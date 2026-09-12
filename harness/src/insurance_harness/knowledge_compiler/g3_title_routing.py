@@ -391,6 +391,7 @@ def resolve_with_title_overlay(
     source_proposals: ProposalBatchV1,
     existing_entities: ExistingEntitySnapshotV1,
     policy: BatchResolutionPolicyV1,
+    compiler_version: str = "batch-entity-resolution-compiler.830.g3.v1",
 ) -> BatchEntityResolutionV1:
     effective = apply_title_routing_overlay(
         overlay,
@@ -404,4 +405,5 @@ def resolve_with_title_overlay(
         proposals=effective,
         existing_entities=existing_entities,
         policy=policy,
+        compiler_version=compiler_version,
     )

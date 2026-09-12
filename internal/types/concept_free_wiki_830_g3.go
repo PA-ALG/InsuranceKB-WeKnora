@@ -2334,7 +2334,7 @@ type resolutionRow830G3 struct {
 
 func expectedResolutionRows830G3(
 	catalog SchemaPackCatalog830G3, corpus BatchCorpus830G3, proposals ProposalBatch830G3,
-	existing ExistingEntitySnapshot830G3, policy BatchResolutionPolicy830G3,
+	existing ExistingEntitySnapshot830G3, policy BatchResolutionPolicy830G3, evidenceV2 ...bool,
 ) ([]resolutionRow830G3, map[string]map[string]bool, error) {
 	entries, _, err := corpusIndexes830G3(corpus)
 	if err != nil {
@@ -2492,7 +2492,7 @@ func expectedResolutionRows830G3(
 			})
 			shapes[shape] = true
 		}
-		if len(versionSet) > 1 || len(shapes) > 1 {
+		if (len(versionSet) > 1 || len(shapes) > 1) && !(len(evidenceV2) > 0 && evidenceV2[0] && distinctFilingVersionsV2_830G3(rows, indexes, versions)) {
 			for _, index := range indexes {
 				rows[index].Ambiguous = true
 			}
@@ -2709,9 +2709,12 @@ func hasReasonSlice830G3(reasons []string, values ...string) bool {
 
 func expectedResolutionDecisions830G3(
 	catalog SchemaPackCatalog830G3, corpus BatchCorpus830G3, proposals ProposalBatch830G3,
-	existing ExistingEntitySnapshot830G3, policy BatchResolutionPolicy830G3,
+	existing ExistingEntitySnapshot830G3, policy BatchResolutionPolicy830G3, evidenceV2 ...bool,
 ) ([]MaterialDecision830G3, error) {
-	rows, materialReasons, err := expectedResolutionRows830G3(catalog, corpus, proposals, existing, policy)
+	if len(evidenceV2) > 0 && evidenceV2[0] {
+		proposals = effectiveEvidenceProposalsV2_830G3(proposals, corpus)
+	}
+	rows, materialReasons, err := expectedResolutionRows830G3(catalog, corpus, proposals, existing, policy, evidenceV2...)
 	if err != nil {
 		return nil, err
 	}
@@ -2773,6 +2776,9 @@ func expectedResolutionDecisions830G3(
 		material.DecisionSHA256, _ = batchConceptHashWithout830G3("material-decision.830.g3.v1", material, "decision_sha256")
 		result = append(result, material)
 	}
+	if len(evidenceV2) > 0 && evidenceV2[0] {
+		result = associateBrochuresV2_830G3(result, proposals)
+	}
 	return result, nil
 }
 
@@ -2781,7 +2787,7 @@ func validateResolutionReplay830G3(
 ) error {
 	resolution, proposals, existing, policy := typed.Resolution, typed.Proposals, typed.Existing, typed.Policy
 	if resolution.Contract != "batch-entity-resolution.830.g3.v1" ||
-		resolution.CompilerVersion != "batch-entity-resolution-compiler.830.g3.v1" ||
+		(resolution.CompilerVersion != "batch-entity-resolution-compiler.830.g3.v1" && resolution.CompilerVersion != evidenceIdentityCompilerV2_830G3) ||
 		resolution.SpaceID != inputs.Corpus.SpaceID || resolution.CatalogSHA256 != catalog.CatalogSHA256 ||
 		resolution.CorpusSHA256 != inputs.Corpus.CorpusSHA256 || resolution.ProposalsSHA256 != proposals.ProposalsSHA256 ||
 		resolution.ExistingSnapshotSHA256 != existing.SnapshotSHA256 || resolution.PolicySHA256 != policy.PolicySHA256 ||
@@ -2793,6 +2799,9 @@ func validateResolutionReplay830G3(
 	entries, _, err := corpusIndexes830G3(inputs.Corpus)
 	if err != nil {
 		return err
+	}
+	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 {
+		proposals = effectiveEvidenceProposalsV2_830G3(proposals, inputs.Corpus)
 	}
 	proposalByMaterial := map[string]MaterialProposal830G3{}
 	for _, proposal := range proposals.Proposals {
@@ -2816,9 +2825,33 @@ func validateResolutionReplay830G3(
 	if !sortedUniquePlain830G3(executionHashes) || !reflect.DeepEqual(executionHashes, resolution.ModelExecutionReceiptSHA256s) || resolution.ModelAttemptedCount != len(attempted) {
 		return ErrConceptCandidateBundle830G3
 	}
-	expectedDecisions, err := expectedResolutionDecisions830G3(catalog, inputs.Corpus, proposals, existing, policy)
+	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 {
+		proposals = effectiveEvidenceProposalsV2_830G3(proposals, inputs.Corpus)
+	}
+	expectedDecisions, err := expectedResolutionDecisions830G3(catalog, inputs.Corpus, proposals, existing, policy, resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3)
 	if err != nil || !reflect.DeepEqual(expectedDecisions, resolution.Decisions) {
 		return ErrConceptCandidateBundle830G3
+	}
+	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 {
+		counts := DispositionCounts830G3{}
+		for _, decision := range expectedDecisions {
+			switch decision.Disposition {
+			case "MATCH":
+				counts.Match++
+			case "CREATE":
+				counts.Create++
+			case "MULTI":
+				counts.Multi++
+			case "NEEDS_CONFIRM":
+				counts.NeedsConfirm++
+			case "QUARANTINE":
+				counts.Quarantine++
+			}
+		}
+		if counts != resolution.DispositionCounts {
+			return ErrConceptCandidateBundle830G3
+		}
+		return nil
 	}
 	counts := DispositionCounts830G3{}
 	previousMaterial := ""
@@ -3393,6 +3426,23 @@ func validateBindingsAgainstResolution830G3(
 		proposals[proposal.MaterialID] = proposal
 	}
 	for _, binding := range request.EntityBindings {
+		if typed.Resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 {
+			termsSupport := false
+			for _, ref := range binding.ResolutionRefs {
+				p := proposals[ref.MaterialID]
+				if p.MaterialRole != "terms" {
+					continue
+				}
+				for _, entity := range p.Entities {
+					if entity.ProposalRef == ref.ProposalRef && entity.ProductCode != nil && *entity.ProductCode == binding.ProductCode && entity.FilingOrRegistration != nil && entity.FilingOrRegistration.Kind == binding.VersionAnchor.Kind && entity.FilingOrRegistration.Value == binding.VersionAnchor.ObservedValue {
+						termsSupport = true
+					}
+				}
+			}
+			if !termsSupport {
+				return ErrConceptCandidateBundle830G3
+			}
+		}
 		materialIDs := map[string]bool{}
 		allBoundIDs := map[string]bool{}
 		boundByRef := map[string]map[string]bool{}

@@ -155,6 +155,7 @@ type ConceptSourceAuthorityService830G2 struct {
 	releases               *wikirepository.WikiReleaseRepository
 	legacyCitationContent  SchemaWikiCitationContentPort
 	formalCandidatePreview SchemaWikiFormalCandidatePreviewReader
+	sourceReuse            *conceptSourceReuseStore830G3
 	// legacyProofResolver is a test-only seam used to exercise the publication
 	// gate with a verified legacy occurrence without rebuilding a complete G1
 	// custody chain. Production construction always leaves it nil.
@@ -173,7 +174,7 @@ type conceptLegacyProof830G2 struct {
 
 func NewConceptSourceAuthorityService830G2(fixed *KnowledgeRevisionSourceService, knowledge interfaces.KnowledgeRepository, chunks interfaces.ChunkRepository, reader interfaces.DocumentReader, codec *SchemaWikiCitationTokenCodec, releases *wikirepository.WikiReleaseRepository, legacyCitationContent SchemaWikiCitationContentPort, formalCandidatePreview *wikirepository.SchemaWikiFormalCandidatePreviewRegistry) *ConceptSourceAuthorityService830G2 {
 	revisions, _ := knowledge.(conceptSourceRevisionRepository830G2)
-	return &ConceptSourceAuthorityService830G2{fixed: fixed, knowledge: knowledge, revisions: revisions, chunks: chunks, docreader: reader, codec: codec, releases: releases, legacyCitationContent: legacyCitationContent, formalCandidatePreview: formalCandidatePreview}
+	return &ConceptSourceAuthorityService830G2{fixed: fixed, knowledge: knowledge, revisions: revisions, chunks: chunks, docreader: reader, codec: codec, releases: releases, legacyCitationContent: legacyCitationContent, formalCandidatePreview: formalCandidatePreview, sourceReuse: newConceptSourceReuseStore830G3(codec)}
 }
 
 func (s *ConceptSourceAuthorityService830G2) VerifyConceptSources830G2(ctx context.Context, request ConceptSourceAuthorityVerificationRequest830G2) error {
@@ -198,6 +199,7 @@ func (s *ConceptSourceAuthorityService830G2) VerifyConceptSources830G2(ctx conte
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	ctx = context.WithValue(ctx, conceptNativeCaptureCacheKey830G2{}, map[string]conceptNativeCaptureEntry830G2{})
+	ctx = context.WithValue(ctx, conceptSourceReusePrepareKey830G3{}, true)
 	legacyEvidence, err := s.verifyLegacyCarryover830G2(ctx, request.Scope, bundle)
 	if err != nil {
 		return ErrConceptSourceAuthorityUnavailable830G2
@@ -263,7 +265,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 	ctx context.Context,
 	request ConceptSourceAuthorityVerificationRequest830G2,
 ) error {
-	if request.Operation != "create-draft" && request.Operation != "review" && request.Operation != "activate" {
+	if request.Operation != "create-draft" && request.Operation != "review" && request.Operation != "activate" && request.Operation != "prepare-read" {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	if request.Operation == "create-draft" {
@@ -295,6 +297,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 		}
 	}
 	ctx = context.WithValue(ctx, conceptNativeCaptureCacheKey830G2{}, map[string]conceptNativeCaptureEntry830G2{})
+	ctx = context.WithValue(ctx, conceptSourceReusePrepareKey830G3{}, true)
 	selected := map[string]struct{}{}
 	for _, binding := range bundle.Request.EntityBindings {
 		for _, materialID := range binding.SourceMaterialIDs {
@@ -319,7 +322,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 	}
 
 	baseView := types.ConceptCandidateBundle830G2{
-		Request: bundle.Request.BaseRequest, CompileResult: bundle.CompileResult,
+		Request: bundle.Request.BaseRequest, CompileResult: bundle.CompileResult, CandidateHash: bundle.CandidateHash,
 	}
 	legacy, err := s.verifyLegacyCarryover830G2(ctx, request.Scope, baseView)
 	if err != nil {
@@ -520,6 +523,9 @@ func (s *ConceptSourceAuthorityService830G2) verifyEvidenceLocated830G3(ctx cont
 	if err != nil || source == nil || resource == nil || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil || source.RevisionSourceID != evidence.RevisionID || source.FileSHA256 != evidence.SourceHash || source.ManifestDigest != evidence.ParseHash || source.ChunkCount != revision.ChunkCount || source.PageCount == nil || evidence.PageNumber > *source.PageCount || resource.ID != source.ResourceID || resource.TenantID != scope.TenantID {
 		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
+	if s.sourceReuse != nil {
+		return s.verifyReusableConceptSource830G3(ctx, scope, evidence, sourceBlock, trustedG3, knowledge, source, resource)
+	}
 	chunks, err := s.chunks.ListChunksByKnowledgeID(ctx, scope.TenantID, evidence.KnowledgeID)
 	if err != nil {
 		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
@@ -662,6 +668,9 @@ func (s *ConceptSourceAuthorityService830G2) resolveCitationEvidence830G2(ctx co
 
 func (s *ConceptSourceAuthorityService830G2) resolveCitationEvidenceLocated830G3(ctx context.Context, request ConceptCitationAuthorityRequest830G2) (*types.KnowledgeRevisionSource, ConceptCitationBBox830G2, *ConceptSourceBlockLocator830G3, error) {
 	if request.Bundle != nil {
+		if request.TrustedG3 {
+			ctx = context.WithValue(ctx, conceptSourceReuseReadOnlyKey830G3{}, true)
+		}
 		proofs, err := s.verifyLegacyCarryover830G2(ctx, request.Scope, *request.Bundle)
 		if err != nil {
 			return nil, ConceptCitationBBox830G2{}, nil, err
@@ -677,6 +686,9 @@ func (s *ConceptSourceAuthorityService830G2) resolveCitationEvidenceLocated830G3
 			source, resource, sourceErr := s.revisions.GetRevisionSource(ctx, request.Scope.TenantID, request.Evidence.KnowledgeID, request.Evidence.ParseAttempt)
 			// C5 evidence uses its historical parse digest; native source manifests were already replayed by the legacy proof.
 			if sourceErr != nil || source == nil || resource == nil || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil || source.RevisionSourceID != request.Evidence.RevisionID || source.FileSHA256 != request.Evidence.SourceHash || proof.authority.RevisionSource.ParseManifestSHA256 != request.Evidence.ParseHash || resource.ID != source.ResourceID || resource.TenantID != request.Scope.TenantID {
+				return nil, ConceptCitationBBox830G2{}, nil, ErrConceptSourceAuthorityUnavailable830G2
+			}
+			if request.TrustedG3 && s.sourceReuse != nil && !s.reusableLegacySourceCurrent830G3(ctx, request, source, resource, proof.authority) {
 				return nil, ConceptCitationBBox830G2{}, nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 			bbox := proof.authority.BBox
@@ -1021,7 +1033,7 @@ func conceptEvidenceMatchesSourceText830G2(evidence types.ConceptEvidence830G2, 
 // migration source and replays that source's original C5 two-stage authority.
 // Only a migrated field whose factual payload is unchanged may consume the
 // resulting proof. Later releases may add concept navigation metadata.
-func (s *ConceptSourceAuthorityService830G2) verifyLegacyCarryover830G2(ctx context.Context, scope types.WikiReleaseScope, bundle types.ConceptCandidateBundle830G2) (map[string]conceptLegacyProof830G2, error) {
+func (s *ConceptSourceAuthorityService830G2) computeLegacyCarryover830G2(ctx context.Context, scope types.WikiReleaseScope, bundle types.ConceptCandidateBundle830G2) (map[string]conceptLegacyProof830G2, error) {
 	if s != nil && s.legacyProofResolver != nil {
 		return s.legacyProofResolver(ctx, scope, bundle)
 	}

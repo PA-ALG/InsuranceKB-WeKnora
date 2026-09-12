@@ -3172,12 +3172,10 @@ def test_gemini_d_renderer_requires_complete_ordered_window_partition() -> None:
         )
 
 
-def test_gemini_c_schema_caps_entities_without_changing_legacy_schema() -> None:
+def test_gemini_c_schema_covers_directory_without_two_entity_sample() -> None:
     gemini = bounded._c_response_schema(_gemini_identity("classify"))
     legacy = bounded._c_response_schema()
-    assert gemini["$defs"]["G3SemanticReferenceMaterialV1"]["properties"]["entities"][
-        "maxItems"
-    ] == 2
+    assert "maxItems" not in gemini["$defs"]["G3SemanticReferenceMaterialV1"]["properties"]["entities"]
     assert "maxItems" not in legacy["$defs"]["G3SemanticMaterialV1"]["properties"][
         "entities"
     ]
@@ -3185,21 +3183,28 @@ def test_gemini_c_schema_caps_entities_without_changing_legacy_schema() -> None:
         Path(__file__).parents[1]
         / "src/insurance_harness/knowledge_compiler/prompts/g3_c_classify_v1.txt"
     ).read_text()
-    assert "at most two entities for each material" in prompt
+    assert "at most two entities for each material" not in prompt
     assert "own distinct source occurrence" in prompt
-    assert "do not reuse one multi-entry quote" in prompt
+    assert "bounded input window" in prompt
 
 
-def test_gemini_c_runtime_rejects_more_than_two_entities_per_material() -> None:
+def test_gemini_c_runtime_accepts_three_supported_entities_per_material() -> None:
     entry, page, response = _reference_fixture()
-    entity = response["materials"][0]["entities"][0]
-    response["materials"][0]["entities"] = [
-        entity,
-        {**entity, "entity_ref": "entity-002"},
-        {**entity, "entity_ref": "entity-003"},
-    ]
-    with pytest.raises(ValueError, match="entity capacity exceeded"):
-        _assemble_reference(entry, page, response)
+    material = response["materials"][0]
+    entity = material["entities"][0]
+    original_evidence = list(material["evidence"])
+    for number in (2, 3):
+        suffix = f"-{number}"
+        clone = json.loads(json.dumps(entity))
+        clone["entity_ref"] += suffix
+        clone["identity_evidence_refs"] = [ref + suffix for ref in entity["identity_evidence_refs"]]
+        for label in clone["labels"]:
+            label["evidence_refs"] = [ref + suffix for ref in label["evidence_refs"]]
+        material["entities"].append(clone)
+        for row in original_evidence:
+            if row["entity_ref"] == entity["entity_ref"]:
+                material["evidence"].append({**row, "entity_ref": clone["entity_ref"], "evidence_ref": row["evidence_ref"] + suffix})
+    assert len(_assemble_reference(entry, page, response)[0].entities) == 3
 
 
 def test_gemini_d_review_display_keeps_every_source_and_complete_output_once() -> None:

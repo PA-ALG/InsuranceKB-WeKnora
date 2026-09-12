@@ -90,6 +90,7 @@ _AUTO_REQUIREMENTS = (
     "version",
 )
 _COMPILER_VERSION = "batch-entity-resolution-compiler.830.g3.v1"
+COMPILER_VERSION_V2 = "batch-entity-resolution-compiler.830.g3.v2"
 _MODEL_PURPOSE = "g3-batch-resolution"
 _MODEL_RUN_SCHEMA_VERSION = "830-g3-v1"
 _MODEL_ROLE = "classify"
@@ -933,7 +934,7 @@ class BatchEntityResolutionV1(_FrozenModel):
         )
         expected_counts = {name: counts[name] for name in names}
         if (
-            self.compiler_version != _COMPILER_VERSION
+            self.compiler_version not in (_COMPILER_VERSION, COMPILER_VERSION_V2)
             or tuple(self.model_execution_receipt_sha256s)
             != tuple(sorted(set(self.model_execution_receipt_sha256s)))
             or not _sorted_unique(self.decisions, lambda item: item.material_id)
@@ -1736,6 +1737,40 @@ def _material_decision(
     )
 
 
+def effective_evidence_proposals_v2(proposals: ProposalBatchV1, corpus: BatchCorpusV1 | None = None) -> ProposalBatchV1:
+    """A read-only resolver view; original model objects/receipt hashes stay intact.
+
+    A filing number is already an explicit version identity. The existing wire
+    label slot carries that observed anchor when there is no separate title label.
+    """
+    if corpus is not None:
+        from .g3_evidence_identity_v2 import expand_directory
+        entries = {row.material_id: row for row in corpus.entries}
+        proposals = proposals.model_copy(update={"proposals": tuple(expand_directory(row, entries[row.material_id]) for row in proposals.proposals)})
+    return proposals.model_copy(update={"proposals": tuple(
+        proposal.model_copy(update={"entities": tuple(
+            entity.model_copy(update={"version_label": entity.filing_or_registration.value})
+            if entity.version_label is None and entity.filing_or_registration is not None
+            else entity for entity in proposal.entities
+        )}) for proposal in proposals.proposals
+    )})
+
+
+def _distinct_filing_versions_v2(contenders, classifications) -> bool:
+    identities, anchors, versions = set(), set(), set()
+    for (entry, _, entity), version in contenders:
+        classification = classifications[(entry.material_id, entity.proposal_ref)]
+        identities.add((entity.issuer, entity.name, entity.product_code,
+                        classification.schema_pack_id, classification.schema_version,
+                        classification.schema_pack_sha256))
+        if entity.filing_or_registration is None:
+            return False
+        anchors.add((entity.filing_or_registration.kind,
+                     _normalized(entity.filing_or_registration.value)))
+        versions.add(version)
+    return len(identities) == 1 and len(anchors) == len(versions)
+
+
 def resolve_batch(
     *,
     catalog: SchemaPackCatalogV1,
@@ -1743,10 +1778,13 @@ def resolve_batch(
     proposals: ProposalBatchV1,
     existing_entities: ExistingEntitySnapshotV1,
     policy: BatchResolutionPolicyV1,
+    compiler_version: str = _COMPILER_VERSION,
 ) -> BatchEntityResolutionV1:
     """Resolve an already captured batch without IO or serving side effects."""
 
     try:
+        if compiler_version not in (_COMPILER_VERSION, COMPILER_VERSION_V2):
+            raise BatchEntityResolutionError("INPUT_CONTRACT_INVALID")
         if type(corpus) is not BatchCorpusV1 or type(proposals) is not ProposalBatchV1:
             raise BatchEntityResolutionError("INPUT_CONTRACT_INVALID")
         corpus_material_ids = tuple(item.material_id for item in corpus.entries)
@@ -1760,6 +1798,8 @@ def resolve_batch(
         exact_proposals = _exact(proposals, ProposalBatchV1)
         exact_existing = _exact(existing_entities, ExistingEntitySnapshotV1)
         exact_policy = _exact(policy, BatchResolutionPolicyV1)
+        if compiler_version == COMPILER_VERSION_V2:
+            exact_proposals = effective_evidence_proposals_v2(exact_proposals, exact_corpus)
         source_keys = tuple(
             _receipt_source_key(entry.receipt, exact_corpus)
             for entry in exact_corpus.entries
@@ -1920,6 +1960,8 @@ def resolve_batch(
         for contenders in contenders_by_entity_key.values():
             versions = {version_key for _, version_key in contenders}
             if len(versions) > 1:
+                if compiler_version == COMPILER_VERSION_V2 and _distinct_filing_versions_v2(contenders, row_classification):
+                    continue
                 ambiguous_rows.update(
                     (row[0].material_id, row[2].proposal_ref) for row, _ in contenders
                 )
@@ -2038,6 +2080,9 @@ def resolve_batch(
             )
 
         ordered = tuple(decisions)
+        if compiler_version == COMPILER_VERSION_V2:
+            from .g3_evidence_identity_v2 import associate_brochures
+            ordered = associate_brochures(ordered, exact_proposals)
         counts = Counter(item.disposition for item in ordered)
         valid_execution_hashes = tuple(
             sorted(
@@ -2046,7 +2091,7 @@ def resolve_batch(
         )
         payload: dict[str, object] = {
             "contract": "batch-entity-resolution.830.g3.v1",
-            "compiler_version": _COMPILER_VERSION,
+            "compiler_version": compiler_version,
             "space_id": exact_corpus.space_id,
             "catalog_sha256": exact_catalog.catalog_sha256,
             "corpus_sha256": exact_corpus.corpus_sha256,

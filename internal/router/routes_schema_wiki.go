@@ -190,6 +190,10 @@ func RegisterSchemaWikiRoutes(
 		"/preparations/:preparation_id/review",
 		append(append([]gin.HandlerFunc(nil), humanPreparationGuards...), schemaHandler.ReviewDraft)...,
 	)
+	human.POST(
+		"/preparations/:preparation_id/batch-concept/prepare-read",
+		append(append([]gin.HandlerFunc(nil), humanPreparationGuards...), schemaHandler.PrepareBatchConceptRead830G3)...,
+	)
 	humanGET := func(path string, endpoint gin.HandlerFunc) {
 		human.GET(path, append(append([]gin.HandlerFunc(nil), humanPreparationGuards...), endpoint)...)
 	}

@@ -85,7 +85,13 @@ func (s *SchemaWikiService) ReadBatchProductBindings830G3(
 	if preparation == nil || preparation.ID != preparationID {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	bundle, expected, err := validateBatchConceptPreparation830G3(preparation, status, scope)
+	var bundle types.BatchConceptCandidateBundle830G3
+	var expected []types.WikiReleaseMemberSnapshot
+	if release != nil {
+		bundle, expected, err = s.releaseAuthority.validatePublishedBatchConceptPreparation830G3(preparation, scope)
+	} else {
+		bundle, expected, err = validateBatchConceptPreparation830G3(preparation, status, scope)
+	}
 	if err != nil {
 		return nil, err
 	}

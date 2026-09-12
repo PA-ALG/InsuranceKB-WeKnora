@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"unicode/utf8"
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
@@ -125,11 +126,14 @@ func (s *SchemaWikiService) validateBatchConceptBase830G3(
 	})
 }
 
+var batchPreparationValidations830G3 atomic.Uint64
+
 func validateBatchConceptPreparation830G3(
 	preparation *types.WikiReleasePreparation,
 	expectedStatus string,
 	scope types.WikiReleaseScope,
 ) (types.BatchConceptCandidateBundle830G3, []types.WikiReleaseMemberSnapshot, error) {
+	batchPreparationValidations830G3.Add(1)
 	if preparation == nil || preparation.WikiReleaseScope != scope ||
 		!validBatchConceptPreparationID830G3(preparation.ID) ||
 		preparation.Status != expectedStatus ||
@@ -164,6 +168,16 @@ func (s *SchemaWikiService) LoadBatchConceptPreparation830G3(
 	scope types.WikiReleaseScope,
 	preparationID string,
 ) (*BatchConceptPreparationRead830G3, error) {
+	return s.loadBatchConceptPreparation830G3(ctx, principal, scope, preparationID, false)
+}
+
+// PrepareBatchConceptRead830G3 is the explicit, idempotent import/prepare gate
+// for historical releases. Public page/citation/PDF GETs never call it.
+func (s *SchemaWikiService) PrepareBatchConceptRead830G3(ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope, preparationID string) (*BatchConceptPreparationRead830G3, error) {
+	return s.loadBatchConceptPreparation830G3(ctx, principal, scope, preparationID, true)
+}
+
+func (s *SchemaWikiService) loadBatchConceptPreparation830G3(ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope, preparationID string, prepareSources bool) (*BatchConceptPreparationRead830G3, error) {
 	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
 		return nil, err
 	}
@@ -186,6 +200,19 @@ func (s *SchemaWikiService) LoadBatchConceptPreparation830G3(
 	bundle, _, err := validateBatchConceptPreparation830G3(preparation, status, scope)
 	if err != nil {
 		return nil, err
+	}
+	if prepareSources {
+		if status != types.WikiReleasePreparationReady {
+			return nil, ErrSchemaWikiPreparationInvalid
+		}
+		if err := s.releaseAuthority.verifyConceptSourceAuthority830G2(ctx, principal, scope, preparation, "prepare-read"); err != nil {
+			return nil, err
+		}
+	}
+	if status == types.WikiReleasePreparationReady {
+		if err := s.releaseAuthority.publishedBatchReuse830G3().rememberValidated(preparation, scope); err != nil {
+			return nil, err
+		}
 	}
 	result := &BatchConceptPreparationRead830G3{
 		Contract: batchConceptPreparationReadContract830G3, ReadMode: "preparation",
@@ -228,8 +255,8 @@ func (s *SchemaWikiService) readBatchConceptPage830G3(
 	memberID string,
 	readMode string,
 ) (*ConceptPageRead830G2, error) {
-	bundle, expected, err := validateBatchConceptPreparation830G3(
-		preparation, types.WikiReleasePreparationReady, scope,
+	bundle, expected, err := s.releaseAuthority.validatePublishedBatchConceptPreparation830G3(
+		preparation, scope,
 	)
 	if err != nil || release == nil || release.CandidateDigest != bundle.CandidateHash ||
 		release.ManifestDigest != preparation.ManifestDigest ||

@@ -56,18 +56,40 @@ func TestBatchConceptPreparation830G3UsesHumanAdminDualKBSeal(t *testing.T) {
 				},
 				&events, access, test.role,
 			)
-			recorder := httptest.NewRecorder()
-			engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
-			require.Equal(t, test.wantStatus, recorder.Code, recorder.Body.String())
-			require.Equal(t, test.wantSeal, access.sealCalls)
-			require.Equal(t, test.wantScope, resolver.preparationCalls)
-			if test.role == types.TenantRoleAdmin {
-				require.Equal(t, []string{
-					"acl:wiki-g3", "evidence:wiki", "acl:raw-g3", "evidence:raw", "seal",
-				}, events)
-			} else {
-				require.Empty(t, events)
+			for _, method := range []string{http.MethodGet, http.MethodPost} {
+				events = []string{}
+				access.sealCalls = 0
+				resolver.preparationCalls = 0
+				target := path
+				if method == http.MethodPost {
+					target += "/prepare-read"
+				}
+				recorder := httptest.NewRecorder()
+				engine.ServeHTTP(recorder, httptest.NewRequest(method, target, nil))
+				require.Equal(t, test.wantStatus, recorder.Code, recorder.Body.String())
+				require.Equal(t, test.wantSeal, access.sealCalls)
+				require.Equal(t, test.wantScope, resolver.preparationCalls)
+				if test.role == types.TenantRoleAdmin {
+					require.Equal(t, []string{
+						"acl:wiki-g3", "evidence:wiki", "acl:raw-g3", "evidence:raw", "seal",
+					}, events)
+				} else {
+					require.Empty(t, events)
+				}
 			}
 		})
 	}
+}
+
+func TestBatchConceptPrepareRead830G3UsesExplicitHumanAdminRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	RegisterSchemaWikiRoutes(engine.Group("/api/v1"), &handler.SchemaWikiHandler{}, &handler.WikiReleaseHandler{}, &rbacGuards{})
+	found := false
+	for _, route := range engine.Routes() {
+		if route.Method == http.MethodPost && route.Path == "/api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/batch-concept/prepare-read" {
+			found = true
+		}
+	}
+	require.True(t, found, "historical capture preparation must be an explicit POST, never implicit in a published GET")
 }

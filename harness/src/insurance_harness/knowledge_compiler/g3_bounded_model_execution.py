@@ -2114,11 +2114,6 @@ def _c_response_schema(identity: ModelIdentity | None = None) -> dict[str, objec
         ):
             properties = cast(dict[str, dict[str, object]], definitions[definition]["properties"])
             properties[field]["minItems"] = 1
-        material_properties = cast(
-            dict[str, dict[str, object]],
-            definitions["G3SemanticReferenceMaterialV1"]["properties"],
-        )
-        material_properties["entities"]["maxItems"] = 2
         return schema
     return G3SemanticResponseV1.model_json_schema()
 
@@ -2304,8 +2299,6 @@ def assemble_c_semantic_response(
         )
     else:
         response, _ = parse_c_semantic_response_bytes(raw)
-    if use_locator_refs and any(len(material.entities) > 2 for material in response.materials):
-        raise ValueError("Gemini C material entity capacity exceeded")
     if tuple(sorted(set(requested_material_ids))) != requested_material_ids:
         raise ValueError("requested materials must be sorted unique")
     entries = {entry.material_id: entry for entry in corpus.entries}
@@ -2503,7 +2496,7 @@ def assemble_c_semantic_response(
                     for ref in material.material_role_evidence_refs
                 )
             ),
-            "entities": tuple(final_entities),
+            "entities": tuple(sorted(final_entities, key=lambda item: item.proposal_ref)),
             "evidence": tuple(sorted(final_evidence, key=lambda item: item.evidence_id)),
         }
         proposals.append(
@@ -4629,6 +4622,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
             proposals=proposal_batch,
             existing_entities=existing,
             policy=policy,
+            compiler_version="batch-entity-resolution-compiler.830.g3.v2",
         )
         _persist_stage_result(plan, "proposal-batch.json", proposal_batch)
         _persist_stage_result(plan, "resolution.json", resolution)

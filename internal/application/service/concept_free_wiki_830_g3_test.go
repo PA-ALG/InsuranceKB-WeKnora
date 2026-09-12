@@ -94,6 +94,8 @@ func batchConceptReleaseFixture830G3(
 	fixture.ctx = schemaWikiHumanContext(fixture.principal1, scope, types.TenantRoleAdmin)
 	verifier := &conceptSourceAuthorityVerifierFake830G2{}
 	fixture.service.conceptSourceAuthorityVerifier830G2 = verifier
+	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
+	fixture.service.publishedReadReuse = newPublishedBatchReadReuse830G3(sourceReuseTestCodec830G3(t))
 
 	now := time.Unix(900, 0).UTC()
 	previous := ""

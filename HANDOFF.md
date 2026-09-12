@@ -1,3 +1,9 @@
+# 当前状态（2026-09-12 G3 性能与识别修复）
+
+当前分支 codex/830-g3-performance 从已部署 cfe7e040 建立，继续现有 OpenSpec 129 的 G3-P1/P2/P3。用户已授权最小读取修复、具体材料识别修复、小批量中断恢复验证；不新建任务平台，不进入 G4。线上 epoch 6 / 7 产品 / 493 字段保持。P1 实现与独立复核通过，真实候选的验证复用段为 0.17–0.21 秒，尚待部署实测；P2 的 15 份来源重放、18 项 Python 测试与 Go 跨语言/旧版本兼容通过；P3 真实产物回放、临时 JobStore 进程中断恢复及 4 项 reserved/unknown 保护测试通过。PG 并发与真实 provider-inflight unknown 未验证。不得按下面历史段落重建数据库或重跑旧发布脚本。临时资源隔离窗口 04 的 19 个非 G3 容器已经 restore，并核验全部恢复运行。
+
+以下为历史记录。
+
 ## 当前执行：G3 已获明确启动授权（2026-09-07）
 
 当前 SOURCE 执行已 STOP：用户“授权”已记录并实际执行一次 v3 apply；先创建 weknora_g3_830 空库，再在 pg_restore 返回 rc=1 时停止。数据库子进程退出与整体子进程重新初始化发生在恢复窗口内，22:02:01 UTC 重新接受连接；具体触发原因尚未确定。旧环境共享该 PostgreSQL，因此不得以来源记录快照相等宣称没有可用性影响。当前源库选定快照与执行前一致；目标 0 用户表/仅 plpgsql。上传、来源补登记、provider、G3 应用启动均 NOT RUN，未重试、未删除现场。公开回执 source-runtime-apply-stop-public-01.json；原授权有效但首次失败即停止的窗口已结束。下一步是 source-runtime-isolated-recovery-proposal-01.md 的独立复核和新增故障隔离范围审批。以下较早状态为历史，不覆盖本段；软件 commit39943a247 保持，G3仍WIP/FLOW NOT RUN/QUALITY DEFERRED_TO_Q0。

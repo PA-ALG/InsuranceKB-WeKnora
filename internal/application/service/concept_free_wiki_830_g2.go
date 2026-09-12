@@ -742,8 +742,8 @@ func (s *SchemaWikiService) loadConceptBundleAtPin830G2(
 	}
 	if json.Unmarshal(preparation.Manifest, &header) == nil &&
 		conceptCandidateBundleContract830G3(header.Contract) {
-		batch, expected, validationErr := validateBatchConceptPreparation830G3(
-			preparation, types.WikiReleasePreparationReady, scope,
+		batch, expected, validationErr := s.releaseAuthority.validatePublishedBatchConceptPreparation830G3(
+			preparation, scope,
 		)
 		bundle := batchConceptG2View830G3(batch)
 		if validationErr != nil || release.CandidateDigest != batch.CandidateHash ||

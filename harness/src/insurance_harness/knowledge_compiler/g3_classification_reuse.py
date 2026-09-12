@@ -34,6 +34,7 @@ def replay_classification(
     catalog: SchemaPackCatalogV1,
     existing_entities: ExistingEntitySnapshotV1,
     policy: BatchResolutionPolicyV1,
+    compiler_version: str = "batch-entity-resolution-compiler.830.g3.v1",
 ) -> BatchEntityResolutionV1:
     """Re-match unchanged captured materials without any provider or parsing IO."""
     old = BatchCorpusV1.model_validate(source_corpus)
@@ -47,6 +48,7 @@ def replay_classification(
         proposals=proposals,
         existing_entities=existing_entities,
         policy=policy,
+        compiler_version=compiler_version,
     )
 
 
@@ -169,6 +171,7 @@ def validate_reuse_binding(
         catalog=request.catalog,
         existing_entities=inputs.existing_entities,
         policy=inputs.policy,
+        compiler_version=request.resolution.compiler_version,
     )
     if resolution != request.resolution:
         raise ValueError("classification reuse current matching mismatch")

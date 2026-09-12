@@ -576,6 +576,7 @@ func (e *WikiReleaseConflictError) Unwrap() error { return ErrWikiReleaseConflic
 
 // WikiReleaseService is the isolated S0-R core, not a production Kernel.
 type WikiReleaseService struct {
+	publishedReadReuse                  *publishedBatchReadReuse830G3
 	repository                          *wikirepository.WikiReleaseRepository
 	accessVerifier                      WikiReleaseAccessVerifier
 	authorizationVerifier               WikiReleaseAuthorizationVerifier
@@ -716,6 +717,11 @@ func (s *WikiReleaseService) ActivateReviewed(
 			return nil, err
 		}
 		if err := s.verifyConceptSourceAuthority830G2(ctx, principal, scope, preparation, "activate"); err != nil {
+			return nil, err
+		}
+	}
+	if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
+		if err := s.publishedBatchReuse830G3().rememberValidated(preparation, scope); err != nil {
 			return nil, err
 		}
 	}
@@ -1874,8 +1880,8 @@ func (s *WikiReleaseService) readMembers(
 		storedManifestDigest = preparation.ManifestDigest
 		conceptG2 = true
 	} else if manifestHeader.Contract == "batch-concept-candidate-bundle.830.g3.v1" {
-		if _, _, validationErr := validateBatchConceptPreparation830G3(
-			preparation, types.WikiReleasePreparationReady, scope,
+		if _, _, validationErr := s.validatePublishedBatchConceptPreparation830G3(
+			preparation, scope,
 		); validationErr != nil {
 			return nil, ErrWikiReleaseInvalidAuthorization
 		}

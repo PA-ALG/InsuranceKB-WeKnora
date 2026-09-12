@@ -1013,6 +1013,32 @@ func (h *SchemaWikiHandler) ReadBatchConceptPreparation830G3(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": response})
 }
 
+// PrepareBatchConceptRead830G3 explicitly prepares historical fixed sources.
+func (h *SchemaWikiHandler) PrepareBatchConceptRead830G3(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	preparer, ok := h.schemaService.(interface {
+		PrepareBatchConceptRead830G3(context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope, string) (*service.BatchConceptPreparationRead830G3, error)
+	})
+	if !ok {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	response, err := preparer.PrepareBatchConceptRead830G3(c.Request.Context(), principal, scope, c.Param("preparation_id"))
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": response})
+}
+
 // ReviewDraft passes one closed named-human receipt to the existing concrete
 // review authority; no caller-selected verifier or approval hash is accepted.
 func (h *SchemaWikiHandler) ReviewDraft(c *gin.Context) {

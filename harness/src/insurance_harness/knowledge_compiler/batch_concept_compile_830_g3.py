@@ -590,6 +590,7 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
             proposals=inputs.proposals,
             existing_entities=inputs.existing_entities,
             policy=inputs.policy,
+            compiler_version=resolution.compiler_version,
         )
         != resolution
     ):
@@ -654,6 +655,15 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         evidence_ids = {item.evidence_id for item in binding.resolution_evidence}
         if set(binding.source_material_ids) != {key[0] for key in refs}:
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
+        if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v2":
+            if not any(proposal_index[material_id].material_role == "terms" and any(
+                entity.proposal_ref == proposal_ref and entity.product_code == binding.product_code
+                and entity.filing_or_registration is not None
+                and entity.filing_or_registration.kind == binding.version_anchor.kind
+                and entity.filing_or_registration.value == binding.version_anchor.observed_value
+                for entity in proposal_index[material_id].entities
+            ) for material_id, proposal_ref in refs if material_id in proposal_index):
+                raise BatchConceptCompileError("RESOLUTION_IDENTITY_SOURCE_REQUIRED")
         bound_by_ref: dict[tuple[str, str], set[str]] = {
             key: set() for key in refs
         }
@@ -969,7 +979,7 @@ def _build_entity_bindings(
         if any(
             row[3].disposition != first.disposition
             or row[3].anchors != anchors
-            or row[3].classification != first.classification
+            or (row[3].classification != first.classification and (resolution.compiler_version != "batch-entity-resolution-compiler.830.g3.v2" or (row[3].classification.primary_label,row[3].classification.schema_pack_id,row[3].classification.schema_version,row[3].classification.schema_pack_sha256) != (first.classification.primary_label,first.classification.schema_pack_id,first.classification.schema_version,first.classification.schema_pack_sha256)))
             for row in rows
         ):
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
@@ -981,6 +991,12 @@ def _build_entity_bindings(
             or anchors.version_anchor is None
         ):
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
+        if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v2":
+            if not any(proposal_index[row[0]].material_role == "terms" and any(
+                entity.proposal_ref == row[1] and entity.product_code == anchors.product_code.observed_value and entity.filing_or_registration is not None and entity.filing_or_registration.kind == anchors.version_anchor.kind and entity.filing_or_registration.value == anchors.version_anchor.observed_value
+                for entity in proposal_index[row[0]].entities
+            ) for row in rows):
+                raise BatchConceptCompileError("RESOLUTION_IDENTITY_SOURCE_REQUIRED")
         classification = first.classification
         entries = [
             entry
@@ -1140,6 +1156,7 @@ def build_batch_compile_request(
         proposals=proposals,
         existing_entities=existing_entities,
         policy=policy,
+        compiler_version=resolution.compiler_version,
     )
     if replayed != resolution:
         raise BatchConceptCompileError("RESOLUTION_REPLAY_MISMATCH")
