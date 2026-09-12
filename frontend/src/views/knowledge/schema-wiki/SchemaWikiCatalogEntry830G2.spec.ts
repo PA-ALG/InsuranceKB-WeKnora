@@ -24,6 +24,7 @@ vi.mock('./SchemaWikiBrowser.vue', () => ({ default: {
 } }))
 
 import SchemaWikiCatalogEntry from './SchemaWikiCatalogEntry830G2.vue'
+import { get } from '@/utils/request'
 enableAutoUnmount(afterEach)
 
 const H = 'a'.repeat(64)
@@ -71,6 +72,31 @@ describe('SchemaWikiCatalogEntry830G2', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="directory"]').text()).toBe('g3-active')
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('shares identical directory reads within a load and allows slow verified responses without retry', async () => {
+    vi.mocked(get).mockClear()
+    vi.mocked(get).mockImplementation((_path: string, options?: any) => {
+      if ((options?.timeout ?? 30000) < 66000) return Promise.reject(new Error('timeout'))
+      return Promise.resolve({ verified: true }) as any
+    })
+    api.loadActive.mockImplementation(async (_kb, transport) => {
+      const reads = await Promise.all([transport.get('/fixed-search'), transport.get('/fixed-search')])
+      expect(reads).toEqual([{ verified: true }, { verified: true }])
+      return { ...common, mode: 'g3-active', catalog: { entries: [] }, entities: [] }
+    })
+    const wrapper = mount(SchemaWikiCatalogEntry, { props: { knowledgeBaseId: 'wiki-entry' }, global: { stubs: {
+      ConceptDirectory830G2: { template: '<div data-testid="directory">G3</div>' },
+    } } })
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(get).mock.calls[0][1]).toEqual({ timeout: 180000 })
+    const transport = api.loadActive.mock.calls[0][1]
+    vi.mocked(get).mockClear(); vi.mocked(get).mockRejectedValue(new Error('source unavailable'))
+    await expect(transport.get('/failed-read')).rejects.toThrow('source unavailable')
+    await expect(transport.get('/failed-read')).rejects.toThrow('source unavailable')
+    expect(get).toHaveBeenCalledTimes(1)
   })
 
   it('rejects ambiguous preparation query before any directory request', async () => {

@@ -13,6 +13,7 @@ import {
   type SchemaPackCatalog830G3 as SchemaPackCatalogValue830G3,
 } from '@/api/schema-wiki/schemaPackCatalog830G3'
 import { get } from '@/utils/request'
+import { createSchemaWikiReadTransport } from '@/api/schema-wiki/readTransport'
 import ConceptDirectory830G2 from './ConceptDirectory830G2.vue'
 import SchemaPackCatalog830G3 from './SchemaPackCatalog830G3.vue'
 import SchemaWikiBrowser from './SchemaWikiBrowser.vue'
@@ -35,7 +36,7 @@ async function load() {
   const current = ++generation
   loading.value = true; error.value = ''; schemaCatalogError.value = ''
   catalog.value = null; schemaCatalog.value = null
-  const transport = { get: (path: string) => get(path) }
+  const transport = createSchemaWikiReadTransport(get)
   const preparation = route.query.preparation_id
   if (preparation !== undefined) {
     try {

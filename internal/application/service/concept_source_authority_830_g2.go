@@ -675,7 +675,8 @@ func (s *ConceptSourceAuthorityService830G2) resolveCitationEvidenceLocated830G3
 				return nil, ConceptCitationBBox830G2{}, nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 			source, resource, sourceErr := s.revisions.GetRevisionSource(ctx, request.Scope.TenantID, request.Evidence.KnowledgeID, request.Evidence.ParseAttempt)
-			if sourceErr != nil || source == nil || resource == nil || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil || source.RevisionSourceID != request.Evidence.RevisionID || source.FileSHA256 != request.Evidence.SourceHash || source.ManifestDigest != request.Evidence.ParseHash || resource.ID != source.ResourceID || resource.TenantID != request.Scope.TenantID {
+			// C5 evidence uses its historical parse digest; native source manifests were already replayed by the legacy proof.
+			if sourceErr != nil || source == nil || resource == nil || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil || source.RevisionSourceID != request.Evidence.RevisionID || source.FileSHA256 != request.Evidence.SourceHash || proof.authority.RevisionSource.ParseManifestSHA256 != request.Evidence.ParseHash || resource.ID != source.ResourceID || resource.TenantID != request.Scope.TenantID {
 				return nil, ConceptCitationBBox830G2{}, nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 			bbox := proof.authority.BBox

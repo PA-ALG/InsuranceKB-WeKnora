@@ -15,6 +15,7 @@ import ConceptCitationViewer830G2 from '@/components/schema-wiki/ConceptCitation
 import { createPdfJsPort } from '@/components/schema-wiki/pdfJsPort'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
 import { get } from '@/utils/request'
+import { createSchemaWikiReadTransport, SCHEMA_WIKI_READ_TIMEOUT_MS } from '@/api/schema-wiki/readTransport'
 
 const route = useRoute()
 const session = shallowRef<ConceptSession830G2 | null>(null)
@@ -46,8 +47,8 @@ const read = computed(() => session.value?.read ?? (batchPage.value ? {
 } : null))
 const previewTransport = computed(() => viewerSession.value ? conceptCitationTransport830G2(viewerSession.value, {
   // Source verification can exceed the ordinary request timeout before PDF rendering.
-  get: path => get(path, { timeout: 60_000 }),
-  getBytes: async path => new Uint8Array(await get<ArrayBuffer>(path, { responseType: 'arraybuffer', timeout: 60_000 })),
+  get: path => get(path, { timeout: SCHEMA_WIKI_READ_TIMEOUT_MS }),
+  getBytes: async path => new Uint8Array(await get<ArrayBuffer>(path, { responseType: 'arraybuffer', timeout: SCHEMA_WIKI_READ_TIMEOUT_MS })),
 }) : null)
 const previewRequest = computed(() => read.value && selected.value ? buildSchemaCitationPreviewRequest({
   release_id: read.value.release_id, activation_epoch: read.value.activation_epoch,
@@ -94,7 +95,7 @@ async function load() {
     if (keys.some(key => !['release_id', 'preparation_id'].includes(key))
       || (release !== undefined && preparation !== undefined)) throw new Error('INVALID_READ_MODE')
     const kbID = routeIdentity(route.params.kbId); const memberID = routeIdentity(route.params.memberId)
-    const transport = { get: (path: string) => get(path) }
+    const transport = createSchemaWikiReadTransport(get)
     if (preparation !== undefined) {
       const directory = await loadBatchConceptPreparation830G3(kbID, routeIdentity(preparation), transport)
       const loaded = await readBatchConceptPage830G3(directory, memberID, transport)

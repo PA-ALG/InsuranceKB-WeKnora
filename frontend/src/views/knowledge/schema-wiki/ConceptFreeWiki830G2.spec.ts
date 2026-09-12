@@ -56,9 +56,9 @@ describe('G2 shared concept page', () => {
 })
 
 describe('G2 source preview under slow source verification', () => {
-  it('allows a verified source taking 35 seconds while preserving binary response handling', async () => {
+  it('allows a verified source taking 95 seconds while preserving binary response handling', async () => {
     mocks.get.mockImplementation((_path: string, config?: any) => {
-      if ((config?.timeout ?? 30000) < 35000) return Promise.reject(new Error('timeout'));
+      if ((config?.timeout ?? 30000) < 95000) return Promise.reject(new Error('timeout'));
       return Promise.resolve(config?.responseType === 'arraybuffer' ? new Uint8Array([37,80,68,70]).buffer : { verified: true });
     });
     const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises();
@@ -67,7 +67,7 @@ describe('G2 source preview under slow source verification', () => {
     await expect(io.getAuthority('/authority')).resolves.toEqual({ verified: true });
     await expect(io.getBytesByToken('/content')).resolves.toEqual(new Uint8Array([37,80,68,70]));
     const calls = mocks.get.mock.calls.slice(-2);
-    expect(calls.every((call: any[]) => call[1].timeout > 35000 && call[1].timeout <= 60000)).toBe(true);
+    expect(calls.every((call: any[]) => call[1].timeout > 95000 && call[1].timeout <= 180000)).toBe(true);
     mocks.get.mockClear(); mocks.get.mockRejectedValue(new Error('source unavailable'));
     await expect(io.getAuthority('/authority')).rejects.toThrow('source unavailable');
     expect(mocks.get).toHaveBeenCalledTimes(1);

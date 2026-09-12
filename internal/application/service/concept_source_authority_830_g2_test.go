@@ -621,7 +621,7 @@ func TestConceptLegacyCitation830G2MissingRevisionOrFixedReaderFailsClosed(t *te
 		Bundle: &types.ConceptCandidateBundle830G2{},
 	}
 	legacyAuthority := &types.SchemaWikiCitationContentAuthorityV1{
-		RevisionSource: types.LiveRevisionSourceReceiptV1{RevisionSourceID: source.RevisionSourceID},
+		RevisionSource: types.LiveRevisionSourceReceiptV1{RevisionSourceID: source.RevisionSourceID, ParseManifestSHA256: evidence.ParseHash},
 		PageNumber:     1, BBox: types.CitationBBoxV1{X0: 1, Y0: 2, X1: 3, Y1: 4},
 	}
 	canonical, err := canonicalJSON830G2(evidence)
