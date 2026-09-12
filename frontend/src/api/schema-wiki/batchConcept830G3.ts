@@ -501,6 +501,12 @@ export async function parseBatchConceptActive830G3(value: unknown, scope: Schema
     if (await schemaWikiHash(MEMBER_HASH_CONTRACT, member) !== hash(row.member_digest)) return invalid()
     members.push(parsed)
   }
+  // Published search rows use slug order; validate the reconstructed member set in canonical order.
+  members.sort((left, right) => {
+    const a = `${left.kind}\0${left.member_id}`
+    const b = `${right.kind}\0${right.member_id}`
+    return a < b ? -1 : a > b ? 1 : 0
+  })
   const parsed = await validateMembers(members, scope, catalog)
   return deepFreeze({ mode: 'g3-active', scope, catalog, releaseID, activationEpoch: epoch,
     candidateHash, members: parsed.members, entities: parsed.entities, alignments: [] })

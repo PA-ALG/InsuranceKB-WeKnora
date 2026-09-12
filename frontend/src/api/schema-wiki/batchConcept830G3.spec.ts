@@ -224,6 +224,23 @@ describe('G3 batch concept Active parser and mocked transports', () => {
     expect(result.entities).toHaveLength(5)
   })
 
+  it('accepts published search order without changing the snapshots or relaxing member hashes', async () => {
+    const rows = (await snapshots()).sort((left, right) => left.logical_slug < right.logical_slug ? -1 : left.logical_slug > right.logical_slug ? 1 : 0)
+    const original = structuredClone(rows)
+    const result = await parseBatchConceptActive830G3(rows, scope, await catalog(), {
+      release_id: 'release-g3', activation_epoch: 6,
+    })
+    expect(result.entities).toHaveLength(5)
+    expect(rows).toEqual(original)
+    expect(result.members.map(member => `${member.kind}\u0000${member.member_id}`)).toEqual(
+      result.members.map(member => `${member.kind}\u0000${member.member_id}`).sort(),
+    )
+    rows[0].member_digest = '0'.repeat(64)
+    await expect(parseBatchConceptActive830G3(rows, scope, await catalog(), {
+      release_id: 'release-g3', activation_epoch: 6,
+    })).rejects.toThrow('BATCH_CONCEPT_830_G3_INVALID')
+  })
+
   it('uses preparation scope and immutable GET without current, and permits only the exact historical q-empty read', async () => {
     const response = await preparationResponse()
     const rows = [{ kind: 'field_assertion', logical_slug: 'assertion_old', revision_id: '8'.repeat(64),
