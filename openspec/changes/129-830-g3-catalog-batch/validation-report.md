@@ -1,3 +1,15 @@
+# 当前状态（2026-09-13 G3 原卡结项）
+
+**G3 FLOW PASS；QUALITY=DEFERRED_TO_Q0；NOT_FOR_PRODUCTION。** 原 R1—R5 及六项遗留处理均已实际验收。当前 epoch 9 / release-2f46c14c-5f6f-46cb-8eb2-e6afc7e5933e，11 包目录、7 产品、493 字段、516 成员。第 7→8→9 版修订/导航变更/恢复、全量成员与字段证据、三样本 27 次读取及真实 APP 重启、独立历史/检索/UI 均通过。
+
+部署 APP/静态资源源码为 4abaa281bf924f22f2aa59a283d2c488be486082；APP 镜像 8a9fdf61c7f9fcee974a6af098644d8e8a49b2ee94ae69a0dda9a4c967771f12。Nginx 动态 DNS 配置以独立覆盖层部署并随本次结项提交，UI 镜像未重建。24 容器运行，旧 APP read-reuse-02 保留停止。不要重跑下方旧发布/数据库脚本。
+
+重启后字段 0.0445–0.2010 秒、预览 0.0818–0.8772 秒、PDF 0.0933–0.1673 秒；单实例启动可短暂中断，候选创建仍需分钟级。15 材料不等于 15 完整产品：两份身份版本未全量抽取、两份待确认、MULTI 119 子条目未全量发布。Q0、大规模/生产长稳、两处目录状态/英文标签展示待整理均按后续事项保留。
+
+完整原卡矩阵、发布/配置来源和实际证据：docs/insurance-kb/evidence/830-g3/g3-final-closeout-20260913.md。私有证据：insurancekb-private-evidence/g3-20260912-final-closeout/evidence-index.json。本次调用不重新执行模型。以下内容为历史，不覆盖当前结论。
+
+---
+
 # G3 验证矩阵
 
 ## 2026-09-12 当前补充：G3-P1/P2/P3 有界修复通过
