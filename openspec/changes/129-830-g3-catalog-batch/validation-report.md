@@ -1,5 +1,23 @@
 # G3 验证矩阵
 
+## 2026-09-12 当前补充：G3-P1/P2/P3 有界修复通过
+
+当前真实发布为 epoch 6 / 7 产品 / 493 字段 / 516 成员，实际读回逐项不变。部署源码 09f3819400303e72d909f3e6b93ffd9b2a2610f2（基础修复 cbd843620），镜像 f52a2efb1b69751f00a3c02c76d92c447bc9ccf33de97aaccf99e7985763cf72。QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION；本轮没有新发布、没有新增模型调用。
+
+| Requirement | 实现与验证 | 状态 |
+|---|---|---|
+| G3-P1 | 普通GET复用发布成员及固定原文索引；真实旧C5摘要域缺口RED/GREEN、独立复核；显式准备78.45秒；首读、重复读、重启后3样本及PDF/页码通过，516成员完全相等 | PASS |
+| G3-P2 | 15来源重放；3说明书关联、2备案版本隔离、跨公司与不明费率表保留待办、目录119定位条目；18 Python及Go实际跨语言/旧v1兼容通过 | PASS |
+| G3-P3 | 真实成功11字段复用、失败仍拒绝；临时JobStore实际退出、租约恢复、完成项不重做、失败隔离、入队去重；4项unknown/reserved保护测试通过 | PASS |
+| 大规模/生产运行 | PostgreSQL并发、1000文件、长稳、真实模型请求进行中断网 | NOT RUN |
+
+DELIVERY：software、container health、已有配置下的索引准备、local live均PASS；本轮provider probe与GitHub live为NOT RUN，未新迁移/变更模型配置。实际HTTP重启后字段2.45–3.47秒、引用2.52–4.50秒、PDF2.60–3.01秒。首读仍有波动，单实例重启短暂中断；错误页缺失与前端静态/后端业务就绪不能混用的问题如实保留。原探针启动期404后，已改等待真实业务接口并补验通过。
+
+完整报告：docs/insurance-kb/evidence/830-g3/g3-read-and-material-repair-20260912.md。证据位于 insurancekb-private-evidence/g3-20260912-read-material-repair。下方为历史切片记录，早期WIP/NOT RUN不覆盖本段当前已执行事实。
+
+---
+
+
 G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。以下为当前切片事实，软件通过不代表真实业务验收完成。
 
 | Requirement | 实现 | 验证/证据 | commit | 状态 |
