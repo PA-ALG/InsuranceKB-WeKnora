@@ -42,3 +42,5 @@
 第一次D compile000成功，compile001被既有校验拒绝：absent_explicitly同时value=null，证据只列一般保险责任，不能证明明确不保障。这是原响应的真实RED，保持校验和失败回执。Owner=root仅追加现有 g3_d_compile_v1.txt 的三态语义提示（present/absent均有非空value与直接证据，未提及必须unknown），不修改字段结果/投影校验；使用已存在字段级projection recovery验证并继承可用结果，新parent只调用失败/未执行字段。提示词为Harness输入，Go应用代码不变，继续消费已冻结49023120b的唯一APP构建；最终分别记录模型source与APPsource，不重复构建。
 
 恢复请求的独立复核发现真实 Gemini 路径选择 g3_d_compile_references_v1.txt，a107 的补充只进入通用模板，18份已物化请求仍缺少三态约束，形成接线 RED。D2 仅 import/prepare，不执行 provider。Owner=root 将相同语义规则补入实际 references 模板，以新 source 和新签名重新物化18请求并检查真实 system body。只继承原成功的1个 ENTITY_SYNTHESIS，失败窗口不继承任何字段，161字段完整重做；不更改 projector，不重建 APP。
+
+D3第一字段窗实际响应的age_segment_tags引用删除原文CRLF，触发既有offered-span校验RED。Owner=root仅在实际references模板明确优先短单行充分引用、多项事实使用多条独立证据，保留原始响应和严格校验；既有projection机制整体校验并复用其余9字段，不逐字段重复重渲染。下一物料组合多个已验证manifest（库已支持），仅调用剩余字段；APP构建和烟测已PASS，不重建。
