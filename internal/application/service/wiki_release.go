@@ -552,6 +552,8 @@ type ConceptSourceAuthorityVerifier830G2 interface {
 // WikiReleaseServiceOptions keeps time, identities, and bounded faults
 // injectable without creating a general workflow platform.
 type WikiReleaseServiceOptions struct {
+	SystemPolicyProvider                SystemAutomationPolicyProvider
+	SystemDecisionVerifier              SystemPolicyDecisionVerifier
 	Now                                 func() time.Time
 	NewID                               func(kind string) string
 	Faults                              WikiReleaseFaults
@@ -576,6 +578,8 @@ func (e *WikiReleaseConflictError) Unwrap() error { return ErrWikiReleaseConflic
 
 // WikiReleaseService is the isolated S0-R core, not a production Kernel.
 type WikiReleaseService struct {
+	systemPolicyProvider                SystemAutomationPolicyProvider
+	systemDecisionVerifier              SystemPolicyDecisionVerifier
 	publishedReadReuse                  *publishedBatchReadReuse830G3
 	repository                          *wikirepository.WikiReleaseRepository
 	accessVerifier                      WikiReleaseAccessVerifier
@@ -616,6 +620,8 @@ func NewWikiReleaseService(
 		}
 	}
 	service := &WikiReleaseService{
+		systemPolicyProvider:                options.SystemPolicyProvider,
+		systemDecisionVerifier:              options.SystemDecisionVerifier,
 		repository:                          repository,
 		accessVerifier:                      accessVerifier,
 		authorizationVerifier:               authorizationVerifier,

@@ -300,6 +300,32 @@ class UnknownFieldKeyAlignment830G3V1(_FrozenModel):
         return self
 
 
+class PublishedBaseBinding830G3V1(_FrozenModel):
+    """An exact parent claim; serving authority verifies it against its Ready Head."""
+
+    contract: Literal["published-base-binding.830.g3.v1"]
+    release_id: Text
+    activation_epoch: Annotated[StrictInt, Field(gt=0)]
+    candidate_sha256: Hash
+    manifest_digest: Hash
+    entity_bindings: tuple[EntityCompileBinding830G3V1, ...] = Field(min_length=1)
+    binding_sha256: Hash
+
+    @model_validator(mode="after")
+    def validate_binding(self) -> Self:
+        ids = tuple(row.entity_id for row in self.entity_bindings)
+        if ids != tuple(sorted(set(ids))) or self.binding_sha256 != _batch_sha256(
+            self.contract, _without_hash(self, "binding_sha256")
+        ):
+            raise ValueError("PUBLISHED_BASE_BINDING_INVALID")
+        return self
+
+
+class FieldRefresh830G3V1(_FrozenModel):
+    entity_id: Text
+    field_key: Text
+
+
 class BatchConceptCompileRequest830G3V1(_FrozenModel):
     contract: Literal["batch-concept-compile-request.830.g3.v1"]
     base_request: CompileRequest
@@ -312,7 +338,33 @@ class BatchConceptCompileRequest830G3V1(_FrozenModel):
     unknown_field_key_alignments: tuple[UnknownFieldKeyAlignment830G3V1, ...]
     quality_status: Literal["REGISTERED_NOT_QUALITY_ADMITTED"]
     release_lane: Literal["ISOLATED_NOT_FOR_PRODUCTION"]
+    published_base: PublishedBaseBinding830G3V1 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    refresh_fields: tuple[FieldRefresh830G3V1, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
     request_sha256: Hash
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_empty_incremental_extensions(cls, value):
+        if isinstance(value, Mapping) and (
+            ("published_base" in value and value["published_base"] is None)
+            or ("refresh_fields" in value and not value["refresh_fields"])
+        ):
+            raise ValueError("EMPTY_INCREMENTAL_EXTENSION_MUST_BE_OMITTED")
+        return value
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def canonical_typed_revalidation(cls, value, handler):
+        # Pydantic's instance revalidation materializes omitted defaults before
+        # the wire validator. Preserve canonical omission without skipping any
+        # hash, source, or closure validation of the instance being rechecked.
+        if isinstance(value, cls):
+            value = value.model_dump(mode="python")
+        return handler(value)
 
     @model_validator(mode="after")
     def validate_request(self) -> Self:
@@ -653,6 +705,39 @@ def _validate_confirmation(request: BatchConceptCompileRequest830G3V1) -> None:
         raise BatchConceptCompileError("PROFILE_CONFIRMATION_MISMATCH")
 
 
+def _published_base_bindings(request: BatchConceptCompileRequest830G3V1):
+    published = request.published_base
+    if published is None:
+        if request.refresh_fields:
+            raise BatchConceptCompileError("FIELD_REFRESH_REQUIRES_PUBLISHED_BASE")
+        return {}
+    base = request.base_request
+    rows = {row.entity_id: row for row in published.entity_bindings}
+    existing = {row.entity_id: row for row in request.resolution_inputs.existing_entities.entities}
+    if (
+        _base_contract_kind(base) != "PUBLISHED_G3"
+        or (published.release_id, published.activation_epoch)
+        != (base.base_release_id, base.base_activation_epoch)
+        or set(rows) != set(base.existing_entity_versions)
+    ):
+        raise BatchConceptCompileError("PUBLISHED_BASE_BINDING_MISMATCH")
+    for entity_id, row in rows.items():
+        actual = existing.get(entity_id)
+        keys = {field.field_key for field in base.existing_fields if field.entity_id == entity_id}
+        if (
+            actual is None
+            or row.entity_version != base.existing_entity_versions[entity_id]
+            or set(row.required_fields) != keys
+            or (row.entity_version, row.issuer, row.display_name, row.product_code, row.version_label,
+                row.version_anchor.kind, row.version_anchor.observed_value)
+            != (actual.entity_version, actual.issuer, actual.name, actual.product_code,
+                actual.version_label, actual.filing_or_registration.kind,
+                actual.filing_or_registration.value)
+        ):
+            raise BatchConceptCompileError("PUBLISHED_BASE_BINDING_MISMATCH")
+    return rows
+
+
 def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> None:
     base = request.base_request
     base_kind = _base_contract_kind(base)
@@ -704,6 +789,7 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
     ):
         raise BatchConceptCompileError("RESOLUTION_REPLAY_MISMATCH")
     _validate_confirmation(request)
+    published_bindings = _published_base_bindings(request)
     bindings = request.entity_bindings
     ids = tuple(item.entity_id for item in bindings)
     if ids != tuple(sorted(set(ids))) or set(ids) != set(base.required_fields):
@@ -739,6 +825,7 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         raise BatchConceptCompileError("SOURCE_CLOSURE_MISMATCH")
     base_entities = set(base.existing_entity_versions)
     matched_base: set[str] = set()
+    current_entities: set[str] = set()
     for binding in bindings:
         entry = _catalog_entry(request, binding)
         expected_profile = entry.profile
@@ -760,6 +847,21 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         ):
             raise BatchConceptCompileError("SCHEMA_PROFILE_BINDING_MISMATCH")
         refs = {(item.material_id, item.proposal_ref): item for item in binding.resolution_refs}
+        # Current C is authoritative for selected materials. A partial current
+        # match can never fall back to a parent binding to hide a new conflict.
+        current_refs = set(refs).intersection(decision_index)
+        if published_bindings and not current_refs:
+            if any(material_id in proposal_index for material_id, _ in refs):
+                raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
+            if published_bindings.get(binding.entity_id) != binding:
+                raise BatchConceptCompileError("PUBLISHED_BASE_BINDING_MISMATCH")
+            for bound in binding.resolution_evidence:
+                verify_evidence(bound.evidence, base.sources)
+            matched_base.add(binding.entity_id)
+            continue
+        if published_bindings and current_refs != set(refs):
+            raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
+        current_entities.add(binding.entity_id)
         evidence_ids = {item.evidence_id for item in binding.resolution_evidence}
         if set(binding.source_material_ids) != {key[0] for key in refs}:
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
@@ -917,6 +1019,12 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
                 raise BatchConceptCompileError("CREATE_IDENTITY_MISMATCH")
     if matched_base != base_entities:
         raise BatchConceptCompileError("BASE_ENTITY_MATCH_REQUIRED")
+    refresh = tuple((row.entity_id, row.field_key) for row in request.refresh_fields)
+    old_keys = {(row.entity_id, row.field_key) for row in base.existing_fields}
+    if refresh != tuple(sorted(set(refresh))) or any(
+        key not in old_keys or key[0] not in current_entities for key in refresh
+    ):
+        raise BatchConceptCompileError("FIELD_REFRESH_INVALID")
     source_keys = {(item.revision_id, item.block_id) for item in base.sources}
     existing_members: tuple[ConceptDefinition | FieldAssertion | FreeWikiPage, ...] = (
         *base.existing_definitions,
@@ -929,7 +1037,8 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         for evidence in member.evidence
     }
     selected_material_ids = {
-        material_id for binding in bindings for material_id in binding.source_material_ids
+        material_id for binding in bindings if binding.entity_id in current_entities
+        for material_id in binding.source_material_ids
     }
     for material_id in selected_material_ids:
         corpus_entry = corpus_index.get(material_id)
@@ -938,7 +1047,15 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         required_source_keys.update(
             (block.revision_id, block.block_id) for block in corpus_entry.blocks
         )
-    if source_keys != required_source_keys:
+    required_source_keys.update(
+        (bound.evidence.revision_id, bound.evidence.block_id)
+        for binding in published_bindings.values() for bound in binding.resolution_evidence
+    )
+    # The deployed serving service checks the exact parent-source union; this
+    # offline DTO cannot manufacture that external authority from a hash claim.
+    if (not published_bindings and source_keys != required_source_keys) or (
+        published_bindings and not required_source_keys <= source_keys
+    ):
         raise BatchConceptCompileError("SOURCE_CLOSURE_MISMATCH")
     expected_alignments = _ALIGNMENT_HASHES if base_kind == "LEGACY_G2" else ()
     if tuple(
@@ -1263,6 +1380,8 @@ def build_batch_compile_request(
     policy: BatchResolutionPolicyV1,
     resolution: BatchEntityResolutionV1,
     selected_decision_refs: tuple[tuple[str, str], ...],
+    published_base: PublishedBaseBinding830G3V1 | None = None,
+    refresh_fields: tuple[FieldRefresh830G3V1, ...] = (),
 ) -> BatchConceptCompileRequest830G3V1:
     """Build one exact, offline G3 request from Catalog and replayed C inputs."""
 
@@ -1289,10 +1408,19 @@ def build_batch_compile_request(
         resolution=resolution,
         selected_decision_refs=selected_decision_refs,
     )
+    current_binding_index = {item.entity_id: item for item in bindings}
+    if published_base is not None:
+        published_base = PublishedBaseBinding830G3V1.model_validate(published_base)
+        merged = {item.entity_id: item for item in published_base.entity_bindings}
+        merged.update(current_binding_index)
+        bindings = tuple(merged[key] for key in sorted(merged))
     binding_index = {item.entity_id: item for item in bindings}
     if any(
         (binding := binding_index.get(entity_id)) is None
-        or binding.resolution_disposition != "MATCH"
+        or (
+            (published_base is None or entity_id in current_binding_index)
+            and binding.resolution_disposition != "MATCH"
+        )
         or binding.entity_version != entity_version
         for entity_id, entity_version in base_request.existing_entity_versions.items()
     ):
@@ -1333,6 +1461,12 @@ def build_batch_compile_request(
         "quality_status": "REGISTERED_NOT_QUALITY_ADMITTED",
         "release_lane": "ISOLATED_NOT_FOR_PRODUCTION",
     }
+    if published_base is not None:
+        payload["published_base"] = published_base
+    if refresh_fields:
+        payload["refresh_fields"] = tuple(
+            FieldRefresh830G3V1.model_validate(row) for row in refresh_fields
+        )
     try:
         return BatchConceptCompileRequest830G3V1.model_validate(
             {
@@ -1412,7 +1546,11 @@ def aligned_existing_fields(
             != _batch_sha256("batch-concept-member.830.g3.v1", new_member)
         ):
             raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
-    return tuple(sorted(result, key=lambda item: (item.entity_id, item.field_key)))
+    refreshed = {(row.entity_id, row.field_key) for row in request.refresh_fields}
+    return tuple(sorted(
+        (item for item in result if (item.entity_id, item.field_key) not in refreshed),
+        key=lambda item: (item.entity_id, item.field_key),
+    ))
 
 
 def _unique_json(raw: str | bytes) -> object:

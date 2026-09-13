@@ -504,9 +504,7 @@ def test_p1_1_start_moves_leased_to_running_and_counts_attempt(
     with pytest.raises(StaleGenerationError):
         store.start(space_id="space-a", job_id=claimed.id, generation=0)
     with pytest.raises(IllegalTransitionError):
-        store.start(
-            space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation
-        )
+        store.start(space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation)
 
 
 def test_p1_1_reclaim_records_lease_expired_retryable_and_requeues_below_limit(
@@ -548,9 +546,7 @@ def test_c2_reclaim_generation_bump_fences_evicted_worker_immediately(
 
     # 回收后（尚未有新 claim）：被逐出 worker 的一切写入即刻 stale。
     with pytest.raises(StaleGenerationError):
-        store.heartbeat(
-            space_id="space-a", job_id=running.id, generation=running.lease_generation
-        )
+        store.heartbeat(space_id="space-a", job_id=running.id, generation=running.lease_generation)
     with pytest.raises(StaleGenerationError):
         store.report_success(
             space_id="space-a", job_id=running.id, generation=running.lease_generation
@@ -597,12 +593,8 @@ def test_c2_outbox_append_requires_running_state(factory: SessionFactory) -> Non
                     draft=OutboxEventDraft(event_type="job.custom", payload={}),
                 )
 
-    running = store.start(
-        space_id="space-a", job_id=leased.id, generation=leased.lease_generation
-    )
-    store.report_success(
-        space_id="space-a", job_id=running.id, generation=running.lease_generation
-    )
+    running = store.start(space_id="space-a", job_id=leased.id, generation=leased.lease_generation)
+    store.report_success(space_id="space-a", job_id=running.id, generation=running.lease_generation)
     # 终态行携带仍然匹配的 generation：state guard 必须单独拒绝（B1 probe）。
     with factory() as session:
         with session.begin():
@@ -747,9 +739,7 @@ def test_p1_3_reclaim_leaves_active_leases_untouched_and_is_space_scoped(
     assert report.requeued_job_ids == ()
     assert report.dead_lettered_job_ids == ()
     assert active_store.get_job(space_id="space-a", job_id=alive.id).state is JobState.LEASED
-    assert (
-        expired_store.get_job(space_id="space-b", job_id=expired.id).state is JobState.LEASED
-    )
+    assert expired_store.get_job(space_id="space-b", job_id=expired.id).state is JobState.LEASED
 
 
 # --- T6：完成事务 = 领域写 + outbox + 状态转换，原子且至多成功一次 ---
@@ -758,9 +748,7 @@ def test_p1_3_reclaim_leaves_active_leases_untouched_and_is_space_scoped(
 def _running_job(store: JobStore, space_id: str = "space-a", key: str = "job-1") -> JobSnapshot:
     store.enqueue(space_id=space_id, job_type="compile", idempotency_key=key)
     claimed = _claimed(store, space_id)
-    return store.start(
-        space_id=space_id, job_id=claimed.id, generation=claimed.lease_generation
-    )
+    return store.start(space_id=space_id, job_id=claimed.id, generation=claimed.lease_generation)
 
 
 def _outbox_rows(factory: SessionFactory) -> list[tuple[str, str, str]]:
@@ -783,9 +771,7 @@ def test_p1_6_report_success_commits_state_and_outbox_in_one_transaction(
         space_id="space-a",
         job_id=running.id,
         generation=running.lease_generation,
-        events=(
-            OutboxEventDraft(event_type="job.succeeded", payload={"job_id": running.id}),
-        ),
+        events=(OutboxEventDraft(event_type="job.succeeded", payload={"job_id": running.id}),),
     )
 
     assert done.state is JobState.SUCCEEDED
@@ -1199,9 +1185,7 @@ def test_p1_4_job_type_policy_override_takes_precedence(factory: SessionFactory)
         factory,
         backoff_seconds=(0.0,),
         max_attempts=3,
-        job_type_policies={
-            "fragile": JobTypePolicy(max_attempts=1, backoff_seconds=(0.0,))
-        },
+        job_type_policies={"fragile": JobTypePolicy(max_attempts=1, backoff_seconds=(0.0,))},
     )
     store.enqueue(space_id="space-a", job_type="fragile", idempotency_key="f-1")
     claimed = _claimed(store, "space-a")
@@ -1533,34 +1517,26 @@ def test_q23_decision_duplicate_label_survives_a_reclaim(factory: SessionFactory
 
     # 路径一：唤醒后再失败（error_class 被覆写为 retryable）。
     retaken = _claimed(store, "space-a", worker_id="worker-2")
-    again = store.start(
-        space_id="space-a", job_id=retaken.id, generation=retaken.lease_generation
-    )
+    again = store.start(space_id="space-a", job_id=retaken.id, generation=retaken.lease_generation)
     store.report_failure(
         space_id="space-a",
         job_id=again.id,
         generation=again.lease_generation,
         failure=JobFailure(error_class=ErrorClass.RETRYABLE, summary="transient"),
     )
-    assert (
-        store.resume_after_decision(space_id="space-a", job_id=again.id).status == "duplicate"
-    )
+    assert store.resume_after_decision(space_id="space-a", job_id=again.id).status == "duplicate"
 
     # 路径二：经历一次租约过期回收（回收无条件写 retryable）。
     third = _claimed(store, "space-a", worker_id="worker-3")
     force_expire(factory, third.id)
     store.reclaim_expired_leases(space_ids=("space-a",))
-    assert (
-        store.resume_after_decision(space_id="space-a", job_id=third.id).status == "duplicate"
-    )
+    assert store.resume_after_decision(space_id="space-a", job_id=third.id).status == "duplicate"
 
 
 def test_q23_never_awaiting_row_is_still_not_awaiting(factory: SessionFactory) -> None:
     """接受侧：真正从未进入 awaiting_human 的行仍返回 not_awaiting。"""
     store = make_store(factory)
-    queued = store.enqueue(
-        space_id="space-a", job_type="compile", idempotency_key="never"
-    ).job
+    queued = store.enqueue(space_id="space-a", job_type="compile", idempotency_key="never").job
 
     outcome = store.resume_after_decision(space_id="space-a", job_id=queued.id)
 
@@ -1615,9 +1591,7 @@ def test_q22_healthy_distribution_metrics_stay_exact(factory: SessionFactory) ->
 
 
 @pytest.mark.parametrize("bad_space_id", ["", "a\x00b", "x" * 64])
-def test_q24_read_path_input_contract_is_typed(
-    factory: SessionFactory, bad_space_id: str
-) -> None:
+def test_q24_read_path_input_contract_is_typed(factory: SessionFactory, bad_space_id: str) -> None:
     """P1.9 读路径输入合同：写路径拒绝的标识符在读路径同样 typed 拒绝。
 
     修复前：NUL 泄漏原始 `DataError`，超长 space_id 静默返回 queue_depth=0
@@ -1728,9 +1702,7 @@ def test_q19b_domain_write_cannot_target_p1_owned_tables(
     _domain_table(job_engine)
     store = make_store(factory)
     running = _running_for_domain_write(store, key=f"owned-{owned_table}")
-    victim = store.enqueue(
-        space_id="space-z", job_type="compile", idempotency_key="victim"
-    ).job
+    victim = store.enqueue(space_id="space-z", job_type="compile", idempotency_key="victim").job
 
     with pytest.raises(DomainWriteViolationError):
         store.report_success(
@@ -1782,9 +1754,7 @@ def test_q19c_other_domains_wiki_prefixed_tables_are_not_blocked(
 
     assert done.state is JobState.SUCCEEDED
     with factory() as session:
-        assert (
-            session.execute(text("SELECT count(*) FROM wiki_page_revisions")).scalar_one() == 1
-        )
+        assert session.execute(text("SELECT count(*) FROM wiki_page_revisions")).scalar_one() == 1
 
 
 @pytest.mark.parametrize(
@@ -1891,9 +1861,7 @@ def test_q31_values_keys_must_be_plain_identifiers(
                 space_id="space-a",
                 job_id=running.id,
                 generation=running.lease_generation,
-                domain_writes=(
-                    DomainWriteSpec(table="demo_domain", values={bad_key: "x"}),
-                ),
+                domain_writes=(DomainWriteSpec(table="demo_domain", values={bad_key: "x"}),),
             )
 
 
@@ -2216,9 +2184,7 @@ def test_q15_expired_lease_holder_has_no_write_authority_on_any_path(
     # 路径二/三/四：running 行的结果提交、失败上报、outbox 追加
     for path in ("success", "failure", "event"):
         job = _claimed(store, "space-a", worker_id=f"worker-{path}")
-        running = store.start(
-            space_id="space-a", job_id=job.id, generation=job.lease_generation
-        )
+        running = store.start(space_id="space-a", job_id=job.id, generation=job.lease_generation)
         force_expire(factory, running.id)
         gen = running.lease_generation
         if path == "success":
@@ -2281,9 +2247,7 @@ def test_q15_unexpired_lease_still_writes_on_every_path(factory: SessionFactory)
     assert done.state is JobState.SUCCEEDED
 
     second = _claimed(store, "space-a", worker_id="worker-2")
-    running2 = store.start(
-        space_id="space-a", job_id=second.id, generation=second.lease_generation
-    )
+    running2 = store.start(space_id="space-a", job_id=second.id, generation=second.lease_generation)
     failed = store.report_failure(
         space_id="space-a",
         job_id=running2.id,
@@ -2314,3 +2278,49 @@ def test_q14_crash_after_start_keeps_its_existing_bound(factory: SessionFactory)
         assert row.state == JobState.DEAD_LETTER.value
         assert row.attempt == 3
     assert leases == 3
+
+
+def test_atomic_admission_rolls_back_job_when_domain_write_is_rejected(factory):
+    from uuid import uuid4
+
+    store = make_store(factory)
+    with pytest.raises(DomainWriteViolationError):
+        store.enqueue(
+            space_id="space-a",
+            job_type="fixture",
+            idempotency_key="atomic-reject",
+            job_id=str(uuid4()),
+            domain_writes=(DomainWriteSpec(table="wiki_jobs", values={"id": "forbidden"}),),
+        )
+    assert job_count(factory) == 0
+
+
+def test_atomic_admission_dedup_rejects_changed_explicit_identity(factory):
+    from uuid import uuid4
+
+    store = make_store(factory)
+    job_id = str(uuid4())
+    first = store.enqueue(
+        space_id="space-a",
+        job_type="fixture",
+        idempotency_key="atomic",
+        job_id=job_id,
+        payload={"run_id": "one"},
+    )
+    same = store.enqueue(
+        space_id="space-a",
+        job_type="fixture",
+        idempotency_key="atomic",
+        job_id=job_id,
+        payload={"run_id": "one"},
+    )
+    assert same.deduplicated and first.job.id == same.job.id
+    with pytest.raises(InvalidJobInputError):
+        store.enqueue(
+            space_id="space-a",
+            job_type="fixture",
+            idempotency_key="atomic",
+            job_id=job_id,
+            payload={"run_id": "changed"},
+        )
+    assert job_count(factory) == 1

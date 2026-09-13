@@ -3,6 +3,8 @@ package embedding
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/logger"
+	"github.com/Tencent/WeKnora/internal/types"
 	secutils "github.com/Tencent/WeKnora/internal/utils"
 )
 
@@ -149,7 +152,34 @@ func (e *OpenAIEmbedder) doRequestWithRetry(ctx context.Context, jsonData []byte
 		req.Header.Set("Authorization", "Bearer "+e.apiKey)
 		secutils.ApplyCustomHeaders(req, e.customHeaders)
 
+		purpose, _ := types.LLMCallMetadataFromContext(ctx)
+		digest := sha256.Sum256(jsonData)
+		reservation, reserveErr := types.ReserveModelDispatch(ctx, types.ModelDispatchSpec{
+			Operation: "embedding", Purpose: purpose, ModelID: e.modelID, ModelName: e.modelName,
+			RequestSHA256: hex.EncodeToString(digest[:]), TransportRetryIndex: i,
+		})
+		if reserveErr != nil {
+			return nil, fmt.Errorf("%w: reserve embedding dispatch: %v", types.ErrModelDispatchJournalUnavailable, reserveErr)
+		}
+		if reservation != nil {
+			if dispatchErr := reservation.MarkDispatching(ctx); dispatchErr != nil {
+				return nil, fmt.Errorf("%w: mark embedding dispatch: %v", types.ErrModelDispatchJournalUnavailable, dispatchErr)
+			}
+		}
 		resp, err = e.httpClient.Do(req)
+		if reservation != nil {
+			result := types.ModelDispatchResult{Outcome: "TRANSPORT_ERROR"}
+			if err == nil && resp != nil {
+				result.Outcome = "HTTP_RESPONSE"
+				result.HTTPStatus = resp.StatusCode
+			}
+			if recordErr := reservation.RecordModelDispatch(ctx, result); recordErr != nil {
+				if resp != nil && resp.Body != nil {
+					_ = resp.Body.Close()
+				}
+				return nil, fmt.Errorf("%w: record embedding dispatch: %v", types.ErrModelDispatchJournalUnavailable, recordErr)
+			}
+		}
 		if err == nil {
 			return resp, nil
 		}

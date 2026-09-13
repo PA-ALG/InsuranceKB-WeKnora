@@ -930,6 +930,7 @@ def _dependency_plan(lock: Mapping[str, Any]) -> dict[str, Any]:
 
 
 _DOCKER_CONTEXT = "colima-g1-build"
+_DOCKER_CONTEXTS = (_DOCKER_CONTEXT, "colima")
 _APP_REPOSITORY = "wechatopenai/weknora-app"
 _LABEL_PREFIX = "io.insurancekb.app."
 
@@ -989,13 +990,14 @@ def _inspect_image(
     repo_root: Path,
     candidate: str,
     labels: Mapping[str, str],
+    docker_context: str,
 ) -> None:
     result = _docker(
         runner,
         (
             "docker",
             "--context",
-            _DOCKER_CONTEXT,
+            docker_context,
             "image",
             "inspect",
             candidate,
@@ -1086,9 +1088,11 @@ def _receipt(
     labels: Mapping[str, str],
     candidates: Sequence[str],
     build_invocations: int,
+    docker_context: str,
 ) -> dict[str, Any]:
     return {
         "contract": "ba0-app-build-receipt.v1",
+        "docker_context": docker_context,
         "status": "PASS",
         "selector": selector,
         "artifact_identity": identity["artifact_identity"],
@@ -1144,10 +1148,13 @@ def select_or_build_app(
     runner: Runner = subprocess.run,
     secret_values: Mapping[str, str] | None = None,
     real_build_budget_remaining: int,
+    docker_context: str = _DOCKER_CONTEXT,
 ) -> dict[str, Any]:
     """Reuse one exactly-labelled image, or spend the one authorized build."""
 
     del secret_values  # credentials cannot influence or cross the Docker boundary
+    if docker_context not in _DOCKER_CONTEXTS:
+        raise ArtifactContractError("Docker context is not approved")
     root = Path(repo_root).resolve(strict=True)
     labels = _required_labels(identity)
     _source_metadata(identity)
@@ -1156,6 +1163,7 @@ def select_or_build_app(
         output,
         {
             "contract": "ba0-app-build-receipt.v1",
+            "docker_context": docker_context,
             "status": "INCOMPLETE",
             "selector": "PREFLIGHT",
             "artifact_identity": identity["artifact_identity"],
@@ -1173,7 +1181,7 @@ def select_or_build_app(
         (
             "docker",
             "--context",
-            _DOCKER_CONTEXT,
+            docker_context,
             "image",
             "ls",
             "--quiet",
@@ -1196,6 +1204,7 @@ def select_or_build_app(
             repo_root=root,
             candidate=image_id,
             labels=labels,
+            docker_context=docker_context,
         )
         receipt = _receipt(
             identity,
@@ -1204,6 +1213,7 @@ def select_or_build_app(
             labels=labels,
             candidates=candidates,
             build_invocations=0,
+            docker_context=docker_context,
         )
     else:
         if real_build_budget_remaining < 1:
@@ -1220,7 +1230,7 @@ def select_or_build_app(
             command: list[str] = [
                 "docker",
                 "--context",
-                _DOCKER_CONTEXT,
+                docker_context,
                 "build",
                 "--file",
                 "docker/Dockerfile.app",
@@ -1242,6 +1252,7 @@ def select_or_build_app(
                 output,
                 {
                     "contract": "ba0-app-build-receipt.v1",
+                    "docker_context": docker_context,
                     "status": "INCOMPLETE",
                     "selector": "BUILD_AFFECTED",
                     "artifact_identity": identity["artifact_identity"],
@@ -1272,6 +1283,7 @@ def select_or_build_app(
             repo_root=root,
             candidate=image_id,
             labels=labels,
+            docker_context=docker_context,
         )
         receipt = _receipt(
             identity,
@@ -1280,6 +1292,7 @@ def select_or_build_app(
             labels=labels,
             candidates=(),
             build_invocations=1,
+            docker_context=docker_context,
         )
 
     _write_evidence(output, receipt)
@@ -1294,7 +1307,7 @@ def _main(arguments: Sequence[str] | None = None) -> int:
     plan_parser.add_argument("--output", required=True)
     selector_parser = subparsers.add_parser("select-or-build")
     selector_parser.add_argument("--repo-root", default=".")
-    selector_parser.add_argument("--context", required=True, choices=(_DOCKER_CONTEXT,))
+    selector_parser.add_argument("--context", default=_DOCKER_CONTEXT, choices=_DOCKER_CONTEXTS)
     selector_parser.add_argument("--build-source-head", required=True)
     selector_parser.add_argument("--evidence-out", required=True)
     parsed = parser.parse_args(arguments)
@@ -1339,6 +1352,7 @@ def _main(arguments: Sequence[str] | None = None) -> int:
             runner=subprocess.run,
             secret_values={},
             real_build_budget_remaining=1,
+            docker_context=parsed.context,
         )
         print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
         return 0

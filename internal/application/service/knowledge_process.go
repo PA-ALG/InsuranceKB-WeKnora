@@ -590,7 +590,21 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 			return
 		}
 
-		err = retrieveEngine.BatchIndex(ctx, embeddingModel, indexInfoList)
+		embeddingSpan := s.tracker().LookupStage(
+			ctx, knowledge.ID, attemptFromCtx(ctx), types.StageEmbedding,
+		)
+		dispatchCtx, dispatchErr := s.withG3ModelDispatchParent(ctx, knowledge, embeddingSpan)
+		if dispatchErr != nil {
+			knowledge.ParseStatus = types.ParseStatusFailed
+			knowledge.ErrorMessage = "model dispatch journal unavailable"
+			knowledge.UpdatedAt = time.Now()
+			_ = s.repo.UpdateKnowledge(ctx, knowledge)
+			s.failStage(ctx, knowledge.ID, types.StageEmbedding,
+				werrors.ErrCodeVectorStoreWriteFailed, "model dispatch journal unavailable", dispatchErr)
+			return
+		}
+		dispatchCtx = types.WithLLMCallMetadata(dispatchCtx, "document_embedding", "")
+		err = retrieveEngine.BatchIndex(dispatchCtx, embeddingModel, indexInfoList)
 		if err != nil {
 			knowledge.ParseStatus = types.ParseStatusFailed
 			knowledge.ErrorMessage = err.Error()
@@ -939,6 +953,8 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 
 	// Set tenant and language context
 	ctx = context.WithValue(ctx, types.TenantIDContextKey, payload.TenantID)
+	retryCount, _ := asynq.GetRetryCount(ctx)
+	ctx = withModelDispatchWorkerRetry(ctx, retryCount)
 	if payload.Language != "" {
 		ctx = context.WithValue(ctx, types.LanguageContextKey, payload.Language)
 	}
@@ -1079,6 +1095,12 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 		summaryErr = err
 		return fmt.Errorf("failed to get chat model: %w", err)
 	}
+	ctx, err = s.withG3ModelDispatchParent(ctx, knowledge, span)
+	if err != nil {
+		markSummaryFailed()
+		summaryErr = err
+		return err
+	}
 
 	// Generate summary
 	summary, err := s.getSummary(ctx, chatModel, knowledge, textChunks)
@@ -1091,6 +1113,11 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 		// (deadline exceeded vs unexpected EOF vs 5xx, etc.).
 		summaryOut["error"] = previewText(err.Error(), 500)
 		summaryOut["error_type"] = fmt.Sprintf("%T", err)
+		if errors.Is(err, types.ErrModelDispatchJournalUnavailable) {
+			markSummaryFailed()
+			summaryErr = err
+			return err
+		}
 		// For the insufficient-content case (scanned PDF without OCR, etc.)
 		// we deliberately do NOT fall back to the first chunk's raw content,
 		// since that chunk is typically just a bare markdown image reference
@@ -1210,7 +1237,8 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 			IsEnabled:       true,
 		}}
 
-		if err := retrieveEngine.BatchIndex(ctx, embeddingModel, indexInfo); err != nil {
+		embeddingCtx := types.WithLLMCallMetadata(ctx, "summary_embedding", "")
+		if err := retrieveEngine.BatchIndex(embeddingCtx, embeddingModel, indexInfo); err != nil {
 			logger.Errorf(ctx, "Failed to index summary chunk: %v", err)
 			summaryErr = err
 			return fmt.Errorf("failed to index summary chunk: %w", err)
@@ -2686,6 +2714,7 @@ func (s *knowledgeService) ProcessManualUpdate(ctx context.Context, t *asynq.Tas
 	ctx = logger.WithRequestID(ctx, payload.RequestId)
 	ctx = logger.WithField(ctx, "manual_process", payload.KnowledgeID)
 	ctx = context.WithValue(ctx, types.TenantIDContextKey, payload.TenantID)
+	retryCount, _ := asynq.GetRetryCount(ctx)
 
 	tenantInfo, err := s.tenantRepo.GetTenantByID(ctx, payload.TenantID)
 	if err != nil {
@@ -2758,6 +2787,18 @@ func (s *knowledgeService) ProcessManualUpdate(ctx context.Context, t *asynq.Tas
 		logger.Warnf(ctx, "ProcessManualUpdate: OpenAttempt failed for %s: %v", knowledge.ID, err)
 	}
 	ctx = withAttempt(ctx, attempt)
+	ctx = withModelDispatchWorkerRetry(ctx, retryCount)
+	parseAttempt := payload.ParseAttempt
+	if parseAttempt <= 0 {
+		parseAttempt = knowledge.CurrentParseAttempt
+	}
+	if err := s.ensureG3ModelDispatchJournal(ctx, knowledge, attempt, parseAttempt); err != nil {
+		knowledge.ParseStatus = types.ParseStatusFailed
+		knowledge.ErrorMessage = "model dispatch journal unavailable"
+		knowledge.UpdatedAt = time.Now()
+		_ = s.repo.UpdateKnowledge(ctx, knowledge)
+		return err
+	}
 
 	// Cleanup old resources (indexes, chunks, graph) for update operations
 	if payload.NeedCleanup {
@@ -2906,6 +2947,18 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 		}
 	}
 	ctx = withAttempt(ctx, attempt)
+	ctx = withModelDispatchWorkerRetry(ctx, retryCount)
+	parseAttempt := payload.ParseAttempt
+	if parseAttempt <= 0 {
+		parseAttempt = knowledge.CurrentParseAttempt
+	}
+	if err := s.ensureG3ModelDispatchJournal(ctx, knowledge, attempt, parseAttempt); err != nil {
+		knowledge.ParseStatus = types.ParseStatusFailed
+		knowledge.ErrorMessage = "model dispatch journal unavailable"
+		knowledge.UpdatedAt = time.Now()
+		_ = s.repo.UpdateKnowledge(ctx, knowledge)
+		return err
+	}
 
 	// 检查多模态配置（仅对文件导入）
 	if payload.FilePath != "" && !payload.EnableMultimodel && IsImageType(payload.FileType) {

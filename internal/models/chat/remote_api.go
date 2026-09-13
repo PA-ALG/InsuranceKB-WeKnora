@@ -3,6 +3,7 @@ package chat
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -231,7 +232,34 @@ func (c *RemoteAPIChat) chatWithRawHTTP(ctx context.Context, endpoint string, cu
 	logger.Infof(ctx, "[LLM Request] Remote HTTP, endpoint=%s, model=%s",
 		endpoint, c.modelName)
 
+	purpose, _ := types.LLMCallMetadataFromContext(ctx)
+	digest := sha256.Sum256(jsonData)
+	reservation, err := types.ReserveModelDispatch(ctx, types.ModelDispatchSpec{
+		Operation: "document_summary", Purpose: purpose, ModelID: c.modelID,
+		ModelName: c.modelName, RequestSHA256: fmt.Sprintf("%x", digest), TransportRetryIndex: 0,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: reserve chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, err)
+	}
+	if reservation != nil {
+		if err := reservation.MarkDispatching(ctx); err != nil {
+			return nil, fmt.Errorf("%w: mark chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, err)
+		}
+	}
 	resp, err := rawHTTPClient.Do(httpReq)
+	if reservation != nil {
+		result := types.ModelDispatchResult{Outcome: "TRANSPORT_ERROR"}
+		if err == nil && resp != nil {
+			result.Outcome = "HTTP_RESPONSE"
+			result.HTTPStatus = resp.StatusCode
+		}
+		if recordErr := reservation.RecordModelDispatch(ctx, result); recordErr != nil {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return nil, fmt.Errorf("%w: record chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, recordErr)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}

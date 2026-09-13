@@ -593,6 +593,21 @@ type UnknownFieldKeyAlignment830G3 struct {
 	AlignmentSHA256       string `json:"alignment_sha256"`
 }
 
+type PublishedBaseBinding830G3 struct {
+	Contract        string                      `json:"contract"`
+	ReleaseID       string                      `json:"release_id"`
+	ActivationEpoch uint64                      `json:"activation_epoch"`
+	CandidateSHA256 string                      `json:"candidate_sha256"`
+	ManifestDigest  string                      `json:"manifest_digest"`
+	EntityBindings  []EntityCompileBinding830G3 `json:"entity_bindings"`
+	BindingSHA256   string                      `json:"binding_sha256"`
+}
+
+type FieldRefresh830G3 struct {
+	EntityID string `json:"entity_id"`
+	FieldKey string `json:"field_key"`
+}
+
 type BatchConceptCompileRequest830G3 struct {
 	Contract                  string                                 `json:"contract"`
 	BaseRequest               ConceptCompileRequest830G2             `json:"base_request"`
@@ -602,10 +617,42 @@ type BatchConceptCompileRequest830G3 struct {
 	ResolutionInputs          BatchResolutionInputs830G3             `json:"resolution_inputs"`
 	Resolution                json.RawMessage                        `json:"resolution"`
 	EntityBindings            []EntityCompileBinding830G3            `json:"entity_bindings"`
+	PublishedBase             *PublishedBaseBinding830G3             `json:"published_base,omitempty"`
+	RefreshFields             []FieldRefresh830G3                    `json:"refresh_fields,omitempty"`
 	UnknownFieldKeyAlignments []UnknownFieldKeyAlignment830G3        `json:"unknown_field_key_alignments"`
 	QualityStatus             string                                 `json:"quality_status"`
 	ReleaseLane               string                                 `json:"release_lane"`
 	RequestSHA256             string                                 `json:"request_sha256"`
+}
+
+func validatePublishedBaseBinding830G3(binding *PublishedBaseBinding830G3) error {
+	if binding == nil || binding.Contract != "published-base-binding.830.g3.v1" ||
+		!conceptIdentity830G2(binding.ReleaseID) || binding.ActivationEpoch == 0 ||
+		!validHash830G3(binding.CandidateSHA256) || !validHash830G3(binding.ManifestDigest) ||
+		len(binding.EntityBindings) == 0 ||
+		!hashEqualWithout830G3(binding.Contract, *binding, "binding_sha256", binding.BindingSHA256) {
+		return ErrConceptCandidateBundle830G3
+	}
+	previous := ""
+	for _, row := range binding.EntityBindings {
+		if row.EntityID <= previous {
+			return ErrConceptCandidateBundle830G3
+		}
+		previous = row.EntityID
+	}
+	return nil
+}
+
+func validateFieldRefreshRows830G3(rows []FieldRefresh830G3) error {
+	previous := ""
+	for _, row := range rows {
+		key := row.EntityID + "\x00" + row.FieldKey
+		if !conceptIdentity830G2(row.EntityID) || !conceptIdentity830G2(row.FieldKey) || key <= previous {
+			return ErrConceptCandidateBundle830G3
+		}
+		previous = key
+	}
+	return nil
 }
 
 type BatchConceptPageManifest830G3 struct {
@@ -1227,9 +1274,14 @@ func batchConceptRootWithout830G3(value reflect.Value, hashKey string) (map[stri
 				found = true
 				continue
 			}
-			// Match the one optional wire collection's omitempty representation in hash preimages.
+			// Match the explicitly optional wire fields' omitempty representation in hash preimages.
 			if typeOf == reflect.TypeOf(BatchConceptCandidateBundle830G3{}) &&
 				field.Name == "NavigationAssignments" && value.Field(index).Len() == 0 {
+				continue
+			}
+			if typeOf == reflect.TypeOf(BatchConceptCompileRequest830G3{}) &&
+				(field.Name == "PublishedBase" && value.Field(index).IsNil() ||
+					field.Name == "RefreshFields" && value.Field(index).Len() == 0) {
 				continue
 			}
 			projected, err := batchConceptProjectRootField830G3(typeOf, field.Name, value.Field(index))
@@ -1337,9 +1389,11 @@ func nonNullCollections830G3(value reflect.Value) bool {
 		return true
 	case reflect.Struct:
 		for index := 0; index < value.NumField(); index++ {
-			// Only this optional collection is omitted from the legacy wire contract.
-			if value.Type() == reflect.TypeOf(BatchConceptCandidateBundle830G3{}) &&
-				value.Type().Field(index).Name == "NavigationAssignments" && value.Field(index).IsNil() {
+			// Optional collections are nil only when their wire members were omitted.
+			if (value.Type() == reflect.TypeOf(BatchConceptCandidateBundle830G3{}) &&
+				value.Type().Field(index).Name == "NavigationAssignments" ||
+				value.Type() == reflect.TypeOf(BatchConceptCompileRequest830G3{}) &&
+					value.Type().Field(index).Name == "RefreshFields") && value.Field(index).IsNil() {
 				continue
 			}
 			if value.Type().Field(index).PkgPath == "" &&
@@ -1804,7 +1858,18 @@ func corpusIndexes830G3(corpus BatchCorpus830G3) (
 
 func validateRequestSourceClosure830G3(
 	request BatchConceptCompileRequest830G3, entries map[string]CorpusEntry830G3,
+	currentBindingSets ...map[string]bool,
 ) error {
+	currentBindings := map[string]bool{}
+	if len(currentBindingSets) == 0 {
+		for _, binding := range request.EntityBindings {
+			currentBindings[binding.EntityID] = true
+		}
+	} else if len(currentBindingSets) == 1 {
+		currentBindings = currentBindingSets[0]
+	} else {
+		return ErrConceptCandidateBundle830G3
+	}
 	baseSources := map[sourceKey830G3]ConceptSourceBlock830G2{}
 	for _, source := range request.BaseRequest.Sources {
 		key := sourceKeyFor830G3(source)
@@ -1830,6 +1895,16 @@ func validateRequestSourceClosure830G3(
 		}
 	}
 	for _, binding := range request.EntityBindings {
+		if !currentBindings[binding.EntityID] {
+			for _, evidence := range binding.ResolutionEvidence {
+				key := evidenceKeyFor830G3(evidence.Evidence)
+				required[key] = true
+				if verifyConceptEvidence830G2(evidence.Evidence, request.BaseRequest.Sources) != nil {
+					return ErrConceptCandidateBundle830G3
+				}
+			}
+			continue
+		}
 		for _, materialID := range binding.SourceMaterialIDs {
 			entry, exists := entries[materialID]
 			if !exists {
@@ -1844,13 +1919,105 @@ func validateRequestSourceClosure830G3(
 			}
 		}
 	}
-	if len(baseSources) != len(required) {
+	if request.PublishedBase == nil && len(baseSources) != len(required) {
 		return ErrConceptCandidateBundle830G3
 	}
 	for key := range required {
 		if _, exists := baseSources[key]; !exists {
 			return ErrConceptCandidateBundle830G3
 		}
+	}
+	return nil
+}
+
+func currentBindingIDs830G3(
+	bindings []EntityCompileBinding830G3, typed typedResolutionInputs830G3,
+) (map[string]bool, error) {
+	decisions := map[string]bool{}
+	for _, parent := range typed.Resolution.Decisions {
+		for _, child := range parent.Children {
+			key := parent.MaterialID + "\x00" + child.ProposalRef
+			if decisions[key] {
+				return nil, ErrConceptCandidateBundle830G3
+			}
+			decisions[key] = true
+		}
+	}
+	current := map[string]bool{}
+	proposalMaterials := map[string]bool{}
+	for _, proposal := range typed.Proposals.Proposals {
+		proposalMaterials[proposal.MaterialID] = true
+	}
+	for _, binding := range bindings {
+		hits := 0
+		materialHits := 0
+		for _, ref := range binding.ResolutionRefs {
+			if decisions[ref.MaterialID+"\x00"+ref.ProposalRef] {
+				hits++
+			}
+			if proposalMaterials[ref.MaterialID] {
+				materialHits++
+			}
+		}
+		if hits != 0 && hits != len(binding.ResolutionRefs) || hits == 0 && materialHits != 0 {
+			return nil, ErrConceptCandidateBundle830G3
+		}
+		if hits == len(binding.ResolutionRefs) {
+			current[binding.EntityID] = true
+		}
+	}
+	return current, nil
+}
+
+// ValidateBatchPublishedBaseHistory830G3 binds an incremental request to the
+// already validated current parent. The embedded published-base object is a
+// claim; the caller must supply the parent reopened from the release authority.
+func ValidateBatchPublishedBaseHistory830G3(
+	parent, child BatchConceptCandidateBundle830G3,
+	releaseID string,
+	activationEpoch uint64,
+	manifestDigest string,
+) error {
+	binding := child.Request.PublishedBase
+	if binding == nil || validatePublishedBaseBinding830G3(binding) != nil ||
+		binding.ReleaseID != releaseID || binding.ActivationEpoch != activationEpoch ||
+		binding.CandidateSHA256 != parent.CandidateHash || binding.ManifestDigest != manifestDigest ||
+		child.Request.BaseRequest.BaseReleaseID != releaseID ||
+		child.Request.BaseRequest.BaseActivationEpoch != activationEpoch ||
+		!reflect.DeepEqual(binding.EntityBindings, parent.Request.EntityBindings) {
+		return ErrConceptCandidateBundle830G3
+	}
+	expected := map[sourceKey830G3]ConceptSourceBlock830G2{}
+	add := func(block ConceptSourceBlock830G2) error {
+		key := sourceKeyFor830G3(block)
+		if previous, exists := expected[key]; exists && !reflect.DeepEqual(previous, block) {
+			return ErrConceptCandidateBundle830G3
+		}
+		expected[key] = block
+		return nil
+	}
+	for _, block := range parent.Request.BaseRequest.Sources {
+		if add(block) != nil {
+			return ErrConceptCandidateBundle830G3
+		}
+	}
+	for _, entry := range child.Request.ResolutionInputs.Corpus.Entries {
+		for _, block := range entry.Blocks {
+			if add(block) != nil {
+				return ErrConceptCandidateBundle830G3
+			}
+		}
+	}
+	actual := map[sourceKey830G3]ConceptSourceBlock830G2{}
+	for _, block := range child.Request.BaseRequest.Sources {
+		key := sourceKeyFor830G3(block)
+		if previous, exists := actual[key]; exists && !reflect.DeepEqual(previous, block) {
+			return ErrConceptCandidateBundle830G3
+		}
+		actual[key] = block
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		return ErrConceptCandidateBundle830G3
 	}
 	return nil
 }
@@ -3423,6 +3590,15 @@ func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 	if err != nil {
 		return ErrConceptCandidateBundle830G3
 	}
+	if request.PublishedBase != nil {
+		if baseKind != batchConceptBasePublishedG3 || validatePublishedBaseBinding830G3(request.PublishedBase) != nil {
+			return ErrConceptCandidateBundle830G3
+		}
+	}
+	if validateFieldRefreshRows830G3(request.RefreshFields) != nil ||
+		(len(request.RefreshFields) != 0 && request.PublishedBase == nil) {
+		return ErrConceptCandidateBundle830G3
+	}
 	proposalHash, existingHash, policyHash, err := validateResolutionInputs830G3(request.ResolutionInputs)
 	if err != nil {
 		return ErrConceptCandidateBundle830G3
@@ -3472,12 +3648,35 @@ func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 		}
 		bindings[binding.EntityID], previous = binding, binding.EntityID
 	}
-	if validateBindingsAgainstResolution830G3(request, typedResolution) != nil {
+	currentBindings, err := currentBindingIDs830G3(request.EntityBindings, typedResolution)
+	if err != nil || validateBindingsAgainstResolution830G3(request, typedResolution, currentBindings) != nil {
 		return ErrConceptCandidateBundle830G3
+	}
+	carriedBindings := map[string]EntityCompileBinding830G3{}
+	if request.PublishedBase != nil {
+		if len(request.PublishedBase.EntityBindings) != len(base.ExistingEntityVersions) {
+			return ErrConceptCandidateBundle830G3
+		}
+		for _, binding := range request.PublishedBase.EntityBindings {
+			version, exists := base.ExistingEntityVersions[binding.EntityID]
+			if !exists || version != binding.EntityVersion {
+				return ErrConceptCandidateBundle830G3
+			}
+			carriedBindings[binding.EntityID] = binding
+		}
+	}
+	for entityID, binding := range bindings {
+		if currentBindings[entityID] {
+			continue
+		}
+		if parent, exists := carriedBindings[entityID]; !exists || !reflect.DeepEqual(parent, binding) {
+			return ErrConceptCandidateBundle830G3
+		}
 	}
 	for entityID, version := range base.ExistingEntityVersions {
 		binding, ok := bindings[entityID]
-		if !ok || binding.ResolutionDisposition != "MATCH" || binding.EntityVersion != version {
+		if !ok || binding.EntityVersion != version ||
+			(request.PublishedBase == nil && binding.ResolutionDisposition != "MATCH") {
 			return ErrConceptCandidateBundle830G3
 		}
 		if baseKind == batchConceptBaseLegacyG2 && (binding.PrimaryClassification != "medical_insurance" ||
@@ -3507,8 +3706,17 @@ func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 	if validateUnknownAlignments830G3(request, bindings) != nil {
 		return ErrConceptCandidateBundle830G3
 	}
+	baseFields := map[string]bool{}
+	for _, field := range base.ExistingFields {
+		baseFields[field.EntityID+"\x00"+field.FieldKey] = true
+	}
+	for _, row := range request.RefreshFields {
+		if !baseFields[row.EntityID+"\x00"+row.FieldKey] || !currentBindings[row.EntityID] {
+			return ErrConceptCandidateBundle830G3
+		}
+	}
 	entries, _, err := corpusIndexes830G3(request.ResolutionInputs.Corpus)
-	if err != nil || validateRequestSourceClosure830G3(request, entries) != nil {
+	if err != nil || validateRequestSourceClosure830G3(request, entries, currentBindings) != nil {
 		return ErrConceptCandidateBundle830G3
 	}
 	return nil
@@ -3579,7 +3787,18 @@ func validateEntityBinding830G3(
 
 func validateBindingsAgainstResolution830G3(
 	request BatchConceptCompileRequest830G3, typed typedResolutionInputs830G3,
+	currentBindingSets ...map[string]bool,
 ) error {
+	currentBindings := map[string]bool{}
+	if len(currentBindingSets) == 0 {
+		for _, binding := range request.EntityBindings {
+			currentBindings[binding.EntityID] = true
+		}
+	} else if len(currentBindingSets) == 1 {
+		currentBindings = currentBindingSets[0]
+	} else {
+		return ErrConceptCandidateBundle830G3
+	}
 	type decisionPair struct {
 		Parent MaterialDecision830G3
 		Child  EntityDecision830G3
@@ -3599,6 +3818,9 @@ func validateBindingsAgainstResolution830G3(
 		proposals[proposal.MaterialID] = proposal
 	}
 	for _, binding := range request.EntityBindings {
+		if !currentBindings[binding.EntityID] {
+			continue
+		}
 		if typed.Resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 {
 			termsSupport := false
 			for _, ref := range binding.ResolutionRefs {
@@ -3835,8 +4057,15 @@ func alignedFields830G3(request BatchConceptCompileRequest830G3) (
 	for _, row := range request.UnknownFieldKeyAlignments {
 		rows[row.EntityID+"\x00"+row.OldFieldKey] = row
 	}
+	refresh := map[string]bool{}
+	for _, row := range request.RefreshFields {
+		refresh[row.EntityID+"\x00"+row.FieldKey] = true
+	}
 	result := make([]ConceptFieldAssertion830G2, 0, len(request.BaseRequest.ExistingFields))
 	for _, field := range request.BaseRequest.ExistingFields {
+		if refresh[field.EntityID+"\x00"+field.FieldKey] {
+			continue
+		}
 		if row, ok := rows[field.EntityID+"\x00"+field.FieldKey]; ok {
 			field.FieldKey = row.NewFieldKey
 		}

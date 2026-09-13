@@ -32,6 +32,7 @@ type conceptSourceReuseRecord830G3 struct {
 type conceptSourceReusePrepared830G3 struct {
 	blocks map[string]string
 	index  *conceptNativeQuoteIndex830G2
+	record conceptSourceReuseRecord830G3
 }
 type conceptSourceReuseStore830G3 struct {
 	codec   *SchemaWikiCitationTokenCodec
@@ -138,14 +139,21 @@ func (s *ConceptSourceAuthorityService830G2) verifyReusableConceptSource830G3(ct
 }
 
 func validateConceptSourceReuse830G3(record *conceptSourceReuseRecord830G3, identity types.ConceptSourceIdentity830G2, source *types.KnowledgeRevisionSource) (*conceptSourceReusePrepared830G3, error) {
-	if record.Contract != conceptSourceReuseContract830G3 || record.Identity != identity || record.BindingDigest != source.BindingDigest || len(record.Chunks) != source.ChunkCount {
+	expected := identity
+	if expected.ParserIdentity == "" {
+		if !validServiceSHA256(record.Identity.ParserIdentity) {
+			return nil, ErrConceptSourceAuthorityUnavailable830G2
+		}
+		expected.ParserIdentity = record.Identity.ParserIdentity
+	}
+	if record.Contract != conceptSourceReuseContract830G3 || record.Identity != expected || record.BindingDigest != source.BindingDigest || len(record.Chunks) != source.ChunkCount {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	digest, err := types.ComputeRevisionManifestDigest(identity.KnowledgeID, identity.ParseAttempt, record.Chunks)
 	if err != nil || digest != source.ManifestDigest {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	index, err := prepareConceptNativeQuoteIndex830G2(&types.ReadResult{MarkdownContent: record.Markdown, NativeStructure: record.Native}, identity.SourceHash, identity.ParserIdentity)
+	index, err := prepareConceptNativeQuoteIndex830G2(&types.ReadResult{MarkdownContent: record.Markdown, NativeStructure: record.Native}, expected.SourceHash, expected.ParserIdentity)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +164,7 @@ func validateConceptSourceReuse830G3(record *conceptSourceReuseRecord830G3, iden
 		}
 		blocks[chunk.ID] = chunk.Content
 	}
-	return &conceptSourceReusePrepared830G3{blocks: blocks, index: index}, nil
+	return &conceptSourceReusePrepared830G3{blocks: blocks, index: index, record: *record}, nil
 }
 
 func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, identity types.ConceptSourceIdentity830G2, source *types.KnowledgeRevisionSource, build func() (*conceptSourceReuseRecord830G3, error)) (*conceptSourceReusePrepared830G3, error) {

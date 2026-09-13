@@ -1,0 +1,103 @@
+{
+  "availability": "AVAILABLE",
+  "calls": [
+    {
+      "contract": "knowledge-model-dispatch-receipt.830.v1",
+      "dispatch_id": "dispatch-a",
+      "duration_ms": 10,
+      "finished_at_unix_ms": 1410,
+      "http_status": 200,
+      "model_id": "qwen-id",
+      "model_name": "qwen<&>",
+      "operation": "embedding",
+      "outcome": "HTTP_RESPONSE",
+      "purpose": "document_embedding",
+      "request_sha256": "70eb35804fbdb2e3c9286b289cb89dd1d1b90d244e2a53aeddddfbf301e33f18",
+      "started_at_unix_ms": 1400,
+      "state": "RECORDED",
+      "transport_retry_index": 0
+    },
+    {
+      "contract": "knowledge-model-dispatch-receipt.830.v1",
+      "dispatch_id": "dispatch-b",
+      "duration_ms": 10,
+      "finished_at_unix_ms": 1710,
+      "model_id": "qwen-id",
+      "model_name": "qwen<&>",
+      "operation": "embedding",
+      "outcome": "TRANSPORT_ERROR",
+      "purpose": "summary_embedding",
+      "request_sha256": "2b73646ab85a1c33f230c9f2be857c5c0f5169c97922cf901e13e634631032c4",
+      "started_at_unix_ms": 1700,
+      "state": "RECORDED",
+      "transport_retry_index": 1
+    }
+  ],
+  "contract": "g3-platform-source-processing-receipt.830.v1",
+  "counts": {
+    "attempts": 2,
+    "confirmed": 2,
+    "interrupted": 0,
+    "not_dispatched": 0,
+    "transport_retries": 1
+  },
+  "journal_marker_sha256": "2197d635eaea0e4bc03750223872c320c793c20fe9e49f37bfdf5e3b381c38cb",
+  "knowledge_id": "fixture-kid",
+  "parse_attempt": 7,
+  "phases": [
+    {
+      "occurrences": [
+        {
+          "duration_ms": 100,
+          "finished_at_unix_ms": 1100,
+          "occurrence": 0,
+          "started_at_unix_ms": 1000,
+          "status": "done"
+        }
+      ],
+      "phase": "docreader",
+      "recorded": true
+    },
+    {
+      "occurrences": [
+        {
+          "duration_ms": 50,
+          "finished_at_unix_ms": 1250,
+          "occurrence": 0,
+          "started_at_unix_ms": 1200,
+          "status": "done"
+        }
+      ],
+      "phase": "chunking",
+      "recorded": true
+    },
+    {
+      "occurrences": [
+        {
+          "duration_ms": 200,
+          "finished_at_unix_ms": 1500,
+          "occurrence": 0,
+          "started_at_unix_ms": 1300,
+          "status": "done"
+        }
+      ],
+      "phase": "embedding",
+      "recorded": true
+    },
+    {
+      "occurrences": [
+        {
+          "duration_ms": 200,
+          "finished_at_unix_ms": 1800,
+          "occurrence": 0,
+          "started_at_unix_ms": 1600,
+          "status": "failed"
+        }
+      ],
+      "phase": "postprocess.summary",
+      "recorded": true
+    }
+  ],
+  "processing_attempt": 3,
+  "receipt_sha256": "975e2f1ca835a3ea1c95727e17085b6a54001042cfa6617c9e2e33ebf9204f43"
+}

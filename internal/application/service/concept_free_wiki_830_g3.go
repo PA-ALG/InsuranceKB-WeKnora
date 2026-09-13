@@ -62,6 +62,16 @@ func (s *SchemaWikiService) CreateBatchConceptDraft830G3(
 	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
 		return nil, err
 	}
+	return s.createBatchConceptDraft830G3(ctx, principal, scope, preparationID, rawBundle, nil, nil)
+}
+
+// Both entry points use exactly the same candidate, immutable source and base
+// validation. Automated callers additionally recheck current policy at the write edge.
+func (s *SchemaWikiService) createBatchConceptDraft830G3(
+	ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope,
+	preparationID string, rawBundle json.RawMessage, beforeWrite func() error,
+	writeDraft func(*types.WikiReleasePreparation) (*types.WikiReleasePreparation, error),
+) (*types.WikiReleasePreparation, error) {
 	if s == nil || s.releaseAuthority == nil || !validBatchConceptPreparationID830G3(preparationID) {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
@@ -91,6 +101,14 @@ func (s *SchemaWikiService) CreateBatchConceptDraft830G3(
 		ctx, principal, scope, input, "create-draft",
 	); err != nil {
 		return nil, err
+	}
+	if beforeWrite != nil {
+		if err := beforeWrite(); err != nil {
+			return nil, err
+		}
+	}
+	if writeDraft != nil {
+		return writeDraft(input)
 	}
 	draft, err := s.releaseAuthority.createDraftAtExpectedHead(
 		ctx, principal, input,
@@ -128,25 +146,44 @@ func (s *SchemaWikiService) validateBatchConceptBase830G3(
 	if err != nil {
 		return ErrSchemaWikiPreparationInvalid
 	}
-	preparation, err := s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	preparation, base, expectedMembers, projectedG3, err :=
+		s.releaseAuthority.loadPublishedBatchReadProjection830G3(ctx, scope, release.PreparationID)
 	if err != nil {
 		return ErrSchemaWikiPreparationInvalid
 	}
-	var header struct {
-		Contract string `json:"contract"`
-	}
-	if json.Unmarshal(preparation.Manifest, &header) != nil ||
-		header.Contract != "batch-concept-candidate-bundle.830.g3.v1" {
-		return s.validateConceptBase830G2(ctx, scope, types.ConceptCandidateBundle830G2{
-			Request: bundle.Request.BaseRequest,
-		})
+	if !projectedG3 {
+		preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+		if err != nil {
+			return ErrSchemaWikiPreparationInvalid
+		}
+		var header struct {
+			Contract string `json:"contract"`
+		}
+		if json.Unmarshal(preparation.Manifest, &header) != nil ||
+			header.Contract != "batch-concept-candidate-bundle.830.g3.v1" {
+			return s.validateConceptBase830G2(ctx, scope, types.ConceptCandidateBundle830G2{
+				Request: bundle.Request.BaseRequest,
+			})
+		}
+		var validationErr error
+		base, expectedMembers, validationErr = validateBatchConceptPreparation830G3(
+			preparation, types.WikiReleasePreparationReady, scope,
+		)
+		if validationErr != nil ||
+			s.releaseAuthority.publishedBatchReuse830G3().rememberValidated(preparation, scope) != nil {
+			return ErrSchemaWikiPreparationInvalid
+		}
 	}
 	storedMembers, err := s.releaseAuthority.repository.GetReleaseMembers(ctx, scope, release.ID)
-	base, expectedMembers, validationErr := validateBatchConceptPreparation830G3(
-		preparation, types.WikiReleasePreparationReady, scope,
-	)
 	request := bundle.Request.BaseRequest
-	if err != nil || validationErr != nil || release.ID != head.ActiveReleaseID ||
+	parentEntityVersions := make(map[string]string, len(base.Request.EntityBindings))
+	for _, binding := range base.Request.EntityBindings {
+		if binding.EntityID == "" || binding.EntityVersion == "" || parentEntityVersions[binding.EntityID] != "" {
+			return ErrSchemaWikiPreparationInvalid
+		}
+		parentEntityVersions[binding.EntityID] = binding.EntityVersion
+	}
+	if err != nil || release.ID != head.ActiveReleaseID ||
 		release.WikiReleaseScope != scope || release.PreparationID != preparation.ID ||
 		release.CandidateDigest != preparation.CandidateDigest ||
 		release.ManifestDigest != preparation.ManifestDigest ||
@@ -158,8 +195,13 @@ func (s *SchemaWikiService) validateBatchConceptBase830G3(
 		!reflect.DeepEqual(request.ExistingDefinitions, base.CompileResult.Output.Definitions) ||
 		!reflect.DeepEqual(request.ExistingFields, base.CompileResult.Output.Fields) ||
 		!reflect.DeepEqual(request.ExistingPages, base.CompileResult.Output.Pages) ||
-		!reflect.DeepEqual(request.ExistingEntityVersions, base.Request.BaseRequest.EntityVersions) ||
+		!reflect.DeepEqual(request.ExistingEntityVersions, parentEntityVersions) ||
 		types.ValidateBatchNavigationHistory830G3(base, bundle) != nil {
+		return ErrSchemaWikiPreparationInvalid
+	}
+	if bundle.Request.PublishedBase != nil && types.ValidateBatchPublishedBaseHistory830G3(
+		base, bundle, release.ID, head.ActivationEpoch, release.ManifestDigest,
+	) != nil {
 		return ErrSchemaWikiPreparationInvalid
 	}
 	return nil

@@ -48,6 +48,8 @@ import type { KnowledgeProcessOverrides } from '@/types/knowledgeProcess';
 import { useUploadConfirmStore, type UploadConfirmResult } from '@/stores/uploadConfirm';
 import WikiBrowser from './wiki/WikiBrowser.vue';
 import SchemaWikiCatalogEntry830G2 from './schema-wiki/SchemaWikiCatalogEntry830G2.vue';
+import ProductIngestionStatus from '@/components/knowledge-base/product-ingestion-status.vue';
+import { getProductIngestionEnabled, uploadProductBatchIfEnabled } from '@/api/product-ingestion';
 import { getWikiStats } from '@/api/wiki';
 import {
   isKnowledgeParseInFlight,
@@ -61,6 +63,21 @@ import type { ParserEngineInfo } from '@/api/system';
 const route = useRoute();
 const { t } = useI18n();
 const kbId = computed(() => (route.params as any).kbId as string || '');
+const productIngestionEnabled = ref(false);
+const productIngestionRefresh = ref(0);
+let productCapabilityGeneration = 0;
+watch(kbId, async (id) => {
+  const generation = ++productCapabilityGeneration;
+  productIngestionEnabled.value = false;
+  if (!id) return;
+  try {
+    const enabled = await getProductIngestionEnabled(id);
+    if (generation === productCapabilityGeneration) productIngestionEnabled.value = enabled;
+  } catch {
+    // Upload checks capability again and reports errors before sending any file.
+  }
+}, { immediate: true });
+onUnmounted(() => { productCapabilityGeneration++; });
 const kbInfo = ref<any>(null);
 const uploadSourceRef = ref<InstanceType<typeof KbUploadSourceDropdown> | null>(null);
 const uploading = ref(false);
@@ -1415,6 +1432,26 @@ const executeUploadBatch = async (
     return { successCount: 0, failCount: files.length };
   }
 
+  try {
+    const receipt = await uploadProductBatchIfEnabled(targetKbId, files);
+    if (receipt) {
+      if (kbId.value === targetKbId) {
+        productIngestionEnabled.value = true;
+        productIngestionRefresh.value++;
+      }
+      window.dispatchEvent(new CustomEvent('knowledgeFileUploaded', { detail: { kbId: targetKbId } }));
+      const message = `平台已接收 ${receipt.accepted_file_count} 个文件，未接收 ${receipt.rejected_file_count} 个。请在产品处理任务中查看后续进度。`;
+      if (receipt.rejected_file_count > 0) MessagePlugin.warning(message);
+      else MessagePlugin.success(message);
+      return { successCount: receipt.accepted_file_count, failCount: receipt.rejected_file_count };
+    }
+  } catch {
+    // An uncertain server upload must never be repeated through the legacy endpoint.
+    if (kbId.value === targetKbId) productIngestionRefresh.value++;
+    MessagePlugin.error('未能确认平台接收结果，请刷新产品任务列表后检查。');
+    return { successCount: 0, failCount: files.length };
+  }
+
   const tagIdsToUpload = selectedTagIds.value.length > 0 ? [...selectedTagIds.value] : undefined;
   let successCount = 0;
   let failCount = 0;
@@ -1564,9 +1601,24 @@ const openUploadConfirmDialog = async (files: File[], urls: string[] = []) => {
   }
 };
 
-const handleUploadSourceFiles = (files: File[]) => {
-  if (!ensureDocumentKbReady()) return;
+const handleUploadSourceFiles = async (files: File[]) => {
   if (files.length === 0) return;
+  const targetKbId = kbId.value;
+  if (!targetKbId || uploading.value) return;
+  uploading.value = true;
+  try {
+    const enabled = await getProductIngestionEnabled(targetKbId);
+    if (kbId.value !== targetKbId) return;
+    productIngestionEnabled.value = enabled;
+    if (enabled) {
+      await executeUploadBatch(files);
+      return;
+    }
+  } catch {
+    MessagePlugin.error('暂时无法确认平台上传方式，请稍后重试。');
+    return;
+  } finally { uploading.value = false; }
+  if (!ensureDocumentKbReady()) return;
   openUploadConfirmDialog(files);
 };
 
@@ -2058,6 +2110,8 @@ async function createNewSession(value: string): Promise<void> {
           </p>
         </div>
       </div>
+
+      <ProductIngestionStatus v-if="kbId && productIngestionEnabled" :knowledge-base-id="kbId" :refresh-token="productIngestionRefresh" />
 
       <div v-if="isWiki && activeKbTab === 'schema'" class="wiki-main-area">
         <SchemaWikiCatalogEntry830G2 v-if="kbId" :knowledge-base-id="kbId" />

@@ -77,3 +77,8 @@ G3-P3：复用现有状态/检查点/幂等机制实跑小批与一次中断恢�
 ### 2026-09-13 用户授权的两款增量验证
 
 用户要求从原始产品目录另挑两款新产品跑流程，并优先按首页完整产品名定位Schema。本次选择福满分1820年金与爱满分1818两全，执行计划见 `docs/superpowers/plans/2026-09-13-g3-two-new-products.md`。G3-INC1—4补齐实际发现的增量base、可组合分类复用及清单执行接线；旧第9版与493字段完整保留，新增材料才发模型。此前G3原固定批次FLOW PASS保留为历史真实结论，不能扩大为新增任意产品入口已通过。
+
+
+## 2026-09-13 G3 platform-independent closeout amendment
+
+User replaces Codex-assisted closeout with G3-AUTO-1 through G3-AUTO-6 in `docs/superpowers/specs/2026-09-13-g3-platform-independent-design.md`. These stable Requirements are normative for this closeout: platform-only orchestration; nonblocking ordinary field failures with raw retention; persistent dependency-scoped reuse; durable observable tasks with terminals and field retry; real deployment plus scoped system-policy review/publish; original/page/evidence custody. The earlier ban on additional service/store implementation is superseded only as necessary to extend the existing Harness service shell and job persistence within the sole WeKnora serving authority. No production release or second authority is authorized. New acceptance is one untouched platform product, three webpage uploads; no Codex processing/continuation, and measured upload-to-search/evidence time. Existing fixed-batch/assisted evidence remains historical and cannot prove this requirement.

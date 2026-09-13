@@ -58,7 +58,7 @@ describe('SchemaWikiCatalogEntry830G2', () => {
       expect(api.loadActive).not.toHaveBeenCalled()
       expect(api.loadSchemaCatalog).not.toHaveBeenCalled()
       expect(wrapper.get('[data-testid="directory"]').text()).toBe(label)
-      expect(wrapper.get('[data-testid="g3-catalog"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="g3-catalog"]').exists()).toBe(true)
     },
   )
 
