@@ -66,3 +66,7 @@ D6 v2 已真实执行11个独立窗口，4 SUCCESS / 7 INVALID_PROVIDER_RESPONSE
 唯一实现写域：harness/src/insurance_harness/knowledge_compiler/g3_field_task_recovery.py 及其有界测试；若发现必须扩展写域，先回报根代理修订计划。软件验证需含原失败形式 RED→GREEN、present 缺证据拒绝、外来/重复/缺失 ref 拒绝、selected 坏引文拒绝、未选坏成员不进入投影、原字节不变与确定性重放。不改 Go/Evidence DTO/APP，不新增模型运行器。实际 D6 录制投影单独记账，不将原FAILED写成SUCCESS；后续仅为未闭合字段发新请求。
 
 INC6 设计独立复核 0 BLOCKER 后收窄：上述机械适配只进入 project_g3_recorded_compile_subset 的 FIELDS 分支；共享 _parse_semantic、新调用与 synthesis 保持原校验。仅适配明选字段；已有错误 evidence 不修正、非单键 concept_ref 包装拒绝。派生视图仍须严格 DTO 及规范往返，再进入原 context projector。此收窄优先于上一段泛述。
+
+### D7 后最后一字段恢复提示修正
+
+D7 实际两全6字段与年金ENTITY_SYNTHESIS SUCCESS，年金target_customer_profile一字段因模型跨PDF换行拼接投保年龄引文而FAILED，原记录保留。剩1字段。发现g3_d_recovery_execution.render_recovery_context仍有INC5前“短引文重复时必须换更长唯一引文”的提示，与当前保留全部精确位置实现不一致。本次仅修正该恢复提示：允许有充分支持的短原文片段重复出现，优先单行，不拼接跨行；EXTRACT仅提取所请求字段的原文明确陈述，不能仅从保障或投保年龄推断目标客群，未明确陈述时用unknown。仅改真实恢复提示生成模块与本计划，不改字段投影、Evidence DTO、引用校验或原响应。该模块不改变当前recorded projection validator identity，旧五份manifest继续按原签名来源验证；新增D7两成功窗口的manifest后只发一字段新调用。修正实际发送正文需独立核对，不以通用模板编辑代替。

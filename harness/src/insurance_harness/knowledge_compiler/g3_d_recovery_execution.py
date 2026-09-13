@@ -81,8 +81,15 @@ def render_recovery_context(identity, request, window):
                 "establishes a responsibility or its explicit exclusion.",
                 "Do not infer explicit absence from unrelated conditions, duration, "
                 "or missing text.",
-                "Each quote must exactly preserve characters and line breaks in an offered span. "
-                "Use a longer unique quotation if the short quote occurs more than once.",
+                "Each quote must be an unchanged contiguous fragment of an offered span. "
+                "Prefer a short supporting fragment within one original line; never join "
+                "text across a PDF line break or insert spaces or punctuation. A complete "
+                "sentence is not required. Repeated exact fragments are allowed: the "
+                "runtime retains all offered exact locations.",
+                "EXTRACT requires a direct statement about the requested field. Do not "
+                "infer a target customer profile solely from general benefits or the "
+                "permitted insured age range. If the source does not state that profile, "
+                "use unknown with null value, empty evidence and a specific unknown_reason.",
                 "Never infer a general rule from an incomplete list or fabricate a quote. "
                 "If the offered text is insufficient, record unknown.",
             ),
