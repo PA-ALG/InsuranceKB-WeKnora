@@ -36,3 +36,7 @@
 ## 非目标及停止边界
 
 不进入G4/Q0/生产，不做1000文档压力测试，不更换embedding/rerank/模型，不重抽旧493字段，不覆盖第9版历史。不得以“全量重跑旧材料”掩盖增量缺口。若发现新的独立子系统/生产问题，仅报告事实，不扩大为本轮平台重构。
+
+## 2026-09-13 实际D失败的有界恢复
+
+第一次D compile000成功，compile001被既有校验拒绝：absent_explicitly同时value=null，证据只列一般保险责任，不能证明明确不保障。这是原响应的真实RED，保持校验和失败回执。Owner=root仅追加现有 g3_d_compile_v1.txt 的三态语义提示（present/absent均有非空value与直接证据，未提及必须unknown），不修改字段结果/投影校验；使用已存在字段级projection recovery验证并继承可用结果，新parent只调用失败/未执行字段。提示词为Harness输入，Go应用代码不变，继续消费已冻结49023120b的唯一APP构建；最终分别记录模型source与APPsource，不重复构建。
