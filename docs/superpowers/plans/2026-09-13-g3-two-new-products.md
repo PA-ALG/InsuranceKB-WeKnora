@@ -54,3 +54,15 @@ Owner=root，委托实现lane仅拥有g3_bounded_model_execution.py中_resolve_g
 RED覆盖重复精确匹配、只保留offered范围内匹配、重叠片段去重、缺失/跨来源/空引用拒绝与旧无窗口兼容。实际D4失败response须保持FAILED原记录，利用已有recorded projection重新验证其可用字段并保留全部真实出处；既有3个origin的reuse manifests按新validator hash重新生成，不改原模型响应/终态。完成定向测试和独立复核后继续仅剩字段，不再为此重建APP，也不引入新模型协议。
 
 Owner=root同步将实际references提示词的“必须唯一出现”改为“优先唯一且充分的原文”，明确相同精确引用保留已提供片段内全部位置；逐字、原始换行、来源范围和字段三态要求不变。
+
+### 2026-09-13 D5 后续恢复执行配置（不改产品代码）
+
+D5 原 SUCCESS 000 保留；001 为 INVALID_PROVIDER_RESPONSE，9 条字段缺 evidence，包含 present，不能补造证据或改写原响应。后续复用既有 g3-chain-failure-policy.830.v2：最多两个独立窗口同时执行，单窗失败保留原 FAILED 并允许其他独立窗口继续，失败仍禁止 D_REVIEW / Candidate；retry_limit 仍为 0。旧私有物料器沿用 v1 导致首错中止，本轮在新的私有配置物料器明确绑定已有 v2/worker_limit=2，并签入新 chain、parent、caps；原历次文件不变。不是新增恢复协议或新模型运行器。独立复核实际包 identity、配置一致性、69 已成功字段及 1 概述复用/剩余字段不重复后，才执行新调用；运行时实际验证仍必须 PASS，不以 helper 准备代替。所有原始失败/成功响应继续归档。
+
+### G3-INC6 · 录制字段结果的有界格式适配和选定子集复用
+
+D6 v2 已真实执行11个独立窗口，4 SUCCESS / 7 INVALID_PROVIDER_RESPONSE；来源原始 wire 明确出现 valid_time=null、单键 concept_ref 包装、fields 数组 literal null 噪声，另有精确引文错误。先冻结以下恢复边界，再实施 RED/实现/独立复核：原始响应字节、签名、FAILED 终态永不改写；仅在派生内存视图中适配无歧义机械表达（未提供时间 null→既有空串；单键 concept_ref 字符串包装展开；unknown 且 value=null/有效 unknown_reason 时遗漏 evidence 视为 []，present 不补证据）。fields 中 literal null 仅可忽略非成员噪声，剩余对象的 field_ref 必须唯一、精确覆盖原窗口全部目标；缺失/外来/重复成员继续失败。recorded subset 完整检查顶层 envelope 和原成员覆盖后，仅将 manifest 明选字段交给严格 DTO 与原 offered context 投影；未选坏字段不能污染有效子集，也不能进入结果。selected 字段证据仍须字节精确匹配原 offered spans，概念与实体归属仍按原 scope 检查；不做空白归一/模糊匹配/业务值修改，不把缺证据的 present 降成 unknown。所有机械适配可按新 validator identity 从同一原始响应确定重放，manifest 绑定该 identity 与实际输出哈希。
+
+唯一实现写域：harness/src/insurance_harness/knowledge_compiler/g3_field_task_recovery.py 及其有界测试；若发现必须扩展写域，先回报根代理修订计划。软件验证需含原失败形式 RED→GREEN、present 缺证据拒绝、外来/重复/缺失 ref 拒绝、selected 坏引文拒绝、未选坏成员不进入投影、原字节不变与确定性重放。不改 Go/Evidence DTO/APP，不新增模型运行器。实际 D6 录制投影单独记账，不将原FAILED写成SUCCESS；后续仅为未闭合字段发新请求。
+
+INC6 设计独立复核 0 BLOCKER 后收窄：上述机械适配只进入 project_g3_recorded_compile_subset 的 FIELDS 分支；共享 _parse_semantic、新调用与 synthesis 保持原校验。仅适配明选字段；已有错误 evidence 不修正、非单键 concept_ref 包装拒绝。派生视图仍须严格 DTO 及规范往返，再进入原 context projector。此收窄优先于上一段泛述。

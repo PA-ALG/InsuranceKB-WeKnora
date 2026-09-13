@@ -2,7 +2,8 @@
 
 These pure functions create no admission, provider call or SUCCESS receipt. A
 caller must bind a recorded selection to its original response and call custody.
-The original response is parsed intact; selection never rewrites captured bytes.
+Selection never rewrites captured bytes; recorded field subsets use only closed,
+deterministic wire adaptations before strict projection.
 """
 
 from __future__ import annotations
@@ -151,6 +152,72 @@ def project_g3_field_recovery_response(
     )
 
 
+def _parse_recorded_field_subset(raw, exact, context, field_keys):
+    """Validate the original envelope, then adapt and parse only selected fields."""
+    runtime = _runtime()
+    value = runtime._unique_json_bytes(raw)
+    envelope_keys = {"contract", "transformation", "definitions", "fields", "pages"}
+    if (
+        not isinstance(value, dict)
+        or set(value) != envelope_keys
+        or value.get("contract") != "g3-d-compile-semantic-references.local.v1"
+        or value.get("definitions") != []
+        or value.get("pages") != []
+        or not isinstance(value.get("fields"), list)
+    ):
+        raise ValueError("recorded field response envelope mismatch")
+    object_fields = []
+    for row in value["fields"]:
+        if row is None:
+            continue
+        if not isinstance(row, dict) or not isinstance(row.get("field_ref"), str):
+            raise ValueError("recorded field response contains non-null member noise")
+        object_fields.append(row)
+    refs = tuple(row["field_ref"] for row in object_fields)
+    if len(refs) != len(set(refs)) or set(refs) != set(exact["field_refs"]):
+        raise ValueError("recorded origin field reference coverage mismatch")
+    targets = [row for row in context["field_targets"] if row["field_key"] in field_keys]
+    if {row["field_key"] for row in targets} != set(field_keys):
+        raise ValueError("recorded selection contains foreign field keys")
+    chosen = {row["field_ref"] for row in targets}
+    selected = []
+    for original in object_fields:
+        if original["field_ref"] not in chosen:
+            continue
+        row = dict(original)
+        if "valid_time" in row and row["valid_time"] is None:
+            row["valid_time"] = ""
+        if (
+            "evidence" not in row
+            and row.get("state") == "unknown"
+            and "value" in row
+            and row["value"] is None
+            and isinstance(row.get("unknown_reason"), str)
+            and row["unknown_reason"].strip()
+        ):
+            row["evidence"] = []
+        concept_refs = row.get("concept_refs")
+        if isinstance(concept_refs, list):
+            row["concept_refs"] = [
+                item["concept_ref"]
+                if (
+                    isinstance(item, dict)
+                    and set(item) == {"concept_ref"}
+                    and isinstance(item["concept_ref"], str)
+                )
+                else item
+                for item in concept_refs
+            ]
+        selected.append(row)
+    derived = {**value, "fields": selected}
+    response = runtime.G3DCompileReferenceResponseV1.model_validate(derived)
+    if runtime.canonical_json(response.model_dump(mode="json", round_trip=True)) != (
+        runtime.canonical_json(derived)
+    ):
+        raise ValueError("recorded selected field wire mismatch")
+    return response, targets
+
+
 def project_g3_recorded_compile_subset(
     raw: bytes,
     request: BatchConceptCompileRequest830G3V1,
@@ -170,25 +237,15 @@ def project_g3_recorded_compile_subset(
             raise ValueError("full recorded window does not accept an alternate context")
         exact = runtime._exact_gemini_d_window(request, origin_window)
         context = runtime.render_gemini_d_compile_window_context(_identity(), request, exact)
-    response = _parse_semantic(raw)
     if include_synthesis:
+        response = _parse_semantic(raw)
         if field_keys or exact["kind"] != "ENTITY_SYNTHESIS":
             raise ValueError("recorded synthesis selection exceeds origin scope")
     else:
         if exact["kind"] != "FIELDS" or not field_keys or len(field_keys) != len(set(field_keys)):
             raise ValueError("recorded field selection must be an explicit unique subset")
-        if response.definitions or response.pages:
-            raise ValueError("D field window cannot create definitions or pages")
-        refs = tuple(row.field_ref for row in response.fields)
-        if len(refs) != len(set(refs)) or set(refs) != set(exact["field_refs"]):
-            raise ValueError("recorded origin field reference coverage mismatch")
-        targets = [row for row in context["field_targets"] if row["field_key"] in field_keys]
-        if {row["field_key"] for row in targets} != set(field_keys):
-            raise ValueError("recorded selection contains foreign field keys")
-        chosen = {row["field_ref"] for row in targets}
-        # A derived in-memory view, never a replacement raw response or call receipt.
-        response = response.model_copy(
-            update={"fields": tuple(row for row in response.fields if row.field_ref in chosen)}
+        response, targets = _parse_recorded_field_subset(
+            raw, exact, context, tuple(field_keys)
         )
         context = {**context, "field_targets": targets}
     return runtime._project_gemini_d_compile_response_with_context(
