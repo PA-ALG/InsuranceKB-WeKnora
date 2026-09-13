@@ -1635,35 +1635,69 @@ def _resolve_g3_d_evidence(
     sources: dict[str, SourceBlock],
     *,
     allowed: set[str] | None = None,
+    offered_sources: Sequence[Mapping[str, object]] | None = None,
 ) -> tuple[Evidence, ...]:
     keys = tuple((item.source_ref, item.quote) for item in selections)
     if len(keys) != len(set(keys)):
         raise ValueError("duplicate D source selection")
+    offered: dict[str, set[tuple[int, int]]] | None = None
+    if offered_sources is not None:
+        offered = {}
+        for row in offered_sources:
+            source_ref = row.get("source_ref")
+            source = sources.get(source_ref) if isinstance(source_ref, str) else None
+            spans = row.get("spans")
+            if source is None or not isinstance(spans, (list, tuple)):
+                raise ValueError("foreign D offered source reference")
+            exact_spans = offered.setdefault(source_ref, set())
+            for span in spans:
+                if not isinstance(span, Mapping):
+                    raise ValueError("invalid D offered source span")
+                start, end, quote = span.get("start"), span.get("end"), span.get("quote")
+                if (
+                    type(start) is not int
+                    or type(end) is not int
+                    or not isinstance(quote, str)
+                    or start < 0
+                    or end <= start
+                    or end > len(source.text)
+                    or source.text[start:end] != quote
+                ):
+                    raise ValueError("invalid D offered source span")
+                exact_spans.add((start, end))
     evidence: list[Evidence] = []
     for selection in selections:
         source = sources.get(selection.source_ref)
         if source is None or (allowed is not None and selection.source_ref not in allowed):
             raise ValueError("foreign D source reference")
-        starts: list[int] = []
-        cursor = 0
-        while True:
-            position = source.text.find(selection.quote, cursor)
-            if position < 0:
-                break
-            starts.append(position)
-            cursor = position + 1
-        if len(starts) != 1:
-            raise ValueError("D source quote must occur exactly once")
-        start = starts[0]
-        row = Evidence(
-            **source.model_dump(exclude={"text"}),
-            start=start,
-            end=start + len(selection.quote),
-            quote=selection.quote,
-            quote_hash=hashlib.sha256(selection.quote.encode()).hexdigest(),
+        if not selection.quote:
+            raise ValueError("empty D source quote")
+        starts: set[int] = set()
+        search_spans = ((0, len(source.text)),) if offered is None else tuple(
+            sorted(offered.get(selection.source_ref, ()))
         )
-        verify_evidence(row, (source,))
-        evidence.append(row)
+        for span_start, span_end in search_spans:
+            cursor = span_start
+            while True:
+                position = source.text.find(selection.quote, cursor, span_end)
+                if position < 0:
+                    break
+                starts.add(position)
+                cursor = position + 1
+        if offered is None and len(starts) != 1:
+            raise ValueError("D source quote must occur exactly once")
+        if offered is not None and not starts:
+            raise ValueError("D source quote is outside offered source spans")
+        for start in sorted(starts):
+            row = Evidence(
+                **source.model_dump(exclude={"text"}),
+                start=start,
+                end=start + len(selection.quote),
+                quote=selection.quote,
+                quote_hash=hashlib.sha256(selection.quote.encode()).hexdigest(),
+            )
+            verify_evidence(row, (source,))
+            evidence.append(row)
     return tuple(sorted(evidence, key=lambda item: (item.revision_id, item.block_id, item.start)))
 
 
@@ -1744,6 +1778,11 @@ def _project_gemini_d_compile_response_with_context(
         if window is None
         else entity_sources[cast(str, window["entity_ref"])]
     )
+    offered_sources = (
+        None
+        if window is None
+        else cast(list[dict[str, object]], context["source_options"])
+    )
     for definition_row in response.definitions:
         if not definition_row.evidence:
             raise ValueError("D definition evidence is required")
@@ -1754,7 +1793,10 @@ def _project_gemini_d_compile_response_with_context(
             title=definition_row.title,
             body=definition_row.body,
             evidence=_resolve_g3_d_evidence(
-                definition_row.evidence, sources, allowed=window_sources
+                definition_row.evidence,
+                sources,
+                allowed=window_sources,
+                offered_sources=offered_sources,
             ),
             aliases=definition_row.aliases,
             origin="MODEL_COMPILE",
@@ -1804,7 +1846,10 @@ def _project_gemini_d_compile_response_with_context(
             attempted=True,
             unknown_reason=field_row.unknown_reason,
             evidence=_resolve_g3_d_evidence(
-                field_row.evidence, sources, allowed=entity_sources[entity_ref]
+                field_row.evidence,
+                sources,
+                allowed=entity_sources[entity_ref],
+                offered_sources=offered_sources,
             ),
             concept_ids=links,
             conditions=field_row.conditions,
@@ -1855,6 +1900,7 @@ def _project_gemini_d_compile_response_with_context(
                 page_row.evidence,
                 sources,
                 allowed=entity_sources[page_row.entity_ref],
+                offered_sources=offered_sources,
             ),
             concept_ids=links,
             conditions=page_row.conditions,

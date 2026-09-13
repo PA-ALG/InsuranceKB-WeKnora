@@ -44,3 +44,13 @@
 恢复请求的独立复核发现真实 Gemini 路径选择 g3_d_compile_references_v1.txt，a107 的补充只进入通用模板，18份已物化请求仍缺少三态约束，形成接线 RED。D2 仅 import/prepare，不执行 provider。Owner=root 将相同语义规则补入实际 references 模板，以新 source 和新签名重新物化18请求并检查真实 system body。只继承原成功的1个 ENTITY_SYNTHESIS，失败窗口不继承任何字段，161字段完整重做；不更改 projector，不重建 APP。
 
 D3第一字段窗实际响应的age_segment_tags引用删除原文CRLF，触发既有offered-span校验RED。Owner=root仅在实际references模板明确优先短单行充分引用、多项事实使用多条独立证据，保留原始响应和严格校验；既有projection机制整体校验并复用其余9字段，不逐字段重复重渲染。下一物料组合多个已验证manifest（库已支持），仅调用剩余字段；APP构建和烟测已PASS，不重建。
+
+## G3-INC5：重复原文的完整定位（D4实际RED后的有界修复）
+
+D4已有4个字段窗口SUCCESS，第5窗因product_name引用“平安福满分（2026）养老年金保险”在同一已提供片段内精确出现两次，被唯一出现次数检查拒绝。原文没有改写、身份一致；选第一个位置会丢失出处，重复调用模型也不能解决定位器不支持重复原文的问题。
+
+Owner=root，委托实现lane仅拥有g3_bounded_model_execution.py中_resolve_g3_d_evidence及3个调用点、一个新增定向测试文件。窗口模式给解析器传递已有offered spans，逐个保留其中所有精确、完整落在片段内的匹配，生成各自原始start/end/quote/hash并逐一verify_evidence；去重并稳定排序。禁止扩到未提供片段、跨来源、改写空白、模糊匹配或随意选一个位置。零匹配仍拒绝，无窗口的旧调用保持既有唯一匹配行为；输出Evidence DTO及APP均不改。
+
+RED覆盖重复精确匹配、只保留offered范围内匹配、重叠片段去重、缺失/跨来源/空引用拒绝与旧无窗口兼容。实际D4失败response须保持FAILED原记录，利用已有recorded projection重新验证其可用字段并保留全部真实出处；既有3个origin的reuse manifests按新validator hash重新生成，不改原模型响应/终态。完成定向测试和独立复核后继续仅剩字段，不再为此重建APP，也不引入新模型协议。
+
+Owner=root同步将实际references提示词的“必须唯一出现”改为“优先唯一且充分的原文”，明确相同精确引用保留已提供片段内全部位置；逐字、原始换行、来源范围和字段三态要求不变。
