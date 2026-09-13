@@ -1101,6 +1101,78 @@ def _valid_model_receipt(
     )
 
 
+def _valid_model_receipt_requests(
+    proposals: ProposalBatchV1,
+    corpus: BatchCorpusV1,
+    entry_by_id: Mapping[str, CorpusEntryV1],
+) -> set[str]:
+    """Validate unchanged receipts against their original admission corpus group."""
+
+    groups: dict[tuple[str, str, str], list[ModelReceiptBindingV1]] = defaultdict(list)
+    for binding in proposals.model_receipts:
+        receipt = binding.policy_receipt
+        groups[(receipt.admission_hash, receipt.run_id, receipt.run_revision)].append(binding)
+
+    material_group: dict[str, tuple[str, str, str]] = {}
+    result: set[str] = set()
+    for group_key, bindings in groups.items():
+        identities = {
+            (
+                row.policy_receipt.space_id,
+                row.policy_receipt.purpose,
+                row.policy_receipt.run_schema_version,
+                row.policy_receipt.identity_key,
+                None
+                if row.policy_receipt.permit_view is None
+                else row.policy_receipt.permit_view.identity,
+            )
+            for row in bindings
+        }
+        if len(identities) != 1:
+            return set()
+        material_ids = tuple(item.material_id for row in bindings for item in row.material_bindings)
+        if len(material_ids) != len(set(material_ids)):
+            return set()
+        if any(
+            material_id in material_group and material_group[material_id] != group_key
+            for material_id in material_ids
+        ):
+            return set()
+        for material_id in material_ids:
+            material_group[material_id] = group_key
+        try:
+            source_entries = tuple(
+                sorted(
+                    (entry_by_id[material_id] for material_id in material_ids),
+                    key=lambda entry: entry.material_id,
+                )
+            )
+        except KeyError:
+            continue
+        source_payload: dict[str, object] = {
+            "contract": "batch-corpus.830.g3.v1",
+            "tenant_id": corpus.tenant_id,
+            "space_id": corpus.space_id,
+            "raw_kb_id": corpus.raw_kb_id,
+            "wiki_kb_id": corpus.wiki_kb_id,
+            "entries": source_entries,
+        }
+        source_corpus = _hashed(
+            BatchCorpusV1,
+            object_type="batch-corpus.830.g3.v1",
+            hash_field="corpus_sha256",
+            payload=source_payload,
+        )
+        source_index = {entry.material_id: entry for entry in source_entries}
+        result.update(
+            row.request_sha256
+            for row in bindings
+            if _valid_model_receipt(row, corpus, entry_by_id)
+            or _valid_model_receipt(row, source_corpus, source_index)
+        )
+    return result
+
+
 def _matching_rule(
     *,
     policy: BatchResolutionPolicyV1,
@@ -1830,11 +1902,9 @@ def resolve_batch(
             global_scope_mismatch = False
 
         receipt_by_request = {item.request_sha256: item for item in exact_proposals.model_receipts}
-        valid_requests = {
-            key
-            for key, item in receipt_by_request.items()
-            if _valid_model_receipt(item, exact_corpus, entry_by_id)
-        }
+        valid_requests = _valid_model_receipt_requests(
+            exact_proposals, exact_corpus, entry_by_id
+        )
         attempted_materials = {
             binding.material_id
             for request_sha in valid_requests

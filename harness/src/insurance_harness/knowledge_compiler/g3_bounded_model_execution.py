@@ -3433,6 +3433,7 @@ def prepare_g3_stage_execution_context(
 ) -> G3StageExecutionContext:
     """Parse and verify all immutable stage inputs once before any call is resumed or sent."""
 
+    _validate_g3_composite_parent_materials(parent, artifacts)
     prepared = _parse_g3_stage_artifacts(plan, artifacts)
     contexts, index, preview = _render_g3_stage_contexts(
         plan=plan,
@@ -3562,8 +3563,32 @@ def _persist_stage_result(
     return _write_or_verify_stage_result(plan, filename, payload)
 
 
+def _validate_g3_composite_parent_materials(
+    parent: G3ModelProcessingAuthorizationV1,
+    artifacts: dict[str, list[bytes]],
+) -> None:
+    rows = artifacts.get("g3-classification-reuse.830.v3", [])
+    if not rows:
+        return
+    from .g3_classification_reuse import (
+        G3ClassificationReuseV3,
+        parse_classification_reuse,
+        validate_composite_parent_materials,
+    )
+
+    if len(rows) != 1:
+        raise ValueError("classification reuse requires one composite input")
+    receipt = parse_classification_reuse(rows[0])
+    if not isinstance(receipt, G3ClassificationReuseV3):
+        raise ValueError("classification reuse composite contract mismatch")
+    validate_composite_parent_materials(receipt, parent=parent)
+
+
 def _validate_g3_prior_stage_results(
-    plan: G3BoundedAdmissionPlanV1, artifacts: dict[str, list[bytes]]
+    plan: G3BoundedAdmissionPlanV1,
+    artifacts: dict[str, list[bytes]],
+    *,
+    parent: G3ModelProcessingAuthorizationV1 | None = None,
 ) -> None:
     if plan.stage == "C_CLASSIFY":
         return
@@ -3595,6 +3620,7 @@ def _validate_g3_prior_stage_results(
     reuse_raw = (
         artifacts.get("g3-classification-reuse.830.v1", [])
         + artifacts.get("g3-classification-reuse.830.v2", [])
+        + artifacts.get("g3-classification-reuse.830.v3", [])
     )
     if reuse_raw:
         from .g3_classification_reuse import (
@@ -3610,7 +3636,10 @@ def _validate_g3_prior_stage_results(
         request = _one_artifact(
             artifacts, "batch-concept-compile-request.830.g3.v1", BatchConceptCompileRequest830G3V1
         )
-        validate_classification_reuse(reuse, request=request)
+        if parent is None:
+            validate_classification_reuse(reuse, request=request)
+        else:
+            validate_classification_reuse(reuse, request=request, parent=parent)
         return
     prior_stage: Literal["C_CLASSIFY", "D_COMPILE"] = (
         "C_CLASSIFY" if plan.stage == "D_COMPILE" else "D_COMPILE"

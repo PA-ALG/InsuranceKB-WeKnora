@@ -576,18 +576,24 @@ def _base_contract_kind(base: CompileRequest) -> Literal["LEGACY_G2", "PUBLISHED
     )
     if identity == (_BASE_RELEASE, _BASE_EPOCH, 134, _BASE_MEMBERS_SHA256):
         return "LEGACY_G2"
-    entity_ids = set(base.existing_entity_versions)
+    existing_entity_ids = set(base.existing_entity_versions)
+    entity_ids = set(base.entity_versions)
     required = {
         (entity_id, field_key)
-        for entity_id, fields in base.required_fields.items()
-        for field_key in fields
+        for entity_id in existing_entity_ids
+        for field_key in base.required_fields.get(entity_id, ())
     }
     actual = {(item.entity_id, item.field_key) for item in base.existing_fields}
     if (
         not base.base_release_id
         or base.base_activation_epoch <= _BASE_EPOCH
-        or entity_ids != set(base.entity_versions)
+        or not existing_entity_ids
+        or not existing_entity_ids.issubset(entity_ids)
         or entity_ids != set(base.required_fields)
+        or any(
+            base.existing_entity_versions[entity_id] != base.entity_versions[entity_id]
+            for entity_id in existing_entity_ids
+        )
         or actual != required
         or len(actual) != len(base.existing_fields)
     ):

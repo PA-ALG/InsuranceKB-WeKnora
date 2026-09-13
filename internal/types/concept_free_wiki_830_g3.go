@@ -1894,6 +1894,98 @@ func validModelReceiptBinding830G3(
 	return true
 }
 
+type modelReceiptOriginKey830G3 struct {
+	AdmissionHash string
+	RunID         string
+	RunRevision   string
+}
+
+type modelReceiptOriginIdentity830G3 struct {
+	SpaceID          string
+	Purpose          string
+	RunSchemaVersion string
+	IdentityKey      string
+	PermitIdentity   ModelIdentity830G3
+	HasPermit        bool
+}
+
+func validModelReceiptRequests830G3(
+	proposals ProposalBatch830G3, corpus BatchCorpus830G3, entries map[string]CorpusEntry830G3,
+) map[string]bool {
+	groups := map[modelReceiptOriginKey830G3][]ModelReceiptBinding830G3{}
+	for _, binding := range proposals.ModelReceipts {
+		receipt := binding.PolicyReceipt
+		key := modelReceiptOriginKey830G3{receipt.AdmissionHash, receipt.RunID, receipt.RunRevision}
+		groups[key] = append(groups[key], binding)
+	}
+	materialGroups := map[string]modelReceiptOriginKey830G3{}
+	valid := map[string]bool{}
+	for groupKey, bindings := range groups {
+		var identity modelReceiptOriginIdentity830G3
+		identitySet := false
+		materialIDs := []string{}
+		seenMaterials := map[string]bool{}
+		for _, binding := range bindings {
+			receipt := binding.PolicyReceipt
+			current := modelReceiptOriginIdentity830G3{
+				SpaceID: receipt.SpaceID, Purpose: receipt.Purpose,
+				RunSchemaVersion: receipt.RunSchemaVersion,
+				IdentityKey:      strings.Join(receipt.IdentityKey, "\x00"),
+			}
+			if receipt.PermitView != nil {
+				current.PermitIdentity = receipt.PermitView.Identity
+				current.HasPermit = true
+			}
+			if identitySet && current != identity {
+				return map[string]bool{}
+			}
+			identity, identitySet = current, true
+			for _, material := range binding.MaterialBindings {
+				if seenMaterials[material.MaterialID] {
+					return map[string]bool{}
+				}
+				if prior, exists := materialGroups[material.MaterialID]; exists && prior != groupKey {
+					return map[string]bool{}
+				}
+				seenMaterials[material.MaterialID] = true
+				materialGroups[material.MaterialID] = groupKey
+				materialIDs = append(materialIDs, material.MaterialID)
+			}
+		}
+		if len(materialIDs) == 0 {
+			continue
+		}
+		sort.Strings(materialIDs)
+		origin := corpus
+		origin.Entries = make([]CorpusEntry830G3, 0, len(materialIDs))
+		originEntries := map[string]CorpusEntry830G3{}
+		for _, materialID := range materialIDs {
+			entry, exists := entries[materialID]
+			if !exists {
+				origin.Entries = nil
+				break
+			}
+			origin.Entries = append(origin.Entries, entry)
+			originEntries[materialID] = entry
+		}
+		if len(origin.Entries) != len(materialIDs) {
+			continue
+		}
+		digest, err := batchConceptHashWithout830G3(origin.Contract, origin, "corpus_sha256")
+		if err != nil {
+			continue
+		}
+		origin.CorpusSHA256 = digest
+		for _, binding := range bindings {
+			if validModelReceiptBinding830G3(binding, corpus, entries) ||
+				validModelReceiptBinding830G3(binding, origin, originEntries) {
+				valid[binding.RequestSHA256] = true
+			}
+		}
+	}
+	return valid
+}
+
 func expectedAnchors830G3(entity EntityProposal830G3) EntityIdentityAnchors830G3 {
 	anchor := func(value *string) *ObservedNormalizedValue830G3 {
 		if value == nil {
@@ -2373,10 +2465,9 @@ func expectedResolutionRows830G3(
 		return nil, nil, err
 	}
 	receipts := map[string]ModelReceiptBinding830G3{}
-	validReceipts := map[string]bool{}
+	validReceipts := validModelReceiptRequests830G3(proposals, corpus, entries)
 	for _, receipt := range proposals.ModelReceipts {
 		receipts[receipt.RequestSHA256] = receipt
-		validReceipts[receipt.RequestSHA256] = validModelReceiptBinding830G3(receipt, corpus, entries)
 	}
 	materialReasons := map[string]map[string]bool{}
 	for _, entry := range corpus.Entries {
@@ -2839,10 +2930,11 @@ func validateResolutionReplay830G3(
 	for _, proposal := range proposals.Proposals {
 		proposalByMaterial[proposal.MaterialID] = proposal
 	}
+	validReceiptRequests := validModelReceiptRequests830G3(proposals, inputs.Corpus, entries)
 	validReceipts := map[string]ModelReceiptBinding830G3{}
 	attempted := map[string]bool{}
 	for _, receipt := range proposals.ModelReceipts {
-		if validModelReceiptBinding830G3(receipt, inputs.Corpus, entries) {
+		if validReceiptRequests[receipt.RequestSHA256] {
 			validReceipts[receipt.RequestSHA256] = receipt
 			for _, binding := range receipt.MaterialBindings {
 				attempted[binding.MaterialID] = true
@@ -3281,13 +3373,20 @@ func batchConceptBaseKind830G3(base ConceptCompileRequest830G2) (string, error) 
 		return batchConceptBaseLegacyG2, nil
 	}
 	if base.BaseReleaseID == "" || base.BaseActivationEpoch <= 5 ||
-		len(base.ExistingEntityVersions) != len(base.EntityVersions) ||
-		len(base.ExistingEntityVersions) != len(base.RequiredFields) {
+		len(base.ExistingEntityVersions) == 0 ||
+		len(base.EntityVersions) != len(base.RequiredFields) {
 		return "", ErrConceptCandidateBundle830G3
 	}
+	for entityID, entityVersion := range base.EntityVersions {
+		if _, ok := base.RequiredFields[entityID]; !ok || entityVersion == "" {
+			return "", ErrConceptCandidateBundle830G3
+		}
+	}
 	required := make(map[string]bool, len(base.ExistingFields))
-	for entityID, fields := range base.RequiredFields {
-		if base.ExistingEntityVersions[entityID] == "" || base.EntityVersions[entityID] == "" {
+	for entityID, existingVersion := range base.ExistingEntityVersions {
+		entityVersion, entityExists := base.EntityVersions[entityID]
+		fields, fieldsExist := base.RequiredFields[entityID]
+		if !entityExists || !fieldsExist || existingVersion == "" || existingVersion != entityVersion {
 			return "", ErrConceptCandidateBundle830G3
 		}
 		for _, fieldKey := range fields {
