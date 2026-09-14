@@ -10,7 +10,11 @@ from insurance_harness.knowledge_compiler.g3_field_tasks import (
     adapt_catalog_field_tasks,
     batch_field_tasks,
 )
-from insurance_harness.product_ingestion.extraction import VALIDATION_VERSION
+from insurance_harness.product_ingestion.extraction import VALIDATION_VERSION, render_window_request
+from insurance_harness.product_ingestion.model_execution import (
+    ModelPolicyDenied,
+    _template_and_request,
+)
 from insurance_harness.product_ingestion.models import (
     FieldCacheIdentity,
     SourceDependency,
@@ -52,8 +56,48 @@ def build_field_windows(
             raise ValueError("retry field plan does not match selected failed fields")
     bindings = {row.entity_id: row for row in request.entity_bindings}
     template = model_settings.template(model_settings.field_template_id)
+
+    def fit(batch):
+        base = request.base_request
+        content = render_window_request(
+            batch.tasks,
+            base.sources,
+            tenant_id=base.tenant_id,
+            space_id=base.space_id,
+            raw_kb_id=base.raw_kb_id,
+        )
+        try:
+            # Use the same pure preflight as dispatch, including JSON envelope
+            # expansion. Field count alone cannot bound source metadata bytes.
+            _template_and_request(
+                model_settings,
+                scope=model_settings.scope,
+                content=content,
+                input_sha256=hashlib.sha256(content).hexdigest(),
+                prompt=FIELD_PROMPT,
+                template_id=model_settings.field_template_id,
+            )
+        except ModelPolicyDenied as error:
+            if (
+                str(error)
+                not in {
+                    "configured model context capacity exceeded",
+                    "configured model request capacity exceeded",
+                }
+                or len(batch.tasks) == 1
+            ):
+                raise
+            midpoint = len(batch.tasks) // 2
+            return tuple(
+                fitted
+                for portion in (batch.tasks[:midpoint], batch.tasks[midpoint:])
+                for fitted in fit(batch_field_tasks(portion)[0])
+            )
+        return (batch,)
+
+    batches = tuple(fitted for batch in batch_field_tasks(tasks) for fitted in fit(batch))
     windows = []
-    for batch in batch_field_tasks(tasks):
+    for ordinal, batch in enumerate(batches):
         specs = []
         for task in batch.tasks:
             binding = bindings[task.entity_id]
@@ -87,7 +131,7 @@ def build_field_windows(
         digest = hashlib.sha256(b"product-field-plan.v1\0" + json_bytes(specs)).hexdigest()
         windows.append(
             PlannedWindow(
-                window_key=f"fields-{batch.ordinal:04d}-{batch.batch_sha256[:16]}",
+                window_key=f"fields-{ordinal:04d}-{batch.batch_sha256[:16]}",
                 dependency_sha256=digest,
                 tasks=tuple(specs),
             )

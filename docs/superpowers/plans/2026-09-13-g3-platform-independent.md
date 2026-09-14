@@ -260,3 +260,15 @@ Task3aa 已部署（APP沿用0c22，UI7a1249，Harness0931e2）。网页恢复59
 Task3ab接口确认：适配入口为adapt_identity_response(raw, context)，输出semantic_raw与audit；原raw由既有call保存，audit以identity_adaptation关联原call。首页约束继续用于名称、分类、材料角色；公司辅助块若本已offered，也可验证同文件产品代码、版本/备案，不再额外要求这些锚点都在首页。不得增加模型输入或改现有提示字节；稳定位置顺序使用页号、原blocks顺序和locator顺序。已记录恢复入口为replay_stage_call，显式MODEL_REPLAY来源，先以真实job lease保存model_replay_receipt，之后适配失败也能统计复用；input/request/model policy/prompt/source/base漂移拒绝，不重新调用。API独立输出reused_model_call_count/reused_usage，本次usage不累加历史。root新增test_joint_identity_pipeline.py负责互补新产品全worker验证；g3_service_inventory负责自己文件内的已记录分类恢复全worker验证。
 
 root必要API透传写域补充：internal/application/service/product_ingestion_bridge.go及_test.go。Go现有白名单DTO会丢弃新增复用统计，增加两个明确数字字段及HTTP往返RED/GREEN；不输出原响应或调用凭据。UI继续沿用已部署入口，不为本次统计重新构建。
+
+
+### 2026-09-14 Task3ac：已发布结果空集合兼容
+
+Task3ab已实际部署：APP297d4db镜像2a2c94b5、Harness297d4db镜像f894c242，UI7a1249复用。网页恢复任务7b652803-6b5e-59c9-b750-19a878e3b273于14:00:02.916129Z开始、14:00:48.454094Z失败。source/routing/identity均成功，复用已记录分类1次、新模型调用0。字段计划未生成，原因是Go发布投影的nil集合序列化为null，Python CompileRequest集合类型拒绝1662处。此终态不是模型分类失败，不是普通字段缺失；原失败与发布Head9保留。
+
+沿用G3-AUTO-2/3/6及用户增量复用授权。g3_extraction_finish唯一写product_ingestion/compilation.py、tests/test_compilation.py；root维护计划、证据和部署，独立review在冻结diff上进行。先使用真实已签名base的只读副本复现RED。原始base通过既有签名/成员校验后，仅在派生CompileRequest视图把definitions.aliases、fields的evidence/concept_ids/conditions/exceptions、pages的concept_ids/conditions/exceptions中显式null解释为空集合。复制处理，保留原始bytes/hash/原字段值/全部非空集合；不得全局递归替换null，不改value、unknown_reason等标量，不改旧Release、Catalog、Profile、签名或权限。
+
+Validation需覆盖实际base+已保存identity一直到field windows、父实体和字段carry、原输入字节不变、非法非集合值仍拒绝、旧无null输入输出不变及Go既有typed canonical的nil/空集合语义。fixture不计真实业务验收。无需Go/UI代码或镜像重建，仅更新既有Harness并复用APP/UI。当前恢复任务保持失败终态；不使用临时脚本续接，不扩展新的恢复协议。部署后冻结版本，再从网页上传此前未处理的第四产品三份原材料，平台独立运行，记录各阶段与总耗时/模型调用/字段状态，普通字段不重复补抽。若还有失败，明确列平台遗留，不宣称G3完成。
+
+
+Task3ac同轮真实输入验证补充：空集合兼容后已可生成75新字段/8个窗口，原502个definition/field/page成员与原page_members.payload完全一致，但所有原10字段窗口超过已配置300000 bytes（最大629253）；主要来自重复的来源依赖元数据。root新增唯一写域pipeline.py、test_pipeline.py，按实际render_window_request及既有_template_and_request的完整请求检查确定性细分过大的窗口，保留原单次最多10字段、任务/来源/缓存身份、原prompt与模型额度配置。已有小窗口保持原组，批次大小不硬编码新数字；严格复用现有上下文/完整请求字节上限。仅容量错误触发分拆，权限/模板/配置错误原样拒绝；单字段也超限则明确容量错误，不放宽配置或重复发送。RED覆盖多字段原请求超限、拆后每窗满足同一传输前置检查、字段集合恰好覆盖且无重复、缓存身份不变、完整请求信封较小限额、非容量错误不被吞掉。真实离线check需重跑拆分后的全部窗口检查，0模型/0业务写。两个独立写域冻结后统一review与仅Harness部署；当前测试任务已终态，下一次网页新产品运行期间不改代码。

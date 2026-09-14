@@ -21,10 +21,19 @@ def compile_request():
 
 
 def policy(digest="a" * 64):
+    import hashlib
+
     return SimpleNamespace(
         policy_sha256=digest,
         field_template_id="extract",
-        template=lambda _: SimpleNamespace(prompt_sha256="b" * 64),
+        scope=None,
+        model="gemini-3.7-flash-medium",
+        max_request_bytes=2_000_000,
+        template=lambda _: SimpleNamespace(
+            prompt_sha256=hashlib.sha256(module().FIELD_PROMPT).hexdigest(),
+            max_context_bytes=1_000_000,
+            max_output_tokens=16384,
+        ),
     )
 
 
@@ -189,3 +198,108 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
     observed = len(ticks)
     await monitor
     assert observed == 1, "synchronous compiler work prevented the lease heartbeat from running"
+
+
+@pytest.mark.parametrize("limit", ["context", "envelope"])
+def test_field_plan_splits_actual_requests_to_configured_capacity(
+    compile_request, monkeypatch, limit
+):
+    import hashlib
+
+    from insurance_harness.knowledge_compiler.g3_field_tasks import (
+        FieldTaskV1,
+        adapt_catalog_field_tasks,
+    )
+    from insurance_harness.product_ingestion.extraction import render_window_request
+    from insurance_harness.product_ingestion.model_execution import _template_and_request
+
+    api = module()
+    tasks = adapt_catalog_field_tasks(compile_request)[:3]
+    monkeypatch.setattr(api, "adapt_catalog_field_tasks", lambda _: tasks)
+    settings = policy()
+    template = settings.template(settings.field_template_id)
+    settings.template = lambda _: template
+    base = compile_request.base_request
+
+    def rendered(selected):
+        return render_window_request(
+            selected,
+            base.sources,
+            tenant_id=base.tenant_id,
+            space_id=base.space_id,
+            raw_kb_id=base.raw_kb_id,
+        )
+
+    def prepared(content):
+        return _template_and_request(
+            settings,
+            scope=settings.scope,
+            content=content,
+            input_sha256=hashlib.sha256(content).hexdigest(),
+            prompt=api.FIELD_PROMPT,
+            template_id=settings.field_template_id,
+        )[1]
+
+    singles = [rendered((task,)) for task in tasks]
+    if limit == "context":
+        template.max_context_bytes = max(map(len, singles)) + 1
+        assert len(rendered(tasks)) > template.max_context_bytes
+    else:
+        settings.max_request_bytes = (
+            max(len(prepared(content).request_bytes) for content in singles) + 1
+        )
+        with pytest.raises(Exception, match="request capacity exceeded"):
+            prepared(rendered(tasks))
+    windows = api.build_field_windows(
+        compile_request, product_identity_sha256="c" * 64, model_settings=settings
+    )
+    assert len(windows) > 1
+    planned = [row for window in windows for row in window.tasks]
+    assert sorted(row.task_sha256 for row in planned) == sorted(task.task_sha256 for task in tasks)
+    for window in windows:
+        content = rendered(
+            tuple(FieldTaskV1.model_validate(row.task_payload) for row in window.tasks)
+        )
+        prepared(content)
+    roomy = api.build_field_windows(
+        compile_request, product_identity_sha256="c" * 64, model_settings=policy()
+    )
+    assert {row.task_sha256: row.cache_identity for row in planned} == {
+        row.task_sha256: row.cache_identity for window in roomy for row in window.tasks
+    }
+
+
+def test_field_plan_does_not_swallow_noncapacity_policy_error(compile_request, monkeypatch):
+    from insurance_harness.knowledge_compiler.g3_field_tasks import adapt_catalog_field_tasks
+    from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
+
+    api = module()
+    monkeypatch.setattr(
+        api, "adapt_catalog_field_tasks", lambda _: adapt_catalog_field_tasks(compile_request)[:2]
+    )
+    settings = policy()
+    template = settings.template("extract")
+    template.prompt_sha256 = "0" * 64
+    settings.template = lambda _: template
+    with pytest.raises(ModelPolicyDenied, match="template mismatch"):
+        api.build_field_windows(
+            compile_request, product_identity_sha256="c" * 64, model_settings=settings
+        )
+
+
+def test_single_field_over_capacity_fails_without_increasing_limit(compile_request, monkeypatch):
+    from insurance_harness.knowledge_compiler.g3_field_tasks import adapt_catalog_field_tasks
+    from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
+
+    api = module()
+    only = adapt_catalog_field_tasks(compile_request)[:1]
+    monkeypatch.setattr(api, "adapt_catalog_field_tasks", lambda _: only)
+    settings = policy()
+    template = settings.template("extract")
+    template.max_context_bytes = 1
+    settings.template = lambda _: template
+    with pytest.raises(ModelPolicyDenied, match="context capacity exceeded"):
+        api.build_field_windows(
+            compile_request, product_identity_sha256="c" * 64, model_settings=settings
+        )
+    assert template.max_context_bytes == 1

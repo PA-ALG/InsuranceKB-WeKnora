@@ -119,3 +119,20 @@ Task3ab已冻结：平台增加同产品互补证据的v3归并（旧v1/v2不改
 Task3ab CODE收束：联合身份/旧v2定向25项、最终备案适配10项、恢复49个不同测试、API19项、Go版本/原342字段Candidate与增量8顶层及16子项、Go Bridge组通过。新增互补三材料完整worker测试88.43秒、已记录分类恢复worker82.36秒、原流水线兼容3项225.47秒均PASS。以上全部是fixture，未调用真实供应商或发布业务结果。原实际响应的本地回归得到一个绑定、三份来源、12条原文件证据；原null与raw保持。
 
 独立复核曾发现产品代码可以冒充同值备案号的补链缺陷；已用补链和既有version引用两条路径RED复现，修复要求明确类型证据，10项最终适配测试与真实备案原响应均通过，复核PASS。旧v1/v2算法与恢复wire保持。复用回执在实际job lease内持久化，任务后续失败仍有统计；API和Go只透传明确的复用计数及usage。源SHA、测试日志摘要见joint-identity-code-tests-20260914.json。部署、网页恢复与新产品完整验收仍NOT RUN，不由CODE PASS推导完成。
+
+
+## Task3ab actual deployment and webpage recovery
+
+APP source297d4db and Harness source297d4db were deployed on the existing G3 environment; UI7a1249 was reused. APP image2a2c94b516913a56e1dd98fa8be07f2cb9e2500610f7cacf80a6c63814a33d4b passed isolated binary/dependency checks, and application/API/worker health passed. The ordinary APP runtime build was interrupted while reinstalling dependencies; the first local rebase failed remote lookup. Both failures are retained. Successful rebase used the verified cached binary and exact existing local runtime base, with one added binary layer; it is explicitly not a successful BA0 runtime build. Separate build/recovery/smoke/deployment receipts remain under /private/tmp/g3-platform-independent-deploy-20260913.
+
+Webpage retry of590980a5 created7b652803-6b5e-59c9-b750-19a878e3b273. It ran14:00:02.916129Z–14:00:48.454094Z (45.537965seconds to FAILED). Source/routing/identity succeeded; one original Gemini classification response reused, zero new model calls. The platform passed joint product identity using the original recorded response. Field planning then failed because1662 optional collection nulls in the existing Go published projection were rejected by Python tuple fields. Field extraction/compile/review/publish were NOT RUN. G3 independent full-chain acceptance remains BLOCKED;45.54seconds is not publication latency.
+
+Actual classification request facts: the three current files supplied22 first-page blocks (584/1703/4983characters),11 Schema candidates and one plausible existing identity. All three model labels were whole_life_insurance and their material roles were brochure/terms/rate-table. Classification itself was correct. Redundant first-page rate rows, duplicated evidence text and task metadata are recorded as prompt-efficiency follow-ups; classification input was not full historical corpus.
+
+## Task3ac code validation
+
+Bounded compatibility change: only recognized optional collection slots in a copied published-member view convert explicitnull to empty collections; original signed base, scalar nulls, required evidence and all populated fields remain unchanged.5 focused tests passed. Actual saved signed base and identity reconstruct8 product bindings and retain493 old fields/8 pages/1 definition exactly against502 original page-member payloads. The check then exposed8 oversized original field windows; the largest was629253bytes against the configured300000byte context cap, chiefly repeated allowed-source metadata.
+
+Field planning now uses the same rendered context and request-envelope preflight as dispatch and recursively splits oversized batches. It preserves task/source/cache identities, max10 fields, configured limits and prompt bytes. Only capacity errors split; other errors and an impossible singleton are explicit errors.9 pipeline checks and the complete joint-product worker fixture (1test,74.36seconds) passed. Independent frozen-four-file review found0BLOCKER. No real provider call, new candidate or release is inferred from these tests. New Harness deployment and fresh three-file business acceptance are NOT RUN at this record.
+
+Actual saved-input split check PASS in36.95seconds:75 unchanged tasks occur exactly once in30 windows of2–3 fields, largest context281482bytes≤300000 and largest complete HTTP envelope298600bytes≤2000000; output cap remains16384tokens. Original502carried members and base bytes are unchanged. This is local pure planning, with0provider/0business effects; real product latency is not yet established. Report: /private/tmp/g3-field-plan-diagnostic-01/check-split.json.

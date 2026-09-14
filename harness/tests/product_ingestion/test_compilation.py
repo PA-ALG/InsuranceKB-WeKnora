@@ -526,3 +526,119 @@ def test_new_page_midrange_score_is_pending_not_automatic_ready(total):
     assert candidate.admission.pending_page_ids == (free_page_id(page),)
     assert candidate.review_result.output.page_scores[free_page_id(page)].total == total
     assert candidate.review_result == review
+
+
+def test_go_published_null_collections_preserve_exact_parent_and_request_hash():
+    parent, expected = platform_request()
+    _, child = candidates()
+    body = json.loads(
+        json.dumps(base_body(parent, child), default=lambda row: row.model_dump(mode="json"))
+    )
+    collection_keys = {
+        "definitions": ("aliases",),
+        "fields": ("evidence", "concept_ids", "conditions", "exceptions"),
+        "pages": ("concept_ids", "conditions", "exceptions"),
+    }
+    changed = 0
+    for kind, keys in collection_keys.items():
+        for row in body["published_projection"][kind]:
+            for key in keys:
+                if row[key] == []:
+                    row[key] = None
+                    changed += 1
+    assert changed > 0
+    original = copy.deepcopy(body)
+    current = expected.resolution_inputs
+    actual = build_platform_compile_request(
+        scope=scope_for(parent),
+        base_body=body,
+        catalog_json=CATALOG.read_bytes(),
+        profile_confirmation_json=CONFIRMATION.read_bytes(),
+        corpus=current.corpus,
+        proposals=current.proposals,
+        policy=current.policy,
+        resolution=expected.resolution,
+        selected_refs=tuple(
+            sorted(
+                (p.material_id, c.proposal_ref)
+                for p in expected.resolution.decisions
+                for c in p.children
+            )
+        ),
+        refresh_fields=tuple(
+            {"entity_id": row.entity_id, "field_key": row.field_key}
+            for row in expected.refresh_fields
+        ),
+    )
+    assert body == original
+    assert actual == expected
+    assert actual.request_sha256 == expected.request_sha256
+
+
+@pytest.mark.parametrize(
+    "kind,row,model",
+    [
+        (
+            "fields",
+            {
+                "value": None,
+                "unknown_reason": None,
+                "evidence": None,
+                "concept_ids": None,
+                "conditions": None,
+                "exceptions": None,
+            },
+            "FieldAssertion",
+        ),
+        (
+            "definitions",
+            {"title": None, "body": None, "aliases": None, "evidence": None},
+            "ConceptDefinition",
+        ),
+        (
+            "pages",
+            {
+                "title": None,
+                "body": None,
+                "concept_ids": None,
+                "conditions": None,
+                "exceptions": None,
+                "evidence": None,
+            },
+            "FreeWikiPage",
+        ),
+    ],
+)
+def test_null_collection_adapter_never_defaults_scalar_or_required_evidence(kind, row, model):
+    from insurance_harness.knowledge_compiler import concept_free_wiki_830_g2 as contract
+    from insurance_harness.product_ingestion.compilation import _published_compile_members
+
+    original = copy.deepcopy(row)
+    projected = _published_compile_members({kind: [row]}, kind)[0]
+    assert row == original
+    for key in ("value", "unknown_reason", "title", "body"):
+        if key in row:
+            assert projected[key] is None
+    if kind != "fields":
+        assert projected["evidence"] is None
+    with pytest.raises(ValueError):
+        getattr(contract, model).model_validate(projected)
+
+
+def test_null_collection_adapter_rejects_wrong_collection_type_on_valid_parent_field():
+    from pydantic import ValidationError
+
+    from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import FieldAssertion
+    from insurance_harness.product_ingestion.compilation import _published_compile_members
+
+    parent, _ = candidates()
+    row = parent.compile_result.output.fields[0].model_dump(mode="json")
+    FieldAssertion.model_validate(row)
+    row["conditions"] = "bad"
+    actual = _published_compile_members({"fields": [row]}, "fields")[0]
+    assert actual["conditions"] == "bad"
+    with pytest.raises(ValidationError) as error:
+        FieldAssertion.model_validate(actual)
+    assert [(item["loc"], item["type"]) for item in error.value.errors()] == [
+        (("conditions",), "tuple_type")
+    ]

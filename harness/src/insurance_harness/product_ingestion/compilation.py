@@ -168,6 +168,26 @@ def build_existing_snapshot(
     )
 
 
+# Go's published read DTO may encode empty slices as null. Adapt only these
+# optional collection slots after signature/member verification; original signed
+# dictionaries, scalar nulls and required evidence remain untouched.
+_PUBLISHED_EMPTY_COLLECTIONS = {
+    "definitions": ("aliases",),
+    "fields": ("evidence", "concept_ids", "conditions", "exceptions"),
+    "pages": ("concept_ids", "conditions", "exceptions"),
+}
+
+
+def _published_compile_members(projection: Mapping[str, Any], kind: str) -> tuple:
+    keys = _PUBLISHED_EMPTY_COLLECTIONS[kind]
+    return tuple(
+        {**row, **{key: () for key in keys if key in row and row[key] is None}}
+        if isinstance(row, Mapping)
+        else row
+        for row in projection.get(kind, ())
+    )
+
+
 def build_platform_compile_request(
     *,
     scope: ProductScope,
@@ -245,9 +265,9 @@ def build_platform_compile_request(
         policy_identity="g3-resolution-policy:" + policy.policy_sha256,
         sources=tuple(sources[key] for key in sorted(sources)),
         required_fields=required_fields,
-        existing_definitions=projection.get("definitions", ()),
-        existing_fields=projection.get("fields", ()),
-        existing_pages=projection.get("pages", ()),
+        existing_definitions=_published_compile_members(projection, "definitions"),
+        existing_fields=_published_compile_members(projection, "fields"),
+        existing_pages=_published_compile_members(projection, "pages"),
         existing_entity_versions=dict(projection["entity_versions"]),
         entity_versions=entity_versions,
         schema_identity=(
