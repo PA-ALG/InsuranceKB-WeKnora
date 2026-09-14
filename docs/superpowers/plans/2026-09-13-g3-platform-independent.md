@@ -6,6 +6,10 @@
 
 **Architecture:** Extend Python wiki-api/wiki-worker and P1 durable JobStore with product ingestion services. WeKnora remains sole original-source and serving Release authority; only versioned REST crosses the boundary. UI uploads and observes, never compiles or signs.
 
+## 2026-09-14 first independent run failure follow-up
+
+The frozen d7812093 platform run `8e5693b4-6365-458b-89e6-7ced242b200d` accepted three new originals through the webpage and reached FAILED in source processing. Preserve this failed receipt; no manual continuation or acceptance PASS. Diagnosis remains read-only until its cause is verified. A separate observed response-contract gap drops Harness `source_processing`, `model_call_count_complete` and `discovery_summary` at the Go `ProductIngestionRun` typed bridge. Owner g3_service_inventory owns only `internal/application/service/product_ingestion_bridge.go` and its focused bridge test for safe typed forwarding, with RED asserting returned JSON retains declared summaries and strips unknown/raw fields. No new authority or broad JSON passthrough. Root owns integration, deployment and the proven parse repair: the current APP has BATCH_EMBED_SIZE=100 while the actual qwen3.7-text-embedding response caps batches at20. Reuse the existing batchEmbedder with BATCH_EMBED_SIZE=20 at the next approved APP replacement; no new embedding adapter or repeated quality calls. Source failure repair and a new measured/recovery run must not rewrite this attempt as passing.
+
 ## 2026-09-14 required open-discovery integration amendment
 
 User authority: `/Users/houjing/Documents/LLM_wiki/G3-统一知识结构补齐任务-2026-09-14.md`, including “Schema 外自由发现必须实际接入”. This extends the current G3 queue, not a new Goal. Keep the deployed navigation, existing 493 field identities and performance/recovery work. Current permanent `pipeline.synthesis` only projects field artifacts; legacy ENTITY_SYNTHESIS and published free pages do not prove this new path is connected.

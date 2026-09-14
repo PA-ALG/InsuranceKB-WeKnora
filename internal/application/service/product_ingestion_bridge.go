@@ -51,6 +51,68 @@ type ProductIngestionField struct {
 	Reason   *string `json:"reason,omitempty"`
 	Attempt  int     `json:"attempt,omitempty"`
 }
+
+// Status summaries are allowlisted DTOs, never arbitrary model or artifact JSON.
+// Nullable counters have no omitempty: unknown must survive as null, not zero.
+type ProductIngestionSourceCounts struct {
+	Attempts         int `json:"attempts"`
+	Confirmed        int `json:"confirmed"`
+	Interrupted      int `json:"interrupted"`
+	NotDispatched    int `json:"not_dispatched"`
+	TransportRetries int `json:"transport_retries"`
+}
+type ProductIngestionSourceOccurrence struct {
+	Occurrence       int    `json:"occurrence"`
+	Status           string `json:"status"`
+	StartedAtUnixMS  int64  `json:"started_at_unix_ms"`
+	FinishedAtUnixMS int64  `json:"finished_at_unix_ms"`
+	DurationMS       int64  `json:"duration_ms"`
+}
+type ProductIngestionSourcePhase struct {
+	Phase       string                             `json:"phase"`
+	Recorded    bool                               `json:"recorded"`
+	Occurrences []ProductIngestionSourceOccurrence `json:"occurrences"`
+}
+type ProductIngestionSourceMaterial struct {
+	KnowledgeID   string                        `json:"knowledge_id"`
+	FileName      *string                       `json:"file_name"`
+	Reused        bool                          `json:"reused"`
+	Availability  string                        `json:"availability"`
+	ReceiptSHA256 *string                       `json:"receipt_sha256"`
+	Counts        *ProductIngestionSourceCounts `json:"counts"`
+	Phases        []ProductIngestionSourcePhase `json:"phases"`
+}
+type ProductIngestionSourceProcessing struct {
+	Contract                     string                           `json:"contract"`
+	ModelCallCount               *int                             `json:"model_call_count"`
+	RecordedModelCallCount       int                              `json:"recorded_model_call_count"`
+	ReusedModelCallCount         *int                             `json:"reused_model_call_count"`
+	RecordedReusedModelCallCount int                              `json:"recorded_reused_model_call_count"`
+	ModelCallCountComplete       bool                             `json:"model_call_count_complete"`
+	InterruptedCount             int                              `json:"interrupted_count"`
+	Materials                    []ProductIngestionSourceMaterial `json:"materials"`
+}
+type ProductIngestionDiscoveryCounts struct {
+	ProposedNew    *int `json:"proposed_new"`
+	Duplicate      *int `json:"duplicate"`
+	UpdateProposal *int `json:"update_proposal"`
+	Rejected       *int `json:"rejected"`
+	Published      *int `json:"published"`
+}
+type ProductIngestionDiscoveryCoverage struct {
+	OfferedChars  int  `json:"offered_chars"`
+	OmittedChars  int  `json:"omitted_chars"`
+	Complete      bool `json:"complete"`
+	MaterialCount int  `json:"material_count"`
+}
+type ProductIngestionDiscoverySummary struct {
+	State              string                             `json:"state"`
+	Reused             bool                               `json:"reused"`
+	ReasonCodes        []string                           `json:"reason_codes"`
+	Counts             ProductIngestionDiscoveryCounts    `json:"counts"`
+	Coverage           *ProductIngestionDiscoveryCoverage `json:"coverage"`
+	PublishedConfirmed bool                               `json:"published_confirmed"`
+}
 type productIngestionWireScope struct {
 	TenantID            string `json:"tenant_id"`
 	SpaceID             string `json:"space_id"`
@@ -58,21 +120,27 @@ type productIngestionWireScope struct {
 	WikiKnowledgeBaseID string `json:"wiki_knowledge_base_id"`
 }
 type ProductIngestionRun struct {
-	RunID               string                    `json:"run_id"`
-	Scope               productIngestionWireScope `json:"scope"`
-	WikiKnowledgeBaseID string                    `json:"wiki_knowledge_base_id"`
-	State               string                    `json:"state"`
-	Stage               *string                   `json:"stage,omitempty"`
-	Stages              []ProductIngestionStage   `json:"stages,omitempty"`
-	Counts              *ProductIngestionCounts   `json:"counts,omitempty"`
-	ModelCallCount      *int                      `json:"model_call_count,omitempty"`
-	CreatedAt           *string                   `json:"created_at,omitempty"`
-	StartedAt           *string                   `json:"started_at,omitempty"`
-	FinishedAt          *string                   `json:"finished_at,omitempty"`
-	PublishedURL        *string                   `json:"published_url,omitempty"`
-	Reason              *string                   `json:"reason,omitempty"`
-	Fields              []ProductIngestionField   `json:"fields,omitempty"`
-	RetryOfRunID        *string                   `json:"retry_of_run_id,omitempty"`
+	RunID                        string                            `json:"run_id"`
+	Scope                        productIngestionWireScope         `json:"scope"`
+	WikiKnowledgeBaseID          string                            `json:"wiki_knowledge_base_id"`
+	State                        string                            `json:"state"`
+	Stage                        *string                           `json:"stage,omitempty"`
+	Stages                       []ProductIngestionStage           `json:"stages,omitempty"`
+	Counts                       *ProductIngestionCounts           `json:"counts,omitempty"`
+	ModelCallCount               *int                              `json:"model_call_count"`
+	SemanticModelCallCount       *int                              `json:"semantic_model_call_count"`
+	SourceModelCallCount         *int                              `json:"source_model_call_count"`
+	RecordedSourceModelCallCount *int                              `json:"recorded_source_model_call_count"`
+	ModelCallCountComplete       *bool                             `json:"model_call_count_complete"`
+	SourceProcessing             *ProductIngestionSourceProcessing `json:"source_processing"`
+	DiscoverySummary             *ProductIngestionDiscoverySummary `json:"discovery_summary"`
+	CreatedAt                    *string                           `json:"created_at,omitempty"`
+	StartedAt                    *string                           `json:"started_at,omitempty"`
+	FinishedAt                   *string                           `json:"finished_at,omitempty"`
+	PublishedURL                 *string                           `json:"published_url,omitempty"`
+	Reason                       *string                           `json:"reason,omitempty"`
+	Fields                       []ProductIngestionField           `json:"fields,omitempty"`
+	RetryOfRunID                 *string                           `json:"retry_of_run_id,omitempty"`
 }
 type ProductIngestionBridge interface {
 	Scope() ProductIngestionScope
