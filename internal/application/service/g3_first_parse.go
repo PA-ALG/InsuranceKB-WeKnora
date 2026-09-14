@@ -134,7 +134,7 @@ func (s *G3FirstParseStore) save(id g3FirstParseIdentity, result *types.ReadResu
 	if err != nil {
 		return err
 	}
-	var projection conceptNativeProjection830G2
+	var projection conceptNativeHeader830G2
 	if json.Unmarshal(result.NativeStructure.SanitizedJSON, &projection) != nil {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}

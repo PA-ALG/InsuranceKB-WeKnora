@@ -95,37 +95,61 @@ type ConceptCitationAuthorityRequest830G2 struct {
 	Bundle          *types.ConceptCandidateBundle830G2
 }
 
+// Native fields are declared in canonical JSON key order. Keep these wire
+// structures ordered when extending their versioned contract: the native encoder
+// avoids the generic per-character map tree while preserving the exact v1 bytes.
 type conceptNativeParserIdentity830G2 struct {
-	ProducerContract string `json:"producer_contract"`
 	CaptureMode      string `json:"capture_mode"`
-	Pypdfium2Version string `json:"pypdfium2_version"`
 	PDFiumVersion    string `json:"pdfium_version"`
+	ProducerContract string `json:"producer_contract"`
+	Pypdfium2Version string `json:"pypdfium2_version"`
 }
 
 type conceptNativeBBox830G2 struct {
-	GlobalCodepointStart int    `json:"global_codepoint_start"`
-	GlobalCodepointEnd   int    `json:"global_codepoint_end"`
 	BBox                 [4]int `json:"bbox"`
+	GlobalCodepointEnd   int    `json:"global_codepoint_end"`
+	GlobalCodepointStart int    `json:"global_codepoint_start"`
 }
 
 type conceptNativePage830G2 struct {
-	PageNumber           int                      `json:"page_number"`
-	GlobalCodepointStart int                      `json:"global_codepoint_start"`
+	BBoxes               []conceptNativeBBox830G2 `json:"bboxes"`
 	GlobalCodepointEnd   int                      `json:"global_codepoint_end"`
+	GlobalCodepointStart int                      `json:"global_codepoint_start"`
+	HeightPoints         string                   `json:"height_points"`
+	PageNumber           int                      `json:"page_number"`
 	PageTextSHA256       string                   `json:"page_text_sha256"`
 	WidthPoints          string                   `json:"width_points"`
-	HeightPoints         string                   `json:"height_points"`
-	BBoxes               []conceptNativeBBox830G2 `json:"bboxes"`
 }
 
 type conceptNativeProjection830G2 struct {
 	Contract             string                           `json:"contract"`
-	SourceSHA256         string                           `json:"source_sha256"`
-	MarkdownSHA256       string                           `json:"markdown_sha256"`
 	CoordinateSpace      string                           `json:"coordinate_space"`
+	MarkdownSHA256       string                           `json:"markdown_sha256"`
+	Pages                []conceptNativePage830G2         `json:"pages"`
 	ParserIdentity       conceptNativeParserIdentity830G2 `json:"parser_identity"`
 	ParserIdentitySHA256 string                           `json:"parser_identity_sha256"`
-	Pages                []conceptNativePage830G2         `json:"pages"`
+	SourceSHA256         string                           `json:"source_sha256"`
+}
+
+// Reading this header does not authorize the source. Callers must still pass the
+// unchanged full native validator before using it or sealing any source asset.
+type conceptNativeHeader830G2 struct {
+	ParserIdentitySHA256 string `json:"parser_identity_sha256"`
+}
+
+func canonicalNativeJSON830G2(value any) ([]byte, error) {
+	switch value.(type) {
+	case conceptNativeProjection830G2, conceptNativeParserIdentity830G2:
+	default:
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	var output bytes.Buffer
+	encoder := json.NewEncoder(&output)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(output.Bytes(), []byte("\n")), nil
 }
 
 type conceptSourceRevisionRepository830G2 interface {
@@ -742,8 +766,8 @@ func prepareConceptNativeQuoteIndex830G2(result *types.ReadResult, sourceSHA, pa
 	if decoder.Decode(&projection) != nil || !jsonEOF830G2(decoder) {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	canonical, err := canonicalJSON830G2(projection)
-	identityCanonical, identityErr := canonicalJSON830G2(projection.ParserIdentity)
+	canonical, err := canonicalNativeJSON830G2(projection)
+	identityCanonical, identityErr := canonicalNativeJSON830G2(projection.ParserIdentity)
 	if err != nil || identityErr != nil || !bytes.Equal(canonical, artifact.SanitizedJSON) || projection.Contract != conceptNativeContract830G2 || projection.SourceSHA256 != sourceSHA || projection.MarkdownSHA256 != testSHA256830G2(result.MarkdownContent) || projection.CoordinateSpace != "normalized_0_1e6_top_left" || projection.ParserIdentity.ProducerContract != "weknora.docreader.builtin-pdfium-charbox.v1" || projection.ParserIdentity.CaptureMode != conceptNativeCapture830G2 || projection.ParserIdentity.Pypdfium2Version == "" || projection.ParserIdentity.PDFiumVersion == "" || projection.ParserIdentitySHA256 != testSHA256Bytes830G2(identityCanonical) || projection.ParserIdentitySHA256 != parserIdentitySHA || len(projection.Pages) == 0 {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}

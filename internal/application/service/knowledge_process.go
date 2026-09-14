@@ -3440,7 +3440,7 @@ func (s *knowledgeService) convert(
 		return nil, nil
 	}
 	if firstParse {
-		var projection conceptNativeProjection830G2
+		var projection conceptNativeHeader830G2
 		if payload.Revision == nil || result.NativeStructure == nil || len(result.ImageRefs) != 0 || result.IsAudio ||
 			json.Unmarshal(result.NativeStructure.SanitizedJSON, &projection) != nil {
 			err = ErrConceptSourceAuthorityUnavailable830G2
