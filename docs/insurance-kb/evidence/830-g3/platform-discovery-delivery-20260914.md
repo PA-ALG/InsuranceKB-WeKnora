@@ -38,3 +38,13 @@
 - 浏览器文件选择工具响应明显延迟，不能把工具往返时长当平台处理时长。上传完成精确时间待核对；不得用任务seal时间无说明替代最后一份文件接收时间。
 - 浏览器API此前显示model_call_count=0，但Go桥丢掉了`model_call_count_complete=false`及处理摘要；0不代表源向量化没有发生。补齐typed转发，并从已有模型dispatch回执核对实际调用数。
 - 本次失败已结束测量。后续配置修复/部署及新的独立运行另记，不能与此次拼接宣称通过。
+
+### 首次失败运行补充核对与修复状态
+
+- 来源 dispatch 表已记录12次embedding发送：条款5次HTTP400、说明书5次HTTP400、费率2次HTTP200；这些条目的transport_retry_index与worker_retry均为0，不能把它们报告成自动重试次数。费率摘要正常完成但标准SDK Chat缺journal记录，因此12只是已记录发送数，不是完整模型调用总数。
+- Go状态桥修复已提交dd99972f19b6d9bf305f1227107c845d5c714bfd，针对真实HTTP GetRun/ListRuns测试通过，独立review无BLOCKER；尚未部署。
+- dd999应用构建依赖层命中缓存，编译阶段客户端报Docker EOF；回执为INCOMPLETE，无可用新镜像。其后18295与Docker socket不可连，恢复诊断中，不能记为健康或已修复。
+- Docker数据盘100→110GiB已经执行，复用原VM与服务。此容量调整不代表宿主实际空闲空间相同；13:31宿主可用2.9GiB。
+
+- 后续诊断确认VM未停止、26容器仍运行，无近期OOM；断开的是宿主端口/socket转发。已仅重建两项SSH local forward并保留旧无监听socket，未重启VM、Docker或数据库。宿主18295/health现返回status:ok，Docker server28.4.0可达。BuildKit旧构建已明确Canceled，未部署。
+- 标准SDK Chat dispatch修复完成真实RED与GREEN：成功、HTTP错误、传输错误、既有去图重试、登记/发前/发后记账故障，及既有Gemini raw路径回归通过（2.137s），未发生真实模型调用；等待独立复核与部署。

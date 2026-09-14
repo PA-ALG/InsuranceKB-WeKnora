@@ -199,3 +199,7 @@ Owner g3_incremental_code_review; root independently reviews and freezes the sou
 
 ### Task5 reuse correction (takes precedence over earlier deployment expansion)
 User correction: stop per-test environment provisioning and focus on the platform flow. Inventory confirms the existing G3 app/UI, PostgreSQL, Redis, DocReader and file volumes are running. The current new Harness logical DB (`weknora_g3_product_harness`, Alembic 0017) is inside the existing PostgreSQL server, and no new database container has been started. The prepared runtime image is reusable; product-api/product-worker have not been started. Reuse these prepared assets and current platform resources without extra VM/database/full-stack provisioning or per-product builds. Keep required product worker lifecycle shared and persistent. Owner-only key provisioning is a separate actual platform access constraint; do not change roles or bypass the 403. Actual independent browser acceptance is still NOT_STARTED.
+
+### 2026-09-14 首次运行的调用计数闭合
+
+已记录的12次embedding发送不能代表全部模型调用：标准OpenAI兼容Chat分支未接入已有dispatch journal。此问题在第二次独立测量前修复，不通过外部脚本估算补账。g3_service_inventory唯一写者：internal/models/chat/remote_api.go及对应测试；使用已有journal协议记录标准SDK实际发送、HTTP响应/错误和去图重试，保留当前provider行为与scope。RED先证明标准Chat缺记录，GREEN验证实际HTTP次数对应记录、journal失败不外发。root维护计划、独立review后统一构建部署。来源失败回执展示缺口单列遗留，不放宽成功source snapshot契约。
