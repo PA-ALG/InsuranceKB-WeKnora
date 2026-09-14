@@ -176,13 +176,14 @@ func validateConceptSourceReuse830G3(record *conceptSourceReuseRecord830G3, iden
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	blocks := make(map[string]string, len(record.Chunks))
+	runes := index.sourceRunes()
 	for _, chunk := range record.Chunks {
 		if _, duplicate := blocks[chunk.ID]; duplicate {
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		if record.ChunkRanges != nil {
 			r, ok := record.ChunkRanges[chunk.ID]
-			if !ok || r.Index != chunk.Index || !g3FirstParseRangeMatches(record.Markdown, chunk.Content, r) {
+			if !ok || r.Index != chunk.Index || !g3FirstParseRangeMatchesRunes(runes, chunk.Content, r) {
 				return nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 		}

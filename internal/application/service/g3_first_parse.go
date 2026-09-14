@@ -202,10 +202,11 @@ func g3FirstParseBindings(record *g3FirstParseRecord, manifest []types.RevisionM
 	}
 	used := map[string]bool{}
 	result := map[string]g3FirstParseRange{}
+	runes := []rune(record.Markdown)
 	for _, chunk := range manifest {
 		key := fmt.Sprintf("%d:%s", chunk.Index, testSHA256830G2(chunk.Content))
 		r, ok := byKey[key]
-		if !ok || chunk.ID == "" || used[key] || !g3FirstParseRangeMatches(record.Markdown, chunk.Content, r) {
+		if !ok || chunk.ID == "" || used[key] || !g3FirstParseRangeMatchesRunes(runes, chunk.Content, r) {
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		if _, duplicate := result[chunk.ID]; duplicate {
@@ -252,7 +253,12 @@ func g3ExactSourceChunks(markdown string, chunks []types.ParsedChunk) ([]types.P
 	return result, nil
 }
 func g3FirstParseRangeMatches(markdown, content string, r g3FirstParseRange) bool {
-	runes := []rune(markdown)
+	return g3FirstParseRangeMatchesRunes([]rune(markdown), content, r)
+}
+
+// Batch callers reuse a single code-point view. Bounds, exact Unicode content
+// and the recorded content hash are still checked independently for every range.
+func g3FirstParseRangeMatchesRunes(runes []rune, content string, r g3FirstParseRange) bool {
 	return r.Start >= 0 && r.End > r.Start && r.End <= len(runes) && string(runes[r.Start:r.End]) == content && testSHA256830G2(content) == r.ContentSHA256
 }
 func conceptSourceReuseKey830G3(identity types.ConceptSourceIdentity830G2, binding string) (string, error) {

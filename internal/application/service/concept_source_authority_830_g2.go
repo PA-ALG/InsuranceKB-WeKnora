@@ -730,6 +730,7 @@ func conceptCitationAuthorityFromResolved830G2(request ConceptCitationAuthorityR
 // buffers escape into the request cache. Only a complete validation creates it.
 type conceptNativeQuoteIndex830G2 struct {
 	text                         string
+	runes                        []rune
 	sourceSHA, parserIdentitySHA string
 	coordinateSpace              string
 	pages                        map[int]conceptNativeQuotePage830G2
@@ -739,6 +740,17 @@ type conceptNativeQuotePage830G2 struct {
 	runes       []rune
 	globalStart int
 	boxes       map[int][4]int
+}
+
+// The validated index already owns this array through its page slices. Retain
+// the same backing storage for batch range checks, without another full copy.
+func (index *conceptNativeQuoteIndex830G2) sourceRunes() []rune {
+	if index.runes != nil {
+		return index.runes
+	}
+	// Compatibility for historical in-memory/test indexes constructed by literal.
+	// Do not mutate a shared index while serving concurrent readers.
+	return []rune(index.text)
 }
 
 func resolveConceptNativeQuote830G2(result *types.ReadResult, sourceSHA, parserIdentitySHA string, pageNumber int, quote string) (ConceptCitationBBox830G2, error) {
@@ -814,7 +826,7 @@ func prepareConceptNativeQuoteIndex830G2(result *types.ReadResult, sourceSHA, pa
 	if lastEnd != len(markdown) {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	return &conceptNativeQuoteIndex830G2{text: result.MarkdownContent, sourceSHA: sourceSHA, parserIdentitySHA: parserIdentitySHA,
+	return &conceptNativeQuoteIndex830G2{text: result.MarkdownContent, runes: markdown, sourceSHA: sourceSHA, parserIdentitySHA: parserIdentitySHA,
 		coordinateSpace: projection.CoordinateSpace, pages: pages}, nil
 }
 

@@ -328,7 +328,7 @@ func g3PlatformChunkPageMapping(
 	var start, end int
 	if len(exactRanges) > 0 && exactRanges[0] != nil {
 		r, ok := exactRanges[0][chunk.ID]
-		if !ok || !g3FirstParseRangeMatches(index.text, chunk.Content, r) {
+		if !ok || !g3FirstParseRangeMatchesRunes(index.sourceRunes(), chunk.Content, r) {
 			return result
 		}
 		start, end = r.Start, r.End
