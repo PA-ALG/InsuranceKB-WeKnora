@@ -13,7 +13,9 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
+from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import (
+    batch_json_bytes_830_g3,
+)
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
     SourceBlock,
     verify_evidence,
@@ -23,14 +25,17 @@ from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     G3DFieldReferenceV1,
     _resolve_g3_d_evidence,
 )
-from insurance_harness.knowledge_compiler.g3_field_task_routing import route_field_task_sources
+from insurance_harness.knowledge_compiler.g3_field_task_routing import (
+    route_field_task_sources,
+)
 from insurance_harness.knowledge_compiler.g3_field_tasks import (
     FieldTaskEvidenceResultV1,
     FieldTaskV1,
     batch_field_tasks,
 )
 
-REQUEST_CONTRACT = "product-field-window-request.v1"
+LEGACY_REQUEST_CONTRACT = "product-field-window-request.v1"
+REQUEST_CONTRACT = "product-field-window-request.v2"
 RESPONSE_CONTRACT = "g3-d-compile-semantic-references.local.v1"
 VALIDATION_VERSION = "product-field-outcome.v1"
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
@@ -173,6 +178,20 @@ def _source_index(
     return index
 
 
+def _compact_field_target(task: FieldTaskV1, offered_refs, index) -> dict:
+    """Keep full dependency scope local; expose only this call's usable refs."""
+    allowed = {(source.revision_id, source.block_id) for source in task.allowed_sources}
+    return {
+        **task.model_dump(mode="json", exclude={"allowed_sources"}),
+        "field_ref": task.task_sha256,
+        "allowed_source_refs": sorted(
+            ref
+            for ref in set(offered_refs)
+            if ref in index and (index[ref].revision_id, index[ref].block_id) in allowed
+        ),
+    }
+
+
 def render_window_request(
     tasks: Sequence[FieldTaskV1],
     sources: Sequence[SourceBlock],
@@ -185,12 +204,14 @@ def render_window_request(
     index = _source_index(
         tasks, sources, tenant_id=tenant_id, space_id=space_id, raw_kb_id=raw_kb_id
     )
-    targets = [{**task.model_dump(mode="json"), "field_ref": task.task_sha256} for task in tasks]
+    offered = route_field_task_sources(tasks, index)
+    offered_refs = tuple(row["source_ref"] for row in offered)
+    targets = [_compact_field_target(task, offered_refs, index) for task in tasks]
     return batch_json_bytes_830_g3(
         {
             "contract": REQUEST_CONTRACT,
             "field_targets": targets,
-            "source_options": route_field_task_sources(tasks, index),
+            "source_options": offered,
             "response_schema": G3DCompileReferenceResponseV1.model_json_schema(),
             "instructions": [
                 "Return only the requested field_refs; transformation EXTRACT, "
@@ -205,6 +226,8 @@ def render_window_request(
                 "sufficient original single-line fragments; never join lines or add punctuation. "
                 "Repeated exact fragments retain all offered locations. Return each source/quote "
                 "pair once. Preserve original characters and line breaks.",
+                "Use only the requested field's allowed_source_refs from source_options; "
+                "the full local dependency scope is bound by its task_sha256.",
                 "concept_refs may contain only the requested task's concept_ids.",
             ],
         }
@@ -215,11 +238,17 @@ def _recorded_context(raw: bytes, tasks, pending, index):
     value = _json(raw)
     if (
         not isinstance(value, dict)
-        or value.get("contract") != REQUEST_CONTRACT
+        or value.get("contract") not in {LEGACY_REQUEST_CONTRACT, REQUEST_CONTRACT}
         or not isinstance(value.get("field_targets"), list)
         or not isinstance(value.get("source_options"), list)
     ):
         raise ValueError("recorded request task scope mismatch")
+    legacy = value["contract"] == LEGACY_REQUEST_CONTRACT
+    offered_refs = tuple(
+        row["source_ref"]
+        for row in value["source_options"]
+        if isinstance(row, dict) and isinstance(row.get("source_ref"), str)
+    )
     task_index = {t.task_sha256: t for t in tasks}
     called = []
     for target in value["field_targets"]:
@@ -228,12 +257,20 @@ def _recorded_context(raw: bytes, tasks, pending, index):
         if (
             task is None
             or task in called
-            or target != {**task.model_dump(mode="json"), "field_ref": task.task_sha256}
+            or target
+            != (
+                {**task.model_dump(mode="json"), "field_ref": task.task_sha256}
+                if legacy
+                else _compact_field_target(task, offered_refs, index)
+            )
         ):
             raise ValueError("recorded request task scope mismatch")
         called.append(task)
     if not {t.task_sha256 for t in pending}.issubset(t.task_sha256 for t in called):
         raise ValueError("recorded request omits pending task")
+    allowed_keys = {
+        (source.revision_id, source.block_id) for task in called for source in task.allowed_sources
+    }
     seen = set()
     for offered in value["source_options"]:
         if not isinstance(offered, dict):
@@ -242,6 +279,7 @@ def _recorded_context(raw: bytes, tasks, pending, index):
         source = index.get(ref) if isinstance(ref, str) else None
         if (
             source is None
+            or (not legacy and (source.revision_id, source.block_id) not in allowed_keys)
             or ref in seen
             or offered.get("source") != source.model_dump(mode="json", exclude={"text"})
             or not isinstance(offered.get("spans"), list)
@@ -266,7 +304,13 @@ def _recorded_context(raw: bytes, tasks, pending, index):
 
 def _failure(task, reason, raw_ref):
     return FieldOutcome(
-        task.task_sha256, task.entity_id, task.field_key, "extraction_failed", reason, None, raw_ref
+        task.task_sha256,
+        task.entity_id,
+        task.field_key,
+        "extraction_failed",
+        reason,
+        None,
+        raw_ref,
     )
 
 
@@ -373,7 +417,12 @@ async def execute_window(
     Its original task/model/prompt/validator provenance is preserved, not re-keyed.
     Recorded request/raw bytes must come from the same fenced call audit row.
     """
-    if not call_id or call_state not in {"reserved", "dispatching", "recorded", "interrupted"}:
+    if not call_id or call_state not in {
+        "reserved",
+        "dispatching",
+        "recorded",
+        "interrupted",
+    }:
         raise ValueError("invalid call identity/state")
     tasks = tuple(tasks)
     index = _source_index(

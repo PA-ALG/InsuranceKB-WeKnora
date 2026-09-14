@@ -608,13 +608,18 @@ def build_product_pipeline(context):
             scope=scope, run_id=run.run_id, artifact_kind="resolved_routing"
         )
         route = json.loads(resolved[0].payload if resolved else read(scope, run.run_id, "routing"))
-        windows = await asyncio.to_thread(
-            build_field_windows,
-            request,
-            product_identity_sha256=route["product_identity_sha256"],
-            model_settings=service_for(scope).configuration.model,
-            selected_fields=selected,
-        )
+        try:
+            windows = await asyncio.to_thread(
+                build_field_windows,
+                request,
+                product_identity_sha256=route["product_identity_sha256"],
+                model_settings=service_for(scope).configuration.model,
+                selected_fields=selected,
+            )
+        except ModelPolicyDenied as error:
+            # Repeating an identical local plan cannot change policy/capacity.
+            # Keep the diagnostic and let explicit platform recovery resume it.
+            raise NonRetryableJobError("FIELD_PLAN_POLICY_DENIED:" + str(error)) from error
         plan = {
             "windows": [
                 {

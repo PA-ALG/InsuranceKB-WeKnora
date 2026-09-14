@@ -274,8 +274,9 @@ def test_recorded_replay_checkpoint_is_stable_and_same_run_model_origin_stays_st
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failed_stage", ["identity", "field_plan"])
 async def test_recorded_identity_recovery_real_worker_reaches_publication_without_classify_resend(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, failed_stage
 ):
     from insurance_harness.db.base import Base, make_session_factory
     from insurance_harness.jobs import JobStore
@@ -304,14 +305,37 @@ async def test_recorded_identity_recovery_real_worker_reaches_publication_withou
         raise ValueError("wrong-purpose identity evidence")
 
     with monkeypatch.context() as patch:
-        patch.setattr(semantic_adapter, "assemble_c_semantic_response", projection_failure)
+        if failed_stage == "identity":
+            patch.setattr(semantic_adapter, "assemble_c_semantic_response", projection_failure)
+        else:
+            from insurance_harness.product_ingestion import pipeline
+            from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
+
+            def plan_failure(*args, **kwargs):
+                raise ModelPolicyDenied("configured model context capacity exceeded")
+
+            patch.setattr(pipeline, "build_field_windows", plan_failure)
         runtime, context, model_client = await _compose(settings, factory, platform, model)
         origin = context.store.create_run(
             scope=SCOPE, idempotency_key="recorded-identity", expected_upload_count=3
         )
         admit_uploads(context.store, SCOPE, origin.run_id)
         failed = await _finish(runtime, context, jobs, origin.run_id)
-    assert failed.terminal_reason == "IDENTITY_RESPONSE_INVALID:ValueError"
+    assert failed.terminal_reason == (
+        "IDENTITY_RESPONSE_INVALID:ValueError"
+        if failed_stage == "identity"
+        else "PRODUCT_STAGE_FAILED:field_plan"
+    )
+    if failed_stage == "field_plan":
+        stage = next(
+            row
+            for row in context.store.list_stages(scope=SCOPE, run_id=origin.run_id)
+            if row.stage_key == "field_plan"
+        )
+        from insurance_harness.jobs.tables import WikiJob
+
+        with factory() as session:
+            assert session.get(WikiJob, stage.job_id).attempt == 1
     assert len(model.identity_requests) == 1 and not model.field_requests
     child = context.store.retry_processing(
         scope=SCOPE, run_id=origin.run_id, expected_version=failed.version

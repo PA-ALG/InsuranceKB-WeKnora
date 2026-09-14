@@ -493,7 +493,7 @@ class FixtureModel:
                 "disposition_checks": [],
             }
         else:
-            assert content["contract"] == "product-field-window-request.v1"
+            assert content["contract"] == "product-field-window-request.v2"
             self.field_requests.append(envelope)
             fields = []
             for index, task in enumerate(content["field_targets"]):

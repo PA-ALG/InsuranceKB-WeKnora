@@ -68,7 +68,10 @@ def tasks(source, keys=("benefit", "duration"), *, discovery=False):
         return rows
     return tuple(
         _task(
-            {**r.model_dump(exclude={"task_sha256", "contract"}), "adapter_kind": "CATALOG_SCHEMA"}
+            {
+                **r.model_dump(exclude={"task_sha256", "contract"}),
+                "adapter_kind": "CATALOG_SCHEMA",
+            }
         )
         for r in rows
     )
@@ -391,7 +394,12 @@ def test_source_scope_is_verified_before_any_dispatch(source, mutation):
         source = source.model_copy(update={"source_hash": sha(b"other")})
     else:
         selected = tuple(
-            _task({**t.model_dump(exclude={"task_sha256", "contract"}), "allowed_sources": ()})
+            _task(
+                {
+                    **t.model_dump(exclude={"task_sha256", "contract"}),
+                    "allowed_sources": (),
+                }
+            )
             for t in selected
         )
     port = Port(lambda _: pytest.fail("invalid custody must not dispatch"))
@@ -436,3 +444,195 @@ def test_cache_json_cannot_claim_verified_without_value_or_evidence(source):
     )
     with pytest.raises(ValueError, match="validated|verified"):
         module().FieldOutcome.from_dict(value)
+
+
+@pytest.fixture
+def many_source_tasks(source):
+    sources = tuple(
+        source.model_copy(
+            update={
+                "knowledge_id": "00000000-0000-0000-0000-000000000001",
+                "revision_id": "a" * 64,
+                "parser_identity": "b" * 64,
+                "block_id": f"00000000-0000-0000-0000-{i:012d}",
+                "text": "赔付金额为100元。\n" + "费率数据" * 600,
+            }
+        )
+        for i in range(1401)
+    )
+    scope = tuple(
+        FieldTaskSourceV1(
+            material_id="00000000-0000-0000-0000-000000000001",
+            revision_id=s.revision_id,
+            block_id=s.block_id,
+            source_hash=s.source_hash,
+            parser_identity=s.parser_identity,
+        )
+        for s in sources
+    )
+    selected = tuple(
+        _task(
+            {
+                **t.model_dump(exclude={"task_sha256", "contract"}),
+                "material_ids": ("00000000-0000-0000-0000-000000000001",),
+                "allowed_sources": scope,
+            }
+        )
+        for t in tasks(source, tuple(f"field_{i:02d}" for i in range(10)))
+    )
+    return sources, selected
+
+
+@pytest.mark.parametrize("count", [1, 10])
+def test_compact_v2_large_source_scope_fits_real_preflight(many_source_tasks, count):
+    from insurance_harness.product_ingestion.model_execution import (
+        _template_and_request,
+    )
+    from insurance_harness.product_ingestion.models import ProductScope
+    from tests.product_ingestion.test_model_execution import configured
+
+    sources, all_tasks = many_source_tasks
+    selected = all_tasks[:count]
+    original = tuple(t.model_dump_json() for t in selected)
+    scope = ProductScope(
+        tenant_id="1",
+        space_id="space-1",
+        raw_knowledge_base_id="raw-1",
+        wiki_knowledge_base_id="wiki-1",
+    )
+    config = configured(scope)
+    settings = type(config).model_validate(
+        {
+            **config.model_dump(),
+            "api_key": config.api_key,
+            "templates": tuple(
+                t.model_copy(update={"max_context_bytes": 300_000}) for t in config.templates
+            ),
+            "max_request_bytes": 2_000_000,
+        }
+    )
+    raw = module().render_window_request(
+        selected, sources, tenant_id=1, space_id="space-1", raw_kb_id="raw-1"
+    )
+    _, prepared = _template_and_request(
+        settings,
+        scope=scope,
+        content=raw,
+        input_sha256=sha(raw),
+        prompt=b"field prompt",
+        template_id=settings.field_template_id,
+    )
+    context = json.loads(raw)
+    assert context["contract"] == "product-field-window-request.v2"
+    assert len(raw) <= 300_000 and len(prepared.request_bytes) <= 2_000_000
+    offered = {row["source_ref"] for row in context["source_options"]}
+    assert 0 < len(offered) < 1401
+    for target, task in zip(context["field_targets"], selected, strict=True):
+        assert "allowed_sources" not in target
+        assert set(target["allowed_source_refs"]) == offered
+        assert target["field_ref"] == task.task_sha256
+        assert len(task.allowed_sources) == 1401
+    assert tuple(t.model_dump_json() for t in selected) == original
+
+
+def recorded_request_version(source, selected, version):
+    request = json.loads(
+        module().render_window_request(
+            selected, (source,), tenant_id=1, space_id="space-1", raw_kb_id="raw-1"
+        )
+    )
+    request["contract"] = f"product-field-window-request.v{version}"
+    if version == 1:
+        request["field_targets"] = [
+            {**t.model_dump(mode="json"), "field_ref": t.task_sha256} for t in selected
+        ]
+    return request
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_compact_v2_and_original_v1_recorded_success_replay_without_dispatch(source, version):
+    selected = tasks(source)
+    current = Port(lambda request: response([row(t, request) for t in selected]))
+    expected = execute(source, selected, current)
+    request = recorded_request_version(source, selected, version)
+    original_request = json.dumps(request, ensure_ascii=False).encode()
+    original_raw = response([row(t, request) for t in selected])
+    unused = Port(lambda _: pytest.fail("recorded response must not redispatch"))
+    actual = execute(
+        source,
+        selected,
+        unused,
+        call_state="recorded",
+        recorded_request_bytes=original_request,
+        recorded_raw=original_raw,
+        recorded_raw_ref="raw-artifact-1",
+    )
+    assert actual == expected and unused.events == []
+    assert json.loads(original_request) == request
+    assert original_raw == response([row(t, request) for t in selected])
+
+
+@pytest.mark.parametrize("version", [1, 2])
+@pytest.mark.parametrize("mutation", ["task", "scope", "span"])
+def test_compact_recorded_versions_refuse_changed_task_scope_or_span(source, version, mutation):
+    selected = tasks(source, ("benefit",))
+    request = recorded_request_version(source, selected, version)
+    if mutation == "task":
+        request["field_targets"][0]["description"] = "changed"
+    elif mutation == "scope":
+        request["source_options"][0]["source"]["tenant_id"] = 2
+    else:
+        request["source_options"][0]["spans"][0]["quote"] = "forged"
+    unused = Port(lambda _: pytest.fail("invalid recorded custody must not dispatch"))
+    with pytest.raises(ValueError, match="scope|span"):
+        execute(
+            source,
+            selected,
+            unused,
+            call_state="recorded",
+            recorded_request_bytes=json.dumps(request).encode(),
+            recorded_raw=response([row(selected[0], request)]),
+            recorded_raw_ref="raw-artifact-1",
+        )
+    assert unused.events == []
+
+
+def test_compact_v2_recorded_refs_cannot_expand_local_task_sources(source):
+    selected = tasks(source, ("benefit",))
+    request = recorded_request_version(source, selected, 2)
+    request["field_targets"][0]["allowed_source_refs"] = ["source_foreign"]
+    unused = Port(lambda _: pytest.fail("foreign source refs must not dispatch"))
+    with pytest.raises(ValueError, match="scope"):
+        execute(
+            source,
+            selected,
+            unused,
+            call_state="recorded",
+            recorded_request_bytes=json.dumps(request).encode(),
+            recorded_raw=response([row(selected[0], request)]),
+            recorded_raw_ref="raw-artifact-1",
+        )
+    assert unused.events == []
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_compact_recorded_versions_reject_quote_outside_offered_spans(source, version):
+    selected = tasks(source, ("benefit",))
+    request = recorded_request_version(source, selected, version)
+    # The source contains the insurance term, but this call offered only the first sentence.
+    request["source_options"][0]["spans"] = [
+        {"start": 0, "end": 10, "quote": source.text[:10], "heading": ""}
+    ]
+    raw = response([row(selected[0], request, quote="保险期间一年。")])
+    unused = Port(lambda _: pytest.fail("recorded response must not redispatch"))
+    actual = execute(
+        source,
+        selected,
+        unused,
+        call_state="recorded",
+        recorded_request_bytes=json.dumps(request, ensure_ascii=False).encode(),
+        recorded_raw=raw,
+        recorded_raw_ref="raw-artifact-1",
+    )
+    assert actual[0].outcome == "extraction_failed" and actual[0].validated_result is None
+    assert unused.events == []

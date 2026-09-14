@@ -1196,8 +1196,12 @@ class ProductIngestionStore:
         identity_retry = run.state is ProductRunState.NEEDS_CONFIRMATION and (
             run.terminal_reason or ""
         ).startswith("IDENTITY_RESPONSE_INVALID:")
+        plan_retry = (
+            run.state is ProductRunState.FAILED
+            and run.terminal_reason == "PRODUCT_STAGE_FAILED:field_plan"
+        )
         if (
-            not (title_retry or identity_retry)
+            not (title_retry or identity_retry or plan_retry)
             and (
                 run.state is not ProductRunState.FAILED
                 or run.terminal_reason != "PRODUCT_STAGE_FAILED:source"
@@ -1207,7 +1211,11 @@ class ProductIngestionStore:
             or len(run.materials) != run.expected_upload_count
             or tuple(m.upload_ordinal for m in run.materials)
             != tuple(range(run.expected_upload_count))
-            or any(m.source is not None for m in run.materials)
+            or (
+                any(m.source is None for m in run.materials)
+                if plan_retry
+                else any(m.source is not None for m in run.materials)
+            )
         ):
             return False
         stages = session.execute(
@@ -1218,10 +1226,21 @@ class ProductIngestionStore:
         expected_stages = {"uploads", "source", "routing"} if title_retry else {"uploads", "source"}
         if identity_retry:
             expected_stages = {"uploads", "source", "routing", "identity"}
+        if plan_retry:
+            expected_stages = {"uploads", "source", "routing", "identity", "field_plan"}
         if {stage.stage_key for stage in stages} != expected_stages:
             return False
         source = next(stage for stage in stages if stage.stage_key == "source")
-        if identity_retry:
+        if plan_retry:
+            by_stage = {stage.stage_key: stage for stage in stages}
+            if (
+                any(by_stage[key].state != "succeeded" for key in expected_stages - {"field_plan"})
+                or by_stage["field_plan"].state != "dead_letter"
+                or self._recovery_source_refs(session, scope, run) is None
+                or self._recorded_identity_ref(session, scope, run) is None
+            ):
+                return False
+        elif identity_retry:
             by_stage = {stage.stage_key: stage for stage in stages}
             if (
                 source.state != "succeeded"
@@ -1258,7 +1277,7 @@ class ProductIngestionStore:
         ):
             return False
         for table in (ProductStageModelCall, ProductWindow, ProductFieldAttempt):
-            if identity_retry and table is ProductStageModelCall:
+            if (identity_retry or plan_retry) and table is ProductStageModelCall:
                 continue
             if session.scalar(select(table.id).where(table.run_id == row.id).limit(1)):
                 return False
@@ -1369,7 +1388,7 @@ class ProductIngestionStore:
             title_retry = origin_run.state is ProductRunState.NEEDS_CONFIRMATION
             identity_retry = (origin_run.terminal_reason or "").startswith(
                 "IDENTITY_RESPONSE_INVALID:"
-            )
+            ) or origin_run.terminal_reason == "PRODUCT_STAGE_FAILED:field_plan"
             plan_type = (
                 RecordedIdentityRecoveryPlan
                 if identity_retry
@@ -1379,7 +1398,7 @@ class ProductIngestionStore:
             )
             extra = (
                 {"source_snapshots": self._recovery_source_refs(session, scope, origin_run)}
-                if title_retry
+                if title_retry or identity_retry
                 else {}
             )
             if identity_retry:
