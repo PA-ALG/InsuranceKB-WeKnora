@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { readConceptPage830G2, conceptCitationTransport830G2,
   type ConceptSession830G2, type ConceptMember830G2 } from '@/api/schema-wiki/conceptFreeWiki830G2'
 import {
-  loadBatchConceptActive830G3,
+  readPinnedBatchConceptPage830G3,
   loadBatchConceptPreparation830G3,
   readBatchConceptPage830G3,
   type BatchConceptMember830G3,
@@ -78,6 +78,21 @@ function preparationEvidence(member: ConceptMember830G2 | BatchConceptMember830G
 const selectedEntity = computed(() => batchPage.value?.directory.entities.find(
   entity => entity.entityID === batchPage.value?.member.owner_id,
 ))
+const visibleSections = computed(() => (selectedEntity.value?.sections ?? []).filter(
+  section => route.query.section === undefined || section.sectionKey === route.query.section,
+))
+function sectionLink(sectionKey: string) {
+  const target = link(selectedEntity.value!.overview)
+  return { ...target, query: { ...target.query, section: sectionKey } }
+}
+function validateSection(page: BatchConceptPage830G3) {
+  if (route.query.section === undefined) return
+  const entity = page.directory.entities.find(item => item.entityID === page.member.owner_id)
+  if (page.member.kind !== 'entity_overview' || typeof route.query.section !== 'string'
+    || !entity?.sections.some(section => section.sectionKey === route.query.section)) {
+    throw new Error('INVALID_SECTION')
+  }
+}
 function fieldByID(memberID: string) {
   return batchPage.value?.directory.members.find(member => member.member_id === memberID)
 }
@@ -92,25 +107,28 @@ async function load() {
   try {
     const keys = Object.keys(route.query)
     const release = route.query.release_id; const preparation = route.query.preparation_id
-    if (keys.some(key => !['release_id', 'preparation_id'].includes(key))
+    if (keys.some(key => !['release_id', 'preparation_id', 'section'].includes(key))
       || (release !== undefined && preparation !== undefined)) throw new Error('INVALID_READ_MODE')
     const kbID = routeIdentity(route.params.kbId); const memberID = routeIdentity(route.params.memberId)
     const transport = createSchemaWikiReadTransport(get)
     if (preparation !== undefined) {
       const directory = await loadBatchConceptPreparation830G3(kbID, routeIdentity(preparation), transport)
       const loaded = await readBatchConceptPage830G3(directory, memberID, transport)
+      validateSection(loaded)
       if (current === generation) batchPage.value = loaded
     } else if (release !== undefined) {
       const releaseID = routeIdentity(release)
-      const active = await loadBatchConceptActive830G3(kbID, transport)
-      if (active && active.releaseID === releaseID) {
-        const loaded = await readBatchConceptPage830G3(active, memberID, transport)
+      const loaded = await readPinnedBatchConceptPage830G3(kbID, memberID, releaseID, transport)
+      if (loaded) {
+        validateSection(loaded)
         if (current === generation) batchPage.value = loaded
       } else {
+        if (route.query.section !== undefined) throw new Error('INVALID_SECTION')
         const loaded = await readConceptPage830G2(kbID, memberID, releaseID, transport)
         if (current === generation) session.value = loaded
       }
     } else {
+      if (route.query.section !== undefined) throw new Error('INVALID_SECTION')
       const loaded = await readConceptPage830G2(kbID, memberID, undefined, transport)
       if (current === generation) session.value = loaded
     }
@@ -128,12 +146,32 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
     <p v-if="loading" role="status">正在读取知识页面…</p>
     <p v-else-if="error" role="alert">{{ error }}</p>
     <template v-else-if="read">
+      <div class="concept-page__layout" :class="{ 'with-navigation': selectedEntity }">
+      <nav v-if="selectedEntity" aria-label="实体知识导航" class="concept-page__navigation">
+        <RouterLink :to="{ name: 'knowledgeBaseDetail', params: { kbId: route.params.kbId }, query: { tab: 'schema' } }">企业知识目录</RouterLink>
+        <h2>{{ selectedEntity.displayName }}</h2>
+        <p class="concept-page__meta">{{ selectedEntity.entityVersion }}</p>
+        <RouterLink :to="link(selectedEntity.overview)" :aria-current="read.member.kind === 'entity_overview' && !route.query.section ? 'page' : undefined">总览</RouterLink>
+        <details v-for="section in selectedEntity.sections" :key="section.sectionKey"
+          :open="route.query.section === section.sectionKey || section.fields.some(field => field.memberID === read!.member.member_id)">
+          <summary>{{ section.displayName }}</summary>
+          <RouterLink :to="sectionLink(section.sectionKey)">查看分组</RouterLink>
+          <ul>
+            <li v-for="field in section.fields" :key="field.memberID">
+              <RouterLink v-if="fieldByID(field.memberID)" :to="link(fieldByID(field.memberID)!)"
+                :aria-current="field.memberID === read.member.member_id ? 'page' : undefined">{{ field.shortTitle }}</RouterLink>
+            </li>
+          </ul>
+        </details>
+        <RouterLink :to="link(selectedEntity.freeWiki)">自由知识</RouterLink>
+      </nav>
+      <div class="concept-page__content">
       <header>
         <span class="concept-page__label">{{ batchPage?.directory.mode === 'g3-preparation'
           ? batchPage.directory.statusLabel : read.member.kind === 'concept' ? '共享定义' : '已发布知识' }}</span>
         <h1>{{ read.member.title }}</h1>
         <p v-if="read.member.kind === 'field_assertion'" class="concept-page__meta">
-          {{ selectedEntity?.displayName ?? read.member.owner_id }} · {{ stateLabel(read.member) }}
+          {{ selectedEntity?.displayName ?? read.member.owner_id }} · {{ selectedEntity?.entityVersion ?? read.member.payload.entity_version }} · {{ stateLabel(read.member) }}
         </p>
         <p v-if="batchPage" class="concept-page__quality">已登记，尚未完成质量验收</p>
       </header>
@@ -163,9 +201,9 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
           {{ batchPage ? '查看原文' : `查看第 ${citation.page_number} 页原文` }}
         </button>
       </section>
-      <section v-if="batchPage && read.member.kind === 'entity_overview' && selectedEntity" aria-label="产品字段">
-        <h2>产品字段</h2>
-        <div v-for="section in selectedEntity.sections" :key="section.sectionKey">
+      <section v-if="batchPage && read.member.kind === 'entity_overview' && selectedEntity" aria-label="实体字段">
+        <h2>知识字段</h2>
+        <div v-for="section in visibleSections" :key="section.sectionKey">
           <h3>{{ section.displayName }}</h3>
           <ul class="concept-page__related">
             <li v-for="field in section.fields" :key="field.memberID">
@@ -193,12 +231,23 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
         <ConceptCitationViewer830G2 v-if="viewerSession" :key="selected!" :session="viewerSession" :citation-id="selected!"
           :preview-transport="previewTransport" :pdf-port="pdfPort" />
       </SettingDrawer>
+      </div>
+      </div>
     </template>
   </main>
 </template>
 
 <style scoped>
 .concept-page { max-width: 1080px; margin: 0 auto; padding: 36px; color: var(--td-text-color-primary); }
+.concept-page__layout.with-navigation { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 32px; }
+.concept-page__navigation { border-right: 1px solid var(--td-component-border); padding-right: 20px; }
+.concept-page__navigation h2 { margin-top: 20px; }
+.concept-page__navigation a { display: block; padding: 6px 0; color: var(--td-brand-color); text-decoration: none; }
+.concept-page__navigation a[aria-current='page'] { font-weight: 700; background: var(--td-bg-color-secondarycontainer); }
+.concept-page__navigation details { margin: 12px 0; }
+.concept-page__navigation summary { cursor: pointer; font-weight: 600; }
+.concept-page__navigation ul { list-style: none; padding-left: 12px; }
+.concept-page__content { min-width: 0; }
 .concept-page__label { color: var(--td-brand-color); font-size: 13px; }
 h1 { margin: 8px 0 24px; font-size: 28px; }
 h2 { margin: 28px 0 12px; font-size: 18px; }
@@ -210,5 +259,9 @@ h2 { margin: 28px 0 12px; font-size: 18px; }
 .concept-page__related a { color: var(--td-brand-color); text-decoration: none; font-weight: 600; }
 .concept-page__sources button { margin: 0 10px 8px 0; border: 1px solid var(--td-component-border);
   border-radius: 6px; padding: 8px 12px; color: var(--td-brand-color); background: transparent; cursor: pointer; }
-@media (max-width: 700px) { .concept-page { padding: 20px; } }
+@media (max-width: 700px) {
+  .concept-page { padding: 20px; }
+  .concept-page__layout.with-navigation { grid-template-columns: 1fr; }
+  .concept-page__navigation { border-right: 0; border-bottom: 1px solid var(--td-component-border); padding-bottom: 16px; }
+}
 </style>

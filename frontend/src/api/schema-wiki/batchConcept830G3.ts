@@ -627,6 +627,30 @@ export async function loadBatchConceptActive830G3(wikiKBID: string,
   return parseBatchConceptActive830G3(rows, scope, catalog, pin)
 }
 
+// Read the requested immutable release, including its server-issued activation epoch.
+// The pinned page is parsed again against the complete verified snapshot without a second GET.
+export async function readPinnedBatchConceptPage830G3(wikiKBID: string, memberID: string,
+  releaseID: string, transport: SchemaWikiReadTransport): Promise<BatchConceptPage830G3 | null> {
+  pathID(wikiKBID); const target = pathID(memberID); const release = pathID(releaseID)
+  const scope = parseSchemaWikiScope(unwrap(await transport.get(buildSchemaWikiScopeBootstrapPath(wikiKBID))))
+  if (scope.wiki_kb_id !== wikiKBID) return invalid()
+  const rows = unwrap(await transport.get(genericPath(scope, `/releases/${release}/search`) + '?q='))
+  if (!Array.isArray(rows)) return invalid()
+  if (!rows.some(row => record(row) && record(row.payload) && row.payload.contract === OVERVIEW_CONTRACT)) return null
+  const path = buildScopedSchemaWikiPath(scope, `/concept-pages/${encodeURIComponent(target)}`,
+    { expectedScope: scope }) + `?release_id=${encodeURIComponent(release)}`
+  const raw = unwrap(await transport.get(path))
+  if (!record(raw) || raw.contract !== PAGE_CONTRACT || raw.read_mode !== 'pinned'
+    || raw.release_id !== release || raw.space_id !== scope.space_id
+    || raw.raw_kb_id !== scope.raw_kb_id || raw.wiki_kb_id !== scope.wiki_kb_id) return invalid()
+  const epoch = positive(raw.activation_epoch)
+  const catalog = await loadCatalog(scope, transport)
+  const directory = await parseBatchConceptActive830G3(rows, scope, catalog, {
+    release_id: release, activation_epoch: epoch,
+  })
+  return parseBatchConceptPage(directory, target, raw)
+}
+
 function localRelated(directory: BatchConceptDirectory830G3, member: BatchConceptMember830G3) {
   let refs: string[] = []
   if (member.kind === 'entity_overview') refs = (member.payload.sections as R[]).flatMap(section =>
@@ -651,7 +675,14 @@ export async function readBatchConceptPage830G3(directory: BatchConceptDirectory
   }
   const path = buildScopedSchemaWikiPath(directory.scope, `/concept-pages/${encodeURIComponent(target)}`,
     { expectedScope: directory.scope }) + `?release_id=${encodeURIComponent(directory.releaseID)}`
-  const raw = exact(unwrap(await transport.get(path)), ['contract', 'read_mode', 'release_id', 'activation_epoch',
+  return parseBatchConceptPage(directory, target, unwrap(await transport.get(path)))
+}
+
+async function parseBatchConceptPage(directory: BatchConceptActive830G3, target: string,
+  value: unknown): Promise<BatchConceptPage830G3> {
+  const expected = directory.members.find(item => item.member_id === target)
+  if (!expected) return invalid()
+  const raw = exact(value, ['contract', 'read_mode', 'release_id', 'activation_epoch',
     'candidate_hash', 'space_id', 'raw_kb_id', 'wiki_kb_id', 'member', 'related_members', 'citations',
     'definition_hash', 'aggregate_hash'])
   if (raw.contract !== PAGE_CONTRACT || raw.read_mode !== 'pinned' || raw.release_id !== directory.releaseID

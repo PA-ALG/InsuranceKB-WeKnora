@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { parseSchemaPackCatalog830G3 } from './schemaPackCatalog830G3'
 import {
   loadBatchConceptActive830G3,
+  readPinnedBatchConceptPage830G3,
   loadBatchConceptPreparation830G3,
   parseBatchConceptActive830G3,
   parseBatchConceptPreparation830G3,
@@ -333,6 +334,49 @@ describe('G3 batch concept Active parser and mocked transports', () => {
     })
     await expect(loadBatchConceptActive830G3(scope.wiki_kb_id, { get })).resolves.toBeNull()
     expect(get.mock.calls.flat().some(path => String(path).includes('/catalogs/'))).toBe(false)
+  })
+
+  it('reads a historical G3 page once using its authenticated epoch and immutable snapshot', async () => {
+    const rows = await snapshots()
+    const active = await parseBatchConceptActive830G3(rows, scope, await catalog(), {
+      release_id: 'release-old', activation_epoch: 4,
+    })
+    const overview = active.entities[0]!.overview
+    const ids = new Set(active.entities[0]!.sections.flatMap(section => section.fields.map(field => field.memberID)))
+    const page = { contract: 'concept-page-read.830.g2.v1', read_mode: 'pinned', release_id: 'release-old',
+      activation_epoch: 4, candidate_hash: candidate.candidate_hash, space_id: scope.space_id,
+      raw_kb_id: scope.raw_kb_id, wiki_kb_id: scope.wiki_kb_id, member: overview,
+      related_members: active.members.filter(member => ids.has(member.member_id)), citations: [], definition_hash: '', aggregate_hash: '' }
+    const get = vi.fn(async (path: string) => {
+      if (path.endsWith('/wiki/schema-scope')) return { success: true, data: scopeValue }
+      if (path.endsWith('/releases/release-old/search?q=')) return { success: true, data: rows }
+      if (path.includes('/catalogs/')) return { success: true, data: candidate.request.catalog }
+      if (path.endsWith(`/concept-pages/${overview.member_id}?release_id=release-old`)) return { success: true, data: page }
+      throw new Error(`unexpected ${path}`)
+    })
+    const result = await readPinnedBatchConceptPage830G3(scope.wiki_kb_id, overview.member_id, 'release-old', { get })
+    expect(result?.directory).toMatchObject({ releaseID: 'release-old', activationEpoch: 4 })
+    expect(result?.member).toEqual(overview)
+    expect(get.mock.calls.filter(([path]) => path.includes('/concept-pages/'))).toHaveLength(1)
+    expect(get.mock.calls.some(([path]) => path.endsWith('/current'))).toBe(false)
+    page.activation_epoch = 0
+    await expect(readPinnedBatchConceptPage830G3(scope.wiki_kb_id, overview.member_id, 'release-old', { get })).rejects.toThrow()
+    page.activation_epoch = 4; page.release_id = 'release-new'
+    await expect(readPinnedBatchConceptPage830G3(scope.wiki_kb_id, overview.member_id, 'release-old', { get })).rejects.toThrow()
+    page.release_id = 'release-old'; page.raw_kb_id = 'other-raw'
+    await expect(readPinnedBatchConceptPage830G3(scope.wiki_kb_id, overview.member_id, 'release-old', { get })).rejects.toThrow()
+    page.raw_kb_id = scope.raw_kb_id; rows[0]!.member_digest = '0'.repeat(64)
+    await expect(readPinnedBatchConceptPage830G3(scope.wiki_kb_id, overview.member_id, 'release-old', { get })).rejects.toThrow()
+  })
+
+  it('leaves historical G2 pages to their original reader without loading a G3 Catalog or page', async () => {
+    const get = vi.fn(async (path: string) => {
+      if (path.endsWith('/wiki/schema-scope')) return { success: true, data: scopeValue }
+      if (path.endsWith('/releases/release-g2/search?q=')) return { success: true, data: [{ payload: { member_ids: [] } }] }
+      throw new Error(`unexpected ${path}`)
+    })
+    await expect(readPinnedBatchConceptPage830G3(scope.wiki_kb_id, 'concept-g2', 'release-g2', { get })).resolves.toBeNull()
+    expect(get).toHaveBeenCalledTimes(2)
   })
 
   it('selects preparation members locally and reads Active pages through the pinned shared envelope', async () => {

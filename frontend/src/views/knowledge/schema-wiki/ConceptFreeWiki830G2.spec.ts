@@ -5,7 +5,7 @@ import { reactive } from 'vue'
 import ConceptPage from './ConceptFreeWiki830G2.vue'
 enableAutoUnmount(afterEach)
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), get: vi.fn(), loadPreparation: vi.fn(), loadActive: vi.fn(), readBatch: vi.fn() }))
+const mocks = vi.hoisted(() => ({ read: vi.fn(), get: vi.fn(), loadPreparation: vi.fn(), loadActive: vi.fn(), readBatch: vi.fn(), readPinned: vi.fn() }))
 const route = reactive({ params: { kbId: 'wiki-a', memberId: 'concept-a' }, query: {} as Record<string, unknown> })
 vi.mock('vue-router', () => ({ useRoute: () => route }))
 vi.mock('@/utils/request', () => ({ get: mocks.get }))
@@ -16,6 +16,7 @@ vi.mock('@/api/schema-wiki/batchConcept830G3', () => ({
   loadBatchConceptPreparation830G3: mocks.loadPreparation,
   loadBatchConceptActive830G3: mocks.loadActive,
   readBatchConceptPage830G3: mocks.readBatch,
+  readPinnedBatchConceptPage830G3: mocks.readPinned,
 }))
 vi.mock('@/components/schema-wiki/pdfJsPort', () => ({ createPdfJsPort: () => ({}) }))
 const stubs = { RouterLink: { props: ['to'], template: '<a :data-target="JSON.stringify(to)"><slot /></a>' },
@@ -33,6 +34,7 @@ function response() {
 }
 beforeEach(() => {
   mocks.read.mockReset(); mocks.get.mockReset(); mocks.loadPreparation.mockReset(); mocks.loadActive.mockReset()
+  mocks.readPinned.mockReset(); mocks.readPinned.mockResolvedValue(null);
   mocks.readBatch.mockReset(); route.query = {}; mocks.read.mockResolvedValue(response()); mocks.loadActive.mockResolvedValue(null)
 })
 describe('G2 shared concept page', () => {
@@ -82,6 +84,73 @@ describe('G3 batch concept page modes', () => {
   const directory = { mode: 'g3-preparation', preparationID: 'preparation-g3', statusLabel: '待审核',
     scope: { wiki_kb_id: 'wiki-a' }, members: [field], entities: [] }
 
+  function entityDirectory() {
+    const overview = { ...field, kind: 'entity_overview', member_id: 'overview-g3', title: '示例医疗险', payload: {} }
+    const freeWiki = { ...overview, kind: 'free_wiki', member_id: 'free-g3' }
+    return { ...directory, members: [field, overview, freeWiki], entities: [{
+      entityID: field.owner_id, entityVersion: '2026版', displayName: '示例医疗险',
+      primaryClassification: 'medical_insurance', overview, freeWiki,
+      sections: [{ sectionKey: 'contract', displayName: '合同规则',
+        fields: [{ fieldKey: 'waiting_period', shortTitle: '等待期', memberID: field.member_id }] },
+      { sectionKey: 'claims', displayName: '理赔规则', fields: [] }],
+    }] }
+  }
+
+  it('keeps entity, Profile section and independent field navigation on a field page', async () => {
+    route.query = { preparation_id: 'preparation-g3' }
+    const scoped = entityDirectory()
+    mocks.loadPreparation.mockResolvedValue(scoped)
+    mocks.readBatch.mockResolvedValue({ readMode: 'preparation', directory: scoped, member: field, relatedMembers: [], citations: [] })
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+    const navigation = wrapper.get('nav[aria-label="实体知识导航"]')
+    expect(navigation.text()).toContain('示例医疗险')
+    expect(navigation.text()).toContain('合同规则')
+    expect(wrapper.text()).toContain('2026版')
+    const targets = navigation.findAll('a').map(node => JSON.parse(node.attributes('data-target')!))
+    expect(targets).toContainEqual({ name: 'conceptPage830G2', params: { kbId: 'wiki-a', memberId: 'assertion-g3' },
+      query: { preparation_id: 'preparation-g3' } })
+    expect(targets).toContainEqual({ name: 'conceptPage830G2', params: { kbId: 'wiki-a', memberId: 'overview-g3' },
+      query: { preparation_id: 'preparation-g3', section: 'contract' } })
+  })
+
+  it('opens a Profile section directly and rejects a section on a field page', async () => {
+    const scoped = entityDirectory()
+    route.query = { preparation_id: 'preparation-g3', section: 'contract' }
+    mocks.loadPreparation.mockResolvedValue(scoped)
+    mocks.readBatch.mockResolvedValue({ readMode: 'preparation', directory: scoped,
+      member: scoped.entities[0]!.overview, relatedMembers: [], citations: [] })
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="实体字段"]').text()).toContain('合同规则')
+    expect(wrapper.get('[aria-label="实体字段"]').text()).not.toContain('理赔规则')
+    mocks.readBatch.mockResolvedValue({ readMode: 'preparation', directory: scoped, member: field, relatedMembers: [], citations: [] })
+    route.params.memberId = 'assertion-g3'; await flushPromises()
+    expect(wrapper.text()).toContain('页面读取失败')
+    expect(wrapper.text()).not.toContain('值：30天')
+  })
+
+  it('refreshes a historical section using its own release, epoch and Profile', async () => {
+    route.params.memberId = 'overview-g3'
+    route.query = { release_id: 'release-old', section: 'contract' }
+    const scoped = { ...entityDirectory(), mode: 'g3-active', releaseID: 'release-old', activationEpoch: 4 }
+    const overview = scoped.entities[0]!.overview
+    mocks.loadActive.mockResolvedValue({ ...scoped, releaseID: 'release-new', activationEpoch: 9, entities: [] })
+    mocks.readPinned.mockResolvedValue({ readMode: 'active', directory: scoped, member: overview, relatedMembers: [], citations: [],
+      session: { scope: scoped.scope, read: { ...response().read, release_id: 'release-old', activation_epoch: 4,
+        member: overview, related_members: [], citations: [] } } })
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="实体字段"]').text()).toContain('合同规则')
+    const targets = wrapper.get('nav').findAll('a').map(node => JSON.parse(node.attributes('data-target')!))
+    expect(targets).toContainEqual({ name: 'conceptPage830G2', params: { kbId: 'wiki-a', memberId: 'assertion-g3' },
+      query: { release_id: 'release-old' } })
+    expect(mocks.readPinned).toHaveBeenCalledWith('wiki-a', 'overview-g3', 'release-old', expect.any(Object))
+    expect(mocks.loadActive).not.toHaveBeenCalled()
+    expect(mocks.read).not.toHaveBeenCalled()
+    route.query = { release_id: 'release-old', section: 'new-version-only-section' }; await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+  })
+
   it('renders preparation evidence locally and never requests an Active token or content', async () => {
     route.query = { preparation_id: 'preparation-g3' }
     mocks.loadPreparation.mockResolvedValue(directory)
@@ -107,7 +176,7 @@ describe('G3 batch concept page modes', () => {
       activation_epoch: 6, member: field, related_members: [],
       citations: [{ citation_id: 'citation-123', page_number: 8, quote: '本产品等待期为30天' }] }
     mocks.loadActive.mockResolvedValue(active)
-    mocks.readBatch.mockResolvedValue({ readMode: 'active', directory: active, member: field, relatedMembers: [],
+    mocks.readPinned.mockResolvedValue({ readMode: 'active', directory: active, member: field, relatedMembers: [],
       citations: read.citations, session: { scope: active.scope, read } })
     const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
     expect(mocks.read).not.toHaveBeenCalled()

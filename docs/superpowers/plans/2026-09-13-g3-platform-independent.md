@@ -12,6 +12,14 @@
 
 ## Authority and tracking
 
+### 2026-09-14 confirmed navigation and service completion
+
+The user's confirmed 830 structure remains part of G3, including blueprint §§4–6 and G3-R5; the earlier 815 exclusion of benefits does not override it. Reuse this worktree and existing runtime. Root owns integration. Complete insurance classification → entity → Profile section → independent field navigation, retaining existing member IDs, pinned URLs and evidence without model calls or duplicate publication. Reuse the existing directory and page renderer, not a new Wiki, Head or editor. Add navigation on G3 field pages and a selectable Profile section view using the same overview and field members; a section is a view, never a second field fact.
+
+Inventory the six medical service lines (安有医、安有护、就医通、臻享家医、御享国医、私董保健医), two eldercare lines (居家养老、高端康养), and separately 家族办公室 from the existing service registry and original materials. Distinguish catalog/Schema presence from real published content. Preserve unresolved version spellings as explicit gaps. Service entities consume their own existing Schema definitions through thin adapters; 11 insurance packs are a subset, not the global enterprise capacity. Prioritize one real 臻享家医 version; relationships require actual evidence.
+
+Bounded validation: first demonstrate missing navigation with component tests; verify existing field targets and release pins remain byte-for-byte unchanged after reclassification; verify section direct URL/refresh and invalid-section rejection. Then check actual deployed medical, critical-illness and service paths, independent field counts, original-source clicks, supported relationships, and representative read times. Ordinary missing fields remain allowed. A fixture or empty service directory is not real acceptance. No build or repair during the measured independent upload run.
+
 Spec: `docs/superpowers/specs/2026-09-13-g3-platform-independent-design.md`; Requirements G3-AUTO-1 through G3-AUTO-6 append existing OpenSpec 129. Current seven-product Head stays unchanged during development. All test fixtures/provider-zero remain CODE only. root is sole integration/deployment owner. Do not commit until independent review; no push.
 
 ### Task 1: Persistent product/field artifacts and task settlement (Python store owner)
