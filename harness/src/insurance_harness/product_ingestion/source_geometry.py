@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections.abc import Sequence
 
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     G3NativeCharacterBoxV1,
@@ -18,8 +19,24 @@ def _sha(raw: bytes) -> str:
 
 
 def project_native_pages(
-    decoded: DecodedSourceSnapshot, *, material_id: str
+    decoded: DecodedSourceSnapshot,
+    *,
+    material_id: str,
+    selected_block_ids: Sequence[str] | None = None,
 ) -> tuple[G3NativePageProjectionV1, ...]:
+    selected = None
+    if selected_block_ids is not None:
+        if isinstance(selected_block_ids, (str, bytes)):
+            raise ValueError("native block selection must contain unique existing IDs")
+        selected = set(selected_block_ids)
+        available = {block.block_id for block in decoded.blocks}
+        if len(selected) != len(selected_block_ids) or not selected <= available:
+            raise ValueError("native block selection must contain unique existing IDs")
+    selected_pages = {
+        block.page_number
+        for block in decoded.blocks
+        if selected is None or block.block_id in selected
+    }
     body = decoded.snapshot
     markdown = body["markdown"]
     native = json.loads(decoded.native_bytes, object_pairs_hook=_object)
@@ -47,8 +64,13 @@ def project_native_pages(
             raise ValueError("native page range, hash, or dimension mismatch")
         previous_end = end
         boxes = {}
+        intervals = []
+        expand = selected is None or number in selected_pages
         for row in page.get("bboxes", []):
-            begin, finish = row.get("global_codepoint_start"), row.get("global_codepoint_end")
+            begin, finish = (
+                row.get("global_codepoint_start"),
+                row.get("global_codepoint_end"),
+            )
             bbox = row.get("bbox")
             if (
                 type(begin) is not int
@@ -62,6 +84,9 @@ def project_native_pages(
             x1, y1, x2, y2 = bbox
             if not 0 <= x1 < x2 <= 1_000_000 or not 0 <= y1 < y2 <= 1_000_000:
                 raise ValueError("native page bbox coordinate mismatch")
+            intervals.append((begin, finish))
+            if not expand:
+                continue
             for absolute in range(begin, finish):
                 if markdown[absolute].isspace():
                     continue
@@ -75,11 +100,25 @@ def project_native_pages(
                     width=width * (x2 - x1) / 1_000_000,
                     height=height * (y2 - y1) / 1_000_000,
                 )
+        # Unselected pages retain range/coordinate/overlap validation without
+        # allocating one Pydantic object per visible character. Whitespace-only
+        # overlap remains legal, exactly as in the full character projection.
+        if not expand:
+            occupied_end = start
+            for begin, finish in sorted(intervals):
+                if (
+                    begin < occupied_end
+                    and not markdown[begin : min(finish, occupied_end)].isspace()
+                ):
+                    raise ValueError("native page bbox overlap")
+                occupied_end = max(occupied_end, finish)
         pages[number] = (page, width, height, tuple(boxes[i] for i in sorted(boxes)))
     result = []
     for block in decoded.blocks:
         if block.page_number not in pages:
             raise ValueError("native page missing for exact source block")
+        if selected is not None and block.block_id not in selected:
+            continue
         page, width, height, boxes = pages[block.page_number]
         identity = json.dumps(
             {

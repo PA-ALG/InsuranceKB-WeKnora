@@ -157,6 +157,7 @@ def build_product_pipeline(context):
         build_current_corpus,
         build_identity_context,
         hashed,
+        select_identity_block_ids,
         validate_identity_offered_response,
     )
     from insurance_harness.product_ingestion.identity_adapter import adapt_identity_response
@@ -268,7 +269,11 @@ def build_product_pipeline(context):
             lambda: tuple(
                 page
                 for knowledge_id, source in sorted(snapshots.items())
-                for page in project_native_pages(source, material_id=knowledge_id)
+                for page in project_native_pages(
+                    source,
+                    material_id=knowledge_id,
+                    selected_block_ids=select_identity_block_ids(source),
+                )
             )
         )
         # Read only immutable routing input hints. Sealing source roles after the

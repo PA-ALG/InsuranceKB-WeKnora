@@ -313,3 +313,66 @@ async def test_finalizer_preserves_typed_child_confirmation_reason(environment, 
         if terminal is ProductRunState.NEEDS_CONFIRMATION
         else "PLATFORM_RESPONSE_INVALID"
     )
+
+
+@pytest.mark.asyncio
+async def test_expired_identity_is_reconciled_to_durable_failed_without_model_calls(environment):
+    from datetime import UTC, datetime
+
+    from sqlalchemy import update
+
+    from insurance_harness.jobs.tables import WikiJob
+    from insurance_harness.product_ingestion.progression import ProductProgression
+
+    scope, store, jobs = environment.scope, environment.store, environment.jobs
+    run = store.create_run(scope=scope, idempotency_key="expired-identity")
+    stage = store.enqueue_stage(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="identity",
+        dependency_sha256="a" * 64,
+        idempotency_key="identity:" + run.run_id,
+    )
+    for _attempt in range(3):
+        claim = jobs.claim(space_ids=(scope.space_id,), worker_id="expired-worker")
+        assert isinstance(claim, ClaimedJob) and claim.job.id == stage.job_id
+        jobs.start(
+            space_id=scope.space_id, job_id=stage.job_id, generation=claim.job.lease_generation
+        )
+        # Test-only SQLite clock setup; exercise the real lease reclaimer afterward.
+        with environment.factory() as session, session.begin():
+            session.execute(
+                update(WikiJob)
+                .where(WikiJob.id == stage.job_id)
+                .values(
+                    lease_expires_at=datetime(2020, 1, 1, tzinfo=UTC),
+                )
+            )
+        jobs.reclaim_expired_leases(space_ids=(scope.space_id,))
+    assert jobs.get_job(space_id=scope.space_id, job_id=stage.job_id).state is JobState.DEAD_LETTER
+    progression = ProductProgression(store=store, jobs=jobs, read_window_plan=lambda *_: ())
+    module = runtime_module()
+    pump = module.ProductRuntimePump(
+        store=store,
+        jobs=jobs,
+        outbox=environment.outbox,
+        progression=progression,
+        scopes={scope.space_id: scope},
+    )
+    await pump.tick()
+    claim = jobs.claim(space_ids=(scope.space_id,), worker_id="finalizer")
+    assert isinstance(claim, ClaimedJob)
+    assert claim.job.job_type == "product_ingestion_root"
+    registry = HandlerRegistry()
+    module.register_finalizer(
+        registry,
+        store=store,
+        jobs=jobs,
+        progression=progression,
+        scopes={scope.space_id: scope},
+    )
+    await worker_loop(environment, registry).process_job(claim.job)
+    final = store.get_run(scope=scope, run_id=run.run_id)
+    assert final.state is ProductRunState.FAILED
+    assert final.terminal_reason == "PRODUCT_STAGE_FAILED:identity"
+    assert final.finished_at is not None and final.model_call_count == 0

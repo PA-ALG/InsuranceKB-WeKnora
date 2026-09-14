@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 
-from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_sha256_830_g3
+from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import (
+    batch_sha256_830_g3,
+)
 from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import (
     BatchCorpusV1,
     CorpusEntryV1,
@@ -148,8 +150,46 @@ def validate_identity_offered_response(raw: bytes, context: dict) -> None:
             page = refs.get(evidence.locator_ref)
             if page is None:
                 raise ValueError("identity evidence outside offered source")
-            if page != 1 and evidence.purpose not in {"issuer", "product_code", "version"}:
+            if page != 1 and evidence.purpose not in {
+                "issuer",
+                "product_code",
+                "version",
+            }:
                 raise ValueError("identity title classification and role require first page")
+
+
+def _select_identity_sources(available, page_text):
+    selected = [row for row in available if row.page_number == 1]
+    company = re.compile(r"[\u4e00-\u9fff]{2,40}保险[\u4e00-\u9fff]{0,12}公司")
+    if not any(company.search(page_text(row)) for row in selected):
+        extra = next(
+            (
+                row
+                for row in available
+                if row.page_number <= 3 and row not in selected and company.search(page_text(row))
+            ),
+            None,
+        )
+        if extra is not None:
+            selected.append(extra)
+    if not selected:
+        raise ValueError("current material has no first-page identity geometry")
+    return selected
+
+
+def select_identity_block_ids(decoded: DecodedSourceSnapshot) -> tuple[str, ...]:
+    """Select source blocks before expanding geometry; preserve prompt selection."""
+    mappings = {row["chunk_id"]: row for row in decoded.snapshot["chunk_page_mappings"]}
+
+    def page_text(block):
+        return "\n".join(
+            block.text[row["block_codepoint_start"] : row["block_codepoint_end"]]
+            for row in mappings[block.block_id]["page_spans"]
+            if row["page_number"] == block.page_number
+        )
+
+    available = sorted(decoded.blocks, key=lambda row: (row.page_number, row.block_id))
+    return tuple(row.block_id for row in _select_identity_sources(available, page_text))
 
 
 def build_identity_context(
@@ -192,25 +232,7 @@ def build_identity_context(
             text = source_map[(page.revision_id, page.block_id)].text
             return "\n".join(text[start:end] for start, end in ranges_for(page))
 
-        selected = [row for row in available if row.page_number == 1]
-        # An insurer heading may be printed on the following page. Include at
-        # most one additional real block bearing an explicit legal company name.
-        company = re.compile(r"[\u4e00-\u9fff]{2,40}保险[\u4e00-\u9fff]{0,12}公司")
-        if not any(company.search(page_text(row)) for row in selected):
-            extra = next(
-                (
-                    row
-                    for row in available
-                    if row.page_number <= 3
-                    and row not in selected
-                    and company.search(page_text(row))
-                ),
-                None,
-            )
-            if extra is not None:
-                selected.append(extra)
-        if not selected:
-            raise ValueError("current material has no first-page identity geometry")
+        selected = _select_identity_sources(available, page_text)
         blocks = []
         for page in selected:
             source = sources.get((page.revision_id, page.block_id))
@@ -284,7 +306,10 @@ def build_identity_context(
                 "only."
             ),
         },
-        "first_page_routing": {"product_name": product_name, "primary_label": primary_label},
+        "first_page_routing": {
+            "product_name": product_name,
+            "primary_label": primary_label,
+        },
         "materials": materials,
         "allowed_material_roles": allowed_material_roles,
         "allowed_taxonomy_labels": allowed_taxonomy_labels,

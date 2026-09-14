@@ -56,7 +56,11 @@ def test_prompt_selects_first_page_without_unrelated_later_source_or_history(sna
     pages = project_native_pages(decoded, material_id="knowledge")
     original = decoded.blocks[0]
     unrelated = original.model_copy(
-        update={"block_id": "later", "page_number": 2, "text": "UNRELATED_LATER_CONTENT"}
+        update={
+            "block_id": "later",
+            "page_number": 2,
+            "text": "UNRELATED_LATER_CONTENT",
+        }
     )
     decoded = replace(decoded, blocks=(*decoded.blocks, unrelated))
     corpus = module().build_current_corpus(
@@ -138,10 +142,16 @@ def test_identity_prompt_does_not_require_regex_hints(snapshot):
         allowed_taxonomy_labels=("endowment_insurance",),
         existing_entities=(),
         schema_candidates=(
-            {"schema_pack_id": "fixture", "applicable_classifications": ["endowment_insurance"]},
+            {
+                "schema_pack_id": "fixture",
+                "applicable_classifications": ["endowment_insurance"],
+            },
         ),
     )
-    assert context["first_page_routing"] == {"product_name": None, "primary_label": None}
+    assert context["first_page_routing"] == {
+        "product_name": None,
+        "primary_label": None,
+    }
     assert len(context["schema_candidates"]) == 1
     assert context["materials"][0]["first_page_material_role"] is None
     assert context["materials"][0]["blocks"][0]["evidence_locator_refs"]
@@ -200,7 +210,11 @@ def test_identity_first_page_context_omits_cross_page_tail(snapshot):
     source = original.model_copy(update={"text": original.text + tail})
     changed = json.loads(json.dumps(decoded.snapshot))
     changed["chunk_page_mappings"][0]["page_spans"] = [
-        {"page_number": 1, "block_codepoint_start": 0, "block_codepoint_end": len(original.text)}
+        {
+            "page_number": 1,
+            "block_codepoint_start": 0,
+            "block_codepoint_end": len(original.text),
+        }
     ]
     decoded = replace(decoded, blocks=(source,), snapshot=changed)
     corpus = module().build_current_corpus(scope, {"knowledge": decoded}, declared_by="fixture")
@@ -258,7 +272,11 @@ def test_cross_page_company_tail_does_not_hide_offered_issuer_block(snapshot):
         {
             "chunk_id": "issuer",
             "page_spans": [
-                {"page_number": 2, "block_codepoint_start": 0, "block_codepoint_end": len(company)}
+                {
+                    "page_number": 2,
+                    "block_codepoint_start": 0,
+                    "block_codepoint_end": len(company),
+                }
             ],
         },
     ]
@@ -276,3 +294,41 @@ def test_cross_page_company_tail_does_not_hide_offered_issuer_block(snapshot):
     assert [block["page_number"] for block in blocks] == [1, 2]
     assert company not in blocks[0]["text"]
     assert blocks[1]["text"] == company and blocks[1]["evidence_locator_refs"]
+
+
+def test_bounded_identity_geometry_matches_full_context_and_exact_locator_refs(
+    snapshot,
+):
+    from insurance_harness.product_ingestion.source_geometry import project_native_pages
+    from tests.product_ingestion.test_source_geometry import bounded_identity_snapshot
+
+    decoded = bounded_identity_snapshot(snapshot)
+    original_body = json.dumps(decoded.snapshot, sort_keys=True)
+    selected_ids = module().select_identity_block_ids(decoded)
+    # A company in the page-two tail of the first chunk must not suppress its
+    # actual page-two block; at most one auxiliary issuer block is selected.
+    assert selected_ids == ("block", "issuer")
+    corpus = module().build_current_corpus(
+        snapshot[0], {"knowledge": decoded}, declared_by="fixture"
+    )
+    options = dict(
+        allowed_material_roles=("terms",),
+        allowed_taxonomy_labels=("endowment_insurance",),
+        existing_entities=(),
+        snapshots={"knowledge": decoded},
+    )
+    full = module().build_identity_context(
+        corpus, project_native_pages(decoded, material_id="knowledge"), **options
+    )
+    bounded = module().build_identity_context(
+        corpus,
+        project_native_pages(decoded, material_id="knowledge", selected_block_ids=selected_ids),
+        **options,
+    )
+    assert json.dumps(bounded, sort_keys=True) == json.dumps(full, sort_keys=True)
+    blocks = bounded["materials"][0]["blocks"]
+    assert [block["page_number"] for block in blocks] == [1, 2]
+    assert all(block["evidence_locator_refs"] for block in blocks)
+    assert "测试人寿保险股份有限公司" not in blocks[0]["text"]
+    assert len(corpus.entries[0].blocks) == 4
+    assert json.dumps(decoded.snapshot, sort_keys=True) == original_body
