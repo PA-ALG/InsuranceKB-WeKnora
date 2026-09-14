@@ -97,7 +97,11 @@ func (e *OpenAIEmbedder) SetSupportsDimensionOverride(supported bool) {
 
 // Embed converts text to vector
 func (e *OpenAIEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
-	for range 3 {
+	attempts := 3
+	if types.ModelAutomaticRetryDisabled(ctx) {
+		attempts = 1
+	}
+	for range attempts {
 		embeddings, err := e.BatchEmbed(ctx, []string{text})
 		if err != nil {
 			return nil, err
@@ -114,14 +118,18 @@ func (e *OpenAIEmbedder) doRequestWithRetry(ctx context.Context, jsonData []byte
 	var err error
 	url := e.baseURL + "/embeddings"
 
-	for i := 0; i <= e.maxRetries; i++ {
+	maxRetries := e.maxRetries
+	if types.ModelAutomaticRetryDisabled(ctx) {
+		maxRetries = 0
+	}
+	for i := 0; i <= maxRetries; i++ {
 		if i > 0 {
 			backoffTime := time.Duration(1<<uint(i-1)) * time.Second
 			if backoffTime > 10*time.Second {
 				backoffTime = 10 * time.Second
 			}
 			logger.GetLogger(ctx).
-				Infof("OpenAIEmbedder retrying request (%d/%d), waiting %v", i, e.maxRetries, backoffTime)
+				Infof("OpenAIEmbedder retrying request (%d/%d), waiting %v", i, maxRetries, backoffTime)
 
 			select {
 			case <-time.After(backoffTime):

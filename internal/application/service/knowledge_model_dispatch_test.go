@@ -298,3 +298,41 @@ func TestG3PlatformProcessingReceiptWireFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestKnowledgeG3DispatchParentExplicitlyDisablesModelRetry(t *testing.T) {
+	journal, repo := newKnowledgeDispatchJournalTest(t)
+	tracker := NewSpanTracker(repo, nil)
+	parent, attempt, err := tracker.OpenAttempt(context.Background(), "retry-policy-kid", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = journal.EnsureEnabled(context.Background(), dispatchTestScope(), "retry-policy-kid", attempt, 9); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		enabled bool
+		tenant  uint64
+		kb      string
+		want    bool
+	}{
+		{"g3", true, 17, "raw", true}, {"other_tenant", true, 18, "raw", false}, {"other_kb", true, 17, "other", false}, {"disabled_config", false, 17, "raw", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &knowledgeService{config: &config.Config{G3PlatformProcessing: &config.G3PlatformProcessingConfig{Enabled: tc.enabled, TenantID: 17, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki"}}, spanTracker: tracker}
+			base := context.Background()
+			ctx, err := service.withG3ModelDispatchParent(base, &types.Knowledge{ID: "retry-policy-kid", TenantID: tc.tenant, KnowledgeBaseID: tc.kb}, parent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if types.ModelAutomaticRetryDisabled(ctx) != tc.want || types.ModelAutomaticRetryDisabled(base) {
+				t.Fatalf("explicit retry policy=%v, want %v", types.ModelAutomaticRetryDisabled(ctx), tc.want)
+			}
+		})
+	}
+	// Journaling directly is not an implicit business retry policy.
+	ctx, err := journal.WithParent(context.Background(), parent, 0)
+	if err != nil || types.ModelAutomaticRetryDisabled(ctx) {
+		t.Fatalf("journal alone changed retry policy: %v", err)
+	}
+}

@@ -3,8 +3,11 @@ package embedding
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -114,5 +117,84 @@ func TestOpenAIEmbedderJournalFailurePreventsProviderDispatch(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("provider received %d calls after journal failure", calls)
+	}
+}
+
+type noRetryEmbeddingTransport struct {
+	calls int
+	err   error
+	body  string
+}
+
+func (r *noRetryEmbeddingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.calls++
+	if r.err != nil {
+		return nil, r.err
+	}
+	return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(r.body)), Header: make(http.Header), Request: req}, nil
+}
+
+func TestOpenAIEmbeddingExplicitPolicyDisablesTransportRetry(t *testing.T) {
+	failure := errors.New("fixture connection reset")
+	for _, disabled := range []bool{true, false} {
+		t.Run(fmt.Sprint(disabled), func(t *testing.T) {
+			transport := &noRetryEmbeddingTransport{err: failure}
+			e := &OpenAIEmbedder{baseURL: "https://embedding.invalid/v1", modelName: "fixture", httpClient: &http.Client{Transport: transport}, maxRetries: 1}
+			recorder := &embeddingDispatchRecorderStub{}
+			ctx := types.WithModelDispatchRecorder(context.Background(), recorder)
+			if disabled {
+				ctx = types.WithModelAutomaticRetryDisabled(ctx)
+			}
+			_, err := e.BatchEmbed(ctx, []string{"input"})
+			want := 2
+			if disabled {
+				want = 1
+			}
+			if transport.calls != want || len(recorder.specs) != want || len(recorder.results) != want {
+				t.Fatalf("transport=%d reservations=%d results=%d, want %d", transport.calls, len(recorder.specs), len(recorder.results), want)
+			}
+			if !errors.Is(err, failure) {
+				t.Fatalf("lost original transport error: %v", err)
+			}
+			for i, spec := range recorder.specs {
+				if spec.TransportRetryIndex != i || recorder.results[i].Outcome != "TRANSPORT_ERROR" {
+					t.Fatalf("invalid transport audit: %#v %#v", recorder.specs, recorder.results)
+				}
+			}
+		})
+	}
+}
+
+func TestOpenAIEmbeddingExplicitPolicyDisablesEmptyResultReplay(t *testing.T) {
+	for _, disabled := range []bool{true, false} {
+		for _, empty := range []bool{true, false} {
+			t.Run(fmt.Sprintf("disabled=%v/empty=%v", disabled, empty), func(t *testing.T) {
+				body := `{"data":[{"embedding":[0.1],"index":0}]}`
+				if empty {
+					body = `{"data":[]}`
+				}
+				transport := &noRetryEmbeddingTransport{body: body}
+				e := &OpenAIEmbedder{baseURL: "https://embedding.invalid/v1", modelName: "fixture", httpClient: &http.Client{Transport: transport}, maxRetries: 3}
+				ctx := context.Background()
+				if disabled {
+					ctx = types.WithModelAutomaticRetryDisabled(ctx)
+				}
+				got, err := e.Embed(ctx, "input")
+				want := 1
+				if empty && !disabled {
+					want = 3
+				}
+				if transport.calls != want {
+					t.Fatalf("dispatches=%d, want %d", transport.calls, want)
+				}
+				if empty {
+					if err == nil || err.Error() != "no embedding returned" {
+						t.Fatalf("empty result must stay explicit error: %v", err)
+					}
+				} else if err != nil || len(got) != 1 {
+					t.Fatalf("successful embedding changed: %v %v", got, err)
+				}
+			})
+		}
 	}
 }

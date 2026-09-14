@@ -1,5 +1,15 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## Task3ad: prevent implicit whole-batch embedding replay (2026-09-14)
+
+Billing diagnosis correction: the user showed CNY199.91 available balance and the free-quota-exhausted notification. The official error-code reference maps this exact 429 insufficient_quota message to TPS/TPM throttling. A subsequent saved-model short-input debug request succeeded with 1024 dimensions; there is no evidence requiring recharge. Root may use the existing model settings endpoint to set this G3 tenant's embedding background MaxConcurrency from inherited default to 1, preserving all other model parameters and server-held credentials, and verify exact readback. This reduces bursts, not a claim of complete token-rate governance. No service restart is required. Both this diagnostic call and setting change occur after the immutable failed acceptance run and are excluded from its timing/call counts.
+
+Requirement G3-AUTO-3 and the existing zero automatic retry acceptance constraint. Frozen source 8dd22b327 produced webpage run f0776a58-90a8-419c-ae0a-7e6d3c478996, now FAILED. The rate table was parsed successfully, but embedding made 100 dispatches for 35 distinct request hashes, including 17 HTTP 429 insufficient_quota responses. batchEmbedWithBackoff replays the complete list up to five times; zero transport_retry_index and worker_retry do not prove absence of this outer replay. Preserve the failed run and all 109 three-material receipts.
+
+Owner g3_admission_finish may modify only internal/types/model_dispatch.go and its test; internal/application/service/knowledge_model_dispatch.go and its test; internal/application/service/retriever/keywords_vector_hybrid_indexer.go and its test; internal/models/embedding/openai.go and model_dispatch_test.go. Add explicit context policy disabling automatic model retry, set by the configured G3 withG3ModelDispatchParent path. Both outer batch backoff and OpenAI embedding transport consume it; do not infer retry policy from recorder presence. Ordinary non-G3 behavior is unchanged. Errors return without whole-list replay. No new cache protocol, service, database, or business continuation.
+
+RED must prove the existing five outer calls; tests cover G3 single invocation, legacy compatibility, successful path, context wiring, no transport retry on connection error, and original error preservation. Root owns evidence, independent review and integration; deployment and subsequent webpage acceptance are separate. Current task remains failed. Failed-run summary undercount and upload layout are separate outstanding issues.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans task-by-task. User has already requested continued execution; no additional execution-choice prompt.
 
 **Goal:** Make one new product's three uploaded originals reach searchable, traceable publication using deployed platform tasks alone.

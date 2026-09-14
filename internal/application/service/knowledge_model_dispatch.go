@@ -170,7 +170,11 @@ func (s *knowledgeService) withG3ModelDispatchParent(
 	if journal == nil || parent == nil {
 		return ctx, types.ErrModelDispatchJournalUnavailable
 	}
-	return journal.WithParent(ctx, parent, modelDispatchWorkerRetry(ctx))
+	dispatchCtx, err := journal.WithParent(ctx, parent, modelDispatchWorkerRetry(ctx))
+	if err != nil {
+		return dispatchCtx, err
+	}
+	return types.WithModelAutomaticRetryDisabled(dispatchCtx), nil
 }
 
 func modelDispatchJSONMap(value any) (types.JSONMap, error) {

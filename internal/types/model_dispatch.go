@@ -61,3 +61,22 @@ func ReserveModelDispatch(ctx context.Context, spec ModelDispatchSpec) (ModelDis
 	}
 	return recorder.ReserveModelDispatch(ctx, spec)
 }
+
+type modelAutomaticRetryDisabledContextKey struct{}
+
+// WithModelAutomaticRetryDisabled explicitly forbids automatic model replay in
+// this operation. It is independent of optional dispatch accounting.
+func WithModelAutomaticRetryDisabled(ctx context.Context) context.Context {
+	if ctx == nil {
+		return nil
+	}
+	return context.WithValue(ctx, modelAutomaticRetryDisabledContextKey{}, true)
+}
+
+func ModelAutomaticRetryDisabled(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	disabled, _ := ctx.Value(modelAutomaticRetryDisabledContextKey{}).(bool)
+	return disabled
+}
