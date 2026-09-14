@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -15,15 +15,14 @@ from insurance_harness.jobs import NonRetryableJobError, RetryableJobError
 from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import SchemaPackCatalogV1
 from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.identity import prepare_identity_routing
 from insurance_harness.product_ingestion.models import (
     OriginalKnowledgeRef,
     ProductRunState,
     ProductScope,
-    SealedSourceRef,
 )
 from insurance_harness.product_ingestion.platform import decode_source_snapshot
 from insurance_harness.product_ingestion.processing_receipts import processing_summary
-from insurance_harness.product_ingestion.routing import route_product_materials
 from insurance_harness.product_ingestion.store import (
     ProductIngestionStore,
     needs_confirmation_error,
@@ -198,13 +197,24 @@ def register_source_stages(
         if now() >= run.source_deadline_at:
             raise NonRetryableJobError("SOURCE_PARSE_DEADLINE_EXCEEDED")
         prior = {}
-        if run.retry_of_run_id and recovery is None:
+        reuse_sealed = recovery is not None and recovery.mode == "REUSE_SEALED_SOURCES"
+        if run.retry_of_run_id and (recovery is None or reuse_sealed):
             prior = {
                 row.artifact_key: row
                 for row in artifacts.list_artifacts(
                     scope=scope, run_id=run.retry_of_run_id, artifact_kind="source_snapshot"
                 )
             }
+        if reuse_sealed:
+            expected = {
+                item.knowledge_id: item.payload_sha256 for item in recovery.source_snapshots
+            }
+            if set(prior) != set(expected) or any(
+                hashlib.sha256(row.payload).hexdigest() != expected[key]
+                or row.payload_sha256 != expected[key]
+                for key, row in prior.items()
+            ):
+                raise NonRetryableJobError("RECOVERY_SOURCE_CHECKPOINT_CHANGED")
         drafts = []
         processing = []
         # Resolve all parse states first; do not capture a partial group while
@@ -234,13 +244,19 @@ def register_source_stages(
                 raw = await platform.capture_source(
                     scope, material.knowledge_id, item["parse_attempt"]
                 )
-            decoded = decode_source_snapshot(
-                raw,
-                scope=scope,
-                knowledge_id=material.knowledge_id,
-                parse_attempt=item["parse_attempt"],
-                public_keys=public_keys,
-            )
+            try:
+                decoded = decode_source_snapshot(
+                    raw,
+                    scope=scope,
+                    knowledge_id=material.knowledge_id,
+                    parse_attempt=item["parse_attempt"],
+                    public_keys=public_keys,
+                )
+            except ValueError:
+                if recovery is not None:
+                    raise NonRetryableJobError("RECOVERY_SOURCE_CHECKPOINT_INVALID") from None
+                raise
+
             processing.append(
                 (
                     material.knowledge_id,
@@ -279,41 +295,11 @@ def register_source_stages(
             raise NonRetryableJobError("SOURCE_CHECKPOINT_SET_MISMATCH")
         if any(not source.blocks for source in snapshots.values()):
             raise needs_confirmation_error("FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE")
-        result = route_product_materials(
-            [
-                snapshots[item.knowledge_id].routing_material(
-                    material_id=item.material_id, file_name=item.original_filename
-                )
-                for item in run.materials
-            ],
-            catalog=catalog,
-        )
-        if result.status != "matched":
-            raise needs_confirmation_error(result.reason or "PRODUCT_IDENTITY_UNRESOLVED")
-        product_identity = hashlib.sha256(
-            b"product-formal-name.v1\0" + result.product_name.encode()
-        ).hexdigest()
-        by_id = {row.material_id: row for row in result.materials}
-        for item in run.materials:
-            source = snapshots[item.knowledge_id].snapshot
-            receipt = source["receipt"]
-            store.seal_material_source(
-                scope=scope,
-                run_id=run.run_id,
-                material_id=item.material_id,
-                source=SealedSourceRef(
-                    knowledge_id=item.knowledge_id,
-                    source_revision_id=receipt["revision_source_id"],
-                    source_sha256=receipt["file_sha256"],
-                    file_sha256=receipt["file_sha256"],
-                    native_manifest_sha256=source["native_capture_sha256"],
-                    page_count=receipt["page_count"],
-                    inferred_material_role=by_id[item.material_id].material_type,
-                    product_identity_sha256=product_identity,
-                ),
-            )
-        payload = asdict(result)
-        payload["product_identity_sha256"] = product_identity
+        try:
+            payload = prepare_identity_routing(snapshots, run.materials, catalog)
+        except ValueError as error:
+            raise needs_confirmation_error(str(error)) from error
+
         return StageOutput(
             (artifact("routing", "product", json_bytes(payload), stage.dependency_sha256),)
         )

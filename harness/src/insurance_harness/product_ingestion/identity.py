@@ -15,6 +15,8 @@ from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import 
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     G3NativePageProjectionV1,
     G3SemanticReferenceResponseV1,
+    _c_eligible_source_locators,
+    _c_locator_ref,
     _c_prompt_block,
 )
 from insurance_harness.product_ingestion.models import ProductScope
@@ -97,16 +99,71 @@ def _name(value: str) -> str:
     return re.sub(r"\s+", "", value).translate(str.maketrans({"(": "（", ")": "）"}))
 
 
+def prepare_identity_routing(snapshots, materials, catalog) -> dict:
+    """Prepare source custody and Catalog options, without deciding identity."""
+    rows = []
+    for material in materials:
+        decoded = snapshots[material.knowledge_id]
+        if not decoded.first_page_ranges:
+            raise ValueError("FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE")
+        rows.append(
+            {
+                "material_id": material.material_id,
+                "knowledge_id": material.knowledge_id,
+                "file_name": material.original_filename,
+                "first_page_ranges": decoded.first_page_ranges,
+            }
+        )
+    return {
+        "contract": "product-routing-input.830.v2",
+        "status": "prepared",
+        "product_name": None,
+        "route": None,
+        "materials": rows,
+        "schema_candidates": [
+            {
+                "schema_pack_id": row.pack.schema_pack_id,
+                "display_name": row.pack.display_name,
+                "applicable_classifications": row.pack.applicable_classifications,
+            }
+            for row in catalog.entries
+        ],
+    }
+
+
+def validate_identity_offered_response(raw: bytes, context: dict) -> None:
+    """A valid native locator is still ineligible unless this call offered it."""
+    response = G3SemanticReferenceResponseV1.model_validate_json(raw)
+    offered = {
+        material["material_id"]: {
+            ref["locator_ref"]: block.get("page_number", 1)
+            for block in material["blocks"]
+            for ref in block["evidence_locator_refs"]
+        }
+        for material in context["materials"]
+    }
+    for material in response.materials:
+        refs = offered.get(material.material_id, {})
+        for evidence in material.evidence:
+            page = refs.get(evidence.locator_ref)
+            if page is None:
+                raise ValueError("identity evidence outside offered source")
+            if page != 1 and evidence.purpose != "issuer":
+                raise ValueError("later identity source supports issuer only")
+
+
 def build_identity_context(
     corpus: BatchCorpusV1,
     pages: Sequence[G3NativePageProjectionV1],
     *,
-    product_name: str,
-    primary_label: str,
-    material_roles: Mapping[str, str],
+    product_name: str | None = None,
+    primary_label: str | None = None,
+    material_roles: Mapping[str, str] | None = None,
     allowed_material_roles: tuple[str, ...],
     allowed_taxonomy_labels: tuple[str, ...],
     existing_entities: Sequence[ExistingEntityV1],
+    schema_candidates: Sequence[dict] = (),
+    snapshots: Mapping[str, DecodedSourceSnapshot] | None = None,
 ) -> dict:
     materials = []
     for entry in corpus.entries:
@@ -115,20 +172,38 @@ def build_identity_context(
             (row for row in pages if row.material_id == entry.material_id),
             key=lambda row: (row.page_number, row.block_id),
         )
+
+        def page_ranges(page, source_map=sources, material_id=entry.material_id):
+            source = source_map[(page.revision_id, page.block_id)]
+            if snapshots is None:
+                return [(0, len(source.text))]
+            mapping = next(
+                row
+                for row in snapshots[material_id].snapshot["chunk_page_mappings"]
+                if row["chunk_id"] == page.block_id
+            )
+            return [
+                (row["block_codepoint_start"], row["block_codepoint_end"])
+                for row in mapping["page_spans"]
+                if row["page_number"] == page.page_number
+            ]
+
+        def page_text(page, source_map=sources, ranges_for=page_ranges):
+            text = source_map[(page.revision_id, page.block_id)].text
+            return "\n".join(text[start:end] for start, end in ranges_for(page))
+
         selected = [row for row in available if row.page_number == 1]
         # An insurer heading may be printed on the following page. Include at
         # most one additional real block bearing an explicit legal company name.
         company = re.compile(r"[\u4e00-\u9fff]{2,40}保险[\u4e00-\u9fff]{0,12}公司")
-        if not any(
-            company.search(sources[(row.revision_id, row.block_id)].text) for row in selected
-        ):
+        if not any(company.search(page_text(row)) for row in selected):
             extra = next(
                 (
                     row
                     for row in available
                     if row.page_number <= 3
                     and row not in selected
-                    and company.search(sources[(row.revision_id, row.block_id)].text)
+                    and company.search(page_text(row))
                 ),
                 None,
             )
@@ -141,34 +216,79 @@ def build_identity_context(
             source = sources.get((page.revision_id, page.block_id))
             if source is None or page.page_number != source.page_number:
                 raise ValueError("identity geometry source mismatch")
-            blocks.append(
-                _c_prompt_block(
-                    page.block_ref,
-                    source.text,
-                    use_locator_refs=True,
-                    native_page=page,
-                    source=source,
-                )
+            prompt_block = _c_prompt_block(
+                page.block_ref,
+                source.text,
+                use_locator_refs=True,
+                native_page=page,
+                source=source,
             )
+            if snapshots is not None:
+                ranges = page_ranges(page)
+                eligible = {
+                    _c_locator_ref(row)
+                    for row in _c_eligible_source_locators(page, source)
+                    if any(start <= row.start < row.end <= end for start, end in ranges)
+                }
+                prompt_block["text"] = "\n".join(source.text[start:end] for start, end in ranges)
+                prompt_block["source_ranges"] = ranges
+                prompt_block["evidence_locator_refs"] = [
+                    row
+                    for row in prompt_block["evidence_locator_refs"]
+                    if row["locator_ref"] in eligible
+                ]
+            prompt_block["page_number"] = page.page_number
+            blocks.append(prompt_block)
         materials.append(
             {
                 "material_id": entry.material_id,
-                "first_page_material_role": material_roles[entry.material_id],
+                "first_page_material_role": (material_roles or {}).get(entry.material_id),
                 "blocks": blocks,
             }
         )
+    # Model hints are optional. The resolver still receives the full existing set.
+    first_text = _name(
+        "\n".join(
+            block["text"]
+            for material in materials
+            for block in material["blocks"]
+            if block["page_number"] == 1
+        )
+    )
     matching = [
         row.model_dump(mode="json")
         for row in existing_entities
-        if _name(row.name) == _name(product_name)
-        or any(_name(alias.value) == _name(product_name) for alias in row.approved_aliases)
+        if _name(row.name) in first_text
+        or any(_name(alias.value) in first_text for alias in row.approved_aliases)
     ]
     return {
         "contract": "g3-c-classify-prompt-context.830.v1",
+        "instructions": {
+            "classification": (
+                "Choose the insurance type from the complete formal product name on page one "
+                "and the supplied Chinese Catalog labels. Other insurance types mentioned in "
+                "body text are not this product's classification."
+            ),
+            "material_role": (
+                "Identify terms, brochure, or rate table from the material's own labels; "
+                "filenames are only hints."
+            ),
+            "grouping": (
+                "Group the supplied materials by the evidenced product name and version. "
+                "Formatting, whitespace, book-title brackets and heading decoration may "
+                "differ; genuine product or version conflicts must stay unresolved."
+            ),
+            "evidence": (
+                "Use only the offered locator refs. Name, classification and material-role "
+                "evidence must come from page one; a later company block supports issuer "
+                "only."
+            ),
+        },
         "first_page_routing": {"product_name": product_name, "primary_label": primary_label},
         "materials": materials,
         "allowed_material_roles": allowed_material_roles,
         "allowed_taxonomy_labels": allowed_taxonomy_labels,
         "existing_entities": matching,
+        "schema_candidates": list(schema_candidates),
         "response_schema": G3SemanticReferenceResponseV1.model_json_schema(),
     }

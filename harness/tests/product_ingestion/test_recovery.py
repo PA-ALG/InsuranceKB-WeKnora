@@ -56,6 +56,199 @@ def failed_capture(stage_runtime):
     return store.get_run(scope=scope, run_id=run.run_id)
 
 
+def title_unavailable(stage_runtime, monkeypatch, reason="FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE"):
+    from insurance_harness.product_ingestion import stages
+
+    scope, store, _, _, execute = stage_runtime
+    run = store.create_run(
+        scope=scope, idempotency_key="title-unavailable", expected_upload_count=3
+    )
+    assert execute(run).state is JobState.SUCCEEDED
+    assert execute(run).state is JobState.SUCCEEDED
+
+    def unavailable(*args, **kwargs):
+        raise ValueError(reason)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(stages, "prepare_identity_routing", unavailable)
+        blocked = execute(run)
+    assert blocked.state is JobState.BLOCKED
+    # Fixture root points to the actual blocked terminal receipt.
+    with store._session_factory() as session, session.begin():
+        session.get(tables.ProductRun, run.run_id).root_job_id = blocked.id
+    return store.get_run(scope=scope, run_id=run.run_id)
+
+
+def test_title_recovery_reuses_exact_sources_and_keeps_original_terminal(
+    stage_runtime, monkeypatch
+):
+    scope, store, artifacts, platform, execute = stage_runtime
+    origin = title_unavailable(stage_runtime, monkeypatch)
+    assert origin.state.value == "needs_confirmation"
+    assert store.can_retry_processing(scope=scope, run_id=origin.run_id)
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    assert (
+        store.retry_processing(
+            scope=scope, run_id=origin.run_id, expected_version=origin.version
+        ).run_id
+        == child.run_id
+    )
+    plan = store.processing_recovery_plan(scope=scope, run_id=child.run_id)
+    assert plan.contract == "product-processing-recovery-plan.830.v2"
+    assert plan.mode == "REUSE_SEALED_SOURCES"
+    assert len(plan.source_snapshots) == 3
+    for _ in range(3):
+        assert execute(child).state is JobState.SUCCEEDED
+    assert platform.calls == 3
+    for old in artifacts.list_artifacts(
+        scope=scope, run_id=origin.run_id, artifact_kind="source_snapshot"
+    ):
+        new = artifacts.get_artifact(
+            scope=scope,
+            run_id=child.run_id,
+            artifact_kind="source_snapshot",
+            artifact_key=old.artifact_key,
+        )
+        assert new.payload == old.payload
+    assert store.get_run(scope=scope, run_id=origin.run_id) == origin
+
+
+@pytest.mark.parametrize(
+    "reason", ["PRODUCT_IDENTITY_OR_VERSION_CONFLICT", "SOURCE_REVISION_CHANGED"]
+)
+def test_title_recovery_does_not_allow_real_conflicts(stage_runtime, monkeypatch, reason):
+    scope, store, _, _, _ = stage_runtime
+    origin = title_unavailable(stage_runtime, monkeypatch, reason)
+    assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
+    with pytest.raises(ValueError):
+        store.retry_processing(scope=scope, run_id=origin.run_id, expected_version=origin.version)
+
+
+@pytest.mark.parametrize("change", ["missing", "corrupt", "binding", "attempt"])
+def test_title_recovery_source_changes_fail_closed(stage_runtime, monkeypatch, change):
+    from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
+
+    scope, store, _, platform, execute = stage_runtime
+    origin = title_unavailable(stage_runtime, monkeypatch)
+    if change in {"missing", "corrupt"}:
+        with store._session_factory() as session, session.begin():
+            saved = session.scalar(
+                select(ProductArtifact).where(
+                    ProductArtifact.run_id == origin.run_id,
+                    ProductArtifact.artifact_kind == "source_snapshot",
+                )
+            )
+            if change == "missing":
+                session.delete(saved)
+            else:
+                saved.payload = b"{}"
+        assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
+        return
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    lookup = platform.lookup_upload
+
+    async def changed(scope, run_id, ordinal):
+        item = await lookup(scope, run_id, ordinal)
+        if change == "binding":
+            item["knowledge_id"] = "different"
+        else:
+            item["parse_attempt"] += 1
+        return item
+
+    platform.lookup_upload = changed
+    assert execute(child).state is JobState.SUCCEEDED
+    assert execute(child).state is JobState.DEAD_LETTER
+    assert platform.calls == 3
+
+
+def test_recovery_v1_wire_bytes_are_unchanged():
+    from insurance_harness.product_ingestion.models import OriginalKnowledgeRef, ProductScope
+    from insurance_harness.product_ingestion.recovery import ProcessingRecoveryPlan
+
+    raw = (
+        b'{"contract":"product-processing-recovery-plan.830.v1",'
+        b'"mode":"RECAPTURE_COMPLETED_SOURCES",'
+        b'"scope":{"tenant_id":"1","space_id":"space","raw_knowledge_base_id":"raw",'
+        b'"wiki_knowledge_base_id":"wiki"},"origin_run_id":"old","origin_version":1,'
+        b'"upload_run_id":"upload","materials":[{"knowledge_id":"k",'
+        b'"original_filename":"file.pdf","upload_ordinal":0}]}'
+    )
+    plan = ProcessingRecoveryPlan(
+        scope=ProductScope(
+            tenant_id="1",
+            space_id="space",
+            raw_knowledge_base_id="raw",
+            wiki_knowledge_base_id="wiki",
+        ),
+        origin_run_id="old",
+        origin_version=1,
+        upload_run_id="upload",
+        materials=(
+            OriginalKnowledgeRef(knowledge_id="k", original_filename="file.pdf", upload_ordinal=0),
+        ),
+    )
+    assert plan.encoded() == raw
+    assert (
+        ProcessingRecoveryPlan.model_validate_json(raw).digest() == hashlib.sha256(raw).hexdigest()
+    )
+
+
+def test_title_recovery_rejects_existing_semantic_call(stage_runtime, monkeypatch):
+    from insurance_harness.product_ingestion.artifact_tables import ProductStageModelCall
+
+    scope, store, _, _, _ = stage_runtime
+    origin = title_unavailable(stage_runtime, monkeypatch)
+    with store._session_factory() as session, session.begin():
+        session.add(
+            ProductStageModelCall(
+                id=str(uuid4()),
+                call_id="already-reserved",
+                run_id=origin.run_id,
+                space_id=scope.space_id,
+                stage_key="routing",
+                operation_key="route",
+                job_id="fixture-job",
+                generation=1,
+                attempt=1,
+                dependency_sha256="0" * 64,
+                input_sha256="0" * 64,
+                model_policy_sha256="0" * 64,
+                prompt_policy_sha256="0" * 64,
+                state="RESERVED",
+                raw_ref="fixture",
+                usage={},
+                reserved_at=datetime.now(UTC),
+            )
+        )
+    assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
+
+
+def test_title_recovery_snapshot_mutation_after_admission_is_rejected(stage_runtime, monkeypatch):
+    from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
+
+    scope, store, _, platform, execute = stage_runtime
+    origin = title_unavailable(stage_runtime, monkeypatch)
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    with store._session_factory() as session, session.begin():
+        saved = session.scalar(
+            select(ProductArtifact).where(
+                ProductArtifact.run_id == origin.run_id,
+                ProductArtifact.artifact_kind == "source_snapshot",
+            )
+        )
+        saved.payload += b" "
+        saved.payload_sha256 = hashlib.sha256(saved.payload).hexdigest()
+    assert execute(child).state is JobState.SUCCEEDED
+    assert execute(child).state is JobState.DEAD_LETTER
+    assert platform.calls == 3
+
+
 def test_processing_recovery_atomic_idempotent_and_real_source_worker(stage_runtime):
     scope, store, artifacts, platform, execute = stage_runtime
     origin = failed_capture(stage_runtime)
@@ -272,7 +465,10 @@ def test_recovery_plan_and_upload_binding_fail_closed(stage_runtime):
     assert platform.calls == 0
 
 
-def test_completed_sources_count_fourteen_historical_calls_not_new(stage_runtime, snapshot):
+def test_completed_sources_count_fourteen_historical_calls_not_new(
+    stage_runtime, snapshot, monkeypatch
+):
+    from insurance_harness.product_ingestion import stages
     from tests.product_ingestion.test_processing_receipts import receipt, sealed
 
     scope, store, artifacts, platform, execute = stage_runtime
@@ -326,11 +522,42 @@ def test_completed_sources_count_fourteen_historical_calls_not_new(stage_runtime
     assert summary["recorded_model_call_count"] == summary["model_call_count"] == 0
     assert summary["recorded_reused_model_call_count"] == summary["reused_model_call_count"] == 14
 
+    def unavailable(*args, **kwargs):
+        raise ValueError("FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(stages, "prepare_identity_routing", unavailable)
+        blocked = execute(child)
+    assert blocked.state is JobState.BLOCKED
+    with store._session_factory() as session, session.begin():
+        session.get(tables.ProductRun, child.run_id).root_job_id = blocked.id
+    origin = store.get_run(scope=scope, run_id=child.run_id)
+    recovered = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    for _ in range(3):
+        assert execute(recovered).state is JobState.SUCCEEDED
+    summary = json.loads(
+        artifacts.get_artifact(
+            scope=scope,
+            run_id=recovered.run_id,
+            artifact_kind="source_processing_summary",
+            artifact_key="product",
+        ).payload
+    )
+    assert summary["model_call_count"] == summary["recorded_model_call_count"] == 0
+    assert summary["reused_model_call_count"] == summary["recorded_reused_model_call_count"] == 14
+    assert platform.calls == 3
+
 
 @pytest.mark.asyncio
-async def test_recovery_runs_normal_identity_fields_discovery_and_publication(tmp_path):
+@pytest.mark.parametrize("failed_stage", ["source", "routing"])
+async def test_recovery_runs_normal_identity_fields_discovery_and_publication(
+    tmp_path, monkeypatch, failed_stage
+):
     from insurance_harness.db.base import Base, make_session_factory
     from insurance_harness.jobs import JobStore
+    from insurance_harness.product_ingestion import stages
     from insurance_harness.product_ingestion.progression import admit_uploads
     from tests.product_ingestion.test_pipeline_runtime import (
         SCOPE,
@@ -358,11 +585,21 @@ async def test_recovery_runs_normal_identity_fields_discovery_and_publication(tm
     async def unavailable(*_):
         raise NonRetryableJobError("snapshot HTTP 409")
 
-    context.bindings[SCOPE.space_id].platform.capture_source = unavailable
-    admit_uploads(context.store, SCOPE, origin.run_id)
-    failed = await _finish(runtime, context, jobs, origin.run_id)
-    assert (
-        failed.state.value == "failed" and failed.terminal_reason == "PRODUCT_STAGE_FAILED:source"
+    with monkeypatch.context() as patch:
+        if failed_stage == "source":
+            patch.setattr(context.bindings[SCOPE.space_id].platform, "capture_source", unavailable)
+        else:
+
+            def unavailable_title(*args, **kwargs):
+                raise ValueError("FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE")
+
+            patch.setattr(stages, "prepare_identity_routing", unavailable_title)
+        admit_uploads(context.store, SCOPE, origin.run_id)
+        failed = await _finish(runtime, context, jobs, origin.run_id)
+    assert failed.terminal_reason == (
+        "PRODUCT_STAGE_FAILED:source"
+        if failed_stage == "source"
+        else "FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE"
     )
     assert not model.identity_requests and not model.field_requests
     child = context.store.retry_processing(

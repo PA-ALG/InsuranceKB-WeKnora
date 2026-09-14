@@ -101,3 +101,5 @@ Task3z 源码0c22aa18aeb18e75dc201f9af2164002a47da6bd已完成既有APP/UI/Harne
 - 三份已保存 source_snapshot 共124/124 EXACT_BLOCK，Markdown和Native与首次资产完全一致。说明书和条款首页名称规范化一致。费率表完整首页标题“《平安盛世金越（尊享版26）终身寿险（分红型）》年交费率表”不被原整行规则接纳，导致FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE；不是解析失败、缺页码或模型失败。只读机器诊断保存在/private/tmp/g3-recovery-routing-diagnostic-01/report.json。
 - 用户明确要求 Gemini + Schema候选判断，已冻结Task3aa：去除首页整行匹配前置门槛，复用现有identity一次持久化分类，成功后封存来源归属及resolved_routing。普通字段不补齐、不重复抽取；真实身份/版本冲突仍提示。当前是开发状态，尚未部署、尚无新增模型分类或发布结果。
 - UI恢复入口新增needs_confirmation+后端cap支持，RED 1失败33通过，GREEN含API共41通过，独立复核PASS。只负责提交平台恢复请求，不在浏览器判定产品身份。Harness实现及完整接线回归进行中。
+
+Task3aa CODE已验证并独立复核PASS。前端单独冻结7a12493526d6022a6091008e42ecbb46f2845d73并构建中；后端从同一现有分支追加。恢复focused20项及完整平台流水线fixture1项通过；最终身份/冲突/旧重试兼容16项通过，最终10项identity适配通过。旧重试兼容专项仅验证持久化身份回执重用，未当作真实发布。首次完整composition成功路径通过，冲突路径暴露空原因，已汇总子判定原因并验证明确AMBIGUOUS_IDENTITY。真实三份snapshot验签后的最终模型上下文41,130字节、11中文Schema候选、全部三个首页完整名称均被提供；没有执行模型或生成业务身份。详见model-routing-code-tests-20260914.json。部署和真实网页恢复仍NOT RUN。

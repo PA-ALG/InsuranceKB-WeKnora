@@ -151,16 +151,12 @@ def test_platform_stages_attach_three_originals_route_and_keep_signed_sources(st
         assert execute(run).state is JobState.SUCCEEDED
     fresh = store.get_run(scope=scope, run_id=run.run_id)
     assert len(fresh.materials) == 3 and fresh.uploads_sealed_at
-    assert {item.source.inferred_material_role for item in fresh.materials} == {
-        "terms",
-        "brochure",
-        "rate_table",
-    }
-    assert len({item.source.product_identity_sha256 for item in fresh.materials}) == 1
+    assert all(item.source is None for item in fresh.materials)
     saved = artifacts.list_artifacts(scope=scope, run_id=run.run_id)
     assert len([item for item in saved if item.artifact_kind == "source_snapshot"]) == 3
     routing = next(item for item in saved if item.artifact_kind == "routing")
-    assert json.loads(routing.payload)["product_name"] == "平安测试（2026）两全保险"
+    assert json.loads(routing.payload)["status"] == "prepared"
+    assert len(json.loads(routing.payload)["schema_candidates"]) == 11
     assert platform.calls == 3
     summary = json.loads(
         next(item for item in saved if item.artifact_kind == "source_processing_summary").payload
@@ -181,15 +177,17 @@ def test_missing_upload_releases_worker_and_deadline_is_terminal(stage_runtime):
     assert platform.calls == 0
 
 
-def test_product_version_conflict_is_typed_terminal_without_model(stage_runtime):
+def test_routing_defers_product_version_judgement_to_identity_model(stage_runtime):
     scope, store, artifacts, platform, execute = stage_runtime
     platform.conflict = True
     run = store.create_run(scope=scope, idempotency_key="conflict", expected_upload_count=3)
     assert execute(run).state is JobState.SUCCEEDED
     assert execute(run).state is JobState.SUCCEEDED
     job = execute(run)
-    assert job.state is JobState.BLOCKED
-    assert "needs_confirmation:PRODUCT_IDENTITY_OR_VERSION_CONFLICT" in job.error_summary
+    assert job.state is JobState.SUCCEEDED
+    assert all(
+        row.source is None for row in store.get_run(scope=scope, run_id=run.run_id).materials
+    )
     assert (
         len(
             artifacts.list_artifacts(

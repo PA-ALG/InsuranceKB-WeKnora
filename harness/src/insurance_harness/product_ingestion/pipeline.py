@@ -113,9 +113,14 @@ def build_product_pipeline(context):
         build_current_corpus,
         build_identity_context,
         hashed,
+        validate_identity_offered_response,
     )
     from insurance_harness.product_ingestion.model_execution import ConfiguredFieldTransport
-    from insurance_harness.product_ingestion.models import FieldOutcomeKind, ProductRunState
+    from insurance_harness.product_ingestion.models import (
+        FieldOutcomeKind,
+        ProductRunState,
+        SealedSourceRef,
+    )
     from insurance_harness.product_ingestion.platform import verify_signed_snapshot
     from insurance_harness.product_ingestion.signing import (
         sign_publish_authorization,
@@ -221,8 +226,12 @@ def build_product_pipeline(context):
                 for page in project_native_pages(source, material_id=knowledge_id)
             )
         )
+        # Read only immutable routing input hints. Sealing source roles after the
+        # first attempt must not alter a replayed model request.
+        route_materials = {row["material_id"]: row for row in route["materials"]}
         source_roles = {
-            row.knowledge_id: row.source.inferred_material_role for row in run.materials
+            row.knowledge_id: route_materials.get(row.material_id, {}).get("material_type")
+            for row in run.materials
         }
         origin_call_id = None
         field_retry = (
@@ -249,12 +258,14 @@ def build_product_pipeline(context):
                 build_identity_context,
                 corpus,
                 pages,
-                product_name=route["product_name"],
-                primary_label=route["route"]["primary_label"],
+                product_name=route.get("product_name"),
+                primary_label=(route.get("route") or {}).get("primary_label"),
                 material_roles=source_roles,
                 allowed_material_roles=roles,
                 allowed_taxonomy_labels=labels,
                 existing_entities=existing.entities,
+                schema_candidates=route.get("schema_candidates", ()),
+                snapshots=snapshots,
             )
             prompt_context["base_identity"] = {
                 "release_id": base["release_id"],
@@ -286,11 +297,17 @@ def build_product_pipeline(context):
                 )
             try:
                 semantic = json_bytes(_json(ConfiguredFieldTransport.decode_response(result.raw)))
+                validate_identity_offered_response(semantic, prompt_context)
+                offered_blocks = {
+                    block["block_ref"]
+                    for material in prompt_context["materials"]
+                    for block in material["blocks"]
+                }
                 proposed = assemble_c_semantic_response(
                     raw=semantic,
                     corpus=corpus,
                     requested_material_ids=tuple(entry.material_id for entry in corpus.entries),
-                    native_pages=pages,
+                    native_pages=tuple(page for page in pages if page.block_ref in offered_blocks),
                     allowed_material_roles=roles,
                     allowed_taxonomy_labels=labels,
                     model_request_sha256=result.execution_receipt.request_sha256,
@@ -343,7 +360,14 @@ def build_product_pipeline(context):
             row for row in resolution.decisions if row.disposition not in {"MATCH", "CREATE"}
         ]
         if rejected:
-            reasons = sorted({reason for row in rejected for reason in row.reason_codes})
+            reasons = sorted(
+                {
+                    reason
+                    for row in rejected
+                    for decision in (row, *row.children)
+                    for reason in decision.reason_codes
+                }
+            ) or ["CONFLICTING_ENTITY_EVIDENCE"]
             raise needs_confirmation_error("PRODUCT_IDENTITY_UNRESOLVED:" + ",".join(reasons))
         refs = tuple(
             sorted(
@@ -359,13 +383,61 @@ def build_product_pipeline(context):
             resolution=resolution,
             selected_decision_refs=refs,
         )
-        if (
-            len(bindings) != 1
-            or _name(bindings[0].display_name) != _name(route["product_name"])
-            or bindings[0].schema_pack_id != route["route"]["schema_pack_id"]
-            or set(bindings[0].source_material_ids) != set(snapshots)
-        ):
+        if len(bindings) != 1 or set(bindings[0].source_material_ids) != set(snapshots):
             raise needs_confirmation_error("FIRST_PAGE_PRODUCT_GROUP_CONFLICT")
+        binding = bindings[0]
+        product_identity = hashlib.sha256(
+            b"product-formal-name.v1\0" + _name(binding.display_name).encode()
+        ).hexdigest()
+        if field_retry:
+            prior_identities = {
+                row.source.product_identity_sha256
+                for row in run.materials
+                if row.source is not None
+            }
+            if len(prior_identities) != 1 or any(row.source is None for row in run.materials):
+                raise needs_confirmation_error("RETRY_SOURCE_IDENTITY_CHANGED")
+            product_identity = next(iter(prior_identities))
+        roles_by_knowledge = {
+            proposal.material_id: proposal.material_role for proposal in proposals.proposals
+        }
+        if field_retry:
+            roles_by_knowledge = {
+                row.knowledge_id: row.source.inferred_material_role for row in run.materials
+            }
+        resolved_route = {
+            "contract": "product-resolved-routing.830.v1",
+            "status": "matched",
+            "product_name": binding.display_name,
+            "product_identity_sha256": product_identity,
+            "route": {"schema_pack_id": binding.schema_pack_id},
+            "materials": [
+                {
+                    "material_id": row.material_id,
+                    "knowledge_id": row.knowledge_id,
+                    "material_type": roles_by_knowledge[row.knowledge_id],
+                }
+                for row in run.materials
+            ],
+        }
+        for item in run.materials:
+            snapshot = snapshots[item.knowledge_id].snapshot
+            receipt = snapshot["receipt"]
+            store.seal_material_source(
+                scope=scope,
+                run_id=run.run_id,
+                material_id=item.material_id,
+                source=SealedSourceRef(
+                    knowledge_id=item.knowledge_id,
+                    source_revision_id=receipt["revision_source_id"],
+                    source_sha256=receipt["file_sha256"],
+                    file_sha256=receipt["file_sha256"],
+                    native_manifest_sha256=snapshot["native_capture_sha256"],
+                    page_count=receipt["page_count"],
+                    inferred_material_role=roles_by_knowledge[item.knowledge_id],
+                    product_identity_sha256=product_identity,
+                ),
+            )
         payload = {
             "corpus": corpus,
             "proposals": proposals,
@@ -376,6 +448,14 @@ def build_product_pipeline(context):
         }
         return StageOutput(
             (
+                artifact(
+                    "resolved_routing",
+                    "product",
+                    json_bytes(resolved_route),
+                    stage.dependency_sha256,
+                    origin=ArtifactOrigin.MODEL if origin_call_id else ArtifactOrigin.RULE,
+                    call_id=origin_call_id,
+                ),
                 artifact(
                     "base_snapshot",
                     "product",
@@ -439,7 +519,10 @@ def build_product_pipeline(context):
             selected_refs=tuple(tuple(row) for row in values["selected_refs"]),
             refresh_fields=tuple(refresh),
         )
-        route = json.loads(read(scope, run.run_id, "routing"))
+        resolved = artifacts.list_artifacts(
+            scope=scope, run_id=run.run_id, artifact_kind="resolved_routing"
+        )
+        route = json.loads(resolved[0].payload if resolved else read(scope, run.run_id, "routing"))
         windows = await asyncio.to_thread(
             build_field_windows,
             request,

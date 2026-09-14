@@ -1,0 +1,195 @@
+{
+  "contract": "g3-model-routing-code-verification.v1",
+  "recorded_at": "2026-09-14T10:06:41.099823+00:00",
+  "status": "PASS",
+  "ui_source": "7a12493526d6022a6091008e42ecbb46f2845d73",
+  "implementation": {
+    "harness/src/insurance_harness/product_ingestion/identity.py": "38335244a383927c9d86c579ae496edd915348332598101b424b997ef3116b62",
+    "harness/src/insurance_harness/product_ingestion/pipeline.py": "ceba9adf375526583165d55c8de2254349144f7bd931ab6ba8c871c0d952f0b4",
+    "harness/src/insurance_harness/product_ingestion/recovery.py": "759b37b07e99ff1b363e9128a3a26878e515ba4f2ee71c89a38ba62d958786b6",
+    "harness/src/insurance_harness/product_ingestion/stages.py": "f9f084c36710e67616f8321b57aff5e38355447368ea32e4287ab7a419565ee8",
+    "harness/src/insurance_harness/product_ingestion/store.py": "71361df6d77b3c3dc546c9816e0513cd6f5b426ea1b0f0a94f6da7009b0bde2c",
+    "harness/tests/product_ingestion/test_identity.py": "ae8a8269aabfead1d003ce7d6f6256d811aee6faf98ca18cb7606efcae59c914",
+    "harness/tests/product_ingestion/test_pipeline_runtime.py": "19f20db74f2ce9e903320b2a0cd3fd6854580f3f29a4ff2a487ad4fd78687c9a",
+    "harness/tests/product_ingestion/test_recovery.py": "ad82d264580691903020c7ea420b980b6c7b4d5140f5fd41504d24939b5a32c6",
+    "harness/tests/product_ingestion/test_stages.py": "0fd53e3509d29145d59c5028c0cbb73e1b4be0b4e2366ece0ddbc6e4ff3950b3"
+  },
+  "logs": {
+    "/private/tmp/g3-task3aa-ui-red.log": "61936c29bcbbe0cdefcfcf574e00093f312bdaad13ffcf4d5584752316718ac6",
+    "/private/tmp/g3-task3aa-ui-green.log": "4bcda62e204922049510a5aabde4846f7207dabd6ca371dbb72010862ccff658",
+    "/private/tmp/g3-task3aa-composition-red.log": "e637889a450c3c8163c11884f2b50210bd0c321f74aabc96390a1693832751c4",
+    "/private/tmp/g3-task3aa-composition-green.log": "29a982afec588c36a90d0cc49d38977f7aacc2b0f9b4d4196b1c0a86f56b3232",
+    "/private/tmp/g3-task3aa-focused-final-green.log": "8a5f479933fa638eb33f2f7e0170c9d8820291e2718358d205835a45859ef462",
+    "/private/tmp/g3-task3aa-recovery-red.log": "56114e460f128b18809815bd79e8294dc96584811a1610fc0998ed7400c986a8",
+    "/private/tmp/g3-task3aa-recovery-focused.log": "e324b830f0eb84e2b1ef630851373c2dcde639aa2409f37ea7007c2f4fbdc63c",
+    "/private/tmp/g3-task3aa-recovery-focused-final.log": "47583a309cb4025e7fb9535265b7032cbdc15aa6b1bc6d42a0969f5f8358e51a",
+    "/private/tmp/g3-task3aa-recovery-pipeline.log": "9f6a95f571b1b7b723c2b48c924d5000200755cf2fd0e55431bff3a9c55efe63"
+  },
+  "test_groups": {
+    "ui_and_api": {
+      "passed": 41
+    },
+    "recovery_focused": {
+      "passed": 20,
+      "deselected": 2
+    },
+    "recovery_production_fixture": {
+      "passed": 1,
+      "seconds": 163.81
+    },
+    "final_identity_compatibility_and_conflict": {
+      "passed": 16,
+      "deselected": 1,
+      "seconds": 50.59
+    },
+    "final_identity_adapter": {
+      "passed": 10,
+      "seconds": 3.93
+    }
+  },
+  "composition_initial": {
+    "success_path_passed": 1,
+    "conflict_test_failed_for_empty_reason": 1,
+    "final_conflict_reason_verified_in_focused": true
+  },
+  "independent_review": "PASS; final identity and pipeline hashes verified, two compatibility findings closed",
+  "actual_input": {
+    "contract": "g3-task3aa-real-input-readonly-check.v1",
+    "identity_source_sha256": "38335244a383927c9d86c579ae496edd915348332598101b424b997ef3116b62",
+    "snapshot_signatures_verified": 3,
+    "input_bytes": 41130,
+    "input_sha256": "07377d1cfbdab07ce41299490e32551f4256437b0180b23105fbbf81ad90c02c",
+    "candidate_schemas": [
+      {
+        "schema_pack_id": "schemapack_medical_insurance",
+        "display_name": "医疗险",
+        "applicable_classifications": [
+          "medical_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_accident_medical_insurance",
+        "display_name": "意外医疗保险",
+        "applicable_classifications": [
+          "accident_medical_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_accident_insurance",
+        "display_name": "意外险",
+        "applicable_classifications": [
+          "accident_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_critical_illness_insurance",
+        "display_name": "重疾险",
+        "applicable_classifications": [
+          "critical_illness_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_term_life_insurance",
+        "display_name": "定期寿险",
+        "applicable_classifications": [
+          "term_life_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_whole_life_insurance",
+        "display_name": "终身寿险",
+        "applicable_classifications": [
+          "whole_life_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_endowment_insurance",
+        "display_name": "两全保险",
+        "applicable_classifications": [
+          "endowment_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_annuity_insurance",
+        "display_name": "年金险",
+        "applicable_classifications": [
+          "annuity_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_nursing_care_insurance",
+        "display_name": "护理保险",
+        "applicable_classifications": [
+          "nursing_care_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_supplementary_pension_insurance",
+        "display_name": "补充养老保险",
+        "applicable_classifications": [
+          "supplementary_pension_insurance"
+        ]
+      },
+      {
+        "schema_pack_id": "schemapack_disability_income_insurance",
+        "display_name": "失能收入损失保险",
+        "applicable_classifications": [
+          "disability_income_insurance"
+        ]
+      }
+    ],
+    "materials": [
+      {
+        "knowledge_id": "0dc97a43-db4a-4a50-98a8-2f649c0356c1",
+        "offered_blocks": 2,
+        "pages": [
+          1
+        ],
+        "offered_characters": 585,
+        "title": "平安盛世金越（尊享版 26）终身寿险（分红型）产品说明书",
+        "complete_first_page_title_offered": true,
+        "locator_count": 11
+      },
+      {
+        "knowledge_id": "52a094ab-13e3-4169-b18c-b471fa05e7f4",
+        "offered_blocks": 6,
+        "pages": [
+          1
+        ],
+        "offered_characters": 1708,
+        "title": "平安盛世金越（尊享版 26）终身寿险（分红型）",
+        "complete_first_page_title_offered": true,
+        "locator_count": 19
+      },
+      {
+        "knowledge_id": "9b511a1e-1b69-42a8-b679-8d9645ca023b",
+        "offered_blocks": 14,
+        "pages": [
+          1
+        ],
+        "offered_characters": 4996,
+        "title": "《平安盛世金越（尊享版26）终身寿险（分红型）》年交费率表",
+        "complete_first_page_title_offered": true,
+        "locator_count": 31
+      }
+    ],
+    "model_calls": 0,
+    "identity_or_candidate_generated": false,
+    "first_page_hints": {
+      "product_name": null,
+      "primary_label": null
+    },
+    "context_instructions": {
+      "classification": "Choose the insurance type from the complete formal product name on page one and the supplied Chinese Catalog labels. Other insurance types mentioned in body text are not this product's classification.",
+      "material_role": "Identify terms, brochure, or rate table from the material's own labels; filenames are only hints.",
+      "grouping": "Group the supplied materials by the evidenced product name and version. Formatting, whitespace, book-title brackets and heading decoration may differ; genuine product or version conflicts must stay unresolved.",
+      "evidence": "Use only the offered locator refs. Name, classification and material-role evidence must come from page one; a later company block supports issuer only."
+    }
+  },
+  "limits": [
+    "Fixture platform/model transports only; not actual provider or publication acceptance.",
+    "Legacy compatibility fixture covers persisted identity retry, not a separate full legacy publication."
+  ],
+  "provider_calls": 0,
+  "runtime_deployment": "NOT RUN"
+}

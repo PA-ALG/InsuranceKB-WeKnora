@@ -156,7 +156,8 @@ def _base_snapshot() -> tuple[dict, object]:
 def _source_snapshot(ordinal: int, *, conflicting: bool = False) -> dict:
     title = "平安冲突（2026）两全保险" if conflicting and ordinal == 1 else TITLE
     role_heading = ("保险条款", "产品说明书", "费率表")[ordinal]
-    text = f"{title}{role_heading}\n{ISSUER}\n产品代码：{PRODUCT_CODE}\n{FILING}\n版本：{VERSION}\n"
+    heading = f"《{title}》年交费率表" if ordinal == 2 else f"{title}{role_heading}"
+    text = f"{heading}\n{ISSUER}\n产品代码：{PRODUCT_CODE}\n{FILING}\n版本：{VERSION}\n"
     raw_text = text.encode()
     file_sha = _sha(f"fixture-pdf-{ordinal}".encode())
     parser_sha = _sha(b"fixture-native-parser-v1")
@@ -417,13 +418,15 @@ class FixtureModel:
             materials.append(
                 {
                     "material_id": material["material_id"],
-                    "material_role": material["first_page_material_role"],
+                    "material_role": ROLES[int(material["material_id"].rsplit("-", 1)[1])],
                     "material_role_evidence_refs": ["material-role"],
                     "entities": [
                         {
                             "entity_ref": "entity",
                             "issuer": ISSUER,
-                            "name": TITLE,
+                            "name": "平安冲突（2026）两全保险"
+                            if "平安冲突" in material["blocks"][0]["text"]
+                            else TITLE,
                             "product_code": PRODUCT_CODE,
                             "version_label": VERSION,
                             "filing_or_registration": {
@@ -439,14 +442,12 @@ class FixtureModel:
                             ],
                             "labels": [
                                 {
-                                    "taxonomy_label": content["first_page_routing"][
-                                        "primary_label"
-                                    ],
+                                    "taxonomy_label": "endowment_insurance",
                                     "confidence": "1.000000",
                                     "evidence_refs": ["classification"],
                                 }
                             ],
-                            "primary_label": content["first_page_routing"]["primary_label"],
+                            "primary_label": "endowment_insurance",
                             "valid_from": None,
                             "valid_through": None,
                         }
@@ -876,7 +877,7 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
 
 
 @pytest.mark.asyncio
-async def test_real_routing_conflict_terminates_needs_confirmation_without_model(tmp_path):
+async def test_real_identity_conflict_terminates_after_one_classification(tmp_path):
     base, base_candidate = _base_snapshot()
     settings = _settings(tmp_path, base_candidate)
     engine = _sqlite_engine(tmp_path / "conflict.db")
@@ -891,9 +892,95 @@ async def test_real_routing_conflict_terminates_needs_confirmation_without_model
     terminal = await _finish(runtime, context, jobs, run.run_id, limit=40)
 
     assert terminal.state is ProductRunState.NEEDS_CONFIRMATION
-    assert terminal.terminal_reason == "PRODUCT_IDENTITY_OR_VERSION_CONFLICT"
-    assert not model.identity_requests and not model.field_requests
+    assert terminal.terminal_reason == "PRODUCT_IDENTITY_UNRESOLVED:AMBIGUOUS_IDENTITY"
+    assert len(model.identity_requests) == 1 and not model.field_requests
     assert platform.activations == 0
+    await runtime.close()
+    await model_client.aclose()
+    engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_legacy_field_retry_preserves_sealed_hash_and_role(tmp_path):
+    from types import SimpleNamespace
+
+    from sqlalchemy import update
+
+    from insurance_harness.product_ingestion.tables import ProductMaterial
+
+    base, base_candidate = _base_snapshot()
+    settings = _settings(tmp_path, base_candidate)
+    engine = _sqlite_engine(tmp_path / "legacy-retry.db")
+    Base.metadata.create_all(engine)
+    session_factory = make_session_factory(engine)
+    jobs = JobStore(session_factory, settings.job_runtime_config())
+    platform, model = FixturePlatform(base), FixtureModel()
+    runtime, context, model_client = await _compose(settings, session_factory, platform, model)
+    run = context.store.create_run(scope=SCOPE, idempotency_key="legacy", expected_upload_count=3)
+    admit_uploads(context.store, SCOPE, run.run_id)
+    for _ in range(12):
+        await _step(runtime, jobs)
+        if context.artifacts.list_artifacts(
+            scope=SCOPE, run_id=run.run_id, artifact_kind="identity"
+        ):
+            break
+    assert len(model.identity_requests) == 1 and not model.field_requests
+    # Old successful routing sealed roles independently of classifier proposals.
+    legacy_hash = "c" * 64
+    with session_factory.begin() as session:
+        session.execute(
+            update(ProductMaterial)
+            .where(ProductMaterial.run_id == run.run_id)
+            .values(product_identity_sha256=legacy_hash)
+        )
+        session.execute(
+            update(ProductMaterial)
+            .where(
+                ProductMaterial.run_id == run.run_id,
+                ProductMaterial.knowledge_id == "knowledge-new-0",
+            )
+            .values(inferred_material_role="brochure")
+        )
+    original = context.store.get_run(scope=SCOPE, run_id=run.run_id)
+    get = context.artifacts.get_artifact
+    legacy_route = {
+        "product_name": TITLE,
+        "product_identity_sha256": legacy_hash,
+        "route": {
+            "primary_label": "endowment_insurance",
+            "schema_pack_id": "schemapack_endowment_insurance",
+        },
+        "materials": [
+            {"material_id": row.material_id, "material_type": row.source.inferred_material_role}
+            for row in original.materials
+        ],
+    }
+
+    def old_artifact(**kwargs):
+        if kwargs["artifact_kind"] == "routing":
+            return SimpleNamespace(payload=_json(legacy_route))
+        return get(**kwargs)
+
+    context.artifacts.get_artifact = old_artifact
+    replay = SimpleNamespace(
+        run_id=run.run_id, retry_of_run_id=run.run_id, materials=original.materials
+    )
+    ports = build_product_pipeline(context)
+    output = await ports.stage_handlers["identity"](
+        SCOPE, replay, SimpleNamespace(dependency_sha256="d" * 64), None
+    )
+    resolved = json.loads(
+        next(row.payload for row in output.drafts if row.artifact_kind == "resolved_routing")
+    )
+    assert resolved["product_identity_sha256"] == legacy_hash
+    assert (
+        next(row for row in resolved["materials"] if row["knowledge_id"] == "knowledge-new-0")[
+            "material_type"
+        ]
+        == "brochure"
+    )
+    assert len(model.identity_requests) == 1 and not model.field_requests
+    assert context.store.get_run(scope=SCOPE, run_id=run.run_id).materials == original.materials
     await runtime.close()
     await model_client.aclose()
     engine.dispose()
