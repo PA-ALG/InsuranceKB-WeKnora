@@ -4,7 +4,7 @@ import hashlib
 
 # ruff: noqa: F811 -- imported pytest fixtures.
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -337,12 +337,11 @@ def test_processing_retry_api_strict_request_and_capability(environment):
 @pytest.mark.parametrize(
     "reason",
     [
-        "SOURCE_PARSE_FAILED:费率.pdf",
-        "SOURCE_PARSE_DEADLINE_EXCEEDED",
+        "NonRetryableJobError: ORIGINAL_UPLOAD_BINDING_CHANGED",
         "needs_confirmation:IDENTITY_CONFLICT",
     ],
 )
-def test_parser_failures_cannot_masquerade_as_snapshot_recovery(stage_runtime, reason):
+def test_identity_and_binding_failures_still_block_source_revalidation(stage_runtime, reason):
     scope, store, _, _, _ = stage_runtime
     origin = failed_capture(stage_runtime)
     with store._session_factory() as session, session.begin():
@@ -627,3 +626,96 @@ async def test_recovery_runs_normal_identity_fields_discovery_and_publication(
         await runtime.close()
         await model_client.aclose()
         engine.dispose()
+
+
+
+def failed_parse_source(stage_runtime, reason):
+    """Real worker failure before source capture; no reparse or model fixture port."""
+    scope, store, _, platform, execute = stage_runtime
+    run = store.create_run(
+        scope=scope, idempotency_key="parse-failure:" + reason, expected_upload_count=3
+    )
+    assert execute(run).state is JobState.SUCCEEDED
+    if reason == "failed":
+        platform.failed = True
+        terminal = execute(run)
+        platform.failed = False
+        expected = "SOURCE_PARSE_FAILED"
+    else:
+        terminal = execute(run, now=lambda: run.source_deadline_at + timedelta(seconds=1))
+        expected = "SOURCE_PARSE_DEADLINE_EXCEEDED"
+    assert terminal.state is JobState.DEAD_LETTER and expected in terminal.error_summary
+    assert platform.calls == 0
+    finish_failed_source(store, scope, run.run_id)
+    return store.get_run(scope=scope, run_id=run.run_id)
+
+
+@pytest.mark.parametrize("reason", ["failed", "deadline"])
+def test_explicit_source_revalidation_recovers_completed_parse(stage_runtime, reason):
+    from insurance_harness.jobs import SpaceScopeError
+
+    scope, store, artifacts, platform, execute = stage_runtime
+    origin = failed_parse_source(stage_runtime, reason)
+    assert origin.terminal_reason == "PRODUCT_STAGE_FAILED:source"
+    assert store.can_retry_processing(scope=scope, run_id=origin.run_id)
+    with pytest.raises(ValueError):
+        store.retry_processing(
+            scope=scope, run_id=origin.run_id, expected_version=origin.version + 1
+        )
+    with pytest.raises(SpaceScopeError):
+        store.retry_processing(
+            scope=scope.model_copy(update={"tenant_id": "foreign"}),
+            run_id=origin.run_id, expected_version=origin.version,
+        )
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    assert child.run_id != origin.run_id and child.retry_of_run_id == origin.run_id
+    assert child.source_deadline_at > child.started_at
+    assert child.run_id == store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    ).run_id
+    assert platform.calls == 0  # Admission itself never reparses or captures.
+    for _ in range(3):
+        assert execute(child).state is JobState.SUCCEEDED
+    assert platform.calls == 3  # Only capture each already completed source once.
+    assert not artifacts.list_stage_calls(scope=scope, run_id=child.run_id)
+    assert store.get_run(scope=scope, run_id=origin.run_id) == origin
+
+
+@pytest.mark.parametrize("current_state", ["failed", "processing", "binding_changed"])
+def test_explicit_source_revalidation_does_not_reparse_unready_sources(
+    stage_runtime, current_state
+):
+    scope, store, artifacts, platform, execute = stage_runtime
+    origin = failed_parse_source(stage_runtime, "failed")
+    assert store.can_retry_processing(scope=scope, run_id=origin.run_id)
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    lookup = platform.lookup_upload
+
+    async def current(scope, run_id, ordinal):
+        value = await lookup(scope, run_id, ordinal)
+        if current_state == "binding_changed":
+            value["knowledge_id"] = "replacement-knowledge"
+        else:
+            value["parse_status"] = current_state
+        return value
+
+    platform.lookup_upload = current
+    assert execute(child).state is JobState.SUCCEEDED
+    failed = execute(child)
+    assert failed.state is JobState.DEAD_LETTER
+    expected = {
+        "failed": "SOURCE_PARSE_FAILED",
+        "processing": "RECOVERY_SOURCE_NOT_COMPLETED",
+        "binding_changed": "ORIGINAL_UPLOAD_BINDING_CHANGED",
+    }[current_state]
+    assert expected in failed.error_summary
+    assert platform.calls == 0
+    assert not artifacts.list_stage_calls(scope=scope, run_id=child.run_id)
+    assert not artifacts.list_artifacts(
+        scope=scope, run_id=child.run_id, artifact_kind="source_snapshot"
+    )
+    assert store.get_run(scope=scope, run_id=origin.run_id) == origin

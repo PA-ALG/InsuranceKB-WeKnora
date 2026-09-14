@@ -2043,6 +2043,11 @@ func (s *knowledgeService) ReparseKnowledge(
 		return nil, err
 	}
 
+	docReaderReuse, err := s.selectG3DocReaderRecovery(ctx, existing, processOverrides)
+	if err != nil {
+		return nil, err
+	}
+
 	// Allocate a fresh span tree attempt up front. Doing this BEFORE
 	// the cleanup + enqueue means: (a) the UI immediately sees a new
 	// attempt with all five stages back to "pending" instead of the
@@ -2240,6 +2245,7 @@ func (s *knowledgeService) ReparseKnowledge(
 			Attempt:                  reparseAttempt,
 			ParseAttempt:             parseAttempt,
 			Revision:                 revisionBinding,
+			DocReaderReuse:           docReaderReuse,
 		}
 
 		langfuse.InjectTracing(ctx, &taskPayload)
@@ -3282,7 +3288,7 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 					err = ErrConceptSourceAuthorityUnavailable830G2
 				} else {
 					id := g3FirstParseIdentity{TenantID: knowledge.TenantID, RawKBID: knowledge.KnowledgeBaseID, KnowledgeID: knowledge.ID, ParseAttempt: payload.Revision.ParseAttempt, SourceSHA256: payload.Revision.FileSHA256}
-					err = s.firstParse.save(id, convertResult, all)
+					err = s.firstParse.save(id, convertResult, all, payload.DocReaderReuse)
 				}
 			}
 		}
@@ -3319,6 +3325,11 @@ func (s *knowledgeService) convert(
 	if payload.URL != "" {
 		docInput["url"] = payload.URL
 	}
+	if payload.DocReaderReuse != nil {
+		docInput["origin_docreader"] = payload.DocReaderReuse
+		docInput["mode"] = "REUSE_VERIFIED_DOCREADER"
+		docInput["chunking"] = "RECOMPUTE_CURRENT_CONFIG"
+	}
 	s.beginStage(ctx, knowledge.ID, types.StageDocReader, docInput)
 	isURL := payload.URL != ""
 	fileType := payload.FileType
@@ -3354,6 +3365,15 @@ func (s *knowledgeService) convert(
 
 	logger.Infof(ctx, "[convert] kb=%s fileType=%s isURL=%v engine=%q rules=%+v",
 		kb.ID, fileType, isURL, parserEngine, eff.ChunkingConfig.ParserEngineRules)
+
+	if payload.DocReaderReuse != nil {
+		result, reuseErr := s.loadG3DocReaderRecovery(ctx, payload, kb, knowledge)
+		if reuseErr != nil {
+			s.failStage(ctx, knowledge.ID, types.StageDocReader, werrors.ErrCodeDocReaderParseFailed, "G3 DocReader reuse invalid", reuseErr)
+			return s.failKnowledge(ctx, knowledge, true, "G3_DOCREADER_REUSE_INVALID: %v", reuseErr)
+		}
+		return result, nil
+	}
 
 	var reader interfaces.DocReader = s.resolveDocReader(ctx, parserEngine, fileType, isURL, mergedOverrides)
 	if reader == nil {

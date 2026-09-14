@@ -34,12 +34,13 @@ type g3FirstParseRange struct {
 	ContentSHA256 string `json:"content_sha256"`
 }
 type g3FirstParseRecord struct {
-	Contract             string                         `json:"contract"`
-	Identity             g3FirstParseIdentity           `json:"identity"`
-	ParserIdentitySHA256 string                         `json:"parser_identity_sha256"`
-	Markdown             string                         `json:"markdown"`
-	Native               *types.NativeStructureArtifact `json:"native"`
-	Chunks               []g3FirstParseRange            `json:"chunks"`
+	OriginDocReader      *types.DocumentDocReaderReuseReference `json:"origin_docreader,omitempty"`
+	Contract             string                                 `json:"contract"`
+	Identity             g3FirstParseIdentity                   `json:"identity"`
+	ParserIdentitySHA256 string                                 `json:"parser_identity_sha256"`
+	Markdown             string                                 `json:"markdown"`
+	Native               *types.NativeStructureArtifact         `json:"native"`
+	Chunks               []g3FirstParseRange                    `json:"chunks"`
 }
 
 // G3FirstParseStore shares only file storage and signing primitives with citation
@@ -82,7 +83,7 @@ func g3FirstParseResult(record *g3FirstParseRecord) *types.ReadResult {
 	return &types.ReadResult{MarkdownContent: record.Markdown, NativeStructure: record.Native}
 }
 func validateG3FirstParse(record *g3FirstParseRecord, id g3FirstParseIdentity) error {
-	if record == nil || record.Contract != g3FirstParseContract || record.Identity != id || len(record.Chunks) == 0 {
+	if record == nil || record.Contract != g3FirstParseContract || record.Identity != id || len(record.Chunks) == 0 || !validG3DocReaderOrigin(record.OriginDocReader, id) {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	if _, err := prepareConceptNativeQuoteIndex830G2(g3FirstParseResult(record), id.SourceSHA256, record.ParserIdentitySHA256); err != nil {
@@ -120,9 +121,12 @@ func (s *conceptSourceReuseStore830G3) readFirstParse(id g3FirstParseIdentity) (
 	if err := validateG3FirstParse(&record, id); err != nil {
 		return nil, err
 	}
+	if err := s.validateDocReaderOrigin(&record); err != nil {
+		return nil, err
+	}
 	return &record, nil
 }
-func (s *G3FirstParseStore) save(id g3FirstParseIdentity, result *types.ReadResult, chunks []types.ParsedChunk) error {
+func (s *G3FirstParseStore) save(id g3FirstParseIdentity, result *types.ReadResult, chunks []types.ParsedChunk, origin ...*types.DocumentDocReaderReuseReference) error {
 	if s == nil || s.reuse == nil || result == nil || result.Error != "" || result.NativeStructure == nil || len(result.ImageRefs) > 0 || result.IsAudio {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
@@ -135,6 +139,13 @@ func (s *G3FirstParseStore) save(id g3FirstParseIdentity, result *types.ReadResu
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	record := g3FirstParseRecord{Contract: g3FirstParseContract, Identity: id, ParserIdentitySHA256: projection.ParserIdentitySHA256, Markdown: result.MarkdownContent, Native: result.NativeStructure, Chunks: []g3FirstParseRange{}}
+	if len(origin) > 1 {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	if len(origin) == 1 && origin[0] != nil {
+		copy := *origin[0]
+		record.OriginDocReader = &copy
+	}
 	seen := map[string]g3FirstParseRange{}
 	for _, chunk := range chunks {
 		if strings.TrimSpace(chunk.Content) == "" {
@@ -152,6 +163,9 @@ func (s *G3FirstParseStore) save(id g3FirstParseIdentity, result *types.ReadResu
 		record.Chunks = append(record.Chunks, r)
 	}
 	if err := validateG3FirstParse(&record, id); err != nil {
+		return err
+	}
+	if err := s.reuse.validateDocReaderOrigin(&record); err != nil {
 		return err
 	}
 	data, err := json.Marshal(record)

@@ -1,3 +1,15 @@
+## Task3ae/af code verification, 2026-09-15
+
+Task3ae repository RED reproduced false recovery eligibility; GREEN: 26 recovery tests PASS (180.09s). Task3af repository RED reproduced the actual extra DocReader call; GREEN: 15 parser/recovery regressions PASS (7.677s), with the external exported fixture not run, plus the explicit no-automatic-retry binding PASS (3.532s). Exact logs and hashes: `/private/tmp/g3-platform-independent-deploy-20260913/task3ae-af-code-verification.json`. Independent frozen-patch review: 0 BLOCKER, 1 BACKLOG: a journal read error is currently treated as recovery inapplicability and can fall back to full reparse; this edge is not described as complete failure-resilience coverage.
+
+The new path uses a NEW ParseAttempt, references immutable original DocReader evidence in the new signed artifact, and performs new chunking under current configuration. It does not claim complete chunk/vector checkpoint reuse or historical raw embedding response custody. Actual historical artifact availability and full worker publication remain NOT RUN. The next joint APP build has a 5400-second bound, reuses partial prior compilation cache without claiming it fully warm, and retains 2 CPU / 4GiB limits and disk reserve checks. Existing database/services are reused; no new source uploads or runtime processing during deployment.
+
+# 2026-09-15 Task3ad build outcome and recovery follow-up
+
+Task3ad CODE remains PASS at 5aa5d05. The actual binary build started at 2026-09-14T15:41:24Z and stopped with BUILD_TIME_BOUND_EXCEEDED at its 2400-second bound; receipt task3ad-app-build-receipt.json is FAILED. Runtime rebase, smoke and deployment were NOT RUN. The live APP remains 297d4db13a55, with existing Harness 8dd22 and UI 7a1249. No business run or provider request occurred during this build. Initial system Python preflight failed before any build due to missing hashlib.file_digest; the actual build used project Python3.12.
+
+The previous fourth acceptance remains FAILED. Read-only follow-up proved source reparse alone cannot reopen its product retry capability, and ordinary full reparse repeats DocReader. Tasks3ae/af prepare explicit source revalidation and immutable DocReader-result reuse using a NEW ParseAttempt. Historical chunk-plan reuse is not claimed. Failed-source call summary incompleteness and lack of embedding raw-response custody remain explicit gaps.
+
 # G3 平台接线进度（2026-09-14）
 
 当前结论：G3 **未完成**。以下代码、部署事实不能替代三份真实原材料的平台独立验收。

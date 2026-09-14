@@ -268,6 +268,15 @@ type ExtractChunkPayload struct {
 }
 
 // DocumentProcessPayload represents the document process task payload
+// DocumentDocReaderReuseReference is selected by the server, never a browser path.
+// Outer payload identity supplies the tenant, RAW KB and knowledge binding.
+type DocumentDocReaderReuseReference struct {
+	OriginParseAttempt      int64  `json:"origin_parse_attempt"`
+	OriginProcessingAttempt int    `json:"origin_processing_attempt"`
+	SourceSHA256            string `json:"source_sha256"`
+	ArtifactSHA256          string `json:"artifact_sha256"`
+}
+
 type DocumentProcessPayload struct {
 	TracingContext
 	RequestId                string   `json:"request_id"`
@@ -297,7 +306,8 @@ type DocumentProcessPayload struct {
 	ParseAttempt int64 `json:"parse_attempt,omitempty"`
 	// Revision is the database parse-attempt binding. It is intentionally
 	// independent of Attempt, which remains tracing-only.
-	Revision *RevisionCommitBinding `json:"revision,omitempty"`
+	Revision       *RevisionCommitBinding           `json:"revision,omitempty"`
+	DocReaderReuse *DocumentDocReaderReuseReference `json:"docreader_reuse,omitempty"`
 }
 
 // FAQImportPayload represents the FAQ import task payload (including dry run mode)

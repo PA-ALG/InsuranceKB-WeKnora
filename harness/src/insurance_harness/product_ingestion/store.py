@@ -1251,8 +1251,6 @@ class ProductIngestionStore:
             or any(
                 code in source.error_summary
                 for code in (
-                    "SOURCE_PARSE_FAILED",
-                    "SOURCE_PARSE_DEADLINE",
                     "ORIGINAL_UPLOAD_BINDING_CHANGED",
                     "needs_confirmation:",
                 )
