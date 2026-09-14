@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable, Mapping
 
 from sqlalchemy import select
@@ -31,6 +32,11 @@ from insurance_harness.product_ingestion.artifact_tables import (
     ProductStageModelCall,
 )
 from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.recovery import (
+    RecordedIdentityRecoveryPlan,
+    material_references,
+    recorded_identity_reference,
+)
 from insurance_harness.product_ingestion.store import ProductIngestionStore
 
 SessionFactory = Callable[[], Session]
@@ -87,6 +93,37 @@ class ProductArtifactStore:
                             raise ValueError(
                                 "model artifact requires a same-run recorded raw model call"
                             )
+                    elif draft.origin is ArtifactOrigin.MODEL_REPLAY:
+                        call = self._identity_replay_call(session, scope, run_id)
+                        if stage_key != "identity" or draft.origin_call_id != call.call_id:
+                            raise ValueError("model replay artifact does not match recovery call")
+                        marker = session.scalar(
+                            select(ProductArtifact).where(
+                                ProductArtifact.run_id == run_id,
+                                ProductArtifact.artifact_kind == "model_replay_receipt",
+                                ProductArtifact.artifact_key == call.call_id,
+                            )
+                        )
+                        if (
+                            draft.artifact_kind == "model_replay_receipt"
+                            or marker is None
+                            or marker.origin != ArtifactOrigin.MODEL_REPLAY.value
+                            or marker.origin_call_id != call.call_id
+                            or hashlib.sha256(marker.payload).hexdigest() != marker.payload_sha256
+                        ):
+                            raise ValueError(
+                                "model replay requires its durable verification checkpoint"
+                            )
+                        from insurance_harness.product_ingestion.tables import ProductStage
+
+                        stage = session.scalar(
+                            select(ProductStage).where(
+                                ProductStage.run_id == run_id,
+                                ProductStage.stage_key == stage_key,
+                            )
+                        )
+                        if stage is None or stage.dependency_sha256 != draft.dependency_sha256:
+                            raise ValueError("model replay artifact dependency changed")
                     existing = session.execute(
                         select(ProductArtifact).where(
                             ProductArtifact.run_id == run_id,
@@ -411,13 +448,142 @@ class ProductArtifactStore:
             for row in rows:
                 for key, value in row.usage.items():
                     usage[key] = usage.get(key, 0) + int(value)
+            replay_ids = set(
+                session.scalars(
+                    select(ProductArtifact.origin_call_id).where(
+                        ProductArtifact.run_id == run_id,
+                        ProductArtifact.space_id == scope.space_id,
+                        ProductArtifact.origin == ArtifactOrigin.MODEL_REPLAY.value,
+                    )
+                ).all()
+            )
+            reused_usage = {}
+            if replay_ids:
+                replay_call = self._identity_replay_call(session, scope, run_id)
+                if replay_ids != {replay_call.call_id}:
+                    raise ValueError("recorded identity replay provenance changed")
+                reused_usage = dict(replay_call.usage)
             return StageCallMetrics(
                 model_call_count=len(rows),
+                reused_model_call_count=len(replay_ids),
+                reused_usage=reused_usage,
                 usage=usage,
                 unsettled_call_count=sum(
                     row.state != StageCallState.RECORDED.value for row in rows
                 ),
             )
+
+    def _identity_replay_call(self, session, scope, run_id):
+        plan = self._products.processing_recovery_plan(scope=scope, run_id=run_id)
+        if not isinstance(plan, RecordedIdentityRecoveryPlan):
+            raise ValueError("recorded identity recovery plan required")
+        origin = self._products._run_snapshot(
+            session, self._products._run(session, scope, plan.origin_run_id), scope
+        )
+        if (
+            origin.version != plan.origin_version
+            or material_references(origin) != plan.materials
+            or self._products._recovery_source_refs(session, scope, origin) != plan.source_snapshots
+        ):
+            raise ValueError("recorded identity origin source binding changed")
+        call = self._call(session, scope, plan.identity_call.call_id)
+        if (
+            call.run_id != plan.origin_run_id
+            or recorded_identity_reference(call) != plan.identity_call
+        ):
+            raise ValueError("recorded identity origin changed")
+        run = self._products._run_snapshot(
+            session, self._products._run(session, scope, run_id), scope
+        )
+        if self._products._recovery_source_refs(session, scope, run) != plan.source_snapshots:
+            raise ValueError("recorded identity sources changed")
+        return call
+
+    def get_identity_replay_call(self, *, scope, run_id, job_id, generation, dependency_sha256):
+        with self._session_factory() as session:
+            run = self._products._run(session, scope, run_id)
+            self._products._ensure_unfinished(session, run)
+            job = self._products._active_job(session, scope, job_id, generation)
+            self._require_job_binding(job.payload, run_id=run_id, stage_key="identity")
+            from insurance_harness.product_ingestion.tables import ProductStage
+
+            stage = session.scalar(
+                select(ProductStage).where(
+                    ProductStage.run_id == run_id,
+                    ProductStage.stage_key == "identity",
+                )
+            )
+            if stage is None or stage.dependency_sha256 != dependency_sha256:
+                raise ValueError("recorded identity recovery dependency changed")
+            return self._call_snapshot(self._identity_replay_call(session, scope, run_id))
+
+    def record_identity_replay(self, *, scope, run_id, job_id, generation, dependency_sha256):
+        """Durable replay checkpoint fenced by the actual consuming job, not a dispatch row."""
+        from insurance_harness.product_ingestion.tables import ProductStage
+
+        with self._session_factory() as session, session.begin():
+            run = self._products._run(session, scope, run_id)
+            self._products._ensure_unfinished(session, run)
+            job = self._products._active_job(session, scope, job_id, generation)
+            self._require_job_binding(job.payload, run_id=run_id, stage_key="identity")
+            stage = session.scalar(
+                select(ProductStage).where(
+                    ProductStage.run_id == run_id,
+                    ProductStage.stage_key == "identity",
+                )
+            )
+            if stage is None or stage.dependency_sha256 != dependency_sha256:
+                raise ValueError("recorded identity replay dependency changed")
+            call = self._identity_replay_call(session, scope, run_id)
+            plan = self._products.processing_recovery_plan(scope=scope, run_id=run_id)
+            payload = json.dumps(
+                {
+                    "contract": "product-model-replay-receipt.v1",
+                    "run_id": run_id,
+                    "origin_run_id": call.run_id,
+                    "origin_call_id": call.call_id,
+                    "recovery_plan_sha256": plan.digest(),
+                    "identity_call": plan.identity_call.model_dump(mode="json"),
+                    "new_dispatch_count": 0,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+            draft = ArtifactDraft(
+                artifact_kind="model_replay_receipt",
+                artifact_key=call.call_id,
+                contract_name="product-model-replay-receipt.v1",
+                contract_version="1",
+                dependency_sha256=dependency_sha256,
+                payload=payload,
+                payload_sha256=hashlib.sha256(payload).hexdigest(),
+                origin=ArtifactOrigin.MODEL_REPLAY,
+                origin_call_id=call.call_id,
+            )
+            existing = session.scalar(
+                select(ProductArtifact).where(
+                    ProductArtifact.run_id == run_id,
+                    ProductArtifact.artifact_kind == draft.artifact_kind,
+                    ProductArtifact.artifact_key == draft.artifact_key,
+                )
+            )
+            if existing is not None:
+                if not self._artifact_matches(existing, "identity", draft):
+                    raise ValueError("recorded identity replay checkpoint changed")
+                return self._artifact_snapshot(existing)
+            row = ProductArtifact(
+                id=_uuid(),
+                run_id=run_id,
+                space_id=scope.space_id,
+                stage_key="identity",
+                **draft.model_dump(mode="python"),
+                producer_job_id=job_id,
+                producer_generation=generation,
+                created_at=database_now(session),
+            )
+            session.add(row)
+            session.flush()
+            return self._artifact_snapshot(row)
 
     def _call(
         self,

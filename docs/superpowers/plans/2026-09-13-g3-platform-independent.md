@@ -241,3 +241,22 @@ RED/GREEN 覆盖三份实际首页同时识别、原文证据校验、冲突拒�
 Task3aa 用户最新修订（2026-09-14）：不用完全匹配标题，使用 Gemini + Schema 候选判断。前述 regex 格式适配方案取消，尚无该实现写入。复用现有 identity 阶段一次持久化 Gemini 分类，不另添 routing 模型调用。routing 仅准备有真实首页定位的来源与候选，不再以整行标题规则阻断；identity 接收非权威可选提示、候选分类及材料原文，由既有响应证据校验与 resolver 决定产品/Schema/材料角色。取消与 regex 结果完全相等的门槛；保留单产品、全部材料归属、真实身份及版本冲突。成功后封存 material_source 与独立 resolved_routing 资产；field_plan 使用该结果，兼容旧成功任务的 routing 资产。已有原始模型响应/调用日志/原文证据持久化机制复用，零自动重试。
 
 新增唯一写域 g3_extraction_finish：pipeline.py、identity.py、必要 routing.py 及对应 identity/pipeline/routing 测试；待 g3_service_inventory 完成 stages.py 来源恢复修改并明确移交后，才修改其中 routing 函数。不改现有 IDENTITY_PROMPT 字节和模型模板配置；既有提示已支持首页优先与候选分类。首页输入使用可回查定位，限制于当前产品材料，不发送历史全库正文。RED 包含《完整产品名》年交费率表无需regex命中即可到达且只执行一次模型分类、分类候选约束、证据校验、真实冲突终态、模型原响应复用、后续字段计划使用已解析模型身份。root 独立检查阶段接线，g3_docker_connection 审核最终冻结实现。其余恢复/API/UI 边界保持。
+
+### 2026-09-14 Task3ab：同产品联合证据与已记录分类响应恢复
+
+Task3aa 已部署（APP沿用0c22，UI7a1249，Harness0931e2）。网页恢复590980a5-803a-5d3f-bee9-d910a32187fd于10:15:45.987385Z开始，10:16:35.274146Z明确待确认。来源复用14次/新增0，Gemini实际1次，三份名称/终身寿险/材料角色均正确，JSON与offered引用校验PASS。原文及Head9未变。首个错误是identity refs冗余包含classification用途；内存诊断去除此冗余后，条款备案值引用了名称块，真正备案行已在同次offered输入中。进一步代码核验：v2仅完整合格条款向说明书关联，不能联合说明书公司、条款代码/备案及费率表名称；空值不能冒充真实冲突。本轮失败保持原样。
+
+适用既有 G3-AUTO-1/2/3/4/6 与用户按产品组处理、缺失不阻断普通字段的明确授权。目标是平台自己完成可靠的三材料联合归并，并复用已保存分类响应。不会由Codex整理实际候选或执行业务接续脚本。
+
+接口/写域冻结：
+- g3_extraction_finish 唯一负责 Python semantic identity adapter（product_ingestion/identity.py或同目录小型identity_adapter.py）及 knowledge_compiler 中新增v3联合锚点分支、必要batch resolver/compiler/对应tests。分类/name/role均沿用已记录模型值；适配保留raw，删除多余的跨用途引用关系，不改原证据用途。缺少正确链接的已声明身份值只能在同材料、本次确实offered的原始定位中作规范化后精确包含验证，存在合格的原文定位时派生验证证据并记录修复原因；同值多处出现按稳定页码/原文位置选择，不把重复出现当冲突；找不到/存在不同取值冲突则不展示该值，不猜值、不复制其他文件的原文。不得把代码当备案号。
+- 新 resolver 版本使用 batch-entity-resolution-compiler.830.g3.v3，v1/v2算法及输出保持。按各材料已验证的完整产品名称、版本与Schema形成唯一组；仅合并有效、互补的非空身份锚点，任何不同非空值/同名多版本/多目标仍明确拒绝。条款实际提供代码和备案，说明书实际提供公司时允许联合；rate-table可归入相同组。原MaterialProposal、原raw及各来源空值不改，统一锚点只进入派生decision；所有支持证据保持原material/revision/page/locator。不得引入伪聚合文件。
+- g3_admission_finish 唯一负责 Go types 中对应v3重算及binding验证和固定向量测试。复用既有协议形状，保持旧v1/v2向量及历史Release验证不变；新分支必须与Python确定性一致。不得改11类Schema/Profile、权限、签名或Active Head协议。
+- g3_service_inventory 唯一负责 product_ingestion recovery/store/artifacts/model_execution及必要models/artifact_models/tests；stages.py仅sources段。为已封存source、identity返回无效且恰有一个完整recorded分类响应、未进入fields的终态增加正式恢复模式，复用原source和原模型记录。原V1/V2恢复wire不变，新增显式V3计划绑定origin_call_id/raw/request/input/policy/source摘要。当前重建输入、模型配置、原来源或base变化时明确失效，不偷偷新发调用。已有原始响应、policy/execution receipt继续可追溯；模型复用统计和本次新增调用分开。不得伪造同run dispatch记录。原终态不可变，重复按钮幂等，仍用现有retry-processing API与server capability，无迁移、无新增服务。
+- root 唯一负责 pipeline.py机械集成上述已冻结端口、必要API输出字段、计划/证据/部署。各owner不得并发编辑该文件；跨域接口先由root协调。g3_docker_connection在实现冻结后独立只读复核。
+
+验收/STOP：先以真实响应派生的固定fixture RED，覆盖首个错误和后续全部门，不能只修一层就上传新产品。验证三来源互补成功、真实冲突拒绝、必要支持来源变化失效、全部值可回查原文件、Python/Go固定向量一致、旧v1/v2重算不变、记录分类响应复用0新分类调用、真正worker从网页恢复可继续到编译/发布。fixture不是实际验收；所有代码及必要APP/Harness镜像部署后冻结，从网页恢复，运行中不改代码或临时续接。普通字段不重复补抽。之后仍需全新产品三原件完整平台验收。用户未要求新环境，继续原18295/DB/队列/DocReader；UI若无改动直接复用7a1249。
+
+Task3ab接口确认：适配入口为adapt_identity_response(raw, context)，输出semantic_raw与audit；原raw由既有call保存，audit以identity_adaptation关联原call。首页约束继续用于名称、分类、材料角色；公司辅助块若本已offered，也可验证同文件产品代码、版本/备案，不再额外要求这些锚点都在首页。不得增加模型输入或改现有提示字节；稳定位置顺序使用页号、原blocks顺序和locator顺序。已记录恢复入口为replay_stage_call，显式MODEL_REPLAY来源，先以真实job lease保存model_replay_receipt，之后适配失败也能统计复用；input/request/model policy/prompt/source/base漂移拒绝，不重新调用。API独立输出reused_model_call_count/reused_usage，本次usage不累加历史。root新增test_joint_identity_pipeline.py负责互补新产品全worker验证；g3_service_inventory负责自己文件内的已记录分类恢复全worker验证。
+
+root必要API透传写域补充：internal/application/service/product_ingestion_bridge.go及_test.go。Go现有白名单DTO会丢弃新增复用统计，增加两个明确数字字段及HTTP往返RED/GREEN；不输出原响应或调用凭据。UI继续沿用已部署入口，不为本次统计重新构建。

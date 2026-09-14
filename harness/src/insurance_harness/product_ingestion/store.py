@@ -50,10 +50,13 @@ from insurance_harness.product_ingestion.recovery import (
     RECOVERY_KIND,
     RECOVERY_PREFIX,
     RECOVERY_V2_PREFIX,
+    RECOVERY_V3_PREFIX,
     ProcessingRecoveryPlan,
+    RecordedIdentityRecoveryPlan,
     SealedSourceRecoveryPlan,
     SourceSnapshotReference,
     material_references,
+    recorded_identity_reference,
 )
 from insurance_harness.product_ingestion.tables import (
     ProductFieldAttempt,
@@ -1190,8 +1193,11 @@ class ProductIngestionStore:
             run.state is ProductRunState.NEEDS_CONFIRMATION
             and run.terminal_reason == "FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE"
         )
+        identity_retry = run.state is ProductRunState.NEEDS_CONFIRMATION and (
+            run.terminal_reason or ""
+        ).startswith("IDENTITY_RESPONSE_INVALID:")
         if (
-            not title_retry
+            not (title_retry or identity_retry)
             and (
                 run.state is not ProductRunState.FAILED
                 or run.terminal_reason != "PRODUCT_STAGE_FAILED:source"
@@ -1210,10 +1216,24 @@ class ProductIngestionStore:
             .where(ProductStage.run_id == row.id, ProductStage.space_id == scope.space_id)
         ).all()
         expected_stages = {"uploads", "source", "routing"} if title_retry else {"uploads", "source"}
+        if identity_retry:
+            expected_stages = {"uploads", "source", "routing", "identity"}
         if {stage.stage_key for stage in stages} != expected_stages:
             return False
         source = next(stage for stage in stages if stage.stage_key == "source")
-        if title_retry:
+        if identity_retry:
+            by_stage = {stage.stage_key: stage for stage in stages}
+            if (
+                source.state != "succeeded"
+                or by_stage["routing"].state != "succeeded"
+                or by_stage["identity"].state != "blocked"
+                or "needs_confirmation:IDENTITY_RESPONSE_INVALID:"
+                not in (by_stage["identity"].error_summary or "")
+                or self._recovery_source_refs(session, scope, run) is None
+                or self._recorded_identity_ref(session, scope, run) is None
+            ):
+                return False
+        elif title_retry:
             routing = next(stage for stage in stages if stage.stage_key == "routing")
             if (
                 source.state != "succeeded"
@@ -1240,9 +1260,26 @@ class ProductIngestionStore:
         ):
             return False
         for table in (ProductStageModelCall, ProductWindow, ProductFieldAttempt):
+            if identity_retry and table is ProductStageModelCall:
+                continue
             if session.scalar(select(table.id).where(table.run_id == row.id).limit(1)):
                 return False
         return True
+
+    @staticmethod
+    def _recorded_identity_ref(session, scope, run):
+        calls = session.scalars(
+            select(ProductStageModelCall).where(
+                ProductStageModelCall.run_id == run.run_id,
+                ProductStageModelCall.space_id == scope.space_id,
+            )
+        ).all()
+        if len(calls) != 1:
+            return None
+        try:
+            return recorded_identity_reference(calls[0])
+        except (ValueError, TypeError):
+            return None
 
     @staticmethod
     def _recovery_source_refs(session, scope, run):
@@ -1277,7 +1314,8 @@ class ProductIngestionStore:
         with self._session_factory() as session:
             row = self._run(session, scope, run_id)
             v2 = row.idempotency_key.startswith(RECOVERY_V2_PREFIX)
-            if not v2 and not row.idempotency_key.startswith(RECOVERY_PREFIX):
+            v3 = row.idempotency_key.startswith(RECOVERY_V3_PREFIX)
+            if not (v2 or v3) and not row.idempotency_key.startswith(RECOVERY_PREFIX):
                 return None
             saved = session.scalar(
                 select(ProductArtifact).where(
@@ -1289,8 +1327,14 @@ class ProductIngestionStore:
             )
             if saved is None or hashlib.sha256(saved.payload).hexdigest() != saved.payload_sha256:
                 raise ValueError("processing recovery plan unavailable")
-            plan_type = SealedSourceRecoveryPlan if v2 else ProcessingRecoveryPlan
-            prefix = RECOVERY_V2_PREFIX if v2 else RECOVERY_PREFIX
+            plan_type = (
+                RecordedIdentityRecoveryPlan
+                if v3
+                else SealedSourceRecoveryPlan
+                if v2
+                else ProcessingRecoveryPlan
+            )
+            prefix = RECOVERY_V3_PREFIX if v3 else RECOVERY_V2_PREFIX if v2 else RECOVERY_PREFIX
             plan = plan_type.model_validate_json(saved.payload)
             run = self._run_snapshot(session, row, scope)
             if (
@@ -1299,7 +1343,7 @@ class ProductIngestionStore:
                 or row.idempotency_key != prefix + plan.digest()
                 or plan.materials != material_references(run)
                 or (
-                    v2
+                    (v2 or v3)
                     and tuple(r.knowledge_id for r in plan.source_snapshots)
                     != tuple(m.knowledge_id for m in plan.materials)
                 )
@@ -1325,12 +1369,23 @@ class ProductIngestionStore:
                 seen.add(upload_origin.id)
             origin_run = self._run_snapshot(session, origin, scope)
             title_retry = origin_run.state is ProductRunState.NEEDS_CONFIRMATION
-            plan_type = SealedSourceRecoveryPlan if title_retry else ProcessingRecoveryPlan
+            identity_retry = (origin_run.terminal_reason or "").startswith(
+                "IDENTITY_RESPONSE_INVALID:"
+            )
+            plan_type = (
+                RecordedIdentityRecoveryPlan
+                if identity_retry
+                else SealedSourceRecoveryPlan
+                if title_retry
+                else ProcessingRecoveryPlan
+            )
             extra = (
                 {"source_snapshots": self._recovery_source_refs(session, scope, origin_run)}
                 if title_retry
                 else {}
             )
+            if identity_retry:
+                extra["identity_call"] = self._recorded_identity_ref(session, scope, origin_run)
             plan = plan_type(
                 scope=scope,
                 origin_run_id=run_id,
@@ -1339,7 +1394,14 @@ class ProductIngestionStore:
                 materials=material_references(origin_run),
                 **extra,
             )
-            identity = (RECOVERY_V2_PREFIX if title_retry else RECOVERY_PREFIX) + plan.digest()
+            prefix = (
+                RECOVERY_V3_PREFIX
+                if identity_retry
+                else RECOVERY_V2_PREFIX
+                if title_retry
+                else RECOVERY_PREFIX
+            )
+            identity = prefix + plan.digest()
             existing = session.scalar(
                 select(ProductRun).where(
                     ProductRun.tenant_id == scope.tenant_id,
@@ -1425,7 +1487,11 @@ class ProductIngestionStore:
                             "artifact_kind": RECOVERY_KIND,
                             "artifact_key": "product",
                             "contract_name": plan.contract,
-                            "contract_version": "2" if title_retry else "1",
+                            "contract_version": "3"
+                            if identity_retry
+                            else "2"
+                            if title_retry
+                            else "1",
                             "dependency_sha256": plan.digest(),
                             "payload": plan.encoded(),
                             "payload_sha256": plan.digest(),

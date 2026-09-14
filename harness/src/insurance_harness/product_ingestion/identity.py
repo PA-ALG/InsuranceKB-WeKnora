@@ -148,8 +148,8 @@ def validate_identity_offered_response(raw: bytes, context: dict) -> None:
             page = refs.get(evidence.locator_ref)
             if page is None:
                 raise ValueError("identity evidence outside offered source")
-            if page != 1 and evidence.purpose != "issuer":
-                raise ValueError("later identity source supports issuer only")
+            if page != 1 and evidence.purpose not in {"issuer", "product_code", "version"}:
+                raise ValueError("identity title classification and role require first page")
 
 
 def build_identity_context(

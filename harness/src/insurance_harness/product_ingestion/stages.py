@@ -197,7 +197,10 @@ def register_source_stages(
         if now() >= run.source_deadline_at:
             raise NonRetryableJobError("SOURCE_PARSE_DEADLINE_EXCEEDED")
         prior = {}
-        reuse_sealed = recovery is not None and recovery.mode == "REUSE_SEALED_SOURCES"
+        reuse_sealed = recovery is not None and recovery.mode in {
+            "REUSE_SEALED_SOURCES",
+            "REPLAY_RECORDED_IDENTITY",
+        }
         if run.retry_of_run_id and (recovery is None or reuse_sealed):
             prior = {
                 row.artifact_key: row

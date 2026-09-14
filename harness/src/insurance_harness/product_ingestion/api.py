@@ -150,6 +150,8 @@ def install_product_api(
             + stage_metrics.model_call_count
         )
         payload["semantic_model_call_count"] = payload["model_call_count"]
+        payload["reused_model_call_count"] = stage_metrics.reused_model_call_count
+        payload["reused_usage"] = stage_metrics.reused_usage
         payload["source_model_call_count"] = None
         payload["model_call_count_complete"] = False
         summaries = artifacts.list_artifacts(

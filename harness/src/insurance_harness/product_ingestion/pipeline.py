@@ -115,6 +115,7 @@ def build_product_pipeline(context):
         hashed,
         validate_identity_offered_response,
     )
+    from insurance_harness.product_ingestion.identity_adapter import adapt_identity_response
     from insurance_harness.product_ingestion.model_execution import ConfiguredFieldTransport
     from insurance_harness.product_ingestion.models import (
         FieldOutcomeKind,
@@ -234,10 +235,10 @@ def build_product_pipeline(context):
             for row in run.materials
         }
         origin_call_id = None
-        field_retry = (
-            run.retry_of_run_id
-            and store.processing_recovery_plan(scope=scope, run_id=run.run_id) is None
-        )
+        model_origin = ArtifactOrigin.RULE
+        adaptation_audit = None
+        recovery_plan = store.processing_recovery_plan(scope=scope, run_id=run.run_id)
+        field_retry = run.retry_of_run_id and recovery_plan is None
         if field_retry:
             previous = json.loads(read(scope, run.retry_of_run_id, "identity"))
             if resolver.BatchCorpusV1.model_validate(previous["corpus"]) != corpus:
@@ -273,19 +274,32 @@ def build_product_pipeline(context):
                 "snapshot_sha256": base["snapshot_sha256"],
             }
             content = json_bytes(prompt_context)
-            result = await service.model_executor.execute_stage_call(
-                store=artifacts,
-                scope=scope,
-                run_id=run.run_id,
-                job=job,
-                stage_key="identity",
-                operation_key="current-product-identity",
-                dependency_sha256=stage.dependency_sha256,
-                input_sha256=hashlib.sha256(content).hexdigest(),
-                content=content,
-                prompt=IDENTITY_PROMPT,
-                template_id=identity_templates[scope.space_id],
+            replay_identity = (
+                recovery_plan is not None and recovery_plan.mode == "REPLAY_RECORDED_IDENTITY"
             )
+            execute_identity = (
+                service.model_executor.replay_stage_call
+                if replay_identity
+                else service.model_executor.execute_stage_call
+            )
+            try:
+                result = await execute_identity(
+                    store=artifacts,
+                    scope=scope,
+                    run_id=run.run_id,
+                    job=job,
+                    stage_key="identity",
+                    operation_key="current-product-identity",
+                    dependency_sha256=stage.dependency_sha256,
+                    input_sha256=hashlib.sha256(content).hexdigest(),
+                    content=content,
+                    prompt=IDENTITY_PROMPT,
+                    template_id=identity_templates[scope.space_id],
+                )
+            except ValueError as error:
+                if replay_identity:
+                    raise needs_confirmation_error("RECORDED_IDENTITY_REPLAY_INVALID") from error
+                raise
             if (
                 result.state != "recorded"
                 or result.raw is None
@@ -298,6 +312,9 @@ def build_product_pipeline(context):
             try:
                 semantic = json_bytes(_json(ConfiguredFieldTransport.decode_response(result.raw)))
                 validate_identity_offered_response(semantic, prompt_context)
+                adaptation = adapt_identity_response(semantic, prompt_context)
+                semantic = adaptation.semantic_raw
+                adaptation_audit = adaptation.audit
                 offered_blocks = {
                     block["block_ref"]
                     for material in prompt_context["materials"]
@@ -347,6 +364,7 @@ def build_product_pipeline(context):
                     "IDENTITY_RESPONSE_INVALID:" + type(error).__name__
                 ) from error
             origin_call_id = result.call_id
+            model_origin = ArtifactOrigin.MODEL_REPLAY if replay_identity else ArtifactOrigin.MODEL
         resolution = await asyncio.to_thread(
             resolver.resolve_batch,
             catalog=context.catalog,
@@ -354,7 +372,11 @@ def build_product_pipeline(context):
             proposals=proposals,
             existing_entities=existing,
             policy=policy,
-            compiler_version=resolver.COMPILER_VERSION_V2,
+            compiler_version=(
+                previous["resolution"]["compiler_version"]
+                if field_retry
+                else resolver.COMPILER_VERSION_V3
+            ),
         )
         rejected = [
             row for row in resolution.decisions if row.disposition not in {"MATCH", "CREATE"}
@@ -453,7 +475,7 @@ def build_product_pipeline(context):
                     "product",
                     json_bytes(resolved_route),
                     stage.dependency_sha256,
-                    origin=ArtifactOrigin.MODEL if origin_call_id else ArtifactOrigin.RULE,
+                    origin=model_origin,
                     call_id=origin_call_id,
                 ),
                 artifact(
@@ -468,9 +490,23 @@ def build_product_pipeline(context):
                     "product",
                     json_bytes(payload),
                     stage.dependency_sha256,
-                    origin=ArtifactOrigin.MODEL if origin_call_id else ArtifactOrigin.RULE,
+                    origin=model_origin,
                     call_id=origin_call_id,
                 ),
+            )
+            + (
+                (
+                    artifact(
+                        "identity_adaptation",
+                        "product",
+                        json_bytes(adaptation_audit),
+                        stage.dependency_sha256,
+                        origin=model_origin,
+                        call_id=origin_call_id,
+                    ),
+                )
+                if adaptation_audit is not None
+                else ()
             )
         )
 

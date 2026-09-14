@@ -147,7 +147,7 @@ def test_identity_prompt_does_not_require_regex_hints(snapshot):
     assert context["materials"][0]["blocks"][0]["evidence_locator_refs"]
 
 
-@pytest.mark.parametrize("bad", ["foreign locator", "later title", "later product code"])
+@pytest.mark.parametrize("bad", ["foreign locator", "later title", "later classification"])
 def test_identity_response_cannot_expand_offered_evidence(bad):
     ref = "loc_" + "a" * 64
     context = {
@@ -163,7 +163,7 @@ def test_identity_response_cannot_expand_offered_evidence(bad):
             }
         ]
     }
-    purpose = "product_code" if bad == "later product code" else "name"
+    purpose = "classification" if bad == "later classification" else "name"
     response = {
         "contract": "g3-batch-resolution-semantic-references.local.v1",
         "materials": [
@@ -184,7 +184,7 @@ def test_identity_response_cannot_expand_offered_evidence(bad):
             }
         ],
     }
-    with pytest.raises(ValueError, match="outside offered|issuer only"):
+    with pytest.raises(ValueError, match="outside offered|require first page"):
         module().validate_identity_offered_response(json.dumps(response).encode(), context)
 
 

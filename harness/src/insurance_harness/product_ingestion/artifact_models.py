@@ -15,6 +15,7 @@ class _FrozenModel(BaseModel):
 
 class ArtifactOrigin(StrEnum):
     MODEL = "model"
+    MODEL_REPLAY = "model_replay"
     RULE = "rule"
     PLATFORM_SOURCE = "platform_source"
 
@@ -55,9 +56,15 @@ class ArtifactDraft(_FrozenModel):
             raise ValueError("artifact identity must not contain NUL")
         if hashlib.sha256(self.payload).hexdigest() != self.payload_sha256:
             raise ValueError("payload does not match payload_sha256")
-        if self.origin is ArtifactOrigin.MODEL and self.origin_call_id is None:
+        if (
+            self.origin in {ArtifactOrigin.MODEL, ArtifactOrigin.MODEL_REPLAY}
+            and self.origin_call_id is None
+        ):
             raise ValueError("model artifact requires origin_call_id")
-        if self.origin is not ArtifactOrigin.MODEL and self.origin_call_id is not None:
+        if (
+            self.origin not in {ArtifactOrigin.MODEL, ArtifactOrigin.MODEL_REPLAY}
+            and self.origin_call_id is not None
+        ):
             raise ValueError("non-model artifact cannot claim an origin_call_id")
         return self
 
@@ -112,5 +119,7 @@ class StageCallReservation(_FrozenModel):
 
 class StageCallMetrics(_FrozenModel):
     model_call_count: int = Field(ge=0)
+    reused_model_call_count: int = Field(default=0, ge=0)
+    reused_usage: dict[str, int] = Field(default_factory=dict)
     unsettled_call_count: int = Field(default=0, ge=0)
     usage: dict[str, int]

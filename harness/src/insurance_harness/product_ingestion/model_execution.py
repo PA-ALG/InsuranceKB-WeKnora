@@ -63,9 +63,7 @@ class PreparedModelRequest:
 class ModelExecutionReceipt(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
-    authority_kind: Literal["configured_product_model_policy"] = (
-        "configured_product_model_policy"
-    )
+    authority_kind: Literal["configured_product_model_policy"] = "configured_product_model_policy"
     call_id: str
     run_id: str
     stage_key: str
@@ -253,9 +251,7 @@ def _result(
         "interrupted" if call.state.value == "interrupted" else "recorded"
     )
     policy_raw = (
-        _canonical(policy_receipt.model_dump(mode="json"))
-        if policy_receipt is not None
-        else None
+        _canonical(policy_receipt.model_dump(mode="json")) if policy_receipt is not None else None
     )
     if call.dispatched_at is None or call.recorded_at is None:
         raise ValueError("terminal model call is missing durable times")
@@ -301,6 +297,75 @@ class ConfiguredModelExecutor:
     ) -> None:
         self._settings_provider = settings_provider
         self._client = client
+
+    async def replay_stage_call(
+        self,
+        *,
+        store: ProductArtifactStore,
+        scope: ProductScope,
+        run_id: str,
+        job: JobSnapshot,
+        stage_key: str,
+        operation_key: str,
+        dependency_sha256: str,
+        input_sha256: str,
+        content: bytes,
+        prompt: bytes,
+        template_id: str,
+    ) -> ModelExecutionResult:
+        """Revalidate a cross-run recorded call without reserving or sending a new call."""
+        if stage_key != "identity" or operation_key != "current-product-identity":
+            raise ValueError("recorded identity replay stage mismatch")
+        call = store.get_identity_replay_call(
+            scope=scope,
+            run_id=run_id,
+            job_id=job.id,
+            generation=job.lease_generation,
+            dependency_sha256=dependency_sha256,
+        )
+        settings = _settings(self._settings_provider)
+        template, prepared = _template_and_request(
+            settings,
+            scope=scope,
+            content=content,
+            input_sha256=input_sha256,
+            prompt=prompt,
+            template_id=template_id,
+        )
+        if (
+            settings.expires_at <= datetime.now(UTC)
+            or template.role != "classify"
+            or template.purpose != "g3-batch-resolution"
+            or template.run_schema_version != "830-g3-v1"
+            or call.model_policy_sha256 != settings.policy_sha256
+            or call.prompt_policy_sha256 != template.prompt_sha256
+            or call.input_sha256 != input_sha256
+            or call.request_bytes != prepared.request_bytes
+            or call.request_sha256 != prepared.request_sha256
+        ):
+            raise ValueError("recorded identity request or model policy changed")
+        receipt = _policy_receipt(
+            settings,
+            template,
+            scope=scope,
+            run_id=call.run_id,
+            job_id=call.job_id,
+            generation=call.generation,
+            stage_key=call.stage_key,
+            operation_key=call.operation_key,
+            dependency_sha256=call.dependency_sha256,
+            input_sha256=call.input_sha256,
+            request_sha256=call.request_sha256,
+            evaluated_at=call.dispatched_at,
+        )
+        store.record_identity_replay(
+            scope=scope,
+            run_id=run_id,
+            job_id=job.id,
+            generation=job.lease_generation,
+            dependency_sha256=dependency_sha256,
+        )
+        return _result(call, policy_receipt=receipt)
 
     async def _send(
         self, settings: ProductModelSettings, prepared: PreparedModelRequest
@@ -414,9 +479,8 @@ class ConfiguredModelExecutor:
             request_bytes=prepared.request_bytes,
         )
         current = _settings(self._settings_provider)
-        if (
-            current.policy_sha256 != initial.policy_sha256
-            or current.expires_at <= datetime.now(UTC)
+        if current.policy_sha256 != initial.policy_sha256 or current.expires_at <= datetime.now(
+            UTC
         ):
             call = store.record_stage_call_result(
                 scope=scope,
@@ -464,9 +528,7 @@ class ConfiguredModelExecutor:
         *,
         prompt: bytes,
     ) -> ConfiguredFieldTransport:
-        return ConfiguredFieldTransport(
-            self, scope=scope, run_id=run_id, job=job, prompt=prompt
-        )
+        return ConfiguredFieldTransport(self, scope=scope, run_id=run_id, job=job, prompt=prompt)
 
 
 class ConfiguredFieldTransport:

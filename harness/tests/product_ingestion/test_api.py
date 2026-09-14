@@ -69,6 +69,35 @@ def auth(token="fixture-platform"):
     return {"Authorization": "Bearer " + token}
 
 
+def test_api_distinguishes_recorded_model_reuse_from_new_dispatch(environment, monkeypatch):
+    from types import SimpleNamespace
+
+    client, *_ = environment
+    monkeypatch.setattr(
+        ProductArtifactStore,
+        "get_stage_call_metrics",
+        lambda *args, **kwargs: SimpleNamespace(
+            model_call_count=0,
+            unsettled_call_count=0,
+            usage={},
+            reused_model_call_count=1,
+            reused_usage={"prompt_tokens": 17},
+        ),
+    )
+    response = client.post(
+        PATH,
+        headers=auth(),
+        json={"idempotency_key": "recorded-reuse", "expected_upload_count": 3},
+    )
+    assert response.status_code == 201
+    run = response.json()["data"]
+    assert run["semantic_model_call_count"] == 0
+    assert run["model_call_count"] == 0
+    assert run["reused_model_call_count"] == 1
+    assert run["reused_usage"] == {"prompt_tokens": 17}
+    assert not run["usage"]
+
+
 def test_real_api_composition_admits_durable_job_without_inline_processing(environment):
     client, factory, *_ = environment
     payload = {"idempotency_key": "browser-batch", "expected_upload_count": 3}

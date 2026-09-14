@@ -163,6 +163,7 @@ func productBridgeSummaryRun(t *testing.T) map[string]any {
 	var summaries map[string]any
 	require.NoError(t, json.Unmarshal([]byte(`{
         "model_call_count": 0, "semantic_model_call_count": 0,
+        "reused_model_call_count": 1, "reused_usage": {"prompt_tokens":17},
         "source_model_call_count": null, "recorded_source_model_call_count": 0,
         "model_call_count_complete": false,
         "source_processing": {
@@ -218,7 +219,7 @@ func TestProductIngestionBridgePreservesSafeSummariesOverHTTP(t *testing.T) {
 		require.NoError(t, err)
 		var got map[string]any
 		require.NoError(t, json.Unmarshal(encoded, &got))
-		for _, key := range []string{"model_call_count", "semantic_model_call_count", "source_model_call_count", "recorded_source_model_call_count", "model_call_count_complete"} {
+		for _, key := range []string{"model_call_count", "semantic_model_call_count", "reused_model_call_count", "reused_usage", "source_model_call_count", "recorded_source_model_call_count", "model_call_count_complete"} {
 			require.Contains(t, got, key, "bridge dropped status field")
 			require.Equal(t, wireRun[key], got[key])
 		}

@@ -103,3 +103,19 @@ Task3z 源码0c22aa18aeb18e75dc201f9af2164002a47da6bd已完成既有APP/UI/Harne
 - UI恢复入口新增needs_confirmation+后端cap支持，RED 1失败33通过，GREEN含API共41通过，独立复核PASS。只负责提交平台恢复请求，不在浏览器判定产品身份。Harness实现及完整接线回归进行中。
 
 Task3aa CODE已验证并独立复核PASS。前端单独冻结7a12493526d6022a6091008e42ecbb46f2845d73并构建中；后端从同一现有分支追加。恢复focused20项及完整平台流水线fixture1项通过；最终身份/冲突/旧重试兼容16项通过，最终10项identity适配通过。旧重试兼容专项仅验证持久化身份回执重用，未当作真实发布。首次完整composition成功路径通过，冲突路径暴露空原因，已汇总子判定原因并验证明确AMBIGUOUS_IDENTITY。真实三份snapshot验签后的最终模型上下文41,130字节、11中文Schema候选、全部三个首页完整名称均被提供；没有执行模型或生成业务身份。详见model-routing-code-tests-20260914.json。部署和真实网页恢复仍NOT RUN。
+
+## Task3aa 部署与真实分类结果（2026-09-14）
+
+以上 NOT RUN 为当时状态。随后部署完成：APP沿用0c22/ab332e7d；UI源码7a124935、镜像6b6cc0c007e439f8a1dcb2902d47f4bebd3e1e0d4d9f97c7b60e905b4d736b36；Harness源码0931e22101fb0dfb6308b47e3c85bc1251172469、镜像e8374c7e85e34d5370bfbfc8aeb48ae44b5f45370ca93f5e1d565e29385fc2f5。既有服务健康、UI静态入口验证PASS，数据库/配置和原文件沿用。精确回执在/private/tmp/g3-platform-independent-deploy-20260913。
+
+- 10:13:55.893072Z冻结；仅网页正式“重试产品识别”创建590980a5-803a-5d3f-bee9-d910a32187fd。开始10:15:45.987385Z，终态10:16:35.274146Z，49.287秒至待确认，不是发布耗时。运行中没有修改代码、配置或接续业务。
+- uploads 0.242秒、source 2.763秒、routing 0.574秒，identity 38.456秒。来源新增调用0/复用14，实际新增Gemini分类1次。提供的三份当前材料首页均包含完整名称，11中文Schema候选；实际HTTP请求45,532字节。Gemini三份均返回“平安盛世金越（尊享版26）终身寿险（分红型）”、whole_life_insurance，角色brochure/terms/rate-table均合法正确。
+- 模型原响应9,190字节完整持久化，call_id=3db4b0b5-5d62-452c-afe3-c21d89d2f7f9。供应商原usage为prompt22559/completion1744/total29510，保留原值，不从其加总差异推断费用。
+- 平台首个错误为IDENTITY_RESPONSE_INVALID:ValueError：模型在identity_evidence_refs中冗余加入classification引用。只读内存诊断进一步发现备案号误引名称块（真正备案原文已在offered输入）；再排除此链接问题，v2逐材料完整身份门仍拒绝互补的说明书公司、条款代码/备案及费率表名称。rate-table拼写本身合法，不是失败原因。诊断没有修改原raw/proposal/数据库，未调用模型或生成实际候选。
+- 字段抽取、编译、审核、发布均NOT RUN，字段数不适用。10:19:04.795292Z只读确认Active Head仍epoch9/release-2f46c14c-5f6f-46cb-8eb2-e6afc7e5933e。原失败与待确认记录完整保留。此轮不能算平台链路验收PASS。
+
+Task3ab已冻结：平台增加同产品互补证据的v3归并（旧v1/v2不改），由正式恢复机制复用已记录分类响应。当前处于开发验证，尚未部署；后续全新产品三份原件完整验收仍NOT RUN。
+
+Task3ab CODE收束：联合身份/旧v2定向25项、最终备案适配10项、恢复49个不同测试、API19项、Go版本/原342字段Candidate与增量8顶层及16子项、Go Bridge组通过。新增互补三材料完整worker测试88.43秒、已记录分类恢复worker82.36秒、原流水线兼容3项225.47秒均PASS。以上全部是fixture，未调用真实供应商或发布业务结果。原实际响应的本地回归得到一个绑定、三份来源、12条原文件证据；原null与raw保持。
+
+独立复核曾发现产品代码可以冒充同值备案号的补链缺陷；已用补链和既有version引用两条路径RED复现，修复要求明确类型证据，10项最终适配测试与真实备案原响应均通过，复核PASS。旧v1/v2算法与恢复wire保持。复用回执在实际job lease内持久化，任务后续失败仍有统计；API和Go只透传明确的复用计数及usage。源SHA、测试日志摘要见joint-identity-code-tests-20260914.json。部署、网页恢复与新产品完整验收仍NOT RUN，不由CODE PASS推导完成。

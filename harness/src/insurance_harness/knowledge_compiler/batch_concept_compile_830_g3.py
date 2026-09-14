@@ -728,7 +728,8 @@ def _published_base_bindings(request: BatchConceptCompileRequest830G3V1):
             actual is None
             or row.entity_version != base.existing_entity_versions[entity_id]
             or set(row.required_fields) != keys
-            or (row.entity_version, row.issuer, row.display_name, row.product_code, row.version_label,
+            or (row.entity_version, row.issuer, row.display_name,
+                row.product_code, row.version_label,
                 row.version_anchor.kind, row.version_anchor.observed_value)
             != (actual.entity_version, actual.issuer, actual.name, actual.product_code,
                 actual.version_label, actual.filing_or_registration.kind,
@@ -862,6 +863,9 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         if published_bindings and current_refs != set(refs):
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
         current_entities.add(binding.entity_id)
+        if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v3":
+            from .g3_evidence_identity_v3 import require_complete_support
+            require_complete_support(resolution, refs, inputs.proposals)
         evidence_ids = {item.evidence_id for item in binding.resolution_evidence}
         if set(binding.source_material_ids) != {key[0] for key in refs}:
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
@@ -1162,6 +1166,9 @@ def _build_entity_bindings(
 ) -> tuple[EntityCompileBinding830G3V1, ...]:
     if selected_decision_refs != tuple(sorted(set(selected_decision_refs))):
         raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
+    if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v3":
+        from .g3_evidence_identity_v3 import require_complete_support
+        require_complete_support(resolution, selected_decision_refs, proposals)
     decisions = _decision_index(resolution)
     proposal_index = {item.material_id: item for item in proposals.proposals}
     selected: list[tuple[str, str, Any, Any]] = []
@@ -1196,7 +1203,10 @@ def _build_entity_bindings(
                 row[3].classification != first.classification
                 and (
                     resolution.compiler_version
-                    != "batch-entity-resolution-compiler.830.g3.v2"
+                    not in (
+                        "batch-entity-resolution-compiler.830.g3.v2",
+                        "batch-entity-resolution-compiler.830.g3.v3",
+                    )
                     or (
                         row[3].classification.primary_label,
                         row[3].classification.schema_pack_id,

@@ -131,6 +131,8 @@ type ProductIngestionRun struct {
 	Counts                       *ProductIngestionCounts           `json:"counts,omitempty"`
 	ModelCallCount               *int                              `json:"model_call_count"`
 	SemanticModelCallCount       *int                              `json:"semantic_model_call_count"`
+	ReusedModelCallCount         *int                              `json:"reused_model_call_count"`
+	ReusedUsage                  map[string]int                    `json:"reused_usage"`
 	SourceModelCallCount         *int                              `json:"source_model_call_count"`
 	RecordedSourceModelCallCount *int                              `json:"recorded_source_model_call_count"`
 	ModelCallCountComplete       *bool                             `json:"model_call_count_complete"`

@@ -336,6 +336,8 @@ def test_recorded_model_call_owns_raw_and_validated_artifact(
         scope=_scope(), run_id=run.run_id
     ).model_dump() == {
         "model_call_count": 1,
+        "reused_model_call_count": 0,
+        "reused_usage": {},
         "unsettled_call_count": 0,
         "usage": {"input_tokens": 11, "output_tokens": 5},
     }
