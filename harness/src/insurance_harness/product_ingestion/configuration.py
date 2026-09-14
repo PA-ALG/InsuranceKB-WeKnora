@@ -71,7 +71,9 @@ class PlatformConnectionSettings(_FrozenModel):
     base_url: str = Field(min_length=1, max_length=2048)
     machine_key: SecretStr
     timeout_seconds: float = Field(gt=0, le=300)
-    max_response_bytes: int = Field(ge=1, le=64 * 1024 * 1024)
+    # Signed source snapshots include base64 native coordinates. This internal
+    # transport budget is independent of model context and model response limits.
+    max_response_bytes: int = Field(ge=1, le=192 * 1024 * 1024)
 
     @model_validator(mode="after")
     def _valid_connection(self) -> Self:
