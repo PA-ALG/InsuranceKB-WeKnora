@@ -434,13 +434,26 @@ def assemble_platform_candidate(
     request: compiler.BatchConceptCompileRequest830G3V1,
     delta: CompileResult,
     run_id: str,
+    independent_review: ReviewResult | None = None,
 ) -> compiler.BatchConceptCandidateBundle830G3V1:
-    """Apply existing structural/evidence gates and record a truthful RULE review."""
+    """Reuse field validation; novel free members additionally require independent review."""
 
     request = compiler.BatchConceptCompileRequest830G3V1.model_validate(request)
     delta = CompileResult.model_validate(delta)
     compiler.validate_delta_output(request, delta)
     output = compiler.compose_batch_output(request, delta)
+    from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
+        _g3_human_admission,
+        _g3_novel_page_ids,
+    )
+
+    novel_members = _g3_novel_page_ids(request, output)
+    if novel_members and (
+        independent_review is None
+        or independent_review.execution.implementation
+        != "platform-independent-discovery-review.830.g3.v1"
+    ):
+        raise ValueError("INDEPENDENT_DISCOVERY_REVIEW_REQUIRED")
     composed = compiler.record_composed_output(
         request,
         delta,
@@ -455,7 +468,7 @@ def assemble_platform_candidate(
         page_scores={},
     )
     raw = compiler._canonical_json(review_output)
-    review = ReviewResult(
+    rule_review = ReviewResult(
         output=review_output,
         execution=ExecutionRecord(
             run_id=_derived_run_id(run_id, "structural-review"),
@@ -468,16 +481,22 @@ def assemble_platform_candidate(
             raw_output_hash=hashlib.sha256(raw.encode()).hexdigest(),
         ),
     )
+    review = independent_review if independent_review is not None else rule_review
+    admission = (
+        _g3_human_admission(request, output, review.output)
+        if novel_members
+        else HumanBatchAdmission(
+            contract="concept-admission.830.g2.v1",
+            status="NEEDS_HUMAN",
+            pending_page_ids=(),
+        )
+    )
     candidate = compiler.assemble_candidate_bundle(
         request,
         delta,
         composed,
         review,
-        HumanBatchAdmission(
-            contract="concept-admission.830.g2.v1",
-            status="NEEDS_HUMAN",
-            pending_page_ids=(),
-        ),
+        admission,
     )
     compiler.validate_candidate_bundle(candidate)
     return candidate

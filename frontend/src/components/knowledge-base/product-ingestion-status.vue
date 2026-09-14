@@ -20,6 +20,12 @@ const sourcePhaseNames: Record<string, string> = { docreader: '读取与解析',
 const sourceStateNames: Record<string, string> = { done: '已完成', failed: '失败', skipped: '已跳过', cancelled: '已取消' }
 const outcomeNames = { verified: '已验证', not_provided: '材料未提供', extraction_failed: '抽取失败' }
 const count = (value?: number | null) => typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : '—'
+const discoveryNames = { NOT_EXECUTED: '未执行', FAILED: '发现失败', PENDING: '待确认', REJECTED: '未通过', EMPTY: '未发现有效新知识', ACCEPTED: '已通过检查' }
+function discoveryPublished(run: ProductIngestionRun): boolean {
+  return run.discovery_summary?.state === 'ACCEPTED' && run.discovery_summary.published_confirmed === true
+    && ['succeeded', 'partial_success'].includes(run.state) && !!run.finished_at
+    && !!run.stages?.some(stage => stage.name === 'verify' && stage.state === 'succeeded' && !!stage.finished_at)
+}
 const timestamp = (value?: string | null) => value ? Date.parse(value) : NaN
 function duration(start?: string | null, end?: string | null, stopped = false): string {
   const from = timestamp(start)
@@ -133,6 +139,15 @@ onUnmounted(() => { generation++; stopTimers() })
       <p class="run-id">任务 {{ run.run_id }}</p>
       <p v-if="run.reason">{{ run.reason }}</p>
       <p data-testid="counts">成功 {{ count(run.counts?.success_count) }} · 材料未提供 {{ count(run.counts?.missing_count) }} · 失败 {{ count(run.counts?.failure_count) }} · 模型调用 {{ count(run.model_call_count) }}<span v-if="run.model_call_count_complete === false">（已记录，部分阶段统计尚未齐全）</span></p>
+      <div data-testid="discovery-status">
+        <p><strong>Schema 外知识发现：</strong><template v-if="discoveryPublished(run)">已发布 {{ count(run.discovery_summary?.counts.published) }} 项知识内容（页面或概念）</template><template v-else>{{ discoveryNames[run.discovery_summary?.state || 'NOT_EXECUTED'] || '发现状态待核对' }}</template><span v-if="run.discovery_summary?.reused"> · 复用已有发现结果</span></p>
+        <template v-if="run.discovery_summary && run.discovery_summary.state !== 'NOT_EXECUTED'">
+          <p>新发现提议 {{ count(run.discovery_summary.counts.proposed_new) }} · 已有知识重复 {{ count(run.discovery_summary.counts.duplicate) }} · 更新提议 {{ count(run.discovery_summary.counts.update_proposal) }} · 未通过 {{ count(run.discovery_summary.counts.rejected) }}</p>
+          <p v-if="run.discovery_summary.coverage">材料范围 {{ count(run.discovery_summary.coverage.material_count) }} 份 · 本次提供 {{ count(run.discovery_summary.coverage.offered_chars) }} 字 · 未覆盖 {{ count(run.discovery_summary.coverage.omitted_chars) }} 字<span v-if="!run.discovery_summary.coverage.complete">（仅检查所提供内容）</span></p>
+          <p v-else>发现范围尚未记录</p>
+          <p v-if="run.discovery_summary.reason_codes.length">原因：{{ run.discovery_summary.reason_codes.join('、') }}</p>
+        </template>
+      </div>
       <div v-if="run.stages?.length" class="stages">
         <table>
           <thead><tr><th>处理阶段</th><th>状态</th><th>耗时</th><th>成功</th><th>未提供</th><th>失败</th></tr></thead>

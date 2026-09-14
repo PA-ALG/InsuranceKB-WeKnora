@@ -21,6 +21,7 @@ from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import (
     SchemaPackCatalogV1,
 )
 from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
+from insurance_harness.product_ingestion.discovery import DISCOVERY_PROMPT, DISCOVERY_REVIEW_PROMPT
 from insurance_harness.product_ingestion.pipeline import FIELD_PROMPT, IDENTITY_PROMPT
 
 
@@ -399,6 +400,24 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
                             "purpose": "g3-field-extraction",
                             "run_schema_version": "830-g3-v1",
                             "prompt_sha256": _sha256(FIELD_PROMPT),
+                            "max_context_bytes": model["field_max_context_bytes"],
+                            "max_output_tokens": model["field_max_output_tokens"],
+                        },
+                        {
+                            "template_id": "discovery-v1",
+                            "role": "extract",
+                            "purpose": "g3-open-discovery",
+                            "run_schema_version": "830-g3-v1",
+                            "prompt_sha256": _sha256(DISCOVERY_PROMPT),
+                            "max_context_bytes": model["field_max_context_bytes"],
+                            "max_output_tokens": model["field_max_output_tokens"],
+                        },
+                        {
+                            "template_id": "discovery-review-v1",
+                            "role": "verify",
+                            "purpose": "g3-open-discovery-review",
+                            "run_schema_version": "830-g3-v1",
+                            "prompt_sha256": _sha256(DISCOVERY_REVIEW_PROMPT),
                             "max_context_bytes": model["field_max_context_bytes"],
                             "max_output_tokens": model["field_max_output_tokens"],
                         },

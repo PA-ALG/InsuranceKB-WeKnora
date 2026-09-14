@@ -22,6 +22,14 @@ export interface ProductSourcePhase {
   recorded: boolean
   occurrences: { occurrence: number; status: string; started_at_unix_ms: number; finished_at_unix_ms: number; duration_ms: number }[]
 }
+export interface ProductDiscoverySummary {
+  state: 'NOT_EXECUTED' | 'FAILED' | 'PENDING' | 'REJECTED' | 'EMPTY' | 'ACCEPTED'
+  reused: boolean
+  reason_codes: string[]
+  counts: { proposed_new: number | null; duplicate: number | null; update_proposal: number | null; rejected: number | null; published: number | null }
+  coverage: { offered_chars: number; omitted_chars: number; complete: boolean; material_count: number } | null
+  published_confirmed: boolean
+}
 export interface ProductIngestionRun {
   run_id: string
   wiki_knowledge_base_id?: string | null
@@ -32,6 +40,7 @@ export interface ProductIngestionRun {
   model_call_count?: number | null
   model_call_count_complete?: boolean
   source_processing?: { materials: { knowledge_id: string; file_name?: string; reused: boolean; availability: string; counts?: { attempts: number } | null; phases: ProductSourcePhase[] }[] }
+  discovery_summary?: ProductDiscoverySummary
   created_at?: string | null
   started_at?: string | null
   finished_at?: string | null

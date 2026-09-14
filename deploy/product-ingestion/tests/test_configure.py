@@ -179,6 +179,26 @@ def test_generate_exact_cross_runtime_configuration_and_preserve_go_values(tmp_p
     )
 
 
+def test_generate_configures_distinct_open_discovery_and_review(tmp_path: Path):
+    module = _module()
+    input_path, payload, _ = _input(tmp_path)
+    output = tmp_path / "generated"
+    module.generate(input_path, output)
+    runtime = json.loads((output / "product-ingestion-runtime.private.json").read_text())
+    model = runtime["bindings"][0]["model"]
+    templates = {row["template_id"]: row for row in model["templates"]}
+    assert {"discovery-v1", "discovery-review-v1"} <= set(templates)
+    assert templates["discovery-v1"]["role"] == "extract"
+    assert templates["discovery-review-v1"]["role"] == "verify"
+    assert templates["discovery-v1"]["purpose"] == "g3-open-discovery"
+    assert templates["discovery-review-v1"]["purpose"] == "g3-open-discovery-review"
+    assert templates["discovery-v1"]["prompt_sha256"] != templates["discovery-review-v1"]["prompt_sha256"]
+    for name in ("discovery-v1", "discovery-review-v1"):
+        assert templates[name]["max_context_bytes"] == payload["model"]["field_max_context_bytes"]
+        assert templates[name]["max_output_tokens"] == payload["model"]["field_max_output_tokens"]
+    assert model["field_template_id"] == "field-window-v1"
+
+
 @pytest.mark.parametrize(
     ("mutate", "match"),
     [

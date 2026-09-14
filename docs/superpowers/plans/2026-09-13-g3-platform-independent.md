@@ -6,6 +6,33 @@
 
 **Architecture:** Extend Python wiki-api/wiki-worker and P1 durable JobStore with product ingestion services. WeKnora remains sole original-source and serving Release authority; only versioned REST crosses the boundary. UI uploads and observes, never compiles or signs.
 
+## 2026-09-14 required open-discovery integration amendment
+
+User authority: `/Users/houjing/Documents/LLM_wiki/G3-统一知识结构补齐任务-2026-09-14.md`, including “Schema 外自由发现必须实际接入”. This extends the current G3 queue, not a new Goal. Keep the deployed navigation, existing 493 field identities and performance/recovery work. Current permanent `pipeline.synthesis` only projects field artifacts; legacy ENTITY_SYNTHESIS and published free pages do not prove this new path is connected.
+
+### Task3w: bounded discovery source coverage
+
+Owner g3_service_inventory after root review of this amendment. Files: new `harness/src/insurance_harness/knowledge_compiler/g3_discovery_routing.py` and `harness/tests/test_g3_discovery_routing.py` only. Reuse `g3_field_task_routing._spans` and original SourceBlock metadata/offsets. Pure `route_discovery_sources(sources, *, max_source_chars=24000, max_span_chars=2000)` returns `source_options` in the existing offered-spans shape plus an explicit coverage record. Select by material/page/chapter coverage without Schema keywords: round-robin materials and spread selection across their ordered chapter spans, including later sections. Do not truncate or normalize quotes. Return offered and omitted exact ranges/counts so bounded coverage is never described as full reading. Budget parameters are caller-controlled and validated. No model, new index/database or schema mutation.
+
+- [ ] RED: long material's later non-Schema section is offered; two materials share budget; exact original offsets/text; strict budget; truthful omitted coverage; deterministic output and invalid-budget rejection.
+- [ ] GREEN: implement only this pure selector and run its focused tests.
+- [ ] Independent root review before any runtime integration.
+
+### Task3x: permanent discovery and independent disposition
+
+Root owns `product_ingestion/pipeline.py`, new `discovery_stage.py`, `compilation.py`, focused runtime/compilation tests and configuration/template wiring. Task3x status Owner g3_service_inventory owns `product_ingestion/api.py`, its test, `frontend/src/api/product-ingestion.ts` and `frontend/src/components/knowledge-base/product-ingestion-status.{vue,spec.ts}` only. Reuse recorded stage calls/artifacts and existing G2/G3 definitions/pages, evidence projector and reviewer; do not create a second compiler or serving Head. Freeze precise adapter interfaces after the bounded port review. Only current changed material is eligible. Failed-field-only recovery reuses prior discovery; no-new-material carry performs zero discovery calls. New material with no field targets still receives an explicit discovery disposition.
+
+- [ ] RED: permanent pipeline currently omits discovery; technical failure is distinct from zero valid candidates; recorded responses replay without redispatch; ordinary field unknowns remain publishable.
+- [ ] Add bounded source coverage and existing-field/page comparison to candidate generation. Independent review must retain decisions/reasons, reject noise/unsupported claims, route duplicate facts toward existing knowledge, and require an independently useful purpose for a new page. Preserve conditions, exceptions, entity/version and exact evidence. Reuse existing score/admission contracts; no automatic Schema rewrite.
+- [ ] Only accepted evidence-validated members enter the existing composed candidate and system review/publication. Preserve rejected/pending raw candidates and coverage. Old published members remain intact.
+- [ ] Deploy the shared Harness update before the measured new-product run; no Go rebuild solely for Python changes. Verify a real Schema-external example or honestly report lack of evidence, plus duplicate/noise dispositions and source/navigation clicks, reusing actual prior artifacts where sufficient.
+
+No implementation or existence of a legacy page alone closes this amendment. Service-line runtime integration remains a separate outstanding item in this same G3 queue.
+
+Task3x pure adapter ownership: g3_extraction_finish owns new `product_ingestion/discovery.py` and `harness/tests/product_ingestion/test_discovery.py`; root owns orchestration/compilation/config/status. Use a strict bounded proposal envelope containing the existing `G3DCompileReferenceResponseV1` plus audit-only dispositions with candidate identity/text, exact source selections, reason, independent business use and an optional existing comparison target. Dispositions distinguish proposed new members, duplicate, existing-knowledge update proposal and rejected noise/unsupported claim; existing-member updates are not silently inserted into G3 delta. Include current validated field delta, inherited same-entity fields/pages and Schema field descriptions in both generation and independent review context. Only the bound entity and offered source spans may be referenced; current raw model responses remain immutable artifacts.
+
+The pure adapter exposes context/projection functions for generation and independent review, without HTTP/store side effects. Review can be one bounded entity-level call using existing `ReviewOutput`/six-part PageScore rather than replaying every field review window. Review binds the exact final composed request/output hashes, checks every proposed new member and every audit disposition, and returns explicit reasons. Existing ordinary field validation is a truthful RULE component; independent member review retains actual model raw and call identity. Missing/invalid scores, failed review, unresolved equivalence or below-threshold members cannot enter automatic publication. The current platform may keep the entire proposed free-member group rejected/pending while publishing validated ordinary fields; do not fake a model review of a pruned output or rerun the model to force a pass. Root candidate assembly must call the existing `_g3_human_admission` on any actual added free members and preserve the independently reviewed hash. Tests must prove unsupported evidence/foreign entity rejection, current-field/Schema comparison availability, duplicate/noise audit-only custody, exact score coverage, stale review binding rejection and explicit failed/pending/empty distinctions.
+
 **Tech Stack:** Python 3.12, FastAPI, SQLAlchemy/PostgreSQL/P1 JobStore, Go/Gin/WeKnora, Vue, existing Gemini and embedding/rerank configuration.
 
 ---

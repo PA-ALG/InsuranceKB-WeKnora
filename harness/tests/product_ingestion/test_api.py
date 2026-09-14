@@ -80,6 +80,8 @@ def test_real_api_composition_admits_durable_job_without_inline_processing(envir
     assert run["model_call_count"] == 0
     assert run["counts"] == {"success_count": 0, "missing_count": 0, "failure_count": 0}
     assert run["wiki_knowledge_base_id"] == "wiki"
+    assert run["discovery_summary"]["state"] == "NOT_EXECUTED"
+    assert run["discovery_summary"]["published_confirmed"] is False
     with factory() as session:
         jobs = list(session.scalars(select(WikiJob)))
         assert len(jobs) == 1
@@ -399,3 +401,150 @@ def test_complete_model_count_requires_terminal_run_and_retains_source_totals(en
     final = client.get(PATH + "/" + run.run_id, headers=auth()).json()["data"]
     assert final["model_call_count_complete"] is True
     assert final["source_processing"]["materials"][0]["counts"]["attempts"] == 0
+
+
+def _discovery_run(environment, summary, *, verified=False):
+    import hashlib
+
+    from insurance_harness.jobs import JobStore
+    from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
+    from insurance_harness.product_ingestion.models import ProductRunState, ProductScope
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+
+    _client, factory, settings, *_ = environment
+    scope = ProductScope.model_validate(SCOPE)
+    jobs = JobStore(factory, settings.job_runtime_config())
+    store = ProductIngestionStore(factory, jobs)
+    artifacts = ProductArtifactStore(factory, store)
+    run = store.create_run(scope=scope, idempotency_key="discovery-status")
+    stage = store.enqueue_stage(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="synthesis",
+        dependency_sha256="a" * 64,
+        idempotency_key="synthesis",
+    )
+    claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    job = jobs.start(space_id="space", job_id=stage.job_id, generation=claim.job.lease_generation)
+    payload = json.dumps(summary).encode()
+    writes = artifacts.prepare_artifact_writes(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="synthesis",
+        job_id=job.id,
+        generation=job.lease_generation,
+        drafts=(
+            ArtifactDraft(
+                artifact_kind="discovery_summary",
+                artifact_key="product",
+                contract_name="discovery-summary",
+                contract_version="v1",
+                dependency_sha256="a" * 64,
+                payload=payload,
+                payload_sha256=hashlib.sha256(payload).hexdigest(),
+                origin=ArtifactOrigin.RULE,
+            ),
+        ),
+    )
+    jobs.report_success(
+        space_id="space", job_id=job.id, generation=job.lease_generation, domain_writes=writes
+    )
+    if verified:
+        verify = store.enqueue_stage(
+            scope=scope,
+            run_id=run.run_id,
+            stage_key="verify",
+            dependency_sha256="b" * 64,
+            idempotency_key="verify",
+        )
+        claim = jobs.claim(space_ids=("space",), worker_id="worker")
+        active = jobs.start(
+            space_id="space", job_id=verify.job_id, generation=claim.job.lease_generation
+        )
+        jobs.report_success(space_id="space", job_id=active.id, generation=active.lease_generation)
+        root = store.enqueue_root(scope=scope, run_id=run.run_id, idempotency_key="root")
+        claim = jobs.claim(space_ids=("space",), worker_id="worker")
+        active = jobs.start(
+            space_id="space", job_id=root.job_id, generation=claim.job.lease_generation
+        )
+        store.finalize_run(
+            scope=scope,
+            run_id=run.run_id,
+            job_id=active.id,
+            generation=active.lease_generation,
+            terminal_state=ProductRunState.PARTIAL_SUCCESS,
+        )
+    return run.run_id
+
+
+def _summary(state="ACCEPTED"):
+    return {
+        "state": state,
+        "reused": True,
+        "reason_codes": ["DISCOVERY_CHECKED"],
+        "counts": {
+            "proposed_new": 2,
+            "duplicate": 1,
+            "update_proposal": 1,
+            "rejected": 1,
+            "published": 0,
+        },
+        "accepted_member_count": 3,
+        "coverage": {
+            "offered_chars": 200,
+            "omitted_chars": 500,
+            "complete": False,
+            "material_count": 2,
+            "sources": [{"quote": "PRIVATE_OMITTED_TEXT"}],
+        },
+        "raw": "PRIVATE_MODEL_TEXT",
+        "candidates": ["PRIVATE_CANDIDATE"],
+        "call_ids": ["PRIVATE_CALL_ID"],
+    }
+
+
+@pytest.mark.parametrize(
+    "state", ["NOT_EXECUTED", "FAILED", "PENDING", "REJECTED", "EMPTY", "ACCEPTED"]
+)
+def test_discovery_status_preserves_dispositions_without_leaking_content(environment, state):
+    client, *_ = environment
+    run_id = _discovery_run(environment, _summary(state))
+    response = client.get(PATH + "/" + run_id, headers=auth())
+    summary = response.json()["data"]["discovery_summary"]
+    assert summary["state"] == state
+    assert summary["reused"] is True
+    assert summary["counts"]["published"] == 0
+    assert summary["published_confirmed"] is False
+    assert summary["coverage"] == {
+        "offered_chars": 200,
+        "omitted_chars": 500,
+        "complete": False,
+        "material_count": 2,
+    }
+    assert "PRIVATE_" not in response.text
+
+
+def test_discovery_publication_requires_successful_terminal_verification(environment):
+    client, *_ = environment
+    run_id = _discovery_run(environment, _summary(), verified=True)
+    summary = client.get(PATH + "/" + run_id, headers=auth()).json()["data"]["discovery_summary"]
+    assert summary["published_confirmed"] is True
+    assert summary["counts"]["published"] == 3
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"state": "nonsense"},
+        {"counts": {"published": True}},
+        {"reason_codes": ["PRIVATE raw model response"]},
+    ],
+)
+def test_malformed_discovery_is_failure_not_no_new_knowledge(environment, change):
+    client, *_ = environment
+    run_id = _discovery_run(environment, {**_summary(), **change})
+    response = client.get(PATH + "/" + run_id, headers=auth())
+    summary = response.json()["data"]["discovery_summary"]
+    assert summary["state"] == "FAILED"
+    assert summary["reason_codes"] == ["DISCOVERY_SUMMARY_INVALID"]
+    assert "PRIVATE" not in response.text

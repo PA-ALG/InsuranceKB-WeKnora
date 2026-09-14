@@ -117,4 +117,38 @@ describe('persistent product processing status', () => {
     expect(w.text()).toContain('new-kb-run')
     expect(w.text()).not.toContain('r1')
   })
+  it('shows discovery as not executed when no summary exists', async () => {
+    expect((await render()).get('[data-testid="discovery-status"]').text()).toContain('未执行')
+  })
+  it.each([
+    ['FAILED', '发现失败'], ['PENDING', '待确认'], ['REJECTED', '未通过'],
+    ['EMPTY', '未发现有效新知识'], ['ACCEPTED', '已通过检查'],
+  ])('distinguishes discovery %s while ordinary missing fields remain visible', async (state, label) => {
+    api.listProductIngestions.mockResolvedValue([run({ discovery_summary: {
+      state, reused: true, published_confirmed: false, reason_codes: ['DISCOVERY_CHECKED'],
+      counts: { proposed_new: 2, duplicate: 1, update_proposal: 1, rejected: 1, published: 0 },
+      coverage: { offered_chars: 200, omitted_chars: 500, complete: false, material_count: 2 },
+      raw: 'PRIVATE_DISCOVERY', candidates: ['PRIVATE_CANDIDATE'],
+    } })])
+    const w = await render()
+    const text = w.get('[data-testid="discovery-status"]').text()
+    expect(text).toContain(label)
+    expect(text).toContain('复用已有发现结果')
+    expect(text).toContain('本次提供 200 字')
+    expect(text).toContain('未覆盖 500 字')
+    expect(text).not.toContain('已发布')
+    expect(text).not.toContain('PRIVATE')
+    expect(w.text()).toContain('材料未提供')
+  })
+  it.each([false, true])('only labels accepted discovery published after verification: %s', async verified => {
+    api.listProductIngestions.mockResolvedValue([run({
+      state: verified ? 'partial_success' : 'running', finished_at: verified ? '2026-09-13T00:00:10Z' : undefined,
+      stages: verified ? [{ name: 'verify', state: 'succeeded', finished_at: '2026-09-13T00:00:09Z' }] : [],
+      discovery_summary: { state: 'ACCEPTED', reused: false, published_confirmed: verified,
+        reason_codes: [], counts: { proposed_new: 1, duplicate: 0, update_proposal: 0, rejected: 0, published: verified ? 1 : 0 }, coverage: null },
+    })])
+    const text = (await render()).get('[data-testid="discovery-status"]').text()
+    expect(text).toContain(verified ? '已发布 1 项知识内容（页面或概念）' : '已通过检查')
+    if (!verified) expect(text).not.toContain('已发布')
+  })
 })

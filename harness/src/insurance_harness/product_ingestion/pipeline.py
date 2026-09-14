@@ -494,26 +494,41 @@ def build_product_pipeline(context):
             attempts=store.list_field_attempts(scope=scope, run_id=run.run_id),
             run_id=run.run_id,
         )
-        return StageOutput(
-            (
-                artifact(
-                    "compile_delta",
-                    "product",
-                    batch_json_bytes_830_g3(delta),
-                    stage.dependency_sha256,
-                ),
-            )
+        from insurance_harness.product_ingestion.discovery_stage import run_discovery_stage
+
+        identity_values = json.loads(read(scope, run.run_id, "identity"))
+        return await run_discovery_stage(
+            service=service_for(scope),
+            artifacts=artifacts,
+            scope=scope,
+            run=run,
+            stage=stage,
+            job=job,
+            request=request,
+            field_delta=delta,
+            entity_id=identity_values["current_entity_ids"][0],
+            base=await asyncio.to_thread(base_for, scope, run.run_id),
         )
 
     async def compilation(scope, run, stage, job):
         from insurance_harness.product_ingestion.compilation import assemble_platform_candidate
 
         request = await asyncio.to_thread(request_for, scope, run.run_id)
+        from insurance_harness.knowledge_compiler.concept_compile_830_g2 import ReviewResult
+
+        discovery_reviews = artifacts.list_artifacts(
+            scope=scope, run_id=run.run_id, artifact_kind="discovery_review"
+        )
         candidate = await asyncio.to_thread(
             assemble_platform_candidate,
             request=request,
             delta=CompileResult.model_validate_json(read(scope, run.run_id, "compile_delta")),
             run_id=run.run_id,
+            independent_review=(
+                ReviewResult.model_validate_json(discovery_reviews[0].payload)
+                if discovery_reviews
+                else None
+            ),
         )
         raw = await asyncio.to_thread(batch_json_bytes_830_g3, candidate)
         preparation_id = "product-" + hashlib.sha256(run.run_id.encode()).hexdigest()[:32]

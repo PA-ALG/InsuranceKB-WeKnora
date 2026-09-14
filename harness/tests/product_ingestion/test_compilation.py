@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 from functools import lru_cache
 from pathlib import Path
@@ -8,6 +9,13 @@ import pytest
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
 from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as resolver
+from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
+    ExecutionRecord,
+    ReviewOutput,
+    ReviewResult,
+    ValueScore,
+    free_page_id,
+)
 from insurance_harness.knowledge_compiler.g3_field_tasks import (
     FieldTaskEvidenceResultV1,
     adapt_catalog_field_tasks,
@@ -289,3 +297,232 @@ def test_candidate_uses_rule_structural_review_and_retains_parent_fields():
     assert json.loads(compiler._canonical_json(candidate))["candidate_hash"] == (
         candidate.candidate_hash
     )
+
+
+@lru_cache(maxsize=1)
+def discovery_delta():
+
+    from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
+        AuditDisposition,
+        free_page_id,
+    )
+    from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
+        Evidence,
+        FreeWikiPage,
+    )
+
+    _, request = platform_request()
+    task = adapt_catalog_field_tasks(request)[0]
+    delta = project_field_attempts(
+        request=request,
+        attempts=(
+            attempt(task, outcome=FieldOutcomeKind.EXTRACTION_FAILED, reason="MISSING_FIELD"),
+        ),
+        run_id="discovery-field-stage",
+    )
+    allowed = {(row.revision_id, row.block_id) for row in task.allowed_sources}
+    source = next(
+        row for row in request.base_request.sources if (row.revision_id, row.block_id) in allowed
+    )
+    quote = source.text[:30]
+    evidence = Evidence(
+        **source.model_dump(exclude={"text"}),
+        start=0,
+        end=len(quote),
+        quote=quote,
+        quote_hash=hashlib.sha256(quote.encode()).hexdigest(),
+    )
+    page = FreeWikiPage(
+        space_id=request.base_request.space_id,
+        entity_id=task.entity_id,
+        entity_version=task.entity_version,
+        stable_key="independent-process-fixture",
+        title="独立流程测试",
+        body=quote,
+        evidence=(evidence,),
+    )
+    output = delta.output.model_copy(
+        update={
+            "pages": (page,),
+            "transformation": "SYNTHESIZE",
+            "audit": (
+                *delta.output.audit,
+                AuditDisposition(
+                    key=free_page_id(page), disposition="new_page", reason="fixture independent use"
+                ),
+            ),
+        }
+    )
+    result = compiler.record_model_compile(
+        request,
+        output,
+        run_id="discovery-projection",
+        implementation="fixture-discovery-projector",
+        raw=compiler._canonical_json(output),
+    )
+    return request, result, page
+
+
+def test_new_free_page_cannot_use_field_only_rule_review():
+    request, delta, _ = discovery_delta()
+    with pytest.raises(ValueError, match="INDEPENDENT_DISCOVERY_REVIEW_REQUIRED"):
+        assemble_platform_candidate(request=request, delta=delta, run_id="new-page-no-review")
+
+
+@lru_cache(maxsize=1)
+def composed_discovery_case():
+    request, delta, page = discovery_delta()
+    return request, delta, page, compiler.compose_batch_output(request, delta)
+
+
+def independent_discovery_review(*, total=100, decision="PASS", drift=None, missing_score=False):
+    request, _, page, output = composed_discovery_case()
+    # Explicit review fixture inputs, never inferred from source length/confidence.
+    values = [25, 20, 20, 15, 10, 10]
+    reduction = 100 - total
+    for index, value in enumerate(values):
+        take = min(reduction, value)
+        values[index] -= take
+        reduction -= take
+    assert reduction == 0
+    score = ValueScore(
+        **dict(
+            zip(
+                (
+                    "business_value",
+                    "reuse",
+                    "evidence_quality",
+                    "definability",
+                    "novel_identity",
+                    "name_stability",
+                ),
+                values,
+                strict=True,
+            )
+        )
+    )
+    reviewed = ReviewOutput(
+        request_hash=(
+            "f" * 64
+            if drift == "request"
+            else compiler.compile_request_hash_g3(request.base_request)
+        ),
+        output_hash=("e" * 64 if drift == "output" else compiler.compile_output_hash_g3(output)),
+        decision=decision,
+        reasons=(
+            "Independent fixture checked new page against original sources and existing fields.",
+        ),
+        page_scores={} if missing_score else {free_page_id(page): score},
+    )
+    raw = compiler._canonical_json(reviewed)
+    context_hash = compiler._batch_sha256(
+        "batch-concept-review-context.830.g3.v1", compiler.review_context_g3(request, output)
+    )
+    return ReviewResult(
+        output=reviewed,
+        execution=ExecutionRecord(
+            run_id="independent-discovery-review-fixture",
+            implementation="platform-independent-discovery-review.830.g3.v1",
+            context_hash="d" * 64 if drift == "context" else context_hash,
+            raw_output=raw,
+            raw_output_hash=hashlib.sha256(raw.encode()).hexdigest(),
+        ),
+    )
+
+
+def test_accepted_new_page_retains_exact_independent_review_and_existing_members():
+    request, delta, page, composed = composed_discovery_case()
+    review = independent_discovery_review()
+    candidate = assemble_platform_candidate(
+        request=request,
+        delta=delta,
+        run_id="accepted-discovery",
+        independent_review=review,
+    )
+    assert candidate.review_result == review
+    assert candidate.review_result.execution.raw_output == compiler._canonical_json(review.output)
+    assert candidate.compile_result.output == composed
+    assert page in candidate.compile_result.output.pages
+    assert all(
+        old in candidate.compile_result.output.pages for old in request.base_request.existing_pages
+    )
+    assert candidate.admission.status == "NEEDS_HUMAN"
+    assert candidate.admission.pending_page_ids == ()
+    assert candidate.review_result.output.page_scores[free_page_id(page)].total == 100
+    assert (
+        len(
+            {
+                candidate.model_compile_result.execution.run_id,
+                candidate.compile_result.execution.run_id,
+                candidate.review_result.execution.run_id,
+            }
+        )
+        == 3
+    )
+
+
+@pytest.mark.parametrize(
+    "drift,reason",
+    [
+        ("request", "REVIEW_NOT_APPROVED_OR_STALE"),
+        ("output", "REVIEW_NOT_APPROVED_OR_STALE"),
+        ("context", "EXECUTION_CONTEXT_MISMATCH"),
+    ],
+)
+def test_new_page_rejects_stale_independent_review_binding(drift, reason):
+    request, delta, _, _ = composed_discovery_case()
+    review = independent_discovery_review(drift=drift)
+    # These execution records have valid raw integrity; only the requested binding is stale.
+    assert json.loads(review.execution.raw_output) == review.output.model_dump(mode="json")
+    with pytest.raises(ValueError, match=reason):
+        assemble_platform_candidate(
+            request=request,
+            delta=delta,
+            run_id="stale-discovery-" + drift,
+            independent_review=review,
+        )
+
+
+@pytest.mark.parametrize(
+    "missing_score,total,decision,reason",
+    [
+        (True, 100, "PASS", "PAGE_ADMISSION_REJECTED"),
+        (False, 59, "PASS", "PAGE_ADMISSION_REJECTED"),
+        (False, 100, "REJECT", "REVIEW_NOT_APPROVED_OR_STALE"),
+    ],
+)
+def test_new_page_missing_low_or_rejected_review_cannot_form_candidate(
+    missing_score,
+    total,
+    decision,
+    reason,
+):
+    request, delta, _, _ = composed_discovery_case()
+    review = independent_discovery_review(
+        total=total,
+        decision=decision,
+        missing_score=missing_score,
+    )
+    with pytest.raises(ValueError, match=reason):
+        assemble_platform_candidate(
+            request=request,
+            delta=delta,
+            run_id="unqualified-discovery",
+            independent_review=review,
+        )
+
+
+@pytest.mark.parametrize("total", [60, 79])
+def test_new_page_midrange_score_is_pending_not_automatic_ready(total):
+    request, delta, page, _ = composed_discovery_case()
+    review = independent_discovery_review(total=total)
+    candidate = assemble_platform_candidate(
+        request=request,
+        delta=delta,
+        run_id="pending-discovery",
+        independent_review=review,
+    )
+    assert candidate.admission.status == "NEEDS_HUMAN"
+    assert candidate.admission.pending_page_ids == (free_page_id(page),)
+    assert candidate.review_result.output.page_scores[free_page_id(page)].total == total
+    assert candidate.review_result == review

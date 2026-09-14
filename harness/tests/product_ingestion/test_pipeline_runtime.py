@@ -16,6 +16,7 @@ from insurance_harness.db.base import Base, make_session_factory
 from insurance_harness.jobs import ClaimedJob, JobState, JobStore
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
 from insurance_harness.product_ingestion.composition import compose_product_worker
+from insurance_harness.product_ingestion.discovery import DISCOVERY_PROMPT, DISCOVERY_REVIEW_PROMPT
 from insurance_harness.product_ingestion.models import (
     FieldOutcomeKind,
     ProductRunState,
@@ -155,10 +156,7 @@ def _base_snapshot() -> tuple[dict, object]:
 def _source_snapshot(ordinal: int, *, conflicting: bool = False) -> dict:
     title = "平安冲突（2026）两全保险" if conflicting and ordinal == 1 else TITLE
     role_heading = ("保险条款", "产品说明书", "费率表")[ordinal]
-    text = (
-        f"{title}{role_heading}\n{ISSUER}\n产品代码：{PRODUCT_CODE}\n"
-        f"{FILING}\n版本：{VERSION}\n"
-    )
+    text = f"{title}{role_heading}\n{ISSUER}\n产品代码：{PRODUCT_CODE}\n{FILING}\n版本：{VERSION}\n"
     raw_text = text.encode()
     file_sha = _sha(f"fixture-pdf-{ordinal}".encode())
     parser_sha = _sha(b"fixture-native-parser-v1")
@@ -261,9 +259,7 @@ def _trusted_files(tmp_path: Path, base_candidate) -> dict:
     )
     policy["rules"][0]["material_roles"] = ["brochure", "rate_table", "terms"]
     policy["rules"][0]["provenance_kinds"] = ["user_supplied_document"]
-    policy["policy_sha256"] = compiler._batch_sha256(
-        "batch-resolution-policy.830.g3.v1", policy
-    )
+    policy["policy_sha256"] = compiler._batch_sha256("batch-resolution-policy.830.g3.v1", policy)
     values = {
         "catalog": CATALOG.read_bytes(),
         "profile_confirmation": PROFILE_CONFIRMATION.read_bytes(),
@@ -326,6 +322,26 @@ def _settings(tmp_path: Path, base_candidate) -> ShellSettings:
                             "max_context_bytes": 8 * 1024 * 1024,
                             "max_output_tokens": 8192,
                         },
+                        *[
+                            {
+                                "template_id": template_id,
+                                "role": role,
+                                "purpose": purpose,
+                                "run_schema_version": "830-g3-v1",
+                                "prompt_sha256": _sha(prompt),
+                                "max_context_bytes": 8 * 1024 * 1024,
+                                "max_output_tokens": 8192,
+                            }
+                            for template_id, role, purpose, prompt in (
+                                ("discovery-v1", "extract", "g3-open-discovery", DISCOVERY_PROMPT),
+                                (
+                                    "discovery-review-v1",
+                                    "verify",
+                                    "g3-open-discovery-review",
+                                    DISCOVERY_REVIEW_PROMPT,
+                                ),
+                            )
+                        ],
                     ],
                     "field_template_id": "field-v1",
                     "max_request_bytes": 12 * 1024 * 1024,
@@ -372,6 +388,8 @@ class FixtureModel:
     def __init__(self):
         self.identity_requests: list[dict] = []
         self.field_requests: list[dict] = []
+        self.discovery_requests: list[dict] = []
+        self.discovery_review_requests: list[dict] = []
         self.fail_one_field = True
 
     @staticmethod
@@ -447,6 +465,32 @@ class FixtureModel:
         if content.get("contract") == "g3-c-classify-prompt-context.830.v1":
             self.identity_requests.append(envelope)
             semantic = self._identity(content)
+        elif content.get("contract") == "product-discovery-context.830.v1":
+            self.discovery_requests.append(envelope)
+            semantic = {
+                "contract": "product-discovery-proposal.830.v1",
+                "proposal": {
+                    "contract": "g3-d-compile-semantic-references.local.v1",
+                    "transformation": "EXTRACT",
+                    "definitions": [],
+                    "fields": [],
+                    "pages": [],
+                },
+                "dispositions": [],
+            }
+        elif content.get("contract") == "product-discovery-review-context.830.v1":
+            self.discovery_review_requests.append(envelope)
+            semantic = {
+                "contract": "product-discovery-review.830.v1",
+                "review": {
+                    "request_hash": content["request_hash"],
+                    "output_hash": content["output_hash"],
+                    "decision": "PASS",
+                    "reasons": ["fixture bounded independent review"],
+                    "page_scores": {},
+                },
+                "disposition_checks": [],
+            }
         else:
             assert content["contract"] == "product-field-window-request.v1"
             self.field_requests.append(envelope)
@@ -659,9 +703,7 @@ async def _compose(settings, session_factory, platform, model):
 def _sqlite_engine(path: Path):
     # WAL lets the real heartbeat/read transactions coexist with P1's atomic
     # domain writes in the SQLite fixture, matching PostgreSQL's nonblocking reads.
-    engine = create_engine(
-        f"sqlite:///{path}", connect_args={"timeout": 120}, future=True
-    )
+    engine = create_engine(f"sqlite:///{path}", connect_args={"timeout": 120}, future=True)
 
     @event.listens_for(engine, "connect")
     def pragmas(connection, _record):
@@ -713,9 +755,15 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
 
     original_prepare = context.artifacts.prepare_artifact_writes
     interrupted = False
+    discovery_interrupted = False
 
     def fail_after_recording(**kwargs):
-        nonlocal interrupted
+        nonlocal interrupted, discovery_interrupted
+        if not discovery_interrupted and any(
+            row.artifact_kind == "discovery_summary" for row in kwargs["drafts"]
+        ):
+            discovery_interrupted = True
+            raise RuntimeError("fixture crash after durable discovery/review recording")
         if not interrupted and any(row.artifact_kind == "identity" for row in kwargs["drafts"]):
             interrupted = True
             raise RuntimeError("fixture crash after durable model recording")
@@ -743,18 +791,18 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
     await runtime.close()
     await model_client.aclose()
     runtime, context, model_client = await _compose(settings, session_factory, platform, model)
+    original_prepare = context.artifacts.prepare_artifact_writes
+    context.artifacts.prepare_artifact_writes = fail_after_recording
     terminal = await _finish(runtime, context, jobs, run.run_id)
 
+    assert discovery_interrupted, "fixture did not exercise discovery artifact crash"
     assert terminal.state is ProductRunState.PARTIAL_SUCCESS
     assert len(model.identity_requests) == 1, "recorded identity raw was sent again after restart"
     assert platform.source_captures == 3 and platform.activations == 1
     attempts = context.store.list_field_attempts(scope=SCOPE, run_id=run.run_id)
     failed = tuple(row for row in attempts if row.outcome is FieldOutcomeKind.EXTRACTION_FAILED)
     assert len(failed) == 1
-    assert all(
-        row.validated_result is None
-        for row in failed
-    )
+    assert all(row.validated_result is None for row in failed)
     assert len(base_candidate.request.entity_bindings) == 5
     assert len(platform.candidate.request.entity_bindings) == 6
     assert platform.candidate.request.base_request.existing_fields == (
@@ -766,6 +814,18 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
         row.entity_id: row.entity_version for row in platform.candidate.request.entity_bindings
     }.items()
     assert terminal.missing_count > 0
+    assert len(model.discovery_requests) == 1, "permanent pipeline omitted open discovery"
+    assert len(model.discovery_review_requests) == 1
+    discovery = json.loads(
+        context.artifacts.get_artifact(
+            scope=SCOPE,
+            run_id=run.run_id,
+            artifact_kind="discovery_summary",
+            artifact_key="product",
+        ).payload
+    )
+    assert discovery["state"] == "EMPTY" and discovery["reused"] is False
+    assert discovery["coverage"]["material_count"] == 3
 
     identity_calls_before = len(model.identity_requests)
     field_calls_before = len(model.field_requests)
@@ -798,6 +858,17 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
         ).payload
     )
     assert retry_identity["reused_from_run_id"] == run.run_id
+    assert len(model.discovery_requests) == len(model.discovery_review_requests) == 1
+    reused = json.loads(
+        context.artifacts.get_artifact(
+            scope=SCOPE,
+            run_id=retry.run_id,
+            artifact_kind="discovery_summary",
+            artifact_key="product",
+        ).payload
+    )
+    assert reused["state"] == "EMPTY" and reused["reused"] is True
+    assert reused["reused_from_run_id"] == run.run_id
 
     await runtime.close()
     await model_client.aclose()

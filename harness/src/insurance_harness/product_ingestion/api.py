@@ -5,10 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from insurance_harness.jobs.errors import SpaceScopeError
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
@@ -32,6 +32,69 @@ class CreateRun(BaseModel):
 class RetryFields(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     field_keys: list[str] = Field(min_length=1)
+
+
+class _DiscoveryCounts(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+    proposed_new: int = Field(ge=0)
+    duplicate: int = Field(ge=0)
+    update_proposal: int = Field(ge=0)
+    rejected: int = Field(ge=0)
+    published: int = Field(ge=0)
+
+
+class _DiscoveryCoverage(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+    offered_chars: int = Field(ge=0)
+    omitted_chars: int = Field(ge=0)
+    complete: bool
+    material_count: int = Field(ge=0)
+
+
+class _DiscoverySummary(BaseModel):
+    """Read-only allowlist; raw candidates and diagnostics stay in artifact custody."""
+
+    model_config = ConfigDict(extra="ignore", strict=True)
+    state: Literal["NOT_EXECUTED", "FAILED", "PENDING", "REJECTED", "EMPTY", "ACCEPTED"]
+    reused: bool
+    reason_codes: list[Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]{0,127}$")]]
+    counts: _DiscoveryCounts
+    coverage: _DiscoveryCoverage | None
+    accepted_member_count: int | None = Field(default=None, ge=0)
+
+
+def _discovery_summary_projection(raw, *, publication_verified=False):
+    empty = {
+        "state": "NOT_EXECUTED",
+        "reused": False,
+        "reason_codes": [],
+        "counts": dict.fromkeys(_DiscoveryCounts.model_fields, 0),
+        "coverage": None,
+        "published_confirmed": False,
+    }
+    if raw is None:
+        return empty
+    try:
+        summary = _DiscoverySummary.model_validate_json(raw)
+        if summary.coverage and summary.coverage.complete != (summary.coverage.omitted_chars == 0):
+            raise ValueError("inconsistent coverage")
+    except (ValidationError, ValueError):
+        return {
+            **empty,
+            "state": "FAILED",
+            "reason_codes": ["DISCOVERY_SUMMARY_INVALID"],
+            "counts": dict.fromkeys(_DiscoveryCounts.model_fields, None),
+        }
+    payload = summary.model_dump(exclude={"accepted_member_count"})
+    published = (
+        summary.accepted_member_count
+        if summary.accepted_member_count is not None
+        else summary.counts.published
+    )
+    confirmed = publication_verified and summary.state == "ACCEPTED" and published > 0
+    payload["counts"]["published"] = published if confirmed else 0
+    payload["published_confirmed"] = confirmed
+    return payload
 
 
 def install_product_api(
@@ -135,6 +198,28 @@ def install_product_api(
             }
             for row in fields
         ]
+        try:
+            discovery = artifacts.get_artifact(
+                scope=scope,
+                run_id=run_id,
+                artifact_kind="discovery_summary",
+                artifact_key="product",
+            ).payload
+        except SpaceScopeError:
+            discovery = None
+        payload["discovery_summary"] = _discovery_summary_projection(
+            discovery,
+            publication_verified=(
+                run.state in {"succeeded", "partial_success"}
+                and run.finished_at is not None
+                and any(
+                    row.stage_key == "verify"
+                    and row.state == "succeeded"
+                    and row.finished_at is not None
+                    for row in stages
+                )
+            ),
+        )
         return {"success": True, "data": payload}
 
     @router.post("", status_code=201)
