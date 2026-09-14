@@ -16,4 +16,5 @@ func RegisterProductIngestionRoutes(r *gin.RouterGroup, h *handler.ProductIngest
 	reads.GET("/:run_id", g.Viewer(), g.KBAccessRead("id"), h.Get)
 	writes.POST("/uploads", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), h.Upload)
 	writes.POST("/:run_id/retry-fields", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), h.RetryFields)
+	writes.POST("/:run_id/retry-processing", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), h.RetryProcessing)
 }

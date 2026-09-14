@@ -217,3 +217,15 @@ RED：普通路径不同文字/CRLF/插入表头时实际无法定位；GREEN：
 已封存旧材料不能覆盖重解析；恢复应保留旧原文及失败审计，由平台创建引用同一PDF的新解析身份后重启任务。此恢复接线另行冻结接口/写域，不能由Codex复制业务记录或运行临时接续脚本。
 
 Task3y独立方案复核补充（实施前）：首次产物必须签封已验证的分块seq/原文codepoint Start/End/content hash，manifest封存后按ChunkIndex+Content绑定真实chunkID；重复正文和跨页不可用strings.Index猜第一次出现。Owner写域补充internal/application/service/concept_source_locator_830_g3.go及对应测试，并包含g3PlatformChunkPageMapping映射。新source快照与后续citation定位均消费同一已签封映射；旧记录不伪造位置。首次产物身份检查须先于legacy cache命中或采用独立版本键。parser/config override在refreshRevisionBinding之前生效，按revision.ParseAttempt绑定并在processChunks之前持久化，后续不得改坐标正文。增加重复段落、跨页、CRLF及缓存旁路的RED/GREEN。
+
+### 2026-09-14 Task3z：正式清单绑定与来源阶段恢复
+
+适用 G3-AUTO-3/4/6。第三次网页验收 d1dd4a86-a4ae-49f3-93e0-decbf56ca9d0 已失败终结；不得重写初次验收结论。三份材料已完成首次解析、向量与摘要，124 个正式 text 块的原文范围均正确。首次位置资产另含 11 个父块，而正式 revision manifest 只选 text 子块。g3_extraction_finish 唯一修改 g3_first_parse.go/tests：每个正式清单成员必须唯一匹配签封范围、正文和摘要；只输出正式成员，允许未被选入清单的父块资产，保留全部缓存哈希及范围校验。RED 必须模拟真实仓储的 text-only 清单，补丢块、重复及篡改反例。
+
+来源阶段恢复使用平台正式入口 POST /:run_id/retry-processing，唯一请求字段 expected_version 为正整数。现有 RAW/WIKI 写权限及 Harness capability 不变。Run 响应增加 version、can_retry_processing。首切片仅对已封存且来源阶段失败、未进入身份/抽取的终态任务开放；解析失败、身份冲突、成功任务不冒充可恢复。平台复制既有材料引用，保留原任务失败，创建有明确版本化恢复计划的子任务，由已有队列执行。原任务版本和幂等键绑定；重复提交返回同一子任务，过期版本拒绝。不得把空 retry_field_keys 隐式解释成恢复；字段重试语义保持。
+
+g3_service_inventory 唯一写域 harness/src/insurance_harness/product_ingestion/{api,store,stages,pipeline,discovery_stage,artifact_models}.py、必要同目录小型 recovery.py，以及对应 tests。复用现有表和 artifact/job 原子提交，不迁移、不建服务。恢复计划须区分字段重试；未执行的身份/抽取按正常流程执行，已有解析、摘要、向量不重复。统计必须区分历史复用调用与本次新增调用。root 唯一写域 Go product_ingestion bridge/handler/routes 及测试、frontend product-ingestion API/status 及测试、计划和交付记录。g3_docker_connection 只读独立复核冻结代码。完成测试后统一构建、部署现有 APP/Harness/UI；恢复仅在网页点击，由平台继续。首次失败与恢复结果分别计时；随后再用一款未处理产品三份原件进行完整独立验收。
+
+RED/GREEN 覆盖严格请求、双库权限、跨作用域/版本拒绝、重复点击幂等、运行中及错误失败类型不可恢复、队列中断后可接续、原失败不变、已保存来源复用零新增解析模型调用、恢复不走字段专用身份分支。SOURCE_PARSE_FAILED 和旧坐标失效材料的新解析身份恢复仍列遗留，不能由本切片宣称解决。
+
+Task3z 能力边界补充：API 的 can_retry_processing 依据持久化失败原因、封存及未执行身份/抽取记录，表示可发起来源校验；不声称同步确认解析成功。worker 在任何快照捕获前重新查询全部原材料，只有 completed 且身份绑定不变才继续。无需 API 注入新的同步平台调用；失败不触发自动重新解析。

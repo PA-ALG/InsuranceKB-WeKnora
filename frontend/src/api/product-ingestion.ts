@@ -32,6 +32,8 @@ export interface ProductDiscoverySummary {
 }
 export interface ProductIngestionRun {
   run_id: string
+  version?: number
+  can_retry_processing?: boolean
   wiki_knowledge_base_id?: string | null
   state: ProductRunState
   stage?: string | null
@@ -86,4 +88,8 @@ export async function getProductIngestion(kbId: string, runId: string): Promise<
 }
 export async function retryProductFields(kbId: string, runId: string, fieldKeys: string[]): Promise<ProductIngestionRun> {
   return unwrap(await post<Envelope<ProductIngestionRun>>(`${base(kbId)}/${encodeURIComponent(runId)}/retry-fields`, { field_keys: fieldKeys }))
+}
+
+export async function retryProductProcessing(kbId: string, runId: string, expectedVersion: number): Promise<ProductIngestionRun> {
+  return unwrap(await post<Envelope<ProductIngestionRun>>(`${base(kbId)}/${encodeURIComponent(runId)}/retry-processing`, { expected_version: expectedVersion }))
 }

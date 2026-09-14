@@ -34,6 +34,11 @@ class RetryFields(BaseModel):
     field_keys: list[str] = Field(min_length=1)
 
 
+class RetryProcessing(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    expected_version: int = Field(gt=0)
+
+
 class _DiscoveryCounts(BaseModel):
     model_config = ConfigDict(extra="ignore", strict=True)
     proposed_new: int = Field(ge=0)
@@ -138,6 +143,7 @@ def install_product_api(
         except SpaceScopeError as error:
             raise HTTPException(404, "product_run_not_found") from error
         payload = run.model_dump(mode="json")
+        payload["can_retry_processing"] = store.can_retry_processing(scope=scope, run_id=run_id)
         stage_metrics = artifacts.get_stage_call_metrics(scope=scope, run_id=run_id)
         payload["model_call_count"] = (
             sum(row.model_call_count for row in stages if row.stage_key == "extract")
@@ -259,6 +265,23 @@ def install_product_api(
     @router.get("/{run_id}")
     def read(space_id: str, run_id: str, principal: PrincipalDependency):
         return read_payload(authorize(space_id, principal), run_id)
+
+    @router.post("/{run_id}/retry-processing", status_code=201)
+    def retry_processing(
+        space_id: str, run_id: str, request: RetryProcessing, principal: PrincipalDependency
+    ):
+        scope = authorize(space_id, principal, write=True)
+        try:
+            run = store.retry_processing(
+                scope=scope,
+                run_id=run_id,
+                expected_version=request.expected_version,
+            )
+        except SpaceScopeError as error:
+            raise HTTPException(404, "product_run_not_found") from error
+        except ValueError as error:
+            raise HTTPException(409, "product_processing_retry_conflict") from error
+        return read_payload(scope, run.run_id)
 
     @router.post("/{run_id}/retry-fields", status_code=201)
     def retry(space_id: str, run_id: str, request: RetryFields, principal: PrincipalDependency):

@@ -123,9 +123,18 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
     from types import ModuleType
 
     from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
+    from insurance_harness.product_ingestion import discovery_stage, platform
     from insurance_harness.product_ingestion.stages import json_bytes
 
     api = module()
+
+    async def discovery(**kwargs):
+        assert kwargs["field_delta"] == {"fixture": True}
+        assert kwargs["processing_recovery"] is False
+        return kwargs["field_delta"]
+
+    monkeypatch.setattr(discovery_stage, "run_discovery_stage", discovery)
+    monkeypatch.setattr(platform, "verify_signed_snapshot", lambda *_args, **_kwargs: {})
     adapter = ModuleType("insurance_harness.product_ingestion.compilation")
 
     def project(**_kwargs):
@@ -145,16 +154,26 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
         purpose="g3-batch-resolution",
         prompt_sha256=hashlib.sha256(api.IDENTITY_PROMPT).hexdigest(),
     )
+    scope = SimpleNamespace(space_id="space")
     context = SimpleNamespace(
         catalog=compile_request.catalog,
         resolution_policy_json=json_bytes(compile_request.resolution_inputs.policy),
         bindings={
             "space": SimpleNamespace(
-                configuration=SimpleNamespace(model=SimpleNamespace(templates=(template,)))
+                scope=scope,
+                configuration=SimpleNamespace(
+                    model=SimpleNamespace(templates=(template,)), source_public_keys={}
+                ),
             )
         },
-        store=SimpleNamespace(list_field_attempts=lambda **_: ()),
-        artifacts=SimpleNamespace(get_artifact=lambda **_: SimpleNamespace(payload=b"{}")),
+        store=SimpleNamespace(
+            list_field_attempts=lambda **_: (), processing_recovery_plan=lambda **_: None
+        ),
+        artifacts=SimpleNamespace(
+            get_artifact=lambda **_: SimpleNamespace(
+                payload=b'{"current_entity_ids":["fixture-entity"]}'
+            )
+        ),
     )
     ports = api.build_product_pipeline(context)
     ticks = []
@@ -165,7 +184,7 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
 
     monitor = asyncio.create_task(heartbeat())
     await ports.stage_handlers["synthesis"](
-        None, SimpleNamespace(run_id="run"), SimpleNamespace(dependency_sha256="a" * 64), None
+        scope, SimpleNamespace(run_id="run"), SimpleNamespace(dependency_sha256="a" * 64), None
     )
     observed = len(ticks)
     await monitor

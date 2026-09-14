@@ -164,6 +164,7 @@ def register_source_stages(
     now=lambda: datetime.now(UTC),
 ):
     async def uploads(scope, run, stage, job):
+        store.processing_recovery_plan(scope=scope, run_id=run.run_id)
         if run.uploads_sealed_at is not None:
             return StageOutput()
         if now() >= run.upload_deadline_at:
@@ -193,10 +194,11 @@ def register_source_stages(
         return StageOutput()
 
     async def sources(scope, run, stage, job):
+        recovery = store.processing_recovery_plan(scope=scope, run_id=run.run_id)
         if now() >= run.source_deadline_at:
             raise NonRetryableJobError("SOURCE_PARSE_DEADLINE_EXCEEDED")
         prior = {}
-        if run.retry_of_run_id:
+        if run.retry_of_run_id and recovery is None:
             prior = {
                 row.artifact_key: row
                 for row in artifacts.list_artifacts(
@@ -211,6 +213,8 @@ def register_source_stages(
         lookup_run = run
         while lookup_run.retry_of_run_id:
             lookup_run = store.get_run(scope=scope, run_id=lookup_run.retry_of_run_id)
+        if recovery is not None and lookup_run.run_id != recovery.upload_run_id:
+            raise NonRetryableJobError("RECOVERY_UPLOAD_BINDING_CHANGED")
         for material in run.materials:
             item = await platform.lookup_upload(scope, lookup_run.run_id, material.upload_ordinal)
             if item is None or item["knowledge_id"] != material.knowledge_id:
@@ -218,6 +222,8 @@ def register_source_stages(
             if item["parse_status"] in {"failed", "error"}:
                 raise NonRetryableJobError("SOURCE_PARSE_FAILED:" + material.original_filename)
             if item["parse_status"] != "completed":
+                if recovery is not None:
+                    raise NonRetryableJobError("RECOVERY_SOURCE_NOT_COMPLETED")
                 raise RetryableJobError("WAITING_FOR_SOURCE_PARSE")
             current.append((material, item))
         for material, item in current:
@@ -239,7 +245,7 @@ def register_source_stages(
                 (
                     material.knowledge_id,
                     decoded.snapshot.get("processing_receipt"),
-                    saved is not None,
+                    saved is not None or recovery is not None,
                 )
             )
             if material.source is not None and (

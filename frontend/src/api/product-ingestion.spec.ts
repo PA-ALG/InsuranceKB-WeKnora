@@ -54,4 +54,13 @@ describe('platform product ingestion API', () => {
     expect((await client.retryProductFields('kb', 'r', ['premium'])).run_id).toBe('new')
     expect(http.post).toHaveBeenCalledWith('/api/v1/knowledge-bases/kb/product-ingestions/r/retry-fields', { field_keys: ['premium'] })
   })
+  it('requests source recovery with only the observed run version and no automatic resend', async () => {
+    const client = await api()
+    http.post.mockResolvedValueOnce({ success: true, data: { run_id: 'child' } }).mockRejectedValueOnce(new Error('unknown response'))
+    expect((await client.retryProductProcessing('kb', 'r/1', 7)).run_id).toBe('child')
+    expect(http.post).toHaveBeenCalledWith('/api/v1/knowledge-bases/kb/product-ingestions/r%2F1/retry-processing', { expected_version: 7 })
+    await expect(client.retryProductProcessing('kb', 'r/1', 7)).rejects.toThrow('unknown response')
+    expect(http.post).toHaveBeenCalledTimes(2)
+  })
+
 })

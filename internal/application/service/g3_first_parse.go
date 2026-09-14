@@ -175,16 +175,23 @@ func (s *G3FirstParseStore) save(id g3FirstParseIdentity, result *types.ReadResu
 	return s.reuse.writeFirstParseArtifact(path, key, data)
 }
 func g3FirstParseBindings(record *g3FirstParseRecord, manifest []types.RevisionManifestChunk) (map[string]g3FirstParseRange, error) {
+	if record == nil || len(manifest) == 0 {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
 	byKey := map[string]g3FirstParseRange{}
 	for _, r := range record.Chunks {
-		byKey[fmt.Sprintf("%d:%s", r.Index, r.ContentSHA256)] = r
+		key := fmt.Sprintf("%d:%s", r.Index, r.ContentSHA256)
+		if _, duplicate := byKey[key]; duplicate {
+			return nil, ErrConceptSourceAuthorityUnavailable830G2
+		}
+		byKey[key] = r
 	}
 	used := map[string]bool{}
 	result := map[string]g3FirstParseRange{}
 	for _, chunk := range manifest {
 		key := fmt.Sprintf("%d:%s", chunk.Index, testSHA256830G2(chunk.Content))
 		r, ok := byKey[key]
-		if !ok || chunk.ID == "" {
+		if !ok || chunk.ID == "" || used[key] || !g3FirstParseRangeMatches(record.Markdown, chunk.Content, r) {
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		if _, duplicate := result[chunk.ID]; duplicate {
@@ -193,9 +200,9 @@ func g3FirstParseBindings(record *g3FirstParseRecord, manifest []types.RevisionM
 		result[chunk.ID] = r
 		used[key] = true
 	}
-	if len(used) != len(byKey) {
-		return nil, ErrConceptSourceAuthorityUnavailable830G2
-	}
+	// The signed capture may also contain parent/context ranges. Canonical
+	// revisions contain text chunks only: bind every manifest member exactly,
+	// without promoting unused capture ranges into the revision or its output.
 	return result, nil
 }
 func g3FirstParseRecordSHA(record *g3FirstParseRecord) string {

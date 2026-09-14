@@ -209,3 +209,27 @@ func (h *ProductIngestionHandler) RetryFields(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": run})
 }
+
+func (h *ProductIngestionHandler) RetryProcessing(c *gin.Context) {
+	ctx, _, ok := h.access(c, true, false)
+	if !ok {
+		return
+	}
+	raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 1024))
+	if err != nil {
+		productGatewayError(c, 400, "PRODUCT_INGESTION_RETRY_PROCESSING_INVALID")
+		return
+	}
+	fields, err := closedG3PlatformReleaseObject(raw, "expected_version")
+	var version int64
+	if err != nil || json.Unmarshal(fields["expected_version"], &version) != nil || version < 1 || version > 9007199254740991 {
+		productGatewayError(c, 400, "PRODUCT_INGESTION_RETRY_PROCESSING_INVALID")
+		return
+	}
+	run, err := h.bridge.RetryProcessing(ctx, c.Param("run_id"), version)
+	if err != nil {
+		productGatewayBridgeError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"success": true, "data": run})
+}

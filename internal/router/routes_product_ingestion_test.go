@@ -26,7 +26,7 @@ func TestProductIngestionRoutesKeepExistingUploadAndExposeScopedTaskEntries(t *t
 	}
 	prefix := "/api/v1/knowledge-bases/:id/product-ingestions"
 	for _, route := range []string{"GET " + prefix + "/capabilities", "POST " + prefix + "/uploads",
-		"GET " + prefix, "GET " + prefix + "/:run_id", "POST " + prefix + "/:run_id/retry-fields"} {
+		"GET " + prefix, "GET " + prefix + "/:run_id", "POST " + prefix + "/:run_id/retry-fields", "POST " + prefix + "/:run_id/retry-processing"} {
 		require.True(t, routes[route], route)
 	}
 	require.True(t, routes["POST /api/v1/knowledge-bases/:id/knowledge/file"])
@@ -42,7 +42,7 @@ func TestProductIngestionRoutesRejectAnonymousBeforeHandler(t *testing.T) {
 	RegisterProductIngestionRoutes(engine.Group("/api/v1"), handler.NewProductIngestionHandler(nil, nil), guards)
 	for _, endpoint := range []struct{ method, path string }{
 		{"GET", "/capabilities"}, {"GET", ""}, {"GET", "/run"},
-		{"POST", "/uploads"}, {"POST", "/run/retry-fields"},
+		{"POST", "/uploads"}, {"POST", "/run/retry-fields"}, {"POST", "/run/retry-processing"},
 	} {
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, httptest.NewRequest(endpoint.method,

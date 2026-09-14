@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { getProductIngestion, listProductIngestions, retryProductFields, type ProductIngestionRun } from '@/api/product-ingestion'
+import { getProductIngestion, listProductIngestions, retryProductFields, retryProductProcessing, type ProductIngestionRun } from '@/api/product-ingestion'
 
 const props = defineProps<{ knowledgeBaseId: string; refreshToken?: number }>()
 const runs = ref<ProductIngestionRun[]>([])
@@ -109,6 +109,22 @@ async function retry(run: ProductIngestionRun) {
     if (current === generation) error.value = '未能确认重试任务，请刷新任务列表后检查。'
   } finally { if (current === generation) retrying.value[run.run_id] = false }
 }
+const recoverable = (run: ProductIngestionRun) => run.state === 'failed' && run.can_retry_processing === true && Number.isSafeInteger(run.version) && (run.version ?? 0) > 0
+async function retryProcessing(run: ProductIngestionRun) {
+  if (!recoverable(run) || retrying.value[run.run_id]) return
+  const current = generation
+  retrying.value[run.run_id] = true
+  try {
+    const next = await retryProductProcessing(props.knowledgeBaseId, run.run_id, run.version!)
+    if (current !== generation) return
+    runs.value = [next, ...runs.value.filter(item => item.run_id !== next.run_id)]
+    selection.value[next.run_id] = []
+    error.value = ''
+    schedule()
+  } catch {
+    if (current === generation) error.value = '未能确认恢复任务，请刷新任务列表后检查。'
+  } finally { if (current === generation) retrying.value[run.run_id] = false }
+}
 watch(() => [props.knowledgeBaseId, props.refreshToken], (_next, previous) => {
   if (!previous || previous[0] !== props.knowledgeBaseId) {
     runs.value = []
@@ -187,6 +203,12 @@ onUnmounted(() => { generation++; stopTimers() })
           </li>
         </ul>
       </details>
+      <div v-if="recoverable(run)">
+        <p>复用已完成的解析，由平台重新检查来源并继续处理。</p>
+        <button type="button" data-testid="retry-processing" :disabled="retrying[run.run_id]" @click="retryProcessing(run)">
+          {{ retrying[run.run_id] ? '正在提交…' : '重试来源校验' }}
+        </button>
+      </div>
       <button v-if="terminal(run.state) && run.fields?.some(field => field.outcome === 'extraction_failed')"
         type="button" data-testid="retry-fields"
         :disabled="!selection[run.run_id]?.length || retrying[run.run_id]" @click="retry(run)">

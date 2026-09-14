@@ -22,6 +22,10 @@ from insurance_harness.jobs import (
 from insurance_harness.jobs.models import ErrorClass, JobFailure, JobState
 from insurance_harness.jobs.store import database_now, require_active_lease
 from insurance_harness.jobs.tables import WikiJob
+from insurance_harness.product_ingestion.artifact_tables import (
+    ProductArtifact,
+    ProductStageModelCall,
+)
 from insurance_harness.product_ingestion.models import (
     CallSnapshot,
     CallState,
@@ -41,6 +45,12 @@ from insurance_harness.product_ingestion.models import (
     WindowSettlement,
     WindowSnapshot,
     WindowTaskSpec,
+)
+from insurance_harness.product_ingestion.recovery import (
+    RECOVERY_KIND,
+    RECOVERY_PREFIX,
+    ProcessingRecoveryPlan,
+    material_references,
 )
 from insurance_harness.product_ingestion.tables import (
     ProductFieldAttempt,
@@ -1170,6 +1180,212 @@ class ProductIngestionStore:
     ) -> dict[str, FieldAttemptSnapshot]:
         with self._session_factory() as session:
             return self._lookup_cache(session, scope, identities)
+
+    def _can_retry_processing(self, session, scope, row) -> bool:
+        run = self._run_snapshot(session, row, scope)
+        if (
+            run.state is not ProductRunState.FAILED
+            or run.terminal_reason != "PRODUCT_STAGE_FAILED:source"
+            or run.finished_at is None
+            or run.uploads_sealed_at is None
+            or len(run.materials) != run.expected_upload_count
+            or tuple(m.upload_ordinal for m in run.materials)
+            != tuple(range(run.expected_upload_count))
+            or any(m.source is not None for m in run.materials)
+        ):
+            return False
+        stages = session.execute(
+            select(ProductStage.stage_key, WikiJob.state, WikiJob.error_summary)
+            .join(WikiJob, WikiJob.id == ProductStage.job_id)
+            .where(ProductStage.run_id == row.id, ProductStage.space_id == scope.space_id)
+        ).all()
+        if {stage.stage_key for stage in stages} != {"uploads", "source"}:
+            return False
+        source = next(stage for stage in stages if stage.stage_key == "source")
+        if (
+            source.state != "dead_letter"
+            or not source.error_summary
+            or any(
+                code in source.error_summary
+                for code in (
+                    "SOURCE_PARSE_FAILED",
+                    "SOURCE_PARSE_DEADLINE",
+                    "ORIGINAL_UPLOAD_BINDING_CHANGED",
+                    "needs_confirmation:",
+                )
+            )
+        ):
+            return False
+        for table in (ProductStageModelCall, ProductWindow, ProductFieldAttempt):
+            if session.scalar(select(table.id).where(table.run_id == row.id).limit(1)):
+                return False
+        return True
+
+    def can_retry_processing(self, *, scope: ProductScope, run_id: str) -> bool:
+        """Capability to request revalidation; the worker rechecks actual parse states."""
+        with self._session_factory() as session:
+            return self._can_retry_processing(session, scope, self._run(session, scope, run_id))
+
+    def processing_recovery_plan(self, *, scope: ProductScope, run_id: str):
+        with self._session_factory() as session:
+            row = self._run(session, scope, run_id)
+            if not row.idempotency_key.startswith(RECOVERY_PREFIX):
+                return None
+            saved = session.scalar(
+                select(ProductArtifact).where(
+                    ProductArtifact.run_id == run_id,
+                    ProductArtifact.space_id == scope.space_id,
+                    ProductArtifact.artifact_kind == RECOVERY_KIND,
+                    ProductArtifact.artifact_key == "product",
+                )
+            )
+            if saved is None or hashlib.sha256(saved.payload).hexdigest() != saved.payload_sha256:
+                raise ValueError("processing recovery plan unavailable")
+            plan = ProcessingRecoveryPlan.model_validate_json(saved.payload)
+            run = self._run_snapshot(session, row, scope)
+            if (
+                plan.scope != scope
+                or plan.origin_run_id != row.retry_of_run_id
+                or row.idempotency_key != RECOVERY_PREFIX + plan.digest()
+                or plan.materials != material_references(run)
+            ):
+                raise ValueError("processing recovery plan binding changed")
+            return plan
+
+    def retry_processing(self, *, scope: ProductScope, run_id: str, expected_version: int):
+        if type(expected_version) is not int or expected_version <= 0:
+            raise ValueError("expected_version must be a positive integer")
+        with self._session_factory() as session, session.begin():
+            origin = self._run(session, scope, run_id, lock=True)
+            if origin.version != expected_version or not self._can_retry_processing(
+                session, scope, origin
+            ):
+                raise ValueError("source recovery is unavailable or version changed")
+            upload_origin = origin
+            seen = {origin.id}
+            while upload_origin.retry_of_run_id:
+                if upload_origin.retry_of_run_id in seen:
+                    raise ValueError("recovery ancestry cycle")
+                upload_origin = self._run(session, scope, upload_origin.retry_of_run_id)
+                seen.add(upload_origin.id)
+            origin_run = self._run_snapshot(session, origin, scope)
+            plan = ProcessingRecoveryPlan(
+                scope=scope,
+                origin_run_id=run_id,
+                origin_version=expected_version,
+                upload_run_id=upload_origin.id,
+                materials=material_references(origin_run),
+            )
+            identity = RECOVERY_PREFIX + plan.digest()
+            existing = session.scalar(
+                select(ProductRun).where(
+                    ProductRun.tenant_id == scope.tenant_id,
+                    ProductRun.space_id == scope.space_id,
+                    ProductRun.idempotency_key == identity,
+                )
+            )
+            if existing is not None:
+                self._check_scope(existing, scope)
+                return self._run_snapshot(session, existing, scope)
+            child_id = str(uuid5(NAMESPACE_URL, identity))
+            stage_id = str(
+                uuid5(NAMESPACE_URL, f"product-stage:{scope.space_id}:{child_id}:uploads")
+            )
+            dependency = hashlib.sha256(("product-uploads.v1\0" + child_id).encode()).hexdigest()
+            job_id = str(uuid5(NAMESPACE_URL, f"product-stage-job:{stage_id}:{dependency}"))
+            now = database_now(session)
+            duration = _aware(origin.source_deadline_at) - _aware(origin.upload_deadline_at)
+            if duration <= timedelta(0):
+                duration = timedelta(hours=1)
+            values = {
+                "id": child_id,
+                "tenant_id": scope.tenant_id,
+                "space_id": scope.space_id,
+                "raw_knowledge_base_id": scope.raw_knowledge_base_id,
+                "wiki_knowledge_base_id": scope.wiki_knowledge_base_id,
+                "idempotency_key": identity,
+                "retry_of_run_id": run_id,
+                "attempt": origin.attempt + 1,
+                "retry_field_keys": [],
+                "expected_upload_count": origin.expected_upload_count,
+                "upload_deadline_at": now + timedelta(minutes=1),
+                "source_deadline_at": now + timedelta(minutes=1) + duration,
+                "uploads_sealed_at": now,
+                "uploads_sealed": True,
+                "state": ProductRunState.AWAITING_SOURCES.value,
+                "version": 1,
+                "created_at": now,
+                "started_at": now,
+                "root_job_id": None,
+            }
+            writes = [DomainWriteSpec(table=ProductRun.__tablename__, values=values)]
+            for material in plan.materials:
+                writes.append(
+                    DomainWriteSpec(
+                        table=ProductMaterial.__tablename__,
+                        values={
+                            "id": str(
+                                uuid5(
+                                    NAMESPACE_URL,
+                                    f"recovery-material:{child_id}:{material.upload_ordinal}",
+                                )
+                            ),
+                            "run_id": child_id,
+                            "tenant_id": scope.tenant_id,
+                            "space_id": scope.space_id,
+                            **material.model_dump(),
+                        },
+                    )
+                )
+            writes.extend(
+                (
+                    DomainWriteSpec(
+                        table=ProductStage.__tablename__,
+                        values={
+                            "id": stage_id,
+                            "run_id": child_id,
+                            "space_id": scope.space_id,
+                            "stage_key": "uploads",
+                            "dependency_sha256": dependency,
+                            "job_id": job_id,
+                            "parent_job_id": None,
+                            "created_at": now,
+                        },
+                    ),
+                    DomainWriteSpec(
+                        table=ProductArtifact.__tablename__,
+                        values={
+                            "id": str(uuid5(NAMESPACE_URL, "recovery-plan:" + child_id)),
+                            "run_id": child_id,
+                            "space_id": scope.space_id,
+                            "stage_key": "uploads",
+                            "artifact_kind": RECOVERY_KIND,
+                            "artifact_key": "product",
+                            "contract_name": plan.contract,
+                            "contract_version": "1",
+                            "dependency_sha256": plan.digest(),
+                            "payload": plan.encoded(),
+                            "payload_sha256": plan.digest(),
+                            "origin": "rule",
+                            "origin_call_id": None,
+                            "producer_job_id": job_id,
+                            "producer_generation": 0,
+                            "created_at": now,
+                        },
+                    ),
+                )
+            )
+        # Terminal origins cannot be mutated through the store. Admission intent,
+        # references and the claimable job commit together through the P1 port.
+        self._jobs.enqueue(
+            space_id=scope.space_id,
+            job_type="product_stage_uploads",
+            idempotency_key=f"{child_id}:uploads:{dependency}",
+            job_id=job_id,
+            payload={"run_id": child_id, "stage_key": "uploads"},
+            domain_writes=tuple(writes),
+        )
+        return self.get_run(scope=scope, run_id=child_id)
 
     def retry_fields(
         self,

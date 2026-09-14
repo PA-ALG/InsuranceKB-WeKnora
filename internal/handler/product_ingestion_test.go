@@ -22,11 +22,13 @@ import (
 )
 
 type productGatewayBridgeStub struct {
-	created  int
-	reads    int
-	retries  int
-	expected int
-	fail     bool
+	created    int
+	reads      int
+	recoveries int
+	version    int64
+	retries    int
+	expected   int
+	fail       bool
 }
 
 func (s *productGatewayBridgeStub) Scope() service.ProductIngestionScope {
@@ -53,6 +55,12 @@ func (s *productGatewayBridgeStub) GetRun(context.Context, string) (*service.Pro
 func (s *productGatewayBridgeStub) RetryFields(_ context.Context, _ string, keys []string) (*service.ProductIngestionRun, error) {
 	s.retries++
 	return &service.ProductIngestionRun{RunID: "retry-run", State: "running"}, nil
+}
+
+func (s *productGatewayBridgeStub) RetryProcessing(_ context.Context, _ string, version int64) (*service.ProductIngestionRun, error) {
+	s.recoveries++
+	s.version = version
+	return &service.ProductIngestionRun{RunID: "recovery-run", State: "running", Version: 1}, nil
 }
 
 type productGatewayKBStub struct {
@@ -122,6 +130,7 @@ func productGatewayRouter(t *testing.T, bridge *productGatewayBridgeStub, kb *pr
 	r.GET(base, handler.List)
 	r.GET(base+"/:run_id", handler.Get)
 	r.POST(base+"/:run_id/retry-fields", handler.RetryFields)
+	r.POST(base+"/:run_id/retry-processing", handler.RetryProcessing)
 	return r, kg
 }
 func productUploadRequest(t *testing.T, count int, extra string) *http.Request {
@@ -238,4 +247,33 @@ func TestProductIngestionGatewayReadAndStrictRetryContract(t *testing.T) {
 	router.ServeHTTP(response, request)
 	require.Equal(t, 201, response.Code, response.Body.String())
 	require.Equal(t, 1, bridge.retries)
+}
+
+func TestProductIngestionGatewayRecoveryStrictVersionAndDualKBWrite(t *testing.T) {
+	bridge := &productGatewayBridgeStub{}
+	router, _ := productGatewayRouter(t, bridge, &productGatewayKBStub{}, types.TenantRoleAdmin)
+	const path = "/api/v1/knowledge-bases/raw/product-ingestions/server-run/retry-processing"
+	for _, body := range []string{`{}`, `{"expected_version":0}`, `{"expected_version":-1}`, `{"expected_version":1.5}`, `{"expected_version":"7"}`, `{"expected_version":7,"knowledge_id":"other"}`, `{"expected_version":7} {}`, `{"expected_version":9007199254740992}`, `{"expected_version":6,"expected_version":7}`, `{"EXPECTED_VERSION":7}`} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest("POST", path, strings.NewReader(body)))
+		require.Equal(t, 400, response.Code, body)
+	}
+	require.Zero(t, bridge.recoveries)
+	for _, deny := range []bool{false, true} {
+		role := types.TenantRoleViewer
+		if deny {
+			role = types.TenantRoleAdmin
+		}
+		denied, _ := productGatewayRouter(t, bridge, &productGatewayKBStub{denyWiki: deny}, role)
+		response := httptest.NewRecorder()
+		denied.ServeHTTP(response, httptest.NewRequest("POST", path, strings.NewReader(`{"expected_version":7}`)))
+		require.Contains(t, []int{403, 404}, response.Code)
+	}
+	require.Zero(t, bridge.recoveries)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest("POST", path, strings.NewReader(`{"expected_version":7}`)))
+	require.Equal(t, 201, response.Code, response.Body.String())
+	require.Equal(t, 1, bridge.recoveries)
+	require.Equal(t, int64(7), bridge.version)
+	require.Zero(t, bridge.retries)
 }

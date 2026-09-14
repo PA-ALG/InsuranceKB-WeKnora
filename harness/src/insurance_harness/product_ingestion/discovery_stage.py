@@ -65,8 +65,7 @@ def _summary():
 def _unchanged_sources(request, base):
     # Compare exact identities, Schema versions, text and evidence geometry.
     prior_bindings = {
-        row["entity_id"]: row
-        for row in base["published_projection"].get("entity_bindings", ())
+        row["entity_id"]: row for row in base["published_projection"].get("entity_bindings", ())
     }
     if any(
         prior_bindings.get(row.entity_id) != row.model_dump(mode="json")
@@ -85,7 +84,18 @@ def _unchanged_sources(request, base):
 
 
 async def run_discovery_stage(
-    *, service, artifacts, scope, run, stage, job, request, field_delta, entity_id, base
+    *,
+    service,
+    artifacts,
+    scope,
+    run,
+    stage,
+    job,
+    request,
+    field_delta,
+    entity_id,
+    base,
+    processing_recovery=False,
 ):
     drafts = []
     summary = _summary()
@@ -131,7 +141,7 @@ async def run_discovery_stage(
 
     phase = "GENERATION"
     try:
-        if run.retry_of_run_id:
+        if run.retry_of_run_id and not processing_recovery:
             prior = artifacts.list_artifacts(
                 scope=scope, run_id=run.retry_of_run_id, artifact_kind="discovery_summary"
             )

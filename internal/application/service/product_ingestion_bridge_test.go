@@ -278,3 +278,31 @@ func TestProductIngestionBridgePreservesNullAndZeroDiscoveryCoverage(t *testing.
 		require.JSONEq(t, string(want), string(actual))
 	}
 }
+
+func TestProductIngestionBridgeRecoveryVersionOnlySingleDispatch(t *testing.T) {
+	options := productBridgeOptions()
+	calls := 0
+	options.Transport = productBridgeTransport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		require.Equal(t, "/product-ingestion/v1/spaces/space/runs/run-1/retry-processing", r.URL.Path)
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"expected_version":7}`, string(body))
+		result := strings.Replace(productBridgeRun(), `"state":"running"`, `"state":"failed","version":7,"can_retry_processing":true`, 1)
+		return bridgeResponse(r, 201, result), nil
+	})
+	bridge, err := NewProductIngestionHTTPBridge(options)
+	require.NoError(t, err)
+	for _, version := range []int64{0, -1, 9007199254740992} {
+		_, err := bridge.RetryProcessing(context.Background(), "run-1", version)
+		require.Error(t, err)
+	}
+	_, err = bridge.RetryProcessing(context.Background(), "../other", 7)
+	require.Error(t, err)
+	require.Zero(t, calls)
+	run, err := bridge.RetryProcessing(context.Background(), "run-1", 7)
+	require.NoError(t, err)
+	require.Equal(t, int64(7), run.Version)
+	require.True(t, run.CanRetryProcessing)
+	require.Equal(t, 1, calls)
+}

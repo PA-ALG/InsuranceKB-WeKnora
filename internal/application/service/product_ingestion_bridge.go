@@ -120,6 +120,8 @@ type productIngestionWireScope struct {
 	WikiKnowledgeBaseID string `json:"wiki_knowledge_base_id"`
 }
 type ProductIngestionRun struct {
+	Version                      int64                             `json:"version"`
+	CanRetryProcessing           bool                              `json:"can_retry_processing"`
 	RunID                        string                            `json:"run_id"`
 	Scope                        productIngestionWireScope         `json:"scope"`
 	WikiKnowledgeBaseID          string                            `json:"wiki_knowledge_base_id"`
@@ -150,6 +152,7 @@ type ProductIngestionBridge interface {
 	ListRuns(context.Context) ([]ProductIngestionRun, error)
 	GetRun(context.Context, string) (*ProductIngestionRun, error)
 	RetryFields(context.Context, string, []string) (*ProductIngestionRun, error)
+	RetryProcessing(context.Context, string, int64) (*ProductIngestionRun, error)
 }
 
 var ErrProductIngestionUnavailable = errors.New("PRODUCT_INGESTION_UNAVAILABLE")
@@ -227,6 +230,13 @@ func (b *productIngestionHTTPBridge) RetryFields(ctx context.Context, id string,
 		seen[key] = true
 	}
 	return b.run(ctx, http.MethodPost, "/"+id+"/retry-fields", map[string]any{"field_keys": keys})
+}
+
+func (b *productIngestionHTTPBridge) RetryProcessing(ctx context.Context, id string, version int64) (*ProductIngestionRun, error) {
+	if !productIngestionID.MatchString(id) || version < 1 || version > 9007199254740991 {
+		return nil, &ProductIngestionBridgeError{StatusCode: 400}
+	}
+	return b.run(ctx, http.MethodPost, "/"+id+"/retry-processing", map[string]any{"expected_version": version})
 }
 
 func (b *productIngestionHTTPBridge) run(ctx context.Context, method, suffix string, body any) (*ProductIngestionRun, error) {

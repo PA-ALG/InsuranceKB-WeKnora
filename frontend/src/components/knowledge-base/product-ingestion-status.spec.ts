@@ -2,7 +2,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const api = vi.hoisted(() => ({ listProductIngestions: vi.fn(), getProductIngestion: vi.fn(), retryProductFields: vi.fn() }))
+const api = vi.hoisted(() => ({ listProductIngestions: vi.fn(), getProductIngestion: vi.fn(), retryProductFields: vi.fn(), retryProductProcessing: vi.fn() }))
 vi.mock('@/api/product-ingestion', () => api)
 const modules = import.meta.glob('./product-ingestion-status.vue')
 const mounted: ReturnType<typeof mount>[] = []
@@ -69,6 +69,29 @@ describe('persistent product processing status', () => {
     await flushPromises()
     expect(api.retryProductFields).toHaveBeenCalledWith('kb', 'r1', ['premium'])
     expect(w.findAll('[data-testid="product-run"]')).toHaveLength(2)
+  })
+  it('starts a version-bound source recovery once and preserves the failed run', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ state: 'failed', fields: [], version: 7, can_retry_processing: true })])
+    let resolve!: (value: any) => void
+    api.retryProductProcessing.mockImplementation(() => new Promise(r => { resolve = r }))
+    const w = await render()
+    const button = w.get('[data-testid="retry-processing"]')
+    await button.trigger('click')
+    await button.trigger('click')
+    expect(api.retryProductProcessing).toHaveBeenCalledTimes(1)
+    expect(api.retryProductProcessing).toHaveBeenCalledWith('kb', 'r1', 7)
+    resolve(run({ run_id: 'recovery', state: 'running', fields: [], finished_at: undefined }))
+    await flushPromises()
+    expect(w.findAll('[data-testid="product-run"]')).toHaveLength(2)
+    expect(w.text()).toContain('处理失败')
+  })
+  it.each([
+    { state: 'failed', version: 7, can_retry_processing: false },
+    { state: 'running', version: 7, can_retry_processing: true },
+    { state: 'failed', version: 0, can_retry_processing: true },
+  ])('does not expose an unavailable source recovery', async extra => {
+    api.listProductIngestions.mockResolvedValue([run({ fields: [], ...extra })])
+    expect((await render()).find('[data-testid="retry-processing"]').exists()).toBe(false)
   })
   it.each(['javascript:alert(1)', '//evil.example/x', 'https://evil.example/x', '/platform/knowledge-bases/kb/../../settings'])('rejects unsafe publication URL %s', async url => {
     api.listProductIngestions.mockResolvedValue([run({ published_url: url })])

@@ -225,7 +225,11 @@ def build_product_pipeline(context):
             row.knowledge_id: row.source.inferred_material_role for row in run.materials
         }
         origin_call_id = None
-        if run.retry_of_run_id:
+        field_retry = (
+            run.retry_of_run_id
+            and store.processing_recovery_plan(scope=scope, run_id=run.run_id) is None
+        )
+        if field_retry:
             previous = json.loads(read(scope, run.retry_of_run_id, "identity"))
             if resolver.BatchCorpusV1.model_validate(previous["corpus"]) != corpus:
                 raise needs_confirmation_error("RETRY_SOURCE_IDENTITY_CHANGED")
@@ -368,7 +372,7 @@ def build_product_pipeline(context):
             "resolution": resolution,
             "selected_refs": refs,
             "current_entity_ids": [bindings[0].entity_id],
-            "reused_from_run_id": run.retry_of_run_id,
+            "reused_from_run_id": run.retry_of_run_id if field_retry else None,
         }
         return StageOutput(
             (
@@ -397,7 +401,10 @@ def build_product_pipeline(context):
         base = await asyncio.to_thread(base_for, scope, run.run_id)
         selected = None
         refresh = []
-        if run.retry_of_run_id:
+        if (
+            run.retry_of_run_id
+            and store.processing_recovery_plan(scope=scope, run_id=run.run_id) is None
+        ):
             selected = {
                 (row.entity_id, row.field_key)
                 for row in store.list_field_attempts(scope=scope, run_id=run.retry_of_run_id)
@@ -498,6 +505,8 @@ def build_product_pipeline(context):
 
         identity_values = json.loads(read(scope, run.run_id, "identity"))
         return await run_discovery_stage(
+            processing_recovery=store.processing_recovery_plan(scope=scope, run_id=run.run_id)
+            is not None,
             service=service_for(scope),
             artifacts=artifacts,
             scope=scope,

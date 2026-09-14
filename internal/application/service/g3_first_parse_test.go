@@ -56,7 +56,7 @@ func firstParseNative(t *testing.T, pages ...string) *types.ReadResult {
 	digest := testSHA256Bytes830G2(data)
 	return &types.ReadResult{MarkdownContent: markdown, NativeStructure: &types.NativeStructureArtifact{SchemaVersion: p.Contract, SourceSHA256: p.SourceSHA256, RawSHA256: digest, SanitizedSHA256: digest, SanitizedJSON: data}}
 }
-func seedFirstParseSnapshot(t *testing.T, authority *ConceptSourceAuthorityService830G2, scope types.WikiReleaseScope, result *types.ReadResult, chunks []types.ParsedChunk) {
+func seedFirstParseSnapshot(t *testing.T, authority *ConceptSourceAuthorityService830G2, scope types.WikiReleaseScope, result *types.ReadResult, chunks []types.ParsedChunk, captured ...[]types.ParsedChunk) {
 	t.Helper()
 	repo := authority.revisions.(*conceptKnowledgeStub830G2)
 	manifest := []types.RevisionManifestChunk{}
@@ -77,7 +77,11 @@ func seedFirstParseSnapshot(t *testing.T, authority *ConceptSourceAuthorityServi
 	repo.source.BindingDigest, err = types.ComputeKnowledgeRevisionSourceBindingDigest(*repo.source)
 	require.NoError(t, err)
 	authority.chunks = conceptChunksStub830G2{chunks: rows}
-	require.NoError(t, (&G3FirstParseStore{reuse: authority.sourceReuse}).save(g3FirstParseIdentityForSource(scope, repo.source), result, chunks))
+	stored := chunks
+	if len(captured) > 0 {
+		stored = captured[0]
+	}
+	require.NoError(t, (&G3FirstParseStore{reuse: authority.sourceReuse}).save(g3FirstParseIdentityForSource(scope, repo.source), result, stored))
 }
 func TestG3FirstParseCRLFRestartSnapshotAndTamperedArtifact(t *testing.T) {
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
@@ -331,7 +335,10 @@ func TestG3FirstParseRealParentChildTableCoordinates(t *testing.T) {
 	manifest := []types.RevisionManifestChunk{}
 	ranges := []g3FirstParseRange{}
 	for i, c := range chunks {
-		manifest = append(manifest, types.RevisionManifestChunk{ID: fmt.Sprintf("db-chunk-%d", i), Index: c.Seq, Content: c.Content})
+		// Production ListChunksByKnowledgeID and revision manifests contain text children only.
+		if c.Seq >= len(result.Parents) {
+			manifest = append(manifest, types.RevisionManifestChunk{ID: fmt.Sprintf("db-chunk-%d", i), Index: c.Seq, Content: c.Content})
+		}
 		ranges = append(ranges, g3FirstParseRange{Index: c.Seq, Start: c.Start, End: c.End, ContentSHA256: testSHA256830G2(c.Content)})
 	}
 	_, err = types.ComputeRevisionManifestDigest("knowledge", 3, manifest)
@@ -381,6 +388,152 @@ func TestG3FirstParseRejectsLegacyCacheWithExistingFirstArtifact(t *testing.T) {
 			require.Error(t, err, "an existing first parse must be bound even when a legacy cache key matches")
 			require.Empty(t, authority.sourceReuse.entries[key].record.FirstParseSHA256, "do not overwrite the historical cache")
 			require.Zero(t, doc.calls)
+		})
+	}
+}
+
+func TestG3FirstParseCanonicalSubsetRestartSnapshot(t *testing.T) {
+	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
+	authority, doc, scope, _, _ := nativeIndexFixture830G2(t)
+	authority.codec = sourceReuseTestCodec830G3(t)
+	authority.sourceReuse = newConceptSourceReuseStore830G3(authority.codec)
+	readySourceReuseResource830G3(authority)
+	result := firstParseNative(t, "父块标题\r\n正文子块")
+	text := "正文子块"
+	start := len([]rune("父块标题\r\n"))
+	children := []types.ParsedChunk{{Seq: 1, Content: text, Start: start, End: len([]rune(result.MarkdownContent))}}
+	captured := append([]types.ParsedChunk{{Seq: 0, Content: result.MarkdownContent, Start: 0, End: len([]rune(result.MarkdownContent))}}, children...)
+	seedFirstParseSnapshot(t, authority, scope, result, children, captured)
+	repo := authority.revisions.(*conceptKnowledgeStub830G2)
+	key, err := g3FirstParseKey(g3FirstParseIdentityForSource(scope, repo.source))
+	require.NoError(t, err)
+	path := filepath.Join(authority.sourceReuse.root, key+".json")
+	original, err := os.ReadFile(path)
+	require.NoError(t, err)
+	// Consume the already signed on-disk artifact with no parser installed.
+	authority.sourceReuse = newConceptSourceReuseStore830G3(authority.codec)
+	authority.docreader = nil
+	prepared, err := authority.captureG3PlatformSource830G3(context.Background(), scope, repo.source)
+	require.NoError(t, err)
+	require.Len(t, prepared.record.Chunks, 1)
+	require.Len(t, prepared.record.ChunkRanges, 1)
+	require.Equal(t, text, prepared.record.Chunks[0].Content)
+	require.Equal(t, 1, repo.source.ChunkCount)
+	require.Equal(t, G3PlatformChunkMappingExactBlock, g3PlatformChunkPageMapping(prepared.record.Chunks[0], prepared.index, prepared.record.ChunkRanges).Status)
+	authority.sourceReuse = newConceptSourceReuseStore830G3(authority.codec)
+	reopened, err := authority.captureG3PlatformSource830G3(context.Background(), scope, repo.source)
+	require.NoError(t, err)
+	require.Equal(t, prepared.record, reopened.record)
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, original, after)
+	require.Zero(t, doc.calls)
+	// Cache ranges are exactly the canonical subset, never the extra parent asset.
+	changed := reopened.record
+	changed.ChunkRanges = map[string]g3FirstParseRange{}
+	for id, r := range reopened.record.ChunkRanges {
+		changed.ChunkRanges[id] = r
+	}
+	changed.ChunkRanges["extra-parent"] = g3FirstParseRange{Index: 0, Start: 0, End: len([]rune(result.MarkdownContent)), ContentSHA256: testSHA256830G2(result.MarkdownContent)}
+	first, err := authority.sourceReuse.readFirstParse(g3FirstParseIdentityForSource(scope, repo.source))
+	require.NoError(t, err)
+	require.Error(t, g3CachedFirstParseMatches(first, &changed))
+}
+
+func TestG3FirstParseCanonicalSubsetRejectsInvalidMembers(t *testing.T) {
+	text := "父正文"
+	parent := g3FirstParseRange{Index: 0, Start: 0, End: 3, ContentSHA256: testSHA256830G2(text)}
+	child := g3FirstParseRange{Index: 1, Start: 1, End: 3, ContentSHA256: testSHA256830G2("正文")}
+	valid := types.RevisionManifestChunk{ID: "child", Index: 1, Content: "正文"}
+	cases := []struct {
+		name     string
+		ranges   []g3FirstParseRange
+		manifest []types.RevisionManifestChunk
+	}{
+		{"missing canonical", []g3FirstParseRange{parent}, []types.RevisionManifestChunk{valid}},
+		{"changed content", []g3FirstParseRange{parent, child}, []types.RevisionManifestChunk{{ID: "child", Index: 1, Content: "正误"}}},
+		{"duplicate canonical range", []g3FirstParseRange{parent, child}, []types.RevisionManifestChunk{valid, {ID: "second-id", Index: 1, Content: "正文"}}},
+		{"tampered offset", []g3FirstParseRange{parent, {Index: 1, Start: 0, End: 2, ContentSHA256: child.ContentSHA256}}, []types.RevisionManifestChunk{valid}},
+		{"duplicate signed range", []g3FirstParseRange{parent, child, child}, []types.RevisionManifestChunk{valid}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := g3FirstParseBindings(&g3FirstParseRecord{Markdown: text, Chunks: tc.ranges}, tc.manifest)
+			require.Error(t, err)
+		})
+	}
+}
+
+// Optional read-only regression against exported real first captures and their
+// durable canonical manifests. No source body or signature key lives in the repo.
+func TestG3FirstParseExportedCanonicalSubset(t *testing.T) {
+	dir := os.Getenv("G3_FIRST_PARSE_DIAGNOSTIC_DIR")
+	if dir == "" {
+		t.Skip("set G3_FIRST_PARSE_DIAGNOSTIC_DIR to existing read-only exports")
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "db.json"))
+	require.NoError(t, err)
+	var db struct {
+		Revisions []struct {
+			KnowledgeID    string `json:"knowledge_id"`
+			ParseAttempt   int64  `json:"parse_attempt"`
+			ManifestDigest string `json:"manifest_digest"`
+			ChunkCount     int    `json:"chunk_count"`
+		} `json:"revisions"`
+		Chunks []struct {
+			ID           string `json:"id"`
+			KnowledgeID  string `json:"knowledge_id"`
+			ParseAttempt int64  `json:"parse_attempt"`
+			ChunkIndex   int    `json:"chunk_index"`
+			Content      string `json:"content"`
+			ChunkType    string `json:"chunk_type"`
+		} `json:"chunks"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &db))
+	files, err := filepath.Glob(filepath.Join(dir, "first-*.json"))
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+	for _, path := range files {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			before, err := os.ReadFile(path)
+			require.NoError(t, err)
+			var envelope struct {
+				Payload g3FirstParseRecord `json:"payload"`
+			}
+			require.NoError(t, json.Unmarshal(before, &envelope))
+			first := &envelope.Payload
+			require.NoError(t, validateG3FirstParse(first, first.Identity))
+			manifest := []types.RevisionManifestChunk{}
+			for _, c := range db.Chunks {
+				if c.KnowledgeID == first.Identity.KnowledgeID && c.ParseAttempt == first.Identity.ParseAttempt && c.ChunkType == "text" {
+					manifest = append(manifest, types.RevisionManifestChunk{ID: c.ID, Index: c.ChunkIndex, Content: c.Content})
+				}
+			}
+			sort.Slice(manifest, func(i, j int) bool { return manifest[i].Index < manifest[j].Index })
+			digest, err := types.ComputeRevisionManifestDigest(first.Identity.KnowledgeID, first.Identity.ParseAttempt, manifest)
+			require.NoError(t, err)
+			matched := false
+			for _, rev := range db.Revisions {
+				if rev.KnowledgeID == first.Identity.KnowledgeID && rev.ParseAttempt == first.Identity.ParseAttempt {
+					require.Equal(t, rev.ManifestDigest, digest)
+					require.Len(t, manifest, rev.ChunkCount)
+					matched = true
+				}
+			}
+			require.True(t, matched)
+			ranges, err := g3FirstParseBindings(first, manifest)
+			require.NoError(t, err)
+			require.Len(t, ranges, len(manifest))
+			require.Greater(t, len(first.Chunks), len(ranges))
+			index, err := prepareConceptNativeQuoteIndex830G2(g3FirstParseResult(first), first.Identity.SourceSHA256, first.ParserIdentitySHA256)
+			require.NoError(t, err)
+			for _, c := range manifest {
+				require.True(t, g3FirstParseRangeMatches(first.Markdown, c.Content, ranges[c.ID]))
+				require.Equal(t, G3PlatformChunkMappingExactBlock, g3PlatformChunkPageMapping(c, index, ranges).Status)
+			}
+			after, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, before, after)
 		})
 	}
 }
