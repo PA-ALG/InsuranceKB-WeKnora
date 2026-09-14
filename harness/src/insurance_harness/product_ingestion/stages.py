@@ -144,13 +144,16 @@ def read_source_snapshots(artifacts, scope, run_id, *, public_keys):
 
 
 async def load_source_blocks(artifacts, scope, run_id, *, public_keys):
-    return tuple(
-        block
-        for source in read_source_snapshots(
-            artifacts, scope, run_id, public_keys=public_keys
-        ).values()
-        for block in source.blocks
-    )
+    def load():
+        return tuple(
+            block
+            for source in read_source_snapshots(
+                artifacts, scope, run_id, public_keys=public_keys
+            ).values()
+            for block in source.blocks
+        )
+
+    return await asyncio.to_thread(load)
 
 
 def register_source_stages(

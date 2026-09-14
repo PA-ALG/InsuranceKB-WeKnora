@@ -740,13 +740,12 @@ class ProductIngestionStore:
         request_sha256: str | None = None,
         tasks: tuple[WindowTaskSpec, ...],
     ) -> WindowReservation:
+        task_values = [task.model_dump(mode="json") for task in tasks]
         with self._session_factory() as session:
             with session.begin():
-                self._active_job(session, scope, job_id, generation)
-                window = self._window_for_job(session, scope, run_id, job_id)
-                if window.window_key != window_key or window.tasks != [
-                    task.model_dump(mode="json") for task in tasks
-                ]:
+                # This lock precedes the job fence and is compatible with FK KEY SHARE.
+                window = self._window_for_job(session, scope, run_id, job_id, reserve_lock=True)
+                if window.window_key != window_key or window.tasks != task_values:
                     raise ValueError("window reservation does not match its sealed task set")
                 if window.selected_field_keys is None:
                     cached = self._lookup_cache(
@@ -755,12 +754,6 @@ class ProductIngestionStore:
                     selected = tuple(
                         task for task in tasks if task.cache_identity.cache_key not in cached
                     )
-                    window.selected_field_keys = [
-                        [task.entity_id, task.field_key] for task in selected
-                    ]
-                    window.cached_attempt_ids = [item.attempt_id for item in cached.values()]
-                    window.reservation_generation = generation
-                    window.reserved_at = database_now(session)
                 else:
                     selected_keys = {tuple(item) for item in window.selected_field_keys}
                     selected = tuple(
@@ -769,6 +762,16 @@ class ProductIngestionStore:
                     cached = self._attempts_by_id(
                         session, scope, tuple(window.cached_attempt_ids or ())
                     )
+                # Complete task hydration/comparison and cache selection run without
+                # holding WikiJob. No selection/call mutation occurs before this fence.
+                self._active_job(session, scope, job_id, generation)
+                if window.selected_field_keys is None:
+                    window.selected_field_keys = [
+                        [task.entity_id, task.field_key] for task in selected
+                    ]
+                    window.cached_attempt_ids = [item.attempt_id for item in cached.values()]
+                    window.reservation_generation = generation
+                    window.reserved_at = database_now(session)
                 if not selected:
                     return WindowReservation(
                         action=WindowReservationAction.ALL_CACHED,
@@ -1205,8 +1208,12 @@ class ProductIngestionStore:
             and run.terminal_reason == "PRODUCT_STAGE_FAILED:identity"
             and row.idempotency_key.startswith(RECOVERY_V3_PREFIX)
         )
+        extract_retry = run.state is ProductRunState.FAILED and run.terminal_reason in {
+            "PRODUCT_STAGE_FAILED:extract",
+            "FIELD_WINDOW_TERMINAL_RESULTS_INCOMPLETE",
+        }
         if (
-            not (title_retry or identity_retry or plan_retry or replay_retry)
+            not (title_retry or identity_retry or plan_retry or replay_retry or extract_retry)
             and (
                 run.state is not ProductRunState.FAILED
                 or run.terminal_reason != "PRODUCT_STAGE_FAILED:source"
@@ -1219,7 +1226,8 @@ class ProductIngestionStore:
             or (
                 any(m.source is None for m in run.materials)
                 if plan_retry
-                else not replay_retry and any(m.source is not None for m in run.materials)
+                else not (replay_retry or extract_retry)
+                and any(m.source is not None for m in run.materials)
             )
         ):
             return False
@@ -1233,12 +1241,16 @@ class ProductIngestionStore:
             expected_stages = {"uploads", "source", "routing", "identity"}
         if plan_retry:
             expected_stages = {"uploads", "source", "routing", "identity", "field_plan"}
+        if extract_retry:
+            expected_stages = {"uploads", "source", "routing", "identity", "field_plan", "extract"}
         if {stage.stage_key for stage in stages} != expected_stages:
             return False
         source = next(stage for stage in stages if stage.stage_key == "source")
-        if plan_retry or replay_retry:
+        if plan_retry or replay_retry or extract_retry:
             by_stage = {stage.stage_key: stage for stage in stages}
-            failed_stage = "field_plan" if plan_retry else "identity"
+            failed_stage = (
+                "extract" if extract_retry else "field_plan" if plan_retry else "identity"
+            )
             if (
                 any(by_stage[key].state != "succeeded" for key in expected_stages - {failed_stage})
                 or by_stage[failed_stage].state != "dead_letter"
@@ -1246,6 +1258,13 @@ class ProductIngestionStore:
                 is None
                 or self._recorded_identity_ref(session, scope, run, verify_sources=verify_sources)
                 is None
+            ):
+                return False
+            if extract_retry and (
+                not (by_stage["extract"].error_summary or "").endswith(
+                    "FIELD_WINDOW_TERMINAL_RESULTS_INCOMPLETE"
+                )
+                or not self._undispatched_failed_windows(session, scope, run.run_id)
             ):
                 return False
         elif identity_retry:
@@ -1288,11 +1307,93 @@ class ProductIngestionStore:
         ):
             return False
         for table in (ProductStageModelCall, ProductWindow, ProductFieldAttempt):
-            if (identity_retry or plan_retry or replay_retry) and table is ProductStageModelCall:
+            if (
+                identity_retry or plan_retry or replay_retry or extract_retry
+            ) and table is ProductStageModelCall:
+                continue
+            if extract_retry and table is ProductWindow:
                 continue
             if session.scalar(select(table.id).where(table.run_id == row.id).limit(1)):
                 return False
         return True
+
+    @staticmethod
+    def _undispatched_failed_windows(session, scope, run_id):
+        """Only abandon wholly unstarted field work; never replay uncertain calls."""
+        windows = session.execute(
+            select(
+                ProductWindow.id.label("window_id"),
+                ProductWindow.window_key,
+                ProductWindow.space_id,
+                ProductWindow.stage_key,
+                ProductWindow.job_id,
+                WikiJob.space_id.label("job_space"),
+                WikiJob.state,
+                WikiJob.job_type,
+                WikiJob.payload,
+            )
+            .outerjoin(WikiJob, WikiJob.id == ProductWindow.job_id)
+            .where(ProductWindow.run_id == run_id)
+        ).all()
+        if not windows or any(
+            row.space_id != scope.space_id
+            or row.job_space != scope.space_id
+            or row.stage_key != "extract"
+            or row.state not in {"dead_letter", "blocked"}
+            or row.job_type != "product_extraction_window"
+            or not isinstance(row.payload, dict)
+            or row.payload.get("run_id") != run_id
+            or row.payload.get("stage_key") != row.stage_key
+            or row.payload.get("window_key") != row.window_key
+            for row in windows
+        ):
+            return False
+        bindings = {row.window_id: row.job_id for row in windows}
+        if session.scalar(
+            select(ProductFieldAttempt.id)
+            .where(
+                or_(
+                    ProductFieldAttempt.run_id == run_id,
+                    ProductFieldAttempt.window_id.in_(tuple(bindings)),
+                )
+            )
+            .limit(1)
+        ):
+            return False
+        calls = session.execute(
+            select(
+                ProductModelCall.run_id,
+                ProductModelCall.window_id,
+                ProductModelCall.job_id,
+                ProductModelCall.space_id,
+                ProductModelCall.state,
+                ProductModelCall.dispatched_at,
+                ProductModelCall.recorded_at,
+                ProductModelCall.request_sha256,
+                ProductModelCall.raw_sha256,
+                ProductModelCall.raw.is_not(None).label("has_raw"),
+                ProductModelCall.request_bytes.is_not(None).label("has_request"),
+            ).where(
+                or_(
+                    ProductModelCall.run_id == run_id,
+                    ProductModelCall.window_id.in_(tuple(bindings)),
+                    ProductModelCall.job_id.in_(tuple(bindings.values())),
+                )
+            )
+        ).all()
+        return all(
+            row.run_id == run_id
+            and row.space_id == scope.space_id
+            and bindings.get(row.window_id) == row.job_id
+            and row.state == "reserved"
+            and row.dispatched_at is None
+            and row.recorded_at is None
+            and row.request_sha256 is None
+            and row.raw_sha256 is None
+            and not row.has_raw
+            and not row.has_request
+            for row in calls
+        )
 
     def _recorded_identity_ref(self, session, scope, run, *, read_lock=False, verify_sources=True):
         """Resolve only an intact recorded call through verified recovery ancestry."""
@@ -1463,6 +1564,8 @@ class ProductIngestionStore:
             ) or origin_run.terminal_reason in {
                 "PRODUCT_STAGE_FAILED:field_plan",
                 "PRODUCT_STAGE_FAILED:identity",
+                "PRODUCT_STAGE_FAILED:extract",
+                "FIELD_WINDOW_TERMINAL_RESULTS_INCOMPLETE",
             }
             plan_type = (
                 RecordedIdentityRecoveryPlan
@@ -2194,12 +2297,19 @@ class ProductIngestionStore:
         return row
 
     def _window_for_job(
-        self, session: Session, scope: ProductScope, run_id: str, job_id: str
+        self,
+        session: Session,
+        scope: ProductScope,
+        run_id: str,
+        job_id: str,
+        *,
+        reserve_lock: bool = False,
     ) -> ProductWindow:
         self._run(session, scope, run_id)
-        row = session.execute(
-            select(ProductWindow).where(ProductWindow.job_id == job_id)
-        ).scalar_one_or_none()
+        statement = select(ProductWindow).where(ProductWindow.job_id == job_id)
+        if reserve_lock:
+            statement = statement.with_for_update(key_share=True)
+        row = session.execute(statement).scalar_one_or_none()
         if row is None or row.space_id != scope.space_id or row.run_id != run_id:
             raise SpaceScopeError()
         return row

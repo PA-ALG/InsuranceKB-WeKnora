@@ -25,9 +25,7 @@ from insurance_harness.product_ingestion.store import ProductIngestionStore
 from insurance_harness.service_shell.worker import HandlerRegistry, HandlerResult
 
 SourceLoader = Callable[[ProductScope, str], Awaitable[Sequence[SourceBlock]]]
-FieldTransportFactory = Callable[
-    [ProductScope, str, JobSnapshot], ConfiguredFieldTransport
-]
+FieldTransportFactory = Callable[[ProductScope, str, JobSnapshot], ConfiguredFieldTransport]
 
 
 def provider_usage(raw: bytes | None) -> dict[str, int]:
@@ -52,6 +50,18 @@ def provider_usage(raw: bytes | None) -> dict[str, int]:
         and type(value) is int
         and value >= 0
     }
+
+
+def _restore_field_tasks(selected):
+    field_tasks = tuple(FieldTaskV1.model_validate(task.task_payload) for task in selected)
+    for spec, task in zip(selected, field_tasks, strict=True):
+        if (spec.entity_id, spec.field_key, spec.task_sha256) != (
+            task.entity_id,
+            task.field_key,
+            task.task_sha256,
+        ):
+            raise ValueError("persisted task identity mismatch")
+    return field_tasks
 
 
 def register_extraction_worker(
@@ -112,22 +122,12 @@ def register_extraction_worker(
             selected = tuple(
                 task for task in window.tasks if (task.entity_id, task.field_key) in keys
             )
-            field_tasks = tuple(FieldTaskV1.model_validate(task.task_payload) for task in selected)
-            for spec, task in zip(selected, field_tasks, strict=True):
-                if (spec.entity_id, spec.field_key, spec.task_sha256) != (
-                    task.entity_id,
-                    task.field_key,
-                    task.task_sha256,
-                ):
-                    raise ValueError("persisted task identity mismatch")
+            field_tasks = await asyncio.to_thread(_restore_field_tasks, selected)
             configured = (
-                transport_factory(scope, run_id, job)
-                if transport_factory is not None
-                else None
+                transport_factory(scope, run_id, job) if transport_factory is not None else None
             )
             if configured is not None and any(
-                spec.model_policy_sha256 != configured.model_policy_sha256
-                for spec in selected
+                spec.model_policy_sha256 != configured.model_policy_sha256 for spec in selected
             ):
                 raise ValueError("field task model policy is not current")
             sources = await load_sources(scope, run_id)
@@ -137,7 +137,7 @@ def register_extraction_worker(
             async def begin(call_id, request_sha256, request_bytes):
                 nonlocal prepared, exact_request_sha256
                 if configured is not None:
-                    prepared = configured.prepare(request_bytes)
+                    prepared = await asyncio.to_thread(configured.prepare, request_bytes)
                     request_bytes = prepared.request_bytes
                     request_sha256 = prepared.request_sha256
                     exact_request_sha256 = request_sha256
@@ -181,7 +181,9 @@ def register_extraction_worker(
             if configured is not None and reservation.action is WindowReservationAction.RECORDED:
                 if recorded_request_bytes is None:
                     raise ValueError("recorded field call has no endpoint request")
-                recorded_request_bytes = configured.semantic_request(recorded_request_bytes)
+                recorded_request_bytes = await asyncio.to_thread(
+                    configured.semantic_request, recorded_request_bytes
+                )
 
             projected = await execute_window(
                 call_id=call.call_id,

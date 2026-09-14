@@ -47,6 +47,41 @@ StageExecutor = Callable[..., Awaitable[StageOutput]]
 WindowPlanReader = Callable[[ProductScope, str], Sequence[PlannedWindow]]
 FieldPromptProvider = Callable[[ProductScope], bytes]
 
+
+def _scoped_source_loader(artifacts, services):
+    gates = {space_id: asyncio.Semaphore(1) for space_id in services}
+
+    async def sources(scope: ProductScope, run_id: str):
+        service = services.get(scope.space_id)
+        if service is None or service.scope != scope:
+            raise ValueError("source request is outside configured product scope")
+        gate = gates[scope.space_id]
+        await gate.acquire()
+        try:
+            read = asyncio.create_task(
+                load_source_blocks(
+                    artifacts,
+                    scope,
+                    run_id,
+                    public_keys=service.configuration.source_public_keys,
+                )
+            )
+        except BaseException:
+            gate.release()
+            raise
+
+        def finished(task):
+            gate.release()
+            # A cancelled waiter does not receive later errors from the read.
+            if not task.cancelled():
+                task.exception()
+
+        read.add_done_callback(finished)
+        return await asyncio.shield(read)
+
+    return sources
+
+
 _PIPELINE_STAGES = frozenset(
     {
         "identity",
@@ -114,9 +149,7 @@ class _ScopedPlatform:
     async def lookup_upload(self, scope: ProductScope, run_id: str, ordinal: int):
         return await self._client(scope).lookup_upload(scope, run_id, ordinal)
 
-    async def capture_source(
-        self, scope: ProductScope, knowledge_id: str, attempt: int
-    ) -> bytes:
+    async def capture_source(self, scope: ProductScope, knowledge_id: str, attempt: int) -> bytes:
         return await self._client(scope).capture_source(scope, knowledge_id, attempt)
 
 
@@ -275,9 +308,7 @@ def compose_product_worker(
     except Exception as error:
         raise ShellConfigError(("product_ingestion_pipeline",)) from error
 
-    scopes = MappingProxyType(
-        {space_id: service.scope for space_id, service in services.items()}
-    )
+    scopes = MappingProxyType({space_id: service.scope for space_id, service in services.items()})
     registry = HandlerRegistry()
     register_source_stages(
         registry,
@@ -301,16 +332,7 @@ def compose_product_worker(
         read_window_plan=ports.read_window_plan,
     )
 
-    async def sources(scope: ProductScope, run_id: str):
-        service = services.get(scope.space_id)
-        if service is None or service.scope != scope:
-            raise ValueError("source request is outside configured product scope")
-        return await load_source_blocks(
-            artifacts,
-            scope,
-            run_id,
-            public_keys=service.configuration.source_public_keys,
-        )
+    sources = _scoped_source_loader(artifacts, services)
 
     def transport(scope: ProductScope, run_id: str, job):
         service = services.get(scope.space_id)

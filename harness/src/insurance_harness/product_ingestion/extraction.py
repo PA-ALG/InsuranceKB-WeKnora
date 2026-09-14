@@ -7,6 +7,7 @@ opens a database, changes a release, or turns an unvalidated value into a fact.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -393,6 +394,22 @@ def _project(raw, tasks, index, context, raw_ref):
     return tuple(outcomes)
 
 
+def _verified_cached_outcomes(tasks, cached, index):
+    known = {}
+    for task in tasks:
+        key = (task.entity_id, task.field_key)
+        hit = (cached or {}).get(key)
+        if hit is None:
+            continue
+        hit = FieldOutcome.from_dict(hit) if isinstance(hit, Mapping) else hit
+        if (hit.entity_id, hit.field_key) != key or hit.outcome == "extraction_failed":
+            raise ValueError("invalid success cache result")
+        for evidence in hit.validated_result.evidence:
+            verify_evidence(evidence, tuple(index.values()))
+        known[key] = hit
+    return known
+
+
 async def execute_window(
     *,
     call_id: str,
@@ -425,21 +442,10 @@ async def execute_window(
     }:
         raise ValueError("invalid call identity/state")
     tasks = tuple(tasks)
-    index = _source_index(
-        tasks, sources, tenant_id=tenant_id, space_id=space_id, raw_kb_id=raw_kb_id
+    index = await asyncio.to_thread(
+        _source_index, tasks, sources, tenant_id=tenant_id, space_id=space_id, raw_kb_id=raw_kb_id
     )
-    known = {}
-    for task in tasks:
-        key = (task.entity_id, task.field_key)
-        hit = (cached or {}).get(key)
-        if hit is None:
-            continue
-        hit = FieldOutcome.from_dict(hit) if isinstance(hit, Mapping) else hit
-        if (hit.entity_id, hit.field_key) != key or hit.outcome == "extraction_failed":
-            raise ValueError("invalid success cache result")
-        for evidence in hit.validated_result.evidence:
-            verify_evidence(evidence, tuple(index.values()))
-        known[key] = hit
+    known = await asyncio.to_thread(_verified_cached_outcomes, tasks, cached, index)
     pending = tuple(t for t in tasks if (t.entity_id, t.field_key) not in known)
     if not pending:
         return tuple(known[t.entity_id, t.field_key] for t in tasks)
@@ -450,12 +456,13 @@ async def execute_window(
         if call_state == "recorded":
             if recorded_request_bytes is None or not recorded_raw_ref:
                 raise ValueError("recorded call requires original request and raw reference")
-            context, projection_tasks = _recorded_context(
-                recorded_request_bytes, tasks, pending, index
+            context, projection_tasks = await asyncio.to_thread(
+                _recorded_context, recorded_request_bytes, tasks, pending, index
             )
             raw, raw_ref = recorded_raw, recorded_raw_ref
         else:
-            request = render_window_request(
+            request = await asyncio.to_thread(
+                render_window_request,
                 pending,
                 tuple(index.values()),
                 tenant_id=tenant_id,
@@ -481,11 +488,17 @@ async def execute_window(
             outcomes = tuple(_failure(t, "TRANSPORT_ERROR", raw_ref) for t in pending)
         else:
             try:
-                semantic = decode_response(raw) if decode_response is not None else raw
+                semantic = (
+                    await asyncio.to_thread(decode_response, raw)
+                    if decode_response is not None
+                    else raw
+                )
             except Exception:
                 outcomes = tuple(_failure(t, "RESPONSE_DECODE_FAILED", raw_ref) for t in pending)
             else:
-                outcomes = _project(semantic, projection_tasks, index, context, raw_ref)
+                outcomes = await asyncio.to_thread(
+                    _project, semantic, projection_tasks, index, context, raw_ref
+                )
     known.update(
         {(o.entity_id, o.field_key): o for o in outcomes if (o.entity_id, o.field_key) not in known}
     )
