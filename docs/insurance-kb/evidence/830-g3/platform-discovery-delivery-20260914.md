@@ -91,3 +91,13 @@ Task3y 源码4e7ab884e5e4b8a7bc406d63fb300f0bdb2a8320已部署为APP镜像364ba4
 - G3总体仍未完成；服务类型完整接线、真实Schema外发现实证等原遗留未由本次代码验证推导解决。
 
 Task3z 最终CODE回归：来源61项、Go网关22项及严格请求最终12项、前端38项、Harness分组46项不同测试通过，独立复核PASS。Harness旧heartbeat测试的依赖fixture已更新并验证，生产heartbeat语义不变。含完整任务流水线的测试使用fixture端口，不是真实发布；部署与网页恢复仍NOT RUN。测试与源码摘要见source-recovery-code-tests-20260914.json。
+
+## 来源恢复真实运行与首页分类修订
+
+Task3z 源码0c22aa18aeb18e75dc201f9af2164002a47da6bd已完成既有APP/UI/Harness替换及健康/静态入口验证：APP ab332e7d1a9b7cefa59f9d8536c665dae6303220c98daddf036fc8d385db2e17；UI 3a35b3a71ada2f9cb15cbfb6c7a6040733d7d8bacedb571cf8ab83d376ab168c；Harness 2c5d442d7b0134b20b9d56fd90e1cdfddc1e830eb4df16c788e81b578e9c5e19。旧APP/UI容器及Harness配置保留；数据库和原材料沿用，无迁移。
+
+- 冻结2026-09-14T09:17:04.099722Z，网页点击正式“重试来源校验”一次，平台创建50687540-c345-581d-aa7c-6199d162b7bd，原失败d1dd保持不变。开始09:19:04.690324Z，终态09:20:24.966374Z，80.276秒至待确认，不是发布耗时。
+- uploads成功4.783秒；source成功25.527秒；routing阻断13.522秒。完整调用统计：本次新增0，复用历史14，未执行字段抽取/编译/发布，字段数不适用。
+- 三份已保存 source_snapshot 共124/124 EXACT_BLOCK，Markdown和Native与首次资产完全一致。说明书和条款首页名称规范化一致。费率表完整首页标题“《平安盛世金越（尊享版26）终身寿险（分红型）》年交费率表”不被原整行规则接纳，导致FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE；不是解析失败、缺页码或模型失败。只读机器诊断保存在/private/tmp/g3-recovery-routing-diagnostic-01/report.json。
+- 用户明确要求 Gemini + Schema候选判断，已冻结Task3aa：去除首页整行匹配前置门槛，复用现有identity一次持久化分类，成功后封存来源归属及resolved_routing。普通字段不补齐、不重复抽取；真实身份/版本冲突仍提示。当前是开发状态，尚未部署、尚无新增模型分类或发布结果。
+- UI恢复入口新增needs_confirmation+后端cap支持，RED 1失败33通过，GREEN含API共41通过，独立复核PASS。只负责提交平台恢复请求，不在浏览器判定产品身份。Harness实现及完整接线回归进行中。

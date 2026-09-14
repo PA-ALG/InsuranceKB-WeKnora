@@ -229,3 +229,15 @@ g3_service_inventory 唯一写域 harness/src/insurance_harness/product_ingestio
 RED/GREEN 覆盖严格请求、双库权限、跨作用域/版本拒绝、重复点击幂等、运行中及错误失败类型不可恢复、队列中断后可接续、原失败不变、已保存来源复用零新增解析模型调用、恢复不走字段专用身份分支。SOURCE_PARSE_FAILED 和旧坐标失效材料的新解析身份恢复仍列遗留，不能由本切片宣称解决。
 
 Task3z 能力边界补充：API 的 can_retry_processing 依据持久化失败原因、封存及未执行身份/抽取记录，表示可发起来源校验；不声称同步确认解析成功。worker 在任何快照捕获前重新查询全部原材料，只有 completed 且身份绑定不变才继续。无需 API 注入新的同步平台调用；失败不触发自动重新解析。
+
+### 2026-09-14 Task3aa：首页标题格式与识别阶段恢复
+
+适用 G3-AUTO-1/3/4/6，承接既有授权，不新建环境。恢复任务 50687540-c345-581d-aa7c-6199d162b7bd 来源成功，124/124 块 EXACT_BLOCK，新增调用0/复用14；终态 FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE。真实根因是费率表标题《产品名》年交费率表不匹配整行标题规则；其它两份同名成功。原失败与待确认任务保持不变，不以此代替新产品独立验收。
+
+唯一写域：g3_extraction_finish 修改 routing.py/test_routing.py，先真实三首页格式 RED，兼容成对书名号、常见 Markdown 标题及交费费率表后缀，证据保持原文偏移。保留身份冲突、正文/后页不补首页的边界。g3_service_inventory 修改 recovery/store/stages 及对应测试，仅扩展明确首页名称不可用且来源完整、未执行语义任务的终态恢复；身份版本冲突不自动消除。保持已有 V1 恢复计划字节/摘要兼容，必要时新增 V2 合同，不修改历史资产。恢复重新核对当前原材料绑定，复用有效 source_snapshot，只重跑必要识别阶段。root 修改前端恢复按钮允许后端明确授权的 needs_confirmation 并区分识别重试文案，Go API 不变；root 维护计划/证据/部署。g3_docker_connection 只读独立审核。
+
+RED/GREEN 覆盖三份实际首页同时识别、原文证据校验、冲突拒绝、来源快照复用、无新增来源调用、原终态不变、V1兼容和恢复幂等。完成后仅部署必要 Harness/UI；APP/数据库/DocReader 复用。网页点击正式恢复，运行期间冻结不改代码；成功后再以未处理产品三份原件验收。普通字段缺失不补抽。失败如实记录具体阶段。
+
+Task3aa 用户最新修订（2026-09-14）：不用完全匹配标题，使用 Gemini + Schema 候选判断。前述 regex 格式适配方案取消，尚无该实现写入。复用现有 identity 阶段一次持久化 Gemini 分类，不另添 routing 模型调用。routing 仅准备有真实首页定位的来源与候选，不再以整行标题规则阻断；identity 接收非权威可选提示、候选分类及材料原文，由既有响应证据校验与 resolver 决定产品/Schema/材料角色。取消与 regex 结果完全相等的门槛；保留单产品、全部材料归属、真实身份及版本冲突。成功后封存 material_source 与独立 resolved_routing 资产；field_plan 使用该结果，兼容旧成功任务的 routing 资产。已有原始模型响应/调用日志/原文证据持久化机制复用，零自动重试。
+
+新增唯一写域 g3_extraction_finish：pipeline.py、identity.py、必要 routing.py 及对应 identity/pipeline/routing 测试；待 g3_service_inventory 完成 stages.py 来源恢复修改并明确移交后，才修改其中 routing 函数。不改现有 IDENTITY_PROMPT 字节和模型模板配置；既有提示已支持首页优先与候选分类。首页输入使用可回查定位，限制于当前产品材料，不发送历史全库正文。RED 包含《完整产品名》年交费率表无需regex命中即可到达且只执行一次模型分类、分类候选约束、证据校验、真实冲突终态、模型原响应复用、后续字段计划使用已解析模型身份。root 独立检查阶段接线，g3_docker_connection 审核最终冻结实现。其余恢复/API/UI 边界保持。

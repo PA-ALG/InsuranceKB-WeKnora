@@ -87,11 +87,24 @@ describe('persistent product processing status', () => {
   })
   it.each([
     { state: 'failed', version: 7, can_retry_processing: false },
+    { state: 'needs_confirmation', version: 7, can_retry_processing: false },
+    { state: 'succeeded', version: 7, can_retry_processing: true },
     { state: 'running', version: 7, can_retry_processing: true },
     { state: 'failed', version: 0, can_retry_processing: true },
   ])('does not expose an unavailable source recovery', async extra => {
     api.listProductIngestions.mockResolvedValue([run({ fields: [], ...extra })])
     expect((await render()).find('[data-testid="retry-processing"]').exists()).toBe(false)
+  })
+  it('recovers a server-approved identification failure without resolving it in the browser', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ state: 'needs_confirmation', stage: 'routing', fields: [], version: 1, can_retry_processing: true })])
+    api.retryProductProcessing.mockResolvedValue(run({ run_id: 'routing-recovery', state: 'running', fields: [], finished_at: undefined }))
+    const w = await render()
+    expect(w.get('[data-testid="retry-processing"]').text()).toBe('重试产品识别')
+    await w.get('[data-testid="retry-processing"]').trigger('click')
+    await flushPromises()
+    expect(api.retryProductProcessing).toHaveBeenCalledWith('kb', 'r1', 1)
+    expect(w.findAll('[data-testid="product-run"]')).toHaveLength(2)
+    expect(w.text()).toContain('需要确认')
   })
   it.each(['javascript:alert(1)', '//evil.example/x', 'https://evil.example/x', '/platform/knowledge-bases/kb/../../settings'])('rejects unsafe publication URL %s', async url => {
     api.listProductIngestions.mockResolvedValue([run({ published_url: url })])

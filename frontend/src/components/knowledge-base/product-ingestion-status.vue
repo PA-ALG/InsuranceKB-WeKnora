@@ -109,7 +109,7 @@ async function retry(run: ProductIngestionRun) {
     if (current === generation) error.value = '未能确认重试任务，请刷新任务列表后检查。'
   } finally { if (current === generation) retrying.value[run.run_id] = false }
 }
-const recoverable = (run: ProductIngestionRun) => run.state === 'failed' && run.can_retry_processing === true && Number.isSafeInteger(run.version) && (run.version ?? 0) > 0
+const recoverable = (run: ProductIngestionRun) => ['failed', 'needs_confirmation'].includes(run.state) && run.can_retry_processing === true && Number.isSafeInteger(run.version) && (run.version ?? 0) > 0
 async function retryProcessing(run: ProductIngestionRun) {
   if (!recoverable(run) || retrying.value[run.run_id]) return
   const current = generation
@@ -206,7 +206,7 @@ onUnmounted(() => { generation++; stopTimers() })
       <div v-if="recoverable(run)">
         <p>复用已完成的解析，由平台重新检查来源并继续处理。</p>
         <button type="button" data-testid="retry-processing" :disabled="retrying[run.run_id]" @click="retryProcessing(run)">
-          {{ retrying[run.run_id] ? '正在提交…' : '重试来源校验' }}
+          {{ retrying[run.run_id] ? '正在提交…' : run.state === 'needs_confirmation' ? '重试产品识别' : '重试来源校验' }}
         </button>
       </div>
       <button v-if="terminal(run.state) && run.fields?.some(field => field.outcome === 'extraction_failed')"
