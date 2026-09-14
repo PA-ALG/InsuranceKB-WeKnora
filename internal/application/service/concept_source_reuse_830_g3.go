@@ -22,12 +22,14 @@ const conceptSourceReuseContract830G3 = "concept-source-reuse.830.g3.v1"
 type conceptSourceReusePrepareKey830G3 struct{}
 type conceptSourceReuseImportKey830G3 struct{}
 type conceptSourceReuseRecord830G3 struct {
-	Contract      string                           `json:"contract"`
-	Identity      types.ConceptSourceIdentity830G2 `json:"identity"`
-	BindingDigest string                           `json:"binding_digest"`
-	Chunks        []types.RevisionManifestChunk    `json:"chunks"`
-	Markdown      string                           `json:"markdown"`
-	Native        *types.NativeStructureArtifact   `json:"native"`
+	Contract         string                           `json:"contract"`
+	Identity         types.ConceptSourceIdentity830G2 `json:"identity"`
+	BindingDigest    string                           `json:"binding_digest"`
+	Chunks           []types.RevisionManifestChunk    `json:"chunks"`
+	Markdown         string                           `json:"markdown"`
+	Native           *types.NativeStructureArtifact   `json:"native"`
+	FirstParseSHA256 string                           `json:"first_parse_sha256,omitempty"`
+	ChunkRanges      map[string]g3FirstParseRange     `json:"chunk_ranges,omitempty"`
 }
 type conceptSourceReusePrepared830G3 struct {
 	blocks map[string]string
@@ -69,11 +71,10 @@ func (s *ConceptSourceAuthorityService830G2) verifyReusableConceptSource830G3(ct
 	if source.RetentionState != types.KnowledgeRevisionSourcePinned || resource.Handle != source.ResourceHandle || resource.ContentHash != source.ObjectSHA256 || resource.State != types.ResourceStateActive || resource.Lifecycle != types.ResourceLifecyclePersistent {
 		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	identity, _ := canonicalJSON830G2(struct {
-		Source  types.ConceptSourceIdentity830G2
-		Binding string
-	}{evidence.ConceptSourceIdentity830G2, source.BindingDigest})
-	key := testSHA256Bytes830G2(identity)
+	key, keyErr := conceptSourceReuseKey830G3(evidence.ConceptSourceIdentity830G2, source.BindingDigest)
+	if keyErr != nil {
+		return nil, empty, nil, keyErr
+	}
 	allow, _ := ctx.Value(conceptSourceReusePrepareKey830G3{}).(bool)
 	prepared, err := s.sourceReuse.load(ctx, key, evidence.ConceptSourceIdentity830G2, source, func() (*conceptSourceReuseRecord830G3, error) {
 		if trustedG3 && !allow {
@@ -97,6 +98,17 @@ func (s *ConceptSourceAuthorityService830G2) verifyReusableConceptSource830G3(ct
 		digest, err := types.ComputeRevisionManifestDigest(evidence.KnowledgeID, evidence.ParseAttempt, manifest)
 		if err != nil || digest != source.ManifestDigest || len(manifest) != source.ChunkCount {
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
+		}
+		first, firstErr := s.sourceReuse.readFirstParse(g3FirstParseIdentityForSource(scope, source))
+		if firstErr == nil {
+			ranges, err := g3FirstParseBindings(first, manifest)
+			if err != nil || first.ParserIdentitySHA256 != evidence.ParserIdentity {
+				return nil, ErrConceptSourceAuthorityUnavailable830G2
+			}
+			return &conceptSourceReuseRecord830G3{Contract: conceptSourceReuseContract830G3, Identity: evidence.ConceptSourceIdentity830G2, BindingDigest: source.BindingDigest, Chunks: manifest, Markdown: first.Markdown, Native: first.Native, FirstParseSHA256: g3FirstParseRecordSHA(first), ChunkRanges: ranges}, nil
+		}
+		if !errors.Is(firstErr, os.ErrNotExist) {
+			return nil, firstErr
 		}
 		pdf, err := s.fixed.ReadFixedRevision(ctx, evidence.KnowledgeID, evidence.ParseAttempt, source.FileSHA256, source.BindingDigest, evidence.PageNumber)
 		if err != nil || testSHA256Bytes830G2(pdf) != evidence.SourceHash {
@@ -128,7 +140,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyReusableConceptSource830G3(ct
 		if block == nil {
 			return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
-		bbox, locator, err = resolveConceptSourceBlockQuote830G3(prepared.index, evidence, *block)
+		bbox, locator, err = resolveConceptSourceBlockQuote830G3(prepared.index, evidence, *block, prepared.record.ChunkRanges)
 	} else {
 		bbox, err = resolveConceptNativeQuoteInIndex830G2(prepared.index, evidence.SourceHash, evidence.ParserIdentity, evidence.PageNumber, evidence.Quote)
 	}
@@ -157,10 +169,22 @@ func validateConceptSourceReuse830G3(record *conceptSourceReuseRecord830G3, iden
 	if err != nil {
 		return nil, err
 	}
+	if (record.FirstParseSHA256 == "") != (record.ChunkRanges == nil) {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	if record.ChunkRanges != nil && (!validServiceSHA256(record.FirstParseSHA256) || len(record.ChunkRanges) != len(record.Chunks)) {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
 	blocks := make(map[string]string, len(record.Chunks))
 	for _, chunk := range record.Chunks {
 		if _, duplicate := blocks[chunk.ID]; duplicate {
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
+		}
+		if record.ChunkRanges != nil {
+			r, ok := record.ChunkRanges[chunk.ID]
+			if !ok || r.Index != chunk.Index || !g3FirstParseRangeMatches(record.Markdown, chunk.Content, r) {
+				return nil, ErrConceptSourceAuthorityUnavailable830G2
+			}
 		}
 		blocks[chunk.ID] = chunk.Content
 	}
@@ -172,6 +196,9 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 	hit := s.entries[key]
 	s.mu.Unlock()
 	if hit != nil {
+		if err := s.validateFirstParseCache(&hit.record); err != nil {
+			return nil, err
+		}
 		return hit, nil
 	}
 	result := s.flight.DoChan(key, func() (any, error) {
@@ -179,6 +206,9 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 		hit := s.entries[key]
 		s.mu.Unlock()
 		if hit != nil {
+			if err := s.validateFirstParseCache(&hit.record); err != nil {
+				return nil, err
+			}
 			return hit, nil
 		}
 		path := filepath.Join(s.root, key+".json")
@@ -202,6 +232,9 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 		var record conceptSourceReuseRecord830G3
 		if json.Unmarshal(data, &record) != nil {
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
+		}
+		if err := s.validateFirstParseCache(&record); err != nil {
+			return nil, err
 		}
 		prepared, err := validateConceptSourceReuse830G3(&record, identity, source)
 		if err != nil {

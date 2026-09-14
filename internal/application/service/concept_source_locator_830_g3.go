@@ -24,18 +24,30 @@ type ConceptSourceBlockLocator830G3 struct {
 	ActualPageNumber  int    `json:"actual_page_number"`
 }
 
-func resolveConceptSourceBlockQuote830G3(index *conceptNativeQuoteIndex830G2, evidence types.ConceptEvidence830G2, block types.ConceptSourceBlock830G2) (ConceptCitationBBox830G2, *ConceptSourceBlockLocator830G3, error) {
+func resolveConceptSourceBlockQuote830G3(index *conceptNativeQuoteIndex830G2, evidence types.ConceptEvidence830G2, block types.ConceptSourceBlock830G2, exactRanges ...map[string]g3FirstParseRange) (ConceptCitationBBox830G2, *ConceptSourceBlockLocator830G3, error) {
 	empty := ConceptCitationBBox830G2{}
 	if index == nil || index.sourceSHA != evidence.SourceHash || index.parserIdentitySHA != evidence.ParserIdentity || block.ConceptSourceIdentity830G2 != evidence.ConceptSourceIdentity830G2 || block.BlockID != evidence.BlockID || block.PageNumber != evidence.PageNumber || block.SourceType != evidence.SourceType || evidence.PageNumber <= 0 || evidence.OffsetUnit != "UNICODE_CODE_POINT" || !conceptEvidenceMatchesSourceText830G2(evidence, block.Text) {
 		return empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	old, oldErr := resolveConceptNativeQuoteInIndex830G2(index, evidence.SourceHash, evidence.ParserIdentity, evidence.PageNumber, evidence.Quote)
-	at := strings.Index(index.text, block.Text)
-	if at < 0 || strings.Index(index.text[at+1:], block.Text) >= 0 {
-		// Historical blocks without one whole-file anchor retain only the strict old gate.
-		return old, nil, oldErr
+	var blockStart int
+	if len(exactRanges) > 0 && exactRanges[0] != nil {
+		r, ok := exactRanges[0][block.BlockID]
+		if !ok || !g3FirstParseRangeMatches(index.text, block.Text, r) {
+			return empty, nil, ErrConceptSourceAuthorityUnavailable830G2
+		}
+		mapping := g3PlatformChunkPageMapping(types.RevisionManifestChunk{ID: block.BlockID, Content: block.Text}, index, exactRanges[0])
+		if mapping.SourcePageNumber == nil || *mapping.SourcePageNumber != evidence.PageNumber {
+			return empty, nil, ErrConceptSourceAuthorityUnavailable830G2
+		}
+		blockStart = r.Start
+	} else {
+		at := strings.Index(index.text, block.Text)
+		if at < 0 || strings.Index(index.text[at+1:], block.Text) >= 0 {
+			return old, nil, oldErr
+		}
+		blockStart = utf8.RuneCountInString(index.text[:at])
 	}
-	blockStart := utf8.RuneCountInString(index.text[:at])
 	start, end := blockStart+evidence.Start, blockStart+evidence.End
 	for number, page := range index.pages {
 		if start < page.globalStart || end > page.globalStart+len(page.runes) {

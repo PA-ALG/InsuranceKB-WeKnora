@@ -203,3 +203,17 @@ User correction: stop per-test environment provisioning and focus on the platfor
 ### 2026-09-14 首次运行的调用计数闭合
 
 已记录的12次embedding发送不能代表全部模型调用：标准OpenAI兼容Chat分支未接入已有dispatch journal。此问题在第二次独立测量前修复，不通过外部脚本估算补账。g3_service_inventory唯一写者：internal/models/chat/remote_api.go及对应测试；使用已有journal协议记录标准SDK实际发送、HTTP响应/错误和去图重试，保留当前provider行为与scope。RED先证明标准Chat缺记录，GREEN验证实际HTTP次数对应记录、journal失败不外发。root维护计划、独立review后统一构建部署。来源失败回执展示缺口单列遗留，不放宽成功source snapshot契约。
+
+### 2026-09-14 Task 3y：首次解析文字与定位统一（第二次真实验收后的修复）
+
+业务根因已经真实回执证明：普通PDF解析与后续native捕获产生不同文字，312/312原始块均UNRESOLVED；不得伪造定位或手工填写产品身份。目标是首次解析产生同一Markdown+Native坐标，持久化并由后续编译/证据消费，不重复读取PDF生成第二套正文。
+
+唯一实现Owner g3_extraction_finish，写域 internal/application/service/knowledge.go、knowledge_process.go、concept_source_reuse_830_g3.go、g3_platform_source_snapshot.go、internal/container/container.go，以及对应测试和必要同域小型parse artifact store文件；root维护计划与交付证据，g3_docker_connection独立review。只在G3启用且精确Tenant/RawKB范围的PDF启用builtin/native_capture，不改其他知识库、DocReader镜像、模型或数据库。两服务共享独立文件store/codec，禁止互相依赖形成构造环。
+
+首次ReadResult以sourceSHA+knowledgeID+parseAttempt+parser identity签封原子持久化于现有文件卷，后续封存manifest后绑定既有source-reuse缓存。分块必须取同一原文的精确Start:End，新增上下文只留ContextHeader；图片改写不得破坏原文字坐标。Capture消费匹配当前来源/修订的首次产物，不再次Read；缺少/损坏/错revision/旧格式产物明确不可用，不回退另一解析器、不修改既有记录。旧有非G3 source/citation兼容性保持。
+
+RED：普通路径不同文字/CRLF/插入表头时实际无法定位；GREEN：精确G3范围首次read一次，后续capture与重启重用不增加read、逐块映射和首页路由可用；非G3不改变、来源/修订/签封篡改拒绝、写入失败不能标成功。先定向低并行测试和独立复核，再统一部署。
+
+已封存旧材料不能覆盖重解析；恢复应保留旧原文及失败审计，由平台创建引用同一PDF的新解析身份后重启任务。此恢复接线另行冻结接口/写域，不能由Codex复制业务记录或运行临时接续脚本。
+
+Task3y独立方案复核补充（实施前）：首次产物必须签封已验证的分块seq/原文codepoint Start/End/content hash，manifest封存后按ChunkIndex+Content绑定真实chunkID；重复正文和跨页不可用strings.Index猜第一次出现。Owner写域补充internal/application/service/concept_source_locator_830_g3.go及对应测试，并包含g3PlatformChunkPageMapping映射。新source快照与后续citation定位均消费同一已签封映射；旧记录不伪造位置。首次产物身份检查须先于legacy cache命中或采用独立版本键。parser/config override在refreshRevisionBinding之前生效，按revision.ParseAttempt绑定并在processChunks之前持久化，后续不得改坐标正文。增加重复段落、跨页、CRLF及缓存旁路的RED/GREEN。

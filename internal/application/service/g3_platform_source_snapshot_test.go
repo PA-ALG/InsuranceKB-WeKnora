@@ -112,6 +112,7 @@ func TestG3PlatformSourceSnapshotCapturesOnceAndSignsCanonicalPayload(t *testing
 	authorizer := &g3PlatformSourceAuthorizerStub{}
 	signer := &g3PlatformSnapshotSignerStub{keyID: "source-key-1", signature: []byte("signed-source")}
 	processing := &g3PlatformProcessingReceiptStub{receipt: g3PlatformAvailableProcessingReceipt(t, "knowledge-1", 1)}
+	seedFirstParseSnapshot(t, authority, scope, doc.result, []types.ParsedChunk{{Seq: 0, Start: 0, End: len([]rune(doc.result.MarkdownContent)), Content: doc.result.MarkdownContent}})
 	service := NewG3PlatformSourceSnapshotService(ensurer, authority, processing, authorizer, signer)
 
 	first, err := service.Capture(context.Background(), scope, "knowledge-1", 1)
@@ -130,11 +131,11 @@ func TestG3PlatformSourceSnapshotCapturesOnceAndSignsCanonicalPayload(t *testing
 	require.Equal(t, []byte("signed-source"), first.Authority.Signature)
 	require.Len(t, first.Snapshot.Chunks, 1)
 	require.Equal(t, "chunk-1", first.Snapshot.Chunks[0].ID)
-	require.Equal(t, "prefix A😀 suffix", first.Snapshot.Chunks[0].Content)
-	require.Equal(t, G3PlatformChunkMappingUnresolved, first.Snapshot.ChunkPageMappings[0].Status)
-	require.Nil(t, first.Snapshot.ChunkPageMappings[0].SourcePageNumber)
-	require.Empty(t, first.Snapshot.ChunkPageMappings[0].PageSpans)
-	require.Equal(t, 1, doc.calls, "the fixed source capture must survive repeat calls")
+	require.Equal(t, doc.result.MarkdownContent, first.Snapshot.Chunks[0].Content)
+	require.Equal(t, G3PlatformChunkMappingExactBlock, first.Snapshot.ChunkPageMappings[0].Status)
+	require.Equal(t, 1, *first.Snapshot.ChunkPageMappings[0].SourcePageNumber)
+	require.Len(t, first.Snapshot.ChunkPageMappings[0].PageSpans, 2)
+	require.Zero(t, doc.calls, "snapshot consumes the saved first parse without another Read")
 	require.Equal(t, 2, ensurer.calls, "every read must recheck the current fixed binding")
 	require.Equal(t, 2, authorizer.calls)
 	require.Equal(t, 2, signer.calls)
@@ -143,7 +144,7 @@ func TestG3PlatformSourceSnapshotCapturesOnceAndSignsCanonicalPayload(t *testing
 
 func TestG3PlatformSourceSnapshotMapsUniqueCrossPageChunkWithoutChangingIt(t *testing.T) {
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
-	authority, _, scope, _, _ := nativeIndexFixture830G2(t)
+	authority, doc, scope, _, _ := nativeIndexFixture830G2(t)
 	authority.codec = sourceReuseTestCodec830G3(t)
 	authority.sourceReuse = newConceptSourceReuseStore830G3(authority.codec)
 	readySourceReuseResource830G3(authority)
@@ -158,6 +159,7 @@ func TestG3PlatformSourceSnapshotMapsUniqueCrossPageChunkWithoutChangingIt(t *te
 	repository.source.BindingDigest, err = types.ComputeKnowledgeRevisionSourceBindingDigest(*repository.source)
 	require.NoError(t, err)
 	authority.chunks = conceptChunksStub830G2{chunks: []*types.Chunk{chunk}}
+	seedFirstParseSnapshot(t, authority, scope, doc.result, []types.ParsedChunk{{Seq: 0, Start: 0, End: len([]rune(doc.result.MarkdownContent)), Content: doc.result.MarkdownContent}})
 
 	service := NewG3PlatformSourceSnapshotService(
 		&g3PlatformSourceEnsurerStub{source: repository.source}, authority,

@@ -78,6 +78,7 @@ type knowledgeService struct {
 	// which has a no-op fallback. See knowledge_span_tracker.go.
 	spanTracker SpanTracker
 	audit       interfaces.AuditLogService
+	firstParse  *G3FirstParseStore
 }
 
 const (
@@ -115,8 +116,10 @@ func NewKnowledgeService(
 	taskPendingRepo interfaces.TaskPendingOpsRepository,
 	spanTracker SpanTracker,
 	audit interfaces.AuditLogService,
+	firstParse *G3FirstParseStore,
 ) (interfaces.KnowledgeService, error) {
 	return &knowledgeService{
+		firstParse:      firstParse,
 		config:          config,
 		repo:            repo,
 		kbService:       kbService,

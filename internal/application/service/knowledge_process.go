@@ -2917,6 +2917,10 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 
 	processOverrides, _ := knowledge.ProcessOverrides()
 	eff := ResolveProcessConfig(kb, processOverrides)
+	firstParse := g3FirstParseScope(s.config, knowledge, payload.FileType)
+	if firstParse {
+		eff = g3FirstParseConfig(eff)
+	}
 	payload.Revision = refreshRevisionBinding(payload.Revision, kb, eff, knowledge.FileType)
 
 	// Re-check abort status right before flipping to "processing" — closes
@@ -3172,7 +3176,7 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 	// Step 2: Store images and update markdown references
 	var storedImages []docparser.StoredImage
 
-	if s.imageResolver != nil && convertResult != nil {
+	if s.imageResolver != nil && convertResult != nil && !firstParse {
 		fileSvc := s.resolveFileService(ctx, kb)
 		tenantID, _ := ctx.Value(types.TenantIDContextKey).(uint64)
 		updatedMarkdown, images, resolveErr := s.imageResolver.ResolveAndStore(ctx, convertResult, fileSvc, tenantID)
@@ -3216,7 +3220,15 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 
 	if eff.ChunkingConfig.EnableParentChild {
 		parentCfg, childCfg := buildParentChildConfigs(eff.ChunkingConfig, chunkCfg)
-		pcResult := chunker.SplitParentChild(convertResult.MarkdownContent, parentCfg, childCfg)
+		pcResult := chunker.ParentChildResult{}
+		if firstParse {
+			pcResult, err = g3FirstParseSplitParentChild(convertResult.MarkdownContent, parentCfg, childCfg)
+			if err != nil {
+				return s.failG3FirstParse(ctx, knowledge, err)
+			}
+		} else {
+			pcResult = chunker.SplitParentChild(convertResult.MarkdownContent, parentCfg, childCfg)
+		}
 		chunks = make([]types.ParsedChunk, len(pcResult.Children))
 		for i, c := range pcResult.Children {
 			chunks[i] = types.ParsedChunk{
@@ -3250,6 +3262,35 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 		logger.Infof(ctx, "Split document into %d chunks for knowledge %s", len(chunks), knowledge.ID)
 	}
 
+	// First-parse source coordinates are immutable before any indexing/model work.
+	if firstParse {
+		chunks, err = g3ExactSourceChunks(convertResult.MarkdownContent, chunks)
+		if err == nil {
+			all := append([]types.ParsedChunk(nil), chunks...)
+			for i := range processOpts.ParentChunks {
+				p := &processOpts.ParentChunks[i]
+				var exact []types.ParsedChunk
+				exact, err = g3ExactSourceChunks(convertResult.MarkdownContent, []types.ParsedChunk{{Content: p.Content, Seq: p.Seq, Start: p.Start, End: p.End}})
+				if err != nil {
+					break
+				}
+				p.Content = exact[0].Content
+				all = append(all, exact[0])
+			}
+			if err == nil {
+				if payload.Revision == nil || payload.Revision.ParseAttempt != knowledge.CurrentParseAttempt || (payload.ParseAttempt > 0 && payload.Revision.ParseAttempt != payload.ParseAttempt) {
+					err = ErrConceptSourceAuthorityUnavailable830G2
+				} else {
+					id := g3FirstParseIdentity{TenantID: knowledge.TenantID, RawKBID: knowledge.KnowledgeBaseID, KnowledgeID: knowledge.ID, ParseAttempt: payload.Revision.ParseAttempt, SourceSHA256: payload.Revision.FileSHA256}
+					err = s.firstParse.save(id, convertResult, all)
+				}
+			}
+		}
+		if err != nil {
+			return s.failG3FirstParse(ctx, knowledge, err)
+		}
+		s.endStage(ctx, knowledge.ID, types.StageDocReader, types.JSONMap{"text_length": len(convertResult.MarkdownContent), "images_found": 0, "is_audio": false, "first_parse_saved": true})
+	}
 	// Step 4: Process chunks (vectorize + index + enqueue async tasks)
 	s.processChunks(ctx, kb, knowledge, chunks, processOpts)
 
@@ -3301,6 +3342,11 @@ func (s *knowledgeService) convert(
 		}
 	}
 
+	firstParse := !isURL && g3FirstParseScope(s.config, knowledge, fileType)
+	if firstParse {
+		eff = g3FirstParseConfig(eff)
+		mergedOverrides = map[string]string{"pdf_native_structure_capture": conceptNativeCapture830G2}
+	}
 	parserEngine := eff.ChunkingConfig.ResolveParserEngine(fileType)
 	if isURL {
 		parserEngine = eff.ChunkingConfig.ResolveParserEngine("url")
@@ -3373,6 +3419,20 @@ func (s *knowledgeService) convert(
 			werrors.ErrCodeDocReaderParseFailed, result.Error, nil)
 		return nil, nil
 	}
+	if firstParse {
+		var projection conceptNativeProjection830G2
+		if payload.Revision == nil || result.NativeStructure == nil || len(result.ImageRefs) != 0 || result.IsAudio ||
+			json.Unmarshal(result.NativeStructure.SanitizedJSON, &projection) != nil {
+			err = ErrConceptSourceAuthorityUnavailable830G2
+		} else {
+			_, err = prepareConceptNativeQuoteIndex830G2(result, payload.Revision.FileSHA256, projection.ParserIdentitySHA256)
+		}
+		if err != nil {
+			s.failStage(ctx, knowledge.ID, types.StageDocReader, werrors.ErrCodeDocReaderParseFailed, "G3 native capture invalid", err)
+			return s.failKnowledge(ctx, knowledge, true, "G3_FIRST_PARSE_ARTIFACT_UNAVAILABLE: %v", err)
+		}
+		payload.Revision.ParserIdentity.DocReader = projection.ParserIdentitySHA256
+	}
 	docOutput := types.JSONMap{
 		"text_length":  len(result.MarkdownContent),
 		"images_found": len(result.ImageRefs),
@@ -3381,7 +3441,9 @@ func (s *knowledgeService) convert(
 	if pages := result.Metadata["pages"]; pages != "" {
 		docOutput["pages"] = pages
 	}
-	s.endStage(ctx, knowledge.ID, types.StageDocReader, docOutput)
+	if !firstParse {
+		s.endStage(ctx, knowledge.ID, types.StageDocReader, docOutput)
+	}
 	return result, nil
 }
 

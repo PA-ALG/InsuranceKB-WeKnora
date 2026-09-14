@@ -241,7 +241,8 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	}))
 	must(container.Provide(service.NewSchemaWikiCitationPorts))
 	must(container.Provide(service.NewKnowledgeRevisionSourceService))
-	must(container.Provide(service.NewConceptSourceAuthorityService830G2))
+	must(container.Provide(service.NewG3FirstParseStore))
+	must(container.Provide(service.NewConceptSourceAuthorityService830G2WithFirstParse))
 	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseAuthorizationVerifier, error) {
 		verifier, _, err := schemaWikiReleaseVerifierProviders(cfg)
 		return verifier, err

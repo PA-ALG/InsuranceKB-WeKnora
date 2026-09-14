@@ -179,7 +179,7 @@ func (s *ConceptSourceAuthorityService830G2) captureG3PlatformSource830G3(
 	expected *types.KnowledgeRevisionSource,
 ) (*conceptSourceReusePrepared830G3, error) {
 	if s == nil || s.fixed == nil || s.knowledge == nil || s.revisions == nil ||
-		s.chunks == nil || s.docreader == nil || s.sourceReuse == nil || expected == nil ||
+		s.chunks == nil || s.sourceReuse == nil || expected == nil ||
 		types.ValidateKnowledgeRevisionSourceBinding(*expected) != nil ||
 		expected.TenantID != scope.TenantID || expected.KnowledgeID == "" ||
 		expected.ParseAttempt <= 0 {
@@ -214,15 +214,17 @@ func (s *ConceptSourceAuthorityService830G2) captureG3PlatformSource830G3(
 		RevisionID: live.RevisionSourceID, SourceHash: live.FileSHA256,
 		ParseHash: live.ManifestDigest,
 	}
-	keyInput, err := canonicalJSON830G2(struct {
-		Source  types.ConceptSourceIdentity830G2 `json:"source"`
-		Binding string                           `json:"binding"`
-	}{identity, live.BindingDigest})
+	// A legacy cache hit must not bypass the first-parse provenance gate.
+	first, err := s.sourceReuse.readFirstParse(g3FirstParseIdentityForSource(scope, live))
 	if err != nil {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	key := testSHA256Bytes830G2(keyInput)
-	return s.sourceReuse.load(ctx, key, identity, live, func() (*conceptSourceReuseRecord830G3, error) {
+	identity.ParserIdentity = first.ParserIdentitySHA256
+	key, err := conceptSourceReuseKey830G3(identity, live.BindingDigest)
+	if err != nil {
+		return nil, err
+	}
+	prepared, err := s.sourceReuse.load(ctx, key, identity, live, func() (*conceptSourceReuseRecord830G3, error) {
 		chunks, err := s.chunks.ListChunksByKnowledgeID(ctx, scope.TenantID, live.KnowledgeID)
 		if err != nil {
 			return nil, err
@@ -245,36 +247,24 @@ func (s *ConceptSourceAuthorityService830G2) captureG3PlatformSource830G3(
 		if err != nil || digest != live.ManifestDigest || len(manifest) != live.ChunkCount {
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
-		pdf, err := s.fixed.ReadFixedRevision(
-			ctx, live.KnowledgeID, live.ParseAttempt, live.FileSHA256, live.BindingDigest, 1,
-		)
-		if err != nil || testSHA256Bytes830G2(pdf) != live.FileSHA256 {
-			return nil, ErrConceptSourceAuthorityUnavailable830G2
+		ranges, err := g3FirstParseBindings(first, manifest)
+		if err != nil {
+			return nil, err
 		}
-		result, err := s.docreader.Read(ctx, &types.ReadRequest{
-			FileContent: pdf, FileName: knowledge.FileName, FileType: "pdf",
-			ParserEngine: "builtin", ParserEngineOverrides: map[string]string{
-				"pdf_native_structure_capture": conceptNativeCapture830G2,
-			},
-		})
-		if err != nil || result == nil || result.Error != "" || result.NativeStructure == nil {
-			return nil, ErrConceptSourceAuthorityUnavailable830G2
-		}
-		var projection conceptNativeProjection830G2
-		decoder := json.NewDecoder(bytes.NewReader(result.NativeStructure.SanitizedJSON))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&projection) != nil || !jsonEOF830G2(decoder) ||
-			!validServiceSHA256(projection.ParserIdentitySHA256) {
-			return nil, ErrConceptSourceAuthorityUnavailable830G2
-		}
-		capturedIdentity := identity
-		capturedIdentity.ParserIdentity = projection.ParserIdentitySHA256
 		return &conceptSourceReuseRecord830G3{
-			Contract: conceptSourceReuseContract830G3, Identity: capturedIdentity,
+			Contract: conceptSourceReuseContract830G3, Identity: identity,
 			BindingDigest: live.BindingDigest, Chunks: manifest,
-			Markdown: result.MarkdownContent, Native: result.NativeStructure,
+			Markdown: first.Markdown, Native: first.Native,
+			FirstParseSHA256: g3FirstParseRecordSHA(first), ChunkRanges: ranges,
 		}, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	if err := g3CachedFirstParseMatches(first, &prepared.record); err != nil {
+		return nil, err
+	}
+	return prepared, nil
 }
 
 func g3PlatformSourceSnapshotFromPrepared(
@@ -297,7 +287,7 @@ func g3PlatformSourceSnapshotFromPrepared(
 			ID: chunk.ID, Index: chunk.Index, Content: chunk.Content,
 			ContentSHA256: g3PlatformRawSHA256([]byte(chunk.Content)),
 		})
-		mappings = append(mappings, g3PlatformChunkPageMapping(chunk, prepared.index))
+		mappings = append(mappings, g3PlatformChunkPageMapping(chunk, prepared.index, prepared.record.ChunkRanges))
 	}
 	receipt := types.RegisteredSourceReceipt830G3{
 		Contract: "knowledge-revision-source.v1", KnowledgeID: source.KnowledgeID,
@@ -326,6 +316,7 @@ func g3PlatformSourceSnapshotFromPrepared(
 func g3PlatformChunkPageMapping(
 	chunk types.RevisionManifestChunk,
 	index *conceptNativeQuoteIndex830G2,
+	exactRanges ...map[string]g3FirstParseRange,
 ) G3PlatformChunkPageMappingV1 {
 	result := G3PlatformChunkPageMappingV1{
 		ChunkID: chunk.ID, Status: G3PlatformChunkMappingUnresolved,
@@ -334,12 +325,21 @@ func g3PlatformChunkPageMapping(
 	if index == nil || chunk.Content == "" {
 		return result
 	}
-	at := strings.Index(index.text, chunk.Content)
-	if at < 0 || strings.Index(index.text[at+1:], chunk.Content) >= 0 {
-		return result
+	var start, end int
+	if len(exactRanges) > 0 && exactRanges[0] != nil {
+		r, ok := exactRanges[0][chunk.ID]
+		if !ok || !g3FirstParseRangeMatches(index.text, chunk.Content, r) {
+			return result
+		}
+		start, end = r.Start, r.End
+	} else {
+		at := strings.Index(index.text, chunk.Content)
+		if at < 0 || strings.Index(index.text[at+1:], chunk.Content) >= 0 {
+			return result
+		}
+		start = utf8.RuneCountInString(index.text[:at])
+		end = start + utf8.RuneCountInString(chunk.Content)
 	}
-	start := utf8.RuneCountInString(index.text[:at])
-	end := start + utf8.RuneCountInString(chunk.Content)
 	numbers := make([]int, 0, len(index.pages))
 	for number := range index.pages {
 		numbers = append(numbers, number)
