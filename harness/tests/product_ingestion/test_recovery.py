@@ -144,7 +144,14 @@ def test_title_recovery_source_changes_fail_closed(stage_runtime, monkeypatch, c
                 session.delete(saved)
             else:
                 saved.payload = b"{}"
-        assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
+        # The display hint checks references only; the action validates payload bytes.
+        assert store.can_retry_processing(scope=scope, run_id=origin.run_id) is (
+            change == "corrupt"
+        )
+        with pytest.raises(ValueError):
+            store.retry_processing(
+                scope=scope, run_id=origin.run_id, expected_version=origin.version
+            )
         return
     child = store.retry_processing(
         scope=scope, run_id=origin.run_id, expected_version=origin.version

@@ -157,6 +157,83 @@ def test_recorded_identity_recovery_replays_original_receipts_and_provenance(
 
 
 @pytest.mark.parametrize(
+    "drift", ["original_raw", "original_source", "parent_source", "cycle", "new_call"]
+)
+def test_failed_replay_recovery_rejects_ancestor_drift(stage_runtime, recorded_origin, drift):
+    from sqlalchemy import select
+
+    from insurance_harness.product_ingestion.artifact_tables import (
+        ProductArtifact,
+        ProductStageModelCall,
+    )
+    from insurance_harness.product_ingestion.recovery import RECOVERY_KIND, RECOVERY_V3_PREFIX
+
+    scope, store, _, _, execute = stage_runtime
+    origin, original, boundary, _, sent = recorded_origin
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    for _ in range(3):
+        assert execute(child).state is JobState.SUCCEEDED
+    job = start_identity(store, scope, child)
+    if drift == "new_call":
+        asyncio.run(boundary.execute_stage_call(**call_args(stage_runtime[2], scope, child, job)))
+    store._jobs.report_failure(
+        space_id=scope.space_id,
+        job_id=job.id,
+        generation=job.lease_generation,
+        failure=JobFailure(
+            error_class=ErrorClass.NON_RETRYABLE, summary="PRODUCT_STAGE_FAILED:identity"
+        ),
+    )
+    with store._session_factory() as session, session.begin():
+        session.get(tables.ProductRun, child.run_id).root_job_id = job.id
+    failed = store.get_run(scope=scope, run_id=child.run_id)
+    plan = store.processing_recovery_plan(scope=scope, run_id=child.run_id)
+    with store._session_factory() as session, session.begin():
+        if drift == "original_raw":
+            call = session.scalar(
+                select(ProductStageModelCall).where(
+                    ProductStageModelCall.call_id == original.call_id
+                )
+            )
+            call.raw += b" "
+            call.raw_sha256 = hashlib.sha256(call.raw).hexdigest()
+        elif drift in {"original_source", "parent_source"}:
+            row = session.scalar(
+                select(ProductArtifact).where(
+                    ProductArtifact.run_id
+                    == (origin.run_id if drift == "original_source" else child.run_id),
+                    ProductArtifact.artifact_kind == "source_snapshot",
+                )
+            )
+            row.payload += b" "  # Stored digest deliberately unchanged.
+        elif drift == "cycle":
+            changed = plan.model_copy(
+                update={"origin_run_id": child.run_id, "origin_version": failed.version}
+            )
+            row = session.scalar(
+                select(ProductArtifact).where(
+                    ProductArtifact.run_id == child.run_id,
+                    ProductArtifact.artifact_kind == RECOVERY_KIND,
+                )
+            )
+            row.payload = changed.encoded()
+            row.payload_sha256 = hashlib.sha256(row.payload).hexdigest()
+            run = session.get(tables.ProductRun, child.run_id)
+            run.retry_of_run_id = child.run_id
+            run.idempotency_key = RECOVERY_V3_PREFIX + changed.digest()
+    # Display checks use small persisted identities; only the actual retry
+    # validates payload bytes and must reject damage even with an unchanged SHA.
+    assert store.can_retry_processing(scope=scope, run_id=child.run_id) is (
+        drift in {"original_source", "parent_source"}
+    )
+    with pytest.raises(ValueError):
+        store.retry_processing(scope=scope, run_id=child.run_id, expected_version=failed.version)
+    assert len(sent) == (2 if drift == "new_call" else 1)
+
+
+@pytest.mark.parametrize(
     "change", ["input", "base", "prompt", "policy", "raw", "source", "scope", "lease"]
 )
 def test_recorded_identity_replay_drift_never_redispatches(stage_runtime, recorded_origin, change):
@@ -419,3 +496,80 @@ def test_source_recovery_v2_wire_bytes_are_unchanged():
     )
     plan = SealedSourceRecoveryPlan.model_validate_json(raw)
     assert plan.encoded() == raw and plan.digest() == hashlib.sha256(raw).hexdigest()
+
+
+@pytest.mark.parametrize("checkpoint_recorded", [False, True])
+def test_failed_replay_can_recover_again_without_reclassifying(
+    stage_runtime, recorded_origin, checkpoint_recorded
+):
+    scope, store, artifacts, platform, execute = stage_runtime
+    origin, original, boundary, _, sent = recorded_origin
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    for _ in range(3):
+        assert execute(child).state is JobState.SUCCEEDED
+    job = start_identity(store, scope, child)
+    if checkpoint_recorded:
+        asyncio.run(boundary.replay_stage_call(**call_args(artifacts, scope, child, job)))
+    store._jobs.report_failure(
+        space_id=scope.space_id,
+        job_id=job.id,
+        generation=job.lease_generation,
+        failure=JobFailure(
+            error_class=ErrorClass.NON_RETRYABLE, summary="PRODUCT_STAGE_FAILED:identity"
+        ),
+    )
+    with store._session_factory() as session, session.begin():
+        session.get(tables.ProductRun, child.run_id).root_job_id = job.id
+    failed = store.get_run(scope=scope, run_id=child.run_id)
+    assert failed.terminal_reason == "PRODUCT_STAGE_FAILED:identity"
+    assert store.can_retry_processing(scope=scope, run_id=failed.run_id)
+    grandchild = store.retry_processing(
+        scope=scope, run_id=failed.run_id, expected_version=failed.version
+    )
+    assert (
+        store.retry_processing(
+            scope=scope, run_id=failed.run_id, expected_version=failed.version
+        ).run_id
+        == grandchild.run_id
+    )
+    plan = store.processing_recovery_plan(scope=scope, run_id=grandchild.run_id)
+    assert plan.origin_run_id == failed.run_id
+    assert plan.identity_call.call_id == original.call_id
+    for _ in range(3):
+        assert execute(grandchild).state is JobState.SUCCEEDED
+    next_job = start_identity(store, scope, grandchild)
+    replay = asyncio.run(
+        boundary.replay_stage_call(**call_args(artifacts, scope, grandchild, next_job))
+    )
+    assert replay == original
+    assert len(sent) == 1 and platform.calls == 3
+    assert store.get_run(scope=scope, run_id=child.run_id) == failed
+    assert store.get_run(scope=scope, run_id=origin.run_id) == origin
+
+
+def test_recovery_button_check_does_not_load_source_payloads(stage_runtime, recorded_origin):
+    from sqlalchemy import event
+
+    scope, store, _, _, _ = stage_runtime
+    origin = recorded_origin[0]
+    inspected = []
+
+    def check_select(state):
+        if not state.is_select:
+            return
+        statement = state.statement
+        if "source_snapshot" in statement.compile().params.values():
+            inspected.append(True)
+            assert "payload" not in statement.selected_columns.keys(), (
+                "display capability must not load complete source payloads"
+            )
+
+    session_class = store._session_factory.class_
+    event.listen(session_class, "do_orm_execute", check_select)
+    try:
+        assert store.can_retry_processing(scope=scope, run_id=origin.run_id)
+    finally:
+        event.remove(session_class, "do_orm_execute", check_select)
+    assert inspected

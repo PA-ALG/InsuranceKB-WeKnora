@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from collections.abc import Awaitable, Callable, Mapping
@@ -98,7 +99,8 @@ def register_stage_handlers(
                 raise NonRetryableJobError("PRODUCT_STAGE_BINDING_MISSING")
             result = await execute(scope, run, stage, job)
             writes = (
-                artifacts.prepare_artifact_writes(
+                await asyncio.to_thread(
+                    artifacts.prepare_artifact_writes,
                     scope=scope,
                     run_id=run_id,
                     stage_key=name,
@@ -204,8 +206,11 @@ def register_source_stages(
         if run.retry_of_run_id and (recovery is None or reuse_sealed):
             prior = {
                 row.artifact_key: row
-                for row in artifacts.list_artifacts(
-                    scope=scope, run_id=run.retry_of_run_id, artifact_kind="source_snapshot"
+                for row in await asyncio.to_thread(
+                    artifacts.list_artifacts,
+                    scope=scope,
+                    run_id=run.retry_of_run_id,
+                    artifact_kind="source_snapshot",
                 )
             }
         if reuse_sealed:
@@ -248,7 +253,8 @@ def register_source_stages(
                     scope, material.knowledge_id, item["parse_attempt"]
                 )
             try:
-                decoded = decode_source_snapshot(
+                decoded = await asyncio.to_thread(
+                    decode_source_snapshot,
                     raw,
                     scope=scope,
                     knowledge_id=material.knowledge_id,
@@ -293,7 +299,9 @@ def register_source_stages(
         return StageOutput(tuple(drafts))
 
     async def routing(scope, run, stage, job):
-        snapshots = read_source_snapshots(artifacts, scope, run.run_id, public_keys=public_keys)
+        snapshots = await asyncio.to_thread(
+            read_source_snapshots, artifacts, scope, run.run_id, public_keys=public_keys
+        )
         if set(snapshots) != {row.knowledge_id for row in run.materials}:
             raise NonRetryableJobError("SOURCE_CHECKPOINT_SET_MISMATCH")
         if any(not source.blocks for source in snapshots.values()):

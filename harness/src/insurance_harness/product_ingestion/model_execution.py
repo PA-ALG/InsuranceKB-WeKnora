@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from collections.abc import Callable
@@ -299,6 +300,37 @@ class ConfiguredModelExecutor:
         self._client = client
 
     async def replay_stage_call(
+        self,
+        *,
+        store: ProductArtifactStore,
+        scope: ProductScope,
+        run_id: str,
+        job: JobSnapshot,
+        stage_key: str,
+        operation_key: str,
+        dependency_sha256: str,
+        input_sha256: str,
+        content: bytes,
+        prompt: bytes,
+        template_id: str,
+    ) -> ModelExecutionResult:
+        """Revalidate a cross-run recorded call without reserving or sending a new call."""
+        return await asyncio.to_thread(
+            self._replay_stage_call,
+            store=store,
+            scope=scope,
+            run_id=run_id,
+            job=job,
+            stage_key=stage_key,
+            operation_key=operation_key,
+            dependency_sha256=dependency_sha256,
+            input_sha256=input_sha256,
+            content=content,
+            prompt=prompt,
+            template_id=template_id,
+        )
+
+    def _replay_stage_call(
         self,
         *,
         store: ProductArtifactStore,
