@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 
 import pytest
 from sqlalchemy import event
@@ -16,7 +17,7 @@ from tests.product_ingestion.test_pipeline_runtime import (
     SCOPE,
     FixtureModel,
     FixturePlatform,
-    _base_snapshot,
+    _base_snapshot_with_navigation,
     _compose,
     _finish,
     _settings,
@@ -31,7 +32,7 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
     monkeypatch,
     response_lost,
 ):
-    base, parent = _base_snapshot()
+    base, parent = _base_snapshot_with_navigation()
     settings = _settings(tmp_path, parent)
     engine = _sqlite_engine(tmp_path / "checkpoint.db")
     Base.metadata.create_all(engine)
@@ -73,6 +74,10 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             scope=SCOPE, run_id=origin.run_id, artifact_kind="candidate", artifact_key="product"
         )
         assert saved_candidate.payload == submissions[0][1]
+        assert json.loads(saved_candidate.payload).get("navigation_assignments") == [
+            row.model_dump(mode="json") for row in parent.navigation_assignments
+        ], "incremental compilation must preserve the published navigation"
+
         _enqueue_control(context.store, SCOPE, failed)
         before_attempts = context.store.list_field_attempts(scope=SCOPE, run_id=origin.run_id)
         assert any(row.outcome is FieldOutcomeKind.EXTRACTION_FAILED for row in before_attempts)

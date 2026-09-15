@@ -143,6 +143,39 @@ def _published_snapshot(candidate, *, release_id: str, activation_epoch: int) ->
     return _signed("base", body)
 
 
+def _base_snapshot_with_navigation():
+    """A signed fixture parent with an existing human navigation override."""
+    parent = compiler.validate_batch_candidate(BASE_CANDIDATE.read_bytes())
+    binding = parent.request.entity_bindings[0]
+    data = {
+        "contract": "g3-navigation-assignment.830.v1",
+        "entity_id": binding.entity_id,
+        "entity_version": binding.entity_version,
+        "assignment_version": 1,
+        "labels": tuple(sorted((binding.primary_classification, "健康保障"))),
+        "primary_label": "健康保障",
+        "previous_assignment_sha256": compiler.navigation_default_sha256_g3(binding),
+    }
+    navigation = (compiler.NavigationAssignment830G3V1.model_validate({
+        **data, "assignment_sha256": compiler._batch_sha256(data["contract"], data),
+    }),)
+    payload = {
+        name: getattr(parent, name)
+        for name in type(parent).model_fields
+        if name not in {"candidate_hash", "navigation_assignments"}
+    }
+    payload["navigation_assignments"] = navigation
+    payload["page_manifest"] = compiler.project_batch_members(
+        parent.request, parent.compile_result.output, navigation
+    )
+    parent = compiler.BatchConceptCandidateBundle830G3V1.model_validate({
+        **payload, "candidate_hash": compiler._batch_sha256(parent.contract, payload),
+    })
+    return _published_snapshot(
+        parent, release_id="release-five-product-fixture", activation_epoch=9
+    ), parent
+
+
 def _base_snapshot() -> tuple[dict, object]:
     candidate = compiler.validate_batch_candidate(BASE_CANDIDATE.read_bytes())
     return (

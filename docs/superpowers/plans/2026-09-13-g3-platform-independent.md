@@ -1,5 +1,15 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3at：增量编译继承已发布导航及产物版本失效
+
+Task3as已部署；网页run16339470-f954-564e-b7ae-60f7515b050b在07:35:46.838Z点击、07:42:31.919412Z失败（405.081412s），candidate成功持久化，preparation HTTP400，0新模型/10复用，字段21/31/30。真实candidate SHA9ebbe5b355d0445683dd87f1f42051ef3b85999be9f8096391007be764f2e16a，10,201,079B，经Go纯types+成员校验PASS且canonical原字节同SHA。只读比对确认：真实已签base保留1条navigation_assignment，新candidate为空；对应旧entity/version仍存在；ValidateBatchNavigationHistory830G3确定拒绝。其他父identity、7旧bindings、493fields/1def/8pages及1822来源一致。不得放松APP历史导航门禁，不得改写该失败候选。
+
+沿用G3-AUTO-1/3/5/6，root唯一写者。修复既有compiler assemble接口可传入严格typed的已发布navigation_assignments，生成manifest/hash时一并继承，空导航时保留旧字节兼容。平台从已验证base_snapshot读取原导航，保持版本/hash/labels不变；不重新分类旧产品、不调用模型、不调用人工导航编辑操作。错误导航或entity/version不符仍拒绝。
+
+编译实现变化使旧candidate失效：复用Artifact现有contract_name/version字段，将新candidate产物版本提升为2，检查点按显式产物合同版本表判可复用；旧candidate及其下游从prefix排除，只重做compilation及之后，sources/identity/field_plan/extract/synthesis继续复用。已验证v2候选仍直接复用；不改历史payload/任务、不新增DB字段/表/工作流版本。历史v1若compiled产物已失效，则从早期前缀进入现有workflow2；仍兼容的v1完整产物按原顺序。
+
+root写域：knowledge_compiler/batch_concept_compile_830_g3.py、product_ingestion/{compilation,pipeline,stages,checkpoints,checkpoint_store}.py及相应tests/原规格证据。先RED覆盖导航在pipeline跨编译保存与hash一致、空导航旧hash兼容、候选版本变化只重编译不重抽取、新版本候选重试原字节复用；后实现、独立复核、只升级现有Harness（复用0018/APP/UI），从网页恢复。全新三材料仍待现有增量通过后执行。Codex不修改真实候选或代执行发布。
+
 ## 2026-09-15 Task3as：先保存编译结果，再提交草稿
 
 草稿幂等身份绑定candidate的生产run，而非恢复child；跨恢复保持同一preparation_id、candidate原字节及原内部审查哈希。当前系统审核签名仍使用当前任务和平台回执，不改原候选。提交响应丢失后由平台原幂等接口处理，不产生另一草稿。

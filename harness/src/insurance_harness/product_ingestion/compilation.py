@@ -449,12 +449,23 @@ def _derived_run_id(run_id: str, stage: str) -> str:
     return "product-" + stage + "-" + hashlib.sha256(run_id.encode()).hexdigest()[:32]
 
 
+def published_navigation_assignments(
+    base_body: dict,
+) -> tuple[compiler.NavigationAssignment830G3V1, ...]:
+    """Read verified projection navigation, including Go's optional null slice."""
+    rows = base_body["published_projection"].get("navigation_assignments")
+    if rows is None:
+        return ()
+    return tuple(compiler.NavigationAssignment830G3V1.model_validate(row) for row in rows)
+
+
 def assemble_platform_candidate(
     *,
     request: compiler.BatchConceptCompileRequest830G3V1,
     delta: CompileResult,
     run_id: str,
     independent_review: ReviewResult | None = None,
+    navigation_assignments: tuple[compiler.NavigationAssignment830G3V1, ...] = (),
 ) -> compiler.BatchConceptCandidateBundle830G3V1:
     """Reuse field validation; novel free members additionally require independent review."""
 
@@ -517,6 +528,7 @@ def assemble_platform_candidate(
         composed,
         review,
         admission,
+        navigation_assignments=navigation_assignments,
     )
     compiler.validate_candidate_bundle(candidate)
     return candidate

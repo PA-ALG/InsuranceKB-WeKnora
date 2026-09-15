@@ -10,6 +10,7 @@ from insurance_harness.knowledge_compiler.g3_field_tasks import (
     adapt_catalog_field_tasks,
     batch_field_tasks,
 )
+from insurance_harness.product_ingestion.checkpoints import CURRENT_ARTIFACT_CONTRACTS
 from insurance_harness.product_ingestion.extraction import (
     VALIDATION_VERSION,
     render_window_request,
@@ -827,6 +828,7 @@ def build_product_pipeline(context):
     async def compilation(scope, run, stage, job):
         from insurance_harness.product_ingestion.compilation import (
             assemble_platform_candidate,
+            published_navigation_assignments,
         )
 
         request = await asyncio.to_thread(request_for, scope, run.run_id)
@@ -843,11 +845,14 @@ def build_product_pipeline(context):
         delta = await asyncio.to_thread(
             lambda: CompileResult.model_validate_json(read(scope, run.run_id, "compile_delta"))
         )
+        base = await asyncio.to_thread(base_for, scope, run.run_id)
+        navigation = published_navigation_assignments(base)
         candidate = await asyncio.to_thread(
             assemble_platform_candidate,
             request=request,
             delta=delta,
             run_id=run.run_id,
+            navigation_assignments=navigation,
             independent_review=(
                 ReviewResult.model_validate_json(discovery_reviews[0].payload)
                 if discovery_reviews
@@ -855,7 +860,13 @@ def build_product_pipeline(context):
             ),
         )
         raw = await asyncio.to_thread(batch_json_bytes_830_g3, candidate)
-        candidate_output = artifact("candidate", "product", raw, stage.dependency_sha256)
+        candidate_output = artifact(
+            "candidate",
+            "product",
+            raw,
+            stage.dependency_sha256,
+            contract_version=CURRENT_ARTIFACT_CONTRACTS["candidate"][1],
+        )
         if run.workflow_version == 2:
             return StageOutput((candidate_output,))
         # Historical jobs retain their original combined-stage contract.

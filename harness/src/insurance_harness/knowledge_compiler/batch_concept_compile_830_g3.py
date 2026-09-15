@@ -2147,8 +2147,10 @@ def assemble_candidate_bundle(
     compile_result: CompileResult,
     review_result: ReviewResult,
     admission: HumanBatchAdmission,
+    *,
+    navigation_assignments: tuple[NavigationAssignment830G3V1, ...] = (),
 ) -> BatchConceptCandidateBundle830G3V1:
-    manifest = project_batch_members(request, compile_result.output)
+    manifest = project_batch_members(request, compile_result.output, navigation_assignments)
     payload: dict[str, object] = {
         "contract": "batch-concept-candidate-bundle.830.g3.v1",
         "request": request,
@@ -2158,6 +2160,8 @@ def assemble_candidate_bundle(
         "page_manifest": manifest,
         "admission": admission,
     }
+    if navigation_assignments:
+        payload["navigation_assignments"] = navigation_assignments
     return BatchConceptCandidateBundle830G3V1.model_validate(
         {
             **payload,

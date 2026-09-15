@@ -47,12 +47,21 @@ def json_bytes(value) -> bytes:
     ).encode()
 
 
-def artifact(kind, key, payload, dependency_sha256, *, origin=ArtifactOrigin.RULE, call_id=None):
+def artifact(
+    kind,
+    key,
+    payload,
+    dependency_sha256,
+    *,
+    origin=ArtifactOrigin.RULE,
+    call_id=None,
+    contract_version="1",
+):
     return ArtifactDraft(
         artifact_kind=kind,
         artifact_key=key,
-        contract_name=f"product-{kind}.v1",
-        contract_version="1",
+        contract_name=f"product-{kind}.v{contract_version}",
+        contract_version=contract_version,
         dependency_sha256=dependency_sha256,
         payload=payload,
         payload_sha256=hashlib.sha256(payload).hexdigest(),

@@ -51,6 +51,10 @@ REQUIRED_OUTPUTS = {
 }
 
 
+# Only declared versioned outputs gate reuse; historical payloads stay immutable.
+CURRENT_ARTIFACT_CONTRACTS = {"candidate": ("product-candidate.v2", "2")}
+
+
 def stage_order(workflow_version):
     if workflow_version == 1:
         return LEGACY_STAGE_ORDER

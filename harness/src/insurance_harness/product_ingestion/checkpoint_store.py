@@ -16,6 +16,7 @@ from insurance_harness.product_ingestion.artifact_tables import (
     ProductStageModelCall,
 )
 from insurance_harness.product_ingestion.checkpoints import (
+    CURRENT_ARTIFACT_CONTRACTS,
     PLAN_KIND,
     RECEIPT_KIND,
     ArtifactReference,
@@ -188,12 +189,23 @@ class CheckpointStore:
             )
         ).all():
             refs[(row.artifact_kind, row.artifact_key)] = _ref(row)
-        # A completed v1 combined stage already owns its draft. Preserve that
-        # workflow; only earlier legacy checkpoints may enter the new split path.
+
+        def current_contract(ref):
+            expected = CURRENT_ARTIFACT_CONTRACTS.get(ref.artifact_kind)
+            return expected is None or (ref.contract_name, ref.contract_version) == expected
+
+        # Only a still-valid completed v1 combined stage may retain its draft.
+        # An obsolete candidate resumes at compilation using the split workflow.
         compiled = stages.get("compilation")
+        compiled_refs = tuple(r for r in refs.values() if r.stage_key == "compilation")
+        compiled_current = any(r.artifact_kind == "candidate" for r in compiled_refs) and all(
+            current_contract(r) for r in compiled_refs
+        )
         workflow_version = origin.workflow_version
         if workflow_version == 1 and (
-            compiled is None or compiled.state not in {"succeeded", "partial_success"}
+            compiled is None
+            or compiled.state not in {"succeeded", "partial_success"}
+            or not compiled_current
         ):
             workflow_version = 2
         order = stage_order(workflow_version)
@@ -203,8 +215,11 @@ class CheckpointStore:
             stage = stages.get(key)
             if stage is None or stage.state not in {"succeeded", "partial_success"}:
                 break
-            kinds = {r.artifact_kind for r in refs.values() if r.stage_key == key}
-            if not set(outputs[key]).issubset(kinds):
+            stage_refs = tuple(r for r in refs.values() if r.stage_key == key)
+            kinds = {r.artifact_kind for r in stage_refs}
+            if not set(outputs[key]).issubset(kinds) or not all(
+                current_contract(r) for r in stage_refs
+            ):
                 break
             prefix.append(stage)
         if not prefix or len(prefix) == len(order):
