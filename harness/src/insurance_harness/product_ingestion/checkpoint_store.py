@@ -18,13 +18,13 @@ from insurance_harness.product_ingestion.artifact_tables import (
 from insurance_harness.product_ingestion.checkpoints import (
     PLAN_KIND,
     RECEIPT_KIND,
-    REQUIRED_OUTPUTS,
-    STAGE_ORDER,
     ArtifactReference,
     CallReference,
     CheckpointPlan,
     CheckpointReceipt,
     FieldReference,
+    required_outputs,
+    stage_order,
 )
 from insurance_harness.product_ingestion.models import ProductRunState
 from insurance_harness.product_ingestion.tables import (
@@ -85,6 +85,8 @@ class CheckpointStore:
             or run.retry_of_run_id != plan.origin_run_id
         ):
             raise ValueError("checkpoint scope or origin changed")
+        if run.workflow_version != plan.workflow_version:
+            raise ValueError("checkpoint workflow changed")
         return plan
 
     def checkpoint_receipt(self, *, scope, run_id, session=None):
@@ -112,6 +114,7 @@ class CheckpointStore:
         )
         if (
             plan is None
+            or receipt.contract != plan.contract.replace("-plan.", "-receipt.")
             or receipt.scope != scope
             or receipt.run_id != run_id
             or receipt.plan_sha256 != plan.digest()
@@ -185,18 +188,28 @@ class CheckpointStore:
             )
         ).all():
             refs[(row.artifact_kind, row.artifact_key)] = _ref(row)
+        # A completed v1 combined stage already owns its draft. Preserve that
+        # workflow; only earlier legacy checkpoints may enter the new split path.
+        compiled = stages.get("compilation")
+        workflow_version = origin.workflow_version
+        if workflow_version == 1 and (
+            compiled is None or compiled.state not in {"succeeded", "partial_success"}
+        ):
+            workflow_version = 2
+        order = stage_order(workflow_version)
+        outputs = required_outputs(workflow_version)
         prefix = []
-        for key in STAGE_ORDER:
+        for key in order:
             stage = stages.get(key)
             if stage is None or stage.state not in {"succeeded", "partial_success"}:
                 break
             kinds = {r.artifact_kind for r in refs.values() if r.stage_key == key}
-            if not set(REQUIRED_OUTPUTS[key]).issubset(kinds):
+            if not set(outputs[key]).issubset(kinds):
                 break
             prefix.append(stage)
-        if not prefix or len(prefix) == len(STAGE_ORDER):
+        if not prefix or len(prefix) == len(order):
             return None
-        resume = STAGE_ORDER[len(prefix)]
+        resume = order[len(prefix)]
         if resume == "verify":
             # A published-head verification retry requires the new publication
             # receipt as its current-head baseline; not the prepublication base.
@@ -320,6 +333,7 @@ class CheckpointStore:
             seen.add(upload.id)
             upload = self._run(session, scope, upload.retry_of_run_id)
         return CheckpointPlan(
+            contract=f"product-stage-checkpoint-plan.830.v{workflow_version}",
             scope=scope,
             origin_run_id=origin.id,
             origin_version=origin.version,
@@ -386,6 +400,7 @@ class CheckpointStore:
                         "uploads_sealed": True,
                         "state": ProductRunState.AWAITING_SOURCES.value,
                         "version": 1,
+                        "workflow_version": plan.workflow_version,
                         "created_at": now,
                         "started_at": now,
                         "root_job_id": None,
@@ -450,7 +465,7 @@ class CheckpointStore:
                             "artifact_kind": PLAN_KIND,
                             "artifact_key": "product",
                             "contract_name": plan.contract,
-                            "contract_version": "1",
+                            "contract_version": str(plan.workflow_version),
                             "dependency_sha256": dependency,
                             "payload": plan.encoded(),
                             "payload_sha256": dependency,

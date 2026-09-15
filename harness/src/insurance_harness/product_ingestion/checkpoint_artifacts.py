@@ -287,6 +287,7 @@ class CheckpointArtifacts:
             if len(call_ids) != len(set(call_ids)):
                 raise ValueError("duplicate original call identity")
             return CheckpointReceipt(
+                contract=plan.contract.replace("-plan.", "-receipt."),
                 scope=scope,
                 run_id=run_id,
                 plan_sha256=plan.digest(),

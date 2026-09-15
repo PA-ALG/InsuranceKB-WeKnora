@@ -30,13 +30,12 @@ def test_reused_partial_discovery_remains_partial_with_no_field_gaps():
         for key in progress_module.STAGES[:7]
     )
     local = tuple(
-        SimpleNamespace(stage_key=key, state="succeeded")
-        for key in progress_module.STAGES[7:]
+        SimpleNamespace(stage_key=key, state="succeeded") for key in progress_module.STAGES[7:]
     )
     store = SimpleNamespace(
         list_stages=lambda **_: local,
         checkpoint_receipt=lambda **_: SimpleNamespace(reused_stages=inherited),
-        get_run=lambda **_: SimpleNamespace(failure_count=0, missing_count=0),
+        get_run=lambda **_: SimpleNamespace(failure_count=0, missing_count=0, workflow_version=2),
     )
     progress = progress_module.ProductProgression(
         store=store, jobs=None, read_window_plan=lambda *_: ()
@@ -203,3 +202,36 @@ def test_field_plan_rejects_duplicate_fields_across_windows_before_any_dispatch(
     with pytest.raises(ValueError, match="duplicate field"):
         progress.advance(scope, run.run_id)
     assert store.list_windows(scope=scope, run_id=run.run_id) == ()
+
+
+@pytest.mark.parametrize("workflow_version", [1, 2])
+def test_preparation_barrier_depends_on_persisted_workflow(workflow_version):
+    from types import SimpleNamespace
+
+    legacy = (
+        "uploads",
+        "source",
+        "routing",
+        "identity",
+        "field_plan",
+        "extract",
+        "synthesis",
+        "compilation",
+        "review",
+        "publish",
+        "verify",
+    )
+    rows = tuple(SimpleNamespace(stage_key=k, state="succeeded") for k in legacy)
+    store = SimpleNamespace(
+        list_stages=lambda **_: rows,
+        checkpoint_receipt=lambda **_: None,
+        get_run=lambda **_: SimpleNamespace(
+            workflow_version=workflow_version, failure_count=0, missing_count=0
+        ),
+    )
+    progress = module().ProductProgression(store=store, jobs=None, read_window_plan=lambda *_: ())
+    if workflow_version == 1:
+        assert progress.final_state(None, "legacy") == ProductRunState.SUCCEEDED
+    else:
+        with pytest.raises(ValueError, match="barrier"):
+            progress.final_state(None, "current")

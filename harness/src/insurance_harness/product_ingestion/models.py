@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -160,6 +160,7 @@ class ProductRunSnapshot(_FrozenModel):
     scope: ProductScope
     state: ProductRunState
     version: int
+    workflow_version: Literal[1, 2] = 1
     retry_of_run_id: str | None
     attempt: int
     retry_field_keys: tuple[str, ...]

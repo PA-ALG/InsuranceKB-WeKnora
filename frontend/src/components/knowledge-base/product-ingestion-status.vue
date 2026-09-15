@@ -15,7 +15,11 @@ let clockTimer: ReturnType<typeof setInterval> | undefined
 const terminal = (state: string) => ['succeeded', 'partial_success', 'failed', 'needs_confirmation'].includes(state)
 const active = computed(() => runs.value.filter(run => !terminal(run.state)))
 const stateNames: Record<string, string> = { created: '已接收', uploading: '接收材料', accepting_uploads: '接收材料', waiting_sources: '等待材料解析', awaiting_sources: '等待材料解析', processing: '处理中', running: '处理中', succeeded: '已完成', partial_success: '部分完成', failed: '处理失败', needs_confirmation: '需要确认', queued: '等待处理', leased: '等待执行', retry_wait: '等待恢复', awaiting_human: '需要确认', blocked: '处理失败', dead_letter: '处理失败', pending: '等待处理', skipped: '已跳过' }
-const stageNames: Record<string, string> = { uploads: '接收材料', identity: '归并产品', field_plan: '安排字段任务', synthesis: '整理已验证结果', verify: '检索与证据检查', upload: '接收材料', uploading: '接收材料', source: '解析材料', sources: '解析材料', parsing: '解析材料', routing: '识别产品', schema: '归并字段', extract: '抽取字段', extraction: '抽取字段', validation: '校验字段', compilation: '编译知识', compile: '编译知识', review: '自动审核', publish: '发布知识', publication: '发布知识' }
+const stageNames: Record<string, string> = { uploads: '接收材料', identity: '归并产品', field_plan: '安排字段任务', synthesis: '整理已验证结果', verify: '检索与证据检查', upload: '接收材料', uploading: '接收材料', source: '解析材料', sources: '解析材料', parsing: '解析材料', routing: '识别产品', schema: '归并字段', extract: '抽取字段', extraction: '抽取字段', validation: '校验字段', compilation: '编译知识', preparation: '提交审核草稿', compile: '编译知识', review: '自动审核', publish: '发布知识', publication: '发布知识' }
+function runStateName(run: ProductIngestionRun): string {
+  if (!terminal(run.state) && run.stage && !['uploads', 'upload', 'source', 'sources', 'parsing'].includes(run.stage)) return '处理中'
+  return stateNames[run.state] || run.state
+}
 const sourcePhaseNames: Record<string, string> = { docreader: '读取与解析', chunking: '文本分段', embedding: '向量化', 'postprocess.summary': '生成摘要' }
 stageNames.checkpoint = '检查已有结果'
 const sourceStateNames: Record<string, string> = { done: '已完成', failed: '失败', skipped: '已跳过', cancelled: '已取消' }
@@ -148,7 +152,7 @@ onUnmounted(() => { generation++; stopTimers() })
     <p v-if="!runs.length">{{ loading ? '正在读取任务…' : '上传产品原始材料后，可在这里查看进度。' }}</p>
     <article v-for="run in runs" :key="run.run_id" data-testid="product-run">
       <div class="run-heading">
-        <strong :class="['run-state', run.state]">{{ stateNames[run.state] || run.state }}</strong>
+        <strong :class="['run-state', run.state]">{{ runStateName(run) }}</strong>
         <span v-if="run.stage">{{ stageNames[run.stage] || run.stage }}</span>
         <span data-testid="run-duration">耗时 {{ duration(run.started_at, run.finished_at, terminal(run.state)) }}</span>
         <a v-if="publishedLink(run)" :href="publishedLink(run)">查看已发布产品</a>

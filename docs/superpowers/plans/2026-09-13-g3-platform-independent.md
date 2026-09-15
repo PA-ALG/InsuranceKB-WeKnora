@@ -1,5 +1,19 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3as：先保存编译结果，再提交草稿
+
+草稿幂等身份绑定candidate的生产run，而非恢复child；跨恢复保持同一preparation_id、candidate原字节及原内部审查哈希。当前系统审核签名仍使用当前任务和平台回执，不改原候选。提交响应丢失后由平台原幂等接口处理，不产生另一草稿。
+
+Task3ar 真实网页run `dcbc67b3-15a3-588b-b7e7-19df10591cc4` 于06:06:56.478Z点击、06:26:03.161148Z失败。检查点两次租约回收后成功；编译单代失败，APP原接口77秒返回400，未生成草稿。新增模型调用0，复用10，字段21/31/30保持。冷缓存兼容修复CODE/DELIVERY通过不等于BUSINESS通过。当前candidate只在create_preparation成功后持久化，导致失败结果不可查、恢复重算，此处必须修正；未知的实际400细分原因仍不得猜测，待平台留下真实candidate后只读定位。
+
+同G3-AUTO-3/4/5/6，复用现有ProductStage、JobStore、ArtifactStore和唯一APP草稿接口。新增工作流v2：compilation只生成并原子保存candidate；preparation读取其原字节提交原接口并保存metadata；后续review/publish/verify不变。提交失败不得丢弃或重组成功candidate。恢复只引用已完成compilation，经既有来源/摘要/代次边界校验，不改写历史结果，不补抽普通字段。
+
+版本显式冻结：ProductRun增加NOT NULL workflow_version（历史/旧写者server_default=1，新create_run显式2；幂等命中不升级）。v1阶段顺序及combined compilation语义保留。CheckpointPlan旧v1字节/顺序不变，新v2按新顺序；新恢复若旧compilation已成功则保持v1复用candidate+preparation，否则可从已完成早期前缀转v2。child版本绑定plan合同，origin可为旧版本。旧字段重试/旧恢复构造点继承原版本。使用现有数据库单一小迁移，不新建环境、队列或存储。
+
+root唯一仓库写者，写域为product_ingestion的tables/models/store/checkpoints/checkpoint_store/progression/pipeline/composition、对应测试及现有migration目录；仅必要API字段回显（不泄密）与UI阶段名/真实活动阶段展示及对应测试。g3_extraction_finish只在/private/tmp提供版本字段/迁移/构造点的测试与实现分离补丁，root先RED再集成；root负责流程、检查点合同和UI。先验证候选持久化先于HTTP、HTTP失败仍可读取、恢复不再调用assembler/模型、复用原字节/原证据、旧v1及幂等兼容、v2发布屏障必须含preparation，再独立冻结复核和部署受影响Harness/UI。APP保持Task3ar镜像，除非拿到真实候选后证实另一个APP根因。
+
+本轮期间不改运行链路；当前失败已终态，才进入本修复。租约首次过期的直接原因尚未证实，后台线程取消后仍运行的放大机制和重复大对象校验列为待修问题，不能宣称稳定性已通过。之后继续现有产品增量验收，再全新产品三原件网页完整验收。
+
 ## 2026-09-15 Task3ar：冷缓存与增量基线的空集合兼容
 
 Task3aq 网页恢复 `baaa5263-75ec-5a4f-b55a-169d3be353cf` 检查点成功，复用10次历史调用，新增调用0；编译提交400，05:14:11.454219Z失败，无新草稿/发布，不算验收通过。原493字段投影中473个conditions、481个exceptions为null，同一检查点编译请求对应项为[]。只读overlay复现：原真实基线测试清空内存缓存、读取既有签名gob投影后，在validateBatchConceptBase830G3失败。Gob空slice变nil，reflect.DeepEqual误判，既有冷读测试仅覆盖成员索引而非下一稿基线。

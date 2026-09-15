@@ -15,7 +15,7 @@ from insurance_harness.product_ingestion.models import (
 
 PLAN_KIND = "checkpoint_plan"
 RECEIPT_KIND = "checkpoint_receipt"
-STAGE_ORDER = (
+LEGACY_STAGE_ORDER = (
     "uploads",
     "source",
     "routing",
@@ -29,7 +29,7 @@ STAGE_ORDER = (
     "verify",
 )
 # These are declared stage output dependencies, not failure-message classifications.
-REQUIRED_OUTPUTS = {
+LEGACY_REQUIRED_OUTPUTS = {
     "uploads": (),
     "source": ("source_snapshot",),
     "routing": ("routing",),
@@ -42,6 +42,26 @@ REQUIRED_OUTPUTS = {
     "publish": ("publish_authorization", "publication"),
     "verify": ("verification",),
 }
+
+STAGE_ORDER = (*LEGACY_STAGE_ORDER[:8], "preparation", *LEGACY_STAGE_ORDER[8:])
+REQUIRED_OUTPUTS = {
+    **LEGACY_REQUIRED_OUTPUTS,
+    "compilation": ("candidate",),
+    "preparation": ("preparation",),
+}
+
+
+def stage_order(workflow_version):
+    if workflow_version == 1:
+        return LEGACY_STAGE_ORDER
+    if workflow_version == 2:
+        return STAGE_ORDER
+    raise ValueError("unsupported product workflow version")
+
+
+def required_outputs(workflow_version):
+    stage_order(workflow_version)
+    return LEGACY_REQUIRED_OUTPUTS if workflow_version == 1 else REQUIRED_OUTPUTS
 
 
 class Frozen(BaseModel):
@@ -91,9 +111,9 @@ class FieldReference(Frozen):
 
 
 class CheckpointPlan(Frozen):
-    contract: Literal["product-stage-checkpoint-plan.830.v1"] = (
-        "product-stage-checkpoint-plan.830.v1"
-    )
+    contract: Literal[
+        "product-stage-checkpoint-plan.830.v1", "product-stage-checkpoint-plan.830.v2"
+    ] = "product-stage-checkpoint-plan.830.v2"
     scope: ProductScope
     origin_run_id: str
     origin_version: int = Field(gt=0)
@@ -105,13 +125,15 @@ class CheckpointPlan(Frozen):
     calls: tuple[CallReference, ...] = ()
     fields: tuple[FieldReference, ...] = ()
 
+    @property
+    def workflow_version(self):
+        return 1 if self.contract.endswith(".v1") else 2
+
     @model_validator(mode="after")
     def valid(self):
+        order = stage_order(self.workflow_version)
         keys = tuple(s.stage_key for s in self.reused_stages)
-        if (
-            self.resume_stage not in STAGE_ORDER
-            or keys != STAGE_ORDER[: STAGE_ORDER.index(self.resume_stage)]
-        ):
+        if self.resume_stage not in order or keys != order[: order.index(self.resume_stage)]:
             raise ValueError("checkpoint stages must form an exact completed dependency prefix")
         if any(s.state not in {"succeeded", "partial_success"} for s in self.reused_stages):
             raise ValueError("checkpoint cannot claim incomplete execution")
@@ -130,9 +152,9 @@ class CheckpointPlan(Frozen):
 
 
 class CheckpointReceipt(Frozen):
-    contract: Literal["product-stage-checkpoint-receipt.830.v1"] = (
-        "product-stage-checkpoint-receipt.830.v1"
-    )
+    contract: Literal[
+        "product-stage-checkpoint-receipt.830.v1", "product-stage-checkpoint-receipt.830.v2"
+    ] = "product-stage-checkpoint-receipt.830.v2"
     scope: ProductScope
     run_id: str
     plan_sha256: str

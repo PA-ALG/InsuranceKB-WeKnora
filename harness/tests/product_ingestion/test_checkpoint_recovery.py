@@ -25,8 +25,11 @@ from tests.product_ingestion.test_pipeline_runtime import (
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("response_lost", [False, True])
 async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_source_resend(
     tmp_path,
+    monkeypatch,
+    response_lost,
 ):
     base, parent = _base_snapshot()
     settings = _settings(tmp_path, parent)
@@ -38,8 +41,12 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
     runtime, context, model_client = await _compose(settings, factory, platform, model)
     service = context.bindings[SCOPE.space_id]
     original_create = service.platform.create_preparation
+    submissions = []
 
     async def transfer_limit(*args, **kwargs):
+        submissions.append((args[1], args[2]))
+        if response_lost:
+            await original_create(*args, **kwargs)
         raise NonRetryableJobError("PLATFORM_CANDIDATE_LIMIT_EXCEEDED")
 
     service.platform.create_preparation = transfer_limit
@@ -60,7 +67,12 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             )
         }
         assert stage_states["synthesis"] in {"succeeded", "partial_success"}
-        assert stage_states["compilation"] == "dead_letter"
+        assert stage_states["compilation"] == "succeeded"
+        assert stage_states["preparation"] == "dead_letter"
+        saved_candidate = context.artifacts.get_artifact(
+            scope=SCOPE, run_id=origin.run_id, artifact_kind="candidate", artifact_key="product"
+        )
+        assert saved_candidate.payload == submissions[0][1]
         _enqueue_control(context.store, SCOPE, failed)
         before_attempts = context.store.list_field_attempts(scope=SCOPE, run_id=origin.run_id)
         assert any(row.outcome is FieldOutcomeKind.EXTRACTION_FAILED for row in before_attempts)
@@ -113,7 +125,7 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             event.remove(factory.class_, "do_orm_execute", no_payload_on_admission)
         plan = context.store.checkpoint_plan(scope=SCOPE, run_id=child.run_id)
         assert plan.origin_run_id == origin.run_id
-        assert plan.resume_stage == "compilation"
+        assert plan.resume_stage == "preparation"
         assert len(plan.encoded()) < 128 * 1024
         assert all(ref.artifact_id for ref in plan.artifacts)
         assert [
@@ -121,15 +133,30 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
         ] == ["checkpoint"]
         child_rows = context.artifacts.list_artifacts(scope=SCOPE, run_id=child.run_id)
         assert not any(
-            row.artifact_kind in {"source_snapshot", "compile_request", "compile_delta"}
+            row.artifact_kind
+            in {"source_snapshot", "compile_request", "compile_delta", "candidate"}
             for row in child_rows
         )
 
-        service.platform.create_preparation = original_create
+        from insurance_harness.product_ingestion import compilation
+
+        def no_reassembly(*args, **kwargs):
+            raise AssertionError("completed candidate must not be assembled again")
+
+        monkeypatch.setattr(compilation, "assemble_platform_candidate", no_reassembly)
+
+        async def record_submission(*args, **kwargs):
+            submissions.append((args[1], args[2]))
+            return await original_create(*args, **kwargs)
+
+        service.platform.create_preparation = record_submission
         result = await _finish(runtime, context, jobs, child.run_id)
         assert result.state is ProductRunState.PARTIAL_SUCCESS, (
             result.terminal_reason,
             runtime.issues,
+        )
+        assert submissions == [submissions[0], submissions[0]], (
+            "recovery must use the same preparation identity and canonical candidate bytes"
         )
         assert (
             tuple(
@@ -164,8 +191,9 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             "field_plan",
             "extract",
             "synthesis",
+            "compilation",
         ]
-        for kind in ("compile_request", "compile_delta"):
+        for kind in ("compile_request", "compile_delta", "candidate"):
             inherited = context.artifacts.get_effective_artifact(
                 scope=SCOPE,
                 run_id=child.run_id,
@@ -176,7 +204,7 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             assert inherited.run_id == origin.run_id
             assert hashlib.sha256(inherited.payload).hexdigest() == inherited.payload_sha256
         assert all(
-            row.stage_key not in {"source", "identity", "extract", "synthesis"}
+            row.stage_key not in {"source", "identity", "extract", "synthesis", "compilation"}
             for row in context.store.list_stages(
                 scope=SCOPE,
                 run_id=child.run_id,

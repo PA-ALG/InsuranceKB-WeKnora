@@ -30,6 +30,13 @@ describe('persistent product processing status', () => {
     expect(w.get('[data-testid="counts"]').text()).toContain('复用调用 9')
     expect(w.text()).toContain('检查已有结果')
   })
+  it('shows the actual preparation phase while a recovery retains its old run state', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ state: 'awaiting_sources', stage: 'preparation', finished_at: undefined, stages: [{ name: 'preparation', state: 'running' }] })])
+    const w = await render()
+    expect(w.get('.run-state').text()).toBe('处理中')
+    expect(w.text()).toContain('提交审核草稿')
+    expect(w.get('.run-heading').text()).not.toContain('等待材料解析')
+  })
   it('restores server stages, counts and partial terminal without exposing values', async () => {
     const w = await render()
     expect(api.listProductIngestions).toHaveBeenCalledWith('kb')

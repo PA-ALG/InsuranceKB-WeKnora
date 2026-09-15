@@ -89,6 +89,7 @@ _PIPELINE_STAGES = frozenset(
         "extract",
         "synthesis",
         "compilation",
+        "preparation",
         "review",
         "publish",
         "verify",

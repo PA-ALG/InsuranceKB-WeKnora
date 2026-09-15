@@ -35,6 +35,7 @@ class ProductRun(Base):
     source_deadline_at: Mapped[datetime]
     state: Mapped[str] = mapped_column(String(32))
     version: Mapped[int]
+    workflow_version: Mapped[int] = mapped_column(nullable=False, server_default="1")
     uploads_sealed: Mapped[bool]
     created_at: Mapped[datetime]
     started_at: Mapped[datetime | None]

@@ -8,7 +8,8 @@ from dataclasses import dataclass
 
 from insurance_harness.jobs import JobState, JobStore
 from insurance_harness.jobs.models import ErrorClass
-from insurance_harness.product_ingestion.checkpoints import STAGE_ORDER as STAGES
+from insurance_harness.product_ingestion.checkpoints import STAGE_ORDER as STAGES  # noqa: F401
+from insurance_harness.product_ingestion.checkpoints import stage_order
 from insurance_harness.product_ingestion.models import (
     ProductRunState,
     ProductScope,
@@ -86,7 +87,8 @@ class ProductProgression:
             return
         if receipt is not None:
             stages.update({stage.stage_key: stage for stage in receipt.reused_stages})
-        for key in STAGES:
+        order = stage_order(run.workflow_version)
+        for key in order:
             stage = stages.get(key)
             if stage is not None:
                 if stage.state not in _GOOD:
@@ -130,7 +132,7 @@ class ProductProgression:
                     return
                 # The aggregate stage handles terminal failed windows explicitly.
                 # A missing ordinary field does not itself make a product fail.
-            parent = stages[STAGES[STAGES.index(key) - 1]]
+            parent = stages[order[order.index(key) - 1]]
             digest = hashlib.sha256(
                 (run_id + "\0" + key + "\0" + parent.dependency_sha256).encode()
             ).hexdigest()
@@ -156,9 +158,12 @@ class ProductProgression:
         receipt = self.store.checkpoint_receipt(scope=scope, run_id=run_id)
         if receipt is not None:
             stages.update({stage.stage_key: stage for stage in receipt.reused_stages})
-        if any(key not in stages or stages[key].state not in _GOOD for key in STAGES):
-            raise ValueError("product publication barrier is not complete")
         run = self.store.get_run(scope=scope, run_id=run_id)
+        if any(
+            key not in stages or stages[key].state not in _GOOD
+            for key in stage_order(run.workflow_version)
+        ):
+            raise ValueError("product publication barrier is not complete")
         return (
             ProductRunState.PARTIAL_SUCCESS
             if run.failure_count

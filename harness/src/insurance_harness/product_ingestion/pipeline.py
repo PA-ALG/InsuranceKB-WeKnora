@@ -834,13 +834,19 @@ def build_product_pipeline(context):
             ReviewResult,
         )
 
-        discovery_reviews = artifacts.list_effective_artifacts(
-            scope=scope, run_id=run.run_id, artifact_kind="discovery_review"
+        discovery_reviews = await asyncio.to_thread(
+            artifacts.list_effective_artifacts,
+            scope=scope,
+            run_id=run.run_id,
+            artifact_kind="discovery_review",
+        )
+        delta = await asyncio.to_thread(
+            lambda: CompileResult.model_validate_json(read(scope, run.run_id, "compile_delta"))
         )
         candidate = await asyncio.to_thread(
             assemble_platform_candidate,
             request=request,
-            delta=CompileResult.model_validate_json(read(scope, run.run_id, "compile_delta")),
+            delta=delta,
             run_id=run.run_id,
             independent_review=(
                 ReviewResult.model_validate_json(discovery_reviews[0].payload)
@@ -849,23 +855,38 @@ def build_product_pipeline(context):
             ),
         )
         raw = await asyncio.to_thread(batch_json_bytes_830_g3, candidate)
-        preparation_id = "product-" + hashlib.sha256(run.run_id.encode()).hexdigest()[:32]
-        base = await asyncio.to_thread(base_for, scope, run.run_id)
-        metadata = await service_for(scope).platform.create_preparation(
+        candidate_output = artifact("candidate", "product", raw, stage.dependency_sha256)
+        if run.workflow_version == 2:
+            return StageOutput((candidate_output,))
+        # Historical jobs retain their original combined-stage contract.
+        metadata = await submit_preparation(scope, run.run_id, run.run_id, raw)
+        return StageOutput((candidate_output, preparation_artifact(metadata, stage)))
+
+    async def submit_preparation(scope, run_id, producer_run_id, raw):
+        preparation_id = "product-" + hashlib.sha256(producer_run_id.encode()).hexdigest()[:32]
+        base = await asyncio.to_thread(base_for, scope, run_id)
+        return await service_for(scope).platform.create_preparation(
             scope, preparation_id, raw, base_body=base
         )
-        return StageOutput(
-            (
-                artifact("candidate", "product", raw, stage.dependency_sha256),
-                artifact(
-                    "preparation",
-                    "product",
-                    json_bytes(metadata),
-                    stage.dependency_sha256,
-                    origin=ArtifactOrigin.PLATFORM_SOURCE,
-                ),
-            )
+
+    def preparation_artifact(metadata, stage):
+        return artifact(
+            "preparation",
+            "product",
+            json_bytes(metadata),
+            stage.dependency_sha256,
+            origin=ArtifactOrigin.PLATFORM_SOURCE,
         )
+
+    async def preparation(scope, run, stage, job):
+        saved = await asyncio.to_thread(
+            artifacts.get_effective_artifact,
+            scope=scope,
+            run_id=run.run_id,
+            artifact_kind="candidate",
+        )
+        metadata = await submit_preparation(scope, run.run_id, saved.run_id, saved.payload)
+        return StageOutput((preparation_artifact(metadata, stage),))
 
     async def review(scope, run, stage, job):
         service = service_for(scope)
@@ -953,6 +974,7 @@ def build_product_pipeline(context):
             "extract": extract,
             "synthesis": synthesis,
             "compilation": compilation,
+            "preparation": preparation,
             "review": review,
             "publish": publish,
             "verify": verify,

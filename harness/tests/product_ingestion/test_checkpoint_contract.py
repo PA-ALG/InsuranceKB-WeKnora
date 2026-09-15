@@ -241,3 +241,31 @@ def test_zero_generation_artifact_cannot_satisfy_required_output(stage_runtime, 
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
     assert plan.resume_stage == "source"
     assert tuple(s.stage_key for s in plan.reused_stages) == ("uploads",)
+
+
+def test_checkpoint_contract_is_bound_to_child_workflow(stage_runtime, monkeypatch):
+    from insurance_harness.product_ingestion.tables import ProductRun
+
+    scope, store, _, _, child = _child(stage_runtime, monkeypatch)
+    plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
+    assert plan.contract == "product-stage-checkpoint-plan.830.v2"
+    assert child.workflow_version == 2
+    with store._session_factory() as session, session.begin():
+        session.get(ProductRun, child.run_id).workflow_version = 1
+    with pytest.raises(ValueError, match="workflow"):
+        store.checkpoint_plan(scope=scope, run_id=child.run_id)
+
+
+def test_legacy_checkpoint_bytes_keep_original_contract(stage_runtime, monkeypatch):
+    from insurance_harness.product_ingestion.checkpoints import CheckpointPlan
+
+    scope, store, _, _, child = _child(stage_runtime, monkeypatch)
+    plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
+    data = plan.model_dump(mode="json")
+    data["contract"] = "product-stage-checkpoint-plan.830.v1"
+    import json
+
+    raw = json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode()
+    legacy = CheckpointPlan.model_validate_json(raw)
+    assert legacy.encoded() == raw
+    assert legacy.workflow_version == 1
