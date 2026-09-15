@@ -17,6 +17,9 @@ import (
 type G3PlatformAutomatedDraftCreator interface {
 	CreateBatchConceptDraftAutomated830G3(context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope, string, json.RawMessage) (*types.WikiReleasePreparation, error)
 }
+type G3PlatformAutomatedTransferDraftCreator interface {
+	CreateBatchConceptDraftTransferAutomated830G3(context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope, string, json.RawMessage) (*types.WikiReleasePreparation, error)
+}
 type G3PlatformAutomatedReleaseService interface {
 	ReviewDraftAutomated(context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope, string, []byte) (*types.WikiReleasePreparation, error)
 	ActivateAutomated(context.Context, types.WikiReleasePrincipal, []byte, []byte) (*types.WikiReleaseReceipt, error)
@@ -44,12 +47,27 @@ func (h *G3PlatformReleaseHandler) CreatePreparation(c *gin.Context) {
 		return
 	}
 	fields, err := closedG3PlatformReleaseObject(raw, "preparation_id", "bundle")
+	memberKey := "bundle"
+	if err != nil {
+		fields, err = closedG3PlatformReleaseObject(raw, "preparation_id", "transfer")
+		memberKey = "transfer"
+	}
 	var id string
-	if err != nil || json.Unmarshal(fields["preparation_id"], &id) != nil || !validG3PlatformPathID(id) || !g3PlatformJSONObject(fields["bundle"]) {
+	if err != nil || json.Unmarshal(fields["preparation_id"], &id) != nil || !validG3PlatformPathID(id) || !g3PlatformJSONObject(fields[memberKey]) {
 		writeG3PlatformReleaseError(c, service.ErrWikiReleaseInvalidAuthorization)
 		return
 	}
-	result, err := h.drafts.CreateBatchConceptDraftAutomated830G3(c.Request.Context(), p, scope, id, fields["bundle"])
+	var result *types.WikiReleasePreparation
+	if memberKey == "transfer" {
+		port, supported := h.drafts.(G3PlatformAutomatedTransferDraftCreator)
+		if !supported {
+			writeG3PlatformReleaseError(c, errG3PlatformReleaseUnavailable)
+			return
+		}
+		result, err = port.CreateBatchConceptDraftTransferAutomated830G3(c.Request.Context(), p, scope, id, fields[memberKey])
+	} else {
+		result, err = h.drafts.CreateBatchConceptDraftAutomated830G3(c.Request.Context(), p, scope, id, fields[memberKey])
+	}
 	if err != nil {
 		writeG3PlatformReleaseError(c, err)
 		return

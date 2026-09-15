@@ -26,6 +26,7 @@ from insurance_harness.product_ingestion.artifact_tables import (
     ProductArtifact,
     ProductStageModelCall,
 )
+from insurance_harness.product_ingestion.checkpoint_store import CheckpointStore
 from insurance_harness.product_ingestion.models import (
     CallSnapshot,
     CallState,
@@ -93,7 +94,7 @@ def needs_confirmation_error(reason: str) -> CapacityBlockedJobError:
     return CapacityBlockedJobError(_NEEDS_CONFIRMATION_PREFIX + reason)
 
 
-class ProductIngestionStore:
+class ProductIngestionStore(CheckpointStore):
     """Service-facing store. All worker mutations are fenced by a P1 job lease."""
 
     def __init__(self, session_factory: SessionFactory, job_store: JobStore) -> None:
@@ -294,7 +295,10 @@ class ProductIngestionStore:
                 self._ensure_unfinished(session, run)
                 material = session.execute(
                     select(ProductMaterial)
-                    .where(ProductMaterial.id == material_id, ProductMaterial.run_id == run_id)
+                    .where(
+                        ProductMaterial.id == material_id,
+                        ProductMaterial.run_id == run_id,
+                    )
                     .with_for_update()
                 ).scalar_one_or_none()
                 if material is None or material.space_id != scope.space_id:
@@ -425,7 +429,10 @@ class ProductIngestionStore:
             self._run(session, scope, run_id)
             rows = session.scalars(
                 select(ProductStage)
-                .where(ProductStage.run_id == run_id, ProductStage.space_id == scope.space_id)
+                .where(
+                    ProductStage.run_id == run_id,
+                    ProductStage.space_id == scope.space_id,
+                )
                 .order_by(ProductStage.created_at, ProductStage.id)
             ).all()
             return tuple(self._stage_snapshot(session, row) for row in rows)
@@ -439,11 +446,16 @@ class ProductIngestionStore:
                 select(ProductWindow, WikiJob)
                 .options(
                     load_only(
-                        ProductWindow.id, ProductWindow.stage_key, ProductWindow.dependency_sha256
+                        ProductWindow.id,
+                        ProductWindow.stage_key,
+                        ProductWindow.dependency_sha256,
                     )
                 )
                 .join(WikiJob, WikiJob.id == ProductWindow.job_id)
-                .where(ProductWindow.run_id == run_id, ProductWindow.space_id == scope.space_id)
+                .where(
+                    ProductWindow.run_id == run_id,
+                    ProductWindow.space_id == scope.space_id,
+                )
             ).all()
             for key in sorted({window.stage_key for window, _job in windows}):
                 group = [(window, job) for window, job in windows if window.stage_key == key]
@@ -632,7 +644,11 @@ class ProductIngestionStore:
                 OutboxEventDraft(
                     event_id=_uuid(),
                     event_type="product.stage.settled",
-                    payload={"run_id": run_id, "stage_id": stage_id, "state": state.value},
+                    payload={
+                        "run_id": run_id,
+                        "stage_id": stage_id,
+                        "state": state.value,
+                    },
                 ),
             ),
         )
@@ -651,7 +667,8 @@ class ProductIngestionStore:
             raise ValueError("window tasks must not be empty")
         window_id = str(
             uuid5(
-                NAMESPACE_URL, f"product-window:{scope.space_id}:{run_id}:{stage_key}:{window_key}"
+                NAMESPACE_URL,
+                f"product-window:{scope.space_id}:{run_id}:{stage_key}:{window_key}",
             )
         )
         job_id = str(uuid5(NAMESPACE_URL, f"product-window-job:{window_id}:{dependency_sha256}"))
@@ -673,7 +690,11 @@ class ProductIngestionStore:
             job_type="product_extraction_window",
             job_id=job_id,
             idempotency_key=f"{run_id}:{stage_key}:{window_key}:{dependency_sha256}",
-            payload={"run_id": run_id, "stage_key": stage_key, "window_key": window_key},
+            payload={
+                "run_id": run_id,
+                "stage_key": stage_key,
+                "window_key": window_key,
+            },
             domain_writes=(
                 DomainWriteSpec(
                     table=ProductWindow.__tablename__,
@@ -1182,7 +1203,26 @@ class ProductIngestionStore:
             rows = session.scalars(
                 query.order_by(ProductFieldAttempt.created_at, ProductFieldAttempt.id)
             ).all()
-            return tuple(self._field_snapshot(row) for row in rows)
+            result = [self._field_snapshot(row) for row in rows]
+            refs, receipt = self.checkpoint_field_references(session, scope, run_id)
+            if refs:
+                from insurance_harness.product_ingestion.checkpoints import field_digest
+
+                for ref in refs:
+                    if field_keys is not None and ref.field_key not in field_keys:
+                        continue
+                    row = session.get(ProductFieldAttempt, ref.attempt_id)
+                    if (
+                        row is None
+                        or row.tenant_id != scope.tenant_id
+                        or row.space_id != scope.space_id
+                    ):
+                        raise ValueError("referenced field is missing or foreign")
+                    value = self._field_snapshot(row)
+                    if field_digest(value) != receipt.field_sha256[ref.attempt_id]:
+                        raise ValueError("referenced field changed after verification")
+                    result.append(value)
+            return tuple(sorted(result, key=lambda row: (row.created_at, row.attempt_id)))
 
     def lookup_cached_fields(
         self, *, scope: ProductScope, identities: Sequence[FieldCacheIdentity]
@@ -1242,7 +1282,14 @@ class ProductIngestionStore:
         if plan_retry:
             expected_stages = {"uploads", "source", "routing", "identity", "field_plan"}
         if extract_retry:
-            expected_stages = {"uploads", "source", "routing", "identity", "field_plan", "extract"}
+            expected_stages = {
+                "uploads",
+                "source",
+                "routing",
+                "identity",
+                "field_plan",
+                "extract",
+            }
         if {stage.stage_key for stage in stages} != expected_stages:
             return False
         source = next(stage for stage in stages if stage.stage_key == "source")
@@ -1433,11 +1480,19 @@ class ProductIngestionStore:
                     origin.version != plan.origin_version
                     or material_references(origin) != plan.materials
                     or self._recovery_source_refs(
-                        session, scope, run, read_lock=read_lock, verify_payloads=verify_sources
+                        session,
+                        scope,
+                        run,
+                        read_lock=read_lock,
+                        verify_payloads=verify_sources,
                     )
                     != plan.source_snapshots
                     or self._recovery_source_refs(
-                        session, scope, origin, read_lock=read_lock, verify_payloads=verify_sources
+                        session,
+                        scope,
+                        origin,
+                        read_lock=read_lock,
+                        verify_payloads=verify_sources,
                     )
                     != plan.source_snapshots
                 ):
@@ -1486,7 +1541,7 @@ class ProductIngestionStore:
             for m in run.materials
         )
 
-    def can_retry_processing(self, *, scope: ProductScope, run_id: str) -> bool:
+    def _legacy_can_retry_processing(self, *, scope: ProductScope, run_id: str) -> bool:
         """Lightweight display hint; retry_processing and the worker fully revalidate."""
         with self._session_factory() as session:
             return self._can_retry_processing(
@@ -1499,7 +1554,10 @@ class ProductIngestionStore:
         if session is None:
             with self._session_factory() as owned_session:
                 return self.processing_recovery_plan(
-                    scope=scope, run_id=run_id, session=owned_session, read_lock=read_lock
+                    scope=scope,
+                    run_id=run_id,
+                    session=owned_session,
+                    read_lock=read_lock,
                 )
         row = self._run(session, scope, run_id)
         v2 = row.idempotency_key.startswith(RECOVERY_V2_PREFIX)
@@ -1541,7 +1599,7 @@ class ProductIngestionStore:
             raise ValueError("processing recovery plan binding changed")
         return plan
 
-    def retry_processing(self, *, scope: ProductScope, run_id: str, expected_version: int):
+    def _legacy_retry_processing(self, *, scope: ProductScope, run_id: str, expected_version: int):
         if type(expected_version) is not int or expected_version <= 0:
             raise ValueError("expected_version must be a positive integer")
         with self._session_factory() as session, session.begin():
@@ -2258,14 +2316,23 @@ class ProductIngestionStore:
             raise SpaceScopeError("cached field attempt is outside the product scope")
         return {row.id: self._field_snapshot(row) for row in rows}
 
-    @staticmethod
-    def _counts(session: Session, run_id: str) -> tuple[int, int, int]:
+    def _counts(self, session: Session, run_id: str) -> tuple[int, int, int]:
         rows = session.execute(
             select(ProductFieldAttempt.outcome, func.count())
             .where(ProductFieldAttempt.run_id == run_id)
             .group_by(ProductFieldAttempt.outcome)
         ).all()
         counts = {name: int(count) for name, count in rows}
+        row = session.get(ProductRun, run_id)
+        scope = ProductScope(
+            tenant_id=row.tenant_id,
+            space_id=row.space_id,
+            raw_knowledge_base_id=row.raw_knowledge_base_id,
+            wiki_knowledge_base_id=row.wiki_knowledge_base_id,
+        )
+        refs, receipt = self.checkpoint_field_references(session, scope, run_id)
+        for ref in refs:
+            counts[ref.outcome] = counts.get(ref.outcome, 0) + 1
         return (
             counts.get(FieldOutcomeKind.VERIFIED.value, 0),
             counts.get(FieldOutcomeKind.NOT_PROVIDED.value, 0),

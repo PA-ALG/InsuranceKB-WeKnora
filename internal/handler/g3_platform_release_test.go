@@ -25,6 +25,10 @@ type automatedReleasePortStub struct {
 	nilResult     bool
 }
 
+func (s *automatedReleasePortStub) CreateBatchConceptDraftTransferAutomated830G3(ctx context.Context, p types.WikiReleasePrincipal, scope types.WikiReleaseScope, id string, raw json.RawMessage) (*types.WikiReleasePreparation, error) {
+	return s.CreateBatchConceptDraftAutomated830G3(ctx, p, scope, id, raw)
+}
+
 func (s *automatedReleasePortStub) CreateBatchConceptDraftAutomated830G3(_ context.Context, p types.WikiReleasePrincipal, scope types.WikiReleaseScope, id string, raw json.RawMessage) (*types.WikiReleasePreparation, error) {
 	s.calls++
 	s.id = id
@@ -127,6 +131,18 @@ func TestG3PlatformReleaseHandlerPreservesSignedWireAndScope(t *testing.T) {
 	require.Equal(t, d, s.first)
 	require.Equal(t, a, s.second)
 	require.Equal(t, 3, s.calls)
+}
+
+func TestG3PlatformReleaseHandlerAcceptsTransferExclusively(t *testing.T) {
+	s := &automatedReleasePortStub{}
+	e := automatedReleaseEngine(s, nil, true)
+	transfer := `{"contract":"g3-platform-candidate-transfer.830.v1","payload":"exact"}`
+	r := releaseRequest(e, "/preparations", `{"preparation_id":"draft-1","transfer":`+transfer+`}`)
+	require.Equal(t, http.StatusCreated, r.Code, r.Body.String())
+	require.Equal(t, []byte(transfer), s.first)
+	r = releaseRequest(e, "/preparations", `{"preparation_id":"draft-1","bundle":{},"transfer":`+transfer+`}`)
+	require.Equal(t, http.StatusBadRequest, r.Code)
+	require.Equal(t, 1, s.calls)
 }
 
 func TestG3PlatformReleaseHandlerRejectsAmbiguousBodiesBeforePort(t *testing.T) {

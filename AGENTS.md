@@ -29,9 +29,15 @@ serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只
 
 `CLAUDE.md` 不再维护另一份必读清单；其他开发入口必须指回本节。
 
+所有任务（包括非 830、总控派工和审查）另须遵守
+[工程质量与执行效率基线](docs/insurance-kb/28-development-execution-charter-830.md#engineering-quality-baseline)。
+这是用户于 2026-09-15 明确要求的项目通用规则：先核对 WeKnora 原生及项目既有能力，
+按稳定职责和接口解决根因；遇到无法判断的实质设计分歧应与用户讨论，不能靠持续增加
+临时分支跑通样本。规则正文只在上述基线维护，不另增审批、验收或编排平台。
+
 2026-09-05 用户已批准的现有 830 有限修订范围及 R830-01—06 见
 [830 蓝图 §0.1](jlx_enterprise_llm_wiki_technical_blueprint_830.md#01-2026-09-05-有限修订范围)。
-本次只修改该节列出的五份文档，在现有规格内修订并执行 D0/独立复核；不新建产品
+该次只修改该节列出的五份文档，在现有规格内修订并执行 D0/独立复核；不新建产品
 Goal/OpenSpec。后续实现消费修订后的蓝图与 Goal Cards，G2 启动授权仍独立。
 
 ## 强制 SDD 流程
@@ -214,8 +220,8 @@ Reviewer finding 只能归为：
 - `BLOCKER`：可复现、在 Mission Card 范围内，并会造成明确验收失败、安全/
   权限缺陷、数据损坏或真实并发错误；
 - `BACKLOG`：真实但不阻断当前用户价值，进入后续 Mission Card；
-- `REJECTED`：不可复现、低概率假设、范围外重构，或 Tencent/WeKnora 上游
-  通用问题。
+- `REJECTED`：不可复现、低概率假设、范围外重构，或不影响当前产品合同的
+  Tencent/WeKnora 上游通用问题。上游来源不能免除当前链路实际依赖能力的正确性责任。
 
 普通 PR 最多一轮修复复审，高风险 PR 最多两轮。两轮后仍出现同域新的基础问题，
 停止追加补丁，回到设计或拆分 PR。达到 Mission Card 验收且 CI 通过后及时合并，

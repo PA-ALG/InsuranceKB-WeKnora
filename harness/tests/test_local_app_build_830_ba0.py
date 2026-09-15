@@ -2146,7 +2146,6 @@ def test_dockerfile_go_runs_share_locked_module_build_cache_ids_and_probe() -> N
         )
     ]
     download_position = first_command.index("go run cmd/download/duckdb/duckdb.go")
-    compile_position = second_command.index("make build-prod")
     for cache_path in first_mounts:
         cache_writes = [
             (path, position)
@@ -2164,10 +2163,9 @@ def test_dockerfile_go_runs_share_locked_module_build_cache_ids_and_probe() -> N
             path == written_probe and position > write_position
             for path, position in first_checks
         ), f"the first Go RUN must verify non-empty evidence in {cache_path}"
-        assert any(
-            path == written_probe and position < compile_position
-            for path, position in second_checks
-        ), f"the build RUN must verify the same {cache_path} evidence before compiling"
+        assert not any(path == written_probe for path, _ in second_checks), (
+            "compile cache may be absent; historical probes are observations, not prerequisites"
+        )
 
 
 def test_dependency_lock_covers_all_versioned_external_facts_without_proxy() -> None:
@@ -3604,7 +3602,12 @@ def test_task5c_cli_passes_selected_context_to_both_ports(tmp_path: Path, monkey
         calls.append(kwargs)
         return {"status": "FIXTURE_ONLY"}
 
-    monkeypatch.setattr(app, "canonical_identity", lambda **kwargs: _identity_record())
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(app, "canonical_identity", lambda **kwargs: {
+        **_identity_record(), "canonical_bytes": b'{"inputs": []}',
+    })
+    monkeypatch.setattr(app, "frozen_source_context", lambda **kwargs: nullcontext(REPO_ROOT))
     monkeypatch.setattr(app, "_checked_output", lambda *args, **kwargs: INTEGRATION_HEAD)
     monkeypatch.setattr(app, "select_or_build_app", capture)
     assert app._main([

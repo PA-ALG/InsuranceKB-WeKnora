@@ -12,6 +12,13 @@ export interface ProductStage extends ProductCounts {
   started_at?: string | null
   finished_at?: string | null
 }
+export interface ProductReusedStage extends Omit<ProductStage, 'name'> {
+  stage_key: string
+  run_id: string
+  job_id: string
+  dependency_sha256: string
+  model_call_count?: number | null
+}
 export interface ProductFieldStatus {
   field_key: string
   outcome: 'verified' | 'not_provided' | 'extraction_failed'
@@ -38,6 +45,8 @@ export interface ProductIngestionRun {
   state: ProductRunState
   stage?: string | null
   stages?: ProductStage[]
+  reused_stages?: ProductReusedStage[]
+  reused_model_call_count?: number | null
   counts?: ProductCounts
   model_call_count?: number | null
   model_call_count_complete?: boolean

@@ -18,6 +18,32 @@ def module():
         pytest.fail("short-stage product progression is not implemented")
 
 
+def test_reused_partial_discovery_remains_partial_with_no_field_gaps():
+    from types import SimpleNamespace
+
+    progress_module = module()
+    inherited = tuple(
+        SimpleNamespace(
+            stage_key=key,
+            state="partial_success" if key == "synthesis" else "succeeded",
+        )
+        for key in progress_module.STAGES[:7]
+    )
+    local = tuple(
+        SimpleNamespace(stage_key=key, state="succeeded")
+        for key in progress_module.STAGES[7:]
+    )
+    store = SimpleNamespace(
+        list_stages=lambda **_: local,
+        checkpoint_receipt=lambda **_: SimpleNamespace(reused_stages=inherited),
+        get_run=lambda **_: SimpleNamespace(failure_count=0, missing_count=0),
+    )
+    progress = progress_module.ProductProgression(
+        store=store, jobs=None, read_window_plan=lambda *_: ()
+    )
+    assert progress.final_state(None, "recovered") == ProductRunState.PARTIAL_SUCCESS
+
+
 def finish_next(store, jobs, scope, run, state=ProductRunState.SUCCEEDED):
     claim = jobs.claim(space_ids=(scope.space_id,), worker_id="worker")
     assert isinstance(claim, ClaimedJob)

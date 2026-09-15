@@ -248,9 +248,10 @@ def _pipeline(
         ports = factory(context)
         if type(ports) is not ProductPipelinePorts:
             raise TypeError("pipeline factory returned an invalid object")
-        if set(ports.stage_handlers) != _PIPELINE_STAGES or any(
-            not callable(value) for value in ports.stage_handlers.values()
-        ):
+        if set(ports.stage_handlers) not in (
+            _PIPELINE_STAGES,
+            _PIPELINE_STAGES | {"checkpoint"},
+        ) or any(not callable(value) for value in ports.stage_handlers.values()):
             raise ValueError("pipeline stage handlers are incomplete")
         if not callable(ports.read_window_plan) or not callable(ports.field_prompt):
             raise ValueError("pipeline read and prompt ports are required")
@@ -359,7 +360,10 @@ def compose_product_worker(
         progression=progression,
         scopes=scopes,
     )
-    if set(registry.handlers) != _EXPECTED_JOB_TYPES:
+    if set(registry.handlers) not in (
+        _EXPECTED_JOB_TYPES,
+        _EXPECTED_JOB_TYPES | {"product_stage_checkpoint"},
+    ):
         raise ShellConfigError(("product_ingestion_pipeline",))
     worker = WorkerLoop(
         store=jobs,

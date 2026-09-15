@@ -17,6 +17,7 @@ const active = computed(() => runs.value.filter(run => !terminal(run.state)))
 const stateNames: Record<string, string> = { created: '已接收', uploading: '接收材料', accepting_uploads: '接收材料', waiting_sources: '等待材料解析', awaiting_sources: '等待材料解析', processing: '处理中', running: '处理中', succeeded: '已完成', partial_success: '部分完成', failed: '处理失败', needs_confirmation: '需要确认', queued: '等待处理', leased: '等待执行', retry_wait: '等待恢复', awaiting_human: '需要确认', blocked: '处理失败', dead_letter: '处理失败', pending: '等待处理', skipped: '已跳过' }
 const stageNames: Record<string, string> = { uploads: '接收材料', identity: '归并产品', field_plan: '安排字段任务', synthesis: '整理已验证结果', verify: '检索与证据检查', upload: '接收材料', uploading: '接收材料', source: '解析材料', sources: '解析材料', parsing: '解析材料', routing: '识别产品', schema: '归并字段', extract: '抽取字段', extraction: '抽取字段', validation: '校验字段', compilation: '编译知识', compile: '编译知识', review: '自动审核', publish: '发布知识', publication: '发布知识' }
 const sourcePhaseNames: Record<string, string> = { docreader: '读取与解析', chunking: '文本分段', embedding: '向量化', 'postprocess.summary': '生成摘要' }
+stageNames.checkpoint = '检查已有结果'
 const sourceStateNames: Record<string, string> = { done: '已完成', failed: '失败', skipped: '已跳过', cancelled: '已取消' }
 const outcomeNames = { verified: '已验证', not_provided: '材料未提供', extraction_failed: '抽取失败' }
 const count = (value?: number | null) => typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : '—'
@@ -154,7 +155,7 @@ onUnmounted(() => { generation++; stopTimers() })
       </div>
       <p class="run-id">任务 {{ run.run_id }}</p>
       <p v-if="run.reason">{{ run.reason }}</p>
-      <p data-testid="counts">成功 {{ count(run.counts?.success_count) }} · 材料未提供 {{ count(run.counts?.missing_count) }} · 失败 {{ count(run.counts?.failure_count) }} · 模型调用 {{ count(run.model_call_count) }}<span v-if="run.model_call_count_complete === false">（已记录，部分阶段统计尚未齐全）</span></p>
+      <p data-testid="counts">成功 {{ count(run.counts?.success_count) }} · 材料未提供 {{ count(run.counts?.missing_count) }} · 失败 {{ count(run.counts?.failure_count) }} · 模型调用 {{ count(run.model_call_count) }}<span v-if="run.model_call_count_complete === false">（已记录，部分阶段统计尚未齐全）</span><span v-if="run.reused_model_call_count !== undefined"> · 复用调用 {{ count(run.reused_model_call_count) }}</span></p>
       <div data-testid="discovery-status">
         <p><strong>Schema 外知识发现：</strong><template v-if="discoveryPublished(run)">已发布 {{ count(run.discovery_summary?.counts.published) }} 项知识内容（页面或概念）</template><template v-else>{{ discoveryNames[run.discovery_summary?.state || 'NOT_EXECUTED'] || '发现状态待核对' }}</template><span v-if="run.discovery_summary?.reused"> · 复用已有发现结果</span></p>
         <template v-if="run.discovery_summary && run.discovery_summary.state !== 'NOT_EXECUTED'">
@@ -164,6 +165,18 @@ onUnmounted(() => { generation++; stopTimers() })
           <p v-if="run.discovery_summary.reason_codes.length">原因：{{ run.discovery_summary.reason_codes.join('、') }}</p>
         </template>
       </div>
+      <details v-if="run.reused_stages?.length" data-testid="reused-stages">
+        <summary>已复用的处理结果（{{ run.reused_stages.length }} 个阶段）</summary>
+        <table>
+          <thead><tr><th>处理阶段</th><th>原结果</th><th>原任务耗时</th><th>成功</th><th>未提供</th><th>失败</th></tr></thead>
+          <tbody><tr v-for="stage in run.reused_stages" :key="`${stage.run_id}:${stage.stage_key}`">
+            <td>{{ stageNames[stage.stage_key] || stage.stage_key }}</td>
+            <td>已复用 · {{ stateNames[stage.state] || stage.state }}</td>
+            <td>{{ duration(stage.started_at, stage.finished_at, true) }}</td>
+            <td>{{ count(stage.success_count) }}</td><td>{{ count(stage.missing_count) }}</td><td>{{ count(stage.failure_count) }}</td>
+          </tr></tbody>
+        </table>
+      </details>
       <div v-if="run.stages?.length" class="stages">
         <table>
           <thead><tr><th>处理阶段</th><th>状态</th><th>耗时</th><th>成功</th><th>未提供</th><th>失败</th></tr></thead>
@@ -206,7 +219,7 @@ onUnmounted(() => { generation++; stopTimers() })
       <div v-if="recoverable(run)">
         <p>复用已完成的解析，由平台重新检查来源并继续处理。</p>
         <button type="button" data-testid="retry-processing" :disabled="retrying[run.run_id]" @click="retryProcessing(run)">
-          {{ retrying[run.run_id] ? '正在提交…' : run.state === 'needs_confirmation' ? '重试产品识别' : '重试来源校验' }}
+          {{ retrying[run.run_id] ? '正在提交…' : '恢复处理' }}
         </button>
       </div>
       <button v-if="terminal(run.state) && run.fields?.some(field => field.outcome === 'extraction_failed')"

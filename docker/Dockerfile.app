@@ -2,6 +2,7 @@
 
 ARG BUILDER_IMAGE
 ARG RUNTIME_IMAGE
+ARG EXISTING_APP_RUNTIME=${RUNTIME_IMAGE}
 
 FROM ${BUILDER_IMAGE} AS builder
 
@@ -89,8 +90,6 @@ ENV VERSION=${VERSION_ARG}
 ENV COMMIT_ID=${COMMIT_ID_ARG}
 RUN --mount=type=cache,id=ba0-app-go-mod-v1,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=ba0-app-go-build-v1,target=/root/.cache/go-build,sharing=locked \
-    test -s /go/pkg/mod/.ba0-app-cache-v1 && \
-    test -s /root/.cache/go-build/.ba0-app-cache-v1 && \
     test -n "$VERSION" && \
     test -n "$COMMIT_ID" && \
     test -n "$SOURCE_DATE_EPOCH" && \
@@ -102,6 +101,10 @@ RUN --mount=type=cache,id=ba0-app-go-mod-v1,target=/go/pkg/mod,sharing=locked \
     mkdir -p /app/yanyiwu && \
     cp -R /go/pkg/mod/github.com/yanyiwu/. /app/yanyiwu/
 
+
+FROM ${EXISTING_APP_RUNTIME} AS runtime-rebase
+COPY --from=builder --chown=1000:1000 /app/WeKnora /app/WeKnora
+COPY --from=builder --chown=1000:1000 /app/scripts/app_artifact.py /app/scripts/app_artifact.py
 
 FROM ${RUNTIME_IMAGE} AS runtime
 

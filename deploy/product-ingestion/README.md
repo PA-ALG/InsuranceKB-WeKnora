@@ -13,3 +13,35 @@
 后台任务服务同时连接平台内部网络和常驻 provider-egress 出站网络。WeKnora 应用在部署时连接相同出站网络；DocReader、数据库和 API 无需因此获得外网连接。此网络不映射任何端口，取代旧运行中的临时模型转发进程。
 
 2026-09-13 收敛要求：本目录描述的是平台共用的产品处理能力，不是每次测试的独立环境。接入当前已有应用、PostgreSQL、Redis、DocReader 和文件卷；不再启动新的数据库实例或复制整套平台。已经准备的逻辑库与镜像直接复用，不为改名字、换布局重新迁移或构建。后续产品上传使用同一套服务；只有必要的代码更新才进行部署。
+
+## 冻结组件构建上下文
+
+仅 Python 业务代码变化时继续复用本目录 Dockerfile，不构建 APP 或前端。确认没有可复用的精确 Harness 制品后，冻结完整提交 SHA、基础镜像 digest、目标 tag 与 iidfile，再从仓库根目录调用已有 BA0 的快照端口。以下调用只构建镜像，不部署、不迁移，也不创建数据库：
+
+```bash
+python3 - "$BUILD_SOURCE_HEAD" "$HARNESS_BASE_IMAGE" "$IMAGE_TAG" "$IIDFILE" <<'PYTHON'
+import subprocess
+import sys
+from pathlib import Path
+from scripts.app_artifact import frozen_source_context
+
+source, base, tag, iidfile = sys.argv[1:]
+paths = ("harness/src", "harness/migrations", "harness/alembic.ini",
+         "deploy/product-ingestion/Dockerfile",
+         "deploy/product-ingestion/Dockerfile.dockerignore",
+         "deploy/product-ingestion/requirements.lock")
+with frozen_source_context(repo_root=Path.cwd(), source_head=source, paths=paths) as context:
+    subprocess.run([
+        "docker", "--context", "colima", "build", "--pull=false",
+        "--platform", "linux/arm64", "--target", "runtime",
+        "--build-arg", "HARNESS_BASE_IMAGE=" + base,
+        "--label", "io.insurancekb.harness.build-source-head=" + source,
+        "--iidfile", str(Path(iidfile).resolve()), "--tag", tag,
+        "--file", str(context / "deploy/product-ingestion/Dockerfile"), str(context),
+    ], check=True)
+PYTHON
+```
+
+该端口只物化所选提交，不读取活动目录的未提交修改；依赖仍消费 requirements.lock 和现有 pip 缓存。制品记录仍须绑定组件输入、基础镜像、平台与最终 image ID；同一已验证制品存在时直接复用，不重复执行上面的 build。
+
+APP 的正式入口仍为 `scripts/app_artifact.py select-or-build`。仅 Go 及该构建工具本身变化时，可指定 `--reuse-runtime-image <exact-local-image-id>` 和 `--reuse-runtime-source <full-commit-sha>`，同时提供 `--repo-root`、`--context colima`、`--build-source-head`、`--evidence-out`。工具核验既有运行资源和依赖未变后，从冻结上下文构建正式 `runtime-rebase` target，并只覆盖二进制与构建工具文件。基础镜像需要现有可验证本地 tag；没有时失败，不隐式拉取。省略两个复用参数时保持原 runtime 构建模式。

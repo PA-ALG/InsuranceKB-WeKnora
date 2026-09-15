@@ -178,7 +178,7 @@ _PUBLISHED_EMPTY_COLLECTIONS = {
 }
 
 
-def _published_compile_members(projection: Mapping[str, Any], kind: str) -> tuple:
+def published_compile_members(projection: Mapping[str, Any], kind: str) -> tuple:
     keys = _PUBLISHED_EMPTY_COLLECTIONS[kind]
     return tuple(
         {**row, **{key: () for key in keys if key in row and row[key] is None}}
@@ -265,9 +265,9 @@ def build_platform_compile_request(
         policy_identity="g3-resolution-policy:" + policy.policy_sha256,
         sources=tuple(sources[key] for key in sorted(sources)),
         required_fields=required_fields,
-        existing_definitions=_published_compile_members(projection, "definitions"),
-        existing_fields=_published_compile_members(projection, "fields"),
-        existing_pages=_published_compile_members(projection, "pages"),
+        existing_definitions=published_compile_members(projection, "definitions"),
+        existing_fields=published_compile_members(projection, "fields"),
+        existing_pages=published_compile_members(projection, "pages"),
         existing_entity_versions=dict(projection["entity_versions"]),
         entity_versions=entity_versions,
         schema_identity=(

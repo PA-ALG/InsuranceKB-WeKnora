@@ -19,6 +19,17 @@ const run = (extra = {}) => ({ run_id: 'r1', wiki_knowledge_base_id: 'kb', state
 describe('persistent product processing status', () => {
   beforeEach(() => { vi.resetAllMocks(); vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-13T00:01:00Z')); api.listProductIngestions.mockResolvedValue([run()]) })
   afterEach(() => { mounted.splice(0).forEach(w => w.unmount()); vi.useRealTimers() })
+  it('shows reused stage outcomes and original duration separately from current work', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ stage: 'checkpoint', model_call_count: 0, reused_model_call_count: 9, reused_stages: [{ stage_key: 'extract', run_id: 'prior', job_id: 'prior-job', state: 'partial_success', started_at: '2026-09-13T00:00:00Z', finished_at: '2026-09-13T00:00:40Z', success_count: 21, missing_count: 31, failure_count: 30 }] })])
+    const w = await render()
+    const reused = w.get('[data-testid="reused-stages"]')
+    expect(reused.text()).toContain('抽取字段')
+    expect(reused.text()).toContain('已复用')
+    expect(reused.text()).toContain('40 秒')
+    expect(reused.text()).toContain('30')
+    expect(w.get('[data-testid="counts"]').text()).toContain('复用调用 9')
+    expect(w.text()).toContain('检查已有结果')
+  })
   it('restores server stages, counts and partial terminal without exposing values', async () => {
     const w = await render()
     expect(api.listProductIngestions).toHaveBeenCalledWith('kb')
@@ -99,7 +110,7 @@ describe('persistent product processing status', () => {
     api.listProductIngestions.mockResolvedValue([run({ state: 'needs_confirmation', stage: 'routing', fields: [], version: 1, can_retry_processing: true })])
     api.retryProductProcessing.mockResolvedValue(run({ run_id: 'routing-recovery', state: 'running', fields: [], finished_at: undefined }))
     const w = await render()
-    expect(w.get('[data-testid="retry-processing"]').text()).toBe('重试产品识别')
+    expect(w.get('[data-testid="retry-processing"]').text()).toBe('恢复处理')
     await w.get('[data-testid="retry-processing"]').trigger('click')
     await flushPromises()
     expect(api.retryProductProcessing).toHaveBeenCalledWith('kb', 'r1', 1)

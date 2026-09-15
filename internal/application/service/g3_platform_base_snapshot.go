@@ -114,19 +114,42 @@ func (s *G3PlatformBaseSnapshotService) Read(
 	); err != nil {
 		return nil, ErrG3PlatformSnapshotUnauthorized
 	}
-	head, err := s.releases.repository.GetHead(ctx, scope)
+	snapshot, err := s.releases.loadG3PlatformBaseSnapshot(ctx, scope, releaseID, activationEpoch)
+	if err != nil {
+		return nil, err
+	}
+
+	authority, err := signG3PlatformSnapshot(
+		ctx, s.signer, G3PlatformBaseSnapshotSigningDomainV1, snapshot.SnapshotSHA256,
+	)
+	if err != nil {
+		return nil, ErrG3PlatformSnapshotUnavailable
+	}
+	return &G3PlatformSignedBaseSnapshotV1{
+		Contract: G3PlatformSignedBaseSnapshotContractV1,
+		Snapshot: *snapshot, Authority: authority,
+	}, nil
+}
+
+// Both signed reads and candidate transfer resolve the same immutable base.
+// Callers authorize scope before entry and recheck current policy at write time.
+func (s *WikiReleaseService) loadG3PlatformBaseSnapshot(ctx context.Context, scope types.WikiReleaseScope, releaseID string, activationEpoch uint64) (*G3PlatformBaseSnapshotV1, error) {
+	if s == nil || s.repository == nil || !validG3PlatformScope(scope) || releaseID == "" || activationEpoch == 0 {
+		return nil, ErrG3PlatformSnapshotUnavailable
+	}
+	head, err := s.repository.GetHead(ctx, scope)
 	if err != nil || head == nil || head.WikiReleaseScope != scope ||
 		head.ActiveReleaseID != releaseID || head.ActivationEpoch != activationEpoch {
 		return nil, ErrG3PlatformSnapshotUnavailable
 	}
-	release, err := s.releases.repository.GetRelease(ctx, scope, releaseID)
+	release, err := s.repository.GetRelease(ctx, scope, releaseID)
 	if err != nil || release == nil || release.ID != releaseID ||
 		release.WikiReleaseScope != scope || release.BaseActivationEpoch == ^uint64(0) ||
 		release.BaseActivationEpoch+1 != activationEpoch || release.PreparationID == "" {
 		return nil, ErrG3PlatformSnapshotUnavailable
 	}
 	preparation, projection, expectedMembers, projectedG3, err :=
-		s.releases.loadPublishedBatchReadProjection830G3(ctx, scope, release.PreparationID)
+		s.loadPublishedBatchReadProjection830G3(ctx, scope, release.PreparationID)
 	if err != nil || !projectedG3 || preparation == nil ||
 		preparation.ID != release.PreparationID ||
 		preparation.Status != types.WikiReleasePreparationReady ||
@@ -138,7 +161,7 @@ func (s *G3PlatformBaseSnapshotService) Read(
 		batchConceptScope830G3(projection) != scope {
 		return nil, ErrG3PlatformSnapshotUnavailable
 	}
-	storedMembers, err := s.releases.repository.GetReleaseMembers(ctx, scope, releaseID)
+	storedMembers, err := s.repository.GetReleaseMembers(ctx, scope, releaseID)
 	if err != nil || !publishedBatchMemberIdentitiesEqual830G3(expectedMembers, storedMembers) {
 		return nil, ErrG3PlatformSnapshotUnavailable
 	}
@@ -183,16 +206,7 @@ func (s *G3PlatformBaseSnapshotService) Read(
 	if err != nil {
 		return nil, ErrG3PlatformSnapshotUnavailable
 	}
-	authority, err := signG3PlatformSnapshot(
-		ctx, s.signer, G3PlatformBaseSnapshotSigningDomainV1, snapshot.SnapshotSHA256,
-	)
-	if err != nil {
-		return nil, ErrG3PlatformSnapshotUnavailable
-	}
-	return &G3PlatformSignedBaseSnapshotV1{
-		Contract: G3PlatformSignedBaseSnapshotContractV1,
-		Snapshot: snapshot, Authority: authority,
-	}, nil
+	return &snapshot, nil
 }
 
 func g3PlatformPublishedProjectionFromBundle(

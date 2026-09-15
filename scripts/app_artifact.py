@@ -17,6 +17,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import tarfile
+from contextlib import contextmanager
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -634,6 +636,216 @@ def _declared_input_pathspecs(
     )
 
 
+@contextmanager
+def frozen_source_context(*, repo_root, source_head, paths=None):
+    """Export one immutable commit; never copy the mutable working directory."""
+    root = Path(repo_root).resolve(strict=True)
+    if re.fullmatch(r"[0-9a-f]{40}", source_head) is None:
+        raise ArtifactContractError("frozen source must be a full commit id")
+    resolved = _checked_output(
+        subprocess.run,
+        ("git", "rev-parse", "--verify", f"{source_head}^{{commit}}"),
+        repo_root=root,
+        description="frozen source commit",
+    )
+    if resolved != source_head:
+        raise ArtifactContractError("frozen source commit differs")
+    selected = tuple(paths or ())
+    for path in selected:
+        _repository_relative(path, "frozen source path")
+    with tempfile.TemporaryDirectory(prefix="ba0-source-") as temporary:
+        directory = Path(temporary)
+        archive = directory / "source.tar"
+        result = subprocess.run(
+            (
+                "git",
+                "archive",
+                "--format=tar",
+                f"--output={archive}",
+                source_head,
+                "--",
+                *selected,
+            ),
+            cwd=root,
+            capture_output=True,
+            text=True,
+            env=_operational_environment(),
+        )
+        if result.returncode:
+            raise ArtifactContractError("cannot export frozen source")
+        context = directory / "context"
+        context.mkdir()
+        with tarfile.open(archive) as contents:
+            contents.extractall(context, filter="data")
+        # tarfile's data filter discards directory modes. A private caller umask
+        # must not make tracked source directories inaccessible to runtime users.
+        context.chmod(0o755)
+        for directory in context.rglob("*"):
+            if directory.is_dir() and not directory.is_symlink():
+                directory.chmod(0o755)
+        yield context
+
+
+def _runtime_recipe(recipe):
+    # Only the two reviewed build-only changes and the explicit rebase stage are
+    # allowed relative to the runtime source. All other recipe changes invalidate.
+    recipe = re.sub(
+        r"^FROM \$\{EXISTING_APP_RUNTIME\} AS runtime-rebase[^\n]*\n.*?(?=^FROM |\Z)",
+        "",
+        recipe,
+        flags=re.M | re.S,
+    )
+    recipe = re.sub(r"^ARG EXISTING_APP_RUNTIME(?:=.*)?\n", "", recipe, flags=re.M)
+    if "COPY . ." in recipe:
+        before, after = recipe.split("COPY . .", 1)
+        after = re.sub(
+            r"^    test -s /(?:go/pkg/mod|root/\.cache/go-build)/\.ba0-app-cache-v1 && \\\n",
+            "",
+            after,
+            flags=re.M,
+        )
+        recipe = before + "COPY . ." + after
+    return recipe.strip()
+
+
+def _runtime_config_hash(record):
+    config = {k: v for k, v in record["Config"].items() if k != "Labels"}
+    return hashlib.sha256(_canonical_json(config)).hexdigest()
+
+
+def _runtime_image_record(root, image, runner, docker_context):
+    result = _docker(
+        runner,
+        (
+            "docker",
+            "--context",
+            docker_context,
+            "image",
+            "inspect",
+            image,
+            "--format",
+            "{{json .}}",
+        ),
+        repo_root=root,
+        description="runtime base inspect",
+    )
+    try:
+        record = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ArtifactContractError("runtime image inspect invalid") from exc
+    if not isinstance(record, dict) or not isinstance(record.get("Config"), dict):
+        raise ArtifactContractError("runtime image config missing")
+    if record.get("Os") != "linux" or record.get("Architecture") != "arm64":
+        raise ArtifactContractError("runtime image platform differs")
+    return record
+
+
+def runtime_reuse_facts(
+    *,
+    repo_root,
+    build_source_head,
+    runtime_source_head,
+    runtime_image,
+    runner=subprocess.run,
+    docker_context="colima-g1-build",
+):
+    root = Path(repo_root).resolve(strict=True)
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", runtime_image):
+        raise ArtifactContractError("runtime image must be exact local image ID")
+    for source in (build_source_head, runtime_source_head):
+        if not re.fullmatch(r"[0-9a-f]{40}", source):
+            raise ArtifactContractError("runtime source must be full commit ID")
+    protected = (
+        "config",
+        "scripts",
+        "migrations",
+        "dataset/samples",
+        "skills/preloaded",
+        "go.mod",
+        "go.sum",
+        "cmd/download",
+        "deploy/local-build/app-external-dependencies.v1.json",
+    )
+    difference = runner(
+        ("git", "diff", "--name-only", runtime_source_head, build_source_head,
+         "--", *protected),
+        cwd=root, capture_output=True, text=True, env=_operational_environment(),
+    )
+    if difference.returncode != 0:
+        raise ArtifactContractError("runtime dependency comparison failed")
+    changed = difference.stdout.splitlines()
+    if set(changed) - {"scripts/app_artifact.py"}:
+        raise ArtifactContractError("non-Go runtime resource or dependency changed")
+    recipes = [
+        _checked_output(
+            runner,
+            ("git", "show", f"{source}:docker/Dockerfile.app"),
+            repo_root=root,
+            description="runtime recipe comparison",
+        )
+        for source in (runtime_source_head, build_source_head)
+    ]
+    if _runtime_recipe(recipes[0]) != _runtime_recipe(recipes[1]):
+        raise ArtifactContractError("runtime dependency recipe changed")
+    record = _runtime_image_record(root, runtime_image, runner, docker_context)
+    if record.get("Id") != runtime_image:
+        raise ArtifactContractError("runtime image ID differs")
+    labels = record["Config"].get("Labels") or {}
+    if labels.get(_LABEL_PREFIX + "build-source-head") != runtime_source_head:
+        raise ArtifactContractError("runtime image source differs")
+    tags = sorted(
+        tag
+        for tag in record.get("RepoTags", [])
+        if isinstance(tag, str) and tag and "<none>" not in tag
+    )
+    if not tags:
+        raise ArtifactContractError("runtime image needs a verified local reference")
+    reference = tags[0]
+    if (
+        _runtime_image_record(root, reference, runner, docker_context).get("Id")
+        != runtime_image
+    ):
+        raise ArtifactContractError("runtime image reference moved")
+    layers = record.get("RootFS", {}).get("Layers")
+    if not isinstance(layers, list) or not layers:
+        raise ArtifactContractError("runtime image parent layers missing")
+    return {
+        "image_id": runtime_image,
+        "image_reference": reference,
+        "source_head": runtime_source_head,
+        "parent_layers": layers,
+        "config_sha256": _runtime_config_hash(record),
+        "refreshed_runtime_paths": ["scripts/app_artifact.py"],
+    }
+
+
+def _verify_runtime_base(root, facts, runner, docker_context):
+    record = _runtime_image_record(
+        root, facts["image_reference"], runner, docker_context
+    )
+    if record.get("Id") != facts["image_id"]:
+        raise ArtifactContractError("runtime image reference moved")
+    if (
+        record.get("RootFS", {}).get("Layers") != facts["parent_layers"]
+        or _runtime_config_hash(record) != facts["config_sha256"]
+    ):
+        raise ArtifactContractError("runtime image facts changed")
+
+
+def _verify_rebased_image(root, image_id, facts, runner, docker_context):
+    record = _runtime_image_record(root, image_id, runner, docker_context)
+    layers = record.get("RootFS", {}).get("Layers", [])
+    parent = facts["parent_layers"]
+    if (
+        record.get("Id") != image_id
+        or layers[: len(parent)] != parent
+        or not (1 <= len(layers) - len(parent) <= 2)
+    ):
+        raise ArtifactContractError("rebased image parent layers differ")
+    if _runtime_config_hash(record) != facts["config_sha256"]:
+        raise ArtifactContractError("rebased image runtime config differs")
+
+
 def canonical_identity(
     *,
     repo_root: str | os.PathLike[str],
@@ -644,6 +856,9 @@ def canonical_identity(
     runner: Runner = subprocess.run,
     effective_build_args: Mapping[str, object],
     environment: Mapping[str, str] | None = None,
+    reuse_runtime_image: str | None = None,
+    reuse_runtime_source: str | None = None,
+    docker_context: str = "colima-g1-build",
 ) -> dict[str, Any]:
     """Return stable canonical bytes and identity for one frozen build source."""
 
@@ -722,12 +937,28 @@ def canonical_identity(
         "effective_build_args": _safe_build_args(effective_build_args),
         "inputs": list(inputs),
     }
+    runtime_reuse = None
+    if bool(reuse_runtime_image) != bool(reuse_runtime_source):
+        raise ArtifactContractError(
+            "runtime image and source must be supplied together"
+        )
+    if reuse_runtime_image:
+        runtime_reuse = runtime_reuse_facts(
+            repo_root=root,
+            build_source_head=build_source_head,
+            runtime_source_head=reuse_runtime_source,
+            runtime_image=reuse_runtime_image,
+            runner=runner,
+            docker_context=docker_context,
+        )
+        identity_document["runtime_reuse"] = runtime_reuse
     canonical_bytes = _canonical_json(identity_document)
     artifact_identity = "sha256:" + hashlib.sha256(canonical_bytes).hexdigest()
     return {
         "artifact": manifest["artifact"],
         "artifact_identity": artifact_identity,
         "canonical_bytes": canonical_bytes,
+        **({"runtime_reuse": runtime_reuse} if runtime_reuse else {}),
         "manifest_sha256": manifest_sha256,
         "dependency_lock_sha256": dependency_lock_sha256,
         "build_source_head": build_source_head,
@@ -753,7 +984,9 @@ def _checked_output(
         env=_operational_environment(),
     )
     if result.returncode != 0:
-        raise ArtifactContractError(f"cannot resolve {description}: {result.stderr.strip()}")
+        raise ArtifactContractError(
+            f"cannot resolve {description}: {result.stderr.strip()}"
+        )
     value = result.stdout.strip()
     if not value:
         raise ArtifactContractError(f"resolved {description} is empty")
@@ -794,7 +1027,9 @@ def build_metadata(
     try:
         source_date_epoch = int(raw_epoch)
     except ValueError as exc:
-        raise ArtifactContractError("build source commit timestamp is not an epoch") from exc
+        raise ArtifactContractError(
+            "build source commit timestamp is not an epoch"
+        ) from exc
     if source_date_epoch < 0:
         raise ArtifactContractError("build source commit timestamp is negative")
     build_time = datetime.fromtimestamp(source_date_epoch, tz=timezone.utc).strftime(
@@ -907,7 +1142,9 @@ def _dependency_plan(lock: Mapping[str, Any]) -> dict[str, Any]:
     for fact_path, consumer, value in facts:
         name = "BA0_" + re.sub(r"[^A-Za-z0-9]+", "_", fact_path).upper()
         if name in names:
-            raise ArtifactContractError(f"dependency plan name collision for {fact_path}")
+            raise ArtifactContractError(
+                f"dependency plan name collision for {fact_path}"
+            )
         names.add(name)
         bindings.append(
             {
@@ -950,6 +1187,13 @@ def _required_labels(identity: Mapping[str, Any]) -> dict[str, str]:
         if not isinstance(value, str) or not value:
             raise ArtifactContractError(f"identity {field} is missing")
         labels[_LABEL_PREFIX + suffix] = value
+    if identity.get("runtime_reuse"):
+        labels[_LABEL_PREFIX + "runtime-base-image"] = identity["runtime_reuse"][
+            "image_id"
+        ]
+        labels[_LABEL_PREFIX + "runtime-base-source"] = identity["runtime_reuse"][
+            "source_head"
+        ]
     if identity.get("artifact") != "weknora-app":
         raise ArtifactContractError("identity artifact is not weknora-app")
     if labels[_LABEL_PREFIX + "platform"] != "linux/arm64":
@@ -980,7 +1224,9 @@ def _docker(
         env=docker_environment,
     )
     if result.returncode != 0:
-        raise ArtifactContractError(f"Docker {description} failed: {result.stderr.strip()}")
+        raise ArtifactContractError(
+            f"Docker {description} failed: {result.stderr.strip()}"
+        )
     return result
 
 
@@ -1010,11 +1256,15 @@ def _inspect_image(
     try:
         record = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        raise ArtifactContractError("Docker image inspect returned invalid JSON") from exc
+        raise ArtifactContractError(
+            "Docker image inspect returned invalid JSON"
+        ) from exc
     if not isinstance(record, Mapping):
         raise ArtifactContractError("Docker image inspect returned a non-object")
     if record.get("Id") != candidate:
-        raise ArtifactContractError("Docker image candidate differs from inspect image id")
+        raise ArtifactContractError(
+            "Docker image candidate differs from inspect image id"
+        )
     if record.get("Os") != "linux":
         raise ArtifactContractError("Docker image OS is not linux")
     if record.get("Architecture") != "arm64":
@@ -1042,20 +1292,24 @@ def _source_metadata(identity: Mapping[str, Any]) -> tuple[str, str, int]:
     if not version or re.search(r"\s", version):
         raise ArtifactContractError("build-source VERSION is invalid")
     if commit_id != identity["build_source_head"]:
-        raise ArtifactContractError("build metadata commit differs from build_source_head")
+        raise ArtifactContractError(
+            "build metadata commit differs from build_source_head"
+        )
     try:
         source_date_epoch = int(raw_epoch)
     except (TypeError, ValueError) as exc:
-        raise ArtifactContractError("build metadata source_date_epoch is invalid") from exc
+        raise ArtifactContractError(
+            "build metadata source_date_epoch is invalid"
+        ) from exc
     if source_date_epoch < 0:
         raise ArtifactContractError("build metadata source_date_epoch is negative")
     expected_build_time = datetime.fromtimestamp(
         source_date_epoch, tz=timezone.utc
-    ).strftime(
-        "%Y-%m-%d %H:%M:%S UTC"
-    )
+    ).strftime("%Y-%m-%d %H:%M:%S UTC")
     if build_time != expected_build_time:
-        raise ArtifactContractError("build metadata time differs from source_date_epoch")
+        raise ArtifactContractError(
+            "build metadata time differs from source_date_epoch"
+        )
     return version, commit_id, source_date_epoch
 
 
@@ -1069,9 +1323,13 @@ def _selector_build_args(root: Path, identity: Mapping[str, Any]) -> dict[str, s
         "BUILDER_IMAGE": lock["base_images"]["builder"]["reference"],
         "RUNTIME_IMAGE": lock["base_images"]["runtime"]["reference"],
         "DEBIAN_SNAPSHOT_BOOTSTRAP": repositories["debian"]["snapshot"],
-        "DEBIAN_SECURITY_SNAPSHOT_BOOTSTRAP": repositories["debian-security"]["snapshot"],
+        "DEBIAN_SECURITY_SNAPSHOT_BOOTSTRAP": repositories["debian-security"][
+            "snapshot"
+        ],
         "DEBIAN_RELEASE_SHA256_BOOTSTRAP": repositories["debian"]["release_sha256"],
-        "DEBIAN_SECURITY_RELEASE_SHA256_BOOTSTRAP": repositories["debian-security"]["release_sha256"],
+        "DEBIAN_SECURITY_RELEASE_SHA256_BOOTSTRAP": repositories["debian-security"][
+            "release_sha256"
+        ],
         "PYTHON3_VERSION_BOOTSTRAP": lock["debian"]["packages"]["python3"],
         "VERSION_ARG": version,
         "COMMIT_ID_ARG": commit_id,
@@ -1106,6 +1364,11 @@ def _receipt(
         "labels": dict(labels),
         "candidate_image_ids": list(candidates),
         "build_invocations": build_invocations,
+        **(
+            {"runtime_reuse": identity["runtime_reuse"]}
+            if identity.get("runtime_reuse")
+            else {}
+        ),
     }
 
 
@@ -1159,6 +1422,9 @@ def select_or_build_app(
     labels = _required_labels(identity)
     _source_metadata(identity)
     output = Path(evidence_out)
+    reuse = identity.get("runtime_reuse")
+    if reuse:
+        _verify_runtime_base(root, reuse, runner, docker_context)
     _write_evidence(
         output,
         {
@@ -1194,7 +1460,9 @@ def select_or_build_app(
         repo_root=root,
         description="image lookup query",
     )
-    candidates = sorted({line.strip() for line in query.stdout.splitlines() if line.strip()})
+    candidates = sorted(
+        {line.strip() for line in query.stdout.splitlines() if line.strip()}
+    )
     if len(candidates) > 1:
         raise ArtifactContractError("multiple candidate image conflict")
     if candidates:
@@ -1225,6 +1493,8 @@ def select_or_build_app(
             f"{str(identity['artifact_identity']).removeprefix('sha256:')}"
         )
         build_args = _selector_build_args(root, identity)
+        if reuse:
+            build_args["EXISTING_APP_RUNTIME"] = reuse["image_reference"]
         with tempfile.TemporaryDirectory(prefix="ba0-app-build-") as temporary:
             iidfile = Path(temporary).resolve() / "image-id"
             command: list[str] = [
@@ -1237,7 +1507,8 @@ def select_or_build_app(
                 "--platform",
                 "linux/arm64",
                 "--target",
-                "runtime",
+                "runtime-rebase" if reuse else "runtime",
+                "--pull=false",
                 "--iidfile",
                 str(iidfile),
                 "--tag",
@@ -1275,7 +1546,9 @@ def select_or_build_app(
             try:
                 image_id = iidfile.read_text(encoding="utf-8").strip()
             except OSError as exc:
-                raise ArtifactContractError("Docker build did not write an iidfile") from exc
+                raise ArtifactContractError(
+                    "Docker build did not write an iidfile"
+                ) from exc
             if not image_id:
                 raise ArtifactContractError("Docker build wrote an empty iidfile")
         _inspect_image(
@@ -1295,6 +1568,9 @@ def select_or_build_app(
             docker_context=docker_context,
         )
 
+    if reuse:
+        _verify_runtime_base(root, reuse, runner, docker_context)
+        _verify_rebased_image(root, receipt["image_id"], reuse, runner, docker_context)
     _write_evidence(output, receipt)
     return receipt
 
@@ -1307,9 +1583,13 @@ def _main(arguments: Sequence[str] | None = None) -> int:
     plan_parser.add_argument("--output", required=True)
     selector_parser = subparsers.add_parser("select-or-build")
     selector_parser.add_argument("--repo-root", default=".")
-    selector_parser.add_argument("--context", default=_DOCKER_CONTEXT, choices=_DOCKER_CONTEXTS)
+    selector_parser.add_argument(
+        "--context", default=_DOCKER_CONTEXT, choices=_DOCKER_CONTEXTS
+    )
     selector_parser.add_argument("--build-source-head", required=True)
     selector_parser.add_argument("--evidence-out", required=True)
+    selector_parser.add_argument("--reuse-runtime-image")
+    selector_parser.add_argument("--reuse-runtime-source")
     parsed = parser.parse_args(arguments)
     if parsed.command == "dependency-plan":
         lock = load_dependency_lock(parsed.lock)
@@ -1341,19 +1621,37 @@ def _main(arguments: Sequence[str] | None = None) -> int:
                 "GOARCH": "arm64",
             },
             environment=os.environ,
+            reuse_runtime_image=parsed.reuse_runtime_image,
+            reuse_runtime_source=parsed.reuse_runtime_source,
+            docker_context=parsed.context,
         )
         evidence = Path(parsed.evidence_out)
         if not evidence.is_absolute():
             evidence = root / evidence
-        receipt = select_or_build_app(
+        inputs = json.loads(identity["canonical_bytes"])["inputs"]
+        with frozen_source_context(
             repo_root=root,
-            identity=identity,
-            evidence_out=evidence,
-            runner=subprocess.run,
-            secret_values={},
-            real_build_budget_remaining=1,
-            docker_context=parsed.context,
-        )
+            source_head=parsed.build_source_head,
+            paths=tuple(row["path"] for row in inputs)
+            + ("deploy/local-build/app-build-inputs.v1.json",),
+        ) as context:
+            for row in inputs:
+                if (
+                    hashlib.sha256((context / row["path"]).read_bytes()).hexdigest()
+                    != row["sha256"]
+                ):
+                    raise ArtifactContractError(
+                        "frozen source input differs from identity"
+                    )
+            receipt = select_or_build_app(
+                repo_root=context,
+                identity=identity,
+                evidence_out=evidence,
+                runner=subprocess.run,
+                secret_values={},
+                real_build_budget_remaining=1,
+                docker_context=parsed.context,
+            )
         print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
         return 0
     raise ArtifactContractError("unsupported command")

@@ -10,7 +10,10 @@ from insurance_harness.knowledge_compiler.g3_field_tasks import (
     adapt_catalog_field_tasks,
     batch_field_tasks,
 )
-from insurance_harness.product_ingestion.extraction import VALIDATION_VERSION, render_window_request
+from insurance_harness.product_ingestion.extraction import (
+    VALIDATION_VERSION,
+    render_window_request,
+)
 from insurance_harness.product_ingestion.model_execution import (
     ModelPolicyDenied,
     _template_and_request,
@@ -142,10 +145,18 @@ def build_field_windows(
 def build_product_pipeline(context):
     """Bind every business stage to durable artifacts and configured platform ports."""
     from insurance_harness.jobs import NonRetryableJobError
-    from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
-    from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as resolver
-    from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
-    from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileResult
+    from insurance_harness.knowledge_compiler import (
+        batch_concept_compile_830_g3 as compiler,
+    )
+    from insurance_harness.knowledge_compiler import (
+        batch_entity_resolution_830_g3 as resolver,
+    )
+    from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import (
+        batch_json_bytes_830_g3,
+    )
+    from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
+        CompileResult,
+    )
     from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
         assemble_c_semantic_response,
     )
@@ -160,8 +171,12 @@ def build_product_pipeline(context):
         select_identity_block_ids,
         validate_identity_offered_response,
     )
-    from insurance_harness.product_ingestion.identity_adapter import adapt_identity_response
-    from insurance_harness.product_ingestion.model_execution import ConfiguredFieldTransport
+    from insurance_harness.product_ingestion.identity_adapter import (
+        adapt_identity_response,
+    )
+    from insurance_harness.product_ingestion.model_execution import (
+        ConfiguredFieldTransport,
+    )
     from insurance_harness.product_ingestion.models import (
         FieldOutcomeKind,
         ProductRunState,
@@ -197,7 +212,7 @@ def build_product_pipeline(context):
         identity_templates[space_id] = templates[0].template_id
 
     def read(scope, run_id, kind, key="product"):
-        return artifacts.get_artifact(
+        return artifacts.get_effective_artifact(
             scope=scope, run_id=run_id, artifact_kind=kind, artifact_key=key
         ).payload
 
@@ -232,8 +247,101 @@ def build_product_pipeline(context):
             for row in plan["windows"]
         )
 
+    async def checkpoint(scope, run, stage, job):
+        from insurance_harness.product_ingestion.checkpoints import RECEIPT_KIND
+        from insurance_harness.product_ingestion.platform import decode_source_snapshot
+
+        service = service_for(scope)
+        try:
+            plan = await asyncio.to_thread(store.checkpoint_plan, scope=scope, run_id=run.run_id)
+            receipt = await asyncio.to_thread(
+                artifacts.verify_checkpoint, scope=scope, run_id=run.run_id
+            )
+            for material in plan.materials:
+                item = await service.platform.lookup_upload(
+                    scope, plan.upload_run_id, material.upload_ordinal
+                )
+                if (
+                    item is None
+                    or item["knowledge_id"] != material.knowledge_id
+                    or item["parse_status"] != "completed"
+                ):
+                    raise ValueError("current source identity is unavailable")
+                if "source" in {row.stage_key for row in plan.reused_stages}:
+                    saved = await asyncio.to_thread(
+                        artifacts.read_checkpoint_artifact,
+                        scope=scope,
+                        run_id=run.run_id,
+                        artifact_kind="source_snapshot",
+                        artifact_key=material.knowledge_id,
+                    )
+                    decoded = await asyncio.to_thread(
+                        decode_source_snapshot,
+                        saved.payload,
+                        scope=scope,
+                        knowledge_id=material.knowledge_id,
+                        parse_attempt=item["parse_attempt"],
+                        public_keys=service.configuration.source_public_keys,
+                    )
+                    if material.source is not None and (
+                        decoded.snapshot["receipt"]["revision_source_id"],
+                        decoded.snapshot["receipt"]["file_sha256"],
+                    ) != (
+                        material.source.source_revision_id,
+                        material.source.file_sha256,
+                    ):
+                        raise ValueError("source revision changed")
+                    del saved, decoded
+            if any(ref.artifact_kind == "base_snapshot" for ref in plan.artifacts):
+                saved = await asyncio.to_thread(
+                    artifacts.read_checkpoint_artifact,
+                    scope=scope,
+                    run_id=run.run_id,
+                    artifact_kind="base_snapshot",
+                )
+                base = await asyncio.to_thread(
+                    verify_signed_snapshot,
+                    saved.payload,
+                    kind="base",
+                    scope=scope,
+                    public_keys=service.configuration.source_public_keys,
+                )
+                current = await service.platform.current(scope)
+                if (base["release_id"], base["activation_epoch"]) != (
+                    current["release_id"],
+                    current["activation_epoch"],
+                ):
+                    raise ValueError("published base changed")
+            if any(ref.artifact_kind == "compile_request" for ref in plan.artifacts):
+                saved = await asyncio.to_thread(
+                    artifacts.read_checkpoint_artifact,
+                    scope=scope,
+                    run_id=run.run_id,
+                    artifact_kind="compile_request",
+                )
+                request = await asyncio.to_thread(
+                    compiler.BatchConceptCompileRequest830G3V1.model_validate_json,
+                    saved.payload,
+                )
+                if request.catalog != context.catalog or request.resolution_inputs.policy != policy:
+                    raise ValueError("Catalog or Schema changed")
+            return StageOutput(
+                (
+                    artifact(
+                        RECEIPT_KIND,
+                        "product",
+                        receipt.encoded(),
+                        stage.dependency_sha256,
+                    ),
+                )
+            )
+        except ValueError as error:
+            raise needs_confirmation_error("CHECKPOINT_INVALID") from error
+
     async def identity(scope, run, stage, job):
-        from insurance_harness.product_ingestion.compilation import build_existing_snapshot
+        from insurance_harness.product_ingestion.compilation import (
+            build_existing_snapshot,
+        )
 
         service = service_for(scope)
         current = await service.platform.current(scope)
@@ -241,7 +349,10 @@ def build_product_pipeline(context):
             scope, current["release_id"], current["activation_epoch"]
         )
         base = verify_signed_snapshot(
-            base_raw, kind="base", scope=scope, public_keys=service.configuration.source_public_keys
+            base_raw,
+            kind="base",
+            scope=scope,
+            public_keys=service.configuration.source_public_keys,
         )
         if (base["release_id"], base["activation_epoch"]) != (
             current["release_id"],
@@ -287,7 +398,11 @@ def build_product_pipeline(context):
         model_origin = ArtifactOrigin.RULE
         adaptation_audit = None
         recovery_plan = store.processing_recovery_plan(scope=scope, run_id=run.run_id)
-        field_retry = run.retry_of_run_id and recovery_plan is None
+        field_retry = (
+            run.retry_of_run_id
+            and recovery_plan is None
+            and store.checkpoint_plan(scope=scope, run_id=run.run_id) is None
+        )
         if field_retry:
             previous = json.loads(read(scope, run.retry_of_run_id, "identity"))
             if resolver.BatchCorpusV1.model_validate(previous["corpus"]) != corpus:
@@ -381,7 +496,8 @@ def build_product_pipeline(context):
                 )
                 material_bindings = tuple(
                     resolver.MaterialBindingV1(
-                        material_id=entry.material_id, corpus_entry_sha256=entry.entry_sha256
+                        material_id=entry.material_id,
+                        corpus_entry_sha256=entry.entry_sha256,
                     )
                     for entry in corpus.entries
                 )
@@ -560,7 +676,9 @@ def build_product_pipeline(context):
         )
 
     async def field_plan(scope, run, stage, job):
-        from insurance_harness.product_ingestion.compilation import build_platform_compile_request
+        from insurance_harness.product_ingestion.compilation import (
+            build_platform_compile_request,
+        )
 
         values = json.loads(read(scope, run.run_id, "identity"))
         base = await asyncio.to_thread(base_for, scope, run.run_id)
@@ -569,6 +687,7 @@ def build_product_pipeline(context):
         if (
             run.retry_of_run_id
             and store.processing_recovery_plan(scope=scope, run_id=run.run_id) is None
+            and store.checkpoint_plan(scope=scope, run_id=run.run_id) is None
         ):
             selected = {
                 (row.entity_id, row.field_key)
@@ -604,7 +723,7 @@ def build_product_pipeline(context):
             selected_refs=tuple(tuple(row) for row in values["selected_refs"]),
             refresh_fields=tuple(refresh),
         )
-        resolved = artifacts.list_artifacts(
+        resolved = artifacts.list_effective_artifacts(
             scope=scope, run_id=run.run_id, artifact_kind="resolved_routing"
         )
         route = json.loads(resolved[0].payload if resolved else read(scope, run.run_id, "routing"))
@@ -660,12 +779,21 @@ def build_product_pipeline(context):
             else ProductRunState.SUCCEEDED
         )
         return StageOutput(
-            (artifact("field_summary", "product", json_bytes(counts), stage.dependency_sha256),),
+            (
+                artifact(
+                    "field_summary",
+                    "product",
+                    json_bytes(counts),
+                    stage.dependency_sha256,
+                ),
+            ),
             state=state,
         )
 
     async def synthesis(scope, run, stage, job):
-        from insurance_harness.product_ingestion.compilation import project_field_attempts
+        from insurance_harness.product_ingestion.compilation import (
+            project_field_attempts,
+        )
 
         request = await asyncio.to_thread(request_for, scope, run.run_id)
         delta = await asyncio.to_thread(
@@ -674,12 +802,16 @@ def build_product_pipeline(context):
             attempts=store.list_field_attempts(scope=scope, run_id=run.run_id),
             run_id=run.run_id,
         )
-        from insurance_harness.product_ingestion.discovery_stage import run_discovery_stage
+        from insurance_harness.product_ingestion.discovery_stage import (
+            run_discovery_stage,
+        )
 
         identity_values = json.loads(read(scope, run.run_id, "identity"))
         return await run_discovery_stage(
-            processing_recovery=store.processing_recovery_plan(scope=scope, run_id=run.run_id)
-            is not None,
+            processing_recovery=(
+                store.processing_recovery_plan(scope=scope, run_id=run.run_id) is not None
+                or store.checkpoint_plan(scope=scope, run_id=run.run_id) is not None
+            ),
             service=service_for(scope),
             artifacts=artifacts,
             scope=scope,
@@ -693,12 +825,16 @@ def build_product_pipeline(context):
         )
 
     async def compilation(scope, run, stage, job):
-        from insurance_harness.product_ingestion.compilation import assemble_platform_candidate
+        from insurance_harness.product_ingestion.compilation import (
+            assemble_platform_candidate,
+        )
 
         request = await asyncio.to_thread(request_for, scope, run.run_id)
-        from insurance_harness.knowledge_compiler.concept_compile_830_g2 import ReviewResult
+        from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
+            ReviewResult,
+        )
 
-        discovery_reviews = artifacts.list_artifacts(
+        discovery_reviews = artifacts.list_effective_artifacts(
             scope=scope, run_id=run.run_id, artifact_kind="discovery_review"
         )
         candidate = await asyncio.to_thread(
@@ -714,7 +850,10 @@ def build_product_pipeline(context):
         )
         raw = await asyncio.to_thread(batch_json_bytes_830_g3, candidate)
         preparation_id = "product-" + hashlib.sha256(run.run_id.encode()).hexdigest()[:32]
-        metadata = await service_for(scope).platform.create_preparation(scope, preparation_id, raw)
+        base = await asyncio.to_thread(base_for, scope, run.run_id)
+        metadata = await service_for(scope).platform.create_preparation(
+            scope, preparation_id, raw, base_body=base
+        )
         return StageOutput(
             (
                 artifact("candidate", "product", raw, stage.dependency_sha256),
@@ -763,7 +902,10 @@ def build_product_pipeline(context):
         return StageOutput(
             (
                 artifact(
-                    "publish_authorization", "product", authorization, stage.dependency_sha256
+                    "publish_authorization",
+                    "product",
+                    authorization,
+                    stage.dependency_sha256,
                 ),
                 artifact(
                     "publication",
@@ -776,7 +918,9 @@ def build_product_pipeline(context):
         )
 
     async def verify(scope, run, stage, job):
-        from insurance_harness.product_ingestion.verification import verify_published_product
+        from insurance_harness.product_ingestion.verification import (
+            verify_published_product,
+        )
 
         values = json.loads(read(scope, run.run_id, "identity"))
         candidate = await asyncio.to_thread(
@@ -803,6 +947,7 @@ def build_product_pipeline(context):
 
     return ProductPipelinePorts(
         stage_handlers={
+            "checkpoint": checkpoint,
             "identity": identity,
             "field_plan": field_plan,
             "extract": extract,

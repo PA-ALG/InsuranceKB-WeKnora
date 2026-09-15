@@ -8,22 +8,14 @@ from dataclasses import dataclass
 
 from insurance_harness.jobs import JobState, JobStore
 from insurance_harness.jobs.models import ErrorClass
-from insurance_harness.product_ingestion.models import ProductRunState, ProductScope, WindowTaskSpec
+from insurance_harness.product_ingestion.checkpoints import STAGE_ORDER as STAGES
+from insurance_harness.product_ingestion.models import (
+    ProductRunState,
+    ProductScope,
+    WindowTaskSpec,
+)
 from insurance_harness.product_ingestion.store import ProductIngestionStore
 
-STAGES = (
-    "uploads",
-    "source",
-    "routing",
-    "identity",
-    "field_plan",
-    "extract",
-    "synthesis",
-    "compilation",
-    "review",
-    "publish",
-    "verify",
-)
 _GOOD = {"succeeded", "partial_success"}
 _BAD = {"failed", "blocked", "dead_letter"}
 _FINAL = {
@@ -88,6 +80,12 @@ class ProductProgression:
             )
             return
         stages = {stage.stage_key: stage for stage in rows}
+        checkpoint = self.store.checkpoint_plan(scope=scope, run_id=run_id)
+        receipt = self.store.checkpoint_receipt(scope=scope, run_id=run_id)
+        if checkpoint is not None and receipt is None:
+            return
+        if receipt is not None:
+            stages.update({stage.stage_key: stage for stage in receipt.reused_stages})
         for key in STAGES:
             stage = stages.get(key)
             if stage is not None:
@@ -155,6 +153,9 @@ class ProductProgression:
         if failure is not None:
             return failure
         stages = {stage.stage_key: stage for stage in rows}
+        receipt = self.store.checkpoint_receipt(scope=scope, run_id=run_id)
+        if receipt is not None:
+            stages.update({stage.stage_key: stage for stage in receipt.reused_stages})
         if any(key not in stages or stages[key].state not in _GOOD for key in STAGES):
             raise ValueError("product publication barrier is not complete")
         run = self.store.get_run(scope=scope, run_id=run_id)
@@ -162,6 +163,6 @@ class ProductProgression:
             ProductRunState.PARTIAL_SUCCESS
             if run.failure_count
             or run.missing_count
-            or any(stage.state == "partial_success" for stage in rows)
+            or any(stage.state == "partial_success" for stage in stages.values())
             else ProductRunState.SUCCEEDED
         )

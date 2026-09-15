@@ -45,6 +45,19 @@ type ProductIngestionStage struct {
 	StartedAt  *string `json:"started_at,omitempty"`
 	FinishedAt *string `json:"finished_at,omitempty"`
 }
+
+// Reused stages are original settled work, separate from this run's jobs.
+type ProductIngestionReusedStage struct {
+	ProductIngestionCounts
+	StageKey         string  `json:"stage_key"`
+	RunID            string  `json:"run_id"`
+	JobID            string  `json:"job_id"`
+	DependencySHA256 string  `json:"dependency_sha256"`
+	State            string  `json:"state"`
+	ModelCallCount   *int    `json:"model_call_count"`
+	StartedAt        *string `json:"started_at,omitempty"`
+	FinishedAt       *string `json:"finished_at,omitempty"`
+}
 type ProductIngestionField struct {
 	FieldKey string  `json:"field_key"`
 	Outcome  string  `json:"outcome"`
@@ -128,6 +141,7 @@ type ProductIngestionRun struct {
 	State                        string                            `json:"state"`
 	Stage                        *string                           `json:"stage,omitempty"`
 	Stages                       []ProductIngestionStage           `json:"stages,omitempty"`
+	ReusedStages                 []ProductIngestionReusedStage     `json:"reused_stages,omitempty"`
 	Counts                       *ProductIngestionCounts           `json:"counts,omitempty"`
 	ModelCallCount               *int                              `json:"model_call_count"`
 	SemanticModelCallCount       *int                              `json:"semantic_model_call_count"`

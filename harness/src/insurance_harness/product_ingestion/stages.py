@@ -13,8 +13,13 @@ from typing import Protocol
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from insurance_harness.jobs import NonRetryableJobError, RetryableJobError
-from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import SchemaPackCatalogV1
-from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
+from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import (
+    SchemaPackCatalogV1,
+)
+from insurance_harness.product_ingestion.artifact_models import (
+    ArtifactDraft,
+    ArtifactOrigin,
+)
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.identity import prepare_identity_routing
 from insurance_harness.product_ingestion.models import (
@@ -127,7 +132,9 @@ def register_stage_handlers(
 
 
 def read_source_snapshots(artifacts, scope, run_id, *, public_keys):
-    rows = artifacts.list_artifacts(scope=scope, run_id=run_id, artifact_kind="source_snapshot")
+    rows = artifacts.list_effective_artifacts(
+        scope=scope, run_id=run_id, artifact_kind="source_snapshot"
+    )
     result = {}
     for row in rows:
         # Expected identity is the immutable artifact key, never a model value.

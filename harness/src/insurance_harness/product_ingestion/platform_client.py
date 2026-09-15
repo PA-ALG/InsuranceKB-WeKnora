@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -162,13 +163,28 @@ class PlatformClient:
             raise ValueError("platform preparation scope mismatch")
         return value
 
-    async def create_preparation(self, scope, preparation_id, candidate_raw: bytes):
+    async def create_preparation(
+        self, scope, preparation_id, candidate_raw: bytes, *, base_body=None
+    ):
         _id(preparation_id)
-        if not isinstance(json.loads(candidate_raw, object_pairs_hook=_object), dict):
-            raise ValueError("candidate must be a JSON object")
+        if base_body is not None:
+            from insurance_harness.product_ingestion.candidate_transfer import (
+                encode_candidate_transfer,
+            )
+
+            encoded = await asyncio.to_thread(encode_candidate_transfer, candidate_raw, base_body)
+            body_key = b"transfer"
+        else:
+            if not isinstance(
+                await asyncio.to_thread(json.loads, candidate_raw, object_pairs_hook=_object), dict
+            ):
+                raise ValueError("candidate must be a JSON object")
+            encoded, body_key = candidate_raw, b"bundle"
         payload = (
-            b'{"bundle":'
-            + candidate_raw
+            b'{"'
+            + body_key
+            + b'":'
+            + encoded
             + b',"preparation_id":'
             + json.dumps(preparation_id).encode()
             + b"}"

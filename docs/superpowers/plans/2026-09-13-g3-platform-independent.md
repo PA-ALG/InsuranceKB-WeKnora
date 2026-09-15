@@ -1,5 +1,37 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 当前队列：增量候选传输与检查点恢复
+
+必要端口写域补充（同一已授权边界）：A 复用 g3_platform_base_snapshot.go 原加载实现，避免复制另一份发布身份校验；B 包含 models.py/composition.py 的 typed 状态和唯一 checkpoint handler 注册。root 同步修改 product_ingestion_bridge.go、frontend/src/api/product-ingestion.ts、knowledge-base/product-ingestion-status.vue 及对应测试，独立显示 reused_stages 原结果/原耗时，不能伪造为新执行成功。
+
+交付入口的小型适配由 g3_docker_connection 在 /private/tmp 提供测试/实现分离补丁、root 集成：仅 scripts/app_artifact.py、docker/Dockerfile.app、必要原README及tests。复用 BA0 identity/lookup/receipt，加冻结 git archive context（不创建 worktree）及显式 exact runtime-rebase；runtime资源与依赖必须与基础镜像来源一致，唯一例外构建工具 app_artifact.py 在rebase明确同步覆盖。基础本地image ID由已核验tag供FROM，构建前后/父层核对同一identity。缓存marker不作正确性门禁。Harness用同一冻结端口和既有Dockerfile，不新增制品平台/第二selector。上传或恢复业务不触发构建。
+
+当前验证进展（CODE，2026-09-15）：A Python传输/客户端/完整pipeline及Go原发布服务集成通过，Unicode完整性独立复核0 BLOCKER；B原82字段三态检查点组合10 PASS 133.54s，早期source/routing完整恢复2 PASS 327.38s，继承partial终态8 PASS 20.62s；旧v1/v2/v3记录兼容和新调用拒绝边界明确分开测试（26+24+3 PASS）。UI 35 PASS、typecheck PASS、Go状态桥PASS；BA0正式构建适配140 PASS 81.97s，空diff、默认runtime、私有umask目录可读性均已RED→GREEN。Ruff和diff检查PASS。独立B最终0 BLOCKER，原partial finding已闭合。此时未构建部署、未外发模型、未恢复业务，G3依然未完成。独立复核/完整验证记录见 docs/insurance-kb/evidence/830-g3/checkpoint-transfer-code-20260915.md。
+
+用户已明确批准“可以，按照你的建议执行”。适用 G3-AUTO-3/4/5/6，沿用现有环境和唯一 Release 权威。原 ef9bf57f-ae07-5206-b2d1-ff34c331f8a2 终态失败不改写：9 份字段调用响应、82 项状态（21 verified、31 not_provided、30 extraction_failed）已保存，compilation 因 8 MiB 请求上限失败。当前 compile_request 6,997,509 bytes、base_snapshot 3,133,391 bytes、compile_delta 209,781 bytes。此队列替代继续扩大错误字符串/恢复前缀白名单的做法，不改变旧协议的审计读取。
+
+复用核验：WeKnora wiki_ingest.go 的持久待办/触发分离、wiki_ingest_batch.go 的按需缓存及退出统计可参考；正常业务仍必须经过既有 Candidate/Review/Release。直接复用 ProductArtifact、ProductStage、JobStore.enqueue/report_success、既有阶段顺序，以及 g3_platform_base_snapshot.go 的已发布投影加载和 wiki_release_automated.go 的自动 draft/source/policy/CAS 校验。不新增表、队列、存储、审批或签名平台。
+
+唯一仓库写者/集成 Owner 为 root。g3_extraction_finish 仅在 /private/tmp 准备恢复的测试与实现分离补丁，不编辑活动仓库；g3_incremental_code_review 只读审查冻结协议及最终实现。Root 维护本计划、现有设计/OpenSpec 和交付记录。
+
+### A. 发布边界的窄传输协议（root）
+
+写域：product_ingestion/{candidate_transfer,platform_client,pipeline,compilation}.py，internal/types/g3_platform_candidate_transfer.go、internal/application/service/{g3_platform_candidate_transfer,wiki_release_automated}.go，internal/handler/g3_platform_release.go，对应测试及共享 fixture。现有 POST preparations 接受旧 bundle 或新 transfer 二选一。transfer 绑定外层已发布 snapshot 的 scope/release/epoch/candidate/manifest，不使用 projection.parent 冒充当前版本。
+
+只处理七个固定数组槽：request.base_request 的 sources/existing_definitions/existing_fields/existing_pages；compile_result.output 的 definitions/fields/pages。与投影逐值相同的成员传 base_index，其余 inline；保持顺序。只在已有明确集合槽应用 null→[] 的兼容，无模糊比较或通用 JSON patch。完整其他候选内容、原响应、审核和摘要均保留；可使用 gzip+base64 压缩传输审计数据。协议限制 wire 8 MiB、解压 delta 64 MiB、展开后候选 128 MiB；单 gzip member，拒绝尾随流、重复索引、越界引用、重复 JSON key 及任何超限。Go 在分配完整展开结果前累计预算，核对完整 canonical manifest SHA，再执行原候选合同校验。解码/压缩不占 Python 心跳事件循环。大于协议能力的输入明确失败，不静默丢弃、不全局放宽 schema 接口。
+
+RED/GREEN：共享跨语言 fixture 精确还原；历史增长不重复传历史成员正文；当前增量/顺序/原响应不变；超8MiB的原候选可在有界传输内表示；旧 bundle 兼容；错误作用域/版本/摘要/null标量/重复或越界索引/解压及展开超限拒绝；真实 handler→service 校验不旁路。完整候选仍仅在发布边界组合，其成本随完整集合增长，不宣称1000文件已验证。
+
+### B. 有效检查点恢复（g3_extraction_finish 提供补丁，root 集成）
+
+写域：product_ingestion/{recovery,artifacts,store,progression,stages,pipeline,api,artifact_models}.py 及必要同目录 checkpoint 模块、对应测试；pipeline.py 接线由 root 最后应用，与 A 不并发写。复用现有 retry-processing 网页/API、表及队列。原子登记小型引用计划并及时返回身份，昂贵验证由 worker 执行，不在提交请求内读取全部来源/历史响应。typed plan 绑定作用域、origin run/version、材料/Schema/base 身份、各原 stage/dependency/settlement 和 artifact ID/contract/key/hash；仅引用，不复制大 payload。原 stage dependency 含 run_id，保留原值；新恢复输入摘要另算。
+
+根据阶段输出和依赖有效性确定接续点，不根据错误文案或任务前缀。不伪造新 run 的前序成功 job；通过验证 receipt 展示复用并满足依赖。ArtifactStore 提供公开的授权引用读取接口，按需读原记录并验摘要；重复恢复引用链必须有界/去环并可直接定位原资产。状态查询只取元数据。当前已完整保存 synthesis 的例子应直接进入 compilation，复用 compile_request/compile_delta/可选 discovery_review、全部82三态字段和原9调用；不能使用只选成功值的 lookup_cached_fields。Schema、来源、base 或相关合同漂移仅使相关依赖失效，未知发送状态不得盲目重发。原失败终态、调用原始身份/用量和证据不改写。发布仍核对当前 source/ACL/policy/Head。
+
+RED/GREEN：等价现场从编译恢复且分类/抽取/自由发现0调用；三态结果及原响应不变；缺失/篡改/跨域/来源Schema或base漂移不误复用；未知发送不补发；并发恢复幂等、失租拒绝回写；状态不读大payload；原任务终态不变，恢复过程/部分成功/失败均有明确终态。旧V1/V2/V3只作兼容，正常入口由检查点机制决策。
+
+先测试 RED 再实现；冻结后独立复核，再仅构建受影响 APP/Harness（UI仅有真实改动才构建），复用仓库 BA0 入口和组件快照，不临时改写 Dockerfile。部署完成后仅从网页发起必要恢复，运行期间不改代码、不执行业务接续脚本、不补普通字段。各阶段/总耗时、调用新旧计数、字段三态、真实发布/检索/证据结果独立记录。CURRENT=CODE_VALIDATED_READY_TO_BUILD；CODE=PASS，DELIVERY/BUSINESS=NOT RUN，G3 尚未完成。
+
 # G3 explicit source recovery follow-up (root, 2026-09-14)
 
 Existing user authority: complete G3 in the existing environment, incremental result reuse, original evidence retention, normal webpage entry only. This continues G3-AUTO-3/4/6; no new Goal, database, service, ACL, provider or manual business continuation.

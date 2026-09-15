@@ -143,6 +143,12 @@ def install_product_api(
         except SpaceScopeError as error:
             raise HTTPException(404, "product_run_not_found") from error
         payload = run.model_dump(mode="json")
+        checkpoint_receipt = store.checkpoint_receipt(scope=scope, run_id=run_id)
+        payload["reused_stages"] = (
+            [row.model_dump(mode="json") for row in checkpoint_receipt.reused_stages]
+            if checkpoint_receipt
+            else []
+        )
         payload["can_retry_processing"] = store.can_retry_processing(scope=scope, run_id=run_id)
         stage_metrics = artifacts.get_stage_call_metrics(scope=scope, run_id=run_id)
         payload["model_call_count"] = (
@@ -154,11 +160,26 @@ def install_product_api(
         payload["reused_usage"] = stage_metrics.reused_usage
         payload["source_model_call_count"] = None
         payload["model_call_count_complete"] = False
-        summaries = artifacts.list_artifacts(
+        summaries = artifacts.list_effective_artifacts(
             scope=scope, run_id=run_id, artifact_kind="source_processing_summary"
         )
         if summaries:
             summary = json.loads(summaries[0].payload)
+            if checkpoint_receipt and summaries[0].run_id != run_id:
+                summary = {
+                    **summary,
+                    "model_call_count": 0,
+                    "recorded_model_call_count": 0,
+                    "reused_model_call_count": (
+                        summary["recorded_model_call_count"]
+                        + summary["recorded_reused_model_call_count"]
+                    )
+                    if summary["model_call_count_complete"]
+                    else None,
+                    "recorded_reused_model_call_count": summary["recorded_model_call_count"]
+                    + summary["recorded_reused_model_call_count"],
+                    "materials": [{**m, "reused": True} for m in summary["materials"]],
+                }
             payload["source_processing"] = {
                 **summary,
                 "materials": [
@@ -207,7 +228,7 @@ def install_product_api(
             for row in fields
         ]
         try:
-            discovery = artifacts.get_artifact(
+            discovery = artifacts.get_effective_artifact(
                 scope=scope,
                 run_id=run_id,
                 artifact_kind="discovery_summary",
@@ -270,7 +291,10 @@ def install_product_api(
 
     @router.post("/{run_id}/retry-processing", status_code=201)
     def retry_processing(
-        space_id: str, run_id: str, request: RetryProcessing, principal: PrincipalDependency
+        space_id: str,
+        run_id: str,
+        request: RetryProcessing,
+        principal: PrincipalDependency,
     ):
         scope = authorize(space_id, principal, write=True)
         try:

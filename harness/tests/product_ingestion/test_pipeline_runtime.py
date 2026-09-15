@@ -577,7 +577,13 @@ class FixturePlatform:
             return self._data(self.base)
         if suffix == "/platform/preparations":
             value = json.loads(request.content)
-            self.candidate = compiler.validate_batch_candidate(_json(value["bundle"]))
+            if "transfer" in value:
+                from tests.product_ingestion.test_candidate_transfer import decode_transfer_fixture
+
+                bundle = decode_transfer_fixture(value["transfer"], self.base["snapshot"])
+            else:
+                bundle = value["bundle"]
+            self.candidate = compiler.validate_batch_candidate(_json(bundle))
             preparation_id = value["preparation_id"]
             self.preparation = {
                 "tenant_id": int(SCOPE.tenant_id),

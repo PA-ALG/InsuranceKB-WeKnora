@@ -31,6 +31,15 @@ CONTENT = json.dumps(
 ).encode()
 
 
+@pytest.fixture
+def legacy_stage_runtime(stage_runtime, monkeypatch):
+    """Historical V3 admission only, to exercise stored-plan replay compatibility."""
+    store = stage_runtime[1]
+    monkeypatch.setattr(store, "can_retry_processing", store._legacy_can_retry_processing)
+    monkeypatch.setattr(store, "retry_processing", store._legacy_retry_processing)
+    return stage_runtime
+
+
 def start_identity(store, scope, run):
     stage = store.enqueue_stage(
         scope=scope,
@@ -100,9 +109,10 @@ def recorded_origin(stage_runtime):
     asyncio.run(boundary._client.aclose())
 
 
-def test_recorded_identity_recovery_replays_original_receipts_and_provenance(
-    stage_runtime, recorded_origin
+def test_legacy_recorded_identity_recovery_replays_original_receipts_and_provenance(
+    legacy_stage_runtime, recorded_origin
 ):
+    stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin, original, boundary, _, sent = recorded_origin
     assert store.can_retry_processing(scope=scope, run_id=origin.run_id)
@@ -159,7 +169,10 @@ def test_recorded_identity_recovery_replays_original_receipts_and_provenance(
 @pytest.mark.parametrize(
     "drift", ["original_raw", "original_source", "parent_source", "cycle", "new_call"]
 )
-def test_failed_replay_recovery_rejects_ancestor_drift(stage_runtime, recorded_origin, drift):
+def test_legacy_failed_replay_recovery_rejects_ancestor_drift(
+    legacy_stage_runtime, recorded_origin, drift
+):
+    stage_runtime = legacy_stage_runtime
     from sqlalchemy import select
 
     from insurance_harness.product_ingestion.artifact_tables import (
@@ -236,7 +249,10 @@ def test_failed_replay_recovery_rejects_ancestor_drift(stage_runtime, recorded_o
 @pytest.mark.parametrize(
     "change", ["input", "base", "prompt", "policy", "raw", "source", "scope", "lease"]
 )
-def test_recorded_identity_replay_drift_never_redispatches(stage_runtime, recorded_origin, change):
+def test_legacy_recorded_identity_replay_drift_never_redispatches(
+    legacy_stage_runtime, recorded_origin, change
+):
+    stage_runtime = legacy_stage_runtime
     from sqlalchemy import select
 
     from insurance_harness.jobs import SpaceScopeError, StaleGenerationError
@@ -303,9 +319,10 @@ def test_recorded_identity_replay_drift_never_redispatches(stage_runtime, record
     )
 
 
-def test_recorded_replay_checkpoint_is_stable_and_same_run_model_origin_stays_strict(
-    stage_runtime, recorded_origin
+def test_legacy_recorded_replay_checkpoint_is_stable_and_same_run_model_origin_stays_strict(
+    legacy_stage_runtime, recorded_origin
 ):
+    stage_runtime = legacy_stage_runtime
     scope, store, artifacts, _, execute = stage_runtime
     origin, original, boundary, _, sent = recorded_origin
     child = store.retry_processing(
@@ -352,7 +369,7 @@ def test_recorded_replay_checkpoint_is_stable_and_same_run_model_origin_stays_st
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failed_stage", ["identity", "field_plan"])
-async def test_recorded_identity_recovery_real_worker_reaches_publication_without_classify_resend(
+async def test_legacy_v3_real_worker_reaches_publication_without_classify_resend(
     tmp_path, monkeypatch, failed_stage
 ):
     from insurance_harness.db.base import Base, make_session_factory
@@ -414,7 +431,8 @@ async def test_recorded_identity_recovery_real_worker_reaches_publication_withou
         with factory() as session:
             assert session.get(WikiJob, stage.job_id).attempt == 1
     assert len(model.identity_requests) == 1 and not model.field_requests
-    child = context.store.retry_processing(
+    # Fixture-only construction of an existing V3 recovery record.
+    child = context.store._legacy_retry_processing(
         scope=SCOPE, run_id=origin.run_id, expected_version=failed.version
     )
     await runtime.close()
@@ -437,7 +455,10 @@ async def test_recorded_identity_recovery_real_worker_reaches_publication_withou
 @pytest.mark.parametrize(
     "change", ["diagnostic", "interrupted", "second_call", "reason", "source_missing"]
 )
-def test_recorded_identity_recovery_admission_is_narrow(stage_runtime, recorded_origin, change):
+def test_legacy_recorded_identity_recovery_admission_is_narrow(
+    legacy_stage_runtime, recorded_origin, change
+):
+    stage_runtime = legacy_stage_runtime
     from sqlalchemy import select
 
     from insurance_harness.jobs.tables import WikiJob
@@ -499,9 +520,10 @@ def test_source_recovery_v2_wire_bytes_are_unchanged():
 
 
 @pytest.mark.parametrize("checkpoint_recorded", [False, True])
-def test_failed_replay_can_recover_again_without_reclassifying(
-    stage_runtime, recorded_origin, checkpoint_recorded
+def test_legacy_failed_replay_can_recover_again_without_reclassifying(
+    legacy_stage_runtime, recorded_origin, checkpoint_recorded
 ):
+    stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin, original, boundary, _, sent = recorded_origin
     child = store.retry_processing(
@@ -549,7 +571,10 @@ def test_failed_replay_can_recover_again_without_reclassifying(
     assert store.get_run(scope=scope, run_id=origin.run_id) == origin
 
 
-def test_recovery_button_check_does_not_load_source_payloads(stage_runtime, recorded_origin):
+def test_legacy_recovery_button_check_does_not_load_source_payloads(
+    legacy_stage_runtime, recorded_origin
+):
+    stage_runtime = legacy_stage_runtime
     from sqlalchemy import event
 
     scope, store, _, _, _ = stage_runtime
@@ -573,3 +598,19 @@ def test_recovery_button_check_does_not_load_source_payloads(stage_runtime, reco
     finally:
         event.remove(session_class, "do_orm_execute", check_select)
     assert inspected
+
+
+def test_checkpoint_admission_does_not_reissue_incomplete_recorded_identity(
+    stage_runtime, recorded_origin
+):
+    """The normal checkpoint entry never turns an unfinished model stage into a new send."""
+    scope, store, artifacts, _, _ = stage_runtime
+    origin, original, _, _, sent = recorded_origin
+    before = artifacts.list_stage_calls(scope=scope, run_id=origin.run_id)
+    assert len(before) == 1 and before[0].call_id == original.call_id
+    assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
+    with pytest.raises(ValueError):
+        store.retry_processing(scope=scope, run_id=origin.run_id, expected_version=origin.version)
+    assert len(sent) == 1
+    assert artifacts.list_stage_calls(scope=scope, run_id=origin.run_id) == before
+    assert store.get_run(scope=scope, run_id=origin.run_id) == origin

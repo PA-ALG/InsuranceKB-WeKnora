@@ -10,7 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.models import _uuid
-from insurance_harness.jobs import DomainWriteSpec, SpaceScopeError, StaleGenerationError
+from insurance_harness.jobs import (
+    DomainWriteSpec,
+    SpaceScopeError,
+    StaleGenerationError,
+)
 from insurance_harness.jobs.store import (
     _aware,
     database_now,
@@ -31,6 +35,7 @@ from insurance_harness.product_ingestion.artifact_tables import (
     ProductArtifact,
     ProductStageModelCall,
 )
+from insurance_harness.product_ingestion.checkpoint_artifacts import CheckpointArtifacts
 from insurance_harness.product_ingestion.models import ProductScope
 from insurance_harness.product_ingestion.recovery import (
     RecordedIdentityRecoveryPlan,
@@ -42,7 +47,7 @@ from insurance_harness.product_ingestion.store import ProductIngestionStore
 SessionFactory = Callable[[], Session]
 
 
-class ProductArtifactStore:
+class ProductArtifactStore(CheckpointArtifacts):
     """Store exact non-field outputs without weakening Task1 field contracts."""
 
     def __init__(
@@ -118,7 +123,9 @@ class ProductArtifactStore:
                             raise ValueError(
                                 "model replay requires its durable verification checkpoint"
                             )
-                        from insurance_harness.product_ingestion.tables import ProductStage
+                        from insurance_harness.product_ingestion.tables import (
+                            ProductStage,
+                        )
 
                         stage = session.scalar(
                             select(ProductStage).where(
@@ -472,14 +479,22 @@ class ProductArtifactStore:
                 if replay_ids != {replay_call.call_id}:
                     raise ValueError("recorded identity replay provenance changed")
                 reused_usage = dict(replay_call.usage)
+            checkpoint = self._products.checkpoint_receipt(
+                scope=scope, run_id=run_id, session=session
+            )
+            if checkpoint:
+                if replay_ids.intersection(checkpoint.reused_call_ids):
+                    raise ValueError("duplicate recovered call accounting")
+                replay_ids.update(checkpoint.reused_call_ids)
+                for key, value in checkpoint.reused_usage.items():
+                    reused_usage[key] = reused_usage.get(key, 0) + value
             return StageCallMetrics(
                 model_call_count=len(rows),
                 reused_model_call_count=len(replay_ids),
                 reused_usage=reused_usage,
                 usage=usage,
-                unsettled_call_count=sum(
-                    row.state != StageCallState.RECORDED.value for row in rows
-                ),
+                unsettled_call_count=sum(row.state != StageCallState.RECORDED.value for row in rows)
+                + (checkpoint.unsettled_call_count if checkpoint else 0),
             )
 
     def _identity_replay_metrics_call(self, session, scope, run_id):

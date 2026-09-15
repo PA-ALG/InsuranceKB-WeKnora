@@ -10,6 +10,37 @@ from insurance_harness.jobs import NonRetryableJobError, RetryableJobError
 from insurance_harness.product_ingestion.models import ProductScope
 
 
+def test_large_candidate_transfer_uses_existing_scoped_preparation_endpoint():
+    from tests.product_ingestion.test_candidate_transfer import example, wire
+
+    candidate, base = example()
+    candidate["raw_response"] = "原始响应" * 800_000
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        return httpx.Response(
+            201,
+            json={
+                "success": True,
+                "data": {
+                    "tenant_id": 1,
+                    "space_id": "space",
+                    "raw_kb_id": "raw",
+                    "wiki_kb_id": "wiki",
+                    "preparation_id": "prep",
+                    "status": "draft",
+                },
+            },
+        )
+
+    api, scope = client(respond)
+    asyncio.run(api.create_preparation(scope, "prep", wire(candidate), base_body=base))
+    assert len(seen) == 1
+    assert set(json.loads(seen[0].content)) == {"preparation_id", "transfer"}
+    assert len(seen[0].content) < 8 << 20
+
+
 def module():
     try:
         return importlib.import_module("insurance_harness.product_ingestion.platform_client")

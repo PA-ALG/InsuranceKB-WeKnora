@@ -19,6 +19,19 @@ from tests.product_ingestion.test_routing import catalog  # noqa: F401
 from tests.product_ingestion.test_stages import stage_runtime  # noqa: F401
 
 
+@pytest.fixture
+def legacy_stage_runtime(stage_runtime, monkeypatch):
+    """Construct previously persisted v1/v2/v3 recovery records for read compatibility.
+
+    Only this fixture selects the historical adapter; production API admission
+    remains the checkpoint owner. Worker/custody validation is not mocked.
+    """
+    store = stage_runtime[1]
+    monkeypatch.setattr(store, "can_retry_processing", store._legacy_can_retry_processing)
+    monkeypatch.setattr(store, "retry_processing", store._legacy_retry_processing)
+    return stage_runtime
+
+
 def finish_failed_source(store, scope, run_id):
     """Fixture-only terminal receipt, equivalent to the production root finalizer."""
     now = datetime.now(UTC)
@@ -79,9 +92,10 @@ def title_unavailable(stage_runtime, monkeypatch, reason="FIRST_PAGE_PRODUCT_NAM
     return store.get_run(scope=scope, run_id=run.run_id)
 
 
-def test_title_recovery_reuses_exact_sources_and_keeps_original_terminal(
-    stage_runtime, monkeypatch
+def test_legacy_title_recovery_reuses_exact_sources_and_keeps_original_terminal(
+    legacy_stage_runtime, monkeypatch
 ):
+    stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin = title_unavailable(stage_runtime, monkeypatch)
     assert origin.state.value == "needs_confirmation"
@@ -118,7 +132,10 @@ def test_title_recovery_reuses_exact_sources_and_keeps_original_terminal(
 @pytest.mark.parametrize(
     "reason", ["PRODUCT_IDENTITY_OR_VERSION_CONFLICT", "SOURCE_REVISION_CHANGED"]
 )
-def test_title_recovery_does_not_allow_real_conflicts(stage_runtime, monkeypatch, reason):
+def test_legacy_v2_reason_policy_is_preserved_for_historical_records(
+    legacy_stage_runtime, monkeypatch, reason
+):
+    stage_runtime = legacy_stage_runtime
     scope, store, _, _, _ = stage_runtime
     origin = title_unavailable(stage_runtime, monkeypatch, reason)
     assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
@@ -127,7 +144,10 @@ def test_title_recovery_does_not_allow_real_conflicts(stage_runtime, monkeypatch
 
 
 @pytest.mark.parametrize("change", ["missing", "corrupt", "binding", "attempt"])
-def test_title_recovery_source_changes_fail_closed(stage_runtime, monkeypatch, change):
+def test_legacy_title_recovery_source_changes_fail_closed(
+    legacy_stage_runtime, monkeypatch, change
+):
+    stage_runtime = legacy_stage_runtime
     from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
 
     scope, store, _, platform, execute = stage_runtime
@@ -204,7 +224,8 @@ def test_recovery_v1_wire_bytes_are_unchanged():
     )
 
 
-def test_title_recovery_rejects_existing_semantic_call(stage_runtime, monkeypatch):
+def test_legacy_title_recovery_rejects_existing_semantic_call(legacy_stage_runtime, monkeypatch):
+    stage_runtime = legacy_stage_runtime
     from insurance_harness.product_ingestion.artifact_tables import ProductStageModelCall
 
     scope, store, _, _, _ = stage_runtime
@@ -234,7 +255,10 @@ def test_title_recovery_rejects_existing_semantic_call(stage_runtime, monkeypatc
     assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
 
 
-def test_title_recovery_snapshot_mutation_after_admission_is_rejected(stage_runtime, monkeypatch):
+def test_legacy_title_recovery_snapshot_mutation_after_admission_is_rejected(
+    legacy_stage_runtime, monkeypatch
+):
+    stage_runtime = legacy_stage_runtime
     from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
 
     scope, store, _, platform, execute = stage_runtime
@@ -256,7 +280,8 @@ def test_title_recovery_snapshot_mutation_after_admission_is_rejected(stage_runt
     assert platform.calls == 3
 
 
-def test_processing_recovery_atomic_idempotent_and_real_source_worker(stage_runtime):
+def test_legacy_processing_recovery_atomic_idempotent_and_real_source_worker(legacy_stage_runtime):
+    stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin = failed_capture(stage_runtime)
     assert origin.terminal_reason == "PRODUCT_STAGE_FAILED:source"
@@ -304,7 +329,8 @@ def test_processing_recovery_atomic_idempotent_and_real_source_worker(stage_runt
         )
 
 
-def test_recovery_rechecks_completed_before_any_capture(stage_runtime):
+def test_legacy_recovery_rechecks_completed_before_any_capture(legacy_stage_runtime):
+    stage_runtime = legacy_stage_runtime
     scope, store, _, platform, execute = stage_runtime
     origin = failed_capture(stage_runtime)
     child = store.retry_processing(
@@ -348,7 +374,8 @@ def test_processing_retry_api_strict_request_and_capability(environment):
         "needs_confirmation:IDENTITY_CONFLICT",
     ],
 )
-def test_identity_and_binding_failures_still_block_source_revalidation(stage_runtime, reason):
+def test_legacy_v1_reason_policy_is_preserved_for_historical_records(legacy_stage_runtime, reason):
+    stage_runtime = legacy_stage_runtime
     scope, store, _, _, _ = stage_runtime
     origin = failed_capture(stage_runtime)
     with store._session_factory() as session, session.begin():
@@ -388,7 +415,7 @@ def test_processing_retry_scope_and_atomic_crash_replay(stage_runtime, monkeypat
     child = store.retry_processing(
         scope=scope, run_id=origin.run_id, expected_version=origin.version
     )
-    assert store.processing_recovery_plan(scope=scope, run_id=child.run_id)
+    assert store.checkpoint_plan(scope=scope, run_id=child.run_id)
     with store._session_factory() as session:
         assert (
             len(
@@ -466,14 +493,15 @@ def test_recovery_plan_and_upload_binding_fail_closed(stage_runtime):
     with store._session_factory() as session, session.begin():
         plan = session.scalar(select(ProductArtifact).where(ProductArtifact.run_id == child.run_id))
         plan.payload = b"{}"
-    with pytest.raises(ValueError, match="recovery plan"):
-        store.processing_recovery_plan(scope=scope, run_id=child.run_id)
+    with pytest.raises(ValueError, match="checkpoint"):
+        store.checkpoint_plan(scope=scope, run_id=child.run_id)
     assert platform.calls == 0
 
 
-def test_completed_sources_count_fourteen_historical_calls_not_new(
-    stage_runtime, snapshot, monkeypatch
+def test_legacy_completed_sources_count_fourteen_historical_calls_not_new(
+    legacy_stage_runtime, snapshot, monkeypatch
 ):
+    stage_runtime = legacy_stage_runtime
     from insurance_harness.product_ingestion import stages
     from tests.product_ingestion.test_processing_receipts import receipt, sealed
 
@@ -635,7 +663,6 @@ async def test_recovery_runs_normal_identity_fields_discovery_and_publication(
         engine.dispose()
 
 
-
 def failed_parse_source(stage_runtime, reason):
     """Real worker failure before source capture; no reparse or model fixture port."""
     scope, store, _, platform, execute = stage_runtime
@@ -658,7 +685,8 @@ def failed_parse_source(stage_runtime, reason):
 
 
 @pytest.mark.parametrize("reason", ["failed", "deadline"])
-def test_explicit_source_revalidation_recovers_completed_parse(stage_runtime, reason):
+def test_legacy_explicit_source_revalidation_recovers_completed_parse(legacy_stage_runtime, reason):
+    stage_runtime = legacy_stage_runtime
     from insurance_harness.jobs import SpaceScopeError
 
     scope, store, artifacts, platform, execute = stage_runtime
@@ -672,16 +700,20 @@ def test_explicit_source_revalidation_recovers_completed_parse(stage_runtime, re
     with pytest.raises(SpaceScopeError):
         store.retry_processing(
             scope=scope.model_copy(update={"tenant_id": "foreign"}),
-            run_id=origin.run_id, expected_version=origin.version,
+            run_id=origin.run_id,
+            expected_version=origin.version,
         )
     child = store.retry_processing(
         scope=scope, run_id=origin.run_id, expected_version=origin.version
     )
     assert child.run_id != origin.run_id and child.retry_of_run_id == origin.run_id
     assert child.source_deadline_at > child.started_at
-    assert child.run_id == store.retry_processing(
-        scope=scope, run_id=origin.run_id, expected_version=origin.version
-    ).run_id
+    assert (
+        child.run_id
+        == store.retry_processing(
+            scope=scope, run_id=origin.run_id, expected_version=origin.version
+        ).run_id
+    )
     assert platform.calls == 0  # Admission itself never reparses or captures.
     for _ in range(3):
         assert execute(child).state is JobState.SUCCEEDED
@@ -691,9 +723,10 @@ def test_explicit_source_revalidation_recovers_completed_parse(stage_runtime, re
 
 
 @pytest.mark.parametrize("current_state", ["failed", "processing", "binding_changed"])
-def test_explicit_source_revalidation_does_not_reparse_unready_sources(
-    stage_runtime, current_state
+def test_legacy_explicit_source_revalidation_does_not_reparse_unready_sources(
+    legacy_stage_runtime, current_state
 ):
+    stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin = failed_parse_source(stage_runtime, "failed")
     assert store.can_retry_processing(scope=scope, run_id=origin.run_id)
@@ -725,4 +758,71 @@ def test_explicit_source_revalidation_does_not_reparse_unready_sources(
     assert not artifacts.list_artifacts(
         scope=scope, run_id=child.run_id, artifact_kind="source_snapshot"
     )
+    assert store.get_run(scope=scope, run_id=origin.run_id) == origin
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", ["knowledge_binding", "parse_version"])
+async def test_checkpoint_worker_revalidates_current_source_identity_and_version(
+    stage_runtime, snapshot, catalog, monkeypatch, change
+):
+    """Reject actual platform metadata drift, independent of terminal error wording."""
+    from types import SimpleNamespace
+
+    from insurance_harness.jobs import CapacityBlockedJobError
+    from insurance_harness.product_ingestion.pipeline import IDENTITY_PROMPT, build_product_pipeline
+    from tests.test_batch_entity_resolution_830_g3 import _policy
+
+    scope, store, artifacts, platform, _ = stage_runtime
+    # The phase fixture uses synchronous worker steps, run off this async test's loop.
+    import asyncio
+
+    origin = await asyncio.to_thread(title_unavailable, stage_runtime, monkeypatch)
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    stage = store.list_stages(scope=scope, run_id=child.run_id)[0]
+    configuration = SimpleNamespace(
+        source_public_keys=snapshot[3],
+        model=SimpleNamespace(
+            templates=[
+                SimpleNamespace(
+                    role="classify",
+                    purpose="g3-batch-resolution",
+                    template_id="fixture-identity",
+                    prompt_sha256=hashlib.sha256(IDENTITY_PROMPT).hexdigest(),
+                )
+            ]
+        ),
+    )
+    context = SimpleNamespace(
+        store=store,
+        artifacts=artifacts,
+        catalog=catalog,
+        resolution_policy_json=_policy().model_dump_json().encode(),
+        bindings={
+            scope.space_id: SimpleNamespace(
+                scope=scope,
+                platform=platform,
+                configuration=configuration,
+            )
+        },
+    )
+    handler = build_product_pipeline(context).stage_handlers["checkpoint"]
+    lookup = platform.lookup_upload
+
+    async def changed(current_scope, run_id, ordinal):
+        value = await lookup(current_scope, run_id, ordinal)
+        if change == "knowledge_binding":
+            value["knowledge_id"] = "replacement-knowledge"
+        else:
+            value["parse_attempt"] += 1
+        return value
+
+    platform.lookup_upload = changed
+    with pytest.raises(CapacityBlockedJobError, match="CHECKPOINT_INVALID"):
+        await handler(scope, child, stage, SimpleNamespace())
+    assert platform.calls == 3
+    assert not artifacts.list_stage_calls(scope=scope, run_id=child.run_id)
+    assert store.checkpoint_receipt(scope=scope, run_id=child.run_id) is None
     assert store.get_run(scope=scope, run_id=origin.run_id) == origin
