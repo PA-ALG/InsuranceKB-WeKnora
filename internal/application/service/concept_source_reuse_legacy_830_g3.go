@@ -31,12 +31,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyLegacyCarryover830G2(ctx cont
 	}
 	// CandidateHash is provided only after the release service validates the
 	// persisted preparation, not from a caller's standalone hash claim.
-	identity, _ := canonicalJSON830G2(struct {
-		Scope           types.WikiReleaseScope
-		Candidate, Base string
-		Epoch           uint64
-	}{scope, bundle.CandidateHash, bundle.Request.BaseReleaseID, bundle.Request.BaseActivationEpoch})
-	key := "legacy-" + testSHA256Bytes830G2(identity)
+	key := conceptLegacyProofKey830G3(scope, bundle.CandidateHash, bundle.Request.BaseReleaseID, bundle.Request.BaseActivationEpoch)
 	result := s.sourceReuse.flight.DoChan(key, func() (any, error) {
 		path := filepath.Join(s.sourceReuse.root, key+".json")
 		data, err := s.sourceReuse.readArtifact(path, key)
@@ -44,7 +39,10 @@ func (s *ConceptSourceAuthorityService830G2) verifyLegacyCarryover830G2(ctx cont
 			if !prepare {
 				return nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
-			proofs, err := s.computeLegacyCarryover830G2(ctx, scope, bundle)
+			proofs, reused, err := s.reusePublishedLegacyBase830G3(ctx, scope, bundle)
+			if err == nil && !reused {
+				proofs, err = s.computeLegacyCarryover830G2(ctx, scope, bundle)
+			}
 			if err != nil {
 				return nil, err
 			}

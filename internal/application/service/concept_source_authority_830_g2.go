@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -180,6 +179,8 @@ type ConceptSourceAuthorityService830G2 struct {
 	legacyCitationContent  SchemaWikiCitationContentPort
 	formalCandidatePreview SchemaWikiFormalCandidatePreviewReader
 	sourceReuse            *conceptSourceReuseStore830G3
+	// The existing release owner supplies only a verified published projection.
+	publishedLegacyBase func(context.Context, types.WikiReleaseScope, string, uint64) (types.BatchConceptCandidateBundle830G3, bool, error)
 	// legacyProofResolver is a test-only seam used to exercise the publication
 	// gate with a verified legacy occurrence without rebuilding a complete G1
 	// custody chain. Production construction always leaves it nil.
@@ -1256,7 +1257,7 @@ func conceptLegacyCarryoverTargetField830G2(
 	for _, candidate := range output {
 		withoutNavigation := candidate
 		withoutNavigation.ConceptIDs = existingCandidate.ConceptIDs
-		if !reflect.DeepEqual(withoutNavigation, existingCandidate) || !containsAllConceptIDs830G2(candidate.ConceptIDs, existingCandidate.ConceptIDs) {
+		if !conceptLegacyFieldFactsEqual830G3(withoutNavigation, existingCandidate) || !containsAllConceptIDs830G2(candidate.ConceptIDs, existingCandidate.ConceptIDs) {
 			continue
 		}
 		return candidate, true
@@ -1271,11 +1272,18 @@ func conceptFieldMatchingExceptNavigation830G2(
 	for _, candidate := range candidates {
 		withoutNavigation := candidate
 		withoutNavigation.ConceptIDs = reference.ConceptIDs
-		if reflect.DeepEqual(withoutNavigation, reference) {
+		if conceptLegacyFieldFactsEqual830G3(withoutNavigation, reference) {
 			return candidate, true
 		}
 	}
 	return types.ConceptFieldAssertion830G2{}, false
+}
+
+func conceptLegacyFieldFactsEqual830G3(a, b types.ConceptFieldAssertion830G2) bool {
+	return batchPublishedCompileMembersEqual830G3(
+		types.ConceptCompileOutput830G2{Fields: []types.ConceptFieldAssertion830G2{a}},
+		types.ConceptCompileOutput830G2{Fields: []types.ConceptFieldAssertion830G2{b}},
+	)
 }
 
 func containsAllConceptIDs830G2(candidate, required []string) bool {

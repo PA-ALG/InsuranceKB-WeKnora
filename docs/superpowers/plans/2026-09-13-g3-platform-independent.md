@@ -1,5 +1,23 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3aw：直接复用最近已验证 G3 的历史证据基线
+
+用户明确要求参考 WeKnora 原生 Wiki 的增量处理，并指出最近 G3 已统一入库，常规新任务无需重跑 G2/G1/815。沿用已授权 G3-AUTO-3/4/5/6，不删除历史资料或当前字段，不新建环境、发布权威或缓存协议。root 唯一仓库写者；既有 g3_admission_finish 只读复核本计划及冻结实现。
+
+Task3av 网页恢复155a5f45-ca70-59fc-ae24-d426e5edb07a在09:31:24.656Z点击、09:51:13.315343Z失败，总1188.659343s；checkpoint229.020407s，三次草稿请求各约300s，0新/10复用模型，21成功/31未提供/30失败。300秒配置验证已结束，不再增加等待或继续原样恢复。原生wiki_ingest_batch.go已有按需页读取/运行内缓存、受影响页发布、独立失败待办；其直接状态翻转不能替代既有唯一Release合同。
+
+已核实最近父发布链含4层G3全候选，每层约7.4–7.8MB，随后G2/G1/815。同一真实父候选本地单核只读验证23.032305792s、完整验证计数1、516成员，输入原样保留；这是诊断，不冒充RED或Colima耗时。当前父的原sealed legacy proof文件40868B存在；失败child proof不存在，尚未证明父proof已验签。source authority新候选miss直接回溯全链，而普通已发布读取已使用signed published projection。原生first-parse重复读取是另一未测成本，本次不一并修改。
+
+架构：发布权威通过一个窄的内部读取接口提供精确scope/release/epoch下的已签名G3 projection及成员校验结果；复用g3_published_read_reuse原实现，不复制缓存协议。SourceAuthority读取父候选自己的candidate/base/epoch对应原sealed legacy proof，按父field ID和evidence hash逐项核对，只有事实/引用/页码/来源未变且满足既有导航扩展规则的field occurrence可映射到child。仅可选集合nil/empty使用已有语义等价比较。仍逐唯一receipt检查当前知识删除、revision/binding、pinned/active来源及必要旧摘要映射。已有child proof命中行为不变；父projection/proof缺失才走原明确准备路径，存在但损坏/错签名/错scope必须失败，不静默覆盖。新定义/页面/身份引用和变化字段继续原native校验。
+
+写域：internal/application/service/{concept_source_authority_830_g2.go,concept_source_reuse_legacy_830_g3.go,g3_published_read_reuse.go,wiki_release.go}，可新增同目录g3_published_legacy_baseline.go及窄测试文件，复用现有fixture及原规格/证据。无Harness/UI/DB/model变化；仅受影响APP构建部署，旧服务和数据库复用。
+
+- [ ] RED：最近父已封存proof时，新child不调用旧链；冷重开相同；父/child/proof不变。
+- [ ] RED/回归：导航扩展及冷projection空集合等价可复用；事实、条件、例外、引文、页码/offset、source/parser变化不能继承；错误成员关联/签名/scope/hash拒绝。
+- [ ] 验证发布权威实际读取接线；父缓存缺失与损坏分开；来源撤销在复用后仍阻止发布。
+- [ ] 最小实现、bounded GREEN、独立冻结复核，部署同一APP；保存原失败回执。
+- [ ] 网页恢复最新失败任务，不重抽普通字段；增量发布/检索/证据通过后，继续已批准新产品三原件网页验收。G3仍未完成。
+
 ## 2026-09-15 Task3av：既有平台响应等待上限的有界调整
 
 Task3au APP138028353已部署，网页run6b468cec-402c-5668-a5c9-c70d399483b1在09:02:48.863Z点击、09:13:41.657508Z失败。检查点209.792576s单代成功，candidate-v2直接复用，未重编译；0新/10复用调用，字段21/31/30不变。preparation3次传输失败。首个APP请求120.330171349s后统一返回CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE，与客户端120s读响应等待先超时相容；目前没有phase trace证明具体停在来源链哪层，也不能排除内在来源问题。

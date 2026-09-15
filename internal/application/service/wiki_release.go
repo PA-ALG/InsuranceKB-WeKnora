@@ -634,6 +634,7 @@ func NewWikiReleaseService(
 	}
 	if authority, ok := options.ConceptSourceAuthorityVerifier830G2.(*ConceptSourceAuthorityService830G2); ok && authority != nil {
 		service.publishedReadReuse = newPublishedBatchReadReuse830G3(authority.codec)
+		authority.publishedLegacyBase = service.loadPublishedLegacyBase830G3
 	}
 	return service
 }
