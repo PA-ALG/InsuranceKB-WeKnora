@@ -1,6 +1,6 @@
 # Task3ay: Ready activation reuse
 
-Status: targeted code validation and independent review passed; deployment and G3 acceptance remain pending.
+Status: targeted code validation, independent review, build, smoke and existing APP deployment passed; actual publication and G3 acceptance remain pending.
 
 Task3ax deployed d9d30adac65339187d45d22f3d445d8596c837d8. Actual webpage recovery 1cb14bbf-e098-52db-9c00-c24afb56292d ran 2026-09-15 13:18:52.257Z to 13:51:52.456396Z (1980.199396 seconds), then failed after three publish transport timeouts. Parsing, identity, extraction were reused; synthesis, compilation, preparation and automatic review succeeded. There were 21 verified, 31 not-provided and 30 failed fields, zero new and ten reused model calls. Two cross-page fields retained their original values and raw responses while gaining accurate per-page evidence fragments. No successful activation or verification was observed. Read-only preflight after the run found epoch 9 and zero nonterminal worker jobs.
 
@@ -23,3 +23,7 @@ Frozen independent review 01 found the omitted-member blocker. Frozen review 02 
 The existing published 投保年龄 page was also inspected through the browser. It shows 待补充 / live_chunk_quote_not_unique and omits the verified citation button. This is a concrete distinction from deleted original material: the page lacks a validated locator. The design still allows multiple immutable Evidence records per field. G3 acceptance must separately demonstrate verified original-page access and a clear route to retained failed/raw extraction records; this observation is not evidence of a completed fix for that presentation gap.
 
 After tests and independent review pass: build and deploy only the existing APP, keep Task3ax Harness/config/services/databases, recover the failed task through the webpage, then verify actual publication, retrieval and evidence. Fresh product three-file webpage acceptance remains required afterward. Do not count local diagnostic/test scripts as platform processing.
+
+Deployment: source ede52c6e9d4ba7e27bde5f98c04198d72498f610, image sha256:fad365cb7af16c43e67093d4f8436e57ae53e6c35fae4161e661971612ba6c5a. Build receipt and smoke passed; existing APP replacement completed 2026-09-15T14:55:54.032993Z, new container76ab9c33e67b17f585b5b83ba9162f3a53ea9116fb3d42bdc52c9bad8a32f32e, rollback weknora-g3-830-app-before-task3ay. Configuration changes0, active jobs0 before deployment. Harness remains d9d30adac. Deployment is not business acceptance.
+
+Actual webpage recovery 15d287e4-d317-587e-87d7-22081517c590 started 2026-09-15T15:08:27.123Z, finished15:12:20.150596Z (233.027596s) needs_confirmation/CHECKPOINT_INVALID before publish. Task3ay activation behavior therefore NOT RUN on this recovery. No new model calls, model reuse counts not yet accepted by checkpoint. D/task3ay-web-recovery.json now FAILED_ACCEPTANCE. Readonly diagnosis conclusively found checkpoint delta comparison ignores the saved effective field_validation view; Task3ba narrows that consumer repair. Original82 fields and9 raw responses remain unchanged.

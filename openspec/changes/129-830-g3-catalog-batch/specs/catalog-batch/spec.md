@@ -114,3 +114,10 @@ An incremental candidate shall reuse the latest exact published G3 projection an
 缺失或损坏不能作为跳过校验的理由。现有签名、来源撤销、当前双KB权限、策略有效期、
 expected Head和CAS/幂等回执保持有效。验收区分重复校验计数器测试与真实部署网页恢复；
 失败任务不得以代码通过或临时发布脚本冒充完成。
+
+### Task3az — 已发布阅读结果复用（G3-AUTO-3/5/6）
+同一页面会话、同一确切发布版本内切换字段，平台 MUST 复用已验证目录和 Schema，仍通过当前权限检查读取目标字段；不得每次重新下载整批目录。切换版本、读取失败或页面销毁 MUST 清理对应复用状态，异步旧响应不得覆盖新页面。
+原文阅读 MAY 在当前页面内保留单个有界、已校验摘要和页数的 PDF 文档，但每条引用 MUST 重新核对当前引用权威和来源；仅当完整scope、发布、候选、来源版本、文件摘要及绑定一致时复用。错误、过大文件、替换及卸载 MUST 正确释放资源，未经验证的字节不得进入可复用状态。此能力不引入模型调用、重新解析、发布或新环境。首次读取和重复读取分别实测；前端缓存不能替代对后端冷读异常的定位。
+
+### G3-AUTO-3 Task3ba checkpoint effective validation view
+Checkpoint delta comparison MUST use the authenticated persisted field_validation effective view when synthesis is reused, including nonempty validation changes. Report input identities and original row digests MUST be validated by the existing apply_field_validation function. Checkpoint receipts MUST retain original immutable field digests. Invalid reports MUST fail closed; recovery MUST NOT reextract or rewrite completed data. Regression uses a completed real fixture pipeline and a nonempty ordinary-field validation failure, then resumes unchanged candidate with zero new model calls.

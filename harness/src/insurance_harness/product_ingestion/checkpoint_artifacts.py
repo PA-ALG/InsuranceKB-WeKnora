@@ -170,7 +170,12 @@ class CheckpointArtifacts:
                 ):
                     raise ValueError("checkpoint artifact producer fence changed")
                 # Do not retain large native/source bytes after validation.
-                if ref.artifact_kind in {"field_plan", "compile_delta", "compile_request"}:
+                if ref.artifact_kind in {
+                    "field_plan",
+                    "field_validation",
+                    "compile_delta",
+                    "compile_request",
+                }:
                     by_kind[ref.artifact_kind] = json.loads(row.payload)
                 session.expunge(row)
             usage = {}
@@ -272,9 +277,22 @@ class CheckpointArtifacts:
                 request = BatchConceptCompileRequest830G3V1.model_validate(
                     by_kind["compile_request"]
                 )
+                from insurance_harness.product_ingestion.field_validation import (
+                    FieldValidationReport,
+                    apply_field_validation,
+                )
+
+                if "field_validation" not in by_kind:
+                    raise ValueError("checkpoint field validation is missing")
+                # The authenticated report derives the compile view; the receipt
+                # above continues to bind the immutable original field rows.
+                effective = apply_field_validation(
+                    tuple(field_snapshots),
+                    FieldValidationReport.model_validate(by_kind["field_validation"]),
+                )
                 delta_ref = next(r for r in plan.artifacts if r.artifact_kind == "compile_delta")
                 projection = project_field_attempts(
-                    request=request, attempts=tuple(field_snapshots), run_id=delta_ref.run_id
+                    request=request, attempts=effective, run_id=delta_ref.run_id
                 )
                 actual = {
                     (f["entity_id"], f["field_key"]): f

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { readConceptPage830G2, conceptCitationTransport830G2,
   type ConceptSession830G2, type ConceptMember830G2 } from '@/api/schema-wiki/conceptFreeWiki830G2'
@@ -9,9 +9,11 @@ import {
   readBatchConceptPage830G3,
   type BatchConceptMember830G3,
   type BatchConceptPage830G3,
+  type BatchConceptActive830G3,
 } from '@/api/schema-wiki/batchConcept830G3'
 import { buildSchemaCitationPreviewRequest } from '@/api/schema-wiki'
 import ConceptCitationViewer830G2 from '@/components/schema-wiki/ConceptCitationViewer830G2.vue'
+import { createVerifiedPdfReuse } from '@/components/schema-wiki/verifiedPdfReuse'
 import { createPdfJsPort } from '@/components/schema-wiki/pdfJsPort'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
 import { get } from '@/utils/request'
@@ -24,7 +26,12 @@ const loading = ref(true)
 const error = ref('')
 const selected = ref<string | null>(null)
 const pdfPort = createPdfJsPort()
+const pdfReuse = createVerifiedPdfReuse(pdfPort)
+let pdfReadIdentity = ''
 let generation = 0
+// This mounted reader owns one immutable directory; every field still makes
+// a fresh scoped request before any content is displayed.
+let activeDirectory: BatchConceptActive830G3 | null = null
 const batchSession = computed<ConceptSession830G2 | null>(() => {
   const source = batchPage.value?.session
   if (!source) return null
@@ -110,34 +117,49 @@ async function load() {
     if (keys.some(key => !['release_id', 'preparation_id', 'section'].includes(key))
       || (release !== undefined && preparation !== undefined)) throw new Error('INVALID_READ_MODE')
     const kbID = routeIdentity(route.params.kbId); const memberID = routeIdentity(route.params.memberId)
+    const identity = JSON.stringify([kbID, release ?? null, preparation ?? null])
+    if (identity !== pdfReadIdentity) { pdfReuse.clear(); pdfReadIdentity = identity }
     const transport = createSchemaWikiReadTransport(get)
     if (preparation !== undefined) {
+      activeDirectory = null
       const directory = await loadBatchConceptPreparation830G3(kbID, routeIdentity(preparation), transport)
       const loaded = await readBatchConceptPage830G3(directory, memberID, transport)
       validateSection(loaded)
       if (current === generation) batchPage.value = loaded
     } else if (release !== undefined) {
       const releaseID = routeIdentity(release)
-      const loaded = await readPinnedBatchConceptPage830G3(kbID, memberID, releaseID, transport)
+      if (activeDirectory?.releaseID !== releaseID || activeDirectory.scope.wiki_kb_id !== kbID) activeDirectory = null
+      const loaded = activeDirectory
+        ? await readBatchConceptPage830G3(activeDirectory, memberID, transport)
+        : await readPinnedBatchConceptPage830G3(kbID, memberID, releaseID, transport)
       if (loaded) {
         validateSection(loaded)
-        if (current === generation) batchPage.value = loaded
+        if (current === generation) {
+          batchPage.value = loaded
+          activeDirectory = loaded.directory.mode === 'g3-active' ? loaded.directory : null
+        }
       } else {
         if (route.query.section !== undefined) throw new Error('INVALID_SECTION')
         const loaded = await readConceptPage830G2(kbID, memberID, releaseID, transport)
         if (current === generation) session.value = loaded
       }
     } else {
+      activeDirectory = null
       if (route.query.section !== undefined) throw new Error('INVALID_SECTION')
       const loaded = await readConceptPage830G2(kbID, memberID, undefined, transport)
       if (current === generation) session.value = loaded
     }
   } catch {
-    if (current === generation) error.value = '页面读取失败，请确认页面已发布且你有访问权限。'
+    if (current === generation) {
+      activeDirectory = null
+      pdfReuse.clear()
+      error.value = '页面读取失败，请确认页面已发布且你有访问权限。'
+    }
   } finally {
     if (current === generation) loading.value = false
   }
 }
+onBeforeUnmount(() => { generation++; activeDirectory = null; pdfReuse.clear() })
 watch(() => [route.params.kbId, route.params.memberId, route.query], load, { immediate: true, deep: true })
 </script>
 
@@ -229,7 +251,7 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
         :min-width="560" :max-width="1000" storage-key="setting-drawer:width:concept-source-830-g2"
         hide-footer @update:visible="visible => { if (!visible) selected = null }">
         <ConceptCitationViewer830G2 v-if="viewerSession" :key="selected!" :session="viewerSession" :citation-id="selected!"
-          :preview-transport="previewTransport" :pdf-port="pdfPort" />
+          :preview-transport="previewTransport" :pdf-port="pdfPort" :pdf-reuse="pdfReuse" />
       </SettingDrawer>
       </div>
       </div>

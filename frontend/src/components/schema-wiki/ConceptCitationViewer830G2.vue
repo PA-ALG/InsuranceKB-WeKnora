@@ -3,16 +3,24 @@ import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import type { ConceptSession830G2 } from '@/api/schema-wiki/conceptFreeWiki830G2'
 import type { SchemaWikiCitationPreviewTransport } from '@/api/schema-wiki'
 import type { PdfPort, RenderedPdfPage } from './pdfJsPort'
-import { conceptSHA256830G2, parseConceptCitationAuthority830G2 } from './conceptCitationAuthority830G2'
+import { parseConceptCitationAuthority830G2 } from './conceptCitationAuthority830G2'
+
+import { createVerifiedPdfReuse, type VerifiedPdfReuse, type VerifiedPdfLease } from './verifiedPdfReuse'
 
 const props = defineProps<{ session: ConceptSession830G2; citationId: string;
-  previewTransport: SchemaWikiCitationPreviewTransport; pdfPort: PdfPort }>()
+  previewTransport: SchemaWikiCitationPreviewTransport; pdfPort: PdfPort; pdfReuse?: VerifiedPdfReuse }>()
 const error = ref('')
 const rendered = shallowRef<RenderedPdfPage | null>(null)
 const host = ref<HTMLElement | null>(null)
 const highlight = ref<Record<string, string>>({})
+const reuse = props.pdfReuse ?? createVerifiedPdfReuse(props.pdfPort, 0)
+let lease: VerifiedPdfLease | null = null
 let alive = true
-onBeforeUnmount(() => { alive = false })
+onBeforeUnmount(() => {
+  alive = false
+  lease?.release(); lease = null
+  if (!props.pdfReuse) reuse.clear()
+})
 onMounted(async () => {
   try {
     const { session, citationId } = props
@@ -21,14 +29,12 @@ onMounted(async () => {
       field_id: session.read.member.member_id, citation_id: citationId,
     }), session, citationId)
     if (!alive) return
-    const bytes = await props.previewTransport.getBytesByToken(authority.opaque_token)
-    if (!(bytes instanceof Uint8Array) || bytes.length === 0
-      || await conceptSHA256830G2(bytes) !== authority.revision_source.file_sha256) {
-      throw new Error('PREVIEW_BYTES_HASH_MISMATCH')
-    }
-    if (!alive) return
-    const opened = await props.pdfPort.open(bytes.slice())
-    if (opened.pageCount !== authority.revision_source.page_count) throw new Error('PAGE_UNAVAILABLE')
+    const sourceKey = JSON.stringify([session.scope, session.read.release_id,
+      session.read.activation_epoch, session.read.candidate_hash, authority.source, authority.revision_source])
+    lease = await reuse.acquire(sourceKey, authority.revision_source.file_sha256,
+      authority.revision_source.page_count, () => props.previewTransport.getBytesByToken(authority.opaque_token))
+    if (!alive) { lease.release(); lease = null; return }
+    const opened = lease.document
     const physicalPage = authority.source_locator?.actual_page_number ?? authority.page_number
     const page = await opened.renderPage(physicalPage)
     if (page.pageNumber !== physicalPage || ![page.width, page.height].every(n => Number.isFinite(n) && n > 0)) {
@@ -42,7 +48,9 @@ onMounted(async () => {
     await nextTick()
     if (alive) host.value?.replaceChildren(page.canvas)
   } catch (e) {
+    lease?.release(); lease = null
     if (!alive) return
+    reuse.clear()
     rendered.value = null
     error.value = e instanceof Error && ['G2_CITATION_AUTHORITY_INVALID', 'PREVIEW_BYTES_HASH_MISMATCH', 'PAGE_UNAVAILABLE'].includes(e.message)
       ? e.message : 'PDF_PREVIEW_UNAVAILABLE'

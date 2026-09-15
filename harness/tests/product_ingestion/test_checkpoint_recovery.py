@@ -27,11 +27,42 @@ from tests.product_ingestion.test_pipeline_runtime import (
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("response_lost", [False, True])
+@pytest.mark.parametrize("derived_failure", [False, True])
 async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_source_resend(
     tmp_path,
     monkeypatch,
     response_lost,
+    derived_failure,
 ):
+    if derived_failure:
+        from insurance_harness.product_ingestion import field_validation
+        from insurance_harness.product_ingestion.checkpoints import field_digest
+
+        validate = field_validation.validate_field_attempts
+
+        def nonempty_validation(**kwargs):
+            report = validate(**kwargs)
+            row = next(r for r in kwargs["attempts"] if r.outcome is FieldOutcomeKind.NOT_PROVIDED)
+            counts = dict(report.counts)
+            counts["not_provided"] -= 1
+            counts["extraction_failed"] += 1
+            return report.model_copy(
+                update={
+                    "counts": counts,
+                    "changes": {
+                        **report.changes,
+                        row.attempt_id: field_validation.FieldValidationChange(
+                            original_digest=field_digest(row),
+                            raw_ref=row.raw_ref,
+                            outcome=FieldOutcomeKind.EXTRACTION_FAILED,
+                            reason="EVIDENCE_CHARACTER_LOCATION_MISSING",
+                            validated_result=None,
+                        ),
+                    },
+                }
+            )
+
+        monkeypatch.setattr(field_validation, "validate_field_attempts", nonempty_validation)
     base, parent = _base_snapshot_with_navigation()
     settings = _settings(tmp_path, parent)
     engine = _sqlite_engine(tmp_path / "checkpoint.db")
@@ -188,6 +219,13 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             )
         } == old_raw
         receipt = context.store.checkpoint_receipt(scope=SCOPE, run_id=child.run_id)
+        if derived_failure:
+            report = json.loads(old_bytes["field_validation", "product"])
+            assert report["changes"], "regression must exercise a genuinely changed effective view"
+            assert receipt.field_sha256 == report["input_digests"]
+            assert any(
+                receipt.field_sha256[r.attempt_id] != field_digest(r) for r in before_attempts
+            )
         assert [row.stage_key for row in receipt.reused_stages] == [
             "uploads",
             "source",

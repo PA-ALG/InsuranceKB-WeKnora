@@ -15,6 +15,7 @@ export interface RenderedPdfPage {
 export interface OpenedPdfDocument {
   readonly pageCount: number
   renderPage(pageNumber: number): Promise<RenderedPdfPage>
+  close?(): Promise<void> | void
 }
 
 export interface PdfPort {
@@ -24,6 +25,7 @@ export interface PdfPort {
 export interface PdfJsApi {
   getDocument(options: { data: Uint8Array }): {
     promise: Promise<Pick<PDFDocumentProxy, 'numPages' | 'getPage'>>
+    destroy?(): Promise<void> | void
   }
 }
 
@@ -46,12 +48,19 @@ export function createPdfJsPort(api: PdfJsApi = defaultPdfJsApi): PdfPort {
       if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
         throw new Error('PDF_PREVIEW_UNAVAILABLE')
       }
-      const documentPort = await api.getDocument({ data: bytes.slice() }).promise
+      const loadingTask = api.getDocument({ data: bytes.slice() })
+      let documentPort: Pick<PDFDocumentProxy, 'numPages' | 'getPage'>
+      try { documentPort = await loadingTask.promise } catch (error) {
+        await loadingTask.destroy?.()
+        throw error
+      }
       if (!Number.isInteger(documentPort.numPages) || documentPort.numPages < 1) {
+        await loadingTask.destroy?.()
         throw new Error('PDF_PREVIEW_UNAVAILABLE')
       }
       return Object.freeze({
         pageCount: documentPort.numPages,
+        close: () => loadingTask.destroy?.(),
         async renderPage(pageNumber: number): Promise<RenderedPdfPage> {
           if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > documentPort.numPages) {
             throw new Error('PAGE_UNAVAILABLE')

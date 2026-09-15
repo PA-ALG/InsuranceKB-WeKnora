@@ -1,0 +1,9 @@
+# Task3ba checkpoint effective view — deployment pending
+
+Task3ay webpage recovery failed CHECKPOINT_INVALID before publish. Readonly original20artifacts/82fields check proves two effective citation arrays differ from original arrays, but equal compile_delta exactly. The verifier must apply the authenticated field_validation view, while keeping original row digests in receipts. No candidate/report/row/raw rewrite or model calls.
+
+Implementation retains the already scope/hash/producer/generation-checked field_validation artifact JSON in verify_checkpoint, validates FieldValidationReport, applies existing input-digest and coverage/count checks, then projects the effective rows. Missing report fails explicitly. Receipt field_sha256 continues to use originals. Legacy contracts lacking required artifacts resume synthesis via existing contract handling.
+
+RED task3ba-checkpoint-red.log: 2 failures CHECKPOINT_INVALID with nonempty derived validation changes, 1PASS, 1deselected,252s. GREEN task3ba-checkpoint-green.log:29PASS440.37s including four completed-pipeline recovery variants, no candidate reassembly or new model calls, original receipt digest matches report input digests and differs from derived rows. Field validation mutation/store/checkpoint contract suites pass. Frozen4files a0b6629fbf6f574533f4bba002843044ecdf41e4c0200ed191e2e618a39da28e; independent review0BLOCKER task3ba-independent-review-01.md. Software PASS; runtime build/deploy and real webpage recovery NOT RUN at this snapshot. G3 remains incomplete.
+
+Final Ruff formatting only: both Python ASTs equal frozen01, check PASS; source SHA ec34620999a2240826bda0692f4c39c4ae5172ca78bffa8aa29580c9c15fd0f8, test SHA c5f88e40ede19d22f89bfbcddd870c002ba64e2b17606ac0120461bf76e85b90. Independent format addendum0BLOCKER, no behavioral changes or redundant full test rerun.

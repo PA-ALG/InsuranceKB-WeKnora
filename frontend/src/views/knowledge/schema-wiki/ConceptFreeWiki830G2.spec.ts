@@ -192,3 +192,53 @@ describe('G3 batch concept page modes', () => {
     expect(mocks.read).not.toHaveBeenCalled()
   })
 })
+
+describe('G3 exact release directory reuse while switching fields', () => {
+  function page(memberID = 'field-one', releaseID = 'release-cache') {
+    const source = response()
+    const member = { ...source.read.member, member_id: memberID, content: memberID }
+    const directory = { mode: 'g3-active', releaseID, activationEpoch: 4,
+      scope: { wiki_kb_id: 'wiki-a' }, members: [member], entities: [] }
+    return { readMode: 'active', directory, member, relatedMembers: [], citations: [],
+      session: { ...source, read: { ...source.read, release_id: releaseID, member, related_members: [], citations: [] } } }
+  }
+  beforeEach(() => {
+    route.params = { kbId: 'wiki-a', memberId: 'field-one' }
+    route.query = { release_id: 'release-cache' }
+  })
+  afterEach(() => { route.params = { kbId: 'wiki-a', memberId: 'concept-a' } })
+  it('fetches only the next member after a successful exact-release directory load', async () => {
+    const first = page(); mocks.readPinned.mockResolvedValue(first)
+    mocks.readBatch.mockResolvedValue({ ...page('field-two'), directory: first.directory })
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+    route.params.memberId = 'field-two'; await flushPromises()
+    expect(mocks.readPinned).toHaveBeenCalledTimes(1)
+    expect(mocks.readBatch).toHaveBeenCalledWith(first.directory, 'field-two', expect.anything())
+    expect(wrapper.text()).toContain('field-two')
+  })
+  it('discards the directory when a member read fails or the release changes', async () => {
+    mocks.readPinned.mockResolvedValue(page())
+    mocks.readBatch.mockRejectedValue(new Error('access revoked'))
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+    route.params.memberId = 'field-two'; await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    route.params.memberId = 'field-three'; await flushPromises()
+    expect(mocks.readPinned).toHaveBeenCalledTimes(2)
+    mocks.readPinned.mockResolvedValue(page('field-three', 'release-next'))
+    route.query = { release_id: 'release-next' }; await flushPromises()
+    expect(mocks.readPinned).toHaveBeenCalledTimes(3)
+  })
+  it('does not let an old release response replace the newer directory', async () => {
+    let finishOld!: (value: unknown) => void
+    mocks.readPinned.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve }))
+    const next = page('field-one', 'release-next')
+    mocks.readPinned.mockResolvedValueOnce(next)
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+    route.query = { release_id: 'release-next' }; await flushPromises()
+    finishOld(page()); await flushPromises()
+    mocks.readBatch.mockResolvedValue({ ...page('field-two', 'release-next'), directory: next.directory })
+    route.params.memberId = 'field-two'; await flushPromises()
+    expect(mocks.readBatch).toHaveBeenCalledWith(next.directory, 'field-two', expect.anything())
+    expect(wrapper.text()).toContain('field-two')
+  })
+})

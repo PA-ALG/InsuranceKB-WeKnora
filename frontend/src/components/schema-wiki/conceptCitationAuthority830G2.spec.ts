@@ -161,3 +161,43 @@ describe('G2 source authority and exact PDF viewer', () => {
     expect(wrapper.text()).toContain('第 22 页')
   })
 })
+
+describe('citation viewer reuses only documents behind fresh authority', () => {
+  it('checks authority twice but downloads and opens the same source once', async () => {
+    const { createVerifiedPdfReuse } = await import('./verifiedPdfReuse')
+    const close = vi.fn()
+    const renderPage = vi.fn().mockImplementation(async () => ({ pageNumber: 1, width: 600, height: 800,
+      canvas: document.createElement('canvas') }))
+    const open = vi.fn().mockResolvedValue({ pageCount: 39, renderPage, close })
+    const pdfPort = { open }; const pdfReuse = createVerifiedPdfReuse(pdfPort)
+    const getAuthority = vi.fn().mockImplementation(async () => authority())
+    const getBytesByToken = vi.fn().mockResolvedValue(bytes)
+    const props = { session, citationId: citation, pdfPort, pdfReuse, previewTransport: { getAuthority, getBytesByToken } }
+    const first = mount(ConceptCitationViewer, { props })
+    await vi.waitFor(() => expect(first.find('[data-testid="citation-page"]').exists()).toBe(true))
+    first.unmount()
+    const second = mount(ConceptCitationViewer, { props })
+    await vi.waitFor(() => expect(second.find('[data-testid="citation-page"]').exists()).toBe(true))
+    expect(getAuthority).toHaveBeenCalledTimes(2)
+    expect(getBytesByToken).toHaveBeenCalledTimes(1); expect(open).toHaveBeenCalledTimes(1)
+    expect(renderPage).toHaveBeenCalledTimes(2)
+    second.unmount(); pdfReuse.clear(); expect(close).toHaveBeenCalledTimes(1)
+  })
+  it('does not display a cached PDF when a fresh authority request fails', async () => {
+    const { createVerifiedPdfReuse } = await import('./verifiedPdfReuse')
+    const close = vi.fn()
+    const open = vi.fn().mockResolvedValue({ pageCount: 39, close,
+      renderPage: vi.fn().mockResolvedValue({ pageNumber: 1, width: 600, height: 800, canvas: document.createElement('canvas') }) })
+    const pdfPort = { open }; const pdfReuse = createVerifiedPdfReuse(pdfPort)
+    const getAuthority = vi.fn().mockResolvedValueOnce(authority()).mockRejectedValueOnce(new Error('source revoked'))
+    const props = { session, citationId: citation, pdfPort, pdfReuse,
+      previewTransport: { getAuthority, getBytesByToken: vi.fn().mockResolvedValue(bytes) } }
+    const first = mount(ConceptCitationViewer, { props })
+    await vi.waitFor(() => expect(first.find('[data-testid="citation-page"]').exists()).toBe(true)); first.unmount()
+    const second = mount(ConceptCitationViewer, { props })
+    await vi.waitFor(() => expect(second.find('[data-testid="citation-error"]').exists()).toBe(true))
+    expect(second.find('[data-testid="citation-page"]').exists()).toBe(false)
+    expect(close).toHaveBeenCalledTimes(1); expect(open).toHaveBeenCalledTimes(1)
+    second.unmount(); pdfReuse.clear()
+  })
+})

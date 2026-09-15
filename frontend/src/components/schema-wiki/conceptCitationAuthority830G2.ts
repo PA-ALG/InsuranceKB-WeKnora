@@ -29,7 +29,8 @@ export interface ConceptCitationAuthority830G2 {
   readonly opaque_token: string
   readonly page_number: number
   readonly block_id: string
-  readonly revision_source: { readonly file_sha256: string; readonly page_count: number }
+  readonly source: Readonly<Record<string, string | number>>
+  readonly revision_source: { readonly binding_digest: string; readonly file_sha256: string; readonly page_count: number }
   readonly bbox: { readonly x0: number; readonly y0: number; readonly x1: number; readonly y1: number }
   readonly source_locator?: {
     readonly contract: 'concept-source-block-locator.830.g3.v1'

@@ -1,4 +1,23 @@
+## 2026-09-15 Task3ba：检查点消费同一有效字段视图
+
+Task3ay已部署APP，但网页恢复15d287e4-d317-587e-87d7-22081517c590在checkpoint终态needs_confirmation/CHECKPOINT_INVALID，未进入publish。只读核对20份引用制品及生产任务身份/hash均匹配，field_validation精确绑定82原行，仅两字段证据3→4、2→3；compile_delta等于派生视图而不等于原行。checkpoint_artifacts.verify_checkpoint目前直接重投影原行，因而误拒。诊断D/task3ay-checkpoint-diagnosis.md。
+
+沿用G3-AUTO-3/4/6，root唯一写者，g3_admission_finish独立只读复核。写域只增加checkpoint_artifacts.py及test_checkpoint_recovery.py、原规格/计划/证据。复用既有FieldValidationReport/apply_field_validation，对已通过scope/producer/generation/hash的by_kind报告验输入绑定并派生有效视图，再比较compile_delta；receipt.field_sha256仍绑定原行，不改存储、候选、报告、模型或来源。缺失/篡改不能回退原值。RED为实际fixture流程生成非空派生报告后恢复，要求同一候选重用、零新增模型，receipt原行摘要不变。增加报告输入摘要损坏拒绝测试，GREEN和冻结复核后仅部署同Harness，与Task3az UI部署复用既有服务，APP不重建。真实网页恢复独立记录；未发布不可宣称完成。
+
 # G3 Platform Independent Processing Implementation Plan
+
+# Task3az: bounded reader reuse within the existing G3 page
+
+User reports field and PDF clicks unreasonably slow. The G3 publication repair Task3ay remains independently queued for deployment; do not delay or interfere with its business recovery. No new environment/database/model or permission policy.
+
+Evidence before implementation: frontend readPinnedBatchConceptPage830G3 always serially reads scope, entire release search, member page and catalog. Parent load clears displayed state and recreates per-load transport; transport deduplicates only within a single load. Recent measured four requests ~4.47s; earlier cold release search70.61s + member80.16s. PDF viewer always fetches fresh authority, whole bytes, hashes bytes, opens a new PDF document, renders one page. Recent preview3.736s + file2.851s. These are server latency samples, excluding frontend parsing/rendering, not total measured UI latency or proof of the entire cold cost.
+
+Scope: root writes UI and narrow tests in existing reader modules. Reuse an already validated exact-release directory in the mounted ConceptFreeWiki830G2 page; repeated field reads use readBatchConceptPage830G3, whose current backend request checks ACL/scope/source and whose parser binds response to release/epoch/candidate/exact member. Cache one directory only, clear on scope/release change or error/unmount. No global/localStorage/cache across authentication sessions. Current selected content remains cleared while a fresh member read is pending. Keep generation fencing so stale completions cannot repopulate a later page. Distinct new-release and preparation paths retain existing reads.
+
+PDF reuse: keep one bounded validated source document per parent reader. Every citation still fetches and verifies fresh authority; reuse bytes/opened document only after current scope/release/candidate/source-file/binding/page-count match. Keys exclude short-lived tokens but include full immutable source identity. On first miss, fetch bytes by current token, check exact SHA256/pagecount and open once; later citations reuse opened document and render the actual referenced page. Bound cached file bytes (16MiB) and one document, release document/worker resources on replacement/unmount; failed fetch/hash/open must never persist a reusable entry. Do not bypass fresh authority or display a failed source. API/protocol/publication remain unchanged. Rendering failure or stale async completion must not leak resources or show old highlights.
+
+Tests: realistic route transitions within same mounted component show first directory load then one member request per next field; version/error invalidation and stale completion reject. Viewer tests assert fresh authority on each citation, same validated PDF fetch/open once, different source/release replacement, bad hash/page count rejects, oversize bypasses cache, and close/dispose. Existing citation/reader tests remain valid. Local targeted tests + independent frozen review before building existing UI, no standalone environment. Deploy UI only once Task3ay APP deployment and active task safety allow. Re-measure real browser clicks, new source first click separately from repeated clicks. Cold backend latency remains a separate measured unresolved item until diagnosed; caching does not prove it fixed.
+
 
 ## 2026-09-15 Task3ay：激活复用已验证 Ready 投影
 
