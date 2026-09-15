@@ -127,3 +127,11 @@ Task3az deployment artifact invariant: public frontend static output MUST be rea
 ### Task3bb — G3-AUTO-3/4 bounded reconciliation selection
 
 The repair scan MUST exclude authoritative terminal run history before hydrating material/field/artifact payloads and return only scoped run identities and keyset timestamps. Current progression validation, outbox and lease recovery remain mandatory. Failed child stages without a terminal run/root/finalization MUST remain discoverable for finalization. Explicit history reads/recovery, original results and states MUST remain unchanged. This reduces idle work; live read latency requires separate measurement and cannot be inferred from fixture success.
+
+### Task3be — G3-AUTO-1 explicit identity extraction guidance
+
+The identity prompt MUST distinguish full legal issuers from abbreviations when both are locally evidenced, and MUST recognise explicit edition tokens in formal product names as version labels with offered version evidence. It MUST NOT invent missing issuer/version values or bypass genuine conflict decisions. Existing raw response, evidence and deterministic admission contracts remain unchanged. Real provider recovery and uninterrupted fresh-upload acceptance are separate outcomes.
+
+### Task3bf G3-AUTO-3/6: resident source proof reuse
+
+A citation reader SHALL reuse complete first-parse binding validation only for the same owned resident record and exact authenticated first payload. Every warm read SHALL reopen the artifact and verify current signature authority and payload bytes; missing/changed artifacts, revoked keys and newly appearing first artifacts for legacy entries remain failures. Cold/unproved/copied records retain full semantic validation. No read-triggered parsing or model call is introduced. Allocation and real webpage timing evidence are reported separately.

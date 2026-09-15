@@ -300,6 +300,19 @@ def build_identity_context(
                 "Formatting, whitespace, book-title brackets and heading decoration may "
                 "differ; genuine product or version conflicts must stay unresolved."
             ),
+            "issuer": (
+                "Use the full legal insurance company name when it is present in this "
+                "material's offered text, rather than its short brand name or a filing "
+                "prefix. Cite that same material's issuer evidence. If only a short name "
+                "is offered, retain it; do not expand it from memory or another material."
+            ),
+            "version": (
+                "An explicit product edition in the formal name, such as 2.0, V2 or a "
+                "clearly labelled year edition, is version evidence. Copy the edition "
+                "as version_label and cite the offered local locator with purpose version. "
+                "Do not confuse a coverage age, payment term, filing year or printing date "
+                "with the product edition. Leave version_label null if none is evidenced."
+            ),
             "evidence": (
                 "Use only the offered locator refs. Name, classification and material-role "
                 "evidence must come from page one; a later company block supports issuer "

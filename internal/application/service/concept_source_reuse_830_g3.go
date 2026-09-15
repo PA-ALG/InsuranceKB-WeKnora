@@ -35,7 +35,20 @@ type conceptSourceReusePrepared830G3 struct {
 	blocks map[string]string
 	index  *conceptNativeQuoteIndex830G2
 	record conceptSourceReuseRecord830G3
+	proof  *conceptSourceBindingProof830G3
 }
+
+// Installed only after complete cold validation, before publishing the owned
+// immutable entry. A copied prepared record cannot inherit another's proof.
+type conceptSourceBindingProof830G3 struct {
+	owned       *conceptSourceReuseRecord830G3
+	firstSHA256 string
+}
+
+func (p *conceptSourceBindingProof830G3) matches(record *conceptSourceReuseRecord830G3) bool {
+	return p != nil && p.owned == record && p.firstSHA256 == record.FirstParseSHA256
+}
+
 type conceptSourceReuseStore830G3 struct {
 	codec   *SchemaWikiCitationTokenCodec
 	root    string
@@ -197,20 +210,14 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 	hit := s.entries[key]
 	s.mu.Unlock()
 	if hit != nil {
-		if err := s.validateFirstParseCache(&hit.record); err != nil {
-			return nil, err
-		}
-		return hit, nil
+		return s.validateResident(hit, identity, source)
 	}
 	result := s.flight.DoChan(key, func() (any, error) {
 		s.mu.Lock()
 		hit := s.entries[key]
 		s.mu.Unlock()
 		if hit != nil {
-			if err := s.validateFirstParseCache(&hit.record); err != nil {
-				return nil, err
-			}
-			return hit, nil
+			return s.validateResident(hit, identity, source)
 		}
 		path := filepath.Join(s.root, key+".json")
 		data, err := s.readArtifact(path, key)
@@ -241,6 +248,7 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 		if err != nil {
 			return nil, err
 		}
+		prepared.proof = &conceptSourceBindingProof830G3{owned: &prepared.record, firstSHA256: record.FirstParseSHA256}
 		if missing {
 			if err := s.writeArtifact(path, key, data); err != nil {
 				return nil, err
@@ -264,6 +272,21 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 		}
 		return loaded.Val.(*conceptSourceReusePrepared830G3), nil
 	}
+}
+
+func (s *conceptSourceReuseStore830G3) validateResident(hit *conceptSourceReusePrepared830G3, identity types.ConceptSourceIdentity830G2, source *types.KnowledgeRevisionSource) (*conceptSourceReusePrepared830G3, error) {
+	if source == nil || hit.record.Identity != identity || hit.record.BindingDigest != source.BindingDigest {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	if err := s.validateFirstParseCacheProof(&hit.record, hit.proof); err != nil {
+		return nil, err
+	}
+	if !hit.proof.matches(&hit.record) {
+		// Unproved entries must validate the source binding and index too. A
+		// first-artifact match alone does not establish their current binding.
+		return validateConceptSourceReuse830G3(&hit.record, identity, source)
+	}
+	return hit, nil
 }
 
 // The existing deployment citation key seals derived artifacts in a separate

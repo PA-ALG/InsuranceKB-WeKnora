@@ -272,6 +272,10 @@ func conceptSourceReuseKey830G3(identity types.ConceptSourceIdentity830G2, bindi
 	return testSHA256Bytes830G2(data), nil
 }
 func (s *conceptSourceReuseStore830G3) validateFirstParseCache(record *conceptSourceReuseRecord830G3) error {
+	return s.validateFirstParseCacheProof(record, nil)
+}
+
+func (s *conceptSourceReuseStore830G3) validateFirstParseCacheProof(record *conceptSourceReuseRecord830G3, proof *conceptSourceBindingProof830G3) error {
 	id := g3FirstParseIdentity{TenantID: record.Identity.TenantID, RawKBID: record.Identity.RawKBID, KnowledgeID: record.Identity.KnowledgeID, ParseAttempt: record.Identity.ParseAttempt, SourceSHA256: record.Identity.SourceHash}
 	key, err := g3FirstParseKey(id)
 	if err != nil {
@@ -287,6 +291,12 @@ func (s *conceptSourceReuseStore830G3) validateFirstParseCache(record *conceptSo
 	// A first artifact that exists makes legacy same-key caches ineligible.
 	if record.FirstParseSHA256 == "" || testSHA256Bytes830G2(data) != record.FirstParseSHA256 {
 		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	// The current signature and complete payload digest still passed above.
+	// Identical authenticated bytes have the same already-proved bindings to
+	// this exact immutable owned record; avoid reconstructing them per quote.
+	if proof.matches(record) {
+		return nil
 	}
 	var first g3FirstParseRecord
 	decoder := json.NewDecoder(bytes.NewReader(data))

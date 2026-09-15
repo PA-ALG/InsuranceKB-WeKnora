@@ -537,3 +537,70 @@ func TestG3FirstParseExportedCanonicalSubset(t *testing.T) {
 		})
 	}
 }
+
+// Resident citation reads must retain artifact checks without repeating the
+// already proved document-wide binding work for every quote.
+func TestG3FirstParseResidentReadReusesBindingWork(t *testing.T) {
+	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
+	authority, doc, scope, _, _ := nativeIndexFixture830G2(t)
+	authority.codec = sourceReuseTestCodec830G3(t)
+	authority.sourceReuse = newConceptSourceReuseStore830G3(authority.codec)
+	readySourceReuseResource830G3(authority)
+	text := strings.Repeat("投保范围与保险责任。", 200)
+	result := firstParseNative(t, text)
+	chunks := make([]types.ParsedChunk, 200)
+	for i := range chunks {
+		chunks[i] = types.ParsedChunk{Seq: i, Content: "投保范围与保险责任。", Start: i * 10, End: (i + 1) * 10}
+	}
+	seedFirstParseSnapshot(t, authority, scope, result, chunks)
+	repo := authority.revisions.(*conceptKnowledgeStub830G2)
+	prepared, err := authority.captureG3PlatformSource830G3(context.Background(), scope, repo.source)
+	require.NoError(t, err)
+	key, err := conceptSourceReuseKey830G3(prepared.record.Identity, repo.source.BindingDigest)
+	require.NoError(t, err)
+	build := func() (*conceptSourceReuseRecord830G3, error) { t.Fatal("reads cannot reparse"); return nil, nil }
+	full := testing.AllocsPerRun(2, func() { require.NoError(t, authority.sourceReuse.validateFirstParseCache(&prepared.record)) })
+	warm := testing.AllocsPerRun(2, func() {
+		got, loadErr := authority.sourceReuse.load(context.Background(), key, prepared.record.Identity, repo.source, build)
+		require.NoError(t, loadErr)
+		require.Same(t, prepared, got)
+	})
+	t.Logf("full binding allocations=%.0f resident allocations=%.0f", full, warm)
+	require.Less(t, warm, full*0.8, "resident reads still repeat document-wide binding work")
+	// A copied prepared entry has no proof for its new owned record. In
+	// particular, first-record checks alone cannot authorize a changed binding.
+	copied := *prepared
+	authority.sourceReuse.entries[key] = &copied
+	checked, err := authority.sourceReuse.load(context.Background(), key, prepared.record.Identity, repo.source, build)
+	require.NoError(t, err)
+	require.NotSame(t, &copied, checked, "copied records must rebuild their validated index")
+	require.Equal(t, prepared.record, checked.record)
+	copied.record.BindingDigest = strings.Repeat("f", 64)
+	authority.sourceReuse.entries[key] = &copied
+	_, err = authority.sourceReuse.load(context.Background(), key, prepared.record.Identity, repo.source, build)
+	require.Error(t, err)
+	authority.sourceReuse.entries[key] = prepared
+	// Same-size edits with restored timestamps are still detected on warm reads.
+	firstKey, err := g3FirstParseKey(g3FirstParseIdentityForSource(scope, repo.source))
+	require.NoError(t, err)
+	path := filepath.Join(authority.sourceReuse.root, firstKey+".json")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	stat, err := os.Stat(path)
+	require.NoError(t, err)
+	changed := append([]byte(nil), raw...)
+	changed[len(changed)/2] ^= 1
+	require.NoError(t, os.WriteFile(path, changed, 0600))
+	require.NoError(t, os.Chtimes(path, stat.ModTime(), stat.ModTime()))
+	_, err = authority.sourceReuse.load(context.Background(), key, prepared.record.Identity, repo.source, build)
+	require.Error(t, err)
+	require.NoError(t, os.Remove(path))
+	_, err = authority.sourceReuse.load(context.Background(), key, prepared.record.Identity, repo.source, build)
+	require.Error(t, err)
+	// An intact file still cannot use a signing key removed after the cold proof.
+	require.NoError(t, os.WriteFile(path, raw, 0600))
+	delete(authority.codec.publicKeys, authority.codec.activeKeyID)
+	_, err = authority.sourceReuse.load(context.Background(), key, prepared.record.Identity, repo.source, build)
+	require.Error(t, err)
+	require.Zero(t, doc.calls)
+}
