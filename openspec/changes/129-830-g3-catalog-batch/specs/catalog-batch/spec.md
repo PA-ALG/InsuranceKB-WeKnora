@@ -91,3 +91,7 @@ User replaces Codex-assisted closeout with G3-AUTO-1 through G3-AUTO-6 in `docs/
 
 ### Task3at amendment (2026-09-15, G3-AUTO-1/3/5/6)
 Incremental platform compilation SHALL preserve the published parent's navigation assignments byte-for-byte in their typed values, including assignment version and hashes, and include them in the new page manifest/candidate hash. It SHALL NOT recreate classification or silently erase navigation. Artifact producer contract revision changes SHALL invalidate only that stage and its descendants at recovery admission, using the existing metadata fields; unchanged earlier extraction/source results SHALL remain immutable and reusable. Current candidate artifacts use product-candidate.v2/version2; old v1 candidates are audit-only inputs for this corrected compiler. No new database/environment or manual real-candidate repair is authorized or required.
+
+
+### Task3au amendment — G3-AUTO-1/3/5/6
+The source authority must select live corpus materials using the existing current-resolution binding contract, including current MATCH/refresh on existing entities. Carried published bindings do not require retransmitting their materials in the current corpus. All existing source/evidence revocation, exact published-base and custody checks remain mandatory; missing current materials fail closed. Source selection must reuse the same types decision used by candidate validation. No historic candidate mutation or model replay is permitted.

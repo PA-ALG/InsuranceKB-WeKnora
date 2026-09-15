@@ -322,11 +322,9 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 	}
 	ctx = context.WithValue(ctx, conceptNativeCaptureCacheKey830G2{}, map[string]conceptNativeCaptureEntry830G2{})
 	ctx = context.WithValue(ctx, conceptSourceReusePrepareKey830G3{}, true)
-	selected := map[string]struct{}{}
-	for _, binding := range bundle.Request.EntityBindings {
-		for _, materialID := range binding.SourceMaterialIDs {
-			selected[materialID] = struct{}{}
-		}
+	selected, err := selectedBatchCorpusMaterialIDs830G3(bundle.Request)
+	if err != nil {
+		return err
 	}
 	selectedBlocks := map[string]types.ConceptSourceBlock830G2{}
 	for _, entry := range bundle.Request.ResolutionInputs.Corpus.Entries {
@@ -419,6 +417,23 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 		}
 	}
 	return nil
+}
+
+func selectedBatchCorpusMaterialIDs830G3(request types.BatchConceptCompileRequest830G3) (map[string]struct{}, error) {
+	current, err := types.CurrentBatchBindingIDs830G3(request)
+	if err != nil {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	selected := map[string]struct{}{}
+	for _, binding := range request.EntityBindings {
+		if !current[binding.EntityID] {
+			continue
+		}
+		for _, materialID := range binding.SourceMaterialIDs {
+			selected[materialID] = struct{}{}
+		}
+	}
+	return selected, nil
 }
 
 func (s *ConceptSourceAuthorityService830G2) verifyCorpusEntryLive830G3(

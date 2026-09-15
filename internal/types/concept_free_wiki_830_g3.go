@@ -1930,6 +1930,17 @@ func validateRequestSourceClosure830G3(
 	return nil
 }
 
+// CurrentBatchBindingIDs830G3 exposes the same current-resolution selection
+// used by candidate validation. Callers must first validate the full candidate
+// and its published base; historical entity membership does not select work.
+func CurrentBatchBindingIDs830G3(request BatchConceptCompileRequest830G3) (map[string]bool, error) {
+	typed, err := decodeResolutionInputs830G3(request.ResolutionInputs, request.Resolution)
+	if err != nil {
+		return nil, err
+	}
+	return currentBindingIDs830G3(request.EntityBindings, typed)
+}
+
 func currentBindingIDs830G3(
 	bindings []EntityCompileBinding830G3, typed typedResolutionInputs830G3,
 ) (map[string]bool, error) {

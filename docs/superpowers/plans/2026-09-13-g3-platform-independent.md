@@ -1,5 +1,14 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3au：增量来源校验复用既有当前绑定判定
+
+Task3at CODE/DELIVERY已通过，source c37e0813c82c935d6d2f6d600da17662adc34ea1；网页run50e6e0b2-701b-54a2-8081-4a5f0cdb89a3于08:21:11.971Z点击、08:28:44.410085Z失败，452.439085s，0新/10复用模型，21/31/30字段原记录不变。检查点及编译均单代成功，candidate-v2已保存SHA c007b78e0b94e6c8e0fa20c167eb921acfff17c23e8f00779324bb43e35c7903，10,202,320B，原导航已继承。草稿3次返回CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE，不是租约回收。
+
+已证明：source gate对全部8绑定取13份材料，而本次corpus只含3份新增材料，剩10份材料属于逐值不变的7个PublishedBase绑定。types既有currentBindingIDs830G3和source closure早已支持当前resolution/历史carry区分；service未消费同一边界。沿用G3-AUTO-1/3/5/6，复用types当前绑定判定，不按corpus交集忽略缺失，不按旧entity一刀切（当前MATCH/refresh仍要校验）。仅当前绑定材料进入corpus live gate；全部旧新binding/definition/field/page证据与legacy当前撤销检查继续执行。既有发布base身份、来源闭包、导航与权限不放宽，不向current corpus拼入历史材料，不修改真实candidate或重抽。
+
+root唯一写者，范围internal/types/concept_free_wiki_830_g3.go及窄测试、internal/application/service/concept_source_authority_830_g2.go及窄测试。g3_service_inventory仅在/private/tmp准备真实source gate的fixture测试补丁，g3_admission_finish独立只读复核。先RED（完整合法增量候选的当前选集/真实gate到达后续阶段；当前材料缺失及当前MATCH不得跳过），后最小实现、GREEN和独立冻结复核。只构建升级受影响APP，Harness/UI/数据库复用。网页从已保存candidate-v2恢复，不重编译、不重抽。当前只证明选集错误；后续证据校验与发布仍未验收，不预判PASS。
+
+
 ## 2026-09-15 Task3at：增量编译继承已发布导航及产物版本失效
 
 Task3as已部署；网页run16339470-f954-564e-b7ae-60f7515b050b在07:35:46.838Z点击、07:42:31.919412Z失败（405.081412s），candidate成功持久化，preparation HTTP400，0新模型/10复用，字段21/31/30。真实candidate SHA9ebbe5b355d0445683dd87f1f42051ef3b85999be9f8096391007be764f2e16a，10,201,079B，经Go纯types+成员校验PASS且canonical原字节同SHA。只读比对确认：真实已签base保留1条navigation_assignment，新candidate为空；对应旧entity/version仍存在；ValidateBatchNavigationHistory830G3确定拒绝。其他父identity、7旧bindings、493fields/1def/8pages及1822来源一致。不得放松APP历史导航门禁，不得改写该失败候选。
