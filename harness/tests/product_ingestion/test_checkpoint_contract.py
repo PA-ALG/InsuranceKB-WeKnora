@@ -142,3 +142,102 @@ def test_failed_verifier_recovery_flattens_refs_without_faking_success(stage_run
     assert (
         artifacts.verify_checkpoint(scope=scope, run_id=resumed.run_id).plan_sha256 == plan.digest()
     )
+
+
+def _enqueue_control(store, scope, origin):
+    """Old recovery admission stored a control input before the source job claim."""
+    import hashlib
+
+    with store._session_factory() as session, session.begin():
+        source = session.scalar(
+            select(ProductArtifact)
+            .where(
+                ProductArtifact.run_id == origin.run_id,
+                ProductArtifact.artifact_kind == "source_snapshot",
+            )
+            .limit(1)
+        )
+        values = {c.name: getattr(source, c.name) for c in ProductArtifact.__table__.columns}
+        values.update(
+            id="enqueue-control",
+            artifact_kind="processing_recovery_plan",
+            payload=b"{}",
+            payload_sha256=hashlib.sha256(b"{}").hexdigest(),
+            dependency_sha256="f" * 64,
+            producer_generation=0,
+        )
+        session.add(ProductArtifact(**values))
+
+
+def test_checkpoint_excludes_enqueue_control_input(stage_runtime, monkeypatch):
+    scope, store, artifacts, origin, _ = _child(stage_runtime, monkeypatch)
+    _enqueue_control(store, scope, origin)
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
+    assert all(ref.producer_generation > 0 for ref in plan.artifacts)
+    assert len([r for r in plan.artifacts if r.artifact_kind == "source_snapshot"]) == 3
+    assert (
+        artifacts.verify_checkpoint(scope=scope, run_id=child.run_id).plan_sha256 == plan.digest()
+    )
+    assert store.get_run(scope=scope, run_id=origin.run_id) == origin
+
+
+def test_retry_failed_checkpoint_excludes_inherited_control_without_rewriting_plan(
+    stage_runtime, monkeypatch
+):
+    from datetime import UTC, datetime
+
+    from insurance_harness.jobs.tables import WikiJob
+    from insurance_harness.product_ingestion.checkpoint_store import _ref
+    from tests.product_ingestion.test_recovery import finish_failed_source
+
+    scope, store, artifacts, origin, child = _child(stage_runtime, monkeypatch)
+    _enqueue_control(store, scope, origin)
+    plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
+    stage = store.list_stages(scope=scope, run_id=child.run_id)[0]
+    # Reproduce the persisted plan admitted by the old deployed selector.
+    with store._session_factory() as session, session.begin():
+        control = session.get(ProductArtifact, "enqueue-control")
+        old_plan = plan.model_copy(update={"artifacts": (*plan.artifacts, _ref(control))})
+        saved = session.scalar(
+            select(ProductArtifact).where(
+                ProductArtifact.run_id == child.run_id,
+                ProductArtifact.artifact_kind == "checkpoint_plan",
+            )
+        )
+        saved.payload, saved.payload_sha256 = old_plan.encoded(), old_plan.digest()
+        job = session.get(WikiJob, stage.job_id)
+        job.state, job.finished_at = "dead_letter", datetime.now(UTC)
+    finish_failed_source(store, scope, child.run_id)
+    failed = store.get_run(scope=scope, run_id=child.run_id)
+    resumed = store.retry_processing(
+        scope=scope, run_id=child.run_id, expected_version=failed.version
+    )
+    new_plan = store.checkpoint_plan(scope=scope, run_id=resumed.run_id)
+    assert all(ref.producer_generation > 0 for ref in new_plan.artifacts)
+    assert (
+        artifacts.verify_checkpoint(scope=scope, run_id=resumed.run_id).plan_sha256
+        == new_plan.digest()
+    )
+    assert store.checkpoint_plan(scope=scope, run_id=child.run_id).encoded() == old_plan.encoded()
+    assert store.get_run(scope=scope, run_id=child.run_id) == failed
+
+
+def test_zero_generation_artifact_cannot_satisfy_required_output(stage_runtime, monkeypatch):
+    scope, store, _, origin, _ = _child(stage_runtime, monkeypatch)
+    with store._session_factory() as session, session.begin():
+        for row in session.scalars(
+            select(ProductArtifact).where(
+                ProductArtifact.run_id == origin.run_id,
+                ProductArtifact.artifact_kind == "source_snapshot",
+            )
+        ):
+            row.producer_generation = 0
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
+    assert plan.resume_stage == "source"
+    assert tuple(s.stage_key for s in plan.reused_stages) == ("uploads",)

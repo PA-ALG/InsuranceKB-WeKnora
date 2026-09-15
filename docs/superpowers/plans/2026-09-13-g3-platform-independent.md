@@ -1,5 +1,13 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3aq：检查点控制输入与已执行输出边界
+
+Task3ap 三组件已部署 source `2f2fe5ca87cbad3a3c0ea9ff12609a81aa139cb7`。网页恢复于 04:41:52.577Z 发起，child `7c42de0e-fa1e-5927-94b5-88ab9cad5bda` 在 04:42:11.935192Z 以 CHECKPOINT_INVALID 结束；本轮增量验收失败，未发布，记录调用为0。原9响应和82字段仍不变，新产品尚未上传。
+
+只读根因及独立复核：旧 `processing_recovery_plan` 是 enqueue 控制输入，producer_generation=0；被当 source 执行产物选入 plan，实际 source job generation=1，dependency也不同。其他15产物的生成任务/代次/依赖相同。Jobs enqueue=0、claim后代次>0是既有生产语义，不按artifact名字补黑名单。
+
+同 G3-AUTO-3/4/6，root唯一写者：仅 checkpoint_store.py、checkpoint合同测试和现有规格/证据。新计划对本run和继承引用均只选择 producer_generation>0 的已执行输出，必需输出检查和worker完整性校验继续执行；旧plan/记录不可变。先RED覆盖控制记录、失败checkpoint再恢复、只有零代次必需产物，后GREEN及独立复核。仅重建部署受影响Harness，APP/UI复用本轮已验证镜像；再从网页恢复失败child并重新计时。全部真实成功前 G3 未完成，随后仍需新产品三份材料网页完整验收。
+
 ## 2026-09-15 当前队列：增量候选传输与检查点恢复
 
 必要端口写域补充（同一已授权边界）：A 复用 g3_platform_base_snapshot.go 原加载实现，避免复制另一份发布身份校验；B 包含 models.py/composition.py 的 typed 状态和唯一 checkpoint handler 注册。root 同步修改 product_ingestion_bridge.go、frontend/src/api/product-ingestion.ts、knowledge-base/product-ingestion-status.vue 及对应测试，独立显示 reused_stages 原结果/原耗时，不能伪造为新执行成功。

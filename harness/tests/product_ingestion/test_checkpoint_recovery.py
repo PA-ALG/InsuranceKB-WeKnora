@@ -11,6 +11,7 @@ from insurance_harness.db.base import Base, make_session_factory
 from insurance_harness.jobs import JobStore, NonRetryableJobError
 from insurance_harness.product_ingestion.models import FieldOutcomeKind, ProductRunState
 from insurance_harness.product_ingestion.progression import admit_uploads
+from tests.product_ingestion.test_checkpoint_contract import _enqueue_control
 from tests.product_ingestion.test_pipeline_runtime import (
     SCOPE,
     FixtureModel,
@@ -60,6 +61,7 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
         }
         assert stage_states["synthesis"] in {"succeeded", "partial_success"}
         assert stage_states["compilation"] == "dead_letter"
+        _enqueue_control(context.store, SCOPE, failed)
         before_attempts = context.store.list_field_attempts(scope=SCOPE, run_id=origin.run_id)
         assert any(row.outcome is FieldOutcomeKind.EXTRACTION_FAILED for row in before_attempts)
         old_artifacts = context.artifacts.list_artifacts(scope=SCOPE, run_id=origin.run_id)

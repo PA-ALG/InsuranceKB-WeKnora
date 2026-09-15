@@ -166,16 +166,25 @@ class CheckpointStore:
             for k in ArtifactReference.model_fields
         ]
         refs = (
-            {(r.artifact_kind, r.artifact_key): r for r in inherited.artifacts} if inherited else {}
+            {
+                (r.artifact_kind, r.artifact_key): r
+                for r in inherited.artifacts
+                if r.producer_generation > 0
+            }
+            if inherited
+            else {}
         )
+        # Enqueue control inputs have generation zero. Only outputs produced by
+        # a claimed execution can satisfy a completed stage, including on retry
+        # of a verifier whose older plan accidentally included control inputs.
         for row in session.execute(
             select(*columns).where(
                 ProductArtifact.run_id == origin.id,
                 ProductArtifact.space_id == scope.space_id,
+                ProductArtifact.producer_generation > 0,
             )
         ).all():
-            if row.artifact_kind not in {PLAN_KIND, RECEIPT_KIND}:
-                refs[(row.artifact_kind, row.artifact_key)] = _ref(row)
+            refs[(row.artifact_kind, row.artifact_key)] = _ref(row)
         prefix = []
         for key in STAGE_ORDER:
             stage = stages.get(key)
