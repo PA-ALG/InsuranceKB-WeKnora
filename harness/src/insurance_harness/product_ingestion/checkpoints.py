@@ -5,13 +5,14 @@ from __future__ import annotations
 import hashlib
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from insurance_harness.product_ingestion.models import (
     MaterialSnapshot,
     ProductScope,
     StageSnapshot,
 )
+from insurance_harness.product_ingestion.recovery import RecordedIdentityReference
 
 PLAN_KIND = "checkpoint_plan"
 RECEIPT_KIND = "checkpoint_receipt"
@@ -118,9 +119,35 @@ class FieldReference(Frozen):
     call_id: str
 
 
-class CheckpointPlan(Frozen):
+class IdentityRetryReference(Frozen):
+    record_id: str
+    stage: StageSnapshot
+    generation: int = Field(gt=0)
+    proof: RecordedIdentityReference
+
+
+class VersionedCheckpoint(Frozen):
+    @model_serializer(mode="wrap")
+    def preserve_old_wire(self, handler):
+        value = handler(self)
+        if not self.contract.endswith(".v3"):
+            value.pop("retry_calls", None)
+        return value
+
+    @model_validator(mode="after")
+    def valid_retry_contract(self):
+        if self.retry_calls and not self.contract.endswith(".v3"):
+            raise ValueError("retry references require checkpoint v3")
+        if len(self.retry_calls) > 1:
+            raise ValueError("only one recorded identity retry is supported")
+        return self
+
+
+class CheckpointPlan(VersionedCheckpoint):
     contract: Literal[
-        "product-stage-checkpoint-plan.830.v1", "product-stage-checkpoint-plan.830.v2"
+        "product-stage-checkpoint-plan.830.v1",
+        "product-stage-checkpoint-plan.830.v2",
+        "product-stage-checkpoint-plan.830.v3",
     ] = "product-stage-checkpoint-plan.830.v2"
     scope: ProductScope
     origin_run_id: str
@@ -132,6 +159,11 @@ class CheckpointPlan(Frozen):
     artifacts: tuple[ArtifactReference, ...]
     calls: tuple[CallReference, ...] = ()
     fields: tuple[FieldReference, ...] = ()
+    retry_calls: tuple[IdentityRetryReference, ...] = ()
+
+    @property
+    def contract_version(self):
+        return self.contract.rsplit(".v", 1)[1]
 
     @property
     def workflow_version(self):
@@ -154,14 +186,29 @@ class CheckpointPlan(Frozen):
         ):
             if len(values) != len(set(values)):
                 raise ValueError("duplicate checkpoint member")
+        if self.retry_calls:
+            ref = self.retry_calls[0]
+            if (
+                self.resume_stage != "identity"
+                or ref.stage.stage_key != "identity"
+                or ref.stage.state not in {"blocked", "dead_letter"}
+                or ref.stage.finished_at is None
+                or any(
+                    c.record_id == ref.record_id or c.call_id == ref.proof.call_id
+                    for c in self.calls
+                )
+            ):
+                raise ValueError("invalid or intersecting identity retry reference")
         if len(self.encoded()) > 131072:
             raise ValueError("checkpoint reference capacity exceeded")
         return self
 
 
-class CheckpointReceipt(Frozen):
+class CheckpointReceipt(VersionedCheckpoint):
     contract: Literal[
-        "product-stage-checkpoint-receipt.830.v1", "product-stage-checkpoint-receipt.830.v2"
+        "product-stage-checkpoint-receipt.830.v1",
+        "product-stage-checkpoint-receipt.830.v2",
+        "product-stage-checkpoint-receipt.830.v3",
     ] = "product-stage-checkpoint-receipt.830.v2"
     scope: ProductScope
     run_id: str
@@ -171,6 +218,7 @@ class CheckpointReceipt(Frozen):
     reused_call_ids: tuple[str, ...]
     reused_usage: dict[str, int]
     unsettled_call_count: int = Field(default=0, ge=0)
+    retry_calls: tuple[IdentityRetryReference, ...] = ()
 
 
 def field_digest(snapshot):

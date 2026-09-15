@@ -606,6 +606,15 @@ def test_checkpoint_admission_does_not_reissue_incomplete_recorded_identity(
     """The normal checkpoint entry never turns an unfinished model stage into a new send."""
     scope, store, artifacts, _, _ = stage_runtime
     origin, original, _, _, sent = recorded_origin
+    from sqlalchemy import select
+
+    from insurance_harness.product_ingestion.artifact_tables import ProductStageModelCall
+
+    with store._session_factory() as session, session.begin():
+        call = session.scalar(
+            select(ProductStageModelCall).where(ProductStageModelCall.run_id == origin.run_id)
+        )
+        call.raw = None  # An actually incomplete receipt remains ineligible.
     before = artifacts.list_stage_calls(scope=scope, run_id=origin.run_id)
     assert len(before) == 1 and before[0].call_id == original.call_id
     assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)

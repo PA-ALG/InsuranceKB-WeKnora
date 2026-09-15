@@ -178,6 +178,14 @@ class CheckpointArtifacts:
                 }:
                     by_kind[ref.artifact_kind] = json.loads(row.payload)
                 session.expunge(row)
+            for ref in plan.retry_calls:
+                if (
+                    self._products._identity_retry_reference(
+                        session, scope, ref.record_id, read_lock=True
+                    )
+                    != ref
+                ):
+                    raise ValueError("checkpoint retry identity proof changed")
             usage = {}
             call_ids = []
             for ref in plan.calls:
@@ -314,4 +322,5 @@ class CheckpointArtifacts:
                 reused_call_ids=tuple(sorted(call_ids)),
                 reused_usage=usage,
                 unsettled_call_count=sum(c.state != "recorded" for c in plan.calls),
+                retry_calls=plan.retry_calls,
             )

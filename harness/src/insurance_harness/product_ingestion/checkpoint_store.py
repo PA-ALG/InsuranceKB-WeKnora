@@ -24,10 +24,12 @@ from insurance_harness.product_ingestion.checkpoints import (
     CheckpointPlan,
     CheckpointReceipt,
     FieldReference,
+    IdentityRetryReference,
     required_outputs,
     stage_order,
 )
 from insurance_harness.product_ingestion.models import ProductRunState
+from insurance_harness.product_ingestion.recovery import recorded_identity_reference
 from insurance_harness.product_ingestion.tables import (
     ProductFieldAttempt,
     ProductMaterial,
@@ -120,6 +122,7 @@ class CheckpointStore:
             or receipt.run_id != run_id
             or receipt.plan_sha256 != plan.digest()
             or receipt.reused_stages != plan.reused_stages
+            or receipt.retry_calls != plan.retry_calls
             or row.space_id != scope.space_id
             or stage is None
             or stage.job_id != row.producer_job_id
@@ -131,6 +134,61 @@ class CheckpointStore:
         ):
             raise ValueError("checkpoint receipt execution binding changed")
         return receipt
+
+    def _identity_retry_reference(self, session, scope, record_id, *, read_lock=False):
+        """Bind a completed failed call; this never authorizes automatic dispatch."""
+
+        def read(table, condition):
+            statement = select(table).where(condition)
+            if read_lock:
+                statement = statement.with_for_update(read=True)
+            return session.scalar(statement)
+
+        call = read(ProductStageModelCall, ProductStageModelCall.id == record_id)
+        if call is None or call.space_id != scope.space_id:
+            raise ValueError("retry identity call unavailable")
+        origin = self._run(session, scope, call.run_id)
+        snapshot = self._run_snapshot(session, origin, scope)
+        stage = read(
+            ProductStage,
+            (ProductStage.run_id == call.run_id) & (ProductStage.stage_key == "identity"),
+        )
+        job = read(WikiJob, WikiJob.id == call.job_id)
+        if (
+            stage is None
+            or job is None
+            or stage.space_id != scope.space_id
+            or job.space_id != scope.space_id
+            or stage.job_id != call.job_id
+            or stage.dependency_sha256 != call.dependency_sha256
+            or job.lease_generation != call.generation
+            or job.state not in {"blocked", "dead_letter"}
+            or job.finished_at is None
+            or snapshot.finished_at is None
+            or snapshot.state not in {ProductRunState.FAILED, ProductRunState.NEEDS_CONFIRMATION}
+            or job.error_class != "capacity_blocked"
+            or not (job.error_summary or "")
+            .partition("needs_confirmation:")[2]
+            .startswith(
+                (
+                    "PRODUCT_IDENTITY_UNRESOLVED:",
+                    "IDENTITY_RESPONSE_INVALID:",
+                )
+            )
+            or session.scalar(
+                select(func.count())
+                .select_from(ProductStageModelCall)
+                .where(ProductStageModelCall.run_id == call.run_id)
+            )
+            != 1
+        ):
+            raise ValueError("identity retry producer is not an intact terminal semantic failure")
+        return IdentityRetryReference(
+            record_id=call.id,
+            stage=self._stage_snapshot(session, stage),
+            generation=call.generation,
+            proof=recorded_identity_reference(call),
+        )
 
     def _checkpoint_candidate(self, session, scope, origin):
         run = self._run_snapshot(session, origin, scope)
@@ -240,11 +298,40 @@ class CheckpointStore:
             r.artifact_key for r in refs if r.artifact_kind == "source_snapshot"
         } != {m.knowledge_id for m in run.materials}:
             return None
+        retry_calls = inherited.retry_calls if inherited and resume == "identity" else ()
+        if (
+            retry_calls
+            and session.scalar(
+                select(ProductStage.id).where(
+                    ProductStage.run_id == origin.id, ProductStage.stage_key == "identity"
+                )
+            )
+            is None
+        ):
+            try:
+                if (
+                    self._identity_retry_reference(session, scope, retry_calls[0].record_id)
+                    != retry_calls[0]
+                ):
+                    return None
+            except ValueError:
+                return None
+        else:
+            retry_calls = ()
         calls = {(c.kind, c.record_id): c for c in inherited.calls} if inherited else {}
         for kind, table in (
             ("field", ProductModelCall),
             ("stage", ProductStageModelCall),
         ):
+            if (
+                session.scalar(
+                    select(table.id)
+                    .where(table.run_id == origin.id, table.space_id != scope.space_id)
+                    .limit(1)
+                )
+                is not None
+            ):
+                return None
             fields = (
                 table.id,
                 table.run_id,
@@ -264,7 +351,21 @@ class CheckpointStore:
                 # cannot be dispatched under a new identity. Reconcile separately.
                 if key not in prefix_keys:
                     if row.dispatched_at is not None:
-                        return None
+                        if (
+                            kind != "stage"
+                            or key != "identity"
+                            or resume != "identity"
+                            or retry_calls
+                            or any(
+                                k not in {"uploads", "source", "routing", "identity"}
+                                for k in stages
+                            )
+                        ):
+                            return None
+                        try:
+                            retry_calls = (self._identity_retry_reference(session, scope, row.id),)
+                        except ValueError:
+                            return None
                     continue
                 if row.state not in {"recorded", "interrupted"}:
                     return None
@@ -348,7 +449,7 @@ class CheckpointStore:
             seen.add(upload.id)
             upload = self._run(session, scope, upload.retry_of_run_id)
         return CheckpointPlan(
-            contract=f"product-stage-checkpoint-plan.830.v{workflow_version}",
+            contract=f"product-stage-checkpoint-plan.830.v{3 if retry_calls else workflow_version}",
             scope=scope,
             origin_run_id=origin.id,
             origin_version=origin.version,
@@ -359,6 +460,7 @@ class CheckpointStore:
             artifacts=refs,
             calls=tuple(sorted(calls.values(), key=lambda c: (c.kind, c.record_id))),
             fields=tuple(sorted(fields.values(), key=lambda f: f.attempt_id)),
+            retry_calls=retry_calls,
         )
 
     def can_retry_processing(self, *, scope, run_id):
@@ -480,7 +582,7 @@ class CheckpointStore:
                             "artifact_kind": PLAN_KIND,
                             "artifact_key": "product",
                             "contract_name": plan.contract,
-                            "contract_version": str(plan.workflow_version),
+                            "contract_version": plan.contract_version,
                             "dependency_sha256": dependency,
                             "payload": plan.encoded(),
                             "payload_sha256": dependency,

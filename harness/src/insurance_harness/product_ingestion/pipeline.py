@@ -333,6 +333,7 @@ def build_product_pipeline(context):
                         "product",
                         receipt.encoded(),
                         stage.dependency_sha256,
+                        contract_version="3" if plan.contract_version == "3" else "1",
                     ),
                 )
             )

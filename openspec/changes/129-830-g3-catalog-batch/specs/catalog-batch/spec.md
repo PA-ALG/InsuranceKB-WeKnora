@@ -135,3 +135,12 @@ The identity prompt MUST distinguish full legal issuers from abbreviations when 
 ### Task3bf G3-AUTO-3/6: resident source proof reuse
 
 A citation reader SHALL reuse complete first-parse binding validation only for the same owned resident record and exact authenticated first payload. Every warm read SHALL reopen the artifact and verify current signature authority and payload bytes; missing/changed artifacts, revoked keys and newly appearing first artifacts for legacy entries remain failures. Cold/unproved/copied records retain full semantic validation. No read-triggered parsing or model call is introduced. Allocation and real webpage timing evidence are reported separately.
+
+
+### Requirement: G3-AUTO-1/3/4/6 Task3bg offered issuer and explicit recorded identity retry
+
+The existing first-page identity selector MUST prefer an available legal-company block within the same material and existing page<=3 allowance over generic first-page company language. It MUST keep page-local locators, one auxiliary block, and the existing broad fallback when no legal-company candidate exists; no issuer aliasing or raw-result rewriting.
+
+The existing public checkpoint mechanism MUST allow explicit webpage recovery of a fully recorded terminal semantic identity failure after successful uploads/source/routing, without re-parsing or embedding completed sources. Checkpoint v3 separates the failed identity call proof from reused-success calls; workflow remains2. The worker MUST revalidate original request/raw bytes and producer/scope/dependency/source proofs, then the existing identity handler makes one fresh recorded call. Unknown/interrupted/corrupt calls, active or foreign producers and unrelated later work remain ineligible. Polling never initiates retries. Expected-version and idempotent child creation remain mandatory.
+
+Checkpoint v1/v2 encoded bytes and hashes MUST remain exact; v3 metadata uses revision3, rejects duplicate/intersecting references and retains the128KiB bound. Failed checkpoint recovery carries its verified retry reference; failed identity is not counted as reused model success. Existing artifacts and failed-run terminal state remain immutable. Recovery is a separate result and cannot convert the failed fresh acceptance into uninterrupted PASS.

@@ -231,7 +231,8 @@ def test_identity_first_page_context_omits_cross_page_tail(snapshot):
     assert block["text"] == original.text and block["source_ranges"] == [(0, len(original.text))]
 
 
-def test_cross_page_company_tail_does_not_hide_offered_issuer_block(snapshot):
+@pytest.mark.parametrize("generic_first_page", [False, True])
+def test_cross_page_company_tail_does_not_hide_offered_issuer_block(snapshot, generic_first_page):
     from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
         G3NativeCharacterBoxV1,
     )
@@ -242,6 +243,18 @@ def test_cross_page_company_tail_does_not_hide_offered_issuer_block(snapshot):
     decoded = native_snapshot(snapshot)
     page = project_native_pages(decoded, material_id="knowledge")[0]
     original = decoded.blocks[0]
+    if generic_first_page:
+        text = "平安测试2.0养老年金保险\n保险人就是保险公司"
+        original = original.model_copy(update={"text": text})
+        page = page.model_copy(
+            update={
+                "text": text,
+                "boxes": tuple(
+                    G3NativeCharacterBoxV1(index=i, x=1.0, y=1.0, width=1.0, height=1.0)
+                    for i in range(len(text))
+                ),
+            }
+        )
     company = "测试人寿保险股份有限公司"
     crossing = original.model_copy(update={"text": original.text + company})
     issuer = original.model_copy(update={"block_id": "issuer", "page_number": 2, "text": company})
@@ -281,6 +294,7 @@ def test_cross_page_company_tail_does_not_hide_offered_issuer_block(snapshot):
         },
     ]
     decoded = replace(decoded, blocks=(crossing, issuer), snapshot=changed)
+    assert module().select_identity_block_ids(decoded) == (original.block_id, "issuer")
     corpus = module().build_current_corpus(scope, {"knowledge": decoded}, declared_by="fixture")
     context = module().build_identity_context(
         corpus,
@@ -332,3 +346,18 @@ def test_bounded_identity_geometry_matches_full_context_and_exact_locator_refs(
     assert "测试人寿保险股份有限公司" not in blocks[0]["text"]
     assert len(corpus.entries[0].blocks) == 4
     assert json.dumps(decoded.snapshot, sort_keys=True) == original_body
+
+
+@pytest.mark.parametrize("generic", ["保险人就是保险公司", "保险合同约定保险公司承担责任"])
+def test_generic_company_language_does_not_suppress_legal_issuer(generic):
+    from types import SimpleNamespace
+
+    first = SimpleNamespace(page_number=1, text="平安测试2.0养老年金保险\n" + generic)
+    irrelevant = SimpleNamespace(page_number=2, text="本公司负责解释")
+    legal = SimpleNamespace(page_number=2, text="中国平安人寿保险股份有限公司")
+    another = SimpleNamespace(page_number=3, text="其他人寿保险股份有限公司")
+    assert module()._select_identity_sources(
+        [first, irrelevant, legal, another], lambda row: row.text
+    ) == [first, legal]
+    # No eligible full issuer: retain existing first-page evidence, never invent one.
+    assert module()._select_identity_sources([first, irrelevant], lambda row: row.text) == [first]

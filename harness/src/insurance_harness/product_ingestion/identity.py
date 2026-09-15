@@ -161,12 +161,19 @@ def validate_identity_offered_response(raw: bytes, context: dict) -> None:
 def _select_identity_sources(available, page_text):
     selected = [row for row in available if row.page_number == 1]
     company = re.compile(r"[\u4e00-\u9fff]{2,40}保险[\u4e00-\u9fff]{0,12}公司")
-    if not any(company.search(page_text(row)) for row in selected):
+    legal_company = re.compile(r"[\u4e00-\u9fff]{2,40}保险(?:股份有限公司|有限责任公司|有限公司)")
+    # Prefer an actual legal-entity suffix to generic language such as
+    # “保险人就是保险公司”. This selects evidence, never canonicalizes an issuer.
+    eligible = [row for row in available if row.page_number <= 3]
+    pattern = (
+        legal_company if any(legal_company.search(page_text(row)) for row in eligible) else company
+    )
+    if not any(pattern.search(page_text(row)) for row in selected):
         extra = next(
             (
                 row
                 for row in available
-                if row.page_number <= 3 and row not in selected and company.search(page_text(row))
+                if row.page_number <= 3 and row not in selected and pattern.search(page_text(row))
             ),
             None,
         )
