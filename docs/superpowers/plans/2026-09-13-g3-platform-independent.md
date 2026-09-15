@@ -1,3 +1,15 @@
+## Task3bb — avoid terminal history hydration during repair (2026-09-16)
+
+Existing approved G3-AUTO-3/4, user asks to fix local read latency and reuse completed work. Root is sole writer; g3_admission_finish remains independent readonly reviewer. Existing native JobStore/Outbox and ProductRuntimePump remain the task owners. Evidence: task3az-background-scan-diagnosis.md, unchanged old scan hydrates every historical run twice before its final-state check. This is confirmed idle waste, not proof of the 46-second preview cause.
+
+Use the current scoped oldest-first scan, returning only immutable run_id/created_at identities. Exclude explicit terminal run states, terminal finalization receipts, and blocked/dead-letter ROOT jobs before loading any field payload. Preserve runs without roots and those whose CHILD job failed but still need finalization. Advance still reads and validates the selected current snapshot. Keep public list_runs/get_run and explicit recovery semantics unchanged. No cache, new queue, DB migration, model call, or altered lease/outbox semantics. Alternatives (slow polling or caching mutable snapshots) retain waste or complicate freshness, so are rejected.
+
+Write scope: product_ingestion/store.py and models.py; tests/product_ingestion/test_runtime.py and test_store.py; this plan, OpenSpec129 and evidence document. Steps:
+- [ ] RED: mixed finalization/row/root terminals plus active and failed-child fixtures; forbid scan snapshot hydration, capture SQL to exclude artifact/field payload reads, assert scoped keyset fairness and normal history remains available.
+- [ ] Implement identity-only scan with correlated terminal filters. Update old scan test to compare identities rather than complete snapshots.
+- [ ] Run runtime/store and bounded checkpoint recovery tests; freeze diff for independent review.
+- [ ] Build/smoke/deploy only same existing Harness once current jobs terminal; preserve APP/UI/DB/config. Observe idle CPU separately from field/PDF latencies. No success claim for latency without live evidence.
+
 ## 2026-09-16 Task3az packaging correction
 
 Actual new UI image returned403: nginx worker cannot read root-owned0600 dist files produced under deployment helper umask077. Failed deployment retained and automatically restored original UI; verify rollback separately. Existing earlier task3as02 already used public dist modes but the reused task3as helper omitted them. Make this invariant permanent in frontend/Dockerfile: only the public static output tree receives a+rX, no secrets/config paths. Root sole writer, existing reviewer reads frozen Dockerfile/spec change. The actual403/runtime EACCES is RED. Reuse already compiled identical dist bytes, record hashes and zero Vite rebuild; build the same Dockerfile and verify as nginx UID before redeploy. No source logic/test rerun, DB/model/release effects. This deployment-only correction extends original Task3az write scope to frontend/Dockerfile.

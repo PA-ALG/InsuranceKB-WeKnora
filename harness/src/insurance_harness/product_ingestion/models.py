@@ -155,6 +155,13 @@ class MaterialSnapshot(_FrozenModel):
     source: SealedSourceRef | None
 
 
+class ProductRunScanEntry(_FrozenModel):
+    """Identity-only cursor entry for background reconciliation."""
+
+    run_id: str
+    created_at: datetime
+
+
 class ProductRunSnapshot(_FrozenModel):
     run_id: str
     scope: ProductScope

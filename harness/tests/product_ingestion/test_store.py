@@ -1377,7 +1377,9 @@ def test_recent_runs_and_rotating_keyset_scan_have_distinct_ordering(
             break
         seen.extend(page)
         cursor = (page[-1].created_at, page[-1].run_id)
-    assert tuple(seen) == ascending
+    assert tuple((row.run_id, row.created_at) for row in seen) == tuple(
+        (row.run_id, row.created_at) for row in ascending
+    )
 
 
 @pytest.mark.parametrize("kind", ["stage", "window", "root"])

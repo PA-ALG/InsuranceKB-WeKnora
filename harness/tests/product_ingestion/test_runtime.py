@@ -376,3 +376,147 @@ async def test_expired_identity_is_reconciled_to_durable_failed_without_model_ca
     assert final.state is ProductRunState.FAILED
     assert final.terminal_reason == "PRODUCT_STAGE_FAILED:identity"
     assert final.finished_at is not None and final.model_call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_repair_selects_live_identities_without_loading_terminal_evidence(
+    environment, monkeypatch
+):
+    from datetime import UTC, datetime, timedelta
+    from uuid import uuid4
+
+    from sqlalchemy import event
+
+    from insurance_harness.jobs.tables import WikiJob
+
+    scope, store = environment.scope, environment.store
+    terminals = ("succeeded", "partial_success", "failed", "needs_confirmation")
+    runs = {}
+    for key in [
+        *(f"row-{s}" for s in terminals),
+        *(f"final-{s}" for s in terminals),
+        "root-blocked",
+        "root-dead_letter",
+        "active",
+        "failed-child",
+        "successful-root-without-final",
+        "missing-root",
+    ]:
+        runs[key] = store.create_run(scope=scope, idempotency_key=key)
+    foreign_scope = scope.model_copy(update={"wiki_knowledge_base_id": "other-wiki"})
+    foreign = store.create_run(scope=foreign_scope, idempotency_key="foreign")
+    root_jobs = {}
+    for key in ("root-blocked", "root-dead_letter", "successful-root-without-final"):
+        root_jobs[key] = store.enqueue_root(
+            scope=scope, run_id=runs[key].run_id, idempotency_key=key
+        )
+    child = store.enqueue_stage(
+        scope=scope,
+        run_id=runs["failed-child"].run_id,
+        stage_key="source",
+        dependency_sha256="a" * 64,
+        idempotency_key="failed-child",
+    )
+    now = datetime.now(UTC)
+    with environment.factory() as session, session.begin():
+        for index, (key, run) in enumerate(runs.items()):
+            row = session.get(tables.ProductRun, run.run_id)
+            row.created_at = now + timedelta(seconds=index)
+            if key.startswith("row-"):
+                row.state = key.removeprefix("row-")
+            if key.startswith("final-"):
+                session.add(
+                    tables.ProductRunFinalization(
+                        id=str(uuid4()),
+                        run_id=run.run_id,
+                        space_id=scope.space_id,
+                        state=key.removeprefix("final-"),
+                        success_count=1,
+                        missing_count=0,
+                        failure_count=0,
+                        model_call_count=1,
+                        usage={},
+                        started_at=now,
+                        finished_at=now,
+                    )
+                )
+        for key, root in root_jobs.items():
+            job = session.get(WikiJob, root.job_id)
+            job.state = "succeeded" if key.startswith("successful") else key.removeprefix("root-")
+            job.finished_at = now
+        session.get(WikiJob, child.job_id).state = "dead_letter"
+        session.get(tables.ProductRun, runs["missing-root"].run_id).root_job_id = str(uuid4())
+        # Historical payload remains available to explicit readers, never to the scan.
+        session.add(
+            tables.ProductFieldAttempt(
+                id=str(uuid4()),
+                run_id=runs["root-blocked"].run_id,
+                window_id=str(uuid4()),
+                call_id="historical-call",
+                tenant_id=scope.tenant_id,
+                space_id=scope.space_id,
+                entity_id="product",
+                field_key="coverage",
+                task_sha256="a" * 64,
+                cache_key="b" * 64,
+                cache_identity={},
+                validation_version="v1",
+                model_policy_sha256="c" * 64,
+                prompt_policy_sha256="d" * 64,
+                outcome="verified",
+                reason=None,
+                validated_result={
+                    "value": "original",
+                    "evidence": [{"quote": "retained original evidence", "page": 3}],
+                },
+                raw_ref="original-response",
+                attempt=1,
+                created_at=now,
+                reused_from_attempt_id=None,
+            )
+        )
+    old = store.get_run(scope=scope, run_id=runs["root-blocked"].run_id)
+    assert old.state is ProductRunState.FAILED and old.success_count == 1
+    statements = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement.lower())
+
+    event.listen(environment.engine, "before_cursor_execute", capture)
+    progression = RecordingProgression()
+    pump = runtime_module().ProductRuntimePump(
+        store=store,
+        jobs=environment.jobs,
+        outbox=environment.outbox,
+        progression=progression,
+        scopes={scope.space_id: scope},
+        page_size=1,
+    )
+    try:
+        with monkeypatch.context() as patch:
+
+            def forbidden(*_args, **_kwargs):
+                pytest.fail("repair scan hydrated a full run before selecting work")
+
+            patch.setattr(store, "_run_snapshot", forbidden)
+            for _ in range(5):
+                await pump._repair(scope)
+        assert not pump.issues
+        assert progression.advanced == [
+            runs[key].run_id
+            for key in ("active", "failed-child", "successful-root-without-final", "missing-root")
+        ]
+        assert foreign.run_id not in progression.advanced
+        assert not any(
+            "product_ingestion_field_attempts" in q
+            or "product_ingestion_artifacts" in q
+            or "product_ingestion_materials" in q
+            for q in statements
+        )
+        assert len(statements) == 5
+        assert pump._cursors[scope.space_id] is None
+    finally:
+        event.remove(environment.engine, "before_cursor_execute", capture)
+    # Selection has no business effects and does not hide terminal history.
+    assert store.get_run(scope=scope, run_id=old.run_id) == old
+    assert old.run_id in {run.run_id for run in store.list_runs(scope=scope)}

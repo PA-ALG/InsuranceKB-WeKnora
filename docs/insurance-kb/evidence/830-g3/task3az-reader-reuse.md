@@ -11,3 +11,7 @@ PDF v6 installed type declarations expose destroy on PDFDocumentLoadingTask, not
 Frozen02 independent review0BLOCKER, reportSHA e685cbc5438158b9150b90b0925576827aff2bf586a6215d6182b08075768050. Runtime RouterView has no fullPath remount key; same-component directory reuse is applicable to actual navigation.
 
 Final npm run type-check PASS (exit0), task3az-typecheck-02.log. All affected software checks closed before commit/build.
+
+Live deployment: Task3az02 UI source79c1d8b873a5fc2a9ca81338a143ae12486d523f image75d617210fd20fcb3cb60d9bc4c604c48936f6432429cfe4b50f0adefe6ccc0e PASS16:05:56Z; runtime nginx read verified. Prior image403 EACCES failed and rolled back (task3az-ui-rollback-verification.json PASS). Permanent public-asset modes repaired via Dockerfile, same compiled bytes reused, zero additional Vite builds.
+
+Real clicks confirmed field navigation uses one field GET and repeat source viewing avoids another PDF-content GET. Backend still4.999/4.528s fields; one repeated preview46.469s. Another new-release preview11.119s. These are server durations, not click-to-render measurements. Optimization only partially resolves the user issue; backend latency remains open. No assertion of model/parse work on these G3 serving paths.

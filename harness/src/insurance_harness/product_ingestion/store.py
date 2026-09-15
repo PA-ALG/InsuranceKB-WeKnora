@@ -36,6 +36,7 @@ from insurance_harness.product_ingestion.models import (
     FieldOutcomeWrite,
     MaterialSnapshot,
     OriginalKnowledgeRef,
+    ProductRunScanEntry,
     ProductRunSnapshot,
     ProductRunState,
     ProductScope,
@@ -194,11 +195,36 @@ class ProductIngestionStore(CheckpointStore):
         scope: ProductScope,
         after: tuple[datetime, str] | None = None,
         limit: int = 50,
-    ) -> tuple[ProductRunSnapshot, ...]:
-        """Read one oldest-first keyset page for bounded reconciliation."""
+    ) -> tuple[ProductRunScanEntry, ...]:
+        """Select reconcilable identities without hydrating terminal history."""
         if limit < 1:
             raise ValueError("limit must be >= 1")
-        statement = select(ProductRun).where(
+        terminal_states = (
+            ProductRunState.SUCCEEDED.value,
+            ProductRunState.PARTIAL_SUCCESS.value,
+            ProductRunState.FAILED.value,
+            ProductRunState.NEEDS_CONFIRMATION.value,
+        )
+        final = (
+            select(ProductRunFinalization.id)
+            .where(
+                ProductRunFinalization.run_id == ProductRun.id,
+                ProductRunFinalization.state.in_(terminal_states),
+            )
+            .exists()
+        )
+        failed_root = (
+            select(WikiJob.id)
+            .where(
+                WikiJob.id == ProductRun.root_job_id,
+                WikiJob.state.in_((JobState.BLOCKED.value, JobState.DEAD_LETTER.value)),
+            )
+            .exists()
+        )
+        statement = select(ProductRun.id, ProductRun.created_at).where(
+            ProductRun.state.not_in(terminal_states),
+            ~final,
+            ~failed_root,
             ProductRun.tenant_id == scope.tenant_id,
             ProductRun.space_id == scope.space_id,
             ProductRun.raw_knowledge_base_id == scope.raw_knowledge_base_id,
@@ -215,10 +241,13 @@ class ProductIngestionStore(CheckpointStore):
                 )
             )
         with self._session_factory() as session:
-            rows = session.scalars(
+            rows = session.execute(
                 statement.order_by(ProductRun.created_at, ProductRun.id).limit(limit)
             ).all()
-            return tuple(self._run_snapshot(session, row, scope) for row in rows)
+            return tuple(
+                ProductRunScanEntry(run_id=run_id, created_at=_aware(created_at))
+                for run_id, created_at in rows
+            )
 
     def attach_original(
         self,
