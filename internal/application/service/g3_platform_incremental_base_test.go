@@ -74,6 +74,47 @@ func TestBatchConceptIncrementalBaseUsesSignedPublishedProjectionAndExactBinding
 	require.NoError(t, schema.validateBatchConceptBase830G3(fixture.ctx, fixture.scope, next))
 	require.Equal(t, before, batchPreparationValidations830G3.Load(), "hot parent projection must avoid replaying old C")
 
+	// A restart reads the signed gob projection. Empty optional slices may then
+	// be nil even though the exact compiler request carries explicit empty arrays.
+	fixture.service.publishedBatchReuse830G3().entries = map[string]publishedBatchReadCache830G3{}
+	nextBefore, err := json.Marshal(next)
+	require.NoError(t, err)
+	require.NoError(t, schema.validateBatchConceptBase830G3(fixture.ctx, fixture.scope, next))
+	require.Equal(t, before, batchPreparationValidations830G3.Load(), "cold reuse must not replay old compilation")
+	nextAfter, err := json.Marshal(next)
+	require.NoError(t, err)
+	require.Equal(t, nextBefore, nextAfter, "comparison cannot mutate candidate input")
+	for name, mutate := range map[string]func(*types.BatchConceptCandidateBundle830G3){
+		"value": func(b *types.BatchConceptCandidateBundle830G3) {
+			v := "changed"
+			b.Request.BaseRequest.ExistingFields[0].Value = &v
+		},
+		"condition": func(b *types.BatchConceptCandidateBundle830G3) {
+			b.Request.BaseRequest.ExistingFields[0].Conditions = []string{"new condition"}
+		},
+		"evidence page": func(b *types.BatchConceptCandidateBundle830G3) {
+			for i := range b.Request.BaseRequest.ExistingFields {
+				if len(b.Request.BaseRequest.ExistingFields[i].Evidence) > 0 {
+					b.Request.BaseRequest.ExistingFields[i].Evidence[0].PageNumber++
+					return
+				}
+			}
+			t.Fatal("fixture must contain evidenced fields")
+		},
+		"member order": func(b *types.BatchConceptCandidateBundle830G3) {
+			rows := b.Request.BaseRequest.ExistingFields
+			require.Greater(t, len(rows), 1)
+			rows[0], rows[1] = rows[1], rows[0]
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var changed types.BatchConceptCandidateBundle830G3
+			require.NoError(t, json.Unmarshal(nextBefore, &changed))
+			mutate(&changed)
+			require.ErrorIs(t, schema.validateBatchConceptBase830G3(fixture.ctx, fixture.scope, changed), ErrSchemaWikiPreparationInvalid)
+		})
+	}
+
 	forged := next
 	forgedBinding := binding
 	forgedBinding.EntityBindings = append([]types.EntityCompileBinding830G3(nil), binding.EntityBindings...)

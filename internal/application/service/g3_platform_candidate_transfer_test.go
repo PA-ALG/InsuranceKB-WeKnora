@@ -27,6 +27,9 @@ func TestG3CandidateTransferUsesExistingDraftAuthorityAndExactManifest(t *testin
 	_, err = f.service.ActivateAutomated(f.ctx, f.principal1, decision, automaticAuthorization(t, f, ready, signedDecision.Nonce))
 	require.NoError(t, err)
 	f.service.newID = oldID
+	// Exercise the next draft after process-local caches are gone, not only the
+	// warm projection produced by the immediately preceding activation.
+	f.service.publishedBatchReuse830G3().entries = map[string]publishedBatchReadCache830G3{}
 	transfer, err := os.ReadFile("../../../harness/tests/fixtures/batch_concept_compile_830_g3/platform-incremental-transfer.json")
 	require.NoError(t, err)
 	candidate, err := os.ReadFile("../../../harness/tests/fixtures/batch_concept_compile_830_g3/platform-incremental-candidate.json")

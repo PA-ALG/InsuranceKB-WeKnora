@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"unicode/utf8"
@@ -192,9 +193,9 @@ func (s *SchemaWikiService) validateBatchConceptBase830G3(
 		release.BaseActivationEpoch == ^uint64(0) ||
 		head.ActivationEpoch != release.BaseActivationEpoch+1 ||
 		!conceptMemberSnapshotSetsEqual830G2(expectedMembers, storedMembers) ||
-		!reflect.DeepEqual(request.ExistingDefinitions, base.CompileResult.Output.Definitions) ||
-		!reflect.DeepEqual(request.ExistingFields, base.CompileResult.Output.Fields) ||
-		!reflect.DeepEqual(request.ExistingPages, base.CompileResult.Output.Pages) ||
+		!batchPublishedCompileMembersEqual830G3(types.ConceptCompileOutput830G2{
+			Definitions: request.ExistingDefinitions, Fields: request.ExistingFields, Pages: request.ExistingPages,
+		}, base.CompileResult.Output) ||
 		!reflect.DeepEqual(request.ExistingEntityVersions, parentEntityVersions) ||
 		types.ValidateBatchNavigationHistory830G3(base, bundle) != nil {
 		return ErrSchemaWikiPreparationInvalid
@@ -205,6 +206,38 @@ func (s *SchemaWikiService) validateBatchConceptBase830G3(
 		return ErrSchemaWikiPreparationInvalid
 	}
 	return nil
+}
+
+// Gob omits empty slices in the signed read cache. Compare only the protocol's
+// optional collection slots with nil/empty equivalence; all other values retain
+// exact comparison. Row copies keep both the signed cache and candidate intact.
+func batchPublishedCompileMembersEqual830G3(left, right types.ConceptCompileOutput830G2) bool {
+	return slices.EqualFunc(left.Definitions, right.Definitions, func(a, b types.ConceptDefinition830G2) bool {
+		if !slices.Equal(a.Aliases, b.Aliases) {
+			return false
+		}
+		a.Aliases, b.Aliases = nil, nil
+		return reflect.DeepEqual(a, b)
+	}) && slices.EqualFunc(left.Fields, right.Fields, func(a, b types.ConceptFieldAssertion830G2) bool {
+		if !slices.Equal(a.Evidence, b.Evidence) || !slices.Equal(a.ConceptIDs, b.ConceptIDs) ||
+			!slices.Equal(a.Conditions, b.Conditions) || !slices.Equal(a.Exceptions, b.Exceptions) {
+			return false
+		}
+		a.Evidence, b.Evidence = nil, nil
+		a.ConceptIDs, b.ConceptIDs = nil, nil
+		a.Conditions, b.Conditions = nil, nil
+		a.Exceptions, b.Exceptions = nil, nil
+		return reflect.DeepEqual(a, b)
+	}) && slices.EqualFunc(left.Pages, right.Pages, func(a, b types.ConceptFreeWikiPage830G2) bool {
+		if !slices.Equal(a.ConceptIDs, b.ConceptIDs) || !slices.Equal(a.Conditions, b.Conditions) ||
+			!slices.Equal(a.Exceptions, b.Exceptions) {
+			return false
+		}
+		a.ConceptIDs, b.ConceptIDs = nil, nil
+		a.Conditions, b.Conditions = nil, nil
+		a.Exceptions, b.Exceptions = nil, nil
+		return reflect.DeepEqual(a, b)
+	})
 }
 
 var batchPreparationValidations830G3 atomic.Uint64

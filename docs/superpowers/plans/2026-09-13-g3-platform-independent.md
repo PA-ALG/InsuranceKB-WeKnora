@@ -1,5 +1,13 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3ar：冷缓存与增量基线的空集合兼容
+
+Task3aq 网页恢复 `baaa5263-75ec-5a4f-b55a-169d3be353cf` 检查点成功，复用10次历史调用，新增调用0；编译提交400，05:14:11.454219Z失败，无新草稿/发布，不算验收通过。原493字段投影中473个conditions、481个exceptions为null，同一检查点编译请求对应项为[]。只读overlay复现：原真实基线测试清空内存缓存、读取既有签名gob投影后，在validateBatchConceptBase830G3失败。Gob空slice变nil，reflect.DeepEqual误判，既有冷读测试仅覆盖成员索引而非下一稿基线。
+
+沿用G3-AUTO-3/5/6，root唯一写者。写域为concept_free_wiki_830_g3.go、必要同目录窄比较函数、g3_platform_incremental_base_test.go、g3_platform_candidate_transfer_test.go及本规格/证据。比较只在既有明确可选集合（definition.aliases；field.evidence/concept_ids/conditions/exceptions；page.concept_ids/conditions/exceptions）允许nil与空slice等价，外层成员集合按长度和顺序比对；值、原文、证据定位、非空集合顺序、必需证据、身份及版本仍精确比较，不修改签名投影、历史候选或摘要。不改权限，不新建存储或编译路径。
+
+先将冷读下一稿校验和真实transfer→draft冷读路径写成RED；覆盖字段值、证据/页码、非空条件变化仍拒绝及输入不变，后最小修复、GREEN及独立冻结复核。仅构建部署受影响APP，复用已热构建缓存、Harness/UI/DB。之后从网页恢复失败任务重新计时；增量通过后仍须全新产品三原件网页完整验收。不得用本诊断或代码测试宣称真实链路完成。
+
 ## 2026-09-15 Task3aq：检查点控制输入与已执行输出边界
 
 Task3ap 三组件已部署 source `2f2fe5ca87cbad3a3c0ea9ff12609a81aa139cb7`。网页恢复于 04:41:52.577Z 发起，child `7c42de0e-fa1e-5927-94b5-88ab9cad5bda` 在 04:42:11.935192Z 以 CHECKPOINT_INVALID 结束；本轮增量验收失败，未发布，记录调用为0。原9响应和82字段仍不变，新产品尚未上传。
