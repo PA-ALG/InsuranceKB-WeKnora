@@ -121,3 +121,5 @@ expected Head和CAS/幂等回执保持有效。验收区分重复校验计数器
 
 ### G3-AUTO-3 Task3ba checkpoint effective validation view
 Checkpoint delta comparison MUST use the authenticated persisted field_validation effective view when synthesis is reused, including nonempty validation changes. Report input identities and original row digests MUST be validated by the existing apply_field_validation function. Checkpoint receipts MUST retain original immutable field digests. Invalid reports MUST fail closed; recovery MUST NOT reextract or rewrite completed data. Regression uses a completed real fixture pipeline and a nonempty ordinary-field validation failure, then resumes unchanged candidate with zero new model calls.
+
+Task3az deployment artifact invariant: public frontend static output MUST be readable/traversable by the nginx worker regardless of the builder's umask. Enforce modes only for /usr/share/nginx/html in existing Dockerfile. Verify actual runtime user read before replacement; reuse byte-identical previously compiled assets, no new Vite compilation.

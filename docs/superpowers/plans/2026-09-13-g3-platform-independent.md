@@ -1,3 +1,7 @@
+## 2026-09-16 Task3az packaging correction
+
+Actual new UI image returned403: nginx worker cannot read root-owned0600 dist files produced under deployment helper umask077. Failed deployment retained and automatically restored original UI; verify rollback separately. Existing earlier task3as02 already used public dist modes but the reused task3as helper omitted them. Make this invariant permanent in frontend/Dockerfile: only the public static output tree receives a+rX, no secrets/config paths. Root sole writer, existing reviewer reads frozen Dockerfile/spec change. The actual403/runtime EACCES is RED. Reuse already compiled identical dist bytes, record hashes and zero Vite rebuild; build the same Dockerfile and verify as nginx UID before redeploy. No source logic/test rerun, DB/model/release effects. This deployment-only correction extends original Task3az write scope to frontend/Dockerfile.
+
 ## 2026-09-15 Task3ba：检查点消费同一有效字段视图
 
 Task3ay已部署APP，但网页恢复15d287e4-d317-587e-87d7-22081517c590在checkpoint终态needs_confirmation/CHECKPOINT_INVALID，未进入publish。只读核对20份引用制品及生产任务身份/hash均匹配，field_validation精确绑定82原行，仅两字段证据3→4、2→3；compile_delta等于派生视图而不等于原行。checkpoint_artifacts.verify_checkpoint目前直接重投影原行，因而误拒。诊断D/task3ay-checkpoint-diagnosis.md。
