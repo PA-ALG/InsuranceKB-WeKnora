@@ -102,3 +102,8 @@ The existing isolated platform connection may use its supported timeout_seconds=
 
 ### Task3aw recent G3 evidence baseline — G3-AUTO-3/4/5/6
 An incremental candidate shall reuse the latest exact published G3 projection and its already sealed legacy evidence occurrences when available, without replaying complete G3/G2/G1/815 ancestors. The existing release authority validates scoped release/epoch/preparation/member identities and the existing derived-artifact owner verifies the parent proof signature/key. Only unchanged factual fields and exact source/evidence occurrences may inherit proofs; existing navigation extension and optional-empty semantics remain valid. Live deletion, revision/resource/retention and source revocation checks remain mandatory. Missing baseline artifacts may use the established preparation path; corrupt or foreign artifacts must fail closed without replacement. Existing files, model outputs, candidates, proof bytes and the single serving Release authority remain preserved. This amendment changes neither provider policy nor ordinary-field completeness requirements.
+
+
+### Task3ax — 普通字段定位验证与有效状态（G3-AUTO-2/3/4/5/6）
+
+字段文本校验成功不代表单页定位成功。平台在编译前消费原签名解析快照的页范围与字符定位，复用815/G3已有一字段多证据结构，将可精确映射的跨页引文投影为多条单页引用；原文和页间空白完整保留在原记录及映射审计中。跨页本身不是字段失败。只有无法满足精确来源/定位要求的普通字段持久记录为抽取失败，不保留未经验证的有效值；原响应与原字段记录不变。有效字段读取、统计、重试与发布消费同一验证产物。验证合同变化仅使相关派生产物失效，恢复不得重新外发已完成抽取或为普通字段触发发现模型。具体冻结范围与验证队列见2026-09-13实施计划Task3ax。

@@ -774,6 +774,14 @@ class ProductIngestionStore(CheckpointStore):
                     cached = self._lookup_cache(
                         session, scope, [task.cache_identity for task in tasks]
                     )
+                    run = self._run(session, scope, run_id)
+                    # An explicit failed-field retry requests a fresh extraction.
+                    # Its original attempt may remain VERIFIED for custody while
+                    # a checkpoint child's location validation marked it failed.
+                    forced = set(run.retry_field_keys or ())
+                    cached = {
+                        key: row for key, row in cached.items() if row.field_key not in forced
+                    }
                     selected = tuple(
                         task for task in tasks if task.cache_identity.cache_key not in cached
                     )
@@ -1187,6 +1195,37 @@ class ProductIngestionStore(CheckpointStore):
         )
 
     def list_field_attempts(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        field_keys: Sequence[str] | None = None,
+    ) -> tuple[FieldAttemptSnapshot, ...]:
+        from insurance_harness.product_ingestion.field_validation import apply_field_validation
+
+        originals = self.list_original_field_attempts(scope=scope, run_id=run_id)
+        report = self._field_validation_report(scope, run_id)
+        effective = apply_field_validation(originals, report) if report is not None else originals
+        return tuple(row for row in effective if field_keys is None or row.field_key in field_keys)
+
+    def _field_validation_report(self, scope, run_id):
+        from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+        from insurance_harness.product_ingestion.field_validation import FieldValidationReport
+
+        rows = ProductArtifactStore(self._session_factory, self).list_effective_artifacts(
+            scope=scope, run_id=run_id, artifact_kind="field_validation"
+        )
+        if not rows:
+            return None
+        if len(rows) != 1 or (
+            rows[0].artifact_key,
+            rows[0].contract_name,
+            rows[0].contract_version,
+        ) != ("product", "product-field_validation.v1", "1"):
+            raise ValueError("field validation artifact contract mismatch")
+        return FieldValidationReport.model_validate_json(rows[0].payload)
+
+    def list_original_field_attempts(
         self,
         *,
         scope: ProductScope,
@@ -1782,20 +1821,18 @@ class ProductIngestionStore(CheckpointStore):
     ) -> ProductRunSnapshot:
         if not failed_attempt_ids:
             raise ValueError("failed_attempt_ids must not be empty")
+        attempts = tuple(
+            item
+            for item in self.list_field_attempts(scope=scope, run_id=run_id)
+            if item.attempt_id in failed_attempt_ids
+        )
+        if len(attempts) != len(set(failed_attempt_ids)) or any(
+            item.outcome is not FieldOutcomeKind.EXTRACTION_FAILED for item in attempts
+        ):
+            raise ValueError("only extraction_failed field attempts may be retried")
         with self._session_factory() as session:
             with session.begin():
                 origin = self._run(session, scope, run_id, lock=True)
-                attempts = session.scalars(
-                    select(ProductFieldAttempt).where(
-                        ProductFieldAttempt.id.in_(tuple(failed_attempt_ids)),
-                        ProductFieldAttempt.run_id == run_id,
-                        ProductFieldAttempt.space_id == scope.space_id,
-                    )
-                ).all()
-                if len(attempts) != len(set(failed_attempt_ids)) or any(
-                    item.outcome != FieldOutcomeKind.EXTRACTION_FAILED.value for item in attempts
-                ):
-                    raise ValueError("only extraction_failed field attempts may be retried")
                 existing = session.execute(
                     select(ProductRun).where(
                         ProductRun.tenant_id == scope.tenant_id,
@@ -2336,6 +2373,23 @@ class ProductIngestionStore(CheckpointStore):
             wiki_knowledge_base_id=row.wiki_knowledge_base_id,
         )
         refs, receipt = self.checkpoint_field_references(session, scope, run_id)
+        # Creation has no committed run yet, and no field validation can exist
+        # before there are local or checkpoint-referenced extraction attempts.
+        report = self._field_validation_report(scope, run_id) if counts or refs else None
+        if report is not None:
+            from insurance_harness.product_ingestion.field_validation import apply_field_validation
+
+            effective = apply_field_validation(
+                self.list_original_field_attempts(scope=scope, run_id=run_id), report
+            )
+            return tuple(
+                sum(item.outcome is kind for item in effective)
+                for kind in (
+                    FieldOutcomeKind.VERIFIED,
+                    FieldOutcomeKind.NOT_PROVIDED,
+                    FieldOutcomeKind.EXTRACTION_FAILED,
+                )
+            )
         for ref in refs:
             counts[ref.outcome] = counts.get(ref.outcome, 0) + 1
         return (

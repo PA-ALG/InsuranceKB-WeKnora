@@ -14,6 +14,7 @@ from sqlalchemy import event, select
 from insurance_harness.jobs.tables import WikiJob
 from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
 from insurance_harness.product_ingestion.checkpoints import (
+    CURRENT_ARTIFACT_CONTRACTS,
     required_outputs,
     stage_order,
 )
@@ -53,7 +54,9 @@ def _metadata_origin(api, factory, *, workflow, candidate_contract, failed_stage
             if key != failed_stage:
                 for kind in required_outputs(workflow)[key]:
                     contract = (
-                        candidate_contract if kind == "candidate" else (f"fixture-{kind}.v1", "1")
+                        candidate_contract
+                        if kind == "candidate"
+                        else CURRENT_ARTIFACT_CONTRACTS.get(kind, (f"fixture-{kind}.v1", "1"))
                     )
                     payload = json.dumps({"fixture_kind": kind}).encode()
                     artifact = ProductArtifact(
@@ -121,6 +124,7 @@ def test_obsolete_candidate_truncates_compilation_and_all_downstream(api, factor
         "compile_request",
         "field_plan",
         "compile_delta",
+        "field_validation",
     }
     assert not any(
         "product_ingestion_artifacts.payload " in sql.lower()
@@ -134,6 +138,28 @@ def test_obsolete_candidate_truncates_compilation_and_all_downstream(api, factor
         }
     assert all(after[identity] == (raw, sha) for identity, raw, sha in before)
     assert store.get_run(scope=scope, run_id=origin.run_id) == origin
+
+
+def test_old_synthesis_resumes_validation_without_replaying_extraction(api, factory):
+    scope, store, origin, _ = _metadata_origin(
+        api,
+        factory,
+        workflow=2,
+        candidate_contract=("product-candidate.v2", "2"),
+        failed_stage="preparation",
+    )
+    with factory() as session, session.begin():
+        for row in session.scalars(
+            select(ProductArtifact).where(ProductArtifact.run_id == origin.run_id)
+        ):
+            if row.artifact_kind == "field_validation":
+                session.delete(row)
+            elif row.artifact_kind == "compile_delta":
+                row.contract_name, row.contract_version = "product-compile_delta.v1", "1"
+    with factory() as session:
+        plan = store._checkpoint_candidate(session, scope, session.get(ProductRun, origin.run_id))
+    assert plan.resume_stage == "synthesis"
+    assert tuple(row.stage_key for row in plan.reused_stages) == stage_order(2)[:6]
 
 
 def test_obsolete_legacy_combined_compilation_upgrades_to_split_workflow(api, factory):

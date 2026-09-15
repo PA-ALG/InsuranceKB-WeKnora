@@ -17,6 +17,7 @@ from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
     ReviewResult,
 )
 from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
+from insurance_harness.product_ingestion.checkpoints import CURRENT_ARTIFACT_CONTRACTS
 from insurance_harness.product_ingestion.compilation import _derived_run_id
 from insurance_harness.product_ingestion.discovery import (
     DISCOVERY_PROMPT,
@@ -110,6 +111,7 @@ async def run_discovery_stage(
                 stage.dependency_sha256,
                 origin=ArtifactOrigin.MODEL if call_id else ArtifactOrigin.RULE,
                 call_id=call_id,
+                contract_version=CURRENT_ARTIFACT_CONTRACTS.get(kind, (None, "1"))[1],
             )
         )
 
@@ -141,8 +143,13 @@ async def run_discovery_stage(
 
     phase = "GENERATION"
     try:
-        if run.retry_of_run_id and not processing_recovery:
-            prior = artifacts.list_artifacts(
+        if run.retry_of_run_id:
+            read_prior = (
+                artifacts.list_effective_artifacts
+                if processing_recovery
+                else artifacts.list_artifacts
+            )
+            prior = read_prior(
                 scope=scope, run_id=run.retry_of_run_id, artifact_kind="discovery_summary"
             )
             if prior:
@@ -168,7 +175,12 @@ async def run_discovery_stage(
                         for row in base["published_projection"].get(kind, ())
                     }
                     if not expected or not set(expected) <= published:
-                        raise needs_confirmation_error("DISCOVERY_RESULT_NOT_IN_PUBLISHED_BASE")
+                        if not processing_recovery:
+                            raise needs_confirmation_error("DISCOVERY_RESULT_NOT_IN_PUBLISHED_BASE")
+                        # The recorded group remains auditable at its origin.
+                        # Changed field dependencies cannot inherit its review.
+                        summary["state"] = "PENDING"
+                        summary["reason_codes"] = ["DISCOVERY_REVALIDATION_REQUIRED"]
                     summary["discovery_origin_run_id"] = origin
                 summary.update(reused=True, reused_from_run_id=run.retry_of_run_id, call_ids=[])
                 # These members belong to the inherited published base, not new output.

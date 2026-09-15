@@ -1,5 +1,19 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3ax：复用多证据结构，跨页定位在编译前收敛
+
+Task3aw d32697067 已构建/烟测/部署同 APP；真实网页恢复3661a372-ae01-5e2f-8ccb-6798b0338668失败，10:53:42.486Z→11:08:41.195356Z，898.709356秒。检查点252.589713秒，0新增/10复用模型，21/31/30字段原行未变。child legacy proof已由平台生成；只读DB/C5比对未发现旧receipt不一致。真实候选+13份既有缓存的离线原函数定位检查，在115项后发现当前产品coverage_responsibilities引用跨3、4页；同一引用也用于death_benefit_rules。quote/块/源身份完全匹配，但单页locator不接受跨页。340条字段证据范围扫描只有该2字段跨页；不将本地probe当完整线上门禁PASS。
+
+沿用G3-AUTO-2/3/4/5/6。用户已允许普通字段失败，不为补齐反复外发。复用已签名source snapshot中的page_spans/native boxes、原FieldAttempt/raw、ProductArtifact、checkpoint合同版本失效和唯一字段读取入口；不增加表、队列、来源版本、签名协议或环境。2026-09-15用户进一步指出815已支持一字段多处证据，因此跨页本身不得判字段失败。已核验815 c7-server-reopen-index中guaranteed_renewal_period有5条引用、位于1/20页；G3证据数组及Viewer的source_locator.actual_page_number均可直接复用。平台按已有原页范围把一条跨页引文确定性映射为多条单页引用，保留原source block起始页身份，由Go locator给出物理页。原文、原attempt/raw不变；每个原码点必须被单页片段或显式gap审计完整覆盖，只有真实页间空白可以放入gap，不得静默strip或删除非空白。只有无法精确分段、缺框等真实定位失败才将普通字段派生为extraction_failed并隐藏有效值。此修订取代此前尚未实现的严格单页降级选择，不扩展引用协议。
+
+唯一Owner=root；g3_admission_finish只读独立复核。写域为harness/src/insurance_harness/product_ingestion下字段验证纯函数/对应artifact存储读取适配、pipeline.py、store.py、checkpoints.py、discovery_stage.py及窄测试/本计划/原规格/证据。必要读取适配须保持Artifact现有scope、hash、checkpoint producer/generation检查；不让UI访问材料大正文。APP/UI无预期行为修改，仅受影响Harness构建部署。
+
+1. 编译前在既有synthesis阶段按原source snapshot及source_geometry既有校验一次构建页范围/字符框索引，逐本产品字段检查来源/块/quote，把可精确映射的跨页quote转换为同字段多条原页证据，保持单页quote原样；identity/版本/签名异常仍是硬错误，普通字段证据问题降为明确失败。只校验当前字段，历史published base复用。
+2. 同一阶段持久化版本化field_validation artifact，绑定原attempt identity/digest/raw_ref及source snapshot digest，保存原引文→各片段及页间空白的无损映射、失败原因和有效结果视图；不覆盖82原行或9原响应。project_field_attempts、统一list_field_attempts、最终counts、失败字段重试读取同一有效视图，不能候选unknown而页面仍verified。stage成功提交遵循既有代次/事务。
+3. compile_delta合同升版使恢复仅失效synthesis及后续；source/identity/field_plan/extract和原调用记录复用。旧field_validation缺失仍能读历史记录，损坏/跨scope不可回退为verified。
+4. 恢复时不得因为validation改变让discovery重新外发。复用既有记录；失败/未执行的发现保留状态。若原未发布发现的复核依赖确实因字段变化失效，保留原始记录并明确待重验，正常普通字段发布继续，不伪造新review或静默消失。新上传仍走原发现策略。本轮恢复必须0新模型。
+5. RED覆盖真实跨页多引用保留、同页/页边界/跨页空白完整审计/非空白缺框、scope/源变化、原记录不变、status/count/retry一致、旧contract仅恢复到synthesis、恢复无provider与候选不带失败值。GREEN后独立复核再部署同Harness，从网页恢复，不手工改业务记录或候选。若还有发布错误，保存真实终态继续定位，不宣称G3完成。
+
 ## 2026-09-15 Task3aw：直接复用最近已验证 G3 的历史证据基线
 
 用户明确要求参考 WeKnora 原生 Wiki 的增量处理，并指出最近 G3 已统一入库，常规新任务无需重跑 G2/G1/815。沿用已授权 G3-AUTO-3/4/5/6，不删除历史资料或当前字段，不新建环境、发布权威或缓存协议。root 唯一仓库写者；既有 g3_admission_finish 只读复核本计划及冻结实现。

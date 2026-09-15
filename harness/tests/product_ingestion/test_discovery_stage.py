@@ -43,12 +43,14 @@ class PriorArtifacts:
     def list_artifacts(self, **kwargs):
         return [SimpleNamespace(payload=json_bytes(self.summary))]
 
+    list_effective_artifacts = list_artifacts
+
     def get_artifact(self, **kwargs):
         assert kwargs["artifact_kind"] == "compile_delta" and kwargs["run_id"] == "original"
         return SimpleNamespace(payload=json_bytes(self.delta))
 
 
-async def retry(artifacts, base):
+async def retry(artifacts, base, *, processing_recovery=False):
     return await run_discovery_stage(
         service=None,
         artifacts=artifacts,
@@ -60,6 +62,7 @@ async def retry(artifacts, base):
         field_delta={"field": "retry result"},
         entity_id="entity",
         base=base,
+        processing_recovery=processing_recovery,
     )
 
 
@@ -77,6 +80,33 @@ async def test_published_discovery_is_carried_without_any_executor_call():
         next(row.payload for row in result.drafts if row.artifact_kind == "discovery_summary")
     )
     assert summary["reused"] is True and summary["state"] == "ACCEPTED"
+    assert summary["accepted_member_count"] == 0 and summary["call_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_processing_recovery_reuses_failed_discovery_without_model():
+    artifacts = PriorArtifacts()
+    artifacts.summary.update(
+        state="FAILED", reason_codes=["DISCOVERY_GENERATION_FAILED"], accepted_member_count=0
+    )
+    result = await retry(artifacts, {"published_projection": {}}, processing_recovery=True)
+    summary = json.loads(
+        next(row.payload for row in result.drafts if row.artifact_kind == "discovery_summary")
+    )
+    assert summary["state"] == "FAILED" and summary["reused"] is True
+    assert summary["reason_codes"] == ["DISCOVERY_GENERATION_FAILED"]
+    assert summary["call_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_recovery_keeps_unpublished_discovery_explicitly_pending():
+    result = await retry(PriorArtifacts(), {"published_projection": {}}, processing_recovery=True)
+    summary = json.loads(
+        next(row.payload for row in result.drafts if row.artifact_kind == "discovery_summary")
+    )
+    assert summary["state"] == "PENDING"
+    assert summary["reason_codes"] == ["DISCOVERY_REVALIDATION_REQUIRED"]
+    assert summary["reused_from_run_id"] == "original"
     assert summary["accepted_member_count"] == 0 and summary["call_ids"] == []
 
 

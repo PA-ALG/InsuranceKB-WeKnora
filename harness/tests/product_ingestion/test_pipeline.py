@@ -107,6 +107,8 @@ def test_factory_installs_every_real_stage_and_checks_configured_identity_prompt
     )
     ports = api.build_product_pipeline(context)
     assert set(ports.stage_handlers) == {
+        "checkpoint",
+        "preparation",
         "identity",
         "field_plan",
         "extract",
@@ -132,17 +134,33 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
     from types import ModuleType
 
     from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
-    from insurance_harness.product_ingestion import discovery_stage, platform
-    from insurance_harness.product_ingestion.stages import json_bytes
+    from insurance_harness.product_ingestion import (
+        discovery_stage,
+        field_validation,
+        platform,
+        stages,
+    )
+    from insurance_harness.product_ingestion.stages import StageOutput, json_bytes
 
     api = module()
 
     async def discovery(**kwargs):
         assert kwargs["field_delta"] == {"fixture": True}
         assert kwargs["processing_recovery"] is False
-        return kwargs["field_delta"]
+        return StageOutput()
 
     monkeypatch.setattr(discovery_stage, "run_discovery_stage", discovery)
+    monkeypatch.setattr(stages, "read_source_snapshots", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        field_validation,
+        "validate_field_attempts",
+        lambda **kwargs: field_validation.FieldValidationReport(
+            source_snapshot_digests={},
+            input_digests={},
+            changes={},
+            counts={"verified": 0, "not_provided": 0, "extraction_failed": 0},
+        ),
+    )
     monkeypatch.setattr(platform, "verify_signed_snapshot", lambda *_args, **_kwargs: {})
     adapter = ModuleType("insurance_harness.product_ingestion.compilation")
 
@@ -176,10 +194,12 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
             )
         },
         store=SimpleNamespace(
-            list_field_attempts=lambda **_: (), processing_recovery_plan=lambda **_: None
+            list_original_field_attempts=lambda **_: (),
+            processing_recovery_plan=lambda **_: None,
+            checkpoint_plan=lambda **_: None,
         ),
         artifacts=SimpleNamespace(
-            get_artifact=lambda **_: SimpleNamespace(
+            get_effective_artifact=lambda **_: SimpleNamespace(
                 payload=b'{"current_entity_ids":["fixture-entity"]}'
             )
         ),

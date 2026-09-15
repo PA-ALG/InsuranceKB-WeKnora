@@ -611,10 +611,10 @@ def test_go_published_null_collections_preserve_exact_parent_and_request_hash():
 )
 def test_null_collection_adapter_never_defaults_scalar_or_required_evidence(kind, row, model):
     from insurance_harness.knowledge_compiler import concept_free_wiki_830_g2 as contract
-    from insurance_harness.product_ingestion.compilation import _published_compile_members
+    from insurance_harness.product_ingestion.compilation import published_compile_members
 
     original = copy.deepcopy(row)
-    projected = _published_compile_members({kind: [row]}, kind)[0]
+    projected = published_compile_members({kind: [row]}, kind)[0]
     assert row == original
     for key in ("value", "unknown_reason", "title", "body"):
         if key in row:
@@ -629,13 +629,13 @@ def test_null_collection_adapter_rejects_wrong_collection_type_on_valid_parent_f
     from pydantic import ValidationError
 
     from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import FieldAssertion
-    from insurance_harness.product_ingestion.compilation import _published_compile_members
+    from insurance_harness.product_ingestion.compilation import published_compile_members
 
     parent, _ = candidates()
     row = parent.compile_result.output.fields[0].model_dump(mode="json")
     FieldAssertion.model_validate(row)
     row["conditions"] = "bad"
-    actual = _published_compile_members({"fields": [row]}, "fields")[0]
+    actual = published_compile_members({"fields": [row]}, "fields")[0]
     assert actual["conditions"] == "bad"
     with pytest.raises(ValidationError) as error:
         FieldAssertion.model_validate(actual)

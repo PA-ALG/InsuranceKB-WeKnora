@@ -36,7 +36,7 @@ LEGACY_REQUIRED_OUTPUTS = {
     "identity": ("identity", "base_snapshot"),
     "field_plan": ("compile_request", "field_plan"),
     "extract": (),
-    "synthesis": ("compile_delta",),
+    "synthesis": ("compile_delta", "field_validation"),
     "compilation": ("candidate", "preparation"),
     "review": ("system_decision", "ready"),
     "publish": ("publish_authorization", "publication"),
@@ -52,7 +52,11 @@ REQUIRED_OUTPUTS = {
 
 
 # Only declared versioned outputs gate reuse; historical payloads stay immutable.
-CURRENT_ARTIFACT_CONTRACTS = {"candidate": ("product-candidate.v2", "2")}
+CURRENT_ARTIFACT_CONTRACTS = {
+    "candidate": ("product-candidate.v2", "2"),
+    "compile_delta": ("product-compile_delta.v2", "2"),
+    "field_validation": ("product-field_validation.v1", "1"),
+}
 
 
 def stage_order(workflow_version):

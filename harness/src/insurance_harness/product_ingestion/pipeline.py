@@ -795,12 +795,33 @@ def build_product_pipeline(context):
         from insurance_harness.product_ingestion.compilation import (
             project_field_attempts,
         )
+        from insurance_harness.product_ingestion.field_validation import (
+            apply_field_validation,
+            validate_field_attempts,
+        )
 
         request = await asyncio.to_thread(request_for, scope, run.run_id)
+
+        def validate():
+            attempts = store.list_original_field_attempts(scope=scope, run_id=run.run_id)
+            snapshots = read_source_snapshots(
+                artifacts,
+                scope,
+                run.run_id,
+                public_keys=service_for(scope).configuration.source_public_keys,
+            )
+            report = validate_field_attempts(
+                tasks=adapt_catalog_field_tasks(request),
+                attempts=attempts,
+                snapshots=snapshots,
+            )
+            return report, apply_field_validation(attempts, report)
+
+        validation, attempts = await asyncio.to_thread(validate)
         delta = await asyncio.to_thread(
             project_field_attempts,
             request=request,
-            attempts=store.list_field_attempts(scope=scope, run_id=run.run_id),
+            attempts=attempts,
             run_id=run.run_id,
         )
         from insurance_harness.product_ingestion.discovery_stage import (
@@ -808,7 +829,7 @@ def build_product_pipeline(context):
         )
 
         identity_values = json.loads(read(scope, run.run_id, "identity"))
-        return await run_discovery_stage(
+        output = await run_discovery_stage(
             processing_recovery=(
                 store.processing_recovery_plan(scope=scope, run_id=run.run_id) is not None
                 or store.checkpoint_plan(scope=scope, run_id=run.run_id) is not None
@@ -823,6 +844,18 @@ def build_product_pipeline(context):
             field_delta=delta,
             entity_id=identity_values["current_entity_ids"][0],
             base=await asyncio.to_thread(base_for, scope, run.run_id),
+        )
+        return StageOutput(
+            output.drafts
+            + (
+                artifact(
+                    "field_validation",
+                    "product",
+                    validation.model_dump_json().encode(),
+                    stage.dependency_sha256,
+                ),
+            ),
+            state=output.state,
         )
 
     async def compilation(scope, run, stage, job):
