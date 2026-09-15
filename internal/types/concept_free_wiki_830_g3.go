@@ -906,6 +906,12 @@ func batchConceptCanonicalJSON830G3(payload any) ([]byte, error) {
 	return batchConceptCanonicalWire830G3(raw)
 }
 
+// CanonicalBatchConceptWire830G3 normalizes persisted JSON using the existing
+// G3 wire rules. It does not validate or compile a candidate bundle.
+func CanonicalBatchConceptWire830G3(raw []byte) ([]byte, error) {
+	return batchConceptCanonicalWire830G3(raw)
+}
+
 func batchConceptCanonicalWire830G3(raw []byte) ([]byte, error) {
 	if !utf8.Valid(raw) || !conceptJSONUnicodeValid830G2(raw) || !conceptJSONUniqueKeys830G2(raw) {
 		return nil, ErrConceptCandidateBundle830G3

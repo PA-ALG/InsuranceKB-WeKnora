@@ -1,5 +1,43 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3ay：激活复用已验证 Ready 投影
+
+Task3ax d9d30adac 已部署；网页恢复 1cb14bbf-e098-52db-9c00-c24afb56292d
+13:18:52.257Z→13:51:52.456396Z 共1980.199396秒，publish 三次300秒传输超时失败。
+source/identity/field_plan/extract复用、synthesis及compilation完成、草稿201及自动审核200；
+两字段跨页已保存为4/3条证据，原值/raw不变，21/31/30，0新/10复用模型。
+当前Head仍epoch9。只读数据库观察未见活动锁等待；尚未证明所有超时CPU成本。
+
+已核对既有实现：ActivateAutomated先validateSystemPreparation完整校验，再执行来源权威，
+rememberValidated保存签名Ready投影，最后private activate却再次完整语义校验。
+已存在validatePublishedBatchConceptPreparation830G3及read校验同一Ready的scope、
+preparation摘要、完整manifest字节摘要、所有成员内容及签名；read注释已明确支持activation。
+本次只把private activate的G3分支接入既有投影读取，不新增缓存/协议/环境、不加长等待、
+不跳过调用者签名、当前双KB权限、来源撤销、系统策略、授权有效期与最终CAS检查。
+投影缺失/损坏仍拒绝，不隐式重建；原G1/G2路径不变。生产G3调用者在进入activate前
+已通过原完整校验及rememberValidated，单请求消除最后一处重复语义编译。
+
+root唯一写者；g3_admission_finish只读独立复核。写域仅wiki_release.go、同目录窄测试、
+原规格/本计划/证据。RED以既有batchPreparationValidations830G3计数器验证完整公开
+自动激活入口只做一次完整Preparation校验（来源真实检查仍运行，fixture另有范围说明）；
+覆盖当前权限/策略/源拒绝、冷重开/篡改投影及manifest/成员、CAS/replay原测试。
+GREEN及冻结复核后只构建部署APP，保持Task3ax Harness与配置不变，从网页恢复最新失败任务。
+部署前确认平台任务终态；不执行手工发布，不修改候选或原字段。未完成真实发布检索/证据与
+全新产品网页验收前，G3仍未完成。
+
+Task3ay GREEN02的4个合法激活用例失败：数据库serializer对原Manifest重新HTML/行分隔符转义，
+read的原始bytes摘要与既有canonical摘要不等。复用types已有batchConceptCanonicalWire830G3，
+仅暴露JSON规范化wrapper；在private激活校验副本中规范化Manifest后调用原投影reader，
+不改变metadata GET原合同、不重做语义编译、不改原始存储。写域据此增加该types文件及窄测试。
+已读实现及合法fixture包含原始>/&/U+2028；G3原文允许非NFC，不能误用G2的NFC限定规范化。
+在格式误拒修复后重新验证nil成员RED，避免被先前manifest错误掩盖。
+
+Task3ay 冻结01独立复核发现一项边界：published metadata GET允许Members=nil，
+activation写边界必须要求完整非空Members。追加公开自动激活测试，仅通过同一SQLite
+内存fixture的来源hook把第二次Ready读取成员设为null，要求拒绝且Head/receipt不变。
+先验证此反例RED，再在private G3分支补len(Members)>0，不改变GET/helper兼容。
+冻结01报告/private/tmp/g3-task3ay-independent-review-01.md；此项关闭后重新冻结复核。
+
 ## 2026-09-15 Task3ax：复用多证据结构，跨页定位在编译前收敛
 
 Task3aw d32697067 已构建/烟测/部署同 APP；真实网页恢复3661a372-ae01-5e2f-8ccb-6798b0338668失败，10:53:42.486Z→11:08:41.195356Z，898.709356秒。检查点252.589713秒，0新增/10复用模型，21/31/30字段原行未变。child legacy proof已由平台生成；只读DB/C5比对未发现旧receipt不一致。真实候选+13份既有缓存的离线原函数定位检查，在115项后发现当前产品coverage_responsibilities引用跨3、4页；同一引用也用于death_benefit_rules。quote/块/源身份完全匹配，但单页locator不接受跨页。340条字段证据范围扫描只有该2字段跨页；不将本地probe当完整线上门禁PASS。

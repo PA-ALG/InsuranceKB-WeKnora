@@ -1216,8 +1216,19 @@ func (s *WikiReleaseService) activate(
 			return nil, ErrWikiReleaseInvalidAuthorization
 		}
 	} else if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
-		if _, _, validationErr := validateBatchConceptPreparation830G3(
-			preparation, types.WikiReleasePreparationReady, scope,
+		// JSON storage may change escaping and spacing; preserve the canonical
+		// manifest identity already checked by the public activation gate.
+		if len(preparation.Members) == 0 {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		canonicalManifest, canonicalErr := types.CanonicalBatchConceptWire830G3(preparation.Manifest)
+		if canonicalErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		validationInput := *preparation
+		validationInput.Manifest = canonicalManifest
+		if _, _, validationErr := s.validatePublishedBatchConceptPreparation830G3(
+			&validationInput, scope,
 		); validationErr != nil {
 			return nil, ErrWikiReleaseInvalidAuthorization
 		}
