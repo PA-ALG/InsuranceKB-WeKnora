@@ -1,5 +1,14 @@
 # G3 Platform Independent Processing Implementation Plan
 
+## 2026-09-15 Task3av：既有平台响应等待上限的有界调整
+
+Task3au APP138028353已部署，网页run6b468cec-402c-5668-a5c9-c70d399483b1在09:02:48.863Z点击、09:13:41.657508Z失败。检查点209.792576s单代成功，candidate-v2直接复用，未重编译；0新/10复用调用，字段21/31/30不变。preparation3次传输失败。首个APP请求120.330171349s后统一返回CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE，与客户端120s读响应等待先超时相容；目前没有phase trace证明具体停在来源链哪层，也不能排除内在来源问题。
+
+沿用G3-AUTO-3/4/5/6及已授权现有环境：仅将该scope platform.timeout_seconds由120改为300（既有PlatformConnectionSettings已允许≤300）。这是一次有界配置验证，不宣称性能解决；httpx标量为网络阶段超时，既有3次job attempts保留，不冒称一次调用或整任务300s硬上限。模型timeout/预算/重试、权限签名、来源校验、响应容量、数据库、应用源码和镜像均不改。当前失败及候选不变。
+
+root唯一写者，只写本计划/现有规格/回执及/private/tmp新私有env和原compose适配；新env逐值对比仅此一个scalar变化，旧env保留回滚。先确认终态、无活动jobs/遗留请求，再复用同一Harness镜像重启原API/worker；APP/UI保持。既有配置模型校验+精确容器env读回、健康检查和独立脚本复核后，从网页恢复并实测。无需源码构建/迁移。若300仍失败，保留平台性能/来源问题，不能继续盲目加时或宣称验收通过。
+
+
 ## 2026-09-15 Task3au：增量来源校验复用既有当前绑定判定
 
 Task3at CODE/DELIVERY已通过，source c37e0813c82c935d6d2f6d600da17662adc34ea1；网页run50e6e0b2-701b-54a2-8081-4a5f0cdb89a3于08:21:11.971Z点击、08:28:44.410085Z失败，452.439085s，0新/10复用模型，21/31/30字段原记录不变。检查点及编译均单代成功，candidate-v2已保存SHA c007b78e0b94e6c8e0fa20c167eb921acfff17c23e8f00779324bb43e35c7903，10,202,320B，原导航已继承。草稿3次返回CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE，不是租约回收。

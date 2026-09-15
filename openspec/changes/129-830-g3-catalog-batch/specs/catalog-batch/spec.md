@@ -95,3 +95,7 @@ Incremental platform compilation SHALL preserve the published parent's navigatio
 
 ### Task3au amendment — G3-AUTO-1/3/5/6
 The source authority must select live corpus materials using the existing current-resolution binding contract, including current MATCH/refresh on existing entities. Carried published bindings do not require retransmitting their materials in the current corpus. All existing source/evidence revocation, exact published-base and custody checks remain mandatory; missing current materials fail closed. Source selection must reuse the same types decision used by candidate validation. No historic candidate mutation or model replay is permitted.
+
+
+### Task3av bounded configuration — G3-AUTO-3/4/5/6
+The existing isolated platform connection may use its supported timeout_seconds=300 for one configuration verification after the 120-second transport failures reach terminal state. No source gate or model policy changes; no build or database migration. Preserve the existing three-attempt job policy and report it explicitly. Exact one-scalar configuration diff, unchanged images, terminal/no-active-work guard and normal webpage recovery are required. This is not a performance acceptance pass.
