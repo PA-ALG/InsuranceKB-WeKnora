@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -123,16 +126,45 @@ class WorkerLoop:
     ) -> None:
         backoff_index = 0
         while not stop.is_set():
+            due = time.monotonic() + self._settings.heartbeat_interval_seconds
             await self._sleep(self._settings.heartbeat_interval_seconds)
             if stop.is_set():
                 return
             try:
-                await self._store_call(
-                    self._store.heartbeat,
-                    space_id=job.space_id,
-                    job_id=job.id,
-                    generation=job.lease_generation,
-                )
+                submitted = time.monotonic()
+
+                def heartbeat(submitted=submitted, due=due):
+                    started = time.monotonic()
+                    error_type = None
+                    renewed = None
+                    try:
+                        renewed = self._store.heartbeat(
+                            space_id=job.space_id, job_id=job.id,
+                            generation=job.lease_generation,
+                        )
+                        return renewed
+                    except Exception as error:
+                        error_type = type(error).__name__
+                        raise
+                    finally:
+                        details = {
+                            "event": "job_heartbeat", "job_id": job.id,
+                            "space_id": job.space_id, "generation": job.lease_generation,
+                            "loop_delay_seconds": max(0.0, submitted - due),
+                            "executor_wait_seconds": max(0.0, started - submitted),
+                            "database_seconds": time.monotonic() - started,
+                            "lease_expires_at": (
+                                renewed.lease_expires_at.isoformat()
+                                if renewed and renewed.lease_expires_at else None
+                            ),
+                            "error_type": error_type,
+                        }
+                        logging.getLogger(__name__).log(
+                            logging.WARNING if error_type else logging.INFO,
+                            json.dumps(details), extra=details,
+                        )
+
+                await self._store_call(heartbeat)
                 backoff_index = 0
             except Exception as error:
                 self.last_transient_error = type(error).__name__

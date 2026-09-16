@@ -40,9 +40,10 @@ def test_production_field_loader_keeps_loop_alive(snapshot, monkeypatch, boundar
     scope, body, sign, keys = snapshot
     raw = sign(body)
     artifact = SimpleNamespace(payload=raw, artifact_key=body["receipt"]["knowledge_id"])
-    store = SimpleNamespace(list_artifacts=lambda **kw: (artifact,))
+    store = SimpleNamespace(list_effective_artifacts=lambda **kw: (artifact,))
     owner, name = (
-        (store, "list_artifacts") if boundary == "read" else (stages, "decode_source_snapshot")
+        (store, "list_effective_artifacts")
+        if boundary == "read" else (stages, "decode_source_snapshot")
     )
     original = getattr(owner, name)
     release = threading.Event()
@@ -267,7 +268,8 @@ def test_scoped_loader_gate_waits_for_cancelled_read_to_finish(snapshot, monkeyp
 
     monkeypatch.setattr(composition, "load_source_blocks", load)
     service = SimpleNamespace(scope=scope, configuration=SimpleNamespace(source_public_keys=keys))
-    loader = composition._scoped_source_loader(object(), {scope.space_id: service})
+    artifacts = SimpleNamespace(list_effective_artifact_references=lambda **kw: (kw["run_id"],))
+    loader = composition._scoped_source_loader(artifacts, {scope.space_id: service})
 
     async def run():
         first = asyncio.create_task(loader(scope, "first"))
@@ -335,3 +337,61 @@ def test_generation_change_during_render_prevents_provider_dispatch(runtime, sou
     assert not sent
     call = store.list_calls(scope=scope, run_id=run.run_id)[0]
     assert call.state.value == "reserved" and call.dispatched_at is None and call.raw is None
+
+
+def test_scoped_loader_reuses_verified_blocks_until_snapshot_identity_changes(
+    snapshot, monkeypatch
+):
+    from insurance_harness.product_ingestion import composition
+
+    scope, _, _, keys = snapshot
+    refs = ["snapshot-v1"]
+    reads = []
+
+    class Artifacts:
+        def list_effective_artifact_references(self, **kwargs):
+            return tuple(refs)
+
+    async def load(*args, **kwargs):
+        reads.append(tuple(refs))
+        return tuple(refs)
+
+    monkeypatch.setattr(composition, "load_source_blocks", load)
+    service = SimpleNamespace(scope=scope, configuration=SimpleNamespace(source_public_keys=keys))
+    loader = composition._scoped_source_loader(Artifacts(), {scope.space_id: service})
+
+    async def run():
+        assert await loader(scope, "run") == ("snapshot-v1",)
+        assert await loader(scope, "run") == ("snapshot-v1",)
+        assert len(reads) == 1, "each field window reopens the full source geometry"
+        refs[0] = "snapshot-v2"
+        assert await loader(scope, "run") == ("snapshot-v2",)
+        assert len(reads) == 2
+        await loader(scope, "other-run")
+        assert len(reads) == 3, "cache must not cross a run's immutable references"
+
+    asyncio.run(run())
+
+
+def test_expired_job_reclaim_records_old_lease_and_generation(runtime, caplog):
+    import logging
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+
+    from insurance_harness.jobs.tables import WikiJob
+
+    store, scope, run, job, _ = start_window(runtime)
+    expired = datetime.now(UTC) - timedelta(seconds=60)
+    with store._session_factory() as session, session.begin():
+        session.execute(
+            update(WikiJob).where(WikiJob.id == job.id).values(lease_expires_at=expired)
+        )
+    jobs = runtime[1]
+    with caplog.at_level(logging.WARNING):
+        jobs.reclaim_expired_leases(space_ids=(scope.space_id,))
+    records = [r for r in caplog.records if getattr(r, "event", "") == "job_lease_reclaimed"]
+    assert records, "lost lease has no durable-context diagnostic"
+    assert records[0].job_id == job.id
+    assert records[0].generation == job.lease_generation
+    assert records[0].expired_at and records[0].reclaimed_at

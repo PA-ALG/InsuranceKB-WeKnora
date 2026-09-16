@@ -12,6 +12,7 @@ deterministic 测试用，真实并发证据只来自 PG lane（P1.12）。
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
@@ -773,6 +774,12 @@ class JobStore:
         requeued: list[str] = []
         dead_lettered: list[str] = []
         for row in expired_rows:
+            diagnostic = {
+                "event": "job_lease_reclaimed", "job_id": row.id,
+                "space_id": row.space_id, "generation": row.lease_generation,
+                "expired_at": row.lease_expires_at.isoformat(),
+                "reclaimed_at": now.isoformat(), "attempt": row.attempt,
+            }
             policy = self._config.policy_for(row.job_type)
             if JobState(row.state) is JobState.LEASED:
                 # P1.1 第 10 条（D-2026-07-27-16）：本次投递从未进入 running，
@@ -794,6 +801,9 @@ class JobStore:
             else:
                 row.available_at = now
                 requeued.append(row.id)
+            # This records the attempted transaction transition; DB state remains
+            # authoritative if a later statement/commit fails.
+            logging.getLogger(__name__).warning(json.dumps(diagnostic), extra=diagnostic)
         return ReclaimReport(
             requeued_job_ids=tuple(requeued), dead_lettered_job_ids=tuple(dead_lettered)
         )

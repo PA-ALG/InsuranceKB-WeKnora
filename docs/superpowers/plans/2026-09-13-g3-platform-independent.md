@@ -550,3 +550,23 @@ Validation需覆盖实际base+已保存identity一直到field windows、父实�
 
 
 Task3ac同轮真实输入验证补充：空集合兼容后已可生成75新字段/8个窗口，原502个definition/field/page成员与原page_members.payload完全一致，但所有原10字段窗口超过已配置300000 bytes（最大629253）；主要来自重复的来源依赖元数据。root新增唯一写域pipeline.py、test_pipeline.py，按实际render_window_request及既有_template_and_request的完整请求检查确定性细分过大的窗口，保留原单次最多10字段、任务/来源/缓存身份、原prompt与模型额度配置。已有小窗口保持原组，批次大小不硬编码新数字；严格复用现有上下文/完整请求字节上限。仅容量错误触发分拆，权限/模板/配置错误原样拒绝；单字段也超限则明确容量错误，不放宽配置或重复发送。RED覆盖多字段原请求超限、拆后每窗满足同一传输前置检查、字段集合恰好覆盖且无重复、缓存身份不变、完整请求信封较小限额、非容量错误不被吞掉。真实离线check需重跑拆分后的全部窗口检查，0模型/0业务写。两个独立写域冻结后统一review与仅Harness部署；当前测试任务已终态，下一次网页新产品运行期间不改代码。
+
+### 2026-09-16 Task3bk：集中诊断后统一修复（用户已授权）
+
+Owner/root 为唯一实现写者；独立 reviewer 只读冻结身份。复用当前 G3 APP、Harness、DocReader、数据库和网页，不新建环境。用户明确要求先记录/跳过可隔离故障、用 Codex 辅助诊断后统一修复；辅助接续不是平台独立验收。964f968 已部署，诊断 run15706f64 于04:25:19Z失败；成功来源、13已验证字段和候选持久化，普通缺失不补抽。
+
+复用能力：WeKnora ReparseKnowledge；Harness checkpoint/artifact/field cache/JobStore generation fence；Go source-reuse/first-parse proof 和唯一 Release authority。已证明缺口及回执见 task3bj-batch-review 与 G3集中诊断-20260916.md。只读审查覆盖到发布/回查依赖；实际 review/publish 因 preparation 失败仍 NOT RUN。
+
+同批顺序（先全部本地验证，再冻结评审及统一部署；不逐项重建）：
+1. 来源恢复：仅复用 uploads 时不要求 source 成功；经作用域及预期解析代次校验接入既有单文件重解析。持久幂等/未知请求先核对；成功兄弟材料不重做；等待有界终态。失败统计独立汇总；成功解析清除当前错误、保留旧失败审计。
+2. 本地重复成本：保持 canonical 字节、字段身份与证据合同；等价文本控制字符检查取代逐字符 Python 循环；路由先按当前 allowed sources 收窄；一次边界复用已验证不可变来源/计划，持久计划去重必须兼容旧版本恢复。
+3. 租约：补已有 WorkerLoop 最小结构化心跳/回收诊断（调度、线程等待、DB时长、generation），用代表性大输入和4并发假provider复现，不拿放大超时冒充根因修复；旧代次禁止回写/未知调用禁止盲目重发保持。
+4. 发布准备：同一次来源验证内按完整绑定复用已验签首次产物/index；每次新请求仍重新核验，当前权限/来源状态保持即时验证。记录子阶段耗时和真实transport异常类别，区分客户端取消与服务端错误；不绕过校验直接发布。
+
+写域/root：harness/src/insurance_harness/{product_ingestion,knowledge_compiler,service_shell,jobs} 中上述职责现有文件及必要窄辅助模块/对应tests；Go internal/application/service 中既有来源复用、平台产品接线、knowledge处理与相应 handler/router/types 的必要适配/测试；仅有明确接口变化才修改现有前端状态组件及测试；当前计划/OpenSpec/证据。没有数据库新表/新服务、新模型、权限协议或第二发布权威。
+
+RED→GREEN：旧行为反例优先；字符集/canonical字节等价、无关历史来源不分段且输出一致；相同源多条证据只做一次大制品验证、跨请求篡改/当前来源撤销仍拒绝；两成功一失败仅恢复失败、未知提交不重发、deadline终态；大输入并发不丢租约、错误日志区分等待位置。全批完成后独立审查冻结diff，再一次构建每个受影响组件；本轮DocReader实现无新缺口则直接复用。真实恢复只从网页发起，记录复用/新增与实际耗时，候选成功前不重抽；后续全新产品三材料网页独立验收仍需另行实测。
+
+CURRENT=Task3bk RED/集中修复；BUSINESS=BLOCKED(preparation)，G3仍未完成。
+
+Task3bk 来源恢复设计复核补充（实现前）：原生 ReparseKnowledge 的独立前置检查不足以幂等恢复，AllocateParseAttempt 无 expected/state fence，文件分支 enqueue 错误会返回 nil；盲接原入口方案拒绝。最小写域补充 internal/application/repository/knowledge.go 与对应测试、既有 TaskInspector adapter/interface（如需要精确任务核对）；不新增表/服务。上传绑定、expected attempt、failed 状态与 metadata 恢复标记必须和分配同一事务；后续更新按恢复 key/目标代次 CAS，不能被旧对象 Save 覆盖。未知提交不二次分配，deadline 给明确终态，迟到消息必须检查该恢复标记。设计说明 /private/tmp/g3-task3bk-reparse-design-review.md。该项尚未实现，不能用已完成局部性能优化宣称恢复接线闭合。

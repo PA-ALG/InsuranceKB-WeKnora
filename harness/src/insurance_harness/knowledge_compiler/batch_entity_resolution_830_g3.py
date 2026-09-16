@@ -32,6 +32,7 @@ from .batch_canonical_830_g3 import batch_sha256_830_g3 as _canonical_batch_sha2
 from .concept_free_wiki_830_g2 import Evidence, SourceBlock, verify_evidence
 from .schema_pack_catalog_830_g3 import SchemaPackCatalogV1
 from .schema_wiki_candidate_evidence_join_596_1 import LiveRevisionSourceReceiptV1
+from .text_controls import BODY_CONTROLS, STRUCTURED_CONTROLS
 
 Hash = Annotated[StrictStr, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Confidence = Annotated[
@@ -135,18 +136,12 @@ def _payload(model: BaseModel, hash_field: str) -> dict[str, object]:
 
 
 def _validate_body_text(value: str) -> None:
-    if any(
-        (ord(character) < 0x20 and character not in "\t\n\r")
-        or ord(character) == 0x7F
-        for character in value
-    ):
+    if BODY_CONTROLS.search(value):
         raise ValueError("batch body text is not canonical")
 
 
 def _validate_structured_text(value: str) -> None:
-    if unicodedata.normalize("NFC", value) != value or any(
-        ord(character) < 0x20 or ord(character) == 0x7F for character in value
-    ):
+    if unicodedata.normalize("NFC", value) != value or STRUCTURED_CONTROLS.search(value):
         raise ValueError("batch structured text is not canonical control-free text")
 
 

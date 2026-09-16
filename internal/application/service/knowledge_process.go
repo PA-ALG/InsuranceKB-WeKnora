@@ -182,6 +182,7 @@ func finalizeIndexedKnowledgeState(
 	hasPendingMultimodal bool,
 	now time.Time,
 ) {
+	knowledge.ErrorMessage = ""
 	if hasPendingMultimodal || textChunkCount > 0 {
 		knowledge.ParseStatus = types.ParseStatusProcessing
 		knowledge.SummaryStatus = types.SummaryStatusNone
@@ -2118,6 +2119,9 @@ func (s *knowledgeService) ReparseKnowledge(
 		return nil, err
 	}
 	existing.CurrentParseAttempt = parseAttempt
+	// AllocateParseAttempt clears the database error; keep this struct aligned
+	// so the subsequent whole-row update cannot restore an older failure.
+	existing.ErrorMessage = ""
 	if fileSHA256 != "" {
 		existing.FileSHA256 = fileSHA256
 	}

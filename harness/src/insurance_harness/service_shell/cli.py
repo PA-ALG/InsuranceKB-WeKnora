@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 from collections.abc import Callable
 from math import ceil
@@ -302,6 +303,15 @@ async def _serve_worker(
 
 def worker_main() -> None:
     """Run only the Worker role selected by the `wiki-worker` script."""
+    # Uvicorn configures its own namespace, not our successful lease renewals.
+    # Keep this narrow: do not turn on provider/library INFO request logging.
+    diagnostics = logging.getLogger("insurance_harness.service_shell.worker")
+    diagnostics.setLevel(logging.INFO)
+    if not diagnostics.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+        diagnostics.addHandler(handler)
+    diagnostics.propagate = False
     settings = _load_or_exit()
     lifecycle, readiness, factory = _runtime_dependencies(settings)
     try:

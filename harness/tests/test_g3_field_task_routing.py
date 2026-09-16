@@ -82,3 +82,33 @@ def test_projector_rejects_quotes_outside_offered_source_spans():
         runtime.validate_routed_selections((("a", "未展示的原文"),), offered)
     with pytest.raises(ValueError, match="offered"):
         runtime.validate_routed_selections((("other", "九十日"),), offered)
+
+
+def test_unrelated_history_is_not_segmented(monkeypatch):
+    from insurance_harness.knowledge_compiler import g3_field_task_routing as routing
+    from insurance_harness.knowledge_compiler.g3_field_tasks import FieldTaskSourceV1
+
+    current = _entry(material_id="current", text="等待期九十日。")
+    history = _entry(material_id="history", text="无关历史条款。" * 10000)
+    block = current.blocks[0]
+    tasks = adapt_discovery_field_tasks(
+        entity_id="entity-a", entity_version="v1", material_ids=("current",),
+        proposals=(DiscoveryFieldProposalV1(field_key="waiting", short_title="等待期"),),
+        discovery_protocol_version="discovery.v1",
+        allowed_sources=(FieldTaskSourceV1(material_id="current", revision_id=block.revision_id,
+            block_id=block.block_id, source_hash=block.source_hash,
+            parser_identity=block.parser_identity),),
+    )
+    expected = routing.route_field_task_sources(tasks, {"current": block})
+    original = routing._spans
+    visited = []
+
+    def observe(text, limit):
+        visited.append(text)
+        return original(text, limit)
+
+    monkeypatch.setattr(routing, "_spans", observe)
+    assert routing.route_field_task_sources(
+        tasks, {"current": block, "history": history.blocks[0]}
+    ) == expected
+    assert visited == [block.text], "unrelated history adds document segmentation work"

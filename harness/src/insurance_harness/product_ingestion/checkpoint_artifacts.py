@@ -6,6 +6,7 @@ import hashlib
 import json
 
 from sqlalchemy import select
+from sqlalchemy.orm import defer
 
 from insurance_harness.jobs import SpaceScopeError
 from insurance_harness.jobs.tables import WikiJob
@@ -37,42 +38,63 @@ class CheckpointArtifacts:
         return selected[0]
 
     def list_effective_artifacts(self, *, scope, run_id, artifact_kind=None, limit=1000):
-        local = self.list_artifacts(
-            scope=scope, run_id=run_id, artifact_kind=artifact_kind, limit=limit
+        return self._effective_artifacts(
+            scope=scope, run_id=run_id, artifact_kind=artifact_kind,
+            limit=limit, include_payload=True,
         )
+
+    def list_effective_artifact_references(self, *, scope, run_id, artifact_kind=None,
+                                          limit=1000):
+        """Current authorized identities; no large payload or geometry hydration."""
+        return self._effective_artifacts(
+            scope=scope, run_id=run_id, artifact_kind=artifact_kind,
+            limit=limit, include_payload=False,
+        )
+
+    def _effective_artifacts(self, *, scope, run_id, artifact_kind, limit, include_payload):
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("invalid effective artifact read capacity")
         with self._session_factory() as session:
+            self._products._run(session, scope, run_id)
+            # Resolve small authorization metadata before metadata-only rows can
+            # install raiseload payload attributes in this Session identity map.
             receipt = self._products.checkpoint_receipt(scope=scope, run_id=run_id, session=session)
+            plan = (self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
+                    if receipt is not None else None)
+            options = () if include_payload else (defer(ProductArtifact.payload, raiseload=True),)
+            query = select(ProductArtifact).options(*options).where(
+                ProductArtifact.run_id == run_id, ProductArtifact.space_id == scope.space_id
+            )
+            if artifact_kind is not None:
+                query = query.where(ProductArtifact.artifact_kind == artifact_kind)
+            local = session.scalars(query.order_by(ProductArtifact.created_at,
+                                                  ProductArtifact.id).limit(limit + 1)).all()
             inherited = []
-            if receipt is not None:
-                plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
-                refs = [
-                    r
-                    for r in plan.artifacts
-                    if artifact_kind is None or r.artifact_kind == artifact_kind
-                ]
-                if len(refs) + len(local) > limit:
-                    raise ValueError("effective artifact read capacity exceeded")
+            if plan is not None:
+                refs = [r for r in plan.artifacts
+                        if artifact_kind is None or r.artifact_kind == artifact_kind]
                 for ref in refs:
-                    # Direct immutable reference, never an origin-wide payload clone.
-                    row = session.get(ProductArtifact, ref.artifact_id)
-                    if (
-                        row is None
-                        or row.space_id != scope.space_id
-                        or _ref(row) != ref
-                        or hashlib.sha256(row.payload).hexdigest() != ref.payload_sha256
-                    ):
+                    row = session.scalar(select(ProductArtifact).options(*options).where(
+                        ProductArtifact.id == ref.artifact_id))
+                    if row is None or row.space_id != scope.space_id or _ref(row) != ref:
                         raise ValueError("referenced artifact is missing or changed")
                     self._products._run(session, scope, ref.run_id)
-                    inherited.append(self._artifact_snapshot(row))
-        values = {}
-        for row in (*inherited, *local):
-            identity = (row.artifact_kind, row.artifact_key)
-            if identity in values and values[identity].artifact_id != row.artifact_id:
-                raise ValueError("recovered output may not overwrite a completed checkpoint")
-            if hashlib.sha256(row.payload).hexdigest() != row.payload_sha256:
-                raise ValueError("artifact bytes changed")
-            values[identity] = row
-        return tuple(values.values())
+                    inherited.append(row)
+            if len(local) + len(inherited) > limit:
+                raise ValueError("effective artifact read capacity exceeded")
+            values = {}
+            for row in (*inherited, *local):
+                identity = (row.artifact_kind, row.artifact_key)
+                if identity in values and values[identity].artifact_id != row.id:
+                    raise ValueError("recovered output may not overwrite a completed checkpoint")
+                if include_payload:
+                    if hashlib.sha256(row.payload).hexdigest() != row.payload_sha256:
+                        raise ValueError("artifact bytes changed")
+                    value = self._artifact_snapshot(row)
+                else:
+                    value = _ref(row)
+                values[identity] = value
+            return tuple(values.values())
 
     def read_checkpoint_artifact(self, *, scope, run_id, artifact_kind, artifact_key="product"):
         """Pre-receipt verifier read: only plan-authorized references, never business use."""

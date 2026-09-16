@@ -657,3 +657,62 @@ def test_model_artifact_rejects_foreign_run_and_diagnostic_only_call(
             generation=second_job.lease_generation,
             drafts=(diagnostic_only,),
         )
+
+
+def test_effective_references_do_not_fetch_payload_but_full_read_still_checks_hash(api, factory):
+    from sqlalchemy import event
+
+    from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
+
+    artifacts, products, jobs, run, running = _start_stage(api, factory)
+    draft = _rule_draft(api)
+    writes = artifacts.prepare_artifact_writes(
+        scope=_scope(), run_id=run.run_id, stage_key="route", job_id=running.id,
+        generation=running.lease_generation, drafts=(draft,),
+    )
+    jobs.report_success(space_id="space-a", job_id=running.id,
+                        generation=running.lease_generation, domain_writes=writes)
+    statements = []
+
+    def observe(_conn, _cursor, statement, *_args):
+        statements.append(statement)
+
+    engine = factory.kw["bind"]
+    event.listen(engine, "before_cursor_execute", observe)
+    try:
+        refs = artifacts.list_effective_artifact_references(
+            scope=_scope(), run_id=run.run_id, artifact_kind=draft.artifact_kind)
+    finally:
+        event.remove(engine, "before_cursor_execute", observe)
+    assert len(refs) == 1 and refs[0].payload_sha256 == draft.payload_sha256
+    assert not any("product_ingestion_artifacts.payload," in sql for sql in statements)
+    with factory() as session, session.begin():
+        row = session.get(ProductArtifact, refs[0].artifact_id)
+        row.payload = b"tampered"
+    with pytest.raises(ValueError, match="bytes changed"):
+        artifacts.list_effective_artifacts(scope=_scope(), run_id=run.run_id)
+    with pytest.raises(SpaceScopeError):
+        artifacts.list_effective_artifact_references(
+            scope=_scope(raw="foreign"), run_id=run.run_id)
+
+
+def test_reference_scan_does_not_shadow_small_checkpoint_payload(api, factory, monkeypatch):
+    from insurance_harness.product_ingestion.checkpoint_store import _small_artifact
+
+    artifacts, products, jobs, run, running = _start_stage(api, factory)
+    draft = _rule_draft(api).model_copy(update={"artifact_key": "product"})
+    writes = artifacts.prepare_artifact_writes(
+        scope=_scope(), run_id=run.run_id, stage_key="route", job_id=running.id,
+        generation=running.lease_generation, drafts=(draft,),
+    )
+    jobs.report_success(space_id="space-a", job_id=running.id,
+                        generation=running.lease_generation, domain_writes=writes)
+
+    def read_small(*, session, **kwargs):
+        row = _small_artifact(session, run.run_id, draft.artifact_kind)
+        assert row.payload == draft.payload
+        return None
+
+    monkeypatch.setattr(products, "checkpoint_receipt", read_small)
+    assert len(artifacts.list_effective_artifact_references(scope=_scope(),
+                                                          run_id=run.run_id)) == 1

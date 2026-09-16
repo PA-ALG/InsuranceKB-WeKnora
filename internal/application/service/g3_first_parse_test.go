@@ -604,3 +604,37 @@ func TestG3FirstParseResidentReadReusesBindingWork(t *testing.T) {
 	require.Error(t, err)
 	require.Zero(t, doc.calls)
 }
+
+func TestG3FirstParseBatchOperationVerifiesOnceAndNextOperationRechecks(t *testing.T) {
+	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
+	authority, doc, scope, _, _ := nativeIndexFixture830G2(t)
+	authority.codec = sourceReuseTestCodec830G3(t)
+	authority.sourceReuse = newConceptSourceReuseStore830G3(authority.codec)
+	readySourceReuseResource830G3(authority)
+	result := firstParseNative(t, "投保范围与保险责任。")
+	seedFirstParseSnapshot(t, authority, scope, result, []types.ParsedChunk{{Seq: 0, Content: "投保范围与保险责任。", Start: 0, End: 10}})
+	repo := authority.revisions.(*conceptKnowledgeStub830G2)
+	prepared, err := authority.captureG3PlatformSource830G3(context.Background(), scope, repo.source)
+	require.NoError(t, err)
+	key, err := conceptSourceReuseKey830G3(prepared.record.Identity, repo.source.BindingDigest)
+	require.NoError(t, err)
+	build := func() (*conceptSourceReuseRecord830G3, error) { t.Fatal("must not reparse"); return nil, nil }
+	ctx := withConceptSourceOperationReuse830G3(context.Background())
+	_, err = authority.sourceReuse.load(ctx, key, prepared.record.Identity, repo.source, build)
+	require.NoError(t, err)
+	// Simulate loss of the backing immutable file after this operation proved it.
+	// The operation continues against its captured proof; a new operation rejects.
+	firstKey, err := g3FirstParseKey(g3FirstParseIdentityForSource(scope, repo.source))
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(filepath.Join(authority.sourceReuse.root, firstKey+".json")))
+	got, err := authority.sourceReuse.load(ctx, key, prepared.record.Identity, repo.source, build)
+	require.NoError(t, err)
+	require.Same(t, prepared, got)
+	changed := *repo.source
+	changed.BindingDigest = strings.Repeat("f", 64)
+	_, err = authority.sourceReuse.load(ctx, key, prepared.record.Identity, &changed, build)
+	require.Error(t, err, "operation reuse cannot accept a changed live binding")
+	_, err = authority.sourceReuse.load(withConceptSourceOperationReuse830G3(context.Background()), key, prepared.record.Identity, repo.source, build)
+	require.Error(t, err, "next operation must re-open the first-parse proof")
+	require.Zero(t, doc.calls)
+}

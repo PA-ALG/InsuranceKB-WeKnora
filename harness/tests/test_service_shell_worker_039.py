@@ -705,3 +705,39 @@ async def test_g3_transient_heartbeat_error_does_not_cancel_handler() -> None:
     await asyncio.wait_for(worker.process_job(_job(1)), timeout=0.5)
     assert ("success", "job-1") in store.calls
     assert store.failures == []
+
+
+async def test_heartbeat_reports_loop_queue_and_database_delay_without_payload(caplog):
+    import logging
+    import time
+
+    store = _store()
+    store.jobs["job-1"] = _job(1)
+    registry = HandlerRegistry()
+    beats = 0
+
+    def heartbeat(**kwargs):
+        nonlocal beats
+        time.sleep(0.005)
+        beats += 1
+        return store.jobs["job-1"]
+
+    store.heartbeat = heartbeat
+
+    async def handler(job):
+        while beats < 1:
+            await asyncio.sleep(0.002)
+        return HandlerResult()
+
+    registry.register("known", handler)
+    worker = WorkerLoop(store=store, registry=registry, settings=_settings(),
+                        lifecycle=Lifecycle(), worker_id="worker-a")
+    with caplog.at_level(logging.INFO):
+        await asyncio.wait_for(worker.process_job(_job(1)), 1)
+    records = [r for r in caplog.records if getattr(r, "event", "") == "job_heartbeat"]
+    assert records, "lease health lacks timing diagnostics"
+    record = records[0]
+    assert record.job_id == "job-1" and record.generation == 1
+    assert record.loop_delay_seconds >= 0 and record.executor_wait_seconds >= 0
+    assert record.database_seconds >= 0.005 and record.error_type is None
+    assert "payload" not in record.__dict__

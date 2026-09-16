@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
+import time
 from urllib.parse import urlsplit
 
 import httpx
@@ -73,6 +75,7 @@ class PlatformClient:
             expected_data_type is list and method != "GET"
         ):
             raise ValueError("unsupported platform response type")
+        started = time.monotonic()
         try:
             async with self.client.stream(
                 method,
@@ -91,7 +94,13 @@ class PlatformClient:
                     if len(raw) + len(chunk) > self.max_response_bytes:
                         raise NonRetryableJobError("PLATFORM_RESPONSE_LIMIT_EXCEEDED")
                     raw.extend(chunk)
-        except httpx.HTTPError:
+        except httpx.HTTPError as error:
+            details = {
+                "event": "platform_transport_error", "error_type": type(error).__name__,
+                "method": method, "elapsed_seconds": time.monotonic() - started,
+                "space_id": scope.space_id,
+            }
+            logging.getLogger(__name__).warning(json.dumps(details), extra=details)
             raise RetryableJobError("PLATFORM_TRANSPORT_UNAVAILABLE") from None
         try:
             envelope = json.loads(raw, object_pairs_hook=_object)

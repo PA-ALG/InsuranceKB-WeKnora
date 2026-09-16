@@ -27,30 +27,21 @@ from .concept_free_wiki_830_g2 import (
     FreeWikiPage,
     SourceBlock,
 )
+from .text_controls import BODY_CONTROLS, STRUCTURED_CONTROLS
 
 _PREFIX = b"schema-wiki-canonical.v1\0"
 _MISSING = object()
 
 
 def _structured(value: str, *, object_key: bool = False) -> str:
-    if unicodedata.normalize("NFC", value) != value or any(
-        ord(character) == 0x7F
-        or (
-            ord(character) < 0x20
-            and (object_key or character not in "\t\n\r")
-        )
-        for character in value
-    ):
+    controls = STRUCTURED_CONTROLS if object_key else BODY_CONTROLS
+    if unicodedata.normalize("NFC", value) != value or controls.search(value):
         raise ValueError("G3 batch structured text is not canonical")
     return value
 
 
 def _body(value: str) -> str:
-    if any(
-        ord(character) == 0x7F
-        or (ord(character) < 0x20 and character not in "\t\n\r")
-        for character in value
-    ):
+    if BODY_CONTROLS.search(value):
         raise ValueError("G3 batch source body contains a forbidden control")
     return value
 

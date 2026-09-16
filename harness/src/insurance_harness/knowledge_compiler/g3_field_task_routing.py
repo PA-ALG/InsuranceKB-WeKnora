@@ -67,9 +67,17 @@ def route_field_task_sources(
     """Select fair per-field chapter hits, then fill a strict shared text budget."""
     if max_span_chars <= 0 or max_source_chars < max_span_chars:
         raise ValueError("invalid field task source budget")
+    # An unrestricted discovery task deliberately retains all sources. Otherwise
+    # unrelated historical documents must not add segmentation/ranking work.
+    unrestricted = not tasks or any(not task.allowed_sources for task in tasks)
+    allowed_union = {
+        (source.revision_id, source.block_id)
+        for task in tasks for source in task.allowed_sources
+    }
     candidates = [
         (ref, start, end, heading)
         for ref, source in sorted(sources.items())
+        if unrestricted or (source.revision_id, source.block_id) in allowed_union
         for start, end, heading in _spans(source.text, max_span_chars)
     ]
     ranked = []

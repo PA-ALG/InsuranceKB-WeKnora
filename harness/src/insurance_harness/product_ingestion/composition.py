@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 
 import httpx
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from sqlalchemy.orm import Session
 
 from insurance_harness.jobs import JobStore, OutboxDispatcher
@@ -50,6 +51,9 @@ FieldPromptProvider = Callable[[ProductScope], bytes]
 
 def _scoped_source_loader(artifacts, services):
     gates = {space_id: asyncio.Semaphore(1) for space_id in services}
+    # At most one run per configured scope; only SourceBlocks, never native
+    # geometry. A new snapshot identity/run evicts the previous derived value.
+    verified = {}
 
     async def sources(scope: ProductScope, run_id: str):
         service = services.get(scope.space_id)
@@ -58,14 +62,36 @@ def _scoped_source_loader(artifacts, services):
         gate = gates[scope.space_id]
         await gate.acquire()
         try:
-            read = asyncio.create_task(
-                load_source_blocks(
+            async def load_verified():
+                refs = await asyncio.to_thread(
+                    artifacts.list_effective_artifact_references,
+                    scope=scope, run_id=run_id, artifact_kind="source_snapshot",
+                )
+                keys = service.configuration.source_public_keys
+                key_identity = tuple(sorted(
+                    (name, public.public_bytes(Encoding.Raw, PublicFormat.Raw))
+                    for name, public in keys.items()
+                ))
+                key = (scope, run_id, refs, key_identity)
+                cached = verified.get(scope.space_id)
+                if cached is not None and cached[0] == key:
+                    return cached[1]
+                blocks = await load_source_blocks(
                     artifacts,
                     scope,
                     run_id,
                     public_keys=service.configuration.source_public_keys,
                 )
-            )
+                after = await asyncio.to_thread(
+                    artifacts.list_effective_artifact_references,
+                    scope=scope, run_id=run_id, artifact_kind="source_snapshot",
+                )
+                if after != refs:
+                    raise ValueError("source snapshot identities changed during verification")
+                verified[scope.space_id] = (key, blocks)
+                return blocks
+
+            read = asyncio.create_task(load_verified())
         except BaseException:
             gate.release()
             raise

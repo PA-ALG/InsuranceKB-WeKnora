@@ -581,3 +581,22 @@ async def test_t6_worker_total_shutdown_timeout_caps_composed_role(
         timeout=0.08,
     )
     assert lifecycle.state.value == "terminated"
+
+
+def test_worker_entrypoint_emits_success_heartbeat_without_test_log_override(tmp_path):
+    code = '''
+import logging
+import uvicorn
+from fastapi import FastAPI
+from insurance_harness.service_shell import cli
+cli._load_or_exit = lambda: object()
+cli._runtime_dependencies = lambda settings: (None, None, None)
+async def serve(**kwargs):
+    uvicorn.Config(FastAPI())
+    logging.getLogger("insurance_harness.service_shell.worker").info("heartbeat-startup-visible")
+cli._serve_worker = serve
+cli.worker_main()
+'''
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                            timeout=15, check=True)
+    assert "heartbeat-startup-visible" in result.stderr

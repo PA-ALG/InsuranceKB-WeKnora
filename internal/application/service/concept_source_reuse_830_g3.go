@@ -20,6 +20,18 @@ import (
 const conceptSourceReuseContract830G3 = "concept-source-reuse.830.g3.v1"
 
 type conceptSourceReusePrepareKey830G3 struct{}
+type conceptSourceOperationReuseKey830G3 struct{}
+type conceptSourceOperationReuse830G3 struct {
+	mu sync.Mutex
+	// Only compact proofs are retained. Large indexes retain the store's bound.
+	verified map[string]string
+	hits     int
+}
+
+func withConceptSourceOperationReuse830G3(ctx context.Context) context.Context {
+	return context.WithValue(ctx, conceptSourceOperationReuseKey830G3{}, &conceptSourceOperationReuse830G3{verified: map[string]string{}})
+}
+
 type conceptSourceReuseImportKey830G3 struct{}
 type conceptSourceReuseRecord830G3 struct {
 	Contract         string                           `json:"contract"`
@@ -205,11 +217,35 @@ func validateConceptSourceReuse830G3(record *conceptSourceReuseRecord830G3, iden
 	return &conceptSourceReusePrepared830G3{blocks: blocks, index: index, record: *record}, nil
 }
 
-func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, identity types.ConceptSourceIdentity830G2, source *types.KnowledgeRevisionSource, build func() (*conceptSourceReuseRecord830G3, error)) (*conceptSourceReusePrepared830G3, error) {
+func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, identity types.ConceptSourceIdentity830G2, source *types.KnowledgeRevisionSource, build func() (*conceptSourceReuseRecord830G3, error)) (value *conceptSourceReusePrepared830G3, loadErr error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	operation, _ := ctx.Value(conceptSourceOperationReuseKey830G3{}).(*conceptSourceOperationReuse830G3)
+	defer func() {
+		if operation != nil && loadErr == nil && value != nil && value.proof.matches(&value.record) {
+			operation.mu.Lock()
+			operation.verified[key] = value.record.FirstParseSHA256
+			operation.mu.Unlock()
+		}
+	}()
 	s.mu.Lock()
 	hit := s.entries[key]
 	s.mu.Unlock()
 	if hit != nil {
+		// The caller still checked live ACL/source/resource state for this quote.
+		// Only this operation's completed immutable-file proof can be reused.
+		if operation != nil && source != nil && hit.record.Identity == identity && hit.record.BindingDigest == source.BindingDigest && hit.proof.matches(&hit.record) {
+			operation.mu.Lock()
+			digest, verified := operation.verified[key]
+			if verified && digest == hit.record.FirstParseSHA256 {
+				operation.hits++
+			}
+			operation.mu.Unlock()
+			if verified && digest == hit.record.FirstParseSHA256 {
+				return hit, nil
+			}
+		}
 		return s.validateResident(hit, identity, source)
 	}
 	result := s.flight.DoChan(key, func() (any, error) {

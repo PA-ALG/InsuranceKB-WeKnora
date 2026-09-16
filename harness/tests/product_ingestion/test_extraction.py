@@ -636,3 +636,21 @@ def test_compact_recorded_versions_reject_quote_outside_offered_spans(source, ve
     )
     assert actual[0].outcome == "extraction_failed" and actual[0].validated_result is None
     assert unused.events == []
+
+
+def test_window_source_check_does_not_serialize_a_redundant_full_batch(source, monkeypatch):
+    from insurance_harness.knowledge_compiler import g3_field_tasks
+
+    selected = tasks(source)
+    serialized_batches = []
+    original = g3_field_tasks._json_bytes
+
+    def observe(value):
+        if isinstance(value, dict) and value.get("contract") == "g3-field-task-batch.830.v1":
+            serialized_batches.append(value)
+        return original(value)
+
+    monkeypatch.setattr(g3_field_tasks, "_json_bytes", observe)
+    module().render_window_request(selected, (source,), tenant_id=1,
+                                   space_id="space-1", raw_kb_id="raw-1")
+    assert not serialized_batches, "window validation serializes every source dependency again"

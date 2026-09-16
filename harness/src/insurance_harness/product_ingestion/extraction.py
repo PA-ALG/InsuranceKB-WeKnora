@@ -32,7 +32,6 @@ from insurance_harness.knowledge_compiler.g3_field_task_routing import (
 from insurance_harness.knowledge_compiler.g3_field_tasks import (
     FieldTaskEvidenceResultV1,
     FieldTaskV1,
-    batch_field_tasks,
 )
 
 LEGACY_REQUEST_CONTRACT = "product-field-window-request.v1"
@@ -147,7 +146,9 @@ def _source_index(
 ) -> dict[str, SourceBlock]:
     if not tasks or len({(t.entity_id, t.field_key) for t in tasks}) != len(tasks):
         raise ValueError("field window must have unique tasks")
-    if len(batch_field_tasks(tasks)) != 1:
+    # This boundary needs bounded, valid tasks, not a serialized batch envelope
+    # whose hash would be immediately discarded (including all source refs).
+    if len(tasks) > 10 or len({task.task_sha256 for task in tasks}) != len(tasks):
         raise ValueError("executor accepts one bounded field window")
     index: dict[str, SourceBlock] = {}
     keys = {}

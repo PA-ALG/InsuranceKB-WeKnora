@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -291,6 +292,18 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 	ctx context.Context,
 	request ConceptSourceAuthorityVerificationRequest830G2,
 ) error {
+	ctx = withConceptSourceOperationReuse830G3(ctx)
+	started := time.Now()
+	defer func() {
+		operation := ctx.Value(conceptSourceOperationReuseKey830G3{}).(*conceptSourceOperationReuse830G3)
+		operation.mu.Lock()
+		count, hits := len(operation.verified), operation.hits
+		operation.mu.Unlock()
+		logger.GetLogger(ctx).WithField("operation", request.Operation).
+			WithField("elapsed_ms", time.Since(started).Milliseconds()).
+			WithField("source_proofs", count).WithField("source_proof_reuse_hits", hits).
+			WithField("cancelled", ctx.Err() != nil).Info("g3_source_authority_validation")
+	}()
 	if request.Operation != "create-draft" && request.Operation != "review" && request.Operation != "activate" && request.Operation != "prepare-read" {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}

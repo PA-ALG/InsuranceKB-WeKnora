@@ -258,3 +258,19 @@ def test_activation_receipt_is_explicitly_bound():
     auth = b'{"expected_activation_epoch":9,"expected_release_id":"parent","nonce":"nonce"}'
     with pytest.raises(ValueError, match="activation receipt"):
         asyncio.run(api.activate(scope, b"{}", auth))
+
+
+def test_transport_failure_records_exception_kind_without_request_secrets(caplog):
+    import logging
+
+    def timeout(request):
+        raise httpx.ReadTimeout("secret provider details", request=request)
+
+    api, scope = client(timeout)
+    with caplog.at_level(logging.WARNING), pytest.raises(RetryableJobError,
+                                                        match="PLATFORM_TRANSPORT_UNAVAILABLE"):
+        asyncio.run(api.current(scope))
+    records = [r for r in caplog.records if getattr(r, "event", "") == "platform_transport_error"]
+    assert records and records[0].error_type == "ReadTimeout"
+    assert "secret provider details" not in caplog.text
+    assert "fixture-secret" not in caplog.text
