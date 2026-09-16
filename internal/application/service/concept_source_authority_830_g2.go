@@ -111,13 +111,14 @@ type conceptNativeBBox830G2 struct {
 }
 
 type conceptNativePage830G2 struct {
-	BBoxes               []conceptNativeBBox830G2 `json:"bboxes"`
-	GlobalCodepointEnd   int                      `json:"global_codepoint_end"`
-	GlobalCodepointStart int                      `json:"global_codepoint_start"`
-	HeightPoints         string                   `json:"height_points"`
-	PageNumber           int                      `json:"page_number"`
-	PageTextSHA256       string                   `json:"page_text_sha256"`
-	WidthPoints          string                   `json:"width_points"`
+	BBoxes               []conceptNativeBBox830G2       `json:"bboxes"`
+	GlobalCodepointEnd   int                            `json:"global_codepoint_end"`
+	GlobalCodepointStart int                            `json:"global_codepoint_start"`
+	HeightPoints         string                         `json:"height_points"`
+	PageNumber           int                            `json:"page_number"`
+	PageTextSHA256       string                         `json:"page_text_sha256"`
+	UnavailableRanges    []types.NativeUnavailableRange `json:"unavailable_ranges,omitempty"`
+	WidthPoints          string                         `json:"width_points"`
 }
 
 type conceptNativeProjection830G2 struct {
@@ -785,7 +786,7 @@ func prepareConceptNativeQuoteIndex830G2(result *types.ReadResult, sourceSHA, pa
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	artifact := result.NativeStructure
-	if artifact.SchemaVersion != conceptNativeContract830G2 || artifact.SourceSHA256 != sourceSHA || artifact.RawSHA256 != artifact.SanitizedSHA256 || testSHA256Bytes830G2(artifact.SanitizedJSON) != artifact.SanitizedSHA256 {
+	if (artifact.SchemaVersion != conceptNativeContract830G2 && artifact.SchemaVersion != types.NativePartialLocatorContract) || artifact.SourceSHA256 != sourceSHA || artifact.RawSHA256 != artifact.SanitizedSHA256 || testSHA256Bytes830G2(artifact.SanitizedJSON) != artifact.SanitizedSHA256 {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	var projection conceptNativeProjection830G2
@@ -796,7 +797,7 @@ func prepareConceptNativeQuoteIndex830G2(result *types.ReadResult, sourceSHA, pa
 	}
 	canonical, err := canonicalNativeJSON830G2(projection)
 	identityCanonical, identityErr := canonicalNativeJSON830G2(projection.ParserIdentity)
-	if err != nil || identityErr != nil || !bytes.Equal(canonical, artifact.SanitizedJSON) || projection.Contract != conceptNativeContract830G2 || projection.SourceSHA256 != sourceSHA || projection.MarkdownSHA256 != testSHA256830G2(result.MarkdownContent) || projection.CoordinateSpace != "normalized_0_1e6_top_left" || projection.ParserIdentity.ProducerContract != "weknora.docreader.builtin-pdfium-charbox.v1" || projection.ParserIdentity.CaptureMode != conceptNativeCapture830G2 || projection.ParserIdentity.Pypdfium2Version == "" || projection.ParserIdentity.PDFiumVersion == "" || projection.ParserIdentitySHA256 != testSHA256Bytes830G2(identityCanonical) || projection.ParserIdentitySHA256 != parserIdentitySHA || len(projection.Pages) == 0 {
+	if err != nil || identityErr != nil || !bytes.Equal(canonical, artifact.SanitizedJSON) || projection.Contract != artifact.SchemaVersion || projection.SourceSHA256 != sourceSHA || projection.MarkdownSHA256 != testSHA256830G2(result.MarkdownContent) || projection.CoordinateSpace != "normalized_0_1e6_top_left" || !types.ValidNativeLocatorIdentity(projection.Contract, projection.ParserIdentity.ProducerContract) || projection.ParserIdentity.CaptureMode != conceptNativeCapture830G2 || projection.ParserIdentity.Pypdfium2Version == "" || projection.ParserIdentity.PDFiumVersion == "" || projection.ParserIdentitySHA256 != testSHA256Bytes830G2(identityCanonical) || projection.ParserIdentitySHA256 != parserIdentitySHA || len(projection.Pages) == 0 {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	markdown := []rune(result.MarkdownContent)
@@ -825,13 +826,7 @@ func prepareConceptNativeQuoteIndex830G2(result *types.ReadResult, sourceSHA, pa
 			}
 			boxPositions[box.GlobalCodepointStart] = box.BBox
 		}
-		visible := 0
-		for _, character := range pageRunes {
-			if !unicode.IsSpace(character) {
-				visible++
-			}
-		}
-		if visible != len(boxPositions) {
+		if !types.ValidateNativeLocatorCoverage(projection.Contract, pageRunes, page.GlobalCodepointStart, boxPositions, page.UnavailableRanges) {
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		lastEnd = page.GlobalCodepointEnd

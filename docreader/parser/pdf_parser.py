@@ -141,6 +141,8 @@ PDF_NATIVE_CAPTURE_MODE = "builtin-pdfium-charbox-v1"
 PDF_NATIVE_STRUCTURE_SCHEMA = "builtin-pdfium-native-locators.v1"
 PDF_NATIVE_STRUCTURE_METADATA_KEY = "native_structure_artifact_v1"
 PDF_NATIVE_LOCATOR_PRODUCER = "weknora.docreader.builtin-pdfium-charbox.v1"
+PDF_PARTIAL_STRUCTURE_SCHEMA = "builtin-pdfium-native-locators.v2"
+PDF_PARTIAL_LOCATOR_PRODUCER = "weknora.docreader.builtin-pdfium-charbox.v2"
 
 
 def _canonical_json(value) -> bytes:
@@ -194,6 +196,48 @@ def _native_bbox(box, width: float, height: float, page_number: int, char_index:
     if normalized[0] >= normalized[2] or normalized[1] >= normalized[3]:
         raise ValueError(f"page {page_number} character {char_index} bbox is invalid")
     return normalized
+
+
+def _native_character_locations(textpage, text, width, height, page_number, offset, rotation):
+    """Keep text authority separate from optional, independently verified geometry."""
+    gaps = []
+    boxes = []
+
+    def missing(index, reason):
+        start = offset + index
+        if gaps and gaps[-1]["global_codepoint_end"] == start and gaps[-1]["reason"] == reason:
+            gaps[-1]["global_codepoint_end"] += 1
+        else:
+            gaps.append({"global_codepoint_start": start, "global_codepoint_end": start + 1, "reason": reason})
+
+    page_reason = "page_rotation_unsupported" if rotation != 0 else None
+    if page_reason is None:
+        try:
+            mapped = textpage.count_chars() == len(text) and all(
+                textpage.get_text_range(i, 1) == ch for i, ch in enumerate(text)
+            )
+        except Exception:
+            mapped = False
+        if not mapped:
+            page_reason = "character_mapping_unavailable"
+    for index, ch in enumerate(text):
+        if ch.isspace():
+            continue
+        if page_reason:
+            missing(index, page_reason)
+            continue
+        try:
+            raw_box = textpage.get_charbox(index)
+        except Exception:
+            missing(index, "bbox_unavailable")
+            continue
+        try:
+            bbox = _native_bbox(raw_box, width, height, page_number, index)
+        except ValueError:
+            missing(index, "bbox_invalid")
+            continue
+        boxes.append({"bbox": bbox, "global_codepoint_start": offset + index, "global_codepoint_end": offset + index + 1})
+    return boxes, gaps
 
 
 def _native_image_area_ratio(page, raw, page_number: int) -> float:
@@ -1560,14 +1604,8 @@ class PDFParser(BaseParser):
                     try:
                         try:
                             rotation = int(page.get_rotation())
-                        except Exception as exc:
-                            raise ValueError(
-                                f"page {page_number} rotation is unavailable"
-                            ) from exc
-                        if rotation != 0:
-                            raise ValueError(
-                                f"page {page_number} rotation is unsupported"
-                            )
+                        except Exception:
+                            rotation = None
                         width, height = (float(value) for value in page.get_size())
                         width_points = _point_string(width)
                         height_points = _point_string(height)
@@ -1585,51 +1623,9 @@ class PDFParser(BaseParser):
                         if _classify_page(ratio, len(page_text.strip())) == "scanned":
                             raise ValueError(f"page {page_number} is scanned")
 
-                        char_count = textpage.count_chars()
-                        if char_count != len(page_text):
-                            raise ValueError(
-                                f"page {page_number} native character mapping is ambiguous"
-                            )
-                        replay = []
-                        bboxes = []
-                        for char_index in range(char_count):
-                            ch = textpage.get_text_range(char_index, 1)
-                            if not isinstance(ch, str) or len(ch) != 1:
-                                raise ValueError(
-                                    f"page {page_number} character {char_index} mapping is ambiguous"
-                                )
-                            try:
-                                ch.encode("utf-8", errors="strict")
-                            except UnicodeError as exc:
-                                raise ValueError(
-                                    f"page {page_number} character {char_index} is not valid UTF-8"
-                                ) from exc
-                            replay.append(ch)
-                            if ch.isspace():
-                                continue
-                            try:
-                                raw_box = textpage.get_charbox(char_index)
-                            except Exception as exc:
-                                raise ValueError(
-                                    f"page {page_number} character {char_index} bbox is unavailable"
-                                ) from exc
-                            bboxes.append(
-                                {
-                                    "bbox": _native_bbox(
-                                        raw_box,
-                                        width,
-                                        height,
-                                        page_number,
-                                        char_index,
-                                    ),
-                                    "global_codepoint_end": global_offset + char_index + 1,
-                                    "global_codepoint_start": global_offset + char_index,
-                                }
-                            )
-                        if "".join(replay) != page_text:
-                            raise ValueError(
-                                f"page {page_number} native character mapping is ambiguous"
-                            )
+                        bboxes, unavailable = _native_character_locations(
+                            textpage, page_text, width, height, page_number, global_offset, rotation
+                        )
 
                         page_end = global_offset + len(page_text)
                         pages.append(
@@ -1643,6 +1639,8 @@ class PDFParser(BaseParser):
                                 "width_points": width_points,
                             }
                         )
+                        if unavailable:
+                            pages[-1]["unavailable_ranges"] = unavailable
                         page_texts.append(page_text)
                         global_offset = page_end
                         if page_index + 1 < page_count:
@@ -1654,14 +1652,16 @@ class PDFParser(BaseParser):
                 _close_pdfium_resource(pdf)
 
         markdown = "\n\n".join(page_texts)
+        partial = any(page.get("unavailable_ranges") for page in pages)
+        schema = PDF_PARTIAL_STRUCTURE_SCHEMA if partial else PDF_NATIVE_STRUCTURE_SCHEMA
         parser_identity = {
             "capture_mode": PDF_NATIVE_CAPTURE_MODE,
             "pdfium_version": str(PDFIUM_INFO),
-            "producer_contract": PDF_NATIVE_LOCATOR_PRODUCER,
+            "producer_contract": PDF_PARTIAL_LOCATOR_PRODUCER if partial else PDF_NATIVE_LOCATOR_PRODUCER,
             "pypdfium2_version": str(PYPDFIUM_INFO),
         }
         sanitized = {
-            "contract": PDF_NATIVE_STRUCTURE_SCHEMA,
+            "contract": schema,
             "coordinate_space": "normalized_0_1e6_top_left",
             "markdown_sha256": _sha256(markdown.encode("utf-8")),
             "pages": pages,
@@ -1675,7 +1675,7 @@ class PDFParser(BaseParser):
             "raw_sha256": structure_sha256,
             "sanitized_json": sanitized,
             "sanitized_sha256": structure_sha256,
-            "schema_version": PDF_NATIVE_STRUCTURE_SCHEMA,
+            "schema_version": schema,
             "source_sha256": sanitized["source_sha256"],
         }
         return Document(
@@ -1688,6 +1688,11 @@ class PDFParser(BaseParser):
                     "utf-8"
                 ),
                 "page_count": len(pages),
+                "location_status": "partial" if partial else "complete",
+                "unlocated_character_count": sum(
+                    row["global_codepoint_end"] - row["global_codepoint_start"]
+                    for page in pages for row in page.get("unavailable_ranges", [])
+                ),
                 "scanned_page_count": 0,
                 "text_page_count": len(pages),
                 "vector_figure_count": 0,

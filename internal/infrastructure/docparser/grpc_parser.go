@@ -14,7 +14,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	docclient "github.com/Tencent/WeKnora/docreader/client"
@@ -58,13 +57,14 @@ type pdfNativeBBox struct {
 }
 
 type pdfNativePage struct {
-	BBoxes               []pdfNativeBBox `json:"bboxes"`
-	GlobalCodepointEnd   int             `json:"global_codepoint_end"`
-	GlobalCodepointStart int             `json:"global_codepoint_start"`
-	HeightPoints         string          `json:"height_points"`
-	PageNumber           int             `json:"page_number"`
-	PageTextSHA256       string          `json:"page_text_sha256"`
-	WidthPoints          string          `json:"width_points"`
+	BBoxes               []pdfNativeBBox                `json:"bboxes"`
+	GlobalCodepointEnd   int                            `json:"global_codepoint_end"`
+	GlobalCodepointStart int                            `json:"global_codepoint_start"`
+	HeightPoints         string                         `json:"height_points"`
+	PageNumber           int                            `json:"page_number"`
+	PageTextSHA256       string                         `json:"page_text_sha256"`
+	UnavailableRanges    []types.NativeUnavailableRange `json:"unavailable_ranges,omitempty"`
+	WidthPoints          string                         `json:"width_points"`
 }
 
 type pdfNativeSanitized struct {
@@ -209,7 +209,9 @@ func (p *GRPCDocumentReader) Read(ctx context.Context, req *types.ReadRequest) (
 			return nil, err
 		}
 	}
-	if captureNative {
+	// A completed parser error is terminal input failure, not a transport error.
+	// Preserve the existing caller's terminal-result path and its original reason.
+	if captureNative && result.Error == "" {
 		if err := attachPDFNativeStructure(req, result); err != nil {
 			return nil, err
 		}
@@ -281,7 +283,7 @@ func attachPDFNativeStructure(req *types.ReadRequest, result *types.ReadResult) 
 		return fmt.Errorf("PDF native structure capture metadata is not canonical")
 	}
 	sourceSHA256 := pdfNativeSHA256(req.FileContent)
-	if envelope.SchemaVersion != pdfNativeSchema || envelope.SourceSHA256 != sourceSHA256 ||
+	if (envelope.SchemaVersion != pdfNativeSchema && envelope.SchemaVersion != types.NativePartialLocatorContract) || envelope.SourceSHA256 != sourceSHA256 ||
 		envelope.RawSHA256 != envelope.SanitizedSHA256 ||
 		envelope.SanitizedSHA256 != pdfNativeSHA256(envelope.SanitizedJSON) {
 		return fmt.Errorf("PDF native structure capture envelope binding is invalid")
@@ -300,10 +302,10 @@ func attachPDFNativeStructure(req *types.ReadRequest, result *types.ReadResult) 
 		return fmt.Errorf("PDF native structure capture parser identity is invalid")
 	}
 	identity := sanitized.ParserIdentity
-	if sanitized.Contract != pdfNativeSchema || sanitized.SourceSHA256 != sourceSHA256 ||
+	if sanitized.Contract != envelope.SchemaVersion || sanitized.SourceSHA256 != sourceSHA256 ||
 		sanitized.CoordinateSpace != pdfNativeCoordinateSpace ||
 		identity.CaptureMode != pdfNativeCaptureMode ||
-		identity.ProducerContract != pdfNativeProducerContract ||
+		!types.ValidNativeLocatorIdentity(sanitized.Contract, identity.ProducerContract) ||
 		strings.TrimSpace(identity.PDFiumVersion) == "" || strings.TrimSpace(identity.PyPDFium2Version) == "" ||
 		sanitized.ParserIdentitySHA256 != pdfNativeSHA256(identityBytes) {
 		return fmt.Errorf("PDF native structure capture parser identity binding is invalid")
@@ -325,25 +327,19 @@ func attachPDFNativeStructure(req *types.ReadRequest, result *types.ReadResult) 
 		if page.PageTextSHA256 != pdfNativeSHA256([]byte(string(pageRunes))) {
 			return fmt.Errorf("PDF native structure capture page %d text binding is invalid", pageIndex+1)
 		}
-		bboxIndex := 0
-		for localIndex, char := range pageRunes {
-			if unicode.IsSpace(char) {
-				continue
-			}
-			if bboxIndex >= len(page.BBoxes) {
-				return fmt.Errorf("PDF native structure capture page %d bbox coverage is incomplete", pageIndex+1)
-			}
-			bbox := page.BBoxes[bboxIndex]
-			globalIndex := page.GlobalCodepointStart + localIndex
-			if bbox.GlobalCodepointStart != globalIndex || bbox.GlobalCodepointEnd != globalIndex+1 ||
+		positions := make(map[int]bool, len(page.BBoxes))
+		previous := page.GlobalCodepointStart - 1
+		for _, bbox := range page.BBoxes {
+			if bbox.GlobalCodepointStart <= previous || bbox.GlobalCodepointStart < page.GlobalCodepointStart || bbox.GlobalCodepointEnd > page.GlobalCodepointEnd || bbox.GlobalCodepointEnd != bbox.GlobalCodepointStart+1 ||
 				len(bbox.BBox) != 4 || bbox.BBox[0] < 0 || bbox.BBox[1] < 0 ||
 				bbox.BBox[2] > 1_000_000 || bbox.BBox[3] > 1_000_000 ||
 				bbox.BBox[0] >= bbox.BBox[2] || bbox.BBox[1] >= bbox.BBox[3] {
 				return fmt.Errorf("PDF native structure capture page %d bbox is invalid", pageIndex+1)
 			}
-			bboxIndex++
+			positions[bbox.GlobalCodepointStart] = true
+			previous = bbox.GlobalCodepointStart
 		}
-		if bboxIndex != len(page.BBoxes) {
+		if !types.ValidateNativeLocatorCoverage(sanitized.Contract, pageRunes, page.GlobalCodepointStart, positions, page.UnavailableRanges) {
 			return fmt.Errorf("PDF native structure capture page %d bbox coverage is invalid", pageIndex+1)
 		}
 		nextPageStart = page.GlobalCodepointEnd

@@ -81,6 +81,35 @@ def test_signed_but_inconsistent_native_page_hash_is_refused(snapshot):
         )
 
 
+@pytest.mark.parametrize("bad", [None, "missing", "overlap", "unknown", "duplicate"])
+def test_partial_native_gap_contract_validated_on_unselected_pages(snapshot, bad):
+    from dataclasses import replace
+
+    decoded = native_snapshot(snapshot)
+    native = json.loads(decoded.native_bytes)
+    native["contract"] = "builtin-pdfium-native-locators.v2"
+    page = native["pages"][1]
+    row = page["bboxes"].pop()
+    gap = {key: value for key, value in row.items() if key != "bbox"}
+    gap["reason"] = "bbox_invalid"
+    page["unavailable_ranges"] = [gap]
+    if bad == "missing":
+        page["unavailable_ranges"] = []
+    elif bad == "overlap":
+        page["bboxes"].append(row)
+    elif bad == "unknown":
+        gap["reason"] = "made_up"
+    elif bad == "duplicate":
+        page["unavailable_ranges"].append(dict(gap))
+    changed = replace(decoded, native_bytes=canonical(native))
+    if bad:
+        with pytest.raises(ValueError, match="native.*(gap|coverage)"):
+            module()._validated_native_pages(changed, selected_pages={1})
+    else:
+        pages = module()._validated_native_pages(changed, selected_pages={1})
+        assert pages[1][3] and pages[2][0]["unavailable_ranges"] == [gap]
+
+
 def bounded_identity_snapshot(snapshot):
     """Signed four-page source including overlapping chunks and a large late page."""
     scope, original, sign, keys = snapshot

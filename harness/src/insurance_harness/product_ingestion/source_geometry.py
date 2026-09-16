@@ -19,6 +19,38 @@ def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _validate_partial_coverage(native, page, markdown, intervals):
+    """Validate declared geometry gaps even when a page isn't being expanded."""
+    gaps = page.get("unavailable_ranges", [])
+    if native.get("contract") != "builtin-pdfium-native-locators.v2":
+        if gaps:
+            raise ValueError("native gaps require partial locator contract")
+        return
+    start, end = page["global_codepoint_start"], page["global_codepoint_end"]
+    dispositions = [(left, right) for left, right in intervals]
+    previous = start
+    for gap in gaps:
+        if not isinstance(gap, dict) or set(gap) != {"global_codepoint_start", "global_codepoint_end", "reason"}:
+            raise ValueError("native gap declaration malformed")
+        left, right = gap["global_codepoint_start"], gap["global_codepoint_end"]
+        if (
+            type(left) is not int or type(right) is not int
+            or not start <= left < right <= end or left < previous
+            or gap["reason"] not in {"bbox_invalid", "bbox_unavailable", "character_mapping_unavailable", "page_rotation_unsupported"}
+            or any(ch.isspace() for ch in markdown[left:right])
+        ):
+            raise ValueError("native gap range or reason invalid")
+        dispositions.append((left, right))
+        previous = right
+    occupied = start
+    for left, right in sorted(dispositions):
+        if left < occupied or any(not ch.isspace() for ch in markdown[occupied:left]):
+            raise ValueError("native gap coverage overlaps or is incomplete")
+        occupied = right
+    if any(not ch.isspace() for ch in markdown[occupied:end]):
+        raise ValueError("native gap coverage is incomplete")
+
+
 def _validated_native_pages(decoded: DecodedSourceSnapshot, *, selected_pages=None):
     body = decoded.snapshot
     markdown = body["markdown"]
@@ -95,6 +127,7 @@ def _validated_native_pages(decoded: DecodedSourceSnapshot, *, selected_pages=No
                 ):
                     raise ValueError("native page bbox overlap")
                 occupied_end = max(occupied_end, finish)
+        _validate_partial_coverage(native, page, markdown, intervals)
         pages[number] = (page, width, height, tuple(boxes[i] for i in sorted(boxes)))
     return pages
 
