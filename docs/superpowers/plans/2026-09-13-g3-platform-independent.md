@@ -570,3 +570,7 @@ RED→GREEN：旧行为反例优先；字符集/canonical字节等价、无关�
 CURRENT=Task3bk RED/集中修复；BUSINESS=BLOCKED(preparation)，G3仍未完成。
 
 Task3bk 来源恢复设计复核补充（实现前）：原生 ReparseKnowledge 的独立前置检查不足以幂等恢复，AllocateParseAttempt 无 expected/state fence，文件分支 enqueue 错误会返回 nil；盲接原入口方案拒绝。最小写域补充 internal/application/repository/knowledge.go 与对应测试、既有 TaskInspector adapter/interface（如需要精确任务核对）；不新增表/服务。上传绑定、expected attempt、failed 状态与 metadata 恢复标记必须和分配同一事务；后续更新按恢复 key/目标代次 CAS，不能被旧对象 Save 覆盖。未知提交不二次分配，deadline 给明确终态，迟到消息必须检查该恢复标记。设计说明 /private/tmp/g3-task3bk-reparse-design-review.md。该项尚未实现，不能用已完成局部性能优化宣称恢复接线闭合。
+
+Task3bk 等待期计划复用补充（实现前）：ProductProgression 在完整计划校验和所有窗口幂等登记成功后，仅缓存计划的授权 ArtifactReference、完整 scope/run 和窗口 job_id。生产组合提供每次执行的轻量计划引用检查；引用不变时只读实时 job 状态，不再读取/反序列化 33.8MB plan 或窗口 tasks。每 scope 最多一个 run；重启、计划身份变化或完整登记中断均重新执行原有校验/缺失窗口补登记。缓存不持有任务正文、不替代持久化、不跳过 job 终态屏障。extract 聚合首次读计划移至现有线程执行边界。RED 覆盖重复等待不反序列化、计划变化重新验证、登记一半失败不缓存、重启复核及未知 scope 仍拒绝。
+
+Task3bk 集中诊断收口与交付顺序：本次用户优先要求“能跳过先记录，把后半链路查清，不逐问题构建”。当前三份来源已完成，真正挡住已有候选的是 preparation 重复证据校验。将已完成的重复扫描/来源缓存/等待期计划复用/操作内证据复用/错误残留/心跳诊断集中形成一个部署批次；其余缺口明确保留，不为尚未需要的自动重新解析协议继续阻塞该候选后半程。现有网页单文件重建可恢复失败文件，但产品级一键自动失败文件重解析、来源失败完整调用统计、持久计划格式去重仍 BLOCKED，不能宣称 G3 全验收完成。该顺序只调整诊断/交付分批，不削减最终验收合同；没有另建服务/数据库。统一 build APP/Harness 各至多一次，DocReader/UI 复用；先核所有任务终态再替换，原配置/权限/模型保持。完成后仅从网页恢复已有候选，不补抽普通字段；实际后续问题按清单记录，不逐项临时补丁重建。

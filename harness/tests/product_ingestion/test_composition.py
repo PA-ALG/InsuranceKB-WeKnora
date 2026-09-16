@@ -141,3 +141,30 @@ def test_cli_enabled_worker_requires_real_pipeline_factory_and_disabled_is_uncha
         assert plain._registry.handlers == {}
     finally:
         engine.dispose()
+
+
+def test_window_plan_identity_uses_current_scope_and_metadata_only():
+    from types import SimpleNamespace
+
+    from insurance_harness.product_ingestion.composition import _scoped_window_plan_identity
+    from insurance_harness.product_ingestion.models import ProductScope
+
+    scope = ProductScope(tenant_id="1", space_id="s", raw_knowledge_base_id="r",
+                         wiki_knowledge_base_id="w")
+    refs = [SimpleNamespace(artifact_key="product", artifact_id="sealed-1")]
+    calls = []
+    def metadata(**kw):
+        calls.append(kw)
+        return tuple(refs)
+    reader = _scoped_window_plan_identity(
+        SimpleNamespace(list_effective_artifact_references=metadata),
+        {"s": SimpleNamespace(scope=scope)},
+    )
+    assert reader(scope, "run")[0].artifact_id == "sealed-1"
+    assert calls == [dict(scope=scope, run_id="run", artifact_kind="field_plan")]
+    with pytest.raises(ValueError, match="outside configured"):
+        reader(scope.model_copy(update={"tenant_id": "2"}), "run")
+    assert len(calls) == 1
+    refs.clear()
+    with pytest.raises(ValueError, match="unique authorized"):
+        reader(scope, "run")

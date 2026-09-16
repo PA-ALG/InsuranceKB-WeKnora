@@ -764,9 +764,10 @@ def build_product_pipeline(context):
         )
 
     async def extract(scope, run, stage, job):
+        windows = await asyncio.to_thread(read_window_plan, scope, run.run_id)
         expected = {
             (task.entity_id, task.field_key)
-            for window in read_window_plan(scope, run.run_id)
+            for window in windows
             for task in window.tasks
         }
         attempts = store.list_field_attempts(scope=scope, run_id=run.run_id)

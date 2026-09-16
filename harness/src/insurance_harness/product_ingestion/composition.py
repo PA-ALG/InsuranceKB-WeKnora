@@ -49,6 +49,21 @@ WindowPlanReader = Callable[[ProductScope, str], Sequence[PlannedWindow]]
 FieldPromptProvider = Callable[[ProductScope], bytes]
 
 
+def _scoped_window_plan_identity(artifacts, services):
+    def identity(scope, run_id):
+        service = services.get(scope.space_id)
+        if service is None or service.scope != scope:
+            raise ValueError("plan request is outside configured product scope")
+        refs = artifacts.list_effective_artifact_references(
+            scope=scope, run_id=run_id, artifact_kind="field_plan",
+        )
+        if len(refs) != 1 or refs[0].artifact_key != "product":
+            raise ValueError("unique authorized field plan is unavailable")
+        return refs
+
+    return identity
+
+
 def _scoped_source_loader(artifacts, services):
     gates = {space_id: asyncio.Semaphore(1) for space_id in services}
     # At most one run per configured scope; only SourceBlocks, never native
@@ -358,6 +373,7 @@ def compose_product_worker(
         store=store,
         jobs=jobs,
         read_window_plan=ports.read_window_plan,
+        read_window_plan_identity=_scoped_window_plan_identity(artifacts, services),
     )
 
     sources = _scoped_source_loader(artifacts, services)

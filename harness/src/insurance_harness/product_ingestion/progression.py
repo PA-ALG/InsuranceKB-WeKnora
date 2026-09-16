@@ -53,8 +53,13 @@ class ProductProgression:
         store: ProductIngestionStore,
         jobs: JobStore,
         read_window_plan: Callable[[ProductScope, str], Sequence[PlannedWindow]],
+        read_window_plan_identity: Callable[[ProductScope, str], object] | None = None,
     ):
         self.store, self.jobs, self.read_window_plan = store, jobs, read_window_plan
+        self.read_window_plan_identity = read_window_plan_identity
+        # One compact completed fanout per scope. Never retain field/source bodies.
+        # A restart reconstructs this only through the normal durable reconciliation.
+        self._fanouts: dict[str, tuple[object, tuple[str, ...]]] = {}
 
     def _stage_failure(self, scope, stages):
         for stage in stages:
@@ -98,32 +103,10 @@ class ProductProgression:
                 admit_uploads(self.store, scope, run_id)
                 return
             if key == "extract":
-                plan = tuple(self.read_window_plan(scope, run_id))
-                if len({item.window_key for item in plan}) != len(plan):
-                    raise ValueError("field plan must contain unique sealed windows")
-                # The reader requires a persisted validated plan. An explicitly
-                # empty plan means all fields are carried from the published base.
-                field_keys = [
-                    (task.entity_id, task.field_key) for item in plan for task in item.tasks
-                ]
-                if len(field_keys) != len(set(field_keys)):
-                    raise ValueError("field plan contains duplicate field tasks")
-                # Reconcile every expected window, including a crash halfway
-                # through fanout. Never infer the plan from whichever jobs exist.
-                windows = [
-                    self.store.enqueue_window(
-                        scope=scope,
-                        run_id=run_id,
-                        stage_key="extract",
-                        window_key=item.window_key,
-                        dependency_sha256=item.dependency_sha256,
-                        tasks=item.tasks,
-                    )
-                    for item in plan
-                ]
+                window_jobs = self._window_jobs(scope, run_id)
                 states = [
-                    self.jobs.get_job(space_id=scope.space_id, job_id=window.job_id).state
-                    for window in windows
+                    self.jobs.get_job(space_id=scope.space_id, job_id=job_id).state
+                    for job_id in window_jobs
                 ]
                 if any(
                     state not in {JobState.SUCCEEDED, JobState.BLOCKED, JobState.DEAD_LETTER}
@@ -148,6 +131,38 @@ class ProductProgression:
         self.store.enqueue_root(
             scope=scope, run_id=run_id, idempotency_key="product-root:" + run_id
         )
+
+    def _window_jobs(self, scope: ProductScope, run_id: str) -> tuple[str, ...]:
+        identity_reader = self.read_window_plan_identity
+        identity = identity_reader(scope, run_id) if identity_reader is not None else None
+        key = (scope, run_id, identity)
+        cached = self._fanouts.get(scope.space_id)
+        if identity_reader is not None and cached is not None and cached[0] == key:
+            return cached[1]
+        plan = tuple(self.read_window_plan(scope, run_id))
+        if len({item.window_key for item in plan}) != len(plan):
+            raise ValueError("field plan must contain unique sealed windows")
+        field_keys = [(task.entity_id, task.field_key) for item in plan for task in item.tasks]
+        if len(field_keys) != len(set(field_keys)):
+            raise ValueError("field plan contains duplicate field tasks")
+        # Reconcile every expected window after a restart or interrupted fanout.
+        # Publish the compact cache only when all durable registrations succeeded.
+        job_ids = tuple(
+            self.store.enqueue_window(
+                scope=scope,
+                run_id=run_id,
+                stage_key="extract",
+                window_key=item.window_key,
+                dependency_sha256=item.dependency_sha256,
+                tasks=item.tasks,
+            ).job_id
+            for item in plan
+        )
+        if identity_reader is not None:
+            if identity_reader(scope, run_id) != identity:
+                raise ValueError("field plan identity changed during fanout")
+            self._fanouts[scope.space_id] = (key, job_ids)
+        return job_ids
 
     def final_state(self, scope: ProductScope, run_id: str) -> ProductRunState:
         rows = self.store.list_stages(scope=scope, run_id=run_id)

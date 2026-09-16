@@ -235,3 +235,86 @@ def test_preparation_barrier_depends_on_persisted_workflow(workflow_version):
     else:
         with pytest.raises(ValueError, match="barrier"):
             progress.final_state(None, "current")
+
+
+def test_waiting_windows_reuse_completed_fanout_but_recheck_plan_authority(runtime, monkeypatch):
+    store, jobs, scope, specs, *_ = runtime
+    plan = (module().PlannedWindow(window_key="one", dependency_sha256="f" * 64, tasks=specs),)
+    reads, registrations, checks = [], [], []
+    identity = ["sealed-plan-1"]
+
+    def read(*_):
+        reads.append(True)
+        return plan
+
+    def reference(*_):
+        checks.append(True)
+        return tuple(identity)
+
+    original = store.enqueue_window
+
+    def enqueue(**kw):
+        registrations.append(True)
+        return original(**kw)
+
+    monkeypatch.setattr(store, "enqueue_window", enqueue)
+    progress = module().ProductProgression(store=store, jobs=jobs, read_window_plan=read)
+    progress.read_window_plan_identity = reference
+    run = store.create_run(scope=scope, idempotency_key="compact-fanout")
+    for _ in range(5):
+        progress.advance(scope, run.run_id)
+        finish_next(store, jobs, scope, run)
+    progress.advance(scope, run.run_id)
+    progress.advance(scope, run.run_id)
+    assert len(reads) == len(registrations) == 1
+    assert len(checks) >= 3  # before/after first validation, and the waiting poll
+    assert "extract" not in {s.stage_key for s in store.list_stages(scope=scope, run_id=run.run_id)}
+    identity[0] = "sealed-plan-2"
+    progress.advance(scope, run.run_id)
+    assert len(reads) == len(registrations) == 2
+    # A process restart has no in-memory evidence of a completed fanout.
+    fresh = module().ProductProgression(store=store, jobs=jobs, read_window_plan=read)
+    fresh.read_window_plan_identity = reference
+    fresh.advance(scope, run.run_id)
+    assert len(reads) == len(registrations) == 3
+
+
+def test_partial_fanout_does_not_cache_and_hides_no_dispatch_failure(runtime, monkeypatch):
+    store, jobs, scope, specs, *_ = runtime
+    plan = (module().PlannedWindow(window_key="one", dependency_sha256="f" * 64, tasks=specs),)
+    reads = []
+    def read(*_):
+        reads.append(True)
+        return plan
+    progress = module().ProductProgression(store=store, jobs=jobs, read_window_plan=read)
+    progress.read_window_plan_identity = lambda *_: ("sealed",)
+    run = store.create_run(scope=scope, idempotency_key="interrupted-fanout")
+    for _ in range(5):
+        progress.advance(scope, run.run_id)
+        finish_next(store, jobs, scope, run)
+    original = store.enqueue_window
+    def uncertain(**kw):
+        original(**kw)
+        raise RuntimeError("connection lost after durable enqueue")
+    monkeypatch.setattr(store, "enqueue_window", uncertain)
+    with pytest.raises(RuntimeError, match="connection lost"):
+        progress.advance(scope, run.run_id)
+    monkeypatch.setattr(store, "enqueue_window", original)
+    progress.advance(scope, run.run_id)
+    progress.advance(scope, run.run_id)
+    assert len(reads) == 2
+    assert len(store.list_windows(scope=scope, run_id=run.run_id)) == 1
+
+
+def test_plan_authority_change_during_fanout_is_not_cached(runtime):
+    store, jobs, scope, specs, *_ = runtime
+    plan = (module().PlannedWindow(window_key="one", dependency_sha256="f" * 64, tasks=specs),)
+    progress = module().ProductProgression(store=store, jobs=jobs, read_window_plan=lambda *_: plan)
+    identities = iter(["first", "changed"])
+    progress.read_window_plan_identity = lambda *_: next(identities)
+    run = store.create_run(scope=scope, idempotency_key="changed-fanout")
+    for _ in range(5):
+        progress.advance(scope, run.run_id)
+        finish_next(store, jobs, scope, run)
+    with pytest.raises(ValueError, match="plan identity changed"):
+        progress.advance(scope, run.run_id)

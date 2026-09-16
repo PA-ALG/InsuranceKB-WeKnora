@@ -43,3 +43,13 @@ Owner=root。G3 独立平台验收仍 BLOCKED，QUALITY 后置。本轮不是全
 ## 独立复核收口
 
 首审发现成功心跳INFO未接入默认启动日志（BLOCKER）与metadata默认全类读取的SQLAlchemy identity-map/raiseload冲突（BACKLOG），均在部署前同批修复。两个真实RED见review-red.log；修后38项通过21.53s，ruff通过。复审24文件SHA匹配，BLOCKER=0/BACKLOG=0，仅针对已实现切片；未实现项状态保持。最终冻结清单task3bk-code-repair-freeze.json SHA b05cb67d60be9262951b16c25e9f75fb631a831fa0cbca1c776eac810fb8bd7e。独立报告同目录task3bk-code-review.md、task3bk-code-rereview.md。
+
+## 等待期追加检查与批次冻结
+
+性能切片已提交 3fb14a1b1。等待期新增轻量授权计划引用复核+已完成fanout job_id复用，重启/身份变化重核，半途失败不缓存；计划正文不进常驻缓存。旧实现3个真实RED失败；progression/runtime/composition 25通过，pipeline/composition 14通过。extract阶段首次完整计划读取放在线程边界。冻结与独审另行记录。
+
+使用当前真实33,857,031B字段计划、2954个SourceBlock，4个真实字段worker+JobStore在宿主临时SQLite做并发诊断，模型为35秒等待替身，原10秒心跳/30秒租约不变。78.113秒结束，4/4 succeeded，全部attempt1/generation1，4次替身调用/0真实模型。24次心跳无错误；最慢loop delay1.6342s、executor等待0.2881s、数据库调用2.5857s。证据/private/tmp/g3-task3bk-concurrency-probe.json。此检查不含80MB源几何冷读、不含Colima真实PG和后台pump竞争，不能冒充生产四并发根因完全解决。真实部署后用新增诊断进一步确认。
+
+批次交付只涵盖已验证性能/容错诊断切片；当前来源已成功，允许继续诊断已有候选的review/publish。自动失败文件重解析/source失败统计/持久计划格式改造保留，不以这些已记录缺口反复打断当前后半流程；它们仍是最终平台收尾需要评估和闭合的项。
+
+等待期追加切片独审 BLOCKER0/BACKLOG0，5文件冻结 SHA442b60b52ded1f4a9156e4463758bc9ca74f4e77084ee1793f004529d2ff3ec2，报告同目录task3bk-fanout-review.md。
