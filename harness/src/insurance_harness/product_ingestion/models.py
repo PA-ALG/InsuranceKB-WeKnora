@@ -167,7 +167,7 @@ class ProductRunSnapshot(_FrozenModel):
     scope: ProductScope
     state: ProductRunState
     version: int
-    workflow_version: Literal[1, 2] = 1
+    workflow_version: Literal[1, 2, 3] = 1
     retry_of_run_id: str | None
     attempt: int
     retry_field_keys: tuple[str, ...]

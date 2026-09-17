@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import importlib
 import json
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -94,6 +95,48 @@ def test_upload_lookup_uses_fixed_scope_key_and_validates_binding():
     with pytest.raises(ValueError):
         asyncio.run(api.lookup_upload(scope.model_copy(update={"space_id": "other"}), "run", 0))
     assert len(seen) == 1
+
+
+def test_bound_reparse_get_then_post_uses_one_stable_key_and_expected_attempt():
+    seen = []
+    key = "a" * 64
+    deadline = datetime(2026, 9, 16, 12, 0, tzinfo=UTC)
+
+    def respond(request):
+        seen.append(request)
+        if request.method == "GET":
+            return httpx.Response(404, json={"success": False})
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {
+                    "contract": "g3-platform-bound-reparse.830.v1",
+                    "run_id": "run",
+                    "ordinal": 2,
+                    "knowledge_id": "knowledge",
+                    "expected_parse_attempt": 1,
+                    "parse_attempt": 2,
+                    "recovery_key": key,
+                    "deadline_at": "2026-09-16T12:00:00Z",
+                    "dispatch_state": "enqueued",
+                    "queue_task_id": "task",
+                    "parse_status": "processing",
+                },
+            },
+        )
+
+    api, scope = client(respond)
+    assert asyncio.run(api.get_reparse_receipt(scope, "run", 2, key)) is None
+    result = asyncio.run(api.reparse_upload(scope, "run", 2, 1, key, deadline))
+    assert result["parse_attempt"] == 2
+    assert seen[0].url.path == seen[1].url.path
+    assert str(seen[0].url).endswith("/platform/uploads/run/2/reparse?recovery_key=" + key)
+    assert json.loads(seen[1].content) == {
+        "expected_parse_attempt": 1,
+        "recovery_key": key,
+        "deadline_at": "2026-09-16T12:00:00Z",
+    }
 
 
 @pytest.mark.parametrize("status", [302, 503, 403])

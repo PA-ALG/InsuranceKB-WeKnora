@@ -76,6 +76,9 @@ func (compositionKnowledgeStub) GetKnowledgeByID(context.Context, uint64, string
 func (compositionKnowledgeStub) FindByMetadataKey(context.Context, uint64, string, string, string) (*types.Knowledge, error) {
 	return nil, nil
 }
+func (compositionKnowledgeStub) FindFileBySHA256(context.Context, uint64, string, string) (*types.Knowledge, error) {
+	return nil, nil
+}
 func TestG3PlatformCompositionDisabledAndEnabledDependencies(t *testing.T) {
 	a, b, err := NewConfiguredG3PlatformHandlers(nil, nil, nil, nil, nil, nil, nil, nil)
 	require.NoError(t, err)

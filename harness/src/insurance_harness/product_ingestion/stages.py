@@ -33,6 +33,7 @@ from insurance_harness.product_ingestion.store import (
     ProductIngestionStore,
     needs_confirmation_error,
 )
+from insurance_harness.product_ingestion.upload_resolution import lookup_material
 from insurance_harness.service_shell.worker import HandlerRegistry, HandlerResult
 
 
@@ -80,9 +81,27 @@ class SourcePlatform(Protocol):
     async def lookup_upload(
         self, scope: ProductScope, run_id: str, ordinal: int
     ) -> dict | None: ...
+    async def lookup_file_by_sha256(
+        self, scope: ProductScope, sha256: str, *, knowledge_id: str | None = None
+    ) -> dict | None: ...
+
     async def capture_source(
         self, scope: ProductScope, knowledge_id: str, attempt: int
     ) -> bytes: ...
+
+    async def get_reparse_receipt(
+        self, scope: ProductScope, run_id: str, ordinal: int, recovery_key: str
+    ) -> dict | None: ...
+
+    async def reparse_upload(
+        self,
+        scope: ProductScope,
+        run_id: str,
+        ordinal: int,
+        expected_parse_attempt: int,
+        recovery_key: str,
+        deadline_at: datetime,
+    ) -> dict: ...
 
 
 def register_stage_handlers(
@@ -189,12 +208,13 @@ def register_source_stages(
             return StageOutput()
         if now() >= run.upload_deadline_at:
             raise NonRetryableJobError("UPLOAD_DEADLINE_EXCEEDED")
+        manifest = store.get_upload_manifest(scope=scope, run_id=run.run_id)
         attached = {row.upload_ordinal for row in run.materials}
         missing = False
         for ordinal in range(run.expected_upload_count):
             if ordinal in attached:
                 continue
-            item = await platform.lookup_upload(scope, run.run_id, ordinal)
+            item = await lookup_material(platform, scope, run.run_id, ordinal, manifest)
             if item is None:
                 missing = True
                 continue
@@ -204,7 +224,11 @@ def register_source_stages(
                 expected_version=run.version,
                 original=OriginalKnowledgeRef(
                     knowledge_id=item["knowledge_id"],
-                    original_filename=item["file_name"],
+                    original_filename=(
+                        manifest.materials[ordinal].original_filename
+                        if manifest is not None
+                        else item["file_name"]
+                    ),
                     upload_ordinal=ordinal,
                 ),
             )
@@ -252,17 +276,109 @@ def register_source_stages(
             lookup_run = store.get_run(scope=scope, run_id=lookup_run.retry_of_run_id)
         if recovery is not None and lookup_run.run_id != recovery.upload_run_id:
             raise NonRetryableJobError("RECOVERY_UPLOAD_BINDING_CHANGED")
+        manifest = store.get_upload_manifest(scope=scope, run_id=run.run_id)
         for material in run.materials:
-            item = await platform.lookup_upload(scope, lookup_run.run_id, material.upload_ordinal)
+            item = await lookup_material(
+                platform,
+                scope,
+                lookup_run.run_id,
+                material.upload_ordinal,
+                manifest,
+                knowledge_id=material.knowledge_id,
+            )
             if item is None or item["knowledge_id"] != material.knowledge_id:
                 raise NonRetryableJobError("ORIGINAL_UPLOAD_BINDING_CHANGED")
+            native_receipt = item.get("processing_receipt")
+            if native_receipt is not None:
+                if item.get("processing_receipt_parse_attempt") != item["parse_attempt"]:
+                    raise NonRetryableJobError("SOURCE_PROCESSING_RECEIPT_ATTEMPT_CHANGED")
+                await asyncio.to_thread(
+                    artifacts.record_source_processing_attempt,
+                    scope=scope,
+                    run_id=run.run_id,
+                    stage=stage,
+                    job=job,
+                    knowledge_id=material.knowledge_id,
+                    parse_attempt=item["parse_attempt"],
+                    receipt=native_receipt,
+                )
+            current.append((material, item))
+        for material, item in current:
+            source_run_id = item.get("original_upload_run_id", lookup_run.run_id)
+            source_ordinal = item.get("original_upload_ordinal", material.upload_ordinal)
+            if item["parse_status"] in {"failed", "error"} and (
+                not source_run_id or type(source_ordinal) is not int or source_ordinal < 0
+            ):
+                raise NonRetryableJobError("SOURCE_REPARSE_BINDING_UNAVAILABLE")
+            recovery_key = hashlib.sha256(
+                (
+                    f"product-source-reparse.830.v1\0{scope.tenant_id}\0{scope.space_id}\0"
+                    f"{run.run_id}\0{source_run_id}\0{source_ordinal}"
+                ).encode()
+            ).hexdigest()
+            receipt = (
+                await platform.get_reparse_receipt(
+                    scope, source_run_id, source_ordinal, recovery_key
+                )
+                if item["parse_status"] in {"failed", "error"}
+                else None
+            )
+            if receipt is not None:
+                try:
+                    receipt_deadline = datetime.fromisoformat(
+                        receipt["deadline_at"].replace("Z", "+00:00")
+                    )
+                except (KeyError, TypeError, ValueError):
+                    raise NonRetryableJobError("REPARSE_RECEIPT_BINDING_CHANGED") from None
+                if (
+                    receipt.get("contract") != "g3-platform-bound-reparse.830.v1"
+                    or receipt.get("run_id") != source_run_id
+                    or receipt.get("ordinal") != source_ordinal
+                    or receipt.get("knowledge_id") != material.knowledge_id
+                    or receipt.get("recovery_key") != recovery_key
+                    or type(receipt.get("expected_parse_attempt")) is not int
+                    or receipt.get("parse_attempt") != receipt["expected_parse_attempt"] + 1
+                    or item["parse_attempt"]
+                    not in {receipt["expected_parse_attempt"], receipt["parse_attempt"]}
+                    or receipt_deadline.tzinfo is None
+                    or receipt_deadline != run.source_deadline_at
+                ):
+                    raise NonRetryableJobError("REPARSE_RECEIPT_BINDING_CHANGED")
+                if receipt["dispatch_state"] in {"unknown", "interrupted"}:
+                    raise needs_confirmation_error("REPARSE_DISPATCH_UNKNOWN")
+                if receipt["dispatch_state"] == "failed":
+                    raise NonRetryableJobError("SOURCE_REPARSE_FAILED")
             if item["parse_status"] in {"failed", "error"}:
-                raise NonRetryableJobError("SOURCE_PARSE_FAILED:" + material.original_filename)
+                if receipt is None:
+                    receipt = await platform.reparse_upload(
+                        scope,
+                        source_run_id,
+                        source_ordinal,
+                        item["parse_attempt"],
+                        recovery_key,
+                        run.source_deadline_at,
+                    )
+                    if (
+                        receipt.get("contract") != "g3-platform-bound-reparse.830.v1"
+                        or receipt.get("run_id") != source_run_id
+                        or receipt.get("ordinal") != source_ordinal
+                        or receipt.get("knowledge_id") != material.knowledge_id
+                        or receipt.get("expected_parse_attempt") != item["parse_attempt"]
+                        or receipt.get("parse_attempt") != item["parse_attempt"] + 1
+                        or receipt.get("recovery_key") != recovery_key
+                        or datetime.fromisoformat(receipt["deadline_at"].replace("Z", "+00:00"))
+                        != run.source_deadline_at
+                    ):
+                        raise NonRetryableJobError("REPARSE_RECEIPT_BINDING_CHANGED")
+                if receipt["dispatch_state"] in {"unknown", "interrupted"}:
+                    raise needs_confirmation_error("REPARSE_DISPATCH_UNKNOWN")
+                if receipt["dispatch_state"] == "failed":
+                    raise NonRetryableJobError("SOURCE_REPARSE_FAILED")
+                raise RetryableJobError("WAITING_FOR_SOURCE_REPARSE")
             if item["parse_status"] != "completed":
                 if recovery is not None:
                     raise NonRetryableJobError("RECOVERY_SOURCE_NOT_COMPLETED")
                 raise RetryableJobError("WAITING_FOR_SOURCE_PARSE")
-            current.append((material, item))
         for material, item in current:
             saved = prior.get(material.knowledge_id)
             if saved is not None:

@@ -32,12 +32,21 @@ func TestG3PlatformSnapshotRoutesExposeOnlyBoundedMachineReads(t *testing.T) {
 	}
 	prefix := "/api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/platform"
 	require.True(t, routes[http.MethodGet+" "+prefix+"/uploads/:run_id/:ordinal"])
+	require.True(t, routes[http.MethodGet+" "+prefix+"/files/by-sha256/:sha256"])
+	require.True(t, routes[http.MethodGet+" "+prefix+"/uploads/:run_id/:ordinal/reparse"])
+	require.True(t, routes[http.MethodPost+" "+prefix+"/uploads/:run_id/:ordinal/reparse"])
 	require.True(t, routes[http.MethodPost+" "+prefix+"/sources/:knowledge_id/attempts/:attempt/snapshot"])
 	require.True(t, routes[http.MethodGet+" "+prefix+"/bases/:release_id/epochs/:epoch"])
 
 	uploadPolicy, ok := guards.apiKeyAuthorizer.Lookup(http.MethodGet, prefix+"/uploads/:run_id/:ordinal")
 	require.True(t, ok)
 	require.Contains(t, uploadPolicy.Capabilities, types.APIKeyCapabilityRetrieve)
+	fingerprintPolicy, ok := guards.apiKeyAuthorizer.Lookup(http.MethodGet, prefix+"/files/by-sha256/:sha256")
+	require.True(t, ok)
+	require.Contains(t, fingerprintPolicy.Capabilities, types.APIKeyCapabilityRetrieve)
+	reparsePolicy, ok := guards.apiKeyAuthorizer.Lookup(http.MethodPost, prefix+"/uploads/:run_id/:ordinal/reparse")
+	require.True(t, ok)
+	require.Contains(t, reparsePolicy.Capabilities, types.APIKeyCapabilityIngest)
 	sourcePolicy, ok := guards.apiKeyAuthorizer.Lookup(http.MethodPost, prefix+"/sources/:knowledge_id/attempts/:attempt/snapshot")
 	require.True(t, ok)
 	require.Contains(t, sourcePolicy.Capabilities, types.APIKeyCapabilityIngest)

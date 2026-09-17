@@ -2,10 +2,13 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 
@@ -128,8 +131,38 @@ func (h *ProductIngestionHandler) Upload(c *gin.Context) {
 			return
 		}
 	}
+	// Read the original multipart files once before admission so the durable
+	// run records exactly which unique content it can recover after a crash.
+	unique := make([]*multipart.FileHeader, 0, len(files))
+	manifest := make([]service.ProductUploadManifestMaterial, 0, len(files))
+	seen := make(map[string]bool, len(files))
+	for _, file := range files {
+		reader, openErr := file.Open()
+		if openErr != nil {
+			productGatewayError(c, 400, "PRODUCT_INGESTION_ORIGINAL_FILES_REQUIRED")
+			return
+		}
+		digest := sha256.New()
+		written, copyErr := io.Copy(digest, reader)
+		closeErr := reader.Close()
+		if copyErr != nil || closeErr != nil || written != file.Size {
+			productGatewayError(c, 400, "PRODUCT_INGESTION_ORIGINAL_FILES_REQUIRED")
+			return
+		}
+		fingerprint := hex.EncodeToString(digest.Sum(nil))
+		contentKey := fmt.Sprintf("%s:%d", fingerprint, file.Size)
+		if seen[contentKey] {
+			continue
+		}
+		seen[contentKey] = true
+		manifest = append(manifest, service.ProductUploadManifestMaterial{
+			Ordinal: len(unique), OriginalFilename: file.Filename,
+			FileSize: file.Size, FileSHA256: fingerprint,
+		})
+		unique = append(unique, file)
+	}
 	// Admission is durable before the first original reaches KnowledgeService.
-	run, err := h.bridge.CreateRun(ctx, len(files))
+	run, err := h.bridge.CreateRun(ctx, len(unique), manifest, len(files)-len(unique))
 	if err != nil {
 		productGatewayBridgeError(c, err)
 		return
@@ -139,11 +172,19 @@ func (h *ProductIngestionHandler) Upload(c *gin.Context) {
 		return
 	}
 	accepted := 0
-	for ordinal, file := range files {
+	for ordinal, file := range unique {
 		metadata := map[string]string{"product_ingestion_upload": fmt.Sprintf("%s:%d", run.RunID, ordinal)}
 		knowledge, err := h.knowledge.kgService.CreateKnowledgeFromFile(ctx, h.bridge.Scope().RawKnowledgeBaseID, file, metadata, nil, "", nil, "web", nil)
 		if err == nil && knowledge != nil {
 			accepted++
+		} else {
+			var duplicate *types.DuplicateKnowledgeError
+			if errors.As(err, &duplicate) && duplicate != nil && knowledge != nil && duplicate.Knowledge != nil && knowledge.ID == duplicate.Knowledge.ID &&
+				knowledge.TenantID == h.bridge.Scope().TenantID && knowledge.KnowledgeBaseID == h.bridge.Scope().RawKnowledgeBaseID &&
+				knowledge.Type == "file" && knowledge.ParseStatus != "failed" && knowledge.FileSize == manifest[ordinal].FileSize &&
+				knowledge.FileSHA256 == manifest[ordinal].FileSHA256 {
+				accepted++
+			}
 		}
 		// Never repeat an uncertain save. Incomplete groups remain durable until their deadline.
 	}

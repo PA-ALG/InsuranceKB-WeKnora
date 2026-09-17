@@ -1,0 +1,450 @@
+{
+  "kind": "readonly-observation-of-platform-produced-results",
+  "observation": {
+    "run": {
+      "id": "6e4c19f7-3163-4473-bf8d-fc5913421c6e",
+      "state": "running",
+      "created_at": "2026-09-16T08:55:43.425286+00:00",
+      "started_at": "2026-09-16T08:55:49.405338+00:00",
+      "uploads_sealed_at": "2026-09-16T08:55:49.405338+00:00",
+      "expected_upload_count": 3,
+      "root_state": "succeeded",
+      "root_finished_at": "2026-09-16T09:12:26.456935+00:00",
+      "final_state": "partial_success",
+      "finished_at": "2026-09-16T09:12:26.440342+00:00",
+      "success_count": 30,
+      "missing_count": 33,
+      "failure_count": 12,
+      "model_call_count": 8
+    },
+    "materials": [
+      {
+        "id": "43991b4b-34df-4aeb-9c8c-c14130059f6a",
+        "filename": "保险条款.pdf",
+        "role": "terms",
+        "revision": "46463438374e08901a3f037b2aff2bb1cd2ecd1e445d90b0a50cdaa791e35699",
+        "pages": 9
+      },
+      {
+        "id": "d1f7bac5-c462-46a4-8b0b-f3f09842786f",
+        "filename": "费率表.pdf",
+        "role": "rate-table",
+        "revision": "dc0dae0083d086a0f3f456383a37c3b980930fe45b4d78cb96419199feff45f0",
+        "pages": 2
+      },
+      {
+        "id": "1786d0e6-6bdd-4fb7-8df9-f640fd157744",
+        "filename": "产品说明书.pdf",
+        "role": "brochure",
+        "revision": "631272fe39aa483e3d2b2812f575d2148559550c4189db11d0131616e50d10a4",
+        "pages": 6
+      }
+    ],
+    "stages": [
+      {
+        "stage": "uploads",
+        "state": "succeeded",
+        "started_at": "2026-09-16T08:55:46.043697+00:00",
+        "finished_at": "2026-09-16T08:55:49.637991+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "source",
+        "state": "succeeded",
+        "started_at": "2026-09-16T08:56:28.222301+00:00",
+        "finished_at": "2026-09-16T08:56:42.889404+00:00",
+        "attempt": 5
+      },
+      {
+        "stage": "routing",
+        "state": "succeeded",
+        "started_at": "2026-09-16T08:56:45.803639+00:00",
+        "finished_at": "2026-09-16T08:56:46.886521+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "identity",
+        "state": "succeeded",
+        "started_at": "2026-09-16T08:56:49.170119+00:00",
+        "finished_at": "2026-09-16T08:57:21.945752+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "field_plan",
+        "state": "succeeded",
+        "started_at": "2026-09-16T08:57:25.352332+00:00",
+        "finished_at": "2026-09-16T08:57:50.386842+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "extract",
+        "state": "succeeded",
+        "started_at": "2026-09-16T08:58:57.116862+00:00",
+        "finished_at": "2026-09-16T08:58:57.533195+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "synthesis",
+        "state": "succeeded",
+        "started_at": "2026-09-16T08:58:58.171106+00:00",
+        "finished_at": "2026-09-16T08:59:27.926675+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "compilation",
+        "state": "succeeded",
+        "started_at": "2026-09-16T08:59:29.5998+00:00",
+        "finished_at": "2026-09-16T09:01:26.698923+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "preparation",
+        "state": "succeeded",
+        "started_at": "2026-09-16T09:01:32.257308+00:00",
+        "finished_at": "2026-09-16T09:04:20.809899+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "review",
+        "state": "succeeded",
+        "started_at": "2026-09-16T09:04:22.869046+00:00",
+        "finished_at": "2026-09-16T09:07:21.074062+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "publish",
+        "state": "succeeded",
+        "started_at": "2026-09-16T09:07:21.601877+00:00",
+        "finished_at": "2026-09-16T09:10:16.327897+00:00",
+        "attempt": 1
+      },
+      {
+        "stage": "verify",
+        "state": "succeeded",
+        "started_at": "2026-09-16T09:10:18.751798+00:00",
+        "finished_at": "2026-09-16T09:12:23.400043+00:00",
+        "attempt": 1
+      }
+    ],
+    "fields": [
+      {
+        "outcome": "extraction_failed",
+        "count": 12
+      },
+      {
+        "outcome": "not_provided",
+        "count": 33
+      },
+      {
+        "outcome": "verified",
+        "count": 30
+      }
+    ],
+    "field_calls": 8,
+    "stage_calls": 1,
+    "observed_at": "2026-09-16T09:13:41.855508+00:00"
+  },
+  "platform_artifacts": {
+    "source_processing_summary": {
+      "contract": "product-source-processing-summary.830.v1",
+      "interrupted_count": 0,
+      "materials": [
+        {
+          "availability": "AVAILABLE",
+          "counts": {
+            "attempts": 3,
+            "confirmed": 3,
+            "interrupted": 0,
+            "not_dispatched": 0,
+            "transport_retries": 0
+          },
+          "knowledge_id": "1786d0e6-6bdd-4fb7-8df9-f640fd157744",
+          "phases": [
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 5507,
+                  "finished_at_unix_ms": 1789548953975,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548948468,
+                  "status": "done"
+                }
+              ],
+              "phase": "docreader",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 275,
+                  "finished_at_unix_ms": 1789548954864,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548954589,
+                  "status": "done"
+                }
+              ],
+              "phase": "chunking",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 3557,
+                  "finished_at_unix_ms": 1789548958645,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548955088,
+                  "status": "done"
+                }
+              ],
+              "phase": "embedding",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 8239,
+                  "finished_at_unix_ms": 1789548968142,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548959903,
+                  "status": "done"
+                }
+              ],
+              "phase": "postprocess.summary",
+              "recorded": true
+            }
+          ],
+          "receipt_sha256": "f56204d205152795795ff4553f1ebe33067511a72c777970d838d64a0bdb1314",
+          "reused": false
+        },
+        {
+          "availability": "AVAILABLE",
+          "counts": {
+            "attempts": 4,
+            "confirmed": 4,
+            "interrupted": 0,
+            "not_dispatched": 0,
+            "transport_retries": 0
+          },
+          "knowledge_id": "43991b4b-34df-4aeb-9c8c-c14130059f6a",
+          "phases": [
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 6880,
+                  "finished_at_unix_ms": 1789548955405,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548948525,
+                  "status": "done"
+                }
+              ],
+              "phase": "docreader",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 770,
+                  "finished_at_unix_ms": 1789548956339,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548955569,
+                  "status": "done"
+                }
+              ],
+              "phase": "chunking",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 7012,
+                  "finished_at_unix_ms": 1789548963377,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548956365,
+                  "status": "done"
+                }
+              ],
+              "phase": "embedding",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 10706,
+                  "finished_at_unix_ms": 1789548974785,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548964079,
+                  "status": "done"
+                }
+              ],
+              "phase": "postprocess.summary",
+              "recorded": true
+            }
+          ],
+          "receipt_sha256": "0fb40fb606236450d0a720a37a0f9634942a077ecddaef5dbfa85a5eb369c488",
+          "reused": false
+        },
+        {
+          "availability": "AVAILABLE",
+          "counts": {
+            "attempts": 3,
+            "confirmed": 3,
+            "interrupted": 0,
+            "not_dispatched": 0,
+            "transport_retries": 0
+          },
+          "knowledge_id": "d1f7bac5-c462-46a4-8b0b-f3f09842786f",
+          "phases": [
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 7205,
+                  "finished_at_unix_ms": 1789548955656,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548948451,
+                  "status": "done"
+                }
+              ],
+              "phase": "docreader",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 106,
+                  "finished_at_unix_ms": 1789548956370,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548956264,
+                  "status": "done"
+                }
+              ],
+              "phase": "chunking",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 6767,
+                  "finished_at_unix_ms": 1789548963151,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548956384,
+                  "status": "done"
+                }
+              ],
+              "phase": "embedding",
+              "recorded": true
+            },
+            {
+              "occurrences": [
+                {
+                  "duration_ms": 7827,
+                  "finished_at_unix_ms": 1789548971901,
+                  "occurrence": 0,
+                  "started_at_unix_ms": 1789548964074,
+                  "status": "done"
+                }
+              ],
+              "phase": "postprocess.summary",
+              "recorded": true
+            }
+          ],
+          "receipt_sha256": "d524461d83b3e97ce0e4c248c017a9e92eaa96cb93ced5f1718b2f9ca794b3cb",
+          "reused": false
+        }
+      ],
+      "model_call_count": 10,
+      "model_call_count_complete": true,
+      "recorded_model_call_count": 10,
+      "recorded_reused_model_call_count": 0,
+      "reused_model_call_count": 0
+    },
+    "publication": {
+      "activated_by": "api_tenant:10003",
+      "activation_epoch": 12,
+      "created_at": "2026-09-16T09:10:15.623217125Z",
+      "previous_release_id": "release-b30b35de-7ed4-4187-b51d-d7d5d819430c",
+      "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "receipt_id": "receipt-6cfcbf50-4df3-47d0-80a9-85367b13d0c8",
+      "release_id": "release-c869b78e-b1ac-497a-842b-30bda43a7b10",
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "tenant_id": 10003,
+      "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+    },
+    "discovery_summary": {
+      "accepted_member_count": 0,
+      "call_ids": [],
+      "counts": {
+        "duplicate": 0,
+        "proposed_new": 0,
+        "published": 0,
+        "rejected": 0,
+        "update_proposal": 0
+      },
+      "coverage": null,
+      "failure_detail": "discovery context budget exceeded",
+      "reason_codes": [
+        "DISCOVERY_GENERATION_FAILED"
+      ],
+      "reused": false,
+      "reused_from_run_id": null,
+      "state": "FAILED"
+    },
+    "verification": {
+      "activation_epoch": 12,
+      "candidate_hash": "4de208b84e9d608d16021d6a2b68eb53534412af0e35a4ce0a2b3c0998aaac15",
+      "citation_count": 51,
+      "contract": "platform-published-product-verification.830.v1",
+      "entity_ids": [
+        "entity_2c82f101e704bdcdbc0870671715274022a13510a156ed42dae8a41070f8b8b4"
+      ],
+      "field_count": 75,
+      "member_count": 76,
+      "missing_field_count": 45,
+      "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "release_id": "release-c869b78e-b1ac-497a-842b-30bda43a7b10",
+      "search_count": 1,
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "status": "PASS",
+      "tenant_id": 10003,
+      "verified_field_count": 30,
+      "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+    }
+  },
+  "model_calls": {
+    "identity": 1,
+    "field_extraction": 8,
+    "native_processing": 10,
+    "total": 19,
+    "ordinary_field_retries": 0
+  },
+  "ui_observation": {
+    "product": "平安盛世长鑫（2026）终身寿险",
+    "directory_epoch": 12,
+    "field": "投保范围",
+    "pdf_page": 8,
+    "highlight": "7.3 投保范围",
+    "field_visible_by_ms": 6152,
+    "preview_loading_at_ms": 13249,
+    "preview_visible_by_ms": 28857,
+    "timing_kind": "observer bounds, includes observation gaps; not HTTP latency",
+    "server_http_ms": {
+      "first_field": 396.704105,
+      "first_preview": 3511.990971,
+      "warm_field": 71.025246,
+      "warm_preview": 100.032646
+    }
+  },
+  "limitations": [
+    "free_wiki discovery budget exceeded before model dispatch",
+    "1835 provider-failure task has no webpage recovery action",
+    "source validation still traverses historical sources",
+    "new product first-read preview slow",
+    "G3 overall remains incomplete"
+  ],
+  "independent_receipt_review": {
+    "agent": "g3_run_receipt_review",
+    "blockers": 0,
+    "backlog": 0,
+    "rejected": 0,
+    "scope": "report and receipt consistency only"
+  }
+}

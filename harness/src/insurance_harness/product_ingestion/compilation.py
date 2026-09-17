@@ -482,7 +482,10 @@ def assemble_platform_candidate(
     if novel_members and (
         independent_review is None
         or independent_review.execution.implementation
-        != "platform-independent-discovery-review.830.g3.v1"
+        not in {
+            "platform-independent-discovery-review.830.g3.v1",
+            "platform-combined-field-discovery-review.830.g3.v1",
+        }
     ):
         raise ValueError("INDEPENDENT_DISCOVERY_REVIEW_REQUIRED")
     composed = compiler.record_composed_output(

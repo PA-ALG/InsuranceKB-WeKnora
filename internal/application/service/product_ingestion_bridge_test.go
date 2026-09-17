@@ -42,14 +42,20 @@ func TestProductIngestionBridgeFixedScopeCredentialAndSafeProjection(t *testing.
 		require.Equal(t, "Bearer private-service-key", r.Header.Get("Authorization"))
 		var body map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		require.Len(t, body, 2)
+		require.Len(t, body, 3)
 		require.Equal(t, float64(3), body["expected_upload_count"])
 		require.NotEmpty(t, body["idempotency_key"])
+		require.Equal(t, "product-upload-manifest.830.g3.v1", body["upload_manifest"].(map[string]any)["contract"])
+		require.Equal(t, float64(0), body["upload_manifest"].(map[string]any)["duplicate_upload_count"])
 		return bridgeResponse(r, 201, productBridgeRun()), nil
 	})
 	bridge, err := NewProductIngestionHTTPBridge(options)
 	require.NoError(t, err)
-	run, err := bridge.CreateRun(context.Background(), 3)
+	manifest := make([]ProductUploadManifestMaterial, 3)
+	for i := range manifest {
+		manifest[i] = ProductUploadManifestMaterial{Ordinal: i, OriginalFilename: fmt.Sprintf("%d.pdf", i), FileSize: 8, FileSHA256: strings.Repeat("a", 64)}
+	}
+	run, err := bridge.CreateRun(context.Background(), 3, manifest, 0)
 	require.NoError(t, err)
 	require.Equal(t, "run-1", run.RunID)
 	require.Equal(t, 1, calls)

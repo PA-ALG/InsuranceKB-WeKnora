@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import time
+from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
 import httpx
@@ -96,8 +97,10 @@ class PlatformClient:
                     raw.extend(chunk)
         except httpx.HTTPError as error:
             details = {
-                "event": "platform_transport_error", "error_type": type(error).__name__,
-                "method": method, "elapsed_seconds": time.monotonic() - started,
+                "event": "platform_transport_error",
+                "error_type": type(error).__name__,
+                "method": method,
+                "elapsed_seconds": time.monotonic() - started,
                 "space_id": scope.space_id,
             }
             logging.getLogger(__name__).warning(json.dumps(details), extra=details)
@@ -136,6 +139,120 @@ class PlatformClient:
         ):
             raise ValueError("platform parse status invalid")
         return value
+
+    async def lookup_file_by_sha256(self, scope, sha256, *, knowledge_id=None):
+        if not isinstance(sha256, str) or re.fullmatch(r"[a-f0-9]{64}", sha256) is None:
+            raise ValueError("invalid upload fingerprint")
+        suffix = f"/platform/files/by-sha256/{sha256}"
+        if knowledge_id is not None:
+            suffix += f"?knowledge_id={_id(knowledge_id)}"
+        value = await self._request(scope, "GET", suffix, missing_ok=True)
+        if value is None:
+            return None
+        if (
+            value.get("contract") != "g3-platform-file-fingerprint.830.v1"
+            or value.get("file_sha256") != sha256
+            or value.get("type") != "file"
+            or type(value.get("file_size")) is not int
+            or value["file_size"] <= 0
+            or type(value.get("parse_attempt")) is not int
+            or value["parse_attempt"] < 1
+            or not isinstance(value.get("parse_status"), str)
+            or not isinstance(value.get("file_name"), str)
+            or not value["file_name"]
+            or (knowledge_id is not None and value.get("knowledge_id") != knowledge_id)
+        ):
+            raise ValueError("platform fingerprint binding mismatch")
+        _id(value.get("knowledge_id"))
+        original = value.get("original_upload_run_id")
+        ordinal = value.get("original_upload_ordinal")
+        if original is not None:
+            _id(original)
+            if type(ordinal) is not int or ordinal < 0:
+                raise ValueError("platform original upload binding invalid")
+        elif ordinal is not None:
+            raise ValueError("platform original upload binding incomplete")
+        return value
+
+    @staticmethod
+    def _reparse_key(value):
+        if not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{64}", value) is None:
+            raise ValueError("invalid reparse recovery key")
+        return value
+
+    async def get_reparse_receipt(self, scope, run_id, ordinal, recovery_key):
+        if type(ordinal) is not int or ordinal < 0:
+            raise ValueError("invalid upload ordinal")
+        key = self._reparse_key(recovery_key)
+        value = await self._request(
+            scope,
+            "GET",
+            f"/platform/uploads/{_id(run_id)}/{ordinal}/reparse?recovery_key={key}",
+            missing_ok=True,
+        )
+        if value is not None:
+            self._validate_reparse_receipt(value, run_id, ordinal, key)
+        return value
+
+    async def reparse_upload(
+        self, scope, run_id, ordinal, expected_parse_attempt, recovery_key, deadline_at
+    ):
+        if (
+            type(ordinal) is not int
+            or ordinal < 0
+            or type(expected_parse_attempt) is not int
+            or expected_parse_attempt < 1
+        ):
+            raise ValueError("invalid reparse attempt")
+        key = self._reparse_key(recovery_key)
+        if not isinstance(deadline_at, datetime) or deadline_at.tzinfo is None:
+            raise ValueError("invalid reparse deadline")
+        deadline = deadline_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        value = await self._request(
+            scope,
+            "POST",
+            f"/platform/uploads/{_id(run_id)}/{ordinal}/reparse",
+            payload=json.dumps(
+                {
+                    "expected_parse_attempt": expected_parse_attempt,
+                    "recovery_key": key,
+                    "deadline_at": deadline,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode(),
+        )
+        self._validate_reparse_receipt(value, run_id, ordinal, key)
+        if value["expected_parse_attempt"] != expected_parse_attempt:
+            raise ValueError("reparse expected attempt changed")
+        if value["deadline_at"] != deadline:
+            raise ValueError("reparse deadline changed")
+        return value
+
+    @staticmethod
+    def _validate_reparse_receipt(value, run_id, ordinal, key):
+        if (
+            value.get("contract") != "g3-platform-bound-reparse.830.v1"
+            or value.get("run_id") != run_id
+            or value.get("ordinal") != ordinal
+            or value.get("recovery_key") != key
+            or not isinstance(value.get("knowledge_id"), str)
+            or type(value.get("expected_parse_attempt")) is not int
+            or value["expected_parse_attempt"] < 1
+            or value.get("parse_attempt") != value["expected_parse_attempt"] + 1
+            or not isinstance(value.get("deadline_at"), str)
+            or value.get("dispatch_state")
+            not in {
+                "allocated",
+                "dispatching",
+                "enqueued",
+                "interrupted",
+                "completed",
+                "failed",
+                "unknown",
+            }
+        ):
+            raise ValueError("reparse receipt binding invalid")
 
     async def capture_source(self, scope, knowledge_id, attempt):
         if type(attempt) is not int or attempt < 1:

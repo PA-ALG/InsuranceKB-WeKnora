@@ -30,11 +30,11 @@ from tests.product_ingestion.test_store import (
 )
 
 
-def test_new_upload_is_v2_and_idempotent_legacy_run_stays_v1(api, factory):
+def test_new_upload_is_v3_and_idempotent_legacy_run_stays_v1(api, factory):
     store, _ = _make_store(api, factory)
     scope = _scope(api)
     run = store.create_run(scope=scope, idempotency_key="workflow")
-    assert run.workflow_version == 2
+    assert run.workflow_version == 3
     with factory() as session, session.begin():
         row = session.get(ProductRun, run.run_id)
         row.workflow_version = 1

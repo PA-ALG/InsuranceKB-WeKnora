@@ -21,6 +21,7 @@ def pipeline_ports(context, *, omitted: str | None = None):
         "field_plan",
         "extract",
         "synthesis",
+        "discovery",
         "compilation",
         "preparation",
         "review",
@@ -67,6 +68,7 @@ def test_composition_registers_complete_product_runtime_against_one_database(
             "product_stage_field_plan",
             "product_stage_extract",
             "product_stage_synthesis",
+            "product_stage_discovery",
             "product_stage_compilation",
             "product_stage_preparation",
             "product_stage_review",
@@ -132,9 +134,7 @@ def test_cli_enabled_worker_requires_real_pipeline_factory_and_disabled_is_uncha
             )
         assert caught.value.keys == ("product_ingestion_pipeline",)
         plain = cli.build_worker_loop(
-            settings=settings(tmp_path).model_copy(
-                update={"product_ingestion_enabled": False}
-            ),
+            settings=settings(tmp_path).model_copy(update={"product_ingestion_enabled": False}),
             lifecycle=Lifecycle(),
             session_factory=session_factory,
         )
@@ -149,13 +149,16 @@ def test_window_plan_identity_uses_current_scope_and_metadata_only():
     from insurance_harness.product_ingestion.composition import _scoped_window_plan_identity
     from insurance_harness.product_ingestion.models import ProductScope
 
-    scope = ProductScope(tenant_id="1", space_id="s", raw_knowledge_base_id="r",
-                         wiki_knowledge_base_id="w")
+    scope = ProductScope(
+        tenant_id="1", space_id="s", raw_knowledge_base_id="r", wiki_knowledge_base_id="w"
+    )
     refs = [SimpleNamespace(artifact_key="product", artifact_id="sealed-1")]
     calls = []
+
     def metadata(**kw):
         calls.append(kw)
         return tuple(refs)
+
     reader = _scoped_window_plan_identity(
         SimpleNamespace(list_effective_artifact_references=metadata),
         {"s": SimpleNamespace(scope=scope)},

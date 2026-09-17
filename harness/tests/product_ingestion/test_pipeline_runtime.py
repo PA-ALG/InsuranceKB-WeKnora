@@ -16,7 +16,12 @@ from insurance_harness.db.base import Base, make_session_factory
 from insurance_harness.jobs import ClaimedJob, JobState, JobStore
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
 from insurance_harness.product_ingestion.composition import compose_product_worker
-from insurance_harness.product_ingestion.discovery import DISCOVERY_PROMPT, DISCOVERY_REVIEW_PROMPT
+from insurance_harness.product_ingestion.discovery import (
+    DISCOVERY_PROMPT,
+    DISCOVERY_REVIEW_PROMPT,
+    INDEPENDENT_DISCOVERY_PROMPT,
+    INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+)
 from insurance_harness.product_ingestion.models import (
     FieldOutcomeKind,
     ProductRunState,
@@ -374,6 +379,18 @@ def _settings(tmp_path: Path, base_candidate) -> ShellSettings:
                                     "g3-open-discovery-review",
                                     DISCOVERY_REVIEW_PROMPT,
                                 ),
+                                (
+                                    "independent-discovery-v1",
+                                    "extract",
+                                    "g3-independent-discovery",
+                                    INDEPENDENT_DISCOVERY_PROMPT,
+                                ),
+                                (
+                                    "independent-discovery-review-v1",
+                                    "verify",
+                                    "g3-independent-discovery-review",
+                                    INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+                                ),
                             )
                         ],
                     ],
@@ -499,7 +516,10 @@ class FixtureModel:
         if content.get("contract") == "g3-c-classify-prompt-context.830.v1":
             self.identity_requests.append(envelope)
             semantic = self._identity(content)
-        elif content.get("contract") == "product-discovery-context.830.v1":
+        elif content.get("contract") in {
+            "product-discovery-context.830.v1",
+            "product-discovery-context.830.v3",
+        }:
             self.discovery_requests.append(envelope)
             semantic = {
                 "contract": "product-discovery-proposal.830.v1",

@@ -56,12 +56,16 @@ def _input(tmp_path: Path) -> tuple[Path, dict, dict]:
             "max_bytes": len(raw),
         }
     previous_publish = _public_raw_url(11)
-    previous_citation = base64.urlsafe_b64encode(
-        Ed25519PrivateKey.from_private_bytes(bytes([12]) * 32).private_bytes_raw()
-        + Ed25519PrivateKey.from_private_bytes(bytes([12]) * 32)
-        .public_key()
-        .public_bytes_raw()
-    ).decode().rstrip("=")
+    previous_citation = (
+        base64.urlsafe_b64encode(
+            Ed25519PrivateKey.from_private_bytes(bytes([12]) * 32).private_bytes_raw()
+            + Ed25519PrivateKey.from_private_bytes(bytes([12]) * 32)
+            .public_key()
+            .public_bytes_raw()
+        )
+        .decode()
+        .rstrip("=")
+    )
     go_config = {
         "server": {"port": 8080, "host": "0.0.0.0"},
         "models": [{"id": "existing", "parameters": {"secret": "keep"}}],
@@ -142,14 +146,18 @@ def _input(tmp_path: Path) -> tuple[Path, dict, dict]:
     return path, payload, go_config
 
 
-def test_generate_exact_cross_runtime_configuration_and_preserve_go_values(tmp_path: Path):
+def test_generate_exact_cross_runtime_configuration_and_preserve_go_values(
+    tmp_path: Path,
+):
     module = _module()
     input_path, payload, original_go = _input(tmp_path)
     output = tmp_path / "generated"
 
     manifest = module.generate(input_path, output)
 
-    runtime = json.loads((output / "product-ingestion-runtime.private.json").read_text())
+    runtime = json.loads(
+        (output / "product-ingestion-runtime.private.json").read_text()
+    )
     binding = runtime["bindings"][0]
     patched = yaml.safe_load((output / "weknora-config.private.yaml").read_text())
     assert patched["server"] == original_go["server"]
@@ -157,11 +165,15 @@ def test_generate_exact_cross_runtime_configuration_and_preserve_go_values(tmp_p
     assert binding["platform"]["machine_key"] == payload["machine"]["api_key"]
     assert patched["g3_platform_processing"]["api_key_id"] == 91
     assert binding["automation"]["policy_sha256"] == manifest["policy_sha256"]
-    assert module.go_policy_sha256(patched["g3_platform_processing"]) == manifest[
-        "policy_sha256"
-    ]
+    assert (
+        module.go_policy_sha256(patched["g3_platform_processing"])
+        == manifest["policy_sha256"]
+    )
     assert binding["source_authorities"] == [
-        {"key_id": "source-current", "public_key_b64": module.standard_public_key(_seed(1))}
+        {
+            "key_id": "source-current",
+            "public_key_b64": module.standard_public_key(_seed(1)),
+        }
     ]
     assert patched["g3_platform_processing"]["source_snapshot_signing_key"][
         "private_key_base64"
@@ -184,7 +196,9 @@ def test_generate_configures_distinct_open_discovery_and_review(tmp_path: Path):
     input_path, payload, _ = _input(tmp_path)
     output = tmp_path / "generated"
     module.generate(input_path, output)
-    runtime = json.loads((output / "product-ingestion-runtime.private.json").read_text())
+    runtime = json.loads(
+        (output / "product-ingestion-runtime.private.json").read_text()
+    )
     model = runtime["bindings"][0]["model"]
     templates = {row["template_id"]: row for row in model["templates"]}
     assert {"discovery-v1", "discovery-review-v1"} <= set(templates)
@@ -192,11 +206,38 @@ def test_generate_configures_distinct_open_discovery_and_review(tmp_path: Path):
     assert templates["discovery-review-v1"]["role"] == "verify"
     assert templates["discovery-v1"]["purpose"] == "g3-open-discovery"
     assert templates["discovery-review-v1"]["purpose"] == "g3-open-discovery-review"
-    assert templates["discovery-v1"]["prompt_sha256"] != templates["discovery-review-v1"]["prompt_sha256"]
+    assert (
+        templates["discovery-v1"]["prompt_sha256"]
+        != templates["discovery-review-v1"]["prompt_sha256"]
+    )
     for name in ("discovery-v1", "discovery-review-v1"):
-        assert templates[name]["max_context_bytes"] == payload["model"]["field_max_context_bytes"]
-        assert templates[name]["max_output_tokens"] == payload["model"]["field_max_output_tokens"]
+        assert (
+            templates[name]["max_context_bytes"]
+            == payload["model"]["field_max_context_bytes"]
+        )
+        assert (
+            templates[name]["max_output_tokens"]
+            == payload["model"]["field_max_output_tokens"]
+        )
     assert model["field_template_id"] == "field-window-v1"
+    for name, role, purpose in (
+        ("independent-discovery-v1", "extract", "g3-independent-discovery"),
+        (
+            "independent-discovery-review-v1",
+            "verify",
+            "g3-independent-discovery-review",
+        ),
+    ):
+        assert templates[name]["role"] == role
+        assert templates[name]["purpose"] == purpose
+        assert (
+            templates[name]["max_context_bytes"]
+            == payload["model"]["field_max_context_bytes"]
+        )
+        assert (
+            templates[name]["max_output_tokens"]
+            == payload["model"]["field_max_output_tokens"]
+        )
 
 
 @pytest.mark.parametrize(
@@ -204,10 +245,17 @@ def test_generate_configures_distinct_open_discovery_and_review(tmp_path: Path):
     [
         (lambda p: p["machine"].update(principal_id="api_tenant:41"), "machine"),
         (lambda p: p["model"].update(model="other-model"), "Gemini"),
-        (lambda p: p["source_signer"].update(seed_b64=p["system_signer"]["seed_b64"]), "distinct"),
+        (
+            lambda p: p["source_signer"].update(
+                seed_b64=p["system_signer"]["seed_b64"]
+            ),
+            "distinct",
+        ),
     ],
 )
-def test_generate_rejects_identity_and_authority_drift(tmp_path: Path, mutate, match: str):
+def test_generate_rejects_identity_and_authority_drift(
+    tmp_path: Path, mutate, match: str
+):
     module = _module()
     input_path, payload, _ = _input(tmp_path)
     mutate(payload)
@@ -220,7 +268,9 @@ def test_generate_rejects_identity_and_authority_drift(tmp_path: Path, mutate, m
 def test_generate_rejects_trusted_file_drift_without_output(tmp_path: Path):
     module = _module()
     input_path, payload, _ = _input(tmp_path)
-    Path(payload["trusted_files"]["resolution_policy"]["source_path"]).write_bytes(b"drift")
+    Path(payload["trusted_files"]["resolution_policy"]["source_path"]).write_bytes(
+        b"drift"
+    )
     output = tmp_path / "generated"
 
     with pytest.raises(ValueError, match="trusted"):

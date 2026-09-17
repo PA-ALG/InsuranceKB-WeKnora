@@ -20,6 +20,19 @@ type g3PlatformUploadLookupStub struct {
 	err    error
 }
 
+type g3BoundReparserStub struct {
+	request service.G3BoundReparseRequest
+	calls int
+}
+func (s *g3BoundReparserStub) BoundReparseKnowledge(_ context.Context, knowledgeID string, request service.G3BoundReparseRequest) (types.G3BoundReparseReceipt, error) {
+	s.calls++
+	s.request = request
+	return types.G3BoundReparseReceipt{Contract: types.G3BoundReparseContractV1, RunID: request.RunID, Ordinal: request.Ordinal, KnowledgeID: knowledgeID, ExpectedParseAttempt: request.ExpectedParseAttempt, ParseAttempt: request.ExpectedParseAttempt+1, RecoveryKey: request.RecoveryKey, DeadlineAt: request.DeadlineAt, DispatchState: "enqueued"}, nil
+}
+func (s *g3BoundReparserStub) ReadBoundReparseKnowledge(_ context.Context, knowledgeID, key string) (types.G3BoundReparseReceipt, error) {
+	return types.G3BoundReparseReceipt{Contract: types.G3BoundReparseContractV1, RunID: "run-1", Ordinal: 0, KnowledgeID: knowledgeID, ExpectedParseAttempt: 3, ParseAttempt: 4, RecoveryKey: key, DispatchState: "enqueued"}, nil
+}
+
 func (s *g3PlatformUploadLookupStub) LookupUpload(
 	_ context.Context, _ types.WikiReleaseScope, _ string, _ int,
 ) (*service.G3PlatformUploadSnapshotV1, error) {
@@ -67,9 +80,28 @@ func newG3PlatformHandlerEngine(
 	})
 	base := "/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/platform"
 	engine.GET(base+"/uploads/:run_id/:ordinal", h.Upload)
+	engine.GET(base+"/uploads/:run_id/:ordinal/reparse", h.ReparseUpload)
+	engine.POST(base+"/uploads/:run_id/:ordinal/reparse", h.ReparseUpload)
 	engine.POST(base+"/sources/:knowledge_id/attempts/:attempt/snapshot", h.Source)
 	engine.GET(base+"/bases/:release_id/epochs/:epoch", h.Base)
 	return engine
+}
+
+func TestG3PlatformReparseBindsUploadAndExpectedGeneration(t *testing.T) {
+	upload := &g3PlatformUploadLookupStub{record: &service.G3PlatformUploadSnapshotV1{RunID: "run-1", Ordinal: 0, KnowledgeID: "source", ParseAttempt: 3}}
+	reparser := &g3BoundReparserStub{}
+	h := NewG3PlatformSnapshotsHandler(NewWikiReleaseHandler(nil), upload, nil, nil, reparser)
+	engine := newG3PlatformHandlerEngine(h)
+	deadline := time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)
+	body := `{"expected_parse_attempt":3,"recovery_key":"`+strings.Repeat("a",64)+`","deadline_at":"`+deadline+`"}`
+	path := "/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/platform/uploads/run-1/0/reparse"
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, strings.NewReader(body)))
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	require.Equal(t, 1, reparser.calls)
+	require.Equal(t, "raw-1", reparser.request.RawKBID)
+	require.Equal(t, int64(3), reparser.request.ExpectedParseAttempt)
+	require.Contains(t, response.Body.String(), `"dispatch_state":"enqueued"`)
 }
 
 func TestG3PlatformSnapshotsHandlerReturnsOnlyVersionedMachineData(t *testing.T) {

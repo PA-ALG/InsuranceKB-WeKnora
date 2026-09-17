@@ -58,6 +58,70 @@ class ProductArtifactStore(CheckpointArtifacts):
         self._session_factory = session_factory
         self._products = product_store
 
+    def record_source_processing_attempt(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        stage,
+        job,
+        knowledge_id: str,
+        parse_attempt: int,
+        receipt: dict,
+    ) -> None:
+        """Keep native call accounting even when a sibling parse fails."""
+        from insurance_harness.product_ingestion.processing_receipts import (
+            validate_processing_receipt,
+        )
+
+        validated = validate_processing_receipt(
+            receipt, knowledge_id=knowledge_id, parse_attempt=parse_attempt
+        )
+        raw = json.dumps(
+            validated, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        key = f"{knowledge_id}:{parse_attempt}"
+        if len(key) > 256:
+            raise ValueError("source processing attempt key exceeds capacity")
+        with self._session_factory() as session, session.begin():
+            self._products._run(session, scope, run_id)
+            active = self._products._active_job(
+                session, scope, job.id, job.lease_generation
+            )
+            self._require_job_binding(active.payload, run_id=run_id, stage_key="source")
+            current = session.scalar(
+                select(ProductArtifact).where(
+                    ProductArtifact.run_id == run_id,
+                    ProductArtifact.artifact_kind == "source_processing_attempt",
+                    ProductArtifact.artifact_key == key,
+                )
+            )
+            if current is not None:
+                if current.payload_sha256 != digest or current.payload != raw:
+                    raise ValueError("source processing receipt changed")
+                return
+            session.add(
+                ProductArtifact(
+                    id=_uuid(),
+                    run_id=run_id,
+                    space_id=scope.space_id,
+                    stage_key="source",
+                    artifact_kind="source_processing_attempt",
+                    artifact_key=key,
+                    contract_name=validated["contract"],
+                    contract_version="1",
+                    dependency_sha256=stage.dependency_sha256,
+                    payload=raw,
+                    payload_sha256=digest,
+                    origin=ArtifactOrigin.PLATFORM_SOURCE.value,
+                    origin_call_id=None,
+                    producer_job_id=job.id,
+                    producer_generation=job.lease_generation,
+                    created_at=database_now(session),
+                )
+            )
+
     def prepare_artifact_writes(
         self,
         *,
@@ -451,6 +515,10 @@ class ProductArtifactStore(CheckpointArtifacts):
         run_id: str,
     ) -> StageCallMetrics:
         """Count real dispatches and sum the usage recorded for those calls."""
+        from insurance_harness.product_ingestion.discovery_replay_metrics import (
+            verified_discovery_replay_calls,
+        )
+
         with self._session_factory() as session:
             self._products._run(session, scope, run_id)
             rows = session.execute(
@@ -488,6 +556,15 @@ class ProductArtifactStore(CheckpointArtifacts):
                 replay_ids.update(checkpoint.reused_call_ids)
                 for key, value in checkpoint.reused_usage.items():
                     reused_usage[key] = reused_usage.get(key, 0) + value
+            discovery_calls = verified_discovery_replay_calls(
+                session, self._products, scope, run_id
+            )
+            for call_id, call in discovery_calls.items():
+                if call_id in replay_ids:
+                    continue
+                replay_ids.add(call_id)
+                for key, value in call.usage.items():
+                    reused_usage[key] = reused_usage.get(key, 0) + int(value)
             return StageCallMetrics(
                 model_call_count=len(rows),
                 reused_model_call_count=len(replay_ids),

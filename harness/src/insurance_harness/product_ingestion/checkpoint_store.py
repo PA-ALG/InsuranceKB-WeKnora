@@ -23,6 +23,7 @@ from insurance_harness.product_ingestion.checkpoints import (
     CallReference,
     CheckpointPlan,
     CheckpointReceipt,
+    ConfirmedFailureReference,
     FieldReference,
     IdentityRetryReference,
     required_outputs,
@@ -73,6 +74,65 @@ def _small_artifact(session, run_id, kind):
 
 
 class CheckpointStore:
+    def _confirmed_failure_reference(self, session, scope, record_id, *, read_lock=False):
+        """Bind a provider response, not an uncertain dispatch or a new send."""
+        statement = select(ProductStageModelCall).where(ProductStageModelCall.id == record_id)
+        if read_lock:
+            statement = statement.with_for_update(read=True)
+        call = session.scalar(statement)
+        if call is None or call.space_id != scope.space_id:
+            raise ValueError("confirmed failure call unavailable")
+        origin = self._run(session, scope, call.run_id)
+        snapshot = self._run_snapshot(session, origin, scope)
+        stage = session.scalar(
+            select(ProductStage).where(
+                ProductStage.run_id == call.run_id,
+                ProductStage.stage_key == "identity",
+            )
+        )
+        job = session.get(WikiJob, call.job_id)
+        if (
+            call.stage_key != "identity"
+            or call.operation_key != "current-product-identity"
+            or call.state != "recorded"
+            or call.diagnostic != "provider_http_status"
+            or not call.raw
+            or not call.request_bytes
+            or not call.raw_sha256
+            or not call.request_sha256
+            or hashlib.sha256(call.raw).hexdigest() != call.raw_sha256
+            or hashlib.sha256(call.request_bytes).hexdigest() != call.request_sha256
+            or call.dispatched_at is None
+            or call.recorded_at is None
+            or stage is None
+            or stage.space_id != scope.space_id
+            or stage.job_id != call.job_id
+            or stage.dependency_sha256 != call.dependency_sha256
+            or job is None
+            or job.space_id != scope.space_id
+            or job.lease_generation != call.generation
+            or job.state not in {"blocked", "dead_letter"}
+            or job.finished_at is None
+            or snapshot.finished_at is None
+            or snapshot.state not in {ProductRunState.FAILED, ProductRunState.NEEDS_CONFIRMATION}
+            or session.scalar(
+                select(func.count())
+                .select_from(ProductStageModelCall)
+                .where(ProductStageModelCall.run_id == call.run_id)
+            ) != 1
+        ):
+            raise ValueError("identity call is not a confirmed terminal HTTP rejection")
+        return ConfirmedFailureReference(
+            record_id=call.id,
+            run_id=call.run_id,
+            call_id=call.call_id,
+            job_id=call.job_id,
+            generation=call.generation,
+            request_sha256=call.request_sha256,
+            raw_sha256=call.raw_sha256,
+            diagnostic="provider_http_status",
+        )
+
     def checkpoint_plan(self, *, scope, run_id, session=None):
         if session is None:
             with self._session_factory() as session:
@@ -123,6 +183,7 @@ class CheckpointStore:
             or receipt.plan_sha256 != plan.digest()
             or receipt.reused_stages != plan.reused_stages
             or receipt.retry_calls != plan.retry_calls
+            or receipt.failed_calls != plan.failed_calls
             or row.space_id != scope.space_id
             or stage is None
             or stage.job_id != row.producer_job_id
@@ -299,6 +360,9 @@ class CheckpointStore:
         } != {m.knowledge_id for m in run.materials}:
             return None
         retry_calls = inherited.retry_calls if inherited and resume == "identity" else ()
+        # Each explicit child is a new attempt. Historical failed calls stay in
+        # their immutable ancestor plan; only this origin's failure is bound here.
+        failed_calls = ()
         if (
             retry_calls
             and session.scalar(
@@ -356,6 +420,7 @@ class CheckpointStore:
                             or key != "identity"
                             or resume != "identity"
                             or retry_calls
+                            or failed_calls
                             or any(
                                 k not in {"uploads", "source", "routing", "identity"}
                                 for k in stages
@@ -365,7 +430,12 @@ class CheckpointStore:
                         try:
                             retry_calls = (self._identity_retry_reference(session, scope, row.id),)
                         except ValueError:
-                            return None
+                            try:
+                                failed_calls = (
+                                    self._confirmed_failure_reference(session, scope, row.id),
+                                )
+                            except ValueError:
+                                return None
                     continue
                 if row.state not in {"recorded", "interrupted"}:
                     return None
@@ -448,8 +518,16 @@ class CheckpointStore:
                 raise ValueError("checkpoint ancestry is cyclic or exceeds capacity")
             seen.add(upload.id)
             upload = self._run(session, scope, upload.retry_of_run_id)
+        if workflow_version == 3:
+            contract_version = 5
+        elif failed_calls:
+            contract_version = 4
+        elif retry_calls:
+            contract_version = 3
+        else:
+            contract_version = workflow_version
         return CheckpointPlan(
-            contract=f"product-stage-checkpoint-plan.830.v{3 if retry_calls else workflow_version}",
+            contract=f"product-stage-checkpoint-plan.830.v{contract_version}",
             scope=scope,
             origin_run_id=origin.id,
             origin_version=origin.version,
@@ -461,6 +539,7 @@ class CheckpointStore:
             calls=tuple(sorted(calls.values(), key=lambda c: (c.kind, c.record_id))),
             fields=tuple(sorted(fields.values(), key=lambda f: f.attempt_id)),
             retry_calls=retry_calls,
+            failed_calls=failed_calls,
         )
 
     def can_retry_processing(self, *, scope, run_id):

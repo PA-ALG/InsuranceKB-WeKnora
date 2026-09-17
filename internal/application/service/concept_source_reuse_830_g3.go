@@ -62,11 +62,37 @@ func (p *conceptSourceBindingProof830G3) matches(record *conceptSourceReuseRecor
 }
 
 type conceptSourceReuseStore830G3 struct {
-	codec   *SchemaWikiCitationTokenCodec
-	root    string
-	mu      sync.Mutex
-	entries map[string]*conceptSourceReusePrepared830G3
-	flight  singleflight.Group
+	codec    *SchemaWikiCitationTokenCodec
+	root     string
+	mu       sync.Mutex
+	entries  map[string]*conceptSourceReusePrepared830G3
+	lastUsed map[string]uint64
+	clock    uint64
+	flight   singleflight.Group
+}
+
+// Caller holds mu. Keep the existing document bound while retaining hot indexes.
+func (s *conceptSourceReuseStore830G3) touch(key string) {
+	if s.lastUsed == nil {
+		s.lastUsed = map[string]uint64{}
+	}
+	s.clock++
+	s.lastUsed[key] = s.clock
+}
+
+func (s *conceptSourceReuseStore830G3) remember(key string, value *conceptSourceReusePrepared830G3) {
+	if s.entries[key] == nil && len(s.entries) >= 16 {
+		oldest, age := "", ^uint64(0)
+		for candidate := range s.entries {
+			if used := s.lastUsed[candidate]; used < age {
+				oldest, age = candidate, used
+			}
+		}
+		delete(s.entries, oldest)
+		delete(s.lastUsed, oldest)
+	}
+	s.entries[key] = value
+	s.touch(key)
 }
 
 func newConceptSourceReuseStore830G3(codec *SchemaWikiCitationTokenCodec) *conceptSourceReuseStore830G3 {
@@ -231,6 +257,9 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 	}()
 	s.mu.Lock()
 	hit := s.entries[key]
+	if hit != nil {
+		s.touch(key)
+	}
 	s.mu.Unlock()
 	if hit != nil {
 		// The caller still checked live ACL/source/resource state for this quote.
@@ -251,6 +280,9 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 	result := s.flight.DoChan(key, func() (any, error) {
 		s.mu.Lock()
 		hit := s.entries[key]
+		if hit != nil {
+			s.touch(key)
+		}
 		s.mu.Unlock()
 		if hit != nil {
 			return s.validateResident(hit, identity, source)
@@ -292,10 +324,7 @@ func (s *conceptSourceReuseStore830G3) load(ctx context.Context, key string, ide
 		}
 		s.mu.Lock()
 		// Bound resident document indexes; evicted entries remain durable.
-		if len(s.entries) >= 16 {
-			s.entries = map[string]*conceptSourceReusePrepared830G3{}
-		}
-		s.entries[key] = prepared
+		s.remember(key, prepared)
 		s.mu.Unlock()
 		return prepared, nil
 	})

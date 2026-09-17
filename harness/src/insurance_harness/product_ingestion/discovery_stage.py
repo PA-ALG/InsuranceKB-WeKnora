@@ -10,11 +10,18 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from dataclasses import dataclass
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
+    CompileOutput,
     ExecutionRecord,
+    ReviewOutput,
     ReviewResult,
+)
+from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
+    ConceptDefinition,
+    FreeWikiPage,
 )
 from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
 from insurance_harness.product_ingestion.checkpoints import CURRENT_ARTIFACT_CONTRACTS
@@ -22,10 +29,17 @@ from insurance_harness.product_ingestion.compilation import _derived_run_id
 from insurance_harness.product_ingestion.discovery import (
     DISCOVERY_PROMPT,
     DISCOVERY_REVIEW_PROMPT,
+    INDEPENDENT_DISCOVERY_PROMPT,
+    INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+    build_discovery_exclusion_index,
+    independent_discovery_window_audits,
     project_discovery_response,
     project_discovery_review,
+    project_independent_discovery_response,
     render_discovery_context,
     render_discovery_review_context,
+    render_independent_discovery_contexts,
+    render_independent_discovery_review_context,
 )
 from insurance_harness.product_ingestion.extraction import _json
 from insurance_harness.product_ingestion.model_execution import (
@@ -35,6 +49,643 @@ from insurance_harness.product_ingestion.model_execution import (
 from insurance_harness.product_ingestion.models import ProductRunState
 from insurance_harness.product_ingestion.stages import StageOutput, artifact, json_bytes
 from insurance_harness.product_ingestion.store import needs_confirmation_error
+
+
+@dataclass(frozen=True, slots=True)
+class IndependentDiscoveryFinalOutcome:
+    reviewed_output: CompileOutput
+    decision: str
+    review_output: ReviewOutput | None
+    review_context_sha256: str | None
+    review_raw_sha256: str | None
+    drafts: tuple
+    summary: dict
+    replayed_call: object | None = None
+
+
+def _verified_parent_discovery_call(
+    row, *, run_id: str, stage_key: str, operation: str,
+    input_sha256: str, prompt_sha256: str,
+):
+    """Reopen an exact recorded parent call; a dispatch with unknown outcome is never resent."""
+    if (
+        row.run_id != run_id
+        or row.stage_key != stage_key
+        or row.operation_key != operation
+        or row.input_sha256 != input_sha256
+        or row.prompt_policy_sha256 != prompt_sha256
+    ):
+        raise ValueError("DISCOVERY_REPLAY_BINDING_MISMATCH")
+    if row.dispatched_at is None:
+        return None
+    state = row.state.value if hasattr(row.state, "value") else row.state
+    if state != "recorded" or not row.raw or getattr(row, "diagnostic", None):
+        raise ValueError("DISCOVERY_REPLAY_OUTCOME_UNKNOWN")
+    if row.raw_sha256 != hashlib.sha256(row.raw).hexdigest():
+        raise ValueError("DISCOVERY_REPLAY_RAW_MISMATCH")
+    return row
+
+
+async def run_independent_discovery_final_review(
+    *, service, artifacts, scope, run, stage, job, request,
+    discovery_candidates: dict, final_composed_output: CompileOutput,
+    final_composed_output_hash: str, exclusion_index: dict | None = None,
+    entity_id: str | None = None, processing_recovery=False,
+) -> IndependentDiscoveryFinalOutcome:
+    """Review the whole free group against the real final hash; admit all or none."""
+    del processing_recovery
+    request_hash = compiler.compile_request_hash_g3(request.base_request)
+    empty = CompileOutput(request_hash=request_hash, fields=())
+    candidate_output = CompileOutput.model_validate(discovery_candidates["output"])
+    if candidate_output.fields or candidate_output.request_hash != request_hash:
+        raise ValueError("independent discovery delta is invalid")
+    if exclusion_index is None:
+        exclusion_index = (
+            build_discovery_exclusion_index(request, entity_id)
+            if entity_id is not None else {
+                row.entity_id: build_discovery_exclusion_index(request, row.entity_id)
+                for row in request.entity_bindings
+            }
+        )
+    drafts = []
+    summary = _summary()
+    summary["final_composed_output_hash"] = final_composed_output_hash
+    summary["candidate_member_count"] = (
+        len(candidate_output.definitions) + len(candidate_output.pages)
+    )
+    review_output = None
+    review_context_sha256 = None
+    review_raw_sha256 = None
+    replayed_call = None
+    reviewed = empty
+    decision = "EMPTY" if not summary["candidate_member_count"] else "FAILED"
+
+    def keep(kind, value, *, call_id=None):
+        drafts.append(artifact(
+            kind, "product", json_bytes(value), stage.dependency_sha256,
+            origin=ArtifactOrigin.MODEL if call_id else ArtifactOrigin.RULE,
+            call_id=call_id,
+            contract_version=CURRENT_ARTIFACT_CONTRACTS.get(kind, (None, "1"))[1],
+        ))
+
+    if summary["candidate_member_count"]:
+        try:
+            settings = service.configuration.model
+            template = _template(
+                settings, "verify", "g3-independent-discovery-review",
+                INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+            )
+            context = await asyncio.to_thread(
+                render_independent_discovery_review_context,
+                request=request, entity_id=entity_id, exclusion_index=exclusion_index,
+                discovery_candidates=discovery_candidates,
+                final_composed_output=final_composed_output,
+                final_composed_output_hash=final_composed_output_hash,
+                max_context_bytes=template.max_context_bytes,
+            )
+            content = json_bytes(context)
+            review_context_sha256 = hashlib.sha256(content).hexdigest()
+            keep("discovery_review_context", context)
+            operation = "independent-discovery-final-review-" + final_composed_output_hash
+            prior_call = None
+            if run.retry_of_run_id and hasattr(artifacts, "list_stage_calls"):
+                for row in artifacts.list_stage_calls(
+                    scope=scope, run_id=run.retry_of_run_id
+                ):
+                    if (row.stage_key == "compilation" and row.operation_key == operation
+                            and row.input_sha256 == review_context_sha256):
+                        prior_call = row
+                        break
+            if prior_call is not None:
+                replayed_call = _verified_parent_discovery_call(
+                    prior_call, run_id=run.retry_of_run_id,
+                    stage_key="compilation", operation=operation,
+                    input_sha256=review_context_sha256,
+                    prompt_sha256=template.prompt_sha256,
+                )
+            if replayed_call is not None:
+                raw_provider = replayed_call.raw
+                call_id = replayed_call.call_id
+                summary["reused"] = True
+                summary["reused_from_run_id"] = run.retry_of_run_id
+            else:
+                result = await service.model_executor.execute_stage_call(
+                    store=artifacts, scope=scope, run_id=run.run_id, job=job,
+                    stage_key="compilation", operation_key=operation,
+                    dependency_sha256=stage.dependency_sha256,
+                    input_sha256=review_context_sha256, content=content,
+                    prompt=INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+                    template_id=template.template_id,
+                )
+                call_id = result.call_id
+                if (result.state != "recorded" or result.raw is None
+                        or result.diagnostic or result.policy_receipt is None):
+                    raise ValueError(
+                        "discovery review model call failed: " + (result.diagnostic or result.state)
+                    )
+                raw_provider = result.raw
+            summary["call_ids"].append(call_id)
+            decoded = _json(ConfiguredFieldTransport.decode_response(raw_provider))
+            if not isinstance(decoded, dict):
+                raise ValueError("discovery review response must be an object")
+            raw = json_bytes(decoded)
+            review_raw_sha256 = hashlib.sha256(raw).hexdigest()
+            keep(
+                "discovery_review_response", json.loads(raw),
+                call_id=None if replayed_call is not None else call_id,
+            )
+            from insurance_harness.product_ingestion.discovery import DiscoveryReview
+            checked = DiscoveryReview.model_validate(json.loads(raw))
+            review_output = checked.review
+            if (review_output.request_hash, review_output.output_hash) != (
+                context["request_hash"], final_composed_output_hash,
+            ):
+                raise ValueError("discovery review binding mismatch")
+            if set(review_output.page_scores) != set(context["review_member_ids"]):
+                raise ValueError("discovery review score coverage mismatch")
+            expected_ids = {row["candidate_id"] for row in context["dispositions"]}
+            ids = [row.candidate_id for row in checked.disposition_checks]
+            if len(ids) != len(set(ids)) or set(ids) != expected_ids:
+                raise ValueError("discovery review disposition coverage mismatch")
+            checks = {row.decision for row in checked.disposition_checks}
+            scores = [score.total for score in review_output.page_scores.values()]
+            if review_output.decision == "REJECT" or "REJECT" in checks or any(
+                score < 60 for score in scores
+            ):
+                decision = "REJECTED"
+            elif (review_output.decision == "NEEDS_HUMAN"
+                  or "NEEDS_HUMAN" in checks or any(score < 80 for score in scores)):
+                decision = "PENDING"
+            else:
+                decision = "ACCEPTED"
+                reviewed = candidate_output
+            keep("discovery_review_proof", {
+                "contract": "product-discovery-review-proof.830.v1",
+                "decision": decision,
+                "final_composed_output_hash": final_composed_output_hash,
+                "actual_review_context_sha256": review_context_sha256,
+                "actual_review_raw_sha256": review_raw_sha256,
+                "model_call_id": call_id,
+                "replayed_from_run_id": (
+                    run.retry_of_run_id if replayed_call is not None else None
+                ),
+                "source_call_id": call_id if replayed_call is not None else None,
+                "source_raw_sha256": (
+                    replayed_call.raw_sha256 if replayed_call is not None else None
+                ),
+                "review": review_output,
+                "disposition_checks": checked.disposition_checks,
+            }, call_id=None if replayed_call is not None else call_id)
+        except (TypeError, ValueError, ModelPolicyDenied) as exc:
+            summary["failure_detail"] = str(exc)
+            decision = "FAILED"
+    summary["state"] = decision
+    summary["reason_codes"] = ["DISCOVERY_" + decision]
+    summary["accepted_member_count"] = (
+        len(reviewed.definitions) + len(reviewed.pages)
+    )
+    keep("reviewed_discovery_delta", {
+        "contract": "product-reviewed-discovery-delta.830.v1",
+        "output": reviewed,
+        "reviewed": decision == "ACCEPTED",
+    })
+    keep("discovery_final_summary", summary)
+    return IndependentDiscoveryFinalOutcome(
+        reviewed, decision, review_output, review_context_sha256,
+        review_raw_sha256, tuple(drafts), summary, replayed_call,
+    )
+
+
+async def _run_entity_discovery_generation_stage(
+    *, service, artifacts, scope, run, stage, job, request, entity_id,
+    exclusion_index, processing_recovery=False,
+):
+    """Separate v3 source task; field extraction output is never an input."""
+    drafts = []
+    summary = _summary()
+    summary["state"] = "GENERATING"
+    summary["exclusion_index_sha256"] = hashlib.sha256(json_bytes(exclusion_index)).hexdigest()
+    empty_output = {
+        "request_hash": compiler.compile_request_hash_g3(request.base_request),
+        "definitions": [], "fields": [], "pages": [], "audit": [],
+        "transformation": "EXTRACT",
+    }
+    candidate_output = empty_output
+    candidate_dispositions = []
+    candidate_sources = []
+    receipts = []
+
+    def keep(kind, value, *, key="product", call_id=None):
+        drafts.append(artifact(
+            kind, key, json_bytes(value), stage.dependency_sha256,
+            origin=ArtifactOrigin.MODEL if call_id else ArtifactOrigin.RULE,
+            call_id=call_id,
+            contract_version=CURRENT_ARTIFACT_CONTRACTS.get(kind, (None, "1"))[1],
+        ))
+
+    binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
+    current_materials = {
+        entry.material_id for entry in request.resolution_inputs.corpus.entries
+    }
+    if not current_materials.intersection(binding.source_material_ids):
+        summary.update(
+            state="EMPTY", reason_codes=["NO_CURRENT_BOUND_MATERIAL"],
+            coverage={
+                "total_chars": 0, "processed_chars": 0,
+                "window_count": 0, "processed_window_count": 0,
+                "complete": True,
+            },
+        )
+        keep("discovery_candidates", {
+            "contract": "product-discovery-candidates.830.v1",
+            "output": empty_output, "dispositions": [], "sources": [],
+            "exclusion_index_sha256": summary["exclusion_index_sha256"],
+            "window_receipts": [],
+        })
+        keep("discovery_delta", {
+            "contract": "product-discovery-delta.830.v1",
+            "output": empty_output, "reviewed": False,
+        })
+        keep("discovery_summary", summary)
+        return StageOutput(tuple(drafts), state=ProductRunState.SUCCEEDED)
+
+    try:
+        settings = service.configuration.model
+        template = _template(
+            settings, "extract", "g3-independent-discovery", INDEPENDENT_DISCOVERY_PROMPT
+        )
+        contexts = await asyncio.to_thread(
+            render_independent_discovery_contexts,
+            request=request, entity_id=entity_id, exclusion_index=exclusion_index,
+            max_context_bytes=template.max_context_bytes,
+        )
+        audit_windows = await asyncio.to_thread(
+            independent_discovery_window_audits, request, entity_id, contexts
+        )
+        total_chars = audit_windows[0]["coverage"]["total_chars"] if audit_windows else 0
+        summary["coverage"] = {
+            "total_chars": total_chars, "processed_chars": 0,
+            "window_count": len(contexts), "processed_window_count": 0,
+            "complete": False,
+        }
+        pages = {}
+        definitions = {}
+        audit_rows = {}
+        for context, window_audit in zip(contexts, audit_windows, strict=True):
+            window_id = context["window"]["window_id"]
+            operation = "independent-discovery-window-" + hashlib.sha256(
+                json_bytes([entity_id, window_id])
+            ).hexdigest()
+            raw_context = json_bytes(context)
+            input_sha = hashlib.sha256(raw_context).hexdigest()
+            artifact_key = entity_id + ":" + window_id
+            keep("discovery_context", context, key=artifact_key)
+            keep("discovery_window_audit", window_audit, key=artifact_key)
+            prior_call = None
+            if run.retry_of_run_id and hasattr(artifacts, "list_stage_calls"):
+                for row in artifacts.list_stage_calls(
+                    scope=scope, run_id=run.retry_of_run_id
+                ):
+                    if (row.stage_key == "discovery" and row.operation_key == operation
+                            and row.input_sha256 == input_sha):
+                        prior_call = row
+                        break
+            replayed_call = None
+            if prior_call is not None:
+                replayed_call = _verified_parent_discovery_call(
+                    prior_call, run_id=run.retry_of_run_id,
+                    stage_key="discovery", operation=operation,
+                    input_sha256=input_sha, prompt_sha256=template.prompt_sha256,
+                )
+            if replayed_call is not None:
+                raw_response = replayed_call.raw
+                call_id = replayed_call.call_id
+                summary["reused"] = True
+                summary["reused_from_run_id"] = run.retry_of_run_id
+                keep("discovery_window_replay_receipt", {
+                    "contract": "product-discovery-window-replay-receipt.830.v1",
+                    "replayed_from_run_id": run.retry_of_run_id,
+                    "source_call_id": replayed_call.call_id,
+                    "source_raw_sha256": replayed_call.raw_sha256,
+                    "source_stage_key": replayed_call.stage_key,
+                    "source_operation_key": replayed_call.operation_key,
+                    "source_input_sha256": replayed_call.input_sha256,
+                    "source_prompt_sha256": replayed_call.prompt_policy_sha256,
+                }, key=artifact_key)
+            else:
+                result = await service.model_executor.execute_stage_call(
+                    store=artifacts, scope=scope, run_id=run.run_id, job=job,
+                    stage_key="discovery", operation_key=operation,
+                    dependency_sha256=stage.dependency_sha256,
+                    input_sha256=input_sha, content=raw_context,
+                    prompt=INDEPENDENT_DISCOVERY_PROMPT,
+                    template_id=template.template_id,
+                )
+                call_id = result.call_id
+                if (result.state != "recorded" or result.raw is None
+                        or result.diagnostic or result.policy_receipt is None):
+                    raise ValueError(
+                        "discovery model call failed: " + (result.diagnostic or result.state)
+                    )
+                raw_response = result.raw
+            summary["call_ids"].append(call_id)
+            decoded = _json(ConfiguredFieldTransport.decode_response(raw_response))
+            if not isinstance(decoded, dict):
+                raise ValueError("discovery generation response must be an object")
+            raw = json_bytes(decoded)
+            keep(
+                "discovery_response", json.loads(raw), key=artifact_key,
+                call_id=None if replayed_call is not None else call_id,
+            )
+            candidate = await asyncio.to_thread(
+                project_independent_discovery_response,
+                raw=raw, request=request, entity_id=entity_id,
+                exclusion_index=exclusion_index, context=context,
+                audit=window_audit,
+            )
+            keep(
+                "discovery_proposal", candidate.proposal, key=artifact_key,
+                call_id=None if replayed_call is not None else call_id,
+            )
+            for row in candidate.output.pages:
+                identity = compiler.free_page_id(row)
+                if identity in pages and pages[identity] != row:
+                    raise ValueError("conflicting discovery page across windows")
+                pages[identity] = row
+            for row in candidate.output.definitions:
+                if row.concept_id in definitions and definitions[row.concept_id] != row:
+                    raise ValueError("conflicting discovery concept across windows")
+                definitions[row.concept_id] = row
+            for row in candidate.output.audit:
+                if row.key in audit_rows and audit_rows[row.key] != row:
+                    raise ValueError("conflicting discovery disposition across windows")
+                audit_rows[row.key] = row
+            for disposition in candidate.proposal.dispositions:
+                item = disposition.model_dump(mode="json")
+                if disposition.member_ref is not None:
+                    proposal_pages = {
+                        row.page_ref: compiler.free_page_id(projected)
+                        for row, projected in zip(
+                            candidate.proposal.proposal.pages,
+                            candidate.output.pages,
+                            strict=True,
+                        )
+                    }
+                    proposal_definitions = {
+                        row.definition_ref: projected.concept_id
+                        for row, projected in zip(
+                            candidate.proposal.proposal.definitions,
+                            candidate.output.definitions,
+                            strict=True,
+                        )
+                    }
+                    item["member_id"] = {
+                        **proposal_pages, **proposal_definitions
+                    }[disposition.member_ref]
+                item["candidate_id"] = entity_id + ":" + window_id + ":" + item["candidate_id"]
+                for evidence in item["evidence"]:
+                    evidence["source_ref"] = (
+                        entity_id + ":" + window_id + ":" + evidence["source_ref"]
+                    )
+                candidate_dispositions.append(item)
+                summary["counts"][
+                    disposition.disposition.lower()
+                    if disposition.disposition != "REJECT" else "rejected"
+                ] += 1
+            cited = {
+                (e["source_ref"], e["quote"])
+                for row in candidate_dispositions[-len(candidate.proposal.dispositions):]
+                for e in row["evidence"]
+            }
+            for option in context["source_options"]:
+                source_ref = entity_id + ":" + window_id + ":" + option["source_ref"]
+                spans = [span for span in option["spans"]
+                         if any(ref == source_ref and quote in span["quote"]
+                                for ref, quote in cited)]
+                if spans:
+                    candidate_sources.append({"source_ref": source_ref, "spans": spans})
+            receipts.append({
+                "entity_id": entity_id, "window_id": window_id, "input_sha256": input_sha,
+                "raw_sha256": hashlib.sha256(raw).hexdigest(), "call_id": call_id,
+                "replayed_from_run_id": (
+                    run.retry_of_run_id if replayed_call is not None else None
+                ),
+                "source_call_id": call_id if replayed_call is not None else None,
+                "source_raw_sha256": (
+                    replayed_call.raw_sha256 if replayed_call is not None else None
+                ),
+            })
+            summary["coverage"]["processed_chars"] += window_audit["coverage"]["offered_chars"]
+            summary["coverage"]["processed_window_count"] += 1
+        from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput
+        free_output = CompileOutput(
+            request_hash=empty_output["request_hash"],
+            definitions=tuple(sorted(definitions.values(), key=lambda row: row.concept_id)),
+            fields=(), pages=tuple(sorted(pages.values(), key=compiler.free_page_id)),
+            audit=tuple(sorted(audit_rows.values(), key=lambda row: row.key)),
+            transformation="SYNTHESIZE" if pages or definitions else "EXTRACT",
+        )
+        candidate_output = free_output.model_dump(mode="json")
+        summary["coverage"]["complete"] = (
+            summary["coverage"]["processed_chars"] == total_chars
+        )
+        if not summary["coverage"]["complete"]:
+            raise ValueError("discovery source coverage incomplete")
+        summary["state"] = "GENERATED" if pages or definitions else "EMPTY"
+        summary["reason_codes"] = ["DISCOVERY_" + summary["state"]]
+    except (TypeError, ValueError, ModelPolicyDenied) as exc:
+        summary["state"] = "FAILED"
+        summary["reason_codes"] = ["DISCOVERY_GENERATION_FAILED"]
+        summary["failure_detail"] = str(exc)
+        candidate_output = empty_output
+        candidate_dispositions = []
+        candidate_sources = []
+    candidates = {
+        "contract": "product-discovery-candidates.830.v1",
+        "output": candidate_output,
+        "dispositions": candidate_dispositions,
+        "sources": candidate_sources,
+        "exclusion_index_sha256": summary["exclusion_index_sha256"],
+        "window_receipts": receipts,
+    }
+    keep("discovery_candidates", candidates)
+    keep("discovery_delta", {
+        "contract": "product-discovery-delta.830.v1",
+        "output": candidate_output, "reviewed": False,
+    })
+    keep("discovery_summary", summary)
+    state = (ProductRunState.SUCCEEDED if summary["state"] in {"GENERATED", "EMPTY"}
+             else ProductRunState.PARTIAL_SUCCESS)
+    return StageOutput(tuple(drafts), state=state)
+
+
+async def run_discovery_generation_stage(
+    *, service, artifacts, scope, run, stage, job, request,
+    entity_id=None, exclusion_index=None, base=None, processing_recovery=False,
+):
+    """One durable discovery task covers every bound entity and original source span."""
+    del base
+    if entity_id is not None:
+        return await _run_entity_discovery_generation_stage(
+            service=service, artifacts=artifacts, scope=scope, run=run,
+            stage=stage, job=job, request=request, entity_id=entity_id,
+            exclusion_index=exclusion_index or build_discovery_exclusion_index(request, entity_id),
+            processing_recovery=processing_recovery,
+        )
+    outputs = []
+    all_drafts = []
+    for binding in sorted(request.entity_bindings, key=lambda row: row.entity_id):
+        index = (
+            exclusion_index[binding.entity_id]
+            if exclusion_index is not None
+            else build_discovery_exclusion_index(request, binding.entity_id)
+        )
+        output = await _run_entity_discovery_generation_stage(
+            service=service, artifacts=artifacts, scope=scope, run=run,
+            stage=stage, job=job, request=request, entity_id=binding.entity_id,
+            exclusion_index=index, processing_recovery=processing_recovery,
+        )
+        outputs.append(output)
+        all_drafts.extend(row for row in output.drafts if row.artifact_key != "product")
+    if not outputs:
+        raise ValueError("discovery has no entity bindings")
+    product_rows = [
+        {row.artifact_kind: json.loads(row.payload)
+         for row in output.drafts if row.artifact_key == "product"}
+        for output in outputs
+    ]
+    summaries = [rows["discovery_summary"] for rows in product_rows]
+    all_successful = all(row["state"] in {"GENERATED", "EMPTY"} for row in summaries)
+    bound_materials = {
+        material_id
+        for binding in request.entity_bindings
+        for material_id in binding.source_material_ids
+    }
+    unbound_materials = sorted({
+        entry.material_id for entry in request.resolution_inputs.corpus.entries
+    } - bound_materials)
+    request_hash = compiler.compile_request_hash_g3(request.base_request)
+    definitions = {}
+    pages = {}
+    audit_rows = {}
+    dispositions = []
+    sources = []
+    receipts = []
+    if all_successful:
+        for rows in product_rows:
+            output = rows["discovery_delta"]["output"]
+            for row in output["definitions"]:
+                key = ConceptDefinition.model_validate(row).concept_id
+                if key in definitions and definitions[key] != row:
+                    all_successful = False
+                definitions[key] = row
+            for row in output["pages"]:
+                key = compiler.free_page_id(FreeWikiPage.model_validate(row))
+                if key in pages and pages[key] != row:
+                    all_successful = False
+                pages[key] = row
+            for row in output["audit"]:
+                key = row["key"]
+                if key in audit_rows and audit_rows[key] != row:
+                    all_successful = False
+                audit_rows[key] = row
+            candidates = rows["discovery_candidates"]
+            dispositions.extend(candidates["dispositions"])
+            sources.extend(candidates["sources"])
+            receipts.extend(candidates["window_receipts"])
+    if not all_successful or unbound_materials:
+        definitions, pages, audit_rows = {}, {}, {}
+        dispositions, sources = [], []
+    free_output = {
+        "request_hash": request_hash,
+        "definitions": sorted(
+            definitions.values(),
+            key=lambda row: ConceptDefinition.model_validate(row).concept_id,
+        ),
+        "fields": [],
+        "pages": sorted(pages.values(), key=lambda row: (row["entity_id"], row["stable_key"])),
+        "audit": sorted(audit_rows.values(), key=lambda row: row["key"]),
+        "transformation": "SYNTHESIZE" if pages or definitions else "EXTRACT",
+    }
+    unbound_chars = sum(
+        len(block.text)
+        for entry in request.resolution_inputs.corpus.entries
+        if entry.material_id in unbound_materials
+        for block in entry.blocks
+    )
+    total_chars = sum(
+        row["coverage"]["total_chars"] for row in summaries if row["coverage"]
+    ) + unbound_chars
+    offered_chars = sum(
+        row["coverage"]["processed_chars"] for row in summaries if row["coverage"]
+    )
+    coverage = {
+        "total_chars": total_chars,
+        "offered_chars": offered_chars,
+        "omitted_chars": total_chars - offered_chars,
+        "material_count": len(request.resolution_inputs.corpus.entries),
+        "entities": [
+            {"entity_id": binding.entity_id, **(row["coverage"] or {})}
+            for binding, row in zip(
+                sorted(request.entity_bindings, key=lambda item: item.entity_id),
+                summaries, strict=True,
+            )
+        ],
+        "complete": (
+            not unbound_materials
+            and all(row["coverage"] and row["coverage"]["complete"] for row in summaries)
+        ),
+        "unbound_material_ids": unbound_materials,
+    }
+    summary = _summary()
+    overall_state = (
+        "FAILED" if not all_successful else "PENDING" if unbound_materials
+        else "PENDING" if pages or definitions else "EMPTY"
+    )
+    summary.update(
+        state=overall_state,
+        reason_codes=[
+            "DISCOVERY_UNBOUND_MATERIAL" if unbound_materials
+            else "DISCOVERY_GENERATED_PENDING_REVIEW" if all_successful and (pages or definitions)
+            else "DISCOVERY_EMPTY" if all_successful
+            else "DISCOVERY_GENERATION_FAILED"
+        ],
+        call_ids=[call_id for row in summaries for call_id in row["call_ids"]],
+        reused=any(row["reused"] for row in summaries),
+        coverage=coverage,
+        entity_summaries=summaries,
+    )
+    for key in summary["counts"]:
+        summary["counts"][key] = sum(row["counts"][key] for row in summaries)
+    candidates = {
+        "contract": "product-discovery-candidates.830.v1", "output": free_output,
+        "dispositions": dispositions, "sources": sources,
+        "window_receipts": receipts,
+        "exclusion_index_sha256": hashlib.sha256(json_bytes(
+            exclusion_index or {
+                row.entity_id: build_discovery_exclusion_index(request, row.entity_id)
+                for row in request.entity_bindings
+            }
+        )).hexdigest(),
+    }
+    for kind, value in (
+        ("discovery_candidates", candidates),
+        ("discovery_delta", {
+            "contract": "product-discovery-delta.830.v1",
+            "output": free_output, "reviewed": False,
+        }),
+        ("discovery_summary", summary),
+    ):
+        all_drafts.append(artifact(
+            kind, "product", json_bytes(value), stage.dependency_sha256,
+            origin=ArtifactOrigin.RULE,
+            contract_version=CURRENT_ARTIFACT_CONTRACTS.get(kind, (None, "1"))[1],
+        ))
+    return StageOutput(
+        tuple(all_drafts),
+        state=(ProductRunState.SUCCEEDED if all_successful and not unbound_materials
+               else ProductRunState.PARTIAL_SUCCESS),
+    )
 
 
 def _template(settings, role, purpose, prompt):
@@ -102,11 +753,11 @@ async def run_discovery_stage(
     summary = _summary()
     delta = field_delta
 
-    def keep(kind, value, *, call_id=None):
+    def keep(kind, value, *, call_id=None, key="product"):
         drafts.append(
             artifact(
                 kind,
-                "product",
+                key,
                 json_bytes(value),
                 stage.dependency_sha256,
                 origin=ArtifactOrigin.MODEL if call_id else ArtifactOrigin.RULE,
@@ -143,6 +794,7 @@ async def run_discovery_stage(
 
     phase = "GENERATION"
     try:
+        reuse_prior = False
         if run.retry_of_run_id:
             read_prior = (
                 artifacts.list_effective_artifacts
@@ -154,7 +806,29 @@ async def run_discovery_stage(
             )
             if prior:
                 summary = json.loads(prior[0].payload)
-                if summary["state"] == "ACCEPTED":
+                prior_calls = (
+                    artifacts.list_stage_calls(scope=scope, run_id=run.retry_of_run_id)
+                    if hasattr(artifacts, "list_stage_calls") else ()
+                )
+                discovery_calls = tuple(
+                    row for row in prior_calls
+                    if row.stage_key == "synthesis" and "discovery" in row.operation_key
+                )
+                replan = (
+                    summary.get("state") == "FAILED"
+                    and not summary.get("call_ids")
+                    and not discovery_calls
+                    and (
+                        summary.get("dispatch_state") == "NOT_DISPATCHED"
+                        or summary.get("failure_detail") == "discovery context budget exceeded"
+                    )
+                )
+                if replan:
+                    summary = _summary()
+                    summary["reason_codes"] = ["PRIOR_DISCOVERY_PREDISPATCH_REPLAN"]
+                else:
+                    reuse_prior = True
+                if reuse_prior and summary["state"] == "ACCEPTED":
                     origin = summary.get("discovery_origin_run_id") or run.retry_of_run_id
                     prior_delta = json.loads(
                         artifacts.get_artifact(
@@ -182,15 +856,16 @@ async def run_discovery_stage(
                         summary["state"] = "PENDING"
                         summary["reason_codes"] = ["DISCOVERY_REVALIDATION_REQUIRED"]
                     summary["discovery_origin_run_id"] = origin
-                summary.update(reused=True, reused_from_run_id=run.retry_of_run_id, call_ids=[])
-                # These members belong to the inherited published base, not new output.
-                summary["accepted_member_count"] = 0
-                summary["counts"]["published"] = 0
+                if reuse_prior:
+                    summary.update(reused=True, reused_from_run_id=run.retry_of_run_id, call_ids=[])
+                    # These members belong to the inherited published base, not new output.
+                    summary["accepted_member_count"] = 0
+                    summary["counts"]["published"] = 0
             else:
                 summary["reason_codes"] = ["PRIOR_DISCOVERY_NOT_EXECUTED"]
-        elif _unchanged_sources(request, base):
+        if not reuse_prior and _unchanged_sources(request, base):
             summary["reason_codes"] = ["NO_CHANGED_SOURCE"]
-        else:
+        elif not reuse_prior:
             settings = service.configuration.model
             generation_template = _template(
                 settings, "extract", "g3-open-discovery", DISCOVERY_PROMPT

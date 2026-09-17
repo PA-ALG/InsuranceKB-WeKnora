@@ -2,10 +2,13 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -33,10 +36,16 @@ type G3PlatformBaseSnapshotReader interface {
 // G3PlatformSnapshotsHandler exposes machine-readable source custody under the
 // same exact-scope and dual-KB ACL seal as Active Wiki reads.
 type G3PlatformSnapshotsHandler struct {
-	access  *WikiReleaseHandler
-	uploads G3PlatformUploadLookup
-	sources G3PlatformSourceSnapshotCapturer
-	bases   G3PlatformBaseSnapshotReader
+	access   *WikiReleaseHandler
+	uploads  G3PlatformUploadLookup
+	sources  G3PlatformSourceSnapshotCapturer
+	bases    G3PlatformBaseSnapshotReader
+	reparser G3PlatformBoundReparser
+}
+
+type G3PlatformBoundReparser interface {
+	BoundReparseKnowledge(context.Context, string, service.G3BoundReparseRequest) (types.G3BoundReparseReceipt, error)
+	ReadBoundReparseKnowledge(context.Context, string, string) (types.G3BoundReparseReceipt, error)
 }
 
 func NewG3PlatformSnapshotsHandler(
@@ -44,10 +53,84 @@ func NewG3PlatformSnapshotsHandler(
 	uploads G3PlatformUploadLookup,
 	sources G3PlatformSourceSnapshotCapturer,
 	bases G3PlatformBaseSnapshotReader,
+	reparser ...G3PlatformBoundReparser,
 ) *G3PlatformSnapshotsHandler {
-	return &G3PlatformSnapshotsHandler{
+	h := &G3PlatformSnapshotsHandler{
 		access: access, uploads: uploads, sources: sources, bases: bases,
 	}
+	if len(reparser) > 0 {
+		h.reparser = reparser[0]
+	}
+	return h
+}
+
+func (h *G3PlatformSnapshotsHandler) ReparseUpload(c *gin.Context) {
+	_, scope, ok := h.request(c, h != nil && h.uploads != nil && h.reparser != nil)
+	if !ok {
+		return
+	}
+	runID := c.Param("run_id")
+	ordinal, err := strconv.Atoi(c.Param("ordinal"))
+	if err != nil || ordinal < 0 || !validG3PlatformPathID(runID) {
+		writeG3PlatformSnapshotError(c, errG3PlatformSnapshotInvalidRequest)
+		return
+	}
+	uploader, err := h.uploads.LookupUpload(c.Request.Context(), scope, runID, ordinal)
+	if err != nil || uploader == nil {
+		if err == nil {
+			err = service.ErrG3PlatformUploadNotFound
+		}
+		writeG3PlatformSnapshotError(c, err)
+		return
+	}
+	if c.Request.Method == http.MethodGet {
+		query := c.Request.URL.Query()
+		if len(query) != 1 || len(query["recovery_key"]) != 1 {
+			writeG3PlatformSnapshotError(c, errG3PlatformSnapshotInvalidRequest)
+			return
+		}
+		receipt, err := h.reparser.ReadBoundReparseKnowledge(c.Request.Context(), uploader.KnowledgeID, query.Get("recovery_key"))
+		if err != nil || receipt.RunID != runID || receipt.Ordinal != ordinal {
+			writeG3PlatformSnapshotError(c, service.ErrG3PlatformUploadNotFound)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": receipt})
+		return
+	}
+	if c.Request.Method != http.MethodPost {
+		writeG3PlatformSnapshotError(c, errG3PlatformSnapshotInvalidRequest)
+		return
+	}
+	var body struct {
+		ExpectedParseAttempt int64  `json:"expected_parse_attempt"`
+		RecoveryKey          string `json:"recovery_key"`
+		DeadlineAt           string `json:"deadline_at"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 2048))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&body) != nil {
+		writeG3PlatformSnapshotError(c, errG3PlatformSnapshotInvalidRequest)
+		return
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		writeG3PlatformSnapshotError(c, errG3PlatformSnapshotInvalidRequest)
+		return
+	}
+	deadline, err := time.Parse(time.RFC3339Nano, body.DeadlineAt)
+	if err != nil || body.ExpectedParseAttempt <= 0 {
+		writeG3PlatformSnapshotError(c, errG3PlatformSnapshotInvalidRequest)
+		return
+	}
+	receipt, err := h.reparser.BoundReparseKnowledge(c.Request.Context(), uploader.KnowledgeID, service.G3BoundReparseRequest{
+		RawKBID: scope.RawKBID, RunID: runID, Ordinal: ordinal, ExpectedParseAttempt: body.ExpectedParseAttempt,
+		RecoveryKey: body.RecoveryKey, DeadlineAt: deadline,
+	})
+	if err != nil {
+		writeG3PlatformSnapshotError(c, service.ErrG3PlatformSnapshotUnavailable)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": receipt})
 }
 
 func (h *G3PlatformSnapshotsHandler) Upload(c *gin.Context) {
@@ -62,6 +145,34 @@ func (h *G3PlatformSnapshotsHandler) Upload(c *gin.Context) {
 		return
 	}
 	record, err := h.uploads.LookupUpload(c.Request.Context(), scope, runID, int(ordinal))
+	if err != nil || record == nil {
+		if err == nil {
+			err = service.ErrG3PlatformSnapshotUnavailable
+		}
+		writeG3PlatformSnapshotError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": record})
+}
+
+func (h *G3PlatformSnapshotsHandler) FileBySHA256(c *gin.Context) {
+	if h == nil {
+		writeG3PlatformSnapshotError(c, errG3PlatformSnapshotServiceUnavailable)
+		return
+	}
+	lookup, available := h.uploads.(interface {
+		LookupFileBySHA256(context.Context, types.WikiReleaseScope, string, string) (*service.G3PlatformFileFingerprintV1, error)
+	})
+	_, scope, ok := h.request(c, available)
+	if !ok {
+		return
+	}
+	sha := c.Param("sha256")
+	if len(c.Request.URL.Query()) > 1 || (len(c.Request.URL.Query()) == 1 && !c.Request.URL.Query().Has("knowledge_id")) || len(c.Request.URL.Query()["knowledge_id"]) > 1 {
+		writeG3PlatformSnapshotError(c, errG3PlatformSnapshotInvalidRequest)
+		return
+	}
+	record, err := lookup.LookupFileBySHA256(c.Request.Context(), scope, sha, c.Query("knowledge_id"))
 	if err != nil || record == nil {
 		if err == nil {
 			err = service.ErrG3PlatformSnapshotUnavailable

@@ -8,13 +8,18 @@ from collections.abc import Mapping
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from insurance_harness.jobs.errors import SpaceScopeError
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.processing_receipts import (
+    processing_summary,
+    validate_processing_receipt,
+)
 from insurance_harness.product_ingestion.progression import admit_uploads
 from insurance_harness.product_ingestion.store import ProductIngestionStore
+from insurance_harness.product_ingestion.upload_manifest import UploadManifest
 from insurance_harness.service_shell.apps import PrincipalDependency
 from insurance_harness.service_shell.principal import (
     AuthorizationError,
@@ -27,6 +32,14 @@ class CreateRun(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     idempotency_key: str = Field(min_length=1, max_length=160)
     expected_upload_count: int = Field(ge=1)
+    upload_manifest: UploadManifest | None = None
+
+    @field_validator("upload_manifest", mode="before")
+    @classmethod
+    def parse_manifest(cls, value):
+        if value is None or isinstance(value, UploadManifest):
+            return value
+        return UploadManifest.model_validate_json(json.dumps(value))
 
 
 class RetryFields(BaseModel):
@@ -66,6 +79,29 @@ class _DiscoverySummary(BaseModel):
     counts: _DiscoveryCounts
     coverage: _DiscoveryCoverage | None
     accepted_member_count: int | None = Field(default=None, ge=0)
+
+
+def combine_discovery_summaries(generation, final):
+    """Keep generation coverage while exposing the separate publication decision."""
+    if final is None:
+        return generation
+    if generation is None:
+        return final
+    try:
+        prior, reviewed = json.loads(generation), json.loads(final)
+        if reviewed.get("state") == "EMPTY" and prior.get("state") in {
+            "FAILED",
+            "PENDING",
+            "REJECTED",
+        }:
+            return generation
+        for key in ("state", "reason_codes", "accepted_member_count"):
+            if key in reviewed:
+                prior[key] = reviewed[key]
+        prior["reused"] = bool(prior.get("reused") or reviewed.get("reused"))
+        return json.dumps(prior).encode()
+    except (ValueError, TypeError, AttributeError):
+        return b"{}"  # Existing safe projection marks malformed status as failure.
 
 
 def _discovery_summary_projection(raw, *, publication_verified=False):
@@ -163,8 +199,50 @@ def install_product_api(
         summaries = artifacts.list_effective_artifacts(
             scope=scope, run_id=run_id, artifact_kind="source_processing_summary"
         )
-        if summaries:
-            summary = json.loads(summaries[0].payload)
+        summary = json.loads(summaries[0].payload) if summaries else None
+        attempts = []
+        for saved in artifacts.list_artifacts(
+            scope=scope, run_id=run_id, artifact_kind="source_processing_attempt"
+        ):
+            if (
+                getattr(saved, "payload_sha256", hashlib.sha256(saved.payload).hexdigest())
+                != hashlib.sha256(saved.payload).hexdigest()
+            ):
+                raise ValueError("source processing audit digest changed")
+            value = json.loads(saved.payload)
+            attempts.append(
+                validate_processing_receipt(
+                    value,
+                    knowledge_id=value["knowledge_id"],
+                    parse_attempt=value["parse_attempt"],
+                )
+            )
+        if summary is None and attempts:
+            summary = processing_summary((item["knowledge_id"], item, False) for item in attempts)
+            if len({item["knowledge_id"] for item in attempts}) < run.expected_upload_count:
+                summary["model_call_count"] = None
+                summary["model_call_count_complete"] = False
+        elif summary is not None and attempts:
+            represented = {
+                item["receipt_sha256"]
+                for item in summary["materials"]
+                if item["receipt_sha256"] is not None
+            }
+            prior = [item for item in attempts if item["receipt_sha256"] not in represented]
+            if prior:
+                extra = processing_summary((item["knowledge_id"], item, False) for item in prior)
+                summary["recorded_model_call_count"] += extra["recorded_model_call_count"]
+                summary["interrupted_count"] += extra["interrupted_count"]
+                summary["model_call_count_complete"] = (
+                    summary["model_call_count_complete"] and extra["model_call_count_complete"]
+                )
+                summary["model_call_count"] = (
+                    summary["recorded_model_call_count"]
+                    if summary["model_call_count_complete"]
+                    else None
+                )
+                summary["prior_attempts"] = extra["materials"]
+        if summary is not None:
             if checkpoint_receipt and summaries[0].run_id != run_id:
                 summary = {
                     **summary,
@@ -212,9 +290,27 @@ def install_product_api(
         payload["counts"] = {
             key: payload[key] for key in ("success_count", "missing_count", "failure_count")
         }
-        payload["stages"] = [
-            {**row.model_dump(mode="json"), "name": row.stage_key} for row in stages
-        ]
+        wall_starts = store.stage_wall_starts(scope=scope, run_id=run_id)
+        last_attempts = store.stage_last_attempt_starts(scope=scope, run_id=run_id)
+        payload["stages"] = []
+        for row in stages:
+            started = wall_starts.get(row.stage_key)
+            ended = row.finished_at
+            attempt = last_attempts.get(row.stage_key)
+            stage_payload = {**row.model_dump(mode="json"), "name": row.stage_key}
+            stage_payload["last_attempt_started_at"] = (
+                attempt.isoformat().replace("+00:00", "Z") if attempt else None
+            )
+            stage_payload["started_at"] = (
+                started.isoformat().replace("+00:00", "Z") if started else None
+            )
+            stage_payload["wall_duration_seconds"] = (
+                max(0.0, (ended - started).total_seconds()) if started and ended else None
+            )
+            stage_payload["last_attempt_duration_seconds"] = (
+                max(0.0, (ended - attempt).total_seconds()) if attempt and ended else None
+            )
+            payload["stages"].append(stage_payload)
         payload["stage"] = next((row.stage_key for row in stages if row.finished_at is None), None)
         payload["reason"] = run.terminal_reason
         # Raw model bytes and unvalidated field values never enter the normal status response.
@@ -236,8 +332,17 @@ def install_product_api(
             ).payload
         except SpaceScopeError:
             discovery = None
+        try:
+            final_discovery = artifacts.get_effective_artifact(
+                scope=scope,
+                run_id=run_id,
+                artifact_kind="discovery_final_summary",
+                artifact_key="product",
+            ).payload
+        except SpaceScopeError:
+            final_discovery = None
         payload["discovery_summary"] = _discovery_summary_projection(
-            discovery,
+            combine_discovery_summaries(discovery, final_discovery),
             publication_verified=(
                 run.state in {"succeeded", "partial_success"}
                 and run.finished_at is not None
@@ -261,6 +366,7 @@ def install_product_api(
                 scope=scope,
                 idempotency_key=request.idempotency_key,
                 expected_upload_count=request.expected_upload_count,
+                upload_manifest=request.upload_manifest,
             )
             # Idempotent admission, never inline parsing/extraction/publication.
             admit_uploads(store, scope, run.run_id)

@@ -55,7 +55,9 @@ def _scoped_window_plan_identity(artifacts, services):
         if service is None or service.scope != scope:
             raise ValueError("plan request is outside configured product scope")
         refs = artifacts.list_effective_artifact_references(
-            scope=scope, run_id=run_id, artifact_kind="field_plan",
+            scope=scope,
+            run_id=run_id,
+            artifact_kind="field_plan",
         )
         if len(refs) != 1 or refs[0].artifact_key != "product":
             raise ValueError("unique authorized field plan is unavailable")
@@ -77,16 +79,21 @@ def _scoped_source_loader(artifacts, services):
         gate = gates[scope.space_id]
         await gate.acquire()
         try:
+
             async def load_verified():
                 refs = await asyncio.to_thread(
                     artifacts.list_effective_artifact_references,
-                    scope=scope, run_id=run_id, artifact_kind="source_snapshot",
+                    scope=scope,
+                    run_id=run_id,
+                    artifact_kind="source_snapshot",
                 )
                 keys = service.configuration.source_public_keys
-                key_identity = tuple(sorted(
-                    (name, public.public_bytes(Encoding.Raw, PublicFormat.Raw))
-                    for name, public in keys.items()
-                ))
+                key_identity = tuple(
+                    sorted(
+                        (name, public.public_bytes(Encoding.Raw, PublicFormat.Raw))
+                        for name, public in keys.items()
+                    )
+                )
                 key = (scope, run_id, refs, key_identity)
                 cached = verified.get(scope.space_id)
                 if cached is not None and cached[0] == key:
@@ -99,7 +106,9 @@ def _scoped_source_loader(artifacts, services):
                 )
                 after = await asyncio.to_thread(
                     artifacts.list_effective_artifact_references,
-                    scope=scope, run_id=run_id, artifact_kind="source_snapshot",
+                    scope=scope,
+                    run_id=run_id,
+                    artifact_kind="source_snapshot",
                 )
                 if after != refs:
                     raise ValueError("source snapshot identities changed during verification")
@@ -129,6 +138,7 @@ _PIPELINE_STAGES = frozenset(
         "field_plan",
         "extract",
         "synthesis",
+        "discovery",
         "compilation",
         "preparation",
         "review",
@@ -193,6 +203,24 @@ class _ScopedPlatform:
 
     async def capture_source(self, scope: ProductScope, knowledge_id: str, attempt: int) -> bytes:
         return await self._client(scope).capture_source(scope, knowledge_id, attempt)
+
+    async def get_reparse_receipt(
+        self, scope: ProductScope, run_id: str, ordinal: int, recovery_key: str
+    ):
+        return await self._client(scope).get_reparse_receipt(scope, run_id, ordinal, recovery_key)
+
+    async def reparse_upload(
+        self,
+        scope: ProductScope,
+        run_id: str,
+        ordinal: int,
+        expected_parse_attempt: int,
+        recovery_key: str,
+        deadline_at,
+    ):
+        return await self._client(scope).reparse_upload(
+            scope, run_id, ordinal, expected_parse_attempt, recovery_key, deadline_at
+        )
 
 
 class ProductWorkerRuntime:

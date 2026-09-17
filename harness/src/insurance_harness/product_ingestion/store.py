@@ -71,6 +71,11 @@ from insurance_harness.product_ingestion.tables import (
     ProductWindow,
     ProductWindowSettlement,
 )
+from insurance_harness.product_ingestion.upload_admission import (
+    read_upload_manifest,
+    save_upload_manifest,
+)
+from insurance_harness.product_ingestion.upload_manifest import UploadManifest
 from insurance_harness.service_shell.worker import HandlerResult
 
 SessionFactory = Callable[[], Session]
@@ -108,6 +113,7 @@ class ProductIngestionStore(CheckpointStore):
         scope: ProductScope,
         idempotency_key: str,
         expected_upload_count: int = 1,
+        upload_manifest: UploadManifest | None = None,
         upload_deadline_at: datetime | None = None,
         source_deadline_at: datetime | None = None,
     ) -> ProductRunSnapshot:
@@ -115,6 +121,11 @@ class ProductIngestionStore(CheckpointStore):
             raise ValueError("idempotency_key must be non-empty")
         if expected_upload_count < 1:
             raise ValueError("expected_upload_count must be positive")
+        if (
+            upload_manifest is not None
+            and upload_manifest.expected_upload_count != expected_upload_count
+        ):
+            raise ValueError("upload manifest count mismatch")
         with self._session_factory() as session:
             with session.begin():
                 row = session.execute(
@@ -145,7 +156,7 @@ class ProductIngestionStore(CheckpointStore):
                         source_deadline_at=source_deadline,
                         state=ProductRunState.ACCEPTING_UPLOADS.value,
                         version=1,
-                        workflow_version=2,
+                        workflow_version=3,
                         uploads_sealed=False,
                         created_at=now,
                         started_at=None,
@@ -153,8 +164,12 @@ class ProductIngestionStore(CheckpointStore):
                     )
                     session.add(row)
                     session.flush()
+                    if upload_manifest is not None:
+                        save_upload_manifest(session, row, upload_manifest)
                 else:
                     self._check_scope(row, scope)
+                    if read_upload_manifest(session, row) != upload_manifest:
+                        raise ValueError("idempotent upload manifest changed")
                     if row.expected_upload_count != expected_upload_count:
                         raise ValueError("idempotent run parameters changed")
                     if upload_deadline_at is not None and _aware(row.upload_deadline_at) != _aware(
@@ -166,6 +181,17 @@ class ProductIngestionStore(CheckpointStore):
                     ):
                         raise ValueError("idempotent source deadline changed")
                 return self._run_snapshot(session, row, scope)
+
+    def get_upload_manifest(self, *, scope: ProductScope, run_id: str) -> UploadManifest | None:
+        with self._session_factory() as session:
+            row = self._run(session, scope, run_id)
+            visited = set()
+            while row.retry_of_run_id:
+                if row.id in visited:
+                    raise ValueError("upload admission lineage cycle")
+                visited.add(row.id)
+                row = self._run(session, scope, row.retry_of_run_id)
+            return read_upload_manifest(session, row)
 
     def get_run(self, *, scope: ProductScope, run_id: str) -> ProductRunSnapshot:
         with self._session_factory() as session:
@@ -466,6 +492,64 @@ class ProductIngestionStore(CheckpointStore):
                 .order_by(ProductStage.created_at, ProductStage.id)
             ).all()
             return tuple(self._stage_snapshot(session, row) for row in rows)
+
+    def stage_wall_starts(self, *, scope: ProductScope, run_id: str) -> dict[str, datetime]:
+        """First durable registration, including queue waits and later attempts."""
+        with self._session_factory() as session:
+            self._run(session, scope, run_id)
+            starts = {
+                key: _aware(created)
+                for key, created in session.execute(
+                    select(ProductStage.stage_key, ProductStage.created_at).where(
+                        ProductStage.run_id == run_id,
+                        ProductStage.space_id == scope.space_id,
+                    )
+                )
+            }
+            for key, created in session.execute(
+                select(ProductWindow.stage_key, func.min(ProductWindow.created_at))
+                .where(ProductWindow.run_id == run_id, ProductWindow.space_id == scope.space_id)
+                .group_by(ProductWindow.stage_key)
+            ):
+                current = starts.get(key)
+                earliest = _aware(created)
+                if earliest is not None and (current is None or earliest < current):
+                    starts[key] = earliest
+            return starts
+
+    def stage_last_attempt_starts(
+        self, *, scope: ProductScope, run_id: str
+    ) -> dict[str, datetime]:
+        """Latest P1 start per stage, separate from the full stage wall clock."""
+        with self._session_factory() as session:
+            self._run(session, scope, run_id)
+            starts = {
+                key: _aware(started)
+                for key, started in session.execute(
+                    select(ProductStage.stage_key, WikiJob.started_at)
+                    .join(WikiJob, WikiJob.id == ProductStage.job_id)
+                    .where(
+                        ProductStage.run_id == run_id,
+                        ProductStage.space_id == scope.space_id,
+                        WikiJob.started_at.is_not(None),
+                    )
+                )
+            }
+            for key, started in session.execute(
+                select(ProductWindow.stage_key, func.max(WikiJob.started_at))
+                .join(WikiJob, WikiJob.id == ProductWindow.job_id)
+                .where(
+                    ProductWindow.run_id == run_id,
+                    ProductWindow.space_id == scope.space_id,
+                    WikiJob.started_at.is_not(None),
+                )
+                .group_by(ProductWindow.stage_key)
+            ):
+                current = starts.get(key)
+                latest = _aware(started)
+                if latest is not None and (current is None or latest > current):
+                    starts[key] = latest
+            return starts
 
     def list_status_stages(self, *, scope: ProductScope, run_id: str) -> tuple[StageSnapshot, ...]:
         """Display window execution as part of extraction, never as an orchestration barrier."""

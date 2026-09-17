@@ -294,14 +294,20 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 ) error {
 	ctx = withConceptSourceOperationReuse830G3(ctx)
 	started := time.Now()
+	var published *publishedSourceReuse830G3
 	defer func() {
 		operation := ctx.Value(conceptSourceOperationReuseKey830G3{}).(*conceptSourceOperationReuse830G3)
 		operation.mu.Lock()
 		count, hits := len(operation.verified), operation.hits
 		operation.mu.Unlock()
+		publishedHits := 0
+		if published != nil {
+			publishedHits = published.hits
+		}
 		logger.GetLogger(ctx).WithField("operation", request.Operation).
 			WithField("elapsed_ms", time.Since(started).Milliseconds()).
 			WithField("source_proofs", count).WithField("source_proof_reuse_hits", hits).
+			WithField("published_source_proof_reuse_hits", publishedHits).
 			WithField("cancelled", ctx.Err() != nil).Info("g3_source_authority_validation")
 	}()
 	if request.Operation != "create-draft" && request.Operation != "review" && request.Operation != "activate" && request.Operation != "prepare-read" {
@@ -365,6 +371,10 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 	if err != nil {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
+	published, err = s.publishedSourceReuse830G3(ctx, request.Scope, bundle)
+	if err != nil {
+		return err
+	}
 	seen := map[string]struct{}{}
 	verify := func(memberID string, evidence types.ConceptEvidence830G2, allowLegacy bool) error {
 		canonicalEvidence, canonicalErr := canonicalJSON830G2(evidence)
@@ -377,10 +387,6 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 			}
 		}
 		key := testSHA256Bytes830G2(canonicalEvidence)
-		if _, ok := seen[key]; ok {
-			return nil
-		}
-		seen[key] = struct{}{}
 		block, ok := conceptSourceBlockForEvidence830G2(baseView, evidence)
 		if !ok {
 			return ErrConceptSourceAuthorityUnavailable830G2
@@ -388,12 +394,19 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 		if selectedBlock, selectedEvidence := selectedBlocks[evidence.RevisionID+"\x00"+evidence.BlockID]; selectedEvidence {
 			block = selectedBlock
 		}
+		if reused, reuseErr := published.verify(ctx, memberID, evidence, block); reuseErr != nil || reused {
+			return reuseErr
+		}
+		if _, ok := seen[key]; ok {
+			return nil
+		}
+		seen[key] = struct{}{}
 		_, _, _, verifyErr := s.verifyEvidenceLocated830G3(ctx, request.Scope, evidence, &block, true)
 		return verifyErr
 	}
 	for _, binding := range bundle.Request.EntityBindings {
 		for _, bound := range binding.ResolutionEvidence {
-			if err := verify("", bound.Evidence, false); err != nil {
+			if err := verify("binding:"+binding.EntityID, bound.Evidence, false); err != nil {
 				return err
 			}
 		}
@@ -560,22 +573,33 @@ func (s *ConceptSourceAuthorityService830G2) verifyEvidence(ctx context.Context,
 	return source, bbox, err
 }
 
-func (s *ConceptSourceAuthorityService830G2) verifyEvidenceLocated830G3(ctx context.Context, scope types.WikiReleaseScope, evidence types.ConceptEvidence830G2, sourceBlock *types.ConceptSourceBlock830G2, trustedG3 bool) (*types.KnowledgeRevisionSource, ConceptCitationBBox830G2, *ConceptSourceBlockLocator830G3, error) {
-	empty := ConceptCitationBBox830G2{}
-	if s == nil || s.fixed == nil || s.knowledge == nil || s.revisions == nil || s.chunks == nil || s.docreader == nil || evidence.TenantID != scope.TenantID || evidence.SpaceID != scope.SpaceID || evidence.RawKBID != scope.RawKBID || evidence.OffsetUnit != "UNICODE_CODE_POINT" || evidence.SourceType != "DOCUMENT" || evidence.Start < 0 || evidence.End <= evidence.Start || evidence.PageNumber <= 0 || testSHA256830G2(evidence.Quote) != evidence.QuoteHash {
-		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
+func (s *ConceptSourceAuthorityService830G2) currentConceptEvidenceSource830G3(ctx context.Context, scope types.WikiReleaseScope, evidence types.ConceptEvidence830G2) (*types.Knowledge, *types.KnowledgeRevisionSource, *types.StoredResource, error) {
+	if s == nil || s.knowledge == nil || s.revisions == nil || evidence.TenantID != scope.TenantID || evidence.SpaceID != scope.SpaceID || evidence.RawKBID != scope.RawKBID || evidence.OffsetUnit != "UNICODE_CODE_POINT" || evidence.SourceType != "DOCUMENT" || evidence.Start < 0 || evidence.End <= evidence.Start || evidence.PageNumber <= 0 || testSHA256830G2(evidence.Quote) != evidence.QuoteHash {
+		return nil, nil, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	knowledge, err := s.knowledge.GetKnowledgeByID(ctx, scope.TenantID, evidence.KnowledgeID)
 	if err != nil || knowledge == nil || knowledge.DeletedAt.Valid || knowledge.TenantID != scope.TenantID || knowledge.KnowledgeBaseID != scope.RawKBID || !strings.EqualFold(knowledge.FileType, "pdf") {
-		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, nil, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	revision, err := s.revisions.GetRevision(ctx, evidence.KnowledgeID, evidence.ParseAttempt)
 	if err != nil || revision == nil || revision.KnowledgeID != evidence.KnowledgeID || revision.ParseAttempt != evidence.ParseAttempt || revision.FileSHA256 != evidence.SourceHash || revision.ManifestAlgorithm != types.RevisionManifestAlgorithm || revision.ManifestDigest != evidence.ParseHash || revision.ChunkCount <= 0 {
-		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, nil, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	source, resource, err := s.revisions.GetRevisionSource(ctx, scope.TenantID, evidence.KnowledgeID, evidence.ParseAttempt)
-	if err != nil || source == nil || resource == nil || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil || source.RevisionSourceID != evidence.RevisionID || source.FileSHA256 != evidence.SourceHash || source.ManifestDigest != evidence.ParseHash || source.ChunkCount != revision.ChunkCount || source.PageCount == nil || evidence.PageNumber > *source.PageCount || resource.ID != source.ResourceID || resource.TenantID != scope.TenantID {
+	if err != nil || source == nil || resource == nil || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil || source.TenantID != scope.TenantID || source.KnowledgeID != evidence.KnowledgeID || source.ParseAttempt != evidence.ParseAttempt || source.RevisionSourceID != evidence.RevisionID || source.FileSHA256 != evidence.SourceHash || source.ManifestDigest != evidence.ParseHash || source.ChunkCount != revision.ChunkCount || source.PageCount == nil || evidence.PageNumber > *source.PageCount || resource.ID != source.ResourceID || resource.TenantID != scope.TenantID {
+		return nil, nil, nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	return knowledge, source, resource, nil
+}
+
+func (s *ConceptSourceAuthorityService830G2) verifyEvidenceLocated830G3(ctx context.Context, scope types.WikiReleaseScope, evidence types.ConceptEvidence830G2, sourceBlock *types.ConceptSourceBlock830G2, trustedG3 bool) (*types.KnowledgeRevisionSource, ConceptCitationBBox830G2, *ConceptSourceBlockLocator830G3, error) {
+	empty := ConceptCitationBBox830G2{}
+	if s == nil || s.fixed == nil || s.chunks == nil || s.docreader == nil {
 		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	knowledge, source, resource, err := s.currentConceptEvidenceSource830G3(ctx, scope, evidence)
+	if err != nil {
+		return nil, empty, nil, err
 	}
 	if s.sourceReuse != nil {
 		return s.verifyReusableConceptSource830G3(ctx, scope, evidence, sourceBlock, trustedG3, knowledge, source, resource)
@@ -600,7 +624,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyEvidenceLocated830G3(ctx cont
 	}
 	sort.Slice(manifest, func(i, j int) bool { return manifest[i].Index < manifest[j].Index })
 	digest, err := types.ComputeRevisionManifestDigest(evidence.KnowledgeID, evidence.ParseAttempt, manifest)
-	if err != nil || len(manifest) != revision.ChunkCount || digest != revision.ManifestDigest || block == nil {
+	if err != nil || len(manifest) != source.ChunkCount || digest != source.ManifestDigest || block == nil {
 		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	if sourceBlock != nil && (sourceBlock.ConceptSourceIdentity830G2 != evidence.ConceptSourceIdentity830G2 || sourceBlock.BlockID != evidence.BlockID || sourceBlock.PageNumber != evidence.PageNumber || sourceBlock.SourceType != evidence.SourceType || sourceBlock.Text != block.Content) {

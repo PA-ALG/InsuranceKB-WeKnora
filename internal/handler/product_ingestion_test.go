@@ -22,13 +22,15 @@ import (
 )
 
 type productGatewayBridgeStub struct {
-	created    int
-	reads      int
-	recoveries int
-	version    int64
-	retries    int
-	expected   int
-	fail       bool
+	created        int
+	reads          int
+	recoveries     int
+	version        int64
+	retries        int
+	expected       int
+	manifest       []service.ProductUploadManifestMaterial
+	duplicateCount int
+	fail           bool
 }
 
 func (s *productGatewayBridgeStub) Scope() service.ProductIngestionScope {
@@ -36,13 +38,31 @@ func (s *productGatewayBridgeStub) Scope() service.ProductIngestionScope {
 }
 func (s *productGatewayBridgeStub) MaxUploadFiles() int   { return 3 }
 func (s *productGatewayBridgeStub) MaxUploadBytes() int64 { return 1 << 20 }
-func (s *productGatewayBridgeStub) CreateRun(_ context.Context, count int) (*service.ProductIngestionRun, error) {
+func (s *productGatewayBridgeStub) CreateRun(_ context.Context, count int, manifest []service.ProductUploadManifestMaterial, duplicateCount int) (*service.ProductIngestionRun, error) {
 	s.created++
 	s.expected = count
+	s.manifest = manifest
+	s.duplicateCount = duplicateCount
 	if s.fail {
 		return nil, errors.New("SECRET_UPSTREAM")
 	}
 	return &service.ProductIngestionRun{RunID: "server-run", State: "accepting_uploads"}, nil
+}
+
+func TestProductIngestionGatewayDeduplicatesBatchBeforeDurableAdmission(t *testing.T) {
+	bridge := &productGatewayBridgeStub{}
+	router, kg := productGatewayRouter(t, bridge, &productGatewayKBStub{}, types.TenantRoleAdmin)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, productDuplicateUploadRequest(t, 3))
+	require.Equal(t, 200, response.Code, response.Body.String())
+	require.Equal(t, 1, bridge.expected)
+	require.Equal(t, 2, bridge.duplicateCount)
+	require.Len(t, bridge.manifest, 1)
+	require.Equal(t, 0, bridge.manifest[0].Ordinal)
+	require.Equal(t, int64(8), bridge.manifest[0].FileSize)
+	require.Len(t, bridge.manifest[0].FileSHA256, 64)
+	require.Equal(t, 1, kg.calls)
+	require.JSONEq(t, `{"success":true,"data":{"run_id":"server-run","accepted_file_count":1,"rejected_file_count":2}}`, response.Body.String())
 }
 func (s *productGatewayBridgeStub) ListRuns(context.Context) ([]service.ProductIngestionRun, error) {
 	s.reads++
@@ -84,6 +104,7 @@ type productGatewayUploadStub struct {
 	t          *testing.T
 	calls      int
 	failSecond bool
+	duplicate  bool
 	markers    []string
 }
 
@@ -100,13 +121,28 @@ func (s *productGatewayUploadStub) CreateKnowledgeFromFile(ctx context.Context, 
 	require.NoError(s.t, err)
 	defer body.Close()
 	data, _ := io.ReadAll(body)
-	require.Equal(s.t, "ORIGINAL", string(data))
+	require.True(s.t, strings.HasPrefix(string(data), "ORIGINAL"))
 	s.markers = append(s.markers, metadata["product_ingestion_upload"])
 	s.calls++
+	if s.duplicate {
+		knowledge := &types.Knowledge{ID: "old-file", TenantID: 1, KnowledgeBaseID: "raw", Type: "file", ParseStatus: "completed", FileSize: file.Size, FileSHA256: s.bridge.manifest[0].FileSHA256, Metadata: types.JSON(`{"product_ingestion_upload":"old-run:0"}`)}
+		return knowledge, types.NewDuplicateFileError(knowledge)
+	}
 	if s.failSecond && s.calls == 2 {
 		return nil, errors.New("SECRET_STORAGE")
 	}
 	return &types.Knowledge{ID: fmt.Sprint(s.calls)}, nil
+}
+
+func TestProductIngestionGatewayAcceptsScopedExistingFileWithoutReplacingOldMetadata(t *testing.T) {
+	bridge := &productGatewayBridgeStub{}
+	router, kg := productGatewayRouter(t, bridge, &productGatewayKBStub{}, types.TenantRoleAdmin)
+	kg.duplicate = true
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, productUploadRequest(t, 1, ""))
+	require.Equal(t, 200, response.Code, response.Body.String())
+	require.JSONEq(t, `{"success":true,"data":{"run_id":"server-run","accepted_file_count":1,"rejected_file_count":0}}`, response.Body.String())
+	require.Equal(t, "server-run:0", kg.markers[0])
 }
 func productGatewayRouter(t *testing.T, bridge *productGatewayBridgeStub, kb *productGatewayKBStub, role types.TenantRole) (*gin.Engine, *productGatewayUploadStub) {
 	gin.SetMode(gin.TestMode)
@@ -134,12 +170,24 @@ func productGatewayRouter(t *testing.T, bridge *productGatewayBridgeStub, kb *pr
 	return r, kg
 }
 func productUploadRequest(t *testing.T, count int, extra string) *http.Request {
+	return productUploadRequestWithBody(t, count, extra, false)
+}
+
+func productDuplicateUploadRequest(t *testing.T, count int) *http.Request {
+	return productUploadRequestWithBody(t, count, "", true)
+}
+
+func productUploadRequestWithBody(t *testing.T, count int, extra string, duplicate bool) *http.Request {
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
 	for i := 0; i < count; i++ {
 		part, err := w.CreateFormFile("files", fmt.Sprintf("original-%d.pdf", i))
 		require.NoError(t, err)
-		_, _ = part.Write([]byte("ORIGINAL"))
+		body := "ORIGINAL"
+		if !duplicate {
+			body = fmt.Sprintf("ORIGINAL-%d", i)
+		}
+		_, _ = part.Write([]byte(body))
 	}
 	if extra != "" {
 		require.NoError(t, w.WriteField(extra, `{"candidate":"client"}`))

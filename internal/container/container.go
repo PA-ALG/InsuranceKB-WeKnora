@@ -414,6 +414,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(func(
 		cfg *config.Config,
 		knowledge interfaces.KnowledgeRepository,
+		knowledgeService interfaces.KnowledgeService,
 		revisions *service.KnowledgeRevisionSourceService,
 		sources *service.ConceptSourceAuthorityService830G2,
 		spans repository.KnowledgeSpanRepository,
@@ -421,7 +422,11 @@ func BuildContainer(container *dig.Container) *dig.Container {
 		schemas *service.SchemaWikiService,
 		releases *service.WikiReleaseService,
 	) (*handler.G3PlatformSnapshotsHandler, *handler.G3PlatformReleaseHandler, error) {
-		return handler.NewConfiguredG3PlatformHandlers(cfg, knowledge, revisions, sources, spans, access, schemas, releases)
+		bound, ok := knowledgeService.(handler.G3PlatformBoundReparser)
+		if !ok {
+			return nil, nil, service.ErrG3PlatformSnapshotUnavailable
+		}
+		return handler.NewConfiguredG3PlatformHandlers(cfg, knowledge, revisions, sources, spans, access, schemas, releases, bound)
 	}))
 	must(container.Provide(func(
 		revisionSourceService *service.KnowledgeRevisionSourceService,

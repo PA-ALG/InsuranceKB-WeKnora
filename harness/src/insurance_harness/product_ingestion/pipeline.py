@@ -258,9 +258,19 @@ def build_product_pipeline(context):
             receipt = await asyncio.to_thread(
                 artifacts.verify_checkpoint, scope=scope, run_id=run.run_id
             )
+            from insurance_harness.product_ingestion.upload_resolution import lookup_material
+
+            manifest = await asyncio.to_thread(
+                store.get_upload_manifest, scope=scope, run_id=run.run_id
+            )
             for material in plan.materials:
-                item = await service.platform.lookup_upload(
-                    scope, plan.upload_run_id, material.upload_ordinal
+                item = await lookup_material(
+                    service.platform,
+                    scope,
+                    plan.upload_run_id,
+                    material.upload_ordinal,
+                    manifest,
+                    knowledge_id=material.knowledge_id,
                 )
                 if (
                     item is None
@@ -333,7 +343,11 @@ def build_product_pipeline(context):
                         "product",
                         receipt.encoded(),
                         stage.dependency_sha256,
-                        contract_version="3" if plan.contract_version == "3" else "1",
+                        contract_version=(
+                            plan.contract_version
+                            if plan.contract_version in {"3", "4", "5"}
+                            else "1"
+                        ),
                     ),
                 )
             )
@@ -765,11 +779,7 @@ def build_product_pipeline(context):
 
     async def extract(scope, run, stage, job):
         windows = await asyncio.to_thread(read_window_plan, scope, run.run_id)
-        expected = {
-            (task.entity_id, task.field_key)
-            for window in windows
-            for task in window.tasks
-        }
+        expected = {(task.entity_id, task.field_key) for window in windows for task in window.tasks}
         attempts = store.list_field_attempts(scope=scope, run_id=run.run_id)
         if {(row.entity_id, row.field_key) for row in attempts} != expected:
             raise NonRetryableJobError("FIELD_WINDOW_TERMINAL_RESULTS_INCOMPLETE")
@@ -826,6 +836,24 @@ def build_product_pipeline(context):
             attempts=attempts,
             run_id=run.run_id,
         )
+        if run.workflow_version >= 3:
+            return StageOutput(
+                (
+                    artifact(
+                        "compile_delta",
+                        "product",
+                        delta.model_dump_json().encode(),
+                        stage.dependency_sha256,
+                        contract_version=CURRENT_ARTIFACT_CONTRACTS["compile_delta"][1],
+                    ),
+                    artifact(
+                        "field_validation",
+                        "product",
+                        validation.model_dump_json().encode(),
+                        stage.dependency_sha256,
+                    ),
+                )
+            )
         from insurance_harness.product_ingestion.discovery_stage import (
             run_discovery_stage,
         )
@@ -860,6 +888,27 @@ def build_product_pipeline(context):
             state=output.state,
         )
 
+    async def discovery(scope, run, stage, job):
+        from insurance_harness.product_ingestion.discovery_stage import (
+            run_discovery_generation_stage,
+        )
+
+        request = await asyncio.to_thread(request_for, scope, run.run_id)
+        return await run_discovery_generation_stage(
+            service=service_for(scope),
+            artifacts=artifacts,
+            scope=scope,
+            run=run,
+            stage=stage,
+            job=job,
+            request=request,
+            base=await asyncio.to_thread(base_for, scope, run.run_id),
+            processing_recovery=(
+                store.processing_recovery_plan(scope=scope, run_id=run.run_id) is not None
+                or store.checkpoint_plan(scope=scope, run_id=run.run_id) is not None
+            ),
+        )
+
     async def compilation(scope, run, stage, job):
         from insurance_harness.product_ingestion.compilation import (
             assemble_platform_candidate,
@@ -871,28 +920,87 @@ def build_product_pipeline(context):
             ReviewResult,
         )
 
-        discovery_reviews = await asyncio.to_thread(
-            artifacts.list_effective_artifacts,
-            scope=scope,
-            run_id=run.run_id,
-            artifact_kind="discovery_review",
-        )
         delta = await asyncio.to_thread(
             lambda: CompileResult.model_validate_json(read(scope, run.run_id, "compile_delta"))
         )
         base = await asyncio.to_thread(base_for, scope, run.run_id)
         navigation = published_navigation_assignments(base)
+        review = None
+        extra_drafts = ()
+        state = ProductRunState.SUCCEEDED
+        if run.workflow_version >= 3:
+            from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput
+            from insurance_harness.product_ingestion.discovery_composition import (
+                compose_discovery_review,
+                merge_discovery_delta,
+            )
+            from insurance_harness.product_ingestion.discovery_stage import (
+                run_independent_discovery_final_review,
+            )
+
+            candidates = await asyncio.to_thread(
+                lambda: json.loads(read(scope, run.run_id, "discovery_candidates"))
+            )
+            free_output = CompileOutput.model_validate(candidates["output"])
+            combined = await asyncio.to_thread(
+                merge_discovery_delta,
+                request=request,
+                field_delta=delta,
+                free_output=free_output,
+                run_id=run.run_id,
+            )
+            final_output = await asyncio.to_thread(compiler.compose_batch_output, request, combined)
+            final_hash = await asyncio.to_thread(compiler.compile_output_hash_g3, final_output)
+            outcome = await run_independent_discovery_final_review(
+                service=service_for(scope),
+                artifacts=artifacts,
+                scope=scope,
+                run=run,
+                stage=stage,
+                job=job,
+                request=request,
+                discovery_candidates=candidates,
+                final_composed_output=final_output,
+                final_composed_output_hash=final_hash,
+            )
+            extra_drafts = outcome.drafts
+            if outcome.decision == "ACCEPTED":
+                review = await asyncio.to_thread(
+                    compose_discovery_review,
+                    request=request,
+                    final_output=final_output,
+                    free_output=free_output,
+                    outcome=outcome,
+                    run_id=run.run_id,
+                )
+                delta = combined
+                extra_drafts += (
+                    artifact(
+                        "composite_review",
+                        "product",
+                        review.model_dump_json().encode(),
+                        stage.dependency_sha256,
+                    ),
+                )
+            elif outcome.decision != "EMPTY":
+                # Entire free group stays unpublished; validated field results survive.
+                state = ProductRunState.PARTIAL_SUCCESS
+        else:
+            discovery_reviews = await asyncio.to_thread(
+                artifacts.list_effective_artifacts,
+                scope=scope,
+                run_id=run.run_id,
+                artifact_kind="discovery_review",
+            )
+            if discovery_reviews:
+                review = ReviewResult.model_validate_json(discovery_reviews[0].payload)
         candidate = await asyncio.to_thread(
             assemble_platform_candidate,
             request=request,
             delta=delta,
             run_id=run.run_id,
             navigation_assignments=navigation,
-            independent_review=(
-                ReviewResult.model_validate_json(discovery_reviews[0].payload)
-                if discovery_reviews
-                else None
-            ),
+            independent_review=review,
         )
         raw = await asyncio.to_thread(batch_json_bytes_830_g3, candidate)
         candidate_output = artifact(
@@ -902,8 +1010,8 @@ def build_product_pipeline(context):
             stage.dependency_sha256,
             contract_version=CURRENT_ARTIFACT_CONTRACTS["candidate"][1],
         )
-        if run.workflow_version == 2:
-            return StageOutput((candidate_output,))
+        if run.workflow_version >= 2:
+            return StageOutput((*extra_drafts, candidate_output), state=state)
         # Historical jobs retain their original combined-stage contract.
         metadata = await submit_preparation(scope, run.run_id, run.run_id, raw)
         return StageOutput((candidate_output, preparation_artifact(metadata, stage)))
@@ -1019,6 +1127,7 @@ def build_product_pipeline(context):
             "field_plan": field_plan,
             "extract": extract,
             "synthesis": synthesis,
+            "discovery": discovery,
             "compilation": compilation,
             "preparation": preparation,
             "review": review,

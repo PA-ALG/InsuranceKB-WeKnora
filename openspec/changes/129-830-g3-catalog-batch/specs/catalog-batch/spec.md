@@ -155,3 +155,15 @@ Within the existing authorized G3 task, successful immutable parse/field/candida
 Canonical text validation and allowed-source routing MAY share validated work within one input boundary without changing bytes, identifiers or evidence. Source-authority checks MAY reuse a fully verified immutable artifact/index within one verification operation; current scope, ACL, source lifecycle and binding checks remain mandatory. New requests cannot inherit unchecked first-parse file proofs. Worker diagnostics distinguish event-loop delay, executor wait, heartbeat database duration and lease reclamation; generation fencing and unknown external-call protection remain mandatory. No ordinary missing field triggers automatic supplementary calls.
 
 The current Codex-assisted diagnostic run is not independent-platform acceptance. All identified in-scope fixes are locally tested/reviewed as one batch before rebuilding affected components; native parsing and unaffected services are reused. Review/publication/search remain NOT RUN until their real prerequisites and live checks succeed.
+
+
+## 2026-09-16 Task3bm — 用户确认的六项集中收尾（G3-AUTO-1—6）
+
+执行边界与Owner见docs/superpowers/plans/2026-09-16-g3-consolidated-closeout.md。正常新产品3186网页全链实测PASS不关闭技术恢复、增量和性能缺口。重复上传须有先持久的输入指纹/数量及existing ProductMaterial关联，不覆盖历史metadata；未知保存由exact-scope lookup核对。故障恢复由durable job/call状态和依赖判定，不以人类错误消息前缀决定；已记录HTTP失败的显式重试与自动重试区分，未知发送禁止盲重试。原生失败单文件恢复沿Task3bk原子expected-attempt/receipt边界完成。来源/成员与已验证已发布投影完全相同时可复用不可变证明，所有新请求仍核当前权限、来源生命周期/修订/资源绑定，变更走完整校验；不删校验换性能。discovery按实际序列化预算分窗，原响应/覆盖审计保留，最终审查绑定最终输出。状态以finalization为权威、wall历时包含重试并分开最后attempt；统计未知不得记零。集中RED/GREEN/独立复核后统一部署受影响组件，再网页重验正常、增量和恢复三类；普通字段缺失不补抽、不作为发布阻断。
+
+
+### Task3bm 用户追加：独立自由发现（2026-09-16）
+
+**G3-DISC-1**：Schema字段抽取和自由发现具有独立任务、输入、结果、状态及恢复。自由发现基于原文、实体身份、紧凑已有知识索引发现有证据的新增概念/知识及页面关联；不得依赖field_delta或以Schema字段清单选择原文覆盖范围。编译汇合后仍经既有审核和唯一Release发布；独立review绑定最终真实输出hash。
+
+**G3-DISC-2**：Schema已有字段及同义概念（即使当前字段未提供/抽取失败）不得生成重复自由页面。模型排除和服务端准入均执行该规则；已有概念可以被关系链接引用，不能复制正文。语义无法确定的候选保留待审处置及证据，不发布未经验证的重复页。

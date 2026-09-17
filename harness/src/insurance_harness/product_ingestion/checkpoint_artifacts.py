@@ -208,6 +208,14 @@ class CheckpointArtifacts:
                     != ref
                 ):
                     raise ValueError("checkpoint retry identity proof changed")
+            for ref in plan.failed_calls:
+                if (
+                    self._products._confirmed_failure_reference(
+                        session, scope, ref.record_id, read_lock=True
+                    )
+                    != ref
+                ):
+                    raise ValueError("checkpoint confirmed failure proof changed")
             usage = {}
             call_ids = []
             for ref in plan.calls:
@@ -345,4 +353,5 @@ class CheckpointArtifacts:
                 reused_usage=usage,
                 unsettled_call_count=sum(c.state != "recorded" for c in plan.calls),
                 retry_calls=plan.retry_calls,
+                failed_calls=plan.failed_calls,
             )

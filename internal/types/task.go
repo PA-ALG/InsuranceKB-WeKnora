@@ -304,6 +304,9 @@ type DocumentProcessPayload struct {
 	// separate from Attempt (tracing) and remains useful when a file-less
 	// source cannot carry a RevisionCommitBinding.
 	ParseAttempt int64 `json:"parse_attempt,omitempty"`
+	// RecoveryKey fences a platform-bound source reparse against its durable
+	// receipt. Ordinary native parses leave this empty.
+	RecoveryKey string `json:"recovery_key,omitempty"`
 	// Revision is the database parse-attempt binding. It is intentionally
 	// independent of Attempt, which remains tracing-only.
 	Revision       *RevisionCommitBinding           `json:"revision,omitempty"`

@@ -23,6 +23,15 @@ type ProductIngestionScope struct {
 	RawKnowledgeBaseID  string
 	WikiKnowledgeBaseID string
 }
+
+// ProductUploadManifestMaterial is the exact original-byte identity admitted
+// before any native Knowledge write. Ordinals address unique content only.
+type ProductUploadManifestMaterial struct {
+	Ordinal          int    `json:"ordinal"`
+	OriginalFilename string `json:"original_filename"`
+	FileSize         int64  `json:"file_size"`
+	FileSHA256       string `json:"file_sha256"`
+}
 type ProductIngestionBridgeOptions struct {
 	BaseURL          string
 	Credential       string
@@ -164,7 +173,7 @@ type ProductIngestionBridge interface {
 	Scope() ProductIngestionScope
 	MaxUploadFiles() int
 	MaxUploadBytes() int64
-	CreateRun(context.Context, int) (*ProductIngestionRun, error)
+	CreateRun(context.Context, int, []ProductUploadManifestMaterial, int) (*ProductIngestionRun, error)
 	ListRuns(context.Context) ([]ProductIngestionRun, error)
 	GetRun(context.Context, string) (*ProductIngestionRun, error)
 	RetryFields(context.Context, string, []string) (*ProductIngestionRun, error)
@@ -199,11 +208,21 @@ func NewProductIngestionHTTPBridge(options ProductIngestionBridgeOptions) (Produ
 func (b *productIngestionHTTPBridge) Scope() ProductIngestionScope { return b.options.Scope }
 func (b *productIngestionHTTPBridge) MaxUploadFiles() int          { return b.options.MaxUploadFiles }
 func (b *productIngestionHTTPBridge) MaxUploadBytes() int64        { return b.options.MaxUploadBytes }
-func (b *productIngestionHTTPBridge) CreateRun(ctx context.Context, count int) (*ProductIngestionRun, error) {
-	if count < 1 || count > b.options.MaxUploadFiles {
+func (b *productIngestionHTTPBridge) CreateRun(ctx context.Context, count int, manifest []ProductUploadManifestMaterial, duplicateCount int) (*ProductIngestionRun, error) {
+	if count < 1 || count > b.options.MaxUploadFiles || len(manifest) != count || duplicateCount < 0 {
 		return nil, &ProductIngestionBridgeError{StatusCode: 400}
 	}
-	return b.run(ctx, http.MethodPost, "", map[string]any{"idempotency_key": uuid.NewString(), "expected_upload_count": count})
+	for ordinal, material := range manifest {
+		if material.Ordinal != ordinal || material.OriginalFilename == "" || material.FileSize <= 0 || len(material.FileSHA256) != 64 {
+			return nil, &ProductIngestionBridgeError{StatusCode: 400}
+		}
+		for _, digit := range material.FileSHA256 {
+			if !((digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f')) {
+				return nil, &ProductIngestionBridgeError{StatusCode: 400}
+			}
+		}
+	}
+	return b.run(ctx, http.MethodPost, "", map[string]any{"idempotency_key": uuid.NewString(), "expected_upload_count": count, "upload_manifest": map[string]any{"contract": "product-upload-manifest.830.g3.v1", "materials": manifest, "duplicate_upload_count": duplicateCount}})
 }
 func (b *productIngestionHTTPBridge) ListRuns(ctx context.Context) ([]ProductIngestionRun, error) {
 	var data struct {

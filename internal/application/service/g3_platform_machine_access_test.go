@@ -11,12 +11,84 @@ import (
 )
 
 type g3PlatformMachineKnowledgeStub struct {
-	byID       *types.Knowledge
-	upload     *types.Knowledge
-	err        error
-	metadata   string
-	findCalls  int
-	getIDCalls int
+	byID             *types.Knowledge
+	upload           *types.Knowledge
+	err              error
+	metadata         string
+	findCalls        int
+	getIDCalls       int
+	fingerprintCalls int
+}
+
+type g3MachineUploadProcessingReceiptStub struct {
+	receipt G3PlatformSourceProcessingReceiptV1
+	err     error
+}
+
+func (s g3MachineUploadProcessingReceiptStub) ProcessingReceipt(context.Context, types.WikiReleaseScope, string, int64) (G3PlatformSourceProcessingReceiptV1, error) {
+	return s.receipt, s.err
+}
+
+func TestG3PlatformUploadSnapshotIncludesCurrentFailedProcessingReceiptWhenAvailable(t *testing.T) {
+	scope, binding, repository, _, machine := g3PlatformMachineFixture()
+	repository.upload.ParseStatus = "failed"
+	receipt := G3PlatformSourceProcessingReceiptV1{Contract: G3PlatformProcessingReceiptContractV1, Availability: G3PlatformProcessingUnavailable, KnowledgeID: repository.upload.ID, ParseAttempt: repository.upload.CurrentParseAttempt, UnavailabilityReason: "LEGACY_NO_JOURNAL", Phases: modelDispatchPhases(nil)}
+	var err error
+	receipt.ReceiptSHA256, err = modelDispatchDigest(receipt.Contract, receipt)
+	require.NoError(t, err)
+	machine.processing = g3MachineUploadProcessingReceiptStub{receipt: receipt}
+	got, err := machine.LookupUpload(g3PlatformMachineContext(scope, binding), scope, "run-1", 0)
+	require.NoError(t, err)
+	require.NotNil(t, got.ProcessingReceipt)
+	require.Equal(t, int64(3), got.ProcessingReceiptParseAttempt)
+	require.Equal(t, "LEGACY_NO_JOURNAL", got.ProcessingReceipt.UnavailabilityReason)
+}
+
+func (s *g3PlatformMachineKnowledgeStub) FindFileBySHA256(_ context.Context, tenantID uint64, kbID, sha string) (*types.Knowledge, error) {
+	s.fingerprintCalls++
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.upload == nil || s.upload.TenantID != tenantID || s.upload.KnowledgeBaseID != kbID || s.upload.FileSHA256 != sha {
+		return nil, nil
+	}
+	return s.upload, nil
+}
+
+func TestG3PlatformMachineFingerprintLookupRejectsForeignOrInvalidFile(t *testing.T) {
+	scope, binding, repository, _, machine := g3PlatformMachineFixture()
+	ctx := g3PlatformMachineContext(scope, binding)
+	repository.upload.Type = "file"
+	repository.upload.FileSHA256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	repository.upload.FileSize = 123
+	record, err := machine.LookupFileBySHA256(ctx, scope, repository.upload.FileSHA256, "")
+	require.NoError(t, err)
+	require.Equal(t, repository.upload.ID, record.KnowledgeID)
+	require.Equal(t, int64(123), record.FileSize)
+	require.Equal(t, 1, repository.fingerprintCalls)
+	repository.upload.Type = "url"
+	_, err = machine.LookupFileBySHA256(ctx, scope, repository.upload.FileSHA256, "")
+	require.Error(t, err)
+	repository.upload.Type = "file"
+	repository.upload.KnowledgeBaseID = "foreign"
+	_, err = machine.LookupFileBySHA256(ctx, scope, repository.upload.FileSHA256, "")
+	require.Error(t, err)
+}
+
+func TestG3PlatformMachineFingerprintKnownIDKeepsFailedOriginalBinding(t *testing.T) {
+	scope, binding, repository, _, machine := g3PlatformMachineFixture()
+	ctx := g3PlatformMachineContext(scope, binding)
+	repository.byID.Type = "file"
+	repository.byID.FileSHA256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	repository.byID.FileSize = 123
+	repository.byID.ParseStatus = "failed"
+	record, err := machine.LookupFileBySHA256(ctx, scope, repository.byID.FileSHA256, repository.byID.ID)
+	require.NoError(t, err)
+	require.Equal(t, "failed", record.ParseStatus)
+	require.Equal(t, "run-1", *record.OriginalUploadRunID)
+	require.Equal(t, 0, *record.OriginalUploadOrdinal)
+	_, err = machine.LookupFileBySHA256(ctx, scope, repository.byID.FileSHA256, "different")
+	require.Error(t, err)
 }
 
 func (s *g3PlatformMachineKnowledgeStub) GetKnowledgeByID(

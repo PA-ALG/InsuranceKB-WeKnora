@@ -623,3 +623,115 @@ def test_checkpoint_admission_does_not_reissue_incomplete_recorded_identity(
     assert len(sent) == 1
     assert artifacts.list_stage_calls(scope=scope, run_id=origin.run_id) == before
     assert store.get_run(scope=scope, run_id=origin.run_id) == origin
+
+
+def test_checkpoint_explicitly_recovers_confirmed_http_rejection_without_replaying_raw(
+    stage_runtime, recorded_origin
+):
+    """A recorded provider rejection is a known result, unlike an unknown send."""
+    scope, store, _artifacts, _platform, _execute = stage_runtime
+    origin, original, _boundary, _settings, sent = recorded_origin
+    from sqlalchemy import select
+
+    from insurance_harness.product_ingestion.artifact_tables import ProductStageModelCall
+
+    with store._session_factory() as session, session.begin():
+        call = session.scalar(
+            select(ProductStageModelCall).where(ProductStageModelCall.call_id == original.call_id)
+        )
+        call.diagnostic = "provider_http_status"
+        call.raw = b'{"error":{"code":429,"message":"quota"}}'
+        call.raw_sha256 = hashlib.sha256(call.raw).hexdigest()
+    assert store.can_retry_processing(scope=scope, run_id=origin.run_id)
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    assert child.run_id != origin.run_id
+    assert store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    ).run_id == child.run_id
+    plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
+    assert plan.resume_stage == "identity"
+    assert plan.contract == "product-stage-checkpoint-plan.830.v5"
+    assert len(plan.failed_calls) == 1
+    assert plan.failed_calls[0].call_id == original.call_id
+    assert len(sent) == 1  # Admission has no provider effect.
+
+
+def test_checkpoint_rejects_unknown_identity_send(stage_runtime, recorded_origin):
+    scope, store, _artifacts, _platform, _execute = stage_runtime
+    origin, original, _boundary, _settings, _sent = recorded_origin
+    from sqlalchemy import select
+
+    from insurance_harness.product_ingestion.artifact_tables import ProductStageModelCall
+
+    with store._session_factory() as session, session.begin():
+        call = session.scalar(
+            select(ProductStageModelCall).where(ProductStageModelCall.call_id == original.call_id)
+        )
+        call.state = "interrupted"
+        call.raw = None
+        call.raw_sha256 = None
+        call.diagnostic = "provider_call_interrupted"
+    assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
+
+
+def test_second_confirmed_http_rejection_can_create_another_explicit_attempt(
+    stage_runtime, recorded_origin
+):
+    scope, store, artifacts, _platform, _execute = stage_runtime
+    origin, original, _boundary, settings, _sent = recorded_origin
+    from sqlalchemy import select
+
+    from insurance_harness.product_ingestion.artifact_tables import ProductStageModelCall
+
+    with store._session_factory() as session, session.begin():
+        call = session.scalar(
+            select(ProductStageModelCall).where(ProductStageModelCall.call_id == original.call_id)
+        )
+        call.diagnostic = "provider_http_status"
+        call.raw = b'{"error":{"code":429}}'
+        call.raw_sha256 = hashlib.sha256(call.raw).hexdigest()
+    child = store.retry_processing(
+        scope=scope, run_id=origin.run_id, expected_version=origin.version
+    )
+    claim = store._jobs.claim(space_ids=(scope.space_id,), worker_id="checkpoint")
+    checkpoint = store._jobs.start(
+        space_id=scope.space_id,
+        job_id=claim.job.id,
+        generation=claim.job.lease_generation,
+    )
+    store._jobs.report_success(
+        space_id=scope.space_id,
+        job_id=checkpoint.id,
+        generation=checkpoint.lease_generation,
+    )
+    identity = start_identity(store, scope, child)
+    boundary = executor(
+        lambda: settings,
+        lambda _request: httpx.Response(429, json={"error": {"code": 429}}),
+    )
+    second = asyncio.run(
+        boundary.execute_stage_call(**call_args(artifacts, scope, child, identity))
+    )
+    assert second.diagnostic == "provider_http_status"
+    store._jobs.report_failure(
+        space_id=scope.space_id,
+        job_id=identity.id,
+        generation=identity.lease_generation,
+        failure=JobFailure(
+            error_class=ErrorClass.CAPACITY_BLOCKED,
+            summary="needs_confirmation:IDENTITY_MODEL_CALL_FAILED:provider_http_status",
+        ),
+    )
+    with store._session_factory() as session, session.begin():
+        session.get(tables.ProductRun, child.run_id).root_job_id = identity.id
+    failed = store.get_run(scope=scope, run_id=child.run_id)
+    assert failed.finished_at is not None
+    assert store.can_retry_processing(scope=scope, run_id=child.run_id)
+    grandchild = store.retry_processing(
+        scope=scope, run_id=child.run_id, expected_version=failed.version
+    )
+    grandchild_plan = store.checkpoint_plan(scope=scope, run_id=grandchild.run_id)
+    assert grandchild_plan.failed_calls[0].call_id == second.call_id
+    asyncio.run(boundary._client.aclose())

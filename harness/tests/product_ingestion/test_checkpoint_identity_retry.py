@@ -33,7 +33,7 @@ def test_public_checkpoint_retries_recorded_identity_without_cloning_success(
         == child.run_id
     )
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
-    assert plan.contract.endswith(".v3") and plan.workflow_version == 2
+    assert plan.contract.endswith(".v5") and plan.workflow_version == 3
     assert plan.resume_stage == "identity"
     assert [s.stage_key for s in plan.reused_stages] == ["uploads", "source", "routing"]
     from sqlalchemy import select
@@ -47,11 +47,11 @@ def test_public_checkpoint_retries_recorded_identity_without_cloning_success(
                 ProductArtifact.artifact_kind == "checkpoint_plan",
             )
         )
-        assert row.contract_version == "3"
+        assert row.contract_version == "5"
     assert not plan.calls and len(plan.retry_calls) == 1
     assert plan.retry_calls[0].proof.call_id == original.call_id
     receipt = artifacts.verify_checkpoint(scope=scope, run_id=child.run_id)
-    assert receipt.contract.endswith(".v3")
+    assert receipt.contract.endswith(".v5")
     assert receipt.retry_calls == plan.retry_calls
     assert not receipt.reused_call_ids and not receipt.reused_usage
     assert len(sent) == 1  # admission and verification do not send
@@ -59,7 +59,7 @@ def test_public_checkpoint_retries_recorded_identity_without_cloning_success(
     assert store.get_run(scope=scope, run_id=origin.run_id) == origin
 
 
-@pytest.mark.parametrize("contract", ["v1", "v2"])
+@pytest.mark.parametrize("contract", ["v1", "v2", "v3", "v4"])
 def test_old_checkpoint_wire_bytes_remain_exact(stage_runtime, recorded_origin, contract):
     from insurance_harness.product_ingestion.checkpoints import CheckpointPlan
 
@@ -84,11 +84,15 @@ def test_old_checkpoint_wire_bytes_remain_exact(stage_runtime, recorded_origin, 
         calls=[],
         fields=[],
     )
+    if contract in {"v3", "v4"}:
+        payload["retry_calls"] = []
+    if contract == "v4":
+        payload["failed_calls"] = []
     wire = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
     plan = CheckpointPlan.model_validate_json(wire)
     assert plan.encoded() == wire
     assert plan.digest() == hashlib.sha256(wire).hexdigest()
-    assert "retry_calls" not in plan.model_dump(mode="json")
+    assert ("retry_calls" in plan.model_dump(mode="json")) == (contract in {"v3", "v4"})
     from insurance_harness.product_ingestion.checkpoints import CheckpointReceipt
 
     data = dict(
@@ -102,6 +106,10 @@ def test_old_checkpoint_wire_bytes_remain_exact(stage_runtime, recorded_origin, 
         reused_usage={},
         unsettled_call_count=0,
     )
+    if contract in {"v3", "v4"}:
+        data["retry_calls"] = []
+    if contract == "v4":
+        data["failed_calls"] = []
     encoded = json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode()
     receipt = CheckpointReceipt.model_validate_json(encoded)
     assert receipt.encoded() == encoded and receipt.digest() == hashlib.sha256(encoded).hexdigest()
@@ -251,6 +259,11 @@ async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path
         final = await _finish(runtime, context, jobs, child.run_id)
         assert final.state is ProductRunState.PARTIAL_SUCCESS
         assert len(model.identity_requests) == 2 and platform.source_captures == captures
+        assert model.discovery_requests
+        assert any(
+            stage.stage_key == "discovery" and stage.state == "succeeded"
+            for stage in context.store.list_stages(scope=SCOPE, run_id=child.run_id)
+        )
         assert platform.activations == 1
         assert context.artifacts.list_stage_calls(scope=SCOPE, run_id=origin.run_id) == before
         assert context.store.get_run(scope=SCOPE, run_id=origin.run_id) == failed

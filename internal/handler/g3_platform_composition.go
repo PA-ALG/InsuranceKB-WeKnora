@@ -57,7 +57,7 @@ func ConfiguredG3PlatformSystemOptions(cfg *config.Config, now func() time.Time)
 
 // NewConfiguredG3PlatformHandlers composes the existing source custody and
 // system-release services. A disabled deployment exposes no machine routes.
-func NewConfiguredG3PlatformHandlers(cfg *config.Config, knowledge service.G3PlatformMachineKnowledgeRepository, revisions *service.KnowledgeRevisionSourceService, sources *service.ConceptSourceAuthorityService830G2, spans repository.KnowledgeSpanRepository, access *WikiReleaseHandler, schemas *service.SchemaWikiService, releases *service.WikiReleaseService) (*G3PlatformSnapshotsHandler, *G3PlatformReleaseHandler, error) {
+func NewConfiguredG3PlatformHandlers(cfg *config.Config, knowledge service.G3PlatformMachineKnowledgeRepository, revisions *service.KnowledgeRevisionSourceService, sources *service.ConceptSourceAuthorityService830G2, spans repository.KnowledgeSpanRepository, access *WikiReleaseHandler, schemas *service.SchemaWikiService, releases *service.WikiReleaseService, reparser ...G3PlatformBoundReparser) (*G3PlatformSnapshotsHandler, *G3PlatformReleaseHandler, error) {
 	runtime, err := config.DecodeG3PlatformProcessing(cfg, time.Now())
 	if err != nil {
 		return nil, nil, err
@@ -72,10 +72,11 @@ func NewConfiguredG3PlatformHandlers(cfg *config.Config, knowledge service.G3Pla
 	if err != nil {
 		return nil, nil, err
 	}
-	machine := service.NewG3PlatformMachineAccessService(knowledge, releases, service.G3PlatformMachineAccessBinding{PrincipalStorageID: runtime.Settings.MachinePrincipalID, APIKeyID: runtime.Settings.APIKeyID, Scope: runtime.Scope})
+	journal := service.NewKnowledgeModelDispatchJournal(spans)
+	machine := service.NewG3PlatformMachineAccessService(knowledge, releases, service.G3PlatformMachineAccessBinding{PrincipalStorageID: runtime.Settings.MachinePrincipalID, APIKeyID: runtime.Settings.APIKeyID, Scope: runtime.Scope}, journal)
 	sourceSnapshots := service.NewG3PlatformSourceSnapshotService(
-		revisions, sources, service.NewKnowledgeModelDispatchJournal(spans), machine, signer,
+		revisions, sources, journal, machine, signer,
 	)
 	baseSnapshots := service.NewG3PlatformBaseSnapshotService(releases, machine, signer)
-	return NewG3PlatformSnapshotsHandler(access, machine, sourceSnapshots, baseSnapshots), NewG3PlatformReleaseHandler(access, schemas, releases), nil
+	return NewG3PlatformSnapshotsHandler(access, machine, sourceSnapshots, baseSnapshots, reparser...), NewG3PlatformReleaseHandler(access, schemas, releases), nil
 }

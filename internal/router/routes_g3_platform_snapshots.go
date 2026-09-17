@@ -53,6 +53,18 @@ func RegisterG3PlatformSnapshotRoutes(
 		apiKeyRetrieve(apiKeyFullAccess()), h.Upload,
 	)
 	register(
+		http.MethodGet, "/files/by-sha256/:sha256",
+		apiKeyRetrieve(apiKeyFullAccess()), h.FileBySHA256,
+	)
+	register(
+		http.MethodGet, "/uploads/:run_id/:ordinal/reparse",
+		apiKeyRetrieve(apiKeyFullAccess()), h.ReparseUpload,
+	)
+	writeGuards := append(append([]gin.HandlerFunc(nil), activeGuards...),
+		g.KBAccessWrite("raw_kb_id"), g.KBAccessWrite("kb_id"), h.ReparseUpload)
+	g.apiKeyRoute(platform, http.MethodPost, "/uploads/:run_id/:ordinal/reparse",
+		apiKeyIngest(apiKeyFullAccess()), writeGuards...)
+	register(
 		http.MethodPost, "/sources/:knowledge_id/attempts/:attempt/snapshot",
 		apiKeyIngest(apiKeyFullAccess()), h.Source,
 	)

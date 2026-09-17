@@ -6,6 +6,8 @@ describes exactly what was offered and omitted; a sample is never a full reading
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import deque
 from collections.abc import Iterator, Mapping, Sequence
 
@@ -162,3 +164,153 @@ def route_discovery_sources(
             "sources": coverage_sources,
         },
     }
+
+
+def route_discovery_source_windows(
+    sources: Mapping[str, SourceBlock],
+    *,
+    max_source_chars: int = 24000,
+    max_span_chars: int = 2000,
+) -> tuple[dict[str, object], ...]:
+    """Cover each original span once using the existing chapter and material order.
+
+    The detailed per-source coverage is a server-side audit record. Callers may
+    project a smaller model view, but must retain these exact offsets and counts.
+    """
+    if (
+        type(max_source_chars) is not int
+        or type(max_span_chars) is not int
+        or max_span_chars <= 0
+        or max_source_chars < max_span_chars
+    ):
+        raise ValueError("invalid discovery source budget")
+    ordered = sorted(
+        sources.items(),
+        key=lambda pair: (
+            pair[1].knowledge_id,
+            pair[1].page_number,
+            pair[1].revision_id,
+            pair[1].block_id,
+            pair[0],
+        ),
+    )
+    material_rows: dict[str, list[Span]] = {}
+    source_rows: dict[str, tuple[Span, ...]] = {}
+    seen = set()
+    for ref, source in ordered:
+        identity = (source.knowledge_id, source.revision_id, source.block_id)
+        if identity in seen:
+            raise ValueError("duplicate source block alias in discovery routing")
+        seen.add(identity)
+        rows = tuple(
+            (ref, start, end, heading)
+            for start, end, heading in _spans(source.text, max_span_chars)
+        )
+        source_rows[ref] = rows
+        material_rows.setdefault(source.knowledge_id, []).extend(rows)
+    iterators = {material: _spread(rows) for material, rows in material_rows.items()}
+    spread: list[Span] = []
+    while iterators:
+        exhausted = []
+        for material, iterator in iterators.items():
+            row = next(iterator, None)
+            if row is None:
+                exhausted.append(material)
+            else:
+                spread.append(row)
+        for material in exhausted:
+            del iterators[material]
+    partitions: list[list[Span]] = []
+    current: list[Span] = []
+    used = 0
+    for row in spread:
+        size = row[2] - row[1]
+        if current and used + size > max_source_chars:
+            partitions.append(current)
+            current = []
+            used = 0
+        current.append(row)
+        used += size
+    if current:
+        partitions.append(current)
+    result = []
+    total_chars = sum(len(source.text) for _, source in ordered)
+    total_spans = sum(len(rows) for rows in source_rows.values())
+    for index, partition in enumerate(partitions):
+        chosen = {(ref, start, end) for ref, start, end, _ in partition}
+        options = []
+        coverage_sources = []
+        represented = set()
+        offered_chars = 0
+        for ref, source in ordered:
+            offered_ranges = []
+            omitted_ranges = []
+            offered_spans = []
+            for _, start, end, heading in source_rows[ref]:
+                span_range = {"start": start, "end": end}
+                if (ref, start, end) in chosen:
+                    offered_ranges.append(span_range)
+                    offered_spans.append(
+                        {
+                            "start": start,
+                            "end": end,
+                            "quote": source.text[start:end],
+                            "heading": heading,
+                        }
+                    )
+                else:
+                    omitted_ranges.append(span_range)
+            source_offered = sum(row["end"] - row["start"] for row in offered_ranges)
+            offered_chars += source_offered
+            coverage_sources.append(
+                {
+                    "source_ref": ref,
+                    "knowledge_id": source.knowledge_id,
+                    "revision_id": source.revision_id,
+                    "block_id": source.block_id,
+                    "page_number": source.page_number,
+                    "total_chars": len(source.text),
+                    "offered_chars": source_offered,
+                    "omitted_chars": len(source.text) - source_offered,
+                    "offered_ranges": offered_ranges,
+                    "omitted_ranges": omitted_ranges,
+                }
+            )
+            if offered_spans:
+                represented.add(source.knowledge_id)
+                options.append(
+                    {
+                        "source_ref": ref,
+                        "source": source.model_dump(exclude={"text"}),
+                        "spans": offered_spans,
+                    }
+                )
+        identity = [(ref, start, end) for ref, start, end, _ in partition]
+        window_id = hashlib.sha256(
+            json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode()
+        ).hexdigest()
+        result.append(
+            {
+                "window_id": window_id,
+                "window_index": index,
+                "window_count": len(partitions),
+                "source_options": options,
+                "coverage": {
+                    "routing_version": ROUTING_VERSION,
+                    "offset_unit": "UNICODE_CODE_POINT",
+                    "max_source_chars": max_source_chars,
+                    "max_span_chars": max_span_chars,
+                    "total_chars": total_chars,
+                    "offered_chars": offered_chars,
+                    "omitted_chars": total_chars - offered_chars,
+                    "complete": total_chars == offered_chars,
+                    "material_count": len(material_rows),
+                    "represented_material_count": len(represented),
+                    "total_span_count": total_spans,
+                    "offered_span_count": len(partition),
+                    "omitted_span_count": total_spans - len(partition),
+                    "sources": coverage_sources,
+                },
+            }
+        )
+    return tuple(result)

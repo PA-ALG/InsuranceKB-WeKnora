@@ -8,8 +8,7 @@ from dataclasses import dataclass
 
 from insurance_harness.jobs import JobState, JobStore
 from insurance_harness.jobs.models import ErrorClass
-from insurance_harness.product_ingestion.checkpoints import STAGE_ORDER as STAGES  # noqa: F401
-from insurance_harness.product_ingestion.checkpoints import stage_order
+from insurance_harness.product_ingestion.checkpoints import CURRENT_STAGE_ORDER, stage_order
 from insurance_harness.product_ingestion.models import (
     ProductRunState,
     ProductScope,
@@ -17,6 +16,7 @@ from insurance_harness.product_ingestion.models import (
 )
 from insurance_harness.product_ingestion.store import ProductIngestionStore
 
+STAGES = CURRENT_STAGE_ORDER
 _GOOD = {"succeeded", "partial_success"}
 _BAD = {"failed", "blocked", "dead_letter"}
 _FINAL = {

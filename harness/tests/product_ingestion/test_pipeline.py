@@ -113,6 +113,7 @@ def test_factory_installs_every_real_stage_and_checks_configured_identity_prompt
         "field_plan",
         "extract",
         "synthesis",
+        "discovery",
         "compilation",
         "review",
         "publish",
@@ -126,7 +127,10 @@ def test_factory_installs_every_real_stage_and_checks_configured_identity_prompt
 
 
 @pytest.mark.asyncio
-async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, monkeypatch):
+@pytest.mark.parametrize("workflow_version", [2, 3])
+async def test_compiler_work_does_not_block_worker_heartbeat(
+    compile_request, monkeypatch, workflow_version
+):
     import asyncio
     import hashlib
     import sys
@@ -145,6 +149,7 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
     api = module()
 
     async def discovery(**kwargs):
+        assert workflow_version == 2, "schema synthesis invoked discovery"
         assert kwargs["field_delta"] == {"fixture": True}
         assert kwargs["processing_recovery"] is False
         return StageOutput()
@@ -166,7 +171,11 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
 
     def project(**_kwargs):
         time.sleep(0.1)
-        return {"fixture": True}
+        return (
+            SimpleNamespace(model_dump_json=lambda: '{"fixture":true}')
+            if workflow_version == 3
+            else {"fixture": True}
+        )
 
     adapter.project_field_attempts = project
     monkeypatch.setitem(sys.modules, adapter.__name__, adapter)
@@ -213,7 +222,10 @@ async def test_compiler_work_does_not_block_worker_heartbeat(compile_request, mo
 
     monitor = asyncio.create_task(heartbeat())
     await ports.stage_handlers["synthesis"](
-        scope, SimpleNamespace(run_id="run"), SimpleNamespace(dependency_sha256="a" * 64), None
+        scope,
+        SimpleNamespace(run_id="run", workflow_version=workflow_version),
+        SimpleNamespace(dependency_sha256="a" * 64),
+        None,
     )
     observed = len(ticks)
     await monitor

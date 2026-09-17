@@ -21,7 +21,12 @@ from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import (
     SchemaPackCatalogV1,
 )
 from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
-from insurance_harness.product_ingestion.discovery import DISCOVERY_PROMPT, DISCOVERY_REVIEW_PROMPT
+from insurance_harness.product_ingestion.discovery import (
+    DISCOVERY_PROMPT,
+    DISCOVERY_REVIEW_PROMPT,
+    INDEPENDENT_DISCOVERY_PROMPT,
+    INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+)
 from insurance_harness.product_ingestion.pipeline import FIELD_PROMPT, IDENTITY_PROMPT
 
 
@@ -34,7 +39,9 @@ class _UniqueSafeLoader(yaml.SafeLoader):
     pass
 
 
-def _construct_mapping(loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False):
+def _construct_mapping(
+    loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False
+):
     result: dict[Any, Any] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
@@ -76,7 +83,11 @@ def standard_public_key(seed_b64: str) -> str:
 
 
 def go_public_key(seed_b64: str) -> str:
-    return base64.urlsafe_b64encode(_seed(seed_b64).public_key().public_bytes_raw()).decode().rstrip("=")
+    return (
+        base64.urlsafe_b64encode(_seed(seed_b64).public_key().public_bytes_raw())
+        .decode()
+        .rstrip("=")
+    )
 
 
 def go_private_key(seed_b64: str) -> str:
@@ -115,7 +126,9 @@ def go_policy_sha256(config: dict[str, Any]) -> str:
         "expires_at": config["expires_at"],
         "signer_key_id": config["system_decision_key_id"],
     }
-    return hashlib.sha256(b"system-automation-policy.v1\0" + _go_canonical(policy)).hexdigest()
+    return hashlib.sha256(
+        b"system-automation-policy.v1\0" + _go_canonical(policy)
+    ).hexdigest()
 
 
 def _sha256(raw: bytes) -> str:
@@ -188,11 +201,16 @@ def _trusted_files(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, b
     raw_files: dict[str, bytes] = {}
     for name, value in refs.items():
         row = _closed(
-            value, {"source_path", "runtime_path", "sha256", "max_bytes"}, "trusted file"
+            value,
+            {"source_path", "runtime_path", "sha256", "max_bytes"},
+            "trusted file",
         )
         if not isinstance(row["sha256"], str) or not _SHA.fullmatch(row["sha256"]):
             raise ValueError("invalid trusted file digest")
-        if not isinstance(row["max_bytes"], int) or not 0 < row["max_bytes"] <= 64 << 20:
+        if (
+            not isinstance(row["max_bytes"], int)
+            or not 0 < row["max_bytes"] <= 64 << 20
+        ):
             raise ValueError("invalid trusted file size")
         source = Path(_secret(row["source_path"], "trusted file path"))
         runtime_path = _secret(row["runtime_path"], "trusted runtime path")
@@ -209,7 +227,9 @@ def _trusted_files(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, b
         }
     SchemaPackCatalogV1.model_validate_json(raw_files["catalog"])
     for name in ("profile_confirmation", "resolution_policy"):
-        if not isinstance(json.loads(raw_files[name], object_pairs_hook=_unique_object), dict):
+        if not isinstance(
+            json.loads(raw_files[name], object_pairs_hook=_unique_object), dict
+        ):
             raise ValueError("trusted product configuration must be an object")
     return runtime, raw_files
 
@@ -244,20 +264,27 @@ def _validate_top(payload: dict[str, Any]) -> None:
         raise ValueError("invalid deployment input")
 
 
-def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
+def _build(
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
     _validate_top(payload)
     scope = _closed(
         payload["scope"],
         {"tenant_id", "space_id", "raw_knowledge_base_id", "wiki_knowledge_base_id"},
         "scope",
     )
-    machine = _closed(payload["machine"], {"principal_id", "api_key_id", "api_key"}, "machine")
+    machine = _closed(
+        payload["machine"], {"principal_id", "api_key_id", "api_key"}, "machine"
+    )
     tenant_text = _secret(scope["tenant_id"], "tenant id")
     try:
         tenant_id = int(tenant_text)
     except ValueError:
         raise ValueError("invalid machine tenant") from None
-    if str(tenant_id) != tenant_text or machine["principal_id"] != f"api_tenant:{tenant_id}":
+    if (
+        str(tenant_id) != tenant_text
+        or machine["principal_id"] != f"api_tenant:{tenant_id}"
+    ):
         raise ValueError("machine identity does not match scope")
     if not isinstance(machine["api_key_id"], int) or machine["api_key_id"] <= 0:
         raise ValueError("invalid machine key identity")
@@ -276,13 +303,23 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
         key_id = _secret(row["key_id"], "authority key id")
         seed = _secret(row["seed_b64"], "Ed25519 seed")
         signer_rows.append((key_id, seed, _seed(seed).public_key().public_bytes_raw()))
-    if len({row[0] for row in signer_rows}) != 3 or len({row[2] for row in signer_rows}) != 3:
+    if (
+        len({row[0] for row in signer_rows}) != 3
+        or len({row[2] for row in signer_rows}) != 3
+    ):
         raise ValueError("signing authorities must be distinct")
     source, system, publish = signer_rows
 
     policy = _closed(
         payload["automation_policy"],
-        {"policy_id", "policy_version", "mode", "not_before", "expires_at", "capabilities"},
+        {
+            "policy_id",
+            "policy_version",
+            "mode",
+            "not_before",
+            "expires_at",
+            "capabilities",
+        },
         "automation policy",
     )
     now = int(datetime.now(UTC).timestamp())
@@ -298,7 +335,9 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
         raise ValueError("invalid automation policy")
 
     platform = _closed(
-        payload["platform"], {"base_url", "timeout_seconds", "max_response_bytes"}, "platform"
+        payload["platform"],
+        {"base_url", "timeout_seconds", "max_response_bytes"},
+        "platform",
     )
     bridge = _closed(
         payload["harness_bridge"],
@@ -330,7 +369,10 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
         },
         "model",
     )
-    if model["model"] != "gemini-3.7-flash-medium" or model["policy_version"] != "g3-user-gemini-gateway-v1":
+    if (
+        model["model"] != "gemini-3.7-flash-medium"
+        or model["policy_version"] != "g3-user-gemini-gateway-v1"
+    ):
         raise ValueError("configured Gemini identity is not approved")
 
     go_config = _load_go(_secret(payload["go_config_path"], "Go config path"))
@@ -375,7 +417,10 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
                 "scope": scope_json,
                 "platform": {**platform, "machine_key": machine_key},
                 "source_authorities": [
-                    {"key_id": source[0], "public_key_b64": standard_public_key(source[1])}
+                    {
+                        "key_id": source[0],
+                        "public_key_b64": standard_public_key(source[1]),
+                    }
                 ],
                 "model": {
                     "scope": scope_json,
@@ -421,6 +466,26 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
                             "max_context_bytes": model["field_max_context_bytes"],
                             "max_output_tokens": model["field_max_output_tokens"],
                         },
+                        {
+                            "template_id": "independent-discovery-v1",
+                            "role": "extract",
+                            "purpose": "g3-independent-discovery",
+                            "run_schema_version": "830-g3-v3",
+                            "prompt_sha256": _sha256(INDEPENDENT_DISCOVERY_PROMPT),
+                            "max_context_bytes": model["field_max_context_bytes"],
+                            "max_output_tokens": model["field_max_output_tokens"],
+                        },
+                        {
+                            "template_id": "independent-discovery-review-v1",
+                            "role": "verify",
+                            "purpose": "g3-independent-discovery-review",
+                            "run_schema_version": "830-g3-v3",
+                            "prompt_sha256": _sha256(
+                                INDEPENDENT_DISCOVERY_REVIEW_PROMPT
+                            ),
+                            "max_context_bytes": model["field_max_context_bytes"],
+                            "max_output_tokens": model["field_max_output_tokens"],
+                        },
                     ],
                     "field_template_id": "field-window-v1",
                     "max_request_bytes": model["max_request_bytes"],
@@ -436,7 +501,9 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
                     "policy_version": policy["policy_version"],
                     "policy_sha256": policy_sha,
                     "capabilities": policy["capabilities"],
-                    "expires_at": datetime.fromtimestamp(policy["expires_at"], UTC).isoformat(),
+                    "expires_at": datetime.fromtimestamp(
+                        policy["expires_at"], UTC
+                    ).isoformat(),
                     "decision_signer_key_id": system[0],
                     "decision_private_key_b64": system[1],
                     "publish_signer_key_id": publish[0],
@@ -452,7 +519,9 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
     patched = deepcopy(go_config)
     signing = patched.setdefault("schema_wiki_signing", {})
     publish_ring = signing.setdefault("publish_authorization_public_keys", [])
-    publish_ring.append({"key_id": publish[0], "public_key_base64": go_public_key(publish[1])})
+    publish_ring.append(
+        {"key_id": publish[0], "public_key_base64": go_public_key(publish[1])}
+    )
     patched["schema_wiki_frozen_release_scope"] = {"enabled": True, **go_scope}
     patched["product_ingestion"] = {
         "enabled": True,
@@ -479,14 +548,19 @@ def _build(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dic
                     "kind": "service",
                     "service": "product_ingestion",
                     "space_ids": [scope["space_id"]],
-                    "capabilities": ["manage_product_ingestion", "read_product_ingestion"],
+                    "capabilities": [
+                        "manage_product_ingestion",
+                        "read_product_ingestion",
+                    ],
                 }
             },
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         ),
-        "WIKI_PRINCIPAL_SPACE_IDS": json.dumps([scope["space_id"]], separators=(",", ":")),
+        "WIKI_PRINCIPAL_SPACE_IDS": json.dumps(
+            [scope["space_id"]], separators=(",", ":")
+        ),
         "WIKI_WORKER_SPACE_IDS": json.dumps([scope["space_id"]], separators=(",", ":")),
     }
     return runtime, patched, env
@@ -505,7 +579,12 @@ def generate(input_path: Path | str, output_dir: Path | str) -> dict[str, Any]:
     runtime, patched, env = _build(payload)
     if target.exists():
         raise ValueError("deployment output already exists")
-    runtime_raw = json.dumps(runtime, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    runtime_raw = (
+        json.dumps(
+            runtime, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+        + b"\n"
+    )
     go_raw = yaml.safe_dump(patched, allow_unicode=True, sort_keys=False).encode()
     env_raw = "".join(f"{key}={value}\n" for key, value in sorted(env.items())).encode()
     target.mkdir(mode=0o700, parents=True)
@@ -524,7 +603,8 @@ def generate(input_path: Path | str, output_dir: Path | str) -> dict[str, Any]:
         ),
         "policy_sha256": go_policy_sha256(patched["g3_platform_processing"]),
         "trusted_file_sha256s": {
-            name: row["sha256"] for name, row in sorted(payload["trusted_files"].items())
+            name: row["sha256"]
+            for name, row in sorted(payload["trusted_files"].items())
         },
         "files": {
             key: {"name": name, "sha256": _sha256(raw), "bytes": len(raw)}

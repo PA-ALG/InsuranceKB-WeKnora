@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from insurance_harness.db.base import Base
-from insurance_harness.jobs import ClaimedJob, JobState, JobStore
+from insurance_harness.jobs import ClaimedJob, JobState, JobStore, NonRetryableJobError
 from insurance_harness.product_ingestion import artifact_tables, tables  # noqa: F401
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.progression import ProductProgression
@@ -71,6 +71,7 @@ def stage_runtime(tmp_path, snapshot, catalog):
             changed["receipt"].update(
                 knowledge_id=knowledge_id,
                 revision_source_id=hashlib.sha256(knowledge_id.encode()).hexdigest(),
+                parse_attempt=attempt,
             )
             # Source title text changes only at the mocked parser boundary.
             text = (
@@ -109,6 +110,16 @@ def stage_runtime(tmp_path, snapshot, catalog):
             ]
             return sign(changed)
 
+        async def get_reparse_receipt(self, _scope, _run_id, _ordinal, _recovery_key):
+            return None
+
+        async def reparse_upload(
+            self, _scope, _run_id, ordinal, _expected_parse_attempt, _recovery_key, _deadline
+        ):
+            raise NonRetryableJobError(
+                "SOURCE_PARSE_FAILED:" + ("保险条款.pdf", "产品说明书.pdf", "费率表.pdf")[ordinal]
+            )
+
     platform = Platform()
 
     def worker(now=None):
@@ -142,6 +153,128 @@ def stage_runtime(tmp_path, snapshot, catalog):
 
     yield scope, store, artifacts, platform, execute
     engine.dispose()
+
+
+def test_one_failed_source_requests_only_its_bound_reparse(stage_runtime):
+    scope, store, _artifacts, platform, execute = stage_runtime
+    original_lookup = platform.lookup_upload
+    reparses = []
+    recovered = False
+
+    async def lookup(_scope, run_id, ordinal):
+        item = await original_lookup(_scope, run_id, ordinal)
+        if ordinal == 2:
+            item["parse_attempt"] = 2 if recovered else 1
+            item["parse_status"] = "completed" if recovered else "failed"
+        return item
+
+    async def reparse(_scope, run_id, ordinal, expected_parse_attempt, recovery_key, deadline):
+        nonlocal recovered
+        reparses.append((run_id, ordinal, expected_parse_attempt, recovery_key))
+        recovered = True
+        return {
+            "contract": "g3-platform-bound-reparse.830.v1",
+            "run_id": run_id,
+            "ordinal": ordinal,
+            "knowledge_id": "knowledge-2",
+            "expected_parse_attempt": 1,
+            "parse_attempt": 2,
+            "recovery_key": recovery_key,
+            "deadline_at": deadline.isoformat(),
+            "dispatch_state": "enqueued",
+            "queue_task_id": "task-2",
+            "parse_status": "processing",
+        }
+
+    platform.lookup_upload = lookup
+    platform.reparse_upload = reparse
+    async def no_receipt(*_args, **_kwargs):
+        return None
+
+    platform.get_reparse_receipt = no_receipt
+    run = store.create_run(
+        scope=scope, idempotency_key="single-source-reparse", expected_upload_count=3
+    )
+    assert execute(run).state is JobState.SUCCEEDED  # uploads
+    source = execute(run)
+    assert source.state is JobState.RETRY_WAIT
+    assert len(reparses) == 1
+    assert reparses[0][:3] == (run.run_id, 2, 1)
+    assert len(reparses[0][3]) == 64
+    assert platform.calls == 0
+
+
+def test_source_failure_persists_successful_sibling_processing_calls(stage_runtime):
+    from tests.product_ingestion.test_processing_receipts import receipt, sealed
+
+    scope, store, artifacts, platform, execute = stage_runtime
+    original_lookup = platform.lookup_upload
+
+    def processing(ordinal):
+        value = receipt()
+        value["knowledge_id"] = f"knowledge-{ordinal}"
+        value["parse_attempt"] = 1
+        value["calls"] = [
+            {
+                "contract": "knowledge-model-dispatch-receipt.830.v1",
+                "dispatch_id": f"call-{ordinal}",
+                "operation": "embedding",
+                "purpose": "document_embedding",
+                "model_id": "embed",
+                "model_name": "qwen",
+                "request_sha256": "b" * 64,
+                "transport_retry_index": 0,
+                "state": "RECORDED",
+                "outcome": "HTTP_RESPONSE",
+                "http_status": 200,
+                "started_at_unix_ms": 1000,
+                "finished_at_unix_ms": 1020,
+                "duration_ms": 20,
+            }
+        ]
+        value["counts"]["attempts"] = 1
+        value["counts"]["confirmed"] = 1
+        return sealed(value)
+
+    async def lookup(_scope, run_id, ordinal):
+        item = await original_lookup(_scope, run_id, ordinal)
+        item["processing_receipt"] = processing(ordinal) if ordinal < 2 else None
+        item["processing_receipt_parse_attempt"] = 1 if ordinal < 2 else None
+        if ordinal == 2:
+            item["parse_status"] = "failed"
+        return item
+
+    async def no_receipt(*_args):
+        return None
+
+    async def reparse(_scope, run_id, ordinal, attempt, key, deadline):
+        return {
+            "contract": "g3-platform-bound-reparse.830.v1",
+            "run_id": run_id,
+            "ordinal": ordinal,
+            "knowledge_id": "knowledge-2",
+            "expected_parse_attempt": attempt,
+            "parse_attempt": attempt + 1,
+            "recovery_key": key,
+            "deadline_at": deadline.isoformat().replace("+00:00", "Z"),
+            "dispatch_state": "enqueued",
+            "queue_task_id": "task-2",
+            "parse_status": "processing",
+        }
+
+    platform.lookup_upload = lookup
+    platform.get_reparse_receipt = no_receipt
+    platform.reparse_upload = reparse
+    run = store.create_run(
+        scope=scope, idempotency_key="source-accounting", expected_upload_count=3
+    )
+    assert execute(run).state is JobState.SUCCEEDED
+    assert execute(run).state is JobState.RETRY_WAIT
+    records = artifacts.list_artifacts(
+        scope=scope, run_id=run.run_id, artifact_kind="source_processing_attempt"
+    )
+    assert len(records) == 2
+    assert sum(json.loads(row.payload)["counts"]["attempts"] for row in records) == 2
 
 
 def test_platform_stages_attach_three_originals_route_and_keep_signed_sources(stage_runtime):

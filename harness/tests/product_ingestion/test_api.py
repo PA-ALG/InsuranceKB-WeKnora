@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -96,6 +97,83 @@ def test_api_distinguishes_recorded_model_reuse_from_new_dispatch(environment, m
     assert run["reused_model_call_count"] == 1
     assert run["reused_usage"] == {"prompt_tokens": 17}
     assert not run["usage"]
+
+
+def test_status_stage_wall_includes_queue_and_retry_before_last_attempt(environment):
+    client, factory, *_ = environment
+    run = client.post(
+        PATH,
+        headers=auth(),
+        json={"idempotency_key": "stage-wall", "expected_upload_count": 1},
+    ).json()["data"]
+    with factory() as session, session.begin():
+        stage = session.scalar(select(product_tables.ProductStage))
+        job = session.get(WikiJob, stage.job_id)
+        job.started_at = stage.created_at + timedelta(seconds=30)
+        job.finished_at = stage.created_at + timedelta(seconds=40)
+        job.state = "succeeded"
+    status = client.get(PATH + "/" + run["run_id"], headers=auth()).json()["data"]
+    stage_status = status["stages"][0]
+    assert datetime.fromisoformat(stage_status["started_at"].replace("Z", "+00:00")).replace(
+        tzinfo=None
+    ) == stage.created_at.replace(tzinfo=None)
+    assert datetime.fromisoformat(
+        stage_status["last_attempt_started_at"].replace("Z", "+00:00")
+    ).replace(tzinfo=None) == job.started_at.replace(tzinfo=None)
+    assert stage_status["wall_duration_seconds"] == 40
+    assert stage_status["last_attempt_duration_seconds"] == 10
+
+
+def test_status_keeps_recorded_source_calls_when_sibling_receipt_is_unknown(
+    environment, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from tests.product_ingestion.test_processing_receipts import receipt, sealed
+
+    client, *_ = environment
+    run = client.post(
+        PATH,
+        headers=auth(),
+        json={"idempotency_key": "source-partial-accounting", "expected_upload_count": 3},
+    ).json()["data"]
+    records = []
+    for index in range(2):
+        item = receipt()
+        item["knowledge_id"] = f"knowledge-{index}"
+        item["parse_attempt"] = 1
+        item["counts"].update(attempts=1, confirmed=1)
+        item["calls"] = [
+            {
+                "contract": "knowledge-model-dispatch-receipt.830.v1",
+                "dispatch_id": f"call-{index}",
+                "operation": "embedding",
+                "purpose": "document_embedding",
+                "model_id": "embed",
+                "model_name": "qwen",
+                "request_sha256": "b" * 64,
+                "transport_retry_index": 0,
+                "state": "RECORDED",
+                "outcome": "HTTP_RESPONSE",
+                "http_status": 200,
+                "started_at_unix_ms": 1000,
+                "finished_at_unix_ms": 1020,
+                "duration_ms": 20,
+            }
+        ]
+        records.append(SimpleNamespace(payload=json.dumps(sealed(item)).encode()))
+    monkeypatch.setattr(
+        ProductArtifactStore,
+        "list_artifacts",
+        lambda _self, **kwargs: (
+            tuple(records) if kwargs.get("artifact_kind") == "source_processing_attempt" else ()
+        ),
+    )
+    status = client.get(PATH + "/" + run["run_id"], headers=auth()).json()["data"]
+    assert status["recorded_source_model_call_count"] == 2
+    assert status["model_call_count"] == 2
+    assert status["source_model_call_count"] is None
+    assert status["model_call_count_complete"] is False
 
 
 def test_real_api_composition_admits_durable_job_without_inline_processing(environment):
@@ -358,7 +436,8 @@ def test_extraction_status_tracks_windows_before_aggregate_exists(environment):
     assert result["stage"] == "extract"
     stage = next(row for row in result["stages"] if row["name"] == "extract")
     assert stage["state"] == "running"
-    assert stage["started_at"] == active.started_at.isoformat().replace("+00:00", "Z")
+    assert stage["last_attempt_started_at"] == active.started_at.isoformat().replace("+00:00", "Z")
+    assert stage["started_at"] <= stage["last_attempt_started_at"]
     assert stage["finished_at"] is None
     # Display projection must never create the aggregate job used by progression.
     assert store.list_stages(scope=scope, run_id=run.run_id) == ()
@@ -577,3 +656,48 @@ def test_malformed_discovery_is_failure_not_no_new_knowledge(environment, change
     assert summary["state"] == "FAILED"
     assert summary["reason_codes"] == ["DISCOVERY_SUMMARY_INVALID"]
     assert "PRIVATE" not in response.text
+
+
+def test_independent_discovery_summary_keeps_generation_coverage_and_final_decision():
+    from insurance_harness.product_ingestion.api import combine_discovery_summaries
+
+    generation = {
+        "state": "PENDING",
+        "reused": True,
+        "reason_codes": ["DISCOVERY_GENERATED_PENDING_REVIEW"],
+        "counts": {
+            "proposed_new": 2,
+            "duplicate": 3,
+            "update_proposal": 0,
+            "rejected": 1,
+            "published": 0,
+        },
+        "coverage": {
+            "offered_chars": 100,
+            "omitted_chars": 0,
+            "complete": True,
+            "material_count": 3,
+        },
+    }
+    final = {
+        "state": "ACCEPTED",
+        "reused": False,
+        "reason_codes": ["DISCOVERY_ACCEPTED"],
+        "accepted_member_count": 2,
+        "coverage": None,
+    }
+    result = json.loads(
+        combine_discovery_summaries(json.dumps(generation).encode(), json.dumps(final).encode())
+    )
+    assert result["state"] == "ACCEPTED"
+    assert result["counts"] == generation["counts"]
+    assert result["coverage"] == generation["coverage"]
+    assert result["accepted_member_count"] == 2
+    generation["state"] = "FAILED"
+    generation["reason_codes"] = ["DISCOVERY_GENERATION_FAILED"]
+    final["state"] = "EMPTY"
+    result = json.loads(
+        combine_discovery_summaries(json.dumps(generation).encode(), json.dumps(final).encode())
+    )
+    assert result["state"] == "FAILED"
+    assert result["reason_codes"] == ["DISCOVERY_GENERATION_FAILED"]

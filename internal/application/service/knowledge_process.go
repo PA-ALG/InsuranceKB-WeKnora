@@ -2032,6 +2032,15 @@ func (s *knowledgeService) ReparseKnowledge(
 	knowledgeID string,
 	processOverrides *types.KnowledgeProcessOverrides,
 ) (*types.Knowledge, error) {
+	return s.reparseKnowledge(ctx, knowledgeID, processOverrides, nil)
+}
+
+func (s *knowledgeService) reparseKnowledge(
+	ctx context.Context,
+	knowledgeID string,
+	processOverrides *types.KnowledgeProcessOverrides,
+	bound *G3BoundReparseRequest,
+) (*types.Knowledge, error) {
 	logger.Info(ctx, "Start re-parsing knowledge")
 
 	tenantID := ctx.Value(types.TenantIDContextKey).(uint64)
@@ -2056,10 +2065,12 @@ func (s *knowledgeService) ReparseKnowledge(
 	// fallback path won't double-allocate when payload.Attempt is
 	// already set on the queued task.
 	reparseAttempt := 0
-	if root, n, err := s.tracker().OpenAttempt(ctx, existing.ID, ""); err == nil && root != nil {
-		reparseAttempt = n
-	} else if err != nil {
-		logger.Warnf(ctx, "[Reparse] OpenAttempt failed for %s: %v (will fall back in worker)", existing.ID, err)
+	if bound == nil {
+		if root, n, err := s.tracker().OpenAttempt(ctx, existing.ID, ""); err == nil && root != nil {
+			reparseAttempt = n
+		} else if err != nil {
+			logger.Warnf(ctx, "[Reparse] OpenAttempt failed for %s: %v (will fall back in worker)", existing.ID, err)
+		}
 	}
 
 	// Get knowledge base configuration
@@ -2109,12 +2120,30 @@ func (s *knowledgeService) ReparseKnowledge(
 	if err != nil {
 		return nil, err
 	}
-	parseAttempt, err := revisionRepo.AllocateParseAttempt(
-		ctx,
-		existing.ID,
-		kb.EmbeddingModelID,
-		fileSHA256,
-	)
+	parseAttempt := int64(0)
+	var boundReceipt types.G3BoundReparseReceipt
+	var boundRepo interfaces.G3BoundReparseRepository
+	if bound != nil {
+		var ok bool
+		boundRepo, ok = s.repo.(interfaces.G3BoundReparseRepository)
+		if !ok || existing.FilePath == "" || existing.Type != "file" || processOverrides != nil {
+			return nil, fmt.Errorf("bound reparse unavailable")
+		}
+		var fresh bool
+		boundReceipt, existing, fresh, err = boundRepo.AllocateG3BoundReparse(ctx, tenantID, bound.RawKBID, knowledgeID, bound.RunID, bound.Ordinal, bound.ExpectedParseAttempt, bound.RecoveryKey, bound.DeadlineAt, kb.EmbeddingModelID, fileSHA256)
+		if err != nil {
+			return nil, err
+		}
+		if !fresh {
+			return existing, nil
+		}
+		parseAttempt = boundReceipt.ParseAttempt
+		if root, n, spanErr := s.tracker().OpenAttempt(ctx, existing.ID, ""); spanErr == nil && root != nil {
+			reparseAttempt = n
+		}
+	} else {
+		parseAttempt, err = revisionRepo.AllocateParseAttempt(ctx, existing.ID, kb.EmbeddingModelID, fileSHA256)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -2195,6 +2224,9 @@ func (s *knowledgeService) ReparseKnowledge(
 		logger.ErrorWithFields(ctx, err, map[string]interface{}{
 			"knowledge_id": knowledgeID,
 		})
+		if bound != nil {
+			_, _ = boundRepo.AdvanceG3BoundReparse(ctx, tenantID, existing.ID, bound.RecoveryKey, parseAttempt, "allocated", "failed", nil)
+		}
 		return nil, err
 	}
 
@@ -2213,10 +2245,16 @@ func (s *knowledgeService) ReparseKnowledge(
 
 	if err := s.repo.UpdateKnowledge(ctx, existing); err != nil {
 		logger.Errorf(ctx, "Failed to update knowledge status before reparse: %v", err)
+		if bound != nil {
+			_, _ = boundRepo.AdvanceG3BoundReparse(ctx, tenantID, existing.ID, bound.RecoveryKey, parseAttempt, "allocated", "failed", nil)
+		}
 		return nil, err
 	}
 	if err := s.repo.UpdateKnowledgeColumn(ctx, existing.ID, "pending_subtasks_count", 0); err != nil {
 		logger.Errorf(ctx, "Failed to reset pending_subtasks_count before reparse: %v", err)
+		if bound != nil {
+			_, _ = boundRepo.AdvanceG3BoundReparse(ctx, tenantID, existing.ID, bound.RecoveryKey, parseAttempt, "allocated", "failed", nil)
+		}
 		return nil, err
 	}
 
@@ -2251,23 +2289,49 @@ func (s *knowledgeService) ReparseKnowledge(
 			Revision:                 revisionBinding,
 			DocReaderReuse:           docReaderReuse,
 		}
+		if bound != nil {
+			taskPayload.RecoveryKey = bound.RecoveryKey
+		}
 
 		langfuse.InjectTracing(ctx, &taskPayload)
 		payloadBytes, err := json.Marshal(taskPayload)
 		if err != nil {
 			logger.Errorf(ctx, "Failed to marshal reparse task payload: %v", err)
+			if bound != nil {
+				_, _ = boundRepo.AdvanceG3BoundReparse(ctx, tenantID, existing.ID, bound.RecoveryKey, parseAttempt, "allocated", "failed", nil)
+				return nil, err
+			}
 			return existing, nil
 		}
+		if bound != nil {
+			if _, err := boundRepo.AdvanceG3BoundReparse(ctx, tenantID, existing.ID, bound.RecoveryKey, parseAttempt, "allocated", "dispatching", nil); err != nil {
+				return nil, err
+			}
+		}
 
+		options := documentProcessTaskOptions(s.config, asynq.MaxRetry(3))
+		if bound != nil {
+			options = append(options, asynq.TaskID("g3-reparse-"+bound.RecoveryKey))
+		}
 		task := asynq.NewTask(
 			types.TypeDocumentProcess,
 			payloadBytes,
-			documentProcessTaskOptions(s.config, asynq.MaxRetry(3))...,
+			options...,
 		)
 		info, err := s.task.Enqueue(task)
 		if err != nil {
 			logger.Errorf(ctx, "Failed to enqueue reparse task: %v", err)
+			if bound != nil {
+				_, _ = boundRepo.AdvanceG3BoundReparse(ctx, tenantID, existing.ID, bound.RecoveryKey, parseAttempt, "dispatching", "unknown", nil)
+				return nil, err
+			}
 			return existing, nil
+		}
+		if bound != nil {
+			queueID := info.ID
+			if _, err := boundRepo.AdvanceG3BoundReparse(ctx, tenantID, existing.ID, bound.RecoveryKey, parseAttempt, "dispatching", "enqueued", &queueID); err != nil {
+				return nil, err
+			}
 		}
 		logger.Infof(ctx, "Enqueued reparse task: id=%s queue=%s knowledge_id=%s", info.ID, info.Queue, existing.ID)
 		recordReparseStarted()
@@ -2867,6 +2931,10 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 	}
 
 	if knowledge == nil {
+		return nil
+	}
+	if !g3BoundReparseTaskAllowed(knowledge, payload, time.Now()) {
+		logger.Warnf(ctx, "Document bound recovery is stale or expired: knowledge=%s attempt=%d", payload.KnowledgeID, payload.ParseAttempt)
 		return nil
 	}
 	if !revisionPayloadMatchesKnowledge(knowledge, payload.Revision, payload.ParseAttempt) {
