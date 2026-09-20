@@ -213,6 +213,18 @@ def build_product_pipeline(context):
         identity_templates[space_id] = templates[0].template_id
 
     def read(scope, run_id, kind, key="product"):
+        if kind in {"base_snapshot", "compile_request", "compile_delta"}:
+            rebased = {
+                "base_snapshot": "rebased_base_snapshot",
+                "compile_request": "rebased_compile_request",
+                "compile_delta": "rebased_compile_delta",
+            }[kind]
+            if key == "product":
+                current = artifacts.get_rebased_artifact(
+                    scope=scope, run_id=run_id, artifact_kind=rebased
+                )
+                if current is not None:
+                    return current.payload
         return artifacts.get_effective_artifact(
             scope=scope, run_id=run_id, artifact_kind=kind, artifact_key=key
         ).payload
@@ -317,12 +329,25 @@ def build_product_pipeline(context):
                     scope=scope,
                     public_keys=service.configuration.source_public_keys,
                 )
+                if plan.prior_rebase_artifacts:
+                    prior = await asyncio.to_thread(
+                        artifacts.read_prior_rebase_artifact,
+                        scope=scope, run_id=run.run_id,
+                        artifact_kind="rebased_base_snapshot",
+                    )
+                    base = await asyncio.to_thread(
+                        verify_signed_snapshot, prior.payload, kind="base", scope=scope,
+                        public_keys=service.configuration.source_public_keys,
+                    )
                 current = await service.platform.current(scope)
-                if (base["release_id"], base["activation_epoch"]) != (
+                base_changed = (base["release_id"], base["activation_epoch"]) != (
                     current["release_id"],
                     current["activation_epoch"],
-                ):
+                )
+                if base_changed and plan.contract_version != "6":
                     raise ValueError("published base changed")
+            else:
+                base_changed = False
             if any(ref.artifact_kind == "compile_request" for ref in plan.artifacts):
                 saved = await asyncio.to_thread(
                     artifacts.read_checkpoint_artifact,
@@ -336,21 +361,144 @@ def build_product_pipeline(context):
                 )
                 if request.catalog != context.catalog or request.resolution_inputs.policy != policy:
                     raise ValueError("Catalog or Schema changed")
-            return StageOutput(
-                (
+            drafts = []
+            if base_changed or plan.prior_rebase_artifacts:
+                from insurance_harness.product_ingestion.checkpoint_rebase import (
+                    rebase_checkpoint_inputs,
+                )
+
+                if base_changed:
+                    await asyncio.to_thread(
+                        artifacts.verify_discarded_stage_calls,
+                        scope=scope, run_id=run.run_id,
+                        stage_keys={"discovery", "compilation"},
+                    )
+                disposition = await asyncio.to_thread(
+                    artifacts.read_checkpoint_discovery_disposition,
+                    scope=scope, run_id=run.run_id,
+                )
+
+                current_raw = await service.platform.base_snapshot(
+                    scope, current["release_id"], current["activation_epoch"]
+                )
+                current_base = await asyncio.to_thread(
+                    verify_signed_snapshot, current_raw, kind="base", scope=scope,
+                    public_keys=service.configuration.source_public_keys,
+                )
+                if (current_base["release_id"], current_base["activation_epoch"]) != (
+                    current["release_id"], current["activation_epoch"]
+                ):
+                    raise ValueError("published base changed during recovery")
+                inputs = {}
+                for kind in ("identity", "compile_request", "field_validation"):
+                    if plan.prior_rebase_artifacts and kind in {"identity", "compile_request"}:
+                        inputs[kind] = await asyncio.to_thread(
+                            artifacts.read_prior_rebase_artifact,
+                            scope=scope, run_id=run.run_id,
+                            artifact_kind="rebased_" + kind,
+                        )
+                    else:
+                        inputs[kind] = await asyncio.to_thread(
+                            artifacts.read_checkpoint_artifact,
+                            scope=scope, run_id=run.run_id, artifact_kind=kind,
+                        )
+                attempts = await asyncio.to_thread(
+                    artifacts.read_checkpoint_field_attempts,
+                    scope=scope, run_id=run.run_id,
+                )
+                rebased = await asyncio.to_thread(
+                    rebase_checkpoint_inputs,
+                    scope=scope, base_body=current_base, base_raw=current_raw,
+                    catalog_json=context.catalog_json,
+                    profile_confirmation_json=context.profile_confirmation_json,
+                    policy=policy, identity_payload=inputs["identity"].payload,
+                    original_request=inputs["compile_request"].payload,
+                    original_attempts=attempts,
+                    original_field_validation=inputs["field_validation"].payload,
+                    run_id=run.run_id,
+                )
+                drafts.extend(
                     artifact(
-                        RECEIPT_KIND,
-                        "product",
-                        receipt.encoded(),
-                        stage.dependency_sha256,
-                        contract_version=(
-                            plan.contract_version
-                            if plan.contract_version in {"3", "4", "5"}
-                            else "1"
+                        kind, "product", payload, stage.dependency_sha256,
+                        origin=(
+                            ArtifactOrigin.PLATFORM_SOURCE
+                            if kind == "rebased_base_snapshot" else ArtifactOrigin.RULE
                         ),
+                    )
+                    for kind, payload in rebased.items()
+                )
+                if disposition is not None:
+                    prior_disposition = json.loads(disposition.payload)
+                    summary = prior_disposition.get(
+                        "original_summary", prior_disposition
+                    )
+                    original_artifact_id = prior_disposition.get(
+                        "original_artifact_id", disposition.artifact_id
+                    )
+                    original_payload_sha256 = prior_disposition.get(
+                        "original_payload_sha256", disposition.payload_sha256
+                    )
+                    drafts.append(artifact(
+                        "rebased_discovery_disposition", "product",
+                        json_bytes({
+                            "contract": "product-rebased-discovery-disposition.830.v1",
+                            "state": summary["state"],
+                            "reason_codes": summary.get("reason_codes", ()),
+                            "original_artifact_id": original_artifact_id,
+                            "original_payload_sha256": original_payload_sha256,
+                            "original_output_hash": summary.get("final_composed_output_hash"),
+                            "original_summary": summary,
+                            "rebased_request_sha256": hashlib.sha256(
+                                rebased["rebased_compile_request"]
+                            ).hexdigest(),
+                        }),
+                        stage.dependency_sha256,
+                    ))
+                    effective_keys = tuple(
+                        row.stage_key for row in plan.reused_stages
+                        if row.stage_key != "compilation"
+                    )
+                    receipt = await asyncio.to_thread(
+                        artifacts.verify_checkpoint, scope=scope, run_id=run.run_id,
+                        effective_stage_keys=effective_keys,
+                    )
+                elif base_changed and "discovery" in {
+                    row.stage_key for row in plan.reused_stages
+                }:
+                    receipt = await asyncio.to_thread(
+                        artifacts.verify_checkpoint, scope=scope, run_id=run.run_id,
+                        effective_stage_keys=tuple(
+                            row.stage_key for row in plan.reused_stages
+                            if row.stage_key in {
+                                "uploads", "source", "routing", "identity",
+                                "field_plan", "extract", "synthesis",
+                            }
+                        ),
+                    )
+                receipt = receipt.model_copy(update={
+                    "rebased_base_sha256": hashlib.sha256(current_raw).hexdigest(),
+                    "rebased_discovery_disposition_sha256": next(
+                        (
+                            draft.payload_sha256 for draft in drafts
+                            if draft.artifact_kind == "rebased_discovery_disposition"
+                        ),
+                        None,
+                    ),
+                })
+            drafts.append(
+                artifact(
+                    RECEIPT_KIND,
+                    "product",
+                    receipt.encoded(),
+                    stage.dependency_sha256,
+                    contract_version=(
+                        plan.contract_version
+                        if plan.contract_version in {"3", "4", "5", "6"}
+                        else "1"
                     ),
                 )
             )
+            return StageOutput(tuple(drafts))
         except ValueError as error:
             raise needs_confirmation_error("CHECKPOINT_INVALID") from error
 
@@ -938,53 +1086,86 @@ def build_product_pipeline(context):
                 run_independent_discovery_final_review,
             )
 
-            candidates = await asyncio.to_thread(
-                lambda: json.loads(read(scope, run.run_id, "discovery_candidates"))
+            disposition_rows = await asyncio.to_thread(
+                artifacts.list_effective_artifacts,
+                scope=scope, run_id=run.run_id,
+                artifact_kind="rebased_discovery_disposition",
             )
-            free_output = CompileOutput.model_validate(candidates["output"])
-            combined = await asyncio.to_thread(
-                merge_discovery_delta,
-                request=request,
-                field_delta=delta,
-                free_output=free_output,
-                run_id=run.run_id,
-            )
-            final_output = await asyncio.to_thread(compiler.compose_batch_output, request, combined)
-            final_hash = await asyncio.to_thread(compiler.compile_output_hash_g3, final_output)
-            outcome = await run_independent_discovery_final_review(
-                service=service_for(scope),
-                artifacts=artifacts,
-                scope=scope,
-                run=run,
-                stage=stage,
-                job=job,
-                request=request,
-                discovery_candidates=candidates,
-                final_composed_output=final_output,
-                final_composed_output_hash=final_hash,
-            )
-            extra_drafts = outcome.drafts
-            if outcome.decision == "ACCEPTED":
-                review = await asyncio.to_thread(
-                    compose_discovery_review,
-                    request=request,
-                    final_output=final_output,
-                    free_output=free_output,
-                    outcome=outcome,
-                    run_id=run.run_id,
-                )
-                delta = combined
-                extra_drafts += (
+            if disposition_rows:
+                disposition = json.loads(disposition_rows[0].payload)
+                original_summary = disposition["original_summary"]
+                if (
+                    original_summary.get("state") not in {"PENDING", "REJECTED"}
+                    or disposition.get("state") != original_summary.get("state")
+                    or disposition.get("rebased_request_sha256")
+                    != hashlib.sha256(batch_json_bytes_830_g3(request)).hexdigest()
+                    or disposition.get("original_payload_sha256")
+                    != hashlib.sha256(json_bytes(original_summary)).hexdigest()
+                    or disposition.get("original_output_hash")
+                    != original_summary.get("final_composed_output_hash")
+                ):
+                    raise ValueError("rebased discovery disposition is invalid")
+                request_hash = compiler.compile_request_hash_g3(request.base_request)
+                empty = CompileOutput(request_hash=request_hash, fields=())
+                extra_drafts = (
                     artifact(
-                        "composite_review",
-                        "product",
-                        review.model_dump_json().encode(),
-                        stage.dependency_sha256,
+                        "reviewed_discovery_delta", "product",
+                        json_bytes({
+                            "contract": "product-reviewed-discovery-delta.830.v1",
+                            "output": empty, "reviewed": False,
+                        }), stage.dependency_sha256,
+                    ),
+                    artifact(
+                        "discovery_final_summary", "product",
+                        json_bytes(original_summary), stage.dependency_sha256,
                     ),
                 )
-            elif outcome.decision != "EMPTY":
-                # Entire free group stays unpublished; validated field results survive.
                 state = ProductRunState.PARTIAL_SUCCESS
+            else:
+                candidates = await asyncio.to_thread(
+                    lambda: json.loads(read(scope, run.run_id, "discovery_candidates"))
+                )
+                free_output = CompileOutput.model_validate(candidates["output"])
+                combined = await asyncio.to_thread(
+                    merge_discovery_delta,
+                    request=request,
+                    field_delta=delta,
+                    free_output=free_output,
+                    run_id=run.run_id,
+                )
+                final_output = await asyncio.to_thread(
+                    compiler.compose_batch_output, request, combined
+                )
+                final_hash = await asyncio.to_thread(
+                    compiler.compile_output_hash_g3, final_output
+                )
+                outcome = await run_independent_discovery_final_review(
+                    service=service_for(scope), artifacts=artifacts, scope=scope,
+                    run=run, stage=stage, job=job, request=request,
+                    discovery_candidates=candidates,
+                    final_composed_output=final_output,
+                    final_composed_output_hash=final_hash,
+                )
+                extra_drafts = outcome.drafts
+                if outcome.decision == "ACCEPTED":
+                    review = await asyncio.to_thread(
+                        compose_discovery_review,
+                        request=request,
+                        final_output=final_output,
+                        free_output=free_output,
+                        outcome=outcome,
+                        run_id=run.run_id,
+                    )
+                    delta = combined
+                    extra_drafts += (
+                        artifact(
+                            "composite_review", "product",
+                            review.model_dump_json().encode(), stage.dependency_sha256,
+                        ),
+                    )
+                elif outcome.decision != "EMPTY":
+                    # Entire free group stays unpublished; validated fields survive.
+                    state = ProductRunState.PARTIAL_SUCCESS
         else:
             discovery_reviews = await asyncio.to_thread(
                 artifacts.list_effective_artifacts,

@@ -8,12 +8,17 @@ const loading = ref(false)
 const error = ref('')
 const selection = ref<Record<string, string[]>>({})
 const retrying = ref<Record<string, boolean>>({})
+const detailLoaded = ref<Record<string, boolean>>({})
+const detailLoading = ref<Record<string, boolean>>({})
 const now = ref(Date.now())
 let generation = 0
 let pollTimer: ReturnType<typeof setTimeout> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 const terminal = (state: string) => ['succeeded', 'partial_success', 'failed', 'needs_confirmation'].includes(state)
+// Stage progress can change without incrementing the upload/version counter.
+const progressIdentity = (run: ProductIngestionRun) => JSON.stringify([run.version, run.state, run.stage, run.finished_at])
 const active = computed(() => runs.value.filter(run => !terminal(run.state)))
+const hasDetail = (run: ProductIngestionRun) => detailLoaded.value[run.run_id] === true || run.stages !== undefined || run.fields !== undefined
 const stateNames: Record<string, string> = { created: '已接收', uploading: '接收材料', accepting_uploads: '接收材料', waiting_sources: '等待材料解析', awaiting_sources: '等待材料解析', processing: '处理中', running: '处理中', succeeded: '已完成', partial_success: '部分完成', failed: '处理失败', needs_confirmation: '需要确认', queued: '等待处理', leased: '等待执行', retry_wait: '等待恢复', awaiting_human: '需要确认', blocked: '处理失败', dead_letter: '处理失败', pending: '等待处理', skipped: '已跳过' }
 const stageNames: Record<string, string> = { uploads: '接收材料', identity: '归并产品', field_plan: '安排字段任务', synthesis: '整理字段结果', discovery: '自由发现', verify: '检索与证据检查', upload: '接收材料', uploading: '接收材料', source: '解析材料', sources: '解析材料', parsing: '解析材料', routing: '识别产品', schema: '归并字段', extract: '抽取字段', extraction: '抽取字段', validation: '校验字段', compilation: '编译知识', preparation: '提交审核草稿', compile: '编译知识', review: '自动审核', publish: '发布知识', publication: '发布知识' }
 function runStateName(run: ProductIngestionRun): string {
@@ -67,20 +72,55 @@ function schedule() {
   pollTimer = setTimeout(() => void poll(current), 2000)
 }
 async function poll(current: number) {
-  const kb = props.knowledgeBaseId
-  const results = await Promise.allSettled(active.value.map(run => getProductIngestion(kb, run.run_id)))
-  if (current !== generation) return
-  let failed = false
-  for (const result of results) {
-    if (result.status === 'rejected') { failed = true; continue }
-    const index = runs.value.findIndex(run => run.run_id === result.value.run_id)
-    if (index >= 0) runs.value[index] = result.value
+  try {
+    const summaries = await listProductIngestions(props.knowledgeBaseId)
+    if (current !== generation) return
+    const previous = new Map(runs.value.map(run => [run.run_id, run]))
+    runs.value = summaries.map(summary => {
+      const old = previous.get(summary.run_id)
+      if (!old || old.state !== summary.state || old.stage !== summary.stage) {
+        detailLoaded.value[summary.run_id] = false
+        return summary
+      }
+      return hasDetail(old)
+        ? { ...old, version: summary.version, state: summary.state, stage: summary.stage,
+            counts: summary.counts, started_at: summary.started_at, finished_at: summary.finished_at,
+            reason: summary.reason }
+        : summary
+    })
+    error.value = ''
+  } catch {
+    if (current !== generation) return
+    error.value = '暂时无法刷新进度，平台任务仍在后台执行。'
   }
-  error.value = failed ? '暂时无法刷新进度，平台任务仍在后台执行。' : ''
   schedule()
+}
+async function loadDetail(run: ProductIngestionRun) {
+  if (detailLoading.value[run.run_id]) return
+  const current = generation
+  const requestedProgress = progressIdentity(run)
+  detailLoading.value[run.run_id] = true
+  try {
+    const detail = await getProductIngestion(props.knowledgeBaseId, run.run_id)
+    if (current !== generation) return
+    const index = runs.value.findIndex(item => item.run_id === detail.run_id)
+    if (index >= 0) {
+      if (progressIdentity(runs.value[index]) !== requestedProgress) return
+      runs.value[index] = detail
+      detailLoaded.value[detail.run_id] = true
+      selection.value[detail.run_id] ??= []
+      schedule()
+    }
+    error.value = ''
+  } catch {
+    if (current === generation) error.value = '未能读取任务详情，请重试。'
+  } finally {
+    if (current === generation) detailLoading.value[run.run_id] = false
+  }
 }
 async function reload() {
   const current = ++generation
+  detailLoading.value = {}
   stopTimers()
   loading.value = true
   error.value = ''
@@ -88,6 +128,7 @@ async function reload() {
     const result = await listProductIngestions(props.knowledgeBaseId)
     if (current !== generation) return
     runs.value = result
+    detailLoaded.value = {}
     for (const run of result) selection.value[run.run_id] ??= []
     schedule()
   } catch {
@@ -106,6 +147,7 @@ async function retry(run: ProductIngestionRun) {
     const next = await retryProductFields(props.knowledgeBaseId, run.run_id, keys)
     if (current !== generation) return
     runs.value = [next, ...runs.value.filter(item => item.run_id !== next.run_id)]
+    detailLoaded.value[next.run_id] = true
     selection.value[next.run_id] = []
     selection.value[run.run_id] = []
     error.value = ''
@@ -114,7 +156,8 @@ async function retry(run: ProductIngestionRun) {
     if (current === generation) error.value = '未能确认重试任务，请刷新任务列表后检查。'
   } finally { if (current === generation) retrying.value[run.run_id] = false }
 }
-const recoverable = (run: ProductIngestionRun) => ['failed', 'needs_confirmation'].includes(run.state) && run.can_retry_processing === true && Number.isSafeInteger(run.version) && (run.version ?? 0) > 0
+const discoveryRecovery = (run: ProductIngestionRun) => run.state === 'partial_success' && run.discovery_summary?.state === 'FAILED'
+const recoverable = (run: ProductIngestionRun) => (['failed', 'needs_confirmation'].includes(run.state) || discoveryRecovery(run)) && run.can_retry_processing === true && Number.isSafeInteger(run.version) && (run.version ?? 0) > 0
 async function retryProcessing(run: ProductIngestionRun) {
   if (!recoverable(run) || retrying.value[run.run_id]) return
   const current = generation
@@ -123,6 +166,7 @@ async function retryProcessing(run: ProductIngestionRun) {
     const next = await retryProductProcessing(props.knowledgeBaseId, run.run_id, run.version!)
     if (current !== generation) return
     runs.value = [next, ...runs.value.filter(item => item.run_id !== next.run_id)]
+    detailLoaded.value[next.run_id] = true
     selection.value[next.run_id] = []
     error.value = ''
     schedule()
@@ -135,6 +179,7 @@ watch(() => [props.knowledgeBaseId, props.refreshToken], (_next, previous) => {
     runs.value = []
     selection.value = {}
     retrying.value = {}
+    detailLoaded.value = {}
   }
   if (props.knowledgeBaseId) void reload()
   else { generation++; stopTimers() }
@@ -159,12 +204,13 @@ onUnmounted(() => { generation++; stopTimers() })
       </div>
       <p class="run-id">任务 {{ run.run_id }}</p>
       <p v-if="run.reason">{{ run.reason }}</p>
-      <p data-testid="counts">成功 {{ count(run.counts?.success_count) }} · 材料未提供 {{ count(run.counts?.missing_count) }} · 失败 {{ count(run.counts?.failure_count) }} · 模型调用 {{ count(run.model_call_count) }}<span v-if="run.model_call_count_complete === false">（已记录，部分阶段统计尚未齐全）</span><span v-if="run.reused_model_call_count !== undefined"> · 复用调用 {{ count(run.reused_model_call_count) }}</span></p>
+      <p data-testid="counts">成功 {{ count(run.counts?.success_count) }} · 材料未提供 {{ count(run.counts?.missing_count) }} · 失败 {{ count(run.counts?.failure_count) }} · 模型调用 {{ count(run.model_call_count) }}<span v-if="run.model_call_count != null && run.model_call_count_complete === false">（已记录，部分阶段统计尚未齐全）</span><span v-if="run.reused_model_call_count != null"> · 复用调用 {{ count(run.reused_model_call_count) }}</span></p>
+      <button type="button" data-testid="load-run-detail" :disabled="detailLoading[run.run_id]" @click="loadDetail(run)">{{ detailLoading[run.run_id] ? '正在读取…' : hasDetail(run) ? '刷新详情' : '查看详情' }}</button>
       <div data-testid="discovery-status">
-        <p><strong>Schema 外知识发现：</strong><template v-if="discoveryPublished(run)">已发布 {{ count(run.discovery_summary?.counts.published) }} 项知识内容（页面或概念）</template><template v-else>{{ discoveryNames[run.discovery_summary?.state || 'NOT_EXECUTED'] || '发现状态待核对' }}</template><span v-if="run.discovery_summary?.reused"> · 复用已有发现结果</span></p>
+        <p><strong>Schema 外知识发现：</strong><template v-if="!hasDetail(run)">详情中查看</template><template v-else-if="discoveryPublished(run)">已发布 {{ count(run.discovery_summary?.counts.published) }} 项知识内容（页面或概念）</template><template v-else>{{ discoveryNames[run.discovery_summary?.state || 'NOT_EXECUTED'] || '发现状态待核对' }}</template><span v-if="run.discovery_summary?.reused"> · 复用已有发现结果</span></p>
         <template v-if="run.discovery_summary && run.discovery_summary.state !== 'NOT_EXECUTED'">
           <p>新发现提议 {{ count(run.discovery_summary.counts.proposed_new) }} · 已有知识重复 {{ count(run.discovery_summary.counts.duplicate) }} · 更新提议 {{ count(run.discovery_summary.counts.update_proposal) }} · 未通过 {{ count(run.discovery_summary.counts.rejected) }}</p>
-          <p v-if="run.discovery_summary.coverage">材料范围 {{ count(run.discovery_summary.coverage.material_count) }} 份 · 本次提供 {{ count(run.discovery_summary.coverage.offered_chars) }} 字 · 未覆盖 {{ count(run.discovery_summary.coverage.omitted_chars) }} 字<span v-if="!run.discovery_summary.coverage.complete">（仅检查所提供内容）</span></p>
+          <p v-if="run.discovery_summary.coverage">材料范围 {{ count(run.discovery_summary.coverage.material_count) }} 份 · 已发送 {{ count(run.discovery_summary.coverage.offered_chars) }} 字 · 未发送 {{ count(run.discovery_summary.coverage.omitted_chars) }} 字<span v-if="!run.discovery_summary.coverage.complete">（尚有内容未完成检查）</span></p>
           <p v-else>发现范围尚未记录</p>
           <p v-if="run.discovery_summary.reason_codes.length">原因：{{ run.discovery_summary.reason_codes.join('、') }}</p>
         </template>
@@ -220,13 +266,14 @@ onUnmounted(() => { generation++; stopTimers() })
           </li>
         </ul>
       </details>
-      <div v-if="recoverable(run)">
-        <p>复用已完成的解析，由平台重新检查来源并继续处理。</p>
+      <div v-if="hasDetail(run) && recoverable(run)">
+        <p v-if="discoveryRecovery(run)">复用已完成的字段结果，由平台恢复自由发现并检查发布结果。</p>
+        <p v-else>复用已完成的解析，由平台重新检查来源并继续处理。</p>
         <button type="button" data-testid="retry-processing" :disabled="retrying[run.run_id]" @click="retryProcessing(run)">
-          {{ retrying[run.run_id] ? '正在提交…' : '恢复处理' }}
+          {{ retrying[run.run_id] ? '正在提交…' : discoveryRecovery(run) ? '恢复自由发现' : '恢复处理' }}
         </button>
       </div>
-      <button v-if="terminal(run.state) && run.fields?.some(field => field.outcome === 'extraction_failed')"
+      <button v-if="hasDetail(run) && terminal(run.state) && run.fields?.some(field => field.outcome === 'extraction_failed')"
         type="button" data-testid="retry-fields"
         :disabled="!selection[run.run_id]?.length || retrying[run.run_id]" @click="retry(run)">
         {{ retrying[run.run_id] ? '正在提交…' : '重试所选失败字段' }}

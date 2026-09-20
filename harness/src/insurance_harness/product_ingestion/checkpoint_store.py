@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import timedelta
 from uuid import NAMESPACE_URL, uuid5
 
@@ -175,13 +176,70 @@ class CheckpointStore:
             if stage
             else None
         )
+        rebased_rows = (
+            session.execute(select(
+                ProductArtifact.artifact_kind,
+                ProductArtifact.payload_sha256,
+                ProductArtifact.producer_job_id,
+                ProductArtifact.producer_generation,
+                ProductArtifact.dependency_sha256,
+            ).where(
+                ProductArtifact.run_id == run_id,
+                ProductArtifact.space_id == scope.space_id,
+                ProductArtifact.artifact_kind.in_((
+                    "rebased_base_snapshot", "rebased_compile_request",
+                    "rebased_identity", "rebased_compile_delta",
+                    "rebased_discovery_disposition",
+                )),
+            )).all()
+            if receipt.rebased_base_sha256 is not None else ()
+        )
+        valid_rebase = receipt.rebased_base_sha256 is None or (
+            stage is not None and job is not None
+            and
+            {row.artifact_kind for row in rebased_rows} == {
+                "rebased_base_snapshot", "rebased_compile_request",
+                "rebased_identity", "rebased_compile_delta",
+            } | (
+                {"rebased_discovery_disposition"}
+                if receipt.rebased_discovery_disposition_sha256 is not None else set()
+            )
+            and next(row.payload_sha256 for row in rebased_rows
+                     if row.artifact_kind == "rebased_base_snapshot")
+            == receipt.rebased_base_sha256
+            and (
+                receipt.rebased_discovery_disposition_sha256 is None
+                or next(
+                    row.payload_sha256 for row in rebased_rows
+                    if row.artifact_kind == "rebased_discovery_disposition"
+                ) == receipt.rebased_discovery_disposition_sha256
+            )
+            and all(
+                row.producer_job_id == stage.job_id
+                and row.producer_generation == job.lease_generation
+                and row.dependency_sha256 == stage.dependency_sha256
+                for row in rebased_rows
+            )
+        )
         if (
             plan is None
             or receipt.contract != plan.contract.replace("-plan.", "-receipt.")
             or receipt.scope != scope
             or receipt.run_id != run_id
             or receipt.plan_sha256 != plan.digest()
-            or receipt.reused_stages != plan.reused_stages
+            or not valid_rebase
+            or (
+                receipt.reused_stages != plan.reused_stages
+                and not (
+                    plan.contract_version == "6"
+                    and receipt.rebased_base_sha256 is not None
+                    and receipt.reused_stages in (
+                        plan.reused_stages[:stage_order(3).index("discovery")],
+                        plan.reused_stages[:stage_order(3).index("compilation")],
+                    )
+                )
+            )
+            or (receipt.rebased_base_sha256 is not None and plan.contract_version != "6")
             or receipt.retry_calls != plan.retry_calls
             or receipt.failed_calls != plan.failed_calls
             or row.space_id != scope.space_id
@@ -254,7 +312,11 @@ class CheckpointStore:
     def _checkpoint_candidate(self, session, scope, origin):
         run = self._run_snapshot(session, origin, scope)
         if (
-            run.state not in {ProductRunState.FAILED, ProductRunState.NEEDS_CONFIRMATION}
+            run.state not in {
+                ProductRunState.FAILED,
+                ProductRunState.NEEDS_CONFIRMATION,
+                ProductRunState.PARTIAL_SUCCESS,
+            }
             or run.finished_at is None
             or not origin.uploads_sealed
         ):
@@ -275,10 +337,19 @@ class CheckpointStore:
                 return None
         # Metadata only. An authorized reference is fully validated by the new worker.
         old_plan = self.checkpoint_plan(scope=scope, run_id=origin.id, session=session)
+        old_receipt = (
+            self.checkpoint_receipt(scope=scope, run_id=origin.id, session=session)
+            if old_plan else None
+        )
         # A failed verifier may be retried by reference too. This is only an
         # admission plan, never a substitute for the next worker's full proof.
         inherited = old_plan
-        stages = {s.stage_key: s for s in inherited.reused_stages} if inherited else {}
+        inherited_stages = (
+            old_receipt.reused_stages if old_receipt is not None
+            else inherited.reused_stages if inherited else ()
+        )
+        inherited_keys = {stage.stage_key for stage in inherited_stages}
+        stages = {s.stage_key: s for s in inherited_stages}
         for row in session.scalars(
             select(ProductStage).where(ProductStage.run_id == origin.id)
         ).all():
@@ -292,7 +363,7 @@ class CheckpointStore:
             {
                 (r.artifact_kind, r.artifact_key): r
                 for r in inherited.artifacts
-                if r.producer_generation > 0
+                if r.producer_generation > 0 and r.stage_key in inherited_keys
             }
             if inherited
             else {}
@@ -308,6 +379,38 @@ class CheckpointStore:
             )
         ).all():
             refs[(row.artifact_kind, row.artifact_key)] = _ref(row)
+
+        failed_discovery_artifact = None
+        failed_discovery_stage = None
+        if run.state is ProductRunState.PARTIAL_SUCCESS:
+            if origin.workflow_version != 3:
+                return None
+            for kind, stage_key in (
+                ("discovery_summary", "discovery"),
+                ("discovery_final_summary", "compilation"),
+            ):
+                summary_ref = refs.get((kind, "product"))
+                discovery_stage = stages.get(stage_key)
+                if summary_ref is None or discovery_stage is None:
+                    continue
+                summary_row = _small_artifact(session, summary_ref.run_id, kind)
+                if summary_row is None or _ref(summary_row) != summary_ref:
+                    return None
+                try:
+                    summary = json.loads(summary_row.payload)
+                except (TypeError, ValueError):
+                    return None
+                if (
+                    summary.get("state") == "FAILED"
+                    and discovery_stage.state == "partial_success"
+                    and summary_ref.stage_key == stage_key
+                    and summary_ref.run_id == discovery_stage.run_id
+                ):
+                    failed_discovery_artifact = summary_ref
+                    failed_discovery_stage = discovery_stage
+                    break
+            if failed_discovery_artifact is None:
+                return None
 
         def current_contract(ref):
             expected = CURRENT_ARTIFACT_CONTRACTS.get(ref.artifact_kind)
@@ -342,8 +445,24 @@ class CheckpointStore:
                 break
             prefix.append(stage)
         if not prefix or len(prefix) == len(order):
+            if not failed_discovery_artifact:
+                return None
+        resume = order[len(prefix)] if len(prefix) < len(order) else "discovery"
+        rebase = workflow_version == 3 and "synthesis" in {s.stage_key for s in prefix}
+        if rebase and run.state is ProductRunState.PARTIAL_SUCCESS:
+            if failed_discovery_artifact is not None and (
+                failed_discovery_artifact.artifact_kind == "discovery_final_summary"
+                and "discovery" in {s.stage_key for s in prefix}
+            ):
+                prefix = prefix[: order.index("compilation")]
+                resume = "compilation"
+            else:
+                prefix = prefix[: order.index("discovery")]
+                resume = "discovery"
+        if run.state is ProductRunState.PARTIAL_SUCCESS and not (
+            failed_discovery_artifact and rebase
+        ):
             return None
-        resume = order[len(prefix)]
         if resume == "verify":
             # A published-head verification retry requires the new publication
             # receipt as its current-head baseline; not the prepublication base.
@@ -382,7 +501,31 @@ class CheckpointStore:
                 return None
         else:
             retry_calls = ()
-        calls = {(c.kind, c.record_id): c for c in inherited.calls} if inherited else {}
+        calls = {}
+        audited_calls = (
+            {(c.kind, c.record_id): c for c in inherited.audited_calls}
+            if inherited and rebase else {}
+        )
+        if inherited:
+            for ref in inherited.calls:
+                if ref.kind == "field":
+                    key = "extract"
+                else:
+                    key = session.scalar(select(ProductStageModelCall.stage_key).where(
+                        ProductStageModelCall.id == ref.record_id,
+                        ProductStageModelCall.run_id == ref.run_id,
+                        ProductStageModelCall.space_id == scope.space_id,
+                    ))
+                    if key is None:
+                        return None
+                if key in inherited_keys:
+                    calls[(ref.kind, ref.record_id)] = ref
+                elif rebase and ref.kind == "stage" and key in {"discovery", "compilation"}:
+                    if ref.state != "recorded":
+                        return None
+                    audited_calls[(ref.kind, ref.record_id)] = ref
+                else:
+                    return None
         for kind, table in (
             ("field", ProductModelCall),
             ("stage", ProductStageModelCall),
@@ -415,6 +558,16 @@ class CheckpointStore:
                 # cannot be dispatched under a new identity. Reconcile separately.
                 if key not in prefix_keys:
                     if row.dispatched_at is not None:
+                        if rebase and kind == "stage" and key in {"discovery", "compilation"}:
+                            if row.state != "recorded" or row.raw_sha256 is None:
+                                return None
+                            audited_calls[(kind, row.id)] = CallReference(
+                                kind=kind, record_id=row.id, run_id=row.run_id,
+                                call_id=row.call_id, state=row.state,
+                                request_sha256=row.request_sha256,
+                                raw_sha256=row.raw_sha256,
+                            )
+                            continue
                         if (
                             kind != "stage"
                             or key != "identity"
@@ -518,8 +671,29 @@ class CheckpointStore:
                 raise ValueError("checkpoint ancestry is cyclic or exceeds capacity")
             seen.add(upload.id)
             upload = self._run(session, scope, upload.retry_of_run_id)
+        prior_rebase_artifacts = inherited.prior_rebase_artifacts if inherited else ()
+        if rebase:
+            prior_receipt = self.checkpoint_receipt(
+                scope=scope, run_id=origin.id, session=session
+            )
+            if prior_receipt is not None and prior_receipt.rebased_base_sha256 is not None:
+                rows = session.execute(select(*columns).where(
+                    ProductArtifact.run_id == origin.id,
+                    ProductArtifact.space_id == scope.space_id,
+                    ProductArtifact.artifact_kind.in_((
+                        "rebased_base_snapshot", "rebased_compile_request",
+                        "rebased_identity", "rebased_compile_delta",
+                        "rebased_discovery_disposition",
+                    )),
+                )).all()
+                prior_rebase_artifacts = tuple(sorted(
+                    (_ref(row) for row in rows), key=lambda row: row.artifact_kind
+                ))
+                expected = 5 if prior_receipt.rebased_discovery_disposition_sha256 else 4
+                if len(prior_rebase_artifacts) != expected:
+                    return None
         if workflow_version == 3:
-            contract_version = 5
+            contract_version = 6 if rebase else 5
         elif failed_calls:
             contract_version = 4
         elif retry_calls:
@@ -540,6 +714,12 @@ class CheckpointStore:
             fields=tuple(sorted(fields.values(), key=lambda f: f.attempt_id)),
             retry_calls=retry_calls,
             failed_calls=failed_calls,
+            audited_calls=tuple(
+                sorted(audited_calls.values(), key=lambda c: (c.kind, c.record_id))
+            ),
+            prior_rebase_artifacts=prior_rebase_artifacts if rebase else (),
+            failed_discovery_artifact=failed_discovery_artifact,
+            failed_discovery_stage=failed_discovery_stage,
         )
 
     def can_retry_processing(self, *, scope, run_id):

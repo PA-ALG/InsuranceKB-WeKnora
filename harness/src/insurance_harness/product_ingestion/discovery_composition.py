@@ -54,6 +54,7 @@ def merge_discovery_delta(*, request, field_delta, free_output, run_id):
 def _review_call_matches(outcome, proof, response_row, proof_row, context_hash, final_hash, run_id):
     from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin, StageCallState
     from insurance_harness.product_ingestion.discovery import INDEPENDENT_DISCOVERY_REVIEW_PROMPT
+    from insurance_harness.product_ingestion.extraction import _json
     from insurance_harness.product_ingestion.model_execution import ConfiguredFieldTransport
 
     replayed = getattr(outcome, "replayed_call", None)
@@ -88,7 +89,7 @@ def _review_call_matches(outcome, proof, response_row, proof_row, context_hash, 
     ):
         return False
     try:
-        semantic = json.loads(ConfiguredFieldTransport.decode_response(replayed.raw))
+        semantic = _json(ConfiguredFieldTransport.decode_response(replayed.raw))
         return semantic == json.loads(response_row.payload)
     except (TypeError, ValueError):
         return False

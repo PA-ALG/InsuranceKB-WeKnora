@@ -234,6 +234,7 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             "field_plan",
             "extract",
             "synthesis",
+            *(["discovery"] if child.workflow_version == 3 else []),
             "compilation",
         ]
         for kind in ("compile_request", "compile_delta", "candidate"):

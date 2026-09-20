@@ -201,6 +201,13 @@ class _ScopedPlatform:
     async def lookup_upload(self, scope: ProductScope, run_id: str, ordinal: int):
         return await self._client(scope).lookup_upload(scope, run_id, ordinal)
 
+    async def lookup_file_by_sha256(
+        self, scope: ProductScope, sha256: str, *, knowledge_id: str | None = None
+    ):
+        return await self._client(scope).lookup_file_by_sha256(
+            scope, sha256, knowledge_id=knowledge_id
+        )
+
     async def capture_source(self, scope: ProductScope, knowledge_id: str, attempt: int) -> bytes:
         return await self._client(scope).capture_source(scope, knowledge_id, attempt)
 

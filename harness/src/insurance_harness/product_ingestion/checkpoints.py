@@ -80,6 +80,11 @@ CURRENT_ARTIFACT_CONTRACTS = {
     "reviewed_discovery_delta": ("product-reviewed_discovery_delta.v1", "1"),
     "discovery_final_summary": ("product-discovery_final_summary.v1", "1"),
     "composite_review": ("product-composite_review.v1", "1"),
+    "rebased_base_snapshot": ("product-rebased_base_snapshot.v1", "1"),
+    "rebased_compile_request": ("product-rebased_compile_request.v1", "1"),
+    "rebased_identity": ("product-rebased_identity.v1", "1"),
+    "rebased_compile_delta": ("product-rebased_compile_delta.v1", "1"),
+    "rebased_discovery_disposition": ("product-rebased_discovery_disposition.v1", "1"),
 }
 
 
@@ -170,19 +175,26 @@ class VersionedCheckpoint(Frozen):
     @model_serializer(mode="wrap")
     def preserve_old_wire(self, handler):
         value = handler(self)
-        if not self.contract.endswith((".v3", ".v4", ".v5")):
+        if not self.contract.endswith((".v3", ".v4", ".v5", ".v6")):
             value.pop("retry_calls", None)
-        if not self.contract.endswith((".v4", ".v5")):
+        if not self.contract.endswith((".v4", ".v5", ".v6")):
             value.pop("failed_calls", None)
+        if not self.contract.endswith(".v6"):
+            value.pop("audited_calls", None)
+            value.pop("failed_discovery_artifact", None)
+            value.pop("failed_discovery_stage", None)
+            value.pop("prior_rebase_artifacts", None)
+            value.pop("rebased_base_sha256", None)
+            value.pop("rebased_discovery_disposition_sha256", None)
         return value
 
     @model_validator(mode="after")
     def valid_retry_contract(self):
-        if self.retry_calls and not self.contract.endswith((".v3", ".v5")):
+        if self.retry_calls and not self.contract.endswith((".v3", ".v5", ".v6")):
             raise ValueError("retry references require checkpoint v3")
         if len(self.retry_calls) > 1:
             raise ValueError("only one recorded identity retry is supported")
-        if self.failed_calls and not self.contract.endswith((".v4", ".v5")):
+        if self.failed_calls and not self.contract.endswith((".v4", ".v5", ".v6")):
             raise ValueError("failure references require checkpoint v4")
         if len(self.failed_calls) > 1 or (self.failed_calls and self.retry_calls):
             raise ValueError("only one identity failure mode is supported")
@@ -196,6 +208,7 @@ class CheckpointPlan(VersionedCheckpoint):
         "product-stage-checkpoint-plan.830.v3",
         "product-stage-checkpoint-plan.830.v4",
         "product-stage-checkpoint-plan.830.v5",
+        "product-stage-checkpoint-plan.830.v6",
     ] = "product-stage-checkpoint-plan.830.v2"
     scope: ProductScope
     origin_run_id: str
@@ -209,6 +222,10 @@ class CheckpointPlan(VersionedCheckpoint):
     fields: tuple[FieldReference, ...] = ()
     retry_calls: tuple[IdentityRetryReference, ...] = ()
     failed_calls: tuple[ConfirmedFailureReference, ...] = ()
+    audited_calls: tuple[CallReference, ...] = ()
+    prior_rebase_artifacts: tuple[ArtifactReference, ...] = ()
+    failed_discovery_artifact: ArtifactReference | None = None
+    failed_discovery_stage: StageSnapshot | None = None
 
     @property
     def contract_version(self):
@@ -218,7 +235,7 @@ class CheckpointPlan(VersionedCheckpoint):
     def workflow_version(self):
         if self.contract.endswith(".v1"):
             return 1
-        return 3 if self.contract.endswith(".v5") else 2
+        return 3 if self.contract.endswith((".v5", ".v6")) else 2
 
     @model_validator(mode="after")
     def valid(self):
@@ -256,6 +273,38 @@ class CheckpointPlan(VersionedCheckpoint):
                 or any(c.call_id == self.failed_calls[0].call_id for c in self.calls)
             ):
                 raise ValueError("invalid or intersecting confirmed failure reference")
+        if self.audited_calls and not self.contract.endswith(".v6"):
+            raise ValueError("audited calls require checkpoint v6")
+        if self.prior_rebase_artifacts:
+            kinds = {r.artifact_kind for r in self.prior_rebase_artifacts}
+            required = {
+                "rebased_base_snapshot", "rebased_compile_request",
+                "rebased_identity", "rebased_compile_delta",
+            }
+            if (
+                not self.contract.endswith(".v6")
+                or not required <= kinds
+                or kinds - required != (
+                    {"rebased_discovery_disposition"} if len(kinds) == 5 else set()
+                )
+                or len(self.prior_rebase_artifacts) != len(kinds)
+                or len({r.artifact_id for r in self.prior_rebase_artifacts}) != len(kinds)
+                or any(r.stage_key != "checkpoint" for r in self.prior_rebase_artifacts)
+            ):
+                raise ValueError("invalid prior checkpoint rebase")
+        if bool(self.failed_discovery_artifact) != bool(self.failed_discovery_stage):
+            raise ValueError("incomplete discovery failure proof")
+        if self.failed_discovery_artifact:
+            if (
+                not self.contract.endswith(".v6")
+                or (self.resume_stage, self.failed_discovery_artifact.artifact_kind,
+                    self.failed_discovery_stage.stage_key) not in {
+                    ("discovery", "discovery_summary", "discovery"),
+                    ("compilation", "discovery_final_summary", "compilation"),
+                }
+                or self.failed_discovery_stage.run_id != self.failed_discovery_artifact.run_id
+            ):
+                raise ValueError("invalid discovery failure proof")
         if len(self.encoded()) > 131072:
             raise ValueError("checkpoint reference capacity exceeded")
         return self
@@ -268,6 +317,7 @@ class CheckpointReceipt(VersionedCheckpoint):
         "product-stage-checkpoint-receipt.830.v3",
         "product-stage-checkpoint-receipt.830.v4",
         "product-stage-checkpoint-receipt.830.v5",
+        "product-stage-checkpoint-receipt.830.v6",
     ] = "product-stage-checkpoint-receipt.830.v2"
     scope: ProductScope
     run_id: str
@@ -279,6 +329,10 @@ class CheckpointReceipt(VersionedCheckpoint):
     unsettled_call_count: int = Field(default=0, ge=0)
     retry_calls: tuple[IdentityRetryReference, ...] = ()
     failed_calls: tuple[ConfirmedFailureReference, ...] = ()
+    rebased_base_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    rebased_discovery_disposition_sha256: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$"
+    )
 
 
 def field_digest(snapshot):

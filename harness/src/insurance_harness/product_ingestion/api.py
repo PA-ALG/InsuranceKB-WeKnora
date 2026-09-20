@@ -384,10 +384,7 @@ def install_product_api(
         return {
             "success": True,
             "data": {
-                "runs": [
-                    read_payload(scope, run.run_id)["data"]
-                    for run in store.list_runs(scope=scope, limit=limit)
-                ]
+                "runs": store.list_status_summaries(scope=scope, limit=limit)
             },
         }
 

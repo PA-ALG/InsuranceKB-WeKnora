@@ -171,3 +171,59 @@ def test_window_plan_identity_uses_current_scope_and_metadata_only():
     refs.clear()
     with pytest.raises(ValueError, match="unique authorized"):
         reader(scope, "run")
+
+
+@pytest.mark.asyncio
+async def test_duplicate_material_resolution_through_production_scope_adapter():
+    import json
+    from types import SimpleNamespace
+
+    import httpx
+
+    from insurance_harness.product_ingestion.composition import _ScopedPlatform
+    from insurance_harness.product_ingestion.upload_manifest import UploadManifest
+    from insurance_harness.product_ingestion.upload_resolution import lookup_material
+    from tests.product_ingestion.test_platform_client import client
+    from tests.product_ingestion.test_upload_manifest_admission import manifest
+
+    seen = []
+    sha = "0" * 63 + "1"
+
+    def respond(request):
+        seen.append(request)
+        if "/platform/uploads/" in request.url.path:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"success": True, "data": {
+            "contract": "g3-platform-file-fingerprint.830.v1",
+            "knowledge_id": "existing",
+            "file_name": "old.pdf",
+            "file_sha256": sha,
+            "file_size": 4,
+            "type": "file",
+            "parse_attempt": 1,
+            "parse_status": "completed",
+            "original_upload_run_id": "old-run",
+            "original_upload_ordinal": 2,
+        }})
+
+    platform, scope = client(respond)
+    scoped = _ScopedPlatform({scope.space_id: SimpleNamespace(scope=scope, platform=platform)})
+    admitted = UploadManifest.model_validate_json(json.dumps(manifest()))
+    try:
+        for knowledge_id in (None, "existing"):
+            result = await lookup_material(
+                scoped, scope, "new-run", 0, admitted, knowledge_id=knowledge_id
+            )
+            assert result["knowledge_id"] == "existing"
+            assert result["original_upload_run_id"] == "old-run"
+            assert result["original_upload_ordinal"] == 2
+        assert len(seen) == 4
+        assert seen[-1].url.params["knowledge_id"] == "existing"
+        with pytest.raises(ValueError, match="outside configured"):
+            await lookup_material(
+                scoped, scope.model_copy(update={"tenant_id": "other"}), "new-run", 0, admitted
+            )
+        assert len(seen) == 4
+        assert all(request.method == "GET" for request in seen)
+    finally:
+        await platform.close()

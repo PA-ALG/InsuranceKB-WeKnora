@@ -36,10 +36,19 @@ def _parent_call(*, stage_key, operation, content, prompt, raw):
     )
 
 
-def _service(*, role, purpose, prompt):
-    class NoResend:
+def _service(*, role, purpose, prompt, new_raw=None):
+    class Executor:
+        def __init__(self):
+            self.calls = []
+
         async def execute_stage_call(self, **kwargs):
-            raise AssertionError("recorded parent response must not be sent again")
+            self.calls.append(kwargs)
+            if new_raw is None:
+                raise AssertionError("valid recorded parent response must not be sent again")
+            return SimpleNamespace(
+                state="recorded", raw=new_raw, call_id="child-call",
+                diagnostic=None, policy_receipt=object(),
+            )
 
     template = SimpleNamespace(
         role=role, purpose=purpose,
@@ -48,7 +57,7 @@ def _service(*, role, purpose, prompt):
     )
     return SimpleNamespace(
         configuration=SimpleNamespace(model=SimpleNamespace(templates=[template])),
-        model_executor=NoResend(),
+        model_executor=Executor(),
     )
 
 
@@ -75,8 +84,12 @@ def _settle_child(*, artifacts, products, jobs, child, running, stage_key, draft
 
 
 @pytest.mark.asyncio
-async def test_recorded_generation_replay_settles_child_without_foreign_model_origin(
-    case, api, factory,
+@pytest.mark.parametrize("parent_kind", [
+    "valid", "fenced", "malformed", "semantic_invalid", "http_error",
+    "unknown", "missing_raw", "tampered", "other_diagnostic",
+])
+async def test_generation_reuses_valid_parent_and_retries_only_received_bad_raw(
+    case, api, factory, parent_kind,
 ):
     request, _field_delta, entity_id = case
     artifacts, products, jobs, child, running = _start_stage(
@@ -92,32 +105,75 @@ async def test_recorded_generation_replay_settles_child_without_foreign_model_or
         json_bytes([entity_id, window_id])
     ).hexdigest()
     response = _proposal(context)
-    raw = json.dumps({"choices": [{"message": {"content": json.dumps(response)}}]}).encode()
+    valid_raw = json.dumps({
+        "choices": [{"message": {"content": json.dumps(response)}}]
+    }).encode()
+    content = json.dumps(response)
+    if parent_kind == "fenced":
+        content = "```json\n" + content + "\n```"
+    elif parent_kind == "malformed":
+        content = "```json\n{broken}\n```"
+    elif parent_kind == "semantic_invalid":
+        duplicate = _proposal(context, title=index["schema_fields"][0]["short_title"])
+        content = json.dumps(duplicate)
+    elif parent_kind == "http_error":
+        content = json.dumps({"error": "service unavailable"})
+    raw = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
     parent = _parent_call(
         stage_key="discovery", operation=operation, content=json_bytes(context),
         prompt=discovery.INDEPENDENT_DISCOVERY_PROMPT, raw=raw,
     )
+    if parent_kind == "http_error":
+        parent.diagnostic = "provider_http_status"
+    elif parent_kind == "unknown":
+        parent.state = "dispatched"
+    elif parent_kind == "missing_raw":
+        parent.raw = None
+        parent.raw_sha256 = None
+        parent.diagnostic = "transport:TimeoutException"
+    elif parent_kind == "tampered":
+        parent.raw_sha256 = "0" * 64
+    elif parent_kind == "other_diagnostic":
+        parent.diagnostic = "transport:TimeoutException"
     artifacts.list_stage_calls = lambda **kwargs: (parent,)
+    service = _service(
+        role="extract", purpose="g3-independent-discovery",
+        prompt=discovery.INDEPENDENT_DISCOVERY_PROMPT,
+        new_raw=valid_raw,
+    )
     output = await run_discovery_generation_stage(
-        service=_service(
-            role="extract", purpose="g3-independent-discovery",
-            prompt=discovery.INDEPENDENT_DISCOVERY_PROMPT,
-        ),
+        service=service,
         artifacts=artifacts, scope=_scope(),
         run=SimpleNamespace(run_id=child.run_id, retry_of_run_id="parent-run"),
         stage=products.list_stages(scope=_scope(), run_id=child.run_id)[0],
         job=running, request=request, entity_id=entity_id, exclusion_index=index,
     )
-    assert any(row.artifact_kind == "discovery_window_replay_receipt" for row in output.drafts)
-    _settle_child(
-        artifacts=artifacts, products=products, jobs=jobs,
-        child=child, running=running, stage_key="discovery", drafts=output.drafts,
-    )
+    summary = json.loads(next(row.payload for row in output.drafts
+                              if row.artifact_kind == "discovery_summary"))
+    if parent_kind in {"unknown", "missing_raw", "tampered", "other_diagnostic"}:
+        assert summary["state"] == "FAILED"
+        assert service.model_executor.calls == []
+        return
+    assert summary["state"] == "GENERATED"
+    assert len(service.model_executor.calls) == (1 if parent_kind in {
+        "malformed", "semantic_invalid", "http_error",
+    } else 0)
+    assert any(row.artifact_kind == "discovery_window_replay_receipt"
+               for row in output.drafts) == (parent_kind in {"valid", "fenced"})
+    if parent_kind in {"valid", "fenced"}:
+        _settle_child(
+            artifacts=artifacts, products=products, jobs=jobs,
+            child=child, running=running, stage_key="discovery", drafts=output.drafts,
+        )
 
 
 @pytest.mark.asyncio
-async def test_recorded_final_review_replay_settles_child_without_foreign_model_origin(
-    case, api, factory,
+@pytest.mark.parametrize("parent_kind", [
+    "valid", "fenced", "malformed", "semantic_invalid", "http_error",
+    "pending", "rejected", "unknown", "missing_raw", "tampered", "other_diagnostic",
+])
+async def test_final_review_reuses_valid_parent_and_retries_only_received_bad_raw(
+    case, api, factory, parent_kind,
 ):
     request, field_delta, entity_id = case
     artifacts, products, jobs, child, running = _start_stage(
@@ -181,19 +237,52 @@ async def test_recorded_final_review_replay_settles_child_without_foreign_model_
             "decision": "ACCEPT", "reason": "Unique useful process",
         }],
     }
-    raw = json.dumps({"choices": [{"message": {"content": json.dumps(response)}}]}).encode()
+    valid_raw = json.dumps({
+        "choices": [{"message": {"content": json.dumps(response)}}]
+    }).encode()
+    if parent_kind == "pending":
+        response["review"]["decision"] = "NEEDS_HUMAN"
+        response["disposition_checks"][0]["decision"] = "NEEDS_HUMAN"
+    elif parent_kind == "rejected":
+        response["review"]["decision"] = "REJECT"
+        response["disposition_checks"][0]["decision"] = "REJECT"
+    content = json.dumps(response)
+    if parent_kind == "fenced":
+        content = "```json\n" + content + "\n```"
+    elif parent_kind == "malformed":
+        content = "```json\n{broken}\n```"
+    elif parent_kind == "semantic_invalid":
+        response["review"]["output_hash"] = "0" * 64
+        content = json.dumps(response)
+    elif parent_kind == "http_error":
+        content = json.dumps({"error": "service unavailable"})
+    raw = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
     parent = _parent_call(
         stage_key="compilation",
         operation="independent-discovery-final-review-" + final_hash,
         content=json_bytes(context), prompt=discovery.INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
         raw=raw,
     )
+    if parent_kind == "http_error":
+        parent.diagnostic = "provider_http_status"
+    elif parent_kind == "unknown":
+        parent.state = "dispatched"
+    elif parent_kind == "missing_raw":
+        parent.raw = None
+        parent.raw_sha256 = None
+        parent.diagnostic = "transport:TimeoutException"
+    elif parent_kind == "tampered":
+        parent.raw_sha256 = "0" * 64
+    elif parent_kind == "other_diagnostic":
+        parent.diagnostic = "transport:TimeoutException"
     artifacts.list_stage_calls = lambda **kwargs: (parent,)
+    service = _service(
+        role="verify", purpose="g3-independent-discovery-review",
+        prompt=discovery.INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+        new_raw=valid_raw,
+    )
     outcome = await run_independent_discovery_final_review(
-        service=_service(
-            role="verify", purpose="g3-independent-discovery-review",
-            prompt=discovery.INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
-        ),
+        service=service,
         artifacts=artifacts, scope=_scope(),
         run=SimpleNamespace(run_id=child.run_id, retry_of_run_id="parent-run"),
         stage=products.list_stages(scope=_scope(), run_id=child.run_id)[0],
@@ -201,9 +290,23 @@ async def test_recorded_final_review_replay_settles_child_without_foreign_model_
         final_composed_output=final, final_composed_output_hash=final_hash,
         exclusion_index=index, entity_id=entity_id,
     )
-    assert outcome.decision == "ACCEPTED" and outcome.replayed_call is parent
+    if parent_kind in {"unknown", "missing_raw", "tampered", "other_diagnostic"}:
+        assert outcome.decision == "FAILED"
+        assert service.model_executor.calls == []
+        return
+    expected = {
+        "pending": "PENDING", "rejected": "REJECTED",
+    }.get(parent_kind, "ACCEPTED")
+    assert outcome.decision == expected
+    assert len(service.model_executor.calls) == (1 if parent_kind in {
+        "malformed", "semantic_invalid", "http_error",
+    } else 0)
+    assert (outcome.replayed_call is parent) == (parent_kind in {
+        "valid", "fenced", "pending", "rejected",
+    })
     assert any(row.artifact_kind == "discovery_review_proof" for row in outcome.drafts)
-    _settle_child(
-        artifacts=artifacts, products=products, jobs=jobs,
-        child=child, running=running, stage_key="compilation", drafts=outcome.drafts,
-    )
+    if parent_kind in {"valid", "fenced", "pending", "rejected"}:
+        _settle_child(
+            artifacts=artifacts, products=products, jobs=jobs,
+            child=child, running=running, stage_key="compilation", drafts=outcome.drafts,
+        )

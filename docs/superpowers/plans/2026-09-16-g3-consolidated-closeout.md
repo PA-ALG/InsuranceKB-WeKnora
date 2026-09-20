@@ -91,3 +91,32 @@ Review：独立只读冻结diff，不修改实现。
 - A追加拥有models/store/checkpoints/checkpoint_store/checkpoint_artifacts/progression的workflow3与checkpoint v5接线；root保留pipeline/composition/API/来源manifest集成。旧workflow1/2与checkpoint1–4不重写。
 - root为前端已有任务列表增加discovery阶段中文名，不新增页面或状态平台。
 - 最终审核复用现有bundle合同：真实自由发现LLM的context/response/proof单独持久化；显式组合审核adapter消费字段规则结果、精确最终输出和free整组审核证明，生成自己的ReviewResult（implementation=platform-combined-field-discovery-review.830.g3.v1）。其完整semantic context哈希描述组合程序的输入，不冒充LLM完整上下文；raw是组合程序输出，原模型响应保持独立。
+
+## Task3bn：真实网页复测后的集中修复（2026-09-17）
+
+基线源码63ac9e460，正常全新2648-1已发布且网页字段原文第12页可见；增量ab0b7d18因生产_ScopedPlatform缺SHA查询代理阻塞，1835恢复051f9096供应商已恢复但身份合并待诊断。新发现原响应为标准单json代码块，严格边界兼容不足；独立发现恢复入口仍缺。全部保留现场，不在运行中修改结果。
+
+本切片唯一写域（覆盖上方同路径旧派工）：
+- A/g3_recovery_analysis：任务列表与轮询轻量化，product_ingestion/api.py、store.py、frontend/src/components/knowledge-base/product-ingestion-status.vue及其API类型和测试；先核对现有Go转发能力，避免为查询参数新建接口。其他root所需API恢复接线等A交回后再修改。
+- C/g3_discovery_analysis：先只读1835身份根因；随后单独派发语义JSON共用边界、discovery_stage统计、discovery_composition及对应测试；不写API/store/checkpoint。
+- root：生产composition SHA代理及实际接线测试、独立发现恢复/checkpoint与集成（API/store等A交回后才写）；身份修复在根因明确后另指定独占写域。文档、复测、冻结及部署仍root。
+- reviewer：仅冻结身份只读复核，不顺手改生产。
+- B/g3_admission_finish：独占 knowledge_compiler/g3_evidence_identity_v2.py、g3_evidence_identity_v3.py及新增窄证据身份helper/对应测试；仅在既有来源证据支持的公司正式名/简称等价时归并，不使用品牌子串或样本硬编码。不改root的pipeline/checkpoint或A的API/store。
+
+RED必须来自本轮真实响应/实际组合入口/数据库任务状态，不把缺依赖当RED；先复用已记录响应离线投影，再必要真实调用。Go发布性能另记录为当前优化问题，优先移除并发完整状态审计的放大器，未有证据前不再启动一次Go重编译。
+
+### Task3bn 恢复实现边界（2026-09-18）
+
+A交回轻量列表后接 checkpoint v6/rebase：独占checkpoints.py/checkpoint_store.py/checkpoint_artifacts.py、pipeline.py、新增窄rebase模块与API恢复提示/相关测试。root不并发改这些文件；root仅前端恢复按钮、上传边界、文档/部署。复用现有retry-processing入口，已发布partial_success且discovery技术失败时该明确动作只恢复discovery，不要求新增Go端点。v1—v5字节合同保持不变。
+
+v6保留旧plan/来源/字段证据，worker核验后基于当前已签发布快照重算resolution/request。当前Head变化只使受影响的运行产物失效，不重发完成模型调用。先对旧完整字段集合应用原validation报告，再按新request所需task SHA选择可复用结果；carry的已发布字段不重复投影，必要task缺失或来源/Schema变化则明确阻断，不自动补抽。新的base/request/delta以独立rebase产物同checkpoint fence持久化；旧candidate/delta及其proof不改写。只有已验v6receipt可激活新运行输入，后续Head再变化由已有CAS拒绝。discovery先核原全部未决call，再匹配窗口上下文；未知发送不能通过新base/input SHA避开检查。独立只读设计依据/private/tmp/g3-task3bn-checkpoint-rebase-design-review.md。
+
+发现generation技术FAILED从discovery恢复；generation已成功但独立final review技术FAILED则从compilation恢复并保留发现候选。可信汇总/原调用/fence决定阶段，不用错误文本前缀猜测；PENDING/REJECTED仍需既有审查决定，不当成可自动补审的技术失败。
+
+2026-09-19集成反例：recorded父响应的内容仍畸形时，不能无限回放导致显式恢复永远失败。C独占discovery_stage.py及对应tests，在真实child恢复中先按当前相同解码/投影规则检查父raw；合法（含本轮围栏兼容后可读者）继续复用，仍不合法才为这个失败单元发一次新的child调用，保留父raw及失败审计。新调用自身失败不在同阶段自动追加；未知发送仍先阻断，合法业务PENDING/REJECTED不因此补审。此项不改变Schema字段抽取与发布权限，不扩大模型重试预算。
+
+v6独立复核两项同一失效边界修正：Head变化后即使调用原本位于成功prefix，只要其discovery/compilation阶段将重执行，仍须核对全部原及继承调用的已记录结局，未知外发不能随prefix截断被绕过。原自由组合法PENDING/REJECTED须保留不发布的业务处置及证据；恢复后续字段发布不能重新生成或补审自由组，不能把旧review改成新输出的审批。沿现有receipt/产物adapter实现字段only恢复，无新表或服务，Owner A；两个真实worker反例先RED再集中修复复审。
+
+B2实现绑定：完整验证原prefix及原compilation的discovery_final_summary后，PENDING/REJECTED且Head变化时在现有checkpoint输出中保存rebased_discovery_disposition，引用原summary的artifact id/SHA/状态及当前request SHA。receipt保留discovery处置，compilation先检查经receipt验证的该规则产物，只组新字段候选，不加载或合并旧free候选、不新调最终模型。原非PASS summary/模型review字节和hash保持原审计意义，以来源引用标明保留处置，不能冒充新审批。后续再次rebase须验证并重新绑定该可选处置。B1仅拦将重执行单元的未知外发，不全局否定无需重做的历史未知调用。
+
+1835缺少官方简称映射证据，保留身份待确认，不用产品名/品牌子串推导主体相同，也不在本轮扩大双端身份协议；已证实供应商调用恢复和三阶段复用，未发布。

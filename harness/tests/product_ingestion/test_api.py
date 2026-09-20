@@ -246,6 +246,42 @@ def test_run_is_visible_after_api_process_recomposition(environment):
     assert listing[0]["run_id"] == first.json()["data"]["run_id"]
 
 
+def test_list_is_a_thin_status_without_replaying_history_audits(environment, monkeypatch):
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+
+    client, *_ = environment
+    run = client.post(
+        PATH, headers=auth(),
+        json={"idempotency_key": "thin-list", "expected_upload_count": 3},
+    ).json()["data"]
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("list must not load full audit or recovery evidence")
+
+    monkeypatch.setattr(ProductArtifactStore, "get_stage_call_metrics", forbidden)
+    monkeypatch.setattr(ProductArtifactStore, "list_artifacts", forbidden)
+    monkeypatch.setattr(ProductArtifactStore, "list_effective_artifacts", forbidden)
+    monkeypatch.setattr(ProductIngestionStore, "can_retry_processing", forbidden)
+    monkeypatch.setattr(ProductIngestionStore, "_run_snapshot", forbidden)
+    response = client.get(PATH, headers=auth("fixture-reader"))
+    assert response.status_code == 200, response.text
+    summary = response.json()["data"]["runs"][0]
+    assert summary["run_id"] == run["run_id"]
+    assert summary["scope"] == SCOPE
+    assert summary["wiki_knowledge_base_id"] == "wiki"
+    assert summary["state"] == "accepting_uploads"
+    assert summary["counts"] == {
+        "success_count": None, "missing_count": None, "failure_count": None
+    }
+    assert summary["model_call_count"] is None
+    assert summary["model_call_count_complete"] is False
+    assert summary["stage"] == "uploads"
+    for key in (
+        "fields", "stages", "source_processing", "discovery_summary", "can_retry_processing"
+    ):
+        assert key not in summary
+
+
 def test_failed_field_retry_creates_a_linked_run_and_preserves_original(environment):
     import hashlib
     from types import SimpleNamespace

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from insurance_harness.product_ingestion import discovery
+from insurance_harness.product_ingestion import discovery, discovery_stage
 from insurance_harness.product_ingestion.discovery_stage import run_discovery_generation_stage
 from insurance_harness.product_ingestion.stages import json_bytes
 from tests.product_ingestion.test_independent_discovery import _proposal
@@ -158,3 +158,86 @@ async def test_base_only_entity_has_zero_current_windows_not_generation_failure(
     assert summary["state"] == "EMPTY"
     assert summary["coverage"]["complete"] is True
     assert summary["coverage"]["window_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_sent_and_verified_chars_diverge_when_second_window_response_fails(
+    case, monkeypatch,
+):
+    request, _delta, entity_id = case
+    binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
+    material_id = binding.source_material_ids[0]
+    entry = next(row for row in request.resolution_inputs.corpus.entries
+                 if row.material_id == material_id)
+    block = entry.blocks[0]
+    longer = block.text + "附加原文条件。" * 500
+    sources = tuple(
+        source.model_copy(update={"text": longer})
+        if source.revision_id == block.revision_id and source.block_id == block.block_id
+        else source for source in request.base_request.sources
+    )
+    entries = tuple(
+        row.model_copy(update={"blocks": tuple(
+            source.model_copy(update={"text": longer})
+            if source.block_id == block.block_id else source for source in row.blocks
+        )}) if row.material_id == material_id else row
+        for row in request.resolution_inputs.corpus.entries
+    )
+    request = request.model_copy(update={
+        "base_request": request.base_request.model_copy(update={"sources": sources}),
+        "resolution_inputs": request.resolution_inputs.model_copy(update={
+            "corpus": request.resolution_inputs.corpus.model_copy(update={"entries": entries})
+        }),
+    })
+    original = discovery.render_independent_discovery_contexts
+
+    def two_windows(**kwargs):
+        kwargs["max_source_chars"] = 2000
+        result = original(**kwargs)
+        assert len(result) == 2
+        return result
+
+    monkeypatch.setattr(discovery_stage, "render_independent_discovery_contexts", two_windows)
+
+    class Executor:
+        def __init__(self):
+            self.calls = []
+
+        async def execute_stage_call(self, **kwargs):
+            self.calls.append(kwargs)
+            context = json.loads(kwargs["content"])
+            content = (
+                json.dumps(_proposal(context)) if len(self.calls) == 1
+                else "```json\n{broken}\n```"
+            )
+            return SimpleNamespace(
+                state="recorded", call_id=f"window-{len(self.calls)}",
+                raw=json_bytes({"choices": [{"message": {"content": content}}]}),
+                diagnostic=None, policy_receipt=object(),
+            )
+
+    executor = Executor()
+    template = SimpleNamespace(
+        role="extract", purpose="g3-independent-discovery",
+        prompt_sha256=hashlib.sha256(discovery.INDEPENDENT_DISCOVERY_PROMPT).hexdigest(),
+        max_context_bytes=100_000, template_id="independent-discovery",
+    )
+    result = await run_discovery_generation_stage(
+        service=SimpleNamespace(
+            configuration=SimpleNamespace(model=SimpleNamespace(templates=[template])),
+            model_executor=executor,
+        ),
+        artifacts=SimpleNamespace(list_stage_calls=lambda **_kwargs: ()),
+        scope=None, run=SimpleNamespace(run_id="two-windows", retry_of_run_id=None),
+        stage=SimpleNamespace(dependency_sha256="b" * 64), job=object(),
+        request=request, entity_id=entity_id,
+    )
+    summary = json.loads(next(row.payload for row in result.drafts
+                              if row.artifact_kind == "discovery_summary"
+                              and row.artifact_key == "product"))
+    assert len(executor.calls) == 2
+    assert summary["state"] == "FAILED"
+    assert summary["coverage"]["offered_chars"] == summary["coverage"]["total_chars"]
+    assert summary["coverage"]["validated_chars"] < summary["coverage"]["offered_chars"]
+    assert summary["coverage"]["omitted_chars"] == 0
+    assert summary["coverage"]["complete"] is False

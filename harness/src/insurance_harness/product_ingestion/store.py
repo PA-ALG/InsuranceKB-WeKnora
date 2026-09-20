@@ -215,6 +215,99 @@ class ProductIngestionStore(CheckpointStore):
             ).all()
             return tuple(self._run_snapshot(session, row, scope) for row in rows)
 
+    def list_status_summaries(self, *, scope: ProductScope, limit: int = 30) -> tuple[dict, ...]:
+        """Read the displayed run heads without opening field, source or model audits."""
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(ProductRun, ProductRunFinalization, WikiJob)
+                .outerjoin(ProductRunFinalization, ProductRunFinalization.run_id == ProductRun.id)
+                .outerjoin(WikiJob, WikiJob.id == ProductRun.root_job_id)
+                .where(
+                    ProductRun.tenant_id == scope.tenant_id,
+                    ProductRun.space_id == scope.space_id,
+                    ProductRun.raw_knowledge_base_id == scope.raw_knowledge_base_id,
+                    ProductRun.wiki_knowledge_base_id == scope.wiki_knowledge_base_id,
+                )
+                .order_by(ProductRun.created_at.desc(), ProductRun.id.desc())
+                .limit(limit)
+            ).all()
+            if not rows:
+                return ()
+            ids = [run.id for run, _final, _root in rows]
+            active_stage: dict[str, str] = {}
+            for run_id, key, job_finished, settlement_finished in session.execute(
+                select(
+                    ProductStage.run_id, ProductStage.stage_key,
+                    WikiJob.finished_at, ProductStageSettlement.finished_at,
+                )
+                .join(WikiJob, WikiJob.id == ProductStage.job_id)
+                .outerjoin(
+                    ProductStageSettlement, ProductStageSettlement.stage_id == ProductStage.id
+                )
+                .where(ProductStage.run_id.in_(ids), ProductStage.space_id == scope.space_id)
+                .order_by(ProductStage.created_at, ProductStage.id)
+            ):
+                if job_finished is None and settlement_finished is None:
+                    active_stage.setdefault(run_id, key)
+            for run_id, key, job_finished in session.execute(
+                select(ProductWindow.run_id, ProductWindow.stage_key, WikiJob.finished_at)
+                .join(WikiJob, WikiJob.id == ProductWindow.job_id)
+                .where(ProductWindow.run_id.in_(ids), ProductWindow.space_id == scope.space_id)
+                .order_by(ProductWindow.created_at, ProductWindow.id)
+            ):
+                if job_finished is None:
+                    active_stage.setdefault(run_id, key)
+            result = []
+            for run, final, root in rows:
+                state = final.state if final is not None else run.state
+                finished_at = _aware(final.finished_at) if final is not None else None
+                reason = None
+                if final is None and root is not None and root.state in {
+                    JobState.BLOCKED.value, JobState.DEAD_LETTER.value,
+                }:
+                    finished_at = _aware(root.finished_at)
+                    summary = root.error_summary or root.state
+                    if (
+                        root.state == JobState.BLOCKED.value
+                        and root.error_class == ErrorClass.CAPACITY_BLOCKED.value
+                        and _NEEDS_CONFIRMATION_PREFIX in summary
+                    ):
+                        state = ProductRunState.NEEDS_CONFIRMATION.value
+                        reason = summary.partition(_NEEDS_CONFIRMATION_PREFIX)[2]
+                    else:
+                        state = ProductRunState.FAILED.value
+                        reason = (
+                            summary if re.fullmatch(r"[A-Z][A-Z0-9_:.-]{0,199}", summary)
+                            else "PRODUCT_STAGE_FAILED"
+                        )
+                counts = (
+                    {
+                        "success_count": final.success_count,
+                        "missing_count": final.missing_count,
+                        "failure_count": final.failure_count,
+                    }
+                    if final is not None else
+                    {"success_count": None, "missing_count": None, "failure_count": None}
+                )
+                result.append({
+                    "run_id": run.id,
+                    "scope": scope.model_dump(mode="json"),
+                    "wiki_knowledge_base_id": scope.wiki_knowledge_base_id,
+                    "version": run.version,
+                    "state": state,
+                    "stage": active_stage.get(run.id),
+                    "created_at": _aware(run.created_at),
+                    "started_at": _aware(final.started_at if final is not None else run.started_at),
+                    "finished_at": finished_at,
+                    "reason": reason,
+                    "counts": counts,
+                    "model_call_count": None,
+                    "model_call_count_complete": False,
+                })
+            return tuple(result)
+
     def scan_runs(
         self,
         *,

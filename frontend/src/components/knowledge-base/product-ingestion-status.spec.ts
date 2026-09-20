@@ -58,15 +58,55 @@ describe('persistent product processing status', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
   it('polls active runs until terminal and stops timers', async () => {
-    api.listProductIngestions.mockResolvedValue([run({ state: 'running', finished_at: undefined })])
-    api.getProductIngestion.mockResolvedValue(run({ state: 'succeeded' }))
+    api.listProductIngestions.mockResolvedValueOnce([run({ state: 'running', finished_at: undefined })])
+      .mockResolvedValueOnce([run({ state: 'succeeded' })])
     const w = await render()
     expect(w.get('[data-testid="run-duration"]').text()).toContain('1 分')
     await vi.advanceTimersByTimeAsync(2100)
     await flushPromises()
-    expect(api.getProductIngestion).toHaveBeenCalledTimes(1)
+    expect(api.listProductIngestions).toHaveBeenCalledTimes(2)
+    expect(api.getProductIngestion).not.toHaveBeenCalled()
     expect(w.text()).toContain('已完成')
     expect(vi.getTimerCount()).toBe(0)
+  })
+  it('loads full evidence and recovery eligibility only when a thin run is opened', async () => {
+    api.listProductIngestions.mockResolvedValue([{
+      run_id: 'r1', wiki_knowledge_base_id: 'kb', state: 'failed', version: 7,
+      counts: { success_count: null, missing_count: null, failure_count: null },
+      model_call_count: null, model_call_count_complete: false,
+    }])
+    api.getProductIngestion.mockResolvedValue(run({ state: 'failed', version: 7, can_retry_processing: true }))
+    const w = await render()
+    expect(w.get('[data-testid="counts"]').text()).toContain('模型调用 —')
+    expect(w.find('[data-testid="retry-processing"]').exists()).toBe(false)
+    expect(w.findAll('input[type="checkbox"]')).toHaveLength(0)
+    await w.get('[data-testid="load-run-detail"]').trigger('click')
+    await flushPromises()
+    expect(api.getProductIngestion).toHaveBeenCalledWith('kb', 'r1')
+    expect(w.get('[data-testid="retry-processing"]').text()).toBe('恢复处理')
+    expect(w.findAll('input[type="checkbox"]')).toHaveLength(1)
+    expect(w.text()).not.toContain('UNVERIFIED_SECRET')
+  })
+  it.each([
+    { state: 'succeeded', stage: 'verify', label: '已完成', stageLabel: '检索与证据检查', finished_at: '2026-09-13T00:01:01Z' },
+    { state: 'running', stage: 'compilation', label: '处理中', stageLabel: '编译知识', finished_at: undefined },
+  ])('does not let a late detail replace newer $state/$stage at the same version', async latest => {
+    const earlier = run({ state: 'running', stage: 'extract', version: 7, finished_at: undefined })
+    api.listProductIngestions.mockResolvedValueOnce([earlier])
+      .mockResolvedValue([run({ ...latest, version: 7 })])
+    let resolve!: (value: any) => void
+    api.getProductIngestion.mockImplementation(() => new Promise(r => { resolve = r }))
+    const w = await render()
+    await w.get('[data-testid="load-run-detail"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(2100)
+    await flushPromises()
+    resolve(earlier)
+    await flushPromises()
+    expect(w.get('.run-state').text()).toBe(latest.label)
+    expect(w.get('.run-heading').text()).toContain(latest.stageLabel)
+    expect(w.get('.run-heading').text()).not.toContain('抽取字段')
+    expect(api.getProductIngestion).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(latest.state === 'succeeded' ? 0 : 2)
   })
   it.each([['accepting_uploads', '接收材料'], ['awaiting_sources', '等待材料解析']])('shows server state %s in Chinese', async (state, label) => {
     api.listProductIngestions.mockResolvedValue([run({ state, finished_at: undefined, stage: undefined })])
@@ -174,6 +214,30 @@ describe('persistent product processing status', () => {
   it('shows discovery as not executed when no summary exists', async () => {
     expect((await render()).get('[data-testid="discovery-status"]').text()).toContain('未执行')
   })
+  it('recovers failed discovery independently without selecting or retrying fields', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ version: 8, can_retry_processing: true,
+      discovery_summary: { state: 'FAILED', reused: false, published_confirmed: false,
+        reason_codes: ['DISCOVERY_GENERATION_FAILED'], counts: {}, coverage: null } })])
+    api.retryProductProcessing.mockResolvedValue(run({ run_id: 'discovery-child', state: 'running', finished_at: undefined }))
+    const w = await render()
+    const recovery = w.get('[data-testid="retry-processing"]')
+    expect(recovery.text()).toBe('恢复自由发现')
+    expect(w.text()).toContain('复用已完成的字段结果')
+    await recovery.trigger('click')
+    await flushPromises()
+    expect(api.retryProductProcessing).toHaveBeenCalledWith('kb', 'r1', 8)
+    expect(api.retryProductFields).not.toHaveBeenCalled()
+  })
+  it('does not enable discovery recovery for ordinary missing fields or an unapproved hint', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ version: 8, can_retry_processing: true,
+      discovery_summary: { state: 'EMPTY', reused: false, published_confirmed: false,
+        reason_codes: [], counts: {}, coverage: null } })])
+    expect((await render()).find('[data-testid="retry-processing"]').exists()).toBe(false)
+    api.listProductIngestions.mockResolvedValue([run({ version: 8, can_retry_processing: false,
+      discovery_summary: { state: 'FAILED', reused: false, published_confirmed: false,
+        reason_codes: [], counts: {}, coverage: null } })])
+    expect((await render()).find('[data-testid="retry-processing"]').exists()).toBe(false)
+  })
   it.each([
     ['FAILED', '发现失败'], ['PENDING', '待确认'], ['REJECTED', '未通过'],
     ['EMPTY', '未发现有效新知识'], ['ACCEPTED', '已通过检查'],
@@ -188,8 +252,8 @@ describe('persistent product processing status', () => {
     const text = w.get('[data-testid="discovery-status"]').text()
     expect(text).toContain(label)
     expect(text).toContain('复用已有发现结果')
-    expect(text).toContain('本次提供 200 字')
-    expect(text).toContain('未覆盖 500 字')
+    expect(text).toContain('已发送 200 字')
+    expect(text).toContain('未发送 500 字')
     expect(text).not.toContain('已发布')
     expect(text).not.toContain('PRIVATE')
     expect(w.text()).toContain('材料未提供')

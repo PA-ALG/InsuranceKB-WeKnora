@@ -248,8 +248,9 @@ def test_checkpoint_contract_is_bound_to_child_workflow(stage_runtime, monkeypat
 
     scope, store, _, _, child = _child(stage_runtime, monkeypatch)
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
-    assert plan.contract == "product-stage-checkpoint-plan.830.v2"
-    assert child.workflow_version == 2
+    version = 5 if child.workflow_version == 3 else 2
+    assert plan.contract == f"product-stage-checkpoint-plan.830.v{version}"
+    assert child.workflow_version in {2, 3}
     with store._session_factory() as session, session.begin():
         session.get(ProductRun, child.run_id).workflow_version = 1
     with pytest.raises(ValueError, match="workflow"):
@@ -263,6 +264,9 @@ def test_legacy_checkpoint_bytes_keep_original_contract(stage_runtime, monkeypat
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
     data = plan.model_dump(mode="json")
     data["contract"] = "product-stage-checkpoint-plan.830.v1"
+    for key in ("retry_calls", "failed_calls", "audited_calls", "failed_discovery_artifact",
+                "failed_discovery_stage"):
+        data.pop(key, None)
     import json
 
     raw = json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode()

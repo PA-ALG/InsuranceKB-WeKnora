@@ -130,7 +130,15 @@ def register_stage_handlers(
             )
             if stage is None:
                 raise NonRetryableJobError("PRODUCT_STAGE_BINDING_MISSING")
-            result = await execute(scope, run, stage, job)
+            try:
+                result = await execute(scope, run, stage, job)
+            except (AttributeError, TypeError) as error:
+                # A broken local port/contract cannot heal through redispatch.
+                # Keep the recorded failure and let an explicit recovery follow
+                # a software repair; provider transient errors retain their type.
+                raise NonRetryableJobError(
+                    f"PRODUCT_STAGE_IMPLEMENTATION_ERROR:{type(error).__name__}:{error}"
+                ) from error
             writes = (
                 await asyncio.to_thread(
                     artifacts.prepare_artifact_writes,

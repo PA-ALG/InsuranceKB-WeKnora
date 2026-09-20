@@ -142,14 +142,18 @@ def test_composite_review_rejects_stale_or_partial_model_proof(drift):
         )
 
 
-def test_composite_accepts_auditable_parent_call_without_claiming_child_model_call():
+@pytest.mark.parametrize("fenced", [False, True])
+def test_composite_accepts_auditable_parent_call_without_claiming_child_model_call(fenced):
     from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
     from insurance_harness.product_ingestion.discovery import INDEPENDENT_DISCOVERY_REVIEW_PROMPT
     from insurance_harness.product_ingestion.discovery_composition import compose_discovery_review
 
     request, _field_delta, free, composed, outcome = case()
     response = next(r for r in outcome.drafts if r.artifact_kind == "discovery_review_response")
-    provider_raw = json_bytes({"choices": [{"message": {"content": response.payload.decode()}}]})
+    content = response.payload.decode()
+    if fenced:
+        content = "```json\n" + content + "\n```"
+    provider_raw = json_bytes({"choices": [{"message": {"content": content}}]})
     raw_sha = hashlib.sha256(provider_raw).hexdigest()
     call = SimpleNamespace(
         run_id="parent",

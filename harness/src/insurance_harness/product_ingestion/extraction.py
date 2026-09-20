@@ -118,9 +118,15 @@ def _sha(raw: bytes) -> str:
 
 
 def _json(raw: bytes) -> object:
-    """Formatting may vary; duplicate keys/non-JSON constants are never accepted."""
+    """Accept bare JSON or one complete JSON fence; keep strict JSON validation."""
     if type(raw) is not bytes or not raw or len(raw) > MAX_RESPONSE_BYTES:
         raise ValueError("invalid response bytes")
+    semantic = raw.strip()
+    if semantic.startswith(b"```"):
+        lines = semantic.splitlines()
+        if len(lines) < 3 or lines[0] != b"```json" or lines[-1] != b"```":
+            raise ValueError("invalid response JSON fence")
+        semantic = b"\n".join(lines[1:-1])
 
     def unique(pairs):
         value = {}
@@ -133,7 +139,7 @@ def _json(raw: bytes) -> object:
     def invalid_constant(value):
         raise ValueError("non-JSON constant")
 
-    return json.loads(raw, object_pairs_hook=unique, parse_constant=invalid_constant)
+    return json.loads(semantic, object_pairs_hook=unique, parse_constant=invalid_constant)
 
 
 def _source_index(

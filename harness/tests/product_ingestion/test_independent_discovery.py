@@ -124,6 +124,27 @@ def test_schema_field_name_cannot_become_free_page_even_if_unknown(case):
         )
 
 
+def test_existing_concept_alias_cannot_become_new_free_page(case):
+    request, _delta, entity_id = case
+    existing = request.base_request.existing_definitions
+    alias = "受保对象"
+    definition = existing[0].model_copy(update={"aliases": (alias,)})
+    base = request.base_request.model_copy(update={
+        "existing_definitions": (definition, *existing[1:]),
+    })
+    request = request.model_copy(update={"base_request": base})
+    index = discovery.build_discovery_exclusion_index(request, entity_id)
+    context = discovery.render_independent_discovery_contexts(
+        request=request, entity_id=entity_id, exclusion_index=index,
+    )[0]
+    with pytest.raises(ValueError, match="existing concept duplicate"):
+        discovery.project_independent_discovery_response(
+            raw=discovery._bytes(_proposal(context, title=alias)),
+            request=request, entity_id=entity_id,
+            exclusion_index=index, context=context,
+        )
+
+
 def test_valid_independent_page_projects_without_field_delta(case):
     request, _delta, entity_id = case
     index = discovery.build_discovery_exclusion_index(request, entity_id)
@@ -140,7 +161,8 @@ def test_valid_independent_page_projects_without_field_delta(case):
 
 
 @pytest.mark.asyncio
-async def test_generation_stage_records_each_window_without_field_delta(case):
+@pytest.mark.parametrize("fenced", [False, True])
+async def test_generation_stage_records_each_window_without_field_delta(case, fenced):
     request, _delta, entity_id = case
 
     class Executor:
@@ -153,7 +175,10 @@ async def test_generation_stage_records_each_window_without_field_delta(case):
             context = json.loads(kwargs["content"])
             self.calls.append(kwargs)
             response = _proposal(context)
-            raw = json.dumps({"choices": [{"message": {"content": json.dumps(response)}}]}).encode()
+            content = json.dumps(response)
+            if fenced:
+                content = "```json\n" + content + "\n```"
+            raw = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
             return SimpleNamespace(state="recorded", raw=raw, call_id=f"call-{len(self.calls)}",
                                    diagnostic=None, policy_receipt=object())
 
@@ -180,7 +205,9 @@ async def test_generation_stage_records_each_window_without_field_delta(case):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("invalid_review", [False, None, []])
+@pytest.mark.parametrize("invalid_review", [
+    False, None, [], "synonym_pending", "fenced_pass",
+])
 async def test_final_review_binds_actual_composed_hash_and_keeps_whole_group(
     case, invalid_review,
 ):
@@ -236,7 +263,21 @@ async def test_final_review_binds_actual_composed_hash_and_keeps_whole_group(
                 "disposition_checks": [{"candidate_id": candidate_id,
                                         "decision": "ACCEPT", "reason": "Unique useful process"}],
             }
-            content = json.dumps(response) if invalid_review is False else invalid_review
+            if invalid_review == "synonym_pending":
+                response["review"]["decision"] = "NEEDS_HUMAN"
+                response["review"]["reasons"] = ["Possible synonym of a Schema concept"]
+                response["disposition_checks"][0].update(
+                    decision="NEEDS_HUMAN", reason="Schema synonym uncertain",
+                )
+            content = (
+                json.dumps(response)
+                if invalid_review is False
+                or invalid_review == "synonym_pending"
+                or invalid_review == "fenced_pass"
+                else invalid_review
+            )
+            if invalid_review == "fenced_pass":
+                content = "```json\n" + content + "\n```"
             raw = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
             return SimpleNamespace(state="recorded", raw=raw, call_id="review-call",
                                    diagnostic=None, policy_receipt=object())
@@ -256,10 +297,14 @@ async def test_final_review_binds_actual_composed_hash_and_keeps_whole_group(
         final_composed_output=final, final_composed_output_hash=final_hash,
         exclusion_index=index, entity_id=entity_id,
     )
-    if invalid_review is False:
+    if invalid_review is False or invalid_review == "fenced_pass":
         assert outcome.decision == "ACCEPTED"
         assert outcome.reviewed_output.pages == free_output.pages
         assert outcome.review_output.output_hash == final_hash
+    elif invalid_review == "synonym_pending":
+        assert outcome.decision == "PENDING"
+        assert outcome.reviewed_output.pages == ()
+        assert outcome.summary["accepted_member_count"] == 0
     else:
         assert outcome.decision == "FAILED"
         assert outcome.reviewed_output.pages == ()

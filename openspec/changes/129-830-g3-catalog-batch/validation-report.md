@@ -1,3 +1,15 @@
+## 2026-09-20 Task3bn 软件通过，部署/网页复验待执行
+
+G3-AUTO-1—6及G3-DISC-1/2对应本切片实现经限定回归、最终独立复审0 BLOCKER；见[Task3bn矩阵](../../../docs/insurance-kb/evidence/830-g3/task3bn-consolidated-validation.md)。最后二次恢复自由组处置继承反例已闭合，未知外发不重试，原字段有效结果保持。这里只认软件验证，不替代构建/部署或业务结果；G3整体仍未完成。将只构建更新Harness/UI，复用其它组件与现有环境。
+
+## 2026-09-18 当前状态：Task3bm 已部署，Task3bn 集中修复中
+
+G3整体仍为BLOCKED。源码63ac9e460已部署至原应用、Harness与网页，未新建环境或数据库；2648-1三份全新原材料网页上传后，由平台独立完成字段发布和验后检查，845.414秒，34有效/34未提供/6抽取失败，23次实际模型调用，普通字段补抽0。网页独立字段及PDF第12页回查通过。完整运行身份、阶段耗时、制品与限制见[Task3bm实测记录](../../../docs/insurance-kb/evidence/830-g3/task3bm-consolidated-validation.md)。
+
+后续重复上传因生产SHA查询接线遗漏失败；供应商恢复后1835身份仍待确认；旧发布准备任务恢复因检查点失败。自由发现围栏JSON兼容、覆盖统计、独立恢复及状态读取成本纳入Task3bn统一修复。当前Task3bn未部署，测试通过不覆盖这些真实失败。5～10分钟目标未达标，千文件/长稳NOT RUN；QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。
+
+以下为历史记录，不覆盖本段当前状态。
+
 ## Task3bm 本地软件收口（2026-09-16）
 
 G3-AUTO-1—6、G3-DISC-1/2实现与有界回归PASS，独立复核最终BLOCKER0。精确矩阵与测试超时重跑边界见[Task3bm报告](../../../docs/insurance-kb/evidence/830-g3/task3bm-consolidated-validation.md)。代码提交为本条所在提交；运行部署及新网页验收NOT RUN。下方历史PASS不能覆盖本轮尚未执行动作。

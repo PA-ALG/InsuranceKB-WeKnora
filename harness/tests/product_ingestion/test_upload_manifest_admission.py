@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from sqlalchemy import select
 
 from insurance_harness.jobs import JobState
@@ -137,3 +138,23 @@ def test_unbound_reused_original_does_not_invent_new_upload_binding():
     assert "original_upload_run_id" in result
     assert result["original_upload_run_id"] is None
     assert result["original_upload_ordinal"] is None
+
+
+@pytest.mark.parametrize("failure", [AttributeError("missing port"), TypeError("bad adapter")])
+def test_local_stage_contract_error_has_terminal_instead_of_repeated_dispatch(
+    stage_runtime, failure  # noqa: F811 -- imported pytest fixture
+):
+    scope, store, _artifacts, platform, execute = stage_runtime
+    run = store.create_run(
+        scope=scope, idempotency_key="local-contract-failure", expected_upload_count=1
+    )
+    calls = []
+
+    async def broken(*_args):
+        calls.append("lookup")
+        raise failure
+
+    platform.lookup_upload = broken
+    result = execute(run)
+    assert result.state is JobState.DEAD_LETTER
+    assert calls == ["lookup"]

@@ -79,11 +79,50 @@ def _verified_parent_discovery_call(
     if row.dispatched_at is None:
         return None
     state = row.state.value if hasattr(row.state, "value") else row.state
-    if state != "recorded" or not row.raw or getattr(row, "diagnostic", None):
+    if state != "recorded" or row.raw is None:
         raise ValueError("DISCOVERY_REPLAY_OUTCOME_UNKNOWN")
     if row.raw_sha256 != hashlib.sha256(row.raw).hexdigest():
         raise ValueError("DISCOVERY_REPLAY_RAW_MISMATCH")
+    diagnostic = getattr(row, "diagnostic", None)
+    if diagnostic == "provider_http_status":
+        # The recorded HTTP response proves this attempt finished, but is not
+        # a successful model result to replay into a child recovery.
+        return None
+    if diagnostic:
+        raise ValueError("DISCOVERY_REPLAY_OUTCOME_UNKNOWN")
     return row
+
+
+def _validated_independent_review(decoded, *, context, final_composed_output_hash):
+    """Validate the same semantic review before replay and after a new call."""
+    from insurance_harness.product_ingestion.discovery import DiscoveryReview
+
+    if not isinstance(decoded, dict):
+        raise ValueError("discovery review response must be an object")
+    checked = DiscoveryReview.model_validate(decoded)
+    review_output = checked.review
+    if (review_output.request_hash, review_output.output_hash) != (
+        context["request_hash"], final_composed_output_hash,
+    ):
+        raise ValueError("discovery review binding mismatch")
+    if set(review_output.page_scores) != set(context["review_member_ids"]):
+        raise ValueError("discovery review score coverage mismatch")
+    expected_ids = {row["candidate_id"] for row in context["dispositions"]}
+    ids = [row.candidate_id for row in checked.disposition_checks]
+    if len(ids) != len(set(ids)) or set(ids) != expected_ids:
+        raise ValueError("discovery review disposition coverage mismatch")
+    checks = {row.decision for row in checked.disposition_checks}
+    scores = [score.total for score in review_output.page_scores.values()]
+    if review_output.decision == "REJECT" or "REJECT" in checks or any(
+        score < 60 for score in scores
+    ):
+        decision = "REJECTED"
+    elif (review_output.decision == "NEEDS_HUMAN"
+          or "NEEDS_HUMAN" in checks or any(score < 80 for score in scores)):
+        decision = "PENDING"
+    else:
+        decision = "ACCEPTED"
+    return checked, review_output, decision
 
 
 async def run_independent_discovery_final_review(
@@ -163,6 +202,19 @@ async def run_independent_discovery_final_review(
                     input_sha256=review_context_sha256,
                     prompt_sha256=template.prompt_sha256,
                 )
+            parent_decoded = None
+            parent_review = None
+            if replayed_call is not None:
+                try:
+                    parent_decoded = _json(
+                        ConfiguredFieldTransport.decode_response(replayed_call.raw)
+                    )
+                    parent_review = _validated_independent_review(
+                        parent_decoded, context=context,
+                        final_composed_output_hash=final_composed_output_hash,
+                    )
+                except (TypeError, ValueError):
+                    replayed_call = None
             if replayed_call is not None:
                 raw_provider = replayed_call.raw
                 call_id = replayed_call.call_id
@@ -185,39 +237,24 @@ async def run_independent_discovery_final_review(
                     )
                 raw_provider = result.raw
             summary["call_ids"].append(call_id)
-            decoded = _json(ConfiguredFieldTransport.decode_response(raw_provider))
-            if not isinstance(decoded, dict):
-                raise ValueError("discovery review response must be an object")
+            decoded = (
+                parent_decoded if replayed_call is not None
+                else _json(ConfiguredFieldTransport.decode_response(raw_provider))
+            )
             raw = json_bytes(decoded)
             review_raw_sha256 = hashlib.sha256(raw).hexdigest()
             keep(
                 "discovery_review_response", json.loads(raw),
                 call_id=None if replayed_call is not None else call_id,
             )
-            from insurance_harness.product_ingestion.discovery import DiscoveryReview
-            checked = DiscoveryReview.model_validate(json.loads(raw))
-            review_output = checked.review
-            if (review_output.request_hash, review_output.output_hash) != (
-                context["request_hash"], final_composed_output_hash,
-            ):
-                raise ValueError("discovery review binding mismatch")
-            if set(review_output.page_scores) != set(context["review_member_ids"]):
-                raise ValueError("discovery review score coverage mismatch")
-            expected_ids = {row["candidate_id"] for row in context["dispositions"]}
-            ids = [row.candidate_id for row in checked.disposition_checks]
-            if len(ids) != len(set(ids)) or set(ids) != expected_ids:
-                raise ValueError("discovery review disposition coverage mismatch")
-            checks = {row.decision for row in checked.disposition_checks}
-            scores = [score.total for score in review_output.page_scores.values()]
-            if review_output.decision == "REJECT" or "REJECT" in checks or any(
-                score < 60 for score in scores
-            ):
-                decision = "REJECTED"
-            elif (review_output.decision == "NEEDS_HUMAN"
-                  or "NEEDS_HUMAN" in checks or any(score < 80 for score in scores)):
-                decision = "PENDING"
-            else:
-                decision = "ACCEPTED"
+            checked, review_output, decision = (
+                parent_review if replayed_call is not None
+                else _validated_independent_review(
+                    decoded, context=context,
+                    final_composed_output_hash=final_composed_output_hash,
+                )
+            )
+            if decision == "ACCEPTED":
                 reviewed = candidate_output
             keep("discovery_review_proof", {
                 "contract": "product-discovery-review-proof.830.v1",
@@ -291,8 +328,10 @@ async def _run_entity_discovery_generation_stage(
         summary.update(
             state="EMPTY", reason_codes=["NO_CURRENT_BOUND_MATERIAL"],
             coverage={
-                "total_chars": 0, "processed_chars": 0,
-                "window_count": 0, "processed_window_count": 0,
+                "total_chars": 0, "offered_chars": 0, "validated_chars": 0,
+                "omitted_chars": 0, "processed_chars": 0,
+                "window_count": 0, "sent_window_count": 0,
+                "processed_window_count": 0, "replayed_chars": 0,
                 "complete": True,
             },
         )
@@ -324,8 +363,11 @@ async def _run_entity_discovery_generation_stage(
         )
         total_chars = audit_windows[0]["coverage"]["total_chars"] if audit_windows else 0
         summary["coverage"] = {
-            "total_chars": total_chars, "processed_chars": 0,
-            "window_count": len(contexts), "processed_window_count": 0,
+            "total_chars": total_chars, "offered_chars": 0,
+            "validated_chars": 0, "omitted_chars": total_chars,
+            "processed_chars": 0, "window_count": len(contexts),
+            "sent_window_count": 0, "processed_window_count": 0,
+            "replayed_chars": 0,
             "complete": False,
         }
         pages = {}
@@ -357,11 +399,29 @@ async def _run_entity_discovery_generation_stage(
                     stage_key="discovery", operation=operation,
                     input_sha256=input_sha, prompt_sha256=template.prompt_sha256,
                 )
+            parent_decoded = None
+            parent_candidate = None
+            if replayed_call is not None:
+                try:
+                    parent_decoded = _json(
+                        ConfiguredFieldTransport.decode_response(replayed_call.raw)
+                    )
+                    if not isinstance(parent_decoded, dict):
+                        raise ValueError("discovery generation response must be an object")
+                    parent_candidate = await asyncio.to_thread(
+                        project_independent_discovery_response,
+                        raw=json_bytes(parent_decoded), request=request,
+                        entity_id=entity_id, exclusion_index=exclusion_index,
+                        context=context, audit=window_audit,
+                    )
+                except (TypeError, ValueError):
+                    replayed_call = None
             if replayed_call is not None:
                 raw_response = replayed_call.raw
                 call_id = replayed_call.call_id
                 summary["reused"] = True
                 summary["reused_from_run_id"] = run.retry_of_run_id
+                summary["coverage"]["replayed_chars"] += window_audit["coverage"]["offered_chars"]
                 keep("discovery_window_replay_receipt", {
                     "contract": "product-discovery-window-replay-receipt.830.v1",
                     "replayed_from_run_id": run.retry_of_run_id,
@@ -382,14 +442,31 @@ async def _run_entity_discovery_generation_stage(
                     template_id=template.template_id,
                 )
                 call_id = result.call_id
+                if result.policy_receipt is not None:
+                    summary["coverage"]["offered_chars"] += (
+                        window_audit["coverage"]["offered_chars"]
+                    )
+                    summary["coverage"]["sent_window_count"] += 1
+                    summary["coverage"]["omitted_chars"] = (
+                        total_chars - summary["coverage"]["offered_chars"]
+                    )
                 if (result.state != "recorded" or result.raw is None
                         or result.diagnostic or result.policy_receipt is None):
                     raise ValueError(
                         "discovery model call failed: " + (result.diagnostic or result.state)
                     )
                 raw_response = result.raw
+            if replayed_call is not None:
+                summary["coverage"]["offered_chars"] += window_audit["coverage"]["offered_chars"]
+                summary["coverage"]["sent_window_count"] += 1
+                summary["coverage"]["omitted_chars"] = (
+                    total_chars - summary["coverage"]["offered_chars"]
+                )
             summary["call_ids"].append(call_id)
-            decoded = _json(ConfiguredFieldTransport.decode_response(raw_response))
+            decoded = (
+                parent_decoded if replayed_call is not None
+                else _json(ConfiguredFieldTransport.decode_response(raw_response))
+            )
             if not isinstance(decoded, dict):
                 raise ValueError("discovery generation response must be an object")
             raw = json_bytes(decoded)
@@ -397,11 +474,14 @@ async def _run_entity_discovery_generation_stage(
                 "discovery_response", json.loads(raw), key=artifact_key,
                 call_id=None if replayed_call is not None else call_id,
             )
-            candidate = await asyncio.to_thread(
-                project_independent_discovery_response,
-                raw=raw, request=request, entity_id=entity_id,
-                exclusion_index=exclusion_index, context=context,
-                audit=window_audit,
+            candidate = (
+                parent_candidate if replayed_call is not None
+                else await asyncio.to_thread(
+                    project_independent_discovery_response,
+                    raw=raw, request=request, entity_id=entity_id,
+                    exclusion_index=exclusion_index, context=context,
+                    audit=window_audit,
+                )
             )
             keep(
                 "discovery_proposal", candidate.proposal, key=artifact_key,
@@ -476,6 +556,7 @@ async def _run_entity_discovery_generation_stage(
                 ),
             })
             summary["coverage"]["processed_chars"] += window_audit["coverage"]["offered_chars"]
+            summary["coverage"]["validated_chars"] = summary["coverage"]["processed_chars"]
             summary["coverage"]["processed_window_count"] += 1
         from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput
         free_output = CompileOutput(
@@ -617,12 +698,25 @@ async def run_discovery_generation_stage(
         row["coverage"]["total_chars"] for row in summaries if row["coverage"]
     ) + unbound_chars
     offered_chars = sum(
+        row["coverage"]["offered_chars"] for row in summaries if row["coverage"]
+    )
+    validated_chars = sum(
         row["coverage"]["processed_chars"] for row in summaries if row["coverage"]
     )
     coverage = {
         "total_chars": total_chars,
         "offered_chars": offered_chars,
+        "validated_chars": validated_chars,
         "omitted_chars": total_chars - offered_chars,
+        "sent_window_count": sum(
+            row["coverage"]["sent_window_count"] for row in summaries if row["coverage"]
+        ),
+        "processed_window_count": sum(
+            row["coverage"]["processed_window_count"] for row in summaries if row["coverage"]
+        ),
+        "replayed_chars": sum(
+            row["coverage"]["replayed_chars"] for row in summaries if row["coverage"]
+        ),
         "material_count": len(request.resolution_inputs.corpus.entries),
         "entities": [
             {"entity_id": binding.entity_id, **(row["coverage"] or {})}
