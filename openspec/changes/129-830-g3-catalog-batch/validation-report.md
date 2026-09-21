@@ -118,3 +118,5 @@ D backend初次独审收口：11源码身份匹配，独立service303.020s/handl
 D backend repair1：完整三包/vet PASS，B1已关闭；root实际Create/Load+Gin renderer→冻结UI/Python两状态PASS，5实体342字段、28个U+2028及所有逻辑正文不变。独审报告4b45e09d…仍BLOCKER1：B2 decoded Text与stored检查已通过，新增raw JSON坏UTF8/lone surrogate替换边未封闭。首轮四源码gzip及所有日志保留，repair2设计5b67f955…独审PASS、dispatch2d7300a9…仅两handler文件，剩余最后一轮预算，无新基础域或外部权限。尚不能把backend或真实G3流程记为PASS。
 
 D backend最终软件收口：repair2最终独审5e9c4f0b… PASS/BLOCKER0，final freeze2b32e49f…逐11文件一致；仅G3 raw preparation_id在typed decode前由既有canonical helper校验、不使用返回值改写原文。原bad UTF8/lone surrogate反例现400/spy0，valid UFFFD/emoji/literal backslash-u和同坏字节G1/G2原行为保留；独立原探针2.295s、wire矩阵2.628s通过。service408.944s完整回归仍对应未变源码，最终handler/router2.802s/2.768s及vet通过。root已核30冻结身份及service→Gin→原UI/Python两状态5实体342字段完整互操作。历史失败/原始日志不重写，root总回执lane-d-root-software-integration.json。全部当前代码写域关闭；此为LOCAL SOFTWARE PASS，G3 FLOW、实际SOURCE/C/model/DB/build/deployment/release均NOT RUN，QUALITY仍DEFERRED_TO_Q0。
+
+部署与网页验收结果已补录：Harness/UI构建和健康通过，列表入口由17.318秒降至0.319秒；重复上传因Gemini地域400阻断在产品归并阶段；真实自由发现恢复在CHECKPOINT_INVALID终止；全新2662-1网页验收未运行。软件通过不能替代上述业务结果，G3仍BLOCKED。

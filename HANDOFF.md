@@ -401,3 +401,5 @@ attestor=`workspace-owner-houjing`，真实结论是 `QUALITY_FAIL`。
 9. [MVP-815 工程接手卡](docs/insurance-kb/26-mvp-815-engineering-handoff.md) 与
    [OpenSpec 120](openspec/changes/120-schema-wiki-medical-596-1-mvp/) 只作已冻结历史
    证据；后续 Goal 仍须自己的授权与适用 OpenSpec。
+
+部署已完成：Harness/UI源码0940f3649，镜像与真实列表性能、重复上传、恢复实测见Task3bn报告。当前实际阻断不是余额，而是Gemini上游400 `User location is not supported for the API use`；此外真实恢复在checkpoint校验阶段仍返回CHECKPOINT_INVALID。2662-1全新三PDF尚未上传，G3不能结项。

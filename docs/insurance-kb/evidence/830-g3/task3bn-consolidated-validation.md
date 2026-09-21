@@ -39,3 +39,15 @@ root最终旧冻结恢复组实际执行20/20通过，388.55秒，日志`/privat
 A最后B2实际RED→GREEN：首个变Head子任务检查点成功、编译产物前失败，再次恢复继承原处置与receipt约束并绑定当前request，保留原PENDING，新增发现/最终检查模型调用0。窄例1 passed/5 deselected，76.52秒；旧wire1 passed/13 deselected。独立最终复审原B1/B2全关闭，0剩余BLOCKER，报告`/private/tmp/g3-task3bn-recovery-final-review-03.md` SHA 8dbd28e05ad04c76f2c77c65ee48e7863e49283b372d64333040d914ad2a72d3；8文件冻结identity SHA db36eb001baab8b29fdab0b8c9dd844a22769520d49a4ed195a38cc5e0f570b9。上述均为离线worker fixture，非真实provider或网页业务。
 
 root全改动Python Ruff发现列表代码及test_api四处超长行，仅机械换行后全部PASS；不改变逻辑，原列表23项语义回归适用。独立review确认四处机械格式RED豁免。diff-check通过。当前提交包含已审软件与证据；本切片容器构建/健康、配置部署、真实provider、local live、GitHub live分别仍NOT RUN。原环境的健康只证明旧制品运行，不代替本提交部署。
+
+## 2026-09-20 部署后网页实测
+
+Task3bn 已只更新受影响 Harness/UI，复用原 APP、DocReader、PostgreSQL、Redis 和运行配置。Harness 镜像 sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d、UI 镜像 sha256:d488e95945f58a0967fd07108cacd32b0c83360e48d123d0bb57cc6ec2bfc57e，源码均为 0940f36497a7e7921b45aafab2362d6ca44182ff；处理服务和前端健康，数据库迁移、配置变更、模型调用和发布写入均为0。原容器保留回滚。
+
+列表性能真实对比：部署前列表 GET 17.318044177 秒 / 309221 字节；部署后 0.318828452 秒 / 25772 字节。部署后显式详情 GET 1.214670547 秒 / 16186 字节。性能改动已在真实入口生效。
+
+重复上传实测：网页再次上传2648-1相同三份PDF，接收与来源阶段成功，三份材料绑定到既有知识ID；归并阶段模型调用收到上游 Gemini 400 `User location is not supported for the API use`，平台以 `IDENTITY_MODEL_CALL_FAILED:provider_http_status` 终止，0字段重抽、0发布写入。该结果证明重复材料接线与原结果复用入口已生效，但受当前模型网关地域限制，不能宣称本次增量发布完成。
+
+平台恢复实测：网页点击2648-1已有发布任务的“恢复自由发现”，平台创建任务 2be3b35b-e390-5825-9ddd-43a6e856ccaa，检查点阶段约1秒终止为 `CHECKPOINT_INVALID`，0模型调用；原任务、材料和字段结果均保留。随后网页恢复旧抽取任务 59c9bf37-b650-50f2-8a1c-65b9563e9023，仍未形成发布结果。该项仍为平台遗留问题，不能用离线 fixture 通过替代真实恢复通过。
+
+新产品2662-1三份原材料仍未上传，避免在 Gemini 当前明确地域拒绝期间消耗全新产品首次网页验收样本。当前 G3 状态：软件、构建、容器健康、列表性能 PASS；重复上传业务与恢复业务 BLOCKED；全新产品网页验收 NOT RUN。主要外部阻断为模型网关地域限制，平台恢复检查点仍需依据真实运行数据修复。
