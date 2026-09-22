@@ -135,3 +135,10 @@ root在最终合并生产代码上重跑source审计生命周期2 passed/18.82�
 G3-AUTO-1/3/6：用户确认平安人寿简称/全称同公司，平台已有可信ResolutionPolicy新增作用域明确的issuer_aliases。原proposal、PDF证据和模型raw不改；新声明入policy SHA，旧省略字段原哈希保持。Python RED3（不支持声明）→115 passed/17.34s；Go新向量RED（严格合同拒绝）→identity与batch回归PASS/26.964s，旧v1/v2/v3向量通过。真实368c已保存响应→原生来源→Python归并3 CREATE/一医疗险绑定/3来源→Go严格resolution/binding重放PASS/2.101s，新增模型0、业务写0。完整发布未执行，网页恢复仍NOT RUN。实现冻结后独审，再一次更新受影响APP/Harness。
 
 最终独立复核BLOCKER0/BACKLOG0/REJECTED0；报告SHA 4605e3ed7392ecfa4daa5873708d755cd0e715ad2849b8ae5268aad28940e3fe，独立Python115 passed/15.03s、Go冻结向量与真实replay PASS/2.303s。软件冻结；下一步APP/Harness各一次构建更新，部署和网页验收仍NOT RUN。
+
+
+## 2026-09-22 最终实际网页收尾
+
+当前本地G3 FLOW PASS；QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。既有b696网页恢复457.517秒/33有效14未提供20失败/新增12调用；全新3190-2三原PDF网页首次上传run5fc81298-7bbe-4c1a-9c8d-bf8844055ef0，557.371秒/25有效19未提供31失败/25调用，普通字段补抽0。发布epoch17/release-b8d07e76-da52-4446-9c37-fb6f8a1cb2d6，检索/引用验证PASS；网页购买限制独立Wiki→PDF第12页高亮PASS。上传后无修改、构建、部署或手工业务接续。平台计时不含后续人工点验间隔；未实际关闭Codex。
+
+实现ec0721083及实际镜像/原始失败均已留档。更正此前独审：现代checkpoint的语义失败恢复是新发身份调用，不是legacy raw replay；零调用重投影列BACKLOG。完整Requirement矩阵、阶段耗时、持久化证据及后续项以 `docs/insurance-kb/evidence/830-g3/task3bn-platform-closeout-20260922.md` 和对应fresh/recovery JSON为准。此前NOT RUN/BLOCKED是当时事实，保留而不覆盖本次真实结果。

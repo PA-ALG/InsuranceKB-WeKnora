@@ -120,3 +120,10 @@ D backend repair1：完整三包/vet PASS，B1已关闭；root实际Create/Load+
 D backend最终软件收口：repair2最终独审5e9c4f0b… PASS/BLOCKER0，final freeze2b32e49f…逐11文件一致；仅G3 raw preparation_id在typed decode前由既有canonical helper校验、不使用返回值改写原文。原bad UTF8/lone surrogate反例现400/spy0，valid UFFFD/emoji/literal backslash-u和同坏字节G1/G2原行为保留；独立原探针2.295s、wire矩阵2.628s通过。service408.944s完整回归仍对应未变源码，最终handler/router2.802s/2.768s及vet通过。root已核30冻结身份及service→Gin→原UI/Python两状态5实体342字段完整互操作。历史失败/原始日志不重写，root总回执lane-d-root-software-integration.json。全部当前代码写域关闭；此为LOCAL SOFTWARE PASS，G3 FLOW、实际SOURCE/C/model/DB/build/deployment/release均NOT RUN，QUALITY仍DEFERRED_TO_Q0。
 
 部署与网页验收结果已补录：Harness/UI构建和健康通过，列表入口由17.318秒降至0.319秒；重复上传因Gemini地域400阻断在产品归并阶段；真实自由发现恢复在CHECKPOINT_INVALID终止；全新2662-1网页验收未运行。软件通过不能替代上述业务结果，G3仍BLOCKED。
+
+
+## 2026-09-22 最终实际网页收尾
+
+当前本地G3 FLOW PASS；QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。既有b696网页恢复457.517秒/33有效14未提供20失败/新增12调用；全新3190-2三原PDF网页首次上传run5fc81298-7bbe-4c1a-9c8d-bf8844055ef0，557.371秒/25有效19未提供31失败/25调用，普通字段补抽0。发布epoch17/release-b8d07e76-da52-4446-9c37-fb6f8a1cb2d6，检索/引用验证PASS；网页购买限制独立Wiki→PDF第12页高亮PASS。上传后无修改、构建、部署或手工业务接续。平台计时不含后续人工点验间隔；未实际关闭Codex。
+
+实现ec0721083及实际镜像/原始失败均已留档。更正此前独审：现代checkpoint的语义失败恢复是新发身份调用，不是legacy raw replay；零调用重投影列BACKLOG。完整Requirement矩阵、阶段耗时、持久化证据及后续项以 `docs/insurance-kb/evidence/830-g3/task3bn-platform-closeout-20260922.md` 和对应fresh/recovery JSON为准。此前NOT RUN/BLOCKED是当时事实，保留而不覆盖本次真实结果。
