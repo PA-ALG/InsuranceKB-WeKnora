@@ -8,8 +8,10 @@ import typing
 from pathlib import Path
 
 import pytest
-from alembic.migration import MigrationContext
+from alembic.config import Config
 from alembic.operations import Operations
+from alembic.runtime.environment import EnvironmentContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import Table, create_engine, inspect, text
 
 import insurance_harness
@@ -143,6 +145,9 @@ def test_migration_preserves_existing_bytes_and_defaults_only_new_column(
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.revision == "0018" and module.down_revision == "0017"
+    config = Config()
+    config.set_main_option("script_location", str(path.parents[1]))
+    script = ScriptDirectory.from_config(config)
     engine = create_engine(f"sqlite:///{tmp_path}/migration.db")
     with engine.begin() as connection:
         connection.execute(
@@ -157,26 +162,36 @@ def test_migration_preserves_existing_bytes_and_defaults_only_new_column(
         before = connection.execute(
             text("SELECT id,version,payload FROM product_ingestion_runs")
         ).all()
-        monkeypatch.setattr(module, "op", Operations(MigrationContext.configure(connection)))
-        module.upgrade()
-        assert (
-            connection.execute(text("SELECT id,version,payload FROM product_ingestion_runs")).all()
-            == before
-        )
-        assert (
-            connection.execute(
-                text("SELECT workflow_version FROM product_ingestion_runs")
-            ).scalar_one()
-            == 1
-        )
-        assert not next(
-            c
-            for c in inspect(connection).get_columns("product_ingestion_runs")
-            if c["name"] == "workflow_version"
-        )["nullable"]
-        module.downgrade()
-        assert (
-            connection.execute(text("SELECT id,version,payload FROM product_ingestion_runs")).all()
-            == before
-        )
+        with EnvironmentContext(
+            config, script, destination_rev="0017"
+        ) as environment_context:
+            environment_context.configure(connection=connection)
+            monkeypatch.setattr(
+                module, "op", Operations(environment_context.get_context())
+            )
+            module.upgrade()
+            assert (
+                connection.execute(
+                    text("SELECT id,version,payload FROM product_ingestion_runs")
+                ).all()
+                == before
+            )
+            assert (
+                connection.execute(
+                    text("SELECT workflow_version FROM product_ingestion_runs")
+                ).scalar_one()
+                == 1
+            )
+            assert not next(
+                c
+                for c in inspect(connection).get_columns("product_ingestion_runs")
+                if c["name"] == "workflow_version"
+            )["nullable"]
+            module.downgrade()
+            assert (
+                connection.execute(
+                    text("SELECT id,version,payload FROM product_ingestion_runs")
+                ).all()
+                == before
+            )
     engine.dispose()

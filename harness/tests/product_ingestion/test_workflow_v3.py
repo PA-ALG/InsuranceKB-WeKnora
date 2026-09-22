@@ -108,7 +108,9 @@ def test_v3_checkpoint_reuses_complete_discovery_then_resumes_compilation(
     )
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
     assert child.workflow_version == plan.workflow_version == 3
-    assert plan.contract == "product-stage-checkpoint-plan.830.v5"
+    assert plan.contract == "product-stage-checkpoint-plan.830.v6"
+    assert plan.supports_rebase and not plan.field_only_rebase
+    assert plan.audited_calls == () and plan.prior_rebase_artifacts == ()
     assert plan.resume_stage == "compilation"
     assert plan.encoded() == type(plan).model_validate_json(plan.encoded()).encoded()
     assert {row.artifact_kind for row in plan.artifacts if row.stage_key == "discovery"} == {

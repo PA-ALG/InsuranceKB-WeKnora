@@ -31,7 +31,23 @@ pytest_plugins = ("tests.product_ingestion.test_discovery",)
 def _parent_call(
     *, stage_key: str, operation: str, content: typing.Any, prompt: typing.Any, raw: bytes
 ) -> SimpleNamespace:
+    request_bytes = json_bytes(
+        {
+            "max_tokens": 8192,
+            "messages": [
+                {"content": prompt.decode(), "role": "system"},
+                {"content": content.decode(), "role": "user"},
+            ],
+            "model": "gemini-3.7-flash-medium",
+            "stream": False,
+            "temperature": 0,
+        }
+    )
     return SimpleNamespace(
+        model_policy_sha256="a" * 64,
+        request_bytes=request_bytes,
+        request_sha256=hashlib.sha256(request_bytes).hexdigest(),
+        recorded_at=datetime.now(UTC),
         run_id="parent-run",
         stage_key=stage_key,
         operation_key=operation,
@@ -69,10 +85,21 @@ def _service(
         purpose=purpose,
         prompt_sha256=hashlib.sha256(prompt).hexdigest(),
         max_context_bytes=300_000,
+        max_output_tokens=8192,
         template_id="fixture-independent",
     )
     return SimpleNamespace(
-        configuration=SimpleNamespace(model=SimpleNamespace(templates=[template])),
+        configuration=SimpleNamespace(
+            model=SimpleNamespace(
+                templates=[template],
+                template=lambda _identity: template,
+                scope=_scope(),
+                policy_sha256="a" * 64,
+                expires_at=datetime(2100, 1, 1, tzinfo=UTC),
+                model="gemini-3.7-flash-medium",
+                max_request_bytes=400000,
+            )
+        ),
         model_executor=Executor(),
     )
 
@@ -129,6 +156,8 @@ def _settle_child(
         "missing_raw",
         "tampered",
         "other_diagnostic",
+        "policy_changed",
+        "request_tampered",
     ],
 )
 async def test_generation_reuses_valid_parent_and_retries_only_received_bad_raw(
@@ -173,6 +202,10 @@ async def test_generation_reuses_valid_parent_and_retries_only_received_bad_raw(
         prompt=discovery.INDEPENDENT_DISCOVERY_PROMPT,
         raw=raw,
     )
+    if parent_kind == "policy_changed":
+        parent.model_policy_sha256 = "b" * 64
+    elif parent_kind == "request_tampered":
+        parent.request_sha256 = "0" * 64
     if parent_kind == "http_error":
         parent.diagnostic = "provider_http_status"
     elif parent_kind == "unknown":
@@ -209,7 +242,13 @@ async def test_generation_reuses_valid_parent_and_retries_only_received_bad_raw(
     summary = json.loads(
         next(row.payload for row in output.drafts if row.artifact_kind == "discovery_summary")
     )
-    if parent_kind in {"unknown", "missing_raw", "tampered", "other_diagnostic"}:
+    if parent_kind in {
+        "unknown",
+        "missing_raw",
+        "tampered",
+        "other_diagnostic",
+        "request_tampered",
+    }:
         assert summary["state"] == "FAILED"
         assert service.model_executor.calls == []
         return
@@ -221,6 +260,7 @@ async def test_generation_reuses_valid_parent_and_retries_only_received_bad_raw(
             "malformed",
             "semantic_invalid",
             "http_error",
+            "policy_changed",
         }
         else 0
     )

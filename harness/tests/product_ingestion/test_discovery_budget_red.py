@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import typing
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +21,7 @@ from insurance_harness.product_ingestion.models import (
     StageSnapshot,
 )
 from insurance_harness.product_ingestion.stages import json_bytes
+from tests.product_ingestion.test_artifacts import _scope
 from tests.product_ingestion.test_independent_discovery import _proposal
 
 pytest_plugins = ("tests.product_ingestion.test_discovery",)
@@ -50,6 +52,22 @@ async def test_recovery_replays_recorded_window_and_never_resends_unknown(
     payload = json_bytes(context)
     response = json_bytes(_proposal(context)).decode()
     raw = json_bytes({"choices": [{"message": {"content": response}}]})
+    request_bytes = json_bytes(
+        {
+            "max_tokens": 8192,
+            "messages": [
+                {
+                    "content": discovery.INDEPENDENT_DISCOVERY_PROMPT.decode(),
+                    "role": "system",
+                },
+                {"content": payload.decode(), "role": "user"},
+            ],
+            "model": "gemini-3.7-flash-medium",
+            "stream": False,
+            "temperature": 0,
+        }
+    )
+    now = datetime.now(UTC)
     operation = (
         "independent-discovery-window-"
         + hashlib.sha256(json_bytes([entity_id, context["window"]["window_id"]])).hexdigest()
@@ -59,8 +77,12 @@ async def test_recovery_replays_recorded_window_and_never_resends_unknown(
         stage_key="discovery",
         operation_key=operation,
         input_sha256=hashlib.sha256(payload).hexdigest(),
+        model_policy_sha256="a" * 64,
         prompt_policy_sha256=hashlib.sha256(discovery.INDEPENDENT_DISCOVERY_PROMPT).hexdigest(),
-        dispatched_at=object(),
+        request_bytes=request_bytes,
+        request_sha256=hashlib.sha256(request_bytes).hexdigest(),
+        dispatched_at=now,
+        recorded_at=now if recorded else None,
         state="recorded" if recorded else "dispatched",
         raw=raw if recorded else None,
         raw_sha256=hashlib.sha256(raw).hexdigest() if recorded else None,
@@ -77,13 +99,24 @@ async def test_recovery_replays_recorded_window_and_never_resends_unknown(
         purpose="g3-independent-discovery",
         prompt_sha256=hashlib.sha256(discovery.INDEPENDENT_DISCOVERY_PROMPT).hexdigest(),
         max_context_bytes=100_000,
+        max_output_tokens=8192,
         template_id="independent-discovery",
+    )
+    scope = _scope()
+    model = SimpleNamespace(
+        templates=[template],
+        template=lambda _identity: template,
+        scope=scope,
+        policy_sha256="a" * 64,
+        expires_at=datetime(2100, 1, 1, tzinfo=UTC),
+        model="gemini-3.7-flash-medium",
+        max_request_bytes=400_000,
     )
     result = await run_discovery_generation_stage(
         service=typing.cast(
             ProductScopeServices,
             SimpleNamespace(
-                configuration=SimpleNamespace(model=SimpleNamespace(templates=[template])),
+                configuration=SimpleNamespace(model=model),
                 model_executor=NoResend(),
             ),
         ),
@@ -91,7 +124,7 @@ async def test_recovery_replays_recorded_window_and_never_resends_unknown(
             ProductArtifactStore,
             SimpleNamespace(list_stage_calls=lambda **_kwargs: (call,)),
         ),
-        scope=typing.cast(ProductScope, None),
+        scope=scope,
         run=typing.cast(
             ProductRunSnapshot, SimpleNamespace(run_id="retry", retry_of_run_id="prior")
         ),

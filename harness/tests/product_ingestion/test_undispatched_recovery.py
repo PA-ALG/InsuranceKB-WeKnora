@@ -34,7 +34,9 @@ def failed_windows(
 ) -> tuple[typing.Any, ...]:
     scope, store, artifacts, _, execute = stage_runtime
     origin, _, boundary, _, _ = recorded_origin
-    child = store.retry_processing(
+    # This fixture constructs the historical recorded-identity recovery path;
+    # modern checkpoint admission is covered by checkpoint recovery tests.
+    child = store._legacy_retry_processing(
         scope=scope, run_id=origin.run_id, expected_version=origin.version
     )
     for _ in range(3):
@@ -113,12 +115,12 @@ def test_undispatched_failed_windows_recover_without_reclassifying(
     scope, store, artifacts, platform, execute = stage_runtime
     failed, _ = failed_windows
     _, original, boundary, _, sent = recorded_origin
-    assert store.can_retry_processing(scope=scope, run_id=failed.run_id)
-    child = store.retry_processing(
+    assert store._legacy_can_retry_processing(scope=scope, run_id=failed.run_id)
+    child = store._legacy_retry_processing(
         scope=scope, run_id=failed.run_id, expected_version=failed.version
     )
     assert (
-        store.retry_processing(
+        store._legacy_retry_processing(
             scope=scope, run_id=failed.run_id, expected_version=failed.version
         ).run_id
         == child.run_id
@@ -185,6 +187,8 @@ def test_undispatched_recovery_rejects_nonempty_or_mismatched_work(
             row.window_id = "foreign-window"
         else:
             row.job_id = "foreign-job"
-    assert not store.can_retry_processing(scope=scope, run_id=failed.run_id)
+    assert not store._legacy_can_retry_processing(scope=scope, run_id=failed.run_id)
     with pytest.raises(ValueError):
-        store.retry_processing(scope=scope, run_id=failed.run_id, expected_version=failed.version)
+        store._legacy_retry_processing(
+            scope=scope, run_id=failed.run_id, expected_version=failed.version
+        )

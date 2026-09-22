@@ -38,6 +38,7 @@ from insurance_harness.product_ingestion.pipeline import (
 from insurance_harness.product_ingestion.platform import _canonical as _source_canonical
 from insurance_harness.product_ingestion.progression import admit_uploads
 from insurance_harness.product_ingestion.signing import canonical
+from insurance_harness.product_ingestion.tables import ProductRun
 from insurance_harness.service_shell.config import ShellSettings
 from insurance_harness.service_shell.health import Lifecycle
 
@@ -538,6 +539,7 @@ class FixtureModel:
         elif content.get("contract") in {
             "product-discovery-context.830.v1",
             "product-discovery-context.830.v3",
+            "product-discovery-context.830.v4",
         }:
             self.discovery_requests.append(envelope)
             semantic = {
@@ -829,8 +831,10 @@ async def _finish(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("workflow_version", [2, 3])
 async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_field(
     tmp_path: Path,
+    workflow_version: int,
 ) -> None:
     base, base_candidate = _base_snapshot()
     settings = _settings(tmp_path, base_candidate)
@@ -843,6 +847,14 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
     run = context.store.create_run(
         scope=SCOPE, idempotency_key="new-product", expected_upload_count=3
     )
+    assert run.workflow_version == 3
+    if workflow_version == 2:
+        # Existing persisted V2 jobs keep their original discovery/review flow.
+        with session_factory() as session, session.begin():
+            historical = session.get(ProductRun, run.run_id)
+            assert historical is not None
+            historical.workflow_version = workflow_version
+        run = context.store.get_run(scope=SCOPE, run_id=run.run_id)
     admit_uploads(context.store, SCOPE, run.run_id)
 
     original_prepare = context.artifacts.prepare_artifact_writes
@@ -908,7 +920,7 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
     }.items()
     assert terminal.missing_count > 0
     assert len(model.discovery_requests) == 1, "permanent pipeline omitted open discovery"
-    assert len(model.discovery_review_requests) == 1
+    assert len(model.discovery_review_requests) == (1 if workflow_version == 2 else 0)
     discovery = json.loads(
         context.artifacts.get_artifact(
             scope=SCOPE,
@@ -919,6 +931,19 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
     )
     assert discovery["state"] == "EMPTY" and discovery["reused"] is False
     assert discovery["coverage"]["material_count"] == 3
+    if workflow_version == 3:
+        final_discovery = json.loads(
+            context.artifacts.get_artifact(
+                scope=SCOPE,
+                run_id=run.run_id,
+                artifact_kind="discovery_final_summary",
+                artifact_key="product",
+            ).payload
+        )
+        assert final_discovery["state"] == "EMPTY"
+        assert final_discovery["candidate_member_count"] == 0
+        assert final_discovery["accepted_member_count"] == 0
+        assert final_discovery["call_ids"] == []
 
     identity_calls_before = len(model.identity_requests)
     field_calls_before = len(model.field_requests)
@@ -951,7 +976,8 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
         ).payload
     )
     assert retry_identity["reused_from_run_id"] == run.run_id
-    assert len(model.discovery_requests) == len(model.discovery_review_requests) == 1
+    assert len(model.discovery_requests) == 1
+    assert len(model.discovery_review_requests) == (1 if workflow_version == 2 else 0)
     reused = json.loads(
         context.artifacts.get_artifact(
             scope=SCOPE,

@@ -144,6 +144,47 @@ def _template_and_request(
     return template, PreparedModelRequest(content, request, _sha(request))
 
 
+def matches_recorded_stage_request(
+    call: StageCallSnapshot,
+    settings: ProductModelSettings,
+    *,
+    scope: ProductScope,
+    content: bytes,
+    prompt: bytes,
+    template_id: str,
+) -> bool:
+    """Check replay custody and current configuration without dispatching a model call.
+
+    A changed model policy invalidates reuse. Broken historical request custody
+    is an error, never permission to silently send a replacement request.
+    """
+    if (
+        call.request_bytes is None
+        or call.request_sha256 != _sha(call.request_bytes)
+        or call.recorded_at is None
+    ):
+        raise ValueError("recorded stage request custody changed")
+    if call.model_policy_sha256 != settings.policy_sha256:
+        return False
+    if settings.expires_at <= datetime.now(UTC):
+        raise ModelPolicyDenied("configured model policy expired")
+    template, prepared = _template_and_request(
+        settings,
+        scope=scope,
+        content=content,
+        input_sha256=call.input_sha256,
+        prompt=prompt,
+        template_id=template_id,
+    )
+    if (
+        call.request_bytes != prepared.request_bytes
+        or call.request_sha256 != prepared.request_sha256
+        or call.prompt_policy_sha256 != template.prompt_sha256
+    ):
+        raise ValueError("recorded stage request binding changed")
+    return True
+
+
 def _policy_receipt(
     settings: ProductModelSettings,
     template: ModelTemplatePolicy,

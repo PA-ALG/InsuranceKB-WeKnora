@@ -325,7 +325,10 @@ async def test_final_discovery_failure_resumes_compilation_without_generation(
         def __call__(self, request: typing.Any) -> typing.Any:
             envelope = json.loads(request.content)
             content = json.loads(envelope["messages"][1]["content"])
-            if content.get("contract") == "product-discovery-context.830.v3":
+            if content.get("contract") in {
+                "product-discovery-context.830.v3",
+                "product-discovery-context.830.v4",
+            }:
                 from tests.product_ingestion.test_independent_discovery import _proposal
 
                 self.discovery_requests.append(envelope)

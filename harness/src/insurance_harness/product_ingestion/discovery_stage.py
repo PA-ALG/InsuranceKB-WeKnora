@@ -70,6 +70,7 @@ from insurance_harness.product_ingestion.extraction import _json
 from insurance_harness.product_ingestion.model_execution import (
     ConfiguredFieldTransport,
     ModelPolicyDenied,
+    matches_recorded_stage_request,
 )
 from insurance_harness.product_ingestion.models import ProductRunState
 from insurance_harness.product_ingestion.stages import StageOutput, artifact, json_bytes
@@ -266,6 +267,15 @@ async def run_independent_discovery_final_review(
                     input_sha256=review_context_sha256,
                     prompt_sha256=template.prompt_sha256,
                 )
+            if replayed_call is not None and not matches_recorded_stage_request(
+                replayed_call,
+                settings,
+                scope=scope,
+                content=content,
+                prompt=INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+                template_id=template.template_id,
+            ):
+                replayed_call = None
             parent_decoded = None
             parent_review = None
             if replayed_call is not None:
@@ -533,6 +543,15 @@ async def _run_entity_discovery_generation_stage(
                     input_sha256=input_sha,
                     prompt_sha256=template.prompt_sha256,
                 )
+            if replayed_call is not None and not matches_recorded_stage_request(
+                replayed_call,
+                settings,
+                scope=scope,
+                content=raw_context,
+                prompt=INDEPENDENT_DISCOVERY_PROMPT,
+                template_id=template.template_id,
+            ):
+                replayed_call = None
             parent_decoded = None
             parent_candidate = None
             if replayed_call is not None:
@@ -959,6 +978,9 @@ async def run_discovery_generation_stage(
         ],
         call_ids=[call_id for row in summaries for call_id in row["call_ids"]],
         reused=any(row["reused"] for row in summaries),
+        reused_from_run_id=(
+            run.retry_of_run_id if any(row["reused"] for row in summaries) else None
+        ),
         coverage=coverage,
         entity_summaries=summaries,
     )

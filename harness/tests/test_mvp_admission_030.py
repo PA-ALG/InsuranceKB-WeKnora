@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import base64
 import copy
 import hashlib
@@ -1788,10 +1789,100 @@ def test_mvp1_i0b_cli_render_rejects_non_registered_or_noncanonical_raw_plan(
     blocked_lines = capsys.readouterr().out.splitlines()
     assert blocked_lines
     assert all(
-        json.loads(line)
-        == {"state": "BLOCKED", "reason_code": "invalid_cli_input"}
+        json.loads(line) == {"state": "BLOCKED", "reason_code": "invalid_cli_input"}
         for line in blocked_lines
     )
+
+
+def _provider_authority_scan(source: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    metadata_reads: list[str] = []
+    violations: list[str] = []
+    tree = ast.parse(source)
+    call_targets = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    metadata_comparands: set[int] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Compare)
+            and len(node.ops) == 1
+            and isinstance(node.ops[0], ast.Eq)
+            and len(node.comparators) == 1
+        ):
+            for candidate, other in (
+                (node.left, node.comparators[0]),
+                (node.comparators[0], node.left),
+            ):
+                if (
+                    isinstance(candidate, ast.Attribute)
+                    and ast.unparse(candidate) == "call.identity.provider"
+                    and isinstance(other, ast.Constant)
+                    and isinstance(other.value, str)
+                ):
+                    metadata_comparands.add(id(candidate))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and "provider" in node.attr.casefold():
+            expression = ast.unparse(node)
+            if (
+                node.attr == "provider"
+                and isinstance(node.ctx, ast.Load)
+                and expression == "call.identity.provider"
+                and id(node) not in call_targets
+                and id(node) in metadata_comparands
+            ):
+                metadata_reads.append(expression)
+            else:
+                violations.append(expression)
+        elif isinstance(node, ast.Name) and "provider" in node.id.casefold():
+            violations.append(node.id)
+        elif isinstance(node, ast.arg) and "provider" in node.arg.casefold():
+            violations.append(node.arg)
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and node.module is not None
+            and "provider" in node.module.casefold()
+        ):
+            violations.append(node.module)
+        elif isinstance(node, ast.alias) and any(
+            "provider" in value.casefold() for value in (node.name, node.asname or "")
+        ):
+            violations.append(node.name)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and (
+            "provider" in node.name.casefold()
+        ):
+            violations.append(node.name)
+        elif (
+            isinstance(node, ast.keyword)
+            and node.arg is not None
+            and "provider" in node.arg.casefold()
+        ):
+            violations.append(node.arg)
+    return tuple(metadata_reads), tuple(violations)
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "provider()",
+        "import provider_sdk",
+        "provider = object()",
+        "client.provider()",
+        "call.identity.provider()",
+        "from provider_sdk import Client",
+        "dispatch(call.identity.provider)",
+        "authority = call.identity.provider",
+        "def identity_value():\n    return call.identity.provider",
+    ),
+)
+def test_mvp1_i0b_provider_authority_recognizer_rejects_execution_edges(source: str) -> None:
+    _metadata, violations = _provider_authority_scan(source)
+    assert violations
+
+
+def test_mvp1_i0b_provider_authority_recognizer_allows_identity_metadata() -> None:
+    metadata, violations = _provider_authority_scan(
+        'matched = call.identity.provider == "g3-user-gateway"'
+    )
+    assert metadata == ("call.identity.provider",)
+    assert violations == ()
 
 
 def test_mvp1_i0b_unsigned_templates_and_architecture_carry_no_authority() -> None:
@@ -1802,17 +1893,17 @@ def test_mvp1_i0b_unsigned_templates_and_architecture_carry_no_authority() -> No
         Path("profiles/g3_bounded_execution.py"),
     }
     assert all((owned / path).is_file() for path in g3_owned_modules)
-    source = "\n".join(
-        path.read_text(encoding="utf-8")
+    owned_sources = {
+        path.relative_to(owned): path.read_text(encoding="utf-8")
         for path in owned.rglob("*.py")
         if path.is_file() and path.relative_to(owned) not in g3_owned_modules
-    )
+    }
+    source = "\n".join(owned_sources.values())
     for forbidden in (
         "goldenset.admission",
         "run_020",
         "wip-gs-v0.1",
         "Ed25519PrivateKey",
-        "provider",
         "model_client",
         "transport",
         "ReceiptSink",
@@ -1820,6 +1911,12 @@ def test_mvp1_i0b_unsigned_templates_and_architecture_carry_no_authority() -> No
         "ReleaseAuthorizer",
     ):
         assert forbidden not in source
+    provider_metadata: list[tuple[Path, str]] = []
+    for relative, module_source in owned_sources.items():
+        metadata, violations = _provider_authority_scan(module_source)
+        assert violations == (), (relative, violations)
+        provider_metadata.extend((relative, expression) for expression in metadata)
+    assert provider_metadata == [(Path("evaluator.py"), "call.identity.provider")]
 
     change = _REPOSITORY_ROOT / "openspec/changes/030-enterprise-wiki-mvp-slice"
     templates = (

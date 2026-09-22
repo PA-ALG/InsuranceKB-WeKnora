@@ -255,6 +255,61 @@ def build_discovery_exclusion_index(
     )
 
 
+def _local_ref(kind: str, value: object) -> str:
+    """Content identity for generation only; publication keeps current compiler refs."""
+    return kind + "_" + _sha(b"product-discovery-local.830.v4\0" + _bytes(value))
+
+
+def _local_entity_ref(binding: EntityCompileBinding830G3V1) -> str:
+    # CREATE -> MATCH changes admission receipts, not the entity being read.
+    # Keep its identity/version anchors, schema/profile, material and evidence dependencies.
+    return _local_ref(
+        "entity",
+        binding.model_dump(
+            mode="json",
+            exclude={
+                "binding_sha256",
+                "resolution_disposition",
+                "resolution_refs",
+                "candidate_id",
+                "entity_candidate_sha256",
+            },
+        ),
+    )
+
+
+def _independent_context_version(context: dict[str, Any]) -> Literal["v3", "v4"]:
+    contract = context.get("contract")
+    if contract == "product-discovery-context.830.v3":
+        return "v3"
+    if contract == "product-discovery-context.830.v4":
+        return "v4"
+    raise ValueError("unknown independent discovery context version")
+
+
+def _independent_sources(
+    request: BatchConceptCompileRequest830G3V1,
+    binding: EntityCompileBinding830G3V1,
+    version: Literal["v3", "v4"],
+) -> dict[str, SourceBlock]:
+    sources = _discovery_sources(request, binding)
+    if version == "v3":
+        return sources
+    return {_local_ref("source", source): source for source in sources.values()}
+
+
+def _local_concept_refs(request: BatchConceptCompileRequest830G3V1) -> list[dict[str, str]]:
+    return [
+        {
+            "concept_ref": _local_ref("concept", row),
+            "concept_id": row.concept_id,
+            "canonical_key": row.canonical_key,
+            "sense_key": row.sense_key,
+        }
+        for row in sorted(request.base_request.existing_definitions, key=lambda row: row.concept_id)
+    ]
+
+
 def render_independent_discovery_contexts(
     *,
     request: BatchConceptCompileRequest830G3V1,
@@ -262,6 +317,7 @@ def render_independent_discovery_contexts(
     exclusion_index: dict[str, Any],
     max_source_chars: int = 24000,
     max_context_bytes: int = 262144,
+    context_version: Literal["v3", "v4"] = "v4",
 ) -> tuple[dict[str, Any], ...]:
     """Read every original span with serialized-byte budgeting and short source refs."""
     if _bytes(exclusion_index) != _bytes(build_discovery_exclusion_index(request, entity_id)):
@@ -269,9 +325,18 @@ def render_independent_discovery_contexts(
     if type(max_source_chars) is not int or not 2000 <= max_source_chars <= 24000:
         raise ValueError("invalid discovery source budget")
     binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
-    sources = _discovery_sources(request, binding)
-    entity_ref = bounded._g3_d_entity_refs(request)[entity_id]
-    concept_refs, _ = bounded._g3_d_existing_concept_refs(request)
+    sources = _independent_sources(request, binding, context_version)
+    if context_version == "v4":
+        entity_ref = _local_entity_ref(binding)
+        concept_refs = _local_concept_refs(request)
+        request_identity = {}
+    else:
+        entity_ref = bounded._g3_d_entity_refs(request)[entity_id]
+        concept_refs, _ = bounded._g3_d_existing_concept_refs(request)
+        request_identity = {
+            "request_sha256": request.request_sha256,
+            "base_request_hash": compile_request_hash_g3(request.base_request),
+        }
     budget = max_source_chars
     while True:
         windows = route_discovery_source_windows(
@@ -298,9 +363,8 @@ def render_independent_discovery_contexts(
             coverage = window["coverage"]
             contexts.append(
                 {
-                    "contract": "product-discovery-context.830.v3",
-                    "request_sha256": request.request_sha256,
-                    "base_request_hash": compile_request_hash_g3(request.base_request),
+                    "contract": "product-discovery-context.830." + context_version,
+                    **request_identity,
                     "exclusion_index": exclusion_index,
                     "max_source_chars": budget,
                     "max_context_bytes": max_context_bytes,
@@ -356,10 +420,15 @@ def independent_discovery_window_audit(
         exclusion_index=context["exclusion_index"],
         max_source_chars=context["max_source_chars"],
         max_context_bytes=context["max_context_bytes"],
+        context_version=_independent_context_version(context),
     )
     if not any(_bytes(row) == _bytes(context) for row in expected):
         raise ValueError("discovery context mismatch")
-    return discovery_window_audit(request, entity_id, context)
+    return next(
+        row
+        for row in independent_discovery_window_audits(request, entity_id, expected)
+        if row["window_id"] == context["window"]["window_id"]
+    )
 
 
 def independent_discovery_window_audits(
@@ -372,7 +441,7 @@ def independent_discovery_window_audits(
         return ()
     binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
     windows = route_discovery_source_windows(
-        _discovery_sources(request, binding),
+        _independent_sources(request, binding, _independent_context_version(contexts[0])),
         max_source_chars=contexts[0]["max_source_chars"],
         max_span_chars=min(2000, contexts[0]["max_source_chars"]),
     )
@@ -381,6 +450,8 @@ def independent_discovery_window_audits(
         raise ValueError("discovery window audit coverage mismatch")
     result = []
     for context in contexts:
+        if _independent_context_version(context) != _independent_context_version(contexts[0]):
+            raise ValueError("discovery context versions differ")
         row = index.get(context["window"]["window_id"])
         if row is None or context["coverage"]["audit_sha256"] != _sha(_bytes(row["coverage"])):
             raise ValueError("discovery window audit mismatch")
@@ -482,20 +553,54 @@ def project_independent_discovery_response(
     if proposed != set(members):
         raise ValueError("discovery proposed member coverage mismatch")
     canonical_options = audit["source_options"]
+    projector_window = dict(context["window"])
+    concept_rebindings: dict[str, str] = {}
+    if _independent_context_version(context) == "v4":
+        binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
+        if context["window"]["entity_ref"] != _local_entity_ref(binding) or context[
+            "existing_concept_refs"
+        ] != _local_concept_refs(request):
+            raise ValueError("discovery local reference mismatch")
+        source_refs = {
+            _local_ref("source", source): ref
+            for ref, source in _discovery_sources(request, binding).items()
+        }
+        canonical_options = [
+            {**row, "source_ref": source_refs[row["source_ref"]]} for row in canonical_options
+        ]
+        current_concepts, _ = bounded._g3_d_existing_concept_refs(request)
+        by_concept = {row["concept_id"]: row["concept_ref"] for row in current_concepts}
+        concept_rebindings = {
+            row["concept_ref"]: by_concept[row["concept_id"]]
+            for row in context["existing_concept_refs"]
+        }
+        projector_window["entity_ref"] = bounded._g3_d_entity_refs(request)[entity_id]
     aliases = {f"s{index + 1}": row["source_ref"] for index, row in enumerate(canonical_options)}
     payload = semantic.model_dump(mode="json")
     for kind in ("definitions", "pages"):
         for member in payload[kind]:
             for evidence in member["evidence"]:
                 evidence["source_ref"] = aliases[evidence["source_ref"]]
+    if _independent_context_version(context) == "v4":
+        for definition in payload["definitions"]:
+            if definition["definition_ref"] in concept_rebindings:
+                raise ValueError("duplicate discovery definition reference")
+        for page in payload["pages"]:
+            if page["entity_ref"] != context["window"]["entity_ref"]:
+                raise ValueError("discovery local entity reference mismatch")
+            page["entity_ref"] = projector_window["entity_ref"]
+            page["concept_refs"] = [
+                concept_rebindings.get(ref, ref) for ref in page["concept_refs"]
+            ]
     canonical = bounded.G3DCompileReferenceResponseV1.model_validate(payload)
     projector_context = {
         **context,
+        "window": projector_window,
         "source_options": canonical_options,
         "entity_source_refs": [
             {
                 "entity_id": entity_id,
-                "entity_ref": context["window"]["entity_ref"],
+                "entity_ref": projector_window["entity_ref"],
                 "source_refs": [row["source_ref"] for row in canonical_options],
             }
         ],
