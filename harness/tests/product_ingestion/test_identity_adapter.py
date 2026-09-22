@@ -166,6 +166,31 @@ def test_foreign_locator_rejected_before_adaptation():
         adapter().adapt_identity_response(json.dumps(obj).encode(), context)
 
 
+@pytest.mark.parametrize(
+    "refs", [["version", "name", "class"], ["name", "name", "class", "version"]]
+)
+def test_identity_reference_sets_normalize_without_changing_claims_or_raw(refs):
+    obj, context = fixture_response()
+    obj["materials"][0]["entities"][0]["identity_evidence_refs"] = refs
+    raw = json.dumps(obj).encode()
+    before = deepcopy(obj)
+    result = adapter().adapt_identity_response(raw, context)
+    entity = json.loads(result.semantic_raw)["materials"][0]["entities"][0]
+    assert obj == before and raw == json.dumps(before).encode()
+    assert entity["name"] == before["materials"][0]["entities"][0]["name"]
+    assert entity["identity_evidence_refs"] == sorted(set(entity["identity_evidence_refs"]))
+    assert any(c["reason"] == "IDENTITY_REFERENCE_SET_NORMALIZED" for c in result.audit["changes"])
+
+
+def test_reference_normalization_still_rejects_unsupported_claims():
+    obj, context = fixture_response()
+    entity = obj["materials"][0]["entities"][0]
+    entity["identity_evidence_refs"].reverse()
+    entity["issuer"] = "未在本材料出现的公司"
+    with pytest.raises(ValueError, match="lacks offered source evidence"):
+        adapter().adapt_identity_response(json.dumps(obj).encode(), context)
+
+
 @pytest.mark.parametrize("already_linked", [False, True])
 def test_product_code_occurrence_cannot_support_same_number_as_filing(already_linked):
     obj, context = fixture_response()

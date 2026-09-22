@@ -73,8 +73,18 @@ def adapt_identity_response(raw: bytes, context: Mapping[str, object]) -> Identi
         quotes = {row[3]["locator_ref"]: row[3]["quote"] for row in locators}
         for entity in material["entities"]:
             selected = entity["identity_evidence_refs"]
-            if len(selected) != len(set(selected)) or selected != sorted(selected):
-                raise ValueError("identity evidence refs must be sorted unique")
+            canonical_refs = sorted(set(selected))
+            if selected != canonical_refs:
+                changes.append(
+                    {
+                        "material_id": material["material_id"],
+                        "entity_ref": entity["entity_ref"],
+                        "reason": "IDENTITY_REFERENCE_SET_NORMALIZED",
+                        "original_evidence_refs": selected,
+                        "evidence_refs": canonical_refs,
+                    }
+                )
+                selected = canonical_refs
             if any(ref not in by_ref for ref in selected):
                 raise ValueError("dangling semantic evidence ref")
             removed = [

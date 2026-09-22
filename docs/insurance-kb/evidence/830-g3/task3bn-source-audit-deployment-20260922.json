@@ -1,0 +1,163 @@
+{
+  "build": {
+    "source": "80f0af20b78ddc4bdcf05603cbd3573ddcb7679e",
+    "base": "python:3.12-slim@sha256:9e01bf1ae5db7649a236da7be1e94ffbbbdd7a93f867dd0d8d5720d9e1f89fab",
+    "exit_code": 0,
+    "elapsed_seconds": 2.685,
+    "builds_this_round": 1,
+    "image_id": "sha256:ae8f288b5daec784971014250238d484996f82d0ed81be69ff30219e6b18d998"
+  },
+  "deployment": {
+    "source": "80f0af20b78ddc4bdcf05603cbd3573ddcb7679e",
+    "before": [
+      {
+        "name": "/g3-platform-product-product-api-1",
+        "id": "d4305edd3b2d2d505bf13fd165b086d3735bedeb1377e011e06e55c6bc01c3fa",
+        "image": "sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155",
+        "health": "healthy",
+        "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+        "networks": [
+          "weknora-g3-830-internal-recovery-02"
+        ]
+      },
+      {
+        "name": "/g3-platform-product-product-worker-1",
+        "id": "9b1e660f4d84d5e24fa826fc190ea66465790a59ea9894444604f072c8925e72",
+        "image": "sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155",
+        "health": "healthy",
+        "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+        "networks": [
+          "weknora-g3-830-internal-recovery-02",
+          "weknora-g3-830-provider-egress"
+        ]
+      }
+    ],
+    "status": "DEPLOYED",
+    "live_before": {
+      "active_jobs": 1,
+      "jobs": [
+        {
+          "id": "972cbbfc-c1f8-5d87-b707-8332f53ccb43",
+          "state": "retry_wait",
+          "error_summary": "ValueError: source processing receipt changed",
+          "run_id": "368c59f1-fa81-4c99-a5ff-ba5940b5e84d",
+          "stage_key": "source"
+        }
+      ],
+      "pending_calls": 0,
+      "current": {
+        "release_id": "release-40116374-35ce-43f3-b15c-90caeac12f78",
+        "activation_epoch": 15
+      }
+    },
+    "migration": "UNCHANGED",
+    "business_acceptance": "NOT RUN",
+    "after": [
+      {
+        "name": "/g3-platform-product-product-api-1",
+        "id": "a55608243371ca1d77f95a92449620bccf6195a0564b54a49af91dc2f193d061",
+        "image": "sha256:ae8f288b5daec784971014250238d484996f82d0ed81be69ff30219e6b18d998",
+        "health": "healthy",
+        "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+        "networks": [
+          "weknora-g3-830-internal-recovery-02"
+        ]
+      },
+      {
+        "name": "/g3-platform-product-product-worker-1",
+        "id": "9f42d94b805eb0ea63d6a77ea0860854bee98da625ce4965f90a45cd24808309",
+        "image": "sha256:ae8f288b5daec784971014250238d484996f82d0ed81be69ff30219e6b18d998",
+        "health": "healthy",
+        "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+        "networks": [
+          "weknora-g3-830-internal-recovery-02",
+          "weknora-g3-830-provider-egress"
+        ]
+      }
+    ],
+    "live_after": {
+      "active_jobs": 1,
+      "jobs": [
+        {
+          "id": "972cbbfc-c1f8-5d87-b707-8332f53ccb43",
+          "state": "running",
+          "error_summary": "ValueError: source processing receipt changed",
+          "run_id": "368c59f1-fa81-4c99-a5ff-ba5940b5e84d",
+          "stage_key": "source"
+        }
+      ],
+      "pending_calls": 0,
+      "current": {
+        "release_id": "release-40116374-35ce-43f3-b15c-90caeac12f78",
+        "activation_epoch": 15
+      }
+    }
+  },
+  "offline_real_receipts": {
+    "input_sha256": "21c08e901b8d4fe887860385bb84c543d958dbd809a4ae96053fe3156081cd1d",
+    "old_snapshots": 3,
+    "final_snapshots": 3,
+    "confirmed_calls": 21,
+    "progress_count_complete": false,
+    "final_count_complete": true,
+    "status": "PASS",
+    "business_effects": 0,
+    "model_calls": 0
+  },
+  "review_sha256": "025431896045c016d7d2cb1f000b709437b14ef636dbe77c5363a44beefa81ba",
+  "browser_source_recovered": "PASS",
+  "browser_pipeline_terminal": "needs_confirmation",
+  "first_uninterrupted_acceptance": "BLOCKED",
+  "go_frontend_builds": 0,
+  "db_migrations": 0,
+  "business_scripts": 0,
+  "browser_model_calls": 22,
+  "browser_source_model_calls": 21,
+  "browser_identity_model_calls": 1,
+  "identity_diagnostic": [
+    {
+      "run_id": "368c59f1-fa81-4c99-a5ff-ba5940b5e84d",
+      "diagnosis": {
+        "original": "identity evidence refs must be sorted unique",
+        "sorted_refs": "PASS"
+      },
+      "unsupported_assertions": [],
+      "model_calls_added": 0,
+      "business_writes": 0
+    },
+    {
+      "run_id": "ae55548d-7328-5516-9989-d9210a2142b9",
+      "diagnosis": {
+        "original": "identity evidence refs must be sorted unique",
+        "sorted_refs": "identity asserted value lacks offered source evidence"
+      },
+      "unsupported_assertions": [
+        {
+          "material_id": "0875e067-ceca-4554-b4d5-525fda34f6d0",
+          "field": "product_code",
+          "value": "2648"
+        },
+        {
+          "material_id": "0e1c2848-d216-482d-a177-76ce5d7eb199",
+          "field": "issuer",
+          "value": "中国平安人寿保险股份有限公司"
+        },
+        {
+          "material_id": "74e184fb-d080-4b55-ae5c-ccc4460d4d80",
+          "field": "issuer",
+          "value": "中国平安人寿保险股份有限公司"
+        },
+        {
+          "material_id": "74e184fb-d080-4b55-ae5c-ccc4460d4d80",
+          "field": "product_code",
+          "value": "2648"
+        }
+      ],
+      "model_calls_added": 0,
+      "business_writes": 0
+    }
+  ],
+  "native_projection": "PASS_3_MATERIALS",
+  "joint_identity": "BLOCKED_ISSUER_SHORT_FULL_NAME_CONFLICT",
+  "identity_reference_fix": "CODE_NOT_DEPLOYED"
+}

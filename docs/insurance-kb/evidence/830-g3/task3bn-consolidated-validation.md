@@ -117,3 +117,15 @@ root在最终合并生产代码上重跑source审计生命周期2 passed/18.82�
 独审发现两项同域缺口并集中修复：成功summary的旧未知回执不能遮住迟到结果；聚合去重不得改material counts同时沿用旧receipt SHA。两项RED为2 failed/.67秒，最终含两反例的34项测试通过；原回执及summary不变，读视图指向真实最新SHA。初冻审查不代表修后通过，修后独审仍待最终报告。
 
 最终修后独审0 BLOCKER，独立相关70 passed/69.17秒，Ruff PASS，冻结SHA一致。报告SHA025431896045c016d7d2cb1f000b709437b14ef636dbe77c5363a44beefa81ba。BACKLOG：list_artifacts默认1000条上限可能截断极大/长轮询任务审计，当前三来源未触及；不能据此声称千文件规模通过。开始一次Harness构建部署，网页业务仍待实测。
+
+部署PASS：80f0af20b78ddc4bdcf05603cbd3573ddcb7679e，镜像ae8f288b5daec784971014250238d484996f82d0ed81be69ff30219e6b18d998；唯一构建2.685秒，原Compose更新一次成功，API/worker均healthy，env摘要/挂载/网络不变，DB/Go/UI未变。已知source等待任务自行恢复，网页进入产品归并；无业务脚本、无重新解析。终态待观测，首次无干预验收仍BLOCKED。机器回执task3bn-source-audit-deployment-20260922.json。
+
+网页后验：原368c任务自主source/routing成功，页面累计22模型调用（native21+identity1），终态needs_confirmation/IDENTITY_RESPONSE_INVALID:ValueError，耗时38分15秒包含开发/部署等待，不能作为正常吞吐成绩。原生回执已追加且不再重复等待，未重解析、未重放原生调用。
+
+进一步贯穿检查不部署：同一已存响应在内存仅规范引用集合后adapter及原生定位投影3/3 PASS；v3联合产品归并仍因issuer简称/全称冲突NEEDS_CONFIRM，未生成持久候选。首期资料同一产品名、medical_insurance明确，完整条款备案号/代码可用，辅助材料身份由既有v3联合互补；公司名不同是剩余决定性边界。未知简称关系不手工改成同一公司。用户已收到归并规则方向异步选择（平台Gemini原文+候选联合判断 / 保持严格人工确认），不是再次申请操作授权。
+
+非语义容错先完成：identity引用排序/重复规范化保留原raw和改动审计，悬空/跨材料/未经支持的身份值仍拒绝；RED3 failed/.64秒，GREEN13 passed/1.30秒，相关39 passed/36.98秒，未部署。不能为该小改再部署后才发现下一个归并问题。
+
+末轮运行状态：原账号正常登录，现有数据/角色不变；两条真实恢复发布PASS，新2662解析回执故障修复已上线且自主续跑，22次调用准确显示。当前新产品没有进入字段抽取/编译/发布，不能宣称G3整体完成。后续不依赖登录操作，待联合issuer规则确定后集中实现、复用旧响应优先、必要失败单元再调模型，最后统一更新并重新网页验收。
+
+引用集合容错最终独审0 BLOCKER；独立27 passed/.81秒，原列表审计/unknown ref/foreign locator探针通过；报告SHA3623abe8884a396d2122f33018ae3340bae7fbc2fe576a0f48f412e1fb6d1878。代码可集成，但本小改不单独构建部署，等待联合归并规则收口再统一交付。
