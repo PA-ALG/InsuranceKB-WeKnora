@@ -37,10 +37,12 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCompileRequest830G3V1,
     EntityCompileBinding830G3V1,
     assemble_candidate_bundle,
+    changed_knowledge_member_ids,
     compile_output_hash_g3,
     compile_request_hash_g3,
     compiler_context_g3,
     compose_batch_output,
+    knowledge_admission_g3,
     record_composed_output,
     record_model_compile,
     review_context_g3,
@@ -1727,22 +1729,7 @@ def render_gemini_d_review_window_context(
 def _g3_novel_page_ids(
     request: BatchConceptCompileRequest830G3V1, output: CompileOutput
 ) -> set[str]:
-    existing = {
-        definition.concept_id: _compile_definition_hash(definition)
-        for definition in request.base_request.existing_definitions
-    }
-    identifiers = {
-        definition.concept_id
-        for definition in output.definitions
-        if existing.get(definition.concept_id) != _compile_definition_hash(definition)
-    }
-    existing_pages = {free_page_id(page): page for page in request.base_request.existing_pages}
-    identifiers.update(
-        free_page_id(page)
-        for page in output.pages
-        if existing_pages.get(free_page_id(page)) != page
-    )
-    return identifiers
+    return changed_knowledge_member_ids(request, output)
 
 
 def _g3_human_admission(
@@ -1750,20 +1737,7 @@ def _g3_human_admission(
     output: CompileOutput,
     checked: ReviewOutput,
 ) -> HumanBatchAdmission:
-    if checked.decision not in ("PASS", "NEEDS_HUMAN"):
-        raise ValueError("REVIEW_NOT_APPROVED_OR_STALE")
-    pending: list[str] = []
-    for member_id in sorted(_g3_novel_page_ids(request, output)):
-        score = checked.page_scores.get(member_id)
-        if score is None or score.total < 60:
-            raise ValueError("PAGE_ADMISSION_REJECTED")
-        if score.total < 80:
-            pending.append(member_id)
-    return HumanBatchAdmission(
-        contract="concept-admission.830.g2.v1",
-        status="NEEDS_HUMAN",
-        pending_page_ids=tuple(pending),
-    )
+    return knowledge_admission_g3(request, output, checked)
 
 
 def _g3_d_display_context(
@@ -1849,13 +1823,14 @@ def _g3_d_display_context(
             else getattr(request, name)
         )
         for name in type(request).model_fields
+        if name != "knowledge_update_policy" or request.knowledge_update_policy is not None
     }
     return {
         "contract": "g3-d-compile-display-context.830.v1",
         "semantic_request": semantic_request,
         "request_sha256": request.request_sha256,
         "base_request_hash": compile_request_hash_g3(request.base_request),
-        "output_mode": "NEW_MEMBERS_ONLY",
+        "output_mode": compiler_context_g3(request)["output_mode"],
     }
 
 

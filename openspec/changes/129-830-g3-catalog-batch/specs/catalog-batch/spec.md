@@ -231,3 +231,14 @@ Validation uses the actual generation3/4 audit failure and workflow2 epoch11→1
 - AND同名字段实例与通用概念由各自类型、义项及主体区分，不依据名称直接合并
 
 审核v4 MUST 保留候选的类型身份：概念的canonical_key/sense_key/aliases/origin，页面的entity_id/stable_key/entity_version/concept_ids；审核v3显式renderer保持历史字节。历史版本只供原合同回放，不能替代当前v4审核授权。Schema绑定必须唯一匹配id/version/hash，否则稳定拒绝。
+
+
+### G35-R2/R3/R5：显式同身份更新的增量编译
+
+G3增量输入MUST复用G2既有update处置：仅已存在的同类型稳定身份可更新，必须显式update且对象实际发生变化。新id假称update、旧id伪装新页/新义项、同批重复身份或重复审计MUST拒绝；字段增量覆盖合同不变。Schema/专家来源的定义正文仍受保护，来源/实体版本校验不放宽。
+
+组合器MUST让每个update替换最终候选中的对应旧成员，并且只保留一条该成员update处置。其他旧成员及历史request/release保持原值；失败不得产生部分覆盖。Python与Go MUST重放同样的组合及最终审核hash，旧内容或旧集合审核不得用于新正文。旧无update向量的canonical与hash MUST保持不变。该子项不代表模型UPDATE_PROPOSAL已接线或发布成功。
+
+更新能力通过可省略的request.knowledge_update_policy=`explicit-same-identity.830.v1`显式声明并进入request hash；只有该请求的compiler context使用NEW_AND_UPDATED_MEMBERS。缺省旧请求保持NEW_MEMBERS_ONLY及禁止update，省略值维持旧canonical字节；空值/未知策略拒绝。当前producer不自动启用该能力。
+
+显式更新策略的Candidate MUST在Python/Go准入边界重验所有新建/变化自由知识的评分覆盖：每项>=60、60—79恰好进入pending，显式update（含只改别名）必须参与；>=80仍保留既有整批发布授权。实际bounded模型display context必须反映同一output_mode，旧请求不新增空扩展键。不能仅依赖正常runner曾调用审核来代替边界校验。

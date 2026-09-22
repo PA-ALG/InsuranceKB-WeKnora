@@ -10,7 +10,7 @@
 - 2026-09-23重新核实[产品PR130](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/130)：OPEN/Draft、未合并、HEAD等于base，deterministic/integration-postgres/wheel-smoke均SUCCESS。明确依赖PR130，不使用停留G2的本地main，不合并G3。
 - 历史部署源码`ec0721083`，当前只读docker ps确认app image`54cadb3d3237`、Harness`646234d2d0ef`、UI`d488e95945f5`仍存在；完整digest引用G3部署回执。源码、制品与部署身份分别记账。
 - G3 FLOW PASS、QUALITY=DEFERRED_TO_Q0、NOT_FOR_PRODUCTION；真实发现EMPTY只证明阶段执行。
-- CURRENT=SEMANTIC_VIEW_VALIDATION；SPEC=首个共用切片冻结、CODE=验证中、BUSINESS=NOT RUN；D1、DOCKER_ACTION=SKIP。当前RED：真实非空准入未证明，更新仅审计，服务实体/正式关系未接本路径。
+- CURRENT=EXPLICIT_UPDATE_SOFTWARE_GREEN；SPEC=共用输入及显式增量准入冻结、CODE=语义视图已提交/增量切片GREEN且独审0 BLOCKER、BUSINESS=NOT RUN；D1、DOCKER_ACTION=SKIP。当前RED：真实非空准入未证明，更新仅审计，服务实体/正式关系未接本路径。
 
 ## 复用 / 适配 / 缺失
 
@@ -91,3 +91,29 @@ Requirement→实现→测试→身份矩阵：
 | G35-R1—7业务目标 | 原生交接、准入、更新、实体/关系、独立审核及唯一Active | 尚无本次真实页面或模型结果 | NOT RUN |
 
 D1软件检查如上述回执；Docker/build/deployment/provider/Candidate/Draft/review/publish/activation/live-probe均NOT RUN。0新增模型、0发布。软件提交不升级BUSINESS或Goal完成状态。
+
+
+## 同身份知识增量准入切片（2026-09-23）
+
+原生接入选择尚未答复；该切片复用已经公开的G2 AuditDisposition.update及最终审核，不改变发现producer或发布权威。G3 Python validate_delta_output/compose_batch_output及Go validateDelta830G3/composeBatchOutput830G3目前全部拒绝同身份旧成员，已核实为更新无法进入Candidate的根因。唯一Owner=root；读审只核对冻结身份。
+
+设计：delta必须显式标为update、确有旧同类型同身份目标且内容有变化；未声明覆盖、新id假称update、无变化和受保护概念正文改写均拒绝。按稳定成员id在最终组合中替换并保留一条update审计，其余旧成员保持原样。已有最终完整性、原文Evidence、主体/版本、专家/Schema保护、独立评分及最终output_hash继续生效；失败不写Active也不改旧对象。字段增量合同不变，复杂跨版本语义冲突不纳入。既有无update样例字节不变。
+
+本轮写域：harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py，harness/tests/test_batch_concept_compile_830_g3_updates.py，internal/types/concept_free_wiki_830_g3.go，internal/types/concept_free_wiki_830_g3_updates_test.go，必要的既有fixtures/batch_concept_compile_830_g3新增跨语言update向量；计划/OpenSpec129/evidence/交接。先Python和Go旧实现RED，再实现、跨语言最终候选验证、冻结独审；无模型、构建部署或业务发布授权扩张。
+
+更新能力通过可省略的request.knowledge_update_policy=`explicit-same-identity.830.v1`显式声明并进入request hash；只有该请求的compiler context使用NEW_AND_UPDATED_MEMBERS。缺省旧请求保持NEW_MEMBERS_ONLY及禁止update，省略值维持旧canonical字节；空值/未知策略拒绝。当前producer不自动启用该能力。
+
+只读审查补核对：实际bounded模型display context硬编码NEW_MEMBERS_ONLY；Candidate边界缺少变化成员评分/pending闭包重验。追加同Owner写域g3_bounded_model_execution.py及本切片测试：复用/下沉既有变化成员识别与准入规则至compiler公开helper，bounded renderer消费同一output_mode；仅显式新策略Candidate执行完整评分及pending核对，历史请求字节/验收合同保持。
+
+
+本切片验证事实见[evidence](../../insurance-kb/evidence/830-g35/knowledge-update-validation.json)。Python/Go旧实现各2项更新RED，模型display/评分准入4项RED；最终Python受影响及bounded旧链26PASS，Go更新/已发布增量/旧canonical/完整Python候选及反例PASS。显式策略保留既有整批审核和唯一Active；未自动启用该策略。
+
+| Requirement子项 | 实现 | 证据 | 当前状态 |
+|---|---|---|---|
+| G35-R2/R5同身份替换、旧请求拒绝及版本化输入 | Python batch compiler与Go candidate mirror | frozen tree 269f586b329d857d5e5d6573441e159966b3dd24，六文件SHA见JSON；commit为本记录所在提交 | PASS（软件） |
+| G35-R3完整审核/评分/pending | 中央knowledge_admission_g3，Go对应验收 | 全重哈希缺评分/低分/错pending/旧审核反例；完整跨语言candidate hash固定 | PASS（软件） |
+| G35-R2模型UPDATE_PROPOSAL贯穿 | producer响应schema/投影与runtime启用尚待接线 | 当前响应只允许新增，未发模型 | NOT RUN |
+
+后续接线必须给定义和页面显式update响应及原身份/依赖，升级相应producer上下文，保留旧响应字节；不能把同ID输出默认为new_page或从audited disposition直接发布。原生接入待答复，真实发现非空/页面/来源与服务实体/关系仍未交付。
+
+冻结tree269f586b329d857d5e5d6573441e159966b3dd24最终只读独审0 BLOCKER，机械文档豁免成立；六个产品/测试/向量文件与冻结树一致。尚未启用producer、未发模型及未部署，本Goal仍未完成。

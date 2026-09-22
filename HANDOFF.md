@@ -1,3 +1,13 @@
+# 当前状态（2026-09-23 · G3.5显式更新编译与准入切片GREEN）
+
+Owner=root，同一830-g35-knowledge-admission工作树，基于语义视图提交fc4f670ff。新增显式knowledge_update_policy，省略时旧请求/旧canonical/NEW_MEMBERS_ONLY不变且禁止update；声明策略后Python/Go可替换同身份概念/自由页，其他base成员与旧request保持。中央变化成员/60—80评分/pending闭包复用既有规则，并在新策略Candidate接口重验；更新正文不能复用旧review。
+
+冻结tree269f586b329d857d5e5d6573441e159966b3dd24最终独审0 BLOCKER。Python最终定向26PASS；旧相关回归77PASS/1skip、3个异常类型断言已按实际Pydantic封装修正并包含在最终26PASS；Go增量/旧canonical/完整Python压缩Candidate/拒绝反例PASS，Ruff/mypy/diff-check PASS。证据：docs/insurance-kb/evidence/830-g35/knowledge-update-validation.json。软件提交不代表业务结果。
+
+CURRENT=共用增量准入软件已GREEN。NEXT_READY=原生候选接入边界答复后推进producer接线及真实材料纵切。明确未接线：模型定义/page update响应、投影器、窗口prompt策略与runtime显式启用；不得将当前Candidate支持写成模型UPDATE_PROPOSAL已贯穿。必要服务实体/关系、事实溯源、最小依赖组与有界质量/成本对照仍须完成。G3.5 BUSINESS=NOT RUN，Goal未完成。
+
+本轮新增模型/解析/应用构建/部署/发布均0；未合并G3、未创建第二Active、未用私密凭据登录。已部署身份继续沿G3回执，不能由当前软件推导现场更新。以下保留上一切片及G3历史状态。
+
 # 当前状态（2026-09-23 · 830-G3.5首个共用软件切片）
 
 Owner=root；独立工作树830-g35-knowledge-admission，base/依赖PR130 HEAD为8f7201dd428033de1e66f8783c125ebf2b617d53。PR130仍OPEN/Draft、未合并；部署仍为G3的ec0721083，本次0模型调用/0构建/0部署/0发布。G3历史FLOW PASS不等于本次自由知识业务PASS。

@@ -627,6 +627,7 @@ type BatchConceptCompileRequest830G3 struct {
 	EntityBindings            []EntityCompileBinding830G3            `json:"entity_bindings"`
 	PublishedBase             *PublishedBaseBinding830G3             `json:"published_base,omitempty"`
 	RefreshFields             []FieldRefresh830G3                    `json:"refresh_fields,omitempty"`
+	KnowledgeUpdatePolicy     string                                 `json:"knowledge_update_policy,omitempty"`
 	UnknownFieldKeyAlignments []UnknownFieldKeyAlignment830G3        `json:"unknown_field_key_alignments"`
 	QualityStatus             string                                 `json:"quality_status"`
 	ReleaseLane               string                                 `json:"release_lane"`
@@ -1298,7 +1299,8 @@ func batchConceptRootWithout830G3(value reflect.Value, hashKey string) (map[stri
 			}
 			if typeOf == reflect.TypeOf(BatchConceptCompileRequest830G3{}) &&
 				(field.Name == "PublishedBase" && value.Field(index).IsNil() ||
-					field.Name == "RefreshFields" && value.Field(index).Len() == 0) {
+					field.Name == "RefreshFields" && value.Field(index).Len() == 0 ||
+					field.Name == "KnowledgeUpdatePolicy" && value.Field(index).String() == "") {
 				continue
 			}
 			projected, err := batchConceptProjectRootField830G3(typeOf, field.Name, value.Field(index))
@@ -3622,6 +3624,7 @@ func batchConceptBaseKind830G3(base ConceptCompileRequest830G2) (string, error) 
 
 func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 	if request.Contract != conceptBatchRequest830G3 ||
+		(request.KnowledgeUpdatePolicy != "" && request.KnowledgeUpdatePolicy != "explicit-same-identity.830.v1") ||
 		request.QualityStatus != "REGISTERED_NOT_QUALITY_ADMITTED" ||
 		request.ReleaseLane != "ISOLATED_NOT_FOR_PRODUCTION" ||
 		!hashEqualWithout830G3(request.Contract, request, "request_sha256", request.RequestSHA256) ||
@@ -4334,6 +4337,9 @@ func validateBatchConceptBundle830G3(bundle BatchConceptCandidateBundle830G3) er
 		"request": bundle.Request, "request_sha256": bundle.Request.RequestSHA256,
 		"base_request_hash": baseRequestHash, "output_mode": "NEW_MEMBERS_ONLY",
 	}
+	if bundle.Request.KnowledgeUpdatePolicy == "explicit-same-identity.830.v1" {
+		compilerContext["output_mode"] = "NEW_AND_UPDATED_MEMBERS"
+	}
 	compilerContextHash, err := batchConceptHash830G3(
 		"batch-concept-compile-context.830.g3.v1", compilerContext,
 	)
@@ -4395,7 +4401,71 @@ func validateBatchConceptBundle830G3(bundle BatchConceptCandidateBundle830G3) er
 		bundle.ReviewResult.Execution.RunID:       true,
 	}
 	if len(runs) != 3 || validatePageManifest830G3(bundle.Request, expected, bundle.PageManifest, bundle.NavigationAssignments) != nil ||
+		validateKnowledgeUpdateAdmission830G3(bundle) != nil ||
 		!hashEqualWithout830G3(bundle.Contract, bundle, "candidate_hash", bundle.CandidateHash) {
+		return ErrConceptCandidateBundle830G3
+	}
+	return nil
+}
+
+func validateKnowledgeUpdateAdmission830G3(bundle BatchConceptCandidateBundle830G3) error {
+	if bundle.Request.KnowledgeUpdatePolicy == "" {
+		return nil
+	}
+	existingDefinitions := map[string]string{}
+	for _, row := range bundle.Request.BaseRequest.ExistingDefinitions {
+		id, idErr := conceptDefinitionID830G2(row)
+		hash, hashErr := conceptDefinitionHash830G3(row)
+		if idErr != nil || hashErr != nil {
+			return ErrConceptCandidateBundle830G3
+		}
+		existingDefinitions[id] = hash
+	}
+	existingPages := map[string]ConceptFreeWikiPage830G2{}
+	for _, row := range bundle.Request.BaseRequest.ExistingPages {
+		id, _ := conceptFreePageID830G2(row)
+		existingPages[id] = row
+	}
+	changed := map[string]bool{}
+	output := bundle.CompileResult.Output
+	for _, row := range output.Definitions {
+		id, idErr := conceptDefinitionID830G2(row)
+		hash, hashErr := conceptDefinitionHash830G3(row)
+		if idErr != nil || hashErr != nil {
+			return ErrConceptCandidateBundle830G3
+		}
+		if existingDefinitions[id] != hash {
+			changed[id] = true
+		}
+	}
+	for _, row := range output.Pages {
+		id, _ := conceptFreePageID830G2(row)
+		old, exists := existingPages[id]
+		if !exists || !batchConceptCanonicalEqual830G3(old, row) {
+			changed[id] = true
+		}
+	}
+	for _, row := range output.Audit {
+		if row.Disposition == "update" {
+			changed[row.Key] = true
+		}
+	}
+	checked := bundle.ReviewResult.Output
+	if len(checked.PageScores) != len(changed) || (checked.Decision != "PASS" && checked.Decision != "NEEDS_HUMAN") {
+		return ErrConceptCandidateBundle830G3
+	}
+	pending := make([]string, 0, len(changed))
+	for id := range changed {
+		score, exists := checked.PageScores[id]
+		if !exists || !validConceptScore830G2(score) || conceptScoreTotal830G2(score) < 60 {
+			return ErrConceptCandidateBundle830G3
+		}
+		if conceptScoreTotal830G2(score) < 80 {
+			pending = append(pending, id)
+		}
+	}
+	sort.Strings(pending)
+	if !reflect.DeepEqual(bundle.Admission.PendingPageIDs, pending) {
 		return ErrConceptCandidateBundle830G3
 	}
 	return nil
@@ -4453,33 +4523,27 @@ func validateDelta830G3(
 	if len(objects) != len(expected) {
 		return ErrConceptCandidateBundle830G3
 	}
-	oldDefinitions, oldPages := map[string]bool{}, map[string]bool{}
-	for _, definition := range request.BaseRequest.ExistingDefinitions {
-		id, _ := conceptDefinitionID830G2(definition)
-		oldDefinitions[id] = true
-	}
-	for _, page := range request.BaseRequest.ExistingPages {
-		id, _ := conceptFreePageID830G2(page)
-		oldPages[id] = true
-	}
 	for _, definition := range output.Definitions {
 		id, idErr := conceptDefinitionID830G2(definition)
-		if idErr != nil || oldDefinitions[id] || objects[id] {
+		if idErr != nil || objects[id] {
 			return ErrConceptCandidateBundle830G3
 		}
 		objects[id] = true
 	}
 	for _, page := range output.Pages {
 		id, idErr := conceptFreePageID830G2(page)
-		if idErr != nil || oldPages[id] || objects[id] {
+		if idErr != nil || objects[id] {
 			return ErrConceptCandidateBundle830G3
 		}
 		objects[id] = true
 	}
 	audit := map[string]ConceptAuditDisposition830G2{}
 	for _, item := range output.Audit {
+		if item.Disposition == "update" && request.KnowledgeUpdatePolicy != "explicit-same-identity.830.v1" {
+			return ErrConceptCandidateBundle830G3
+		}
 		if audit[item.Key].Key != "" || (item.Disposition != "new_page" &&
-			item.Disposition != "sense" && item.Disposition != "field_rule") {
+			item.Disposition != "sense" && item.Disposition != "field_rule" && item.Disposition != "update") {
 			return ErrConceptCandidateBundle830G3
 		}
 		audit[item.Key] = item
@@ -4492,7 +4556,8 @@ func validateDelta830G3(
 			return ErrConceptCandidateBundle830G3
 		}
 	}
-	if validateDeltaEvidence830G3(request, output) != nil {
+	if validateConceptDispositions830G3(request.BaseRequest, output) != nil ||
+		validateDeltaEvidence830G3(request, output) != nil {
 		return ErrConceptCandidateBundle830G3
 	}
 	return nil
@@ -4605,9 +4670,30 @@ func composeBatchOutput830G3(
 	if err != nil {
 		return ConceptCompileOutput830G2{}, ErrConceptCandidateBundle830G3
 	}
-	definitions := append(append([]ConceptDefinition830G2{}, request.BaseRequest.ExistingDefinitions...), delta.Definitions...)
+	changedDefinitions, changedPages := map[string]bool{}, map[string]bool{}
+	for _, definition := range delta.Definitions {
+		id, _ := conceptDefinitionID830G2(definition)
+		changedDefinitions[id] = true
+	}
+	for _, page := range delta.Pages {
+		id, _ := conceptFreePageID830G2(page)
+		changedPages[id] = true
+	}
+	definitions := append([]ConceptDefinition830G2{}, delta.Definitions...)
+	for _, definition := range request.BaseRequest.ExistingDefinitions {
+		id, _ := conceptDefinitionID830G2(definition)
+		if !changedDefinitions[id] {
+			definitions = append(definitions, definition)
+		}
+	}
 	fields := append(append([]ConceptFieldAssertion830G2{}, aligned...), delta.Fields...)
-	pages := append(append([]ConceptFreeWikiPage830G2{}, request.BaseRequest.ExistingPages...), delta.Pages...)
+	pages := append([]ConceptFreeWikiPage830G2{}, delta.Pages...)
+	for _, page := range request.BaseRequest.ExistingPages {
+		id, _ := conceptFreePageID830G2(page)
+		if !changedPages[id] {
+			pages = append(pages, page)
+		}
+	}
 	sort.Slice(definitions, func(i, j int) bool {
 		left, _ := conceptDefinitionID830G2(definitions[i])
 		right, _ := conceptDefinitionID830G2(definitions[j])
@@ -4632,7 +4718,9 @@ func composeBatchOutput830G3(
 		len(request.BaseRequest.ExistingDefinitions)+len(aligned)+len(request.BaseRequest.ExistingPages)+len(delta.Audit))
 	for _, definition := range request.BaseRequest.ExistingDefinitions {
 		id, _ := conceptDefinitionID830G2(definition)
-		audit = append(audit, ConceptAuditDisposition830G2{Key: id, Disposition: "alias_link", Reason: "BASE_CARRYOVER"})
+		if !changedDefinitions[id] {
+			audit = append(audit, ConceptAuditDisposition830G2{Key: id, Disposition: "alias_link", Reason: "BASE_CARRYOVER"})
+		}
 	}
 	for _, field := range aligned {
 		id, _ := conceptFieldID830G2(field)
@@ -4644,7 +4732,9 @@ func composeBatchOutput830G3(
 	}
 	for _, page := range request.BaseRequest.ExistingPages {
 		id, _ := conceptFreePageID830G2(page)
-		audit = append(audit, ConceptAuditDisposition830G2{Key: id, Disposition: "alias_link", Reason: "BASE_CARRYOVER"})
+		if !changedPages[id] {
+			audit = append(audit, ConceptAuditDisposition830G2{Key: id, Disposition: "alias_link", Reason: "BASE_CARRYOVER"})
+		}
 	}
 	audit = append(audit, delta.Audit...)
 	sort.Slice(audit, func(i, j int) bool { return audit[i].Key < audit[j].Key })

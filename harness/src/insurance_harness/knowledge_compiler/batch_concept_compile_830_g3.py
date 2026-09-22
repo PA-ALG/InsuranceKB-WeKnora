@@ -43,6 +43,7 @@ from .concept_compile_830_g2 import (
     ExecutionRecord,
     HumanBatchAdmission,
     PageMember,
+    ReviewOutput,
     ReviewResult,
     free_page_id,
     validate_disposition_semantics,
@@ -336,6 +337,9 @@ class BatchConceptCompileRequest830G3V1(_FrozenModel):
     refresh_fields: tuple[FieldRefresh830G3V1, ...] = Field(
         default=(), exclude_if=lambda value: not value
     )
+    knowledge_update_policy: Literal["explicit-same-identity.830.v1"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     request_sha256: Hash
 
     @model_validator(mode="before")
@@ -344,6 +348,7 @@ class BatchConceptCompileRequest830G3V1(_FrozenModel):
         if isinstance(value, Mapping) and (
             ("published_base" in value and value["published_base"] is None)
             or ("refresh_fields" in value and not value["refresh_fields"])
+            or ("knowledge_update_policy" in value and value["knowledge_update_policy"] is None)
         ):
             raise ValueError("EMPTY_INCREMENTAL_EXTENSION_MUST_BE_OMITTED")
         return value
@@ -1582,7 +1587,9 @@ def compiler_context_g3(request: BatchConceptCompileRequest830G3V1) -> dict[str,
         "request": request,
         "request_sha256": request.request_sha256,
         "base_request_hash": compile_request_hash_g3(request.base_request),
-        "output_mode": "NEW_MEMBERS_ONLY",
+        "output_mode": "NEW_AND_UPDATED_MEMBERS"
+        if request.knowledge_update_policy
+        else "NEW_MEMBERS_ONLY",
     }
 
 
@@ -1684,18 +1691,29 @@ def validate_delta_output(
         item.concept_id for item in output.definitions
     )
     page_collision = old_pages.intersection(free_page_id(item) for item in output.pages)
-    if definition_collision or page_collision:
+    updates = {item.key for item in output.audit if item.disposition == "update"}
+    if updates and request.knowledge_update_policy != "explicit-same-identity.830.v1":
+        raise BatchConceptCompileError("KNOWLEDGE_UPDATES_NOT_ENABLED")
+    if (definition_collision | page_collision) - updates:
         raise BatchConceptCompileError("DELTA_IDENTITY_COLLISION")
     objects = _delta_objects(output)
+    if len(objects) != len(output.definitions) + len(output.fields) + len(output.pages):
+        raise BatchConceptCompileError("DELTA_IDENTITY_COLLISION")
     promoted = {
         item.key: item
         for item in output.audit
-        if item.disposition in ("new_page", "sense", "field_rule")
+        if item.disposition in ("new_page", "sense", "field_rule", "update")
     }
     if len(promoted) != len(output.audit) or set(promoted) != set(objects):
         raise BatchConceptCompileError("DELTA_AUDIT_MISMATCH")
     if any(promoted[item.assertion_id].disposition != "field_rule" for item in output.fields):
         raise BatchConceptCompileError("DELTA_AUDIT_MISMATCH")
+    try:
+        for obj, old, disposition in validate_disposition_semantics(request.base_request, output):
+            if disposition == "update" and old == obj:
+                raise ValueError("UPDATE_TARGET_MISSING_OR_DUPLICATE")
+    except ValueError as exc:
+        raise BatchConceptCompileError(str(exc)) from None
     sources = request.base_request.sources
     binding_by_entity = {item.entity_id: item for item in request.entity_bindings}
     source_keys_by_material = {
@@ -1784,13 +1802,33 @@ def compose_batch_output(
     base = request.base_request
     delta = model_compile_result.output
     aligned = aligned_existing_fields(request)
+    changed_definitions = {item.concept_id for item in delta.definitions}
+    changed_pages = {free_page_id(item) for item in delta.pages}
     definitions = tuple(
-        sorted((*base.existing_definitions, *delta.definitions), key=lambda item: item.concept_id)
+        sorted(
+            (
+                *(
+                    item
+                    for item in base.existing_definitions
+                    if item.concept_id not in changed_definitions
+                ),
+                *delta.definitions,
+            ),
+            key=lambda item: item.concept_id,
+        )
     )
     fields = tuple(
         sorted((*aligned, *delta.fields), key=lambda item: (item.entity_id, item.field_key))
     )
-    pages = tuple(sorted((*base.existing_pages, *delta.pages), key=free_page_id))
+    pages = tuple(
+        sorted(
+            (
+                *(item for item in base.existing_pages if free_page_id(item) not in changed_pages),
+                *delta.pages,
+            ),
+            key=free_page_id,
+        )
+    )
     if (
         len({item.concept_id for item in definitions}) != len(definitions)
         or len({item.assertion_id for item in fields}) != len(fields)
@@ -1802,6 +1840,7 @@ def compose_batch_output(
     carry_audit = [
         AuditDisposition(key=item.concept_id, disposition="alias_link", reason="BASE_CARRYOVER")
         for item in base.existing_definitions
+        if item.concept_id not in changed_definitions
     ]
     carry_audit.extend(
         AuditDisposition(
@@ -1818,6 +1857,7 @@ def compose_batch_output(
     carry_audit.extend(
         AuditDisposition(key=free_page_id(item), disposition="alias_link", reason="BASE_CARRYOVER")
         for item in base.existing_pages
+        if free_page_id(item) not in changed_pages
     )
     if aligned_ids.intersection(original_ids):
         raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
@@ -2050,6 +2090,47 @@ def _validate_published_review_reuse(
         raise BatchConceptCompileError("PUBLISHED_REVIEW_REUSE_INVALID")
 
 
+def changed_knowledge_member_ids(
+    request: BatchConceptCompileRequest830G3V1, output: CompileOutput
+) -> set[str]:
+    existing_definitions = {
+        row.concept_id: _definition_hash_g3(row)
+        for row in request.base_request.existing_definitions
+    }
+    existing_pages = {free_page_id(row): row for row in request.base_request.existing_pages}
+    changed = {
+        row.concept_id
+        for row in output.definitions
+        if existing_definitions.get(row.concept_id) != _definition_hash_g3(row)
+    } | {free_page_id(row) for row in output.pages if existing_pages.get(free_page_id(row)) != row}
+    if request.knowledge_update_policy:
+        changed.update(row.key for row in output.audit if row.disposition == "update")
+    return changed
+
+
+def knowledge_admission_g3(
+    request: BatchConceptCompileRequest830G3V1, output: CompileOutput, checked: ReviewOutput
+) -> HumanBatchAdmission:
+    """Shared admission for bounded review and explicit-update candidate custody."""
+    if checked.decision not in ("PASS", "NEEDS_HUMAN"):
+        raise BatchConceptCompileError("REVIEW_NOT_APPROVED_OR_STALE")
+    changed = changed_knowledge_member_ids(request, output)
+    if request.knowledge_update_policy and set(checked.page_scores) != changed:
+        raise BatchConceptCompileError("PAGE_ADMISSION_COVERAGE_MISMATCH")
+    pending = []
+    for member_id in sorted(changed):
+        score = checked.page_scores.get(member_id)
+        if score is None or score.total < 60:
+            raise BatchConceptCompileError("PAGE_ADMISSION_REJECTED")
+        if score.total < 80:
+            pending.append(member_id)
+    return HumanBatchAdmission(
+        contract="concept-admission.830.g2.v1",
+        status="NEEDS_HUMAN",
+        pending_page_ids=tuple(pending),
+    )
+
+
 def _validate_navigation_assignments(
     request: BatchConceptCompileRequest830G3V1,
     model_compile_result: CompileResult,
@@ -2114,6 +2195,10 @@ def validate_candidate_bundle(bundle: BatchConceptCandidateBundle830G3V1) -> Non
     }
     if len(run_ids) != 3 or bundle.admission.status != "NEEDS_HUMAN":
         raise BatchConceptCompileError("EXECUTION_INDEPENDENCE_INVALID")
+    if request.knowledge_update_policy and bundle.admission != knowledge_admission_g3(
+        request, expected, review.output
+    ):
+        raise BatchConceptCompileError("HUMAN_ADMISSION_BINDING_MISMATCH")
     if bundle.page_manifest != project_batch_members(
         request, expected, bundle.navigation_assignments
     ):
