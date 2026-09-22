@@ -1,0 +1,9 @@
+PASS positive exact profile receipt/file/semantic
+PASS negative profile-actor_display_name: PROFILE_CONFIRMATION_MISMATCH
+PASS negative profile-queue_owner: PROFILE_CONFIRMATION_MISMATCH
+PASS negative source-full-parser_identity: SOURCE_CLOSURE_MISMATCH
+PASS negative source-full-page_number: SOURCE_CLOSURE_MISMATCH
+PASS negative match-display-anchor: RESOLUTION_REFERENCE_INVALID
+PASS negative create-candidate-key: RESOLUTION_REFERENCE_INVALID
+PASS positive selected-child evidence and full SourceBlock overlap
+ALL 8 INDEPENDENT CHECKS PASSED

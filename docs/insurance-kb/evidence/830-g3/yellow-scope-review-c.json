@@ -1,0 +1,13 @@
+{
+  "contract": "830-g3-c-yellow-scope-review.v1",
+  "status": "YELLOW_BOUNDED_REVIEW_PENDING",
+  "production_lines": 1566,
+  "test_lines": 1224,
+  "exact_production_file_count": 1,
+  "reason": "Frozen input/output DTOs plus pure evidence/trust/identity resolver are one approved domain; retain two-file owner boundary during review, no mechanical splitting or scope expansion",
+  "required_review": "Independent Spec/code review checks responsibilities and maintainability; size alone does not establish completion",
+  "file_sha256s": {
+    "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py": "f93b682e8fecd4a7b9db22a3cb84f74ce9a117b22b8375a951fe3c1637b13bcd",
+    "harness/tests/test_batch_entity_resolution_830_g3.py": "9ace729bbfb2382e16e67598e2740330ce30802517c53f5c1e84c9af41ee68f3"
+  }
+}

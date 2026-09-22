@@ -1,0 +1,135 @@
+{
+  "contract": "830-g3-preserved-native-captures.v1",
+  "status": "CAPTURES_VERIFIED_NOT_SOURCE_REVISIONS",
+  "documents": [
+    {
+      "material_id": "g3-material-07",
+      "file_sha256": "53eb3b5b6c2d66c09cea593f9cb40faa596182ad82523e72bd394f49466913cc",
+      "pages": 35,
+      "markdown_utf8_bytes": 107016,
+      "markdown_sha256": "a72af4d05e91621921d3c8595a09d4e0e66b80a41ef744bc0e38443e603fb246",
+      "native_sha256": "d7d2921d3c5887f2b73c34093301cae1f2c5b3909a2cdb46357e33e076655445",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "e25e87313cb4ec2e5ab2e57487d41135c6387cf4e874685a8e6cf8dae9306506",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-07-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-08",
+      "file_sha256": "f043311c2257f6f5e5cd14120c4f418ed9ef2245dda21fc1eb80d75ae21f1079",
+      "pages": 46,
+      "markdown_utf8_bytes": 126827,
+      "markdown_sha256": "1dfda6a1e9398198d4b7688cbdd78938879694d836ebae406081b75f5b8d7513",
+      "native_sha256": "747373c3faa6f8e010109bedef0c989d380b6b877e350d5eef58bf994a72f363",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "88db835214869b144acbaa253af8e99a3650de2e1b5663af8eb5b89e705b8696",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-08-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-09",
+      "file_sha256": "734fe177e498de35ceb551eb02a770bb0de41d0e7bf03b163327e9afdc4118ec",
+      "pages": 10,
+      "markdown_utf8_bytes": 28979,
+      "markdown_sha256": "3f3700adc5118591ba9c6fbfab9a8f5818ece7bf716d0792bc32f60e9ea8c1ba",
+      "native_sha256": "3c946fd40897515e394b525dfaa500f3916f4568db260464f4143d80eb746d88",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "fecfc7c17404f4976f732ae7242c8b915479488ed122e993eb254d3b5f1a8070",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-09-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-11",
+      "file_sha256": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+      "pages": 9,
+      "markdown_utf8_bytes": 29243,
+      "markdown_sha256": "fcda1ef806ab13fa6bc1fc6b4bc7f9eafe29d94b6bffee36ef65c42bdaf00afe",
+      "native_sha256": "03b1aa9ac95b7774d7cdb833770c8172ddb270aa2e0785ec6ffe1c277d97d23d",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "8fe1d5b89f5536a983c35cad0235e0f4e01f41187683e85caeac2eda4af4c294",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-11-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-12",
+      "file_sha256": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+      "pages": 44,
+      "markdown_utf8_bytes": 133466,
+      "markdown_sha256": "a134d6b66c25f95959f3998f0c88988b0249d1b253ced415fec1f3f43848b804",
+      "native_sha256": "33c0b0636fc4a42007ecee5368c228e81813483cbcca13f9a9746c0e5a4aa1a7",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "549143dde35df75e1cd6c4565e035c5241cb64c5f4342f3935c3e2e5567ec049",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-12-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-13",
+      "file_sha256": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+      "pages": 12,
+      "markdown_utf8_bytes": 41852,
+      "markdown_sha256": "71dcc17ceebf9b016ce6658f94de60f439fcd9321702a71ef21d5b1a37008fb0",
+      "native_sha256": "9d93b76108ea4d049ffa0af766456f3efbc6ab1397ec89795db757c02576cddc",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "4bb6e95db4eafaa1d55096e4609f3e59c3c419273d4028d3e2eb7fb568c1e6d4",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-13-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-14",
+      "file_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+      "pages": 9,
+      "markdown_utf8_bytes": 27846,
+      "markdown_sha256": "7c36ff3907f94f6fa2e76b8601e7be7c742bf0a97e03c59ad7e90b34999f5a09",
+      "native_sha256": "ab693a93d1062afd118f154a57fdf9328dcaed22eb8f304b8a5ea6c12950b2f1",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "df9f05b86ca3128e314d6e4965a9c81a969f2e6fa807dadeabfd937567b8c25d",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-14-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-17",
+      "file_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+      "pages": 43,
+      "markdown_utf8_bytes": 138696,
+      "markdown_sha256": "912a2125cc768d0f2f165c93c67cbe4fc6cdc9536f9d280c6cdcc8ae385db7c0",
+      "native_sha256": "2ef5a28754637e41e00d08a003ac29ce75726b294851a5859ffbe90c244e5d1d",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "9fc6987e83c2dc107a7770bf1ab06d34d67d5743081c9edd8274a78994830468",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-17-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-18",
+      "file_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
+      "pages": 11,
+      "markdown_utf8_bytes": 20292,
+      "markdown_sha256": "827abacedcae76b5fa533afe83a81c07d5ef4e66ef7ba6ab5995a8b06bca511e",
+      "native_sha256": "a2184272a802334cb23f27a017f4ee6566bb1926cbb2b2f93b6a3ac8a19f7652",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "29af9db806702e26c2b7a2ce4a39bc8cfe991d5adffe95e208cde1871cac86f3",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-18-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-19",
+      "file_sha256": "62b7c75958120effcba98adc71e6236f18728d900a05f312efc405f8be1aa5b8",
+      "pages": 2,
+      "markdown_utf8_bytes": 2355,
+      "markdown_sha256": "532a94d8402e44cb23e804b5166fc864c59ea8716861ad6343ee9fce6e950f7b",
+      "native_sha256": "65de8012928fc142d05b742eb96f21a1f20a4f8fc548974c9e5d0713ad695cf5",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "7f5fa4acb35c3e80444e7d1b2be08b770c925d3ebeafecb34bceb0715997d171",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-19-native.json.gz"
+    },
+    {
+      "material_id": "g3-material-21",
+      "file_sha256": "fcba0b42ee84b4ee961ba49f650a82b3057fa3f5aaed5c0a7fba41dfb254685e",
+      "pages": 5,
+      "markdown_utf8_bytes": 7266,
+      "markdown_sha256": "a8670f07aace99698d469d256126135b2efab9ee7e4a07d2b5c7d68ea067b643",
+      "native_sha256": "1e2521df8f9edb4fd53314b7dbce10df98c20185c1b553e6c980c94f8fa1f1d5",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "capture_file_sha256": "4bf31d980926b8d5a7845c865b0c3851bfac756369316678f4c736c2607cea41",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-21-native.json.gz"
+    }
+  ],
+  "source_attempts": [
+    "native-preflight-attempt1.json (10 successes/1 scanned-page failure)",
+    "native-multi-alternative-probe.json (one alternative whole PDF success)"
+  ],
+  "selected_raw_file_set_sha256": "0fa401475bf868a5f0f49f406da40214b6e1af7b88cca64e65c2e2b84fc4648f",
+  "capture_set_sha256": "6ab9ca3b168f6d600914591f8fd303f11eb5ae32f9030cdc3c57d447a5ef6f21",
+  "meaning": "Copies and digest checks of existing actual parser outputs only; no reparsing, uploading or model calls",
+  "flow": "NOT RUN"
+}

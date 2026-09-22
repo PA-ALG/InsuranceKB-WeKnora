@@ -1,0 +1,58 @@
+{
+  "contract": "830-g3-source-runtime-stop-process-events.v1",
+  "raw_private_log_sha256": "4be7224ab0a59bb2c66af771429c20ac8a96f6b928dbdb34e25dc736c0492d29",
+  "events": [
+    {
+      "timestamp": "2026-09-07T22:00:49.593109599Z",
+      "message": "server process (PID 1884388) exited with exit code 2",
+      "raw_line_sha256": "aaf6b13fe68334b441e3655531b69134b7388eac6a2308d478520cabad6444fb"
+    },
+    {
+      "timestamp": "2026-09-07T22:00:49.631918798Z",
+      "message": "terminating any other active server processes",
+      "raw_line_sha256": "f43007e705708108ae30e18c329a1133ed66bbaabb4e6e702b5070c6e4a5aa1e"
+    },
+    {
+      "timestamp": "2026-09-07T22:00:55.763500957Z",
+      "message": "issuing SIGKILL to recalcitrant children",
+      "raw_line_sha256": "5abb1c8ecf712d7da2e778c514ef7b28ea00827fe86395f401d5efdda10cd864"
+    },
+    {
+      "timestamp": "2026-09-07T22:00:56.598468674Z",
+      "message": "all server processes terminated; reinitializing",
+      "raw_line_sha256": "de07571411536f08f8fbdd1c704defa9c7cb9a1dff7f768ef1c0908a71d40966"
+    },
+    {
+      "timestamp": "2026-09-07T22:01:11.829340276Z",
+      "message": "the database system is in recovery mode",
+      "raw_line_sha256": "fd13ce99b19ccbb4e74bf832cbf82ee2ae791aacffb732f271adef3e8835fe63"
+    },
+    {
+      "timestamp": "2026-09-07T22:01:19.665589704Z",
+      "message": "the database system is in recovery mode",
+      "raw_line_sha256": "44a36b9f42f710835b8b2f957626679b41d8eabd6a6d2f2210deb0425b24a021"
+    },
+    {
+      "timestamp": "2026-09-07T22:01:29.162006110Z",
+      "message": "the database system is in recovery mode",
+      "raw_line_sha256": "6fc4b43a5d4945609fad5e8caec85d4363cbd494bdafe9373adb20081321d193"
+    },
+    {
+      "timestamp": "2026-09-07T22:01:43.849038838Z",
+      "message": "the database system is in recovery mode",
+      "raw_line_sha256": "84a6c876b63b50d94019bd315e8b9f739002f7a9ff9364df5ca0b73f7e2e2231"
+    },
+    {
+      "timestamp": "2026-09-07T22:01:46.696362771Z",
+      "message": "database system was not properly shut down; automatic recovery in progress",
+      "raw_line_sha256": "e4373fe65b3c86199634573c8826181035130d13aa45c05ec3252904da34a3f6"
+    },
+    {
+      "timestamp": "2026-09-07T22:02:01.835029285Z",
+      "message": "database system is ready to accept connections",
+      "raw_line_sha256": "d363df1cfbbfc83e4d62dd3868252c545d45e4cc207537a0b4357ec6f49732c1"
+    }
+  ],
+  "interpretation": "PostgreSQL child exit and postmaster reinitialization overlapped the restore window. No original restore PID or SQL-statement binding survived; specific trigger is unknown. Source database shared this postmaster, so selected snapshot equality does not exclude availability impact.",
+  "earlier_diagnostic_limitation": "Zero matches in the initial fixed keyword taxonomy did not mean zero server failures."
+}

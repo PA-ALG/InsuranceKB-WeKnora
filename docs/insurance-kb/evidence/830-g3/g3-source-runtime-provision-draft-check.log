@@ -1,0 +1,29 @@
+AST_PASS
+CLI_HELP_PASS
+usage: g3-source-runtime-provision-draft.py [-h] [--transport {colima,docker}]
+                                            {preflight,apply} ...
+
+Draft G3 source-runtime provisioner. This file is deliberately inert unless
+invoked with either ``preflight`` or ``apply``. ``preflight`` performs read-
+only Docker/PostgreSQL inspection and writes a local receipt. ``apply`` is a
+one-shot, fail-closed mutation runner; it requires a matching preflight
+receipt and a separate authorization receipt. The draft never starts an
+embedding guard, never sends provider traffic, and never uploads PDFs. It uses
+only locally present image digests with ``--pull=never``.
+
+positional arguments:
+  {preflight,apply}
+    preflight           read-only runtime inspection
+    apply               one-shot provision/configure; mutation
+
+options:
+  -h, --help            show this help message and exit
+  --transport {colima,docker}
+{"checks": {"aes_sha256": true, "app_image": true, "config_sha256": true, "docreader_image": true, "embedding_model_id": true, "file_refs": true, "frozen_file_bytes": true, "physical_files": true, "raw_kb_id": true, "redis_image": true, "source_rows": true, "summary_model_id": true, "tenant_id": true}, "contract": "g3-source-runtime-draft-constant-check.v1", "result": "PASS"}
+STATIC_BOUNDARY_PASS proxy_disabled=true no_redirect=true script_sha_bound=true
+FAKE_API_OMITTED_ZERO_FIELDS_PASS calls=7 actual_http=0 proxy_use=0
+FAKE_API_NONZERO_FIELD_REJECT_PASS calls=7 actual_http=0 proxy_use=0
+FAKE_TAR_HELPER_PASS
+RUNTIME_PREFLIGHT_NOT_RUN
+RUNTIME_APPLY_NOT_RUN
+NETWORK_CALLS=0

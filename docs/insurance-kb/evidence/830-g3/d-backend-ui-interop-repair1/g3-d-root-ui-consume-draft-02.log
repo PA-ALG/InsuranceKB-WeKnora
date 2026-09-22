@@ -1,0 +1,13 @@
+{
+  "contract": "830-g3-go-http-to-frozen-ui-parser-check.v1",
+  "status": "PASS",
+  "input_path": "/private/tmp/g3-d-root-service-json-02/draft.json",
+  "input_sha256": "26cc154568917d15ef0087cd4a624b9701cf9162250c35a6a75ae9f521f3dac8",
+  "input_bytes": 396360,
+  "preparation_id": "root-wire-draft",
+  "preparation_status": "DRAFT",
+  "candidate_sha256": "e9f3fc9bec2cca609a30dce0f015a6af955e41da9d7a42399b05164efef14870",
+  "entities": 5,
+  "fields": 342,
+  "boundary": "Synthetic protocol test response; no HTTP server, live scope, DB, provider, browser or deployment."
+}

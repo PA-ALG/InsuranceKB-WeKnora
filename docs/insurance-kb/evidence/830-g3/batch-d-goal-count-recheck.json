@@ -1,0 +1,16 @@
+{
+  "contract": "batch-d-goal-count-recheck.830.g3.v1",
+  "checked_at": "2026-09-07T09:39:05.174341+00:00",
+  "reviewer": "g3_seam_audit",
+  "status": "BLOCKED_DESIGN_RECOVERY_PENDING",
+  "withdrawn_authorization": "amendment3 legacy_field_keys/legacy_fields and per-medical68/actual344; earlier design review preserved as historical only",
+  "reason": "G3 Goal Card requires exact equality between pack FieldDefinition count and independent per-entity FieldAssertion pages",
+  "actual_fact": "two singular social_insurance_requirement fields are attempted unknown with null value and no evidence/conditions/exceptions/concepts/time",
+  "recovery": "strict exact two-entity/version/current-base unknown-only key alignment to plural; old release untouched; per medical67/full342",
+  "proposed_amendment": {
+    "path": "lane-d-unknown-key-alignment-amendment-6.md",
+    "sha256": "8673c257c493020262de418c03eb789d2569909e008b2feb0b0ccf5fd640c9dd"
+  },
+  "D_implementation": "NOT RUN",
+  "runtime_effects": 0
+}

@@ -1,0 +1,78 @@
+{
+  "contract": "830-g3-d-ui-final-staged-mechanical-review.v1",
+  "verdict": "PASS",
+  "expected_stage_manifest": {
+    "path": "/private/tmp/g3-d-ui-final-stage-files.json",
+    "sha256": "02fea3c053bf141ce89c8897ed46280d8b506cd6676c746f13f892981a4a3704",
+    "count": 28
+  },
+  "staged_set": {
+    "count": 28,
+    "exact_set_match": true,
+    "internal_paths": 0,
+    "harness_paths": 0,
+    "unexpected_paths": [],
+    "missing_paths": []
+  },
+  "indexed_ui_identity": {
+    "files_checked": 8,
+    "all_match_repair1_freeze": true,
+    "freeze_sha256": "6cdd98c539f9ef1b985dce16d6937b7c6b52e948bc69873fcd20db0c5e8c944c",
+    "source_sha256": "52ec691d36c0984c60725ff9b8f6ed08de8c5f47817a1ca7f1a4b63075192b05",
+    "test_sha256": "37713e5c6627b87e3123136ddc9ba1944c782282154a47f4d500630d4eee8b67"
+  },
+  "evidence": {
+    "owner_logs_exact": 11,
+    "independent_logs_exact": 3,
+    "shared_fixture_identities_exact": 3,
+    "root_integration_sha256": "b2c71bc6f4847321f02bf0660d6a94c31ad67d2e612df693005c37cbd34520af",
+    "independent_acceptance_sha256": "3fb2d779bfdbb4cbda2c44e21e7f08966ecd2944b12444522ec9e6361abe4432"
+  },
+  "staged_document_identities": {
+    "HANDOFF.md": {
+      "sha256": "457948754ff3b0e609317e910a4628cd5004ed891545d2625af3d27553f5964a",
+      "bytes": 29535
+    },
+    "openspec/changes/129-830-g3-catalog-batch/validation-report.md": {
+      "sha256": "7cc62c20ac9dcecfed487e2df584f61dd770ac514b1563c21e25781aac5e862b",
+      "bytes": 9835
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-ui-root-integration-verification.json": {
+      "sha256": "b2c71bc6f4847321f02bf0660d6a94c31ad67d2e612df693005c37cbd34520af",
+      "bytes": 3485
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-ui-repair1-independent-rereview.json": {
+      "sha256": "3fb2d779bfdbb4cbda2c44e21e7f08966ecd2944b12444522ec9e6361abe4432",
+      "bytes": 4784
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-ui-repair1-freeze.json": {
+      "sha256": "6cdd98c539f9ef1b985dce16d6937b7c6b52e948bc69873fcd20db0c5e8c944c",
+      "bytes": 5764
+    }
+  },
+  "status_accuracy": {
+    "ui_task4": "PASS_LOCAL_SOFTWARE",
+    "ui_blockers": 0,
+    "ui_backlog": 0,
+    "backend": "INCOMPLETE",
+    "actual_runtime_effects": 0,
+    "no_release_claim": true
+  },
+  "red_treatment": {
+    "product_change": "Covered by preserved effective structured-control RED, owner GREEN, and independent rereview.",
+    "mechanical_docs": "RED exempt: these files only preserve evidence and record an already-reviewed result; they add no behavior, criterion, authority, or runtime operation."
+  },
+  "findings": [],
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0,
+    "push": 0,
+    "pr": 0,
+    "runtime": 0,
+    "repo_files_written_by_reviewer": 0
+  }
+}

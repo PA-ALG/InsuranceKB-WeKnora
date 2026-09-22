@@ -1,0 +1,32 @@
+{
+  "contract": "830-g3-d-owner-fixture-progress.v1",
+  "recorded_at": "2026-09-07T12:11:04.414146+00:00",
+  "reported_by": "g3_catalog_impl",
+  "status": "OWNER_PROVISIONAL_NOT_INDEPENDENTLY_REVIEWED",
+  "fixture_counts": {
+    "entities": 5,
+    "existing_fields": 134,
+    "unchanged_carry": 132,
+    "unknown_key_alignments": 2,
+    "delta_fields": 208,
+    "final_fields": 342,
+    "source_blocks": 26,
+    "execution_raws": 3
+  },
+  "post_bytes_owner_reported": 2247425,
+  "limit_bytes": 8388608,
+  "existing_codes": [
+    "596",
+    "594"
+  ],
+  "existing_serving_versions": [
+    "596-1",
+    "594-1"
+  ],
+  "qualifiers": [
+    "protocol fixture, not real C/model/provider result",
+    "two synthetic MATCH decisions and three synthetic CREATE decisions",
+    "fixture/negative tests and Go mirror still in progress",
+    "handler/service/UI writes remain closed until frozen capacity and DTO validation gates pass"
+  ]
+}

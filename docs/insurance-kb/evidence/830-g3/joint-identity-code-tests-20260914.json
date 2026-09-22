@@ -1,0 +1,127 @@
+{
+  "task": "Task3ab",
+  "base_commit": "0931e22101fb0dfb6308b47e3c85bc1251172469",
+  "requirements": [
+    "G3-AUTO-1",
+    "G3-AUTO-2",
+    "G3-AUTO-3",
+    "G3-AUTO-4",
+    "G3-AUTO-6"
+  ],
+  "code_status": "PASS",
+  "independent_review": "PASS: typed filing evidence blocker corrected and rechecked; all other reviewed files unchanged",
+  "deployment": "NOT RUN",
+  "business_acceptance": "NOT RUN",
+  "source_sha256": {
+    "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py": "1c8e7a19310bcf5543773c6cdf3e5c2aa272d5034ee95f53881731b55bc4e309",
+    "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py": "b359f6096f5efdfce7035357798a39a296ab6c242ed705cbaadfa6eb341905f1",
+    "harness/src/insurance_harness/knowledge_compiler/g3_evidence_identity_v3.py": "7c81f82eefcd5cb3f516e5d25bf2cb7578f8b329adfb80a34ef8779a781878fd",
+    "harness/src/insurance_harness/product_ingestion/api.py": "70f198d569e8f72eb6d290fcce2a86c50cb5d4ec521945e792451946373f653b",
+    "harness/src/insurance_harness/product_ingestion/artifact_models.py": "3eda90ed790f2635c4bd7c7df4f68af730f1e3a95e5e6d3388d16c59b089f49a",
+    "harness/src/insurance_harness/product_ingestion/artifacts.py": "256366bae39ca8aaf9c5d2dfadb042844f62d4204bb7c976815a3da5363ff700",
+    "harness/src/insurance_harness/product_ingestion/identity.py": "00853ac58e5aa20704c3cb4c12a44a3bebcfe51a023c416f03e8a7473a04e0fd",
+    "harness/src/insurance_harness/product_ingestion/identity_adapter.py": "9f4294a59cb21ec4bca385f8a0fd69a2d5a63c56ec309cd1112f21f23ce5370b",
+    "harness/src/insurance_harness/product_ingestion/model_execution.py": "7de54fd21fef7a59d5955cfa45315f7211468692dba80348a716dbb3eb694662",
+    "harness/src/insurance_harness/product_ingestion/pipeline.py": "fc8fd9c33f1fe4fbf249c907b02f9215cd677e280a44bbf9d7b42c03c3374711",
+    "harness/src/insurance_harness/product_ingestion/recovery.py": "b824f077bc38aca06f8c68814b2f32718e08f6c5fdef19028b718cec3a77a14e",
+    "harness/src/insurance_harness/product_ingestion/stages.py": "fdfb0dab5e37366d8bfc348812b26990e28c35e917d3a6bafbd87f2b2fad5e0a",
+    "harness/src/insurance_harness/product_ingestion/store.py": "d6e71cae1f2a662059c9c8458a0f18d758170296d3e73dc54d6e5b316e5f0b7c",
+    "harness/tests/product_ingestion/test_api.py": "464feea0984ab8e8f0b38d1c4ce53f8e24e5567598443cb83019202ca8b66939",
+    "harness/tests/product_ingestion/test_artifacts.py": "1b3448b221544ea0aa0edc016143e8db23cd6314d164316a804735023551a7a7",
+    "harness/tests/product_ingestion/test_identity.py": "7772df357dcd6cfba38ba00337a7e3a6dd506afbcf4f0f1784c6cecd4604e6fd",
+    "harness/tests/product_ingestion/test_identity_adapter.py": "094382ae7b5713ad14079bbc50d0add7f6ed76cf250f81dc73d42661c2218768",
+    "harness/tests/product_ingestion/test_identity_recovery.py": "16805192bd775b7ef3a3d2a127418faa9ef90e51b3620365f9b42c2e05bdae9b",
+    "harness/tests/product_ingestion/test_joint_identity_pipeline.py": "7b8f683309101cf23c01ffe9dfe2648cc514a53a148be7d79d0372920db872af",
+    "harness/tests/test_g3_evidence_identity_v3.py": "64971d978666cb95e80a1f2de780bcaad9bc1c4a5b933e87bd2fb821b0892aea",
+    "internal/application/service/product_ingestion_bridge.go": "0df7559c4e87d931d30ea1a08276fba935563f9db311cd278e1632acc28e7a43",
+    "internal/application/service/product_ingestion_bridge_test.go": "96d8f7366ec30ef28de336da392a69e9f74954a03de22efeb166518a64e7370e",
+    "internal/types/concept_free_wiki_830_g3.go": "355ae21f71bbf103872a430199e1cd6ce8be7024480d6dc721488b10f93b42dc",
+    "internal/types/concept_free_wiki_830_g3_identity_v3.go": "49f162e4015824b63b4b9cd2fe22523c8fb581984e138d7c83134dcd2ece7f71",
+    "internal/types/concept_free_wiki_830_g3_identity_v3_test.go": "6077b01ba4e1f3457a59ff3e343d5e58580e1f54ba0b4da5a7ed8e8d9bb27cac",
+    "internal/types/testdata/concept_identity_joint_830_g3_vector.json": "fe4aa7f6acde0108c5aaa43fce4a59d09b90629c95b475c511d7b0d51c0bf491"
+  },
+  "tests": {
+    "python_identity_and_v2_compatibility": "25 PASS",
+    "typed_filing_adapter_final": "10 PASS",
+    "recorded_recovery_distinct_tests": "49 PASS (earlier metrics expectation failure corrected and reverified)",
+    "api": "19 PASS",
+    "joint_worker_pipeline": "1 PASS / 88.43 seconds",
+    "recorded_recovery_worker": "1 PASS / 82.36 seconds (included in recovery count)",
+    "pipeline_compatibility": "3 PASS / 225.47 seconds",
+    "go_resolver": "8 top-level plus 16 subtests PASS / 29.025 seconds",
+    "go_bridge_group": "PASS / 4.761 seconds"
+  },
+  "logs": {
+    "pipeline-red": {
+      "path": "/private/tmp/g3-task3ab-pipeline-red.log",
+      "sha256": "cf7fed8fe0235893b18dd26f9127366af9c6753a44d1cffde66598adaac1df4d"
+    },
+    "pipeline-green": {
+      "path": "/private/tmp/g3-task3ab-pipeline-green.log",
+      "sha256": "3c0fcc0b5abf201c694b0771023ab880a0c2bc7aaf9f82244291075c17d4f9a3"
+    },
+    "pipeline-compatibility": {
+      "path": "/private/tmp/g3-task3ab-pipeline-compatibility.log",
+      "sha256": "1a669abfb4906ab5e7f5d085981cde9766c1bf9994ce4c5d776b08956a3c2365"
+    },
+    "api-red": {
+      "path": "/private/tmp/g3-task3ab-api-red.log",
+      "sha256": "5d54c0be6f6f5ee522ac07b9c12b96591c7baf214d9a39f1a2eaff3b853536dc"
+    },
+    "api-full": {
+      "path": "/private/tmp/g3-task3ab-api-full.log",
+      "sha256": "4e2b24f9e20b5ab0471b83133a365880b52e6146324f3ae71b9eb0562f437d11"
+    },
+    "bridge-red": {
+      "path": "/private/tmp/g3-task3ab-bridge-red.log",
+      "sha256": "ce50b9c5c6169bab6a312274b1337b1b8a186c322a0465f8a9bf2313be1d01ab"
+    },
+    "bridge-green": {
+      "path": "/private/tmp/g3-task3ab-bridge-green.log",
+      "sha256": "c300968bfd9ddc4d3acbaf26a86504da122a9221c293875c1fd523ffb892a1a5"
+    },
+    "focused-final": {
+      "path": "/private/tmp/g3-task3ab-focused-final.log",
+      "sha256": "05254eafa020f7e8f5f60be42c43b5976a0bed5efca654dedfa098166e14cd9f"
+    },
+    "filing-type-red": {
+      "path": "/private/tmp/g3-task3ab-filing-type-red.log",
+      "sha256": "a6489f498bfcfe11fdff13f4510518d961f1634b7ad2aa504d72f8b13a3dec47"
+    },
+    "filing-type-green": {
+      "path": "/private/tmp/g3-task3ab-filing-type-green.log",
+      "sha256": "44ce0ebeeedafd61e596be4f729c086c4eab170a6a54db26b62ac1dc13142ba3"
+    },
+    "recovery-red": {
+      "path": "/private/tmp/g3-task3ab-recovery-red.log",
+      "sha256": "0acd2b13643a132009f778deee23e46ded3dfcccaa4c0d0a6ee1ae93b4f4daa8"
+    },
+    "replay-receipt-red": {
+      "path": "/private/tmp/g3-task3ab-replay-receipt-red.log",
+      "sha256": "bacadd60b3bc47cbed91469e86842f344cdaf36f41f53b27b58426d640ff9a1a"
+    },
+    "recovery-focused": {
+      "path": "/private/tmp/g3-task3ab-recovery-focused.log",
+      "sha256": "c64fdbf472014d847a652f4e0acd86fdaac324021fd23e06d18b8ab07fb7ad90"
+    },
+    "recovery-regression": {
+      "path": "/private/tmp/g3-task3ab-recovery-regression.log",
+      "sha256": "a3f03e43d2b5fc89cd6a65fbf404bcebef17aec185b9e6c6ffcf684633e1c859"
+    },
+    "recovery-artifacts-final": {
+      "path": "/private/tmp/g3-task3ab-recovery-artifacts-final.log",
+      "sha256": "fe7c15588697fe3e6761ad9f163a4a7b172946fd466d1c773cdbc424e701adfc"
+    },
+    "recovery-worker": {
+      "path": "/private/tmp/g3-task3ab-recovery-worker.log",
+      "sha256": "a148e4294e65eb6a6b5719a0e084db82b26b856d6f911d631cc16d247a5a825b"
+    }
+  },
+  "provider_calls_during_tests": 0,
+  "business_writes_during_tests": 0,
+  "notes": [
+    "Fixture publication is not deployed-platform acceptance.",
+    "Original real model response was replayed only in local diagnostic fixture; production recovery remains NOT RUN.",
+    "Historical v1/v2 resolution and V1/V2 recovery wire remain unchanged."
+  ]
+}

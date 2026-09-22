@@ -1,0 +1,41 @@
+{
+  "contract": "830-g3-existing-identity-trace-mechanical-integration-review.v1",
+  "inputs": {
+    "trace": {
+      "sha256": "6fdb0297bc0d3bcda73a1b7b5ea45540bd40df5cb1c97945a1c80e356089d675",
+      "bytes": 9357,
+      "source_byte_equal": true
+    },
+    "clarification": {
+      "sha256": "f4936943f1a88f861bbc831106e4e687ec4f0124de4158767cf59eb4df2683ae",
+      "bytes": 5086,
+      "source_byte_equal": true
+    },
+    "disposition": {
+      "sha256": "8adc2fb9253f14719e0f35a603cade779e18272a51d64b606d7505f0639e4910",
+      "bytes": 1955
+    }
+  },
+  "checks": {
+    "disposition_binds_input_hashes": true,
+    "empty_alias_overstatement_corrected": true,
+    "g2_unknown_not_treated_as_permanent_veto": true,
+    "published_g2_unknown_state_preserved": true,
+    "fresh_head_and_identity_projection_remain_open": true,
+    "no_snapshot_protocol_code_or_authority_created": true
+  },
+  "red_exemption": "PASS: exact evidence copies plus a read-only disposition that qualifies prior conclusions; no requirement, protocol, executable, snapshot, or authority changed.",
+  "findings": {
+    "BLOCKER": [],
+    "BACKLOG": [],
+    "REJECTED": []
+  },
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "product_write": 0,
+    "go_read": 0
+  },
+  "verdict": "PASS"
+}

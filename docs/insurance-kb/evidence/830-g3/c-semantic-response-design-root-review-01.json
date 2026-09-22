@@ -1,0 +1,36 @@
+{
+  "contract": "830-g3-c-semantic-response-design-root-review.v1",
+  "status": "LOCAL_DESIGN_CANDIDATE_ONLY",
+  "inputs": [
+    {
+      "path": "g3-c-semantic-response-assembler-design-01.md",
+      "sha256": "1fa83644dc2bd6328bd939077cfde5e7f24bf27dde021dffc7107c8c0a7a8c15"
+    },
+    {
+      "path": "g3-c-semantic-response-assembler-design-02.md",
+      "sha256": "43f137e2e68f355a2141ce0a9059db78433c6f6f3ceae7591e8dd0089bdc7eff"
+    }
+  ],
+  "root_checks": {
+    "synthetic_json_parse": "PASS",
+    "synthetic_unicode_spans": 7,
+    "repeated_w1_span_example": "PASS"
+  },
+  "corrections": [
+    "Removed overstrong block-wide quote uniqueness. Frozen W1 offsets disambiguate; selected native page must still have exactly one occurrence.",
+    "Require full visible code-point bbox proof for the actual model quote; premodel anchor proof cannot substitute."
+  ],
+  "authority_boundary": "No assembler implementation/profile/runner/permit/provider call is dispatched. Real PolicyReceipt may only come from the existing authorized guard, not from model semantics or a human approval string. Admission scope design remains unresolved.",
+  "not_claimed": [
+    "Actual corpus/model result",
+    "Full native bbox implementation tests",
+    "Expert Golden/quality PASS",
+    "Real source or C execution"
+  ],
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "product_write": 0
+  }
+}

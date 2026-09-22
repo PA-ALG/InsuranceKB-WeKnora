@@ -1,0 +1,4 @@
+live_receipt_model ACCEPT 'parse\tattempt'
+old_schema_hash REJECT ValueError Schema Wiki text must not contain control characters
+proposed_batch_hash ACCEPT 52e5a645001040b344a168d97c7452f09d6bfd9d233e58e48e3b2ae070843f21
+python_non_ascii_domain REJECT UnicodeEncodeError 'ascii' codec can't encode character '\u57df' in position 0: ordinal not in range(128)

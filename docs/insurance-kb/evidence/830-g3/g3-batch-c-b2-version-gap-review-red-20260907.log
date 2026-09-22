@@ -1,0 +1,29 @@
+{
+  "parent_disposition": "NEEDS_CONFIRM",
+  "parent_reason_codes": [
+    "AMBIGUOUS_IDENTITY"
+  ],
+  "children": [
+    {
+      "proposal_ref": "a",
+      "disposition": "NEEDS_CONFIRM",
+      "reason_codes": [
+        "VERSION_UNRESOLVED"
+      ],
+      "entity_candidate": null
+    },
+    {
+      "proposal_ref": "b",
+      "disposition": "NEEDS_CONFIRM",
+      "reason_codes": [
+        "VERSION_UNRESOLVED"
+      ],
+      "entity_candidate": null
+    }
+  ]
+}
+Traceback (most recent call last):
+  File "/private/tmp/g3-batch-c-b2-version-gap-review-red-20260907.py", line 69, in <module>
+    assert parent.disposition == "MULTI"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

@@ -1,0 +1,74 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > bootstraps the exact scope then validates all 11 packs and 801 fields 261ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects catalog hash tampering 17ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects field metadata tampering 126ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects field semantic hash tampering 464ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects pack hash tampering 59ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects profile hash tampering 267ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects profile binding tampering 8ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects profile topology tampering 15ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects confirmation status tampering 8ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects quality status tampering 10ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects integer metadata tampering 8ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects unknown property tampering 11ms
+ ✓ src/api/schema-wiki/schemaPackCatalog830G3.spec.ts > schema pack catalog 830 G3 API > rejects scope drift and never requests the catalog 1ms
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result 170ms
+ ✓ src/views/knowledge/schema-wiki/SchemaPackCatalog830G3.spec.ts > SchemaPackCatalog830G3 > uses one read-only renderer for all packs, variable nodes, and workbook metadata 262ms
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy 39ms
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed 7ms
+
+ Test Files  3 passed (3)
+      Tests  17 passed (17)
+   Start at  14:40:44
+   Duration  6.07s (transform 3.01s, setup 0ms, import 5.65s, tests 1.76s, environment 3.94s)
+

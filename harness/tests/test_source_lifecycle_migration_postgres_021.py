@@ -920,12 +920,22 @@ def test_l5_alembic_check_passes_and_revision_topology_keeps_single_head(
 ) -> None:
     config = _cfg(postgres_migration_db.url)
     scripts = ScriptDirectory.from_config(config)
-    # 0006 之后由 035 的 0015 续接（实际链 0012 → 0006 → 0015）；单 head 不变。
-    assert scripts.get_heads() == ["0015"]
+    # 0006 之后由 035 的 0015 续接，G3 产品迁移再顺序续接到 0018。
+    # 实际链 0012 → 0006 → 0015 → 0016 → 0017 → 0018 仍只有一个 head。
+    assert scripts.get_heads() == ["0018"]
+    for revision_id, down_revision in (
+        ("0018", "0017"),
+        ("0017", "0016"),
+        ("0016", "0015"),
+        ("0015", "0006"),
+    ):
+        revision = scripts.get_revision(revision_id)
+        assert revision is not None
+        assert revision.down_revision == down_revision
 
     command.upgrade(config, "0012")
     command.upgrade(config, "0006")
     assert _version_rows(postgres_migration_db.engine) == ("0006",)
     command.upgrade(config, "head")
-    assert _version_rows(postgres_migration_db.engine) == ("0015",)
+    assert _version_rows(postgres_migration_db.engine) == ("0018",)
     command.check(config)

@@ -1,0 +1,618 @@
+{
+  "contract": "service-schema-subset.830.g3.v1",
+  "content_status": "STRUCTURE_ONLY_NOT_PUBLISHED",
+  "source": {
+    "kind": "legacy_code_definition",
+    "path": "/Users/houjing/Documents/LLM_wiki/customized-llm-wiki/frontend/src/lib/insurance-schema-registry.ts",
+    "sha256": "7c20729b0dcb6aaa4672a51d2f9158846da1ebe7ee21b0bde5891aed1c869f82"
+  },
+  "entries": [
+    {
+      "contract": "service-schema-definition.830.g3.v1",
+      "schema_pack_id": "schemapack_service_line",
+      "schema_version": "2026-09-14-v1",
+      "entity_type": "service_line",
+      "source_schema_key": "insurance.service.ServiceLine",
+      "source_fields_sha256": "0e0160ab0aecdca1eb568847b620b6bd45b5e043ce641def70f55146ec9bf1a4",
+      "display_name": "服务线",
+      "purpose": "场景下的具体服务产品线，如『安有医』/『臻享家医』/『居家养老』。一条服务线可有多个版本。",
+      "identity_fields": [
+        "series_name",
+        "scenario_name",
+        "line_name"
+      ],
+      "fields": [
+        {
+          "field_key": "line_name",
+          "short_title": "服务线名称",
+          "description": "如：安有医、臻享家医、居家养老。",
+          "importance": "critical",
+          "source_field_name": "line_name"
+        },
+        {
+          "field_key": "scenario_name",
+          "short_title": "所属场景",
+          "description": "医健 / 养老 / 家办。",
+          "importance": "critical",
+          "source_field_name": "scenario_name"
+        },
+        {
+          "field_key": "series_name",
+          "short_title": "所属系列",
+          "description": "添平安系列 / 享平安系列。",
+          "importance": "critical",
+          "source_field_name": "series_name"
+        },
+        {
+          "field_key": "line_summary",
+          "short_title": "服务线简介",
+          "description": "本服务线的整体定位。",
+          "importance": "high_confidence",
+          "source_field_name": "line_summary"
+        },
+        {
+          "field_key": "target_customers",
+          "short_title": "目标客群",
+          "description": "面向的客户类型。",
+          "importance": "high_confidence",
+          "source_field_name": "target_customers"
+        }
+      ],
+      "relation_hints": [
+        "service_line_version 子版本用 has_part",
+        "所属 service_scenario 用 part_of"
+      ],
+      "source_lint_rules": [],
+      "sections": [
+        {
+          "section_key": "identity",
+          "display_name": "基础信息",
+          "fields": [
+            {
+              "field_key": "line_name",
+              "short_title": "服务线名称"
+            },
+            {
+              "field_key": "scenario_name",
+              "short_title": "所属场景"
+            },
+            {
+              "field_key": "series_name",
+              "short_title": "所属系列"
+            }
+          ]
+        },
+        {
+          "section_key": "positioning",
+          "display_name": "服务定位",
+          "fields": [
+            {
+              "field_key": "line_summary",
+              "short_title": "服务线简介"
+            },
+            {
+              "field_key": "target_customers",
+              "short_title": "目标客群"
+            }
+          ]
+        }
+      ],
+      "schema_sha256": "bb13e6dfd445a9f945b52f98f75798965caf76bacb44c50b66d578d05d6d7d94"
+    },
+    {
+      "contract": "service-schema-definition.830.g3.v1",
+      "schema_pack_id": "schemapack_service_line_version",
+      "schema_version": "2026-09-14-v1",
+      "entity_type": "service_line_version",
+      "source_schema_key": "insurance.service.ServiceLineVersion",
+      "source_fields_sha256": "656721e9f430f6b93add74fe570da2245d53b625e7361e9f8ba72915bc73f3e8",
+      "display_name": "服务线版本",
+      "purpose": "服务线的具体版本，如『臻享家医 V1』/『安有医 颐享版』。用户上传文件的最小归属单元。包含准入规则、服务体系等完整版本内容。",
+      "identity_fields": [
+        "line_name",
+        "version_name"
+      ],
+      "fields": [
+        {
+          "field_key": "line_name",
+          "short_title": "服务线名称",
+          "description": "如：臻享家医、安有医、居家养老。",
+          "importance": "critical",
+          "source_field_name": "line_name"
+        },
+        {
+          "field_key": "version_name",
+          "short_title": "版本名称",
+          "description": "如：V1、颐享版、V2优享。",
+          "importance": "critical",
+          "source_field_name": "version_name"
+        },
+        {
+          "field_key": "scenario_name",
+          "short_title": "所属场景",
+          "description": "医健 / 养老 / 家办。",
+          "importance": "critical",
+          "source_field_name": "scenario_name"
+        },
+        {
+          "field_key": "series_name",
+          "short_title": "所属系列",
+          "description": "添平安系列。",
+          "importance": "high_confidence",
+          "source_field_name": "series_name"
+        },
+        {
+          "field_key": "admission_rules",
+          "short_title": "准入规则",
+          "description": "哪些客户可以获得本版本服务。",
+          "importance": "high_confidence",
+          "source_field_name": "admission_rules"
+        },
+        {
+          "field_key": "qualification_threshold",
+          "short_title": "达标门槛",
+          "description": "如：保费达到X万元。",
+          "importance": "high_confidence",
+          "source_field_name": "qualification_threshold"
+        },
+        {
+          "field_key": "designated_products",
+          "short_title": "指定产品",
+          "description": "绑定哪些保险产品可获本版本服务。",
+          "importance": "high_confidence",
+          "source_field_name": "designated_products"
+        },
+        {
+          "field_key": "effective_date_rule",
+          "short_title": "生效时间",
+          "description": "服务何时生效，如保单生效后30天内激活。",
+          "importance": "high_confidence",
+          "source_field_name": "effective_date_rule"
+        },
+        {
+          "field_key": "eligible_persons",
+          "short_title": "权益人规则",
+          "description": "被保险人/投保人/家属等使用规则。",
+          "importance": "high_confidence",
+          "source_field_name": "eligible_persons"
+        },
+        {
+          "field_key": "service_period",
+          "short_title": "服务期限",
+          "description": "服务有效期，如保单年度内。",
+          "importance": "high_confidence",
+          "source_field_name": "service_period"
+        },
+        {
+          "field_key": "service_entry",
+          "short_title": "服务入口",
+          "description": "APP入口、热线、专属链接等。",
+          "importance": "high_confidence",
+          "source_field_name": "service_entry"
+        },
+        {
+          "field_key": "service_system",
+          "short_title": "服务体系",
+          "description": "本版本包含哪些服务线和服务项目总览。",
+          "importance": "high_confidence",
+          "source_field_name": "service_system"
+        },
+        {
+          "field_key": "coverage_scope",
+          "short_title": "服务覆盖范围",
+          "description": "地区、城市、线上/线下覆盖。",
+          "importance": "high_confidence",
+          "source_field_name": "coverage_scope"
+        },
+        {
+          "field_key": "usage_notes",
+          "short_title": "注意事项",
+          "description": "使用限制和合规提示。",
+          "importance": "high_confidence",
+          "source_field_name": "usage_notes"
+        },
+        {
+          "field_key": "service_process",
+          "short_title": "服务流程",
+          "description": "整体服务流程概述。",
+          "importance": "recommended",
+          "source_field_name": "service_process"
+        },
+        {
+          "field_key": "compliance_notes",
+          "short_title": "合规说明",
+          "description": "免责条款和合规提示。",
+          "importance": "recommended",
+          "source_field_name": "compliance_notes"
+        }
+      ],
+      "relation_hints": [
+        "service_item 子服务项用 has_part",
+        "所属 service_line 用 part_of",
+        "关联保险产品用 bundled_with"
+      ],
+      "source_lint_rules": [
+        "line_name 和 version_name 是 DEDUP_KEY，一旦确定不能随意修改。",
+        "has_part 关系应覆盖该版本下所有 service_item 实体。"
+      ],
+      "sections": [
+        {
+          "section_key": "identity",
+          "display_name": "版本信息",
+          "fields": [
+            {
+              "field_key": "line_name",
+              "short_title": "服务线名称"
+            },
+            {
+              "field_key": "version_name",
+              "short_title": "版本名称"
+            },
+            {
+              "field_key": "scenario_name",
+              "short_title": "所属场景"
+            },
+            {
+              "field_key": "series_name",
+              "short_title": "所属系列"
+            }
+          ]
+        },
+        {
+          "section_key": "admission",
+          "display_name": "准入与期限",
+          "fields": [
+            {
+              "field_key": "admission_rules",
+              "short_title": "准入规则"
+            },
+            {
+              "field_key": "qualification_threshold",
+              "short_title": "达标门槛"
+            },
+            {
+              "field_key": "designated_products",
+              "short_title": "指定产品"
+            },
+            {
+              "field_key": "effective_date_rule",
+              "short_title": "生效时间"
+            },
+            {
+              "field_key": "eligible_persons",
+              "short_title": "权益人规则"
+            },
+            {
+              "field_key": "service_period",
+              "short_title": "服务期限"
+            }
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务详情",
+          "fields": [
+            {
+              "field_key": "service_entry",
+              "short_title": "服务入口"
+            },
+            {
+              "field_key": "service_system",
+              "short_title": "服务体系"
+            },
+            {
+              "field_key": "coverage_scope",
+              "short_title": "服务覆盖范围"
+            },
+            {
+              "field_key": "usage_notes",
+              "short_title": "注意事项"
+            },
+            {
+              "field_key": "service_process",
+              "short_title": "服务流程"
+            },
+            {
+              "field_key": "compliance_notes",
+              "short_title": "合规说明"
+            }
+          ]
+        }
+      ],
+      "schema_sha256": "94e9351ee87c13eb19adb41f2248ea5065ccba9a9cdd2a67ed3cf5063782d86c"
+    },
+    {
+      "contract": "service-schema-definition.830.g3.v1",
+      "schema_pack_id": "schemapack_service_item",
+      "schema_version": "2026-09-14-v1",
+      "entity_type": "service_item",
+      "source_schema_key": "insurance.service.ServiceItem",
+      "source_fields_sha256": "9eca85641fe0ddb54290574bef4034c6cae815ef17c6a4c9a1d9e7db30fa2b2a",
+      "display_name": "服务项",
+      "purpose": "服务线版本下的具体服务项目，是服务知识的最小业务单元。命名规范：{service_line}-{version}-{item_name}，如『臻享家医-V1-在线问诊』。",
+      "identity_fields": [
+        "line_name",
+        "version_name",
+        "item_name"
+      ],
+      "fields": [
+        {
+          "field_key": "line_name",
+          "short_title": "服务线名称",
+          "description": "如：臻享家医、安有医、居家养老。是 DEDUP_KEY 的一部分。",
+          "importance": "critical",
+          "source_field_name": "line_name"
+        },
+        {
+          "field_key": "version_name",
+          "short_title": "服务线版本",
+          "description": "如：V1、颐享版、V2优享。是 DEDUP_KEY 的一部分。",
+          "importance": "critical",
+          "source_field_name": "version_name"
+        },
+        {
+          "field_key": "item_name",
+          "short_title": "服务项名称",
+          "description": "如：在线问诊、家庭医生服务。是 DEDUP_KEY 的一部分。",
+          "importance": "critical",
+          "source_field_name": "item_name"
+        },
+        {
+          "field_key": "scenario_name",
+          "short_title": "所属场景",
+          "description": "医健 / 养老 / 家办。",
+          "importance": "critical",
+          "source_field_name": "scenario_name"
+        },
+        {
+          "field_key": "series_name",
+          "short_title": "所属系列",
+          "description": "添平安系列 / 享平安系列。",
+          "importance": "high_confidence",
+          "source_field_name": "series_name"
+        },
+        {
+          "field_key": "service_scenario",
+          "short_title": "服务场景",
+          "description": "此服务项适用的使用场景（用户场景描述）。",
+          "importance": "high_confidence",
+          "source_field_name": "service_scenario"
+        },
+        {
+          "field_key": "service_stage",
+          "short_title": "服务阶段",
+          "description": "此服务项所属的服务阶段（如：健康管理/就医协助/康复护理）。",
+          "importance": "high_confidence",
+          "source_field_name": "service_stage"
+        },
+        {
+          "field_key": "service_intro",
+          "short_title": "服务项目介绍",
+          "description": "对本服务项的整体介绍说明。",
+          "importance": "high_confidence",
+          "source_field_name": "service_intro"
+        },
+        {
+          "field_key": "service_frequency",
+          "short_title": "服务次数",
+          "description": "不限次 / 每年N次 / 服务期内N次。",
+          "importance": "high_confidence",
+          "source_field_name": "service_frequency"
+        },
+        {
+          "field_key": "service_content",
+          "short_title": "服务内容",
+          "description": "本服务项具体提供的内容明细。",
+          "importance": "high_confidence",
+          "source_field_name": "service_content"
+        },
+        {
+          "field_key": "service_standard",
+          "short_title": "服务标准",
+          "description": "服务质量标准和承诺。",
+          "importance": "high_confidence",
+          "source_field_name": "service_standard"
+        },
+        {
+          "field_key": "activation_conditions",
+          "short_title": "服务启动条件",
+          "description": "激活/开通本服务项的前提条件。",
+          "importance": "high_confidence",
+          "source_field_name": "activation_conditions"
+        },
+        {
+          "field_key": "eligible_customers",
+          "short_title": "适用人群",
+          "description": "谁可以使用本服务项。",
+          "importance": "high_confidence",
+          "source_field_name": "eligible_customers"
+        },
+        {
+          "field_key": "coverage_cities",
+          "short_title": "服务覆盖城市",
+          "description": "服务可用的城市范围。",
+          "importance": "high_confidence",
+          "source_field_name": "coverage_cities"
+        },
+        {
+          "field_key": "usage_process",
+          "short_title": "服务项目使用流程",
+          "description": "如何申请/使用本服务。",
+          "importance": "high_confidence",
+          "source_field_name": "usage_process"
+        },
+        {
+          "field_key": "service_notes",
+          "short_title": "服务说明",
+          "description": "补充说明、限制条件。",
+          "importance": "high_confidence",
+          "source_field_name": "service_notes"
+        },
+        {
+          "field_key": "important_notes",
+          "short_title": "重要提示",
+          "description": "使用前需注意的关键信息。",
+          "importance": "high_confidence",
+          "source_field_name": "important_notes"
+        },
+        {
+          "field_key": "marketing_materials",
+          "short_title": "触客素材",
+          "description": "关联销售素材、宣传材料路径。",
+          "importance": "recommended",
+          "source_field_name": "marketing_materials"
+        },
+        {
+          "field_key": "faq",
+          "short_title": "常见Q&A",
+          "description": "客户常见问题与解答。",
+          "importance": "recommended",
+          "source_field_name": "faq"
+        },
+        {
+          "field_key": "service_features",
+          "short_title": "服务特色",
+          "description": "按需扩展字段，如特色优势、独特价值。",
+          "importance": "recommended",
+          "source_field_name": "service_features"
+        },
+        {
+          "field_key": "knowledge_gaps",
+          "short_title": "待补全信息",
+          "description": "材料未提供的缺失字段。",
+          "importance": "recommended",
+          "source_field_name": "knowledge_gaps"
+        }
+      ],
+      "relation_hints": [
+        "所属 service_line_version 用 part_of",
+        "通用概念页 service_item_concept 用 instance_of",
+        "ComplianceRule 用 governed_by",
+        "Pitch/ObjectionHandling 用 supports"
+      ],
+      "source_lint_rules": [
+        "实体标题必须遵循 {line_name}-{version_name}-{item_name} 命名规范。",
+        "line_name / version_name / item_name 三字段缺失时不能进入 active。",
+        "服务项不能被描述为保险金责任或理赔内容。",
+        "service_frequency 和 eligible_customers 至少一项有证据支持。"
+      ],
+      "sections": [
+        {
+          "section_key": "identity",
+          "display_name": "基础信息",
+          "fields": [
+            {
+              "field_key": "line_name",
+              "short_title": "服务线名称"
+            },
+            {
+              "field_key": "version_name",
+              "short_title": "服务线版本"
+            },
+            {
+              "field_key": "item_name",
+              "short_title": "服务项名称"
+            },
+            {
+              "field_key": "scenario_name",
+              "short_title": "所属场景"
+            },
+            {
+              "field_key": "series_name",
+              "short_title": "所属系列"
+            }
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务内容与标准",
+          "fields": [
+            {
+              "field_key": "service_scenario",
+              "short_title": "服务场景"
+            },
+            {
+              "field_key": "service_stage",
+              "short_title": "服务阶段"
+            },
+            {
+              "field_key": "service_intro",
+              "short_title": "服务项目介绍"
+            },
+            {
+              "field_key": "service_frequency",
+              "short_title": "服务次数"
+            },
+            {
+              "field_key": "service_content",
+              "short_title": "服务内容"
+            },
+            {
+              "field_key": "service_standard",
+              "short_title": "服务标准"
+            }
+          ]
+        },
+        {
+          "section_key": "usage",
+          "display_name": "适用与使用规则",
+          "fields": [
+            {
+              "field_key": "activation_conditions",
+              "short_title": "服务启动条件"
+            },
+            {
+              "field_key": "eligible_customers",
+              "short_title": "适用人群"
+            },
+            {
+              "field_key": "coverage_cities",
+              "short_title": "服务覆盖城市"
+            },
+            {
+              "field_key": "usage_process",
+              "short_title": "服务项目使用流程"
+            },
+            {
+              "field_key": "service_notes",
+              "short_title": "服务说明"
+            },
+            {
+              "field_key": "important_notes",
+              "short_title": "重要提示"
+            }
+          ]
+        },
+        {
+          "section_key": "supplement",
+          "display_name": "补充信息",
+          "fields": [
+            {
+              "field_key": "marketing_materials",
+              "short_title": "触客素材"
+            },
+            {
+              "field_key": "faq",
+              "short_title": "常见Q&A"
+            },
+            {
+              "field_key": "service_features",
+              "short_title": "服务特色"
+            },
+            {
+              "field_key": "knowledge_gaps",
+              "short_title": "待补全信息"
+            }
+          ]
+        }
+      ],
+      "schema_sha256": "df47c75e73295ab270b64a2b06363273011a810dcc7e3cda101dfdc559be326c"
+    }
+  ],
+  "deferred_entity_types": [
+    "service_series",
+    "service_scenario",
+    "service_item_concept"
+  ],
+  "catalog_sha256": "dbccbb925ac56dab2ed0c7dd91589ae84bd31c077a28c2771fa322867163f8fb"
+}

@@ -256,6 +256,21 @@ func TestParseConceptCandidateBundle830G2ProjectsFrozenVector(t *testing.T) {
 	}
 }
 
+func TestConceptOutput830G2SharedSemanticPhasesPreserveFrozenWrapper(t *testing.T) {
+	bundle, err := ParseConceptCandidateBundle830G2(conceptVector830G2(t))
+	require.NoError(t, err)
+	request, output := bundle.Request, bundle.CompileResult.Output
+	require.NoError(t, validateConceptOutputShapeCoverage830G2(request, output))
+	existing, linked := conceptOutputDefinitionState830G2(request, output)
+	require.NotNil(t, existing)
+	for _, definition := range output.Definitions {
+		require.NoError(t, validateConceptOutputDefinitionLink830G2(definition, linked))
+	}
+	require.NoError(t, validateConceptOutputEvidence830G2(request, output))
+	require.NoError(t, validateConceptDispositions830G2(request, output))
+	require.NoError(t, validateConceptOutput830G2(request, output))
+}
+
 func TestParseConceptCandidateBundle830G2AcceptsWholeBatchHumanAdmission(t *testing.T) {
 	bundle, err := ParseConceptCandidateBundle830G2(conceptHumanVector830G2(t, nil))
 	require.NoError(t, err)

@@ -552,6 +552,8 @@ type ConceptSourceAuthorityVerifier830G2 interface {
 // WikiReleaseServiceOptions keeps time, identities, and bounded faults
 // injectable without creating a general workflow platform.
 type WikiReleaseServiceOptions struct {
+	SystemPolicyProvider                SystemAutomationPolicyProvider
+	SystemDecisionVerifier              SystemPolicyDecisionVerifier
 	Now                                 func() time.Time
 	NewID                               func(kind string) string
 	Faults                              WikiReleaseFaults
@@ -576,6 +578,9 @@ func (e *WikiReleaseConflictError) Unwrap() error { return ErrWikiReleaseConflic
 
 // WikiReleaseService is the isolated S0-R core, not a production Kernel.
 type WikiReleaseService struct {
+	systemPolicyProvider                SystemAutomationPolicyProvider
+	systemDecisionVerifier              SystemPolicyDecisionVerifier
+	publishedReadReuse                  *publishedBatchReadReuse830G3
 	repository                          *wikirepository.WikiReleaseRepository
 	accessVerifier                      WikiReleaseAccessVerifier
 	authorizationVerifier               WikiReleaseAuthorizationVerifier
@@ -614,7 +619,9 @@ func NewWikiReleaseService(
 			return kind + "-" + uuid.NewString()
 		}
 	}
-	return &WikiReleaseService{
+	service := &WikiReleaseService{
+		systemPolicyProvider:                options.SystemPolicyProvider,
+		systemDecisionVerifier:              options.SystemDecisionVerifier,
 		repository:                          repository,
 		accessVerifier:                      accessVerifier,
 		authorizationVerifier:               authorizationVerifier,
@@ -625,6 +632,11 @@ func NewWikiReleaseService(
 		newID:                               options.NewID,
 		faults:                              options.Faults,
 	}
+	if authority, ok := options.ConceptSourceAuthorityVerifier830G2.(*ConceptSourceAuthorityService830G2); ok && authority != nil {
+		service.publishedReadReuse = newPublishedBatchReadReuse830G3(authority.codec)
+		authority.publishedLegacyBase = service.loadPublishedLegacyBase830G3
+	}
+	return service
 }
 
 // ActivateReviewed requires a named-human whole-batch approval before the
@@ -701,14 +713,26 @@ func (s *WikiReleaseService) ActivateReviewed(
 		); validationErr != nil {
 			return nil, ErrWikiReleaseInvalidAuthorization
 		}
+	} else if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
+		if _, _, validationErr := validateBatchConceptPreparation830G3(
+			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+	}
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) ||
+		conceptCandidateBundleContract830G3(manifestHeader.Contract) {
 		// Activation verifies the same current dual-KB ACL before opening any
 		// immutable source object. s.activate repeats this gate at the CAS edge.
 		if err := s.verifyAccess(ctx, principal, scope, "activate"); err != nil {
 			return nil, err
 		}
-		if err := s.verifyConceptSourceAuthority830G2(
-			ctx, principal, scope, preparation, "activate",
-		); err != nil {
+		if err := s.verifyConceptSourceAuthority830G2(ctx, principal, scope, preparation, "activate"); err != nil {
+			return nil, err
+		}
+	}
+	if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
+		if err := s.publishedBatchReuse830G3().rememberValidated(preparation, scope); err != nil {
 			return nil, err
 		}
 	}
@@ -894,6 +918,10 @@ func (s *WikiReleaseService) reviewDraft(
 		_, _, validationErr = validateConceptPreparation830G2(
 			draft, types.WikiReleasePreparationDraft, scope,
 		)
+	} else if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
+		_, _, validationErr = validateBatchConceptPreparation830G3(
+			draft, types.WikiReleasePreparationDraft, scope,
+		)
 	} else {
 		_, validationErr = validateSchemaWikiPreparation(
 			draft, types.WikiReleasePreparationDraft, scope,
@@ -924,7 +952,8 @@ func (s *WikiReleaseService) reviewDraft(
 		draft.ReviewPolicyID != decision.ReviewPolicyHash {
 		return nil, fmt.Errorf("%w: human decision draft mismatch", ErrWikiReleaseInvalidAuthorization)
 	}
-	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) ||
+		conceptCandidateBundleContract830G3(manifestHeader.Contract) {
 		if err := s.verifyConceptSourceAuthority830G2(
 			ctx, principal, scope, draft, "review",
 		); err != nil {
@@ -1183,6 +1212,23 @@ func (s *WikiReleaseService) activate(
 	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		if _, _, validationErr := validateConceptPreparation830G2(
 			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+	} else if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
+		// JSON storage may change escaping and spacing; preserve the canonical
+		// manifest identity already checked by the public activation gate.
+		if len(preparation.Members) == 0 {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		canonicalManifest, canonicalErr := types.CanonicalBatchConceptWire830G3(preparation.Manifest)
+		if canonicalErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		validationInput := *preparation
+		validationInput.Manifest = canonicalManifest
+		if _, _, validationErr := s.validatePublishedBatchConceptPreparation830G3(
+			&validationInput, scope,
 		); validationErr != nil {
 			return nil, ErrWikiReleaseInvalidAuthorization
 		}
@@ -1837,16 +1883,27 @@ func (s *WikiReleaseService) readMembers(
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	preparation, err := s.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	preparation, _, projectedMembers, projectedG3, err := s.loadPublishedBatchReadProjection830G3(
+		ctx, scope, release.PreparationID,
+	)
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	storedManifestDigest := digestWikiReleaseBytes(preparation.Manifest)
-	conceptG2 := false
+	storedManifestDigest := preparation.ManifestDigest
+	conceptG2 := projectedG3
+	if projectedG3 {
+		preparation.Members = projectedMembers
+	} else {
+		preparation, err = s.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+		if err != nil {
+			return nil, mapWikiReleaseRepositoryError(err)
+		}
+		storedManifestDigest = digestWikiReleaseBytes(preparation.Manifest)
+	}
 	var manifestHeader struct {
 		Contract string `json:"contract"`
 	}
-	if json.Unmarshal(preparation.Manifest, &manifestHeader) == nil &&
+	if !projectedG3 && json.Unmarshal(preparation.Manifest, &manifestHeader) == nil &&
 		conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		if _, _, validationErr := validateConceptPreparation830G2(
 			preparation, types.WikiReleasePreparationReady, scope,
@@ -1855,8 +1912,16 @@ func (s *WikiReleaseService) readMembers(
 		}
 		storedManifestDigest = preparation.ManifestDigest
 		conceptG2 = true
+	} else if !projectedG3 && manifestHeader.Contract == "batch-concept-candidate-bundle.830.g3.v1" {
+		if _, _, validationErr := s.validatePublishedBatchConceptPreparation830G3(
+			preparation, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		storedManifestDigest = preparation.ManifestDigest
+		conceptG2 = true
 	}
-	if isSchemaWikiC6StoredManifest(preparation.Manifest) {
+	if !projectedG3 && isSchemaWikiC6StoredManifest(preparation.Manifest) {
 		c6Digest, validC6 := schemaWikiC6StoredManifestDigest(preparation.Manifest)
 		if !validC6 {
 			return nil, ErrWikiReleaseInvalidAuthorization
@@ -1872,9 +1937,13 @@ func (s *WikiReleaseService) readMembers(
 		}
 		storedManifestDigest = c6Digest
 	}
-	membersEqual := wikiReleaseMemberSnapshotsEqual(preparation.Members, members)
-	if conceptG2 {
+	var membersEqual bool
+	if projectedG3 {
+		membersEqual = publishedBatchMemberIdentitiesEqual830G3(preparation.Members, members)
+	} else if conceptG2 {
 		membersEqual = conceptMemberSnapshotSetsEqual830G2(preparation.Members, members)
+	} else {
+		membersEqual = wikiReleaseMemberSnapshotsEqual(preparation.Members, members)
 	}
 	if preparation.WikiReleaseScope != scope || preparation.ID != release.PreparationID ||
 		preparation.Status != types.WikiReleasePreparationReady ||
@@ -1884,6 +1953,9 @@ func (s *WikiReleaseService) readMembers(
 		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest ||
 		!membersEqual {
 		return nil, ErrWikiReleaseInvalidAuthorization
+	}
+	if projectedG3 {
+		return preparation.Members, nil
 	}
 	return members, nil
 }

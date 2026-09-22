@@ -1,0 +1,48 @@
+{
+  "contract": "830-g3-c-owner-verification.v1",
+  "recorded_at": "2026-09-07T07:04:46.835165+00:00",
+  "owner": "g3_catalog_impl",
+  "file_sha256s": {
+    "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py": "f93b682e8fecd4a7b9db22a3cb84f74ce9a117b22b8375a951fe3c1637b13bcd",
+    "harness/tests/test_batch_entity_resolution_830_g3.py": "9ace729bbfb2382e16e67598e2740330ce30802517c53f5c1e84c9af41ee68f3"
+  },
+  "owner_tests_passed": 18,
+  "logs": {
+    "red": {
+      "path": "g3-batch-c-red.log",
+      "sha256": "130b5be8150d1ae56ddc9a2cbaa398906ea5b80fb1a25f96e3857ad094d9b703"
+    },
+    "green": {
+      "path": "g3-batch-c-green.log",
+      "sha256": "b9b5af223d73a5c802cf64537e3cbd73cf125f07561b2b2c3b759696a33d8b89"
+    },
+    "ruff": {
+      "path": "g3-batch-c-ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "mypy": {
+      "path": "g3-batch-c-mypy.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e"
+    }
+  },
+  "red_status": "NOT_ACCEPTED_MODULE_IMPORT_COLLECTION_FAILURE",
+  "red_gap": "RESOLVED_FOR_LATER_REGRESSION_RED via original persisted child journal extraction and independent byte/time verification; initial module missing and fixture failures remain rejected",
+  "independent_review": "BLOCKERS_REPRODUCED_FINAL_CONCENTRATED_REPORT_PENDING",
+  "flow": "NOT RUN",
+  "provider_calls": 0,
+  "db_writes": 0,
+  "builds": 0,
+  "owner_reported_behavior_red": [
+    "Bad source with no proposal returned NEEDS_CONFIRM instead of QUARANTINE",
+    "Identity evidence using material-role scope returned NEEDS_CONFIRM rather than quarantine",
+    "Two versions of same serving entity snapshot incorrectly rejected",
+    "Valid multiline source text incorrectly rejected"
+  ],
+  "dependent_execution": "PAUSED_NOT_RUN",
+  "review_probe_log": {
+    "path": "g3-batch-c-independent-probes.log",
+    "sha256": "95f0ee83b8d7641f4e264b2958285657d1992c2313afe043993bd4c3a6327393",
+    "meaning": "New independent review probes against frozen C, not historical pre-implementation RED"
+  },
+  "recovered_behavior_red": "batch-c-original-red-recovery.json"
+}

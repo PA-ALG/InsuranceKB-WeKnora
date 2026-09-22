@@ -165,6 +165,55 @@ func (s *KnowledgeRevisionSourceService) BackfillCurrentCompleted(
 	return s.sealPreparedRevisionSource(ctx, source)
 }
 
+// ensureCurrentCompletedForScope is the system preparation seam used only
+// after a caller-specific service authorizer has admitted an exact Wiki scope.
+// It does not consume or impersonate the human-admin backfill authority.
+func (s *KnowledgeRevisionSourceService) ensureCurrentCompletedForScope(
+	ctx context.Context,
+	scope types.WikiReleaseScope,
+	knowledgeID string,
+	parseAttempt int64,
+) (*types.KnowledgeRevisionSource, error) {
+	if s == nil || s.repo == nil || scope.TenantID == 0 || scope.SpaceID == "" ||
+		scope.RawKBID == "" || scope.WikiKBID == "" || knowledgeID == "" || parseAttempt <= 0 {
+		return nil, ErrRevisionSourceMismatch
+	}
+	// File backends are tenant-scoped. Bind only the admitted scope identity;
+	// do not manufacture a human role or API-key authority.
+	ctx = context.WithValue(ctx, types.TenantIDContextKey, scope.TenantID)
+	knowledge, current, last, err := s.repo.GetRevisionState(ctx, knowledgeID)
+	if err == nil && knowledge != nil && current != nil && last != nil &&
+		!knowledge.DeletedAt.Valid && knowledge.TenantID == scope.TenantID &&
+		knowledge.KnowledgeBaseID == scope.RawKBID &&
+		knowledge.ParseStatus == types.ParseStatusCompleted &&
+		knowledge.CurrentParseAttempt == parseAttempt && current.ParseAttempt == parseAttempt &&
+		current.KnowledgeID == knowledgeID && current.FileSHA256 == knowledge.FileSHA256 &&
+		last.KnowledgeID == current.KnowledgeID && last.ParseAttempt == current.ParseAttempt &&
+		last.FileSHA256 == current.FileSHA256 && last.ManifestDigest == current.ManifestDigest &&
+		current.ManifestAlgorithm == types.RevisionManifestAlgorithm && current.ChunkCount > 0 {
+		sealed, resource, readErr := s.repo.GetRevisionSource(ctx, scope.TenantID, knowledgeID, parseAttempt)
+		if readErr == nil && sealed != nil && types.ValidateKnowledgeRevisionSourceBinding(*sealed) == nil &&
+			sealed.TenantID == scope.TenantID && sealed.KnowledgeID == knowledgeID &&
+			sealed.ParseAttempt == parseAttempt &&
+			sealed.FileSHA256 == current.FileSHA256 && sealed.ManifestAlgorithm == current.ManifestAlgorithm &&
+			sealed.ManifestDigest == current.ManifestDigest && sealed.ChunkCount == current.ChunkCount &&
+			resource != nil && resource.ID == sealed.ResourceID && resource.TenantID == scope.TenantID &&
+			resource.Handle == sealed.ResourceHandle && resource.ContentHash == sealed.ObjectSHA256 &&
+			resource.State == types.ResourceStateActive &&
+			resource.Lifecycle == types.ResourceLifecyclePersistent {
+			copy := *sealed
+			return &copy, nil
+		}
+	}
+	prepared, err := s.prepareCurrentCompleted(
+		ctx, scope.TenantID, scope.RawKBID, knowledgeID, parseAttempt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s.sealPreparedRevisionSource(ctx, prepared)
+}
+
 func (s *KnowledgeRevisionSourceService) authorizeBackfill(ctx context.Context) (uint64, error) {
 	if _, apiKey := types.TenantAPIKeyScopeFromContext(ctx); apiKey ||
 		!types.TenantRoleFromContext(ctx).HasPermission(types.TenantRoleAdmin) {

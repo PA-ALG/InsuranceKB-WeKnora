@@ -1,0 +1,23 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_________ test_unknown_alignment_rejects_rehashed_false_member_digest __________
+
+    def test_unknown_alignment_rejects_rehashed_false_member_digest() -> None:
+        request, output, rows = _aligned_output(tamper_unknown_reason=False)
+        contracts = importlib.import_module(
+            "insurance_harness.knowledge_compiler.schema_wiki_contracts"
+        )
+        changed = dict(rows[0])
+        changed["old_member_digest"] = "0" * 64
+        changed["alignment_sha256"] = contracts.schema_wiki_sha256(
+            changed["contract"], {key: value for key, value in changed.items() if key != "alignment_sha256"}
+        )
+    
+>       with pytest.raises(ValueError, match="BASE_UNKNOWN_KEY_MIGRATION_REQUIRED"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:131: Failed
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_unknown_alignment_rejects_rehashed_false_member_digest
+1 failed, 1 passed in 4.86s

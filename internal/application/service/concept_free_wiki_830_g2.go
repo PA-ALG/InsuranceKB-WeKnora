@@ -9,6 +9,7 @@ import (
 	"errors"
 	"reflect"
 	"sort"
+	"strings"
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -488,17 +489,107 @@ func (s *SchemaWikiService) ReadConceptPage830G2(
 	if err != nil {
 		return nil, err
 	}
-	members, err := s.releaseAuthority.SearchPinned(ctx, principal, pin, "")
+	return s.readConceptPageAtPin830G2(
+		ctx, principal, scope, memberID, pin, readMode, nil, false, false,
+	)
+}
+
+// ReadConceptPageQuery830G3 selects one immutable release before it decides
+// whether the G3-only query cardinality rules apply. G2 releases retain their
+// historical first-value query behavior.
+func (s *SchemaWikiService) ReadConceptPageQuery830G3(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	memberID string,
+	releaseOccurrences []string,
+	preparationPresent bool,
+) (*ConceptPageRead830G2, error) {
+	if s == nil || s.releaseAuthority == nil || memberID == "" {
+		return nil, ErrWikiReleaseNotFound
+	}
+	readMode := "current"
+	selectedRelease := ""
+	if len(releaseOccurrences) > 0 {
+		selectedRelease = strings.TrimSpace(releaseOccurrences[0])
+	}
+	var pin WikiReleasePinnedRead
+	var err error
+	if selectedRelease != "" {
+		pin, err = s.releaseAuthority.BeginExactPinnedRead(ctx, principal, scope, selectedRelease)
+		readMode = "pinned"
+	} else {
+		pin, err = s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
+	}
 	if err != nil {
 		return nil, err
 	}
+	return s.readConceptPageAtPin830G2(
+		ctx, principal, scope, memberID, pin, readMode,
+		releaseOccurrences, preparationPresent, true,
+	)
+}
+
+func (s *SchemaWikiService) readConceptPageAtPin830G2(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	memberID string,
+	pin WikiReleasePinnedRead,
+	readMode string,
+	releaseOccurrences []string,
+	preparationPresent bool,
+	enforceG3Query bool,
+) (*ConceptPageRead830G2, error) {
 	release, err := s.releaseAuthority.repository.GetRelease(ctx, scope, pin.ReleaseID())
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	preparation, err := s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	preparation, _, _, projectedG3, err := s.releaseAuthority.loadPublishedBatchReadProjection830G3(
+		ctx, scope, release.PreparationID,
+	)
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	if projectedG3 {
+		if enforceG3Query && (len(releaseOccurrences) > 1 ||
+			len(releaseOccurrences) == 1 && strings.TrimSpace(releaseOccurrences[0]) == "" ||
+			preparationPresent) {
+			return nil, ErrSchemaWikiPreparationInvalid
+		}
+		members, searchErr := s.releaseAuthority.SearchPinned(ctx, principal, pin, "")
+		if searchErr != nil {
+			return nil, searchErr
+		}
+		return s.readBatchConceptPage830G3(
+			pin, members, release, preparation, scope, memberID, readMode,
+		)
+	}
+	preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	var header struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(preparation.Manifest, &header) == nil &&
+		conceptCandidateBundleContract830G3(header.Contract) {
+		if enforceG3Query && (len(releaseOccurrences) > 1 ||
+			len(releaseOccurrences) == 1 && strings.TrimSpace(releaseOccurrences[0]) == "" ||
+			preparationPresent) {
+			return nil, ErrSchemaWikiPreparationInvalid
+		}
+		members, searchErr := s.releaseAuthority.SearchPinned(ctx, principal, pin, "")
+		if searchErr != nil {
+			return nil, searchErr
+		}
+		return s.readBatchConceptPage830G3(
+			pin, members, release, preparation, scope, memberID, readMode,
+		)
+	}
+	members, err := s.releaseAuthority.SearchPinned(ctx, principal, pin, "")
+	if err != nil {
+		return nil, err
 	}
 	bundle, expected, err := validateConceptPreparation830G2(
 		preparation, types.WikiReleasePreparationReady, scope,
@@ -511,7 +602,7 @@ func (s *SchemaWikiService) ReadConceptPage830G2(
 		release.BaseActivationEpoch != bundle.Request.BaseActivationEpoch ||
 		release.BaseActivationEpoch == ^uint64(0) ||
 		pin.ActivationEpoch() != release.BaseActivationEpoch+1 ||
-		!conceptMemberSnapshotSetsEqual830G2(expected, members) {
+		!publishedBatchMemberIdentitiesEqual830G3(expected, members) {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	member, ok := conceptPageMemberByID830G2(bundle.PageManifest.Members, memberID)
@@ -565,10 +656,56 @@ func (s *SchemaWikiService) IssueConceptCitationAuthority830G2(
 	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil || s.conceptSourceAuthority == nil || releaseID == "" || memberID == "" || citationID == "" {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	pin, bundle, err := s.loadExactConceptBundle830G2(ctx, principal, scope, releaseID)
+	pin, bundle, isG3, err := s.loadExactConceptBundleWithKind830G3(ctx, principal, scope, releaseID)
 	if err != nil {
 		return nil, err
 	}
+	return s.issueConceptCitationAtPin830G2(ctx, scope, pin, bundle, memberID, citationID, isG3)
+}
+
+// IssueConceptCitationQuery830G3 classifies the pinned immutable release and
+// applies the G3 query gate before it resolves evidence or issues authority.
+func (s *SchemaWikiService) IssueConceptCitationQuery830G3(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	memberID string,
+	citationID string,
+	releaseOccurrences []string,
+	preparationPresent bool,
+) (*ConceptCitationContentAuthority830G2, error) {
+	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil ||
+		s.conceptSourceAuthority == nil || memberID == "" || citationID == "" ||
+		len(releaseOccurrences) == 0 {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	selectedRelease := strings.TrimSpace(releaseOccurrences[0])
+	if selectedRelease == "" {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	pin, err := s.releaseAuthority.BeginExactPinnedRead(ctx, principal, scope, selectedRelease)
+	if err != nil {
+		return nil, err
+	}
+	bundle, isG3, err := s.loadConceptBundleAtPin830G2(ctx, principal, scope, pin)
+	if err != nil {
+		return nil, err
+	}
+	if isG3 && (len(releaseOccurrences) != 1 || preparationPresent) {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	return s.issueConceptCitationAtPin830G2(ctx, scope, pin, bundle, memberID, citationID, isG3)
+}
+
+func (s *SchemaWikiService) issueConceptCitationAtPin830G2(
+	ctx context.Context,
+	scope types.WikiReleaseScope,
+	pin WikiReleasePinnedRead,
+	bundle types.ConceptCandidateBundle830G2,
+	memberID string,
+	citationID string,
+	trustedG3 bool,
+) (*ConceptCitationContentAuthority830G2, error) {
 	evidence, ok := conceptEvidenceByCitationID830G2(bundle, memberID, citationID)
 	if !ok {
 		return nil, ErrWikiReleaseNotFound
@@ -578,37 +715,96 @@ func (s *SchemaWikiService) IssueConceptCitationAuthority830G2(
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	return s.conceptSourceAuthority.IssueConceptCitationAuthority830G2(ctx, ConceptCitationAuthorityRequest830G2{
-		Scope: scope, ReleaseID: pin.ReleaseID(), ActivationEpoch: pin.ActivationEpoch(),
+		TrustedG3: trustedG3, Scope: scope, ReleaseID: pin.ReleaseID(), ActivationEpoch: pin.ActivationEpoch(),
 		CandidateHash: bundle.CandidateHash, MemberID: memberID, CitationID: citationID, Evidence: evidence, SourceBlock: sourceBlock, Bundle: &bundle,
 	})
 }
 
 func (s *SchemaWikiService) loadExactConceptBundle830G2(ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope, releaseID string) (WikiReleasePinnedRead, types.ConceptCandidateBundle830G2, error) {
+	pin, bundle, _, err := s.loadExactConceptBundleWithKind830G3(ctx, principal, scope, releaseID)
+	return pin, bundle, err
+}
+
+func (s *SchemaWikiService) loadExactConceptBundleWithKind830G3(ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope, releaseID string) (WikiReleasePinnedRead, types.ConceptCandidateBundle830G2, bool, error) {
 	empty := WikiReleasePinnedRead{}
 	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil {
-		return empty, types.ConceptCandidateBundle830G2{}, ErrConceptSourceAuthorityUnavailable830G2
+		return empty, types.ConceptCandidateBundle830G2{}, false, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	pin, err := s.releaseAuthority.BeginExactPinnedRead(ctx, principal, scope, releaseID)
 	if err != nil {
-		return empty, types.ConceptCandidateBundle830G2{}, err
+		return empty, types.ConceptCandidateBundle830G2{}, false, err
 	}
+	bundle, isG3, err := s.loadConceptBundleAtPin830G2(ctx, principal, scope, pin)
+	return pin, bundle, isG3, err
+}
+
+func (s *SchemaWikiService) loadConceptBundleAtPin830G2(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	pin WikiReleasePinnedRead,
+) (types.ConceptCandidateBundle830G2, bool, error) {
+	empty := types.ConceptCandidateBundle830G2{}
 	members, err := s.releaseAuthority.SearchPinned(ctx, principal, pin, "")
 	if err != nil {
-		return empty, types.ConceptCandidateBundle830G2{}, err
+		return empty, false, err
 	}
 	release, err := s.releaseAuthority.repository.GetRelease(ctx, scope, pin.ReleaseID())
 	if err != nil {
-		return empty, types.ConceptCandidateBundle830G2{}, mapWikiReleaseRepositoryError(err)
+		return empty, false, mapWikiReleaseRepositoryError(err)
 	}
-	preparation, err := s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	preparation, batch, expected, projectedG3, err := s.releaseAuthority.loadPublishedBatchReadProjection830G3(
+		ctx, scope, release.PreparationID,
+	)
 	if err != nil {
-		return empty, types.ConceptCandidateBundle830G2{}, mapWikiReleaseRepositoryError(err)
+		return empty, false, mapWikiReleaseRepositoryError(err)
+	}
+	if projectedG3 {
+		bundle := batchConceptG2View830G3(batch)
+		if release.CandidateDigest != batch.CandidateHash ||
+			release.ManifestDigest != preparation.ManifestDigest ||
+			release.BaseReleaseID != preparation.ExpectedReleaseID ||
+			release.BaseActivationEpoch != preparation.ExpectedActivationEpoch ||
+			release.BaseReleaseID != batch.Request.BaseRequest.BaseReleaseID ||
+			release.BaseActivationEpoch != batch.Request.BaseRequest.BaseActivationEpoch ||
+			release.BaseActivationEpoch == ^uint64(0) ||
+			pin.ActivationEpoch() != release.BaseActivationEpoch+1 ||
+			!publishedBatchMemberIdentitiesEqual830G3(expected, members) {
+			return empty, true, ErrSchemaWikiPreparationInvalid
+		}
+		return bundle, true, nil
+	}
+	preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	if err != nil {
+		return empty, false, mapWikiReleaseRepositoryError(err)
+	}
+	var header struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(preparation.Manifest, &header) == nil &&
+		conceptCandidateBundleContract830G3(header.Contract) {
+		batch, expected, validationErr := s.releaseAuthority.validatePublishedBatchConceptPreparation830G3(
+			preparation, scope,
+		)
+		bundle := batchConceptG2View830G3(batch)
+		if validationErr != nil || release.CandidateDigest != batch.CandidateHash ||
+			release.ManifestDigest != preparation.ManifestDigest ||
+			release.BaseReleaseID != preparation.ExpectedReleaseID ||
+			release.BaseActivationEpoch != preparation.ExpectedActivationEpoch ||
+			release.BaseReleaseID != batch.Request.BaseRequest.BaseReleaseID ||
+			release.BaseActivationEpoch != batch.Request.BaseRequest.BaseActivationEpoch ||
+			release.BaseActivationEpoch == ^uint64(0) ||
+			pin.ActivationEpoch() != release.BaseActivationEpoch+1 ||
+			!publishedBatchMemberIdentitiesEqual830G3(expected, members) {
+			return empty, true, ErrSchemaWikiPreparationInvalid
+		}
+		return bundle, true, nil
 	}
 	bundle, expected, err := validateConceptPreparation830G2(preparation, types.WikiReleasePreparationReady, scope)
 	if err != nil || release.CandidateDigest != bundle.CandidateHash || release.ManifestDigest != preparation.ManifestDigest || release.BaseReleaseID != preparation.ExpectedReleaseID || release.BaseActivationEpoch != preparation.ExpectedActivationEpoch || release.BaseReleaseID != bundle.Request.BaseReleaseID || release.BaseActivationEpoch != bundle.Request.BaseActivationEpoch || release.BaseActivationEpoch == ^uint64(0) || pin.ActivationEpoch() != release.BaseActivationEpoch+1 || !conceptMemberSnapshotSetsEqual830G2(expected, members) {
-		return empty, types.ConceptCandidateBundle830G2{}, ErrSchemaWikiPreparationInvalid
+		return empty, false, ErrSchemaWikiPreparationInvalid
 	}
-	return pin, bundle, nil
+	return bundle, false, nil
 }
 
 func conceptEvidenceByCitationID830G2(bundle types.ConceptCandidateBundle830G2, memberID, citationID string) (types.ConceptEvidence830G2, bool) {

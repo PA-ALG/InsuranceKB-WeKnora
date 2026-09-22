@@ -1,0 +1,9 @@
+{
+  "contract": "830-g3-batch-integration-identity.v1",
+  "commit": "68669f9e5f0755627be5c31bc4f8f6cf1634b8ea",
+  "tree": "852c33714b891e2a33a200e58d264bf9d9937407",
+  "software": "PASS",
+  "tests": 56,
+  "review": "batch-c-independent-review-2.json",
+  "real_batch": "NOT RUN"
+}

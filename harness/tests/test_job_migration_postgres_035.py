@@ -116,7 +116,16 @@ def test_p1_11_single_new_migration_from_real_head_0006(
     config = _cfg(postgres_migration_db.url)
     scripts = ScriptDirectory.from_config(config)
 
-    assert scripts.get_heads() == ["0015"]
+    assert scripts.get_heads() == ["0018"]
+    for revision_id, down_revision in (
+        ("0018", "0017"),
+        ("0017", "0016"),
+        ("0016", "0015"),
+        ("0015", "0006"),
+    ):
+        chain_revision = scripts.get_revision(revision_id)
+        assert chain_revision is not None
+        assert chain_revision.down_revision == down_revision
     revision = scripts.get_revision("0015")
     assert revision is not None
     assert revision.down_revision == "0006"
@@ -125,16 +134,18 @@ def test_p1_11_single_new_migration_from_real_head_0006(
     baseline = set(inspect(postgres_migration_db.engine).get_table_names())
     assert P1_TABLES.isdisjoint(baseline)
 
-    command.upgrade(config, "head")
+    command.upgrade(config, "0015")
     assert _version_rows(postgres_migration_db.engine) == ("0015",)
     after = set(inspect(postgres_migration_db.engine).get_table_names())
     assert after - baseline == P1_TABLES
 
-    command.check(config)
-
     command.downgrade(config, "0006")
     assert _version_rows(postgres_migration_db.engine) == ("0006",)
     assert set(inspect(postgres_migration_db.engine).get_table_names()) == baseline
+
+    command.upgrade(config, "head")
+    assert _version_rows(postgres_migration_db.engine) == ("0018",)
+    command.check(config)
 
 
 @pytest.mark.integration_postgres
@@ -285,7 +296,7 @@ def test_i9_downgrade_with_live_rows_is_refused_before_any_ddl(
     postgres_migration_db: PostgresMigrationDb,
 ) -> None:
     config = _cfg(postgres_migration_db.url)
-    command.upgrade(config, "head")
+    command.upgrade(config, "0015")
     with postgres_migration_db.engine.begin() as connection:
         connection.execute(
             text(
@@ -347,7 +358,7 @@ def test_q26_downgrade_relative_destination_crossing_0006_is_resolved(
     原回归节点只传 `-1` 且因 live-row 预检先抛，解析分支从未被触达。
     """
     config = _cfg(postgres_migration_db.url)
-    command.upgrade(config, "head")
+    command.upgrade(config, "0015")
     assert _version_rows(postgres_migration_db.engine) == ("0015",)
 
     command.downgrade(config, "-2")  # 0015 → 0006 → 0012，跨 0006 领地
@@ -362,7 +373,7 @@ def test_q26_downgrade_refuses_while_dead_letter_forensics_exist(
 ) -> None:
     """P1.4 要求 dead_letter 保留取证字段；降级不得静默销毁 DLQ。"""
     config = _cfg(postgres_migration_db.url)
-    command.upgrade(config, "head")
+    command.upgrade(config, "0015")
     _insert_job(postgres_migration_db.engine, state="dead_letter", key="dlq-1")
 
     with pytest.raises(Exception, match="0015 downgrade refused"):
@@ -386,7 +397,7 @@ def test_q26_offline_sql_downgrade_is_explicitly_refused(
 ) -> None:
     """offline `--sql` 降级必须是**声明的** fail-closed，而非偶然 AttributeError。"""
     config = _cfg(postgres_migration_db.url)
-    command.upgrade(config, "head")
+    command.upgrade(config, "0015")
 
     with pytest.raises(RuntimeError, match="offline `--sql` downgrade is not supported"):
         command.downgrade(config, "0015:0006", sql=True)

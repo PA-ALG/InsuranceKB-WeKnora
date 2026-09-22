@@ -1,0 +1,44 @@
+{
+  "contract": "830-g3-d-backend-query-owner-amendment3-independent-review.v1",
+  "input": {
+    "path": "docs/insurance-kb/evidence/830-g3/lane-d-backend-query-owner-amendment-3.md",
+    "sha256": "1b8ff9d0d6366c6ed7cf444186926ef8313215143ce5751b06a5c1ef2f981a88",
+    "bytes": 5175
+  },
+  "verdict": "PASS_FOR_SINGLE_HANDLER_PATH_DISPATCH",
+  "blocker_count": 0,
+  "backlog_count": 0,
+  "checks": {
+    "page_current_toctou": "CLOSED: classification and projection share one WikiReleasePinnedRead.",
+    "citation_choice": "CLOSED: IssueConceptCitationQuery830G3 is the only allowed G3-aware production path; bool discriminator plus later issuer is explicitly forbidden.",
+    "production_conformance": "CLOSED: SchemaWikiService must implement both atomic entries; legacy fallback is limited to older G2-only doubles and cannot serve unvalidated G3.",
+    "raw_query_presence": "CLOSED: URL.Query release_id slice preserves occurrences; preparation_id uses map-key presence.",
+    "legacy_selection": "CLOSED: strings.TrimSpace(first), nil/empty/whitespace page current behavior, and citation empty rejection are explicit.",
+    "g2_compatibility": "CLOSED: first-value/repeated/empty/mixed/unrelated-key behavior remains unchanged for selected G2.",
+    "query_scope": "CLOSED: no unrelated-key rejection and no query-carried scope assumption.",
+    "surface": "BOUNDED: one added handler production path, tests in the existing authorized G3 handler test, private reuse in already-open service, no route/wire/DTO/repository/table/Head expansion.",
+    "tests": "CLOSED: G3 current/exact denial, issuer zero, G2 compatibility, cross-release first-value, whitespace, and mutable-Head single-pin cases are specified."
+  },
+  "rejected": [
+    {
+      "item": "v1 bool discriminator",
+      "reason": "superseded due current Head double observation"
+    },
+    {
+      "item": "v2 citation alternative wording",
+      "reason": "superseded; v3 freezes atomic only"
+    },
+    {
+      "item": "reject unrelated query keys",
+      "reason": "outside frozen requirement and explicitly excluded"
+    }
+  ],
+  "findings": [],
+  "effects": {
+    "repo_write": 0,
+    "http": 0,
+    "database": 0,
+    "provider": 0,
+    "runtime": 0
+  }
+}

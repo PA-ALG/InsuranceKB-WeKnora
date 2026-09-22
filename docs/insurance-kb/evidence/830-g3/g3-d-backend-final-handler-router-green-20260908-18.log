@@ -1,0 +1,18 @@
+ok  	github.com/Tencent/WeKnora/internal/handler	2.684s
+json
+json
+--- FAIL: TestBatchConceptPreparation830G3UsesHumanAdminDualKBSeal (0.00s)
+    --- FAIL: TestBatchConceptPreparation830G3UsesHumanAdminDualKBSeal/admin (0.00s)
+        routes_batch_concept_830_g3_test.go:61: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/router/routes_batch_concept_830_g3_test.go:61
+            	Error:      	Not equal: 
+            	            	expected: 503
+            	            	actual  : 400
+            	Test:       	TestBatchConceptPreparation830G3UsesHumanAdminDualKBSeal/admin
+            	Messages:   	{"error":{"message":"schema wiki preparation invalid"},"success":false}
+json
+json
+json
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/router	3.297s
+FAIL

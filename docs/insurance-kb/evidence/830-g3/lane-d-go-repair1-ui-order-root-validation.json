@@ -1,0 +1,12 @@
+{
+  "contract": "830-g3-d-go-repair1-ui-order-root-validation.v1",
+  "strict_openspec": {
+    "status": "PASS",
+    "exit_code": 0,
+    "log": "g3-d-go-repair1-ui-order-openspec-validation-01.log",
+    "sha256": "7e4c5408b4957f357454498d9fa5d1cc05251a878db7c30de9ecd027a6f0f9f4"
+  },
+  "note": "Any subsequent PostHog DNS telemetry error does not change the successful strict validation result. No application HTTP or provider call is performed.",
+  "product_implementation_status": "Go repair1 and mock UI implementation active in separate owner domains; neither accepted or integrated.",
+  "real_business_effects": 0
+}

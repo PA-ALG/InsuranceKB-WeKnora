@@ -1,0 +1,73 @@
+{
+  "contract": "830-g3-d-task3-query-gap-design-review.v1",
+  "proposal": {
+    "path": "/private/tmp/g3-d-task3-query-owner-gap-proposal-20260908-v2.md",
+    "sha256": "f698cd6c992bb0a9413ba10a4c40089838d521830a73daab94572b4379ac7f06"
+  },
+  "verdict": "CONDITIONALLY_PASS_AFTER_TEXTUAL_FREEZE",
+  "fundamental_blockers": 0,
+  "implementation_gate_blockers": 1,
+  "findings": [
+    {
+      "id": "QG-B1-ATOMIC-CITATION-MUST-BE-UNAMBIGUOUS",
+      "severity": "BLOCKER_BEFORE_IMPLEMENTATION",
+      "finding": "The citation section still says discriminator or atomic and only prefers atomic. This leaves two implementation contracts even though the proposed interface and review goal require one bounded path.",
+      "required_closure": "Delete the alternative. Freeze IssueConceptCitationQuery830G3 as the only G3-aware production handler path. It must receive raw release_id occurrences and preparation_id key presence, classify the selected exact immutable release, reject malformed G3 query shape before Evidence resolution/token signing, then issue for that same exact release. Older test doubles may retain the legacy fallback; the production SchemaWikiService must implement the atomic interface."
+    }
+  ],
+  "necessary_contract_precision": [
+    {
+      "id": "QG-C1-LEGACY-SELECTION-EXACTNESS",
+      "requirement": "State exact extraction and selection: values := c.Request.URL.Query(); releaseOccurrences, releasePresent := values[\"release_id\"]; preparationPresent := key presence in values; selected := strings.TrimSpace(first occurrence) when present. Nil means absent. Empty or whitespace-only first occurrence selects current for page and remains unavailable for citation, exactly matching current handler behavior. Do not use c.Query/GetQuery for cardinality."
+    },
+    {
+      "id": "QG-C2-UNKNOWN-KEY_SCOPE",
+      "requirement": "Keep v2 wording: unrelated query keys remain ignored. Scope is path/request identity, not query. No unknown-key rejection test belongs in this repair."
+    }
+  ],
+  "confirmed_closures": [
+    {
+      "area": "current page TOCTOU",
+      "result": "ReadConceptPageQuery830G3 classifies and projects from one WikiReleasePinnedRead, so G2-to-G3 Head movement cannot turn an already-classified request into a different release read."
+    },
+    {
+      "area": "citation ordering",
+      "result": "The proposed atomic issuer can reject G3 repeated/empty/mixed shape before Evidence resolution and token signing. Citation already selects a nonempty exact immutable release, so no current-Head lookup is needed."
+    },
+    {
+      "area": "G2 compatibility",
+      "result": "Classification is based on the same legacy-selected target. A selected G2 release receives no new cardinality/mixed/unknown-key rule and retains first-value/empty behavior."
+    },
+    {
+      "area": "scope",
+      "result": "Existing requestIdentity obtains wiki/space/raw from route parameters; there are no required scope query keys to preserve."
+    },
+    {
+      "area": "surface",
+      "result": "One additional handler production path plus private reuse in the already-open G3 service; no route, public DTO, repository, table, wire contract, or second Head."
+    }
+  ],
+  "required_tests": [
+    "G3 current page absent release accepted and mutable Head advances after sole pin without changing returned release.",
+    "G3 current/exact repeated, explicit-empty or whitespace-empty, and preparation_id key presence reject before projection or token issuance.",
+    "G2 selected by first value retains repeated/empty/mixed and unrelated-key behavior; include first-G2/second-G3 and first-empty/current-G2 cases.",
+    "Citation single nonempty exact G3 succeeds; repeated or preparation-present has issuer/token call count zero."
+  ],
+  "rejected": [
+    {
+      "proposal": "v1 boolean discriminator",
+      "reason": "Current page classification and read observed Head twice and could bypass the G3 query gate after G2-to-G3 Head movement."
+    },
+    {
+      "proposal": "Reject every unknown query key for G3",
+      "reason": "Outside the frozen repeated/empty/mixed requirements; scope is already carried in path parameters."
+    }
+  ],
+  "effects": {
+    "repo_write": 0,
+    "http": 0,
+    "database": 0,
+    "provider": 0,
+    "runtime": 0
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "contract": "830-g3-d-source-coverage-design-return.v1",
+  "recorded_at": "2026-09-07T13:29:06.797656+00:00",
+  "owner": "root",
+  "status": "DESIGN_RETURN_ALL_D_CODE_FROZEN",
+  "prior_repair": "B1/B2/B3 independent24+8probes/ruff/mypy PASS; no patch requested",
+  "new_fingerprint": "same selected material extra field-evidence block rejected by identity-only request source equality",
+  "current_contract": "D v2 §2.3 material owner allowlist and §2.4 selected required blocks + carry, not identity-only blocks",
+  "reason_for_design_return": "first source coverage ambiguity was not covered by one-block selected fixture; fix cannot silently expand frozen interpretation during review",
+  "scope_boundary": "no new authority/DTO/endpoint/model/policy; clarify existing source union and sourceful fixture first",
+  "stop_state": "Go/handler/service/UI and Python edits frozen pending reviewed design",
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "upload": 0,
+    "build": 0
+  }
+}

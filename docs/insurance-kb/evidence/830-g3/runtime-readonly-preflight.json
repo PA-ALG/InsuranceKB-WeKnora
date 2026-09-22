@@ -1,0 +1,139 @@
+{
+  "contract": "830-g3-runtime-readonly-preflight.v1",
+  "checked_at": "2026-09-07T07:56:14.022221+00:00",
+  "effects": {
+    "writes": 0,
+    "provider_calls": 0,
+    "builds": 0,
+    "pulls": 0,
+    "starts": 0
+  },
+  "source_app": {
+    "image": "sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19",
+    "running": true,
+    "environment": {
+      "DB_NAME": "weknora_g2_594",
+      "DB_USER": "p0clone",
+      "STORAGE_TYPE": "local",
+      "STORAGE_LOCAL_PATH": null,
+      "LOCAL_STORAGE_BASE_DIR": "/data/files",
+      "RETRIEVE_DRIVER": "postgres",
+      "REDIS_DB": "14",
+      "REDIS_ADDR": "redis-g2:6379"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "weknora-g2-594-files",
+        "Destination": "/data/files",
+        "RW": true
+      },
+      {
+        "Type": "volume",
+        "Name": "weknora-g2-594-c5",
+        "Destination": "/run/c5",
+        "RW": false
+      },
+      {
+        "Type": "volume",
+        "Name": "weknora-g2-594-docreader-tmp",
+        "Destination": "/tmp/docreader",
+        "RW": false
+      }
+    ],
+    "secret_identity": {}
+  },
+  "database": {
+    "active_scheduled_datasources": 0,
+    "pending_knowledge": 0,
+    "active_sync_logs": 0,
+    "source_rows": [
+      {
+        "tenant_id": 10003,
+        "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+        "parse_attempt": 3,
+        "revision_source_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+        "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+        "page_count": 44,
+        "retention_state": "pinned",
+        "binding_digest": "3b3796a0376b469593bb7fd19c091d9ff29a991f8035635126c2ce752ce5a110",
+        "resource_id": "ea1399d4-0410-4dff-8bcb-66f5a1a23e51"
+      },
+      {
+        "tenant_id": 10003,
+        "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+        "parse_attempt": 1,
+        "revision_source_id": "aed62bb6045daf632084f85970244cb840a2ea81932d3620bfa4efb1a4a03d0e",
+        "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+        "page_count": 17,
+        "retention_state": "pinned",
+        "binding_digest": "212b52240bd16a3cabe77841c1f6cf595c7f7a107efed71d4b470c55c601bec1",
+        "resource_id": "10d8ea5c-97ed-4ce8-8a3e-6877e8e5c821"
+      },
+      {
+        "tenant_id": 10003,
+        "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+        "parse_attempt": 2,
+        "revision_source_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+        "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+        "page_count": 39,
+        "retention_state": "pinned",
+        "binding_digest": "299502a83c9f776c84f097c2ef5b05c92ce6afaabe5ceb722214be275cf418c0",
+        "resource_id": "46ea6872-d26e-4bab-b3ad-151ab6eedd29"
+      }
+    ],
+    "knowledge_file_references": [
+      {
+        "id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+        "current_parse_attempt": 1,
+        "file_path": "resource://M22i_VqDy9ruSBBBMxuoiw",
+        "file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279"
+      },
+      {
+        "id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+        "current_parse_attempt": 3,
+        "file_path": "resource://FVUX9FsxUDI9UpWjzS021g",
+        "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5"
+      },
+      {
+        "id": "e7722140-3486-437b-9952-f3d66d6fb539",
+        "current_parse_attempt": 1,
+        "file_path": "resource://-tdrjtBIk-FRDhwN2Tehzg",
+        "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f"
+      },
+      {
+        "id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+        "current_parse_attempt": 2,
+        "file_path": "resource://2hNe9Q-sAFtCOhdsLA8oNQ",
+        "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+      }
+    ],
+    "g3_database_exists": 0
+  },
+  "redis": {
+    "configured_database_count": 16,
+    "db14_key_count": 2,
+    "db15_key_count": 2
+  },
+  "ports": [
+    "weknora-g2-594-ui 127.0.0.1:18195->80/tcp",
+    "weknora-g2-594-app 127.0.0.1:18194->8080/tcp",
+    "weknora-g2-594-docreader ",
+    "WeKnora-app 127.0.0.1:8080->8080/tcp",
+    "WeKnora-c5-1e6-redis 127.0.0.1:56393->6379/tcp",
+    "social-monitor-pacing-baseline-postgres-1 127.0.0.1:55435->5432/tcp",
+    "social-monitor-pacing-baseline-redis-1 127.0.0.1:56382->6379/tcp",
+    "WeKnora-p0-clone-postgres-vsnd11r2 127.0.0.1:55434->5432/tcp",
+    "social-monitor-test-postgres-1 127.0.0.1:55433->5432/tcp",
+    "WeKnora-redis 6379/tcp",
+    "WeKnora-frontend 127.0.0.1:8081->80/tcp",
+    "WeKnora-postgres 5432/tcp",
+    "WeKnora-docreader 50051/tcp",
+    "xueqiu-task7-verify-2-postgres-1 127.0.0.1:55439->5432/tcp",
+    "social-monitor-postgres-1 127.0.0.1:55432->5432/tcp",
+    "social-monitor-test-redis-1 127.0.0.1:56380->6379/tcp",
+    "wanneng-postgres 5432/tcp",
+    "wanneng-redis 6379/tcp",
+    "wanneng-frontend 80/tcp"
+  ]
+}

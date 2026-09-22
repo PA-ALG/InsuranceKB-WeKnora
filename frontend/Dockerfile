@@ -9,6 +9,8 @@
 FROM nginx:1.30.3-alpine@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1
 
 COPY dist /usr/share/nginx/html
+# Public assets must remain readable when the host builder uses a private umask.
+RUN chmod -R a+rX /usr/share/nginx/html
 
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 

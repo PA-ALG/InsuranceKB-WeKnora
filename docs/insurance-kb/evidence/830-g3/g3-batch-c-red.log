@@ -1,0 +1,16 @@
+
+==================================== ERRORS ====================================
+________ ERROR collecting tests/test_batch_entity_resolution_830_g3.py _________
+ImportError while importing test module '/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/test_batch_entity_resolution_830_g3.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Users/houjing/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+harness/tests/test_batch_entity_resolution_830_g3.py:35: in <module>
+    from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as g
+E   ImportError: cannot import name 'batch_entity_resolution_830_g3' from 'insurance_harness.knowledge_compiler' (/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/src/insurance_harness/knowledge_compiler/__init__.py)
+=========================== short test summary info ============================
+ERROR harness/tests/test_batch_entity_resolution_830_g3.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 1.08s

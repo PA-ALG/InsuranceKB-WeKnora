@@ -1,0 +1,16 @@
+{
+  "contract": "830-g3-existing-classifier-red.v1",
+  "requirement": "G3-R4",
+  "source_path": "dataset/shouxian_product/平安守护百分百（2026）两全保险/保险条款.pdf",
+  "file_sha256": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+  "inspection": "Local PDF text inspection to probe existing keyword function only; NOT WeKnora parser, SourceRevision, new model output, Golden or G3 batch run",
+  "existing_api": "insurance_harness.product.classify.detect_product_line",
+  "input": "file name plus first two PDF pages, unchanged extracted text",
+  "title_anchor": "平安守护百分百（2026）两全保险",
+  "expected_primary_product_line_from_explicit_title": "endowment",
+  "actual_keyword_product_line": "critical-illness",
+  "assertion": "explicit titled primary contract must not be replaced by a mentioned attached critical illness contract",
+  "result": "RED",
+  "provider_calls": 0,
+  "db_writes": 0
+}

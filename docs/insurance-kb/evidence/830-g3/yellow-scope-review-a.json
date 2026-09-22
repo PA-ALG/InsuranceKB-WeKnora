@@ -1,0 +1,14 @@
+{
+  "contract": "830-g3-yellow-scope-review.v1",
+  "recorded_at": "2026-09-07T05:39:38.740422+00:00",
+  "owner": "root",
+  "trigger": "production code >=500 lines",
+  "observed_lines": 649,
+  "observed_file_sha256": "7501f68bf9bee84b1ba803732a51d4ffa6116f4c842b3c593ddf0ae70920a4e9",
+  "not_a_frozen_release_identity": true,
+  "scope": "one file, strict catalog/field/mapping models + bounded XLSX XML reader + compile/validate/exact lookup",
+  "decision": "CONTINUE_MINIMAL_GREEN_WITHIN_CURRENT_TWO_FILE_WRITE_DOMAIN",
+  "rationale": "All functions serve current workbook→Catalog/Profile result. No new dependency, service, DB table, second authority or downstream classifier. Do not mechanically condense lines to evade threshold. Independent review required before integration.",
+  "focused_observation": "Ensure numeric Excel usage_frequency remains numeric rather than silently stringifying; add raw-cell-type regression before correction.",
+  "external_effects": 0
+}

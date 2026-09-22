@@ -1,0 +1,627 @@
+{
+  "runs": [
+    {
+      "id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "retry_of_run_id": null,
+      "state": "running",
+      "workflow_version": 3,
+      "started_at": "2026-09-22T08:01:35.281665+00:00",
+      "uploads_sealed_at": "2026-09-22T08:01:35.281665+00:00"
+    }
+  ],
+  "finalizations": [
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "partial_success",
+      "success_count": 25,
+      "missing_count": 19,
+      "failure_count": 31,
+      "model_call_count": 8,
+      "started_at": "2026-09-22T08:01:35.281665+00:00",
+      "finished_at": "2026-09-22T08:10:52.653071+00:00"
+    }
+  ],
+  "stages": [
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "uploads",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:01:35.057571+00:00",
+      "finished_at": "2026-09-22T08:01:35.309171+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 0.2516
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "source",
+      "state": "succeeded",
+      "attempt": 4,
+      "lease_generation": 4,
+      "started_at": "2026-09-22T08:01:55.672712+00:00",
+      "finished_at": "2026-09-22T08:01:56.916654+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 1.243942
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "routing",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:01:58.772816+00:00",
+      "finished_at": "2026-09-22T08:01:58.950633+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 0.177817
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "identity",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:02:00.846276+00:00",
+      "finished_at": "2026-09-22T08:02:21.27999+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 20.433714
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "field_plan",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:02:22.592484+00:00",
+      "finished_at": "2026-09-22T08:02:30.532328+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 7.939844
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "extract",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:03:42.997845+00:00",
+      "finished_at": "2026-09-22T08:03:43.24497+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 0.247125
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "synthesis",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:03:44.051492+00:00",
+      "finished_at": "2026-09-22T08:03:51.846355+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 7.794863
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "discovery",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:03:53.39206+00:00",
+      "finished_at": "2026-09-22T08:04:30.848806+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 37.456746
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "compilation",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:04:32.845823+00:00",
+      "finished_at": "2026-09-22T08:05:48.066268+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 75.220445
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "preparation",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:05:50.028789+00:00",
+      "finished_at": "2026-09-22T08:07:47.142583+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 117.113794
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "review",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:07:47.681742+00:00",
+      "finished_at": "2026-09-22T08:08:50.164236+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 62.482494
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "publish",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:08:51.658204+00:00",
+      "finished_at": "2026-09-22T08:10:07.64413+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 75.985926
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "verify",
+      "state": "succeeded",
+      "attempt": 1,
+      "lease_generation": 1,
+      "started_at": "2026-09-22T08:10:08.691856+00:00",
+      "finished_at": "2026-09-22T08:10:52.013603+00:00",
+      "error_class": null,
+      "error_summary": null,
+      "last_attempt_seconds": 43.321747
+    }
+  ],
+  "stage_calls": [
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "discovery",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:04:11.528539+00:00",
+      "recorded_at": "2026-09-22T08:04:19.65782+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "identity",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:02:02.846241+00:00",
+      "recorded_at": "2026-09-22T08:02:20.840254+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "stage_key": "discovery",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:04:20.899834+00:00",
+      "recorded_at": "2026-09-22T08:04:26.835954+00:00"
+    }
+  ],
+  "field_calls": [
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:02:33.416893+00:00",
+      "recorded_at": "2026-09-22T08:03:11.479329+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:02:33.238083+00:00",
+      "recorded_at": "2026-09-22T08:03:08.178551+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:03:08.602877+00:00",
+      "recorded_at": "2026-09-22T08:03:33.445488+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:03:31.205954+00:00",
+      "recorded_at": "2026-09-22T08:03:40.81705+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:02:33.428245+00:00",
+      "recorded_at": "2026-09-22T08:03:01.726241+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:03:02.086258+00:00",
+      "recorded_at": "2026-09-22T08:03:30.91585+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:02:33.34524+00:00",
+      "recorded_at": "2026-09-22T08:03:38.13404+00:00"
+    },
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "state": "recorded",
+      "attempt": 1,
+      "diagnostic": null,
+      "dispatched_at": "2026-09-22T08:03:11.728639+00:00",
+      "recorded_at": "2026-09-22T08:03:39.939644+00:00"
+    }
+  ],
+  "verification": [
+    {
+      "run_id": "5fc81298-7bbe-4c1a-9c8d-bf8844055ef0",
+      "result": {
+        "activation_epoch": 17,
+        "candidate_hash": "1695453d9f5c607682d484f775eced5bc91f908d57f7771b5ca7bc129a6cb158",
+        "citation_count": 76,
+        "contract": "platform-published-product-verification.830.v1",
+        "entity_ids": [
+          "entity_181842c938186d522da2c63f459d733787698e57d9757c88fff8b619d66fccf7"
+        ],
+        "field_count": 75,
+        "member_count": 76,
+        "missing_field_count": 50,
+        "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+        "release_id": "release-b8d07e76-da52-4446-9c37-fb6f8a1cb2d6",
+        "search_count": 1,
+        "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+        "status": "PASS",
+        "tenant_id": 10003,
+        "verified_field_count": 25,
+        "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+      }
+    }
+  ],
+  "elapsed_seconds": 557.371406,
+  "clock_boundary": "Last upload sealed to platform published search/citation verification terminal; subsequent human UI inspection time excluded.",
+  "preflight": {
+    "product": "平安盛世鑫禧（2026）终身寿险（分红型）",
+    "version": "3190-2",
+    "source_document_rows": [
+      {
+        "file": "/Users/houjing/Documents/LLM_wiki/g3-acceptance-inputs/3190-2/保险条款.pdf",
+        "url": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?attachmentType=1&planCode=3190&versionNo=3190-2",
+        "bytes": 705682,
+        "sha256": "a9af5e81f947875e5c61f62bb6b534ffde37a17b4d08ffeb2fae20d21d6f3ac7",
+        "md5": "4395bc9535bd99962c2f11a1ce6040c5",
+        "content_type": "application/pdf;charset=UTF-8"
+      },
+      {
+        "file": "/Users/houjing/Documents/LLM_wiki/g3-acceptance-inputs/3190-2/费率表.pdf",
+        "url": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?attachmentType=2&planCode=3190&versionNo=3190-2",
+        "bytes": 112492,
+        "sha256": "8202f464e12d13558c4101fac3b6b4265af9bfb299312ef854f6c9fc2af76998",
+        "md5": "2342323da4f772e4cf38b1ae85417901",
+        "content_type": "application/pdf;charset=UTF-8"
+      },
+      {
+        "file": "/Users/houjing/Documents/LLM_wiki/g3-acceptance-inputs/3190-2/产品说明书.pdf",
+        "url": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?attachmentType=7&planCode=3190&versionNo=3190-2",
+        "bytes": 222076,
+        "sha256": "4d2ade0e7b0f38436bddf13d0aac3e3ad2bbf98387971a380540d7341e12c1c1",
+        "md5": "354375ce0ec7103fdcc2c60bb803f396",
+        "content_type": "application/pdf;charset=UTF-8"
+      }
+    ],
+    "prior_knowledge_matches": [],
+    "existing_entity_matches": [],
+    "status": "FRESH_INPUTS_READY_NOT_UPLOADED"
+  },
+  "summaries": [
+    {
+      "artifact_kind": "discovery_final_summary",
+      "result": {
+        "accepted_member_count": 0,
+        "call_ids": [],
+        "candidate_member_count": 0,
+        "counts": {
+          "duplicate": 0,
+          "proposed_new": 0,
+          "published": 0,
+          "rejected": 0,
+          "update_proposal": 0
+        },
+        "coverage": null,
+        "final_composed_output_hash": "86843c2ac9260c7fd899f60bbb3ac54c560c40a61a5e06ab797a743e87964487",
+        "reason_codes": [
+          "DISCOVERY_EMPTY"
+        ],
+        "reused": false,
+        "reused_from_run_id": null,
+        "state": "EMPTY"
+      }
+    },
+    {
+      "artifact_kind": "field_summary",
+      "result": {
+        "extraction_failed": 31,
+        "not_provided": 19,
+        "verified": 25
+      }
+    },
+    {
+      "artifact_kind": "source_processing_summary",
+      "result": {
+        "contract": "product-source-processing-summary.830.v1",
+        "interrupted_count": 0,
+        "materials": [
+          {
+            "availability": "AVAILABLE",
+            "counts": {
+              "attempts": 5,
+              "confirmed": 5,
+              "interrupted": 0,
+              "not_dispatched": 0,
+              "transport_retries": 0
+            },
+            "knowledge_id": "5c36690f-d0c0-499c-832b-20d26797fb6b",
+            "phases": [
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 1494,
+                    "finished_at_unix_ms": 1790064096472,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064094978,
+                    "status": "done"
+                  }
+                ],
+                "phase": "docreader",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 73,
+                    "finished_at_unix_ms": 1790064096681,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064096608,
+                    "status": "done"
+                  }
+                ],
+                "phase": "chunking",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 6630,
+                    "finished_at_unix_ms": 1790064103315,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064096685,
+                    "status": "done"
+                  }
+                ],
+                "phase": "embedding",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 8136,
+                    "finished_at_unix_ms": 1790064112107,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064103971,
+                    "status": "done"
+                  }
+                ],
+                "phase": "postprocess.summary",
+                "recorded": true
+              }
+            ],
+            "receipt_sha256": "7117be81bd36f39380f9911d983b10f2906e46587bfa9ff2a56f503dcc789dd5",
+            "reused": false
+          },
+          {
+            "availability": "AVAILABLE",
+            "counts": {
+              "attempts": 6,
+              "confirmed": 6,
+              "interrupted": 0,
+              "not_dispatched": 0,
+              "transport_retries": 0
+            },
+            "knowledge_id": "67999e29-d66f-41af-9fe8-67a6afbde5e5",
+            "phases": [
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 4743,
+                    "finished_at_unix_ms": 1790064099689,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064094946,
+                    "status": "done"
+                  }
+                ],
+                "phase": "docreader",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 21,
+                    "finished_at_unix_ms": 1790064099717,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064099696,
+                    "status": "done"
+                  }
+                ],
+                "phase": "chunking",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 5548,
+                    "finished_at_unix_ms": 1790064105266,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064099718,
+                    "status": "done"
+                  }
+                ],
+                "phase": "embedding",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 8860,
+                    "finished_at_unix_ms": 1790064114502,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064105642,
+                    "status": "done"
+                  }
+                ],
+                "phase": "postprocess.summary",
+                "recorded": true
+              }
+            ],
+            "receipt_sha256": "267674f73e98766ba7ae6143c2eb0b8908dbd4b419f654d9fc5d55b11fe665d5",
+            "reused": false
+          },
+          {
+            "availability": "AVAILABLE",
+            "counts": {
+              "attempts": 3,
+              "confirmed": 3,
+              "interrupted": 0,
+              "not_dispatched": 0,
+              "transport_retries": 0
+            },
+            "knowledge_id": "7c362d59-12dd-474f-b9e3-071a543d62ab",
+            "phases": [
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 4496,
+                    "finished_at_unix_ms": 1790064099343,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064094847,
+                    "status": "done"
+                  }
+                ],
+                "phase": "docreader",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 55,
+                    "finished_at_unix_ms": 1790064099409,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064099354,
+                    "status": "done"
+                  }
+                ],
+                "phase": "chunking",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 1566,
+                    "finished_at_unix_ms": 1790064100977,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064099411,
+                    "status": "done"
+                  }
+                ],
+                "phase": "embedding",
+                "recorded": true
+              },
+              {
+                "occurrences": [
+                  {
+                    "duration_ms": 5980,
+                    "finished_at_unix_ms": 1790064107582,
+                    "occurrence": 0,
+                    "started_at_unix_ms": 1790064101602,
+                    "status": "done"
+                  }
+                ],
+                "phase": "postprocess.summary",
+                "recorded": true
+              }
+            ],
+            "receipt_sha256": "626418c62e06065278177e6d92982b6aabfe329c09e94d70520a2d11d18accf6",
+            "reused": false
+          }
+        ],
+        "model_call_count": 14,
+        "model_call_count_complete": true,
+        "recorded_model_call_count": 14,
+        "recorded_reused_model_call_count": 0,
+        "reused_model_call_count": 0
+      }
+    }
+  ],
+  "calls": {
+    "native": 14,
+    "identity": 1,
+    "field_windows": 8,
+    "discovery": 2,
+    "total": 25,
+    "ordinary_field_retries": 0,
+    "counting_note": "Native receipt dispatches plus recorded Harness stage/field dispatches; finalization.model_call_count only counts field windows."
+  },
+  "execution": {
+    "source_commit": "ec0721083c955af67d996aed883f6eab16fa9393",
+    "code_changes_after_upload": 0,
+    "builds_after_upload": 0,
+    "deployments_after_upload": 0,
+    "manual_business_continuations": 0,
+    "navigated_away_during_processing": true,
+    "literal_codex_shutdown_test": "NOT RUN"
+  },
+  "browser_evidence": {
+    "verified_field": "购买限制",
+    "assertion_id": "assertion_cfd14287d1cbb9d0f45eac94cf77e642a11428cab23ef67ce4e2d3cb314c7b47",
+    "field_page_ms": 1418,
+    "evidence_page_label_ms": 786,
+    "original_pdf_page": 12,
+    "pdf_highlight_visible": true,
+    "failed_field": "投保范围",
+    "failed_display": "待补充",
+    "failed_reason": "EXTRACTION_FAILED:FIELD_VALIDATION_FAILED",
+    "unverified_value_displayed": false,
+    "measurement_note": "Single CUA call wall timing; evidence time ends when page-12 label is visible, not full PDF rendering."
+  },
+  "persistence_readback": {
+    "field_calls_raw_sha_ref_present": 8,
+    "stage_calls_raw_sha_ref_present": 3,
+    "field_attempt_rows_with_outcome_result_raw_ref": 75,
+    "source_snapshots": 3,
+    "source_processing_audit_snapshots": 7,
+    "active_jobs_in_running_queued_retry_wait": 0
+  },
+  "status": "PASS",
+  "quality": "DEFERRED_TO_Q0",
+  "production": "NOT_FOR_PRODUCTION"
+}

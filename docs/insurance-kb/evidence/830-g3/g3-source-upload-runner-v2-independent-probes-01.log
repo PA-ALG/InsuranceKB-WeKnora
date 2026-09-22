@@ -1,0 +1,10 @@
+PASS frozen-loader 11-new 4-old exact
+PASS actual-W1 g3-material-01 chunks=162
+PASS actual-W1 g3-material-02 chunks=79
+PASS actual-W1 g3-material-03 chunks=37
+PASS actual-W1 g3-material-04 chunks=9
+PASS actual-provision-v3 docreader-env exact
+PASS expired-deadline-before-POST
+PASS timezone-less-authorization-rejected
+PASS old-source-check-before-pass-checkpoint
+EFFECTS http=0 docker=0 database=0 provider=0 upload=0

@@ -1,0 +1,24 @@
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/exact
+    concept_free_wiki_830_g3_test.go:43: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:43
+        	Error:      	Received unexpected error:
+        	            	schema wiki preparation invalid
+        	Test:       	TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/exact
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/missing_candidate
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/missing_preparation
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/null_candidate
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/mixed_g2
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/extra
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/duplicate
+--- FAIL: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody (0.00s)
+    --- FAIL: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/exact (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/missing_candidate (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/missing_preparation (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/null_candidate (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/mixed_g2 (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/extra (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/duplicate (0.00s)
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/handler	4.137s
+FAIL

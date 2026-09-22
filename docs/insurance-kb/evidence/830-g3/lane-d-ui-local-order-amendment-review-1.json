@@ -1,0 +1,53 @@
+{
+  "contract": "g3-lane-d-ui-local-order-amendment-review.v1",
+  "reviewed_path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-ui-local-order-amendment-1.md",
+  "reviewed_sha256": "df52a2049b76b41b9ab493cc38abd248aa1cea408c287bae7108ed21311c10ee",
+  "result": {
+    "status": "PASS",
+    "blockers": 0,
+    "backlog": 0,
+    "rejected": 0
+  },
+  "findings": [],
+  "review_basis": [
+    {
+      "fact": "The frozen valid UI inputs do not depend on the outstanding Go invalid-input repair.",
+      "evidence": "The accepted Python candidate contains the exact four-key page_manifest with 354 members and the complete 342-field projection; Go independent checking has already matched the positive snapshots and digests. The outstanding defect concerns nested omitted-versus-null rejection, while the amendment requires the UI parser to follow the strict reviewed contract rather than the permissive Go behavior."
+    },
+    {
+      "fact": "The order change is confined to local mocked Task4 work.",
+      "evidence": "Lines 17-27 allow only existing UI paths, local fixtures and mocked transports, while retaining the bans on live HTTP, browser runtime, provider/source calls, DB effects, Draft/review/activation, build/image and deployment. Backend Tasks1-3 stay closed."
+    },
+    {
+      "fact": "The original final integration gates remain intact.",
+      "evidence": "Lines 34-43 require meaningful RED, focused GREEN, G2 regressions and vue-tsc, then an immutable UI freeze and independent review. Root cannot accept/commit the combined UI or integrate it until the repaired Go mirror and Python-Go canonical/snapshot equality pass on exact identities."
+    },
+    {
+      "fact": "Task4 has sufficient local seams without expanding the owner matrix.",
+      "evidence": "The new batchConcept830G3 API can consume the frozen candidate/page manifest and existing Catalog parser under mocked transports. The three already authorized Vue files cover entry, directory and page modes; the pre-authorized narrow conceptFreeWiki830G2 dispatcher is available only if required. Existing router and KnowledgeBase route shapes already carry preparation_id/release_id."
+    },
+    {
+      "fact": "The frozen fixture is locally consumable by Vitest without a new runtime asset.",
+      "evidence": "Frontend tests already read cross-tree JSON vectors using readFileSync/new URL. The exact candidate fixture remains harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json, and UI tests can mechanically derive mocked preparation/Active responses from it without copying the 2.25 MB candidate into production code."
+    }
+  ],
+  "required_dispatch_bindings": [
+    "Bind the exact current Python source-coverage2 freeze and candidate fixture identity.",
+    "Bind the frozen Go DTO identity being repaired, downstream plan identity and alignment clarification identity before UI writes start.",
+    "Keep production code free of fixture imports and tenant/wiki/entity/release/preparation/member constants.",
+    "Treat malformed nested omitted/null inputs as frontend RED vectors now; do not mirror the known Go permissiveness.",
+    "Keep backend Tasks1-3 and all live effects closed until the original repaired-Go gate passes."
+  ],
+  "scope_assessment": "The amendment changes scheduling only. It does not change the accepted wire, response DTO, route, Catalog authority, source authority or final acceptance criteria.",
+  "effects": {
+    "product_write": 0,
+    "test_write": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "provider": 0,
+    "source": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

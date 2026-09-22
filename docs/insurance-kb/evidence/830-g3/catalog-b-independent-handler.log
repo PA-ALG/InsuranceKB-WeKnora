@@ -1,0 +1,4 @@
+captured_from_same-turn_tool_call=true
+command=go test ./internal/handler -run SchemaPackCatalog830G3 -count=1
+exit_code=0
+ok  github.com/Tencent/WeKnora/internal/handler  3.008s

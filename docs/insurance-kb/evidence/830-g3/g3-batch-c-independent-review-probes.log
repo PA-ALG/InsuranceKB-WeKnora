@@ -1,0 +1,8 @@
+PASS normalized alias competition stays human
+PASS normalized alias competition reason
+PASS mis-purposed identity evidence quarantines row
+PASS eligible peer retains candidate
+PASS bad-row evidence excluded from candidate
+PASS shared MULTI evidence rejected after full rehash
+PASS normalized-equal observed formatting remains valid
+PASS 4 independent scenarios / 8 assertions

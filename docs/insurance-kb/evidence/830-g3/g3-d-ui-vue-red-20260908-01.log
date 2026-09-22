@@ -1,0 +1,653 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ ✓ src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts > ConceptDirectory830G2 > renders pinned concept and entity links through the serving Wiki 170ms
+ × src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts > ConceptDirectory830G2 > renders G3 products by classification and formal name with Profile order and bounded lineage links 33ms
+   → Cannot read properties of undefined (reading 'length')
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable DRAFT preparation without loading current or Active
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable DRAFT preparation without loading current or Active
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable READY preparation without loading current or Active
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable READY preparation without loading current or Active
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > renders a complete Active G3 directory while preserving normal G2 fallback
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > renders a complete Active G3 directory while preserving normal G2 fallback
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ × src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable DRAFT preparation without loading current or Active 246ms
+   → expected "vi.fn()" to be called with arguments: [ 'wiki-serving', …(2) ]
+
+Number of calls: 0
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > rejects ambiguous preparation query before any directory request
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > rejects ambiguous preparation query before any directory request
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ × src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > renders a complete Active G3 directory while preserving normal G2 fallback 97ms
+   → Unable to get [data-testid="directory"] within: <section data-v-1b998c03="" class="catalog-entry">
+  <section data-v-1b998c03="" data-testid="g3-catalog">G3 Catalog</section>
+  <p data-v-1b998c03="" role="alert" class="catalog-state">目录读取失败，请确认已发布版本仍是当前固定版本。</p>
+</section>
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy 123ms
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed 33ms
+ × src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable READY preparation without loading current or Active 35ms
+   → expected "vi.fn()" to be called with arguments: [ 'wiki-serving', …(2) ]
+
+Number of calls: 0
+
+ × src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > rejects ambiguous preparation query before any directory request 20ms
+   → Unable to get [role="alert"] within: <section data-v-1b998c03="" class="catalog-entry">
+  <section data-v-1b998c03="" data-testid="g3-catalog">G3 Catalog</section>
+  <!--v-if-->
+</section>
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result 71ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G2 shared concept page > shows the shared definition and entity-specific tri-state fields with pinned links 269ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G2 shared concept page > opens the G2 source viewer using the release that supplied the page 260ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G2 shared concept page > does not show stale content after a failed fixed-release read 88ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G2 source preview under slow source verification > allows a verified source taking 35 seconds while preserving binary response handling 245ms
+ × src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > renders preparation evidence locally and never requests an Active token or content 546ms
+   → expected "vi.fn()" to be called with arguments: [ 'wiki-a', 'preparation-g3', …(1) ]
+
+Number of calls: 0
+
+ × src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > uses the pinned shared page session for Active evidence 370ms
+   → expected "vi.fn()" to not be called at all, but actually been called 11 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  2nd vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  3rd vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  4th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  5th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  6th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  7th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  8th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  9th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  10th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  11th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+
+Number of calls: 11
+
+ × src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > rejects mixed preparation and release modes before reading either page 181ms
+   → expected "vi.fn()" to not be called at all, but actually been called 6 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  2nd vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  3rd vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  4th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  5th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  6th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+
+Number of calls: 6
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts > ConceptDirectory830G2 > renders G3 products by classification and formal name with Profile order and bounded lineage links
+TypeError: Cannot read properties of undefined (reading 'length')
+ ❯ Proxy._sfc_render src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue:22:37
+     20|       <p>第 {{ catalog.activationEpoch }} 版</p>
+     21|     </header>
+     22|     <section v-if="catalog.concepts.length" aria-label="共享定义">
+       |                                     ^
+     23|       <h3>共享定义</h3>
+     24|       <ul>
+ ❯ renderComponentRoot ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:4543:16
+ ❯ ReactiveEffect.componentUpdateFn [as fn] ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:6070:46
+ ❯ ReactiveEffect.run ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/reactivity/dist/reactivity.cjs.js:264:19
+ ❯ setupRenderEffect ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:6205:5
+ ❯ mountComponent ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:5977:7
+ ❯ processComponent ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:5929:9
+ ❯ patch ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:5439:11
+ ❯ ReactiveEffect.componentUpdateFn [as fn] ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:6077:11
+ ❯ ReactiveEffect.run ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/reactivity/dist/reactivity.cjs.js:264:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > renders preparation evidence locally and never requests an Active token or content
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'wiki-a', 'preparation-g3', …(1) ]
+
+Number of calls: 0
+
+ ❯ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts:89:35
+     87|     mocks.readBatch.mockResolvedValue({ readMode: 'preparation', direc…
+     88|     const wrapper = mount(ConceptPage, { global: { stubs } }); await f…
+     89|     expect(mocks.loadPreparation).toHaveBeenCalledWith('wiki-a', 'prep…
+       |                                   ^
+     90|     expect(mocks.loadActive).not.toHaveBeenCalled(); expect(mocks.read…
+     91|     expect(wrapper.text()).toContain('待审核')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > uses the pinned shared page session for Active evidence
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 11 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  2nd vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  3rd vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  4th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  5th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  6th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  7th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  8th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  9th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  10th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  11th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      "release-g3",
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+
+Number of calls: 11
+
+ ❯ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts:112:28
+    110|       citations: read.citations, session: { scope: active.scope, read …
+    111|     const wrapper = mount(ConceptPage, { global: { stubs } }); await f…
+    112|     expect(mocks.read).not.toHaveBeenCalled()
+       |                            ^
+    113|     await wrapper.get('[data-testid="g3-source"]').trigger('click')
+    114|     expect(wrapper.get('[data-testid="source-viewer"]').text()).toBe('…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > rejects mixed preparation and release modes before reading either page
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 6 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  2nd vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  3rd vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  4th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  5th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+  6th vi.fn() call:
+
+    Array [
+      "wiki-a",
+      "concept-a",
+      undefined,
+      Object {
+        "get": [Function get],
+      },
+    ]
+
+
+Number of calls: 6
+
+ ❯ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts:122:28
+    120|     expect(wrapper.text()).toContain('页面读取失败')
+    121|     expect(mocks.loadPreparation).not.toHaveBeenCalled(); expect(mocks…
+    122|     expect(mocks.read).not.toHaveBeenCalled()
+       |                            ^
+    123|   })
+    124| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable DRAFT preparation without loading current or Active
+ FAIL  src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable READY preparation without loading current or Active
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'wiki-serving', …(2) ]
+
+Number of calls: 0
+
+ ❯ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts:54:35
+     52|       } } })
+     53|       await flushPromises()
+     54|       expect(api.loadPreparation).toHaveBeenCalledWith('wiki-serving',…
+       |                                   ^
+     55|       expect(api.load).not.toHaveBeenCalled()
+     56|       expect(api.loadActive).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > renders a complete Active G3 directory while preserving normal G2 fallback
+Error: Unable to get [data-testid="directory"] within: <section data-v-1b998c03="" class="catalog-entry">
+  <section data-v-1b998c03="" data-testid="g3-catalog">G3 Catalog</section>
+  <p data-v-1b998c03="" role="alert" class="catalog-state">目录读取失败，请确认已发布版本仍是当前固定版本。</p>
+</section>
+ ❯ VueWrapper.get ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js:7182:15
+ ❯ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts:71:20
+     69|     } } })
+     70|     await flushPromises()
+     71|     expect(wrapper.get('[data-testid="directory"]').text()).toBe('g3-a…
+       |                    ^
+     72|     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+     73|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > rejects ambiguous preparation query before any directory request
+Error: Unable to get [role="alert"] within: <section data-v-1b998c03="" class="catalog-entry">
+  <section data-v-1b998c03="" data-testid="g3-catalog">G3 Catalog</section>
+  <!--v-if-->
+</section>
+ ❯ VueWrapper.get ../../830-g1-field-assertion-pages/frontend/node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js:7182:15
+ ❯ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts:79:20
+     77|     const wrapper = mount(SchemaWikiCatalogEntry, { props: { knowledge…
+     78|     await flushPromises()
+     79|     expect(wrapper.get('[role="alert"]').text()).toContain('目录读取失败')
+       |                    ^
+     80|     expect(api.loadPreparation).not.toHaveBeenCalled()
+     81|     expect(api.load).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  8 failed | 8 passed (16)
+   Start at  00:33:01
+   Duration  17.01s (transform 10.86s, setup 0ms, import 16.79s, tests 2.82s, environment 12.35s)
+

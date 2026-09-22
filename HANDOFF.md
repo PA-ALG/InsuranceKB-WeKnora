@@ -1,3 +1,135 @@
+# 当前状态（2026-09-22 · G3 平台独立流程验收 PASS）
+
+既有增量恢复 + 全新产品三原PDF首次网页上传均已完成平台自动发布/检索/证据回查。Gemini恢复后 b696耗时457.517秒，33有效/14未提供/20失败，新增12调用；全新3190-2 run5fc81298-7bbe-4c1a-9c8d-bf8844055ef0耗时557.371秒，25有效/19未提供/31失败，25调用（native14+identity1+field8+discovery2），普通字段补抽0。全新上传后无代码/构建/部署/手工业务接续。网页“购买限制”独立Wiki→原PDF第12页高亮通过，字段约1.418秒、证据页码出现约0.786秒。计时止于平台发布检索/引用验后终态，后续人工点验间隔不计入；未实际关闭Codex。
+
+当前epoch17 / release-b8d07e76-da52-4446-9c37-fb6f8a1cb2d6。APP/Harness源码ec0721083，镜像54cadb3d3237…/646234d2d0ef…；原DB/UI/DocReader复用。任务终态partial_success，普通字段质量后置。G3本地FLOW PASS，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION；千文件/长稳、自由发现非空质量、窄屏PDF及发布成本仍为后续优化。9分17秒是一次真实样本成绩，不是普遍时限承诺。
+
+更正旧独审：现代checkpoint身份语义失败恢复会新发调用，不等于legacy raw replay；a173真实新增调用因地域400终止，b696为用户再次授权网页恢复。保留原失败与更正报告，不声称已实现身份raw零调用重投影。完整矩阵/剩余项见 docs/insurance-kb/evidence/830-g3/task3bn-platform-closeout-20260922.md。以下为历史状态，均不覆盖本段。
+
+# 历史状态（2026-09-22 · 公司归并集中修复已独审，准备一次部署）
+
+原用户确认已接入可信策略，引用集合容错及公司别名规则已完成真实离线贯穿/跨语言复核，独审0 BLOCKER。Python115通过；真实368c原响应无需新模型→3 CREATE/单医疗险绑定/3来源，Go发布端重放通过。APP/Harness待各一次构建更新；当前实际环境仍旧镜像、active jobs=0，网页恢复/发布仍NOT RUN，G3未完成。原公司值与原证据未覆盖；策略仅本Space显式声明。
+
+# 当前状态（2026-09-22 · 用户确认本批材料均为平安人寿产品；归并实现待收口）
+
+用户最新明确：“这些都是平安人寿的产品，没什么好冲突的”。此前公司简称/全称归并规则问题已得到本批业务确认，不再作为待用户确认/授权事项。下一步在平台记录并消费本批次公司身份确认，保留原始issuer文字及来源，统一“平安人寿”与“中国平安人寿保险股份有限公司”；不能将此确认扩大为任意公司简称包含匹配，也不能伪造成模型或原文证据。引用集合容错50a1ce762已测试/独审但未部署；需与公司归并接线集中验证、统一部署后，通过网页恢复368c任务。新产品抽取至发布尚未执行，最终仍需一轮无中途修复的全新产品网页验收。下方“等待用户选择”是本次确认前的历史事实，已被本段取代。
+
+Owner=root，工作树830-g3-performance，继续OpenSpec129。实际运行Harness为80f0af20b78ddc4bdcf05603cbd3573ddcb7679e，镜像sha256:ae8f288b5daec784971014250238d484996f82d0ed81be69ff30219e6b18d998；UI仍0940f36497a7，APP保持63ac9e460，现有DB/服务复用。2648-1此前正常网页发布PASS（14分5秒）；本轮两条恢复网页发布PASS；2662-1全新三文件已网页上传，原生解析完成；进度回执集中修复后已自行完成source和routing，identity终态needs_confirmation，G3不能结项。
+
+本轮只读复现：2be3b35b的source逐次处理审计在generation3落库、source阶段generation4成功，checkpoint把审计误当最终阶段输出而拒绝。d830d5e2（5b737子）的本地proof和三份来源均通过，旧workflow2绑定epoch11与当前epoch13不同而被拒绝。两个任务的原字段在当前已签base上的独立内存重基检查PASS（74/82字段），无业务写入、无模型重抽，不等于恢复成功。
+
+Gemini实际worker受控探测HTTP200、3.133秒、单次无文档发送；09-20地域400不是当前探测结果。API容器仅内网，其不能外呼为既有部署边界，不需改网络。已根据用户要求核对历史，原专用测试账号g2-594-operator@example.invalid仍存在；原/private/tmp凭据已丢失。本轮仅恢复该账号凭据、撤销其旧会话，账号/tenant10003/权限/材料不变，无新账号或权限扩张。正常网页登录已成功，原RAW材料和任务可见。私有凭据持久保存在仓库外private-evidence受限文件，不写入文档或工具输出。
+
+按用户要求tracer bullet/deep modules集中修复：审计/最终输出生命周期分离，恢复验证收敛为单入口并返回稳定安全原因，v7明确workflow2重基兼容。包含二次失败恢复的worker贯穿1 passed/274.67秒、短合同/诊断5 passed、合并后审计2 passed；恢复新增模型调用0。独立最终复核BLOCKER0，报告SHA1966963f3ae1091292de13acdce6405ed6caa586266861ecffc8a33928263d3e。构建1次37.219秒；首次Compose更新返回1并回滚健康旧镜像，增加等待至180秒后同一镜像第二次更新PASS，无重编译。API/worker均healthy，env摘要/挂载/网络一致，前后active仍epoch13，活动任务0。首次失败详细Compose输出未保留，不能据此断言唯一根因；Docker日志证实旧容器退出较慢，新镜像隔离导入烟测PASS。机器回执docs/insurance-kb/evidence/830-g3/task3bn-recovery-20260922.json。
+
+网页已恢复两条任务并完成平台自动发布/检索证据检查：b3fab26f-9392-5045-9eea-b4148e4fc219耗时248.612秒，34有效/34未提供/6失败，新字段调用0/自由发现2，epoch14；76eafa2b-324b-51a1-8582-27492adbfe6c耗时495.917秒，13有效/17未提供/52失败，新增模型0，epoch15/release-40116374-35ce-43f3-b15c-90caeac12f78。第一条网页独立字段及PDF第12页实际通过。2662-1全新三原PDF已网页上传，run368c59f1-fa81-4c99-a5ff-ba5940b5e84d，最后上传2026-09-22T03:54:16.652739Z，三来源原生解析completed，实际原生调用21（12/3/6），source因正常增长回执被误拒而重复等待。重复上传92efedee已网页恢复为ae55548d，1次身份模型响应含不受单材料证据支持的身份值，终态needs_confirmation；原响应保留，不自动重抽。不得用脚本代执行业务接续；两条成功恢复上传后未修改代码或重新构建；2662-1首轮据实BLOCKED，回执生命周期已集中修复、独审0 BLOCKER并一次部署，平台自主续跑后在identity终结，页面22调用（原生21+身份1）；记录保全，不能将后续恢复冒充首次无修复验收。原签名/模型配置未变，无DB迁移。路径与Owner见实施计划09-22节，实际记录见Task3bn验证报告末尾。以下按日期内容是历史记录，不覆盖本段。
+
+后续同响应贯穿诊断（只读、无模型新增）：原阻断是identity_evidence_refs排序，规范化后适配和3材料原生证据定位投影PASS；进一步复用现有v3联合归并发现公司简称/全称冲突，3材料均NEEDS_CONFIRM。条款issuer=平安人寿（备案号前缀），说明书issuer=中国平安人寿保险股份有限公司，费率无issuer；险种均medical_insurance、名称一致。无旧同名产品竞争。不能把排序修复误报整个产品可发布。identity_adapter引用集合容错已在工作树RED3→GREEN13，相关39 passed/36.98秒，原raw不改；独审0 BLOCKER（独立27项通过），未构建部署，等用户对平台Gemini联合公司身份判断方向的异步选择。现有正式v3相同名称材料互补机制可复用，不重建归并系统。跨公司/版本真实冲突仍必须明确待确认，不能直接字符串包含判断相同公司。
+
+## 2026-09-20 · Task3bn软件冻结，开始一次受影响组件部署
+
+本切片最终独立复核0 BLOCKER，重复上传代理、失败终态、轻量列表/按需详情、JSON边界/覆盖统计、独立发现恢复及v6当前发布变更恢复已通过限定验证。最后二次恢复处置丢失反例已闭合，原PENDING/REJECTED不重审，未知发送不重发；全部为软件/fixture结果。Task3bn部署及网页业务尚NOT RUN，G3整体未完成。下一步仅Harness/UI各一次构建后更新原服务，APP/DocReader/数据库复用；再网页恢复、重复上传、全新2662-1三原PDF验收。完整证据见docs/insurance-kb/evidence/830-g3/task3bn-consolidated-validation.md。
+
+## 2026-09-20 · G3继续，Task3bn未部署（软件冻结前记录）
+
+现有Task3bm服务健康，网页2648-1发布结果14分5秒、34有效/34未提供/6失败再次可见。G3整体仍未完成；最新Task3bn软件复审剩1项原范围缺口：变Head恢复检查点后、编译前再次失败时须保留自由组待确认/拒绝处置。Owner A正在修复，root不并发改恢复域；B只读复审。C父响应解析/恢复边界已独审0新增BLOCKER。原窗口中已准备的新产品2662-1三原PDF尚未上传。完成该项后只构建部署Harness/UI一次，再顺序网页复验；详见Task3bn验证记录。
+
+## 2026-09-18 · Task3bm 已部署并全新网页复测；Task3bn 集中修复中
+
+源码63ac9e460已统一部署到原APP/Harness/UI；无新DB/服务环境。2648-1 平安智盈倍护（2026）终身护理保险三原PDF经网页首次上传，平台独立完成发布及验后检查，run faf5182c-4b77-4f82-aa65-8e0178f2d023，09-17 03:17:50.008552Z→03:31:55.422362Z，845.414秒，partial_success；34有效/34未提供/6失败，23模型调用（原生13+身份1+字段8+发现1），普通字段补抽0。release-70dd8e65-a844-4e7c-97fd-15107cdd3bfb；网页独立字段“投保范围”与原PDF第12页实际可见。上传后无代码/构建/手工候选/发布脚本。
+
+G3仍未完成。重复上传ab0b7d18的manifest已存，生产_ScopedPlatform漏SHA查询方法，23次attempt后于09-17 04:40:37Z失败终结（0模型）；1835恢复051f9096复用三阶段并实际调用1次身份模型，因发行人简称/全名无可信映射而身份待确认，未发布；旧59c9恢复5b737e7d在checkpoint失败（0模型），尚不能宣称恢复验收通过。发现阶段原响应单json代码块遭严格解析拒绝；覆盖统计和独立发现恢复仍有缺口。详见现有plan末尾Task3bn、OpenSpec129及本轮验证记录。原失败/原响应均保留，不手工改DB接续。
+
+Task3bn软件修复在当前工作树：root补SHA代理及本地确定性接口错误终态，18项Python回归通过；A轻量列表/按需详情已通过23项Python，root最终网页状态组件39项及类型检查通过；C语义JSON/覆盖/Schema同义排除已冻结，36项定向及86项相关回归通过。A继续checkpoint v6与独立发现恢复，root前端/集成；已冻结子集交独立只读复核。当前dirty状态未部署。只在同批测试和独立复核后部署受影响Harness/UI；Go发布性能仍实测分钟级，5～10分钟未达标。普通字段质量/千文件/生产长稳仍后置。
+
+以下为历史状态，不覆盖上段。
+
+## 2026-09-16 · Task3bm 集中修复软件完成，待统一部署
+
+Owner=root；继续830-g3-performance及原应用/数据库。G3-AUTO-1—6及G3-DISC-1/2的软件实现、回归与最终独立复核完成，BLOCKER0。新增独立自由发现任务，Schema已有字段及同义概念排除，真实父调用回放/统计保留；上传manifest、去重及原生恢复、发布来源复用同时收口。详见[本轮验证矩阵](docs/insurance-kb/evidence/830-g3/task3bm-consolidated-validation.md)。部署/2648-1新三材料网页验收/重复增量/1835故障恢复均NOT RUN，仍不能宣称G3完成。既有3186基线及失败回执保持有效。下一步一次构建APP/Harness/UI后替换现有服务，不创建新环境。
+
+# 当前状态（2026-09-16 17:12 全新产品网页全流程完成）
+
+**全新产品正常链路 PASS，终态 partial_success；G3 整体仍未完成。** 3186-1平安盛世长鑫（2026）终身寿险三份原PDF首次网页上传后，平台独立完成解析、Gemini归并分类/抽取、编译、自动审核、发布与验后检索/证据检查。run6e4c19f7-3163-4473-bf8d-fc5913421c6e，从08:55:49.405338Z到09:12:26.440342Z，共16分37秒；30有效/33未提供/12失败，模型19次（原生10+分类1+抽取8），普通字段补抽0。
+
+当前Active Release为release-c869b78e-b1ac-497a-842b-30bda43a7b10 / epoch12；目录10产品732字段。平台验后报告PASS，76页/51引用/1产品检索；网页本产品“投保范围”→原文第8页7.3高亮实际通过。运行APP/Harness代码954255a0f，现有数据库/DocReader/UI复用。此次上传后无代码修改、构建、切换、手工候选或发布脚本。
+
+待集中修复：1835模型故障后网页不能恢复、重复材料未挂接批次、历史来源重复校验导致分钟级发布、discovery输入预算失败、来源失败自动恢复/租约及首读性能。此前59c9bf37恢复失败仍有效，不能用新样本覆盖；5～10分钟未达标，千文件/长稳NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。
+
+事实与集中清单：[实测报告](docs/insurance-kb/evidence/830-g3/task3bl-fresh-product-platform-run.md)，机器回执同名json。下一步在已有G3范围统一处理已记录根因并独立复核，再按组件统一构建；不逐错误部署，不重放成功模型调用。
+
+---
+
+# 当前状态（2026-09-16 G3 集中诊断后，同批修复进行中）
+
+**新增平台独立验收仍 BLOCKED；G3 未完成。** 下方原卡历史 PASS 不覆盖用户后来要求的网页上传至发布独立验收。工作树830-g3-performance，部署源码964f968；Task3bk首切片已提交3fb14a1b1，等待期复用追加切片在当前树。复用现有服务/数据库，不新建环境。
+
+诊断run15706f64-ae9e-5e46-951d-ff68534c52f7已于04:25:19Z失败终结：三来源成功，13字段验证/17未提供/52失败，preparation三次超时，尚未review/publish。先网页单文件恢复后再恢复产品是辅助诊断，不是独立验收。保留全部成功来源/字段/候选，不重复调用。用户要求集中排查、统一修复后再构建；本轮尚无新镜像构建/部署。
+
+当前性能/来源复用/错误及心跳诊断切片已本地验证，独立复核已通过（24文件，BLOCKER0）；自动失败文件重解析幂等接线、source失败统计、计划去重和真实4并发租约验收尚未闭合。详情：docs/insurance-kb/evidence/830-g3/task3bk-batch-diagnosis.md。已完成集中诊断，下一步冻结已实现的性能修复并统一构建 APP/Harness，DocReader/UI复用，网页从有效候选恢复；当前三材料已成功，自动失败文件重解析/source失败统计/持久计划格式改造按清单保留，不阻塞后半链路诊断；随后仍需全新产品三材料独立验收。不得运行旧历史发布脚本。
+
+---
+
+# 当前状态（2026-09-13 G3 原卡结项）
+
+**G3 FLOW PASS；QUALITY=DEFERRED_TO_Q0；NOT_FOR_PRODUCTION。** 原 R1—R5 及六项遗留处理均已实际验收。当前 epoch 9 / release-2f46c14c-5f6f-46cb-8eb2-e6afc7e5933e，11 包目录、7 产品、493 字段、516 成员。第 7→8→9 版修订/导航变更/恢复、全量成员与字段证据、三样本 27 次读取及真实 APP 重启、独立历史/检索/UI 均通过。
+
+部署 APP/静态资源源码为 4abaa281bf924f22f2aa59a283d2c488be486082；APP 镜像 8a9fdf61c7f9fcee974a6af098644d8e8a49b2ee94ae69a0dda9a4c967771f12。Nginx 动态 DNS 配置以独立覆盖层部署并随本次结项提交，UI 镜像未重建。24 容器运行，旧 APP read-reuse-02 保留停止。不要重跑下方旧发布/数据库脚本。
+
+重启后字段 0.0445–0.2010 秒、预览 0.0818–0.8772 秒、PDF 0.0933–0.1673 秒；单实例启动可短暂中断，候选创建仍需分钟级。15 材料不等于 15 完整产品：两份身份版本未全量抽取、两份待确认、MULTI 119 子条目未全量发布。Q0、大规模/生产长稳、两处目录状态/英文标签展示待整理均按后续事项保留。
+
+完整原卡矩阵、发布/配置来源和实际证据：docs/insurance-kb/evidence/830-g3/g3-final-closeout-20260913.md。私有证据：insurancekb-private-evidence/g3-20260912-final-closeout/evidence-index.json。本次调用不重新执行模型。以下内容为历史，不覆盖当前结论。
+
+---
+
+# 当前状态（2026-09-12 G3 性能与识别修复完成）
+
+当前分支 codex/830-g3-performance；部署代码 09f3819400303e72d909f3e6b93ffd9b2a2610f2，镜像 sha256:f52a2efb1b69751f00a3c02c76d92c447bc9ccf33de97aaccf99e7985763cf72，应用 weknora-g3-830-release-app-read-reuse-02。实际发布仍为 release-ad1e523a-0dc0-4eb1-8e78-79e9289a1570 / epoch 6 / 7 产品 / 493 字段 / 516 成员，逐项读回一致。本轮不进入 G4，质量验收仍后置。
+
+G3-P1：持久化发布验证结果及固定来源索引已部署；实际旧 C5 哈希域兼容缺口完成真实 RED/GREEN 与独立复核。一次显式准备 78.45 秒；HTTP 重启后字段 2.45–3.47 秒、引用 2.52–4.50 秒、PDF 2.60–3.01 秒，三样本原文字节/页码通过。首读仍有 2.6–23 秒波动。原验证探针误认前端静态健康页，改为等待真实业务接口后补跑重启通过；单实例启动期短暂不可用、错误页缺失导致404仍是已知运行限制，不是无停机架构。
+
+G3-P2：15来源零模型重放，m02/04/18关联已有条款，m07/08不同备案分别保留版本；m09不同公司且代码不足、m19费率表适用版本不足，仍待确认；m21从1条补到119个有定位目录条目，不直接发布119款产品。18项Python及Go跨语言/旧版本兼容通过。该重放不改写旧发布及模型产物。
+
+G3-P3：真实成功结果11字段可复用；临时SQLite JobStore实际进程退出后恢复、完成项不重做、失败隔离与去重通过；4项unknown/reserved保护测试通过。PostgreSQL高并发、千文件规模、真实provider-inflight unknown均NOT RUN。本轮模型调用0。
+
+最终环境：原有其他23容器恢复，加新APP共24运行，0暂停；旧APP保留停止；default运行、g1-build停止。回收未使用构建缓存4.737GB，最终数据盘约剩4.3GiB，容量仍偏紧。不要重建数据库或重跑下方历史发布脚本。
+
+结果入口：docs/insurance-kb/evidence/830-g3/g3-read-and-material-repair-20260912.md。36份有界验证元数据（约733KB）保存在 /Users/houjing/Documents/LLM_wiki/insurancekb-private-evidence/g3-20260912-read-material-repair；没有再复制整套PDF/模型响应。
+
+以下为历史记录。
+
+## 当前执行：G3 已获明确启动授权（2026-09-07）
+
+当前 SOURCE 执行已 STOP：用户“授权”已记录并实际执行一次 v3 apply；先创建 weknora_g3_830 空库，再在 pg_restore 返回 rc=1 时停止。数据库子进程退出与整体子进程重新初始化发生在恢复窗口内，22:02:01 UTC 重新接受连接；具体触发原因尚未确定。旧环境共享该 PostgreSQL，因此不得以来源记录快照相等宣称没有可用性影响。当前源库选定快照与执行前一致；目标 0 用户表/仅 plpgsql。上传、来源补登记、provider、G3 应用启动均 NOT RUN，未重试、未删除现场。公开回执 source-runtime-apply-stop-public-01.json；原授权有效但首次失败即停止的窗口已结束。下一步是 source-runtime-isolated-recovery-proposal-01.md 的独立复核和新增故障隔离范围审批。以下较早状态为历史，不覆盖本段；软件 commit39943a247 保持，G3仍WIP/FLOW NOT RUN/QUALITY DEFERRED_TO_Q0。
+
+当前收口：D backend最终repair2独立PASS（报告5e9c4f0b…，BLOCKER0），B1与B2全部关闭；final freeze2b32e49f…，11文件全部匹配。service完整回归408.944s、最终handler/router2.802s/2.768s及vet通过；原始坏UTF8/Unicode探针独立转绿，G1/G2兼容保留。root service→Gin→冻结UI/Python两状态完整互操作PASS，30项冻结输入身份匹配；根结论见lane-d-root-software-integration.json。全部当前代码写域关闭，剩余后端修复额度0。G3仍WIP、FLOW NOT RUN、QUALITY DEFERRED_TO_Q0；真实SOURCE尚待此前外发批准，后续真实C输入/策略/受控模型窗口及发布验收也未执行。用户“结构确认”和安佑福1828材料已处理，禁止重复询问结构或推定具名信息。
+
+最新：后端repair1完整三包回归PASS（408.944s/3.427s/3.799s），B1实际service→Gin→冻结UI/Python的DRAFT/READY完整5实体342字段互操作PASS、正文不变。repair1独审4b45e09d…确认B2解码后Text和stored-ID检查通过，但发现raw JSON坏UTF8/lone surrogate会被Go decoder先替换后接受；原反例保留。方案5b67f955…独审PASS，最终第2轮dispatch2d7300a9…仅G3 handler+test，既有raw canonical helper丢弃返回值、只验原字段，增加same-wire G2/G3分支回归。原9后端文件和全部UI/Go/Python/C/common冻结，不授权第三轮。G3仍WIP、FLOW NOT RUN，外发原问题待实际回复。
+
+当前软件门禁（2026-09-08）：UI首轮修复已独审PASS并提交b7a26b8aa；后端11文件初次独审收口为2项BLOCKER：read_sha对真实U+2028采用错误转义preimage，及preparation_id未按D Text严验/handler先trim。原11源码、31日志、独立反例及实际service→Gin→冻结UI失败证据均已保全；独审报告lane-d-backend-independent-review-01.json SHA416d80fa…，方案9ff57eb0…独审PASS，首轮修复dispatch0941c4de…仅开放G3 service/schema handler与两份G3测试。Go/Python/C/common/UI/fixtures和另外7后端文件关闭。接下来是修后独审及原前端互操作；真实SOURCE/C/provider/DB/build/deployment仍NOT RUN，原外发问题待实际回复，结构确认已接受。下述较早进度为历史，当前状态以本段和startup.json为准。
+
+唯一 Owner=830-G3总控/root；G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。已成功 fetch，base/main=075d9c38c01e48abfe7985985dc503099cf9b19a；专用工作树 `.worktrees/830-g3-implementation`，分支 `codex/830-g3-implementation`。
+
+首切片：真实 v5 工作簿已生成 11 pack/profile、801 字段；A/B独立复核BLOCKER0，总控Python17、前端17、Go接口及类型检查通过。用户已回复“结构确认”，exact Catalog确认回执保存；具名信息已非阻断询问。安佑福1828条款/说明书/版本待核费率表已保留。15原始PDF准备：4已有W1 revisions共287 chunks实际读取/hash/前后版本一致；11新PDF native预检输出保存。十一份新材料已离线生成204 embedding inputs及exact Go transport bodies，693129bytes，尚未外发。C历史B2过强问题已回设计，原评审结论撤回记录保留；设计2两文件及集中wire修复冻结，independent56/root A+C73 tests、ruff、strict mypy通过，独立复审BLOCKER0。D候选/页面合同整合复核通过后已进入DTO；actual27多行正文暴露共享canonical拒绝问题，修订7的C/common兼容代码已由root独立核验81项及正文/嵌套身份检查通过；当前来源回执兼容8代码已独立复核通过（C79/common82、root A/C/common99），D已恢复完整342候选DTO/fixture实现：actual旧医疗各含1个与新Profile不同的unknown key；68/344 legacy方案因违反卡精确67要求已撤回，改为只限两条全空unknown的具名lineage对齐设计，恢复每医疗67/整包342，旧release不动；模型delta和机械carry分别保留raw。已确认可复用G2同包新增逻辑实体，无额外主数据人工注册前置；需要真实pack/Profile与待审页面接线。新隔离环境只读核实storage本地/vector随DB、无待处理任务；Redis15已占用改独立队列。4原文件hash已读回，只有3条source custody row，第4缺口保留。11请求guard的持久化失败/并发启动问题已修复，9 tests及独立复审通过，尚未serve。复审临时安装76包后移除新建venv，覆盖日志身份已如实纠正。来源环境脚本两轮集中修复后v3独立复核BLOCKER0/BACKLOG1，第三次实际只读preflight PASS；两次只读预检失败原样保留，没有执行apply。旧01/03/04完整native原字节已无损持久化，02一次独立禁网解析补存成功，全部15capture/hash已核验；02当前source row仍缺。模型/上传/DB写/镜像构建/生产动作均0，G3 FLOW仍NOT RUN。启动记录见 `docs/insurance-kb/evidence/830-g3/startup.json`。以下G2历史状态不覆盖当前G3授权。
+
+最新D独立复审：完整342字段及2,247,500字节容量通过；原11/root110 bounded tests通过，但三个重算hash攻击仍被接受（身份anchors、确认语义、同identity原文替换）。D软件BLOCKED，首轮集中修复已先冻结，Go暂停未GREEN；见lane-d-python-independent-review-01.json及lane-d-python-repair-dispatch-1.json。来源upload v2独立33项/9 probes通过，完整执行预览已发用户，当前授权回复未收到，apply/upload/provider仍0。
+
+D最新：原三项修复经独立24 tests/8 probes/ruff/mypy全部通过，root4补充攻击也通过；新source覆盖不一致保持BLOCKED。已回设计明确selected材料完整blocks+carry及per-owner来源并集，设计2独立0/0后派第二次且最后有界D Python修复。旧代码/fixtures快照保存于d-repair1-snapshots；Go继续冻结，来源外发仍待当前用户回复、无执行。
+
+D当前软件进展：source coverage第二次最终复审PASS（30 tests、ruff/mypy、BLOCKER0/BACKLOG0）；root独立核对actual134字段、27来源精确并集、第二正文块引用及3 raw。最新synthetic完整POST为2,254,490字节，342字段；代码/fixture冻结，见lane-d-source-coverage2-independent-review.json。Go仅两文件恢复严格镜像及跨语言验证，handler/service/UI仍关闭。真实C模型执行路径另有设计缺口，不能自动扩建通用模型平台；来源外发审批仍待用户回复，所有真实效果0。
+
+最新（2026-09-08）：Go完整镜像首次独审2项BLOCKER：strict wire字段出现性/null及3个C source Hash类型漏验；四个C重算反例、354跨语言snapshot和完整types回归独立PASS，原Go/RED快照保留，正在准备一次集中修复。UI本地并行顺序调整独立PASS，原Task4已派mock RED→实现；backend与最终UI接受/commit/整合仍等修复后Go独审PASS。结构确认单列PASS，具名元数据单列待补；来源外发原问题仍待用户回复，所有真实效果0。
+
+最新软件门禁：D Go首轮修复独立PASS（原2BLOCKER关闭、4 C反例/354跨语言snapshot/fulltypes/gofmt通过），source8db0e765…、test72e2c166…，报告lane-d-go-repair1-independent-rereview.json SHA17d1153f…。Python与Go类型镜像写域均关闭。后端Tasks1/2/3现已派出，UI本地实现正在全量检查；两者仍需独审/整合。原外发批准仍未收到，真实SOURCE/C/model/DB/build/deployment/业务效果均0。
+
+UI最新独审：原8文件/17份日志身份全部匹配，独立25项页面测试、46项G2回归、actual两条历史字段对齐通过；唯一BLOCKER是结构化Text/identity误放行内部TAB/LF/CR。完整重哈希反例已复现，报告lane-d-ui-independent-review-01.json SHA c206bffc…。原代码/日志保全，按既有修订7v2只开放API及spec两文件首轮修复，保留正文TAB/LF/CR，六个Vue文件冻结；见lane-d-ui-repair-dispatch-1.json SHA d600c0cc…。PDF worker额外测试为既有依赖路径环境限制，不计PASS或产品失败。后端Tasks1/2/3仍实现中，真实SOURCE/C/provider/DB/build/deployment/业务效果仍0。
+
+UI当前软件门禁：首轮修复独立PASS，原UI-B1关闭（BLOCKER0/BACKLOG0）；source52ec691d…、spec37713e5c…、freeze6cdd98c5…，报告lane-d-ui-repair1-independent-rereview.json SHA3fb2d779…。原完整重哈希反例已拒绝，正常输入接受；独立26项页面及46项G2回归通过，正文TAB/LF/CR保留、LF/CRLF hash不同，FreeWiki投影与冻结Python/Go一致。六个Vue文件逐SHA未变，UI写域关闭。后端Tasks1/2/3仍未完成；尚无真实G3上传/模型/DB/构建/部署/发布效果。
+
+后端Task3范围补齐：真实query入口遗漏已先回设计，v1 bool分类方案因current双读TOCTOU撤回，v3独立PASS（cc80ae37…）后仅追加internal/handler/concept_free_wiki_830_g2.go，backend总写域12路径。Read/Issue原子入口同pin分类与投影/签发前校验，保留G2首值/空值行为，不增加未知query拒绝或新wire。dispatch见lane-d-backend-query-owner-dispatch-1.json；实现/最终回归及独审仍未完成，全部真实效果0。
+
+---
+
 ## 当前终态：G2 FLOW PASS（2026-09-07）
 
 G2核心流程已完成，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION；GitHub live=NOT RUN。唯一Owner=root，G2写域在本次证据收尾后关闭；没有启动G3。
@@ -297,3 +429,5 @@ attestor=`workspace-owner-houjing`，真实结论是 `QUALITY_FAIL`。
 9. [MVP-815 工程接手卡](docs/insurance-kb/26-mvp-815-engineering-handoff.md) 与
    [OpenSpec 120](openspec/changes/120-schema-wiki-medical-596-1-mvp/) 只作已冻结历史
    证据；后续 Goal 仍须自己的授权与适用 OpenSpec。
+
+部署已完成：Harness/UI源码0940f3649，镜像与真实列表性能、重复上传、恢复实测见Task3bn报告。当前实际阻断不是余额，而是Gemini上游400 `User location is not supported for the API use`；此外真实恢复在checkpoint校验阶段仍返回CHECKPOINT_INVALID。2662-1全新三PDF尚未上传，G3不能结项。

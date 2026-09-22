@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, create_engine, func, select, text
 from sqlalchemy import event as sqlalchemy_event
 from sqlalchemy.engine import URL, make_url
@@ -104,10 +105,15 @@ def _fresh_runtime() -> Iterator[PostgresRuntime]:
             assert str(version).startswith("16")
             connection.exec_driver_sql(f'CREATE DATABASE "{database_name}" TEMPLATE template0')
         database_created = True
-        command.upgrade(_alembic_config(database_url), "head")
+        alembic_config = _alembic_config(database_url)
+        expected_head = ScriptDirectory.from_config(alembic_config).get_current_head()
+        assert expected_head is not None
+        command.upgrade(alembic_config, "head")
         engine = create_engine(database_url, future=True, connect_args=CONNECT_ARGS)
         with engine.connect() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0015"
+            assert (
+                connection.scalar(text("SELECT version_num FROM alembic_version")) == expected_head
+            )
         yield PostgresRuntime(
             engine=engine,
             factory=sessionmaker(bind=engine, expire_on_commit=False, future=True),

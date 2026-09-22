@@ -1,0 +1,14 @@
+actual_base_file_sha256 69dd25e29ea771a512cf24c083a52e8347386def68b30d90d379f2b0dfe181d1
+actual_base_sources 21
+actual_base_existing_fields 134
+actual_base_control_value_count 27
+actual_base_first_control_paths [('$.existing_fields[93].evidence[0].quote', 16, 16, 381), ('$.existing_fields[93].value', 16, 16, 381), ('$.existing_fields[98].evidence[0].quote', 9, 9, 277), ('$.existing_fields[98].value', 9, 9, 277), ('$.existing_pages[0].body', 29, 29, 901)]
+schema_wiki_actual_base_result REJECT ValueError Schema Wiki text must not contain control characters
+schema_wiki_c_multiline_result REJECT ValueError Schema Wiki text must not contain control characters
+concept_canonical_c_multiline_result ACCEPT d620c1d525cf82fb7dc707130bb64fab94aff642bbc32c0806645bde41f73627 142
+allowed_preimages_equal True
+allowed_schema_sha256 3834e1bcd318801548489f19fc60e570e98a60343223639fa74d5dcfe05db806
+allowed_concept_sha256 3834e1bcd318801548489f19fc60e570e98a60343223639fa74d5dcfe05db806
+identity_control_example 'bad\nidentity'
+identity_control_example 'bad\tidentity'
+identity_control_example 'bad\ridentity'

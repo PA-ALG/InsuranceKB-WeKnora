@@ -1,0 +1,147 @@
+{
+  "contract": "g3-d-python-source-coverage2-freeze.v1",
+  "authority": {
+    "design_path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-source-coverage-design-2.md",
+    "design_sha256": "ec64c6b90d2504b481686fc071ce1f6ed2bcf218339efafff8119aa6f7e21716",
+    "dispatch_path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-source-coverage-dispatch-2.json",
+    "dispatch_sha256": "00b25ab6ff65fe5d705f6237ce710d21d21de465c0b05e0f340ce9e3cb3e9245",
+    "repair1_source_sha256": "5e472c98c4cb10929cf90689c03b105c68d02da74ca04f5fe12f554d0e6a7ef5"
+  },
+  "files": [
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "sha256": "e8e0dbcd8bf4cb1f2072d6fbf4ebf79f3554cbfef53c9c1f84011dbcc4357316",
+      "bytes": 71615
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/test_batch_concept_compile_830_g3.py",
+      "sha256": "86edf3d9bad9984d37991fb23f305d5e582fe6ee602ab0a7284a7a73d6fb2495",
+      "bytes": 33527
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+      "bytes": 2254415
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+      "bytes": 2254490
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb",
+      "bytes": 1623
+    }
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-red-20260907-01.log",
+      "sha256": "adbe12b55e645a27cada0122aff49856adc6dc2832ffb532e5424886771c9bc8",
+      "bytes": 4913
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-red-20260907-02.log",
+      "sha256": "ac8db71ed4db331628689356153074cb0686944736a48f4711bbba416e09c76f",
+      "bytes": 8145
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-red-20260907-03.log",
+      "sha256": "f03f23680da8adb7babc2b946e007e31fd9c6e62b0864347ae9c019a0287e772",
+      "bytes": 16609
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-green-core-20260907-01.log",
+      "sha256": "6d3aaf1ca3d25617e639d7f87867efe3f6d90bd40b07baaef1a96c9ca3dcf6a3",
+      "bytes": 99
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-green-focused-20260907-01.log",
+      "sha256": "57063522ab5d03479bbe10884bda7dd9381b7277c6495c37755da8de5c1901e7",
+      "bytes": 125
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-green-field-20260907-01.log",
+      "sha256": "def777a71fa0680737bef1f2f9bd5b83104d428ee55b21bbb931d79671029555",
+      "bytes": 113
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-fixture-regenerate-20260907-01.log",
+      "sha256": "f8aa7fde16779386c8d016f2e7bfb1ae607bb0ee5b1bc794164a1b8079e7a4fe",
+      "bytes": 388
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-green-fixture-focused-20260907-01.log",
+      "sha256": "b62e55e4c61f49de086db82c7e218a9759a31705cc3adc645a1caad2eca89272",
+      "bytes": 114
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-ruff-pre-20260907-01.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-mypy-pre-20260907-01.log",
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8",
+      "bytes": 43
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-green-full-20260907-01.log",
+      "sha256": "26fa34f380ce87c06b367976c1e5af9f5686d1e04a869c583d70c5b4a949b8ec",
+      "bytes": 111
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-ruff-final-20260907-01.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-mypy-final-20260907-01.log",
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8",
+      "bytes": 43
+    },
+    {
+      "path": "/private/tmp/g3-d-python-source-coverage2-capacity-20260907-01.json",
+      "sha256": "98e61f2fdebb4a0ee00f0959c1761489056a148c82f94abf682f79f00ad5f02a",
+      "bytes": 1944
+    }
+  ],
+  "verification": {
+    "effective_red": "1 failed in 13.85s; exact SOURCE_CLOSURE_MISMATCH on a fully rehashed typed A+B request",
+    "rejected_red_logs": [
+      "01 is set-level reproduction only",
+      "02 reaches builder but error is normalized to BATCH_REQUEST_INVALID"
+    ],
+    "final_focused": "30 passed in 104.19s",
+    "ruff": "All checks passed!",
+    "strict_mypy": "Success: no issues found in 2 source files"
+  },
+  "behavior": {
+    "request_source_union": "all blocks of exact selected C materials plus all actual carry member Evidence blocks",
+    "owner_allowlist": "selected material blocks plus same-owner base field/page Evidence plus linked existing definition Evidence",
+    "fixture": "actual base134; carry132; alignment2; delta208; final342; 27 request sources; one field ProposalEvidence on the second selected-material block"
+  },
+  "snapshot_history": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/d-repair1-snapshots/inventory.json",
+  "closed": [
+    "Go",
+    "C",
+    "common",
+    "Catalog",
+    "G2",
+    "exact alignment",
+    "handler",
+    "service",
+    "UI"
+  ],
+  "effects": {
+    "provider": 0,
+    "model": 0,
+    "database": 0,
+    "http": 0,
+    "build": 0,
+    "container": 0,
+    "commit": 0,
+    "push": 0,
+    "upload": 0
+  }
+}

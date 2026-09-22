@@ -1,0 +1,121 @@
+......FF..........................................                       [100%]
+=================================== FAILURES ===================================
+___ test_multi_identity_clusters_survive_missing_versions_and_shared_issuer ____
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_multi_identity_clusters_survive_missing_versions_and_shared_issuer(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="multi-missing-version",
+            text=(
+                "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
+                "医疗保险 官方条款"
+            ),
+        )
+>       result = _resolve(
+            catalog,
+            (entry,),
+            (
+                (
+                    {
+                        "proposal_ref": "a",
+                        "name": "产品甲",
+                        "product_code": "A-CODE",
+                        "filing": None,
+                    },
+                    {
+                        "proposal_ref": "b",
+                        "name": "产品乙",
+                        "product_code": "B-CODE",
+                        "filing": None,
+                    },
+                ),
+            ),
+        )
+
+harness/tests/test_batch_entity_resolution_830_g3.py:778: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:572: in _resolve
+    proposals = tuple(
+harness/tests/test_batch_entity_resolution_830_g3.py:573: in <genexpr>
+    _material_proposal(entry, receipt, entities=rows)
+harness/tests/test_batch_entity_resolution_830_g3.py:340: in _material_proposal
+    _proposal_evidence(
+harness/tests/test_batch_entity_resolution_830_g3.py:294: in _proposal_evidence
+    evidence=_span(block, quote),
+             ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+block = SourceBlock(tenant_id=7, space_id='space-g3', raw_kb_id='raw-g3', knowledge_id='knowledge-multi-missing-version', pars...k-multi-missing-version', page_number=1, text='平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 医疗保险 官方条款', source_type='DOCUMENT')
+quote = '2026'
+
+    def _span(block: SourceBlock, quote: str) -> Evidence:
+>       start = block.text.index(quote)
+                ^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: substring not found
+
+harness/tests/test_batch_entity_resolution_830_g3.py:282: ValueError
+_ test_multi_identity_clusters_ignore_classification_failure_and_missing_issuer _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_multi_identity_clusters_ignore_classification_failure_and_missing_issuer(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="multi-classification",
+            text="产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 医疗保险 官方条款",
+        )
+>       result = _resolve(
+            catalog,
+            (entry,),
+            (
+                (
+                    {
+                        "proposal_ref": "a",
+                        "issuer": None,
+                        "name": "产品甲",
+                        "product_code": "A-CODE",
+                        "filing": None,
+                        "classification_confidence": "0.100000",
+                    },
+                    {
+                        "proposal_ref": "b",
+                        "issuer": None,
+                        "name": "产品乙",
+                        "product_code": "B-CODE",
+                        "filing": None,
+                        "classification_confidence": "0.100000",
+                    },
+                ),
+            ),
+        )
+
+harness/tests/test_batch_entity_resolution_830_g3.py:819: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:572: in _resolve
+    proposals = tuple(
+harness/tests/test_batch_entity_resolution_830_g3.py:573: in <genexpr>
+    _material_proposal(entry, receipt, entities=rows)
+harness/tests/test_batch_entity_resolution_830_g3.py:340: in _material_proposal
+    _proposal_evidence(
+harness/tests/test_batch_entity_resolution_830_g3.py:294: in _proposal_evidence
+    evidence=_span(block, quote),
+             ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+block = SourceBlock(tenant_id=7, space_id='space-g3', raw_kb_id='raw-g3', knowledge_id='knowledge-multi-classification', parse...='block-multi-classification', page_number=1, text='产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 医疗保险 官方条款', source_type='DOCUMENT')
+quote = '2026'
+
+    def _span(block: SourceBlock, quote: str) -> Evidence:
+>       start = block.text.index(quote)
+                ^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: substring not found
+
+harness/tests/test_batch_entity_resolution_830_g3.py:282: ValueError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multi_identity_clusters_survive_missing_versions_and_shared_issuer
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multi_identity_clusters_ignore_classification_failure_and_missing_issuer
+2 failed, 48 passed in 19.06s

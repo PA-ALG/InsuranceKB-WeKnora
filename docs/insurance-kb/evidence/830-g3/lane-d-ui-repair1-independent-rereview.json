@@ -1,0 +1,103 @@
+{
+  "contract": "830-g3-d-ui-repair1-independent-rereview.v1",
+  "reviewed_freeze": {
+    "path": "docs/insurance-kb/evidence/830-g3/lane-d-ui-repair1-freeze.json",
+    "sha256": "6cdd98c539f9ef1b985dce16d6937b7c6b52e948bc69873fcd20db0c5e8c944c",
+    "source_sha256": "52ec691d36c0984c60725ff9b8f6ed08de8c5f47817a1ca7f1a4b63075192b05",
+    "test_sha256": "37713e5c6627b87e3123136ddc9ba1944c782282154a47f4d500630d4eee8b67",
+    "all_eight_files_match": true,
+    "unchanged_vue_files": 6,
+    "owner_logs_exact": 11
+  },
+  "verdict": {
+    "spec_compliance": "PASS",
+    "code_quality": "PASS",
+    "closed_blockers": [
+      "UI-B1-STRUCTURED-CONTROL-PRESENCE"
+    ],
+    "blocker_count": 0,
+    "backlog_count": 0,
+    "entry_gate": "OPEN_FOR_NEXT_DEPENDENT_STAGE"
+  },
+  "findings": [],
+  "closure_evidence": [
+    {
+      "area": "structured versus body validation",
+      "evidence": "batchConcept830G3.ts:26-27,162-175,196-205",
+      "result": "structuredText rejects U+0000-U+001F and U+007F; identity and identity arrays use it. bodyText permits only TAB/LF/CR among ASCII controls and remains NFC-strict."
+    },
+    {
+      "area": "canonical keys",
+      "evidence": "batchConcept830G3.ts:213-223",
+      "result": "canonical object keys use structuredText; values retain canonical body bytes, while typed parsing separately constrains every structured field."
+    },
+    {
+      "area": "typed call sites",
+      "evidence": "batchConcept830G3.ts:250-350",
+      "result": "Evidence quote and exact G2 body fields use body validation; parser/source/block identities, concept identifiers, Profile labels and overview fields use identity validation. Field titles remain bound to the validated Profile short title."
+    },
+    {
+      "area": "FreeWiki projection",
+      "evidence": "batchConcept830G3.ts:303-313; Python batch_concept_compile_830_g3.py:1554-1560; Go concept_free_wiki_830_g3.go:3746-3757",
+      "result": "UI content is body plus condition, exception and optional valid-time lines in the same order and exact text as frozen Python/Go."
+    },
+    {
+      "area": "multiline bytes and hashes",
+      "evidence": "batchConcept830G3.spec.ts:146-213",
+      "result": "TAB/LF/CR survive exact typed bodies; LF and CRLF remain byte-distinct and produce different manifest/read hashes."
+    },
+    {
+      "area": "original fully rehashed attack",
+      "evidence": "/private/tmp/g3-d-ui-repair1-independent-probe03-01.log",
+      "result": "positive accepted; parser_identity internal LF rejected after recomputing members_sha256 and read_sha256. Mutated hashes remain 09df983a... and d08ac297... exactly as the original failing probe."
+    }
+  ],
+  "independent_logs": [
+    {
+      "path": "/private/tmp/g3-d-ui-repair1-independent-probe03-01.log",
+      "sha256": "47573b2c3dd538e63b07bf8d74d0b3a1ac90764022ab409bf0c5c10524f0288e",
+      "bytes": 398,
+      "result": "positive ACCEPTED; fully rehashed internal-LF parser_identity REJECTED with BATCH_CONCEPT_830_G3_INVALID"
+    },
+    {
+      "path": "/private/tmp/g3-d-ui-repair1-independent-focused-01.log",
+      "sha256": "1f6c447a67080ee2658adae0c139e39feb98c9e9f840a00ec06da5bd7a35cd48",
+      "bytes": 284,
+      "result": "4 files / 26 tests PASS"
+    },
+    {
+      "path": "/private/tmp/g3-d-ui-repair1-independent-g2-regression-01.log",
+      "sha256": "d3ef9de16277d7d9f5ecc8a2dd2086622698892e36210a9432518a14acb3c896",
+      "bytes": 284,
+      "result": "3 files / 46 tests PASS"
+    }
+  ],
+  "red_evidence": {
+    "repair_red": "docs/insurance-kb/evidence/830-g3/g3-d-ui-repair1-structured-red-20260908-01.log",
+    "sha256": "06dd72f55ad819b37d037a4c262325539e0dd826e464df4f573dc53f74c1c6c2",
+    "classification": "EFFECTIVE_BEHAVIOR_RED: structured-control test resolved instead of rejecting before repair; 1 failed, 9 skipped.",
+    "original_review_red_preserved": {
+      "path": "docs/insurance-kb/evidence/830-g3/d-ui-review1-evidence/g3-d-ui-independent-identity-control-probe-03.log",
+      "sha256": "5ea0fe75d21ff657a18bfcae5fe449c3966635fb5f2b4f955e16d6490967a426"
+    }
+  },
+  "rejected": [
+    {
+      "claim": "structured-green01 or exact-path01 is final proof",
+      "reason": "Freeze correctly records these as intermediate test-construction/list-order attempts; final green02/green03 and exact-path02 are the applicable owner results."
+    },
+    {
+      "claim": "Initial tsx EPERM from the restricted IPC sandbox is product evidence",
+      "reason": "It is an execution-environment limitation; the same frozen probe completed using local IPC permission and produced the recorded raw log."
+    }
+  ],
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0,
+    "repo_files_written_by_reviewer": 0
+  }
+}

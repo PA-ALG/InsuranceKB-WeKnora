@@ -1,0 +1,5 @@
+PASS MATCH-entity_key_sha256 RESOLUTION_REFERENCE_INVALID
+PASS MATCH-version_candidate_key_sha256 RESOLUTION_REFERENCE_INVALID
+PASS profile-display-name-rehashed PROFILE_CONFIRMATION_MISMATCH
+PASS same-source-parser-identity-drift SOURCE_CLOSURE_MISMATCH
+{"baseline_fields": 342, "additional_attacks_rejected": 4, "provider": 0, "database": 0, "build": 0}

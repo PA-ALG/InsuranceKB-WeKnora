@@ -615,15 +615,26 @@ def _foreign_key_shape(
     )
 
 
+def _assert_current_migration_topology(script: ScriptDirectory) -> None:
+    assert script.get_heads() == ["0018"]
+    for revision_id, down_revision in (
+        ("0018", "0017"),
+        ("0017", "0016"),
+        ("0016", "0015"),
+        ("0015", "0006"),
+        ("0006", "0012"),
+    ):
+        revision = script.get_revision(revision_id)
+        assert revision is not None
+        assert revision.down_revision == down_revision
+
+
 def test_l5_schema_0006_revises_actual_0012_and_chain_keeps_single_head() -> None:
     assert MIGRATION_PATH.is_file()
     script = ScriptDirectory.from_config(_cfg("sqlite://"))
 
-    # 0006 之后由 035 的 0015 续接（实际链 0012 → 0006 → 0015）；单 head 不变。
-    assert script.get_heads() == ["0015"]
-    revision = script.get_revision("0006")
-    assert revision is not None
-    assert revision.down_revision == "0012"
+    # 实际链 0012 → 0006 → 0015 → 0016 → 0017 → 0018 只有一个 head。
+    _assert_current_migration_topology(script)
 
 
 def test_l2_orm_declares_durable_lifecycle_roots_and_scope_closure() -> None:
@@ -1200,8 +1211,8 @@ def test_l5_empty_downgrade_removes_0006_objects_and_roll_forward_is_equivalent(
         "lifecycle": _lifecycle_schema_signature(engine),
         "parent_uniques": _parent_unique_signature(engine),
     } == before_schema
-    # 链 head 已由 035 的 0015 续接；本测试固定校验 0006 段的往返等价。
-    assert ScriptDirectory.from_config(_cfg(url)).get_heads() == ["0015"]
+    # 本测试固定校验 0006 段的往返等价，同时核对当前完整迁移链。
+    _assert_current_migration_topology(ScriptDirectory.from_config(_cfg(url)))
     assert _alembic_version(engine) == "0006"
 
 

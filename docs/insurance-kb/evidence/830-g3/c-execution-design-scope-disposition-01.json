@@ -1,0 +1,27 @@
+{
+  "contract": "830-g3-c-execution-design-scope-disposition.v1",
+  "recorded_at": "2026-09-07T14:38:24.941448+00:00",
+  "status": "DESIGN_NOT_FROZEN_REAL_MODEL_EXECUTION_CLOSED",
+  "facts": [
+    "Existing pure C code is independently reviewed and closed.",
+    "The actual guarded call cannot reuse G2 DeepSeek extract identity as classify.",
+    "Canonical admission currently has an MVP-specific signed profile; adding a G3 selector string is insufficient.",
+    "Candidate A needs real G3 meanings for every admission binding and a code-owned durable guarded executor; none is currently authorized to issue admission or call a provider."
+  ],
+  "root_disposition": "Preserve Candidate A as an unapproved design candidate. Do not build a generic model platform, reopen historical027/028, change the weak-model boundary, fill mandatory hashes with placeholders or fabricate Golden/permits. No additional C production write domain is dispatched. Complete the already authorized independent D Go mirror while assessing the actual G3 execution scope. The report is static preparation, not a failed real provider execution or proof that the only route is a new platform.",
+  "required_before_c_dispatch": [
+    "Define exact bounded G3 admission semantics and truthful source/Seed bindings within existing authority.",
+    "Review scope against charter28 section6 before implementing an additional prerequisite.",
+    "Freeze real source acquisition/page map/ExistingSnapshot/Policy/window inputs.",
+    "Prepare exact externally visible request and receive separate current model-call approval."
+  ],
+  "source_approval": "Pending source-only question remains unchanged; no reply received.",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "upload": 0,
+    "container": 0,
+    "product_write": 0
+  }
+}

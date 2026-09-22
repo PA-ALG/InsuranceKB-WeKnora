@@ -1,0 +1,24 @@
+{
+  "contract": "830-g3-d-ui-review1-root-mechanical-validation.v1",
+  "status": "PASS",
+  "scope": "Evidence custody and mechanical status/repair dispatch only; UI implementation remains BLOCKED.",
+  "original_snapshots_checked": 8,
+  "original_owner_logs_checked": 17,
+  "unchanged_frozen_vue_files_checked": 6,
+  "openspec": {
+    "command": "openspec validate 129-830-g3-catalog-batch --strict",
+    "exit_code": 0,
+    "log": "g3-d-ui-review1-root-openspec-01.log",
+    "sha256": "7e4c5408b4957f357454498d9fa5d1cc05251a878db7c30de9ecd027a6f0f9f4",
+    "note": "Post-validation telemetry failure, if present, is not a schema validation failure."
+  },
+  "active_api_and_backend_not_read": true,
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

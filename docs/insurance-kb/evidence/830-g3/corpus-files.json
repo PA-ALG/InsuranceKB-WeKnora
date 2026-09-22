@@ -1,0 +1,145 @@
+{
+  "contract": "830-g3-corpus-files.v1",
+  "status": "RAW_FILE_SET_FROZEN_REVISIONS_AND_SEED_POLICY_PENDING",
+  "entries": [
+    {
+      "inventory_id": "g3-material-01",
+      "path": "dataset/version-materials/esb_zunxiang_596-1_tiaokuan.pdf",
+      "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "size_bytes": 1047811,
+      "pages": 39,
+      "identity_anchor_note": "596-1",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-02",
+      "path": "dataset/version-materials/esb_zunxiang_596-1_shuomingshu.pdf",
+      "file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "size_bytes": 492101,
+      "pages": 27,
+      "identity_anchor_note": "596-1",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-03",
+      "path": "dataset/version-materials/esb_huixiang_594-1_tiaokuan.pdf",
+      "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "size_bytes": 1332078,
+      "pages": 44,
+      "identity_anchor_note": "594-1",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-04",
+      "path": "dataset/version-materials/esb_huixiang_594-1_shuomingshu.pdf",
+      "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "size_bytes": 395696,
+      "pages": 17,
+      "identity_anchor_note": "594-1",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-05",
+      "path": "dataset/version-materials/esb_jiaxiang_595-1_tiaokuan.pdf",
+      "file_sha256": "b72df94a33b2e4a07908f2ffda52bcf1b839b547ef2c5e229313b3fe4551ac64",
+      "size_bytes": 1714836,
+      "pages": 94,
+      "identity_anchor_note": "595-1",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-07",
+      "path": "dataset/version-materials/esb_changqi_1072-1_tiaokuan.pdf",
+      "file_sha256": "53eb3b5b6c2d66c09cea593f9cb40faa596182ad82523e72bd394f49466913cc",
+      "size_bytes": 1229968,
+      "pages": 35,
+      "identity_anchor_note": "1072-1",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-08",
+      "path": "dataset/version-materials/esb_changqi_1072-4_tiaokuan.pdf",
+      "file_sha256": "f043311c2257f6f5e5cd14120c4f418ed9ef2245dda21fc1eb80d75ae21f1079",
+      "size_bytes": 1394564,
+      "pages": 46,
+      "identity_anchor_note": "1072-4",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-09",
+      "path": "dataset/version-materials/esb_2016_tiaokuan.pdf",
+      "file_sha256": "734fe177e498de35ceb551eb02a770bb0de41d0e7bf03b163327e9afdc4118ec",
+      "size_bytes": 529442,
+      "pages": 10,
+      "identity_anchor_note": "insurer-and-version-unresolved",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-10",
+      "path": "dataset/version-materials/esb_2017_tiaokuan.pdf",
+      "file_sha256": "74c8670612f1caacbb8fcb14d3b2bf9b8d35166a6e7680b0767f6fcb9cccea2a",
+      "size_bytes": 821648,
+      "pages": 15,
+      "identity_anchor_note": "Ping-An-Health-2019-002",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-11",
+      "path": "dataset/shouxian_product/平安守护百分百（2026）两全保险/保险条款.pdf",
+      "file_sha256": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+      "size_bytes": 476226,
+      "pages": 9,
+      "identity_anchor_note": "1826",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-12",
+      "path": "dataset/shouxian_product/平安附加（2026）失能收入损失保险/保险条款.pdf",
+      "file_sha256": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+      "size_bytes": 1100736,
+      "pages": 44,
+      "identity_anchor_note": "new-disability",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-13",
+      "path": "dataset/shouxian_product/平安附加（2026）意外伤害保险/保险条款.pdf",
+      "file_sha256": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+      "size_bytes": 578026,
+      "pages": 12,
+      "identity_anchor_note": "new-accident",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-14",
+      "path": "dataset/shouxian_product/平安盛世金越（尊享版26）终身寿险/保险条款.pdf",
+      "file_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+      "size_bytes": 496516,
+      "pages": 9,
+      "identity_anchor_note": "1824",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-15",
+      "path": "dataset/shouxian_product/平安盛世金越（尊享版26）终身寿险（分红型）/保险条款.pdf",
+      "file_sha256": "d4a09a8005d03e7ce2ef122a632fb4fabf8613238e1f7ba6cca7b744a28f321d",
+      "size_bytes": 534475,
+      "pages": 15,
+      "identity_anchor_note": "1837",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-16",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1827-1-critical-illness-terms.pdf",
+      "file_sha256": "49042161ab876fdf4815f8f935ba0d4866f5631b76e6fddf05845c6ceb4306f1",
+      "size_bytes": 1163899,
+      "pages": 43,
+      "identity_anchor_note": "1827-1; 平安人寿〔2025〕疾病保险153号; local PDF page1 verified",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    }
+  ],
+  "selection_reason": "保留2已有实体和说明书、1072跨版本、2016/2017名称及承保人边界、1826多实体歧义、寿险普通/分红相似名、失能/意外及新增1827明确重疾；2609附加尊享同名例保留inventory，未进入冻结15份集",
+  "label_source": "No classifier output or expert Golden; disposition Seed labels/thresholds must freeze before execution",
+  "source_revision_manifest": "NOT_YET_COMPLETE",
+  "file_set_sha256": "d95b6de64a1dab1661077115fce670f97f42f1b3003545055b3175a39c6aa912"
+}

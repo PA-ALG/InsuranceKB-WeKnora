@@ -106,9 +106,7 @@ class _AuthoritySnapshot:
     policy_digest: str
     bound_policy_digest: str
     transport_authority_digest: bytes
-    transport_call: Callable[
-        [ModelIdentity, ModelCallRequest], Awaitable[object]
-    ]
+    transport_call: Callable[[ModelIdentity, ModelCallRequest], Awaitable[object]]
 
 
 _GATEWAY_STATES: WeakKeyDictionary[object, _GatewayState] = WeakKeyDictionary()
@@ -268,9 +266,7 @@ class GuardedModelClient:
             raise ModelGatewayDenied("invalid_transport_identity")
         if facts.content_digest != hashlib.sha256(request.content).hexdigest():
             raise ModelGatewayDenied("call_content_digest_mismatch")
-        if facts.rendered_prompt_digest != hashlib.sha256(
-            request.rendered_prompt
-        ).hexdigest():
+        if facts.rendered_prompt_digest != hashlib.sha256(request.rendered_prompt).hexdigest():
             raise ModelGatewayDenied("rendered_prompt_digest_mismatch")
 
         context = ModelCallContext(
@@ -395,8 +391,7 @@ def _authorized_transport_call(
         or first.transport_identity != expected_identity
         or first.policy_digest != expected_policy_digest
         or first.bound_policy_digest != expected_policy_digest
-        or first.transport_authority_digest
-        != expected_transport_authority_digest
+        or first.transport_authority_digest != expected_transport_authority_digest
         or not _decision_authorizes_call(
             decision,
             verified_admission,
@@ -414,8 +409,7 @@ def _authorized_transport_call(
         or second.transport_identity != first.transport_identity
         or second.policy_digest != first.policy_digest
         or second.bound_policy_digest != first.bound_policy_digest
-        or second.transport_authority_digest
-        != first.transport_authority_digest
+        or second.transport_authority_digest != first.transport_authority_digest
         or not _decision_authorizes_call(
             decision,
             verified_admission,
@@ -434,9 +428,7 @@ def _read_authority_snapshot(
 ) -> _AuthoritySnapshot | None:
     current_state = _get_gateway_state(client)
     composition_state = _get_composition_state(expected_state.composition)
-    transport_snapshot = _bound_transport_snapshot(
-        expected_state.transport_binding
-    )
+    transport_snapshot = _bound_transport_snapshot(expected_state.transport_binding)
     policy_digest = (
         None
         if composition_state is None
@@ -616,8 +608,7 @@ def _resolve_sink(
         or receipt_sink_type is None
         or sink_record_descriptor is None
         or type(receipt_sink) is not receipt_sink_type
-        or getattr_static(receipt_sink_type, "record", None)
-        is not sink_record_descriptor
+        or getattr_static(receipt_sink_type, "record", None) is not sink_record_descriptor
         or sink_record_descriptor.__code__ is not state.sink_record_code
     ):
         return None
@@ -692,13 +683,9 @@ def _validated_executor_identity(
 
 
 _TargetSnapshot = tuple[bytes, int, type[object], FunctionType, CodeType]
-_ExecutionCall = Callable[
-    [ModelIdentity, ModelCallRequest], Awaitable[object]
-]
+_ExecutionCall = Callable[[ModelIdentity, ModelCallRequest], Awaitable[object]]
 _ExecutorSnapshot = tuple[ModelIdentity, str, bytes, _ExecutionCall]
-_ExecutorObservation = tuple[
-    ModelIdentity, ModelCallRequest, AbstractEventLoop, int
-]
+_ExecutorObservation = tuple[ModelIdentity, ModelCallRequest, AbstractEventLoop, int]
 
 
 def _make_stateful_target_authority() -> tuple[
@@ -712,16 +699,14 @@ def _make_stateful_target_authority() -> tuple[
     Callable[[], None],
 ]:
     lock = RLock()
-    registry: WeakKeyDictionary[object, tuple[bytes, int, int]] = (
+    registry: WeakKeyDictionary[object, tuple[bytes, int, int]] = WeakKeyDictionary()
+    observations: WeakKeyDictionary[object, list[tuple[str, str, AbstractEventLoop, int]]] = (
         WeakKeyDictionary()
     )
-    observations: WeakKeyDictionary[
-        object, list[tuple[str, str, AbstractEventLoop, int]]
-    ] = WeakKeyDictionary()
     barriers: WeakKeyDictionary[object, tuple[Event, Event]] = WeakKeyDictionary()
-    precheck_barriers: WeakKeyDictionary[
-        object, tuple[AsyncEvent, AsyncEvent]
-    ] = WeakKeyDictionary()
+    precheck_barriers: WeakKeyDictionary[object, tuple[AsyncEvent, AsyncEvent]] = (
+        WeakKeyDictionary()
+    )
     process_pid = os.getpid()
     process_generation = 1
     next_target_generation = 1
@@ -741,8 +726,7 @@ def _make_stateful_target_authority() -> tuple[
             or os.getpid() != process_pid
             or state[2] != process_generation
             or type(value) is not target_type
-            or getattr_static(target_type, "complete", None)
-            is not complete_descriptor
+            or getattr_static(target_type, "complete", None) is not complete_descriptor
             or complete_descriptor.__code__ is not complete_code
         ):
             return None
@@ -913,9 +897,7 @@ def _make_executor_authority(
 ]:
     lock = RLock()
     registry: WeakKeyDictionary[object, tuple[object, ...]] = WeakKeyDictionary()
-    observations: WeakKeyDictionary[
-        object, list[_ExecutorObservation]
-    ] = WeakKeyDictionary()
+    observations: WeakKeyDictionary[object, list[_ExecutorObservation]] = WeakKeyDictionary()
     deferred_results: WeakKeyDictionary[object, list[object]] = WeakKeyDictionary()
     process_pid = os.getpid()
     process_generation = 1
@@ -927,6 +909,7 @@ def _make_executor_authority(
     sha256_function = hashlib.sha256
     allowed_dispatchers = frozenset(
         {
+            "g3:openai-compatible-v1",
             "test:success",
             "test:failure",
             "test:cancel",
@@ -940,9 +923,7 @@ def _make_executor_authority(
             "test:model-client",
         }
     )
-    if not isinstance(target_snapshot, FunctionType) or not isinstance(
-        target_invoke, FunctionType
-    ):
+    if not isinstance(target_snapshot, FunctionType) or not isinstance(target_invoke, FunctionType):
         raise RuntimeError("invalid package target helpers")
 
     def function_closure_fingerprint(function: FunctionType) -> bytes:
@@ -950,9 +931,9 @@ def _make_executor_authority(
 
         def visit(current: FunctionType, depth: int) -> bytes:
             identity = id(current)
-            code_digest = sha256_function(
-                marshal_function(current.__code__)
-            ).hexdigest().encode("ascii")
+            code_digest = (
+                sha256_function(marshal_function(current.__code__)).hexdigest().encode("ascii")
+            )
             if identity in seen:
                 return b"cycle:" + str(identity).encode("ascii") + b":" + code_digest
             seen.add(identity)
@@ -963,9 +944,7 @@ def _make_executor_authority(
             ]
             closure = current.__closure__
             if closure is None:
-                return b"".join(
-                    len(part).to_bytes(8, "big") + part for part in parts
-                )
+                return b"".join(len(part).to_bytes(8, "big") + part for part in parts)
             for name, cell in zip(
                 current.__code__.co_freevars,
                 closure,
@@ -980,26 +959,19 @@ def _make_executor_authority(
                     if isinstance(value, FunctionType) and depth < 3:
                         value_part = visit(value, depth + 1)
                     elif isinstance(value, CodeType):
-                        value_part = (
-                            b"code:"
-                            + sha256_function(marshal_function(value))
-                            .hexdigest()
-                            .encode("ascii")
-                        )
+                        value_part = b"code:" + sha256_function(
+                            marshal_function(value)
+                        ).hexdigest().encode("ascii")
                     elif isinstance(value, (bytes, str, int, bool, type(None))):
                         value_part = (
-                            f"{value_type.__module__}.{value_type.__qualname__}:"
-                            f"{value!r}"
+                            f"{value_type.__module__}.{value_type.__qualname__}:{value!r}"
                         ).encode()
                     else:
                         value_part = (
-                            f"{value_type.__module__}.{value_type.__qualname__}:"
-                            f"{id(value)}"
+                            f"{value_type.__module__}.{value_type.__qualname__}:{id(value)}"
                         ).encode()
                 parts.extend((name.encode(), value_part))
-            return b"".join(
-                len(part).to_bytes(8, "big") + part for part in parts
-            )
+            return b"".join(len(part).to_bytes(8, "big") + part for part in parts)
 
         return sha256_function(visit(function, 0)).digest()
 
@@ -1099,10 +1071,8 @@ def _make_executor_authority(
             or target_snapshot.__code__ is not snapshot_code
             or target_invoke is not invoke_helper
             or target_invoke.__code__ is not invoke_code
-            or function_closure_fingerprint(target_snapshot)
-            != snapshot_closure_digest
-            or function_closure_fingerprint(target_invoke)
-            != invoke_closure_digest
+            or function_closure_fingerprint(target_snapshot) != snapshot_closure_digest
+            or function_closure_fingerprint(target_invoke) != invoke_closure_digest
         ):
             return None
         target = None if target_ref is None else target_ref()
@@ -1119,10 +1089,10 @@ def _make_executor_authority(
                 or current_target[4] is not code
             ):
                 return None
-        elif any(
-            item is not None
-            for item in (target_ref, target_type_ref, descriptor_ref, code)
-        ) or target_generation != 0:
+        elif (
+            any(item is not None for item in (target_ref, target_type_ref, descriptor_ref, code))
+            or target_generation != 0
+        ):
             return None
         payload = canonical_payload(
             dispatcher_key=dispatcher_key,
@@ -1257,9 +1227,7 @@ def _make_executor_authority(
             if identity.model_dump_json().encode("utf-8") != identity_bytes:
                 return None
             authority_digest = sha256_function(
-                b"insurancekb.transport-authority.v1\0"
-                + stored_mac
-                + route_config
+                b"insurancekb.transport-authority.v1\0" + stored_mac + route_config
             ).digest()
 
         async def execute(
@@ -1281,6 +1249,16 @@ def _make_executor_authority(
                         (identity, request, get_running_loop(), get_ident())
                     )
                 return success_result
+            if dispatcher_key == "g3:openai-compatible-v1":
+                from .g3_bounded_gateway import _fixed_openai_compatible_dispatch
+
+                g3_result = await _fixed_openai_compatible_dispatch(route_config, identity, request)
+                validated_result = await _require_exact_transport_str(g3_result)
+                with lock:
+                    observations.setdefault(value, []).append(
+                        (identity, request, get_running_loop(), get_ident())
+                    )
+                return validated_result
             if dispatcher_key == "test:failure":
                 with lock:
                     observations.setdefault(value, []).append(
@@ -1295,16 +1273,19 @@ def _make_executor_authority(
                 raise CancelledError
             result: object
             if dispatcher_key == "test:nested":
+
                 async def nested_result() -> object:
                     return "nested-result"
 
                 result = nested_result()
             elif dispatcher_key == "test:generator":
+
                 def deferred_generator() -> Iterator[object]:
                     yield "deferred-result"
 
                 result = deferred_generator()
             elif dispatcher_key == "test:async-generator":
+
                 async def deferred_async_generator() -> AsyncIterator[object]:
                     yield "deferred-result"
 
@@ -1314,6 +1295,7 @@ def _make_executor_authority(
             elif dispatcher_key == "test:object":
                 result = object()
             elif dispatcher_key == "test:bare-awaitable":
+
                 class BareLazyProviderAwaitable:
                     __slots__ = ("deferred_calls",)
 
@@ -1328,6 +1310,7 @@ def _make_executor_authority(
 
                 result = BareLazyProviderAwaitable()
             elif dispatcher_key == "test:slow-aclose":
+
                 class SlowAsyncCloseResult:
                     __slots__ = ("cleanup_entered", "cleanup_resume")
 
@@ -1435,9 +1418,7 @@ def _make_bound_transport_authority(
         policy = ProductionModelPolicy(approved_identity_keys)
         if executor_snapshot is None:
             raise ModelGatewayDenied("invalid_gateway")
-        identity, executor_policy_digest, authority_digest, execution_call = (
-            executor_snapshot
-        )
+        identity, executor_policy_digest, authority_digest, execution_call = executor_snapshot
         del execution_call
         try:
             policy.evaluate(identity)
@@ -1450,13 +1431,10 @@ def _make_bound_transport_authority(
             _seal=_CONSTRUCTION_SEAL,
         )
         descriptor = getattr_static(_CanonicalModelTransportAdapter, "call", None)
-        if (
-            not isinstance(descriptor, FunctionType)
-            or not _function_is_isolatable(
-                descriptor,
-                require_coroutine=True,
-                parameter_names=("self", "identity", "request"),
-            )
+        if not isinstance(descriptor, FunctionType) or not _function_is_isolatable(
+            descriptor,
+            require_coroutine=True,
+            parameter_names=("self", "identity", "request"),
         ):
             raise ModelGatewayDenied("invalid_gateway")
         binding = _BoundModelTransport.__new__(
@@ -1502,8 +1480,7 @@ def _make_bound_transport_authority(
             if (
                 type(adapter) is not _CanonicalModelTransportAdapter
                 or not isinstance(descriptor, FunctionType)
-                or getattr_static(_CanonicalModelTransportAdapter, "call", None)
-                is not descriptor
+                or getattr_static(_CanonicalModelTransportAdapter, "call", None) is not descriptor
                 or descriptor.__code__ is not code
                 or not isinstance(expected_authority_digest, bytes)
             ):
@@ -1511,9 +1488,7 @@ def _make_bound_transport_authority(
             executor_snapshot = consume_executor(executor)
             if executor_snapshot is None:
                 return None
-            executor_identity, executor_policy, authority_digest, execution_call = (
-                executor_snapshot
-            )
+            executor_identity, executor_policy, authority_digest, execution_call = executor_snapshot
             try:
                 identity = ModelIdentity.model_validate_json(identity_bytes)
             except Exception:
@@ -1591,6 +1566,47 @@ def _build_stateful_model_client_target_for_test(
     result: str = "stateful-result",
 ) -> object:
     return _build_stateful_target(endpoint, model, credential, result)
+
+
+def _build_g3_guarded_model_client(
+    *,
+    composition: ProductionModelComposition,
+    verified_admission: VerifiedAdmission,
+    transport_identity: ModelIdentity,
+    route_config: object,
+    reservation_capability: object,
+    receipt_sink: object,
+) -> GuardedModelClient:
+    """Closed package seam used only by the G3 factory."""
+
+    from .g3_bounded_gateway import (
+        G3BoundedRouteConfig,
+        G3CallReservationCapability,
+        G3LedgerPolicyReceiptSink,
+        _reservation_snapshot,
+    )
+
+    if (
+        type(route_config) is not G3BoundedRouteConfig
+        or type(reservation_capability) is not G3CallReservationCapability
+        or type(receipt_sink) is not G3LedgerPolicyReceiptSink
+        or _reservation_snapshot(reservation_capability) is None
+    ):
+        raise ModelGatewayDenied("invalid_gateway")
+    identity, policy_digest = _validated_executor_identity(composition, transport_identity)
+    executor = _issue_executor(
+        "g3:openai-compatible-v1",
+        identity,
+        policy_digest,
+        route_config.model_dump_json().encode("utf-8"),
+        None,
+    )
+    del verified_admission
+    return _build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=receipt_sink,
+    )
 
 
 def _issue_stateful_model_client_executor_for_test(

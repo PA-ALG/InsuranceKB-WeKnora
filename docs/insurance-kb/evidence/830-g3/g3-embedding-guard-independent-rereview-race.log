@@ -1,0 +1,3 @@
+outcomes=['created', 'refused']
+ledger_valid=True
+ledger_mode=0o600

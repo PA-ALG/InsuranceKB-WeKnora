@@ -1,0 +1,15 @@
+3cbbf7776f16e216d28902580acf34197b56475a1c29f9654b2bdde5892e2de8  docs/insurance-kb/evidence/830-g3/native-capture-inventory-v2.json
+3260b23abec9740cc7cbed161273922a3c7a63771fe60fc4cbad013f481a9753  docs/insurance-kb/evidence/830-g3/corpus-files-v4.json
+91d7c3c968dee09b95c58a62148d7e7786f39d3109c67a455e447eba512dc6d9  docs/insurance-kb/evidence/830-g3/existing-native-preservation.json
+fb1b7aee0318238295ded41a37dc15562beef82c7be448dd38f0ca8b6fbc4c39  docs/insurance-kb/evidence/830-g3/native-02-supplement-result.json
+541160e034b6bba78895fe52b749997be6bba0540140218f08bd942a8409e1ca  docs/insurance-kb/evidence/830-g3/native-02-supplement-run.log
+8c45741c5976d465a2c1d229046258382bd82fcbd366c82bc677a37417ca6872  docs/insurance-kb/evidence/830-g3/source-runtime-v3-actual-preflight-03.json
+4652d0fca66b430c8928da28272df94c033fdd50f3b9157b96108388430e86d4  docs/insurance-kb/evidence/830-g3/source-runtime-v3-actual-preflight-03.log
+823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4  docs/insurance-kb/evidence/830-g3/source_runtime_provision_v3.py
+a5ebeb07fe01b5e2dfdef9cb2f830eefb4bf9ab66d454de052731f6b7fde9961  docs/insurance-kb/evidence/830-g3/source-runtime-isolation-plan.md
+370037e7c46972d1d1753cf72ad53490fb7ee5e53b0951faead1df4e1944b4ab  docs/insurance-kb/evidence/830-g3/lane-d-dto-dispatch.json
+4f786b649fb20eafd432755446cdaa05204ccbcc616d1c9b3279295a22205719  docs/insurance-kb/evidence/830-g3/lane-d-final-contract-independent-review.json
+native_02_log_cmp_exit=0
+{"status":"ALL_15_CAPTURES_VERIFIED_NOT_SOURCE_REVISIONS","capture_set_sha256":"70a6fe13275f7366c610abbed0d8c44b480197696b1f4a03624457f48d4cf4e5","corpus_file_set_sha256":"0fa401475bf868a5f0f49f406da40214b6e1af7b88cca64e65c2e2b84fc4648f","document_count":15,"provider_calls":0,"knowledge_reparses":0,"scope":"15 actual local native captures; old04 raw first preserved now, old02 standalone capture supplemented now. Existing receipt history untouched. Current G3 service source receipt/readback and C inputs/Seed/Policy freeze still pending."}
+{"contract":"830-g3-source-runtime-provision-preflight.v1","effects":{"builds":0,"database_writes":0,"provider_calls":0,"pulls":0,"runtime_writes":0,"starts":0,"uploads":0},"target_absence":{"containers":true,"database":true,"network":true,"port_18294":true,"volumes":true},"knowledge_ref_count":4,"source_row_count":3,"script_sha256":"823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4","plan_sha256":"a5ebeb07fe01b5e2dfdef9cb2f830eefb4bf9ab66d454de052731f6b7fde9961"}
+{"status":"PASS","design_sha256":"75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d","authorized_stage":"DTO/types/cross-language fixture only; full342 serializer capacity before handler/service/UI","blockers":[],"backlog":[]}

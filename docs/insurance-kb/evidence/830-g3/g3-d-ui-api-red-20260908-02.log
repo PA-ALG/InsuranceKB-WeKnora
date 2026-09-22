@@ -1,0 +1,106 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > parses the exact frozen 354-member/342-field preparation and derives Profile navigation 561ms
+   → BATCH_CONCEPT_830_G3_INVALID
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects omitted, null, extra, non-NFC, duplicate and fully rehashed topology drift 4212ms
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects scope, identity and read-hash drift and maps READY distinctly 652ms
+   → BATCH_CONCEPT_830_G3_INVALID
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > parses exact Active snapshots without casting the G3 overview to G2 656ms
+   → BATCH_CONCEPT_830_G3_INVALID
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > uses preparation scope and immutable GET without current, and permits only the exact historical q-empty read 158ms
+   → expected [Function] to throw error including 'BATCH_CONCEPT_830_G3_ALIGNMENT_INVALID' but got 'BATCH_CONCEPT_830_G3_INVALID'
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > pins Active current then exact search 49ms
+   → BATCH_CONCEPT_830_G3_INVALID
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > selects preparation members locally and reads Active pages through the pinned shared envelope 700ms
+   → BATCH_CONCEPT_830_G3_INVALID
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > parses the exact frozen 354-member/342-field preparation and derives Profile navigation
+Error: BATCH_CONCEPT_830_G3_INVALID
+ ❯ unavailable src/api/schema-wiki/batchConcept830G3.ts:2:9
+      1| function unavailable(): never {
+      2|   throw new Error('BATCH_CONCEPT_830_G3_INVALID')
+       |         ^
+      3| }
+      4|
+ ❯ parseBatchConceptPreparation830G3 src/api/schema-wiki/batchConcept830G3.ts:6:10
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:82:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects scope, identity and read-hash drift and maps READY distinctly
+Error: BATCH_CONCEPT_830_G3_INVALID
+ ❯ unavailable src/api/schema-wiki/batchConcept830G3.ts:2:9
+      1| function unavailable(): never {
+      2|   throw new Error('BATCH_CONCEPT_830_G3_INVALID')
+       |         ^
+      3| }
+      4|
+ ❯ parseBatchConceptPreparation830G3 src/api/schema-wiki/batchConcept830G3.ts:6:10
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:123:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > parses exact Active snapshots without casting the G3 overview to G2
+Error: BATCH_CONCEPT_830_G3_INVALID
+ ❯ unavailable src/api/schema-wiki/batchConcept830G3.ts:2:9
+      1| function unavailable(): never {
+      2|   throw new Error('BATCH_CONCEPT_830_G3_INVALID')
+       |         ^
+      3| }
+      4|
+ ❯ parseBatchConceptActive830G3 src/api/schema-wiki/batchConcept830G3.ts:10:10
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:139:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > uses preparation scope and immutable GET without current, and permits only the exact historical q-empty read
+AssertionError: expected [Function] to throw error including 'BATCH_CONCEPT_830_G3_ALIGNMENT_INVALID' but got 'BATCH_CONCEPT_830_G3_INVALID'
+
+Expected: "BATCH_CONCEPT_830_G3_ALIGNMENT_INVALID"
+Received: "BATCH_CONCEPT_830_G3_INVALID"
+
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:162:95
+    160|       throw new Error(`unexpected ${path}`)
+    161|     })
+    162|     await expect(loadBatchConceptPreparation830G3(scope.wiki_kb_id, 'p…
+       |                                                                                               ^
+    163|       .rejects.toThrow('BATCH_CONCEPT_830_G3_ALIGNMENT_INVALID')
+    164|     const paths = get.mock.calls.map(call => call[0])
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > pins Active current then exact search
+Error: BATCH_CONCEPT_830_G3_INVALID
+ ❯ unavailable src/api/schema-wiki/batchConcept830G3.ts:2:9
+      1| function unavailable(): never {
+      2|   throw new Error('BATCH_CONCEPT_830_G3_INVALID')
+       |         ^
+      3| }
+      4|
+ ❯ loadBatchConceptActive830G3 src/api/schema-wiki/batchConcept830G3.ts:18:10
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:179:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > selects preparation members locally and reads Active pages through the pinned shared envelope
+Error: BATCH_CONCEPT_830_G3_INVALID
+ ❯ unavailable src/api/schema-wiki/batchConcept830G3.ts:2:9
+      1| function unavailable(): never {
+      2|   throw new Error('BATCH_CONCEPT_830_G3_INVALID')
+       |         ^
+      3| }
+      4|
+ ❯ parseBatchConceptPreparation830G3 src/api/schema-wiki/batchConcept830G3.ts:6:10
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:187:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 passed (7)
+   Start at  00:17:35
+   Duration  10.60s (transform 1.36s, setup 0ms, import 2.31s, tests 7.00s, environment 1ms)
+

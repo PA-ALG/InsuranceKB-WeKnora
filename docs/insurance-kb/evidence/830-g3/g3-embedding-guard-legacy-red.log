@@ -1,0 +1,4 @@
+legacy_fake_upstream_attempts=2
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+AssertionError: FAILED: same material must not forward again after first failed attempt

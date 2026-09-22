@@ -1,0 +1,43 @@
+{
+  "contract": "830-g3-source-runtime-seam-audit.v1",
+  "inspector": "g3_corpus_audit with root latest-runtime correction",
+  "scope": "read-only local code and historical receipts",
+  "upload": "POST /api/v1/knowledge-bases/:kb_id/knowledge/file",
+  "upload_effects": [
+    "local PDF/knowledge/parse writes",
+    "embedding provider HTTP even when multimodel/summary/qgen disabled"
+  ],
+  "source_backfill": "POST /api/v1/knowledge/:id/revisions/:attempt/source/backfill",
+  "source_backfill_effects": [
+    "local DB write; provider0"
+  ],
+  "new_sources_pending": 11,
+  "existing_sources_need_reopen": 4,
+  "exact3_not_applicable_to_anyoufu": "rate table lacks exact1828 version anchor; use individually captured sources",
+  "history_guard_scripts": {
+    "upload": "/private/tmp/weknora_g2_execute_b_guarded.py",
+    "embedding": "/private/tmp/weknora_g2_embedding_guard.py",
+    "reuse_limit": "G2 hardcoded identities/one-shot budget; must not execute unchanged or reuse external-call authorization"
+  },
+  "historical_latest_runtime_reference": "docs/insurance-kb/evidence/830-g2/g2-final-runtime-check.json",
+  "historical_latest_app_image": "sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19",
+  "older_source_compatible_image": "sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43",
+  "docreader_image": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+  "isolation": "G3 dedicated local DB/KB/files/queue namespace; do not append to frozenG2 or production",
+  "auth": "human normal login, Admin + KB write for source backfill; API key denied",
+  "reopen": "scoped citation preview -> server opaque_token -> citation-content -> exact PDF byteSHA",
+  "existing_reopen_gap": "596 brochure has source revision but no separate successful citation-content reopen receipt found",
+  "multi_positive": "Material21 whole historical official product list has separate name/code anchors; versions unresolved; actualSourceRevision/classifier still NOT RUN",
+  "flow": "NOT RUN",
+  "provider_calls": 0,
+  "db_writes": 0,
+  "builds": 0,
+  "existing_W1_readback": {
+    "documents": 4,
+    "chunks": 287,
+    "receipt": "existing-chunk-capture.json",
+    "status": "PASS"
+  },
+  "existing_source_custody_reopen": "NOT RUN; current W1 descriptor/chunks do not establish native source custody",
+  "upload_preparation_plan": "offline-embedding-preparation-plan.json"
+}

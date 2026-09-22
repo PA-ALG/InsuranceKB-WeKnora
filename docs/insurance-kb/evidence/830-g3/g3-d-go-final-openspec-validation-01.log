@@ -1,0 +1,75 @@
+Change '129-830-g3-catalog-batch' is valid
+Error while flushing PostHog PostHogFetchNetworkError: Network error while fetching PostHog
+    at retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:627:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/utils/index.mjs:25:25)
+    at async PostHog.fetchWithRetry (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:616:16)
+    at async PostHog._flush (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:588:17) {
+  error: TypeError: fetch failed
+      at node:internal/deps/undici/undici:16416:13
+      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+      at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:622:23)
+      at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/utils/index.mjs:25:25)
+      at async PostHog.fetchWithRetry (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:616:16)
+      at async PostHog._flush (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:588:17) {
+    [cause]: Error: getaddrinfo ENOTFOUND edge.openspec.dev
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:122:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'edge.openspec.dev'
+    }
+  },
+  [cause]: TypeError: fetch failed
+      at node:internal/deps/undici/undici:16416:13
+      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+      at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:622:23)
+      at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/utils/index.mjs:25:25)
+      at async PostHog.fetchWithRetry (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:616:16)
+      at async PostHog._flush (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:588:17) {
+    [cause]: Error: getaddrinfo ENOTFOUND edge.openspec.dev
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:122:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'edge.openspec.dev'
+    }
+  }
+}
+Error while flushing PostHog PostHogFetchNetworkError: Network error while fetching PostHog
+    at retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:627:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/utils/index.mjs:25:25)
+    at async PostHog.fetchWithRetry (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:616:16)
+    at async PostHog._flush (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:588:17) {
+  error: TypeError: fetch failed
+      at node:internal/deps/undici/undici:16416:13
+      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+      at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:622:23)
+      at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/utils/index.mjs:25:25)
+      at async PostHog.fetchWithRetry (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:616:16)
+      at async PostHog._flush (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:588:17) {
+    [cause]: Error: getaddrinfo ENOTFOUND edge.openspec.dev
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:122:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'edge.openspec.dev'
+    }
+  },
+  [cause]: TypeError: fetch failed
+      at node:internal/deps/undici/undici:16416:13
+      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+      at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:622:23)
+      at async retriable (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/utils/index.mjs:25:25)
+      at async PostHog.fetchWithRetry (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:616:16)
+      at async PostHog._flush (file:///Users/houjing/.nvm/versions/node/v24.13.1/lib/node_modules/@fission-ai/openspec/node_modules/@posthog/core/dist/posthog-core-stateless.mjs:588:17) {
+    [cause]: Error: getaddrinfo ENOTFOUND edge.openspec.dev
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:122:26) {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'edge.openspec.dev'
+    }
+  }
+}

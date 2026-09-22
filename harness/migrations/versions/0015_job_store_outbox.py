@@ -33,10 +33,6 @@ down_revision = "0006"
 branch_labels = None
 depends_on = None
 
-# 0006 的 downgrade 会在这些目的地执行（含 base=None）；届时其 preflight
-# 必须在本迁移 DDL 之前先行判定。
-_DESTINATIONS_CROSSING_0006 = {"0001", "0002", "0003", "0004", "0005", "0012"}
-
 _JOB_STATES = (
     "'queued', 'leased', 'running', 'succeeded', "
     "'retry_wait', 'awaiting_human', 'blocked', 'dead_letter'"
@@ -44,6 +40,7 @@ _JOB_STATES = (
 _ERROR_CLASSES = "'retryable', 'non_retryable', 'capacity_blocked', 'human_required'"
 _LIVE_JOB_STATES = "'queued', 'leased', 'running', 'retry_wait', 'awaiting_human'"
 _RELATIVE_DESTINATION = re.compile(r"^-\d+$")
+_PLAN_PREFLIGHT_MARKER = "insurance_harness_downgrade_plan_preflight_complete"
 
 
 def upgrade() -> None:
@@ -138,10 +135,10 @@ def _load_0006_module() -> ModuleType:
     return module
 
 
-def _resolved_destinations() -> tuple[str, ...] | None:
+def _resolved_destinations(source_revision: str = revision) -> tuple[str, ...] | None:
     """把降级目的地解析为具体 revision id；base/未知形式按「越过」处理。
 
-    相对形式（`-N`）沿 down_revision 链自 0015 逐步解析（review M13）；
+    相对形式（`-N`）沿 down_revision 链自命令起点逐步解析（review M13）；
     解析失败时保守返回 None（视为 base，触发 preflight，宁拒绝不半降）。
     """
     destination = context.get_revision_argument()
@@ -155,7 +152,7 @@ def _resolved_destinations() -> tuple[str, ...] | None:
             return None
         if _RELATIVE_DESTINATION.fullmatch(value):
             steps = int(value[1:])
-            current: str | None = revision
+            current: str | None = source_revision
             script = ScriptDirectory.from_config(context.config)
             for _ in range(steps):
                 if current is None:
@@ -175,11 +172,21 @@ def _resolved_destinations() -> tuple[str, ...] | None:
     return tuple(resolved)
 
 
-def _destination_crosses_0006() -> bool:
-    destinations = _resolved_destinations()
+def _planned_downgrade_revisions(source_revision: str) -> set[str]:
+    """返回本次命令实际会执行 downgrade() 的 revision。"""
+    destinations = _resolved_destinations(source_revision)
+    script = ScriptDirectory.from_config(context.config)
     if destinations is None:
-        return True
-    return any(revision_id in _DESTINATIONS_CROSSING_0006 for revision_id in destinations)
+        return {
+            node.revision for node in script.iterate_revisions(source_revision, None)
+        }
+    planned: set[str] = set()
+    for destination in destinations:
+        planned.update(
+            node.revision
+            for node in script.iterate_revisions(source_revision, destination)
+        )
+    return planned
 
 
 def _validate_own_rows_before_ddl() -> None:
@@ -218,38 +225,56 @@ def _validate_own_rows_before_ddl() -> None:
         )
 
 
-def _validate_downgrade_before_ddl() -> None:
-    """在本迁移任何 DDL 之前重放 0006 聚合 preflight（除拓扑自检）。"""
+def _validate_downgrade_plan_before_ddl(source_revision: str) -> None:
+    """在整条降级计划第一条 DDL 前运行其实际跨越领地的只读检查。"""
+    migration_context = context.get_context()
+    if migration_context.opts.get(_PLAN_PREFLIGHT_MARKER):
+        return
+
+    planned = _planned_downgrade_revisions(source_revision)
+    protected = {"0015", "0006", "0012", "0005", "0003"}
+    if protected.isdisjoint(planned):
+        migration_context.opts[_PLAN_PREFLIGHT_MARKER] = True
+        return
+
     if context.is_offline_mode():
         # 本迁移的降级 preflight 需要真实连接读自有数据（I9/D-16）。offline
         # `--sql` 模式无连接可用：把偶然的 fail-closed（原先抛 AttributeError）
         # 变成**声明的** fail-closed，避免生成可执行的 DROP 脚本。
         raise RuntimeError(
-            "0015 downgrade requires an online connection for its pre-DDL data "
+            f"{source_revision} downgrade requires an online connection for its pre-DDL "
+            "data "
             "preflight; offline `--sql` downgrade is not supported"
         )
-    _validate_own_rows_before_ddl()
-    if not _destination_crosses_0006():
+
+    if "0015" in planned:
+        _validate_own_rows_before_ddl()
+
+    lower_preflight_revisions = {"0006", "0012", "0005", "0003"}
+    if lower_preflight_revisions.isdisjoint(planned):
+        migration_context.opts[_PLAN_PREFLIGHT_MARKER] = True
         return
+
     module = _load_0006_module()
     connection = op.get_bind()
-    unsafe_lifecycle = {
-        name: count for name, count in module._lifecycle_state_counts().items() if count
-    }
-    if unsafe_lifecycle:
-        raise RuntimeError(
-            "0015 downgrade refused before DDL: durable source lifecycle data exists "
-            f"{unsafe_lifecycle}"
-        )
-    observed, _tombstones = module._observed_historical_revisions(connection)
-    if observed:
-        raise RuntimeError(
-            "0015 downgrade refused before DDL: source-aware provenance cannot be "
-            f"preserved by 0012 ({len(observed)} scoped source(s))"
-        )
-    if module._destination_crosses(module._PRE_SCOPE_REVISIONS):
+    if "0006" in planned:
+        unsafe_lifecycle = {
+            name: count for name, count in module._lifecycle_state_counts().items() if count
+        }
+        if unsafe_lifecycle:
+            raise RuntimeError(
+                "0015 downgrade refused before DDL: durable source lifecycle data exists "
+                f"{unsafe_lifecycle}"
+            )
+        observed, _tombstones = module._observed_historical_revisions(connection)
+        if observed:
+            raise RuntimeError(
+                "0015 downgrade refused before DDL: source-aware provenance cannot be "
+                f"preserved by 0012 ({len(observed)} scoped source(s))"
+            )
+    if "0003" in planned:
         module._validate_enterprise_scope_downgrade()
-    if module._destination_crosses(module._PRE_RELEASE_REVISIONS):
+    if "0005" in planned:
         unsafe_release = {
             name: count for name, count in module._release_state_counts().items() if count
         }
@@ -257,7 +282,7 @@ def _validate_downgrade_before_ddl() -> None:
             raise RuntimeError(
                 f"0005 downgrade refused: release read-model data exists {unsafe_release}"
             )
-    if module._destination_crosses(module._PRE_FLYWHEEL_REVISIONS):
+    if "0012" in planned:
         unsafe_flywheel = {
             name: count for name, count in module._flywheel_state_counts().items() if count
         }
@@ -265,6 +290,12 @@ def _validate_downgrade_before_ddl() -> None:
             raise RuntimeError(
                 f"0012 downgrade refused: durable flywheel data exists {unsafe_flywheel}"
             )
+    migration_context.opts[_PLAN_PREFLIGHT_MARKER] = True
+
+
+def _validate_downgrade_before_ddl() -> None:
+    """保持 0015 既有入口，委托整条命令的计划级 preflight。"""
+    _validate_downgrade_plan_before_ddl(revision)
 
 
 def downgrade() -> None:

@@ -1,0 +1,18 @@
+{
+  "contract": "batch-c-design2-root-integration-verification.830.g3.v1",
+  "checked_at": "2026-09-07T09:04:16.620158+00:00",
+  "source_sha256": "971a56ab7191b32b56fbf1f9eea99dbc3768270ff1f5891a09207830c030fedc",
+  "test_sha256": "1ae5937ab12091c0be88310b191fb29e4cdedd9e0aad11f098b269d216c8d84e",
+  "command": "PYTHONPATH=harness/src main-existing-venv/python -m pytest -q harness/tests/test_schema_pack_catalog_830_g3.py harness/tests/test_batch_entity_resolution_830_g3.py",
+  "exit_code": 0,
+  "passed": 70,
+  "failed": 0,
+  "skipped": 0,
+  "elapsed_seconds": 27.98,
+  "log": "g3-root-ac-design2-verification-20260907.log",
+  "log_sha256": "2bbe4320b4ee19ec665d5d546490de2cbfa16f25fa98bf2bfc88f88bff14d317",
+  "independent_review": "PENDING",
+  "FLOW": "NOT RUN",
+  "provider_calls": 0,
+  "runtime_mutations": 0
+}

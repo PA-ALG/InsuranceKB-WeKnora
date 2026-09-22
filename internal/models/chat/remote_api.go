@@ -3,7 +3,9 @@ package chat
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -36,6 +38,49 @@ type RemoteAPIChat struct {
 	adapter providerAdapter
 	// thinkingOverride 来自 extra_config.thinking_control，非 nil 时覆盖 adapter.Thinking()。
 	thinkingOverride ThinkingStrategy
+}
+
+type sdkChatDispatchContextKey struct{}
+
+// Observe the SDK's actual HTTP bytes without replacing its provider behavior.
+// Only non-streaming Chat requests explicitly marked below use this journal.
+type sdkChatDispatchHTTPClient struct{ next openai.HTTPDoer }
+
+func (c sdkChatDispatchHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	spec, enabled := req.Context().Value(sdkChatDispatchContextKey{}).(types.ModelDispatchSpec)
+	if !enabled {
+		return c.next.Do(req)
+	}
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read SDK chat request: %w", err)
+	}
+	_ = req.Body.Close()
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	spec.RequestSHA256 = fmt.Sprintf("%x", sha256.Sum256(body))
+	reservation, err := types.ReserveModelDispatch(req.Context(), spec)
+	if err != nil {
+		return nil, fmt.Errorf("%w: reserve SDK chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, err)
+	}
+	if reservation != nil {
+		if err := reservation.MarkDispatching(req.Context()); err != nil {
+			return nil, fmt.Errorf("%w: mark SDK chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, err)
+		}
+	}
+	resp, err := c.next.Do(req)
+	if reservation != nil {
+		result := types.ModelDispatchResult{Outcome: "TRANSPORT_ERROR"}
+		if err == nil && resp != nil {
+			result.Outcome, result.HTTPStatus = "HTTP_RESPONSE", resp.StatusCode
+		}
+		if recordErr := reservation.RecordModelDispatch(req.Context(), result); recordErr != nil {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return nil, fmt.Errorf("%w: record SDK chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, recordErr)
+		}
+	}
+	return resp, err
 }
 
 // NewRemoteAPIChat 创建远程 API 聊天实例
@@ -83,6 +128,7 @@ func NewRemoteAPIChat(chatConfig *ChatConfig) (*RemoteAPIChat, error) {
 		}
 	}
 
+	config.HTTPClient = sdkChatDispatchHTTPClient{next: config.HTTPClient}
 	modelName := chatConfig.ModelName
 	if chatConfig.ExtraConfig != nil {
 		if override := strings.TrimSpace(chatConfig.ExtraConfig["remote_model_name"]); override != "" {
@@ -180,13 +226,20 @@ func (c *RemoteAPIChat) Chat(ctx context.Context, messages []Message, opts *Chat
 
 	req := *(body.(*openai.ChatCompletionRequest))
 	c.logRequest(timeoutCtx, req, false)
-	resp, err := c.client.CreateChatCompletion(timeoutCtx, req)
+	purpose, _ := types.LLMCallMetadataFromContext(timeoutCtx)
+	spec := types.ModelDispatchSpec{
+		Operation: "document_summary", Purpose: purpose, ModelID: c.modelID, ModelName: c.modelName,
+	}
+	dispatchCtx := context.WithValue(timeoutCtx, sdkChatDispatchContextKey{}, spec)
+	resp, err := c.client.CreateChatCompletion(dispatchCtx, req)
 	if err != nil {
-		if isMultimodalNotSupportedError(err) {
+		if !errors.Is(err, types.ErrModelDispatchJournalUnavailable) && isMultimodalNotSupportedError(err) {
 			logger.Warnf(timeoutCtx, "[LLM Request] Model %s does not support multimodal, retrying without images", c.modelName)
 			cleaned := stripImagesFromMessages(messages)
 			req = c.shapedRequest(cleaned, opts, false)
-			resp, err = c.client.CreateChatCompletion(timeoutCtx, req)
+			spec.TransportRetryIndex = 1
+			dispatchCtx = context.WithValue(timeoutCtx, sdkChatDispatchContextKey{}, spec)
+			resp, err = c.client.CreateChatCompletion(dispatchCtx, req)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("create chat completion: %w", err)
@@ -231,7 +284,34 @@ func (c *RemoteAPIChat) chatWithRawHTTP(ctx context.Context, endpoint string, cu
 	logger.Infof(ctx, "[LLM Request] Remote HTTP, endpoint=%s, model=%s",
 		endpoint, c.modelName)
 
+	purpose, _ := types.LLMCallMetadataFromContext(ctx)
+	digest := sha256.Sum256(jsonData)
+	reservation, err := types.ReserveModelDispatch(ctx, types.ModelDispatchSpec{
+		Operation: "document_summary", Purpose: purpose, ModelID: c.modelID,
+		ModelName: c.modelName, RequestSHA256: fmt.Sprintf("%x", digest), TransportRetryIndex: 0,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: reserve chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, err)
+	}
+	if reservation != nil {
+		if err := reservation.MarkDispatching(ctx); err != nil {
+			return nil, fmt.Errorf("%w: mark chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, err)
+		}
+	}
 	resp, err := rawHTTPClient.Do(httpReq)
+	if reservation != nil {
+		result := types.ModelDispatchResult{Outcome: "TRANSPORT_ERROR"}
+		if err == nil && resp != nil {
+			result.Outcome = "HTTP_RESPONSE"
+			result.HTTPStatus = resp.StatusCode
+		}
+		if recordErr := reservation.RecordModelDispatch(ctx, result); recordErr != nil {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return nil, fmt.Errorf("%w: record chat dispatch: %v", types.ErrModelDispatchJournalUnavailable, recordErr)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}

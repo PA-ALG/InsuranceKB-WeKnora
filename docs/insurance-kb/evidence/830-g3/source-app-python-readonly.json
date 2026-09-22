@@ -1,0 +1,18 @@
+{
+  "contract": "830-g3-source-app-python-readonly.v1",
+  "status": "PASS",
+  "source_container": {
+    "image": "sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19",
+    "id": "7f76414e6a1593570b786caf762e6e2cd732cea2dbd0cd1b81e9bd6e4f333ddf",
+    "running": true
+  },
+  "probe": {
+    "python_version": "3.11.2",
+    "stdlib_imports": "PASS",
+    "openssl_version": "OpenSSL 3.0.20 7 Apr 2026",
+    "default_ca_file_exists": true,
+    "provider_calls": 0
+  },
+  "probe_stdout_sha256": "61e47ca85e58b1979a14916d8f57f13283990225cd35312a0b41d9a9b26dc234",
+  "scope": "Existing source app only; target G3 not yet created. No guard start, HTTP/provider, installation, DB, image build/pull."
+}

@@ -1,0 +1,125 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_actual_registered_source_receipt_round_trips_exact_http_shape ______
+
+    def test_actual_registered_source_receipt_round_trips_exact_http_shape() -> None:
+        receipt = json.loads(_ACTUAL_REGISTERED_RECEIPT.read_text(encoding="utf-8"))["source"]
+        parser = hashlib.sha256(b"actual-registered-parser-fixture").hexdigest()
+        block = SourceBlock(
+            tenant_id=7,
+            space_id="space-g3",
+            raw_kb_id="raw-g3",
+            knowledge_id=receipt["knowledge_id"],
+            parse_attempt=receipt["parse_attempt"],
+            revision_id=receipt["revision_source_id"],
+            source_hash=receipt["file_sha256"],
+            parse_hash=receipt["manifest_digest"],
+            parser_identity=parser,
+            block_id="actual-http-shape-block",
+            page_number=1,
+            text="actual HTTP receipt structure fixture",
+            source_type="DOCUMENT",
+        )
+        provenance = _new(
+            g.SourceProvenanceV1,
+            "source-provenance.830.g3.v1",
+            "declaration_sha256",
+            provenance_id="actual-http-shape-provenance",
+            kind="official_public_document",
+            source_uri="urn:fixture:actual-http-receipt-shape",
+            acquisition_receipt_sha256=hashlib.sha256(b"actual-http-capture").hexdigest(),
+            declared_by="existing-g2-evidence-fixture",
+        )
+    
+>       entry = _new(
+            g.CorpusEntryV1,
+            "corpus-entry.830.g3.v1",
+            "entry_sha256",
+            material_id="actual-http-shape",
+            receipt=receipt,
+            native_capture_sha256=hashlib.sha256(b"actual-http-native-fixture").hexdigest(),
+            parser_identity_sha256=parser,
+            blocks=(block,),
+            provenance=provenance,
+        )
+
+harness/tests/test_batch_entity_resolution_830_g3.py:187: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+model = <class 'insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3.CorpusEntryV1'>
+object_type = 'corpus-entry.830.g3.v1', hash_field = 'entry_sha256'
+values = {'material_id': 'actual-http-shape', 'receipt': {'contract': 'knowledge-revision-source.v1', 'knowledge_id': 'f987fc16...a5bb92219fecccb07d', 'parser_identity_sha256': 'a2f801a8ffc34d44d01c0ddad074ccaf7c2899c841505cddae77670a8e658ca7', ...}
+
+    def _new(model: type[Any], object_type: str, hash_field: str, **values: object) -> Any:
+        payload = {key: _jsonable(value) for key, value in values.items()}
+>       return model(**values, **{hash_field: batch_sha256_830_g3(object_type, payload)})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 21 validation errors for CorpusEntryV1
+E       receipt.contract
+E         Input should be 'live-revision-source-receipt.v1' [type=literal_error, input_value='knowledge-revision-source.v1', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+E       receipt.tenant_id
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.space_id
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.raw_kb_id
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.wiki_kb_id
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.evidence_parse_attempt_id
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.weknora_parse_attempt
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.resource_id
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.parsed_document_sha256
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.parse_manifest_sha256
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.weknora_manifest_algorithm
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.weknora_manifest_digest
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.weknora_chunk_count
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.source_receipt_sha256
+E         Field required [type=missing, input_value={'contract': 'knowledge-r...ention_state': 'pinned'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       receipt.parse_attempt
+E         Extra inputs are not permitted [type=extra_forbidden, input_value=2, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       receipt.object_sha256
+E         Extra inputs are not permitted [type=extra_forbidden, input_value='88b784c61f52a2e21a2a12f9...a4453af03a27e8ab1245edc', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       receipt.manifest_algorithm
+E         Extra inputs are not permitted [type=extra_forbidden, input_value='weknora.chunk_manifest.v1', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       receipt.manifest_digest
+E         Extra inputs are not permitted [type=extra_forbidden, input_value='f2190b125469819ea0d97603...9117582b4d581947a0de414', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       receipt.chunk_count
+E         Extra inputs are not permitted [type=extra_forbidden, input_value=162, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       receipt.binding_digest
+E         Extra inputs are not permitted [type=extra_forbidden, input_value='299502a83c9f776c84f097c2...e5ceb722214be275cf418c0', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+E       receipt.retention_state
+E         Extra inputs are not permitted [type=extra_forbidden, input_value='pinned', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/extra_forbidden
+
+harness/tests/test_batch_entity_resolution_830_g3.py:69: ValidationError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_actual_registered_source_receipt_round_trips_exact_http_shape
+1 failed in 1.15s

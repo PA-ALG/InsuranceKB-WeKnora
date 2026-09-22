@@ -1,0 +1,850 @@
+from __future__ import annotations
+
+import json
+import typing
+from collections.abc import Iterator
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+
+from insurance_harness.db.base import Base
+from insurance_harness.jobs import ClaimedJob
+from insurance_harness.jobs.tables import WikiJob
+from insurance_harness.product_ingestion import tables as product_tables  # noqa: F401
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.service_shell.cli import build_api_app
+from insurance_harness.service_shell.config import ShellSettings
+from insurance_harness.service_shell.health import Lifecycle, ReadinessChecker
+
+PATH = "/product-ingestion/v1/spaces/space/runs"
+SCOPE = {
+    "tenant_id": "10003",
+    "space_id": "space",
+    "raw_knowledge_base_id": "raw",
+    "wiki_knowledge_base_id": "wiki",
+}
+RECORDS = {
+    "fixture-platform": {
+        "kind": "service",
+        "service": "product_ingestion",
+        "space_ids": ["space"],
+        "capabilities": ["manage_product_ingestion", "read_product_ingestion"],
+    },
+    "fixture-reader": {
+        "kind": "service",
+        "service": "product_ingestion",
+        "space_ids": ["space"],
+        "capabilities": ["read_product_ingestion"],
+    },
+}
+
+
+@pytest.fixture
+def environment(tmp_path: Path) -> Iterator[tuple[typing.Any, ...]]:
+    engine = create_engine(
+        f"sqlite:///{tmp_path}/api.db", connect_args={"check_same_thread": False}
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    lifecycle = Lifecycle()
+    lifecycle.mark_serving()
+    readiness = ReadinessChecker(
+        lifecycle=lifecycle, probe=lambda: None, timeout_seconds=0.1, freshness_seconds=1
+    )
+    settings = ShellSettings(
+        postgres_dsn=SecretStr("postgresql://fixture@localhost/fixture"),
+        principal_records_json=SecretStr(json.dumps(RECORDS)),
+        principal_space_ids=("space",),
+        product_ingestion_enabled=True,
+        product_ingestion_scopes_json=SecretStr(json.dumps([SCOPE])),
+    )
+    app = build_api_app(
+        settings=settings, lifecycle=lifecycle, readiness=readiness, session_factory=factory
+    )
+    with TestClient(app) as client:
+        yield client, factory, settings, lifecycle, readiness
+    engine.dispose()
+
+
+def auth(token: str = "fixture-platform") -> dict[str, typing.Any]:
+    return {"Authorization": "Bearer " + token}
+
+
+def test_api_distinguishes_recorded_model_reuse_from_new_dispatch(
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    client, *_ = environment
+    monkeypatch.setattr(
+        ProductArtifactStore,
+        "get_stage_call_metrics",
+        lambda *args, **kwargs: SimpleNamespace(
+            model_call_count=0,
+            unsettled_call_count=0,
+            usage={},
+            reused_model_call_count=1,
+            reused_usage={"prompt_tokens": 17},
+        ),
+    )
+    response = client.post(
+        PATH,
+        headers=auth(),
+        json={"idempotency_key": "recorded-reuse", "expected_upload_count": 3},
+    )
+    assert response.status_code == 201
+    run = response.json()["data"]
+    assert run["semantic_model_call_count"] == 0
+    assert run["model_call_count"] == 0
+    assert run["reused_model_call_count"] == 1
+    assert run["reused_usage"] == {"prompt_tokens": 17}
+    assert not run["usage"]
+
+
+def test_status_stage_wall_includes_queue_and_retry_before_last_attempt(
+    environment: typing.Any,
+) -> None:
+    client, factory, *_ = environment
+    run = client.post(
+        PATH,
+        headers=auth(),
+        json={"idempotency_key": "stage-wall", "expected_upload_count": 1},
+    ).json()["data"]
+    with factory() as session, session.begin():
+        stage = session.scalar(select(product_tables.ProductStage))
+        job = session.get(WikiJob, stage.job_id)
+        job.started_at = stage.created_at + timedelta(seconds=30)
+        job.finished_at = stage.created_at + timedelta(seconds=40)
+        job.state = "succeeded"
+    status = client.get(PATH + "/" + run["run_id"], headers=auth()).json()["data"]
+    stage_status = status["stages"][0]
+    assert datetime.fromisoformat(stage_status["started_at"].replace("Z", "+00:00")).replace(
+        tzinfo=None
+    ) == stage.created_at.replace(tzinfo=None)
+    assert datetime.fromisoformat(
+        stage_status["last_attempt_started_at"].replace("Z", "+00:00")
+    ).replace(tzinfo=None) == job.started_at.replace(tzinfo=None)
+    assert stage_status["wall_duration_seconds"] == 40
+    assert stage_status["last_attempt_duration_seconds"] == 10
+
+
+def test_status_keeps_recorded_source_calls_when_sibling_receipt_is_unknown(
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    from tests.product_ingestion.test_processing_receipts import receipt, sealed
+
+    client, *_ = environment
+    run = client.post(
+        PATH,
+        headers=auth(),
+        json={"idempotency_key": "source-partial-accounting", "expected_upload_count": 3},
+    ).json()["data"]
+    records = []
+    for index in range(2):
+        item = receipt()
+        item["knowledge_id"] = f"knowledge-{index}"
+        item["parse_attempt"] = 1
+        item["counts"].update(attempts=1, confirmed=1)
+        item["calls"] = [
+            {
+                "contract": "knowledge-model-dispatch-receipt.830.v1",
+                "dispatch_id": f"call-{index}",
+                "operation": "embedding",
+                "purpose": "document_embedding",
+                "model_id": "embed",
+                "model_name": "qwen",
+                "request_sha256": "b" * 64,
+                "transport_retry_index": 0,
+                "state": "RECORDED",
+                "outcome": "HTTP_RESPONSE",
+                "http_status": 200,
+                "started_at_unix_ms": 1000,
+                "finished_at_unix_ms": 1020,
+                "duration_ms": 20,
+            }
+        ]
+        records.append(SimpleNamespace(payload=json.dumps(sealed(item)).encode()))
+    monkeypatch.setattr(
+        ProductArtifactStore,
+        "list_artifacts",
+        lambda _self, **kwargs: (
+            tuple(records) if kwargs.get("artifact_kind") == "source_processing_attempt" else ()
+        ),
+    )
+    status = client.get(PATH + "/" + run["run_id"], headers=auth()).json()["data"]
+    assert status["recorded_source_model_call_count"] == 2
+    assert status["model_call_count"] == 2
+    assert status["source_model_call_count"] is None
+    assert status["model_call_count_complete"] is False
+
+
+def test_real_api_composition_admits_durable_job_without_inline_processing(
+    environment: typing.Any,
+) -> None:
+    client, factory, *_ = environment
+    payload = {"idempotency_key": "browser-batch", "expected_upload_count": 3}
+    response = client.post(PATH, headers=auth(), json=payload)
+    assert response.status_code == 201, response.text
+    run = response.json()["data"]
+    assert run["state"] == "accepting_uploads"
+    assert run["expected_upload_count"] == 3
+    assert run["model_call_count"] == 0
+    assert run["counts"] == {"success_count": 0, "missing_count": 0, "failure_count": 0}
+    assert run["wiki_knowledge_base_id"] == "wiki"
+    assert run["discovery_summary"]["state"] == "NOT_EXECUTED"
+    assert run["discovery_summary"]["published_confirmed"] is False
+    with factory() as session:
+        jobs = list(session.scalars(select(WikiJob)))
+        assert len(jobs) == 1
+        assert jobs[0].state == "queued"
+        assert jobs[0].job_type == "product_stage_uploads"
+    again = client.post(PATH, headers=auth(), json=payload)
+    assert again.json()["data"]["run_id"] == run["run_id"]
+    assert (
+        client.get(PATH + "/" + run["run_id"], headers=auth()).json()["data"]["run_id"]
+        == run["run_id"]
+    )
+
+
+@pytest.mark.parametrize("source_sealed", [False, True])
+def test_source_audit_snapshots_do_not_double_count_calls(
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch, source_sealed: typing.Any
+) -> None:
+    import copy
+    from types import SimpleNamespace
+
+    from insurance_harness.product_ingestion.processing_receipts import processing_summary
+    from tests.product_ingestion.test_processing_audit_lifecycle import _processing
+    from tests.product_ingestion.test_processing_receipts import sealed
+
+    client, *_ = environment
+    run = client.post(
+        PATH,
+        headers=auth(),
+        json={
+            "idempotency_key": "growing-source-counts",
+            "expected_upload_count": 1,
+        },
+    ).json()["data"]
+    first = _processing(0, True)
+    latest = copy.deepcopy(first)
+    second_call = {**latest["calls"][0], "dispatch_id": "call-second"}
+    latest["calls"].append(second_call)
+    latest["counts"].update(attempts=2, confirmed=2)
+    latest = sealed(latest)
+    records = [
+        SimpleNamespace(payload=json.dumps(item).encode())
+        for item in (
+            _processing(0, False),
+            first,
+            latest,
+        )
+    ]
+    monkeypatch.setattr(
+        ProductArtifactStore,
+        "list_artifacts",
+        lambda _self, **kw: (
+            tuple(records) if kw.get("artifact_kind") == "source_processing_attempt" else ()
+        ),
+    )
+    summary = SimpleNamespace(
+        run_id=run["run_id"],
+        payload=json.dumps(processing_summary([("knowledge-0", latest, False)])).encode(),
+    )
+    monkeypatch.setattr(
+        ProductArtifactStore,
+        "list_effective_artifacts",
+        lambda _self, **kw: (
+            (summary,)
+            if source_sealed and kw.get("artifact_kind") == "source_processing_summary"
+            else ()
+        ),
+    )
+    status = client.get(PATH + "/" + run["run_id"], headers=auth()).json()["data"]
+    assert status["recorded_source_model_call_count"] == 2
+    assert status["model_call_count"] == 2
+    assert status["model_call_count_complete"] is False
+    if not source_sealed:
+        assert status["source_model_call_count"] is None
+
+
+def test_api_authentication_scope_and_read_only_capability(environment: typing.Any) -> None:
+    client, *_ = environment
+    payload = {"idempotency_key": "browser-batch", "expected_upload_count": 3}
+    assert client.post(PATH, json=payload).status_code == 401
+    assert client.post(PATH, headers=auth("fixture-reader"), json=payload).status_code == 403
+    assert client.get(PATH.replace("/space/", "/other/"), headers=auth()).status_code == 403
+    assert client.get(PATH, headers=auth("fixture-reader")).status_code == 200
+
+
+def test_user_cannot_inject_candidate_or_unverified_fields(environment: typing.Any) -> None:
+    client, factory, *_ = environment
+    response = client.post(
+        PATH,
+        headers=auth(),
+        json={
+            "idempotency_key": "bad-batch",
+            "expected_upload_count": 3,
+            "candidate": {"fields": [{"value": "unverified"}]},
+        },
+    )
+    assert response.status_code == 422
+    with factory() as session:
+        assert list(session.scalars(select(WikiJob))) == []
+
+
+def test_run_is_visible_after_api_process_recomposition(environment: typing.Any) -> None:
+    client, factory, settings, lifecycle, readiness = environment
+    first = client.post(
+        PATH,
+        headers=auth(),
+        json={
+            "idempotency_key": "restart-batch",
+            "expected_upload_count": 3,
+        },
+    )
+    assert first.status_code == 201
+    second_app = build_api_app(
+        settings=settings, lifecycle=lifecycle, readiness=readiness, session_factory=factory
+    )
+    with TestClient(second_app) as second_client:
+        listing = second_client.get(PATH, headers=auth()).json()["data"]["runs"]
+    assert listing[0]["run_id"] == first.json()["data"]["run_id"]
+
+
+def test_list_is_a_thin_status_without_replaying_history_audits(
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+
+    client, *_ = environment
+    run = client.post(
+        PATH,
+        headers=auth(),
+        json={"idempotency_key": "thin-list", "expected_upload_count": 3},
+    ).json()["data"]
+
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("list must not load full audit or recovery evidence")
+
+    monkeypatch.setattr(ProductArtifactStore, "get_stage_call_metrics", forbidden)
+    monkeypatch.setattr(ProductArtifactStore, "list_artifacts", forbidden)
+    monkeypatch.setattr(ProductArtifactStore, "list_effective_artifacts", forbidden)
+    monkeypatch.setattr(ProductIngestionStore, "can_retry_processing", forbidden)
+    monkeypatch.setattr(ProductIngestionStore, "_run_snapshot", forbidden)
+    response = client.get(PATH, headers=auth("fixture-reader"))
+    assert response.status_code == 200, response.text
+    summary = response.json()["data"]["runs"][0]
+    assert summary["run_id"] == run["run_id"]
+    assert summary["scope"] == SCOPE
+    assert summary["wiki_knowledge_base_id"] == "wiki"
+    assert summary["state"] == "accepting_uploads"
+    assert summary["counts"] == {
+        "success_count": None,
+        "missing_count": None,
+        "failure_count": None,
+    }
+    assert summary["model_call_count"] is None
+    assert summary["model_call_count_complete"] is False
+    assert summary["stage"] == "uploads"
+    for key in (
+        "fields",
+        "stages",
+        "source_processing",
+        "discovery_summary",
+        "can_retry_processing",
+    ):
+        assert key not in summary
+
+
+def test_failed_field_retry_creates_a_linked_run_and_preserves_original(
+    environment: typing.Any,
+) -> None:
+    import hashlib
+    from types import SimpleNamespace
+
+    from insurance_harness.jobs import ClaimedJob, JobStore
+    from insurance_harness.product_ingestion import models
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+    from tests.product_ingestion.test_store import _task
+
+    client, factory, *_ = environment
+    scope = models.ProductScope.model_validate(SCOPE)
+    jobs = JobStore(
+        factory,
+        ShellSettings(
+            postgres_dsn=SecretStr("postgresql://fixture@localhost/fixture")
+        ).job_runtime_config(),
+    )
+    store = ProductIngestionStore(factory, jobs)
+    run = store.create_run(scope=scope, idempotency_key="failed-field-run")
+    task = _task(SimpleNamespace(**vars(models)), "alpha")
+    window = store.enqueue_window(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="extract",
+        window_key="window",
+        dependency_sha256="9" * 64,
+        tasks=(task,),
+    )
+    claim = jobs.claim(space_ids=("space",), worker_id="fixture-worker")
+    assert isinstance(claim, ClaimedJob)
+    active = jobs.start(
+        space_id="space", job_id=window.job_id, generation=claim.job.lease_generation
+    )
+    request = b'{"fixture":"request"}'
+    request_sha = hashlib.sha256(request).hexdigest()
+    reservation = store.reserve_window(
+        scope=scope,
+        run_id=run.run_id,
+        job_id=active.id,
+        generation=active.lease_generation,
+        attempt=1,
+        call_id="fixture-call",
+        window_key="window",
+        request_sha256=request_sha,
+        tasks=(task,),
+    )
+    assert reservation.call is not None
+    store.begin_call(
+        scope=scope,
+        call_id=reservation.call.call_id,
+        job_id=active.id,
+        generation=active.lease_generation,
+        request_sha256=request_sha,
+        request_bytes=request,
+    )
+    raw = store.record_call_result(
+        scope=scope,
+        call_id=reservation.call.call_id,
+        job_id=active.id,
+        generation=active.lease_generation,
+        request_sha256=request_sha,
+        raw=b"{bad format}",
+        diagnostic=None,
+    )
+    settlement = store.settle_window(
+        scope=scope,
+        run_id=run.run_id,
+        job_id=active.id,
+        generation=active.lease_generation,
+        outcomes=(
+            models.FieldOutcomeWrite(
+                entity_id=task.entity_id,
+                field_key=task.field_key,
+                task_sha256=task.task_sha256,
+                cache_identity=task.cache_identity,
+                outcome=models.FieldOutcomeKind.EXTRACTION_FAILED,
+                reason="INVALID_RESPONSE_ENVELOPE",
+                validated_result=None,
+                raw_ref=raw.raw_ref,
+            ),
+        ),
+    )
+    assert len(store.list_field_attempts(scope=scope, run_id=run.run_id)) == 1, settlement
+    response = client.post(
+        PATH + "/" + run.run_id + "/retry-fields", headers=auth(), json={"field_keys": ["alpha"]}
+    )
+    assert response.status_code == 201, response.text
+    retry = response.json()["data"]
+    assert retry["retry_of_run_id"] == run.run_id
+    assert retry["run_id"] != run.run_id
+    assert store.get_run(scope=scope, run_id=run.run_id).failure_count == 1
+
+
+def test_status_includes_non_field_model_calls_without_exposing_raw_response(
+    environment: typing.Any,
+) -> None:
+    import hashlib
+
+    from insurance_harness.jobs import JobStore
+    from insurance_harness.product_ingestion.models import ProductScope
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+
+    client, factory, settings, *_ = environment
+    scope = ProductScope.model_validate(SCOPE)
+    jobs = JobStore(factory, settings.job_runtime_config())
+    store = ProductIngestionStore(factory, jobs)
+    artifacts = ProductArtifactStore(factory, store)
+    run = store.create_run(scope=scope, idempotency_key="model-count")
+    stage = store.enqueue_stage(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="identity",
+        dependency_sha256="a" * 64,
+        idempotency_key="identity",
+    )
+    claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    assert isinstance(claim, ClaimedJob)
+    job = jobs.start(space_id="space", job_id=stage.job_id, generation=claim.job.lease_generation)
+    artifacts.reserve_stage_call(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="identity",
+        operation_key="identity",
+        dependency_sha256="a" * 64,
+        job_id=job.id,
+        generation=job.lease_generation,
+        attempt=job.attempt,
+        call_id="fixture-identity",
+        input_sha256="b" * 64,
+        model_policy_sha256="c" * 64,
+        prompt_policy_sha256="d" * 64,
+    )
+    request = b"fixture model request"
+    artifacts.begin_stage_call(
+        scope=scope,
+        call_id="fixture-identity",
+        job_id=job.id,
+        generation=job.lease_generation,
+        request_sha256=hashlib.sha256(request).hexdigest(),
+        request_bytes=request,
+    )
+    assert (
+        artifacts.get_stage_call_metrics(scope=scope, run_id=run.run_id).unsettled_call_count == 1
+    )
+    artifacts.record_stage_call_result(
+        scope=scope,
+        call_id="fixture-identity",
+        job_id=job.id,
+        generation=job.lease_generation,
+        request_sha256=hashlib.sha256(request).hexdigest(),
+        raw=b"private model response",
+        diagnostic=None,
+        usage={"input_tokens": 37},
+    )
+    assert (
+        artifacts.get_stage_call_metrics(scope=scope, run_id=run.run_id).unsettled_call_count == 0
+    )
+    result = client.get(PATH + "/" + run.run_id, headers=auth())
+    assert result.status_code == 200
+    assert result.json()["data"]["model_call_count"] == 1
+    assert result.json()["data"]["usage"]["input_tokens"] == 37
+    assert "private model response" not in result.text
+
+
+def test_extraction_status_tracks_windows_before_aggregate_exists(environment: typing.Any) -> None:
+    from types import SimpleNamespace
+
+    from insurance_harness.jobs import JobStore
+    from insurance_harness.product_ingestion import models
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+    from tests.product_ingestion.test_store import _task
+
+    client, factory, settings, *_ = environment
+    scope = models.ProductScope.model_validate(SCOPE)
+    jobs = JobStore(factory, settings.job_runtime_config())
+    store = ProductIngestionStore(factory, jobs)
+    run = store.create_run(scope=scope, idempotency_key="live-extract")
+    task = _task(SimpleNamespace(**vars(models)), "alpha")
+    window = store.enqueue_window(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="extract",
+        window_key="window",
+        dependency_sha256="9" * 64,
+        tasks=(task,),
+    )
+    claim = jobs.claim(space_ids=("space",), worker_id="fixture-worker")
+    assert isinstance(claim, ClaimedJob)
+    active = jobs.start(
+        space_id="space",
+        job_id=window.job_id,
+        generation=claim.job.lease_generation,
+    )
+    result = client.get(PATH + "/" + run.run_id, headers=auth()).json()["data"]
+    assert result["stage"] == "extract"
+    stage = next(row for row in result["stages"] if row["name"] == "extract")
+    assert stage["state"] == "running"
+    assert active.started_at is not None
+    assert stage["last_attempt_started_at"] == active.started_at.isoformat().replace("+00:00", "Z")
+    assert stage["started_at"] <= stage["last_attempt_started_at"]
+    assert stage["finished_at"] is None
+    # Display projection must never create the aggregate job used by progression.
+    assert store.list_stages(scope=scope, run_id=run.run_id) == ()
+
+
+def test_complete_model_count_requires_terminal_run_and_retains_source_totals(
+    environment: typing.Any,
+) -> None:
+    import hashlib
+
+    from insurance_harness.jobs import JobStore
+    from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
+    from insurance_harness.product_ingestion.models import ProductRunState, ProductScope
+    from insurance_harness.product_ingestion.processing_receipts import processing_summary
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+    from tests.product_ingestion.test_processing_receipts import receipt
+
+    client, factory, settings, *_ = environment
+    scope = ProductScope.model_validate(SCOPE)
+    jobs = JobStore(factory, settings.job_runtime_config())
+    store = ProductIngestionStore(factory, jobs)
+    artifacts = ProductArtifactStore(factory, store)
+    run = store.create_run(scope=scope, idempotency_key="accounting-terminal")
+    stage = store.enqueue_stage(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="sources",
+        dependency_sha256="a" * 64,
+        idempotency_key="sources",
+    )
+    claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    assert isinstance(claim, ClaimedJob)
+    job = jobs.start(space_id="space", job_id=stage.job_id, generation=claim.job.lease_generation)
+    payload = json.dumps(processing_summary([("knowledge", receipt(), False)])).encode()
+    writes = artifacts.prepare_artifact_writes(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="sources",
+        job_id=job.id,
+        generation=job.lease_generation,
+        drafts=(
+            ArtifactDraft(
+                artifact_kind="source_processing_summary",
+                artifact_key="sources",
+                contract_name="source-processing-summary",
+                contract_version="v1",
+                dependency_sha256="a" * 64,
+                payload=payload,
+                payload_sha256=hashlib.sha256(payload).hexdigest(),
+                origin=ArtifactOrigin.PLATFORM_SOURCE,
+            ),
+        ),
+    )
+    jobs.report_success(
+        space_id="space", job_id=job.id, generation=job.lease_generation, domain_writes=writes
+    )
+    current = client.get(PATH + "/" + run.run_id, headers=auth()).json()["data"]
+    assert current["source_model_call_count"] == 0
+    assert current["recorded_source_model_call_count"] == 0
+    # No in-flight calls does not mean later stages have made all their calls.
+    assert current["model_call_count_complete"] is False
+    root = store.enqueue_root(scope=scope, run_id=run.run_id, idempotency_key="root")
+    claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    assert isinstance(claim, ClaimedJob)
+    active = jobs.start(space_id="space", job_id=root.job_id, generation=claim.job.lease_generation)
+    store.finalize_run(
+        scope=scope,
+        run_id=run.run_id,
+        job_id=active.id,
+        generation=active.lease_generation,
+        terminal_state=ProductRunState.SUCCEEDED,
+    )
+    final = client.get(PATH + "/" + run.run_id, headers=auth()).json()["data"]
+    assert final["model_call_count_complete"] is True
+    assert final["source_processing"]["materials"][0]["counts"]["attempts"] == 0
+
+
+def _discovery_run(
+    environment: typing.Any, summary: typing.Any, *, verified: typing.Any = False
+) -> typing.Any:
+    import hashlib
+
+    from insurance_harness.jobs import JobStore
+    from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
+    from insurance_harness.product_ingestion.models import ProductRunState, ProductScope
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+
+    _client, factory, settings, *_ = environment
+    scope = ProductScope.model_validate(SCOPE)
+    jobs = JobStore(factory, settings.job_runtime_config())
+    store = ProductIngestionStore(factory, jobs)
+    artifacts = ProductArtifactStore(factory, store)
+    run = store.create_run(scope=scope, idempotency_key="discovery-status")
+    stage = store.enqueue_stage(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="synthesis",
+        dependency_sha256="a" * 64,
+        idempotency_key="synthesis",
+    )
+    claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    assert isinstance(claim, ClaimedJob)
+    job = jobs.start(space_id="space", job_id=stage.job_id, generation=claim.job.lease_generation)
+    payload = json.dumps(summary).encode()
+    writes = artifacts.prepare_artifact_writes(
+        scope=scope,
+        run_id=run.run_id,
+        stage_key="synthesis",
+        job_id=job.id,
+        generation=job.lease_generation,
+        drafts=(
+            ArtifactDraft(
+                artifact_kind="discovery_summary",
+                artifact_key="product",
+                contract_name="discovery-summary",
+                contract_version="v1",
+                dependency_sha256="a" * 64,
+                payload=payload,
+                payload_sha256=hashlib.sha256(payload).hexdigest(),
+                origin=ArtifactOrigin.RULE,
+            ),
+        ),
+    )
+    jobs.report_success(
+        space_id="space", job_id=job.id, generation=job.lease_generation, domain_writes=writes
+    )
+    if verified:
+        verify = store.enqueue_stage(
+            scope=scope,
+            run_id=run.run_id,
+            stage_key="verify",
+            dependency_sha256="b" * 64,
+            idempotency_key="verify",
+        )
+        claim = jobs.claim(space_ids=("space",), worker_id="worker")
+        assert isinstance(claim, ClaimedJob)
+        active = jobs.start(
+            space_id="space", job_id=verify.job_id, generation=claim.job.lease_generation
+        )
+        jobs.report_success(space_id="space", job_id=active.id, generation=active.lease_generation)
+        root = store.enqueue_root(scope=scope, run_id=run.run_id, idempotency_key="root")
+        claim = jobs.claim(space_ids=("space",), worker_id="worker")
+        assert isinstance(claim, ClaimedJob)
+        active = jobs.start(
+            space_id="space", job_id=root.job_id, generation=claim.job.lease_generation
+        )
+        store.finalize_run(
+            scope=scope,
+            run_id=run.run_id,
+            job_id=active.id,
+            generation=active.lease_generation,
+            terminal_state=ProductRunState.PARTIAL_SUCCESS,
+        )
+    return run.run_id
+
+
+def _summary(state: str = "ACCEPTED") -> dict[str, typing.Any]:
+    return {
+        "state": state,
+        "reused": True,
+        "reason_codes": ["DISCOVERY_CHECKED"],
+        "counts": {
+            "proposed_new": 2,
+            "duplicate": 1,
+            "update_proposal": 1,
+            "rejected": 1,
+            "published": 0,
+        },
+        "accepted_member_count": 3,
+        "coverage": {
+            "offered_chars": 200,
+            "omitted_chars": 500,
+            "complete": False,
+            "material_count": 2,
+            "sources": [{"quote": "PRIVATE_OMITTED_TEXT"}],
+        },
+        "raw": "PRIVATE_MODEL_TEXT",
+        "candidates": ["PRIVATE_CANDIDATE"],
+        "call_ids": ["PRIVATE_CALL_ID"],
+    }
+
+
+@pytest.mark.parametrize(
+    "state", ["NOT_EXECUTED", "FAILED", "PENDING", "REJECTED", "EMPTY", "ACCEPTED"]
+)
+def test_discovery_status_preserves_dispositions_without_leaking_content(
+    environment: typing.Any, state: typing.Any
+) -> None:
+    client, *_ = environment
+    run_id = _discovery_run(environment, _summary(state))
+    response = client.get(PATH + "/" + run_id, headers=auth())
+    summary = response.json()["data"]["discovery_summary"]
+    assert summary["state"] == state
+    assert summary["reused"] is True
+    assert summary["counts"]["published"] == 0
+    assert summary["published_confirmed"] is False
+    assert summary["coverage"] == {
+        "offered_chars": 200,
+        "omitted_chars": 500,
+        "complete": False,
+        "material_count": 2,
+    }
+    assert "PRIVATE_" not in response.text
+
+
+def test_discovery_publication_requires_successful_terminal_verification(
+    environment: typing.Any,
+) -> None:
+    client, *_ = environment
+    run_id = _discovery_run(environment, _summary(), verified=True)
+    summary = client.get(PATH + "/" + run_id, headers=auth()).json()["data"]["discovery_summary"]
+    assert summary["published_confirmed"] is True
+    assert summary["counts"]["published"] == 3
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"state": "nonsense"},
+        {"counts": {"published": True}},
+        {"reason_codes": ["PRIVATE raw model response"]},
+    ],
+)
+def test_malformed_discovery_is_failure_not_no_new_knowledge(
+    environment: typing.Any, change: typing.Any
+) -> None:
+    client, *_ = environment
+    run_id = _discovery_run(environment, {**_summary(), **change})
+    response = client.get(PATH + "/" + run_id, headers=auth())
+    summary = response.json()["data"]["discovery_summary"]
+    assert summary["state"] == "FAILED"
+    assert summary["reason_codes"] == ["DISCOVERY_SUMMARY_INVALID"]
+    assert "PRIVATE" not in response.text
+
+
+def test_independent_discovery_summary_keeps_generation_coverage_and_final_decision() -> None:
+    from insurance_harness.product_ingestion.api import combine_discovery_summaries
+
+    generation = {
+        "state": "PENDING",
+        "reused": True,
+        "reason_codes": ["DISCOVERY_GENERATED_PENDING_REVIEW"],
+        "counts": {
+            "proposed_new": 2,
+            "duplicate": 3,
+            "update_proposal": 0,
+            "rejected": 1,
+            "published": 0,
+        },
+        "coverage": {
+            "offered_chars": 100,
+            "omitted_chars": 0,
+            "complete": True,
+            "material_count": 3,
+        },
+    }
+    final = {
+        "state": "ACCEPTED",
+        "reused": False,
+        "reason_codes": ["DISCOVERY_ACCEPTED"],
+        "accepted_member_count": 2,
+        "coverage": None,
+    }
+    raw_result = combine_discovery_summaries(
+        json.dumps(generation).encode(), json.dumps(final).encode()
+    )
+    assert raw_result is not None
+    result = json.loads(raw_result)
+    assert result["state"] == "ACCEPTED"
+    assert result["counts"] == generation["counts"]
+    assert result["coverage"] == generation["coverage"]
+    assert result["accepted_member_count"] == 2
+    generation["state"] = "FAILED"
+    generation["reason_codes"] = ["DISCOVERY_GENERATION_FAILED"]
+    final["state"] = "EMPTY"
+    raw_result = combine_discovery_summaries(
+        json.dumps(generation).encode(), json.dumps(final).encode()
+    )
+    assert raw_result is not None
+    result = json.loads(raw_result)
+    assert result["state"] == "FAILED"
+    assert result["reason_codes"] == ["DISCOVERY_GENERATION_FAILED"]

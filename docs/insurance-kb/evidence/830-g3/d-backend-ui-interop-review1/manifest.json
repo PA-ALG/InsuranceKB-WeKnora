@@ -1,0 +1,99 @@
+{
+  "contract": "830-g3-d-backend-ui-interop-review1.v1",
+  "status": "BLOCKED",
+  "finding": "G3 service read_sha canonical escapes U+2028 while frozen canonical preserves it.",
+  "backend_freeze_sha256": "5ce69ab74960e7467e2e9af3b40bf365d5fde99c27c623dea138ec3e25ed30f3",
+  "ui_source_sha256": "52ec691d36c0984c60725ff9b8f6ed08de8c5f47817a1ca7f1a4b63075192b05",
+  "producer": "Actual G3 Create/Load service over existing test repository/source-verifier doubles, then real Gin JSON renderer; production handler/route not invoked.",
+  "ready_state": "Synthetic Ready row for read-shape coverage; not a real human Review.",
+  "go_producer_exit": 0,
+  "ui_draft_consumer_exit": 1,
+  "ui_ready_consumer": "NOT RUN after first failure",
+  "python_frozen_helper": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+  "go_claimed": "0e933f199d51779bb0cf14fff977f7aaf014cc51282839573dc1d0947103ca33",
+  "u2028_count": 28,
+  "u2029_count": 0,
+  "entries": [
+    {
+      "original": "/private/tmp/g3-d-root-service-json-overlay-01.go",
+      "raw_sha256": "5ebb20d15b4ed3331742a281ee0fa33e4ec224bbe42a0fa3586066332be96bfd",
+      "raw_bytes": 36890,
+      "archive": "g3-d-root-service-json-overlay-01.go.gz",
+      "gzip": true,
+      "archive_sha256": "31d1394680922238f552b0f688e87a2a3cff857860d2b05e61355f5bf4b750ee"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-service-json-overlay-01.json",
+      "raw_sha256": "3738a8ce955183b15b40f3c49d61f0c5862768bc520e8b8654a09cd6cf3f0e74",
+      "raw_bytes": 231,
+      "archive": "g3-d-root-service-json-overlay-01.json",
+      "gzip": false,
+      "archive_sha256": "3738a8ce955183b15b40f3c49d61f0c5862768bc520e8b8654a09cd6cf3f0e74"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-service-json-producer-01.log",
+      "raw_sha256": "ef198230fc0a3d3c40ca804d76c5dce5591d0478611995557439ac29b69a0613",
+      "raw_bytes": 1391,
+      "archive": "g3-d-root-service-json-producer-01.log",
+      "gzip": false,
+      "archive_sha256": "ef198230fc0a3d3c40ca804d76c5dce5591d0478611995557439ac29b69a0613"
+    },
+    {
+      "original": "/private/tmp/g3-d-ui-consume-go-preparation-01.ts",
+      "raw_sha256": "3bdafa2f5deed34109922120a01fcbacab0525b561225bac548f3ed6bc99c06a",
+      "raw_bytes": 2979,
+      "archive": "g3-d-ui-consume-go-preparation-01.ts",
+      "gzip": false,
+      "archive_sha256": "3bdafa2f5deed34109922120a01fcbacab0525b561225bac548f3ed6bc99c06a"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-ui-consume-draft-01.log",
+      "raw_sha256": "8e45d24450e1ba5ac41cd10062358640febd4ea6e87fbe1c5fe0de7fa513c23b",
+      "raw_bytes": 461,
+      "archive": "g3-d-root-ui-consume-draft-01.log",
+      "gzip": false,
+      "archive_sha256": "8e45d24450e1ba5ac41cd10062358640febd4ea6e87fbe1c5fe0de7fa513c23b"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-read-hash-reproduction-01.json",
+      "raw_sha256": "d8e7f4284dda738fbb75eaf0a589a68d491f3c1164c23d744d6b09e17945c970",
+      "raw_bytes": 605,
+      "archive": "g3-d-root-read-hash-reproduction-01.json",
+      "gzip": false,
+      "archive_sha256": "d8e7f4284dda738fbb75eaf0a589a68d491f3c1164c23d744d6b09e17945c970"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-frozen-python-read-hash-01.json",
+      "raw_sha256": "94e09a7af0dc856c3d046b8265a329b98620ba381cb7e1217e8bcfb45dc567f9",
+      "raw_bytes": 348,
+      "archive": "g3-d-root-frozen-python-read-hash-01.json",
+      "gzip": false,
+      "archive_sha256": "94e09a7af0dc856c3d046b8265a329b98620ba381cb7e1217e8bcfb45dc567f9"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-service-json-01/draft.json",
+      "raw_sha256": "563649b5a751bc77e36b0f38f3c7cec2b7626a00b2b530a8809bdaa59f93c429",
+      "raw_bytes": 396360,
+      "archive": "draft.json.gz",
+      "gzip": true,
+      "archive_sha256": "470bbd2c22df0975a0f09210f98f7ed6216c6bba2fbfca45461ac28e0a468a72"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-service-json-01/ready.json",
+      "raw_sha256": "94419dffd7ccfd43ac4520e64d7396abcd91d61fe2f3fd35a7357a992e982a05",
+      "raw_bytes": 396360,
+      "archive": "ready.json.gz",
+      "gzip": true,
+      "archive_sha256": "3bbedc7b562a60ebb16b8b69a1321062bfbfc2412473ad491788af55ee8005dd"
+    }
+  ],
+  "effects": {
+    "live_http": 0,
+    "provider": 0,
+    "database": 0,
+    "browser": 0,
+    "image_build": 0,
+    "deployment": 0,
+    "source_files_modified": 0
+  }
+}

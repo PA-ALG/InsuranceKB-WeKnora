@@ -1,0 +1,23 @@
+{
+  "contract": "source-upload-design-independent-review.830.g3.v1",
+  "reviewer": "g3_seam_audit",
+  "status": "PASS_DESIGN_ONLY",
+  "design_sha256": "9a94c31f7101988e6ec7603de51a0ca518d0315ca99711c445db46608db90399",
+  "blocker_count": 0,
+  "backlog_count": 0,
+  "actual_counts": {
+    "corpus": 15,
+    "new_requests": 11,
+    "inputs": 204
+  },
+  "script_review_requirements": [
+    "pre-POST target and duplicate existence check;409 can mutate created_at",
+    "exact multipart process_config and parser/metadata readback",
+    "APP namespace exact guard; local SDK retry cannot cause duplicate provider attempts",
+    "durable STARTED per mutation, no retry after timeout/unknown, first failure stops remaining",
+    "source seal exact15 mapping, original3 sourceIDs preserved, old02 G3-only backfill",
+    "explicit egress attach/detach and partial process stop inspection; bridge is not endpoint firewall"
+  ],
+  "external_authorization": "NOT YET PROVIDED; ask only after concrete runner is reviewed",
+  "execution": "NOT RUN"
+}

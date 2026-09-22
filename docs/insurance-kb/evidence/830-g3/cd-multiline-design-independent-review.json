@@ -1,0 +1,15 @@
+{
+  "contract": "830-g3-cd-multiline-design-review.v1",
+  "status": "PASS",
+  "reviewer": "g3_seam_audit",
+  "design": "cd-multiline-canonical-amendment-7-v2.md",
+  "design_sha256": "975ae956c2c851b8f8fffffbffd5bbbebb6b4051fa031237db3c0afb224f9380",
+  "blockers": [],
+  "backlog": [],
+  "closed": [
+    "Typed recursive nested structural strings checked before dumping on construction/revalidation; only exact C SourceBlock.text/Evidence.quote body exceptions",
+    "Object type nonempty ASCII control-free in both languages"
+  ],
+  "prior_probe_sha256": "1b86c0f5b6053b8b9990b267d8a6280fc61e20dad7e101ad0e100d320aa0d39d",
+  "authorization": "C/common bounded compatibility slice only; independent review before D continuation"
+}

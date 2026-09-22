@@ -1,0 +1,337 @@
+{
+  "contract": "830-g3-d-go-staged-mechanical-integration-review.v1",
+  "scope": "Git index only plus frozen fixture identities; no Go rerun and no active backend/UI reads",
+  "index_identity": [
+    {
+      "path": "HANDOFF.md",
+      "sha256": "e5c377e78762722b3fe940ba5f179904f80721c41eec2906c7d0195e135a4ae0",
+      "bytes": 28327,
+      "git_blob": "8b2483311a3285fdd9184a5790281f534fa9a918"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-final-openspec-validation-01.log",
+      "sha256": "7e4c5408b4957f357454498d9fa5d1cc05251a878db7c30de9ecd027a6f0f9f4",
+      "bytes": 6479,
+      "git_blob": "a0316d2fb689b3dd4fb0798c2721f09a553f21b4"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-focused-02.log",
+      "sha256": "c796811cc2bec28464d61a4c53a68c6f06df70ad7e07bedc1dc14efe718a1ba5",
+      "bytes": 2892,
+      "git_blob": "3d2fb83a84fb478d2aa30e21caca239e26a57ec5"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-fulltypes-01.log",
+      "sha256": "a3cf77e5a748e71fdb04b79f6359d9a94f8a282e548fe85b1ebdfedcd616977c",
+      "bytes": 55,
+      "git_blob": "ee610ffbfac3d345b5d2dd47ea8b06caa8a5902b"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-gofmt-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-omitted-matrix-01.log",
+      "sha256": "ec8f7f272e6544efadc0495dd0493e2b85df9349d007f79b871a30749fc07fe9",
+      "bytes": 1113,
+      "git_blob": "c936116f9e60d6f7a9b298838824d9b549305970"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-original-probes-01.log",
+      "sha256": "3b03492c2b8f2ff72c697c2ac663c10e38c809c9e5486d8424c5a224e5d6edc2",
+      "bytes": 1242,
+      "git_blob": "5972e9cc0d43d8e079a3318da6352f5a8b4b1806"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-source-diff-01.log",
+      "sha256": "22e02ed12b78d21637921cd1117a9175c955bd6993d1554fa761fbc55f9dd9dc",
+      "bytes": 3069,
+      "git_blob": "ba2bf2be0f08710fa51ea54bf4887c2b1a3de391"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-test-diff-01.log",
+      "sha256": "4625282eb87384e0fe79fd7ca23a35002df91fba2065cc41cf01519d8dfd2731",
+      "bytes": 7118,
+      "git_blob": "8238b5dcfbe5a741b2a0012d9b29090dcdd755aa"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-focused-green-20260908-03.log",
+      "sha256": "8c7c16da7b7542459ddf388f965257ebccdd3accbc25bc335aaff88fc672c11e",
+      "bytes": 55,
+      "git_blob": "02695edf0786e50927507362ef3f7182e462439d"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-fulltypes-green-20260908-04.log",
+      "sha256": "4d2cdd6cb7b550db076b152c3c1aea60c2f1842c4e51fae40d75422cf9d57820",
+      "bytes": 55,
+      "git_blob": "ba1356d7c5468989db9dd349ab0a30788498e91c"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-gofmt-green-20260908-05.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-review-green-20260908-02.log",
+      "sha256": "5146cfdf4dab174ac3d924f73aac449c040b9779b6cdbaeab8b3680683c9a743",
+      "bytes": 55,
+      "git_blob": "239f0a9bf429298ccb409b242402b604fe13b7a8"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-review-red-20260908-01.log",
+      "sha256": "becefed8f92d413cd3ae373ae614db31fd0f1efb6e1b3fa84adc652f400c2eb6",
+      "bytes": 4802,
+      "git_blob": "5a6b62e9a0ba571c1261f98d0d2332aedc5b8f28"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/lane-d-backend-dispatch-1.json",
+      "sha256": "a187545ba45cb29f693767441e5f3cc87328721b650aa975040f0bb3fe94a4b0",
+      "bytes": 2717,
+      "git_blob": "78c6f8dfff19667a0ae376371356c5cd5875c3ca"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/lane-d-go-repair1-freeze.json",
+      "sha256": "ca6f6daff78c94a185455aa5b879887360b4298ff1c67de90565a3ed618b163b",
+      "bytes": 2367,
+      "git_blob": "af7f36d77a9e79ae35b31e7cf31eb9b782bd8f39"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/lane-d-go-repair1-independent-rereview.json",
+      "sha256": "17d1153f4e4de7e79fdf779459853f47efbb878ad104dffceab688852ac921c3",
+      "bytes": 6786,
+      "git_blob": "0766c57abd689bd7049809842dd1cf309cff632e"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/lane-d-go-root-integration-verification.json",
+      "sha256": "ffab7f3ce5be794c3d50de4b038d0d9fd252a25708074c079fff1043309916c6",
+      "bytes": 2712,
+      "git_blob": "9aef9611e8a829d48d9b1fe2d7c9018cd3aff3be"
+    },
+    {
+      "path": "internal/types/concept_free_wiki_830_g3.go",
+      "sha256": "8db0e765b4e24cc6e2f0e825105bc0d93c3934da02de4f4ebc17b07ad3fe3050",
+      "bytes": 160738,
+      "git_blob": "a55a1965dd3601e32979c63786150f3b2a35c9f5"
+    },
+    {
+      "path": "internal/types/concept_free_wiki_830_g3_test.go",
+      "sha256": "72e2c16660821f22988b5ef3f9e23a2750a6f11c78248a350eca85848b8729ec",
+      "bytes": 25205,
+      "git_blob": "1d56be045e68aa5c84a2b0f0bb3b478c508f0a77"
+    },
+    {
+      "path": "openspec/changes/129-830-g3-catalog-batch/tasks.md",
+      "sha256": "30711320c6399f337b7932fbc8fdcb97c72f00fc2fe9437105a032fe3eb72fc7",
+      "bytes": 2056,
+      "git_blob": "f4388bf6db63dce649d6620b58db24b6e2d79a53"
+    },
+    {
+      "path": "openspec/changes/129-830-g3-catalog-batch/validation-report.md",
+      "sha256": "4a10f8e0d7e82046b1875601d35ebf604234b5d592864f78862c53a3643a949a",
+      "bytes": 8023,
+      "git_blob": "f960657a30f06f5f51ac8c08c854c4edb5ce8a28"
+    }
+  ],
+  "fixture_identity": [
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+      "expected_sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+      "match": true,
+      "bytes": 2254415
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+      "expected_sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+      "match": true,
+      "bytes": 2254490
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb",
+      "expected_sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb",
+      "match": true,
+      "bytes": 1623
+    }
+  ],
+  "owner_log_identity": [
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-review-red-20260908-01.log",
+      "sha256": "becefed8f92d413cd3ae373ae614db31fd0f1efb6e1b3fa84adc652f400c2eb6",
+      "expected_sha256": "becefed8f92d413cd3ae373ae614db31fd0f1efb6e1b3fa84adc652f400c2eb6",
+      "match": true,
+      "bytes": 4802,
+      "expected_bytes": 4802,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-review-green-20260908-02.log",
+      "sha256": "5146cfdf4dab174ac3d924f73aac449c040b9779b6cdbaeab8b3680683c9a743",
+      "expected_sha256": "5146cfdf4dab174ac3d924f73aac449c040b9779b6cdbaeab8b3680683c9a743",
+      "match": true,
+      "bytes": 55,
+      "expected_bytes": 55,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-focused-green-20260908-03.log",
+      "sha256": "8c7c16da7b7542459ddf388f965257ebccdd3accbc25bc335aaff88fc672c11e",
+      "expected_sha256": "8c7c16da7b7542459ddf388f965257ebccdd3accbc25bc335aaff88fc672c11e",
+      "match": true,
+      "bytes": 55,
+      "expected_bytes": 55,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-fulltypes-green-20260908-04.log",
+      "sha256": "4d2cdd6cb7b550db076b152c3c1aea60c2f1842c4e51fae40d75422cf9d57820",
+      "expected_sha256": "4d2cdd6cb7b550db076b152c3c1aea60c2f1842c4e51fae40d75422cf9d57820",
+      "match": true,
+      "bytes": 55,
+      "expected_bytes": 55,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-wire-presence-gofmt-green-20260908-05.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "match": true,
+      "bytes": 0,
+      "expected_bytes": 0,
+      "bytes_match": true
+    }
+  ],
+  "independent_log_identity": [
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-focused-02.log",
+      "sha256": "c796811cc2bec28464d61a4c53a68c6f06df70ad7e07bedc1dc14efe718a1ba5",
+      "expected_sha256": "c796811cc2bec28464d61a4c53a68c6f06df70ad7e07bedc1dc14efe718a1ba5",
+      "match": true,
+      "bytes": 2892,
+      "expected_bytes": 2892,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-original-probes-01.log",
+      "sha256": "3b03492c2b8f2ff72c697c2ac663c10e38c809c9e5486d8424c5a224e5d6edc2",
+      "expected_sha256": "3b03492c2b8f2ff72c697c2ac663c10e38c809c9e5486d8424c5a224e5d6edc2",
+      "match": true,
+      "bytes": 1242,
+      "expected_bytes": 1242,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-omitted-matrix-01.log",
+      "sha256": "ec8f7f272e6544efadc0495dd0493e2b85df9349d007f79b871a30749fc07fe9",
+      "expected_sha256": "ec8f7f272e6544efadc0495dd0493e2b85df9349d007f79b871a30749fc07fe9",
+      "match": true,
+      "bytes": 1113,
+      "expected_bytes": 1113,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-fulltypes-01.log",
+      "sha256": "a3cf77e5a748e71fdb04b79f6359d9a94f8a282e548fe85b1ebdfedcd616977c",
+      "expected_sha256": "a3cf77e5a748e71fdb04b79f6359d9a94f8a282e548fe85b1ebdfedcd616977c",
+      "match": true,
+      "bytes": 55,
+      "expected_bytes": 55,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-gofmt-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "match": true,
+      "bytes": 0,
+      "expected_bytes": 0,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-source-diff-01.log",
+      "sha256": "22e02ed12b78d21637921cd1117a9175c955bd6993d1554fa761fbc55f9dd9dc",
+      "expected_sha256": "22e02ed12b78d21637921cd1117a9175c955bd6993d1554fa761fbc55f9dd9dc",
+      "match": true,
+      "bytes": 3069,
+      "expected_bytes": 3069,
+      "bytes_match": true
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-go-repair1-independent-test-diff-01.log",
+      "sha256": "4625282eb87384e0fe79fd7ca23a35002df91fba2065cc41cf01519d8dfd2731",
+      "expected_sha256": "4625282eb87384e0fe79fd7ca23a35002df91fba2065cc41cf01519d8dfd2731",
+      "match": true,
+      "bytes": 7118,
+      "expected_bytes": 7118,
+      "bytes_match": true
+    }
+  ],
+  "dispatch": {
+    "sha256": "a187545ba45cb29f693767441e5f3cc87328721b650aa975040f0bb3fe94a4b0",
+    "exclusive_path_count": 11,
+    "exclusive_paths": [
+      "internal/application/service/concept_free_wiki_830_g3.go",
+      "internal/application/service/concept_free_wiki_830_g2.go",
+      "internal/application/service/concept_source_authority_830_g2.go",
+      "internal/application/service/wiki_release.go",
+      "internal/handler/schema_wiki.go",
+      "internal/router/routes_schema_wiki.go",
+      "internal/application/service/concept_free_wiki_830_g3_test.go",
+      "internal/handler/concept_free_wiki_830_g3_test.go",
+      "internal/router/routes_batch_concept_830_g3_test.go",
+      "internal/application/service/concept_source_authority_830_g2_test.go",
+      "internal/application/service/wiki_release_test.go"
+    ]
+  },
+  "openspec": {
+    "log_sha256": "7e4c5408b4957f357454498d9fa5d1cc05251a878db7c30de9ecd027a6f0f9f4",
+    "bytes": 6479,
+    "validation_line": "Change '129-830-g3-catalog-batch' is valid",
+    "telemetry_after_validation": "PostHog ENOTFOUND only; stored bytes preserved",
+    "exit_code_note": "Exit 0 is the root-run result stated with this frozen log; the log bytes themselves record the valid result line but do not encode a numeric exit field."
+  },
+  "status_diff_sha256": "2e3cc1980b46c6ea17aa3713de215f75178c224659572d6a4254a0b91b1673eb",
+  "checks": {
+    "staged_count_22": true,
+    "no_backend_production_paths": true,
+    "no_ui_paths": true,
+    "index_go_source_exact": true,
+    "index_go_test_exact": true,
+    "index_review_exact": true,
+    "fixtures_unchanged": true,
+    "owner_logs_exact": true,
+    "independent_logs_exact": true,
+    "backend_dispatch_exact": true,
+    "backend_dispatch_11_paths": true,
+    "backend_tasks_ordered": true,
+    "task2_source_before_task3": true,
+    "final_review_gate_preserved": true,
+    "no_real_runtime_authorized": true,
+    "openspec_log_exact": true,
+    "openspec_validation_line_present": true,
+    "openspec_following_error_telemetry_only": true,
+    "cached_diffcheck_excluding_logs_empty": true,
+    "status_records_software_pass_and_incomplete_runtime": true
+  },
+  "verdict": {
+    "status": "PASS",
+    "blocker_count": 0,
+    "backlog_count": 0,
+    "rejected_count": 0,
+    "red_boundary": "Mechanical index/docs/log integration is RED-exempt. It introduces no product behavior; backend/UI implementations retain their own RED/GREEN and independent-review gates."
+  },
+  "effects": {
+    "repo_writes_by_reviewer": 0,
+    "go_tests_rerun": 0,
+    "active_backend_reads": 0,
+    "active_ui_reads": 0,
+    "provider_calls": 0,
+    "http_calls": 0,
+    "db_calls": 0,
+    "builds": 0
+  }
+}

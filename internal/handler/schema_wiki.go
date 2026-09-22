@@ -422,14 +422,15 @@ func decodeSchemaWikiC6DecisionRequest(c *gin.Context) (wikiReleaseActivationReq
 }
 
 type schemaWikiCreateDraftRequest struct {
-	PreparationID              string                                        `json:"preparation_id"`
-	Release                    types.KnowledgeWikiReleaseV1                  `json:"release"`
-	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1    `json:"candidate_evidence_authority"`
-	ReviewBundle               types.SchemaWikiReviewBundleV1                `json:"review_bundle"`
-	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1  `json:"evaluation_bundle"`
-	ReviewSuccessor            types.Schema67GoldenReviewSuccessorMetadataV1 `json:"review_successor"`
-	EntityPageManifest         json.RawMessage                               `json:"entity_page_manifest,omitempty"`
-	ConceptCandidateBundle     json.RawMessage                               `json:"concept_candidate_bundle,omitempty"`
+	PreparationID               string                                        `json:"preparation_id"`
+	Release                     types.KnowledgeWikiReleaseV1                  `json:"release"`
+	CandidateEvidenceAuthority  types.Schema67CandidateEvidenceAuthorityV1    `json:"candidate_evidence_authority"`
+	ReviewBundle                types.SchemaWikiReviewBundleV1                `json:"review_bundle"`
+	EvaluationBundle            types.Schema67GoldenEvaluationReviewBundleV1  `json:"evaluation_bundle"`
+	ReviewSuccessor             types.Schema67GoldenReviewSuccessorMetadataV1 `json:"review_successor"`
+	EntityPageManifest          json.RawMessage                               `json:"entity_page_manifest,omitempty"`
+	ConceptCandidateBundle      json.RawMessage                               `json:"concept_candidate_bundle,omitempty"`
+	BatchConceptCandidateBundle json.RawMessage                               `json:"batch_concept_candidate_bundle,omitempty"`
 }
 
 type schemaWikiReviewDraftRequest struct {
@@ -872,6 +873,21 @@ func (h *SchemaWikiHandler) CreateDraft(c *gin.Context) {
 				request.ConceptCandidateBundle,
 			)
 		}
+	} else if variant == "batch-concept-830-g3" {
+		creator, ok := h.schemaService.(interface {
+			CreateBatchConceptDraft830G3(
+				context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope,
+				string, json.RawMessage,
+			) (*types.WikiReleasePreparation, error)
+		})
+		if !ok {
+			err = service.ErrSchemaWikiPreparationInvalid
+		} else {
+			draft, err = creator.CreateBatchConceptDraft830G3(
+				c.Request.Context(), principal, scope, request.PreparationID,
+				request.BatchConceptCandidateBundle,
+			)
+		}
 	} else {
 		draft, err = h.schemaService.CreateSchemaDraft(
 			c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
@@ -940,6 +956,8 @@ func decodeSchemaWikiCreateDraftRequest(
 		variant = "entity-page-graph-830-g1"
 	case hasExactKeys("preparation_id", "concept_candidate_bundle"):
 		variant = "concept-free-wiki-830-g2"
+	case hasExactKeys("preparation_id", "batch_concept_candidate_bundle"):
+		variant = "batch-concept-830-g3"
 	case hasExactKeys(
 		"preparation_id", "release", "candidate_evidence_authority", "review_bundle",
 		"evaluation_bundle", "review_successor",
@@ -948,13 +966,77 @@ func decodeSchemaWikiCreateDraftRequest(
 	default:
 		return "", service.ErrSchemaWikiPreparationInvalid
 	}
+	if variant == "batch-concept-830-g3" {
+		if _, err := types.CanonicalConceptMemberPayload830G2(fields["preparation_id"]); err != nil {
+			return "", service.ErrSchemaWikiPreparationInvalid
+		}
+	}
 	decoder = json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(destination) != nil || ensureWikiReleaseJSONEOF(decoder) != nil ||
-		strings.TrimSpace(destination.PreparationID) == "" {
+		strings.TrimSpace(destination.PreparationID) == "" ||
+		(variant == "batch-concept-830-g3" &&
+			bytes.Equal(bytes.TrimSpace(destination.BatchConceptCandidateBundle), []byte("null"))) {
 		return "", service.ErrSchemaWikiPreparationInvalid
 	}
 	return variant, nil
+}
+
+// ReadBatchConceptPreparation830G3 returns one immutable Draft or Ready batch
+// preparation after the shared human preparation guards seal both KB scopes.
+func (h *SchemaWikiHandler) ReadBatchConceptPreparation830G3(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	reader, ok := h.schemaService.(interface {
+		LoadBatchConceptPreparation830G3(
+			context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope, string,
+		) (*service.BatchConceptPreparationRead830G3, error)
+	})
+	if !ok {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	response, err := reader.LoadBatchConceptPreparation830G3(
+		c.Request.Context(), principal, scope, c.Param("preparation_id"),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": response})
+}
+
+// PrepareBatchConceptRead830G3 explicitly prepares historical fixed sources.
+func (h *SchemaWikiHandler) PrepareBatchConceptRead830G3(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	preparer, ok := h.schemaService.(interface {
+		PrepareBatchConceptRead830G3(context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope, string) (*service.BatchConceptPreparationRead830G3, error)
+	})
+	if !ok {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	response, err := preparer.PrepareBatchConceptRead830G3(c.Request.Context(), principal, scope, c.Param("preparation_id"))
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": response})
 }
 
 // ReviewDraft passes one closed named-human receipt to the existing concrete

@@ -1,0 +1,41 @@
+.................................F...................................... [ 88%]
+.........                                                                [100%]
+=================================== FAILURES ===================================
+_ test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonical_text _
+
+    def test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonical_text() -> None:
+        with pytest.raises(ValueError):
+            g.LabelProposalV1(taxonomy_label="medical_insurance", confidence=0.95, evidence_ids=("e",))
+        with pytest.raises(ValueError):
+            g.LabelProposalV1(
+                taxonomy_label="medical_insurance",
+                confidence="0.95",
+                evidence_ids=("e",),
+            )
+        with pytest.raises(ValueError):
+            g.TrustRuleV1(
+                rule_id="r",
+                provenance_kinds=("official_public_document",),
+                material_roles=("terms",),
+                purposes=("issuer",),
+                field_keys=(),
+                space_ids=("space-g3",),
+                product_version_anchors=(),
+                validity_mode="identity_only",
+                valid_from=None,
+                valid_through=None,
+                priority=True,
+            )
+        with pytest.raises(ValueError):
+            g.VersionAnchorV1(kind="registration_number", value="e\u0301")
+>       assert g.VersionAnchorV1(kind="registration_number", value="A\nB").value == "A\nB"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for VersionAnchorV1
+E       value
+E         Value error, text must be non-empty canonical NFC [type=value_error, input_value='A\nB', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1750: ValidationError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonical_text
+1 failed, 80 passed in 43.44s

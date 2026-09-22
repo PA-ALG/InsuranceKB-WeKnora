@@ -1,0 +1,10 @@
+material_id=fixture-endowment-1826
+expanded_corpus_entry_valid=true
+expanded_base_compile_request_valid=true
+extra_block_matches_same_registered_source_identity=true
+extra_block_in_selected_material_owner_allowlist=true
+extra_block_in_request_source_keys=true
+extra_block_in_existing_or_resolution_evidence_keys=false
+current_request_closure_source_keys_equal_required=false
+difference=[('124798cf075514fa3fddf16c2044cb88bfdea8fd56dba09b67318e19f6f8be6b', 'block-fixture-endowment-1826-field-only')]
+REPRODUCED: source-layer-valid selected-material field block is rejected by current exact source-key closure

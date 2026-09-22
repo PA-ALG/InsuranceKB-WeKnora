@@ -1,0 +1,4 @@
+Error: BATCH_CONCEPT_830_G3_INVALID
+    at invalid (/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend/src/api/schema-wiki/batchConcept830G3.ts:154:72)
+    at parseBatchConceptPreparation830G3 (/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend/src/api/schema-wiki/batchConcept830G3.ts:463:116)
+    at async main (/private/tmp/g3-d-ui-consume-go-preparation-01.ts:25:18)

@@ -44,6 +44,7 @@ _TRUSTED_PROVIDER_FAMILY_KEYS = frozenset(
         ("bailian", "qwen"),
         ("bailian", "qwen-vl"),
         ("deepseek", "deepseek"),
+        ("g3-user-gateway", "gemini"),
     }
 )
 _DEPLOYMENT_ROOT_GRAMMARS = (
@@ -289,6 +290,18 @@ def _validate_production_identity_declaration(
         "schema67-deepseek-v1",
     ):
         raise ModelPolicyDenied("invalid_identity")
+    if provider == "g3-user-gateway":
+        if (
+            validated.family,
+            deployment,
+            validated.role,
+            validated.policy_version,
+        ) not in {
+            ("gemini", "gemini-3.7-flash-medium", role, "g3-user-gemini-gateway-v1")
+            for role in ("classify", "extract", "verify")
+        }:
+            raise ModelPolicyDenied("invalid_identity")
+        return validated
     tokens = frozenset(filter(None, re.split(r"[^a-z0-9]+", deployment)))
     if deployment in _UNVERSIONED_ALIASES or tokens.intersection(_ROLLING_MARKERS):
         raise ModelPolicyDenied("rolling_identity")

@@ -1,0 +1,150 @@
+{
+  "contract": "830-g3-d-backend-repair1-rereview-custody.v1",
+  "report_sha256": "4b45e09d5de02dadcb16650f8e3c253d799caffe9f5b4f52eb0677c692f4c453",
+  "entries": [
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-handler-focused-green-01.log",
+      "raw_sha256": "af5a5ce9ba82f89dacb956faa23c77c7ce912d9cf3d6f2279ee96de9e7059fea",
+      "raw_bytes": 56,
+      "archive": "g3-d-backend-repair1-independent-handler-focused-green-01.log",
+      "gzip": false,
+      "archive_sha256": "af5a5ce9ba82f89dacb956faa23c77c7ce912d9cf3d6f2279ee96de9e7059fea"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-handler-invalid-utf8-red-01.log",
+      "raw_sha256": "56b484034e49562e6a77d8769e7a7abb97b607415c47edfb4be2820332d791a0",
+      "raw_bytes": 659,
+      "archive": "g3-d-backend-repair1-independent-handler-invalid-utf8-red-01.log",
+      "gzip": false,
+      "archive_sha256": "56b484034e49562e6a77d8769e7a7abb97b607415c47edfb4be2820332d791a0"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-handler-unicode-decode-red-02.log",
+      "raw_sha256": "c16106d8c466328c3a9ba1b3261abf04664224088dfa11dcb0f0ab6eb22ed3f4",
+      "raw_bytes": 2940,
+      "archive": "g3-d-backend-repair1-independent-handler-unicode-decode-red-02.log",
+      "gzip": false,
+      "archive_sha256": "c16106d8c466328c3a9ba1b3261abf04664224088dfa11dcb0f0ab6eb22ed3f4"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-interop-check-01.json",
+      "raw_sha256": "22a5b0ebf7ef5afc43914ca5093515d40662e3fe70c4ffc0eebf9b13b719f3bd",
+      "raw_bytes": 735,
+      "archive": "g3-d-backend-repair1-independent-interop-check-01.json",
+      "gzip": false,
+      "archive_sha256": "22a5b0ebf7ef5afc43914ca5093515d40662e3fe70c4ffc0eebf9b13b719f3bd"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-load-stored-green-01.log",
+      "raw_sha256": "e2ba1ddb402017f1376f20092d9de231ee80246d5e42a93228219bff1d298cbf",
+      "raw_bytes": 68,
+      "archive": "g3-d-backend-repair1-independent-load-stored-green-01.log",
+      "gzip": false,
+      "archive_sha256": "e2ba1ddb402017f1376f20092d9de231ee80246d5e42a93228219bff1d298cbf"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-prepid-matrix-green-01.log",
+      "raw_sha256": "95067524749f391b00191b64e8502218cc680f9874e099cfc0214fc0e5000672",
+      "raw_bytes": 228,
+      "archive": "g3-d-backend-repair1-independent-prepid-matrix-green-01.log",
+      "gzip": false,
+      "archive_sha256": "95067524749f391b00191b64e8502218cc680f9874e099cfc0214fc0e5000672"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-prepid-matrix-green-02.log",
+      "raw_sha256": "874dbca802fba1258b593e391c77cac40c98cde9da62de4cf49cfa006f9b49ff",
+      "raw_bytes": 68,
+      "archive": "g3-d-backend-repair1-independent-prepid-matrix-green-02.log",
+      "gzip": false,
+      "archive_sha256": "874dbca802fba1258b593e391c77cac40c98cde9da62de4cf49cfa006f9b49ff"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-rereview-01.json",
+      "raw_sha256": "4b45e09d5de02dadcb16650f8e3c253d799caffe9f5b4f52eb0677c692f4c453",
+      "raw_bytes": 9388,
+      "archive": "g3-d-backend-repair1-independent-rereview-01.json",
+      "gzip": false,
+      "archive_sha256": "4b45e09d5de02dadcb16650f8e3c253d799caffe9f5b4f52eb0677c692f4c453"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair1-independent-service-focused-green-01.log",
+      "raw_sha256": "71ac5556c122468a150ac4f6fc69a52ddca04b7e4813123a69ea031c64194b7b",
+      "raw_bytes": 69,
+      "archive": "g3-d-backend-repair1-independent-service-focused-green-01.log",
+      "gzip": false,
+      "archive_sha256": "71ac5556c122468a150ac4f6fc69a52ddca04b7e4813123a69ea031c64194b7b"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair2-independent-canonical-guard-green-01.log",
+      "raw_sha256": "5d742d94bcf985178c8215f3bfdd7d5c858e318bf61964ac34eebe6171cb02b7",
+      "raw_bytes": 56,
+      "archive": "g3-d-backend-repair2-independent-canonical-guard-green-01.log",
+      "gzip": false,
+      "archive_sha256": "5d742d94bcf985178c8215f3bfdd7d5c858e318bf61964ac34eebe6171cb02b7"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_repair1_handler_invalid_utf8_overlay.json",
+      "raw_sha256": "6f15be436bced3124c9b6366786264eb020e4863b4895a29adb1b663d92cbe01",
+      "raw_bytes": 247,
+      "archive": "g3_d_backend_repair1_handler_invalid_utf8_overlay.json",
+      "gzip": false,
+      "archive_sha256": "6f15be436bced3124c9b6366786264eb020e4863b4895a29adb1b663d92cbe01"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_repair1_handler_invalid_utf8_probe_test.go",
+      "raw_sha256": "16e87c663857d3bf375aed1129d9d34e1bd1c210d01e1b8ec831bf99050428c3",
+      "raw_bytes": 825,
+      "archive": "g3_d_backend_repair1_handler_invalid_utf8_probe_test.go.gz",
+      "gzip": true,
+      "archive_sha256": "8012e07c0f7bd38e5e1481ff5554c986a1247327bfee48615e78e8775f285665"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_repair1_handler_unicode_decode_overlay.json",
+      "raw_sha256": "54bcd68379d4fc9b6f8b9ade0e7d41cd6d06e1afdefc48fc8e1792504c526c18",
+      "raw_bytes": 251,
+      "archive": "g3_d_backend_repair1_handler_unicode_decode_overlay.json",
+      "gzip": false,
+      "archive_sha256": "54bcd68379d4fc9b6f8b9ade0e7d41cd6d06e1afdefc48fc8e1792504c526c18"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_repair1_handler_unicode_decode_probe_test.go",
+      "raw_sha256": "358467d7dde73b8322e923acdcba0136da0687b3bfffca560261a872a60dbc17",
+      "raw_bytes": 1493,
+      "archive": "g3_d_backend_repair1_handler_unicode_decode_probe_test.go.gz",
+      "gzip": true,
+      "archive_sha256": "14495143cc3bb35280f7c1f696e3629c2fc4575e2d411f917348725b419a2d95"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_repair1_load_stored_overlay.json",
+      "raw_sha256": "814a59288d4bf91ba7e84892d87813f4dc66e96f182b1ec3a9bf0c69bee4fd2b",
+      "raw_bytes": 241,
+      "archive": "g3_d_backend_repair1_load_stored_overlay.json",
+      "gzip": false,
+      "archive_sha256": "814a59288d4bf91ba7e84892d87813f4dc66e96f182b1ec3a9bf0c69bee4fd2b"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_repair1_load_stored_probe_test.go",
+      "raw_sha256": "55486814fcab0843923533030fff3726dfe6b622e60acef7f1aefda264c79b84",
+      "raw_bytes": 1094,
+      "archive": "g3_d_backend_repair1_load_stored_probe_test.go.gz",
+      "gzip": true,
+      "archive_sha256": "1bb7fc01b2bfd878db9601b3da1ba57616e81cf23e7a29624a0e0b06be75c08d"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_repair2_canonical_guard_overlay.json",
+      "raw_sha256": "b6fe2bc117938e246384861b845dc80d70a8f803ddee5dcdc33ba90cdb23544e",
+      "raw_bytes": 237,
+      "archive": "g3_d_backend_repair2_canonical_guard_overlay.json",
+      "gzip": false,
+      "archive_sha256": "b6fe2bc117938e246384861b845dc80d70a8f803ddee5dcdc33ba90cdb23544e"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_repair2_canonical_guard_probe_test.go",
+      "raw_sha256": "bec17c62c3c1f3114420849e455ad345d0930e47901e9682aac3ad307b913a4c",
+      "raw_bytes": 838,
+      "archive": "g3_d_backend_repair2_canonical_guard_probe_test.go.gz",
+      "gzip": true,
+      "archive_sha256": "e284862cb477ca6ef7235040393a8afb658dbf4ce4ee6cdaa96d26ecf01b9415"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+=== RUN   TestIndependentG3RejectsOmittedNestedNullable
+    g3_d_go_independent_review_test.go:63: BLOCKER: omitted nested actor_display_name accepted as explicit null
+--- FAIL: TestIndependentG3RejectsOmittedNestedNullable (1.52s)
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/types	3.278s
+FAIL

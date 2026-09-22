@@ -4,10 +4,17 @@ import (
 	"context"
 	"io"
 	"mime/multipart"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/hibiken/asynq"
 )
+
+// G3BoundReparseRepository is a narrow optional capability of KnowledgeRepository.
+type G3BoundReparseRepository interface {
+	AllocateG3BoundReparse(context.Context, uint64, string, string, string, int, int64, string, time.Time, string, string) (types.G3BoundReparseReceipt, *types.Knowledge, bool, error)
+	AdvanceG3BoundReparse(context.Context, uint64, string, string, int64, string, string, *string) (types.G3BoundReparseReceipt, error)
+}
 
 // KnowledgeService defines the interface for knowledge services.
 type KnowledgeService interface {
@@ -269,6 +276,8 @@ type KnowledgeRepository interface {
 	// FindByMetadataKey finds a knowledge item by a key-value pair in the metadata JSON column.
 	// Used by data source sync to locate existing items by external_id.
 	FindByMetadataKey(ctx context.Context, tenantID uint64, kbID string, key string, value string) (*types.Knowledge, error)
+	// FindFileBySHA256 resolves only a live file in one tenant and RAW KB.
+	FindFileBySHA256(ctx context.Context, tenantID uint64, kbID string, sha256 string) (*types.Knowledge, error)
 	// SearchKnowledgeInScopes searches knowledge items by keyword within the given (tenant_id, kb_id) scopes (own + shared).
 	SearchKnowledgeInScopes(ctx context.Context, scopes []types.KnowledgeSearchScope, keyword string, offset, limit int, fileTypes []string) ([]*types.Knowledge, bool, int64, error)
 	// ListIDsByTagIDs returns all knowledge IDs that have any of the specified tag IDs (OR semantics).

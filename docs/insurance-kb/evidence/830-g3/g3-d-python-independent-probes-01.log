@@ -1,0 +1,6 @@
+PASS baseline actual342 request/candidate
+INVALID_ACCEPTED binding-product-code-not-bound-to-C-anchor
+INVALID_ACCEPTED profile-confirmation-content-not-bound-to-file-sha
+INVALID_ACCEPTED same-source-identity-different-bytes
+PASS nested-extra-key-rejected
+EFFECTS provider=0 model=0 database=0 build=0 repo_write=0

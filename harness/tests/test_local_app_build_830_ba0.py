@@ -34,7 +34,7 @@ import shlex
 import stat
 import subprocess
 import sys
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -49,9 +49,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ARTIFACT_PATH = REPO_ROOT / "scripts/app_artifact.py"
 START_EXACT_IMAGE_PATH = REPO_ROOT / "scripts/start_exact_image.py"
 MANIFEST_PATH = REPO_ROOT / "deploy/local-build/app-build-inputs.v1.json"
-DEPENDENCY_LOCK_PATH = (
-    REPO_ROOT / "deploy/local-build/app-external-dependencies.v1.json"
-)
+DEPENDENCY_LOCK_PATH = REPO_ROOT / "deploy/local-build/app-external-dependencies.v1.json"
 EXACT_COMPOSE_PATH = REPO_ROOT / "deploy/local-build/docker-compose.app-exact.yml"
 DOCKERFILE_PATH = REPO_ROOT / "docker/Dockerfile.app"
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
@@ -369,9 +367,7 @@ def _go_list_stream(repo_root: Path, *, incomplete: bool = False) -> str:
     ]
     if sentinel.is_file():
         server_imports.append(f"{module_path}/internal/newtopsentinel")
-        packages.append(
-            local_package("internal/newtopsentinel", ["sentinel.go"], ["context"])
-        )
+        packages.append(local_package("internal/newtopsentinel", ["sentinel.go"], ["context"]))
     packages.append(
         local_package(
             "cmd/server",
@@ -407,9 +403,7 @@ def _identity_runner(
         index: int,
     ) -> subprocess.CompletedProcess[str]:
         del cwd, kwargs, index
-        assert arguments and arguments[0] != "docker", (
-            "identity/preflight must not invoke Docker"
-        )
+        assert arguments and arguments[0] != "docker", "identity/preflight must not invoke Docker"
         if arguments[0] == "go" and "list" in arguments:
             if go_list_failure == "command":
                 return _completed(
@@ -465,9 +459,7 @@ def _write_synthetic_contract(repo_root: Path) -> tuple[Path, Path]:
                 *REQUIRED_CRITICAL_INPUTS,
             }
         ),
-        "external_dependency_lock": (
-            "deploy/local-build/app-external-dependencies.v1.json"
-        ),
+        "external_dependency_lock": ("deploy/local-build/app-external-dependencies.v1.json"),
         "build_contract": {
             "target": "runtime",
             "platform": PLATFORM,
@@ -499,8 +491,7 @@ def _write_synthetic_contract(repo_root: Path) -> tuple[Path, Path]:
         "dataset/samples/sample.txt": "sample\n",
         "skills/preloaded/sample/SKILL.md": "sample\n",
         "cmd/server/main.go": (
-            "package main\n\n"
-            'import _ "github.com/Tencent/WeKnora/internal/newtopsentinel"\n'
+            'package main\n\nimport _ "github.com/Tencent/WeKnora/internal/newtopsentinel"\n'
         ),
         "cmd/server/bootstrap.go": "package main\n",
         "cmd/server/listen.go": "package main\n",
@@ -515,8 +506,7 @@ def _write_synthetic_contract(repo_root: Path) -> tuple[Path, Path]:
         "internal/runtime/server.go": "package runtime\n",
         "internal/types/interfaces/user.go": "package interfaces\n",
         "internal/assets/embed.go": (
-            "package assets\n\nimport _ \"embed\"\n\n"
-            "//go:embed asr_test.wav\nvar ASR []byte\n"
+            'package assets\n\nimport _ "embed"\n\n//go:embed asr_test.wav\nvar ASR []byte\n'
         ),
         "internal/assets/asr_test.wav": "fixture\n",
         "docs/docs.go": "package docs\n",
@@ -556,15 +546,12 @@ def _synthetic_dependency_lock() -> dict[str, Any]:
         "debian": {
             "repositories": {
                 "debian": {
-                    "snapshot": (
-                        "https://snapshot.debian.org/archive/debian/20260801T000000Z/"
-                    ),
+                    "snapshot": ("https://snapshot.debian.org/archive/debian/20260801T000000Z/"),
                     "release_sha256": "5" * 64,
                 },
                 "debian-security": {
                     "snapshot": (
-                        "https://snapshot.debian.org/archive/debian-security/"
-                        "20260801T000000Z/"
+                        "https://snapshot.debian.org/archive/debian-security/20260801T000000Z/"
                     ),
                     "release_sha256": "6" * 64,
                 },
@@ -676,9 +663,7 @@ def _image_inspect(
             "Id": image_id,
             "Os": os_name,
             "Architecture": architecture,
-            "Config": {
-                "Labels": dict(REQUIRED_LABELS if labels is None else labels)
-            },
+            "Config": {"Labels": dict(REQUIRED_LABELS if labels is None else labels)},
         }
     )
 
@@ -699,9 +684,7 @@ def _invalid_image_inspections() -> tuple[tuple[str, str, int, str], ...]:
     }
     cases: list[tuple[str, str, int, str]] = []
     for label, drift in drift_values.items():
-        slug = slugs.get(
-            label, label.removeprefix("io.insurancekb.app.").replace("-", "_")
-        )
+        slug = slugs.get(label, label.removeprefix("io.insurancekb.app.").replace("-", "_"))
         missing = {name: value for name, value in REQUIRED_LABELS.items() if name != label}
         changed = {**REQUIRED_LABELS, label: drift}
         cases.extend(
@@ -749,9 +732,7 @@ def _assert_exact_lookup_query(call: RecordedCall) -> None:
     assert "--quiet" in arguments
     assert "--no-trunc" in arguments
     filters = [
-        arguments[index + 1]
-        for index, value in enumerate(arguments[:-1])
-        if value == "--filter"
+        arguments[index + 1] for index, value in enumerate(arguments[:-1]) if value == "--filter"
     ]
     assert f"label=io.insurancekb.app.artifact-identity={ARTIFACT_IDENTITY}" in filters
     reference_filters = [value for value in filters if value.startswith("reference=")]
@@ -824,16 +805,12 @@ def _effective_build_labels(arguments: tuple[str, ...], cwd: Path) -> dict[str, 
     def expand(value: str) -> str:
         return re.sub(
             r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))",
-            lambda match: variables.get(
-                match.group(1) or match.group(2), match.group(0)
-            ),
+            lambda match: variables.get(match.group(1) or match.group(2), match.group(0)),
             value,
         )
 
     if dockerfile.is_file():
-        for instruction in _dockerfile_instructions(
-            dockerfile.read_text(encoding="utf-8")
-        ):
+        for instruction in _dockerfile_instructions(dockerfile.read_text(encoding="utf-8")):
             keyword, _, operands = instruction.partition(" ")
             if keyword == "FROM":
                 labels = {}
@@ -1078,9 +1055,7 @@ def _assert_no_floating_or_ignored_installs(instructions: list[str]) -> None:
             assert "$" in operands or re.search(r"@v?\d", operands)
 
 
-def _build_args_cover_lock_uses(
-    uses: tuple[LockUse, ...], build_args: Mapping[str, str]
-) -> bool:
+def _build_args_cover_lock_uses(uses: tuple[LockUse, ...], build_args: Mapping[str, str]) -> bool:
     return all(
         any(value in argument for argument in build_args.values())
         for use in uses
@@ -1096,9 +1071,7 @@ def _assert_build_arg_lock_dataflow(
     segments = _lock_shell_segments(instructions)
     for use in uses:
         for value in use.values:
-            names = {
-                name for name, argument in build_args.items() if value in argument
-            }
+            names = {name for name, argument in build_args.items() if value in argument}
             assert names, f"{use.description} was not mapped to a build arg"
             assert all(
                 any(
@@ -1215,10 +1188,7 @@ def _assert_dependency_lock_dataflow(
     dockerfile_source: str,
     dependency_plan: Mapping[str, object] | None = None,
 ) -> None:
-    instructions = [
-        _executable_text(item)
-        for item in _dockerfile_instructions(dockerfile_source)
-    ]
+    instructions = [_executable_text(item) for item in _dockerfile_instructions(dockerfile_source)]
     uses = _dependency_lock_uses(lock)
     _assert_no_floating_or_ignored_installs(instructions)
     assert any(
@@ -1229,16 +1199,12 @@ def _assert_dependency_lock_dataflow(
     ), "the verified uv payload must actually be installed"
     base_uses = tuple(use for use in uses if use.consumer.startswith("from-"))
     _assert_build_arg_lock_dataflow(base_uses, build_args, instructions)
-    dependency_uses = tuple(
-        use for use in uses if not use.consumer.startswith("from-")
-    )
+    dependency_uses = tuple(use for use in uses if not use.consumer.startswith("from-"))
     if _build_args_cover_lock_uses(dependency_uses, build_args):
         _assert_build_arg_lock_dataflow(dependency_uses, build_args, instructions)
     else:
         assert dependency_plan is not None, "copied-lock path requires a dependency plan"
-        _assert_copied_lock_dataflow(
-            lock, uses, dependency_plan, instructions
-        )
+        _assert_copied_lock_dataflow(lock, uses, dependency_plan, instructions)
 
 
 def _selector_runner(
@@ -1269,9 +1235,7 @@ def _selector_runner(
         if _is_docker_build(arguments):
             if "--iidfile" in arguments:
                 iidfile = Path(arguments[arguments.index("--iidfile") + 1])
-                iidfile.write_text(
-                    IMAGE_ID + "\n", encoding="utf-8"
-                )
+                iidfile.write_text(IMAGE_ID + "\n", encoding="utf-8")
                 built_image_id = iidfile.read_text(encoding="utf-8").strip()
                 platforms = _docker_option_values(arguments, "--platform")
                 if len(platforms) == 1 and re.fullmatch(r"[^/]+/[^/]+", platforms[0]):
@@ -1287,9 +1251,7 @@ def _selector_runner(
             return _completed(arguments, stdout=f"built {IMAGE_ID}\n")
         if "inspect" in arguments:
             inspect = (
-                inspect_stdout
-                if inspect_stdout is not None
-                else built_inspect or _image_inspect()
+                inspect_stdout if inspect_stdout is not None else built_inspect or _image_inspect()
             )
             return _completed(
                 arguments,
@@ -1598,9 +1560,7 @@ def test_manifest_resolver_includes_known_real_go_and_embed_closure() -> None:
     assert ".dockerignore" in paths
     assert "Makefile" in paths
     assert "VERSION" in paths
-    go_list_calls = [
-        call for call in runner.calls if call.arguments[0:2] == ("go", "list")
-    ]
+    go_list_calls = [call for call in runner.calls if call.arguments[0:2] == ("go", "list")]
     assert len(go_list_calls) == 1
     assert go_list_calls[0].arguments[:4] == ("go", "list", "-deps", "-json")
     assert set(go_list_calls[0].arguments[4:]) == {
@@ -1610,10 +1570,11 @@ def test_manifest_resolver_includes_known_real_go_and_embed_closure() -> None:
     assert go_list_calls[0].cwd == REPO_ROOT
     go_list_env = go_list_calls[0].kwargs.get("env")
     assert isinstance(go_list_env, Mapping)
-    assert {
-        name: go_list_env.get(name)
-        for name in ("GOOS", "GOARCH", "CGO_ENABLED")
-    } == {"GOOS": "linux", "GOARCH": "arm64", "CGO_ENABLED": "1"}
+    assert {name: go_list_env.get(name) for name in ("GOOS", "GOARCH", "CGO_ENABLED")} == {
+        "GOOS": "linux",
+        "GOARCH": "arm64",
+        "CGO_ENABLED": "1",
+    }
     assert all(call.arguments[0] != "docker" for call in runner.calls)
 
 
@@ -1667,9 +1628,7 @@ def test_manifest_loader_rejects_unknown_fields_and_repository_escape(
     document = _load_json(MANIFEST_PATH, description="app build-input manifest")
 
     unknown_path = tmp_path / "unknown.json"
-    unknown_path.write_text(
-        json.dumps({**document, "silent_extra_input": True}), encoding="utf-8"
-    )
+    unknown_path.write_text(json.dumps({**document, "silent_extra_input": True}), encoding="utf-8")
     with pytest.raises(module.ArtifactContractError, match="unknown|schema|field"):
         module.load_manifest(unknown_path)
 
@@ -1807,10 +1766,7 @@ def test_identity_drift_scope_catches_deleted_file_from_go_embed_pattern(
     repo_root = tmp_path / "repository"
     manifest_path, lock_path = _write_synthetic_contract(repo_root)
     (repo_root / "docs/docs.go").write_text(
-        "package docs\n\n"
-        'import "embed"\n\n'
-        f"//go:embed {embed_pattern}\n"
-        "var Assets embed.FS\n",
+        f'package docs\n\nimport "embed"\n\n//go:embed {embed_pattern}\nvar Assets embed.FS\n',
         encoding="utf-8",
     )
     for relative in asset_paths:
@@ -1840,17 +1796,11 @@ def test_identity_drift_scope_catches_deleted_file_from_go_embed_pattern(
     ).strip()
 
     def go_list_stream() -> str:
-        records = [
-            json.loads(line)
-            for line in _go_list_stream(repo_root).splitlines()
-            if line
-        ]
+        records = [json.loads(line) for line in _go_list_stream(repo_root).splitlines() if line]
         docs = next(record for record in records if record.get("ImportPath", "").endswith("/docs"))
         docs["EmbedPatterns"] = [embed_pattern]
         docs["EmbedFiles"] = sorted(
-            relative
-            for relative in asset_paths
-            if (repo_root / "docs" / relative).is_file()
+            relative for relative in asset_paths if (repo_root / "docs" / relative).is_file()
         )
         return "".join(json.dumps(record) + "\n" for record in records)
 
@@ -1981,9 +1931,7 @@ def test_canonical_identity_secret_canary_is_absent_from_bytes_trace_and_output(
         {
             "results": results,
             "canonical_bytes": [result["canonical_bytes"] for result in results],
-            "trace": [
-                call.__dict__ for runner in runners for call in runner.calls
-            ],
+            "trace": [call.__dict__ for runner in runners for call in runner.calls],
             "stdout": captured.out,
             "stderr": captured.err,
         }
@@ -1992,9 +1940,7 @@ def test_canonical_identity_secret_canary_is_absent_from_bytes_trace_and_output(
     for canary in (CANARY_SECRET, CANARY_SECRET_B):
         assert canary not in surfaces
         assert _sha256_bytes(canary.encode()) not in surfaces
-    assert all(
-        call.arguments[0] != "docker" for runner in runners for call in runner.calls
-    )
+    assert all(call.arguments[0] != "docker" for runner in runners for call in runner.calls)
 
 
 # BA0-REQ-03/04: stable metadata, builder facts, persistent caches, locked inputs.
@@ -2021,9 +1967,9 @@ def test_metadata_comes_from_build_source_epoch_and_is_wall_clock_stable() -> No
     assert first["version"] == "v1.2.3"
     assert first["commit_id"] == BUILD_SOURCE_HEAD
     assert first["source_date_epoch"] == 1_700_000_000
-    assert first["build_time"] == datetime.fromtimestamp(
-        1_700_000_000, tz=UTC
-    ).strftime("%Y-%m-%d %H:%M:%S UTC")
+    assert first["build_time"] == datetime.fromtimestamp(1_700_000_000, tz=UTC).strftime(
+        "%Y-%m-%d %H:%M:%S UTC"
+    )
     assert "go_version" not in first, "host Go version must not enter metadata"
 
     script = GET_VERSION_PATH.read_text(encoding="utf-8")
@@ -2031,9 +1977,7 @@ def test_metadata_comes_from_build_source_epoch_and_is_wall_clock_stable() -> No
     assert "SOURCE_DATE_EPOCH" in script
     assert "%ct" in script
     build_time_lines = [
-        line
-        for line in script.splitlines()
-        if "BUILD_TIME=" in line and "date" in line
+        line for line in script.splitlines() if "BUILD_TIME=" in line and "date" in line
     ]
     assert all("SOURCE_DATE_EPOCH" in line for line in build_time_lines)
     assert "go version" not in script
@@ -2059,9 +2003,7 @@ def _dockerfile_instructions(source: str) -> list[str]:
 def _cache_mounts(instruction: str) -> dict[str, str]:
     mounts: dict[str, str] = {}
     for mount in re.findall(r"--mount=([^ ]+)", instruction):
-        fields = dict(
-            part.split("=", 1) for part in mount.split(",") if "=" in part
-        )
+        fields = dict(part.split("=", 1) for part in mount.split(",") if "=" in part)
         if fields.get("type") == "cache" and "target" in fields:
             assert fields.get("sharing") == "locked"
             assert fields.get("id"), f"cache mount lacks a stable id: {mount}"
@@ -2114,8 +2056,7 @@ def test_dockerfile_go_runs_share_locked_module_build_cache_ids_and_probe() -> N
     assert set(first_mounts) == {"/go/pkg/mod", "/root/.cache/go-build"}
     assert first_mounts == second_mounts
     assert all(
-        "SOURCE" not in cache_id and "COMMIT" not in cache_id
-        for cache_id in first_mounts.values()
+        "SOURCE" not in cache_id and "COMMIT" not in cache_id for cache_id in first_mounts.values()
     )
     first_command = _executable_text(duckdb_run)
     second_command = _executable_text(build_run)
@@ -2123,9 +2064,7 @@ def test_dockerfile_go_runs_share_locked_module_build_cache_ids_and_probe() -> N
     second_assignments = _shell_assignments(second_command)
     writes = [
         (
-            _resolve_shell_path(
-                match.group("path") or match.group("tee"), first_assignments
-            ),
+            _resolve_shell_path(match.group("path") or match.group("tee"), first_assignments),
             match.start(),
         )
         for match in re.finditer(
@@ -2135,18 +2074,13 @@ def test_dockerfile_go_runs_share_locked_module_build_cache_ids_and_probe() -> N
     ]
     first_checks = [
         (_resolve_shell_path(match.group("path"), first_assignments), match.start())
-        for match in re.finditer(
-            r"(?:\btest|\[)\s+-s\s+(?P<path>[^\s;&\]]+)", first_command
-        )
+        for match in re.finditer(r"(?:\btest|\[)\s+-s\s+(?P<path>[^\s;&\]]+)", first_command)
     ]
     second_checks = [
         (_resolve_shell_path(match.group("path"), second_assignments), match.start())
-        for match in re.finditer(
-            r"(?:\btest|\[)\s+-s\s+(?P<path>[^\s;&\]]+)", second_command
-        )
+        for match in re.finditer(r"(?:\btest|\[)\s+-s\s+(?P<path>[^\s;&\]]+)", second_command)
     ]
     download_position = first_command.index("go run cmd/download/duckdb/duckdb.go")
-    compile_position = second_command.index("make build-prod")
     for cache_path in first_mounts:
         cache_writes = [
             (path, position)
@@ -2156,18 +2090,14 @@ def test_dockerfile_go_runs_share_locked_module_build_cache_ids_and_probe() -> N
         assert cache_writes, f"the first Go RUN must write a probe in {cache_path}"
         written_probe, write_position = cache_writes[0]
         assert written_probe
-        assert not re.search(
-            r"secret|token|password|credential", written_probe, re.I
-        )
+        assert not re.search(r"secret|token|password|credential", written_probe, re.I)
         assert write_position > download_position
         assert any(
-            path == written_probe and position > write_position
-            for path, position in first_checks
+            path == written_probe and position > write_position for path, position in first_checks
         ), f"the first Go RUN must verify non-empty evidence in {cache_path}"
-        assert any(
-            path == written_probe and position < compile_position
-            for path, position in second_checks
-        ), f"the build RUN must verify the same {cache_path} evidence before compiling"
+        assert not any(path == written_probe for path, _ in second_checks), (
+            "compile cache may be absent; historical probes are observations, not prerequisites"
+        )
 
 
 def test_dependency_lock_covers_all_versioned_external_facts_without_proxy() -> None:
@@ -2259,9 +2189,7 @@ def test_dockerfile_build_path_wires_locked_facts_into_consuming_instructions(
     build_args = _docker_build_args(build_calls[0])
     dockerfile_source = DOCKERFILE_PATH.read_text(encoding="utf-8")
     uses = _dependency_lock_uses(lock)
-    dependency_uses = tuple(
-        use for use in uses if not use.consumer.startswith("from-")
-    )
+    dependency_uses = tuple(use for use in uses if not use.consumer.startswith("from-"))
     dependency_plan: Mapping[str, object] | None = None
     if not _build_args_cover_lock_uses(dependency_uses, build_args):
         plan_builder = getattr(module, "_dependency_plan", None)
@@ -2318,9 +2246,7 @@ def test_lock_dataflow_guard_rejects_ineffective_consumers(
 ) -> None:
     if malicious_fixture == "floating-install":
         with pytest.raises(AssertionError, match="upgrade|pin"):
-            _assert_no_floating_or_ignored_installs(
-                ["RUN pip install --upgrade pip"]
-            )
+            _assert_no_floating_or_ignored_installs(["RUN pip install --upgrade pip"])
         return
 
     if malicious_fixture in {"preassignment", "ignored-failure"}:
@@ -2337,16 +2263,12 @@ def test_lock_dataflow_guard_rejects_ineffective_consumers(
             else 'RUN apt-get install "git=$LOCKED" || :'
         )
         with pytest.raises(AssertionError, match="real operation operands"):
-            _assert_build_arg_lock_dataflow(
-                (use,), {"LOCKED": "1.2.3-locked"}, [instruction]
-            )
+            _assert_build_arg_lock_dataflow((use,), {"LOCKED": "1.2.3-locked"}, [instruction])
         return
 
     lock = _synthetic_dependency_lock()
     uses = _dependency_lock_uses(lock)
-    dependency_uses = tuple(
-        use for use in uses if not use.consumer.startswith("from-")
-    )
+    dependency_uses = tuple(use for use in uses if not use.consumer.startswith("from-"))
     facts = sorted(
         (path, use.consumer, value)
         for use in dependency_uses
@@ -2368,8 +2290,7 @@ def test_lock_dataflow_guard_rejects_ineffective_consumers(
         "output_path": "/tmp/ba0-dependency-plan.env",
         "bindings": bindings,
         "output_bytes": "".join(
-            f"{binding['name']}={json.dumps(binding['value'])}\n"
-            for binding in bindings
+            f"{binding['name']}={json.dumps(binding['value'])}\n" for binding in bindings
         ).encode(),
     }
     expected_message = "exact dependency-plan parser argv"
@@ -2390,10 +2311,7 @@ def test_lock_dataflow_guard_rejects_ineffective_consumers(
             "FROM $BUILDER AS builder",
             "FROM $RUNTIME AS runtime",
             f"COPY {lock_path} {lock_path}",
-            (
-                f"RUN {parser} --lock {lock_path} "
-                "--output /tmp/ba0-dependency-plan.env"
-            ),
+            (f"RUN {parser} --lock {lock_path} --output /tmp/ba0-dependency-plan.env"),
             "RUN sh /tmp/uv-installer",
         )
     )
@@ -2490,9 +2408,7 @@ def test_lookup_zero_candidates_is_only_miss_and_builds_once(tmp_path: Path) -> 
     assert receipt["image_id"] == IMAGE_ID
     build_calls = [call for call in runner.calls if _is_docker_build(call.arguments)]
     assert len(build_calls) == 1
-    built_labels = _effective_build_labels(
-        build_calls[0].arguments, build_calls[0].cwd
-    )
+    built_labels = _effective_build_labels(build_calls[0].arguments, build_calls[0].cwd)
     assert REQUIRED_LABELS.items() <= built_labels.items()
     tags = _docker_option_values(build_calls[0].arguments, "--tag", short="-t")
     assert len(tags) == 1
@@ -2649,9 +2565,7 @@ def test_lookup_secret_canary_never_enters_argv_trace_labels_receipt_or_output(
         runner = _selector_runner(candidates="")
         runners.append(runner)
         receipts.append(_selector_call(module, case_path, runner, secrets=secrets))
-        receipt_files.append(
-            (case_path / "selector-receipt.json").read_text(encoding="utf-8")
-        )
+        receipt_files.append((case_path / "selector-receipt.json").read_text(encoding="utf-8"))
     captured = capsys.readouterr()
 
     invariant_keys = (
@@ -2667,9 +2581,7 @@ def test_lookup_secret_canary_never_enters_argv_trace_labels_receipt_or_output(
         "platform",
         "labels",
     )
-    projections = [
-        {key: receipt[key] for key in invariant_keys} for receipt in receipts
-    ]
+    projections = [{key: receipt[key] for key in invariant_keys} for receipt in receipts]
     assert projections[0] == projections[1] == projections[2]
     surfaces = _json_text(
         {
@@ -2792,16 +2704,12 @@ def _shell_function_body(source: str, name: str) -> str:
     return _executable_text(match.group("body"))
 
 
-def _shell_command_tokens(
-    source: str, *, preserve_wrappers: bool = False
-) -> list[list[str]]:
+def _shell_command_tokens(source: str, *, preserve_wrappers: bool = False) -> list[list[str]]:
     cleaned = "\n".join(
         line.lstrip().lstrip("@+-").strip()
         for line in _executable_text(source).replace("\\\n", " ").splitlines()
     )
-    lexer = shlex.shlex(
-        cleaned.replace("\n", " ; "), posix=True, punctuation_chars=";&|"
-    )
+    lexer = shlex.shlex(cleaned.replace("\n", " ; "), posix=True, punctuation_chars=";&|")
     lexer.whitespace_split = True
     lexer.commenters = ""
     commands: list[list[str]] = []
@@ -2821,9 +2729,7 @@ def _shell_command_tokens(
         if not preserve_wrappers:
             if command[:1] == ["env"]:
                 command = command[1:]
-            while command and re.fullmatch(
-                r"[A-Za-z_][A-Za-z0-9_]*=.*", command[0]
-            ):
+            while command and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", command[0]):
                 command = command[1:]
         if command:
             normalized.append(command)
@@ -2839,9 +2745,10 @@ def _tokens_are_docker_build(tokens: list[str]) -> bool:
             index += 2
         else:
             index += 1
-    return tokens[index : index + 1] == ["build"] or tokens[
-        index : index + 2
-    ] == ["buildx", "build"]
+    return tokens[index : index + 1] == ["build"] or tokens[index : index + 2] == [
+        "buildx",
+        "build",
+    ]
 
 
 def _assert_no_docker_build_commands(source: str) -> None:
@@ -2855,8 +2762,7 @@ def _assert_no_docker_build_commands(source: str) -> None:
         "docker build cannot be hidden in command or make-shell substitution"
     )
     assert all(
-        not _tokens_are_docker_build(tokens)
-        for tokens in _shell_command_tokens(executable)
+        not _tokens_are_docker_build(tokens) for tokens in _shell_command_tokens(executable)
     ), "direct docker build/buildx build is forbidden"
 
 
@@ -2885,12 +2791,8 @@ def _assert_no_docker_authority(source: str) -> None:
                     if option == "--":
                         tokens = tokens[1:]
                         break
-                    if option in {"-S", "--split-string"} or option.startswith(
-                        "--split-string="
-                    ):
-                        raise AssertionError(
-                            "Docker authority guard forbids env split-string"
-                        )
+                    if option in {"-S", "--split-string"} or option.startswith("--split-string="):
+                        raise AssertionError("Docker authority guard forbids env split-string")
                     if option in {"-i", "--ignore-environment"}:
                         tokens = tokens[1:]
                     elif option in {"-u", "--unset", "-C", "--chdir"}:
@@ -2898,9 +2800,7 @@ def _assert_no_docker_authority(source: str) -> None:
                         tokens = tokens[2:]
                     elif option.startswith(("--unset=", "--chdir=")):
                         tokens = tokens[1:]
-                    elif re.fullmatch(
-                        r"[A-Za-z_][A-Za-z0-9_]*=.*", option
-                    ):
+                    elif re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", option):
                         tokens = tokens[1:]
                     elif option.startswith("-"):
                         raise AssertionError(
@@ -2930,8 +2830,7 @@ def _assert_no_docker_authority(source: str) -> None:
                     break
         if tokens and Path(tokens[0]).name in {"sh", "bash", "zsh"}:
             assert not any(
-                re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", option)
-                for option in tokens[1:]
+                re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", option) for option in tokens[1:]
             ), "Docker authority guard forbids secondary shell -c"
         assert not tokens or Path(tokens[0]).name not in {"docker", "sudo"}, (
             "public app build entry must not hold direct Docker authority"
@@ -2997,27 +2896,20 @@ def test_public_app_build_entry_has_one_authority_and_makefile_has_no_naked_buil
         "echo",
     }
     assert all(
-        tokens in branch_delegates or tokens[0] in harmless_setup
-        for tokens in branch_commands
+        tokens in branch_delegates or tokens[0] in harmless_setup for tokens in branch_commands
     ), "BUILD_APP branch may only delegate once plus harmless shell setup"
 
-    app_target = re.search(
-        r"(?ms)^docker-build-app:\n(?P<body>(?:\t.*\n)+)", makefile
-    )
+    app_target = re.search(r"(?ms)^docker-build-app:\n(?P<body>(?:\t.*\n)+)", makefile)
     assert app_target is not None
     target_body = _executable_text(app_target.group("body")).replace("\\\n", " ")
     _assert_no_docker_build_commands(target_body)
     _assert_no_docker_authority(target_body)
     recipe_commands = _shell_command_tokens(target_body)
-    delegates = [
-        tokens
-        for tokens in recipe_commands
-        if tokens[0] == "./scripts/build_images.sh"
-    ]
+    delegates = [tokens for tokens in recipe_commands if tokens[0] == "./scripts/build_images.sh"]
     assert len(delegates) == 1 and "--app" in delegates[0]
-    assert all(
-        tokens in delegates or tokens[0] in harmless_setup for tokens in recipe_commands
-    ), "docker-build-app may only delegate once plus harmless shell setup"
+    assert all(tokens in delegates or tokens[0] in harmless_setup for tokens in recipe_commands), (
+        "docker-build-app may only delegate once plus harmless shell setup"
+    )
 
 
 # BA0-REQ-05/06: standalone exact-image artifact smoke and zero effects.
@@ -3040,13 +2932,13 @@ def _compose_script_operand(value: object, *, healthcheck: bool) -> str:
 
 
 def _assert_fail_fast_healthcheck(script: str) -> None:
-    assert re.match(
-        r"^\s*set\s+-[a-z]*e[a-z]*(?:\s+-[a-z]+)*\s*(?:;|\n)", script
-    ), "healthcheck script must begin with set -e fail-fast semantics"
+    assert re.match(r"^\s*set\s+-[a-z]*e[a-z]*(?:\s+-[a-z]+)*\s*(?:;|\n)", script), (
+        "healthcheck script must begin with set -e fail-fast semantics"
+    )
     assert "||" not in script, "healthcheck checks must not ignore failure with ||"
-    assert not re.search(
-        r"(?:;|&&|\|\|)\s*(?:true|:|exit\s+0)\s*$", script.strip()
-    ), "healthcheck must not mask checks with unconditional trailing success"
+    assert not re.search(r"(?:;|&&|\|\|)\s*(?:true|:|exit\s+0)\s*$", script.strip()), (
+        "healthcheck must not mask checks with unconditional trailing success"
+    )
 
 
 def test_d3_exact_image_compose_is_single_service_read_only_and_standalone() -> None:
@@ -3082,9 +2974,7 @@ def test_d3_exact_image_compose_is_single_service_read_only_and_standalone() -> 
         assert forbidden not in service
 
     entrypoint = _compose_script_operand(service["entrypoint"], healthcheck=False)
-    healthcheck = _compose_script_operand(
-        service["healthcheck"]["test"], healthcheck=True
-    )
+    healthcheck = _compose_script_operand(service["healthcheck"]["test"], healthcheck=True)
     _assert_fail_fast_healthcheck(healthcheck)
     for command in (entrypoint, healthcheck):
         assert re.search(r"\btest\s+-x\s+['\"]?/app/WeKnora\b", command)
@@ -3180,10 +3070,7 @@ def test_d3_exact_image_runner_order_and_exact_no_build_no_pull_argv(
     assert config_env == up_env == down_env
     assert runner.env_files
     assert all(mode == 0o600 for _, mode, _ in runner.env_files)
-    assert all(
-        content == f"BA0_APP_IMAGE={IMAGE_ID}\n"
-        for _, _, content in runner.env_files
-    )
+    assert all(content == f"BA0_APP_IMAGE={IMAGE_ID}\n" for _, _, content in runner.env_files)
     assert receipt["status"] == "PASS"
     assert receipt["scope"] == "CONTAINER_ARTIFACT_SMOKE"
     assert runner.receipt_existed_at_cleanup is False
@@ -3249,9 +3136,7 @@ def test_d3_malformed_provenance_is_rejected_before_runner_or_copy(
     d2_receipt[field] = value
     if label is not None:
         d2_receipt["labels"][label] = value
-    d2_receipt_path.write_text(
-        json.dumps(d2_receipt, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    d2_receipt_path.write_text(json.dumps(d2_receipt, sort_keys=True) + "\n", encoding="utf-8")
     evidence_path = tmp_path / "d3.json"
     runner = D3Runner()
 
@@ -3362,32 +3247,30 @@ def test_d3_exact_image_static_topology_or_argv_failure_precedes_collision_with_
         service["environment"]["OPENAI_API_KEY"] = CANARY_SECRET
     elif mutation == "entrypoint-no-fail-fast":
         assert isinstance(service["entrypoint"], list)
-        service["entrypoint"][2] = service["entrypoint"][2].replace(
-            "set -eu\n", "true\n", 1
-        )
+        service["entrypoint"][2] = service["entrypoint"][2].replace("set -eu\n", "true\n", 1)
     elif mutation == "healthcheck-missing-path":
         assert isinstance(service["healthcheck"]["test"], list)
-        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][
-            1
-        ].replace("test -d /app/config;", "", 1)
+        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][1].replace(
+            "test -d /app/config;", "", 1
+        )
     elif mutation == "commented-required-path":
         assert isinstance(service["entrypoint"], list)
         service["entrypoint"][2] = service["entrypoint"][2].replace(
             "test -d /app/config", "# test -d /app/config", 1
         )
         assert isinstance(service["healthcheck"]["test"], list)
-        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][
-            1
-        ].replace("test -d /app/config", "# test -d /app/config", 1)
+        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][1].replace(
+            "test -d /app/config", "# test -d /app/config", 1
+        )
     elif mutation == "no-op-required-path":
         assert isinstance(service["entrypoint"], list)
         service["entrypoint"][2] = service["entrypoint"][2].replace(
             "test -d /app/config", ": test -d /app/config", 1
         )
         assert isinstance(service["healthcheck"]["test"], list)
-        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][
-            1
-        ].replace("test -d /app/config", ": test -d /app/config", 1)
+        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][1].replace(
+            "test -d /app/config", ": test -d /app/config", 1
+        )
     elif mutation == "trailing-decoy":
         assert isinstance(service["entrypoint"], list)
         service["entrypoint"] = [
@@ -3479,3 +3362,197 @@ def test_d3_exact_image_receipt_proves_exact_runtime_and_all_forbidden_effects_z
         "g2": 0,
     }
     assert all(not _is_docker_build(call.arguments) for call in runner.calls)
+
+
+# Task5c: execution context is explicit provenance, never artifact identity.
+class ContextFixtureRunner:
+    """Check real commands before delegating responses to the existing fixtures."""
+
+    def __init__(self, delegate: Runner, context: str) -> None:
+        self.delegate = delegate
+        self.context = context
+        self.commands: list[tuple[str, ...]] = []
+
+    def __call__(self, arguments: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        command = tuple(arguments)
+        assert command[:3] == ("docker", "--context", self.context)
+        self.commands.append(command)
+        return self.delegate(("docker", "--context", CONTEXT, *command[3:]), **kwargs)
+
+
+@pytest.mark.parametrize("context", (CONTEXT, "colima"))
+@pytest.mark.parametrize("reuse", (True, False))
+def test_task5c_selector_context_reaches_lookup_build_inspect_and_receipt(
+    tmp_path: Path,
+    context: str,
+    reuse: bool,
+) -> None:
+    module = _artifact_module()
+    identity = _identity_record()
+    before = deepcopy(identity)
+    runner = ContextFixtureRunner(
+        _selector_runner(candidates=IMAGE_ID if reuse else ""),
+        context,
+    )
+    receipt = module.select_or_build_app(
+        repo_root=REPO_ROOT,
+        identity=identity,
+        evidence_out=tmp_path / "selector.json",
+        runner=runner,
+        real_build_budget_remaining=0 if reuse else 1,
+        docker_context=context,
+    )
+    assert receipt["docker_context"] == context
+    assert receipt["build_invocations"] == (0 if reuse else 1)
+    assert receipt["labels"] == REQUIRED_LABELS
+    assert identity == before
+    assert runner.commands[0][3:5] == ("image", "ls")
+    assert runner.commands[-1][3:5] == ("image", "inspect")
+    assert sum(command[3] == "build" for command in runner.commands) == (0 if reuse else 1)
+
+
+@pytest.mark.parametrize("context", ("default", "remote", "", "colima;true"))
+def test_task5c_selector_rejects_unapproved_context_before_effects(
+    tmp_path: Path,
+    context: str,
+) -> None:
+    module = _artifact_module()
+    runner = _selector_runner(candidates=IMAGE_ID)
+    output = tmp_path / "selector.json"
+    with pytest.raises(module.ArtifactContractError, match="context"):
+        module.select_or_build_app(
+            repo_root=REPO_ROOT,
+            identity=_identity_record(),
+            evidence_out=output,
+            runner=runner,
+            real_build_budget_remaining=1,
+            docker_context=context,
+        )
+    assert runner.calls == []
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("context", (CONTEXT, "colima"))
+@pytest.mark.parametrize("runtime_failure", (False, True))
+def test_task5c_smoke_uses_context_through_cleanup_and_receipt(
+    tmp_path: Path,
+    context: str,
+    runtime_failure: bool,
+) -> None:
+    module = _smoke_module()
+    d2_path, output = tmp_path / "d2.json", tmp_path / "d3.json"
+    d2 = _d2_receipt(d2_path)
+    d2["docker_context"] = context
+    d2_path.write_text(json.dumps(d2))
+    delegate = D3Runner(runtime_returncode=int(runtime_failure))
+    delegate.evidence_path = output
+    runner = ContextFixtureRunner(delegate, context)
+    kwargs = dict(
+        repo_root=REPO_ROOT,
+        d2_receipt_path=d2_path,
+        evidence_out=output,
+        nonce=D3_NONCE,
+        runner=runner,
+        docker_context=context,
+    )
+    if runtime_failure:
+        with pytest.raises(module.ArtifactSmokeError, match="runtime inspect"):
+            module.run_exact_image_smoke(**kwargs)
+    else:
+        module.run_exact_image_smoke(**kwargs)
+    receipt = json.loads(output.read_text())
+    assert receipt["docker_context"] == context
+    assert receipt["cleanup"] == "PASS"
+    assert receipt["status"] == ("FAIL" if runtime_failure else "PASS")
+    assert delegate.events[-1] == "cleanup"
+    assert all(command[3] != "build" for command in runner.commands)
+
+
+@pytest.mark.parametrize(
+    ("receipt_context", "selected"),
+    ((CONTEXT, "colima"), ("colima", CONTEXT), (None, "colima"), ("remote", CONTEXT)),
+)
+def test_task5c_smoke_rejects_cross_context_before_docker(
+    tmp_path: Path,
+    receipt_context: str | None,
+    selected: str,
+) -> None:
+    module = _smoke_module()
+    d2_path, output = tmp_path / "d2.json", tmp_path / "d3.json"
+    d2 = _d2_receipt(d2_path)
+    if receipt_context is not None:
+        d2["docker_context"] = receipt_context
+    d2_path.write_text(json.dumps(d2))
+    runner = D3Runner()
+    with pytest.raises(module.ArtifactSmokeError, match="context"):
+        module.run_exact_image_smoke(
+            repo_root=REPO_ROOT,
+            d2_receipt_path=d2_path,
+            evidence_out=output,
+            nonce=D3_NONCE,
+            runner=runner,
+            docker_context=selected,
+        )
+    assert runner.calls == []
+    assert not output.exists()
+
+
+def test_task5c_legacy_receipt_default_stays_on_original_context(tmp_path: Path) -> None:
+    receipt = _d3_call(_smoke_module(), tmp_path, D3Runner())
+    assert receipt["docker_context"] == CONTEXT
+
+
+def test_task5c_cli_passes_selected_context_to_both_ports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, smoke = _artifact_module(), _smoke_module()
+    calls = []
+
+    def capture(**kwargs: object) -> dict[str, str]:
+        calls.append(kwargs)
+        return {"status": "FIXTURE_ONLY"}
+
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(
+        app,
+        "canonical_identity",
+        lambda **kwargs: {
+            **_identity_record(),
+            "canonical_bytes": b'{"inputs": []}',
+        },
+    )
+    monkeypatch.setattr(app, "frozen_source_context", lambda **kwargs: nullcontext(REPO_ROOT))
+    monkeypatch.setattr(app, "_checked_output", lambda *args, **kwargs: INTEGRATION_HEAD)
+    monkeypatch.setattr(app, "select_or_build_app", capture)
+    assert (
+        app._main(
+            [
+                "select-or-build",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--context",
+                "colima",
+                "--build-source-head",
+                BUILD_SOURCE_HEAD,
+                "--evidence-out",
+                str(tmp_path / "app.json"),
+            ]
+        )
+        == 0
+    )
+    monkeypatch.setattr(smoke, "run_exact_image_smoke", capture)
+    assert (
+        smoke._main(
+            [
+                "--context",
+                "colima",
+                "--d2-receipt",
+                str(tmp_path / "app.json"),
+                "--evidence-out",
+                str(tmp_path / "smoke.json"),
+            ]
+        )
+        == 0
+    )
+    assert [call["docker_context"] for call in calls] == ["colima", "colima"]

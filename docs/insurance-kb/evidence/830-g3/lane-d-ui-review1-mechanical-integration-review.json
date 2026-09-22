@@ -1,0 +1,99 @@
+{
+  "contract": "830-g3-d-ui-review1-mechanical-integration-review.v1",
+  "verdict": "PASS",
+  "review_scope": "Mechanical evidence custody, repair dispatch, and status-document accuracy only.",
+  "documents": {
+    "docs/insurance-kb/evidence/830-g3/lane-d-ui-independent-review-01.json": {
+      "sha256": "c206bffce381b98a4deaeeb20f6b5cfdd48835ab4089677b2985d2ea11e706a0",
+      "bytes": 6735
+    },
+    "docs/insurance-kb/evidence/830-g3/d-ui-review1-evidence/custody.json": {
+      "sha256": "b819c1627269f5eeb36638d0c6b760eaaa91eae8c81c7f10f13686068e977a9a",
+      "bytes": 2720
+    },
+    "docs/insurance-kb/evidence/830-g3/d-ui-review1-snapshots/manifest.json": {
+      "sha256": "682ced3ace20575a45fb8e94fe811f6f59051c0fb110241a3bb9cfaf1051c716",
+      "bytes": 3526
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-ui-repair-dispatch-1.json": {
+      "sha256": "d600c0cc8ab44a73e3dda551679e6c9d1910f0b3d8e16e222f215adfa68ad157",
+      "bytes": 2376
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-ui-review1-root-mechanical-validation.json": {
+      "sha256": "a35e454654df5b2c11409784c7bad9924a5e0f2141212152425a31a51b6a6431",
+      "bytes": 826
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-ui-freeze-1.json": {
+      "sha256": "4aa287e33371ba2d658731fc3361ba25a56c66f4594aa4acf3264a9cda0f209f",
+      "bytes": 5803
+    },
+    "docs/insurance-kb/evidence/830-g3/g3-d-ui-review1-root-openspec-01.log": {
+      "sha256": "7e4c5408b4957f357454498d9fa5d1cc05251a878db7c30de9ecd027a6f0f9f4",
+      "bytes": 6479
+    },
+    "HANDOFF.md": {
+      "sha256": "552f0da0281f9cc07b4bd26ea27e1cdc01bd7640ad075ffafec281007cc22011",
+      "bytes": 28997
+    },
+    "openspec/changes/129-830-g3-catalog-batch/validation-report.md": {
+      "sha256": "797688d7ed53ebd7055525cbbf74426f7e9f59954f36755ff9bf02dcc4616ed1",
+      "bytes": 8741
+    }
+  },
+  "checks": {
+    "independent_review_exact_copy": true,
+    "evidence_custody_originals_and_archives_exact": {
+      "count": 9,
+      "pass": true
+    },
+    "original_ui_snapshots_gzip_and_raw_exact": {
+      "count": 8,
+      "pass": true
+    },
+    "original_owner_logs_exact": {
+      "count": 17,
+      "pass": true
+    },
+    "recorded_result": {
+      "blockers": 1,
+      "backlog": 0,
+      "focused_tests": "25/25 PASS",
+      "g2_regression": "46/46 PASS",
+      "alignment": "2 exact matches PASS"
+    },
+    "repair_scope": {
+      "exclusive_paths": [
+        "frontend/src/api/schema-wiki/batchConcept830G3.ts",
+        "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts"
+      ],
+      "count": 2,
+      "body_tab_lf_cr_preserved": true,
+      "other_six_ui_files_closed": true
+    },
+    "effects_zero_recorded": true,
+    "implementation_acceptance_recorded": false,
+    "openspec_strict_log": {
+      "first_line": "Change 129-830-g3-catalog-batch is valid",
+      "exit_code_recorded": 0,
+      "telemetry_enotfound_classification": "post-validation telemetry only"
+    },
+    "current_git_index": "EMPTY_DURING_REVIEW; final staged-set exclusion must be checked after root stages the documents."
+  },
+  "mechanical_red_exemption": "PASS is exempt from RED because these changes only preserve exact review bytes and record the already-observed review, dispatch, and status; they do not change product behavior, contracts, criteria, authority, or runtime state.",
+  "boundaries": [
+    "The two-field alignment evidence is a local authenticated-payload and fixture parser check, not a live runtime or business release.",
+    "The initial missing-module log and pdfJsPort Denied-ID environment run remain rejected as behavioral evidence.",
+    "No active UI or backend source was read, tested, accepted, or included in this verdict.",
+    "No claim is made about the eventual staged set because the index was empty at review time."
+  ],
+  "findings": [],
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0,
+    "product_files_written": 0
+  }
+}

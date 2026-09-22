@@ -1,0 +1,20 @@
+{
+  "contract": "830-g3-source-execution-authorization-request.v1",
+  "recorded_at": "2026-09-07T12:25:04.789473+00:00",
+  "status": "PENDING_USER_REPLY",
+  "asked_via": "request_user_input_async",
+  "question": "是否批准按完整执行预览执行：创建本机隔离环境、接入11份新增PDF并登记全部15份来源，将新增材料的204段文本发送至阿里云 DashScope 生成向量（最多11次请求，失败即停，不自动重试）？",
+  "preview": "source-execution-approval-preview.md",
+  "preview_sha256": "daed68c8d4cdd9534da8db7807552174a7bbb026c108208e6804f97dfee6050e",
+  "ready_receipt": "source-execution-ready.json",
+  "actual_user_reply": null,
+  "decision": null,
+  "no_authorization_inferred_from_tool_acceptance": true,
+  "dependent_actions_not_run": [
+    "provision apply",
+    "guard serve",
+    "upload",
+    "source backfill",
+    "embedding provider"
+  ]
+}

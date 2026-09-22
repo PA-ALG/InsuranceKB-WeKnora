@@ -1,0 +1,70 @@
+{
+  "contract": "830-g3-d-root-software-integration.v1",
+  "status": "PASS_LOCAL_SOFTWARE_NOT_RUNTIME",
+  "GOAL_ID": "G3",
+  "GOAL_PRODUCT_STATE": "WIP_NOT_PASSED",
+  "FLOW_STATUS": "NOT RUN",
+  "QUALITY_STATUS": "DEFERRED_TO_Q0",
+  "NOT_FOR_PRODUCTION": true,
+  "references": [
+    {
+      "path": "lane-d-backend-repair2-final-freeze.json",
+      "sha256": "2b32e49f0562e18eb58515a053d1a5b932f9faf36a54b41c8bb70da22f349830"
+    },
+    {
+      "path": "lane-d-backend-repair2-independent-review.json",
+      "sha256": "5e9c4f0b72f7288f8020feb8de09c24126cf75e9f561cbe8c9601b4bd8192efd"
+    },
+    {
+      "path": "lane-d-final-input-integrity.json",
+      "sha256": "533c3988f2e0d903205e2646f37c63adcfd2df626d238e37dd9528c9da5a929e"
+    },
+    {
+      "path": "d-backend-ui-interop-repair1/manifest.json",
+      "sha256": "f4d4387ab6363b24c347c39b495f1d68f99c76edfb7bd6d0f24ea37fa3aea9b3"
+    },
+    {
+      "path": "lane-d-ui-repair1-independent-rereview.json",
+      "sha256": "3fb2d779bfdbb4cbda2c44e21e7f08966ecd2944b12444522ec9e6361abe4432"
+    },
+    {
+      "path": "lane-d-go-repair1-independent-rereview.json",
+      "sha256": "17d1153f4e4de7e79fdf779459853f47efbb878ad104dffceab688852ac921c3"
+    },
+    {
+      "path": "lane-d-source-coverage2-independent-review.json",
+      "sha256": "0b21ea94a9e4ca0d22c273282916c6f07dda2bfc2d59b7f0664c4b3e7a5275f2"
+    }
+  ],
+  "accepted_backend_paths": 11,
+  "backend_repairs_used": 2,
+  "remaining_backend_repairs": 0,
+  "blockers_closed": [
+    "B1 preparation read Unicode canonical bytes",
+    "B2 decoded D Text and stored/request ID checks",
+    "B2 raw JSON Unicode before lossy decode"
+  ],
+  "validation": {
+    "complete_backend_service": "repair1 full package PASS408.944s; final service source unchanged",
+    "final_handler_router": "repair2 full packages PASS2.802s/2.768s and vet0",
+    "independent_handler": "original unchanged malformed UTF8 and Unicode table now PASS; G1/G2 scope compatibility retained",
+    "ui_python_service_interop": "DRAFT and synthetic READY both PASS; five fixture entities,342 fields,354 members; only read_sha changed from original response; 28 U+2028 preserved",
+    "interop_reuse_limit": "The producer executed Create/Load service and Gin renderer, not the handler. Its service hash5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd is unchanged in repair2. Its captured old handler hash is historical context, not proof of the final handler; final handler is separately covered by repair2 full and independent tests.",
+    "frozen_input_integrity": "30 source/test/fixture SHA identities verified",
+    "catalog_profile": "11 classes/801 fields compiled; exact user structure confirmation preserved"
+  },
+  "runtime_remaining": [
+    "Source-only provision/upload/readback requires the previously requested external-send approval; no reply recorded",
+    "Actual C corpus/page map/ExistingSnapshot/Policy and guarded-model admission/window still need freeze after authoritative source acquisition",
+    "Actual model classification/compile/review, human release approval, image/runtime delivery and browser/source verification have not run"
+  ],
+  "effects": {
+    "live_http": 0,
+    "provider": 0,
+    "database": 0,
+    "image_build": 0,
+    "deployment": 0,
+    "source_upload": 0
+  },
+  "historical_failures": "Initial and repair1 blocked reports, source snapshots, raw logs and environment failures are retained; log names do not determine verdicts."
+}

@@ -56,6 +56,40 @@ func TestGetPreparationScopeForWikiKBIsExactAndTenantScoped(t *testing.T) {
 	require.ErrorIs(t, err, ErrWikiReleaseNotFound)
 }
 
+func TestGetReadyPreparationMetadataOmitsHeavyPublishedPayload(t *testing.T) {
+	t.Parallel()
+	repo, db := newSchemaWikiScopeRepository(t)
+	scope := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-medical",
+	}
+	ready := &types.WikiReleasePreparation{
+		ID: "preparation-published", WikiReleaseScope: scope,
+		CandidateDigest: "candidate", ManifestDigest: "manifest",
+		ReadyReceiptDigest: "receipt", ReviewDecisionDigest: "decision", ReviewPolicyID: "policy",
+		ExpectedReleaseID: "release-base", ExpectedActivationEpoch: 5,
+		Status:            types.WikiReleasePreparationReady,
+		Manifest:          []byte(`{"contract":"batch-concept-candidate-bundle.830.g3.v1","large":"payload"}`),
+		Members:           []types.WikiReleaseMemberSnapshot{{LogicalSlug: "member-1", Content: "large member"}},
+		PreparationDigest: "preparation",
+	}
+	require.NoError(t, db.Create(ready).Error)
+
+	metadata, err := repo.GetReadyPreparationMetadata(context.Background(), scope, ready.ID)
+	require.NoError(t, err)
+	require.Equal(t, ready.ID, metadata.ID)
+	require.Equal(t, ready.WikiReleaseScope, metadata.WikiReleaseScope)
+	require.Equal(t, ready.CandidateDigest, metadata.CandidateDigest)
+	require.Equal(t, ready.ManifestDigest, metadata.ManifestDigest)
+	require.Equal(t, ready.PreparationDigest, metadata.PreparationDigest)
+	require.Nil(t, metadata.Manifest)
+	require.Nil(t, metadata.Members)
+
+	_, err = repo.GetReadyPreparationMetadata(context.Background(), types.WikiReleaseScope{
+		TenantID: scope.TenantID + 1, SpaceID: scope.SpaceID, RawKBID: scope.RawKBID, WikiKBID: scope.WikiKBID,
+	}, ready.ID)
+	require.ErrorIs(t, err, ErrWikiReleaseNotFound)
+}
+
 func schemaWikiScopeHead(id string, tenantID uint64, wikiKBID string) *types.WikiReleaseHead {
 	return &types.WikiReleaseHead{
 		ID: id,

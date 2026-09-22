@@ -1,0 +1,166 @@
+{
+  "source_commit": "ec0721083c955af67d996aed883f6eab16fa9393",
+  "software": "PASS",
+  "container_health": "PASS",
+  "provisioning": "PASS",
+  "github_live": "NOT RUN",
+  "business_acceptance": "NOT RUN",
+  "app_build": {
+    "status": "PASS",
+    "image_id": "sha256:54cadb3d3237a3fe775fb3aafb428c7aa030477b765cdc6506800b43f09c04eb",
+    "build_source_head": "ec0721083c955af67d996aed883f6eab16fa9393",
+    "artifact_identity": "sha256:76bdfb25549069b9aa8cd99b1af2251c85f5915a6825d33befc1168a2d42cb91"
+  },
+  "app_build_attempts": 2,
+  "app_initial_build_outcome": "Docker connection EOF before Go compile; preserved original log",
+  "app_recovery_compile_seconds": 855.7,
+  "app_precheck_stops": [
+    "existing APP has provider-egress network",
+    "existing nginx template has APP_DNS_RESOLVER placeholder"
+  ],
+  "app_precheck_effects": "No container or route mutation before either assertion",
+  "harness_build": {
+    "source": "ec0721083c955af67d996aed883f6eab16fa9393",
+    "base": "python:3.12-slim@sha256:9e01bf1ae5db7649a236da7be1e94ffbbbdd7a93f867dd0d8d5720d9e1f89fab",
+    "exit_code": 0,
+    "elapsed_seconds": 3.116,
+    "builds_this_round": 1,
+    "image_id": "sha256:646234d2d0ef037a2f542b20778b6c376342eef4830224ec4ac106d2e39812bc"
+  },
+  "app_deployment": {
+    "status": "REPLACED",
+    "old_app_id": "619cc6d6009f4a17209e0a38d23221d58f65ec346df0f08e20cc023dd5d43e13",
+    "old_image_id": "sha256:ffa9d18f8753fc2f67e1365120c44ad8e756ffb6d275a9ca4ae0b422d0928f54",
+    "new_image_id": "sha256:54cadb3d3237a3fe775fb3aafb428c7aa030477b765cdc6506800b43f09c04eb",
+    "source_commit": "ec0721083c955af67d996aed883f6eab16fa9393",
+    "explicit_database_mutations": 0,
+    "explicit_provider_requests": 0,
+    "background_effects": "NOT_MEASURED",
+    "old_container_preserved": true,
+    "new_app_id": "3d84a85258d14610183e964e558ebde939b0360f91ec32b871897faf119257c3",
+    "business_ready_before_cutover": true,
+    "health": true,
+    "config_tree_sha256": "b80bbda6dec91d9343fbcd38ded050622d1b696c0f0720803f0f80af1b79472e",
+    "ui_restarted": false,
+    "ui_configuration_sha256": "48c2eb7db07c10f589fae83daa97c22603681cdb8647355ba3ebacb7b56258c3",
+    "ui_template_sha256": "7f8669b1e51a55101bee13f511f0febb2bf9772acd6d32d7de0dd9bce3bb0a60",
+    "old_stopped_after_serving_ready": true,
+    "storage_reserve_bytes": 2147483648
+  },
+  "harness_deployment": {
+    "source": "ec0721083c955af67d996aed883f6eab16fa9393",
+    "before": [
+      {
+        "name": "/g3-platform-product-product-api-1",
+        "id": "a55608243371ca1d77f95a92449620bccf6195a0564b54a49af91dc2f193d061",
+        "image": "sha256:ae8f288b5daec784971014250238d484996f82d0ed81be69ff30219e6b18d998",
+        "health": "healthy",
+        "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+        "networks": [
+          "weknora-g3-830-internal-recovery-02"
+        ]
+      },
+      {
+        "name": "/g3-platform-product-product-worker-1",
+        "id": "9f42d94b805eb0ea63d6a77ea0860854bee98da625ce4965f90a45cd24808309",
+        "image": "sha256:ae8f288b5daec784971014250238d484996f82d0ed81be69ff30219e6b18d998",
+        "health": "healthy",
+        "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+        "networks": [
+          "weknora-g3-830-internal-recovery-02",
+          "weknora-g3-830-provider-egress"
+        ]
+      }
+    ],
+    "status": "DEPLOYED",
+    "live_before": {
+      "active_jobs": 0,
+      "jobs": [],
+      "pending_calls": 0,
+      "current": {
+        "release_id": "release-40116374-35ce-43f3-b15c-90caeac12f78",
+        "activation_epoch": 15
+      }
+    },
+    "migration": "UNCHANGED",
+    "business_acceptance": "NOT RUN",
+    "configuration_changes": {
+      "platform_base_url": "http://weknora-g3-830-release-app-issuer-closeout-01:8080",
+      "resolution_policy_sha256": "1df5c02a3b4f9ccd0c0538d0ee8ab96f6c49857cc9edf77ce6465229f0e90c76"
+    },
+    "after": [
+      {
+        "name": "/g3-platform-product-product-api-1",
+        "id": "482066d7f770b0887209c0ef30ef63590fd14a199e6cde7104faf53387c9e6a2",
+        "image": "sha256:646234d2d0ef037a2f542b20778b6c376342eef4830224ec4ac106d2e39812bc",
+        "health": "healthy",
+        "environment_sha256": "f30d7b968a8f48283dd62939c8f7e45647e43f22142edbebb140af28e76812d2",
+        "networks": [
+          "weknora-g3-830-internal-recovery-02"
+        ]
+      },
+      {
+        "name": "/g3-platform-product-product-worker-1",
+        "id": "1d04362c4e3846b3067b687c27ec23211670ac94403e44d44fdc1e40e9440fce",
+        "image": "sha256:646234d2d0ef037a2f542b20778b6c376342eef4830224ec4ac106d2e39812bc",
+        "health": "healthy",
+        "environment_sha256": "f30d7b968a8f48283dd62939c8f7e45647e43f22142edbebb140af28e76812d2",
+        "networks": [
+          "weknora-g3-830-internal-recovery-02",
+          "weknora-g3-830-provider-egress"
+        ]
+      }
+    ],
+    "live_after": {
+      "active_jobs": 0,
+      "jobs": [],
+      "pending_calls": 0,
+      "current": {
+        "release_id": "release-40116374-35ce-43f3-b15c-90caeac12f78",
+        "activation_epoch": 15
+      }
+    }
+  },
+  "fresh_input_preflight": {
+    "product": "平安盛世鑫禧（2026）终身寿险（分红型）",
+    "version": "3190-2",
+    "source_document_rows": [
+      {
+        "file": "/Users/houjing/Documents/LLM_wiki/g3-acceptance-inputs/3190-2/保险条款.pdf",
+        "url": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?attachmentType=1&planCode=3190&versionNo=3190-2",
+        "bytes": 705682,
+        "sha256": "a9af5e81f947875e5c61f62bb6b534ffde37a17b4d08ffeb2fae20d21d6f3ac7",
+        "md5": "4395bc9535bd99962c2f11a1ce6040c5",
+        "content_type": "application/pdf;charset=UTF-8"
+      },
+      {
+        "file": "/Users/houjing/Documents/LLM_wiki/g3-acceptance-inputs/3190-2/费率表.pdf",
+        "url": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?attachmentType=2&planCode=3190&versionNo=3190-2",
+        "bytes": 112492,
+        "sha256": "8202f464e12d13558c4101fac3b6b4265af9bfb299312ef854f6c9fc2af76998",
+        "md5": "2342323da4f772e4cf38b1ae85417901",
+        "content_type": "application/pdf;charset=UTF-8"
+      },
+      {
+        "file": "/Users/houjing/Documents/LLM_wiki/g3-acceptance-inputs/3190-2/产品说明书.pdf",
+        "url": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?attachmentType=7&planCode=3190&versionNo=3190-2",
+        "bytes": 222076,
+        "sha256": "4d2ade0e7b0f38436bddf13d0aac3e3ad2bbf98387971a380540d7341e12c1c1",
+        "md5": "354375ce0ec7103fdcc2c60bb803f396",
+        "content_type": "application/pdf;charset=UTF-8"
+      }
+    ],
+    "prior_knowledge_matches": [],
+    "existing_entity_matches": [],
+    "status": "FRESH_INPUTS_READY_NOT_UPLOADED"
+  },
+  "provider_failure": {
+    "run_id": "a173f1a2-4c1e-57ed-bae5-d5370528f96d",
+    "model_calls": 1,
+    "code": 400,
+    "message": "User location is not supported for the API use.",
+    "platform_terminal_state": "needs_confirmation",
+    "source_stages_reused": 3
+  },
+  "active_web_recovery_run": "b696618c-c20f-577f-bbc6-a6d06af47bb4"
+}

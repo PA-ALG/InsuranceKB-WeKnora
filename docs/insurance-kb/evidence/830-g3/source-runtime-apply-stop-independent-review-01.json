@@ -1,0 +1,69 @@
+{
+  "contract": "830-g3-source-runtime-apply-stop-independent-review.v1",
+  "status": "STOP_CONFIRMED_ROOT_CAUSE_UNRESOLVED",
+  "scope": "Read-only inspection of frozen provision v3 pg_dump/pg_restore transport and sanitized apply/diagnostic receipts",
+  "inputs": {
+    "script": {
+      "path": "docs/insurance-kb/evidence/830-g3/source_runtime_provision_v3.py",
+      "sha256": "823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4"
+    },
+    "apply_receipt": {
+      "path": "/private/tmp/g3-source-runtime-apply-01.private.json",
+      "sha256": "1f65d31c52e38f4da4c3e6f14b2cfe2b9df2d75347e71f51fec5f67aae1db967",
+      "safe_fields_only_reviewed": true
+    },
+    "sanitized_diagnostic": {
+      "path": "/private/tmp/g3-source-provision-stop-diagnostic-01/summary.json",
+      "sha256": "3ea65ef4c7497615fa0137d4632ef00fc354f29cb5c4eb07492454020d587f67"
+    },
+    "readonly_transport_diagnostic": {
+      "path": "/private/tmp/g3-source-provision-stop-diagnostic-01/transport-summary.json",
+      "sha256": "550d4b3cc487f8bced62c449a099dbdda0cc902808f64c4f8589d660d652765b"
+    }
+  },
+  "proved_sequence": [
+    "Apply revalidated source and target absence gates.",
+    "The source pg_dump command returned rc=0 and nonempty 5,368,392 bytes; receipt binds SHA-256 055f4d0a58e5932cb227b93ebb9c37f413010ac858586a60e23cdd7e9c4a016c.",
+    "createdb from template0 succeeded and the durable last checkpoint is created-target-database.",
+    "The next docker exec -i pg_restore operation returned rc=1, so no later checkpoint ran.",
+    "STOP inspection found all four target containers absent; uploads/provider/guard/build/pull effects remained zero.",
+    "Sanitized read-only inspection found target weknora_g3_830 present, owned by p0clone, with zero user tables and only plpgsql; p0clone is superuser/create_db and the server is PostgreSQL 17.9."
+  ],
+  "minimum_cause_statement": "The only proven proximal cause is pg_restore process failure (rc=1) after successful target database creation. Existing evidence cannot distinguish malformed/truncated custom archive, Colima stdin transport failure, pg_restore/server compatibility, connection failure, extension/DDL failure, or another restore-side error.",
+  "bounded_exclusions": [
+    "No partial restored user-table state is present in the target at the time of the sanitized diagnostic.",
+    "The observed role has superuser and createdb privileges, so a generic lack of those two privileges is not supported.",
+    "The searched PostgreSQL log interval contains none of the listed error-category strings; logging coverage/configuration was not established, so this does not exclude all server-side errors.",
+    "A public synthetic 1 MiB stdin payload crossed the same Colima transport with an exact digest match, so a deterministic generic stdin-corruption claim is not supported.",
+    "pg_dump and pg_restore both report PostgreSQL 17.9, so a deterministic client/server major-version mismatch is not supported.",
+    "A fresh same-source read-only dump was 5,368,392 bytes with PGDMP magic and was accepted by pg_restore --list with exit 0 and no stderr, so the current dump/list path and current archive format are readable."
+  ],
+  "observability_gaps": [
+    "Runner._docker_process captures stdout and stderr, but Runner.docker raises only docker operation failed (exec), rc=1; the durable receipt records neither a pg_restore operation label nor any safe stderr fingerprint.",
+    "No stderr byte count/SHA-256 or allowlisted error classification is retained, so the failing layer and repeated failure identity cannot be established without a new diagnostic.",
+    "The dump checkpoint proves only command success, byte count and dump SHA. The script does not run a no-write pg_restore --list archive validation before createdb/restore.",
+    "The apply receipt records neither pg_dump/pg_restore client versions nor an archive table-of-contents digest/count. These facts were recoverable only from a separate post-failure diagnostic and therefore were unavailable at the STOP boundary.",
+    "Because the in-memory dump is not persisted and stderr is discarded, the original failure cannot be reconstructed from the apply receipt alone."
+  ],
+  "transaction_boundary": "createdb is outside pg_restore --single-transaction and therefore intentionally remains after failure. Zero user tables is consistent with restore failing before object creation or with transaction rollback; it does not by itself select between those cases.",
+  "completed_read_only_discriminators": {
+    "public_stdin": "PASS: exact digest match over the same transport",
+    "client_versions": "PASS: pg_dump and pg_restore both 17.9",
+    "fresh_archive_list": "PASS: PGDMP magic, pg_restore --list exit 0, 42,551-byte table of contents, no stderr",
+    "source_snapshot": "PASS: the selected source rows/jobs snapshot SHA 2b3c77be83abf6b2ea8a83f201a427f40380b2878fe6cd17f6aa270350fe7e7c matches preflight and apply-before"
+  },
+  "evidence_limits": [
+    "The selected source rows/jobs snapshot is not a byte-level or whole-database identity proof.",
+    "The fresh archive SHA differs from the discarded original archive SHA. Equal size, unchanged selected snapshot and successful listing do not prove that the original failed archive bytes were valid or identical.",
+    "The no-write list probe does not execute restore SQL, extensions or ownership operations and therefore cannot exonerate the restore execution phase."
+  ],
+  "decision": "Keep STOP. Do not retry, restore, drop, mutate the script, or select a remediation from the current evidence. A future recovery design must treat the original failure cause as unknown and add safe operation-specific failure observability before any separately authorized mutation.",
+  "effects_of_this_review": {
+    "runtime_operation": false,
+    "database": false,
+    "container": false,
+    "http": false,
+    "provider": false,
+    "script_or_repo_write": false
+  }
+}

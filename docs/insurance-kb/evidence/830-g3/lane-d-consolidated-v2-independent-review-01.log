@@ -1,0 +1,32 @@
+75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d  docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md
+     584 docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md
+--- docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract.md	2026-09-07 17:59:35
++++ docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md	2026-09-07 18:08:52
+@@ -128,6 +128,8 @@
+ binding_sha256
+ ```
+ 
++`binding_sha256 = schema_wiki_sha256(contract, payload_without_binding_sha256)`。
++
+ MATCH 的 `candidate_id/entity_candidate_sha256` 必须显式 null；`entity_id/entity_version` 与所有 ref 的 matched IDs 原样相等。MATCH 仍重算 entity/version key 供审计，但不得用它替代 serving ID。CREATE 的所有 ref 必须指向同一 C Candidate；`candidate_id` 和 candidate SHA 完整，D 的 entity ID/version 按固定公式生成。所有 ref 必须具有一致的 normalized issuer/name/code/version anchor、primary classification 和 pack 三元组，否则 D 拒绝。
+ 
+ Pack 必须从内联、已严格验证的 Catalog exact 取包；Profile 必须是该 entry 的 exact Profile。`required_fields` 逐项逐序等于 `profile.ordered_field_keys`，不能只比较 set。每个选中 pack 的 FieldDefinition 数必须与该实体最终独立 FieldAssertion 页数完全相等。
+@@ -153,6 +155,8 @@
+ request_sha256
+ ```
+ 
++`request_sha256 = schema_wiki_sha256(contract, payload_without_request_sha256)`。
++
+ `catalog_wire_sha256` 是 Catalog 对象按 UTF-8、NFC、对象键排序、紧凑 JSON 序列化后的普通 SHA-256；当前值为 `0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9`。Catalog content hash 是内部 `catalog_sha256=b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd`，两者不得互换。
+ 
+ 请求必须同时满足：
+@@ -287,6 +291,7 @@
+ - run ID 与 model compile、review 两个 run ID 各不相同；
+ - raw 是 final G2 CompileOutput 的 schema-wiki canonical JSON，恰好等于 canonical 字符串并通过 G2 raw semantic binding；
+ - `context_hash = schema_wiki_sha256("batch-concept-carry-context.830.g3.v1", carry_context)`；
++- `model_compile_output_hash = model_compile_result.output.output_hash`；
+ - carry context exact keys 为 `request_sha256`、`model_compile_output_hash`、`model_compile_execution_sha256`；最后一项等于 `schema_wiki_sha256("batch-concept-model-execution.830.g3.v1", model_compile_result.execution)`；
+ - 新 G3 recorder 直接构造原 G2 `ExecutionRecord` 形状并重验，不能调用固定 G2 `execution-context` 域后伪称 G3 hash，也不修改旧 `record_output`。
+ 
+docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md:234:### 3.1 两份编译结果和审核结果
+docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract.md:230:### 3.1 两份编译结果和审核结果

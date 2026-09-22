@@ -1,0 +1,33 @@
+{
+  "contract": "batch-c-design2-independent-review.830.g3.v1",
+  "recorded_at": "2026-09-07T09:07:26.306843+00:00",
+  "reviewer": "g3_seam_audit",
+  "source_sha256": "971a56ab7191b32b56fbf1f9eea99dbc3768270ff1f5891a09207830c030fedc",
+  "test_sha256": "1ae5937ab12091c0be88310b191fb29e4cdedd9e0aad11f098b269d216c8d84e",
+  "status": "BLOCKED",
+  "blocker_count": 1,
+  "blockers": [
+    {
+      "id": "C2-B1",
+      "finding": "_multi_children_valid does not exclude SCOPE_MISMATCH/SOURCE_RECEIPT_MISMATCH/MODEL_RECEIPT_INVALID in wire eligibility; self-consistent invalid child can retain sets and sustain parent MULTI",
+      "scope": "single shared eligibility reason set; exact resolve automatic Candidate rules unchanged",
+      "repair": "new three-tamper behavior RED then concentrated fix; original53 tests retained"
+    }
+  ],
+  "other_design2_requirements": "reviewer reports conforming",
+  "raw_evidence": [
+    {
+      "path": "g3-batch-c-design2-independent-green-20260907.log",
+      "sha256": "2ca76c9abfabef02f468cd71a8d2f5d68c2b8ef531a2c122e5ed54787561287d"
+    },
+    {
+      "path": "g3-batch-c-design2-wire-blocker-probe-20260907.py",
+      "sha256": "5ae856fc6feafdc64558f6361e3fa00d181cd11d2f0049744cde3dd44c4e2ea5"
+    },
+    {
+      "path": "g3-batch-c-design2-wire-blocker-probe-20260907.log",
+      "sha256": "2e6d79d603b10c02149bed11ba906669ba21ccb537827375276e5de7c8fb8176"
+    }
+  ],
+  "runtime_effects": 0
+}

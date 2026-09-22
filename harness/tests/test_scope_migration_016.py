@@ -1,6 +1,7 @@
 """016 T2: enterprise knowledge-space migration and database isolation."""
 
 from datetime import UTC, datetime
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -605,6 +606,76 @@ def test_s3_4_downgrade_rejects_single_non_legacy_space(tmp_path: Path) -> None:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
             _alembic_head(url)
         )
+
+
+@pytest.mark.parametrize("starting_revision", ["0018", "0017", "0016"])
+def test_s3_4_partial_g3_head_rejects_unsafe_scope_before_any_ddl(
+    tmp_path: Path,
+    starting_revision: str,
+) -> None:
+    url, engine = _database(tmp_path, f"downgrade-from-{starting_revision}")
+    command.upgrade(_alembic_cfg(url), starting_revision)
+    with engine.begin() as connection:
+        _insert_space(connection, LEGACY_SPACE_ID)
+        _insert_space(connection, "space-b")
+    before_tables = set(inspect(engine).get_table_names())
+
+    with pytest.raises(CommandError, match="multiple|exactly one|legacy-default"):
+        command.downgrade(_alembic_cfg(url), "0002")
+
+    assert set(inspect(engine).get_table_names()) == before_tables
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+            starting_revision
+        )
+
+
+def test_s3_4_relative_downgrade_rejects_unsafe_scope_before_any_ddl(
+    tmp_path: Path,
+) -> None:
+    url, engine = _database(tmp_path, "downgrade-relative-to-0002")
+    command.upgrade(_alembic_cfg(url), "head")
+    with engine.begin() as connection:
+        _insert_space(connection, LEGACY_SPACE_ID)
+        _insert_space(connection, "space-b")
+    before_tables = set(inspect(engine).get_table_names())
+
+    with pytest.raises(CommandError, match="multiple|exactly one|legacy-default"):
+        command.downgrade(_alembic_cfg(url), "-9")
+
+    assert set(inspect(engine).get_table_names()) == before_tables
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0018"
+
+
+@pytest.mark.parametrize("destination", ["0006", "-4"])
+def test_s3_4_downgrade_does_not_apply_scope_preflight_before_scope_territory(
+    tmp_path: Path,
+    destination: str,
+) -> None:
+    url, engine = _database(tmp_path, f"downgrade-to-0006-{destination}")
+    command.upgrade(_alembic_cfg(url), "head")
+    with engine.begin() as connection:
+        _insert_space(connection, LEGACY_SPACE_ID)
+        _insert_space(connection, "space-b")
+
+    command.downgrade(_alembic_cfg(url), destination)
+
+    assert "knowledge_spaces" in inspect(engine).get_table_names()
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0006"
+        assert connection.scalar(text("SELECT count(*) FROM knowledge_spaces")) == 2
+
+
+def test_s3_4_offline_downgrade_refuses_before_emitting_ddl() -> None:
+    output = StringIO()
+    config = _alembic_cfg("sqlite://")
+    config.output_buffer = output
+
+    with pytest.raises(RuntimeError, match="offline.*preflight|preflight.*offline"):
+        command.downgrade(config, "0018:0002", sql=True)
+
+    assert "DROP " not in output.getvalue().upper()
 
 
 @pytest.mark.parametrize(

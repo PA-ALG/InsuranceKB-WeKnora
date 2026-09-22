@@ -1,0 +1,179 @@
+{
+  "observed_at": "2026-09-22T03:17:28.924011+00:00",
+  "source_commit": "dc635e8e2151ba52941394426890c4a033698ca2",
+  "build": {
+    "source": "dc635e8e2151ba52941394426890c4a033698ca2",
+    "base": "python:3.12-slim@sha256:9e01bf1ae5db7649a236da7be1e94ffbbbdd7a93f867dd0d8d5720d9e1f89fab",
+    "exit_code": 0,
+    "elapsed_seconds": 37.219,
+    "image_id": "sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155",
+    "builds_this_round": 1
+  },
+  "deployment_attempts": [
+    {
+      "source": "dc635e8e2151ba52941394426890c4a033698ca2",
+      "before": [
+        {
+          "name": "/g3-platform-product-product-api-1",
+          "id": "b8f469669ea900fadf3377bb2a02bb72981ef46ab8547e3c098282e1821d32f9",
+          "image": "sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+          "health": "healthy",
+          "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+          "networks": [
+            "weknora-g3-830-internal-recovery-02"
+          ]
+        },
+        {
+          "name": "/g3-platform-product-product-worker-1",
+          "id": "5b2110b799d369e89bce9aef6be18adea884aa2307583f3e22782324b4aa3ebc",
+          "image": "sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+          "health": "healthy",
+          "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+          "networks": [
+            "weknora-g3-830-internal-recovery-02",
+            "weknora-g3-830-provider-egress"
+          ]
+        }
+      ],
+      "status": "FAILED",
+      "live_before": {
+        "active_jobs": 0,
+        "current": {
+          "release_id": "release-70dd8e65-a844-4e7c-97fd-15107cdd3bfb",
+          "activation_epoch": 13
+        }
+      },
+      "migration": "UNCHANGED",
+      "business_acceptance": "NOT RUN",
+      "failure_type": "RuntimeError",
+      "rollback": [
+        {
+          "name": "/g3-platform-product-product-api-1",
+          "id": "10ce9484f27aaca8d668f52be09fd6690d4fd70c67d60c637e61d7fff4168b14",
+          "image": "sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+          "health": "healthy",
+          "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+          "networks": [
+            "weknora-g3-830-internal-recovery-02"
+          ]
+        },
+        {
+          "name": "/g3-platform-product-product-worker-1",
+          "id": "94007a5d488f616fda4c43355d02924c4b771e22f2bea9423a4041329bd69c6c",
+          "image": "sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+          "health": "healthy",
+          "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+          "networks": [
+            "weknora-g3-830-internal-recovery-02",
+            "weknora-g3-830-provider-egress"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "dc635e8e2151ba52941394426890c4a033698ca2",
+      "before": [
+        {
+          "name": "/g3-platform-product-product-api-1",
+          "id": "10ce9484f27aaca8d668f52be09fd6690d4fd70c67d60c637e61d7fff4168b14",
+          "image": "sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+          "health": "healthy",
+          "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+          "networks": [
+            "weknora-g3-830-internal-recovery-02"
+          ]
+        },
+        {
+          "name": "/g3-platform-product-product-worker-1",
+          "id": "94007a5d488f616fda4c43355d02924c4b771e22f2bea9423a4041329bd69c6c",
+          "image": "sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+          "health": "healthy",
+          "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+          "networks": [
+            "weknora-g3-830-internal-recovery-02",
+            "weknora-g3-830-provider-egress"
+          ]
+        }
+      ],
+      "status": "DEPLOYED",
+      "live_before": {
+        "active_jobs": 0,
+        "current": {
+          "release_id": "release-70dd8e65-a844-4e7c-97fd-15107cdd3bfb",
+          "activation_epoch": 13
+        }
+      },
+      "migration": "UNCHANGED",
+      "business_acceptance": "NOT RUN",
+      "after": [
+        {
+          "name": "/g3-platform-product-product-api-1",
+          "id": "d4305edd3b2d2d505bf13fd165b086d3735bedeb1377e011e06e55c6bc01c3fa",
+          "image": "sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155",
+          "health": "healthy",
+          "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+          "networks": [
+            "weknora-g3-830-internal-recovery-02"
+          ]
+        },
+        {
+          "name": "/g3-platform-product-product-worker-1",
+          "id": "9b1e660f4d84d5e24fa826fc190ea66465790a59ea9894444604f072c8925e72",
+          "image": "sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155",
+          "health": "healthy",
+          "environment_sha256": "74432e2f458b3d835334ea7ea68be858ab870e72155ba79efd5bc4f4ee452c05",
+          "networks": [
+            "weknora-g3-830-internal-recovery-02",
+            "weknora-g3-830-provider-egress"
+          ]
+        }
+      ],
+      "live_after": {
+        "active_jobs": 0,
+        "current": {
+          "release_id": "release-70dd8e65-a844-4e7c-97fd-15107cdd3bfb",
+          "activation_epoch": 13
+        }
+      }
+    }
+  ],
+  "review": {
+    "blockers": 0,
+    "sha256": "1966963f3ae1091292de13acdce6405ed6caa586266861ecffc8a33928263d3e"
+  },
+  "software_checks": {
+    "legacy_worker_with_second_recovery": "1 passed / 274.67s",
+    "contract_and_diagnostics": "5 passed / 38.29s",
+    "root_merged_audit_lifecycle": "2 passed / 18.82s",
+    "ruff": "PASS",
+    "diff_check": "PASS",
+    "recovery_fixture_new_model_calls": 0
+  },
+  "provider_probe": {
+    "model": "gemini-3.7-flash-medium",
+    "http_status": 200,
+    "elapsed_seconds": 3.133,
+    "actual_sends": 1,
+    "document_content_sent": false,
+    "before_deployment": true
+  },
+  "delivery": {
+    "software": "PASS",
+    "container_health": "PASS",
+    "provider_probe": "PASS",
+    "provisioning": "PASS",
+    "local_live": "PASS",
+    "github_live": "NOT RUN"
+  },
+  "business": {
+    "existing_recovery": "NOT RUN",
+    "fresh_2662_1_upload": "NOT RUN",
+    "blocker": "webpage_session_at_login",
+    "g3_complete": false
+  },
+  "limitations": [
+    "First Compose update returned exit 1 during bounded startup wait and rolled back; its detailed output was not retained. Docker logs show slow old-container termination; new image import smoke passed in 6.726 seconds. Same image succeeded with 180-second wait, without source rebuild.",
+    "Container health and unchanged active release do not establish business acceptance.",
+    "Fresh 2662-1 three-file webpage test remains required."
+  ]
+}

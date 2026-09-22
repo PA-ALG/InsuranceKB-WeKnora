@@ -1,0 +1,54 @@
+{
+  "contract": "830-g3-d-ui-local-dispatch.v1",
+  "status": "ROOT_DISPATCH_AUTHORIZED_LOCAL_ONLY",
+  "owner": "g3_catalog_ui",
+  "task": "Original downstream Task4 only, within its exact owner matrix",
+  "inputs": [
+    {
+      "path": "lane-d-ui-local-order-amendment-1.md",
+      "sha256": "df52a2049b76b41b9ab493cc38abd248aa1cea408c287bae7108ed21311c10ee"
+    },
+    {
+      "path": "lane-d-ui-local-order-amendment-review-1.json",
+      "sha256": "dcf96bcabd2f0021b72364db955af14b5ba928919d48ab432fe195228a3b66c4"
+    },
+    {
+      "path": "lane-d-downstream-execution-plan-1.md",
+      "sha256": "a5cbf39c74f2bd26d52590580b7d2a059858d2951577614ad1cae3ed8727f3ab"
+    },
+    {
+      "path": "d-preparation-alignment-display-clarification-1.md",
+      "sha256": "5e12a1e0f81677986aa8483c79e6376f9266b410655564be8ee96ec858b0daab"
+    },
+    {
+      "path": "lane-d-source-coverage2-freeze.json",
+      "sha256": "811eb4d070f5f33743d2da6cd507abbacefa9debe7bab8ec910d274252c940c7"
+    },
+    {
+      "path": "lane-d-go-mirror-freeze-1.json",
+      "sha256": "32f6c8c6dce01f221cf0e8ded1c59e2a312b880b7f24f5552208b2d3722e1019"
+    },
+    {
+      "path": "lane-d-go-mirror-independent-review-01.json",
+      "sha256": "f26245641a354047aa578dc16d528e4ac125250f7eb7cfc1c6019b330650959a"
+    }
+  ],
+  "basis": "User-authorized G3 implementation and continue instruction; independently reviewed bounded local execution-order amendment.",
+  "consolidated_go_findings": "Go review has two blockers: strict wire presence/null and three source Hash field validators. Both concern malformed-input rejection and leave the accepted frozen success DTO unchanged; neither grants UI acceptance or relaxes its parser.",
+  "required_gates": [
+    "Mocked meaningful RED before implementation",
+    "No live transport or browser/runtime calls",
+    "Final immutable UI review/commit/integration waits for repaired Go independent PASS and Python-Go equality"
+  ],
+  "backend_tasks_1_2_3": "CLOSED",
+  "real_source_execution": "PENDING_EXISTING_USER_APPROVAL_NO_NEW_CONSENT_INFERRED",
+  "real_c_model_execution": "CLOSED",
+  "effects_authorized": {
+    "local_UI_source_and_tests": true,
+    "provider": false,
+    "database": false,
+    "live_http": false,
+    "build_image": false,
+    "deployment": false
+  }
+}

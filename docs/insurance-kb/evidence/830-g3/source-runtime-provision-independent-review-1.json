@@ -1,0 +1,42 @@
+{
+  "contract": "source-runtime-provision-independent-review.830.g3.v1",
+  "recorded_at": "2026-09-07T09:01:50.953386+00:00",
+  "reviewer": "g3_seam_audit",
+  "script": {
+    "path": "source_runtime_provision.py",
+    "sha256": "8560873c4af84079a5b4e3109452f03ecbd90d4006c1d5624ea2d0ddcbafcabe"
+  },
+  "notes_sha256": "d46316e078e20277173898c480f01af77284fcb323473f0ba27f812cc6ff6644",
+  "status": "BLOCKED",
+  "blocker_count": 6,
+  "blockers": [
+    "STOP must include SEED and inspect all stopped targets; checkpoint each API write",
+    "Prove source DB_HOST/PORT maps to exact PG; revalidate identity and assert current_database/current_user before target writes",
+    "Bind existing KB/model identity and compare complete expected non-dynamic configuration after PUT",
+    "Verify human active tenant and Admin role before any PUT",
+    "Require regular source files and exact four-file tar manifest before extraction",
+    "Exact nonsecret parser env allowlist; reject CR/LF/NUL and clean private env staging on success/failure"
+  ],
+  "backlog_count": 0,
+  "preflight_attempts": [
+    {
+      "attempt": 1,
+      "log": "g3-source-runtime-preflight-20260907-01.log",
+      "sha256": "630702ab145e3abe429a18d9c11763bd03cfe2e07ee9dca17eb66368c7107580",
+      "status": "BLOCKED",
+      "error": "{\"error\": \"RuntimeError: unexpected inspect cardinality for container/weknora-g3-830-app\", \"status\": \"STOP\"}",
+      "runtime_mutations": 0
+    },
+    {
+      "attempt": 2,
+      "log": "g3-source-runtime-preflight-20260907-02.log",
+      "sha256": "26912fb90cc43b7435e6fd7eae25dd186b7932993badc00ffd9b2aa9a571d93c",
+      "status": "BLOCKED",
+      "error": "{\"error\": \"RuntimeError: docker inspect failed for network/weknora-g3-830-internal, rc=1\", \"status\": \"STOP\"}",
+      "runtime_mutations": 0
+    }
+  ],
+  "apply": "NOT RUN",
+  "provider": "NOT RUN",
+  "next": "one concentrated private-script repair and independent rereview; no apply from rejected SHA"
+}

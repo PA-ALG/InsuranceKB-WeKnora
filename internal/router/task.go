@@ -17,6 +17,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/tracing/langfuse"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
+	"github.com/Tencent/WeKnora/internal/utils"
 	"github.com/hibiken/asynq"
 	"go.uber.org/dig"
 )
@@ -149,6 +150,11 @@ func newAsynqServer(concurrency int, queues map[string]int) *asynq.Server {
 func backgroundTaskMiddleware() asynq.MiddlewareFunc {
 	return func(next asynq.Handler) asynq.Handler {
 		return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+			if t.Type() == types.TypeDocumentProcess || t.Type() == types.TypeTemporaryDocumentProcess {
+				if err := utils.WaitForDocumentStorageCapacity(ctx); err != nil {
+					return err
+				}
+			}
 			return next.ProcessTask(types.WithBackgroundTask(ctx), t)
 		})
 	}

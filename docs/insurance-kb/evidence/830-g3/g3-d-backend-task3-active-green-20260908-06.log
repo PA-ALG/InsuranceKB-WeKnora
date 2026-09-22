@@ -1,0 +1,13 @@
+=== RUN   TestBatchConceptActivePage830G3ReopensWholePinnedBundle
+
+2026/09/08 01:52:06 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.212ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 01:52:15 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.134ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-active-page" LIMIT 1
+
+2026/09/08 01:52:18 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.170ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-active-page" LIMIT 1
+--- PASS: TestBatchConceptActivePage830G3ReopensWholePinnedBundle (34.53s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/application/service	37.748s

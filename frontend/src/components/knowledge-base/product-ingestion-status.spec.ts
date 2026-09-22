@@ -1,0 +1,272 @@
+// @vitest-environment happy-dom
+import { mount, flushPromises } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const api = vi.hoisted(() => ({ listProductIngestions: vi.fn(), getProductIngestion: vi.fn(), retryProductFields: vi.fn(), retryProductProcessing: vi.fn() }))
+vi.mock('@/api/product-ingestion', () => api)
+const modules = import.meta.glob('./product-ingestion-status.vue')
+const mounted: ReturnType<typeof mount>[] = []
+async function render() {
+  expect(modules['./product-ingestion-status.vue'], 'persistent product status component must exist').toBeTypeOf('function')
+  const component: any = await modules['./product-ingestion-status.vue']!()
+  const wrapper = mount(component.default, { props: { knowledgeBaseId: 'kb', refreshToken: 0 } })
+  mounted.push(wrapper)
+  await flushPromises()
+  return wrapper
+}
+const run = (extra = {}) => ({ run_id: 'r1', wiki_knowledge_base_id: 'kb', state: 'partial_success', stage: 'publish', stages: [{ name: 'extraction', state: 'succeeded', started_at: '2026-09-13T00:00:00Z', finished_at: '2026-09-13T00:00:05Z', success_count: 2, missing_count: 1, failure_count: 1 }], counts: { success_count: 2, missing_count: 1, failure_count: 1 }, model_call_count: 3, started_at: '2026-09-13T00:00:00Z', finished_at: '2026-09-13T00:00:10Z', fields: [{ field_key: 'premium', outcome: 'extraction_failed', reason: 'EVIDENCE_INVALID', value: 'UNVERIFIED_SECRET' }, { field_key: 'age', outcome: 'not_provided', reason: '材料未提供' }], ...extra })
+
+describe('persistent product processing status', () => {
+  beforeEach(() => { vi.resetAllMocks(); vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-13T00:01:00Z')); api.listProductIngestions.mockResolvedValue([run()]) })
+  afterEach(() => { mounted.splice(0).forEach(w => w.unmount()); vi.useRealTimers() })
+  it('shows reused stage outcomes and original duration separately from current work', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ stage: 'checkpoint', model_call_count: 0, reused_model_call_count: 9, reused_stages: [{ stage_key: 'extract', run_id: 'prior', job_id: 'prior-job', state: 'partial_success', started_at: '2026-09-13T00:00:00Z', finished_at: '2026-09-13T00:00:40Z', success_count: 21, missing_count: 31, failure_count: 30 }] })])
+    const w = await render()
+    const reused = w.get('[data-testid="reused-stages"]')
+    expect(reused.text()).toContain('抽取字段')
+    expect(reused.text()).toContain('已复用')
+    expect(reused.text()).toContain('40 秒')
+    expect(reused.text()).toContain('30')
+    expect(w.get('[data-testid="counts"]').text()).toContain('复用调用 9')
+    expect(w.text()).toContain('检查已有结果')
+  })
+  it('shows the actual preparation phase while a recovery retains its old run state', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ state: 'awaiting_sources', stage: 'preparation', finished_at: undefined, stages: [{ name: 'preparation', state: 'running' }] })])
+    const w = await render()
+    expect(w.get('.run-state').text()).toBe('处理中')
+    expect(w.text()).toContain('提交审核草稿')
+    expect(w.get('.run-heading').text()).not.toContain('等待材料解析')
+  })
+  it('restores server stages, counts and partial terminal without exposing values', async () => {
+    const w = await render()
+    expect(api.listProductIngestions).toHaveBeenCalledWith('kb')
+    expect(w.text()).toContain('部分完成')
+    expect(w.text()).toContain('5 秒')
+    expect(w.text()).toContain('10 秒')
+    expect(w.text()).toContain('EVIDENCE_INVALID')
+    expect(w.text()).not.toContain('UNVERIFIED_SECRET')
+    expect(w.findAll('input[type="checkbox"]')).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(api.getProductIngestion).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('shows missing statistics and terminal timestamps as unknown, not zero or live time', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ counts: undefined, model_call_count: undefined, finished_at: undefined, stages: [] })])
+    const w = await render()
+    expect(w.get('[data-testid="counts"]').text()).toContain('成功 —')
+    expect(w.get('[data-testid="run-duration"]').text()).toBe('耗时 —')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('polls active runs until terminal and stops timers', async () => {
+    api.listProductIngestions.mockResolvedValueOnce([run({ state: 'running', finished_at: undefined })])
+      .mockResolvedValueOnce([run({ state: 'succeeded' })])
+    const w = await render()
+    expect(w.get('[data-testid="run-duration"]').text()).toContain('1 分')
+    await vi.advanceTimersByTimeAsync(2100)
+    await flushPromises()
+    expect(api.listProductIngestions).toHaveBeenCalledTimes(2)
+    expect(api.getProductIngestion).not.toHaveBeenCalled()
+    expect(w.text()).toContain('已完成')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('loads full evidence and recovery eligibility only when a thin run is opened', async () => {
+    api.listProductIngestions.mockResolvedValue([{
+      run_id: 'r1', wiki_knowledge_base_id: 'kb', state: 'failed', version: 7,
+      counts: { success_count: null, missing_count: null, failure_count: null },
+      model_call_count: null, model_call_count_complete: false,
+    }])
+    api.getProductIngestion.mockResolvedValue(run({ state: 'failed', version: 7, can_retry_processing: true }))
+    const w = await render()
+    expect(w.get('[data-testid="counts"]').text()).toContain('模型调用 —')
+    expect(w.find('[data-testid="retry-processing"]').exists()).toBe(false)
+    expect(w.findAll('input[type="checkbox"]')).toHaveLength(0)
+    await w.get('[data-testid="load-run-detail"]').trigger('click')
+    await flushPromises()
+    expect(api.getProductIngestion).toHaveBeenCalledWith('kb', 'r1')
+    expect(w.get('[data-testid="retry-processing"]').text()).toBe('恢复处理')
+    expect(w.findAll('input[type="checkbox"]')).toHaveLength(1)
+    expect(w.text()).not.toContain('UNVERIFIED_SECRET')
+  })
+  it.each([
+    { state: 'succeeded', stage: 'verify', label: '已完成', stageLabel: '检索与证据检查', finished_at: '2026-09-13T00:01:01Z' },
+    { state: 'running', stage: 'compilation', label: '处理中', stageLabel: '编译知识', finished_at: undefined },
+  ])('does not let a late detail replace newer $state/$stage at the same version', async latest => {
+    const earlier = run({ state: 'running', stage: 'extract', version: 7, finished_at: undefined })
+    api.listProductIngestions.mockResolvedValueOnce([earlier])
+      .mockResolvedValue([run({ ...latest, version: 7 })])
+    let resolve!: (value: any) => void
+    api.getProductIngestion.mockImplementation(() => new Promise(r => { resolve = r }))
+    const w = await render()
+    await w.get('[data-testid="load-run-detail"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(2100)
+    await flushPromises()
+    resolve(earlier)
+    await flushPromises()
+    expect(w.get('.run-state').text()).toBe(latest.label)
+    expect(w.get('.run-heading').text()).toContain(latest.stageLabel)
+    expect(w.get('.run-heading').text()).not.toContain('抽取字段')
+    expect(api.getProductIngestion).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(latest.state === 'succeeded' ? 0 : 2)
+  })
+  it.each([['accepting_uploads', '接收材料'], ['awaiting_sources', '等待材料解析']])('shows server state %s in Chinese', async (state, label) => {
+    api.listProductIngestions.mockResolvedValue([run({ state, finished_at: undefined, stage: undefined })])
+    expect((await render()).text()).toContain(label)
+  })
+  it.each([['failed', '处理失败'], ['needs_confirmation', '需要确认']])('stops for terminal %s', async (state, label) => {
+    api.listProductIngestions.mockResolvedValue([run({ state })])
+    expect((await render()).text()).toContain(label)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('retries only checked failures and shows the returned new run', async () => {
+    api.retryProductFields.mockResolvedValue(run({ run_id: 'r2', state: 'created', fields: [], finished_at: undefined }))
+    const w = await render()
+    const retry = w.get('[data-testid="retry-fields"]')
+    expect(retry.attributes('disabled')).toBeDefined()
+    await w.get('input[type="checkbox"]').setValue(true)
+    await retry.trigger('click')
+    await flushPromises()
+    expect(api.retryProductFields).toHaveBeenCalledWith('kb', 'r1', ['premium'])
+    expect(w.findAll('[data-testid="product-run"]')).toHaveLength(2)
+  })
+  it('starts a version-bound source recovery once and preserves the failed run', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ state: 'failed', fields: [], version: 7, can_retry_processing: true })])
+    let resolve!: (value: any) => void
+    api.retryProductProcessing.mockImplementation(() => new Promise(r => { resolve = r }))
+    const w = await render()
+    const button = w.get('[data-testid="retry-processing"]')
+    await button.trigger('click')
+    await button.trigger('click')
+    expect(api.retryProductProcessing).toHaveBeenCalledTimes(1)
+    expect(api.retryProductProcessing).toHaveBeenCalledWith('kb', 'r1', 7)
+    resolve(run({ run_id: 'recovery', state: 'running', fields: [], finished_at: undefined }))
+    await flushPromises()
+    expect(w.findAll('[data-testid="product-run"]')).toHaveLength(2)
+    expect(w.text()).toContain('处理失败')
+  })
+  it.each([
+    { state: 'failed', version: 7, can_retry_processing: false },
+    { state: 'needs_confirmation', version: 7, can_retry_processing: false },
+    { state: 'succeeded', version: 7, can_retry_processing: true },
+    { state: 'running', version: 7, can_retry_processing: true },
+    { state: 'failed', version: 0, can_retry_processing: true },
+  ])('does not expose an unavailable source recovery', async extra => {
+    api.listProductIngestions.mockResolvedValue([run({ fields: [], ...extra })])
+    expect((await render()).find('[data-testid="retry-processing"]').exists()).toBe(false)
+  })
+  it('recovers a server-approved identification failure without resolving it in the browser', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ state: 'needs_confirmation', stage: 'routing', fields: [], version: 1, can_retry_processing: true })])
+    api.retryProductProcessing.mockResolvedValue(run({ run_id: 'routing-recovery', state: 'running', fields: [], finished_at: undefined }))
+    const w = await render()
+    expect(w.get('[data-testid="retry-processing"]').text()).toBe('恢复处理')
+    await w.get('[data-testid="retry-processing"]').trigger('click')
+    await flushPromises()
+    expect(api.retryProductProcessing).toHaveBeenCalledWith('kb', 'r1', 1)
+    expect(w.findAll('[data-testid="product-run"]')).toHaveLength(2)
+    expect(w.text()).toContain('需要确认')
+  })
+  it.each(['javascript:alert(1)', '//evil.example/x', 'https://evil.example/x', '/platform/knowledge-bases/kb/../../settings'])('rejects unsafe publication URL %s', async url => {
+    api.listProductIngestions.mockResolvedValue([run({ published_url: url })])
+    expect((await render()).find('a').exists()).toBe(false)
+  })
+  it('links the published platform product', async () => {
+    const url = '/platform/knowledge-bases/kb/schema-wiki/entities/e/overview'
+    api.listProductIngestions.mockResolvedValue([run({ published_url: url })])
+    expect((await render()).get('a').attributes('href')).toBe(url)
+  })
+  it('links the configured serving Wiki when its ID differs from the uploaded Raw KB', async () => {
+    const url = '/platform/knowledge-bases/wiki-serving/schema-wiki/entities/e/overview'
+    api.listProductIngestions.mockResolvedValue([run({ wiki_knowledge_base_id: 'wiki-serving', published_url: url })])
+    expect((await render()).get('a').attributes('href')).toBe(url)
+  })
+  it.each([undefined, 'other-wiki'])('does not infer a published target when serving identity is %s', async wikiId => {
+    api.listProductIngestions.mockResolvedValue([run({ wiki_knowledge_base_id: wikiId, published_url: '/platform/knowledge-bases/kb/schema-wiki' })])
+    expect((await render()).find('a').exists()).toBe(false)
+  })
+  it('labels the actual extract stage', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ stage: 'extract', stages: [] })])
+    expect((await render()).text()).toContain('抽取字段')
+  })
+  it('shows persisted source phase times and incomplete counts without invented zeroes', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ model_call_count_complete: false, source_processing: { materials: [
+      { knowledge_id: 'new', file_name: '保险条款.pdf', reused: false, counts: { attempts: 2 }, phases: [
+        { phase: 'docreader', recorded: true, occurrences: [{ occurrence: 0, status: 'done', duration_ms: 12500 }] },
+        { phase: 'embedding', recorded: false, occurrences: [] },
+      ] },
+      { knowledge_id: 'old', file_name: '费率表.pdf', reused: true, counts: null, phases: [] },
+    ] } })])
+    const text = (await render()).text()
+    expect(text).toContain('部分阶段统计尚未齐全')
+    expect(text).toContain('保险条款.pdf')
+    expect(text).toContain('12.5 秒')
+    expect(text).toContain('未记录')
+    expect(text).toContain('复用已有解析 · 模型调用尝试 —')
+  })
+  it('ignores stale responses after knowledge base navigation', async () => {
+    let resolve!: (value: any) => void
+    api.listProductIngestions.mockImplementationOnce(() => new Promise(r => { resolve = r })).mockResolvedValueOnce([run({ run_id: 'new-kb-run' })])
+    const w = await render()
+    await w.setProps({ knowledgeBaseId: 'other' })
+    await flushPromises()
+    resolve([run()]); await flushPromises()
+    expect(w.text()).toContain('new-kb-run')
+    expect(w.text()).not.toContain('r1')
+  })
+  it('shows discovery as not executed when no summary exists', async () => {
+    expect((await render()).get('[data-testid="discovery-status"]').text()).toContain('未执行')
+  })
+  it('recovers failed discovery independently without selecting or retrying fields', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ version: 8, can_retry_processing: true,
+      discovery_summary: { state: 'FAILED', reused: false, published_confirmed: false,
+        reason_codes: ['DISCOVERY_GENERATION_FAILED'], counts: {}, coverage: null } })])
+    api.retryProductProcessing.mockResolvedValue(run({ run_id: 'discovery-child', state: 'running', finished_at: undefined }))
+    const w = await render()
+    const recovery = w.get('[data-testid="retry-processing"]')
+    expect(recovery.text()).toBe('恢复自由发现')
+    expect(w.text()).toContain('复用已完成的字段结果')
+    await recovery.trigger('click')
+    await flushPromises()
+    expect(api.retryProductProcessing).toHaveBeenCalledWith('kb', 'r1', 8)
+    expect(api.retryProductFields).not.toHaveBeenCalled()
+  })
+  it('does not enable discovery recovery for ordinary missing fields or an unapproved hint', async () => {
+    api.listProductIngestions.mockResolvedValue([run({ version: 8, can_retry_processing: true,
+      discovery_summary: { state: 'EMPTY', reused: false, published_confirmed: false,
+        reason_codes: [], counts: {}, coverage: null } })])
+    expect((await render()).find('[data-testid="retry-processing"]').exists()).toBe(false)
+    api.listProductIngestions.mockResolvedValue([run({ version: 8, can_retry_processing: false,
+      discovery_summary: { state: 'FAILED', reused: false, published_confirmed: false,
+        reason_codes: [], counts: {}, coverage: null } })])
+    expect((await render()).find('[data-testid="retry-processing"]').exists()).toBe(false)
+  })
+  it.each([
+    ['FAILED', '发现失败'], ['PENDING', '待确认'], ['REJECTED', '未通过'],
+    ['EMPTY', '未发现有效新知识'], ['ACCEPTED', '已通过检查'],
+  ])('distinguishes discovery %s while ordinary missing fields remain visible', async (state, label) => {
+    api.listProductIngestions.mockResolvedValue([run({ discovery_summary: {
+      state, reused: true, published_confirmed: false, reason_codes: ['DISCOVERY_CHECKED'],
+      counts: { proposed_new: 2, duplicate: 1, update_proposal: 1, rejected: 1, published: 0 },
+      coverage: { offered_chars: 200, omitted_chars: 500, complete: false, material_count: 2 },
+      raw: 'PRIVATE_DISCOVERY', candidates: ['PRIVATE_CANDIDATE'],
+    } })])
+    const w = await render()
+    const text = w.get('[data-testid="discovery-status"]').text()
+    expect(text).toContain(label)
+    expect(text).toContain('复用已有发现结果')
+    expect(text).toContain('已发送 200 字')
+    expect(text).toContain('未发送 500 字')
+    expect(text).not.toContain('已发布')
+    expect(text).not.toContain('PRIVATE')
+    expect(w.text()).toContain('材料未提供')
+  })
+  it.each([false, true])('only labels accepted discovery published after verification: %s', async verified => {
+    api.listProductIngestions.mockResolvedValue([run({
+      state: verified ? 'partial_success' : 'running', finished_at: verified ? '2026-09-13T00:00:10Z' : undefined,
+      stages: verified ? [{ name: 'verify', state: 'succeeded', finished_at: '2026-09-13T00:00:09Z' }] : [],
+      discovery_summary: { state: 'ACCEPTED', reused: false, published_confirmed: verified,
+        reason_codes: [], counts: { proposed_new: 1, duplicate: 0, update_proposal: 0, rejected: 0, published: verified ? 1 : 0 }, coverage: null },
+    })])
+    const text = (await render()).get('[data-testid="discovery-status"]').text()
+    expect(text).toContain(verified ? '已发布 1 项知识内容（页面或概念）' : '已通过检查')
+    if (!verified) expect(text).not.toContain('已发布')
+  })
+})

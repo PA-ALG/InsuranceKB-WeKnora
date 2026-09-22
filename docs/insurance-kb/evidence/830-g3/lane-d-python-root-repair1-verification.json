@@ -1,0 +1,30 @@
+{
+  "contract": "830-g3-d-python-root-repair1-verification.v1",
+  "status": "PASS_PENDING_INDEPENDENT_REVIEW",
+  "source_sha256": "5e472c98c4cb10929cf90689c03b105c68d02da74ca04f5fe12f554d0e6a7ef5",
+  "test_sha256": "7f16886fbe4110082175ed5e93714fa647c30195af980c4724307c3de109183c",
+  "candidate_sha256": "179affc52b282ea16d3aecfda091c449de3d62992c4f5b337bb97609df414de0",
+  "additional_checks": [
+    "MATCH entity_key tamper rejected after binding/request rehash",
+    "MATCH version_candidate_key tamper rejected after binding/request rehash",
+    "actor_display_name tamper rejected after confirmation/request rehash",
+    "same SourceBlock identity changed parser_identity rejected after request rehash"
+  ],
+  "baseline_fields": 342,
+  "logs": [
+    {
+      "path": "g3-d-python-root-repair1-probes.py",
+      "sha256": "4d1acb81ac18f52f01da7796ab01a560987a5c45a3e9a125c428c1f07302a48a"
+    },
+    {
+      "path": "g3-d-python-root-repair1-probes-01.log",
+      "sha256": "da96136d67a727ecb433cbeeb793ba4c1a9700aa40c5aa9a7673968aa2a283f9"
+    }
+  ],
+  "old_root110": "bounded pre-repair history retained; not rerun without justification",
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "build": 0
+  }
+}

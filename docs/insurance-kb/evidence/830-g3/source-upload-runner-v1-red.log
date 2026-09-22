@@ -1,0 +1,97 @@
+test_descriptor_double_read_manifest_and_parser_must_match (__main__.UploadRunnerTests) ... ERROR
+test_frozen_local_inputs_are_exact_eleven_unique_sources (__main__.UploadRunnerTests) ... ERROR
+test_provider_non200_ledger_stops_before_next_material (__main__.UploadRunnerTests) ... FAIL
+test_scope_preflight_rejects_new_md5_before_any_write (__main__.UploadRunnerTests) ... FAIL
+test_source_receipt_and_old_ids_are_exact (__main__.UploadRunnerTests) ... ERROR
+test_started_persist_failure_prevents_post (__main__.UploadRunnerTests) ... ERROR
+test_teardown_failure_reports_stop_incomplete (__main__.UploadRunnerTests) ... ERROR
+test_timeout_is_result_unknown_and_sequence_does_not_advance (__main__.UploadRunnerTests) ... ERROR
+
+======================================================================
+ERROR: test_descriptor_double_read_manifest_and_parser_must_match (__main__.UploadRunnerTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner_test.py", line 85, in test_descriptor_double_read_manifest_and_parser_must_match
+    process = module.expected_process_config()
+  File "/private/tmp/g3-source-upload-runner.py", line 44, in expected_process_config
+    raise NotImplementedError
+NotImplementedError
+
+======================================================================
+ERROR: test_frozen_local_inputs_are_exact_eleven_unique_sources (__main__.UploadRunnerTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner_test.py", line 141, in test_frozen_local_inputs_are_exact_eleven_unique_sources
+    inputs = module.load_frozen_inputs(module.WORKTREE)
+  File "/private/tmp/g3-source-upload-runner.py", line 72, in load_frozen_inputs
+    raise NotImplementedError
+NotImplementedError
+
+======================================================================
+ERROR: test_source_receipt_and_old_ids_are_exact (__main__.UploadRunnerTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner_test.py", line 116, in test_source_receipt_and_old_ids_are_exact
+    module.validate_source_receipt(receipt, material, descriptor, "knowledge-1")
+  File "/private/tmp/g3-source-upload-runner.py", line 60, in validate_source_receipt
+    raise NotImplementedError
+NotImplementedError
+
+======================================================================
+ERROR: test_started_persist_failure_prevents_post (__main__.UploadRunnerTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner_test.py", line 38, in test_started_persist_failure_prevents_post
+    module.single_post(State(), lambda: sent.append(True), "upload:g3-material-07")
+  File "/private/tmp/g3-source-upload-runner.py", line 32, in single_post
+    raise NotImplementedError
+NotImplementedError
+
+======================================================================
+ERROR: test_teardown_failure_reports_stop_incomplete (__main__.UploadRunnerTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner_test.py", line 136, in test_teardown_failure_reports_stop_incomplete
+    evidence = module.teardown(Runtime(), failed=True)
+  File "/private/tmp/g3-source-upload-runner.py", line 68, in teardown
+    raise NotImplementedError
+NotImplementedError
+
+======================================================================
+ERROR: test_timeout_is_result_unknown_and_sequence_does_not_advance (__main__.UploadRunnerTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner_test.py", line 66, in test_timeout_is_result_unknown_and_sequence_does_not_advance
+    module.execute_material_sequence(materials, state, worker)
+  File "/private/tmp/g3-source-upload-runner.py", line 36, in execute_material_sequence
+    raise NotImplementedError
+NotImplementedError
+
+======================================================================
+FAIL: test_provider_non200_ledger_stops_before_next_material (__main__.UploadRunnerTests)
+----------------------------------------------------------------------
+NotImplementedError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner_test.py", line 81, in test_provider_non200_ledger_stops_before_next_material
+    module.validate_guard_ledger(ledger, [material])
+AssertionError: "provider attempt failed" does not match ""
+
+======================================================================
+FAIL: test_scope_preflight_rejects_new_md5_before_any_write (__main__.UploadRunnerTests)
+----------------------------------------------------------------------
+NotImplementedError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner_test.py", line 27, in test_scope_preflight_rejects_new_md5_before_any_write
+    module.validate_initial_scope(existing, materials, {})
+AssertionError: "pre-upload conflict" does not match ""
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.084s
+
+FAILED (failures=2, errors=6)

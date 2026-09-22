@@ -1,0 +1,16 @@
+{
+  "changed_from_freeze": [
+    "frontend/src/api/schema-wiki/batchConcept830G3.ts",
+    "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts"
+  ],
+  "unchanged_from_freeze": [
+    "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+    "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts",
+    "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue",
+    "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts"
+  ],
+  "unexpected_changed": [],
+  "pass": true
+}

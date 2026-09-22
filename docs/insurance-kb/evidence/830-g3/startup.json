@@ -1,0 +1,432 @@
+{
+  "contract": "830-g3-startup.v1",
+  "recorded_at": "2026-09-07T05:16:54.083379+00:00",
+  "GOAL_ID": "G3",
+  "CURRENT_AUTHORIZATION": "EXPLICIT_USER_G3_IMPLEMENTATION_START",
+  "authorization_text": "那开始吧，由你来启动 G3 总控",
+  "OWNER": "830-G3总控 / root",
+  "GOAL_PRODUCT_STATE": "WIP_NOT_PASSED",
+  "base": "075d9c38c01e48abfe7985985dc503099cf9b19a",
+  "base_tree": "5881aeddcf9db0543cb89ecbedfbd74d36821731",
+  "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
+  "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
+  "branch": "codex/830-g3-implementation",
+  "CURRENT_RED": "SOURCE_PROVISION_STOPPED_POSTGRES_PROCESS_REINITIALIZATION",
+  "NEXT_PHYSICAL_RESULT": "Independent review of isolated PostgreSQL recovery proposal; new bounded recovery scope requires approval, original source consent remains recorded",
+  "FROZEN_INPUT": {
+    "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
+    "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
+    "field_counts": [
+      67,
+      70,
+      62,
+      67,
+      66,
+      75,
+      79,
+      82,
+      74,
+      83,
+      76
+    ],
+    "corpus": "corpus-files-v4.json:15 raw sources; all15 actual native captures verified;4 existing W1 revisions/chunks reopened; actual G3 service readback and C input/Seed/Policy freeze pending",
+    "labels": "PROTOCOL_SEED_NOT_EXPERT_GOLDEN",
+    "corpus_raw_file_set_sha256": "0fa401475bf868a5f0f49f406da40214b6e1af7b88cca64e65c2e2b84fc4648f",
+    "inventory": "corpus-inventory-v3.json",
+    "existing_readback": "existing-source-readonly-probe.json and existing-chunk-capture.json:4 currentW1 revisions/287 chunks exact hash verified; native custody source reopen still pending",
+    "native_captures": "native-capture-inventory-v2.json:15 actual captures, set70a6fe13275f7366c610abbed0d8c44b480197696b1f4a03624457f48d4cf4e5",
+    "existing_native_preservation": "01/03 historical raw digest matched;04 raw first preserved with historical canonical match;02 fresh standalone local parse PASS27pages, no WeKnora reparse"
+  },
+  "VALIDATION_LEVEL": "D1",
+  "DOCKER_ACTION": "ONE_SOURCE_APPLY_STOPPED_AFTER_TARGET_DB_CREATE; READONLY_DIAGNOSTICS_COMPLETE",
+  "ARTIFACT_IDENTITY": "source-runtime-apply-stop-public-01.json; source-runtime-stop-current-postgres-01.json",
+  "WRITE_DOMAINS": {
+    "root": [
+      "HANDOFF.md",
+      "docs/insurance-kb/evidence/830-g3/**",
+      "openspec/changes/README.md",
+      "openspec/changes/129-830-g3-catalog-batch/**",
+      "docs/superpowers/plans/2026-09-07-830-g3-catalog.md",
+      "internal/handler/schema_pack_catalog_830_g3.generated.json"
+    ],
+    "g3_seam_audit": [],
+    "g3_corpus_audit": [],
+    "g3_catalog_impl": [
+      "harness/src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py",
+      "harness/tests/test_schema_pack_catalog_830_g3.py",
+      "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+      "harness/tests/test_batch_entity_resolution_830_g3.py",
+      "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "harness/tests/test_batch_concept_compile_830_g3.py",
+      "internal/types/concept_free_wiki_830_g3.go",
+      "internal/types/concept_free_wiki_830_g3_test.go",
+      "harness/tests/fixtures/batch_concept_compile_830_g3/**",
+      "harness/src/insurance_harness/knowledge_compiler/batch_canonical_830_g3.py",
+      "harness/tests/test_batch_canonical_830_g3.py"
+    ],
+    "g3_catalog_ui": [
+      "internal/handler/schema_pack_catalog_830_g3.go",
+      "internal/router/routes_schema_wiki.go",
+      "frontend/src/api/schema-wiki/schemaPackCatalog830G3.ts",
+      "frontend/src/views/knowledge/schema-wiki/SchemaPackCatalog830G3.vue",
+      "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "internal/handler/schema_pack_catalog_830_g3_test.go",
+      "internal/router/routes_schema_pack_catalog_830_g3_test.go",
+      "frontend/src/api/schema-wiki/schemaPackCatalog830G3.spec.ts",
+      "frontend/src/views/knowledge/schema-wiki/SchemaPackCatalog830G3.spec.ts",
+      "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
+    ]
+  },
+  "parallel_implementation": "NONE_ALL_CURRENT_CODE_DOMAINS_CLOSED",
+  "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
+  "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
+  "budgets": {
+    "model_calls_current_slice": 0,
+    "material_external_transfers": 0,
+    "docker_builds_current_slice": 0,
+    "docker_pulls": 0,
+    "shared_db_writes": 0,
+    "external_owner": "root only; later exact plans separately frozen",
+    "model_calls_counting_scope": "product compiler/reviewer/provider HTTP calls only; does not mean zero Codex/subagent development inference",
+    "frontend_dependencies": "reuse existing G1 node_modules through ignored symlink; no install"
+  },
+  "NON_GOALS": [
+    "G4",
+    "G5",
+    "G6",
+    "Q0",
+    "production knowledge publication",
+    "new service/table/authority",
+    "historical worktree cleanup",
+    "BA0 rerun"
+  ],
+  "STOP": [
+    "28§6 repeated same blocking edge after one correction",
+    "second-level prerequisite",
+    "28§8 timebox/48h no real result",
+    "architecture red line or unowned shared file changes",
+    "G3 card wrong merge/identity drift/frozen threshold drift"
+  ],
+  "FLOW_STATUS": "NOT RUN",
+  "QUALITY_STATUS": "DEFERRED_TO_Q0",
+  "SCHEMA_CATALOG_STATUS": "11_COMPILED_NOT_RUNTIME_REGISTERED",
+  "QUALITY_ADMITTED_PACK_SET": [],
+  "baseline_verification": {
+    "tests": "test_entity_page_graph_830_g1.py + test_medical_schema_pack_596_1.py",
+    "passed": 16,
+    "skipped": 3,
+    "failed": 0,
+    "not_g3_pass": true,
+    "skip_reason": "3 historical C5 replay checks require expired /private/tmp/weknora-815-final-06e08c.sbD1nuoR/c5-bundle-v3 inputs; NOT counted toward G3",
+    "actual_c5_replay": {
+      "source": "docs/insurance-kb/evidence/830-g2/inputs/c5",
+      "passed": 3,
+      "skipped": 0,
+      "failed": 0,
+      "meaning": "same three previously skipped G1 baseline checks, persistent exact input reuse; total distinct baseline19PASS"
+    },
+    "effective_skipped": 0
+  },
+  "shared_contract": {
+    "plan": "docs/superpowers/plans/2026-09-07-830-g3-catalog.md",
+    "plan_sha256": "8c32fe0d7047b0d97b0c78a30cd4d53c0d18852536c4cfb7350b1ad628c0b266",
+    "mapping_config_sha256": "4be610b5eb9c4c665a932b0786eafc08a75982447fb14aaf1f1e32c7662fef18",
+    "spec_sha256": "c06b3d5ba8da5c17eb5ae47eeb68d62bf44c3c7928682cc8353065495132304c",
+    "status": "A_SPEC_CODE_PASS_BLOCKER0_WIRE_UNCHANGED",
+    "classification_shape": "applicable_classifications=[mapping.classification] one-element ordered array; not a batch classifier output"
+  },
+  "implementation_owner": "root integration; all implementation lanes frozen and independently accepted",
+  "catalog_content_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
+  "profile_confirmation": "USER_CONFIRMED_EXACT_CATALOG; actor display name/queue assignee not supplied",
+  "profile_confirmation_receipt": "profile-user-confirmation.json",
+  "source_runtime_provision": "ACTUAL_V3_APPLY_STOPPED_CREATED_EMPTY_TARGET_DB; PostgreSQL process reinitialization observed; uploads/provider NOT RUN; no retry",
+  "d_contract": {
+    "path": "docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md",
+    "sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
+    "status": "FROZEN_PASS_BLOCKER0",
+    "review": "lane-d-final-contract-independent-review.json"
+  },
+  "c_multiline_gap": {
+    "reproduction": "cd-multiline-canonical-reproduction.log",
+    "scope": "actual base27 multiline values; C corpus/Evidence also blocked; prior bounded56/73 pass history retained",
+    "state": "BLOCKED_PENDING_BOUNDED_DESIGN7",
+    "status": "C_COMMON_CODE_PASS_ROOT_INDEPENDENT81; D_FULL342_NOT_RUN"
+  },
+  "multiline_design7": {
+    "contract": "830-g3-cd-multiline-design-review.v1",
+    "status": "PASS",
+    "reviewer": "g3_seam_audit",
+    "design": "cd-multiline-canonical-amendment-7-v2.md",
+    "design_sha256": "975ae956c2c851b8f8fffffbffd5bbbebb6b4051fa031237db3c0afb224f9380",
+    "blockers": [],
+    "backlog": [],
+    "closed": [
+      "Typed recursive nested structural strings checked before dumping on construction/revalidation; only exact C SourceBlock.text/Evidence.quote body exceptions",
+      "Object type nonempty ASCII control-free in both languages"
+    ],
+    "prior_probe_sha256": "1b86c0f5b6053b8b9990b267d8a6280fc61e20dad7e101ad0e100d320aa0d39d",
+    "authorization": "C/common bounded compatibility slice only; independent review before D continuation"
+  },
+  "multiline_code_review": {
+    "status": "PASS",
+    "receipt": "cd-multiline-code-independent-review.json",
+    "files": [
+      {
+        "path": "harness/src/insurance_harness/knowledge_compiler/batch_canonical_830_g3.py",
+        "sha256": "1f9b655221d2fad058a8693d5058b943159b9e8da0e5422f68ae1479498d1d02"
+      },
+      {
+        "path": "harness/tests/test_batch_canonical_830_g3.py",
+        "sha256": "49b12c1acd2d4e6786678b2dd7baf4bcbf5194c32e60261561b4d0a7efe5d2ec"
+      },
+      {
+        "path": "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+        "sha256": "07dc26da46c3b2204ac6f21243e2af45f339f530304d9d2a81094f52dc79e310"
+      },
+      {
+        "path": "harness/tests/test_batch_entity_resolution_830_g3.py",
+        "sha256": "7dab537cd0ad11ef0c907d790796b19f0ed80dbb666d62a8b94e462ee239908d"
+      }
+    ],
+    "commit": "de38eb252979713415d8fa34946084f7f344cbc0"
+  },
+  "source_registration_design_review": {
+    "contract": "830-g3-source-registration-design-review.v1",
+    "recorded_at": "2026-09-07T11:31:37.343546+00:00",
+    "reviewer": "g3_catalog_ui",
+    "design": "c-source-registration-amendment-8.md",
+    "design_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+    "status": "PASS",
+    "blockers": [],
+    "backlog": [
+      {
+        "item": "Early non-PDF MIME quarantine",
+        "reason": "Current actual service normalizes and requires application/pdf; D authoritative re-open remains required; not part of this bounded amendment"
+      }
+    ],
+    "verified": [
+      "Exact 14 JSON keys incl contract mirror handler lines42-56/74-81",
+      "C identity/classification do not consume three legacy admission fields; no generic admission adapter prerequisite",
+      "Exact nested outer hash binding; legacy self-hash and scope preserved",
+      "Actual authenticated acquisition capture binds BatchCorpus scope; D reopens current server authority and historical G1/C5 chain",
+      "Require real discriminated union; reject unknown/mixed/extra shapes"
+    ],
+    "required_implementation_sites": [
+      "_entry_source_reasons",
+      "_matching_rule",
+      "CREATE _decision candidate scope/key",
+      "resolve_batch.source_keys"
+    ],
+    "source_scope": "Registered uses exact BatchCorpus scope, never guesses from block/receipt; legacy retains receipt scope checks",
+    "effects": {
+      "http": 0,
+      "database": 0,
+      "provider": 0,
+      "container": 0
+    }
+  },
+  "source_registration_dispatch": {
+    "contract": "830-g3-source-registration-dispatch.v1",
+    "recorded_at": "2026-09-07T11:31:37.343546+00:00",
+    "owner": "g3_catalog_impl",
+    "status": "AUTHORIZED_WITHIN_G3_AFTER_DESIGN_REVIEW",
+    "design_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+    "predecessor_common_c_commit": "de38eb252",
+    "write_paths": [
+      "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+      "harness/tests/test_batch_entity_resolution_830_g3.py"
+    ],
+    "required_implementation_sites": [
+      "_entry_source_reasons",
+      "_matching_rule",
+      "CREATE _decision candidate scope/key",
+      "resolve_batch.source_keys"
+    ],
+    "sequence": "RED actual HTTP receipt rejected by old DTO; implementation and focused/AC regressions; frozen files and independent review before actual C corpus",
+    "non_goals": [
+      "No new admission prerequisite/resource_id/self-hash",
+      "No shared legacy receipt/server/DB/model/upload changes",
+      "No D handler/service/UI expansion"
+    ],
+    "effects": {
+      "http": 0,
+      "database": 0,
+      "provider": 0,
+      "container": 0
+    }
+  },
+  "source_upload_runner": {
+    "frozen_v1": "source_upload_runner_v1.py",
+    "v1_status": "BLOCKED_INDEPENDENT_REVIEW_7",
+    "review": "source-upload-runner-independent-review-2.json",
+    "current": "V2_CODE_REVIEW_PASS_USER_AUTHORIZED_EXECUTION_NOT_RUN_PROVISION_STOPPED",
+    "dispatch": "source-upload-runner-repair-dispatch-1.json",
+    "actual_effects": 0,
+    "freeze": "source-upload-runner-freeze-2.json"
+  },
+  "source_registration_code_review": {
+    "status": "PASS",
+    "review": "c-source-registration-independent-review.json",
+    "root_tests": 99,
+    "source_sha256": "050f5a0b65e8919142946e6f38a947220ec9181060b9d6ea89f3ed9778dfe2e5",
+    "test_sha256": "16b4628e3f8a258cab97a03ab6daf6585c3fdeb3cbfaa4e4beb11c68845f2216",
+    "commit": "a6ca221cdc4fb500c3e38e3a4dd733091774bbad"
+  },
+  "d_fixture_progress": {
+    "contract": "830-g3-d-owner-fixture-progress.v1",
+    "recorded_at": "2026-09-07T12:11:04.414146+00:00",
+    "reported_by": "g3_catalog_impl",
+    "status": "OWNER_PROVISIONAL_NOT_INDEPENDENTLY_REVIEWED",
+    "fixture_counts": {
+      "entities": 5,
+      "existing_fields": 134,
+      "unchanged_carry": 132,
+      "unknown_key_alignments": 2,
+      "delta_fields": 208,
+      "final_fields": 342,
+      "source_blocks": 26,
+      "execution_raws": 3
+    },
+    "post_bytes_owner_reported": 2247425,
+    "limit_bytes": 8388608,
+    "existing_codes": [
+      "596",
+      "594"
+    ],
+    "existing_serving_versions": [
+      "596-1",
+      "594-1"
+    ],
+    "qualifiers": [
+      "protocol fixture, not real C/model/provider result",
+      "two synthetic MATCH decisions and three synthetic CREATE decisions",
+      "fixture/negative tests and Go mirror still in progress",
+      "handler/service/UI writes remain closed until frozen capacity and DTO validation gates pass"
+    ]
+  },
+  "source_execution_ready": "source-execution-ready.json",
+  "source_execution_package_check": {
+    "status": "PASS_USER_AUTHORIZATION_RECEIVED",
+    "receipt": "source-execution-package-independent-check.json",
+    "user_reply": "授权"
+  },
+  "d_python_review": {
+    "status": "PASS",
+    "blockers": 0,
+    "receipt": "lane-d-python-independent-review-01.json",
+    "repair": "lane-d-python-repair-dispatch-1.json",
+    "root_bounded_tests": 110,
+    "independent_bounded_tests": 11,
+    "preparation_bytes": 2247500,
+    "fixture": "synthetic protocol, not actual C/model/business",
+    "repair1": {
+      "freeze": "lane-d-python-repair1-freeze.json",
+      "source_sha256": "5e472c98c4cb10929cf90689c03b105c68d02da74ca04f5fe12f554d0e6a7ef5",
+      "owner_focused": 24,
+      "root_additional_attacks": 4,
+      "fixture_changed": false,
+      "independent_status": "PASS_ORIGINAL_THREE_FINDINGS"
+    },
+    "new_source_coverage": {
+      "status": "PASS_AFTER_DESIGN2_AND_FINAL_REVIEW",
+      "reviewer": "g3_seam_audit",
+      "fingerprint": "selected material non-identity SourceBlock rejected before compile while delta owner allowlist permits it",
+      "next": "Go exact mirror",
+      "go": "RESUMED_TWO_FILE_DOMAIN",
+      "design_status": "PASS",
+      "dispatch": "lane-d-source-coverage-dispatch-2.json"
+    },
+    "source_coverage2": {
+      "freeze": "lane-d-source-coverage2-freeze.json",
+      "source_sha256": "e8e0dbcd8bf4cb1f2072d6fbf4ebf79f3554cbfef53c9c1f84011dbcc4357316",
+      "owner_tests": 30,
+      "root_verification": "lane-d-source-coverage2-root-verification.json",
+      "post_bytes": 2254490,
+      "source_blocks": 27,
+      "independent_review": "lane-d-source-coverage2-independent-review.json",
+      "independent_tests": 30,
+      "independent_status": "PASS",
+      "review_sha256": "0b21ea94a9e4ca0d22c273282916c6f07dda2bfc2d59b7f0664c4b3e7a5275f2"
+    },
+    "historical_initial_review": "lane-d-python-independent-review-01.json (three findings superseded by reviewed repairs)"
+  },
+  "d_active_transport_design": {
+    "status": "PASS_DESIGN_ONLY",
+    "sha256": "26189ef0159da209926d24d14b59939b0688924febd55c221b2e6b9b1536ed26",
+    "review": "d-active-page-transport-design-review-1.json"
+  },
+  "d_go_progress": {
+    "status": "PASS_AFTER_REPAIR1_CLOSED",
+    "logs": [
+      {
+        "path": "g3-d-go-fullfixture-red-20260907-03.log",
+        "sha256": "536935c955eee13e118ec5759b4ebed3d57d574f7ac86d6d1ab0cefc8d731953"
+      },
+      {
+        "path": "g3-d-go-c-replay-red-20260907-06.log",
+        "sha256": "4ae4f447a91da08f41257cc5f37b7437844575eec959f8e31ef900699fb7860d"
+      }
+    ],
+    "owner": "g3_catalog_impl",
+    "write_paths": [
+      "internal/types/concept_free_wiki_830_g3.go",
+      "internal/types/concept_free_wiki_830_g3_test.go"
+    ],
+    "independent_review": "lane-d-go-repair1-independent-rereview.json",
+    "downstream_design": "lane-d-downstream-design-freeze-1.json",
+    "scope_review": "yellow-scope-control-d-go-02.json",
+    "commit": "0258e413f",
+    "current_write_paths": [],
+    "write_paths_note": "Historical authorized mirror paths, now closed."
+  },
+  "d_ui_progress": {
+    "status": "PASS_AFTER_REPAIR1_CLOSED",
+    "independent_review": "lane-d-ui-repair1-independent-rereview.json",
+    "commit": "b7a26b8aa",
+    "current_write_paths": []
+  },
+  "d_backend_progress": {
+    "status": "PASS_LOCAL_SOFTWARE_CLOSED",
+    "freeze": "lane-d-backend-freeze-1.json",
+    "freeze_sha256": "5ce69ab74960e7467e2e9af3b40bf365d5fde99c27c623dea138ec3e25ed30f3",
+    "changed_files": 11,
+    "repair_rounds_used": 2,
+    "confirmed_findings": [],
+    "root_interop": "d-backend-ui-interop-repair1/manifest.json",
+    "repair_design_inputs": "d-backend-repair1-design-inputs/manifest.json",
+    "live_effects": 0,
+    "independent_review": "lane-d-backend-repair2-independent-review.json",
+    "repair_dispatch": "lane-d-backend-repair-dispatch-2.json",
+    "final_freeze": "lane-d-backend-repair2-final-freeze.json",
+    "root_integration": "lane-d-root-software-integration.json",
+    "current_write_paths": [],
+    "closed_findings": [
+      "B1",
+      "B2 decoded Text/storage",
+      "B2 raw JSON Unicode"
+    ]
+  },
+  "progress_updated_at": "2026-09-07T22:21:17.317738+00:00",
+  "source_execution_user_authorization": {
+    "status": "APPROVED",
+    "receipt": "source-execution-explicit-user-authorization-01.json",
+    "sha256": "102c4def5921673854ca994be681127db462fcfa9f5526695444e4e3e815e9a1",
+    "reply": "授权",
+    "scope": "Frozen source-only execution package;11 uploads/204 inputs/max11 embedding requests/15 source registrations",
+    "repeat_confirmation_required": false
+  },
+  "source_execution_actual": {
+    "status": "BLOCKED",
+    "public_receipt": "source-runtime-apply-stop-public-01.json",
+    "recovery_proposal": "source-runtime-isolated-recovery-proposal-01.md",
+    "provisioning": "BLOCKED",
+    "provider_probe": "NOT RUN",
+    "local_live": "NOT RUN",
+    "database_created": true,
+    "uploads": 0,
+    "provider_calls": 0,
+    "retries": 0,
+    "independent_review": "source-runtime-apply-stop-independent-review-01.json",
+    "independent_supplement": "source-runtime-apply-stop-independent-supplement-02.json"
+  }
+}

@@ -1,0 +1,882 @@
+..................FFFFFFFF.F..FFFFFF                                     [100%]
+=================================== FAILURES ===================================
+_ test_existing_identity_competition_across_different_codes_stays_human[name] __
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+competition = 'name'
+
+    @pytest.mark.parametrize("competition", ["name", "alias", "anchor"])
+    def test_existing_identity_competition_across_different_codes_stays_human(
+        catalog: SchemaPackCatalogV1,
+        competition: str,
+    ) -> None:
+        proposed_name = "竞争产品"
+        proposed_anchor = "REG-COMPETE"
+        existing = g.ExistingEntityV1(
+            entity_id="serving-other-code",
+            entity_version="version-other-code",
+            product_id="product-other-code",
+            product_version_id="product-version-other-code",
+            issuer="平安保险",
+            name=proposed_name if competition == "name" else "既有正式名称",
+            product_code="OTHER-CODE",
+            version_label="2025",
+            filing_or_registration=g.VersionAnchorV1(
+                kind="registration_number",
+                value=proposed_anchor if competition == "anchor" else "REG-OTHER",
+            ),
+            approved_aliases=(
+                (
+                    g.ApprovedAliasV1(value=proposed_name, approval_receipt_sha256="f" * 64),
+                )
+                if competition == "alias"
+                else ()
+            ),
+            identity_evidence_sha256s=("e" * 64,),
+        )
+        entry = _entry(
+            material_id=f"compete-{competition}",
+            text=(
+                f"平安保险 {proposed_name} 产品代码 NEW-CODE 登记编号 {proposed_anchor} "
+                "版本 2026 医疗保险 官方条款"
+            ),
+        )
+        child = (
+            _resolve(
+                catalog,
+                (entry,),
+                (
+                    (
+                        {
+                            "proposal_ref": "p",
+                            "name": proposed_name,
+                            "product_code": "NEW-CODE",
+                            "filing": proposed_anchor,
+                        },
+                    ),
+                ),
+                existing=_existing(existing),
+            )
+            .decisions[0]
+            .children[0]
+        )
+>       assert child.disposition == "NEEDS_CONFIRM"
+E       AssertionError: assert 'CREATE' == 'NEEDS_CONFIRM'
+E         
+E         - NEEDS_CONFIRM
+E         + CREATE
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1354: AssertionError
+_ test_existing_identity_competition_across_different_codes_stays_human[alias] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+competition = 'alias'
+
+    @pytest.mark.parametrize("competition", ["name", "alias", "anchor"])
+    def test_existing_identity_competition_across_different_codes_stays_human(
+        catalog: SchemaPackCatalogV1,
+        competition: str,
+    ) -> None:
+        proposed_name = "竞争产品"
+        proposed_anchor = "REG-COMPETE"
+        existing = g.ExistingEntityV1(
+            entity_id="serving-other-code",
+            entity_version="version-other-code",
+            product_id="product-other-code",
+            product_version_id="product-version-other-code",
+            issuer="平安保险",
+            name=proposed_name if competition == "name" else "既有正式名称",
+            product_code="OTHER-CODE",
+            version_label="2025",
+            filing_or_registration=g.VersionAnchorV1(
+                kind="registration_number",
+                value=proposed_anchor if competition == "anchor" else "REG-OTHER",
+            ),
+            approved_aliases=(
+                (
+                    g.ApprovedAliasV1(value=proposed_name, approval_receipt_sha256="f" * 64),
+                )
+                if competition == "alias"
+                else ()
+            ),
+            identity_evidence_sha256s=("e" * 64,),
+        )
+        entry = _entry(
+            material_id=f"compete-{competition}",
+            text=(
+                f"平安保险 {proposed_name} 产品代码 NEW-CODE 登记编号 {proposed_anchor} "
+                "版本 2026 医疗保险 官方条款"
+            ),
+        )
+        child = (
+            _resolve(
+                catalog,
+                (entry,),
+                (
+                    (
+                        {
+                            "proposal_ref": "p",
+                            "name": proposed_name,
+                            "product_code": "NEW-CODE",
+                            "filing": proposed_anchor,
+                        },
+                    ),
+                ),
+                existing=_existing(existing),
+            )
+            .decisions[0]
+            .children[0]
+        )
+>       assert child.disposition == "NEEDS_CONFIRM"
+E       AssertionError: assert 'CREATE' == 'NEEDS_CONFIRM'
+E         
+E         - NEEDS_CONFIRM
+E         + CREATE
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1354: AssertionError
+_ test_existing_identity_competition_across_different_codes_stays_human[anchor] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+competition = 'anchor'
+
+    @pytest.mark.parametrize("competition", ["name", "alias", "anchor"])
+    def test_existing_identity_competition_across_different_codes_stays_human(
+        catalog: SchemaPackCatalogV1,
+        competition: str,
+    ) -> None:
+        proposed_name = "竞争产品"
+        proposed_anchor = "REG-COMPETE"
+        existing = g.ExistingEntityV1(
+            entity_id="serving-other-code",
+            entity_version="version-other-code",
+            product_id="product-other-code",
+            product_version_id="product-version-other-code",
+            issuer="平安保险",
+            name=proposed_name if competition == "name" else "既有正式名称",
+            product_code="OTHER-CODE",
+            version_label="2025",
+            filing_or_registration=g.VersionAnchorV1(
+                kind="registration_number",
+                value=proposed_anchor if competition == "anchor" else "REG-OTHER",
+            ),
+            approved_aliases=(
+                (
+                    g.ApprovedAliasV1(value=proposed_name, approval_receipt_sha256="f" * 64),
+                )
+                if competition == "alias"
+                else ()
+            ),
+            identity_evidence_sha256s=("e" * 64,),
+        )
+        entry = _entry(
+            material_id=f"compete-{competition}",
+            text=(
+                f"平安保险 {proposed_name} 产品代码 NEW-CODE 登记编号 {proposed_anchor} "
+                "版本 2026 医疗保险 官方条款"
+            ),
+        )
+        child = (
+            _resolve(
+                catalog,
+                (entry,),
+                (
+                    (
+                        {
+                            "proposal_ref": "p",
+                            "name": proposed_name,
+                            "product_code": "NEW-CODE",
+                            "filing": proposed_anchor,
+                        },
+                    ),
+                ),
+                existing=_existing(existing),
+            )
+            .decisions[0]
+            .children[0]
+        )
+>       assert child.disposition == "NEEDS_CONFIRM"
+E       AssertionError: assert 'CREATE' == 'NEEDS_CONFIRM'
+E         
+E         - NEEDS_CONFIRM
+E         + CREATE
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1354: AssertionError
+_____________ test_same_stable_key_conflicts_do_not_count_as_multi _____________
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_same_stable_key_conflicts_do_not_count_as_multi(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="same-key-conflict",
+            text=(
+                "平安保险 产品甲 产品乙 产品代码 SAME-CODE 登记编号 SAME-REG "
+                "版本 2026 医疗保险 官方条款"
+            ),
+        )
+        result = _resolve(
+            catalog,
+            (entry,),
+            (
+                (
+                    {"proposal_ref": "a", "name": "产品甲", "product_code": "SAME-CODE", "filing": "SAME-REG"},
+                    {"proposal_ref": "b", "name": "产品乙", "product_code": "SAME-CODE", "filing": "SAME-REG"},
+                ),
+            ),
+        )
+>       assert result.decisions[0].disposition == "NEEDS_CONFIRM"
+E       AssertionError: assert 'MULTI' == 'NEEDS_CONFIRM'
+E         
+E         - NEEDS_CONFIRM
+E         + MULTI
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1379: AssertionError
+_ test_candidate_aggregation_excludes_ineligible_rows_and_escalates_structural_competition _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_candidate_aggregation_excludes_ineligible_rows_and_escalates_structural_competition(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        good = _entry(
+            material_id="good",
+            text="平安保险 聚合产品 产品代码 AGG1 登记编号 AGG-REG 版本 2026 医疗保险 官方条款",
+        )
+        low = _entry(
+            material_id="low",
+            text="平安保险 聚合产品 产品代码 AGG1 登记编号 AGG-REG 版本 2026 医疗保险 官方条款",
+        )
+        result = _resolve(
+            catalog,
+            (good, low),
+            (
+                ({"proposal_ref": "good", "name": "聚合产品", "product_code": "AGG1", "filing": "AGG-REG"},),
+                (
+                    {
+                        "proposal_ref": "low",
+                        "name": "聚合产品",
+                        "product_code": "AGG1",
+                        "filing": "AGG-REG",
+                        "identity_confidence": "0.100000",
+                    },
+                ),
+            ),
+        )
+        candidate = result.decisions[0].children[0].entity_candidate
+        assert result.decisions[0].disposition == "CREATE"
+        assert result.decisions[1].disposition == "NEEDS_CONFIRM"
+        assert candidate is not None
+        assert candidate.evidence_ids
+>       assert all(item.startswith("good-") for item in candidate.evidence_ids)
+E       assert False
+E        +  where False = all(<generator object test_candidate_aggregation_excludes_ineligible_rows_and_escalates_structural_competition.<locals>.<genexpr> at 0x10a027850>)
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1416: AssertionError
+_ test_model_receipt_requires_frozen_purpose_schema_and_classify_role[receipt_changes0] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+receipt_changes = {'purpose': 'other-purpose'}
+
+    @pytest.mark.parametrize(
+        ("receipt_changes"),
+        [
+            {"purpose": "other-purpose"},
+            {"run_schema_version": "other-schema"},
+            {"role": "extract"},
+        ],
+    )
+    def test_model_receipt_requires_frozen_purpose_schema_and_classify_role(
+        catalog: SchemaPackCatalogV1,
+        receipt_changes: dict[str, str],
+    ) -> None:
+        entry = _entry(
+            material_id="wrong-model-purpose",
+            text="平安保险 用途产品 产品代码 PURPOSE1 登记编号 PURPOSE-REG 版本 2026 医疗保险 官方条款",
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry, **receipt_changes)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(({"proposal_ref": "p", "name": "用途产品", "product_code": "PURPOSE1", "filing": "PURPOSE-REG"}),),
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy(),
+        )
+>       assert result.model_attempted_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = BatchEntityResolutionV1(contract='batch-entity-resolution.830.g3.v1', compiler_version='batch-entity-resolution-compil...LTI=0, NEEDS_CONFIRM=0, QUARANTINE=0), batch_sha256='32aa97be55671a164ae38c2258ce55f4250d4ba0e1cbdb4940efbb609feb29ce').model_attempted_count
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1498: AssertionError
+_ test_model_receipt_requires_frozen_purpose_schema_and_classify_role[receipt_changes1] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+receipt_changes = {'run_schema_version': 'other-schema'}
+
+    @pytest.mark.parametrize(
+        ("receipt_changes"),
+        [
+            {"purpose": "other-purpose"},
+            {"run_schema_version": "other-schema"},
+            {"role": "extract"},
+        ],
+    )
+    def test_model_receipt_requires_frozen_purpose_schema_and_classify_role(
+        catalog: SchemaPackCatalogV1,
+        receipt_changes: dict[str, str],
+    ) -> None:
+        entry = _entry(
+            material_id="wrong-model-purpose",
+            text="平安保险 用途产品 产品代码 PURPOSE1 登记编号 PURPOSE-REG 版本 2026 医疗保险 官方条款",
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry, **receipt_changes)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(({"proposal_ref": "p", "name": "用途产品", "product_code": "PURPOSE1", "filing": "PURPOSE-REG"}),),
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy(),
+        )
+>       assert result.model_attempted_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = BatchEntityResolutionV1(contract='batch-entity-resolution.830.g3.v1', compiler_version='batch-entity-resolution-compil...LTI=0, NEEDS_CONFIRM=0, QUARANTINE=0), batch_sha256='1fbaebaa1944d93464a04e68a924c057ba62c4de3286f022727716b7e4386f75').model_attempted_count
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1498: AssertionError
+_ test_model_receipt_requires_frozen_purpose_schema_and_classify_role[receipt_changes2] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+receipt_changes = {'role': 'extract'}
+
+    @pytest.mark.parametrize(
+        ("receipt_changes"),
+        [
+            {"purpose": "other-purpose"},
+            {"run_schema_version": "other-schema"},
+            {"role": "extract"},
+        ],
+    )
+    def test_model_receipt_requires_frozen_purpose_schema_and_classify_role(
+        catalog: SchemaPackCatalogV1,
+        receipt_changes: dict[str, str],
+    ) -> None:
+        entry = _entry(
+            material_id="wrong-model-purpose",
+            text="平安保险 用途产品 产品代码 PURPOSE1 登记编号 PURPOSE-REG 版本 2026 医疗保险 官方条款",
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry, **receipt_changes)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(({"proposal_ref": "p", "name": "用途产品", "product_code": "PURPOSE1", "filing": "PURPOSE-REG"}),),
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy(),
+        )
+>       assert result.model_attempted_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = BatchEntityResolutionV1(contract='batch-entity-resolution.830.g3.v1', compiler_version='batch-entity-resolution-compil...LTI=0, NEEDS_CONFIRM=0, QUARANTINE=0), batch_sha256='031e7609d7c989d5b3ab903c41e57d54f8d3755523afc1ef71939ff8e5bca174').model_attempted_count
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1498: AssertionError
+___ test_interval_proposal_dates_are_strict[reversed-2026-10-01-2026-09-01] ____
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+material_id = 'reversed', valid_from = '2026-10-01'
+valid_through = '2026-09-01'
+
+    @pytest.mark.parametrize(
+        ("material_id", "valid_from", "valid_through"),
+        [
+            ("bad-date", "2026-02-30", None),
+            ("reversed", "2026-10-01", "2026-09-01"),
+            ("missing-start", None, "2026-09-01"),
+        ],
+    )
+    def test_interval_proposal_dates_are_strict(
+        catalog: SchemaPackCatalogV1,
+        material_id: str,
+        valid_from: str | None,
+        valid_through: str | None,
+    ) -> None:
+        policy = _interval_policy(valid_from="2026-01-01", valid_through=None)
+        date_text = " ".join(item for item in (valid_from, valid_through) if item is not None)
+        entry = _entry(
+            material_id=material_id,
+            text=(
+                f"平安保险 日期产品 产品代码 DATE1 登记编号 DATE-REG 版本 2026 {date_text} "
+                "医疗保险 官方条款"
+            ),
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry)
+>       proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(
+                {
+                    "proposal_ref": "p",
+                    "name": "日期产品",
+                    "product_code": "DATE1",
+                    "filing": "DATE-REG",
+                    "valid_from": valid_from,
+                    "valid_through": valid_through,
+                },
+            ),
+        )
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1528: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = CorpusEntryV1(material_id='reversed', receipt=LiveRevisionSourceReceiptV1(contract='live-revision-source-receipt.v1', ...6a5ba47316ea827840011300acae1558fec'), entry_sha256='7cfb7ec0b5e33e65dc51f9745233652bd3a78df223e7800b6dd7f7fbe3ae6639')
+receipt = ModelReceiptBindingV1(policy_receipt=PolicyReceipt(decision='ALLOW', reason_code='policy_allowed', identity_key=('fixt...594a43fe0db8939b8dcf280c', execution_receipt_sha256='38d42267a90c0a2792fd6f21d7cc1826ce4ae3236f2293eede1b13a40c0492b2')
+entities = ({'proposal_ref': 'p', 'name': '日期产品', 'product_code': 'DATE1', 'filing': 'DATE-REG', ...},)
+role = 'terms', tamper_entry_hash = False
+
+    def _material_proposal(
+        entry: g.CorpusEntryV1,
+        receipt: g.ModelReceiptBindingV1,
+        *,
+        entities: tuple[dict[str, object], ...],
+        role: str = "terms",
+        tamper_entry_hash: bool = False,
+    ) -> g.MaterialProposalV1:
+        block = entry.blocks[0]
+        evidence: list[g.ProposalEvidenceV1] = [
+            _proposal_evidence(
+                block=block,
+                evidence_id=f"{entry.material_id}-role",
+                proposal_ref=None,
+                purpose="material_role",
+                quote="官方条款",
+            )
+        ]
+        entity_models: list[g.EntityProposalV1] = []
+        for row in entities:
+            ref = str(row["proposal_ref"])
+            values = {
+                "issuer": str(row.get("issuer", "平安保险")),
+                "name": row.get("name"),
+                "product_code": row.get("product_code"),
+                "version_label": row.get("version_label", "2026"),
+                "filing": row.get("filing", "REG001"),
+                "label": row.get("label", "medical_insurance"),
+            }
+            ids: dict[str, str] = {}
+            identity_fields = (
+                ("issuer", "issuer"),
+                ("name", "name"),
+                ("product_code", "product_code"),
+                ("version", "version_label"),
+            )
+            for purpose, key in identity_fields:
+                value = values[key]
+                if value is not None:
+                    evidence_id = f"{entry.material_id}-{ref}-{purpose}"
+                    ids[purpose] = evidence_id
+                    evidence.append(
+                        _proposal_evidence(
+                            block=block,
+                            evidence_id=evidence_id,
+                            proposal_ref=ref,
+                            purpose=purpose,
+                            quote=str(value),
+                        )
+                    )
+            if values["filing"] is not None:
+                evidence_id = f"{entry.material_id}-{ref}-filing"
+                ids["filing"] = evidence_id
+                evidence.append(
+                    _proposal_evidence(
+                        block=block,
+                        evidence_id=evidence_id,
+                        proposal_ref=ref,
+                        purpose="version",
+                        quote=str(values["filing"]),
+                    )
+                )
+            date_ids: list[str] = []
+            for date_key in ("valid_from", "valid_through"):
+                date_value = row.get(date_key)
+                if date_value is None:
+                    continue
+                evidence_id = f"{entry.material_id}-{ref}-{date_key}"
+                date_ids.append(evidence_id)
+                evidence.append(
+                    _proposal_evidence(
+                        block=block,
+                        evidence_id=evidence_id,
+                        proposal_ref=ref,
+                        purpose="version",
+                        quote=str(date_value),
+                    )
+                )
+            classification_id = f"{entry.material_id}-{ref}-classification"
+            evidence.append(
+                _proposal_evidence(
+                    block=block,
+                    evidence_id=classification_id,
+                    proposal_ref=ref,
+                    purpose="classification",
+                    quote="医疗保险" if values["label"] == "medical_insurance" else "重大疾病保险",
+                )
+            )
+            entity_models.append(
+>               g.EntityProposalV1(
+                    proposal_ref=ref,
+                    issuer=values["issuer"],
+                    name=values["name"],
+                    product_code=values["product_code"],
+                    version_label=values["version_label"],
+                    filing_or_registration=(
+                        None
+                        if values["filing"] is None
+                        else g.VersionAnchorV1(kind="registration_number", value=values["filing"])
+                    ),
+                    identity_confidence=str(row.get("identity_confidence", "0.990000")),
+                    identity_evidence_ids=tuple(sorted((*ids.values(), *date_ids))),
+                    labels=(
+                        g.LabelProposalV1(
+                            taxonomy_label=str(values["label"]),
+                            confidence=str(row.get("classification_confidence", "0.990000")),
+                            evidence_ids=(classification_id,),
+                        ),
+                    ),
+                    primary_label=str(values["label"]),
+                    valid_from=row.get("valid_from"),
+                    valid_through=row.get("valid_through"),
+                )
+            )
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for EntityProposalV1
+E             Value error, entity validity interval is invalid [type=value_error, input_value={'proposal_ref': 'p', 'is..._through': '2026-09-01'}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+harness/tests/test_batch_entity_resolution_830_g3.py:387: ValidationError
+_______________ test_invalid_policy_date_rejects_whole_contract ________________
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_invalid_policy_date_rejects_whole_contract(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        policy = _interval_policy(valid_from="2026-01-01", valid_through="2026-12-31")
+        entry = _entry(
+            material_id="invalid-policy-date",
+            text="平安保险 日期产品 产品代码 DATE3 登记编号 DATE3-REG 版本 2026 医疗保险 官方条款",
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=({"proposal_ref": "p", "name": "日期产品", "product_code": "DATE3", "filing": "DATE3-REG"},),
+        )
+        valid_rule = policy.rules[0]
+        invalid_rule_values = valid_rule.model_dump(mode="python")
+        invalid_rule_values["valid_from"] = "2026-02-30"
+        invalid_rule = g.TrustRuleV1.model_construct(**invalid_rule_values)
+        invalid_policy_values = policy.model_dump(mode="python", exclude={"policy_sha256"})
+        invalid_policy_values["rules"] = (invalid_rule,)
+        invalid_policy = g.BatchResolutionPolicyV1.model_construct(
+            **invalid_policy_values,
+            policy_sha256=schema_wiki_sha256(
+                "batch-resolution-policy.830.g3.v1", invalid_policy_values
+            ),
+        )
+>       with pytest.raises(g.BatchEntityResolutionError) as error:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE BatchEntityResolutionError
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1635: Failed
+______ test_duplicate_real_source_with_different_material_ids_is_rejected ______
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_duplicate_real_source_with_different_material_ids_is_rejected(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        first = _entry(
+            material_id="source-a",
+            text="平安保险 来源产品 产品代码 SRC1 登记编号 SRC-REG 版本 2026 医疗保险 官方条款",
+        )
+        second_values = first.model_dump(mode="python", exclude={"material_id", "entry_sha256"})
+        second = _new(
+            g.CorpusEntryV1,
+            "corpus-entry.830.g3.v1",
+            "entry_sha256",
+            material_id="source-b",
+            **second_values,
+        )
+        corpus = _corpus(first, second)
+>       with pytest.raises(g.BatchEntityResolutionError) as error:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE BatchEntityResolutionError
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1662: Failed
+________ test_validate_batch_recomputes_auto_candidate_semantics[keys] _________
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+tamper = 'keys'
+
+    @pytest.mark.parametrize("tamper", ["keys", "anchors", "evidence", "threshold"])
+    def test_validate_batch_recomputes_auto_candidate_semantics(
+        catalog: SchemaPackCatalogV1,
+        tamper: str,
+    ) -> None:
+        entry = _entry(
+            material_id=f"wire-{tamper}",
+            text="平安保险 Wire产品 产品代码 WIRE1 登记编号 WIRE-REG 版本 2026 医疗保险 官方条款",
+        )
+        result = _resolve(
+            catalog,
+            (entry,),
+            (({"proposal_ref": "p", "name": "Wire产品", "product_code": "WIRE1", "filing": "WIRE-REG"},),),
+        )
+>       assert result.space_id == "space-g3"
+               ^^^^^^^^^^^^^^^
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1709: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = BatchEntityResolutionV1(contract='batch-entity-resolution.830.g3.v1', compiler_version='batch-entity-resolution-compil...LTI=0, NEEDS_CONFIRM=0, QUARANTINE=0), batch_sha256='369fe7cad8909ee72cd1101b6af40e470d09bb55e74e0bc4f44d0993bbac869a')
+item = 'space_id'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'BatchEntityResolutionV1' object has no attribute 'space_id'
+
+../../harness/.venv/lib/python3.12/site-packages/pydantic/main.py:1042: AttributeError
+_______ test_validate_batch_recomputes_auto_candidate_semantics[anchors] _______
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+tamper = 'anchors'
+
+    @pytest.mark.parametrize("tamper", ["keys", "anchors", "evidence", "threshold"])
+    def test_validate_batch_recomputes_auto_candidate_semantics(
+        catalog: SchemaPackCatalogV1,
+        tamper: str,
+    ) -> None:
+        entry = _entry(
+            material_id=f"wire-{tamper}",
+            text="平安保险 Wire产品 产品代码 WIRE1 登记编号 WIRE-REG 版本 2026 医疗保险 官方条款",
+        )
+        result = _resolve(
+            catalog,
+            (entry,),
+            (({"proposal_ref": "p", "name": "Wire产品", "product_code": "WIRE1", "filing": "WIRE-REG"},),),
+        )
+>       assert result.space_id == "space-g3"
+               ^^^^^^^^^^^^^^^
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1709: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = BatchEntityResolutionV1(contract='batch-entity-resolution.830.g3.v1', compiler_version='batch-entity-resolution-compil...LTI=0, NEEDS_CONFIRM=0, QUARANTINE=0), batch_sha256='c7f0e67b7c32ae1794357da6620b14fc90ea35d9601980a7155bdbe4e92b613c')
+item = 'space_id'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'BatchEntityResolutionV1' object has no attribute 'space_id'
+
+../../harness/.venv/lib/python3.12/site-packages/pydantic/main.py:1042: AttributeError
+______ test_validate_batch_recomputes_auto_candidate_semantics[evidence] _______
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+tamper = 'evidence'
+
+    @pytest.mark.parametrize("tamper", ["keys", "anchors", "evidence", "threshold"])
+    def test_validate_batch_recomputes_auto_candidate_semantics(
+        catalog: SchemaPackCatalogV1,
+        tamper: str,
+    ) -> None:
+        entry = _entry(
+            material_id=f"wire-{tamper}",
+            text="平安保险 Wire产品 产品代码 WIRE1 登记编号 WIRE-REG 版本 2026 医疗保险 官方条款",
+        )
+        result = _resolve(
+            catalog,
+            (entry,),
+            (({"proposal_ref": "p", "name": "Wire产品", "product_code": "WIRE1", "filing": "WIRE-REG"},),),
+        )
+>       assert result.space_id == "space-g3"
+               ^^^^^^^^^^^^^^^
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1709: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = BatchEntityResolutionV1(contract='batch-entity-resolution.830.g3.v1', compiler_version='batch-entity-resolution-compil...LTI=0, NEEDS_CONFIRM=0, QUARANTINE=0), batch_sha256='efff37177acdf445c0abdda797ea113eec691bdd6b9eec7a0367a0b244491f47')
+item = 'space_id'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'BatchEntityResolutionV1' object has no attribute 'space_id'
+
+../../harness/.venv/lib/python3.12/site-packages/pydantic/main.py:1042: AttributeError
+______ test_validate_batch_recomputes_auto_candidate_semantics[threshold] ______
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+tamper = 'threshold'
+
+    @pytest.mark.parametrize("tamper", ["keys", "anchors", "evidence", "threshold"])
+    def test_validate_batch_recomputes_auto_candidate_semantics(
+        catalog: SchemaPackCatalogV1,
+        tamper: str,
+    ) -> None:
+        entry = _entry(
+            material_id=f"wire-{tamper}",
+            text="平安保险 Wire产品 产品代码 WIRE1 登记编号 WIRE-REG 版本 2026 医疗保险 官方条款",
+        )
+        result = _resolve(
+            catalog,
+            (entry,),
+            (({"proposal_ref": "p", "name": "Wire产品", "product_code": "WIRE1", "filing": "WIRE-REG"},),),
+        )
+>       assert result.space_id == "space-g3"
+               ^^^^^^^^^^^^^^^
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1709: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = BatchEntityResolutionV1(contract='batch-entity-resolution.830.g3.v1', compiler_version='batch-entity-resolution-compil...LTI=0, NEEDS_CONFIRM=0, QUARANTINE=0), batch_sha256='ac8ce44d9aa60ea3b970546d0d2c13106b8833f7fc4746b4630245b3bf55f159')
+item = 'space_id'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'BatchEntityResolutionV1' object has no attribute 'space_id'
+
+../../harness/.venv/lib/python3.12/site-packages/pydantic/main.py:1042: AttributeError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_existing_identity_competition_across_different_codes_stays_human[name]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_existing_identity_competition_across_different_codes_stays_human[alias]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_existing_identity_competition_across_different_codes_stays_human[anchor]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_same_stable_key_conflicts_do_not_count_as_multi
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_candidate_aggregation_excludes_ineligible_rows_and_escalates_structural_competition
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_model_receipt_requires_frozen_purpose_schema_and_classify_role[receipt_changes0]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_model_receipt_requires_frozen_purpose_schema_and_classify_role[receipt_changes1]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_model_receipt_requires_frozen_purpose_schema_and_classify_role[receipt_changes2]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_interval_proposal_dates_are_strict[reversed-2026-10-01-2026-09-01]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_invalid_policy_date_rejects_whole_contract
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_duplicate_real_source_with_different_material_ids_is_rejected
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_validate_batch_recomputes_auto_candidate_semantics[keys]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_validate_batch_recomputes_auto_candidate_semantics[anchors]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_validate_batch_recomputes_auto_candidate_semantics[evidence]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_validate_batch_recomputes_auto_candidate_semantics[threshold]
+15 failed, 21 passed in 15.50s

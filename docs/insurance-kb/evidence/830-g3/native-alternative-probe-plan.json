@@ -1,0 +1,15 @@
+{
+  "contract": "830-g3-bounded-native-source-probe-plan.v1",
+  "hypothesis": "Official exported-text product list can use existing native PDF locator; previous manual had a scanned page and failed; no PDF edits/parser changes",
+  "scope": "One new whole original official PDF only; retrieve10successful prior captures without reparsing",
+  "file_sha256": "fcba0b42ee84b4ee961ba49f650a82b3057fa3f5aaed5c0a7fba41dfb254685e",
+  "script_sha256": "cce23d22604f097fc4ef3eb10abadafc07b680e3852c5b63bae5638c13ac0c36",
+  "script": "/private/tmp/g3-native-single-probe.py",
+  "attempts_max": 1,
+  "provider_calls_max": 0,
+  "uploads_max": 0,
+  "db_writes_max": 0,
+  "builds_max": 0,
+  "sample_freeze": "Before actual SourceRevision/Seed/policy freeze; do not overwrite first attempt failure or claim15/15",
+  "status": "PREPARED"
+}

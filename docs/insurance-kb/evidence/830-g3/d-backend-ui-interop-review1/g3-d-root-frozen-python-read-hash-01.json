@@ -1,0 +1,7 @@
+{
+  "contract": "830-g3-actual-frozen-python-read-hash-check.v1",
+  "go_claimed": "0e933f199d51779bb0cf14fff977f7aaf014cc51282839573dc1d0947103ca33",
+  "frozen_python_helper": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+  "equal": false,
+  "body_sha256": "563649b5a751bc77e36b0f38f3c7cec2b7626a00b2b530a8809bdaa59f93c429"
+}

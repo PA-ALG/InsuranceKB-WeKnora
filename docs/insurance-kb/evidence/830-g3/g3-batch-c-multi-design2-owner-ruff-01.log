@@ -1,0 +1,11 @@
+E501 Line too long (102 > 100)
+    --> src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py:1758:101
+     |
+1756 |                 if entity.product_code is None:
+1757 |                     continue
+1758 |                 if _identity_key(exact_corpus.space_id, entity.product_code) in invalid_identity_keys:
+     |                                                                                                     ^^
+1759 |                     row_multi_identity_evidence[(entry.material_id, entity.proposal_ref)] = ((), ())
+     |
+
+Found 1 error.

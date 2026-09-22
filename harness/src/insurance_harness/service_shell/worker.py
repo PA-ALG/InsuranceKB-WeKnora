@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping
+import json
+import logging
+import time
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -17,6 +20,12 @@ from insurance_harness.jobs import (
     RetryableJobError,
     classify_failure,
 )
+from insurance_harness.jobs.errors import (
+    IllegalTransitionError,
+    LeaseExpiredError,
+    StaleGenerationError,
+)
+from insurance_harness.jobs.models import JobState
 from insurance_harness.service_shell.config import ShellSettings
 from insurance_harness.service_shell.health import Lifecycle, ProcessState
 
@@ -29,7 +38,7 @@ class HandlerResult:
     domain_writes: tuple[DomainWriteSpec, ...] = ()
 
 
-Handler = Callable[[JobSnapshot], Awaitable[HandlerResult]]
+Handler = Callable[[JobSnapshot], Coroutine[Any, Any, HandlerResult]]
 Sleeper = Callable[[float], Awaitable[None]]
 
 
@@ -108,22 +117,68 @@ class WorkerLoop:
     async def _store_call(self, operation: Callable[..., Any], **kwargs: Any) -> Any:
         return await asyncio.to_thread(operation, **kwargs)
 
-    async def _heartbeat(self, job: JobSnapshot, stop: asyncio.Event) -> None:
+    async def _heartbeat(
+        self,
+        job: JobSnapshot,
+        stop: asyncio.Event,
+        handler_task: asyncio.Task[HandlerResult],
+        lease_lost: asyncio.Event,
+    ) -> None:
         backoff_index = 0
         while not stop.is_set():
+            due = time.monotonic() + self._settings.heartbeat_interval_seconds
             await self._sleep(self._settings.heartbeat_interval_seconds)
             if stop.is_set():
                 return
             try:
-                await self._store_call(
-                    self._store.heartbeat,
-                    space_id=job.space_id,
-                    job_id=job.id,
-                    generation=job.lease_generation,
-                )
+                submitted = time.monotonic()
+
+                def heartbeat(
+                    submitted: float = submitted, due: float = due
+                ) -> JobSnapshot:
+                    started = time.monotonic()
+                    error_type: str | None = None
+                    renewed: JobSnapshot | None = None
+                    try:
+                        renewed = self._store.heartbeat(
+                            space_id=job.space_id, job_id=job.id,
+                            generation=job.lease_generation,
+                        )
+                        return renewed
+                    except Exception as error:
+                        error_type = type(error).__name__
+                        raise
+                    finally:
+                        details = {
+                            "event": "job_heartbeat", "job_id": job.id,
+                            "space_id": job.space_id, "generation": job.lease_generation,
+                            "loop_delay_seconds": max(0.0, submitted - due),
+                            "executor_wait_seconds": max(0.0, started - submitted),
+                            "database_seconds": time.monotonic() - started,
+                            "lease_expires_at": (
+                                renewed.lease_expires_at.isoformat()
+                                if renewed and renewed.lease_expires_at else None
+                            ),
+                            "error_type": error_type,
+                        }
+                        logging.getLogger(__name__).log(
+                            logging.WARNING if error_type else logging.INFO,
+                            json.dumps(details), extra=details,
+                        )
+
+                await self._store_call(heartbeat)
                 backoff_index = 0
             except Exception as error:
                 self.last_transient_error = type(error).__name__
+                if isinstance(error, (LeaseExpiredError, StaleGenerationError)) or (
+                    isinstance(error, IllegalTransitionError)
+                    and error.source not in {JobState.LEASED, JobState.RUNNING}
+                ):
+                    lease_lost.set()
+                    # Cancel the handler's await chain, not this heartbeat task.
+                    # A running to_thread function continues until it returns.
+                    handler_task.cancel()
+                    return
                 delays = self._settings.transient_backoff_seconds
                 delay = delays[min(backoff_index, len(delays) - 1)]
                 backoff_index += 1
@@ -147,6 +202,7 @@ class WorkerLoop:
         """Execute one claimed generation; cancellation deliberately performs no write."""
         started = False
         heartbeat_stop = asyncio.Event()
+        lease_lost = asyncio.Event()
         heartbeat_task: asyncio.Task[None] | None = None
         try:
             job = await self._store_call(
@@ -156,14 +212,19 @@ class WorkerLoop:
                 generation=claimed.lease_generation,
             )
             started = True
-            heartbeat_task = asyncio.create_task(self._heartbeat(job, heartbeat_stop))
             handler = self._registry.get(job.job_type)
             if handler is None:
                 raise RetryableJobError("unknown_job_type")
-            result = await handler(job)
+            handler_task = asyncio.create_task(handler(job))
+            heartbeat_task = asyncio.create_task(
+                self._heartbeat(job, heartbeat_stop, handler_task, lease_lost)
+            )
+            result = await handler_task
             if not isinstance(result, HandlerResult):
                 raise TypeError("handler must return HandlerResult")
             await self._stop_heartbeat(heartbeat_task, heartbeat_stop)
+            if lease_lost.is_set():
+                return
             await self._store_call(
                 self._store.report_success,
                 space_id=job.space_id,
@@ -174,11 +235,19 @@ class WorkerLoop:
             )
         except asyncio.CancelledError:
             await self._stop_heartbeat(heartbeat_task, heartbeat_stop)
+            if lease_lost.is_set():
+                return
             # Drain timeout abandons this generation. P1 lease expiry is the only
             # recovery path; reporting cancellation would create a second transition.
             raise
+        except (LeaseExpiredError, StaleGenerationError) as error:
+            await self._stop_heartbeat(heartbeat_task, heartbeat_stop)
+            self.last_transient_error = type(error).__name__
+            # The durable store already owns recovery; stale generations never write.
         except Exception as error:
             await self._stop_heartbeat(heartbeat_task, heartbeat_stop)
+            if lease_lost.is_set():
+                return
             if started:
                 await self._store_call(
                     self._store.report_failure,

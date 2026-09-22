@@ -22,6 +22,8 @@ import (
 
 // Config 应用程序总配置
 type Config struct {
+	G3PlatformProcessing            *G3PlatformProcessingConfig            `yaml:"g3_platform_processing" json:"-"`
+	ProductIngestion                *ProductIngestionConfig                `yaml:"product_ingestion" json:"-"`
 	Conversation                    *ConversationConfig                    `yaml:"conversation"     json:"conversation"`
 	Server                          *ServerConfig                          `yaml:"server"           json:"server"`
 	KnowledgeBase                   *KnowledgeBaseConfig                   `yaml:"knowledge_base"   json:"knowledge_base"`

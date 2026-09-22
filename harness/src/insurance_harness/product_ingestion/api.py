@@ -1,0 +1,411 @@
+"""Versioned platform-to-platform product admission and safe status surface."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Mapping
+from typing import Annotated, Any, Literal
+
+from fastapi import APIRouter, FastAPI, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
+from insurance_harness.jobs.errors import SpaceScopeError
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.processing_audit import (
+    read_audit,
+    source_accounting,
+)
+from insurance_harness.product_ingestion.progression import admit_uploads
+from insurance_harness.product_ingestion.store import ProductIngestionStore
+from insurance_harness.product_ingestion.upload_manifest import UploadManifest
+from insurance_harness.service_shell.apps import PrincipalDependency
+from insurance_harness.service_shell.principal import (
+    AuthorizationError,
+    Principal,
+    ServiceCapability,
+    require_service_capability,
+)
+
+
+class CreateRun(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    idempotency_key: str = Field(min_length=1, max_length=160)
+    expected_upload_count: int = Field(ge=1)
+    upload_manifest: UploadManifest | None = None
+
+    @field_validator("upload_manifest", mode="before")
+    @classmethod
+    def parse_manifest(cls, value: object) -> UploadManifest | None:
+        if value is None or isinstance(value, UploadManifest):
+            return value
+        return UploadManifest.model_validate_json(json.dumps(value))
+
+
+class RetryFields(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    field_keys: list[str] = Field(min_length=1)
+
+
+class RetryProcessing(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    expected_version: int = Field(gt=0)
+
+
+class _DiscoveryCounts(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+    proposed_new: int = Field(ge=0)
+    duplicate: int = Field(ge=0)
+    update_proposal: int = Field(ge=0)
+    rejected: int = Field(ge=0)
+    published: int = Field(ge=0)
+
+
+class _DiscoveryCoverage(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+    offered_chars: int = Field(ge=0)
+    omitted_chars: int = Field(ge=0)
+    complete: bool
+    material_count: int = Field(ge=0)
+
+
+class _DiscoverySummary(BaseModel):
+    """Read-only allowlist; raw candidates and diagnostics stay in artifact custody."""
+
+    model_config = ConfigDict(extra="ignore", strict=True)
+    state: Literal["NOT_EXECUTED", "FAILED", "PENDING", "REJECTED", "EMPTY", "ACCEPTED"]
+    reused: bool
+    reason_codes: list[Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]{0,127}$")]]
+    counts: _DiscoveryCounts
+    coverage: _DiscoveryCoverage | None
+    accepted_member_count: int | None = Field(default=None, ge=0)
+
+
+def combine_discovery_summaries(generation: bytes | None, final: bytes | None) -> bytes | None:
+    """Keep generation coverage while exposing the separate publication decision."""
+    if final is None:
+        return generation
+    if generation is None:
+        return final
+    try:
+        prior, reviewed = json.loads(generation), json.loads(final)
+        if reviewed.get("state") == "EMPTY" and prior.get("state") in {
+            "FAILED",
+            "PENDING",
+            "REJECTED",
+        }:
+            return generation
+        for key in ("state", "reason_codes", "accepted_member_count"):
+            if key in reviewed:
+                prior[key] = reviewed[key]
+        prior["reused"] = bool(prior.get("reused") or reviewed.get("reused"))
+        return json.dumps(prior).encode()
+    except (ValueError, TypeError, AttributeError):
+        return b"{}"  # Existing safe projection marks malformed status as failure.
+
+
+def _discovery_summary_projection(
+    raw: bytes | None, *, publication_verified: bool = False
+) -> dict[str, Any]:
+    empty = {
+        "state": "NOT_EXECUTED",
+        "reused": False,
+        "reason_codes": [],
+        "counts": dict.fromkeys(_DiscoveryCounts.model_fields, 0),
+        "coverage": None,
+        "published_confirmed": False,
+    }
+    if raw is None:
+        return empty
+    try:
+        summary = _DiscoverySummary.model_validate_json(raw)
+        if summary.coverage and summary.coverage.complete != (summary.coverage.omitted_chars == 0):
+            raise ValueError("inconsistent coverage")
+    except (ValidationError, ValueError):
+        return {
+            **empty,
+            "state": "FAILED",
+            "reason_codes": ["DISCOVERY_SUMMARY_INVALID"],
+            "counts": dict.fromkeys(_DiscoveryCounts.model_fields, None),
+        }
+    payload = summary.model_dump(exclude={"accepted_member_count"})
+    published = (
+        summary.accepted_member_count
+        if summary.accepted_member_count is not None
+        else summary.counts.published
+    )
+    confirmed = publication_verified and summary.state == "ACCEPTED" and published > 0
+    payload["counts"]["published"] = published if confirmed else 0
+    payload["published_confirmed"] = confirmed
+    return payload
+
+
+def install_product_api(
+    app: FastAPI,
+    *,
+    store: ProductIngestionStore,
+    artifacts: ProductArtifactStore,
+    scopes: Mapping[str, ProductScope],
+    max_upload_files: int,
+) -> None:
+    """Mount only when composition explicitly enables the configured service.
+
+    Scope comes from platform configuration, never a request body's tenant or KB.
+    The existing provider authenticates a service principal; browser JWTs are
+    checked by the WeKnora gateway, and are not reinterpreted here as system keys.
+    """
+    if not scopes or max_upload_files < 1:
+        raise ValueError("product ingestion needs exact scopes and capacity")
+    router = APIRouter(prefix="/product-ingestion/v1/spaces/{space_id}/runs")
+
+    def authorize(space_id: str, principal: Principal, *, write: bool = False) -> ProductScope:
+        require_service_capability(
+            principal,
+            space_id=space_id,
+            capability=(
+                ServiceCapability.MANAGE_PRODUCT_INGESTION
+                if write
+                else ServiceCapability.READ_PRODUCT_INGESTION
+            ),
+        )
+        scope = scopes.get(space_id)
+        if scope is None:
+            raise AuthorizationError("product_scope_unconfigured")
+        return scope
+
+    def read_payload(scope: ProductScope, run_id: str) -> dict[str, Any]:
+        try:
+            run = store.get_run(scope=scope, run_id=run_id)
+            stages = store.list_status_stages(scope=scope, run_id=run_id)
+            fields = store.list_field_attempts(scope=scope, run_id=run_id)
+        except SpaceScopeError as error:
+            raise HTTPException(404, "product_run_not_found") from error
+        payload = run.model_dump(mode="json")
+        checkpoint_receipt = store.checkpoint_receipt(scope=scope, run_id=run_id)
+        payload["reused_stages"] = (
+            [row.model_dump(mode="json") for row in checkpoint_receipt.reused_stages]
+            if checkpoint_receipt
+            else []
+        )
+        payload["can_retry_processing"] = store.can_retry_processing(scope=scope, run_id=run_id)
+        stage_metrics = artifacts.get_stage_call_metrics(scope=scope, run_id=run_id)
+        payload["model_call_count"] = (
+            sum(row.model_call_count for row in stages if row.stage_key == "extract")
+            + stage_metrics.model_call_count
+        )
+        payload["semantic_model_call_count"] = payload["model_call_count"]
+        payload["reused_model_call_count"] = stage_metrics.reused_model_call_count
+        payload["reused_usage"] = stage_metrics.reused_usage
+        payload["source_model_call_count"] = None
+        payload["model_call_count_complete"] = False
+        summaries = artifacts.list_effective_artifacts(
+            scope=scope, run_id=run_id, artifact_kind="source_processing_summary"
+        )
+        summary = json.loads(summaries[0].payload) if summaries else None
+        attempts = read_audit(
+            artifacts.list_artifacts(
+                scope=scope, run_id=run_id, artifact_kind="source_processing_attempt"
+            )
+        )
+        summary = source_accounting(summary, attempts)
+        if summary is not None:
+            if checkpoint_receipt and summaries and summaries[0].run_id != run_id:
+                summary = {
+                    **summary,
+                    "model_call_count": 0,
+                    "recorded_model_call_count": 0,
+                    "reused_model_call_count": (
+                        summary["recorded_model_call_count"]
+                        + summary["recorded_reused_model_call_count"]
+                    )
+                    if summary["model_call_count_complete"]
+                    else None,
+                    "recorded_reused_model_call_count": summary["recorded_model_call_count"]
+                    + summary["recorded_reused_model_call_count"],
+                    "materials": [{**m, "reused": True} for m in summary["materials"]],
+                }
+            payload["source_processing"] = {
+                **summary,
+                "materials": [
+                    {
+                        **row,
+                        "file_name": next(
+                            (
+                                item.original_filename
+                                for item in run.materials
+                                if item.knowledge_id == row["knowledge_id"]
+                            ),
+                            None,
+                        ),
+                    }
+                    for row in summary["materials"]
+                ],
+            }
+            payload["source_model_call_count"] = summary["model_call_count"]
+            payload["recorded_source_model_call_count"] = summary["recorded_model_call_count"]
+            payload["model_call_count"] += summary["recorded_model_call_count"]
+            payload["model_call_count_complete"] = (
+                run.finished_at is not None
+                and summary["model_call_count_complete"]
+                and stage_metrics.unsettled_call_count == 0
+                and store.unsettled_dispatch_count(scope=scope, run_id=run_id) == 0
+            )
+        for key, value in stage_metrics.usage.items():
+            payload["usage"][key] = payload["usage"].get(key, 0) + value
+        payload["wiki_knowledge_base_id"] = scope.wiki_knowledge_base_id
+        payload["counts"] = {
+            key: payload[key] for key in ("success_count", "missing_count", "failure_count")
+        }
+        wall_starts = store.stage_wall_starts(scope=scope, run_id=run_id)
+        last_attempts = store.stage_last_attempt_starts(scope=scope, run_id=run_id)
+        payload["stages"] = []
+        for row in stages:
+            started = wall_starts.get(row.stage_key)
+            ended = row.finished_at
+            attempt = last_attempts.get(row.stage_key)
+            stage_payload = {**row.model_dump(mode="json"), "name": row.stage_key}
+            stage_payload["last_attempt_started_at"] = (
+                attempt.isoformat().replace("+00:00", "Z") if attempt else None
+            )
+            stage_payload["started_at"] = (
+                started.isoformat().replace("+00:00", "Z") if started else None
+            )
+            stage_payload["wall_duration_seconds"] = (
+                max(0.0, (ended - started).total_seconds()) if started and ended else None
+            )
+            stage_payload["last_attempt_duration_seconds"] = (
+                max(0.0, (ended - attempt).total_seconds()) if attempt and ended else None
+            )
+            payload["stages"].append(stage_payload)
+        payload["stage"] = next((row.stage_key for row in stages if row.finished_at is None), None)
+        payload["reason"] = run.terminal_reason
+        # Raw model bytes and unvalidated field values never enter the normal status response.
+        payload["fields"] = [
+            {
+                "field_key": row.field_key,
+                "outcome": row.outcome.value,
+                "reason": row.reason,
+                "attempt": row.attempt,
+            }
+            for row in fields
+        ]
+        try:
+            discovery = artifacts.get_effective_artifact(
+                scope=scope,
+                run_id=run_id,
+                artifact_kind="discovery_summary",
+                artifact_key="product",
+            ).payload
+        except SpaceScopeError:
+            discovery = None
+        try:
+            final_discovery = artifacts.get_effective_artifact(
+                scope=scope,
+                run_id=run_id,
+                artifact_kind="discovery_final_summary",
+                artifact_key="product",
+            ).payload
+        except SpaceScopeError:
+            final_discovery = None
+        payload["discovery_summary"] = _discovery_summary_projection(
+            combine_discovery_summaries(discovery, final_discovery),
+            publication_verified=(
+                run.state in {"succeeded", "partial_success"}
+                and run.finished_at is not None
+                and any(
+                    row.stage_key == "verify"
+                    and row.state == "succeeded"
+                    and row.finished_at is not None
+                    for row in stages
+                )
+            ),
+        )
+        return {"success": True, "data": payload}
+
+    @router.post("", status_code=201)
+    def create(space_id: str, request: CreateRun, principal: PrincipalDependency) -> dict[str, Any]:
+        scope = authorize(space_id, principal, write=True)
+        if request.expected_upload_count > max_upload_files:
+            raise HTTPException(422, "upload_capacity_exceeded")
+        try:
+            run = store.create_run(
+                scope=scope,
+                idempotency_key=request.idempotency_key,
+                expected_upload_count=request.expected_upload_count,
+                upload_manifest=request.upload_manifest,
+            )
+            # Idempotent admission, never inline parsing/extraction/publication.
+            admit_uploads(store, scope, run.run_id)
+        except ValueError as error:
+            raise HTTPException(409, "product_run_conflict") from error
+        return read_payload(scope, run.run_id)
+
+    @router.get("")
+    def listing(
+        space_id: str,
+        principal: PrincipalDependency,
+        limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    ) -> dict[str, Any]:
+        scope = authorize(space_id, principal)
+        return {
+            "success": True,
+            "data": {"runs": store.list_status_summaries(scope=scope, limit=limit)},
+        }
+
+    @router.get("/{run_id}")
+    def read(space_id: str, run_id: str, principal: PrincipalDependency) -> dict[str, Any]:
+        return read_payload(authorize(space_id, principal), run_id)
+
+    @router.post("/{run_id}/retry-processing", status_code=201)
+    def retry_processing(
+        space_id: str,
+        run_id: str,
+        request: RetryProcessing,
+        principal: PrincipalDependency,
+    ) -> dict[str, Any]:
+        scope = authorize(space_id, principal, write=True)
+        try:
+            run = store.retry_processing(
+                scope=scope,
+                run_id=run_id,
+                expected_version=request.expected_version,
+            )
+        except SpaceScopeError as error:
+            raise HTTPException(404, "product_run_not_found") from error
+        except ValueError as error:
+            raise HTTPException(409, "product_processing_retry_conflict") from error
+        return read_payload(scope, run.run_id)
+
+    @router.post("/{run_id}/retry-fields", status_code=201)
+    def retry(
+        space_id: str, run_id: str, request: RetryFields, principal: PrincipalDependency
+    ) -> dict[str, Any]:
+        scope = authorize(space_id, principal, write=True)
+        if len(request.field_keys) != len(set(request.field_keys)):
+            raise HTTPException(422, "duplicate_field_keys")
+        try:
+            rows = store.list_field_attempts(
+                scope=scope, run_id=run_id, field_keys=request.field_keys
+            )
+            latest = {row.field_key: row for row in rows}
+            if set(latest) != set(request.field_keys) or any(
+                row.outcome.value != "extraction_failed" for row in latest.values()
+            ):
+                raise HTTPException(409, "only_failed_fields_can_be_retried")
+            attempt_ids = sorted(row.attempt_id for row in latest.values())
+            key = hashlib.sha256(json.dumps(attempt_ids).encode()).hexdigest()
+            run = store.retry_fields(
+                scope=scope,
+                run_id=run_id,
+                failed_attempt_ids=attempt_ids,
+                idempotency_key="field-retry:" + key,
+            )
+            admit_uploads(store, scope, run.run_id)
+        except SpaceScopeError as error:
+            raise HTTPException(404, "product_run_not_found") from error
+        except ValueError as error:
+            raise HTTPException(409, "product_retry_conflict") from error
+        return read_payload(scope, run.run_id)
+
+    app.include_router(router)
