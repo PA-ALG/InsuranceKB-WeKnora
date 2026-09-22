@@ -820,7 +820,14 @@ async def test_checkpoint_worker_revalidates_current_source_identity_and_version
         return value
 
     platform.lookup_upload = changed
-    with pytest.raises(CapacityBlockedJobError, match="CHECKPOINT_INVALID"):
+    from insurance_harness.jobs import NonRetryableJobError
+
+    expected_error, expected_reason = (
+        (NonRetryableJobError, "ORIGINAL_UPLOAD_BINDING_CHANGED")
+        if change == "knowledge_binding"
+        else (CapacityBlockedJobError, "CHECKPOINT_SOURCE_SNAPSHOT_INVALID")
+    )
+    with pytest.raises(expected_error, match=expected_reason):
         await handler(scope, child, stage, SimpleNamespace())
     assert platform.calls == 3
     assert not artifacts.list_stage_calls(scope=scope, run_id=child.run_id)

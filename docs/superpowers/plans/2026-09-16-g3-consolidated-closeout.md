@@ -136,3 +136,20 @@ B2实现绑定：完整验证原prefix及原compilation的discovery_final_summar
 验收 tracer：真实 source 多轮等待 → 已成功来源与审计共存 → 下游失败 → 平台恢复 → 复用字段 → 基于当前发布编译 → 发布 → 字段证据回查。先在真实 repository/worker 测试中复现跨代次与变 Head 两条边，并离线读取实际失败记录检查后续合同；统一验证和独立审查闭合后，只更新受影响制品一次，再进行网页恢复和全新2662-1三文件验收。离线投影不持久化、不代执行业务任务，不算平台通过。
 
 运行证据：真正 worker 的 Gemini 受控探测 HTTP200 / 3.133s / 单次发送，提示仅 Reply only OK，未发送材料。API 容器按既有设计仅内网，其连接错误不构成 worker 网络故障。两个失败记录对 epoch13 的纯重基投影分别成功（74/82字段，7.785/15.219s），未写DB、未生成发布候选。网页当前登录失效；已请用户在可见页面登录，开发与离线验证继续。
+
+### 2026-09-22 首次上传回执演进边界
+
+两条既有恢复已真实发布成功。2662-1首次网页上传run368c59f1三来源原生解析completed，source阶段却反复抛出`source processing receipt changed`：机器上传GET在同一parse_attempt下返回进度快照，artifact按knowledge/parse_attempt只允许首个精确字节，正常追加调用/阶段统计因此被误判。ValueError又被默认重试，用户看到等待解析。这属于已批准G3-AUTO-2/3/4/6的实际缺口；不是模型分类失败。
+
+在原模块和数据库内修复，不改变业务流程：新增窄的processing audit模块，封装快照验证、单调进展及计数视图；source阶段仍只调用record_source_processing_attempt。原审计不可覆盖，新快照按内容身份追加保存。单调域为knowledge_id/parse_attempt/processing_attempt，同域journal_marker固定；不同processing_attempt独立保留。已确认调用不得改变，允许同dispatch的DISPATCH_UNCERTAIN到RECORDED精化，必须保持请求、模型、operation、purpose、retry index及开始时间身份；NOT_DISPATCHED不能变成已发送。phase按去除局部occurrence序号后的事实多重集做包含检查，旧终态事实不得丢失。UNAVAILABLE转AVAILABLE可接受，AVAILABLE不回退。有效视图按处理尝试合并进展、全局按dispatch_id只计一次，原UNKNOWN快照不删除。
+
+正式source_snapshot/summary仍为原签名发布来源，v1合同不变。已有summary通过material的精确receipt_sha256匹配审计，取得代表的处理尝试及dispatch；同尝试早期快照不重复计费，其余处理尝试只加尚未计数的dispatch。旧summary无法匹配时保留原计数并标complete=false，不猜测合并。没有成功summary时只返回已记录下限，最终source_model_call_count=None、complete=false。独立设计审查指出的处理attempt域、在途计数、迟到回执、phase重编号与v1兼容五项均按本段裁决。
+
+真正的来源身份、终态事实篡改及无效回执应返回稳定NonRetryable错误并终止，不消耗长等待解析的重试预算；瞬态读取/原文尚未完成仍按既有JobStore策略等待。原审计缺失统计标为未知，不能把在途0误称最终0。既有旧key记录兼容读取，新记录内容寻址；不新增表/迁移/服务或新权限。
+
+唯一实现Owner=root：processing audit新模块、artifacts.py、api.py、必要stages.py接线；测试test_processing_audit_lifecycle.py、test_api.py、原source/checkpoint回归。先RED复现同次解析空统计→已记录调用→兄弟材料完成，再验证审计原字节保留、最终不重计、篡改明确终态和恢复后source复用。独立review只读冻结设计/改动，不参与业务接续。集中验证后才安排一次Harness更新；本次首轮新产品验收据实BLOCKED，后续恢复不能冒充首次无修复验收。
+
+
+本轮独审修正（部署前）：允许同attempt迟到响应精化时，读取视图须使用精确SHA已匹配attempt的最新合法回执重算计数；不能被旧成功summary中的未知状态永久锁住。每material的counts/phases必须与其receipt_sha256所指原回执一致，去重仅发生于聚合层，不能改counts再沿用旧SHA。已持久化v1 summary、回执及签名来源字节均不变。两项先用最小反例RED再修复，同批交独审。
+
+本次更新仍只替换原Harness API/worker。当前唯一活动任务若仍为已知368c59f1的source retry_wait、无未决模型外发，则允许在该等待边界优雅停止旧worker并更新；其他活动任务或正在外发则延期。沿用已有持久JobStore租约恢复，不改DB任务状态，不代执行source或publish。保留原首次验收BLOCKED，后续自动续跑标为故障修复后恢复。原环境、挂载、权限、网络和数据库不变，健康或配置不一致回原镜像；无Go/UI重构建。

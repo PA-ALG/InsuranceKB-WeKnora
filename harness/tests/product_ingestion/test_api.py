@@ -202,6 +202,47 @@ def test_real_api_composition_admits_durable_job_without_inline_processing(envir
     )
 
 
+@pytest.mark.parametrize("source_sealed", [False, True])
+def test_source_audit_snapshots_do_not_double_count_calls(environment, monkeypatch, source_sealed):
+    import copy
+    from types import SimpleNamespace
+
+    from insurance_harness.product_ingestion.processing_receipts import processing_summary
+    from tests.product_ingestion.test_processing_audit_lifecycle import _processing
+    from tests.product_ingestion.test_processing_receipts import sealed
+
+    client, *_ = environment
+    run = client.post(PATH, headers=auth(), json={
+        "idempotency_key": "growing-source-counts", "expected_upload_count": 1,
+    }).json()["data"]
+    first = _processing(0, True)
+    latest = copy.deepcopy(first)
+    second_call = {**latest["calls"][0], "dispatch_id": "call-second"}
+    latest["calls"].append(second_call)
+    latest["counts"].update(attempts=2, confirmed=2)
+    latest = sealed(latest)
+    records = [SimpleNamespace(payload=json.dumps(item).encode()) for item in (
+        _processing(0, False), first, latest,
+    )]
+    monkeypatch.setattr(ProductArtifactStore, "list_artifacts", lambda _self, **kw: (
+        tuple(records) if kw.get("artifact_kind") == "source_processing_attempt" else ()
+    ))
+    summary = SimpleNamespace(
+        run_id=run["run_id"],
+        payload=json.dumps(processing_summary([("knowledge-0", latest, False)])).encode(),
+    )
+    monkeypatch.setattr(ProductArtifactStore, "list_effective_artifacts", lambda _self, **kw: (
+        (summary,) if source_sealed and kw.get("artifact_kind") == "source_processing_summary"
+        else ()
+    ))
+    status = client.get(PATH + "/" + run["run_id"], headers=auth()).json()["data"]
+    assert status["recorded_source_model_call_count"] == 2
+    assert status["model_call_count"] == 2
+    assert status["model_call_count_complete"] is False
+    if not source_sealed:
+        assert status["source_model_call_count"] is None
+
+
 def test_api_authentication_scope_and_read_only_capability(environment):
     client, *_ = environment
     payload = {"idempotency_key": "browser-batch", "expected_upload_count": 3}

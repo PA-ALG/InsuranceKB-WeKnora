@@ -6,12 +6,13 @@ import hashlib
 import json
 from collections.abc import Callable, Mapping
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.models import _uuid
 from insurance_harness.jobs import (
     DomainWriteSpec,
+    NonRetryableJobError,
     SpaceScopeError,
     StaleGenerationError,
 )
@@ -70,18 +71,28 @@ class ProductArtifactStore(CheckpointArtifacts):
         receipt: dict,
     ) -> None:
         """Keep native call accounting even when a sibling parse fails."""
+        from insurance_harness.product_ingestion.processing_audit import (
+            attempt_identity,
+            extends,
+            latest_attempts,
+            read_audit,
+        )
         from insurance_harness.product_ingestion.processing_receipts import (
             validate_processing_receipt,
         )
 
-        validated = validate_processing_receipt(
-            receipt, knowledge_id=knowledge_id, parse_attempt=parse_attempt
-        )
+        try:
+            validated = validate_processing_receipt(
+                receipt, knowledge_id=knowledge_id, parse_attempt=parse_attempt
+            )
+        except (ValueError, KeyError, TypeError) as error:
+            raise NonRetryableJobError("SOURCE_PROCESSING_RECEIPT_INVALID") from error
         raw = json.dumps(
             validated, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode()
         digest = hashlib.sha256(raw).hexdigest()
-        key = f"{knowledge_id}:{parse_attempt}"
+        attempt_key = f"{knowledge_id}:{parse_attempt}"
+        key = f"{attempt_key}:{digest}"
         if len(key) > 256:
             raise ValueError("source processing attempt key exceeds capacity")
         with self._session_factory() as session, session.begin():
@@ -90,17 +101,25 @@ class ProductArtifactStore(CheckpointArtifacts):
                 session, scope, job.id, job.lease_generation
             )
             self._require_job_binding(active.payload, run_id=run_id, stage_key="source")
-            current = session.scalar(
+            snapshots = tuple(session.scalars(
                 select(ProductArtifact).where(
                     ProductArtifact.run_id == run_id,
                     ProductArtifact.artifact_kind == "source_processing_attempt",
-                    ProductArtifact.artifact_key == key,
+                    or_(
+                        ProductArtifact.artifact_key == attempt_key,
+                        ProductArtifact.artifact_key.startswith(attempt_key + ":", autoescape=True),
+                    ),
                 )
+            ))
+            previous = tuple(
+                row for row in latest_attempts(read_audit(snapshots))
+                if attempt_identity(row) == attempt_identity(validated)
             )
-            if current is not None:
-                if current.payload_sha256 != digest or current.payload != raw:
-                    raise ValueError("source processing receipt changed")
-                return
+            if previous:
+                if len(previous) != 1 or not extends(previous[0], validated):
+                    raise NonRetryableJobError("SOURCE_PROCESSING_RECEIPT_CONFLICT")
+                if previous[0] == validated:
+                    return
             session.add(
                 ProductArtifact(
                     id=_uuid(),

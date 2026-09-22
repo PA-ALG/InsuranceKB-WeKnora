@@ -13,9 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from insurance_harness.jobs.errors import SpaceScopeError
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.models import ProductScope
-from insurance_harness.product_ingestion.processing_receipts import (
-    processing_summary,
-    validate_processing_receipt,
+from insurance_harness.product_ingestion.processing_audit import (
+    read_audit,
+    source_accounting,
 )
 from insurance_harness.product_ingestion.progression import admit_uploads
 from insurance_harness.product_ingestion.store import ProductIngestionStore
@@ -200,50 +200,12 @@ def install_product_api(
             scope=scope, run_id=run_id, artifact_kind="source_processing_summary"
         )
         summary = json.loads(summaries[0].payload) if summaries else None
-        attempts = []
-        for saved in artifacts.list_artifacts(
+        attempts = read_audit(artifacts.list_artifacts(
             scope=scope, run_id=run_id, artifact_kind="source_processing_attempt"
-        ):
-            if (
-                getattr(saved, "payload_sha256", hashlib.sha256(saved.payload).hexdigest())
-                != hashlib.sha256(saved.payload).hexdigest()
-            ):
-                raise ValueError("source processing audit digest changed")
-            value = json.loads(saved.payload)
-            attempts.append(
-                validate_processing_receipt(
-                    value,
-                    knowledge_id=value["knowledge_id"],
-                    parse_attempt=value["parse_attempt"],
-                )
-            )
-        if summary is None and attempts:
-            summary = processing_summary((item["knowledge_id"], item, False) for item in attempts)
-            if len({item["knowledge_id"] for item in attempts}) < run.expected_upload_count:
-                summary["model_call_count"] = None
-                summary["model_call_count_complete"] = False
-        elif summary is not None and attempts:
-            represented = {
-                item["receipt_sha256"]
-                for item in summary["materials"]
-                if item["receipt_sha256"] is not None
-            }
-            prior = [item for item in attempts if item["receipt_sha256"] not in represented]
-            if prior:
-                extra = processing_summary((item["knowledge_id"], item, False) for item in prior)
-                summary["recorded_model_call_count"] += extra["recorded_model_call_count"]
-                summary["interrupted_count"] += extra["interrupted_count"]
-                summary["model_call_count_complete"] = (
-                    summary["model_call_count_complete"] and extra["model_call_count_complete"]
-                )
-                summary["model_call_count"] = (
-                    summary["recorded_model_call_count"]
-                    if summary["model_call_count_complete"]
-                    else None
-                )
-                summary["prior_attempts"] = extra["materials"]
+        ))
+        summary = source_accounting(summary, attempts)
         if summary is not None:
-            if checkpoint_receipt and summaries[0].run_id != run_id:
+            if checkpoint_receipt and summaries and summaries[0].run_id != run_id:
                 summary = {
                     **summary,
                     "model_call_count": 0,

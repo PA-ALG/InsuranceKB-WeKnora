@@ -84,4 +84,36 @@ root在最终合并生产代码上重跑source审计生命周期2 passed/18.82�
 
 部署尝试2次：首次Compose在60秒启动等待配置下exit1，已回滚至旧镜像且两服务healthy；详细Compose输出未保留，不能确认其唯一失败原因。Docker日志显示旧两服务45秒内未退出并经历强制终止，新容器运行约77秒后被回滚停止。新镜像隔离、禁网CLI导入烟测PASS/6.726秒。保留首次失败回执，随后只把受控部署等待改为180秒、保留错误输出并补rollback后验，同一镜像第二次更新PASS，没有任何代码重构建。新的API/worker健康，前后Active Release一致为release-70dd8e65-a844-4e7c-97fd-15107cdd3bfb/epoch13，活动任务均0。
 
-软件PASS、精确容器健康PASS、原配置复用PASS、local live健康及current读取PASS；provider单次受控探测PASS发生在本次部署前，配置和外呼适配器未变；GitHub live NOT RUN。网页仍在登录页，本轮恢复、增量业务复验及全新2662-1上传均NOT RUN。只读检查和fixture不能代替业务验收，G3整体未完成。完整无密钥机器回执见task3bn-recovery-20260922.json。
+软件PASS、精确容器健康PASS、原配置复用PASS、local live健康及current读取PASS；provider单次受控探测PASS发生在本次部署前，配置和外呼适配器未变；GitHub live NOT RUN。部署结束时网页仍在登录页，本轮业务当时NOT RUN。后续真实业务见下节；G3整体未完成。完整无密钥机器回执见task3bn-recovery-20260922.json。
+
+## 2026-09-22 原账号恢复及网页业务复验（进行中）
+
+用户要求复用处理过这批材料的账号。核对历史创建/授权记录后，确认原专用测试账号仍存在，临时凭据文件已丢失。本轮仅恢复该测试账号凭据并撤销其旧会话，账号/租户10003/权限/材料保持，未新建账号、未关闭认证、未改应用代码或部署。正常网页登录成功，原RAW库和历史任务可见。私有凭据不进入Git或公开回执。
+
+网页恢复2be3b35b后，平台任务b3fab26f-9392-5045-9eea-b4148e4fc219在2026-09-22T03:40:44.811614Z至03:44:53.424001Z完成，248.612秒（4分8秒），partial_success。34有效/34未提供/6失败，原字段新增调用0，自由发现实际新增2调用，页面显示复用9调用/7阶段。checkpoint16.136秒、discovery19.892秒、compilation48.999秒、preparation51.621秒、review34.814秒、publish37.126秒、verify26.847秒（总耗时另含排队切换）。最终发现未形成有效新知识，保留DISCOVERY_EMPTY及原响应，不补抽普通字段。
+
+平台自动发布至release-c667f177-d4ae-46df-a1a8-658e8824aa4c/epoch14；平台验后PASS，74字段、75成员、69引用、1条产品检索。浏览器实际打开该版本独立字段“投保范围”及原PDF第12页，正文可见。验证记录中的missing_field_count=40为非有效字段合计，任务终态细分为34未提供+6失败；legacy finalization.model_call_count=0不含stage_calls，应以API详情及持久调用记录实际2次为准。
+
+随后通过网页恢复d830d5e2，平台创建76eafa2b-324b-51a1-8582-27492adbfe6c，03:45:24.101799Z至03:53:40.018891Z完成（495.917秒），partial_success，13有效/17未提供/52失败，模型新增0/复用10。发布epoch15/release-40116374-35ce-43f3-b15c-90caeac12f78，平台检索和23引用检查PASS。新增2662-1三原文件SHA与准备记录一致，上传前在knowledges含历史删除记录的SHA匹配数为0。全部接续均由平台任务执行，无业务脚本、手工候选、字段修补或代发布。
+
+
+## 2026-09-22 首次上传回执缺陷及集中修复
+
+2662-1三份原PDF通过网页首次上传，最后上传03:54:16.652739Z，run368c59f1-fa81-4c99-a5ff-ba5940b5e84d。三份原生解析均completed，调用回执分别12/3/6，合计21次且均有确认响应。source首次保存AVAILABLE/0调用的在途回执，后续同parse/processing attempt合法追加被旧唯一key误拒，ValueError使其长期重试。首次无干预验收BLOCKED；修复后恢复不覆盖该结论。
+
+重复上传恢复run ae55548d-7328-5516-9989-d9210a2142b9已明确needs_confirmation，1次Gemini身份调用，原响应已存。JSON合法，但identity引用排序与单材料身份值证据不满足合同；仅内存排序诊断后仍存在不受证据支持的值。不手工补身份/跳过证据，不自动重调，归并语义容错作为明确遗留。
+
+根因修复归属processing_audit深模块：追加不可变快照、同处理尝试进展验证、迟到未知响应精化、阶段终态事实多重集、计数去重、旧summary精确SHA兼容。无新表或迁移。原worker source轮询测试真实RED（source processing receipt changed），API增长快照两项真实RED（错误计3、应为2）。本地source/receipt/checkpoint关联44 passed；后续audit/API32 passed；恢复关联68项初次66 passed，另2项为已有错误诊断合同的旧测试断言，按真实NonRetryable绑定变化及CapacityBlocked解析版本变化细分后2 passed/1.63秒，无对应生产代码变更。
+
+实际三材料6份回执离线回放PASS：在途计数未知、已记录下限21，最终summary准确21不重计；输入SHA21c08e901b8d4fe887860385bb84c543d958dbd809a4ae96053fe3156081cd1d。读取只用GET/SELECT，离线回放业务写入0、模型新增0。独立代码复核进行中，部署NOT RUN，G3整体仍BLOCKED。
+
+
+| 适用 Requirement | 当前实现 | 验证证据 | 状态 |
+|---|---|---|---|
+| G3-AUTO-3/6 成功解析及审计复用 | artifacts追加不可变快照，processing_audit统一合并 | source轮询worker通过、原字节不变；真实3文件6回执/21调用离线回放 | CODE PASS / DELIVERY NOT RUN |
+| G3-AUTO-4 明确终态、正确统计 | 无效/冲突回执NonRetryable；API读视图按dispatch去重 | 冲突worker明确dead_letter；在途unknown；迟到精化和SHA/原counts一致性RED→GREEN | CODE PASS / DELIVERY NOT RUN |
+| G3-AUTO-5 真实服务接线 | 仅现有Harness API/worker受影响 | 软件34 passed/9.76秒，Ruff及diff检查；部署尚未执行 | NOT RUN |
+
+独审发现两项同域缺口并集中修复：成功summary的旧未知回执不能遮住迟到结果；聚合去重不得改material counts同时沿用旧receipt SHA。两项RED为2 failed/.67秒，最终含两反例的34项测试通过；原回执及summary不变，读视图指向真实最新SHA。初冻审查不代表修后通过，修后独审仍待最终报告。
+
+最终修后独审0 BLOCKER，独立相关70 passed/69.17秒，Ruff PASS，冻结SHA一致。报告SHA025431896045c016d7d2cb1f000b709437b14ef636dbe77c5363a44beefa81ba。BACKLOG：list_artifacts默认1000条上限可能截断极大/长轮询任务审计，当前三来源未触及；不能据此声称千文件规模通过。开始一次Harness构建部署，网页业务仍待实测。
