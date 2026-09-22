@@ -1,3 +1,13 @@
+# 当前状态（2026-09-22 · 实际恢复根因已定位，集中修复未部署）
+
+Owner=root，工作树830-g3-performance，继续OpenSpec129。实际运行Harness/UI为0940f36497a7，APP保持63ac9e460，现有DB/服务不变。2648-1此前正常网页发布PASS（14分5秒）；恢复与增量验收仍BLOCKED，2662-1全新三文件尚未上传，G3不能结项。
+
+本轮只读复现：2be3b35b的source逐次处理审计在generation3落库、source阶段generation4成功，checkpoint把审计误当最终阶段输出而拒绝。d830d5e2（5b737子）的本地proof和三份来源均通过，旧workflow2绑定epoch11与当前epoch13不同而被拒绝。两个任务的原字段在当前已签base上的独立内存重基检查PASS（74/82字段），无业务写入、无模型重抽，不等于恢复成功。
+
+Gemini实际worker受控探测HTTP200、3.133秒、单次无文档发送；09-20地域400不是当前探测结果。API容器仅内网，其不能外呼为既有部署边界，不需改网络。浏览器当前登录页，已请求用户自行登录，不索取密码；不依赖登录的开发继续。
+
+按用户要求tracer bullet/deep modules集中修复：审计/最终输出生命周期分离，恢复验证收敛为单入口并返回稳定安全原因，v7明确workflow2重基兼容。包含二次失败恢复的worker贯穿1 passed/274.67秒、短合同/诊断5 passed、合并后审计2 passed；恢复新增模型调用0。独立最终复核BLOCKER0，报告SHA1966963f3ae1091292de13acdce6405ed6caa586266861ecffc8a33928263d3e。当前构建0、部署0、业务写入0；下一步只更新Harness一次，再网页恢复/全新样本验收，Go/UI/DB复用。路径与Owner见实施计划09-22节，实际记录见Task3bn验证报告末尾。以下按日期内容是历史记录，不覆盖本段。
+
 ## 2026-09-20 · Task3bn软件冻结，开始一次受影响组件部署
 
 本切片最终独立复核0 BLOCKER，重复上传代理、失败终态、轻量列表/按需详情、JSON边界/覆盖统计、独立发现恢复及v6当前发布变更恢复已通过限定验证。最后二次恢复处置丢失反例已闭合，原PENDING/REJECTED不重审，未知发送不重发；全部为软件/fixture结果。Task3bn部署及网页业务尚NOT RUN，G3整体未完成。下一步仅Harness/UI各一次构建后更新原服务，APP/DocReader/数据库复用；再网页恢复、重复上传、全新2662-1三原PDF验收。完整证据见docs/insurance-kb/evidence/830-g3/task3bn-consolidated-validation.md。

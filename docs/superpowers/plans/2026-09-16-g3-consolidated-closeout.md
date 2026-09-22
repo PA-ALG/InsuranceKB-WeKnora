@@ -120,3 +120,19 @@ v6独立复核两项同一失效边界修正：Head变化后即使调用原本�
 B2实现绑定：完整验证原prefix及原compilation的discovery_final_summary后，PENDING/REJECTED且Head变化时在现有checkpoint输出中保存rebased_discovery_disposition，引用原summary的artifact id/SHA/状态及当前request SHA。receipt保留discovery处置，compilation先检查经receipt验证的该规则产物，只组新字段候选，不加载或合并旧free候选、不新调最终模型。原非PASS summary/模型review字节和hash保持原审计意义，以来源引用标明保留处置，不能冒充新审批。后续再次rebase须验证并重新绑定该可选处置。B1仅拦将重执行单元的未知外发，不全局否定无需重做的历史未知调用。
 
 1835缺少官方简称映射证据，保留身份待确认，不用产品名/品牌子串推导主体相同，也不在本轮扩大双端身份协议；已证实供应商调用恢复和三阶段复用，未发布。
+
+### 2026-09-22 真实失败边界：先贯穿检查，再集中修复
+
+沿用用户已批准的 G3、OpenSpec129 与现有环境。用户再次要求 tracer bullet / deep modules：本轮不按单个异常部署，不新建服务、数据库或编排平台。
+
+已读真实记录：2be3b35b 恢复在本地 checkpoint 验证失败，原因是 source_processing_attempt 在 source 第3代保存而阶段第4代成功。该审计记录按既有设计应持续保留，却被选择器混入只能来自成功代次的阶段输出。d830d5e2 的本地记录、三份来源签名与解析版本均通过，但旧 workflow2 的 base epoch11 与当前13不同，现有协议不允许重基；盲升为 workflow3 会增加自由发现阶段，不能这样处理。
+
+复用与模块边界：
+- 保留现有 JobStore、source 逐次审计写入、checkpoint references、签名来源、纯 rebase_checkpoint_inputs 和发布 CAS。
+- CheckpointStore 唯一负责按产物寿命选择可复用输出；处理审计保留原记录且不冒充最终输出，最终输出仍严格核对 fence。root/g3_recovery_contract_audit 独占 checkpoints.py、checkpoint_store.py、新增 audit lifecycle 测试。
+- root 将恢复校验从 pipeline 闭包收敛为单一恢复验证入口，封装本地证明、来源、Schema/当前发布依赖与重基；pipeline 只调入口及已有阶段提交机制。失败输出稳定、安全的检查阶段/原因码，不输出原异常正文。唯一写域为新 checkpoint_validation.py、pipeline.py 与诊断测试。
+- 旧 workflow2 兼容设计已独立核对：新增最小 v7 恢复 wire，显式 execution_workflow_version=2；v1—v6 字节不变，协议能力 supports_rebase 由 checkpoint 模型集中提供，调用方不继续散布版本字符串判断。新 child 仍执行 workflow2，不增加 discovery。只在实际变 Head 且完成重基 receipt 后，执行视图使用重新验证的 field-only delta，并重新执行 compilation；原自由发现与审批保留历史审计，不能套在新输出上。同 Head 保持原候选/审批复用语义。g3_legacy_rebase_design 等 A 交回写域后负责 checkpoint 模型/存储/产物、验证入口中的兼容接线与专用测试，root 不并发写。禁止改写旧 DB 记录；不增加表、服务或迁移。
+
+验收 tracer：真实 source 多轮等待 → 已成功来源与审计共存 → 下游失败 → 平台恢复 → 复用字段 → 基于当前发布编译 → 发布 → 字段证据回查。先在真实 repository/worker 测试中复现跨代次与变 Head 两条边，并离线读取实际失败记录检查后续合同；统一验证和独立审查闭合后，只更新受影响制品一次，再进行网页恢复和全新2662-1三文件验收。离线投影不持久化、不代执行业务任务，不算平台通过。
+
+运行证据：真正 worker 的 Gemini 受控探测 HTTP200 / 3.133s / 单次发送，提示仅 Reply only OK，未发送材料。API 容器按既有设计仅内网，其连接错误不构成 worker 网络故障。两个失败记录对 epoch13 的纯重基投影分别成功（74/82字段，7.785/15.219s），未写DB、未生成发布候选。网页当前登录失效；已请用户在可见页面登录，开发与离线验证继续。

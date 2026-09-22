@@ -60,6 +60,15 @@ CURRENT_REQUIRED_OUTPUTS = {
     "discovery": ("discovery_candidates", "discovery_delta", "discovery_summary"),
 }
 
+# These rows are append-only accounting from individual source attempts. They
+# remain on the originating run, but are not completed stage outputs and must
+# never become recovery inputs merely because their stage later succeeded.
+CHECKPOINT_AUDIT_ONLY_KINDS = frozenset({"source_processing_attempt"})
+
+
+def is_checkpoint_reusable_artifact(artifact_kind: str) -> bool:
+    return artifact_kind not in CHECKPOINT_AUDIT_ONLY_KINDS
+
 
 # Only declared versioned outputs gate reuse; historical payloads stay immutable.
 CURRENT_ARTIFACT_CONTRACTS = {
@@ -172,14 +181,18 @@ class ConfirmedFailureReference(Frozen):
 
 
 class VersionedCheckpoint(Frozen):
+    execution_workflow_version: Literal[2] | None = None
+
     @model_serializer(mode="wrap")
     def preserve_old_wire(self, handler):
         value = handler(self)
+        if not self.contract.endswith(".v7"):
+            value.pop("execution_workflow_version", None)
         if not self.contract.endswith((".v3", ".v4", ".v5", ".v6")):
             value.pop("retry_calls", None)
         if not self.contract.endswith((".v4", ".v5", ".v6")):
             value.pop("failed_calls", None)
-        if not self.contract.endswith(".v6"):
+        if not self.supports_rebase:
             value.pop("audited_calls", None)
             value.pop("failed_discovery_artifact", None)
             value.pop("failed_discovery_stage", None)
@@ -188,8 +201,21 @@ class VersionedCheckpoint(Frozen):
             value.pop("rebased_discovery_disposition_sha256", None)
         return value
 
+    @property
+    def supports_rebase(self) -> bool:
+        return self.contract.endswith((".v6", ".v7"))
+
+    @property
+    def field_only_rebase(self) -> bool:
+        return self.contract.endswith(".v7")
+
     @model_validator(mode="after")
     def valid_retry_contract(self):
+        if self.contract.endswith(".v7"):
+            if self.execution_workflow_version != 2:
+                raise ValueError("checkpoint v7 requires execution_workflow_version 2")
+        elif self.execution_workflow_version is not None:
+            raise ValueError("explicit execution workflow requires checkpoint v7")
         if self.retry_calls and not self.contract.endswith((".v3", ".v5", ".v6")):
             raise ValueError("retry references require checkpoint v3")
         if len(self.retry_calls) > 1:
@@ -209,6 +235,7 @@ class CheckpointPlan(VersionedCheckpoint):
         "product-stage-checkpoint-plan.830.v4",
         "product-stage-checkpoint-plan.830.v5",
         "product-stage-checkpoint-plan.830.v6",
+        "product-stage-checkpoint-plan.830.v7",
     ] = "product-stage-checkpoint-plan.830.v2"
     scope: ProductScope
     origin_run_id: str
@@ -233,9 +260,16 @@ class CheckpointPlan(VersionedCheckpoint):
 
     @property
     def workflow_version(self):
+        if self.contract.endswith(".v7"):
+            return self.execution_workflow_version
         if self.contract.endswith(".v1"):
             return 1
         return 3 if self.contract.endswith((".v5", ".v6")) else 2
+
+    def artifact_is_effective_after_rebase(self, artifact_kind: str) -> bool:
+        if not self.field_only_rebase:
+            return True
+        return artifact_kind != "compile_delta" and not artifact_kind.startswith("discovery_")
 
     @model_validator(mode="after")
     def valid(self):
@@ -273,7 +307,7 @@ class CheckpointPlan(VersionedCheckpoint):
                 or any(c.call_id == self.failed_calls[0].call_id for c in self.calls)
             ):
                 raise ValueError("invalid or intersecting confirmed failure reference")
-        if self.audited_calls and not self.contract.endswith(".v6"):
+        if self.audited_calls and not self.supports_rebase:
             raise ValueError("audited calls require checkpoint v6")
         if self.prior_rebase_artifacts:
             kinds = {r.artifact_kind for r in self.prior_rebase_artifacts}
@@ -282,7 +316,7 @@ class CheckpointPlan(VersionedCheckpoint):
                 "rebased_identity", "rebased_compile_delta",
             }
             if (
-                not self.contract.endswith(".v6")
+                not self.supports_rebase
                 or not required <= kinds
                 or kinds - required != (
                     {"rebased_discovery_disposition"} if len(kinds) == 5 else set()
@@ -318,6 +352,7 @@ class CheckpointReceipt(VersionedCheckpoint):
         "product-stage-checkpoint-receipt.830.v4",
         "product-stage-checkpoint-receipt.830.v5",
         "product-stage-checkpoint-receipt.830.v6",
+        "product-stage-checkpoint-receipt.830.v7",
     ] = "product-stage-checkpoint-receipt.830.v2"
     scope: ProductScope
     run_id: str

@@ -1,6 +1,6 @@
 # Task3bn 集中修复与平台复验
 
-基线63ac9e460092ecc3b27b8d56ea077bb813705581；沿用OpenSpec129和现有G3环境。当前为软件验证阶段，尚未部署本切片。G3整体BLOCKED，不能用上轮2648-1正常发布覆盖重复上传/失败恢复问题。
+沿用OpenSpec129和现有G3环境。Task3bn 源码0940f36497a7已于09-20部署；当前09-22继续核查其真实恢复失败，集中修复尚未部署，G3整体BLOCKED。下表保留当时软件冻结口径，实际部署与业务结果以文末按日期的记录为准，不能用2648-1正常发布覆盖恢复问题。
 
 | Requirement | 实现及证据 | 软件状态 | 本切片实际部署/网页复验 |
 |---|---|---|---|
@@ -42,7 +42,7 @@ root全改动Python Ruff发现列表代码及test_api四处超长行，仅机械
 
 ## 2026-09-20 部署后网页实测
 
-Task3bn 已只更新受影响 Harness/UI，复用原 APP、DocReader、PostgreSQL、Redis 和运行配置。Harness 镜像 sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d、UI 镜像 sha256:d488e95945f58a0967fd07108cacd32b0c83360e48d123d0bb57cc6ec2bfc57e，源码均为 0940f36497a7e7921b45aafab2362d6ca44182ff；处理服务和前端健康，数据库迁移、配置变更、模型调用和发布写入均为0。原容器保留回滚。
+Task3bn 已只更新受影响 Harness/UI，复用原 APP、DocReader、PostgreSQL、Redis 和运行配置。Harness 镜像 sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3、UI 镜像 sha256:d488e95945f58a0967fd07108cacd32b0c83360e48d123d0bb57cc6ec2bfc57e，源码均为 0940f36497a7e7921b45aafab2362d6ca44182ff；处理服务和前端健康，数据库迁移、配置变更、模型调用和发布写入均为0。原容器保留回滚。
 
 列表性能真实对比：部署前列表 GET 17.318044177 秒 / 309221 字节；部署后 0.318828452 秒 / 25772 字节。部署后显式详情 GET 1.214670547 秒 / 16186 字节。性能改动已在真实入口生效。
 
@@ -51,3 +51,29 @@ Task3bn 已只更新受影响 Harness/UI，复用原 APP、DocReader、PostgreSQ
 平台恢复实测：网页点击2648-1已有发布任务的“恢复自由发现”，平台创建任务 2be3b35b-e390-5825-9ddd-43a6e856ccaa，检查点阶段约1秒终止为 `CHECKPOINT_INVALID`，0模型调用；原任务、材料和字段结果均保留。随后网页恢复旧抽取任务 59c9bf37-b650-50f2-8a1c-65b9563e9023，仍未形成发布结果。该项仍为平台遗留问题，不能用离线 fixture 通过替代真实恢复通过。
 
 新产品2662-1三份原材料仍未上传，避免在 Gemini 当前明确地域拒绝期间消耗全新产品首次网页验收样本。当前 G3 状态：软件、构建、容器健康、列表性能 PASS；重复上传业务与恢复业务 BLOCKED；全新产品网页验收 NOT RUN。主要外部阻断为模型网关地域限制，平台恢复检查点仍需依据真实运行数据修复。
+
+
+## 2026-09-22 真实故障定位与集中修复（尚未部署）
+
+仅使用既有环境、真实持久记录和公开GET核验。服务健康，原active仍为 release-70dd8e65-a844-4e7c-97fd-15107cdd3bfb / epoch13。此次构建0、部署0、迁移0、业务写入0；2662-1尚未上传。
+
+| 检查 | 实际结果 | 范围 |
+|---|---|---|
+| 2be3b35b checkpoint | BLOCKED：`checkpoint artifact producer fence changed`；父faf有2个source_processing_attempt producer_generation3，source任务成功代次4 | 已部署函数+真实DB，仅SELECT/SHOW；初次只读事务不允许FOR SHARE，随后以SQL语句防护禁止写入 |
+| d830d5e2 checkpoint（5b737子） | 本地proof、3份当前来源及签名/parse attempt均PASS；旧workflow2/base epoch11不支持切到当前13 | 真实原因不等于解析失败；任务09-20 16:34:55.363138Z已blocked，无一直运行 |
+| 原字段重基兼容 | 2be 74字段，7.785秒；d830 82字段，15.219秒；现有纯函数均PASS | 只读输入、仅内存投影，不写结果/不生成发布candidate/不替任务运行，不能算BUSINESS PASS |
+| Gemini实际worker | HTTP200，3.133秒，内容OK.，零重试，1次实际发送 | prompt仅Reply only OK，未发送文档；原usage为prompt120/completion2/total163/reasoning41，按提供方原值保存 |
+| API网络诊断 | API仅内网，无默认出站路由；worker有既有provider-egress且调用成功 | API里首次ConnectError未发送模型请求，不是实际worker网络故障；没有改网络/配置 |
+| 网页入口 | 登录页，等待用户自行登录 | 不读取Owner密码；离线工作不因此停止 |
+
+恢复单入口与安全原因码：新增两项测试在旧代码均以泛化CHECKPOINT_INVALID断言失败（94.71秒），实现后2 passed/52.17秒；原v6当前Head重基及未知发送反例2 passed、4 deselected/231.50秒，原未知发送继续不发新调用。Ruff通过。运行warning为Starlette testclient/httpx弃用提示，非业务错误。
+
+source审计生命周期修复：选择器同时过滤当前及继承的audit-only refs，原审计保留，最终输出fence仍严格相等。新增真实repository/WorkerLoop两例RED→GREEN，相关checkpoint contract/recovery/source阶段24 passed/303.86秒（owner报告，root已核对实际diff与新测试）。尚待合并本轮旧workflow2兼容的限定回归及独立审查；不能把上述结果写成真实网页恢复或G3完成。
+
+本轮合并软件验证：旧workflow2保持旧v2记录不变，新恢复计划v7显式执行workflow2；变Head后复用已验证字段，重新编译，旧自由发现审核不进入新输出。真实repository/worker fixture贯穿至发布成功，随后扩展为首个v7在preparation故障、孙任务继承4项重基证明继续完成：最终1 passed/274.67秒，两代恢复的归并、字段、发现、最终检查新增模型调用均0。中间208.56秒一次失败为测试误断言内部异常码，平台公开终态正确为PRODUCT_STAGE_FAILED:preparation，纠正断言后通过，不作为产品RED。v7合同、旧v6 wire及诊断短批5 passed/38.29秒。scope绑定错误已恢复原NonRetryable语义，独立RED→GREEN 1 passed/4.47秒。
+
+root在最终合并生产代码上重跑source审计生命周期2 passed/18.82秒，9项改动Python文件Ruff通过，git diff --check通过。独立最终复核仍在执行；上述为本地软件结果，部署与真实网页验收尚未执行。证据位于工作树tmp/g3-diagnostics-20260922/：legacy-rebase-tests.txt SHA a68a191e8d8ca1bcb993d07e44fb14bc072643831fd90a6301579ba60c2775eb；source-audit-lifecycle.txt SHA 01467d058334587b171a8a1f60d8018723f0616f7acb76bff6d4ac0b567054c9。
+
+一次部署准备：仅Harness API/worker，复用当前compose、原配置、挂载、网络与数据库，不改Go/UI，不迁移。部署前无活动任务才更新，健康或配置一致性失败则回原镜像；准备脚本尚未执行。数据卷/dev/vdb1实测108G/已用97G/可用11G，无扩容或清理。
+
+最终独立复核完成：5个生产文件冻结SHA逐一一致，BLOCKER0。报告tmp/g3-diagnostics-20260922/final-review.md SHA1966963f3ae1091292de13acdce6405ed6caa586266861ecffc8a33928263d3e；确认旧wire、v7有效产物隔离、二次恢复proof链、原scope失败语义及严格generation fence。非阻断后续项为独立入口policy错误边界、一次性部署包装的assert/rollback显式后验和新入队时间点竞态，不扩成本轮长期部署框架。软件冻结后才开始一次Harness构建/部署；截至本段运行验收仍NOT RUN。

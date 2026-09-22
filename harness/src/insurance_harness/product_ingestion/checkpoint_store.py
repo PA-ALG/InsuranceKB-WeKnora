@@ -27,6 +27,7 @@ from insurance_harness.product_ingestion.checkpoints import (
     ConfirmedFailureReference,
     FieldReference,
     IdentityRetryReference,
+    is_checkpoint_reusable_artifact,
     required_outputs,
     stage_order,
 )
@@ -231,7 +232,7 @@ class CheckpointStore:
             or (
                 receipt.reused_stages != plan.reused_stages
                 and not (
-                    plan.contract_version == "6"
+                    plan.supports_rebase
                     and receipt.rebased_base_sha256 is not None
                     and receipt.reused_stages in (
                         plan.reused_stages[:stage_order(3).index("discovery")],
@@ -239,7 +240,7 @@ class CheckpointStore:
                     )
                 )
             )
-            or (receipt.rebased_base_sha256 is not None and plan.contract_version != "6")
+            or (receipt.rebased_base_sha256 is not None and not plan.supports_rebase)
             or receipt.retry_calls != plan.retry_calls
             or receipt.failed_calls != plan.failed_calls
             or row.space_id != scope.space_id
@@ -363,7 +364,9 @@ class CheckpointStore:
             {
                 (r.artifact_kind, r.artifact_key): r
                 for r in inherited.artifacts
-                if r.producer_generation > 0 and r.stage_key in inherited_keys
+                if r.producer_generation > 0
+                and r.stage_key in inherited_keys
+                and is_checkpoint_reusable_artifact(r.artifact_kind)
             }
             if inherited
             else {}
@@ -378,7 +381,8 @@ class CheckpointStore:
                 ProductArtifact.producer_generation > 0,
             )
         ).all():
-            refs[(row.artifact_kind, row.artifact_key)] = _ref(row)
+            if is_checkpoint_reusable_artifact(row.artifact_kind):
+                refs[(row.artifact_kind, row.artifact_key)] = _ref(row)
 
         failed_discovery_artifact = None
         failed_discovery_stage = None
@@ -448,7 +452,15 @@ class CheckpointStore:
             if not failed_discovery_artifact:
                 return None
         resume = order[len(prefix)] if len(prefix) < len(order) else "discovery"
-        rebase = workflow_version == 3 and "synthesis" in {s.stage_key for s in prefix}
+        legacy_rebase = (
+            workflow_version == 2
+            and inherited is not None
+            and inherited.contract_version in {"2", "7"}
+        )
+        rebase = (
+            (workflow_version == 3 or legacy_rebase)
+            and "synthesis" in {s.stage_key for s in prefix}
+        )
         if rebase and run.state is ProductRunState.PARTIAL_SUCCESS:
             if failed_discovery_artifact is not None and (
                 failed_discovery_artifact.artifact_kind == "discovery_final_summary"
@@ -692,7 +704,9 @@ class CheckpointStore:
                 expected = 5 if prior_receipt.rebased_discovery_disposition_sha256 else 4
                 if len(prior_rebase_artifacts) != expected:
                     return None
-        if workflow_version == 3:
+        if legacy_rebase:
+            contract_version = 7
+        elif workflow_version == 3:
             contract_version = 6 if rebase else 5
         elif failed_calls:
             contract_version = 4
@@ -702,6 +716,7 @@ class CheckpointStore:
             contract_version = workflow_version
         return CheckpointPlan(
             contract=f"product-stage-checkpoint-plan.830.v{contract_version}",
+            execution_workflow_version=2 if contract_version == 7 else None,
             scope=scope,
             origin_run_id=origin.id,
             origin_version=origin.version,

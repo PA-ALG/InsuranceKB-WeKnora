@@ -183,3 +183,14 @@ The current Codex-assisted diagnostic run is not independent-platform acceptance
 ### Task3bn 恢复中父响应的有效性（G3-AUTO-3/4、G3-DISC-1，2026-09-19）
 
 显式恢复的发现任务 SHALL 先按当前相同解码及投影规则核验已记录父响应；合法结果复用，仍属技术格式/证据结构失败的单元才允许一次新的子调用。原响应与失败原因 SHALL 保留，新调用失败 SHALL NOT 在同阶段无限重试。未知发送仍阻断，合法PENDING/REJECTED不是技术失败。Schema字段成功结果不重抽，单json围栏经软件修复后合法的父响应仍可直接复用。
+
+
+### 2026-09-22 recovery lifecycle clarification — G3-AUTO-3/4/6
+
+Append-only source processing audits can be saved before the source stage's final successful execution. They MUST remain retained and readable, but MUST NOT be selected as final stage outputs in a recovery checkpoint. Reusable final outputs retain exact producer/dependency/final-generation checks; this change does not relax job fencing.
+
+Checkpoint validation has one service entry responsible for stored proof, current source, Catalog/Schema and current published-base dependencies, returning drafts for the existing fenced stage adapter. Its safe failure code identifies the failed boundary without exposing provider, configuration or raw exception text.
+
+A recovery of a historical G3 workflow2 run after an unrelated Head change MUST preserve workflow2 and reuse validated fields without adding discovery or new field calls. A new versioned checkpoint may explicitly record this execution workflow; v1–v6 wire bytes and original rows remain immutable. Only after a validated rebase receipt may the execution view select the rebased field-only request/delta and exclude historical discovery-derived outputs/reviews; the original records remain audit evidence. Unchanged-base recovery preserves prior semantics. Changed-base recovery invalidates compilation and subsequent outputs, with all four rebased inputs and the receipt persisted under one fence. A subsequent recovery validates and reuses that same chain. Unknown model sends still block relevant redispatch. No new database, service, migration or serving authority is added.
+
+Validation uses the actual generation3/4 audit failure and workflow2 epoch11→13 failure as representative boundaries, first repository/worker RED→GREEN and read-only stored-record checks, then one consolidated deployment and real webpage acceptance. Offline diagnostics cannot count as platform execution or G3 completion.

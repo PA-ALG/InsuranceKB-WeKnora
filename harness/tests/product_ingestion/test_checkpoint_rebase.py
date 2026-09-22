@@ -180,7 +180,7 @@ async def test_changed_head_does_not_resend_a_discovery_with_unknown_outcome(tmp
         )
         result = await _finish(runtime, context, jobs, child.run_id)
         assert result.state is ProductRunState.NEEDS_CONFIRMATION
-        assert result.terminal_reason == "CHECKPOINT_INVALID"
+        assert result.terminal_reason == "CHECKPOINT_REBASE_INVALID"
         assert len(model.discovery_requests) == before
     finally:
         await runtime.close()

@@ -30,7 +30,7 @@ from insurance_harness.product_ingestion.tables import (
 
 class CheckpointArtifacts:
     def get_rebased_artifact(self, *, scope, run_id, artifact_kind):
-        """All four v6 inputs are one fenced checkpoint output, or none is visible."""
+        """All four rebased inputs are one fenced checkpoint output, or none is visible."""
         kinds = {
             "rebased_base_snapshot", "rebased_compile_request",
             "rebased_identity", "rebased_compile_delta",
@@ -41,7 +41,7 @@ class CheckpointArtifacts:
             receipt = self._products.checkpoint_receipt(
                 scope=scope, run_id=run_id, session=session
             )
-            if receipt is None or not receipt.contract.endswith(".v6"):
+            if receipt is None or not receipt.supports_rebase:
                 return None
             stage = session.scalar(select(ProductStage).where(
                 ProductStage.run_id == run_id, ProductStage.stage_key == "checkpoint"
@@ -119,6 +119,11 @@ class CheckpointArtifacts:
                 refs = [r for r in plan.artifacts
                         if r.stage_key in effective_keys
                         and (artifact_kind is None or r.artifact_kind == artifact_kind)]
+                if receipt.rebased_base_sha256 is not None:
+                    refs = [
+                        ref for ref in refs
+                        if plan.artifact_is_effective_after_rebase(ref.artifact_kind)
+                    ]
                 for ref in refs:
                     row = session.scalar(select(ProductArtifact).options(*options).where(
                         ProductArtifact.id == ref.artifact_id))
@@ -250,8 +255,8 @@ class CheckpointArtifacts:
         """A changed base cannot hide an unknown send by changing its input hash."""
         with self._session_factory() as session, session.begin():
             plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
-            if plan is None or plan.contract_version != "6":
-                raise ValueError("checkpoint call audit requires v6")
+            if plan is None or not plan.supports_rebase:
+                raise ValueError("checkpoint call audit requires rebase support")
             refs = (*(ref for ref in plan.calls if ref.kind == "stage"),
                     *plan.audited_calls)
             for ref in refs:
@@ -280,7 +285,7 @@ class CheckpointArtifacts:
             if effective_stage_keys is not None:
                 expected = tuple(s.stage_key for s in plan.reused_stages)
                 if (
-                    plan.contract_version != "6"
+                    not plan.supports_rebase
                     or tuple(effective_stage_keys) != expected[:len(effective_stage_keys)]
                     or not effective_stage_keys
                 ):
@@ -586,6 +591,7 @@ class CheckpointArtifacts:
                 raise ValueError("duplicate original call identity")
             return CheckpointReceipt(
                 contract=plan.contract.replace("-plan.", "-receipt."),
+                execution_workflow_version=plan.execution_workflow_version,
                 scope=scope,
                 run_id=run_id,
                 plan_sha256=plan.digest(),
