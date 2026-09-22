@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from insurance_harness.db.base import Base
@@ -30,15 +30,15 @@ class ProductRun(Base):
     attempt: Mapped[int]
     retry_field_keys: Mapped[list[str]] = mapped_column(JSON)
     expected_upload_count: Mapped[int]
-    upload_deadline_at: Mapped[datetime]
-    uploads_sealed_at: Mapped[datetime | None]
-    source_deadline_at: Mapped[datetime]
+    upload_deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    uploads_sealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    source_deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     state: Mapped[str] = mapped_column(String(32))
     version: Mapped[int]
     workflow_version: Mapped[int] = mapped_column(nullable=False, server_default="1")
     uploads_sealed: Mapped[bool]
-    created_at: Mapped[datetime]
-    started_at: Mapped[datetime | None]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     root_job_id: Mapped[str | None] = mapped_column(String(36))
 
 
@@ -78,7 +78,7 @@ class ProductStage(Base):
     dependency_sha256: Mapped[str] = mapped_column(String(64))
     job_id: Mapped[str] = mapped_column(String(36), unique=True)
     parent_job_id: Mapped[str | None] = mapped_column(String(36))
-    created_at: Mapped[datetime]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ProductWindow(Base):
@@ -95,11 +95,11 @@ class ProductWindow(Base):
     dependency_sha256: Mapped[str] = mapped_column(String(64))
     tasks: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
     job_id: Mapped[str] = mapped_column(String(36), unique=True)
-    created_at: Mapped[datetime]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     selected_field_keys: Mapped[list[list[str]] | None] = mapped_column(JSON)
     cached_attempt_ids: Mapped[list[str] | None] = mapped_column(JSON)
     reservation_generation: Mapped[int | None]
-    reserved_at: Mapped[datetime | None]
+    reserved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ProductStageSettlement(Base):
@@ -115,7 +115,7 @@ class ProductStageSettlement(Base):
     failure_count: Mapped[int]
     model_call_count: Mapped[int]
     usage: Mapped[dict[str, int]] = mapped_column(JSON)
-    finished_at: Mapped[datetime]
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ProductModelCall(Base):
@@ -140,9 +140,9 @@ class ProductModelCall(Base):
     raw_sha256: Mapped[str | None] = mapped_column(String(64))
     raw_ref: Mapped[str] = mapped_column(String(512))
     diagnostic: Mapped[str | None] = mapped_column(Text)
-    reserved_at: Mapped[datetime]
-    dispatched_at: Mapped[datetime | None]
-    recorded_at: Mapped[datetime | None]
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     selected_field_keys: Mapped[list[list[str]]] = mapped_column(JSON)
     cached_attempt_ids: Mapped[list[str]] = mapped_column(JSON)
 
@@ -172,7 +172,7 @@ class ProductFieldAttempt(Base):
     validated_result: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     raw_ref: Mapped[str] = mapped_column(String(512))
     attempt: Mapped[int]
-    created_at: Mapped[datetime]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     reused_from_attempt_id: Mapped[str | None] = mapped_column(String(36))
 
 
@@ -187,7 +187,7 @@ class ProductWindowSettlement(Base):
     missing_count: Mapped[int]
     failure_count: Mapped[int]
     usage: Mapped[dict[str, int]] = mapped_column(JSON)
-    finished_at: Mapped[datetime]
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ProductRunFinalization(Base):
@@ -202,5 +202,5 @@ class ProductRunFinalization(Base):
     failure_count: Mapped[int]
     model_call_count: Mapped[int]
     usage: Mapped[dict[str, int]] = mapped_column(JSON)
-    started_at: Mapped[datetime]
-    finished_at: Mapped[datetime]
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

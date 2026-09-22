@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from insurance_harness.db.base import Base
@@ -37,7 +37,7 @@ class ProductArtifact(Base):
     origin_call_id: Mapped[str | None] = mapped_column(String(128))
     producer_job_id: Mapped[str] = mapped_column(String(36))
     producer_generation: Mapped[int]
-    created_at: Mapped[datetime]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ProductStageModelCall(Base):
@@ -73,6 +73,6 @@ class ProductStageModelCall(Base):
     raw_ref: Mapped[str] = mapped_column(String(512))
     diagnostic: Mapped[str | None] = mapped_column(Text)
     usage: Mapped[dict[str, int]] = mapped_column(JSON)
-    reserved_at: Mapped[datetime]
-    dispatched_at: Mapped[datetime | None]
-    recorded_at: Mapped[datetime | None]
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
