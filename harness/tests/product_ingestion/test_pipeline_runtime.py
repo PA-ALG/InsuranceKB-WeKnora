@@ -540,6 +540,7 @@ class FixtureModel:
             "product-discovery-context.830.v1",
             "product-discovery-context.830.v3",
             "product-discovery-context.830.v4",
+            "product-discovery-context.830.v5",
         }:
             self.discovery_requests.append(envelope)
             semantic = {

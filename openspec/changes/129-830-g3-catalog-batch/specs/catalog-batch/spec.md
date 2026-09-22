@@ -204,3 +204,30 @@ Validation uses the actual generation3/4 audit failure and workflow2 epoch11→1
 验证：原文支持的简称/正式名称互补→同一候选；未声明/跨Space/真实公司或版本冲突→不自动归并；原proposal原字节不变；旧policy哈希不变、新声明篡改拒绝；Python生成输入/决定/绑定由Go完整重放；已有模型与来源复用，失败原记录不删除。
 
 策略语义明确化：非空issuer_aliases产生新的policy identity，其精确等价比较适用于消费该新policy的解析；v3联合归并才生成canonical issuer的共享anchors/candidate。旧无映射policy和旧v1/v2结果原字节不变，不要求新策略在旧编译器忽略自己声明。已有compile_request的旧checkpoint对不同policy保持fail closed；本次368c在identity失败，无compile_request，可复用原模型raw和来源。
+
+### 2026-09-23 G3.5 — 自由发现与知识准入（用户新授权）
+
+本次Goal与完整G35-R1—7、非目标和真实选材冻结于
+`docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md`。
+旧G3 FLOW PASS保留，不能代替G3.5非空知识准入；沿既有G2-R1/R3及G3-DISC-1/2扩展。
+
+#### Requirement: G35-R2/G35-R5 已有知识语义参与准入及真实依赖
+
+发现与独立审核MUST能够比较已有页/概念的正文、主体/义项、版本、条件和例外；
+仅有名称索引不足以判断语义重复与更新。已有自由页正文/作用域/证据修订MUST改变本次
+生成输入identity；不能只因page_id/title/stable_key未变就复用旧发现。无关实体页不应
+扩大当前实体输入，原Schema字段结果变化仍不使独立发现失效。
+
+第一软件切片采用显式v5 generation context与v4 review context；v3/v4 generation历史
+输入保留原renderer及原字节语义，当前运行默认v5，不把新增语义输入变化伪装为零调用。
+已有知识比较视图只带语义正文/作用域/稳定身份和revision摘要，不展开历史来源巨大审计
+对象；来源Evidence真实性继续由现有验证边界承担。超出原有序列化预算明确失败，不静默
+截正文。此切片不自行执行模型、部署、Candidate或发布；尚不意味着更新、新实体和局部
+失败合同已完成。
+
+- GIVEN已有页稳定身份/标题未变，正文或条件/例外/版本/证据被修订
+- WHEN构建当前发现或审核输入
+- THEN视图呈现真实语义且identity改变；历史v3/v4 renderer仍保留原形
+- AND同名字段实例与通用概念由各自类型、义项及主体区分，不依据名称直接合并
+
+审核v4 MUST 保留候选的类型身份：概念的canonical_key/sense_key/aliases/origin，页面的entity_id/stable_key/entity_version/concept_ids；审核v3显式renderer保持历史字节。历史版本只供原合同回放，不能替代当前v4审核授权。Schema绑定必须唯一匹配id/version/hash，否则稳定拒绝。

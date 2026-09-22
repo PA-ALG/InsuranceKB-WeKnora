@@ -1,0 +1,41 @@
+{
+  "contract": "g35-source-selection-audit.v1",
+  "selected_at": "2026-09-22T17:10:57.623834+00:00",
+  "base_commit": "8f7201dd428033de1e66f8783c125ebf2b617d53",
+  "source_artifact_path": "/Users/houjing/Documents/LLM_wiki/insurancekb-private-evidence/g3-20260912-final-closeout/final-epoch9-and-dns-20260913/epoch9/candidate/request.json",
+  "source_artifact_sha256": "0f9f651aaef9d3a916b8d0e2dcb762d9ccd7f4f3516872fc619c925790bfbb3a",
+  "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+  "revision_id": "89944ff7ecbfdcb0d00b7ceacfbdac4407389af078514317e2a3affe1973de50",
+  "source_hash": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+  "parse_hash": "9995d0f3f2962ec8a879e77ae3850bba0d34e5984d82356ae440cce695bb27ee",
+  "parser_identity": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+  "block_count": 79,
+  "total_chars": 25801,
+  "selection_status": "REPRESENTATIVE_SOURCE_SELECTED_NOT_GENERATED_OR_ADMITTED",
+  "cases": [
+    {
+      "kind": "positive_candidate",
+      "page": 26,
+      "block_id": "be785ddd-ced1-49f2-b254-42178808ab7c",
+      "quote": "本产品说明书所载资料供您理解保险条款所用， 各项内容均以保险条款为准。",
+      "business_use": "帮助读者理解说明书与合同条款的适用顺序；是材料使用规则，不是新保险责任。",
+      "expected": "先与已有知识比对，可引用/补充/新建；不可只因无字段名就强制建页。"
+    },
+    {
+      "kind": "schema_duplicate",
+      "page": 1,
+      "field_key": "waiting_period",
+      "expected": "30日等待期归现有字段；不重复自由页。"
+    },
+    {
+      "kind": "marketing_counterexample",
+      "page": 1,
+      "quote": "特需国际省心住，尊享品质医疗",
+      "expected": "宣传短语不独立成页；后续具体保障范围另按原文判断。"
+    }
+  ],
+  "new_parse_calls": 0,
+  "new_model_calls": 0,
+  "new_publication_effects": 0,
+  "caveat": "从既有冻结真实请求选择来源；尚未复核当前撤回状态、模型输出、独立审核、页面或生产准入。"
+}

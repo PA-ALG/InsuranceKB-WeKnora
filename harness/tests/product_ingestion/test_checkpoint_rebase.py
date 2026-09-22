@@ -328,6 +328,7 @@ async def test_final_discovery_failure_resumes_compilation_without_generation(
             if content.get("contract") in {
                 "product-discovery-context.830.v3",
                 "product-discovery-context.830.v4",
+                "product-discovery-context.830.v5",
             }:
                 from tests.product_ingestion.test_independent_discovery import _proposal
 
@@ -345,7 +346,10 @@ async def test_final_discovery_failure_resumes_compilation_without_generation(
                         "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
                     },
                 )
-            if content.get("contract") == "product-discovery-review-context.830.v3":
+            if content.get("contract") in {
+                "product-discovery-review-context.830.v3",
+                "product-discovery-review-context.830.v4",
+            }:
                 self.discovery_review_requests.append(envelope)
                 if self.broken:
                     response: dict[str, typing.Any] = {"invalid": True}
