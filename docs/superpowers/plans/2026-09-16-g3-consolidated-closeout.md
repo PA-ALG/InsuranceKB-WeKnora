@@ -156,3 +156,15 @@ B2实现绑定：完整验证原prefix及原compilation的discovery_final_summar
 
 
 2026-09-22 回执修复后真实identity边界：368c59f1已自主越过source，21次原生调用未重发；新增1次身份响应仅因identity_evidence_refs未排序被拒，原响应离线排序后适配通过且无不受支持的身份值。同批ae55548d排序后仍有缺原文依据的issuer/product_code，必须保持needs_confirmation。继续原G3-AUTO-1/3/6：identity_adapter唯一负责将引用集合按排序/去重规范化并记录改动审计；原模型raw不变，不修改值、不扩展来源、不放宽跨材料/悬空/用途检查。检查同一响应的原生定位投影及归并后再部署，不能单凭排序PASS推断全链通过。Owner root限identity_adapter及tests、本文/验证报告；同批复审后才做下一次受影响Harness更新，明确记为发现新边界后的后续修复，不能声称一次更新已解决所有问题。
+
+最新业务确认：用户明确本次这些材料都是平安人寿的产品。此前归并方向询问不再待答；本批公司确认可作为独立、可审计的用户声明消费，不冒充原材料证据。保留原issuer和模型响应，以平台确认绑定支持同批简称/全称归一；产品代码/版本真实冲突仍按原规则处理。无需为了已确认的公司关系再调Gemini或重复索要授权。实施前沿现有治理/来源声明能力核对窄接口及恢复合同，将此接线与已通过的引用格式容错统一验证和部署。
+
+### 2026-09-22 公司确认归并（G3-AUTO-1/3/6，root唯一写者）
+
+复用现有可信ResolutionPolicy、v3联合身份解析和Go发布复核；缺口为有原文支持的公司简称与正式名称缺少可审计等价声明。新增可选issuer_aliases策略项（canonical_name、aliases、space_ids、confirmation_ref），精确归一比较且限定Space，声明和策略SHA持久进入现有resolution inputs。用户2026-09-22确认“这些都是平安人寿的产品”作为本批声明出处；原文、模型值、原响应及每份材料的证据归属均不改写。派生决定可使用规范名称，不能把声明伪装成PDF证据。未配置时省略字段并保持历史策略原字节/哈希，显式空/null配置拒绝；禁止同Space重叠别名或链式映射。无新表、权限系统或审批入口。
+
+现有名称/代码/版本/来源校验仍生效，不能通过公司声明补造产品身份。Python解析与Go发布重放采用同一策略等价语义，v3联合决定消费规范名称，旧无映射策略结果保持不变。唯一Owner=root：batch_entity_resolution_830_g3.py、g3_evidence_identity_v3.py、新增issuer_aliases窄合同模块，Go对应types/identity v3及必要测试/固定跨语言向量；配置仅在原Space现有trusted policy更新。先真实同响应离线贯穿，核实旧发布和恢复兼容，再同引用规范化合并一次APP/Harness部署，UI/DB不变。网页恢复才计业务结果。
+
+验证：原文支持的简称/正式名称互补→同一候选；未声明/跨Space/真实公司或版本冲突→不自动归并；原proposal原字节不变；旧policy哈希不变、新声明篡改拒绝；Python生成输入/决定/绑定由Go完整重放；已有模型与来源复用，失败原记录不删除。
+
+策略语义明确化：非空issuer_aliases产生新的policy identity，其精确等价比较适用于消费该新policy的解析；v3联合归并才生成canonical issuer的共享anchors/candidate。旧无映射policy和旧v1/v2结果原字节不变，不要求新策略在旧编译器忽略自己声明。已有compile_request的旧checkpoint对不同policy保持fail closed；本次368c在identity失败，无compile_request，可复用原模型raw和来源。

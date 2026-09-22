@@ -41,14 +41,19 @@ def _nonempty(rows, key):
     return [getattr(row[2], key) for row in rows if getattr(row[2], key) is not None]
 
 
-def _target(entity, existing):
+def _target(entity, existing, policy):
     reasons = set()
     if g._has_existing_identity_competition(existing, entity):
         reasons.add("AMBIGUOUS_IDENTITY")
     matches = g._existing_matches(existing, entity)
     exact = None
     if matches:
-        issuers = [m for m in matches if g._normalized(entity.issuer) == g._normalized(m.issuer)]
+        issuers = [
+            m
+            for m in matches
+            if g._normalized(policy.canonical_issuer(entity.issuer, existing.space_id))
+            == g._normalized(policy.canonical_issuer(m.issuer, existing.space_id))
+        ]
         if not issuers:
             reasons.add("IDENTITY_ANCHOR_CONFLICT")
         else:
@@ -100,6 +105,9 @@ def associate_material_groups(decisions, proposals, corpus, existing, policy):
                 "valid_through",
             )
         }
+        values["issuer"] = [
+            policy.canonical_issuer(value, corpus.space_id) for value in values["issuer"]
+        ]
         conflicts = any(
             len(
                 {
@@ -152,7 +160,7 @@ def associate_material_groups(decisions, proposals, corpus, existing, policy):
         entity = rows[0][2].model_copy(
             update={key: vs[0] if vs else None for key, vs in values.items()}
         )
-        reasons, target = _target(entity, existing)
+        reasons, target = _target(entity, existing, policy)
         candidate = None
         if not reasons and target is None:
             candidate = g._candidate(

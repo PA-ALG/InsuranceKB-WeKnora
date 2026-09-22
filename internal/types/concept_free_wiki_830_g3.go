@@ -424,19 +424,27 @@ type TrustRule830G3 struct {
 	Priority              int64    `json:"priority"`
 }
 
+type IssuerAliasDeclaration830G3 struct {
+	CanonicalName   string   `json:"canonical_name"`
+	Aliases         []string `json:"aliases"`
+	SpaceIDs        []string `json:"space_ids"`
+	ConfirmationRef string   `json:"confirmation_ref"`
+}
+
 type BatchResolutionPolicy830G3 struct {
-	Contract                string           `json:"contract"`
-	PolicyID                string           `json:"policy_id"`
-	PolicyVersion           string           `json:"policy_version"`
-	TaxonomyID              string           `json:"taxonomy_id"`
-	TaxonomyVersion         string           `json:"taxonomy_version"`
-	IdentityThreshold       string           `json:"identity_threshold"`
-	ClassificationThreshold string           `json:"classification_threshold"`
-	QueueID                 string           `json:"queue_id"`
-	QueueOwner              string           `json:"queue_owner"`
-	AutoCandidateRequires   []string         `json:"auto_candidate_requires"`
-	Rules                   []TrustRule830G3 `json:"rules"`
-	PolicySHA256            string           `json:"policy_sha256"`
+	Contract                string                        `json:"contract"`
+	PolicyID                string                        `json:"policy_id"`
+	PolicyVersion           string                        `json:"policy_version"`
+	TaxonomyID              string                        `json:"taxonomy_id"`
+	TaxonomyVersion         string                        `json:"taxonomy_version"`
+	IdentityThreshold       string                        `json:"identity_threshold"`
+	ClassificationThreshold string                        `json:"classification_threshold"`
+	QueueID                 string                        `json:"queue_id"`
+	QueueOwner              string                        `json:"queue_owner"`
+	AutoCandidateRequires   []string                      `json:"auto_candidate_requires"`
+	Rules                   []TrustRule830G3              `json:"rules"`
+	IssuerAliases           []IssuerAliasDeclaration830G3 `json:"issuer_aliases,omitempty"`
+	PolicySHA256            string                        `json:"policy_sha256"`
 }
 
 type ClassificationLabelAssignment830G3 struct {
@@ -1281,6 +1289,9 @@ func batchConceptRootWithout830G3(value reflect.Value, hashKey string) (map[stri
 				continue
 			}
 			// Match the explicitly optional wire fields' omitempty representation in hash preimages.
+			if typeOf == reflect.TypeOf(BatchResolutionPolicy830G3{}) && field.Name == "IssuerAliases" && value.Field(index).Len() == 0 {
+				continue
+			}
 			if typeOf == reflect.TypeOf(BatchConceptCandidateBundle830G3{}) &&
 				field.Name == "NavigationAssignments" && value.Field(index).Len() == 0 {
 				continue
@@ -1398,6 +1409,7 @@ func nonNullCollections830G3(value reflect.Value) bool {
 			// Optional collections are nil only when their wire members were omitted.
 			if (value.Type() == reflect.TypeOf(BatchConceptCandidateBundle830G3{}) &&
 				value.Type().Field(index).Name == "NavigationAssignments" ||
+				value.Type() == reflect.TypeOf(BatchResolutionPolicy830G3{}) && value.Type().Field(index).Name == "IssuerAliases" ||
 				value.Type() == reflect.TypeOf(BatchConceptCompileRequest830G3{}) &&
 					value.Type().Field(index).Name == "RefreshFields") && value.Field(index).IsNil() {
 				continue
@@ -1782,7 +1794,7 @@ func validateResolutionPolicy830G3(policy BatchResolutionPolicy830G3) error {
 		!validStructuredText830G3(policy.TaxonomyID) || !validStructuredText830G3(policy.TaxonomyVersion) ||
 		!validStructuredText830G3(policy.QueueID) || !validStructuredText830G3(policy.QueueOwner) ||
 		!validConfidence830G3(policy.IdentityThreshold) || !validConfidence830G3(policy.ClassificationThreshold) ||
-		len(policy.Rules) == 0 || !hashEqualWithout830G3(policy.Contract, policy, "policy_sha256", policy.PolicySHA256) {
+		len(policy.Rules) == 0 || !validIssuerAliases830G3(policy.IssuerAliases) || !hashEqualWithout830G3(policy.Contract, policy, "policy_sha256", policy.PolicySHA256) {
 		return ErrConceptCandidateBundle830G3
 	}
 	previous := ""
@@ -2305,7 +2317,7 @@ func primaryConfidence830G3(entity EntityProposal830G3) string {
 	return ""
 }
 
-func exactExistingMatch830G3(existing ExistingEntitySnapshot830G3, entity EntityProposal830G3) *ExistingEntity830G3 {
+func exactExistingMatch830G3(existing ExistingEntitySnapshot830G3, entity EntityProposal830G3, policy BatchResolutionPolicy830G3) *ExistingEntity830G3 {
 	if entity.ProductCode == nil || entity.Issuer == nil || entity.Name == nil || entity.VersionLabel == nil || entity.FilingOrRegistration == nil {
 		return nil
 	}
@@ -2313,7 +2325,7 @@ func exactExistingMatch830G3(existing ExistingEntitySnapshot830G3, entity Entity
 	for index := range existing.Entities {
 		candidate := &existing.Entities[index]
 		if normalizedIdentity830G3(candidate.ProductCode) != normalizedIdentity830G3(*entity.ProductCode) ||
-			normalizedIdentity830G3(candidate.Issuer) != normalizedIdentity830G3(*entity.Issuer) ||
+			normalizedIdentity830G3(policy.canonicalIssuer(candidate.Issuer, existing.SpaceID)) != normalizedIdentity830G3(policy.canonicalIssuer(*entity.Issuer, existing.SpaceID)) ||
 			normalizedIdentity830G3(candidate.VersionLabel) != normalizedIdentity830G3(*entity.VersionLabel) ||
 			candidate.FilingOrRegistration.Kind != entity.FilingOrRegistration.Kind ||
 			normalizedIdentity830G3(candidate.FilingOrRegistration.Value) != normalizedIdentity830G3(entity.FilingOrRegistration.Value) {
@@ -2895,7 +2907,7 @@ func expectedEntityDecision830G3(
 		if len(matches) > 0 {
 			issuerMatches := []ExistingEntity830G3{}
 			for _, candidate := range matches {
-				if row.Entity.Issuer == nil || normalizedIdentity830G3(*row.Entity.Issuer) == normalizedIdentity830G3(candidate.Issuer) {
+				if row.Entity.Issuer == nil || normalizedIdentity830G3(policy.canonicalIssuer(*row.Entity.Issuer, existing.SpaceID)) == normalizedIdentity830G3(policy.canonicalIssuer(candidate.Issuer, existing.SpaceID)) {
 					issuerMatches = append(issuerMatches, candidate)
 				}
 			}
@@ -3235,7 +3247,7 @@ func validateResolutionReplay830G3(
 					!validateAutomaticEvidence830G3(entity, proposal, entry) {
 					return ErrConceptCandidateBundle830G3
 				}
-				match := exactExistingMatch830G3(existing, entity)
+				match := exactExistingMatch830G3(existing, entity, policy)
 				if child.Disposition == "MATCH" {
 					if match == nil || child.MatchedEntityID == nil || child.MatchedEntityVersion == nil || child.EntityCandidate != nil ||
 						*child.MatchedEntityID != match.EntityID || *child.MatchedEntityVersion != match.EntityVersion {
@@ -3418,8 +3430,21 @@ func validateResolutionInputs830G3(inputs BatchResolutionInputs830G3) (
 	if err != nil {
 		return "", "", "", err
 	}
+	policyKeys := append([]string(nil), policyKeys830G3...)
+	var policyShape map[string]json.RawMessage
+	if json.Unmarshal(inputs.Policy, &policyShape) != nil {
+		return "", "", "", ErrConceptCandidateBundle830G3
+	}
+	if raw, exists := policyShape["issuer_aliases"]; exists {
+		var declarations []IssuerAliasDeclaration830G3
+		if exactTypedRaw830G3(raw, &declarations) != nil || len(declarations) == 0 || !validIssuerAliases830G3(declarations) {
+			return "", "", "", ErrConceptCandidateBundle830G3
+		}
+		policyKeys = append(policyKeys, "issuer_aliases")
+		sort.Strings(policyKeys)
+	}
 	policyHash, err = validateRawContractHash830G3(
-		inputs.Policy, "batch-resolution-policy.830.g3.v1", "policy_sha256", policyKeys830G3,
+		inputs.Policy, "batch-resolution-policy.830.g3.v1", "policy_sha256", policyKeys,
 	)
 	return proposalHash, existingHash, policyHash, err
 }

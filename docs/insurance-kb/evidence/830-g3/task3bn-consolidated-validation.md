@@ -129,3 +129,9 @@ root在最终合并生产代码上重跑source审计生命周期2 passed/18.82�
 末轮运行状态：原账号正常登录，现有数据/角色不变；两条真实恢复发布PASS，新2662解析回执故障修复已上线且自主续跑，22次调用准确显示。当前新产品没有进入字段抽取/编译/发布，不能宣称G3整体完成。后续不依赖登录操作，待联合issuer规则确定后集中实现、复用旧响应优先、必要失败单元再调模型，最后统一更新并重新网页验收。
 
 引用集合容错最终独审0 BLOCKER；独立27 passed/.81秒，原列表审计/unknown ref/foreign locator探针通过；报告SHA3623abe8884a396d2122f33018ae3340bae7fbc2fe576a0f48f412e1fb6d1878。代码可集成，但本小改不单独构建部署，等待联合归并规则收口再统一交付。
+
+### 2026-09-22 公司声明策略收口（未部署）
+
+G3-AUTO-1/3/6：用户确认平安人寿简称/全称同公司，平台已有可信ResolutionPolicy新增作用域明确的issuer_aliases。原proposal、PDF证据和模型raw不改；新声明入policy SHA，旧省略字段原哈希保持。Python RED3（不支持声明）→115 passed/17.34s；Go新向量RED（严格合同拒绝）→identity与batch回归PASS/26.964s，旧v1/v2/v3向量通过。真实368c已保存响应→原生来源→Python归并3 CREATE/一医疗险绑定/3来源→Go严格resolution/binding重放PASS/2.101s，新增模型0、业务写0。完整发布未执行，网页恢复仍NOT RUN。实现冻结后独审，再一次更新受影响APP/Harness。
+
+最终独立复核BLOCKER0/BACKLOG0/REJECTED0；报告SHA 4605e3ed7392ecfa4daa5873708d755cd0e715ad2849b8ae5268aad28940e3fe，独立Python115 passed/15.03s、Go冻结向量与真实replay PASS/2.303s。软件冻结；下一步APP/Harness各一次构建更新，部署和网页验收仍NOT RUN。

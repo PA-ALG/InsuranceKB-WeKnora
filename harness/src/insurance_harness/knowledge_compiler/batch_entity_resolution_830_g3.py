@@ -23,6 +23,7 @@ from pydantic import (
     StrictStr,
     StringConstraints,
     ValidationError,
+    model_serializer,
     model_validator,
 )
 
@@ -592,6 +593,26 @@ class TrustRuleV1(_FrozenModel):
         return self
 
 
+class IssuerAliasDeclarationV1(_FrozenModel):
+    """A scoped operator declaration; it is not a source/model assertion."""
+
+    canonical_name: Text
+    aliases: tuple[Text, ...] = Field(min_length=1)
+    space_ids: tuple[Text, ...] = Field(min_length=1)
+    confirmation_ref: Text
+
+    @model_validator(mode="after")
+    def validate_declaration(self) -> Self:
+        if self.aliases != tuple(sorted(set(self.aliases))) or self.space_ids != tuple(
+            sorted(set(self.space_ids))
+        ):
+            raise ValueError("issuer alias declaration must be canonical unique")
+        names = [_normalized(v) for v in (self.canonical_name, *self.aliases)]
+        if len(names) != len(set(names)):
+            raise ValueError("issuer aliases must be distinct from canonical name")
+        return self
+
+
 class BatchResolutionPolicyV1(_FrozenModel):
     contract: Literal["batch-resolution-policy.830.g3.v1"]
     policy_id: Text
@@ -604,7 +625,24 @@ class BatchResolutionPolicyV1(_FrozenModel):
     queue_owner: Text
     auto_candidate_requires: tuple[Text, ...]
     rules: tuple[TrustRuleV1, ...] = Field(min_length=1)
+    issuer_aliases: tuple[IssuerAliasDeclarationV1, ...] = Field(default=(), min_length=1)
     policy_sha256: Hash
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_wire(self, handler):
+        result = handler(self)
+        if not self.issuer_aliases:
+            result.pop("issuer_aliases", None)
+        return result
+
+    def canonical_issuer(self, value: str, space_id: str) -> str:
+        normalized = _normalized(value)
+        for declaration in self.issuer_aliases:
+            if space_id in declaration.space_ids and normalized in {
+                _normalized(v) for v in (declaration.canonical_name, *declaration.aliases)
+            }:
+                return declaration.canonical_name
+        return value
 
     @model_validator(mode="after")
     def validate_policy(self) -> Self:
@@ -612,7 +650,19 @@ class BatchResolutionPolicyV1(_FrozenModel):
             raise ValueError("auto candidate requirement set mismatch")
         if not _sorted_unique(self.rules, lambda item: item.rule_id):
             raise ValueError("trust rules must be canonical unique")
-        if not _hash_matches(self, "policy_sha256", self.contract):
+        if not _sorted_unique(self.issuer_aliases, lambda item: item.canonical_name):
+            raise ValueError("issuer declarations must be canonical unique")
+        occupied = set()
+        for declaration in self.issuer_aliases:
+            for space in declaration.space_ids:
+                for name in (declaration.canonical_name, *declaration.aliases):
+                    key = (space, _normalized(name))
+                    if key in occupied:
+                        raise ValueError("issuer declarations overlap")
+                    occupied.add(key)
+        if self.policy_sha256 != _batch_sha256(
+            self.contract, self.model_dump(exclude={"policy_sha256"})
+        ):
             raise ValueError("batch policy hash mismatch")
         return self
 
@@ -1660,7 +1710,9 @@ def _decision(
         issuer_matches = tuple(
             match
             for match in matches
-            if entity.issuer is None or _normalized(entity.issuer) == _normalized(match.issuer)
+            if entity.issuer is None
+            or _normalized(policy.canonical_issuer(entity.issuer, space_id))
+            == _normalized(policy.canonical_issuer(match.issuer, space_id))
         )
         if not issuer_matches:
             reasons.add("IDENTITY_ANCHOR_CONFLICT")

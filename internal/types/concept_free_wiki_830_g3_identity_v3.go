@@ -65,10 +65,15 @@ func associateEvidenceV3_830G3(decisions []MaterialDecision830G3, proposals Prop
 		firstClass := decisions[group[0].parent].Children[group[0].child].Classification
 		ids := []string{}
 		for _, row := range group {
+			issuer := row.entity.Issuer
+			if issuer != nil {
+				canonical := policy.canonicalIssuer(*issuer, existing.SpaceID)
+				issuer = &canonical
+			}
 			for _, values := range []struct {
 				dst **string
 				src *string
-			}{{&merged.Issuer, row.entity.Issuer}, {&merged.ProductCode, row.entity.ProductCode}, {&merged.VersionLabel, row.entity.VersionLabel}, {&merged.ValidFrom, row.entity.ValidFrom}, {&merged.ValidThrough, row.entity.ValidThrough}} {
+			}{{&merged.Issuer, issuer}, {&merged.ProductCode, row.entity.ProductCode}, {&merged.VersionLabel, row.entity.VersionLabel}, {&merged.ValidFrom, row.entity.ValidFrom}, {&merged.ValidThrough, row.entity.ValidThrough}} {
 				if values.src == nil {
 					continue
 				}
