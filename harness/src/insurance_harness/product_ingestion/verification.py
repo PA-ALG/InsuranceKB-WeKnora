@@ -5,34 +5,41 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
+from collections.abc import Sequence
+from typing import Any, cast
 from urllib.parse import urlencode
 
 from insurance_harness.jobs import NonRetryableJobError
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCandidateBundle830G3V1,
+    EntityCompileBinding830G3V1,
     _batch_sha256,
     _without_hash,
 )
+from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileRequest, PageMember
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
+    Evidence,
     FieldAssertion,
+    SourceBlock,
     SourceIdentity,
     verify_evidence,
 )
-from insurance_harness.product_ingestion.platform_client import _id
+from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.platform_client import PlatformClient, _id
 from insurance_harness.product_ingestion.signing import canonical
 
 
-def _require(condition, code):
+def _require(condition: bool, code: str) -> None:
     if not condition:
         raise NonRetryableJobError(code)
 
 
-def _equal(left, right):
+def _equal(left: object, right: object) -> bool:
     # JSON booleans must not compare equal to integer scope/locator identities.
     return canonical(left) == canonical(right)
 
 
-def _citation_id(candidate_hash, member_id, evidence):
+def _citation_id(candidate_hash: str, member_id: str, evidence: Evidence) -> str:
     # Existing Go concept citation preimage, including every exact location.
     return (
         "citation-"
@@ -54,17 +61,17 @@ def _citation_id(candidate_hash, member_id, evidence):
 
 
 def _preview_matches(
-    authority,
+    authority: dict[str, Any],
     *,
-    scope_wire,
-    release_id,
-    epoch,
-    candidate_hash,
-    member_id,
-    citation_id,
-    evidence,
-    source,
-):
+    scope_wire: dict[str, str | int],
+    release_id: str,
+    epoch: int,
+    candidate_hash: str,
+    member_id: str,
+    citation_id: str,
+    evidence: Evidence,
+    source: SourceBlock,
+) -> None:
     expected = {
         "release_id": release_id,
         "activation_epoch": epoch,
@@ -139,8 +146,13 @@ def _preview_matches(
 
 
 async def verify_published_product(
-    *, platform, scope, receipt, candidate: BatchConceptCandidateBundle830G3V1, current_entity_ids
-) -> dict:
+    *,
+    platform: PlatformClient,
+    scope: ProductScope,
+    receipt: dict[str, Any],
+    candidate: BatchConceptCandidateBundle830G3V1,
+    current_entity_ids: Sequence[str],
+) -> dict[str, Any]:
     """Return a durable PASS report only after exact scoped platform reads.
 
     Transport failures retain the client's typed retry classification. Other
@@ -153,10 +165,26 @@ async def verify_published_product(
         raise NonRetryableJobError("VERIFY_RESPONSE_INVALID") from None
 
 
-def _prepare_verification(platform, scope, receipt, candidate, current_entity_ids):
+def _prepare_verification(
+    platform: PlatformClient,
+    scope: ProductScope,
+    receipt: dict[str, Any],
+    candidate: BatchConceptCandidateBundle830G3V1,
+    current_entity_ids: Sequence[str],
+) -> tuple[
+    CompileRequest,
+    dict[str, str | int],
+    str,
+    int,
+    tuple[str, ...],
+    dict[str, EntityCompileBinding830G3V1],
+    list[PageMember],
+    dict[str, FieldAssertion],
+    dict[tuple[str, str], SourceBlock],
+]:
     _require(isinstance(candidate, BatchConceptCandidateBundle830G3V1), "VERIFY_CANDIDATE_INVALID")
     base = candidate.request.base_request
-    scope_wire = {
+    scope_wire: dict[str, str | int] = {
         "tenant_id": int(scope.tenant_id),
         "space_id": scope.space_id,
         "raw_kb_id": scope.raw_knowledge_base_id,
@@ -203,16 +231,40 @@ def _prepare_verification(platform, scope, receipt, candidate, current_entity_id
         == _batch_sha256(candidate.contract, _without_hash(candidate, "candidate_hash")),
         "VERIFY_CANDIDATE_IDENTITY",
     )
-    return base, scope_wire, release_id, epoch, entities, bindings, members, fields, sources
+    return (
+        base,
+        scope_wire,
+        release_id,
+        cast(int, epoch),
+        entities,
+        bindings,
+        members,
+        fields,
+        sources,
+    )
 
 
-async def _verify(platform, scope, receipt, candidate, current_entity_ids):
+async def _verify(
+    platform: PlatformClient,
+    scope: ProductScope,
+    receipt: dict[str, Any],
+    candidate: BatchConceptCandidateBundle830G3V1,
+    current_entity_ids: Sequence[str],
+) -> dict[str, Any]:
     # Hashing the complete parent and checking current evidence can be substantial;
     # keep the worker's event loop available for durable lease heartbeats.
-    base, scope_wire, release_id, epoch, entities, bindings, members, fields, sources = (
-        await asyncio.to_thread(
-            _prepare_verification, platform, scope, receipt, candidate, current_entity_ids
-        )
+    (
+        base,
+        scope_wire,
+        release_id,
+        epoch,
+        entities,
+        bindings,
+        members,
+        fields,
+        sources,
+    ) = await asyncio.to_thread(
+        _prepare_verification, platform, scope, receipt, candidate, current_entity_ids
     )
     expected_current = {"release_id": release_id, "activation_epoch": epoch}
     _require(
@@ -225,6 +277,8 @@ async def _verify(platform, scope, receipt, candidate, current_entity_ids):
         hits = await platform._request(
             scope, "GET", f"/releases/{release_id}/search?{query}", expected_data_type=list
         )
+        if hits is None:
+            raise NonRetryableJobError("VERIFY_RESPONSE_INVALID")
         _require(
             any(
                 isinstance(hit, dict)
@@ -261,7 +315,7 @@ async def _verify(platform, scope, receipt, candidate, current_entity_ids):
         evidence_by_id = {
             _citation_id(candidate.candidate_hash, member.member_id, e): e for e in field.evidence
         }
-        expected_citations = [
+        expected_citations: list[dict[str, Any]] = [
             {
                 "citation_id": _citation_id(candidate.candidate_hash, member.member_id, e),
                 "page_number": e.page_number,

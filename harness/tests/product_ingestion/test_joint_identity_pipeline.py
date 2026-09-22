@@ -1,9 +1,16 @@
 """Exercise complementary source identity through the permanent worker pipeline."""
 
 import json
+import typing
+from pathlib import Path
 
 import pytest
-from test_pipeline_runtime import (
+
+from insurance_harness.db.base import Base, make_session_factory
+from insurance_harness.jobs import JobStore
+from insurance_harness.product_ingestion.models import ProductRunState
+from insurance_harness.product_ingestion.progression import admit_uploads
+from tests.product_ingestion.test_pipeline_runtime import (
     SCOPE,
     FixtureModel,
     FixturePlatform,
@@ -14,16 +21,10 @@ from test_pipeline_runtime import (
     _sqlite_engine,
 )
 
-from insurance_harness.db.base import Base, make_session_factory
-from insurance_harness.jobs import JobStore
-from insurance_harness.product_ingestion.models import ProductRunState
-from insurance_harness.product_ingestion.progression import admit_uploads
-
 
 class ComplementaryIdentityModel(FixtureModel):
-    @staticmethod
-    def _identity(content):
-        semantic = FixtureModel._identity(content)
+    def _identity(self, content: typing.Any) -> typing.Any:
+        semantic = super()._identity(content)
         for material in semantic["materials"]:
             entity = material["entities"][0]
             entity["identity_evidence_refs"].append("classification")
@@ -47,7 +48,9 @@ class ComplementaryIdentityModel(FixtureModel):
 
 
 @pytest.mark.asyncio
-async def test_complementary_identity_reaches_publication_without_refilling_fields(tmp_path):
+async def test_complementary_identity_reaches_publication_without_refilling_fields(
+    tmp_path: Path,
+) -> None:
     base, base_candidate = _base_snapshot()
     settings = _settings(tmp_path, base_candidate)
     engine = _sqlite_engine(tmp_path / "joint-identity.db")
@@ -84,6 +87,7 @@ async def test_complementary_identity_reaches_publication_without_refilling_fiel
         )
         assert adaptation.origin_call_id
         assert len(base_candidate.request.entity_bindings) == 5
+        assert platform.candidate is not None
         assert len(platform.candidate.request.entity_bindings) == 6
     finally:
         await runtime.close()

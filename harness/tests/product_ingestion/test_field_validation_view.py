@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: F811
 import importlib
+import typing
 from datetime import UTC, datetime
 
 import pytest
@@ -19,14 +20,14 @@ from tests.product_ingestion.test_platform import snapshot  # noqa: F401
 from tests.product_ingestion.test_source_geometry import native_snapshot
 
 
-def implementation():
+def implementation() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.field_validation")
     except ModuleNotFoundError:
         pytest.fail("field location validation is not persisted as an effective field view")
 
 
-def example(snapshot):
+def example(snapshot: typing.Any) -> tuple[typing.Any, ...]:
     decoded = native_snapshot(snapshot)
     task = tasks(decoded.blocks[0], keys=("benefit",))[0]
     value = FieldTaskEvidenceResultV1.create(
@@ -76,7 +77,9 @@ def example(snapshot):
     return decoded, task, row
 
 
-def test_effective_view_preserves_raw_and_value_and_survives_serialization(snapshot):
+def test_effective_view_preserves_raw_and_value_and_survives_serialization(
+    snapshot: typing.Any,
+) -> None:
     m = implementation()
     decoded, task, row = example(snapshot)
     before = row.model_dump_json()
@@ -94,7 +97,7 @@ def test_effective_view_preserves_raw_and_value_and_survives_serialization(snaps
         m.apply_field_validation((changed,), loaded)
 
 
-def test_bad_location_is_one_failed_field_without_value_or_raw_loss(snapshot):
+def test_bad_location_is_one_failed_field_without_value_or_raw_loss(snapshot: typing.Any) -> None:
     import json
     from dataclasses import replace
 

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from itertools import count
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import pytest
 from pydantic import BaseModel
@@ -64,7 +65,23 @@ def _jsonable(value: object) -> object:
     return value
 
 
-def _new(model: type[Any], object_type: str, hash_field: str, **values: object) -> Any:
+class ResolveArgs(TypedDict):
+    catalog: SchemaPackCatalogV1
+    corpus: g.BatchCorpusV1
+    proposals: g.ProposalBatchV1
+    existing_entities: g.ExistingEntitySnapshotV1
+    policy: g.BatchResolutionPolicyV1
+
+
+class ReceiptChanges(TypedDict, total=False):
+    purpose: str
+    run_schema_version: str
+    role: str
+
+
+def _new[ModelT: BaseModel](
+    model: type[ModelT], object_type: str, hash_field: str, **values: object
+) -> ModelT:
     payload = {key: _jsonable(value) for key, value in values.items()}
     return model(**values, **{hash_field: batch_sha256_830_g3(object_type, payload)})
 
@@ -107,7 +124,7 @@ def _receipt(*, material_id: str, text: str) -> LiveRevisionSourceReceiptV1:
         weknora_parse_attempt=2,
         resource_id=str(values["resource_id"]),
         file_sha256=file_sha,
-        size=int(values["size"]),
+        size=len(text.encode()),
         mime_type="application/pdf",
     )
     values["source_receipt_sha256"] = live_revision_source_receipt_sha256(values)
@@ -447,12 +464,14 @@ def _policy_receipt(
     role: str = "classify",
 ) -> PolicyReceipt:
     now = datetime(2026, 9, 7, tzinfo=UTC)
-    identity = ModelIdentity(
-        provider="fixture-provider",
-        deployment_id="fixture-classifier",
-        family="deepseek",
-        role=role,
-        policy_version="fixture-policy-v1",
+    identity = ModelIdentity.model_validate(
+        dict(
+            provider="fixture-provider",
+            deployment_id="fixture-classifier",
+            family="deepseek",
+            role=role,
+            policy_version="fixture-policy-v1",
+        )
     )
     if decision == "DENY":
         return PolicyReceipt(
@@ -559,12 +578,14 @@ def _span(block: SourceBlock, quote: str) -> Evidence:
 def _proposal_evidence(
     *, block: SourceBlock, evidence_id: str, proposal_ref: str | None, purpose: str, quote: str
 ) -> g.ProposalEvidenceV1:
-    return g.ProposalEvidenceV1(
-        evidence_id=evidence_id,
-        entity_proposal_ref=proposal_ref,
-        purpose=purpose,
-        field_key=None,
-        evidence=_span(block, quote),
+    return g.ProposalEvidenceV1.model_validate(
+        dict(
+            evidence_id=evidence_id,
+            entity_proposal_ref=proposal_ref,
+            purpose=purpose,
+            field_key=None,
+            evidence=_span(block, quote),
+        )
     )
 
 
@@ -572,7 +593,7 @@ def _material_proposal(
     entry: g.CorpusEntryV1,
     receipt: g.ModelReceiptBindingV1,
     *,
-    entities: tuple[dict[str, object], ...],
+    entities: tuple[Mapping[str, object], ...],
     role: str = "terms",
     tamper_entry_hash: bool = False,
 ) -> g.MaterialProposalV1:
@@ -657,29 +678,35 @@ def _material_proposal(
             )
         )
         entity_models.append(
-            g.EntityProposalV1(
-                proposal_ref=ref,
-                issuer=values["issuer"],
-                name=values["name"],
-                product_code=values["product_code"],
-                version_label=values["version_label"],
-                filing_or_registration=(
-                    None
-                    if values["filing"] is None
-                    else g.VersionAnchorV1(kind="registration_number", value=values["filing"])
-                ),
-                identity_confidence=str(row.get("identity_confidence", "0.990000")),
-                identity_evidence_ids=tuple(sorted((*ids.values(), *date_ids))),
-                labels=(
-                    g.LabelProposalV1(
-                        taxonomy_label=str(values["label"]),
-                        confidence=str(row.get("classification_confidence", "0.990000")),
-                        evidence_ids=(classification_id,),
+            g.EntityProposalV1.model_validate(
+                dict(
+                    proposal_ref=ref,
+                    issuer=values["issuer"],
+                    name=values["name"],
+                    product_code=values["product_code"],
+                    version_label=values["version_label"],
+                    filing_or_registration=(
+                        None
+                        if values["filing"] is None
+                        else g.VersionAnchorV1.model_validate(
+                            dict(kind="registration_number", value=values["filing"])
+                        )
                     ),
-                ),
-                primary_label=str(values["label"]),
-                valid_from=row.get("valid_from"),
-                valid_through=row.get("valid_through"),
+                    identity_confidence=str(row.get("identity_confidence", "0.990000")),
+                    identity_evidence_ids=tuple(sorted((*ids.values(), *date_ids))),
+                    labels=(
+                        g.LabelProposalV1.model_validate(
+                            dict(
+                                taxonomy_label=str(values["label"]),
+                                confidence=str(row.get("classification_confidence", "0.990000")),
+                                evidence_ids=(classification_id,),
+                            )
+                        ),
+                    ),
+                    primary_label=str(values["label"]),
+                    valid_from=row.get("valid_from"),
+                    valid_through=row.get("valid_through"),
+                )
             )
         )
     values = {
@@ -835,7 +862,7 @@ def _interval_policy(*, valid_from: str, valid_through: str | None) -> g.BatchRe
 def _resolve(
     catalog: SchemaPackCatalogV1,
     entries: tuple[g.CorpusEntryV1, ...],
-    entity_rows: tuple[tuple[dict[str, object], ...], ...],
+    entity_rows: tuple[tuple[Mapping[str, object], ...], ...],
     *,
     existing: g.ExistingEntitySnapshotV1 | None = None,
     valid_receipt: bool = True,
@@ -951,12 +978,14 @@ def test_nested_policy_receipt_control_text_is_rejected(
     corpus = _corpus(entry)
     clean = _policy_receipt()
     assert clean.permit_view is not None
-    bad_identity = ModelIdentity(
-        provider="fixture-provider",
-        deployment_id="fixture\tclassifier",
-        family="deepseek",
-        role="classify",
-        policy_version="fixture-policy-v1",
+    bad_identity = ModelIdentity.model_validate(
+        dict(
+            provider="fixture-provider",
+            deployment_id="fixture\tclassifier",
+            family="deepseek",
+            role="classify",
+            policy_version="fixture-policy-v1",
+        )
     )
     bad_permit = ModelPermitView.model_validate(
         {**clean.permit_view.model_dump(mode="python"), "identity": bad_identity}
@@ -1011,9 +1040,7 @@ def test_nested_live_receipt_control_text_is_rejected() -> None:
     receipt_values = original.receipt.model_dump(mode="python")
     receipt_values["evidence_parse_attempt_id"] = "parse\tattempt"
     receipt_values["source_receipt_sha256"] = "0" * 64
-    receipt_values["source_receipt_sha256"] = live_revision_source_receipt_sha256(
-        receipt_values
-    )
+    receipt_values["source_receipt_sha256"] = live_revision_source_receipt_sha256(receipt_values)
     bad_receipt = LiveRevisionSourceReceiptV1.model_validate(receipt_values)
 
     with pytest.raises(ValueError, match="structured text"):
@@ -1037,18 +1064,22 @@ def test_exact_existing_match_preserves_serving_ids_and_issuer_vetoes_reuse(
 ) -> None:
     text = "平安保险 平安安心医疗保险 产品代码 MED001 登记编号 REG001 版本 2026 医疗保险 官方条款"
     entry = _entry(material_id="m1", text=text)
-    existing = g.ExistingEntityV1(
-        entity_id="serving-entity-42",
-        entity_version="serving-version-9",
-        product_id="product-42",
-        product_version_id="product-version-9",
-        issuer="平安保险",
-        name="平安安心医疗保险",
-        product_code="MED001",
-        version_label="2026",
-        filing_or_registration=g.VersionAnchorV1(kind="registration_number", value="REG001"),
-        approved_aliases=(),
-        identity_evidence_sha256s=("c" * 64,),
+    existing = g.ExistingEntityV1.model_validate(
+        dict(
+            entity_id="serving-entity-42",
+            entity_version="serving-version-9",
+            product_id="product-42",
+            product_version_id="product-version-9",
+            issuer="平安保险",
+            name="平安安心医疗保险",
+            product_code="MED001",
+            version_label="2026",
+            filing_or_registration=g.VersionAnchorV1.model_validate(
+                dict(kind="registration_number", value="REG001")
+            ),
+            approved_aliases=(),
+            identity_evidence_sha256s=("c" * 64,),
+        )
     )
     matched = (
         _resolve(
@@ -1169,10 +1200,7 @@ def test_multi_identity_clusters_survive_missing_versions_and_shared_issuer(
 ) -> None:
     entry = _entry(
         material_id="multi-missing-version",
-        text=(
-            "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
-            "版本 2026 医疗保险 官方条款"
-        ),
+        text=("平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 版本 2026 医疗保险 官方条款"),
     )
     result = _resolve(
         catalog,
@@ -1200,12 +1228,14 @@ def test_multi_identity_clusters_survive_missing_versions_and_shared_issuer(
     assert all(child.disposition == "NEEDS_CONFIRM" for child in parent.children)
     assert all(child.entity_candidate is None for child in parent.children)
     assert all("VERSION_UNRESOLVED" in child.reason_codes for child in parent.children)
-    assert tuple(
-        child.multi_identity_name_evidence_ids for child in parent.children
-    ) == (("multi-missing-version-a-name",), ("multi-missing-version-b-name",))
-    assert tuple(
-        child.multi_identity_code_evidence_ids for child in parent.children
-    ) == (("multi-missing-version-a-product_code",), ("multi-missing-version-b-product_code",))
+    assert tuple(child.multi_identity_name_evidence_ids for child in parent.children) == (
+        ("multi-missing-version-a-name",),
+        ("multi-missing-version-b-name",),
+    )
+    assert tuple(child.multi_identity_code_evidence_ids for child in parent.children) == (
+        ("multi-missing-version-a-product_code",),
+        ("multi-missing-version-b-product_code",),
+    )
 
 
 def test_multi_identity_clusters_ignore_classification_failure_and_missing_issuer(
@@ -1213,10 +1243,7 @@ def test_multi_identity_clusters_ignore_classification_failure_and_missing_issue
 ) -> None:
     entry = _entry(
         material_id="multi-classification",
-        text=(
-            "产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
-            "版本 2026 医疗保险 官方条款"
-        ),
+        text=("产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 版本 2026 医疗保险 官方条款"),
     )
     result = _resolve(
         catalog,
@@ -1256,8 +1283,7 @@ def test_multi_identity_clusters_survive_unmapped_classification(
     entry = _entry(
         material_id="multi-unmapped-classification",
         text=(
-            "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
-            "版本 2026 重大疾病保险 官方条款"
+            "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 版本 2026 重大疾病保险 官方条款"
         ),
     )
     result = _resolve(
@@ -1295,10 +1321,7 @@ def test_multi_identity_rejects_name_evidence_whose_quote_does_not_match_anchor(
 ) -> None:
     entry = _entry(
         material_id="multi-wrong-name-quote",
-        text=(
-            "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
-            "版本 2026 医疗保险 官方条款"
-        ),
+        text=("平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 版本 2026 医疗保险 官方条款"),
     )
     corpus = _corpus(entry)
     receipt = _model_binding(corpus, entry)
@@ -1322,13 +1345,15 @@ def test_multi_identity_rejects_name_evidence_whose_quote_does_not_match_anchor(
     )
     wrong_quote = _span(entry.blocks[0], "官方条款")
     evidence = tuple(
-        g.ProposalEvidenceV1(
-            **item.model_dump(mode="python", exclude={"evidence"}),
-            evidence=(
-                wrong_quote
-                if item.evidence_id == "multi-wrong-name-quote-a-name"
-                else item.evidence
-            ),
+        g.ProposalEvidenceV1.model_validate(
+            dict(
+                **item.model_dump(mode="python", exclude={"evidence"}),
+                evidence=(
+                    wrong_quote
+                    if item.evidence_id == "multi-wrong-name-quote-a-name"
+                    else item.evidence
+                ),
+            )
         )
         for item in proposal.evidence
     )
@@ -1360,10 +1385,7 @@ def test_multi_identity_aliases_at_one_locator_do_not_create_independent_cluster
 ) -> None:
     entry = _entry(
         material_id="multi-same-locator",
-        text=(
-            "平安保险 产品甲 产品乙 产品代码 A-CODE B-CODE "
-            "版本 2026 医疗保险 官方条款"
-        ),
+        text=("平安保险 产品甲 产品乙 产品代码 A-CODE B-CODE 版本 2026 医疗保险 官方条款"),
     )
     corpus = _corpus(entry)
     receipt = _model_binding(corpus, entry)
@@ -1390,9 +1412,11 @@ def test_multi_identity_aliases_at_one_locator_do_not_create_independent_cluster
         "product_code": _span(entry.blocks[0], "A-CODE B-CODE"),
     }
     evidence = tuple(
-        g.ProposalEvidenceV1(
-            **item.model_dump(mode="python", exclude={"evidence"}),
-            evidence=shared.get(item.purpose, item.evidence),
+        g.ProposalEvidenceV1.model_validate(
+            dict(
+                **item.model_dump(mode="python", exclude={"evidence"}),
+                evidence=shared.get(item.purpose, item.evidence),
+            )
         )
         for item in proposal.evidence
     )
@@ -1766,17 +1790,25 @@ def test_existing_entity_can_expose_multiple_versions_and_match_exact_one(
         "approved_aliases": (),
         "identity_evidence_sha256s": ("e" * 64,),
     }
-    old = g.ExistingEntityV1(
-        **common,
-        entity_version="version-2025",
-        version_label="2025",
-        filing_or_registration=g.VersionAnchorV1(kind="registration_number", value="VERS-REG-2025"),
+    old = g.ExistingEntityV1.model_validate(
+        dict(
+            **common,
+            entity_version="version-2025",
+            version_label="2025",
+            filing_or_registration=g.VersionAnchorV1.model_validate(
+                dict(kind="registration_number", value="VERS-REG-2025")
+            ),
+        )
     )
-    current = g.ExistingEntityV1(
-        **common,
-        entity_version="version-2026",
-        version_label="2026",
-        filing_or_registration=g.VersionAnchorV1(kind="registration_number", value="VERS-REG-2026"),
+    current = g.ExistingEntityV1.model_validate(
+        dict(
+            **common,
+            entity_version="version-2026",
+            version_label="2026",
+            filing_or_registration=g.VersionAnchorV1.model_validate(
+                dict(kind="registration_number", value="VERS-REG-2026")
+            ),
+        )
     )
     entry = _entry(
         material_id="existing-versions",
@@ -1984,7 +2016,7 @@ def test_exact_same_inputs_are_idempotent(catalog: SchemaPackCatalogV1) -> None:
     )
     existing = _existing()
     policy = _policy()
-    arguments = {
+    arguments: ResolveArgs = {
         "catalog": catalog,
         "corpus": corpus,
         "proposals": proposals,
@@ -1996,12 +2028,16 @@ def test_exact_same_inputs_are_idempotent(catalog: SchemaPackCatalogV1) -> None:
 
 def test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonical_text() -> None:
     with pytest.raises(ValueError):
-        g.LabelProposalV1(taxonomy_label="medical_insurance", confidence=0.95, evidence_ids=("e",))
+        g.LabelProposalV1.model_validate(
+            dict(taxonomy_label="medical_insurance", confidence=0.95, evidence_ids=("e",))
+        )
     with pytest.raises(ValueError):
-        g.LabelProposalV1(
-            taxonomy_label="medical_insurance",
-            confidence="0.95",
-            evidence_ids=("e",),
+        g.LabelProposalV1.model_validate(
+            dict(
+                taxonomy_label="medical_insurance",
+                confidence="0.95",
+                evidence_ids=("e",),
+            )
         )
     with pytest.raises(ValueError):
         g.TrustRuleV1(
@@ -2018,9 +2054,9 @@ def test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonic
             priority=True,
         )
     with pytest.raises(ValueError):
-        g.VersionAnchorV1(kind="registration_number", value="e\u0301")
+        g.VersionAnchorV1.model_validate(dict(kind="registration_number", value="e\u0301"))
     with pytest.raises(ValueError):
-        g.VersionAnchorV1(kind="registration_number", value="A\nB")
+        g.VersionAnchorV1.model_validate(dict(kind="registration_number", value="A\nB"))
 
 
 def test_exact_source_body_non_nfc_hashes_but_structured_text_stays_nfc() -> None:
@@ -2054,25 +2090,29 @@ def test_existing_identity_competition_across_different_codes_stays_human(
 ) -> None:
     proposed_name = "竞争产品"
     proposed_anchor = "REG-COMPETE"
-    existing = g.ExistingEntityV1(
-        entity_id="serving-other-code",
-        entity_version="version-other-code",
-        product_id="product-other-code",
-        product_version_id="product-version-other-code",
-        issuer="平安保险",
-        name=proposed_name if competition == "name" else "既有正式名称",
-        product_code="OTHER-CODE",
-        version_label="2025",
-        filing_or_registration=g.VersionAnchorV1(
-            kind="registration_number",
-            value=proposed_anchor if competition == "anchor" else "REG-OTHER",
-        ),
-        approved_aliases=(
-            (g.ApprovedAliasV1(value=proposed_name, approval_receipt_sha256="f" * 64),)
-            if competition == "alias"
-            else ()
-        ),
-        identity_evidence_sha256s=("e" * 64,),
+    existing = g.ExistingEntityV1.model_validate(
+        dict(
+            entity_id="serving-other-code",
+            entity_version="version-other-code",
+            product_id="product-other-code",
+            product_version_id="product-version-other-code",
+            issuer="平安保险",
+            name=proposed_name if competition == "name" else "既有正式名称",
+            product_code="OTHER-CODE",
+            version_label="2025",
+            filing_or_registration=g.VersionAnchorV1.model_validate(
+                dict(
+                    kind="registration_number",
+                    value=proposed_anchor if competition == "anchor" else "REG-OTHER",
+                )
+            ),
+            approved_aliases=(
+                (g.ApprovedAliasV1(value=proposed_name, approval_receipt_sha256="f" * 64),)
+                if competition == "alias"
+                else ()
+            ),
+            identity_evidence_sha256s=("e" * 64,),
+        )
     )
     entry = _entry(
         material_id=f"compete-{competition}",
@@ -2297,7 +2337,7 @@ def test_candidate_aggregation_excludes_ineligible_rows_and_escalates_structural
 )
 def test_model_receipt_requires_frozen_purpose_schema_and_classify_role(
     catalog: SchemaPackCatalogV1,
-    receipt_changes: dict[str, str],
+    receipt_changes: ReceiptChanges,
 ) -> None:
     entry = _entry(
         material_id="wrong-model-purpose",

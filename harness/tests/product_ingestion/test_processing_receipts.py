@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import importlib
+import typing
 
 import pytest
 
@@ -10,7 +11,7 @@ CONTRACT = "g3-platform-source-processing-receipt.830.v1"
 PHASES = ("docreader", "chunking", "embedding", "postprocess.summary")
 
 
-def sealed(value):
+def sealed(value: typing.Any) -> typing.Any:
     value = copy.deepcopy(value)
     value.pop("receipt_sha256", None)
     value["receipt_sha256"] = hashlib.sha256(
@@ -19,7 +20,7 @@ def sealed(value):
     return value
 
 
-def receipt():
+def receipt() -> typing.Any:
     return sealed(
         {
             "contract": CONTRACT,
@@ -41,18 +42,18 @@ def receipt():
     )
 
 
-def api():
+def api() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.processing_receipts")
     except ModuleNotFoundError:
         pytest.fail("platform source model accounting is not implemented")
 
 
-def validate(value):
+def validate(value: typing.Any) -> typing.Any:
     return api().validate_processing_receipt(value, knowledge_id="knowledge", parse_attempt=2)
 
 
-def test_proven_zero_requires_marker_and_legacy_unavailable_is_not_zero():
+def test_proven_zero_requires_marker_and_legacy_unavailable_is_not_zero() -> None:
     assert validate(receipt())["counts"]["attempts"] == 0
     old = {
         "contract": CONTRACT,
@@ -72,7 +73,7 @@ def test_proven_zero_requires_marker_and_legacy_unavailable_is_not_zero():
         validate(sealed(changed))
 
 
-def test_attempt_identity_and_receipt_hash_cannot_drift():
+def test_attempt_identity_and_receipt_hash_cannot_drift() -> None:
     changed = receipt()
     changed["parse_attempt"] = 3
     with pytest.raises(ValueError):
@@ -83,7 +84,7 @@ def test_attempt_identity_and_receipt_hash_cannot_drift():
         validate(changed)
 
 
-def test_dispatch_accounting_distinguishes_unsent_and_uncertain():
+def test_dispatch_accounting_distinguishes_unsent_and_uncertain() -> None:
     value = receipt()
     calls = []
     for index, (state, outcome) in enumerate(
@@ -125,7 +126,7 @@ def test_dispatch_accounting_distinguishes_unsent_and_uncertain():
         validate(sealed(value))
 
 
-def test_phase_times_are_real_or_explicitly_unrecorded():
+def test_phase_times_are_real_or_explicitly_unrecorded() -> None:
     value = receipt()
     row = value["phases"][0]
     row["recorded"] = True
@@ -144,7 +145,7 @@ def test_phase_times_are_real_or_explicitly_unrecorded():
         validate(sealed(value))
 
 
-def test_unknown_processing_totals_remain_unknown_and_reused_calls_are_not_new_calls():
+def test_unknown_processing_totals_remain_unknown_and_reused_calls_are_not_new_calls() -> None:
     summary = api().processing_summary([("legacy", None, False)])
     assert summary["model_call_count"] is None
     assert summary["recorded_model_call_count"] == 0
@@ -155,7 +156,7 @@ def test_unknown_processing_totals_remain_unknown_and_reused_calls_are_not_new_c
     assert reuse["model_call_count_complete"] is True
 
 
-def test_actual_go_processing_receipt_wire_is_accepted_without_rewriting():
+def test_actual_go_processing_receipt_wire_is_accepted_without_rewriting() -> None:
     import json
     from pathlib import Path
 

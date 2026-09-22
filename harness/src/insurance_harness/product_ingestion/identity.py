@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
+
+from pydantic import BaseModel
 
 from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import (
     batch_sha256_830_g3,
@@ -14,6 +17,7 @@ from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import 
     ExistingEntityV1,
     SourceProvenanceV1,
 )
+from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import SourceBlock
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     G3NativePageProjectionV1,
     G3SemanticReferenceResponseV1,
@@ -21,11 +25,14 @@ from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     _c_locator_ref,
     _c_prompt_block,
 )
-from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import SchemaPackCatalogV1
+from insurance_harness.product_ingestion.models import MaterialSnapshot, ProductScope
 from insurance_harness.product_ingestion.platform import DecodedSourceSnapshot
 
 
-def hashed(model, domain: str, hash_field: str, **payload):
+def hashed[ModelT: BaseModel](
+    model: type[ModelT], domain: str, hash_field: str, **payload: object
+) -> ModelT:
     return model.model_validate(
         {
             **payload,
@@ -98,10 +105,14 @@ def build_current_corpus(
 
 
 def _name(value: str) -> str:
-    return re.sub(r"\s+", "", value).translate(str.maketrans({"(": "（", ")": "）"}))
+    return re.sub(r"\s+", "", value).translate(str.maketrans("()", "（）"))
 
 
-def prepare_identity_routing(snapshots, materials, catalog) -> dict:
+def prepare_identity_routing(
+    snapshots: Mapping[str, DecodedSourceSnapshot],
+    materials: Sequence[MaterialSnapshot],
+    catalog: SchemaPackCatalogV1,
+) -> dict[str, Any]:
     """Prepare source custody and Catalog options, without deciding identity."""
     rows = []
     for material in materials:
@@ -133,7 +144,7 @@ def prepare_identity_routing(snapshots, materials, catalog) -> dict:
     }
 
 
-def validate_identity_offered_response(raw: bytes, context: dict) -> None:
+def validate_identity_offered_response(raw: bytes, context: dict[str, Any]) -> None:
     """A valid native locator is still ineligible unless this call offered it."""
     response = G3SemanticReferenceResponseV1.model_validate_json(raw)
     offered = {
@@ -158,7 +169,9 @@ def validate_identity_offered_response(raw: bytes, context: dict) -> None:
                 raise ValueError("identity title classification and role require first page")
 
 
-def _select_identity_sources(available, page_text):
+def _select_identity_sources[PageT: (SourceBlock, G3NativePageProjectionV1)](
+    available: Sequence[PageT], page_text: Callable[[PageT], str]
+) -> list[PageT]:
     selected = [row for row in available if row.page_number == 1]
     company = re.compile(r"[\u4e00-\u9fff]{2,40}保险[\u4e00-\u9fff]{0,12}公司")
     legal_company = re.compile(r"[\u4e00-\u9fff]{2,40}保险(?:股份有限公司|有限责任公司|有限公司)")
@@ -188,7 +201,7 @@ def select_identity_block_ids(decoded: DecodedSourceSnapshot) -> tuple[str, ...]
     """Select source blocks before expanding geometry; preserve prompt selection."""
     mappings = {row["chunk_id"]: row for row in decoded.snapshot["chunk_page_mappings"]}
 
-    def page_text(block):
+    def page_text(block: SourceBlock) -> str:
         return "\n".join(
             block.text[row["block_codepoint_start"] : row["block_codepoint_end"]]
             for row in mappings[block.block_id]["page_spans"]
@@ -209,10 +222,10 @@ def build_identity_context(
     allowed_material_roles: tuple[str, ...],
     allowed_taxonomy_labels: tuple[str, ...],
     existing_entities: Sequence[ExistingEntityV1],
-    schema_candidates: Sequence[dict] = (),
+    schema_candidates: Sequence[dict[str, Any]] = (),
     snapshots: Mapping[str, DecodedSourceSnapshot] | None = None,
-) -> dict:
-    materials = []
+) -> dict[str, Any]:
+    materials: list[dict[str, Any]] = []
     for entry in corpus.entries:
         sources = {(row.revision_id, row.block_id): row for row in entry.blocks}
         available = sorted(
@@ -220,7 +233,11 @@ def build_identity_context(
             key=lambda row: (row.page_number, row.block_id),
         )
 
-        def page_ranges(page, source_map=sources, material_id=entry.material_id):
+        def page_ranges(
+            page: G3NativePageProjectionV1,
+            source_map: dict[tuple[str, str], SourceBlock] = sources,
+            material_id: str = entry.material_id,
+        ) -> list[tuple[int, int]]:
             source = source_map[(page.revision_id, page.block_id)]
             if snapshots is None:
                 return [(0, len(source.text))]
@@ -235,7 +252,11 @@ def build_identity_context(
                 if row["page_number"] == page.page_number
             ]
 
-        def page_text(page, source_map=sources, ranges_for=page_ranges):
+        def page_text(
+            page: G3NativePageProjectionV1,
+            source_map: dict[tuple[str, str], SourceBlock] = sources,
+            ranges_for: Callable[[G3NativePageProjectionV1], list[tuple[int, int]]] = page_ranges,
+        ) -> str:
             text = source_map[(page.revision_id, page.block_id)].text
             return "\n".join(text[start:end] for start, end in ranges_for(page))
 

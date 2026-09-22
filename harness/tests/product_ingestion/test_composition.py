@@ -1,21 +1,27 @@
 from __future__ import annotations
 
 import asyncio
+import typing
 from pathlib import Path
 
 import pytest
-from test_configuration import settings
 
 from insurance_harness.db.base import Base, make_engine, make_session_factory
+from insurance_harness.product_ingestion.composition import (
+    ProductPipelinePorts,
+    ProductScopeServices,
+)
 from insurance_harness.product_ingestion.models import ProductRunState
 from insurance_harness.product_ingestion.stages import StageOutput
 from insurance_harness.service_shell.config import ShellConfigError
 from insurance_harness.service_shell.health import Lifecycle
+from insurance_harness.service_shell.worker import WorkerLoop
+from tests.product_ingestion.test_configuration import settings
 
 
-def pipeline_ports(context, *, omitted: str | None = None):
-    from insurance_harness.product_ingestion.composition import ProductPipelinePorts
-
+def pipeline_ports(
+    context: object, *, omitted: str | None = None
+) -> ProductPipelinePorts | StageOutput:
     names = {
         "identity",
         "field_plan",
@@ -29,7 +35,7 @@ def pipeline_ports(context, *, omitted: str | None = None):
         "verify",
     }
 
-    async def stage(*_args):
+    async def stage(*_args: object) -> StageOutput:
         return StageOutput(state=ProductRunState.SUCCEEDED)
 
     return ProductPipelinePorts(
@@ -39,7 +45,7 @@ def pipeline_ports(context, *, omitted: str | None = None):
     )
 
 
-def runtime(tmp_path: Path, factory=pipeline_ports):
+def runtime(tmp_path: Path, factory: typing.Any = pipeline_ports) -> tuple[typing.Any, ...]:
     from insurance_harness.product_ingestion.composition import compose_product_worker
 
     engine = make_engine(f"sqlite:///{tmp_path}/composition.db")
@@ -138,14 +144,16 @@ def test_cli_enabled_worker_requires_real_pipeline_factory_and_disabled_is_uncha
             lifecycle=Lifecycle(),
             session_factory=session_factory,
         )
+        assert isinstance(plain, WorkerLoop)
         assert plain._registry.handlers == {}
     finally:
         engine.dispose()
 
 
-def test_window_plan_identity_uses_current_scope_and_metadata_only():
+def test_window_plan_identity_uses_current_scope_and_metadata_only() -> None:
     from types import SimpleNamespace
 
+    from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
     from insurance_harness.product_ingestion.composition import _scoped_window_plan_identity
     from insurance_harness.product_ingestion.models import ProductScope
 
@@ -155,13 +163,16 @@ def test_window_plan_identity_uses_current_scope_and_metadata_only():
     refs = [SimpleNamespace(artifact_key="product", artifact_id="sealed-1")]
     calls = []
 
-    def metadata(**kw):
+    def metadata(**kw: typing.Any) -> typing.Any:
         calls.append(kw)
         return tuple(refs)
 
     reader = _scoped_window_plan_identity(
-        SimpleNamespace(list_effective_artifact_references=metadata),
-        {"s": SimpleNamespace(scope=scope)},
+        typing.cast(
+            ProductArtifactStore,
+            SimpleNamespace(list_effective_artifact_references=metadata),
+        ),
+        {"s": typing.cast(ProductScopeServices, SimpleNamespace(scope=scope))},
     )
     assert reader(scope, "run")[0].artifact_id == "sealed-1"
     assert calls == [dict(scope=scope, run_id="run", artifact_kind="field_plan")]
@@ -174,7 +185,7 @@ def test_window_plan_identity_uses_current_scope_and_metadata_only():
 
 
 @pytest.mark.asyncio
-async def test_duplicate_material_resolution_through_production_scope_adapter():
+async def test_duplicate_material_resolution_through_production_scope_adapter() -> None:
     import json
     from types import SimpleNamespace
 
@@ -189,31 +200,39 @@ async def test_duplicate_material_resolution_through_production_scope_adapter():
     seen = []
     sha = "0" * 63 + "1"
 
-    def respond(request):
+    def respond(request: typing.Any) -> typing.Any:
         seen.append(request)
         if "/platform/uploads/" in request.url.path:
             return httpx.Response(404)
-        return httpx.Response(200, json={"success": True, "data": {
-            "contract": "g3-platform-file-fingerprint.830.v1",
-            "knowledge_id": "existing",
-            "file_name": "old.pdf",
-            "file_sha256": sha,
-            "file_size": 4,
-            "type": "file",
-            "parse_attempt": 1,
-            "parse_status": "completed",
-            "original_upload_run_id": "old-run",
-            "original_upload_ordinal": 2,
-        }})
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {
+                    "contract": "g3-platform-file-fingerprint.830.v1",
+                    "knowledge_id": "existing",
+                    "file_name": "old.pdf",
+                    "file_sha256": sha,
+                    "file_size": 4,
+                    "type": "file",
+                    "parse_attempt": 1,
+                    "parse_status": "completed",
+                    "original_upload_run_id": "old-run",
+                    "original_upload_ordinal": 2,
+                },
+            },
+        )
 
     platform, scope = client(respond)
-    scoped = _ScopedPlatform({scope.space_id: SimpleNamespace(scope=scope, platform=platform)})
+    service = typing.cast(ProductScopeServices, SimpleNamespace(scope=scope, platform=platform))
+    scoped = _ScopedPlatform({scope.space_id: service})
     admitted = UploadManifest.model_validate_json(json.dumps(manifest()))
     try:
         for knowledge_id in (None, "existing"):
             result = await lookup_material(
                 scoped, scope, "new-run", 0, admitted, knowledge_id=knowledge_id
             )
+            assert result is not None
             assert result["knowledge_id"] == "existing"
             assert result["original_upload_run_id"] == "old-run"
             assert result["original_upload_ordinal"] == 2

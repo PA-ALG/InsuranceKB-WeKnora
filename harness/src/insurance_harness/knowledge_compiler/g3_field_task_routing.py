@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from typing import TypedDict
 
 from insurance_harness.compiler.sections import _is_heading
 
@@ -15,6 +16,34 @@ from .concept_free_wiki_830_g2 import SourceBlock
 from .g3_field_tasks import FieldTaskV1
 
 ROUTING_VERSION = "g3-field-task-chapter-routing.830.v1"
+
+
+class RoutedSourceIdentity(TypedDict):
+    tenant_id: int
+    space_id: str
+    raw_kb_id: str
+    knowledge_id: str
+    parse_attempt: int
+    revision_id: str
+    source_hash: str
+    parse_hash: str
+    parser_identity: str
+    block_id: str
+    page_number: int
+    source_type: str
+
+
+class RoutedSourceSpan(TypedDict):
+    start: int
+    end: int
+    quote: str
+    heading: str
+
+
+class RoutedSource(TypedDict):
+    source_ref: str
+    source: RoutedSourceIdentity
+    spans: list[RoutedSourceSpan]
 
 
 def _terms(task: FieldTaskV1) -> tuple[str, ...]:
@@ -63,7 +92,7 @@ def route_field_task_sources(
     *,
     max_source_chars: int = 24000,
     max_span_chars: int = 2000,
-) -> list[dict[str, object]]:
+) -> list[RoutedSource]:
     """Select fair per-field chapter hits, then fill a strict shared text budget."""
     if max_span_chars <= 0 or max_source_chars < max_span_chars:
         raise ValueError("invalid field task source budget")
@@ -71,8 +100,7 @@ def route_field_task_sources(
     # unrelated historical documents must not add segmentation/ranking work.
     unrestricted = not tasks or any(not task.allowed_sources for task in tasks)
     allowed_union = {
-        (source.revision_id, source.block_id)
-        for task in tasks for source in task.allowed_sources
+        (source.revision_id, source.block_id) for task in tasks for source in task.allowed_sources
     }
     candidates = [
         (ref, start, end, heading)
@@ -120,21 +148,35 @@ def route_field_task_sources(
             if size + row[2] - row[1] <= max_source_chars:
                 chosen[key] = row
                 size += row[2] - row[1]
-    result = []
+    result: list[RoutedSource] = []
     for ref, source in sorted(sources.items()):
-        spans = [
+        spans: list[RoutedSourceSpan] = [
             {"start": start, "end": end, "quote": source.text[start:end], "heading": heading}
             for r, start, end, heading in sorted(chosen.values())
             if r == ref
         ]
         if spans:
-            result.append(
-                {"source_ref": ref, "source": source.model_dump(exclude={"text"}), "spans": spans}
+            source_identity = RoutedSourceIdentity(
+                tenant_id=source.tenant_id,
+                space_id=source.space_id,
+                raw_kb_id=source.raw_kb_id,
+                knowledge_id=source.knowledge_id,
+                parse_attempt=source.parse_attempt,
+                revision_id=source.revision_id,
+                source_hash=source.source_hash,
+                parse_hash=source.parse_hash,
+                parser_identity=source.parser_identity,
+                block_id=source.block_id,
+                page_number=source.page_number,
+                source_type=source.source_type,
             )
+            result.append({"source_ref": ref, "source": source_identity, "spans": spans})
     return result
 
 
-def validate_routed_selections(selections, offered_sources) -> None:
+def validate_routed_selections(
+    selections: Sequence[tuple[str, str]], offered_sources: Sequence[RoutedSource]
+) -> None:
     """Reject model quotes outside the exact bounded spans it was offered."""
     offered = {row["source_ref"]: row["spans"] for row in offered_sources}
     for source_ref, quote in selections:

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import importlib
+import typing
+from collections.abc import Iterator
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import SecretStr
 
 from insurance_harness.db.base import Base, make_engine, make_session_factory
 from insurance_harness.jobs import (
@@ -25,7 +29,7 @@ from insurance_harness.service_shell.worker import HandlerRegistry, WorkerLoop
 
 
 @pytest.fixture
-def environment(tmp_path):
+def environment(tmp_path: Path) -> Iterator[SimpleNamespace]:
     engine = make_engine(f"sqlite:///{tmp_path}/runtime.db")
     Base.metadata.create_all(engine)
     factory = make_session_factory(engine)
@@ -56,14 +60,14 @@ def environment(tmp_path):
     engine.dispose()
 
 
-def runtime_module():
+def runtime_module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.runtime")
     except ModuleNotFoundError:
         pytest.fail("bounded product runtime is not implemented")
 
 
-def emit(environment, *, event_id: str, event_type: str, run_id: str) -> None:
+def emit(environment: typing.Any, *, event_id: str, event_type: str, run_id: str) -> None:
     queued = environment.jobs.enqueue(
         space_id=environment.scope.space_id,
         job_type="fixture_event",
@@ -92,24 +96,26 @@ def emit(environment, *, event_id: str, event_type: str, run_id: str) -> None:
 
 
 class RecordingProgression:
-    def __init__(self, *, bad_run_id: str | None = None, final=ProductRunState.SUCCEEDED):
+    def __init__(
+        self, *, bad_run_id: str | None = None, final: typing.Any = ProductRunState.SUCCEEDED
+    ) -> None:
         self.bad_run_id = bad_run_id
         self.final = final
         self.advanced: list[str] = []
         self.finalized: list[str] = []
 
-    def advance(self, _scope, run_id):
+    def advance(self, _scope: object, run_id: str) -> None:
         self.advanced.append(run_id)
         if run_id == self.bad_run_id:
             raise ValueError("bad persisted run")
 
-    def final_state(self, _scope, run_id):
+    def final_state(self, _scope: object, run_id: str) -> typing.Any:
         self.finalized.append(run_id)
         return self.final
 
 
 @pytest.mark.asyncio
-async def test_tick_acks_only_product_events_and_isolates_each_run(environment) -> None:
+async def test_tick_acks_only_product_events_and_isolates_each_run(environment: typing.Any) -> None:
     module = runtime_module()
     bad = environment.store.create_run(scope=environment.scope, idempotency_key="bad")
     good = environment.store.create_run(scope=environment.scope, idempotency_key="good")
@@ -146,7 +152,7 @@ async def test_tick_acks_only_product_events_and_isolates_each_run(environment) 
 
 
 @pytest.mark.asyncio
-async def test_keyset_repair_rotates_past_terminal_or_bad_old_runs(environment) -> None:
+async def test_keyset_repair_rotates_past_terminal_or_bad_old_runs(environment: typing.Any) -> None:
     module = runtime_module()
     runs = tuple(
         environment.store.create_run(scope=environment.scope, idempotency_key=f"repair-{index}")
@@ -171,14 +177,14 @@ async def test_keyset_repair_rotates_past_terminal_or_bad_old_runs(environment) 
 
 
 @pytest.mark.asyncio
-async def test_run_ticks_until_shared_lifecycle_drains(environment) -> None:
+async def test_run_ticks_until_shared_lifecycle_drains(environment: typing.Any) -> None:
     module = runtime_module()
     run = environment.store.create_run(scope=environment.scope, idempotency_key="long-lived")
     progression = RecordingProgression()
     lifecycle = Lifecycle()
     lifecycle.mark_serving()
 
-    async def drain(_seconds):
+    async def drain(_seconds: object) -> None:
         lifecycle.begin_drain()
 
     pump = module.ProductRuntimePump(
@@ -194,14 +200,14 @@ async def test_run_ticks_until_shared_lifecycle_drains(environment) -> None:
     assert run.run_id in progression.advanced
 
 
-def worker_loop(environment, registry):
+def worker_loop(environment: typing.Any, registry: typing.Any) -> WorkerLoop:
     lifecycle = Lifecycle()
     lifecycle.mark_serving()
     return WorkerLoop(
         store=environment.jobs,
         registry=registry,
         settings=ShellSettings(
-            postgres_dsn="postgresql://unused/test",
+            postgres_dsn=SecretStr("postgresql://unused/test"),
             worker_space_ids=(environment.scope.space_id,),
             heartbeat_interval_seconds=30,
             lease_seconds=300,
@@ -212,7 +218,9 @@ def worker_loop(environment, registry):
 
 
 @pytest.mark.asyncio
-async def test_registered_finalizer_uses_worker_loop_single_success(environment) -> None:
+async def test_registered_finalizer_uses_worker_loop_single_success(
+    environment: typing.Any,
+) -> None:
     module = runtime_module()
     run = environment.store.create_run(scope=environment.scope, idempotency_key="final")
     root = environment.store.enqueue_root(
@@ -246,7 +254,9 @@ async def test_registered_finalizer_uses_worker_loop_single_success(environment)
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("terminal", [ProductRunState.NEEDS_CONFIRMATION, ProductRunState.FAILED])
-async def test_finalizer_preserves_typed_child_confirmation_reason(environment, terminal) -> None:
+async def test_finalizer_preserves_typed_child_confirmation_reason(
+    environment: typing.Any, terminal: typing.Any
+) -> None:
     module = runtime_module()
     run = environment.store.create_run(scope=environment.scope, idempotency_key="confirm")
     stage = environment.store.enqueue_stage(
@@ -316,7 +326,9 @@ async def test_finalizer_preserves_typed_child_confirmation_reason(environment, 
 
 
 @pytest.mark.asyncio
-async def test_expired_identity_is_reconciled_to_durable_failed_without_model_calls(environment):
+async def test_expired_identity_is_reconciled_to_durable_failed_without_model_calls(
+    environment: typing.Any,
+) -> None:
     from datetime import UTC, datetime
 
     from sqlalchemy import update
@@ -380,8 +392,8 @@ async def test_expired_identity_is_reconciled_to_durable_failed_without_model_ca
 
 @pytest.mark.asyncio
 async def test_repair_selects_live_identities_without_loading_terminal_evidence(
-    environment, monkeypatch
-):
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from datetime import UTC, datetime, timedelta
     from uuid import uuid4
 
@@ -479,7 +491,14 @@ async def test_repair_selects_live_identities_without_loading_terminal_evidence(
     assert old.state is ProductRunState.FAILED and old.success_count == 1
     statements = []
 
-    def capture(_conn, _cursor, statement, _parameters, _context, _many):
+    def capture(
+        _conn: object,
+        _cursor: object,
+        statement: typing.Any,
+        _parameters: object,
+        _context: object,
+        _many: object,
+    ) -> None:
         statements.append(statement.lower())
 
     event.listen(environment.engine, "before_cursor_execute", capture)
@@ -495,7 +514,7 @@ async def test_repair_selects_live_identities_without_loading_terminal_evidence(
     try:
         with monkeypatch.context() as patch:
 
-            def forbidden(*_args, **_kwargs):
+            def forbidden(*_args: object, **_kwargs: object) -> None:
                 pytest.fail("repair scan hydrated a full run before selecting work")
 
             patch.setattr(store, "_run_snapshot", forbidden)

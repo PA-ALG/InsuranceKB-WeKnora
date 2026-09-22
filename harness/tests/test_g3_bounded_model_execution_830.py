@@ -9,6 +9,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Literal
 
 import pytest
 from pydantic import ValidationError
@@ -16,15 +17,27 @@ from pydantic import ValidationError
 from insurance_harness.knowledge_compiler import g3_bounded_model_execution as bounded
 from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCandidateBundle830G3V1,
     _batch_sha256,
     assemble_candidate_bundle,
+    compile_output_hash_g3,
+    compile_request_hash_g3,
     compiler_context_g3,
+    compose_batch_output,
+    record_composed_output,
     review_context_g3,
     validate_batch_candidate,
+)
+from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import (
+    BatchCorpusV1,
+    CorpusEntryV1,
+    MaterialProposalV1,
+    ProposalBatchV1,
 )
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
     CompileOutput,
     ReviewOutput,
+    ValueScore,
 )
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     G3NativeCharacterBoxV1,
@@ -43,10 +56,12 @@ from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     project_gemini_d_review_response,
     render_g3_d_prompt_context,
 )
-from insurance_harness.model_policy import AdmissionPolicyDenied, ModelIdentity
+from insurance_harness.model_policy import AdmissionPolicyDenied, ModelIdentity, ModelRole
 from insurance_harness.run_admission import evaluator
 from insurance_harness.run_admission.g3_models import (
     G3AuthorizedMaterialV1,
+    G3BoundedAdmissionPlanV1,
+    G3CallPlanV1,
     G3CostAuditV1,
     G3DelegatedStageSignerV1,
     G3ModelProcessingAuthorizationV1,
@@ -73,9 +88,7 @@ def test_current_schema_mapping_is_closed_and_canonical() -> None:
             assert specs[1][1].endswith("g3_bounded_model_execution.py")
         else:
             assert specs[1][1].endswith("concept_compile_830_g2.py")
-    assert request_hashes == {
-        "b4a5a1487957d6f873a3aab0ba516a886aa413568a7ba485e8e619b43417024c"
-    }
+    assert request_hashes == {"b4a5a1487957d6f873a3aab0ba516a886aa413568a7ba485e8e619b43417024c"}
 
 
 def test_c_renderer_partitions_materials_and_binds_parent_rows() -> None:
@@ -100,7 +113,6 @@ def test_c_renderer_partitions_materials_and_binds_parent_rows() -> None:
             text=entry.blocks[0].text,
             boxes=(),
         )
-
         for index, entry in enumerate(entries, 1)
     )
     page_set = G3NativePageProjectionSetV1(
@@ -108,14 +120,10 @@ def test_c_renderer_partitions_materials_and_binds_parent_rows() -> None:
     )
     artifacts = {
         "batch-corpus.830.g3.v1": [canonical_json(corpus.model_dump(mode="json"))],
-        "batch-resolution-policy.830.g3.v1": [
-            canonical_json(policy.model_dump(mode="json"))
-        ],
+        "batch-resolution-policy.830.g3.v1": [canonical_json(policy.model_dump(mode="json"))],
         "schema-pack-catalog.830.g3.v1": [canonical_json(catalog.model_dump(mode="json"))],
         "existing-entities.830.g3.v1": [canonical_json(existing.model_dump(mode="json"))],
-        "g3-native-page-projections.830.v1": [
-            canonical_json(page_set.model_dump(mode="json"))
-        ],
+        "g3-native-page-projections.830.v1": [canonical_json(page_set.model_dump(mode="json"))],
     }
     roles = sorted({role for rule in policy.rules for role in rule.material_roles})
     labels = sorted(
@@ -139,11 +147,14 @@ def test_c_renderer_partitions_materials_and_binds_parent_rows() -> None:
                                 {
                                     "block_ref": f"opaque-{index}",
                                     "text": entry.blocks[0].text,
-                                    "evidence_locators": [{
-                                        "block_ref": f"opaque-{index}",
-                                        "start": 0, "end": len(entry.blocks[0].text),
-                                        "quote": entry.blocks[0].text,
-                                    }],
+                                    "evidence_locators": [
+                                        {
+                                            "block_ref": f"opaque-{index}",
+                                            "start": 0,
+                                            "end": len(entry.blocks[0].text),
+                                            "quote": entry.blocks[0].text,
+                                        }
+                                    ],
                                 }
                             ],
                         }
@@ -217,9 +228,7 @@ def test_c_renderer_partitions_materials_and_binds_parent_rows() -> None:
                 if key != "structured_dispatch_hash"
             },
             "calls": calls,
-            "opaque_block_map_sha256": _sha(
-                artifacts["g3-native-page-projections.830.v1"][0]
-            ),
+            "opaque_block_map_sha256": _sha(artifacts["g3-native-page-projections.830.v1"][0]),
             "input_context_sha256": _sha(index_bytes),
         },
     )
@@ -362,7 +371,9 @@ def test_d_renderers_reuse_existing_compile_and_review_contexts() -> None:
     parent = G3ModelProcessingAuthorizationV1.model_construct()
     template = b"fixed D system"
 
-    def d_plan(stage: str, role: str, context: bytes):
+    def d_plan(
+        stage: Literal["D_COMPILE", "D_REVIEW"], role: ModelRole, context: bytes
+    ) -> tuple[G3BoundedAdmissionPlanV1, bytes]:
         identity = base.approved_identities[0].model_copy(update={"role": role})
         call = base.request_manifest.calls[0].model_copy(
             update={
@@ -638,7 +649,7 @@ def _automatic_semantic_response(text: str) -> bytes:
 
 
 def _semantic_from_proposals(
-    proposals, corpus, block_refs: dict[tuple[str, str], str]
+    proposals: ProposalBatchV1, corpus: BatchCorpusV1, block_refs: dict[tuple[str, str], str]
 ) -> bytes:
     blocks = {
         (block.revision_id, block.block_id): block
@@ -697,9 +708,7 @@ def _semantic_from_proposals(
             {
                 "material_id": proposal.material_id,
                 "material_role": proposal.material_role,
-                "material_role_evidence_refs": list(
-                    proposal.material_role_evidence_ids
-                ),
+                "material_role_evidence_refs": list(proposal.material_role_evidence_ids),
                 "entities": entities,
                 "evidence": evidence,
             }
@@ -773,9 +782,7 @@ def test_native_and_semantic_closed_wires_preserve_only_exact_body_fields() -> N
         text=raw,
         boxes=(),
     )
-    pages = G3NativePageProjectionSetV1(
-        contract="g3-native-page-projections.830.v1", pages=(page,)
-    )
+    pages = G3NativePageProjectionSetV1(contract="g3-native-page-projections.830.v1", pages=(page,))
     native_wire = bounded.canonical_native_page_projections(pages)
     assert raw.encode() in native_wire
     with pytest.raises(TypeError):
@@ -858,9 +865,7 @@ def _large_native_projection_wire() -> bytes:
         boxes=(),
     )
     return bounded.canonical_native_page_projections(
-        G3NativePageProjectionSetV1(
-            contract="g3-native-page-projections.830.v1", pages=(page,)
-        )
+        G3NativePageProjectionSetV1(contract="g3-native-page-projections.830.v1", pages=(page,))
     )
 
 
@@ -875,9 +880,7 @@ def test_one_artifact_uses_existing_native_capacity_only_for_exact_typed_pair() 
     assert bounded.canonical_native_page_projections(parsed) == raw
 
     with pytest.raises(ValueError, match="invalid semantic response bytes"):
-        bounded._one_artifact(
-            {"not-native": [raw]}, "not-native", G3NativePageProjectionSetV1
-        )
+        bounded._one_artifact({"not-native": [raw]}, "not-native", G3NativePageProjectionSetV1)
     with pytest.raises(ValueError, match="invalid semantic response bytes"):
         bounded._one_artifact(
             {"g3-native-page-projections.830.v1": [raw]},
@@ -895,9 +898,7 @@ def test_native_artifact_reader_keeps_exact_wire_and_capacity_closed(
     invalid = canonical_json({"contract": contract, "pages": "invalid"})
     for raw in (duplicate, noncanonical, invalid):
         with pytest.raises((ValueError, ValidationError)):
-            bounded._one_artifact(
-                {contract: [raw]}, contract, G3NativePageProjectionSetV1
-            )
+            bounded._one_artifact({contract: [raw]}, contract, G3NativePageProjectionSetV1)
 
     monkeypatch.setattr(evaluator, "_MAX_G3_NATIVE_PROJECTION_BYTES", 64)
     over_native_limit = canonical_json({"contract": contract, "pages": []}) + b" " * 64
@@ -946,7 +947,7 @@ def test_d_compile_review_and_candidate_contracts_form_one_chain() -> None:
     assert stale.request_hash != candidate.request.base_request.request_hash
 
 
-def _gemini_identity(role: str) -> ModelIdentity:
+def _gemini_identity(role: ModelRole) -> ModelIdentity:
     return ModelIdentity(
         provider="g3-user-gateway",
         deployment_id="gemini-3.7-flash-medium",
@@ -956,7 +957,7 @@ def _gemini_identity(role: str) -> ModelIdentity:
     )
 
 
-def _gemini_compile_reference_wire(candidate) -> bytes:
+def _gemini_compile_reference_wire(candidate: BatchConceptCandidateBundle830G3V1) -> bytes:
     context = render_g3_d_prompt_context(
         "D_COMPILE", _gemini_identity("extract"), candidate.request
     )
@@ -967,8 +968,7 @@ def _gemini_compile_reference_wire(candidate) -> bytes:
         original = next(
             item
             for item in candidate.model_compile_result.output.fields
-            if (item.entity_id, item.field_key)
-            == (target["entity_id"], target["field_key"])
+            if (item.entity_id, item.field_key) == (target["entity_id"], target["field_key"])
         )
         fields.append(
             {
@@ -1034,21 +1034,16 @@ def test_gemini_d_display_context_deduplicates_only_bound_business_inputs() -> N
     display = rendered["context"]
     assert display["contract"] == "g3-d-compile-display-context.830.v1"
     assert display["request_sha256"] == request.request_sha256
-    assert display["base_request_hash"] == bounded.compile_request_hash_g3(
-        request.base_request
-    )
+    assert display["base_request_hash"] == compile_request_hash_g3(request.base_request)
     semantic_request = display["semantic_request"]
     displayed_sources = semantic_request["base_request"]["sources"]
     assert [(row["revision_id"], row["block_id"]) for row in displayed_sources] == [
         (row.revision_id, row.block_id) for row in request.base_request.sources
     ]
     assert all(
-        "text" not in row and isinstance(row["source_ref"], str)
-        for row in displayed_sources
+        "text" not in row and isinstance(row["source_ref"], str) for row in displayed_sources
     )
-    option_by_ref = {
-        row["source_ref"]: row["source"].text for row in rendered["source_options"]
-    }
+    option_by_ref = {row["source_ref"]: row["source"].text for row in rendered["source_options"]}
     assert option_by_ref == {
         row["source_ref"]: source.text
         for row, source in zip(displayed_sources, request.base_request.sources, strict=True)
@@ -1071,8 +1066,7 @@ def test_gemini_d_display_context_deduplicates_only_bound_business_inputs() -> N
         for entry in displayed_catalog["entries"]
     } == selected
     assert all(
-        entry.pack.fields and entry.profile.sections
-        for entry in displayed_catalog["entries"]
+        entry.pack.fields and entry.profile.sections for entry in displayed_catalog["entries"]
     )
     assert batch_json_bytes_830_g3(request) == request_bytes
 
@@ -1114,9 +1108,10 @@ def test_gemini_d_review_refs_project_exact_hashes_and_scores() -> None:
     assert tuple(projected.page_scores) == tuple(
         row["member_id"] for row in context["review_targets"]
     )
-    assert g3_current_schema_specs("D_REVIEW", identity)[1][2]["properties"][
-        "contract"
-    ]["const"] == "g3-d-review-semantic-references.local.v1"
+    assert (
+        g3_current_schema_specs("D_REVIEW", identity)[1][2]["properties"]["contract"]["const"]
+        == "g3-d-review-semantic-references.local.v1"
+    )
 
 
 def test_gemini_d_projection_rejects_foreign_and_duplicate_refs() -> None:
@@ -1137,8 +1132,7 @@ def test_gemini_d_projection_preserves_business_text_and_derives_evidence_ids() 
     value = json.loads(_gemini_compile_reference_wire(candidate))
     target = context["field_targets"][0]
     allowed = next(
-        row for row in context["entity_source_refs"]
-        if row["entity_ref"] == target["entity_ref"]
+        row for row in context["entity_source_refs"] if row["entity_ref"] == target["entity_ref"]
     )["source_refs"]
     option = next(row for row in context["source_options"] if row["source_ref"] in allowed)
     selected = {"source_ref": option["source_ref"], "quote": option["source"].text}
@@ -1183,7 +1177,8 @@ def test_gemini_d_projection_preserves_business_text_and_derives_evidence_ids() 
     ]
     projected = project_gemini_d_compile_response(canonical_json(value), candidate.request)
     field = next(
-        item for item in projected.fields
+        item
+        for item in projected.fields
         if (item.entity_id, item.field_key) == (target["entity_id"], target["field_key"])
     )
     assert field.value == "原文\r\n业务值-\uf99c"
@@ -1201,8 +1196,8 @@ def test_gemini_d_projection_preserves_business_text_and_derives_evidence_ids() 
         identity=_gemini_identity("extract"),
         run_id="gemini-d-compile-non-nfc",
     )
-    composed = bounded.compose_batch_output(candidate.request, model_result)
-    final_result = bounded.record_composed_output(
+    composed = compose_batch_output(candidate.request, model_result)
+    final_result = record_composed_output(
         candidate.request,
         model_result,
         composed,
@@ -1357,9 +1352,7 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
     )
     typed_artifacts = {
         "batch-corpus.830.g3.v1": [canonical_json(corpus.model_dump(mode="json"))],
-        "batch-resolution-policy.830.g3.v1": [
-            canonical_json(policy.model_dump(mode="json"))
-        ],
+        "batch-resolution-policy.830.g3.v1": [canonical_json(policy.model_dump(mode="json"))],
         "schema-pack-catalog.830.g3.v1": [canonical_json(catalog.model_dump(mode="json"))],
         "existing-entities.830.g3.v1": [canonical_json(existing.model_dump(mode="json"))],
         "g3-native-page-projections.830.v1": [canonical_json(page_set.model_dump(mode="json"))],
@@ -1460,10 +1453,15 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
                     "material_id": entry.material_id,
                     "blocks": [
                         bounded._c_prompt_block(
-                            block_refs[(block.revision_id, block.block_id)], block.text,
-                            use_locator_refs=gemini, source=block,
-                            native_page=next(p for p in pages if p.block_ref ==
-                                             block_refs[(block.revision_id, block.block_id)]),
+                            block_refs[(block.revision_id, block.block_id)],
+                            block.text,
+                            use_locator_refs=gemini,
+                            source=block,
+                            native_page=next(
+                                p
+                                for p in pages
+                                if p.block_ref == block_refs[(block.revision_id, block.block_id)]
+                            ),
                         )
                         for block in entry.blocks
                     ],
@@ -1472,9 +1470,7 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             ],
             "allowed_material_roles": roles,
             "allowed_taxonomy_labels": labels,
-            "existing_entities": [
-                entity.model_dump(mode="json") for entity in existing.entities
-            ],
+            "existing_entities": [entity.model_dump(mode="json") for entity in existing.entities],
             "response_schema": bounded._c_response_schema(base.approved_identities[0]),
         }
     )
@@ -1658,9 +1654,7 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
     seed_payload = canonical_json(
         {"contract": "g3-protocol-seed-data.830.v1", "fixture": "provider-zero"}
     )
-    seed_ref = artifact_ref(
-        "g3-protocol-seed-data.830.v1", seed_payload, "seed.json"
-    )
+    seed_ref = artifact_ref("g3-protocol-seed-data.830.v1", seed_payload, "seed.json")
     protocol_seed = _hashed(
         type(base.protocol_seed_lock),
         "g3-protocol-seed.830.v1",
@@ -1724,9 +1718,7 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             "parent_authorization_digest": parent_digest,
             "artifacts": refs_tuple,
             "data_categories": ("C_W1_SOURCE",),
-            "material_or_derivation_ids": tuple(
-                entry.material_id for entry in corpus.entries
-            ),
+            "material_or_derivation_ids": tuple(entry.material_id for entry in corpus.entries),
             "provider": call.identity.provider,
             "deployment_id": call.identity.deployment_id,
             "endpoint_origin": call.endpoint_origin,
@@ -1834,8 +1826,11 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
                 {
                     "index": 0,
                     "finish_reason": "stop",
-                    "message": {"role": "assistant", "content": content,
-                                "reasoning_content": "synthetic optional field"},
+                    "message": {
+                        "role": "assistant",
+                        "content": content,
+                        "reasoning_content": "synthetic optional field",
+                    },
                 }
             ],
             "usage": {
@@ -1871,9 +1866,7 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
     malicious_body_ref = artifact_ref(
         "g3-http-request-body.830.v1", malicious_body, "request-body.json"
     )
-    assert write_store(malicious_body, "request-body.json") == Path(
-        malicious_body_ref.artifact_ref
-    )
+    assert write_store(malicious_body, "request-body.json") == Path(malicious_body_ref.artifact_ref)
     malicious_call = call.model_copy(
         update={
             "request_body_sha256": _sha(malicious_body),
@@ -1881,9 +1874,7 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
         }
     )
     malicious_preview_value = json.loads(preview)
-    malicious_preview_value["calls"][0]["user"] = (
-        context.decode() + "\nUNAUTHORIZED EXTRA MATERIAL"
-    )
+    malicious_preview_value["calls"][0]["user"] = context.decode() + "\nUNAUTHORIZED EXTRA MATERIAL"
     malicious_preview_value["calls"][0]["request_body_sha256"] = _sha(malicious_body)
     malicious_preview = canonical_json(malicious_preview_value)
     malicious_preview_ref = artifact_ref(
@@ -2011,9 +2002,7 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             stage_input=str(malicious_plan_path),
         )
     drifted_schema_artifacts = (
-        plan.schema_lock.artifacts[0].model_copy(
-            update={"canonical_schema_sha256": "f" * 64}
-        ),
+        plan.schema_lock.artifacts[0].model_copy(update={"canonical_schema_sha256": "f" * 64}),
         *plan.schema_lock.artifacts[1:],
     )
     drifted_schema = _hashed(
@@ -2074,14 +2063,15 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
         stage="C_CLASSIFY",
         stage_input=str(plan_path),
     )
-    semantic = _semantic_from_proposals(
-        fixture_inputs.proposals, corpus, block_refs
-    ).decode()
+    semantic = _semantic_from_proposals(fixture_inputs.proposals, corpus, block_refs).decode()
     if gemini:
         reference_value = json.loads(semantic)
         reference_value["contract"] = "g3-batch-resolution-semantic-references.local.v1"
-        source_map = {(entry.material_id, block.revision_id, block.block_id): block
-                      for entry in corpus.entries for block in entry.blocks}
+        source_map = {
+            (entry.material_id, block.revision_id, block.block_id): block
+            for entry in corpus.entries
+            for block in entry.blocks
+        }
         page_map = {page.block_ref: page for page in pages}
         for material in reference_value["materials"]:
             for row in material["evidence"]:
@@ -2100,20 +2090,18 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
         )
         original_parse = runner._parse_g3_stage_artifacts
         parse_count = 0
-        def counted_parse(*args, **kwargs):
+
+        def counted_parse(*args: Any, **kwargs: Any) -> bounded.G3StageExecutionContext:
             nonlocal parse_count
             parse_count += 1
             return original_parse(*args, **kwargs)
+
         with monkeypatch.context() as parsing:
             parsing.setattr(runner, "_parse_g3_stage_artifacts", counted_parse)
             terminal = await runner.run_stage(str(admission_path))
         assert parse_count == 1, "verified typed inputs must be reused by the execution loop"
         stage_terminal_path = (
-            ledger
-            / "chains"
-            / plan.chain_manifest_hash
-            / "stage-terminals"
-            / "C_CLASSIFY.json"
+            ledger / "chains" / plan.chain_manifest_hash / "stage-terminals" / "C_CLASSIFY.json"
         )
         stage_terminal_path.unlink()
         policy_path = tmp_path / "g3-root-policy.json"
@@ -2181,9 +2169,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     proposals = ProposalBatchV1.model_validate_json(proposal_bytes)
     resolution = BatchEntityResolutionV1.model_validate_json(resolution_bytes)
     assert proposal_bytes == canonical_json(proposals.model_dump(mode="json", round_trip=True))
-    assert resolution_bytes == canonical_json(
-        resolution.model_dump(mode="json", round_trip=True)
-    )
+    assert resolution_bytes == canonical_json(resolution.model_dump(mode="json", round_trip=True))
     assert terminal.stage_output_sha256 == resolution.batch_sha256
 
     from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
@@ -2207,23 +2193,28 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
         materializer_module = importlib.util.module_from_spec(materializer_spec)
         monkeypatch.setitem(sys.modules, materializer_spec.name, materializer_module)
         materializer_spec.loader.exec_module(materializer_module)
-        before_read = {str(path.relative_to(ledger)): path.read_bytes()
-                       for path in ledger.rglob("*") if path.is_file()}
+        before_read = {
+            str(path.relative_to(ledger)): path.read_bytes()
+            for path in ledger.rglob("*")
+            if path.is_file()
+        }
         c_stage, _, _, c_results = materializer_module._prior_stage(
             parent, parent_bytes, plan.chain_manifest, "D_COMPILE"
         )
         assert c_stage == recovered_terminal
         assert c_results["resolution"][1] == resolution_bytes
-        assert before_read == {str(path.relative_to(ledger)): path.read_bytes()
-                              for path in ledger.rglob("*") if path.is_file()}
+        assert before_read == {
+            str(path.relative_to(ledger)): path.read_bytes()
+            for path in ledger.rglob("*")
+            if path.is_file()
+        }
     compile_request = build_batch_compile_request(
         base_request=fixture_candidate.request.base_request,
         catalog_json=(
             repository_root / "docs/insurance-kb/evidence/830-g3/catalog/catalog.json"
         ).read_bytes(),
         profile_confirmation_json=(
-            repository_root
-            / "docs/insurance-kb/evidence/830-g3/profile-user-confirmation.json"
+            repository_root / "docs/insurance-kb/evidence/830-g3/profile-user-confirmation.json"
         ).read_bytes(),
         corpus=corpus,
         proposals=proposals,
@@ -2235,11 +2226,11 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
 
     def build_d_plan(
         *,
-        stage: str,
-        prior_terminal,
+        stage: Literal["D_COMPILE", "D_REVIEW"],
+        prior_terminal: G3StageTerminalReceiptV1,
         run_id: str,
         typed_payloads: dict[str, bytes],
-    ):
+    ) -> tuple[G3BoundedAdmissionPlanV1, Path]:
         purpose, schema_version, role, prompt_name, categories = {
             "D_COMPILE": (
                 "g3-batch-concept-compile",
@@ -2271,9 +2262,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             "prompt_version": prompt_name.removesuffix(".txt").replace("_", "-"),
             "render_rules_version": "g3-prompt-render.830.v1",
         }
-        approved_hash = _sha(
-            b"g3-approved-template.830.v1\0" + canonical_json(template_values)
-        )
+        approved_hash = _sha(b"g3-approved-template.830.v1\0" + canonical_json(template_values))
         stage_template = _hashed(
             type(base.template_lock),
             "g3-stage-template-lock.830.v1",
@@ -2327,9 +2316,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             final_result = __import__(
                 "insurance_harness.knowledge_compiler.concept_compile_830_g2",
                 fromlist=["CompileResult"],
-            ).CompileResult.model_validate_json(
-                typed_payloads["g3-d-final-compile-result.830.v1"]
-            )
+            ).CompileResult.model_validate_json(typed_payloads["g3-d-final-compile-result.830.v1"])
             user_context = batch_json_bytes_830_g3(
                 runner.render_g3_d_prompt_context(
                     stage, identity, compile_request, final_result.output
@@ -2392,12 +2379,8 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             artifact_ref(contract, payload, contract + ".json")
             for contract, payload in typed_payloads.items()
         ] + [
-            artifact_ref(
-                "g3-rendered-call-context.830.v1", user_context, "call-context.json"
-            ),
-            artifact_ref(
-                "g3-stage-render-contexts.830.v1", context_index, "stage-contexts.json"
-            ),
+            artifact_ref("g3-rendered-call-context.830.v1", user_context, "call-context.json"),
+            artifact_ref("g3-stage-render-contexts.830.v1", context_index, "stage-contexts.json"),
             artifact_ref("g3-http-request-body.830.v1", body_bytes, "request-body.json"),
         ]
         stage_refs_tuple = tuple(
@@ -2412,9 +2395,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             stage=stage,
             prior_terminal_receipt_sha256=prior_terminal.receipt_sha256,
             derivation_rules_version="g3-c-to-d-derivation.830.v1",
-            input_artifact_sha256s=tuple(
-                sorted({ref.sha256 for ref in stage_refs_tuple})
-            ),
+            input_artifact_sha256s=tuple(sorted({ref.sha256 for ref in stage_refs_tuple})),
             derived_request_manifest_hash=stage_manifest.manifest_hash,
         )
         derivation_id = "c-to-d-compile" if stage == "D_COMPILE" else "d-compile-to-review"
@@ -2548,26 +2529,18 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
         )
         return result, prepared_path
 
-    compile_request_bytes = canonical_json(
-        compile_request.model_dump(mode="json", round_trip=True)
-    )
+    compile_request_bytes = canonical_json(compile_request.model_dump(mode="json", round_trip=True))
     compile_plan, compile_admission = build_d_plan(
         stage="D_COMPILE",
         prior_terminal=recovered_terminal,
         run_id="fixture-g3-model-compile-live-chain",
-        typed_payloads={
-            "batch-concept-compile-request.830.g3.v1": compile_request_bytes
-        },
+        typed_payloads={"batch-concept-compile-request.830.g3.v1": compile_request_bytes},
     )
     compile_raw = canonical_json(
-        fixture_candidate.model_compile_result.output.model_dump(
-            mode="json", round_trip=True
-        )
+        fixture_candidate.model_compile_result.output.model_dump(mode="json", round_trip=True)
     ).decode()
     if gemini:
-        compile_wire_candidate = fixture_candidate.model_copy(
-            update={"request": compile_request}
-        )
+        compile_wire_candidate = fixture_candidate.model_copy(update={"request": compile_request})
         compile_raw = _gemini_compile_reference_wire(compile_wire_candidate).decode()
     with respx.mock:
         compile_posted = respx.post(provider_url).respond(
@@ -2588,11 +2561,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     assert compile_posted.call_count == 1
     assert recovered_compile_terminal.stage_output_sha256 == compile_terminal.stage_output_sha256
     compile_results = (
-        ledger
-        / "chains"
-        / compile_plan.chain_manifest_hash
-        / "stage-results"
-        / "D_COMPILE"
+        ledger / "chains" / compile_plan.chain_manifest_hash / "stage-results" / "D_COMPILE"
     )
     model_compile_bytes = (compile_results / "model-compile-result.json").read_bytes()
     final_compile_bytes = (compile_results / "final-compile-result.json").read_bytes()
@@ -2609,15 +2578,21 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             "concept-compile-output.830.g2.v1"
         )
     if non_nfc:
-        before_read = {str(path.relative_to(ledger)): path.read_bytes()
-                       for path in ledger.rglob("*") if path.is_file()}
+        before_read = {
+            str(path.relative_to(ledger)): path.read_bytes()
+            for path in ledger.rglob("*")
+            if path.is_file()
+        }
         reopened_stage, _, _, reopened_results = materializer_module._prior_stage(
             parent, parent_bytes, compile_plan.chain_manifest, "D_REVIEW"
         )
         assert reopened_stage == recovered_compile_terminal
         assert reopened_results["final"][1] == final_compile_bytes
-        assert before_read == {str(path.relative_to(ledger)): path.read_bytes()
-                              for path in ledger.rglob("*") if path.is_file()}
+        assert before_read == {
+            str(path.relative_to(ledger)): path.read_bytes()
+            for path in ledger.rglob("*")
+            if path.is_file()
+        }
     review_plan, review_admission = build_d_plan(
         stage="D_REVIEW",
         prior_terminal=recovered_compile_terminal,
@@ -2647,16 +2622,14 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     )
     review_wire = fixture_candidate.review_result.output.model_copy(
         update={
-            "output_hash": bounded.compile_output_hash_g3(final_result.output),
+            "output_hash": compile_output_hash_g3(final_result.output),
             "page_scores": {
                 page_id: human_score
                 for page_id in novel_page_ids(compile_request.base_request, final_result.output)
             },
         }
     )
-    review_raw = canonical_json(
-        review_wire.model_dump(mode="json", round_trip=True)
-    ).decode()
+    review_raw = canonical_json(review_wire.model_dump(mode="json", round_trip=True)).decode()
     if gemini:
         review_context_value = runner.render_g3_d_prompt_context(
             "D_REVIEW",
@@ -2685,11 +2658,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
         review_terminal = await runner.run_stage(str(review_admission))
     assert review_posted.call_count == 1
     review_results = (
-        ledger
-        / "chains"
-        / review_plan.chain_manifest_hash
-        / "stage-results"
-        / "D_REVIEW"
+        ledger / "chains" / review_plan.chain_manifest_hash / "stage-results" / "D_REVIEW"
     )
     review_result_bytes = (review_results / "review-result.json").read_bytes()
     candidate_bytes = (review_results / "candidate.json").read_bytes()
@@ -2713,11 +2682,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     assert posted.call_count + compile_posted.call_count + review_posted.call_count == 3
 
     review_stage_terminal_path = (
-        ledger
-        / "chains"
-        / review_plan.chain_manifest_hash
-        / "stage-terminals"
-        / "D_REVIEW.json"
+        ledger / "chains" / review_plan.chain_manifest_hash / "stage-terminals" / "D_REVIEW.json"
     )
     review_stage_terminal_path.unlink()
     (review_results / "candidate.json").write_bytes(b"{}")
@@ -2739,7 +2704,9 @@ def test_private_native_dispatch_validates_the_full_graph_once(
     validate = G3NativePageProjectionSetV1.model_validate
     complete_graph_passes = []
 
-    def counted(cls, value, *args, **kwargs):
+    def counted(
+        cls: type[G3NativePageProjectionSetV1], value: object, *args: Any, **kwargs: Any
+    ) -> G3NativePageProjectionSetV1:
         complete_graph_passes.append(type(value))
         return validate(value, *args, **kwargs)
 
@@ -2757,12 +2724,15 @@ def test_public_native_serializer_still_revalidates_constructed_instances() -> N
         bounded.canonical_native_page_projections(unsafe)
 
 
-@pytest.mark.parametrize("text", [
-    "first\r\nsecond\nactual-\uf99c-source",
-    "same\nsame\n" + "long-source-" * 100,
-    "\n \t\n",
-    "甲" * 255 + "\n" + "乙" * 257,
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "first\r\nsecond\nactual-\uf99c-source",
+        "same\nsame\n" + "long-source-" * 100,
+        "\n \t\n",
+        "甲" * 255 + "\n" + "乙" * 257,
+    ],
+)
 def test_c_prompt_locators_are_bounded_exact_and_preserve_source(text: str) -> None:
     block = bounded._c_prompt_block("opaque-source", text)
     assert block == bounded._c_prompt_block("opaque-source", text)
@@ -2773,15 +2743,19 @@ def test_c_prompt_locators_are_bounded_exact_and_preserve_source(text: str) -> N
         assert locator["block_ref"] == "opaque-source"
         assert 0 <= locator["start"] < locator["end"] <= len(text)
         assert locator["end"] - locator["start"] <= 256
-        assert locator["quote"] == text[locator["start"]:locator["end"]]
+        assert locator["quote"] == text[locator["start"] : locator["end"]]
         covered.update(range(locator["start"], locator["end"]))
     assert all(index in covered for index, char in enumerate(text) if not char.isspace())
 
 
 def _reference_gemini_identity() -> ModelIdentity:
-    return ModelIdentity(provider="g3-user-gateway", family="gemini", role="classify",
-                         deployment_id="gemini-3.7-flash-medium",
-                         policy_version="g3-user-gemini-gateway-v1")
+    return ModelIdentity(
+        provider="g3-user-gateway",
+        family="gemini",
+        role="classify",
+        deployment_id="gemini-3.7-flash-medium",
+        policy_version="g3-user-gemini-gateway-v1",
+    )
 
 
 def test_gemini_c_schema_requires_source_reference_contract() -> None:
@@ -2824,9 +2798,9 @@ def test_gemini_c_schema_exposes_existing_nonempty_proposal_requirements() -> No
 
     material["entities"]["minItems"] = 99
     fresh = g3_current_schema_specs("C_CLASSIFY", _reference_gemini_identity())[1][2]
-    assert fresh["$defs"]["G3SemanticReferenceMaterialV1"]["properties"]["entities"][
-        "minItems"
-    ] == 1
+    assert (
+        fresh["$defs"]["G3SemanticReferenceMaterialV1"]["properties"]["entities"]["minItems"] == 1
+    )
     assert canonical_json(fresh) == canonical_json(
         g3_current_schema_specs("C_CLASSIFY", _reference_gemini_identity())[1][2]
     )
@@ -2836,29 +2810,38 @@ def test_empty_gemini_c_reference_wire_reaches_existing_semantic_nonempty_gate()
     entry, page, _ = _reference_fixture()
     empty = {
         "contract": "g3-batch-resolution-semantic-references.local.v1",
-        "materials": [{
-            "material_id": entry.material_id,
-            "material_role": "policy",
-            "material_role_evidence_refs": [],
-            "entities": [],
-            "evidence": [],
-        }],
+        "materials": [
+            {
+                "material_id": entry.material_id,
+                "material_role": "policy",
+                "material_role_evidence_refs": [],
+                "entities": [],
+                "evidence": [],
+            }
+        ],
     }
     assert bounded.G3SemanticReferenceResponseV1.model_validate(empty)
     with pytest.raises(ValueError, match="semantic refs must be sorted unique"):
         _assemble_reference(entry, page, empty)
 
 
-def _reference_fixture():
+def _reference_fixture() -> tuple[CorpusEntryV1, G3NativePageProjectionV1, dict[str, Any]]:
     text = "中国人寿保险A款分类医疗险"
     entry = _entry(material_id="m-001", text=text)
     source = entry.blocks[0]
     page = G3NativePageProjectionV1(
-        block_ref="opaque-1", material_id="m-001", revision_id=source.revision_id,
-        block_id=source.block_id, page_number=source.page_number,
-        page_width=100.0, page_height=100.0, text=text,
-        boxes=tuple(G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0,
-                    width=1.0, height=1.0) for i in range(len(text))),
+        block_ref="opaque-1",
+        material_id="m-001",
+        revision_id=source.revision_id,
+        block_id=source.block_id,
+        page_number=source.page_number,
+        page_width=100.0,
+        page_height=100.0,
+        text=text,
+        boxes=tuple(
+            G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0, width=1.0, height=1.0)
+            for i in range(len(text))
+        ),
     )
     locator = {"block_ref": "opaque-1", "start": 0, "end": len(text), "quote": text}
     ref = "loc_" + _sha(canonical_json(locator))
@@ -2870,13 +2853,23 @@ def _reference_fixture():
     return entry, page, response
 
 
-def _assemble_reference(entry, page, response, **overrides):
-    args = dict(raw=canonical_json(response), corpus=_corpus(entry),
-                requested_material_ids=("m-001",), native_pages=(page,),
-                allowed_material_roles=("policy",), allowed_taxonomy_labels=("medical",),
-                model_request_sha256="1" * 64, use_locator_refs=True)
-    args.update(overrides)
-    return assemble_c_semantic_response(**args)
+def _assemble_reference(
+    entry: CorpusEntryV1,
+    page: G3NativePageProjectionV1,
+    response: dict[str, Any],
+    *,
+    native_pages: tuple[G3NativePageProjectionV1, ...] | None = None,
+) -> tuple[MaterialProposalV1, ...]:
+    return assemble_c_semantic_response(
+        raw=canonical_json(response),
+        corpus=_corpus(entry),
+        requested_material_ids=("m-001",),
+        native_pages=(page,) if native_pages is None else native_pages,
+        allowed_material_roles=("policy",),
+        allowed_taxonomy_labels=("medical",),
+        model_request_sha256="1" * 64,
+        use_locator_refs=True,
+    )
 
 
 def test_c_reference_response_assembles_exact_local_source() -> None:
@@ -2887,12 +2880,19 @@ def test_c_reference_response_assembles_exact_local_source() -> None:
     assert result[0].entities[0].name == "A款"
 
 
-@pytest.mark.parametrize("mutation", [
-    "invented", "changed_source", "wrong_material", "duplicate_page", "legacy",
-])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "invented",
+        "changed_source",
+        "wrong_material",
+        "duplicate_page",
+        "legacy",
+    ],
+)
 def test_c_reference_response_rejects_unbound_source(mutation: str) -> None:
     entry, page, response = _reference_fixture()
-    extra = {}
+    native_pages = None
     if mutation == "invented":
         response["materials"][0]["evidence"][0]["locator_ref"] = "loc_" + "f" * 64
     elif mutation == "changed_source":
@@ -2900,29 +2900,42 @@ def test_c_reference_response_rejects_unbound_source(mutation: str) -> None:
     elif mutation == "wrong_material":
         page = page.model_copy(update={"material_id": "m-002"})
     elif mutation == "duplicate_page":
-        extra["native_pages"] = (page, page)
+        native_pages = (page, page)
     else:
         response = json.loads(_semantic_response(entry.blocks[0].text))
     with pytest.raises(ValueError):
-        _assemble_reference(entry, page, response, **extra)
+        _assemble_reference(entry, page, response, native_pages=native_pages)
 
 
-@pytest.mark.parametrize("text", [
-    "same\r\nsame\r\n" + "字" * 600, "实际\uf99c-source\r\n", "\n \t\n",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "same\r\nsame\r\n" + "字" * 600,
+        "实际\uf99c-source\r\n",
+        "\n \t\n",
+    ],
+)
 def test_c_prompt_reference_ids_bind_exact_positions_and_text(text: str) -> None:
     old = bounded._c_prompt_block("source-1", text)
     entry = _entry(material_id="m-001", text="canonical fixture")
     source = entry.blocks[0].model_copy(update={"text": text})
     page = G3NativePageProjectionV1(
-        block_ref="source-1", material_id="m-001", revision_id=source.revision_id,
-        block_id=source.block_id, page_number=source.page_number,
-        page_width=1000.0, page_height=100.0, text=text,
-        boxes=tuple(G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0,
-                    width=1.0, height=1.0) for i in range(len(text))),
+        block_ref="source-1",
+        material_id="m-001",
+        revision_id=source.revision_id,
+        block_id=source.block_id,
+        page_number=source.page_number,
+        page_width=1000.0,
+        page_height=100.0,
+        text=text,
+        boxes=tuple(
+            G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0, width=1.0, height=1.0)
+            for i in range(len(text))
+        ),
     )
-    new = bounded._c_prompt_block("source-1", text, use_locator_refs=True,
-                                  native_page=page, source=source)
+    new = bounded._c_prompt_block(
+        "source-1", text, use_locator_refs=True, native_page=page, source=source
+    )
     assert new["text"] == text
     assert "evidence_locators" not in new
     assert new["evidence_locator_refs"] == [
@@ -2938,8 +2951,11 @@ def test_c_reference_options_exclude_ambiguous_native_quotes() -> None:
     entry, page, _ = _reference_fixture()
     page = page.model_copy(update={"text": page.text + page.text})
     block = bounded._c_prompt_block(
-        page.block_ref, entry.blocks[0].text, use_locator_refs=True,
-        native_page=page, source=entry.blocks[0],
+        page.block_ref,
+        entry.blocks[0].text,
+        use_locator_refs=True,
+        native_page=page,
+        source=entry.blocks[0],
     )
     assert block["evidence_locator_refs"] == []
 
@@ -2959,17 +2975,29 @@ def test_c_reference_schema_rejects_nonfield_scope_before_expansion() -> None:
         bounded.G3SemanticReferenceResponseV1.model_validate(response)
 
 
-@pytest.mark.parametrize("duplicate", [
-    "material", "entity", "evidence", "identity_ref", "label", "label_ref", "role_ref",
-])
+@pytest.mark.parametrize(
+    "duplicate",
+    [
+        "material",
+        "entity",
+        "evidence",
+        "identity_ref",
+        "label",
+        "label_ref",
+        "role_ref",
+    ],
+)
 def test_c_reference_unordered_collections_never_remove_duplicates(duplicate: str) -> None:
     entry, page, response = _reference_fixture()
     material = response["materials"][0]
     entity = material["entities"][0]
     rows = {
-        "material": response["materials"], "entity": material["entities"],
-        "evidence": material["evidence"], "identity_ref": entity["identity_evidence_refs"],
-        "label": entity["labels"], "label_ref": entity["labels"][0]["evidence_refs"],
+        "material": response["materials"],
+        "entity": material["entities"],
+        "evidence": material["evidence"],
+        "identity_ref": entity["identity_evidence_refs"],
+        "label": entity["labels"],
+        "label_ref": entity["labels"][0]["evidence_refs"],
         "role_ref": material["material_role_evidence_refs"],
     }[duplicate]
     rows.append(rows[0])
@@ -2983,11 +3011,18 @@ def test_c_reference_options_recover_exact_physical_line_within_native_page() ->
     source = entry.blocks[0]
     native_text = "中国人寿保险A款分类医疗险"
     page = G3NativePageProjectionV1(
-        block_ref="opaque-1", material_id="m-001", revision_id=source.revision_id,
-        block_id=source.block_id, page_number=source.page_number,
-        page_width=100.0, page_height=100.0, text=native_text,
-        boxes=tuple(G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0,
-                    width=1.0, height=1.0) for i in range(len(native_text))),
+        block_ref="opaque-1",
+        material_id="m-001",
+        revision_id=source.revision_id,
+        block_id=source.block_id,
+        page_number=source.page_number,
+        page_width=100.0,
+        page_height=100.0,
+        text=native_text,
+        boxes=tuple(
+            G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0, width=1.0, height=1.0)
+            for i in range(len(native_text))
+        ),
     )
     choices = bounded._c_eligible_source_locators(page, source)
     assert len(choices) == 1
@@ -3031,12 +3066,8 @@ def test_gemini_d_compile_windows_allow_two_entities_and_full_material_tuple() -
     fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
     request = validate_batch_candidate(fixture.read_bytes()).request
     bindings = list(request.entity_bindings)
-    primary = min(
-        bindings[0].source_material_ids[0], bindings[1].source_material_ids[0]
-    )
-    merged = tuple(
-        sorted({bindings[0].source_material_ids[0], bindings[1].source_material_ids[0]})
-    )
+    primary = min(bindings[0].source_material_ids[0], bindings[1].source_material_ids[0])
+    merged = tuple(sorted({bindings[0].source_material_ids[0], bindings[1].source_material_ids[0]}))
     bindings[0] = bindings[0].model_copy(update={"source_material_ids": merged})
     bindings[1] = bindings[1].model_copy(update={"source_material_ids": (primary,)})
     request = request.model_copy(update={"entity_bindings": tuple(bindings)})
@@ -3068,15 +3099,13 @@ def test_gemini_d_compile_window_context_is_entity_scoped() -> None:
     assert {row["source_ref"] for row in context["source_options"]} == allowed
     linked = {
         concept_id
-        for row in (
-            *context["existing_members"]["fields"],
-            *context["existing_members"]["pages"],
-        )
+        for row in context["existing_members"]["fields"]
         for concept_id in row.concept_ids
     }
-    assert {
-        row.concept_id for row in context["existing_members"]["definitions"]
-    } <= linked
+    linked.update(
+        concept_id for row in context["existing_members"]["pages"] for concept_id in row.concept_ids
+    )
+    assert {row.concept_id for row in context["existing_members"]["definitions"]} <= linked
     assert len(context["existing_members"]["definitions"]) < len(
         request.base_request.existing_definitions
     )
@@ -3096,19 +3125,21 @@ def test_gemini_d_renderer_requires_complete_ordered_window_partition() -> None:
         for window in windows
     )
     calls = tuple(
-        base.request_manifest.calls[0].model_copy(update={
-            "call_id": f"d-window-{ordinal:03d}",
-            "ordinal": ordinal,
-            "stage": "D_COMPILE",
-            "window_id": window["window_id"],
-            "material_ids": window["material_ids"],
-            "identity": identity,
-            "input_context_sha256": _sha(contexts[ordinal]),
-        })
+        base.request_manifest.calls[0].model_copy(
+            update={
+                "call_id": f"d-window-{ordinal:03d}",
+                "ordinal": ordinal,
+                "stage": "D_COMPILE",
+                "window_id": window["window_id"],
+                "material_ids": window["material_ids"],
+                "identity": identity,
+                "input_context_sha256": _sha(contexts[ordinal]),
+            }
+        )
         for ordinal, window in enumerate(windows)
     )
 
-    def plan_for(plan_calls):
+    def plan_for(plan_calls: tuple[G3CallPlanV1, ...]) -> G3BoundedAdmissionPlanV1:
         manifest = _hashed(
             type(base.request_manifest),
             "g3-request-manifest.830.v1",
@@ -3118,18 +3149,20 @@ def test_gemini_d_renderer_requires_complete_ordered_window_partition() -> None:
             chain_id=base.chain_id,
             calls=plan_calls,
         )
-        index = canonical_json({
-            "contract": "g3-stage-render-contexts.830.v1",
-            "stage": "D_COMPILE",
-            "calls": [
-                {
-                    "call_id": call.call_id,
-                    "ordinal": call.ordinal,
-                    "input_context_sha256": call.input_context_sha256,
-                }
-                for call in plan_calls
-            ],
-        })
+        index = canonical_json(
+            {
+                "contract": "g3-stage-render-contexts.830.v1",
+                "stage": "D_COMPILE",
+                "calls": [
+                    {
+                        "call_id": call.call_id,
+                        "ordinal": call.ordinal,
+                        "input_context_sha256": call.input_context_sha256,
+                    }
+                    for call in plan_calls
+                ],
+            }
+        )
         dispatch = _hashed(
             type(base.dispatch_lock),
             "g3-stage-dispatch.830.v1",
@@ -3142,11 +3175,13 @@ def test_gemini_d_renderer_requires_complete_ordered_window_partition() -> None:
             schema_hash=base.schema_hash,
             template_hash=base.template_lock.approved_template_hash,
         )
-        return base.model_copy(update={
-            "stage": "D_COMPILE",
-            "request_manifest": manifest,
-            "dispatch_lock": dispatch,
-        })
+        return base.model_copy(
+            update={
+                "stage": "D_COMPILE",
+                "request_manifest": manifest,
+                "dispatch_lock": dispatch,
+            }
+        )
 
     rendered, _, _ = _render_g3_stage_contexts(
         plan=plan_for(calls),
@@ -3175,10 +3210,10 @@ def test_gemini_d_renderer_requires_complete_ordered_window_partition() -> None:
 def test_gemini_c_schema_covers_directory_without_two_entity_sample() -> None:
     gemini = bounded._c_response_schema(_gemini_identity("classify"))
     legacy = bounded._c_response_schema()
-    assert "maxItems" not in gemini["$defs"]["G3SemanticReferenceMaterialV1"]["properties"]["entities"]
-    assert "maxItems" not in legacy["$defs"]["G3SemanticMaterialV1"]["properties"][
-        "entities"
-    ]
+    assert (
+        "maxItems" not in gemini["$defs"]["G3SemanticReferenceMaterialV1"]["properties"]["entities"]
+    )
+    assert "maxItems" not in legacy["$defs"]["G3SemanticMaterialV1"]["properties"]["entities"]
     prompt = (
         Path(__file__).parents[1]
         / "src/insurance_harness/knowledge_compiler/prompts/g3_c_classify_v1.txt"
@@ -3203,7 +3238,13 @@ def test_gemini_c_runtime_accepts_three_supported_entities_per_material() -> Non
         material["entities"].append(clone)
         for row in original_evidence:
             if row["entity_ref"] == entity["entity_ref"]:
-                material["evidence"].append({**row, "entity_ref": clone["entity_ref"], "evidence_ref": row["evidence_ref"] + suffix})
+                material["evidence"].append(
+                    {
+                        **row,
+                        "entity_ref": clone["entity_ref"],
+                        "evidence_ref": row["evidence_ref"] + suffix,
+                    }
+                )
     assert len(_assemble_reference(entry, page, response)[0].entities) == 3
 
 
@@ -3222,17 +3263,13 @@ def test_gemini_d_review_display_keeps_every_source_and_complete_output_once() -
     assert {
         (row["source"].revision_id, row["source"].block_id): row["source"]
         for row in context["source_options"]
-    } == {
-        (row.revision_id, row.block_id): row
-        for row in candidate.request.base_request.sources
-    }
+    } == {(row.revision_id, row.block_id): row for row in candidate.request.base_request.sources}
     assert len(context["corpus_entry_metadata"]) == len(
         candidate.request.resolution_inputs.corpus.entries
     )
     assert all("blocks" not in row for row in context["corpus_entry_metadata"])
     displayed = {
-        (row["source"].revision_id, row["source"].block_id)
-        for row in context["source_options"]
+        (row["source"].revision_id, row["source"].block_id) for row in context["source_options"]
     }
     corpus_only = {
         (row["source"].revision_id, row["source"].block_id)
@@ -3270,13 +3307,15 @@ def test_gemini_d_review_windows_are_entity_scoped_and_aggregate_exactly() -> No
             _gemini_identity("verify"), request, output, window
         )
         assert context["window"] == window
-        assert {
-            row["entity_id"] for row in context["candidate_partition"]["fields"]
-        } <= {window["entity_id"]}
+        assert {row["entity_id"] for row in context["candidate_partition"]["fields"]} <= {
+            window["entity_id"]
+        }
         assert len(context["candidate_partition"]["fields"]) == len(window["field_keys"])
         assert len(batch_json_bytes_830_g3(context)) <= 262144
-        assert sum(len(span["quote"]) for row in context["source_options"]
-                   for span in row["spans"]) <= 24000
+        assert (
+            sum(len(span["quote"]) for row in context["source_options"] for span in row["spans"])
+            <= 24000
+        )
         raw = canonical_json(
             {
                 "contract": "g3-d-review-semantic-references.local.v1",
@@ -3316,7 +3355,7 @@ def test_gemini_d_review_aggregate_propagates_reject_without_averaging() -> None
     reviews = []
     for ordinal, window in enumerate(windows):
         scores = {
-            row["member_id"]: bounded.ValueScore(
+            row["member_id"]: ValueScore(
                 business_value=20,
                 reuse=20,
                 evidence_quality=20,
@@ -3329,8 +3368,8 @@ def test_gemini_d_review_aggregate_propagates_reject_without_averaging() -> None
         }
         reviews.append(
             ReviewOutput(
-                request_hash=bounded.compile_request_hash_g3(request.base_request),
-                output_hash=bounded.compile_output_hash_g3(output),
+                request_hash=compile_request_hash_g3(request.base_request),
+                output_hash=compile_output_hash_g3(output),
                 decision="REJECT" if ordinal == 1 else "PASS",
                 reasons=(f"window-{ordinal}",),
                 page_scores=scores,
@@ -3349,10 +3388,9 @@ def test_gemini_d_review_finalizer_builds_candidate_and_seals_rejection(
     output = candidate.compile_result.output
     windows = bounded.derive_gemini_d_review_windows(request, output)
     targets = {
-        row["review_ref"]: row["member_id"]
-        for row in bounded._g3_d_review_targets(request, output)
+        row["review_ref"]: row["member_id"] for row in bounded._g3_d_review_targets(request, output)
     }
-    high = bounded.ValueScore(
+    high = ValueScore(
         business_value=25,
         reuse=20,
         evidence_quality=20,
@@ -3362,8 +3400,8 @@ def test_gemini_d_review_finalizer_builds_candidate_and_seals_rejection(
     )
     reviews = tuple(
         ReviewOutput(
-            request_hash=bounded.compile_request_hash_g3(request.base_request),
-            output_hash=bounded.compile_output_hash_g3(output),
+            request_hash=compile_request_hash_g3(request.base_request),
+            output_hash=compile_output_hash_g3(output),
             decision="PASS",
             reasons=(f"reviewed {window['entity_id']}",),
             page_scores={targets[ref]: high for ref in window["review_refs"]},
@@ -3448,9 +3486,7 @@ def test_gemini_d_review_finalizer_builds_candidate_and_seals_rejection(
     )
     assert terminal.status == "FAILED"
     assert terminal.calls_consumed == len(windows)
-    assert terminal.call_terminal_sha256s == tuple(
-        item.receipt_sha256 for item in terminals
-    )
+    assert terminal.call_terminal_sha256s == tuple(item.receipt_sha256 for item in terminals)
 
 
 def test_gemini_d_window_projection_aggregates_exact_delta() -> None:
@@ -3472,18 +3508,14 @@ def test_gemini_d_window_projection_aggregates_exact_delta() -> None:
                 canonical_json(value), candidate.request, window
             )
         )
-    aggregate = bounded.aggregate_gemini_d_compile_window_outputs(
-        candidate.request, outputs
-    )
+    aggregate = bounded.aggregate_gemini_d_compile_window_outputs(candidate.request, outputs)
     assert aggregate.model_copy(update={"audit": ()}) == (
         candidate.model_compile_result.output.model_copy(update={"audit": ()})
     )
     assert set(aggregate.audit) == set(candidate.model_compile_result.output.audit)
 
     with pytest.raises(ValueError, match="window output count|window field coverage"):
-        bounded.aggregate_gemini_d_compile_window_outputs(
-            candidate.request, outputs[1:]
-        )
+        bounded.aggregate_gemini_d_compile_window_outputs(candidate.request, outputs[1:])
 
 
 def test_gemini_d_synthesis_links_new_definition_and_fields_reject_it() -> None:
@@ -3494,14 +3526,12 @@ def test_gemini_d_synthesis_links_new_definition_and_fields_reject_it() -> None:
     field_window = next(
         row
         for row in bounded.derive_gemini_d_compile_windows(candidate.request)
-        if row["kind"] == "FIELDS"
-        and any(by_ref[ref]["evidence"] for ref in row["field_refs"])
+        if row["kind"] == "FIELDS" and any(by_ref[ref]["evidence"] for ref in row["field_refs"])
     )
     synth_window = next(
         row
         for row in bounded.derive_gemini_d_compile_windows(candidate.request)
-        if row["kind"] == "ENTITY_SYNTHESIS"
-        and row["entity_id"] == field_window["entity_id"]
+        if row["kind"] == "ENTITY_SYNTHESIS" and row["entity_id"] == field_window["entity_id"]
     )
     fields = [by_ref[ref] for ref in field_window["field_refs"]]
     linked = next(row for row in fields if row["evidence"])
@@ -3544,9 +3574,7 @@ def test_gemini_d_synthesis_links_new_definition_and_fields_reject_it() -> None:
     )
 
     assert len(projected.definitions) == 1
-    assert projected.pages[0].concept_ids == (
-        projected.definitions[0].concept_id,
-    )
+    assert projected.pages[0].concept_ids == (projected.definitions[0].concept_id,)
     fields[0]["concept_refs"] = [*fields[0]["concept_refs"], "definition-local-001"]
     with pytest.raises(ValueError, match="foreign D concept reference"):
         bounded.project_gemini_d_compile_window_response(
@@ -3562,10 +3590,7 @@ def test_gemini_d_synthesis_links_new_definition_and_fields_reject_it() -> None:
             candidate.request,
             field_window,
         )
-    prompt_root = (
-        Path(__file__).parents[1]
-        / "src/insurance_harness/knowledge_compiler/prompts"
-    )
+    prompt_root = Path(__file__).parents[1] / "src/insurance_harness/knowledge_compiler/prompts"
     compile_prompt = (prompt_root / "g3_d_compile_references_v1.txt").read_text()
     review_prompt = (prompt_root / "g3_d_review_references_v1.txt").read_text()
     assert "supplied 1–10 field_ref" in compile_prompt
@@ -3681,9 +3706,7 @@ def test_gemini_d_window_projection_rejects_wrong_kind_and_nonoccurring_quote() 
     )
 
     foreign = next(
-        row
-        for row in windows
-        if row["entity_id"] != window["entity_id"] and row["field_refs"]
+        row for row in windows if row["entity_id"] != window["entity_id"] and row["field_refs"]
     )
     wrong = {
         "contract": "g3-d-compile-semantic-references.local.v1",
@@ -3713,7 +3736,7 @@ def test_gemini_d_window_projection_rejects_wrong_kind_and_nonoccurring_quote() 
         )
 
 
-def test_module_cli_uses_canonical_main_context_type(monkeypatch):
+def test_module_cli_uses_canonical_main_context_type(monkeypatch: pytest.MonkeyPatch) -> None:
     import runpy
     import sys
 

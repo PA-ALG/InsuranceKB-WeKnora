@@ -6,10 +6,14 @@ import base64
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from datetime import datetime
+from typing import Any, cast
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from pydantic import SecretStr
 
+from insurance_harness.product_ingestion.configuration import AutomationSignerSettings
 from insurance_harness.product_ingestion.platform import _object
 
 
@@ -29,7 +33,7 @@ def canonical(value: object) -> bytes:
     return text.encode()
 
 
-def _scope(config):
+def _scope(config: AutomationSignerSettings) -> dict[str, int | str]:
     return {
         "tenant_id": int(config.scope.tenant_id),
         "space_id": config.scope.space_id,
@@ -38,20 +42,29 @@ def _scope(config):
     }
 
 
-def _key(secret):
+def _key(secret: SecretStr) -> Ed25519PrivateKey:
     return Ed25519PrivateKey.from_private_bytes(
         base64.b64decode(secret.get_secret_value(), validate=True)
     )
 
 
-def _sign(body, key, domain=b""):
+def _sign(
+    body: Mapping[str, Any],
+    key: Ed25519PrivateKey,
+    domain: bytes = b"",
+) -> bytes:
     signature = key.sign(domain + canonical(body))
     return canonical(
         {**body, "signature": base64.urlsafe_b64encode(signature).decode().rstrip("=")}
     )
 
 
-def sign_system_decision(config, preparation: dict, *, run_id: str) -> bytes:
+def sign_system_decision(
+    config: AutomationSignerSettings,
+    preparation: Mapping[str, Any],
+    *,
+    run_id: str,
+) -> bytes:
     scope = _scope(config)
     if any(preparation.get(name) != value for name, value in scope.items()):
         raise ValueError("system preparation scope mismatch")
@@ -117,8 +130,11 @@ def sign_system_decision(config, preparation: dict, *, run_id: str) -> bytes:
     return _sign(body, _key(config.decision_private_key_b64), b"system-policy-decision.v1\0")
 
 
-def sign_publish_authorization(config, decision_raw: bytes) -> bytes:
-    decision = json.loads(decision_raw, object_pairs_hook=_object)
+def sign_publish_authorization(
+    config: AutomationSignerSettings,
+    decision_raw: bytes,
+) -> bytes:
+    decision = cast(dict[str, Any], json.loads(decision_raw, object_pairs_hook=_object))
     if (
         canonical(decision) != decision_raw
         or any(decision.get(name) != value for name, value in _scope(config).items())

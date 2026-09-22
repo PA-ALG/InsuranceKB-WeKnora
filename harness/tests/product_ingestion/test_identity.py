@@ -3,6 +3,7 @@ from __future__ import annotations
 # ruff: noqa: F811
 import importlib
 import json
+import typing
 from dataclasses import replace
 
 import pytest
@@ -11,14 +12,16 @@ from tests.product_ingestion.test_platform import snapshot  # noqa: F401
 from tests.product_ingestion.test_source_geometry import native_snapshot
 
 
-def module():
+def module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.identity")
     except ModuleNotFoundError:
         pytest.fail("platform identity input adapter is not implemented")
 
 
-def test_current_corpus_retains_exact_source_and_stable_knowledge_identity(snapshot):
+def test_current_corpus_retains_exact_source_and_stable_knowledge_identity(
+    snapshot: typing.Any,
+) -> None:
     scope, body, sign, keys = snapshot
     body["receipt"]["manifest_algorithm"] = "weknora.chunk_manifest.v1"
     decoded = native_snapshot(snapshot)
@@ -35,7 +38,7 @@ def test_current_corpus_retains_exact_source_and_stable_knowledge_identity(snaps
     assert "knowledge" in entry.provenance.source_uri
 
 
-def test_corpus_refuses_cross_scope_signed_snapshot(snapshot):
+def test_corpus_refuses_cross_scope_signed_snapshot(snapshot: typing.Any) -> None:
     scope, body, sign, keys = snapshot
     body["receipt"]["manifest_algorithm"] = "weknora.chunk_manifest.v1"
     decoded = native_snapshot(snapshot)
@@ -47,7 +50,9 @@ def test_corpus_refuses_cross_scope_signed_snapshot(snapshot):
         )
 
 
-def test_prompt_selects_first_page_without_unrelated_later_source_or_history(snapshot):
+def test_prompt_selects_first_page_without_unrelated_later_source_or_history(
+    snapshot: typing.Any,
+) -> None:
     scope, body, sign, keys = snapshot
     body["receipt"]["manifest_algorithm"] = "weknora.chunk_manifest.v1"
     decoded = native_snapshot(snapshot)
@@ -82,7 +87,9 @@ def test_prompt_selects_first_page_without_unrelated_later_source_or_history(sna
     assert context["materials"][0]["blocks"][0]["evidence_locator_refs"]
 
 
-def test_issuer_extra_block_is_selected_by_block_text_not_shared_whole_page(snapshot):
+def test_issuer_extra_block_is_selected_by_block_text_not_shared_whole_page(
+    snapshot: typing.Any,
+) -> None:
     from insurance_harness.product_ingestion.source_geometry import project_native_pages
 
     scope, body, *_ = snapshot
@@ -128,7 +135,7 @@ def test_issuer_extra_block_is_selected_by_block_text_not_shared_whole_page(snap
     assert "同页其他内容" not in sent
 
 
-def test_identity_prompt_does_not_require_regex_hints(snapshot):
+def test_identity_prompt_does_not_require_regex_hints(snapshot: typing.Any) -> None:
     from insurance_harness.product_ingestion.source_geometry import project_native_pages
 
     scope, body, *_ = snapshot
@@ -158,7 +165,7 @@ def test_identity_prompt_does_not_require_regex_hints(snapshot):
 
 
 @pytest.mark.parametrize("bad", ["foreign locator", "later title", "later classification"])
-def test_identity_response_cannot_expand_offered_evidence(bad):
+def test_identity_response_cannot_expand_offered_evidence(bad: typing.Any) -> None:
     ref = "loc_" + "a" * 64
     context = {
         "materials": [
@@ -198,7 +205,7 @@ def test_identity_response_cannot_expand_offered_evidence(bad):
         module().validate_identity_offered_response(json.dumps(response).encode(), context)
 
 
-def test_identity_first_page_context_omits_cross_page_tail(snapshot):
+def test_identity_first_page_context_omits_cross_page_tail(snapshot: typing.Any) -> None:
     from insurance_harness.product_ingestion.source_geometry import project_native_pages
 
     scope, body, *_ = snapshot
@@ -232,7 +239,9 @@ def test_identity_first_page_context_omits_cross_page_tail(snapshot):
 
 
 @pytest.mark.parametrize("generic_first_page", [False, True])
-def test_cross_page_company_tail_does_not_hide_offered_issuer_block(snapshot, generic_first_page):
+def test_cross_page_company_tail_does_not_hide_offered_issuer_block(
+    snapshot: typing.Any, generic_first_page: typing.Any
+) -> None:
     from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
         G3NativeCharacterBoxV1,
     )
@@ -311,8 +320,8 @@ def test_cross_page_company_tail_does_not_hide_offered_issuer_block(snapshot, ge
 
 
 def test_bounded_identity_geometry_matches_full_context_and_exact_locator_refs(
-    snapshot,
-):
+    snapshot: typing.Any,
+) -> None:
     from insurance_harness.product_ingestion.source_geometry import project_native_pages
     from tests.product_ingestion.test_source_geometry import bounded_identity_snapshot
 
@@ -349,7 +358,7 @@ def test_bounded_identity_geometry_matches_full_context_and_exact_locator_refs(
 
 
 @pytest.mark.parametrize("generic", ["保险人就是保险公司", "保险合同约定保险公司承担责任"])
-def test_generic_company_language_does_not_suppress_legal_issuer(generic):
+def test_generic_company_language_does_not_suppress_legal_issuer(generic: typing.Any) -> None:
     from types import SimpleNamespace
 
     first = SimpleNamespace(page_number=1, text="平安测试2.0养老年金保险\n" + generic)

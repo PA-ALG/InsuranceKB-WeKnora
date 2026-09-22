@@ -5,27 +5,45 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from typing import TYPE_CHECKING, Any
 
+from insurance_harness.jobs import JobSnapshot
+from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler_types
 from insurance_harness.knowledge_compiler.g3_field_tasks import (
+    FieldTaskBatchV1,
     adapt_catalog_field_tasks,
     batch_field_tasks,
 )
+from insurance_harness.product_ingestion.artifact_models import ArtifactDraft
 from insurance_harness.product_ingestion.checkpoints import CURRENT_ARTIFACT_CONTRACTS
 from insurance_harness.product_ingestion.extraction import (
     VALIDATION_VERSION,
     render_window_request,
 )
+from insurance_harness.product_ingestion.field_validation import FieldValidationReport
 from insurance_harness.product_ingestion.model_execution import (
     ModelPolicyDenied,
     _template_and_request,
 )
+from insurance_harness.product_ingestion.model_settings import ProductModelSettings
 from insurance_harness.product_ingestion.models import (
+    FieldAttemptSnapshot,
     FieldCacheIdentity,
+    ProductRunSnapshot,
+    ProductScope,
     SourceDependency,
+    StageSnapshot,
     WindowTaskSpec,
 )
 from insurance_harness.product_ingestion.progression import PlannedWindow
-from insurance_harness.product_ingestion.stages import json_bytes
+from insurance_harness.product_ingestion.stages import StageOutput, json_bytes
+
+if TYPE_CHECKING:
+    from insurance_harness.product_ingestion.composition import (
+        ProductCompositionContext,
+        ProductPipelinePorts,
+        ProductScopeServices,
+    )
 
 FIELD_PROMPT = (
     b"Extract only the requested insurance fields from the offered source spans. "
@@ -47,10 +65,10 @@ IDENTITY_PROMPT = (
 
 
 def build_field_windows(
-    request,
+    request: compiler_types.BatchConceptCompileRequest830G3V1,
     *,
     product_identity_sha256: str,
-    model_settings,
+    model_settings: ProductModelSettings,
     selected_fields: set[tuple[str, str]] | None = None,
 ) -> tuple[PlannedWindow, ...]:
     tasks = adapt_catalog_field_tasks(request)
@@ -61,7 +79,7 @@ def build_field_windows(
     bindings = {row.entity_id: row for row in request.entity_bindings}
     template = model_settings.template(model_settings.field_template_id)
 
-    def fit(batch):
+    def fit(batch: FieldTaskBatchV1) -> tuple[FieldTaskBatchV1, ...]:
         base = request.base_request
         content = render_window_request(
             batch.tasks,
@@ -100,9 +118,9 @@ def build_field_windows(
         return (batch,)
 
     batches = tuple(fitted for batch in batch_field_tasks(tasks) for fitted in fit(batch))
-    windows = []
+    windows: list[PlannedWindow] = []
     for ordinal, batch in enumerate(batches):
-        specs = []
+        specs: list[WindowTaskSpec] = []
         for task in batch.tasks:
             binding = bindings[task.entity_id]
             deps = sorted({(row.revision_id, row.source_hash) for row in task.allowed_sources})
@@ -143,7 +161,7 @@ def build_field_windows(
     return tuple(windows)
 
 
-def build_product_pipeline(context):
+def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelinePorts:
     """Bind every business stage to durable artifacts and configured platform ports."""
     from insurance_harness.jobs import NonRetryableJobError
     from insurance_harness.knowledge_compiler import (
@@ -198,7 +216,7 @@ def build_product_pipeline(context):
 
     store, artifacts = context.store, context.artifacts
     policy = resolver.BatchResolutionPolicyV1.model_validate_json(context.resolution_policy_json)
-    identity_templates = {}
+    identity_templates: dict[str, str] = {}
     for space_id, service in context.bindings.items():
         templates = [
             row
@@ -212,7 +230,9 @@ def build_product_pipeline(context):
             raise ValueError("configured identity template does not match platform pipeline")
         identity_templates[space_id] = templates[0].template_id
 
-    def read(scope, run_id, kind, key="product"):
+    def read(
+        scope: ProductScope, run_id: str, kind: str, key: str = "product"
+    ) -> bytes:
         if kind in {"base_snapshot", "compile_request", "compile_delta"}:
             rebased = {
                 "base_snapshot": "rebased_base_snapshot",
@@ -229,13 +249,13 @@ def build_product_pipeline(context):
             scope=scope, run_id=run_id, artifact_kind=kind, artifact_key=key
         ).payload
 
-    def service_for(scope):
+    def service_for(scope: ProductScope) -> ProductScopeServices:
         service = context.bindings[scope.space_id]
         if service.scope != scope:
             raise NonRetryableJobError("PRODUCT_PIPELINE_SCOPE_MISMATCH")
         return service
 
-    def base_for(scope, run_id):
+    def base_for(scope: ProductScope, run_id: str) -> dict[str, Any]:
         service = service_for(scope)
         return verify_signed_snapshot(
             read(scope, run_id, "base_snapshot"),
@@ -244,12 +264,14 @@ def build_product_pipeline(context):
             public_keys=service.configuration.source_public_keys,
         )
 
-    def request_for(scope, run_id):
+    def request_for(
+        scope: ProductScope, run_id: str
+    ) -> compiler.BatchConceptCompileRequest830G3V1:
         return compiler.BatchConceptCompileRequest830G3V1.model_validate_json(
             read(scope, run_id, "compile_request")
         )
 
-    def read_window_plan(scope, run_id):
+    def read_window_plan(scope: ProductScope, run_id: str) -> tuple[PlannedWindow, ...]:
         plan = json.loads(read(scope, run_id, "field_plan"))
         return tuple(
             PlannedWindow(
@@ -260,7 +282,12 @@ def build_product_pipeline(context):
             for row in plan["windows"]
         )
 
-    async def checkpoint(scope, run, stage, job):
+    async def checkpoint(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         from insurance_harness.product_ingestion.checkpoint_validation import (
             CheckpointValidationError,
             validate_checkpoint,
@@ -271,7 +298,12 @@ def build_product_pipeline(context):
         except CheckpointValidationError as error:
             raise needs_confirmation_error(error.reason.value) from None
 
-    async def identity(scope, run, stage, job):
+    async def identity(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         from insurance_harness.product_ingestion.compilation import (
             build_existing_snapshot,
         )
@@ -331,13 +363,15 @@ def build_product_pipeline(context):
         model_origin = ArtifactOrigin.RULE
         adaptation_audit = None
         recovery_plan = store.processing_recovery_plan(scope=scope, run_id=run.run_id)
+        retry_origin_run_id = run.retry_of_run_id
         field_retry = (
-            run.retry_of_run_id
+            retry_origin_run_id is not None
             and recovery_plan is None
             and store.checkpoint_plan(scope=scope, run_id=run.run_id) is None
         )
         if field_retry:
-            previous = json.loads(read(scope, run.retry_of_run_id, "identity"))
+            assert retry_origin_run_id is not None
+            previous = json.loads(read(scope, retry_origin_run_id, "identity"))
             if resolver.BatchCorpusV1.model_validate(previous["corpus"]) != corpus:
                 raise needs_confirmation_error("RETRY_SOURCE_IDENTITY_CHANGED")
             proposals = resolver.ProposalBatchV1.model_validate(previous["proposals"])
@@ -480,14 +514,17 @@ def build_product_pipeline(context):
             row for row in resolution.decisions if row.disposition not in {"MATCH", "CREATE"}
         ]
         if rejected:
-            reasons = sorted(
-                {
+            reasons: list[str] = sorted(
+                {reason for row in rejected for reason in row.reason_codes}
+                | {
                     reason
                     for row in rejected
-                    for decision in (row, *row.children)
-                    for reason in decision.reason_codes
+                    for child in row.children
+                    for reason in child.reason_codes
                 }
-            ) or ["CONFLICTING_ENTITY_EVIDENCE"]
+            )
+            if not reasons:
+                reasons = ["CONFLICTING_ENTITY_EVIDENCE"]
             raise needs_confirmation_error("PRODUCT_IDENTITY_UNRESOLVED:" + ",".join(reasons))
         refs = tuple(
             sorted(
@@ -522,9 +559,13 @@ def build_product_pipeline(context):
             proposal.material_id: proposal.material_role for proposal in proposals.proposals
         }
         if field_retry:
-            roles_by_knowledge = {
-                row.knowledge_id: row.source.inferred_material_role for row in run.materials
-            }
+            roles_by_knowledge = {}
+            for material in run.materials:
+                if material.source is None:
+                    raise needs_confirmation_error("RETRY_SOURCE_IDENTITY_CHANGED")
+                roles_by_knowledge[material.knowledge_id] = (
+                    material.source.inferred_material_role
+                )
         resolved_route = {
             "contract": "product-resolved-routing.830.v1",
             "status": "matched",
@@ -608,15 +649,20 @@ def build_product_pipeline(context):
             )
         )
 
-    async def field_plan(scope, run, stage, job):
+    async def field_plan(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         from insurance_harness.product_ingestion.compilation import (
             build_platform_compile_request,
         )
 
         values = json.loads(read(scope, run.run_id, "identity"))
         base = await asyncio.to_thread(base_for, scope, run.run_id)
-        selected = None
-        refresh = []
+        selected: set[tuple[str, str]] | None = None
+        refresh: list[dict[str, str]] = []
         if (
             run.retry_of_run_id
             and store.processing_recovery_plan(scope=scope, run_id=run.run_id) is None
@@ -694,7 +740,12 @@ def build_product_pipeline(context):
             )
         )
 
-    async def extract(scope, run, stage, job):
+    async def extract(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         windows = await asyncio.to_thread(read_window_plan, scope, run.run_id)
         expected = {(task.entity_id, task.field_key) for window in windows for task in window.tasks}
         attempts = store.list_field_attempts(scope=scope, run_id=run.run_id)
@@ -720,7 +771,12 @@ def build_product_pipeline(context):
             state=state,
         )
 
-    async def synthesis(scope, run, stage, job):
+    async def synthesis(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         from insurance_harness.product_ingestion.compilation import (
             project_field_attempts,
         )
@@ -731,7 +787,9 @@ def build_product_pipeline(context):
 
         request = await asyncio.to_thread(request_for, scope, run.run_id)
 
-        def validate():
+        def validate() -> tuple[
+            FieldValidationReport, tuple[FieldAttemptSnapshot, ...]
+        ]:
             attempts = store.list_original_field_attempts(scope=scope, run_id=run.run_id)
             snapshots = read_source_snapshots(
                 artifacts,
@@ -805,7 +863,12 @@ def build_product_pipeline(context):
             state=output.state,
         )
 
-    async def discovery(scope, run, stage, job):
+    async def discovery(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         from insurance_harness.product_ingestion.discovery_stage import (
             run_discovery_generation_stage,
         )
@@ -826,7 +889,12 @@ def build_product_pipeline(context):
             ),
         )
 
-    async def compilation(scope, run, stage, job):
+    async def compilation(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         from insurance_harness.product_ingestion.compilation import (
             assemble_platform_candidate,
             published_navigation_assignments,
@@ -842,8 +910,8 @@ def build_product_pipeline(context):
         )
         base = await asyncio.to_thread(base_for, scope, run.run_id)
         navigation = published_navigation_assignments(base)
-        review = None
-        extra_drafts = ()
+        review: ReviewResult | None = None
+        extra_drafts: tuple[ArtifactDraft, ...] = ()
         state = ProductRunState.SUCCEEDED
         if run.workflow_version >= 3:
             from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput
@@ -966,14 +1034,18 @@ def build_product_pipeline(context):
         metadata = await submit_preparation(scope, run.run_id, run.run_id, raw)
         return StageOutput((candidate_output, preparation_artifact(metadata, stage)))
 
-    async def submit_preparation(scope, run_id, producer_run_id, raw):
+    async def submit_preparation(
+        scope: ProductScope, run_id: str, producer_run_id: str, raw: bytes
+    ) -> dict[str, Any]:
         preparation_id = "product-" + hashlib.sha256(producer_run_id.encode()).hexdigest()[:32]
         base = await asyncio.to_thread(base_for, scope, run_id)
         return await service_for(scope).platform.create_preparation(
             scope, preparation_id, raw, base_body=base
         )
 
-    def preparation_artifact(metadata, stage):
+    def preparation_artifact(
+        metadata: dict[str, Any], stage: StageSnapshot
+    ) -> ArtifactDraft:
         return artifact(
             "preparation",
             "product",
@@ -982,7 +1054,12 @@ def build_product_pipeline(context):
             origin=ArtifactOrigin.PLATFORM_SOURCE,
         )
 
-    async def preparation(scope, run, stage, job):
+    async def preparation(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         saved = await asyncio.to_thread(
             artifacts.get_effective_artifact,
             scope=scope,
@@ -992,7 +1069,12 @@ def build_product_pipeline(context):
         metadata = await submit_preparation(scope, run.run_id, saved.run_id, saved.payload)
         return StageOutput((preparation_artifact(metadata, stage),))
 
-    async def review(scope, run, stage, job):
+    async def review(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         service = service_for(scope)
         metadata = json.loads(read(scope, run.run_id, "preparation"))
         decision = sign_system_decision(
@@ -1019,7 +1101,12 @@ def build_product_pipeline(context):
             )
         )
 
-    async def publish(scope, run, stage, job):
+    async def publish(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         service = service_for(scope)
         decision = read(scope, run.run_id, "system_decision")
         authorization = sign_publish_authorization(service.configuration.automation, decision)
@@ -1042,7 +1129,12 @@ def build_product_pipeline(context):
             )
         )
 
-    async def verify(scope, run, stage, job):
+    async def verify(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         from insurance_harness.product_ingestion.verification import (
             verify_published_product,
         )
@@ -1070,6 +1162,9 @@ def build_product_pipeline(context):
             )
         )
 
+    def field_prompt(_scope: ProductScope) -> bytes:
+        return FIELD_PROMPT
+
     return ProductPipelinePorts(
         stage_handlers={
             "checkpoint": checkpoint,
@@ -1085,5 +1180,5 @@ def build_product_pipeline(context):
             "verify": verify,
         },
         read_window_plan=read_window_plan,
-        field_prompt=lambda _scope: FIELD_PROMPT,
+        field_prompt=field_prompt,
     )

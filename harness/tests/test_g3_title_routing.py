@@ -3,10 +3,15 @@ from __future__ import annotations
 import importlib
 import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
+from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import (
+    BatchCorpusV1,
+    ProposalBatchV1,
+)
 from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import SchemaPackCatalogV1
 from tests.test_batch_entity_resolution_830_g3 import (
     _corpus,
@@ -19,14 +24,14 @@ from tests.test_batch_entity_resolution_830_g3 import (
 )
 
 
-def _module():
+def _module() -> ModuleType:
     name = "insurance_harness.knowledge_compiler.g3_title_routing"
     assert importlib.util.find_spec(name) is not None, "no deterministic G3 title routing overlay"
     return importlib.import_module(name)
 
 
 @pytest.fixture(scope="module")
-def catalog():
+def catalog() -> SchemaPackCatalogV1:
     path = Path(__file__).parents[2] / "docs/insurance-kb/evidence/830-g3/catalog/catalog.json"
     return SchemaPackCatalogV1.model_validate_json(path.read_bytes())
 
@@ -38,7 +43,9 @@ def catalog():
         ("平安爱满分（2026）两全保险", "endowment_insurance"),
     ),
 )
-def test_formal_title_selects_catalog_without_model(title, label, catalog):
+def test_formal_title_selects_catalog_without_model(
+    title: str, label: str, catalog: SchemaPackCatalogV1
+) -> None:
     info = _module().route_formal_title(title, catalog=catalog)
     assert info.classification_status == "KNOWN"
     assert info.primary_label == label
@@ -46,7 +53,9 @@ def test_formal_title_selects_catalog_without_model(title, label, catalog):
     assert info.title_year == "2026"
 
 
-def _capture(version=None, filing="REG001"):
+def _capture(
+    version: str | None = None, filing: str | None = "REG001"
+) -> tuple[BatchCorpusV1, ProposalBatchV1]:
     name = "平安测试（2026）两全保险"
     entry = _entry(
         material_id="m-001",
@@ -74,7 +83,9 @@ def _capture(version=None, filing="REG001"):
     return corpus, _proposal_batch(corpus, (receipt,), (proposal,))
 
 
-def test_title_year_overlay_preserves_captured_model_and_enters_existing_resolver(catalog):
+def test_title_year_overlay_preserves_captured_model_and_enters_existing_resolver(
+    catalog: SchemaPackCatalogV1,
+) -> None:
     module = _module()
     corpus, captured = _capture()
     original = batch_json_bytes_830_g3(captured)
@@ -111,7 +122,7 @@ def test_title_year_overlay_preserves_captured_model_and_enters_existing_resolve
     assert resolution.decisions[0].children[0].classification.primary_label == "endowment_insurance"
 
 
-def test_known_classification_does_not_invent_missing_filing(catalog):
+def test_known_classification_does_not_invent_missing_filing(catalog: SchemaPackCatalogV1) -> None:
     module = _module()
     corpus, captured = _capture(filing=None)
     overlay, derived = module.build_title_routing_overlay(
@@ -134,7 +145,7 @@ def test_known_classification_does_not_invent_missing_filing(catalog):
     assert "VERSION_UNRESOLVED" in result.decisions[0].children[0].reason_codes
 
 
-def test_tampered_overlay_is_rejected(catalog):
+def test_tampered_overlay_is_rejected(catalog: SchemaPackCatalogV1) -> None:
     module = _module()
     corpus, captured = _capture()
     overlay, _ = module.build_title_routing_overlay(
@@ -153,7 +164,9 @@ def test_tampered_overlay_is_rejected(catalog):
         )
 
 
-def test_existing_conflicting_version_is_preserved_and_cannot_auto_resolve(catalog):
+def test_existing_conflicting_version_is_preserved_and_cannot_auto_resolve(
+    catalog: SchemaPackCatalogV1,
+) -> None:
     module = _module()
     corpus, captured = _capture(version="2025")
     overlay, derived = module.build_title_routing_overlay(
@@ -175,7 +188,9 @@ def test_existing_conflicting_version_is_preserved_and_cannot_auto_resolve(catal
         )
 
 
-def test_known_title_without_explicit_year_keeps_version_separate(catalog):
+def test_known_title_without_explicit_year_keeps_version_separate(
+    catalog: SchemaPackCatalogV1,
+) -> None:
     route = _module().route_formal_title("平安测试年金保险", catalog=catalog)
     assert route.classification_status == "KNOWN"
     assert route.title_year is None
@@ -190,14 +205,18 @@ def test_known_title_without_explicit_year_keeps_version_separate(catalog):
         "甲（2026）年金保险+乙（2026）两全保险",
     ),
 )
-def test_obvious_multiple_product_titles_do_not_select_first_keyword(catalog, title):
+def test_obvious_multiple_product_titles_do_not_select_first_keyword(
+    catalog: SchemaPackCatalogV1, title: str
+) -> None:
     route = _module().route_formal_title(title, catalog=catalog)
     assert route.classification_status == "AMBIGUOUS_TITLE"
     assert route.primary_label is None
     assert route.schema_pack_id is None
 
 
-def test_existing_specific_keyword_overlap_keeps_one_catalog_line(catalog):
+def test_existing_specific_keyword_overlap_keeps_one_catalog_line(
+    catalog: SchemaPackCatalogV1,
+) -> None:
     module = _module()
     for title, label in (
         ("甲医疗意外保险", "accident_medical_insurance"),
@@ -209,7 +228,9 @@ def test_existing_specific_keyword_overlap_keeps_one_catalog_line(catalog):
         assert route.primary_label == label
 
 
-def test_title_line_mapping_matches_all_eleven_actual_catalog_entries(catalog):
+def test_title_line_mapping_matches_all_eleven_actual_catalog_entries(
+    catalog: SchemaPackCatalogV1,
+) -> None:
     module = _module()
     titles = (
         "甲医疗保险",

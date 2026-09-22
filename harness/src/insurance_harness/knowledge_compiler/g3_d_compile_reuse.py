@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Self
+from typing import Literal, Self, TypedDict
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -52,7 +52,21 @@ class _CompletedCompile:
     terminal_sha256: str
 
 
-def _load_successful_compile(origin_admission_digest, *, admission_root=None, ledger_root=None):
+class _CompileReusePayload(TypedDict):
+    contract: Literal["g3-d-compile-result-reuse.830.v1"]
+    origin_admission_digest: str
+    origin_terminal_sha256: str
+    request_sha256: str
+    model_result_sha256: str
+    final_result_sha256: str
+
+
+def _load_successful_compile(
+    origin_admission_digest: str,
+    *,
+    admission_root: str | Path | None = None,
+    ledger_root: str | Path | None = None,
+) -> _CompletedCompile:
     plan, request = _load_origin(origin_admission_digest, admission_root)
     root = Path(ledger_root if ledger_root is not None else gateway.G3_LEDGER_ROOT)
     chain = root / "chains" / plan.chain_manifest_hash
@@ -108,8 +122,8 @@ def _load_successful_compile(origin_admission_digest, *, admission_root=None, le
     return _CompletedCompile(request, model, final, terminal.receipt_sha256)
 
 
-def _payload(origin_admission_digest, completed):
-    return dict(
+def _payload(origin_admission_digest: str, completed: _CompletedCompile) -> _CompileReusePayload:
+    return _CompileReusePayload(
         contract="g3-d-compile-result-reuse.830.v1",
         origin_admission_digest=origin_admission_digest,
         origin_terminal_sha256=completed.terminal_sha256,
@@ -123,7 +137,12 @@ def _payload(origin_admission_digest, completed):
     )
 
 
-def build_compile_result_reuse(*, origin_admission_digest, admission_root=None, ledger_root=None):
+def build_compile_result_reuse(
+    *,
+    origin_admission_digest: str,
+    admission_root: str | Path | None = None,
+    ledger_root: str | Path | None = None,
+) -> G3CompileResultReuseV1:
     completed = _load_successful_compile(
         origin_admission_digest,
         admission_root=admission_root,
@@ -138,7 +157,13 @@ def build_compile_result_reuse(*, origin_admission_digest, admission_root=None, 
     )
 
 
-def validate_compile_reuse_binding(receipt, *, request, model_result, final_result):
+def validate_compile_reuse_binding(
+    receipt: object,
+    *,
+    request: BatchConceptCompileRequest830G3V1,
+    model_result: CompileResult,
+    final_result: CompileResult,
+) -> G3CompileResultReuseV1:
     receipt = G3CompileResultReuseV1.model_validate(receipt)
     supplied = _CompletedCompile(
         request, model_result, final_result, receipt.origin_terminal_sha256
@@ -151,14 +176,14 @@ def validate_compile_reuse_binding(receipt, *, request, model_result, final_resu
 
 
 def validate_compile_result_reuse(
-    receipt,
+    receipt: object,
     *,
-    request,
-    model_result,
-    final_result,
-    admission_root=None,
-    ledger_root=None,
-):
+    request: BatchConceptCompileRequest830G3V1,
+    model_result: CompileResult,
+    final_result: CompileResult,
+    admission_root: str | Path | None = None,
+    ledger_root: str | Path | None = None,
+) -> None:
     receipt = validate_compile_reuse_binding(
         receipt,
         request=request,

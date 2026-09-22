@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from datetime import UTC
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     AwareDatetime,
@@ -116,7 +117,12 @@ class ProductModelSettings(BaseModel):
             raise ValueError("configured Gemini identity is not approved") from None
         return self
 
-    def model_copy(self, *, update=None, deep: bool = False) -> Self:
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, Any] | None = None,
+        deep: bool = False,
+    ) -> Self:
         values = self.model_dump(mode="python")
         values["api_key"] = self.api_key
         if update:

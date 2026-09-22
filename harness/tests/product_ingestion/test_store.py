@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import typing
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +17,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -135,7 +136,7 @@ def _identity(api: SimpleNamespace, *, source_sha: str = "1" * 64, task_sha: str
     )
 
 
-def _task(api: SimpleNamespace, field_key: str, *, source_sha: str = "1" * 64) -> Any:
+def _task(api: Any, field_key: str, *, source_sha: str = "1" * 64) -> Any:
     identity = api.FieldCacheIdentity(
         **{
             **_identity(api, source_sha=source_sha).model_dump(exclude={"field_key"}),
@@ -1297,7 +1298,7 @@ async def test_worker_loop_commits_prepared_window_once_without_double_completio
             outcomes=(_verified(api, task, raw_ref=call.raw_ref),),
         )
         assert counts.success_count == 1
-        return result
+        return typing.cast(HandlerResult, result)
 
     registry.register("product_extraction_window", handler)
     lifecycle = Lifecycle()
@@ -1306,7 +1307,7 @@ async def test_worker_loop_commits_prepared_window_once_without_double_completio
         store=jobs,
         registry=registry,
         settings=ShellSettings(
-            postgres_dsn="postgresql://unused/test",
+            postgres_dsn=SecretStr("postgresql://unused/test"),
             heartbeat_interval_seconds=30,
             lease_seconds=300,
         ),
@@ -1383,7 +1384,9 @@ def test_recent_runs_and_rotating_keyset_scan_have_distinct_ordering(
 
 
 @pytest.mark.parametrize("kind", ["stage", "window", "root"])
-def test_admission_commit_never_exposes_an_unbound_job(api, factory, monkeypatch, kind):
+def test_admission_commit_never_exposes_an_unbound_job(
+    api: typing.Any, factory: typing.Any, monkeypatch: pytest.MonkeyPatch, kind: typing.Any
+) -> None:
     from insurance_harness.product_ingestion.tables import ProductRun, ProductStage, ProductWindow
 
     jobs = _job_store(factory)
@@ -1392,7 +1395,7 @@ def test_admission_commit_never_exposes_an_unbound_job(api, factory, monkeypatch
     run = store.create_run(scope=scope, idempotency_key="atomic-admission")
     original_enqueue = jobs.enqueue
 
-    def crash_after_commit(**kwargs):
+    def crash_after_commit(**kwargs: typing.Any) -> None:
         result = original_enqueue(**kwargs)
         with factory() as session:
             if kind == "root":

@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+import typing
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,7 +36,7 @@ CONFIRMATION = ROOT / "docs/insurance-kb/evidence/830-g3/profile-user-confirmati
 
 
 @lru_cache(maxsize=1)
-def candidates():
+def candidates() -> tuple[typing.Any, ...]:
     parent = compiler.validate_batch_candidate((FIXTURES / "candidate.json").read_bytes())
     child = compiler.validate_batch_candidate(
         (FIXTURES / "platform-incremental-candidate.json").read_bytes()
@@ -43,7 +44,7 @@ def candidates():
     return parent, child
 
 
-def scope_for(parent):
+def scope_for(parent: typing.Any) -> ProductScope:
     base = parent.request.base_request
     return ProductScope(
         tenant_id=str(base.tenant_id),
@@ -53,7 +54,7 @@ def scope_for(parent):
     )
 
 
-def base_body(parent, child):
+def base_body(parent: typing.Any, child: typing.Any) -> dict[str, typing.Any]:
     binding = child.request.published_base
     assert binding is not None
     base = parent.request.base_request
@@ -109,7 +110,7 @@ def base_body(parent, child):
 
 
 @lru_cache(maxsize=1)
-def platform_request():
+def platform_request() -> tuple[typing.Any, ...]:
     parent, child = candidates()
     scope = scope_for(parent)
     body = base_body(parent, child)
@@ -149,7 +150,7 @@ def platform_request():
     return parent, request
 
 
-def test_existing_snapshot_is_derived_from_real_signed_parent_closure():
+def test_existing_snapshot_is_derived_from_real_signed_parent_closure() -> None:
     parent, child = candidates()
     scope = scope_for(parent)
     body = base_body(parent, child)
@@ -187,7 +188,7 @@ def test_existing_snapshot_is_derived_from_real_signed_parent_closure():
         )
 
 
-def test_compile_request_replays_only_current_c_and_carries_exact_parent():
+def test_compile_request_replays_only_current_c_and_carries_exact_parent() -> None:
     parent, request = platform_request()
 
     assert request.published_base is not None
@@ -199,7 +200,9 @@ def test_compile_request_replays_only_current_c_and_carries_exact_parent():
     compiler.BatchConceptCompileRequest830G3V1.model_validate(request)
 
 
-def attempt(task, *, outcome, result=None, reason=None):
+def attempt(
+    task: typing.Any, *, outcome: typing.Any, result: typing.Any = None, reason: typing.Any = None
+) -> SimpleNamespace:
     return SimpleNamespace(
         entity_id=task.entity_id,
         field_key=task.field_key,
@@ -211,7 +214,7 @@ def attempt(task, *, outcome, result=None, reason=None):
     )
 
 
-def test_field_projection_revalidates_success_and_maps_ordinary_failure_to_unknown():
+def test_field_projection_revalidates_success_and_maps_ordinary_failure_to_unknown() -> None:
     _, request = platform_request()
     tasks = adapt_catalog_field_tasks(request)
     assert len(tasks) == 1
@@ -270,7 +273,7 @@ def test_field_projection_revalidates_success_and_maps_ordinary_failure_to_unkno
         )
 
 
-def test_candidate_uses_rule_structural_review_and_retains_parent_fields():
+def test_candidate_uses_rule_structural_review_and_retains_parent_fields() -> None:
     parent, request = platform_request()
     task = adapt_catalog_field_tasks(request)[0]
     delta = project_field_attempts(
@@ -300,7 +303,7 @@ def test_candidate_uses_rule_structural_review_and_retains_parent_fields():
 
 
 @lru_cache(maxsize=1)
-def discovery_delta():
+def discovery_delta() -> tuple[typing.Any, ...]:
 
     from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
         AuditDisposition,
@@ -363,19 +366,25 @@ def discovery_delta():
     return request, result, page
 
 
-def test_new_free_page_cannot_use_field_only_rule_review():
+def test_new_free_page_cannot_use_field_only_rule_review() -> None:
     request, delta, _ = discovery_delta()
     with pytest.raises(ValueError, match="INDEPENDENT_DISCOVERY_REVIEW_REQUIRED"):
         assemble_platform_candidate(request=request, delta=delta, run_id="new-page-no-review")
 
 
 @lru_cache(maxsize=1)
-def composed_discovery_case():
+def composed_discovery_case() -> tuple[typing.Any, ...]:
     request, delta, page = discovery_delta()
     return request, delta, page, compiler.compose_batch_output(request, delta)
 
 
-def independent_discovery_review(*, total=100, decision="PASS", drift=None, missing_score=False):
+def independent_discovery_review(
+    *,
+    total: typing.Any = 100,
+    decision: typing.Any = "PASS",
+    drift: typing.Any = None,
+    missing_score: typing.Any = False,
+) -> ReviewResult:
     request, _, page, output = composed_discovery_case()
     # Explicit review fixture inputs, never inferred from source length/confidence.
     values = [25, 20, 20, 15, 10, 10]
@@ -430,7 +439,7 @@ def independent_discovery_review(*, total=100, decision="PASS", drift=None, miss
     )
 
 
-def test_accepted_new_page_retains_exact_independent_review_and_existing_members():
+def test_accepted_new_page_retains_exact_independent_review_and_existing_members() -> None:
     request, delta, page, composed = composed_discovery_case()
     review = independent_discovery_review()
     candidate = assemble_platform_candidate(
@@ -469,7 +478,9 @@ def test_accepted_new_page_retains_exact_independent_review_and_existing_members
         ("context", "EXECUTION_CONTEXT_MISMATCH"),
     ],
 )
-def test_new_page_rejects_stale_independent_review_binding(drift, reason):
+def test_new_page_rejects_stale_independent_review_binding(
+    drift: typing.Any, reason: typing.Any
+) -> None:
     request, delta, _, _ = composed_discovery_case()
     review = independent_discovery_review(drift=drift)
     # These execution records have valid raw integrity; only the requested binding is stale.
@@ -492,11 +503,11 @@ def test_new_page_rejects_stale_independent_review_binding(drift, reason):
     ],
 )
 def test_new_page_missing_low_or_rejected_review_cannot_form_candidate(
-    missing_score,
-    total,
-    decision,
-    reason,
-):
+    missing_score: typing.Any,
+    total: typing.Any,
+    decision: typing.Any,
+    reason: typing.Any,
+) -> None:
     request, delta, _, _ = composed_discovery_case()
     review = independent_discovery_review(
         total=total,
@@ -513,7 +524,7 @@ def test_new_page_missing_low_or_rejected_review_cannot_form_candidate(
 
 
 @pytest.mark.parametrize("total", [60, 79])
-def test_new_page_midrange_score_is_pending_not_automatic_ready(total):
+def test_new_page_midrange_score_is_pending_not_automatic_ready(total: typing.Any) -> None:
     request, delta, page, _ = composed_discovery_case()
     review = independent_discovery_review(total=total)
     candidate = assemble_platform_candidate(
@@ -528,7 +539,7 @@ def test_new_page_midrange_score_is_pending_not_automatic_ready(total):
     assert candidate.review_result == review
 
 
-def test_go_published_null_collections_preserve_exact_parent_and_request_hash():
+def test_go_published_null_collections_preserve_exact_parent_and_request_hash() -> None:
     parent, expected = platform_request()
     _, child = candidates()
     body = json.loads(
@@ -609,12 +620,15 @@ def test_go_published_null_collections_preserve_exact_parent_and_request_hash():
         ),
     ],
 )
-def test_null_collection_adapter_never_defaults_scalar_or_required_evidence(kind, row, model):
+def test_null_collection_adapter_never_defaults_scalar_or_required_evidence(
+    kind: typing.Any, row: typing.Any, model: typing.Any
+) -> None:
     from insurance_harness.knowledge_compiler import concept_free_wiki_830_g2 as contract
     from insurance_harness.product_ingestion.compilation import published_compile_members
 
     original = copy.deepcopy(row)
     projected = published_compile_members({kind: [row]}, kind)[0]
+    assert isinstance(projected, dict)
     assert row == original
     for key in ("value", "unknown_reason", "title", "body"):
         if key in row:
@@ -625,7 +639,7 @@ def test_null_collection_adapter_never_defaults_scalar_or_required_evidence(kind
         getattr(contract, model).model_validate(projected)
 
 
-def test_null_collection_adapter_rejects_wrong_collection_type_on_valid_parent_field():
+def test_null_collection_adapter_rejects_wrong_collection_type_on_valid_parent_field() -> None:
     from pydantic import ValidationError
 
     from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import FieldAssertion
@@ -635,7 +649,9 @@ def test_null_collection_adapter_rejects_wrong_collection_type_on_valid_parent_f
     row = parent.compile_result.output.fields[0].model_dump(mode="json")
     FieldAssertion.model_validate(row)
     row["conditions"] = "bad"
-    actual = published_compile_members({"fields": [row]}, "fields")[0]
+    actual = typing.cast(
+        dict[str, typing.Any], published_compile_members({"fields": [row]}, "fields")[0]
+    )
     assert actual["conditions"] == "bad"
     with pytest.raises(ValidationError) as error:
         FieldAssertion.model_validate(actual)

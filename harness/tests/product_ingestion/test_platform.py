@@ -4,6 +4,7 @@ import base64
 import hashlib
 import importlib
 import json
+import typing
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -11,7 +12,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from insurance_harness.product_ingestion.models import ProductScope
 
 
-def canonical(value):
+def canonical(value: typing.Any) -> bytes:
     return (
         json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         .replace("\u2028", "\\u2028")
@@ -20,11 +21,11 @@ def canonical(value):
     )
 
 
-def sha(raw):
+def sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def module():
+def module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.platform")
     except ModuleNotFoundError:
@@ -32,7 +33,7 @@ def module():
 
 
 @pytest.fixture
-def snapshot():
+def snapshot() -> typing.Any:
     key = Ed25519PrivateKey.generate()
     scope = ProductScope(
         tenant_id="1", space_id="space", raw_knowledge_base_id="raw", wiki_knowledge_base_id="wiki"
@@ -106,7 +107,7 @@ def snapshot():
         ],
     }
 
-    def sign(value=body):
+    def sign(value: typing.Any = body) -> typing.Any:
         value = {k: v for k, v in value.items() if k != "snapshot_sha256"}
         digest = sha(value["contract"].encode() + b"\0" + canonical(value))
         domain = "weknora.g3-platform-source-snapshot.830.v1"
@@ -129,7 +130,7 @@ def snapshot():
     return scope, body, sign, {"fixture-key": key.public_key()}
 
 
-def decode(snapshot, raw=None, **kwargs):
+def decode(snapshot: typing.Any, raw: bytes | None = None, **kwargs: typing.Any) -> typing.Any:
     scope, _body, sign, keys = snapshot
     return module().decode_source_snapshot(
         raw or sign(),
@@ -141,7 +142,9 @@ def decode(snapshot, raw=None, **kwargs):
     )
 
 
-def test_signed_platform_source_keeps_native_original_chunks_and_exact_first_page_ranges(snapshot):
+def test_signed_platform_source_keeps_native_original_chunks_and_exact_first_page_ranges(
+    snapshot: typing.Any,
+) -> None:
     result = decode(snapshot)
     assert len(result.blocks) == 1
     assert result.unresolved_chunk_ids == ("unmapped",)
@@ -153,7 +156,7 @@ def test_signed_platform_source_keeps_native_original_chunks_and_exact_first_pag
     assert material["first_page_ranges"] == result.first_page_ranges
 
 
-def test_tampered_or_wrong_scope_snapshot_is_refused(snapshot):
+def test_tampered_or_wrong_scope_snapshot_is_refused(snapshot: typing.Any) -> None:
     scope, body, sign, keys = snapshot
     altered = json.loads(sign())
     altered["snapshot"]["chunks"][0]["content"] += "伪造"
@@ -168,7 +171,9 @@ def test_tampered_or_wrong_scope_snapshot_is_refused(snapshot):
         )
 
 
-def test_unknown_signer_and_signed_invalid_chunk_coordinates_fail_closed(snapshot):
+def test_unknown_signer_and_signed_invalid_chunk_coordinates_fail_closed(
+    snapshot: typing.Any,
+) -> None:
     scope, body, sign, _keys = snapshot
     with pytest.raises(ValueError):
         module().decode_source_snapshot(
@@ -180,7 +185,7 @@ def test_unknown_signer_and_signed_invalid_chunk_coordinates_fail_closed(snapsho
         decode(snapshot, sign(altered))
 
 
-def test_signed_chunk_offsets_must_address_the_same_markdown_text(snapshot):
+def test_signed_chunk_offsets_must_address_the_same_markdown_text(snapshot: typing.Any) -> None:
     _scope, body, sign, _keys = snapshot
     changed = json.loads(json.dumps(body))
     changed["markdown"] = "替" * len(changed["markdown"])
@@ -188,7 +193,7 @@ def test_signed_chunk_offsets_must_address_the_same_markdown_text(snapshot):
         decode(snapshot, sign(changed))
 
 
-def test_signed_processing_receipt_is_checked_in_source_decoder(snapshot):
+def test_signed_processing_receipt_is_checked_in_source_decoder(snapshot: typing.Any) -> None:
     from tests.product_ingestion.test_processing_receipts import receipt, sealed
 
     _scope, body, sign, _keys = snapshot

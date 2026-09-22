@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
+from collections.abc import Iterable, Sequence
+from typing import Any, Protocol, cast
 
 from insurance_harness.jobs import NonRetryableJobError
 from insurance_harness.product_ingestion.processing_receipts import (
@@ -12,12 +14,19 @@ from insurance_harness.product_ingestion.processing_receipts import (
     validate_processing_receipt,
 )
 
+type Receipt = dict[str, Any]
 
-def attempt_identity(receipt):
+
+class AuditRecord(Protocol):
+    payload: bytes
+    payload_sha256: str
+
+
+def attempt_identity(receipt: Receipt) -> tuple[str, int, int]:
     return receipt["knowledge_id"], receipt["parse_attempt"], receipt.get("processing_attempt", 0)
 
 
-def _call_extends(previous, current):
+def _call_extends(previous: Receipt, current: Receipt | None) -> bool:
     if previous == current:
         return True
     mutable = {"state", "outcome", "http_status", "finished_at_unix_ms", "duration_ms"}
@@ -31,7 +40,7 @@ def _call_extends(previous, current):
     )
 
 
-def extends(previous, current):
+def extends(previous: Receipt, current: Receipt) -> bool:
     """Previously observed terminal facts must survive a progress observation."""
     if attempt_identity(previous) != attempt_identity(current):
         return False
@@ -53,7 +62,7 @@ def extends(previous, current):
     for old, new in zip(previous["phases"], current["phases"], strict=True):
         # Occurrence is the response's sorted ordinal, not a durable span ID.
         # A previously running earlier span may finish after a later sibling.
-        def facts(rows):
+        def facts(rows: Sequence[Receipt]) -> Counter[str]:
             return Counter(
                 json.dumps({k: v for k, v in row.items() if k != "occurrence"}, sort_keys=True)
                 for row in rows
@@ -64,9 +73,9 @@ def extends(previous, current):
     return True
 
 
-def latest_attempts(receipts):
+def latest_attempts(receipts: Iterable[Receipt]) -> tuple[Receipt, ...]:
     """Collapse repeated observations, rejecting conflicting terminal facts."""
-    selected = {}
+    selected: dict[tuple[str, int, int], Receipt] = {}
     for receipt in receipts:
         key = attempt_identity(receipt)
         previous = selected.get(key)
@@ -78,9 +87,9 @@ def latest_attempts(receipts):
     return tuple(selected[key] for key in sorted(selected) if key[2] > 0 or key[:2] not in known)
 
 
-def read_audit(records):
+def read_audit(records: Iterable[AuditRecord]) -> tuple[Receipt, ...]:
     """Decode stored audit snapshots independently of the final stage fence."""
-    values = []
+    values: list[Receipt] = []
     try:
         for saved in records:
             digest = hashlib.sha256(saved.payload).hexdigest()
@@ -97,9 +106,12 @@ def read_audit(records):
     return tuple(values)
 
 
-def _account_calls(rows):
+def _account_calls(
+    rows: Iterable[tuple[Receipt, bool]],
+) -> tuple[int, int, int, bool, bool]:
     """Aggregate dispatches without changing the receipts used by material views."""
-    calls, owners = {}, {}
+    calls: dict[str, Receipt] = {}
+    owners: dict[str, bool] = {}
     complete = reused_complete = True
     for receipt, reused in rows:
         if receipt["availability"] != "AVAILABLE":
@@ -128,22 +140,33 @@ def _account_calls(rows):
     return attempts, reused_attempts, interrupted, complete, reused_complete
 
 
-def _entry(receipt, reused):
-    return processing_summary([(receipt["knowledge_id"], receipt, reused)])["materials"][0]
+def _entry(receipt: Receipt, reused: bool) -> Receipt:
+    return cast(
+        Receipt,
+        processing_summary([(receipt["knowledge_id"], receipt, reused)])["materials"][0],
+    )
 
 
-def source_accounting(summary, receipts):
+def source_accounting(
+    summary: Receipt | None,
+    receipts: Sequence[Receipt],
+) -> Receipt | None:
     """Read view of latest facts; persisted v1 summary and receipts stay unchanged."""
     latest = latest_attempts(receipts)
     if summary is None and not latest:
         return None
-    by_sha = {row["receipt_sha256"]: attempt_identity(row) for row in receipts}
+    by_sha: dict[str, tuple[str, int, int]] = {
+        row["receipt_sha256"]: attempt_identity(row) for row in receipts
+    }
     by_attempt = {attempt_identity(row): row for row in latest}
-    represented, unknown = set(), set()
-    rows, entries, opaque = [], [], []
+    represented: set[tuple[str, int, int]] = set()
+    unknown: set[str] = set()
+    rows: list[tuple[Receipt, bool]] = []
+    entries: list[Receipt] = []
+    opaque: list[Receipt] = []
     for entry in summary["materials"] if summary is not None else []:
         key = by_sha.get(entry.get("receipt_sha256"))
-        receipt = by_attempt.get(key)
+        receipt = by_attempt.get(key) if key is not None else None
         if receipt is None:
             # A legacy summary without exact audit binding remains authoritative.
             # Do not guess an attempt or combine an overlapping newer journal.
@@ -151,6 +174,7 @@ def source_accounting(summary, receipts):
             opaque.append(entry)
             entries.append(entry)
         else:
+            assert key is not None
             represented.add(key)
             rows.append((receipt, entry["reused"]))
             entries.append(_entry(receipt, entry["reused"]))

@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from insurance_harness.jobs import JobState, JobStore, OutboxDispatcher
+from insurance_harness.jobs import JobSnapshot, JobState, JobStore, OutboxDispatcher
 from insurance_harness.jobs.errors import SpaceScopeError
 from insurance_harness.jobs.models import ErrorClass, OutboxEventView
 from insurance_harness.product_ingestion.models import ProductRunState, ProductScope
@@ -222,7 +222,7 @@ def register_finalizer(
     if not scopes or any(key != scope.space_id for key, scope in scopes.items()):
         raise ValueError("product finalizer requires exact configured scopes")
 
-    async def finalize(job) -> HandlerResult:
+    async def finalize(job: JobSnapshot) -> HandlerResult:
         scope = scopes.get(job.space_id)
         if scope is None:
             raise SpaceScopeError()

@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from insurance_harness.model_policy import ModelIdentity
 from insurance_harness.model_policy import g3_bounded_gateway as gateway
 from insurance_harness.run_admission.g3_models import (
+    G3BoundedAdmissionPlanV1,
     G3BoundedApprovalEnvelopeV1,
     G3ModelProcessingAuthorizationEnvelopeV1,
     G3ProviderUsageV1,
@@ -19,7 +22,7 @@ from insurance_harness.run_admission.g3_models import (
     canonical_g3_hash,
 )
 
-from .batch_canonical_830_g3 import batch_sha256_830_g3
+from .batch_canonical_830_g3 import batch_json_bytes_830_g3, batch_sha256_830_g3
 from .batch_concept_compile_830_g3 import (
     BatchConceptCompileRequest830G3V1,
     Hash,
@@ -27,10 +30,14 @@ from .batch_concept_compile_830_g3 import (
     compile_request_hash_g3,
     compose_batch_output,
 )
-from .concept_compile_830_g2 import CompileResult
+from .concept_compile_830_g2 import CompileOutput, CompileResult, ReviewOutput
+from .concept_free_wiki_830_g2 import SourceBlock
 from .g3_d_projection_reuse import _read
 
 CONTRACT = "g3-d-review-result-reuse.830.v1"
+
+if TYPE_CHECKING:
+    from .g3_bounded_model_execution import G3DReviewWindow, G3DReviewWindowContext
 
 
 class _Frozen(BaseModel):
@@ -80,14 +87,19 @@ class G3ReviewResultReuseV1(_Frozen):
 
 @dataclass(frozen=True)
 class _OriginReview:
-    plan: object
+    plan: G3BoundedAdmissionPlanV1
     request: BatchConceptCompileRequest830G3V1
-    output: object
+    output: CompileOutput
     terminal: G3StageTerminalReceiptV1
-    records: dict
+    records: dict[str, gateway.G3RecordedCall]
 
 
-def _signed_input(root, plan, contract, model):
+def _signed_input[ModelT: BaseModel](
+    root: Path,
+    plan: G3BoundedAdmissionPlanV1,
+    contract: str,
+    model: type[ModelT],
+) -> ModelT:
     refs = [ref for ref in plan.eligibility_lock.input_artifacts if ref.contract == contract]
     if len(refs) != 1:
         raise ValueError("review reuse original input reference ambiguous")
@@ -107,7 +119,12 @@ def _signed_input(root, plan, contract, model):
     return result
 
 
-def _load_origin_review(origin_admission_digest, *, admission_root=None, ledger_root=None):
+def _load_origin_review(
+    origin_admission_digest: str,
+    *,
+    admission_root: str | Path | None = None,
+    ledger_root: str | Path | None = None,
+) -> _OriginReview:
     from insurance_harness.run_admission import evaluator
     from insurance_harness.run_admission.g3_trust_policy import (
         load_g3_root_trust_policy,
@@ -184,7 +201,12 @@ def _load_origin_review(origin_admission_digest, *, admission_root=None, ledger_
     return _OriginReview(plan, request, final.output, terminal, records)
 
 
-def local_review_context(request, context, *, _sources=None):
+def local_review_context(
+    request: BatchConceptCompileRequest830G3V1,
+    context: G3DReviewWindowContext,
+    *,
+    _sources: Mapping[str, SourceBlock] | None = None,
+) -> dict[str, Any]:
     """Normalize only declared global bindings and request-derived opaque references.
 
     Sources use full SourceBlock content identity; selected snippets and all candidate,
@@ -192,7 +214,7 @@ def local_review_context(request, context, *, _sources=None):
     """
     from . import g3_bounded_model_execution as runtime
 
-    value = runtime._unique_json_bytes(runtime.batch_json_bytes_830_g3(context))
+    value = cast(dict[str, Any], runtime._unique_json_bytes(batch_json_bytes_830_g3(context)))
     if value.get("contract") != "g3-d-review-bounded-window-context.830.v2":
         raise ValueError("review reuse requires bounded local context")
     if (
@@ -242,13 +264,19 @@ def local_review_context(request, context, *, _sources=None):
     return value
 
 
-def _local_hash(request, context, sources=None):
+def _local_hash(
+    request: BatchConceptCompileRequest830G3V1,
+    context: G3DReviewWindowContext,
+    sources: Mapping[str, SourceBlock] | None = None,
+) -> str:
     return batch_sha256_830_g3(
         "g3-local-review-context.830.v1", local_review_context(request, context, _sources=sources)
     )
 
 
-def _contexts(request, output):
+def _contexts(
+    request: BatchConceptCompileRequest830G3V1, output: CompileOutput
+) -> tuple[tuple[G3DReviewWindow, G3DReviewWindowContext], ...]:
     from . import g3_bounded_model_execution as runtime
 
     windows = runtime.derive_gemini_d_review_windows(request, output)
@@ -260,13 +288,13 @@ def _contexts(request, output):
 
 
 def _derive(
-    origin_admission_digest,
-    origin,
-    current_request,
-    current_output,
-    origin_call_ids=None,
-    current_identity=None,
-):
+    origin_admission_digest: str,
+    origin: _OriginReview,
+    current_request: BatchConceptCompileRequest830G3V1,
+    current_output: CompileOutput,
+    origin_call_ids: Sequence[str] | None = None,
+    current_identity: ModelIdentity | None = None,
+) -> tuple[G3ReviewResultReuseV1, dict[str, ReviewOutput]]:
     from . import g3_bounded_model_execution as runtime
 
     current_sources = runtime._g3_d_source_index(current_request)[1]
@@ -275,7 +303,7 @@ def _derive(
         row["review_ref"]: row["member_id"]
         for row in runtime._g3_d_review_targets(origin.request, origin.output)
     }
-    current = {}
+    current: dict[str, G3DReviewWindow] = {}
     for window, context in _contexts(current_request, current_output):
         digest = _local_hash(current_request, context, current_sources)
         if digest in current:
@@ -289,9 +317,12 @@ def _derive(
     selected = tuple(calls) if origin_call_ids is None else tuple(origin_call_ids)
     if len(set(selected)) != len(selected) or not set(selected) <= calls.keys():
         raise ValueError("review reuse origin call selection is foreign or duplicated")
-    entries, outputs = [], {}
+    entries: list[G3ReviewReuseEntryV1] = []
+    outputs: dict[str, ReviewOutput] = {}
     for call_id in selected:
         call, record = calls[call_id], origin.records[call_id]
+        if call.window_id is None:
+            raise ValueError("review reuse call has no window")
         if current_identity is not None and call.identity != current_identity:
             raise ValueError("review reuse current model identity mismatch")
         if record.terminal.status != "SUCCESS":
@@ -311,7 +342,7 @@ def _derive(
             plan=origin.plan,
             call=call,
             system=prompt,
-            user=runtime.batch_json_bytes_830_g3(context).decode(),
+            user=batch_json_bytes_830_g3(context).decode(),
         )
         if record.request_bytes != expected_body:
             raise ValueError("review reuse original prompt/context no longer exact")
@@ -360,6 +391,9 @@ def _derive(
                 observed_usage=record.observed_usage,
             )
         )
+    origin_status = origin.terminal.status
+    if origin_status not in ("SUCCESS", "FAILED"):
+        raise ValueError("review reuse origin terminal status is invalid")
     payload = dict(
         contract=CONTRACT,
         current_request_sha256=current_request.request_sha256,
@@ -370,7 +404,7 @@ def _derive(
         origin_chain_manifest_hash=origin.plan.chain_manifest_hash,
         origin_parent_authorization_digest=origin.plan.parent_authorization_digest,
         origin_stage_terminal_sha256=origin.terminal.receipt_sha256,
-        origin_stage_status=origin.terminal.status,
+        origin_stage_status=origin_status,
         entries=tuple(entries),
     )
     return G3ReviewResultReuseV1.model_validate(
@@ -380,13 +414,13 @@ def _derive(
 
 def build_review_result_reuse(
     *,
-    origin_admission_digest,
-    current_request,
-    current_output,
-    origin_call_ids=None,
-    admission_root=None,
-    ledger_root=None,
-):
+    origin_admission_digest: str,
+    current_request: BatchConceptCompileRequest830G3V1,
+    current_output: CompileOutput,
+    origin_call_ids: Sequence[str] | None = None,
+    admission_root: str | Path | None = None,
+    ledger_root: str | Path | None = None,
+) -> G3ReviewResultReuseV1:
     origin = _load_origin_review(
         origin_admission_digest, admission_root=admission_root, ledger_root=ledger_root
     )
@@ -395,7 +429,7 @@ def build_review_result_reuse(
     )[0]
 
 
-def normalize_review_reuse(value):
+def normalize_review_reuse(value: object) -> tuple[G3ReviewResultReuseV1, ...]:
     items = value if isinstance(value, (tuple, list)) else (value,)
     result = tuple(G3ReviewResultReuseV1.model_validate(item) for item in items)
     if not result or len({row.receipt_sha256 for row in result}) != len(result):
@@ -403,12 +437,16 @@ def normalize_review_reuse(value):
     return result
 
 
-def derive_remaining_review_windows(request, output, reuse):
+def derive_remaining_review_windows(
+    request: BatchConceptCompileRequest830G3V1,
+    output: CompileOutput,
+    reuse: object,
+) -> tuple[G3DReviewWindow, ...]:
     from . import g3_bounded_model_execution as runtime
 
     windows = runtime.derive_gemini_d_review_windows(request, output)
     all_ids = {window["window_id"] for window in windows}
-    selected = []
+    selected: list[str] = []
     for manifest in normalize_review_reuse(reuse):
         if (
             manifest.current_request_sha256 != request.request_sha256
@@ -422,17 +460,17 @@ def derive_remaining_review_windows(request, output, reuse):
 
 
 def validate_review_result_reuse(
-    receipt,
+    receipt: object,
     *,
-    current_request,
-    current_output,
-    current_identity=None,
-    admission_root=None,
-    ledger_root=None,
-):
+    current_request: BatchConceptCompileRequest830G3V1,
+    current_output: CompileOutput,
+    current_identity: ModelIdentity | None = None,
+    admission_root: str | Path | None = None,
+    ledger_root: str | Path | None = None,
+) -> dict[str, ReviewOutput]:
     manifests = normalize_review_reuse(receipt)
     derive_remaining_review_windows(current_request, current_output, manifests)
-    outputs = {}
+    outputs: dict[str, ReviewOutput] = {}
     for manifest in manifests:
         origin = _load_origin_review(
             manifest.origin_admission_digest, admission_root=admission_root, ledger_root=ledger_root
@@ -451,7 +489,13 @@ def validate_review_result_reuse(
     return outputs
 
 
-def aggregate_reused_review_outputs(request, output, *, new_outputs, reused):
+def aggregate_reused_review_outputs(
+    request: BatchConceptCompileRequest830G3V1,
+    output: CompileOutput,
+    *,
+    new_outputs: Sequence[ReviewOutput],
+    reused: Mapping[str, ReviewOutput],
+) -> ReviewOutput:
     from . import g3_bounded_model_execution as runtime
 
     windows = runtime.derive_gemini_d_review_windows(request, output)

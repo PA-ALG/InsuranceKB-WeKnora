@@ -1,5 +1,7 @@
 """Compiler navigation carry is part of immutable manifest construction."""
 
+import typing
+
 import pytest
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
@@ -8,7 +10,7 @@ from insurance_harness.product_ingestion.compilation import published_navigation
 from tests.product_ingestion.test_pipeline_runtime import _base_snapshot_with_navigation
 
 
-def test_assembly_preserves_typed_navigation_and_unchanged_default_wire():
+def test_assembly_preserves_typed_navigation_and_unchanged_default_wire() -> None:
     _, parent = _base_snapshot_with_navigation()
     before = batch_json_bytes_830_g3(parent)
     projection = {
@@ -45,7 +47,7 @@ def test_assembly_preserves_typed_navigation_and_unchanged_default_wire():
     assert batch_json_bytes_830_g3(parent) == before
 
 
-def test_assembly_rejects_navigation_for_an_absent_entity():
+def test_assembly_rejects_navigation_for_an_absent_entity() -> None:
     _, parent = _base_snapshot_with_navigation()
     original = parent.navigation_assignments[0]
     data = original.model_dump(exclude={"assignment_sha256"})
@@ -64,8 +66,13 @@ def test_assembly_rejects_navigation_for_an_absent_entity():
         )
 
 
-def test_empty_published_navigation_accepts_go_null_and_omitted_collection():
-    for projection in ({}, {"navigation_assignments": None}, {"navigation_assignments": []}):
+def test_empty_published_navigation_accepts_go_null_and_omitted_collection() -> None:
+    projections: tuple[dict[str, typing.Any], ...] = (
+        {},
+        {"navigation_assignments": None},
+        {"navigation_assignments": []},
+    )
+    for projection in projections:
         assert published_navigation_assignments({"published_projection": projection}) == ()
     with pytest.raises(ValueError):
         published_navigation_assignments({"published_projection": {"navigation_assignments": [{}]}})

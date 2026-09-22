@@ -2,16 +2,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import typing
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
-from pydantic import SecretStr, ValidationError
+from pydantic import HttpUrl, SecretStr, ValidationError
 
 from insurance_harness.db.base import Base, make_engine, make_session_factory
 from insurance_harness.jobs import ClaimedJob, ErrorClass, JobFailure, JobRuntimeConfig, JobStore
 from insurance_harness.product_ingestion import artifact_tables, tables  # noqa: F401
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.model_execution import ConfiguredModelExecutor
+from insurance_harness.product_ingestion.model_settings import (
+    ModelTemplatePolicy,
+    ProductModelSettings,
+)
 from insurance_harness.product_ingestion.models import ProductScope
 from insurance_harness.product_ingestion.store import ProductIngestionStore
 
@@ -19,15 +27,16 @@ PROMPT = b"Return the approved classification JSON only."
 CONTENT = b'{"materials":["source-a"]}'
 
 
-def configured(scope, *, key="secret-a", expires_at=None, max_context_bytes=4096):
-    from insurance_harness.product_ingestion.model_settings import (
-        ModelTemplatePolicy,
-        ProductModelSettings,
-    )
-
+def configured(
+    scope: ProductScope,
+    *,
+    key: str = "secret-a",
+    expires_at: datetime | None = None,
+    max_context_bytes: int = 4096,
+) -> ProductModelSettings:
     return ProductModelSettings(
         scope=scope,
-        endpoint="https://gateway.invalid/v1/chat/completions",
+        endpoint=HttpUrl("https://gateway.invalid/v1/chat/completions"),
         api_key=SecretStr(key),
         model="gemini-3.7-flash-medium",
         policy_version="g3-user-gemini-gateway-v1",
@@ -60,7 +69,7 @@ def configured(scope, *, key="secret-a", expires_at=None, max_context_bytes=4096
 
 
 @pytest.fixture
-def runtime(tmp_path):
+def runtime(tmp_path: Path) -> Iterator[tuple[typing.Any, ...]]:
     engine = make_engine(f"sqlite:///{tmp_path}/model.db")
     Base.metadata.create_all(engine)
     factory = make_session_factory(engine)
@@ -100,20 +109,20 @@ def runtime(tmp_path):
     engine.dispose()
 
 
-def executor(settings_provider, handler):
-    from insurance_harness.product_ingestion.model_execution import ConfiguredModelExecutor
-
+def executor(settings_provider: typing.Any, handler: typing.Any) -> ConfiguredModelExecutor:
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=False)
     return ConfiguredModelExecutor(settings_provider=settings_provider, client=client)
 
 
 @pytest.mark.asyncio
-async def test_stage_call_persists_exact_request_receipts_usage_and_replays(runtime) -> None:
+async def test_stage_call_persists_exact_request_receipts_usage_and_replays(
+    runtime: typing.Any,
+) -> None:
     _products, artifacts, jobs, scope, run, job = runtime
     settings = configured(scope)
     sent = []
 
-    def handler(request):
+    def handler(request: typing.Any) -> typing.Any:
         sent.append(request)
         return httpx.Response(
             200,
@@ -163,25 +172,27 @@ async def test_stage_call_persists_exact_request_receipts_usage_and_replays(runt
     assert persisted.raw == first.raw
     assert persisted.usage == {"prompt_tokens": 17, "completion_tokens": 3}
     assert first.state == "recorded" and first.diagnostic is None
+    assert first.policy_receipt is not None
     assert first.policy_receipt.decision == "ALLOW"
     assert first.policy_receipt.purpose == "g3-batch-resolution"
     assert first.policy_receipt.run_schema_version == "830-g3-v1"
-    assert first.policy_receipt_raw_sha256 == hashlib.sha256(
-        first.policy_receipt_raw
-    ).hexdigest()
+    assert first.policy_receipt_raw is not None
+    assert first.policy_receipt_raw_sha256 == hashlib.sha256(first.policy_receipt_raw).hexdigest()
     assert first.execution_receipt.raw_sha256 == persisted.raw_sha256
     assert replay.execution_receipt_sha256 == first.execution_receipt_sha256
     assert replay.call_id == "call-first"
 
 
 @pytest.mark.asyncio
-async def test_denial_capacity_drift_and_interrupted_calls_never_dispatch(runtime) -> None:
+async def test_denial_capacity_drift_and_interrupted_calls_never_dispatch(
+    runtime: typing.Any,
+) -> None:
     _products, artifacts, _jobs, scope, run, job = runtime
     settings = configured(scope, max_context_bytes=len(CONTENT))
     current = [settings]
     calls = []
 
-    def handler(request):
+    def handler(request: typing.Any) -> typing.Any:
         calls.append(request)
         return httpx.Response(200, json={"choices": []})
 
@@ -227,7 +238,7 @@ async def test_denial_capacity_drift_and_interrupted_calls_never_dispatch(runtim
     drifted = configured(scope).model_copy(update={"endpoint": "https://other.invalid/v1/chat"})
     reads = 0
 
-    def drifting():
+    def drifting() -> typing.Any:
         nonlocal reads
         reads += 1
         return settings if reads == 1 else drifted
@@ -278,12 +289,13 @@ async def test_denial_capacity_drift_and_interrupted_calls_never_dispatch(runtim
     assert calls == []
 
 
-def test_policy_hash_excludes_key_and_settings_reject_bad_limits(runtime) -> None:
+def test_policy_hash_excludes_key_and_settings_reject_bad_limits(runtime: typing.Any) -> None:
     _products, _artifacts, _jobs, scope, _run, _job = runtime
     expiry = datetime.now(UTC) + timedelta(hours=1)
-    assert configured(scope, key="one", expires_at=expiry).policy_sha256 == configured(
-        scope, key="two", expires_at=expiry
-    ).policy_sha256
+    assert (
+        configured(scope, key="one", expires_at=expiry).policy_sha256
+        == configured(scope, key="two", expires_at=expiry).policy_sha256
+    )
     from insurance_harness.product_ingestion.model_settings import ProductModelSettings
 
     values = configured(scope).model_dump(mode="python")

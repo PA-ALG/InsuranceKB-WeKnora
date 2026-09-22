@@ -5,7 +5,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import ModuleType
+from typing import Any, cast
 
 import pytest
 
@@ -14,27 +17,28 @@ BASE = "sha256:" + "a" * 64
 TAG = "wechatopenai/weknora-app:local-base"
 
 
-def module():
+def module() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
         "app_reuse_under_test", ROOT / "scripts/app_artifact.py"
     )
+    assert spec is not None and spec.loader is not None
     result = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(result)
     return result
 
 
-def require_port(m, name):
+def require_port(m: ModuleType, name: str) -> Callable[..., Any]:
     port = getattr(m, name, None)
     assert callable(port), f"formal BA0 port missing: {name}"
-    return port
+    return cast(Callable[..., Any], port)
 
 
-def git(repo, *args):
+def git(repo: Path, *args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=repo, text=True).strip()
 
 
 @pytest.fixture
-def history(tmp_path):
+def history(tmp_path: Path) -> tuple[Path, str, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q")
@@ -74,13 +78,13 @@ def history(tmp_path):
 
 
 class ImageRunner:
-    def __init__(self, source, *, bad_id=False, bad_source=False):
-        self.calls = []
+    def __init__(self, source: str, *, bad_id: bool = False, bad_source: bool = False) -> None:
+        self.calls: list[tuple[str, ...]] = []
         self.source = source
         self.bad_id = bad_id
         self.bad_source = bad_source
 
-    def __call__(self, args, **kwargs):
+    def __call__(self, args: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         self.calls.append(tuple(args))
         if args[0] != "docker":
             return subprocess.run(args, **kwargs)
@@ -104,9 +108,13 @@ class ImageRunner:
         return subprocess.CompletedProcess(args, 0, json.dumps(record), "")
 
 
-def facts(m, history, runner=None):
+def facts(
+    m: ModuleType,
+    history: tuple[Path, str, str],
+    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> dict[str, Any]:
     repo, old, new = history
-    return require_port(m, "runtime_reuse_facts")(
+    result: dict[str, Any] = require_port(m, "runtime_reuse_facts")(
         repo_root=repo,
         build_source_head=new,
         runtime_source_head=old,
@@ -114,9 +122,12 @@ def facts(m, history, runner=None):
         runner=runner or ImageRunner(old),
         docker_context="colima",
     )
+    return result
 
 
-def test_freeze_uses_commit_not_dirty_worktree_and_releases_context(history):
+def test_freeze_uses_commit_not_dirty_worktree_and_releases_context(
+    history: tuple[Path, str, str],
+) -> None:
     m = module()
     freeze = require_port(m, "frozen_source_context")
     repo, _, source = history
@@ -130,7 +141,7 @@ def test_freeze_uses_commit_not_dirty_worktree_and_releases_context(history):
     assert not snapshot.exists()
 
 
-def test_freeze_subset_port_is_reusable_for_harness(history):
+def test_freeze_subset_port_is_reusable_for_harness(history: tuple[Path, str, str]) -> None:
     m = module()
     repo, _, source = history
     with require_port(m, "frozen_source_context")(
@@ -140,7 +151,9 @@ def test_freeze_subset_port_is_reusable_for_harness(history):
         assert not (Path(snapshot) / "config").exists()
 
 
-def test_runtime_reuse_allows_go_and_only_explicit_build_tool(history):
+def test_runtime_reuse_allows_go_and_only_explicit_build_tool(
+    history: tuple[Path, str, str],
+) -> None:
     result = facts(module(), history)
     assert result["image_id"] == BASE
     assert result["image_reference"] == TAG
@@ -160,7 +173,9 @@ def test_runtime_reuse_allows_go_and_only_explicit_build_tool(history):
         "deploy/local-build/app-external-dependencies.v1.json",
     ],
 )
-def test_runtime_resource_or_dependency_drift_rejected(history, path):
+def test_runtime_resource_or_dependency_drift_rejected(
+    history: tuple[Path, str, str], path: str
+) -> None:
     m = module()
     repo, old, _ = history
     (repo / path).write_text("changed non-Go runtime input")
@@ -171,14 +186,16 @@ def test_runtime_resource_or_dependency_drift_rejected(history, path):
 
 
 @pytest.mark.parametrize("field", ["bad_id", "bad_source"])
-def test_runtime_image_identity_and_source_are_verified(history, field):
+def test_runtime_image_identity_and_source_are_verified(
+    history: tuple[Path, str, str], field: str
+) -> None:
     m = module()
     runner = ImageRunner(history[1], **{field: True})
     with pytest.raises(m.ArtifactContractError, match="image|source"):
         facts(m, history, runner)
 
 
-def test_formal_rebase_dockerfile_refreshes_only_binary_and_build_tool():
+def test_formal_rebase_dockerfile_refreshes_only_binary_and_build_tool() -> None:
     dockerfile = (ROOT / "docker/Dockerfile.app").read_text()
     assert "ARG EXISTING_APP_RUNTIME" in dockerfile.split("FROM ", 1)[0]
     assert "FROM ${EXISTING_APP_RUNTIME} AS runtime-rebase" in dockerfile
@@ -192,7 +209,7 @@ def test_formal_rebase_dockerfile_refreshes_only_binary_and_build_tool():
     assert not any("/app/scripts " in line for line in copies)
 
 
-def test_cold_compile_does_not_require_previous_cache_probe():
+def test_cold_compile_does_not_require_previous_cache_probe() -> None:
     dockerfile = (ROOT / "docker/Dockerfile.app").read_text()
     compile_section = dockerfile.split("COPY . .", 1)[1].split("FROM ", 1)[0]
     assert ".ba0-app-cache-v1" not in compile_section
@@ -200,7 +217,7 @@ def test_cold_compile_does_not_require_previous_cache_probe():
     assert "id=ba0-app-go-build-v1" in compile_section
 
 
-def test_runtime_recipe_change_cannot_be_hidden_as_go_only(history):
+def test_runtime_recipe_change_cannot_be_hidden_as_go_only(history: tuple[Path, str, str]) -> None:
     m = module()
     repo, old, _ = history
     p = repo / "docker/Dockerfile.app"
@@ -211,7 +228,9 @@ def test_runtime_recipe_change_cannot_be_hidden_as_go_only(history):
         facts(m, (repo, old, git(repo, "rev-parse", "HEAD")))
 
 
-def test_runtime_base_enters_canonical_identity(history, monkeypatch):
+def test_runtime_base_enters_canonical_identity(
+    history: tuple[Path, str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     m = module()
     require_port(m, "runtime_reuse_facts")
     repo, old, new = history
@@ -272,8 +291,8 @@ def test_runtime_base_enters_canonical_identity(history, monkeypatch):
 
 @pytest.mark.parametrize("reuse_hit", [False, True])
 def test_selector_retains_lookup_receipt_and_runtime_parent_proof(
-    history, tmp_path, monkeypatch, reuse_hit
-):
+    history: tuple[Path, str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reuse_hit: bool
+) -> None:
     m = module()
     runtime = facts(m, history)
     source = history[2]
@@ -303,7 +322,7 @@ def test_selector_retains_lookup_receipt_and_runtime_parent_proof(
     )
     child_record["Config"] = dict(base_record["Config"], Labels=labels)
 
-    def runner(args, **kwargs):
+    def runner(args: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         calls.append((tuple(args), kwargs["cwd"]))
         if "inspect" in args:
             record = child_record if built in args else base_record
@@ -338,7 +357,9 @@ def test_selector_retains_lookup_receipt_and_runtime_parent_proof(
 
 
 @pytest.mark.parametrize("defect", ["parent", "config", "id"])
-def test_rebased_result_rejects_wrong_parent_config_or_id(history, defect):
+def test_rebased_result_rejects_wrong_parent_config_or_id(
+    history: tuple[Path, str, str], defect: str
+) -> None:
     m = module()
     runtime = facts(m, history)
     child_id = "sha256:" + "d" * 64
@@ -352,14 +373,14 @@ def test_rebased_result_rejects_wrong_parent_config_or_id(history, defect):
     else:
         record["Id"] = BASE
 
-    def runner(args, **kw):
+    def runner(args: Sequence[str], **kw: Any) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args, 0, json.dumps(record), "")
 
     with pytest.raises(m.ArtifactContractError, match="rebased image"):
         m._verify_rebased_image(history[0], child_id, runtime, runner, "colima")
 
 
-def test_pure_go_change_allows_empty_runtime_resource_diff(history):
+def test_pure_go_change_allows_empty_runtime_resource_diff(history: tuple[Path, str, str]) -> None:
     m = module()
     repo, old, _ = history
     git(repo, "checkout", old, "--", "scripts/app_artifact.py")
@@ -368,7 +389,7 @@ def test_pure_go_change_allows_empty_runtime_resource_diff(history):
     assert result["image_id"] == BASE
 
 
-def test_unqualified_docker_build_keeps_original_runtime_default():
+def test_unqualified_docker_build_keeps_original_runtime_default() -> None:
     source = (ROOT / "docker/Dockerfile.app").read_text()
     stages = [line for line in source.splitlines() if line.startswith("FROM ")]
     assert stages[-1] == "FROM ${RUNTIME_IMAGE} AS runtime"
@@ -390,7 +411,9 @@ def test_unqualified_docker_build_keeps_original_runtime_default():
     ) != m._runtime_recipe(old)
 
 
-def test_frozen_directories_remain_traversable_under_private_umask(history):
+def test_frozen_directories_remain_traversable_under_private_umask(
+    history: tuple[Path, str, str],
+) -> None:
     import os
     import stat
 

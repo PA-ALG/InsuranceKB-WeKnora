@@ -58,7 +58,8 @@ class _Frozen(BaseModel):
 
 def _hash_matches(value: BaseModel, field: str) -> bool:
     body = value.model_dump(mode="json", exclude={field})
-    return getattr(value, field) == schema_wiki_sha256(body["contract"], body)
+    actual = getattr(value, field)
+    return isinstance(actual, str) and actual == schema_wiki_sha256(body["contract"], body)
 
 
 class ServiceDefinitionSourceV1(_Frozen):
@@ -183,7 +184,7 @@ def load_service_schema_catalog(
 def presentation_profile(definition: ServiceSchemaDefinitionV1) -> PresentationProfileV1:
     """Adapt only presentation topology to the existing G1 profile contract."""
     definition = ServiceSchemaDefinitionV1.model_validate(definition)
-    payload = {
+    payload: dict[str, object] = {
         "contract": "presentation-profile.v1",
         "profile_id": "profile_" + definition.entity_type,
         "profile_version": definition.schema_version,
@@ -193,5 +194,5 @@ def presentation_profile(definition: ServiceSchemaDefinitionV1) -> PresentationP
         "sections": [section.model_dump(mode="json") for section in definition.sections],
     }
     return PresentationProfileV1.model_validate(
-        {**payload, "profile_sha256": schema_wiki_sha256(payload["contract"], payload)}
+        {**payload, "profile_sha256": schema_wiki_sha256("presentation-profile.v1", payload)}
     )

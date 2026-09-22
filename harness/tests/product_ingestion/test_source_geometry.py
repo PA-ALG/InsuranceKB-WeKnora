@@ -5,20 +5,21 @@ import base64
 import hashlib
 import importlib
 import json
+import typing
 
 import pytest
 
 from tests.product_ingestion.test_platform import canonical, decode, snapshot  # noqa: F401
 
 
-def module():
+def module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.source_geometry")
     except ModuleNotFoundError:
         pytest.fail("platform native geometry projector is not implemented")
 
 
-def native_snapshot(snapshot, *, invalid=False):
+def native_snapshot(snapshot: typing.Any, *, invalid: typing.Any = False) -> typing.Any:
     scope, body, sign, keys = snapshot
     body = json.loads(json.dumps(body))
     markdown = body["markdown"]
@@ -61,8 +62,8 @@ def native_snapshot(snapshot, *, invalid=False):
 
 
 def test_geometry_uses_actual_page_offsets_and_boxes_without_rebuilding_source(
-    snapshot,
-):
+    snapshot: typing.Any,
+) -> None:
     decoded = native_snapshot(snapshot)
     pages = module().project_native_pages(decoded, material_id="material")
     assert len(pages) == 1
@@ -74,7 +75,7 @@ def test_geometry_uses_actual_page_offsets_and_boxes_without_rebuilding_source(
     assert decoded.unresolved_chunk_ids == ("unmapped",)
 
 
-def test_signed_but_inconsistent_native_page_hash_is_refused(snapshot):
+def test_signed_but_inconsistent_native_page_hash_is_refused(snapshot: typing.Any) -> None:
     with pytest.raises(ValueError, match="native page"):
         module().project_native_pages(
             native_snapshot(snapshot, invalid=True), material_id="material"
@@ -82,7 +83,9 @@ def test_signed_but_inconsistent_native_page_hash_is_refused(snapshot):
 
 
 @pytest.mark.parametrize("bad", [None, "missing", "overlap", "unknown", "duplicate"])
-def test_partial_native_gap_contract_validated_on_unselected_pages(snapshot, bad):
+def test_partial_native_gap_contract_validated_on_unselected_pages(
+    snapshot: typing.Any, bad: typing.Any
+) -> None:
     from dataclasses import replace
 
     decoded = native_snapshot(snapshot)
@@ -110,7 +113,7 @@ def test_partial_native_gap_contract_validated_on_unselected_pages(snapshot, bad
         assert pages[1][3] and pages[2][0]["unavailable_ranges"] == [gap]
 
 
-def bounded_identity_snapshot(snapshot):
+def bounded_identity_snapshot(snapshot: typing.Any) -> typing.Any:
     """Signed four-page source including overlapping chunks and a large late page."""
     scope, original, sign, keys = snapshot
     body = json.loads(json.dumps(original))
@@ -193,8 +196,8 @@ def bounded_identity_snapshot(snapshot):
 
 
 def test_selected_geometry_avoids_unselected_character_objects_and_preserves_output(
-    snapshot, monkeypatch
-):
+    snapshot: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     decoded = bounded_identity_snapshot(snapshot)
     projector = module()
     original_body = canonical(decoded.snapshot)
@@ -203,7 +206,7 @@ def test_selected_geometry_avoids_unselected_character_objects_and_preserves_out
     constructed = []
     original = projector.G3NativeCharacterBoxV1
 
-    def record(**values):
+    def record(**values: typing.Any) -> typing.Any:
         constructed.append(values["x"])
         return original(**values)
 
@@ -217,7 +220,9 @@ def test_selected_geometry_avoids_unselected_character_objects_and_preserves_out
 
 
 @pytest.mark.parametrize("bad", ["hash", "range", "coordinate", "overlap"])
-def test_selected_geometry_still_rejects_corrupt_unselected_native_page(snapshot, bad):
+def test_selected_geometry_still_rejects_corrupt_unselected_native_page(
+    snapshot: typing.Any, bad: typing.Any
+) -> None:
     from dataclasses import replace
 
     decoded = bounded_identity_snapshot(snapshot)
@@ -240,7 +245,9 @@ def test_selected_geometry_still_rejects_corrupt_unselected_native_page(snapshot
 
 
 @pytest.mark.parametrize("selection", [("unknown",), ("block", "block")])
-def test_selected_geometry_rejects_invalid_block_selection(snapshot, selection):
+def test_selected_geometry_rejects_invalid_block_selection(
+    snapshot: typing.Any, selection: typing.Any
+) -> None:
     with pytest.raises(ValueError, match="selection"):
         module().project_native_pages(
             bounded_identity_snapshot(snapshot),

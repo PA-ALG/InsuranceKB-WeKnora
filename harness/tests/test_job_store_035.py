@@ -2280,7 +2280,9 @@ def test_q14_crash_after_start_keeps_its_existing_bound(factory: SessionFactory)
     assert leases == 3
 
 
-def test_atomic_admission_rolls_back_job_when_domain_write_is_rejected(factory):
+def test_atomic_admission_rolls_back_job_when_domain_write_is_rejected(
+    factory: SessionFactory,
+) -> None:
     from uuid import uuid4
 
     store = make_store(factory)
@@ -2295,7 +2297,7 @@ def test_atomic_admission_rolls_back_job_when_domain_write_is_rejected(factory):
     assert job_count(factory) == 0
 
 
-def test_atomic_admission_dedup_rejects_changed_explicit_identity(factory):
+def test_atomic_admission_dedup_rejects_changed_explicit_identity(factory: SessionFactory) -> None:
     from uuid import uuid4
 
     store = make_store(factory)

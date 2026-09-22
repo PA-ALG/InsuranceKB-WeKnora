@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+# Partial test doubles isolate the stated boundary; admission is tested separately.
 import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -24,7 +27,12 @@ from insurance_harness.model_policy.g3_bounded_gateway import (
     _parse_g3_gemini_provider_response,
     validate_g3_route,
 )
-from insurance_harness.run_admission.g3_models import canonical_g3_hash, canonical_json
+from insurance_harness.run_admission.g3_models import (
+    G3BoundedAdmissionPlanV1,
+    G3CallPlanV1,
+    canonical_g3_hash,
+    canonical_json,
+)
 from insurance_harness.run_admission.models import (
     canonical_model_identities_hash,
     canonical_model_plan_hash,
@@ -40,7 +48,7 @@ def _gemini_identity(*, role: str = "classify") -> ModelIdentity:
     return ModelIdentity(
         provider="g3-user-gateway",
         deployment_id="gemini-3.7-flash-medium",
-        family="gemini",  # type: ignore[arg-type]
+        family="gemini",
         role=role,  # type: ignore[arg-type]
         policy_version="g3-user-gemini-gateway-v1",
     )
@@ -56,7 +64,7 @@ def test_exact_user_gateway_gemini_identity_is_admitted_for_g3_roles() -> None:
 def test_exact_user_gateway_gemini_route_is_admitted() -> None:
     route = G3BoundedRouteConfig(
         endpoint_origin="http://8.148.158.241:3131",
-        endpoint_path="/v1/chat/completions",  # type: ignore[arg-type]
+        endpoint_path="/v1/chat/completions",
         timeout_seconds=30,
         follow_redirects=False,
     )
@@ -98,8 +106,8 @@ def test_gemini_request_and_schema_are_exact_and_identity_selected() -> None:
         output_token_ceiling=321,
     )
     raw = g3_openai_request_bytes(
-        plan=SimpleNamespace(routing_lock=routing),
-        call=call,
+        plan=cast(G3BoundedAdmissionPlanV1, SimpleNamespace(routing_lock=routing)),
+        call=cast(G3CallPlanV1, call),
         system="fixed system",
         user="fixed user",
     )
@@ -172,9 +180,7 @@ def _gemini_aggregate_usage_response(
     content: str = '{ "answer": true }',
     reasoning_content: object = _MISSING,
 ) -> bytes:
-    value = json.loads(
-        _gemini_response(content=content, reasoning_content=reasoning_content)
-    )
+    value = json.loads(_gemini_response(content=content, reasoning_content=reasoning_content))
     value["usage"] = {
         "prompt_tokens": 355_513,
         "completion_tokens": 12_020,
@@ -210,16 +216,16 @@ def test_gemini_exact_complete_json_fence_preserves_semantics_usage_and_raw() ->
 @pytest.mark.parametrize(
     "content",
     (
-        'Explanation\n```json\n{}\n```',
-        '```json\n{}\n```\nExplanation',
-        ' ```json\n{}\n```',
-        '```json\n{}\n```\n',
-        '```JSON\n{}\n```',
-        '```\n{}\n```',
-        '```json\r\n{}\r\n```',
-        '```json\n{}',
-        '{}\n```',
-        '```json\n{}\n```\n```json\n{}\n```',
+        "Explanation\n```json\n{}\n```",
+        "```json\n{}\n```\nExplanation",
+        " ```json\n{}\n```",
+        "```json\n{}\n```\n",
+        "```JSON\n{}\n```",
+        "```\n{}\n```",
+        "```json\r\n{}\r\n```",
+        "```json\n{}",
+        "{}\n```",
+        "```json\n{}\n```\n```json\n{}\n```",
         '```json\n{"key":1,"key":2}\n```',
         '```json\n{"key":NaN}\n```',
         '```json\n{"key":Infinity}\n```',
@@ -228,9 +234,7 @@ def test_gemini_exact_complete_json_fence_preserves_semantics_usage_and_raw() ->
 )
 def test_gemini_json_fence_does_not_repair_or_search_content(content: str) -> None:
     with pytest.raises(G3LedgerDenied) as denied:
-        _parse_g3_gemini_provider_response(
-            _gemini_identity(), _gemini_response(content=content)
-        )
+        _parse_g3_gemini_provider_response(_gemini_identity(), _gemini_response(content=content))
     assert denied.value.reason_code == "INVALID_PROVIDER_RESPONSE"
 
 
@@ -283,7 +287,9 @@ def test_gemini_response_rejects_non_string_reasoning_content(
         lambda usage: usage.update(extra=0),
     ),
 )
-def test_gemini_response_rejects_invalid_aggregate_usage(mutate) -> None:
+def test_gemini_response_rejects_invalid_aggregate_usage(
+    mutate: Callable[[dict[str, Any]], object],
+) -> None:
     value = json.loads(_gemini_aggregate_usage_response())
     mutate(value["usage"])
     with pytest.raises(G3LedgerDenied) as denied:
@@ -308,7 +314,9 @@ def test_gemini_response_rejects_invalid_aggregate_usage(mutate) -> None:
         lambda value: value["choices"][0]["message"].update(extra="unknown"),
     ),
 )
-def test_gemini_response_rejects_nonexact_usage_and_response_shape(mutate) -> None:
+def test_gemini_response_rejects_nonexact_usage_and_response_shape(
+    mutate: Callable[[dict[str, Any]], object],
+) -> None:
     value = json.loads(_gemini_response())
     mutate(value)
     with pytest.raises(G3LedgerDenied) as denied:
@@ -329,9 +337,7 @@ def test_gemini_response_rejects_nonexact_usage_and_response_shape(mutate) -> No
 )
 def test_gemini_response_rejects_unusable_semantic_content(content: str) -> None:
     with pytest.raises(G3LedgerDenied) as denied:
-        _parse_g3_gemini_provider_response(
-            _gemini_identity(), _gemini_response(content=content)
-        )
+        _parse_g3_gemini_provider_response(_gemini_identity(), _gemini_response(content=content))
     assert denied.value.reason_code == "INVALID_PROVIDER_RESPONSE"
 
 
@@ -344,9 +350,7 @@ def test_gemini_first_terminal_recomputes_persisted_response_closure(
     root = tmp_path / "ledger"
     root.mkdir(mode=0o700)
     monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
-    _old_plan, old_terminal, _old_semantic, _policy, call_dir = (
-        _complete_successful_stage(root)
-    )
+    _old_plan, old_terminal, _old_semantic, _policy, call_dir = _complete_successful_stage(root)
     (call_dir / "call-terminal.json").unlink()
 
     plan = _gemini_plan()
@@ -393,9 +397,7 @@ def test_gemini_first_terminal_accepts_exact_aggregate_usage(
     root = tmp_path / "ledger"
     root.mkdir(mode=0o700)
     monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
-    _old_plan, old_terminal, _old_semantic, _policy, call_dir = (
-        _complete_successful_stage(root)
-    )
+    _old_plan, old_terminal, _old_semantic, _policy, call_dir = _complete_successful_stage(root)
     (call_dir / "call-terminal.json").unlink()
 
     plan = _gemini_plan()
@@ -404,8 +406,8 @@ def test_gemini_first_terminal_accepts_exact_aggregate_usage(
         content='```json\n{"answer":true}\n```' if fenced else '{"answer":true}',
         reasoning_content="opaque fixture",
     )
-    _content, expected_semantic, expected_usage = (
-        _parse_g3_gemini_provider_response(call.identity, response_bytes)
+    _content, expected_semantic, expected_usage = _parse_g3_gemini_provider_response(
+        call.identity, response_bytes
     )
     (call_dir / "response-body.private.json").write_bytes(response_bytes)
     (call_dir / "semantic-content.private.json").write_bytes(expected_semantic)
@@ -439,9 +441,7 @@ def test_gemini_successful_reopen_reparses_exact_aggregate_usage(
     root.mkdir(mode=0o700)
     monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
     monkeypatch.setattr(bounded_tests, "valid_c_plan", _gemini_plan)
-    plan, old_terminal, _old_semantic, _policy, call_dir = (
-        _complete_successful_stage(root)
-    )
+    plan, old_terminal, _old_semantic, _policy, call_dir = _complete_successful_stage(root)
     (call_dir.parents[1] / "stage-terminals" / f"{plan.stage}.json").unlink()
 
     response_bytes = _gemini_aggregate_usage_response(
@@ -483,7 +483,7 @@ def test_gemini_successful_reopen_reparses_exact_aggregate_usage(
     assert reopened[1] == semantic
 
 
-def _gemini_plan():
+def _gemini_plan() -> G3BoundedAdmissionPlanV1:
     base = valid_c_plan()
     identity = _gemini_identity()
     calls = tuple(
@@ -522,9 +522,7 @@ def _gemini_plan():
         "g3-stage-dispatch.830.v1",
         "structured_dispatch_hash",
         **{
-            **base.dispatch_lock.model_dump(
-                mode="python", exclude={"structured_dispatch_hash"}
-            ),
+            **base.dispatch_lock.model_dump(mode="python", exclude={"structured_dispatch_hash"}),
             "calls": calls,
         },
     )

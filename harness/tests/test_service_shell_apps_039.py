@@ -47,11 +47,7 @@ def _health() -> tuple[Lifecycle, ReadinessChecker]:
 
 
 def _paths(app: FastAPI) -> set[str]:
-    return {
-        path
-        for route in app.routes
-        if (path := getattr(route, "path", None)) is not None
-    }
+    return {path for route in app.routes if (path := getattr(route, "path", None)) is not None}
 
 
 def test_t4_same_wheel_registers_exact_api_and_worker_scripts() -> None:
@@ -378,19 +374,21 @@ def test_t4_production_api_composition_wires_auth_and_p1_observations(
     monkeypatch.setattr(
         shell_cli,
         "space_job_metrics",
-        lambda actual, *, space_id: SpaceJobMetrics(
-            space_id=space_id,
-            state_counts=_state_counts(queued=2),
-            queue_depth=2,
-            retry_wait_count=0,
-            dead_letter_count=0,
-            attempt_total=3,
-            oldest_schedulable_age_seconds=1.0,
-            expired_lease_count=0,
-            oldest_expired_lease_age_seconds=None,
-        )
-        if actual is session
-        else pytest.fail("wrong session"),
+        lambda actual, *, space_id: (
+            SpaceJobMetrics(
+                space_id=space_id,
+                state_counts=_state_counts(queued=2),
+                queue_depth=2,
+                retry_wait_count=0,
+                dead_letter_count=0,
+                attempt_total=3,
+                oldest_schedulable_age_seconds=1.0,
+                expired_lease_count=0,
+                oldest_expired_lease_age_seconds=None,
+            )
+            if actual is session
+            else pytest.fail("wrong session")
+        ),
     )
     monkeypatch.setattr(
         shell_cli,
@@ -583,8 +581,10 @@ async def test_t6_worker_total_shutdown_timeout_caps_composed_role(
     assert lifecycle.state.value == "terminated"
 
 
-def test_worker_entrypoint_emits_success_heartbeat_without_test_log_override(tmp_path):
-    code = '''
+def test_worker_entrypoint_emits_success_heartbeat_without_test_log_override(
+    tmp_path: Path,
+) -> None:
+    code = """
 import logging
 import uvicorn
 from fastapi import FastAPI
@@ -596,7 +596,8 @@ async def serve(**kwargs):
     logging.getLogger("insurance_harness.service_shell.worker").info("heartbeat-startup-visible")
 cli._serve_worker = serve
 cli.worker_main()
-'''
-    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
-                            timeout=15, check=True)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=15, check=True
+    )
     assert "heartbeat-startup-visible" in result.stderr

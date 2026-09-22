@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import importlib
+import typing
 from types import SimpleNamespace
 
 import pytest
 
+from insurance_harness.product_ingestion.model_settings import ProductModelSettings
 from tests.test_g3_field_tasks import _request
 
 
-def module():
+def module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.pipeline")
     except ModuleNotFoundError:
@@ -16,11 +18,11 @@ def module():
 
 
 @pytest.fixture(scope="module")
-def compile_request():
+def compile_request() -> typing.Any:
     return _request()
 
 
-def policy(digest="a" * 64):
+def policy(digest: typing.Any = "a" * 64) -> SimpleNamespace:
     import hashlib
 
     return SimpleNamespace(
@@ -37,7 +39,9 @@ def policy(digest="a" * 64):
     )
 
 
-def test_field_plan_is_bounded_and_uses_only_required_non_carried_fields(compile_request):
+def test_field_plan_is_bounded_and_uses_only_required_non_carried_fields(
+    compile_request: typing.Any,
+) -> None:
     from insurance_harness.knowledge_compiler.g3_field_tasks import adapt_catalog_field_tasks
 
     expected = adapt_catalog_field_tasks(compile_request)
@@ -52,7 +56,7 @@ def test_field_plan_is_bounded_and_uses_only_required_non_carried_fields(compile
     assert all(row.task_sha256 == row.task_payload["task_sha256"] for row in actual)
 
 
-def test_model_policy_change_keeps_business_cache_identity(compile_request):
+def test_model_policy_change_keeps_business_cache_identity(compile_request: typing.Any) -> None:
     first = module().build_field_windows(
         compile_request, product_identity_sha256="c" * 64, model_settings=policy()
     )
@@ -65,7 +69,9 @@ def test_model_policy_change_keeps_business_cache_identity(compile_request):
     ]
 
 
-def test_retry_plan_accepts_only_explicit_selected_failed_field_keys(compile_request):
+def test_retry_plan_accepts_only_explicit_selected_failed_field_keys(
+    compile_request: typing.Any,
+) -> None:
     first = module().build_field_windows(
         compile_request, product_identity_sha256="c" * 64, model_settings=policy()
     )
@@ -81,7 +87,9 @@ def test_retry_plan_accepts_only_explicit_selected_failed_field_keys(compile_req
     } == selected
 
 
-def test_factory_installs_every_real_stage_and_checks_configured_identity_prompt(compile_request):
+def test_factory_installs_every_real_stage_and_checks_configured_identity_prompt(
+    compile_request: typing.Any,
+) -> None:
     import hashlib
 
     from insurance_harness.product_ingestion.stages import json_bytes
@@ -129,8 +137,8 @@ def test_factory_installs_every_real_stage_and_checks_configured_identity_prompt
 @pytest.mark.asyncio
 @pytest.mark.parametrize("workflow_version", [2, 3])
 async def test_compiler_work_does_not_block_worker_heartbeat(
-    compile_request, monkeypatch, workflow_version
-):
+    compile_request: typing.Any, monkeypatch: pytest.MonkeyPatch, workflow_version: typing.Any
+) -> None:
     import asyncio
     import hashlib
     import sys
@@ -148,7 +156,7 @@ async def test_compiler_work_does_not_block_worker_heartbeat(
 
     api = module()
 
-    async def discovery(**kwargs):
+    async def discovery(**kwargs: typing.Any) -> StageOutput:
         assert workflow_version == 2, "schema synthesis invoked discovery"
         assert kwargs["field_delta"] == {"fixture": True}
         assert kwargs["processing_recovery"] is False
@@ -169,7 +177,7 @@ async def test_compiler_work_does_not_block_worker_heartbeat(
     monkeypatch.setattr(platform, "verify_signed_snapshot", lambda *_args, **_kwargs: {})
     adapter = ModuleType("insurance_harness.product_ingestion.compilation")
 
-    def project(**_kwargs):
+    def project(**_kwargs: object) -> typing.Any:
         time.sleep(0.1)
         return (
             SimpleNamespace(model_dump_json=lambda: '{"fixture":true}')
@@ -177,7 +185,7 @@ async def test_compiler_work_does_not_block_worker_heartbeat(
             else {"fixture": True}
         )
 
-    adapter.project_field_attempts = project
+    adapter.__dict__["project_field_attempts"] = project
     monkeypatch.setitem(sys.modules, adapter.__name__, adapter)
     monkeypatch.setattr(
         compiler.BatchConceptCompileRequest830G3V1,
@@ -208,15 +216,16 @@ async def test_compiler_work_does_not_block_worker_heartbeat(
             checkpoint_plan=lambda **_: None,
         ),
         artifacts=SimpleNamespace(
+            get_rebased_artifact=lambda **_: None,
             get_effective_artifact=lambda **_: SimpleNamespace(
                 payload=b'{"current_entity_ids":["fixture-entity"]}'
-            )
+            ),
         ),
     )
     ports = api.build_product_pipeline(context)
     ticks = []
 
-    async def heartbeat():
+    async def heartbeat() -> None:
         await asyncio.sleep(0.02)
         ticks.append(1)
 
@@ -234,8 +243,8 @@ async def test_compiler_work_does_not_block_worker_heartbeat(
 
 @pytest.mark.parametrize("limit", ["context", "envelope"])
 def test_field_plan_splits_actual_requests_to_configured_capacity(
-    compile_request, monkeypatch, limit
-):
+    compile_request: typing.Any, monkeypatch: pytest.MonkeyPatch, limit: typing.Any
+) -> None:
     import hashlib
 
     from insurance_harness.knowledge_compiler.g3_field_tasks import (
@@ -253,7 +262,7 @@ def test_field_plan_splits_actual_requests_to_configured_capacity(
     settings.template = lambda _: template
     base = compile_request.base_request
 
-    def rendered(selected):
+    def rendered(selected: typing.Any) -> typing.Any:
         return render_window_request(
             selected,
             base.sources,
@@ -262,9 +271,9 @@ def test_field_plan_splits_actual_requests_to_configured_capacity(
             raw_kb_id=base.raw_kb_id,
         )
 
-    def prepared(content):
+    def prepared(content: typing.Any) -> typing.Any:
         return _template_and_request(
-            settings,
+            typing.cast(ProductModelSettings, settings),
             scope=settings.scope,
             content=content,
             input_sha256=hashlib.sha256(content).hexdigest(),
@@ -301,7 +310,9 @@ def test_field_plan_splits_actual_requests_to_configured_capacity(
     }
 
 
-def test_field_plan_does_not_swallow_noncapacity_policy_error(compile_request, monkeypatch):
+def test_field_plan_does_not_swallow_noncapacity_policy_error(
+    compile_request: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from insurance_harness.knowledge_compiler.g3_field_tasks import adapt_catalog_field_tasks
     from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
 
@@ -319,7 +330,9 @@ def test_field_plan_does_not_swallow_noncapacity_policy_error(compile_request, m
         )
 
 
-def test_single_field_over_capacity_fails_without_increasing_limit(compile_request, monkeypatch):
+def test_single_field_over_capacity_fails_without_increasing_limit(
+    compile_request: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from insurance_harness.knowledge_compiler.g3_field_tasks import adapt_catalog_field_tasks
     from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
 

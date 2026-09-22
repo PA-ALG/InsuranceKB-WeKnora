@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import typing
+
 # ruff: noqa: F811 -- imported pytest fixtures.
 import pytest
 from sqlalchemy import select
@@ -14,7 +16,7 @@ from tests.product_ingestion.test_routing import catalog  # noqa: F401
 from tests.product_ingestion.test_stages import stage_runtime  # noqa: F401
 
 
-def _child(stage_runtime, monkeypatch):
+def _child(stage_runtime: typing.Any, monkeypatch: typing.Any) -> tuple[typing.Any, ...]:
     scope, store, artifacts, _, _ = stage_runtime
     origin = title_unavailable(stage_runtime, monkeypatch, reason="any-new-diagnostic-text")
     child = store.retry_processing(
@@ -23,7 +25,9 @@ def _child(stage_runtime, monkeypatch):
     return scope, store, artifacts, origin, child
 
 
-def test_checkpoint_selection_uses_outputs_not_failure_text(stage_runtime, monkeypatch):
+def test_checkpoint_selection_uses_outputs_not_failure_text(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, artifacts, origin, child = _child(stage_runtime, monkeypatch)
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
     assert plan.resume_stage == "routing"
@@ -43,7 +47,9 @@ def test_checkpoint_selection_uses_outputs_not_failure_text(stage_runtime, monke
 
 
 @pytest.mark.parametrize("change", ["bytes", "missing", "foreign", "generation", "dependency"])
-def test_checkpoint_worker_rejects_changed_original_asset(stage_runtime, monkeypatch, change):
+def test_checkpoint_worker_rejects_changed_original_asset(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch, change: typing.Any
+) -> None:
     scope, store, artifacts, _, child = _child(stage_runtime, monkeypatch)
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
     ref = next(r for r in plan.artifacts if r.artifact_kind == "source_snapshot")
@@ -64,7 +70,9 @@ def test_checkpoint_worker_rejects_changed_original_asset(stage_runtime, monkeyp
     assert store.checkpoint_receipt(scope=scope, run_id=child.run_id) is None
 
 
-def test_checkpoint_unknown_dispatch_cannot_become_new_identity_call(stage_runtime, monkeypatch):
+def test_checkpoint_unknown_dispatch_cannot_become_new_identity_call(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from datetime import UTC, datetime
 
     from insurance_harness.product_ingestion.artifact_tables import ProductStageModelCall
@@ -99,7 +107,9 @@ def test_checkpoint_unknown_dispatch_cannot_become_new_identity_call(stage_runti
     assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
 
 
-def test_missing_observer_summary_does_not_invalidate_source_checkpoint(stage_runtime, monkeypatch):
+def test_missing_observer_summary_does_not_invalidate_source_checkpoint(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, artifacts, origin, _ = _child(stage_runtime, monkeypatch)
     with store._session_factory() as session, session.begin():
         row = session.scalar(
@@ -117,7 +127,9 @@ def test_missing_observer_summary_does_not_invalidate_source_checkpoint(stage_ru
     assert len(artifacts.verify_checkpoint(scope=scope, run_id=child.run_id).reused_stages) == 2
 
 
-def test_failed_verifier_recovery_flattens_refs_without_faking_success(stage_runtime, monkeypatch):
+def test_failed_verifier_recovery_flattens_refs_without_faking_success(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from datetime import UTC, datetime
 
     from insurance_harness.jobs.tables import WikiJob
@@ -144,7 +156,7 @@ def test_failed_verifier_recovery_flattens_refs_without_faking_success(stage_run
     )
 
 
-def _enqueue_control(store, scope, origin):
+def _enqueue_control(store: typing.Any, scope: object, origin: typing.Any) -> None:
     """Old recovery admission stored a control input before the source job claim."""
     import hashlib
 
@@ -169,7 +181,9 @@ def _enqueue_control(store, scope, origin):
         session.add(ProductArtifact(**values))
 
 
-def test_checkpoint_excludes_enqueue_control_input(stage_runtime, monkeypatch):
+def test_checkpoint_excludes_enqueue_control_input(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, artifacts, origin, _ = _child(stage_runtime, monkeypatch)
     _enqueue_control(store, scope, origin)
     child = store.retry_processing(
@@ -185,8 +199,8 @@ def test_checkpoint_excludes_enqueue_control_input(stage_runtime, monkeypatch):
 
 
 def test_retry_failed_checkpoint_excludes_inherited_control_without_rewriting_plan(
-    stage_runtime, monkeypatch
-):
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from datetime import UTC, datetime
 
     from insurance_harness.jobs.tables import WikiJob
@@ -225,7 +239,9 @@ def test_retry_failed_checkpoint_excludes_inherited_control_without_rewriting_pl
     assert store.get_run(scope=scope, run_id=child.run_id) == failed
 
 
-def test_zero_generation_artifact_cannot_satisfy_required_output(stage_runtime, monkeypatch):
+def test_zero_generation_artifact_cannot_satisfy_required_output(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, _, origin, _ = _child(stage_runtime, monkeypatch)
     with store._session_factory() as session, session.begin():
         for row in session.scalars(
@@ -243,7 +259,9 @@ def test_zero_generation_artifact_cannot_satisfy_required_output(stage_runtime, 
     assert tuple(s.stage_key for s in plan.reused_stages) == ("uploads",)
 
 
-def test_checkpoint_contract_is_bound_to_child_workflow(stage_runtime, monkeypatch):
+def test_checkpoint_contract_is_bound_to_child_workflow(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from insurance_harness.product_ingestion.tables import ProductRun
 
     scope, store, _, _, child = _child(stage_runtime, monkeypatch)
@@ -257,15 +275,22 @@ def test_checkpoint_contract_is_bound_to_child_workflow(stage_runtime, monkeypat
         store.checkpoint_plan(scope=scope, run_id=child.run_id)
 
 
-def test_legacy_checkpoint_bytes_keep_original_contract(stage_runtime, monkeypatch):
+def test_legacy_checkpoint_bytes_keep_original_contract(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from insurance_harness.product_ingestion.checkpoints import CheckpointPlan
 
     scope, store, _, _, child = _child(stage_runtime, monkeypatch)
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
     data = plan.model_dump(mode="json")
     data["contract"] = "product-stage-checkpoint-plan.830.v1"
-    for key in ("retry_calls", "failed_calls", "audited_calls", "failed_discovery_artifact",
-                "failed_discovery_stage"):
+    for key in (
+        "retry_calls",
+        "failed_calls",
+        "audited_calls",
+        "failed_discovery_artifact",
+        "failed_discovery_stage",
+    ):
         data.pop(key, None)
     import json
 

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import typing
+from pathlib import Path
 
 import pytest
 from sqlalchemy import event
+from sqlalchemy.orm import ORMExecuteState
 
 from insurance_harness.db.base import Base, make_session_factory
 from insurance_harness.jobs import JobStore, NonRetryableJobError
@@ -29,18 +32,18 @@ from tests.product_ingestion.test_pipeline_runtime import (
 @pytest.mark.parametrize("response_lost", [False, True])
 @pytest.mark.parametrize("derived_failure", [False, True])
 async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_source_resend(
-    tmp_path,
-    monkeypatch,
-    response_lost,
-    derived_failure,
-):
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    response_lost: typing.Any,
+    derived_failure: typing.Any,
+) -> None:
     if derived_failure:
         from insurance_harness.product_ingestion import field_validation
         from insurance_harness.product_ingestion.checkpoints import field_digest
 
         validate = field_validation.validate_field_attempts
 
-        def nonempty_validation(**kwargs):
+        def nonempty_validation(**kwargs: typing.Any) -> typing.Any:
             report = validate(**kwargs)
             row = next(r for r in kwargs["attempts"] if r.outcome is FieldOutcomeKind.NOT_PROVIDED)
             counts = dict(report.counts)
@@ -75,7 +78,7 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
     original_create = service.platform.create_preparation
     submissions = []
 
-    async def transfer_limit(*args, **kwargs):
+    async def transfer_limit(*args: typing.Any, **kwargs: typing.Any) -> None:
         submissions.append((args[1], args[2]))
         if response_lost:
             await original_create(*args, **kwargs)
@@ -130,21 +133,23 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             "recovery must follow valid completed checkpoints, not error-string allowlists"
         )
 
-        def no_payload_on_admission(state):
+        def no_payload_on_admission(state: ORMExecuteState) -> None:
             if not state.is_select:
                 return
-            names = {getattr(item, "name", "") for item in state.statement.get_final_froms()}
+            statement = typing.cast(typing.Any, state.statement)
+            names = {getattr(item, "name", "") for item in statement.get_final_froms()}
             if names & {
                 "product_ingestion_artifacts",
                 "product_ingestion_stage_calls",
                 "product_ingestion_model_calls",
             }:
-                columns = {getattr(col, "name", "") for col in state.statement.selected_columns}
+                columns = {getattr(col, "name", "") for col in statement.selected_columns}
                 assert not columns & {"payload", "raw", "request_bytes"}, (
                     "admission eagerly reads historical bytes"
                 )
 
-        event.listen(factory.class_, "do_orm_execute", no_payload_on_admission)
+        session_class = typing.cast(typing.Any, factory).class_
+        event.listen(session_class, "do_orm_execute", no_payload_on_admission)
         try:
             child = context.store.retry_processing(
                 scope=SCOPE,
@@ -158,7 +163,7 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
             )
             assert duplicate.run_id == child.run_id
         finally:
-            event.remove(factory.class_, "do_orm_execute", no_payload_on_admission)
+            event.remove(session_class, "do_orm_execute", no_payload_on_admission)
         plan = context.store.checkpoint_plan(scope=SCOPE, run_id=child.run_id)
         assert plan.origin_run_id == origin.run_id
         assert plan.resume_stage == "preparation"
@@ -176,12 +181,12 @@ async def test_real_pipeline_compile_checkpoint_resumes_without_any_model_or_sou
 
         from insurance_harness.product_ingestion import compilation
 
-        def no_reassembly(*args, **kwargs):
+        def no_reassembly(*args: object, **kwargs: object) -> None:
             raise AssertionError("completed candidate must not be assembled again")
 
         monkeypatch.setattr(compilation, "assemble_platform_candidate", no_reassembly)
 
-        async def record_submission(*args, **kwargs):
+        async def record_submission(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
             submissions.append((args[1], args[2]))
             return await original_create(*args, **kwargs)
 

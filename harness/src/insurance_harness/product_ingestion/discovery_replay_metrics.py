@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin, StageCallState
 from insurance_harness.product_ingestion.artifact_tables import (
@@ -16,9 +18,18 @@ from insurance_harness.product_ingestion.discovery import (
     INDEPENDENT_DISCOVERY_PROMPT,
     INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
 )
+from insurance_harness.product_ingestion.models import ProductScope
+
+if TYPE_CHECKING:
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
 
 
-def verified_discovery_replay_calls(session, products, scope, run_id):
+def verified_discovery_replay_calls(
+    session: Session,
+    products: ProductIngestionStore,
+    scope: ProductScope,
+    run_id: str,
+) -> dict[str, ProductStageModelCall]:
     """Return distinct recorded ancestor calls supported by exact child rule records."""
     markers = session.scalars(
         select(ProductArtifact).where(
@@ -32,7 +43,7 @@ def verified_discovery_replay_calls(session, products, scope, run_id):
     if not markers:
         return {}
     child = products._run(session, scope, run_id)
-    ancestors = set()
+    ancestors: set[str] = set()
     visited = {run_id}
     ancestor_id = child.retry_of_run_id
     while ancestor_id:
@@ -42,7 +53,7 @@ def verified_discovery_replay_calls(session, products, scope, run_id):
         ancestor = products._run(session, scope, ancestor_id)
         ancestors.add(ancestor.id)
         ancestor_id = ancestor.retry_of_run_id
-    calls = {}
+    calls: dict[str, ProductStageModelCall] = {}
     for marker in markers:
         if marker.artifact_kind == "discovery_review_proof":
             _verify_payload(marker)
@@ -77,11 +88,12 @@ def verified_discovery_replay_calls(session, products, scope, run_id):
                 raise ValueError("discovery replay window receipt contract changed")
             if receipt.get("source_stage_key") != "discovery":
                 raise ValueError("discovery replay window stage changed")
-            operation = receipt.get("source_operation_key")
-            if not isinstance(operation, str) or not operation.startswith(
+            source_operation = receipt.get("source_operation_key")
+            if not isinstance(source_operation, str) or not source_operation.startswith(
                 "independent-discovery-window-"
             ):
                 raise ValueError("discovery replay window operation changed")
+            operation = source_operation
             input_sha = receipt.get("source_input_sha256")
             prompt_sha = hashlib.sha256(INDEPENDENT_DISCOVERY_PROMPT).hexdigest()
             if receipt.get("source_prompt_sha256") != prompt_sha:
@@ -120,7 +132,7 @@ def verified_discovery_replay_calls(session, products, scope, run_id):
     return calls
 
 
-def _object(payload):
+def _object(payload: bytes) -> dict[str, Any]:
     try:
         value = json.loads(payload)
     except (TypeError, ValueError) as exc:
@@ -130,18 +142,18 @@ def _object(payload):
     return value
 
 
-def _hash(value):
+def _hash(value: object) -> TypeGuard[str]:
     return isinstance(value, str) and len(value) == 64 and all(
         char in "0123456789abcdef" for char in value
     )
 
 
-def _verify_payload(row):
+def _verify_payload(row: ProductArtifact) -> None:
     if hashlib.sha256(row.payload).hexdigest() != row.payload_sha256:
         raise ValueError("discovery replay artifact bytes changed")
 
 
-def _verify_replay_marker(marker, *, stage_key):
+def _verify_replay_marker(marker: ProductArtifact, *, stage_key: str) -> None:
     if (
         marker.stage_key != stage_key
         or marker.origin != ArtifactOrigin.RULE.value
@@ -151,7 +163,14 @@ def _verify_replay_marker(marker, *, stage_key):
     _verify_payload(marker)
 
 
-def _matching_child_artifact(session, scope, run_id, kind, key, digest):
+def _matching_child_artifact(
+    session: Session,
+    scope: ProductScope,
+    run_id: str,
+    kind: str,
+    key: str,
+    digest: object,
+) -> None:
     if not _hash(digest):
         raise ValueError("discovery replay child artifact hash missing")
     row = session.scalar(

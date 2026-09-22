@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import (
@@ -97,25 +97,23 @@ class _FrozenModel(BaseModel):
 def _without_hash(model: BaseModel, field: str) -> dict[str, object]:
     if field not in type(model).model_fields:
         raise ValueError("root hash field is not declared")
-    return {
-        name: getattr(model, name)
-        for name in type(model).model_fields
-        if name != field
-        and not (
-            type(model).model_fields[name].exclude_if is not None
-            and type(model).model_fields[name].exclude_if(getattr(model, name))
-        )
-    }
+    result: dict[str, object] = {}
+    for name, field_info in type(model).model_fields.items():
+        value = getattr(model, name)
+        exclude_if = field_info.exclude_if
+        if name != field and not (exclude_if is not None and exclude_if(value)):
+            result[name] = value
+    return result
 
 
 def _batch_sha256(object_type: str, payload: object) -> str:
     return _canonical_batch_sha256(object_type, payload)
 
 
-def _hashed(model_type: type[BaseModel], contract: str, hash_field: str, **payload: object) -> Any:
-    return model_type.model_validate(
-        {**payload, hash_field: _batch_sha256(contract, payload)}
-    )
+def _hashed[ModelT: BaseModel](
+    model_type: type[ModelT], contract: str, hash_field: str, **payload: object
+) -> ModelT:
+    return model_type.model_validate({**payload, hash_field: _batch_sha256(contract, payload)})
 
 
 def _canonical_json(value: object) -> str:
@@ -188,9 +186,7 @@ class CatalogProfileConfirmationBinding830G3V1(_FrozenModel):
 
     @model_validator(mode="after")
     def semantic_hash(self) -> Self:
-        if self.receipt_semantic_sha256 != _batch_sha256(
-            self.receipt.contract, self.receipt
-        ):
+        if self.receipt_semantic_sha256 != _batch_sha256(self.receipt.contract, self.receipt):
             raise ValueError("PROFILE_CONFIRMATION_HASH_MISMATCH")
         return self
 
@@ -205,9 +201,7 @@ class BatchResolutionInputs830G3V1(_FrozenModel):
 
     @model_validator(mode="after")
     def content_hash(self) -> Self:
-        if self.inputs_sha256 != _batch_sha256(
-            self.contract, _without_hash(self, "inputs_sha256")
-        ):
+        if self.inputs_sha256 != _batch_sha256(self.contract, _without_hash(self, "inputs_sha256")):
             raise ValueError("RESOLUTION_INPUTS_HASH_MISMATCH")
         return self
 
@@ -257,9 +251,7 @@ class EntityCompileBinding830G3V1(_FrozenModel):
     @model_validator(mode="after")
     def shape_and_hash(self) -> Self:
         refs = tuple((item.material_id, item.proposal_ref) for item in self.resolution_refs)
-        evidence = tuple(
-            (item.material_id, item.evidence_id) for item in self.resolution_evidence
-        )
+        evidence = tuple((item.material_id, item.evidence_id) for item in self.resolution_evidence)
         nullable = (self.candidate_id, self.entity_candidate_sha256)
         if (
             not self.resolution_refs
@@ -348,7 +340,7 @@ class BatchConceptCompileRequest830G3V1(_FrozenModel):
 
     @model_validator(mode="before")
     @classmethod
-    def reject_empty_incremental_extensions(cls, value):
+    def reject_empty_incremental_extensions(cls, value: object) -> object:
         if isinstance(value, Mapping) and (
             ("published_base" in value and value["published_base"] is None)
             or ("refresh_fields" in value and not value["refresh_fields"])
@@ -358,7 +350,7 @@ class BatchConceptCompileRequest830G3V1(_FrozenModel):
 
     @model_validator(mode="wrap")
     @classmethod
-    def canonical_typed_revalidation(cls, value, handler):
+    def canonical_typed_revalidation(cls, value: object, handler: Callable[[object], Self]) -> Self:
         # Pydantic's instance revalidation materializes omitted defaults before
         # the wire validator. Preserve canonical omission without skipping any
         # hash, source, or closure validation of the instance being rechecked.
@@ -390,9 +382,7 @@ class BatchConceptPageManifest830G3V1(_FrozenModel):
             keys != tuple(sorted(keys))
             or len(ids) != len(set(ids))
             or self.members_sha256
-            != _batch_sha256(
-                "batch-concept-page-members.830.g3.v1", {"members": self.members}
-            )
+            != _batch_sha256("batch-concept-page-members.830.g3.v1", {"members": self.members})
         ):
             raise ValueError("PAGE_MANIFEST_MISMATCH")
         return self
@@ -446,9 +436,7 @@ class NavigationAssignment830G3V1(_FrozenModel):
             self.labels != tuple(sorted(set(self.labels)))
             or self.primary_label not in self.labels
             or self.assignment_sha256
-            != _batch_sha256(
-                self.contract, _without_hash(self, "assignment_sha256")
-            )
+            != _batch_sha256(self.contract, _without_hash(self, "assignment_sha256"))
         ):
             raise ValueError("NAVIGATION_ASSIGNMENT_INVALID")
         return self
@@ -515,9 +503,11 @@ def validate_unknown_field_key_alignments(
         ):
             raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
         return ()
-    if tuple(row.entity_id for row in exact_rows) != tuple(
-        sorted({row.entity_id for row in exact_rows})
-    ) or tuple(row.alignment_sha256 for row in exact_rows) != _ALIGNMENT_HASHES:
+    if (
+        tuple(row.entity_id for row in exact_rows)
+        != tuple(sorted({row.entity_id for row in exact_rows}))
+        or tuple(row.alignment_sha256 for row in exact_rows) != _ALIGNMENT_HASHES
+    ):
         raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
     old_fields = {(item.entity_id, item.field_key): item for item in exact_request.existing_fields}
     new_fields = {(item.entity_id, item.field_key): item for item in exact_output.fields}
@@ -690,8 +680,7 @@ def _validate_confirmation(request: BatchConceptCompileRequest830G3V1) -> None:
         receipt.catalog_sha256 != request.catalog.catalog_sha256
         or receipt.catalog_wire_sha256 != request.catalog_wire_sha256
         or confirmation.receipt_file_sha256 != _PROFILE_CONFIRMATION_FILE_SHA256
-        or confirmation.receipt_semantic_sha256
-        != _PROFILE_CONFIRMATION_SEMANTIC_SHA256
+        or confirmation.receipt_semantic_sha256 != _PROFILE_CONFIRMATION_SEMANTIC_SHA256
     ):
         raise BatchConceptCompileError("PROFILE_CONFIRMATION_MISMATCH")
     expected = {
@@ -705,7 +694,9 @@ def _validate_confirmation(request: BatchConceptCompileRequest830G3V1) -> None:
         raise BatchConceptCompileError("PROFILE_CONFIRMATION_MISMATCH")
 
 
-def _published_base_bindings(request: BatchConceptCompileRequest830G3V1):
+def _published_base_bindings(
+    request: BatchConceptCompileRequest830G3V1,
+) -> dict[str, EntityCompileBinding830G3V1]:
     published = request.published_base
     if published is None:
         if request.refresh_fields:
@@ -728,12 +719,24 @@ def _published_base_bindings(request: BatchConceptCompileRequest830G3V1):
             actual is None
             or row.entity_version != base.existing_entity_versions[entity_id]
             or set(row.required_fields) != keys
-            or (row.entity_version, row.issuer, row.display_name,
-                row.product_code, row.version_label,
-                row.version_anchor.kind, row.version_anchor.observed_value)
-            != (actual.entity_version, actual.issuer, actual.name, actual.product_code,
-                actual.version_label, actual.filing_or_registration.kind,
-                actual.filing_or_registration.value)
+            or (
+                row.entity_version,
+                row.issuer,
+                row.display_name,
+                row.product_code,
+                row.version_label,
+                row.version_anchor.kind,
+                row.version_anchor.observed_value,
+            )
+            != (
+                actual.entity_version,
+                actual.issuer,
+                actual.name,
+                actual.product_code,
+                actual.version_label,
+                actual.filing_or_registration.kind,
+                actual.filing_or_registration.value,
+            )
         ):
             raise BatchConceptCompileError("PUBLISHED_BASE_BINDING_MISMATCH")
     return rows
@@ -815,13 +818,9 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
             if previous is not None and previous != block:
                 raise BatchConceptCompileError("SOURCE_CLOSURE_MISMATCH")
             corpus_sources[key] = block
-    base_sources = {
-        (block.revision_id, block.block_id): block for block in base.sources
-    }
+    base_sources = {(block.revision_id, block.block_id): block for block in base.sources}
     if any(
-        base_sources[key] != block
-        for key, block in corpus_sources.items()
-        if key in base_sources
+        base_sources[key] != block for key, block in corpus_sources.items() if key in base_sources
     ):
         raise BatchConceptCompileError("SOURCE_CLOSURE_MISMATCH")
     base_entities = set(base.existing_entity_versions)
@@ -865,30 +864,31 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         current_entities.add(binding.entity_id)
         if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v3":
             from .g3_evidence_identity_v3 import require_complete_support
+
             require_complete_support(resolution, refs, inputs.proposals)
         evidence_ids = {item.evidence_id for item in binding.resolution_evidence}
         if set(binding.source_material_ids) != {key[0] for key in refs}:
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
         if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v2":
-            if not any(proposal_index[material_id].material_role == "terms" and any(
-                entity.proposal_ref == proposal_ref and entity.product_code == binding.product_code
-                and entity.filing_or_registration is not None
-                and entity.filing_or_registration.kind == binding.version_anchor.kind
-                and entity.filing_or_registration.value == binding.version_anchor.observed_value
-                for entity in proposal_index[material_id].entities
-            ) for material_id, proposal_ref in refs if material_id in proposal_index):
+            if not any(
+                proposal_index[material_id].material_role == "terms"
+                and any(
+                    entity.proposal_ref == proposal_ref
+                    and entity.product_code == binding.product_code
+                    and entity.filing_or_registration is not None
+                    and entity.filing_or_registration.kind == binding.version_anchor.kind
+                    and entity.filing_or_registration.value == binding.version_anchor.observed_value
+                    for entity in proposal_index[material_id].entities
+                )
+                for material_id, proposal_ref in refs
+                if material_id in proposal_index
+            ):
                 raise BatchConceptCompileError("RESOLUTION_IDENTITY_SOURCE_REQUIRED")
-        bound_by_ref: dict[tuple[str, str], set[str]] = {
-            key: set() for key in refs
-        }
+        bound_by_ref: dict[tuple[str, str], set[str]] = {key: set() for key in refs}
         for bound in binding.resolution_evidence:
             key = (bound.material_id, bound.proposal_ref)
             found = decision_index.get(key)
-            if (
-                key not in refs
-                or found is None
-                or bound.evidence_id not in found[1].evidence_ids
-            ):
+            if key not in refs or found is None or bound.evidence_id not in found[1].evidence_ids:
                 raise BatchConceptCompileError("RESOLUTION_EVIDENCE_MISSING")
             bound_by_ref[key].add(bound.evidence_id)
         for key, ref in refs.items():
@@ -900,8 +900,7 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
                 parent.disposition not in ("MATCH", "CREATE", "MULTI")
                 or child.disposition != binding.resolution_disposition
                 or child.decision_sha256 != ref.decision_sha256
-                or child.classification.assignment_sha256
-                != ref.classification_assignment_sha256
+                or child.classification.assignment_sha256 != ref.classification_assignment_sha256
                 or child.classification.primary_label != binding.primary_classification
                 or child.classification.schema_pack_id != binding.schema_pack_id
                 or child.classification.schema_version != binding.schema_version
@@ -992,15 +991,19 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
                 raise BatchConceptCompileError("BASE_ENTITY_MATCH_REQUIRED")
             if binding.entity_id in base_entities:
                 matched_base.add(binding.entity_id)
-                if base_kind == "LEGACY_G2" and (
-                    binding.primary_classification,
-                    binding.schema_pack_id,
-                    binding.schema_version,
-                    binding.schema_pack_sha256,
-                    binding.profile_id,
-                    binding.profile_version,
-                    binding.profile_sha256,
-                ) != _MEDICAL_PACK:
+                if (
+                    base_kind == "LEGACY_G2"
+                    and (
+                        binding.primary_classification,
+                        binding.schema_pack_id,
+                        binding.schema_version,
+                        binding.schema_pack_sha256,
+                        binding.profile_id,
+                        binding.profile_version,
+                        binding.profile_sha256,
+                    )
+                    != _MEDICAL_PACK
+                ):
                     raise BatchConceptCompileError("BASE_PACK_MIGRATION_REQUIRED")
         else:
             children = [decision_index[key][1] for key in refs]
@@ -1017,8 +1020,7 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
                 or binding.candidate_id != candidate.candidate_id
                 or binding.entity_candidate_sha256 != candidate.candidate_sha256
                 or binding.entity_key_sha256 != candidate.entity_key_sha256
-                or binding.version_candidate_key_sha256
-                != candidate.version_candidate_key_sha256
+                or binding.version_candidate_key_sha256 != candidate.version_candidate_key_sha256
             ):
                 raise BatchConceptCompileError("CREATE_IDENTITY_MISMATCH")
     if matched_base != base_entities:
@@ -1041,7 +1043,9 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         for evidence in member.evidence
     }
     selected_material_ids = {
-        material_id for binding in bindings if binding.entity_id in current_entities
+        material_id
+        for binding in bindings
+        if binding.entity_id in current_entities
         for material_id in binding.source_material_ids
     }
     for material_id in selected_material_ids:
@@ -1053,7 +1057,8 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         )
     required_source_keys.update(
         (bound.evidence.revision_id, bound.evidence.block_id)
-        for binding in published_bindings.values() for bound in binding.resolution_evidence
+        for binding in published_bindings.values()
+        for bound in binding.resolution_evidence
     )
     # The deployed serving service checks the exact parent-source union; this
     # offline DTO cannot manufacture that external authority from a hash claim.
@@ -1062,9 +1067,10 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
     ):
         raise BatchConceptCompileError("SOURCE_CLOSURE_MISMATCH")
     expected_alignments = _ALIGNMENT_HASHES if base_kind == "LEGACY_G2" else ()
-    if tuple(
-        item.alignment_sha256 for item in request.unknown_field_key_alignments
-    ) != expected_alignments:
+    if (
+        tuple(item.alignment_sha256 for item in request.unknown_field_key_alignments)
+        != expected_alignments
+    ):
         raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
     aligned_existing_fields(request)
 
@@ -1137,9 +1143,7 @@ def _build_unknown_alignments(
             "old_member_id": old.assertion_id,
             "old_member_digest": _concept_member_hash_g3(old_member),
             "new_member_id": new.assertion_id,
-            "new_member_digest": _batch_sha256(
-                "batch-concept-member.830.g3.v1", new_member
-            ),
+            "new_member_digest": _batch_sha256("batch-concept-member.830.g3.v1", new_member),
         }
         rows.append(
             UnknownFieldKeyAlignment830G3V1.model_validate(
@@ -1168,6 +1172,7 @@ def _build_entity_bindings(
         raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
     if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v3":
         from .g3_evidence_identity_v3 import require_complete_support
+
         require_complete_support(resolution, selected_decision_refs, proposals)
     decisions = _decision_index(resolution)
     proposal_index = {item.material_id: item for item in proposals.proposals}
@@ -1188,9 +1193,7 @@ def _build_entity_bindings(
             entity_id = None if candidate is None else "entity_" + candidate.entity_key_sha256
         if entity_id is None:
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
-        grouped.setdefault(entity_id, []).append(
-            (material_id, proposal_ref, parent, child)
-        )
+        grouped.setdefault(entity_id, []).append((material_id, proposal_ref, parent, child))
     bindings: list[EntityCompileBinding830G3V1] = []
     for entity_id in sorted(grouped):
         rows = grouped[entity_id]
@@ -1240,8 +1243,7 @@ def _build_entity_bindings(
                     and entity.product_code == anchors.product_code.observed_value
                     and entity.filing_or_registration is not None
                     and entity.filing_or_registration.kind == anchors.version_anchor.kind
-                    and entity.filing_or_registration.value
-                    == anchors.version_anchor.observed_value
+                    and entity.filing_or_registration.value == anchors.version_anchor.observed_value
                     for entity in proposal_index[row[0]].entities
                 )
                 for row in rows
@@ -1305,9 +1307,7 @@ def _build_entity_bindings(
                     material_id=material_id,
                     proposal_ref=proposal_ref,
                     decision_sha256=child.decision_sha256,
-                    classification_assignment_sha256=(
-                        child.classification.assignment_sha256
-                    ),
+                    classification_assignment_sha256=(child.classification.assignment_sha256),
                 )
             )
             proposal = proposal_index.get(material_id)
@@ -1370,9 +1370,7 @@ def _build_entity_bindings(
             EntityCompileBinding830G3V1.model_validate(
                 {
                     **payload,
-                    "binding_sha256": _batch_sha256(
-                        "entity-compile-binding.830.g3.v1", payload
-                    ),
+                    "binding_sha256": _batch_sha256("entity-compile-binding.830.g3.v1", payload),
                 }
             )
         )
@@ -1439,9 +1437,7 @@ def build_batch_compile_request(
         contract="catalog-profile-confirmation-binding.830.g3.v1",
         receipt=confirmation_receipt,
         receipt_file_sha256=hashlib.sha256(profile_confirmation_json).hexdigest(),
-        receipt_semantic_sha256=_batch_sha256(
-            confirmation_receipt.contract, confirmation_receipt
-        ),
+        receipt_semantic_sha256=_batch_sha256(confirmation_receipt.contract, confirmation_receipt),
     )
     inputs_payload: dict[str, object] = {
         "contract": "batch-resolution-inputs.830.g3.v1",
@@ -1453,9 +1449,7 @@ def build_batch_compile_request(
     resolution_inputs = BatchResolutionInputs830G3V1.model_validate(
         {
             **inputs_payload,
-            "inputs_sha256": _batch_sha256(
-                "batch-resolution-inputs.830.g3.v1", inputs_payload
-            ),
+            "inputs_sha256": _batch_sha256("batch-resolution-inputs.830.g3.v1", inputs_payload),
         }
     )
     payload: dict[str, object] = {
@@ -1481,9 +1475,7 @@ def build_batch_compile_request(
         return BatchConceptCompileRequest830G3V1.model_validate(
             {
                 **payload,
-                "request_sha256": _batch_sha256(
-                    "batch-concept-compile-request.830.g3.v1", payload
-                ),
+                "request_sha256": _batch_sha256("batch-concept-compile-request.830.g3.v1", payload),
             }
         )
     except BatchConceptCompileError:
@@ -1500,9 +1492,7 @@ def aligned_existing_fields(
     for field in request.base_request.existing_fields:
         row = rows.get((field.entity_id, field.field_key))
         result.append(
-            field
-            if row is None
-            else field.model_copy(update={"field_key": row.new_field_key})
+            field if row is None else field.model_copy(update={"field_key": row.new_field_key})
         )
     output = CompileOutput(
         request_hash=compile_request_hash_g3(request.base_request),
@@ -1552,15 +1542,16 @@ def aligned_existing_fields(
         if (
             row.source_candidate_sha256 != _BASE_CANDIDATE
             or row.old_member_digest != _concept_member_hash_g3(old_member)
-            or row.new_member_digest
-            != _batch_sha256("batch-concept-member.830.g3.v1", new_member)
+            or row.new_member_digest != _batch_sha256("batch-concept-member.830.g3.v1", new_member)
         ):
             raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
     refreshed = {(row.entity_id, row.field_key) for row in request.refresh_fields}
-    return tuple(sorted(
-        (item for item in result if (item.entity_id, item.field_key) not in refreshed),
-        key=lambda item: (item.entity_id, item.field_key),
-    ))
+    return tuple(
+        sorted(
+            (item for item in result if (item.entity_id, item.field_key) not in refreshed),
+            key=lambda item: (item.entity_id, item.field_key),
+        )
+    )
 
 
 def _unique_json(raw: str | bytes) -> object:
@@ -1703,9 +1694,7 @@ def validate_delta_output(
     }
     if len(promoted) != len(output.audit) or set(promoted) != set(objects):
         raise BatchConceptCompileError("DELTA_AUDIT_MISMATCH")
-    if any(
-        promoted[item.assertion_id].disposition != "field_rule" for item in output.fields
-    ):
+    if any(promoted[item.assertion_id].disposition != "field_rule" for item in output.fields):
         raise BatchConceptCompileError("DELTA_AUDIT_MISMATCH")
     sources = request.base_request.sources
     binding_by_entity = {item.entity_id: item for item in request.entity_bindings}
@@ -1719,9 +1708,7 @@ def validate_delta_output(
     base_pages_by_entity: dict[str, list[FreeWikiPage]] = {}
     for page in request.base_request.existing_pages:
         base_pages_by_entity.setdefault(page.entity_id, []).append(page)
-    definition_by_id = {
-        item.concept_id: item for item in request.base_request.existing_definitions
-    }
+    definition_by_id = {item.concept_id: item for item in request.base_request.existing_definitions}
     delta_members: tuple[FieldAssertion | FreeWikiPage, ...] = (
         *output.fields,
         *output.pages,
@@ -2035,16 +2022,12 @@ def project_batch_members(
     return BatchConceptPageManifest830G3V1(
         contract="batch-concept-page-manifest.830.g3.v1",
         members=ordered,
-        members_sha256=_batch_sha256(
-            "batch-concept-page-members.830.g3.v1", {"members": ordered}
-        ),
+        members_sha256=_batch_sha256("batch-concept-page-members.830.g3.v1", {"members": ordered}),
         audit=output.audit,
     )
 
 
-def _validate_execution(
-    result: CompileResult | ReviewResult, expected_context_hash: str
-) -> None:
+def _validate_execution(result: CompileResult | ReviewResult, expected_context_hash: str) -> None:
     if result.execution.context_hash != expected_context_hash:
         raise BatchConceptCompileError("EXECUTION_CONTEXT_MISMATCH")
     _validate_raw(result.execution.raw_output, result.output)
@@ -2165,9 +2148,7 @@ def assemble_candidate_bundle(
     return BatchConceptCandidateBundle830G3V1.model_validate(
         {
             **payload,
-            "candidate_hash": _batch_sha256(
-                cast(str, payload["contract"]), payload
-            ),
+            "candidate_hash": _batch_sha256(cast(str, payload["contract"]), payload),
         }
     )
 
@@ -2199,9 +2180,7 @@ def apply_navigation_assignment_g3(
         None,
     )
     exact_labels = tuple(labels)
-    if prior is not None and (
-        prior.labels, prior.primary_label
-    ) == (exact_labels, primary_label):
+    if prior is not None and (prior.labels, prior.primary_label) == (exact_labels, primary_label):
         return bundle
     assignment_payload: dict[str, object] = {
         "contract": "g3-navigation-assignment.830.v1",
@@ -2211,9 +2190,7 @@ def apply_navigation_assignment_g3(
         "labels": exact_labels,
         "primary_label": primary_label,
         "previous_assignment_sha256": (
-            navigation_default_sha256_g3(binding)
-            if prior is None
-            else prior.assignment_sha256
+            navigation_default_sha256_g3(binding) if prior is None else prior.assignment_sha256
         ),
     }
     assignment = NavigationAssignment830G3V1.model_validate(
@@ -2228,18 +2205,12 @@ def apply_navigation_assignment_g3(
         sorted(
             (
                 assignment,
-                *(
-                    item
-                    for item in bundle.navigation_assignments
-                    if item.entity_id != entity_id
-                ),
+                *(item for item in bundle.navigation_assignments if item.entity_id != entity_id),
             ),
             key=lambda item: (item.entity_id, item.entity_version),
         )
     )
-    _validate_navigation_assignments(
-        bundle.request, bundle.model_compile_result, assignments
-    )
+    _validate_navigation_assignments(bundle.request, bundle.model_compile_result, assignments)
     payload = _without_hash(bundle, "candidate_hash")
     payload["navigation_assignments"] = assignments
     payload["page_manifest"] = project_batch_members(

@@ -12,7 +12,7 @@ import hashlib
 import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal, NoReturn, TypedDict, cast
 
 from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import (
     batch_json_bytes_830_g3,
@@ -45,6 +45,16 @@ BeginCall = Callable[[str, str, bytes], Awaitable[None]]
 PersistRaw = Callable[[str, str, bytes | None, str | None], Awaitable[str]]
 Outcome = Literal["verified", "not_provided", "extraction_failed"]
 CallState = Literal["reserved", "dispatching", "recorded", "interrupted"]
+
+
+class _FieldOutcomePayload(TypedDict):
+    task_sha256: str
+    entity_id: str
+    field_key: str
+    outcome: Outcome
+    reason: str
+    validated_result: FieldTaskEvidenceResultV1 | None
+    raw_ref: str | None
 
 
 @dataclass(frozen=True)
@@ -110,7 +120,7 @@ class FieldOutcome:
             raw["validated_result"] = FieldTaskEvidenceResultV1.model_validate(
                 raw["validated_result"]
             )
-        return cls(**raw)
+        return cls(**cast(_FieldOutcomePayload, raw))
 
 
 def _sha(raw: bytes) -> str:
@@ -128,7 +138,7 @@ def _json(raw: bytes) -> object:
             raise ValueError("invalid response JSON fence")
         semantic = b"\n".join(lines[1:-1])
 
-    def unique(pairs):
+    def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
         value = {}
         for key, item in pairs:
             if key in value:
@@ -136,7 +146,7 @@ def _json(raw: bytes) -> object:
             value[key] = item
         return value
 
-    def invalid_constant(value):
+    def invalid_constant(value: str) -> NoReturn:
         raise ValueError("non-JSON constant")
 
     return json.loads(semantic, object_pairs_hook=unique, parse_constant=invalid_constant)
@@ -172,13 +182,16 @@ def _source_index(
         keys[key] = source
         ref = "source_" + _sha(batch_json_bytes_830_g3(source.model_dump(exclude={"text"})))
         index[ref] = source
-    for original in tasks:
-        task = FieldTaskV1.model_validate(original)
+    for original_task in tasks:
+        task = FieldTaskV1.model_validate(original_task)
         if not task.allowed_sources:
             raise ValueError("field task requires immutable source scope")
         for allowed in task.allowed_sources:
-            source = keys.get((allowed.revision_id, allowed.block_id))
-            if source is None or (source.source_hash, source.parser_identity) != (
+            allowed_source = keys.get((allowed.revision_id, allowed.block_id))
+            if allowed_source is None or (
+                allowed_source.source_hash,
+                allowed_source.parser_identity,
+            ) != (
                 allowed.source_hash,
                 allowed.parser_identity,
             ):
@@ -186,7 +199,9 @@ def _source_index(
     return index
 
 
-def _compact_field_target(task: FieldTaskV1, offered_refs, index) -> dict:
+def _compact_field_target(
+    task: FieldTaskV1, offered_refs: Sequence[str], index: Mapping[str, SourceBlock]
+) -> dict[str, Any]:
     """Keep full dependency scope local; expose only this call's usable refs."""
     allowed = {(source.revision_id, source.block_id) for source in task.allowed_sources}
     return {
@@ -242,7 +257,12 @@ def render_window_request(
     )
 
 
-def _recorded_context(raw: bytes, tasks, pending, index):
+def _recorded_context(
+    raw: bytes,
+    tasks: Sequence[FieldTaskV1],
+    pending: Sequence[FieldTaskV1],
+    index: dict[str, SourceBlock],
+) -> tuple[dict[str, Any], tuple[FieldTaskV1, ...]]:
     value = _json(raw)
     if (
         not isinstance(value, dict)
@@ -310,7 +330,7 @@ def _recorded_context(raw: bytes, tasks, pending, index):
     return value, tuple(called)
 
 
-def _failure(task, reason, raw_ref):
+def _failure(task: FieldTaskV1, reason: str, raw_ref: str | None) -> FieldOutcome:
     return FieldOutcome(
         task.task_sha256,
         task.entity_id,
@@ -322,7 +342,13 @@ def _failure(task, reason, raw_ref):
     )
 
 
-def _project(raw, tasks, index, context, raw_ref):
+def _project(
+    raw: bytes,
+    tasks: Sequence[FieldTaskV1],
+    index: dict[str, SourceBlock],
+    context: dict[str, Any],
+    raw_ref: str | None,
+) -> tuple[FieldOutcome, ...]:
     try:
         value = _json(raw)
         if (
@@ -335,7 +361,7 @@ def _project(raw, tasks, index, context, raw_ref):
             or not isinstance(value["fields"], list)
         ):
             raise ValueError("invalid response envelope")
-        grouped = {t.task_sha256: [] for t in tasks}
+        grouped: dict[str, list[dict[str, Any]]] = {t.task_sha256: [] for t in tasks}
         for row in value["fields"]:
             if (
                 not isinstance(row, dict)
@@ -384,7 +410,7 @@ def _project(raw, tasks, index, context, raw_ref):
                 valid_time=row.valid_time,
                 source_blocks=tuple(index.values()),
             )
-            outcome = "not_provided" if result.state == "unknown" else "verified"
+            outcome: Outcome = "not_provided" if result.state == "unknown" else "verified"
             outcomes.append(
                 FieldOutcome(
                     task.task_sha256,
@@ -401,7 +427,11 @@ def _project(raw, tasks, index, context, raw_ref):
     return tuple(outcomes)
 
 
-def _verified_cached_outcomes(tasks, cached, index):
+def _verified_cached_outcomes(
+    tasks: Sequence[FieldTaskV1],
+    cached: Mapping[tuple[str, str], FieldOutcome | Mapping[str, object]] | None,
+    index: dict[str, SourceBlock],
+) -> dict[tuple[str, str], FieldOutcome]:
     known = {}
     for task in tasks:
         key = (task.entity_id, task.field_key)
@@ -411,6 +441,7 @@ def _verified_cached_outcomes(tasks, cached, index):
         hit = FieldOutcome.from_dict(hit) if isinstance(hit, Mapping) else hit
         if (hit.entity_id, hit.field_key) != key or hit.outcome == "extraction_failed":
             raise ValueError("invalid success cache result")
+        assert hit.validated_result is not None
         for evidence in hit.validated_result.evidence:
             verify_evidence(evidence, tuple(index.values()))
         known[key] = hit
@@ -476,7 +507,7 @@ async def execute_window(
                 space_id=space_id,
                 raw_kb_id=raw_kb_id,
             )
-            context = _json(request)
+            context = cast(dict[str, Any], _json(request))
             request_hash = _sha(request)
             await begin_call(call_id, request_hash, request)
             diagnostic = None

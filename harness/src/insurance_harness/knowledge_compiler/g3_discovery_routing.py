@@ -10,12 +10,76 @@ import hashlib
 import json
 from collections import deque
 from collections.abc import Iterator, Mapping, Sequence
+from typing import Literal, TypedDict
 
 from .concept_free_wiki_830_g2 import SourceBlock
-from .g3_field_task_routing import _spans
+from .g3_field_task_routing import RoutedSource, RoutedSourceIdentity, RoutedSourceSpan, _spans
 
 ROUTING_VERSION = "g3-discovery-material-spread.830.v1"
 Span = tuple[str, int, int, str]
+
+
+class DiscoveryRange(TypedDict):
+    start: int
+    end: int
+
+
+class DiscoverySourceCoverage(TypedDict):
+    source_ref: str
+    knowledge_id: str
+    revision_id: str
+    block_id: str
+    page_number: int
+    total_chars: int
+    offered_chars: int
+    omitted_chars: int
+    offered_ranges: list[DiscoveryRange]
+    omitted_ranges: list[DiscoveryRange]
+
+
+class DiscoveryCoverage(TypedDict):
+    routing_version: str
+    offset_unit: Literal["UNICODE_CODE_POINT"]
+    max_source_chars: int
+    max_span_chars: int
+    total_chars: int
+    offered_chars: int
+    omitted_chars: int
+    complete: bool
+    material_count: int
+    represented_material_count: int
+    total_span_count: int
+    offered_span_count: int
+    omitted_span_count: int
+    sources: list[DiscoverySourceCoverage]
+
+
+class DiscoverySourceSelection(TypedDict):
+    source_options: list[RoutedSource]
+    coverage: DiscoveryCoverage
+
+
+class DiscoverySourceWindow(DiscoverySourceSelection):
+    window_id: str
+    window_index: int
+    window_count: int
+
+
+def _source_identity(source: SourceBlock) -> RoutedSourceIdentity:
+    return RoutedSourceIdentity(
+        tenant_id=source.tenant_id,
+        space_id=source.space_id,
+        raw_kb_id=source.raw_kb_id,
+        knowledge_id=source.knowledge_id,
+        parse_attempt=source.parse_attempt,
+        revision_id=source.revision_id,
+        source_hash=source.source_hash,
+        parse_hash=source.parse_hash,
+        parser_identity=source.parser_identity,
+        block_id=source.block_id,
+        page_number=source.page_number,
+        source_type=source.source_type,
+    )
 
 
 def _spread(rows: Sequence[Span]) -> Iterator[Span]:
@@ -41,7 +105,7 @@ def route_discovery_sources(
     *,
     max_source_chars: int = 24000,
     max_span_chars: int = 2000,
-) -> dict[str, object]:
+) -> DiscoverySourceSelection:
     """Round-robin materials, spreading whole spans across pages and chapters.
 
     Budgets count Unicode code points of offered quotes, excluding metadata.
@@ -96,17 +160,17 @@ def route_discovery_sources(
         for material in exhausted:
             del iterators[material]
 
-    options = []
-    coverage_sources = []
+    options: list[RoutedSource] = []
+    coverage_sources: list[DiscoverySourceCoverage] = []
     represented = set()
     total_chars = 0
     total_spans = 0
     for ref, source in ordered:
-        offered_ranges = []
-        omitted_ranges = []
-        offered_spans = []
+        offered_ranges: list[DiscoveryRange] = []
+        omitted_ranges: list[DiscoveryRange] = []
+        offered_spans: list[RoutedSourceSpan] = []
         for _, start, end, heading in source_rows[ref]:
-            span_range = {"start": start, "end": end}
+            span_range = DiscoveryRange(start=start, end=end)
             if (ref, start, end) in chosen:
                 offered_ranges.append(span_range)
                 offered_spans.append(
@@ -141,7 +205,7 @@ def route_discovery_sources(
             options.append(
                 {
                     "source_ref": ref,
-                    "source": source.model_dump(exclude={"text"}),
+                    "source": _source_identity(source),
                     "spans": offered_spans,
                 }
             )
@@ -171,7 +235,7 @@ def route_discovery_source_windows(
     *,
     max_source_chars: int = 24000,
     max_span_chars: int = 2000,
-) -> tuple[dict[str, object], ...]:
+) -> tuple[DiscoverySourceWindow, ...]:
     """Cover each original span once using the existing chapter and material order.
 
     The detailed per-source coverage is a server-side audit record. Callers may
@@ -233,21 +297,21 @@ def route_discovery_source_windows(
         used += size
     if current:
         partitions.append(current)
-    result = []
+    result: list[DiscoverySourceWindow] = []
     total_chars = sum(len(source.text) for _, source in ordered)
     total_spans = sum(len(rows) for rows in source_rows.values())
     for index, partition in enumerate(partitions):
         chosen = {(ref, start, end) for ref, start, end, _ in partition}
-        options = []
-        coverage_sources = []
+        options: list[RoutedSource] = []
+        coverage_sources: list[DiscoverySourceCoverage] = []
         represented = set()
         offered_chars = 0
         for ref, source in ordered:
-            offered_ranges = []
-            omitted_ranges = []
-            offered_spans = []
+            offered_ranges: list[DiscoveryRange] = []
+            omitted_ranges: list[DiscoveryRange] = []
+            offered_spans: list[RoutedSourceSpan] = []
             for _, start, end, heading in source_rows[ref]:
-                span_range = {"start": start, "end": end}
+                span_range = DiscoveryRange(start=start, end=end)
                 if (ref, start, end) in chosen:
                     offered_ranges.append(span_range)
                     offered_spans.append(
@@ -281,13 +345,13 @@ def route_discovery_source_windows(
                 options.append(
                     {
                         "source_ref": ref,
-                        "source": source.model_dump(exclude={"text"}),
+                        "source": _source_identity(source),
                         "spans": offered_spans,
                     }
                 )
-        identity = [(ref, start, end) for ref, start, end, _ in partition]
+        window_identity = [(ref, start, end) for ref, start, end, _ in partition]
         window_id = hashlib.sha256(
-            json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode()
+            json.dumps(window_identity, ensure_ascii=False, separators=(",", ":")).encode()
         ).hexdigest()
         result.append(
             {

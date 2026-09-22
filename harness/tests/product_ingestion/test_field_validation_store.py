@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import typing
+
 # ruff: noqa: F811
 import pytest
 from sqlalchemy import select
@@ -28,7 +30,7 @@ from tests.product_ingestion.test_store import (
 )
 
 
-def saved_validation(api, factory):
+def saved_validation(api: typing.Any, factory: typing.Any) -> tuple[typing.Any, ...]:
     store, jobs = _make_store(api, factory)
     scope = _scope(api)
     run, _ = _run_with_uploads(api, store)
@@ -106,7 +108,9 @@ def saved_validation(api, factory):
     return scope, run, original, call
 
 
-def test_restart_counts_filter_retry_and_original_custody(api, factory):
+def test_restart_counts_filter_retry_and_original_custody(
+    api: typing.Any, factory: typing.Any
+) -> None:
     scope, run, original, call = saved_validation(api, factory)
     store, _ = _make_store(api, factory)
     effective = store.list_field_attempts(scope=scope, run_id=run.run_id, field_keys=("benefit",))[
@@ -142,7 +146,9 @@ def test_restart_counts_filter_retry_and_original_custody(api, factory):
     assert reservation.action is api.WindowReservationAction.DISPATCH
 
 
-def test_corrupt_validation_never_falls_back_to_verified(api, factory):
+def test_corrupt_validation_never_falls_back_to_verified(
+    api: typing.Any, factory: typing.Any
+) -> None:
     scope, run, _, _ = saved_validation(api, factory)
     with factory() as session, session.begin():
         row = session.scalar(select(ProductArtifact).where(ProductArtifact.run_id == run.run_id))

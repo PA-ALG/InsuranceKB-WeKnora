@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F811 -- imported pytest fixtures.
 import asyncio
+import typing
 
 import pytest
 
@@ -10,16 +11,16 @@ from insurance_harness.jobs.tables import WikiJob
 from insurance_harness.product_ingestion import models, tables
 from tests.product_ingestion.test_identity_recovery import (
     call_args,
-    catalog,
     recorded_origin,
-    snapshot,
-    stage_runtime,
     start_identity,
 )
+from tests.product_ingestion.test_platform import snapshot
+from tests.product_ingestion.test_routing import catalog
+from tests.product_ingestion.test_stages import stage_runtime
 from tests.product_ingestion.test_store import _task
 
 
-def start(store, scope):
+def start(store: typing.Any, scope: typing.Any) -> typing.Any:
     claim = store._jobs.claim(space_ids=(scope.space_id,), worker_id="undispatched-test")
     assert isinstance(claim, ClaimedJob)
     return store._jobs.start(
@@ -28,7 +29,9 @@ def start(store, scope):
 
 
 @pytest.fixture
-def failed_windows(stage_runtime, recorded_origin):
+def failed_windows(
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> tuple[typing.Any, ...]:
     scope, store, artifacts, _, execute = stage_runtime
     origin, _, boundary, _, _ = recorded_origin
     child = store.retry_processing(
@@ -105,8 +108,8 @@ def failed_windows(stage_runtime, recorded_origin):
 
 
 def test_undispatched_failed_windows_recover_without_reclassifying(
-    stage_runtime, recorded_origin, failed_windows
-):
+    stage_runtime: typing.Any, recorded_origin: typing.Any, failed_windows: typing.Any
+) -> None:
     scope, store, artifacts, platform, execute = stage_runtime
     failed, _ = failed_windows
     _, original, boundary, _, sent = recorded_origin
@@ -148,8 +151,8 @@ def test_undispatched_failed_windows_recover_without_reclassifying(
     ],
 )
 def test_undispatched_recovery_rejects_nonempty_or_mismatched_work(
-    stage_runtime, failed_windows, drift
-):
+    stage_runtime: typing.Any, failed_windows: typing.Any, drift: typing.Any
+) -> None:
     from sqlalchemy import select
 
     scope, store, _, _, _ = stage_runtime

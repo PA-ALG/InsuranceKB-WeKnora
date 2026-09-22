@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Literal
+from collections.abc import Callable
+from typing import Any, Literal, Protocol, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
@@ -97,7 +98,7 @@ CURRENT_ARTIFACT_CONTRACTS = {
 }
 
 
-def stage_order(workflow_version):
+def stage_order(workflow_version: Literal[1, 2, 3]) -> tuple[str, ...]:
     if workflow_version == 1:
         return LEGACY_STAGE_ORDER
     if workflow_version == 2:
@@ -107,7 +108,7 @@ def stage_order(workflow_version):
     raise ValueError("unsupported product workflow version")
 
 
-def required_outputs(workflow_version):
+def required_outputs(workflow_version: Literal[1, 2, 3]) -> dict[str, tuple[str, ...]]:
     stage_order(workflow_version)
     if workflow_version == 1:
         return LEGACY_REQUIRED_OUTPUTS
@@ -117,10 +118,10 @@ def required_outputs(workflow_version):
 class Frozen(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    def encoded(self):
+    def encoded(self) -> bytes:
         return self.model_dump_json().encode()
 
-    def digest(self):
+    def digest(self) -> str:
         return hashlib.sha256(self.encoded()).hexdigest()
 
 
@@ -180,17 +181,27 @@ class ConfirmedFailureReference(Frozen):
     diagnostic: Literal["provider_http_status"]
 
 
+class _VersionedFields(Protocol):
+    contract: str
+    retry_calls: tuple[IdentityRetryReference, ...]
+    failed_calls: tuple[ConfirmedFailureReference, ...]
+
+
 class VersionedCheckpoint(Frozen):
     execution_workflow_version: Literal[2] | None = None
 
     @model_serializer(mode="wrap")
-    def preserve_old_wire(self, handler):
+    def preserve_old_wire(
+        self,
+        handler: Callable[[Any], dict[str, Any]],
+    ) -> dict[str, Any]:
         value = handler(self)
-        if not self.contract.endswith(".v7"):
+        fields = cast(_VersionedFields, self)
+        if not fields.contract.endswith(".v7"):
             value.pop("execution_workflow_version", None)
-        if not self.contract.endswith((".v3", ".v4", ".v5", ".v6")):
+        if not fields.contract.endswith((".v3", ".v4", ".v5", ".v6")):
             value.pop("retry_calls", None)
-        if not self.contract.endswith((".v4", ".v5", ".v6")):
+        if not fields.contract.endswith((".v4", ".v5", ".v6")):
             value.pop("failed_calls", None)
         if not self.supports_rebase:
             value.pop("audited_calls", None)
@@ -203,26 +214,27 @@ class VersionedCheckpoint(Frozen):
 
     @property
     def supports_rebase(self) -> bool:
-        return self.contract.endswith((".v6", ".v7"))
+        return cast(_VersionedFields, self).contract.endswith((".v6", ".v7"))
 
     @property
     def field_only_rebase(self) -> bool:
-        return self.contract.endswith(".v7")
+        return cast(_VersionedFields, self).contract.endswith(".v7")
 
     @model_validator(mode="after")
-    def valid_retry_contract(self):
-        if self.contract.endswith(".v7"):
+    def valid_retry_contract(self) -> Self:
+        fields = cast(_VersionedFields, self)
+        if fields.contract.endswith(".v7"):
             if self.execution_workflow_version != 2:
                 raise ValueError("checkpoint v7 requires execution_workflow_version 2")
         elif self.execution_workflow_version is not None:
             raise ValueError("explicit execution workflow requires checkpoint v7")
-        if self.retry_calls and not self.contract.endswith((".v3", ".v5", ".v6")):
+        if fields.retry_calls and not fields.contract.endswith((".v3", ".v5", ".v6")):
             raise ValueError("retry references require checkpoint v3")
-        if len(self.retry_calls) > 1:
+        if len(fields.retry_calls) > 1:
             raise ValueError("only one recorded identity retry is supported")
-        if self.failed_calls and not self.contract.endswith((".v4", ".v5", ".v6")):
+        if fields.failed_calls and not fields.contract.endswith((".v4", ".v5", ".v6")):
             raise ValueError("failure references require checkpoint v4")
-        if len(self.failed_calls) > 1 or (self.failed_calls and self.retry_calls):
+        if len(fields.failed_calls) > 1 or (fields.failed_calls and fields.retry_calls):
             raise ValueError("only one identity failure mode is supported")
         return self
 
@@ -255,12 +267,14 @@ class CheckpointPlan(VersionedCheckpoint):
     failed_discovery_stage: StageSnapshot | None = None
 
     @property
-    def contract_version(self):
+    def contract_version(self) -> str:
         return self.contract.rsplit(".v", 1)[1]
 
     @property
-    def workflow_version(self):
+    def workflow_version(self) -> Literal[1, 2, 3]:
         if self.contract.endswith(".v7"):
+            if self.execution_workflow_version is None:
+                raise ValueError("checkpoint v7 requires execution_workflow_version 2")
             return self.execution_workflow_version
         if self.contract.endswith(".v1"):
             return 1
@@ -272,7 +286,7 @@ class CheckpointPlan(VersionedCheckpoint):
         return artifact_kind != "compile_delta" and not artifact_kind.startswith("discovery_")
 
     @model_validator(mode="after")
-    def valid(self):
+    def valid(self) -> Self:
         order = stage_order(self.workflow_version)
         keys = tuple(s.stage_key for s in self.reused_stages)
         if self.resume_stage not in order or keys != order[: order.index(self.resume_stage)]:
@@ -328,15 +342,17 @@ class CheckpointPlan(VersionedCheckpoint):
                 raise ValueError("invalid prior checkpoint rebase")
         if bool(self.failed_discovery_artifact) != bool(self.failed_discovery_stage):
             raise ValueError("incomplete discovery failure proof")
-        if self.failed_discovery_artifact:
+        failed_artifact = self.failed_discovery_artifact
+        failed_stage = self.failed_discovery_stage
+        if failed_artifact is not None and failed_stage is not None:
             if (
                 not self.contract.endswith(".v6")
-                or (self.resume_stage, self.failed_discovery_artifact.artifact_kind,
-                    self.failed_discovery_stage.stage_key) not in {
+                or (self.resume_stage, failed_artifact.artifact_kind, failed_stage.stage_key)
+                not in {
                     ("discovery", "discovery_summary", "discovery"),
                     ("compilation", "discovery_final_summary", "compilation"),
                 }
-                or self.failed_discovery_stage.run_id != self.failed_discovery_artifact.run_id
+                or failed_stage.run_id != failed_artifact.run_id
             ):
                 raise ValueError("invalid discovery failure proof")
         if len(self.encoded()) > 131072:
@@ -370,5 +386,5 @@ class CheckpointReceipt(VersionedCheckpoint):
     )
 
 
-def field_digest(snapshot):
+def field_digest(snapshot: BaseModel) -> str:
     return hashlib.sha256(snapshot.model_dump_json().encode()).hexdigest()

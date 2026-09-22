@@ -5,20 +5,21 @@ from __future__ import annotations
 # ruff: noqa: F811 -- imported pytest fixtures
 import hashlib
 import json
+import typing
+from pathlib import Path
 
 import pytest
+from pydantic import SecretStr
 
-from tests.product_ingestion.test_identity_recovery import (  # noqa: F401
-    catalog,
-    recorded_origin,
-    snapshot,
-    stage_runtime,
-)
+from tests.product_ingestion.test_identity_recovery import recorded_origin  # noqa: F401
+from tests.product_ingestion.test_platform import snapshot  # noqa: F401
+from tests.product_ingestion.test_routing import catalog  # noqa: F401
+from tests.product_ingestion.test_stages import stage_runtime  # noqa: F401
 
 
 def test_public_checkpoint_retries_recorded_identity_without_cloning_success(
-    stage_runtime, recorded_origin
-):
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     scope, store, artifacts, _, _ = stage_runtime
     origin, original, _, _, sent = recorded_origin
     before = artifacts.list_stage_calls(scope=scope, run_id=origin.run_id)
@@ -60,7 +61,9 @@ def test_public_checkpoint_retries_recorded_identity_without_cloning_success(
 
 
 @pytest.mark.parametrize("contract", ["v1", "v2", "v3", "v4"])
-def test_old_checkpoint_wire_bytes_remain_exact(stage_runtime, recorded_origin, contract):
+def test_old_checkpoint_wire_bytes_remain_exact(
+    stage_runtime: typing.Any, recorded_origin: typing.Any, contract: typing.Any
+) -> None:
     from insurance_harness.product_ingestion.checkpoints import CheckpointPlan
 
     scope, store, *_ = stage_runtime
@@ -131,8 +134,11 @@ def test_old_checkpoint_wire_bytes_remain_exact(stage_runtime, recorded_origin, 
 )
 @pytest.mark.parametrize("after_admission", [False, True])
 def test_recorded_identity_retry_rejects_changed_proof(
-    stage_runtime, recorded_origin, change, after_admission
-):
+    stage_runtime: typing.Any,
+    recorded_origin: typing.Any,
+    change: typing.Any,
+    after_admission: typing.Any,
+) -> None:
     from sqlalchemy import select
 
     from insurance_harness.jobs import SpaceScopeError
@@ -176,7 +182,9 @@ def test_recorded_identity_retry_rejects_changed_proof(
         assert not store.can_retry_processing(scope=scope, run_id=origin.run_id)
 
 
-def test_failed_checkpoint_retains_single_recorded_retry_reference(stage_runtime, recorded_origin):
+def test_failed_checkpoint_retains_single_recorded_retry_reference(
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     from insurance_harness.jobs.tables import WikiJob
     from tests.product_ingestion.test_recovery import finish_failed_source
 
@@ -204,7 +212,7 @@ def test_failed_checkpoint_retains_single_recorded_retry_reference(stage_runtime
 
 
 @pytest.mark.asyncio
-async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path):
+async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path: Path) -> None:
     from insurance_harness.db.base import Base, make_session_factory
     from insurance_harness.jobs import JobStore
     from insurance_harness.product_ingestion.models import ProductRunState
@@ -223,7 +231,7 @@ async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path
     class Model(FixtureModel):
         bad_identity = True
 
-        def _identity(self, content):
+        def _identity(self, content: dict[str, typing.Any]) -> dict[str, typing.Any]:
             output = super()._identity(content)
             if self.bad_identity:
                 for material in output["materials"]:
@@ -257,7 +265,7 @@ async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path
             scope=SCOPE, run_id=origin.run_id, expected_version=failed.version
         )
         final = await _finish(runtime, context, jobs, child.run_id)
-        assert final.state is ProductRunState.PARTIAL_SUCCESS
+        assert final.state is ProductRunState.PARTIAL_SUCCESS, final.terminal_reason
         assert len(model.identity_requests) == 2 and platform.source_captures == captures
         assert model.discovery_requests
         assert any(
@@ -278,7 +286,9 @@ async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path
         engine.dispose()
 
 
-def test_recorded_identity_http_recovery_is_explicit_and_idempotent(stage_runtime, recorded_origin):
+def test_recorded_identity_http_recovery_is_explicit_and_idempotent(
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     from fastapi.testclient import TestClient
 
     from insurance_harness.service_shell.cli import build_api_app
@@ -296,11 +306,11 @@ def test_recorded_identity_http_recovery_is_explicit_and_idempotent(stage_runtim
         lifecycle=lifecycle, probe=lambda: None, timeout_seconds=0.1, freshness_seconds=1
     )
     settings = ShellSettings(
-        postgres_dsn="postgresql://fixture@localhost/fixture",
-        principal_records_json=json.dumps(RECORDS),
+        postgres_dsn=SecretStr("postgresql://fixture@localhost/fixture"),
+        principal_records_json=SecretStr(json.dumps(RECORDS)),
         principal_space_ids=(scope.space_id,),
         product_ingestion_enabled=True,
-        product_ingestion_scopes_json=json.dumps([scope.model_dump()]),
+        product_ingestion_scopes_json=SecretStr(json.dumps([scope.model_dump()])),
     )
     app = build_api_app(
         settings=settings,

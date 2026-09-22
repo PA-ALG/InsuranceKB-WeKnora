@@ -7,6 +7,8 @@ import importlib.util
 import json
 from copy import deepcopy
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -16,16 +18,17 @@ MODULE = "insurance_harness.knowledge_compiler.service_schema_catalog_830_g3"
 ASSET = Path(__file__).parents[2] / "docs/insurance-kb/assets/service-schema-830-g3.json"
 
 
-def _module():
+def _module() -> ModuleType:
     assert importlib.util.find_spec(MODULE) is not None, "service schema loader is missing"
     return importlib.import_module(MODULE)
 
 
-def _raw():
-    return json.loads(ASSET.read_text())
+def _raw() -> dict[str, Any]:
+    result: dict[str, Any] = json.loads(ASSET.read_text())
+    return result
 
 
-def test_load_three_original_service_definitions_with_g1_profiles():
+def test_load_three_original_service_definitions_with_g1_profiles() -> None:
     module = _module()
     catalog = module.load_service_schema_catalog(ASSET.read_bytes())
     assert catalog.content_status == "STRUCTURE_ONLY_NOT_PUBLISHED"
@@ -69,7 +72,7 @@ def test_load_three_original_service_definitions_with_g1_profiles():
         "identity",
     ],
 )
-def test_reject_invalid_or_misattributed_structure(mutation):
+def test_reject_invalid_or_misattributed_structure(mutation: str) -> None:
     module = _module()
     raw = deepcopy(_raw())
     entry = raw["entries"][0]
@@ -113,7 +116,7 @@ def test_reject_invalid_or_misattributed_structure(mutation):
         module.load_service_schema_catalog(json.dumps(raw).encode())
 
 
-def test_reject_source_bytes_and_stale_content_hashes():
+def test_reject_source_bytes_and_stale_content_hashes() -> None:
     module = _module()
     with pytest.raises(ValueError, match="source"):
         module.load_service_schema_catalog(ASSET.read_bytes(), source_bytes=b"unrelated code")
@@ -123,7 +126,7 @@ def test_reject_source_bytes_and_stale_content_hashes():
         module.load_service_schema_catalog(json.dumps(raw))
 
 
-def test_loading_has_no_dependency_on_original_absolute_source_path():
+def test_loading_has_no_dependency_on_original_absolute_source_path() -> None:
     # Deployed consumers use the reviewed source hash; original source bytes are optional.
     catalog = _module().load_service_schema_catalog(ASSET.read_bytes())
     assert catalog.source.kind == "legacy_code_definition"

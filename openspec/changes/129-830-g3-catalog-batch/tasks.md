@@ -33,3 +33,24 @@
 - [x] 原 R1—R5 最终矩阵、实际导航变更与恢复、读取/重启/DNS 故障修复、历史/检索/UI 独立验收完成。
 
 结项：G3 FLOW PASS；QUALITY=DEFERRED_TO_Q0；NOT_FOR_PRODUCTION。完整结果见 `docs/insurance-kb/evidence/830-g3/g3-final-closeout-20260913.md`，保留历史失败与后续业务待办。
+
+## 2026-09-22 PR #130 CI 收尾（用户授权继续修复并提交）
+
+Owner/integration=root；复用当前工作树与既有G3-AUTO-1—6实现，不部署、不调用模型、不改变验收标准。
+当前RED：远端Ruff 57项（5文件），PostgreSQL任务因测试跨模块导入失败而收集中断；本地相同Ruff已复现。全量mypy/collection先检查，避免只修第一道检查。
+写域：上述CI发现对应Harness源码/测试及本OpenSpec/验证记录；仅格式、测试导入和实际类型/回归缺陷。不得禁用检查、扩大ignore、删除测试或改原始证据凑通过。生产语义变化须有可复现RED并独审。
+步骤：保留RED → 分类集中修复 → 本地同CI静态/测试门禁 → 独立复核冻结diff → root提交推送 → 核验远端CI。实际部署及模型调用保持0。
+
+CI预检追加事实：strict mypy `src tests` 为3659 errors/147 files，旧全量collect为7274项+1导入错误。按独立域并行收口（dispatching-parallel-agents技能），不屏蔽检查：A独占Harness product_ingestion源码、jobs/store及service_shell/worker；B独占knowledge_compiler源码；C独占tests/product_ingestion；root独占其余tests、规格/最终集成。跨域错误只报告，交对应Owner，不并发写；所有lane不commit/push/deploy，不做provider/业务调用。最终独审由完成写域外的reviewer执行。
+
+并行队列调整：compiler源码类型已清零后，root将 `harness/tests/test_g3_bounded_model_execution_830.py` 与 `harness/tests/test_g3_bounded_review_windows.py` 两文件当前编辑结果交B继续收口；root停止写这两文件（含格式化），其余顶层测试仍root。现有受控JSON模型/窗口类型优先复用，不以cast替代结构合同。
+
+CI收口写域再平衡：A确认尚未编辑 `product_ingestion/discovery.py`、`discovery_stage.py`，现交root补齐类型及回归；A从写入/格式化清单排除两文件。仅既有发现接口的准确注解和已复现检查修复，不改发现/发布策略。
+
+A明确交出尚未写入的 `product_ingestion/verification.py`、`identity.py`、`extraction.py` 给root继续同批CI类型收口，A停止触碰含格式化；其余A写域不变。现有公司策略19项编译回归、归并/别名/增量候选/字段恢复54项回归通过，尚不替代最终全量检查。
+
+A确认 `product_ingestion/api.py` 尚未编辑，交root补齐现有入口类型；A暂停该文件含格式化。root额外审查识别恢复模型字段顺序影响encoded/digest的问题，A恢复三版原字节，C新增三版固定字节/摘要回归（3 PASS）；不能用Python类注解改动破坏持久回执。
+
+CI集中回归追加：root发现类型收口将 `published_compile_members` 的 JSON 行返回值错误改为 Pydantic 对象，导致 lossless candidate transfer / preparation 失败；现接管 `compilation.py` 与 `candidate_transfer.py` 恢复原公开返回语义，只在既有编译构造边界建模。RED为原有 candidate transfer 测试及真实worker fixture preparation失败；不改测试断言。旧 replay fencing 测试则显式选用既有 legacy 恢复入口，现代 public checkpoint 路径保留独立覆盖。独立审查以不可变tree执行，修正后复核最终delta。
+
+本轮CI源码冻结tree `326aa8f640c3035a79abdda77a34542eb9ce903b`：独立只读审查 BLOCKER 0，Ruff/strict mypy（668文件）及有界回归 PASS。root已恢复 adapter 原边界，指定恢复窗口6 PASS；详细矩阵见 `docs/insurance-kb/evidence/830-g3/task3bn-pr130-ci-20260922.md`。完整确定性及PostgreSQL由提交后的exact GitHub CI继续核验；保持Draft，不推导merge-ready或新部署。

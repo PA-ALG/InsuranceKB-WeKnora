@@ -34,7 +34,16 @@ from .batch_entity_resolution_830_g3 import (
 from .concept_free_wiki_830_g2 import Evidence, SourceBlock, evidence_for, verify_evidence
 from .schema_pack_catalog_830_g3 import SchemaPackCatalogV1
 
-RULE_VERSION = "g3-formal-title-rules.830.v1"
+RULE_VERSION: Literal["g3-formal-title-rules.830.v1"] = "g3-formal-title-rules.830.v1"
+VersionAction = Literal[
+    "FILLED_FROM_TITLE",
+    "KEPT_EXISTING",
+    "NO_EXACT_TITLE",
+    "NO_EXPLICIT_YEAR",
+    "TITLE_YEAR_AMBIGUOUS",
+    "VERSION_CONFLICT",
+    "CLASSIFICATION_CONFLICT",
+]
 # Existing product classifier line keys projected into the existing G3 Catalog.
 _LINE_LABELS = {
     "medical": "medical_insurance",
@@ -77,15 +86,7 @@ class TitleRuleObservationV1(FormalTitleRouteV1):
     title_evidence: Evidence | None
     original_version_label: StrictStr | None
     effective_version_label: StrictStr | None
-    version_action: Literal[
-        "FILLED_FROM_TITLE",
-        "KEPT_EXISTING",
-        "NO_EXACT_TITLE",
-        "NO_EXPLICIT_YEAR",
-        "TITLE_YEAR_AMBIGUOUS",
-        "VERSION_CONFLICT",
-        "CLASSIFICATION_CONFLICT",
-    ]
+    version_action: VersionAction
 
 
 class TitleRoutingOverlayV1(_Frozen):
@@ -150,7 +151,7 @@ def route_formal_title(title: str, *, catalog: SchemaPackCatalogV1) -> FormalTit
     normalized = _normalized(title)
     ambiguous = _multiple_title_lines(normalized)
     line = None if ambiguous else detect_product_line(normalized)
-    label = _LINE_LABELS.get(line)
+    label = None if line is None else _LINE_LABELS.get(line)
     packs = [
         entry.pack
         for entry in catalog.entries
@@ -207,7 +208,9 @@ def _exact_title(
     return None, None
 
 
-def _hashed(model, contract: str, hash_field: str, payload: dict):
+def _hashed[ModelT: BaseModel](
+    model: type[ModelT], contract: str, hash_field: str, payload: dict[str, object]
+) -> ModelT:
     return model.model_validate({**payload, hash_field: batch_sha256_830_g3(contract, payload)})
 
 
@@ -247,6 +250,7 @@ def build_title_routing_overlay(
             name_evidence_id, title = _exact_title(entity, proposal, entry.blocks)
             route = route_formal_title("" if title is None else title.quote, catalog=catalog)
             value = entity.version_label
+            action: VersionAction
             if title is None:
                 action = "NO_EXACT_TITLE"
             elif route.classification_status in {"AMBIGUOUS_TITLE", "CATALOG_AMBIGUOUS"} or (
@@ -338,7 +342,7 @@ def build_title_routing_overlay(
             "proposals": tuple(effective_materials),
         },
     )
-    payload = {
+    payload: dict[str, object] = {
         "contract": "g3-title-routing-overlay.830.v1",
         "origin": "DETERMINISTIC_SOURCE_RULE",
         "rule_version": RULE_VERSION,
@@ -353,7 +357,12 @@ def build_title_routing_overlay(
         "observations": tuple(observations),
         "effective_proposals_sha256": effective.proposals_sha256,
     }
-    overlay = _hashed(TitleRoutingOverlayV1, payload["contract"], "overlay_sha256", payload)
+    overlay = _hashed(
+        TitleRoutingOverlayV1,
+        "g3-title-routing-overlay.830.v1",
+        "overlay_sha256",
+        payload,
+    )
     return overlay, effective
 
 

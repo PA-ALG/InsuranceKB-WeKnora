@@ -7,9 +7,12 @@ and their shared candidate are derived from complementary material claims.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 
 from . import batch_entity_resolution_830_g3 as g
 from .g3_evidence_identity_v2 import own_identity_supported, same_classification
+
+IdentityRow = tuple[g.MaterialProposalV1, g.EntityDecisionV1, g.EntityProposalV1]
 
 _ALLOWED = {
     "IDENTITY_EVIDENCE_MISSING",
@@ -21,7 +24,11 @@ _ALLOWED = {
 _SUCCESS = {"EXACT_EXISTING_MATCH", "NEW_ENTITY_CANDIDATE"}
 
 
-def _child(child, policy, **updates):
+def _child(
+    child: g.EntityDecisionV1,
+    policy: g.BatchResolutionPolicyV1,
+    **updates: object,
+) -> g.EntityDecisionV1:
     payload = child.model_dump(exclude={"decision_sha256"})
     payload.update(updates)
     human = payload["disposition"] in ("NEEDS_CONFIRM", "QUARANTINE")
@@ -37,21 +44,27 @@ def _child(child, policy, **updates):
     )
 
 
-def _nonempty(rows, key):
-    return [getattr(row[2], key) for row in rows if getattr(row[2], key) is not None]
-
-
-def _target(entity, existing, policy):
-    reasons = set()
+def _target(
+    entity: g.EntityProposalV1,
+    existing: g.ExistingEntitySnapshotV1,
+    policy: g.BatchResolutionPolicyV1,
+) -> tuple[set[str], g.ExistingEntityV1 | None]:
+    issuer = entity.issuer
+    name = entity.name
+    version_label = entity.version_label
+    filing = entity.filing_or_registration
+    if issuer is None or name is None or version_label is None or filing is None:
+        raise ValueError("joint identity target is incomplete")
+    reasons: set[str] = set()
     if g._has_existing_identity_competition(existing, entity):
         reasons.add("AMBIGUOUS_IDENTITY")
-    matches = g._existing_matches(existing, entity)
+    matches = list(g._existing_matches(existing, entity))
     exact = None
     if matches:
         issuers = [
             m
             for m in matches
-            if g._normalized(policy.canonical_issuer(entity.issuer, existing.space_id))
+            if g._normalized(policy.canonical_issuer(issuer, existing.space_id))
             == g._normalized(policy.canonical_issuer(m.issuer, existing.space_id))
         ]
         if not issuers:
@@ -60,12 +73,11 @@ def _target(entity, existing, policy):
             matches = [
                 m
                 for m in issuers
-                if g._normalized(entity.name)
+                if g._normalized(name)
                 in {g._normalized(m.name), *(g._normalized(a.value) for a in m.approved_aliases)}
-                and g._normalized(entity.version_label) == g._normalized(m.version_label)
-                and entity.filing_or_registration.kind == m.filing_or_registration.kind
-                and g._normalized(entity.filing_or_registration.value)
-                == g._normalized(m.filing_or_registration.value)
+                and g._normalized(version_label) == g._normalized(m.version_label)
+                and filing.kind == m.filing_or_registration.kind
+                and g._normalized(filing.value) == g._normalized(m.filing_or_registration.value)
             ]
             if len(matches) != 1:
                 reasons.add("AMBIGUOUS_IDENTITY")
@@ -74,10 +86,16 @@ def _target(entity, existing, policy):
     return reasons, exact
 
 
-def associate_material_groups(decisions, proposals, corpus, existing, policy):
+def associate_material_groups(
+    decisions: tuple[g.MaterialDecisionV1, ...],
+    proposals: g.ProposalBatchV1,
+    corpus: g.BatchCorpusV1,
+    existing: g.ExistingEntitySnapshotV1,
+    policy: g.BatchResolutionPolicyV1,
+) -> tuple[g.MaterialDecisionV1, ...]:
     parents = {p.material_id: p for p in decisions}
     entries = {e.material_id: e for e in corpus.entries}
-    buckets = defaultdict(list)
+    buckets: defaultdict[str, list[IdentityRow]] = defaultdict(list)
     for proposal in proposals.proposals:
         parent = parents[proposal.material_id]
         for entity, child in zip(proposal.entities, parent.children, strict=True):
@@ -93,33 +111,27 @@ def associate_material_groups(decisions, proposals, corpus, existing, policy):
             for p, c, e in rows
         ):
             continue
-        values = {
-            key: _nonempty(rows, key)
-            for key in (
-                "issuer",
-                "name",
-                "product_code",
-                "version_label",
-                "filing_or_registration",
-                "valid_from",
-                "valid_through",
-            )
+        string_values: dict[str, list[str]] = {
+            "issuer": [e.issuer for _, _, e in rows if e.issuer is not None],
+            "name": [e.name for _, _, e in rows if e.name is not None],
+            "product_code": [e.product_code for _, _, e in rows if e.product_code is not None],
+            "version_label": [e.version_label for _, _, e in rows if e.version_label is not None],
+            "valid_from": [e.valid_from for _, _, e in rows if e.valid_from is not None],
+            "valid_through": [e.valid_through for _, _, e in rows if e.valid_through is not None],
         }
-        values["issuer"] = [
-            policy.canonical_issuer(value, corpus.space_id) for value in values["issuer"]
+        anchor_values = [
+            entity.filing_or_registration
+            for _, _, entity in rows
+            if entity.filing_or_registration is not None
         ]
+        issuer_values = [
+            policy.canonical_issuer(value, corpus.space_id) for value in string_values["issuer"]
+        ]
+        string_values["issuer"] = issuer_values
         conflicts = any(
-            len(
-                {
-                    (v.kind, g._normalized(v.value))
-                    if key == "filing_or_registration"
-                    else g._normalized(v)
-                    for v in vs
-                }
-            )
-            > 1
-            for key, vs in values.items()
+            len({g._normalized(value) for value in values}) > 1 for values in string_values.values()
         )
+        conflicts |= len({(v.kind, g._normalized(v.value)) for v in anchor_values}) > 1
         conflicts |= any(
             not same_classification(rows[0][1].classification, c.classification) for _, c, _ in rows
         )
@@ -144,10 +156,8 @@ def associate_material_groups(decisions, proposals, corpus, existing, policy):
                     reasons=set(),
                 )
             continue
-        if any(
-            not values[key]
-            for key in ("issuer", "product_code", "version_label", "filing_or_registration")
-        ):
+        required_strings = ("issuer", "product_code", "version_label")
+        if any(not string_values[key] for key in required_strings) or not anchor_values:
             continue
         if not any(
             p.material_role == "terms"
@@ -158,7 +168,10 @@ def associate_material_groups(decisions, proposals, corpus, existing, policy):
             continue
         # This transient scalar carrier is never emitted as a MaterialProposal.
         entity = rows[0][2].model_copy(
-            update={key: vs[0] if vs else None for key, vs in values.items()}
+            update={
+                **{key: values[0] if values else None for key, values in string_values.items()},
+                "filing_or_registration": anchor_values[0] if anchor_values else None,
+            }
         )
         reasons, target = _target(entity, existing, policy)
         candidate = None
@@ -211,7 +224,11 @@ def associate_material_groups(decisions, proposals, corpus, existing, policy):
     return tuple(parents[p.material_id] for p in decisions)
 
 
-def require_complete_support(resolution, selected_refs, proposals):
+def require_complete_support(
+    resolution: g.BatchEntityResolutionV1,
+    selected_refs: Iterable[tuple[str, str]],
+    proposals: g.ProposalBatchV1,
+) -> None:
     """A linked decision cannot publish after omitting its supporting material."""
     selected = set(selected_refs)
     rows = [
@@ -223,6 +240,10 @@ def require_complete_support(resolution, selected_refs, proposals):
     for material_id, child in rows:
         if (material_id, child.proposal_ref) not in selected:
             continue
+        product_code = child.anchors.product_code
+        version_anchor = child.anchors.version_anchor
+        if product_code is None or version_anchor is None:
+            raise ValueError("RESOLUTION_IDENTITY_SOURCE_REQUIRED")
         required = {
             (mid, other.proposal_ref)
             for mid, other in rows
@@ -242,11 +263,10 @@ def require_complete_support(resolution, selected_refs, proposals):
             and any(
                 e.proposal_ref == ref
                 and e.product_code is not None
-                and g._normalized(e.product_code) == child.anchors.product_code.normalized_value
+                and g._normalized(e.product_code) == product_code.normalized_value
                 and e.filing_or_registration is not None
-                and e.filing_or_registration.kind == child.anchors.version_anchor.kind
-                and g._normalized(e.filing_or_registration.value)
-                == child.anchors.version_anchor.normalized_value
+                and e.filing_or_registration.kind == version_anchor.kind
+                and g._normalized(e.filing_or_registration.value) == version_anchor.normalized_value
                 for e in by_material[mid].entities
             )
             for mid, ref in required

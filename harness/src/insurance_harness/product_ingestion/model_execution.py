@@ -376,6 +376,8 @@ class ConfiguredModelExecutor:
             or call.request_sha256 != prepared.request_sha256
         ):
             raise ValueError("recorded identity request or model policy changed")
+        if call.dispatched_at is None:
+            raise ValueError("recorded identity dispatch time is missing")
         receipt = _policy_receipt(
             settings,
             template,
@@ -525,6 +527,8 @@ class ConfiguredModelExecutor:
                 usage={},
             )
             return _result(call, policy_receipt=None)
+        if call.dispatched_at is None:
+            raise ValueError("dispatched stage call time is missing")
         receipt = _policy_receipt(
             current,
             template,

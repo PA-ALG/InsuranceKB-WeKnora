@@ -4,15 +4,19 @@ import hashlib
 
 # ruff: noqa: F811 -- imported pytest fixtures.
 import json
+import typing
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import select
 
-from insurance_harness.jobs import JobState, NonRetryableJobError
+from insurance_harness.jobs import JobSnapshot, JobState, NonRetryableJobError
 from insurance_harness.jobs.tables import WikiJob
 from insurance_harness.product_ingestion import tables
+from insurance_harness.product_ingestion.composition import ProductCompositionContext
 from tests.product_ingestion.test_api import PATH, auth, environment  # noqa: F401
 from tests.product_ingestion.test_platform import snapshot  # noqa: F401
 from tests.product_ingestion.test_routing import catalog  # noqa: F401
@@ -20,7 +24,7 @@ from tests.product_ingestion.test_stages import stage_runtime  # noqa: F401
 
 
 @pytest.fixture
-def legacy_stage_runtime(stage_runtime, monkeypatch):
+def legacy_stage_runtime(stage_runtime: typing.Any, monkeypatch: typing.Any) -> typing.Any:
     """Construct previously persisted v1/v2/v3 recovery records for read compatibility.
 
     Only this fixture selects the historical adapter; production API admission
@@ -32,7 +36,7 @@ def legacy_stage_runtime(stage_runtime, monkeypatch):
     return stage_runtime
 
 
-def finish_failed_source(store, scope, run_id):
+def finish_failed_source(store: typing.Any, scope: typing.Any, run_id: str) -> None:
     """Fixture-only terminal receipt, equivalent to the production root finalizer."""
     now = datetime.now(UTC)
     with store._session_factory() as session, session.begin():
@@ -53,13 +57,13 @@ def finish_failed_source(store, scope, run_id):
         )
 
 
-def failed_capture(stage_runtime):
+def failed_capture(stage_runtime: typing.Any) -> typing.Any:
     scope, store, artifacts, platform, execute = stage_runtime
     run = store.create_run(scope=scope, idempotency_key="capture-failed", expected_upload_count=3)
     assert execute(run).state is JobState.SUCCEEDED
     capture = platform.capture_source
 
-    async def unavailable(*_):
+    async def unavailable(*_: object) -> None:
         raise NonRetryableJobError("PLATFORM_REJECTED_HTTP_409")
 
     platform.capture_source = unavailable
@@ -69,7 +73,11 @@ def failed_capture(stage_runtime):
     return store.get_run(scope=scope, run_id=run.run_id)
 
 
-def title_unavailable(stage_runtime, monkeypatch, reason="FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE"):
+def title_unavailable(
+    stage_runtime: typing.Any,
+    monkeypatch: typing.Any,
+    reason: typing.Any = "FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE",
+) -> typing.Any:
     from insurance_harness.product_ingestion import stages
 
     scope, store, _, _, execute = stage_runtime
@@ -79,7 +87,7 @@ def title_unavailable(stage_runtime, monkeypatch, reason="FIRST_PAGE_PRODUCT_NAM
     assert execute(run).state is JobState.SUCCEEDED
     assert execute(run).state is JobState.SUCCEEDED
 
-    def unavailable(*args, **kwargs):
+    def unavailable(*args: object, **kwargs: object) -> None:
         raise ValueError(reason)
 
     with monkeypatch.context() as patch:
@@ -93,8 +101,8 @@ def title_unavailable(stage_runtime, monkeypatch, reason="FIRST_PAGE_PRODUCT_NAM
 
 
 def test_legacy_title_recovery_reuses_exact_sources_and_keeps_original_terminal(
-    legacy_stage_runtime, monkeypatch
-):
+    legacy_stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin = title_unavailable(stage_runtime, monkeypatch)
@@ -133,8 +141,8 @@ def test_legacy_title_recovery_reuses_exact_sources_and_keeps_original_terminal(
     "reason", ["PRODUCT_IDENTITY_OR_VERSION_CONFLICT", "SOURCE_REVISION_CHANGED"]
 )
 def test_legacy_v2_reason_policy_is_preserved_for_historical_records(
-    legacy_stage_runtime, monkeypatch, reason
-):
+    legacy_stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch, reason: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, _, _, _ = stage_runtime
     origin = title_unavailable(stage_runtime, monkeypatch, reason)
@@ -145,8 +153,8 @@ def test_legacy_v2_reason_policy_is_preserved_for_historical_records(
 
 @pytest.mark.parametrize("change", ["missing", "corrupt", "binding", "attempt"])
 def test_legacy_title_recovery_source_changes_fail_closed(
-    legacy_stage_runtime, monkeypatch, change
-):
+    legacy_stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch, change: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
 
@@ -178,7 +186,7 @@ def test_legacy_title_recovery_source_changes_fail_closed(
     )
     lookup = platform.lookup_upload
 
-    async def changed(scope, run_id, ordinal):
+    async def changed(scope: typing.Any, run_id: str, ordinal: int) -> typing.Any:
         item = await lookup(scope, run_id, ordinal)
         if change == "binding":
             item["knowledge_id"] = "different"
@@ -192,7 +200,7 @@ def test_legacy_title_recovery_source_changes_fail_closed(
     assert platform.calls == 3
 
 
-def test_recovery_v1_wire_bytes_are_unchanged():
+def test_recovery_v1_wire_bytes_are_unchanged() -> None:
     from insurance_harness.product_ingestion.models import OriginalKnowledgeRef, ProductScope
     from insurance_harness.product_ingestion.recovery import ProcessingRecoveryPlan
 
@@ -224,7 +232,9 @@ def test_recovery_v1_wire_bytes_are_unchanged():
     )
 
 
-def test_legacy_title_recovery_rejects_existing_semantic_call(legacy_stage_runtime, monkeypatch):
+def test_legacy_title_recovery_rejects_existing_semantic_call(
+    legacy_stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     stage_runtime = legacy_stage_runtime
     from insurance_harness.product_ingestion.artifact_tables import ProductStageModelCall
 
@@ -256,8 +266,8 @@ def test_legacy_title_recovery_rejects_existing_semantic_call(legacy_stage_runti
 
 
 def test_legacy_title_recovery_snapshot_mutation_after_admission_is_rejected(
-    legacy_stage_runtime, monkeypatch
-):
+    legacy_stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     stage_runtime = legacy_stage_runtime
     from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
 
@@ -280,7 +290,9 @@ def test_legacy_title_recovery_snapshot_mutation_after_admission_is_rejected(
     assert platform.calls == 3
 
 
-def test_legacy_processing_recovery_atomic_idempotent_and_real_source_worker(legacy_stage_runtime):
+def test_legacy_processing_recovery_atomic_idempotent_and_real_source_worker(
+    legacy_stage_runtime: typing.Any,
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin = failed_capture(stage_runtime)
@@ -329,7 +341,9 @@ def test_legacy_processing_recovery_atomic_idempotent_and_real_source_worker(leg
         )
 
 
-def test_legacy_recovery_rechecks_completed_before_any_capture(legacy_stage_runtime):
+def test_legacy_recovery_rechecks_completed_before_any_capture(
+    legacy_stage_runtime: typing.Any,
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, _, platform, execute = stage_runtime
     origin = failed_capture(stage_runtime)
@@ -342,7 +356,7 @@ def test_legacy_recovery_rechecks_completed_before_any_capture(legacy_stage_runt
     assert platform.calls == 0
 
 
-def test_processing_retry_api_strict_request_and_capability(environment):
+def test_processing_retry_api_strict_request_and_capability(environment: typing.Any) -> None:
     client, *_ = environment
     run = client.post(
         PATH, headers=auth(), json={"idempotency_key": "running", "expected_upload_count": 3}
@@ -374,7 +388,9 @@ def test_processing_retry_api_strict_request_and_capability(environment):
         "needs_confirmation:IDENTITY_CONFLICT",
     ],
 )
-def test_legacy_v1_reason_policy_is_preserved_for_historical_records(legacy_stage_runtime, reason):
+def test_legacy_v1_reason_policy_is_preserved_for_historical_records(
+    legacy_stage_runtime: typing.Any, reason: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, _, _, _ = stage_runtime
     origin = failed_capture(stage_runtime)
@@ -391,7 +407,9 @@ def test_legacy_v1_reason_policy_is_preserved_for_historical_records(legacy_stag
         store.retry_processing(scope=scope, run_id=origin.run_id, expected_version=origin.version)
 
 
-def test_processing_retry_scope_and_atomic_crash_replay(stage_runtime, monkeypatch):
+def test_processing_retry_scope_and_atomic_crash_replay(
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from insurance_harness.jobs import SpaceScopeError
 
     scope, store, _, _, _ = stage_runtime
@@ -404,7 +422,7 @@ def test_processing_retry_scope_and_atomic_crash_replay(stage_runtime, monkeypat
         )
     enqueue = store._jobs.enqueue
 
-    def lost_response(**kwargs):
+    def lost_response(**kwargs: typing.Any) -> None:
         enqueue(**kwargs)
         raise RuntimeError("API response lost after atomic commit")
 
@@ -429,7 +447,7 @@ def test_processing_retry_scope_and_atomic_crash_replay(stage_runtime, monkeypat
         )
 
 
-def test_recovery_http_positive_and_version_conflict(stage_runtime):
+def test_recovery_http_positive_and_version_conflict(stage_runtime: typing.Any) -> None:
     from fastapi.testclient import TestClient
 
     from insurance_harness.service_shell.cli import build_api_app
@@ -445,11 +463,11 @@ def test_recovery_http_positive_and_version_conflict(stage_runtime):
         lifecycle=lifecycle, probe=lambda: None, timeout_seconds=0.1, freshness_seconds=1
     )
     settings = ShellSettings(
-        postgres_dsn="postgresql://fixture@localhost/fixture",
-        principal_records_json=json.dumps(RECORDS),
+        postgres_dsn=SecretStr("postgresql://fixture@localhost/fixture"),
+        principal_records_json=SecretStr(json.dumps(RECORDS)),
         principal_space_ids=(scope.space_id,),
         product_ingestion_enabled=True,
-        product_ingestion_scopes_json=json.dumps([scope.model_dump()]),
+        product_ingestion_scopes_json=SecretStr(json.dumps([scope.model_dump()])),
     )
     app = build_api_app(
         settings=settings,
@@ -482,7 +500,7 @@ def test_recovery_http_positive_and_version_conflict(stage_runtime):
         assert client.get(path, headers=auth()).json()["data"] == before
 
 
-def test_recovery_plan_and_upload_binding_fail_closed(stage_runtime):
+def test_recovery_plan_and_upload_binding_fail_closed(stage_runtime: typing.Any) -> None:
     from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
 
     scope, store, _, platform, execute = stage_runtime
@@ -499,8 +517,8 @@ def test_recovery_plan_and_upload_binding_fail_closed(stage_runtime):
 
 
 def test_legacy_completed_sources_count_fourteen_historical_calls_not_new(
-    legacy_stage_runtime, snapshot, monkeypatch
-):
+    legacy_stage_runtime: typing.Any, snapshot: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     stage_runtime = legacy_stage_runtime
     from insurance_harness.product_ingestion import stages
     from tests.product_ingestion.test_processing_receipts import receipt, sealed
@@ -510,7 +528,7 @@ def test_legacy_completed_sources_count_fourteen_historical_calls_not_new(
     capture = platform.capture_source
     sign = snapshot[2]
 
-    async def with_history(scope, knowledge_id, attempt):
+    async def with_history(scope: typing.Any, knowledge_id: str, attempt: int) -> typing.Any:
         envelope = json.loads(await capture(scope, knowledge_id, attempt))
         body = envelope["snapshot"]
         value = receipt()
@@ -556,7 +574,7 @@ def test_legacy_completed_sources_count_fourteen_historical_calls_not_new(
     assert summary["recorded_model_call_count"] == summary["model_call_count"] == 0
     assert summary["recorded_reused_model_call_count"] == summary["reused_model_call_count"] == 14
 
-    def unavailable(*args, **kwargs):
+    def unavailable(*args: object, **kwargs: object) -> None:
         raise ValueError("FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE")
 
     with monkeypatch.context() as patch:
@@ -587,8 +605,8 @@ def test_legacy_completed_sources_count_fourteen_historical_calls_not_new(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failed_stage", ["source", "routing"])
 async def test_recovery_runs_normal_identity_fields_discovery_and_publication(
-    tmp_path, monkeypatch, failed_stage
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed_stage: typing.Any
+) -> None:
     from insurance_harness.db.base import Base, make_session_factory
     from insurance_harness.jobs import JobStore
     from insurance_harness.product_ingestion import stages
@@ -616,7 +634,7 @@ async def test_recovery_runs_normal_identity_fields_discovery_and_publication(
         scope=SCOPE, idempotency_key="failed-source", expected_upload_count=3
     )
 
-    async def unavailable(*_):
+    async def unavailable(*_: object) -> None:
         raise NonRetryableJobError("snapshot HTTP 409")
 
     with monkeypatch.context() as patch:
@@ -624,7 +642,7 @@ async def test_recovery_runs_normal_identity_fields_discovery_and_publication(
             patch.setattr(context.bindings[SCOPE.space_id].platform, "capture_source", unavailable)
         else:
 
-            def unavailable_title(*args, **kwargs):
+            def unavailable_title(*args: object, **kwargs: object) -> None:
                 raise ValueError("FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE")
 
             patch.setattr(stages, "prepare_identity_routing", unavailable_title)
@@ -663,7 +681,7 @@ async def test_recovery_runs_normal_identity_fields_discovery_and_publication(
         engine.dispose()
 
 
-def failed_parse_source(stage_runtime, reason):
+def failed_parse_source(stage_runtime: typing.Any, reason: typing.Any) -> typing.Any:
     """Real worker failure before source capture; no reparse or model fixture port."""
     scope, store, _, platform, execute = stage_runtime
     run = store.create_run(
@@ -685,7 +703,9 @@ def failed_parse_source(stage_runtime, reason):
 
 
 @pytest.mark.parametrize("reason", ["failed", "deadline"])
-def test_legacy_explicit_source_revalidation_recovers_completed_parse(legacy_stage_runtime, reason):
+def test_legacy_explicit_source_revalidation_recovers_completed_parse(
+    legacy_stage_runtime: typing.Any, reason: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     from insurance_harness.jobs import SpaceScopeError
 
@@ -724,8 +744,8 @@ def test_legacy_explicit_source_revalidation_recovers_completed_parse(legacy_sta
 
 @pytest.mark.parametrize("current_state", ["failed", "processing", "binding_changed"])
 def test_legacy_explicit_source_revalidation_does_not_reparse_unready_sources(
-    legacy_stage_runtime, current_state
-):
+    legacy_stage_runtime: typing.Any, current_state: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin = failed_parse_source(stage_runtime, "failed")
@@ -735,7 +755,7 @@ def test_legacy_explicit_source_revalidation_does_not_reparse_unready_sources(
     )
     lookup = platform.lookup_upload
 
-    async def current(scope, run_id, ordinal):
+    async def current(scope: typing.Any, run_id: str, ordinal: int) -> typing.Any:
         value = await lookup(scope, run_id, ordinal)
         if current_state == "binding_changed":
             value["knowledge_id"] = "replacement-knowledge"
@@ -764,8 +784,12 @@ def test_legacy_explicit_source_revalidation_does_not_reparse_unready_sources(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("change", ["knowledge_binding", "parse_version"])
 async def test_checkpoint_worker_revalidates_current_source_identity_and_version(
-    stage_runtime, snapshot, catalog, monkeypatch, change
-):
+    stage_runtime: typing.Any,
+    snapshot: typing.Any,
+    catalog: typing.Any,
+    monkeypatch: pytest.MonkeyPatch,
+    change: typing.Any,
+) -> None:
     """Reject actual platform metadata drift, independent of terminal error wording."""
     from types import SimpleNamespace
 
@@ -808,10 +832,12 @@ async def test_checkpoint_worker_revalidates_current_source_identity_and_version
             )
         },
     )
-    handler = build_product_pipeline(context).stage_handlers["checkpoint"]
+    handler = build_product_pipeline(
+        typing.cast(ProductCompositionContext, context)
+    ).stage_handlers["checkpoint"]
     lookup = platform.lookup_upload
 
-    async def changed(current_scope, run_id, ordinal):
+    async def changed(current_scope: typing.Any, run_id: str, ordinal: int) -> typing.Any:
         value = await lookup(current_scope, run_id, ordinal)
         if change == "knowledge_binding":
             value["knowledge_id"] = "replacement-knowledge"
@@ -828,7 +854,7 @@ async def test_checkpoint_worker_revalidates_current_source_identity_and_version
         else (CapacityBlockedJobError, "CHECKPOINT_SOURCE_SNAPSHOT_INVALID")
     )
     with pytest.raises(expected_error, match=expected_reason):
-        await handler(scope, child, stage, SimpleNamespace())
+        await handler(scope, child, stage, typing.cast(JobSnapshot, SimpleNamespace()))
     assert platform.calls == 3
     assert not artifacts.list_stage_calls(scope=scope, run_id=child.run_id)
     assert store.checkpoint_receipt(scope=scope, run_id=child.run_id) is None

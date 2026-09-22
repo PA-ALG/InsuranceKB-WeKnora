@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
+from typing import Any
 
 from insurance_harness.knowledge_compiler import (
     batch_concept_compile_830_g3 as compiler,
@@ -12,6 +14,7 @@ from insurance_harness.knowledge_compiler import (
 )
 from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
 from insurance_harness.knowledge_compiler.g3_field_tasks import adapt_catalog_field_tasks
+from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import validate_catalog
 from insurance_harness.product_ingestion.compilation import (
     build_existing_snapshot,
     build_platform_compile_request,
@@ -21,14 +24,24 @@ from insurance_harness.product_ingestion.field_validation import (
     FieldValidationReport,
     apply_field_validation,
 )
+from insurance_harness.product_ingestion.models import FieldAttemptSnapshot, ProductScope
 from insurance_harness.product_ingestion.stages import json_bytes
 
 
 def rebase_checkpoint_inputs(
-    *, scope, base_body, base_raw, catalog_json, profile_confirmation_json,
-    policy, identity_payload, original_request, original_attempts,
-    original_field_validation, run_id,
-):
+    *,
+    scope: ProductScope,
+    base_body: Mapping[str, Any],
+    base_raw: bytes,
+    catalog_json: bytes,
+    profile_confirmation_json: bytes,
+    policy: resolver.BatchResolutionPolicyV1,
+    identity_payload: bytes,
+    original_request: bytes,
+    original_attempts: tuple[FieldAttemptSnapshot, ...],
+    original_field_validation: bytes,
+    run_id: str,
+) -> dict[str, bytes]:
     """Validate the complete old field report before selecting current exact tasks."""
     identity = json.loads(identity_payload)
     corpus = resolver.BatchCorpusV1.model_validate(identity["corpus"])
@@ -45,7 +58,7 @@ def rebase_checkpoint_inputs(
     )
     existing = build_existing_snapshot(scope=scope, base_body=base_body, policy=policy)
     resolution = resolver.resolve_batch(
-        catalog=compiler.validate_catalog(catalog_json),
+        catalog=validate_catalog(catalog_json),
         corpus=corpus,
         proposals=proposals,
         existing_entities=existing,
@@ -70,14 +83,14 @@ def rebase_checkpoint_inputs(
         raise ValueError("rebased identity entity changed")
     for entity_id in old_ids:
         old, new = old_bindings[entity_id], new_bindings[entity_id]
-        for key in (
+        for binding_field in (
             "entity_version", "issuer", "schema_pack_id", "schema_pack_sha256",
             "schema_version", "source_material_ids", "required_fields",
         ):
-            if getattr(old, key) != getattr(new, key):
+            if getattr(old, binding_field) != getattr(new, binding_field):
                 raise ValueError("rebased identity binding changed")
     by_key = {(row.entity_id, row.field_key): row for row in effective}
-    selected = []
+    selected: list[FieldAttemptSnapshot] = []
     for task in adapt_catalog_field_tasks(request):
         key = (task.entity_id, task.field_key)
         row = by_key.get(key)

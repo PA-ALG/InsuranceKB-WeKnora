@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import typing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from pydantic import SecretStr
 from sqlalchemy import create_engine, event
 
 from insurance_harness.db.base import Base, make_session_factory
-from insurance_harness.jobs import ClaimedJob, JobState, JobStore
+from insurance_harness.jobs import ClaimedJob, JobSnapshot, JobState, JobStore
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
 from insurance_harness.product_ingestion.composition import compose_product_worker
 from insurance_harness.product_ingestion.discovery import (
@@ -24,8 +25,10 @@ from insurance_harness.product_ingestion.discovery import (
 )
 from insurance_harness.product_ingestion.models import (
     FieldOutcomeKind,
+    ProductRunSnapshot,
     ProductRunState,
     ProductScope,
+    StageSnapshot,
 )
 from insurance_harness.product_ingestion.pipeline import (
     FIELD_PROMPT,
@@ -63,7 +66,7 @@ def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _json(value) -> bytes:
+def _json(value: typing.Any) -> bytes:
     return json.dumps(
         value,
         ensure_ascii=False,
@@ -74,7 +77,7 @@ def _json(value) -> bytes:
     ).encode()
 
 
-def _signed(kind: str, body: dict) -> dict:
+def _signed(kind: str, body: dict[str, typing.Any]) -> dict[str, typing.Any]:
     contract = f"g3-platform-{kind}-snapshot.830.v1"
     domain = f"weknora.{contract}"
     unsigned = json.loads(_json({**body, "contract": contract}))
@@ -92,10 +95,17 @@ def _signed(kind: str, body: dict) -> dict:
             "signature": base64.b64encode(signature).decode(),
         },
     }
-    return json.loads(_json(envelope))
+    decoded = json.loads(_json(envelope))
+    assert isinstance(decoded, dict)
+    return decoded
 
 
-def _published_snapshot(candidate, *, release_id: str, activation_epoch: int) -> dict:
+def _published_snapshot(
+    candidate: compiler.BatchConceptCandidateBundle830G3V1,
+    *,
+    release_id: str,
+    activation_epoch: int,
+) -> dict[str, typing.Any]:
     request = candidate.request
     base = request.base_request
     versions = {row.entity_id: row.entity_version for row in request.entity_bindings}
@@ -148,11 +158,11 @@ def _published_snapshot(candidate, *, release_id: str, activation_epoch: int) ->
     return _signed("base", body)
 
 
-def _base_snapshot_with_navigation():
+def _base_snapshot_with_navigation() -> tuple[typing.Any, ...]:
     """A signed fixture parent with an existing human navigation override."""
     parent = compiler.validate_batch_candidate(BASE_CANDIDATE.read_bytes())
     binding = parent.request.entity_bindings[0]
-    data = {
+    data: dict[str, typing.Any] = {
         "contract": "g3-navigation-assignment.830.v1",
         "entity_id": binding.entity_id,
         "entity_version": binding.entity_version,
@@ -161,9 +171,14 @@ def _base_snapshot_with_navigation():
         "primary_label": "健康保障",
         "previous_assignment_sha256": compiler.navigation_default_sha256_g3(binding),
     }
-    navigation = (compiler.NavigationAssignment830G3V1.model_validate({
-        **data, "assignment_sha256": compiler._batch_sha256(data["contract"], data),
-    }),)
+    navigation = (
+        compiler.NavigationAssignment830G3V1.model_validate(
+            {
+                **data,
+                "assignment_sha256": compiler._batch_sha256(data["contract"], data),
+            }
+        ),
+    )
     payload = {
         name: getattr(parent, name)
         for name in type(parent).model_fields
@@ -173,15 +188,18 @@ def _base_snapshot_with_navigation():
     payload["page_manifest"] = compiler.project_batch_members(
         parent.request, parent.compile_result.output, navigation
     )
-    parent = compiler.BatchConceptCandidateBundle830G3V1.model_validate({
-        **payload, "candidate_hash": compiler._batch_sha256(parent.contract, payload),
-    })
+    parent = compiler.BatchConceptCandidateBundle830G3V1.model_validate(
+        {
+            **payload,
+            "candidate_hash": compiler._batch_sha256(parent.contract, payload),
+        }
+    )
     return _published_snapshot(
         parent, release_id="release-five-product-fixture", activation_epoch=9
     ), parent
 
 
-def _base_snapshot() -> tuple[dict, object]:
+def _base_snapshot() -> tuple[dict[str, typing.Any], compiler.BatchConceptCandidateBundle830G3V1]:
     candidate = compiler.validate_batch_candidate(BASE_CANDIDATE.read_bytes())
     return (
         _published_snapshot(
@@ -191,7 +209,7 @@ def _base_snapshot() -> tuple[dict, object]:
     )
 
 
-def _source_snapshot(ordinal: int, *, conflicting: bool = False) -> dict:
+def _source_snapshot(ordinal: int, *, conflicting: bool = False) -> dict[str, typing.Any]:
     title = "平安冲突（2026）两全保险" if conflicting and ordinal == 1 else TITLE
     role_heading = ("保险条款", "产品说明书", "费率表")[ordinal]
     heading = f"《{title}》年交费率表" if ordinal == 2 else f"{title}{role_heading}"
@@ -292,7 +310,9 @@ def _source_snapshot(ordinal: int, *, conflicting: bool = False) -> dict:
     return _signed("source", body)
 
 
-def _trusted_files(tmp_path: Path, base_candidate) -> dict:
+def _trusted_files(
+    tmp_path: Path, base_candidate: compiler.BatchConceptCandidateBundle830G3V1
+) -> dict[str, typing.Any]:
     policy = base_candidate.request.resolution_inputs.policy.model_dump(
         mode="json", exclude={"policy_sha256"}
     )
@@ -312,7 +332,7 @@ def _trusted_files(tmp_path: Path, base_candidate) -> dict:
     return result
 
 
-def _settings(tmp_path: Path, base_candidate) -> ShellSettings:
+def _settings(tmp_path: Path, base_candidate: typing.Any) -> ShellSettings:
     expires = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
     runtime = {
         "contract": "product-ingestion-runtime.830.v1",
@@ -436,15 +456,14 @@ def _settings(tmp_path: Path, base_candidate) -> ShellSettings:
 
 
 class FixtureModel:
-    def __init__(self):
-        self.identity_requests: list[dict] = []
-        self.field_requests: list[dict] = []
-        self.discovery_requests: list[dict] = []
-        self.discovery_review_requests: list[dict] = []
+    def __init__(self) -> None:
+        self.identity_requests: list[dict[str, typing.Any]] = []
+        self.field_requests: list[dict[str, typing.Any]] = []
+        self.discovery_requests: list[dict[str, typing.Any]] = []
+        self.discovery_review_requests: list[dict[str, typing.Any]] = []
         self.fail_one_field = True
 
-    @staticmethod
-    def _identity(content: dict) -> dict:
+    def _identity(self, content: dict[str, typing.Any]) -> dict[str, typing.Any]:
         materials = []
         for material in content["materials"]:
             locator = material["blocks"][0]["evidence_locator_refs"][0]["locator_ref"]
@@ -583,19 +602,19 @@ class FixtureModel:
 
 
 class FixturePlatform:
-    def __init__(self, base: dict, *, conflict: bool = False):
+    def __init__(self, base: dict[str, typing.Any], *, conflict: bool = False) -> None:
         self.base = base
         self.sources = tuple(_source_snapshot(i, conflicting=conflict) for i in range(3))
         self.current = {
             "release_id": base["snapshot"]["release_id"],
             "activation_epoch": base["snapshot"]["activation_epoch"],
         }
-        self.candidate = None
-        self.preparation = None
+        self.candidate: compiler.BatchConceptCandidateBundle830G3V1 | None = None
+        self.preparation: dict[str, typing.Any] | None = None
         self.source_captures = 0
         self.activations = 0
 
-    def _data(self, value, status=200):
+    def _data(self, value: typing.Any, status: int = 200) -> httpx.Response:
         return httpx.Response(status, json={"success": True, "data": value})
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -656,6 +675,7 @@ class FixturePlatform:
             }
             return self._data(self.preparation)
         if suffix.endswith("/review"):
+            assert self.preparation is not None
             return self._data(
                 {
                     **self.preparation,
@@ -664,6 +684,7 @@ class FixturePlatform:
                 }
             )
         if suffix == "/platform/activate":
+            assert self.candidate is not None
             value = json.loads(request.content)
             authorization_raw = canonical(value["authorization"])
             authorization = value["authorization"]
@@ -733,10 +754,12 @@ class FixturePlatform:
         raise AssertionError(f"unexpected platform request: {request.method} {suffix}")
 
 
-async def _compose(settings, session_factory, platform, model):
+async def _compose(
+    settings: typing.Any, session_factory: typing.Any, platform: typing.Any, model: typing.Any
+) -> typing.Any:
     captured = {}
 
-    def factory(context):
+    def factory(context: typing.Any) -> typing.Any:
         captured["context"] = context
         return build_product_pipeline(context)
 
@@ -760,13 +783,13 @@ async def _compose(settings, session_factory, platform, model):
     return result, captured["context"], model_client
 
 
-def _sqlite_engine(path: Path):
+def _sqlite_engine(path: Path) -> typing.Any:
     # WAL lets the real heartbeat/read transactions coexist with P1's atomic
     # domain writes in the SQLite fixture, matching PostgreSQL's nonblocking reads.
     engine = create_engine(f"sqlite:///{path}", connect_args={"timeout": 120}, future=True)
 
     @event.listens_for(engine, "connect")
-    def pragmas(connection, _record):
+    def pragmas(connection: typing.Any, _record: object) -> None:
         cursor = connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA busy_timeout=120000")
@@ -775,7 +798,7 @@ def _sqlite_engine(path: Path):
     return engine
 
 
-async def _step(runtime, jobs):
+async def _step(runtime: typing.Any, jobs: typing.Any) -> bool:
     await runtime.pump.tick()
     claimed = jobs.claim(space_ids=(SCOPE.space_id,), worker_id="fixture-worker")
     if isinstance(claimed, ClaimedJob):
@@ -784,7 +807,14 @@ async def _step(runtime, jobs):
     return False
 
 
-async def _finish(runtime, context, jobs, run_id, *, limit=160):
+async def _finish(
+    runtime: typing.Any,
+    context: typing.Any,
+    jobs: typing.Any,
+    run_id: str,
+    *,
+    limit: typing.Any = 160,
+) -> typing.Any:
     for _ in range(limit):
         await _step(runtime, jobs)
         value = context.store.get_run(scope=SCOPE, run_id=run_id)
@@ -799,7 +829,9 @@ async def _finish(runtime, context, jobs, run_id, *, limit=160):
 
 
 @pytest.mark.asyncio
-async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_field(tmp_path):
+async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_field(
+    tmp_path: Path,
+) -> None:
     base, base_candidate = _base_snapshot()
     settings = _settings(tmp_path, base_candidate)
     engine = _sqlite_engine(tmp_path / "pipeline.db")
@@ -817,7 +849,7 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
     interrupted = False
     discovery_interrupted = False
 
-    def fail_after_recording(**kwargs):
+    def fail_after_recording(**kwargs: typing.Any) -> typing.Any:
         nonlocal interrupted, discovery_interrupted
         if not discovery_interrupted and any(
             row.artifact_kind == "discovery_summary" for row in kwargs["drafts"]
@@ -864,6 +896,7 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
     assert len(failed) == 1
     assert all(row.validated_result is None for row in failed)
     assert len(base_candidate.request.entity_bindings) == 5
+    assert platform.candidate is not None
     assert len(platform.candidate.request.entity_bindings) == 6
     assert platform.candidate.request.base_request.existing_fields == (
         base_candidate.compile_result.output.fields
@@ -936,7 +969,7 @@ async def test_real_pipeline_restarts_without_resend_then_retries_only_failed_fi
 
 
 @pytest.mark.asyncio
-async def test_real_identity_conflict_terminates_after_one_classification(tmp_path):
+async def test_real_identity_conflict_terminates_after_one_classification(tmp_path: Path) -> None:
     base, base_candidate = _base_snapshot()
     settings = _settings(tmp_path, base_candidate)
     engine = _sqlite_engine(tmp_path / "conflict.db")
@@ -960,7 +993,7 @@ async def test_real_identity_conflict_terminates_after_one_classification(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_legacy_field_retry_preserves_sealed_hash_and_role(tmp_path):
+async def test_legacy_field_retry_preserves_sealed_hash_and_role(tmp_path: Path) -> None:
     from types import SimpleNamespace
 
     from sqlalchemy import update
@@ -986,7 +1019,7 @@ async def test_legacy_field_retry_preserves_sealed_hash_and_role(tmp_path):
     assert len(model.identity_requests) == 1 and not model.field_requests
     # Old successful routing sealed roles independently of classifier proposals.
     legacy_hash = "c" * 64
-    with session_factory.begin() as session:
+    with typing.cast(typing.Any, session_factory).begin() as session:
         session.execute(
             update(ProductMaterial)
             .where(ProductMaterial.run_id == run.run_id)
@@ -1015,7 +1048,7 @@ async def test_legacy_field_retry_preserves_sealed_hash_and_role(tmp_path):
         ],
     }
 
-    def old_artifact(**kwargs):
+    def old_artifact(**kwargs: typing.Any) -> typing.Any:
         if kwargs["artifact_kind"] == "routing":
             return SimpleNamespace(payload=_json(legacy_route))
         return get(**kwargs)
@@ -1026,7 +1059,10 @@ async def test_legacy_field_retry_preserves_sealed_hash_and_role(tmp_path):
     )
     ports = build_product_pipeline(context)
     output = await ports.stage_handlers["identity"](
-        SCOPE, replay, SimpleNamespace(dependency_sha256="d" * 64), None
+        SCOPE,
+        typing.cast(ProductRunSnapshot, replay),
+        typing.cast(StageSnapshot, SimpleNamespace(dependency_sha256="d" * 64)),
+        typing.cast(JobSnapshot, None),
     )
     resolved = json.loads(
         next(row.payload for row in output.drafts if row.artifact_kind == "resolved_routing")

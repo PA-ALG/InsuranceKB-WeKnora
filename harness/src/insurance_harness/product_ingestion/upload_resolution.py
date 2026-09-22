@@ -1,9 +1,38 @@
 """Resolve an admitted original without rewriting an earlier upload's metadata."""
 
+from typing import Any, Protocol
+
 from insurance_harness.jobs import NonRetryableJobError
+from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.upload_manifest import UploadManifest
 
 
-async def lookup_material(platform, scope, run_id, ordinal, manifest, *, knowledge_id=None):
+class UploadLookup(Protocol):
+    async def lookup_upload(
+        self,
+        scope: ProductScope,
+        run_id: str,
+        ordinal: int,
+    ) -> dict[str, Any] | None: ...
+
+    async def lookup_file_by_sha256(
+        self,
+        scope: ProductScope,
+        sha256: str,
+        *,
+        knowledge_id: str | None = None,
+    ) -> dict[str, Any] | None: ...
+
+
+async def lookup_material(
+    platform: UploadLookup,
+    scope: ProductScope,
+    run_id: str,
+    ordinal: int,
+    manifest: UploadManifest | None,
+    *,
+    knowledge_id: str | None = None,
+) -> dict[str, Any] | None:
     item = await platform.lookup_upload(scope, run_id, ordinal)
     original_binding = item is not None
     if manifest is None:

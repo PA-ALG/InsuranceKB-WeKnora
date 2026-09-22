@@ -1,7 +1,7 @@
 from insurance_harness.product_ingestion.upload_manifest import UploadManifest, UploadMaterial
 
 
-def test_upload_manifest_preserves_first_ordinal_and_deduplicates_content():
+def test_upload_manifest_preserves_first_ordinal_and_deduplicates_content() -> None:
     manifest = UploadManifest.from_uploads(
         [
             UploadMaterial(
@@ -21,7 +21,7 @@ def test_upload_manifest_preserves_first_ordinal_and_deduplicates_content():
     assert manifest.duplicate_upload_count == 1
 
 
-def test_upload_manifest_rejects_invalid_or_noncontiguous_input():
+def test_upload_manifest_rejects_invalid_or_noncontiguous_input() -> None:
     import pytest
 
     with pytest.raises(ValueError):
@@ -36,7 +36,7 @@ def test_upload_manifest_rejects_invalid_or_noncontiguous_input():
         UploadMaterial(ordinal=0, original_filename="a.pdf", file_size=0, file_sha256="a" * 64)
 
 
-def test_upload_manifest_rejects_invalid_wire_form():
+def test_upload_manifest_rejects_invalid_wire_form() -> None:
     import json
 
     import pytest

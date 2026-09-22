@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, TypedDict
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
 from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as resolver
@@ -25,8 +25,10 @@ from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
 )
 from insurance_harness.knowledge_compiler.g3_field_tasks import (
     FieldTaskEvidenceResultV1,
+    FieldTaskV1,
     adapt_catalog_field_tasks,
 )
+from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import validate_catalog
 from insurance_harness.product_ingestion.models import FieldOutcomeKind, ProductScope
 
 _BASE_CONTRACT = "g3-platform-base-snapshot.830.v1"
@@ -40,7 +42,14 @@ def _value(row: object, name: str) -> Any:
     return getattr(row, name, None)
 
 
-def _scope(scope: ProductScope) -> dict[str, object]:
+class ScopeWire(TypedDict):
+    tenant_id: int
+    space_id: str
+    raw_kb_id: str
+    wiki_kb_id: str
+
+
+def _scope(scope: ProductScope) -> ScopeWire:
     try:
         tenant_id = int(scope.tenant_id)
     except (TypeError, ValueError):
@@ -178,7 +187,8 @@ _PUBLISHED_EMPTY_COLLECTIONS = {
 }
 
 
-def published_compile_members(projection: Mapping[str, Any], kind: str) -> tuple:
+def published_compile_members(projection: Mapping[str, Any], kind: str) -> tuple[object, ...]:
+    """Preserve JSON rows for lossless transfer; domain validation belongs to compilation."""
     keys = _PUBLISHED_EMPTY_COLLECTIONS[kind]
     return tuple(
         {**row, **{key: () for key in keys if key in row and row[key] is None}}
@@ -215,7 +225,7 @@ def build_platform_compile_request(
         for row in selected_refs
     ):
         raise ValueError("selected resolution refs must be sorted unique pairs")
-    catalog = compiler.validate_catalog(catalog_json)
+    catalog = validate_catalog(catalog_json)
     catalog_identity = projection.get("catalog")
     if catalog_identity != {
         "catalog_id": catalog.catalog_id,
@@ -259,25 +269,28 @@ def build_platform_compile_request(
             "refresh_fields": refresh_fields,
         },
     )
-    base_request = CompileRequest(
-        request_id="product-ingestion-" + request_identity,
-        **_scope(scope),
-        policy_identity="g3-resolution-policy:" + policy.policy_sha256,
-        sources=tuple(sources[key] for key in sorted(sources)),
-        required_fields=required_fields,
-        existing_definitions=published_compile_members(projection, "definitions"),
-        existing_fields=published_compile_members(projection, "fields"),
-        existing_pages=published_compile_members(projection, "pages"),
-        existing_entity_versions=dict(projection["entity_versions"]),
-        entity_versions=entity_versions,
-        schema_identity=(
-            f"catalog:{catalog.catalog_id}@{catalog.catalog_version}#{catalog.catalog_sha256}"
-        ),
-        profile_identity=compiler._profile_set_identity(bindings),
-        purpose="Platform product ingestion from signed source and published base custody",
-        budget_identity="platform-persisted-field-artifacts.830.g3.v1",
-        base_release_id=base_body["release_id"],
-        base_activation_epoch=base_body["activation_epoch"],
+    base_request = CompileRequest.model_validate(
+        {
+            "request_id": "product-ingestion-" + request_identity,
+            **_scope(scope),
+            "policy_identity": "g3-resolution-policy:" + policy.policy_sha256,
+            "sources": tuple(sources[key] for key in sorted(sources)),
+            "required_fields": required_fields,
+            "existing_definitions": published_compile_members(projection, "definitions"),
+            "existing_fields": published_compile_members(projection, "fields"),
+            "existing_pages": published_compile_members(projection, "pages"),
+            "existing_entity_versions": dict(projection["entity_versions"]),
+            "entity_versions": entity_versions,
+            "schema_identity": (
+                f"catalog:{catalog.catalog_id}@{catalog.catalog_version}"
+                f"#{catalog.catalog_sha256}"
+            ),
+            "profile_identity": compiler._profile_set_identity(bindings),
+            "purpose": "Platform product ingestion from signed source and published base custody",
+            "budget_identity": "platform-persisted-field-artifacts.830.g3.v1",
+            "base_release_id": base_body["release_id"],
+            "base_activation_epoch": base_body["activation_epoch"],
+        }
     )
     published_payload: dict[str, object] = {
         "contract": "published-base-binding.830.g3.v1",
@@ -296,6 +309,9 @@ def build_platform_compile_request(
         }
     )
     existing = build_existing_snapshot(scope=scope, base_body=base_body, policy=policy)
+    validated_refresh = tuple(
+        compiler.FieldRefresh830G3V1.model_validate(row) for row in refresh_fields
+    )
     return compiler.build_batch_compile_request(
         base_request=base_request,
         catalog_json=catalog_json,
@@ -307,14 +323,14 @@ def build_platform_compile_request(
         resolution=resolution,
         selected_decision_refs=selected_refs,
         published_base=published,
-        refresh_fields=refresh_fields,
+        refresh_fields=validated_refresh,
     )
 
 
 def _field_result(
     *,
     request: compiler.BatchConceptCompileRequest830G3V1,
-    task,
+    task: FieldTaskV1,
     attempt: object,
 ) -> tuple[FieldAssertion, str]:
     if (
@@ -450,7 +466,7 @@ def _derived_run_id(run_id: str, stage: str) -> str:
 
 
 def published_navigation_assignments(
-    base_body: dict,
+    base_body: Mapping[str, Any],
 ) -> tuple[compiler.NavigationAssignment830G3V1, ...]:
     """Read verified projection navigation, including Go's optional null slice."""
     rows = base_body["published_projection"].get("navigation_assignments")

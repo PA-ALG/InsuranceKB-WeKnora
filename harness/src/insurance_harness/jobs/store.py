@@ -774,6 +774,8 @@ class JobStore:
         requeued: list[str] = []
         dead_lettered: list[str] = []
         for row in expired_rows:
+            if row.lease_expires_at is None:
+                raise ValueError("expired job lease timestamp is missing")
             diagnostic = {
                 "event": "job_lease_reclaimed", "job_id": row.id,
                 "space_id": row.space_id, "generation": row.lease_generation,

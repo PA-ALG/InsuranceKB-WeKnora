@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from typing import TypedDict
+
 import pytest
 
 from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as g
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import _build_entity_bindings
+from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import SchemaPackCatalogV1
 from tests.test_batch_entity_resolution_830_g3 import (
     _corpus,
     _entry,
@@ -13,14 +16,23 @@ from tests.test_batch_entity_resolution_830_g3 import (
     _new,
     _policy,
     _proposal_batch,
-    catalog,  # noqa: F401
+)
+from tests.test_batch_entity_resolution_830_g3 import (
+    catalog as catalog,
 )
 
 V3 = "batch-entity-resolution-compiler.830.g3.v3"
 
 
-def joint_fixture():
-    rows = [
+class ResolutionArgs(TypedDict):
+    corpus: g.BatchCorpusV1
+    proposals: g.ProposalBatchV1
+    existing_entities: g.ExistingEntitySnapshotV1
+    policy: g.BatchResolutionPolicyV1
+
+
+def joint_fixture() -> ResolutionArgs:
+    rows: list[tuple[str, str, str | None, str | None, str | None]] = [
         ("a-brochure", "brochure", "平安保险", None, None),
         ("b-terms", "terms", None, "MED1", "REG1"),
         ("c-rates", "rate-table", None, None, None),
@@ -68,7 +80,9 @@ def joint_fixture():
     return dict(corpus=corpus, proposals=proposals, existing_entities=_existing(), policy=policy)
 
 
-def test_joint_complementary_sources_preserve_original_nulls_and_compile(catalog):  # noqa: F811
+def test_joint_complementary_sources_preserve_original_nulls_and_compile(
+    catalog: SchemaPackCatalogV1,
+) -> None:  # noqa: F811
     args = joint_fixture()
     original = args["proposals"].model_dump_json()
     old = [
@@ -79,7 +93,17 @@ def test_joint_complementary_sources_preserve_original_nulls_and_compile(catalog
     assert [r.disposition for r in result.decisions] == ["CREATE"] * 3
     assert args["proposals"].model_dump_json() == original
     children = [p.children[0] for p in result.decisions]
-    assert len({c.entity_candidate.candidate_sha256 for c in children}) == 1
+    assert all(c.entity_candidate is not None for c in children)
+    assert (
+        len(
+            {
+                c.entity_candidate.candidate_sha256
+                for c in children
+                if c.entity_candidate is not None
+            }
+        )
+        == 1
+    )
     refs = tuple((p.material_id, p.entities[0].proposal_ref) for p in args["proposals"].proposals)
     bindings = _build_entity_bindings(
         catalog=catalog, proposals=args["proposals"], resolution=result, selected_decision_refs=refs
@@ -102,7 +126,13 @@ def test_joint_complementary_sources_preserve_original_nulls_and_compile(catalog
     ] == old
 
 
-def revise(args, material_id, *, entity_updates=None, drop_purpose=None):
+def revise(
+    args: ResolutionArgs,
+    material_id: str,
+    *,
+    entity_updates: dict[str, object] | None = None,
+    drop_purpose: str | None = None,
+) -> ResolutionArgs:
     originals = args["proposals"]
     changed = []
     for proposal in originals.proposals:
@@ -137,7 +167,9 @@ def revise(args, material_id, *, entity_updates=None, drop_purpose=None):
 
 
 @pytest.mark.parametrize("purpose", ["issuer", "product_code", "version", "name"])
-def test_missing_support_never_borrows_another_documents_evidence(catalog, purpose):  # noqa: F811
+def test_missing_support_never_borrows_another_documents_evidence(
+    catalog: SchemaPackCatalogV1, purpose: str
+) -> None:  # noqa: F811
     args = joint_fixture()
     material = "a-brochure" if purpose == "issuer" else "b-terms"
     args = revise(args, material, drop_purpose=purpose)
@@ -145,7 +177,9 @@ def test_missing_support_never_borrows_another_documents_evidence(catalog, purpo
     assert all(row.disposition not in {"CREATE", "MATCH"} for row in result.decisions)
 
 
-def test_different_nonempty_claim_with_own_evidence_rejects_whole_same_name_group(catalog):  # noqa: F811
+def test_different_nonempty_claim_with_own_evidence_rejects_whole_same_name_group(
+    catalog: SchemaPackCatalogV1,
+) -> None:  # noqa: F811
     args = joint_fixture()
     # Both observed values are exact source evidence; different dates are a real conflict.
     entry = args["corpus"].entries[0]
@@ -153,7 +187,7 @@ def test_different_nonempty_claim_with_own_evidence_rejects_whole_same_name_grou
     entries = (new_entry, *args["corpus"].entries[1:])
     corpus = _corpus(*entries)
     receipt = _model_binding(corpus, *entries)
-    rows = []
+    rows: list[g.MaterialProposalV1] = []
     for i, old in enumerate(args["proposals"].proposals):
         e = old.entities[0]
         rows.append(
@@ -187,7 +221,7 @@ def test_different_nonempty_claim_with_own_evidence_rejects_whole_same_name_grou
     assert all("AMBIGUOUS_IDENTITY" in row.children[0].reason_codes for row in result.decisions)
 
 
-def test_source_revision_tampering_blocks_joint_group(catalog):  # noqa: F811
+def test_source_revision_tampering_blocks_joint_group(catalog: SchemaPackCatalogV1) -> None:  # noqa: F811
     args = joint_fixture()
     own = args["proposals"].proposals[0]
     altered = _new(

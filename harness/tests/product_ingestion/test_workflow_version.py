@@ -4,12 +4,13 @@ from __future__ import annotations
 
 # ruff: noqa: F811 -- imported pytest fixtures.
 import importlib.util
+import typing
 from pathlib import Path
 
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import Table, create_engine, inspect, text
 
 import insurance_harness
 from insurance_harness.product_ingestion.tables import ProductRun
@@ -30,7 +31,9 @@ from tests.product_ingestion.test_store import (
 )
 
 
-def test_new_upload_is_v3_and_idempotent_legacy_run_stays_v1(api, factory):
+def test_new_upload_is_v3_and_idempotent_legacy_run_stays_v1(
+    api: typing.Any, factory: typing.Any
+) -> None:
     store, _ = _make_store(api, factory)
     scope = _scope(api)
     run = store.create_run(scope=scope, idempotency_key="workflow")
@@ -45,7 +48,9 @@ def test_new_upload_is_v3_and_idempotent_legacy_run_stays_v1(api, factory):
     assert repeated.version == original_version
 
 
-def test_direct_old_writer_defaults_to_v1_and_null_is_forbidden(api, factory):
+def test_direct_old_writer_defaults_to_v1_and_null_is_forbidden(
+    api: typing.Any, factory: typing.Any
+) -> None:
     from sqlalchemy.exc import IntegrityError
 
     column = ProductRun.__table__.c.get("workflow_version")
@@ -54,24 +59,26 @@ def test_direct_old_writer_defaults_to_v1_and_null_is_forbidden(api, factory):
     assert str(column.server_default.arg) == "1"
     store, _ = _make_store(api, factory)
     run = store.create_run(scope=_scope(api), idempotency_key="original")
+    table = typing.cast(Table, ProductRun.__table__)
     with factory() as session, session.begin():
         row = session.get(ProductRun, run.run_id)
-        values = {c.name: getattr(row, c.name) for c in ProductRun.__table__.columns}
+        assert row is not None
+        values = {c.name: getattr(row, c.name) for c in table.columns}
         values.pop("workflow_version")
         values.update(id="old-writer", idempotency_key="old-writer")
-        session.execute(ProductRun.__table__.insert().values(**values))
+        session.execute(table.insert().values(**values))
     assert store.get_run(scope=_scope(api), run_id="old-writer").workflow_version == 1
     with pytest.raises(IntegrityError), factory() as session, session.begin():
         session.execute(
-            text(
-                "UPDATE product_ingestion_runs SET workflow_version=NULL WHERE id=:id"
-            ),
+            text("UPDATE product_ingestion_runs SET workflow_version=NULL WHERE id=:id"),
             {"id": run.run_id},
         )
 
 
 @pytest.mark.parametrize("version", (1, 2))
-def test_legacy_processing_child_inherits_persisted_workflow(stage_runtime, version):
+def test_legacy_processing_child_inherits_persisted_workflow(
+    stage_runtime: typing.Any, version: typing.Any
+) -> None:
     scope, store, *_ = stage_runtime
     origin = failed_capture(stage_runtime)
     with store._session_factory() as session, session.begin():
@@ -85,7 +92,9 @@ def test_legacy_processing_child_inherits_persisted_workflow(stage_runtime, vers
 
 
 @pytest.mark.parametrize("version", (1, 2))
-def test_field_retry_child_inherits_persisted_workflow(api, factory, version):
+def test_field_retry_child_inherits_persisted_workflow(
+    api: typing.Any, factory: typing.Any, version: typing.Any
+) -> None:
     store, jobs = _make_store(api, factory)
     run, _ = _run_with_uploads(api, store)
     with factory() as session, session.begin():
@@ -122,14 +131,15 @@ def test_field_retry_child_inherits_persisted_workflow(api, factory, version):
 
 
 def test_migration_preserves_existing_bytes_and_defaults_only_new_column(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path = (
         Path(insurance_harness.__file__).resolve().parents[2]
         / "migrations/versions/0018_product_workflow_version.py"
     )
     assert path.is_file(), "workflow migration is missing"
     spec = importlib.util.spec_from_file_location("workflow_migration", path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.revision == "0018" and module.down_revision == "0017"
@@ -147,14 +157,10 @@ def test_migration_preserves_existing_bytes_and_defaults_only_new_column(
         before = connection.execute(
             text("SELECT id,version,payload FROM product_ingestion_runs")
         ).all()
-        monkeypatch.setattr(
-            module, "op", Operations(MigrationContext.configure(connection))
-        )
+        monkeypatch.setattr(module, "op", Operations(MigrationContext.configure(connection)))
         module.upgrade()
         assert (
-            connection.execute(
-                text("SELECT id,version,payload FROM product_ingestion_runs")
-            ).all()
+            connection.execute(text("SELECT id,version,payload FROM product_ingestion_runs")).all()
             == before
         )
         assert (
@@ -170,9 +176,7 @@ def test_migration_preserves_existing_bytes_and_defaults_only_new_column(
         )["nullable"]
         module.downgrade()
         assert (
-            connection.execute(
-                text("SELECT id,version,payload FROM product_ingestion_runs")
-            ).all()
+            connection.execute(text("SELECT id,version,payload FROM product_ingestion_runs")).all()
             == before
         )
     engine.dispose()

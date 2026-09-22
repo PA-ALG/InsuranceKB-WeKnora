@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from insurance_harness.knowledge_compiler import g3_bounded_model_execution as runtime
 from insurance_harness.knowledge_compiler.g3_field_tasks import (
     DiscoveryFieldProposalV1,
@@ -8,7 +10,7 @@ from insurance_harness.knowledge_compiler.g3_field_tasks import (
 from tests.test_batch_entity_resolution_830_g3 import _entry
 
 
-def test_routing_is_bounded_preserves_offsets_and_prefers_field_guidance():
+def test_routing_is_bounded_preserves_offsets_and_prefers_field_guidance() -> None:
     assert hasattr(runtime, "route_field_task_sources"), "runtime has no shared field routing"
     entry = _entry(
         material_id="route-a",
@@ -39,21 +41,21 @@ def test_routing_is_bounded_preserves_offsets_and_prefers_field_guidance():
     )
 
 
-def test_schema_and_discovery_route_through_same_bounded_contract():
+def test_schema_and_discovery_route_through_same_bounded_contract() -> None:
     assert hasattr(runtime, "route_field_task_sources"), "runtime has no shared field routing"
     assert hasattr(runtime, "adapt_catalog_field_tasks"), (
         "runtime bypasses shared FieldTask adapter"
     )
 
 
-def test_runtime_bounded_scheduler_continues_siblings_and_keeps_order():
+def test_runtime_bounded_scheduler_continues_siblings_and_keeps_order() -> None:
     import asyncio
 
     assert hasattr(runtime, "_run_bounded_call_tasks"), "runtime has no bounded call scheduler"
     active = peak = 0
     completed = []
 
-    async def one(value):
+    async def one(value: int) -> int:
         nonlocal active, peak
         active += 1
         peak = max(peak, active)
@@ -72,7 +74,7 @@ def test_runtime_bounded_scheduler_continues_siblings_and_keeps_order():
     assert result[0] == 0 and isinstance(result[1], ValueError) and result[2:] == (2, 3)
 
 
-def test_projector_rejects_quotes_outside_offered_source_spans():
+def test_projector_rejects_quotes_outside_offered_source_spans() -> None:
     import pytest
 
     assert hasattr(runtime, "validate_routed_selections"), "projector does not enforce routed spans"
@@ -84,7 +86,7 @@ def test_projector_rejects_quotes_outside_offered_source_spans():
         runtime.validate_routed_selections((("other", "九十日"),), offered)
 
 
-def test_unrelated_history_is_not_segmented(monkeypatch):
+def test_unrelated_history_is_not_segmented(monkeypatch: pytest.MonkeyPatch) -> None:
     from insurance_harness.knowledge_compiler import g3_field_task_routing as routing
     from insurance_harness.knowledge_compiler.g3_field_tasks import FieldTaskSourceV1
 
@@ -92,23 +94,32 @@ def test_unrelated_history_is_not_segmented(monkeypatch):
     history = _entry(material_id="history", text="无关历史条款。" * 10000)
     block = current.blocks[0]
     tasks = adapt_discovery_field_tasks(
-        entity_id="entity-a", entity_version="v1", material_ids=("current",),
+        entity_id="entity-a",
+        entity_version="v1",
+        material_ids=("current",),
         proposals=(DiscoveryFieldProposalV1(field_key="waiting", short_title="等待期"),),
         discovery_protocol_version="discovery.v1",
-        allowed_sources=(FieldTaskSourceV1(material_id="current", revision_id=block.revision_id,
-            block_id=block.block_id, source_hash=block.source_hash,
-            parser_identity=block.parser_identity),),
+        allowed_sources=(
+            FieldTaskSourceV1(
+                material_id="current",
+                revision_id=block.revision_id,
+                block_id=block.block_id,
+                source_hash=block.source_hash,
+                parser_identity=block.parser_identity,
+            ),
+        ),
     )
     expected = routing.route_field_task_sources(tasks, {"current": block})
     original = routing._spans
     visited = []
 
-    def observe(text, limit):
+    def observe(text: str, limit: int) -> tuple[tuple[int, int, str], ...]:
         visited.append(text)
         return original(text, limit)
 
     monkeypatch.setattr(routing, "_spans", observe)
-    assert routing.route_field_task_sources(
-        tasks, {"current": block, "history": history.blocks[0]}
-    ) == expected
+    assert (
+        routing.route_field_task_sources(tasks, {"current": block, "history": history.blocks[0]})
+        == expected
+    )
     assert visited == [block.text], "unrelated history adds document segmentation work"

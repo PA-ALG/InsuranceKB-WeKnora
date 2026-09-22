@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import json
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from insurance_harness.jobs import NonRetryableJobError
 from insurance_harness.knowledge_compiler import (
@@ -19,13 +20,21 @@ from insurance_harness.knowledge_compiler import (
 from insurance_harness.knowledge_compiler import (
     batch_entity_resolution_830_g3 as resolver,
 )
-from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
+from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
 from insurance_harness.product_ingestion.checkpoints import RECEIPT_KIND
+from insurance_harness.product_ingestion.models import (
+    ProductRunSnapshot,
+    ProductScope,
+    StageSnapshot,
+)
 from insurance_harness.product_ingestion.platform import (
     decode_source_snapshot,
     verify_signed_snapshot,
 )
 from insurance_harness.product_ingestion.stages import StageOutput, artifact, json_bytes
+
+if TYPE_CHECKING:
+    from insurance_harness.product_ingestion.composition import ProductCompositionContext
 
 
 class CheckpointFailureReason(StrEnum):
@@ -46,7 +55,12 @@ class CheckpointValidationError(ValueError):
         super().__init__(reason.value)
 
 
-async def validate_checkpoint(context, scope, run, stage):
+async def validate_checkpoint(
+    context: ProductCompositionContext,
+    scope: ProductScope,
+    run: ProductRunSnapshot,
+    stage: StageSnapshot,
+) -> StageOutput:
     """Return immutable drafts after full dependency validation; perform no writes."""
     service = context.bindings[scope.space_id]
     if service.scope != scope:
@@ -56,6 +70,8 @@ async def validate_checkpoint(context, scope, run, stage):
     reason = CheckpointFailureReason.PLAN
     try:
         plan = await asyncio.to_thread(store.checkpoint_plan, scope=scope, run_id=run.run_id)
+        if plan is None:
+            raise ValueError("checkpoint plan missing")
         reason = CheckpointFailureReason.LOCAL_PROOF
         receipt = await asyncio.to_thread(
             artifacts.verify_checkpoint, scope=scope, run_id=run.run_id
@@ -157,7 +173,7 @@ async def validate_checkpoint(context, scope, run, stage):
             if request.catalog != context.catalog or request.resolution_inputs.policy != policy:
                 raise ValueError("Catalog or Schema changed")
         reason = CheckpointFailureReason.REBASE
-        drafts = []
+        drafts: list[ArtifactDraft] = []
         if base_changed or plan.prior_rebase_artifacts:
             from insurance_harness.product_ingestion.checkpoint_rebase import (
                 rebase_checkpoint_inputs,

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCompileRequest830G3V1,
     aligned_existing_fields,
     validate_batch_candidate,
 )
@@ -19,7 +20,7 @@ from insurance_harness.knowledge_compiler.g3_field_tasks import (
 )
 
 
-def _request():
+def _request() -> BatchConceptCompileRequest830G3V1:
     fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
     return validate_batch_candidate(fixture.read_bytes()).request
 
@@ -137,7 +138,7 @@ def test_field_task_result_enforces_exact_tristate_and_evidence_scope() -> None:
         )
 
 
-def test_number_constraint_rejects_nonfinite_values():
+def test_number_constraint_rejects_nonfinite_values() -> None:
     from insurance_harness.knowledge_compiler.g3_field_tasks import FieldValueConstraintV1
 
     constraint = FieldValueConstraintV1(kind="NUMBER")
@@ -145,7 +146,7 @@ def test_number_constraint_rejects_nonfinite_values():
     assert not any(constraint.accepts(value) for value in ("nan", "NaN", "inf", "-Infinity"))
 
 
-def test_catalog_explicit_product_type_enum_rejects_arbitrary_known_value():
+def test_catalog_explicit_product_type_enum_rejects_arbitrary_known_value() -> None:
     request = _request()
     task = next(
         row for row in adapt_catalog_field_tasks(request) if row.field_key == "product_type"
@@ -178,7 +179,7 @@ def test_catalog_explicit_product_type_enum_rejects_arbitrary_known_value():
         )
 
 
-def test_catalog_constraint_preserves_open_and_compound_specs_as_text():
+def test_catalog_constraint_preserves_open_and_compound_specs_as_text() -> None:
     from insurance_harness.knowledge_compiler import g3_field_tasks as module
 
     assert hasattr(module, "catalog_value_constraint"), "no catalog constraint compiler"

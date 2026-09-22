@@ -2,25 +2,43 @@
 
 import copy
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
 from insurance_harness.knowledge_compiler import g3_bounded_model_execution as runtime
+from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCandidateBundle830G3V1,
+    compile_output_hash_g3,
     validate_batch_candidate,
 )
-from insurance_harness.run_admission.g3_models import G3ProviderUsageV1, canonical_json
+from insurance_harness.knowledge_compiler.concept_compile_830_g2 import ReviewOutput
+from insurance_harness.model_policy import ModelIdentity
+from insurance_harness.run_admission.g3_models import (
+    G3BoundedAdmissionPlanV1,
+    G3CallPlanV1,
+    G3ProviderUsageV1,
+    canonical_json,
+)
+
+ReviewCase = tuple[
+    BatchConceptCandidateBundle830G3V1,
+    ModelIdentity,
+    tuple[runtime.G3DReviewWindow, ...],
+    tuple[runtime.G3DReviewWindowContext, ...],
+]
 
 
 @pytest.fixture(scope="module")
-def review_case():
+def review_case() -> ReviewCase:
     candidate = validate_batch_candidate(
         (
             Path(__file__).parent / "fixtures/batch_concept_compile_830_g3/candidate.json"
         ).read_bytes()
     )
-    identity = runtime.ModelIdentity(
+    identity = ModelIdentity(
         provider="g3-user-gateway",
         family="gemini",
         deployment_id="gemini-3.7-flash-medium",
@@ -36,7 +54,7 @@ def review_case():
     return candidate, identity, windows, contexts
 
 
-def test_review_local_comparison_removes_only_global_bindings(review_case):
+def test_review_local_comparison_removes_only_global_bindings(review_case: ReviewCase) -> None:
     from insurance_harness.knowledge_compiler.g3_d_review_reuse import local_review_context
 
     candidate, _, _, contexts = review_case
@@ -45,7 +63,9 @@ def test_review_local_comparison_removes_only_global_bindings(review_case):
     for key in ("request_sha256", "base_request_hash", "output_hash"):
         after[key] = "f" * 64
     after["window"]["window_id"] = "other-derived-window"
-    after["local_whole_candidate_binding"]["field_count"] += 1
+    field_count = after["local_whole_candidate_binding"]["field_count"]
+    assert isinstance(field_count, int)
+    after["local_whole_candidate_binding"]["field_count"] = field_count + 1
     assert local_review_context(candidate.request, before) == local_review_context(
         candidate.request, after
     )
@@ -55,17 +75,19 @@ def test_review_local_comparison_removes_only_global_bindings(review_case):
         "source_options",
         "candidate_partition",
     ):
-        changed = copy.deepcopy(after)
+        changed: dict[str, Any] = copy.deepcopy(dict(after))
         changed[key] = () if key != "candidate_partition" else {}
         with pytest.raises(ValueError):
             # Invalid or different local content must never compare equal.
             if local_review_context(candidate.request, before) != local_review_context(
-                candidate.request, changed
+                candidate.request, cast(runtime.G3DReviewWindowContext, changed)
             ):
                 raise ValueError("local difference")
 
 
-def test_review_reference_normalization_preserves_scoped_source_and_policy(review_case):
+def test_review_reference_normalization_preserves_scoped_source_and_policy(
+    review_case: ReviewCase,
+) -> None:
     from insurance_harness.knowledge_compiler.g3_d_review_reuse import local_review_context
 
     candidate, _, windows, contexts = review_case
@@ -100,7 +122,9 @@ def test_review_reference_normalization_preserves_scoped_source_and_policy(revie
         )
 
 
-def fake_origin(monkeypatch, review_case, *, reject_index=None):
+def fake_origin(
+    monkeypatch: pytest.MonkeyPatch, review_case: ReviewCase, *, reject_index: int | None = None
+) -> tuple[ModuleType, SimpleNamespace]:
     from insurance_harness.knowledge_compiler import g3_d_review_reuse as reuse
 
     candidate, identity, windows, contexts = review_case
@@ -151,10 +175,10 @@ def fake_origin(monkeypatch, review_case, *, reject_index=None):
             semantic_bytes=raw,
             response_bytes=raw,
             request_bytes=runtime.g3_openai_request_bytes(
-                plan=body_plan,
-                call=call,
+                plan=cast(G3BoundedAdmissionPlanV1, body_plan),
+                call=cast(G3CallPlanV1, call),
                 system=prompt.decode(),
-                user=runtime.batch_json_bytes_830_g3(context).decode(),
+                user=batch_json_bytes_830_g3(context).decode(),
             ),
             terminal=SimpleNamespace(
                 status="SUCCESS",
@@ -176,7 +200,7 @@ def fake_origin(monkeypatch, review_case, *, reject_index=None):
         parent_authorization_digest="c" * 64,
     )
     origin = SimpleNamespace(
-        plan=plan,
+        plan=cast(G3BoundedAdmissionPlanV1, plan),
         request=candidate.request,
         output=candidate.compile_result.output,
         terminal=SimpleNamespace(
@@ -188,7 +212,9 @@ def fake_origin(monkeypatch, review_case, *, reject_index=None):
     return reuse, origin
 
 
-def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch, review_case):
+def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(
+    monkeypatch: pytest.MonkeyPatch, review_case: ReviewCase
+) -> None:
     reuse, origin = fake_origin(monkeypatch, review_case, reject_index=0)
     candidate, identity, windows, _ = review_case
     manifest = reuse.build_review_result_reuse(
@@ -198,7 +224,7 @@ def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch
     )
     assert len(manifest.entries) == len(windows) - 1
     assert manifest.origin_stage_status == "FAILED"
-    verified = reuse.validate_review_result_reuse(
+    verified: dict[str, ReviewOutput] = reuse.validate_review_result_reuse(
         manifest,
         current_request=candidate.request,
         current_output=candidate.compile_result.output,
@@ -238,7 +264,7 @@ def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch
     }
     seen = []
 
-    def verified_once(*args, **kwargs):
+    def verified_once(*args: object, **kwargs: object) -> dict[str, ReviewOutput]:
         seen.append(kwargs["current_identity"])
         return verified
 
@@ -248,7 +274,7 @@ def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch
         run_id="review-reuse-fixture",
         request_manifest=SimpleNamespace(calls=(SimpleNamespace(identity=identity),)),
     )
-    prepared = runtime._parse_g3_stage_artifacts(plan, artifacts)
+    prepared = runtime._parse_g3_stage_artifacts(cast(G3BoundedAdmissionPlanV1, plan), artifacts)
     assert seen == [identity] and prepared.recovery_windows == remaining
     monkeypatch.setattr(runtime, "_failed_stage_terminal", lambda **kwargs: None)
     final_review, rebuilt = runtime._finalize_gemini_d_review_windows(
@@ -256,7 +282,7 @@ def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch
         model_compile_result=candidate.model_compile_result,
         final_compile_result=candidate.compile_result,
         outputs=(new,),
-        plan=plan,
+        plan=cast(G3BoundedAdmissionPlanV1, plan),
         admission_digest="a" * 64,
         call_dir="unused-fixture",
         call_terminals=(),
@@ -264,7 +290,7 @@ def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch
         prepared=prepared,
     )
     assert final_review.output == result
-    assert validate_batch_candidate(runtime.batch_json_bytes_830_g3(rebuilt)) == rebuilt
+    assert validate_batch_candidate(batch_json_bytes_830_g3(rebuilt)) == rebuilt
     import importlib.util
     import sys
 
@@ -274,12 +300,13 @@ def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch
         / "g3_actual_model_plan_materializer_v1.py"
     )
     spec = importlib.util.spec_from_file_location("review_reuse_materializer_fixture", path)
+    assert spec is not None and spec.loader is not None
     materializer = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = materializer
     spec.loader.exec_module(materializer)
-    captured = {}
+    captured: dict[str, Any] = {}
 
-    def fixed(*args, **kwargs):
+    def fixed(*args: object, **kwargs: object) -> dict[str, tuple[()]]:
         captured.update(kwargs)
         return {"artifacts": (), "calls": ()}
 
@@ -311,7 +338,10 @@ def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch
     record = origin.records["review-1"]
     original_body = record.request_bytes
     changed_body = runtime._unique_json_bytes(original_body)
-    changed_body["messages"][0]["content"] += "changed policy"
+    assert isinstance(changed_body, dict)
+    messages = changed_body["messages"]
+    assert isinstance(messages, list)
+    messages[0]["content"] += "changed policy"
     record.request_bytes = canonical_json(changed_body)
     with pytest.raises(ValueError, match="prompt/context"):
         reuse.build_review_result_reuse(
@@ -338,7 +368,9 @@ def test_reuse_skips_reject_and_aggregates_exact_remaining_partition(monkeypatch
         )
 
 
-def test_changed_one_field_reuses_only_unaffected_windows(monkeypatch, review_case):
+def test_changed_one_field_reuses_only_unaffected_windows(
+    monkeypatch: pytest.MonkeyPatch, review_case: ReviewCase
+) -> None:
     reuse, _ = fake_origin(monkeypatch, review_case)
     candidate, identity, windows, _ = review_case
     selected = windows[0]
@@ -365,9 +397,7 @@ def test_changed_one_field_reuses_only_unaffected_windows(monkeypatch, review_ca
         current_output=changed,
         current_identity=identity,
     )
-    assert all(
-        row.output_hash == runtime.compile_output_hash_g3(changed) for row in outputs.values()
-    )
+    assert all(row.output_hash == compile_output_hash_g3(changed) for row in outputs.values())
     with pytest.raises(ValueError, match="local"):
         reuse.build_review_result_reuse(
             origin_admission_digest="a" * 64,

@@ -71,8 +71,9 @@ class ProductRouting:
 
 def _identity(name: str) -> str:
     # Only the identity is normalized. Evidence is always the original substring.
+    punctuation: dict[str, str | int | None] = {"(": "（", ")": "）"}
     return re.sub(r"\s+", "", unicodedata.normalize("NFC", name)).translate(
-        str.maketrans({"(": "（", ")": "）"})
+        str.maketrans(punctuation)
     )
 
 
@@ -80,7 +81,7 @@ def _material_role(file_name: str, first_pages: Sequence[str]) -> tuple[str | No
     filename_roles = {
         role for role, labels in _ROLES.items() if any(x in file_name for x in labels)
     }
-    heading_roles = set()
+    heading_roles: set[str] = set()
     for text in first_pages:
         # Long paragraphs mentioning other materials are not role headings.
         for line in text.splitlines()[:20]:
@@ -100,9 +101,11 @@ def _material_role(file_name: str, first_pages: Sequence[str]) -> tuple[str | No
     return roles.pop(), None
 
 
-def _first_page_slices(item, blocks):
+def _first_page_slices(
+    item: Mapping[str, Any], blocks: Sequence[SourceBlock]
+) -> list[tuple[SourceBlock, int, str]]:
     ranges = item.get("first_page_ranges")
-    slices = []
+    slices: list[tuple[SourceBlock, int, str]] = []
     for block in blocks:
         if block.page_number != 1:
             continue
@@ -142,7 +145,7 @@ def route_product_materials(
     if any(not isinstance(mid, str) or not mid for mid in ids) or len(set(ids)) != len(ids):
         raise ValueError("MATERIAL_IDENTITY_INVALID")
     scope = None
-    routed = []
+    routed: list[RoutedMaterial] = []
     for item in materials:
         blocks = tuple(item["blocks"])
         if not blocks or any(not isinstance(block, SourceBlock) for block in blocks):
@@ -168,7 +171,7 @@ def route_product_materials(
         first_pages = _first_page_slices(item, blocks)
         role, role_error = _material_role(item["file_name"], [text for _, _, text in first_pages])
         names: dict[str, list[Evidence]] = {}
-        anchors = []
+        anchors: list[tuple[str, str, Evidence]] = []
         for block, offset, text in first_pages:
             for kind, pattern in _ANCHORS.items():
                 for match in pattern.finditer(text):
@@ -207,16 +210,16 @@ def route_product_materials(
     error = next((row.reason for row in rows if row.reason), None)
     if error:
         return ProductRouting("needs_confirmation", None, None, rows, error)
-    names = {row.product_name for row in rows}
+    product_names = {row.product_name for row in rows}
     anchor_conflict = any(
         len({value for row in rows for key, value, _ in row.identity_anchors if key == kind}) > 1
         for kind in _ANCHORS
     )
-    if len(names) != 1 or anchor_conflict:
+    if len(product_names) != 1 or anchor_conflict:
         return ProductRouting(
             "needs_confirmation", None, None, rows, "PRODUCT_IDENTITY_OR_VERSION_CONFLICT"
         )
-    name = next(iter(names))
+    name = next(iter(product_names))
     assert name is not None
     route = route_formal_title(name, catalog=catalog)
     if route.classification_status != "KNOWN":

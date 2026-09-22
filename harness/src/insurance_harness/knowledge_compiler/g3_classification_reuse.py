@@ -9,11 +9,17 @@ request. The signed D admission separately binds the explicit reuse receipt.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-from insurance_harness.run_admission.g3_models import G3AuthorizedMaterialV1
+from insurance_harness.run_admission.g3_models import (
+    G3ArtifactRefV1,
+    G3AuthorizedMaterialV1,
+    G3BoundedApprovalEnvelopeV1,
+    G3ModelProcessingAuthorizationEnvelopeV1,
+)
 
 from .batch_canonical_830_g3 import batch_sha256_830_g3
 from .batch_concept_compile_830_g3 import BatchConceptCompileRequest830G3V1, Hash
@@ -86,11 +92,32 @@ class G3ClassificationReuseV1(BaseModel):
         return self
 
 
-class G3ClassificationReuseV2(G3ClassificationReuseV1):
+class G3ClassificationReuseV2(BaseModel):
     """Original C authority plus a separately reproducible deterministic overlay."""
 
+    model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
     contract: Literal["g3-classification-reuse.830.v2"]
+    source_chain_manifest_hash: Hash
+    source_terminal_receipt_sha256: Hash
+    source_admission_digest: Hash
+    source_proposals_sha256: Hash
+    source_resolution_sha256: Hash
+    source_corpus_sha256: Hash
+    current_catalog_sha256: Hash
+    current_snapshot_sha256: Hash
+    current_policy_sha256: Hash
+    current_resolution_sha256: Hash
+    current_request_sha256: Hash
+    receipt_sha256: Hash
     title_overlay: TitleRoutingOverlayV1
+
+    @model_validator(mode="after")
+    def check_hash(self) -> Self:
+        if self.receipt_sha256 != batch_sha256_830_g3(
+            self.contract, self.model_dump(exclude={"receipt_sha256"})
+        ):
+            raise ValueError("classification reuse receipt hash mismatch")
+        return self
 
 
 class G3ClassificationOriginV1(BaseModel):
@@ -181,7 +208,7 @@ ClassificationReuse = G3ClassificationReuseV1 | G3ClassificationReuseV2 | G3Clas
 
 
 def parse_classification_reuse(value: object) -> ClassificationReuse:
-    adapter = TypeAdapter(ClassificationReuse)
+    adapter: TypeAdapter[ClassificationReuse] = TypeAdapter(ClassificationReuse)
     if isinstance(value, (bytes, str)):
         return adapter.validate_json(value)
     return adapter.validate_python(value)
@@ -220,8 +247,9 @@ def build_classification_reuse(
     source_resolution_sha256: str,
     title_overlay: TitleRoutingOverlayV1 | None = None,
 ) -> ClassificationReuse:
-    payload = {
-        "contract": "g3-classification-reuse.830.v1",
+    contract = "g3-classification-reuse.830.v1"
+    payload: dict[str, object] = {
+        "contract": contract,
         "source_chain_manifest_hash": source_chain_manifest_hash,
         "source_terminal_receipt_sha256": source_terminal_receipt_sha256,
         "source_admission_digest": source_admission_digest,
@@ -229,16 +257,17 @@ def build_classification_reuse(
         **_request_binding(request),
     }
     if title_overlay is not None:
+        contract = "g3-classification-reuse.830.v2"
         title_overlay = TitleRoutingOverlayV1.model_validate(title_overlay)
         payload.update(
-            contract="g3-classification-reuse.830.v2",
+            contract=contract,
             source_proposals_sha256=title_overlay.source_proposals_sha256,
             title_overlay=title_overlay,
         )
     result = parse_classification_reuse(
         {
             **payload,
-            "receipt_sha256": batch_sha256_830_g3(payload["contract"], payload),
+            "receipt_sha256": batch_sha256_830_g3(contract, payload),
         }
     )
     return result
@@ -252,7 +281,7 @@ def build_composite_classification_reuse(
     """Bind a canonical set of real C origins to one recomputed current request."""
 
     request = BatchConceptCompileRequest830G3V1.model_validate(request)
-    payload = {
+    payload: dict[str, object] = {
         "contract": "g3-classification-reuse.830.v3",
         "origins": origins,
         **_composite_request_binding(request),
@@ -260,7 +289,7 @@ def build_composite_classification_reuse(
     return G3ClassificationReuseV3.model_validate(
         {
             **payload,
-            "receipt_sha256": batch_sha256_830_g3(payload["contract"], payload),
+            "receipt_sha256": batch_sha256_830_g3("g3-classification-reuse.830.v3", payload),
         }
     )
 
@@ -335,7 +364,10 @@ def validate_reuse_binding(
         raise ValueError("classification reuse current matching mismatch")
 
 
-def _verify_historical_authority(parent, approval) -> None:
+def _verify_historical_authority(
+    parent: G3ModelProcessingAuthorizationEnvelopeV1,
+    approval: G3BoundedApprovalEnvelopeV1,
+) -> None:
     from insurance_harness.run_admission.g3_trust_policy import (
         load_g3_root_trust_policy,
         verify_delegated_stage_signature,
@@ -358,8 +390,8 @@ def _verify_classification_origin(
     origin: G3ClassificationOriginV1,
     *,
     request: BatchConceptCompileRequest830G3V1,
-    ledger_root,
-    admission_root,
+    ledger_root: str | Path,
+    admission_root: str | Path,
 ) -> _VerifiedClassificationOrigin:
     """Reopen one real C chain and return only its already signed outputs."""
 
@@ -383,7 +415,9 @@ def _verify_classification_origin(
     root = Path(ledger_root)
     admissions = Path(admission_root)
 
-    def read(path, model, file_sha=None):
+    def read[ModelT: BaseModel](
+        path: Path, model: type[ModelT], file_sha: str | None = None
+    ) -> ModelT:
         raw = gateway._read_secure_ledger_file(path)
         if file_sha is not None and hashlib.sha256(raw).hexdigest() != file_sha:
             raise ValueError("classification reuse origin artifact digest mismatch")
@@ -392,7 +426,7 @@ def _verify_classification_origin(
             raise ValueError("classification reuse noncanonical origin")
         return value
 
-    def read_ref(ref, model):
+    def read_ref[ModelT: BaseModel](ref: G3ArtifactRefV1, model: type[ModelT]) -> ModelT:
         path = Path(ref.artifact_ref)
         try:
             relative = path.relative_to(admissions)
@@ -603,7 +637,7 @@ def _validate_composite_outputs(
             key=lambda binding: binding.request_sha256,
         )
     )
-    payload = {
+    payload: dict[str, object] = {
         "contract": "batch-identity-proposals.830.g3.v1",
         "corpus_sha256": current_corpus.corpus_sha256,
         "model_receipts": model_receipts,
@@ -612,7 +646,7 @@ def _validate_composite_outputs(
     merged = ProposalBatchV1.model_validate(
         {
             **payload,
-            "proposals_sha256": batch_sha256_830_g3(payload["contract"], payload),
+            "proposals_sha256": batch_sha256_830_g3("batch-identity-proposals.830.g3.v1", payload),
         }
     )
     if merged != current_proposals:
@@ -623,9 +657,9 @@ def validate_classification_reuse(
     receipt: ClassificationReuse,
     *,
     request: BatchConceptCompileRequest830G3V1,
-    ledger_root=None,
-    admission_root=None,
-    parent=None,
+    ledger_root: str | Path | None = None,
+    admission_root: str | Path | None = None,
+    parent: object | None = None,
 ) -> None:
     """Reopen the historical ledger, then rematch against the bound current state.
 
@@ -670,7 +704,9 @@ def validate_classification_reuse(
         validate_reuse_binding(receipt, request=request)
         return
 
-    def read(path, model, file_sha=None):
+    def read[ModelT: BaseModel](
+        path: Path, model: type[ModelT], file_sha: str | None = None
+    ) -> ModelT:
         raw = gateway._read_secure_ledger_file(path)
         if file_sha is not None and hashlib.sha256(raw).hexdigest() != file_sha:
             raise ValueError("classification reuse origin artifact digest mismatch")

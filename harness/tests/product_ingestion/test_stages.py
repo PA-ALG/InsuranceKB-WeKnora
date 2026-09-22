@@ -5,9 +5,11 @@ import asyncio
 import hashlib
 import importlib
 import json
+import typing
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -24,7 +26,7 @@ from tests.product_ingestion.test_platform import snapshot  # noqa: F401
 from tests.product_ingestion.test_routing import catalog  # noqa: F401
 
 
-def module():
+def module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.stages")
     except ModuleNotFoundError:
@@ -32,7 +34,7 @@ def module():
 
 
 @pytest.fixture
-def stage_runtime(tmp_path, snapshot, catalog):
+def stage_runtime(tmp_path: typing.Any, snapshot: typing.Any, catalog: typing.Any) -> typing.Any:
     scope, body, sign, keys = snapshot
     engine = create_engine(
         f"sqlite:///{tmp_path}/stages.db", connect_args={"check_same_thread": False}
@@ -40,7 +42,7 @@ def stage_runtime(tmp_path, snapshot, catalog):
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     settings = ShellSettings(
-        postgres_dsn="postgresql://fixture/fixture",
+        postgres_dsn=SecretStr("postgresql://fixture/fixture"),
         worker_id="worker",
         worker_space_ids=(scope.space_id,),
     )
@@ -54,7 +56,9 @@ def stage_runtime(tmp_path, snapshot, catalog):
         failed = False
         calls = 0
 
-        async def lookup_upload(self, _scope, run_id, ordinal):
+        async def lookup_upload(
+            self, _scope: object, run_id: object, ordinal: int
+        ) -> None | dict[str, typing.Any]:
             if not self.ready:
                 return None
             return {
@@ -64,7 +68,9 @@ def stage_runtime(tmp_path, snapshot, catalog):
                 "parse_attempt": 1,
             }
 
-        async def capture_source(self, _scope, knowledge_id, attempt):
+        async def capture_source(
+            self, _scope: object, knowledge_id: str, attempt: int
+        ) -> typing.Any:
             self.calls += 1
             ordinal = int(knowledge_id.rsplit("-", 1)[1])
             changed = json.loads(json.dumps(body))
@@ -110,19 +116,27 @@ def stage_runtime(tmp_path, snapshot, catalog):
             ]
             return sign(changed)
 
-        async def get_reparse_receipt(self, _scope, _run_id, _ordinal, _recovery_key):
+        async def get_reparse_receipt(
+            self, _scope: object, _run_id: object, _ordinal: object, _recovery_key: object
+        ) -> None:
             return None
 
         async def reparse_upload(
-            self, _scope, _run_id, ordinal, _expected_parse_attempt, _recovery_key, _deadline
-        ):
+            self,
+            _scope: object,
+            _run_id: object,
+            ordinal: int,
+            _expected_parse_attempt: object,
+            _recovery_key: object,
+            _deadline: object,
+        ) -> None:
             raise NonRetryableJobError(
                 "SOURCE_PARSE_FAILED:" + ("保险条款.pdf", "产品说明书.pdf", "费率表.pdf")[ordinal]
             )
 
     platform = Platform()
 
-    def worker(now=None):
+    def worker(now: typing.Any = None) -> WorkerLoop:
         registry = HandlerRegistry()
         module().register_source_stages(
             registry,
@@ -144,7 +158,7 @@ def stage_runtime(tmp_path, snapshot, catalog):
 
     progress = ProductProgression(store=store, jobs=jobs, read_window_plan=lambda *_: ())
 
-    def execute(run, now=None):
+    def execute(run: typing.Any, now: typing.Any = None) -> typing.Any:
         progress.advance(scope, run.run_id)
         claim = jobs.claim(space_ids=(scope.space_id,), worker_id="worker")
         assert isinstance(claim, ClaimedJob)
@@ -155,20 +169,27 @@ def stage_runtime(tmp_path, snapshot, catalog):
     engine.dispose()
 
 
-def test_one_failed_source_requests_only_its_bound_reparse(stage_runtime):
+def test_one_failed_source_requests_only_its_bound_reparse(stage_runtime: typing.Any) -> None:
     scope, store, _artifacts, platform, execute = stage_runtime
     original_lookup = platform.lookup_upload
     reparses = []
     recovered = False
 
-    async def lookup(_scope, run_id, ordinal):
+    async def lookup(_scope: typing.Any, run_id: str, ordinal: int) -> typing.Any:
         item = await original_lookup(_scope, run_id, ordinal)
         if ordinal == 2:
             item["parse_attempt"] = 2 if recovered else 1
             item["parse_status"] = "completed" if recovered else "failed"
         return item
 
-    async def reparse(_scope, run_id, ordinal, expected_parse_attempt, recovery_key, deadline):
+    async def reparse(
+        _scope: object,
+        run_id: str,
+        ordinal: int,
+        expected_parse_attempt: int,
+        recovery_key: str,
+        deadline: datetime,
+    ) -> dict[str, typing.Any]:
         nonlocal recovered
         reparses.append((run_id, ordinal, expected_parse_attempt, recovery_key))
         recovered = True
@@ -188,7 +209,8 @@ def test_one_failed_source_requests_only_its_bound_reparse(stage_runtime):
 
     platform.lookup_upload = lookup
     platform.reparse_upload = reparse
-    async def no_receipt(*_args, **_kwargs):
+
+    async def no_receipt(*_args: object, **_kwargs: object) -> None:
         return None
 
     platform.get_reparse_receipt = no_receipt
@@ -204,13 +226,15 @@ def test_one_failed_source_requests_only_its_bound_reparse(stage_runtime):
     assert platform.calls == 0
 
 
-def test_source_failure_persists_successful_sibling_processing_calls(stage_runtime):
+def test_source_failure_persists_successful_sibling_processing_calls(
+    stage_runtime: typing.Any,
+) -> None:
     from tests.product_ingestion.test_processing_receipts import receipt, sealed
 
     scope, store, artifacts, platform, execute = stage_runtime
     original_lookup = platform.lookup_upload
 
-    def processing(ordinal):
+    def processing(ordinal: int) -> typing.Any:
         value = receipt()
         value["knowledge_id"] = f"knowledge-{ordinal}"
         value["parse_attempt"] = 1
@@ -236,7 +260,7 @@ def test_source_failure_persists_successful_sibling_processing_calls(stage_runti
         value["counts"]["confirmed"] = 1
         return sealed(value)
 
-    async def lookup(_scope, run_id, ordinal):
+    async def lookup(_scope: typing.Any, run_id: str, ordinal: int) -> typing.Any:
         item = await original_lookup(_scope, run_id, ordinal)
         item["processing_receipt"] = processing(ordinal) if ordinal < 2 else None
         item["processing_receipt_parse_attempt"] = 1 if ordinal < 2 else None
@@ -244,10 +268,17 @@ def test_source_failure_persists_successful_sibling_processing_calls(stage_runti
             item["parse_status"] = "failed"
         return item
 
-    async def no_receipt(*_args):
+    async def no_receipt(*_args: object) -> None:
         return None
 
-    async def reparse(_scope, run_id, ordinal, attempt, key, deadline):
+    async def reparse(
+        _scope: object,
+        run_id: str,
+        ordinal: int,
+        attempt: int,
+        key: str,
+        deadline: datetime,
+    ) -> dict[str, typing.Any]:
         return {
             "contract": "g3-platform-bound-reparse.830.v1",
             "run_id": run_id,
@@ -277,7 +308,9 @@ def test_source_failure_persists_successful_sibling_processing_calls(stage_runti
     assert sum(json.loads(row.payload)["counts"]["attempts"] for row in records) == 2
 
 
-def test_platform_stages_attach_three_originals_route_and_keep_signed_sources(stage_runtime):
+def test_platform_stages_attach_three_originals_route_and_keep_signed_sources(
+    stage_runtime: typing.Any,
+) -> None:
     scope, store, artifacts, platform, execute = stage_runtime
     run = store.create_run(scope=scope, idempotency_key="three", expected_upload_count=3)
     for _ in range(3):
@@ -298,7 +331,7 @@ def test_platform_stages_attach_three_originals_route_and_keep_signed_sources(st
     assert all(item["counts"] is None for item in summary["materials"])
 
 
-def test_missing_upload_releases_worker_and_deadline_is_terminal(stage_runtime):
+def test_missing_upload_releases_worker_and_deadline_is_terminal(stage_runtime: typing.Any) -> None:
     scope, store, _artifacts, platform, execute = stage_runtime
     platform.ready = False
     run = store.create_run(scope=scope, idempotency_key="late", expected_upload_count=3)
@@ -310,7 +343,9 @@ def test_missing_upload_releases_worker_and_deadline_is_terminal(stage_runtime):
     assert platform.calls == 0
 
 
-def test_routing_defers_product_version_judgement_to_identity_model(stage_runtime):
+def test_routing_defers_product_version_judgement_to_identity_model(
+    stage_runtime: typing.Any,
+) -> None:
     scope, store, artifacts, platform, execute = stage_runtime
     platform.conflict = True
     run = store.create_run(scope=scope, idempotency_key="conflict", expected_upload_count=3)
@@ -331,7 +366,9 @@ def test_routing_defers_product_version_judgement_to_identity_model(stage_runtim
     )
 
 
-def test_parser_failure_finishes_source_stage_without_snapshot_call(stage_runtime):
+def test_parser_failure_finishes_source_stage_without_snapshot_call(
+    stage_runtime: typing.Any,
+) -> None:
     scope, store, _artifacts, platform, execute = stage_runtime
     platform.failed = True
     run = store.create_run(scope=scope, idempotency_key="parse-failed", expected_upload_count=3)

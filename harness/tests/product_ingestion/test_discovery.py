@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import json
+import typing
 from pathlib import Path
 
 import pytest
@@ -13,17 +14,17 @@ from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileO
 MODULE = "insurance_harness.product_ingestion.discovery"
 
 
-def adapter():
+def adapter() -> typing.Any:
     assert importlib.util.find_spec(MODULE) is not None, "durable discovery adapter is missing"
     return importlib.import_module(MODULE)
 
 
-def wire(value):
+def wire(value: typing.Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
 @pytest.fixture(scope="module")
-def case():
+def case() -> tuple[typing.Any, ...]:
     path = Path(__file__).parents[1] / "fixtures/batch_concept_compile_830_g3/candidate.json"
     candidate = compiler.validate_batch_candidate(path.read_bytes())
     request = candidate.request
@@ -45,7 +46,7 @@ def case():
     return request, delta, fields[0].entity_id
 
 
-def prepared(case):
+def prepared(case: typing.Any) -> tuple[typing.Any, ...]:
     module = adapter()
     request, delta, entity = case
     context = module.render_discovery_context(request=request, field_delta=delta, entity_id=entity)
@@ -92,7 +93,7 @@ def prepared(case):
     return module, request, delta, context, envelope
 
 
-def project(case, mutate=None):
+def project(case: typing.Any, mutate: typing.Any = None) -> tuple[typing.Any, ...]:
     module, request, delta, context, proposal = prepared(case)
     if mutate:
         mutate(proposal)
@@ -106,7 +107,14 @@ def project(case, mutate=None):
     return module, request, delta, context, projection
 
 
-def checked(case, *, score=100, decision="PASS", checks="ACCEPT", mutate=None):
+def checked(
+    case: typing.Any,
+    *,
+    score: typing.Any = 100,
+    decision: typing.Any = "PASS",
+    checks: typing.Any = "ACCEPT",
+    mutate: typing.Any = None,
+) -> tuple[typing.Any, ...]:
     module, request, delta, generation, projection = project(case)
     context = module.render_discovery_review_context(
         request=request,
@@ -154,7 +162,9 @@ def checked(case, *, score=100, decision="PASS", checks="ACCEPT", mutate=None):
     return result, projection, context
 
 
-def test_context_contains_current_and_inherited_members_schema_and_exact_coverage(case):
+def test_context_contains_current_and_inherited_members_schema_and_exact_coverage(
+    case: typing.Any,
+) -> None:
     module, request, delta, context, _ = prepared(case)
     comparisons = context["comparison"]
     assert comparisons["current_fields"]
@@ -172,8 +182,8 @@ def test_context_contains_current_and_inherited_members_schema_and_exact_coverag
     assert compiler.compose_batch_output(request, delta).fields
 
 
-def test_duplicate_noise_and_update_are_retained_audit_only(case):
-    def mutate(proposal):
+def test_duplicate_noise_and_update_are_retained_audit_only(case: typing.Any) -> None:
+    def mutate(proposal: typing.Any) -> None:
         module, request, delta, context, _ = prepared(case)
         target = delta.output.fields[0].assertion_id
         for candidate, disposition, existing in [
@@ -211,12 +221,14 @@ def test_duplicate_noise_and_update_are_retained_audit_only(case):
         (lambda p: p["dispositions"][0].update(member_ref="missing"), "member"),
     ],
 )
-def test_generation_rejects_foreign_unsupported_or_unmatched_new_members(case, change, match):
+def test_generation_rejects_foreign_unsupported_or_unmatched_new_members(
+    case: typing.Any, change: typing.Any, match: typing.Any
+) -> None:
     with pytest.raises(ValueError, match=match):
         project(case, change)
 
 
-def test_generation_context_cannot_change_evidence_scope(case):
+def test_generation_context_cannot_change_evidence_scope(case: typing.Any) -> None:
     module, request, delta, context, proposal = prepared(case)
     context["source_options"][0]["spans"][0]["quote"] = "forged"
     with pytest.raises(ValueError, match="context"):
@@ -229,7 +241,7 @@ def test_generation_context_cannot_change_evidence_scope(case):
         )
 
 
-def test_accepted_review_binds_actual_composed_output_and_comparison(case):
+def test_accepted_review_binds_actual_composed_output_and_comparison(case: typing.Any) -> None:
     result, projection, context = checked(case)
     assert result.state == "ACCEPTED"
     assert result.review.output_hash == compiler.compile_output_hash_g3(projection.composed_output)
@@ -248,8 +260,8 @@ def test_accepted_review_binds_actual_composed_output_and_comparison(case):
     ],
 )
 def test_nonaccepted_group_is_retained_without_pruning_or_altering_fields(
-    case, score, decision, expected
-):
+    case: typing.Any, score: typing.Any, decision: typing.Any, expected: typing.Any
+) -> None:
     result, projection, _ = checked(case, score=score, decision=decision)
     assert result.state == expected
     assert len(projection.new_output.pages) == 1
@@ -264,12 +276,14 @@ def test_nonaccepted_group_is_retained_without_pruning_or_altering_fields(
         (lambda r: r["disposition_checks"].clear(), "disposition coverage"),
     ],
 )
-def test_review_rejects_stale_hash_or_incomplete_coverage(case, change, match):
+def test_review_rejects_stale_hash_or_incomplete_coverage(
+    case: typing.Any, change: typing.Any, match: typing.Any
+) -> None:
     with pytest.raises(ValueError, match=match):
         checked(case, mutate=change)
 
 
-def test_empty_is_only_a_successfully_parsed_and_reviewed_empty_group(case):
+def test_empty_is_only_a_successfully_parsed_and_reviewed_empty_group(case: typing.Any) -> None:
     module, request, delta, generation, proposal = prepared(case)
     proposal["proposal"]["pages"] = []
     proposal["dispositions"] = []
@@ -309,8 +323,8 @@ def test_empty_is_only_a_successfully_parsed_and_reviewed_empty_group(case):
         )
 
 
-def test_duplicate_or_update_candidate_requires_source_evidence(case):
-    def mutate(proposal):
+def test_duplicate_or_update_candidate_requires_source_evidence(case: typing.Any) -> None:
+    def mutate(proposal: typing.Any) -> None:
         proposal["dispositions"].append(
             dict(
                 candidate_id="unsupported-update",
@@ -328,7 +342,7 @@ def test_duplicate_or_update_candidate_requires_source_evidence(case):
         project(case, mutate)
 
 
-def test_source_budget_does_not_spend_on_inherited_only_source_blocks(case):
+def test_source_budget_does_not_spend_on_inherited_only_source_blocks(case: typing.Any) -> None:
     _, request, _, context, _ = prepared(case)
     binding = next(row for row in request.entity_bindings if row.entity_id == case[2])
     keys = {
@@ -343,13 +357,13 @@ def test_source_budget_does_not_spend_on_inherited_only_source_blocks(case):
     )
 
 
-def test_unresolved_disposition_keeps_whole_group_pending(case):
+def test_unresolved_disposition_keeps_whole_group_pending(case: typing.Any) -> None:
     result, projection, _ = checked(case, checks="NEEDS_HUMAN")
     assert result.state == "PENDING"
     assert len(projection.new_output.pages) == 1
 
 
-def test_review_context_cannot_swap_comparison_inventory(case):
+def test_review_context_cannot_swap_comparison_inventory(case: typing.Any) -> None:
     module, request, delta, generation, projection = project(case)
     context = module.render_discovery_review_context(
         request=request, field_delta=delta, projection=projection, context=generation
@@ -361,7 +375,7 @@ def test_review_context_cannot_swap_comparison_inventory(case):
         )
 
 
-def test_caller_template_context_budget_above_default_is_honored():
+def test_caller_template_context_budget_above_default_is_honored() -> None:
     module = adapter()
     assert module._limit({"context": "small"}, 300000) == {"context": "small"}
     for invalid in (0, -1, True, 1.5):
@@ -369,7 +383,7 @@ def test_caller_template_context_budget_above_default_is_honored():
             module._limit({}, invalid)
 
 
-def test_update_only_result_is_pending_adapter_not_empty(case):
+def test_update_only_result_is_pending_adapter_not_empty(case: typing.Any) -> None:
     module, request, delta, generation, proposal = prepared(case)
     selection = proposal["dispositions"][0]["evidence"]
     proposal["proposal"]["pages"] = []

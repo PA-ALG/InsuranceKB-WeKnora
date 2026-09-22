@@ -4,6 +4,7 @@ import hashlib
 import importlib
 import importlib.util
 import json
+from typing import Any
 
 import pytest
 
@@ -12,12 +13,15 @@ from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import Source
 MODULE = "insurance_harness.knowledge_compiler.g3_discovery_routing"
 
 
-def _route(sources, **kwargs):
+def _route(sources: dict[str, SourceBlock], **kwargs: object) -> dict[str, Any]:
     assert importlib.util.find_spec(MODULE) is not None, "bounded discovery routing is missing"
-    return importlib.import_module(MODULE).route_discovery_sources(sources, **kwargs)
+    result: dict[str, Any] = importlib.import_module(MODULE).route_discovery_sources(
+        sources, **kwargs
+    )
+    return result
 
 
-def _source(material, text, *, block="block-1", page=1):
+def _source(material: str, text: str, *, block: str = "block-1", page: int = 1) -> SourceBlock:
     return SourceBlock(
         tenant_id=7,
         space_id="space",
@@ -35,7 +39,7 @@ def _source(material, text, *, block="block-1", page=1):
     )
 
 
-def test_later_independent_knowledge_is_offered_without_schema_terms():
+def test_later_independent_knowledge_is_offered_without_schema_terms() -> None:
     text = "普通说明甲" * 400 + "\n附录\n独立知识：专属家庭联络流程需要提前确认接听时间。"
     result = _route({"a": _source("manual-a", text)}, max_source_chars=200, max_span_chars=100)
     offered = "".join(s["quote"] for r in result["source_options"] for s in r["spans"])
@@ -45,7 +49,7 @@ def test_later_independent_knowledge_is_offered_without_schema_terms():
     assert result["coverage"]["offered_chars"] <= 200
 
 
-def test_material_round_robin_does_not_reward_many_blocks():
+def test_material_round_robin_does_not_reward_many_blocks() -> None:
     sources = {
         **{
             f"a-{i}": _source("material-a", "甲" * 100, block=f"block-{i}", page=i + 1)
@@ -54,7 +58,7 @@ def test_material_round_robin_does_not_reward_many_blocks():
         "b": _source("material-b", "乙" * 1000),
     }
     result = _route(sources, max_source_chars=400, max_span_chars=100)
-    counts = {}
+    counts: dict[str, int] = {}
     for row in result["source_options"]:
         key = row["source"]["knowledge_id"]
         counts[key] = counts.get(key, 0) + sum(len(s["quote"]) for s in row["spans"])
@@ -63,7 +67,7 @@ def test_material_round_robin_does_not_reward_many_blocks():
     assert any(row["source"]["page_number"] == 10 for row in result["source_options"])
 
 
-def test_original_offsets_metadata_and_complete_partition_are_preserved():
+def test_original_offsets_metadata_and_complete_partition_are_preserved() -> None:
     text = "第一章\r\n A😀 e\u0301。\n" + "内部未展示的正文甲" * 100 + "\n尾部独立知识。"
     sources = {"source-a": _source("manual", text)}
     result = _route(sources, max_source_chars=100, max_span_chars=50)
@@ -92,7 +96,7 @@ def test_original_offsets_metadata_and_complete_partition_are_preserved():
     assert coverage["offset_unit"] == "UNICODE_CODE_POINT"
 
 
-def test_order_uses_page_and_is_independent_of_input_mapping_order():
+def test_order_uses_page_and_is_independent_of_input_mapping_order() -> None:
     sources = {
         "aaa-page9": _source("manual", "后" * 100, block="a", page=9),
         "zzz-page1": _source("manual", "前" * 100, block="z", page=1),
@@ -104,7 +108,7 @@ def test_order_uses_page_and_is_independent_of_input_mapping_order():
     )
 
 
-def test_small_budget_reports_unrepresented_materials_without_partial_quotes():
+def test_small_budget_reports_unrepresented_materials_without_partial_quotes() -> None:
     sources = {name: _source(name, name * 100) for name in ("a", "b", "c")}
     result = _route(sources, max_source_chars=100, max_span_chars=100)
     coverage = result["coverage"]
@@ -115,7 +119,7 @@ def test_small_budget_reports_unrepresented_materials_without_partial_quotes():
     assert len(coverage["sources"]) == 3
 
 
-def test_short_and_empty_inputs_have_truthful_full_coverage():
+def test_short_and_empty_inputs_have_truthful_full_coverage() -> None:
     short = _route({"a": _source("a", "全部内容。")})
     assert short["coverage"]["complete"]
     assert short["coverage"]["omitted_chars"] == 0
@@ -140,12 +144,12 @@ def test_short_and_empty_inputs_have_truthful_full_coverage():
         (100, "10"),
     ],
 )
-def test_invalid_budgets_are_rejected(budget, span):
+def test_invalid_budgets_are_rejected(budget: bool | float | int, span: bool | int | str) -> None:
     with pytest.raises(ValueError, match="budget"):
         _route({}, max_source_chars=budget, max_span_chars=span)
 
 
-def test_duplicate_block_aliases_do_not_inflate_material_coverage():
+def test_duplicate_block_aliases_do_not_inflate_material_coverage() -> None:
     source = _source("a", "同一个来源块")
     with pytest.raises(ValueError, match="duplicate"):
         _route({"a": source, "alias": source})

@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     G3NativeCharacterBoxV1,
@@ -14,12 +15,29 @@ from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
 )
 from insurance_harness.product_ingestion.platform import DecodedSourceSnapshot, _object
 
+if TYPE_CHECKING:
+    from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import Evidence
+
+
+type NativePage = dict[str, Any]
+type NativePageProjection = tuple[
+    NativePage,
+    float,
+    float,
+    tuple[G3NativeCharacterBoxV1, ...],
+]
+
 
 def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _validate_partial_coverage(native, page, markdown, intervals):
+def _validate_partial_coverage(
+    native: Mapping[str, Any],
+    page: Mapping[str, Any],
+    markdown: str,
+    intervals: Sequence[tuple[int, int]],
+) -> None:
     """Validate declared geometry gaps even when a page isn't being expanded."""
     gaps = page.get("unavailable_ranges", [])
     if native.get("contract") != "builtin-pdfium-native-locators.v2":
@@ -30,13 +48,23 @@ def _validate_partial_coverage(native, page, markdown, intervals):
     dispositions = [(left, right) for left, right in intervals]
     previous = start
     for gap in gaps:
-        if not isinstance(gap, dict) or set(gap) != {"global_codepoint_start", "global_codepoint_end", "reason"}:
+        if not isinstance(gap, dict) or set(gap) != {
+            "global_codepoint_start",
+            "global_codepoint_end",
+            "reason",
+        }:
             raise ValueError("native gap declaration malformed")
         left, right = gap["global_codepoint_start"], gap["global_codepoint_end"]
         if (
             type(left) is not int or type(right) is not int
             or not start <= left < right <= end or left < previous
-            or gap["reason"] not in {"bbox_invalid", "bbox_unavailable", "character_mapping_unavailable", "page_rotation_unsupported"}
+            or gap["reason"]
+            not in {
+                "bbox_invalid",
+                "bbox_unavailable",
+                "character_mapping_unavailable",
+                "page_rotation_unsupported",
+            }
             or any(ch.isspace() for ch in markdown[left:right])
         ):
             raise ValueError("native gap range or reason invalid")
@@ -51,7 +79,11 @@ def _validate_partial_coverage(native, page, markdown, intervals):
         raise ValueError("native gap coverage is incomplete")
 
 
-def _validated_native_pages(decoded: DecodedSourceSnapshot, *, selected_pages=None):
+def _validated_native_pages(
+    decoded: DecodedSourceSnapshot,
+    *,
+    selected_pages: set[int] | None = None,
+) -> dict[int, NativePageProjection]:
     body = decoded.snapshot
     markdown = body["markdown"]
     native = json.loads(decoded.native_bytes, object_pairs_hook=_object)
@@ -61,7 +93,7 @@ def _validated_native_pages(decoded: DecodedSourceSnapshot, *, selected_pages=No
         or native.get("parser_identity_sha256") != body["parser_identity_sha256"]
     ):
         raise ValueError("native page source identity mismatch")
-    pages = {}
+    pages: dict[int, NativePageProjection] = {}
     previous_end = 0
     for page in native["pages"]:
         number = page["page_number"]
@@ -191,14 +223,17 @@ def project_native_pages(
 @dataclass(frozen=True)
 class EvidenceLocationIndex:
     decoded: DecodedSourceSnapshot
-    mappings: dict
-    pages: dict
+    mappings: dict[str, dict[str, Any]]
+    pages: dict[int, NativePageProjection]
 
 
-def prepare_evidence_locations(decoded: DecodedSourceSnapshot, evidences):
+def prepare_evidence_locations(
+    decoded: DecodedSourceSnapshot,
+    evidences: Sequence[Evidence],
+) -> EvidenceLocationIndex:
     """Validate/index each source once for the current evidence dependency set."""
     mappings = {r["chunk_id"]: r for r in decoded.snapshot["chunk_page_mappings"]}
-    selected = set()
+    selected: set[int] = set()
     for evidence in evidences:
         row = mappings.get(evidence.block_id)
         if row is None or row["status"] != "EXACT_BLOCK":
@@ -215,7 +250,12 @@ def prepare_evidence_locations(decoded: DecodedSourceSnapshot, evidences):
     )
 
 
-def project_evidence_locations(evidence, decoded: DecodedSourceSnapshot, *, page_index=None):
+def project_evidence_locations(
+    evidence: Evidence,
+    decoded: DecodedSourceSnapshot,
+    *,
+    page_index: EvidenceLocationIndex | None = None,
+) -> tuple[tuple[Evidence, ...], dict[str, Any]]:
     """Project one unchanged quote into the existing multiple-citation representation.
 
     Physical page separators have no PDF glyphs. Preserve them explicitly in the
@@ -241,10 +281,12 @@ def project_evidence_locations(evidence, decoded: DecodedSourceSnapshot, *, page
     if markdown[start:end] != evidence.quote:
         raise ValueError("EVIDENCE_SOURCE_RANGE_MISMATCH")
     pages = page_index.pages
-    pieces, gaps, audit = [], [], []
+    pieces: list[Evidence] = []
+    gaps: list[dict[str, int | str]] = []
+    audit: list[dict[str, int | str]] = []
     cursor = start
 
-    def gap(left, right):
+    def gap(left: int, right: int) -> None:
         if left == right:
             return
         text = markdown[left:right]

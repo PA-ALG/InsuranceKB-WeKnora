@@ -4,8 +4,10 @@ from __future__ import annotations
 
 # ruff: noqa: F811 -- imported pytest fixtures.
 import json
+import typing
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import select
 
 from insurance_harness.jobs import JobState
@@ -20,12 +22,14 @@ from tests.product_ingestion.test_routing import catalog  # noqa: F401
 from tests.product_ingestion.test_stages import stage_runtime  # noqa: F401
 
 
-def _finish_source_after_wait_with_processing_audits(stage_runtime, monkeypatch):
+def _finish_source_after_wait_with_processing_audits(
+    stage_runtime: typing.Any, monkeypatch: typing.Any
+) -> typing.Any:
     scope, store, artifacts, platform, execute = stage_runtime
     original_lookup = platform.lookup_upload
     reparsed = False
 
-    def processing(ordinal):
+    def processing(ordinal: int) -> typing.Any:
         value = receipt()
         value["knowledge_id"] = f"knowledge-{ordinal}"
         value["parse_attempt"] = 1
@@ -51,7 +55,7 @@ def _finish_source_after_wait_with_processing_audits(stage_runtime, monkeypatch)
         value["counts"]["confirmed"] = 1
         return sealed(value)
 
-    async def lookup(_scope, run_id, ordinal):
+    async def lookup(_scope: typing.Any, run_id: str, ordinal: int) -> typing.Any:
         item = await original_lookup(_scope, run_id, ordinal)
         if ordinal < 2:
             item["processing_receipt"] = processing(ordinal)
@@ -61,10 +65,17 @@ def _finish_source_after_wait_with_processing_audits(stage_runtime, monkeypatch)
             item["parse_attempt"] = 2 if reparsed else 1
         return item
 
-    async def no_receipt(*_args):
+    async def no_receipt(*_args: object) -> None:
         return None
 
-    async def reparse(_scope, run_id, ordinal, attempt, recovery_key, deadline):
+    async def reparse(
+        _scope: object,
+        run_id: str,
+        ordinal: int,
+        attempt: int,
+        recovery_key: str,
+        deadline: datetime,
+    ) -> dict[str, typing.Any]:
         nonlocal reparsed
         reparsed = True
         return {
@@ -108,7 +119,7 @@ def _finish_source_after_wait_with_processing_audits(stage_runtime, monkeypatch)
     assert source_job.state is JobState.SUCCEEDED
     assert all(row.producer_generation < source_job.lease_generation for row in audits)
 
-    def unavailable(*_args, **_kwargs):
+    def unavailable(*_args: object, **_kwargs: object) -> None:
         raise ValueError("FIRST_PAGE_PRODUCT_NAME_UNAVAILABLE")
 
     with monkeypatch.context() as patch:
@@ -121,8 +132,8 @@ def _finish_source_after_wait_with_processing_audits(stage_runtime, monkeypatch)
 
 
 def test_recovery_excludes_earlier_generation_source_audits_but_keeps_parent_rows(
-    stage_runtime, monkeypatch
-):
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, artifacts, origin, audits = _finish_source_after_wait_with_processing_audits(
         stage_runtime, monkeypatch
     )
@@ -140,14 +151,13 @@ def test_recovery_excludes_earlier_generation_source_audits_but_keeps_parent_row
         )
     ) == len(audits)
     assert (
-        artifacts.verify_checkpoint(scope=scope, run_id=child.run_id).plan_sha256
-        == plan.digest()
+        artifacts.verify_checkpoint(scope=scope, run_id=child.run_id).plan_sha256 == plan.digest()
     )
 
 
 def test_retry_of_old_failed_checkpoint_drops_inherited_source_audit_reference(
-    stage_runtime, monkeypatch
-):
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, artifacts, origin, audits = _finish_source_after_wait_with_processing_audits(
         stage_runtime, monkeypatch
     )
@@ -185,7 +195,8 @@ def test_retry_of_old_failed_checkpoint_drops_inherited_source_audit_reference(
     inherited = store.checkpoint_plan(scope=scope, run_id=grandchild.run_id)
 
     assert all(ref.artifact_kind != "source_processing_attempt" for ref in inherited.artifacts)
-    assert artifacts.verify_checkpoint(
-        scope=scope, run_id=grandchild.run_id
-    ).plan_sha256 == inherited.digest()
+    assert (
+        artifacts.verify_checkpoint(scope=scope, run_id=grandchild.run_id).plan_sha256
+        == inherited.digest()
+    )
     assert json.loads(audits[0].payload)["knowledge_id"] in {"knowledge-0", "knowledge-1"}

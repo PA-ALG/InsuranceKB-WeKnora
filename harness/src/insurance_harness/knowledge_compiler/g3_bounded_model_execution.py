@@ -12,12 +12,12 @@ import os
 import re
 import stat
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated, Any, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, NotRequired, Protocol, TypedDict, cast
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import (
@@ -102,6 +102,7 @@ from insurance_harness.run_admission.g3_models import (
     G3DispositionCountsV1,
     G3ModelProcessingAuthorizationEnvelopeV1,
     G3ModelProcessingAuthorizationV1,
+    G3ProviderUsageV1,
     G3StageTerminalReceiptV1,
     G3UsageTotalsV1,
     canonical_g3_hash,
@@ -111,10 +112,197 @@ from insurance_harness.run_admission.g3_models import (
 
 from .g3_field_task_routing import (
     ROUTING_VERSION,
+    RoutedSource,
     route_field_task_sources,
     validate_routed_selections,
 )
-from .g3_field_tasks import FieldTaskEvidenceResultV1, adapt_catalog_field_tasks
+from .g3_field_tasks import FieldTaskEvidenceResultV1, FieldTaskV1, adapt_catalog_field_tasks
+
+if TYPE_CHECKING:
+    from .g3_failed_classification_quarantine import (
+        VerifiedFailedClassificationQuarantineBatchV1,
+    )
+
+
+class G3DSourceOption(TypedDict):
+    source_ref: str
+    source: SourceBlock
+
+
+class G3DEntitySourceRef(TypedDict):
+    entity_ref: str
+    entity_id: str
+    source_refs: list[str]
+
+
+class G3DFieldTarget(TypedDict):
+    field_ref: str
+    entity_ref: str
+    entity_id: str
+    entity_version: str
+    display_name: str
+    field_key: str
+    short_title: str
+    description: str | None
+    source_guidance: str | None
+
+
+class G3DOutputWindow(TypedDict):
+    kind: Literal["ENTITY_SYNTHESIS", "FIELDS"]
+    field_refs: tuple[str, ...]
+
+
+class G3DCompileWindow(G3DOutputWindow):
+    window_id: str
+    primary_material_id: str
+    material_ids: tuple[str, ...]
+    entity_slot: int
+    entity_id: str
+    entity_ref: str
+    recovery_contract: NotRequired[str]
+    field_keys: NotRequired[tuple[str, ...]]
+    task_sha256s: NotRequired[tuple[str, ...]]
+
+
+G3DRecoveryWindow = G3DCompileWindow
+
+
+class G3CallTerminalSummary(Protocol):
+    """Fields required when a D window aggregation seals a failed stage."""
+
+    ordinal: int
+    receipt_sha256: str
+    cost_audit: G3CostAuditV1
+    provider_usage: G3ProviderUsageV1 | None
+    status: Literal["SUCCESS", "FAILED", "OUTCOME_UNKNOWN"]
+
+
+class G3DReviewTarget(TypedDict):
+    review_ref: str
+    member_id: str
+    kind: Literal["definition", "free_page"]
+    audit: AuditDisposition
+
+
+class G3DReviewWindow(TypedDict):
+    window_id: str
+    kind: Literal["FIELDS_REVIEW", "MEMBERS_REVIEW"]
+    primary_material_id: str
+    material_ids: tuple[str, ...]
+    entity_slot: int
+    entity_id: str
+    entity_ref: str
+    field_keys: tuple[str, ...]
+    review_refs: tuple[str, ...]
+
+
+class G3DWindowCommon(TypedDict):
+    primary_material_id: str
+    material_ids: tuple[str, ...]
+    entity_slot: int
+    entity_id: str
+    entity_ref: str
+
+
+class G3DExistingMembers(TypedDict):
+    definitions: tuple[ConceptDefinition, ...]
+    fields: tuple[FieldAssertion, ...]
+    pages: tuple[FreeWikiPage, ...]
+
+
+class G3DCompileWindowContext(TypedDict):
+    contract: str
+    request_sha256: str
+    base_request_hash: str
+    extraction_policy: dict[str, object]
+    window: G3DCompileWindow
+    entity_bindings: tuple[EntityCompileBinding830G3V1, ...]
+    catalog_entries: tuple[dict[str, str], ...]
+    existing_members: G3DExistingMembers
+    field_targets: list[G3DFieldTarget]
+    source_options: list[RoutedSource]
+    field_tasks: tuple[dict[str, object], ...]
+    entity_source_refs: tuple[G3DEntitySourceRef, ...]
+    existing_concept_refs: list[dict[str, str]]
+    response_schema: dict[str, Any]
+
+
+class G3DReviewDisplayContext(TypedDict):
+    contract: str
+    request_scope: dict[str, Any]
+    selected_catalog: dict[str, Any]
+    resolution_policy: BatchResolutionPolicyV1
+    accepted_resolution: BatchEntityResolutionV1
+    corpus_entry_metadata: tuple[dict[str, Any], ...]
+    entity_bindings: tuple[EntityCompileBinding830G3V1, ...]
+    entity_source_refs: list[G3DEntitySourceRef]
+    field_targets: list[G3DFieldTarget]
+    source_options: list[G3DSourceOption]
+    candidate: CompileOutput
+    review_targets: list[G3DReviewTarget]
+    machine_bindings: dict[str, str]
+
+
+class G3DReviewWindowContext(TypedDict):
+    contract: str
+    request_sha256: str
+    base_request_hash: str
+    output_hash: str
+    window: G3DReviewWindow
+    review_instructions: tuple[str, ...]
+    entity_binding: dict[str, Any]
+    field_descriptors: tuple[dict[str, Any], ...]
+    candidate_partition: dict[str, Any]
+    source_options: tuple[dict[str, Any], ...]
+    review_targets: tuple[G3DReviewTarget, ...]
+    local_whole_candidate_binding: dict[str, int | str]
+    response_schema: dict[str, Any]
+
+
+class G3DReviewScope(TypedDict):
+    sources: dict[str, SourceBlock]
+    source_keys: dict[tuple[str, str], str]
+    entity_rows: tuple[tuple[EntityCompileBinding830G3V1, str, int], ...]
+    entity_refs: dict[str, str]
+    entity_sources: dict[str, set[str]]
+    fields: dict[tuple[str, str], FieldAssertion]
+    targets: dict[str, G3DReviewTarget]
+    members: dict[str, ConceptDefinition | FreeWikiPage]
+    target_owners: dict[str, str]
+    tasks: dict[tuple[str, str], FieldTaskV1]
+    output_hash: str
+
+
+class G3DPromptContext(TypedDict, total=False):
+    contract: str
+    context: Mapping[str, Any]
+    field_targets: list[G3DFieldTarget]
+    source_options: list[G3DSourceOption]
+    entity_source_refs: list[G3DEntitySourceRef]
+    existing_concept_refs: list[dict[str, str]]
+    review_targets: list[G3DReviewTarget]
+    response_schema: dict[str, Any]
+
+
+class G3CPromptLocator(TypedDict):
+    block_ref: str
+    start: int
+    end: int
+    quote: str
+
+
+class G3CPromptLocatorRef(TypedDict):
+    locator_ref: str
+    quote: str
+
+
+class G3CPromptBlock(TypedDict, total=False):
+    block_ref: str
+    text: str
+    source_ranges: list[tuple[int, int]]
+    page_number: int
+    evidence_locators: list[G3CPromptLocator]
+    evidence_locator_refs: list[G3CPromptLocatorRef]
 
 
 def _structured_text(value: str) -> str:
@@ -127,8 +315,7 @@ def _structured_text(value: str) -> str:
 
 def _body_text(value: str) -> str:
     if any(
-        ord(character) == 0x7F
-        or (ord(character) < 0x20 and character not in "\t\n\r")
+        ord(character) == 0x7F or (ord(character) < 0x20 and character not in "\t\n\r")
         for character in value
     ):
         raise ValueError("semantic source body contains a forbidden control")
@@ -206,13 +393,9 @@ _G3_GEMINI_REQUEST_SCHEMA: dict[str, object] = {
         "stream": {"const": False},
     },
 }
-cast(dict[str, object], _G3_GEMINI_REQUEST_SCHEMA["properties"]).pop(
-    "enable_thinking"
-)
+cast(dict[str, object], _G3_GEMINI_REQUEST_SCHEMA["properties"]).pop("enable_thinking")
 
-_G3_GEMINI_JSON_INSTRUCTION = (
-    "Return only valid JSON, without Markdown fences or explanations."
-)
+_G3_GEMINI_JSON_INSTRUCTION = "Return only valid JSON, without Markdown fences or explanations."
 
 
 def _is_g3_gemini_identity(identity: ModelIdentity) -> bool:
@@ -244,14 +427,14 @@ def _is_g3_gemini_d_identity(stage: str, identity: ModelIdentity) -> bool:
 def g3_current_schema_specs(
     stage: Literal["C_CLASSIFY", "D_COMPILE", "D_REVIEW"],
     identity: ModelIdentity | None = None,
-) -> tuple[tuple[str, str, dict[str, object]], ...]:
+) -> tuple[tuple[Literal["request", "response"], str, dict[str, Any]], ...]:
     """Return the only current schema producers and source modules for one stage."""
 
     request_module = (
         "harness/src/insurance_harness/knowledge_compiler/g3_bounded_model_execution.py"
     )
     response_module = request_module
-    response_schema: dict[str, object]
+    response_schema: dict[str, Any]
     if stage == "C_CLASSIFY":
         response_schema = _c_response_schema(identity)
     elif stage == "D_COMPILE":
@@ -270,9 +453,7 @@ def g3_current_schema_specs(
                 "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py"
             )
             response_schema = ReviewOutput.model_json_schema()
-    if identity is None or (
-        identity.provider == "bailian" and identity.family == "qwen"
-    ):
+    if identity is None or (identity.provider == "bailian" and identity.family == "qwen"):
         request_schema = _G3_REQUEST_SCHEMA
     elif _is_g3_gemini_identity(identity):
         request_schema = _G3_GEMINI_REQUEST_SCHEMA
@@ -406,9 +587,7 @@ class G3SemanticReferenceEvidenceV1(_SemanticModel):
 
 class G3SemanticReferenceIdentityEvidenceV1(G3SemanticReferenceEvidenceV1):
     entity_ref: Text
-    purpose: Literal[
-        "issuer", "product_code", "name", "version", "classification"
-    ]
+    purpose: Literal["issuer", "product_code", "name", "version", "classification"]
     field_key: None
 
 
@@ -429,12 +608,15 @@ class G3SemanticReferenceMaterialV1(_SemanticModel):
     material_role: Text
     material_role_evidence_refs: tuple[Text, ...]
     entities: tuple[G3SemanticEntityV1, ...]
-    evidence: tuple[Annotated[
-        G3SemanticReferenceIdentityEvidenceV1
-        | G3SemanticReferenceRoleEvidenceV1
-        | G3SemanticReferenceFieldEvidenceV1,
-        Field(discriminator="purpose"),
-    ], ...]
+    evidence: tuple[
+        Annotated[
+            G3SemanticReferenceIdentityEvidenceV1
+            | G3SemanticReferenceRoleEvidenceV1
+            | G3SemanticReferenceFieldEvidenceV1,
+            Field(discriminator="purpose"),
+        ],
+        ...,
+    ]
 
 
 class G3SemanticReferenceResponseV1(_SemanticModel):
@@ -512,17 +694,21 @@ class G3DReviewReferenceResponseV1(_SemanticModel):
 
 
 def _g3_d_ref(kind: str, request_sha256: str, value: object) -> str:
-    return kind + "_" + hashlib.sha256(
-        ("g3-d-" + kind + "-reference.830.v1").encode("ascii")
-        + b"\0"
-        + canonical_json({"request_sha256": request_sha256, "value": value})
-    ).hexdigest()
+    return (
+        kind
+        + "_"
+        + hashlib.sha256(
+            ("g3-d-" + kind + "-reference.830.v1").encode("ascii")
+            + b"\0"
+            + canonical_json({"request_sha256": request_sha256, "value": value})
+        ).hexdigest()
+    )
 
 
 def _g3_d_source_index(
     request: BatchConceptCompileRequest830G3V1,
-) -> tuple[list[dict[str, object]], dict[str, SourceBlock], dict[tuple[str, str], str]]:
-    options: list[dict[str, object]] = []
+) -> tuple[list[G3DSourceOption], dict[str, SourceBlock], dict[tuple[str, str], str]]:
+    options: list[G3DSourceOption] = []
     by_ref: dict[str, SourceBlock] = {}
     by_key: dict[tuple[str, str], str] = {}
     for source in request.base_request.sources:
@@ -539,7 +725,7 @@ def _g3_d_source_index(
         by_key[key] = source_ref
         options.append({"source_ref": source_ref, "source": source})
     return (
-        sorted(options, key=lambda item: cast(str, item["source_ref"])),
+        sorted(options, key=lambda item: item["source_ref"]),
         by_ref,
         by_key,
     )
@@ -592,7 +778,7 @@ def _g3_d_entity_source_refs(
     request: BatchConceptCompileRequest830G3V1,
     by_source_key: dict[tuple[str, str], str],
     entity_refs: dict[str, str],
-) -> list[dict[str, object]]:
+) -> list[G3DEntitySourceRef]:
     source_keys_by_material = {
         entry.material_id: {(block.revision_id, block.block_id) for block in entry.blocks}
         for entry in request.resolution_inputs.corpus.entries
@@ -604,7 +790,7 @@ def _g3_d_entity_source_refs(
     for page in request.base_request.existing_pages:
         base_pages.setdefault(page.entity_id, []).append(page)
     definitions = {item.concept_id: item for item in request.base_request.existing_definitions}
-    rows: list[dict[str, object]] = []
+    rows: list[G3DEntitySourceRef] = []
     for binding in request.entity_bindings:
         allowed = {
             key
@@ -638,34 +824,40 @@ def _g3_d_entity_source_refs(
                 "source_refs": refs,
             }
         )
-    return sorted(rows, key=lambda item: cast(str, item["entity_id"]))
+    return sorted(rows, key=lambda item: item["entity_id"])
 
 
 def _g3_d_field_targets(
     request: BatchConceptCompileRequest830G3V1,
     entity_refs: dict[str, str],
-) -> list[dict[str, object]]:
+) -> list[G3DFieldTarget]:
     bindings = {row.entity_id: row for row in request.entity_bindings}
-    rows = []
+    rows: list[G3DFieldTarget] = []
     for task in adapt_catalog_field_tasks(request):
         binding = bindings[task.entity_id]
-        field_ref = _g3_d_ref("field", request.request_sha256, {
-            "entity_id": task.entity_id,
-            "entity_version": task.entity_version,
-            "field_key": task.field_key,
-            "profile_sha256": binding.profile_sha256,
-        })
-        rows.append({
-            "field_ref": field_ref,
-            "entity_ref": entity_refs[task.entity_id],
-            "entity_id": task.entity_id,
-            "entity_version": task.entity_version,
-            "display_name": binding.display_name,
-            "field_key": task.field_key,
-            "short_title": task.short_title,
-            "description": task.description,
-            "source_guidance": task.source_guidance,
-        })
+        field_ref = _g3_d_ref(
+            "field",
+            request.request_sha256,
+            {
+                "entity_id": task.entity_id,
+                "entity_version": task.entity_version,
+                "field_key": task.field_key,
+                "profile_sha256": binding.profile_sha256,
+            },
+        )
+        rows.append(
+            {
+                "field_ref": field_ref,
+                "entity_ref": entity_refs[task.entity_id],
+                "entity_id": task.entity_id,
+                "entity_version": task.entity_version,
+                "display_name": binding.display_name,
+                "field_key": task.field_key,
+                "short_title": task.short_title,
+                "description": task.description,
+                "source_guidance": task.source_guidance,
+            }
+        )
     return rows
 
 
@@ -722,7 +914,7 @@ def _g3_d_entity_slots(
 
 def derive_gemini_d_compile_windows(
     request: BatchConceptCompileRequest830G3V1,
-) -> tuple[dict[str, object], ...]:
+) -> tuple[G3DCompileWindow, ...]:
     """Derive the only admissible Gemini D compile window partition."""
 
     entity_refs = _g3_d_entity_refs(request)
@@ -730,51 +922,71 @@ def derive_gemini_d_compile_windows(
     max_fields_per_call = cast(int, policy["max_fields_per_call"])
     max_profile_fields = cast(int, policy["max_profile_fields"])
     targets = _g3_d_field_targets(request, entity_refs)
-    by_entity: dict[str, list[dict[str, object]]] = {
+    by_entity: dict[str, list[G3DFieldTarget]] = {
         binding.entity_id: [] for binding in request.entity_bindings
     }
     for target in targets:
-        by_entity[cast(str, target["entity_id"])].append(target)
-    rows: list[dict[str, object]] = []
+        by_entity[target["entity_id"]].append(target)
+    rows: list[G3DCompileWindow] = []
     for binding, primary_material_id, entity_slot in _g3_d_entity_slots(request):
         if len(binding.required_fields) > max_profile_fields:
             raise ValueError("D window profile field capacity exceeded")
         entity_ref = entity_refs[binding.entity_id]
-        common = {
+        entity_targets = by_entity[binding.entity_id]
+        if not entity_targets:
+            continue
+        synth_value = {
             "primary_material_id": primary_material_id,
             "material_ids": binding.source_material_ids,
             "entity_slot": entity_slot,
             "entity_id": binding.entity_id,
             "entity_ref": entity_ref,
+            "kind": "ENTITY_SYNTHESIS",
+            "field_refs": (),
         }
-        entity_targets = by_entity[binding.entity_id]
-        if not entity_targets:
-            continue
-        synth_value = {**common, "kind": "ENTITY_SYNTHESIS", "field_refs": ()}
         rows.append(
             {
-                **synth_value,
                 "window_id": _g3_d_ref(
                     "window",
                     request.request_sha256,
                     {"extraction_policy": policy, **synth_value},
                 ),
+                "kind": "ENTITY_SYNTHESIS",
+                "primary_material_id": primary_material_id,
+                "material_ids": binding.source_material_ids,
+                "entity_slot": entity_slot,
+                "entity_id": binding.entity_id,
+                "entity_ref": entity_ref,
+                "field_refs": (),
             }
         )
         for offset in range(0, len(entity_targets), max_fields_per_call):
             field_refs = tuple(
-                cast(str, item["field_ref"])
-                for item in entity_targets[offset : offset + max_fields_per_call]
+                item["field_ref"] for item in entity_targets[offset : offset + max_fields_per_call]
             )
-            value = {**common, "kind": "FIELDS", "field_refs": field_refs}
+            value = {
+                "primary_material_id": primary_material_id,
+                "material_ids": binding.source_material_ids,
+                "entity_slot": entity_slot,
+                "entity_id": binding.entity_id,
+                "entity_ref": entity_ref,
+                "kind": "FIELDS",
+                "field_refs": field_refs,
+            }
             rows.append(
                 {
-                    **value,
                     "window_id": _g3_d_ref(
                         "window",
                         request.request_sha256,
                         {"extraction_policy": policy, **value},
                     ),
+                    "kind": "FIELDS",
+                    "primary_material_id": primary_material_id,
+                    "material_ids": binding.source_material_ids,
+                    "entity_slot": entity_slot,
+                    "entity_id": binding.entity_id,
+                    "entity_ref": entity_ref,
+                    "field_refs": field_refs,
                 }
             )
     if len(rows) > 300:
@@ -784,10 +996,16 @@ def derive_gemini_d_compile_windows(
 
 def _exact_gemini_d_window(
     request: BatchConceptCompileRequest830G3V1, window: object
-) -> dict[str, object]:
+) -> G3DCompileWindow:
     if not isinstance(window, dict) or set(window) != {
-        "window_id", "kind", "primary_material_id", "material_ids", "entity_slot",
-        "entity_id", "entity_ref", "field_refs"
+        "window_id",
+        "kind",
+        "primary_material_id",
+        "material_ids",
+        "entity_slot",
+        "entity_id",
+        "entity_ref",
+        "field_refs",
     }:
         raise ValueError("invalid D compile window")
     matches = [
@@ -804,7 +1022,7 @@ def render_gemini_d_compile_window_context(
     identity: ModelIdentity,
     request: BatchConceptCompileRequest830G3V1,
     window: object,
-) -> dict[str, object]:
+) -> G3DCompileWindowContext:
     """Render one compact, typed Gemini D compile window."""
 
     if not _is_g3_gemini_d_identity("D_COMPILE", identity):
@@ -816,25 +1034,19 @@ def render_gemini_d_compile_window_context(
 def _render_gemini_d_compile_window_context(
     identity: ModelIdentity,
     request: BatchConceptCompileRequest830G3V1,
-    exact: dict[str, object],
-) -> dict[str, object]:
+    exact: G3DCompileWindow,
+) -> G3DCompileWindowContext:
     """Shared renderer; callers first validate a full or recovery window."""
-    source_options, _, source_keys = _g3_d_source_index(request)
+    source_options, sources, source_keys = _g3_d_source_index(request)
     entity_refs = _g3_d_entity_refs(request)
     entity_sources = _g3_d_entity_source_refs(request, source_keys, entity_refs)
-    source_row = next(
-        row for row in entity_sources if row["entity_id"] == exact["entity_id"]
-    )
-    allowed = set(cast(list[str], source_row["source_refs"]))
-    field_refs = set(cast(tuple[str, ...], exact["field_refs"]))
+    source_row = next(row for row in entity_sources if row["entity_id"] == exact["entity_id"])
+    allowed = set(source_row["source_refs"])
+    field_refs = set(exact["field_refs"])
     field_targets = [
-        row
-        for row in _g3_d_field_targets(request, entity_refs)
-        if row["field_ref"] in field_refs
+        row for row in _g3_d_field_targets(request, entity_refs) if row["field_ref"] in field_refs
     ]
-    binding = next(
-        row for row in request.entity_bindings if row.entity_id == exact["entity_id"]
-    )
+    binding = next(row for row in request.entity_bindings if row.entity_id == exact["entity_id"])
     catalog_entries = tuple(
         row
         for row in request.catalog.entries
@@ -848,21 +1060,16 @@ def _render_gemini_d_compile_window_context(
     if len(catalog_entries) != 1:
         raise ValueError("D window catalog binding mismatch")
     existing_fields = tuple(
-            row
-            for row in request.base_request.existing_fields
-            if row.entity_id == binding.entity_id
-        )
+        row for row in request.base_request.existing_fields if row.entity_id == binding.entity_id
+    )
     existing_pages = tuple(
-            row
-            for row in request.base_request.existing_pages
-            if row.entity_id == binding.entity_id
-        )
-    linked_existing_ids = {
-        concept_id
-        for row in (*existing_fields, *existing_pages)
-        for concept_id in row.concept_ids
-    }
-    existing_members = {
+        row for row in request.base_request.existing_pages if row.entity_id == binding.entity_id
+    )
+    linked_existing_ids = {concept_id for row in existing_fields for concept_id in row.concept_ids}
+    linked_existing_ids.update(
+        concept_id for row in existing_pages for concept_id in row.concept_ids
+    )
+    existing_members: G3DExistingMembers = {
         "definitions": tuple(
             row
             for row in request.base_request.existing_definitions
@@ -873,12 +1080,15 @@ def _render_gemini_d_compile_window_context(
     }
     concept_rows, _ = _g3_d_existing_concept_refs(request)
     selected_keys = {str(row["field_key"]) for row in field_targets}
-    tasks = tuple(task for task in adapt_catalog_field_tasks(request)
-                  if task.entity_id == binding.entity_id
-                  and (exact["kind"] == "ENTITY_SYNTHESIS" or task.field_key in selected_keys))
+    tasks = tuple(
+        task
+        for task in adapt_catalog_field_tasks(request)
+        if task.entity_id == binding.entity_id
+        and (exact["kind"] == "ENTITY_SYNTHESIS" or task.field_key in selected_keys)
+    )
     routed_sources = route_field_task_sources(
-        tasks, {str(row["source_ref"]): row["source"] for row in source_options
-                if row["source_ref"] in allowed},
+        tasks,
+        {source_ref: source for source_ref, source in sources.items() if source_ref in allowed},
     )
     source_row = {**source_row, "source_refs": [row["source_ref"] for row in routed_sources]}
     return {
@@ -888,21 +1098,29 @@ def _render_gemini_d_compile_window_context(
         "extraction_policy": gemini_d_extraction_policy(),
         "window": exact,
         "entity_bindings": (binding,),
-        "catalog_entries": tuple({
-            "schema_pack_id": row.pack.schema_pack_id,
-            "schema_version": row.pack.schema_version,
-            "schema_pack_sha256": row.pack.schema_pack_sha256,
-        } for row in catalog_entries),
+        "catalog_entries": tuple(
+            {
+                "schema_pack_id": row.pack.schema_pack_id,
+                "schema_version": row.pack.schema_version,
+                "schema_pack_sha256": row.pack.schema_pack_sha256,
+            }
+            for row in catalog_entries
+        ),
         "existing_members": existing_members,
         "field_targets": field_targets,
         "source_options": routed_sources,
-        "field_tasks": tuple({
-            "task_sha256": task.task_sha256,
-            "field_key": task.field_key,
-            "adapter_kind": task.adapter_kind,
-            "value_constraint": task.value_constraint,
-            "allowed_states": task.allowed_states,
-        } for task in tasks) if exact["kind"] == "FIELDS" else (),
+        "field_tasks": tuple(
+            {
+                "task_sha256": task.task_sha256,
+                "field_key": task.field_key,
+                "adapter_kind": task.adapter_kind,
+                "value_constraint": task.value_constraint,
+                "allowed_states": task.allowed_states,
+            }
+            for task in tasks
+        )
+        if exact["kind"] == "FIELDS"
+        else (),
         "entity_source_refs": (source_row,),
         "existing_concept_refs": concept_rows,
         "response_schema": G3DCompileReferenceResponseV1.model_json_schema(),
@@ -911,7 +1129,7 @@ def _render_gemini_d_compile_window_context(
 
 def render_gemini_d_review_display_context(
     request: BatchConceptCompileRequest830G3V1, output: CompileOutput
-) -> dict[str, object]:
+) -> G3DReviewDisplayContext:
     """Keep all business content and source text once for Gemini review."""
 
     source_options, _, source_keys = _g3_d_source_index(request)
@@ -1003,11 +1221,11 @@ def render_gemini_d_review_display_context(
 
 def _g3_d_review_targets(
     request: BatchConceptCompileRequest830G3V1, output: CompileOutput
-) -> list[dict[str, object]]:
+) -> list[G3DReviewTarget]:
     definitions = {item.concept_id: item for item in output.definitions}
     pages = {free_page_id(item): item for item in output.pages}
     audits = {item.key: item for item in output.audit}
-    rows: list[dict[str, object]] = []
+    rows: list[G3DReviewTarget] = []
     output_hash = compile_output_hash_g3(output)
     for member_id in sorted(_g3_novel_page_ids(request, output)):
         member = definitions.get(member_id) or pages.get(member_id)
@@ -1042,9 +1260,12 @@ def _g3_d_review_definition_owners(
     }
     affected = {row[0].entity_id for row in entity_rows}
     linked: dict[str, set[str]] = {entity_id: set() for entity_id in affected}
-    for member in (*output.fields, *output.pages):
-        if member.entity_id in linked:
-            linked[member.entity_id].update(member.concept_ids)
+    for field in output.fields:
+        if field.entity_id in linked:
+            linked[field.entity_id].update(field.concept_ids)
+    for page in output.pages:
+        if page.entity_id in linked:
+            linked[page.entity_id].update(page.concept_ids)
     ordered_entities = [row[0].entity_id for row in entity_rows]
     owners: dict[str, str] = {}
     for definition in output.definitions:
@@ -1070,7 +1291,15 @@ def _g3_d_review_definition_owners(
     return owners
 
 
-_REVIEW_WINDOW_POLICY = {
+class _ReviewWindowPolicy(TypedDict):
+    version: str
+    max_fields: int
+    max_source_chars: int
+    neighbor_chars: int
+    max_context_bytes: int
+
+
+_REVIEW_WINDOW_POLICY: _ReviewWindowPolicy = {
     "version": "g3-evidence-bounded-review.830.v2",
     "max_fields": 10,
     "max_source_chars": 24000,
@@ -1079,7 +1308,10 @@ _REVIEW_WINDOW_POLICY = {
 }
 
 
-def _g3_review_field_tasks(request, fields):
+def _g3_review_field_tasks(
+    request: BatchConceptCompileRequest830G3V1,
+    fields: Mapping[tuple[str, str], FieldAssertion],
+) -> dict[tuple[str, str], FieldTaskV1]:
     from .g3_field_tasks import _source_scope, _task, catalog_value_constraint
 
     tasks = {(task.entity_id, task.field_key): task for task in adapt_catalog_field_tasks(request)}
@@ -1119,7 +1351,9 @@ def _g3_review_field_tasks(request, fields):
     return tasks
 
 
-def _g3_review_scope(request, output):
+def _g3_review_scope(
+    request: BatchConceptCompileRequest830G3V1, output: CompileOutput
+) -> G3DReviewScope:
     from .batch_concept_compile_830_g3 import aligned_existing_fields
 
     _, sources, source_keys = _g3_d_source_index(request)
@@ -1137,30 +1371,32 @@ def _g3_review_scope(request, output):
         if existing.get((row.entity_id, row.field_key)) != row
     }
     targets = _g3_d_review_targets(request, output)
-    members = {row.concept_id: row for row in output.definitions}
+    members: dict[str, ConceptDefinition | FreeWikiPage] = {
+        row.concept_id: row for row in output.definitions
+    }
     members.update({free_page_id(row): row for row in output.pages})
     target_owners = {}
     for target in targets:
         member = members[target["member_id"]]
         owner = member.entity_id if isinstance(member, FreeWikiPage) else owners[member.concept_id]
         target_owners[target["review_ref"]] = owner
-    return dict(
-        sources=sources,
-        source_keys=source_keys,
-        entity_rows=entity_rows,
-        entity_refs=entity_refs,
-        entity_sources=entity_sources,
-        fields=fields,
-        targets={row["review_ref"]: row for row in targets},
-        members=members,
-        target_owners=target_owners,
-        tasks=_g3_review_field_tasks(request, fields),
-        output_hash=compile_output_hash_g3(output),
-    )
+    return {
+        "sources": sources,
+        "source_keys": source_keys,
+        "entity_rows": entity_rows,
+        "entity_refs": entity_refs,
+        "entity_sources": entity_sources,
+        "fields": fields,
+        "targets": {row["review_ref"]: row for row in targets},
+        "members": members,
+        "target_owners": target_owners,
+        "tasks": _g3_review_field_tasks(request, fields),
+        "output_hash": compile_output_hash_g3(output),
+    }
 
 
-def _merge_review_intervals(rows):
-    merged = []
+def _merge_review_intervals(rows: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
+    merged: list[tuple[int, int]] = []
     for start, end in sorted(rows):
         if merged and start <= merged[-1][1]:
             merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
@@ -1169,9 +1405,14 @@ def _merge_review_intervals(rows):
     return merged
 
 
-def _g3_review_source_options(scope, members, entity_id, tasks):
+def _g3_review_source_options(
+    scope: G3DReviewScope,
+    members: Sequence[FieldAssertion | FreeWikiPage | ConceptDefinition],
+    entity_id: str,
+    tasks: Sequence[FieldTaskV1],
+) -> tuple[dict[str, Any], ...]:
     sources, keys = scope["sources"], scope["source_keys"]
-    intervals = {}
+    intervals: dict[str, list[tuple[int, int]]] = {}
     for member in members:
         for evidence in member.evidence:
             ref = keys.get((evidence.revision_id, evidence.block_id))
@@ -1215,7 +1456,7 @@ def _g3_review_source_options(scope, members, entity_id, tasks):
             intervals.setdefault(row["source_ref"], []).extend(
                 (span["start"], span["end"]) for span in row["spans"]
             )
-    result = []
+    result: list[dict[str, Any]] = []
     for ref, ranges in sorted(intervals.items()):
         source = sources[ref]
         result.append(
@@ -1233,7 +1474,9 @@ def _g3_review_source_options(scope, members, entity_id, tasks):
     return tuple(result)
 
 
-def _g3_review_member_view(member, scope):
+def _g3_review_member_view(
+    member: FieldAssertion | FreeWikiPage | ConceptDefinition, scope: G3DReviewScope
+) -> dict[str, Any]:
     # Candidate text appears once; evidence text lives only in the exact source spans.
     return {
         **member.model_dump(exclude={"evidence"}),
@@ -1249,7 +1492,12 @@ def _g3_review_member_view(member, scope):
     }
 
 
-def _render_g3_bounded_review_context(request, output, exact, scope):
+def _render_g3_bounded_review_context(
+    request: BatchConceptCompileRequest830G3V1,
+    output: CompileOutput,
+    exact: G3DReviewWindow,
+    scope: G3DReviewScope,
+) -> G3DReviewWindowContext:
     entity_id = exact["entity_id"]
     binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
     fields = tuple(scope["fields"][(entity_id, key)] for key in exact["field_keys"])
@@ -1260,8 +1508,14 @@ def _render_g3_bounded_review_context(request, output, exact, scope):
     tasks = tuple(scope["tasks"][(entity_id, field.field_key)] for field in fields)
     source_options = _g3_review_source_options(scope, (*fields, *members), entity_id, tasks)
     ids = {*(row.assertion_id for row in fields), *(row["member_id"] for row in targets)}
-    references = sorted({concept_id for row in (*fields, *pages) for concept_id in row.concept_ids})
-    result = {
+    references = {concept_id for row in fields for concept_id in row.concept_ids}
+    references.update(concept_id for row in pages for concept_id in row.concept_ids)
+    linked_definitions = tuple(
+        member
+        for ref in sorted(references)
+        if isinstance((member := scope["members"].get(ref)), ConceptDefinition)
+    )
+    result: G3DReviewWindowContext = {
         "contract": "g3-d-review-bounded-window-context.830.v2",
         "request_sha256": request.request_sha256,
         "base_request_hash": compile_request_hash_g3(request.base_request),
@@ -1315,14 +1569,13 @@ def _render_g3_bounded_review_context(request, output, exact, scope):
             ),
             "linked_concept_refs": tuple(
                 {
-                    "concept_id": ref,
-                    "title": scope["members"][ref].title,
-                    "canonical_key": scope["members"][ref].canonical_key,
-                    "sense_key": scope["members"][ref].sense_key,
-                    "definition_hash": _compile_definition_hash(scope["members"][ref]),
+                    "concept_id": definition.concept_id,
+                    "title": definition.title,
+                    "canonical_key": definition.canonical_key,
+                    "sense_key": definition.sense_key,
+                    "definition_hash": _compile_definition_hash(definition),
                 }
-                for ref in references
-                if ref in scope["members"]
+                for definition in linked_definitions
             ),
             "audit": tuple(row for row in output.audit if row.key in ids),
         },
@@ -1342,26 +1595,42 @@ def _render_g3_bounded_review_context(request, output, exact, scope):
     return result
 
 
-def derive_gemini_d_review_windows(request, output) -> tuple[dict[str, object], ...]:
+def derive_gemini_d_review_windows(
+    request: BatchConceptCompileRequest830G3V1, output: CompileOutput
+) -> tuple[G3DReviewWindow, ...]:
     """Partition only novel members, bounding both evidence and complete context size."""
     return _derive_g3_review_partition(request, output)
 
 
-def _derive_g3_review_partition(request, output, candidate_window=None):
+def _derive_g3_review_partition(
+    request: BatchConceptCompileRequest830G3V1,
+    output: CompileOutput,
+    candidate_window: Mapping[str, object] | None = None,
+) -> tuple[G3DReviewWindow, ...]:
     # Exact reopening needs only the relevant fixed parent group, not every sibling.
     scope = _g3_review_scope(request, output)
-    rows = []
+    rows: list[G3DReviewWindow] = []
 
-    def add(common, field_keys=(), review_refs=()):
-        value = {
+    def add(
+        common: G3DWindowCommon,
+        field_keys: Sequence[str] = (),
+        review_refs: Sequence[str] = (),
+    ) -> None:
+        kind: Literal["FIELDS_REVIEW", "MEMBERS_REVIEW"] = (
+            "FIELDS_REVIEW" if field_keys else "MEMBERS_REVIEW"
+        )
+        value: dict[str, object] = {
             **common,
-            "kind": "FIELDS_REVIEW" if field_keys else "MEMBERS_REVIEW",
+            "kind": kind,
             "field_keys": tuple(field_keys),
             "review_refs": tuple(review_refs),
         }
-        window = {
-            **value,
-            "window_id": _g3_d_ref(
+        window = G3DReviewWindow(
+            **common,
+            kind=kind,
+            field_keys=tuple(field_keys),
+            review_refs=tuple(review_refs),
+            window_id=_g3_d_ref(
                 "window",
                 request.request_sha256,
                 {
@@ -1370,7 +1639,7 @@ def _derive_g3_review_partition(request, output, candidate_window=None):
                     **value,
                 },
             ),
-        }
+        )
         try:
             _render_g3_bounded_review_context(request, output, window, scope)
         except ValueError as exc:
@@ -1385,7 +1654,7 @@ def _derive_g3_review_partition(request, output, candidate_window=None):
     for binding, primary, slot in scope["entity_rows"]:
         if candidate_window is not None and candidate_window.get("entity_id") != binding.entity_id:
             continue
-        common = dict(
+        common = G3DWindowCommon(
             primary_material_id=primary,
             material_ids=binding.source_material_ids,
             entity_slot=slot,
@@ -1395,18 +1664,28 @@ def _derive_g3_review_partition(request, output, candidate_window=None):
         keys = sorted(key for entity, key in scope["fields"] if entity == binding.entity_id)
         for start in range(0, len(keys), _REVIEW_WINDOW_POLICY["max_fields"]):
             group = keys[start : start + _REVIEW_WINDOW_POLICY["max_fields"]]
+            candidate_field_keys = (
+                None if candidate_window is None else candidate_window.get("field_keys")
+            )
             if candidate_window is not None and (
                 candidate_window.get("kind") != "FIELDS_REVIEW"
-                or not candidate_window.get("field_keys")
-                or candidate_window["field_keys"][0] not in group
+                or not isinstance(candidate_field_keys, (tuple, list))
+                or not candidate_field_keys
+                or candidate_field_keys[0] not in group
             ):
                 continue
             add(common, group)
         for ref, owner in sorted(scope["target_owners"].items()):
+            candidate_review_refs = (
+                None if candidate_window is None else candidate_window.get("review_refs")
+            )
             if owner == binding.entity_id and (
                 candidate_window is None
-                or (candidate_window.get("kind") == "MEMBERS_REVIEW"
-                    and ref in candidate_window.get("review_refs", ()))
+                or (
+                    candidate_window.get("kind") == "MEMBERS_REVIEW"
+                    and isinstance(candidate_review_refs, (tuple, list))
+                    and ref in candidate_review_refs
+                )
             ):
                 add(common, review_refs=(ref,))
     if len(rows) > 300:
@@ -1414,7 +1693,11 @@ def _derive_g3_review_partition(request, output, candidate_window=None):
     return tuple(rows)
 
 
-def _exact_gemini_d_review_window(request, output, window) -> dict[str, object]:
+def _exact_gemini_d_review_window(
+    request: BatchConceptCompileRequest830G3V1,
+    output: CompileOutput,
+    window: object,
+) -> G3DReviewWindow:
     if not isinstance(window, dict):
         raise ValueError("invalid D review window")
     matches = [
@@ -1427,7 +1710,12 @@ def _exact_gemini_d_review_window(request, output, window) -> dict[str, object]:
     return matches[0]
 
 
-def render_gemini_d_review_window_context(identity, request, output, window) -> dict[str, object]:
+def render_gemini_d_review_window_context(
+    identity: ModelIdentity,
+    request: BatchConceptCompileRequest830G3V1,
+    output: CompileOutput,
+    window: object,
+) -> G3DReviewWindowContext:
     if not _is_g3_gemini_d_identity("D_REVIEW", identity):
         raise ValueError("D review windows require Gemini verify identity")
     exact = _exact_gemini_d_review_window(request, output, window)
@@ -1455,6 +1743,7 @@ def _g3_novel_page_ids(
         if existing_pages.get(free_page_id(page)) != page
     )
     return identifiers
+
 
 def _g3_human_admission(
     request: BatchConceptCompileRequest830G3V1,
@@ -1525,11 +1814,7 @@ def _g3_d_display_context(
         for name in type(corpus).model_fields
     }
     resolution_inputs = {
-        name: (
-            corpus_projection
-            if name == "corpus"
-            else getattr(request.resolution_inputs, name)
-        )
+        name: (corpus_projection if name == "corpus" else getattr(request.resolution_inputs, name))
         for name in type(request.resolution_inputs).model_fields
     }
 
@@ -1579,7 +1864,7 @@ def render_g3_d_prompt_context(
     identity: ModelIdentity,
     request: BatchConceptCompileRequest830G3V1,
     output: CompileOutput | None = None,
-) -> dict[str, object]:
+) -> G3DPromptContext:
     """Render the identity-selected D prompt context used by host and runtime."""
 
     if stage == "D_COMPILE":
@@ -1599,9 +1884,7 @@ def render_g3_d_prompt_context(
             "context": _g3_d_display_context(request, source_keys),
             "field_targets": _g3_d_field_targets(request, entity_refs),
             "source_options": source_options,
-            "entity_source_refs": _g3_d_entity_source_refs(
-                request, source_keys, entity_refs
-            ),
+            "entity_source_refs": _g3_d_entity_source_refs(request, source_keys, entity_refs),
             "existing_concept_refs": concept_rows,
             "response_schema": G3DCompileReferenceResponseV1.model_json_schema(),
         }
@@ -1649,6 +1932,7 @@ def _resolve_g3_d_evidence(
             spans = row.get("spans")
             if source is None or not isinstance(spans, (list, tuple)):
                 raise ValueError("foreign D offered source reference")
+            assert isinstance(source_ref, str)
             exact_spans = offered.setdefault(source_ref, set())
             for span in spans:
                 if not isinstance(span, Mapping):
@@ -1673,8 +1957,10 @@ def _resolve_g3_d_evidence(
         if not selection.quote:
             raise ValueError("empty D source quote")
         starts: set[int] = set()
-        search_spans = ((0, len(source.text)),) if offered is None else tuple(
-            sorted(offered.get(selection.source_ref, ()))
+        search_spans = (
+            ((0, len(source.text)),)
+            if offered is None
+            else tuple(sorted(offered.get(selection.source_ref, ())))
         )
         for span_start, span_end in search_spans:
             cursor = span_start
@@ -1689,52 +1975,67 @@ def _resolve_g3_d_evidence(
         if offered is not None and not starts:
             raise ValueError("D source quote is outside offered source spans")
         for start in sorted(starts):
-            row = Evidence(
+            evidence_row = Evidence(
                 **source.model_dump(exclude={"text"}),
                 start=start,
                 end=start + len(selection.quote),
                 quote=selection.quote,
                 quote_hash=hashlib.sha256(selection.quote.encode()).hexdigest(),
             )
-            verify_evidence(row, (source,))
-            evidence.append(row)
+            verify_evidence(evidence_row, (source,))
+            evidence.append(evidence_row)
     return tuple(sorted(evidence, key=lambda item: (item.revision_id, item.block_id, item.start)))
 
 
 def project_gemini_d_compile_response(
     raw: bytes,
     request: BatchConceptCompileRequest830G3V1,
-    window: dict[str, object] | None = None,
+    window: object | None = None,
 ) -> CompileOutput:
     response = G3DCompileReferenceResponseV1.model_validate(_unique_json_bytes(raw))
     if canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
         raise ValueError("D compile semantic wire mismatch")
     identity = ModelIdentity(
-        provider="g3-user-gateway", family="gemini",
-        deployment_id="gemini-3.7-flash-medium", role="extract",
+        provider="g3-user-gateway",
+        family="gemini",
+        deployment_id="gemini-3.7-flash-medium",
+        role="extract",
         policy_version="g3-user-gemini-gateway-v1",
     )
+    exact_window = None if window is None else _exact_gemini_d_window(request, window)
     context = (
         render_g3_d_prompt_context("D_COMPILE", identity, request)
-        if window is None
-        else render_gemini_d_compile_window_context(identity, request, window)
+        if exact_window is None
+        else _render_gemini_d_compile_window_context(identity, request, exact_window)
     )
-    return _project_gemini_d_compile_response_with_context(response, request, window, context)
+    return _project_gemini_d_compile_response_with_context(response, request, exact_window, context)
 
 
 def _project_gemini_d_compile_response_with_context(
     response: G3DCompileReferenceResponseV1,
     request: BatchConceptCompileRequest830G3V1,
-    window: dict[str, object] | None,
-    context: dict[str, object],
+    window: G3DCompileWindow | None,
+    context: Mapping[str, object],
 ) -> CompileOutput:
     """Shared strict projector after raw parsing and caller-owned scope validation."""
     if window is not None:
+        selections = tuple(
+            (selection.source_ref, selection.quote)
+            for row in response.definitions
+            for selection in row.evidence
+        )
+        selections += tuple(
+            (selection.source_ref, selection.quote)
+            for row in response.fields
+            for selection in row.evidence
+        )
+        selections += tuple(
+            (selection.source_ref, selection.quote)
+            for row in response.pages
+            for selection in row.evidence
+        )
         validate_routed_selections(
-            tuple((selection.source_ref, selection.quote)
-                  for row in (*response.definitions, *response.fields, *response.pages)
-                  for selection in row.evidence),
-            context["source_options"],
+            selections, cast(Sequence[RoutedSource], context["source_options"])
         )
     _, sources, _ = _g3_d_source_index(request)
     task_index = {
@@ -1742,16 +2043,13 @@ def _project_gemini_d_compile_response_with_context(
     }
     context_field_targets = cast(list[dict[str, object]], context["field_targets"])
     context_entity_sources = cast(list[dict[str, object]], context["entity_source_refs"])
-    field_targets = {
-        cast(str, row["field_ref"]): row for row in context_field_targets
-    }
+    field_targets = {cast(str, row["field_ref"]): row for row in context_field_targets}
     entity_sources = {
         cast(str, row["entity_ref"]): set(cast(list[str], row["source_refs"]))
         for row in context_entity_sources
     }
     entity_ids = {
-        cast(str, row["entity_ref"]): cast(str, row["entity_id"])
-        for row in context_entity_sources
+        cast(str, row["entity_ref"]): cast(str, row["entity_id"]) for row in context_entity_sources
     }
     existing_rows, concept_refs = _g3_d_existing_concept_refs(request)
     del existing_rows
@@ -1766,22 +2064,15 @@ def _project_gemini_d_compile_response_with_context(
         or (window_kind == "FIELDS" and response.transformation != "EXTRACT")
     ):
         raise ValueError("D window transformation is invalid for its kind")
-    if (
-        len(definition_refs) != len(set(definition_refs))
-        or set(definition_refs).intersection(concept_refs)
+    if len(definition_refs) != len(set(definition_refs)) or set(definition_refs).intersection(
+        concept_refs
     ):
         raise ValueError("duplicate D definition reference")
     definitions: list[ConceptDefinition] = []
     dispositions: list[AuditDisposition] = []
-    window_sources = (
-        None
-        if window is None
-        else entity_sources[cast(str, window["entity_ref"])]
-    )
+    window_sources = None if window is None else entity_sources[window["entity_ref"]]
     offered_sources = (
-        None
-        if window is None
-        else cast(list[dict[str, object]], context["source_options"])
+        None if window is None else cast(list[dict[str, object]], context["source_options"])
     )
     for definition_row in response.definitions:
         if not definition_row.evidence:
@@ -1859,10 +2150,15 @@ def _project_gemini_d_compile_response_with_context(
         task = task_index.get((field.entity_id, field.field_key))
         if task is not None:
             FieldTaskEvidenceResultV1.create(
-                task=task, state=field.state, value=field.value,
-                evidence=field.evidence, unknown_reason=field.unknown_reason,
-                concept_ids=field.concept_ids, conditions=field.conditions,
-                exceptions=field.exceptions, valid_time=field.valid_time,
+                task=task,
+                state=field.state,
+                value=field.value,
+                evidence=field.evidence,
+                unknown_reason=field.unknown_reason,
+                concept_ids=field.concept_ids,
+                conditions=field.conditions,
+                exceptions=field.exceptions,
+                valid_time=field.valid_time,
                 source_blocks=tuple(sources.values()),
             )
         fields.append(field)
@@ -1929,7 +2225,7 @@ def _project_gemini_d_compile_response_with_context(
 def project_gemini_d_compile_window_response(
     raw: bytes,
     request: BatchConceptCompileRequest830G3V1,
-    window: dict[str, object],
+    window: object,
 ) -> CompileOutput:
     """Project one response against its exact code-owned D window."""
 
@@ -1949,7 +2245,7 @@ def aggregate_gemini_d_compile_window_outputs(
 
 def _aggregate_gemini_d_compile_outputs(
     request: BatchConceptCompileRequest830G3V1,
-    windows: Sequence[dict[str, object]],
+    windows: Sequence[G3DOutputWindow],
     outputs: Sequence[CompileOutput],
 ) -> CompileOutput:
     """Shared complete-delta validation for fixed and explicitly recovered partitions."""
@@ -1967,9 +2263,9 @@ def _aggregate_gemini_d_compile_outputs(
             or (window["kind"] == "FIELDS" and output.transformation != "EXTRACT")
         ):
             raise ValueError("D window output identity mismatch")
-        window_refs = set(cast(tuple[str, ...], window["field_refs"]))
+        window_refs = set(window["field_refs"])
         expected_fields = {
-            (cast(str, row["entity_id"]), cast(str, row["field_key"]))
+            (row["entity_id"], row["field_key"])
             for row in field_targets
             if row["field_ref"] in window_refs
         }
@@ -1979,25 +2275,26 @@ def _aggregate_gemini_d_compile_outputs(
             raise ValueError("D field window generated synthesis members")
         if window["kind"] == "ENTITY_SYNTHESIS" and output.fields:
             raise ValueError("D synthesis window generated fields")
-        for key, row in (
-            *((item.concept_id, item) for item in output.definitions),
-            *((free_page_id(item), item) for item in output.pages),
-        ):
-            target = definitions if isinstance(row, ConceptDefinition) else pages
-            if key in target:
+        for definition in output.definitions:
+            if definition.concept_id in definitions:
                 raise ValueError("duplicate D window generated member")
-            target[key] = row
-        for row in output.fields:
-            key = (row.entity_id, row.field_key)
-            if key in fields or row.attempted is not True:
+            definitions[definition.concept_id] = definition
+        for page in output.pages:
+            page_id = free_page_id(page)
+            if page_id in pages:
+                raise ValueError("duplicate D window generated member")
+            pages[page_id] = page
+        for field in output.fields:
+            key = (field.entity_id, field.field_key)
+            if key in fields or field.attempted is not True:
                 raise ValueError("duplicate or unattempted D window field")
-            fields[key] = row
+            fields[key] = field
         for row in output.audit:
             if row.key in audits:
                 raise ValueError("duplicate D window audit")
             audits[row.key] = row
     expected = {
-        (cast(str, row["entity_id"]), cast(str, row["field_key"]))
+        (row["entity_id"], row["field_key"])
         for row in _g3_d_field_targets(request, _g3_d_entity_refs(request))
     }
     if set(fields) != expected:
@@ -2009,7 +2306,8 @@ def _aggregate_gemini_d_compile_outputs(
         pages=tuple(sorted(pages.values(), key=free_page_id)),
         audit=tuple(sorted(audits.values(), key=lambda item: item.key)),
         transformation=(
-            "SYNTHESIZE" if any(row.transformation == "SYNTHESIZE" for row in outputs)
+            "SYNTHESIZE"
+            if any(row.transformation == "SYNTHESIZE" for row in outputs)
             else "EXTRACT"
         ),
     )
@@ -2033,7 +2331,7 @@ def project_gemini_d_review_response(
     if canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
         raise ValueError("D review semantic wire mismatch")
     targets = _g3_d_review_targets(request, output)
-    target_index = {cast(str, row["review_ref"]): cast(str, row["member_id"]) for row in targets}
+    target_index = {row["review_ref"]: row["member_id"] for row in targets}
     refs = tuple(item.review_ref for item in response.scores)
     if len(refs) != len(set(refs)) or set(refs) != set(target_index):
         raise ValueError("D review reference coverage mismatch")
@@ -2056,24 +2354,29 @@ def project_gemini_d_review_window_response(
     raw: bytes,
     request: BatchConceptCompileRequest830G3V1,
     output: CompileOutput,
-    window: dict[str, object],
+    window: object,
 ) -> ReviewOutput:
     """Project one review response against its exact entity-owned targets."""
 
     exact = _exact_gemini_d_review_window(request, output, window)
     all_targets = {
-        cast(str, row["review_ref"]): cast(str, row["member_id"])
-        for row in _g3_d_review_targets(request, output)
+        row["review_ref"]: row["member_id"] for row in _g3_d_review_targets(request, output)
     }
     return _project_g3_exact_review_response(raw, request, output, exact, all_targets)
 
 
-def _project_g3_exact_review_response(raw, request, output, exact, all_targets):
+def _project_g3_exact_review_response(
+    raw: bytes,
+    request: BatchConceptCompileRequest830G3V1,
+    output: CompileOutput,
+    exact: G3DReviewWindow,
+    all_targets: Mapping[str, str],
+) -> ReviewOutput:
     """Shared projector after the caller has derived and bound the exact window."""
     response = G3DReviewReferenceResponseV1.model_validate(_unique_json_bytes(raw))
     if canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
         raise ValueError("D review semantic wire mismatch")
-    expected_refs = set(cast(tuple[str, ...], exact["review_refs"]))
+    expected_refs = set(exact["review_refs"])
     refs = tuple(item.review_ref for item in response.scores)
     if len(refs) != len(set(refs)) or set(refs) != expected_refs:
         raise ValueError("D review window reference coverage mismatch")
@@ -2107,17 +2410,13 @@ def aggregate_gemini_d_review_window_outputs(
     request_hash = compile_request_hash_g3(request.base_request)
     output_hash = compile_output_hash_g3(output)
     target_index = {
-        cast(str, row["review_ref"]): cast(str, row["member_id"])
-        for row in _g3_d_review_targets(request, output)
+        row["review_ref"]: row["member_id"] for row in _g3_d_review_targets(request, output)
     }
     scores: dict[str, ValueScore] = {}
     reasons: list[str] = []
     decisions: list[str] = []
     for window, review in zip(windows, reviews, strict=True):
-        expected_member_ids = {
-            target_index[review_ref]
-            for review_ref in cast(tuple[str, ...], window["review_refs"])
-        }
+        expected_member_ids = {target_index[review_ref] for review_ref in window["review_refs"]}
         if (
             review.request_hash != request_hash
             or review.output_hash != output_hash
@@ -2147,7 +2446,7 @@ def aggregate_gemini_d_review_window_outputs(
     )
 
 
-def _c_response_schema(identity: ModelIdentity | None = None) -> dict[str, object]:
+def _c_response_schema(identity: ModelIdentity | None = None) -> dict[str, Any]:
     if identity is not None and _is_g3_gemini_identity(identity):
         schema = G3SemanticReferenceResponseV1.model_json_schema()
         definitions = cast(dict[str, dict[str, object]], schema["$defs"])
@@ -2222,11 +2521,7 @@ def _unique_json_bytes(raw: bytes) -> object:
 def _parse_native_page_projection_bytes(raw: bytes) -> G3NativePageProjectionSetV1:
     from insurance_harness.run_admission import evaluator
 
-    if (
-        type(raw) is not bytes
-        or not raw
-        or len(raw) > evaluator._MAX_G3_NATIVE_PROJECTION_BYTES
-    ):
+    if type(raw) is not bytes or not raw or len(raw) > evaluator._MAX_G3_NATIVE_PROJECTION_BYTES:
         raise ValueError("invalid native projection bytes")
     projection = G3NativePageProjectionSetV1.model_validate(
         _decode_unique_canonical_json_bytes(raw)
@@ -2340,7 +2635,9 @@ def assemble_c_semantic_response(
 
     if use_locator_refs:
         response = _resolve_c_source_references(
-            raw, corpus=corpus, native_pages=native_pages,
+            raw,
+            corpus=corpus,
+            native_pages=native_pages,
             requested_material_ids=requested_material_ids,
         )
     else:
@@ -2590,9 +2887,7 @@ def _build_d_compile_result_from_semantic(
 ) -> CompileResult:
     gemini = _is_g3_gemini_d_identity("D_COMPILE", identity)
     output = (
-        project_gemini_d_compile_response(raw, request)
-        if gemini
-        else parse_d_compile_output(raw)
+        project_gemini_d_compile_response(raw, request) if gemini else parse_d_compile_output(raw)
     )
     projected = (
         batch_json_bytes_830_g3(output)
@@ -2620,31 +2915,35 @@ def _gemini_d_window_output(
 ) -> CompileOutput:
     if call.window_id is None:
         raise ValueError("Gemini D compile call has no window")
-    windows = {
-        cast(str, row["window_id"]): row
-        for row in derive_gemini_d_compile_windows(request)
-    }
+    windows = {row["window_id"]: row for row in derive_gemini_d_compile_windows(request)}
     window = windows.get(call.window_id)
-    if window is None or call.material_ids != cast(tuple[str, ...], window["material_ids"]):
+    if window is None or call.material_ids != window["material_ids"]:
         raise ValueError("Gemini D compile call/window binding mismatch")
     return project_gemini_d_compile_window_response(raw, request, window)
 
 
-def _prepared_gemini_d_window_output(*, raw, request, call, prepared):
+def _prepared_gemini_d_window_output(
+    *,
+    raw: bytes,
+    request: BatchConceptCompileRequest830G3V1,
+    call: G3CallPlanV1,
+    prepared: G3StageExecutionContext,
+) -> CompileOutput:
     if prepared.projection_reuse is None:
         return _gemini_d_window_output(raw=raw, request=request, call=call)
     from .g3_d_recovery_execution import project_recovery_response
 
-    window = next((row for row in prepared.recovery_windows
-                   if row["window_id"] == call.window_id), None)
+    window = next(
+        (row for row in prepared.recovery_windows if row["window_id"] == call.window_id), None
+    )
     if window is None or tuple(window["material_ids"]) != call.material_ids:
         raise ValueError("recovery call/window binding mismatch")
-    return project_recovery_response(raw, request, window)
+    # This adapter is used by D_COMPILE; exact window validation belongs to
+    # the projector, as for an unrecovered compile response.
+    return project_recovery_response(raw, request, cast(G3DCompileWindow, window))
 
 
-def _gemini_d_window_projection_hash(
-    window_id: str, output: CompileOutput
-) -> str:
+def _gemini_d_window_projection_hash(window_id: str, output: CompileOutput) -> str:
     return _compile_sha256(
         "g3-d-compile-window-projection.830.v1",
         {"window_id": window_id, "output": output},
@@ -2660,19 +2959,14 @@ def _gemini_d_review_window_output(
 ) -> ReviewOutput:
     if call.window_id is None:
         raise ValueError("Gemini D review call has no window")
-    windows = {
-        cast(str, row["window_id"]): row
-        for row in derive_gemini_d_review_windows(request, output)
-    }
+    windows = {row["window_id"]: row for row in derive_gemini_d_review_windows(request, output)}
     window = windows.get(call.window_id)
-    if window is None or call.material_ids != cast(tuple[str, ...], window["material_ids"]):
+    if window is None or call.material_ids != window["material_ids"]:
         raise ValueError("Gemini D review call/window binding mismatch")
     return project_gemini_d_review_window_response(raw, request, output, window)
 
 
-def _gemini_d_review_window_projection_hash(
-    window_id: str, review: ReviewOutput
-) -> str:
+def _gemini_d_review_window_projection_hash(window_id: str, review: ReviewOutput) -> str:
     return _compile_sha256(
         "g3-d-review-window-projection.830.v1",
         {"window_id": window_id, "output": review},
@@ -2809,18 +3103,14 @@ def prepare_stage(*, parent_authorization: str, stage: str, stage_input: str) ->
     parent = G3ModelProcessingAuthorizationEnvelopeV1.model_validate(
         _unique_json_bytes(parent_bytes)
     )
-    if (
-        hashlib.sha256(parent_bytes).hexdigest() != parent_digest
-        or parent_bytes
-        != canonical_json(parent.model_dump(mode="json", round_trip=True))
+    if hashlib.sha256(parent_bytes).hexdigest() != parent_digest or parent_bytes != canonical_json(
+        parent.model_dump(mode="json", round_trip=True)
     ):
         raise ValueError("parent content address mismatch")
     verify_parent_authorization(load_g3_root_trust_policy(), parent)
     input_path = Path(stage_input)
     input_digest = input_path.parent.name
-    expected_input = (
-        evaluator._ADMISSION_STORE_ROOT / "sha256" / input_digest / "stage-input.json"
-    )
+    expected_input = evaluator._ADMISSION_STORE_ROOT / "sha256" / input_digest / "stage-input.json"
     if input_path != expected_input:
         raise ValueError("stage input content address mismatch")
     from insurance_harness.run_admission import trust_policy
@@ -2941,10 +3231,7 @@ def _one_artifact[ModelT: BaseModel](
     values = artifacts.get(contract, [])
     if len(values) != 1:
         raise ValueError(f"expected one {contract} artifact")
-    if (
-        contract == "g3-native-page-projections.830.v1"
-        and model is G3NativePageProjectionSetV1
-    ):
+    if contract == "g3-native-page-projections.830.v1" and model is G3NativePageProjectionSetV1:
         return cast(ModelT, _parse_native_page_projection_bytes(values[0]))
     return model.model_validate(_unique_json_bytes(values[0]))
 
@@ -2969,16 +3256,28 @@ class G3StageExecutionContext:
     reused_outputs: tuple[CompileOutput, ...] = ()
     review_reuse: Any = None
     reused_reviews: tuple[tuple[str, ReviewOutput], ...] = ()
-    recovery_windows: tuple[dict[str, object], ...] = ()
+    recovery_windows: tuple[G3DCompileWindow | G3DReviewWindow, ...] = ()
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(self, "context_by_call", MappingProxyType(dict(self.context_by_call)))
+
+
+class _StageContextCommon(TypedDict):
+    plan: G3BoundedAdmissionPlanV1
+    context_by_call: Mapping[str, bytes]
+    context_index: bytes
+    preview: bytes | None
 
 
 def _parse_g3_stage_artifacts(
     plan: G3BoundedAdmissionPlanV1, artifacts: dict[str, list[bytes]]
 ) -> G3StageExecutionContext:
-    common = {"plan": plan, "context_by_call": {}, "context_index": b"", "preview": None}
+    common: _StageContextCommon = {
+        "plan": plan,
+        "context_by_call": {},
+        "context_index": b"",
+        "preview": None,
+    }
     if plan.stage == "C_CLASSIFY":
         return G3StageExecutionContext(
             **common,
@@ -2986,9 +3285,7 @@ def _parse_g3_stage_artifacts(
             policy=_one_artifact(
                 artifacts, "batch-resolution-policy.830.g3.v1", BatchResolutionPolicyV1
             ),
-            catalog=_one_artifact(
-                artifacts, "schema-pack-catalog.830.g3.v1", SchemaPackCatalogV1
-            ),
+            catalog=_one_artifact(artifacts, "schema-pack-catalog.830.g3.v1", SchemaPackCatalogV1),
             existing=_one_artifact(
                 artifacts, "existing-entities.830.g3.v1", ExistingEntitySnapshotV1
             ),
@@ -3012,15 +3309,21 @@ def _parse_g3_stage_artifacts(
                 normalize_projection_reuse,
             )
 
-            manifests = normalize_projection_reuse(
+            projection_manifests = normalize_projection_reuse(
                 tuple(_unique_json_bytes(raw) for raw in reuse_rows)
             )
-            windows = derive_recovery_windows(request, manifests)
-            verified = tuple(validate_d_projection_reuse(row, current_request=request)
-                             for row in manifests)
+            windows = derive_recovery_windows(request, projection_manifests)
+            projection_results = tuple(
+                validate_d_projection_reuse(row, current_request=request)
+                for row in projection_manifests
+            )
             return G3StageExecutionContext(
-                **common, compile_request=request, projection_reuse=manifests,
-                reused_outputs=tuple(output for result in verified for output in result.outputs),
+                **common,
+                compile_request=request,
+                projection_reuse=projection_manifests,
+                reused_outputs=tuple(
+                    output for result in projection_results for output in result.outputs
+                ),
                 recovery_windows=windows,
             )
         return G3StageExecutionContext(**common, compile_request=request)
@@ -3033,26 +3336,37 @@ def _parse_g3_stage_artifacts(
             normalize_review_reuse,
             validate_review_result_reuse,
         )
-        manifests = normalize_review_reuse(tuple(_unique_json_bytes(raw) for raw in review_rows))
+
+        review_manifests = normalize_review_reuse(
+            tuple(_unique_json_bytes(raw) for raw in review_rows)
+        )
         if not plan.request_manifest.calls:
             raise ValueError("review reuse requires an explicitly bounded remaining call")
-        verified = validate_review_result_reuse(
-            manifests, current_request=request, current_output=final_result.output,
+        review_results = validate_review_result_reuse(
+            review_manifests,
+            current_request=request,
+            current_output=final_result.output,
             current_identity=plan.request_manifest.calls[0].identity,
         )
         return G3StageExecutionContext(
-            **common, compile_request=request, model_compile_result=model_result,
-            final_compile_result=final_result, review_reuse=manifests,
-            reused_reviews=tuple(verified.items()),
+            **common,
+            compile_request=request,
+            model_compile_result=model_result,
+            final_compile_result=final_result,
+            review_reuse=review_manifests,
+            reused_reviews=tuple(review_results.items()),
             recovery_windows=derive_remaining_review_windows(
-                request, final_result.output, manifests,
+                request,
+                final_result.output,
+                review_manifests,
             ),
         )
     return G3StageExecutionContext(
-        **common, compile_request=request, model_compile_result=model_result,
+        **common,
+        compile_request=request,
+        model_compile_result=model_result,
         final_compile_result=final_result,
     )
-
 
 
 def _c_source_locators(block_ref: str, text: str) -> tuple[G3SemanticLocatorV1, ...]:
@@ -3063,9 +3377,14 @@ def _c_source_locators(block_ref: str, text: str) -> tuple[G3SemanticLocatorV1, 
     def emit(start: int, end: int) -> None:
         quote = text[start:end]
         if quote.strip():
-            locators.append(G3SemanticLocatorV1(
-                block_ref=block_ref, start=start, end=end, quote=quote,
-            ))
+            locators.append(
+                G3SemanticLocatorV1(
+                    block_ref=block_ref,
+                    start=start,
+                    end=end,
+                    quote=quote,
+                )
+            )
 
     offset = 0
     pending_start: int | None = None
@@ -3101,10 +3420,13 @@ def _c_locator_ref(locator: G3SemanticLocatorV1) -> str:
 
 
 def _c_eligible_source_locators(
-    page: G3NativePageProjectionV1, source: SourceBlock,
+    page: G3NativePageProjectionV1,
+    source: SourceBlock,
 ) -> tuple[G3SemanticLocatorV1, ...]:
     if (page.revision_id, page.block_id, page.page_number) != (
-        source.revision_id, source.block_id, source.page_number,
+        source.revision_id,
+        source.block_id,
+        source.page_number,
     ):
         raise ValueError("reference native/source identity mismatch")
     eligible: list[G3SemanticLocatorV1] = []
@@ -3129,10 +3451,14 @@ def _c_eligible_source_locators(
         while start < end:
             stop = min(start + 256, end)
             if not all(index in covered for index in range(start, stop)):
-                admit(G3SemanticLocatorV1(
-                    block_ref=page.block_ref, start=start, end=stop,
-                    quote=source.text[start:stop],
-                ))
+                admit(
+                    G3SemanticLocatorV1(
+                        block_ref=page.block_ref,
+                        start=start,
+                        end=stop,
+                        quote=source.text[start:stop],
+                    )
+                )
             if stop == end:
                 break
             start = stop - 64
@@ -3140,31 +3466,49 @@ def _c_eligible_source_locators(
 
 
 def _c_prompt_block(
-    block_ref: str, text: str, *, use_locator_refs: bool = False,
+    block_ref: str,
+    text: str,
+    *,
+    use_locator_refs: bool = False,
     native_page: G3NativePageProjectionV1 | None = None,
     source: SourceBlock | None = None,
-) -> dict[str, object]:
+) -> G3CPromptBlock:
     if use_locator_refs:
         if (
-            native_page is None or source is None
-            or native_page.block_ref != block_ref or source.text != text
+            native_page is None
+            or source is None
+            or native_page.block_ref != block_ref
+            or source.text != text
         ):
             raise ValueError("reference prompt requires exact native/source binding")
         locators = _c_eligible_source_locators(native_page, source)
         return {
-            "block_ref": block_ref, "text": text,
+            "block_ref": block_ref,
+            "text": text,
             "evidence_locator_refs": [
                 {"locator_ref": _c_locator_ref(locator), "quote": locator.quote}
                 for locator in locators
             ],
         }
-    return {"block_ref": block_ref, "text": text, "evidence_locators": [
-        locator.model_dump(mode="json") for locator in _c_source_locators(block_ref, text)
-    ]}
+    return {
+        "block_ref": block_ref,
+        "text": text,
+        "evidence_locators": [
+            {
+                "block_ref": locator.block_ref,
+                "start": locator.start,
+                "end": locator.end,
+                "quote": locator.quote,
+            }
+            for locator in _c_source_locators(block_ref, text)
+        ],
+    }
 
 
 def _resolve_c_source_references(
-    raw: bytes, *, corpus: BatchCorpusV1,
+    raw: bytes,
+    *,
+    corpus: BatchCorpusV1,
     native_pages: tuple[G3NativePageProjectionV1, ...],
     requested_material_ids: tuple[str, ...],
 ) -> G3SemanticResponseV1:
@@ -3199,25 +3543,36 @@ def _resolve_c_source_references(
             resolved_locator = locators.get((material.material_id, row.locator_ref))
             if resolved_locator is None:
                 raise ValueError("unknown or foreign source locator reference")
-            evidence.append(G3SemanticEvidenceV1(
-                **row.model_dump(exclude={"locator_ref"}), locator=resolved_locator,
-            ))
+            evidence.append(
+                G3SemanticEvidenceV1(
+                    **row.model_dump(exclude={"locator_ref"}),
+                    locator=resolved_locator,
+                )
+            )
         entities = []
         for entity in material.entities:
             labels = tuple(
                 label.model_copy(update={"evidence_refs": tuple(sorted(label.evidence_refs))})
                 for label in sorted(entity.labels, key=lambda row: row.taxonomy_label)
             )
-            entities.append(entity.model_copy(update={
-                "identity_evidence_refs": tuple(sorted(entity.identity_evidence_refs)),
-                "labels": labels,
-            }))
-        materials.append(G3SemanticMaterialV1(
-            **material.model_dump(exclude={"evidence", "entities", "material_role_evidence_refs"}),
-            evidence=tuple(sorted(evidence, key=lambda row: row.evidence_ref)),
-            entities=tuple(sorted(entities, key=lambda row: row.entity_ref)),
-            material_role_evidence_refs=tuple(sorted(material.material_role_evidence_refs)),
-        ))
+            entities.append(
+                entity.model_copy(
+                    update={
+                        "identity_evidence_refs": tuple(sorted(entity.identity_evidence_refs)),
+                        "labels": labels,
+                    }
+                )
+            )
+        materials.append(
+            G3SemanticMaterialV1(
+                **material.model_dump(
+                    exclude={"evidence", "entities", "material_role_evidence_refs"}
+                ),
+                evidence=tuple(sorted(evidence, key=lambda row: row.evidence_ref)),
+                entities=tuple(sorted(entities, key=lambda row: row.entity_ref)),
+                material_role_evidence_refs=tuple(sorted(material.material_role_evidence_refs)),
+            )
+        )
     return G3SemanticResponseV1(
         contract="g3-batch-resolution-semantic-response.local.v1",
         materials=tuple(sorted(materials, key=lambda row: row.material_id)),
@@ -3257,10 +3612,7 @@ def _render_g3_stage_contexts(
         assert existing is not None
         assert page_set is not None
         page_bytes = artifacts["g3-native-page-projections.830.v1"][0]
-        if (
-            plan.dispatch_lock.opaque_block_map_sha256
-            != hashlib.sha256(page_bytes).hexdigest()
-        ):
+        if plan.dispatch_lock.opaque_block_map_sha256 != hashlib.sha256(page_bytes).hexdigest():
             raise ValueError("opaque block map hash mismatch")
         entries = {entry.material_id: entry for entry in corpus.entries}
         parent_materials = {item.material_id: item for item in parent.c_materials}
@@ -3329,14 +3681,18 @@ def _render_g3_stage_contexts(
             for material_id in sorted(call.material_ids):
                 if material_id not in entries:
                     raise ValueError("call selects a foreign material")
-                blocks: list[dict[str, object]] = []
+                blocks: list[G3CPromptBlock] = []
                 for page in sorted(pages_by_material[material_id], key=lambda item: item.block_ref):
                     source = blocks_by_material[material_id][(page.revision_id, page.block_id)]
-                    blocks.append(_c_prompt_block(
-                        page.block_ref, source.text,
-                        use_locator_refs=_is_g3_gemini_identity(call.identity),
-                        native_page=page, source=source,
-                    ))
+                    blocks.append(
+                        _c_prompt_block(
+                            page.block_ref,
+                            source.text,
+                            use_locator_refs=_is_g3_gemini_identity(call.identity),
+                            native_page=page,
+                            source=source,
+                        )
+                    )
                 material_rows.append({"material_id": material_id, "blocks": blocks})
             context_by_call[call.call_id] = canonical_json(
                 {
@@ -3368,16 +3724,19 @@ def _render_g3_stage_contexts(
             from .g3_d_recovery_execution import render_recovery_context
 
             recovering = prepared.projection_reuse is not None
-            windows = (prepared.recovery_windows if recovering
-                       else derive_gemini_d_compile_windows(request))
-            render = (render_recovery_context if recovering
-                      else render_gemini_d_compile_window_context)
+            compile_windows: tuple[G3DCompileWindow, ...] = (
+                cast(tuple[G3DCompileWindow, ...], prepared.recovery_windows)
+                if recovering
+                else derive_gemini_d_compile_windows(request)
+            )
+            render = (
+                render_recovery_context if recovering else render_gemini_d_compile_window_context
+            )
             if tuple((call.window_id, call.material_ids) for call in calls) != tuple(
-                (cast(str, row["window_id"]), cast(tuple[str, ...], row["material_ids"]))
-                for row in windows
+                (row["window_id"], row["material_ids"]) for row in compile_windows
             ):
                 raise ValueError("Gemini D calls are not the exact active window partition")
-            for call, window in zip(calls, windows, strict=True):
+            for call, window in zip(calls, compile_windows, strict=True):
                 context_by_call[call.call_id] = batch_json_bytes_830_g3(
                     render(call.identity, request, window)
                 )
@@ -3403,17 +3762,19 @@ def _render_g3_stage_contexts(
             and _is_g3_gemini_d_identity("D_REVIEW", calls[0].identity)
             and calls[0].window_id is not None
         ):
-            windows = (prepared.recovery_windows if prepared.review_reuse is not None
-                       else derive_gemini_d_review_windows(request, final_result.output))
+            review_windows: tuple[G3DReviewWindow, ...] = (
+                cast(tuple[G3DReviewWindow, ...], prepared.recovery_windows)
+                if prepared.review_reuse is not None
+                else derive_gemini_d_review_windows(request, final_result.output)
+            )
             if tuple((call.window_id, call.material_ids) for call in calls) != tuple(
-                (cast(str, row["window_id"]), cast(tuple[str, ...], row["material_ids"]))
-                for row in windows
+                (row["window_id"], row["material_ids"]) for row in review_windows
             ):
                 raise ValueError("Gemini D review calls are not the exact active window partition")
-            for call, window in zip(calls, windows, strict=True):
+            for call, review_window in zip(calls, review_windows, strict=True):
                 context_by_call[call.call_id] = batch_json_bytes_830_g3(
                     render_gemini_d_review_window_context(
-                        call.identity, request, final_result.output, window
+                        call.identity, request, final_result.output, review_window
                     )
                 )
         else:
@@ -3421,9 +3782,7 @@ def _render_g3_stage_contexts(
                 raise ValueError("legacy D review requires one call")
             call = calls[0]
             context_by_call[call.call_id] = batch_json_bytes_830_g3(
-                render_g3_d_prompt_context(
-                    "D_REVIEW", call.identity, request, final_result.output
-                )
+                render_g3_d_prompt_context("D_REVIEW", call.identity, request, final_result.output)
             )
     for call in plan.request_manifest.calls:
         context = context_by_call.get(call.call_id)
@@ -3602,9 +3961,7 @@ def _write_or_verify_stage_result(
         os.close(lock_fd)
 
 
-def _persist_stage_result(
-    plan: G3BoundedAdmissionPlanV1, filename: str, value: BaseModel
-) -> Path:
+def _persist_stage_result(plan: G3BoundedAdmissionPlanV1, filename: str, value: BaseModel) -> Path:
     payload = canonical_json(value.model_dump(mode="json", round_trip=True))
     return _write_or_verify_stage_result(plan, filename, payload)
 
@@ -3644,22 +4001,32 @@ def _validate_g3_prior_stage_results(
             G3CompileResultReuseV1,
             validate_compile_result_reuse,
         )
+
         if plan.stage != "D_REVIEW" or len(compile_reuse_rows) != 1:
             raise ValueError("completed compile reuse requires an explicit D review input")
         receipt = _one_artifact(
-            artifacts, "g3-d-compile-result-reuse.830.v1", G3CompileResultReuseV1,
+            artifacts,
+            "g3-d-compile-result-reuse.830.v1",
+            G3CompileResultReuseV1,
         )
         if plan.prior_terminal_receipt_sha256 != receipt.origin_terminal_sha256:
             raise ValueError("completed compile reuse prior mismatch")
         validate_compile_result_reuse(
             receipt,
-            request=_one_artifact(artifacts, "batch-concept-compile-request.830.g3.v1",
-                                  BatchConceptCompileRequest830G3V1),
+            request=_one_artifact(
+                artifacts,
+                "batch-concept-compile-request.830.g3.v1",
+                BatchConceptCompileRequest830G3V1,
+            ),
             model_result=_one_artifact(
-                artifacts, "g3-d-model-compile-result.830.v1", CompileResult,
+                artifacts,
+                "g3-d-model-compile-result.830.v1",
+                CompileResult,
             ),
             final_result=_one_artifact(
-                artifacts, "g3-d-final-compile-result.830.v1", CompileResult,
+                artifacts,
+                "g3-d-final-compile-result.830.v1",
+                CompileResult,
             ),
         )
         return
@@ -3673,11 +4040,14 @@ def _validate_g3_prior_stage_results(
             parse_classification_reuse,
             validate_classification_reuse,
         )
+
         if plan.stage != "D_COMPILE" or len(reuse_raw) != 1:
             raise ValueError("classification reuse is only an explicit D compile input")
         reuse = parse_classification_reuse(reuse_raw[0])
-        if (canonical_json(reuse.model_dump(mode="json", round_trip=True)) != reuse_raw[0]
-                or plan.prior_terminal_receipt_sha256 != reuse.source_terminal_receipt_sha256):
+        if (
+            canonical_json(reuse.model_dump(mode="json", round_trip=True)) != reuse_raw[0]
+            or plan.prior_terminal_receipt_sha256 != reuse.source_terminal_receipt_sha256
+        ):
             raise ValueError("classification reuse prior receipt mismatch")
         request = _one_artifact(
             artifacts, "batch-concept-compile-request.830.g3.v1", BatchConceptCompileRequest830G3V1
@@ -3691,9 +4061,7 @@ def _validate_g3_prior_stage_results(
         "C_CLASSIFY" if plan.stage == "D_COMPILE" else "D_COMPILE"
     )
     chain_dir = _g3_chain_directory(plan)
-    terminal_bytes = _read_secure_exact(
-        chain_dir / "stage-terminals" / f"{prior_stage}.json"
-    )
+    terminal_bytes = _read_secure_exact(chain_dir / "stage-terminals" / f"{prior_stage}.json")
     prior = G3StageTerminalReceiptV1.model_validate_json(terminal_bytes)
     if (
         prior.stage != prior_stage
@@ -3717,8 +4085,7 @@ def _validate_g3_prior_stage_results(
             BatchConceptCompileRequest830G3V1,
         )
         if (
-            proposal_bytes
-            != canonical_json(proposal.model_dump(mode="json", round_trip=True))
+            proposal_bytes != canonical_json(proposal.model_dump(mode="json", round_trip=True))
             or resolution_bytes
             != canonical_json(resolution.model_dump(mode="json", round_trip=True))
             or request.resolution != resolution
@@ -3731,12 +4098,8 @@ def _validate_g3_prior_stage_results(
     final_bytes = _read_secure_exact(result_dir / "final-compile-result.json")
     model_result = CompileResult.model_validate_json(model_bytes)
     final_result = CompileResult.model_validate_json(final_bytes)
-    signed_model = _one_artifact(
-        artifacts, "g3-d-model-compile-result.830.v1", CompileResult
-    )
-    signed_final = _one_artifact(
-        artifacts, "g3-d-final-compile-result.830.v1", CompileResult
-    )
+    signed_model = _one_artifact(artifacts, "g3-d-model-compile-result.830.v1", CompileResult)
+    signed_final = _one_artifact(artifacts, "g3-d-final-compile-result.830.v1", CompileResult)
     request = _one_artifact(
         artifacts,
         "batch-concept-compile-request.830.g3.v1",
@@ -3789,8 +4152,8 @@ def _call_terminal(
     if usage is None:
         raise RuntimeError("successful provider usage is missing")
     if _is_g3_gemini_identity(current_call.identity):
-        _content, derived_semantic, derived_usage = (
-            _parse_g3_gemini_provider_response(current_call.identity, response_bytes)
+        _content, derived_semantic, derived_usage = _parse_g3_gemini_provider_response(
+            current_call.identity, response_bytes
         )
         if derived_semantic != semantic_bytes or derived_usage != usage:
             raise RuntimeError("Gemini response audit closure mismatch")
@@ -3955,8 +4318,8 @@ def _failed_stage_terminal(
     plan: G3BoundedAdmissionPlanV1,
     admission_digest: str,
     call_dir: str,
-    completed_call_terminals: tuple[G3CallTerminalReceiptV1, ...],
-    failed_call_terminal: G3CallTerminalReceiptV1 | None,
+    completed_call_terminals: tuple[G3CallTerminalSummary, ...],
+    failed_call_terminal: G3CallTerminalSummary | None,
     calls_reserved: int,
     started_at: datetime,
 ) -> G3StageTerminalReceiptV1:
@@ -4046,7 +4409,7 @@ def _finalize_gemini_d_compile_windows(
     plan: G3BoundedAdmissionPlanV1,
     admission_digest: str,
     call_dir: str,
-    call_terminals: tuple[G3CallTerminalReceiptV1, ...],
+    call_terminals: tuple[G3CallTerminalSummary, ...],
     started_at: datetime,
     prepared: G3StageExecutionContext | None = None,
 ) -> CompileResult:
@@ -4058,7 +4421,8 @@ def _finalize_gemini_d_compile_windows(
             from .g3_field_task_recovery import aggregate_g3_recovered_compile_outputs
 
             aggregate = aggregate_g3_recovered_compile_outputs(
-                request, (*prepared.reused_outputs, *outputs),
+                request,
+                (*prepared.reused_outputs, *outputs),
             )
             implementation = "g3-gemini-d-recovery-aggregate.830.v1"
             raw = batch_json_bytes_830_g3(aggregate).decode()
@@ -4094,7 +4458,7 @@ def _finalize_gemini_d_review_windows(
     plan: G3BoundedAdmissionPlanV1,
     admission_digest: str,
     call_dir: str,
-    call_terminals: tuple[G3CallTerminalReceiptV1, ...],
+    call_terminals: tuple[G3CallTerminalSummary, ...],
     started_at: datetime,
     prepared: G3StageExecutionContext | None = None,
 ) -> tuple[ReviewResult, BatchConceptCandidateBundle830G3V1]:
@@ -4103,8 +4467,11 @@ def _finalize_gemini_d_review_windows(
     try:
         if prepared is not None and prepared.review_reuse is not None:
             from .g3_d_review_reuse import aggregate_reused_review_outputs
+
             aggregate = aggregate_reused_review_outputs(
-                request, final_compile_result.output, new_outputs=outputs,
+                request,
+                final_compile_result.output,
+                new_outputs=outputs,
                 reused=dict(prepared.reused_reviews),
             )
         else:
@@ -4125,15 +4492,11 @@ def _finalize_gemini_d_review_windows(
         review_result = review_result.model_copy(
             update={
                 "execution": review_result.execution.model_copy(
-                    update={
-                        "implementation": "g3-gemini-d-review-window-aggregate.830.v1"
-                    }
+                    update={"implementation": "g3-gemini-d-review-window-aggregate.830.v1"}
                 )
             }
         )
-        admission_state = _g3_human_admission(
-            request, final_compile_result.output, aggregate
-        )
+        admission_state = _g3_human_admission(request, final_compile_result.output, aggregate)
         candidate = assemble_candidate_bundle(
             request,
             model_compile_result,
@@ -4155,14 +4518,21 @@ def _finalize_gemini_d_review_windows(
         raise
 
 
-async def _run_bounded_call_tasks(calls, execute, *, worker_limit: int):
+async def _run_bounded_call_tasks[InputT, ResultT](
+    calls: Sequence[InputT],
+    execute: Callable[[InputT], Awaitable[ResultT]],
+    *,
+    worker_limit: int,
+) -> tuple[ResultT | Exception | None, ...]:
     """Execute independent calls with bounded concurrency and stable result order."""
     import asyncio
+
     if worker_limit not in (1, 2):
         raise ValueError("G3 worker limit must be 1 or 2")
     semaphore = asyncio.Semaphore(worker_limit)
     gateway_unavailable = False
-    async def one(call):
+
+    async def one(call: InputT) -> ResultT | Exception | None:
         nonlocal gateway_unavailable
         async with semaphore:
             if gateway_unavailable:
@@ -4182,6 +4552,7 @@ async def _run_bounded_call_tasks(calls, execute, *, worker_limit: int):
                 return result
             except Exception as error:
                 return error
+
     return tuple(await asyncio.gather(*(one(call) for call in calls)))
 
 
@@ -4192,7 +4563,7 @@ def _failed_classification_quarantines(
     corpus: BatchCorpusV1,
     policy: BatchResolutionPolicyV1,
     failed_terminals: tuple[G3CallTerminalReceiptV1, ...],
-):
+) -> VerifiedFailedClassificationQuarantineBatchV1:
     from .g3_failed_classification_quarantine import (
         build_verified_failed_classification_quarantines,
     )
@@ -4213,7 +4584,7 @@ def _persist_failed_classification_quarantines(
     corpus: BatchCorpusV1,
     policy: BatchResolutionPolicyV1,
     failed_terminals: tuple[G3CallTerminalReceiptV1, ...],
-):
+) -> VerifiedFailedClassificationQuarantineBatchV1:
     quarantine = _failed_classification_quarantines(
         plan=plan,
         admission_digest=admission_digest,
@@ -4244,9 +4615,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
 
     admission_path = Path(admission)
     admission_digest_from_path = admission_path.parent.name
-    envelope_bytes = evaluator._read_external_artifact(
-        admission, admission_digest_from_path
-    )
+    envelope_bytes = evaluator._read_external_artifact(admission, admission_digest_from_path)
     envelope_value = _unique_json_bytes(envelope_bytes)
     admission_digest = hashlib.sha256(envelope_bytes).hexdigest()
     if admission_path != (
@@ -4254,9 +4623,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
     ):
         raise ValueError("stage admission path is not content addressed")
     envelope = G3BoundedApprovalEnvelopeV1.model_validate(envelope_value)
-    if envelope_bytes != canonical_json(
-        envelope.model_dump(mode="json", round_trip=True)
-    ):
+    if envelope_bytes != canonical_json(envelope.model_dump(mode="json", round_trip=True)):
         raise ValueError("stage admission is not canonical")
     plan = envelope.payload
     request = _request_for_plan(plan, admission, admission_digest)
@@ -4280,6 +4647,14 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
     compile_request_model = prepared.compile_request
     model_compile_result = prepared.model_compile_result
     final_compile_result = prepared.final_compile_result
+    if plan.stage == "C_CLASSIFY":
+        assert corpus is not None and policy is not None
+    elif plan.stage == "D_COMPILE":
+        assert compile_request_model is not None
+    else:
+        assert compile_request_model is not None
+        assert model_compile_result is not None
+        assert final_compile_result is not None
     partial = plan.chain_manifest.failure_policy.policy_version == "g3-chain-failure-policy.830.v2"
     failures: list[tuple[G3CallTerminalReceiptV1 | None, str, Exception]] = []
     call_terminals: list[G3CallTerminalReceiptV1] = []
@@ -4292,27 +4667,47 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
     candidate: BatchConceptCandidateBundle830G3V1 | None = None
     stage_started = datetime.now(UTC)
     last_call_dir: str | None = None
-    async def execute_call(call):
+
+    async def execute_call(call: G3CallPlanV1) -> G3CallTerminalReceiptV1 | None:
         nonlocal last_call_dir, compile_result, review_result, candidate
+        nonlocal corpus, policy, catalog
+        nonlocal compile_request_model, model_compile_result, final_compile_result
+        if plan.stage == "C_CLASSIFY":
+            assert corpus is not None and policy is not None
+        elif plan.stage == "D_COMPILE":
+            assert compile_request_model is not None
+        else:
+            assert compile_request_model is not None
+            assert model_compile_result is not None
+            assert final_compile_result is not None
         from insurance_harness.model_policy.g3_bounded_gateway import (
             inspect_g3_call_state,
             resume_g3_unstarted_call,
             seal_g3_unknown_call,
         )
-        state = inspect_g3_call_state(
-            plan=plan, call=call, admission_artifact_digest=admission_digest,
-        ) if partial else None
+
+        state = (
+            inspect_g3_call_state(
+                plan=plan,
+                call=call,
+                admission_artifact_digest=admission_digest,
+            )
+            if partial
+            else None
+        )
         if state is not None and state.status in {"FAILED", "OUTCOME_UNKNOWN"}:
             if state.terminal is None:
                 # An unacknowledged request is never sent again. Only a timed-out
                 # request may be sealed; active requests retain their worker slot.
                 terminal = seal_g3_unknown_call(
-                    plan=plan, call=call, admission_artifact_digest=admission_digest,
+                    plan=plan,
+                    call=call,
+                    admission_artifact_digest=admission_digest,
                 )
             else:
                 terminal = state.terminal
             failures.append((terminal, "", RuntimeError("existing call " + state.status)))
-            return
+            return None
         reopened = _reopen_completed_g3_call(
             plan=plan,
             call=call,
@@ -4394,7 +4789,10 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     and call.window_id is not None
                 ):
                     output = _prepared_gemini_d_window_output(
-                        raw=semantic, request=compile_request_model, call=call, prepared=prepared,
+                        raw=semantic,
+                        request=compile_request_model,
+                        call=call,
+                        prepared=prepared,
                     )
                     assert call.window_id is not None
                     if terminal.projection_sha256 != _gemini_d_window_projection_hash(
@@ -4466,7 +4864,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     if terminal.projection_sha256 != candidate.candidate_hash:
                         raise RuntimeError("reopened D review projection mismatch")
             call_terminals.append(terminal)
-            return
+            return None
         reserve = (
             resume_g3_unstarted_call
             if state is not None and state.status == "RESERVED_NOT_SENT"
@@ -4564,12 +4962,13 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     and call.window_id is not None
                 ):
                     output = _prepared_gemini_d_window_output(
-                        raw=semantic, request=compile_request_model, call=call, prepared=prepared,
+                        raw=semantic,
+                        request=compile_request_model,
+                        call=call,
+                        prepared=prepared,
                     )
                     assert call.window_id is not None
-                    projection_hash = _gemini_d_window_projection_hash(
-                        call.window_id, output
-                    )
+                    projection_hash = _gemini_d_window_projection_hash(call.window_id, output)
                     compile_window_by_ordinal[call.ordinal] = output
                 else:
                     compile_result = _build_d_compile_result_from_semantic(
@@ -4585,6 +4984,12 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 compile_request_model = prepared.compile_request
                 model_compile_result = prepared.model_compile_result
                 final_compile_result = prepared.final_compile_result
+                if (
+                    compile_request_model is None
+                    or model_compile_result is None
+                    or final_compile_result is None
+                ):
+                    raise ValueError("prepared D review inputs are incomplete")
                 if (
                     _is_g3_gemini_d_identity("D_REVIEW", call.identity)
                     and call.window_id is not None
@@ -4659,6 +5064,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 and failed_call.response_meta.content_type.split(";", 1)[0].strip().lower()
                 == "application/json"
             ):
+                assert corpus is not None and policy is not None
                 _persist_failed_classification_quarantines(
                     plan=plan,
                     admission_digest=admission_digest,
@@ -4678,6 +5084,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
         )
         call_terminals.append(terminal)
         if plan.stage == "C_CLASSIFY":
+            assert corpus is not None
             policy_receipt = __import__(
                 "insurance_harness.model_policy", fromlist=["PolicyReceipt"]
             ).PolicyReceipt.model_validate_json(
@@ -4709,9 +5116,12 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     execution_receipt_sha256=terminal.receipt_sha256,
                 )
             )
+        return None
+
     if partial:
         outcomes = await _run_bounded_call_tasks(
-            plan.request_manifest.calls, execute_call,
+            plan.request_manifest.calls,
+            execute_call,
             worker_limit=plan.stage_caps.worker_limit,
         )
         unrecorded = [item for item in outcomes if isinstance(item, Exception)]
@@ -4732,6 +5142,8 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
         # Successful leaves stay immutable and reusable; no partial candidate is
         # emitted and other independent calls have already had their opportunity.
         if plan.stage == "C_CLASSIFY":
+            assert isinstance(corpus, BatchCorpusV1)
+            assert isinstance(policy, BatchResolutionPolicyV1)
             failed_classifications = tuple(
                 terminal
                 for terminal, _, _ in failures
@@ -4757,6 +5169,9 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
     disposition_counts = None
     coverage_gaps: tuple[str, ...] = ()
     if plan.stage == "C_CLASSIFY":
+        assert isinstance(corpus, BatchCorpusV1)
+        assert isinstance(policy, BatchResolutionPolicyV1)
+        assert isinstance(catalog, SchemaPackCatalogV1)
         proposals_payload: dict[str, object] = {
             "contract": "batch-identity-proposals.830.g3.v1",
             "corpus_sha256": corpus.corpus_sha256,
@@ -4791,6 +5206,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
 
         coverage_gaps = g3_coverage_gap_codes(disposition_counts)
     elif plan.stage == "D_COMPILE":
+        assert isinstance(compile_request_model, BatchConceptCompileRequest830G3V1)
         if compile_window_outputs:
             if last_call_dir is None:
                 raise RuntimeError("D window calls have no ledger directory")
@@ -4816,6 +5232,9 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
         _persist_stage_result(plan, "final-compile-result.json", final_compile_result)
         stage_output_sha = compile_output_hash_g3(final_compile_result.output)
     else:
+        assert isinstance(compile_request_model, BatchConceptCompileRequest830G3V1)
+        assert isinstance(model_compile_result, CompileResult)
+        assert isinstance(final_compile_result, CompileResult)
         if review_window_outputs:
             if last_call_dir is None:
                 raise RuntimeError("D review window calls have no ledger directory")

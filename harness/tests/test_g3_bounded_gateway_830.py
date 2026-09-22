@@ -39,12 +39,15 @@ from insurance_harness.model_policy.models import _model_permit_view_digest
 from insurance_harness.run_admission.g3_models import (
     G3ArtifactRefV1,
     G3BoundedAdmissionPlanV1,
+    G3CallPlanV1,
+    G3CallReservationV1,
     G3CallTerminalReceiptV1,
     G3CostAuditV1,
     G3DispositionCountsV1,
     G3PreparedReceiptV1,
     G3ProviderResponseMetaV1,
     G3ProviderUsageV1,
+    G3ReservedChainBudgetV1,
     G3StageLedgerBindingV1,
     G3StageTerminalReceiptV1,
     G3StartedReceiptV1,
@@ -56,11 +59,13 @@ from tests.test_run_admission_g3_bounded_830 import H, _hashed, valid_c_plan, va
 
 
 def test_route_is_https_exact_and_redirect_free() -> None:
-    route = G3BoundedRouteConfig(
-        endpoint_origin="https://dashscope.aliyuncs.com",
-        endpoint_path="/compatible-mode/v1/chat/completions",
-        timeout_seconds=30,
-        follow_redirects=False,
+    route = G3BoundedRouteConfig.model_validate(
+        dict(
+            endpoint_origin="https://dashscope.aliyuncs.com",
+            endpoint_path="/compatible-mode/v1/chat/completions",
+            timeout_seconds=30,
+            follow_redirects=False,
+        )
     )
     assert validate_g3_route(route) == route
     for origin in (
@@ -71,11 +76,13 @@ def test_route_is_https_exact_and_redirect_free() -> None:
         with pytest.raises(G3LedgerDenied):
             validate_g3_route(route.model_copy(update={"endpoint_origin": origin}))
     with pytest.raises(ValueError):
-        G3BoundedRouteConfig(
-            endpoint_origin="https://dashscope.aliyuncs.com",
-            endpoint_path="/chat/completions",
-            timeout_seconds=30,
-            follow_redirects=False,
+        G3BoundedRouteConfig.model_validate(
+            dict(
+                endpoint_origin="https://dashscope.aliyuncs.com",
+                endpoint_path="/chat/completions",
+                timeout_seconds=30,
+                follow_redirects=False,
+            )
         )
 
 
@@ -98,7 +105,7 @@ def test_factory_has_no_path_sink_callback_client_or_target_injection() -> None:
     assert G3_LEDGER_ROOT == "/var/lib/insurancekb/g3-bounded-execution-ledger/v1"
 
 
-def _write_started_and_success(call_dir: Path, plan_call: object) -> None:
+def _write_started_and_success(call_dir: Path, plan_call: G3CallPlanV1) -> None:
     call = plan_call
     started0 = G3StartedReceiptV1(
         contract="g3-started-receipt.830.v1",
@@ -285,6 +292,8 @@ def _complete_successful_stage(
     assert snapshot is not None
     call_dir = Path(str(snapshot[2]))
     reservation = snapshot[4]
+    assert isinstance(reservation, G3CallReservationV1)
+    assert isinstance(snapshot[5], G3ReservedChainBudgetV1)
     prepared0 = G3PreparedReceiptV1(
         contract="g3-prepared-receipt.830.v1",
         chain_id=plan.chain_id,
@@ -626,6 +635,7 @@ def test_v2_inspects_and_resumes_only_reserved_not_sent_call(
     assert original_state is not None
     state = gateway.inspect_g3_call_state(plan=plan, call=call, admission_artifact_digest="8" * 64)
     assert state.status == "RESERVED_NOT_SENT"
+    assert isinstance(original_state[4], G3CallReservationV1)
     assert state.reservation_receipt_sha256 == original_state[4].receipt_sha256
     assert state.prepared_receipt_sha256 is None
 
@@ -661,7 +671,9 @@ def test_v2_inspects_and_resumes_only_reserved_not_sent_call(
     )
     assert second_route == first_route
     assert prepared_path.read_bytes() == prepared_before
-    assert _reservation_snapshot(resumed_again)[5] == original_state[5]
+    resumed_snapshot = _reservation_snapshot(resumed_again)
+    assert resumed_snapshot is not None
+    assert resumed_snapshot[5] == original_state[5]
 
 
 def test_v2_unknown_is_not_resendable_but_does_not_block_one_independent_call(
@@ -980,6 +992,8 @@ async def test_fixed_transport_posts_once_and_started_blocks_replay(
     assert snapshot is not None
     call_dir = Path(str(snapshot[2]))
     reservation = snapshot[4]
+    assert isinstance(reservation, G3CallReservationV1)
+    assert isinstance(snapshot[5], G3ReservedChainBudgetV1)
     budget = snapshot[5]
     body = b'{"messages":[],"model":"fixture"}'
     body_hash = hashlib.sha256(body).hexdigest()
@@ -1051,21 +1065,23 @@ async def test_fixed_transport_posts_once_and_started_blocks_replay(
         evaluated_at=datetime.now(UTC),
     )
     _write_exclusive(call_dir / "policy-receipt.json", receipt.model_dump_json().encode())
-    route = G3BoundedRouteConfig(
-        endpoint_origin=call.endpoint_origin,
-        endpoint_path="/compatible-mode/v1/chat/completions",
-        timeout_seconds=timeout_seconds,
-        follow_redirects=False,
-        call_directory=str(call_dir),
-        request_body_sha256=body_hash,
-        prepared_receipt_sha256=prepared.receipt_sha256,
-        chain_manifest_hash=plan.chain_manifest_hash,
-        stage=plan.stage,
-        admission_artifact_digest="8" * 64,
-        call_id=call.call_id,
-        ordinal=call.ordinal,
-        input_token_ceiling=10,
-        output_token_ceiling=20,
+    route = G3BoundedRouteConfig.model_validate(
+        dict(
+            endpoint_origin=call.endpoint_origin,
+            endpoint_path="/compatible-mode/v1/chat/completions",
+            timeout_seconds=timeout_seconds,
+            follow_redirects=False,
+            call_directory=str(call_dir),
+            request_body_sha256=body_hash,
+            prepared_receipt_sha256=prepared.receipt_sha256,
+            chain_manifest_hash=plan.chain_manifest_hash,
+            stage=plan.stage,
+            admission_artifact_digest="8" * 64,
+            call_id=call.call_id,
+            ordinal=call.ordinal,
+            input_token_ceiling=10,
+            output_token_ceiling=20,
+        )
     )
     transport_attempts: list[httpx.Request] = []
 
@@ -1170,6 +1186,8 @@ def test_failed_terminal_preserves_complete_response_metadata(
     assert snapshot is not None
     call_dir = Path(str(snapshot[2]))
     reservation = snapshot[4]
+    assert isinstance(reservation, G3CallReservationV1)
+    assert isinstance(snapshot[5], G3ReservedChainBudgetV1)
     prepared0 = G3PreparedReceiptV1(
         contract="g3-prepared-receipt.830.v1",
         chain_id=plan.chain_id,

@@ -1,10 +1,12 @@
 import hashlib
 import json
+import typing
 from types import SimpleNamespace
 
 import pytest
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
+from insurance_harness.knowledge_compiler.concept_compile_830_g2 import free_page_id
 from insurance_harness.product_ingestion.stages import artifact, json_bytes
 from tests.product_ingestion.test_compilation import (
     composed_discovery_case,
@@ -12,23 +14,19 @@ from tests.product_ingestion.test_compilation import (
 )
 
 
-def case():
+def case() -> tuple[typing.Any, ...]:
     request, delta, page, composed = composed_discovery_case()
     free = delta.output.model_copy(
         update={
             "fields": (),
-            "audit": tuple(
-                row for row in delta.output.audit if row.key == compiler.free_page_id(page)
-            ),
+            "audit": tuple(row for row in delta.output.audit if row.key == free_page_id(page)),
         }
     )
     fields = delta.output.model_copy(
         update={
             "pages": (),
             "definitions": (),
-            "audit": tuple(
-                row for row in delta.output.audit if row.key != compiler.free_page_id(page)
-            ),
+            "audit": tuple(row for row in delta.output.audit if row.key != free_page_id(page)),
         }
     )
     field_delta = compiler.record_model_compile(
@@ -95,7 +93,7 @@ def case():
     return request, field_delta, free, composed, outcome
 
 
-def test_two_stage_merge_preserves_fields_and_truthful_composite_review():
+def test_two_stage_merge_preserves_fields_and_truthful_composite_review() -> None:
     from insurance_harness.product_ingestion.compilation import assemble_platform_candidate
     from insurance_harness.product_ingestion.discovery_composition import (
         compose_discovery_review,
@@ -122,7 +120,7 @@ def test_two_stage_merge_preserves_fields_and_truthful_composite_review():
 
 
 @pytest.mark.parametrize("drift", ["hash", "raw", "partial", "decision"])
-def test_composite_review_rejects_stale_or_partial_model_proof(drift):
+def test_composite_review_rejects_stale_or_partial_model_proof(drift: typing.Any) -> None:
     from insurance_harness.product_ingestion.discovery_composition import compose_discovery_review
 
     request, _field_delta, free, composed, outcome = case()
@@ -143,7 +141,9 @@ def test_composite_review_rejects_stale_or_partial_model_proof(drift):
 
 
 @pytest.mark.parametrize("fenced", [False, True])
-def test_composite_accepts_auditable_parent_call_without_claiming_child_model_call(fenced):
+def test_composite_accepts_auditable_parent_call_without_claiming_child_model_call(
+    fenced: typing.Any,
+) -> None:
     from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
     from insurance_harness.product_ingestion.discovery import INDEPENDENT_DISCOVERY_REVIEW_PROMPT
     from insurance_harness.product_ingestion.discovery_composition import compose_discovery_review

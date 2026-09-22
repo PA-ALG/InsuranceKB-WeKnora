@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Mapping
+from typing import Any, Protocol
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -38,6 +39,7 @@ from insurance_harness.product_ingestion.artifact_tables import (
 )
 from insurance_harness.product_ingestion.checkpoint_artifacts import CheckpointArtifacts
 from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.processing_receipts import Receipt
 from insurance_harness.product_ingestion.recovery import (
     RecordedIdentityRecoveryPlan,
     material_references,
@@ -46,6 +48,22 @@ from insurance_harness.product_ingestion.recovery import (
 from insurance_harness.product_ingestion.store import ProductIngestionStore
 
 SessionFactory = Callable[[], Session]
+
+
+class StageBinding(Protocol):
+    @property
+    def dependency_sha256(self) -> str: ...
+
+
+class JobBinding(Protocol):
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def lease_generation(self) -> int: ...
+
+    @property
+    def payload(self) -> dict[str, Any]: ...
 
 
 class ProductArtifactStore(CheckpointArtifacts):
@@ -64,11 +82,11 @@ class ProductArtifactStore(CheckpointArtifacts):
         *,
         scope: ProductScope,
         run_id: str,
-        stage,
-        job,
+        stage: StageBinding,
+        job: JobBinding,
         knowledge_id: str,
         parse_attempt: int,
-        receipt: dict,
+        receipt: Receipt,
     ) -> None:
         """Keep native call accounting even when a sibling parse fails."""
         from insurance_harness.product_ingestion.processing_audit import (
@@ -170,37 +188,40 @@ class ProductArtifactStore(CheckpointArtifacts):
                 writes: list[DomainWriteSpec] = []
                 for draft in drafts:
                     if draft.origin is ArtifactOrigin.MODEL:
-                        call = self._call(session, scope, draft.origin_call_id or "")
-                        if call.dependency_sha256 != draft.dependency_sha256:
+                        model_call = self._call(session, scope, draft.origin_call_id or "")
+                        if model_call.dependency_sha256 != draft.dependency_sha256:
                             raise ValueError(
                                 "model artifact dependency does not match its recorded call"
                             )
                         if (
-                            call.run_id != run_id
-                            or call.stage_key != stage_key
-                            or call.state != StageCallState.RECORDED.value
-                            or not call.raw
+                            model_call.run_id != run_id
+                            or model_call.stage_key != stage_key
+                            or model_call.state != StageCallState.RECORDED.value
+                            or not model_call.raw
                         ):
                             raise ValueError(
                                 "model artifact requires a same-run recorded raw model call"
                             )
                     elif draft.origin is ArtifactOrigin.MODEL_REPLAY:
-                        call = replay_call
-                        assert call is not None
-                        if stage_key != "identity" or draft.origin_call_id != call.call_id:
+                        replay_model_call = replay_call
+                        assert replay_model_call is not None
+                        if (
+                            stage_key != "identity"
+                            or draft.origin_call_id != replay_model_call.call_id
+                        ):
                             raise ValueError("model replay artifact does not match recovery call")
                         marker = session.scalar(
                             select(ProductArtifact).where(
                                 ProductArtifact.run_id == run_id,
                                 ProductArtifact.artifact_kind == "model_replay_receipt",
-                                ProductArtifact.artifact_key == call.call_id,
+                                ProductArtifact.artifact_key == replay_model_call.call_id,
                             )
                         )
                         if (
                             draft.artifact_kind == "model_replay_receipt"
                             or marker is None
                             or marker.origin != ArtifactOrigin.MODEL_REPLAY.value
-                            or marker.origin_call_id != call.call_id
+                            or marker.origin_call_id != replay_model_call.call_id
                             or hashlib.sha256(marker.payload).hexdigest() != marker.payload_sha256
                         ):
                             raise ValueError(
@@ -560,7 +581,7 @@ class ProductArtifactStore(CheckpointArtifacts):
                     )
                 ).all()
             )
-            reused_usage = {}
+            reused_usage: dict[str, int] = {}
             if replay_ids:
                 replay_call = self._identity_replay_metrics_call(session, scope, run_id)
                 if replay_ids != {replay_call.call_id}:
@@ -593,7 +614,9 @@ class ProductArtifactStore(CheckpointArtifacts):
                 + (checkpoint.unsettled_call_count if checkpoint else 0),
             )
 
-    def _identity_replay_metrics_call(self, session, scope, run_id):
+    def _identity_replay_metrics_call(
+        self, session: Session, scope: ProductScope, run_id: str
+    ) -> ProductStageModelCall:
         """Read recorded accounting provenance, never an execution authorization proof."""
         plan = self._products.processing_recovery_plan(scope=scope, run_id=run_id, session=session)
         if not isinstance(plan, RecordedIdentityRecoveryPlan):
@@ -628,7 +651,14 @@ class ProductArtifactStore(CheckpointArtifacts):
             raise ValueError("recorded identity replay checkpoint changed")
         return call
 
-    def _identity_replay_call(self, session, scope, run_id, *, read_lock=False):
+    def _identity_replay_call(
+        self,
+        session: Session,
+        scope: ProductScope,
+        run_id: str,
+        *,
+        read_lock: bool = False,
+    ) -> ProductStageModelCall:
         plan = self._products.processing_recovery_plan(
             scope=scope, run_id=run_id, session=session, read_lock=read_lock
         )
@@ -661,7 +691,15 @@ class ProductArtifactStore(CheckpointArtifacts):
             raise ValueError("recorded identity sources changed")
         return call
 
-    def get_identity_replay_call(self, *, scope, run_id, job_id, generation, dependency_sha256):
+    def get_identity_replay_call(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        job_id: str,
+        generation: int,
+        dependency_sha256: str,
+    ) -> StageCallSnapshot:
         with self._session_factory() as session:
             run = self._products._run(session, scope, run_id)
             self._products._ensure_unfinished(session, run)
@@ -682,7 +720,15 @@ class ProductArtifactStore(CheckpointArtifacts):
                 raise ValueError("recorded identity recovery dependency changed")
             return call
 
-    def record_identity_replay(self, *, scope, run_id, job_id, generation, dependency_sha256):
+    def record_identity_replay(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        job_id: str,
+        generation: int,
+        dependency_sha256: str,
+    ) -> ArtifactSnapshot:
         """Durable replay checkpoint fenced by the actual consuming job, not a dispatch row."""
         from insurance_harness.product_ingestion.tables import ProductStage
 
@@ -693,6 +739,8 @@ class ProductArtifactStore(CheckpointArtifacts):
             plan = self._products.processing_recovery_plan(
                 scope=scope, run_id=run_id, session=session, read_lock=True
             )
+            if not isinstance(plan, RecordedIdentityRecoveryPlan):
+                raise ValueError("recorded identity recovery plan required")
             job = self._products._active_job(session, scope, job_id, generation)
             self._require_job_binding(job.payload, run_id=run_id, stage_key="identity")
             stage = session.scalar(

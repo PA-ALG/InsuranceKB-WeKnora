@@ -222,7 +222,7 @@ class FieldTaskEvidenceResultV1(_Frozen):
                 raise ValueError("known field task result violates value constraint")
         elif value is not None or evidence or not unknown_reason:
             raise ValueError("unknown field task result must be empty and reviewable")
-        payload = {
+        payload: dict[str, object] = {
             "contract": "g3-field-task-evidence-result.830.v1",
             "task_sha256": task.task_sha256,
             "state": state,
@@ -426,7 +426,7 @@ def batch_field_tasks(
         wire = json.loads(_json_bytes(payload))
         batches.append(
             FieldTaskBatchV1.model_validate(
-                {**wire, "batch_sha256": _hash(payload["contract"], wire)}
+                {**wire, "batch_sha256": _hash("g3-field-task-batch.830.v1", wire)}
             )
         )
     return tuple(batches)

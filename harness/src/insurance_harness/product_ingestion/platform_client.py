@@ -9,6 +9,7 @@ import logging
 import re
 import time
 from datetime import UTC, datetime
+from typing import Any, Literal, cast, overload
 from urllib.parse import urlsplit
 
 import httpx
@@ -18,7 +19,7 @@ from insurance_harness.product_ingestion.models import ProductScope
 from insurance_harness.product_ingestion.platform import _object
 
 
-def _id(value: str) -> str:
+def _id(value: object) -> str:
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,256}", value):
         raise ValueError("invalid platform identifier")
     return value
@@ -33,8 +34,8 @@ class PlatformClient:
         scope: ProductScope,
         timeout_seconds: float,
         max_response_bytes: int,
-        transport=None,
-    ):
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         parsed = urlsplit(base_url)
         if (
             parsed.scheme not in {"http", "https"}
@@ -64,12 +65,55 @@ class PlatformClient:
             transport=transport,
         )
 
-    async def close(self):
+    async def close(self) -> None:
         await self.client.aclose()
 
+    @overload
     async def _request(
-        self, scope, method, suffix, *, payload=None, missing_ok=False, expected_data_type=dict
-    ):
+        self,
+        scope: ProductScope,
+        method: str,
+        suffix: str,
+        *,
+        payload: bytes | None = None,
+        missing_ok: Literal[False] = False,
+        expected_data_type: type[dict[str, Any]] = dict,
+    ) -> dict[str, Any]: ...
+
+    @overload
+    async def _request(
+        self,
+        scope: ProductScope,
+        method: str,
+        suffix: str,
+        *,
+        payload: bytes | None = None,
+        missing_ok: Literal[True],
+        expected_data_type: type[dict[str, Any]] = dict,
+    ) -> dict[str, Any] | None: ...
+
+    @overload
+    async def _request(
+        self,
+        scope: ProductScope,
+        method: Literal["GET"],
+        suffix: str,
+        *,
+        payload: bytes | None = None,
+        missing_ok: bool = False,
+        expected_data_type: type[list[Any]],
+    ) -> list[Any] | None: ...
+
+    async def _request(
+        self,
+        scope: ProductScope,
+        method: str,
+        suffix: str,
+        *,
+        payload: bytes | None = None,
+        missing_ok: bool = False,
+        expected_data_type: type[dict[str, Any]] | type[list[Any]] = dict,
+    ) -> dict[str, Any] | list[Any] | None:
         if scope != self.scope:
             raise ValueError("platform scope does not match configured binding")
         if expected_data_type not in (dict, list) or (
@@ -111,11 +155,16 @@ class PlatformClient:
                 envelope.get("data"), expected_data_type
             ):
                 raise ValueError()
-            return envelope["data"]
+            return cast(dict[str, Any] | list[Any], envelope["data"])
         except (ValueError, TypeError, AttributeError):
             raise NonRetryableJobError("PLATFORM_RESPONSE_INVALID") from None
 
-    async def lookup_upload(self, scope, run_id, ordinal):
+    async def lookup_upload(
+        self,
+        scope: ProductScope,
+        run_id: str,
+        ordinal: int,
+    ) -> dict[str, Any] | None:
         if type(ordinal) is not int or ordinal < 0:
             raise ValueError("invalid upload ordinal")
         value = await self._request(
@@ -140,7 +189,13 @@ class PlatformClient:
             raise ValueError("platform parse status invalid")
         return value
 
-    async def lookup_file_by_sha256(self, scope, sha256, *, knowledge_id=None):
+    async def lookup_file_by_sha256(
+        self,
+        scope: ProductScope,
+        sha256: str,
+        *,
+        knowledge_id: str | None = None,
+    ) -> dict[str, Any] | None:
         if not isinstance(sha256, str) or re.fullmatch(r"[a-f0-9]{64}", sha256) is None:
             raise ValueError("invalid upload fingerprint")
         suffix = f"/platform/files/by-sha256/{sha256}"
@@ -175,12 +230,18 @@ class PlatformClient:
         return value
 
     @staticmethod
-    def _reparse_key(value):
+    def _reparse_key(value: str) -> str:
         if not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{64}", value) is None:
             raise ValueError("invalid reparse recovery key")
         return value
 
-    async def get_reparse_receipt(self, scope, run_id, ordinal, recovery_key):
+    async def get_reparse_receipt(
+        self,
+        scope: ProductScope,
+        run_id: str,
+        ordinal: int,
+        recovery_key: str,
+    ) -> dict[str, Any] | None:
         if type(ordinal) is not int or ordinal < 0:
             raise ValueError("invalid upload ordinal")
         key = self._reparse_key(recovery_key)
@@ -195,8 +256,14 @@ class PlatformClient:
         return value
 
     async def reparse_upload(
-        self, scope, run_id, ordinal, expected_parse_attempt, recovery_key, deadline_at
-    ):
+        self,
+        scope: ProductScope,
+        run_id: str,
+        ordinal: int,
+        expected_parse_attempt: int,
+        recovery_key: str,
+        deadline_at: datetime,
+    ) -> dict[str, Any]:
         if (
             type(ordinal) is not int
             or ordinal < 0
@@ -230,7 +297,12 @@ class PlatformClient:
         return value
 
     @staticmethod
-    def _validate_reparse_receipt(value, run_id, ordinal, key):
+    def _validate_reparse_receipt(
+        value: dict[str, Any],
+        run_id: str,
+        ordinal: int,
+        key: str,
+    ) -> None:
         if (
             value.get("contract") != "g3-platform-bound-reparse.830.v1"
             or value.get("run_id") != run_id
@@ -254,7 +326,12 @@ class PlatformClient:
         ):
             raise ValueError("reparse receipt binding invalid")
 
-    async def capture_source(self, scope, knowledge_id, attempt):
+    async def capture_source(
+        self,
+        scope: ProductScope,
+        knowledge_id: str,
+        attempt: int,
+    ) -> bytes:
         if type(attempt) is not int or attempt < 1:
             raise ValueError("invalid parse attempt")
         value = await self._request(
@@ -262,14 +339,19 @@ class PlatformClient:
         )
         return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
-    async def current(self, scope):
+    async def current(self, scope: ProductScope) -> dict[str, Any]:
         value = await self._request(scope, "GET", "/current")
         _id(value.get("release_id"))
         if type(value.get("activation_epoch")) is not int or value["activation_epoch"] < 1:
             raise ValueError("platform active identity invalid")
         return value
 
-    async def base_snapshot(self, scope, release_id, epoch):
+    async def base_snapshot(
+        self,
+        scope: ProductScope,
+        release_id: str,
+        epoch: int,
+    ) -> bytes:
         if type(epoch) is not int or epoch < 1:
             raise ValueError("invalid base epoch")
         value = await self._request(
@@ -277,7 +359,12 @@ class PlatformClient:
         )
         return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
-    def _preparation_scope(self, scope, preparation_id, value):
+    def _preparation_scope(
+        self,
+        scope: ProductScope,
+        preparation_id: str,
+        value: dict[str, Any],
+    ) -> dict[str, Any]:
         expected = {
             "tenant_id": int(scope.tenant_id),
             "space_id": scope.space_id,
@@ -290,8 +377,13 @@ class PlatformClient:
         return value
 
     async def create_preparation(
-        self, scope, preparation_id, candidate_raw: bytes, *, base_body=None
-    ):
+        self,
+        scope: ProductScope,
+        preparation_id: str,
+        candidate_raw: bytes,
+        *,
+        base_body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         _id(preparation_id)
         if base_body is not None:
             from insurance_harness.product_ingestion.candidate_transfer import (
@@ -320,7 +412,12 @@ class PlatformClient:
         value = await self._request(scope, "POST", "/platform/preparations", payload=payload)
         return self._preparation_scope(scope, preparation_id, value)
 
-    async def review_preparation(self, scope, preparation_id, decision_raw: bytes):
+    async def review_preparation(
+        self,
+        scope: ProductScope,
+        preparation_id: str,
+        decision_raw: bytes,
+    ) -> dict[str, Any]:
         if len(decision_raw) > 1024 * 1024:
             raise NonRetryableJobError("PLATFORM_DECISION_LIMIT_EXCEEDED")
         value = await self._request(
@@ -331,7 +428,12 @@ class PlatformClient:
         )
         return self._preparation_scope(scope, preparation_id, value)
 
-    async def activate(self, scope, decision_raw: bytes, authorization_raw: bytes):
+    async def activate(
+        self,
+        scope: ProductScope,
+        decision_raw: bytes,
+        authorization_raw: bytes,
+    ) -> dict[str, Any]:
         if max(len(decision_raw), len(authorization_raw)) > 1024 * 1024:
             raise NonRetryableJobError("PLATFORM_AUTHORIZATION_LIMIT_EXCEEDED")
         # Preserve both original signatures' bytes across the REST envelope.

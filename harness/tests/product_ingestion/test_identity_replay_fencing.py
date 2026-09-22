@@ -5,12 +5,15 @@ from __future__ import annotations
 # ruff: noqa: F401,F811 -- shared actual recorded-call fixtures.
 import asyncio
 import threading
+import typing
 
 import pytest
 from sqlalchemy import event
+from sqlalchemy.orm import ORMExecuteState
 
 from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
 from insurance_harness.product_ingestion.stages import artifact
+from insurance_harness.service_shell.worker import HandlerRegistry
 from tests.product_ingestion.test_identity_recovery import (
     call_args,
     recorded_origin,
@@ -21,10 +24,14 @@ from tests.product_ingestion.test_routing import catalog
 from tests.product_ingestion.test_stages import stage_runtime
 
 
-def child_identity(stage_runtime, recorded_origin):
+def child_identity(
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> tuple[typing.Any, ...]:
     scope, store, artifacts, _, execute = stage_runtime
     origin, _, boundary, _, _ = recorded_origin
-    child = store.retry_processing(
+    # This suite locks the historical v3 recorded-identity replay contract;
+    # modern public retry admission is covered by test_checkpoint_identity_retry.
+    child = store._legacy_retry_processing(
         scope=scope, run_id=origin.run_id, expected_version=origin.version
     )
     for _ in range(3):
@@ -33,14 +40,16 @@ def child_identity(stage_runtime, recorded_origin):
     return scope, store, artifacts, child, job, boundary
 
 
-def test_replay_full_validation_runs_off_event_loop(stage_runtime, recorded_origin, monkeypatch):
+def test_replay_full_validation_runs_off_event_loop(
+    stage_runtime: typing.Any, recorded_origin: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, _, artifacts, child, job, boundary = child_identity(stage_runtime, recorded_origin)
     original = artifacts._identity_replay_call
     main_thread = threading.get_ident()
     observations = []
     released = threading.Event()
 
-    def validate(*args, **kwargs):
+    def validate(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         observations.append(threading.get_ident())
         # A live event loop releases the controlled read; no long wall-clock fixture.
         assert released.wait(1), "full replay validation blocked the event loop"
@@ -48,7 +57,7 @@ def test_replay_full_validation_runs_off_event_loop(stage_runtime, recorded_orig
 
     monkeypatch.setattr(artifacts, "_identity_replay_call", validate)
 
-    async def run():
+    async def run() -> typing.Any:
         replay = asyncio.create_task(
             boundary.replay_stage_call(**call_args(artifacts, scope, child, job))
         )
@@ -64,19 +73,22 @@ def test_replay_full_validation_runs_off_event_loop(stage_runtime, recorded_orig
 
 @pytest.mark.parametrize("method", ["get_identity_replay_call", "record_identity_replay"])
 def test_replay_verifies_full_sources_before_job_fence(
-    stage_runtime, recorded_origin, monkeypatch, method
-):
+    stage_runtime: typing.Any,
+    recorded_origin: typing.Any,
+    monkeypatch: pytest.MonkeyPatch,
+    method: typing.Any,
+) -> None:
     scope, store, artifacts, child, job, _ = child_identity(stage_runtime, recorded_origin)
     original_fence = store._active_job
     original_sources = store._recovery_source_refs
     fenced_sessions = set()
     reads = []
 
-    def fence(session, *args, **kwargs):
+    def fence(session: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         fenced_sessions.add(id(session))
         return original_fence(session, *args, **kwargs)
 
-    def sources(session, *args, **kwargs):
+    def sources(session: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         assert id(session) not in fenced_sessions, "large source payload read under WikiJob lock"
         reads.append(id(session))
         return original_sources(session, *args, **kwargs)
@@ -94,15 +106,17 @@ def test_replay_verifies_full_sources_before_job_fence(
     assert set(reads) == fenced_sessions
 
 
-def test_replay_payload_rows_have_shared_locks_until_fence(stage_runtime, recorded_origin):
+def test_replay_payload_rows_have_shared_locks_until_fence(
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     scope, store, artifacts, child, job, _ = child_identity(stage_runtime, recorded_origin)
     observed = []
     session_class = store._session_factory.class_
 
-    def on_select(state):
+    def on_select(state: ORMExecuteState) -> None:
         if not state.is_select:
             return
-        statement = state.statement
+        statement = typing.cast(typing.Any, state.statement)
         tables = {item.name for item in statement.get_final_froms() if hasattr(item, "name")}
         if tables & {"product_ingestion_artifacts", "product_ingestion_stage_calls"}:
             lock = statement._for_update_arg
@@ -127,8 +141,8 @@ def test_replay_payload_rows_have_shared_locks_until_fence(stage_runtime, record
 
 
 def test_replay_artifact_batch_validates_once_before_fence(
-    stage_runtime, recorded_origin, monkeypatch
-):
+    stage_runtime: typing.Any, recorded_origin: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, artifacts, child, job, boundary = child_identity(stage_runtime, recorded_origin)
     replay = asyncio.run(boundary.replay_stage_call(**call_args(artifacts, scope, child, job)))
     original = artifacts._identity_replay_call
@@ -136,11 +150,11 @@ def test_replay_artifact_batch_validates_once_before_fence(
     validations = []
     fenced = set()
 
-    def fence(session, *args, **kwargs):
+    def fence(session: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         fenced.add(id(session))
         return original_fence(session, *args, **kwargs)
 
-    def validate(session, *args, **kwargs):
+    def validate(session: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         assert id(session) not in fenced, "replay drafts validate full payloads under job lock"
         validations.append(id(session))
         return original(session, *args, **kwargs)
@@ -171,8 +185,8 @@ def test_replay_artifact_batch_validates_once_before_fence(
 
 
 def test_replay_rejects_changed_source_bytes_even_with_same_stored_sha(
-    stage_runtime, recorded_origin
-):
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     from sqlalchemy import select
 
     from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
@@ -195,12 +209,12 @@ def test_replay_rejects_changed_source_bytes_even_with_same_stored_sha(
 
 
 def test_replay_metrics_use_recorded_identity_not_large_sources(
-    stage_runtime, recorded_origin, monkeypatch
-):
+    stage_runtime: typing.Any, recorded_origin: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, artifacts, child, job, boundary = child_identity(stage_runtime, recorded_origin)
     replay = asyncio.run(boundary.replay_stage_call(**call_args(artifacts, scope, child, job)))
 
-    def no_source_read(*args, **kwargs):
+    def no_source_read(*args: object, **kwargs: object) -> None:
         pytest.fail("metrics must not reread source snapshot payloads")
 
     monkeypatch.setattr(store, "_recovery_source_refs", no_source_read)
@@ -213,15 +227,21 @@ def test_replay_metrics_use_recorded_identity_not_large_sources(
 
 @pytest.mark.parametrize("boundary_name", ["read", "decode", "routing"])
 def test_reused_source_read_and_verification_do_not_block_loop(
-    stage_runtime, recorded_origin, snapshot, catalog, monkeypatch, boundary_name
-):
+    stage_runtime: typing.Any,
+    recorded_origin: typing.Any,
+    snapshot: typing.Any,
+    catalog: typing.Any,
+    monkeypatch: pytest.MonkeyPatch,
+    boundary_name: typing.Any,
+) -> None:
     from types import SimpleNamespace
 
     from insurance_harness.product_ingestion import stages
 
     scope, store, artifacts, platform, execute = stage_runtime
     origin = recorded_origin[0]
-    child = store.retry_processing(
+    # Exercise the historical source-only replay path, not modern checkpoint admission.
+    child = store._legacy_retry_processing(
         scope=scope, run_id=origin.run_id, expected_version=origin.version
     )
     execute(child)  # Existing uploaded-source identities are restored first.
@@ -233,7 +253,7 @@ def test_reused_source_read_and_verification_do_not_block_loop(
         stages, "register_stage_handlers", lambda *a, **kw: handlers.update(kw["handlers"])
     )
     stages.register_source_stages(
-        None,
+        typing.cast(HandlerRegistry, None),
         store=store,
         artifacts=artifacts,
         scopes={scope.space_id: scope},
@@ -253,14 +273,14 @@ def test_reused_source_read_and_verification_do_not_block_loop(
     threads = []
     main_thread = threading.get_ident()
 
-    def slow(*args, **kwargs):
+    def slow(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         threads.append(threading.get_ident())
         assert released.wait(1), "source checkpoint work blocked the event loop"
         return original(*args, **kwargs)
 
     monkeypatch.setattr(owner, name, slow)
 
-    async def run():
+    async def run() -> typing.Any:
         task = asyncio.create_task(
             handlers["routing" if boundary_name == "routing" else "source"](
                 scope,

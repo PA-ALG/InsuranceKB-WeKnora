@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -33,11 +33,13 @@ def _source(text: str, *, block_id: str = "block-a") -> SourceBlock:
     )
 
 
-def _selection(source_ref: str = "source-a", quote: str = PRODUCT_NAME):
+def _selection(source_ref: str = "source-a", quote: str = PRODUCT_NAME) -> G3DSourceSelectionV1:
     return G3DSourceSelectionV1(source_ref=source_ref, quote=quote)
 
 
-def _offered(source_ref: str, source: SourceBlock, *ranges: tuple[int, int]):
+def _offered(
+    source_ref: str, source: SourceBlock, *ranges: tuple[int, int]
+) -> list[dict[str, Any]]:
     return [
         {
             "source_ref": source_ref,
@@ -66,9 +68,7 @@ def test_window_keeps_both_exact_occurrences_inside_one_offered_span() -> None:
     )
 
     starts = tuple(
-        index
-        for index in range(len(source.text))
-        if source.text.startswith(PRODUCT_NAME, index)
+        index for index in range(len(source.text)) if source.text.startswith(PRODUCT_NAME, index)
     )
     assert tuple(row.start for row in evidence) == starts
     assert all(row.quote == PRODUCT_NAME for row in evidence)
@@ -82,9 +82,7 @@ def test_window_filters_exact_occurrence_outside_offered_span() -> None:
     evidence = _resolve_g3_d_evidence(
         (_selection(),),
         {"source-a": source},
-        offered_sources=_offered(
-            "source-a", source, (second, second + len(PRODUCT_NAME))
-        ),
+        offered_sources=_offered("source-a", source, (second, second + len(PRODUCT_NAME))),
     )
 
     assert tuple(row.start for row in evidence) == (second,)
@@ -116,9 +114,7 @@ def test_window_rejects_quote_with_no_complete_offered_match() -> None:
         _resolve_g3_d_evidence(
             (_selection(),),
             {"source-a": source},
-            offered_sources=_offered(
-                "source-a", source, (start, start + len(PRODUCT_NAME) - 1)
-            ),
+            offered_sources=_offered("source-a", source, (start, start + len(PRODUCT_NAME) - 1)),
         )
 
 
@@ -134,7 +130,7 @@ def test_window_rejects_foreign_source_and_empty_quote() -> None:
         )
     with pytest.raises(ValueError, match="empty"):
         _resolve_g3_d_evidence(
-            (SimpleNamespace(source_ref="source-a", quote=""),),
+            (G3DSourceSelectionV1.model_construct(source_ref="source-a", quote=""),),
             {"source-a": source},
             offered_sources=offered,
         )

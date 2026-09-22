@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -15,12 +17,14 @@ MODULE = "insurance_harness.knowledge_compiler.g3_classification_reuse"
 FIXTURE = Path(__file__).parent / "fixtures/batch_concept_compile_830_g3/candidate.json"
 
 
-def _api():
+def _api() -> ModuleType:
     assert importlib.util.find_spec(MODULE) is not None, "classification reuse is not implemented"
     return importlib.import_module(MODULE)
 
 
-def test_historical_authority_rejects_untrusted_parent_before_child_signature(monkeypatch):
+def test_historical_authority_rejects_untrusted_parent_before_child_signature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from insurance_harness.model_policy import AdmissionPolicyDenied
     from insurance_harness.run_admission import g3_trust_policy as trust
 
@@ -29,7 +33,7 @@ def test_historical_authority_rejects_untrusted_parent_before_child_signature(mo
     delegated = []
     monkeypatch.setattr(trust, "load_g3_root_trust_policy", lambda: policy)
 
-    def reject(actual_policy, actual_parent):
+    def reject(actual_policy: object, actual_parent: object) -> None:
         assert actual_policy is policy and actual_parent is parent
         raise AdmissionPolicyDenied("untrusted_g3_parent_key")
 
@@ -42,7 +46,7 @@ def test_historical_authority_rejects_untrusted_parent_before_child_signature(mo
     assert delegated == []
 
 
-def test_replay_reuses_original_model_receipts_and_current_snapshot():
+def test_replay_reuses_original_model_receipts_and_current_snapshot() -> None:
     api = _api()
     request = validate_batch_candidate(FIXTURE.read_bytes()).request
     inputs = request.resolution_inputs
@@ -84,7 +88,7 @@ def test_replay_reuses_original_model_receipts_and_current_snapshot():
     assert replayed != result
 
 
-def test_replay_rejects_unrelated_or_changed_source_without_relabeling_receipts():
+def test_replay_rejects_unrelated_or_changed_source_without_relabeling_receipts() -> None:
     api = _api()
     request = validate_batch_candidate(FIXTURE.read_bytes()).request
     inputs = request.resolution_inputs
@@ -100,7 +104,7 @@ def test_replay_rejects_unrelated_or_changed_source_without_relabeling_receipts(
         )
 
 
-def test_reuse_receipt_binds_current_request_and_keeps_original_origin():
+def test_reuse_receipt_binds_current_request_and_keeps_original_origin() -> None:
     api = _api()
     assert hasattr(api, "G3ClassificationReuseV1"), "explicit reuse receipt is missing"
     request = validate_batch_candidate(FIXTURE.read_bytes()).request
@@ -124,7 +128,7 @@ def test_reuse_receipt_binds_current_request_and_keeps_original_origin():
         )
 
 
-def test_origin_reopen_is_mandatory_even_for_a_valid_reuse_binding(tmp_path):
+def test_origin_reopen_is_mandatory_even_for_a_valid_reuse_binding(tmp_path: Path) -> None:
     api = _api()
     assert hasattr(api, "validate_classification_reuse"), "origin ledger reopen is missing"
     request = validate_batch_candidate(FIXTURE.read_bytes()).request
@@ -141,23 +145,33 @@ def test_origin_reopen_is_mandatory_even_for_a_valid_reuse_binding(tmp_path):
         )
 
 
-def test_title_reuse_explicitly_binds_rule_overlay_without_relabeling_source():
+def test_title_reuse_explicitly_binds_rule_overlay_without_relabeling_source() -> None:
     from insurance_harness.knowledge_compiler.g3_title_routing import build_title_routing_overlay
 
     api = _api()
     request = validate_batch_candidate(FIXTURE.read_bytes()).request
     inputs = request.resolution_inputs
     overlay, effective = build_title_routing_overlay(
-        corpus=inputs.corpus, catalog=request.catalog, source_proposals=inputs.proposals,
+        corpus=inputs.corpus,
+        catalog=request.catalog,
+        source_proposals=inputs.proposals,
         material_ids=tuple(row.material_id for row in inputs.proposals.proposals),
     )
     assert effective == inputs.proposals
     receipt = api.build_classification_reuse(
-        request=request, source_chain_manifest_hash="1" * 64,
-        source_terminal_receipt_sha256="2" * 64, source_admission_digest="3" * 64,
-        source_resolution_sha256=request.resolution.batch_sha256, title_overlay=overlay,
+        request=request,
+        source_chain_manifest_hash="1" * 64,
+        source_terminal_receipt_sha256="2" * 64,
+        source_admission_digest="3" * 64,
+        source_resolution_sha256=request.resolution.batch_sha256,
+        title_overlay=overlay,
     )
     assert receipt.contract == "g3-classification-reuse.830.v2"
+    # Frozen inherited V2 wire from the pre-CI-fix implementation. The receipt
+    # itself and its containing artifact both bind bytes, including field order.
+    assert hashlib.sha256(receipt.model_dump_json().encode()).hexdigest() == (
+        "cddb0bf9163d20d8921f6eec74d715d52d465a352343ff65edd3d8aa6401ce9c"
+    )
     assert receipt.source_proposals_sha256 == inputs.proposals.proposals_sha256
     api.validate_reuse_binding(receipt, request=request)
     with pytest.raises(ValueError):

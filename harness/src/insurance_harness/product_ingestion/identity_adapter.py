@@ -5,8 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import _normalized
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
@@ -47,10 +47,10 @@ def _filing_support(value: str, kind: str, quote: str, product_code: str | None)
 @dataclass(frozen=True)
 class IdentityAdaptation:
     semantic_raw: bytes
-    audit: dict
+    audit: dict[str, Any]
 
 
-def adapt_identity_response(raw: bytes, context: Mapping[str, object]) -> IdentityAdaptation:
+def adapt_identity_response(raw: bytes, context: dict[str, Any]) -> IdentityAdaptation:
     """Repair reference relationships only using this call's offered locators.
 
     Locator coordinates remain opaque here. Their offered order is the renderer's
@@ -59,14 +59,14 @@ def adapt_identity_response(raw: bytes, context: Mapping[str, object]) -> Identi
     """
     validate_identity_offered_response(raw, context)
     response = G3SemanticReferenceResponseV1.model_validate_json(raw).model_dump(mode="json")
-    offered = {}
+    offered: dict[str, list[tuple[int, int, int, dict[str, Any]]]] = {}
     for material in context["materials"]:
         locators = []
         for block_index, block in enumerate(material["blocks"]):
             for ordinal, row in enumerate(block["evidence_locator_refs"]):
                 locators.append((block["page_number"], block_index, ordinal, row))
         offered[material["material_id"]] = sorted(locators, key=lambda row: row[:3])
-    changes = []
+    changes: list[dict[str, Any]] = []
     for material in response["materials"]:
         by_ref = {row["evidence_ref"]: row for row in material["evidence"]}
         locators = offered[material["material_id"]]

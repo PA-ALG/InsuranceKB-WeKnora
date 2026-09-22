@@ -1,4 +1,5 @@
 """Shared gateway exhaustion pauses only unsent calls, with no provider traffic."""
+
 from __future__ import annotations
 
 import asyncio
@@ -17,7 +18,8 @@ from insurance_harness.run_admission.g3_models import (
 def _recorded_failure(status: int) -> G3CallTerminalReceiptV1:
     # Actual 2026-09-11 gateway response: text/plain, not model-output JSON.
     response = httpx.Response(
-        status, content=b"Token error: All accounts limited. Wait 8s.",
+        status,
+        content=b"Token error: All accounts limited. Wait 8s.",
         headers={"content-type": "text/plain"},
     )
     # The scheduler receives the already persisted terminal; custody validation
@@ -35,14 +37,14 @@ def _recorded_failure(status: int) -> G3CallTerminalReceiptV1:
 
 
 @pytest.mark.parametrize("status", [429, 503])
-def test_shared_gateway_failure_retains_inflight_and_leaves_unsent_resumable(status):
-    sent = []
+def test_shared_gateway_failure_retains_inflight_and_leaves_unsent_resumable(status: int) -> None:
+    sent: list[int] = []
     failed = _recorded_failure(status)
 
-    async def scenario():
+    async def scenario() -> None:
         both_started = asyncio.Event()
 
-        async def execute(call):
+        async def execute(call: int) -> int | G3CallTerminalReceiptV1:
             sent.append(call)
             if call == 0:
                 await both_started.wait()
@@ -54,7 +56,9 @@ def test_shared_gateway_failure_retains_inflight_and_leaves_unsent_resumable(sta
             return call
 
         outcomes = await runtime._run_bounded_call_tasks(
-            tuple(range(8)), execute, worker_limit=2,
+            tuple(range(8)),
+            execute,
+            worker_limit=2,
         )
         assert sent == [0, 1]
         assert outcomes[:2] == (failed, 1)
@@ -62,23 +66,29 @@ def test_shared_gateway_failure_retains_inflight_and_leaves_unsent_resumable(sta
         # Explicit later recovery may send only the never-started calls. No
         # retry/timer is created by the scheduler and the successful leaf stays.
         assert await runtime._run_bounded_call_tasks(
-            tuple(range(2, 8)), execute, worker_limit=2,
+            tuple(range(2, 8)),
+            execute,
+            worker_limit=2,
         ) == tuple(range(2, 8))
         assert sent == list(range(8))
 
     asyncio.run(scenario())
 
 
-def test_recorded_field_validation_failure_does_not_pause_siblings():
-    sent = []
+def test_recorded_field_validation_failure_does_not_pause_siblings() -> None:
+    sent: list[int] = []
     failed = _recorded_failure(200)
 
-    async def execute(call):
+    async def execute(call: int) -> int | G3CallTerminalReceiptV1:
         sent.append(call)
         return failed if call == 0 else call
 
-    outcomes = asyncio.run(runtime._run_bounded_call_tasks(
-        tuple(range(4)), execute, worker_limit=2,
-    ))
+    outcomes = asyncio.run(
+        runtime._run_bounded_call_tasks(
+            tuple(range(4)),
+            execute,
+            worker_limit=2,
+        )
+    )
     assert sent == [0, 1, 2, 3]
     assert outcomes == (failed, 1, 2, 3)

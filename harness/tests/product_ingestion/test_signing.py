@@ -4,6 +4,7 @@ import base64
 import hashlib
 import importlib
 import json
+import typing
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -14,7 +15,7 @@ from pydantic import SecretStr
 from insurance_harness.product_ingestion.models import ProductScope
 
 
-def module():
+def module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.signing")
     except ModuleNotFoundError:
@@ -22,7 +23,7 @@ def module():
 
 
 @pytest.fixture
-def signing():
+def signing() -> tuple[typing.Any, ...]:
     key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
     publish_key = Ed25519PrivateKey.from_private_bytes(bytes(range(1, 33)))
     scope = ProductScope(
@@ -62,7 +63,7 @@ def signing():
     return config, metadata, key, publish_key
 
 
-def test_system_signature_is_domain_separated_and_exact_replay_stable(signing):
+def test_system_signature_is_domain_separated_and_exact_replay_stable(signing: typing.Any) -> None:
     config, metadata, key, _ = signing
     raw = module().sign_system_decision(config, metadata, run_id="run")
     assert raw == module().sign_system_decision(config, metadata, run_id="run")
@@ -74,7 +75,7 @@ def test_system_signature_is_domain_separated_and_exact_replay_stable(signing):
     assert body["expected_activation_epoch"] == 9
 
 
-def test_signer_refuses_wrong_scope_and_expired_preparation(signing):
+def test_signer_refuses_wrong_scope_and_expired_preparation(signing: typing.Any) -> None:
     config, metadata, *_ = signing
     with pytest.raises(ValueError, match="scope"):
         module().sign_system_decision(config, {**metadata, "raw_kb_id": "other"}, run_id="run")
@@ -84,7 +85,7 @@ def test_signer_refuses_wrong_scope_and_expired_preparation(signing):
         )
 
 
-def test_publish_signature_binds_original_system_receipt_and_parent(signing):
+def test_publish_signature_binds_original_system_receipt_and_parent(signing: typing.Any) -> None:
     config, metadata, _, key = signing
     decision = module().sign_system_decision(config, metadata, run_id="run")
     raw = module().sign_publish_authorization(config, decision)

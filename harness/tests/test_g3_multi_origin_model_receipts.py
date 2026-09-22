@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from test_batch_entity_resolution_830_g3 import (
+from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as g
+from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import SchemaPackCatalogV1
+from tests.test_batch_entity_resolution_830_g3 import (
     _corpus,
     _entry,
     _existing,
@@ -9,14 +11,14 @@ from test_batch_entity_resolution_830_g3 import (
     _policy,
     _proposal_batch,
 )
-from test_batch_entity_resolution_830_g3 import (
-    catalog as _catalog_fixture,
+from tests.test_batch_entity_resolution_830_g3 import (
+    catalog as catalog,
 )
 
-from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as g
 
-
-def _two_origin_fixture():
+def _two_origin_fixture() -> tuple[
+    g.BatchCorpusV1, g.ProposalBatchV1, g.ModelReceiptBindingV1, g.ModelReceiptBindingV1
+]:
     first = _entry(
         material_id="origin-a",
         text=(
@@ -67,10 +69,10 @@ def _two_origin_fixture():
     return merged, proposals, first_receipt, second_receipt
 
 
-def test_resolver_accepts_two_verified_origin_receipt_hashes():
+def test_resolver_accepts_two_verified_origin_receipt_hashes(catalog: SchemaPackCatalogV1) -> None:
     corpus, proposals, first, second = _two_origin_fixture()
     resolution = g.resolve_batch(
-        catalog=_catalog_fixture.__wrapped__(),
+        catalog=catalog,
         corpus=corpus,
         proposals=proposals,
         existing_entities=_existing(),
@@ -86,7 +88,7 @@ def test_resolver_accepts_two_verified_origin_receipt_hashes():
     )
 
 
-def test_multi_origin_receipts_keep_their_original_corpus_input_hashes():
+def test_multi_origin_receipts_keep_their_original_corpus_input_hashes() -> None:
     corpus, proposals, first, second = _two_origin_fixture()
     entries = {entry.material_id: entry for entry in corpus.entries}
 
@@ -98,7 +100,7 @@ def test_multi_origin_receipts_keep_their_original_corpus_input_hashes():
     }
 
 
-def test_receipt_origin_groups_reject_overlapping_material_scope():
+def test_receipt_origin_groups_reject_overlapping_material_scope() -> None:
     corpus, proposals, first, second = _two_origin_fixture()
     overlap = second.model_copy(
         update={"material_bindings": first.material_bindings},
@@ -113,7 +115,7 @@ def test_receipt_origin_groups_reject_overlapping_material_scope():
     assert g._valid_model_receipt_requests(proposals, corpus, entries) == set()
 
 
-def test_single_origin_receipt_validation_is_unchanged():
+def test_single_origin_receipt_validation_is_unchanged() -> None:
     entry = _entry(
         material_id="single-origin",
         text="平安保险 平安安心医疗保险 产品代码 SINGLE 登记编号 REG-S 版本 2026 医疗保险 官方条款",
@@ -146,7 +148,7 @@ def test_single_origin_receipt_validation_is_unchanged():
     assert g._valid_model_receipt_requests(invalid_proposals, corpus, entries) == set()
 
 
-def test_single_origin_partial_receipt_keeps_full_corpus_binding():
+def test_single_origin_partial_receipt_keeps_full_corpus_binding() -> None:
     first = _entry(
         material_id="partial-a",
         text=(
@@ -172,7 +174,7 @@ def test_single_origin_partial_receipt_keeps_full_corpus_binding():
     }
 
 
-def test_origin_group_uses_all_call_material_bindings_for_its_corpus():
+def test_origin_group_uses_all_call_material_bindings_for_its_corpus() -> None:
     entries = tuple(
         _entry(
             material_id=f"group-{suffix}",

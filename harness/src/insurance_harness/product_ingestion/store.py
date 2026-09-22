@@ -6,6 +6,7 @@ import hashlib
 import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from sqlalchemy import and_, func, or_, select
@@ -55,6 +56,7 @@ from insurance_harness.product_ingestion.recovery import (
     RECOVERY_V3_PREFIX,
     ProcessingRecoveryPlan,
     RecordedIdentityRecoveryPlan,
+    RecordedIdentityReference,
     SealedSourceRecoveryPlan,
     SourceSnapshotReference,
     material_references,
@@ -77,6 +79,9 @@ from insurance_harness.product_ingestion.upload_admission import (
 )
 from insurance_harness.product_ingestion.upload_manifest import UploadManifest
 from insurance_harness.service_shell.worker import HandlerResult
+
+if TYPE_CHECKING:
+    from insurance_harness.product_ingestion.field_validation import FieldValidationReport
 
 SessionFactory = Callable[[], Session]
 _CACHEABLE = (FieldOutcomeKind.VERIFIED.value, FieldOutcomeKind.NOT_PROVIDED.value)
@@ -215,7 +220,12 @@ class ProductIngestionStore(CheckpointStore):
             ).all()
             return tuple(self._run_snapshot(session, row, scope) for row in rows)
 
-    def list_status_summaries(self, *, scope: ProductScope, limit: int = 30) -> tuple[dict, ...]:
+    def list_status_summaries(
+        self,
+        *,
+        scope: ProductScope,
+        limit: int = 30,
+    ) -> tuple[dict[str, Any], ...]:
         """Read the displayed run heads without opening field, source or model audits."""
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
@@ -363,10 +373,13 @@ class ProductIngestionStore(CheckpointStore):
             rows = session.execute(
                 statement.order_by(ProductRun.created_at, ProductRun.id).limit(limit)
             ).all()
-            return tuple(
-                ProductRunScanEntry(run_id=run_id, created_at=_aware(created_at))
-                for run_id, created_at in rows
-            )
+            result: list[ProductRunScanEntry] = []
+            for run_id, created_at in rows:
+                aware_created = _aware(created_at)
+                if aware_created is None:
+                    raise ValueError("run scan row has no creation time")
+                result.append(ProductRunScanEntry(run_id=run_id, created_at=aware_created))
+            return tuple(result)
 
     def attach_original(
         self,
@@ -591,13 +604,14 @@ class ProductIngestionStore(CheckpointStore):
         with self._session_factory() as session:
             self._run(session, scope, run_id)
             starts = {
-                key: _aware(created)
+                key: aware_created
                 for key, created in session.execute(
                     select(ProductStage.stage_key, ProductStage.created_at).where(
                         ProductStage.run_id == run_id,
                         ProductStage.space_id == scope.space_id,
                     )
                 )
+                if (aware_created := _aware(created)) is not None
             }
             for key, created in session.execute(
                 select(ProductWindow.stage_key, func.min(ProductWindow.created_at))
@@ -617,7 +631,7 @@ class ProductIngestionStore(CheckpointStore):
         with self._session_factory() as session:
             self._run(session, scope, run_id)
             starts = {
-                key: _aware(started)
+                key: aware_started
                 for key, started in session.execute(
                     select(ProductStage.stage_key, WikiJob.started_at)
                     .join(WikiJob, WikiJob.id == ProductStage.job_id)
@@ -627,6 +641,7 @@ class ProductIngestionStore(CheckpointStore):
                         WikiJob.started_at.is_not(None),
                     )
                 )
+                if (aware_started := _aware(started)) is not None
             }
             for key, started in session.execute(
                 select(ProductWindow.stage_key, func.max(WikiJob.started_at))
@@ -679,7 +694,11 @@ class ProductIngestionStore(CheckpointStore):
                     )
                 )
                 aggregate = stages.get(key)
-                starts = [_aware(job.started_at) for _window, job in group if job.started_at]
+                starts = [
+                    started_value
+                    for _window, job in group
+                    if (started_value := _aware(job.started_at)) is not None
+                ]
                 if aggregate and aggregate.started_at:
                     starts.append(aggregate.started_at)
                 failures = [
@@ -689,11 +708,17 @@ class ProductIngestionStore(CheckpointStore):
                 state = aggregate.state if aggregate else ("running" if starts else "queued")
                 if failures and all(job.finished_at for _window, job in group):
                     state = "failed"
-                    finished = max(_aware(job.finished_at) for _window, job in group)
+                    finished_values = [
+                        finished_value
+                        for _window, job in group
+                        if (finished_value := _aware(job.finished_at)) is not None
+                    ]
+                    finished = max(finished_values)
                 usage: dict[str, int] = {}
                 for settlement in settlements:
-                    for usage_key, value in settlement.usage.items():
-                        usage[usage_key] = usage.get(usage_key, 0) + value
+                    for usage_key, usage_value in settlement.usage.items():
+                        usage[usage_key] = usage.get(usage_key, 0) + usage_value
+                started_at = min(starts) if starts else None
                 stages[key] = StageSnapshot(
                     stage_id=aggregate.stage_id if aggregate else "window-phase:" + key,
                     run_id=run_id,
@@ -709,7 +734,7 @@ class ProductIngestionStore(CheckpointStore):
                     failure_count=sum(row.failure_count for row in settlements),
                     model_call_count=dispatched or 0,
                     usage=usage,
-                    started_at=min(starts) if starts else None,
+                    started_at=started_at,
                     finished_at=finished,
                 )
         order = (
@@ -1414,7 +1439,11 @@ class ProductIngestionStore(CheckpointStore):
         effective = apply_field_validation(originals, report) if report is not None else originals
         return tuple(row for row in effective if field_keys is None or row.field_key in field_keys)
 
-    def _field_validation_report(self, scope, run_id):
+    def _field_validation_report(
+        self,
+        scope: ProductScope,
+        run_id: str,
+    ) -> FieldValidationReport | None:
         from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
         from insurance_harness.product_ingestion.field_validation import FieldValidationReport
 
@@ -1453,6 +1482,8 @@ class ProductIngestionStore(CheckpointStore):
             result = [self._field_snapshot(row) for row in rows]
             refs, receipt = self.checkpoint_field_references(session, scope, run_id)
             if refs:
+                if receipt is None:
+                    raise ValueError("checkpoint field receipt is missing")
                 from insurance_harness.product_ingestion.checkpoints import field_digest
 
                 for ref in refs:
@@ -1477,7 +1508,14 @@ class ProductIngestionStore(CheckpointStore):
         with self._session_factory() as session:
             return self._lookup_cache(session, scope, identities)
 
-    def _can_retry_processing(self, session, scope, row, *, verify_sources=True) -> bool:
+    def _can_retry_processing(
+        self,
+        session: Session,
+        scope: ProductScope,
+        row: ProductRun,
+        *,
+        verify_sources: bool = True,
+    ) -> bool:
         run = self._run_snapshot(session, row, scope)
         title_retry = (
             run.state is ProductRunState.NEEDS_CONFIRMATION
@@ -1612,7 +1650,11 @@ class ProductIngestionStore(CheckpointStore):
         return True
 
     @staticmethod
-    def _undispatched_failed_windows(session, scope, run_id):
+    def _undispatched_failed_windows(
+        session: Session,
+        scope: ProductScope,
+        run_id: str,
+    ) -> bool:
         """Only abandon wholly unstarted field work; never replay uncertain calls."""
         windows = session.execute(
             select(
@@ -1689,10 +1731,18 @@ class ProductIngestionStore(CheckpointStore):
             for row in calls
         )
 
-    def _recorded_identity_ref(self, session, scope, run, *, read_lock=False, verify_sources=True):
+    def _recorded_identity_ref(
+        self,
+        session: Session,
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        *,
+        read_lock: bool = False,
+        verify_sources: bool = True,
+    ) -> RecordedIdentityReference | None:
         """Resolve only an intact recorded call through verified recovery ancestry."""
         seen = set()
-        expected_refs = []
+        expected_refs: list[RecordedIdentityReference] = []
         try:
             while run.run_id not in seen:
                 seen.add(run.run_id)
@@ -1751,7 +1801,14 @@ class ProductIngestionStore(CheckpointStore):
         return None
 
     @staticmethod
-    def _recovery_source_refs(session, scope, run, *, read_lock=False, verify_payloads=True):
+    def _recovery_source_refs(
+        session: Session,
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        *,
+        read_lock: bool = False,
+        verify_payloads: bool = True,
+    ) -> tuple[SourceSnapshotReference, ...] | None:
         columns = (
             (ProductArtifact,)
             if verify_payloads
@@ -1796,8 +1853,13 @@ class ProductIngestionStore(CheckpointStore):
             )
 
     def processing_recovery_plan(
-        self, *, scope: ProductScope, run_id: str, session=None, read_lock=False
-    ):
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        session: Session | None = None,
+        read_lock: bool = False,
+    ) -> ProcessingRecoveryPlan | SealedSourceRecoveryPlan | RecordedIdentityRecoveryPlan | None:
         if session is None:
             with self._session_factory() as owned_session:
                 return self.processing_recovery_plan(
@@ -1838,7 +1900,7 @@ class ProductIngestionStore(CheckpointStore):
             or row.idempotency_key != prefix + plan.digest()
             or plan.materials != material_references(run)
             or (
-                (v2 or v3)
+                isinstance(plan, (SealedSourceRecoveryPlan, RecordedIdentityRecoveryPlan))
                 and tuple(r.knowledge_id for r in plan.source_snapshots)
                 != tuple(m.knowledge_id for m in plan.materials)
             )
@@ -1846,7 +1908,13 @@ class ProductIngestionStore(CheckpointStore):
             raise ValueError("processing recovery plan binding changed")
         return plan
 
-    def _legacy_retry_processing(self, *, scope: ProductScope, run_id: str, expected_version: int):
+    def _legacy_retry_processing(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        expected_version: int,
+    ) -> ProductRunSnapshot:
         if type(expected_version) is not int or expected_version <= 0:
             raise ValueError("expected_version must be a positive integer")
         with self._session_factory() as session, session.begin():
@@ -1872,28 +1940,45 @@ class ProductIngestionStore(CheckpointStore):
                 "PRODUCT_STAGE_FAILED:extract",
                 "FIELD_WINDOW_TERMINAL_RESULTS_INCOMPLETE",
             }
-            plan_type = (
-                RecordedIdentityRecoveryPlan
-                if identity_retry
-                else SealedSourceRecoveryPlan
-                if title_retry
-                else ProcessingRecoveryPlan
-            )
-            extra = (
-                {"source_snapshots": self._recovery_source_refs(session, scope, origin_run)}
-                if title_retry or identity_retry
-                else {}
-            )
             if identity_retry:
-                extra["identity_call"] = self._recorded_identity_ref(session, scope, origin_run)
-            plan = plan_type(
-                scope=scope,
-                origin_run_id=run_id,
-                origin_version=expected_version,
-                upload_run_id=upload_origin.id,
-                materials=material_references(origin_run),
-                **extra,
-            )
+                source_refs = self._recovery_source_refs(session, scope, origin_run)
+                identity_ref = self._recorded_identity_ref(session, scope, origin_run)
+                if source_refs is None or identity_ref is None:
+                    raise ValueError("identity recovery inputs are unavailable")
+                plan: (
+                    ProcessingRecoveryPlan
+                    | SealedSourceRecoveryPlan
+                    | RecordedIdentityRecoveryPlan
+                )
+                plan = RecordedIdentityRecoveryPlan(
+                    scope=scope,
+                    origin_run_id=run_id,
+                    origin_version=expected_version,
+                    upload_run_id=upload_origin.id,
+                    materials=material_references(origin_run),
+                    source_snapshots=source_refs,
+                    identity_call=identity_ref,
+                )
+            elif title_retry:
+                source_refs = self._recovery_source_refs(session, scope, origin_run)
+                if source_refs is None:
+                    raise ValueError("sealed source recovery inputs are unavailable")
+                plan = SealedSourceRecoveryPlan(
+                    scope=scope,
+                    origin_run_id=run_id,
+                    origin_version=expected_version,
+                    upload_run_id=upload_origin.id,
+                    materials=material_references(origin_run),
+                    source_snapshots=source_refs,
+                )
+            else:
+                plan = ProcessingRecoveryPlan(
+                    scope=scope,
+                    origin_run_id=run_id,
+                    origin_version=expected_version,
+                    upload_run_id=upload_origin.id,
+                    materials=material_references(origin_run),
+                )
             prefix = (
                 RECOVERY_V3_PREFIX
                 if identity_retry
@@ -1919,7 +2004,11 @@ class ProductIngestionStore(CheckpointStore):
             dependency = hashlib.sha256(("product-uploads.v1\0" + child_id).encode()).hexdigest()
             job_id = str(uuid5(NAMESPACE_URL, f"product-stage-job:{stage_id}:{dependency}"))
             now = database_now(session)
-            duration = _aware(origin.source_deadline_at) - _aware(origin.upload_deadline_at)
+            aware_source_deadline = _aware(origin.source_deadline_at)
+            aware_upload_deadline = _aware(origin.upload_deadline_at)
+            if aware_source_deadline is None or aware_upload_deadline is None:
+                raise ValueError("recovery origin deadlines are incomplete")
+            duration = aware_source_deadline - aware_upload_deadline
             if duration <= timedelta(0):
                 duration = timedelta(hours=1)
             values = {
@@ -2368,20 +2457,26 @@ class ProductIngestionStore(CheckpointStore):
                         state = ProductRunState.FAILED
                         terminal_reason = summary
         created_at = _aware(row.created_at)
-        assert created_at is not None
+        upload_deadline_at = _aware(row.upload_deadline_at)
+        source_deadline_at = _aware(row.source_deadline_at)
+        if created_at is None or upload_deadline_at is None or source_deadline_at is None:
+            raise ValueError("run timestamps are incomplete")
+        if row.workflow_version not in {1, 2, 3}:
+            raise ValueError("unsupported product workflow version")
+        workflow_version = cast(Literal[1, 2, 3], row.workflow_version)
         return ProductRunSnapshot(
             run_id=row.id,
             scope=scope,
             state=state,
             version=row.version,
-            workflow_version=row.workflow_version,
+            workflow_version=workflow_version,
             retry_of_run_id=row.retry_of_run_id,
             attempt=row.attempt,
             retry_field_keys=tuple(row.retry_field_keys),
             expected_upload_count=row.expected_upload_count,
-            upload_deadline_at=_aware(row.upload_deadline_at),
+            upload_deadline_at=upload_deadline_at,
             uploads_sealed_at=_aware(row.uploads_sealed_at),
-            source_deadline_at=_aware(row.source_deadline_at),
+            source_deadline_at=source_deadline_at,
             materials=material_snapshots,
             success_count=success,
             missing_count=missing,
@@ -2398,15 +2493,25 @@ class ProductIngestionStore(CheckpointStore):
     def _material_snapshot(row: ProductMaterial) -> MaterialSnapshot:
         source = None
         if row.source_revision_id is not None:
+            sealed_values = (
+                row.source_sha256,
+                row.file_sha256,
+                row.native_manifest_sha256,
+                row.page_count,
+                row.inferred_material_role,
+                row.product_identity_sha256,
+            )
+            if any(value is None for value in sealed_values):
+                raise ValueError("sealed material metadata is incomplete")
             source = SealedSourceRef(
                 knowledge_id=row.knowledge_id,
                 source_revision_id=row.source_revision_id,
-                source_sha256=row.source_sha256,
-                file_sha256=row.file_sha256,
-                native_manifest_sha256=row.native_manifest_sha256,
-                page_count=row.page_count,
-                inferred_material_role=row.inferred_material_role,
-                product_identity_sha256=row.product_identity_sha256,
+                source_sha256=cast(str, row.source_sha256),
+                file_sha256=cast(str, row.file_sha256),
+                native_manifest_sha256=cast(str, row.native_manifest_sha256),
+                page_count=cast(int, row.page_count),
+                inferred_material_role=cast(str, row.inferred_material_role),
+                product_identity_sha256=cast(str, row.product_identity_sha256),
             )
         return MaterialSnapshot(
             material_id=row.id,
@@ -2467,6 +2572,9 @@ class ProductIngestionStore(CheckpointStore):
 
     @staticmethod
     def _call_snapshot(row: ProductModelCall) -> CallSnapshot:
+        reserved_at = _aware(row.reserved_at)
+        if reserved_at is None:
+            raise ValueError("model call reservation time is missing")
         return CallSnapshot(
             call_id=row.call_id,
             run_id=row.run_id,
@@ -2480,15 +2588,20 @@ class ProductIngestionStore(CheckpointStore):
             raw_sha256=row.raw_sha256,
             raw_ref=row.raw_ref,
             diagnostic=row.diagnostic,
-            reserved_at=_aware(row.reserved_at),
+            reserved_at=reserved_at,
             dispatched_at=_aware(row.dispatched_at),
             recorded_at=_aware(row.recorded_at),
-            selected_field_keys=tuple(tuple(item) for item in row.selected_field_keys),
+            selected_field_keys=tuple(
+                cast(tuple[str, str], tuple(item)) for item in row.selected_field_keys
+            ),
             cached_attempt_ids=tuple(row.cached_attempt_ids),
         )
 
     @staticmethod
     def _field_snapshot(row: ProductFieldAttempt) -> FieldAttemptSnapshot:
+        created_at = _aware(row.created_at)
+        if created_at is None:
+            raise ValueError("field attempt creation time is missing")
         return FieldAttemptSnapshot(
             attempt_id=row.id,
             run_id=row.run_id,
@@ -2506,7 +2619,7 @@ class ProductIngestionStore(CheckpointStore):
             validated_result=row.validated_result,
             raw_ref=row.raw_ref,
             attempt=row.attempt,
-            created_at=_aware(row.created_at),
+            created_at=created_at,
             reused_from_attempt_id=row.reused_from_attempt_id,
         )
 
@@ -2572,6 +2685,8 @@ class ProductIngestionStore(CheckpointStore):
         ).all()
         counts = {name: int(count) for name, count in rows}
         row = session.get(ProductRun, run_id)
+        if row is None:
+            raise SpaceScopeError("product run is unavailable")
         scope = ProductScope(
             tenant_id=row.tenant_id,
             space_id=row.space_id,
@@ -2588,13 +2703,10 @@ class ProductIngestionStore(CheckpointStore):
             effective = apply_field_validation(
                 self.list_original_field_attempts(scope=scope, run_id=run_id), report
             )
-            return tuple(
-                sum(item.outcome is kind for item in effective)
-                for kind in (
-                    FieldOutcomeKind.VERIFIED,
-                    FieldOutcomeKind.NOT_PROVIDED,
-                    FieldOutcomeKind.EXTRACTION_FAILED,
-                )
+            return (
+                sum(item.outcome is FieldOutcomeKind.VERIFIED for item in effective),
+                sum(item.outcome is FieldOutcomeKind.NOT_PROVIDED for item in effective),
+                sum(item.outcome is FieldOutcomeKind.EXTRACTION_FAILED for item in effective),
             )
         for ref in refs:
             counts[ref.outcome] = counts.get(ref.outcome, 0) + 1

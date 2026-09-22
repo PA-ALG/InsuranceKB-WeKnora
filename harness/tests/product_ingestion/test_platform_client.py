@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import importlib
 import json
+import typing
 from datetime import UTC, datetime
 
 import httpx
@@ -11,14 +12,14 @@ from insurance_harness.jobs import NonRetryableJobError, RetryableJobError
 from insurance_harness.product_ingestion.models import ProductScope
 
 
-def test_large_candidate_transfer_uses_existing_scoped_preparation_endpoint():
+def test_large_candidate_transfer_uses_existing_scoped_preparation_endpoint() -> None:
     from tests.product_ingestion.test_candidate_transfer import example, wire
 
     candidate, base = example()
     candidate["raw_response"] = "原始响应" * 800_000
     seen = []
 
-    def respond(request):
+    def respond(request: typing.Any) -> typing.Any:
         seen.append(request)
         return httpx.Response(
             201,
@@ -42,14 +43,14 @@ def test_large_candidate_transfer_uses_existing_scoped_preparation_endpoint():
     assert len(seen[0].content) < 8 << 20
 
 
-def module():
+def module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.platform_client")
     except ModuleNotFoundError:
         pytest.fail("scoped platform REST client is not implemented")
 
 
-def client(transport, max_bytes=4096):
+def client(transport: typing.Any, max_bytes: typing.Any = 4096) -> tuple[typing.Any, ...]:
     scope = ProductScope(
         tenant_id="1", space_id="space", raw_knowledge_base_id="raw", wiki_knowledge_base_id="wiki"
     )
@@ -63,10 +64,10 @@ def client(transport, max_bytes=4096):
     ), scope
 
 
-def test_upload_lookup_uses_fixed_scope_key_and_validates_binding():
+def test_upload_lookup_uses_fixed_scope_key_and_validates_binding() -> None:
     seen = []
 
-    def respond(request):
+    def respond(request: typing.Any) -> typing.Any:
         seen.append(request)
         return httpx.Response(
             200,
@@ -97,12 +98,12 @@ def test_upload_lookup_uses_fixed_scope_key_and_validates_binding():
     assert len(seen) == 1
 
 
-def test_bound_reparse_get_then_post_uses_one_stable_key_and_expected_attempt():
+def test_bound_reparse_get_then_post_uses_one_stable_key_and_expected_attempt() -> None:
     seen = []
     key = "a" * 64
     deadline = datetime(2026, 9, 16, 12, 0, tzinfo=UTC)
 
-    def respond(request):
+    def respond(request: typing.Any) -> typing.Any:
         seen.append(request)
         if request.method == "GET":
             return httpx.Response(404, json={"success": False})
@@ -140,10 +141,10 @@ def test_bound_reparse_get_then_post_uses_one_stable_key_and_expected_attempt():
 
 
 @pytest.mark.parametrize("status", [302, 503, 403])
-def test_no_redirect_or_automatic_retry_and_sanitized_errors(status):
+def test_no_redirect_or_automatic_retry_and_sanitized_errors(status: typing.Any) -> None:
     seen = []
 
-    def respond(request):
+    def respond(request: typing.Any) -> typing.Any:
         seen.append(request)
         return httpx.Response(
             status, text="fixture-secret private source", headers={"location": "http://other"}
@@ -157,7 +158,7 @@ def test_no_redirect_or_automatic_retry_and_sanitized_errors(status):
     assert len(seen) == 1
 
 
-def test_missing_upload_is_pending_but_oversized_or_duplicate_response_is_rejected():
+def test_missing_upload_is_pending_but_oversized_or_duplicate_response_is_rejected() -> None:
     api, scope = client(lambda _: httpx.Response(404, json={"success": False}))
     assert asyncio.run(api.lookup_upload(scope, "run", 0)) is None
     for response in (b'{"success":true,"success":false,"data":{}}', b"x" * 5000):
@@ -166,7 +167,7 @@ def test_missing_upload_is_pending_but_oversized_or_duplicate_response_is_reject
             asyncio.run(api.lookup_upload(scope, "run", 0))
 
 
-def test_mismatched_upload_binding_is_not_accepted():
+def test_mismatched_upload_binding_is_not_accepted() -> None:
     api, scope = client(
         lambda _: httpx.Response(
             200,
@@ -184,10 +185,10 @@ def test_mismatched_upload_binding_is_not_accepted():
         asyncio.run(api.lookup_upload(scope, "run", 0))
 
 
-def test_release_methods_preserve_signed_bytes_and_bound_preparation_scope():
+def test_release_methods_preserve_signed_bytes_and_bound_preparation_scope() -> None:
     seen = []
 
-    def respond(request):
+    def respond(request: typing.Any) -> typing.Any:
         seen.append(request)
         if request.url.path.endswith("/activate"):
             auth = json.loads(request.content)["authorization"]
@@ -243,7 +244,7 @@ def test_release_methods_preserve_signed_bytes_and_bound_preparation_scope():
     assert len(seen) == 3
 
 
-def test_release_preparation_response_scope_mismatch_is_refused():
+def test_release_preparation_response_scope_mismatch_is_refused() -> None:
     api, scope = client(
         lambda _: httpx.Response(
             200,
@@ -265,7 +266,7 @@ def test_release_preparation_response_scope_mismatch_is_refused():
         asyncio.run(api.create_preparation(scope, "prep", json.dumps({"fixture": True}).encode()))
 
 
-def test_list_read_requires_explicit_expected_type():
+def test_list_read_requires_explicit_expected_type() -> None:
     api, scope = client(lambda _: httpx.Response(200, json={"success": True, "data": []}))
     assert "expected_data_type" in __import__("inspect").signature(api._request).parameters
     assert (
@@ -278,7 +279,7 @@ def test_list_read_requires_explicit_expected_type():
         asyncio.run(api._request(scope, "GET", "/current"))
 
 
-def test_activation_receipt_is_explicitly_bound():
+def test_activation_receipt_is_explicitly_bound() -> None:
     api, scope = client(
         lambda _: httpx.Response(
             200,
@@ -303,15 +304,19 @@ def test_activation_receipt_is_explicitly_bound():
         asyncio.run(api.activate(scope, b"{}", auth))
 
 
-def test_transport_failure_records_exception_kind_without_request_secrets(caplog):
+def test_transport_failure_records_exception_kind_without_request_secrets(
+    caplog: typing.Any,
+) -> None:
     import logging
 
-    def timeout(request):
+    def timeout(request: typing.Any) -> None:
         raise httpx.ReadTimeout("secret provider details", request=request)
 
     api, scope = client(timeout)
-    with caplog.at_level(logging.WARNING), pytest.raises(RetryableJobError,
-                                                        match="PLATFORM_TRANSPORT_UNAVAILABLE"):
+    with (
+        caplog.at_level(logging.WARNING),
+        pytest.raises(RetryableJobError, match="PLATFORM_TRANSPORT_UNAVAILABLE"),
+    ):
         asyncio.run(api.current(scope))
     records = [r for r in caplog.records if getattr(r, "event", "") == "platform_transport_error"]
     assert records and records[0].error_type == "ReadTimeout"

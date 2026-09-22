@@ -3,21 +3,28 @@ import copy
 import gzip
 import hashlib
 import json
+import typing
 
 import pytest
 
 
-def wire(value):
+def wire(value: typing.Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
-def example():
+def example() -> tuple[typing.Any, ...]:
     source = {
         "text": "历史原文e\u0301\r\n<>&\u2028，证据",
         "revision_id": "rev",
         "block_id": "block",
     }
-    field = {"value": None, "evidence": [], "concept_ids": [], "conditions": [], "exceptions": []}
+    field: dict[str, typing.Any] = {
+        "value": None,
+        "evidence": [],
+        "concept_ids": [],
+        "conditions": [],
+        "exceptions": [],
+    }
     base = {
         "scope": {"tenant_id": 1, "space_id": "space", "raw_kb_id": "raw", "wiki_kb_id": "wiki"},
         "release_id": "release",
@@ -46,13 +53,13 @@ def example():
     return candidate, base
 
 
-def encoder():
+def encoder() -> typing.Any:
     from insurance_harness.product_ingestion.candidate_transfer import encode_candidate_transfer
 
     return encode_candidate_transfer
 
 
-def decode_transfer_fixture(transfer, base):
+def decode_transfer_fixture(transfer: typing.Any, base: typing.Any) -> typing.Any:
     """Test receiver only; production receiving authority is Go."""
     from insurance_harness.product_ingestion.candidate_transfer import SLOTS
     from insurance_harness.product_ingestion.compilation import published_compile_members
@@ -68,9 +75,14 @@ def decode_transfer_fixture(transfer, base):
         for part in parents:
             parent = parent[part]
         projection = base["published_projection"]
-        rows = (
-            projection[kind] if kind == "sources" else published_compile_members(projection, kind)
-        )
+        if kind == "sources":
+            rows = projection[kind]
+        elif kind == "definitions":
+            rows = published_compile_members(projection, "definitions")
+        elif kind == "fields":
+            rows = published_compile_members(projection, "fields")
+        else:
+            rows = published_compile_members(projection, "pages")
         parent[key] = [
             item["inline"] if "inline" in item else rows[item["base_index"]]
             for item in delta["members"][slot]
@@ -79,7 +91,7 @@ def decode_transfer_fixture(transfer, base):
     return candidate
 
 
-def test_reference_transfer_keeps_delta_and_response_without_mutating_inputs():
+def test_reference_transfer_keeps_delta_and_response_without_mutating_inputs() -> None:
     candidate, base = example()
     before = wire((candidate, base))
     transfer = json.loads(encoder()(wire(candidate), base))
@@ -96,14 +108,14 @@ def test_reference_transfer_keeps_delta_and_response_without_mutating_inputs():
     assert wire((candidate, base)) == before
 
 
-def test_large_original_candidate_uses_bounded_delta_encoding():
+def test_large_original_candidate_uses_bounded_delta_encoding() -> None:
     candidate, base = example()
     candidate["raw_response"] = "重复原响应" * 600_000
     assert len(wire(candidate)) > 8 * 1024 * 1024
     assert len(encoder()(wire(candidate), base)) < 8 * 1024 * 1024
 
 
-def test_null_collection_compatibility_does_not_normalize_scalar_values():
+def test_null_collection_compatibility_does_not_normalize_scalar_values() -> None:
     candidate, base = example()
     base["published_projection"]["fields"][0]["evidence"] = None
     # The candidate is independent of the original projection in production.
@@ -119,13 +131,13 @@ def test_null_collection_compatibility_does_not_normalize_scalar_values():
     assert "inline" in packed["members"]["existing_fields"][0]
 
 
-def test_duplicate_json_is_not_sanitized_by_encoder():
+def test_duplicate_json_is_not_sanitized_by_encoder() -> None:
     _, base = example()
     with pytest.raises(ValueError):
         encoder()(b'{"request":{},"request":{}}', base)
 
 
-def test_transport_preserves_legal_decomposed_unicode_and_line_separators():
+def test_transport_preserves_legal_decomposed_unicode_and_line_separators() -> None:
     candidate, base = example()
     exact = "e\u0301\r\n<>&\u2028"
     candidate["request"]["base_request"]["sources"][0]["text"] = exact

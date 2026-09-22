@@ -4,9 +4,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import typing
+from pathlib import Path
 
 import httpx
 import pytest
+from sqlalchemy.orm import ORMExecuteState
 
 from insurance_harness.jobs import ClaimedJob, ErrorClass, JobFailure, JobState
 from insurance_harness.product_ingestion import tables
@@ -32,7 +35,7 @@ CONTENT = json.dumps(
 
 
 @pytest.fixture
-def legacy_stage_runtime(stage_runtime, monkeypatch):
+def legacy_stage_runtime(stage_runtime: typing.Any, monkeypatch: typing.Any) -> typing.Any:
     """Historical V3 admission only, to exercise stored-plan replay compatibility."""
     store = stage_runtime[1]
     monkeypatch.setattr(store, "can_retry_processing", store._legacy_can_retry_processing)
@@ -40,7 +43,7 @@ def legacy_stage_runtime(stage_runtime, monkeypatch):
     return stage_runtime
 
 
-def start_identity(store, scope, run):
+def start_identity(store: typing.Any, scope: typing.Any, run: typing.Any) -> typing.Any:
     stage = store.enqueue_stage(
         scope=scope,
         run_id=run.run_id,
@@ -55,7 +58,13 @@ def start_identity(store, scope, run):
     )
 
 
-def call_args(artifacts, scope, run, job, content=CONTENT):
+def call_args(
+    artifacts: typing.Any,
+    scope: typing.Any,
+    run: typing.Any,
+    job: typing.Any,
+    content: typing.Any = CONTENT,
+) -> typing.Any:
     return dict(
         store=artifacts,
         scope=scope,
@@ -72,7 +81,7 @@ def call_args(artifacts, scope, run, job, content=CONTENT):
 
 
 @pytest.fixture
-def recorded_origin(stage_runtime):
+def recorded_origin(stage_runtime: typing.Any) -> typing.Any:
     scope, store, artifacts, platform, execute = stage_runtime
     run = store.create_run(scope=scope, idempotency_key="recorded-failure", expected_upload_count=3)
     for _ in range(3):
@@ -81,7 +90,7 @@ def recorded_origin(stage_runtime):
     settings = configured(scope)
     sent = []
 
-    def respond(request):
+    def respond(request: typing.Any) -> typing.Any:
         sent.append(request)
         return httpx.Response(
             200,
@@ -106,12 +115,13 @@ def recorded_origin(stage_runtime):
         session.get(tables.ProductRun, run.run_id).root_job_id = job.id
     origin = store.get_run(scope=scope, run_id=run.run_id)
     yield origin, original, boundary, settings, sent
+    assert boundary._client is not None
     asyncio.run(boundary._client.aclose())
 
 
 def test_legacy_recorded_identity_recovery_replays_original_receipts_and_provenance(
-    legacy_stage_runtime, recorded_origin
-):
+    legacy_stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin, original, boundary, _, sent = recorded_origin
@@ -170,8 +180,8 @@ def test_legacy_recorded_identity_recovery_replays_original_receipts_and_provena
     "drift", ["original_raw", "original_source", "parent_source", "cycle", "new_call"]
 )
 def test_legacy_failed_replay_recovery_rejects_ancestor_drift(
-    legacy_stage_runtime, recorded_origin, drift
-):
+    legacy_stage_runtime: typing.Any, recorded_origin: typing.Any, drift: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     from sqlalchemy import select
 
@@ -250,8 +260,8 @@ def test_legacy_failed_replay_recovery_rejects_ancestor_drift(
     "change", ["input", "base", "prompt", "policy", "raw", "source", "scope", "lease"]
 )
 def test_legacy_recorded_identity_replay_drift_never_redispatches(
-    legacy_stage_runtime, recorded_origin, change
-):
+    legacy_stage_runtime: typing.Any, recorded_origin: typing.Any, change: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     from sqlalchemy import select
 
@@ -320,8 +330,8 @@ def test_legacy_recorded_identity_replay_drift_never_redispatches(
 
 
 def test_legacy_recorded_replay_checkpoint_is_stable_and_same_run_model_origin_stays_strict(
-    legacy_stage_runtime, recorded_origin
-):
+    legacy_stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, artifacts, _, execute = stage_runtime
     origin, original, boundary, _, sent = recorded_origin
@@ -370,8 +380,8 @@ def test_legacy_recorded_replay_checkpoint_is_stable_and_same_run_model_origin_s
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failed_stage", ["identity", "field_plan"])
 async def test_legacy_v3_real_worker_reaches_publication_without_classify_resend(
-    tmp_path, monkeypatch, failed_stage
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed_stage: typing.Any
+) -> None:
     from insurance_harness.db.base import Base, make_session_factory
     from insurance_harness.jobs import JobStore
     from insurance_harness.knowledge_compiler import g3_bounded_model_execution as semantic_adapter
@@ -395,7 +405,7 @@ async def test_legacy_v3_real_worker_reaches_publication_without_classify_resend
     jobs = JobStore(factory, settings.job_runtime_config())
     platform, model = FixturePlatform(base), FixtureModel()
 
-    def projection_failure(**kwargs):
+    def projection_failure(**kwargs: object) -> None:
         raise ValueError("wrong-purpose identity evidence")
 
     with monkeypatch.context() as patch:
@@ -405,7 +415,7 @@ async def test_legacy_v3_real_worker_reaches_publication_without_classify_resend
             from insurance_harness.product_ingestion import pipeline
             from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
 
-            def plan_failure(*args, **kwargs):
+            def plan_failure(*args: object, **kwargs: object) -> None:
                 raise ModelPolicyDenied("configured model context capacity exceeded")
 
             patch.setattr(pipeline, "build_field_windows", plan_failure)
@@ -429,7 +439,9 @@ async def test_legacy_v3_real_worker_reaches_publication_without_classify_resend
         from insurance_harness.jobs.tables import WikiJob
 
         with factory() as session:
-            assert session.get(WikiJob, stage.job_id).attempt == 1
+            job = session.get(WikiJob, stage.job_id)
+            assert job is not None
+            assert job.attempt == 1
     assert len(model.identity_requests) == 1 and not model.field_requests
     # Fixture-only construction of an existing V3 recovery record.
     child = context.store._legacy_retry_processing(
@@ -456,8 +468,8 @@ async def test_legacy_v3_real_worker_reaches_publication_without_classify_resend
     "change", ["diagnostic", "interrupted", "second_call", "reason", "source_missing"]
 )
 def test_legacy_recorded_identity_recovery_admission_is_narrow(
-    legacy_stage_runtime, recorded_origin, change
-):
+    legacy_stage_runtime: typing.Any, recorded_origin: typing.Any, change: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     from sqlalchemy import select
 
@@ -504,7 +516,7 @@ def test_legacy_recorded_identity_recovery_admission_is_narrow(
     assert len(sent) == 1
 
 
-def test_source_recovery_v2_wire_bytes_are_unchanged():
+def test_source_recovery_v2_wire_bytes_are_unchanged() -> None:
     from insurance_harness.product_ingestion.recovery import SealedSourceRecoveryPlan
 
     raw = (
@@ -521,8 +533,8 @@ def test_source_recovery_v2_wire_bytes_are_unchanged():
 
 @pytest.mark.parametrize("checkpoint_recorded", [False, True])
 def test_legacy_failed_replay_can_recover_again_without_reclassifying(
-    legacy_stage_runtime, recorded_origin, checkpoint_recorded
-):
+    legacy_stage_runtime: typing.Any, recorded_origin: typing.Any, checkpoint_recorded: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     scope, store, artifacts, platform, execute = stage_runtime
     origin, original, boundary, _, sent = recorded_origin
@@ -572,8 +584,8 @@ def test_legacy_failed_replay_can_recover_again_without_reclassifying(
 
 
 def test_legacy_recovery_button_check_does_not_load_source_payloads(
-    legacy_stage_runtime, recorded_origin
-):
+    legacy_stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     stage_runtime = legacy_stage_runtime
     from sqlalchemy import event
 
@@ -581,10 +593,10 @@ def test_legacy_recovery_button_check_does_not_load_source_payloads(
     origin = recorded_origin[0]
     inspected = []
 
-    def check_select(state):
+    def check_select(state: ORMExecuteState) -> None:
         if not state.is_select:
             return
-        statement = state.statement
+        statement = typing.cast(typing.Any, state.statement)
         if "source_snapshot" in statement.compile().params.values():
             inspected.append(True)
             assert "payload" not in statement.selected_columns.keys(), (
@@ -601,8 +613,8 @@ def test_legacy_recovery_button_check_does_not_load_source_payloads(
 
 
 def test_checkpoint_admission_does_not_reissue_incomplete_recorded_identity(
-    stage_runtime, recorded_origin
-):
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     """The normal checkpoint entry never turns an unfinished model stage into a new send."""
     scope, store, artifacts, _, _ = stage_runtime
     origin, original, _, _, sent = recorded_origin
@@ -626,8 +638,8 @@ def test_checkpoint_admission_does_not_reissue_incomplete_recorded_identity(
 
 
 def test_checkpoint_explicitly_recovers_confirmed_http_rejection_without_replaying_raw(
-    stage_runtime, recorded_origin
-):
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     """A recorded provider rejection is a known result, unlike an unknown send."""
     scope, store, _artifacts, _platform, _execute = stage_runtime
     origin, original, _boundary, _settings, sent = recorded_origin
@@ -647,9 +659,12 @@ def test_checkpoint_explicitly_recovers_confirmed_http_rejection_without_replayi
         scope=scope, run_id=origin.run_id, expected_version=origin.version
     )
     assert child.run_id != origin.run_id
-    assert store.retry_processing(
-        scope=scope, run_id=origin.run_id, expected_version=origin.version
-    ).run_id == child.run_id
+    assert (
+        store.retry_processing(
+            scope=scope, run_id=origin.run_id, expected_version=origin.version
+        ).run_id
+        == child.run_id
+    )
     plan = store.checkpoint_plan(scope=scope, run_id=child.run_id)
     assert plan.resume_stage == "identity"
     assert plan.contract == "product-stage-checkpoint-plan.830.v5"
@@ -658,7 +673,9 @@ def test_checkpoint_explicitly_recovers_confirmed_http_rejection_without_replayi
     assert len(sent) == 1  # Admission has no provider effect.
 
 
-def test_checkpoint_rejects_unknown_identity_send(stage_runtime, recorded_origin):
+def test_checkpoint_rejects_unknown_identity_send(
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     scope, store, _artifacts, _platform, _execute = stage_runtime
     origin, original, _boundary, _settings, _sent = recorded_origin
     from sqlalchemy import select
@@ -677,8 +694,8 @@ def test_checkpoint_rejects_unknown_identity_send(stage_runtime, recorded_origin
 
 
 def test_second_confirmed_http_rejection_can_create_another_explicit_attempt(
-    stage_runtime, recorded_origin
-):
+    stage_runtime: typing.Any, recorded_origin: typing.Any
+) -> None:
     scope, store, artifacts, _platform, _execute = stage_runtime
     origin, original, _boundary, settings, _sent = recorded_origin
     from sqlalchemy import select
@@ -734,4 +751,5 @@ def test_second_confirmed_http_rejection_can_create_another_explicit_attempt(
     )
     grandchild_plan = store.checkpoint_plan(scope=scope, run_id=grandchild.run_id)
     assert grandchild_plan.failed_calls[0].call_id == second.call_id
+    assert boundary._client is not None
     asyncio.run(boundary._client.aclose())

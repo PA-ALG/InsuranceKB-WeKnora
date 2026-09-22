@@ -1,5 +1,13 @@
 """Plan only missing FieldTasks after custody-verified projection reuse."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from insurance_harness.model_policy import ModelIdentity
+
+from .batch_concept_compile_830_g3 import BatchConceptCompileRequest830G3V1
+from .concept_compile_830_g2 import CompileOutput
 from .g3_d_projection_reuse import G3DProjectionReuseManifestV1
 from .g3_field_task_recovery import (
     derive_g3_field_recovery_window,
@@ -8,8 +16,11 @@ from .g3_field_task_recovery import (
 )
 from .g3_field_tasks import adapt_catalog_field_tasks
 
+if TYPE_CHECKING:
+    from .g3_bounded_model_execution import G3DCompileWindow, G3DRecoveryWindow
 
-def normalize_projection_reuse(value) -> tuple[G3DProjectionReuseManifestV1, ...]:
+
+def normalize_projection_reuse(value: object) -> tuple[G3DProjectionReuseManifestV1, ...]:
     """Normalize one or multiple manifests without granting historical custody."""
     items = value if isinstance(value, (tuple, list)) else (value,)
     if not items:
@@ -22,7 +33,9 @@ def normalize_projection_reuse(value) -> tuple[G3DProjectionReuseManifestV1, ...
     return manifests
 
 
-def derive_recovery_windows(request, manifest) -> tuple[dict[str, object], ...]:
+def derive_recovery_windows(
+    request: BatchConceptCompileRequest830G3V1, manifest: object
+) -> tuple[G3DRecoveryWindow, ...]:
     from .g3_bounded_model_execution import derive_gemini_d_compile_windows
 
     manifests = normalize_projection_reuse(manifest)
@@ -45,16 +58,16 @@ def derive_recovery_windows(request, manifest) -> tuple[dict[str, object], ...]:
             if entry.entity_id in synthesis:
                 raise ValueError("reused synthesis is duplicated")
             synthesis.add(entry.entity_id)
-    grouped = {}
-    for entity, key in sorted(required - reused):
-        grouped.setdefault(entity, []).append(key)
-    windows = []
-    for entity, keys in sorted(grouped.items()):
+    grouped: dict[str, list[str]] = {}
+    for entity_id, field_key in sorted(required - reused):
+        grouped.setdefault(entity_id, []).append(field_key)
+    windows: list[G3DRecoveryWindow] = []
+    for entity_id, keys in sorted(grouped.items()):
         for start in range(0, len(keys), 10):
             windows.append(
                 derive_g3_field_recovery_window(
                     request,
-                    entity_id=entity,
+                    entity_id=entity_id,
                     field_keys=keys[start : start + 10],
                 )
             )
@@ -66,9 +79,14 @@ def derive_recovery_windows(request, manifest) -> tuple[dict[str, object], ...]:
     return tuple(windows)
 
 
-def render_recovery_context(identity, request, window):
+def render_recovery_context(
+    identity: ModelIdentity,
+    request: BatchConceptCompileRequest830G3V1,
+    window: G3DCompileWindow,
+) -> dict[str, Any]:
     from .g3_bounded_model_execution import render_gemini_d_compile_window_context
 
+    context: dict[str, Any]
     if window.get("recovery_contract"):
         context = render_g3_field_recovery_context(identity, request, window)
         context = {
@@ -95,7 +113,7 @@ def render_recovery_context(identity, request, window):
             ),
         }
     else:
-        context = render_gemini_d_compile_window_context(identity, request, window)
+        context = dict(render_gemini_d_compile_window_context(identity, request, window))
     schema = context["response_schema"]
     properties = schema["properties"]
     return {
@@ -115,7 +133,11 @@ def render_recovery_context(identity, request, window):
     }
 
 
-def project_recovery_response(raw, request, window):
+def project_recovery_response(
+    raw: bytes,
+    request: BatchConceptCompileRequest830G3V1,
+    window: G3DCompileWindow,
+) -> CompileOutput:
     from .g3_bounded_model_execution import project_gemini_d_compile_window_response
 
     if window.get("recovery_contract"):

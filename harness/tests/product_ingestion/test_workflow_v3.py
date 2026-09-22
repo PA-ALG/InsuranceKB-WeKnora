@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import typing
+
 # ruff: noqa: F811 -- imported pytest fixtures
 from sqlalchemy import select
 
@@ -21,38 +23,79 @@ from tests.product_ingestion.test_store import (
 )
 
 
-def test_new_run_uses_v3_without_changing_older_stage_orders(api, factory):
+def test_new_run_uses_v3_without_changing_older_stage_orders(
+    api: typing.Any, factory: typing.Any
+) -> None:
     store, _jobs = _make_store(api, factory)
     run = store.create_run(scope=_scope(api), idempotency_key="workflow-v3")
     assert run.workflow_version == 3
     assert stage_order(1) == (
-        "uploads", "source", "routing", "identity", "field_plan", "extract",
-        "synthesis", "compilation", "review", "publish", "verify",
+        "uploads",
+        "source",
+        "routing",
+        "identity",
+        "field_plan",
+        "extract",
+        "synthesis",
+        "compilation",
+        "review",
+        "publish",
+        "verify",
     )
     assert stage_order(2) == (
-        "uploads", "source", "routing", "identity", "field_plan", "extract",
-        "synthesis", "compilation", "preparation", "review", "publish", "verify",
+        "uploads",
+        "source",
+        "routing",
+        "identity",
+        "field_plan",
+        "extract",
+        "synthesis",
+        "compilation",
+        "preparation",
+        "review",
+        "publish",
+        "verify",
     )
     assert stage_order(3) == (
-        "uploads", "source", "routing", "identity", "field_plan", "extract",
-        "synthesis", "discovery", "compilation", "preparation", "review", "publish", "verify",
+        "uploads",
+        "source",
+        "routing",
+        "identity",
+        "field_plan",
+        "extract",
+        "synthesis",
+        "discovery",
+        "compilation",
+        "preparation",
+        "review",
+        "publish",
+        "verify",
     )
     assert required_outputs(3)["synthesis"] == ("compile_delta", "field_validation")
     assert required_outputs(3)["discovery"] == (
-        "discovery_candidates", "discovery_delta", "discovery_summary",
+        "discovery_candidates",
+        "discovery_delta",
+        "discovery_summary",
     )
     for kind in (
-        "discovery_context", "discovery_window_audit", "discovery_window_replay_receipt",
+        "discovery_context",
+        "discovery_window_audit",
+        "discovery_window_replay_receipt",
         "discovery_response",
-        "discovery_proposal", "discovery_review_context", "discovery_review_response",
+        "discovery_proposal",
+        "discovery_review_context",
+        "discovery_review_response",
         "discovery_review_proof",
-        "reviewed_discovery_delta", "discovery_final_summary",
+        "reviewed_discovery_delta",
+        "discovery_final_summary",
         "composite_review",
     ):
         assert CURRENT_ARTIFACT_CONTRACTS[kind] == (f"product-{kind}.v1", "1")
 
 
-def test_v3_checkpoint_reuses_complete_discovery_then_resumes_compilation(api, factory):
+def test_v3_checkpoint_reuses_complete_discovery_then_resumes_compilation(
+    api: typing.Any, factory: typing.Any
+) -> None:
     scope, store, origin, _ = _metadata_origin(
         api,
         factory,
@@ -69,11 +112,15 @@ def test_v3_checkpoint_reuses_complete_discovery_then_resumes_compilation(api, f
     assert plan.resume_stage == "compilation"
     assert plan.encoded() == type(plan).model_validate_json(plan.encoded()).encoded()
     assert {row.artifact_kind for row in plan.artifacts if row.stage_key == "discovery"} == {
-        "discovery_candidates", "discovery_delta", "discovery_summary",
+        "discovery_candidates",
+        "discovery_delta",
+        "discovery_summary",
     }
 
 
-def test_v3_checkpoint_does_not_skip_missing_discovery_output(api, factory):
+def test_v3_checkpoint_does_not_skip_missing_discovery_output(
+    api: typing.Any, factory: typing.Any
+) -> None:
     scope, store, origin, _ = _metadata_origin(
         api,
         factory,

@@ -8,9 +8,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from insurance_harness.knowledge_compiler.g3_field_tasks import FieldTaskEvidenceResultV1
+from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import Evidence, SourceBlock
+from insurance_harness.knowledge_compiler.g3_field_tasks import (
+    FieldTaskEvidenceResultV1,
+    FieldTaskV1,
+)
 from insurance_harness.product_ingestion.checkpoints import field_digest
-from insurance_harness.product_ingestion.models import FieldOutcomeKind
+from insurance_harness.product_ingestion.models import FieldAttemptSnapshot, FieldOutcomeKind
+from insurance_harness.product_ingestion.platform import DecodedSourceSnapshot
 from insurance_harness.product_ingestion.source_geometry import (
     prepare_evidence_locations,
     project_evidence_locations,
@@ -36,13 +41,15 @@ class FieldValidationReport(BaseModel):
     changes: dict[str, FieldValidationChange]
 
 
-def apply_field_validation(attempts, report: FieldValidationReport):
+def apply_field_validation(
+    attempts: tuple[FieldAttemptSnapshot, ...], report: FieldValidationReport
+) -> tuple[FieldAttemptSnapshot, ...]:
     """One effective view for compilation, display, counting and field retry."""
     if set(report.input_digests) != {row.attempt_id for row in attempts} or not (
         set(report.changes) <= set(report.input_digests)
     ):
         raise ValueError("field validation input coverage changed")
-    result = []
+    result: list[FieldAttemptSnapshot] = []
     for row in attempts:
         if report.input_digests.get(row.attempt_id) != field_digest(row):
             raise ValueError("field validation input changed")
@@ -72,7 +79,12 @@ def apply_field_validation(attempts, report: FieldValidationReport):
     return tuple(result)
 
 
-def validate_field_attempts(*, tasks, attempts, snapshots):
+def validate_field_attempts(
+    *,
+    tasks: tuple[FieldTaskV1, ...],
+    attempts: tuple[FieldAttemptSnapshot, ...],
+    snapshots: dict[str, DecodedSourceSnapshot],
+) -> FieldValidationReport:
     """Validate current fields against already authenticated parser snapshots.
 
     Source authentication happens at the existing snapshot boundary. A malformed
@@ -82,9 +94,9 @@ def validate_field_attempts(*, tasks, attempts, snapshots):
     by_task = {(t.entity_id, t.field_key): t for t in tasks}
     if len(by_task) != len(tasks) or set(by_task) != {(r.entity_id, r.field_key) for r in attempts}:
         raise ValueError("field validation task coverage mismatch")
-    changes = {}
-    source_digests = {}
-    evidence_by_source = {}
+    changes: dict[str, FieldValidationChange] = {}
+    source_digests: dict[str, str] = {}
+    evidence_by_source: dict[str, list[Evidence]] = {}
     for row in attempts:
         if row.outcome is FieldOutcomeKind.VERIFIED:
             result = FieldTaskEvidenceResultV1.model_validate(row.validated_result)
@@ -105,8 +117,10 @@ def validate_field_attempts(*, tasks, attempts, snapshots):
         original = FieldTaskEvidenceResultV1.model_validate(row.validated_result)
         if task.task_sha256 != row.task_sha256 or original.task_sha256 != row.task_sha256:
             raise ValueError("field validation task identity mismatch")
-        parts, mappings, source_blocks = [], [], []
-        reason = None
+        parts: list[Evidence] = []
+        mappings: list[dict[str, Any]] = []
+        source_blocks: list[SourceBlock] = []
+        reason: str | None = None
         for evidence in original.evidence:
             decoded = snapshots.get(evidence.knowledge_id)
             if decoded is None:

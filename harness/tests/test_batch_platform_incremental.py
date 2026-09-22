@@ -1,13 +1,20 @@
 """Synthetic compiler protocol fixtures: no provider or publication effects."""
 
 import hashlib
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import pytest
+from pydantic import BaseModel
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as g3
 from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as resolution_api
+from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCandidateBundle830G3V1,
+    BatchConceptCompileRequest830G3V1,
+)
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
     AuditDisposition,
     CompileOutput,
@@ -17,18 +24,34 @@ from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
     ReviewOutput,
     ReviewResult,
 )
-from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import FieldAssertion
+from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
+    ConceptDefinition,
+    FieldAssertion,
+    FreeWikiPage,
+)
 
 ROOT = Path(__file__).parents[2]
 FIXTURE = ROOT / "harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json"
 
 
-def hashed(cls, domain, hash_field, **payload):
+def hashed[ModelT: BaseModel](
+    cls: type[ModelT], domain: str, hash_field: str, **payload: object
+) -> ModelT:
     return cls.model_validate({**payload, hash_field: g3._batch_sha256(domain, payload)})
 
 
 @lru_cache(maxsize=1)
-def published_subset_inputs():
+def published_subset_inputs() -> tuple[
+    BatchConceptCandidateBundle830G3V1,
+    CompileRequest,
+    resolution_api.BatchCorpusV1,
+    resolution_api.ProposalBatchV1,
+    resolution_api.ExistingEntitySnapshotV1,
+    resolution_api.BatchEntityResolutionV1,
+    tuple[tuple[str, str], ...],
+    dict[str, Any],
+    g3.EntityCompileBinding830G3V1,
+]:
     """Current fixture has five entities; current C selects only one of them."""
     parent = g3.validate_batch_candidate(FIXTURE.read_bytes())
     old = parent.request
@@ -121,15 +144,12 @@ def published_subset_inputs():
     selected = {row.entity_id: row for row in new_bindings}
     combined = tuple(selected.get(row.entity_id, row) for row in old.entity_bindings)
     sources = {(row.revision_id, row.block_id): row for row in old.base_request.sources}
-    required = {
-        (e.revision_id, e.block_id)
-        for row in (
-            *parent.compile_result.output.definitions,
-            *parent.compile_result.output.fields,
-            *parent.compile_result.output.pages,
-        )
-        for e in row.evidence
-    }
+    evidence_rows: tuple[ConceptDefinition | FieldAssertion | FreeWikiPage, ...] = (
+        *parent.compile_result.output.definitions,
+        *parent.compile_result.output.fields,
+        *parent.compile_result.output.pages,
+    )
+    required = {(e.revision_id, e.block_id) for row in evidence_rows for e in row.evidence}
     required.update(
         (e.evidence.revision_id, e.evidence.block_id)
         for row in old.entity_bindings
@@ -172,7 +192,14 @@ def published_subset_inputs():
     )
 
 
-def build(refresh_fields=(), changed=None):
+def build(
+    refresh_fields: tuple[tuple[str, str], ...] = (),
+    changed: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+) -> tuple[
+    BatchConceptCandidateBundle830G3V1,
+    BatchConceptCompileRequest830G3V1,
+    g3.EntityCompileBinding830G3V1,
+]:
     parent, base, corpus, proposals, existing, resolution, refs, payload, selected = (
         published_subset_inputs()
     )
@@ -194,12 +221,14 @@ def build(refresh_fields=(), changed=None):
         resolution=resolution,
         selected_decision_refs=refs,
         published_base=binding,
-        refresh_fields=tuple({"entity_id": e, "field_key": f} for e, f in refresh_fields),
+        refresh_fields=tuple(
+            g3.FieldRefresh830G3V1(entity_id=e, field_key=f) for e, f in refresh_fields
+        ),
     )
     return parent, request, selected
 
 
-def test_current_product_only_c_carries_other_published_bindings_without_model_replay():
+def test_current_product_only_c_carries_other_published_bindings_without_model_replay() -> None:
     parent, request, selected = build()
     assert len(request.resolution_inputs.proposals.proposals) == 1
     assert len(request.entity_bindings) == len(parent.request.entity_bindings)
@@ -217,12 +246,14 @@ def test_current_product_only_c_carries_other_published_bindings_without_model_r
         lambda p: {**p, "entity_bindings": p["entity_bindings"][:-1]},
     ],
 )
-def test_published_binding_must_cover_exact_parent_identity(mutation):
+def test_published_binding_must_cover_exact_parent_identity(
+    mutation: Callable[[dict[str, Any]], dict[str, Any]],
+) -> None:
     with pytest.raises(ValueError):
         build(changed=mutation)
 
 
-def test_failed_field_refresh_excludes_only_selected_base_field_from_carry():
+def test_failed_field_refresh_excludes_only_selected_base_field_from_carry() -> None:
     *_, selected = published_subset_inputs()
     pair = (selected.entity_id, selected.required_fields[0])
     parent, request, _ = build(refresh_fields=(pair,))
@@ -231,7 +262,7 @@ def test_failed_field_refresh_excludes_only_selected_base_field_from_carry():
     assert pair not in {(row.entity_id, row.field_key) for row in actual}
 
 
-def test_refresh_cannot_target_a_carried_unselected_product():
+def test_refresh_cannot_target_a_carried_unselected_product() -> None:
     parent, *_ = published_subset_inputs()
     other = next(
         row for row in parent.request.entity_bindings if row.resolution_disposition == "MATCH"
@@ -240,12 +271,14 @@ def test_refresh_cannot_target_a_carried_unselected_product():
         build(refresh_fields=((other.entity_id, other.required_fields[0]),))
 
 
-def test_legacy_candidate_bytes_are_unchanged():
+def test_legacy_candidate_bytes_are_unchanged() -> None:
     raw = FIXTURE.read_bytes()
     assert g3._canonical_json(g3.validate_batch_candidate(raw)).encode() == raw
 
 
-def refresh_candidate_fixture():
+def refresh_candidate_fixture() -> tuple[
+    BatchConceptCandidateBundle830G3V1, BatchConceptCandidateBundle830G3V1, tuple[str, str]
+]:
     *_, selected = published_subset_inputs()
     pair = (selected.entity_id, selected.required_fields[0])
     parent, request, _ = build(refresh_fields=(pair,))
@@ -310,7 +343,7 @@ def refresh_candidate_fixture():
     return parent, result, pair
 
 
-def test_refresh_delta_replaces_exactly_one_and_retains_every_other_field():
+def test_refresh_delta_replaces_exactly_one_and_retains_every_other_field() -> None:
     parent, result, pair = refresh_candidate_fixture()
     assert len(result.model_compile_result.output.fields) == 1
     previous = {(row.entity_id, row.field_key): row for row in parent.compile_result.output.fields}
@@ -333,7 +366,7 @@ def test_refresh_delta_replaces_exactly_one_and_retains_every_other_field():
         g3.compose_batch_output(result.request, invalid)
 
 
-def test_omitted_incremental_defaults_survive_typed_revalidation():
+def test_omitted_incremental_defaults_survive_typed_revalidation() -> None:
     request = g3.validate_batch_candidate(FIXTURE.read_bytes()).request
     assert request.published_base is None and request.refresh_fields == ()
     again = g3.BatchConceptCompileRequest830G3V1.model_validate(request)

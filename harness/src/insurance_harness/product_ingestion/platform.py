@@ -5,9 +5,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -33,8 +33,8 @@ def _canonical(value: Any) -> bytes:
     )
 
 
-def _object(pairs):
-    result = {}
+def _object(pairs: Iterable[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
             raise ValueError("duplicate source snapshot property")
@@ -81,7 +81,7 @@ def verify_signed_snapshot(
             base64.b64decode(authority["signature"], validate=True),
             domain.encode() + b"\0" + digest.encode("ascii"),
         )
-        return body
+        return cast(dict[str, Any], body)
     except (KeyError, TypeError, InvalidSignature, UnicodeError) as error:
         raise ValueError("platform snapshot authority invalid") from error
 

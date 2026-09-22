@@ -8,27 +8,38 @@ import json
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from insurance_harness.jobs import NonRetryableJobError, RetryableJobError
+from insurance_harness.jobs import JobSnapshot, NonRetryableJobError, RetryableJobError
+from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import SourceBlock
 from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import (
     SchemaPackCatalogV1,
 )
 from insurance_harness.product_ingestion.artifact_models import (
     ArtifactDraft,
     ArtifactOrigin,
+    ArtifactSnapshot,
 )
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.identity import prepare_identity_routing
 from insurance_harness.product_ingestion.models import (
     OriginalKnowledgeRef,
+    ProductRunSnapshot,
     ProductRunState,
     ProductScope,
+    StageSnapshot,
 )
-from insurance_harness.product_ingestion.platform import decode_source_snapshot
-from insurance_harness.product_ingestion.processing_receipts import processing_summary
+from insurance_harness.product_ingestion.platform import (
+    DecodedSourceSnapshot,
+    decode_source_snapshot,
+)
+from insurance_harness.product_ingestion.processing_receipts import Receipt, processing_summary
+from insurance_harness.product_ingestion.recovery import (
+    RecordedIdentityRecoveryPlan,
+    SealedSourceRecoveryPlan,
+)
 from insurance_harness.product_ingestion.store import (
     ProductIngestionStore,
     needs_confirmation_error,
@@ -37,27 +48,31 @@ from insurance_harness.product_ingestion.upload_resolution import lookup_materia
 from insurance_harness.service_shell.worker import HandlerRegistry, HandlerResult
 
 
-def json_bytes(value) -> bytes:
+def _json_default(item: Any) -> Any:
+    return item.model_dump(mode="json")
+
+
+def json_bytes(value: Any) -> bytes:
     return json.dumps(
         value,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
         allow_nan=False,
-        default=lambda item: item.model_dump(mode="json"),
+        default=_json_default,
     ).encode()
 
 
 def artifact(
-    kind,
-    key,
-    payload,
-    dependency_sha256,
+    kind: str,
+    key: str,
+    payload: bytes,
+    dependency_sha256: str,
     *,
-    origin=ArtifactOrigin.RULE,
-    call_id=None,
-    contract_version="1",
-):
+    origin: ArtifactOrigin = ArtifactOrigin.RULE,
+    call_id: str | None = None,
+    contract_version: str = "1",
+) -> ArtifactDraft:
     return ArtifactDraft(
         artifact_kind=kind,
         artifact_key=key,
@@ -80,10 +95,10 @@ class StageOutput:
 class SourcePlatform(Protocol):
     async def lookup_upload(
         self, scope: ProductScope, run_id: str, ordinal: int
-    ) -> dict | None: ...
+    ) -> dict[str, Any] | None: ...
     async def lookup_file_by_sha256(
         self, scope: ProductScope, sha256: str, *, knowledge_id: str | None = None
-    ) -> dict | None: ...
+    ) -> dict[str, Any] | None: ...
 
     async def capture_source(
         self, scope: ProductScope, knowledge_id: str, attempt: int
@@ -91,7 +106,7 @@ class SourcePlatform(Protocol):
 
     async def get_reparse_receipt(
         self, scope: ProductScope, run_id: str, ordinal: int, recovery_key: str
-    ) -> dict | None: ...
+    ) -> dict[str, Any] | None: ...
 
     async def reparse_upload(
         self,
@@ -101,7 +116,12 @@ class SourcePlatform(Protocol):
         expected_parse_attempt: int,
         recovery_key: str,
         deadline_at: datetime,
-    ) -> dict: ...
+    ) -> dict[str, Any]: ...
+
+
+StageExecutor = Callable[
+    [ProductScope, ProductRunSnapshot, StageSnapshot, JobSnapshot], Awaitable[StageOutput]
+]
 
 
 def register_stage_handlers(
@@ -110,11 +130,15 @@ def register_stage_handlers(
     store: ProductIngestionStore,
     artifacts: ProductArtifactStore,
     scopes: Mapping[str, ProductScope],
-    handlers: Mapping[str, Callable[..., Awaitable[StageOutput]]],
-):
+    handlers: Mapping[str, StageExecutor],
+) -> None:
     for name, execute in handlers.items():
 
-        async def handle(job, name=name, execute=execute):
+        async def handle(
+            job: JobSnapshot,
+            name: str = name,
+            execute: StageExecutor = execute,
+        ) -> HandlerResult:
             scope = scopes.get(job.space_id)
             if scope is None or job.payload.get("stage_key") != name:
                 raise NonRetryableJobError("PRODUCT_STAGE_SCOPE_MISMATCH")
@@ -167,11 +191,17 @@ def register_stage_handlers(
         registry.register(f"product_stage_{name}", handle)
 
 
-def read_source_snapshots(artifacts, scope, run_id, *, public_keys):
+def read_source_snapshots(
+    artifacts: ProductArtifactStore,
+    scope: ProductScope,
+    run_id: str,
+    *,
+    public_keys: Mapping[str, Ed25519PublicKey],
+) -> dict[str, DecodedSourceSnapshot]:
     rows = artifacts.list_effective_artifacts(
         scope=scope, run_id=run_id, artifact_kind="source_snapshot"
     )
-    result = {}
+    result: dict[str, DecodedSourceSnapshot] = {}
     for row in rows:
         # Expected identity is the immutable artifact key, never a model value.
         envelope = json.loads(row.payload)
@@ -186,8 +216,14 @@ def read_source_snapshots(artifacts, scope, run_id, *, public_keys):
     return result
 
 
-async def load_source_blocks(artifacts, scope, run_id, *, public_keys):
-    def load():
+async def load_source_blocks(
+    artifacts: ProductArtifactStore,
+    scope: ProductScope,
+    run_id: str,
+    *,
+    public_keys: Mapping[str, Ed25519PublicKey],
+) -> tuple[SourceBlock, ...]:
+    def load() -> tuple[SourceBlock, ...]:
         return tuple(
             block
             for source in read_source_snapshots(
@@ -200,17 +236,22 @@ async def load_source_blocks(artifacts, scope, run_id, *, public_keys):
 
 
 def register_source_stages(
-    registry,
+    registry: HandlerRegistry,
     *,
-    store,
-    artifacts,
-    scopes,
+    store: ProductIngestionStore,
+    artifacts: ProductArtifactStore,
+    scopes: Mapping[str, ProductScope],
     platform: SourcePlatform,
     public_keys: Mapping[str, Ed25519PublicKey],
     catalog: SchemaPackCatalogV1,
-    now=lambda: datetime.now(UTC),
-):
-    async def uploads(scope, run, stage, job):
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> None:
+    async def uploads(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         store.processing_recovery_plan(scope=scope, run_id=run.run_id)
         if run.uploads_sealed_at is not None:
             return StageOutput()
@@ -245,11 +286,16 @@ def register_source_stages(
         store.seal_uploads(scope=scope, run_id=run.run_id, expected_version=run.version)
         return StageOutput()
 
-    async def sources(scope, run, stage, job):
+    async def sources(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         recovery = store.processing_recovery_plan(scope=scope, run_id=run.run_id)
         if now() >= run.source_deadline_at:
             raise NonRetryableJobError("SOURCE_PARSE_DEADLINE_EXCEEDED")
-        prior = {}
+        prior: dict[str, ArtifactSnapshot] = {}
         reuse_sealed = recovery is not None and recovery.mode in {
             "REUSE_SEALED_SOURCES",
             "REPLAY_RECORDED_IDENTITY",
@@ -265,6 +311,9 @@ def register_source_stages(
                 )
             }
         if reuse_sealed:
+            assert isinstance(
+                recovery, (SealedSourceRecoveryPlan, RecordedIdentityRecoveryPlan)
+            )
             expected = {
                 item.knowledge_id: item.payload_sha256 for item in recovery.source_snapshots
             }
@@ -274,8 +323,8 @@ def register_source_stages(
                 for key, row in prior.items()
             ):
                 raise NonRetryableJobError("RECOVERY_SOURCE_CHECKPOINT_CHANGED")
-        drafts = []
-        processing = []
+        drafts: list[ArtifactDraft] = []
+        processing: list[tuple[str, Receipt | None, bool]] = []
         # Resolve all parse states first; do not capture a partial group while
         # a known sibling has failed. Existing platform source cache is durable.
         current = []
@@ -412,7 +461,7 @@ def register_source_stages(
             processing.append(
                 (
                     material.knowledge_id,
-                    decoded.snapshot.get("processing_receipt"),
+                    cast(Receipt | None, decoded.snapshot.get("processing_receipt")),
                     saved is not None or recovery is not None,
                 )
             )
@@ -441,7 +490,12 @@ def register_source_stages(
         )
         return StageOutput(tuple(drafts))
 
-    async def routing(scope, run, stage, job):
+    async def routing(
+        scope: ProductScope,
+        run: ProductRunSnapshot,
+        stage: StageSnapshot,
+        job: JobSnapshot,
+    ) -> StageOutput:
         snapshots = await asyncio.to_thread(
             read_source_snapshots, artifacts, scope, run.run_id, public_keys=public_keys
         )

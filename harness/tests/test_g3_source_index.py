@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -67,7 +67,7 @@ def test_source_index_manifest_rejects_raw_identity_drift() -> None:
         G3SourceIndexManifestV1.model_validate(value)
 
 
-def test_source_index_reopens_persisted_material_without_full_native_input(tmp_path):
+def test_source_index_reopens_persisted_material_without_full_native_input(tmp_path: Path) -> None:
     from insurance_harness.knowledge_compiler import g3_source_index as source_index
 
     assert hasattr(source_index, "persist_g3_source_index"), "source index has no durable writer"

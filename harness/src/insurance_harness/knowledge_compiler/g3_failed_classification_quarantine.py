@@ -19,6 +19,7 @@ from .batch_canonical_830_g3 import batch_sha256_830_g3
 from .batch_entity_resolution_830_g3 import (
     BatchCorpusV1,
     BatchResolutionPolicyV1,
+    CorpusEntryV1,
     Hash,
     MaterialDecisionV1,
     _entry_source_reasons,
@@ -54,9 +55,7 @@ class VerifiedFailedClassificationQuarantineV1(_FrozenModel):
             or self.decision.disposition != "QUARANTINE"
             or self.decision.reason_codes != ("MODEL_RECEIPT_INVALID",)
             or self.receipt_sha256
-            != batch_sha256_830_g3(
-                self.contract, self.model_dump(exclude={"receipt_sha256"})
-            )
+            != batch_sha256_830_g3(self.contract, self.model_dump(exclude={"receipt_sha256"}))
         ):
             raise ValueError("failed classification quarantine receipt mismatch")
         return self
@@ -82,15 +81,13 @@ class VerifiedFailedClassificationQuarantineBatchV1(_FrozenModel):
                 for row in self.decisions
             )
             or self.batch_sha256
-            != batch_sha256_830_g3(
-                self.contract, self.model_dump(exclude={"batch_sha256"})
-            )
+            != batch_sha256_830_g3(self.contract, self.model_dump(exclude={"batch_sha256"}))
         ):
             raise ValueError("failed classification quarantine batch mismatch")
         return self
 
 
-def _source_receipt_binding(entry) -> str:
+def _source_receipt_binding(entry: CorpusEntryV1) -> str:
     receipt = entry.receipt
     value = getattr(receipt, "source_receipt_sha256", None)
     if value is None:
@@ -113,9 +110,7 @@ def _decision(material_id: str, policy: BatchResolutionPolicyV1) -> MaterialDeci
     return MaterialDecisionV1.model_validate(
         {
             **payload,
-            "decision_sha256": batch_sha256_830_g3(
-                "material-decision.830.g3.v1", payload
-            ),
+            "decision_sha256": batch_sha256_830_g3("material-decision.830.g3.v1", payload),
         }
     )
 
@@ -191,7 +186,7 @@ def build_verified_failed_classification_quarantines(
         if recorded.terminal != supplied_terminal:
             raise ValueError("failed classification terminal binding mismatch")
         decision = _decision(entry.material_id, policy)
-        payload = {
+        payload: dict[str, object] = {
             "contract": "g3-verified-failed-classification-quarantine.830.v1",
             "historical_attempt": True,
             "admission_artifact_digest": admission_digest,
@@ -212,11 +207,13 @@ def build_verified_failed_classification_quarantines(
             VerifiedFailedClassificationQuarantineV1.model_validate(
                 {
                     **payload,
-                    "receipt_sha256": batch_sha256_830_g3(payload["contract"], payload),
+                    "receipt_sha256": batch_sha256_830_g3(
+                        "g3-verified-failed-classification-quarantine.830.v1", payload
+                    ),
                 }
             )
         )
-    batch_payload = {
+    batch_payload: dict[str, object] = {
         "contract": "g3-verified-failed-classification-quarantine-batch.830.v1",
         "chain_manifest_hash": plan.chain_manifest_hash,
         "source_corpus_sha256": corpus.corpus_sha256,
@@ -226,7 +223,9 @@ def build_verified_failed_classification_quarantines(
     return VerifiedFailedClassificationQuarantineBatchV1.model_validate(
         {
             **batch_payload,
-            "batch_sha256": batch_sha256_830_g3(batch_payload["contract"], batch_payload),
+            "batch_sha256": batch_sha256_830_g3(
+                "g3-verified-failed-classification-quarantine-batch.830.v1", batch_payload
+            ),
         }
     )
 

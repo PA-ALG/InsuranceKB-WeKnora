@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import time
+import typing
 from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
@@ -12,6 +13,8 @@ import pytest
 from insurance_harness.jobs import NonRetryableJobError, RetryableJobError
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCandidateBundle830G3V1,
+    _batch_sha256,
+    _without_hash,
 )
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import SourceIdentity
 from insurance_harness.product_ingestion.models import ProductScope
@@ -21,12 +24,18 @@ from insurance_harness.product_ingestion.verification import verify_published_pr
 
 
 @lru_cache(maxsize=1)
-def fixture_candidate():
+def fixture_candidate() -> typing.Any:
     path = Path(__file__).parents[1] / "fixtures/batch_concept_compile_830_g3/candidate.json"
     return BatchConceptCandidateBundle830G3V1.model_validate_json(path.read_bytes())
 
 
-def setup(*, entity="ping-an-e-sheng-bao", change=None, status=None, candidate=None):
+def setup(
+    *,
+    entity: str = "ping-an-e-sheng-bao",
+    change: typing.Any = None,
+    status: int | None = None,
+    candidate: typing.Any = None,
+) -> typing.Any:
     candidate = candidate or fixture_candidate()
     base = candidate.request.base_request
     scope = ProductScope(
@@ -50,7 +59,7 @@ def setup(*, entity="ping-an-e-sheng-bao", change=None, status=None, candidate=N
     sources = {(s.revision_id, s.block_id): s for s in base.sources}
     seen = []
 
-    def evidence_map(member):
+    def evidence_map(member: typing.Any) -> typing.Any:
         result = {}
         for e in member["payload"].get("evidence", []):
             preimage = [
@@ -66,11 +75,12 @@ def setup(*, entity="ping-an-e-sheng-bao", change=None, status=None, candidate=N
             result["citation-" + hashlib.sha256(canonical(preimage)).hexdigest()[:24]] = e
         return result
 
-    def respond(request):
+    def respond(request: typing.Any) -> typing.Any:
         seen.append(request)
         if status:
             return httpx.Response(status, text="private source fixture-secret")
         suffix = request.url.path.split("/raw/" + base.raw_kb_id, 1)[1]
+        data: typing.Any
         if suffix == "/current":
             data = {"release_id": receipt["release_id"], "activation_epoch": 10}
         elif suffix.endswith("/search"):
@@ -160,7 +170,7 @@ def setup(*, entity="ping-an-e-sheng-bao", change=None, status=None, candidate=N
         transport=httpx.MockTransport(respond),
     )
 
-    async def run():
+    async def run() -> typing.Any:
         try:
             return await verify_published_product(
                 platform=api,
@@ -175,7 +185,7 @@ def setup(*, entity="ping-an-e-sheng-bao", change=None, status=None, candidate=N
     return run, seen, members, candidate
 
 
-def test_published_product_uses_real_typed_fixture_and_only_current_entity_reads():
+def test_published_product_uses_real_typed_fixture_and_only_current_entity_reads() -> None:
     run, seen, members, _ = setup()
     report = asyncio.run(run())
     fields = [m for m in members.values() if m["kind"] == "field_assertion"]
@@ -189,7 +199,7 @@ def test_published_product_uses_real_typed_fixture_and_only_current_entity_reads
     assert "fixture-secret" not in json.dumps(report)
 
 
-def test_unknown_fields_are_accepted_without_citation_calls():
+def test_unknown_fields_are_accepted_without_citation_calls() -> None:
     entity = next(
         b.entity_id
         for b in fixture_candidate().request.entity_bindings
@@ -206,8 +216,8 @@ def test_unknown_fields_are_accepted_without_citation_calls():
     "fault",
     ["head", "search", "scope", "payload", "missing-citation", "source", "offset", "pdf-page"],
 )
-def test_read_or_evidence_drift_never_produces_pass(fault):
-    def change(suffix, data):
+def test_read_or_evidence_drift_never_produces_pass(fault: typing.Any) -> None:
+    def change(suffix: str, data: typing.Any) -> None:
         if fault == "head" and suffix == "/current":
             data["release_id"] = "different"
         if fault == "search" and suffix.endswith("/search"):
@@ -237,7 +247,7 @@ def test_read_or_evidence_drift_never_produces_pass(fault):
     assert "private" not in str(error.value)
 
 
-def test_typed_source_mutation_is_rejected_before_transport():
+def test_typed_source_mutation_is_rejected_before_transport() -> None:
     original = fixture_candidate()
     field = next(
         m
@@ -263,17 +273,19 @@ def test_typed_source_mutation_is_rejected_before_transport():
 
 
 @pytest.mark.parametrize("status,error", [(503, RetryableJobError), (403, NonRetryableJobError)])
-def test_transport_errors_remain_explicit_without_retry(status, error):
+def test_transport_errors_remain_explicit_without_retry(
+    status: typing.Any, error: typing.Any
+) -> None:
     run, seen, _, _ = setup(status=status)
     with pytest.raises(error):
         asyncio.run(run())
     assert len(seen) == 1
 
 
-def test_head_drift_after_evidence_reads_fails_without_changing_publication():
+def test_head_drift_after_evidence_reads_fails_without_changing_publication() -> None:
     current_reads = 0
 
-    def change(suffix, data):
+    def change(suffix: str, data: typing.Any) -> None:
         nonlocal current_reads
         if suffix == "/current":
             current_reads += 1
@@ -288,8 +300,8 @@ def test_head_drift_after_evidence_reads_fails_without_changing_publication():
     assert all(request.method == "GET" for request in seen)
 
 
-def test_existing_unique_quote_authority_needs_no_invented_g3_locator():
-    def change(suffix, data):
+def test_existing_unique_quote_authority_needs_no_invented_g3_locator() -> None:
+    def change(suffix: str, data: typing.Any) -> None:
         if "/citations/" in suffix:
             data["contract"] = "concept-citation-content-authority.830.g2.v1"
             data.pop("source_locator")
@@ -298,15 +310,17 @@ def test_existing_unique_quote_authority_needs_no_invented_g3_locator():
     assert asyncio.run(run())["status"] == "PASS"
 
 
-def test_candidate_validation_keeps_worker_heartbeat_running(monkeypatch):
+def test_candidate_validation_keeps_worker_heartbeat_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from insurance_harness.product_ingestion import verification
 
     run, _, _, _ = setup()
-    original = verification._batch_sha256
-    ticks = []
-    observed = []
+    original = _batch_sha256
+    ticks: list[int] = []
+    observed: list[bool] = []
 
-    def slow_hash(*args):
+    def slow_hash(*args: typing.Any) -> typing.Any:
         before = len(ticks)
         time.sleep(0.08)
         observed.append(len(ticks) > before)
@@ -314,8 +328,8 @@ def test_candidate_validation_keeps_worker_heartbeat_running(monkeypatch):
 
     monkeypatch.setattr(verification, "_batch_sha256", slow_hash)
 
-    async def exercise():
-        async def heartbeat():
+    async def exercise() -> None:
+        async def heartbeat() -> None:
             while True:
                 ticks.append(True)
                 await asyncio.sleep(0.005)
@@ -331,9 +345,7 @@ def test_candidate_validation_keeps_worker_heartbeat_running(monkeypatch):
     assert observed == [True]
 
 
-def test_exact_duplicate_evidence_uses_one_citation():
-    from insurance_harness.product_ingestion import verification
-
+def test_exact_duplicate_evidence_uses_one_citation() -> None:
     original = fixture_candidate()
     target = next(
         m
@@ -353,8 +365,8 @@ def test_exact_duplicate_evidence_uses_one_citation():
     )
     candidate = candidate.model_copy(
         update={
-            "candidate_hash": verification._batch_sha256(
-                candidate.contract, verification._without_hash(candidate, "candidate_hash")
+            "candidate_hash": _batch_sha256(
+                candidate.contract, _without_hash(candidate, "candidate_hash")
             )
         }
     )

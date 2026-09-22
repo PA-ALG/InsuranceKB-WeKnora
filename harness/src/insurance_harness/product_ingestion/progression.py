@@ -12,6 +12,7 @@ from insurance_harness.product_ingestion.checkpoints import CURRENT_STAGE_ORDER,
 from insurance_harness.product_ingestion.models import (
     ProductRunState,
     ProductScope,
+    StageSnapshot,
     WindowTaskSpec,
 )
 from insurance_harness.product_ingestion.store import ProductIngestionStore
@@ -34,7 +35,9 @@ class PlannedWindow:
     tasks: tuple[WindowTaskSpec, ...]
 
 
-def admit_uploads(store: ProductIngestionStore, scope: ProductScope, run_id: str):
+def admit_uploads(
+    store: ProductIngestionStore, scope: ProductScope, run_id: str
+) -> StageSnapshot:
     """Admission is a short stage, never a waiting root/finalizer."""
     digest = hashlib.sha256(("product-uploads.v1\0" + run_id).encode()).hexdigest()
     return store.enqueue_stage(
@@ -61,7 +64,9 @@ class ProductProgression:
         # A restart reconstructs this only through the normal durable reconciliation.
         self._fanouts: dict[str, tuple[object, tuple[str, ...]]] = {}
 
-    def _stage_failure(self, scope, stages):
+    def _stage_failure(
+        self, scope: ProductScope, stages: Sequence[StageSnapshot]
+    ) -> ProductRunState | None:
         for stage in stages:
             if stage.state not in _BAD:
                 continue

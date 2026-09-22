@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import importlib
 import json
+import typing
 from copy import deepcopy
 
 import pytest
 
 
-def fixture_response():
+def fixture_response() -> tuple[typing.Any, ...]:
     evidence = [
         {
             "evidence_ref": "class",
@@ -88,14 +89,14 @@ def fixture_response():
     return response, context
 
 
-def adapter():
+def adapter() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.identity_adapter")
     except ModuleNotFoundError:
         pytest.fail("deterministic identity evidence adapter missing")
 
 
-def test_redundant_classification_and_misdirected_filing_keep_original():
+def test_redundant_classification_and_misdirected_filing_keep_original() -> None:
     obj, context = fixture_response()
     raw = json.dumps(obj, ensure_ascii=False).encode()
     before = deepcopy(obj)
@@ -117,14 +118,14 @@ def test_redundant_classification_and_misdirected_filing_keep_original():
     assert result.audit["changes"]
 
 
-def test_absent_filing_cannot_be_invented_or_treated_as_product_code():
+def test_absent_filing_cannot_be_invented_or_treated_as_product_code() -> None:
     obj, context = fixture_response()
     context["materials"][0]["blocks"][0]["evidence_locator_refs"].pop()
     with pytest.raises(ValueError, match="lacks offered source evidence"):
         adapter().adapt_identity_response(json.dumps(obj).encode(), context)
 
 
-def test_auxiliary_offered_page_can_support_filing_without_new_source():
+def test_auxiliary_offered_page_can_support_filing_without_new_source() -> None:
     obj, context = fixture_response()
     block = context["materials"][0]["blocks"][0]
     filing = block["evidence_locator_refs"].pop()
@@ -140,7 +141,9 @@ def test_auxiliary_offered_page_can_support_filing_without_new_source():
     assert any(c.get("locator_ref") == filing["locator_ref"] for c in result.audit["changes"])
 
 
-def test_repeated_exact_filing_uses_stable_offered_locator_and_keeps_all_original_evidence():
+def test_repeated_exact_filing_uses_stable_offered_locator_and_keeps_all_original_evidence() -> (
+    None
+):
     obj, context = fixture_response()
     block = context["materials"][0]["blocks"][0]
     block["evidence_locator_refs"].append(
@@ -159,7 +162,7 @@ def test_repeated_exact_filing_uses_stable_offered_locator_and_keeps_all_origina
     assert adapter().adapt_identity_response(raw, context) == result
 
 
-def test_foreign_locator_rejected_before_adaptation():
+def test_foreign_locator_rejected_before_adaptation() -> None:
     obj, context = fixture_response()
     obj["materials"][0]["evidence"][0]["locator_ref"] = "loc_" + "f" * 64
     with pytest.raises(ValueError, match="outside offered"):
@@ -169,7 +172,7 @@ def test_foreign_locator_rejected_before_adaptation():
 @pytest.mark.parametrize(
     "refs", [["version", "name", "class"], ["name", "name", "class", "version"]]
 )
-def test_identity_reference_sets_normalize_without_changing_claims_or_raw(refs):
+def test_identity_reference_sets_normalize_without_changing_claims_or_raw(refs: typing.Any) -> None:
     obj, context = fixture_response()
     obj["materials"][0]["entities"][0]["identity_evidence_refs"] = refs
     raw = json.dumps(obj).encode()
@@ -182,7 +185,7 @@ def test_identity_reference_sets_normalize_without_changing_claims_or_raw(refs):
     assert any(c["reason"] == "IDENTITY_REFERENCE_SET_NORMALIZED" for c in result.audit["changes"])
 
 
-def test_reference_normalization_still_rejects_unsupported_claims():
+def test_reference_normalization_still_rejects_unsupported_claims() -> None:
     obj, context = fixture_response()
     entity = obj["materials"][0]["entities"][0]
     entity["identity_evidence_refs"].reverse()
@@ -192,7 +195,9 @@ def test_reference_normalization_still_rejects_unsupported_claims():
 
 
 @pytest.mark.parametrize("already_linked", [False, True])
-def test_product_code_occurrence_cannot_support_same_number_as_filing(already_linked):
+def test_product_code_occurrence_cannot_support_same_number_as_filing(
+    already_linked: typing.Any,
+) -> None:
     obj, context = fixture_response()
     entity = obj["materials"][0]["entities"][0]
     entity["product_code"] = "5011"
@@ -221,7 +226,9 @@ def test_product_code_occurrence_cannot_support_same_number_as_filing(already_li
         ("产品代码5011，备案编号5011", True),
     ],
 )
-def test_same_number_requires_its_own_explicit_filing_occurrence(quote, accepted):
+def test_same_number_requires_its_own_explicit_filing_occurrence(
+    quote: typing.Any, accepted: typing.Any
+) -> None:
     obj, context = fixture_response()
     entity = obj["materials"][0]["entities"][0]
     entity["product_code"] = "5011"

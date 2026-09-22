@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from insurance_harness.model_policy import g3_bounded_gateway as gateway
 from insurance_harness.run_admission.g3_models import (
+    G3BoundedAdmissionPlanV1,
     G3BoundedApprovalEnvelopeV1,
+    G3CallPlanV1,
     G3ModelProcessingAuthorizationEnvelopeV1,
     G3ProviderUsageV1,
     G3UsageTotalsV1,
@@ -26,6 +29,9 @@ from .batch_concept_compile_830_g3 import (
 )
 from .concept_compile_830_g2 import CompileOutput
 from .g3_field_tasks import _source_scope, adapt_catalog_field_tasks
+
+if TYPE_CHECKING:
+    from .g3_bounded_model_execution import G3DRecoveryWindow
 
 VALIDATOR_VERSION = "g3-d-recorded-projection-validator.830.v1"
 
@@ -113,7 +119,7 @@ def validator_sha256() -> str:
     )
 
 
-def _read(path: Path, model, digest: str | None = None):
+def _read[ModelT: BaseModel](path: Path, model: type[ModelT], digest: str | None = None) -> ModelT:
     raw = gateway._read_secure_ledger_file(path)
     if digest is not None and hashlib.sha256(raw).hexdigest() != digest:
         raise ValueError("projection reuse origin artifact digest mismatch")
@@ -123,7 +129,9 @@ def _read(path: Path, model, digest: str | None = None):
     return value
 
 
-def _load_origin(origin_admission_digest: str, admission_root=None):
+def _load_origin(
+    origin_admission_digest: str, admission_root: str | Path | None = None
+) -> tuple[G3BoundedAdmissionPlanV1, BatchConceptCompileRequest830G3V1]:
     from insurance_harness.run_admission import evaluator
     from insurance_harness.run_admission.g3_trust_policy import (
         load_g3_root_trust_policy,
@@ -177,7 +185,7 @@ def _load_origin(origin_admission_digest: str, admission_root=None):
     return plan, request
 
 
-def _entity_scope(request, entity_id):
+def _entity_scope(request: BatchConceptCompileRequest830G3V1, entity_id: str) -> str:
     bindings = [b for b in request.entity_bindings if b.entity_id == entity_id]
     if len(bindings) != 1:
         raise ValueError("projection reuse entity is not currently bound")
@@ -210,7 +218,11 @@ def _entity_scope(request, entity_id):
     )
 
 
-def _recorded_recovery_origin_window(request, call, recorded):
+def _recorded_recovery_origin_window(
+    request: BatchConceptCompileRequest830G3V1,
+    call: G3CallPlanV1,
+    recorded: gateway.G3RecordedCall,
+) -> tuple[G3DRecoveryWindow, dict[str, Any]]:
     """Recover scope from the authenticated old request, never from reuse selection."""
     from .g3_bounded_model_execution import _unique_json_bytes
     from .g3_field_task_recovery import _exact_recovery_window
@@ -234,12 +246,18 @@ def _recorded_recovery_origin_window(request, call, recorded):
     window = _exact_recovery_window(request, context["window"])
     if window["window_id"] != call.window_id or tuple(window["material_ids"]) != call.material_ids:
         raise ValueError("recorded recovery window does not match original signed call")
-    return window, context
+    return window, cast(dict[str, Any], context)
 
 
 def _derive(
-    *, plan, origin_request, current_request, origin_admission_digest, selections, ledger_root=None
-):
+    *,
+    plan: G3BoundedAdmissionPlanV1,
+    origin_request: BatchConceptCompileRequest830G3V1,
+    current_request: BatchConceptCompileRequest830G3V1,
+    origin_admission_digest: str,
+    selections: Sequence[G3DProjectionSelectionV1],
+    ledger_root: str | Path | None = None,
+) -> tuple[tuple[G3DProjectionReuseEntryV1, ...], G3DProjectionReuseResult]:
     from .g3_bounded_model_execution import derive_gemini_d_compile_windows
     from .g3_field_task_recovery import project_g3_recorded_compile_subset
 
@@ -247,12 +265,17 @@ def _derive(
     calls = {c.call_id: c for c in plan.request_manifest.calls}
     old_tasks = {(t.entity_id, t.field_key): t for t in adapt_catalog_field_tasks(origin_request)}
     new_tasks = {(t.entity_id, t.field_key): t for t in adapt_catalog_field_tasks(current_request)}
-    entries, outputs, records, seen = [], [], {}, set()
+    entries: list[G3DProjectionReuseEntryV1] = []
+    outputs: list[CompileOutput] = []
+    records: dict[str, gateway.G3RecordedCall] = {}
+    seen: set[tuple[str, str]] = set()
     for selection in selections:
         selection = G3DProjectionSelectionV1.model_validate(selection)
         call = calls.get(selection.origin_call_id)
         if call is None:
             raise ValueError("projection reuse origin call/window not in signed plan")
+        if call.window_id is None:
+            raise ValueError("projection reuse origin call has no window")
         origin_context = None
         if call.window_id in windows:
             window = windows[call.window_id]
@@ -307,6 +330,8 @@ def _derive(
             }
         )
         terminal = recorded.terminal
+        if terminal.status not in ("SUCCESS", "FAILED"):
+            raise ValueError("projection reuse terminal status is invalid")
         entries.append(
             G3DProjectionReuseEntryV1(
                 **selection.model_dump(),
@@ -351,13 +376,13 @@ def _derive(
 
 def build_d_projection_reuse_manifest(
     *,
-    origin_request,
-    current_request,
-    origin_admission_digest,
-    selections,
-    ledger_root=None,
-    admission_root=None,
-):
+    origin_request: BatchConceptCompileRequest830G3V1,
+    current_request: BatchConceptCompileRequest830G3V1,
+    origin_admission_digest: str,
+    selections: Sequence[G3DProjectionSelectionV1],
+    ledger_root: str | Path | None = None,
+    admission_root: str | Path | None = None,
+) -> G3DProjectionReuseManifestV1:
     plan, recorded_request = _load_origin(origin_admission_digest, admission_root)
     if origin_request != recorded_request:
         raise ValueError("projection reuse supplied original request is not signed origin")
@@ -379,13 +404,20 @@ def build_d_projection_reuse_manifest(
         entries=entries,
     )
     return G3DProjectionReuseManifestV1.model_validate(
-        {**payload, "manifest_sha256": batch_sha256_830_g3(payload["contract"], payload)}
+        {
+            **payload,
+            "manifest_sha256": batch_sha256_830_g3("g3-d-projection-reuse.830.v1", payload),
+        }
     )
 
 
 def validate_d_projection_reuse(
-    manifest, *, current_request, ledger_root=None, admission_root=None
-):
+    manifest: object,
+    *,
+    current_request: BatchConceptCompileRequest830G3V1,
+    ledger_root: str | Path | None = None,
+    admission_root: str | Path | None = None,
+) -> G3DProjectionReuseResult:
     manifest = G3DProjectionReuseManifestV1.model_validate(manifest)
     if (
         manifest.current_request_sha256 != current_request.request_sha256

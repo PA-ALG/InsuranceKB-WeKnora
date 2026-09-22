@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -23,6 +23,7 @@ from insurance_harness.product_ingestion.upload_manifest import UploadManifest
 from insurance_harness.service_shell.apps import PrincipalDependency
 from insurance_harness.service_shell.principal import (
     AuthorizationError,
+    Principal,
     ServiceCapability,
     require_service_capability,
 )
@@ -36,7 +37,7 @@ class CreateRun(BaseModel):
 
     @field_validator("upload_manifest", mode="before")
     @classmethod
-    def parse_manifest(cls, value):
+    def parse_manifest(cls, value: object) -> UploadManifest | None:
         if value is None or isinstance(value, UploadManifest):
             return value
         return UploadManifest.model_validate_json(json.dumps(value))
@@ -81,7 +82,7 @@ class _DiscoverySummary(BaseModel):
     accepted_member_count: int | None = Field(default=None, ge=0)
 
 
-def combine_discovery_summaries(generation, final):
+def combine_discovery_summaries(generation: bytes | None, final: bytes | None) -> bytes | None:
     """Keep generation coverage while exposing the separate publication decision."""
     if final is None:
         return generation
@@ -104,7 +105,9 @@ def combine_discovery_summaries(generation, final):
         return b"{}"  # Existing safe projection marks malformed status as failure.
 
 
-def _discovery_summary_projection(raw, *, publication_verified=False):
+def _discovery_summary_projection(
+    raw: bytes | None, *, publication_verified: bool = False
+) -> dict[str, Any]:
     empty = {
         "state": "NOT_EXECUTED",
         "reused": False,
@@ -156,7 +159,7 @@ def install_product_api(
         raise ValueError("product ingestion needs exact scopes and capacity")
     router = APIRouter(prefix="/product-ingestion/v1/spaces/{space_id}/runs")
 
-    def authorize(space_id, principal, *, write=False):
+    def authorize(space_id: str, principal: Principal, *, write: bool = False) -> ProductScope:
         require_service_capability(
             principal,
             space_id=space_id,
@@ -171,7 +174,7 @@ def install_product_api(
             raise AuthorizationError("product_scope_unconfigured")
         return scope
 
-    def read_payload(scope, run_id):
+    def read_payload(scope: ProductScope, run_id: str) -> dict[str, Any]:
         try:
             run = store.get_run(scope=scope, run_id=run_id)
             stages = store.list_status_stages(scope=scope, run_id=run_id)
@@ -200,9 +203,11 @@ def install_product_api(
             scope=scope, run_id=run_id, artifact_kind="source_processing_summary"
         )
         summary = json.loads(summaries[0].payload) if summaries else None
-        attempts = read_audit(artifacts.list_artifacts(
-            scope=scope, run_id=run_id, artifact_kind="source_processing_attempt"
-        ))
+        attempts = read_audit(
+            artifacts.list_artifacts(
+                scope=scope, run_id=run_id, artifact_kind="source_processing_attempt"
+            )
+        )
         summary = source_accounting(summary, attempts)
         if summary is not None:
             if checkpoint_receipt and summaries and summaries[0].run_id != run_id:
@@ -319,7 +324,7 @@ def install_product_api(
         return {"success": True, "data": payload}
 
     @router.post("", status_code=201)
-    def create(space_id: str, request: CreateRun, principal: PrincipalDependency):
+    def create(space_id: str, request: CreateRun, principal: PrincipalDependency) -> dict[str, Any]:
         scope = authorize(space_id, principal, write=True)
         if request.expected_upload_count > max_upload_files:
             raise HTTPException(422, "upload_capacity_exceeded")
@@ -341,17 +346,15 @@ def install_product_api(
         space_id: str,
         principal: PrincipalDependency,
         limit: Annotated[int, Query(ge=1, le=100)] = 30,
-    ):
+    ) -> dict[str, Any]:
         scope = authorize(space_id, principal)
         return {
             "success": True,
-            "data": {
-                "runs": store.list_status_summaries(scope=scope, limit=limit)
-            },
+            "data": {"runs": store.list_status_summaries(scope=scope, limit=limit)},
         }
 
     @router.get("/{run_id}")
-    def read(space_id: str, run_id: str, principal: PrincipalDependency):
+    def read(space_id: str, run_id: str, principal: PrincipalDependency) -> dict[str, Any]:
         return read_payload(authorize(space_id, principal), run_id)
 
     @router.post("/{run_id}/retry-processing", status_code=201)
@@ -360,7 +363,7 @@ def install_product_api(
         run_id: str,
         request: RetryProcessing,
         principal: PrincipalDependency,
-    ):
+    ) -> dict[str, Any]:
         scope = authorize(space_id, principal, write=True)
         try:
             run = store.retry_processing(
@@ -375,7 +378,9 @@ def install_product_api(
         return read_payload(scope, run.run_id)
 
     @router.post("/{run_id}/retry-fields", status_code=201)
-    def retry(space_id: str, run_id: str, request: RetryFields, principal: PrincipalDependency):
+    def retry(
+        space_id: str, run_id: str, request: RetryFields, principal: PrincipalDependency
+    ) -> dict[str, Any]:
         scope = authorize(space_id, principal, write=True)
         if len(request.field_keys) != len(set(request.field_keys)):
             raise HTTPException(422, "duplicate_field_keys")

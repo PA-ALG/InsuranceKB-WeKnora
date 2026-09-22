@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from typing import Any
 
 import pytest
+from pydantic import BaseModel
+
+from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
+from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCandidateBundle830G3V1,
+    BatchConceptCompileRequest830G3V1,
+)
+from insurance_harness.knowledge_compiler.g3_field_tasks import FieldTaskV1
 
 
-def module():
+def module() -> ModuleType:
     return importlib.import_module("insurance_harness.knowledge_compiler.g3_d_projection_reuse")
 
 
-def test_selection_rejects_ambiguous_or_duplicate_targets():
+def test_selection_rejects_ambiguous_or_duplicate_targets() -> None:
     cls = module().G3DProjectionSelectionV1
     for fields, synthesis in (((), False), (("x", "x"), False), (("x",), True)):
         with pytest.raises(ValueError):
@@ -17,7 +28,7 @@ def test_selection_rejects_ambiguous_or_duplicate_targets():
     assert cls(origin_call_id="call", field_keys=("x",)).field_keys == ("x",)
 
 
-def test_manifest_rejects_rehashed_invented_empty_evidence():
+def test_manifest_rejects_rehashed_invented_empty_evidence() -> None:
     mod = module()
     payload = dict(
         contract="g3-d-projection-reuse.830.v1",
@@ -36,7 +47,7 @@ def test_manifest_rejects_rehashed_invented_empty_evidence():
 
 
 @pytest.fixture(scope="module")
-def request_fixture():
+def request_fixture() -> BatchConceptCandidateBundle830G3V1:
     from pathlib import Path
 
     from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
@@ -50,7 +61,9 @@ def request_fixture():
     )
 
 
-def _setup(monkeypatch, candidate):
+def _setup(
+    monkeypatch: pytest.MonkeyPatch, candidate: BatchConceptCandidateBundle830G3V1
+) -> tuple[ModuleType, BatchConceptCompileRequest830G3V1, list[str], list[dict[str, object]]]:
     import json
     from types import SimpleNamespace
 
@@ -92,7 +105,7 @@ def _setup(monkeypatch, candidate):
     monkeypatch.setattr(mod, "_load_origin", lambda *args: (plan, request))
     reads = []
 
-    def read(**kwargs):
+    def read(**kwargs: object) -> SimpleNamespace:
         reads.append(kwargs)
         return recorded
 
@@ -105,7 +118,9 @@ def _setup(monkeypatch, candidate):
     return mod, request, fields, reads
 
 
-def test_projection_reopens_failed_evidence_and_deduplicates_usage(monkeypatch, request_fixture):
+def test_projection_reopens_failed_evidence_and_deduplicates_usage(
+    monkeypatch: pytest.MonkeyPatch, request_fixture: BatchConceptCandidateBundle830G3V1
+) -> None:
     mod, request, fields, reads = _setup(monkeypatch, request_fixture)
     selections = tuple(
         mod.G3DProjectionSelectionV1(origin_call_id="old-call", field_keys=(key,))
@@ -135,7 +150,9 @@ def test_projection_reopens_failed_evidence_and_deduplicates_usage(monkeypatch, 
         mod.validate_d_projection_reuse(payload, current_request=request)
 
 
-def test_projection_rejects_duplicate_and_changed_task(monkeypatch, request_fixture):
+def test_projection_rejects_duplicate_and_changed_task(
+    monkeypatch: pytest.MonkeyPatch, request_fixture: BatchConceptCandidateBundle830G3V1
+) -> None:
     mod, request, fields, _ = _setup(monkeypatch, request_fixture)
     selection = mod.G3DProjectionSelectionV1(origin_call_id="old-call", field_keys=(fields[0],))
     with pytest.raises(ValueError, match="duplicate"):
@@ -148,7 +165,7 @@ def test_projection_rejects_duplicate_and_changed_task(monkeypatch, request_fixt
     original = mod.adapt_catalog_field_tasks
     calls = 0
 
-    def tasks(value):
+    def tasks(value: BatchConceptCompileRequest830G3V1) -> tuple[FieldTaskV1, ...]:
         nonlocal calls
         calls += 1
         rows = original(value)
@@ -168,7 +185,9 @@ def test_projection_rejects_duplicate_and_changed_task(monkeypatch, request_fixt
         )
 
 
-def test_origin_loader_rejects_invalid_root_signature_before_using_historical_request(monkeypatch):
+def test_origin_loader_rejects_invalid_root_signature_before_using_historical_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from types import SimpleNamespace
 
     from insurance_harness.run_admission import g3_trust_policy as trust
@@ -180,11 +199,11 @@ def test_origin_loader_rejects_invalid_root_signature_before_using_historical_re
     approval = SimpleNamespace(payload=plan)
     reads = []
 
-    def read(path, model, digest=None):
+    def read(path: Path, model: type[BaseModel], digest: str | None = None) -> SimpleNamespace:
         reads.append(path.name)
         return approval if path.name == "approval-envelope.json" else parent
 
-    def invalid(policy, envelope):
+    def invalid(policy: object, envelope: object) -> None:
         assert envelope is parent
         raise ValueError("invalid historical root signature")
 
@@ -197,7 +216,18 @@ def test_origin_loader_rejects_invalid_root_signature_before_using_historical_re
     assert reads == ["approval-envelope.json", "model-processing-authorization.json"]
 
 
-def _setup_recovery_origin(monkeypatch, candidate):
+def _setup_recovery_origin(
+    monkeypatch: pytest.MonkeyPatch, candidate: BatchConceptCandidateBundle830G3V1
+) -> tuple[
+    ModuleType,
+    BatchConceptCompileRequest830G3V1,
+    list[str],
+    list[dict[str, object]],
+    SimpleNamespace,
+    SimpleNamespace,
+    dict[str, Any],
+    dict[str, Any],
+]:
     import hashlib
     import json
 
@@ -225,7 +255,7 @@ def _setup_recovery_origin(monkeypatch, candidate):
     entity_id = target_map[selected_rows[0]["field_ref"]]["entity_id"]
     window = derive_g3_field_recovery_window(request, entity_id=entity_id, field_keys=selected_keys)
     context = json.loads(
-        runtime.batch_json_bytes_830_g3(render_recovery_context(_identity(), request, window))
+        batch_json_bytes_830_g3(render_recovery_context(_identity(), request, window))
     )
     body = {
         "messages": [
@@ -245,8 +275,8 @@ def _setup_recovery_origin(monkeypatch, candidate):
 
 
 def test_repair_origin_reuses_signed_exact_subset_without_recursive_manifest_validation(
-    monkeypatch, request_fixture
-):
+    monkeypatch: pytest.MonkeyPatch, request_fixture: BatchConceptCandidateBundle830G3V1
+) -> None:
     mod, request, keys, reads, call, recorded, body, context = _setup_recovery_origin(
         monkeypatch, request_fixture
     )
@@ -267,8 +297,10 @@ def test_repair_origin_reuses_signed_exact_subset_without_recursive_manifest_val
 
 @pytest.mark.parametrize("mutation", ["window", "offered_span"])
 def test_repair_origin_rejects_forged_window_or_source_scope(
-    monkeypatch, request_fixture, mutation
-):
+    monkeypatch: pytest.MonkeyPatch,
+    request_fixture: BatchConceptCandidateBundle830G3V1,
+    mutation: str,
+) -> None:
     import hashlib
 
     from insurance_harness.run_admission.g3_models import canonical_json
@@ -296,8 +328,8 @@ def test_repair_origin_rejects_forged_window_or_source_scope(
 
 
 def test_repair_origin_keeps_selected_quote_inside_original_offered_spans(
-    monkeypatch, request_fixture
-):
+    monkeypatch: pytest.MonkeyPatch, request_fixture: BatchConceptCandidateBundle830G3V1
+) -> None:
     import json
 
     from insurance_harness.run_admission.g3_models import canonical_json

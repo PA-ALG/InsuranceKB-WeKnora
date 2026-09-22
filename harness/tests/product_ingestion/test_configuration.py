@@ -4,6 +4,7 @@ import base64
 import copy
 import hashlib
 import json
+import typing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -32,8 +33,7 @@ def _secret(seed: int) -> str:
 
 def runtime_json(tmp_path: Path) -> str:
     catalog = (
-        Path(__file__).parents[3]
-        / "docs/insurance-kb/evidence/830-g3/catalog/catalog.json"
+        Path(__file__).parents[3] / "docs/insurance-kb/evidence/830-g3/catalog/catalog.json"
     ).read_bytes()
     files = {}
     for name, raw in (
@@ -49,9 +49,7 @@ def runtime_json(tmp_path: Path) -> str:
             "max_bytes": len(raw),
         }
     source_private = Ed25519PrivateKey.from_private_bytes(bytes([9]) * 32)
-    source_public = base64.b64encode(
-        source_private.public_key().public_bytes_raw()
-    ).decode()
+    source_public = base64.b64encode(source_private.public_key().public_bytes_raw()).decode()
     expires = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     return json.dumps(
         {
@@ -118,20 +116,18 @@ def runtime_json(tmp_path: Path) -> str:
     )
 
 
-def settings(tmp_path: Path, **updates) -> ShellSettings:
+def settings(tmp_path: Path, **updates: typing.Any) -> ShellSettings:
     values = {
         "postgres_dsn": SecretStr("postgresql+psycopg://wiki:secret@db/wiki"),
         "principal_space_ids": (SCOPE.space_id,),
         "worker_id": "worker-a",
         "worker_space_ids": (SCOPE.space_id,),
         "product_ingestion_enabled": True,
-        "product_ingestion_scopes_json": SecretStr(
-            json.dumps([SCOPE.model_dump(mode="json")])
-        ),
+        "product_ingestion_scopes_json": SecretStr(json.dumps([SCOPE.model_dump(mode="json")])),
         "product_ingestion_runtime_json": SecretStr(runtime_json(tmp_path)),
     }
     values.update(updates)
-    return ShellSettings(**values)
+    return ShellSettings.model_validate(values)
 
 
 def test_disabled_product_runtime_does_not_parse_or_read_configuration(tmp_path: Path) -> None:
@@ -161,11 +157,14 @@ def test_runtime_configuration_loads_exact_scopes_keys_and_trusted_bytes(
     assert binding.scope == SCOPE == binding.model.scope == binding.automation.scope
     assert tuple(binding.source_public_keys) == ("source-current",)
     assert loaded.catalog.catalog_sha256
-    assert loaded.catalog_json == Path(
-        json.loads(settings(tmp_path).product_ingestion_runtime_json.get_secret_value())[
-            "trusted_files"
-        ]["catalog"]["path"]
-    ).read_bytes()
+    assert (
+        loaded.catalog_json
+        == Path(
+            json.loads(settings(tmp_path).product_ingestion_runtime_json.get_secret_value())[
+                "trusted_files"
+            ]["catalog"]["path"]
+        ).read_bytes()
+    )
     assert loaded.profile_confirmation_json.startswith(b"{")
     assert loaded.resolution_policy_json.startswith(b"{")
     rendered = repr(loaded)
@@ -193,9 +192,7 @@ def test_runtime_configuration_rejects_scope_file_and_ambiguous_json(
         else:
             value["trusted_files"]["resolution_policy"]["sha256"] = "f" * 64
         raw = json.dumps(value)
-    configured = configured.model_copy(
-        update={"product_ingestion_runtime_json": SecretStr(raw)}
-    )
+    configured = configured.model_copy(update={"product_ingestion_runtime_json": SecretStr(raw)})
     with pytest.raises(ShellConfigError) as caught:
         load_product_runtime_configuration(configured)
     assert caught.value.keys == ("product_ingestion_runtime_json",)

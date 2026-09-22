@@ -11,7 +11,11 @@ from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import 
     BatchCorpusV1,
     BatchResolutionPolicyV1,
 )
-from insurance_harness.run_admission.g3_models import G3BoundedAdmissionPlanV1
+from insurance_harness.run_admission.g3_models import (
+    G3BoundedAdmissionPlanV1,
+    G3CallTerminalReceiptV1,
+    canonical_json,
+)
 
 _PACKAGE = Path("/private/tmp/g3-gemini-c-stage-package-05/install/sha256")
 _SNAPSHOT = Path("/private/tmp/g3-gemini-run-c-05-chain-snapshot")
@@ -41,8 +45,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+type QuarantineCase = tuple[
+    G3BoundedAdmissionPlanV1,
+    BatchCorpusV1,
+    BatchResolutionPolicyV1,
+    dict[str, G3CallTerminalReceiptV1],
+]
+
+
 @pytest.fixture()
-def actual_c05(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def actual_c05(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> QuarantineCase:
     plan = G3BoundedAdmissionPlanV1.model_validate_json(_PLAN.read_bytes())
     corpus = BatchCorpusV1.model_validate_json(_CORPUS.read_bytes())
     policy = BatchResolutionPolicyV1.model_validate_json(_POLICY.read_bytes())
@@ -56,10 +68,11 @@ def actual_c05(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "insurance_harness.model_policy.g3_bounded_gateway.G3_LEDGER_ROOT", str(ledger)
     )
     terminals = {
-        call.call_id: runner.G3CallTerminalReceiptV1.model_validate_json(
+        call.call_id: G3CallTerminalReceiptV1.model_validate_json(
             next(
-                leaf for leaf in chain.glob("calls/*/call-terminal.json")
-                if runner.G3CallTerminalReceiptV1.model_validate_json(leaf.read_bytes()).call_id
+                leaf
+                for leaf in chain.glob("calls/*/call-terminal.json")
+                if G3CallTerminalReceiptV1.model_validate_json(leaf.read_bytes()).call_id
                 == call.call_id
             ).read_bytes()
         )
@@ -68,7 +81,9 @@ def actual_c05(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return plan, corpus, policy, terminals
 
 
-def test_wired_failure_route_materializes_exact_named_quarantine(actual_c05):
+def test_wired_failure_route_materializes_exact_named_quarantine(
+    actual_c05: QuarantineCase,
+) -> None:
     plan, corpus, policy, terminals = actual_c05
     result = runner._persist_failed_classification_quarantines(
         plan=plan,
@@ -84,25 +99,26 @@ def test_wired_failure_route_materializes_exact_named_quarantine(actual_c05):
     assert decision.queue_id == "queue-g3"
     assert decision.queue_owner == "本任务用户（本人）"
     assert (
-        result.decisions[0].call_terminal_receipt_sha256
-        == terminals[_FAILED_CALL].receipt_sha256
+        result.decisions[0].call_terminal_receipt_sha256 == terminals[_FAILED_CALL].receipt_sha256
     )
     assert terminals[_FAILED_CALL].status == "FAILED"
     persisted = (
         runner._g3_chain_directory(plan)
         / "stage-results/C_CLASSIFY/failed-classification-quarantine.json"
     )
-    assert runner._read_secure_exact(persisted) == runner.canonical_json(
+    assert runner._read_secure_exact(persisted) == canonical_json(
         result.model_dump(mode="json", round_trip=True)
     )
 
 
-def test_failed_classification_quarantine_rejects_wrong_request_and_material(actual_c05):
+def test_failed_classification_quarantine_rejects_wrong_request_and_material(
+    actual_c05: QuarantineCase,
+) -> None:
     plan, corpus, policy, terminals = actual_c05
     failed = terminals[_FAILED_CALL]
     failed_values = failed.model_dump(mode="python")
     failed_values["request_body_sha256"] = "0" * 64
-    wrong_request = runner.G3CallTerminalReceiptV1.model_construct(**failed_values)
+    wrong_request = G3CallTerminalReceiptV1.model_construct(**failed_values)
     calls = []
     for call in plan.request_manifest.calls:
         if call.call_id == _FAILED_CALL:
@@ -120,16 +136,23 @@ def test_failed_classification_quarantine_rejects_wrong_request_and_material(act
         wrong_request,
         wrong_material,
     ):
-        kwargs = {"plan": plan, "failed_terminals": (changed,)}
         if isinstance(changed, G3BoundedAdmissionPlanV1):
-            kwargs = {"plan": changed, "failed_terminals": (failed,)}
+            changed_plan, changed_terminal = changed, failed
+        else:
+            changed_plan, changed_terminal = plan, changed
         with pytest.raises(ValueError):
             runner._failed_classification_quarantines(
-                admission_digest=_ADMISSION, corpus=corpus, policy=policy, **kwargs
+                admission_digest=_ADMISSION,
+                corpus=corpus,
+                policy=policy,
+                plan=changed_plan,
+                failed_terminals=(changed_terminal,),
             )
 
 
-def test_failed_classification_quarantine_rejects_success_terminal(actual_c05):
+def test_failed_classification_quarantine_rejects_success_terminal(
+    actual_c05: QuarantineCase,
+) -> None:
     plan, corpus, policy, terminals = actual_c05
     with pytest.raises(ValueError, match="failed classification terminal"):
         runner._failed_classification_quarantines(
@@ -141,7 +164,9 @@ def test_failed_classification_quarantine_rejects_success_terminal(actual_c05):
         )
 
 
-def test_failed_classification_quarantine_rejects_policy_outside_admission(actual_c05):
+def test_failed_classification_quarantine_rejects_policy_outside_admission(
+    actual_c05: QuarantineCase,
+) -> None:
     plan, corpus, policy, terminals = actual_c05
     payload = policy.model_dump(mode="python", exclude={"policy_sha256"})
     payload["queue_id"] = "foreign-queue"

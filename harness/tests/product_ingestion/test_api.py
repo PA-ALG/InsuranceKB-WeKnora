@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+import typing
+from collections.abc import Iterator
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from insurance_harness.db.base import Base
+from insurance_harness.jobs import ClaimedJob
 from insurance_harness.jobs.tables import WikiJob
 from insurance_harness.product_ingestion import tables as product_tables  # noqa: F401
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
@@ -40,7 +45,7 @@ RECORDS = {
 
 
 @pytest.fixture
-def environment(tmp_path):
+def environment(tmp_path: Path) -> Iterator[tuple[typing.Any, ...]]:
     engine = create_engine(
         f"sqlite:///{tmp_path}/api.db", connect_args={"check_same_thread": False}
     )
@@ -52,11 +57,11 @@ def environment(tmp_path):
         lifecycle=lifecycle, probe=lambda: None, timeout_seconds=0.1, freshness_seconds=1
     )
     settings = ShellSettings(
-        postgres_dsn="postgresql://fixture@localhost/fixture",
-        principal_records_json=json.dumps(RECORDS),
+        postgres_dsn=SecretStr("postgresql://fixture@localhost/fixture"),
+        principal_records_json=SecretStr(json.dumps(RECORDS)),
         principal_space_ids=("space",),
         product_ingestion_enabled=True,
-        product_ingestion_scopes_json=json.dumps([SCOPE]),
+        product_ingestion_scopes_json=SecretStr(json.dumps([SCOPE])),
     )
     app = build_api_app(
         settings=settings, lifecycle=lifecycle, readiness=readiness, session_factory=factory
@@ -66,11 +71,13 @@ def environment(tmp_path):
     engine.dispose()
 
 
-def auth(token="fixture-platform"):
+def auth(token: str = "fixture-platform") -> dict[str, typing.Any]:
     return {"Authorization": "Bearer " + token}
 
 
-def test_api_distinguishes_recorded_model_reuse_from_new_dispatch(environment, monkeypatch):
+def test_api_distinguishes_recorded_model_reuse_from_new_dispatch(
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from types import SimpleNamespace
 
     client, *_ = environment
@@ -99,7 +106,9 @@ def test_api_distinguishes_recorded_model_reuse_from_new_dispatch(environment, m
     assert not run["usage"]
 
 
-def test_status_stage_wall_includes_queue_and_retry_before_last_attempt(environment):
+def test_status_stage_wall_includes_queue_and_retry_before_last_attempt(
+    environment: typing.Any,
+) -> None:
     client, factory, *_ = environment
     run = client.post(
         PATH,
@@ -125,8 +134,8 @@ def test_status_stage_wall_includes_queue_and_retry_before_last_attempt(environm
 
 
 def test_status_keeps_recorded_source_calls_when_sibling_receipt_is_unknown(
-    environment, monkeypatch
-):
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from types import SimpleNamespace
 
     from tests.product_ingestion.test_processing_receipts import receipt, sealed
@@ -176,7 +185,9 @@ def test_status_keeps_recorded_source_calls_when_sibling_receipt_is_unknown(
     assert status["model_call_count_complete"] is False
 
 
-def test_real_api_composition_admits_durable_job_without_inline_processing(environment):
+def test_real_api_composition_admits_durable_job_without_inline_processing(
+    environment: typing.Any,
+) -> None:
     client, factory, *_ = environment
     payload = {"idempotency_key": "browser-batch", "expected_upload_count": 3}
     response = client.post(PATH, headers=auth(), json=payload)
@@ -203,7 +214,9 @@ def test_real_api_composition_admits_durable_job_without_inline_processing(envir
 
 
 @pytest.mark.parametrize("source_sealed", [False, True])
-def test_source_audit_snapshots_do_not_double_count_calls(environment, monkeypatch, source_sealed):
+def test_source_audit_snapshots_do_not_double_count_calls(
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch, source_sealed: typing.Any
+) -> None:
     import copy
     from types import SimpleNamespace
 
@@ -212,29 +225,48 @@ def test_source_audit_snapshots_do_not_double_count_calls(environment, monkeypat
     from tests.product_ingestion.test_processing_receipts import sealed
 
     client, *_ = environment
-    run = client.post(PATH, headers=auth(), json={
-        "idempotency_key": "growing-source-counts", "expected_upload_count": 1,
-    }).json()["data"]
+    run = client.post(
+        PATH,
+        headers=auth(),
+        json={
+            "idempotency_key": "growing-source-counts",
+            "expected_upload_count": 1,
+        },
+    ).json()["data"]
     first = _processing(0, True)
     latest = copy.deepcopy(first)
     second_call = {**latest["calls"][0], "dispatch_id": "call-second"}
     latest["calls"].append(second_call)
     latest["counts"].update(attempts=2, confirmed=2)
     latest = sealed(latest)
-    records = [SimpleNamespace(payload=json.dumps(item).encode()) for item in (
-        _processing(0, False), first, latest,
-    )]
-    monkeypatch.setattr(ProductArtifactStore, "list_artifacts", lambda _self, **kw: (
-        tuple(records) if kw.get("artifact_kind") == "source_processing_attempt" else ()
-    ))
+    records = [
+        SimpleNamespace(payload=json.dumps(item).encode())
+        for item in (
+            _processing(0, False),
+            first,
+            latest,
+        )
+    ]
+    monkeypatch.setattr(
+        ProductArtifactStore,
+        "list_artifacts",
+        lambda _self, **kw: (
+            tuple(records) if kw.get("artifact_kind") == "source_processing_attempt" else ()
+        ),
+    )
     summary = SimpleNamespace(
         run_id=run["run_id"],
         payload=json.dumps(processing_summary([("knowledge-0", latest, False)])).encode(),
     )
-    monkeypatch.setattr(ProductArtifactStore, "list_effective_artifacts", lambda _self, **kw: (
-        (summary,) if source_sealed and kw.get("artifact_kind") == "source_processing_summary"
-        else ()
-    ))
+    monkeypatch.setattr(
+        ProductArtifactStore,
+        "list_effective_artifacts",
+        lambda _self, **kw: (
+            (summary,)
+            if source_sealed and kw.get("artifact_kind") == "source_processing_summary"
+            else ()
+        ),
+    )
     status = client.get(PATH + "/" + run["run_id"], headers=auth()).json()["data"]
     assert status["recorded_source_model_call_count"] == 2
     assert status["model_call_count"] == 2
@@ -243,7 +275,7 @@ def test_source_audit_snapshots_do_not_double_count_calls(environment, monkeypat
         assert status["source_model_call_count"] is None
 
 
-def test_api_authentication_scope_and_read_only_capability(environment):
+def test_api_authentication_scope_and_read_only_capability(environment: typing.Any) -> None:
     client, *_ = environment
     payload = {"idempotency_key": "browser-batch", "expected_upload_count": 3}
     assert client.post(PATH, json=payload).status_code == 401
@@ -252,7 +284,7 @@ def test_api_authentication_scope_and_read_only_capability(environment):
     assert client.get(PATH, headers=auth("fixture-reader")).status_code == 200
 
 
-def test_user_cannot_inject_candidate_or_unverified_fields(environment):
+def test_user_cannot_inject_candidate_or_unverified_fields(environment: typing.Any) -> None:
     client, factory, *_ = environment
     response = client.post(
         PATH,
@@ -268,7 +300,7 @@ def test_user_cannot_inject_candidate_or_unverified_fields(environment):
         assert list(session.scalars(select(WikiJob))) == []
 
 
-def test_run_is_visible_after_api_process_recomposition(environment):
+def test_run_is_visible_after_api_process_recomposition(environment: typing.Any) -> None:
     client, factory, settings, lifecycle, readiness = environment
     first = client.post(
         PATH,
@@ -287,16 +319,19 @@ def test_run_is_visible_after_api_process_recomposition(environment):
     assert listing[0]["run_id"] == first.json()["data"]["run_id"]
 
 
-def test_list_is_a_thin_status_without_replaying_history_audits(environment, monkeypatch):
+def test_list_is_a_thin_status_without_replaying_history_audits(
+    environment: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from insurance_harness.product_ingestion.store import ProductIngestionStore
 
     client, *_ = environment
     run = client.post(
-        PATH, headers=auth(),
+        PATH,
+        headers=auth(),
         json={"idempotency_key": "thin-list", "expected_upload_count": 3},
     ).json()["data"]
 
-    def forbidden(*_args, **_kwargs):
+    def forbidden(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("list must not load full audit or recovery evidence")
 
     monkeypatch.setattr(ProductArtifactStore, "get_stage_call_metrics", forbidden)
@@ -312,18 +347,26 @@ def test_list_is_a_thin_status_without_replaying_history_audits(environment, mon
     assert summary["wiki_knowledge_base_id"] == "wiki"
     assert summary["state"] == "accepting_uploads"
     assert summary["counts"] == {
-        "success_count": None, "missing_count": None, "failure_count": None
+        "success_count": None,
+        "missing_count": None,
+        "failure_count": None,
     }
     assert summary["model_call_count"] is None
     assert summary["model_call_count_complete"] is False
     assert summary["stage"] == "uploads"
     for key in (
-        "fields", "stages", "source_processing", "discovery_summary", "can_retry_processing"
+        "fields",
+        "stages",
+        "source_processing",
+        "discovery_summary",
+        "can_retry_processing",
     ):
         assert key not in summary
 
 
-def test_failed_field_retry_creates_a_linked_run_and_preserves_original(environment):
+def test_failed_field_retry_creates_a_linked_run_and_preserves_original(
+    environment: typing.Any,
+) -> None:
     import hashlib
     from types import SimpleNamespace
 
@@ -336,7 +379,9 @@ def test_failed_field_retry_creates_a_linked_run_and_preserves_original(environm
     scope = models.ProductScope.model_validate(SCOPE)
     jobs = JobStore(
         factory,
-        ShellSettings(postgres_dsn="postgresql://fixture@localhost/fixture").job_runtime_config(),
+        ShellSettings(
+            postgres_dsn=SecretStr("postgresql://fixture@localhost/fixture")
+        ).job_runtime_config(),
     )
     store = ProductIngestionStore(factory, jobs)
     run = store.create_run(scope=scope, idempotency_key="failed-field-run")
@@ -367,6 +412,7 @@ def test_failed_field_retry_creates_a_linked_run_and_preserves_original(environm
         request_sha256=request_sha,
         tasks=(task,),
     )
+    assert reservation.call is not None
     store.begin_call(
         scope=scope,
         call_id=reservation.call.call_id,
@@ -413,7 +459,9 @@ def test_failed_field_retry_creates_a_linked_run_and_preserves_original(environm
     assert store.get_run(scope=scope, run_id=run.run_id).failure_count == 1
 
 
-def test_status_includes_non_field_model_calls_without_exposing_raw_response(environment):
+def test_status_includes_non_field_model_calls_without_exposing_raw_response(
+    environment: typing.Any,
+) -> None:
     import hashlib
 
     from insurance_harness.jobs import JobStore
@@ -434,6 +482,7 @@ def test_status_includes_non_field_model_calls_without_exposing_raw_response(env
         idempotency_key="identity",
     )
     claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    assert isinstance(claim, ClaimedJob)
     job = jobs.start(space_id="space", job_id=stage.job_id, generation=claim.job.lease_generation)
     artifacts.reserve_stage_call(
         scope=scope,
@@ -481,7 +530,7 @@ def test_status_includes_non_field_model_calls_without_exposing_raw_response(env
     assert "private model response" not in result.text
 
 
-def test_extraction_status_tracks_windows_before_aggregate_exists(environment):
+def test_extraction_status_tracks_windows_before_aggregate_exists(environment: typing.Any) -> None:
     from types import SimpleNamespace
 
     from insurance_harness.jobs import JobStore
@@ -504,6 +553,7 @@ def test_extraction_status_tracks_windows_before_aggregate_exists(environment):
         tasks=(task,),
     )
     claim = jobs.claim(space_ids=("space",), worker_id="fixture-worker")
+    assert isinstance(claim, ClaimedJob)
     active = jobs.start(
         space_id="space",
         job_id=window.job_id,
@@ -513,6 +563,7 @@ def test_extraction_status_tracks_windows_before_aggregate_exists(environment):
     assert result["stage"] == "extract"
     stage = next(row for row in result["stages"] if row["name"] == "extract")
     assert stage["state"] == "running"
+    assert active.started_at is not None
     assert stage["last_attempt_started_at"] == active.started_at.isoformat().replace("+00:00", "Z")
     assert stage["started_at"] <= stage["last_attempt_started_at"]
     assert stage["finished_at"] is None
@@ -520,7 +571,9 @@ def test_extraction_status_tracks_windows_before_aggregate_exists(environment):
     assert store.list_stages(scope=scope, run_id=run.run_id) == ()
 
 
-def test_complete_model_count_requires_terminal_run_and_retains_source_totals(environment):
+def test_complete_model_count_requires_terminal_run_and_retains_source_totals(
+    environment: typing.Any,
+) -> None:
     import hashlib
 
     from insurance_harness.jobs import JobStore
@@ -544,6 +597,7 @@ def test_complete_model_count_requires_terminal_run_and_retains_source_totals(en
         idempotency_key="sources",
     )
     claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    assert isinstance(claim, ClaimedJob)
     job = jobs.start(space_id="space", job_id=stage.job_id, generation=claim.job.lease_generation)
     payload = json.dumps(processing_summary([("knowledge", receipt(), False)])).encode()
     writes = artifacts.prepare_artifact_writes(
@@ -575,6 +629,7 @@ def test_complete_model_count_requires_terminal_run_and_retains_source_totals(en
     assert current["model_call_count_complete"] is False
     root = store.enqueue_root(scope=scope, run_id=run.run_id, idempotency_key="root")
     claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    assert isinstance(claim, ClaimedJob)
     active = jobs.start(space_id="space", job_id=root.job_id, generation=claim.job.lease_generation)
     store.finalize_run(
         scope=scope,
@@ -588,7 +643,9 @@ def test_complete_model_count_requires_terminal_run_and_retains_source_totals(en
     assert final["source_processing"]["materials"][0]["counts"]["attempts"] == 0
 
 
-def _discovery_run(environment, summary, *, verified=False):
+def _discovery_run(
+    environment: typing.Any, summary: typing.Any, *, verified: typing.Any = False
+) -> typing.Any:
     import hashlib
 
     from insurance_harness.jobs import JobStore
@@ -610,6 +667,7 @@ def _discovery_run(environment, summary, *, verified=False):
         idempotency_key="synthesis",
     )
     claim = jobs.claim(space_ids=("space",), worker_id="worker")
+    assert isinstance(claim, ClaimedJob)
     job = jobs.start(space_id="space", job_id=stage.job_id, generation=claim.job.lease_generation)
     payload = json.dumps(summary).encode()
     writes = artifacts.prepare_artifact_writes(
@@ -643,12 +701,14 @@ def _discovery_run(environment, summary, *, verified=False):
             idempotency_key="verify",
         )
         claim = jobs.claim(space_ids=("space",), worker_id="worker")
+        assert isinstance(claim, ClaimedJob)
         active = jobs.start(
             space_id="space", job_id=verify.job_id, generation=claim.job.lease_generation
         )
         jobs.report_success(space_id="space", job_id=active.id, generation=active.lease_generation)
         root = store.enqueue_root(scope=scope, run_id=run.run_id, idempotency_key="root")
         claim = jobs.claim(space_ids=("space",), worker_id="worker")
+        assert isinstance(claim, ClaimedJob)
         active = jobs.start(
             space_id="space", job_id=root.job_id, generation=claim.job.lease_generation
         )
@@ -662,7 +722,7 @@ def _discovery_run(environment, summary, *, verified=False):
     return run.run_id
 
 
-def _summary(state="ACCEPTED"):
+def _summary(state: str = "ACCEPTED") -> dict[str, typing.Any]:
     return {
         "state": state,
         "reused": True,
@@ -691,7 +751,9 @@ def _summary(state="ACCEPTED"):
 @pytest.mark.parametrize(
     "state", ["NOT_EXECUTED", "FAILED", "PENDING", "REJECTED", "EMPTY", "ACCEPTED"]
 )
-def test_discovery_status_preserves_dispositions_without_leaking_content(environment, state):
+def test_discovery_status_preserves_dispositions_without_leaking_content(
+    environment: typing.Any, state: typing.Any
+) -> None:
     client, *_ = environment
     run_id = _discovery_run(environment, _summary(state))
     response = client.get(PATH + "/" + run_id, headers=auth())
@@ -709,7 +771,9 @@ def test_discovery_status_preserves_dispositions_without_leaking_content(environ
     assert "PRIVATE_" not in response.text
 
 
-def test_discovery_publication_requires_successful_terminal_verification(environment):
+def test_discovery_publication_requires_successful_terminal_verification(
+    environment: typing.Any,
+) -> None:
     client, *_ = environment
     run_id = _discovery_run(environment, _summary(), verified=True)
     summary = client.get(PATH + "/" + run_id, headers=auth()).json()["data"]["discovery_summary"]
@@ -725,7 +789,9 @@ def test_discovery_publication_requires_successful_terminal_verification(environ
         {"reason_codes": ["PRIVATE raw model response"]},
     ],
 )
-def test_malformed_discovery_is_failure_not_no_new_knowledge(environment, change):
+def test_malformed_discovery_is_failure_not_no_new_knowledge(
+    environment: typing.Any, change: typing.Any
+) -> None:
     client, *_ = environment
     run_id = _discovery_run(environment, {**_summary(), **change})
     response = client.get(PATH + "/" + run_id, headers=auth())
@@ -735,7 +801,7 @@ def test_malformed_discovery_is_failure_not_no_new_knowledge(environment, change
     assert "PRIVATE" not in response.text
 
 
-def test_independent_discovery_summary_keeps_generation_coverage_and_final_decision():
+def test_independent_discovery_summary_keeps_generation_coverage_and_final_decision() -> None:
     from insurance_harness.product_ingestion.api import combine_discovery_summaries
 
     generation = {
@@ -763,9 +829,11 @@ def test_independent_discovery_summary_keeps_generation_coverage_and_final_decis
         "accepted_member_count": 2,
         "coverage": None,
     }
-    result = json.loads(
-        combine_discovery_summaries(json.dumps(generation).encode(), json.dumps(final).encode())
+    raw_result = combine_discovery_summaries(
+        json.dumps(generation).encode(), json.dumps(final).encode()
     )
+    assert raw_result is not None
+    result = json.loads(raw_result)
     assert result["state"] == "ACCEPTED"
     assert result["counts"] == generation["counts"]
     assert result["coverage"] == generation["coverage"]
@@ -773,8 +841,10 @@ def test_independent_discovery_summary_keeps_generation_coverage_and_final_decis
     generation["state"] = "FAILED"
     generation["reason_codes"] = ["DISCOVERY_GENERATION_FAILED"]
     final["state"] = "EMPTY"
-    result = json.loads(
-        combine_discovery_summaries(json.dumps(generation).encode(), json.dumps(final).encode())
+    raw_result = combine_discovery_summaries(
+        json.dumps(generation).encode(), json.dumps(final).encode()
     )
+    assert raw_result is not None
+    result = json.loads(raw_result)
     assert result["state"] == "FAILED"
     assert result["reason_codes"] == ["DISCOVERY_GENERATION_FAILED"]

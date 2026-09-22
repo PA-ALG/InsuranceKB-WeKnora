@@ -2,28 +2,41 @@ from __future__ import annotations
 
 import hashlib
 import json
+import typing
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Literal
 
 import pytest
-from pydantic import SecretStr
+from pydantic import HttpUrl, SecretStr
 
+from insurance_harness.jobs.models import JobSnapshot
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
+from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCompileRequest830G3V1,
+)
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileResult, ReviewResult
 from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.composition import ProductScopeServices
 from insurance_harness.product_ingestion.discovery import DISCOVERY_PROMPT, DISCOVERY_REVIEW_PROMPT
 from insurance_harness.product_ingestion.discovery_stage import run_discovery_stage
 from insurance_harness.product_ingestion.model_settings import (
     ModelTemplatePolicy,
     ProductModelSettings,
 )
-from insurance_harness.product_ingestion.models import ProductRunState, ProductScope
+from insurance_harness.product_ingestion.models import (
+    ProductRunSnapshot,
+    ProductRunState,
+    ProductScope,
+    StageSnapshot,
+)
 from insurance_harness.product_ingestion.stages import json_bytes
 from tests.product_ingestion.test_discovery import case, prepared  # noqa: F401
 
 
 class PriorArtifacts:
-    def __init__(self):
+    def __init__(self) -> None:
         self.summary = {
             "state": "ACCEPTED",
             "reused": False,
@@ -40,26 +53,30 @@ class PriorArtifacts:
         }
         self.delta = {"output": {"pages": [{"stable_key": "retained-page"}], "definitions": []}}
 
-    def list_artifacts(self, **kwargs):
+    def list_artifacts(self, **kwargs: object) -> list[typing.Any]:
         return [SimpleNamespace(payload=json_bytes(self.summary))]
 
     list_effective_artifacts = list_artifacts
 
-    def get_artifact(self, **kwargs):
+    def get_artifact(self, **kwargs: typing.Any) -> SimpleNamespace:
         assert kwargs["artifact_kind"] == "compile_delta" and kwargs["run_id"] == "original"
         return SimpleNamespace(payload=json_bytes(self.delta))
 
 
-async def retry(artifacts, base, *, processing_recovery=False):
+async def retry(
+    artifacts: typing.Any, base: typing.Any, *, processing_recovery: bool = False
+) -> typing.Any:
     return await run_discovery_stage(
-        service=None,
-        artifacts=artifacts,
-        scope=None,
-        run=SimpleNamespace(run_id="retry", retry_of_run_id="original"),
-        stage=SimpleNamespace(dependency_sha256="a" * 64),
-        job=None,
-        request=None,
-        field_delta={"field": "retry result"},
+        service=typing.cast(ProductScopeServices, None),
+        artifacts=typing.cast(ProductArtifactStore, artifacts),
+        scope=typing.cast(ProductScope, None),
+        run=typing.cast(
+            ProductRunSnapshot, SimpleNamespace(run_id="retry", retry_of_run_id="original")
+        ),
+        stage=typing.cast(StageSnapshot, SimpleNamespace(dependency_sha256="a" * 64)),
+        job=typing.cast(JobSnapshot, None),
+        request=typing.cast(BatchConceptCompileRequest830G3V1, None),
+        field_delta=typing.cast(CompileResult, {"field": "retry result"}),
         entity_id="entity",
         base=base,
         processing_recovery=processing_recovery,
@@ -67,13 +84,13 @@ async def retry(artifacts, base, *, processing_recovery=False):
 
 
 @pytest.mark.asyncio
-async def test_accepted_discovery_not_in_published_base_cannot_be_silently_dropped():
+async def test_accepted_discovery_not_in_published_base_cannot_be_silently_dropped() -> None:
     with pytest.raises(Exception, match="DISCOVERY_RESULT_NOT_IN_PUBLISHED_BASE"):
         await retry(PriorArtifacts(), {"published_projection": {"pages": [], "definitions": []}})
 
 
 @pytest.mark.asyncio
-async def test_published_discovery_is_carried_without_any_executor_call():
+async def test_published_discovery_is_carried_without_any_executor_call() -> None:
     artifacts = PriorArtifacts()
     result = await retry(artifacts, {"published_projection": artifacts.delta["output"]})
     summary = json.loads(
@@ -84,7 +101,7 @@ async def test_published_discovery_is_carried_without_any_executor_call():
 
 
 @pytest.mark.asyncio
-async def test_processing_recovery_reuses_failed_discovery_without_model():
+async def test_processing_recovery_reuses_failed_discovery_without_model() -> None:
     artifacts = PriorArtifacts()
     artifacts.summary.update(
         state="FAILED", reason_codes=["DISCOVERY_GENERATION_FAILED"], accepted_member_count=0
@@ -99,7 +116,7 @@ async def test_processing_recovery_reuses_failed_discovery_without_model():
 
 
 @pytest.mark.asyncio
-async def test_recovery_keeps_unpublished_discovery_explicitly_pending():
+async def test_recovery_keeps_unpublished_discovery_explicitly_pending() -> None:
     result = await retry(PriorArtifacts(), {"published_projection": {}}, processing_recovery=True)
     summary = json.loads(
         next(row.payload for row in result.drafts if row.artifact_kind == "discovery_summary")
@@ -110,7 +127,7 @@ async def test_recovery_keeps_unpublished_discovery_explicitly_pending():
     assert summary["accepted_member_count"] == 0 and summary["call_ids"] == []
 
 
-def test_unchanged_sources_requires_exact_entity_schema_and_version_binding():
+def test_unchanged_sources_requires_exact_entity_schema_and_version_binding() -> None:
     from insurance_harness.product_ingestion.discovery_stage import _unchanged_sources
 
     source = dict(revision_id="revision", block_id="block", text="unchanged original")
@@ -134,13 +151,14 @@ def test_unchanged_sources_requires_exact_entity_schema_and_version_binding():
         entity_bindings=[SimpleNamespace(entity_id="entity", model_dump=lambda **kwargs: binding)],
     )
     base = {"published_projection": {"sources": [source], "entity_bindings": [binding.copy()]}}
-    assert _unchanged_sources(request, base) is True
+    typed_request = typing.cast(BatchConceptCompileRequest830G3V1, request)
+    assert _unchanged_sources(typed_request, base) is True
     base["published_projection"]["entity_bindings"][0]["schema_version"] = "2"
-    assert _unchanged_sources(request, base) is False
+    assert _unchanged_sources(typed_request, base) is False
 
 
 @pytest.fixture(scope="module")
-def discovery_scenario(request):
+def discovery_scenario(request: typing.Any) -> tuple[typing.Any, ...]:
     scenario = request.getfixturevalue("case")
     _, request, delta, _, proposal = prepared(scenario)
     base = request.base_request
@@ -149,6 +167,10 @@ def discovery_scenario(request):
         space_id=base.space_id,
         raw_knowledge_base_id=base.raw_kb_id,
         wiki_knowledge_base_id=base.wiki_kb_id,
+    )
+    template_specs: tuple[tuple[str, Literal["extract", "verify"], str, bytes], ...] = (
+        ("discovery-generate", "extract", "g3-open-discovery", DISCOVERY_PROMPT),
+        ("discovery-review", "verify", "g3-open-discovery-review", DISCOVERY_REVIEW_PROMPT),
     )
     templates = tuple(
         ModelTemplatePolicy(
@@ -160,14 +182,11 @@ def discovery_scenario(request):
             max_context_bytes=300000,
             max_output_tokens=16384,
         )
-        for identity, role, purpose, prompt in (
-            ("discovery-generate", "extract", "g3-open-discovery", DISCOVERY_PROMPT),
-            ("discovery-review", "verify", "g3-open-discovery-review", DISCOVERY_REVIEW_PROMPT),
-        )
+        for identity, role, purpose, prompt in template_specs
     )
     settings = ProductModelSettings(
         scope=scope,
-        endpoint="https://fixture.invalid/v1/chat/completions",
+        endpoint=HttpUrl("https://fixture.invalid/v1/chat/completions"),
         api_key=SecretStr("fixture-key-never-used"),
         model="gemini-3.7-flash-medium",
         policy_version="g3-user-gemini-gateway-v1",
@@ -184,15 +203,21 @@ def discovery_scenario(request):
 class ModelPackages:
     """Only the existing executor port is faked; no projector/reviewer is mocked."""
 
-    def __init__(self, proposal, *, malformed=None, disposition="ACCEPT"):
+    def __init__(
+        self,
+        proposal: typing.Any,
+        *,
+        malformed: typing.Any = None,
+        disposition: typing.Any = "ACCEPT",
+    ) -> None:
         self.proposal = proposal
         self.malformed = malformed
         self.disposition = disposition
-        self.calls = []
-        self.responses = {}
-        self.review_envelope = None
+        self.calls: list[dict[str, typing.Any]] = []
+        self.responses: dict[str, bytes] = {}
+        self.review_envelope: dict[str, typing.Any] | None = None
 
-    async def execute_stage_call(self, **kwargs):
+    async def execute_stage_call(self, **kwargs: typing.Any) -> SimpleNamespace:
         ordinal = len(self.calls)
         context = json.loads(kwargs["content"])
         assert kwargs["input_sha256"] == hashlib.sha256(kwargs["content"]).hexdigest()
@@ -245,18 +270,22 @@ class ModelPackages:
         )
 
 
-async def execute_scenario(scenario, **options):
+async def execute_scenario(scenario: typing.Any, **options: typing.Any) -> tuple[typing.Any, ...]:
     request, delta, entity, scope, settings, proposal = scenario
     executor = ModelPackages(proposal, **options)
     result = await run_discovery_stage(
-        service=SimpleNamespace(
-            configuration=SimpleNamespace(model=settings), model_executor=executor
+        service=typing.cast(
+            ProductScopeServices,
+            SimpleNamespace(configuration=SimpleNamespace(model=settings), model_executor=executor),
         ),
-        artifacts=object(),
+        artifacts=typing.cast(ProductArtifactStore, object()),
         scope=scope,
-        run=SimpleNamespace(run_id="current-discovery", retry_of_run_id=None),
-        stage=SimpleNamespace(dependency_sha256="b" * 64),
-        job=object(),
+        run=typing.cast(
+            ProductRunSnapshot,
+            SimpleNamespace(run_id="current-discovery", retry_of_run_id=None),
+        ),
+        stage=typing.cast(StageSnapshot, SimpleNamespace(dependency_sha256="b" * 64)),
+        job=typing.cast(JobSnapshot, object()),
         request=request,
         field_delta=delta,
         entity_id=entity,
@@ -270,8 +299,8 @@ async def execute_scenario(scenario, **options):
 
 @pytest.mark.asyncio
 async def test_malformed_generation_is_failed_with_one_call_and_unchanged_fields(
-    discovery_scenario,
-):
+    discovery_scenario: typing.Any,
+) -> None:
     result, drafts, summary, executor = await execute_scenario(
         discovery_scenario,
         malformed="generation",
@@ -293,8 +322,8 @@ async def test_malformed_generation_is_failed_with_one_call_and_unchanged_fields
 
 @pytest.mark.asyncio
 async def test_malformed_review_is_failed_with_two_calls_and_recorded_generation(
-    discovery_scenario,
-):
+    discovery_scenario: typing.Any,
+) -> None:
     result, drafts, summary, executor = await execute_scenario(
         discovery_scenario,
         malformed="review",
@@ -318,10 +347,10 @@ async def test_malformed_review_is_failed_with_two_calls_and_recorded_generation
     "disposition,expected", [("REJECT", "REJECTED"), ("NEEDS_HUMAN", "PENDING")]
 )
 async def test_disposition_failure_overrides_inner_pass_without_merging(
-    discovery_scenario,
-    disposition,
-    expected,
-):
+    discovery_scenario: typing.Any,
+    disposition: typing.Any,
+    expected: typing.Any,
+) -> None:
     result, drafts, summary, executor = await execute_scenario(
         discovery_scenario,
         disposition=disposition,
@@ -342,7 +371,9 @@ async def test_disposition_failure_overrides_inner_pass_without_merging(
 
 
 @pytest.mark.asyncio
-async def test_accepted_group_keeps_actual_review_binding_and_merged_delta(discovery_scenario):
+async def test_accepted_group_keeps_actual_review_binding_and_merged_delta(
+    discovery_scenario: typing.Any,
+) -> None:
     result, drafts, summary, executor = await execute_scenario(discovery_scenario)
     request, fields = discovery_scenario[:2]
     assert result.state == ProductRunState.SUCCEEDED

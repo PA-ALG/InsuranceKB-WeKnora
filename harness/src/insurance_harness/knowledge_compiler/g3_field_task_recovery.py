@@ -8,22 +8,26 @@ deterministic wire adaptations before strict projection.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any
+
+from insurance_harness.model_policy import ModelIdentity
+from insurance_harness.run_admission.g3_models import canonical_json
+
+from .batch_canonical_830_g3 import batch_json_bytes_830_g3
+from .g3_field_tasks import adapt_catalog_field_tasks
 
 if TYPE_CHECKING:
-    from insurance_harness.model_policy import ModelIdentity
-
     from .batch_concept_compile_830_g3 import BatchConceptCompileRequest830G3V1
     from .concept_compile_830_g2 import CompileOutput
+    from .g3_bounded_model_execution import (
+        G3DCompileReferenceResponseV1,
+        G3DFieldTarget,
+        G3DOutputWindow,
+        G3DRecoveryWindow,
+    )
 
 RECOVERY_VERSION = "g3-field-task-recovery.830.v1"
-
-
-def _runtime():
-    from . import g3_bounded_model_execution
-
-    return g3_bounded_model_execution
 
 
 def derive_g3_field_recovery_window(
@@ -32,9 +36,10 @@ def derive_g3_field_recovery_window(
     entity_id: str,
     field_keys: Sequence[str] = (),
     field_refs: Sequence[str] = (),
-) -> dict[str, object]:
+) -> G3DRecoveryWindow:
     """Select one same-entity 1–10 task window, with code-owned refs and budget."""
-    runtime = _runtime()
+    from . import g3_bounded_model_execution as runtime
+
     if bool(field_keys) == bool(field_refs):
         raise ValueError("recovery requires exactly one nonempty field selector")
     selector = tuple(field_keys or field_refs)
@@ -50,14 +55,18 @@ def derive_g3_field_recovery_window(
         for row in runtime._g3_d_field_targets(request, entity_refs)
         if row["entity_id"] == entity_id
     ]
-    selector_key = "field_key" if field_keys else "field_ref"
-    selected = [row for row in target_rows if row[selector_key] in selector]
-    if {row[selector_key] for row in selected} != set(selector):
+    selected = (
+        [row for row in target_rows if row["field_key"] in selector]
+        if field_keys
+        else [row for row in target_rows if row["field_ref"] in selector]
+    )
+    selected_values = {row["field_key"] if field_keys else row["field_ref"] for row in selected}
+    if selected_values != set(selector):
         raise ValueError("recovery contains foreign or unbound field targets")
     selected_keys = tuple(str(row["field_key"]) for row in selected)
     tasks = [
         task
-        for task in runtime.adapt_catalog_field_tasks(request)
+        for task in adapt_catalog_field_tasks(request)
         if task.entity_id == entity_id and task.field_key in selected_keys
     ]
     if len(tasks) != len(selected):
@@ -75,7 +84,16 @@ def derive_g3_field_recovery_window(
         "task_sha256s": tuple(task.task_sha256 for task in tasks),
     }
     return {
-        **value,
+        "recovery_contract": RECOVERY_VERSION,
+        "primary_material_id": primary_material_id,
+        "material_ids": binding.source_material_ids,
+        "entity_slot": entity_slot,
+        "entity_id": entity_id,
+        "entity_ref": entity_refs[entity_id],
+        "kind": "FIELDS",
+        "field_refs": tuple(str(row["field_ref"]) for row in selected),
+        "field_keys": selected_keys,
+        "task_sha256s": tuple(task.task_sha256 for task in tasks),
         "window_id": runtime._g3_d_ref(
             "window",
             request.request_sha256,
@@ -84,16 +102,23 @@ def derive_g3_field_recovery_window(
     }
 
 
-def _exact_recovery_window(request, window):
-    runtime = _runtime()
-    if not isinstance(window, dict):
+def _exact_recovery_window(
+    request: BatchConceptCompileRequest830G3V1, window: Mapping[str, object]
+) -> G3DRecoveryWindow:
+    entity_id = window.get("entity_id")
+    field_refs = window.get("field_refs", ())
+    if (
+        not isinstance(entity_id, str)
+        or not isinstance(field_refs, (tuple, list))
+        or not all(isinstance(item, str) for item in field_refs)
+    ):
         raise ValueError("recovery window must be an exact mapping")
     exact = derive_g3_field_recovery_window(
         request,
-        entity_id=window.get("entity_id"),
-        field_refs=window.get("field_refs", ()),
+        entity_id=entity_id,
+        field_refs=field_refs,
     )
-    if runtime.batch_json_bytes_830_g3(exact) != runtime.batch_json_bytes_830_g3(window):
+    if batch_json_bytes_830_g3(exact) != batch_json_bytes_830_g3(window):
         raise ValueError("recovery window scope or policy mismatch")
     return exact
 
@@ -101,32 +126,38 @@ def _exact_recovery_window(request, window):
 def render_g3_field_recovery_context(
     identity: ModelIdentity,
     request: BatchConceptCompileRequest830G3V1,
-    window: dict[str, object],
-) -> dict[str, object]:
-    runtime = _runtime()
+    window: Mapping[str, object],
+) -> dict[str, Any]:
+    from . import g3_bounded_model_execution as runtime
+
     if not runtime._is_g3_gemini_d_identity("D_COMPILE", identity):
         raise ValueError("recovery requires Gemini extract identity")
     exact = _exact_recovery_window(request, window)
     context = runtime._render_gemini_d_compile_window_context(identity, request, exact)
     policy = runtime.gemini_d_extraction_policy()
+    max_source_chars = policy["max_source_chars"]
+    max_source_span_chars = policy["max_source_span_chars"]
+    if not isinstance(max_source_chars, int) or not isinstance(max_source_span_chars, int):
+        raise RuntimeError("invalid recovery source policy")
     spans = [span for source in context["source_options"] for span in source["spans"]]
-    if sum(len(span["quote"]) for span in spans) > policy["max_source_chars"] or any(
-        len(span["quote"]) > policy["max_source_span_chars"] for span in spans
+    if sum(len(span["quote"]) for span in spans) > max_source_chars or any(
+        len(span["quote"]) > max_source_span_chars for span in spans
     ):
         raise ValueError("recovery source budget exceeded")
-    return context
+    return dict(context)
 
 
-def _parse_semantic(raw: bytes):
-    runtime = _runtime()
+def _parse_semantic(raw: bytes) -> G3DCompileReferenceResponseV1:
+    from . import g3_bounded_model_execution as runtime
+
     response = runtime.G3DCompileReferenceResponseV1.model_validate(runtime._unique_json_bytes(raw))
-    if runtime.canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
+    if canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
         raise ValueError("D compile semantic wire mismatch")
     return response
 
 
-def _identity():
-    return _runtime().ModelIdentity(
+def _identity() -> ModelIdentity:
+    return ModelIdentity(
         provider="g3-user-gateway",
         family="gemini",
         deployment_id="gemini-3.7-flash-medium",
@@ -138,10 +169,11 @@ def _identity():
 def project_g3_field_recovery_response(
     raw: bytes,
     request: BatchConceptCompileRequest830G3V1,
-    window: dict[str, object],
+    window: Mapping[str, object],
 ) -> CompileOutput:
     """Project a new response under the exact subset and bounded offered evidence."""
-    runtime = _runtime()
+    from . import g3_bounded_model_execution as runtime
+
     exact = _exact_recovery_window(request, window)
     context = render_g3_field_recovery_context(_identity(), request, exact)
     return runtime._project_gemini_d_compile_response_with_context(
@@ -152,9 +184,15 @@ def project_g3_field_recovery_response(
     )
 
 
-def _parse_recorded_field_subset(raw, exact, context, field_keys):
+def _parse_recorded_field_subset(
+    raw: bytes,
+    exact: G3DRecoveryWindow,
+    context: Mapping[str, Any],
+    field_keys: Sequence[str],
+) -> tuple[G3DCompileReferenceResponseV1, list[G3DFieldTarget]]:
     """Validate the original envelope, then adapt and parse only selected fields."""
-    runtime = _runtime()
+    from . import g3_bounded_model_execution as runtime
+
     value = runtime._unique_json_bytes(raw)
     envelope_keys = {"contract", "transformation", "definitions", "fields", "pages"}
     if (
@@ -211,8 +249,8 @@ def _parse_recorded_field_subset(raw, exact, context, field_keys):
         selected.append(row)
     derived = {**value, "fields": selected}
     response = runtime.G3DCompileReferenceResponseV1.model_validate(derived)
-    if runtime.canonical_json(response.model_dump(mode="json", round_trip=True)) != (
-        runtime.canonical_json(derived)
+    if canonical_json(response.model_dump(mode="json", round_trip=True)) != (
+        canonical_json(derived)
     ):
         raise ValueError("recorded selected field wire mismatch")
     return response, targets
@@ -221,14 +259,15 @@ def _parse_recorded_field_subset(raw, exact, context, field_keys):
 def project_g3_recorded_compile_subset(
     raw: bytes,
     request: BatchConceptCompileRequest830G3V1,
-    origin_window: dict[str, object],
+    origin_window: G3DRecoveryWindow,
     *,
     field_keys: Sequence[str] = (),
     include_synthesis: bool = False,
-    origin_context: dict[str, object] | None = None,
+    origin_context: Mapping[str, object] | None = None,
 ) -> CompileOutput:
     """Reproduce only explicit manifest members, using the ORIGINAL offered spans."""
-    runtime = _runtime()
+    from . import g3_bounded_model_execution as runtime
+
     if origin_window.get("recovery_contract"):
         exact = _exact_recovery_window(request, origin_window)
         context = validate_recorded_recovery_context(request, exact, origin_context)
@@ -244,9 +283,7 @@ def project_g3_recorded_compile_subset(
     else:
         if exact["kind"] != "FIELDS" or not field_keys or len(field_keys) != len(set(field_keys)):
             raise ValueError("recorded field selection must be an explicit unique subset")
-        response, targets = _parse_recorded_field_subset(
-            raw, exact, context, tuple(field_keys)
-        )
+        response, targets = _parse_recorded_field_subset(raw, exact, context, tuple(field_keys))
         context = {**context, "field_targets": targets}
     return runtime._project_gemini_d_compile_response_with_context(
         response,
@@ -256,18 +293,19 @@ def project_g3_recorded_compile_subset(
     )
 
 
-def validate_recorded_recovery_context(request, window, origin_context):
+def validate_recorded_recovery_context(
+    request: BatchConceptCompileRequest830G3V1,
+    window: G3DRecoveryWindow,
+    origin_context: Mapping[str, object] | None,
+) -> Mapping[str, object]:
     """Require the captured routing scope, allowing only non-routing prompt metadata."""
-    runtime = _runtime()
-    if not isinstance(origin_context, dict):
+    if origin_context is None:
         raise ValueError("recorded recovery requires its original signed context")
     expected = render_g3_field_recovery_context(_identity(), request, window)
     ignored = {"response_schema", "correction_instructions"}
     actual_scope = {key: value for key, value in origin_context.items() if key not in ignored}
     expected_scope = {key: value for key, value in expected.items() if key not in ignored}
-    if runtime.batch_json_bytes_830_g3(actual_scope) != runtime.batch_json_bytes_830_g3(
-        expected_scope
-    ):
+    if batch_json_bytes_830_g3(actual_scope) != batch_json_bytes_830_g3(expected_scope):
         raise ValueError("recorded recovery context routing/source scope mismatch")
     return origin_context
 
@@ -277,12 +315,13 @@ def aggregate_g3_recovered_compile_outputs(
     outputs: Sequence[CompileOutput],
 ) -> CompileOutput:
     """Require an exact complete delta after custody-verified reuse plus new tasks."""
-    runtime = _runtime()
+    from . import g3_bounded_model_execution as runtime
+
     targets = {
         (row["entity_id"], row["field_key"]): row["field_ref"]
         for row in runtime._g3_d_field_targets(request, runtime._g3_d_entity_refs(request))
     }
-    windows = []
+    windows: list[G3DOutputWindow] = []
     for output in outputs:
         if output.fields and (output.definitions or output.pages):
             raise ValueError("recovered output mixes field and synthesis scopes")

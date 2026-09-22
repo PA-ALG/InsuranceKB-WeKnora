@@ -3,6 +3,8 @@
 # ruff: noqa: F811 -- fixture imports are intentionally reused by pytest.
 
 import json
+import typing
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -31,8 +33,8 @@ from tests.product_ingestion.test_stages import stage_runtime  # noqa: F401
 
 
 def test_v7_explicitly_rebases_workflow_two_without_changing_v2_wire(
-    stage_runtime, monkeypatch
-):
+    stage_runtime: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     scope, store, _, _, child = _child(stage_runtime, monkeypatch)
     current = store.checkpoint_plan(scope=scope, run_id=child.run_id)
     old = CheckpointPlan.model_validate_json(
@@ -63,8 +65,8 @@ def test_v7_explicitly_rebases_workflow_two_without_changing_v2_wire(
 
 @pytest.mark.asyncio
 async def test_changed_head_rebases_legacy_workflow_two_without_discovery_calls(
-    tmp_path, monkeypatch
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     base, parent = _base_snapshot_with_navigation()
     settings = _settings(tmp_path, parent)
     engine = _sqlite_engine(tmp_path / "legacy-rebase.db")
@@ -76,7 +78,7 @@ async def test_changed_head_rebases_legacy_workflow_two_without_discovery_calls(
     service = context.bindings[SCOPE.space_id]
     original_create = service.platform.create_preparation
 
-    async def fail_preparation(*args, **kwargs):
+    async def fail_preparation(*args: object, **kwargs: object) -> None:
         raise NonRetryableJobError("PREPARATION_TEST_LIMIT")
 
     service.platform.create_preparation = fail_preparation
@@ -85,7 +87,9 @@ async def test_changed_head_rebases_legacy_workflow_two_without_discovery_calls(
             scope=SCOPE, idempotency_key="legacy-rebase-origin", expected_upload_count=3
         )
         with factory() as session, session.begin():
-            session.get(ProductRun, origin.run_id).workflow_version = 2
+            row = session.get(ProductRun, origin.run_id)
+            assert row is not None
+            row.workflow_version = 2
         admit_uploads(context.store, SCOPE, origin.run_id)
         failed = await _finish(runtime, context, jobs, origin.run_id)
         assert failed.state is ProductRunState.FAILED
@@ -115,16 +119,17 @@ async def test_changed_head_rebases_legacy_workflow_two_without_discovery_calls(
         assert plan.contract == "product-stage-checkpoint-plan.830.v7"
         assert plan.execution_workflow_version == 2
         assert "synthesis" in {stage.stage_key for stage in plan.reused_stages}
-        assert context.store.checkpoint_plan(
-            scope=SCOPE, run_id=legacy.run_id
-        ).encoded() == legacy_bytes
+        assert (
+            context.store.checkpoint_plan(scope=SCOPE, run_id=legacy.run_id).encoded()
+            == legacy_bytes
+        )
 
         from insurance_harness.product_ingestion import compilation
 
         assemble = compilation.assemble_platform_candidate
         reviews = []
 
-        def observe_review(*args, **kwargs):
+        def observe_review(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
             reviews.append(kwargs["independent_review"])
             return assemble(*args, **kwargs)
 

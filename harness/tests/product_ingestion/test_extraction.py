@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import importlib
 import json
+import typing
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ from insurance_harness.knowledge_compiler.g3_field_tasks import (
 )
 
 
-def module():
+def module() -> typing.Any:
     path = Path(__file__).parents[2] / "src/insurance_harness/product_ingestion/extraction.py"
     assert path.is_file(), "platform single-window extraction executor is not implemented"
     return importlib.import_module("insurance_harness.product_ingestion.extraction")
@@ -29,7 +30,7 @@ def sha(raw: bytes) -> str:
 
 
 @pytest.fixture
-def source():
+def source() -> SourceBlock:
     return SourceBlock(
         tenant_id=1,
         space_id="space-1",
@@ -47,7 +48,9 @@ def source():
     )
 
 
-def tasks(source, keys=("benefit", "duration"), *, discovery=False):
+def tasks(
+    source: typing.Any, keys: typing.Any = ("benefit", "duration"), *, discovery: bool = False
+) -> typing.Any:
     rows = adapt_discovery_field_tasks(
         entity_id="product-1",
         entity_version="version-1",
@@ -77,7 +80,7 @@ def tasks(source, keys=("benefit", "duration"), *, discovery=False):
     )
 
 
-def response(fields):
+def response(fields: typing.Any) -> bytes:
     return json.dumps(
         {
             "contract": "g3-d-compile-semantic-references.local.v1",
@@ -91,7 +94,14 @@ def response(fields):
     ).encode()
 
 
-def row(task, request, *, state="present", value="100", quote="赔付金额为100元。"):
+def row(
+    task: typing.Any,
+    request: typing.Any,
+    *,
+    state: str = "present",
+    value: typing.Any = "100",
+    quote: typing.Any = "赔付金额为100元。",
+) -> dict[str, typing.Any]:
     return {
         "field_ref": task.task_sha256,
         "state": state,
@@ -114,31 +124,40 @@ def row(task, request, *, state="present", value="100", quote="赔付金额为10
 
 
 class Port:
-    def __init__(self, make_response):
+    def __init__(self, make_response: typing.Any) -> None:
         self.make_response = make_response
-        self.events = []
-        self.request = None
-        self.saved_raw = None
-        self.diagnostic = None
+        self.events: list[str] = []
+        self.request: bytes | None = None
+        self.saved_raw: bytes | None = None
+        self.diagnostic: str | None = None
 
-    async def begin(self, call_id, request_sha256, request_bytes):
+    async def begin(self, call_id: object, request_sha256: str, request_bytes: bytes) -> None:
         assert request_sha256 == sha(request_bytes)
         self.events.append("begin")
         self.request = request_bytes
 
-    async def transport(self, request_bytes):
+    async def transport(self, request_bytes: bytes) -> typing.Any:
         assert self.events == ["begin"]
         self.events.append("transport")
         return self.make_response(json.loads(request_bytes))
 
-    async def persist(self, call_id, request_sha256, raw, diagnostic):
+    async def persist(
+        self,
+        call_id: object,
+        request_sha256: str,
+        raw: bytes | None,
+        diagnostic: str | None,
+    ) -> str:
+        assert self.request is not None
         assert request_sha256 == sha(self.request)
         self.events.append("persist")
         self.saved_raw, self.diagnostic = raw, diagnostic
         return "raw-artifact-1"
 
 
-def execute(source, selected, port, **kwargs):
+def execute(
+    source: typing.Any, selected: typing.Any, port: typing.Any, **kwargs: typing.Any
+) -> typing.Any:
     return asyncio.run(
         module().execute_window(
             call_id="call-1",
@@ -155,7 +174,7 @@ def execute(source, selected, port, **kwargs):
     )
 
 
-def test_mixed_fields_keep_valid_result_and_save_raw_before_projection(source):
+def test_mixed_fields_keep_valid_result_and_save_raw_before_projection(source: typing.Any) -> None:
     selected = tasks(source)
     port = Port(
         lambda request: response(
@@ -166,7 +185,7 @@ def test_mixed_fields_keep_valid_result_and_save_raw_before_projection(source):
         )
     )
 
-    def decode(raw):
+    def decode(raw: bytes) -> typing.Any:
         assert port.events == ["begin", "transport", "persist"]
         assert port.saved_raw == raw
         return raw
@@ -184,7 +203,9 @@ def test_mixed_fields_keep_valid_result_and_save_raw_before_projection(source):
 
 
 @pytest.mark.parametrize("discovery", [False, True])
-def test_unknown_is_valid_not_provided_and_cached_without_transport(source, discovery):
+def test_unknown_is_valid_not_provided_and_cached_without_transport(
+    source: typing.Any, discovery: typing.Any
+) -> None:
     selected = tasks(source, ("missing",), discovery=discovery)
     port = Port(lambda request: response([row(selected[0], request, state="unknown", value=None)]))
     outcomes = execute(source, selected, port)
@@ -209,12 +230,12 @@ def test_unknown_is_valid_not_provided_and_cached_without_transport(source, disc
     assert unused.events == []
 
 
-def test_partial_cache_omits_successful_tasks_from_new_request(source):
+def test_partial_cache_omits_successful_tasks_from_new_request(source: typing.Any) -> None:
     selected = tasks(source)
     first = Port(lambda request: response([row(selected[0], request)]))
     known = execute(source, selected[:1], first)[0]
 
-    def remaining(request):
+    def remaining(request: typing.Any) -> typing.Any:
         assert [r["field_ref"] for r in request["field_targets"]] == [selected[1].task_sha256]
         return response([row(selected[1], request, state="unknown", value=None)])
 
@@ -224,10 +245,10 @@ def test_partial_cache_omits_successful_tasks_from_new_request(source):
 
 
 @pytest.mark.parametrize("mutation", ["no_value", "no_evidence", "unknown_value", "blank_reason"])
-def test_invalid_tristate_never_exposes_value(source, mutation):
+def test_invalid_tristate_never_exposes_value(source: typing.Any, mutation: typing.Any) -> None:
     selected = tasks(source, ("benefit",))
 
-    def wire(request):
+    def wire(request: typing.Any) -> typing.Any:
         value = row(selected[0], request, state="absent_explicitly")
         if mutation == "no_value":
             value["value"] = None
@@ -251,7 +272,9 @@ def test_invalid_tristate_never_exposes_value(source, mutation):
         ("ENUM", "other", ("yes",)),
     ],
 )
-def test_value_constraint_failure_is_per_field(source, kind, value, allowed):
+def test_value_constraint_failure_is_per_field(
+    source: typing.Any, kind: typing.Any, value: typing.Any, allowed: typing.Any
+) -> None:
     original = tasks(source, ("a_bad", "b_good"))
     bad = _task(
         {
@@ -275,10 +298,12 @@ def test_value_constraint_failure_is_per_field(source, kind, value, allowed):
 
 
 @pytest.mark.parametrize("variant", ["missing", "duplicate"])
-def test_missing_duplicate_refs_do_not_discard_valid_siblings(source, variant):
+def test_missing_duplicate_refs_do_not_discard_valid_siblings(
+    source: typing.Any, variant: typing.Any
+) -> None:
     selected = tasks(source)
 
-    def wire(request):
+    def wire(request: typing.Any) -> typing.Any:
         values = [row(selected[1], request)]
         if variant == "duplicate":
             values += [row(selected[0], request)] * 2
@@ -291,7 +316,9 @@ def test_missing_duplicate_refs_do_not_discard_valid_siblings(source, variant):
 
 
 @pytest.mark.parametrize("wire", [b"not json", b'{"fields":[],"fields":[]}', b'{"fields":[]}'])
-def test_bad_envelope_preserves_bytes_and_fails_window(source, wire):
+def test_bad_envelope_preserves_bytes_and_fails_window(
+    source: typing.Any, wire: typing.Any
+) -> None:
     selected = tasks(source)
     port = Port(lambda _: wire)
     outcomes = execute(source, selected, port)
@@ -299,10 +326,10 @@ def test_bad_envelope_preserves_bytes_and_fails_window(source, wire):
     assert all(x.outcome == "extraction_failed" and x.validated_result is None for x in outcomes)
 
 
-def test_foreign_field_ref_fails_window(source):
+def test_foreign_field_ref_fails_window(source: typing.Any) -> None:
     selected = tasks(source)
 
-    def wire(request):
+    def wire(request: typing.Any) -> typing.Any:
         values = [row(t, request) for t in selected]
         values.append({**values[0], "field_ref": "foreign"})
         return response(values)
@@ -310,7 +337,7 @@ def test_foreign_field_ref_fails_window(source):
     assert all(x.outcome == "extraction_failed" for x in execute(source, selected, Port(wire)))
 
 
-def test_line_joined_quote_cannot_be_normalized_into_evidence(source):
+def test_line_joined_quote_cannot_be_normalized_into_evidence(source: typing.Any) -> None:
     selected = tasks(source, ("benefit",))
     port = Port(
         lambda request: response(
@@ -326,10 +353,10 @@ def test_line_joined_quote_cannot_be_normalized_into_evidence(source):
     assert execute(source, selected, port)[0].outcome == "extraction_failed"
 
 
-def test_transport_error_is_recorded_without_retry(source):
+def test_transport_error_is_recorded_without_retry(source: typing.Any) -> None:
     selected = tasks(source)
 
-    def fail(_):
+    def fail(_: object) -> None:
         raise TimeoutError("secret-like provider body must not enter public reasons")
 
     port = Port(fail)
@@ -340,7 +367,7 @@ def test_transport_error_is_recorded_without_retry(source):
     assert "secret-like" not in json.dumps([x.to_dict() for x in results])
 
 
-def test_recorded_raw_replay_has_zero_provider_effects(source):
+def test_recorded_raw_replay_has_zero_provider_effects(source: typing.Any) -> None:
     selected = tasks(source)
     first = Port(lambda request: response([row(t, request) for t in selected]))
     expected = execute(source, selected, first)
@@ -358,7 +385,7 @@ def test_recorded_raw_replay_has_zero_provider_effects(source):
 
 
 @pytest.mark.parametrize("state", ["dispatching", "interrupted"])
-def test_uncertain_dispatch_never_calls_transport(source, state):
+def test_uncertain_dispatch_never_calls_transport(source: typing.Any, state: typing.Any) -> None:
     selected = tasks(source)
     port = Port(lambda _: pytest.fail("uncertain dispatch cannot be retried"))
     outcomes = execute(source, selected, port, call_state=state)
@@ -369,24 +396,25 @@ def test_uncertain_dispatch_never_calls_transport(source, state):
 
 
 @pytest.mark.parametrize("failure", ["begin", "persist"])
-def test_checkpoint_failure_cannot_settle_or_reissue(source, failure):
+def test_checkpoint_failure_cannot_settle_or_reissue(
+    source: typing.Any, failure: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     selected = tasks(source)
     port = Port(lambda request: response([row(t, request) for t in selected]))
 
-    async def broken(*args):
+    async def broken(*args: object) -> None:
         raise RuntimeError("store fence rejected")
 
-    if failure == "begin":
-        port.begin = broken
-    else:
-        port.persist = broken
+    monkeypatch.setattr(port, failure, broken)
     with pytest.raises(RuntimeError, match="store fence rejected"):
         execute(source, selected, port)
     assert port.events == ([] if failure == "begin" else ["begin", "transport"])
 
 
 @pytest.mark.parametrize("mutation", ["tenant", "hash", "missing"])
-def test_source_scope_is_verified_before_any_dispatch(source, mutation):
+def test_source_scope_is_verified_before_any_dispatch(
+    source: typing.Any, mutation: typing.Any
+) -> None:
     selected = tasks(source)
     if mutation == "tenant":
         source = source.model_copy(update={"tenant_id": 2})
@@ -408,7 +436,9 @@ def test_source_scope_is_verified_before_any_dispatch(source, mutation):
     assert port.events == []
 
 
-def test_recorded_response_keeps_original_scope_when_sibling_is_now_cached(source):
+def test_recorded_response_keeps_original_scope_when_sibling_is_now_cached(
+    source: typing.Any,
+) -> None:
     selected = tasks(source)
     first = Port(lambda request: response([row(t, request) for t in selected]))
     expected = execute(source, selected, first)
@@ -426,7 +456,7 @@ def test_recorded_response_keeps_original_scope_when_sibling_is_now_cached(sourc
     assert actual == expected and second.events == []
 
 
-def test_cache_json_cannot_claim_verified_without_value_or_evidence(source):
+def test_cache_json_cannot_claim_verified_without_value_or_evidence(source: typing.Any) -> None:
     selected = tasks(source, ("benefit",))
     first = Port(lambda request: response([row(selected[0], request)]))
     value = execute(source, selected, first)[0].to_dict()
@@ -447,7 +477,7 @@ def test_cache_json_cannot_claim_verified_without_value_or_evidence(source):
 
 
 @pytest.fixture
-def many_source_tasks(source):
+def many_source_tasks(source: typing.Any) -> tuple[typing.Any, ...]:
     sources = tuple(
         source.model_copy(
             update={
@@ -484,7 +514,9 @@ def many_source_tasks(source):
 
 
 @pytest.mark.parametrize("count", [1, 10])
-def test_compact_v2_large_source_scope_fits_real_preflight(many_source_tasks, count):
+def test_compact_v2_large_source_scope_fits_real_preflight(
+    many_source_tasks: typing.Any, count: typing.Any
+) -> None:
     from insurance_harness.product_ingestion.model_execution import (
         _template_and_request,
     )
@@ -535,7 +567,7 @@ def test_compact_v2_large_source_scope_fits_real_preflight(many_source_tasks, co
     assert tuple(t.model_dump_json() for t in selected) == original
 
 
-def recorded_request_version(source, selected, version):
+def recorded_request_version(source: typing.Any, selected: typing.Any, version: int) -> typing.Any:
     request = json.loads(
         module().render_window_request(
             selected, (source,), tenant_id=1, space_id="space-1", raw_kb_id="raw-1"
@@ -550,7 +582,9 @@ def recorded_request_version(source, selected, version):
 
 
 @pytest.mark.parametrize("version", [1, 2])
-def test_compact_v2_and_original_v1_recorded_success_replay_without_dispatch(source, version):
+def test_compact_v2_and_original_v1_recorded_success_replay_without_dispatch(
+    source: typing.Any, version: typing.Any
+) -> None:
     selected = tasks(source)
     current = Port(lambda request: response([row(t, request) for t in selected]))
     expected = execute(source, selected, current)
@@ -574,7 +608,9 @@ def test_compact_v2_and_original_v1_recorded_success_replay_without_dispatch(sou
 
 @pytest.mark.parametrize("version", [1, 2])
 @pytest.mark.parametrize("mutation", ["task", "scope", "span"])
-def test_compact_recorded_versions_refuse_changed_task_scope_or_span(source, version, mutation):
+def test_compact_recorded_versions_refuse_changed_task_scope_or_span(
+    source: typing.Any, version: typing.Any, mutation: typing.Any
+) -> None:
     selected = tasks(source, ("benefit",))
     request = recorded_request_version(source, selected, version)
     if mutation == "task":
@@ -597,7 +633,7 @@ def test_compact_recorded_versions_refuse_changed_task_scope_or_span(source, ver
     assert unused.events == []
 
 
-def test_compact_v2_recorded_refs_cannot_expand_local_task_sources(source):
+def test_compact_v2_recorded_refs_cannot_expand_local_task_sources(source: typing.Any) -> None:
     selected = tasks(source, ("benefit",))
     request = recorded_request_version(source, selected, 2)
     request["field_targets"][0]["allowed_source_refs"] = ["source_foreign"]
@@ -616,7 +652,9 @@ def test_compact_v2_recorded_refs_cannot_expand_local_task_sources(source):
 
 
 @pytest.mark.parametrize("version", [1, 2])
-def test_compact_recorded_versions_reject_quote_outside_offered_spans(source, version):
+def test_compact_recorded_versions_reject_quote_outside_offered_spans(
+    source: typing.Any, version: typing.Any
+) -> None:
     selected = tasks(source, ("benefit",))
     request = recorded_request_version(source, selected, version)
     # The source contains the insurance term, but this call offered only the first sentence.
@@ -638,19 +676,22 @@ def test_compact_recorded_versions_reject_quote_outside_offered_spans(source, ve
     assert unused.events == []
 
 
-def test_window_source_check_does_not_serialize_a_redundant_full_batch(source, monkeypatch):
+def test_window_source_check_does_not_serialize_a_redundant_full_batch(
+    source: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from insurance_harness.knowledge_compiler import g3_field_tasks
 
     selected = tasks(source)
     serialized_batches = []
     original = g3_field_tasks._json_bytes
 
-    def observe(value):
+    def observe(value: typing.Any) -> typing.Any:
         if isinstance(value, dict) and value.get("contract") == "g3-field-task-batch.830.v1":
             serialized_batches.append(value)
         return original(value)
 
     monkeypatch.setattr(g3_field_tasks, "_json_bytes", observe)
-    module().render_window_request(selected, (source,), tenant_id=1,
-                                   space_id="space-1", raw_kb_id="raw-1")
+    module().render_window_request(
+        selected, (source,), tenant_id=1, space_id="space-1", raw_kb_id="raw-1"
+    )
     assert not serialized_batches, "window validation serializes every source dependency again"

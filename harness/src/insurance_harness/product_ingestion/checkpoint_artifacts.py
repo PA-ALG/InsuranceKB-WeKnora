@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable, Collection, Iterable
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 from sqlalchemy import select
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import Session, defer
 
 from insurance_harness.jobs import SpaceScopeError
 from insurance_harness.jobs.tables import WikiJob
+from insurance_harness.product_ingestion.artifact_models import ArtifactSnapshot
 from insurance_harness.product_ingestion.artifact_tables import (
     ProductArtifact,
     ProductStageModelCall,
@@ -17,8 +20,14 @@ from insurance_harness.product_ingestion.artifact_tables import (
 from insurance_harness.product_ingestion.checkpoint_store import _ref
 from insurance_harness.product_ingestion.checkpoints import (
     CURRENT_ARTIFACT_CONTRACTS,
+    ArtifactReference,
     CheckpointReceipt,
     field_digest,
+)
+from insurance_harness.product_ingestion.models import (
+    FieldAttemptSnapshot,
+    MaterialSnapshot,
+    ProductScope,
 )
 from insurance_harness.product_ingestion.tables import (
     ProductFieldAttempt,
@@ -27,9 +36,24 @@ from insurance_harness.product_ingestion.tables import (
     ProductWindowSettlement,
 )
 
+if TYPE_CHECKING:
+    from insurance_harness.product_ingestion.store import ProductIngestionStore
+
 
 class CheckpointArtifacts:
-    def get_rebased_artifact(self, *, scope, run_id, artifact_kind):
+    if TYPE_CHECKING:
+        _session_factory: Callable[[], Session]
+        _products: ProductIngestionStore
+
+        def _artifact_snapshot(self, row: ProductArtifact) -> ArtifactSnapshot: ...
+
+    def get_rebased_artifact(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        artifact_kind: str,
+    ) -> ArtifactSnapshot | None:
         """All four rebased inputs are one fenced checkpoint output, or none is visible."""
         kinds = {
             "rebased_base_snapshot", "rebased_compile_request",
@@ -56,6 +80,8 @@ class CheckpointArtifacts:
                 return None
             if len(rows) != len(kinds) or {row.artifact_kind for row in rows} != kinds:
                 raise ValueError("partial checkpoint rebase is unavailable")
+            if stage is None or job is None:
+                raise ValueError("checkpoint rebase producer is unavailable")
             for row in rows:
                 if (
                     row.artifact_key != "product"
@@ -72,7 +98,14 @@ class CheckpointArtifacts:
                 next(row for row in rows if row.artifact_kind == artifact_kind)
             )
 
-    def get_effective_artifact(self, *, scope, run_id, artifact_kind, artifact_key="product"):
+    def get_effective_artifact(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        artifact_kind: str,
+        artifact_key: str = "product",
+    ) -> ArtifactSnapshot:
         rows = self.list_effective_artifacts(
             scope=scope, run_id=run_id, artifact_kind=artifact_kind
         )
@@ -81,21 +114,64 @@ class CheckpointArtifacts:
             raise SpaceScopeError("authorized artifact is unavailable")
         return selected[0]
 
-    def list_effective_artifacts(self, *, scope, run_id, artifact_kind=None, limit=1000):
+    def list_effective_artifacts(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        artifact_kind: str | None = None,
+        limit: int = 1000,
+    ) -> tuple[ArtifactSnapshot, ...]:
         return self._effective_artifacts(
             scope=scope, run_id=run_id, artifact_kind=artifact_kind,
             limit=limit, include_payload=True,
         )
 
-    def list_effective_artifact_references(self, *, scope, run_id, artifact_kind=None,
-                                          limit=1000):
+    def list_effective_artifact_references(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        artifact_kind: str | None = None,
+        limit: int = 1000,
+    ) -> tuple[ArtifactReference, ...]:
         """Current authorized identities; no large payload or geometry hydration."""
         return self._effective_artifacts(
             scope=scope, run_id=run_id, artifact_kind=artifact_kind,
             limit=limit, include_payload=False,
         )
 
-    def _effective_artifacts(self, *, scope, run_id, artifact_kind, limit, include_payload):
+    @overload
+    def _effective_artifacts(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        artifact_kind: str | None,
+        limit: int,
+        include_payload: Literal[True],
+    ) -> tuple[ArtifactSnapshot, ...]: ...
+
+    @overload
+    def _effective_artifacts(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        artifact_kind: str | None,
+        limit: int,
+        include_payload: Literal[False],
+    ) -> tuple[ArtifactReference, ...]: ...
+
+    def _effective_artifacts(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        artifact_kind: str | None,
+        limit: int,
+        include_payload: bool,
+    ) -> tuple[ArtifactSnapshot, ...] | tuple[ArtifactReference, ...]:
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise ValueError("invalid effective artifact read capacity")
         with self._session_factory() as session:
@@ -115,6 +191,7 @@ class CheckpointArtifacts:
                                                   ProductArtifact.id).limit(limit + 1)).all()
             inherited = []
             if plan is not None:
+                assert receipt is not None
                 effective_keys = {stage.stage_key for stage in receipt.reused_stages}
                 refs = [r for r in plan.artifacts
                         if r.stage_key in effective_keys
@@ -133,21 +210,36 @@ class CheckpointArtifacts:
                     inherited.append(row)
             if len(local) + len(inherited) > limit:
                 raise ValueError("effective artifact read capacity exceeded")
-            values = {}
-            for row in (*inherited, *local):
-                identity = (row.artifact_kind, row.artifact_key)
-                if identity in values and values[identity].artifact_id != row.id:
-                    raise ValueError("recovered output may not overwrite a completed checkpoint")
-                if include_payload:
+            if include_payload:
+                snapshots: dict[tuple[str, str], ArtifactSnapshot] = {}
+                for row in (*inherited, *local):
+                    identity = (row.artifact_kind, row.artifact_key)
+                    if identity in snapshots and snapshots[identity].artifact_id != row.id:
+                        raise ValueError(
+                            "recovered output may not overwrite a completed checkpoint"
+                        )
                     if hashlib.sha256(row.payload).hexdigest() != row.payload_sha256:
                         raise ValueError("artifact bytes changed")
-                    value = self._artifact_snapshot(row)
-                else:
-                    value = _ref(row)
-                values[identity] = value
-            return tuple(values.values())
+                    snapshots[identity] = self._artifact_snapshot(row)
+                return tuple(snapshots.values())
+            references: dict[tuple[str, str], ArtifactReference] = {}
+            for row in (*inherited, *local):
+                identity = (row.artifact_kind, row.artifact_key)
+                if identity in references and references[identity].artifact_id != row.id:
+                    raise ValueError(
+                        "recovered output may not overwrite a completed checkpoint"
+                    )
+                references[identity] = _ref(row)
+            return tuple(references.values())
 
-    def read_checkpoint_artifact(self, *, scope, run_id, artifact_kind, artifact_key="product"):
+    def read_checkpoint_artifact(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        artifact_kind: str,
+        artifact_key: str = "product",
+    ) -> ArtifactSnapshot:
         """Pre-receipt verifier read: only plan-authorized references, never business use."""
         with self._session_factory() as session:
             plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
@@ -173,13 +265,15 @@ class CheckpointArtifacts:
             self._products._run(session, scope, row.run_id)
             return self._artifact_snapshot(row)
 
-    def read_checkpoint_field_attempts(self, *, scope, run_id):
+    def read_checkpoint_field_attempts(
+        self, *, scope: ProductScope, run_id: str
+    ) -> tuple[FieldAttemptSnapshot, ...]:
         """Read only field rows named by a plan already verified by this worker."""
         with self._session_factory() as session:
             plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
             if plan is None:
                 raise ValueError("checkpoint plan missing")
-            values = []
+            values: list[FieldAttemptSnapshot] = []
             for ref in plan.fields:
                 row = session.get(ProductFieldAttempt, ref.attempt_id)
                 self._products._run(session, scope, ref.run_id)
@@ -193,9 +287,13 @@ class CheckpointArtifacts:
                 values.append(self._products._field_snapshot(row))
             return tuple(values)
 
-    def read_checkpoint_discovery_disposition(self, *, scope, run_id):
+    def read_checkpoint_discovery_disposition(
+        self, *, scope: ProductScope, run_id: str
+    ) -> ArtifactSnapshot | None:
         with self._session_factory() as session:
             plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
+            if plan is None:
+                return None
             refs = [ref for ref in plan.artifacts
                     if ref.artifact_kind == "discovery_final_summary"
                     and ref.artifact_key == "product"]
@@ -236,9 +334,13 @@ class CheckpointArtifacts:
                 return None
             return self._artifact_snapshot(row)
 
-    def read_prior_rebase_artifact(self, *, scope, run_id, artifact_kind):
+    def read_prior_rebase_artifact(
+        self, *, scope: ProductScope, run_id: str, artifact_kind: str
+    ) -> ArtifactSnapshot:
         with self._session_factory() as session:
             plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
+            if plan is None:
+                raise ValueError("checkpoint plan missing")
             refs = [r for r in plan.prior_rebase_artifacts if r.artifact_kind == artifact_kind]
             if len(refs) != 1:
                 raise ValueError("prior checkpoint rebase input missing")
@@ -251,7 +353,9 @@ class CheckpointArtifacts:
                 raise ValueError("prior checkpoint rebase changed")
             return self._artifact_snapshot(row)
 
-    def verify_discarded_stage_calls(self, *, scope, run_id, stage_keys):
+    def verify_discarded_stage_calls(
+        self, *, scope: ProductScope, run_id: str, stage_keys: Collection[str]
+    ) -> None:
         """A changed base cannot hide an unknown send by changing its input hash."""
         with self._session_factory() as session, session.begin():
             plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
@@ -276,7 +380,13 @@ class CheckpointArtifacts:
                 ):
                     raise ValueError("discarded discovery call outcome is unknown")
 
-    def verify_checkpoint(self, *, scope, run_id, effective_stage_keys=None):
+    def verify_checkpoint(
+        self,
+        *,
+        scope: ProductScope,
+        run_id: str,
+        effective_stage_keys: Collection[str] | None = None,
+    ) -> CheckpointReceipt:
         """Expensive worker-only validation. No job row lock and no provider effects."""
         with self._session_factory() as session, session.begin():
             plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
@@ -306,7 +416,9 @@ class CheckpointArtifacts:
                 session, self._products._run(session, scope, run_id), scope
             )
 
-            def canonical_materials(rows):
+            def canonical_materials(
+                rows: Iterable[MaterialSnapshot],
+            ) -> tuple[tuple[str, str, int, object], ...]:
                 return tuple(
                     (m.knowledge_id, m.original_filename, m.upload_ordinal, m.source) for m in rows
                 )
@@ -329,58 +441,66 @@ class CheckpointArtifacts:
                     ProductStage.stage_key == "checkpoint",
                 ))
                 parent_job = session.get(WikiJob, parent_stage.job_id) if parent_stage else None
-                for ref in plan.prior_rebase_artifacts:
-                    row = session.get(ProductArtifact, ref.artifact_id)
+                if parent_stage is None:
+                    raise ValueError("prior checkpoint rebase producer is unavailable")
+                for prior_ref in plan.prior_rebase_artifacts:
+                    prior_row = session.get(ProductArtifact, prior_ref.artifact_id)
                     if (
-                        row is None or parent_job is None
-                        or row.space_id != scope.space_id or _ref(row) != ref
-                        or row.producer_job_id != parent_stage.job_id
-                        or row.producer_generation != parent_job.lease_generation
-                        or row.dependency_sha256 != parent_stage.dependency_sha256
-                        or hashlib.sha256(row.payload).hexdigest() != ref.payload_sha256
+                        prior_row is None or parent_job is None
+                        or prior_row.space_id != scope.space_id
+                        or _ref(prior_row) != prior_ref
+                        or prior_row.producer_job_id != parent_stage.job_id
+                        or prior_row.producer_generation != parent_job.lease_generation
+                        or prior_row.dependency_sha256 != parent_stage.dependency_sha256
+                        or hashlib.sha256(prior_row.payload).hexdigest()
+                        != prior_ref.payload_sha256
                     ):
                         raise ValueError("prior checkpoint rebase custody changed")
                     if (
-                        ref.artifact_kind == "rebased_discovery_disposition"
+                        prior_ref.artifact_kind == "rebased_discovery_disposition"
                         and parent_receipt.rebased_discovery_disposition_sha256
-                        != ref.payload_sha256
+                        != prior_ref.payload_sha256
                     ):
                         raise ValueError("prior discovery disposition receipt changed")
-            for stage in plan.reused_stages:
-                row = session.get(ProductStage, stage.stage_id)
-                job = session.get(WikiJob, stage.job_id)
-                self._products._run(session, scope, stage.run_id)
+            for reused_stage in plan.reused_stages:
+                stage_row = session.get(ProductStage, reused_stage.stage_id)
+                stage_job = session.get(WikiJob, reused_stage.job_id)
+                self._products._run(session, scope, reused_stage.run_id)
                 if (
-                    row is None
-                    or row.space_id != scope.space_id
-                    or self._products._stage_snapshot(session, row) != stage
-                    or job is None
-                    or job.state != "succeeded"
+                    stage_row is None
+                    or stage_row.space_id != scope.space_id
+                    or self._products._stage_snapshot(session, stage_row) != reused_stage
+                    or stage_job is None
+                    or stage_job.state != "succeeded"
                 ):
                     raise ValueError("checkpoint producer did not complete successfully")
             if plan.failed_discovery_artifact is not None:
-                stage = plan.failed_discovery_stage
-                ref = plan.failed_discovery_artifact
-                stage_row = session.get(ProductStage, stage.stage_id)
-                job = session.get(WikiJob, stage.job_id)
-                row = session.get(ProductArtifact, ref.artifact_id)
-                self._products._run(session, scope, ref.run_id)
+                failed_stage = plan.failed_discovery_stage
+                failed_ref = plan.failed_discovery_artifact
+                if failed_stage is None:
+                    raise ValueError("discovery failure stage is missing")
+                failed_stage_row = session.get(ProductStage, failed_stage.stage_id)
+                failed_job = session.get(WikiJob, failed_stage.job_id)
+                failed_row = session.get(ProductArtifact, failed_ref.artifact_id)
+                self._products._run(session, scope, failed_ref.run_id)
                 if (
-                    stage_row is None or job is None or row is None
-                    or job.state != "succeeded"
-                    or self._products._stage_snapshot(session, stage_row) != stage
-                    or row.space_id != scope.space_id or _ref(row) != ref
-                    or row.producer_job_id != stage.job_id
-                    or row.producer_generation != job.lease_generation
-                    or row.dependency_sha256 != stage.dependency_sha256
-                    or hashlib.sha256(row.payload).hexdigest() != ref.payload_sha256
+                    failed_stage_row is None or failed_job is None or failed_row is None
+                    or failed_job.state != "succeeded"
+                    or self._products._stage_snapshot(session, failed_stage_row) != failed_stage
+                    or failed_row.space_id != scope.space_id
+                    or _ref(failed_row) != failed_ref
+                    or failed_row.producer_job_id != failed_stage.job_id
+                    or failed_row.producer_generation != failed_job.lease_generation
+                    or failed_row.dependency_sha256 != failed_stage.dependency_sha256
+                    or hashlib.sha256(failed_row.payload).hexdigest()
+                    != failed_ref.payload_sha256
                 ):
                     raise ValueError("discovery failure proof changed")
-                summary = json.loads(row.payload)
+                summary = json.loads(failed_row.payload)
                 if (
                     summary.get("state") != "FAILED"
-                    or stage.state != "partial_success"
-                    or (ref.artifact_kind, stage.stage_key) not in {
+                    or failed_stage.state != "partial_success"
+                    or (failed_ref.artifact_kind, failed_stage.stage_key) not in {
                         ("discovery_summary", "discovery"),
                         ("discovery_final_summary", "compilation"),
                     }
@@ -388,73 +508,77 @@ class CheckpointArtifacts:
                     raise ValueError("discovery failure proof is not technical")
             # Stable artifacts/calls are held FOR SHARE during their complete read.
             # Active job fencing happens only after this pure verification returns.
-            by_kind = {}
-            for ref in sorted(plan.artifacts, key=lambda r: r.artifact_id):
-                row = session.scalar(
+            by_kind: dict[str, Any] = {}
+            for artifact_ref in sorted(plan.artifacts, key=lambda r: r.artifact_id):
+                artifact_row = session.scalar(
                     select(ProductArtifact)
-                    .where(ProductArtifact.id == ref.artifact_id)
+                    .where(ProductArtifact.id == artifact_ref.artifact_id)
                     .with_for_update(read=True)
                 )
-                self._products._run(session, scope, ref.run_id)
+                self._products._run(session, scope, artifact_ref.run_id)
                 if (
-                    row is None
-                    or row.space_id != scope.space_id
-                    or _ref(row) != ref
-                    or hashlib.sha256(row.payload).hexdigest() != ref.payload_sha256
+                    artifact_row is None
+                    or artifact_row.space_id != scope.space_id
+                    or _ref(artifact_row) != artifact_ref
+                    or hashlib.sha256(artifact_row.payload).hexdigest()
+                    != artifact_ref.payload_sha256
                 ):
                     raise ValueError("checkpoint artifact custody changed")
-                producing_stage = stage_bindings.get((row.run_id, row.stage_key))
+                producing_stage = stage_bindings.get(
+                    (artifact_row.run_id, artifact_row.stage_key)
+                )
                 if (
                     producing_stage is None
-                    or producing_stage.job_id != row.producer_job_id
-                    or producing_stage.dependency_sha256 != row.dependency_sha256
+                    or producing_stage.job_id != artifact_row.producer_job_id
+                    or producing_stage.dependency_sha256 != artifact_row.dependency_sha256
                 ):
                     raise ValueError("checkpoint artifact is not output of its bound stage")
-                producer = session.get(WikiJob, row.producer_job_id)
+                producer = session.get(WikiJob, artifact_row.producer_job_id)
                 if (
                     producer is None
                     or producer.state != "succeeded"
-                    or producer.lease_generation != row.producer_generation
+                    or producer.lease_generation != artifact_row.producer_generation
                 ):
                     raise ValueError("checkpoint artifact producer fence changed")
                 # Do not retain large native/source bytes after validation.
-                if ref.artifact_kind in {
+                if artifact_ref.artifact_kind in {
                     "field_plan",
                     "field_validation",
                     "compile_delta",
                     "compile_request",
                 }:
-                    by_kind[ref.artifact_kind] = json.loads(row.payload)
-                session.expunge(row)
-            for ref in plan.retry_calls:
+                    by_kind[artifact_ref.artifact_kind] = json.loads(artifact_row.payload)
+                session.expunge(artifact_row)
+            for retry_ref in plan.retry_calls:
                 if (
                     self._products._identity_retry_reference(
-                        session, scope, ref.record_id, read_lock=True
+                        session, scope, retry_ref.record_id, read_lock=True
                     )
-                    != ref
+                    != retry_ref
                 ):
                     raise ValueError("checkpoint retry identity proof changed")
-            for ref in plan.failed_calls:
+            for failure_ref in plan.failed_calls:
                 if (
                     self._products._confirmed_failure_reference(
-                        session, scope, ref.record_id, read_lock=True
+                        session, scope, failure_ref.record_id, read_lock=True
                     )
-                    != ref
+                    != failure_ref
                 ):
                     raise ValueError("checkpoint confirmed failure proof changed")
-            usage = {}
-            call_ids = []
-            for ref in plan.calls:
-                table = ProductModelCall if ref.kind == "field" else ProductStageModelCall
-                row = session.scalar(
-                    select(table).where(table.id == ref.record_id).with_for_update(read=True)
-                )
-                self._products._run(session, scope, ref.run_id)
+            usage: dict[str, int] = {}
+            call_ids: list[str] = []
+            for call_ref in plan.calls:
+                table = ProductModelCall if call_ref.kind == "field" else ProductStageModelCall
+                # The selected ORM class depends on the discriminated reference kind.
+                call_row = cast(Any, session.scalar(
+                    select(table).where(table.id == call_ref.record_id).with_for_update(read=True)
+                ))
+                self._products._run(session, scope, call_ref.run_id)
                 if (
-                    row is None
-                    or row.space_id != scope.space_id
+                    call_row is None
+                    or call_row.space_id != scope.space_id
                     or any(
-                        getattr(row, k) != getattr(ref, k)
+                        getattr(call_row, k) != getattr(call_ref, k)
                         for k in (
                             "run_id",
                             "call_id",
@@ -469,25 +593,27 @@ class CheckpointArtifacts:
                     ("raw", "raw_sha256"),
                     ("request_bytes", "request_sha256"),
                 ):
-                    raw = getattr(row, key)
-                    sha = getattr(row, sha_key)
+                    raw = getattr(call_row, key)
+                    sha = getattr(call_row, sha_key)
                     if (
                         (raw is None) != (sha is None)
                         or raw is not None
                         and hashlib.sha256(raw).hexdigest() != sha
                     ):
                         raise ValueError("checkpoint recorded call bytes changed")
-                if row.state == "recorded" and (row.raw is None or row.request_bytes is None):
+                if call_row.state == "recorded" and (
+                    call_row.raw is None or call_row.request_bytes is None
+                ):
                     raise ValueError("recorded checkpoint call is incomplete")
-                call_stage = "extract" if ref.kind == "field" else row.stage_key
-                if row.dispatched_at is not None and call_stage in effective_keys:
-                    call_ids.append(row.call_id)
-                    if ref.kind == "stage":
-                        recorded_usage = row.usage
+                call_stage = "extract" if call_ref.kind == "field" else call_row.stage_key
+                if call_row.dispatched_at is not None and call_stage in effective_keys:
+                    call_ids.append(call_row.call_id)
+                    if call_ref.kind == "stage":
+                        recorded_usage = call_row.usage
                     else:
                         settlement = session.scalar(
                             select(ProductWindowSettlement).where(
-                                ProductWindowSettlement.window_id == row.window_id
+                                ProductWindowSettlement.window_id == call_row.window_id
                             )
                         )
                         if settlement is None:
@@ -495,41 +621,42 @@ class CheckpointArtifacts:
                         recorded_usage = settlement.usage
                     for key, value in recorded_usage.items():
                         usage[key] = usage.get(key, 0) + value
-            for ref in plan.audited_calls:
-                row = session.scalar(
+            for audited_ref in plan.audited_calls:
+                audited_row = session.scalar(
                     select(ProductStageModelCall)
-                    .where(ProductStageModelCall.id == ref.record_id)
+                    .where(ProductStageModelCall.id == audited_ref.record_id)
                     .with_for_update(read=True)
                 )
-                self._products._run(session, scope, ref.run_id)
+                self._products._run(session, scope, audited_ref.run_id)
                 if (
-                    ref.kind != "stage" or row is None
-                    or row.space_id != scope.space_id
-                    or row.stage_key not in {"discovery", "compilation"}
-                    or row.dispatched_at is None or row.state != "recorded"
-                    or any(getattr(row, key) != getattr(ref, key) for key in (
+                    audited_ref.kind != "stage" or audited_row is None
+                    or audited_row.space_id != scope.space_id
+                    or audited_row.stage_key not in {"discovery", "compilation"}
+                    or audited_row.dispatched_at is None or audited_row.state != "recorded"
+                    or any(getattr(audited_row, key) != getattr(audited_ref, key) for key in (
                         "run_id", "call_id", "state", "request_sha256", "raw_sha256"
                     ))
-                    or row.request_bytes is None or row.raw is None
-                    or hashlib.sha256(row.request_bytes).hexdigest() != row.request_sha256
-                    or hashlib.sha256(row.raw).hexdigest() != row.raw_sha256
+                    or audited_row.request_bytes is None or audited_row.raw is None
+                    or hashlib.sha256(audited_row.request_bytes).hexdigest()
+                    != audited_row.request_sha256
+                    or hashlib.sha256(audited_row.raw).hexdigest() != audited_row.raw_sha256
                 ):
                     raise ValueError("audited discovery call changed or was not settled")
-            fields = {}
-            keys = set()
-            field_snapshots = []
-            for ref in plan.fields:
-                row = session.scalar(
+            fields: dict[str, str] = {}
+            keys: set[tuple[str, str]] = set()
+            field_snapshots: list[FieldAttemptSnapshot] = []
+            for field_ref in plan.fields:
+                field_row = session.scalar(
                     select(ProductFieldAttempt)
-                    .where(ProductFieldAttempt.id == ref.attempt_id)
+                    .where(ProductFieldAttempt.id == field_ref.attempt_id)
                     .with_for_update(read=True)
                 )
                 if (
-                    row is None
-                    or row.space_id != scope.space_id
-                    or row.tenant_id != scope.tenant_id
+                    field_row is None
+                    or field_row.space_id != scope.space_id
+                    or field_row.tenant_id != scope.tenant_id
                     or any(
-                        getattr(row, k) != getattr(ref, k)
+                        getattr(field_row, k) != getattr(field_ref, k)
                         for k in (
                             "run_id",
                             "entity_id",
@@ -541,17 +668,17 @@ class CheckpointArtifacts:
                     )
                 ):
                     raise ValueError("checkpoint field identity changed")
-                snapshot = self._products._field_snapshot(row)
+                snapshot = self._products._field_snapshot(field_row)
                 field_snapshots.append(snapshot)
-                fields[row.id] = field_digest(snapshot)
-                keys.add((row.entity_id, row.field_key))
+                fields[field_row.id] = field_digest(snapshot)
+                keys.add((field_row.entity_id, field_row.field_key))
             if "extract" in {s.stage_key for s in plan.reused_stages}:
-                expected = {
+                expected_keys = {
                     (t["entity_id"], t["field_key"])
                     for w in by_kind["field_plan"]["windows"]
                     for t in w["tasks"]
                 }
-                if keys != expected:
+                if keys != expected_keys:
                     raise ValueError("checkpoint field completion coverage changed")
             if "compile_delta" in by_kind:
                 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
@@ -584,13 +711,24 @@ class CheckpointArtifacts:
                     for f in by_kind["compile_delta"]["output"]["fields"]
                 }
                 for field in projection.output.fields:
-                    expected = field.model_dump(mode="json")
-                    if actual.get((field.entity_id, field.field_key)) != expected:
+                    expected_field = field.model_dump(mode="json")
+                    if actual.get((field.entity_id, field.field_key)) != expected_field:
                         raise ValueError("checkpoint fields differ from the recorded compile delta")
             if len(call_ids) != len(set(call_ids)):
                 raise ValueError("duplicate original call identity")
             return CheckpointReceipt(
-                contract=plan.contract.replace("-plan.", "-receipt."),
+                contract=cast(
+                    Literal[
+                        "product-stage-checkpoint-receipt.830.v1",
+                        "product-stage-checkpoint-receipt.830.v2",
+                        "product-stage-checkpoint-receipt.830.v3",
+                        "product-stage-checkpoint-receipt.830.v4",
+                        "product-stage-checkpoint-receipt.830.v5",
+                        "product-stage-checkpoint-receipt.830.v6",
+                        "product-stage-checkpoint-receipt.830.v7",
+                    ],
+                    plan.contract.replace("-plan.", "-receipt."),
+                ),
                 execution_workflow_version=plan.execution_workflow_version,
                 scope=scope,
                 run_id=run_id,

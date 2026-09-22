@@ -5,9 +5,13 @@ import asyncio
 import hashlib
 import importlib
 import json
+import typing
+from collections.abc import Iterator
+from pathlib import Path
 
 import httpx
 import pytest
+from pydantic import HttpUrl, SecretStr
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -21,7 +25,7 @@ from insurance_harness.service_shell.worker import HandlerRegistry, WorkerLoop
 from tests.product_ingestion.test_extraction import response, row, source, tasks  # noqa: F401
 
 
-def worker_module():
+def worker_module() -> typing.Any:
     try:
         return importlib.import_module("insurance_harness.product_ingestion.worker")
     except ModuleNotFoundError:
@@ -29,14 +33,14 @@ def worker_module():
 
 
 @pytest.fixture
-def runtime(tmp_path, source):
+def runtime(tmp_path: Path, source: typing.Any) -> Iterator[tuple[typing.Any, ...]]:
     engine = create_engine(
         f"sqlite:///{tmp_path}/worker.db", connect_args={"check_same_thread": False}
     )
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     settings = ShellSettings(
-        postgres_dsn="postgresql://fixture@localhost/fixture",
+        postgres_dsn=SecretStr("postgresql://fixture@localhost/fixture"),
         worker_id="worker",
         worker_space_ids=("space-1",),
     )
@@ -78,14 +82,16 @@ def runtime(tmp_path, source):
     engine.dispose()
 
 
-def test_real_worker_commits_mixed_window_and_reuses_success_after_recomposition(runtime, source):
+def test_real_worker_commits_mixed_window_and_reuses_success_after_recomposition(
+    runtime: typing.Any, source: typing.Any
+) -> None:
     store, jobs, scope, specs, selected, settings = runtime
     calls = []
 
-    async def load_sources(_scope, _run_id):
+    async def load_sources(_scope: object, _run_id: object) -> tuple[typing.Any, ...]:
         return (source,)
 
-    async def transport(request):
+    async def transport(request: typing.Any) -> bytes:
         calls.append(request)
         payload = json.loads(request)
         semantic = response(
@@ -98,7 +104,7 @@ def test_real_worker_commits_mixed_window_and_reuses_success_after_recomposition
             }
         ).encode()
 
-    def loop():
+    def loop() -> WorkerLoop:
         registry = HandlerRegistry()
         worker_module().register_extraction_worker(
             registry,
@@ -118,7 +124,7 @@ def test_real_worker_commits_mixed_window_and_reuses_success_after_recomposition
             worker_id="worker",
         )
 
-    def execute_run(key):
+    def execute_run(key: str) -> tuple[typing.Any, ...]:
         run = store.create_run(scope=scope, idempotency_key=key)
         store.enqueue_window(
             scope=scope,
@@ -152,7 +158,9 @@ def test_real_worker_commits_mixed_window_and_reuses_success_after_recomposition
     }
 
 
-def test_recorded_response_is_projected_without_redispatch(runtime, source):
+def test_recorded_response_is_projected_without_redispatch(
+    runtime: typing.Any, source: typing.Any
+) -> None:
     store, jobs, scope, specs, selected, settings = runtime
     run = store.create_run(scope=scope, idempotency_key="recorded")
     window = store.enqueue_window(
@@ -205,10 +213,10 @@ def test_recorded_response_is_projected_without_redispatch(runtime, source):
         diagnostic=None,
     )
 
-    async def load_sources(_scope, _run_id):
+    async def load_sources(_scope: object, _run_id: object) -> tuple[typing.Any, ...]:
         return (source,)
 
-    async def transport(_request):
+    async def transport(_request: bytes) -> bytes:
         pytest.fail("recorded call must not be sent again")
 
     registry = HandlerRegistry()
@@ -219,7 +227,13 @@ def test_recorded_response_is_projected_without_redispatch(runtime, source):
         load_sources=load_sources,
         transport=transport,
     )
-    result = asyncio.run(registry.get("product_extraction_window")(job))
+    handler = registry.get("product_extraction_window")
+    assert handler is not None
+
+    async def invoke_handler() -> typing.Any:
+        return await handler(job)
+
+    result = asyncio.run(invoke_handler())
     jobs.report_success(
         space_id=scope.space_id,
         job_id=job.id,
@@ -230,7 +244,9 @@ def test_recorded_response_is_projected_without_redispatch(runtime, source):
     assert len(store.list_field_attempts(scope=scope, run_id=run.run_id)) == 2
 
 
-def test_uncertain_dispatch_settles_failed_without_loading_sources_or_sending_again(runtime):
+def test_uncertain_dispatch_settles_failed_without_loading_sources_or_sending_again(
+    runtime: typing.Any,
+) -> None:
     store, jobs, scope, specs, _, _ = runtime
     run = store.create_run(scope=scope, idempotency_key="interrupted")
     window = store.enqueue_window(
@@ -265,7 +281,10 @@ def test_uncertain_dispatch_settles_failed_without_loading_sources_or_sending_ag
         request_bytes=request,
     )
 
-    async def forbidden(*_args):
+    async def forbidden_sources(*_args: object) -> tuple[typing.Any, ...]:
+        pytest.fail("uncertain dispatch cannot invoke source or provider again")
+
+    async def forbidden_transport(_request: bytes) -> bytes:
         pytest.fail("uncertain dispatch cannot invoke source or provider again")
 
     registry = HandlerRegistry()
@@ -273,10 +292,16 @@ def test_uncertain_dispatch_settles_failed_without_loading_sources_or_sending_ag
         registry,
         store=store,
         scopes={scope.space_id: scope},
-        load_sources=forbidden,
-        transport=forbidden,
+        load_sources=forbidden_sources,
+        transport=forbidden_transport,
     )
-    result = asyncio.run(registry.get("product_extraction_window")(job))
+    handler = registry.get("product_extraction_window")
+    assert handler is not None
+
+    async def invoke_handler() -> typing.Any:
+        return await handler(job)
+
+    result = asyncio.run(invoke_handler())
     jobs.report_success(
         space_id=scope.space_id,
         job_id=job.id,
@@ -294,7 +319,9 @@ def test_uncertain_dispatch_settles_failed_without_loading_sources_or_sending_ag
     )
 
 
-def test_configured_transport_persists_full_endpoint_envelope(runtime, source):
+def test_configured_transport_persists_full_endpoint_envelope(
+    runtime: typing.Any, source: typing.Any
+) -> None:
     from datetime import UTC, datetime, timedelta
 
     from pydantic import SecretStr
@@ -309,7 +336,7 @@ def test_configured_transport_persists_full_endpoint_envelope(runtime, source):
     field_prompt = b"Extract only the requested fields."
     policy = ProductModelSettings(
         scope=scope,
-        endpoint="https://gateway.invalid/v1/chat/completions",
+        endpoint=HttpUrl("https://gateway.invalid/v1/chat/completions"),
         api_key=SecretStr("fixture-secret"),
         model="gemini-3.7-flash-medium",
         policy_version="g3-user-gemini-gateway-v1",
@@ -331,12 +358,11 @@ def test_configured_transport_persists_full_endpoint_envelope(runtime, source):
         timeout_seconds=5,
     )
     specs = tuple(
-        spec.model_copy(update={"model_policy_sha256": policy.policy_sha256})
-        for spec in specs
+        spec.model_copy(update={"model_policy_sha256": policy.policy_sha256}) for spec in specs
     )
     sent = []
 
-    def provider(request):
+    def provider(request: typing.Any) -> typing.Any:
         sent.append(request)
         envelope = json.loads(request.content)
         semantic = json.loads(envelope["messages"][1]["content"])

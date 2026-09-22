@@ -4,19 +4,25 @@ import hashlib
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
+from insurance_harness.product_ingestion.tables import ProductRun
 from insurance_harness.product_ingestion.upload_manifest import UploadManifest
 
 
-def _binding(row):
+def _binding(row: ProductRun) -> tuple[str, str]:
     dependency = hashlib.sha256(("product-uploads.v1\0" + row.id).encode()).hexdigest()
     stage_id = str(uuid5(NAMESPACE_URL, f"product-stage:{row.space_id}:{row.id}:uploads"))
     job_id = str(uuid5(NAMESPACE_URL, f"product-stage-job:{stage_id}:{dependency}"))
     return dependency, job_id
 
 
-def save_upload_manifest(session, row, manifest: UploadManifest):
+def save_upload_manifest(
+    session: Session,
+    row: ProductRun,
+    manifest: UploadManifest,
+) -> None:
     payload = manifest.model_dump_json().encode()
     dependency, job_id = _binding(row)
     session.add(
@@ -42,7 +48,7 @@ def save_upload_manifest(session, row, manifest: UploadManifest):
     )
 
 
-def read_upload_manifest(session, row):
+def read_upload_manifest(session: Session, row: ProductRun) -> UploadManifest | None:
     saved = session.scalar(
         select(ProductArtifact).where(
             ProductArtifact.run_id == row.id,

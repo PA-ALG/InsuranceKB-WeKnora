@@ -6,6 +6,7 @@ import base64
 import gzip
 import hashlib
 import json
+from typing import Any
 
 from insurance_harness.product_ingestion.compilation import published_compile_members
 from insurance_harness.product_ingestion.platform import _object
@@ -27,7 +28,7 @@ SLOTS = {
 }
 
 
-def _wire(value) -> bytes:
+def _wire(value: Any) -> bytes:
     # Transport is lossless, not a second domain validator. In particular raw
     # evidence and provider output may contain decomposed Unicode and CRLF.
     return json.dumps(
@@ -35,7 +36,7 @@ def _wire(value) -> bytes:
     ).encode()
 
 
-def encode_candidate_transfer(candidate_raw: bytes, base_body: dict) -> bytes:
+def encode_candidate_transfer(candidate_raw: bytes, base_body: dict[str, Any]) -> bytes:
     """Consume a verified published snapshot; preserve the exact canonical candidate.
 
     Signature/current-authority verification belongs to the existing caller and

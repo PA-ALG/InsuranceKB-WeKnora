@@ -601,8 +601,7 @@ def valid_gemini_d_compile_plan(
                 stage="D_COMPILE",
                 direction="response",
                 enforcing_module=(
-                    "harness/src/insurance_harness/knowledge_compiler/"
-                    "g3_bounded_model_execution.py"
+                    "harness/src/insurance_harness/knowledge_compiler/g3_bounded_model_execution.py"
                 ),
                 enforcing_module_sha256="f" * 64,
                 canonical_schema_sha256="d" * 64,
@@ -800,17 +799,11 @@ def _with_stage_chain_capacity(
         "g3-bounded-chain.830.v1",
         "chain_manifest_hash",
         **{
-            **plan.chain_manifest.model_dump(
-                mode="python", exclude={"chain_manifest_hash"}
-            ),
+            **plan.chain_manifest.model_dump(mode="python", exclude={"chain_manifest_hash"}),
             "stages": stages,
             "max_calls": sum(stage.max_calls for stage in stages),
-            "total_input_token_ceiling": sum(
-                stage.input_token_ceiling for stage in stages
-            ),
-            "total_output_token_ceiling": sum(
-                stage.output_token_ceiling for stage in stages
-            ),
+            "total_input_token_ceiling": sum(stage.input_token_ceiling for stage in stages),
+            "total_output_token_ceiling": sum(stage.output_token_ceiling for stage in stages),
             "total_time_limit_seconds": sum(stage.time_limit_seconds for stage in stages),
         },
     )
@@ -877,9 +870,7 @@ def _with_old_gemini_d_compile_call(
         "g3-stage-dispatch.830.v1",
         "structured_dispatch_hash",
         **{
-            **plan.dispatch_lock.model_dump(
-                mode="python", exclude={"structured_dispatch_hash"}
-            ),
+            **plan.dispatch_lock.model_dump(mode="python", exclude={"structured_dispatch_hash"}),
             "calls": calls,
         },
     )
@@ -893,24 +884,17 @@ def _with_old_gemini_d_compile_call(
                 sorted(call.window_id for call in calls if call.window_id is not None)
             ),
             "material_or_derivation_ids": tuple(
-                sorted(
-                    {
-                        material_id
-                        for call in calls
-                        for material_id in call.material_ids
-                    }
-                )
+                sorted({material_id for call in calls for material_id in call.material_ids})
             ),
         },
     )
+    assert plan.derived_stage_receipt is not None
     derived = _hashed(
         G3DerivedStageReceiptV1,
         "g3-derived-stage-receipt.830.v1",
         "receipt_sha256",
         **{
-            **plan.derived_stage_receipt.model_dump(
-                mode="python", exclude={"receipt_sha256"}
-            ),
+            **plan.derived_stage_receipt.model_dump(mode="python", exclude={"receipt_sha256"}),
             "derived_request_manifest_hash": manifest.manifest_hash,
         },
     )
@@ -971,9 +955,7 @@ def _as_nonwindow_d_multicall(
         "g3-stage-eligibility.830.v1",
         "eligibility_hash",
         **{
-            **plan.eligibility_lock.model_dump(
-                mode="python", exclude={"eligibility_hash"}
-            ),
+            **plan.eligibility_lock.model_dump(mode="python", exclude={"eligibility_hash"}),
             "stage": stage,
             "eligible_subject_ids": (),
         },
@@ -983,9 +965,7 @@ def _as_nonwindow_d_multicall(
         "g3-stage-schema-set.830.v1",
         "schema_hash",
         contract="g3-stage-schema-set.830.v1",
-        artifacts=(
-            plan.schema_lock.artifacts[0].model_copy(update={"stage": stage}),
-        ),
+        artifacts=(plan.schema_lock.artifacts[0].model_copy(update={"stage": stage}),),
     )
     template_values = {
         **plan.template_lock.model_dump(
@@ -1010,9 +990,7 @@ def _as_nonwindow_d_multicall(
         "g3-stage-routing.830.v1",
         "routing_policy_hash",
         **{
-            **plan.routing_lock.model_dump(
-                mode="python", exclude={"routing_policy_hash"}
-            ),
+            **plan.routing_lock.model_dump(mode="python", exclude={"routing_policy_hash"}),
             "stage": stage,
             "purpose": purpose,
             "run_schema_version": schema_version,
@@ -1030,9 +1008,7 @@ def _as_nonwindow_d_multicall(
         "g3-stage-dispatch.830.v1",
         "structured_dispatch_hash",
         **{
-            **plan.dispatch_lock.model_dump(
-                mode="python", exclude={"structured_dispatch_hash"}
-            ),
+            **plan.dispatch_lock.model_dump(mode="python", exclude={"structured_dispatch_hash"}),
             "stage": stage,
             "calls": calls,
             "schema_hash": schema.schema_hash,
@@ -1071,20 +1047,17 @@ def _as_nonwindow_d_multicall(
         "g3-stage-provenance.830.v1",
         "provenance_hash",
         **{
-            **plan.provenance_lock.model_dump(
-                mode="python", exclude={"provenance_hash"}
-            ),
+            **plan.provenance_lock.model_dump(mode="python", exclude={"provenance_hash"}),
             "stage": stage,
         },
     )
+    assert plan.derived_stage_receipt is not None
     derived = _hashed(
         G3DerivedStageReceiptV1,
         "g3-derived-stage-receipt.830.v1",
         "receipt_sha256",
         **{
-            **plan.derived_stage_receipt.model_dump(
-                mode="python", exclude={"receipt_sha256"}
-            ),
+            **plan.derived_stage_receipt.model_dump(mode="python", exclude={"receipt_sha256"}),
             "stage": stage,
             "derived_request_manifest_hash": manifest.manifest_hash,
         },
@@ -1164,9 +1137,7 @@ def _as_windowed_gemini_d_review(
         "g3-stage-dispatch.830.v1",
         "structured_dispatch_hash",
         **{
-            **current.dispatch_lock.model_dump(
-                mode="python", exclude={"structured_dispatch_hash"}
-            ),
+            **current.dispatch_lock.model_dump(mode="python", exclude={"structured_dispatch_hash"}),
             "calls": calls,
         },
     )
@@ -1182,14 +1153,13 @@ def _as_windowed_gemini_d_review(
             ),
         },
     )
+    assert current.derived_stage_receipt is not None
     derived = _hashed(
         G3DerivedStageReceiptV1,
         "g3-derived-stage-receipt.830.v1",
         "receipt_sha256",
         **{
-            **current.derived_stage_receipt.model_dump(
-                mode="python", exclude={"receipt_sha256"}
-            ),
+            **current.derived_stage_receipt.model_dump(mode="python", exclude={"receipt_sha256"}),
             "derived_request_manifest_hash": manifest.manifest_hash,
         },
     )
@@ -1254,25 +1224,39 @@ def test_complete_plan_closes_every_mandatory_hash_and_projection() -> None:
 def _non_hash_order_c_plan() -> G3BoundedAdmissionPlanV1:
     plan = valid_c_plan(call_count=2)
     calls = tuple(
-        call.model_copy(update={
-            "request_body_sha256": plan.request_manifest.calls[1 - index].request_body_sha256,
-        })
+        call.model_copy(
+            update={
+                "request_body_sha256": plan.request_manifest.calls[1 - index].request_body_sha256,
+            }
+        )
         for index, call in enumerate(plan.request_manifest.calls)
     )
     manifest = _hashed(
-        G3RequestManifestV1, "g3-request-manifest.830.v1", "manifest_hash",
-        **{**plan.request_manifest.model_dump(mode="python", exclude={"manifest_hash"}),
-           "calls": calls},
+        G3RequestManifestV1,
+        "g3-request-manifest.830.v1",
+        "manifest_hash",
+        **{
+            **plan.request_manifest.model_dump(mode="python", exclude={"manifest_hash"}),
+            "calls": calls,
+        },
     )
     dispatch = _hashed(
-        G3StageDispatchLockV1, "g3-stage-dispatch.830.v1", "structured_dispatch_hash",
-        **{**plan.dispatch_lock.model_dump(mode="python", exclude={"structured_dispatch_hash"}),
-           "calls": calls},
+        G3StageDispatchLockV1,
+        "g3-stage-dispatch.830.v1",
+        "structured_dispatch_hash",
+        **{
+            **plan.dispatch_lock.model_dump(mode="python", exclude={"structured_dispatch_hash"}),
+            "calls": calls,
+        },
     )
-    return plan.model_copy(update={
-        "request_manifest": manifest, "manifest_hash": manifest.manifest_hash,
-        "dispatch_lock": dispatch, "structured_dispatch_hash": dispatch.structured_dispatch_hash,
-    })
+    return plan.model_copy(
+        update={
+            "request_manifest": manifest,
+            "manifest_hash": manifest.manifest_hash,
+            "dispatch_lock": dispatch,
+            "structured_dispatch_hash": dispatch.structured_dispatch_hash,
+        }
+    )
 
 
 def test_request_artifact_binding_preserves_call_order_independent_of_hash_order() -> None:
@@ -1281,10 +1265,12 @@ def test_request_artifact_binding_preserves_call_order_independent_of_hash_order
     assert checked == plan
     assert tuple(call.ordinal for call in checked.request_manifest.calls) == (0, 1)
     assert tuple(call.request_body_sha256 for call in checked.request_manifest.calls) == (
-        "2" * 64, "1" * 64,
+        "2" * 64,
+        "1" * 64,
     )
     assert tuple(ref.sha256 for ref in checked.eligibility_lock.input_artifacts) == (
-        "1" * 64, "2" * 64,
+        "1" * 64,
+        "2" * 64,
     )
 
 
@@ -1294,12 +1280,14 @@ def test_request_artifact_binding_preserves_call_order_independent_of_hash_order
 def test_rehashed_request_artifact_inventory_drift_stays_rejected(mutation: str) -> None:
     plan = _non_hash_order_c_plan()
     refs = plan.eligibility_lock.input_artifacts
-    foreign = refs[-1].model_copy(update={
-        "sha256": "3" * 64,
-        "artifact_ref": (
-            "/var/lib/insurancekb/run-admission/sha256/" + "3" * 64 + "/request-body.json"
-        ),
-    })
+    foreign = refs[-1].model_copy(
+        update={
+            "sha256": "3" * 64,
+            "artifact_ref": (
+                "/var/lib/insurancekb/run-admission/sha256/" + "3" * 64 + "/request-body.json"
+            ),
+        }
+    )
     if mutation == "missing":
         refs = refs[:1]
     elif mutation == "extra":
@@ -1313,14 +1301,20 @@ def test_rehashed_request_artifact_inventory_drift_stays_rejected(mutation: str)
     with pytest.raises((ValueError, ValidationError)):
         updates = {}
         for attr, artifact_field, domain, hash_field in (
-            ("eligibility_lock", "input_artifacts", "g3-stage-eligibility.830.v1",
-             "eligibility_hash"),
+            (
+                "eligibility_lock",
+                "input_artifacts",
+                "g3-stage-eligibility.830.v1",
+                "eligibility_hash",
+            ),
             ("rights_lock", "artifacts", "g3-external-send-rights.830.v1", "rights_hash"),
             ("provenance_lock", "artifacts", "g3-stage-provenance.830.v1", "provenance_hash"),
         ):
             old = getattr(plan, attr)
             changed = _hashed(
-                type(old), domain, hash_field,
+                type(old),
+                domain,
+                hash_field,
                 **{**old.model_dump(mode="python", exclude={hash_field}), artifact_field: refs},
             )
             updates[attr] = changed
@@ -1364,16 +1358,12 @@ def test_request_body_rerender_is_byte_exact_and_model_bound() -> None:
         response_format="json_object",
     )
     with pytest.raises(AdmissionPolicyDenied):
-        _rerender_g3_request(
-            legacy, plan, call, system="system fixture", user="user fixture"
-        )
+        _rerender_g3_request(legacy, plan, call, system="system fixture", user="user fixture")
     tampered = body.replace(
         plan.approved_identities[0].deployment_id.encode(), b"qwen3.5-plus-2026-04-21"
     )
     with pytest.raises(AdmissionPolicyDenied):
-        _rerender_g3_request(
-            tampered, plan, call, system="system fixture", user="user fixture"
-        )
+        _rerender_g3_request(tampered, plan, call, system="system fixture", user="user fixture")
 
 
 def test_strict_dto_rejects_extra_bool_integer_and_noncanonical_tuple() -> None:
@@ -1465,9 +1455,7 @@ def test_gemini_d_compile_rejects_each_insufficient_signed_capacity(
         ("resource_caps", "token_limit"),
     ),
 )
-def test_gemini_d_compile_rejects_each_nonexact_active_cap(
-    target: str, field: str
-) -> None:
+def test_gemini_d_compile_rejects_each_nonexact_active_cap(target: str, field: str) -> None:
     plan = valid_gemini_d_compile_plan(call_count=2, capacity_calls=90)
     with pytest.raises(ValueError, match="invalid G3 bounded admission plan"):
         validate_g3_bounded_plan(_with_rehashed_actual_cap(plan, target, field))
@@ -1480,9 +1468,7 @@ def test_gemini_d_compile_rejects_rehashed_dispatch_omission() -> None:
         "g3-stage-dispatch.830.v1",
         "structured_dispatch_hash",
         **{
-            **plan.dispatch_lock.model_dump(
-                mode="python", exclude={"structured_dispatch_hash"}
-            ),
+            **plan.dispatch_lock.model_dump(mode="python", exclude={"structured_dispatch_hash"}),
             "calls": plan.dispatch_lock.calls[:-1],
         },
     )
@@ -1620,9 +1606,7 @@ def test_windowed_gemini_d_review_rejects_each_insufficient_signed_capacity(
         capacity_calls=30,
     )
     with pytest.raises(ValueError, match="invalid G3 bounded admission plan"):
-        validate_g3_bounded_plan(
-            _with_stage_chain_capacity(plan, "D_REVIEW", **{field: capacity})
-        )
+        validate_g3_bounded_plan(_with_stage_chain_capacity(plan, "D_REVIEW", **{field: capacity}))
 
 
 @pytest.mark.parametrize(
@@ -1641,9 +1625,7 @@ def test_windowed_gemini_d_review_rejects_each_insufficient_signed_capacity(
         ("resource_caps", "token_limit"),
     ),
 )
-def test_windowed_gemini_d_review_rejects_each_nonexact_active_cap(
-    target: str, field: str
-) -> None:
+def test_windowed_gemini_d_review_rejects_each_nonexact_active_cap(target: str, field: str) -> None:
     plan = _as_windowed_gemini_d_review(
         valid_gemini_d_compile_plan(call_count=2, capacity_calls=180),
         capacity_calls=30,
@@ -1874,9 +1856,7 @@ def test_d_rejects_native_projection_contract_before_any_artifact_read(
     )
     native_ref = G3ArtifactRefV1(
         contract="g3-native-page-projections.830.v1",
-        artifact_ref=(
-            "/var/lib/insurancekb/run-admission/sha256/" + "b" * 64 + "/native.json"
-        ),
+        artifact_ref=("/var/lib/insurancekb/run-admission/sha256/" + "b" * 64 + "/native.json"),
         sha256="b" * 64,
         bytes=32 * 1024 * 1024 + 1,
     )
@@ -1884,9 +1864,7 @@ def test_d_rejects_native_projection_contract_before_any_artifact_read(
         **{
             **base.eligibility_lock.__dict__,
             "stage": "D_COMPILE",
-            "input_artifacts": (
-                (native_ref,) if native_location == "artifact_collection" else ()
-            ),
+            "input_artifacts": ((native_ref,) if native_location == "artifact_collection" else ()),
         }
     )
     protocol_seed = base.protocol_seed_lock.model_construct(

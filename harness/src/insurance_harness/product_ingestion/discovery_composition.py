@@ -8,19 +8,33 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
+from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCompileRequest830G3V1,
+)
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
     CompileOutput,
+    CompileResult,
     ExecutionRecord,
     ReviewResult,
+    free_page_id,
 )
+from insurance_harness.product_ingestion.artifact_models import ArtifactDraft
 from insurance_harness.product_ingestion.compilation import _derived_run_id
+from insurance_harness.product_ingestion.discovery_stage import IndependentDiscoveryFinalOutcome
 
 COMPOSITE_REVIEW = "platform-combined-field-discovery-review.830.g3.v1"
 
 
-def merge_discovery_delta(*, request, field_delta, free_output, run_id):
+def merge_discovery_delta(
+    *,
+    request: BatchConceptCompileRequest830G3V1,
+    field_delta: CompileResult,
+    free_output: CompileOutput,
+    run_id: str,
+) -> CompileResult:
     compiler.validate_delta_output(request, field_delta)
     free_output = CompileOutput.model_validate(free_output)
     if free_output.fields or free_output.request_hash != field_delta.output.request_hash:
@@ -51,7 +65,15 @@ def merge_discovery_delta(*, request, field_delta, free_output, run_id):
     return merged
 
 
-def _review_call_matches(outcome, proof, response_row, proof_row, context_hash, final_hash, run_id):
+def _review_call_matches(
+    outcome: IndependentDiscoveryFinalOutcome,
+    proof: dict[str, Any],
+    response_row: ArtifactDraft,
+    proof_row: ArtifactDraft,
+    context_hash: str,
+    final_hash: str,
+    run_id: str,
+) -> bool:
     from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin, StageCallState
     from insurance_harness.product_ingestion.discovery import INDEPENDENT_DISCOVERY_REVIEW_PROMPT
     from insurance_harness.product_ingestion.extraction import _json
@@ -90,12 +112,19 @@ def _review_call_matches(outcome, proof, response_row, proof_row, context_hash, 
         return False
     try:
         semantic = _json(ConfiguredFieldTransport.decode_response(replayed.raw))
-        return semantic == json.loads(response_row.payload)
+        return bool(semantic == json.loads(response_row.payload))
     except (TypeError, ValueError):
         return False
 
 
-def compose_discovery_review(*, request, final_output, free_output, outcome, run_id):
+def compose_discovery_review(
+    *,
+    request: BatchConceptCompileRequest830G3V1,
+    final_output: CompileOutput,
+    free_output: CompileOutput,
+    outcome: IndependentDiscoveryFinalOutcome,
+    run_id: str,
+) -> ReviewResult:
     """Verify exact all-or-none proof, then attest to this adapter's real work."""
     from insurance_harness.product_ingestion.discovery import DiscoveryReview
 
@@ -122,13 +151,13 @@ def compose_discovery_review(*, request, final_output, free_output, outcome, run
     request_hash = compiler.compile_request_hash_g3(request.base_request)
     review = checked.review
     member_ids = {row.concept_id for row in free_output.definitions} | {
-        compiler.free_page_id(row) for row in free_output.pages
+        free_page_id(row) for row in free_output.pages
     }
     final_members = {row.concept_id: row for row in final_output.definitions} | {
-        compiler.free_page_id(row): row for row in final_output.pages
+        free_page_id(row): row for row in final_output.pages
     }
     expected_members = {row.concept_id: row for row in free_output.definitions} | {
-        compiler.free_page_id(row): row for row in free_output.pages
+        free_page_id(row): row for row in free_output.pages
     }
     checks = {row.candidate_id for row in checked.disposition_checks}
     if (

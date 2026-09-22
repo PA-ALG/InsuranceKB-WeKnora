@@ -6,12 +6,20 @@ from pathlib import Path
 import pytest
 
 from insurance_harness.model_policy import g3_bounded_gateway as gateway
-from insurance_harness.run_admission.g3_models import canonical_g3_hash, canonical_json
+from insurance_harness.run_admission.g3_models import (
+    G3BoundedAdmissionPlanV1,
+    G3CallTerminalReceiptV1,
+    G3ProviderUsageV1,
+    canonical_g3_hash,
+    canonical_json,
+)
 from tests import test_g3_bounded_gateway_830 as fixture
 from tests.test_g3_user_gemini_gateway_830 import _gemini_plan, _gemini_response
 
 
-def _recorded(monkeypatch, tmp_path, status):
+def _recorded(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, status: str
+) -> tuple[G3BoundedAdmissionPlanV1, Path, G3CallTerminalReceiptV1, bytes, G3ProviderUsageV1]:
     root = tmp_path / "ledger"
     root.mkdir(mode=0o700)
     monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
@@ -49,8 +57,8 @@ def _recorded(monkeypatch, tmp_path, status):
 
 @pytest.mark.parametrize("status", ["SUCCESS", "FAILED"])
 def test_recorded_leaf_preserves_status_and_reports_observed_over_cap(
-    monkeypatch, tmp_path: Path, status: str
-):
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, status: str
+) -> None:
     plan, directory, terminal, semantic, usage = _recorded(monkeypatch, tmp_path, status)
     before = fixture._tree_snapshot(directory)
     value = gateway.read_g3_recorded_call(
@@ -64,7 +72,9 @@ def test_recorded_leaf_preserves_status_and_reports_observed_over_cap(
 
 
 @pytest.mark.parametrize("artifact", ["request-body.private.json", "response-body.private.json"])
-def test_recorded_failed_leaf_rejects_changed_raw_bytes(monkeypatch, tmp_path: Path, artifact):
+def test_recorded_failed_leaf_rejects_changed_raw_bytes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, artifact: str
+) -> None:
     plan, directory, _, _, _ = _recorded(monkeypatch, tmp_path, "FAILED")
     (directory / artifact).write_bytes(b"{}")
     with pytest.raises(gateway.G3LedgerDenied):

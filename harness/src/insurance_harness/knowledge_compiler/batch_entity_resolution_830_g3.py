@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import unicodedata
 from collections import Counter, defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, Self, cast
@@ -129,11 +129,7 @@ def _normalized(value: str) -> str:
 
 
 def _payload(model: BaseModel, hash_field: str) -> dict[str, object]:
-    return {
-        name: getattr(model, name)
-        for name in type(model).model_fields
-        if name != hash_field
-    }
+    return {name: getattr(model, name) for name in type(model).model_fields if name != hash_field}
 
 
 def _validate_body_text(value: str) -> None:
@@ -625,11 +621,11 @@ class BatchResolutionPolicyV1(_FrozenModel):
     queue_owner: Text
     auto_candidate_requires: tuple[Text, ...]
     rules: tuple[TrustRuleV1, ...] = Field(min_length=1)
-    issuer_aliases: tuple[IssuerAliasDeclarationV1, ...] = Field(default=(), min_length=1)
+    issuer_aliases: tuple[IssuerAliasDeclarationV1, ...] = ()
     policy_sha256: Hash
 
     @model_serializer(mode="wrap")
-    def preserve_legacy_wire(self, handler):
+    def preserve_legacy_wire(self, handler: Callable[[Self], dict[str, Any]]) -> dict[str, Any]:
         result = handler(self)
         if not self.issuer_aliases:
             result.pop("issuer_aliases", None)
@@ -646,6 +642,8 @@ class BatchResolutionPolicyV1(_FrozenModel):
 
     @model_validator(mode="after")
     def validate_policy(self) -> Self:
+        if not self.issuer_aliases and "issuer_aliases" in self.model_fields_set:
+            raise ValueError("issuer aliases must not be explicitly empty")
         if self.auto_candidate_requires != _AUTO_REQUIREMENTS:
             raise ValueError("auto candidate requirement set mismatch")
         if not _sorted_unique(self.rules, lambda item: item.rule_id):
@@ -887,8 +885,7 @@ def _multi_children_valid(children: Sequence[EntityDecisionV1]) -> bool:
     clusters: list[set[str]] = []
     for rows in by_key.values():
         names = {
-            cast(ObservedNormalizedValueV1, child.anchors.name).normalized_value
-            for child in rows
+            cast(ObservedNormalizedValueV1, child.anchors.name).normalized_value for child in rows
         }
         if len(names) != 1:
             continue
@@ -1063,9 +1060,7 @@ def _receipt_manifest_digest(receipt: SourceReceipt830G3) -> str:
     return receipt.weknora_manifest_digest
 
 
-def _receipt_scope(
-    receipt: SourceReceipt830G3, corpus: BatchCorpusV1
-) -> tuple[int, str, str, str]:
+def _receipt_scope(receipt: SourceReceipt830G3, corpus: BatchCorpusV1) -> tuple[int, str, str, str]:
     if isinstance(receipt, RegisteredSourceReceipt830G3V1):
         return corpus.tenant_id, corpus.space_id, corpus.raw_kb_id, corpus.wiki_kb_id
     return receipt.tenant_id, receipt.space_id, receipt.raw_kb_id, receipt.wiki_kb_id
@@ -1477,16 +1472,12 @@ def _multi_identity_evidence_ids(
     policy: BatchResolutionPolicyV1,
     reasons: set[ReasonCode],
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    if (
-        reasons
-        & {
-            "SCOPE_MISMATCH",
-            "SOURCE_RECEIPT_MISMATCH",
-            "EVIDENCE_JOIN_FAILED",
-            "MODEL_RECEIPT_INVALID",
-        }
-        or _confidence(entity.identity_confidence) < _confidence(policy.identity_threshold)
-    ):
+    if reasons & {
+        "SCOPE_MISMATCH",
+        "SOURCE_RECEIPT_MISMATCH",
+        "EVIDENCE_JOIN_FAILED",
+        "MODEL_RECEIPT_INVALID",
+    } or _confidence(entity.identity_confidence) < _confidence(policy.identity_threshold):
         return (), ()
     anchors = {"name": entity.name, "product_code": entity.product_code}
     valid: dict[str, list[str]] = {"name": [], "product_code": []}
@@ -1868,32 +1859,59 @@ def effective_evidence_proposals_v2(
     """
     if corpus is not None:
         from .g3_evidence_identity_v2 import expand_directory
+
         entries = {row.material_id: row for row in corpus.entries}
-        proposals = proposals.model_copy(update={
+        proposals = proposals.model_copy(
+            update={
+                "proposals": tuple(
+                    expand_directory(row, entries[row.material_id]) for row in proposals.proposals
+                )
+            }
+        )
+    return proposals.model_copy(
+        update={
             "proposals": tuple(
-                expand_directory(row, entries[row.material_id]) for row in proposals.proposals
+                proposal.model_copy(
+                    update={
+                        "entities": tuple(
+                            entity.model_copy(
+                                update={"version_label": entity.filing_or_registration.value}
+                            )
+                            if entity.version_label is None
+                            and entity.filing_or_registration is not None
+                            else entity
+                            for entity in proposal.entities
+                        )
+                    }
+                )
+                for proposal in proposals.proposals
             )
-        })
-    return proposals.model_copy(update={"proposals": tuple(
-        proposal.model_copy(update={"entities": tuple(
-            entity.model_copy(update={"version_label": entity.filing_or_registration.value})
-            if entity.version_label is None and entity.filing_or_registration is not None
-            else entity for entity in proposal.entities
-        )}) for proposal in proposals.proposals
-    )})
+        }
+    )
 
 
-def _distinct_filing_versions_v2(contenders, classifications) -> bool:
+def _distinct_filing_versions_v2(
+    contenders: Sequence[tuple[tuple[CorpusEntryV1, MaterialProposalV1, EntityProposalV1], str]],
+    classifications: Mapping[tuple[str, str], ClassificationAssignmentV1],
+) -> bool:
     identities, anchors, versions = set(), set(), set()
     for (entry, _, entity), version in contenders:
         classification = classifications[(entry.material_id, entity.proposal_ref)]
-        identities.add((entity.issuer, entity.name, entity.product_code,
-                        classification.schema_pack_id, classification.schema_version,
-                        classification.schema_pack_sha256))
+        identities.add(
+            (
+                entity.issuer,
+                entity.name,
+                entity.product_code,
+                classification.schema_pack_id,
+                classification.schema_version,
+                classification.schema_pack_sha256,
+            )
+        )
         if entity.filing_or_registration is None:
             return False
-        anchors.add((entity.filing_or_registration.kind,
-                     _normalized(entity.filing_or_registration.value)))
+        anchors.add(
+            (entity.filing_or_registration.kind, _normalized(entity.filing_or_registration.value))
+        )
         versions.add(version)
     return len(identities) == 1 and len(anchors) == len(versions)
 
@@ -1928,8 +1946,7 @@ def resolve_batch(
         if compiler_version in (COMPILER_VERSION_V2, COMPILER_VERSION_V3):
             exact_proposals = effective_evidence_proposals_v2(exact_proposals, exact_corpus)
         source_keys = tuple(
-            _receipt_source_key(entry.receipt, exact_corpus)
-            for entry in exact_corpus.entries
+            _receipt_source_key(entry.receipt, exact_corpus) for entry in exact_corpus.entries
         )
         if len(source_keys) != len(set(source_keys)):
             raise BatchEntityResolutionError("DUPLICATE_MATERIAL")
@@ -1957,9 +1974,7 @@ def resolve_batch(
             global_scope_mismatch = False
 
         receipt_by_request = {item.request_sha256: item for item in exact_proposals.model_receipts}
-        valid_requests = _valid_model_receipt_requests(
-            exact_proposals, exact_corpus, entry_by_id
-        )
+        valid_requests = _valid_model_receipt_requests(exact_proposals, exact_corpus, entry_by_id)
         attempted_materials = {
             binding.material_id
             for request_sha in valid_requests
@@ -2046,10 +2061,7 @@ def resolve_batch(
             if len({_normalized(cast(str, row[2].name)) for row in rows}) != 1
         }
         invalid_identity_keys.update(
-            entity_key
-            for keys in occurrence_keys.values()
-            if len(keys) > 1
-            for entity_key in keys
+            entity_key for keys in occurrence_keys.values() if len(keys) > 1 for entity_key in keys
         )
         if invalid_identity_keys:
             for row in entity_rows:
@@ -2085,8 +2097,9 @@ def resolve_batch(
         for contenders in contenders_by_entity_key.values():
             versions = {version_key for _, version_key in contenders}
             if len(versions) > 1:
-                if (compiler_version == COMPILER_VERSION_V2
-                        and _distinct_filing_versions_v2(contenders, row_classification)):
+                if compiler_version == COMPILER_VERSION_V2 and _distinct_filing_versions_v2(
+                    contenders, row_classification
+                ):
                     continue
                 ambiguous_rows.update(
                     (row[0].material_id, row[2].proposal_ref) for row, _ in contenders
@@ -2208,9 +2221,11 @@ def resolve_batch(
         ordered = tuple(decisions)
         if compiler_version == COMPILER_VERSION_V2:
             from .g3_evidence_identity_v2 import associate_brochures
+
             ordered = associate_brochures(ordered, exact_proposals)
         if compiler_version == COMPILER_VERSION_V3:
             from .g3_evidence_identity_v3 import associate_material_groups
+
             ordered = associate_material_groups(
                 ordered, exact_proposals, exact_corpus, exact_existing, exact_policy
             )

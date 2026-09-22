@@ -3,15 +3,19 @@ from pathlib import Path
 import pytest
 
 from insurance_harness.knowledge_compiler import g3_bounded_model_execution as runtime
+from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCandidateBundle830G3V1,
     aligned_existing_fields,
     validate_batch_candidate,
 )
+from insurance_harness.knowledge_compiler.concept_compile_830_g2 import free_page_id
+from insurance_harness.model_policy import ModelIdentity
 from insurance_harness.run_admission.g3_models import canonical_json
 
 
 @pytest.fixture(scope="module")
-def candidate():
+def candidate() -> BatchConceptCandidateBundle830G3V1:
     return validate_batch_candidate(
         (
             Path(__file__).parent / "fixtures/batch_concept_compile_830_g3/candidate.json"
@@ -19,8 +23,8 @@ def candidate():
     )
 
 
-def identity():
-    return runtime.ModelIdentity(
+def identity() -> ModelIdentity:
+    return ModelIdentity(
         provider="g3-user-gateway",
         family="gemini",
         deployment_id="gemini-3.7-flash-medium",
@@ -29,7 +33,9 @@ def identity():
     )
 
 
-def test_review_windows_cover_novel_members_once_and_bound_exact_source(candidate):
+def test_review_windows_cover_novel_members_once_and_bound_exact_source(
+    candidate: BatchConceptCandidateBundle830G3V1,
+) -> None:
     request, output = candidate.request, candidate.compile_result.output
     windows = runtime.derive_gemini_d_review_windows(request, output)
     old = {(field.entity_id, field.field_key): field for field in aligned_existing_fields(request)}
@@ -47,7 +53,7 @@ def test_review_windows_cover_novel_members_once_and_bound_exact_source(candidat
         assert len(window["field_keys"]) <= 10
         assert bool(window["field_keys"]) != bool(window["review_refs"])
         context = runtime.render_gemini_d_review_window_context(identity(), request, output, window)
-        assert len(runtime.batch_json_bytes_830_g3(context)) <= 262144
+        assert len(batch_json_bytes_830_g3(context)) <= 262144
         assert (
             sum(len(s["quote"]) for row in context["source_options"] for s in row["spans"]) <= 24000
         )
@@ -67,7 +73,9 @@ def test_review_windows_cover_novel_members_once_and_bound_exact_source(candidat
                 )
 
 
-def test_field_only_review_requires_its_own_call_and_reject_propagates(candidate):
+def test_field_only_review_requires_its_own_call_and_reject_propagates(
+    candidate: BatchConceptCandidateBundle830G3V1,
+) -> None:
     request, output = candidate.request, candidate.compile_result.output
     windows = runtime.derive_gemini_d_review_windows(request, output)
     reviews = []
@@ -109,7 +117,9 @@ def test_field_only_review_requires_its_own_call_and_reject_propagates(candidate
         )
 
 
-def test_changed_carry_content_is_reviewed_and_unchanged_pages_are_not_novel(candidate):
+def test_changed_carry_content_is_reviewed_and_unchanged_pages_are_not_novel(
+    candidate: BatchConceptCandidateBundle830G3V1,
+) -> None:
     request, output = candidate.request, candidate.compile_result.output
     carried = aligned_existing_fields(request)
     key = (carried[0].entity_id, carried[0].field_key)
@@ -124,15 +134,11 @@ def test_changed_carry_content_is_reviewed_and_unchanged_pages_are_not_novel(can
     fields = runtime._g3_review_scope(request, changed_output)["fields"]
     assert key in fields
     assert key in runtime._g3_review_scope(request, changed_output)["tasks"]
-    from types import SimpleNamespace
-
     page = output.pages[0]
-    shadow = SimpleNamespace(
-        base_request=SimpleNamespace(
-            existing_definitions=request.base_request.existing_definitions, existing_pages=(page,)
-        )
+    shadow = request.model_copy(
+        update={"base_request": request.base_request.model_copy(update={"existing_pages": (page,)})}
     )
-    assert runtime.free_page_id(page) not in runtime._g3_novel_page_ids(shadow, output)
+    assert free_page_id(page) not in runtime._g3_novel_page_ids(shadow, output)
     edited = page.model_copy(update={"body": page.body + " revised"})
     changed_pages = output.model_copy(update={"pages": (edited,)})
-    assert runtime.free_page_id(edited) in runtime._g3_novel_page_ids(shadow, changed_pages)
+    assert free_page_id(edited) in runtime._g3_novel_page_ids(shadow, changed_pages)

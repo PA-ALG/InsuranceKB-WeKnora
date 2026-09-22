@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import typing
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,9 +36,7 @@ RAW = b'{"proposals":[]}'
 @pytest.fixture(scope="module")
 def api() -> SimpleNamespace:
     try:
-        models = importlib.import_module(
-            "insurance_harness.product_ingestion.artifact_models"
-        )
+        models = importlib.import_module("insurance_harness.product_ingestion.artifact_models")
         importlib.import_module("insurance_harness.product_ingestion.artifact_tables")
         artifacts = importlib.import_module("insurance_harness.product_ingestion.artifacts")
     except ModuleNotFoundError as error:
@@ -264,14 +263,17 @@ def test_existing_artifact_is_exact_idempotent_and_changed_body_conflicts(
         job_id=replay.job.id,
         generation=claimed.job.lease_generation,
     )
-    assert artifacts.prepare_artifact_writes(
-        scope=_scope(),
-        run_id=run.run_id,
-        stage_key="route",
-        job_id=replaying.id,
-        generation=replaying.lease_generation,
-        drafts=(draft,),
-    ) == ()
+    assert (
+        artifacts.prepare_artifact_writes(
+            scope=_scope(),
+            run_id=run.run_id,
+            stage_key="route",
+            job_id=replaying.id,
+            generation=replaying.lease_generation,
+            drafts=(draft,),
+        )
+        == ()
+    )
     with pytest.raises(ValueError, match="immutable"):
         artifacts.prepare_artifact_writes(
             scope=_scope(),
@@ -290,9 +292,7 @@ def test_recorded_model_call_owns_raw_and_validated_artifact(
     artifacts, products, jobs, run, running = _start_stage(api, factory)
     reserved = _reserve(api, artifacts, run, running)
     assert reserved.action is api.StageCallAction.DISPATCH
-    assert artifacts.get_stage_call_metrics(
-        scope=_scope(), run_id=run.run_id
-    ).model_call_count == 0
+    assert artifacts.get_stage_call_metrics(scope=_scope(), run_id=run.run_id).model_call_count == 0
     dispatched = artifacts.begin_stage_call(
         scope=_scope(),
         call_id=reserved.call.call_id,
@@ -302,14 +302,17 @@ def test_recorded_model_call_owns_raw_and_validated_artifact(
         request_bytes=REQUEST,
     )
     assert dispatched.state is api.StageCallState.DISPATCHED
-    assert artifacts.begin_stage_call(
-        scope=_scope(),
-        call_id=reserved.call.call_id,
-        job_id=running.id,
-        generation=running.lease_generation,
-        request_sha256=REQUEST_SHA,
-        request_bytes=REQUEST,
-    ) == dispatched
+    assert (
+        artifacts.begin_stage_call(
+            scope=_scope(),
+            call_id=reserved.call.call_id,
+            job_id=running.id,
+            generation=running.lease_generation,
+            request_sha256=REQUEST_SHA,
+            request_bytes=REQUEST,
+        )
+        == dispatched
+    )
     with pytest.raises(ValueError, match="immutable"):
         artifacts.begin_stage_call(
             scope=_scope(),
@@ -332,25 +335,26 @@ def test_recorded_model_call_owns_raw_and_validated_artifact(
     assert recorded.state is api.StageCallState.RECORDED
     assert recorded.raw == RAW
     assert recorded.raw_sha256 == hashlib.sha256(RAW).hexdigest()
-    assert artifacts.get_stage_call_metrics(
-        scope=_scope(), run_id=run.run_id
-    ).model_dump() == {
+    assert artifacts.get_stage_call_metrics(scope=_scope(), run_id=run.run_id).model_dump() == {
         "model_call_count": 1,
         "reused_model_call_count": 0,
         "reused_usage": {},
         "unsettled_call_count": 0,
         "usage": {"input_tokens": 11, "output_tokens": 5},
     }
-    assert artifacts.record_stage_call_result(
-        scope=_scope(),
-        call_id=reserved.call.call_id,
-        job_id=running.id,
-        generation=running.lease_generation,
-        request_sha256=REQUEST_SHA,
-        raw=RAW,
-        diagnostic=None,
-        usage={"input_tokens": 11, "output_tokens": 5},
-    ) == recorded
+    assert (
+        artifacts.record_stage_call_result(
+            scope=_scope(),
+            call_id=reserved.call.call_id,
+            job_id=running.id,
+            generation=running.lease_generation,
+            request_sha256=REQUEST_SHA,
+            raw=RAW,
+            diagnostic=None,
+            usage={"input_tokens": 11, "output_tokens": 5},
+        )
+        == recorded
+    )
     with pytest.raises(ValueError, match="immutable"):
         artifacts.record_stage_call_result(
             scope=_scope(),
@@ -659,7 +663,9 @@ def test_model_artifact_rejects_foreign_run_and_diagnostic_only_call(
         )
 
 
-def test_effective_references_do_not_fetch_payload_but_full_read_still_checks_hash(api, factory):
+def test_effective_references_do_not_fetch_payload_but_full_read_still_checks_hash(
+    api: typing.Any, factory: typing.Any
+) -> None:
     from sqlalchemy import event
 
     from insurance_harness.product_ingestion.artifact_tables import ProductArtifact
@@ -667,21 +673,30 @@ def test_effective_references_do_not_fetch_payload_but_full_read_still_checks_ha
     artifacts, products, jobs, run, running = _start_stage(api, factory)
     draft = _rule_draft(api)
     writes = artifacts.prepare_artifact_writes(
-        scope=_scope(), run_id=run.run_id, stage_key="route", job_id=running.id,
-        generation=running.lease_generation, drafts=(draft,),
+        scope=_scope(),
+        run_id=run.run_id,
+        stage_key="route",
+        job_id=running.id,
+        generation=running.lease_generation,
+        drafts=(draft,),
     )
-    jobs.report_success(space_id="space-a", job_id=running.id,
-                        generation=running.lease_generation, domain_writes=writes)
+    jobs.report_success(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        domain_writes=writes,
+    )
     statements = []
 
-    def observe(_conn, _cursor, statement, *_args):
+    def observe(_conn: object, _cursor: object, statement: typing.Any, *_args: object) -> None:
         statements.append(statement)
 
     engine = factory.kw["bind"]
     event.listen(engine, "before_cursor_execute", observe)
     try:
         refs = artifacts.list_effective_artifact_references(
-            scope=_scope(), run_id=run.run_id, artifact_kind=draft.artifact_kind)
+            scope=_scope(), run_id=run.run_id, artifact_kind=draft.artifact_kind
+        )
     finally:
         event.remove(engine, "before_cursor_execute", observe)
     assert len(refs) == 1 and refs[0].payload_sha256 == draft.payload_sha256
@@ -692,27 +707,36 @@ def test_effective_references_do_not_fetch_payload_but_full_read_still_checks_ha
     with pytest.raises(ValueError, match="bytes changed"):
         artifacts.list_effective_artifacts(scope=_scope(), run_id=run.run_id)
     with pytest.raises(SpaceScopeError):
-        artifacts.list_effective_artifact_references(
-            scope=_scope(raw="foreign"), run_id=run.run_id)
+        artifacts.list_effective_artifact_references(scope=_scope(raw="foreign"), run_id=run.run_id)
 
 
-def test_reference_scan_does_not_shadow_small_checkpoint_payload(api, factory, monkeypatch):
+def test_reference_scan_does_not_shadow_small_checkpoint_payload(
+    api: typing.Any, factory: typing.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from insurance_harness.product_ingestion.checkpoint_store import _small_artifact
 
     artifacts, products, jobs, run, running = _start_stage(api, factory)
     draft = _rule_draft(api).model_copy(update={"artifact_key": "product"})
     writes = artifacts.prepare_artifact_writes(
-        scope=_scope(), run_id=run.run_id, stage_key="route", job_id=running.id,
-        generation=running.lease_generation, drafts=(draft,),
+        scope=_scope(),
+        run_id=run.run_id,
+        stage_key="route",
+        job_id=running.id,
+        generation=running.lease_generation,
+        drafts=(draft,),
     )
-    jobs.report_success(space_id="space-a", job_id=running.id,
-                        generation=running.lease_generation, domain_writes=writes)
+    jobs.report_success(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        domain_writes=writes,
+    )
 
-    def read_small(*, session, **kwargs):
+    def read_small(*, session: typing.Any, **kwargs: object) -> None:
         row = _small_artifact(session, run.run_id, draft.artifact_kind)
+        assert row is not None
         assert row.payload == draft.payload
         return None
 
     monkeypatch.setattr(products, "checkpoint_receipt", read_small)
-    assert len(artifacts.list_effective_artifact_references(scope=_scope(),
-                                                          run_id=run.run_id)) == 1
+    assert len(artifacts.list_effective_artifact_references(scope=_scope(), run_id=run.run_id)) == 1

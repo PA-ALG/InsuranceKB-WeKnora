@@ -17,9 +17,11 @@ from insurance_harness.product_ingestion.model_execution import (
     PreparedModelRequest,
 )
 from insurance_harness.product_ingestion.models import (
+    FieldOutcomeKind,
     FieldOutcomeWrite,
     ProductScope,
     WindowReservationAction,
+    WindowTaskSpec,
 )
 from insurance_harness.product_ingestion.store import ProductIngestionStore
 from insurance_harness.service_shell.worker import HandlerRegistry, HandlerResult
@@ -52,7 +54,7 @@ def provider_usage(raw: bytes | None) -> dict[str, int]:
     }
 
 
-def _restore_field_tasks(selected):
+def _restore_field_tasks(selected: Sequence[WindowTaskSpec]) -> tuple[FieldTaskV1, ...]:
     field_tasks = tuple(FieldTaskV1.model_validate(task.task_payload) for task in selected)
     for spec, task in zip(selected, field_tasks, strict=True):
         if (spec.entity_id, spec.field_key, spec.task_sha256) != (
@@ -134,7 +136,9 @@ def register_extraction_worker(
             prepared: PreparedModelRequest | None = None
             exact_request_sha256: str | None = None
 
-            async def begin(call_id, request_sha256, request_bytes):
+            async def begin(
+                call_id: str, request_sha256: str, request_bytes: bytes
+            ) -> None:
                 nonlocal prepared, exact_request_sha256
                 if configured is not None:
                     prepared = await asyncio.to_thread(configured.prepare, request_bytes)
@@ -151,7 +155,12 @@ def register_extraction_worker(
                     request_bytes=request_bytes,
                 )
 
-            async def persist(call_id, request_sha256, raw, diagnostic):
+            async def persist(
+                call_id: str,
+                request_sha256: str,
+                raw: bytes | None,
+                diagnostic: str | None,
+            ) -> str:
                 nonlocal raw_for_usage
                 if configured is not None:
                     if exact_request_sha256 is None:
@@ -185,6 +194,9 @@ def register_extraction_worker(
                     configured.semantic_request, recorded_request_bytes
                 )
 
+            selected_transport = configured_send if configured is not None else transport
+            if selected_transport is None:
+                raise ValueError("field transport is unavailable")
             projected = await execute_window(
                 call_id=call.call_id,
                 tasks=field_tasks,
@@ -192,7 +204,7 @@ def register_extraction_worker(
                 tenant_id=int(scope.tenant_id),
                 space_id=scope.space_id,
                 raw_kb_id=scope.raw_knowledge_base_id,
-                transport=configured_send if configured is not None else transport,
+                transport=selected_transport,
                 begin_call=begin,
                 persist_raw=persist,
                 call_state=(
@@ -208,13 +220,29 @@ def register_extraction_worker(
                 ),
             )
             by_key = {(spec.entity_id, spec.field_key): spec for spec in selected}
-            outcomes = tuple(
-                FieldOutcomeWrite(
-                    **outcome.to_dict(),
-                    cache_identity=by_key[outcome.entity_id, outcome.field_key].cache_identity,
+            writes: list[FieldOutcomeWrite] = []
+            for outcome in projected:
+                if outcome.raw_ref is None:
+                    raise ValueError("field outcome raw reference is missing")
+                writes.append(
+                    FieldOutcomeWrite(
+                        task_sha256=outcome.task_sha256,
+                        entity_id=outcome.entity_id,
+                        field_key=outcome.field_key,
+                        outcome=FieldOutcomeKind(outcome.outcome),
+                        reason=outcome.reason,
+                        validated_result=(
+                            outcome.validated_result.model_dump(mode="json")
+                            if outcome.validated_result is not None
+                            else None
+                        ),
+                        raw_ref=outcome.raw_ref,
+                        cache_identity=by_key[
+                            outcome.entity_id, outcome.field_key
+                        ].cache_identity,
+                    )
                 )
-                for outcome in projected
-            )
+            outcomes = tuple(writes)
         result, _counts = await asyncio.to_thread(
             store.prepare_window_settlement,
             scope=scope,

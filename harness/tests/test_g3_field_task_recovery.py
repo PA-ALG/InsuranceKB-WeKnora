@@ -2,24 +2,30 @@ from __future__ import annotations
 
 import importlib
 import json
+from collections.abc import Sequence
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import pytest
 
 from insurance_harness.knowledge_compiler import g3_bounded_model_execution as bounded
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCandidateBundle830G3V1,
     validate_batch_candidate,
 )
 from insurance_harness.run_admission.g3_models import canonical_json
 from tests.test_g3_bounded_model_execution_830 import _gemini_compile_reference_wire
 
 
-def _module():
+def _module() -> ModuleType:
     return importlib.import_module("insurance_harness.knowledge_compiler.g3_field_task_recovery")
 
 
 @pytest.fixture(scope="module")
-def fixture():
+def fixture() -> tuple[
+    BatchConceptCandidateBundle830G3V1, list[bounded.G3DFieldTarget], dict[str, Any]
+]:
     candidate = validate_batch_candidate(
         (
             Path(__file__).parent / "fixtures/batch_concept_compile_830_g3/candidate.json"
@@ -32,7 +38,7 @@ def fixture():
     return candidate, targets, {row["field_ref"]: row for row in wire["fields"]}
 
 
-def _response(fields=(), transformation="EXTRACT"):
+def _response(fields: Sequence[dict[str, Any]] = (), transformation: str = "EXTRACT") -> bytes:
     return canonical_json(
         {
             "contract": "g3-d-compile-semantic-references.local.v1",
@@ -44,7 +50,11 @@ def _response(fields=(), transformation="EXTRACT"):
     )
 
 
-def test_recovery_window_is_exact_bounded_subset_and_rejects_foreign_scope(fixture):
+def test_recovery_window_is_exact_bounded_subset_and_rejects_foreign_scope(
+    fixture: tuple[
+        BatchConceptCandidateBundle830G3V1, list[bounded.G3DFieldTarget], dict[str, Any]
+    ],
+) -> None:
     module = _module()
     candidate, targets, by_ref = fixture
     entity = targets[0]["entity_id"]
@@ -83,7 +93,11 @@ def test_recovery_window_is_exact_bounded_subset_and_rejects_foreign_scope(fixtu
         module.project_g3_field_recovery_response(_response(), candidate.request, window)
 
 
-def test_recorded_subset_keeps_raw_and_rejects_selected_bad_evidence(fixture):
+def test_recorded_subset_keeps_raw_and_rejects_selected_bad_evidence(
+    fixture: tuple[
+        BatchConceptCandidateBundle830G3V1, list[bounded.G3DFieldTarget], dict[str, Any]
+    ],
+) -> None:
     module = _module()
     candidate, targets, by_ref = fixture
     window = next(
@@ -112,7 +126,11 @@ def test_recorded_subset_keeps_raw_and_rejects_selected_bad_evidence(fixture):
         )
 
 
-def test_synthesis_label_survives_full_and_recovery_aggregation(fixture):
+def test_synthesis_label_survives_full_and_recovery_aggregation(
+    fixture: tuple[
+        BatchConceptCandidateBundle830G3V1, list[bounded.G3DFieldTarget], dict[str, Any]
+    ],
+) -> None:
     module = _module()
     candidate, targets, by_ref = fixture
     outputs = []

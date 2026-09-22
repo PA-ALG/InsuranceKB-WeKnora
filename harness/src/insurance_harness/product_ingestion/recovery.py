@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from insurance_harness.product_ingestion.models import OriginalKnowledgeRef, ProductScope
+from insurance_harness.product_ingestion.models import (
+    OriginalKnowledgeRef,
+    ProductRunSnapshot,
+    ProductScope,
+)
 
 RECOVERY_PREFIX = "processing-recovery.v1:"
 RECOVERY_V2_PREFIX = "processing-recovery.v2:"
@@ -17,7 +21,41 @@ RECOVERY_V3_PREFIX = "processing-recovery.v3:"
 RECOVERY_KIND = "processing_recovery_plan"
 
 
-class ProcessingRecoveryPlan(BaseModel):
+class RecordedIdentityCall(Protocol):
+    state: str
+    stage_key: str
+    operation_key: str
+    diagnostic: str | None
+    raw: bytes | None
+    request_bytes: bytes | None
+    raw_sha256: str | None
+    request_sha256: str | None
+    dispatched_at: datetime | None
+    recorded_at: datetime | None
+    prompt_policy_sha256: str
+    input_sha256: str
+    call_id: str
+    run_id: str
+    job_id: str
+    generation: int
+    attempt: int
+    dependency_sha256: str
+    model_policy_sha256: str
+    raw_ref: str
+    usage: dict[str, Any]
+    reserved_at: datetime
+
+
+class _RecoveryPlanMethods:
+    def encoded(self) -> bytes:
+        assert isinstance(self, BaseModel)
+        return self.model_dump_json().encode()
+
+    def digest(self) -> str:
+        return hashlib.sha256(self.encoded()).hexdigest()
+
+
+class ProcessingRecoveryPlan(_RecoveryPlanMethods, BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     contract: Literal["product-processing-recovery-plan.830.v1"] = (
         "product-processing-recovery-plan.830.v1"
@@ -29,12 +67,6 @@ class ProcessingRecoveryPlan(BaseModel):
     upload_run_id: str = Field(min_length=1)
     materials: tuple[OriginalKnowledgeRef, ...]
 
-    def encoded(self) -> bytes:
-        return self.model_dump_json().encode()
-
-    def digest(self) -> str:
-        return hashlib.sha256(self.encoded()).hexdigest()
-
 
 class SourceSnapshotReference(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
@@ -42,11 +74,17 @@ class SourceSnapshotReference(BaseModel):
     payload_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
-class SealedSourceRecoveryPlan(ProcessingRecoveryPlan):
+class SealedSourceRecoveryPlan(_RecoveryPlanMethods, BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     contract: Literal["product-processing-recovery-plan.830.v2"] = (
         "product-processing-recovery-plan.830.v2"
     )
     mode: Literal["REUSE_SEALED_SOURCES"] = "REUSE_SEALED_SOURCES"
+    scope: ProductScope
+    origin_run_id: str = Field(min_length=1)
+    origin_version: int = Field(gt=0)
+    upload_run_id: str = Field(min_length=1)
+    materials: tuple[OriginalKnowledgeRef, ...]
     source_snapshots: tuple[SourceSnapshotReference, ...]
 
 
@@ -69,15 +107,22 @@ class RecordedIdentityReference(BaseModel):
     base_identity: RecordedBaseIdentity
 
 
-class RecordedIdentityRecoveryPlan(SealedSourceRecoveryPlan):
+class RecordedIdentityRecoveryPlan(_RecoveryPlanMethods, BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     contract: Literal["product-processing-recovery-plan.830.v3"] = (
         "product-processing-recovery-plan.830.v3"
     )
     mode: Literal["REPLAY_RECORDED_IDENTITY"] = "REPLAY_RECORDED_IDENTITY"
+    scope: ProductScope
+    origin_run_id: str = Field(min_length=1)
+    origin_version: int = Field(gt=0)
+    upload_run_id: str = Field(min_length=1)
+    materials: tuple[OriginalKnowledgeRef, ...]
+    source_snapshots: tuple[SourceSnapshotReference, ...]
     identity_call: RecordedIdentityReference
 
 
-def recorded_identity_reference(call) -> RecordedIdentityReference:
+def recorded_identity_reference(call: RecordedIdentityCall) -> RecordedIdentityReference:
     """Bind actual recorded bytes and original execution identity, never a new dispatch."""
     if (
         str(call.state) != "recorded"
@@ -86,6 +131,8 @@ def recorded_identity_reference(call) -> RecordedIdentityReference:
         or call.diagnostic is not None
         or not call.raw
         or not call.request_bytes
+        or call.raw_sha256 is None
+        or call.request_sha256 is None
         or call.dispatched_at is None
         or call.recorded_at is None
         or hashlib.sha256(call.raw).hexdigest() != call.raw_sha256
@@ -149,7 +196,7 @@ def recorded_identity_reference(call) -> RecordedIdentityReference:
     )
 
 
-def material_references(run):
+def material_references(run: ProductRunSnapshot) -> tuple[OriginalKnowledgeRef, ...]:
     return tuple(
         OriginalKnowledgeRef(
             knowledge_id=row.knowledge_id,

@@ -6,6 +6,7 @@ import copy
 
 # ruff: noqa: F811 -- imported pytest fixtures.
 import json
+import typing
 from datetime import UTC, datetime
 
 import pytest
@@ -20,7 +21,7 @@ from tests.product_ingestion.test_routing import catalog  # noqa: F401
 from tests.product_ingestion.test_stages import stage_runtime  # noqa: F401
 
 
-def _ready_again(store, run):
+def _ready_again(store: typing.Any, run: typing.Any) -> None:
     with store._session_factory() as session, session.begin():
         stage = session.scalar(
             select(tables.ProductStage).where(
@@ -31,7 +32,7 @@ def _ready_again(store, run):
         session.get(WikiJob, stage.job_id).available_at = datetime(2020, 1, 1, tzinfo=UTC)
 
 
-def _processing(ordinal, complete):
+def _processing(ordinal: int, complete: bool) -> typing.Any:
     value = receipt()
     value["knowledge_id"] = f"knowledge-{ordinal}"
     value["parse_attempt"] = 1
@@ -58,12 +59,14 @@ def _processing(ordinal, complete):
     return sealed(value)
 
 
-def test_source_poll_accepts_growing_journal_and_preserves_each_snapshot(stage_runtime):
+def test_source_poll_accepts_growing_journal_and_preserves_each_snapshot(
+    stage_runtime: typing.Any,
+) -> None:
     scope, store, artifacts, platform, execute = stage_runtime
     lookup = platform.lookup_upload
     complete = False
 
-    async def observed(scope, run_id, ordinal):
+    async def observed(scope: typing.Any, run_id: str, ordinal: int) -> typing.Any:
         item = await lookup(scope, run_id, ordinal)
         item.update(
             parse_status="completed" if complete else "processing",
@@ -97,12 +100,14 @@ def test_source_poll_accepts_growing_journal_and_preserves_each_snapshot(stage_r
     assert sum(json.loads(item.payload)["counts"]["attempts"] for item in saved) == 3
 
 
-def test_conflicting_terminal_source_receipt_stops_without_wait_retry(stage_runtime):
+def test_conflicting_terminal_source_receipt_stops_without_wait_retry(
+    stage_runtime: typing.Any,
+) -> None:
     scope, store, _artifacts, platform, execute = stage_runtime
     lookup = platform.lookup_upload
     changed = False
 
-    async def observed(scope, run_id, ordinal):
+    async def observed(scope: typing.Any, run_id: str, ordinal: int) -> typing.Any:
         item = await lookup(scope, run_id, ordinal)
         value = _processing(ordinal, True)
         if changed:
@@ -125,7 +130,7 @@ def test_conflicting_terminal_source_receipt_stops_without_wait_retry(stage_runt
     assert "SOURCE_PROCESSING_RECEIPT_CONFLICT" in outcome.error_summary
 
 
-def test_processing_attempts_share_dispatch_accounting_without_losing_audits():
+def test_processing_attempts_share_dispatch_accounting_without_losing_audits() -> None:
     from insurance_harness.product_ingestion.processing_audit import (
         latest_attempts,
         source_accounting,
@@ -140,11 +145,12 @@ def test_processing_attempts_share_dispatch_accounting_without_losing_audits():
     second = sealed(second)
     assert len(latest_attempts([first, second])) == 2
     summary = source_accounting(None, [first, second])
+    assert summary is not None
     assert summary["recorded_model_call_count"] == 2
     assert summary["model_call_count"] is None
 
 
-def test_uncertain_dispatch_can_gain_matching_late_response_but_not_change_request():
+def test_uncertain_dispatch_can_gain_matching_late_response_but_not_change_request() -> None:
     from insurance_harness.jobs import NonRetryableJobError
     from insurance_harness.product_ingestion.processing_audit import latest_attempts
 
@@ -163,7 +169,7 @@ def test_uncertain_dispatch_can_gain_matching_late_response_but_not_change_reque
         latest_attempts([unknown, sealed(changed)])
 
 
-def test_reindexed_completed_phase_occurrences_preserve_prior_facts():
+def test_reindexed_completed_phase_occurrences_preserve_prior_facts() -> None:
     from insurance_harness.product_ingestion.processing_audit import latest_attempts
 
     first = _processing(0, False)
@@ -193,7 +199,7 @@ def test_reindexed_completed_phase_occurrences_preserve_prior_facts():
     assert latest_attempts([first, second]) == (second,)
 
 
-def test_completed_summary_adds_only_distinct_previous_attempt_dispatches():
+def test_completed_summary_adds_only_distinct_previous_attempt_dispatches() -> None:
     from insurance_harness.product_ingestion.processing_audit import source_accounting
     from insurance_harness.product_ingestion.processing_receipts import processing_summary
 
@@ -205,27 +211,31 @@ def test_completed_summary_adds_only_distinct_previous_attempt_dispatches():
     final["calls"] = [{**final["calls"][0], "dispatch_id": "new-call"}]
     final = sealed(final)
     summary = processing_summary([("knowledge-0", final, False)])
+    assert summary is not None
     result = source_accounting(summary, [_processing(0, False), first, final])
+    assert result is not None
     assert result["recorded_model_call_count"] == 2
     assert result["model_call_count_complete"] is True
     assert len(result["prior_attempts"]) == 1
     assert summary["recorded_model_call_count"] == 1
 
 
-def test_unknown_legacy_summary_identity_never_guesses_or_double_counts():
+def test_unknown_legacy_summary_identity_never_guesses_or_double_counts() -> None:
     from insurance_harness.product_ingestion.processing_audit import source_accounting
     from insurance_harness.product_ingestion.processing_receipts import processing_summary
 
     final = _processing(0, True)
     summary = processing_summary([("knowledge-0", final, False)])
+    assert summary is not None
     summary["materials"][0]["receipt_sha256"] = "f" * 64
     result = source_accounting(summary, [final])
+    assert result is not None
     assert result["recorded_model_call_count"] == 1
     assert result["model_call_count"] is None
     assert result["model_call_count_complete"] is False
 
 
-def test_completed_summary_uses_late_response_without_mutating_original_summary():
+def test_completed_summary_uses_late_response_without_mutating_original_summary() -> None:
     from insurance_harness.product_ingestion.processing_audit import source_accounting
     from insurance_harness.product_ingestion.processing_receipts import processing_summary
 
@@ -236,8 +246,10 @@ def test_completed_summary_uses_late_response_without_mutating_original_summary(
     uncertain["counts"].update(confirmed=0, interrupted=1)
     uncertain = sealed(uncertain)
     summary = processing_summary([("knowledge-0", uncertain, False)])
+    assert summary is not None
     before = copy.deepcopy(summary)
     result = source_accounting(summary, [uncertain, final])
+    assert result is not None
     assert result["model_call_count_complete"] is True
     assert result["interrupted_count"] == 0
     assert result["model_call_count"] == 1
@@ -245,7 +257,7 @@ def test_completed_summary_uses_late_response_without_mutating_original_summary(
     assert summary == before
 
 
-def test_deduplicated_total_preserves_exact_material_receipt_counts():
+def test_deduplicated_total_preserves_exact_material_receipt_counts() -> None:
     from insurance_harness.product_ingestion.processing_audit import source_accounting
 
     first = _processing(0, True)
@@ -254,6 +266,7 @@ def test_deduplicated_total_preserves_exact_material_receipt_counts():
     second["journal_marker_sha256"] = "d" * 64
     second = sealed(second)
     result = source_accounting(None, [first, second])
+    assert result is not None
     assert result["recorded_model_call_count"] == 1
     originals = {row["receipt_sha256"]: row for row in (first, second)}
     for row in result["materials"]:

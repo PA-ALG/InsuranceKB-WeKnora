@@ -1,15 +1,28 @@
+# Partial test doubles isolate the stated boundary; admission is tested separately.
+from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCompileRequest830G3V1,
     validate_batch_candidate,
 )
+from insurance_harness.knowledge_compiler.g3_d_projection_reuse import (
+    G3DProjectionReuseEntryV1,
+    G3DProjectionReuseManifestV1,
+)
 from insurance_harness.knowledge_compiler.g3_field_tasks import adapt_catalog_field_tasks
+from insurance_harness.run_admission.g3_models import (
+    G3BoundedAdmissionPlanV1,
+    G3CallPlanV1,
+    G3ProviderUsageV1,
+)
 
 
-def test_recovery_only_plans_fields_not_already_evidenced():
+def test_recovery_only_plans_fields_not_already_evidenced() -> None:
     from insurance_harness.knowledge_compiler import g3_d_recovery_execution as recovery
 
     request = validate_batch_candidate(
@@ -18,7 +31,7 @@ def test_recovery_only_plans_fields_not_already_evidenced():
         ).read_bytes()
     ).request
     tasks = adapt_catalog_field_tasks(request)
-    grouped = {}
+    grouped: dict[str, list[str]] = {}
     for task in tasks:
         grouped.setdefault(task.entity_id, []).append(task.field_key)
     target = max(grouped, key=lambda key: len(grouped[key]))
@@ -48,7 +61,7 @@ def test_recovery_only_plans_fields_not_already_evidenced():
         )
 
 
-def test_runtime_dispatches_only_the_bound_recovery_window(monkeypatch):
+def test_runtime_dispatches_only_the_bound_recovery_window(monkeypatch: pytest.MonkeyPatch) -> None:
     from insurance_harness.knowledge_compiler import g3_bounded_model_execution as runtime
     from insurance_harness.knowledge_compiler import g3_d_recovery_execution as recovery
 
@@ -60,9 +73,9 @@ def test_runtime_dispatches_only_the_bound_recovery_window(monkeypatch):
     assert (
         runtime._prepared_gemini_d_window_output(
             raw=b"{}",
-            request=object(),
-            call=call,
-            prepared=prepared,
+            request=cast(BatchConceptCompileRequest830G3V1, object()),
+            call=cast(G3CallPlanV1, call),
+            prepared=cast(runtime.G3StageExecutionContext, prepared),
         )
         is sentinel
     )
@@ -70,13 +83,13 @@ def test_runtime_dispatches_only_the_bound_recovery_window(monkeypatch):
     with pytest.raises(ValueError, match="binding"):
         runtime._prepared_gemini_d_window_output(
             raw=b"{}",
-            request=object(),
-            call=call,
-            prepared=prepared,
+            request=cast(BatchConceptCompileRequest830G3V1, object()),
+            call=cast(G3CallPlanV1, call),
+            prepared=cast(runtime.G3StageExecutionContext, prepared),
         )
 
 
-def test_runtime_recovery_aggregation_records_valid_compile_output():
+def test_runtime_recovery_aggregation_records_valid_compile_output() -> None:
     from datetime import UTC, datetime
 
     from insurance_harness.knowledge_compiler import g3_bounded_model_execution as runtime
@@ -111,18 +124,24 @@ def test_runtime_recovery_aggregation_records_valid_compile_output():
     result = runtime._finalize_gemini_d_compile_windows(
         request=candidate.request,
         outputs=[new],
-        plan=SimpleNamespace(run_id="recovery-test"),
+        plan=cast(G3BoundedAdmissionPlanV1, SimpleNamespace(run_id="recovery-test")),
         admission_digest="a" * 64,
         call_dir="unused",
         call_terminals=(),
         started_at=datetime.now(UTC),
-        prepared=prepared,
+        prepared=cast(runtime.G3StageExecutionContext, prepared),
     )
     assert result.execution.implementation == "g3-gemini-d-recovery-aggregate.830.v1"
     validate_delta_output(candidate.request, result)
 
 
-def _projection_entry(entity_id, field_keys=(), *, synthesis=False, call_id="test-call"):
+def _projection_entry(
+    entity_id: str,
+    field_keys: Sequence[str] = (),
+    *,
+    synthesis: bool = False,
+    call_id: str = "test-call",
+) -> G3DProjectionReuseEntryV1:
     from insurance_harness.knowledge_compiler.g3_d_projection_reuse import (
         G3DProjectionReuseEntryV1,
     )
@@ -143,26 +162,25 @@ def _projection_entry(entity_id, field_keys=(), *, synthesis=False, call_id="tes
         origin_terminal_status="SUCCESS",
         origin_projection_sha256="1" * 64,
         current_projection_sha256="1" * 64,
-        observed_usage={
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-            "total_tokens": 2,
-            "usage_verified": True,
-        },
+        observed_usage=G3ProviderUsageV1(
+            prompt_tokens=1, completion_tokens=1, total_tokens=2, usage_verified=True
+        ),
         input_token_ceiling=10,
         output_token_ceiling=10,
         anomaly_codes=(),
     )
 
 
-def _projection_manifest(current_hash, entries, *, origin="2"):
+def _projection_manifest(
+    current_hash: str, entries: Sequence[G3DProjectionReuseEntryV1], *, origin: str = "2"
+) -> G3DProjectionReuseManifestV1:
     from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_sha256_830_g3
     from insurance_harness.knowledge_compiler.g3_d_projection_reuse import (
         VALIDATOR_VERSION,
         G3DProjectionReuseManifestV1,
     )
 
-    value = dict(
+    value: dict[str, Any] = dict(
         contract="g3-d-projection-reuse.830.v1",
         current_request_sha256=current_hash,
         origin_admission_digest=origin * 64,
@@ -175,7 +193,7 @@ def _projection_manifest(current_hash, entries, *, origin="2"):
     return G3DProjectionReuseManifestV1.model_validate(value)
 
 
-def test_normalize_projection_reuse_accepts_single_and_multiple_typed_manifests():
+def test_normalize_projection_reuse_accepts_single_and_multiple_typed_manifests() -> None:
     from insurance_harness.knowledge_compiler import g3_d_recovery_execution as recovery
 
     first = _projection_manifest("1" * 64, [_projection_entry("entity", ["a"])])
@@ -186,7 +204,7 @@ def test_normalize_projection_reuse_accepts_single_and_multiple_typed_manifests(
     assert recovery.normalize_projection_reuse((first, second)) == (first, second)
 
 
-def test_normalize_projection_reuse_rejects_empty_duplicate_and_mixed_requests():
+def test_normalize_projection_reuse_rejects_empty_duplicate_and_mixed_requests() -> None:
     from insurance_harness.knowledge_compiler import g3_d_recovery_execution as recovery
 
     first = _projection_manifest("1" * 64, [_projection_entry("entity", ["a"])])
@@ -196,12 +214,17 @@ def test_normalize_projection_reuse_rejects_empty_duplicate_and_mixed_requests()
             recovery.normalize_projection_reuse(value)
 
 
-def test_multi_origin_recovery_union_covers_all_tasks_without_reextracting(monkeypatch):
+def test_multi_origin_recovery_union_covers_all_tasks_without_reextracting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from insurance_harness.knowledge_compiler import g3_bounded_model_execution as runtime
     from insurance_harness.knowledge_compiler import g3_d_recovery_execution as recovery
 
-    request = SimpleNamespace(
-        request_sha256="1" * 64, entity_bindings=(SimpleNamespace(entity_id="entity"),)
+    request = cast(
+        BatchConceptCompileRequest830G3V1,
+        SimpleNamespace(
+            request_sha256="1" * 64, entity_bindings=(SimpleNamespace(entity_id="entity"),)
+        ),
     )
     monkeypatch.setattr(
         recovery,

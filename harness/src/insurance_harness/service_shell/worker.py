@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -38,7 +38,7 @@ class HandlerResult:
     domain_writes: tuple[DomainWriteSpec, ...] = ()
 
 
-Handler = Callable[[JobSnapshot], Awaitable[HandlerResult]]
+Handler = Callable[[JobSnapshot], Coroutine[Any, Any, HandlerResult]]
 Sleeper = Callable[[float], Awaitable[None]]
 
 
@@ -133,10 +133,12 @@ class WorkerLoop:
             try:
                 submitted = time.monotonic()
 
-                def heartbeat(submitted=submitted, due=due):
+                def heartbeat(
+                    submitted: float = submitted, due: float = due
+                ) -> JobSnapshot:
                     started = time.monotonic()
-                    error_type = None
-                    renewed = None
+                    error_type: str | None = None
+                    renewed: JobSnapshot | None = None
                     try:
                         renewed = self._store.heartbeat(
                             space_id=job.space_id, job_id=job.id,
