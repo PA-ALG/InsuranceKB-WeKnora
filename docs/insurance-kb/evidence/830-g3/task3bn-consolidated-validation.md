@@ -77,3 +77,11 @@ root在最终合并生产代码上重跑source审计生命周期2 passed/18.82�
 一次部署准备：仅Harness API/worker，复用当前compose、原配置、挂载、网络与数据库，不改Go/UI，不迁移。部署前无活动任务才更新，健康或配置一致性失败则回原镜像；准备脚本尚未执行。数据卷/dev/vdb1实测108G/已用97G/可用11G，无扩容或清理。
 
 最终独立复核完成：5个生产文件冻结SHA逐一一致，BLOCKER0。报告tmp/g3-diagnostics-20260922/final-review.md SHA1966963f3ae1091292de13acdce6405ed6caa586266861ecffc8a33928263d3e；确认旧wire、v7有效产物隔离、二次恢复proof链、原scope失败语义及严格generation fence。非阻断后续项为独立入口policy错误边界、一次性部署包装的assert/rollback显式后验和新入队时间点竞态，不扩成本轮长期部署框架。软件冻结后才开始一次Harness构建/部署；截至本段运行验收仍NOT RUN。
+
+## 2026-09-22 集中修复部署结果
+
+源码dc635e8e2151ba52941394426890c4a033698ca2，唯一新镜像sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155，构建1次37.219秒，依赖缓存复用。只替换原Harness API/worker；UI、Go、DocReader和数据库未构建/迁移，运行环境配置摘要、挂载与网络均保持一致。
+
+部署尝试2次：首次Compose在60秒启动等待配置下exit1，已回滚至旧镜像且两服务healthy；详细Compose输出未保留，不能确认其唯一失败原因。Docker日志显示旧两服务45秒内未退出并经历强制终止，新容器运行约77秒后被回滚停止。新镜像隔离、禁网CLI导入烟测PASS/6.726秒。保留首次失败回执，随后只把受控部署等待改为180秒、保留错误输出并补rollback后验，同一镜像第二次更新PASS，没有任何代码重构建。新的API/worker健康，前后Active Release一致为release-70dd8e65-a844-4e7c-97fd-15107cdd3bfb/epoch13，活动任务均0。
+
+软件PASS、精确容器健康PASS、原配置复用PASS、local live健康及current读取PASS；provider单次受控探测PASS发生在本次部署前，配置和外呼适配器未变；GitHub live NOT RUN。网页仍在登录页，本轮恢复、增量业务复验及全新2662-1上传均NOT RUN。只读检查和fixture不能代替业务验收，G3整体未完成。完整无密钥机器回执见task3bn-recovery-20260922.json。

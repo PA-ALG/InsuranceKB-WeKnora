@@ -1,12 +1,14 @@
-# 当前状态（2026-09-22 · 实际恢复根因已定位，集中修复未部署）
+# 当前状态（2026-09-22 · 恢复集中修复已部署，网页验收待登录）
 
-Owner=root，工作树830-g3-performance，继续OpenSpec129。实际运行Harness/UI为0940f36497a7，APP保持63ac9e460，现有DB/服务不变。2648-1此前正常网页发布PASS（14分5秒）；恢复与增量验收仍BLOCKED，2662-1全新三文件尚未上传，G3不能结项。
+Owner=root，工作树830-g3-performance，继续OpenSpec129。实际运行Harness为dc635e8e2151ba52941394426890c4a033698ca2，镜像sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155；UI仍0940f36497a7，APP保持63ac9e460，现有DB/服务复用。2648-1此前正常网页发布PASS（14分5秒）；本轮恢复与增量网页复验尚NOT RUN，2662-1全新三文件尚未上传，G3不能结项。
 
 本轮只读复现：2be3b35b的source逐次处理审计在generation3落库、source阶段generation4成功，checkpoint把审计误当最终阶段输出而拒绝。d830d5e2（5b737子）的本地proof和三份来源均通过，旧workflow2绑定epoch11与当前epoch13不同而被拒绝。两个任务的原字段在当前已签base上的独立内存重基检查PASS（74/82字段），无业务写入、无模型重抽，不等于恢复成功。
 
 Gemini实际worker受控探测HTTP200、3.133秒、单次无文档发送；09-20地域400不是当前探测结果。API容器仅内网，其不能外呼为既有部署边界，不需改网络。浏览器当前登录页，已请求用户自行登录，不索取密码；不依赖登录的开发继续。
 
-按用户要求tracer bullet/deep modules集中修复：审计/最终输出生命周期分离，恢复验证收敛为单入口并返回稳定安全原因，v7明确workflow2重基兼容。包含二次失败恢复的worker贯穿1 passed/274.67秒、短合同/诊断5 passed、合并后审计2 passed；恢复新增模型调用0。独立最终复核BLOCKER0，报告SHA1966963f3ae1091292de13acdce6405ed6caa586266861ecffc8a33928263d3e。当前构建0、部署0、业务写入0；下一步只更新Harness一次，再网页恢复/全新样本验收，Go/UI/DB复用。路径与Owner见实施计划09-22节，实际记录见Task3bn验证报告末尾。以下按日期内容是历史记录，不覆盖本段。
+按用户要求tracer bullet/deep modules集中修复：审计/最终输出生命周期分离，恢复验证收敛为单入口并返回稳定安全原因，v7明确workflow2重基兼容。包含二次失败恢复的worker贯穿1 passed/274.67秒、短合同/诊断5 passed、合并后审计2 passed；恢复新增模型调用0。独立最终复核BLOCKER0，报告SHA1966963f3ae1091292de13acdce6405ed6caa586266861ecffc8a33928263d3e。构建1次37.219秒；首次Compose更新返回1并回滚健康旧镜像，增加等待至180秒后同一镜像第二次更新PASS，无重编译。API/worker均healthy，env摘要/挂载/网络一致，前后active仍epoch13，活动任务0。首次失败详细Compose输出未保留，不能据此断言唯一根因；Docker日志证实旧容器退出较慢，新镜像隔离导入烟测PASS。机器回执docs/insurance-kb/evidence/830-g3/task3bn-recovery-20260922.json。
+
+下一步仅网页验收：用户登录当前18295/login后，从页面恢复已有2be/d830/重复上传失败任务，确认实际模型/字段复用/发布/证据，再上传2662-1全新三份原PDF。不得用脚本代执行业务接续；不修改代码、不重新构建。原签名/模型配置未变，无DB迁移/材料业务写入。路径与Owner见实施计划09-22节，实际记录见Task3bn验证报告末尾。以下按日期内容是历史记录，不覆盖本段。
 
 ## 2026-09-20 · Task3bn软件冻结，开始一次受影响组件部署
 
