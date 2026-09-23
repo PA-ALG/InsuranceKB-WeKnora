@@ -42,10 +42,15 @@ def _object(pairs: Iterable[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def platform_snapshot_payload_sha256(contract: str, payload: Mapping[str, Any]) -> str:
+    """Match the native versioned wire digest without normalizing source strings."""
+    return _sha(contract.encode() + b"\0" + _canonical(dict(payload)))
+
+
 def verify_signed_snapshot(
     raw: bytes, *, kind: str, scope: ProductScope, public_keys: Mapping[str, Ed25519PublicKey]
 ) -> dict[str, Any]:
-    if kind not in {"source", "base"}:
+    if kind not in {"source", "base", "native-discovery-plan", "native-discovery"}:
         raise ValueError("unknown platform snapshot kind")
     try:
         envelope = json.loads(raw, object_pairs_hook=_object)

@@ -346,6 +346,18 @@ class PlatformClient:
             raise ValueError("platform active identity invalid")
         return value
 
+    async def native_discovery(
+        self, scope: ProductScope, knowledge_id: str, attempt: int, payload: bytes
+    ) -> bytes:
+        if type(attempt) is not int or attempt < 1:
+            raise ValueError("invalid parse attempt")
+        value = await self._request(
+            scope, "POST",
+            f"/platform/sources/{_id(knowledge_id)}/attempts/{attempt}/native-discovery",
+            payload=payload,
+        )
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+
     async def base_snapshot(
         self,
         scope: ProductScope,

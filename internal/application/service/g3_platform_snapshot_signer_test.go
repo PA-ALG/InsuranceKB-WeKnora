@@ -49,3 +49,15 @@ func TestG3PlatformSnapshotSignerRejectsOtherDomainsAndMalformedInput(t *testing
 	_, err = NewEd25519G3PlatformSnapshotSigner("", key)
 	require.Error(t, err)
 }
+
+func TestG3PlatformSnapshotSignerNativeDomains(t *testing.T) {
+	key := ed25519.NewKeyFromSeed(make([]byte, 32))
+	signer, err := NewEd25519G3PlatformSnapshotSigner("fixture", key)
+	require.NoError(t, err)
+	for _, kind := range []string{"native-discovery-plan", "native-discovery"} {
+		domain := "weknora.g3-platform-" + kind + "-snapshot.830.v1"
+		_, signature, err := signer.SignG3PlatformSnapshot(context.Background(), domain, strings.Repeat("a", 64))
+		require.NoError(t, err)
+		require.True(t, ed25519.Verify(key.Public().(ed25519.PublicKey), []byte(domain+"\x00"+strings.Repeat("a", 64)), signature))
+	}
+}

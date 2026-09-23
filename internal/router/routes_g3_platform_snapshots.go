@@ -69,6 +69,10 @@ func RegisterG3PlatformSnapshotRoutes(
 		apiKeyIngest(apiKeyFullAccess()), h.Source,
 	)
 	register(
+		http.MethodPost, "/sources/:knowledge_id/attempts/:attempt/native-discovery",
+		apiKeyIngest(apiKeyFullAccess()), h.NativeDiscovery,
+	)
+	register(
 		http.MethodGet, "/bases/:release_id/epochs/:epoch",
 		apiKeyRetrieve(apiKeyFullAccess()), h.Base,
 	)

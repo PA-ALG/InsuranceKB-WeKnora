@@ -1,0 +1,249 @@
+{
+  "envelopes": [
+    {
+      "contract": "g3-platform-signed-native-discovery-plan-snapshot.830.v1",
+      "snapshot": {
+        "contract": "g3-platform-native-discovery-plan-snapshot.830.v1",
+        "scope": {
+          "tenant_id": 42,
+          "space_id": "space",
+          "raw_kb_id": "raw",
+          "wiki_kb_id": "wiki"
+        },
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "source_snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_sha256": "9b5c7f39dbe0fd3bc6987b34c014952aac0bada7eb9000af0d61130299ca32a3",
+        "request_sha256": "7fe0ea3b9469e2e1b11ab5503bb90b83aad08254c5ab8fa975bf6c028b15143c",
+        "phase": "plan",
+        "window_count": 1,
+        "windows": [
+          {
+            "window_id": 0,
+            "chunk_ids": [
+              "block-a",
+              "block-b"
+            ],
+            "prompt": "You are a knowledge extraction system. Analyze the following document and list all significant entities AND key concepts as a lightweight candidate set. Another pass will later attach concrete supporting chunks to each item, so you do NOT need to write exhaustive per-item facts here.\n\n\u003cdocument\u003e\n\u003ccontent\u003e\n说明书各项内容以保险条款为准。\n\n等待期为30日。\n\n\n\u003c/content\u003e\n\u003c/document\u003e\n\n\u003cprevious_slugs\u003e\n(none — candidates are not serving page identities)\n\u003c/previous_slugs\u003e\n\n\u003cinstructions\u003e\nReturn a JSON object with two arrays: \"entities\" and \"concepts\".\n**IMPORTANT: Write ALL names, descriptions, and details in Chinese**.\n\nIf the \u003ccontent\u003e block above is empty, contains only image references with no extracted text, or otherwise carries no substantive information, return {\"entities\": [], \"concepts\": []}. Do NOT invent entities or concepts from any other source.\n\n### Extraction Scope (Granularity: standard)\n**STANDARD mode — balanced (default).**\nExtract the document's main subjects PLUS entities/concepts that are substantively discussed — meaning they have a dedicated paragraph, multiple bullet points, or at least 2-3 sentences of context.\n\nINCLUDE:\n- The document's main subject(s).\n- Secondary entities/concepts that receive a concrete block of content (a paragraph, a multi-point list, or a dedicated sub-section).\n- Named methodologies, architectures, or techniques when the document explains HOW the subject uses them — not merely names them.\n\nEXCLUDE:\n- Items mentioned only in a comma-separated list of technologies without any further explanation (e.g. \"Tech stack: A, B, C, D\" — none of A/B/C/D are extracted unless they each also receive their own paragraph elsewhere).\n- One-off mentions, parenthetical references, and generic infrastructure nouns.\n- Items whose entire contribution to the document would fit in a single short sentence.\n\nAim for a tight, curated index. When in doubt about a marginal item, prefer to EXCLUDE it.\n\n### Slug Continuity Rules\nIf previous slugs are provided above, you MUST follow these rules:\n- If an entity or concept from the previous extraction still exists in the current document, **reuse its exact slug** from the previous list. Do NOT generate a new slug for the same thing.\n- If an entity or concept no longer appears in the document, **do NOT include it** in the output.\n- Only generate new slugs for entities/concepts that are genuinely new (not present in the previous list).\n- This ensures slug stability across document updates.\n\n### Entities (people, organizations, products, places, technologies, events, etc.)\nEach entity should have:\n- \"name\": The entity name in Chinese (human-readable).\n- \"slug\": URL-friendly slug, format \"entity/\u003clowercase-hyphenated-name\u003e\" (use romanized/pinyin form for non-Latin names). **Reuse previous slug if the entity was extracted before.**\n- \"aliases\": An array of strings representing names that refer to THE EXACT SAME entity. Only include: official abbreviations (e.g. \"IBM\" for \"International Business Machines\"), full/short name variants (e.g. \"腾讯\" for \"腾讯控股有限公司\"), translations, and well-known alternate names. Do NOT include parent categories, related products, generic terms, or broader concepts. Provide [] if none.\n- \"description\": **Index listing summary** — one sentence, 15-40 words, in Chinese. Describes WHAT this entity IS and its role in the document. Must be self-contained. This will be displayed in the wiki index.\n- \"details\": A short 1-3 sentence fallback summary in Chinese. This is ONLY used when chunk-level citation fails downstream, so it does NOT need to be exhaustive. Keep it under 300 characters.\n\nApply the Extraction Scope rules above. Never promote trivially-mentioned names into entities.\n\n### Concepts (topics, themes, methodologies, theories, etc.)\nEach concept should have:\n- \"name\": The concept name in Chinese (human-readable).\n- \"slug\": URL-friendly slug, format \"concept/\u003clowercase-hyphenated-name\u003e\" (use romanized/pinyin form for non-Latin names). **Reuse previous slug if the concept was extracted before.**\n- \"aliases\": An array of strings representing names that refer to THE EXACT SAME concept. Only include: official abbreviations (e.g. \"RAG\" for \"Retrieval-Augmented Generation\"), full/short name variants, and well-known synonyms used interchangeably in the field. Do NOT include sub-topics, related techniques, broader categories, or implementation details. Provide [] if none.\n- \"description\": **Index listing summary** — one sentence, 15-40 words, in Chinese. Defines WHAT this concept IS. Must be self-contained.\n- \"details\": A short 1-3 sentence fallback summary in Chinese. Keep it under 300 characters.\n\nApply the Extraction Scope rules above. Skip concepts that are merely name-dropped without discussion.\n\n### Deduplication Rules\n- If something is a specific named thing (person, company, product, place), put it ONLY in \"entities\".\n- If something is an abstract idea, methodology, or theory, put it ONLY in \"concepts\".\n- Never duplicate items across the two arrays.\n\n### JSON Formatting Rules\n- **CRITICAL**: Do NOT use literal newline characters inside JSON string values. If you need a newline in a string, you MUST use the escaped sequence \\n.\n\u003c/instructions\u003e\n\nOutput ONLY valid JSON. Example:\n{\n  \"entities\": [\n    {\n      \"name\": \"Acme Corp\",\n      \"slug\": \"entity/acme-corp\",\n      \"aliases\": [\"Acme\", \"Acme Corporation\"],\n      \"description\": \"A technology company specializing in AI solutions.\",\n      \"details\": \"Founded in 2020, focuses on enterprise AI products.\"\n    }\n  ],\n  \"concepts\": [\n    {\n      \"name\": \"Retrieval-Augmented Generation\",\n      \"slug\": \"concept/retrieval-augmented-generation\",\n      \"aliases\": [\"RAG\"],\n      \"description\": \"A technique that combines information retrieval with language model generation.\",\n      \"details\": \"Retrieves documents, then feeds them as context to an LLM.\"\n    }\n  ]\n}\n\n\u003cwiki_extraction_business_instructions\u003e\n帮助理解保险材料\n\u003c/wiki_extraction_business_instructions\u003e\nApply these business instructions only when they do not conflict with the system-owned output format, citation, safety, or factuality rules.",
+            "prompt_sha256": "392855402578aaf5465c4b29a9492092a451912a4990cecf9ebab49a461361b4"
+          }
+        ],
+        "candidates": [],
+        "discovery_raw_sha256": "",
+        "citation_raw_sha256": "",
+        "snapshot_sha256": "d807916a69fff125451950785b71918537b6c105e6d974d13d75eae4e7c3b8d4"
+      },
+      "authority": {
+        "contract": "g3-platform-snapshot-authority.830.v1",
+        "domain": "weknora.g3-platform-native-discovery-plan-snapshot.830.v1",
+        "key_id": "fixture",
+        "payload_sha256": "d807916a69fff125451950785b71918537b6c105e6d974d13d75eae4e7c3b8d4",
+        "signature": "n1cmuUx77tvuabTR0D35nD/jjVmJYPd4OiwzQsXvT87jeZZzbHrpNJLqjgKR69CABLYPZVpH0yLr0bmLoh+tCw=="
+      }
+    },
+    {
+      "contract": "g3-platform-signed-native-discovery-plan-snapshot.830.v1",
+      "snapshot": {
+        "contract": "g3-platform-native-discovery-plan-snapshot.830.v1",
+        "scope": {
+          "tenant_id": 42,
+          "space_id": "space",
+          "raw_kb_id": "raw",
+          "wiki_kb_id": "wiki"
+        },
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "source_snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_sha256": "9b5c7f39dbe0fd3bc6987b34c014952aac0bada7eb9000af0d61130299ca32a3",
+        "request_sha256": "afee89a6c8c9ef0819efb8ab0c61817ddd03fa829c8a24488ac1a2ae6ad90a52",
+        "phase": "cite",
+        "window_count": 1,
+        "windows": [
+          {
+            "window_id": 0,
+            "chunk_ids": [
+              "block-a",
+              "block-b"
+            ],
+            "prompt": "You are a precise citation system. Your job is to scan a batch of document chunks and decide, for each candidate entity/concept below, which chunks substantively discuss it.\n\n\u003cinstructions\u003e\n**IMPORTANT: Write ALL names, descriptions, and details in Chinese**.\n\n### Primary task\nFor each candidate slug (listed in \u003ccandidate_slugs\u003e below), select the chunk IDs (from the \u003cchunks\u003e block below) that **substantively discuss** that entity/concept. \"Substantively\" means the chunk states at least one concrete fact, attribute, step, date, number, relationship, or other useful piece of information about the candidate — not a passing mention.\n\n- Only cite chunks that appear in the \u003cchunks\u003e block below.\n- Use the \"id\" attribute of each \u003cc\u003e element verbatim (e.g. \"c003\").\n- If a candidate is not meaningfully discussed in ANY chunk in this batch, omit it from the output (do not include empty arrays).\n- A chunk CAN be cited by multiple candidates if it genuinely discusses multiple of them.\n- If a chunk is overly long or mixes unrelated topics, still cite it for every candidate it discusses.\n\n### Secondary task: new slugs\nIf this batch reveals a significant entity/concept that is **NOT** in \u003ccandidate_slugs\u003e, you may add it under \"new_slugs\" so it gets incorporated. Only add genuinely new, substantively-discussed items. Do NOT rediscover items already listed in \u003ccandidate_slugs\u003e — reuse their slug if they are already candidates.\n\nEach new slug must include:\n- \"type\": \"entity\" or \"concept\"\n- \"name\", \"slug\", \"aliases\", \"description\", \"details\" (same semantics as the candidate list)\n- \"source_chunks\": list of chunk IDs in the current batch that discuss it\n\n### JSON Formatting Rules\n- **CRITICAL**: Do NOT use literal newline characters inside JSON string values. If needed, use \\n.\n- Output ONLY valid JSON, no preamble.\n\u003c/instructions\u003e\n\nOutput format:\n{\n  \"citations\": {\n    \"entity/xxx\": [\"c001\", \"c003\"],\n    \"concept/yyy\": [\"c002\"]\n  },\n  \"new_slugs\": [\n    {\n      \"type\": \"entity\",\n      \"name\": \"Example\",\n      \"slug\": \"entity/example\",\n      \"aliases\": [],\n      \"description\": \"...\",\n      \"details\": \"...\",\n      \"source_chunks\": [\"c005\"]\n    }\n  ]\n}\n\nIf nothing in this batch is cite-worthy, return: {\"citations\": {}, \"new_slugs\": []}\n\n\u003ccandidate_slugs\u003e\n- slug: concept/authority, type: concept, name: \"说明书适用顺序\", description: 说明书与条款\n- slug: concept/uncited, type: concept, name: \"未支持\", description: 未支持提案\n\n\u003c/candidate_slugs\u003e\n\n\u003cchunks\u003e\n\u003cc id=\"c000\" index=\"0\"\u003e\n说明书各项内容以保险条款为准。\n\u003c/c\u003e\n\u003cc id=\"c001\" index=\"1\"\u003e\n等待期为30日。\n\u003c/c\u003e\n\n\u003c/chunks\u003e\n\nNow apply the instructions above to the chunks and output ONLY the JSON.\n\n\u003cwiki_extraction_business_instructions\u003e\n帮助理解保险材料\n\u003c/wiki_extraction_business_instructions\u003e\nApply these business instructions only when they do not conflict with the system-owned output format, citation, safety, or factuality rules.",
+            "prompt_sha256": "af40d7a2df6c951fb8df4ed789a7bfb0b509c396375aecbddff40f899ce75739"
+          }
+        ],
+        "candidates": [],
+        "discovery_raw_sha256": "7a8ad0a54a8213038ea9e21d5b4abd4431ffef8320350d44b074f4e03e5991e4",
+        "citation_raw_sha256": "",
+        "snapshot_sha256": "dbc25fcaae5403b6642aba19e6ed805440a4115d12a2a6514d7856e2398e1687"
+      },
+      "authority": {
+        "contract": "g3-platform-snapshot-authority.830.v1",
+        "domain": "weknora.g3-platform-native-discovery-plan-snapshot.830.v1",
+        "key_id": "fixture",
+        "payload_sha256": "dbc25fcaae5403b6642aba19e6ed805440a4115d12a2a6514d7856e2398e1687",
+        "signature": "SXwEVBWDrbDCnuCkAtrZ2x+RTO2TWOVpk+r4ixyusex2pLM/3yPfOO1rLnrmLSrh8VW4ZzwY0DfRl/Nd81MyBw=="
+      }
+    },
+    {
+      "contract": "g3-platform-signed-native-discovery-snapshot.830.v1",
+      "snapshot": {
+        "contract": "g3-platform-native-discovery-snapshot.830.v1",
+        "scope": {
+          "tenant_id": 42,
+          "space_id": "space",
+          "raw_kb_id": "raw",
+          "wiki_kb_id": "wiki"
+        },
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "source_snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "policy_sha256": "9b5c7f39dbe0fd3bc6987b34c014952aac0bada7eb9000af0d61130299ca32a3",
+        "request_sha256": "910f9c080e445668eda6509db4d40c84bc70760e42aad727bcf72558781d0ff9",
+        "phase": "snapshot",
+        "window_count": 1,
+        "windows": [
+          {
+            "window_id": 0,
+            "chunk_ids": [
+              "block-a",
+              "block-b"
+            ],
+            "prompt": "You are a precise citation system. Your job is to scan a batch of document chunks and decide, for each candidate entity/concept below, which chunks substantively discuss it.\n\n\u003cinstructions\u003e\n**IMPORTANT: Write ALL names, descriptions, and details in Chinese**.\n\n### Primary task\nFor each candidate slug (listed in \u003ccandidate_slugs\u003e below), select the chunk IDs (from the \u003cchunks\u003e block below) that **substantively discuss** that entity/concept. \"Substantively\" means the chunk states at least one concrete fact, attribute, step, date, number, relationship, or other useful piece of information about the candidate — not a passing mention.\n\n- Only cite chunks that appear in the \u003cchunks\u003e block below.\n- Use the \"id\" attribute of each \u003cc\u003e element verbatim (e.g. \"c003\").\n- If a candidate is not meaningfully discussed in ANY chunk in this batch, omit it from the output (do not include empty arrays).\n- A chunk CAN be cited by multiple candidates if it genuinely discusses multiple of them.\n- If a chunk is overly long or mixes unrelated topics, still cite it for every candidate it discusses.\n\n### Secondary task: new slugs\nIf this batch reveals a significant entity/concept that is **NOT** in \u003ccandidate_slugs\u003e, you may add it under \"new_slugs\" so it gets incorporated. Only add genuinely new, substantively-discussed items. Do NOT rediscover items already listed in \u003ccandidate_slugs\u003e — reuse their slug if they are already candidates.\n\nEach new slug must include:\n- \"type\": \"entity\" or \"concept\"\n- \"name\", \"slug\", \"aliases\", \"description\", \"details\" (same semantics as the candidate list)\n- \"source_chunks\": list of chunk IDs in the current batch that discuss it\n\n### JSON Formatting Rules\n- **CRITICAL**: Do NOT use literal newline characters inside JSON string values. If needed, use \\n.\n- Output ONLY valid JSON, no preamble.\n\u003c/instructions\u003e\n\nOutput format:\n{\n  \"citations\": {\n    \"entity/xxx\": [\"c001\", \"c003\"],\n    \"concept/yyy\": [\"c002\"]\n  },\n  \"new_slugs\": [\n    {\n      \"type\": \"entity\",\n      \"name\": \"Example\",\n      \"slug\": \"entity/example\",\n      \"aliases\": [],\n      \"description\": \"...\",\n      \"details\": \"...\",\n      \"source_chunks\": [\"c005\"]\n    }\n  ]\n}\n\nIf nothing in this batch is cite-worthy, return: {\"citations\": {}, \"new_slugs\": []}\n\n\u003ccandidate_slugs\u003e\n- slug: concept/authority, type: concept, name: \"说明书适用顺序\", description: 说明书与条款\n- slug: concept/uncited, type: concept, name: \"未支持\", description: 未支持提案\n\n\u003c/candidate_slugs\u003e\n\n\u003cchunks\u003e\n\u003cc id=\"c000\" index=\"0\"\u003e\n说明书各项内容以保险条款为准。\n\u003c/c\u003e\n\u003cc id=\"c001\" index=\"1\"\u003e\n等待期为30日。\n\u003c/c\u003e\n\n\u003c/chunks\u003e\n\nNow apply the instructions above to the chunks and output ONLY the JSON.\n\n\u003cwiki_extraction_business_instructions\u003e\n帮助理解保险材料\n\u003c/wiki_extraction_business_instructions\u003e\nApply these business instructions only when they do not conflict with the system-owned output format, citation, safety, or factuality rules.",
+            "prompt_sha256": "af40d7a2df6c951fb8df4ed789a7bfb0b509c396375aecbddff40f899ce75739"
+          }
+        ],
+        "candidates": [
+          {
+            "content_origin": "MODEL_GENERATED",
+            "kind": "concept",
+            "name": "说明书适用顺序",
+            "slug": "concept/authority",
+            "aliases": [],
+            "description": "说明书与条款",
+            "details": "",
+            "source_chunks": [
+              "block-a"
+            ],
+            "has_source_chunks": true
+          },
+          {
+            "content_origin": "MODEL_GENERATED",
+            "kind": "concept",
+            "name": "未支持",
+            "slug": "concept/uncited",
+            "aliases": [],
+            "description": "未支持提案",
+            "details": "不得成为原文",
+            "source_chunks": [],
+            "has_source_chunks": false
+          }
+        ],
+        "discovery_raw_sha256": "7a8ad0a54a8213038ea9e21d5b4abd4431ffef8320350d44b074f4e03e5991e4",
+        "citation_raw_sha256": "bb7119855d207f463d1c0eed7035134cf7981c475ee251ed2892552cc8a5c010",
+        "snapshot_sha256": "4765743eaee33f061c8193a3d87f8f754cffbf293c0885027562c73bd66a5954"
+      },
+      "authority": {
+        "contract": "g3-platform-snapshot-authority.830.v1",
+        "domain": "weknora.g3-platform-native-discovery-snapshot.830.v1",
+        "key_id": "fixture",
+        "payload_sha256": "4765743eaee33f061c8193a3d87f8f754cffbf293c0885027562c73bd66a5954",
+        "signature": "ZzSfnIauTkRFOKU9tgvJ1d9+36qcJWSyxsswl+ddNitFmWxzE5gvqDuh73pCUvnpA8WB1z4MROW1uO8L3Ho0DQ=="
+      }
+    }
+  ],
+  "requests": [
+    {
+      "contract": "g3-native-discovery-request.830.v1",
+      "source_snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "phase": "plan",
+      "language": "Chinese",
+      "granularity": "standard",
+      "purpose": "帮助理解保险材料",
+      "window_id": 0,
+      "discovery_raw": "",
+      "citation_raw": "",
+      "max_prompt_bytes": 100000
+    },
+    {
+      "contract": "g3-native-discovery-request.830.v1",
+      "source_snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "phase": "cite",
+      "language": "Chinese",
+      "granularity": "standard",
+      "purpose": "帮助理解保险材料",
+      "window_id": 0,
+      "discovery_raw": "{\"entities\":[],\"concepts\":[{\"name\":\"说明书适用顺序\",\"slug\":\"concept/authority\",\"aliases\":[],\"description\":\"说明书与条款\",\"details\":\"\"},{\"name\":\"未支持\",\"slug\":\"concept/uncited\",\"aliases\":[],\"description\":\"未支持提案\",\"details\":\"不得成为原文\"}]}",
+      "citation_raw": "",
+      "max_prompt_bytes": 100000
+    },
+    {
+      "contract": "g3-native-discovery-request.830.v1",
+      "source_snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "phase": "snapshot",
+      "language": "Chinese",
+      "granularity": "standard",
+      "purpose": "帮助理解保险材料",
+      "window_id": 0,
+      "discovery_raw": "{\"entities\":[],\"concepts\":[{\"name\":\"说明书适用顺序\",\"slug\":\"concept/authority\",\"aliases\":[],\"description\":\"说明书与条款\",\"details\":\"\"},{\"name\":\"未支持\",\"slug\":\"concept/uncited\",\"aliases\":[],\"description\":\"未支持提案\",\"details\":\"不得成为原文\"}]}",
+      "citation_raw": "{\"citations\":{\"concept/authority\":[\"c000\"]},\"new_slugs\":[]}",
+      "max_prompt_bytes": 100000
+    }
+  ],
+  "source": {
+    "contract": "",
+    "scope": {
+      "tenant_id": 42,
+      "space_id": "space",
+      "raw_kb_id": "raw",
+      "wiki_kb_id": "wiki"
+    },
+    "receipt": {
+      "contract": "",
+      "knowledge_id": "doc",
+      "parse_attempt": 1,
+      "revision_source_id": "",
+      "file_sha256": "",
+      "object_sha256": "",
+      "size": 0,
+      "mime_type": "",
+      "page_count": 0,
+      "manifest_algorithm": "",
+      "manifest_digest": "",
+      "chunk_count": 0,
+      "binding_digest": "",
+      "retention_state": ""
+    },
+    "parser_identity_sha256": "",
+    "native_capture_sha256": "",
+    "markdown": "",
+    "native": {
+      "SchemaVersion": "",
+      "SourceSHA256": "",
+      "RawSHA256": "",
+      "SanitizedSHA256": "",
+      "SanitizedJSON": null
+    },
+    "chunks": [
+      {
+        "id": "block-a",
+        "index": 0,
+        "content": "说明书各项内容以保险条款为准。",
+        "content_sha256": ""
+      },
+      {
+        "id": "block-b",
+        "index": 1,
+        "content": "等待期为30日。",
+        "content_sha256": ""
+      }
+    ],
+    "chunk_page_mappings": null,
+    "processing_receipt": {
+      "contract": "",
+      "availability": "",
+      "knowledge_id": "",
+      "parse_attempt": 0,
+      "phases": null,
+      "receipt_sha256": ""
+    },
+    "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}

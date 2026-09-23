@@ -1,5 +1,23 @@
 # 830-G3.5 自由发现与知识准入实施计划
 
+## 2026-09-23 用户已选择原生候选交接
+
+用户随后补充：原生Wiki实际补充生成的信息可以保留，必须增加“模型生成”标志；原文有证据的内容必须能点击查看原文。本要求覆盖此前将无原文证据的补充一律拒绝的表述。准入按内容片段记录来源支持与模型生成，混合页面分别展示。原生chunk引用仅是定位线索，不能使整段/整页补充变成原文事实；证据仍绑定真实材料版本和精确引文。模型生成内容不得伪造原文引用，也不能借此填充需要原文确认的产品保障/数值/条件字段。使用现有Candidate/审核/Active/页面载体扩展来源表达，无第二发布权威。
+
+原生PreviousSlugs固定为空，不从native wiki_pages读取旧身份，不调用extractCandidateSlugs内部的原生存量页去重模型。正式已有知识比较在Harness唯一准入边界完成。持久性承诺为“已提交StageCall原始响应可恢复；发送结果未知时不盲重发”，不把收到响应但尚未落库的崩溃窗口宣称为零丢失。
+
+用户明确答复“先按推荐的执行吧”：原生负责发现候选，Harness负责准入、审核、唯一发布。此前NEXT_READY中的选择阻断已解除；不再重复要求架构批准。沿用本Goal授权及外部动作限制。
+
+实现采用原生两段候选能力（WikiCandidateSlugPrompt、WikiChunkCitationPrompt及chunk handles），不调用写页、归并已有原生页或发布入口。版本化REST提供签名计划及签名候选快照。Harness继续使用已有StageCall保存原始响应、请求/模型身份和未知发送状态，执行原生计划后交回原生解释和引用关联；不另建模型队列或第二调用日志。原生签名证明来源/计划/候选投影绑定，不证明模型内容真实或已获审核。候选快照作为既有artifact持久保存，语义准入只裁决这些候选，不再执行第二次自由发现。
+
+原生候选计划绑定scope、完整来源快照hash、窗口内chunk身份与顺序、提示词/策略和前一段原始响应hash。窗口由原生既有引用batch划分，所有非空来源chunk覆盖且不截断；超预算明确失败。引用阶段每个窗口的成功响应分别持久保存，兄弟失败不抹除成功调用；空结果与缺失/失败不同。快照保留无引用候选为未支持提案，禁止将Description/Details当作原文依据。未知chunk、重复slug、类型/slug不一致和来源版本变化均拒绝，禁止静默降级。Harness仍负责事实级引文验证、Schema/已有知识比较和最终整批审核。
+
+先交付候选producer/REST/跨语言验证，再接入持久stage和显式产品策略，最后贯穿新增/更新准入。显式候选策略启用时阻止该产品RAW路径的原生自动写页，其他知识库旧行为保持；旧请求/旧发现协议保持可回放。代码默认不改变运行中配置。
+
+本切片root独占写域：新增internal/application/service/g3_native_discovery.go及测试、internal/handler/g3_platform_native_discovery.go及测试；既有g3_platform_snapshots/composition、routes_g3_platform_snapshots；Harness新增native_discovery.py及测试和必要platform/client接缝。后续stage/config/准入producer接线在下一RED前明确扩展此写域。先RED→实现→有界验证→冻结独审。当前BUSINESS=NOT RUN。
+
+跨语言签名接线的必要扩展写域：既有g3_platform_snapshot_signer.go及测试、新增testdata/g3_native_discovery_v1.json合成向量、platform_client测试。发现计划与候选快照使用不同签名domain；真实Ed25519签名器（非stub）回放同一向量，Python验证scope/request/source/窗口/raw/引用绑定。当前纯producer子项已实现，尚无runtime策略启用、StageCall调用或最终页面展示；模型生成标签目前只进入候选DTO，不能据此声称用户新增展示要求完成。
+
 **Goal / Mission**：真实已解析材料中的有效Schema外知识经过既有Candidate、审核与唯一Active，在网页可读、可检索、可回原文。唯一Owner及Integration Owner=root；reviewer只读冻结身份。用户2026-09-23启动消息已授权有界设计、实现和验收；不重复索要普通实现批准。预计一条依赖G3的产品PR；首切片时间盒1工作日，至2026-09-24 18:00+08。独审按项目默认gpt-5.6-sol/high。
 
 **Architecture**：WeKnora保管原件、解析与版本化来源；Harness集中承担发现准入及可替换语义策略。既有任务模块负责恢复/调用记账，审核和发布保持既有唯一边界。同语义输入只运行一套必要发现，不先完整原生Wiki再重复发现。技术栈沿Go/Python3.12/PostgreSQL/Vue，不增服务/数据库。

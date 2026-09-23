@@ -41,6 +41,7 @@ type G3PlatformSnapshotsHandler struct {
 	sources  G3PlatformSourceSnapshotCapturer
 	bases    G3PlatformBaseSnapshotReader
 	reparser G3PlatformBoundReparser
+	native   G3PlatformNativeDiscoveryProducer
 }
 
 type G3PlatformBoundReparser interface {

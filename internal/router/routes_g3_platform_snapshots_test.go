@@ -36,6 +36,7 @@ func TestG3PlatformSnapshotRoutesExposeOnlyBoundedMachineReads(t *testing.T) {
 	require.True(t, routes[http.MethodGet+" "+prefix+"/uploads/:run_id/:ordinal/reparse"])
 	require.True(t, routes[http.MethodPost+" "+prefix+"/uploads/:run_id/:ordinal/reparse"])
 	require.True(t, routes[http.MethodPost+" "+prefix+"/sources/:knowledge_id/attempts/:attempt/snapshot"])
+	require.True(t, routes[http.MethodPost+" "+prefix+"/sources/:knowledge_id/attempts/:attempt/native-discovery"], "native candidate handoff must be scope-bound")
 	require.True(t, routes[http.MethodGet+" "+prefix+"/bases/:release_id/epochs/:epoch"])
 
 	uploadPolicy, ok := guards.apiKeyAuthorizer.Lookup(http.MethodGet, prefix+"/uploads/:run_id/:ordinal")
@@ -50,4 +51,7 @@ func TestG3PlatformSnapshotRoutesExposeOnlyBoundedMachineReads(t *testing.T) {
 	sourcePolicy, ok := guards.apiKeyAuthorizer.Lookup(http.MethodPost, prefix+"/sources/:knowledge_id/attempts/:attempt/snapshot")
 	require.True(t, ok)
 	require.Contains(t, sourcePolicy.Capabilities, types.APIKeyCapabilityIngest)
+	nativePolicy, ok := guards.apiKeyAuthorizer.Lookup(http.MethodPost, prefix+"/sources/:knowledge_id/attempts/:attempt/native-discovery")
+	require.True(t, ok)
+	require.Contains(t, nativePolicy.Capabilities, types.APIKeyCapabilityIngest)
 }

@@ -1,3 +1,11 @@
+# 当前状态（2026-09-23 · 用户选择原生候选交接，producer接口验证）
+
+用户已批准推荐原生候选交接，此前架构选择阻断解除。最新要求：原生实际补充生成的信息保留并标“模型生成”；原文有证据必须可点击，混合页按内容区分。root继续同一工作树，未改变运行服务/模型/发布授权。
+
+原生纯producer通过受scope/双KB访问保护REST渲染两段原生提示、严格关联chunk并签名计划/候选。只持有source reader与signer，不查询native旧页、不调用native模型/写页/发布；Harness签名解码及绑定校验已接，完整合成Go签名向量由Python重放。候选名称/description/details明确MODEL_GENERATED，has_source_chunks仅为原文定位线索；最终逐片段来源与页面展示尚未实现。当前源码在独审前验证；StageCall调度、runtime互斥、候选语义准入/更新及真实材料验收仍NOT RUN。
+
+NEXT_READY=冻结producer独审后接既有StageCall持久流程和内容来源片段。新增模型/应用构建/部署/发布均0；G3.5 BUSINESS=NOT RUN。以下旧状态不覆盖已获得的选择与新要求。
+
 # 当前状态（2026-09-23 · G3.5显式更新编译与准入切片GREEN）
 
 Owner=root，同一830-g35-knowledge-admission工作树，基于语义视图提交fc4f670ff。新增显式knowledge_update_policy，省略时旧请求/旧canonical/NEW_MEMBERS_ONLY不变且禁止update；声明策略后Python/Go可替换同身份概念/自由页，其他base成员与旧request保持。中央变化成员/60—80评分/pending闭包复用既有规则，并在新策略Candidate接口重验；更新正文不能复用旧review。

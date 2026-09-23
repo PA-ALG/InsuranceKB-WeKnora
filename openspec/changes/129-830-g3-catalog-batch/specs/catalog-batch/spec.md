@@ -207,6 +207,14 @@ Validation uses the actual generation3/4 audit failure and workflow2 epoch11→1
 
 ### 2026-09-23 G3.5 — 自由发现与知识准入（用户新授权）
 
+#### Requirement: G35-R1/R3/R5 原生候选交接（2026-09-23 用户选择）
+
+补充G35-R3（用户随后明确）：原生实际补充生成的信息MAY保留，但MUST显式标注“模型生成”；有原文依据的内容MUST保留可点击的原文证据定位。混合页面MUST按内容片段区分，页面级/候选级chunk引用不得冒充所有内容的事实依据；不得编造引用。该要求覆盖此前把所有无原文支持补充一律拒绝的表述，不放宽需要原文确认的产品字段事实及唯一发布审核。
+
+原生producer的PreviousSlugs MUST为空（以后如使用正式身份须独立版本化并绑定依赖）；MUST NOT查询native wiki_pages或调用原生deduplicateExtractedBatch。已提交StageCall raw必须可恢复，响应尚未落库的未知发送必须阻断重发，不声称网络调用与数据库提交原子。
+
+原生候选producer MUST复用已有候选发现及chunk引用能力，通过版本化REST输出签名计划和候选快照；不得进入原生写页/发布路径。Harness MUST复用既有持久模型执行器保留每段raw及请求/模型身份，未知发送不可重发，成功段不可因兄弟失败丢失。签名快照绑定scope、来源版本/hash、全窗口覆盖、原始响应hash、提示词和引用映射；它不是语义真实性或审核授权。未知引用/重复身份/来源漂移 MUST拒绝，不能用原生description/details替代原文。无引用候选保留为unsupported，不直接晋升。Harness只对候选做知识准入及最终审核，不再重复自由发现。显式产品候选策略阻止原生直写；未声明策略的旧协议/行为保持。软件验证不代表已部署或真实知识准入。
+
 本次Goal与完整G35-R1—7、非目标和真实选材冻结于
 `docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md`。
 旧G3 FLOW PASS保留，不能代替G3.5非空知识准入；沿既有G2-R1/R3及G3-DISC-1/2扩展。

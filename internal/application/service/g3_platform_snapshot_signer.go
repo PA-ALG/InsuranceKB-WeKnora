@@ -23,7 +23,7 @@ func NewEd25519G3PlatformSnapshotSigner(keyID string, key ed25519.PrivateKey) (G
 	return &ed25519G3PlatformSnapshotSigner{keyID: keyID, key: append(ed25519.PrivateKey(nil), key...)}, nil
 }
 func (s *ed25519G3PlatformSnapshotSigner) SignG3PlatformSnapshot(ctx context.Context, domain, digest string) (string, []byte, error) {
-	if s == nil || ctx == nil || ctx.Err() != nil || (domain != G3PlatformSourceSnapshotSigningDomainV1 && domain != G3PlatformBaseSnapshotSigningDomainV1) || len(digest) != 64 || strings.ToLower(digest) != digest {
+	if s == nil || ctx == nil || ctx.Err() != nil || (domain != G3PlatformSourceSnapshotSigningDomainV1 && domain != G3PlatformBaseSnapshotSigningDomainV1 && domain != "weknora."+G3NativeDiscoveryPlanContract && domain != "weknora."+G3NativeDiscoverySnapshotContract) || len(digest) != 64 || strings.ToLower(digest) != digest {
 		return "", nil, ErrG3PlatformSnapshotUnavailable
 	}
 	if _, err := hex.DecodeString(digest); err != nil {

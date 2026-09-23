@@ -98,6 +98,28 @@ def test_upload_lookup_uses_fixed_scope_key_and_validates_binding() -> None:
     assert len(seen) == 1
 
 
+def test_native_discovery_uses_bound_endpoint_without_transport_retry() -> None:
+    seen = []
+
+    def respond(request: typing.Any) -> typing.Any:
+        seen.append(request)
+        return httpx.Response(200, json={"success": True, "data": {"signed": "snapshot"}})
+
+    api, scope = client(respond)
+    payload = b'{"phase":"plan"}'
+    result = asyncio.run(api.native_discovery(scope, "doc", 2, payload))
+    assert json.loads(result) == {"signed": "snapshot"}
+    assert seen[0].url.path.endswith("/platform/sources/doc/attempts/2/native-discovery")
+    assert seen[0].content == payload
+    with pytest.raises(ValueError):
+        asyncio.run(
+            api.native_discovery(scope.model_copy(update={"space_id": "other"}), "doc", 2, payload)
+        )
+    with pytest.raises(ValueError):
+        asyncio.run(api.native_discovery(scope, "doc", True, payload))
+    assert len(seen) == 1
+
+
 def test_bound_reparse_get_then_post_uses_one_stable_key_and_expected_attempt() -> None:
     seen = []
     key = "a" * 64
