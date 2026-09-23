@@ -153,3 +153,7 @@ Requirement→implementation→test→identity：G35-R3由native_evidence.py及5
 冻结tree 2a10bcb6bb88a6d2f9071be06a8c51cc837a34a7，两项最终独审0 BLOCKER。最终协调器/准入14PASS5.24s，实际SQLite三代成功调用不重发，重启配置漂移1PASS20.16s，旧worker/checkpoint12PASS141.29s，Ruff/mypy通过；详细RED、测试替身限制及审查见native-pipeline-validation.json。CURRENT=NATIVE_PIPELINE_SOFTWARE_REVIEWED；NEXT_READY=后续必要结构实体/关系、最小依赖组与有界真实纵切。运行配置尚未启用，新增真实模型/构建/部署/发布均0，BUSINESS=NOT RUN，G3.5未完成。
 
 Requirement→implementation→test→identity矩阵见native-pipeline-validation.json，commit为本记录所在提交。G35-R6只验证现有整组围栏，最小依赖组仍NOT RUN。
+
+## 2026-09-23 G35本机部署与完整验收准备
+
+用户明确要求真实流程及质量/覆盖双验。source223aa8ed2的APP/Harness/UI已本机部署，native配置和三模板/Purpose启用，当前Head仍epoch17。部署及制品各自PASS；真实provider/准入/审核/发布/原文点击效果NOT RUN，不能推导质量或覆盖达标。原PDF输入已核实，但旧attempt1无首次解析来源记录，snapshot409；等待正常UI重解析产生可验证新来源。网页滚动的自动审批服务连续超时/断连而未执行，已请求用户指导。详细身份、回执和边界见`docs/insurance-kb/evidence/830-g35/local-live-preparation-20260923.json`，质量覆盖检查见同目录`insurance-coverage-checklist-v1.md`。本轮未改产品代码，文档记录适用机械事实更新豁免；未声明G35完成。

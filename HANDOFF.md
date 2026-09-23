@@ -1,3 +1,15 @@
+# 当前状态（2026-09-23 · 原生候选模式已部署，真实业务验收待来源准备）
+
+用户明确要求复用830-G3总控账号，已从既有私密归档通过正常网页登录成功，tenant10003/admin；不要重新索要账号、重置密码或创建新环境。用户追加自由发现必须同时关注质量和覆盖度，检查表见docs/insurance-kb/evidence/830-g35/insurance-coverage-checklist-v1.md，全部真实效果仍NOT RUN。
+
+冻结source223aa8ed27160b9afaca40c0f810f35ce7f282e3已完成本机APP/Harness/UI升级，APP镜像0047b47d113a...，Harness77b6e1a62a07...；UI同容器静态根html.g35-223aa8ed2716。APP/Harness各1次构建成功；UI首次Less worker超时，原样式单独编译通过后以既有preprocessorMaxWorkers=0同源恢复成功，累计2尝试。native策略、保险Purpose、三个精确模板已启用，模型/gateway/scope/automation不变。独立部署复核0 BLOCKER，旧APP/worker静默后换代，旧容器/数据保留，健康与Active Head前后完全相同：release-b8d07e76-da52-4446-9c37-fb6f8a1cb2d6 epoch17。
+
+原PDF已核验（e生保尊享说明书，knowledge1265a343-c408-4620-8eed-c4f6a2adadc2，SHA5e2aef...、492101字节、27物理页），但旧attempt1缺首次解析来源文件，签名快照409 G3_PLATFORM_SNAPSHOT_UNAVAILABLE。需要在正常网页对这份文件重新解析，新attempt的签名来源通过后才正常上传创建全新单材料manifest/run；不能伪造来源、直接脚本构造候选或调用发布脚本。三个历史interrupted模型调用属于9月16日已succeeded的旧job，保留，不重试；当前可调度job/outbox与原生Wiki active均0。
+
+CURRENT=LOCAL_RUNTIME_DEPLOYED_SOURCE_REPARSE_NOT_RUN；BUSINESS=NOT RUN；G3.5未完成。当前浏览器滚动操作的自动审批服务先超时、允许的一次重试后stream disconnected，均未执行；这是审批服务故障而非安全否决。已向用户请求继续重试或用户先在网页重解析的指示，待答复，不绕过UI审批。Chrome新标签页原RAW库筛选“产品说明书.pdf”，目标卡片摘要为《平安e生保（尊享版）医疗保险产品说明书》；坐标/AX索引续接时须重读。
+
+当前证据docs/insurance-kb/evidence/830-g35/local-live-preparation-20260923.json；私密回滚档/脚本在/Users/houjing/Documents/LLM_wiki/insurancekb-private-evidence/g35-live-20260923，当前可用原始工作目录/private/tmp/g35-live-20260923。不要重建或再次运行deploy.py；升级已经成功。真实新run/模型准入/审核发布均未启动，不能把部署PASS写成抽取质量或覆盖PASS。以下为历史状态。
+
 # 当前状态（2026-09-23 · 原生任务接线与持久恢复软件验证）
 
 原生候选模式已接入既有任务主流程，按显式配置校验三个模板，任务/检查点固定策略及更新授权。缺省旧流程保持。发现和准入复用现有StageCall，授权祖先raw跨三代恢复；无关Head可重投影、实际知识上下文改变需新判断。PENDING/实体待解析保留整组围栏，字段独立；来源覆盖与准入状态分开记录。
