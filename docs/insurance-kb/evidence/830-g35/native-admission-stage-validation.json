@@ -1,0 +1,61 @@
+{
+  "contract": "g35-native-admission-stage-validation.830.v1",
+  "base_commit": "9000bd6d6f498473cf0038f57ba71726560dcbd5",
+  "reviewed_tree": "0d3f2b43f7a39095cadc46cdbc5c750651a3ed63",
+  "requirements": [
+    "G35-R1",
+    "G35-R3",
+    "G35-R5"
+  ],
+  "scope": "Pure PDF evidence/provenance remapping and one-window StageCall admission adapter. No pipeline/configuration enablement.",
+  "red": [
+    "New API absence was capability smoke only: geometry3 and stage4 tests; not an existing behavior counterexample.",
+    "Review-discovered valid overlapping quotes produced duplicate projected citation and DUPLICATE_CONTENT_CITATION; fixed by complete Evidence equality reuse and sorted unique per-segment indexes."
+  ],
+  "validation": {
+    "geometry": "PASS: 5 tests 0.56s; actual signed source/native geometry fixture, cross-page references, missing geometry, pure generated, overlapping originals in both orders.",
+    "admission_stage": "PASS: 4 tests 2.48s; new call, parent reuse, unknown outcome zero sends, semantic failure retains response/receipt. Shared executor and parent are test doubles; not a live or full persistence claim.",
+    "affected_combined": "PASS: 8 tests 2.56s before adding reverse-order geometry case; final geometry suite includes it.",
+    "ruff": "PASS",
+    "mypy": "PASS, two source files",
+    "diff_check": "PASS"
+  },
+  "review": {
+    "geometry": {
+      "reviewer": "native_boundary_review",
+      "blockers": 0,
+      "tree": "0d3f2b43f7a39095cadc46cdbc5c750651a3ed63"
+    },
+    "stage": {
+      "reviewer": "semantic_view_review",
+      "blockers": 0,
+      "tree": "0d3f2b43f7a39095cadc46cdbc5c750651a3ed63"
+    },
+    "mechanical_docs_red_exemption": "Both explicitly confirmed mechanical identity/test/NOT RUN fact records."
+  },
+  "boundaries": [
+    "Callers must verify source/native snapshots before admission.",
+    "Only geometry-success output is returned for later compiler/final review; intermediate semantic raw remains auditable.",
+    "Pipeline/checkpoint/metrics/configuration wiring remains outstanding.",
+    "No structural entity creation, model repair call, or publication authority added."
+  ],
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "frozen_files": {
+    "harness/src/insurance_harness/product_ingestion/native_evidence.py": "869740cd24ec37d0b17ab52091f5699d3034d16581f78381c93630d4134ed970",
+    "harness/tests/product_ingestion/test_native_evidence.py": "0d7d25c79208a18f5facfcddbb2690466ab8d1c287b1e4ae7a4a5ca6cdf150f5",
+    "harness/src/insurance_harness/product_ingestion/native_admission_stage.py": "41450ce68e8209f002ca2e36aae4125058ffe784ec465c40493e1a2bae73d929",
+    "harness/tests/product_ingestion/test_native_admission_stage.py": "9af2146a8a31b054e5d7f13f511a32aff0f32a076e84b6830ffa210d96d9dc47"
+  }
+}

@@ -1,5 +1,11 @@
 # 830-G3.5 自由发现与知识准入实施计划
 
+## 当前状态：原文定位与准入执行软件完成（2026-09-23）
+
+原文定位及逐窗准入执行冻结tree0d3f2b43f7a39095cadc46cdbc5c750651a3ed63，两项独审0 BLOCKER。跨页引用复用source_geometry拆分，并按完整Evidence合并共享片段、同步重映射内容来源索引；正文/生成段不变，缺定位不改标生成。逐窗执行复用StageCall、精确父响应与未知发送阻断，先存raw后准入/几何，失败保留回执，无自动修复调用。
+
+几何5PASS0.56s，执行4PASS2.48s（executor/父调用为测试替身），受影响合跑8PASS2.56s后追加倒序几何反例已覆盖于最终5项；Ruff/mypy PASS，证据native-admission-stage-validation.json。CURRENT=NATIVE_ADMISSION_EXECUTION_SOFTWARE_GREEN；NEXT_READY=任务主流程显式接线、检查点和完整持久计数/恢复验证。尚未运行启用，新增真实model/build/deploy/publish均0，BUSINESS=NOT RUN，G3.5未完成。
+
 ## 当前状态：原生准入与审核回放计数软件完成（2026-09-23）
 
 原生准入纯投影与v5回放计数软件完成：冻结tree c761124a6f37a027d38beb58a444872bbd7332dc（metrics独审ac5371b7），两项最终独审0 BLOCKER。逐成员强制来源标志、原文精确字符引用、候选完整处置、同身份/版本更新，并保留“更新旧页+新增相关概念”的各自动作；复用编译与v5审核。新增10项通过7.61s；真实持久metrics旧/新审核9项通过1.60s，Ruff/mypy PASS。证据native-admission-validation.json。
@@ -213,3 +219,11 @@ root写域：internal/config/product_ingestion.go及config.go验证入口/相应
 ## 下一切片：来源审核回放的持久计数兼容
 
 接线核对发现discovery_replay_metrics仍固定旧审核prompt，已授权v5审核父响应虽能正确复用，却会在持久计数阶段被当成变更而拒绝。沿既有唯一metrics边界，从已校验hash的子review context合同选择旧/v5提示，再核对真实父StageCall；不信任回执自报prompt，不放宽祖先/raw/operation绑定。root写域仅discovery_replay_metrics.py及既有test_discovery_replay_metrics.py、计划/OpenSpec129/evidence/HANDOFF。先使用真实artifact/StageCall持久存储复现v5错误，再实现并保留旧回放与篡改拒绝测试。无新调用、无运行启用。
+
+## 下一切片：自由知识的原文定位与片段索引
+
+原生准入的Evidence先证明原字符位置；正式接线前还必须复用source_geometry确认原PDF可定位。新增纯native_evidence适配器：一次按材料准备现有几何索引，调用project_evidence_locations；跨页引用按既有规则拆为真实页片段，同步重映射content_provenance.evidence_indexes，保留正文/来源片段和原始引用审计。生成片段不伪造PDF定位，缺几何的原文依据明确失败，不静默改成模型生成。唯一root写域为新增product_ingestion/native_evidence.py及test_native_evidence.py、计划/OpenSpec129/evidence。先跨页索引及缺定位反例，复用实际签名source fixture；当前仍不启用pipeline/真实模型。
+
+## 下一切片：逐窗语义准入执行
+
+沿同一StageCall调用与恢复边界执行native admission，单窗输出仅准入候选，不自行发现或发布。模板必须单独授权g3-native-admission及精确prompt；操作身份绑定序列化完整语义输入，父响应需校验原scope/model/request/prompt/raw，结果未知不重发。模型raw由既有executor先持久，子任务回放记录RULE归属。纯响应投影后运行已复用PDF定位，正式输出及最终审核使用定位后的完整Evidence/来源索引；失败保留context/response/错误审计而不产出可编译输出。root写域新增native_admission_stage.py及test_native_admission_stage.py、计划/OpenSpec129/evidence/HANDOFF；暂不改pipeline、运行配置或远端状态。新生成、已知父响应零新调用、未知父调用阻断与语义失败保留回执先验证。

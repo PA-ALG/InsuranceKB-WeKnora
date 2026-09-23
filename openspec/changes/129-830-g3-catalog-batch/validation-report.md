@@ -136,3 +136,12 @@ D backend最终软件收口：repair2最终独审5e9c4f0b… PASS/BLOCKER0，fin
 CURRENT=NATIVE_ADMISSION_SOFTWARE_GREEN；NEXT_READY=原文PDF定位与逐窗准入执行/Harness显式接线。运行未启用；纯投影要求调用方先验证签名，尚不代表PDF点击实测/实体关系创建/真实发布。新增真实模型/构建/部署/发布0，BUSINESS=NOT RUN，Goal未完成。
 
 Requirement→implementation→test→identity：G35-R2/R3对应native_admission.py及test_native_admission.py（10PASS）；G35-R5对应discovery_replay_metrics.py及持久回放测试（9PASS）。精确identity/RED/修复及复核见native-admission-validation.json；commit为本记录所在提交。
+
+
+### 2026-09-23 G35-R1/R3/R5 原文定位与逐窗准入执行（软件子项）
+
+原文定位及逐窗准入执行冻结tree0d3f2b43f7a39095cadc46cdbc5c750651a3ed63，两项独审0 BLOCKER。跨页引用复用source_geometry拆分，并按完整Evidence合并共享片段、同步重映射内容来源索引；正文/生成段不变，缺定位不改标生成。逐窗执行复用StageCall、精确父响应与未知发送阻断，先存raw后准入/几何，失败保留回执，无自动修复调用。
+
+几何5PASS0.56s，执行4PASS2.48s（executor/父调用为测试替身），受影响合跑8PASS2.56s后追加倒序几何反例已覆盖于最终5项；Ruff/mypy PASS，证据native-admission-stage-validation.json。CURRENT=NATIVE_ADMISSION_EXECUTION_SOFTWARE_GREEN；NEXT_READY=任务主流程显式接线、检查点和完整持久计数/恢复验证。尚未运行启用，新增真实model/build/deploy/publish均0，BUSINESS=NOT RUN，G3.5未完成。
+
+Requirement→implementation→test→identity：G35-R3由native_evidence.py及5项几何验证覆盖；G35-R1/R5由native_admission_stage.py及4项执行边界验证覆盖。冻结identity/RED/修复/独审见native-admission-stage-validation.json；commit为本记录所在提交。

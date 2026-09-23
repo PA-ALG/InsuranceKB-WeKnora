@@ -1,3 +1,9 @@
+# 当前状态（2026-09-23 · 原文定位与准入执行软件完成）
+
+原文定位及逐窗准入执行冻结tree0d3f2b43f7a39095cadc46cdbc5c750651a3ed63，两项独审0 BLOCKER。跨页引用复用source_geometry拆分，并按完整Evidence合并共享片段、同步重映射内容来源索引；正文/生成段不变，缺定位不改标生成。逐窗执行复用StageCall、精确父响应与未知发送阻断，先存raw后准入/几何，失败保留回执，无自动修复调用。
+
+几何5PASS0.56s，执行4PASS2.48s（executor/父调用为测试替身），受影响合跑8PASS2.56s后追加倒序几何反例已覆盖于最终5项；Ruff/mypy PASS，证据native-admission-stage-validation.json。CURRENT=NATIVE_ADMISSION_EXECUTION_SOFTWARE_GREEN；NEXT_READY=任务主流程显式接线、检查点和完整持久计数/恢复验证。尚未运行启用，新增真实model/build/deploy/publish均0，BUSINESS=NOT RUN，G3.5未完成。
+
 # 当前状态（2026-09-23 · 原生准入软件完成）
 
 原生准入纯投影与v5回放计数软件完成：冻结tree c761124a6f37a027d38beb58a444872bbd7332dc（metrics独审ac5371b7），两项最终独审0 BLOCKER。逐成员强制来源标志、原文精确字符引用、候选完整处置、同身份/版本更新，并保留“更新旧页+新增相关概念”的各自动作；复用编译与v5审核。新增10项通过7.61s；真实持久metrics旧/新审核9项通过1.60s，Ruff/mypy PASS。证据native-admission-validation.json。
