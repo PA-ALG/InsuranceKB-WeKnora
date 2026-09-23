@@ -89,7 +89,7 @@ class IndependentDiscoveryFinalOutcome:
     replayed_call: StageCallSnapshot | None = None
 
 
-def _verified_parent_discovery_call(
+def verify_recorded_discovery_call(
     row: StageCallSnapshot,
     *,
     run_id: str,
@@ -225,7 +225,7 @@ async def run_independent_discovery_final_review(
     if summary["candidate_member_count"]:
         try:
             settings = service.configuration.model
-            template = _template(
+            template = require_discovery_template(
                 settings,
                 "verify",
                 "g3-independent-discovery-review",
@@ -259,7 +259,7 @@ async def run_independent_discovery_final_review(
                         break
             if prior_call is not None:
                 assert run.retry_of_run_id is not None
-                replayed_call = _verified_parent_discovery_call(
+                replayed_call = verify_recorded_discovery_call(
                     prior_call,
                     run_id=run.retry_of_run_id,
                     stage_key="compilation",
@@ -480,7 +480,7 @@ async def _run_entity_discovery_generation_stage(
 
     try:
         settings = service.configuration.model
-        template = _template(
+        template = require_discovery_template(
             settings, "extract", "g3-independent-discovery", INDEPENDENT_DISCOVERY_PROMPT
         )
         contexts = await asyncio.to_thread(
@@ -535,7 +535,7 @@ async def _run_entity_discovery_generation_stage(
             replayed_call = None
             if prior_call is not None:
                 assert run.retry_of_run_id is not None
-                replayed_call = _verified_parent_discovery_call(
+                replayed_call = verify_recorded_discovery_call(
                     prior_call,
                     run_id=run.retry_of_run_id,
                     stage_key="discovery",
@@ -1034,7 +1034,7 @@ async def run_discovery_generation_stage(
     )
 
 
-def _template(
+def require_discovery_template(
     settings: ProductModelSettings, role: str, purpose: str, prompt: bytes
 ) -> ModelTemplatePolicy:
     matches = [row for row in settings.templates if row.role == role and row.purpose == purpose]
@@ -1219,10 +1219,10 @@ async def run_discovery_stage(
             summary["reason_codes"] = ["NO_CHANGED_SOURCE"]
         elif not reuse_prior:
             settings = service.configuration.model
-            generation_template = _template(
+            generation_template = require_discovery_template(
                 settings, "extract", "g3-open-discovery", DISCOVERY_PROMPT
             )
-            review_template = _template(
+            review_template = require_discovery_template(
                 settings, "verify", "g3-open-discovery-review", DISCOVERY_REVIEW_PROMPT
             )
             generation = await asyncio.to_thread(

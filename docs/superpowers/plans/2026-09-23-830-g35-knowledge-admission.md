@@ -1,5 +1,11 @@
 # 830-G3.5 自由发现与知识准入实施计划
 
+## 当前状态：原生逐窗执行软件完成（2026-09-23）
+
+内容来源与展示已提交d04868fdd。原生逐窗collector冻结tree0b2352e49d5df56df37240684cf4ee3cd39aa013，最终独审0 BLOCKER。完整签名窗口、先存provider raw后投影、精确父响应复验、未知发送阻断及兄弟失败保留已实现；模型计划预算覆盖真实JSON包装和provider envelope。固定原生批次超预算明确失败，不截断。
+
+首轮47PASS（collector4及既有stage/replay/native），预算反例2RED后受影响collector6PASS，Ruff/mypy PASS。验证见native-discovery-stage-validation.json。CURRENT=NATIVE_WINDOW_COLLECTOR_SOFTWARE_GREEN；NEXT_READY=来源审核v5、原生语义准入/更新、显式runtime策略与旧原生写页互斥。尚未接pipeline持久消费/metrics或执行真实provider；本轮新增模型/构建/部署/发布均0，BUSINESS=NOT RUN。下方历史状态不覆盖本段。
+
 ## 当前状态：内容来源与页面展示软件完成（2026-09-23）
 
 原生producer已提交5043c7b55；内容来源domain/编译/Go验收/页面展示冻结tree 18814ec469c14a3f9e973f656d4bf2bfc3421509，后端独审及UI定向复审均0 BLOCKER。新对象逐片段区分“模型生成”和“原文依据”，完整条件/例外/有效期也覆盖；纯生成可无引用，混合页仅有依据片段显示精确原文按钮。旧对象字节及旧展示保持。验证和文件身份见content-provenance-validation.json。
@@ -155,3 +161,9 @@ G35-R3来源一致性：含MODEL_GENERATED的定义必须origin=MODEL_COMPILE；
 G35-R3展示检查发现G2目录也直接展示定义正文，故同Owner必要写域包含conceptDirectory830G2.ts/.vue及对应测试，复用同一来源解析/片段组件；不新增展示协议。整批组合若保留旧生成片段，最终transformation仍须SYNTHESIZE，不能被本次EXTRACT增量抹掉；以carryover反例验证，旧无生成对象合同不变。
 
 完整G3跨语言向量包含原文允许的非NFC业务文本，暴露前端bodyText仍强制NFC的不一致；按既有G3业务正文保真合同移除该处NFC要求，结构化身份及对象键仍要求NFC，禁止归一化原文。该反例并入G35-R3同一显示切片。
+
+## 下一切片：原生候选逐窗执行（用户已批准路线，默认尚不接运行）
+
+复用source_snapshot既有签名artifact、PlatformClient.native_discovery及ConfiguredModelExecutor.execute_stage_call。每文档先验证完整plan，逐窗执行发现和引用，成功provider raw先进入StageCall，再请求签名候选快照；收集完整窗口集合后才供后续准入使用。窗口失败保留已完成结果和明确失败阶段，不能把单窗成功当全文完成。模型请求键绑定来源、原生策略、阶段、窗口与输入，父任务只复用同策略且请求/raw完整的已记录结果；未知发送继续阻断，HTTP确定失败可按现有规则重新规划。原生两阶段只生成候选及线索，不编译正式Evidence或写Active。
+
+该步唯一root写域：新增product_ingestion/native_discovery_stage.py及test_native_discovery_stage.py；现有discovery_stage.py仅把同职责模板选择/父调用校验helper公开复用，必要model_execution既有测试与checkpoints的artifact声明；本计划/对应OpenSpec129/evidence。暂不启用pipeline策略，不执行真实provider；后续准入响应/投影、来源review新版本以及Go自动写页互斥完成后才能接运行。模型/部署授权不扩大。

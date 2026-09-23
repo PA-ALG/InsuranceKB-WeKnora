@@ -144,6 +144,25 @@ def _template_and_request(
     return template, PreparedModelRequest(content, request, _sha(request))
 
 
+def prepare_configured_model_request(
+    settings: ProductModelSettings,
+    *,
+    scope: ProductScope,
+    content: bytes,
+    prompt: bytes,
+    template_id: str,
+) -> PreparedModelRequest:
+    """Serialize and check an exact stage request without dispatch or persistence."""
+    return _template_and_request(
+        settings,
+        scope=scope,
+        content=content,
+        input_sha256=_sha(content),
+        prompt=prompt,
+        template_id=template_id,
+    )[1]
+
+
 def matches_recorded_stage_request(
     call: StageCallSnapshot,
     settings: ProductModelSettings,

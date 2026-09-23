@@ -1,3 +1,9 @@
+# 当前状态（2026-09-23 · 原生逐窗collector软件完成）
+
+内容来源/页面展示提交d04868fdd；原生逐窗collector冻结tree0b2352e49d5df56df37240684cf4ee3cd39aa013，最终独审0 BLOCKER。通过既有StageCall先持久原响应后原生投影，精确父调用复用，unknown阻断，完整窗口及兄弟失败保留；实际请求包装预算经边界反例修复。首轮47PASS、修复后collector6PASS，Ruff/mypy PASS，详见native-discovery-stage-validation.json。
+
+CURRENT=NATIVE_WINDOW_COLLECTOR_SOFTWARE_GREEN；NEXT_READY=来源审核、语义准入/更新和显式runtime接线。新artifact持久消费/metrics及真实链路尚未接入，新模型/构建/部署/发布0，BUSINESS=NOT RUN。以下保留历史状态。
+
 # 当前状态（2026-09-23 · G3.5来源标志与原文入口软件完成）
 
 原生producer已提交5043c7b55。来源domain/编译/跨语言验收及页面展示冻结tree18814ec469c14a3f9e973f656d4bf2bfc3421509，最终独审0 BLOCKER；新内容逐片段显示模型生成/原文依据，原文按钮精确绑定完整Evidence，纯生成无伪造引用，混合页取消重复全页引用列表，旧对象保持兼容。证据见docs/insurance-kb/evidence/830-g35/content-provenance-validation.json。
