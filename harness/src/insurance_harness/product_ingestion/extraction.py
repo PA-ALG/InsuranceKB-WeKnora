@@ -541,3 +541,8 @@ async def execute_window(
         {(o.entity_id, o.field_key): o for o in outcomes if (o.entity_id, o.field_key) not in known}
     )
     return tuple(known[t.entity_id, t.field_key] for t in tasks)
+
+
+def decode_model_json(raw: bytes) -> object:
+    """Public strict semantic JSON boundary shared by model response adapters."""
+    return _json(raw)

@@ -1,3 +1,9 @@
+# 当前状态（2026-09-23 · 原生准入软件完成）
+
+原生准入纯投影与v5回放计数软件完成：冻结tree c761124a6f37a027d38beb58a444872bbd7332dc（metrics独审ac5371b7），两项最终独审0 BLOCKER。逐成员强制来源标志、原文精确字符引用、候选完整处置、同身份/版本更新，并保留“更新旧页+新增相关概念”的各自动作；复用编译与v5审核。新增10项通过7.61s；真实持久metrics旧/新审核9项通过1.60s，Ruff/mypy PASS。证据native-admission-validation.json。
+
+CURRENT=NATIVE_ADMISSION_SOFTWARE_GREEN；NEXT_READY=原文PDF定位与逐窗准入执行/Harness显式接线。运行未启用；纯投影要求调用方先验证签名，尚不代表PDF点击实测/实体关系创建/真实发布。新增真实模型/构建/部署/发布0，BUSINESS=NOT RUN，Goal未完成。
+
 # 当前状态（2026-09-23 · 显式原生候选模式互斥软件完成）
 
 Go互斥冻结tree81b75d36c0dee4db78989ba4dd5d2df113b0725a，独审0 BLOCKER；新策略显式绑定完整产品scope，native候选API未配置时503，postprocess不计/不排旧Wiki任务，旧worker及启动恢复被拦截且durable rows保留，无第二Active或队列。config/service/container/handler/router五包定向PASS，证据native-write-exclusion-validation.json。

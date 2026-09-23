@@ -127,3 +127,12 @@ D backend最终软件收口：repair2最终独审5e9c4f0b… PASS/BLOCKER0，fin
 当前本地G3 FLOW PASS；QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。既有b696网页恢复457.517秒/33有效14未提供20失败/新增12调用；全新3190-2三原PDF网页首次上传run5fc81298-7bbe-4c1a-9c8d-bf8844055ef0，557.371秒/25有效19未提供31失败/25调用，普通字段补抽0。发布epoch17/release-b8d07e76-da52-4446-9c37-fb6f8a1cb2d6，检索/引用验证PASS；网页购买限制独立Wiki→PDF第12页高亮PASS。上传后无修改、构建、部署或手工业务接续。平台计时不含后续人工点验间隔；未实际关闭Codex。
 
 实现ec0721083及实际镜像/原始失败均已留档。更正此前独审：现代checkpoint的语义失败恢复是新发身份调用，不是legacy raw replay；零调用重投影列BACKLOG。完整Requirement矩阵、阶段耗时、持久化证据及后续项以 `docs/insurance-kb/evidence/830-g3/task3bn-platform-closeout-20260922.md` 和对应fresh/recovery JSON为准。此前NOT RUN/BLOCKED是当时事实，保留而不覆盖本次真实结果。
+
+
+### 2026-09-23 G35-R2/R3/R5 原生准入与v5回放计数（软件子项）
+
+原生准入纯投影与v5回放计数软件完成：冻结tree c761124a6f37a027d38beb58a444872bbd7332dc（metrics独审ac5371b7），两项最终独审0 BLOCKER。逐成员强制来源标志、原文精确字符引用、候选完整处置、同身份/版本更新，并保留“更新旧页+新增相关概念”的各自动作；复用编译与v5审核。新增10项通过7.61s；真实持久metrics旧/新审核9项通过1.60s，Ruff/mypy PASS。证据native-admission-validation.json。
+
+CURRENT=NATIVE_ADMISSION_SOFTWARE_GREEN；NEXT_READY=原文PDF定位与逐窗准入执行/Harness显式接线。运行未启用；纯投影要求调用方先验证签名，尚不代表PDF点击实测/实体关系创建/真实发布。新增真实模型/构建/部署/发布0，BUSINESS=NOT RUN，Goal未完成。
+
+Requirement→implementation→test→identity：G35-R2/R3对应native_admission.py及test_native_admission.py（10PASS）；G35-R5对应discovery_replay_metrics.py及持久回放测试（9PASS）。精确identity/RED/修复及复核见native-admission-validation.json；commit为本记录所在提交。

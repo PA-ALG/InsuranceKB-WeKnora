@@ -17,6 +17,7 @@ from insurance_harness.product_ingestion.artifact_tables import (
 from insurance_harness.product_ingestion.discovery import (
     INDEPENDENT_DISCOVERY_PROMPT,
     INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+    PROVENANCE_DISCOVERY_REVIEW_PROMPT,
 )
 from insurance_harness.product_ingestion.models import ProductScope
 
@@ -35,9 +36,12 @@ def verified_discovery_replay_calls(
         select(ProductArtifact).where(
             ProductArtifact.run_id == run_id,
             ProductArtifact.space_id == scope.space_id,
-            ProductArtifact.artifact_kind.in_((
-                "discovery_window_replay_receipt", "discovery_review_proof",
-            )),
+            ProductArtifact.artifact_kind.in_(
+                (
+                    "discovery_window_replay_receipt",
+                    "discovery_review_proof",
+                )
+            ),
         )
     ).all()
     if not markers:
@@ -68,15 +72,37 @@ def verified_discovery_replay_calls(
                 raise ValueError("discovery replay final output hash missing")
             operation = "independent-discovery-final-review-" + output_hash
             input_sha = proof.get("actual_review_context_sha256")
-            prompt_sha = hashlib.sha256(INDEPENDENT_DISCOVERY_REVIEW_PROMPT).hexdigest()
             call_id = proof.get("source_call_id")
             if proof.get("model_call_id") != call_id:
                 raise ValueError("discovery replay review call identity changed")
-            _matching_child_artifact(
-                session, scope, run_id, "discovery_review_context", "product", input_sha,
+            context_row = _matching_child_artifact(
+                session,
+                scope,
+                run_id,
+                "discovery_review_context",
+                "product",
+                input_sha,
             )
+            version = _object(context_row.payload).get("contract")
+            if version not in {
+                None,
+                "product-discovery-review-context.830.v3",
+                "product-discovery-review-context.830.v4",
+                "product-discovery-review-context.830.v5",
+            }:
+                raise ValueError("discovery replay review context contract changed")
+            prompt = (
+                PROVENANCE_DISCOVERY_REVIEW_PROMPT
+                if version == "product-discovery-review-context.830.v5"
+                else INDEPENDENT_DISCOVERY_REVIEW_PROMPT
+            )
+            prompt_sha = hashlib.sha256(prompt).hexdigest()
             _matching_child_artifact(
-                session, scope, run_id, "discovery_review_response", "product",
+                session,
+                scope,
+                run_id,
+                "discovery_review_response",
+                "product",
                 proof.get("actual_review_raw_sha256"),
             )
             source_run = proof.get("replayed_from_run_id")
@@ -99,7 +125,11 @@ def verified_discovery_replay_calls(
             if receipt.get("source_prompt_sha256") != prompt_sha:
                 raise ValueError("discovery replay window prompt changed")
             _matching_child_artifact(
-                session, scope, run_id, "discovery_context", marker.artifact_key,
+                session,
+                scope,
+                run_id,
+                "discovery_context",
+                marker.artifact_key,
                 input_sha,
             )
             call_id = receipt.get("source_call_id")
@@ -143,8 +173,10 @@ def _object(payload: bytes) -> dict[str, Any]:
 
 
 def _hash(value: object) -> TypeGuard[str]:
-    return isinstance(value, str) and len(value) == 64 and all(
-        char in "0123456789abcdef" for char in value
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(char in "0123456789abcdef" for char in value)
     )
 
 
@@ -170,7 +202,7 @@ def _matching_child_artifact(
     kind: str,
     key: str,
     digest: object,
-) -> None:
+) -> ProductArtifact:
     if not _hash(digest):
         raise ValueError("discovery replay child artifact hash missing")
     row = session.scalar(
@@ -182,8 +214,11 @@ def _matching_child_artifact(
         )
     )
     if (
-        row is None or row.origin != ArtifactOrigin.RULE.value
-        or row.origin_call_id is not None or row.payload_sha256 != digest
+        row is None
+        or row.origin != ArtifactOrigin.RULE.value
+        or row.origin_call_id is not None
+        or row.payload_sha256 != digest
     ):
         raise ValueError("discovery replay child artifact binding changed")
     _verify_payload(row)
+    return row

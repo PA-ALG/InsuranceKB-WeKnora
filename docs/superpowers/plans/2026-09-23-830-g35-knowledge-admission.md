@@ -1,5 +1,11 @@
 # 830-G3.5 自由发现与知识准入实施计划
 
+## 当前状态：原生准入与审核回放计数软件完成（2026-09-23）
+
+原生准入纯投影与v5回放计数软件完成：冻结tree c761124a6f37a027d38beb58a444872bbd7332dc（metrics独审ac5371b7），两项最终独审0 BLOCKER。逐成员强制来源标志、原文精确字符引用、候选完整处置、同身份/版本更新，并保留“更新旧页+新增相关概念”的各自动作；复用编译与v5审核。新增10项通过7.61s；真实持久metrics旧/新审核9项通过1.60s，Ruff/mypy PASS。证据native-admission-validation.json。
+
+CURRENT=NATIVE_ADMISSION_SOFTWARE_GREEN；NEXT_READY=原文PDF定位与逐窗准入执行/Harness显式接线。运行未启用；纯投影要求调用方先验证签名，尚不代表PDF点击实测/实体关系创建/真实发布。新增真实模型/构建/部署/发布0，BUSINESS=NOT RUN，Goal未完成。
+
 ## 当前状态：原生候选模式互斥软件完成（2026-09-23）
 
 来源审核已提交c7e8a8ccc。Go候选模式互斥冻结tree81b75d36c0dee4db78989ba4dd5d2df113b0725a，独审0 BLOCKER：显式native-candidates.830.v1策略绑定tenant/space/RAW/Wiki；未配策略的native候选接口503，启用后postprocess不计/不排旧Wiki子任务，旧ingest/finalize先拦截，启动恢复跳过且保留既有durable rows。旧空配置对其他原生行为兼容。
@@ -193,3 +199,17 @@ root必要写域：discovery.py的独立review renderer/版本选择，必要同
 root写域：internal/config/product_ingestion.go及config.go验证入口/相应tests；knowledge_post_process.go、wiki_ingest.go/wiki_ingest_batch.go及定向tests；container/recover_pending_wiki_tasks.go及reset_pending_tasks_test.go必要签名/测试；本计划/OpenSpec129/evidence。复用唯一策略判定，不新增队列或修改Active。先旧配置忽略策略/旧worker仍可进入副作用的RED，再实现/冻结独审。实际运行配置不变。
 
 互斥接缝补充：机器native-discovery请求也必须核验同一显式完整scope策略，防止Harness误启用时另一端仍走旧直写；因此本切片必要写域扩至handler/g3_platform_native_discovery.go、g3_platform_snapshots.go、g3_platform_composition.go及native handler测试。纯producer领域服务和历史签名向量不变，只有机器接线要求策略；未配策略不得派发原生候选计划。
+
+## 下一切片：原生候选到正式知识的语义准入投影
+
+现有DiscoveryProposal/G3D响应只允许有证据的新增成员，UPDATE_PROPOSAL是审计项，不能承载用户允许的生成补充。新增原生准入v1短引用响应：只处理签名窗口内候选，逐个给出NEW/UPDATE/REFERENCE/REJECT/PENDING或REQUIRES_ENTITY_RESOLUTION处置；每个生成定义/页面必须关联候选并显式提供content_provenance，不能再自行发现第二套主题。已有知识语义比较复用build_discovery_knowledge_view；更新必须绑定原身份与不可变revision且启用现有显式update策略，字段结果不能被覆盖。
+
+候选级UPDATE表示至少一个既有成员更新，可同时新增该页需要的概念；NEW候选只含NEW成员。每个成员各自校验action/identity/revision，传入独立审核的disposition也必须保留成员动作，不能将随附新概念误标UPDATE。
+
+原文短引用给出source_ref/start/quote，服务端按已验SourceBlock构造Evidence并核对原字符位置；仅模型片段可以无引用。签名候选description/details始终标模型生成，chunk关联只是线索。准入输出复用CompileOutput、AuditDisposition和最终v5独立审核；结构实体/关系不足保留待解析处置，不伪装成已创建实体。窗口跨页/原文PDF定位在接runtime时复用source_geometry验证，不把当前纯投影结果当业务验收。
+
+本步root写域：新增product_ingestion/native_admission.py及test_native_admission.py；extraction.py仅公开复用既有严格JSON解析器，不改变其旧调用；计划/OpenSpec129/evidence。原生collector/pipeline/模型配置暂不启用。先新provenance缺失/无引用生成/显式更新/候选覆盖/原文偏移反例，再实现；尚不扩大外部调用或部署授权。
+
+## 下一切片：来源审核回放的持久计数兼容
+
+接线核对发现discovery_replay_metrics仍固定旧审核prompt，已授权v5审核父响应虽能正确复用，却会在持久计数阶段被当成变更而拒绝。沿既有唯一metrics边界，从已校验hash的子review context合同选择旧/v5提示，再核对真实父StageCall；不信任回执自报prompt，不放宽祖先/raw/operation绑定。root写域仅discovery_replay_metrics.py及既有test_discovery_replay_metrics.py、计划/OpenSpec129/evidence/HANDOFF。先使用真实artifact/StageCall持久存储复现v5错误，再实现并保留旧回放与篡改拒绝测试。无新调用、无运行启用。

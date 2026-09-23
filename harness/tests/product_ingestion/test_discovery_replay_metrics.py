@@ -182,10 +182,14 @@ def test_generation_replay_counts_real_parent_once_with_persisted_receipt(
     assert artifacts.get_stage_call_metrics(scope=_scope(), run_id=child.run_id) == metrics
 
 
+@pytest.mark.parametrize("provenance", [False, True])
+@pytest.mark.parametrize("wrong_prompt", [False, True])
 def test_review_replay_counts_real_parent_with_persisted_proof(
-    api: typing.Any, factory: typing.Any
+    api: typing.Any, factory: typing.Any, provenance: bool, wrong_prompt: bool
 ) -> None:
     context = {"final_composed_output_hash": "d" * 64}
+    if provenance:
+        context["contract"] = "product-discovery-review-context.830.v5"
     content = json_bytes(context)
     raw = json_bytes({"choices": []})
     parent = _record_parent_call(
@@ -194,7 +198,11 @@ def test_review_replay_counts_real_parent_with_persisted_proof(
         stage_key="compilation",
         operation="independent-discovery-final-review-" + "d" * 64,
         context=content,
-        prompt=discovery.INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+        prompt=(
+            discovery.PROVENANCE_DISCOVERY_REVIEW_PROMPT
+            if provenance != wrong_prompt
+            else discovery.INDEPENDENT_DISCOVERY_REVIEW_PROMPT
+        ),
         raw=raw,
         call_id="metrics-review-call",
     )
@@ -224,6 +232,10 @@ def test_review_replay_counts_real_parent_with_persisted_proof(
         _rule("discovery_review_proof", "product", proof),
     )
     _settle(artifacts, products, jobs, child, running, "compilation", drafts)
+    if wrong_prompt:
+        with pytest.raises(ValueError, match="parent call provenance changed"):
+            artifacts.get_stage_call_metrics(scope=_scope(), run_id=child.run_id)
+        return
     metrics = artifacts.get_stage_call_metrics(scope=_scope(), run_id=child.run_id)
     assert metrics.reused_model_call_count == 1
     assert metrics.reused_usage == {"input_tokens": 7, "output_tokens": 3}
