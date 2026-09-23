@@ -1396,6 +1396,7 @@ def build_batch_compile_request(
     selected_decision_refs: tuple[tuple[str, str], ...],
     published_base: PublishedBaseBinding830G3V1 | None = None,
     refresh_fields: tuple[FieldRefresh830G3V1, ...] = (),
+    knowledge_update_policy: Literal["explicit-same-identity.830.v1"] | None = None,
 ) -> BatchConceptCompileRequest830G3V1:
     """Build one exact, offline G3 request from Catalog and replayed C inputs."""
 
@@ -1471,6 +1472,8 @@ def build_batch_compile_request(
         "quality_status": "REGISTERED_NOT_QUALITY_ADMITTED",
         "release_lane": "ISOLATED_NOT_FOR_PRODUCTION",
     }
+    if knowledge_update_policy is not None:
+        payload["knowledge_update_policy"] = knowledge_update_policy
     if published_base is not None:
         payload["published_base"] = published_base
     if refresh_fields:

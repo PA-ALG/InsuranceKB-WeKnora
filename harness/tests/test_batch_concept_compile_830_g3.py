@@ -939,7 +939,8 @@ def test_actual342_fixture_round_trips_complete_base_and_registered_sources() ->
     assert len(wire) < 8 * 1024 * 1024
 
 
-def test_builder_replays_c_and_reconstructs_exact_fixture_request() -> None:
+@pytest.mark.parametrize("updates", [False, True])
+def test_builder_replays_c_and_reconstructs_exact_fixture_request(updates: bool) -> None:
     module = importlib.import_module(
         "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
     )
@@ -964,9 +965,17 @@ def test_builder_replays_c_and_reconstructs_exact_fixture_request() -> None:
         policy=request.resolution_inputs.policy,
         resolution=request.resolution,
         selected_decision_refs=refs,
+        **({"knowledge_update_policy": "explicit-same-identity.830.v1"} if updates else {}),
     )
 
-    assert rebuilt == request
+    if updates:
+        assert rebuilt.knowledge_update_policy == "explicit-same-identity.830.v1"
+        assert rebuilt.request_sha256 != request.request_sha256
+        assert module.BatchConceptCompileRequest830G3V1.model_validate_json(
+            module._canonical_json(rebuilt)
+        ) == rebuilt
+    else:
+        assert rebuilt == request
 
 
 def test_builder_accepts_all_blocks_from_selected_material() -> None:

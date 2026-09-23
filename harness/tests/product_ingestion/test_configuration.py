@@ -240,3 +240,39 @@ def test_runtime_configuration_rejects_a_cross_scope_source_key_union(
     with pytest.raises(ShellConfigError) as caught:
         load_product_runtime_configuration(configured)
     assert caught.value.keys == ("product_ingestion_runtime_json",)
+
+
+def test_native_candidate_mode_requires_all_exact_templates(tmp_path: Path) -> None:
+    from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
+    from insurance_harness.product_ingestion.discovery import PROVENANCE_DISCOVERY_REVIEW_PROMPT
+    from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+    from insurance_harness.product_ingestion.native_discovery import (
+        NATIVE_DISCOVERY_EXECUTION_PROMPT,
+    )
+
+    payload = json.loads(runtime_json(tmp_path))
+    legacy = ProductRuntimeSettings.model_validate_json(json.dumps(payload))
+    assert "native_discovery" not in legacy.bindings[0].model_dump(mode="json")
+    binding = payload["bindings"][0]
+    binding["native_discovery"] = {
+        "policy": "native-candidates.830.v1",
+        "language": "zh-CN",
+        "granularity": "standard",
+        "purpose": "保险知识阅读",
+        "allow_knowledge_updates": True,
+    }
+    with pytest.raises(ValueError):
+        ProductRuntimeSettings.model_validate_json(json.dumps(payload))
+    for role, purpose, prompt in (
+        ("extract", "g3-native-discovery", NATIVE_DISCOVERY_EXECUTION_PROMPT),
+        ("extract", "g3-native-admission", NATIVE_ADMISSION_PROMPT),
+        ("verify", "g3-provenance-discovery-review", PROVENANCE_DISCOVERY_REVIEW_PROMPT),
+    ):
+        template = copy.deepcopy(binding["model"]["templates"][0])
+        template.update(template_id=purpose, role=role, purpose=purpose, prompt_sha256=_sha(prompt))
+        binding["model"]["templates"].append(template)
+    configured = ProductRuntimeSettings.model_validate_json(json.dumps(payload))
+    assert configured.bindings[0].native_discovery.allow_knowledge_updates
+    binding["model"]["templates"][-1]["prompt_sha256"] = "0" * 64
+    with pytest.raises(ValueError):
+        ProductRuntimeSettings.model_validate_json(json.dumps(payload))

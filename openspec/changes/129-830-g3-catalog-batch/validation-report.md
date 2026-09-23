@@ -145,3 +145,11 @@ Requirement→implementation→test→identity：G35-R2/R3对应native_admission
 几何5PASS0.56s，执行4PASS2.48s（executor/父调用为测试替身），受影响合跑8PASS2.56s后追加倒序几何反例已覆盖于最终5项；Ruff/mypy PASS，证据native-admission-stage-validation.json。CURRENT=NATIVE_ADMISSION_EXECUTION_SOFTWARE_GREEN；NEXT_READY=任务主流程显式接线、检查点和完整持久计数/恢复验证。尚未运行启用，新增真实model/build/deploy/publish均0，BUSINESS=NOT RUN，G3.5未完成。
 
 Requirement→implementation→test→identity：G35-R3由native_evidence.py及5项几何验证覆盖；G35-R1/R5由native_admission_stage.py及4项执行边界验证覆盖。冻结identity/RED/修复/独审见native-admission-stage-validation.json；commit为本记录所在提交。
+
+### 2026-09-23 G35-R1/R3/R5 原生任务与恢复接线（软件子项）
+
+原生候选模式已接入既有任务主流程，按显式配置校验三个模板，任务/检查点固定策略及更新授权。缺省旧流程保持。发现和准入复用现有StageCall，授权祖先raw跨三代恢复；无关Head可重投影、实际知识上下文改变需新判断。PENDING/实体待解析保留整组围栏，字段独立；来源覆盖与准入状态分开记录。
+
+冻结tree 2a10bcb6bb88a6d2f9071be06a8c51cc837a34a7，两项最终独审0 BLOCKER。最终协调器/准入14PASS5.24s，实际SQLite三代成功调用不重发，重启配置漂移1PASS20.16s，旧worker/checkpoint12PASS141.29s，Ruff/mypy通过；详细RED、测试替身限制及审查见native-pipeline-validation.json。CURRENT=NATIVE_PIPELINE_SOFTWARE_REVIEWED；NEXT_READY=后续必要结构实体/关系、最小依赖组与有界真实纵切。运行配置尚未启用，新增真实模型/构建/部署/发布均0，BUSINESS=NOT RUN，G3.5未完成。
+
+Requirement→implementation→test→identity矩阵见native-pipeline-validation.json，commit为本记录所在提交。G35-R6只验证现有整组围栏，最小依赖组仍NOT RUN。

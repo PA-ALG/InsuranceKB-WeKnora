@@ -15,13 +15,15 @@ from insurance_harness.product_ingestion.models import ProductScope
 from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
 from insurance_harness.product_ingestion.stages import json_bytes
 from tests.product_ingestion.test_discovery_replay_custody import _parent_call, _service
-from tests.product_ingestion.test_native_admission import context, inputs, response
+from tests.product_ingestion.test_native_admission import context, inputs, project, response
 
 pytest_plugins = ("tests.product_ingestion.test_discovery",)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["new", "parent", "unknown", "bad_semantics"])
+@pytest.mark.parametrize(
+    "mode", ["new", "parent", "ancestor", "unknown", "bad_semantics", "changed_knowledge"]
+)
 async def test_admission_call_custody_and_failure_preservation(case: Any, mode: str) -> None:
     request, entity, snapshot, source = values = inputs(case)
     scope = ProductScope(
@@ -41,7 +43,7 @@ async def test_admission_call_custody_and_failure_preservation(case: Any, mode: 
         role="extract",
         purpose="g3-native-admission",
         prompt=NATIVE_ADMISSION_PROMPT,
-        new_raw=raw if mode in {"new", "bad_semantics"} else None,
+        new_raw=raw if mode in {"new", "bad_semantics", "changed_knowledge"} else None,
     )
     service.configuration.model.scope = scope
     record = _parent_call(
@@ -52,16 +54,35 @@ async def test_admission_call_custody_and_failure_preservation(case: Any, mode: 
         raw=raw,
     )
     record.diagnostic = None
+    if mode == "ancestor":
+        record.run_id = "ancestor-run"
     if mode == "unknown":
         record.state = "interrupted"
         record.raw = None
-    records = [record] if mode in {"parent", "unknown"} else []
+    records = [record] if mode in {"parent", "unknown", "changed_knowledge"} else []
+    if mode == "changed_knowledge":
+        existing = project(values, context(values), response(context(values))).output.pages[0]
+        existing = existing.model_copy(update={"stable_key": "existing-guide"})
+        request = request.model_copy(
+            update={
+                "base_request": request.base_request.model_copy(
+                    update={"existing_pages": (existing,)}
+                )
+            }
+        )
+        assert context((request, entity, snapshot, source)) != context(values)
     module = importlib.import_module("insurance_harness.product_ingestion.native_admission_stage")
     outcome = await module.run_native_admission_window(
         service=service,
-        artifacts=SimpleNamespace(list_stage_calls=lambda **kw: records),
+        artifacts=SimpleNamespace(
+            list_stage_calls=lambda **kw: records,
+            read_checkpoint_stage_calls=lambda **kw: [record] if mode == "ancestor" else [],
+        ),
         scope=scope,
-        run=SimpleNamespace(run_id="child", retry_of_run_id=("parent-run" if records else None)),
+        run=SimpleNamespace(
+            run_id="child",
+            retry_of_run_id=("parent-run" if records or mode == "ancestor" else None),
+        ),
         stage=SimpleNamespace(dependency_sha256="f" * 64),
         job=SimpleNamespace(),
         request=request,
@@ -69,8 +90,12 @@ async def test_admission_call_custody_and_failure_preservation(case: Any, mode: 
         snapshot=snapshot,
         source=source,
     )
-    assert len(service.model_executor.calls) == (1 if mode in {"new", "bad_semantics"} else 0)
-    assert (outcome.projection is not None) == (mode in {"new", "parent"})
+    assert len(service.model_executor.calls) == (
+        1 if mode in {"new", "bad_semantics", "changed_knowledge"} else 0
+    )
+    assert (outcome.projection is not None) == (
+        mode in {"new", "parent", "ancestor", "changed_knowledge"}
+    )
     assert bool(outcome.failure) == (mode in {"unknown", "bad_semantics"})
     drafts = {row.artifact_kind: row for row in outcome.drafts}
     assert "native_admission_context" in drafts
@@ -79,9 +104,13 @@ async def test_admission_call_custody_and_failure_preservation(case: Any, mode: 
     else:
         response_draft = drafts["native_admission_response"]
         assert response_draft.origin == (
-            ArtifactOrigin.RULE if mode == "parent" else ArtifactOrigin.MODEL
+            ArtifactOrigin.RULE if mode in {"parent", "ancestor"} else ArtifactOrigin.MODEL
         )
-        assert response_draft.origin_call_id == (None if mode == "parent" else "child-call")
+        assert response_draft.origin_call_id == (
+            None if mode in {"parent", "ancestor"} else "child-call"
+        )
         proof = json.loads(drafts["native_admission_execution"].payload)
         assert proof["raw_sha256"] == hashlib.sha256(raw).hexdigest()
-        assert proof["replayed_from_run_id"] == ("parent-run" if mode == "parent" else None)
+        assert proof["replayed_from_run_id"] == (
+            "ancestor-run" if mode == "ancestor" else "parent-run" if mode == "parent" else None
+        )

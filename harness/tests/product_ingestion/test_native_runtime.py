@@ -1,0 +1,268 @@
+"""Native opt-in through the durable worker; all external ports are local fixtures."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
+from pydantic import SecretStr
+
+from insurance_harness.db.base import Base, make_session_factory
+from insurance_harness.jobs import JobStore
+from insurance_harness.product_ingestion.discovery import PROVENANCE_DISCOVERY_REVIEW_PROMPT
+from insurance_harness.product_ingestion.models import ProductRunState
+from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+from insurance_harness.product_ingestion.native_discovery import NATIVE_DISCOVERY_EXECUTION_PROMPT
+from insurance_harness.product_ingestion.platform import platform_snapshot_payload_sha256
+from insurance_harness.product_ingestion.progression import admit_uploads
+from tests.product_ingestion.test_pipeline_runtime import (
+    SCOPE,
+    FixtureModel,
+    FixturePlatform,
+    _base_snapshot_with_navigation,
+    _compose,
+    _finish,
+    _json,
+    _published_snapshot,
+    _settings,
+    _sha,
+    _signed,
+    _source_snapshot,
+    _sqlite_engine,
+)
+
+
+def native_settings(tmp_path: Path, parent: Any) -> Any:
+    settings = _settings(tmp_path, parent)
+    data = json.loads(settings.product_ingestion_runtime_json.get_secret_value())
+    binding = data["bindings"][0]
+    binding["native_discovery"] = dict(
+        policy="native-candidates.830.v1",
+        language="Chinese",
+        granularity="standard",
+        purpose="材料知识发现",
+        allow_knowledge_updates=True,
+    )
+    for role, purpose, prompt in (
+        ("extract", "g3-native-discovery", NATIVE_DISCOVERY_EXECUTION_PROMPT),
+        ("extract", "g3-native-admission", NATIVE_ADMISSION_PROMPT),
+        ("verify", "g3-provenance-discovery-review", PROVENANCE_DISCOVERY_REVIEW_PROMPT),
+    ):
+        binding["model"]["templates"].append(
+            dict(
+                template_id=purpose,
+                role=role,
+                purpose=purpose,
+                run_schema_version="830-g3-v1",
+                prompt_sha256=_sha(prompt),
+                max_context_bytes=8 * 1024 * 1024,
+                max_output_tokens=8192,
+            )
+        )
+    return settings.model_copy(
+        update={"product_ingestion_runtime_json": SecretStr(_json(data).decode())}
+    )
+
+
+class NativeModel(FixtureModel):
+    def __init__(self) -> None:
+        super().__init__()
+        self.native_requests: list[dict[str, Any]] = []
+        self.admission_requests: list[dict[str, Any]] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        envelope = json.loads(request.content)
+        content = json.loads(envelope["messages"][-1]["content"])
+        if content.get("contract") == "native-knowledge-admission-context.830.v1":
+            self.admission_requests.append(content)
+            semantic = {
+                "contract": "native-knowledge-admission.830.v1",
+                "definitions": [],
+                "pages": [],
+                "decisions": [
+                    {
+                        "candidate_ref": row["candidate_ref"],
+                        "decision": "REJECT",
+                        "member_refs": [],
+                        "existing_target": None,
+                        "reason": "无独立知识用途",
+                    }
+                    for row in content["native_candidates"]
+                ],
+            }
+            return httpx.Response(
+                200, json={"choices": [{"message": {"content": _json(semantic).decode()}}]}
+            )
+        if content.get("contract") != "native-discovery-execution.830.v1":
+            return super().__call__(request)
+        self.native_requests.append(content)
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": '{"entities":[],"concepts":[]}'}}]}
+        )
+
+
+class NativePort:
+    fail = True
+
+    async def __call__(self, scope: Any, knowledge_id: str, attempt: int, payload: bytes) -> bytes:
+        request = json.loads(payload)
+        phase = request["phase"]
+        ordinal = int(knowledge_id.rsplit("-", 1)[1])
+        if self.fail and ordinal == 1 and phase == "snapshot":
+            raise ValueError("fixture sibling snapshot failure")
+        source = _source_snapshot(ordinal)["snapshot"]
+        prompt = ("discover" if phase == "plan" else "cite") + ":" + knowledge_id
+        body = dict(
+            scope=source["scope"],
+            knowledge_id=knowledge_id,
+            parse_attempt=attempt,
+            source_snapshot_sha256=source["snapshot_sha256"],
+            policy_sha256="a" * 64,
+            request_sha256=platform_snapshot_payload_sha256(request["contract"], request),
+            phase=phase,
+            window_count=1,
+            windows=[
+                dict(
+                    window_id=0,
+                    chunk_ids=[source["chunks"][0]["id"]],
+                    prompt=prompt,
+                    prompt_sha256=_sha(prompt.encode()),
+                )
+            ],
+            candidates=[
+                dict(
+                    content_origin="MODEL_GENERATED",
+                    kind="concept",
+                    name="测试候选",
+                    slug="concept/test",
+                    aliases=[],
+                    description="待判断的候选",
+                    details="补充文本",
+                    source_chunks=[],
+                    has_source_chunks=False,
+                )
+            ]
+            if phase == "snapshot" and ordinal == 0
+            else [],
+            discovery_raw_sha256=_sha(request["discovery_raw"].encode()) if phase != "plan" else "",
+            citation_raw_sha256=_sha(request["citation_raw"].encode())
+            if phase == "snapshot"
+            else "",
+        )
+        return _json(
+            _signed("native-discovery" if phase == "snapshot" else "native-discovery-plan", body)
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("policy_drift", [False, True])
+async def test_three_generation_native_recovery_keeps_original_calls_and_update_policy(
+    tmp_path: Path,
+    policy_drift: bool,
+) -> None:
+    base, parent = _base_snapshot_with_navigation()
+    settings = native_settings(tmp_path, parent)
+    engine = _sqlite_engine(tmp_path / "native.db")
+    Base.metadata.create_all(engine)
+    factory = make_session_factory(engine)
+    jobs = JobStore(factory, settings.job_runtime_config())
+    platform, model, native = FixturePlatform(base), NativeModel(), NativePort()
+    runtime, context, client = await _compose(settings, factory, platform, model)
+    context.bindings[SCOPE.space_id].platform.native_discovery = native
+    try:
+        origin = context.store.create_run(
+            scope=SCOPE, idempotency_key="native-origin", expected_upload_count=3
+        )
+        admit_uploads(context.store, SCOPE, origin.run_id)
+        first = await _finish(runtime, context, jobs, origin.run_id)
+        assert len(model.native_requests) == 6, (first.terminal_reason, runtime.issues)
+        assert len(model.admission_requests) == 1
+        assert first.state is ProductRunState.PARTIAL_SUCCESS
+        saved = context.artifacts.get_artifact(
+            scope=SCOPE,
+            run_id=origin.run_id,
+            artifact_kind="compile_request",
+            artifact_key="product",
+        )
+        assert (
+            json.loads(saved.payload)["knowledge_update_policy"] == "explicit-same-identity.830.v1"
+        )
+        child = context.store.retry_processing(
+            scope=SCOPE, run_id=origin.run_id, expected_version=first.version
+        )
+        if policy_drift:
+            await runtime.close()
+            await client.aclose()
+            updated = json.loads(settings.product_ingestion_runtime_json.get_secret_value())
+            updated["bindings"][0]["native_discovery"]["purpose"] = "changed-purpose"
+            settings = settings.model_copy(
+                update={"product_ingestion_runtime_json": SecretStr(_json(updated).decode())}
+            )
+            runtime, context, client = await _compose(settings, factory, platform, model)
+            context.bindings[SCOPE.space_id].platform.native_discovery = native
+        second = await _finish(runtime, context, jobs, child.run_id)
+        if policy_drift:
+            assert second.state is ProductRunState.NEEDS_CONFIRMATION
+            assert second.terminal_reason == "CHECKPOINT_COMPILE_INPUT_INVALID"
+            assert len(model.native_requests) == 6
+            assert len(model.admission_requests) == 1
+            return
+        assert second.state is ProductRunState.PARTIAL_SUCCESS, (
+            second.terminal_reason,
+            runtime.issues,
+        )
+        assert len(model.native_requests) == 6
+        assert len(model.admission_requests) == 1
+        assert not [
+            c
+            for c in context.artifacts.list_stage_calls(scope=SCOPE, run_id=child.run_id)
+            if c.stage_key == "discovery"
+        ]
+        # An unrelated new head reprojects against current inputs. Identical semantic
+        # admission context can reuse raw; the old compiled output is never reused.
+        platform.base = _published_snapshot(
+            parent, release_id="native-unrelated-head", activation_epoch=10
+        )
+        platform.current = dict(release_id="native-unrelated-head", activation_epoch=10)
+        native.fail = False
+        grandchild = context.store.retry_processing(
+            scope=SCOPE, run_id=child.run_id, expected_version=second.version
+        )
+        plan = context.store.checkpoint_plan(scope=SCOPE, run_id=grandchild.run_id)
+        assert (
+            len([c for c in plan.audited_calls if c.run_id == origin.run_id and c.kind == "stage"])
+            >= 6
+        )
+        third = await _finish(runtime, context, jobs, grandchild.run_id)
+        assert third.state in {ProductRunState.SUCCEEDED, ProductRunState.PARTIAL_SUCCESS}, (
+            third.terminal_reason,
+            runtime.issues,
+        )
+        assert len(model.native_requests) == 6
+        assert len(model.admission_requests) == 1
+        rebased = context.artifacts.get_rebased_artifact(
+            scope=SCOPE, run_id=grandchild.run_id, artifact_kind="rebased_compile_request"
+        )
+        assert (
+            json.loads(rebased.payload)["knowledge_update_policy"]
+            == "explicit-same-identity.830.v1"
+        )
+        summary = context.artifacts.get_artifact(
+            scope=SCOPE,
+            run_id=grandchild.run_id,
+            artifact_kind="discovery_summary",
+            artifact_key="product",
+        )
+        assert json.loads(summary.payload)["state"] == "EMPTY"
+        receipts = context.artifacts.list_effective_artifacts(
+            scope=SCOPE, run_id=grandchild.run_id, artifact_kind="native_discovery_execution"
+        )
+        assert len(receipts) == 6
+        assert {json.loads(r.payload)["replayed_from_run_id"] for r in receipts} == {origin.run_id}
+    finally:
+        await runtime.close()
+        await client.aclose()
+        engine.dispose()

@@ -17,18 +17,21 @@ from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, A
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.discovery_stage import (
     require_discovery_template,
-    verify_recorded_discovery_call,
 )
 from insurance_harness.product_ingestion.model_execution import (
     ConfiguredFieldTransport,
     ModelPolicyDenied,
-    matches_recorded_stage_request,
     prepare_configured_model_request,
 )
 from insurance_harness.product_ingestion.models import (
     ProductRunSnapshot,
     ProductScope,
     StageSnapshot,
+)
+from insurance_harness.product_ingestion.native_call_replay import (
+    NativeReplayIndex,
+    read_native_replay_calls,
+    select_native_replay_call,
 )
 from insurance_harness.product_ingestion.native_discovery import (
     NATIVE_DISCOVERY_EXECUTION_PROMPT,
@@ -97,6 +100,7 @@ async def collect_native_discovery(
     language: str,
     granularity: Literal["focused", "standard", "exhaustive"],
     purpose: str,
+    replay_calls: NativeReplayIndex | None = None,
 ) -> NativeDiscoveryCollection:
     settings = service.configuration.model
     if settings.scope != scope or not sources:
@@ -107,10 +111,10 @@ async def collect_native_discovery(
     template = require_discovery_template(
         settings, "extract", "g3-native-discovery", NATIVE_DISCOVERY_EXECUTION_PROMPT
     )
-    parent_calls = (
-        await asyncio.to_thread(artifacts.list_stage_calls, scope=scope, run_id=run.retry_of_run_id)
-        if run.retry_of_run_id
-        else ()
+    replay_calls = (
+        await read_native_replay_calls(artifacts, scope, run)
+        if replay_calls is None
+        else replay_calls
     )
     drafts: list[ArtifactDraft] = []
     snapshots: list[NativeDiscoverySnapshot] = []
@@ -166,33 +170,18 @@ async def collect_native_discovery(
         )
         input_hash = hashlib.sha256(content).hexdigest()
         operation = "native-discovery-" + input_hash
-        prior = [
-            row
-            for row in parent_calls
-            if row.stage_key == "discovery" and row.operation_key == operation
-        ]
-        if len(prior) > 1:
-            raise ValueError("native discovery parent call duplicated")
-        replayed = None
-        if prior:
-            assert run.retry_of_run_id is not None
-            replayed = verify_recorded_discovery_call(
-                prior[0],
-                run_id=run.retry_of_run_id,
-                stage_key="discovery",
-                operation=operation,
-                input_sha256=input_hash,
-                prompt_sha256=template.prompt_sha256,
-            )
-            if replayed is not None and not matches_recorded_stage_request(
-                replayed,
-                settings,
-                scope=scope,
-                content=content,
-                prompt=NATIVE_DISCOVERY_EXECUTION_PROMPT,
-                template_id=template.template_id,
-            ):
-                replayed = None
+        keep("native_discovery_context", operation, content)
+        assert replay_calls is not None
+        replayed = select_native_replay_call(
+            replay_calls,
+            operation=operation,
+            input_hash=input_hash,
+            settings=settings,
+            scope=scope,
+            content=content,
+            prompt=NATIVE_DISCOVERY_EXECUTION_PROMPT,
+            template=template,
+        )
         if replayed is not None:
             raw = replayed.raw
             call_id = replayed.call_id
@@ -232,7 +221,7 @@ async def collect_native_discovery(
                     input_sha256=input_hash,
                     model_call_id=call_id,
                     raw_sha256=hashlib.sha256(raw).hexdigest(),
-                    replayed_from_run_id=run.retry_of_run_id if replayed is not None else None,
+                    replayed_from_run_id=replayed.run_id if replayed is not None else None,
                 )
             ),
         )

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Mapping, Sequence
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
 from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as resolver
@@ -210,6 +210,7 @@ def build_platform_compile_request(
     resolution: resolver.BatchEntityResolutionV1,
     selected_refs: tuple[tuple[str, str], ...],
     refresh_fields: tuple[Mapping[str, str], ...] = (),
+    knowledge_update_policy: Literal["explicit-same-identity.830.v1"] | None = None,
 ) -> compiler.BatchConceptCompileRequest830G3V1:
     """Build the exact parent carry plus current-C request; old C is never replayed."""
 
@@ -324,6 +325,7 @@ def build_platform_compile_request(
         selected_decision_refs=selected_refs,
         published_base=published,
         refresh_fields=validated_refresh,
+        knowledge_update_policy=knowledge_update_policy,
     )
 
 

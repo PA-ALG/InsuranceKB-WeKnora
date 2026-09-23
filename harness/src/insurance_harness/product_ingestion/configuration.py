@@ -161,12 +161,24 @@ class AutomationSignerSettings(_FrozenModel):
         return self
 
 
+class NativeDiscoverySettings(_FrozenModel):
+    policy: Literal["native-candidates.830.v1"]
+    language: str = Field(min_length=1, max_length=100)
+    granularity: Literal["focused", "standard", "exhaustive"]
+    purpose: str = Field(max_length=16000)
+    allow_knowledge_updates: bool = Field(default=False, strict=True)
+
+
 class ProductScopeRuntimeSettings(_FrozenModel):
     scope: ProductScope
     platform: PlatformConnectionSettings
     source_authorities: tuple[SourceAuthoritySettings, ...] = Field(min_length=1)
     model: ProductModelSettings
     automation: AutomationSignerSettings
+    native_discovery: NativeDiscoverySettings | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def _same_scope_and_unique_keys(self) -> Self:
@@ -177,6 +189,32 @@ class ProductScopeRuntimeSettings(_FrozenModel):
             raise ValueError("source authority key ids must be unique")
         for item in self.source_authorities:
             item.public_key()
+        if self.native_discovery is not None:
+            from insurance_harness.product_ingestion.discovery import (
+                PROVENANCE_DISCOVERY_REVIEW_PROMPT,
+            )
+            from insurance_harness.product_ingestion.discovery_stage import (
+                require_discovery_template,
+            )
+            from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
+            from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+            from insurance_harness.product_ingestion.native_discovery import (
+                NATIVE_DISCOVERY_EXECUTION_PROMPT,
+            )
+
+            try:
+                for role, purpose, prompt in (
+                    ("extract", "g3-native-discovery", NATIVE_DISCOVERY_EXECUTION_PROMPT),
+                    ("extract", "g3-native-admission", NATIVE_ADMISSION_PROMPT),
+                    (
+                        "verify",
+                        "g3-provenance-discovery-review",
+                        PROVENANCE_DISCOVERY_REVIEW_PROMPT,
+                    ),
+                ):
+                    require_discovery_template(self.model, role, purpose, prompt)
+            except ModelPolicyDenied as exc:
+                raise ValueError("native discovery model templates are missing or changed") from exc
         return self
 
 
@@ -210,6 +248,10 @@ class LoadedProductBinding:
     @property
     def model(self) -> ProductModelSettings:
         return self.settings.model
+
+    @property
+    def native_discovery(self) -> NativeDiscoverySettings | None:
+        return self.settings.native_discovery
 
     @property
     def automation(self) -> AutomationSignerSettings:

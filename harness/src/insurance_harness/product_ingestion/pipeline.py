@@ -35,6 +35,11 @@ from insurance_harness.product_ingestion.models import (
     StageSnapshot,
     WindowTaskSpec,
 )
+from insurance_harness.product_ingestion.native_pipeline import (
+    native_discovery_policy,
+    run_native_discovery_stage,
+    validate_native_discovery_policy,
+)
 from insurance_harness.product_ingestion.progression import PlannedWindow
 from insurance_harness.product_ingestion.stages import StageOutput, json_bytes
 
@@ -689,6 +694,7 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
                         {"entity_id": binding["entity_id"], "field_key": key}
                         for key in binding["required_fields"]
                     )
+        native_settings = service_for(scope).configuration.native_discovery
         request = await asyncio.to_thread(
             build_platform_compile_request,
             scope=scope,
@@ -701,6 +707,11 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
             resolution=resolver.BatchEntityResolutionV1.model_validate(values["resolution"]),
             selected_refs=tuple(tuple(row) for row in values["selected_refs"]),
             refresh_fields=tuple(refresh),
+            knowledge_update_policy=(
+                "explicit-same-identity.830.v1"
+                if native_settings is not None and native_settings.allow_knowledge_updates
+                else None
+            ),
         )
         resolved = artifacts.list_effective_artifacts(
             scope=scope, run_id=run.run_id, artifact_kind="resolved_routing"
@@ -737,6 +748,11 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
                     stage.dependency_sha256,
                 ),
                 artifact("field_plan", "product", json_bytes(plan), stage.dependency_sha256),
+            ) + (
+                (artifact("native_discovery_policy", "product", json_bytes(native_policy),
+                          stage.dependency_sha256),)
+                if (native_policy := native_discovery_policy(service_for(scope).configuration))
+                is not None else ()
             )
         )
 
@@ -863,6 +879,17 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
             state=output.state,
         )
 
+    def validate_discovery_policy(scope: ProductScope, run_id: str) -> None:
+        rows = artifacts.list_effective_artifacts(
+            scope=scope, run_id=run_id, artifact_kind="native_discovery_policy"
+        )
+        if len(rows) > 1:
+            raise ValueError("ambiguous native discovery policy")
+        validate_native_discovery_policy(
+            native_discovery_policy(service_for(scope).configuration),
+            rows[0].payload if rows else None,
+        )
+
     async def discovery(
         scope: ProductScope,
         run: ProductRunSnapshot,
@@ -874,6 +901,19 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
         )
 
         request = await asyncio.to_thread(request_for, scope, run.run_id)
+        await asyncio.to_thread(validate_discovery_policy, scope, run.run_id)
+        service = service_for(scope)
+        if service.configuration.native_discovery is not None:
+            from insurance_harness.product_ingestion.stages import read_source_snapshots
+
+            sources = await asyncio.to_thread(
+                read_source_snapshots, artifacts, scope, run.run_id,
+                public_keys=service.configuration.source_public_keys,
+            )
+            return await run_native_discovery_stage(
+                service=service, artifacts=artifacts, scope=scope, run=run, stage=stage,
+                job=job, request=request, sources=sources,
+            )
         return await run_discovery_generation_stage(
             service=service_for(scope),
             artifacts=artifacts,
@@ -900,6 +940,7 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
             published_navigation_assignments,
         )
 
+        await asyncio.to_thread(validate_discovery_policy, scope, run.run_id)
         request = await asyncio.to_thread(request_for, scope, run.run_id)
         from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
             ReviewResult,

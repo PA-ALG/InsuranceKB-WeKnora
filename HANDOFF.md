@@ -1,3 +1,9 @@
+# 当前状态（2026-09-23 · 原生任务接线与持久恢复软件验证）
+
+原生候选模式已接入既有任务主流程，按显式配置校验三个模板，任务/检查点固定策略及更新授权。缺省旧流程保持。发现和准入复用现有StageCall，授权祖先raw跨三代恢复；无关Head可重投影、实际知识上下文改变需新判断。PENDING/实体待解析保留整组围栏，字段独立；来源覆盖与准入状态分开记录。
+
+冻结tree 2a10bcb6bb88a6d2f9071be06a8c51cc837a34a7，两项最终独审0 BLOCKER。最终协调器/准入14PASS5.24s，实际SQLite三代成功调用不重发，重启配置漂移1PASS20.16s，旧worker/checkpoint12PASS141.29s，Ruff/mypy通过；详细RED、测试替身限制及审查见native-pipeline-validation.json。CURRENT=NATIVE_PIPELINE_SOFTWARE_REVIEWED；NEXT_READY=后续必要结构实体/关系、最小依赖组与有界真实纵切。运行配置尚未启用，新增真实模型/构建/部署/发布均0，BUSINESS=NOT RUN，G3.5未完成。
+
 # 当前状态（2026-09-23 · 原文定位与准入执行软件完成）
 
 原文定位及逐窗准入执行冻结tree0d3f2b43f7a39095cadc46cdbc5c750651a3ed63，两项独审0 BLOCKER。跨页引用复用source_geometry拆分，并按完整Evidence合并共享片段、同步重映射内容来源索引；正文/生成段不变，缺定位不改标生成。逐窗执行复用StageCall、精确父响应与未知发送阻断，先存raw后准入/几何，失败保留回执，无自动修复调用。

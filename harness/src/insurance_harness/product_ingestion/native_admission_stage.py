@@ -15,12 +15,10 @@ from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, A
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.discovery_stage import (
     require_discovery_template,
-    verify_recorded_discovery_call,
 )
 from insurance_harness.product_ingestion.model_execution import (
     ConfiguredFieldTransport,
     ModelPolicyDenied,
-    matches_recorded_stage_request,
 )
 from insurance_harness.product_ingestion.models import (
     ProductRunSnapshot,
@@ -32,6 +30,11 @@ from insurance_harness.product_ingestion.native_admission import (
     NativeAdmissionProjection,
     project_native_admission_response,
     render_native_admission_context,
+)
+from insurance_harness.product_ingestion.native_call_replay import (
+    NativeReplayIndex,
+    read_native_replay_calls,
+    select_native_replay_call,
 )
 from insurance_harness.product_ingestion.native_discovery import NativeDiscoverySnapshot
 from insurance_harness.product_ingestion.native_evidence import locate_native_evidence
@@ -61,6 +64,7 @@ async def run_native_admission_window(
     entity_id: str,
     snapshot: NativeDiscoverySnapshot,
     source: DecodedSourceSnapshot,
+    replay_calls: NativeReplayIndex | None = None,
 ) -> NativeAdmissionWindowOutcome:
     """Consume verified snapshots; stage owner persists these returned artifacts.
 
@@ -108,40 +112,21 @@ async def run_native_admission_window(
 
     keep("native_admission_context", content)
     try:
-        parent_calls = (
-            await asyncio.to_thread(
-                artifacts.list_stage_calls, scope=scope, run_id=run.retry_of_run_id
-            )
-            if run.retry_of_run_id
-            else ()
+        replay_calls = (
+            await read_native_replay_calls(artifacts, scope, run)
+            if replay_calls is None
+            else replay_calls
         )
-        prior = [
-            row
-            for row in parent_calls
-            if row.stage_key == "discovery" and row.operation_key == operation
-        ]
-        if len(prior) > 1:
-            raise ValueError("native admission parent call duplicated")
-        replayed = None
-        if prior:
-            assert run.retry_of_run_id is not None
-            replayed = verify_recorded_discovery_call(
-                prior[0],
-                run_id=run.retry_of_run_id,
-                stage_key="discovery",
-                operation=operation,
-                input_sha256=input_hash,
-                prompt_sha256=template.prompt_sha256,
-            )
-            if replayed is not None and not matches_recorded_stage_request(
-                replayed,
-                settings,
-                scope=scope,
-                content=content,
-                prompt=NATIVE_ADMISSION_PROMPT,
-                template_id=template.template_id,
-            ):
-                replayed = None
+        replayed = select_native_replay_call(
+            replay_calls,
+            operation=operation,
+            input_hash=input_hash,
+            settings=settings,
+            scope=scope,
+            content=content,
+            prompt=NATIVE_ADMISSION_PROMPT,
+            template=template,
+        )
         if replayed is not None:
             raw, call_id = replayed.raw, replayed.call_id
         else:
@@ -178,7 +163,7 @@ async def run_native_admission_window(
                     "input_sha256": input_hash,
                     "model_call_id": call_id,
                     "raw_sha256": hashlib.sha256(raw).hexdigest(),
-                    "replayed_from_run_id": run.retry_of_run_id if replayed is not None else None,
+                    "replayed_from_run_id": replayed.run_id if replayed is not None else None,
                 }
             ),
         )

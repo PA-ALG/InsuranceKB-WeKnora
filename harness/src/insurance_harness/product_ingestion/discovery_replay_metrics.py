@@ -20,6 +20,8 @@ from insurance_harness.product_ingestion.discovery import (
     PROVENANCE_DISCOVERY_REVIEW_PROMPT,
 )
 from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+from insurance_harness.product_ingestion.native_discovery import NATIVE_DISCOVERY_EXECUTION_PROMPT
 
 if TYPE_CHECKING:
     from insurance_harness.product_ingestion.store import ProductIngestionStore
@@ -40,6 +42,8 @@ def verified_discovery_replay_calls(
                 (
                     "discovery_window_replay_receipt",
                     "discovery_review_proof",
+                    "native_discovery_execution",
+                    "native_admission_execution",
                 )
             ),
         )
@@ -59,7 +63,34 @@ def verified_discovery_replay_calls(
         ancestor_id = ancestor.retry_of_run_id
     calls: dict[str, ProductStageModelCall] = {}
     for marker in markers:
-        if marker.artifact_kind == "discovery_review_proof":
+        if marker.artifact_kind in {"native_discovery_execution", "native_admission_execution"}:
+            _verify_replay_marker(marker, stage_key="discovery")
+            proof = _object(marker.payload)
+            source_run = proof.get("replayed_from_run_id")
+            if source_run is None:
+                continue
+            admission = marker.artifact_kind == "native_admission_execution"
+            prefix = "native-admission" if admission else "native-discovery"
+            if proof.get("contract") != prefix + "-execution-receipt.830.v1":
+                raise ValueError("native replay receipt contract changed")
+            input_sha = proof.get("input_sha256")
+            if not _hash(input_sha) or proof.get("operation_key") != prefix + "-" + input_sha:
+                raise ValueError("native replay operation/input changed")
+            operation = prefix + "-" + input_sha
+            prompt_sha = hashlib.sha256(
+                NATIVE_ADMISSION_PROMPT if admission else NATIVE_DISCOVERY_EXECUTION_PROMPT
+            ).hexdigest()
+            _matching_child_artifact(
+                session,
+                scope,
+                run_id,
+                "native_admission_context" if admission else "native_discovery_context",
+                marker.artifact_key,
+                input_sha,
+            )
+            call_id = proof.get("model_call_id")
+            raw_sha = proof.get("raw_sha256")
+        elif marker.artifact_kind == "discovery_review_proof":
             _verify_payload(marker)
             proof = _object(marker.payload)
             if proof.get("replayed_from_run_id") is None:

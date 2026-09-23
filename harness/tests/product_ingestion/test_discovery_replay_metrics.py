@@ -324,3 +324,75 @@ def test_unrelated_rule_artifact_never_counts_as_replay(
         ).reused_model_call_count
         == 0
     )
+
+
+@pytest.mark.parametrize("producer", ["discovery", "admission"])
+@pytest.mark.parametrize("tamper", [None, "input_sha256", "raw_sha256", "model_call_id"])
+def test_native_replay_counts_only_actual_parent_custody(
+    api: typing.Any,
+    factory: typing.Any,
+    producer: str,
+    tamper: str | None,
+) -> None:
+    from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+    from insurance_harness.product_ingestion.native_discovery import (
+        NATIVE_DISCOVERY_EXECUTION_PROMPT,
+    )
+
+    prefix = "native-" + producer
+    kind = "native_" + producer
+    context = {"native_snapshot_sha256": "d" * 64, "window_id": 0}
+    content = json_bytes(context)
+    raw = json_bytes({"choices": []})
+    operation = prefix + "-" + _digest(content)
+    parent = _record_parent_call(
+        api,
+        factory,
+        stage_key="discovery",
+        operation=operation,
+        context=content,
+        prompt=(
+            NATIVE_ADMISSION_PROMPT
+            if producer == "admission"
+            else NATIVE_DISCOVERY_EXECUTION_PROMPT
+        ),
+        raw=raw,
+        call_id="metrics-native-call",
+    )
+    artifacts, products, jobs, child, running = _child(
+        api,
+        factory,
+        stage_key="discovery",
+        parent_run_id=parent.run_id,
+        run_key="metrics-child-native",
+    )
+    proof = {
+        "contract": prefix + "-execution-receipt.830.v1",
+        "operation_key": operation,
+        "input_sha256": _digest(content),
+        "model_call_id": "metrics-native-call",
+        "raw_sha256": _digest(raw),
+        "replayed_from_run_id": parent.run_id,
+    }
+    if tamper:
+        proof[tamper] = "0" * 64
+    _settle(
+        artifacts,
+        products,
+        jobs,
+        child,
+        running,
+        "discovery",
+        (
+            _rule(kind + "_context", "window", context),
+            _rule(kind + "_execution", "window", proof),
+        ),
+    )
+    if tamper:
+        with pytest.raises(ValueError):
+            artifacts.get_stage_call_metrics(scope=_scope(), run_id=child.run_id)
+    else:
+        metrics = artifacts.get_stage_call_metrics(scope=_scope(), run_id=child.run_id)
+        assert metrics.model_call_count == 0
+        assert metrics.reused_model_call_count == 1
+        assert metrics.reused_usage == {"input_tokens": 7, "output_tokens": 3}

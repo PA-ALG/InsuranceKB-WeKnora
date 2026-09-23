@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, defer
 
 from insurance_harness.jobs import SpaceScopeError
 from insurance_harness.jobs.tables import WikiJob
-from insurance_harness.product_ingestion.artifact_models import ArtifactSnapshot
+from insurance_harness.product_ingestion.artifact_models import ArtifactSnapshot, StageCallSnapshot
 from insurance_harness.product_ingestion.artifact_tables import (
     ProductArtifact,
     ProductStageModelCall,
@@ -46,6 +46,8 @@ class CheckpointArtifacts:
         _products: ProductIngestionStore
 
         def _artifact_snapshot(self, row: ProductArtifact) -> ArtifactSnapshot: ...
+
+        def _call_snapshot(self, row: ProductStageModelCall) -> StageCallSnapshot: ...
 
     def get_rebased_artifact(
         self,
@@ -352,6 +354,41 @@ class CheckpointArtifacts:
             ):
                 raise ValueError("prior checkpoint rebase changed")
             return self._artifact_snapshot(row)
+
+    def read_checkpoint_stage_calls(
+        self, *, scope: ProductScope, run_id: str, stage_key: str,
+    ) -> tuple[StageCallSnapshot, ...]:
+        """Read only ancestor calls explicitly carried by this recovery plan.
+
+        Operation, input and active model policy are checked by the replay
+        adapter before reuse. This read never promotes a partial stage to done.
+        """
+        with self._session_factory() as session, session.begin():
+            plan = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
+            if plan is None:
+                return ()
+            refs = {ref.record_id: ref for ref in (*plan.calls, *plan.audited_calls)
+                    if ref.kind == "stage"}
+            result = []
+            for ref in refs.values():
+                row = session.scalar(select(ProductStageModelCall).where(
+                    ProductStageModelCall.id == ref.record_id
+                ).with_for_update(read=True))
+                self._products._run(session, scope, ref.run_id)
+                if row is None or row.space_id != scope.space_id or any(
+                    getattr(row, key) != getattr(ref, key)
+                    for key in ("run_id", "call_id", "state", "request_sha256", "raw_sha256")
+                ):
+                    raise ValueError("checkpoint stage call identity changed")
+                for key, digest in (("raw", "raw_sha256"), ("request_bytes", "request_sha256")):
+                    raw, expected = getattr(row, key), getattr(row, digest)
+                    if (raw is None) != (expected is None) or (
+                        raw is not None and hashlib.sha256(raw).hexdigest() != expected
+                    ):
+                        raise ValueError("checkpoint stage call bytes changed")
+                if row.stage_key == stage_key:
+                    result.append(self._call_snapshot(row))
+            return tuple(result)
 
     def verify_discarded_stage_calls(
         self, *, scope: ProductScope, run_id: str, stage_keys: Collection[str]

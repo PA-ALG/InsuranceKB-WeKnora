@@ -172,6 +172,26 @@ async def validate_checkpoint(
             )
             if request.catalog != context.catalog or request.resolution_inputs.policy != policy:
                 raise ValueError("Catalog or Schema changed")
+        if any(ref.artifact_kind == "compile_request" for ref in plan.artifacts):
+            from insurance_harness.product_ingestion.native_pipeline import (
+                native_discovery_policy,
+                validate_native_discovery_policy,
+            )
+
+            policies = [r for r in plan.artifacts if r.artifact_kind == "native_discovery_policy"]
+            if len(policies) > 1:
+                raise ValueError("ambiguous native discovery policy")
+            saved_policy = (
+                await asyncio.to_thread(
+                    artifacts.read_checkpoint_artifact, scope=scope, run_id=run.run_id,
+                    artifact_kind="native_discovery_policy",
+                )
+                if policies else None
+            )
+            validate_native_discovery_policy(
+                native_discovery_policy(service.configuration),
+                saved_policy.payload if saved_policy is not None else None,
+            )
         reason = CheckpointFailureReason.REBASE
         drafts: list[ArtifactDraft] = []
         if base_changed or plan.prior_rebase_artifacts:

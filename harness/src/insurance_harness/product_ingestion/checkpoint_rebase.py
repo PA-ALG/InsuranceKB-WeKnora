@@ -73,6 +73,7 @@ def rebase_checkpoint_inputs(
         profile_confirmation_json=profile_confirmation_json,
         corpus=corpus, proposals=proposals, policy=policy,
         resolution=resolution, selected_refs=selected_refs,
+        knowledge_update_policy=old_request.knowledge_update_policy,
     )
     old_ids = set(identity["current_entity_ids"])
     old_bindings = {row.entity_id: row for row in old_request.entity_bindings

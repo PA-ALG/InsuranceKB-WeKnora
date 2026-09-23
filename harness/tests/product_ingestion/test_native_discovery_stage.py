@@ -224,8 +224,10 @@ async def test_native_stage_does_not_resend_unknown_model_attempt(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("ancestor", [False, True])
 async def test_native_stage_revalidates_parent_calls_without_resending(
     native_runtime: tuple[Any, ...],
+    ancestor: bool,
 ) -> None:
     from insurance_harness.product_ingestion.model_execution import ConfiguredModelExecutor
 
@@ -242,7 +244,7 @@ async def test_native_stage_revalidates_parent_calls_without_resending(
         result = model.records[args["operation_key"]]
         records.append(
             SimpleNamespace(
-                run_id="parent",
+                run_id="ancestor" if ancestor else "parent",
                 stage_key="discovery",
                 operation_key=args["operation_key"],
                 input_sha256=args["input_sha256"],
@@ -259,7 +261,8 @@ async def test_native_stage_revalidates_parent_calls_without_resending(
                 call_id=result.call_id,
             )
         )
-    store.list_stage_calls = lambda **kwargs: records
+    store.list_stage_calls = lambda **kwargs: [] if ancestor else records
+    store.read_checkpoint_stage_calls = lambda **kwargs: records if ancestor else []
 
     async def forbidden(**kwargs: Any) -> Any:
         raise AssertionError("recorded parent must not be redispatched")
@@ -272,7 +275,9 @@ async def test_native_stage_revalidates_parent_calls_without_resending(
         for row in outcome.drafts
         if row.artifact_kind == "native_discovery_execution"
     ]
-    assert len(receipts) == 4 and all(row["replayed_from_run_id"] == "parent" for row in receipts)
+    assert len(receipts) == 4 and all(
+        row["replayed_from_run_id"] == ("ancestor" if ancestor else "parent") for row in receipts
+    )
     records[0].state = "interrupted"
     records[0].raw = None
     failed = await collect(native_runtime, retry_of="parent")

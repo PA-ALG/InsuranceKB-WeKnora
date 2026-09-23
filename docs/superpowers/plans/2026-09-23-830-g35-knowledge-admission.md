@@ -1,5 +1,11 @@
 # 830-G3.5 自由发现与知识准入实施计划
 
+## 当前状态：原生任务接线与持久恢复软件验证（2026-09-23）
+
+原生候选模式已接入既有任务主流程，按显式配置校验三个模板，任务/检查点固定策略及更新授权。缺省旧流程保持。发现和准入复用现有StageCall，授权祖先raw跨三代恢复；无关Head可重投影、实际知识上下文改变需新判断。PENDING/实体待解析保留整组围栏，字段独立；来源覆盖与准入状态分开记录。
+
+冻结tree 2a10bcb6bb88a6d2f9071be06a8c51cc837a34a7，两项最终独审0 BLOCKER。最终协调器/准入14PASS5.24s，实际SQLite三代成功调用不重发，重启配置漂移1PASS20.16s，旧worker/checkpoint12PASS141.29s，Ruff/mypy通过；详细RED、测试替身限制及审查见native-pipeline-validation.json。CURRENT=NATIVE_PIPELINE_SOFTWARE_REVIEWED；NEXT_READY=后续必要结构实体/关系、最小依赖组与有界真实纵切。运行配置尚未启用，新增真实模型/构建/部署/发布均0，BUSINESS=NOT RUN，G3.5未完成。
+
 ## 当前状态：原文定位与准入执行软件完成（2026-09-23）
 
 原文定位及逐窗准入执行冻结tree0d3f2b43f7a39095cadc46cdbc5c750651a3ed63，两项独审0 BLOCKER。跨页引用复用source_geometry拆分，并按完整Evidence合并共享片段、同步重映射内容来源索引；正文/生成段不变，缺定位不改标生成。逐窗执行复用StageCall、精确父响应与未知发送阻断，先存raw后准入/几何，失败保留回执，无自动修复调用。
@@ -227,3 +233,21 @@ root写域：internal/config/product_ingestion.go及config.go验证入口/相应
 ## 下一切片：逐窗语义准入执行
 
 沿同一StageCall调用与恢复边界执行native admission，单窗输出仅准入候选，不自行发现或发布。模板必须单独授权g3-native-admission及精确prompt；操作身份绑定序列化完整语义输入，父响应需校验原scope/model/request/prompt/raw，结果未知不重发。模型raw由既有executor先持久，子任务回放记录RULE归属。纯响应投影后运行已复用PDF定位，正式输出及最终审核使用定位后的完整Evidence/来源索引；失败保留context/response/错误审计而不产出可编译输出。root写域新增native_admission_stage.py及test_native_admission_stage.py、计划/OpenSpec129/evidence/HANDOFF；暂不改pipeline、运行配置或远端状态。新生成、已知父响应零新调用、未知父调用阻断与语义失败保留回执先验证。
+
+## 下一切片：任务主流程、配置及持久恢复接线
+
+当前已复用原生候选producer、StageCall collector、语义准入、source_geometry、CompileOutput与v5独立审核；缺口是pipeline仍只调用旧发现。下一步新增显式可省略NativeDiscoverySettings（native-candidates.830.v1、language/granularity/purpose、allow_knowledge_updates），缺省仍旧路线。启用时启动校验三个精确模板native discovery/native admission/provenance review；Go同scope候选模式接口已有503防线。运行配置不在本步修改。
+
+field_plan将本任务的发现策略及实际模型/模板指纹持久为native_discovery_policy（旧模式不生成），并通过现有builder可省略knowledge_update_policy参数在允许时声明已支持的更新合同；默认旧请求字节不变。discovery及compilation核对本任务策略与当前配置，checkpoint验证沿既有依赖边界执行同样核对；配置切换不得使旧任务悄悄执行另一套producer。恢复时不匹配明确阻断，已成功StageCall不删除、不以新配置盲重发；待明确重新规划/新任务后才执行变更策略。checkpoint rebase保留已声明更新策略。
+
+原生stage协调器只读已验证source_snapshots，对当前corpus每份文档执行一次完整原生发现；按实体/资料绑定把签名窗口交给逐窗准入，无候选窗口无需额外模型调用。只编排已有接口，不引入调度器/队列/第二发现。集合组合复用CompileOutput；跨窗source短引用与candidate审计ID加作用域以防串文，正式同id冲突明确pending/failed。任何未绑定资料/窗口失败不伪装完整，成功窗口raw及draft仍保留；首纵切保持现有整组审核，G35-R6最小依赖组随后按已定队列完善。主pipeline产出既有discovery_candidates/delta/summary供唯一编译/审核消费；字段结果保持独立。
+
+持久计数复用verified_discovery_replay_calls：collector补保存真实execution content；native discovery/admission执行回执必须匹配子context哈希、固定提示、真实祖先StageCall的operation/input/raw/状态，不能相信自报call_id。checkpoint仅新增这些已存在artifact的版本声明，不复制来源或模型raw。
+
+本步root独占写域：configuration.py及配置测试；新增native_pipeline.py及对应协调器/接线测试；pipeline.py的field_plan/discovery/compilation窄接缝；compilation.py及batch_concept_compile_830_g3.py仅公开builder可省略update策略及对应回归；checkpoint_validation.py/checkpoint_rebase.py/checkpoints.py必要策略/保留接缝；native_discovery_stage.py仅补execution context留存，discovery_replay_metrics.py及持久测试增加原生回执校验；本计划/OpenSpec129/evidence/HANDOFF。先配置/阶段选择/完整覆盖/持久回放篡改反例，再实现；既有source/field/审核/发布权威不变。部署、真实provider及业务写入仍须核对本Goal已有明确窗口与预算，不由本软件切片推导。
+
+接线设计独审发现三代恢复缺口：native适配器目前仅查直接父run，partial discovery的成功调用仅以checkpoint audited_calls继续传递。采用现有plan.calls/audited_calls授权祖先raw重投影，在checkpoint_artifacts公开只读调用接口并逐条核验引用/作用域/request/raw身份；native适配器复用该集合，不遍历任意历史。纯Go签名计划允许按同source/policy重请求，不重复解析或provider；不新建成功投影缓存/恢复协议/队列。必要写域扩为checkpoint_artifacts.py、native_call_replay.py及对应祖先恢复验证，native_admission_stage.py仅改回放读取/原run回执；checkpoint_store.py如现有授权引用已完整则保持不改。必须覆盖三代恢复及base变更只影响准入的实际依赖，不能把第一代回放测试冒充完整恢复。
+
+恢复验证口径补充：准入调用依赖实际完整语义上下文，而不是无关 Active Head 的 epoch。无关发布导致旧编译输出失效并重新投影，但上下文逐字一致的准入 raw 仍可复用；现有知识正文/版本/Schema 等实际输入变化会改变调用输入身份并重新判断。三代真实 SQLite worker 测试覆盖原生发现与准入 raw 留在第一代，第二代不新增调用，第三代换无关 Head 后仍读取授权祖先记录，重新编译请求保留更新策略。额外验证实际准入上下文变化重新调用。
+
+接线独审修复：原生PENDING/REQUIRES_ENTITY_RESOLUTION纳入现有整组围栏，不能因其它NEW成员通过最终审核而消失；完整集合失败时仍保留逐窗原响应/处置回执。字段独立继续。source coverage只描述原生发现覆盖，完整发现后的准入失败不应把omitted_chars=0与complete=false混成非法状态；native_coverage另记准入是否完整。最小反例覆盖混合NEW+两种pending、准入失败/预检失败及现有API状态投影，不扩R6分组协议。
