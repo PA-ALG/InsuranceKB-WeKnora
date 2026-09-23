@@ -3101,7 +3101,7 @@ func expectedResolutionDecisions830G3(
 		result = append(result, material)
 	}
 	if jointV3 {
-		return associateEvidenceV3_830G3(result, proposals, existing, policy)
+		return associateEvidenceV3_830G3(result, proposals, existing, policy, len(evidenceV2) > 2 && evidenceV2[2])
 	}
 	if len(evidenceV2) > 0 && evidenceV2[0] {
 		result = associateBrochuresV2_830G3(result, proposals)
@@ -3114,7 +3114,7 @@ func validateResolutionReplay830G3(
 ) error {
 	resolution, proposals, existing, policy := typed.Resolution, typed.Proposals, typed.Existing, typed.Policy
 	if resolution.Contract != "batch-entity-resolution.830.g3.v1" ||
-		(resolution.CompilerVersion != "batch-entity-resolution-compiler.830.g3.v1" && resolution.CompilerVersion != evidenceIdentityCompilerV2_830G3 && resolution.CompilerVersion != evidenceIdentityCompilerV3_830G3) ||
+		(resolution.CompilerVersion != "batch-entity-resolution-compiler.830.g3.v1" && resolution.CompilerVersion != evidenceIdentityCompilerV2_830G3 && resolution.CompilerVersion != evidenceIdentityCompilerV3_830G3 && resolution.CompilerVersion != evidenceIdentityCompilerV4_830G3) ||
 		resolution.SpaceID != inputs.Corpus.SpaceID || resolution.CatalogSHA256 != catalog.CatalogSHA256 ||
 		resolution.CorpusSHA256 != inputs.Corpus.CorpusSHA256 || resolution.ProposalsSHA256 != proposals.ProposalsSHA256 ||
 		resolution.ExistingSnapshotSHA256 != existing.SnapshotSHA256 || resolution.PolicySHA256 != policy.PolicySHA256 ||
@@ -3127,7 +3127,7 @@ func validateResolutionReplay830G3(
 	if err != nil {
 		return err
 	}
-	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 {
+	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV4_830G3 {
 		proposals = effectiveEvidenceProposalsV2_830G3(proposals, inputs.Corpus)
 	}
 	proposalByMaterial := map[string]MaterialProposal830G3{}
@@ -3153,14 +3153,14 @@ func validateResolutionReplay830G3(
 	if !sortedUniquePlain830G3(executionHashes) || !reflect.DeepEqual(executionHashes, resolution.ModelExecutionReceiptSHA256s) || resolution.ModelAttemptedCount != len(attempted) {
 		return ErrConceptCandidateBundle830G3
 	}
-	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 {
+	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV4_830G3 {
 		proposals = effectiveEvidenceProposalsV2_830G3(proposals, inputs.Corpus)
 	}
-	expectedDecisions, err := expectedResolutionDecisions830G3(catalog, inputs.Corpus, proposals, existing, policy, resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3, resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3)
+	expectedDecisions, err := expectedResolutionDecisions830G3(catalog, inputs.Corpus, proposals, existing, policy, resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV4_830G3, resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV4_830G3, resolution.CompilerVersion == evidenceIdentityCompilerV4_830G3)
 	if err != nil || !reflect.DeepEqual(expectedDecisions, resolution.Decisions) {
 		return ErrConceptCandidateBundle830G3
 	}
-	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 {
+	if resolution.CompilerVersion == evidenceIdentityCompilerV2_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 || resolution.CompilerVersion == evidenceIdentityCompilerV4_830G3 {
 		counts := DispositionCounts830G3{}
 		for _, decision := range expectedDecisions {
 			switch decision.Disposition {
@@ -3872,7 +3872,7 @@ func validateBindingsAgainstResolution830G3(
 		if !currentBindings[binding.EntityID] {
 			continue
 		}
-		if typed.Resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 {
+		if typed.Resolution.CompilerVersion == evidenceIdentityCompilerV3_830G3 || typed.Resolution.CompilerVersion == evidenceIdentityCompilerV4_830G3 {
 			if err := validateJointBindingSupportV3_830G3(binding, typed.Resolution, proposals); err != nil {
 				return err
 			}

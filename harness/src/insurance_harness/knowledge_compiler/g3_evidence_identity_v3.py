@@ -24,6 +24,41 @@ _ALLOWED = {
 _SUCCESS = {"EXACT_EXISTING_MATCH", "NEW_ENTITY_CANDIDATE"}
 
 
+def _existing_named_version(
+    entity: g.EntityProposalV1,
+    existing: g.ExistingEntitySnapshotV1,
+    policy: g.BatchResolutionPolicyV1,
+) -> g.ExistingEntityV1 | None:
+    """Link observed identity to an immutable existing version, without new evidence."""
+    if entity.issuer is None or entity.name is None or entity.version_label is None:
+        return None
+    matches = [
+        item
+        for item in existing.entities
+        if g._normalized(policy.canonical_issuer(entity.issuer, existing.space_id))
+        == g._normalized(policy.canonical_issuer(item.issuer, existing.space_id))
+        and g._normalized(entity.name)
+        in {g._normalized(item.name), *(g._normalized(a.value) for a in item.approved_aliases)}
+        and g._normalized(entity.version_label) == g._normalized(item.version_label)
+    ]
+    # Supplied optional anchors may reject the unique named version; they must
+    # not silently select one of several products with the same name and year.
+    if len(matches) != 1:
+        return None
+    target = matches[0]
+    if entity.product_code is not None and g._normalized(entity.product_code) != g._normalized(
+        target.product_code
+    ):
+        return None
+    filing = entity.filing_or_registration
+    if filing is not None and (
+        filing.kind != target.filing_or_registration.kind
+        or g._normalized(filing.value) != g._normalized(target.filing_or_registration.value)
+    ):
+        return None
+    return target
+
+
 def _child(
     child: g.EntityDecisionV1,
     policy: g.BatchResolutionPolicyV1,
@@ -92,6 +127,8 @@ def associate_material_groups(
     corpus: g.BatchCorpusV1,
     existing: g.ExistingEntitySnapshotV1,
     policy: g.BatchResolutionPolicyV1,
+    *,
+    allow_existing_named_version: bool = False,
 ) -> tuple[g.MaterialDecisionV1, ...]:
     parents = {p.material_id: p for p in decisions}
     entries = {e.material_id: e for e in corpus.entries}
@@ -147,6 +184,48 @@ def associate_material_groups(
                     reason_codes=tuple(
                         sorted((set(child.reason_codes) - _SUCCESS) | {"AMBIGUOUS_IDENTITY"})
                     ),
+                )
+                parents[proposal.material_id] = g._material_decision(
+                    entry=entries[proposal.material_id],
+                    proposal=proposal,
+                    children=(changed,),
+                    policy=policy,
+                    reasons=set(),
+                )
+            continue
+        # The carrier only combines independently verified claims. Existing
+        # version anchors remain snapshot facts, never claims in the source PDF.
+        entity = rows[0][2].model_copy(
+            update={
+                **{key: values[0] if values else None for key, values in string_values.items()},
+                "filing_or_registration": anchor_values[0] if anchor_values else None,
+            }
+        )
+        target = _existing_named_version(entity, existing, policy)
+        if (
+            allow_existing_named_version
+            and target is not None
+            and (entity.product_code is None or entity.filing_or_registration is None)
+        ):
+            linked = entity.model_copy(
+                update={
+                    "issuer": policy.canonical_issuer(target.issuer, corpus.space_id),
+                    "name": target.name,
+                    "product_code": target.product_code,
+                    "version_label": target.version_label,
+                    "filing_or_registration": target.filing_or_registration,
+                }
+            )
+            for proposal, child, _ in rows:
+                changed = _child(
+                    child,
+                    policy,
+                    disposition="MATCH",
+                    matched_entity_id=target.entity_id,
+                    matched_entity_version=target.entity_version,
+                    entity_candidate=None,
+                    anchors=g._anchors(linked),
+                    reason_codes=("EXACT_EXISTING_MATCH",),
                 )
                 parents[proposal.material_id] = g._material_decision(
                     entry=entries[proposal.material_id],
@@ -256,6 +335,11 @@ def require_complete_support(
         }
         if not required <= selected:
             raise ValueError("RESOLUTION_IDENTITY_SOURCE_REQUIRED")
+
+        if resolution.compiler_version == g.COMPILER_VERSION_V4 and child.disposition == "MATCH":
+            # The replayed decision binds the existing snapshot/version. Its
+            # original terms need not be resubmitted with every new brochure.
+            continue
 
         by_material = {p.material_id: p for p in proposals.proposals}
         if not any(

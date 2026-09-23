@@ -239,3 +239,124 @@ def test_source_revision_tampering_blocks_joint_group(catalog: SchemaPackCatalog
     result = g.resolve_batch(catalog=catalog, **args, compiler_version=V3)
     assert result.decisions[0].disposition == "QUARANTINE"
     assert all(row.disposition not in {"CREATE", "MATCH"} for row in result.decisions)
+
+
+def existing_brochure_fixture(**claims: object) -> ResolutionArgs:
+    entry = _entry(
+        material_id="brochure",
+        text="平安保险 平安测试医疗保险 2026 官方条款 "
+        + " ".join(str(v) for v in claims.values() if v is not None),
+    )
+    corpus = _corpus(entry)
+    receipt = _model_binding(corpus, entry)
+    proposal = _material_proposal(
+        entry,
+        receipt,
+        role="brochure",
+        entities=(
+            {
+                "proposal_ref": "product",
+                "issuer": "平安保险",
+                "name": "平安测试医疗保险",
+                "version_label": "2026",
+                "product_code": None,
+                "filing": None,
+                **claims,
+            },
+        ),
+    )
+    target = g.ExistingEntityV1(
+        entity_id="existing-product",
+        entity_version="existing-product@2026",
+        product_id=None,
+        product_version_id=None,
+        issuer="平安保险",
+        name="平安测试医疗保险",
+        product_code="MED1",
+        version_label="2026",
+        filing_or_registration=g.VersionAnchorV1(kind="registration_number", value="REG1"),
+        approved_aliases=(),
+        identity_evidence_sha256s=("e" * 64,),
+    )
+    return dict(
+        corpus=corpus,
+        proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+        existing_entities=_existing(target),
+        policy=joint_fixture()["policy"],
+    )
+
+
+@pytest.mark.parametrize("claims", [{}, {"product_code": "MED1"}, {"filing": "REG1"}])
+def test_existing_brochure_matches_and_compiles_without_reuploading_terms(
+    catalog: SchemaPackCatalogV1, claims: dict[str, object]
+) -> None:  # noqa: F811
+    args = existing_brochure_fixture(**claims)
+    before = args["proposals"].model_dump_json()
+    old = g.resolve_batch(catalog=catalog, **args, compiler_version=V3)
+    assert old.decisions[0].disposition == "NEEDS_CONFIRM"
+    result = g.resolve_batch(catalog=catalog, **args, compiler_version=g.COMPILER_VERSION_V4)
+    assert result.decisions[0].disposition == "MATCH"
+    child = result.decisions[0].children[0]
+    assert child.matched_entity_version == "existing-product@2026"
+    assert child.anchors.product_code.observed_value == "MED1"
+    bindings = _build_entity_bindings(
+        catalog=catalog,
+        proposals=args["proposals"],
+        resolution=result,
+        selected_decision_refs=(("brochure", "product"),),
+    )
+    assert len(bindings) == 1
+    if "product_code" not in claims:
+        assert all(e.purpose != "product_code" for e in bindings[0].resolution_evidence)
+        assert "MED1" not in args["corpus"].entries[0].blocks[0].text
+    if "filing" not in claims:
+        assert all("REG1" not in e.evidence.quote for e in bindings[0].resolution_evidence)
+    assert args["proposals"].model_dump_json() == before
+
+
+@pytest.mark.parametrize(
+    "claims",
+    [
+        {"issuer": None},
+        {"version_label": None},
+        {"version_label": "2027"},
+        {"issuer": "OTHER"},
+        {"product_code": "OTHER"},
+        {"filing": "OTHER"},
+    ],
+)
+def test_existing_brochure_does_not_hide_missing_or_conflicting_claims(
+    catalog: SchemaPackCatalogV1, claims: dict[str, object]
+) -> None:  # noqa: F811
+    result = g.resolve_batch(
+        catalog=catalog,
+        **existing_brochure_fixture(**claims),
+        compiler_version=g.COMPILER_VERSION_V4,
+    )
+    assert result.decisions[0].disposition not in {"MATCH", "CREATE"}
+
+
+@pytest.mark.parametrize("purpose", ["issuer", "name", "version"])
+def test_existing_brochure_requires_own_identity_evidence(
+    catalog: SchemaPackCatalogV1, purpose: str
+) -> None:  # noqa: F811
+    args = revise(existing_brochure_fixture(), "brochure", drop_purpose=purpose)
+    result = g.resolve_batch(catalog=catalog, **args, compiler_version=g.COMPILER_VERSION_V4)
+    assert result.decisions[0].disposition not in {"MATCH", "CREATE"}
+
+
+def test_existing_brochure_cannot_choose_between_duplicate_name_year(
+    catalog: SchemaPackCatalogV1,
+) -> None:  # noqa: F811
+    args = existing_brochure_fixture()
+    target = args["existing_entities"].entities[0]
+    duplicate = target.model_copy(
+        update={
+            "entity_id": "other-product",
+            "entity_version": "other-product@2026",
+            "product_code": "MED2",
+        }
+    )
+    args["existing_entities"] = _existing(target, duplicate)
+    result = g.resolve_batch(catalog=catalog, **args, compiler_version=g.COMPILER_VERSION_V4)
+    assert result.decisions[0].disposition not in {"MATCH", "CREATE"}

@@ -868,7 +868,10 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         if published_bindings and current_refs != set(refs):
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
         current_entities.add(binding.entity_id)
-        if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v3":
+        if resolution.compiler_version in (
+            "batch-entity-resolution-compiler.830.g3.v3",
+            "batch-entity-resolution-compiler.830.g3.v4",
+        ):
             from .g3_evidence_identity_v3 import require_complete_support
 
             require_complete_support(resolution, refs, inputs.proposals)
@@ -1176,7 +1179,10 @@ def _build_entity_bindings(
 ) -> tuple[EntityCompileBinding830G3V1, ...]:
     if selected_decision_refs != tuple(sorted(set(selected_decision_refs))):
         raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
-    if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v3":
+    if resolution.compiler_version in (
+        "batch-entity-resolution-compiler.830.g3.v3",
+        "batch-entity-resolution-compiler.830.g3.v4",
+    ):
         from .g3_evidence_identity_v3 import require_complete_support
 
         require_complete_support(resolution, selected_decision_refs, proposals)
@@ -1215,6 +1221,7 @@ def _build_entity_bindings(
                     not in (
                         "batch-entity-resolution-compiler.830.g3.v2",
                         "batch-entity-resolution-compiler.830.g3.v3",
+                        "batch-entity-resolution-compiler.830.g3.v4",
                     )
                     or (
                         row[3].classification.primary_label,

@@ -206,3 +206,26 @@ func TestEvidenceIdentityV3JointExistingTarget830G3(t *testing.T) {
 		})
 	}
 }
+
+func TestExistingBrochureIdentityPythonReplay830G3(t *testing.T) {
+	path := "testdata/concept_identity_existing_brochure_830_g3_vector.json"
+	if diagnostic := os.Getenv("G35_IDENTITY_REPLAY_VECTOR"); diagnostic != "" {
+		path = diagnostic
+	}
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var wire struct {
+		Catalog    SchemaPackCatalog830G3      `json:"catalog"`
+		Inputs     BatchResolutionInputs830G3  `json:"inputs"`
+		Resolution json.RawMessage             `json:"resolution"`
+		Bindings   []EntityCompileBinding830G3 `json:"bindings"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &wire))
+	typed, err := decodeResolutionInputs830G3(wire.Inputs, wire.Resolution)
+	require.NoError(t, err)
+	require.NoError(t, validateResolutionReplay830G3(wire.Catalog, wire.Inputs, typed))
+	require.Equal(t, "MATCH", typed.Resolution.Decisions[0].Disposition)
+	require.NoError(t, validateBindingsAgainstResolution830G3(BatchConceptCompileRequest830G3{EntityBindings: wire.Bindings}, typed))
+	require.Nil(t, typed.Proposals.Proposals[0].Entities[0].ProductCode)
+	require.Nil(t, typed.Proposals.Proposals[0].Entities[0].FilingOrRegistration)
+}

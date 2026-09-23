@@ -577,8 +577,9 @@ class CheckpointStore:
         if (
             retry_calls
             and session.scalar(
-                select(ProductStage.id).where(
-                    ProductStage.run_id == origin.id, ProductStage.stage_key == "identity"
+                select(ProductStageModelCall.id).where(
+                    ProductStageModelCall.run_id == origin.id,
+                    ProductStageModelCall.stage_key == "identity",
                 )
             )
             is None

@@ -6,6 +6,37 @@ import (
 )
 
 const evidenceIdentityCompilerV3_830G3 = "batch-entity-resolution-compiler.830.g3.v3"
+const evidenceIdentityCompilerV4_830G3 = "batch-entity-resolution-compiler.830.g3.v4"
+
+func existingNamedVersion830G3(entity EntityProposal830G3, existing ExistingEntitySnapshot830G3, policy BatchResolutionPolicy830G3) *ExistingEntity830G3 {
+	if entity.Issuer == nil || entity.Name == nil || entity.VersionLabel == nil {
+		return nil
+	}
+	matches := []ExistingEntity830G3{}
+	for _, item := range existing.Entities {
+		if normalizedIdentity830G3(policy.canonicalIssuer(*entity.Issuer, existing.SpaceID)) != normalizedIdentity830G3(policy.canonicalIssuer(item.Issuer, existing.SpaceID)) || normalizedIdentity830G3(*entity.VersionLabel) != normalizedIdentity830G3(item.VersionLabel) {
+			continue
+		}
+		nameMatches := normalizedIdentity830G3(*entity.Name) == normalizedIdentity830G3(item.Name)
+		for _, alias := range item.ApprovedAliases {
+			nameMatches = nameMatches || normalizedIdentity830G3(*entity.Name) == normalizedIdentity830G3(alias.Value)
+		}
+		if nameMatches {
+			matches = append(matches, item)
+		}
+	}
+	if len(matches) != 1 {
+		return nil
+	}
+	target := matches[0]
+	if entity.ProductCode != nil && normalizedIdentity830G3(*entity.ProductCode) != normalizedIdentity830G3(target.ProductCode) {
+		return nil
+	}
+	if anchor := entity.FilingOrRegistration; anchor != nil && (anchor.Kind != target.FilingOrRegistration.Kind || normalizedIdentity830G3(anchor.Value) != normalizedIdentity830G3(target.FilingOrRegistration.Value)) {
+		return nil
+	}
+	return &target
+}
 
 type jointIdentityRowV3_830G3 struct {
 	parent   int
@@ -16,7 +47,7 @@ type jointIdentityRowV3_830G3 struct {
 
 // Only a derived decision receives the joint anchors. Original proposals and
 // evidence keep their own material, revision and locator throughout replay.
-func associateEvidenceV3_830G3(decisions []MaterialDecision830G3, proposals ProposalBatch830G3, existing ExistingEntitySnapshot830G3, policy BatchResolutionPolicy830G3) ([]MaterialDecision830G3, error) {
+func associateEvidenceV3_830G3(decisions []MaterialDecision830G3, proposals ProposalBatch830G3, existing ExistingEntitySnapshot830G3, policy BatchResolutionPolicy830G3, allowExistingNamedVersion bool) ([]MaterialDecision830G3, error) {
 	byMaterial := map[string]MaterialProposal830G3{}
 	for _, proposal := range proposals.Proposals {
 		byMaterial[proposal.MaterialID] = proposal
@@ -113,6 +144,23 @@ func associateEvidenceV3_830G3(decisions []MaterialDecision830G3, proposals Prop
 				result[row.parent] = jointParentV3_830G3(decisions[row.parent], child, policy)
 			}
 			continue
+		}
+		if allowExistingNamedVersion && (merged.ProductCode == nil || merged.FilingOrRegistration == nil) {
+			if target := existingNamedVersion830G3(merged, existing, policy); target != nil {
+				issuer := policy.canonicalIssuer(target.Issuer, existing.SpaceID)
+				merged.Issuer, merged.Name, merged.ProductCode, merged.VersionLabel, merged.FilingOrRegistration = &issuer, &target.Name, &target.ProductCode, &target.VersionLabel, &target.FilingOrRegistration
+				for _, row := range group {
+					child := decisions[row.parent].Children[row.child]
+					child.Disposition = "MATCH"
+					child.MatchedEntityID, child.MatchedEntityVersion = &target.EntityID, &target.EntityVersion
+					child.EntityCandidate, child.QueueID, child.QueueOwner = nil, nil, nil
+					child.Anchors = expectedAnchors830G3(merged)
+					child.ReasonCodes = []string{"EXACT_EXISTING_MATCH"}
+					child.DecisionSHA256, _ = batchConceptHashWithout830G3("entity-decision.830.g3.v1", child, "decision_sha256")
+					result[row.parent] = jointParentV3_830G3(decisions[row.parent], child, policy)
+				}
+				continue
+			}
 		}
 		if merged.Issuer == nil || merged.ProductCode == nil || merged.VersionLabel == nil || merged.FilingOrRegistration == nil {
 			continue
@@ -222,7 +270,7 @@ func validateJointBindingSupportV3_830G3(binding EntityCompileBinding830G3, reso
 			}
 		}
 	}
-	if !termsSupport {
+	if !termsSupport && !(resolution.CompilerVersion == evidenceIdentityCompilerV4_830G3 && target.Disposition == "MATCH") {
 		return ErrConceptCandidateBundle830G3
 	}
 	return nil

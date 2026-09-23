@@ -254,3 +254,7 @@ G3增量输入MUST复用G2既有update处置：仅已存在的同类型稳定身
 显式更新策略的Candidate MUST在Python/Go准入边界重验所有新建/变化自由知识的评分覆盖：每项>=60、60—79恰好进入pending，显式update（含只改别名）必须参与；>=80仍保留既有整批发布授权。实际bounded模型display context必须反映同一output_mode，旧请求不新增空扩展键。不能仅依赖正常runner曾调用审核来代替边界校验。
 
 G35-R3来源一致性：含MODEL_GENERATED的定义必须origin=MODEL_COMPILE；含生成片段的CompileOutput必须transformation=SYNTHESIZE。主正文及相关知识预览使用同一片段展示。仅新来源合同的citation增加可省略evidence_index，绑定完整Evidence派生的citation_id；排序位置和quote不得代替身份。G2仅新合同自由页采用完整renderer，旧对象正文/hash保持。
+
+#### Requirement: G35-R1 已有产品唯一身份关联（2026-09-23 用户澄清）
+
+已有产品的材料 MUST 可以凭原文支持的公司、完整正式名称（或已批准别名）和明确年款唯一关联其已有版本；说明书未给出编码/备案不构成实际歧义。明确提供的编码/备案与目标冲突、多个候选或证据不足 MUST 阻断。MATCH 的派生anchors MAY消费绑定的ExistingEntitySnapshot，原proposal和证据归属 MUST 不变，不能补造本次材料引用。编译及Go发布重放 MUST 核对相同关联与已有版本身份，不要求每次重复上传原条款；CREATE及来源真实性/信任/置信度门禁保持。成功模型记录按既有依赖验证复用。

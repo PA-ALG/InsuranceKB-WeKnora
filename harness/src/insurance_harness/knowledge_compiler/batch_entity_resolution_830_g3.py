@@ -94,6 +94,7 @@ _AUTO_REQUIREMENTS = (
 _COMPILER_VERSION = "batch-entity-resolution-compiler.830.g3.v1"
 COMPILER_VERSION_V2 = "batch-entity-resolution-compiler.830.g3.v2"
 COMPILER_VERSION_V3 = "batch-entity-resolution-compiler.830.g3.v3"
+COMPILER_VERSION_V4 = "batch-entity-resolution-compiler.830.g3.v4"
 _MODEL_PURPOSE = "g3-batch-resolution"
 _MODEL_RUN_SCHEMA_VERSION = "830-g3-v1"
 _MODEL_ROLE = "classify"
@@ -978,7 +979,12 @@ class BatchEntityResolutionV1(_FrozenModel):
         expected_counts = {name: counts[name] for name in names}
         if (
             self.compiler_version
-            not in (_COMPILER_VERSION, COMPILER_VERSION_V2, COMPILER_VERSION_V3)
+            not in (
+                _COMPILER_VERSION,
+                COMPILER_VERSION_V2,
+                COMPILER_VERSION_V3,
+                COMPILER_VERSION_V4,
+            )
             or tuple(self.model_execution_receipt_sha256s)
             != tuple(sorted(set(self.model_execution_receipt_sha256s)))
             or not _sorted_unique(self.decisions, lambda item: item.material_id)
@@ -1928,7 +1934,12 @@ def resolve_batch(
     """Resolve an already captured batch without IO or serving side effects."""
 
     try:
-        if compiler_version not in (_COMPILER_VERSION, COMPILER_VERSION_V2, COMPILER_VERSION_V3):
+        if compiler_version not in (
+            _COMPILER_VERSION,
+            COMPILER_VERSION_V2,
+            COMPILER_VERSION_V3,
+            COMPILER_VERSION_V4,
+        ):
             raise BatchEntityResolutionError("INPUT_CONTRACT_INVALID")
         if type(corpus) is not BatchCorpusV1 or type(proposals) is not ProposalBatchV1:
             raise BatchEntityResolutionError("INPUT_CONTRACT_INVALID")
@@ -1943,7 +1954,7 @@ def resolve_batch(
         exact_proposals = _exact(proposals, ProposalBatchV1)
         exact_existing = _exact(existing_entities, ExistingEntitySnapshotV1)
         exact_policy = _exact(policy, BatchResolutionPolicyV1)
-        if compiler_version in (COMPILER_VERSION_V2, COMPILER_VERSION_V3):
+        if compiler_version in (COMPILER_VERSION_V2, COMPILER_VERSION_V3, COMPILER_VERSION_V4):
             exact_proposals = effective_evidence_proposals_v2(exact_proposals, exact_corpus)
         source_keys = tuple(
             _receipt_source_key(entry.receipt, exact_corpus) for entry in exact_corpus.entries
@@ -2223,11 +2234,16 @@ def resolve_batch(
             from .g3_evidence_identity_v2 import associate_brochures
 
             ordered = associate_brochures(ordered, exact_proposals)
-        if compiler_version == COMPILER_VERSION_V3:
+        if compiler_version in (COMPILER_VERSION_V3, COMPILER_VERSION_V4):
             from .g3_evidence_identity_v3 import associate_material_groups
 
             ordered = associate_material_groups(
-                ordered, exact_proposals, exact_corpus, exact_existing, exact_policy
+                ordered,
+                exact_proposals,
+                exact_corpus,
+                exact_existing,
+                exact_policy,
+                allow_existing_named_version=compiler_version == COMPILER_VERSION_V4,
             )
         counts = Counter(item.disposition for item in ordered)
         valid_execution_hashes = tuple(

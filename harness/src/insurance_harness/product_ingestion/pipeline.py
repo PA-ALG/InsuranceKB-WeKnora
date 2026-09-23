@@ -368,11 +368,12 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
         model_origin = ArtifactOrigin.RULE
         adaptation_audit = None
         recovery_plan = store.processing_recovery_plan(scope=scope, run_id=run.run_id)
+        checkpoint_plan = store.checkpoint_plan(scope=scope, run_id=run.run_id)
         retry_origin_run_id = run.retry_of_run_id
         field_retry = (
             retry_origin_run_id is not None
             and recovery_plan is None
-            and store.checkpoint_plan(scope=scope, run_id=run.run_id) is None
+            and checkpoint_plan is None
         )
         if field_retry:
             assert retry_origin_run_id is not None
@@ -412,7 +413,7 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
             content = json_bytes(prompt_context)
             replay_identity = (
                 recovery_plan is not None and recovery_plan.mode == "REPLAY_RECORDED_IDENTITY"
-            )
+            ) or bool(checkpoint_plan is not None and checkpoint_plan.retry_calls)
             execute_identity = (
                 service.model_executor.replay_stage_call
                 if replay_identity
@@ -512,7 +513,7 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
             compiler_version=(
                 previous["resolution"]["compiler_version"]
                 if field_retry
-                else resolver.COMPILER_VERSION_V3
+                else resolver.COMPILER_VERSION_V4
             ),
         )
         rejected = [

@@ -212,7 +212,10 @@ def test_failed_checkpoint_retains_single_recorded_retry_reference(
 
 
 @pytest.mark.asyncio
-async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path: Path) -> None:
+@pytest.mark.parametrize("recoverable", [False, True])
+async def test_real_worker_replays_identity_without_paid_resampling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recoverable: bool
+) -> None:
     from insurance_harness.db.base import Base, make_session_factory
     from insurance_harness.jobs import JobStore
     from insurance_harness.product_ingestion.models import ProductRunState
@@ -233,13 +236,26 @@ async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path
 
         def _identity(self, content: dict[str, typing.Any]) -> dict[str, typing.Any]:
             output = super()._identity(content)
-            if self.bad_identity:
+            if self.bad_identity and not recoverable:
                 for material in output["materials"]:
                     for entity in material["entities"]:
-                        entity["version_label"] = None
+                        if not recoverable:
+                            entity["version_label"] = None
                         entity["filing_or_registration"] = None
                         entity["product_code"] = None
             return output
+
+    from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as resolver
+
+    resolve = resolver.resolve_batch
+    if recoverable:
+
+        def old_resolve(**kwargs: typing.Any) -> typing.Any:
+            from insurance_harness.product_ingestion.store import needs_confirmation_error
+
+            raise needs_confirmation_error("PRODUCT_IDENTITY_UNRESOLVED:IDENTITY_EVIDENCE_MISSING")
+
+        monkeypatch.setattr(resolver, "resolve_batch", old_resolve)
 
     base, parent = _base_snapshot_with_navigation()
     settings = _settings(tmp_path, parent)
@@ -261,25 +277,44 @@ async def test_real_worker_retries_identity_once_and_reuses_all_sources(tmp_path
         captures = platform.source_captures
         before = context.artifacts.list_stage_calls(scope=SCOPE, run_id=origin.run_id)
         model.bad_identity = False
+        monkeypatch.setattr(resolver, "resolve_batch", resolve)
         child = context.store.retry_processing(
             scope=SCOPE, run_id=origin.run_id, expected_version=failed.version
         )
         final = await _finish(runtime, context, jobs, child.run_id)
-        assert final.state is ProductRunState.PARTIAL_SUCCESS, final.terminal_reason
-        assert len(model.identity_requests) == 2 and platform.source_captures == captures
-        assert model.discovery_requests
-        assert any(
-            stage.stage_key == "discovery" and stage.state == "succeeded"
-            for stage in context.store.list_stages(scope=SCOPE, run_id=child.run_id)
-        )
-        assert platform.activations == 1
+        assert len(model.identity_requests) == 1 and platform.source_captures == captures
+        if recoverable:
+            assert final.state is ProductRunState.PARTIAL_SUCCESS, final.terminal_reason
+            assert model.discovery_requests and platform.activations == 1
+        else:
+            assert final.state is ProductRunState.NEEDS_CONFIRMATION, final.terminal_reason
+            assert final.terminal_reason.startswith("PRODUCT_IDENTITY_UNRESOLVED:")
+            assert not model.discovery_requests and platform.activations == 0
         assert context.artifacts.list_stage_calls(scope=SCOPE, run_id=origin.run_id) == before
         assert context.store.get_run(scope=SCOPE, run_id=origin.run_id) == failed
         receipt = context.store.checkpoint_receipt(scope=SCOPE, run_id=child.run_id)
         assert not receipt.reused_call_ids and len(receipt.retry_calls) == 1
-        new = context.artifacts.list_stage_calls(scope=SCOPE, run_id=child.run_id)
-        identity = [call for call in new if call.stage_key == "identity"]
-        assert len(identity) == 1 and identity[0].call_id != before[0].call_id
+        assert not [
+            call
+            for call in context.artifacts.list_stage_calls(scope=SCOPE, run_id=child.run_id)
+            if call.stage_key == "identity"
+        ]
+        metrics = context.artifacts.get_stage_call_metrics(scope=SCOPE, run_id=child.run_id)
+        assert metrics.reused_model_call_count == 1
+        if not recoverable:
+            assert metrics.model_call_count == 0
+        assert metrics.reused_usage == before[0].usage
+        if not recoverable:
+            grandchild = context.store.retry_processing(
+                scope=SCOPE, run_id=child.run_id, expected_version=final.version
+            )
+            assert (
+                context.store.checkpoint_plan(scope=SCOPE, run_id=grandchild.run_id).retry_calls
+                == receipt.retry_calls
+            )
+            again = await _finish(runtime, context, jobs, grandchild.run_id)
+            assert again.state is ProductRunState.NEEDS_CONFIRMATION
+            assert len(model.identity_requests) == 1
     finally:
         await runtime.close()
         await model_client.aclose()

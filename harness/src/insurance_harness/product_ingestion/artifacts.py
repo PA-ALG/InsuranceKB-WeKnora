@@ -42,6 +42,7 @@ from insurance_harness.product_ingestion.models import ProductScope
 from insurance_harness.product_ingestion.processing_receipts import Receipt
 from insurance_harness.product_ingestion.recovery import (
     RecordedIdentityRecoveryPlan,
+    RecordedIdentityReference,
     material_references,
     recorded_identity_reference,
 )
@@ -614,15 +615,29 @@ class ProductArtifactStore(CheckpointArtifacts):
                 + (checkpoint.unsettled_call_count if checkpoint else 0),
             )
 
+    def _identity_replay_authority(
+        self,
+        session: Session,
+        scope: ProductScope,
+        run_id: str,
+    ) -> tuple[str, RecordedIdentityReference]:
+        """Resolve the existing recovery authorities to one immutable call proof."""
+        plan = self._products.processing_recovery_plan(scope=scope, run_id=run_id, session=session)
+        if isinstance(plan, RecordedIdentityRecoveryPlan):
+            return plan.digest(), plan.identity_call
+        checkpoint = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
+        receipt = self._products.checkpoint_receipt(scope=scope, run_id=run_id, session=session)
+        if checkpoint is None or receipt is None or len(checkpoint.retry_calls) != 1:
+            raise ValueError("recorded identity recovery plan required")
+        return checkpoint.digest(), checkpoint.retry_calls[0].proof
+
     def _identity_replay_metrics_call(
         self, session: Session, scope: ProductScope, run_id: str
     ) -> ProductStageModelCall:
         """Read recorded accounting provenance, never an execution authorization proof."""
-        plan = self._products.processing_recovery_plan(scope=scope, run_id=run_id, session=session)
-        if not isinstance(plan, RecordedIdentityRecoveryPlan):
-            raise ValueError("recorded identity recovery plan required")
-        call = self._call(session, scope, plan.identity_call.call_id)
-        if recorded_identity_reference(call) != plan.identity_call:
+        plan_digest, proof = self._identity_replay_authority(session, scope, run_id)
+        call = self._call(session, scope, proof.call_id)
+        if recorded_identity_reference(call) != proof:
             raise ValueError("recorded identity replay provenance changed")
         marker = session.scalar(
             select(ProductArtifact).where(
@@ -637,8 +652,8 @@ class ProductArtifactStore(CheckpointArtifacts):
             "run_id": run_id,
             "origin_run_id": call.run_id,
             "origin_call_id": call.call_id,
-            "recovery_plan_sha256": plan.digest(),
-            "identity_call": plan.identity_call.model_dump(mode="json"),
+            "recovery_plan_sha256": plan_digest,
+            "identity_call": proof.model_dump(mode="json"),
             "new_dispatch_count": 0,
         }
         if (
@@ -663,7 +678,18 @@ class ProductArtifactStore(CheckpointArtifacts):
             scope=scope, run_id=run_id, session=session, read_lock=read_lock
         )
         if not isinstance(plan, RecordedIdentityRecoveryPlan):
-            raise ValueError("recorded identity recovery plan required")
+            _, proof = self._identity_replay_authority(session, scope, run_id)
+            checkpoint = self._products.checkpoint_plan(scope=scope, run_id=run_id, session=session)
+            assert checkpoint is not None
+            ref = checkpoint.retry_calls[0]
+            if (
+                self._products._identity_retry_reference(
+                    session, scope, ref.record_id, read_lock=read_lock
+                )
+                != ref
+            ):
+                raise ValueError("checkpoint retry identity proof changed")
+            return self._call(session, scope, proof.call_id, read_lock=read_lock)
         origin = self._products._run_snapshot(
             session, self._products._run(session, scope, plan.origin_run_id), scope
         )
@@ -736,11 +762,7 @@ class ProductArtifactStore(CheckpointArtifacts):
             run = self._products._run(session, scope, run_id)
             self._products._ensure_unfinished(session, run)
             call = self._identity_replay_call(session, scope, run_id, read_lock=True)
-            plan = self._products.processing_recovery_plan(
-                scope=scope, run_id=run_id, session=session, read_lock=True
-            )
-            if not isinstance(plan, RecordedIdentityRecoveryPlan):
-                raise ValueError("recorded identity recovery plan required")
+            plan_digest, proof = self._identity_replay_authority(session, scope, run_id)
             job = self._products._active_job(session, scope, job_id, generation)
             self._require_job_binding(job.payload, run_id=run_id, stage_key="identity")
             stage = session.scalar(
@@ -757,8 +779,8 @@ class ProductArtifactStore(CheckpointArtifacts):
                     "run_id": run_id,
                     "origin_run_id": call.run_id,
                     "origin_call_id": call.call_id,
-                    "recovery_plan_sha256": plan.digest(),
-                    "identity_call": plan.identity_call.model_dump(mode="json"),
+                    "recovery_plan_sha256": plan_digest,
+                    "identity_call": proof.model_dump(mode="json"),
                     "new_dispatch_count": 0,
                 },
                 sort_keys=True,
