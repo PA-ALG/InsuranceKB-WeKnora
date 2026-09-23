@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Tencent/WeKnora/internal/agent"
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/models/chat"
 	"github.com/Tencent/WeKnora/internal/searchutil"
@@ -321,6 +322,7 @@ type WikiPendingOp struct {
 // both of which are correctness-critical short-lived flags rather
 // than data the system should survive without.
 type wikiIngestService struct {
+	config         *config.Config
 	wikiService    interfaces.WikiPageService
 	kbService      interfaces.KnowledgeBaseService
 	knowledgeSvc   interfaces.KnowledgeService
@@ -361,6 +363,7 @@ type wikiPromptWarmup struct {
 
 // NewWikiIngestService creates a new wiki ingest service
 func NewWikiIngestService(
+	cfg *config.Config,
 	wikiService interfaces.WikiPageService,
 	kbService interfaces.KnowledgeBaseService,
 	knowledgeSvc interfaces.KnowledgeService,
@@ -375,6 +378,7 @@ func NewWikiIngestService(
 	spanTracker SpanTracker,
 ) interfaces.TaskHandler {
 	svc := &wikiIngestService{
+		config:         cfg,
 		wikiService:    wikiService,
 		kbService:      kbService,
 		knowledgeSvc:   knowledgeSvc,

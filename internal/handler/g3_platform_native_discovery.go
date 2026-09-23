@@ -25,6 +25,10 @@ func (h *G3PlatformSnapshotsHandler) NativeDiscovery(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if !h.nativeConfig.NativeCandidateScopeEnabled(scope.TenantID, scope.SpaceID, scope.RawKBID, scope.WikiKBID) {
+		writeG3PlatformSnapshotError(c, errG3PlatformSnapshotServiceUnavailable)
+		return
+	}
 	knowledgeID := c.Param("knowledge_id")
 	attempt, err := strconv.ParseInt(c.Param("attempt"), 10, 64)
 	if err != nil || attempt <= 0 || !validG3PlatformPathID(knowledgeID) {

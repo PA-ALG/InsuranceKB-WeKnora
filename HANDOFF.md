@@ -1,3 +1,9 @@
+# 当前状态（2026-09-23 · 显式原生候选模式互斥软件完成）
+
+Go互斥冻结tree81b75d36c0dee4db78989ba4dd5d2df113b0725a，独审0 BLOCKER；新策略显式绑定完整产品scope，native候选API未配置时503，postprocess不计/不排旧Wiki任务，旧worker及启动恢复被拦截且durable rows保留，无第二Active或队列。config/service/container/handler/router五包定向PASS，证据native-write-exclusion-validation.json。
+
+CURRENT=NATIVE_WRITE_EXCLUSION_SOFTWARE_GREEN；NEXT_READY=原生准入/更新及Harness显式接线。运行未启用，启用须停旧worker且任务静默，旧待办未迁移/删除；其他旧入口仍可能留下未消费待办，列接线观察项。0真实模型/构建/部署/发布，BUSINESS=NOT RUN，Goal未完成。以下为历史状态。
+
 # 当前状态（2026-09-23 · 来源片段独立审核软件完成）
 
 来源显示提交d04868fdd、逐窗collector提交e879cf7ff；来源审核冻结tree88443394f2ab52a2944b57c69bd576eb5ac2b3f1，独审0 BLOCKER。新对象自动review v5且拒绝降级；真实Evidence逐条核验并按原次序提供给片段审核，纯生成证据分须0，新prompt须独立模板授权。旧对象/旧prompt兼容，最终hash和整组准入保持。

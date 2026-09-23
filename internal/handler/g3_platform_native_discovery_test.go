@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Tencent/WeKnora/internal/application/service"
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/stretchr/testify/require"
 )
@@ -42,6 +43,9 @@ func TestNativeDiscoveryHandlerRetainsScopeAndRejectsMalformedRequests(t *testin
 			producer := &nativeDiscoveryProducerStub{err: tc.producerError}
 			h := NewG3PlatformSnapshotsHandler(NewWikiReleaseHandler(nil), nil, nil, nil)
 			h.native = producer
+			h.nativeConfig = &config.Config{ProductIngestion: &config.ProductIngestionConfig{
+				Enabled: true, TenantID: 42, SpaceID: "space-1", RawKBID: "raw-1", WikiKBID: "wiki-1", WikiProducerPolicy: config.NativeCandidatesPolicy,
+			}}
 			engine := newG3PlatformHandlerEngine(h)
 			engine.POST("/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/platform/sources/:knowledge_id/attempts/:attempt/native-discovery", h.NativeDiscovery)
 			reply := httptest.NewRecorder()
@@ -55,4 +59,16 @@ func TestNativeDiscoveryHandlerRetainsScopeAndRejectsMalformedRequests(t *testin
 			require.NoError(t, json.Unmarshal(reply.Body.Bytes(), &body))
 		})
 	}
+}
+
+func TestNativeDiscoveryHandlerNeedsExplicitCandidateMode(t *testing.T) {
+	producer := &nativeDiscoveryProducerStub{}
+	h := NewG3PlatformSnapshotsHandler(NewWikiReleaseHandler(nil), nil, nil, nil)
+	h.native = producer
+	engine := newG3PlatformHandlerEngine(h)
+	engine.POST("/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/platform/sources/:knowledge_id/attempts/:attempt/native-discovery", h.NativeDiscovery)
+	reply := httptest.NewRecorder()
+	engine.ServeHTTP(reply, httptest.NewRequest(http.MethodPost, "/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/platform/sources/doc/attempts/1/native-discovery", strings.NewReader(`{}`)))
+	require.Equal(t, http.StatusServiceUnavailable, reply.Code)
+	require.Zero(t, producer.calls)
 }

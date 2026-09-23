@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/application/service"
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -36,12 +37,13 @@ type G3PlatformBaseSnapshotReader interface {
 // G3PlatformSnapshotsHandler exposes machine-readable source custody under the
 // same exact-scope and dual-KB ACL seal as Active Wiki reads.
 type G3PlatformSnapshotsHandler struct {
-	access   *WikiReleaseHandler
-	uploads  G3PlatformUploadLookup
-	sources  G3PlatformSourceSnapshotCapturer
-	bases    G3PlatformBaseSnapshotReader
-	reparser G3PlatformBoundReparser
-	native   G3PlatformNativeDiscoveryProducer
+	access       *WikiReleaseHandler
+	uploads      G3PlatformUploadLookup
+	sources      G3PlatformSourceSnapshotCapturer
+	bases        G3PlatformBaseSnapshotReader
+	reparser     G3PlatformBoundReparser
+	native       G3PlatformNativeDiscoveryProducer
+	nativeConfig *config.Config
 }
 
 type G3PlatformBoundReparser interface {

@@ -1,5 +1,11 @@
 # 830-G3.5 自由发现与知识准入实施计划
 
+## 当前状态：原生候选模式互斥软件完成（2026-09-23）
+
+来源审核已提交c7e8a8ccc。Go候选模式互斥冻结tree81b75d36c0dee4db78989ba4dd5d2df113b0725a，独审0 BLOCKER：显式native-candidates.830.v1策略绑定tenant/space/RAW/Wiki；未配策略的native候选接口503，启用后postprocess不计/不排旧Wiki子任务，旧ingest/finalize先拦截，启动恢复跳过且保留既有durable rows。旧空配置对其他原生行为兼容。
+
+实际YAML配置与API反例RED后，config/service/container/handler/router五包定向PASS；证据见native-write-exclusion-validation.json。CURRENT=NATIVE_WRITE_EXCLUSION_SOFTWARE_GREEN；NEXT_READY=候选语义准入/更新和Harness显式接线。未启用运行配置；启用需旧worker退出且无活动任务，未提供热切换屏障或迁移旧待办。本轮真实model/build/deploy/publish均0，BUSINESS=NOT RUN。
+
 ## 当前状态：来源片段独立审核软件完成（2026-09-23）
 
 原生逐窗执行已提交e879cf7ff。来源审核冻结tree88443394f2ab52a2944b57c69bd576eb5ac2b3f1，独审0 BLOCKER：新来源对象自动采用v5，不允许降到旧审核；逐片段标志、完整展示内容及按真实Evidence次序校验的原文进入审核。新模板独立受purpose/prompt授权，无原文的纯生成内容不得获得evidence_quality分。旧v3/v4及旧提示保持，最终hash/整组准入复用。
@@ -179,3 +185,11 @@ G35-R3展示检查发现G2目录也直接展示定义正文，故同Owner必要�
 已实现的展示合同必须贯穿最终语义审核，不能只加UI标签。现有review v4只向审核展示正文与页面级evidence，且旧prompt一律拒绝无来源补充。新增review context v5及单独受模板授权的新prompt：含新来源合同的候选逐片段核查来源支持/模型生成，允许明确标注且有用的补充，拒绝把产品保障/金额/资格条件猜测包装成通用补充；纯生成的evidence_quality必须0。最终输出hash和整组审核发布门禁复用，不增加独立审核平台。旧v3/v4及旧prompt字节保持，新的来源对象不允许降级到旧审核上下文。
 
 root必要写域：discovery.py的独立review renderer/版本选择，必要同职责纯来源视图helper；现有discovery_stage.py最终审核模板选择与评分校验、discovery_composition.py父响应prompt核验；tests/product_ingestion中对应review/provenance/replay tests、计划/OpenSpec129/evidence。先验证新内容在旧renderer中丢失片段标志的RED，再实现；尚不改变运行配置或新增真实模型调用。
+
+## 下一切片：显式原生候选模式与旧直写互斥（G35-R1/R3）
+
+复用ProductIngestionConfig的既有tenant/space/RAW/Wiki绑定和原生持久队列，新增可省略wiki_producer_policy=native-candidates.830.v1。旧空配置保持；未知策略或不完整绑定拒绝启动。显式候选模式只禁止该绑定RAW/Wiki的原生自动写页，其他KB保持。postprocess不再把原生Wiki子任务计入/入队；ingest/finalize在任何模型/写页/队列消费前拒绝既有触发；启动恢复跳过这些lane且保留durable行。部署启用须在旧worker退出/任务静默后进行，不支持进程内热切换，也不删除既有页面/待办或宣称迁移完成。
+
+root写域：internal/config/product_ingestion.go及config.go验证入口/相应tests；knowledge_post_process.go、wiki_ingest.go/wiki_ingest_batch.go及定向tests；container/recover_pending_wiki_tasks.go及reset_pending_tasks_test.go必要签名/测试；本计划/OpenSpec129/evidence。复用唯一策略判定，不新增队列或修改Active。先旧配置忽略策略/旧worker仍可进入副作用的RED，再实现/冻结独审。实际运行配置不变。
+
+互斥接缝补充：机器native-discovery请求也必须核验同一显式完整scope策略，防止Harness误启用时另一端仍走旧直写；因此本切片必要写域扩至handler/g3_platform_native_discovery.go、g3_platform_snapshots.go、g3_platform_composition.go及native handler测试。纯producer领域服务和历史签名向量不变，只有机器接线要求策略；未配策略不得派发原生候选计划。

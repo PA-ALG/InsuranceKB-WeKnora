@@ -80,5 +80,6 @@ func NewConfiguredG3PlatformHandlers(cfg *config.Config, knowledge service.G3Pla
 	baseSnapshots := service.NewG3PlatformBaseSnapshotService(releases, machine, signer)
 	snapshots := NewG3PlatformSnapshotsHandler(access, machine, sourceSnapshots, baseSnapshots, reparser...)
 	snapshots.native = service.NewG3NativeDiscoveryService(sourceSnapshots, signer)
+	snapshots.nativeConfig = cfg
 	return snapshots, NewG3PlatformReleaseHandler(access, schemas, releases), nil
 }

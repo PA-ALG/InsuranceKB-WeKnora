@@ -979,6 +979,9 @@ func LoadConfig() (*Config, error) {
 // It checks for obviously invalid or missing values that would cause runtime failures.
 func ValidateConfig(cfg *Config) error {
 	var errs []string
+	if err := validateProductWikiProducerPolicy(cfg); err != nil {
+		errs = append(errs, err.Error())
+	}
 	if cfg != nil && cfg.KnowledgeRevisionSource != nil &&
 		cfg.KnowledgeRevisionSource.MaxObjectBytes < 0 {
 		errs = append(errs, "knowledge_revision_source.max_object_bytes cannot be negative")
