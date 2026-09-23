@@ -284,6 +284,13 @@ onUnmounted(() => { generation++; stopTimers() })
 
 <style scoped>
 .product-ingestion-status { margin: 0 24px 20px; padding: 20px; border: 1px solid var(--td-component-border, #e5e7eb); border-radius: 10px; color: var(--td-text-color-primary, #20242b); background: var(--td-bg-color-container, #fff); }
+.product-ingestion-status {
+  /* Keep the document pane reachable as task history and details grow. */
+  flex-shrink: 0;
+  box-sizing: border-box;
+  max-height: 30vh;
+  overflow: auto;
+}
 header, .run-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
 header { justify-content: space-between; }
 h3 { margin: 0; font-size: 16px; }
