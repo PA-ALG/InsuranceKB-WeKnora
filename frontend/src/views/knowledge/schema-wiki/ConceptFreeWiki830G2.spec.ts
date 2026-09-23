@@ -242,3 +242,27 @@ describe('G3 exact release directory reuse while switching fields', () => {
     expect(wrapper.text()).toContain('field-two')
   })
 })
+
+it('labels mixed and related generated content and opens the exact segment citation', async () => {
+  const value: any = response()
+  value.read.member.content = '原文事实。模型补充。'
+  value.read.member.payload.content_provenance = { contract: 'knowledge-content-provenance.830.v1', segments: [
+    { text: '原文事实。', origin: 'SOURCE_SUPPORTED', evidence_indexes: [0] },
+    { text: '模型补充。', origin: 'MODEL_GENERATED', evidence_indexes: [] },
+  ] }
+  value.read.citations = [{ citation_id: 'citation-actual', page_number: 2, quote: '原文事实', evidence_index: 0 }]
+  value.read.related_members = [{ kind: 'free_wiki_item', member_id: 'free-related', owner_id: 'entity-a',
+    title: '补充说明', content: '关联的模型说明', payload: { content_provenance: {
+      contract: 'knowledge-content-provenance.830.v1', segments: [
+        { text: '关联的模型说明', origin: 'MODEL_GENERATED', evidence_indexes: [] },
+      ],
+    } } }]
+  mocks.read.mockResolvedValue(value)
+  const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+  expect(wrapper.findAll('[data-origin="MODEL_GENERATED"]')).toHaveLength(2)
+  expect(wrapper.findAll('[data-origin="MODEL_GENERATED"]').every(row => row.text().includes('模型生成'))).toBe(true)
+  expect(wrapper.findAll('button')).toHaveLength(1)
+  expect(wrapper.findAll('[data-origin="MODEL_GENERATED"] button')).toHaveLength(0)
+  await wrapper.get('[data-origin="SOURCE_SUPPORTED"] button').trigger('click')
+  expect(wrapper.get('[data-testid="source-viewer"]').text()).toBe('release-a')
+})

@@ -1,3 +1,5 @@
+import { conceptSHA256830G2, conceptCitationID } from '@/api/schema-wiki/conceptCitationIdentity'
+export { conceptSHA256830G2 } from '@/api/schema-wiki/conceptCitationIdentity'
 import type { ConceptSession830G2 } from '@/api/schema-wiki/conceptFreeWiki830G2'
 
 const CONTRACT = 'concept-citation-content-authority.830.g2.v1'
@@ -19,10 +21,6 @@ function canonical(v: unknown): string {
   if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']'
   if (object(v)) return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}'
   return JSON.stringify(v)
-}
-export async function conceptSHA256830G2(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes).buffer)
-  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
 }
 const textSHA = (s: string) => conceptSHA256830G2(new TextEncoder().encode(s))
 export interface ConceptCitationAuthority830G2 {
@@ -95,8 +93,7 @@ export async function parseConceptCitationAuthority830G2(value: unknown, session
       || e.quote_hash !== a.quote_hash || !SOURCE_KEYS.every(k => e[k] === source[k])) continue
     if (locator && (e.offset_unit !== 'UNICODE_CODE_POINT'
       || e.start !== locator.start || e.end !== locator.end)) continue
-    const derived = 'citation-' + (await textSHA(JSON.stringify([read.candidate_hash, read.member.member_id,
-      e.revision_id, e.block_id, e.page_number, e.start, e.end, e.quote_hash]))).slice(0, 24)
+    const derived = await conceptCitationID(read.candidate_hash, read.member.member_id, e)
     if (derived === citationID) matching++
   }
   if (matching !== 1) return fail()

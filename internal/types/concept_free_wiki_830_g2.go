@@ -52,14 +52,15 @@ type ConceptEvidence830G2 struct {
 }
 
 type ConceptDefinition830G2 struct {
-	SpaceID      string                 `json:"space_id"`
-	CanonicalKey string                 `json:"canonical_key"`
-	SenseKey     string                 `json:"sense_key"`
-	Title        string                 `json:"title"`
-	Body         string                 `json:"body"`
-	Evidence     []ConceptEvidence830G2 `json:"evidence"`
-	Aliases      []string               `json:"aliases"`
-	Origin       string                 `json:"origin"`
+	ContentProvenance *KnowledgeContentProvenance `json:"content_provenance,omitempty"`
+	SpaceID           string                      `json:"space_id"`
+	CanonicalKey      string                      `json:"canonical_key"`
+	SenseKey          string                      `json:"sense_key"`
+	Title             string                      `json:"title"`
+	Body              string                      `json:"body"`
+	Evidence          []ConceptEvidence830G2      `json:"evidence"`
+	Aliases           []string                    `json:"aliases"`
+	Origin            string                      `json:"origin"`
 }
 
 type ConceptFieldAssertion830G2 struct {
@@ -79,17 +80,18 @@ type ConceptFieldAssertion830G2 struct {
 }
 
 type ConceptFreeWikiPage830G2 struct {
-	SpaceID       string                 `json:"space_id"`
-	EntityID      string                 `json:"entity_id"`
-	StableKey     string                 `json:"stable_key"`
-	Title         string                 `json:"title"`
-	Body          string                 `json:"body"`
-	Evidence      []ConceptEvidence830G2 `json:"evidence"`
-	ConceptIDs    []string               `json:"concept_ids"`
-	Conditions    []string               `json:"conditions"`
-	Exceptions    []string               `json:"exceptions"`
-	EntityVersion string                 `json:"entity_version"`
-	ValidTime     string                 `json:"valid_time"`
+	ContentProvenance *KnowledgeContentProvenance `json:"content_provenance,omitempty"`
+	SpaceID           string                      `json:"space_id"`
+	EntityID          string                      `json:"entity_id"`
+	StableKey         string                      `json:"stable_key"`
+	Title             string                      `json:"title"`
+	Body              string                      `json:"body"`
+	Evidence          []ConceptEvidence830G2      `json:"evidence"`
+	ConceptIDs        []string                    `json:"concept_ids"`
+	Conditions        []string                    `json:"conditions"`
+	Exceptions        []string                    `json:"exceptions"`
+	EntityVersion     string                      `json:"entity_version"`
+	ValidTime         string                      `json:"valid_time"`
 }
 
 type ConceptCompileRequest830G2 struct {
@@ -476,6 +478,9 @@ func conceptJSONExactKeys830G2(raw []byte, destination reflect.Type) bool {
 		}
 		delim, composite := token.(json.Delim)
 		if !composite {
+			if expected == reflect.TypeOf(KnowledgeContentProvenance{}) && token == nil {
+				return false
+			}
 			return true
 		}
 		switch delim {
@@ -767,7 +772,7 @@ func validateConceptOutput830G2(request ConceptCompileRequest830G2, output Conce
 }
 
 func validateConceptOutputShapeCoverage830G2(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) error {
-	if output.Contract != "concept-compile-output.830.g2.v1" ||
+	if validateKnowledgeTransformation(output) != nil || output.Contract != "concept-compile-output.830.g2.v1" ||
 		(output.Transformation != "EXTRACT" && output.Transformation != "NORMALIZE" && output.Transformation != "COMPRESS" && output.Transformation != "SYNTHESIZE") ||
 		validateConceptMembers830G2(request.SpaceID, output.Definitions, output.Fields, output.Pages) != nil {
 		return ErrConceptCandidateBundle830G2
@@ -900,9 +905,19 @@ func validateConceptMembers830G2(spaceID string, definitions []ConceptDefinition
 }
 
 func validateConceptDefinition830G2(value ConceptDefinition830G2) error {
-	if !conceptIdentity830G2(value.SpaceID) || !conceptIdentity830G2(value.CanonicalKey) || !conceptIdentity830G2(value.SenseKey) || value.Title == "" || value.Body == "" || len(value.Evidence) == 0 ||
+	if !conceptIdentity830G2(value.SpaceID) || !conceptIdentity830G2(value.CanonicalKey) || !conceptIdentity830G2(value.SenseKey) || value.Title == "" || value.Body == "" ||
 		(value.Origin != "SCHEMA_DEFINITION" && value.Origin != "MODEL_COMPILE" && value.Origin != "EXPERT_REVISION_RECORD") {
 		return ErrConceptCandidateBundle830G2
+	}
+	if validateKnowledgeContentProvenance(value.Body, value.Evidence, value.ContentProvenance) != nil {
+		return ErrConceptCandidateBundle830G2
+	}
+	if value.Origin != "MODEL_COMPILE" && value.ContentProvenance != nil {
+		for _, segment := range value.ContentProvenance.Segments {
+			if segment.Origin == "MODEL_GENERATED" {
+				return ErrConceptCandidateBundle830G2
+			}
+		}
 	}
 	for _, alias := range value.Aliases {
 		if !conceptIdentity830G2(alias) {
@@ -942,7 +957,7 @@ func validateConceptField830G2(value ConceptFieldAssertion830G2) error {
 }
 
 func validateConceptPage830G2(value ConceptFreeWikiPage830G2) error {
-	if !conceptIdentity830G2(value.SpaceID) || !conceptIdentity830G2(value.EntityID) || !conceptIdentity830G2(value.StableKey) || value.Title == "" || value.Body == "" || len(value.Evidence) == 0 {
+	if !conceptIdentity830G2(value.SpaceID) || !conceptIdentity830G2(value.EntityID) || !conceptIdentity830G2(value.StableKey) || value.Title == "" || value.Body == "" || validateKnowledgeContentProvenance(conceptFreePageContent830G3(value), value.Evidence, value.ContentProvenance) != nil {
 		return ErrConceptCandidateBundle830G2
 	}
 	for _, evidence := range value.Evidence {
@@ -1131,7 +1146,11 @@ func projectConceptMembers830G2(request ConceptCompileRequest830G2, output Conce
 	for _, p := range output.Pages {
 		id, _ := conceptFreePageID830G2(p)
 		payload, _ := json.Marshal(p)
-		members = append(members, ConceptPageMember830G2{"free_wiki_item", id, p.EntityID, p.Title, p.Body, payload})
+		content := p.Body
+		if p.ContentProvenance != nil {
+			content = conceptFreePageContent830G3(p)
+		}
+		members = append(members, ConceptPageMember830G2{"free_wiki_item", id, p.EntityID, p.Title, content, payload})
 	}
 	entities := make([]string, 0, len(request.RequiredFields))
 	for entity := range request.RequiredFields {

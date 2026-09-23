@@ -1,3 +1,9 @@
+# 当前状态（2026-09-23 · G3.5来源标志与原文入口软件完成）
+
+原生producer已提交5043c7b55。来源domain/编译/跨语言验收及页面展示冻结tree18814ec469c14a3f9e973f656d4bf2bfc3421509，最终独审0 BLOCKER；新内容逐片段显示模型生成/原文依据，原文按钮精确绑定完整Evidence，纯生成无伪造引用，混合页取消重复全页引用列表，旧对象保持兼容。证据见docs/insurance-kb/evidence/830-g35/content-provenance-validation.json。
+
+Python107PASS/1历史真实fixture缺失skip，Go定向PASS，前端109PASS；UI修复后41PASS，类型检查PASS。CURRENT=CONTENT_PROVENANCE_SOFTWARE_GREEN；NEXT_READY=原生逐窗执行及准入/更新/来源审核接线。新增真实模型/构建/部署/发布均0，新链路未启用，BUSINESS=NOT RUN，G3.5未完成。以下为历史阶段记录，不覆盖本段。
+
 # 当前状态（2026-09-23 · 用户选择原生候选交接，producer接口验证）
 
 用户已批准推荐原生候选交接，此前架构选择阻断解除。最新要求：原生实际补充生成的信息保留并标“模型生成”；原文有证据必须可点击，混合页按内容区分。root继续同一工作树，未改变运行服务/模型/发布授权。

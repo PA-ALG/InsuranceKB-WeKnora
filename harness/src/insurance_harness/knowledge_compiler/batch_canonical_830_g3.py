@@ -25,7 +25,9 @@ from .concept_free_wiki_830_g2 import (
     Evidence,
     FieldAssertion,
     FreeWikiPage,
+    KnowledgeContentSegment,
     SourceBlock,
+    free_page_content,
 )
 from .text_controls import BODY_CONTROLS, STRUCTURED_CONTROLS
 
@@ -97,6 +99,7 @@ def _typed_model_tree(value: BaseModel, body_fields: frozenset[str]) -> dict[str
     return {
         name: _tree(getattr(value, name), wire[name], body=name in body_fields)
         for name in type(value).model_fields
+        if name in wire
     }
 
 
@@ -116,12 +119,7 @@ def _field_member_content(value: FieldAssertion) -> tuple[str, str]:
 
 
 def _page_member_content(value: FreeWikiPage) -> tuple[str, str]:
-    lines = [value.body]
-    lines.extend("条件：" + item for item in value.conditions)
-    lines.extend("例外：" + item for item in value.exceptions)
-    if value.valid_time:
-        lines.append("有效期：" + value.valid_time)
-    return value.body, "\n".join(lines)
+    return value.body, free_page_content(value)
 
 
 def _page_member_tree(value: PageMember) -> dict[str, object]:
@@ -179,9 +177,7 @@ def _page_member_tree(value: PageMember) -> dict[str, object]:
     return {
         name: payload_tree
         if name == "payload"
-        else _tree(
-            getattr(checked, name), wire[name], body=name in body_fields
-        )
+        else _tree(getattr(checked, name), wire[name], body=name in body_fields)
         for name in type(checked).model_fields
     }
 
@@ -208,6 +204,8 @@ def _tree(value: object, serialized: object = _MISSING, *, body: bool = False) -
         }
     if type(value) is ConceptDefinition:
         return _typed_model_tree(value, frozenset(("title", "body")))
+    if type(value) is KnowledgeContentSegment:
+        return _typed_model_tree(value, frozenset(("text",)))
     if type(value) is FieldAssertion:
         return _typed_model_tree(
             value,
@@ -314,9 +312,7 @@ def definition_sha256_830_g3(definition: ConceptDefinition) -> str:
     ).hexdigest()
 
 
-def paired_execution_sha256_830_g3(
-    object_type: str, result: CompileResult | ReviewResult
-) -> str:
+def paired_execution_sha256_830_g3(object_type: str, result: CompileResult | ReviewResult) -> str:
     """Hash only a paired result's closed execution wire under an existing domain."""
 
     _validate_object_type(object_type)

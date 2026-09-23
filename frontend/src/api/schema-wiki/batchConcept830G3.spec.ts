@@ -1,3 +1,4 @@
+import { gunzipSync } from 'node:zlib'
 import { readFileSync } from 'node:fs'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -423,4 +424,21 @@ describe('G3 batch concept Active parser and mocked transports', () => {
       relatedMembers: related,
     })
   })
+})
+
+
+it('parses the complete mixed/generated candidate using the shared cross-language vector', async () => {
+  const fixture = JSON.parse(gunzipSync(readFileSync(new URL(
+    '../../../../harness/tests/fixtures/batch_concept_compile_830_g3/content-provenance-candidate.json.gz', import.meta.url,
+  ))).toString())
+  const response = await preparationResponse(value => { value.page_manifest = fixture.page_manifest })
+  const parsed = await parseBatchConceptPreparation830G3(response, scope, await catalog(), 'preparation-g3')
+  const page = parsed.members.find(m => m.kind === 'free_wiki_item' && m.payload.content_provenance)!
+  expect(page.content).toContain('条件：供阅读参考')
+  expect(page.payload.evidence).toEqual([])
+  const broken = structuredClone(response)
+  const row = broken.page_manifest.members.find((m: any) => m.member_id === page.member_id)
+  row.payload.content_provenance.segments[0].text = row.payload.body
+  await refreshManifestHashes(broken)
+  await expect(parseBatchConceptPreparation830G3(broken, scope, await catalog(), 'preparation-g3')).rejects.toThrow()
 })

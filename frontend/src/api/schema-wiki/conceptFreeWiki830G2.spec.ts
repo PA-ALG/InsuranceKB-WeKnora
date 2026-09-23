@@ -1,3 +1,4 @@
+import { conceptCitationID } from './conceptCitationIdentity'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { readConceptPage830G2, conceptCitationTransport830G2 } from './conceptFreeWiki830G2'
@@ -106,3 +107,52 @@ it.each(['concept-owner','field-owner','unrelated-field','evidence-space','evide
     await expect(readConceptPage830G2('wiki-a',response.data.member.member_id,'release-a',{get})).rejects.toThrow()
     expect(get).toHaveBeenCalledTimes(2)
   })
+
+it('accepts explicitly generated knowledge with no manufactured citations', async () => {
+  const response = fixture()
+  response.data.member.payload.evidence = []
+  response.data.member.payload.content_provenance = { contract: 'knowledge-content-provenance.830.v1', segments: [
+    { text: response.data.member.content, origin: 'MODEL_GENERATED', evidence_indexes: [] },
+  ] }
+  response.data.citations = []
+  const get = vi.fn().mockResolvedValueOnce({ success: true, data: scope }).mockResolvedValue(response)
+  const result = await readConceptPage830G2('wiki-a', response.data.member.member_id, 'release-a', { get })
+  expect(result.read.citations).toEqual([])
+})
+
+it.each(['missing', 'wrong-index', 'wrong-id'])('rejects detached segment source binding: %s', async mutation => {
+  const response: any = fixture()
+  response.data.member.payload.content_provenance = { contract: 'knowledge-content-provenance.830.v1', segments: [
+    { text: response.data.member.content, origin: 'SOURCE_SUPPORTED', evidence_indexes: [0] },
+  ] }
+  const proof = response.data.member.payload.evidence[0]
+  response.data.citations = [{ citation_id: await conceptCitationID(response.data.candidate_hash, response.data.member.member_id, proof),
+    page_number: proof.page_number, quote: proof.quote, evidence_index: 0 }]
+  if (mutation === 'missing') delete response.data.citations[0].evidence_index
+  if (mutation === 'wrong-index') response.data.citations[0].evidence_index = 5
+  if (mutation === 'wrong-id') response.data.citations[0].citation_id = `citation-${'b'.repeat(24)}`
+  const get = vi.fn().mockResolvedValueOnce({ success: true, data: scope }).mockResolvedValue(response)
+  await expect(readConceptPage830G2('wiki-a', response.data.member.member_id, 'release-a', { get })).rejects.toThrow()
+})
+
+
+it('maps equal quotes in different source occurrences by evidence index despite citation sorting', async () => {
+  const response: any = fixture()
+  const member = response.data.member
+  const first = member.payload.evidence[0]
+  member.payload.evidence.push({ ...first, revision_id: 'revision-<other>', block_id: 'block-other', page_number: 2 })
+  member.payload.content_provenance = { contract: 'knowledge-content-provenance.830.v1', segments: [
+    { text: member.content, origin: 'SOURCE_SUPPORTED', evidence_indexes: [0, 1] },
+  ] }
+  response.data.citations = await Promise.all(member.payload.evidence.map(async (e: any, index: number) => ({
+    citation_id: await conceptCitationID(response.data.candidate_hash, member.member_id, e),
+    page_number: e.page_number, quote: e.quote, evidence_index: index,
+  })))
+  response.data.citations.reverse()
+  const get = vi.fn().mockResolvedValueOnce({ success: true, data: scope }).mockResolvedValue(response)
+  const session = await readConceptPage830G2('wiki-a', member.member_id, 'release-a', { get })
+  expect(session.read.citations.map(c => c.evidence_index)).toEqual([1, 0])
+  response.data.citations[0].evidence_index = 0
+  const retry = vi.fn().mockResolvedValueOnce({ success: true, data: scope }).mockResolvedValue(response)
+  await expect(readConceptPage830G2('wiki-a', member.member_id, 'release-a', { get: retry })).rejects.toThrow()
+})

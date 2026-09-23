@@ -96,3 +96,12 @@ describe('ConceptDirectory830G2', () => {
       .toEqual(expect.arrayContaining(targets))
   })
 })
+
+it('shows model origin in the directory preview as well as the full page', () => {
+  const value = structuredClone(catalog)
+  value.concepts[0].payload = { content_provenance: { contract: 'knowledge-content-provenance.830.v1', segments: [
+    { text: '定义', origin: 'MODEL_GENERATED', evidence_indexes: [] },
+  ] } }
+  const wrapper = mount(ConceptDirectory, { props: { catalog: value }, global: { stubs: { RouterLink: true } } })
+  expect(wrapper.get('[data-origin="MODEL_GENERATED"]').text()).toContain('模型生成')
+})

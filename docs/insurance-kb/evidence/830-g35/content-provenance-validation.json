@@ -1,0 +1,103 @@
+{
+  "contract": "g35-content-provenance-validation.830.v1",
+  "base_commit": "5043c7b55d54baf30f8fd72cb080505c15c578fe",
+  "reviewed_tree": "18814ec469c14a3f9e973f656d4bf2bfc3421509",
+  "requirements": [
+    "G35-R1",
+    "G35-R3",
+    "G35-R5",
+    "G35-R6"
+  ],
+  "scope": "Content provenance domain, complete rendered content, canonical/compile/admission parity, exact citation identity and segment UI. Producer/runtime enablement remains NOT RUN.",
+  "red": [
+    "Legacy domain rejects new provenance/pure-generated empty evidence",
+    "Generated content transformation and carryover rejected or erased",
+    "Evidence index absent and UI label missing",
+    "Directory view omitted source distinction",
+    "Full cross-language candidate exposes non-NFC body rejection",
+    "Mixed active page renders duplicate outer evidence button: expected 1, actual 2"
+  ],
+  "validation": {
+    "python": {
+      "passed": 107,
+      "skipped": 1,
+      "seconds": 194.21,
+      "skip": "Existing test_batch_concept_compile_830_g3_incremental.py:101 requires unavailable real epoch9 candidate; not a live PASS",
+      "suites": [
+        "test_knowledge_content_provenance.py",
+        "test_concept_free_wiki_830_g2.py",
+        "test_batch_concept_compile_830_g3_updates.py",
+        "test_batch_concept_compile_830_g3_incremental.py",
+        "test_batch_concept_compile_830_g3.py"
+      ]
+    },
+    "go": "PASS: internal/types and internal/application/service, TestKnowledgeContent*, G2/G3 canonical and candidate parse, TestKnowledgeUpdate830G3; types 68.807s, service 3.908s",
+    "frontend": "109 passed across 6 API/view/citation suites before final 3-file correction; affected 2 suites 41 passed after correction",
+    "vue_tsc": "PASS full tsconfig.app.json after correction",
+    "mypy": "PASS 4 modified compiler source files",
+    "ruff": "PASS",
+    "diff_check": "PASS"
+  },
+  "review": {
+    "backend": {
+      "reviewer": "native_boundary_review",
+      "tree": "32f86c691a1a2250187712c00bfa44a36595a791",
+      "blockers": 0,
+      "unchanged_in_final_tree": true
+    },
+    "ui": {
+      "reviewer": "semantic_view_review",
+      "tree": "18814ec469c14a3f9e973f656d4bf2bfc3421509",
+      "blockers": 0
+    },
+    "backlog": [
+      "G2 citation decoder tolerates unknown extra keys; required identity/index/quote binding still enforced",
+      "Runtime must require provenance on every new producer member; omission is retained only for historical compatibility",
+      "SOURCE_SUPPORTED label requires semantic entailment review, locator validation alone does not prove support"
+    ],
+    "mechanical_docs_red_exemption": "semantic_view_review explicitly confirmed HANDOFF/plan top status and this evidence file only; records do not change behavior."
+  },
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "frozen_files": {
+    "docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md": "4fc3ba995252db9f6902c1f58c338f73fbaba3e6f60015b705920537b76780ec",
+    "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts": "a27df7f811add63e184a068f53cd5f2b3aa15b151b8912070f1ade2d0bdaeb5b",
+    "frontend/src/api/schema-wiki/batchConcept830G3.ts": "e651f38707f290463bdc4d627f5c5cdaf9338b25918d50dc5754629606f157ca",
+    "frontend/src/api/schema-wiki/conceptCitationIdentity.ts": "1adc8926b0744c708e9d28b929037e84071abebcb31565c63e3b73b4d7c72054",
+    "frontend/src/api/schema-wiki/conceptDirectory830G2.spec.ts": "55ca3b7765e239c5fe38ee3a6b56ced6d8879e2877d206dbd1c393cfd18b53ce",
+    "frontend/src/api/schema-wiki/conceptDirectory830G2.ts": "ae87453d3f89aa79fad4fc92010a09c508b6dde22b81e3f34b11b438d9e460e2",
+    "frontend/src/api/schema-wiki/conceptFreeWiki830G2.spec.ts": "78894d41522c355561149a3e7b0473a553eb2a2d9caff329e85e666451b17211",
+    "frontend/src/api/schema-wiki/conceptFreeWiki830G2.ts": "f3b1c3b5b3b8c4206c7a1c3f7ddcf99f48fa2bb9acb68fcb3c2f9981d3b6f74c",
+    "frontend/src/api/schema-wiki/knowledgeContentProvenance.ts": "977a81276adb64860c1bac46089038a7bbcf02471979d25203d5b22238af8b61",
+    "frontend/src/components/schema-wiki/KnowledgeContentBody.vue": "32343b683d8fffcf078448856663b8fa05a253652c9fa97ef592aba5124b4ae8",
+    "frontend/src/components/schema-wiki/conceptCitationAuthority830G2.ts": "3f5bd97cb45f44780fc46d847eec3b045071178e8dc1a2c3dc17b87df2589ae2",
+    "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts": "fda564179d2cb8998a1386927622e5cc444f62fd678800ee3eb760a797dc379d",
+    "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue": "9bf013b856af6bdd91f46dd676f3bec6508025db29275412bb155a06fc165f10",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts": "4e54f463db3b0709a616b09b9899190caee90d6f511fa9e39df74a1920bd8dc7",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue": "1159964ad0a98baf89f4d5f8f30967a3e5f47e090cc4ef99a96f0ed96d2cd2de",
+    "harness/src/insurance_harness/knowledge_compiler/batch_canonical_830_g3.py": "bbd51dab7d4ee673561776a87b1db16d8dcf373702b432e5ea2d84c8df2de0d0",
+    "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py": "aa53a69340dd2c5b83c53728fe0624541149463bd0f1a52ace174de7421f51da",
+    "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py": "f82cd46696bf0860936705becd532f5eb5070331ba40bc16553318d540fff085",
+    "harness/src/insurance_harness/knowledge_compiler/concept_free_wiki_830_g2.py": "369ee85e8c4196288972d071bfd31bd7f92dd6edf4f140a5cdb4583f14209fae",
+    "harness/tests/fixtures/batch_concept_compile_830_g3/content-provenance-candidate.json.gz": "e980979f29518e591e93c6d93277051a9b2d9f5ed5180bac8d69de2b60cfce9d",
+    "harness/tests/test_knowledge_content_provenance.py": "3c30d6338e1e72ff43519b35397a54e76cd147868d3bf0a6910637198dc43101",
+    "internal/application/service/concept_free_wiki_830_g2.go": "e7b7d0989a33c987d8b51a1aaa1f1a5be056e548786ca6adcd157c28e719cf7d",
+    "internal/application/service/concept_free_wiki_830_g2_test.go": "941ec7dc34a4bf19ea2e62d3509d4f0682713ec0eab26afa45447195db306f76",
+    "internal/types/concept_free_wiki_830_g2.go": "857176d0b57c59d76f391bd2569d1c4128f941911c64ecd7bfb0156d1675e7f1",
+    "internal/types/concept_free_wiki_830_g3.go": "6bd112e904db958475a554f2f8ab3e3c8281650ad66d9e11fbc58bf52b1a6cff",
+    "internal/types/knowledge_content_provenance.go": "2a124d4e9a5ab0e042ba93f1928bf6d8e15c267468e849686fd005ba5d195adc",
+    "internal/types/knowledge_content_provenance_test.go": "31cac15006712856fed58f37f8d480cc58943830689f1e0f479a1641d7f0849d",
+    "openspec/changes/129-830-g3-catalog-batch/specs/catalog-batch/spec.md": "228178a655caea88f8e4675929e9652ab964a573ac5ddb9b43a56defa44178bc"
+  }
+}

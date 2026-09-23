@@ -1,5 +1,11 @@
 # 830-G3.5 自由发现与知识准入实施计划
 
+## 当前状态：内容来源与页面展示软件完成（2026-09-23）
+
+原生producer已提交5043c7b55；内容来源domain/编译/Go验收/页面展示冻结tree 18814ec469c14a3f9e973f656d4bf2bfc3421509，后端独审及UI定向复审均0 BLOCKER。新对象逐片段区分“模型生成”和“原文依据”，完整条件/例外/有效期也覆盖；纯生成可无引用，混合页仅有依据片段显示精确原文按钮。旧对象字节及旧展示保持。验证和文件身份见content-provenance-validation.json。
+
+Python 107PASS/1个历史真实fixture缺失skip，Go类型/服务定向PASS，前端六文件109PASS；UI复审修复后两文件41PASS、全项目类型检查PASS。CURRENT=CONTENT_PROVENANCE_SOFTWARE_GREEN；NEXT_READY=原生逐窗StageCall执行、准入/更新及来源审核接线。当前未启用新运行策略；真实模型/应用构建/部署/发布新增均0，BUSINESS=NOT RUN，G3.5未完成。下方阶段性未实现说明属于历史记录，以本段为准。
+
 ## 2026-09-23 用户已选择原生候选交接
 
 用户随后补充：原生Wiki实际补充生成的信息可以保留，必须增加“模型生成”标志；原文有证据的内容必须能点击查看原文。本要求覆盖此前将无原文证据的补充一律拒绝的表述。准入按内容片段记录来源支持与模型生成，混合页面分别展示。原生chunk引用仅是定位线索，不能使整段/整页补充变成原文事实；证据仍绑定真实材料版本和精确引文。模型生成内容不得伪造原文引用，也不能借此填充需要原文确认的产品保障/数值/条件字段。使用现有Candidate/审核/Active/页面载体扩展来源表达，无第二发布权威。
@@ -17,6 +23,14 @@
 本切片root独占写域：新增internal/application/service/g3_native_discovery.go及测试、internal/handler/g3_platform_native_discovery.go及测试；既有g3_platform_snapshots/composition、routes_g3_platform_snapshots；Harness新增native_discovery.py及测试和必要platform/client接缝。后续stage/config/准入producer接线在下一RED前明确扩展此写域。先RED→实现→有界验证→冻结独审。当前BUSINESS=NOT RUN。
 
 跨语言签名接线的必要扩展写域：既有g3_platform_snapshot_signer.go及测试、新增testdata/g3_native_discovery_v1.json合成向量、platform_client测试。发现计划与候选快照使用不同签名domain；真实Ed25519签名器（非stub）回放同一向量，Python验证scope/request/source/窗口/raw/引用绑定。当前纯producer子项已实现，尚无runtime策略启用、StageCall调用或最终页面展示；模型生成标签目前只进入候选DTO，不能据此声称用户新增展示要求完成。
+
+### G35-R3 内容来源片段子项（用户新增要求的后续实现）
+
+现有ConceptDefinition/FreeWikiPage要求至少一条页面级evidence，前端分别展示正文和全页引用；MODEL_COMPILE表示编译来源，不能区分模型补充与原文支持。新增可省略content_provenance扩展，contract=knowledge-content-provenance.830.v1；segments按顺序覆盖完整展示内容，每段含text、origin（SOURCE_SUPPORTED或MODEL_GENERATED）和指向同对象evidence的evidence_indexes。片段拼接必须逐字等于统一renderer结果：定义为body；自由页为body及原顺序追加的\n条件：…、\n例外：…、可选\n有效期：…；有依据片段必须有合法索引，无依据模型生成片段不伪造引用；索引在各段内不重复，所有顶层evidence须被片段消费。保留不同段引用同一真实证据的能力。
+
+省略扩展维持旧合同/字节/证据必需；显式新合同允许纯模型生成补充无evidence，仍走独立语义审核/评分及唯一发布。Schema/专家定义保护和字段必须原文证据规则不变。生成来源及索引纳入内容hash/最终审核，不由页面有任意引用推断整个正文来源。展示逐段标“模型生成”或“原文依据”；点击索引必须按完整Evidence身份精确映射现有citation_id，不能按quote猜原件。conditions/exceptions/valid_time等有语义的页面附加内容也须有清晰来源展示，不能绕过片段标注。为本次必要目标扩展现有合同，不新增内容发布平台。
+
+后续root写域：G2 Python/Go domain合同及必要compile/页面投影/严格wire边界，前端conceptFreeWiki830G2/batchConcept830G3适配及ConceptFreeWiki830G2.vue，必要共用片段helper与定向tests/跨语言向量、当前计划/OpenSpec129/evidence。先旧对象拒绝新标记/空证据的RED与缺失页面标记RED，再贯穿实现；未完成前不得启用新运行策略。
 
 **Goal / Mission**：真实已解析材料中的有效Schema外知识经过既有Candidate、审核与唯一Active，在网页可读、可检索、可回原文。唯一Owner及Integration Owner=root；reviewer只读冻结身份。用户2026-09-23启动消息已授权有界设计、实现和验收；不重复索要普通实现批准。预计一条依赖G3的产品PR；首切片时间盒1工作日，至2026-09-24 18:00+08。独审按项目默认gpt-5.6-sol/high。
 
@@ -135,3 +149,9 @@ D1软件检查如上述回执；Docker/build/deployment/provider/Candidate/Draft
 后续接线必须给定义和页面显式update响应及原身份/依赖，升级相应producer上下文，保留旧响应字节；不能把同ID输出默认为new_page或从audited disposition直接发布。原生接入待答复，真实发现非空/页面/来源与服务实体/关系仍未交付。
 
 冻结tree269f586b329d857d5e5d6573441e159966b3dd24最终只读独审0 BLOCKER，机械文档豁免成立；六个产品/测试/向量文件与冻结树一致。尚未启用producer、未发模型及未部署，本Goal仍未完成。
+
+G35-R3来源一致性：含MODEL_GENERATED的定义必须origin=MODEL_COMPILE；含生成片段的CompileOutput必须transformation=SYNTHESIZE。主正文及相关知识预览使用同一片段展示。仅新来源合同的citation增加可省略evidence_index，绑定完整Evidence派生的citation_id；排序位置和quote不得代替身份。G2仅新合同自由页采用完整renderer，旧对象正文/hash保持。
+
+G35-R3展示检查发现G2目录也直接展示定义正文，故同Owner必要写域包含conceptDirectory830G2.ts/.vue及对应测试，复用同一来源解析/片段组件；不新增展示协议。整批组合若保留旧生成片段，最终transformation仍须SYNTHESIZE，不能被本次EXTRACT增量抹掉；以carryover反例验证，旧无生成对象合同不变。
+
+完整G3跨语言向量包含原文允许的非NFC业务文本，暴露前端bodyText仍强制NFC的不一致；按既有G3业务正文保真合同移除该处NFC要求，结构化身份及对象键仍要求NFC，禁止归一化原文。该反例并入G35-R3同一显示切片。

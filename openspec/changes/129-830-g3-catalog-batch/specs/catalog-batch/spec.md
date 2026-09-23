@@ -211,6 +211,8 @@ Validation uses the actual generation3/4 audit failure and workflow2 epoch11→1
 
 补充G35-R3（用户随后明确）：原生实际补充生成的信息MAY保留，但MUST显式标注“模型生成”；有原文依据的内容MUST保留可点击的原文证据定位。混合页面MUST按内容片段区分，页面级/候选级chunk引用不得冒充所有内容的事实依据；不得编造引用。该要求覆盖此前把所有无原文支持补充一律拒绝的表述，不放宽需要原文确认的产品字段事实及唯一发布审核。
 
+内容合同的可省略content_provenance扩展MUST采用knowledge-content-provenance.830.v1。segments的text顺序拼接等于完整展示内容：定义为body；自由页为既有统一renderer的body及条件、例外、有效期；SOURCE_SUPPORTED片段引用同对象顶层evidence的合法非空索引，MODEL_GENERATED片段不得伪造引用。全部evidence须有片段归属。显式扩展允许纯模型生成补充无evidence，省略时旧证据必需规则及canonical字节不变。来源标注参与内容和审核hash；字段事实/受保护定义/唯一Active门禁保持。页面按片段展示并通过完整Evidence身份定位原文，禁止仅按quote猜引用。
+
 原生producer的PreviousSlugs MUST为空（以后如使用正式身份须独立版本化并绑定依赖）；MUST NOT查询native wiki_pages或调用原生deduplicateExtractedBatch。已提交StageCall raw必须可恢复，响应尚未落库的未知发送必须阻断重发，不声称网络调用与数据库提交原子。
 
 原生候选producer MUST复用已有候选发现及chunk引用能力，通过版本化REST输出签名计划和候选快照；不得进入原生写页/发布路径。Harness MUST复用既有持久模型执行器保留每段raw及请求/模型身份，未知发送不可重发，成功段不可因兄弟失败丢失。签名快照绑定scope、来源版本/hash、全窗口覆盖、原始响应hash、提示词和引用映射；它不是语义真实性或审核授权。未知引用/重复身份/来源漂移 MUST拒绝，不能用原生description/details替代原文。无引用候选保留为unsupported，不直接晋升。Harness只对候选做知识准入及最终审核，不再重复自由发现。显式产品候选策略阻止原生直写；未声明策略的旧协议/行为保持。软件验证不代表已部署或真实知识准入。
@@ -250,3 +252,5 @@ G3增量输入MUST复用G2既有update处置：仅已存在的同类型稳定身
 更新能力通过可省略的request.knowledge_update_policy=`explicit-same-identity.830.v1`显式声明并进入request hash；只有该请求的compiler context使用NEW_AND_UPDATED_MEMBERS。缺省旧请求保持NEW_MEMBERS_ONLY及禁止update，省略值维持旧canonical字节；空值/未知策略拒绝。当前producer不自动启用该能力。
 
 显式更新策略的Candidate MUST在Python/Go准入边界重验所有新建/变化自由知识的评分覆盖：每项>=60、60—79恰好进入pending，显式update（含只改别名）必须参与；>=80仍保留既有整批发布授权。实际bounded模型display context必须反映同一output_mode，旧请求不新增空扩展键。不能仅依赖正常runner曾调用审核来代替边界校验。
+
+G35-R3来源一致性：含MODEL_GENERATED的定义必须origin=MODEL_COMPILE；含生成片段的CompileOutput必须transformation=SYNTHESIZE。主正文及相关知识预览使用同一片段展示。仅新来源合同的citation增加可省略evidence_index，绑定完整Evidence派生的citation_id；排序位置和quote不得代替身份。G2仅新合同自由页采用完整renderer，旧对象正文/hash保持。

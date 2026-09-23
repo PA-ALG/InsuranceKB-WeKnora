@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import KnowledgeContentBody from '@/components/schema-wiki/KnowledgeContentBody.vue'
 import type { ConceptCatalogResult830G2 } from '@/api/schema-wiki/conceptDirectory830G2'
 import type { BatchConceptDirectory830G3, BatchConceptEntity830G3 } from '@/api/schema-wiki/batchConcept830G3'
 
@@ -61,7 +62,7 @@ const totalFields = computed(() => props.catalog.mode === 'g2' ? 0
       <ul>
         <li v-for="concept in catalog.concepts" :key="concept.member_id">
           <RouterLink :to="conceptLink(concept.member_id)">{{ concept.title }}</RouterLink>
-          <p>{{ concept.content }}</p>
+          <KnowledgeContentBody :member="concept" :source-page="conceptLink(concept.member_id)" />
         </li>
       </ul>
     </section>

@@ -21,6 +21,7 @@ from .concept_free_wiki_830_g2 import (
     SourceBlock,
     digest,
     evidence_for,
+    free_page_content,
     lint_members,
     verify_evidence,
 )
@@ -101,6 +102,14 @@ class CompileOutput(Frozen):
     pages: tuple[FreeWikiPage, ...] = ()
     audit: tuple[AuditDisposition, ...] = ()
     transformation: Literal["EXTRACT", "NORMALIZE", "COMPRESS", "SYNTHESIZE"] = "EXTRACT"
+
+    @model_validator(mode="after")
+    def check_generated_transformation(self) -> Self:
+        if self.transformation != "SYNTHESIZE" and any(
+            member.has_generated_content for member in (*self.definitions, *self.pages)
+        ):
+            raise ValueError("GENERATED_CONTENT_REQUIRES_SYNTHESIZE")
+        return self
 
     @property
     def output_hash(self) -> str:
@@ -223,9 +232,7 @@ def validate_output(request: CompileRequest, output: CompileOutput) -> None:
     validate_dispositions(request, output)
 
 
-def validate_output_member_semantics(
-    request: CompileRequest, output: CompileOutput
-) -> None:
+def validate_output_member_semantics(request: CompileRequest, output: CompileOutput) -> None:
     """Validate fixed member shape checks that precede protected-definition identity."""
 
     expected = {(e, f) for e, fs in request.required_fields.items() for f in fs}
@@ -638,7 +645,7 @@ def project_members(request: CompileRequest, output: CompileOutput) -> PageManif
                 member_id=member_id,
                 owner_id=p.entity_id,
                 title=p.title,
-                content=p.body,
+                content=free_page_content(p) if p.content_provenance else p.body,
                 payload=p.model_dump(mode="json"),
             )
         )

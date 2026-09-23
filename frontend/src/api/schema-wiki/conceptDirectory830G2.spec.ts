@@ -224,3 +224,14 @@ describe('G2 catalog contract', () => {
     await expect(parseConceptCatalog830G2(mixed, scope, current)).rejects.toThrow()
   })
 })
+
+it('preserves the explicit generated label on directory definitions', async () => {
+  const rows = a70()
+  const concept = rows.find(m => m.kind === 'concept')!
+  concept.payload.evidence = []
+  concept.payload.content_provenance = { contract: 'knowledge-content-provenance.830.v1', segments: [
+    { text: concept.content, origin: 'MODEL_GENERATED', evidence_indexes: [] },
+  ] }
+  const parsed = await parseConceptCatalog830G2(rows, scope, current)
+  expect(parsed.mode).toBe('g2')
+})

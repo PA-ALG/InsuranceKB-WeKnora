@@ -12,6 +12,7 @@ import {
   type BatchConceptActive830G3,
 } from '@/api/schema-wiki/batchConcept830G3'
 import { buildSchemaCitationPreviewRequest } from '@/api/schema-wiki'
+import KnowledgeContentBody from '@/components/schema-wiki/KnowledgeContentBody.vue'
 import ConceptCitationViewer830G2 from '@/components/schema-wiki/ConceptCitationViewer830G2.vue'
 import { createVerifiedPdfReuse } from '@/components/schema-wiki/verifiedPdfReuse'
 import { createPdfJsPort } from '@/components/schema-wiki/pdfJsPort'
@@ -197,7 +198,7 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
         </p>
         <p v-if="batchPage" class="concept-page__quality">已登记，尚未完成质量验收</p>
       </header>
-      <article class="concept-page__body">{{ read.member.content }}</article>
+      <KnowledgeContentBody class="concept-page__body" :member="read.member" :citations="read.citations" @source="selected = $event" />
       <section v-if="batchPage && read.member.kind === 'field_assertion'" aria-label="字段详情">
         <h2>字段详情</h2>
         <p v-if="read.member.payload.value !== null"><strong>取值：</strong>{{ read.member.payload.value }}</p>
@@ -216,7 +217,7 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
         </div>
         <p class="concept-page__meta">激活后可打开原件</p>
       </section>
-      <section v-else-if="read.citations.length" class="concept-page__sources" aria-label="原文证据">
+      <section v-else-if="read.citations.length && !read.member.payload.content_provenance" class="concept-page__sources" aria-label="原文证据">
         <h2>原文证据</h2>
         <button v-for="citation in read.citations" :key="citation.citation_id" type="button"
           :data-testid="batchPage ? 'g3-source' : 'g2-source'" @click="selected = citation.citation_id">
@@ -242,7 +243,7 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
             <p v-if="member.kind === 'field_assertion'" class="concept-page__meta">
               {{ member.owner_id }} · {{ member.payload.entity_version }} · {{ stateLabel(member) }}
             </p>
-            <p class="concept-page__body">{{ member.content }}</p>
+            <KnowledgeContentBody class="concept-page__body" :member="member" :source-page="link(member)" />
           </li>
         </ul>
       </section>

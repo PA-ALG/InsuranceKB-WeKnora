@@ -16,9 +16,10 @@ import (
 )
 
 type ConceptPageCitation830G2 struct {
-	CitationID string `json:"citation_id"`
-	PageNumber int    `json:"page_number"`
-	Quote      string `json:"quote"`
+	EvidenceIndex *int   `json:"evidence_index,omitempty"`
+	CitationID    string `json:"citation_id"`
+	PageNumber    int    `json:"page_number"`
+	Quote         string `json:"quote"`
 }
 
 type ConceptPageRead830G2 struct {
@@ -892,10 +893,12 @@ func conceptMemberCitations830G2(
 	member types.ConceptPageMember830G2,
 ) []ConceptPageCitation830G2 {
 	evidence := []types.ConceptEvidence830G2{}
+	hasProvenance := false
 	for _, definition := range bundle.CompileResult.Output.Definitions {
 		id, _ := definition.DefinitionID()
 		if id == member.MemberID {
 			evidence = append(evidence, definition.Evidence...)
+			hasProvenance = definition.ContentProvenance != nil
 		}
 	}
 	for _, field := range bundle.CompileResult.Output.Fields {
@@ -908,18 +911,24 @@ func conceptMemberCitations830G2(
 		id, _ := page.FreeWikiPageID()
 		if id == member.MemberID {
 			evidence = append(evidence, page.Evidence...)
+			hasProvenance = page.ContentProvenance != nil
 		}
 	}
 	result := make([]ConceptPageCitation830G2, 0, len(evidence))
-	for _, item := range evidence {
+	for index, item := range evidence {
 		raw, _ := json.Marshal([]any{
 			bundle.CandidateHash, member.MemberID, item.RevisionID, item.BlockID,
 			item.PageNumber, item.Start, item.End, item.QuoteHash,
 		})
 		sum := sha256.Sum256(raw)
+		var evidenceIndex *int
+		if hasProvenance {
+			evidenceIndex = &index
+		}
 		result = append(result, ConceptPageCitation830G2{
-			CitationID: "citation-" + hex.EncodeToString(sum[:])[:24],
-			PageNumber: item.PageNumber, Quote: item.Quote,
+			EvidenceIndex: evidenceIndex,
+			CitationID:    "citation-" + hex.EncodeToString(sum[:])[:24],
+			PageNumber:    item.PageNumber, Quote: item.Quote,
 		})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].CitationID < result[j].CitationID })

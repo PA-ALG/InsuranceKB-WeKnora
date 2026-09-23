@@ -57,6 +57,7 @@ from .concept_free_wiki_830_g2 import (
     FreeWikiPage,
     SourceBlock,
     digest,
+    free_page_content,
     verify_evidence,
 )
 from .schema_pack_catalog_830_g3 import SchemaPackCatalogV1, validate_catalog
@@ -1505,6 +1506,15 @@ def aligned_existing_fields(
         fields=tuple(sorted(result, key=lambda item: (item.entity_id, item.field_key))),
         pages=request.base_request.existing_pages,
         audit=(),
+        transformation="SYNTHESIZE"
+        if any(
+            member.has_generated_content
+            for member in (
+                *request.base_request.existing_definitions,
+                *request.base_request.existing_pages,
+            )
+        )
+        else "EXTRACT",
     )
     checked = validate_unknown_field_key_alignments(
         request.base_request, output, request.unknown_field_key_alignments
@@ -1867,7 +1877,9 @@ def compose_batch_output(
         fields=fields,
         pages=pages,
         audit=tuple(sorted((*carry_audit, *delta.audit), key=lambda item: item.key)),
-        transformation=delta.transformation,
+        transformation="SYNTHESIZE"
+        if any(member.has_generated_content for member in (*definitions, *pages))
+        else delta.transformation,
     )
     try:
         _validate_output_g3(base, output)
@@ -1913,15 +1925,6 @@ def _field_content(field: FieldAssertion) -> str:
     lines.extend("例外：" + item for item in field.exceptions)
     if field.valid_time:
         lines.append("有效期：" + field.valid_time)
-    return "\n".join(lines)
-
-
-def _free_page_content(page: Any) -> str:
-    lines = [page.body]
-    lines.extend("条件：" + item for item in page.conditions)
-    lines.extend("例外：" + item for item in page.exceptions)
-    if page.valid_time:
-        lines.append("有效期：" + page.valid_time)
     return "\n".join(lines)
 
 
@@ -2012,7 +2015,7 @@ def project_batch_members(
                 member_id=free_page_id(page),
                 owner_id=page.entity_id,
                 title=page.title,
-                content=_free_page_content(page),
+                content=free_page_content(page),
                 payload=page.model_dump(mode="json"),
             )
         )

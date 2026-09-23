@@ -1,3 +1,4 @@
+import { knowledgeContentSegments, validateKnowledgeCitations, type KnowledgeCitation } from './knowledgeContentProvenance'
 import {
   buildSchemaWikiScopeBootstrapPath,
   type SchemaWikiReadTransport,
@@ -132,7 +133,7 @@ export interface BatchConceptPage830G3 {
   readonly directory: BatchConceptDirectory830G3
   readonly member: BatchConceptMember830G3
   readonly relatedMembers: readonly BatchConceptMember830G3[]
-  readonly citations: readonly { readonly citation_id: string, readonly page_number: number, readonly quote: string }[]
+  readonly citations: readonly KnowledgeCitation[]
   readonly session?: {
     readonly scope: SchemaWikiScopeV1
     readonly read: {
@@ -146,7 +147,7 @@ export interface BatchConceptPage830G3 {
       readonly wiki_kb_id: string
       readonly member: BatchConceptMember830G3
       readonly related_members: readonly BatchConceptMember830G3[]
-      readonly citations: readonly { readonly citation_id: string, readonly page_number: number, readonly quote: string }[]
+      readonly citations: readonly KnowledgeCitation[]
       readonly definition_hash: string
       readonly aggregate_hash: string
     }
@@ -163,7 +164,7 @@ function exact(value: unknown, keys: readonly string[]): R {
 }
 function bodyText(value: unknown, allowEmpty = false): string {
   if (typeof value !== 'string' || (!allowEmpty && value.length === 0)
-    || value.normalize('NFC') !== value || BODY_CONTROL.test(value)) return invalid()
+    || BODY_CONTROL.test(value)) return invalid()
   return value
 }
 function structuredText(value: unknown, allowEmpty = false): string {
@@ -304,22 +305,24 @@ async function pageMember(value: unknown, scope: SchemaWikiScopeV1, tenantID?: n
       ...(validTime === '' ? [] : [`有效期：${validTime}`])].join('\n')
     if (identity(fieldKey) !== p.field_key || content !== expected) return invalid()
   } else if (kind === 'concept') {
-    const p = exact(payload, ['space_id', 'canonical_key', 'sense_key', 'title', 'body', 'evidence', 'aliases', 'origin'])
+    const p = exact(payload, ['space_id', 'canonical_key', 'sense_key', 'title', 'body', 'evidence', 'aliases', 'origin', ...(Object.hasOwn(payload, 'content_provenance') ? ['content_provenance'] : [])])
     if (!memberID.startsWith('concept_') || ownerID !== scope.space_id || p.space_id !== scope.space_id
       || bodyText(p.title) !== title || bodyText(p.body) !== content || strings(p.aliases).length < 0
-      || (await evidence(p.evidence, scope, tenantID)).length === 0
+      || ((await evidence(p.evidence, scope, tenantID)).length === 0 && !Object.hasOwn(p, 'content_provenance'))
       || !['SCHEMA_DEFINITION', 'MODEL_COMPILE', 'EXPERT_REVISION_RECORD'].includes(String(p.origin))) return invalid()
+    knowledgeContentSegments(member as unknown as BatchConceptMember830G3)
     identity(p.canonical_key); identity(p.sense_key)
   } else if (kind === 'free_wiki_item') {
     const p = exact(payload, ['space_id', 'entity_id', 'stable_key', 'title', 'body', 'evidence', 'concept_ids',
-      'conditions', 'exceptions', 'entity_version', 'valid_time'])
+      'conditions', 'exceptions', 'entity_version', 'valid_time', ...(Object.hasOwn(payload, 'content_provenance') ? ['content_provenance'] : [])])
     const pageBody = bodyText(p.body); const conditions = bodyStrings(p.conditions); const exceptions = bodyStrings(p.exceptions)
     const validTime = bodyText(p.valid_time, true)
     const expected = [pageBody, ...conditions.map(item => `条件：${item}`), ...exceptions.map(item => `例外：${item}`),
       ...(validTime === '' ? [] : [`有效期：${validTime}`])].join('\n')
     if (!memberID.startsWith('free_') || p.space_id !== scope.space_id || identity(p.entity_id) !== ownerID
       || !entityVersion(p.entity_version, ownerID) || bodyText(p.title) !== title || expected !== content
-      || (await evidence(p.evidence, scope, tenantID)).length === 0) return invalid()
+      || ((await evidence(p.evidence, scope, tenantID)).length === 0 && !Object.hasOwn(p, 'content_provenance'))) return invalid()
+    knowledgeContentSegments(member as unknown as BatchConceptMember830G3)
     identity(p.stable_key); strings(p.concept_ids, true)
   } else if (kind === 'free_wiki') {
     const p = exact(payload, ['member_ids'])
@@ -698,11 +701,12 @@ async function parseBatchConceptPage(directory: BatchConceptActive830G3, target:
   const expectedRelated = localRelated(directory, expected)
   if (related.length !== expectedRelated.length || related.some((item, index) => item.member_id !== expectedRelated[index].member_id)) return invalid()
   const citations = raw.citations.map(item => {
-    const citation = exact(item, ['citation_id', 'page_number', 'quote'])
+    const citation = exact(item, ['citation_id', 'page_number', 'quote', ...(record(item) && Object.hasOwn(item, 'evidence_index') ? ['evidence_index'] : [])])
     if (!/^citation-[a-f0-9]{24}$/.test(String(citation.citation_id)) || positive(citation.page_number) < 1
       || bodyText(citation.quote).length === 0) return invalid()
-    return citation as unknown as { citation_id: string, page_number: number, quote: string }
+    return citation as unknown as KnowledgeCitation
   })
+  await validateKnowledgeCitations(selected, directory.candidateHash, citations)
   const read = { ...raw, member: selected, related_members: related, citations } as BatchConceptPage830G3['session'] extends { read: infer T } ? T : never
   return deepFreeze({ readMode: 'active', directory, member: selected, relatedMembers: related, citations,
     session: { scope: directory.scope, read } })

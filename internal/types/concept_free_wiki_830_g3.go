@@ -1114,6 +1114,8 @@ func batchConceptBusinessBodyField830G3(owner reflect.Type, field string) bool {
 	switch owner {
 	case reflect.TypeOf(ConceptDefinition830G2{}):
 		return field == "Title" || field == "Body"
+	case reflect.TypeOf(KnowledgeContentSegment{}):
+		return field == "Text"
 	case reflect.TypeOf(ConceptFieldAssertion830G2{}):
 		return field == "Value" || field == "UnknownReason" || field == "Conditions" || field == "Exceptions" || field == "ValidTime"
 	case reflect.TypeOf(ConceptFreeWikiPage830G2{}):
@@ -4488,7 +4490,7 @@ func validateDelta830G3(
 	request BatchConceptCompileRequest830G3, output ConceptCompileOutput830G2,
 ) error {
 	requestHash, err := compileRequestHash830G3(request.BaseRequest)
-	if err != nil || output.Contract != "concept-compile-output.830.g2.v1" ||
+	if err != nil || validateKnowledgeTransformation(output) != nil || output.Contract != "concept-compile-output.830.g2.v1" ||
 		output.RequestHash != requestHash {
 		return ErrConceptCandidateBundle830G3
 	}
@@ -4742,6 +4744,10 @@ func composeBatchOutput830G3(
 		Contract: "concept-compile-output.830.g2.v1", RequestHash: delta.RequestHash,
 		Definitions: definitions, Fields: fields, Pages: pages, Audit: audit,
 		Transformation: delta.Transformation,
+	}
+	// The final output also includes previously generated content carried from the base.
+	if validateKnowledgeTransformation(result) != nil {
+		result.Transformation = "SYNTHESIZE"
 	}
 	if validateConceptOutput830G3(request.BaseRequest, result) != nil {
 		return ConceptCompileOutput830G2{}, ErrConceptCandidateBundle830G3
