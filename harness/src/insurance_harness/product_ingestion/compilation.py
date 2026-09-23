@@ -259,6 +259,12 @@ def build_platform_compile_request(
         raise ValueError("platform compile requires source blocks")
     entity_versions = {row.entity_id: row.entity_version for row in bindings}
     required_fields = {row.entity_id: row.required_fields for row in bindings}
+    # Schema display order is not the wire order of the refresh set. Preserve
+    # every item (including invalid duplicates) for the compiler's closure check.
+    validated_refresh = tuple(sorted(
+        (compiler.FieldRefresh830G3V1.model_validate(row) for row in refresh_fields),
+        key=lambda row: (row.entity_id, row.field_key),
+    ))
     request_identity = compiler._batch_sha256(
         "platform-product-compile-request.830.g3.v1",
         {
@@ -267,7 +273,7 @@ def build_platform_compile_request(
             "proposals_sha256": proposals.proposals_sha256,
             "resolution_sha256": resolution.batch_sha256,
             "selected_refs": selected_refs,
-            "refresh_fields": refresh_fields,
+            "refresh_fields": validated_refresh,
         },
     )
     base_request = CompileRequest.model_validate(
@@ -310,9 +316,6 @@ def build_platform_compile_request(
         }
     )
     existing = build_existing_snapshot(scope=scope, base_body=base_body, policy=policy)
-    validated_refresh = tuple(
-        compiler.FieldRefresh830G3V1.model_validate(row) for row in refresh_fields
-    )
     return compiler.build_batch_compile_request(
         base_request=base_request,
         catalog_json=catalog_json,

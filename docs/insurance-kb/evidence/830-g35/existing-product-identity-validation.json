@@ -1,0 +1,166 @@
+{
+  "recorded_date": "2026-09-23",
+  "requirement_scope": "OpenSpec 129: existing product identity and recorded identity response recovery",
+  "source_commit": "62f84bc0dfa9e2933d62a20b7e5e5fa1425c0ab1",
+  "root_cause": "The v3 resolver required product code and filing anchors even when a brochure independently evidenced canonical issuer, full product name and year and uniquely matched an existing product. A missing product code also made the same-name existing product appear competitive.",
+  "implementation": "Versioned v4 resolution accepts a unique existing issuer/name/version match with independently supported current-material identity. Optional explicit code/filing must agree. Original proposals and evidence remain unchanged. Recorded-response recovery uses existing replay fencing and preserves authorized ancestor references across generations.",
+  "red": [
+    "Valid existing-product brochure fixture: expected MATCH, old implementation returned NEEDS_CONFIRMATION.",
+    "Third-generation recorded identity recovery lost its authorized ancestor call reference."
+  ],
+  "verification": [
+    {
+      "check": "Related Python suite before final ancestor-reference preservation fix",
+      "status": "PASS",
+      "passed": 166,
+      "seconds": 225.92,
+      "warning": "One existing Starlette deprecation warning"
+    },
+    {
+      "check": "Worker replay positive and genuine-missing-version negative, including third generation after final fix",
+      "status": "PASS",
+      "passed": 2,
+      "deselected": 25,
+      "seconds": 83.26
+    },
+    {
+      "check": "Ruff modified Python files and mypy three modified source files",
+      "status": "PASS"
+    },
+    {
+      "check": "Go targeted historical v3 and synthetic v4 cross-language replay",
+      "status": "PASS",
+      "seconds": 6.103
+    },
+    {
+      "check": "Actual saved brochure response: offline Python v3/v4 comparison and entity binding",
+      "status": "PASS",
+      "new_provider_calls": 0
+    },
+    {
+      "check": "Actual saved brochure response: Go resolution and binding replay",
+      "status": "PASS",
+      "seconds": 3.305,
+      "new_provider_calls": 0
+    },
+    {
+      "check": "Full internal/types package",
+      "status": "BLOCKED",
+      "seconds": 602.785,
+      "reason": "Reached default 10-minute suite timeout under local build load; no individual assertion failure recorded. This is not a full-suite PASS."
+    },
+    {
+      "check": "The provenance cross-language case active at full-suite timeout, separately bounded rerun",
+      "status": "PASS",
+      "seconds": 44.414
+    },
+    {
+      "check": "Final current-source checkpoint and identity combined suite",
+      "status": "PASS",
+      "passed": 47,
+      "seconds": 1012.75,
+      "warning": "One existing Starlette deprecation warning; concurrent local build load.",
+      "command": "PYTHONPATH=harness/src ../830-g3-performance/harness/.venv/bin/python -m pytest harness/tests/product_ingestion/test_checkpoint_identity_retry.py harness/tests/test_g3_evidence_identity_v3.py -q",
+      "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g35-knowledge-admission"
+    }
+  ],
+  "independent_review": {
+    "code": {
+      "status": "PASS",
+      "blockers": 0,
+      "manifest_sha256": "c54930b5a69dcbf1885f5cbed08f0e7d362b8439da6ef4d1309495377e20294e",
+      "files": 14
+    },
+    "deployment_script": {
+      "status": "PASS",
+      "blockers": 0,
+      "sha256": "e6e27c45b368aca7244e67b0ea4aec564ad831e9aa085dfe091018215c4ce63c",
+      "condition": "Both artifact receipts must pass and bind the exact expected source before execution."
+    }
+  },
+  "delivery": {
+    "harness_build": {
+      "status": "PASS",
+      "builds": 1,
+      "image": "sha256:dc76c18f9da8d7f836a5bf9af4c63077b38cf59b628b714362b68b6a194e1d3d"
+    },
+    "app_build": {
+      "status": "PASS",
+      "builds": 1,
+      "image": "sha256:72a7eecd673e66aca8f4929db0058f74bb7953c95b9bda6507b1e3d8686666c2",
+      "source": "62f84bc0dfa9e2933d62a20b7e5e5fa1425c0ab1"
+    },
+    "deployment": {
+      "status": "PASS",
+      "source": "62f84bc0dfa9e2933d62a20b7e5e5fa1425c0ab1",
+      "started_at": "2026-09-23T11:44:06.460721+00:00",
+      "new_ids": {
+        "/g3-platform-product-product-api-1": "065330634ecc1503e96cbf41106878ba14712b348f6f507b7d6e2ade4911a535",
+        "/weknora-g3-830-release-app-issuer-closeout-01": "75bfbac92334565544667c2954f77f022c769a76384ae680a3770eedd5cc8668",
+        "/g3-platform-product-product-worker-1": "2909f80b6db672230755f89140030afca1cc250f231e8e055d86d24f5ad083b6"
+      },
+      "old_ids": {
+        "/weknora-g3-830-release-app-issuer-closeout-01": "309160f4bba5031f5ff55cc0a9525549bd72ed0387676b936b89338512c6065f",
+        "/g3-platform-product-product-api-1": "12e2d241edc603a98aad2b7e0584693781178cf5318bf5a9ea557cd03824d905",
+        "/g3-platform-product-product-worker-1": "a1114889c3a5a615440bcf5b1075ebc8808e7917cf0d4af8668cf045f3595196"
+      },
+      "provider_calls": 0,
+      "business_write_requests": 0,
+      "migration": false,
+      "ui_container": "910dbd30ef29a86058980381040eb1bec2b75ee91edebbb89ff1323b2195d19e",
+      "finished_at": "2026-09-23T11:48:14.946731+00:00",
+      "active_head_unchanged": true,
+      "old_containers_preserved": true,
+      "ui_static_unchanged": true
+    },
+    "provider_probe": {
+      "status": "NOT RUN",
+      "new_calls_for_this_repair": 0
+    },
+    "github_live": {
+      "status": "NOT RUN"
+    },
+    "business_recovery": {
+      "status": "BLOCKED",
+      "run_id": "d8fd756e-9609-5e1f-8e1f-dcb8b126a5ec",
+      "finished_at": "2026-09-23T11:53:29.354614Z",
+      "identity": "PASS",
+      "identity_reused_calls": 1,
+      "source_reused_calls": 3,
+      "new_model_calls": 0,
+      "failed_stage": "field_plan",
+      "error": "FIELD_REFRESH_INVALID",
+      "diagnosis": "All 79 refresh fields exist, but caller supplies Schema display order rather than protocol canonical order."
+    },
+    "container_health": {
+      "status": "PASS",
+      "containers": {
+        "/g3-platform-product-product-api-1": "065330634ecc1503e96cbf41106878ba14712b348f6f507b7d6e2ade4911a535",
+        "/weknora-g3-830-release-app-issuer-closeout-01": "75bfbac92334565544667c2954f77f022c769a76384ae680a3770eedd5cc8668",
+        "/g3-platform-product-product-worker-1": "2909f80b6db672230755f89140030afca1cc250f231e8e055d86d24f5ad083b6"
+      }
+    },
+    "provisioning": {
+      "status": "PASS",
+      "migration": false,
+      "runtime_configuration_unchanged": true
+    },
+    "local_live": {
+      "status": "PASS",
+      "scope": "Health and unchanged Active Head after deployment; business recovery separately recorded."
+    }
+  },
+  "original_live_run": "2f0f8a89-ff30-4c04-9268-9ceacc5a34e8",
+  "original_identity_call": "e23dc81e-201c-458a-8a78-303377c4197d",
+  "original_identity_raw_sha256": "17a0484a8818d9d42f4309e3ce8fffe12c8bcb1c6023b351e1c3253cf3516d2e",
+  "private_receipts_working_directory": "/private/tmp/g35-live-20260923",
+  "business_limit": "Actual UI recovery passed identity by replay, but stopped at field planning before new model calls. Extraction, admission, publication, evidence navigation, quality and coverage remain unverified; G3.5 is not complete.",
+  "private_receipts_archive": "/Users/houjing/Documents/LLM_wiki/insurancekb-private-evidence/g35-live-20260923",
+  "receipts": {
+    "identity-final-targeted.log": "f843a9bb3c57d2f284d3513df298f07ab04543242ded84a4d267a191ec85f4aa",
+    "identity-repair/app-artifact.json": "5ff7e6aab4606c39afddce2311158e19ec0d7d8b8d91680f93fc0467d0fe853e",
+    "identity-repair/harness-artifact.json": "cf9939b4d3c26fdff07e20269682c7022a78ab96ed424641d9834598c7cefde1",
+    "identity-repair/deployment-result.json": "b0499d9190c9a6454810fe39cf747f821cefc417034c018819ea11cfe949bad6",
+    "shouhu-recovery/latest.json": "873865abe7505626ae1decebd7a1d16f36f1ff0f87fffffe97ccd5930dd819a5"
+  }
+}

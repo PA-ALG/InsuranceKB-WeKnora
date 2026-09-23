@@ -658,3 +658,42 @@ def test_null_collection_adapter_rejects_wrong_collection_type_on_valid_parent_f
     assert [(item["loc"], item["type"]) for item in error.value.errors()] == [
         (("conditions",), "tuple_type")
     ]
+
+
+def test_refresh_input_order_is_canonical_but_duplicates_remain_invalid() -> None:
+    parent, expected = platform_request()
+    _, child = candidates()
+    current = expected.resolution_inputs
+    entity_id = expected.refresh_fields[0].entity_id
+    refresh = tuple(
+        {"entity_id": row.entity_id, "field_key": row.field_key}
+        for row in sorted(
+            (row for row in expected.base_request.existing_fields if row.entity_id == entity_id),
+            key=lambda row: (row.entity_id, row.field_key),
+        )
+    )
+    assert len(refresh) > 1
+    args = dict(
+        scope=scope_for(parent),
+        base_body=base_body(parent, child),
+        catalog_json=CATALOG.read_bytes(),
+        profile_confirmation_json=CONFIRMATION.read_bytes(),
+        corpus=current.corpus,
+        proposals=current.proposals,
+        policy=current.policy,
+        resolution=expected.resolution,
+        selected_refs=tuple(sorted(
+            (p.material_id, c.proposal_ref)
+            for p in expected.resolution.decisions for c in p.children
+        )),
+    )
+    canonical = build_platform_compile_request(**args, refresh_fields=refresh)
+    reversed_input = tuple(reversed(refresh))
+    actual = build_platform_compile_request(**args, refresh_fields=reversed_input)
+    assert actual == canonical
+    assert actual.request_sha256 == canonical.request_sha256
+    assert tuple(reversed(reversed_input)) == refresh
+    with pytest.raises(
+        compiler.BatchConceptCompileError, match="BATCH_REQUEST_INVALID|FIELD_REFRESH_INVALID"
+    ):
+        build_platform_compile_request(**args, refresh_fields=(*refresh, refresh[0]))
