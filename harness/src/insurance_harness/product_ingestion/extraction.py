@@ -37,7 +37,7 @@ from insurance_harness.knowledge_compiler.g3_field_tasks import (
 LEGACY_REQUEST_CONTRACT = "product-field-window-request.v1"
 REQUEST_CONTRACT = "product-field-window-request.v2"
 RESPONSE_CONTRACT = "g3-d-compile-semantic-references.local.v1"
-VALIDATION_VERSION = "product-field-outcome.v1"
+VALIDATION_VERSION = "product-field-outcome.v2"
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
 Transport = Callable[[bytes], Awaitable[bytes]]
@@ -379,7 +379,14 @@ def _project(
             outcomes.append(_failure(task, "DUPLICATE_FIELD" if rows else "MISSING_FIELD", raw_ref))
             continue
         try:
-            row = G3DFieldReferenceV1.model_validate(rows[0])
+            # These external empty-value spellings carry no additional fact.
+            # Copy only the decoded row: the persisted provider bytes stay intact.
+            adapted = dict(rows[0])
+            if "valid_time" in adapted and adapted["valid_time"] is None:
+                adapted["valid_time"] = ""
+            if adapted.get("state") == "present" and "unknown_reason" not in adapted:
+                adapted["unknown_reason"] = None
+            row = G3DFieldReferenceV1.model_validate(adapted)
             if (row.value is not None and not row.value.strip()) or (
                 row.unknown_reason is not None and not row.unknown_reason.strip()
             ):

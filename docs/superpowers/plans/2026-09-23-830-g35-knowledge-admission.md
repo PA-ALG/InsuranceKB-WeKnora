@@ -299,3 +299,17 @@ root唯一写域扩至g3_evidence_identity_v3.py、Go对应concept_free_wiki_830
 已部署62f84bc0，正常网页恢复d8fd756e成功复用身份1次/原始解析调用3次，新模型0；identity成功，field_plan失败。原制品离线完整请求重放定位FIELD_REFRESH_INVALID：79个已存在字段均合法，但Schema显示顺序不是协议要求的(entity_id,field_key)规范顺序。既有编译器已正确校验有序唯一更新集合；缺口仅为product_ingestion.compilation的请求组装未规范化。复用已有build_platform_compile_request，在适配边界验证字段结构并排序，请求身份与实际refresh列表使用同一规范顺序；不删除重复、不放宽旧字段/当前实体约束、不修改Go协议。
 
 先增加乱序更新列表与规范输入产生相同完整请求的RED，以及重复更新仍拒绝的反例；再最小修改compilation.py。沿用G35-R1及G3-AUTO增量合同，Owner=root，写域为该适配器/其测试及本计划/Spec/验证记录。使用已保存真实base/identity离线重放完整请求与字段窗口，独立只读复核后只构建Harness、复用APP/UI；沿正常UI恢复，不手工组装业务候选或改任务DB。终态恢复与内容质量独立记账。
+
+## 2026-09-23 原生准入当前实体引用边界（真实响应复现）
+
+字段规划修复bfcf37233已部署，UI恢复e375979e通过规划并实际返回8个字段窗口；原生发现及chunk关联均成功，全文6123字符/无省略、13候选。准入原响应c1引用context.entity.entity_id，符合既有prompt的“offered identity”，但投影只将definitions/pages视为可REFERENCE，导致整个准入失败。root仅修复native_admission.py的只读引用目标集合：允许经完整request与context重建验证的当前entity_id，保持概念/页面引用；UPDATE/NEW仍只针对原成员集合，不允许新建/修改实体。异空间/非当前实体引用继续拒绝。先当前实体引用RED+非当前反例，再软件和保存raw离线重放，不改变prompt/input字节，不重调已成功producer。模板/语义质量及字段失败另按真实结果核验，不用此接口修复声称质量PASS。
+
+## 2026-09-23 字段响应兼容与内容覆盖复核（root 唯一写者）
+
+实际42项失败中40项valid_time=null，2项present缺unknown_reason；只读独审限定归一后41项通过既有完整证据校验（22事实、19未提供），1项错误引用仍拒绝。缺口位于product_ingestion.extraction的外部响应适配边界，复用G3DFieldReferenceV1和FieldTaskEvidenceResultV1，不放宽核心事实/引用合同。仅显式null有效期转空字符串，仅present缺unknown_reason补None；缺有效期、unknown缺原因、错误类型、错误引用仍失败。raw原字节先落库且不改；VALIDATION_VERSION升product-field-outcome.v2，缓存保留原成功结果来源。不新建旧raw写回/恢复机制，部署后走既有retry_fields，仅重试失败字段。
+
+先测试复现两种协议形状和严格反例，再最小适配及提示词修订。字段prompt明确必填nullable键、空有效期、精确引用、完整条件/例外；部署时显式绑定新模板hash，不改模型、端点、预算和发布范围。写域extraction.py、pipeline.py及其测试、本计划/Spec/验证记录；既有native引用修复合并独审与Harness一次构建部署，当前运行未终态前不得更换服务。自由候选13个不视为覆盖PASS：另逐项核对已冻结原文18项内容与实际字段/候选/准入处置，先定位遗漏再修正，不用增加页数替代质量。
+
+只读18项复核：5项现有有效结果覆盖、7项限定归一可恢复、6项仍有缺口/证据失败。原生未提免责退费对象和利益演示边界；年龄错误处理因“通用”误拒，未如实告知后果误归健康问卷字段。修订既有insurance purpose至v2，强调逐节保留权利义务的后果/对象/时限及示例边界而不注入样本答案；修订原生准入prompt，按Schema完整语义区分字段事实和独立规则/解释，不能仅因通用性、同一主题或字段名而拒绝。字段事实仍由Schema承接，字段失败不授权复制同名自由页；禁止第二发现与凑页数。用途文本与模板hash显式更新使相关发现/准入重算，原raw保留；全局model policy变化会使原调用不具备exact复用条件，必须如实记录，不能声称本轮这些模型零调用。
+
+原生REFERENCE独审反例：当前实体target存在不足以证明语义身份，概念或另一实体不得被吞成当前产品。先补concept→current、other entity→current拒绝RED；正例必须是kind=entity且name精确匹配context.entity.display_name。仅可信当前正式名称可接受，不用模型自称alias建立身份授权。native当前实体边界修复与上述响应/提示词集中独审；其余旧成员REFERENCE规则不扩改。

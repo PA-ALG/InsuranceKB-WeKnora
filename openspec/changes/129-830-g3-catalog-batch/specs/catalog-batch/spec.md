@@ -264,3 +264,22 @@ G35-R3来源一致性：含MODEL_GENERATED的定义必须origin=MODEL_COMPILE；
 - GIVEN 已唯一匹配既有产品，新增材料需要刷新已有字段，Schema字段显示顺序与协议排序不同
 - WHEN product_ingestion适配器构造完整增量编译请求
 - THEN MUST验证更新项结构，并按(entity_id,field_key)排序；请求身份和refresh_fields采用同一规范集合顺序。相同更新项的不同输入顺序产生相同请求。重复项、非已有字段、非当前实体仍由既有编译校验拒绝；不得静默删项或放松证据/发布合同。
+
+#### Scenario: G35-R2 当前产品实体的只读引用
+
+- GIVEN 原生候选指向当前已解析产品，准入context已提供经编译请求绑定的entity_id
+- WHEN 准入返回REFERENCE且existing_target等于该当前entity_id
+- THEN MUST保留为只读引用处置，不要求为实体重复建立free page；不得生成实体/关系或修改已有成员。非当前实体引用仍拒绝，NEW/UPDATE的成员、版本、Schema及来源校验保持。
+- AND 当前实体REFERENCE MUST仅接收kind=entity且name等于可信context.entity.display_name的候选；概念及其他产品名称不得因返回当前entity_id被静默吞并，模型自报alias不能授予身份。
+
+#### Scenario: G35-R1/R3 字段响应空值的限定兼容
+
+- GIVEN 模型已返回并持久保存原始字段响应，外部协议出现valid_time显式null或present行遗漏nullable unknown_reason
+- WHEN product-field-outcome.v2在适配边界解释该响应
+- THEN MAY仅将显式null有效期转空字符串、仅为present缺失原因补None，再走原有严格结构/字段状态/引用原文校验；MUST不改原raw，不补缺失有效期，不补unknown原因，不修改引用或事实。缓存/窗口身份MUST绑定新验证版本及实际prompt；未知发送不补发，已成功结果保持，失败恢复复用现有字段重试入口。
+
+#### Scenario: G35-R2/R5 保险场景知识覆盖与语义去重
+
+- GIVEN 原生发现面对完整保险材料，Schema已声明字段用途
+- WHEN 发现并准入候选知识
+- THEN MUST关注各节实际权利义务、后果/对象/时限/条件/例外和演示适用边界；不得以篇幅短或规则通用作为唯一删除理由。Schema去重MUST比较完整定义与语义职责，不得只按主题名称推断覆盖。独立规则/解释可准入，字段值仍由Schema流程承接，禁止因字段技术失败复制同名free page。完整原文输入不等于语义覆盖PASS，真实质量验证MUST逐项核对原文和有效产物。

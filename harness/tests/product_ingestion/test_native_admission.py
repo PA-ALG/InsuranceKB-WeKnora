@@ -349,3 +349,48 @@ def test_update_page_with_new_concept_keeps_each_member_action_through_review(ca
     payload["decisions"][0]["decision"] = "NEW"
     with pytest.raises(ValueError, match="action mismatch"):
         project(values, ctx, payload)
+
+
+def test_reference_current_entity_does_not_create_or_update_members(case: Any) -> None:
+    request, entity, snapshot, source = inputs(case)
+    native = snapshot.model_dump(mode="json")
+    native["candidates"][0].update(
+        kind="entity", name=context((request, entity, snapshot, source))["entity"]["display_name"]
+    )
+    snapshot = NativeDiscoverySnapshot.model_validate(native)
+    values = request, entity, snapshot, source
+    ctx = context(values)
+    payload = response(ctx)
+    payload["pages"] = []
+    payload["decisions"][0].update(decision="REFERENCE", member_refs=[], existing_target=values[1])
+    result = project(values, ctx, payload)
+    assert not result.output.pages and not result.output.definitions and not result.output.audit
+    assert result.dispositions[0]["existing_target"] == values[1]
+    assert result.dispositions[0]["disposition"] == "REFERENCE"
+    payload["decisions"][0]["existing_target"] = "unoffered-entity"
+    with pytest.raises(ValueError, match="audit-only decision invalid"):
+        project(values, ctx, payload)
+
+
+@pytest.mark.parametrize("kind", ["concept", "entity"])
+def test_current_entity_reference_rejects_different_candidate_identity(
+    case: Any, kind: str
+) -> None:
+    request, entity, snapshot, source = inputs(case)
+    native = snapshot.model_dump(mode="json")
+    native["candidates"][0]["kind"] = kind
+    if kind == "concept":
+        native["candidates"][0]["name"] = context((request, entity, snapshot, source))["entity"][
+            "display_name"
+        ]
+    # The other entity keeps a different name, even if its model-proposed alias matches.
+    native["candidates"][0]["aliases"] = [
+        context((request, entity, snapshot, source))["entity"]["display_name"]
+    ]
+    values = request, entity, NativeDiscoverySnapshot.model_validate(native), source
+    ctx = context(values)
+    payload = response(ctx)
+    payload["pages"] = []
+    payload["decisions"][0].update(decision="REFERENCE", member_refs=[], existing_target=entity)
+    with pytest.raises(ValueError, match="current entity candidate identity mismatch"):
+        project(values, ctx, payload)

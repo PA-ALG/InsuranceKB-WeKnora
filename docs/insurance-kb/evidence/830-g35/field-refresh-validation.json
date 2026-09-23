@@ -1,0 +1,74 @@
+{
+  "status": "PASS",
+  "source_base": "62f84bc0dfa9e2933d62a20b7e5e5fa1425c0ab1",
+  "frozen_files": {
+    "harness/src/insurance_harness/product_ingestion/compilation.py": "e0bfc3459a184567f10277dee86e1419cf5f41d10969d503e819dfc3c048e8b9",
+    "harness/tests/product_ingestion/test_compilation.py": "ddfdc01d7e84af1a16548a8eb0b3cd8afa11d855e810a8cce3ad35bec836f965",
+    "docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md": "c3e012f22392a3b354c379117a613db7d287a9ed5038d87ce22f09c3a78b8da5",
+    "openspec/changes/129-830-g3-catalog-batch/specs/catalog-batch/spec.md": "870d091a1fc68cb036dd377a895cd3bfdd526b07918e4afafdc889338ea65763",
+    "docs/insurance-kb/evidence/830-g35/existing-product-identity-validation.json": "dcb3f8e518724687fbb62d883d8877abde6064d49aaea7dd4c4b848ccad1703c"
+  },
+  "red": {
+    "failed": 1,
+    "seconds": 39.06
+  },
+  "green": {
+    "passed": 20,
+    "seconds": 554.01
+  },
+  "ruff": "PASS",
+  "mypy": "PASS",
+  "real_offline": {
+    "status": "PASS",
+    "request_sha256": "091ee77026a05620cd070fc595a3354cf3a92bec58f728ab1cae2e0d5680cc28",
+    "refresh_fields": 79,
+    "windows": 8,
+    "tasks": 79,
+    "new_model_calls": 0
+  },
+  "new_provider_calls": 0,
+  "delivery": {
+    "status": "PASS",
+    "source": "bfcf37233c5c35b5a6482cc74d09ebef356d823a",
+    "started_at": "2026-09-23T12:27:35.277346+00:00",
+    "new_ids": {
+      "/g3-platform-product-product-api-1": "bf6bf7802bf85dcb6659e018b4ecc2e66ba6991a5d8af8f0bf9e7c9bf3b4eb68",
+      "/g3-platform-product-product-worker-1": "81279894a1cb6c020d75b7fda67905e987c0a9b44a9b0c6169b960cc896632a6"
+    },
+    "old_ids": {
+      "/g3-platform-product-product-api-1": "065330634ecc1503e96cbf41106878ba14712b348f6f507b7d6e2ade4911a535",
+      "/g3-platform-product-product-worker-1": "2909f80b6db672230755f89140030afca1cc250f231e8e055d86d24f5ad083b6"
+    },
+    "provider_calls": 0,
+    "business_write_requests": 0,
+    "migration": false,
+    "ui_container": "910dbd30ef29a86058980381040eb1bec2b75ee91edebbb89ff1323b2195d19e",
+    "app_container_unchanged": "75bfbac92334565544667c2954f77f022c769a76384ae680a3770eedd5cc8668",
+    "finished_at": "2026-09-23T12:29:20.794578+00:00",
+    "active_head_unchanged": true,
+    "old_containers_preserved": true,
+    "ui_static_unchanged": true
+  },
+  "receipts": {
+    "shouhu-recovery/refresh-red.log": "29f92809432d4e4ba89234355262a0f8555e7dc6c8c38bf1c3eb35a4ee3056db",
+    "shouhu-recovery/refresh-green.log": "621aa91c36d5611a29eeefe5494786912e8577d90924d0d2ce8db4b846ed377c",
+    "shouhu-recovery/field-plan-replay-result.json": "031118fe511f1b4218954390bc0a5c4164f2d7ce1a874e9a84cd498e1ede6e31",
+    "refresh-repair/mypy.log": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e"
+  },
+  "source_commit": "bfcf37233c5c35b5a6482cc74d09ebef356d823a",
+  "independent_review": {
+    "status": "PASS",
+    "blockers": 0,
+    "reviewer": "semantic_view_review",
+    "native_design_review": "PASS",
+    "final_native_review": "Unavailable: reviewer usage limit; final review completed by semantic_view_review"
+  },
+  "build": {
+    "status": "PASS",
+    "source": "bfcf37233c5c35b5a6482cc74d09ebef356d823a",
+    "image": "sha256:cfaa2155d6305b071f12c79ba206a8a102ae0951240b30545181bd0725e27e4f"
+  },
+  "deployment_script_sha256": "19e228bba328e75aac57b1aa927676e213ed6c585780991f67a11137cccae195",
+  "business": "NOT RUN",
+  "note": "Actual failed run retained; new software passes offline full request and window construction. No claim of extraction quality or publication."
+}

@@ -202,6 +202,95 @@ def test_mixed_fields_keep_valid_result_and_save_raw_before_projection(source: t
     ]
 
 
+@pytest.mark.parametrize("state", ["present", "unknown"])
+def test_explicit_null_valid_time_is_empty_without_changing_saved_raw(
+    source: typing.Any, state: str
+) -> None:
+    selected = tasks(source, ("benefit",))
+    port = Port(
+        lambda request: response(
+            [
+                {
+                    **row(
+                        selected[0],
+                        request,
+                        state=state,
+                        value=None if state == "unknown" else "100",
+                    ),
+                    "valid_time": None,
+                }
+            ]
+        )
+    )
+    result = execute(source, selected, port)[0]
+    assert result.outcome == ("not_provided" if state == "unknown" else "verified")
+    assert result.validated_result.valid_time == ""
+    assert json.loads(port.saved_raw)["fields"][0]["valid_time"] is None
+    assert module().VALIDATION_VERSION == "product-field-outcome.v2"
+
+
+def test_present_missing_nullable_reason_preserves_raw_and_validates_evidence(
+    source: typing.Any,
+) -> None:
+    selected = tasks(source, ("benefit",))
+
+    def make_response(request: typing.Any) -> bytes:
+        item = row(selected[0], request)
+        del item["unknown_reason"]
+        return response([item])
+
+    port = Port(make_response)
+    result = execute(source, selected, port)[0]
+    assert result.outcome == "verified"
+    assert result.validated_result.unknown_reason is None
+    assert "unknown_reason" not in json.loads(port.saved_raw)["fields"][0]
+
+
+@pytest.mark.parametrize(
+    "bad_shape",
+    [
+        "missing_valid_time",
+        "numeric_valid_time",
+        "unknown_missing_reason",
+        "unknown_null_reason",
+        "missing_state",
+        "bad_quote",
+    ],
+)
+def test_empty_metadata_compatibility_never_repairs_semantic_errors(
+    source: typing.Any, bad_shape: str
+) -> None:
+    selected = tasks(source, ("benefit",))
+
+    def make_response(request: typing.Any) -> bytes:
+        unknown = bad_shape.startswith("unknown_")
+        item = row(
+            selected[0],
+            request,
+            state="unknown" if unknown else "present",
+            value=None if unknown else "100",
+        )
+        item["valid_time"] = None
+        if bad_shape == "missing_valid_time":
+            del item["valid_time"]
+        elif bad_shape == "numeric_valid_time":
+            item["valid_time"] = 0
+        elif bad_shape == "unknown_missing_reason":
+            del item["unknown_reason"]
+        elif bad_shape == "unknown_null_reason":
+            item["unknown_reason"] = None
+        elif bad_shape == "missing_state":
+            del item["state"]
+        else:
+            item["evidence"][0]["quote"] = "赔付金额为999元。"
+            del item["unknown_reason"]
+        return response([item])
+
+    result = execute(source, selected, Port(make_response))[0]
+    assert result.outcome == "extraction_failed"
+    assert result.validated_result is None
+
+
 @pytest.mark.parametrize("discovery", [False, True])
 def test_unknown_is_valid_not_provided_and_cached_without_transport(
     source: typing.Any, discovery: typing.Any

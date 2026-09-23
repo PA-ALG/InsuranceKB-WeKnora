@@ -1,3 +1,39 @@
+# 当前状态（2026-09-23 · 已确认覆盖遗漏，集中质量修复独审通过；真实发布超时失败）
+
+root同一工作树830-g35-knowledge-admission。当前集中修复在bfcf37233后：字段响应v2仅适配显式null有效期/仅present缺nullable原因，原raw与严格引用保持；字段提示词保义与JSON键明确；原生当前产品REFERENCE仅允许kind=entity且正式名称精确匹配，禁止概念/其他实体/模型alias吞并；准入按Schema完整语义判断，通用规则不能单凭通用性拒绝；insurance-native-purpose-v2逐节关注对象/后果/例外/示例边界，无样本答案或数量目标。
+
+字段RED3fail8.41s→62PASS34.21s；当前entity语义反例RED2fail23.53s→native19PASS81.31s；ruff/mypy/diff-check PASS。实际保存raw离线字段28有效/50未提供/1错误引用，原文件SHA不变；原生13候选投影通过但仍0页，仅证明边界修复。semantic_view_review对8文件冻结清单独审0 BLOCKER。软件与配置离线准备PASS，构建/部署/新提示词真实业务均NOT RUN，本轮新增模型0。验证field-boundary-validation.json；精确清单及离线配置/private/tmp/g35-live-20260923/field-boundary-repair。
+
+18项原文覆盖审计已完成，报告docs/insurance-kb/evidence/830-g35/shouhu-coverage-audit-20260923.md：5已有效覆盖、7限定适配可恢复、2犹豫/退保需字段重试、4真实语义遗漏（免责退款对象、年龄错误、说明/告知后果、利益演示边界）。不是全文覆盖率，不能把全文6123字符无省略或候选13视为质量PASS。
+
+线上e375979e于13:21:07.806144Z终态failed/PRODUCT_STAGE_FAILED:publish（12:30:05启动）。新增11模型，复用identity1/source3；fields6/31/42；native失败。compilation12分15秒、preparation11分、review3分55秒，publish三次300s ReadTimeout后dead_letter。Go已观察一次activate耗时7m51返回503 CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE，来源检查cancelled=true/195149ms/source_proofs=0；APP约408%CPU，worker约164%CPU，心跳正常。这是尚未解决的发布阻断，不能声称链路跑通，也不能据此证明原PDF来源无效。APP/Harness/UI仍62f84bc0/bfcf37233/73100bd61，未换服务；Active最近已验证epoch17，新Head须重新GET确认。
+
+NEXT：先单独定位发布的重复完整验证/取消问题，保持当前质量修复独立；不要再盲目新发模型。原run尚未发布的6成功字段不能因retry_fields只选42失败而丢失；且新native策略会被旧processing checkpoint严格拒绝。后续宜通过正常网页完整重新处理同一材料，复用现有source/field成功缓存，再核验18项与原文点击/模型标志；不得绕过checkpoint漂移或手工写候选。配置仅两模板hash/id、field_template_id和purpose改变，实际部署须验证旧新完整配置hash，model/endpoint/预算/权限不变；新policy确实使旧native调用不再exact复用，不能谎称零调用。
+
+以下为历史状态。
+
+# 当前状态（2026-09-23 · 字段规划修复已部署，守护说明书真实任务发布准备中）
+
+最新代码HEAD=bfcf37233c5c35b5a6482cc74d09ebef356d823a；APP保持62f84bc0，Harness已按bfcf37233仅更新API/worker，UI73100bd61保持。字段规划修复20PASS/554.01s、真实保存完整请求79字段/8窗口离线PASS，代码及部署独审0 BLOCKER，部署PASS/无迁移/Active epoch17不变。部署脚本及制品在private-evidence/g35-live-20260923/refresh-repair，公开field-refresh-validation.json。
+
+正常网页二次恢复得到e375979e-1118-58d5-b2e4-f5aba0ccec98（12:30:05Z启动），不是脚本建任务；提交确认曾超时，列表已确认接收，不再重复提交。field_plan通过，8字段窗口79项=6通过/31未提供/42FIELD_VALIDATION_FAILED；新增11模型调用（字段8、原生发现/引用2、准入1），复用身份1及原始解析3。原生producer成功覆盖全文6123字符、无省略，13候选；原生贷款公式正确。准入原响应将当前context.entity作为REFERENCE，但投影仅允许旧概念/页面，导致整组native admission audit-only decision invalid。10候选被拒绝、2需实体解析的语义处置仍需质量评估，不能把全文输入覆盖当知识覆盖PASS。
+
+root已在native_admission.py只读引用集合加入经context完整核验的当前entity_id，NEW/UPDATE权限不变；原件不改。RED1失败29.11s→GREEN17通过108.38s，真实保存响应离线投影13候选PASS（1REFERENCE/2REQUIRES_ENTITY_RESOLUTION/10REJECT，0新页/定义），0新模型。该修复及测试/计划/Spec未提交未部署，冻结private/native-boundary-repair/review-manifest.json，等待最终独审；不要在当前任务运行时换代服务。
+
+当前任务12:49:55Z完成compilation，12:50:14Z进入preparation，最近12:56Z仍运行、心跳正常，无终态或新发布回执。42字段共同表层原因已由只读review确认：40个valid_time=null（要求字符串），2个缺unknown_reason；正在离线验证纠正形状后是否还有证据错误，尚未改字段实现/提示词。所有原响应、字段和制品保存在shouhu-recovery-2私密目录，监测session62883。质量/覆盖未通过，完整效果仍未验收，G3.5未完成。继续原任务，不创建新workspace、不换模型/账号、不盲目重发已记录响应。
+
+以下为历史状态，不覆盖本段。
+
+# 当前状态（2026-09-23 · 产品身份修复已部署，字段规划顺序修复验证中）
+
+用户已明确平安人寿产品可用完整名称+年份确认；说明书缺编码/备案不应凭空制造歧义。源码62f84bc0dfa9e2933d62a20b7e5e5fa1425c0ab1已部署，APP72a7eecd673e...、Harnessdc76c18f9da8...；UI继续73100bd61，主应用/处理服务健康，Active仍release-b8d07e76 epoch17。独审0 BLOCKER；最终47项PASS/1012.75s，Go全包10分钟超时仍BLOCKED，定向跨语言及实际保存响应离线回放PASS。详细事实见existing-product-identity-validation.json。
+
+新材料为平安守护百分百（2026）两全保险/产品说明书.pdf，SHA d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a，7物理页。原run2f0f8a89身份误拒；正常网页恢复生成d8fd756e-9609-5e1f-8e1f-dcb8b126a5ec，身份成功，复用身份1及来源处理3次，新模型0。网页提交曾未及时确认，刷新已核实成功，不可重复提交。恢复run最终11:53:29Z在field_plan失败：实际完整请求离线定位79项合法已存在字段被按Schema展示顺序传入，违反refresh_fields规范排序，FIELD_REFRESH_INVALID。
+
+root继续原工作树，已先补计划/Spec/RED，在product_ingestion.compilation适配边界严格验证并排序refresh；请求身份与编译使用同序，不去重、不放松底层约束。20项适配器回归与真实完整请求/窗口离线验证进行中，独审复核中。通过后仅构建部署Harness，APP/UI复用，再走网页恢复。尚无新抽取/准入/审核/发布，业务仍BLOCKED，G3.5未完成。18项质量/覆盖清单已按原PDF冻结；重点核对贷款应为现金价值×80%−欠款，原生来源摘要现有错写不作为正式知识依据。
+
+私密原始回执在/private/tmp/g35-live-20260923；已同步主要构建/部署/身份/恢复制品至/Users/houjing/Documents/LLM_wiki/insurancekb-private-evidence/g35-live-20260923。不创建新workspace，不改模型配置或发布权威，账号继续复用既有g3-test-operator私密凭据。以下为历史状态，不覆盖本段。
+
 # 当前状态（2026-09-23 · 原生候选模式已部署，真实业务验收待来源准备）
 
 用户明确要求复用830-G3总控账号，已从既有私密归档通过正常网页登录成功，tenant10003/admin；不要重新索要账号、重置密码或创建新环境。用户追加自由发现必须同时关注质量和覆盖度，检查表见docs/insurance-kb/evidence/830-g35/insurance-coverage-checklist-v1.md，全部真实效果仍NOT RUN。
