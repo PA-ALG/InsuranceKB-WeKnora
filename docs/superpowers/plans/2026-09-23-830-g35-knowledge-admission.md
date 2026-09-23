@@ -1,5 +1,11 @@
 # 830-G3.5 自由发现与知识准入实施计划
 
+## 当前状态：来源片段独立审核软件完成（2026-09-23）
+
+原生逐窗执行已提交e879cf7ff。来源审核冻结tree88443394f2ab52a2944b57c69bd576eb5ac2b3f1，独审0 BLOCKER：新来源对象自动采用v5，不允许降到旧审核；逐片段标志、完整展示内容及按真实Evidence次序校验的原文进入审核。新模板独立受purpose/prompt授权，无原文的纯生成内容不得获得evidence_quality分。旧v3/v4及旧提示保持，最终hash/整组准入复用。
+
+来源反例4RED、模板接线4RED后，最终受影响45PASS，语义依赖29PASS，Ruff/mypy PASS；证据见provenance-review-validation.json。CURRENT=PROVENANCE_REVIEW_SOFTWARE_GREEN；NEXT_READY=原生候选语义准入/更新、显式runtime策略和旧写页互斥。新pipeline/模型配置尚未启用，本轮0真实模型/构建/部署/发布，BUSINESS=NOT RUN。以下历史状态不覆盖本段。
+
 ## 当前状态：原生逐窗执行软件完成（2026-09-23）
 
 内容来源与展示已提交d04868fdd。原生逐窗collector冻结tree0b2352e49d5df56df37240684cf4ee3cd39aa013，最终独审0 BLOCKER。完整签名窗口、先存provider raw后投影、精确父响应复验、未知发送阻断及兄弟失败保留已实现；模型计划预算覆盖真实JSON包装和provider envelope。固定原生批次超预算明确失败，不截断。
@@ -167,3 +173,9 @@ G35-R3展示检查发现G2目录也直接展示定义正文，故同Owner必要�
 复用source_snapshot既有签名artifact、PlatformClient.native_discovery及ConfiguredModelExecutor.execute_stage_call。每文档先验证完整plan，逐窗执行发现和引用，成功provider raw先进入StageCall，再请求签名候选快照；收集完整窗口集合后才供后续准入使用。窗口失败保留已完成结果和明确失败阶段，不能把单窗成功当全文完成。模型请求键绑定来源、原生策略、阶段、窗口与输入，父任务只复用同策略且请求/raw完整的已记录结果；未知发送继续阻断，HTTP确定失败可按现有规则重新规划。原生两阶段只生成候选及线索，不编译正式Evidence或写Active。
 
 该步唯一root写域：新增product_ingestion/native_discovery_stage.py及test_native_discovery_stage.py；现有discovery_stage.py仅把同职责模板选择/父调用校验helper公开复用，必要model_execution既有测试与checkpoints的artifact声明；本计划/对应OpenSpec129/evidence。暂不启用pipeline策略，不执行真实provider；后续准入响应/投影、来源review新版本以及Go自动写页互斥完成后才能接运行。模型/部署授权不扩大。
+
+## 下一切片：来源片段独立审核（G35-R3，沿既有审核边界）
+
+已实现的展示合同必须贯穿最终语义审核，不能只加UI标签。现有review v4只向审核展示正文与页面级evidence，且旧prompt一律拒绝无来源补充。新增review context v5及单独受模板授权的新prompt：含新来源合同的候选逐片段核查来源支持/模型生成，允许明确标注且有用的补充，拒绝把产品保障/金额/资格条件猜测包装成通用补充；纯生成的evidence_quality必须0。最终输出hash和整组审核发布门禁复用，不增加独立审核平台。旧v3/v4及旧prompt字节保持，新的来源对象不允许降级到旧审核上下文。
+
+root必要写域：discovery.py的独立review renderer/版本选择，必要同职责纯来源视图helper；现有discovery_stage.py最终审核模板选择与评分校验、discovery_composition.py父响应prompt核验；tests/product_ingestion中对应review/provenance/replay tests、计划/OpenSpec129/evidence。先验证新内容在旧renderer中丢失片段标志的RED，再实现；尚不改变运行配置或新增真实模型调用。

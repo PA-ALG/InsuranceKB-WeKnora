@@ -1,0 +1,55 @@
+{
+  "contract": "g35-provenance-review-validation.830.v1",
+  "base_commit": "e879cf7ff0409d7e56b68664f93c109719a74b4a",
+  "reviewed_tree": "88443394f2ab52a2944b57c69bd576eb5ac2b3f1",
+  "requirements": [
+    "G35-R1",
+    "G35-R3",
+    "G35-R5",
+    "G35-R6"
+  ],
+  "scope": "Existing final-review path extended to provenance-aware context v5 and explicit model template purpose; no runtime configuration activation.",
+  "red": [
+    "4 missing-provenance/downgrade counterexamples",
+    "4 final-stage new-template selection counterexamples"
+  ],
+  "validation": {
+    "final_affected": "45 passed in 17.45s: new provenance review (9), independent discovery, discovery replay custody",
+    "semantic_dependencies": "29 passed after renderer change; combined with initial new 5, 34 passed in 6.33s",
+    "intermediate_failures": "10 failures/64 passed exposed an accidentally inserted positional argument, early invalid-final-hash check ordering, and missing diagnostic in a new test double; fixed and affected suites rerun",
+    "mypy": "PASS 3 modified source files",
+    "ruff": "PASS",
+    "diff_check": "PASS"
+  },
+  "review": {
+    "reviewer": "semantic_view_review",
+    "tree": "88443394f2ab52a2944b57c69bd576eb5ac2b3f1",
+    "blockers": 0,
+    "mechanical_docs_red_exemption": "Explicitly confirmed HANDOFF/plan top and evidence-only result recording."
+  },
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "remaining": [
+    "New native admission producer must require content_provenance on every new member",
+    "Wire explicit native runtime policy, old native write mutual exclusion, checkpoint receipts/metrics",
+    "Real source/material/provider acceptance remains NOT RUN"
+  ],
+  "frozen_files": {
+    "docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md": "61a037fbef1c9ce43e62f03410857d049d637ce18bb88725474dcfd2f7d4b6a4",
+    "harness/src/insurance_harness/product_ingestion/discovery.py": "427b8ae957fc3891da97f800498b323bae56f2512b74ff88200e66a3c77ebb0b",
+    "harness/src/insurance_harness/product_ingestion/discovery_composition.py": "dfb8d1fd139420712a120d226b39750db2bd72aa1386e464fd5c4c0769fae180",
+    "harness/src/insurance_harness/product_ingestion/discovery_stage.py": "0801c4d038eacafde6116890e2e2bcee853d544d1295c48f36120d876d896da6",
+    "harness/tests/product_ingestion/test_discovery_provenance_review.py": "9a7e4e6d70e9c467ea7750bf6179d35ff82381bd8e5a536ebc1de87ca21a1a5f"
+  }
+}

@@ -1,3 +1,9 @@
+# 当前状态（2026-09-23 · 来源片段独立审核软件完成）
+
+来源显示提交d04868fdd、逐窗collector提交e879cf7ff；来源审核冻结tree88443394f2ab52a2944b57c69bd576eb5ac2b3f1，独审0 BLOCKER。新对象自动review v5且拒绝降级；真实Evidence逐条核验并按原次序提供给片段审核，纯生成证据分须0，新prompt须独立模板授权。旧对象/旧prompt兼容，最终hash和整组准入保持。
+
+最终受影响45PASS、语义依赖29PASS、Ruff/mypy PASS，见provenance-review-validation.json。CURRENT=PROVENANCE_REVIEW_SOFTWARE_GREEN；NEXT_READY=原生语义准入/更新及显式runtime接线/旧写页互斥。尚未开启新pipeline及模板，本轮真实模型/构建/部署/发布0，BUSINESS=NOT RUN，G3.5未完成。以下为历史记录。
+
 # 当前状态（2026-09-23 · 原生逐窗collector软件完成）
 
 内容来源/页面展示提交d04868fdd；原生逐窗collector冻结tree0b2352e49d5df56df37240684cf4ee3cd39aa013，最终独审0 BLOCKER。通过既有StageCall先持久原响应后原生投影，精确父调用复用，unknown阻断，完整窗口及兄弟失败保留；实际请求包装预算经边界反例修复。首轮47PASS、修复后collector6PASS，Ruff/mypy PASS，详见native-discovery-stage-validation.json。

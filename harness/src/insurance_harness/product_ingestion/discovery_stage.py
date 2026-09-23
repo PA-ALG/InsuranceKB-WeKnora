@@ -55,8 +55,8 @@ from insurance_harness.product_ingestion.discovery import (
     DISCOVERY_PROMPT,
     DISCOVERY_REVIEW_PROMPT,
     INDEPENDENT_DISCOVERY_PROMPT,
-    INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
     build_discovery_exclusion_index,
+    independent_discovery_review_policy,
     independent_discovery_window_audits,
     project_discovery_response,
     project_discovery_review,
@@ -141,6 +141,14 @@ def _validated_independent_review(
         raise ValueError("discovery review binding mismatch")
     if set(review_output.page_scores) != set(context["review_member_ids"]):
         raise ValueError("discovery review score coverage mismatch")
+    if context.get("contract") == "product-discovery-review-context.830.v5":
+        for member in context["candidate_members"]:
+            if (
+                member.get("content_provenance") is not None
+                and not member["evidence"]
+                and review_output.page_scores[member["member_id"]].evidence_quality != 0
+            ):
+                raise ValueError("generated-only member evidence score must be zero")
     expected_ids = {row["candidate_id"] for row in context["dispositions"]}
     ids = [row.candidate_id for row in checked.disposition_checks]
     if len(ids) != len(set(ids)) or set(ids) != expected_ids:
@@ -225,12 +233,8 @@ async def run_independent_discovery_final_review(
     if summary["candidate_member_count"]:
         try:
             settings = service.configuration.model
-            template = require_discovery_template(
-                settings,
-                "verify",
-                "g3-independent-discovery-review",
-                INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
-            )
+            purpose, prompt = independent_discovery_review_policy(candidate_output)
+            template = require_discovery_template(settings, "verify", purpose, prompt)
             context = await asyncio.to_thread(
                 render_independent_discovery_review_context,
                 request=request,
@@ -272,7 +276,7 @@ async def run_independent_discovery_final_review(
                 settings,
                 scope=scope,
                 content=content,
-                prompt=INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+                prompt=prompt,
                 template_id=template.template_id,
             ):
                 replayed_call = None
@@ -309,7 +313,7 @@ async def run_independent_discovery_final_review(
                     dependency_sha256=stage.dependency_sha256,
                     input_sha256=review_context_sha256,
                     content=content,
-                    prompt=INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
+                    prompt=prompt,
                     template_id=template.template_id,
                 )
                 call_id = result.call_id
