@@ -1,0 +1,24 @@
+{
+  "source_sha256": "d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a",
+  "normal_before_chars": 4591,
+  "normal_after_chars": 5014,
+  "capture_chars": 5177,
+  "capture_unchanged": true,
+  "restored_table_rows": 14,
+  "restored_chars": 423,
+  "model_calls": 0,
+  "builds": 0,
+  "deployments": 0,
+  "business_writes": 0,
+  "tests": {
+    "red_failures": 2,
+    "green_passed": 50,
+    "skipped_external_fixtures": 3
+  },
+  "source_hashes": {
+    "docreader/parser/pdf_parser.py": "a4f62803127486641ebce98181edbad5b32afe9ea33dfc7d7b0865a6af2dc955",
+    "docreader/tests/test_pdf_router.py": "dc02ce2f7c1cc4bd4fec50fe352c3e82cbb887e14fcb0bf38b21199b0b7a36dd",
+    "openspec/changes/129-830-g3-catalog-batch/specs/catalog-batch/spec.md": "57194467353a7941c921203da6661c26b18df1c6f7a49a2fb9ec606743ac9674"
+  },
+  "runtime_module_sha256": "de9dee89a1639bb198d12a782acfe722b12f0dbfd9bee48f03f3a821e355845a"
+}

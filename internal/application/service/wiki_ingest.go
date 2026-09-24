@@ -118,14 +118,6 @@ const (
 	// task_pending_ops and are picked up by the follow-up task.
 	wikiMaxDocsPerBatch = 5
 
-	// wikiMaxFailRetries is the maximum number of times a single document op
-	// may be re-attempted via requeueFailedOps before it is permanently
-	// archived to task_dead_letters. 5 retries ≈ five full batch cycles
-	// (each with a ~30 s delay), giving transient LLM errors a fair chance
-	// to recover without letting a persistently-broken doc clog the queue
-	// indefinitely.
-	wikiMaxFailRetries = 5
-
 	// wikiIngestMaxRetry controls asynq retry budget for wiki:ingest tasks.
 	// Keep this moderate: lock conflicts already retry every 15s via
 	// asynqRetryDelayFunc, and follow-up/retract paths fire quickly.
@@ -142,17 +134,6 @@ const (
 	// wikiDeletedTTL bounds how long we remember a deletion. Must comfortably
 	// exceed the longest plausible ingest run (LLM extraction + reduce).
 	wikiDeletedTTL = 1 * time.Hour
-
-	// wikiLLMMaxAttempts is the total attempt count (initial + retries) for
-	// every LLM call routed through generateWithTemplate. 3 was chosen to
-	// absorb transient 504/timeouts from upstream gateways without
-	// materially prolonging task runtime when the remote is genuinely down.
-	wikiLLMMaxAttempts = 3
-
-	// wikiLLMBackoffBase is the base delay for the exponential backoff
-	// between retry attempts. The nth retry waits base << (n-1) — so with
-	// a 2s base we wait 2s, 4s, 8s between attempts.
-	wikiLLMBackoffBase = 2 * time.Second
 
 	// wikiTaskType is the task_type stamp used in task_pending_ops and
 	// task_dead_letters rows for this pipeline. Stable across the lifetime
@@ -292,6 +273,7 @@ type WikiPendingOp struct {
 	Op          string                       `json:"op"`
 	KnowledgeID string                       `json:"knowledge_id"`
 	Revision    *types.RevisionCommitBinding `json:"revision,omitempty"`
+	ExecutionID string                       `json:"execution_id,omitempty"`
 	// Ingest fields
 	Language string `json:"language,omitempty"`
 	// Retract fields
@@ -302,7 +284,10 @@ type WikiPendingOp struct {
 
 	// dbID is set by peekPendingList from task_pending_ops.id. Zero in
 	// constructions made outside the queue (e.g. legacy tests).
-	dbID int64 `json:"-"`
+	dbID            int64 `json:"-"`
+	queueRows       []*types.TaskPendingOp
+	recoveryBlocked bool
+	failure         error
 }
 
 // wikiIngestService handles the LLM-powered wiki generation pipeline.
@@ -312,8 +297,7 @@ type WikiPendingOp struct {
 //     "knowledge_base"): the per-document op queue. Replaces the
 //     legacy Redis wiki:pending:<kbID> list, which was vulnerable to
 //     24h TTL eviction at 4w-document scale.
-//   - task_dead_letters: in-batch failures that exhausted
-//     wikiMaxFailRetries land here. The asynq dead-letter middleware
+//   - task_dead_letters: failed or uncertain guarded operations land here. The asynq dead-letter middleware
 //     also writes asynq-level archived rows here uniformly across
 //     every task type.
 //
@@ -414,11 +398,14 @@ func (s *wikiIngestService) tracker() SpanTracker {
 // Lookups are by `LatestAttempt(knowledgeID)` because the asynq task
 // payload (WikiIngestPayload) is KB-scoped and carries no per-doc
 // attempt — see the type's comment for the batch architecture.
-func (s *wikiIngestService) beginWikiSubspan(ctx context.Context, knowledgeID string, input types.JSONMap) *Span {
+func (s *wikiIngestService) beginWikiSubspan(ctx context.Context, knowledgeID string, revision *types.RevisionCommitBinding, input types.JSONMap) *Span {
 	if knowledgeID == "" {
 		return nil
 	}
 	attempt := s.tracker().LatestAttempt(ctx, knowledgeID)
+	if revision != nil {
+		attempt = int(revision.ParseAttempt)
+	}
 	if attempt <= 0 {
 		return nil
 	}
@@ -1022,7 +1009,7 @@ func (s *wikiIngestService) scheduleStaleClaimRecheck(ctx context.Context, paylo
 }
 
 // decodePendingRows converts raw task_pending_ops rows into WikiPendingOps,
-// applying the last-write-wins dedup by knowledge_id. peekedIDs carries the
+// delegating revision selection to the operation module. peekedIDs carries the
 // db ids of EVERY row (including dedup-collapsed ones) so the caller can
 // drain them all at trim time. Shared by peekPendingList (no claim) and
 // claimPendingList (claimed rows).
@@ -1031,55 +1018,25 @@ func (s *wikiIngestService) decodePendingRows(ctx context.Context, rows []*types
 		return nil, nil
 	}
 
-	all := make([]WikiPendingOp, 0, len(rows))
-	peekedIDs = make([]int64, 0, len(rows))
-	for _, r := range rows {
-		peekedIDs = append(peekedIDs, r.ID)
+	decoded := make([]WikiPendingOp, 0, len(rows))
+	for _, row := range rows {
+		peekedIDs = append(peekedIDs, row.ID)
 		var op WikiPendingOp
-		if len(r.Payload) > 0 {
-			if err := json.Unmarshal(r.Payload, &op); err != nil {
-				logger.Warnf(ctx, "wiki ingest: failed to unmarshal pending op id=%d: %v", r.ID, err)
+		if len(row.Payload) > 0 {
+			if err := json.Unmarshal(row.Payload, &op); err != nil {
+				logger.Warnf(ctx, "wiki ingest: invalid pending payload id=%d: %v", row.ID, err)
 				continue
 			}
 		} else {
-			// Defensive: if payload was lost, fall back to column data
-			// so the row is still drainable (otherwise it would loop
-			// on every batch as un-deletable).
-			op = WikiPendingOp{
-				Op:          r.Op,
-				KnowledgeID: r.DedupKey,
-			}
+			op.Op, op.KnowledgeID = row.Op, row.DedupKey
 		}
-		op.dbID = r.ID
-		all = append(all, op)
+		op.dbID = row.ID
+		op.queueRows = []*types.TaskPendingOp{row}
+		op.recoveryBlocked = op.ExecutionID != "" || row.FailCount > 0
+		decoded = append(decoded, op)
 	}
+	ops = selectWikiInputCohorts(decoded)
 
-	// Deduplicate by KnowledgeID, keeping only the *last* operation for
-	// each document. Optimizes out redundant sequences (e.g., upload
-	// then immediate delete: [ingest, retract] → [retract]). The
-	// non-canonical rows still get drained at trim time — their dbIDs
-	// are in peekedIDs.
-	seen := make(map[string]bool)
-	reversedUnique := make([]WikiPendingOp, 0, len(all))
-	for i := len(all) - 1; i >= 0; i-- {
-		op := all[i]
-		if op.KnowledgeID == "" {
-			// No dedup key — keep verbatim (rare; edge case for
-			// future ops without a knowledge anchor).
-			reversedUnique = append(reversedUnique, op)
-			continue
-		}
-		if seen[op.KnowledgeID] {
-			continue
-		}
-		seen[op.KnowledgeID] = true
-		reversedUnique = append(reversedUnique, op)
-	}
-
-	ops = make([]WikiPendingOp, 0, len(reversedUnique))
-	for i := len(reversedUnique) - 1; i >= 0; i-- {
-		ops = append(ops, reversedUnique[i])
-	}
 	return ops, peekedIDs
 }
 
@@ -1120,85 +1077,18 @@ func (s *wikiIngestService) finalizeWikiSubtask(
 	finalizeSubtaskDetached(ctx, s.knowledgeRepo, knowledgeID, "wiki", nil, false, true, revision)
 }
 
-// requeueFailedOps records in-batch failures.
-//
-// For each failed op:
-//
-//   - IncrFailCount on the source row. The repo returns the new total,
-//     so a single round trip handles both bookkeeping and retry-budget
-//     check.
-//   - If the count is <= wikiMaxFailRetries: leave the row in place.
-//     The next follow-up batch's PeekBatch will pick it up naturally
-//     (rows are ordered by id ASC and we never moved/touched it).
-//   - If the count exceeds the retry cap: archive the op into
-//     task_dead_letters and DeleteByIDs to remove it from the queue.
-//     Settlement failures are returned so the caller does not mark claims
-//     settled while rows are still claimed or undeleted.
-func (s *wikiIngestService) requeueFailedOps(ctx context.Context, payload WikiIngestPayload, ops []WikiPendingOp) error {
-	if s.pendingRepo == nil || len(ops) == 0 {
-		return nil
-	}
-	var settleErrs []error
+// settleFailedWikiOperations settles failed native operations without replay. The
+// task trigger can retry settlement, but cannot replay the marked operation.
+func (s *wikiIngestService) settleFailedWikiOperations(ctx context.Context, payload WikiIngestPayload, ops []WikiPendingOp) error {
+	var errs []error
 	for _, op := range ops {
-		if op.dbID == 0 {
-			// Op was never persisted (synthetic / test) — nothing to
-			// retry against.
+		if op.ExecutionID == "" || op.failure == nil {
+			errs = append(errs, errors.New("cannot settle an unguarded Wiki failure"))
 			continue
 		}
-		count, err := s.pendingRepo.IncrFailCount(ctx, op.dbID)
-		if err != nil {
-			logger.Warnf(ctx, "wiki ingest: failed to increment fail count for %s (id=%d): %v", op.KnowledgeID, op.dbID, err)
-			settleErrs = append(settleErrs, fmt.Errorf("increment fail count id=%d: %w", op.dbID, err))
-			// Without a fresh count we can't tell whether to drop. Be
-			// conservative: leave the row in place; the next PeekBatch
-			// will see it again and we'll try once more.
-			continue
-		}
-		if count <= wikiMaxFailRetries {
-			// Release the claim so the row is immediately eligible for the
-			// next trigger's ClaimBatch instead of waiting out
-			// wikiClaimStaleAfter. No-op in Lite mode (row was peeked, never
-			// claimed). ReleaseByIDs preserves fail_count, so the retry
-			// budget still counts down.
-			if err := s.pendingRepo.ReleaseByIDs(ctx, []int64{op.dbID}); err != nil {
-				logger.Warnf(ctx, "wiki ingest: failed to release claim for retry id=%d: %v", op.dbID, err)
-				settleErrs = append(settleErrs, fmt.Errorf("release retry claim id=%d: %w", op.dbID, err))
-			}
-			logger.Infof(ctx, "wiki ingest: re-queued failed op %s (%s) for retry (attempt %d/%d)", op.KnowledgeID, op.DocTitle, count, wikiMaxFailRetries)
-			continue
-		}
-
-		// Exhausted in-batch retries — archive and remove. This is the
-		// terminal failure point for the op, so release its slot in the
-		// knowledge's finalizing counter (ingest ops only; retracts are
-		// for deleted knowledge that has no counter to drain). The
-		// matching +1 was seeded by KnowledgePostProcess.SetFinalizing.
-		if op.Op == WikiOpIngest {
-			s.finalizeWikiSubtask(ctx, op.KnowledgeID, op.Revision)
-		}
-		logger.Warnf(ctx, "wiki ingest: dropping op %s (%s) after %d failures (limit %d)", op.KnowledgeID, op.DocTitle, count, wikiMaxFailRetries)
-		if s.deadLetterRepo != nil {
-			payloadBytes, _ := json.Marshal(op)
-			if dlErr := s.deadLetterRepo.Insert(ctx, &types.TaskDeadLetter{
-				TenantID:  payload.TenantID,
-				TaskType:  wikiTaskType,
-				Scope:     wikiTaskScope,
-				ScopeID:   payload.KnowledgeBaseID,
-				RelatedID: op.KnowledgeID,
-				Payload:   payloadBytes,
-				LastError: fmt.Sprintf("exceeded wikiMaxFailRetries=%d (in-batch retries)", wikiMaxFailRetries),
-				FailCount: count,
-			}); dlErr != nil {
-				logger.Warnf(ctx, "wiki ingest: failed to archive op %s to dead letters: %v", op.KnowledgeID, dlErr)
-				settleErrs = append(settleErrs, fmt.Errorf("archive dead letter id=%d: %w", op.dbID, dlErr))
-			}
-		}
-		if err := s.pendingRepo.DeleteByIDs(ctx, []int64{op.dbID}); err != nil {
-			logger.Warnf(ctx, "wiki ingest: failed to drop dead-lettered row id=%d: %v", op.dbID, err)
-			settleErrs = append(settleErrs, fmt.Errorf("drop dead-lettered row id=%d: %w", op.dbID, err))
-		}
+		errs = append(errs, s.settleWikiOperation(ctx, payload, op))
 	}
-	return errors.Join(settleErrs...)
+	return errors.Join(errs...)
 }
 
 // docIngestResult captures per-document info for batch post-processing.
@@ -2188,19 +2078,23 @@ func (s *wikiIngestService) buildLogEntry(tenantID uint64, kbID, action, knowled
 
 // publishDraftPages transitions draft pages to published status after ingest completes.
 // This ensures users don't see half-built pages during the ingest process.
-func (s *wikiIngestService) publishDraftPages(ctx context.Context, kbID string, slugs []string) {
+func (s *wikiIngestService) publishDraftPages(ctx context.Context, kbID string, slugs []string) map[string]error {
+	failures := make(map[string]error)
 	for _, slug := range slugs {
 		page, err := s.wikiService.GetPageBySlug(ctx, kbID, slug)
-		if err != nil || page == nil {
-			continue
+		if err == nil && page == nil {
+			err = errors.New("generated page missing")
 		}
-		if page.Status == types.WikiPageStatusDraft {
-			page.Status = types.WikiPageStatusPublished
-			if err := s.wikiService.UpdatePageMeta(ctx, page); err != nil {
-				logger.Warnf(ctx, "wiki ingest: failed to publish page %s: %v", slug, err)
-			}
+		if err == nil && page.Status == types.WikiPageStatusDraft {
+			published := *page
+			published.Status = types.WikiPageStatusPublished
+			err = s.wikiService.UpdatePageMeta(ctx, &published)
+		}
+		if err != nil {
+			failures[slug] = &wikiStageFailure{Stage: "page_publish", Outcome: wikiOutcomeFailed, Cause: err}
 		}
 	}
+	return failures
 }
 
 // writeDedupCandidateGroup renders one new item together with its own
@@ -2435,23 +2329,9 @@ func (s *wikiIngestService) deduplicateExtractedBatch(
 	return entities, concepts
 }
 
-// generateWithTemplate executes a prompt template and calls the LLM with
-// bounded exponential-backoff retries for transient infrastructure errors.
-//
-// Retry policy:
-//   - Up to wikiLLMMaxAttempts total attempts (initial + retries).
-//   - Only retry errors classified as transient by isTransientLLMError:
-//     HTTP 408/429/5xx, context deadline exceeded (when the parent ctx is
-//     still alive), or generic "timeout"/"connection reset" wording.
-//     4xx (except 408/429) is a caller-side fault and fails fast.
-//   - Backoff is exponential base 2s: 2s, 4s, 8s — roughly wikiLLMBackoffBase
-//   - 2^(attempt-1). Honors ctx cancellation so the task can abort.
-//
-// This exists because wiki ingest makes several independent LLM calls per
-// document (extraction, summary, dedup, citations, intro) and a single
-// transient 504 from the upstream gateway used to drop the document's
-// summary page permanently. Retries plus failedOps requeuing (see
-// mapOneDocument) turn those events into at-most-a-few-minute hiccups.
+// generateWithTemplate sends at most once. A missing complete response is an
+// unknown provider outcome, not permission to repeat the request. The batch
+// owner settles failures; this layer and the SDK never multiply retries.
 func (s *wikiIngestService) generateWithTemplate(ctx context.Context, chatModel chat.Chat, promptTpl string, data map[string]string) (string, error) {
 	tmpl, err := template.New("wiki").Parse(promptTpl)
 	if err != nil {
@@ -2498,6 +2378,10 @@ func (s *wikiIngestService) generateWithTemplate(ctx context.Context, chatModel 
 		}
 	}
 	ctx = types.WithLLMCallMetadata(ctx, purpose, prefixFingerprint)
+	// A transport interruption is not proof that the provider did no work.
+	// The task outcome owner decides recovery; neither this wrapper nor the
+	// provider SDK may replay a request whose result is unknown.
+	ctx = types.WithModelAutomaticRetryDisabled(ctx)
 
 	tenantID, tenantScoped := types.TenantIDFromContext(ctx)
 	requestJSON, _ := json.Marshal(struct {
@@ -2515,41 +2399,22 @@ func (s *wikiIngestService) generateWithTemplate(ctx context.Context, chatModel 
 			var warmupErr error
 			releaseWarmup, warmupErr = s.awaitWikiPromptWarmup(ctx, warmupKey)
 			if warmupErr != nil {
-				return "", warmupErr
+				return "", &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeNotRun, Cause: warmupErr}
 			}
 		}
 		defer releaseWarmup()
 
-		var lastErr error
-		for attempt := 1; attempt <= wikiLLMMaxAttempts; attempt++ {
-			response, callErr := chatModel.Chat(ctx, messages, opts)
-			if callErr == nil && response != nil {
-				return response.Content, nil
-			}
-			if callErr == nil {
-				callErr = errors.New("LLM returned nil response")
-			}
-			lastErr = callErr
-
-			if !isTransientLLMError(ctx, callErr) {
-				return "", fmt.Errorf("LLM call failed: %w", callErr)
-			}
-			if attempt == wikiLLMMaxAttempts {
-				break
-			}
-
-			backoff := wikiLLMBackoffBase << (attempt - 1)
-			logger.Warnf(ctx, "wiki ingest: LLM call failed (attempt %d/%d), retrying in %s: %v",
-				attempt, wikiLLMMaxAttempts, backoff, callErr)
-			timer := time.NewTimer(backoff)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return "", fmt.Errorf("LLM call aborted during backoff: %w", ctx.Err())
-			case <-timer.C:
-			}
+		if err := ctx.Err(); err != nil {
+			return "", &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeNotRun, Cause: err}
 		}
-		return "", fmt.Errorf("LLM call failed after %d attempts: %w", wikiLLMMaxAttempts, lastErr)
+		response, callErr := chatModel.Chat(ctx, messages, opts)
+		if callErr != nil || response == nil {
+			return "", &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeUnknown, Cause: callErr}
+		}
+		if strings.TrimSpace(response.Content) == "" {
+			return "", &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeFailed, Cause: errors.New("empty model response")}
+		}
+		return response.Content, nil
 	}
 
 	// Missing tenant context is unexpected for production Wiki work. Fail safe
@@ -2567,7 +2432,7 @@ func (s *wikiIngestService) generateWithTemplate(ctx context.Context, chatModel 
 
 	select {
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return "", &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeUnknown, Cause: ctx.Err()}
 	case result := <-resultCh:
 		if result.Err != nil {
 			return "", result.Err
@@ -2623,64 +2488,6 @@ func (s *wikiIngestService) awaitWikiPromptWarmup(ctx context.Context, key strin
 	case <-entry.done:
 		return func() {}, nil
 	}
-}
-
-// isTransientLLMError reports whether an error from the chat provider
-// looks like an infrastructure hiccup worth retrying. Classification is
-// intentionally conservative: the truthful "could not tell, assume
-// permanent" choice keeps retries cheap and avoids masking real bugs.
-//
-// We treat the following as transient:
-//   - HTTP 408 (client request timeout — upstream usually didn't process),
-//     429 (rate-limited — retry after backoff may succeed), 5xx (any
-//     server-side fault, including the 504 "Remote error, timeout with
-//     60" we see from the gateway in front of several LLM providers).
-//   - Wrapped context.DeadlineExceeded when the parent ctx is still alive
-//     (nested per-call timeouts).
-//   - Substring matches on the error text for common transport failures
-//     ("timeout", "connection reset", "EOF") that providers surface
-//     without a structured status code.
-func isTransientLLMError(ctx context.Context, err error) bool {
-	if err == nil {
-		return false
-	}
-	// Never retry after the parent ctx itself expired — the task is
-	// being cancelled and the next attempt would just fail again.
-	if ctx.Err() != nil {
-		return false
-	}
-
-	msg := err.Error()
-	// Providers that bubble HTTP status up formatted as
-	// "API request failed with status NNN: ..." — match that first.
-	for _, s := range []string{
-		"status 408", "status 429",
-		"status 500", "status 501", "status 502", "status 503", "status 504",
-		"status 520", "status 521", "status 522", "status 523", "status 524",
-	} {
-		if strings.Contains(msg, s) {
-			return true
-		}
-	}
-
-	lower := strings.ToLower(msg)
-	for _, s := range []string{
-		"timeout",
-		"timed out",
-		"connection reset",
-		"connection refused",
-		"broken pipe",
-		"no such host", // DNS hiccup
-		"i/o timeout",
-		"unexpected eof",
-		"tls handshake",
-		"context deadline exceeded", // nested per-call deadline
-	} {
-		if strings.Contains(lower, s) {
-			return true
-		}
-	}
-	return false
 }
 
 // --- Helpers ---

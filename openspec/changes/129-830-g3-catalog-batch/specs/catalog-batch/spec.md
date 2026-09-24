@@ -283,3 +283,38 @@ G35-R3来源一致性：含MODEL_GENERATED的定义必须origin=MODEL_COMPILE；
 - GIVEN 原生发现面对完整保险材料，Schema已声明字段用途
 - WHEN 发现并准入候选知识
 - THEN MUST关注各节实际权利义务、后果/对象/时限/条件/例外和演示适用边界；不得以篇幅短或规则通用作为唯一删除理由。Schema去重MUST比较完整定义与语义职责，不得只按主题名称推断覆盖。独立规则/解释可准入，字段值仍由Schema流程承接，禁止因字段技术失败复制同名free page。完整原文输入不等于语义覆盖PASS，真实质量验证MUST逐项核对原文和有效产物。
+
+#### Scenario: G35-R1/R3/R7 PDF 数字表格保真（2026-09-24 P0-1）
+
+- GIVEN 原生 builtin PDF 解析产生连续数字表格行，既有文本清理将其误判为坐标轴杂字
+- WHEN 解析器清理正文
+- THEN MUST保留没有相邻图表标题边界的数字块；同页别处出现Figure标题不足以授权删除。已有相邻Figure标题的图表标签清理继续工作，原始定位捕获合同和原字节不改。
+- AND 本切片唯一Owner=root，写域限docreader/parser/pdf_parser.py、docreader/tests/test_pdf_router.py及本任务证据/入口；先以无标题数字表和异处标题反例证明RED，再实测原PDF。复杂性归解析模块，不在Harness或提示词重建丢失内容，不引入新解析器/开关。
+
+用户已批准按2026-09-24清单执行，并要求tracer bullet与deep modules：以同一真实材料贯穿已有上传、解析、发现、准入、审核和发布形成最小纵切；各边界由原有责任模块提供窄接口并封装状态/校验，不横向新建平行流程。P0-1离线证明不代表正常网页输入与后续生成验收完成。
+
+#### Scenario: G35-R1/R5/R7 原生对照结果不冒充成功（2026-09-24 P0-2）
+
+- GIVEN 原生候选发现成功，但某个引用批调用或响应解析失败，或者某个页面正文生成失败
+- WHEN 原生Wiki聚合阶段结果
+- THEN MUST返回可区分的单元结果，保存成功兄弟引用结果及失败位置；引用批不完整时MUST NOT用候选短说明继续生成带原文支持的正文。页面生成失败MUST保留错误，不能标为no_change或健康完成。
+- AND 文档结果结算由既有ProcessWikiIngest统一拥有，COMPLETE仅可从全部必需阶段成功推导；PARTIAL/NEEDS_ATTENTION沿既有失败追踪与任务处置展示，不新增第二队列。已写成功页保持，原生实验不宣称exact断点恢复；正式G3.5继续复用Harness StageCall的raw/依赖/恢复合同。
+- AND 外部调用失败与响应格式失败须区分；缺少完整响应的发送结果不可推断为未发送。禁止以新增EOF字符串匹配触发重发。任何未知发送须在原生内层、fallback及任务重排之间统一阻断自动重发；没有可核验持久边界时保持未验收，不用局部单元测试声明跨崩溃恢复通过。
+
+本切片写Owner=root，先收口wiki_ingest_cite.go、wiki_ingest_batch.go、wiki_ingest.go及对应测试/本任务证据；涉及持久调用记录或任务结算接口的新增写域必须先补窄合同与反例。不得把最佳努力span日志当作exact恢复权威，或让Go直接访问Harness私有表。
+
+P0-2结算澄清：source parse与可选Wiki enrichment独立；已成功解析的source不得因Wiki失败改成failed。Wiki失败/部分成功须在原trace和持久失败处置中明确，排空slot继续使用原revision binding。原生未知或格式失败不自动整文重跑，成功页保持。调用结果类型封装在同责任的wiki_ingest_outcome.go；不保留旧字符串瞬态重试分类器。主Wiki必须展示待处理生成失败，不能把页面数或source completed当作健康完成。
+
+P0-2最小持久隔离补充（同Owner，不新增执行器/表）：原生文档op在首次模型调用前，MUST用现有pending行的tenant/task/scope/dedup/op/payload和claimed_at作CAS，持久写入execution_id。恢复发现execution_id非空时MUST隔离为OUTCOME_UNKNOWN，不整文重发；marker写入失败则不得调用模型。此文档级marker不声称单元raw恢复或exact执行，已写成功页保持。原TaskPendingOpsRepository的可选窄扩展负责payload CAS与同库事务archive/delete；消费者缺少该能力时发送前fail closed。归档必须锁定并校验原行身份，insert失败不得delete，delete失败不得留下归档；原行已不在时不推断归档成功，不排空source slot。slot仅在确认本次归档成功后沿原revision接口结算；提交回执未知可能保留待清理slot，不能用再次模型调用消除此不确定性。WikiStats沿既有队列仓储查询当前KB/tenant的原生归档失败数量，前端只显示生成未完整、可查看文档处理记录；不得把查失败当0。
+
+必要新增写域限internal/types/interfaces/task_queue.go、internal/application/repository/task_queue.go及测试（上述CAS/事务/计数），internal/types/wiki_page.go、internal/application/service/wiki_page.go及测试（独立生成失败计数），frontend/src/api/wiki/index.ts、frontend/src/views/knowledge/wiki/WikiBrowser.vue及中英文locale（失败可见）。原生业务逻辑仍只在wiki_ingest*.go；不改通用parse状态机/数据库schema。先用现有实现缺少guard的运行时接口反例及事务回滚/身份隔离反例建立RED，再实现。
+
+上述CAS具体化：Begin只在execution_id缺省/空且claim身份匹配时原子设置该JSON字段，保持payload其他未知字段，不能重新marshal整段覆盖。Complete同样按claim+execution_id删除，旧worker不能删除新claim。解码去重前检查同dedup_key所有已领取行；任何marker使整组隔离，空marker兄弟也须先持久标记，标记任一步失败不得先归档其他兄弟后遗留可发送行。marker只约束同一queue operation及其已存在兄弟，不授权同revision自动重新入队；恢复器只可触发既有pending，不得重新造op。预发送CAS RED已获得，扩展同反例覆盖marked sibling、旧claim complete和payload未知字段保持。
+
+P0-2独立复核收口（2026-09-24）：原生草稿发布是文档完成的必需阶段。页面读取失败/缺失、状态持久写入失败MUST逐slug返回失败并关联所有贡献文档；已发布兄弟页保持。失败页面不得进入成功日志、后续交叉链接输入或健康完成统计。锁/读取/写入失败与模型失败消费同一页结果账本，不能只清理模型失败。任一Complete/Archive CAS未确认MUST返回结算错误且不排空slot。该原生draft状态切换不是正式Active发布，不改变正式审核权威。
+
+P0-2 revision隔离澄清：上一段按knowledge全组marker隔离收窄为tenant/task/scope/op/knowledge/exact RevisionCommitBinding；旧版本未知操作不能阻断真正的新版本。已归档同版本失败通过现有dead-letter在Begin前核对，迟到同版本行必须先mark再隔离，不能重发模型。ClaimBatch仍按knowledge串行，当前持有者Archive与删除同事务后迟到行才可领取；Lite继续使用现有scope锁。已领取旧marker版本单独归档，不能被最新未开始版本覆盖或当成功清理。不增加成功tombstone；本切片不承诺成功删除后任意未来重复提交的exactly-once。
+
+P0-2复核设计边界：最终发送门在标记后、任何模型调用前，按现有dead-letter锁内保存的payload核对op+exact revision，命中者沿原恢复归档而非release重试。重解析/删除的单文档Wiki ingest scrub只能删除未领取且execution_id为空的行；不能抹掉在途/未知操作marker。该窄保护落在原TaskPendingOpsRepository.DeleteByDedupKey，不改变其他任务的清理或整库失活清理。不引入新enqueue协议、成功回执表或后台恢复器。
+
+P0-2代次选择设计重审（0设计BLOCKER后冻结）：queue row ID/到达次序不是文件版本。输入选择责任集中在原生operation模块：对同knowledge合法显式Revision按既有单调ParseAttempt取最高代，legacy nil不得覆盖显式版本；畸形显式高代次单独隔离，不压住合法版本；同代次不同file/parser身份整组冲突，双方不得发送。最高代失败/未知不得回退发送较低代。任一已领取retract为该knowledge顶层删除栅栏，不被迟到ingest越过；原已开始组仍按自身identity结算。未开始较低代可作为superseded行随选中操作结算；已开始/冲突组独立保留。provider发送前查DL；允许先CAS marker后零provider归档。反例覆盖marked R1→R2→late R1、DL后[R2,late R1]、非法高代、同代冲突、最高代未知不回退及R2→retract→late R1。该规则替换已有latest-row选择，不新增调度器/成功journal。

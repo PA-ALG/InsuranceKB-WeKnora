@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -68,7 +69,7 @@ type citationPipelineOutcome struct {
 // those will come from the chunk-citation pass instead.
 //
 // Returns (entities, concepts, slugItems, error). On LLM or parse failure it
-// returns an error — the caller can then fall back to the legacy extractor.
+// returns an error; incomplete discovery must not enter citation or page writes.
 func (s *wikiIngestService) extractCandidateSlugs(
 	ctx context.Context,
 	chatModel chat.Chat,
@@ -111,7 +112,7 @@ func (s *wikiIngestService) extractCandidateSlugs(
 	var result combinedExtraction
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		logger.Warnf(ctx, "wiki ingest: failed to parse candidate slug JSON: %v\nRaw: %s", err, raw)
-		return nil, nil, nil, fmt.Errorf("parse candidate slug JSON: %w", err)
+		return nil, nil, nil, &wikiStageFailure{Stage: "wiki_candidate_slug", Outcome: wikiOutcomeFailed, Cause: err}
 	}
 
 	result.Entities, result.Concepts = s.deduplicateExtractedBatch(
@@ -244,15 +245,39 @@ func renderChunksXML(batch chunkBatch) string {
 	return sb.String()
 }
 
+type citationClassificationOutcome struct {
+	Citations   map[string][]string
+	NewSlugs    []newSlugFromCitation
+	BatchErrors []error // nil entry means that batch succeeded; order matches source batches.
+}
+
+func (r citationClassificationOutcome) Err() error {
+	var failures []error
+	outcome := wikiOutcomeNotRun
+	for i, err := range r.BatchErrors {
+		if err == nil {
+			continue
+		}
+		state := wikiFailureOutcome(err)
+		if state == wikiOutcomeUnknown || (state == wikiOutcomeFailed && outcome != wikiOutcomeUnknown) {
+			outcome = state
+		}
+		failures = append(failures, fmt.Errorf("batch %d: %w", i, err))
+	}
+	if len(failures) == 0 {
+		return nil
+	}
+	return &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: outcome, Cause: errors.Join(failures...)}
+}
+
 // classifyChunkCitations runs Pass 1..N of the chunk-cited pipeline: given a
 // set of candidate slugs (from Pass 0) and the document's chunks, it asks the
 // LLM which chunks substantively discuss each candidate. Results across
 // batches are merged into a single slug → union(chunk_id) map, and any
 // "new_slugs" that Pass 0 missed are collected separately.
 //
-// Returns (citations, newSlugs, batchCount). citations is keyed by slug and
-// contains real chunk UUIDs (already translated from batch handles). newSlugs
-// likewise carry real chunk UUIDs in SourceChunks.
+// The outcome retains successful peers and identifies every failed batch.
+// Callers must not write pages unless every required batch completed.
 func (s *wikiIngestService) classifyChunkCitations(
 	ctx context.Context,
 	chatModel chat.Chat,
@@ -260,10 +285,11 @@ func (s *wikiIngestService) classifyChunkCitations(
 	chunks []*types.Chunk,
 	lang string,
 	batchCtx *WikiBatchContext,
-) (map[string][]string, []newSlugFromCitation, int) {
+	parent *Span,
+) citationClassificationOutcome {
 	batches := splitChunksIntoCitationBatches(chunks)
 	if len(batches) == 0 || strings.TrimSpace(candidatesXML) == "" {
-		return map[string][]string{}, nil, 0
+		return citationClassificationOutcome{Citations: map[string][]string{}}
 	}
 
 	// Merge state. Using sets keyed by (slug, chunkID) to dedup across
@@ -271,6 +297,7 @@ func (s *wikiIngestService) classifyChunkCitations(
 	var mu sync.Mutex
 	citationSet := make(map[string]map[string]bool) // slug → set of real chunk IDs
 	var newSlugsAll []newSlugFromCitation
+	batchErrors := make([]error, len(batches))
 
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.SetLimit(maxCitationBatchConcurrency)
@@ -279,6 +306,7 @@ func (s *wikiIngestService) classifyChunkCitations(
 		batch := batches[bi]
 		batchIdx := bi
 		eg.Go(func() error {
+			batchSpan := s.tracker().BeginSubSpan(ectx, parent, fmt.Sprintf("postprocess.wiki.classify.batch[%d]", batchIdx), types.SpanKindSubSpan, types.JSONMap{"batch": batchIdx, "chunks": len(batch.chunks)})
 			chunksXML := renderChunksXML(batch)
 			raw, err := s.generateWithTemplate(ectx, chatModel, agent.WikiChunkCitationPrompt, map[string]string{
 				"CandidateSlugs": candidatesXML,
@@ -286,20 +314,47 @@ func (s *wikiIngestService) classifyChunkCitations(
 				"Language":       lang,
 			})
 			if err != nil {
-				logger.Warnf(ectx, "wiki ingest: citation batch %d failed: %v", batchIdx, err)
-				return nil // don't abort peer batches
+				batchErrors[batchIdx] = err
+				s.tracker().FailSpan(ectx, batchSpan, wikiFailureOutcome(err), err.Error(), nil)
+				return nil // Preserve successful peer batches.
 			}
 			raw = cleanLLMJSON(raw)
 
 			var parsed citationBatchResult
 			if jerr := json.Unmarshal([]byte(raw), &parsed); jerr != nil {
-				logger.Warnf(ectx, "wiki ingest: citation batch %d parse failed: %v\nRaw: %s", batchIdx, jerr, raw)
+				batchErrors[batchIdx] = &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: wikiOutcomeFailed, Cause: jerr}
+				s.tracker().FailSpan(ectx, batchSpan, wikiOutcomeFailed, "Invalid citation response", nil)
 				return nil
 			}
 
-			// Translate handles → real chunk UUIDs; drop unknown handles.
+			// Any invalid reference makes this batch incomplete. Never silently
+			// discard it and then generate from the short candidate outline.
+			valid := parsed.Citations != nil
+			for _, handles := range parsed.Citations {
+				for _, handle := range handles {
+					if _, ok := batch.handles.Resolve(handle); !ok {
+						valid = false
+					}
+				}
+			}
+			for _, ns := range parsed.NewSlugs {
+				if ns.Slug == "" || ns.Name == "" || len(ns.SourceChunks) == 0 {
+					valid = false
+				}
+				for _, handle := range ns.SourceChunks {
+					if _, ok := batch.handles.Resolve(handle); !ok {
+						valid = false
+					}
+				}
+			}
+			if !valid {
+				batchErrors[batchIdx] = &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: wikiOutcomeFailed, Cause: errors.New("invalid citation references")}
+				s.tracker().FailSpan(ectx, batchSpan, wikiOutcomeFailed, "Invalid citation references", nil)
+				return nil
+			}
+
+			// Translate only validated handles into durable chunk identities.
 			mu.Lock()
-			defer mu.Unlock()
 
 			for slug, handleList := range parsed.Citations {
 				if slug == "" {
@@ -310,29 +365,26 @@ func (s *wikiIngestService) classifyChunkCitations(
 					set = make(map[string]bool)
 					citationSet[slug] = set
 				}
+				ids := make([]string, 0, len(handleList))
 				for _, handle := range handleList {
-					realID, known := batch.handles.Resolve(handle)
-					if !known {
-						logger.Warnf(ectx, "wiki ingest: citation batch %d referenced unknown chunk handle %q for slug %s", batchIdx, handle, slug)
-						continue
-					}
+					realID, _ := batch.handles.Resolve(handle)
 					set[realID] = true
+					ids = append(ids, realID)
 				}
+				parsed.Citations[slug] = ids
 			}
-
-			for _, ns := range parsed.NewSlugs {
-				if ns.Slug == "" || ns.Name == "" {
-					continue
-				}
+			for i, ns := range parsed.NewSlugs {
 				real := make([]string, 0, len(ns.SourceChunks))
 				for _, handle := range ns.SourceChunks {
-					if id, ok := batch.handles.Resolve(handle); ok {
-						real = append(real, id)
-					}
+					id, _ := batch.handles.Resolve(handle)
+					real = append(real, id)
 				}
 				ns.SourceChunks = real
+				parsed.NewSlugs[i] = ns
 				newSlugsAll = append(newSlugsAll, ns)
 			}
+			mu.Unlock()
+			s.tracker().EndSpan(ectx, batchSpan, types.JSONMap{"citations": parsed.Citations, "new_slugs": parsed.NewSlugs})
 			return nil
 		})
 	}
@@ -356,7 +408,7 @@ func (s *wikiIngestService) classifyChunkCitations(
 		out[slug] = ids
 	}
 
-	return out, newSlugsAll, len(batches)
+	return citationClassificationOutcome{Citations: out, NewSlugs: newSlugsAll, BatchErrors: batchErrors}
 }
 
 // resolveCitedChunks loads the content of every chunk referenced by the

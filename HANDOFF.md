@@ -1,3 +1,53 @@
+# 当前状态（2026-09-24 · P0-1/P0-2软件闭合；真实链路继续）
+
+用户批准九项顺序与tracer bullet/deep modules。root唯一写者。P0-1表格保真、P0-2原生失败/未知治理已完成软件反例、回归与独立复核（0 BLOCKER、20源文件SHA匹配），尚未部署。P0-2最后回归137通过/2跳过（本次PG事务/并发/版本检查均真实执行）；代次选择重设计后服务90通过/1旧Release环境跳过。selectWikiInputCohorts按合法ParseAttempt选代、冲突隔离、retract栅栏，unknown晚到行受既有dead-letter发送门保护；wikiPageFailures统一页面结果归属，发布/结算失败不冒充成功。详见native-outcome-20260924.md。
+
+P0-3新增实测：同1CPU/2GB Linux离线校验22.17s；实际现有服务只读preparation GET 19.542s，前后Active均epoch17。原四百余秒发布不由资源配额/重复校验单独解释，正核对旧日志的全链路负载与取消。P0-3尚未写行为修复；不把旧失败候选激活。新模型/产品镜像/部署/业务写入仍0；额外构建仅离线诊断测试程序。临时PG schema和转发已清理。
+
+NEXT：保留已验证P0软件身份，继续P0-3根因及正常网页新空库健康基线；随后P1/P2。G3.5和九项任务远未全部完成，不应停在软件GREEN或称已交付完整效果。当前账号/workspace/样本沿既有授权复用。
+
+以下为历史状态。
+
+# 当前状态（2026-09-24 · 已授权执行；P0-1数字表格丢失软件修复完成）
+
+用户批准按九项计划顺序执行，追加tracer bullet/deep modules；同一工作树root唯一写者。P0-1实际解析容器离线精确重现normal4591/capture5177，确定普通PDF清理器把第7页14行423字符数字表格误作图表杂字删除。窄修复只在相邻Figure标题时清理连续数字块；Spec先冻结，两例RED后GREEN50通过/3外部fixture跳过，真实PDF恢复14行至5014字符，capture5177逐字不变。独审0 BLOCKER；详情parse-alignment-20260924.md/json。
+
+本切片新模型/构建/部署/业务写入0，代码未部署/未提交，旧Active不由此推断变化。P0-1正常网页同输入回执仍待健康基线窗口。NEXT：P0-2引用/正文失败不得冒充完成及成功结果恢复；P0-3只读性能诊断并行。完整九项仍未完成；不将局部软件修复记作业务通过。
+
+以下为历史状态。
+
+# 当前状态（2026-09-24 · G3.5质量与覆盖度后续事项已整理）
+
+用户要求“按照这个思路，梳理下要做的事项”。后续执行入口为docs/superpowers/plans/2026-09-24-830-g35-quality-and-coverage-closeout.md，原OpenSpec129 tasks已同步9项checkbox。P0先输入对齐、EOF/降级恢复及健康原生基线、正式发布超时；P1高召回/条件式正文草稿复用、语义准入与来源、R4实体关系、R6依赖隔离；P2集中部署及完整真实验收。首项P0-1，发布只读离线诊断可独立推进。未冻结协议须先补对应Spec/RED，不能把事项清单当接口实现授权。
+
+本轮仅计划和入口文档变更，模型/构建/部署/业务写入均0；保留此前源码/镜像及实验身份，G3.5未完成。下段原生实跑结果和限制仍有效。
+
+以下为历史状态。
+
+# 当前状态（2026-09-24 · 完整原生基线已运行，降级与质量缺口已确认）
+
+用户追加要求直接跑完整原生Wiki并参考nashsu/llm_wiki。root通过正常网页在同环境/账号建隔离库0a1b3411-939c-47f1-b946-5bcc359d0682，上传守护说明书一次，knowledge4da4fef4-dcce-4a40-ae55-d46e00ace8e2/attempt1/SHA d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a。standard/默认Purpose、同Gemini，原生终态completed且11页（2实体7概念+摘要+首页），上传到文档完成188.889s、finalize217.102s。不是产品Active发布，结束GET确认epoch17不变。没有新服务部署/产品代码修改。
+
+本轮不能算健康质量基线：原生首次发现及旧回退EOF，自动重排后发现2实体8概念；chunk引用EOF后降级短提纲继续写页，免责页EOF缺失，最终仍completed。18文本请求（17Wiki+1文档摘要）/13成功usage，总已报告56231tokens，5失败用量未知。9知识页仅91—229字符、chunk_refs全空；网页已验证来源文档可开PDF，但非逐段引文定位/模型生成标识。18项独审：7完整7部分2缺失2错误（贷款公式顺序、现金价值减额规则），QUALITY_FAIL。不能称G3.5优于原生。
+
+同PDF解析亦有差异：旧18块合计6123含重叠/maxend5177，新16块合计5493/maxend4591；原生去重全文4591且未触发截断，缺部分演示表格年度行。但关键遗漏规则仍在本次输入，不能全归因解析。新网页有显式builtin规则，旧无覆盖，解析分支根因未定。完整报告docs/insurance-kb/evidence/830-g35/native-full-baseline-20260924.md；私密原件native-full-baseline归档。参考本地v0.6.3及直接读取的官方main已区分。
+
+NEXT：先取得输入对齐、引用/正文健康的原生基线，再比较是否需要复用原生页面编辑器为草稿；高召回Purpose、来源片段、公式/条件保真、R4/R6及正式发布验收继续。不得用短候选提纲冒充完整原生生成，也不得把原生整页来源当逐句证据。G3.5仍未完成，cb69质量镜像仍未部署，旧发布超时根因仍未解决。
+
+以下为历史状态。
+
+# 当前状态（2026-09-23 · G3.5清单复核；质量镜像已构建，发布性能仍诊断中）
+
+用户要求继续并核对原生能力/G3.5剩余项。统一当前清单见docs/insurance-kb/evidence/830-g35/status-20260923.md。确认原生standard/exhaustive无条数上限，实际3实体+10概念；standard排除单句与保险覆盖目标冲突，后续选择exhaustive+purpose-v2（尚未部署）。R4结构实体/关系、R6最小依赖组仍未实现；R1/R2/R3/R5软件已有，真实非空发布与R7验收未闭合，不能说只差验收。
+
+质量源码cb69e41ae已一次构建Harness PASS，镜像sha256:ca42a65aa8224faeaed313c5aee2a9c5d01dd9c29ed30c3abecb0c3d211c0321；未部署/新增模型0。构建回执private/field-boundary-repair。线上仍原三个身份。13:21发布失败后正常GET current再核实epoch17/release-b8d07e76，未发布。
+
+已只读导出e375的candidate13,500,975字节/1067members做一次本机Go诊断：canonical8.012s，SnapshotMembers5.161s，总13.18s；匹配GOMEMLIMIT1400MiB/GOMAXPROCS2后13.45s。测试PASS；外部time sysctl计时受沙箱限exit1，不冒充全命令PASS。linux跨编译因pg_query需要CGO失败，没有改生产或假冒容器结果。APP/VM架构均arm64，APP配1CPU/2GiB、memory.peak724582400、OOM0。发布慢不能仅归因完整校验，还需同运行环境定位；profile主要为canonical/JSON解析。临时Go诊断测试已移除并保存在private/publish-diagnosis，无产品Go修改。证据publish-diagnostic-20260923.json。
+
+R6独立设计审查已得到候选依赖v2/SCC/裁剪后重审的最小方案，但尚未冻结实现合同/RED，不得当完成。NEXT保持发布阻断诊断，不盲目重发模型/业务；质量镜像已备可复用。旧epoch与原数据不动，不新建workspace。
+
+以下为历史状态。
+
 # 当前状态（2026-09-23 · 已确认覆盖遗漏，集中质量修复独审通过；真实发布超时失败）
 
 root同一工作树830-g35-knowledge-admission。当前集中修复在bfcf37233后：字段响应v2仅适配显式null有效期/仅present缺nullable原因，原raw与严格引用保持；字段提示词保义与JSON键明确；原生当前产品REFERENCE仅允许kind=entity且正式名称精确匹配，禁止概念/其他实体/模型alias吞并；准入按Schema完整语义判断，通用规则不能单凭通用性拒绝；insurance-native-purpose-v2逐节关注对象/后果/例外/示例边界，无样本答案或数量目标。

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -348,6 +349,11 @@ func (r *taskPendingOpsRepository) DeleteByDedupKey(
 	if op != "" {
 		q = q.Where("op = ?", op)
 	}
+	// A reparse must not erase the only durable witness of an in-flight
+	// or unknown native Wiki call. Other queue consumers retain their contract.
+	if taskType == types.TypeWikiIngest && op == "ingest" {
+		q = pendingExecutionQuery(q.Where("claimed_at IS NULL"), "")
+	}
 	return q.Delete(&types.TaskPendingOp{}).Error
 }
 
@@ -456,4 +462,133 @@ func (r *taskDeadLetterRepository) DeleteByID(ctx context.Context, id int64) err
 	return r.db.WithContext(ctx).
 		Where("id = ?", id).
 		Delete(&types.TaskDeadLetter{}).Error
+}
+
+// pendingClaimQuery binds every queue dimension and the generation returned
+// by ClaimBatch. Lite mode uses NULL while its existing process lock is held.
+func pendingClaimQuery(db *gorm.DB, op *types.TaskPendingOp) *gorm.DB {
+	q := db.Model(&types.TaskPendingOp{}).Where("id = ? AND tenant_id = ? AND task_type = ? AND scope = ? AND scope_id = ? AND op = ? AND dedup_key = ?", op.ID, op.TenantID, op.TaskType, op.Scope, op.ScopeID, op.Op, op.DedupKey)
+	if op.ClaimedAt == nil {
+		return q.Where("claimed_at IS NULL")
+	}
+	return q.Where("claimed_at = ?", *op.ClaimedAt)
+}
+
+func pendingExecutionQuery(q *gorm.DB, executionID string) *gorm.DB {
+	if q.Dialector.Name() == "postgres" {
+		return q.Where("COALESCE(payload->>'execution_id', '') = ?", executionID)
+	}
+	return q.Where("COALESCE(json_extract(payload, '$.execution_id'), '') = ?", executionID)
+}
+
+func (r *taskPendingOpsRepository) BeginOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error) {
+	if claim == nil || claim.ID == 0 || executionID == "" {
+		return false, errors.New("task execution: claim and execution id required")
+	}
+	q := pendingExecutionQuery(pendingClaimQuery(r.db.WithContext(ctx), claim), "")
+	// Keep SQLite's RawMessage storage representation as bytes.
+	value := gorm.Expr("CAST(json_set(payload, '$.execution_id', ?) AS BLOB)", executionID)
+	if r.db.Dialector.Name() == "postgres" {
+		value = gorm.Expr("jsonb_set(payload, '{execution_id}', to_jsonb(CAST(? AS text)))", executionID)
+	}
+	result := q.Update("payload", value)
+	return result.Error == nil && result.RowsAffected == 1, result.Error
+}
+
+func (r *taskPendingOpsRepository) CompleteOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error) {
+	if claim == nil || claim.ID == 0 || executionID == "" {
+		return false, errors.New("task execution: claim and execution id required")
+	}
+	result := pendingExecutionQuery(pendingClaimQuery(r.db.WithContext(ctx), claim), executionID).Delete(&types.TaskPendingOp{})
+	return result.Error == nil && result.RowsAffected == 1, result.Error
+}
+
+func (r *taskPendingOpsRepository) ArchiveOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string, failure *types.TaskDeadLetter) (bool, error) {
+	if claim == nil || claim.ID == 0 || executionID == "" || failure == nil {
+		return false, errors.New("task execution: claim, execution id and failure required")
+	}
+	if claim.TenantID != failure.TenantID || claim.TaskType != failure.TaskType || claim.Scope != failure.Scope || claim.ScopeID != failure.ScopeID || claim.DedupKey != failure.RelatedID {
+		return false, errors.New("task execution: archive scope mismatch")
+	}
+	settled := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		q := pendingExecutionQuery(pendingClaimQuery(tx, claim), executionID)
+		if tx.Dialector.Name() == "postgres" {
+			q = q.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		var row types.TaskPendingOp
+		if err := q.Take(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+		archive := *failure
+		archive.ID = 0
+		archive.Payload = row.Payload
+		archive.FailCount = row.FailCount + 1
+		if err := tx.Create(&archive).Error; err != nil {
+			return err
+		}
+		result := pendingExecutionQuery(pendingClaimQuery(tx, claim), executionID).Delete(&types.TaskPendingOp{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("task execution: claim changed during archive")
+		}
+		settled = true
+		return nil
+	})
+	return err == nil && settled, err
+}
+
+func (r *taskPendingOpsRepository) FailedOperationCount(ctx context.Context, tenantID uint64, taskType, scope, scopeID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&types.TaskDeadLetter{}).Where("tenant_id = ? AND task_type = ? AND scope = ? AND scope_id = ?", tenantID, taskType, scope, scopeID).Count(&count).Error
+	return count, err
+}
+
+// HasFailedOperation is the final dispatch gate for a claimed operation.
+// ClaimBatch serializes a document until its previous archive/delete commits;
+// Lite uses the existing scope lock. Archive copies the locked payload, so a
+// late queue row cannot authorize replay of that exact failed revision.
+func (r *taskPendingOpsRepository) HasFailedOperation(ctx context.Context, claim *types.TaskPendingOp) (bool, error) {
+	if claim == nil {
+		return false, errors.New("task execution: claim required")
+	}
+	type identity struct {
+		Op       string                       `json:"op"`
+		Revision *types.RevisionCommitBinding `json:"revision"`
+	}
+	var target identity
+	if err := json.Unmarshal(claim.Payload, &target); err != nil {
+		return false, err
+	}
+	target.Op = claim.Op
+	rows, err := r.db.WithContext(ctx).Model(&types.TaskDeadLetter{}).Select("payload").Where("tenant_id = ? AND task_type = ? AND scope = ? AND scope_id = ? AND related_id = ?", claim.TenantID, claim.TaskType, claim.Scope, claim.ScopeID, claim.DedupKey).Rows()
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return false, err
+		}
+		var archived identity
+		if err := json.Unmarshal(payload, &archived); err != nil {
+			return false, err
+		}
+		if archived.Op != target.Op {
+			continue
+		}
+		if archived.Revision == nil && target.Revision == nil {
+			return true, nil
+		}
+		if archived.Revision != nil && target.Revision != nil && *archived.Revision == *target.Revision {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }

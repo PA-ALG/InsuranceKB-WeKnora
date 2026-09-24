@@ -391,7 +391,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 
 	// Crash/abort safety net (standard/claim mode only). If this batch exits
 	// abnormally — panic, ctx timeout, or an early error return — BEFORE it
-	// settles its claimed rows (trim + requeueFailedOps), release the claims
+	// settles its claimed rows (trim + settleFailedWikiOperations), release the claims
 	// so the next trigger can re-claim within seconds instead of waiting out
 	// wikiClaimStaleAfter (~90m). On the normal path claimsSettled flips true
 	// once the rows reach their terminal state, making this a no-op. Uses a
@@ -406,12 +406,31 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 			}
 			releaseCtx, releaseCancel := wikiIngestCleanupContext(ctx)
 			defer releaseCancel()
-			if err := s.pendingRepo.ReleaseByIDs(releaseCtx, peekedIDs); err != nil {
+			protected := make(map[int64]bool)
+			for _, op := range pendingOps {
+				if op.ExecutionID != "" {
+					for _, row := range op.queueRows {
+						protected[row.ID] = true
+					}
+				}
+			}
+			var unstarted []int64
+			for _, id := range peekedIDs {
+				if !protected[id] {
+					unstarted = append(unstarted, id)
+				}
+			}
+			if err := s.pendingRepo.ReleaseByIDs(releaseCtx, unstarted); err != nil {
 				logger.Warnf(ctx, "wiki ingest: failed to release %d claims on abnormal exit for KB %s: %v", len(peekedIDs), payload.KnowledgeBaseID, err)
 				return
 			}
 			logger.Warnf(ctx, "wiki ingest: released %d claimed rows on abnormal exit for KB %s (re-claimable immediately)", len(peekedIDs), payload.KnowledgeBaseID)
 		}()
+	}
+
+	if err := s.beginWikiOperations(ctx, payload, pendingOps); err != nil {
+		exitStatus = "execution_guard_failed"
+		return fmt.Errorf("wiki ingest: prepare operation: %w", err)
 	}
 
 	// Resolve extraction granularity once per batch. Historical rows with
@@ -444,6 +463,18 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 	for _, op := range pendingOps {
 		op := op
 		eg.Go(func() error {
+			if op.recoveryBlocked {
+				if op.failure == nil {
+					op.failure = &wikiStageFailure{Stage: "wiki_recovery", Outcome: wikiOutcomeUnknown}
+				}
+				span := s.beginWikiSubspan(mapCtx, op.KnowledgeID, op.Revision, types.JSONMap{"recovery": true})
+				s.tracker().FailSpan(mapCtx, span, "WIKI_NEEDS_ATTENTION", "Wiki input needs attention; automatic execution stopped", nil)
+				mapMu.Lock()
+				failedOps = append(failedOps, op)
+				ingestFailed++
+				mapMu.Unlock()
+				return nil
+			}
 			if op.Op == WikiOpRetract {
 				// Resolve the authoritative page set at run-time. The caller
 				// (knowledgeService.cleanupWikiOnKnowledgeDelete) captures
@@ -527,6 +558,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 			if err != nil {
 				mapMu.Lock()
 				ingestFailed++
+				op.failure = err
 				failedOps = append(failedOps, op)
 				if isLikelyRateLimitError(err) {
 					rateLimited = true
@@ -567,7 +599,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 				// "finalizing" until the housekeeping sweep marks it
 				// failed. The matching +1 was seeded by
 				// KnowledgePostProcess.SetFinalizing.
-				s.finalizeWikiSubtask(mapCtx, op.KnowledgeID, op.Revision)
+				// The guarded settlement below releases the slot after durable completion.
 			}
 			return nil
 		})
@@ -590,34 +622,13 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 	var allPagesAffected []string
 	var ingestPagesAffected []string
 	var retractPagesAffected []string
-	// failedAdditionSlugs collects entity/concept slugs whose page
-	// generation LLM call failed (so the page was never written). The
-	// post-reduce cleanup step uses this set to (a) strip dead [[slug]]
-	// references from the same batch's summary pages, and (b) prune the
-	// slugs out of the wiki log feed so users don't see clickable entries
-	// pointing at missing pages.
-	failedAdditionSlugs := make(map[string]struct{})
-	// unappliedSlugKIDs collects the knowledge_ids that contributed to a
-	// slug whose update never landed — either because we could NOT acquire
-	// the per-slug lock within wikiSlugLockWait, or because reduce returned
-	// an error. In both cases the page keeps its prior content, so the
-	// owning document(s) must be re-queued rather than trimmed — otherwise
-	// the row is deleted and the contribution is silently lost forever
-	// (finalize only rebuilds the index / cross-links, it does not re-run
-	// reduce). requeueFailedOps' fail_count budget bounds the retries and
-	// dead-letters a document whose slug fails/stays hot permanently.
-	unappliedSlugKIDs := make(map[string]struct{})
-	// collectUnapplied records every knowledge_id backing a slug we failed
-	// to apply. Caller holds no lock; it takes reduceMu itself.
-	collectUnapplied := func(updates []SlugUpdate) {
-		reduceMu.Lock()
-		for _, u := range updates {
-			if u.KnowledgeID != "" {
-				unappliedSlugKIDs[u.KnowledgeID] = struct{}{}
-			}
-		}
-		reduceMu.Unlock()
-	}
+	// All page failures share attribution and visibility decisions. Workers
+	// record under the ledger lock; tail processing reads after they join.
+	pageFailures := newWikiPageFailures()
+	failedAdditionSlugs := pageFailures.additions
+	unappliedSlugKIDs := pageFailures.byKnowledge
+	failedPageSlugs := pageFailures.bySlug
+	collectUnapplied := pageFailures.record
 
 	// Build the kid → wikiSpan lookup before kicking off reduce. Each
 	// per-slug reduce attaches a postprocess.wiki.page[slug] subspan
@@ -635,47 +646,42 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 		updates := updates
 		egReduce.Go(func() error {
 			var (
-				changed        bool
-				affectedType   string
-				additionFailed bool
-				reduceErr      error
+				changed      bool
+				affectedType string
+				reduceErr    error
 			)
 			// Serialize same-slug read-modify-write across concurrent batches
 			// (standard mode). runs fn directly in Lite mode.
 			acquired, lockErr := s.withSlugLock(reduceCtx, payload.KnowledgeBaseID, slug, func() error {
-				changed, affectedType, additionFailed, reduceErr = s.reduceSlugUpdates(
+				changed, affectedType, _, reduceErr = s.reduceSlugUpdates(
 					reduceCtx, chatModel, payload.KnowledgeBaseID, slug, updates, payload.TenantID, batchCtx, kidToWikiSpan)
 				return reduceErr
 			})
-			if lockErr != nil {
-				collectUnapplied(updates)
+			if lockErr != nil && !acquired {
+				collectUnapplied(slug, updates, lockErr)
 				// ctx cancelled (batch timeout / shutdown) — stop quietly.
 				return nil
 			}
 			if !acquired {
 				// Contended slug we couldn't get in time. The page keeps its
 				// prior content, so the documents that fed this slug are NOT
-				// done: record their knowledge_ids so the trim phase re-queues
-				// them (via the failed-op retry budget) for a later,
-				// hopefully-uncontended batch instead of deleting their rows.
+				// done: record their knowledge_ids so the settlement phase archives
+				// their incomplete outcome without repeating model work.
 				logger.Warnf(reduceCtx, "wiki ingest: slug %s busy > %s, deferring update", slug, wikiSlugLockWait)
-				collectUnapplied(updates)
+				collectUnapplied(slug, updates, errors.New("page lock unavailable"))
 				return nil
 			}
 			if reduceErr != nil {
-				// The page's read-modify-write failed, so this slug's update
-				// never landed. Re-queue the contributing documents (same
-				// fail_count budget as a map failure) so a later batch retries
-				// instead of silently dropping the row at trim time.
+				// Record the failed page separately from successful siblings.
 				logger.Warnf(reduceCtx, "wiki ingest: reduce failed for slug %s: %v", slug, reduceErr)
-				collectUnapplied(updates)
+				collectUnapplied(slug, updates, reduceErr)
 				if isLikelyRateLimitError(reduceErr) {
 					reduceMu.Lock()
 					rateLimited = true
 					reduceMu.Unlock()
 				}
 			}
-			if changed {
+			if changed && reduceErr == nil {
 				reduceMu.Lock()
 				allPagesAffected = append(allPagesAffected, slug)
 				if affectedType == "ingest" {
@@ -685,11 +691,6 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 				}
 				reduceMu.Unlock()
 			}
-			if additionFailed {
-				reduceMu.Lock()
-				failedAdditionSlugs[slug] = struct{}{}
-				reduceMu.Unlock()
-			}
 			return nil
 		})
 	}
@@ -697,6 +698,25 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 
 	tailCtx, tailCancel := wikiIngestCleanupContext(ctx)
 	defer tailCancel()
+
+	// Publication is part of each page's required outcome. Record failures
+	// before any success log, cross-link input or document completion is built.
+	publishSlugs := make([]string, 0, len(ingestPagesAffected))
+	for _, slug := range ingestPagesAffected {
+		if _, failed := failedPageSlugs[slug]; !failed {
+			publishSlugs = append(publishSlugs, slug)
+		}
+	}
+	for slug, cause := range s.publishDraftPages(tailCtx, payload.KnowledgeBaseID, publishSlugs) {
+		collectUnapplied(slug, slugUpdates[slug], cause)
+	}
+	successful := allPagesAffected[:0]
+	for _, slug := range allPagesAffected {
+		if _, failed := failedPageSlugs[slug]; !failed {
+			successful = append(successful, slug)
+		}
+	}
+	allPagesAffected = successful
 
 	// Sanitize the doc summary pages produced by this batch BEFORE we
 	// build log entries / rebuild the index. The summary LLM (run during
@@ -742,8 +762,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 	for _, r := range docResults {
 		// Drop any slugs whose page generation failed in reduce so the
 		// log feed never offers a clickable entry that 404s. The summary
-		// page itself (slug = summary/<knowledgeID>) is always created
-		// unconditionally upstream, so it survives the filter.
+		// page is filtered by the same outcome when its write/publication failed.
 		pages := r.Pages
 		if len(failedAdditionSlugs) > 0 {
 			pages = pages[:0:0]
@@ -760,14 +779,6 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 		if err := s.logEntrySvc.AppendBatch(tailCtx, logEntries); err != nil {
 			logger.Warnf(ctx, "wiki ingest: failed to append %d log entries: %v", len(logEntries), err)
 		}
-	}
-
-	// Publish freshly-generated pages immediately (NOT deferred to finalize):
-	// users should see a document's wiki pages as soon as their content is
-	// written, not after the debounce window. This is a cheap status flip.
-	if len(allPagesAffected) > 0 {
-		logger.Infof(ctx, "wiki ingest: publishing draft pages")
-		s.publishDraftPages(tailCtx, payload.KnowledgeBaseID, allPagesAffected)
 	}
 
 	// Defer KB-global convergence (index-intro rebuild + dead-link cleanup +
@@ -825,20 +836,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 		if r == nil {
 			continue
 		}
-		// A successfully-mapped doc is terminal for its wiki op, so
-		// release the knowledge's slot in pending_subtasks_count (the row
-		// promotes to completed once the counter hits zero). Done before
-		// the WikiSpan nil-check below so a doc that had no attempt to
-		// attach a span to still drains its counter slot. The matching +1
-		// is seeded by KnowledgePostProcess.SetFinalizing.
-		//
-		// EXCEPT docs with an unapplied slug (contended lock or reduce
-		// error): those are re-queued below, so keep their finalizing slot
-		// held — the retry (or the dead-letter drain in requeueFailedOps)
-		// releases it once the op reaches a real terminal state.
-		if _, unapplied := unappliedSlugKIDs[r.KnowledgeID]; !unapplied {
-			s.finalizeWikiSubtask(ctx, r.KnowledgeID, r.Revision)
-		}
+		// Source slot settlement happens only after guarded completion/archive.
 		if r.WikiSpan == nil {
 			continue
 		}
@@ -849,7 +847,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 				"slug":  p.Slug,
 				"title": previewText(p.Title, 80),
 			}
-			if _, bad := failedAdditionSlugs[p.Slug]; bad {
+			if _, bad := failedPageSlugs[p.Slug]; bad {
 				droppedPages = append(droppedPages, entry)
 				continue
 			}
@@ -868,7 +866,16 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 		for k, v := range r.MapStats {
 			output[k] = v
 		}
-		s.tracker().EndSpan(spanCtx, r.WikiSpan, output)
+		if cause, failed := unappliedSlugKIDs[r.KnowledgeID]; failed {
+			code := "WIKI_PARTIAL"
+			if wikiFailureOutcome(cause) == wikiOutcomeUnknown {
+				code = "WIKI_NEEDS_ATTENTION"
+			}
+			detail, _ := json.Marshal(output)
+			s.tracker().FailSpan(spanCtx, r.WikiSpan, code, fmt.Sprintf("Wiki incomplete: %d pages written, %d pages failed", len(writtenPages), len(droppedPages)), errors.New(string(detail)))
+		} else {
+			s.tracker().EndSpan(spanCtx, r.WikiSpan, output)
+		}
 	}
 	spanCancel()
 	// Failed-map docs already had FailSpan called inside
@@ -877,55 +884,57 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 
 	// Fold documents with an unapplied slug (contended lock or reduce error)
 	// into failedOps so they are neither trimmed nor promoted to completed:
-	// requeueFailedOps then runs them through the same fail_count budget
-	// (retry now, dead-letter once the slug stays permanently hot/broken) as
-	// a map-phase failure. A doc already counted as a map failure is skipped
-	// to avoid a double fail_count bump.
+	// settleFailedWikiOperations archives them without repeating successful model work.
+	// A document already recorded as a map failure is not added twice.
 	if len(unappliedSlugKIDs) > 0 {
-		failedKIDs := make(map[string]struct{}, len(failedOps))
+		failedIDs := make(map[int64]struct{}, len(failedOps))
 		for _, op := range failedOps {
-			failedKIDs[op.KnowledgeID] = struct{}{}
+			failedIDs[op.dbID] = struct{}{}
 		}
 		for _, op := range pendingOps {
 			if _, unapplied := unappliedSlugKIDs[op.KnowledgeID]; !unapplied {
 				continue
 			}
-			if _, already := failedKIDs[op.KnowledgeID]; already {
+			if _, already := failedIDs[op.dbID]; already {
 				continue
 			}
+			op.failure = unappliedSlugKIDs[op.KnowledgeID]
 			failedOps = append(failedOps, op)
-			failedKIDs[op.KnowledgeID] = struct{}{}
+			failedIDs[op.dbID] = struct{}{}
 		}
 	}
 
-	// Build the trim set: rows that should be removed from
-	// task_pending_ops. We start from the full peekedIDs (every row we
-	// pulled, even ones de-duplicated by knowledge_id) and subtract
-	// any failed op's dbID — those need to stay in place so the
-	// requeueFailedOps path can decide between retry and dead-letter.
-	failedIDSet := make(map[int64]struct{}, len(failedOps))
+	// Guarded selected cohorts settle through claim+execution CAS. Only rows
+	// never selected (for example malformed legacy payloads) use old cleanup.
+	guardedIDs := make(map[int64]bool)
+	failedIDSet := make(map[int64]bool)
 	for _, op := range failedOps {
-		if op.dbID != 0 {
-			failedIDSet[op.dbID] = struct{}{}
+		failedIDSet[op.dbID] = true
+	}
+	for _, op := range pendingOps {
+		for _, row := range op.queueRows {
+			guardedIDs[row.ID] = true
 		}
 	}
-	trimIDs := make([]int64, 0, len(peekedIDs))
+	var trimIDs []int64
 	for _, id := range peekedIDs {
-		if _, fail := failedIDSet[id]; fail {
-			continue
+		if !guardedIDs[id] {
+			trimIDs = append(trimIDs, id)
 		}
-		trimIDs = append(trimIDs, id)
 	}
 	settleCtx, settleCancel := wikiIngestCleanupContext(ctx)
 	trimErr := s.trimPendingList(settleCtx, trimIDs)
+	for _, op := range pendingOps {
+		if failedIDSet[op.dbID] {
+			continue
+		}
+		trimErr = errors.Join(trimErr, s.settleWikiOperation(settleCtx, payload, op))
+	}
 
-	// Process failed ops: increment fail_count and dead-letter once
-	// the cap is hit. Must come AFTER trim so successful siblings are
-	// already gone from the queue — otherwise a follow-up batch could
-	// re-pick them up.
+	// Archive failed guarded ops after successful cohorts settle.
 	var requeueErr error
 	if len(failedOps) > 0 {
-		requeueErr = s.requeueFailedOps(settleCtx, payload, failedOps)
+		requeueErr = s.settleFailedWikiOperations(settleCtx, payload, failedOps)
 	}
 	settleCancel()
 	if err := errors.Join(trimErr, requeueErr); err != nil {
@@ -1221,7 +1230,7 @@ func (s *wikiIngestService) mapOneDocument(
 	// summary + classification) shows up in the trace tree. Returns
 	// nil when the parent attempt is gone (no panic on missing
 	// lookups — span tracker is best-effort).
-	wikiSpan := s.beginWikiSubspan(ctx, knowledgeID, types.JSONMap{
+	wikiSpan := s.beginWikiSubspan(ctx, knowledgeID, op.Revision, types.JSONMap{
 		"language":          lang,
 		"knowledge_base_id": payload.KnowledgeBaseID,
 	})
@@ -1291,13 +1300,12 @@ func (s *wikiIngestService) mapOneDocument(
 	oldPageSlugs := s.getExistingPageSlugsForKnowledge(ctx, payload.KnowledgeBaseID, knowledgeID)
 
 	// Pass 0: lightweight candidate slug extraction (skeleton only).
-	// On failure we fall back to the legacy single-shot extractor so the doc
-	// still gets ingested, just without chunk-level citations.
+	// Failure stops this document; a second extractor would repeat uncertain
+	// work and silently lose the required citation stage.
 	var (
 		extractedEntities []extractedItem
 		extractedConcepts []extractedItem
 		slugItems         map[string]extractedItem
-		pass0Failed       bool
 	)
 	logger.Infof(ctx, "wiki ingest: pass 0 — extracting candidate slugs for %s", knowledgeID)
 	extractSpan := s.tracker().BeginSubSpan(ctx, wikiSpan, "postprocess.wiki.extract", types.SpanKindSubSpan, types.JSONMap{
@@ -1306,20 +1314,14 @@ func (s *wikiIngestService) mapOneDocument(
 	})
 	extractedEntities, extractedConcepts, slugItems, err = s.extractCandidateSlugs(ctx, chatModel, payload.KnowledgeBaseID, content, lang, oldPageSlugs, batchCtx)
 	if err != nil {
-		logger.Warnf(ctx, "wiki ingest: pass 0 failed for %s (%v) — falling back to legacy extractor", knowledgeID, err)
-		pass0Failed = true
-		extractedEntities, extractedConcepts, slugItems, err = s.extractEntitiesAndConceptsNoUpsert(ctx, chatModel, payload.KnowledgeBaseID, content, lang, oldPageSlugs, batchCtx)
-		if err != nil {
-			logger.Warnf(ctx, "wiki ingest: legacy fallback also failed for %s: %v", knowledgeID, err)
-			s.tracker().FailSpan(ctx, extractSpan, "EXTRACT_FAILED", err.Error(), err)
-			s.tracker().FailSpan(ctx, wikiSpan, "EXTRACT_FAILED", err.Error(), err)
-			return nil, nil, err
-		}
+		s.tracker().FailSpan(ctx, extractSpan, wikiFailureOutcome(err), err.Error(), nil)
+		s.tracker().FailSpan(ctx, wikiSpan, wikiFailureOutcome(err), err.Error(), nil)
+		return nil, nil, err
 	}
 	s.tracker().EndSpan(ctx, extractSpan, types.JSONMap{
 		"entities":         len(extractedEntities),
 		"concepts":         len(extractedConcepts),
-		"pass0_fallback":   pass0Failed,
+		"pass0_fallback":   false,
 		"entities_preview": previewExtractedItems(extractedEntities, 8),
 		"concepts_preview": previewExtractedItems(extractedConcepts, 8),
 	})
@@ -1357,6 +1359,7 @@ func (s *wikiIngestService) mapOneDocument(
 		citations      map[string][]string
 		newSlugs       []newSlugFromCitation
 		batchCount     int
+		citationErr    error
 	)
 
 	// Both calls run in parallel goroutines under the same wikiSpan
@@ -1366,13 +1369,10 @@ func (s *wikiIngestService) mapOneDocument(
 		"content_chars":   utf8.RuneCountInString(content),
 		"extracted_slugs": len(summaryExtractedPages),
 	})
-	var classifySpan *Span
-	if !pass0Failed {
-		classifySpan = s.tracker().BeginSubSpan(ctx, wikiSpan, "postprocess.wiki.classify", types.SpanKindSubSpan, types.JSONMap{
-			"chunks":     len(chunks),
-			"candidates": len(extractedEntities) + len(extractedConcepts),
-		})
-	}
+	classifySpan := s.tracker().BeginSubSpan(ctx, wikiSpan, "postprocess.wiki.classify", types.SpanKindSubSpan, types.JSONMap{
+		"chunks":     len(chunks),
+		"candidates": len(extractedEntities) + len(extractedConcepts),
+	})
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -1386,7 +1386,7 @@ func (s *wikiIngestService) mapOneDocument(
 			"InstructionScope":   "wiki_content",
 		})
 		if summaryErr != nil {
-			s.tracker().FailSpan(ctx, summarySpan, "SUMMARY_FAILED", summaryErr.Error(), summaryErr)
+			s.tracker().FailSpan(ctx, summarySpan, wikiFailureOutcome(summaryErr), summaryErr.Error(), nil)
 		} else {
 			sumLine, sumBody := splitSummaryLine(summaryContent)
 			s.tracker().EndSpan(ctx, summarySpan, types.JSONMap{
@@ -1398,15 +1398,14 @@ func (s *wikiIngestService) mapOneDocument(
 	}()
 	go func() {
 		defer wg.Done()
-		// Skip citation pass when Pass 0 has fallen back to the legacy path —
-		// the legacy output already contains paraphrased Details, so chunk
-		// citations would be redundant and we'd spend LLM calls for nothing.
-		if pass0Failed {
-			citations = map[string][]string{}
+		candidatesXML := renderCandidateSlugsXML(extractedEntities, extractedConcepts)
+		outcome := s.classifyChunkCitations(ctx, chatModel, candidatesXML, chunks, lang, batchCtx, classifySpan)
+		citations, newSlugs, batchCount = outcome.Citations, outcome.NewSlugs, len(outcome.BatchErrors)
+		citationErr = outcome.Err()
+		if citationErr != nil {
+			s.tracker().FailSpan(ctx, classifySpan, wikiFailureOutcome(citationErr), citationErr.Error(), nil)
 			return
 		}
-		candidatesXML := renderCandidateSlugsXML(extractedEntities, extractedConcepts)
-		citations, newSlugs, batchCount = s.classifyChunkCitations(ctx, chatModel, candidatesXML, chunks, lang, batchCtx)
 		s.tracker().EndSpan(ctx, classifySpan, types.JSONMap{
 			"cited_slugs":      len(citations),
 			"new_slugs":        len(newSlugs),
@@ -1416,6 +1415,10 @@ func (s *wikiIngestService) mapOneDocument(
 		})
 	}()
 	wg.Wait()
+	if citationErr != nil {
+		s.tracker().FailSpan(ctx, wikiSpan, wikiFailureOutcome(citationErr), citationErr.Error(), nil)
+		return nil, nil, citationErr
+	}
 
 	// Merge citations back into the item structs (non-failing; items without
 	// citations simply keep their Description+Details fallback).
@@ -1468,20 +1471,8 @@ func (s *wikiIngestService) mapOneDocument(
 	var docSummary string
 
 	if summaryErr != nil {
-		// Summary is the headline artifact of an ingested document — a
-		// document with no summary page is half-ingested and leaves the
-		// entity/concept updates hanging without a root to link back to
-		// from the index. Historically we just logged and moved on,
-		// which meant a single transient 504 permanently dropped the
-		// summary page for that document.
-		//
-		// Returning an error here sends the op to failedOps (see the
-		// map-phase loop in ProcessWikiIngest), which requeueFailedOps
-		// appends back onto the pending list so the next batch retries.
-		// The internal retries in generateWithTemplate already exhaust
-		// the LLM's own transient-error budget before we give up here.
-		logger.Errorf(ctx, "wiki ingest: generate summary failed for %s, will requeue: %v", knowledgeID, summaryErr)
-		s.tracker().FailSpan(ctx, wikiSpan, "SUMMARY_FAILED", summaryErr.Error(), summaryErr)
+		// The batch owner records this failure without replaying successful work.
+		s.tracker().FailSpan(ctx, wikiSpan, wikiFailureOutcome(summaryErr), summaryErr.Error(), nil)
 		return nil, nil, fmt.Errorf("generate summary: %w", summaryErr)
 	}
 	sumLine, sumBody := splitSummaryLine(summaryContent)
@@ -1612,7 +1603,7 @@ func (s *wikiIngestService) mapOneDocument(
 		"wiki ingest: mapped knowledge %s title=%q candidates=%d chunks=%d batches=%d cited_chunks=%d uncited_slugs=%d new_slugs=%d updates=%d reparse_slugs=%d stale_slugs=%d pass0_fallback=%v elapsed=%s",
 		knowledgeID, previewText(docTitle, 80),
 		len(slugItems), len(chunks), batchCount, len(citedChunkSet), uncited, len(newSlugs),
-		len(updates), reparseOverlap, staleCount, pass0Failed,
+		len(updates), reparseOverlap, staleCount, false,
 		time.Since(docStartedAt).Round(time.Millisecond),
 	)
 
@@ -1635,7 +1626,7 @@ func (s *wikiIngestService) mapOneDocument(
 		"stale_slugs":      staleCount,
 		"extracted_pages":  len(extractedPages),
 		"summary_chars":    utf8.RuneCountInString(docSummary),
-		"pass0_fallback":   pass0Failed,
+		"pass0_fallback":   false,
 		"classify_batches": batchCount,
 		"summary_preview":  previewText(docSummaryLine, 160),
 	}
@@ -2121,10 +2112,7 @@ func (s *wikiIngestService) reduceSlugUpdates(
 			if len(additions) > 0 {
 				additionFailed = true
 			}
-			// Don't propagate the LLM error to the named return: it has
-			// already been logged, and the eg.Go caller would otherwise
-			// log it a second time as "reduce failed for slug".
-			err = nil
+			return false, "", additionFailed, err
 		}
 	}
 

@@ -361,7 +361,11 @@ def _is_chart_debris_line(line: str) -> bool:
 
 
 def _strip_chart_text_debris(text: str) -> str:
-    """Drop runs of axis/legend lines leaked from vector figures into the text layer."""
+    """Drop axis/legend runs only at an adjacent figure-caption boundary.
+
+    Numeric runs alone are also valid table rows. A figure elsewhere on the
+    page does not establish that this run belongs to it.
+    """
     if not text:
         return text
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
@@ -374,7 +378,7 @@ def _strip_chart_text_debris(text: str) -> str:
                 _is_chart_debris_line(lines[j]) or not lines[j].strip()
             ):
                 j += 1
-            if j - i >= 3:
+            if j - i >= 3 and j < len(lines) and _FIGURE_CAPTION_RE.match(lines[j].strip()):
                 i = j
                 continue
         out.append(lines[i])

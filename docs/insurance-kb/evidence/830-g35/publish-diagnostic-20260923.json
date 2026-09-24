@@ -1,0 +1,175 @@
+{
+  "offline_validation_status": "PASS",
+  "container_same_input_validation": "NOT_RUN",
+  "scope": "Offline recorded candidate canonical and member validation, not live publication",
+  "candidate_sha256": "dc3eccfbf830ad85223c5d0b2663c39db6e0c851cf852f4bd813f8a426b8ab92",
+  "candidate_bytes": 13500975,
+  "members": 1067,
+  "canonical_seconds": 8.012168708,
+  "snapshot_members_seconds": 5.161313958,
+  "test_seconds": 13.18,
+  "resource_matched_local_seconds": 13.45,
+  "resource_matched_local_go_memory_limit": "1400MiB",
+  "resource_matched_local_gomaxprocs": 2,
+  "timing_wrapper_exit": 1,
+  "timing_wrapper_limitation": "macOS sysctl kern.clockrate sandbox denied; test itself passed",
+  "linux_cross_compile": "BLOCKED: pg_query CGO functions unavailable under CGO_ENABLED=0",
+  "profile": {
+    "total_cpu_seconds": 12.38,
+    "flat": [
+      {
+        "function": "runtime.madvise",
+        "seconds": 1.3
+      },
+      {
+        "function": "encoding/json.(*Decoder).readValue",
+        "seconds": 0.96
+      },
+      {
+        "function": "encoding/json.stateInString",
+        "seconds": 0.68
+      },
+      {
+        "function": "encoding/json.unquoteBytes",
+        "seconds": 0.66
+      },
+      {
+        "function": "encoding/json.(*decodeState).rescanLiteral",
+        "seconds": 0.53
+      },
+      {
+        "function": "runtime.pthread_cond_signal",
+        "seconds": 0.49
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.conceptJSONUnicodeValid830G2",
+        "seconds": 0.39
+      },
+      {
+        "function": "runtime.pthread_cond_wait",
+        "seconds": 0.36
+      },
+      {
+        "function": "runtime.memmove",
+        "seconds": 0.35
+      },
+      {
+        "function": "encoding/json.appendString[go.shape.string]",
+        "seconds": 0.3
+      },
+      {
+        "function": "runtime.mallocgcSmallScanNoHeader",
+        "seconds": 0.28
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.entityPageUnescapeLineSeparators830G1",
+        "seconds": 0.26
+      },
+      {
+        "function": "runtime.mallocgc",
+        "seconds": 0.22
+      },
+      {
+        "function": "runtime.concatstrings",
+        "seconds": 0.19
+      },
+      {
+        "function": "runtime.memclrNoHeapPointers",
+        "seconds": 0.17
+      }
+    ],
+    "cumulative": [
+      {
+        "function": "testing.tRunner",
+        "seconds": 9.47
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.TestG35RecordedPublishDiagnostic",
+        "seconds": 9.47
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.batchConceptCanonicalJSON830G3",
+        "seconds": 7.95
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.validateBatchConceptBundle830G3",
+        "seconds": 6.8
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.batchConceptCanonicalWire830G3",
+        "seconds": 6.37
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.CanonicalBatchConceptCandidateBundle830G3",
+        "seconds": 5.94
+      },
+      {
+        "function": "encoding/json.(*Decoder).Decode",
+        "seconds": 5.74
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.batchConceptHash830G3",
+        "seconds": 5.35
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.ParseBatchConceptCandidateBundle830G3",
+        "seconds": 5.32
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.conceptJSONUniqueKeys830G2",
+        "seconds": 3.92
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.conceptJSONUniqueKeys830G2.func1",
+        "seconds": 3.9
+      },
+      {
+        "function": "encoding/json.(*Decoder).Token",
+        "seconds": 3.87
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.BatchConceptCandidateBundle830G3.SnapshotMembers",
+        "seconds": 3.52
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.batchConceptTypedValueValid830G3",
+        "seconds": 2.99
+      },
+      {
+        "function": "encoding/json.(*Decoder).readValue",
+        "seconds": 2.93
+      },
+      {
+        "function": "encoding/json.(*decodeState).unmarshal",
+        "seconds": 2.87
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.canonicalRawEqualValue830G3",
+        "seconds": 2.83
+      },
+      {
+        "function": "encoding/json.(*decodeState).value",
+        "seconds": 2.79
+      },
+      {
+        "function": "github.com/Tencent/WeKnora/internal/types.batchConceptPageMemberValid830G3",
+        "seconds": 2.29
+      },
+      {
+        "function": "runtime.systemstack",
+        "seconds": 2.07
+      }
+    ]
+  },
+  "live_container": {
+    "architecture": "linux/arm64",
+    "vm_cpus": 4,
+    "app_cpu_quota": 1,
+    "memory_limit_bytes": 2147483648,
+    "memory_peak_bytes": 724582400,
+    "oom_events": 0
+  },
+  "root_cause": "NOT CONFIRMED: duplicate validation exists but local 13s does not explain live 471s; no timeout or validation bypass applied",
+  "new_model_calls": 0,
+  "service_changes": 0
+}

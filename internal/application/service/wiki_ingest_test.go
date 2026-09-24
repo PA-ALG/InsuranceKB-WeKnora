@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -343,6 +344,26 @@ type templateCaptureChatModel struct {
 	prefix   string
 }
 
+type interruptedWikiChatModel struct {
+	templateCaptureChatModel
+	calls         int
+	retryDisabled bool
+}
+
+func (m *interruptedWikiChatModel) Chat(ctx context.Context, _ []chat.Message, _ *chat.ChatOptions) (*types.ChatResponse, error) {
+	m.calls++
+	m.retryDisabled = types.ModelAutomaticRetryDisabled(ctx)
+	return nil, io.ErrUnexpectedEOF
+}
+
+func TestGenerateWithTemplateDoesNotReplayUnknownSend(t *testing.T) {
+	model := &interruptedWikiChatModel{}
+	_, err := (&wikiIngestService{}).generateWithTemplate(context.Background(), model, "source {{.Value}}", map[string]string{"Value": "body"})
+	if err == nil || model.calls != 1 || !model.retryDisabled {
+		t.Fatalf("unknown send must stop at one attempt with transport retries disabled: calls=%d disabled=%v error=%v", model.calls, model.retryDisabled, err)
+	}
+}
+
 func (m *templateCaptureChatModel) Chat(
 	ctx context.Context,
 	messages []chat.Message,
@@ -514,19 +535,19 @@ func TestTrimPendingListReturnsDeleteError(t *testing.T) {
 	}
 }
 
-func TestRequeueFailedOpsReturnsReleaseError(t *testing.T) {
+func TestSettleFailedWikiOperationsRejectsUnguardedReplay(t *testing.T) {
 	wantErr := errors.New("release failed")
 	repo := &wikiPendingRepoForCleanupTest{incrCount: 1, releaseErr: wantErr}
 	svc := &wikiIngestService{pendingRepo: repo}
 
-	err := svc.requeueFailedOps(context.Background(), WikiIngestPayload{}, []WikiPendingOp{{
+	err := svc.settleFailedWikiOperations(context.Background(), WikiIngestPayload{}, []WikiPendingOp{{
 		Op:          WikiOpIngest,
 		KnowledgeID: "k1",
 		DocTitle:    "doc",
 		dbID:        99,
 	}})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("requeueFailedOps() error = %v, want %v", err, wantErr)
+	if err == nil || errors.Is(err, wantErr) {
+		t.Fatalf("unguarded op must fail before releasing for retry, got %v", err)
 	}
 }
 

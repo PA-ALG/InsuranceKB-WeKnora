@@ -212,6 +212,20 @@ class PunctuationMergeTest(unittest.TestCase):
 
 
 class PdfTextSanitizeTest(unittest.TestCase):
+    def test_preserves_numeric_table_without_figure_boundary(self):
+        from docreader.parser.pdf_parser import _postprocess_pdf_text
+
+        rows = "2 2 6350 12700 0 27600 2950\n3 3 6350 19050 0 41400 4800\n20 20 6350 127000 0 500000 67050"
+        raw = rows + "\nImportant: values are at policy year end."
+        self.assertEqual(_postprocess_pdf_text(raw), raw)
+
+    def test_unrelated_figure_does_not_authorize_numeric_table_removal(self):
+        from docreader.parser.pdf_parser import _postprocess_pdf_text
+
+        rows = "2 2 6350 12700 0 27600 2950\n3 3 6350 19050 0 41400 4800\n20 20 6350 127000 0 500000 67050"
+        raw = "Figure 1. An unrelated diagram.\n" + rows + "\nImportant: table assumptions."
+        self.assertEqual(_postprocess_pdf_text(raw), raw)
+
     def test_removes_fffe_placeholder(self):
         from docreader.parser.pdf_parser import _postprocess_pdf_text
 

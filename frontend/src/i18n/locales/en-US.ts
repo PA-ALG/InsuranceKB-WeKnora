@@ -2890,6 +2890,7 @@ export default {
       issueAiLinter: 'AI Linter',
       issueIgnore: 'Ignore False Alarm',
       globalIssuesTitle: 'Global Pending Content Issues',
+      failedGenerationCount: '{count} Wiki generation failures recorded. See document processing details.',
       globalIssuesCount: '{count} Pending Content Issues',
       globalIssuesEmpty: 'No pending content issues',
       issuePagePrefix: 'Page: ',

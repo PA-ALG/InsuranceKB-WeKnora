@@ -92,6 +92,7 @@ export interface WikiStats {
   recent_updates: WikiPage[];
   pending_tasks: number;
   pending_issues: number;
+  failed_operations?: number;
   is_active: boolean;
 }
 
