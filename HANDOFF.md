@@ -1,6 +1,6 @@
 # 当前状态（2026-09-24 · P0前置已部署；原生引用未知；P0-3首条软件切片已验证）
 
-root继续执行已批准九项顺序，唯一写者。本地提交460c664cf的APP/UI/DocReader各构建一次并已部署；首轮前端切换断言失败后旧服务已核实恢复，有限第二次复用同制品于02:52:39Z通过全部健康/身份/Active检查。Harness未换镜像，正式Active仍epoch17。交付证据见p0-quality-delivery-20260924.md。
+root继续执行已批准九项顺序，唯一写者。P0-3首条软件切片已提交`d03f0b204609290c48d99eb3162626bd3fb15c03`，尚未push/构建/部署；矩阵见`docs/insurance-kb/evidence/830-g35/publish-operation-validation-20260924.json`。本地提交460c664cf的APP/UI/DocReader各构建一次并已部署；首轮前端切换断言失败后旧服务已核实恢复，有限第二次复用同制品于02:52:39Z通过全部健康/身份/Active检查。Harness未换镜像，正式Active仍epoch17。交付证据见p0-quality-delivery-20260924.md。
 
 正常网页新空库8649ee5e-e3a7-4a67-994b-7bbf372025d5，单次上传knowledge ea9f9062-ad98-4321-9e8d-b003345ca2b1。真实输入17块、5014字符，与修复PDF结果逐字一致，旧缺失14行已恢复；候选2实体8概念成功，唯一引用batch OUTCOME_UNKNOWN，无短提纲降级、无实体/概念页，失败记录UI与Trace已查看。4文本发送/3成功usage21487tokens/1未知用量；健康基线仍未取得，不能再盲重传。已向用户异步请求模型中转服务10:56:23—10:56:34的日志，当前本地未保留底层cause，LLM debug未开。详见native-recheck-20260924.md。私密输入/回执已归档insurancekb-private-evidence/g35-live-20260924。
 

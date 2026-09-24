@@ -1,0 +1,70 @@
+{
+  "requirement": "G3-AUTO-5/P0-3 operation-local validation and cancellation slice",
+  "implementation_commit": "d03f0b204609290c48d99eb3162626bd3fb15c03",
+  "base": "460c664cf20f23ede858aa06c24e8275cb56a495",
+  "source_sha256": {
+    "internal/types/concept_free_wiki_830_g3.go": "8fa841b8552297537a8c30505989837010585548738e93886cc6b76c5283f6d7",
+    "internal/types/batch_concept_operation_830_g3_test.go": "9715320ce9c25f9ddad09c1e6c95217c819c9521209f5790d7ce1705196a10ce",
+    "internal/application/service/concept_free_wiki_830_g3.go": "57159597ee4c9f9d8129f4ce0ed97a3f61b1b8b26a4b62c4556cba2f18ecbbcf",
+    "internal/application/service/concept_source_authority_830_g2.go": "7a8088038336d0abccd776e53257f1b54c333916a826dcaca06e5cdcb7e57f22",
+    "internal/application/service/g3_activation_reuse_test.go": "945cef2e78cb1e0cd8161b4b09e230164eb69910ff8401762ac36c6126555ec6",
+    "internal/application/service/g3_published_read_reuse.go": "653c3816e9ba83606e1d34cc3da9d65288973d2ead1cc112f024fc13fa1dbfe8",
+    "internal/application/service/wiki_release.go": "eb45ce525858eea0c1bbe24185b00f6e3438d19f0a8ed32ed683961ba2c016b4",
+    "internal/application/service/wiki_release_automated.go": "b72427d9643a5bc03bb0522d97751116eb2fcd9456c82ffba5fe518a2c7cc59a"
+  },
+  "software": "PASS",
+  "review": {
+    "blockers": 0,
+    "reviewer": "/root/publish_root_cause",
+    "matched_source_files": 8
+  },
+  "checks": {
+    "types": {
+      "status": "PASS",
+      "seconds": 11.124
+    },
+    "automated_activation": {
+      "status": "PASS",
+      "seconds": 171.061
+    },
+    "source_cas_contract": {
+      "status": "PASS",
+      "seconds": 90.398
+    },
+    "linux_recorded_candidate": {
+      "status": "PASS",
+      "input_bytes": 13500975,
+      "members": 1067,
+      "legacy_seconds": 21.026218,
+      "operation_seconds": 17.234215,
+      "canonical_members_equal": true,
+      "precancel_seconds": 7.4291e-05,
+      "cpus": 1,
+      "memory_gib": 2,
+      "go": "1.26.5",
+      "arch": "linux/arm64"
+    }
+  },
+  "delivery": {
+    "product_build": "NOT RUN",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": {
+    "healthy_native_baseline": "BLOCKED",
+    "valid_candidate_publish": "NOT RUN",
+    "timeout_retry_nonoverlap": "NOT RUN",
+    "G3.5": "BLOCKED"
+  },
+  "limits": [
+    "Timing is one offline sequential comparison, not complete activation or stable percentile.",
+    "Single decode/semantic/canonical primitive still runs until next cancellation boundary.",
+    "Signed projection may remain if cancellation occurs after the last pre-write check; subsequent activation remains cancellation-gated.",
+    "Ancestor validation still uses Background and requires separate measurement.",
+    "Explicit wrong/nil result production source-verifier branch tests remain backlog."
+  ],
+  "evidence_root": "insurancekb-private-evidence/g35-live-20260924/publish-operation"
+}
