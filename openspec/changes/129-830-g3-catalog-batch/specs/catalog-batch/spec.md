@@ -399,3 +399,12 @@ root唯一写者；继续用户已批准质量任务。既有原生候选/引用
 - **G35-R5-WIRE-4**：新提示明确逐段SOURCE_SUPPORTED包括原文改述；补充解释独立MODEL_GENERATED。Schema比较必须保留subject/recipient/trigger/condition/exception/consequence，不能用触发条件覆盖独立后果，告知对象须完整。提示变化不是质量验收；当前v6 review只查retained dispositions，Schema误拒与对象遗漏仍BLOCKED，下一切片另冻结所有decision的disposition检查协议，不能冒称已独立覆盖全部REJECT。
 
 新增写域限product_ingestion/native_admission_wire.py、native_admission_policy.py及既有configuration.py/composition.py/native_admission_stage.py/native_admission_preflight.py/checkpoint_validation.py/checkpoints.py；相关定向tests、本Spec、原计划/任务/HANDOFF/证据。原native_admission.py领域投影不改协议。RED覆盖精确CRLF/Unicode、逐段引用和来源不自动改写、篡改catalog/context、未知/重复ref、v2语义仍严格、旧配置哈希不变/非法新模板拒绝、完整阶段恢复身份、真实worker仅准入新增。先软件/离线证据，集中交付和新有限真实窗口另记，旧窗口保持关闭。
+
+### G35-R6-REVIEW-SCOPE：审核比较输入遵循已验证候选作用域（2026-09-25）
+
+真实43e71710完整准入成功，最终审核预派发因730770 bytes>300000失败；原因是单产品候选装入14历史产品的Schema/page比较视图。原renderer已支持单entity，显式重放214790bytes且final hash/完整selection不变。root唯一写者，复用v6现有renderer、policy、模型executor和唯一发布；不改预算、不新增协议/配置，不新建scope平台。独立设计审查确认以下边界。
+
+- **G35-R6-REVIEW-SCOPE-1**：在既有最终review深模块，从完整校验后的native dependency selection确定单一比较实体；selection.entity_id、admission_context.entity（含版本）、所有candidate pages实体/版本以及request唯一binding必须一致。调用者显式entity如冲突必须拒绝，缺失/多实体/篡改/无绑定不得猜首项或回落全库。没有selection的历史路径保持原接口语义。
+- **G35-R6-REVIEW-SCOPE-2**：作用域只影响existing Schema/page与排重index的实体范围。全局definitions/existing_concepts、完整selection/response/effective_dependencies、全部当前dispositions/原文/逐段标签、完整final output/hash保持；最终组合仍包含其他历史实体。实际context字节/hash按原算法计量，旧全库审核不得复用为新窄上下文审核。
+- 写域：native_dependency_selection.py（纯作用域一致性验证）、discovery_stage.py（原review接线）、test_native_dependency_selection.py及现有Spec/计划/任务/证据/HANDOFF。先stage默认不传entity实际发送全库的RED及冲突反例，再实现；真实14实体raw离线复现预算通过，不能冒充provider审核或发布。
+- 明确非目标：v6只审retained、零成员跳过不在此改变；语义质量5项另按字段完整性/候选覆盖/准入证据分类处理。真实窗口保持关闭，不因软件scope PASS重新调用模型；下一真实验证须等耦合质量缺口离线收口并另冻结窗口。

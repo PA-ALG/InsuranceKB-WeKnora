@@ -96,3 +96,15 @@ v4 worker现已证明发现调用保持1次；回归继续暴露聚合summary遗
 
 46d541d81已提交推送，PR运行35747827910真实PG结果58 PASS/2失败，均为Alembic check发现20个product_ingestion时间列：0016/17迁移实际TIMESTAMP WITH TIME ZONE，ORM隐式Mapped[datetime]却推导无时区DateTime。root追加窄修复：tables.py、artifact_tables.py显式DateTime(timezone=True)对齐现有数据库，复用jobs既有时区声明模式；不修改迁移、不新增数据库/配置、不运行现场DDL。新增test_schema_metadata.py以PostgreSQL mock dialect执行现有migration，比较迁移与ORM时间列类型及nullable，真实CI差异为RED。原PG集成断言不变，随后独审/提交/远端CI继续核验。
 时区映射修复freeze a614b81abd8be6325a9bbd908afa1c1dba62ad4a独审BLOCKER0；旧base RED、新tree36回归PASS、strict670 PASS；仅纠正ORM声明，root提交并继续查看远端PG完整60项，现场migration/deploy/provider=0。
+
+
+## 2026-09-25 wire v3真实闭环与审核作用域收口
+
+- [x] 原文编号v3源码6ea5e023独审、Harness-only实际build1/交付PASS；Python3.9构建前准备失败保留，切换使用项目3.12。
+- [x] 同账号正常UI恢复一次43e71710，准入1新调用/8复用，4页提议严格投影成功；219.79秒终态PARTIAL_SUCCESS。
+- [x] 保存审核预派发上下文超预算证据，字段Active epoch20，自由知识accepted0/published0，关闭有限窗口。
+- [x] 独立语义审查：前次4阻断关闭，现18项15完整/2部分/1缺失，新5项缺口明确归属。
+- [x] G35-R6-REVIEW-SCOPE-1/2 Spec→真实stage RED→原深模块作用域接线；131有界PASS，真实14实体raw离线实际stage输入214790/300000，完整finalhash/selection保持。
+- [x] scope软件revision2最终独审0 BLOCKER/冻结，ruff/两源码mypy PASS；最终stage8 PASS（与131重叠）。不部署、不新provider。
+- [ ] 下一质量切片：c8来源条件、c9字段重复；贷款/退款对象字段完整；利益演示全文覆盖。先真实反例/输入语义收口，再考虑新有限真实窗口。
+- [ ] v7全处置/零成员审核、R4、跨窗口R6、非空自由知识发布与真实来源点击。完整G3.5仍未完成。

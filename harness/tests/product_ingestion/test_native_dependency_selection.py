@@ -410,7 +410,17 @@ def test_structural_dependencies_reach_fixed_point(case: Any, mode: str) -> None
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "mode", ["new", "replay", "old_prompt", "reject_dependency", "pending_dependency"]
+    "mode",
+    [
+        "new",
+        "replay",
+        "old_prompt",
+        "reject_dependency",
+        "pending_dependency",
+        "auto_scope",
+        "wide_parent",
+        "scope_conflict",
+    ],
 )
 async def test_final_review_binds_complete_plan_and_selected_final_hash(
     case: Any, mode: str
@@ -491,7 +501,28 @@ async def test_final_review_binds_complete_plan_and_selected_final_hash(
         raw=raw,
     )
     record.diagnostic = None
-    parent = mode in {"replay", "old_prompt"}
+    if mode == "wide_parent":
+        wide_context = discovery.render_independent_discovery_review_context(
+            request=request,
+            entity_id=None,
+            exclusion_index={
+                b.entity_id: discovery.build_discovery_exclusion_index(request, b.entity_id)
+                for b in request.entity_bindings
+            },
+            discovery_candidates=candidates,
+            final_composed_output=output,
+            final_composed_output_hash=context["output_hash"],
+            max_context_bytes=300000,
+        )
+        record = _parent_call(
+            stage_key="compilation",
+            operation="independent-discovery-final-review-" + context["output_hash"],
+            content=json_bytes(wide_context),
+            prompt=prompt,
+            raw=raw,
+        )
+        record.diagnostic = None
+    parent = mode in {"replay", "old_prompt", "wide_parent"}
     outcome = await run_independent_discovery_final_review(
         service=service,
         artifacts=SimpleNamespace(list_stage_calls=lambda **kw: [record] if parent else []),
@@ -503,13 +534,22 @@ async def test_final_review_binds_complete_plan_and_selected_final_hash(
         discovery_candidates=candidates,
         final_composed_output=output,
         final_composed_output_hash=context["output_hash"],
-        entity_id=entity,
+        entity_id=(
+            "other"
+            if mode == "scope_conflict"
+            else None
+            if mode in {"auto_scope", "wide_parent"}
+            else entity
+        ),
     )
     assert outcome.decision == {
         "old_prompt": "FAILED",
+        "scope_conflict": "FAILED",
         "reject_dependency": "REJECTED",
         "pending_dependency": "PENDING",
     }.get(mode, "ACCEPTED"), outcome.summary
+    if mode == "scope_conflict":
+        assert not service.model_executor.calls
     if outcome.decision == "ACCEPTED":
         compose_discovery_review(
             request=request,
@@ -518,7 +558,13 @@ async def test_final_review_binds_complete_plan_and_selected_final_hash(
             outcome=outcome,
             run_id="child",
         )
-        assert len(service.model_executor.calls) == (0 if parent else 1)
+        assert len(service.model_executor.calls) == (0 if mode == "replay" else 1)
+        if service.model_executor.calls:
+            sent = json.loads(service.model_executor.calls[0]["content"])
+            assert sent == context
+            assert sent["dependency_selection"] == result.dependency_selection
+            assert sent["existing_knowledge"]["definitions"]
+            assert sent["exclusion_index"]["existing_concepts"]
     else:
         with pytest.raises(ValueError):
             compose_discovery_review(
@@ -589,3 +635,82 @@ def test_failed_update_keeps_previous_page_in_final_composition(case: Any) -> No
     assert old in final.pages
     assert any(p.stable_key == "dependency-b" for p in final.pages)
     assert not any(p.body == page["body"] for p in final.pages)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "healthy",
+        "receipt",
+        "selected_entity",
+        "missing_owner",
+        "context_entity",
+        "context_version",
+        "page_entity",
+        "page_version",
+        "mixed_pages",
+        "explicit_entity",
+        "unbound",
+        "duplicate_binding",
+    ],
+)
+def test_native_review_scope_rejects_inconsistent_ownership(case: Any, fault: str) -> None:
+    import hashlib
+
+    from insurance_harness.product_ingestion import native_dependency_selection as selection_api
+
+    values = dependency_case(case)
+    request, entity = values[:2]
+    result = project(values)
+    selection = deepcopy(result.dependency_selection)
+    output = result.output
+    explicit = None
+    if fault == "receipt":
+        selection["selection_sha256"] = "0" * 64
+    elif fault == "selected_entity":
+        selection["entity_id"] = "other"
+    elif fault == "missing_owner":
+        selection["admission_context"].pop("entity")
+        selection["admission_context_sha256"] = hashlib.sha256(
+            json_bytes(selection["admission_context"])
+        ).hexdigest()
+    elif fault in {"context_entity", "context_version"}:
+        key = "entity_id" if fault == "context_entity" else "entity_version"
+        selection["admission_context"]["entity"][key] = "other"
+        selection["admission_context_sha256"] = hashlib.sha256(
+            json_bytes(selection["admission_context"])
+        ).hexdigest()
+    elif fault in {"page_entity", "page_version", "mixed_pages"}:
+        key = "entity_version" if fault == "page_version" else "entity_id"
+        pages = (output.pages[0].model_copy(update={key: "other"}),)
+        if fault == "mixed_pages":
+            pages = (*output.pages, *pages)
+        output = output.model_copy(update={"pages": pages})
+        from insurance_harness.knowledge_compiler.concept_compile_830_g2 import free_page_id
+
+        selection["retained_member_ids"] = [free_page_id(page) for page in output.pages]
+    elif fault == "explicit_entity":
+        explicit = "other"
+    elif fault == "unbound":
+        request = request.model_copy(
+            update={
+                "entity_bindings": tuple(
+                    b for b in request.entity_bindings if b.entity_id != entity
+                )
+            }
+        )
+    elif fault == "duplicate_binding":
+        binding = next(b for b in request.entity_bindings if b.entity_id == entity)
+        request = request.model_copy(
+            update={"entity_bindings": (*request.entity_bindings, binding)}
+        )
+    if fault != "receipt":
+        selection["selection_sha256"] = hashlib.sha256(
+            json_bytes({k: v for k, v in selection.items() if k != "selection_sha256"})
+        ).hexdigest()
+    kwargs = dict(request=request, candidate_output=output, selection=selection, entity_id=explicit)
+    if fault == "healthy":
+        assert selection_api.resolve_native_review_entity(**kwargs) == entity
+    else:
+        with pytest.raises(ValueError):
+            selection_api.resolve_native_review_entity(**kwargs)

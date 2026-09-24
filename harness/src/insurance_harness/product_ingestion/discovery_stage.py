@@ -198,15 +198,6 @@ async def run_independent_discovery_final_review(
     candidate_output = CompileOutput.model_validate(discovery_candidates["output"])
     if candidate_output.fields or candidate_output.request_hash != request_hash:
         raise ValueError("independent discovery delta is invalid")
-    if exclusion_index is None:
-        exclusion_index = (
-            build_discovery_exclusion_index(request, entity_id)
-            if entity_id is not None
-            else {
-                row.entity_id: build_discovery_exclusion_index(request, row.entity_id)
-                for row in request.entity_bindings
-            }
-        )
     drafts = []
     summary = _summary()
     summary["final_composed_output_hash"] = final_composed_output_hash
@@ -235,6 +226,31 @@ async def run_independent_discovery_final_review(
 
     if summary["candidate_member_count"]:
         try:
+            selection = discovery_candidates.get("dependency_selection")
+            if selection is not None:
+                from insurance_harness.product_ingestion.native_dependency_selection import (
+                    resolve_native_review_entity,
+                )
+
+                entity_id = await asyncio.to_thread(
+                    resolve_native_review_entity,
+                    request=request,
+                    candidate_output=candidate_output,
+                    selection=selection,
+                    entity_id=entity_id,
+                )
+            if exclusion_index is None:
+                exclusion_index = await asyncio.to_thread(
+                    lambda: (
+                        build_discovery_exclusion_index(request, entity_id)
+                        if entity_id is not None
+                        else {
+                            row.entity_id: build_discovery_exclusion_index(request, row.entity_id)
+                            for row in request.entity_bindings
+                        }
+                    )
+                )
+            assert exclusion_index is not None
             settings = service.configuration.model
             purpose, prompt = independent_discovery_review_policy(
                 candidate_output,

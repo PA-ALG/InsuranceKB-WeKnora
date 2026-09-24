@@ -17,6 +17,10 @@ from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
 )
 
 if TYPE_CHECKING:
+    from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+        BatchConceptCompileRequest830G3V1,
+    )
+    from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput
     from insurance_harness.product_ingestion.native_admission import NativeAdmissionResponseV2
 
 
@@ -138,3 +142,47 @@ def validate_dependency_selection(
     isolated = {r["candidate_ref"] for r in selection["isolated_candidates"]}
     if kept & isolated or kept | isolated != refs:
         raise ValueError("native dependency selection coverage mismatch")
+
+
+def resolve_native_review_entity(
+    *,
+    request: BatchConceptCompileRequest830G3V1,
+    candidate_output: CompileOutput,
+    selection: dict[str, Any],
+    entity_id: str | None = None,
+) -> str:
+    """Resolve comparison scope from verified ownership, never the whole release.
+
+    Definitions remain global comparison knowledge; only entity-specific Schema
+    and page views are scoped. This does not prune the selection or final output.
+    """
+    from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+        compile_request_hash_g3,
+    )
+    from insurance_harness.knowledge_compiler.concept_compile_830_g2 import free_page_id
+
+    member_ids = {row.concept_id for row in candidate_output.definitions} | {
+        free_page_id(row) for row in candidate_output.pages
+    }
+    validate_dependency_selection(
+        selection, member_ids, compile_request_hash_g3(request.base_request)
+    )
+    selected = selection.get("entity_id")
+    owner = selection["admission_context"].get("entity")
+    bindings = [row for row in request.entity_bindings if row.entity_id == selected]
+    if (
+        not isinstance(selected, str)
+        or not selected
+        or not isinstance(owner, dict)
+        or owner.get("entity_id") != selected
+        or (entity_id is not None and entity_id != selected)
+        or len(bindings) != 1
+    ):
+        raise ValueError("native review entity scope mismatch")
+    version = bindings[0].entity_version
+    if owner.get("entity_version") != version or any(
+        (page.entity_id, page.entity_version) != (selected, version)
+        for page in candidate_output.pages
+    ):
+        raise ValueError("native review entity scope mismatch")
+    return selected

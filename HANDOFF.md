@@ -1,3 +1,13 @@
+## 2026-09-25 当前：wire v3真实准入通过；审核上下文超限与5项内容缺口阻断
+
+root唯一写者，HEAD6ea5e023已Harness-only构建/交付一次（image b3bed2d2…、runtime e0e3a79b…），APP/UI/DocReader保持。原77ee恢复修复一并部署。真实43e71710任务3分39秒结束，新准入1/复用8，4页提议通过strict/原文定位，但最终审核准备730770 bytes超过300000，独立审核调用0、自由知识发布0；字段发布epoch20/release-848316db-db18-4265-bcc9-dc27d7d624e4（16:35:21Z GET），任务PARTIAL_SUCCESS。
+
+精确离线复现：单产品候选却带14历史产品1030条Schema。既有单entity renderer降至214790bytes，完整finalhash/selection/4页证据保持；作用域自动接线软件已实现：先验证selection/page/request实体及版本一致性，原stage再用既有单entity renderer；131有界PASS，实际stage离线fake capture214790bytes，revision2独审0 BLOCKER、ruff/两源码mypy PASS，尚未部署。有限真实窗口CLOSED_BLOCKED，不能再点击恢复。实际build1，另1次Python3.9准备失败发生在Dockerbuild前，已留审查/恢复回执。
+
+独立语义复核：前次4阻断关闭，但18关键点15完整/2部分/1缺失。新BLOCKER：c8条件引用漏s11；c9重复有效字段；贷款字段漏利率因素/到期提醒归还；免责字段漏部分退款对象；利益演示边界未发现。NEXT：在既有review深模块验证相关产品作用域，离线收口上述覆盖/输入问题后才考虑下一真实窗口，不改大预算凑通过。自动全处置/零成员语义审核、R4/跨窗口R6/非空发布和点击、完整G3.5未完成。
+
+证据：docs/insurance-kb/evidence/830-g35/native-admission-wire-20260925.md；私密insurancekb-private-evidence/g35-wire-20260925/delivery。以下为历史状态。
+
 ## 2026-09-25 当前：原文编号准入v3软件独审通过，准备有限真实纵切
 
 root继续tracer bullet/deep modules。新增纯wire适配：模型逐段text/origin/evidence_refs，程序按既有完整source span展开exact quote/offset/index；原文Unicode/CRLF、正文/决策/来源声明不改，继续原v2 strict/R6/geometry。旧v1/v2不放宽。可选top-level准入模板派生同模型executor，基础model/native_discovery及其余成功调用身份保持；execution v2及完整checkpoint重验当前配置和原StageCall，防止升级后整段误复用。

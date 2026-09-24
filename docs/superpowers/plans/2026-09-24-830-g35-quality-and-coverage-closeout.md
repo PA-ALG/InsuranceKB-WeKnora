@@ -241,3 +241,16 @@ Wire模型逐段text/origin/evidence_refs；服务端按既有完整span顺序�
 RED：新wire参数旧预检不支持（9项失败）；可选admission配置旧loader extra_forbidden（1失败/6拒绝已有PASS）。先实现纯适配并22项定向GREEN，再推进新配置与worker接线。部署/provider/business本切片尚NOT RUN；旧真实窗口保持关闭。
 
 2026-09-25本切片软件收口：完整94 PASS/1 SKIP，首审两项审计命名/反例覆盖阻断修复后35 PASS（与前组重叠）、非空stage1 PASS、ruff与7源码mypy PASS；revision2独审0 BLOCKER。详见native-admission-wire-20260925.md。自动全REJECT/零成员覆盖审核仍为后续明确缺口。本轮真实GET仍epoch19，未构建/部署/调用模型。下一物理结果为单独冻结Harness-only一次构建/可逆切换、一次UI恢复、最多准入1+审核1，四个真实质量阻断需对新结果逐项验证。
+
+## 2026-09-25 审核作用域首修复及质量后续
+
+wire v3已交付，43e71710真实准入成功但审核输入730770/300000 bytes失败，字段发布epoch20，自由页0。根因/质量证据见native-admission-wire-20260925.md末节。本轮窗口已关闭，后续不连续重试。
+
+沿tracer bullet/deep modules，当前最小方案复用v6单entity接口，独审确认无须改prompt/model/config；直接提高预算不能解决输入随历史库膨胀的问题，全面v7审核改版则会扩大当前范围。root在原native_dependency_selection封装纯scope校验，原review stage调用，其他外部接口不变。
+
+- [x] 冻结G35-R6-REVIEW-SCOPE-1/2；用真实stage无entity调用验证旧输出错误包含全库；校验scope冲突/多实体/缺绑定/篡改与全局concept保留。
+- [x] 在native_dependency_selection.py实现唯一scope一致性；discovery_stage.py原入口构造对应index；保持非selection旧路径。
+- [x] 跑相关review/replay/组合回归、真实14实体全链式离线重放；确认214790 bytes、同finalhash/完整selection，不复用旧全库review。
+- [x] 冻结identity revision2独审0 BLOCKER，记录131有界PASS、最终stage8 PASS（重叠）、ruff/mypy PASS；此切片不部署、不新provider、不新业务窗口。
+
+质量下一切片先冻结真实反例再设计：准入c8段落证据完整、c9重复判定；字段贷款条款/退款对象完整；全材料s14–s17利益演示漏发现。复用原source、native raw、effective fields构造同一材料的覆盖核对视图，分清“已提供原文”“形成候选”“字段/页面承载”“独立核验”；不能把Schema定义视为有效字段正文，也不能只审已有候选而声称全文无遗漏。v7全处置/零成员审核需显式新合同，不并入当前scope接线。没有产品批准的新发布路径或通用覆盖平台。
