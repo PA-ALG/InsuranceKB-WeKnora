@@ -531,6 +531,7 @@ type WikiReleaseFaults struct {
 // caller-declared source identities are inputs to verify against server-owned
 // source revisions, coordinates, and current ACLs, never authority themselves.
 type ConceptSourceAuthorityVerificationRequest830G2 struct {
+	validated         *validatedBatchOperation830G3 // Request-local only; never supplied by HTTP.
 	Principal         types.WikiReleasePrincipal
 	Scope             types.WikiReleaseScope
 	Operation         string
@@ -975,17 +976,29 @@ func (s *WikiReleaseService) reviewDraft(
 	)
 }
 
-func (s *WikiReleaseService) verifyConceptSourceAuthority830G2(
+func (s *WikiReleaseService) verifyConceptSourceAuthority830G2(ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope, preparation *types.WikiReleasePreparation, operation string) error {
+	return s.verifyConceptSourceAuthorityValidated830G3(ctx, principal, scope, preparation, operation, nil)
+}
+
+func (s *WikiReleaseService) verifyConceptSourceAuthorityValidated830G3(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,
 	scope types.WikiReleaseScope,
 	preparation *types.WikiReleasePreparation,
 	operation string,
+	validation *validatedBatchOperation830G3,
 ) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if validation != nil && !validation.matchesPreparation(preparation, scope) {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
 	if preparation == nil || s.conceptSourceAuthorityVerifier830G2 == nil {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	request := ConceptSourceAuthorityVerificationRequest830G2{
+		validated:         validation,
 		Principal:         principal,
 		Scope:             scope,
 		Operation:         operation,
@@ -996,7 +1009,7 @@ func (s *WikiReleaseService) verifyConceptSourceAuthority830G2(
 		Manifest:          append(json.RawMessage(nil), preparation.Manifest...),
 	}
 	if err := s.conceptSourceAuthorityVerifier830G2.VerifyConceptSources830G2(ctx, request); err != nil {
-		return fmt.Errorf("%w: %v", ErrConceptSourceAuthorityUnavailable830G2, err)
+		return fmt.Errorf("%w: %w", ErrConceptSourceAuthorityUnavailable830G2, err)
 	}
 	return nil
 }

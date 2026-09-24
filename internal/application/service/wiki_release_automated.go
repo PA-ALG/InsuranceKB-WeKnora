@@ -193,26 +193,32 @@ func (s *WikiReleaseService) replaySystemReady(ctx context.Context, p types.Wiki
 }
 
 func validateSystemPreparation(preparation *types.WikiReleasePreparation, status string, scope types.WikiReleaseScope, d *SystemPolicyDecisionReceiptV1, receiptDigest string) error {
-	if _, _, err := validateBatchConceptPreparation830G3(preparation, status, scope); err != nil {
-		return err
+	_, err := validateSystemPreparationOperation(context.Background(), preparation, status, scope, d, receiptDigest)
+	return err
+}
+
+func validateSystemPreparationOperation(ctx context.Context, preparation *types.WikiReleasePreparation, status string, scope types.WikiReleaseScope, d *SystemPolicyDecisionReceiptV1, receiptDigest string) (*validatedBatchOperation830G3, error) {
+	validation, err := validateBatchConceptPreparationOperation830G3(ctx, preparation, status, scope)
+	if err != nil {
+		return nil, err
 	}
 	if preparation.ID != d.PreparationID || preparation.CandidateDigest != d.CandidateDigest || preparation.ManifestDigest != d.ManifestDigest ||
 		preparation.ReadyReceiptDigest != d.ReadyReceiptDigest || preparation.ReviewPolicyID != d.InnerReviewPolicyID ||
 		preparation.ExpectedReleaseID != d.ExpectedReleaseID || preparation.ExpectedActivationEpoch != d.ExpectedActivationEpoch {
-		return ErrWikiReleaseInvalidAuthorization
+		return nil, ErrWikiReleaseInvalidAuthorization
 	}
 	draft := *preparation
 	if status == types.WikiReleasePreparationReady {
 		if preparation.ReviewDecisionDigest != receiptDigest {
-			return ErrWikiReleaseInvalidAuthorization
+			return nil, ErrWikiReleaseInvalidAuthorization
 		}
 		draft.Status = types.WikiReleasePreparationDraft
 		draft.ReviewDecisionDigest = ""
 	}
 	if digestWikiReleasePreparation(&draft) != d.DraftPreparationDigest {
-		return ErrWikiReleaseInvalidAuthorization
+		return nil, ErrWikiReleaseInvalidAuthorization
 	}
-	return nil
+	return validation, nil
 }
 
 // ActivateAutomated uses the existing PublishAuthorizationV0 and the single
@@ -258,13 +264,14 @@ func (s *WikiReleaseService) ActivateAutomated(ctx context.Context, p types.Wiki
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	if err := validateSystemPreparation(ready, types.WikiReleasePreparationReady, scope, decision, digest); err != nil {
+	validation, err := validateSystemPreparationOperation(ctx, ready, types.WikiReleasePreparationReady, scope, decision, digest)
+	if err != nil {
 		return nil, err
 	}
-	if err := s.verifyConceptSourceAuthority830G2(ctx, p, scope, ready, "activate"); err != nil {
+	if err := s.verifyConceptSourceAuthorityValidated830G3(ctx, p, scope, ready, "activate", validation); err != nil {
 		return nil, err
 	}
-	if err := s.publishedBatchReuse830G3().rememberValidated(ready, scope); err != nil {
+	if err := s.publishedBatchReuse830G3().rememberOperation(ctx, ready, scope, validation); err != nil {
 		return nil, err
 	}
 	if err := s.recheckSystemPolicy(ctx, p, scope, "activate", policy.Digest); err != nil {
@@ -272,6 +279,9 @@ func (s *WikiReleaseService) ActivateAutomated(ctx context.Context, p types.Wiki
 	}
 	if !exactRetry && decision.ExpiresAt <= s.now().Unix() {
 		return nil, ErrWikiReleaseInvalidAuthorization
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return s.activate(ctx, p, rawAuthorization)
 }

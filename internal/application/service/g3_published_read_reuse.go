@@ -274,17 +274,33 @@ func publishedBatchMemberIdentitiesEqual830G3(
 
 // Called only after full validation at an explicit preparation/activation gate.
 func (s *publishedBatchReadReuse830G3) rememberValidated(p *types.WikiReleasePreparation, scope types.WikiReleaseScope) error {
+	var bundle types.BatchConceptCandidateBundle830G3
+	if p == nil || len(p.Manifest) == 0 || json.Unmarshal(p.Manifest, &bundle) != nil || bundle.CandidateHash != p.CandidateDigest || batchConceptScope830G3(bundle) != scope {
+		return ErrSchemaWikiPreparationInvalid
+	}
+	return s.rememberBundle(context.Background(), p, scope, bundle)
+}
+
+func (s *publishedBatchReadReuse830G3) rememberOperation(ctx context.Context, p *types.WikiReleasePreparation, scope types.WikiReleaseScope, v *validatedBatchOperation830G3) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !v.matchesPreparation(p, scope) || !conceptMemberSnapshotsEqual830G2(v.members, p.Members) {
+		return ErrSchemaWikiPreparationInvalid
+	}
+	return s.rememberBundle(ctx, p, scope, v.bundle)
+}
+
+func (s *publishedBatchReadReuse830G3) rememberBundle(ctx context.Context, p *types.WikiReleasePreparation, scope types.WikiReleaseScope, bundle types.BatchConceptCandidateBundle830G3) error {
 	if s == nil {
 		return ErrSchemaWikiPreparationInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	key, err := publishedBatchInputKey830G3(p, scope)
 	if err != nil {
 		return err
-	}
-	var bundle types.BatchConceptCandidateBundle830G3
-	if len(p.Manifest) == 0 || json.Unmarshal(p.Manifest, &bundle) != nil || bundle.CandidateHash != p.CandidateDigest ||
-		batchConceptScope830G3(bundle) != scope {
-		return ErrSchemaWikiPreparationInvalid
 	}
 	memberDigests := make(map[string]string, len(p.Members))
 	for _, member := range p.Members {
@@ -311,6 +327,9 @@ func (s *publishedBatchReadReuse830G3) rememberValidated(p *types.WikiReleasePre
 	}
 	encoded, err := sealPublishedBatchReadProjection830G3(s.codec, key, payload.Bytes())
 	if err != nil {
+		return err
+	}
+	if err = ctx.Err(); err != nil {
 		return err
 	}
 	if err = os.MkdirAll(s.root, 0700); err != nil {

@@ -1,3 +1,15 @@
+# 当前状态（2026-09-24 · P0前置已部署；原生引用未知；P0-3首条软件切片已验证）
+
+root继续执行已批准九项顺序，唯一写者。本地提交460c664cf的APP/UI/DocReader各构建一次并已部署；首轮前端切换断言失败后旧服务已核实恢复，有限第二次复用同制品于02:52:39Z通过全部健康/身份/Active检查。Harness未换镜像，正式Active仍epoch17。交付证据见p0-quality-delivery-20260924.md。
+
+正常网页新空库8649ee5e-e3a7-4a67-994b-7bbf372025d5，单次上传knowledge ea9f9062-ad98-4321-9e8d-b003345ca2b1。真实输入17块、5014字符，与修复PDF结果逐字一致，旧缺失14行已恢复；候选2实体8概念成功，唯一引用batch OUTCOME_UNKNOWN，无短提纲降级、无实体/概念页，失败记录UI与Trace已查看。4文本发送/3成功usage21487tokens/1未知用量；健康基线仍未取得，不能再盲重传。已向用户异步请求模型中转服务10:56:23—10:56:34的日志，当前本地未保留底层cause，LLM debug未开。详见native-recheck-20260924.md。私密输入/回执已归档insurancekb-private-evidence/g35-live-20260924。
+
+P0-3只读同APP A/B=18.214s（无额外轮询）/25.044s（8次有界状态查询），Active不变；未复现历史400s。按Spec冻结最小一次操作验证/取消修复：types新入口GREEN，canonical/members与旧入口相同；service取消后仍写projection的真实RED已记录。现在接入单请求私有验证结果供source/既有projection复用，仍保留DB/source/ACL/review/Head/CAS；未部署此新改动。service定向回归171.061s、既有来源/CAS合同90.398s均PASS；源码8文件独审0 BLOCKER。相同1CPU/2GiB Linux候选新旧对照21.026s→17.234s（约减少18%），canonical与1067成员逐字一致；提前取消74微秒。这不是完整发布计时；旧400秒仍未完全解释。本P0-3源码尚未产品构建/部署，详见publish-cancellation-analysis-20260924.md。
+
+NEXT：等待引用调用中转诊断证据，健康原生基线尚BLOCKED；P0-3软件切片已验证，后续随集中交付验证有效候选完整发布/超时恢复。已知写盘取消小窗口、ancestry Background成本与wrong/nil token生产分支专项测试仍BACKLOG。P1/P2未闭合，G3.5远未完成。不激活旧失败候选、不新增发布权威、不反复重建或重复未知调用。
+
+以下为历史状态。
+
 # 当前状态（2026-09-24 · P0-1/P0-2软件闭合；真实链路继续）
 
 用户批准九项顺序与tracer bullet/deep modules。root唯一写者。P0-1表格保真、P0-2原生失败/未知治理已完成软件反例、回归与独立复核（0 BLOCKER、20源文件SHA匹配），尚未部署。P0-2最后回归137通过/2跳过（本次PG事务/并发/版本检查均真实执行）；代次选择重设计后服务90通过/1旧Release环境跳过。selectWikiInputCohorts按合法ParseAttempt选代、冲突隔离、retract栅栏，unknown晚到行受既有dead-letter发送门保护；wikiPageFailures统一页面结果归属，发布/结算失败不冒充成功。详见native-outcome-20260924.md。

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -30,6 +32,8 @@ func TestG3AutomatedActivationDoesNotRepeatReadySemanticValidation(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, uint64(6), receipt.ActivationEpoch)
 	require.Len(t, verifier.requests, sourceChecks+1, "activation must retain current source authority")
+	require.NotNil(t, verifier.requests[len(verifier.requests)-1].validated, "source verification must receive the request-owned validation result")
+	require.True(t, verifier.requests[len(verifier.requests)-1].validated.matchesSource(verifier.requests[len(verifier.requests)-1]))
 	require.Equal(t, uint64(1), batchPreparationValidations830G3.Load()-before, "private CAS activation must reuse the already validated Ready projection")
 }
 
@@ -63,4 +67,62 @@ func TestG3AutomatedActivationRejectsMembersOmittedAfterValidation(t *testing.T)
 	after, err := f.repo.CountState(f.ctx)
 	require.NoError(t, err)
 	require.Equal(t, before, after, "omitted members must not create an empty release or advance the head")
+}
+
+func TestG3AutomatedActivationCancellationStopsProjectionWrite(t *testing.T) {
+	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
+	f, s, policy := automatedFixture(t)
+	draft, err := s.CreateBatchConceptDraftAutomated830G3(f.ctx, f.principal1, f.scope, "activation-cancel", batchConceptCandidateVector830G3(t))
+	require.NoError(t, err)
+	decision, signed := automaticDecision(t, f, policy, draft)
+	ready, err := f.service.ReviewDraftAutomated(f.ctx, f.principal1, f.scope, draft.ID, decision)
+	require.NoError(t, err)
+	before, err := f.repo.CountState(f.ctx)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(f.ctx)
+	defer cancel()
+	f.service.conceptSourceAuthorityVerifier830G2 = automaticSourceHook(cancel)
+	_, err = f.service.ActivateAutomated(ctx, f.principal1, decision, automaticAuthorization(t, f, ready, signed.Nonce))
+	require.Error(t, err)
+	entries, readErr := os.ReadDir(f.service.publishedBatchReuse830G3().root)
+	require.True(t, readErr == nil || os.IsNotExist(readErr))
+	require.Empty(t, entries, "cancellation after source verification must not write a signed projection")
+	after, err := f.repo.CountState(f.ctx)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+}
+
+func TestG3OperationResultRejectsChangedIdentity(t *testing.T) {
+	f, s, policy := automatedFixture(t)
+	draft, err := s.CreateBatchConceptDraftAutomated830G3(f.ctx, f.principal1, f.scope, "operation-identity", batchConceptCandidateVector830G3(t))
+	require.NoError(t, err)
+	decision, _ := automaticDecision(t, f, policy, draft)
+	ready, err := f.service.ReviewDraftAutomated(f.ctx, f.principal1, f.scope, draft.ID, decision)
+	require.NoError(t, err)
+	v, err := validateBatchConceptPreparationOperation830G3(f.ctx, ready, types.WikiReleasePreparationReady, f.scope)
+	require.NoError(t, err)
+	r := ConceptSourceAuthorityVerificationRequest830G2{Principal: f.principal1, Scope: f.scope, Operation: "activate", PreparationID: ready.ID, PreparationDigest: ready.PreparationDigest, ManifestDigest: ready.ManifestDigest, CandidateHash: ready.CandidateDigest, Manifest: ready.Manifest, validated: v}
+	require.True(t, v.matchesSource(r))
+	cases := []func(*ConceptSourceAuthorityVerificationRequest830G2){
+		func(r *ConceptSourceAuthorityVerificationRequest830G2) { r.PreparationID += "changed" },
+		func(r *ConceptSourceAuthorityVerificationRequest830G2) { r.PreparationDigest += "changed" },
+		func(r *ConceptSourceAuthorityVerificationRequest830G2) { r.ManifestDigest += "changed" },
+		func(r *ConceptSourceAuthorityVerificationRequest830G2) { r.CandidateHash += "changed" },
+		func(r *ConceptSourceAuthorityVerificationRequest830G2) { r.Scope.TenantID++ },
+		func(r *ConceptSourceAuthorityVerificationRequest830G2) {
+			r.Manifest = append(append([]byte(nil), r.Manifest...), ' ')
+		},
+	}
+	for _, change := range cases {
+		changed := r
+		change(&changed)
+		require.False(t, v.matchesSource(changed))
+	}
+	ctx, cancel := context.WithCancel(f.ctx)
+	cancel()
+	before := batchPreparationValidations830G3.Load()
+	got, err := validateBatchConceptPreparationOperation830G3(ctx, ready, types.WikiReleasePreparationReady, f.scope)
+	require.Nil(t, got)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, before, batchPreparationValidations830G3.Load())
 }

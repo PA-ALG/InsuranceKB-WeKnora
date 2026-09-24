@@ -320,10 +320,25 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 	} else if !validServiceSHA256(request.PreparationDigest) {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
-	bundle, canonical, err := types.CanonicalBatchConceptCandidateBundle830G3(request.Manifest)
-	if err != nil || digestWikiReleaseBytes(canonical) != request.ManifestDigest ||
-		bundle.CandidateHash != request.CandidateHash || batchConceptScope830G3(bundle) != request.Scope {
-		return ErrConceptSourceAuthorityUnavailable830G2
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	var bundle types.BatchConceptCandidateBundle830G3
+	var err error
+	if request.validated != nil {
+		if !request.validated.matchesSource(request) {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+		bundle = request.validated.bundle
+	} else {
+		var canonical []byte
+		bundle, canonical, err = types.CanonicalBatchConceptCandidateBundle830G3(request.Manifest)
+		if err != nil || digestWikiReleaseBytes(canonical) != request.ManifestDigest || bundle.CandidateHash != request.CandidateHash || batchConceptScope830G3(bundle) != request.Scope {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+	}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	if request.Operation != "create-draft" {
 		if s.releases == nil {
@@ -349,6 +364,9 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 	}
 	selectedBlocks := map[string]types.ConceptSourceBlock830G2{}
 	for _, entry := range bundle.Request.ResolutionInputs.Corpus.Entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if _, ok := selected[entry.MaterialID]; !ok {
 			continue
 		}
@@ -377,6 +395,9 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 	}
 	seen := map[string]struct{}{}
 	verify := func(memberID string, evidence types.ConceptEvidence830G2, allowLegacy bool) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		canonicalEvidence, canonicalErr := canonicalJSON830G2(evidence)
 		if canonicalErr != nil {
 			return ErrConceptSourceAuthorityUnavailable830G2

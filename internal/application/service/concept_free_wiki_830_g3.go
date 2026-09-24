@@ -242,19 +242,58 @@ func batchPublishedCompileMembersEqual830G3(left, right types.ConceptCompileOutp
 
 var batchPreparationValidations830G3 atomic.Uint64
 
-func validateBatchConceptPreparation830G3(
+// This graph belongs to one request. Only the validator constructs it; source
+// verification borrows it and projection code reads it without exposing nested
+// mutable collections through the public interface. It is never persisted.
+type validatedBatchOperation830G3 struct {
+	bundle                                                              types.BatchConceptCandidateBundle830G3
+	members                                                             []types.WikiReleaseMemberSnapshot
+	scope                                                               types.WikiReleaseScope
+	preparationID, preparationDigest, status, manifestDigest, rawDigest string
+}
+
+func (v *validatedBatchOperation830G3) matchesSource(r ConceptSourceAuthorityVerificationRequest830G2) bool {
+	return v != nil && v.scope == r.Scope && v.preparationID == r.PreparationID && v.preparationDigest == r.PreparationDigest &&
+		v.manifestDigest == r.ManifestDigest && v.bundle.CandidateHash == r.CandidateHash && v.rawDigest == digestWikiReleaseBytes(r.Manifest)
+}
+
+func (v *validatedBatchOperation830G3) matchesPreparation(p *types.WikiReleasePreparation, scope types.WikiReleaseScope) bool {
+	return p != nil && v != nil && p.Status == v.status && p.WikiReleaseScope == scope && v.matchesSource(ConceptSourceAuthorityVerificationRequest830G2{
+		Scope: scope, PreparationID: p.ID, PreparationDigest: p.PreparationDigest, ManifestDigest: p.ManifestDigest, CandidateHash: p.CandidateDigest, Manifest: p.Manifest,
+	}) && digestWikiReleasePreparation(p) == p.PreparationDigest
+}
+
+func validateBatchConceptPreparation830G3(p *types.WikiReleasePreparation, status string, scope types.WikiReleaseScope) (types.BatchConceptCandidateBundle830G3, []types.WikiReleaseMemberSnapshot, error) {
+	v, err := validateBatchConceptPreparationOperation830G3(context.Background(), p, status, scope)
+	if err != nil {
+		return types.BatchConceptCandidateBundle830G3{}, nil, err
+	}
+	return v.bundle, v.members, nil
+}
+
+func validateBatchConceptPreparationOperation830G3(
+	ctx context.Context,
 	preparation *types.WikiReleasePreparation,
 	expectedStatus string,
 	scope types.WikiReleaseScope,
-) (types.BatchConceptCandidateBundle830G3, []types.WikiReleaseMemberSnapshot, error) {
+) (*validatedBatchOperation830G3, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	batchPreparationValidations830G3.Add(1)
 	if preparation == nil || preparation.WikiReleaseScope != scope ||
 		!validBatchConceptPreparationID830G3(preparation.ID) ||
 		preparation.Status != expectedStatus ||
 		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest {
-		return types.BatchConceptCandidateBundle830G3{}, nil, ErrSchemaWikiPreparationInvalid
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	bundle, canonical, err := types.CanonicalBatchConceptCandidateBundle830G3(preparation.Manifest)
+	bundle, canonical, members, err := types.ValidateBatchConceptOperation830G3(ctx, preparation.Manifest)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
 	base := bundle.Request.BaseRequest
 	if err != nil || batchConceptScope830G3(bundle) != scope ||
 		preparation.ManifestDigest != digestWikiReleaseBytes(canonical) ||
@@ -263,17 +302,19 @@ func validateBatchConceptPreparation830G3(
 		preparation.ReviewPolicyID != conceptReviewPolicyHash830G2(base.PolicyIdentity) ||
 		preparation.ExpectedReleaseID != base.BaseReleaseID ||
 		preparation.ExpectedActivationEpoch != base.BaseActivationEpoch {
-		return types.BatchConceptCandidateBundle830G3{}, nil, ErrSchemaWikiPreparationInvalid
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	if expectedStatus == types.WikiReleasePreparationDraft && preparation.ReviewDecisionDigest != "" ||
 		expectedStatus == types.WikiReleasePreparationReady && preparation.ReviewDecisionDigest == "" {
-		return types.BatchConceptCandidateBundle830G3{}, nil, ErrSchemaWikiPreparationInvalid
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	members, err := bundle.SnapshotMembers()
-	if err != nil || !conceptMemberSnapshotsEqual830G2(members, preparation.Members) {
-		return types.BatchConceptCandidateBundle830G3{}, nil, ErrSchemaWikiPreparationInvalid
+	if !conceptMemberSnapshotsEqual830G2(members, preparation.Members) {
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	return bundle, members, nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return &validatedBatchOperation830G3{bundle: bundle, members: members, scope: scope, preparationID: preparation.ID, preparationDigest: preparation.PreparationDigest, status: expectedStatus, manifestDigest: digestWikiReleaseBytes(canonical), rawDigest: digestWikiReleaseBytes(preparation.Manifest)}, nil
 }
 
 func (s *SchemaWikiService) LoadBatchConceptPreparation830G3(

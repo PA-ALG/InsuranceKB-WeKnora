@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -740,7 +741,7 @@ var alignmentKeys830G3 = []string{
 	"source_release_id",
 }
 
-func ParseBatchConceptCandidateBundle830G3(raw []byte) (BatchConceptCandidateBundle830G3, error) {
+func decodeBatchConceptCandidateBundle830G3(raw []byte) (BatchConceptCandidateBundle830G3, error) {
 	var bundle BatchConceptCandidateBundle830G3
 	keys := batchBundleKeys830G3
 	var fields map[string]json.RawMessage
@@ -752,7 +753,12 @@ func ParseBatchConceptCandidateBundle830G3(raw []byte) (BatchConceptCandidateBun
 	if decodeExactObject830G3(raw, &bundle, keys, true) != nil {
 		return bundle, ErrConceptCandidateBundle830G3
 	}
-	if validateBatchConceptBundle830G3(bundle) != nil {
+	return bundle, nil
+}
+
+func ParseBatchConceptCandidateBundle830G3(raw []byte) (BatchConceptCandidateBundle830G3, error) {
+	bundle, err := decodeBatchConceptCandidateBundle830G3(raw)
+	if err != nil || validateBatchConceptBundle830G3(bundle) != nil {
 		return BatchConceptCandidateBundle830G3{}, ErrConceptCandidateBundle830G3
 	}
 	return bundle, nil
@@ -778,8 +784,53 @@ func (bundle BatchConceptCandidateBundle830G3) SnapshotMembers() (
 	if validateBatchConceptBundle830G3(bundle) != nil {
 		return nil, ErrConceptCandidateBundle830G3
 	}
+	return snapshotValidatedBatchConceptMembers830G3(context.Background(), bundle)
+}
+
+// ValidateBatchConceptOperation830G3 validates once and derives the canonical
+// manifest and members from that same owned graph. Cancellation is checked at
+// phase boundaries; an in-progress JSON/semantic primitive runs to completion.
+func ValidateBatchConceptOperation830G3(ctx context.Context, raw []byte) (BatchConceptCandidateBundle830G3, []byte, []WikiReleaseMemberSnapshot, error) {
+	empty := BatchConceptCandidateBundle830G3{}
+	if err := ctx.Err(); err != nil {
+		return empty, nil, nil, err
+	}
+	bundle, err := decodeBatchConceptCandidateBundle830G3(raw)
+	if err != nil {
+		return empty, nil, nil, err
+	}
+	if err = ctx.Err(); err != nil {
+		return empty, nil, nil, err
+	}
+	if err = validateBatchConceptBundle830G3(bundle); err != nil {
+		return empty, nil, nil, ErrConceptCandidateBundle830G3
+	}
+	if err = ctx.Err(); err != nil {
+		return empty, nil, nil, err
+	}
+	canonical, err := batchConceptCanonicalJSON830G3(bundle)
+	if err != nil {
+		return empty, nil, nil, ErrConceptCandidateBundle830G3
+	}
+	if err = ctx.Err(); err != nil {
+		return empty, nil, nil, err
+	}
+	members, err := snapshotValidatedBatchConceptMembers830G3(ctx, bundle)
+	if err != nil {
+		return empty, nil, nil, err
+	}
+	if err = ctx.Err(); err != nil {
+		return empty, nil, nil, err
+	}
+	return bundle, canonical, members, nil
+}
+
+func snapshotValidatedBatchConceptMembers830G3(ctx context.Context, bundle BatchConceptCandidateBundle830G3) ([]WikiReleaseMemberSnapshot, error) {
 	result := make([]WikiReleaseMemberSnapshot, 0, len(bundle.PageManifest.Members))
 	for _, member := range bundle.PageManifest.Members {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		digest, err := batchConceptHash830G3("batch-concept-member.830.g3.v1", member)
 		if err != nil {
 			return nil, ErrConceptCandidateBundle830G3

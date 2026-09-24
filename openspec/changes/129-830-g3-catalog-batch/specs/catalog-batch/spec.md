@@ -318,3 +318,14 @@ P0-2 revision隔离澄清：上一段按knowledge全组marker隔离收窄为tena
 P0-2复核设计边界：最终发送门在标记后、任何模型调用前，按现有dead-letter锁内保存的payload核对op+exact revision，命中者沿原恢复归档而非release重试。重解析/删除的单文档Wiki ingest scrub只能删除未领取且execution_id为空的行；不能抹掉在途/未知操作marker。该窄保护落在原TaskPendingOpsRepository.DeleteByDedupKey，不改变其他任务的清理或整库失活清理。不引入新enqueue协议、成功回执表或后台恢复器。
 
 P0-2代次选择设计重审（0设计BLOCKER后冻结）：queue row ID/到达次序不是文件版本。输入选择责任集中在原生operation模块：对同knowledge合法显式Revision按既有单调ParseAttempt取最高代，legacy nil不得覆盖显式版本；畸形显式高代次单独隔离，不压住合法版本；同代次不同file/parser身份整组冲突，双方不得发送。最高代失败/未知不得回退发送较低代。任一已领取retract为该knowledge顶层删除栅栏，不被迟到ingest越过；原已开始组仍按自身identity结算。未开始较低代可作为superseded行随选中操作结算；已开始/冲突组独立保留。provider发送前查DL；允许先CAS marker后零provider归档。反例覆盖marked R1→R2→late R1、DL后[R2,late R1]、非法高代、同代冲突、最高代未知不回退及R2→retract→late R1。该规则替换已有latest-row选择，不新增调度器/成功journal。
+
+### G3-AUTO-5 / P0-3 · 一次操作内验证复用与取消（2026-09-24）
+
+在已批准的发布性能切片内，先修复已证实的同包重复完整验证和取消后继续进入昂贵阶段，不把当前18.2/25.0秒读取A/B扩大为历史400秒根因已闭合。唯一写者root；写域限Go `internal/types/concept_free_wiki_830_g3.go`、service同名文件、`wiki_release.go`、`wiki_release_automated.go`、`concept_source_authority_830_g2.go`、`g3_published_read_reuse.go`及定向测试，不改Harness/handler/DB/签名格式。
+
+- types提供一个窄的context-aware完整验证/投影入口：精确decode、完整semantic validation一次、旧canonical编码、已验证member snapshots。各阶段前后和member循环检查取消；旧Parse/Canonical/Snapshot公开入口保持原安全语义。不得删除Unicode、重复JSON key、精确key、candidate/compile/review/member约束。
+- service在一次ActivateAutomated请求内持有私有验证结果，封装decoded bundle、canonical/raw身份、members与完整preparation身份；只由成功的完整验证构造。源验证借读它、既有signed projection消费它，不再次全量解析/语义验证。该对象不持久化、不上HTTP、不跨请求复用，不建立新的发布授权或缓存协议；Go嵌套集合靠私有所有权保持只读，不宣称语言级不可变。
+- 当前来源验证接口的已有独立调用仍可无该结果并执行完整验证；如传入结果，则MUST精确核对scope/preparation/candidate/raw identity，失配不得静默回落。仍重读数据库Draft/Ready，保留live来源版本/撤销、当前双KB ACL及每项evidence核验；source循环和projection构建前检查取消。
+- 系统决策、policy/expiry、nonce、expected Head及private CAS数据库重读/成员检查不变；私有验证对象不能替代最终权威门禁。
+- 取消在稳定阶段边界生效，不能通过启动无人等待的goroutine假装终止；当前JSON或semantic primitive可能运行至该阶段末尾，必须如实记录该限制。检查到取消后source/projection/activation后续effects为0。
+- RED包括：取消后仍进入source/写边界；一次operation重复semantic validation；错误复用身份。另验证canonical/member逐字一致、context各阶段取消、当前权限/来源变更和validation后成员遗漏仍拒绝。真实发布仅沿P2当前有效候选；旧失败候选继续只读。
