@@ -1,0 +1,72 @@
+{
+  "base_commit": "4ecabb717d2d5d51ab73a89370fdf175987c01f6",
+  "requirement": "G35-R2/R3",
+  "owner": "root",
+  "old_admission_observation": {
+    "artifact_sha256": "deb4a920b61a80b759a94399386c498b4fbabe8326b5afeb318b949a3e13c0e6",
+    "source_options": 18,
+    "source_chars_with_overlap": 6123,
+    "candidates": 13,
+    "candidate_details_char_range": [
+      41,
+      107
+    ],
+    "decisions": {
+      "REFERENCE": 1,
+      "REQUIRES_ENTITY_RESOLUTION": 2,
+      "REJECT": 10
+    },
+    "definitions": 0,
+    "pages": 0,
+    "not_a_same_input_model_ab": true
+  },
+  "red": {
+    "failures": 4,
+    "seconds": 4.19,
+    "reason": "native admission cannot duplicate Schema fields"
+  },
+  "validation": {
+    "source_projection_and_stage_tests": 25,
+    "final_review_tests": 17,
+    "total_distinct_passed": 42,
+    "final_review_seconds": 4.34,
+    "ruff": "PASS",
+    "source_mypy": "PASS",
+    "test_fixture_mypy": "BLOCKED: six pre-existing Any/SimpleNamespace typing errors; not changed in this slice",
+    "native_admission_tests": 19,
+    "stage_call_tests": 6
+  },
+  "files": {
+    "harness/src/insurance_harness/product_ingestion/native_admission.py": "3fb32eb4792cafaca642c02aa122dad1b2fbc776977bf1700eea00c3a6e4dbaf",
+    "harness/tests/product_ingestion/test_native_admission.py": "a1c3a23bb58a17532a7310ddbf1db7604886cafcb16c72be8cf0d3a31d1d6751",
+    "harness/tests/product_ingestion/test_discovery_provenance_review.py": "03e17d3f0588c39666a6181368a3cbd312e8e21579a4f8c489e082a401a47bb9",
+    "openspec/changes/129-830-g3-catalog-batch/specs/catalog-batch/spec.md": "b1783d5d4544bf4cdb636f6a1977abee58a46df1d477b0ccd57b96fb0b6f6a5f"
+  },
+  "review": {
+    "status": "PASS",
+    "reviewer": "schema_name_admission_review",
+    "blockers": 0,
+    "mechanical_documentation_red_exemption_confirmed": true,
+    "offline_exhaustive_configuration": "PASS: only granularity changed; model/purpose unchanged; file hashes verified"
+  },
+  "deployment": "NOT RUN",
+  "business_quality": "NOT RUN",
+  "new_model_calls": 0,
+  "builds": 0,
+  "business_writes": 0,
+  "decision": "Validate current full-source admission before adding optional WikiPageModify draft stage.",
+  "prepared_exhaustive_configuration": {
+    "status": "PREPARED_OFFLINE_VALIDATED",
+    "source_configuration_sha256": "84a53008e3141413222f703cfe083456c21796fea4842cb5b8d6e97b02ee279e",
+    "prepared_configuration_sha256": "7bbdde6200fdadea4af190ca05c09e6e4aae9368b3fcf2ce77b7a4089b06de1a",
+    "granularity_before": "standard",
+    "granularity_after": "exhaustive",
+    "purpose_sha256": "5d128efc1fb9741caa259670de6801492929fa5ea53deb5e8d6cc61bb10cc212",
+    "only_additional_change": "native_discovery.granularity",
+    "other_configuration_unchanged": true,
+    "admission_prompt_matches_source": true,
+    "deployed": false,
+    "new_model_calls": 0,
+    "note": "Based on the previously prepared v2 prompt config; actual formal runtime/model unchanged. Native discovery policy/input identity changes; old producer responses are not exact reusable."
+  }
+}

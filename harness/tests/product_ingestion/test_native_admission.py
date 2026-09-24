@@ -254,6 +254,95 @@ def test_native_projection_joins_existing_compiler_and_provenance_review(
     assert bool(review["candidate_source_options"]) == supported
 
 
+@pytest.mark.parametrize("collision", ["page_title", "definition_title", "canonical_key", "alias"])
+def test_schema_name_collision_keeps_distinct_meaning_for_semantic_review(
+    case: Any, collision: str
+) -> None:
+    from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
+    from insurance_harness.product_ingestion import discovery
+    from insurance_harness.product_ingestion.discovery_composition import merge_discovery_delta
+
+    values = inputs(case)
+    request, entity, _snapshot, _source = values
+    ctx = context(values)
+    field = next(
+        f for f in ctx["existing_knowledge"]["schema_fields"] if f["field_key"] == "product_code"
+    )
+    payload = response(ctx)
+    page = payload["pages"][0]
+    body = "阅读资料时，可用险种代码核对不同材料是否属于同一产品，不能仅凭名称相近判断。"
+    page.update(body=body, title="险种代码的阅读用途")
+    page["content_provenance"]["segments"][0]["text"] = body
+    if collision == "page_title":
+        page["title"] = field["short_title"]
+    else:
+        definition = {
+            key: deepcopy(page[key])
+            for key in ("body", "evidence", "content_provenance", "audit_reason")
+        }
+        definition.update(
+            member_ref="d1",
+            action="NEW",
+            expected_revision_sha256=None,
+            title=field["short_title"] if collision == "definition_title" else "产品标识核对",
+            canonical_key=field["field_key"] if collision == "canonical_key" else "产品标识核对",
+            sense_key="阅读时跨材料核对方法",
+            aliases=[field["short_title"]] if collision == "alias" else [],
+        )
+        payload["definitions"] = [definition]
+        page["concept_refs"] = ["d1"]
+        payload["decisions"][0]["member_refs"].append("d1")
+    projected = project(values, ctx, payload)
+    delta = merge_discovery_delta(
+        request=request, field_delta=case[1], free_output=projected.output, run_id="same-name"
+    )
+    composed = compiler.compose_batch_output(request, delta)
+    assert composed.fields == compiler.compose_batch_output(request, case[1]).fields
+    review = discovery.render_independent_discovery_review_context(
+        request=request,
+        entity_id=entity,
+        exclusion_index=discovery.build_discovery_exclusion_index(request, entity),
+        discovery_candidates={
+            "output": projected.output.model_dump(mode="json"),
+            "dispositions": projected.dispositions,
+            "sources": ctx["source_options"],
+        },
+        final_composed_output=composed,
+        final_composed_output_hash=compiler.compile_output_hash_g3(composed),
+    )
+    assert field in review["existing_knowledge"]["schema_fields"]
+    assert all(m["rendered_content"] == body for m in review["candidate_members"])
+    assert all(m["content_provenance"] for m in review["candidate_members"])
+    assert len(review["review_member_ids"]) == len(projected.output.pages) + len(
+        projected.output.definitions
+    )
+
+
+def test_candidate_chunk_subset_does_not_hide_other_bound_window_evidence(case: Any) -> None:
+    request, entity, snapshot, source = inputs(case)
+    candidate = snapshot.candidates[0].model_copy(
+        update={"source_chunks": [], "has_source_chunks": False}
+    )
+    snapshot = snapshot.model_copy(update={"candidates": [candidate]})
+    values = request, entity, snapshot, source
+    ctx = context(values)
+    payload = response(ctx, supported=True)
+    result = project(values, ctx, payload)
+    assert result.output.pages[0].evidence[0].block_id == source.blocks[0].block_id
+    payload["pages"][0]["evidence"][0]["source_ref"] = "outside-window"
+    with pytest.raises(ValueError, match="quote/offset mismatch"):
+        project(values, ctx, payload)
+
+
+def test_native_admission_cannot_return_schema_field_output(case: Any) -> None:
+    values = inputs(case)
+    ctx = context(values)
+    payload = response(ctx)
+    payload["fields"] = [{"field_key": "product_code", "value": "invented"}]
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        project(values, ctx, payload)
+
+
 def test_update_page_with_new_concept_keeps_each_member_action_through_review(case: Any) -> None:
     from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
     from insurance_harness.product_ingestion import discovery

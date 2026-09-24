@@ -1,3 +1,41 @@
+# 当前状态（2026-09-24 · P1准入同名误拒已修复；软件42例通过，独立复核0阻断）
+
+root继续用户批准的G3.5质量/覆盖计划。P1对照核验确认native_admission已接收整个窗口原文并可生成完整body；旧13候选/0成员是真实旧准入结果，不能据此推导必须追加20次WikiPageModify。独立设计审查建议先验证修订准入，暂不新增正文阶段。健康DeepSeek原生基线仍作为完整正文对照，不重复成功调用。
+
+发现并修复确定的软件缺口：原生投影仅凭title/canonical_key/aliases与Schema字段同名即拒绝。Spec先冻结，4个真实RED后删除名称硬拒绝；正文/义项/完整Schema描述交既有独立审核，字段协议、精确来源、版本与唯一Active门保持。25项准入/StageCall+17项审核回归通过，ruff/生产源码mypy PASS；测试夹具6个既有类型错误单记，未扩修。新增模型/构建/部署/业务写入均0。当前4源码/Spec文件冻结于/private/tmp/g35-schema-name-review.json，独立review源码与文档0 BLOCKER，机械记录RED豁免已确认；本切片随本次提交保存。已在私密离线配置将standard改为exhaustive，保留Purpose v2和全部其他参数，离线校验及独立复核通过；尚未应用线上。详见docs/insurance-kb/evidence/830-g35/native-semantic-admission-20260924.md/json。
+
+NEXT：验证修订准入真实效果，继续必要实体关系R4、依赖隔离R6和集中交付。完整G3.5未完成；正式运行仍APP/UI/DocReader460c664cf、Harness bfcf37233，P0-3 d03f0b204及本次源码尚未部署。Active最后只读核验epoch17，本轮没有重新GET，不冒充实时观测。
+
+以下为历史状态。
+
+# 当前状态（2026-09-24 · DeepSeek原生Wiki完整生成PASS；质量14完整/4部分，G3.5未完成）
+
+root继续同一隔离验证，未新建库/重传/改队列。DeepSeek DNS修复后，原任务06:26:25Z自动retry7/10恢复，06:28:28Z批次成功，06:28:52Z索引收尾成功。5014字符完整输入、17块；2实体18概念、1 Wiki总结1首页，共22页，109链接、0待办/失败/孤页；25真实文本发送/25成功usage186392tokens，无本次恢复错误。生成收尾约147.4秒，上传到完成约53分钟含DNS失败和退避。辅助文档摘要仍failed，与成功Wiki总结不同。正式Active已GET确认epoch17不变。详见docs/insurance-kb/evidence/830-g35/native-deepseek-baseline-20260924.md。
+
+独立只读18项复核：14完整/4部分/0缺失/0已确认事实错误。部分为重疾概念首句缺触发前提、贷款“担保”和犹豫期“无条件”的未标补充、利益演示专页缺提示4/5（产品实体和总结保留）。20知识页均有可解析chunk_refs，但无逐句绑定；来源可进文档并读17块，当前IAB内嵌PDF空白，不计PDF预览通过；无模型生成标识。当前浏览器保留完整产品实体页。不能称质量/精确来源/所有后处理/正式产品发布/G3.5已完成。
+
+NEXT：健康Wiki生成链路基线已取得，P1按既定顺序复用完整正文草稿并落实条件边界、模型补充标志与精确引用；R4/R6及P0-3真实发布验收仍待完成。不得再把候选短提纲冒充原生完整正文，不重新跑本次成功模型调用。源码/镜像及正式Harness模型未换，P0-3 d03f0b204软件仍未部署。私密完整回执insurancekb-private-evidence/g35-deepseek-20260924，四文件冻结SHA见报告。
+
+以下为历史状态。
+
+# 当前状态（2026-09-24 · DeepSeek DNS 已修复；实际模型测试 PASS，Wiki待原队列重试）
+
+用户确认仅为DeepSeek增加真实DNS例外，并要求再试。Clash UI本轮已能访问，但编辑窗口空白；root使用已有Mihomo官方配置/API完成授权修复。首次仅加api.deepseek.com后短暂解析真实地址，但06:01:23Z原Wiki retry6/10仍被198.18.0.4拦截。随后直接DNS对照明确：api.deepseek.com返回真实IP及CNAME api.deepseek.com.eo.dnse1.com，单独查询该CNAME却获Fake-IP；因此系统二次解析仍失败。最终仅为原域名及这个实际CNAME加入fake-ip-filter，持久Merge和runtime同步，已有阿里云规则/代理选择/SSRF/TLS保护不变。修改前备份、现有mihomo -t验证PASS、既有Unix控制接口重载204；原域名/别名宿主查询及APP容器均真实公网221.11.190.218/58.251.127.101。
+
+通过正常网页的模型测试仅调用一次已有deepseek-v4-flash（b2034da8-942c-4a19-945d-1bc09459222e）：输入“请只回复：连接成功”，实际调用成功/回答连接成功/3576ms/usage36+17=53tokens。这确认DeepSeek模型链路已通，不是完整Wiki效果PASS。未更改模型注册、Harness正式模型或产品服务镜像。私密回执与代理配置备份：insurancekb-private-evidence/g35-deepseek-20260924/dns-fix。
+
+现有隔离KB73fa795c-da78-4f7c-9de8-70fc698d503b/knowledge3dbe732d-62f8-4344-8634-55396f6c9800仍pending1/仅默认index页1、实体概念页0；最后Wiki retry6/10失败发生于最终CNAME修复之前，等待原生退避后续调度。文档摘要3次重试已耗尽，仍failed。未重复上传、新建库、手工修改队列或取消任务；普通账号管理员队列GET403，未升级权限。下一步读取已有Wiki实际结果/原文覆盖与质量，另处理摘要恢复；G3.5及完整流程仍未通过，勿把本次连通性PASS冒充业务完成。
+
+以下为历史状态。
+
+# 当前状态（2026-09-24 · 用户授权切换 DeepSeek；模型配置已保存，DNS 阻断）
+
+用户明确要求 Gemini 调用失败时切换已有 DeepSeek。已通过正常网页将原实验库8649ee5e-e3a7-4a67-994b-7bbf372025d5的summary/wiki synthesis均保存为b2034da8-942c-4a19-945d-1bc09459222e（deepseek-v4-flash，https://api.deepseek.com/v1）；未修改全局模型注册或Harness正式流程模型。原文档重建被KNOWLEDGE_REVISION_SOURCE_PINNED拒绝，未绕过固定来源保护。按已有隔离验证授权，在同workspace正常UI创建73fa795c-da78-4f7c-9de8-70fc698d503b并上传同PDF一次，knowledge3dbe732d-62f8-4344-8634-55396f6c9800；standard/无Purpose/同embedding与分块/问题生成关闭/显式builtin，原Gemini失败记录保留。
+
+新文档解析和向量化已完成，但DeepSeek模型构造在发送前被SSRF检查拒绝：api.deepseek.com解析为198.18.0.63（保留198.18.0.0/15）。宿主机和APP容器读取均一致；本机Clash运行配置是fake-ip 198.18.0.1/16。此为明确DNS阻断，不是DeepSeek返回失败；没有成功DeepSeek调用。最近统计pending1/pages0，后台可能按原机制再调度但仍被模型构造拒绝。没有修改DNS、代理、安全规则或重启服务。已异步请求用户允许仅为api.deepseek.com增加真实DNS解析例外，因为这超出知识库配置范围；答复前不可操作代理。新证据与窗口：insurancekb-private-evidence/g35-deepseek-20260924/result.json及window.json。仍未完成健康原生基线/G3.5；以下软件与交付状态继续有效。
+
+以下为历史状态。
+
 # 当前状态（2026-09-24 · P0前置已部署；原生引用未知；P0-3首条软件切片已验证）
 
 root继续执行已批准九项顺序，唯一写者。P0-3首条软件切片已提交`d03f0b204609290c48d99eb3162626bd3fb15c03`，尚未push/构建/部署；矩阵见`docs/insurance-kb/evidence/830-g35/publish-operation-validation-20260924.json`。本地提交460c664cf的APP/UI/DocReader各构建一次并已部署；首轮前端切换断言失败后旧服务已核实恢复，有限第二次复用同制品于02:52:39Z通过全部健康/身份/Active检查。Harness未换镜像，正式Active仍epoch17。交付证据见p0-quality-delivery-20260924.md。

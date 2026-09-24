@@ -240,6 +240,16 @@ Validation uses the actual generation3/4 audit failure and workflow2 epoch11→1
 - THEN视图呈现真实语义且identity改变；历史v3/v4 renderer仍保留原形
 - AND同名字段实例与通用概念由各自类型、义项及主体区分，不依据名称直接合并
 
+#### Scenario: G35-R2 原生准入投影不得用同名替代语义审核（2026-09-24）
+
+- GIVEN 原生候选已绑定可信来源窗口，提出与Schema字段同名、但具有独立义项或解释用途的概念/页面
+- WHEN title、canonical_key或aliases与Schema字段短标题/field_key相同
+- THEN 原生投影 MUST NOT 仅据名称碰撞拒绝整份响应；保留完整正文、义项、来源片段及处置，交既有独立审核对照完整Schema描述判断语义。投影成功不代表质量通过或发布授权。
+- AND 字段值复述即使换名也须由独立审核拒绝；REJECT/NEEDS_HUMAN不得组合为通过审核。原生响应仍不得包含fields，合并后既有字段增量保持原值；身份/版本/精确引文/来源标记/审核hash与唯一Active门禁不变。
+- AND 准入仍可选取已绑定窗口内但不在候选source_chunks子集中的原文；candidate chunk关联不构成正文证据白名单，窗口外或错误offset/quote仍拒绝。
+
+本切片唯一写者root，写域为native_admission.py及对应准入/独立审核测试、此Spec与既有执行证据。旧独立发现v3/v4路径合同不改；不新增正文生成阶段、模型调用或发布入口。先以同名不同义投影反例记录RED，再验证字段防护与审核拒绝；真实模型语义质量仍须P1/P2实测。
+
 审核v4 MUST 保留候选的类型身份：概念的canonical_key/sense_key/aliases/origin，页面的entity_id/stable_key/entity_version/concept_ids；审核v3显式renderer保持历史字节。历史版本只供原合同回放，不能替代当前v4审核授权。Schema绑定必须唯一匹配id/version/hash，否则稳定拒绝。
 
 

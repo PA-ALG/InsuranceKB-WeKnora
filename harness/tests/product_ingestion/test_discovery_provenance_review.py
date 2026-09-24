@@ -102,10 +102,12 @@ def test_legacy_review_remains_byte_identical(case: Any) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("parent", [False, True])
 @pytest.mark.parametrize("evidence_score", [0, 20])
+@pytest.mark.parametrize("disposition_decision", ["ACCEPT", "REJECT", "NEEDS_HUMAN"])
 async def test_final_review_uses_authorized_provenance_policy_and_honest_score(
     case: Any,
     parent: bool,
     evidence_score: int,
+    disposition_decision: str,
 ) -> None:
     import json
     from types import SimpleNamespace
@@ -119,6 +121,20 @@ async def test_final_review_uses_authorized_provenance_policy_and_honest_score(
 
     values = review_case(case, pure=True)
     request, entity, _page, output, candidates = values
+    if disposition_decision != "ACCEPT":
+        # A field value dressed up with a new article title still needs a
+        # semantic reviewer decision; successful projection is not authority.
+        value = next(
+            f.value for f in case[1].output.fields if f.entity_id == entity and f.value is not None
+        )
+        page_data = _page.model_dump(mode="json")
+        page_data.update(title="产品信息阅读指引", body=value)
+        page_data["content_provenance"]["segments"][0]["text"] = value
+        page = FreeWikiPage.model_validate(page_data)
+        output = output.model_copy(update={"pages": (page,)})
+        candidates["output"] = output.model_dump(mode="json")
+        candidates["dispositions"][0]["text"] = value
+        values = request, entity, page, output, candidates
     context = render(values, max_context_bytes=300000)
     score = dict(
         business_value=25,
@@ -140,8 +156,10 @@ async def test_final_review_uses_authorized_provenance_policy_and_honest_score(
         "disposition_checks": [
             {
                 "candidate_id": row["candidate_id"],
-                "decision": "ACCEPT",
-                "reason": "Useful supplementary explanation",
+                "decision": disposition_decision,
+                "reason": "Useful supplementary explanation"
+                if disposition_decision == "ACCEPT"
+                else "The proposed explanation restates a Schema field; no independent meaning.",
             }
             for row in candidates["dispositions"]
         ],
@@ -177,6 +195,16 @@ async def test_final_review_uses_authorized_provenance_policy_and_honest_score(
     if evidence_score:
         assert outcome.decision == "FAILED"
         assert "evidence score" in outcome.summary["failure_detail"]
+    elif disposition_decision != "ACCEPT":
+        assert outcome.decision == ("REJECTED" if disposition_decision == "REJECT" else "PENDING")
+        with pytest.raises(ValueError, match="not accepted as an exact group"):
+            compose_discovery_review(
+                request=request,
+                final_output=output,
+                free_output=output,
+                outcome=outcome,
+                run_id="child",
+            )
     else:
         assert outcome.decision == "ACCEPTED", outcome.summary
         compose_discovery_review(

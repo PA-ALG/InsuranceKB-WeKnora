@@ -29,7 +29,6 @@ from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
     evidence_for,
 )
 from insurance_harness.product_ingestion.discovery import (
-    build_discovery_exclusion_index,
     build_discovery_knowledge_view,
 )
 from insurance_harness.product_ingestion.extraction import decode_model_json
@@ -293,12 +292,6 @@ def project_native_admission_response(
     audit: list[AuditDisposition] = []
     projected: dict[str, ConceptDefinition | FreeWikiPage] = {}
     concept_refs = {identity: identity for identity in old_definitions}
-    index = build_discovery_exclusion_index(request, entity_id)
-    excluded = {
-        "".join(value.casefold().split())
-        for row in index["schema_fields"]
-        for value in (row["field_key"], row["short_title"])
-    }
 
     def evidence_for_row(row: _Member) -> tuple[Evidence, ...]:
         result = []
@@ -328,11 +321,9 @@ def project_native_admission_response(
                 raise ValueError("native admission update target/revision invalid")
         elif old is not None or row.expected_revision_sha256 is not None:
             raise ValueError("native admission new identity collides with existing knowledge")
-        names = [row.title]
-        if isinstance(row, NativeDefinition):
-            names.extend([row.canonical_key, *row.aliases])
-        if any("".join(name.casefold().split()) in excluded for name in names):
-            raise ValueError("native admission cannot duplicate Schema fields")
+        # A field title/alias is not its meaning. Admission and independent
+        # review compare the complete Schema descriptions and member content;
+        # this projector enforces identities, provenance and the field-free DTO.
         if identity in {a.key for a in audit}:
             raise ValueError("native admission duplicate projected identity")
         projected[row.member_ref] = member
@@ -393,10 +384,7 @@ def project_native_admission_response(
     for decision in response.decisions:
         native = candidates[decision.candidate_ref]
         if decision.decision == "REFERENCE" and decision.existing_target == entity_id:
-            if (
-                native["kind"] != "entity"
-                or native["name"] != context["entity"]["display_name"]
-            ):
+            if native["kind"] != "entity" or native["name"] != context["entity"]["display_name"]:
                 raise ValueError("native admission current entity candidate identity mismatch")
         refs = decision.member_refs
         if len(set(refs)) != len(refs) or not set(refs) <= by_ref.keys():
