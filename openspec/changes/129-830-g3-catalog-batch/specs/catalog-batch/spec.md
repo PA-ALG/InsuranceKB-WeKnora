@@ -377,3 +377,14 @@ root唯一写者。按已批准质量计划，继续单材料tracer：当前真�
 本切片同时澄清v2成员生成合同：response context新增版本化member_contract（独立概念以有用Wiki page承接；definitions仅为至少一个页面使用的术语义项；concept_refs用member_ref/现有concept_id及最小样例；无新定义可合法空引用）。该显式输入改变必须使operation/input SHA变化，旧准入raw不能作为新场景输入的输出复用；来源/原生候选调用身份不变。v1提示与context保持字节语义。新增changed_contract RED已观察旧实现把旧上下文响应复用而没有执行新请求；实现后只允许新准入响应，不能扩大为整文件重算。完整运行配置与系统模板SHA/id保持不变；此前修改系统模板的方案已由下段收窄设计取代。
 
 预检切片设计收窄（同日独立设计复核后，取代上段system prompt/模板变更方案）：成员职责、保险覆盖及引用样例全部放入服务端生成的版本化member_contract上下文；保持既有v2 system prompt、template ID/SHA和完整运行配置不变。变化只进入admission context/input/operation身份，旧admission raw不能命中新输入，其他阶段仍按原完整policy与请求验证复用。无需跨策略兼容或policy history，不删除任何既有校验。写域追加test_native_runtime.py，用真实完整配置和持久worker恢复验证来源/身份/字段/发现/引用调用计数不增加、仅新admission增加1；旧成功/未知/过期调用保持既有规则。先观察当前system prompt改动拒绝已批准配置的RED，再移回场景上下文；该软件恢复纵切不等同于真实模型质量。
+
+### G35-R5/R6：后续阶段失败不得遮蔽发现失败（2026-09-24 恢复实测）
+
+真实恢复16452cbb复用了33dd1349的FAILED discovery_summary而从compilation继续；模型新增0、字段发布到epoch18，自由发现仍FAILED。这不是准入质量验证。根因在既有checkpoint_store仅对顶层PARTIAL_SUCCESS检查技术发现失败，顶层FAILED会遗漏更早的失败结果。
+
+root唯一写者；追加写域仅product_ingestion/checkpoint_store.py、test_checkpoint_artifact_version.py、test_native_runtime.py及本Spec/既有计划/证据/HANDOFF。恢复选择仍由原checkpoint深模块负责，公开接口、配置、队列、审核及发布合同不变。
+
+- workflow3所有原本可恢复的终态均检查已有绑定的discovery_summary/discovery_final_summary；更晚阶段失败不得遮蔽较早的FAILED + partial_success技术失败。按有效前缀与最早失败边界恢复，不能越过已有更早的失效边界；REJECTED/PENDING等语义结果不得因该修复重发。
+- 原产物、stage/job代次和raw custody证明、未知发送阻断及全policy检查保持。有效source/identity/fields和原生发现/引用继续复用，新member_contract仅重做准入；不删除旧结果、不改历史任务状态。
+- RED包含真实worker中准入失败后compilation故障的FAILED父任务，以及最终审核失败后更晚故障的恢复边界；覆盖更早产物失效优先、非FAILED摘要和旧workflow。完整worker恢复证明只有必要admission新增，不能以metadata测试替代接线。
+- 本轮已冻结的真实窗口一次UI恢复已用完，不追加点击；先完成上述离线反例/验证/独审，再单独记录后续有限交付窗口。G3.5、非空质量/点击与R4仍未完成。

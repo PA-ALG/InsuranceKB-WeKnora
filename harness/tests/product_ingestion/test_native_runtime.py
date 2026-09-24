@@ -269,11 +269,13 @@ async def test_three_generation_native_recovery_keeps_original_calls_and_update_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("later_compilation_failure", [False, True])
 async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    later_compilation_failure: bool,
 ) -> None:
-    from insurance_harness.product_ingestion import native_admission_stage
+    from insurance_harness.product_ingestion import compilation, native_admission_stage
     from insurance_harness.product_ingestion.discovery import DEPENDENCY_DISCOVERY_REVIEW_PROMPT
 
     base, parent = _base_snapshot_with_navigation()
@@ -340,6 +342,10 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
     runtime, context, client = await _compose(settings, factory, platform, model)
     context.bindings[SCOPE.space_id].platform.native_discovery = native
     current_render = native_admission_stage.render_native_admission_context
+    assemble = compilation.assemble_platform_candidate
+
+    def fail_compilation(*args: Any, **kwargs: Any) -> Any:
+        raise ValueError("fixture compilation failure after failed admission")
 
     def previous_context(**kwargs: Any) -> Any:
         value = current_render(**kwargs)
@@ -353,12 +359,17 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
         monkeypatch.setattr(
             native_admission_stage, "render_native_admission_context", previous_context
         )
+        if later_compilation_failure:
+            monkeypatch.setattr(compilation, "assemble_platform_candidate", fail_compilation)
         origin = context.store.create_run(
             scope=SCOPE, idempotency_key="member-old", expected_upload_count=3
         )
         admit_uploads(context.store, SCOPE, origin.run_id)
         first = await _finish(runtime, context, jobs, origin.run_id)
-        assert first.state is ProductRunState.PARTIAL_SUCCESS, (
+        expected = (
+            ProductRunState.FAILED if later_compilation_failure else ProductRunState.PARTIAL_SUCCESS
+        )
+        assert first.state is expected, (
             first.terminal_reason,
             runtime.issues,
         )
@@ -367,10 +378,14 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
         monkeypatch.setattr(
             native_admission_stage, "render_native_admission_context", current_render
         )
+        monkeypatch.setattr(compilation, "assemble_platform_candidate", assemble)
         native.fail = False
         child = context.store.retry_processing(
             scope=SCOPE, run_id=origin.run_id, expected_version=first.version
         )
+        plan = context.store.checkpoint_plan(scope=SCOPE, run_id=child.run_id)
+        assert plan.resume_stage == "discovery"
+        assert plan.failed_discovery_artifact.artifact_kind == "discovery_summary"
         second = await _finish(runtime, context, jobs, child.run_id)
         assert second.state in {ProductRunState.SUCCEEDED, ProductRunState.PARTIAL_SUCCESS}, (
             second.terminal_reason,

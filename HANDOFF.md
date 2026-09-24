@@ -1,12 +1,16 @@
-## 2026-09-24 当前：准入预检软件通过；同策略最小恢复已验证，待最终独审/交付
+## 2026-09-24 当前：真实准入调用已验证；引文与来源段合同仍阻断，自由知识未发布
 
-root沿既定tracer/deep modules实现native admission纯预检、原raw/RULE审计、完整strict/R6/geometry及projection v2；只允许v2唯一逐字offset和无歧义概念引用归位，孤定义继续拒绝。场景说明集中到版本化member_contract上下文：独立概念页、页面使用的术语定义、保险条件/例外/公式及来源标志。
+root继续既定tracer/deep modules。预检d8d99b85f已Harness-only构建/部署PASS一次，APP/UI37ae768ba、DocReader460c664cf及完整runtime SHA624e393d…保持。第一次正常UI恢复16452cbb新增模型0，复用旧FAILED发现摘要而字段发布epoch18；已定位后续compilation失败遮蔽更早发现失败的检查点选择缺陷。
 
-系统prompt、模板与完整旧runtime配置保持原值；原“修改系统模板导致全局策略失效”的方案已撤销，未应用配置、不放宽任何身份检查。旧runtime SHA624e393d…校验PASS，原native policy相同；持久worker恢复验证来源/身份/字段调用不变，原生发现/引用6次复用，仅准入新增1次。旧raw不能充当新context响应；真实raw离线5处归位仍孤定义拒绝。原144项定向/集成PASS，新恢复纵切1 PASS；最终变更独审待关闭。
+该恢复选择已在原checkpoint_store窄修复：所有可恢复workflow3终态检查partial_success的FAILED摘要，取最早失效边界；健康succeeded阶段metadata-only、成功call/raw custody及unknown阻断不变。先Spec/RED，42个不同测试获得PASS、ruff/production mypy PASS，revision2独审0 BLOCKER。此后续修复尚未部署，不热换活跃任务、不新增恢复器/表/协议。
 
-NEXT：冻结软件后只交付受影响Harness组件，复用配置和APP/UI/DocReader；正常网页恢复原任务并事前冻结最小新调用窗口，失败即停。当前模型/业务/构建/部署新增均0，运行仍37ae768ba，本轮未新GET Active；完整质量/点击/非空发布和G3.5尚未通过。
+已独立只读确认16452cbb现有PARTIAL_SUCCESS计划可正确恢复discovery，另冻结一次UI/最多2新模型窗口，无需再构建。a9b39523-3daa-53d2-ae86-c900761cd7a6于15:03:53–15:10:44Z结束，新增准入1 recorded、复用8，无新解析/字段/原生发现引用调用。14候选→2 NEW页/0定义、9 REJECT、2实体待解析、1REFERENCE；旧孤定义消失，但两段quote各删原文6处行内CRLF无法逐字定位，且evidence未归属SOURCE_SUPPORTED段，完整输出仍非法。两个窗口均已关闭，不再连续重试。
 
-见[预检及恢复证据](docs/insurance-kb/evidence/830-g35/native-admission-preflight-20260924.md)。root唯一写者，私密证据insurancekb-private-evidence/g35-preflight-20260924。
+15:11:44Z GET唯一Active为epoch19/release-7cc9f6c8-5050-4678-9225-380356dc8f98；这是字段发布。任务PARTIAL_SUCCESS，自由发现FAILED/accepted0/published0；字段仍26 verified/51 not_provided/2失败，不能称内容质量或完整G3.5通过。模型调用已正常返回，当前不归因断联。
+
+NEXT：在原证据/准入深模块设计稳定原文选择及逐段来源合同，先完整raw离线反例再冻结窄协议/RED；不自动删换行、不自动重标来源、不绕过正式审核。独立质量复核已完成：9项Schema去重8项成立，c8丢失“中止期间不承担保险责任”后果；告知页另漏投保人/被保险人对象范围。连同quote与未分配evidence共4项BLOCKER待修。R4/跨窗口R6/真实非空发布和点击尚未完成。详见[native-admission-preflight-20260924](docs/insurance-kb/evidence/830-g35/native-admission-preflight-20260924.md)及原质量计划。
+
+root唯一写者，当前工作树830-g35-knowledge-admission；私密证据分为g35-preflight-delivery-20260924、g35-checkpoint-failure-20260924、g35-admission-continuation-20260924。无新的GitHub推送/CI/live结论。
 
 以下为历史状态。
 

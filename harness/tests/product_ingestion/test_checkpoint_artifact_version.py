@@ -20,7 +20,11 @@ from insurance_harness.product_ingestion.checkpoints import (
     required_outputs,
     stage_order,
 )
-from insurance_harness.product_ingestion.tables import ProductRun
+from insurance_harness.product_ingestion.tables import (
+    ProductRun,
+    ProductStage,
+    ProductStageSettlement,
+)
 from tests.product_ingestion.test_recovery import finish_failed_source
 from tests.product_ingestion.test_store import (
     _make_store,
@@ -261,3 +265,66 @@ def test_old_native_projection_resumes_discovery_and_keeps_completed_extraction(
     assert plan.resume_stage == "discovery"
     assert tuple(row.stage_key for row in plan.reused_stages) == stage_order(3)[:7]
     assert any(row.artifact_kind == "compile_delta" for row in plan.artifacts)
+
+
+@pytest.mark.parametrize(
+    "summary_kind,summary_stage,summary_state,obsolete_stage,expected",
+    [
+        ("discovery_summary", "discovery", "FAILED", None, "discovery"),
+        ("discovery_final_summary", "compilation", "FAILED", None, "compilation"),
+        ("discovery_final_summary", "compilation", "FAILED", "discovery", "discovery"),
+        ("discovery_summary", "discovery", "FAILED", "synthesis", "synthesis"),
+        ("discovery_summary", "discovery", "PENDING", None, "preparation"),
+        ("discovery_summary", "discovery", "REJECTED", None, "preparation"),
+    ],
+)
+def test_later_failure_respects_earliest_invalid_discovery_boundary(
+    api: typing.Any, factory: typing.Any, summary_kind: str, summary_stage: str,
+    summary_state: str, obsolete_stage: str | None, expected: str,
+) -> None:
+    scope, store, origin, _ = _metadata_origin(
+        api, factory, workflow=3, candidate_contract=("product-candidate.v2", "2"),
+        failed_stage="preparation",
+    )
+    with factory() as session, session.begin():
+        summary = session.scalar(select(ProductArtifact).where(
+            ProductArtifact.run_id == origin.run_id,
+            ProductArtifact.artifact_kind == summary_kind,
+        ))
+        if summary is None:
+            producer = session.scalar(select(ProductArtifact).where(
+                ProductArtifact.run_id == origin.run_id,
+                ProductArtifact.stage_key == summary_stage,
+            ))
+            values = {c.name: getattr(producer, c.name) for c in ProductArtifact.__table__.columns}
+            contract, version = CURRENT_ARTIFACT_CONTRACTS[summary_kind]
+            values.update(id=str(uuid4()), artifact_kind=summary_kind,
+                          contract_name=contract, contract_version=version)
+            summary = ProductArtifact(**values)
+            session.add(summary)
+        summary.payload = json.dumps({"state": summary_state}).encode()
+        summary.payload_sha256 = hashlib.sha256(summary.payload).hexdigest()
+        stage = session.scalar(select(ProductStage).where(
+            ProductStage.run_id == origin.run_id, ProductStage.stage_key == summary_stage,
+        ))
+        session.add(ProductStageSettlement(
+            id=str(uuid4()), stage_id=stage.id, run_id=origin.run_id, space_id=scope.space_id,
+            state="partial_success", success_count=0, missing_count=0, failure_count=1,
+            model_call_count=0, usage={}, finished_at=datetime.now(UTC),
+        ))
+        if obsolete_stage:
+            obsolete = session.scalar(select(ProductArtifact).where(
+                ProductArtifact.run_id == origin.run_id,
+                ProductArtifact.stage_key == obsolete_stage,
+            ))
+            obsolete.contract_version = "obsolete"
+    with factory() as session:
+        plan = store._checkpoint_candidate(session, scope, session.get(ProductRun, origin.run_id))
+    assert plan.resume_stage == expected
+    assert tuple(s.stage_key for s in plan.reused_stages) == stage_order(3)[
+        :stage_order(3).index(expected)
+    ]
+    if summary_state == "FAILED" and obsolete_stage is None:
+        assert plan.failed_discovery_artifact.artifact_kind == summary_kind
+    else:
+        assert plan.failed_discovery_artifact is None

@@ -219,3 +219,13 @@ P0-3实施收窄（2026-09-24）：实际只读A/B为18.214/25.044秒，不足�
 发现修改system prompt/template会改变全局模型策略并拒绝成功调用复用。经独立设计复核，撤销该方案：新增成员职责/引用规则仅作为服务端版本化context，保持系统prompt、模板和完整运行配置原值；只改变准入input/operation。无需跨策略兼容，不删global hash。完整旧配置离线校验、原native policy一致、实际旧请求兼容检查PASS；新增持久worker恢复1 PASS：source/identity/field计数不变，6次原生发现/引用全部复用，仅1次新准入。它是本地恢复接线证据，未执行真实供应商恢复。
 
 CURRENT=最终变更独审/冻结；NEXT_READY=仅Harness必要制品交付，复用现有配置和其它组件；随后正常网页恢复原任务并事前冻结必要调用预算，失败停止。当前新build/deploy/provider/business均0，真实质量/点击/非空发布、R4和完整G3.5未完成。不得部署先前废弃的新模板配置。
+
+## 预检交付与真实断点验证结果（2026-09-24 15:11Z）
+
+本段取代上段CURRENT：d8d99b85f Harness-only一次构建/交付PASS，完整配置/APP/UI/DocReader复用。第一次UI恢复16452cbb新增模型0，错误复用FAILED发现结果而字段发布epoch18；原checkpoint只在PARTIAL_SUCCESS检查发现失败，遗漏后续compilation FAILED。现已在同模块修复最早失效边界，健康阶段metadata-only、成功调用/unknown围栏保持；Spec/RED后42个不同测试PASS，独审0 BLOCKER，尚未部署该后续修复。
+
+已只读/独审核对16452cbb现有恢复计划确实回到discovery，沿正常UI再执行一个单独冻结的有限窗口，复用已部署版本而不另构建。a9b39523新增准入1、复用8、模型返回成功；14候选→2页/0定义，旧孤定义消失，但两个quote各漏6处PDF行内CRLF，且原文evidence未绑定任何SOURCE_SUPPORTED段，完整输出仍非法。字段流程终态PARTIAL_SUCCESS/epoch19，自由发现FAILED，无非空自由知识发布。详细证据见native-admission-preflight-20260924.md；两窗口均已关闭，不能连续点击重试。
+
+CURRENT=完整raw离线质量/证据合同复核；NEXT_READY=把证据选择与逐段来源归属集中到原准入/证据责任边界，复用原生source引用和已校验原文，先完整协议反例后实现。只改offset/删除换行/自动重标provenance都不足以闭合。九项Schema拒绝需比较真实字段语义与有效内容；候选/页面数量不代替覆盖。此后续方向尚未实现，需在现有OpenSpec冻结具体最小协议再RED。R4、跨窗口R6、正式质量/点击/完整G3.5仍未完成。
+
+独立质量复核已关闭：9项去重8项由当前字段完整承接，c8漏中止期间不承担责任的后果；告知页遗漏投保人与被保险人的询问范围。下一条完整反例须同时覆盖这两项语义损失、逐字quote和SOURCE_SUPPORTED段/evidence归属，不能只通过格式测试。当前BLOCKER为4项，完整质量/点击仍未验收；不凭页面数量或字段verified状态推导覆盖。

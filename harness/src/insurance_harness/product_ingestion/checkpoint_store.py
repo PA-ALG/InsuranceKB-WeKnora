@@ -460,16 +460,22 @@ class CheckpointStore:
 
         failed_discovery_artifact = None
         failed_discovery_stage = None
-        if run.state is ProductRunState.PARTIAL_SUCCESS:
-            if origin.workflow_version != 3:
-                return None
+        if run.state is ProductRunState.PARTIAL_SUCCESS and origin.workflow_version != 3:
+            return None
+        # Later stage failure does not make an earlier technical discovery
+        # failure reusable. Inspect its bound result for every eligible v3 run.
+        if origin.workflow_version == 3:
             for kind, stage_key in (
                 ("discovery_summary", "discovery"),
                 ("discovery_final_summary", "compilation"),
             ):
                 summary_ref = artifact_refs.get((kind, "product"))
                 discovery_stage = stages.get(stage_key)
-                if summary_ref is None or discovery_stage is None:
+                if (
+                    summary_ref is None
+                    or discovery_stage is None
+                    or discovery_stage.state != "partial_success"
+                ):
                     continue
                 summary_row = _small_artifact(session, summary_ref.run_id, kind)
                 if summary_row is None or _ref(summary_row) != summary_ref:
@@ -480,15 +486,14 @@ class CheckpointStore:
                     return None
                 if (
                     summary.get("state") == "FAILED"
-                    and discovery_stage.state == "partial_success"
                     and summary_ref.stage_key == stage_key
                     and summary_ref.run_id == discovery_stage.run_id
                 ):
                     failed_discovery_artifact = summary_ref
                     failed_discovery_stage = discovery_stage
                     break
-            if failed_discovery_artifact is None:
-                return None
+        if run.state is ProductRunState.PARTIAL_SUCCESS and failed_discovery_artifact is None:
+            return None
 
         def current_contract(ref: ArtifactReference) -> bool:
             expected = CURRENT_ARTIFACT_CONTRACTS.get(ref.artifact_kind)
@@ -526,9 +531,8 @@ class CheckpointStore:
             ):
                 break
             prefix.append(stage)
-        if not prefix or len(prefix) == len(order):
-            if not failed_discovery_artifact:
-                return None
+        if not prefix or (len(prefix) == len(order) and not failed_discovery_artifact):
+            return None
         resume = order[len(prefix)] if len(prefix) < len(order) else "discovery"
         legacy_rebase = (
             workflow_version == 2
@@ -539,20 +543,20 @@ class CheckpointStore:
             (workflow_version == 3 or legacy_rebase)
             and "synthesis" in {s.stage_key for s in prefix}
         )
-        if rebase and run.state is ProductRunState.PARTIAL_SUCCESS:
-            if failed_discovery_artifact is not None and (
-                failed_discovery_artifact.artifact_kind == "discovery_final_summary"
-                and "discovery" in {s.stage_key for s in prefix}
-            ):
-                prefix = prefix[: order.index("compilation")]
-                resume = "compilation"
-            else:
-                prefix = prefix[: order.index("discovery")]
-                resume = "discovery"
         if run.state is ProductRunState.PARTIAL_SUCCESS and not (
             failed_discovery_artifact and rebase
         ):
             return None
+        if failed_discovery_stage is not None:
+            boundary = order.index(failed_discovery_stage.stage_key)
+            if rebase and boundary <= len(prefix):
+                prefix = prefix[:boundary]
+                resume = order[boundary]
+            else:
+                # An earlier obsolete/missing output already requires recovery;
+                # do not advance past it or bind a proof for a different boundary.
+                failed_discovery_artifact = None
+                failed_discovery_stage = None
         if resume == "verify":
             # A published-head verification retry requires the new publication
             # receipt as its current-head baseline; not the prepublication base.
