@@ -1,3 +1,15 @@
+## 2026-09-24 当前：R6已交付，首条真实纵切失败；完整准入边界设计已记录
+
+源码37ae768ba3392d49ae389c5754f283d9a802e6d5的APP/Harness/UI各构建一次并可逆交付PASS，DocReader保持460c664cf；旧制品保留，无migration。正常网页同账号、同说明书任务33dd1349-e821-4d9c-b712-171e4fcb566c于10:53:01Z开始、12:33:48Z失败；13:51:29Z只读GET正式Active仍epoch17/release-b8d07e76-da52-4446-9c37-fb6f8a1cb2d6，没有新发布。DELIVERY PASS不能推导BUSINESS PASS。
+
+本次实际新模型发送9次全部recorded，供应商总tokens240067；正式Gemini配置未切换。原生发现14候选，准入拟生成11定义/2页面，但3处引文offset错误、2处canonical_key/member_ref混用、9个无页面使用的定义使完整投影失败。仅修坐标不能跑通，不能删定义/造页掩盖缺口。字段26 verified/51 not_provided/2 extraction_failed，51尚未人工证实为真实缺失。编译3代租约耗尽与Mac合盖/维护休眠吻合，不能归因模型断联或据此放宽租约。最终审核、非空发布、真实来源点击及完整覆盖验收仍未完成。
+
+NEXT：按原计划在现有native admission内冻结纯预检窄接口，保留原raw和修正审计，只允许唯一逐字引文/无歧义标识归位，结构及孤定义继续拒绝；明确独立概念Wiki页与页面所用definition职责。先OpenSpec增量/RED和真实回执完整离线复验，再集中交付最小新调用窗口；新preflight尚未实现，不重传/重算已成功阶段而不先核对依赖。当前真实窗口结束，宿主需持续运行才能进行下次真实验证。R4、跨窗口R6和G3.5仍未完成。
+
+证据：[R6真实纵切](docs/insurance-kb/evidence/830-g35/r6-real-tracer-20260924.md)；设计：[质量与覆盖度收口计划](docs/superpowers/plans/2026-09-24-830-g35-quality-and-coverage-closeout.md)。完整私密回执insurancekb-private-evidence/g35-r6-delivery-20260924。
+
+以下为历史状态。
+
 ## 2026-09-24 当前补充：真实纵切设计/展示补齐已独审，准备集中交付
 
 用户继续要求 tracer bullet/deep modules；已在原质量收口计划冻结下一条真实非空纵切，职责保持在原生候选、准入、纯依赖闭包、整次运行汇总、最终审核、唯一发布及安全摘要。发现并补齐Go桥丢R6可选计数、Vue漏显示PENDING已验证发布；HTTP RED 1失败、组件RED4失败，定向Go及组件47项GREEN，增量独审0 BLOCKER。旧Harness源码未改，两个审查manifest均保留；详见native-dependency-isolation-20260924.md追加段。
