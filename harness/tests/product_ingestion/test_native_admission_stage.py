@@ -293,3 +293,70 @@ def _with_geometry(source: Any) -> Any:
         ],
     }
     return replace(source, snapshot=body, native_bytes=json_bytes(native))
+
+
+@pytest.mark.asyncio
+async def test_v3_stage_keeps_wire_raw_and_projects_nonempty_exact_source(
+    case: Any, tmp_path: Any
+) -> None:
+    from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
+    from insurance_harness.product_ingestion.native_admission_stage import (
+        run_native_admission_window,
+    )
+    from insurance_harness.product_ingestion.native_admission_wire import WIRE_PROMPT, WIRE_PROTOCOL
+    from tests.product_ingestion.test_native_admission_policy import add_override, policy_payload
+    from tests.product_ingestion.test_native_admission_wire import wire_sample
+
+    request, entity, snapshot, source, _, payload = wire_sample(case)
+    source = _with_geometry(source)
+    data = policy_payload(tmp_path)
+    add_override(data)
+    binding = ProductRuntimeSettings.model_validate_json(json.dumps(data)).bindings[0]
+    scope = ProductScope(
+        tenant_id=str(request.base_request.tenant_id),
+        space_id=request.base_request.space_id,
+        raw_knowledge_base_id=request.base_request.raw_kb_id,
+        wiki_knowledge_base_id=request.base_request.wiki_kb_id,
+    )
+    decoded = json_bytes(payload)
+    raw = json_bytes({"choices": [{"message": {"content": decoded.decode()}}]})
+    service = _service(
+        role="extract", purpose="g3-native-admission-v3", prompt=WIRE_PROMPT, new_raw=raw
+    )
+    service.configuration.model = binding.model.model_copy(update={"scope": scope})
+    service.configuration.native_admission = binding.native_admission
+    service.native_admission_executor = service.model_executor
+    outcome = await run_native_admission_window(
+        service=service,
+        artifacts=SimpleNamespace(),
+        scope=scope,
+        run=SimpleNamespace(run_id="wire-run", retry_of_run_id=None),
+        stage=SimpleNamespace(dependency_sha256="f" * 64),
+        job=SimpleNamespace(),
+        request=request,
+        entity_id=entity,
+        snapshot=snapshot,
+        source=source,
+        dependency_policy="candidate-dependencies.830.v1",
+        isolation_enabled=True,
+    )
+    assert outcome.failure is None
+    assert len(outcome.projection.output.pages) == 1
+    assert outcome.projection.output.pages[0].evidence[0].quote == source.blocks[0].text
+    drafts = {row.artifact_kind: row for row in outcome.drafts}
+    assert drafts["native_admission_response"].payload == decoded
+    context = json.loads(drafts["native_admission_context"].payload)
+    assert context["wire_protocol"] == WIRE_PROTOCOL
+    assert context["source_options"][0]["spans"][0]["evidence_ref"] == "s1:1"
+    canonical = json.loads(drafts["native_admission_canonical_response"].payload)
+    assert canonical["contract"] == "native-knowledge-admission.830.v2"
+    execution = json.loads(drafts["native_admission_execution"].payload)
+    assert execution["wire_protocol"] == WIRE_PROTOCOL
+    assert execution["raw_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert execution["raw_sha256"] != hashlib.sha256(decoded).hexdigest()
+    assert execution["model_policy_sha256"] != binding.model.policy_sha256
+    expansion = json.loads(drafts["native_admission_preflight"].payload)["wire_expansion"]
+    assert (
+        expansion["wire_context_sha256"]
+        == hashlib.sha256(drafts["native_admission_context"].payload).hexdigest()
+    )

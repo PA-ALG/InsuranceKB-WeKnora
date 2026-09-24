@@ -14,9 +14,6 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
 from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.checkpoints import CURRENT_ARTIFACT_CONTRACTS
-from insurance_harness.product_ingestion.discovery_stage import (
-    require_discovery_template,
-)
 from insurance_harness.product_ingestion.model_execution import (
     ConfiguredFieldTransport,
     ModelPolicyDenied,
@@ -28,12 +25,13 @@ from insurance_harness.product_ingestion.models import (
 )
 from insurance_harness.product_ingestion.native_admission import (
     NativeAdmissionProjection,
-    native_admission_prompt,
     render_native_admission_context,
 )
+from insurance_harness.product_ingestion.native_admission_policy import resolve_admission_policy
 from insurance_harness.product_ingestion.native_admission_preflight import (
     preflight_native_admission_response,
 )
+from insurance_harness.product_ingestion.native_admission_wire import render_wire_context
 from insurance_harness.product_ingestion.native_call_replay import (
     NativeReplayIndex,
     read_native_replay_calls,
@@ -77,7 +75,16 @@ async def run_native_admission_window(
     A received but semantically invalid response remains auditable and pending;
     this adapter never sends a repair call or authorizes publication.
     """
-    settings = service.configuration.model
+    policy = resolve_admission_policy(
+        service.configuration.model, dependency_policy,
+        getattr(service.configuration, "native_admission", None),
+    )
+    settings, prompt, template = policy.settings, policy.prompt, policy.template
+    executor = (
+        service.native_admission_executor if policy.wire_protocol else service.model_executor
+    )
+    if executor is None:
+        raise ValueError("native admission executor is not configured")
     base = request.base_request
     expected_scope = ProductScope(
         tenant_id=str(base.tenant_id),
@@ -87,8 +94,6 @@ async def run_native_admission_window(
     )
     if scope != settings.scope or scope != expected_scope:
         raise ValueError("native admission execution scope mismatch")
-    prompt = native_admission_prompt(dependency_policy)
-    template = require_discovery_template(settings, "extract", "g3-native-admission", prompt)
     context = await asyncio.to_thread(
         render_native_admission_context,
         request=request,
@@ -99,7 +104,8 @@ async def run_native_admission_window(
         dependency_policy=dependency_policy,
         isolation_enabled=isolation_enabled,
     )
-    content = json_bytes(context)
+    wire_context = render_wire_context(context) if policy.wire_protocol else context
+    content = json_bytes(wire_context)
     input_hash = hashlib.sha256(content).hexdigest()
     operation = "native-admission-" + input_hash
     drafts: list[ArtifactDraft] = []
@@ -136,8 +142,9 @@ async def run_native_admission_window(
         )
         if replayed is not None:
             raw, call_id = replayed.raw, replayed.call_id
+            request_hash = replayed.request_sha256
         else:
-            result = await service.model_executor.execute_stage_call(
+            result = await executor.execute_stage_call(
                 store=artifacts,
                 scope=scope,
                 run_id=run.run_id,
@@ -160,16 +167,19 @@ async def run_native_admission_window(
                     "native admission call incomplete: " + (result.diagnostic or result.state)
                 )
             raw, call_id = result.raw, result.call_id
+            request_hash = result.execution_receipt.request_sha256
         assert raw is not None
         keep(
             "native_admission_execution",
             json_bytes(
                 {
-                    "contract": "native-admission-execution-receipt.830.v1",
+                    "contract": "native-admission-execution-receipt.830.v2",
+                    **policy.identity(),
                     "operation_key": operation,
                     "input_sha256": input_hash,
                     "model_call_id": call_id,
                     "raw_sha256": hashlib.sha256(raw).hexdigest(),
+                    "request_sha256": request_hash,
                     "replayed_from_run_id": replayed.run_id if replayed is not None else None,
                 }
             ),
@@ -184,6 +194,7 @@ async def run_native_admission_window(
             snapshot=snapshot,
             source=source,
             context=context,
+            wire_protocol=policy.wire_protocol,
         )
         keep("native_admission_preflight", json_bytes(preflight.receipt))
         keep("native_admission_canonical_response", preflight.canonical)

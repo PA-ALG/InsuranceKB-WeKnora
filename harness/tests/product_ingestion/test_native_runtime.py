@@ -270,10 +270,12 @@ async def test_three_generation_native_recovery_keeps_original_calls_and_update_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("later_compilation_failure", [False, True])
+@pytest.mark.parametrize("wire_upgrade", [False, True])
 async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     later_compilation_failure: bool,
+    wire_upgrade: bool,
 ) -> None:
     from insurance_harness.product_ingestion import compilation, native_admission_stage
     from insurance_harness.product_ingestion.discovery import DEPENDENCY_DISCOVERY_REVIEW_PROMPT
@@ -311,10 +313,13 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
         def __call__(self, request: httpx.Request) -> httpx.Response:
             envelope = json.loads(request.content)
             content = json.loads(envelope["messages"][-1]["content"])
-            if content.get("contract") == "native-knowledge-admission-context.830.v2":
+            if content.get("contract") in {
+                "native-knowledge-admission-context.830.v2",
+                "native-knowledge-admission-context.830.v3",
+            }:
                 self.admission_requests.append(content)
                 semantic = {
-                    "contract": "native-knowledge-admission.830.v2",
+                    "contract": content["contract"].replace("-context", ""),
                     "definitions": [],
                     "pages": [],
                     "decisions": [
@@ -380,6 +385,20 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
         )
         monkeypatch.setattr(compilation, "assemble_platform_candidate", assemble)
         native.fail = False
+        if wire_upgrade:
+            from tests.product_ingestion.test_native_admission_policy import add_override
+
+            await runtime.close()
+            await client.aclose()
+            add_override(data)
+            settings = settings.model_copy(update={
+                "product_ingestion_runtime_json": SecretStr(_json(data).decode()),
+            })
+            runtime, context, client = await _compose(settings, factory, platform, model)
+            service = context.bindings[SCOPE.space_id]
+            service.platform.native_discovery = native
+            service.native_admission_executor._client = client
+            monkeypatch.setattr(compilation, "assemble_platform_candidate", fail_compilation)
         child = context.store.retry_processing(
             scope=SCOPE, run_id=origin.run_id, expected_version=first.version
         )
@@ -387,7 +406,10 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
         assert plan.resume_stage == "discovery"
         assert plan.failed_discovery_artifact.artifact_kind == "discovery_summary"
         second = await _finish(runtime, context, jobs, child.run_id)
-        assert second.state in {ProductRunState.SUCCEEDED, ProductRunState.PARTIAL_SUCCESS}, (
+        assert second.state in (
+            {ProductRunState.FAILED} if wire_upgrade
+            else {ProductRunState.SUCCEEDED, ProductRunState.PARTIAL_SUCCESS}
+        ), (
             second.terminal_reason,
             runtime.issues,
         )
@@ -400,6 +422,8 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
         assert len(model.admission_requests) == 2
         assert "member_contract" not in model.admission_requests[0]
         assert "member_contract" in model.admission_requests[1]
+        if wire_upgrade:
+            assert model.admission_requests[1]["contract"].endswith(".v3")
         calls = context.artifacts.list_stage_calls(scope=SCOPE, run_id=child.run_id)
         discovery_calls = [c for c in calls if c.stage_key == "discovery"]
         assert len(discovery_calls) == 1
@@ -413,6 +437,44 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
         )
         assert len(receipts) == 6
         assert {json.loads(r.payload)["replayed_from_run_id"] for r in receipts} == {origin.run_id}
+        if wire_upgrade:
+            from dataclasses import replace
+            from types import MappingProxyType
+
+            from insurance_harness.product_ingestion.checkpoint_validation import (
+                CheckpointValidationError,
+                validate_checkpoint,
+            )
+
+            monkeypatch.setattr(compilation, "assemble_platform_candidate", assemble)
+            grandchild = context.store.retry_processing(
+                scope=SCOPE, run_id=child.run_id, expected_version=second.version,
+            )
+            plan = context.store.checkpoint_plan(scope=SCOPE, run_id=grandchild.run_id)
+            assert plan.resume_stage == "compilation"
+            checkpoint = context.store.list_stages(scope=SCOPE, run_id=grandchild.run_id)[0]
+            await validate_checkpoint(context, SCOPE, grandchild, checkpoint)
+            service = context.bindings[SCOPE.space_id]
+            override = service.configuration.native_admission
+            for changed_override in (None, override.model_copy(update={
+                "template": override.template.model_copy(update={
+                    "max_output_tokens": 8193,
+                }),
+            })):
+                changed_settings = service.configuration.settings.model_copy(update={
+                    "native_admission": changed_override,
+                })
+                changed_service = replace(service, configuration=replace(
+                    service.configuration, settings=changed_settings,
+                ))
+                changed_context = replace(context, bindings=MappingProxyType({
+                    SCOPE.space_id: changed_service,
+                }))
+                with pytest.raises(CheckpointValidationError):
+                    await validate_checkpoint(changed_context, SCOPE, grandchild, checkpoint)
+            third = await _finish(runtime, context, jobs, grandchild.run_id)
+            assert third.state in {ProductRunState.SUCCEEDED, ProductRunState.PARTIAL_SUCCESS}
+            assert len(model.native_requests) == 6 and len(model.admission_requests) == 2
     finally:
         await runtime.close()
         await client.aclose()

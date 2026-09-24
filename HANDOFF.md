@@ -1,3 +1,17 @@
+## 2026-09-25 当前：原文编号准入v3软件独审通过，准备有限真实纵切
+
+root继续tracer bullet/deep modules。新增纯wire适配：模型逐段text/origin/evidence_refs，程序按既有完整source span展开exact quote/offset/index；原文Unicode/CRLF、正文/决策/来源声明不改，继续原v2 strict/R6/geometry。旧v1/v2不放宽。可选top-level准入模板派生同模型executor，基础model/native_discovery及其余成功调用身份保持；execution v2及完整checkpoint重验当前配置和原StageCall，防止升级后整段误复用。
+
+先Spec/RED，完整有界94 PASS/1 SKIP、ruff及7源码mypy PASS；首审哈希命名和负例覆盖2项BLOCKER已修复，35纯边界PASS与非空stage1PASS（与前组重叠），revision2独审0 BLOCKER。provider raw/decoded bytes/canonical wire value三层哈希明确分离。当前源码尚未提交/构建/部署；原77ee检查点修复亦未部署。证据见native-admission-wire-20260925.md，冻结/private/tmp/g35-wire-review-2.json。
+
+实际配置已离线准备，仅新增admission v3绑定，base model/native_discovery策略逐字保持、endpoint/model/secret不变，未应用。16:13:48Z同账号GET仍a9b39523 PARTIAL_SUCCESS/自由发现FAILED/字段26-51-2，唯一Active epoch19/release-7cc9f6c8-5050-4678-9225-380356dc8f98；Harness仍d8镜像ed95cb8…及runtime624e393d…且healthy。无本轮新provider/上传/业务写入。
+
+NEXT：冻结源码/文档与有限Harness-only交付窗口，一次必要build和可回滚切换，再同账号同材料正常UI恢复一次，最多新准入1+最终审核1，其他成功工作exact复用。未知/失败停止，保留回执；原两个真实窗口保持关闭。新输出须逐项核验4个真实质量阻断、全部候选处置、覆盖、模型补充标识和原文点击。自动全REJECT/零成员独立语义审核仍缺失（v6仅retained，零成员跳过），未冒称已修。完整G3.5、R4及跨窗口R6未完成。
+
+root唯一写者，活动工作树仍830-g35-knowledge-admission；不得动其他工作树既有用户改动，不创建第二Wiki/Release authority。
+
+以下为历史状态。
+
 ## 2026-09-24 当前：真实准入调用已验证；引文与来源段合同仍阻断，自由知识未发布
 
 root继续既定tracer/deep modules。预检d8d99b85f已Harness-only构建/部署PASS一次，APP/UI37ae768ba、DocReader460c664cf及完整runtime SHA624e393d…保持。第一次正常UI恢复16452cbb新增模型0，复用旧FAILED发现摘要而字段发布epoch18；已定位后续compilation失败遮蔽更早发现失败的检查点选择缺陷。

@@ -31,6 +31,10 @@ from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import (
 )
 from insurance_harness.product_ingestion.model_settings import ProductModelSettings
 from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.native_admission_policy import (
+    NativeAdmissionSettings,
+    resolve_admission_policy,
+)
 from insurance_harness.service_shell.config import ShellConfigError, ShellSettings
 
 Sha256Hex = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
@@ -182,6 +186,9 @@ class ProductScopeRuntimeSettings(_FrozenModel):
         default=None,
         exclude_if=lambda value: value is None,
     )
+    native_admission: NativeAdmissionSettings | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def _same_scope_and_unique_keys(self) -> Self:
@@ -192,6 +199,8 @@ class ProductScopeRuntimeSettings(_FrozenModel):
             raise ValueError("source authority key ids must be unique")
         for item in self.source_authorities:
             item.public_key()
+        if self.native_admission is not None and self.native_discovery is None:
+            raise ValueError("native admission override requires native discovery")
         if self.native_discovery is not None:
             from insurance_harness.product_ingestion.discovery import (
                 DEPENDENCY_DISCOVERY_REVIEW_PROMPT,
@@ -207,6 +216,9 @@ class ProductScopeRuntimeSettings(_FrozenModel):
             )
 
             try:
+                resolve_admission_policy(
+                    self.model, self.native_discovery.dependency_policy, self.native_admission,
+                )
                 for role, purpose, prompt in (
                     ("extract", "g3-native-discovery", NATIVE_DISCOVERY_EXECUTION_PROMPT),
                     (
@@ -267,6 +279,10 @@ class LoadedProductBinding:
     @property
     def native_discovery(self) -> NativeDiscoverySettings | None:
         return self.settings.native_discovery
+
+    @property
+    def native_admission(self) -> NativeAdmissionSettings | None:
+        return self.settings.native_admission
 
     @property
     def automation(self) -> AutomationSignerSettings:

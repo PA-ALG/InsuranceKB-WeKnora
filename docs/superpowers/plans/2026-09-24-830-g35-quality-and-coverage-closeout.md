@@ -229,3 +229,15 @@ CURRENT=最终变更独审/冻结；NEXT_READY=仅Harness必要制品交付，�
 CURRENT=完整raw离线质量/证据合同复核；NEXT_READY=把证据选择与逐段来源归属集中到原准入/证据责任边界，复用原生source引用和已校验原文，先完整协议反例后实现。只改offset/删除换行/自动重标provenance都不足以闭合。九项Schema拒绝需比较真实字段语义与有效内容；候选/页面数量不代替覆盖。此后续方向尚未实现，需在现有OpenSpec冻结具体最小协议再RED。R4、跨窗口R6、正式质量/点击/完整G3.5仍未完成。
 
 独立质量复核已关闭：9项去重8项由当前字段完整承接，c8漏中止期间不承担责任的后果；告知页遗漏投保人与被保险人的询问范围。下一条完整反例须同时覆盖这两项语义损失、逐字quote和SOURCE_SUPPORTED段/evidence归属，不能只通过格式测试。当前BLOCKER为4项，完整质量/点击仍未验收；不凭页面数量或字段verified状态推导覆盖。
+
+### 2026-09-24 继续：原文编号准入 v3（设计复核后首切片）
+
+复用调查：原生候选已成功；native_admission/source_options已提供精确span，strict/R6/geometry已有完整门禁。quote丢6处CRLF与证据未归属段需要把原文绑定交回程序。独审确认旧v2 system prompt不能冒充refs-only，且新增准入配置必须进入完整discovery恢复校验。
+
+本切片先完成 G35-R5-WIRE-1—3：纯wire适配 → admission-only显式模板及同executor配置派生 → 原StageCall/完整阶段恢复 → 定向软件与原raw反例 → 独审 → 集中交付/新有限窗口。旧model和native_discovery字节不改，不新增兼容白名单/恢复器/队列/第二Wiki。spec已先冻结于129；root独占新增wire/policy及configuration/composition/stage/preflight/checkpoint_validation/checkpoints和相关tests。
+
+Wire模型逐段text/origin/evidence_refs；服务端按既有完整span顺序展开exact evidence及indexes，复用原v2领域投影。旧v1/v2不改；MODEL/SOURCE必须由模型明确声明，不自动重标。完整span使首次来源高亮粒度为原chunk，不能声称句级最小引文。新prompt加强后果/对象范围，只是生成约束；全部REJECT尚不在现v6独立审核scope，4个真实质量阻断不能在此直接标PASS，后续需独立disposition覆盖切片和真实结果逐项核验。
+
+RED：新wire参数旧预检不支持（9项失败）；可选admission配置旧loader extra_forbidden（1失败/6拒绝已有PASS）。先实现纯适配并22项定向GREEN，再推进新配置与worker接线。部署/provider/business本切片尚NOT RUN；旧真实窗口保持关闭。
+
+2026-09-25本切片软件收口：完整94 PASS/1 SKIP，首审两项审计命名/反例覆盖阻断修复后35 PASS（与前组重叠）、非空stage1 PASS、ruff与7源码mypy PASS；revision2独审0 BLOCKER。详见native-admission-wire-20260925.md。自动全REJECT/零成员覆盖审核仍为后续明确缺口。本轮真实GET仍epoch19，未构建/部署/调用模型。下一物理结果为单独冻结Harness-only一次构建/可逆切换、一次UI恢复、最多准入1+审核1，四个真实质量阻断需对新结果逐项验证。

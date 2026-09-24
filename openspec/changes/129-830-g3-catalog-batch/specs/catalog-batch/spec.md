@@ -388,3 +388,14 @@ root唯一写者；追加写域仅product_ingestion/checkpoint_store.py、test_c
 - 原产物、stage/job代次和raw custody证明、未知发送阻断及全policy检查保持。有效source/identity/fields和原生发现/引用继续复用，新member_contract仅重做准入；不删除旧结果、不改历史任务状态。
 - RED包含真实worker中准入失败后compilation故障的FAILED父任务，以及最终审核失败后更晚故障的恢复边界；覆盖更早产物失效优先、非FAILED摘要和旧workflow。完整worker恢复证明只有必要admission新增，不能以metadata测试替代接线。
 - 本轮已冻结的真实窗口一次UI恢复已用完，不追加点击；先完成上述离线反例/验证/独审，再单独记录后续有限交付窗口。G3.5、非空质量/点击与R4仍未完成。
+
+### G35-R5/R6：服务端证据编号准入（2026-09-24，四项质量阻断首切片）
+
+root唯一写者；继续用户已批准质量任务。既有原生候选/引用、精确source_options、严格v2投影、R6、几何定位和StageCall全部复用。缺口是模型重复抄写原文/计算offset/维护独立证据索引导致完整响应非法。新增纯wire适配，不新增发现、执行、审核或发布平台。
+
+- **G35-R5-WIRE-1**：显式wire v3及新系统模板；旧v1/v2字节语义不变。服务端按已验证source_options顺序给既有完整span分配短编号，保留Unicode/CRLF精确字节；首切片不另作分句或清洗。模型逐段返回text、origin、evidence_refs；不再独立返回evidence/offset/quote。按catalog固定顺序展开为既有v2 evidence和segment indexes，正文、决策、来源标签不得修改。重复/未知ref、MODEL带引用、SOURCE无引用、非法正文覆盖均拒绝；同一引用可被不同段使用。原始wire、context与展开后的v2及回执分别留存，继续完整strict/R6/geometry/review。该接口避免未被段使用的孤立evidence，但不能自动判断模型来源标签的语义真伪。
+- **G35-R5-WIRE-2**：top-level可选native_admission绑定仅包含protocol和完整ModelTemplatePolicy；仅依赖策略v1可启用。保留base model与native_discovery配置/哈希，派生设置仅替换exact旧admission模板，新purpose g3-native-admission-v3，连接、凭据、模型、容量继承。不改变generic replay校验。composition复用同一ConfiguredModelExecutor类，只有准入使用派生实例；旧准入请求失配，其他成功调用仍须通过原exact校验。兼容Owner=root；旧配置默认保留，后续正常配置迁移再移除旧模板，不引入policy history。
+- **G35-R5-WIRE-3**：执行回执升版，绑定protocol/template/prompt/derived policy/input/request/raw身份；旧完成阶段旧产物版本必须重验。完整discovery checkpoint复用前按当前准入配置复核回执；改变/移除override不得沿用旧完整阶段。缺失/失配fail closed，FAILED discovery恢复仍可使用原成功调用索引按exact请求选择。新协议自身后续亦可exact复用，不放宽未知调用围栏。
+- **G35-R5-WIRE-4**：新提示明确逐段SOURCE_SUPPORTED包括原文改述；补充解释独立MODEL_GENERATED。Schema比较必须保留subject/recipient/trigger/condition/exception/consequence，不能用触发条件覆盖独立后果，告知对象须完整。提示变化不是质量验收；当前v6 review只查retained dispositions，Schema误拒与对象遗漏仍BLOCKED，下一切片另冻结所有decision的disposition检查协议，不能冒称已独立覆盖全部REJECT。
+
+新增写域限product_ingestion/native_admission_wire.py、native_admission_policy.py及既有configuration.py/composition.py/native_admission_stage.py/native_admission_preflight.py/checkpoint_validation.py/checkpoints.py；相关定向tests、本Spec、原计划/任务/HANDOFF/证据。原native_admission.py领域投影不改协议。RED覆盖精确CRLF/Unicode、逐段引用和来源不自动改写、篡改catalog/context、未知/重复ref、v2语义仍严格、旧配置哈希不变/非法新模板拒绝、完整阶段恢复身份、真实worker仅准入新增。先软件/离线证据，集中交付和新有限真实窗口另记，旧窗口保持关闭。

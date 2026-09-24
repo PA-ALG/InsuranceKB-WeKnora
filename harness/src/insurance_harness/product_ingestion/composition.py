@@ -189,6 +189,7 @@ class ProductScopeServices:
     configuration: LoadedProductBinding
     platform: PlatformClient
     model_executor: ConfiguredModelExecutor
+    native_admission_executor: ConfiguredModelExecutor | None = None
 
     @property
     def scope(self) -> ProductScope:
@@ -336,6 +337,18 @@ def _services(
         ) -> ProductModelSettings:
             return binding.model
 
+        def admission_settings_provider(
+            binding: LoadedProductBinding = binding,
+        ) -> ProductModelSettings:
+            from insurance_harness.product_ingestion.native_admission_policy import (
+                resolve_admission_policy,
+            )
+
+            assert binding.native_discovery is not None
+            return resolve_admission_policy(
+                binding.model, binding.native_discovery.dependency_policy, binding.native_admission,
+            ).settings
+
         result[space_id] = ProductScopeServices(
             configuration=binding,
             platform=PlatformClient(
@@ -348,6 +361,10 @@ def _services(
             ),
             model_executor=ConfiguredModelExecutor(
                 settings_provider=settings_provider
+            ),
+            native_admission_executor=(
+                ConfiguredModelExecutor(settings_provider=admission_settings_provider)
+                if binding.native_admission is not None else None
             ),
         )
     return MappingProxyType(result)

@@ -45,6 +45,7 @@ class CheckpointFailureReason(StrEnum):
     BASE = "CHECKPOINT_BASE_INVALID"
     BASE_WORKFLOW = "CHECKPOINT_BASE_CHANGED_UNSUPPORTED_WORKFLOW"
     COMPILE_INPUT = "CHECKPOINT_COMPILE_INPUT_INVALID"
+    ADMISSION = "CHECKPOINT_ADMISSION_EXECUTION_INVALID"
     REBASE = "CHECKPOINT_REBASE_INVALID"
     RECEIPT = "CHECKPOINT_RECEIPT_INVALID"
 
@@ -192,6 +193,49 @@ async def validate_checkpoint(
                 native_discovery_policy(service.configuration),
                 saved_policy.payload if saved_policy is not None else None,
             )
+        if "discovery" in {row.stage_key for row in plan.reused_stages}:
+            from insurance_harness.product_ingestion.native_admission_policy import (
+                resolve_admission_policy,
+                validate_admission_execution,
+            )
+
+            reason = CheckpointFailureReason.ADMISSION
+            executions = {
+                r.artifact_key: r for r in plan.artifacts
+                if r.artifact_kind == "native_admission_execution"
+            }
+            contexts = [r for r in plan.artifacts if r.artifact_kind == "native_admission_context"]
+            if set(executions) != {r.artifact_key for r in contexts}:
+                raise ValueError("native admission checkpoint receipts missing")
+            if contexts:
+                native = service.configuration.native_discovery
+                if native is None:
+                    raise ValueError("native admission checkpoint policy missing")
+                admission_policy = resolve_admission_policy(
+                    service.configuration.model, native.dependency_policy,
+                    service.configuration.native_admission,
+                )
+                calls = await asyncio.to_thread(
+                    artifacts.read_checkpoint_stage_calls,
+                    scope=scope, run_id=run.run_id, stage_key="discovery",
+                )
+                for ref in contexts:
+                    saved_context = await asyncio.to_thread(
+                        artifacts.read_checkpoint_artifact, scope=scope, run_id=run.run_id,
+                        artifact_kind="native_admission_context", artifact_key=ref.artifact_key,
+                    )
+                    saved_execution = await asyncio.to_thread(
+                        artifacts.read_checkpoint_artifact, scope=scope, run_id=run.run_id,
+                        artifact_kind="native_admission_execution", artifact_key=ref.artifact_key,
+                    )
+                    execution = json.loads(saved_execution.payload)
+                    matches = [c for c in calls if c.call_id == execution.get("model_call_id")]
+                    if len(matches) != 1:
+                        raise ValueError("native admission checkpoint call ambiguous or missing")
+                    await asyncio.to_thread(
+                        validate_admission_execution,
+                        admission_policy, execution, saved_context.payload, matches[0],
+                    )
         reason = CheckpointFailureReason.REBASE
         drafts: list[ArtifactDraft] = []
         if base_changed or plan.prior_rebase_artifacts:

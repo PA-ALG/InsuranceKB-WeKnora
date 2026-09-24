@@ -109,6 +109,7 @@ def preflight_native_admission_response(
     snapshot: NativeDiscoverySnapshot,
     source: DecodedSourceSnapshot,
     context: dict[str, Any],
+    wire_protocol: str | None = None,
 ) -> NativeAdmissionPreflight:
     """Return a full strict projection or a rejection, retaining the binding audit."""
     changes: list[dict[str, Any]] = []
@@ -117,6 +118,7 @@ def preflight_native_admission_response(
     projection = None
     failure = None
     phase = "context"
+    expansion = None
     try:
         expected = render_native_admission_context(
             request=request,
@@ -135,8 +137,20 @@ def preflight_native_admission_response(
             if not isinstance(decoded, dict):
                 raise ValueError("native admission response must be an object")
             value = decoded
-            _bind_v2(value, context, changes)
+            if wire_protocol is not None:
+                from insurance_harness.product_ingestion.native_admission_wire import (
+                    WIRE_PROTOCOL,
+                    expand_wire_response,
+                )
+
+                if wire_protocol != WIRE_PROTOCOL:
+                    raise ValueError("native admission wire protocol invalid")
+                value, expansion = expand_wire_response(value, context)
+            else:
+                _bind_v2(value, context, changes)
             canonical = json_bytes(value)
+        elif wire_protocol is not None:
+            raise ValueError("native admission wire requires dependency policy")
         phase = "strict_projection"
         projection = project_native_admission_response(
             raw=canonical,
@@ -164,5 +178,6 @@ def preflight_native_admission_response(
         if projection is not None
         else ("REJECTED" if phase == "strict_projection" else "NOT_RUN"),
         "error": {"phase": phase, "detail": failure} if failure is not None else None,
+        **({"wire_expansion": expansion} if expansion is not None else {}),
     }
     return NativeAdmissionPreflight(projection, canonical, receipt, failure)

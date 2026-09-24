@@ -78,6 +78,14 @@ def _service(
                 call_id="child-call",
                 diagnostic=None,
                 policy_receipt=object(),
+                execution_receipt=SimpleNamespace(request_sha256=hashlib.sha256(json_bytes({
+                    "max_tokens": 8192,
+                    "messages": [
+                        {"content": kwargs["prompt"].decode(), "role": "system"},
+                        {"content": kwargs["content"].decode(), "role": "user"},
+                    ],
+                    "model": "gemini-3.7-flash-medium", "stream": False, "temperature": 0,
+                })).hexdigest()),
             )
 
     template = SimpleNamespace(
