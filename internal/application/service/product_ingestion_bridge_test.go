@@ -314,3 +314,55 @@ func TestProductIngestionBridgeRecoveryVersionOnlySingleDispatch(t *testing.T) {
 	require.True(t, run.CanRetryProcessing)
 	require.Equal(t, 1, calls)
 }
+
+func TestProductIngestionBridgePreservesPartialDiscoveryPublication(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "legacy", true: "partial"}[enabled], func(t *testing.T) {
+			wireRun := productBridgeSummaryRun(t)
+			summary := wireRun["discovery_summary"].(map[string]any)
+			if enabled {
+				summary["state"] = "PENDING"
+				summary["published_confirmed"] = true
+				summary["dependency_policy"] = "candidate-dependencies.830.v1"
+				summary["pending_candidate_count"] = float64(2)
+				summary["accepted_member_count"] = float64(1)
+				summary["counts"].(map[string]any)["published"] = float64(1)
+				summary["dependency_selection"] = "PRIVATE_SELECTION"
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var data any = wireRun
+				if r.URL.Path == "/product-ingestion/v1/spaces/space/runs" {
+					data = map[string]any{"runs": []any{wireRun}}
+				}
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"success": true, "data": data}))
+			}))
+			defer server.Close()
+			options := productBridgeOptions()
+			options.BaseURL = server.URL
+			bridge, err := NewProductIngestionHTTPBridge(options)
+			require.NoError(t, err)
+			one, err := bridge.GetRun(context.Background(), "run-1")
+			require.NoError(t, err)
+			listed, err := bridge.ListRuns(context.Background())
+			require.NoError(t, err)
+			require.Len(t, listed, 1)
+			for _, run := range []ProductIngestionRun{*one, listed[0]} {
+				encoded, err := json.Marshal(run)
+				require.NoError(t, err)
+				var decoded map[string]any
+				require.NoError(t, json.Unmarshal(encoded, &decoded))
+				result := decoded["discovery_summary"].(map[string]any)
+				for _, key := range []string{"dependency_policy", "pending_candidate_count", "accepted_member_count"} {
+					if enabled {
+						require.Equal(t, summary[key], result[key], key)
+					} else {
+						require.NotContains(t, result, key)
+					}
+				}
+				require.Equal(t, summary["state"], result["state"])
+				require.Equal(t, summary["published_confirmed"], result["published_confirmed"])
+				require.NotContains(t, string(encoded), "PRIVATE_")
+			}
+		})
+	}
+}

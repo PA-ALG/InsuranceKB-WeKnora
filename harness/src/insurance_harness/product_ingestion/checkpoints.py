@@ -73,6 +73,7 @@ def is_checkpoint_reusable_artifact(artifact_kind: str) -> bool:
 
 # Only declared versioned outputs gate reuse; historical payloads stay immutable.
 CURRENT_ARTIFACT_CONTRACTS = {
+    "native_dependency_selection": ("product-native_dependency_selection.v1", "1"),
     "native_discovery_policy": ("product-native_discovery_policy.v1", "1"),
     "native_discovery_plan": ("product-native_discovery_plan.v1", "1"),
     "native_candidate_snapshot": ("product-native_candidate_snapshot.v1", "1"),

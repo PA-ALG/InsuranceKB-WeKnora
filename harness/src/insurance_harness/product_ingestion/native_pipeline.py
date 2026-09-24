@@ -119,6 +119,25 @@ async def run_native_discovery_stage(
         "published": 0,
     }
     unresolved = False
+    dependency_policy = getattr(settings, "dependency_policy", None)
+    admission_groups = sum(
+        1
+        for snap in collection.snapshots
+        if snap.candidates
+        for binding in request.entity_bindings
+        if set(binding.source_material_ids) & material_sources[snap.knowledge_id]
+    )
+    isolation_enabled = bool(
+        dependency_policy
+        and collection.complete
+        and not failures
+        and not unbound
+        and admission_groups == 1
+        and len(collection.snapshots) == 1
+        and len(collection.snapshots[0].windows) == 1
+    )
+    selection = None
+    pending_count = 0
     for snapshot in collection.snapshots:
         entities = [
             b
@@ -141,6 +160,8 @@ async def run_native_discovery_stage(
                     snapshot=snapshot,
                     source=sources[snapshot.knowledge_id],
                     replay_calls=replay_calls,
+                    dependency_policy=dependency_policy,
+                    isolation_enabled=isolation_enabled,
                 )
             except (ValueError, ModelPolicyDenied) as exc:
                 failures.append(
@@ -166,6 +187,20 @@ async def run_native_discovery_stage(
                 )
                 continue
             projection = outcome.projection
+            if isolation_enabled:
+                if projection.dependency_selection is None:
+                    raise ValueError("native dependency selection missing")
+                selection = projection.dependency_selection
+                pending_count += len(projection.isolated_candidates)
+            else:
+                pending_count += (
+                    projection.dependency_unavailable_count
+                    if dependency_policy
+                    else sum(
+                        d.decision in {"PENDING", "REQUIRES_ENTITY_RESOLUTION"}
+                        for d in projection.response.decisions
+                    )
+                )
             prefix = (
                 hashlib.sha256(
                     json_bytes(
@@ -221,10 +256,10 @@ async def run_native_discovery_stage(
                     "admission_context_sha256": hashlib.sha256(projection.context).hexdigest(),
                 }
             )
+    unresolved |= pending_count > 0
     complete = collection.complete and not failures and not unbound and not unresolved
-    # The first vertical slice retains the established whole-free-group fence.
-    # Raw/provider work above survives even when a sibling prevents admission.
-    if not complete:
+    # Only a single, known dependency domain can retain an independently reviewed subset.
+    if not complete and not (isolation_enabled and selection is not None and not failures):
         definitions, pages, audit = {}, {}, {}
         dispositions, source_options = [], []
     output = CompileOutput(
@@ -290,6 +325,8 @@ async def run_native_discovery_stage(
             "unbound_material_ids": unbound,
         },
     }
+    if dependency_policy:
+        summary.update(dependency_policy=dependency_policy, pending_candidate_count=pending_count)
     candidates = {
         "contract": "product-discovery-candidates.830.v1",
         "output": output,
@@ -299,6 +336,16 @@ async def run_native_discovery_stage(
         "producer_policy": settings.policy,
         "exclusion_index_sha256": hashlib.sha256(json_bytes(indexes)).hexdigest(),
     }
+    if selection is not None:
+        candidates["dependency_selection"] = selection
+        drafts.append(
+            artifact(
+                "native_dependency_selection",
+                "product",
+                json_bytes(selection),
+                stage.dependency_sha256,
+            )
+        )
     for kind, value in (
         ("discovery_candidates", candidates),
         (

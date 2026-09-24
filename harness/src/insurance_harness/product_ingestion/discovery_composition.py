@@ -73,6 +73,7 @@ def _review_call_matches(
     context_hash: str,
     final_hash: str,
     run_id: str,
+    dependency_selection: bool,
 ) -> bool:
     from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin, StageCallState
     from insurance_harness.product_ingestion.discovery import independent_discovery_review_policy
@@ -105,7 +106,9 @@ def _review_call_matches(
         or replayed.diagnostic
         or replayed.prompt_policy_sha256
         != hashlib.sha256(
-            independent_discovery_review_policy(outcome.reviewed_output)[1]
+            independent_discovery_review_policy(
+                outcome.reviewed_output, dependency_selection=dependency_selection
+            )[1]
         ).hexdigest()
         or not replayed.raw
         or hashlib.sha256(replayed.raw).hexdigest() != replayed.raw_sha256
@@ -171,7 +174,14 @@ def compose_discovery_review(
         or outcome.review_context_sha256 != context_hash
         or outcome.review_raw_sha256 != response_hash
         or not _review_call_matches(
-            outcome, proof, response_row, proof_row, context_hash, final_hash, run_id
+            outcome,
+            proof,
+            response_row,
+            proof_row,
+            context_hash,
+            final_hash,
+            run_id,
+            context.get("contract") == "product-discovery-review-context.830.v6",
         )
         or proof.get("review") != review.model_dump(mode="json")
         or proof.get("disposition_checks")

@@ -128,12 +128,15 @@ type ProductIngestionDiscoveryCoverage struct {
 	MaterialCount int  `json:"material_count"`
 }
 type ProductIngestionDiscoverySummary struct {
-	State              string                             `json:"state"`
-	Reused             bool                               `json:"reused"`
-	ReasonCodes        []string                           `json:"reason_codes"`
-	Counts             ProductIngestionDiscoveryCounts    `json:"counts"`
-	Coverage           *ProductIngestionDiscoveryCoverage `json:"coverage"`
-	PublishedConfirmed bool                               `json:"published_confirmed"`
+	DependencyPolicy      string                             `json:"dependency_policy,omitempty"`
+	PendingCandidateCount *int                               `json:"pending_candidate_count,omitempty"`
+	AcceptedMemberCount   *int                               `json:"accepted_member_count,omitempty"`
+	State                 string                             `json:"state"`
+	Reused                bool                               `json:"reused"`
+	ReasonCodes           []string                           `json:"reason_codes"`
+	Counts                ProductIngestionDiscoveryCounts    `json:"counts"`
+	Coverage              *ProductIngestionDiscoveryCoverage `json:"coverage"`
+	PublishedConfirmed    bool                               `json:"published_confirmed"`
 }
 type productIngestionWireScope struct {
 	TenantID            string `json:"tenant_id"`

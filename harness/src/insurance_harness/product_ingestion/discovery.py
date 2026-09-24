@@ -130,8 +130,29 @@ disposition once. Return the strict review envelope, not publication authority.
 """
 
 
-def independent_discovery_review_policy(output: CompileOutput) -> tuple[str, bytes]:
+DEPENDENCY_DISCOVERY_REVIEW_PROMPT = (
+    PROVENANCE_DISCOVERY_REVIEW_PROMPT
+    + b"""
+Additionally review dependency_selection as untrusted comparison data. It contains
+all original native candidates and the complete validated admission response, even
+isolated candidates. Source references inside this envelope resolve ONLY against
+its admission_context.source_options. Check the effective dependencies and selection
+for omitted semantic prerequisites: each retained member must remain valid without
+any isolated candidate, including unknown subjects, new definitions and failed
+updates. Reject retained dispositions and the review if independence is contradicted;
+use NEEDS_HUMAN if uncertain. Do not score isolated members or authorize their release.
+Score only review_member_ids and check only the retained dispositions. The full plan
+is review context, never additional source evidence. Bind the supplied final hash.
+"""
+)
+
+
+def independent_discovery_review_policy(
+    output: CompileOutput, *, dependency_selection: bool = False
+) -> tuple[str, bytes]:
     """Select the explicitly authorized template without changing historical prompts."""
+    if dependency_selection:
+        return "g3-dependency-discovery-review", DEPENDENCY_DISCOVERY_REVIEW_PROMPT
     if any(row.content_provenance is not None for row in (*output.definitions, *output.pages)):
         return "g3-provenance-discovery-review", PROVENANCE_DISCOVERY_REVIEW_PROMPT
     return "g3-independent-discovery-review", INDEPENDENT_DISCOVERY_REVIEW_PROMPT
@@ -1541,6 +1562,7 @@ def render_independent_discovery_review_context(
         "product-discovery-review-context.830.v3",
         "product-discovery-review-context.830.v4",
         "product-discovery-review-context.830.v5",
+        "product-discovery-review-context.830.v6",
     ]
     | None = None,
 ) -> dict[str, Any]:
@@ -1554,9 +1576,12 @@ def render_independent_discovery_review_context(
         row.content_provenance is not None
         for row in (*candidate_output.definitions, *candidate_output.pages)
     )
+    selection = discovery_candidates.get("dependency_selection")
     if context_version is None:
         context_version = (
-            "product-discovery-review-context.830.v5"
+            "product-discovery-review-context.830.v6"
+            if selection is not None
+            else "product-discovery-review-context.830.v5"
             if has_provenance
             else "product-discovery-review-context.830.v4"
         )
@@ -1564,9 +1589,15 @@ def render_independent_discovery_review_context(
         "product-discovery-review-context.830.v3",
         "product-discovery-review-context.830.v4",
         "product-discovery-review-context.830.v5",
+        "product-discovery-review-context.830.v6",
     ):
         raise ValueError("unsupported discovery review context version")
-    if has_provenance and context_version != "product-discovery-review-context.830.v5":
+    if (selection is not None) != (context_version == "product-discovery-review-context.830.v6"):
+        raise ValueError("dependency selection requires discovery review v6")
+    if has_provenance and context_version not in {
+        "product-discovery-review-context.830.v5",
+        "product-discovery-review-context.830.v6",
+    }:
         raise ValueError("content provenance requires discovery review v5")
     expected_index = (
         build_discovery_exclusion_index(request, entity_id)
@@ -1589,6 +1620,14 @@ def render_independent_discovery_review_context(
         (free_page_id(FreeWikiPage.model_validate(row)), row) for row in pages
     ]
     member_ids = sorted(identity for identity, _ in members)
+    if selection is not None:
+        from insurance_harness.product_ingestion.native_dependency_selection import (
+            validate_dependency_selection,
+        )
+
+        validate_dependency_selection(
+            selection, set(member_ids), compile_request_hash_g3(request.base_request)
+        )
     final_definitions = {row.concept_id: row for row in final_composed_output.definitions}
     final_pages = {free_page_id(row): row for row in final_composed_output.pages}
     if any(
@@ -1642,7 +1681,10 @@ def render_independent_discovery_review_context(
             }
         )
     provenance_view: dict[str, Any] = {}
-    if context_version == "product-discovery-review-context.830.v5":
+    if context_version in {
+        "product-discovery-review-context.830.v5",
+        "product-discovery-review-context.830.v6",
+    }:
         from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
             free_page_content,
             verify_evidence,
@@ -1695,6 +1737,7 @@ def render_independent_discovery_review_context(
         {
             "contract": context_version,
             **provenance_view,
+            **({"dependency_selection": selection} if selection is not None else {}),
             **(
                 {"existing_knowledge": build_discovery_knowledge_view(request, entity_id)}
                 if context_version != "product-discovery-review-context.830.v3"

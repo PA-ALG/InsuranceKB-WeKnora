@@ -12,7 +12,10 @@ import pytest
 
 from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
 from insurance_harness.product_ingestion.models import ProductScope
-from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+from insurance_harness.product_ingestion.native_admission import (
+    native_admission_prompt,
+    render_native_admission_context,
+)
 from insurance_harness.product_ingestion.stages import json_bytes
 from tests.product_ingestion.test_discovery_replay_custody import _parent_call, _service
 from tests.product_ingestion.test_native_admission import context, inputs, project, response
@@ -20,11 +23,14 @@ from tests.product_ingestion.test_native_admission import context, inputs, proje
 pytest_plugins = ("tests.product_ingestion.test_discovery",)
 
 
+@pytest.mark.parametrize("dependencies", [False, True])
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "mode", ["new", "parent", "ancestor", "unknown", "bad_semantics", "changed_knowledge"]
 )
-async def test_admission_call_custody_and_failure_preservation(case: Any, mode: str) -> None:
+async def test_admission_call_custody_and_failure_preservation(
+    case: Any, mode: str, dependencies: bool
+) -> None:
     request, entity, snapshot, source = values = inputs(case)
     scope = ProductScope(
         tenant_id=str(request.base_request.tenant_id),
@@ -32,17 +38,30 @@ async def test_admission_call_custody_and_failure_preservation(case: Any, mode: 
         raw_knowledge_base_id=request.base_request.raw_kb_id,
         wiki_knowledge_base_id=request.base_request.wiki_kb_id,
     )
-    ctx = context(values)
+    policy = "candidate-dependencies.830.v1" if dependencies else None
+    prompt = native_admission_prompt(policy)
+    ctx = render_native_admission_context(
+        request=request,
+        entity_id=entity,
+        snapshot=snapshot,
+        source=source,
+        dependency_policy=policy,
+        isolation_enabled=dependencies,
+    )
     ctx["max_context_bytes"] = 300000
     content = json_bytes(ctx)
     payload = response(ctx)
+    if dependencies:
+        payload["contract"] = "native-knowledge-admission.830.v2"
+        for row in payload["decisions"]:
+            row["depends_on"] = []
     if mode == "bad_semantics":
         del payload["pages"][0]["content_provenance"]
     raw = json_bytes({"choices": [{"message": {"content": json.dumps(payload)}}]})
     service = _service(
         role="extract",
         purpose="g3-native-admission",
-        prompt=NATIVE_ADMISSION_PROMPT,
+        prompt=prompt,
         new_raw=raw if mode in {"new", "bad_semantics", "changed_knowledge"} else None,
     )
     service.configuration.model.scope = scope
@@ -50,7 +69,7 @@ async def test_admission_call_custody_and_failure_preservation(case: Any, mode: 
         stage_key="discovery",
         operation="native-admission-" + hashlib.sha256(content).hexdigest(),
         content=content,
-        prompt=NATIVE_ADMISSION_PROMPT,
+        prompt=prompt,
         raw=raw,
     )
     record.diagnostic = None
@@ -89,6 +108,8 @@ async def test_admission_call_custody_and_failure_preservation(case: Any, mode: 
         entity_id=entity,
         snapshot=snapshot,
         source=source,
+        dependency_policy=policy,
+        isolation_enabled=dependencies,
     )
     assert len(service.model_executor.calls) == (
         1 if mode in {"new", "bad_semantics", "changed_knowledge"} else 0

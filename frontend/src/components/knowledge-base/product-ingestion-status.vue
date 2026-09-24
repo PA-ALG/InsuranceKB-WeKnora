@@ -31,8 +31,18 @@ const sourceStateNames: Record<string, string> = { done: '已完成', failed: '�
 const outcomeNames = { verified: '已验证', not_provided: '材料未提供', extraction_failed: '抽取失败' }
 const count = (value?: number | null) => typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : '—'
 const discoveryNames = { NOT_EXECUTED: '未执行', FAILED: '发现失败', PENDING: '待确认', REJECTED: '未通过', EMPTY: '未发现有效新知识', ACCEPTED: '已通过检查' }
+function discoveryPending(run: ProductIngestionRun): number | undefined {
+  const summary = run.discovery_summary
+  const pending = summary?.pending_candidate_count
+  return summary?.dependency_policy === 'candidate-dependencies.830.v1'
+    && typeof pending === 'number' && Number.isInteger(pending) && pending > 0 ? pending : undefined
+}
 function discoveryPublished(run: ProductIngestionRun): boolean {
-  return run.discovery_summary?.state === 'ACCEPTED' && run.discovery_summary.published_confirmed === true
+  const summary = run.discovery_summary
+  const partial = summary?.state === 'PENDING' && discoveryPending(run) !== undefined
+    && typeof summary.counts.published === 'number' && summary.counts.published > 0
+    && summary.accepted_member_count === summary.counts.published
+  return (summary?.state === 'ACCEPTED' || partial) && summary?.published_confirmed === true
     && ['succeeded', 'partial_success'].includes(run.state) && !!run.finished_at
     && !!run.stages?.some(stage => stage.name === 'verify' && stage.state === 'succeeded' && !!stage.finished_at)
 }
@@ -207,7 +217,7 @@ onUnmounted(() => { generation++; stopTimers() })
       <p data-testid="counts">成功 {{ count(run.counts?.success_count) }} · 材料未提供 {{ count(run.counts?.missing_count) }} · 失败 {{ count(run.counts?.failure_count) }} · 模型调用 {{ count(run.model_call_count) }}<span v-if="run.model_call_count != null && run.model_call_count_complete === false">（已记录，部分阶段统计尚未齐全）</span><span v-if="run.reused_model_call_count != null"> · 复用调用 {{ count(run.reused_model_call_count) }}</span></p>
       <button type="button" data-testid="load-run-detail" :disabled="detailLoading[run.run_id]" @click="loadDetail(run)">{{ detailLoading[run.run_id] ? '正在读取…' : hasDetail(run) ? '刷新详情' : '查看详情' }}</button>
       <div data-testid="discovery-status">
-        <p><strong>Schema 外知识发现：</strong><template v-if="!hasDetail(run)">详情中查看</template><template v-else-if="discoveryPublished(run)">已发布 {{ count(run.discovery_summary?.counts.published) }} 项知识内容（页面或概念）</template><template v-else>{{ discoveryNames[run.discovery_summary?.state || 'NOT_EXECUTED'] || '发现状态待核对' }}</template><span v-if="run.discovery_summary?.reused"> · 复用已有发现结果</span></p>
+        <p><strong>Schema 外知识发现：</strong><template v-if="!hasDetail(run)">详情中查看</template><template v-else-if="discoveryPublished(run)">已发布 {{ count(run.discovery_summary?.counts.published) }} 项知识内容（页面或概念）</template><template v-else>{{ discoveryNames[run.discovery_summary?.state || 'NOT_EXECUTED'] || '发现状态待核对' }}</template><span v-if="discoveryPending(run) !== undefined"> · 另有 {{ discoveryPending(run) }} 项待处理</span><span v-if="run.discovery_summary?.reused"> · 复用已有发现结果</span></p>
         <template v-if="run.discovery_summary && run.discovery_summary.state !== 'NOT_EXECUTED'">
           <p>新发现提议 {{ count(run.discovery_summary.counts.proposed_new) }} · 已有知识重复 {{ count(run.discovery_summary.counts.duplicate) }} · 更新提议 {{ count(run.discovery_summary.counts.update_proposal) }} · 未通过 {{ count(run.discovery_summary.counts.rejected) }}</p>
           <p v-if="run.discovery_summary.coverage">材料范围 {{ count(run.discovery_summary.coverage.material_count) }} 份 · 已发送 {{ count(run.discovery_summary.coverage.offered_chars) }} 字 · 未发送 {{ count(run.discovery_summary.coverage.omitted_chars) }} 字<span v-if="!run.discovery_summary.coverage.complete">（尚有内容未完成检查）</span></p>

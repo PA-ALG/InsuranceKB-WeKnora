@@ -269,4 +269,23 @@ describe('persistent product processing status', () => {
     expect(text).toContain(verified ? '已发布 1 项知识内容（页面或概念）' : '已通过检查')
     if (!verified) expect(text).not.toContain('已发布')
   })
+  it.each(['verified', 'not_verified', 'running', 'unknown_policy', 'no_pending', 'verify_failed'])('shows partial discovery publication with pending candidates only after verification: %s', async mode => {
+    api.listProductIngestions.mockResolvedValue([run({
+      state: mode === 'running' ? 'running' : 'partial_success',
+      finished_at: mode === 'running' ? undefined : '2026-09-13T00:00:10Z',
+      stages: [{ name: 'verify', state: mode === 'verify_failed' ? 'failed' : 'succeeded', finished_at: '2026-09-13T00:00:09Z' }],
+      discovery_summary: {
+        state: 'PENDING', reused: false, published_confirmed: mode !== 'not_verified',
+        dependency_policy: mode === 'unknown_policy' ? 'unknown' : 'candidate-dependencies.830.v1',
+        pending_candidate_count: mode === 'no_pending' ? 0 : 2, accepted_member_count: 1,
+        reason_codes: ['NATIVE_CANDIDATES_ISOLATED'], coverage: null,
+        counts: { proposed_new: 2, duplicate: 0, update_proposal: 0, rejected: 0, published: mode === 'not_verified' ? 0 : 1 },
+      },
+    })])
+    const text = (await render()).get('[data-testid="discovery-status"]').text()
+    if (mode === 'verified') expect(text).toContain('已发布 1 项知识内容（页面或概念）')
+    else expect(text).not.toContain('已发布')
+    if (!['unknown_policy', 'no_pending'].includes(mode)) expect(text).toContain('另有 2 项待处理')
+  })
+
 })

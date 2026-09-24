@@ -26,8 +26,8 @@ from insurance_harness.product_ingestion.models import (
     StageSnapshot,
 )
 from insurance_harness.product_ingestion.native_admission import (
-    NATIVE_ADMISSION_PROMPT,
     NativeAdmissionProjection,
+    native_admission_prompt,
     project_native_admission_response,
     render_native_admission_context,
 )
@@ -65,6 +65,8 @@ async def run_native_admission_window(
     snapshot: NativeDiscoverySnapshot,
     source: DecodedSourceSnapshot,
     replay_calls: NativeReplayIndex | None = None,
+    dependency_policy: str | None = None,
+    isolation_enabled: bool = False,
 ) -> NativeAdmissionWindowOutcome:
     """Consume verified snapshots; stage owner persists these returned artifacts.
 
@@ -82,9 +84,8 @@ async def run_native_admission_window(
     )
     if scope != settings.scope or scope != expected_scope:
         raise ValueError("native admission execution scope mismatch")
-    template = require_discovery_template(
-        settings, "extract", "g3-native-admission", NATIVE_ADMISSION_PROMPT
-    )
+    prompt = native_admission_prompt(dependency_policy)
+    template = require_discovery_template(settings, "extract", "g3-native-admission", prompt)
     context = await asyncio.to_thread(
         render_native_admission_context,
         request=request,
@@ -92,6 +93,8 @@ async def run_native_admission_window(
         snapshot=snapshot,
         source=source,
         max_context_bytes=template.max_context_bytes,
+        dependency_policy=dependency_policy,
+        isolation_enabled=isolation_enabled,
     )
     content = json_bytes(context)
     input_hash = hashlib.sha256(content).hexdigest()
@@ -124,7 +127,7 @@ async def run_native_admission_window(
             settings=settings,
             scope=scope,
             content=content,
-            prompt=NATIVE_ADMISSION_PROMPT,
+            prompt=prompt,
             template=template,
         )
         if replayed is not None:
@@ -140,7 +143,7 @@ async def run_native_admission_window(
                 dependency_sha256=stage.dependency_sha256,
                 input_sha256=input_hash,
                 content=content,
-                prompt=NATIVE_ADMISSION_PROMPT,
+                prompt=prompt,
                 template_id=template.template_id,
             )
             if (
@@ -193,6 +196,11 @@ async def run_native_admission_window(
                     "decisions": projection.response.decisions,
                     "dispositions": projection.dispositions,
                     "locations": located.locations,
+                    **(
+                        {"dependency_selection": projection.dependency_selection}
+                        if projection.dependency_selection is not None
+                        else {}
+                    ),
                 }
             ),
         )

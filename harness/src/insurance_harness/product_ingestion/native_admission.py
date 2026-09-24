@@ -6,6 +6,7 @@ PDF locator or publication effects occur here; final review remains independent.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -70,6 +71,30 @@ Schema fields, or authorize publication. Return only the strict response envelop
 """
 
 
+NATIVE_DEPENDENCY_POLICY = "candidate-dependencies.830.v1"
+NATIVE_ADMISSION_DEPENDENCY_PROMPT = (
+    NATIVE_ADMISSION_PROMPT
+    + b"""
+For the v2 response, every decision must explicitly list depends_on candidate refs
+from this window, including an empty list for an independent candidate. Declare
+all semantic prerequisites on other candidates; do not infer that an unresolved
+entity makes unrelated knowledge unavailable. No self, duplicate or external refs.
+Shared members and page references to newly supplied definitions also create
+structural dependencies. Pending, rejected or unresolved candidates cannot satisfy
+a prerequisite. Do not hide a dependency in prose or rely on another window's new
+knowledge. The server selects a closed subset and independently reviews it.
+"""
+)
+
+
+def native_admission_prompt(dependency_policy: str | None) -> bytes:
+    if dependency_policy is None:
+        return NATIVE_ADMISSION_PROMPT
+    if dependency_policy != NATIVE_DEPENDENCY_POLICY:
+        raise ValueError("native admission dependency policy invalid")
+    return NATIVE_ADMISSION_DEPENDENCY_PROMPT
+
+
 class _Frozen(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -125,13 +150,27 @@ class NativeAdmissionResponse(_Frozen):
     decisions: tuple[NativeAdmissionDecision, ...]
 
 
+class NativeAdmissionDecisionV2(NativeAdmissionDecision):
+    depends_on: tuple[str, ...]
+
+
+class NativeAdmissionResponseV2(_Frozen):
+    contract: Literal["native-knowledge-admission.830.v2"]
+    definitions: tuple[NativeDefinition, ...]
+    pages: tuple[NativePage, ...]
+    decisions: tuple[NativeAdmissionDecisionV2, ...]
+
+
 @dataclass(frozen=True, slots=True)
 class NativeAdmissionProjection:
     output: CompileOutput
-    response: NativeAdmissionResponse
+    response: NativeAdmissionResponse | NativeAdmissionResponseV2
     dispositions: tuple[dict[str, Any], ...]
     context: bytes
     raw: bytes
+    isolated_candidates: tuple[dict[str, Any], ...] = ()
+    dependency_selection: dict[str, Any] | None = None
+    dependency_unavailable_count: int = 0
 
 
 def _window_sources(
@@ -192,7 +231,12 @@ def render_native_admission_context(
     snapshot: NativeDiscoverySnapshot,
     source: DecodedSourceSnapshot,
     max_context_bytes: int = 262144,
+    dependency_policy: str | None = None,
+    isolation_enabled: bool = False,
 ) -> dict[str, Any]:
+    native_admission_prompt(dependency_policy)
+    if type(isolation_enabled) is not bool or (isolation_enabled and dependency_policy is None):
+        raise ValueError("native admission isolation policy invalid")
     blocks = _window_sources(request, entity_id, snapshot, source)
     binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
     refs = {block.block_id: f"s{i + 1}" for i, block in enumerate(blocks)}
@@ -239,6 +283,11 @@ def render_native_admission_context(
         "response_schema": NativeAdmissionResponse.model_json_schema(),
         "max_context_bytes": max_context_bytes,
     }
+    if dependency_policy is not None:
+        value["contract"] = "native-knowledge-admission-context.830.v2"
+        value["dependency_policy"] = dependency_policy
+        value["isolation_enabled"] = isolation_enabled
+        value["response_schema"] = NativeAdmissionResponseV2.model_json_schema()
     if (
         type(max_context_bytes) is not int
         or max_context_bytes < 1
@@ -263,10 +312,16 @@ def project_native_admission_response(
         snapshot=snapshot,
         source=source,
         max_context_bytes=context["max_context_bytes"],
+        dependency_policy=context.get("dependency_policy"),
+        isolation_enabled=context.get("isolation_enabled", False),
     )
     if json_bytes(expected) != json_bytes(context):
         raise ValueError("native admission context mismatch")
-    response = NativeAdmissionResponse.model_validate(decode_model_json(raw))
+    response = (
+        NativeAdmissionResponseV2.model_validate(decode_model_json(raw))
+        if context.get("dependency_policy") is not None
+        else NativeAdmissionResponse.model_validate(decode_model_json(raw))
+    )
     rows: tuple[NativeDefinition | NativePage, ...] = (*response.definitions, *response.pages)
     by_ref = {row.member_ref: row for row in rows}
     if len(by_ref) != len(rows):
@@ -439,6 +494,56 @@ def project_native_admission_response(
             )
     if covered != set(by_ref):
         raise ValueError("native admission unbound promoted member")
+    isolated: tuple[dict[str, Any], ...] = ()
+    selection = None
+    unavailable_count = 0
+    if isinstance(response, NativeAdmissionResponseV2):
+        from insurance_harness.product_ingestion.native_dependency_selection import (
+            select_native_dependencies,
+        )
+
+        kept, isolated, edges = select_native_dependencies(response, projected)
+        unavailable_count = len(isolated)
+    if isinstance(response, NativeAdmissionResponseV2) and context["isolation_enabled"]:
+        retained_refs = {
+            ref for d in response.decisions if d.candidate_ref in kept for ref in d.member_refs
+        }
+        retained_ids = {
+            member.concept_id if isinstance(member, ConceptDefinition) else free_page_id(member)
+            for ref, member in projected.items()
+            if ref in retained_refs
+        }
+        retained_dispositions = {
+            snapshot.snapshot_sha256 + ":" + d.candidate_ref + ":" + (ref or "audit")
+            for d in response.decisions
+            if d.candidate_ref in kept
+            for ref in d.member_refs or (None,)
+        }
+        definitions = [d for d in definitions if d.concept_id in retained_ids]
+        pages = [p for p in pages if free_page_id(p) in retained_ids]
+        audit = [a for a in audit if a.key in retained_ids]
+        dispositions = [d for d in dispositions if d["candidate_id"] in retained_dispositions]
+        selection = {
+            "contract": "native-dependency-selection.830.v1",
+            "dependency_policy": NATIVE_DEPENDENCY_POLICY,
+            "request_hash": compile_request_hash_g3(request.base_request),
+            "admission_context": context,
+            "admission_context_sha256": hashlib.sha256(json_bytes(context)).hexdigest(),
+            "raw_sha256": hashlib.sha256(raw).hexdigest(),
+            "native_snapshot_sha256": snapshot.snapshot_sha256,
+            "entity_id": entity_id,
+            "windows": [row.model_dump(mode="json") for row in snapshot.windows],
+            "response": response.model_dump(mode="json"),
+            "effective_dependencies": edges,
+            "retained_candidates": sorted(kept),
+            "retained_member_refs": sorted(retained_refs),
+            "retained_member_ids": sorted(retained_ids),
+            "isolated_candidates": list(isolated),
+            "isolated_member_refs": sorted(set(projected) - retained_refs),
+        }
+        selection["selection_sha256"] = hashlib.sha256(json_bytes(selection)).hexdigest()
+    else:
+        isolated = ()
     output = CompileOutput(
         request_hash=compile_request_hash_g3(request.base_request),
         fields=(),
@@ -448,5 +553,12 @@ def project_native_admission_response(
         transformation="SYNTHESIZE" if rows else "EXTRACT",
     )
     return NativeAdmissionProjection(
-        output, response, tuple(dispositions), json_bytes(context), raw
+        output,
+        response,
+        tuple(dispositions),
+        json_bytes(context),
+        raw,
+        isolated,
+        selection,
+        unavailable_count,
     )

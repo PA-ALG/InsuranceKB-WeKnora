@@ -141,7 +141,10 @@ def _validated_independent_review(
         raise ValueError("discovery review binding mismatch")
     if set(review_output.page_scores) != set(context["review_member_ids"]):
         raise ValueError("discovery review score coverage mismatch")
-    if context.get("contract") == "product-discovery-review-context.830.v5":
+    if context.get("contract") in {
+        "product-discovery-review-context.830.v5",
+        "product-discovery-review-context.830.v6",
+    }:
         for member in context["candidate_members"]:
             if (
                 member.get("content_provenance") is not None
@@ -233,7 +236,10 @@ async def run_independent_discovery_final_review(
     if summary["candidate_member_count"]:
         try:
             settings = service.configuration.model
-            purpose, prompt = independent_discovery_review_policy(candidate_output)
+            purpose, prompt = independent_discovery_review_policy(
+                candidate_output,
+                dependency_selection=discovery_candidates.get("dependency_selection") is not None,
+            )
             template = require_discovery_template(settings, "verify", purpose, prompt)
             context = await asyncio.to_thread(
                 render_independent_discovery_review_context,

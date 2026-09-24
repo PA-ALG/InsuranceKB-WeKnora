@@ -182,14 +182,18 @@ def test_generation_replay_counts_real_parent_once_with_persisted_receipt(
     assert artifacts.get_stage_call_metrics(scope=_scope(), run_id=child.run_id) == metrics
 
 
-@pytest.mark.parametrize("provenance", [False, True])
+@pytest.mark.parametrize("provenance", [False, True, "dependency"])
 @pytest.mark.parametrize("wrong_prompt", [False, True])
 def test_review_replay_counts_real_parent_with_persisted_proof(
-    api: typing.Any, factory: typing.Any, provenance: bool, wrong_prompt: bool
+    api: typing.Any, factory: typing.Any, provenance: bool | str, wrong_prompt: bool
 ) -> None:
     context = {"final_composed_output_hash": "d" * 64}
     if provenance:
-        context["contract"] = "product-discovery-review-context.830.v5"
+        context["contract"] = (
+            "product-discovery-review-context.830.v6"
+            if provenance == "dependency"
+            else "product-discovery-review-context.830.v5"
+        )
     content = json_bytes(context)
     raw = json_bytes({"choices": []})
     parent = _record_parent_call(
@@ -199,8 +203,10 @@ def test_review_replay_counts_real_parent_with_persisted_proof(
         operation="independent-discovery-final-review-" + "d" * 64,
         context=content,
         prompt=(
-            discovery.PROVENANCE_DISCOVERY_REVIEW_PROMPT
-            if provenance != wrong_prompt
+            discovery.DEPENDENCY_DISCOVERY_REVIEW_PROMPT
+            if provenance == "dependency" and not wrong_prompt
+            else discovery.PROVENANCE_DISCOVERY_REVIEW_PROMPT
+            if bool(provenance) != wrong_prompt
             else discovery.INDEPENDENT_DISCOVERY_REVIEW_PROMPT
         ),
         raw=raw,
@@ -326,7 +332,7 @@ def test_unrelated_rule_artifact_never_counts_as_replay(
     )
 
 
-@pytest.mark.parametrize("producer", ["discovery", "admission"])
+@pytest.mark.parametrize("producer", ["discovery", "admission", "dependency"])
 @pytest.mark.parametrize("tamper", [None, "input_sha256", "raw_sha256", "model_call_id"])
 def test_native_replay_counts_only_actual_parent_custody(
     api: typing.Any,
@@ -334,14 +340,19 @@ def test_native_replay_counts_only_actual_parent_custody(
     producer: str,
     tamper: str | None,
 ) -> None:
-    from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+    from insurance_harness.product_ingestion.native_admission import native_admission_prompt
     from insurance_harness.product_ingestion.native_discovery import (
         NATIVE_DISCOVERY_EXECUTION_PROMPT,
     )
 
+    dependency = producer == "dependency"
+    if dependency:
+        producer = "admission"
     prefix = "native-" + producer
     kind = "native_" + producer
     context = {"native_snapshot_sha256": "d" * 64, "window_id": 0}
+    if dependency:
+        context["dependency_policy"] = "candidate-dependencies.830.v1"
     content = json_bytes(context)
     raw = json_bytes({"choices": []})
     operation = prefix + "-" + _digest(content)
@@ -352,7 +363,7 @@ def test_native_replay_counts_only_actual_parent_custody(
         operation=operation,
         context=content,
         prompt=(
-            NATIVE_ADMISSION_PROMPT
+            native_admission_prompt("candidate-dependencies.830.v1" if dependency else None)
             if producer == "admission"
             else NATIVE_DISCOVERY_EXECUTION_PROMPT
         ),

@@ -80,6 +80,10 @@ class _DiscoverySummary(BaseModel):
     counts: _DiscoveryCounts
     coverage: _DiscoveryCoverage | None
     accepted_member_count: int | None = Field(default=None, ge=0)
+    dependency_policy: Literal["candidate-dependencies.830.v1"] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    pending_candidate_count: int | None = Field(default=None, ge=0, exclude_if=lambda v: v is None)
 
 
 def combine_discovery_summaries(generation: bytes | None, final: bytes | None) -> bytes | None:
@@ -96,9 +100,19 @@ def combine_discovery_summaries(generation: bytes | None, final: bytes | None) -
             "REJECTED",
         }:
             return generation
+        partial = (
+            prior.get("dependency_policy") == "candidate-dependencies.830.v1"
+            and prior.get("pending_candidate_count", 0) > 0
+        )
         for key in ("state", "reason_codes", "accepted_member_count"):
             if key in reviewed:
                 prior[key] = reviewed[key]
+        if partial:
+            if reviewed.get("state") == "ACCEPTED":
+                prior["state"] = "PENDING"
+            prior["reason_codes"] = sorted(
+                set(prior.get("reason_codes", [])) | {"NATIVE_CANDIDATES_ISOLATED"}
+            )
         prior["reused"] = bool(prior.get("reused") or reviewed.get("reused"))
         return json.dumps(prior).encode()
     except (ValueError, TypeError, AttributeError):
@@ -135,7 +149,21 @@ def _discovery_summary_projection(
         if summary.accepted_member_count is not None
         else summary.counts.published
     )
-    confirmed = publication_verified and summary.state == "ACCEPTED" and published > 0
+    partial = summary.dependency_policy == "candidate-dependencies.830.v1" and bool(
+        summary.pending_candidate_count
+    )
+    if summary.dependency_policy is not None:
+        payload["accepted_member_count"] = summary.accepted_member_count or 0
+    confirmed = (
+        publication_verified
+        and (
+            summary.state == "ACCEPTED"
+            or (
+                summary.state == "PENDING" and partial and summary.accepted_member_count is not None
+            )
+        )
+        and published > 0
+    )
     payload["counts"]["published"] = published if confirmed else 0
     payload["published_confirmed"] = confirmed
     return payload

@@ -30,6 +30,9 @@ export interface ProductSourcePhase {
   occurrences: { occurrence: number; status: string; started_at_unix_ms: number; finished_at_unix_ms: number; duration_ms: number }[]
 }
 export interface ProductDiscoverySummary {
+  dependency_policy?: 'candidate-dependencies.830.v1'
+  pending_candidate_count?: number
+  accepted_member_count?: number
   state: 'NOT_EXECUTED' | 'FAILED' | 'PENDING' | 'REJECTED' | 'EMPTY' | 'ACCEPTED'
   reused: boolean
   reason_codes: string[]

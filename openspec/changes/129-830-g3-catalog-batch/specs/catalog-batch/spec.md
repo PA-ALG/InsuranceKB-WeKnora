@@ -339,3 +339,27 @@ P0-2代次选择设计重审（0设计BLOCKER后冻结）：queue row ID/到达�
 - 系统决策、policy/expiry、nonce、expected Head及private CAS数据库重读/成员检查不变；私有验证对象不能替代最终权威门禁。
 - 取消在稳定阶段边界生效，不能通过启动无人等待的goroutine假装终止；当前JSON或semantic primitive可能运行至该阶段末尾，必须如实记录该限制。检查到取消后source/projection/activation后续effects为0。
 - RED包括：取消后仍进入source/写边界；一次operation重复semantic validation；错误复用身份。另验证canonical/member逐字一致、context各阶段取消、当前权限/来源变更和validation后成员遗漏仍拒绝。真实发布仅沿P2当前有效候选；旧失败候选继续只读。
+
+### G35-R5/R6：显式候选依赖隔离首切片（2026-09-24 用户确认先R6）
+
+用户确认先隔离未决候选并验证完整流程，再接R4正式关系。root唯一写者；复用现有原生准入、StageCall、增量组合器、独立审核和唯一Release，不新建队列/表/发布权威。
+
+运行配置可显式启用dependency_policy=`candidate-dependencies.830.v1`；缺省省略该键并保持旧配置/请求语义。启用时使用显式v2准入context/response及对应新prompt身份，每条decision MUST提供depends_on（引用同窗口candidate_ref，可显式空数组）；必须完整覆盖候选，无重复、未知、自引用。旧v1不推断独立，继续原整组围栏；v1/v2响应不得跨请求投影，新prompt/context不可冒充旧raw exact复用。
+
+投影先验证完整响应的成员/身份/版本/来源合同，然后按依赖隔离：PENDING、REQUIRES_ENTITY_RESOLUTION和REJECT不能满足依赖；REFERENCE可满足只读依赖。共享同一成员的候选共同进退，引用本响应新定义的页面依赖该定义的所有提供候选；依赖闭环可整体保留，但任一节点未决则其依赖者全部隔离。裁剪后无页面使用的新定义连同其提供候选隔离，不能残留悬空引用。独立的合法候选保留；失败UPDATE不进入增量，既有组合器仍保留旧正文。原完整response/raw与逐候选隔离回执都保存，最终审核只对裁剪后的成员与对应dispositions评分，但必须只读看到完整已验证v2响应、原候选语义与有效依赖/隔离计划，检查未声明的依赖；采用独立v6审核context和新prompt身份。
+
+首条tracer仅当整次运行恰好一个完整有效admission response（单窗口、单实体依赖域）时允许候选级隔离；所有多窗口/多实体输入即使调用成功也保留整组围栏。isolation_enabled必须进入请求身份。窗口原始结果未知/响应结构不合法、来源未绑定或跨窗口同身份冲突仍保守隔离整组，不能推断未知窗口没有依赖。此限制不等于全部R6完成；跨窗口故障和审核失败后的二次最小裁剪是后续独立切片，须另冻结边界。审核仍基于裁剪后真实最终composition hash独立执行，未通过不发布，不复用裁剪前审核授权。可审核成员存在不把未决候选状态改为全部成功：用户摘要保留PENDING与隔离原因，同时保留已通过成员计数。
+
+写域：product_ingestion/native_admission.py、native_admission_stage.py、native_pipeline.py、configuration.py、discovery_replay_metrics.py、api.py、discovery.py、discovery_stage.py、discovery_composition.py、checkpoints.py及新增native_dependency_selection.py纯依赖模块；对应tests与本Spec/既有计划/证据。先记录新版依赖协议及独立候选保留的RED，再实现；模板/配置只离线准备，部署和真实质量分别验收。
+
+反例：A未决、独立B保留、依赖A的C隔离；共享定义/环、无效依赖、旧v1不放宽；失败更新保持旧页；裁剪结果与旧审核hash不匹配；未知窗口/冲突仍隔离；新协议调用记录可复用且输入改变不误复用；最终审核通过部分成员时摘要仍可见未决。
+
+隔离算法求确定性不动点：显式边、共享member原子组、页面→新定义结构边取并集；结构自身可闭环（显式候选自引用仍非法），传播失效及孤定义直到稳定，输出/原因/图稳定排序。receipt绑定policy、context/raw hash、snapshot/entity/windows、完整已验证响应、有效图、保留/隔离候选和成员及selection hash；注册native_dependency_selection版本化artifact，与discovery_candidates内同一receipt共同持久化，policy变更拒绝旧checkpoint。审核上下文读取并验证receipt身份与保留成员，完整计划变化使审核input hash变化。摘要在存在隔离项时保留PENDING与原因，accepted_member_count仅统计独立审核通过成员；发布验证前published=0，exact release验证后允许PENDING + published_confirmed + published=N并存。
+
+### G35-R6 展示纵切补齐（2026-09-24）
+
+沿用户已确认 tracer bullet/deep modules 继续推进：新后端摘要已支持 PENDING + verified partial publication，但 Go bridge 白名单丢弃 dependency_policy/pending_candidate_count/accepted_member_count，前端仅 ACCEPTED 才显示已发布，必须在部署前补齐同一纵切。
+
+唯一 Owner=root；追加写域 internal/application/service/product_ingestion_bridge.go 及对应测试，frontend/src/api/product-ingestion.ts、frontend/src/components/knowledge-base/product-ingestion-status.vue 及对应组件测试。Harness 保持唯一摘要计算责任；Go bridge 仅透传受限可选字段，不传 raw/candidate/依赖图、不重算语义状态；前端仅展示已验证发布和待处理数量，不依赖 candidate 细节或触发第二工作流。
+
+旧摘要缺省三个新字段必须维持原输出；已声明依赖策略的 PENDING 在 published_confirmed=true、终态及 verify 成功时可显示已发布数量，同时明确未决数。未验证、尚未完成、未知策略或无正数未决时不得仅凭 PENDING 显示发布。REJECTED/FAILED 仍非发布完成。RED 必须贯穿 bridge HTTP序列化和组件用户可见输出，保留旧状态/敏感字段防泄漏回归。

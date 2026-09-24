@@ -1,3 +1,17 @@
+## 2026-09-24 当前补充：真实纵切设计/展示补齐已独审，准备集中交付
+
+用户继续要求 tracer bullet/deep modules；已在原质量收口计划冻结下一条真实非空纵切，职责保持在原生候选、准入、纯依赖闭包、整次运行汇总、最终审核、唯一发布及安全摘要。发现并补齐Go桥丢R6可选计数、Vue漏显示PENDING已验证发布；HTTP RED 1失败、组件RED4失败，定向Go及组件47项GREEN，增量独审0 BLOCKER。旧Harness源码未改，两个审查manifest均保留；详见native-dependency-isolation-20260924.md追加段。
+
+实际配置比对PASS：当前API/worker配置相同；新配置仅已批准字段/准入/审核模板及Purpose/粒度/依赖策略变动，正式模型/endpoint/凭据不变。尚未构建或切换服务，Active未新GET。下一步冻结软件identity并沿已审查交付窗口执行，每类至多一次必要build，静默切换、失败回滚；真实流程仍NOT RUN。
+
+## 2026-09-24 当前：用户确认先 R6；候选依赖隔离首切片本地验证/独审完成
+
+用户已回复“可以”，确认先 R6 隔离未决候选、再验证非空完整流程、后接 R4；取代下方“尚未收到答复”。root 唯一写者，工作树仍 830-g35-knowledge-admission，基线 87f73ea1b。显式 v2 准入、纯依赖闭包、完整计划 v6 独立审核、回放身份、部分发布状态已实现并在本地验证；当前代码未提交/部署，独立代码审查 0 BLOCKER；内部回执语义重算加固记 BACKLOG，不扩大首切片。细节与证据见 docs/insurance-kb/evidence/830-g35/native-dependency-isolation-20260924.md。
+
+首切片只允许整个运行恰好一个完整 admission response 的候选级隔离；所有多窗口/多实体、未知响应和来源未绑定继续整组围栏。旧 v1 不放宽。失败 UPDATE 保留旧页；只对裁剪后的最终 composition 重新审核，审核可见完整未裁剪候选及隔离图。跨窗口最小隔离与审核失败后二次裁剪尚未实现，不能称 R6 全完成。
+
+已离线准备新版 dependency-policy 配置并校验，保留模型/连接/凭据及其他参数不变，未应用。当前 APP/UI/DocReader 460c664cf、Harness bfcf37233；本轮 provider/build/deployment/business effects 均 0，Active 未新 GET，G3.5 未完成。NEXT：冻结软件身份及回执 → 在已授权交付边界内安排集中部署/正常平台非空验收；不重复健康原生调用、不用 fixture 冒充真实质量。
+
 # 当前状态（2026-09-24 · R4复用边界已核实；正式关系需新增版本化成员合同）
 
 root沿已批准顺序核查必要实体/正式关系。独立只读核验HEAD47c0c6af6：服务三Schema仅STRUCTURE_ONLY_NOT_PUBLISHED；entity_page_graph是页面导航；原生graph/wiki link缺正式身份、版本、条件和审核/发布绑定；G2/G3 CompileOutput和Go发布重放尚无relation成员。因此R4不是薄适配，不能用现有导航边冒充完成。最小草案为已MATCH具体产品→经身份/Evidence/价值准入的险种概念关系，新增明确版本化G3 relation成员走同一Candidate/Review/Release；未命名险种不建具体产品，不默认扩保险公司Schema。详见docs/insurance-kb/evidence/830-g35/r4-capability-boundary-20260924.md。

@@ -15,12 +15,13 @@ from insurance_harness.product_ingestion.artifact_tables import (
     ProductStageModelCall,
 )
 from insurance_harness.product_ingestion.discovery import (
+    DEPENDENCY_DISCOVERY_REVIEW_PROMPT,
     INDEPENDENT_DISCOVERY_PROMPT,
     INDEPENDENT_DISCOVERY_REVIEW_PROMPT,
     PROVENANCE_DISCOVERY_REVIEW_PROMPT,
 )
 from insurance_harness.product_ingestion.models import ProductScope
-from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+from insurance_harness.product_ingestion.native_admission import native_admission_prompt
 from insurance_harness.product_ingestion.native_discovery import NATIVE_DISCOVERY_EXECUTION_PROMPT
 
 if TYPE_CHECKING:
@@ -77,10 +78,7 @@ def verified_discovery_replay_calls(
             if not _hash(input_sha) or proof.get("operation_key") != prefix + "-" + input_sha:
                 raise ValueError("native replay operation/input changed")
             operation = prefix + "-" + input_sha
-            prompt_sha = hashlib.sha256(
-                NATIVE_ADMISSION_PROMPT if admission else NATIVE_DISCOVERY_EXECUTION_PROMPT
-            ).hexdigest()
-            _matching_child_artifact(
+            native_context_row = _matching_child_artifact(
                 session,
                 scope,
                 run_id,
@@ -88,6 +86,13 @@ def verified_discovery_replay_calls(
                 marker.artifact_key,
                 input_sha,
             )
+            prompt_sha = hashlib.sha256(
+                native_admission_prompt(
+                    _object(native_context_row.payload).get("dependency_policy")
+                )
+                if admission
+                else NATIVE_DISCOVERY_EXECUTION_PROMPT
+            ).hexdigest()
             call_id = proof.get("model_call_id")
             raw_sha = proof.get("raw_sha256")
         elif marker.artifact_kind == "discovery_review_proof":
@@ -120,10 +125,13 @@ def verified_discovery_replay_calls(
                 "product-discovery-review-context.830.v3",
                 "product-discovery-review-context.830.v4",
                 "product-discovery-review-context.830.v5",
+                "product-discovery-review-context.830.v6",
             }:
                 raise ValueError("discovery replay review context contract changed")
             prompt = (
-                PROVENANCE_DISCOVERY_REVIEW_PROMPT
+                DEPENDENCY_DISCOVERY_REVIEW_PROMPT
+                if version == "product-discovery-review-context.830.v6"
+                else PROVENANCE_DISCOVERY_REVIEW_PROMPT
                 if version == "product-discovery-review-context.830.v5"
                 else INDEPENDENT_DISCOVERY_REVIEW_PROMPT
             )

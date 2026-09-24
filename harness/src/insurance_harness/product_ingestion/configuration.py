@@ -162,6 +162,9 @@ class AutomationSignerSettings(_FrozenModel):
 
 
 class NativeDiscoverySettings(_FrozenModel):
+    dependency_policy: Literal["candidate-dependencies.830.v1"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     policy: Literal["native-candidates.830.v1"]
     language: str = Field(min_length=1, max_length=100)
     granularity: Literal["focused", "standard", "exhaustive"]
@@ -191,13 +194,14 @@ class ProductScopeRuntimeSettings(_FrozenModel):
             item.public_key()
         if self.native_discovery is not None:
             from insurance_harness.product_ingestion.discovery import (
+                DEPENDENCY_DISCOVERY_REVIEW_PROMPT,
                 PROVENANCE_DISCOVERY_REVIEW_PROMPT,
             )
             from insurance_harness.product_ingestion.discovery_stage import (
                 require_discovery_template,
             )
             from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
-            from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+            from insurance_harness.product_ingestion.native_admission import native_admission_prompt
             from insurance_harness.product_ingestion.native_discovery import (
                 NATIVE_DISCOVERY_EXECUTION_PROMPT,
             )
@@ -205,7 +209,11 @@ class ProductScopeRuntimeSettings(_FrozenModel):
             try:
                 for role, purpose, prompt in (
                     ("extract", "g3-native-discovery", NATIVE_DISCOVERY_EXECUTION_PROMPT),
-                    ("extract", "g3-native-admission", NATIVE_ADMISSION_PROMPT),
+                    (
+                        "extract",
+                        "g3-native-admission",
+                        native_admission_prompt(self.native_discovery.dependency_policy),
+                    ),
                     (
                         "verify",
                         "g3-provenance-discovery-review",
@@ -213,6 +221,13 @@ class ProductScopeRuntimeSettings(_FrozenModel):
                     ),
                 ):
                     require_discovery_template(self.model, role, purpose, prompt)
+                if self.native_discovery.dependency_policy is not None:
+                    require_discovery_template(
+                        self.model,
+                        "verify",
+                        "g3-dependency-discovery-review",
+                        DEPENDENCY_DISCOVERY_REVIEW_PROMPT,
+                    )
             except ModelPolicyDenied as exc:
                 raise ValueError("native discovery model templates are missing or changed") from exc
         return self
