@@ -90,6 +90,7 @@ from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
     SourceBlock,
     verify_evidence,
 )
+from insurance_harness.knowledge_compiler.evidence_occurrences import exact_quote_occurrences
 from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import (
     SchemaPackCatalogV1,
 )
@@ -1931,20 +1932,12 @@ def _resolve_g3_d_evidence(
             raise ValueError("foreign D source reference")
         if not selection.quote:
             raise ValueError("empty D source quote")
-        starts: set[int] = set()
         search_spans = (
             ((0, len(source.text)),)
             if offered is None
             else tuple(sorted(offered.get(selection.source_ref, ())))
         )
-        for span_start, span_end in search_spans:
-            cursor = span_start
-            while True:
-                position = source.text.find(selection.quote, cursor, span_end)
-                if position < 0:
-                    break
-                starts.add(position)
-                cursor = position + 1
+        starts = exact_quote_occurrences(source.text, selection.quote, search_spans)
         if offered is None and len(starts) != 1:
             raise ValueError("D source quote must occur exactly once")
         if offered is not None and not starts:

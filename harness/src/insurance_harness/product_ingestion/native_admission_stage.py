@@ -13,6 +13,7 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
 )
 from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.checkpoints import CURRENT_ARTIFACT_CONTRACTS
 from insurance_harness.product_ingestion.discovery_stage import (
     require_discovery_template,
 )
@@ -28,8 +29,10 @@ from insurance_harness.product_ingestion.models import (
 from insurance_harness.product_ingestion.native_admission import (
     NativeAdmissionProjection,
     native_admission_prompt,
-    project_native_admission_response,
     render_native_admission_context,
+)
+from insurance_harness.product_ingestion.native_admission_preflight import (
+    preflight_native_admission_response,
 )
 from insurance_harness.product_ingestion.native_call_replay import (
     NativeReplayIndex,
@@ -110,6 +113,7 @@ async def run_native_admission_window(
                 stage.dependency_sha256,
                 origin=ArtifactOrigin.MODEL if call_id else ArtifactOrigin.RULE,
                 call_id=call_id,
+                contract_version=CURRENT_ARTIFACT_CONTRACTS.get(kind, (None, "1"))[1],
             )
         )
 
@@ -172,8 +176,8 @@ async def run_native_admission_window(
         )
         decoded = ConfiguredFieldTransport.decode_response(raw)
         keep("native_admission_response", decoded, call_id=call_id if replayed is None else None)
-        projection = await asyncio.to_thread(
-            project_native_admission_response,
+        preflight = await asyncio.to_thread(
+            preflight_native_admission_response,
             raw=decoded,
             request=request,
             entity_id=entity_id,
@@ -181,6 +185,11 @@ async def run_native_admission_window(
             source=source,
             context=context,
         )
+        keep("native_admission_preflight", json_bytes(preflight.receipt))
+        keep("native_admission_canonical_response", preflight.canonical)
+        if preflight.projection is None:
+            raise ValueError(preflight.failure or "native admission preflight rejected")
+        projection = preflight.projection
         located = await asyncio.to_thread(
             locate_native_evidence,
             projection.output,
@@ -191,7 +200,8 @@ async def run_native_admission_window(
             "native_admission_projection",
             json_bytes(
                 {
-                    "contract": "native-admission-projection.830.v1",
+                    "contract": "native-admission-projection.830.v2",
+                    "preflight_sha256": hashlib.sha256(json_bytes(preflight.receipt)).hexdigest(),
                     "output": projection.output,
                     "decisions": projection.response.decisions,
                     "dispositions": projection.dispositions,

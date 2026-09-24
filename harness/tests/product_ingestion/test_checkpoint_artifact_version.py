@@ -228,3 +228,36 @@ def test_current_candidate_keeps_successful_compilation_and_legacy_order(
             r.artifact_kind == "preparation" and r.stage_key == "compilation"
             for r in plan.artifacts
         )
+
+
+def test_old_native_projection_resumes_discovery_and_keeps_completed_extraction(
+    api: typing.Any,
+    factory: typing.Any,
+) -> None:
+    scope, store, origin, _ = _metadata_origin(
+        api,
+        factory,
+        workflow=3,
+        candidate_contract=("product-candidate.v2", "2"),
+        failed_stage="publish",
+    )
+    with factory() as session, session.begin():
+        row = session.scalar(
+            select(ProductArtifact).where(
+                ProductArtifact.run_id == origin.run_id,
+                ProductArtifact.artifact_kind == "discovery_candidates",
+            )
+        )
+        values = {c.name: getattr(row, c.name) for c in ProductArtifact.__table__.columns}
+        values.update(
+            id=str(uuid4()),
+            artifact_kind="native_admission_projection",
+            contract_name="product-native_admission_projection.v1",
+            contract_version="1",
+        )
+        session.add(ProductArtifact(**values))
+    with factory() as session:
+        plan = store._checkpoint_candidate(session, scope, session.get(ProductRun, origin.run_id))
+    assert plan.resume_stage == "discovery"
+    assert tuple(row.stage_key for row in plan.reused_stages) == stage_order(3)[:7]
+    assert any(row.artifact_kind == "compile_delta" for row in plan.artifacts)

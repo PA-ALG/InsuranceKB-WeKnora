@@ -1,3 +1,15 @@
+## 2026-09-24 当前：准入预检软件通过；同策略最小恢复已验证，待最终独审/交付
+
+root沿既定tracer/deep modules实现native admission纯预检、原raw/RULE审计、完整strict/R6/geometry及projection v2；只允许v2唯一逐字offset和无歧义概念引用归位，孤定义继续拒绝。场景说明集中到版本化member_contract上下文：独立概念页、页面使用的术语定义、保险条件/例外/公式及来源标志。
+
+系统prompt、模板与完整旧runtime配置保持原值；原“修改系统模板导致全局策略失效”的方案已撤销，未应用配置、不放宽任何身份检查。旧runtime SHA624e393d…校验PASS，原native policy相同；持久worker恢复验证来源/身份/字段调用不变，原生发现/引用6次复用，仅准入新增1次。旧raw不能充当新context响应；真实raw离线5处归位仍孤定义拒绝。原144项定向/集成PASS，新恢复纵切1 PASS；最终变更独审待关闭。
+
+NEXT：冻结软件后只交付受影响Harness组件，复用配置和APP/UI/DocReader；正常网页恢复原任务并事前冻结最小新调用窗口，失败即停。当前模型/业务/构建/部署新增均0，运行仍37ae768ba，本轮未新GET Active；完整质量/点击/非空发布和G3.5尚未通过。
+
+见[预检及恢复证据](docs/insurance-kb/evidence/830-g35/native-admission-preflight-20260924.md)。root唯一写者，私密证据insurancekb-private-evidence/g35-preflight-20260924。
+
+以下为历史状态。
+
 ## 2026-09-24 当前：R6已交付，首条真实纵切失败；完整准入边界设计已记录
 
 源码37ae768ba3392d49ae389c5754f283d9a802e6d5的APP/Harness/UI各构建一次并可逆交付PASS，DocReader保持460c664cf；旧制品保留，无migration。正常网页同账号、同说明书任务33dd1349-e821-4d9c-b712-171e4fcb566c于10:53:01Z开始、12:33:48Z失败；13:51:29Z只读GET正式Active仍epoch17/release-b8d07e76-da52-4446-9c37-fb6f8a1cb2d6，没有新发布。DELIVERY PASS不能推导BUSINESS PASS。

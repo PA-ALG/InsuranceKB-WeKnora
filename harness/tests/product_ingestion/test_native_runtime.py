@@ -266,3 +266,139 @@ async def test_three_generation_native_recovery_keeps_original_calls_and_update_
         await runtime.close()
         await client.aclose()
         engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from insurance_harness.product_ingestion import native_admission_stage
+    from insurance_harness.product_ingestion.discovery import DEPENDENCY_DISCOVERY_REVIEW_PROMPT
+
+    base, parent = _base_snapshot_with_navigation()
+    settings = native_settings(tmp_path, parent)
+    data = json.loads(settings.product_ingestion_runtime_json.get_secret_value())
+    binding = data["bindings"][0]
+    binding["native_discovery"]["dependency_policy"] = "candidate-dependencies.830.v1"
+    for template in binding["model"]["templates"]:
+        if template["purpose"] == "g3-native-admission":
+            # Approved v2 system prompt from 37ae768ba; context guidance must not
+            # silently require a new global policy or repeat successful work.
+            template["prompt_sha256"] = (
+                "1c051df03d2a7753213eb1829becf894ddcb054c30688eed217ccd6afd07c965"
+            )
+    binding["model"]["templates"].append(
+        dict(
+            template_id="g3-dependency-discovery-review",
+            role="verify",
+            purpose="g3-dependency-discovery-review",
+            run_schema_version="830-g3-v1",
+            prompt_sha256=_sha(DEPENDENCY_DISCOVERY_REVIEW_PROMPT),
+            max_context_bytes=8 * 1024 * 1024,
+            max_output_tokens=8192,
+        )
+    )
+    settings = settings.model_copy(
+        update={
+            "product_ingestion_runtime_json": SecretStr(_json(data).decode()),
+        }
+    )
+
+    class MemberModel(NativeModel):
+        def __call__(self, request: httpx.Request) -> httpx.Response:
+            envelope = json.loads(request.content)
+            content = json.loads(envelope["messages"][-1]["content"])
+            if content.get("contract") == "native-knowledge-admission-context.830.v2":
+                self.admission_requests.append(content)
+                semantic = {
+                    "contract": "native-knowledge-admission.830.v2",
+                    "definitions": [],
+                    "pages": [],
+                    "decisions": [
+                        {
+                            "candidate_ref": row["candidate_ref"],
+                            "decision": "REJECT",
+                            "member_refs": [],
+                            "existing_target": None,
+                            "reason": "无独立用途",
+                            "depends_on": [],
+                        }
+                        for row in content["native_candidates"]
+                    ],
+                }
+                return httpx.Response(
+                    200, json={"choices": [{"message": {"content": _json(semantic).decode()}}]}
+                )
+            return super().__call__(request)
+
+    engine = _sqlite_engine(tmp_path / "member-guidance.db")
+    Base.metadata.create_all(engine)
+    factory = make_session_factory(engine)
+    jobs = JobStore(factory, settings.job_runtime_config())
+    platform, model, native = FixturePlatform(base), MemberModel(), NativePort()
+    runtime, context, client = await _compose(settings, factory, platform, model)
+    context.bindings[SCOPE.space_id].platform.native_discovery = native
+    current_render = native_admission_stage.render_native_admission_context
+
+    def previous_context(**kwargs: Any) -> Any:
+        value = current_render(**kwargs)
+        value.pop("member_contract", None)
+        return value
+
+    try:
+        # A recorded response from the old input survives a failed discovery.
+        # The current strict projector rejects the old context; no permissive
+        # production path or business result is fabricated for this fixture.
+        monkeypatch.setattr(
+            native_admission_stage, "render_native_admission_context", previous_context
+        )
+        origin = context.store.create_run(
+            scope=SCOPE, idempotency_key="member-old", expected_upload_count=3
+        )
+        admit_uploads(context.store, SCOPE, origin.run_id)
+        first = await _finish(runtime, context, jobs, origin.run_id)
+        assert first.state is ProductRunState.PARTIAL_SUCCESS, (
+            first.terminal_reason,
+            runtime.issues,
+        )
+        assert len(model.native_requests) == 6 and len(model.admission_requests) == 1
+        counts = (platform.source_captures, len(model.identity_requests), len(model.field_requests))
+        monkeypatch.setattr(
+            native_admission_stage, "render_native_admission_context", current_render
+        )
+        native.fail = False
+        child = context.store.retry_processing(
+            scope=SCOPE, run_id=origin.run_id, expected_version=first.version
+        )
+        second = await _finish(runtime, context, jobs, child.run_id)
+        assert second.state in {ProductRunState.SUCCEEDED, ProductRunState.PARTIAL_SUCCESS}, (
+            second.terminal_reason,
+            runtime.issues,
+        )
+        assert counts == (
+            platform.source_captures,
+            len(model.identity_requests),
+            len(model.field_requests),
+        )
+        assert len(model.native_requests) == 6
+        assert len(model.admission_requests) == 2
+        assert "member_contract" not in model.admission_requests[0]
+        assert "member_contract" in model.admission_requests[1]
+        calls = context.artifacts.list_stage_calls(scope=SCOPE, run_id=child.run_id)
+        discovery_calls = [c for c in calls if c.stage_key == "discovery"]
+        assert len(discovery_calls) == 1
+        new = discovery_calls[0]
+        assert new.operation_key.startswith("native-admission-")
+        assert new.request_sha256 == _sha(new.request_bytes)
+        assert new.raw_sha256 == _sha(new.raw)
+        assert new.input_sha256 == _sha(_json(model.admission_requests[1]))
+        receipts = context.artifacts.list_effective_artifacts(
+            scope=SCOPE, run_id=child.run_id, artifact_kind="native_discovery_execution"
+        )
+        assert len(receipts) == 6
+        assert {json.loads(r.payload)["replayed_from_run_id"] for r in receipts} == {origin.run_id}
+    finally:
+        await runtime.close()
+        await client.aclose()
+        engine.dispose()

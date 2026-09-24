@@ -26,11 +26,22 @@ pytest_plugins = ("tests.product_ingestion.test_discovery",)
 @pytest.mark.parametrize("dependencies", [False, True])
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "mode", ["new", "parent", "ancestor", "unknown", "bad_semantics", "changed_knowledge"]
+    "mode",
+    [
+        "new",
+        "parent",
+        "ancestor",
+        "unknown",
+        "bad_semantics",
+        "changed_knowledge",
+        "changed_contract",
+    ],
 )
 async def test_admission_call_custody_and_failure_preservation(
     case: Any, mode: str, dependencies: bool
 ) -> None:
+    if mode == "changed_contract" and not dependencies:
+        pytest.skip("member contract guidance is v2 only")
     request, entity, snapshot, source = values = inputs(case)
     scope = ProductScope(
         tenant_id=str(request.base_request.tenant_id),
@@ -62,13 +73,20 @@ async def test_admission_call_custody_and_failure_preservation(
         role="extract",
         purpose="g3-native-admission",
         prompt=prompt,
-        new_raw=raw if mode in {"new", "bad_semantics", "changed_knowledge"} else None,
+        new_raw=raw
+        if mode in {"new", "bad_semantics", "changed_knowledge", "changed_contract"}
+        else None,
     )
     service.configuration.model.scope = scope
+    recorded_content = content
+    if mode == "changed_contract":
+        old_context = dict(ctx)
+        old_context.pop("member_contract", None)
+        recorded_content = json_bytes(old_context)
     record = _parent_call(
         stage_key="discovery",
-        operation="native-admission-" + hashlib.sha256(content).hexdigest(),
-        content=content,
+        operation="native-admission-" + hashlib.sha256(recorded_content).hexdigest(),
+        content=recorded_content,
         prompt=prompt,
         raw=raw,
     )
@@ -78,7 +96,9 @@ async def test_admission_call_custody_and_failure_preservation(
     if mode == "unknown":
         record.state = "interrupted"
         record.raw = None
-    records = [record] if mode in {"parent", "unknown", "changed_knowledge"} else []
+    records = (
+        [record] if mode in {"parent", "unknown", "changed_knowledge", "changed_contract"} else []
+    )
     if mode == "changed_knowledge":
         existing = project(values, context(values), response(context(values))).output.pages[0]
         existing = existing.model_copy(update={"stable_key": "existing-guide"})
@@ -112,10 +132,10 @@ async def test_admission_call_custody_and_failure_preservation(
         isolation_enabled=dependencies,
     )
     assert len(service.model_executor.calls) == (
-        1 if mode in {"new", "bad_semantics", "changed_knowledge"} else 0
+        1 if mode in {"new", "bad_semantics", "changed_knowledge", "changed_contract"} else 0
     )
     assert (outcome.projection is not None) == (
-        mode in {"new", "parent", "ancestor", "changed_knowledge"}
+        mode in {"new", "parent", "ancestor", "changed_knowledge", "changed_contract"}
     )
     assert bool(outcome.failure) == (mode in {"unknown", "bad_semantics"})
     drafts = {row.artifact_kind: row for row in outcome.drafts}
@@ -135,3 +155,141 @@ async def test_admission_call_custody_and_failure_preservation(
         assert proof["replayed_from_run_id"] == (
             "ancestor-run" if mode == "ancestor" else "parent-run" if mode == "parent" else None
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["offset", "reference", "orphan"])
+async def test_preflight_preserves_raw_and_audits_full_projection(case: Any, fault: str) -> None:
+    from copy import deepcopy
+
+    request, entity, snapshot, source = inputs(case)
+    source = _with_geometry(source)
+    policy = "candidate-dependencies.830.v1"
+    ctx = render_native_admission_context(
+        request=request,
+        entity_id=entity,
+        snapshot=snapshot,
+        source=source,
+        dependency_policy=policy,
+        isolation_enabled=True,
+        max_context_bytes=300000,
+    )
+    payload = response(ctx, supported=True)
+    payload["contract"] = "native-knowledge-admission.830.v2"
+    payload["decisions"][0]["depends_on"] = []
+    page = payload["pages"][0]
+    page["evidence"][0]["start"] = 1
+    if fault != "offset":
+        definition = deepcopy(page)
+        for key in ("stable_key", "concept_refs", "conditions", "exceptions", "valid_time"):
+            del definition[key]
+        definition.update(member_ref="d1", canonical_key="reading", sense_key="guide", aliases=[])
+        payload["definitions"] = [definition]
+        payload["decisions"][0]["member_refs"].append("d1")
+        page["concept_refs"] = [] if fault == "orphan" else ["reading"]
+    decoded = json_bytes(payload)
+    raw = json_bytes({"choices": [{"message": {"content": decoded.decode()}}]})
+    prompt = native_admission_prompt(policy)
+    service = _service(role="extract", purpose="g3-native-admission", prompt=prompt, new_raw=None)
+    scope = ProductScope(
+        tenant_id=str(request.base_request.tenant_id),
+        space_id=request.base_request.space_id,
+        raw_knowledge_base_id=request.base_request.raw_kb_id,
+        wiki_knowledge_base_id=request.base_request.wiki_kb_id,
+    )
+    service.configuration.model.scope = scope
+    content = json_bytes(ctx)
+    record = _parent_call(
+        stage_key="discovery",
+        operation="native-admission-" + hashlib.sha256(content).hexdigest(),
+        content=content,
+        prompt=prompt,
+        raw=raw,
+    )
+    record.diagnostic = None
+    module = importlib.import_module("insurance_harness.product_ingestion.native_admission_stage")
+    outcome = await module.run_native_admission_window(
+        service=service,
+        artifacts=SimpleNamespace(
+            list_stage_calls=lambda **kw: [record], read_checkpoint_stage_calls=lambda **kw: []
+        ),
+        scope=scope,
+        run=SimpleNamespace(run_id="child", retry_of_run_id="parent-run"),
+        stage=SimpleNamespace(dependency_sha256="f" * 64),
+        job=SimpleNamespace(),
+        request=request,
+        entity_id=entity,
+        snapshot=snapshot,
+        source=source,
+        dependency_policy=policy,
+        isolation_enabled=True,
+    )
+    assert service.model_executor.calls == []
+    assert (outcome.projection is not None) == (fault != "orphan")
+    drafts = {row.artifact_kind: row for row in outcome.drafts}
+    assert json.loads(drafts["native_admission_response"].payload) == payload
+    audit = drafts["native_admission_preflight"]
+    assert audit.origin == ArtifactOrigin.RULE and audit.origin_call_id is None
+    receipt = json.loads(audit.payload)
+    assert (
+        receipt["original_sha256"]
+        == hashlib.sha256(drafts["native_admission_response"].payload).hexdigest()
+    )
+    assert receipt["status"] == ("REJECTED" if fault == "orphan" else "PASS")
+    assert len(receipt["changes"]) == {"offset": 1, "reference": 3, "orphan": 2}[fault]
+    if fault == "orphan":
+        assert "definition lacks page use" in outcome.failure
+        assert "native_admission_projection" not in drafts
+    else:
+        assert drafts["native_admission_projection"].contract_version == "2"
+        canonical = drafts["native_admission_canonical_response"]
+        assert canonical.origin == ArtifactOrigin.RULE
+        assert receipt["canonical_sha256"] == hashlib.sha256(canonical.payload).hexdigest()
+        assert outcome.projection.output.pages[0].evidence[0].start == 0
+
+
+def _with_geometry(source: Any) -> Any:
+    """Attach complete fixture geometry so the test crosses the real locator."""
+    from dataclasses import replace
+
+    block = source.blocks[0]
+    text = block.text
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    page = {
+        "page_number": 1,
+        "global_codepoint_start": 0,
+        "global_codepoint_end": len(text),
+        "page_text_sha256": digest,
+        "width_points": "100",
+        "height_points": "200",
+        "bboxes": [
+            {
+                "global_codepoint_start": i,
+                "global_codepoint_end": i + 1,
+                "bbox": [1000, 2000, 3000, 4000],
+            }
+            for i, ch in enumerate(text)
+            if not ch.isspace()
+        ],
+    }
+    native = {
+        "source_sha256": digest,
+        "markdown_sha256": digest,
+        "parser_identity_sha256": "b" * 64,
+        "pages": [page],
+    }
+    body = {
+        **source.snapshot,
+        "receipt": {**source.snapshot["receipt"], "file_sha256": digest},
+        "markdown": text,
+        "parser_identity_sha256": "b" * 64,
+        "chunk_page_mappings": [
+            {
+                "chunk_id": block.block_id,
+                "status": "EXACT_BLOCK",
+                "block_global_start": 0,
+                "page_spans": [page],
+            }
+        ],
+    }
+    return replace(source, snapshot=body, native_bytes=json_bytes(native))

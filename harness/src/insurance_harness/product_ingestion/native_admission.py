@@ -288,6 +288,24 @@ def render_native_admission_context(
         value["dependency_policy"] = dependency_policy
         value["isolation_enabled"] = isolation_enabled
         value["response_schema"] = NativeAdmissionResponseV2.model_json_schema()
+        value["member_contract"] = {
+            "contract": "native-admission-member-guidance.830.v1",
+            "pages": "Independently useful concepts, rules and explanations become Wiki pages.",
+            "definitions": "Terminology definitions, each used by at least one supplied page.",
+            "concept_refs": "Use a definition member_ref or an offered existing concept_id; "
+            "never a canonical_key. Empty is valid when no definition is needed.",
+            "coverage_rules": [
+                "Preserve rights, duties, recipients, time limits, conditions, exceptions, "
+                "formulas and illustration limitations for each useful supplied candidate.",
+                "Never target a fixed page count or drop source-supported detail "
+                "to shorten output.",
+                "Separate model explanations from source-supported claims with content_provenance.",
+            ],
+            "reference_example": {
+                "definition": {"member_ref": "d1", "canonical_key": "example_term"},
+                "page": {"concept_refs": ["d1"]},
+            },
+        }
     if (
         type(max_context_bytes) is not int
         or max_context_bytes < 1

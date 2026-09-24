@@ -211,3 +211,11 @@ P0-3实施收窄（2026-09-24）：实际只读A/B为18.214/25.044秒，不足�
 5. 宿主合盖不改产品租约机制；下一真实窗口选择机器持续运行的时段。不要声称普通防空闲命令能解决合盖休眠。使用正常恢复入口，未知发送不盲重发。
 
 本段是根因驱动的后续设计，尚未写上述preflight实现/RED，也没有执行新的模型调用/构建/部署。9个孤定义证明“仅offset修复即可跑通”不成立，须先关闭完整输出合同再推进真实纵切。R4及跨窗口R6仍未完成。
+
+## 准入预检与同策略恢复切片结果（2026-09-24）
+
+已先Spec/RED后实现纯预检、完整strict/geometry串接、projection v2和v2保险场景member_contract；首次92 PASS/1有意v1skip，加集成52 PASS。真实raw经5处机械归位仍孤定义失败。详见`docs/insurance-kb/evidence/830-g35/native-admission-preflight-20260924.md`。本段取代前文“尚未写preflight/RED”的状态。
+
+发现修改system prompt/template会改变全局模型策略并拒绝成功调用复用。经独立设计复核，撤销该方案：新增成员职责/引用规则仅作为服务端版本化context，保持系统prompt、模板和完整运行配置原值；只改变准入input/operation。无需跨策略兼容，不删global hash。完整旧配置离线校验、原native policy一致、实际旧请求兼容检查PASS；新增持久worker恢复1 PASS：source/identity/field计数不变，6次原生发现/引用全部复用，仅1次新准入。它是本地恢复接线证据，未执行真实供应商恢复。
+
+CURRENT=最终变更独审/冻结；NEXT_READY=仅Harness必要制品交付，复用现有配置和其它组件；随后正常网页恢复原任务并事前冻结必要调用预算，失败停止。当前新build/deploy/provider/business均0，真实质量/点击/非空发布、R4和完整G3.5未完成。不得部署先前废弃的新模板配置。

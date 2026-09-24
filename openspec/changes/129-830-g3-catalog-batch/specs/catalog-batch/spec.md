@@ -363,3 +363,17 @@ P0-2代次选择设计重审（0设计BLOCKER后冻结）：queue row ID/到达�
 唯一 Owner=root；追加写域 internal/application/service/product_ingestion_bridge.go 及对应测试，frontend/src/api/product-ingestion.ts、frontend/src/components/knowledge-base/product-ingestion-status.vue 及对应组件测试。Harness 保持唯一摘要计算责任；Go bridge 仅透传受限可选字段，不传 raw/candidate/依赖图、不重算语义状态；前端仅展示已验证发布和待处理数量，不依赖 candidate 细节或触发第二工作流。
 
 旧摘要缺省三个新字段必须维持原输出；已声明依赖策略的 PENDING 在 published_confirmed=true、终态及 verify 成功时可显示已发布数量，同时明确未决数。未验证、尚未完成、未知策略或无正数未决时不得仅凭 PENDING 显示发布。REJECTED/FAILED 仍非发布完成。RED 必须贯穿 bridge HTTP序列化和组件用户可见输出，保留旧状态/敏感字段防泄漏回归。
+
+### G35-R5/R6：原生准入确定性预检（2026-09-24 真实失败回执驱动）
+
+root唯一写者。按已批准质量计划，继续单材料tracer：当前真实raw的三层结构错误必须完整识别，不能以修正offset宣称业务通过。复用原生发现/StageCall及严格投影、既有定位和唯一发布。新增纯native admission preflight不做I/O、不调用模型、不授权发布；阶段适配器只持久记录与调用。写域为product_ingestion/native_admission_preflight.py（新增）、native_admission_stage.py、checkpoints.py及对应测试；共享精确匹配原语仅涉及knowledge_compiler/evidence_occurrences.py（新增）和g3_bounded_model_execution.py既有枚举循环。场景提示澄清位于native_admission.py的v2服务端member_contract上下文，系统prompt/template/完整配置保持原值，通过新context输入身份与旧raw区分。本Spec/计划/HANDOFF/既有证据允许对应状态记录。
+
+- 输入为原始decoded响应和绑定的request/context/snapshot/source。仅v2允许确定性归位：正确start原样保留；错误start仅当同一source_ref的offered span内quote逐字唯一出现时修正。Unicode按Python码点，保留CRLF/emoji；零/多命中、空白归一化、模糊匹配或跨源推断均拒绝。共享原语只枚举精确occurrence，D字段保留原有多命中策略。
+- concept_refs只允许既有合法identity或本响应definition.member_ref；错填canonical_key时，必须逐字唯一指向一个definition，且不与既有identity/任何member_ref冲突才归位。不得改正文、provenance、decisions、候选/成员集合或自动造页/删孤定义。重复canonical_key（不同sense）不可猜测。旧v1完全保持严格原行为。
+- 原provider raw、native_admission_response和调用身份不可变。RULE预检回执记录版本、原始/归位raw及context/source/snapshot hash、JSON pointer旧/新值、原因、quote hash/命中数、strict projection成功或结构化失败。只有完整严格投影（含R6闭包）通过才输出投影；几何定位保持其后原门禁。归位后的字节保存在独立RULE产物，与原始MODEL产物分离；任何失败仍保存审计但无projection。
+- native_admission_projection派生产物升版，旧完成阶段因旧投影版本必须重新预检；原调用请求/模板不变时记录可复用，未知仍不重发。升级不得使身份/字段/来源成功步骤一并失效。提示/schema改变必须单独改变模型请求身份，不能假称同raw可响应新提示。
+- RED涵盖两类归位贯穿真实stage journal；v1拒绝、Unicode/重叠/正确offset重复quote、0/多命中/外源/篡改context、引用碰撞/重复sense、孤定义保持失败、原始响应及回执不可变、旧投影截断但成功模型raw保持可恢复。真实失败raw离线预检必须最终停在孤定义；没有最终审核/发布即BUSINESS仍BLOCKED。
+
+本切片同时澄清v2成员生成合同：response context新增版本化member_contract（独立概念以有用Wiki page承接；definitions仅为至少一个页面使用的术语义项；concept_refs用member_ref/现有concept_id及最小样例；无新定义可合法空引用）。该显式输入改变必须使operation/input SHA变化，旧准入raw不能作为新场景输入的输出复用；来源/原生候选调用身份不变。v1提示与context保持字节语义。新增changed_contract RED已观察旧实现把旧上下文响应复用而没有执行新请求；实现后只允许新准入响应，不能扩大为整文件重算。完整运行配置与系统模板SHA/id保持不变；此前修改系统模板的方案已由下段收窄设计取代。
+
+预检切片设计收窄（同日独立设计复核后，取代上段system prompt/模板变更方案）：成员职责、保险覆盖及引用样例全部放入服务端生成的版本化member_contract上下文；保持既有v2 system prompt、template ID/SHA和完整运行配置不变。变化只进入admission context/input/operation身份，旧admission raw不能命中新输入，其他阶段仍按原完整policy与请求验证复用。无需跨策略兼容或policy history，不删除任何既有校验。写域追加test_native_runtime.py，用真实完整配置和持久worker恢复验证来源/身份/字段/发现/引用调用计数不增加、仅新admission增加1；旧成功/未知/过期调用保持既有规则。先观察当前system prompt改动拒绝已批准配置的RED，再移回场景上下文；该软件恢复纵切不等同于真实模型质量。
