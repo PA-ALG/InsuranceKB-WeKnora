@@ -100,6 +100,8 @@ P0-1→P0-2→P1-1提供可信对照；P0-3的只读/离线诊断可独立推进
 
 ## Task P1-3：必要实体与正式业务关系（R4）
 
+2026-09-24只读边界复核：既有服务Schema只有结构定义，实体页面图/原生graph/wiki link没有正式关系发布合同。R4需新增明确版本化的Candidate relation成员贯穿既有审核、Go重放和读取；不能视为薄接线。推荐最小产品→险种概念切片见`docs/insurance-kb/evidence/830-g35/r4-capability-boundary-20260924.md`；此为草案，未冻结生产接口。已询问是否先R6及非空完整流程，未收到答复前不记录执行顺序已改变。
+
 **复用入口：** `harness/src/insurance_harness/knowledge_compiler/service_schema_catalog_830_g3.py`、`batch_concept_compile_830_g3.py`、`harness/tests/test_service_schema_catalog_830_g3.py`及既有实体图/关系合同。
 
 - [ ] 将原生实体候选分清：已存在实体、确有独立身份的新实体、普通类别/概念。未命名“提前给付型重疾险”不能凭空建一个具体产品。
