@@ -9,7 +9,10 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin, StageCallState
+from insurance_harness.product_ingestion.artifact_models import (
+    ArtifactOrigin,
+    StageCallState,
+)
 from insurance_harness.product_ingestion.artifact_tables import (
     ProductArtifact,
     ProductStageModelCall,
@@ -22,7 +25,13 @@ from insurance_harness.product_ingestion.discovery import (
 )
 from insurance_harness.product_ingestion.models import ProductScope
 from insurance_harness.product_ingestion.native_admission import native_admission_prompt
-from insurance_harness.product_ingestion.native_discovery import NATIVE_DISCOVERY_EXECUTION_PROMPT
+from insurance_harness.product_ingestion.native_admission_wire import (
+    WIRE_PROMPT,
+    WIRE_PROTOCOL,
+)
+from insurance_harness.product_ingestion.native_discovery import (
+    NATIVE_DISCOVERY_EXECUTION_PROMPT,
+)
 
 if TYPE_CHECKING:
     from insurance_harness.product_ingestion.store import ProductIngestionStore
@@ -64,7 +73,11 @@ def verified_discovery_replay_calls(
         ancestor_id = ancestor.retry_of_run_id
     calls: dict[str, ProductStageModelCall] = {}
     for marker in markers:
-        if marker.artifact_kind in {"native_discovery_execution", "native_admission_execution"}:
+        admission_v2 = False
+        if marker.artifact_kind in {
+            "native_discovery_execution",
+            "native_admission_execution",
+        }:
             _verify_replay_marker(marker, stage_key="discovery")
             proof = _object(marker.payload)
             source_run = proof.get("replayed_from_run_id")
@@ -72,10 +85,20 @@ def verified_discovery_replay_calls(
                 continue
             admission = marker.artifact_kind == "native_admission_execution"
             prefix = "native-admission" if admission else "native-discovery"
-            if proof.get("contract") != prefix + "-execution-receipt.830.v1":
+            admission_v2 = (
+                admission
+                and proof.get("contract") == "native-admission-execution-receipt.830.v2"
+            )
+            if (
+                not admission_v2
+                and proof.get("contract") != prefix + "-execution-receipt.830.v1"
+            ):
                 raise ValueError("native replay receipt contract changed")
             input_sha = proof.get("input_sha256")
-            if not _hash(input_sha) or proof.get("operation_key") != prefix + "-" + input_sha:
+            if (
+                not _hash(input_sha)
+                or proof.get("operation_key") != prefix + "-" + input_sha
+            ):
                 raise ValueError("native replay operation/input changed")
             operation = prefix + "-" + input_sha
             native_context_row = _matching_child_artifact(
@@ -87,7 +110,11 @@ def verified_discovery_replay_calls(
                 input_sha,
             )
             prompt_sha = hashlib.sha256(
-                native_admission_prompt(
+                WIRE_PROMPT
+                if admission_v2
+                and _object(native_context_row.payload).get("wire_protocol")
+                == WIRE_PROTOCOL
+                else native_admission_prompt(
                     _object(native_context_row.payload).get("dependency_policy")
                 )
                 if admission
@@ -149,7 +176,10 @@ def verified_discovery_replay_calls(
         else:
             _verify_replay_marker(marker, stage_key="discovery")
             receipt = _object(marker.payload)
-            if receipt.get("contract") != "product-discovery-window-replay-receipt.830.v1":
+            if (
+                receipt.get("contract")
+                != "product-discovery-window-replay-receipt.830.v1"
+            ):
                 raise ValueError("discovery replay window receipt contract changed")
             if receipt.get("source_stage_key") != "discovery":
                 raise ValueError("discovery replay window stage changed")
@@ -197,8 +227,42 @@ def verified_discovery_replay_calls(
             or hashlib.sha256(call.raw).hexdigest() != raw_sha
         ):
             raise ValueError("discovery replay parent call provenance changed")
+        if admission_v2:
+            _verify_admission_v2_custody(
+                proof, native_context_row.payload, call, prompt_sha
+            )
         calls[call_id] = call
     return calls
+
+
+def _verify_admission_v2_custody(
+    proof: dict[str, Any], content: bytes, call: ProductStageModelCall, prompt_sha: str
+) -> None:
+    """Read historical accounting evidence; do not authorize replay or publication."""
+    protocol = _object(content).get("wire_protocol")
+    if (
+        protocol not in (None, WIRE_PROTOCOL)
+        or proof.get("wire_protocol") != protocol
+        or proof.get("prompt_sha256") != prompt_sha
+        or proof.get("model_policy_sha256") != call.model_policy_sha256
+        or not isinstance(proof.get("template_id"), str)
+        or not proof["template_id"]
+        or not call.request_bytes
+        or proof.get("request_sha256") != call.request_sha256
+        or hashlib.sha256(call.request_bytes).hexdigest() != call.request_sha256
+    ):
+        raise ValueError("native admission replay policy/request changed")
+    messages = _object(call.request_bytes).get("messages")
+    if (
+        not isinstance(messages, list)
+        or len(messages) != 2
+        or not isinstance(messages[0], dict)
+        or messages[0].get("role") != "system"
+        or not isinstance(messages[0].get("content"), str)
+        or hashlib.sha256(messages[0]["content"].encode()).hexdigest() != prompt_sha
+        or messages[1] != {"role": "user", "content": content.decode()}
+    ):
+        raise ValueError("native admission replay request content changed")
 
 
 def _object(payload: bytes) -> dict[str, Any]:
