@@ -533,7 +533,7 @@ class FixtureModel:
     def __call__(self, request: httpx.Request) -> httpx.Response:
         envelope = json.loads(request.content)
         content = json.loads(envelope["messages"][1]["content"])
-        if content.get("contract") == "g3-c-classify-prompt-context.830.v1":
+        if content.get("contract") == "product-identity-source-context.830.v2":
             self.identity_requests.append(envelope)
             semantic = self._identity(content)
         elif content.get("contract") in {

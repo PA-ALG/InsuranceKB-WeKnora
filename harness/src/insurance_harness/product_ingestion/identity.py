@@ -14,7 +14,6 @@ from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import (
 from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import (
     BatchCorpusV1,
     CorpusEntryV1,
-    ExistingEntityV1,
     SourceProvenanceV1,
 )
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import SourceBlock
@@ -221,7 +220,6 @@ def build_identity_context(
     material_roles: Mapping[str, str] | None = None,
     allowed_material_roles: tuple[str, ...],
     allowed_taxonomy_labels: tuple[str, ...],
-    existing_entities: Sequence[ExistingEntityV1],
     schema_candidates: Sequence[dict[str, Any]] = (),
     snapshots: Mapping[str, DecodedSourceSnapshot] | None = None,
 ) -> dict[str, Any]:
@@ -296,24 +294,17 @@ def build_identity_context(
                 "blocks": blocks,
             }
         )
-    # Model hints are optional. The resolver still receives the full existing set.
-    first_text = _name(
-        "\n".join(
-            block["text"]
-            for material in materials
-            for block in material["blocks"]
-            if block["page_number"] == 1
-        )
-    )
-    matching = [
-        row.model_dump(mode="json")
-        for row in existing_entities
-        if _name(row.name) in first_text
-        or any(_name(alias.value) in first_text for alias in row.approved_aliases)
-    ]
+    # Extract only this material. The resolver owns historical entity matching;
+    # exposing its anchors here can contaminate claims without local evidence.
     return {
-        "contract": "g3-c-classify-prompt-context.830.v1",
+        "contract": "product-identity-source-context.830.v2",
         "instructions": {
+            "optional_identity": (
+                "Extract identity claims only from the offered material. Leave optional "
+                "product_code, filing_or_registration, issuer and version_label null "
+                "when this material does not explicitly support them. Existing product "
+                "matching is performed separately by the server."
+            ),
             "classification": (
                 "Choose the insurance type from the complete formal product name on page one "
                 "and the supplied Chinese Catalog labels. Other insurance types mentioned in "
@@ -354,7 +345,6 @@ def build_identity_context(
         "materials": materials,
         "allowed_material_roles": allowed_material_roles,
         "allowed_taxonomy_labels": allowed_taxonomy_labels,
-        "existing_entities": matching,
         "schema_candidates": list(schema_candidates),
         "response_schema": G3SemanticReferenceResponseV1.model_json_schema(),
     }

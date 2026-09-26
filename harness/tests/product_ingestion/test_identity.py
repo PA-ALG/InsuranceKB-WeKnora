@@ -79,7 +79,6 @@ def test_prompt_selects_first_page_without_unrelated_later_source_or_history(
         material_roles={"knowledge": "terms"},
         allowed_material_roles=("terms",),
         allowed_taxonomy_labels=("endowment_insurance",),
-        existing_entities=(),
     )
     raw = json.dumps(context, ensure_ascii=False)
     assert "UNRELATED_LATER_CONTENT" not in raw
@@ -128,7 +127,6 @@ def test_issuer_extra_block_is_selected_by_block_text_not_shared_whole_page(
         material_roles={"knowledge": "terms"},
         allowed_material_roles=("terms",),
         allowed_taxonomy_labels=("endowment_insurance",),
-        existing_entities=(),
     )
     sent = [block["text"] for block in context["materials"][0]["blocks"]]
     assert company in sent
@@ -147,7 +145,6 @@ def test_identity_prompt_does_not_require_regex_hints(snapshot: typing.Any) -> N
         project_native_pages(decoded, material_id="knowledge"),
         allowed_material_roles=("terms", "brochure", "rate_table"),
         allowed_taxonomy_labels=("endowment_insurance",),
-        existing_entities=(),
         schema_candidates=(
             {
                 "schema_pack_id": "fixture",
@@ -230,7 +227,6 @@ def test_identity_first_page_context_omits_cross_page_tail(snapshot: typing.Any)
         (page,),
         allowed_material_roles=("terms",),
         allowed_taxonomy_labels=("endowment_insurance",),
-        existing_entities=(),
         snapshots={"knowledge": decoded},
     )
     assert tail not in json.dumps(context)
@@ -310,7 +306,6 @@ def test_cross_page_company_tail_does_not_hide_offered_issuer_block(
         (page, extra),
         allowed_material_roles=("terms",),
         allowed_taxonomy_labels=("endowment_insurance",),
-        existing_entities=(),
         snapshots={"knowledge": decoded},
     )
     blocks = context["materials"][0]["blocks"]
@@ -337,7 +332,6 @@ def test_bounded_identity_geometry_matches_full_context_and_exact_locator_refs(
     options = dict(
         allowed_material_roles=("terms",),
         allowed_taxonomy_labels=("endowment_insurance",),
-        existing_entities=(),
         snapshots={"knowledge": decoded},
     )
     full = module().build_identity_context(

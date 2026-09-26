@@ -407,7 +407,6 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
                 material_roles=source_roles,
                 allowed_material_roles=roles,
                 allowed_taxonomy_labels=labels,
-                existing_entities=existing.entities,
                 schema_candidates=route.get("schema_candidates", ()),
                 snapshots=snapshots,
             )
