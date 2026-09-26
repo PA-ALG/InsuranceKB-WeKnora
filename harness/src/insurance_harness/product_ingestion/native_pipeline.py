@@ -13,7 +13,10 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCompileRequest830G3V1,
     compile_request_hash_g3,
 )
-from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput, free_page_id
+from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
+    CompileOutput,
+    free_page_id,
+)
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.configuration import LoadedProductBinding
 from insurance_harness.product_ingestion.discovery import build_discovery_exclusion_index
@@ -24,8 +27,12 @@ from insurance_harness.product_ingestion.models import (
     ProductScope,
     StageSnapshot,
 )
+from insurance_harness.product_ingestion.native_admission import NativeAdmissionProjection
 from insurance_harness.product_ingestion.native_admission_stage import run_native_admission_window
 from insurance_harness.product_ingestion.native_call_replay import read_native_replay_calls
+from insurance_harness.product_ingestion.native_dependency_aggregate import (
+    aggregate_native_dependencies,
+)
 from insurance_harness.product_ingestion.native_discovery_stage import collect_native_discovery
 from insurance_harness.product_ingestion.platform import DecodedSourceSnapshot
 from insurance_harness.product_ingestion.stages import StageOutput, artifact, json_bytes
@@ -136,6 +143,15 @@ async def run_native_discovery_stage(
         and len(collection.snapshots) == 1
         and len(collection.snapshots[0].windows) == 1
     )
+    aggregate_eligible = bool(
+        dependency_policy
+        and collection.complete
+        and not failures
+        and not unbound
+        and len(collection.snapshots) > 1
+        and admission_groups > 0
+    )
+    projections: list[NativeAdmissionProjection] = []
     selection = None
     pending_count = 0
     for snapshot in collection.snapshots:
@@ -187,6 +203,7 @@ async def run_native_discovery_stage(
                 )
                 continue
             projection = outcome.projection
+            projections.append(projection)
             if isolation_enabled:
                 if projection.dependency_selection is None:
                     raise ValueError("native dependency selection missing")
@@ -256,10 +273,29 @@ async def run_native_discovery_stage(
                     "admission_context_sha256": hashlib.sha256(projection.context).hexdigest(),
                 }
             )
+    if aggregate_eligible and not failures:
+        try:
+            aggregate = await asyncio.to_thread(
+                aggregate_native_dependencies,
+                snapshots=collection.snapshots,
+                projections=projections,
+            )
+            definitions = {row.concept_id: row for row in aggregate.output.definitions}
+            pages = {free_page_id(row): row for row in aggregate.output.pages}
+            audit = {row.key: row for row in aggregate.output.audit}
+            dispositions = [
+                row for row in dispositions if row["candidate_id"] in aggregate.retained_review_ids
+            ]
+            selection = aggregate.selection
+            pending_count = aggregate.pending_candidate_count
+        except ValueError as exc:
+            failures.append({"phase": "dependency-aggregate", "detail": str(exc)})
     unresolved |= pending_count > 0
     complete = collection.complete and not failures and not unbound and not unresolved
-    # Only a single, known dependency domain can retain an independently reviewed subset.
-    if not complete and not (isolation_enabled and selection is not None and not failures):
+    # Retain a subset only after its complete dependency domain has been validated.
+    if not complete and not (
+        (isolation_enabled or aggregate_eligible) and selection is not None and not failures
+    ):
         definitions, pages, audit = {}, {}, {}
         dispositions, source_options = [], []
     output = CompileOutput(
@@ -340,7 +376,9 @@ async def run_native_discovery_stage(
         candidates["dependency_selection"] = selection
         drafts.append(
             artifact(
-                "native_dependency_selection",
+                "native_dependency_aggregate"
+                if selection["contract"] == "native-dependency-selection.830.v2"
+                else "native_dependency_selection",
                 "product",
                 json_bytes(selection),
                 stage.dependency_sha256,

@@ -7,7 +7,6 @@ model, alter existing knowledge, or authorize publication.
 from __future__ import annotations
 
 import hashlib
-from collections import defaultdict, deque
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -32,18 +31,17 @@ def select_native_dependencies(
 ) -> tuple[frozenset[str], tuple[dict[str, Any], ...], list[list[list[str]]]]:
     """Return retained candidate refs and an audit of all isolated candidates."""
     decisions = {row.candidate_ref: row for row in response.decisions}
-    Node = tuple[str, str]
-    dependents: dict[Node, set[Node]] = defaultdict(set)
-    blocked: set[Node] = set()
-    queue: deque[Node] = deque()
+    from insurance_harness.product_ingestion.native_dependency_closure import (
+        Edge,
+        Node,
+        unavailable_closure,
+    )
+
+    edges: set[Edge] = set()
+    unavailable: set[Node] = set()
 
     def depends(node: Node, required: Node) -> None:
-        dependents[required].add(node)
-
-    def isolate(node: Node) -> None:
-        if node not in blocked:
-            blocked.add(node)
-            queue.append(node)
+        edges.add((node, required))
 
     for row in response.decisions:
         if len(set(row.depends_on)) != len(row.depends_on) or any(
@@ -60,7 +58,7 @@ def select_native_dependencies(
             depends(node, member)
             depends(member, node)
         if row.decision in {"PENDING", "REQUIRES_ENTITY_RESOLUTION", "REJECT"}:
-            isolate(node)
+            unavailable.add(node)
     definitions = {
         member.concept_id: ref
         for ref, member in projected.items()
@@ -71,25 +69,12 @@ def select_native_dependencies(
         for concept in page.concept_ids:
             if concept in definitions:
                 depends(("member", ref), ("member", definitions[concept]))
-    while True:
-        while queue:
-            for dependent in dependents[queue.popleft()]:
-                isolate(dependent)
-        used = {
-            concept
-            for ref, page in pages.items()
-            if ("member", ref) not in blocked
-            for concept in page.concept_ids
-        }
-        orphans = {
-            ref
-            for concept, ref in definitions.items()
-            if concept not in used and ("member", ref) not in blocked
-        }
-        if not orphans:
-            break
-        for ref in orphans:
-            isolate(("member", ref))
+    blocked = unavailable_closure(
+        edges=edges,
+        unavailable=unavailable,
+        definitions={concept: ("member", ref) for concept, ref in definitions.items()},
+        pages={("member", ref): page.concept_ids for ref, page in pages.items()},
+    )
     kept = frozenset(ref for ref in decisions if ("candidate", ref) not in blocked)
     audit = tuple(
         {
@@ -105,10 +90,8 @@ def select_native_dependencies(
         for row in sorted(response.decisions, key=lambda row: row.candidate_ref)
         if row.candidate_ref not in kept
     )
-    edges = sorted(
-        [[list(node), list(required)] for required, nodes in dependents.items() for node in nodes]
-    )
-    return kept, audit, edges
+    serialized_edges = sorted([[list(node), list(required)] for node, required in edges])
+    return kept, audit, serialized_edges
 
 
 def validate_dependency_selection(
@@ -120,6 +103,18 @@ def validate_dependency_selection(
     )
     from insurance_harness.product_ingestion.stages import json_bytes
 
+    if selection.get("contract") == "native-dependency-selection.830.v2":
+        from insurance_harness.product_ingestion.native_dependency_aggregate import (
+            validate_aggregate_selection,
+        )
+
+        validate_aggregate_selection(selection)
+        if (
+            selection["request_hash"] != request_hash
+            or set(selection["retained_member_ids"]) != member_ids
+        ):
+            raise ValueError("native aggregate review binding mismatch")
+        return
     payload = {k: v for k, v in selection.items() if k != "selection_sha256"}
     if (
         selection.get("contract") != "native-dependency-selection.830.v1"
@@ -171,7 +166,15 @@ def resolve_native_review_entity(
         selection, member_ids, compile_request_hash_g3(request.base_request)
     )
     selected = selection.get("entity_id")
-    owner = selection["admission_context"].get("entity")
+    if selection["contract"] == "native-dependency-selection.830.v2":
+        from insurance_harness.product_ingestion.native_dependency_aggregate import (
+            validate_aggregate_selection,
+        )
+
+        validate_aggregate_selection(selection, candidate_output)
+        owner = {"entity_id": selected, "entity_version": selection["entity_version"]}
+    else:
+        owner = selection["admission_context"].get("entity")
     bindings = [row for row in request.entity_bindings if row.entity_id == selected]
     if (
         not isinstance(selected, str)

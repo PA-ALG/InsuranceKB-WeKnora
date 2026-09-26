@@ -962,12 +962,8 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
         state = ProductRunState.SUCCEEDED
         if run.workflow_version >= 3:
             from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput
-            from insurance_harness.product_ingestion.discovery_composition import (
-                compose_discovery_review,
-                merge_discovery_delta,
-            )
-            from insurance_harness.product_ingestion.discovery_stage import (
-                run_independent_discovery_final_review,
+            from insurance_harness.product_ingestion.discovery_review_compilation import (
+                compile_reviewed_discovery,
             )
 
             disposition_rows = await asyncio.to_thread(
@@ -1009,46 +1005,13 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
                 candidates = await asyncio.to_thread(
                     lambda: json.loads(read(scope, run.run_id, "discovery_candidates"))
                 )
-                free_output = CompileOutput.model_validate(candidates["output"])
-                combined = await asyncio.to_thread(
-                    merge_discovery_delta,
-                    request=request,
-                    field_delta=delta,
-                    free_output=free_output,
-                    run_id=run.run_id,
-                )
-                final_output = await asyncio.to_thread(
-                    compiler.compose_batch_output, request, combined
-                )
-                final_hash = await asyncio.to_thread(
-                    compiler.compile_output_hash_g3, final_output
-                )
-                outcome = await run_independent_discovery_final_review(
+                compiled = await compile_reviewed_discovery(
                     service=service_for(scope), artifacts=artifacts, scope=scope,
                     run=run, stage=stage, job=job, request=request,
-                    discovery_candidates=candidates,
-                    final_composed_output=final_output,
-                    final_composed_output_hash=final_hash,
+                    field_delta=delta, discovery_candidates=candidates,
                 )
-                extra_drafts = outcome.drafts
-                if outcome.decision == "ACCEPTED":
-                    review = await asyncio.to_thread(
-                        compose_discovery_review,
-                        request=request,
-                        final_output=final_output,
-                        free_output=free_output,
-                        outcome=outcome,
-                        run_id=run.run_id,
-                    )
-                    delta = combined
-                    extra_drafts += (
-                        artifact(
-                            "composite_review", "product",
-                            review.model_dump_json().encode(), stage.dependency_sha256,
-                        ),
-                    )
-                elif outcome.decision != "EMPTY":
-                    # Entire free group stays unpublished; validated fields survive.
+                delta, review, extra_drafts = compiled.delta, compiled.review, compiled.drafts
+                if compiled.state == ProductRunState.PARTIAL_SUCCESS:
                     state = ProductRunState.PARTIAL_SUCCESS
         else:
             discovery_reviews = await asyncio.to_thread(

@@ -233,7 +233,7 @@ async def test_coordinator_keeps_selected_candidates_but_fences_unknown_windows(
         a.artifact_kind: json.loads(a.payload) for a in result.drafts if a.artifact_key == "product"
     }
     assert bool(rows["discovery_candidates"]["output"]["pages"]) is (mode == "single")
-    assert rows["discovery_summary"]["state"] == ("FAILED" if mode == "failed" else "PENDING")
+    assert rows["discovery_summary"]["state"] == ("PENDING" if mode == "single" else "FAILED")
     assert rows["discovery_summary"]["pending_candidate_count"] >= 1
     assert not rows["discovery_summary"]["native_coverage"]["complete"]
     if mode == "single":

@@ -74,12 +74,17 @@ def _review_call_matches(
     final_hash: str,
     run_id: str,
     dependency_selection: bool,
+    refined: bool = False,
 ) -> bool:
     from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin, StageCallState
     from insurance_harness.product_ingestion.discovery import independent_discovery_review_policy
+    from insurance_harness.product_ingestion.discovery_stage import independent_review_operation_key
     from insurance_harness.product_ingestion.extraction import _json
     from insurance_harness.product_ingestion.model_execution import ConfiguredFieldTransport
 
+    expected_operation = independent_review_operation_key(final_hash, context_hash, refined=refined)
+    if refined and proof.get("operation_key") != expected_operation:
+        return False
     replayed = getattr(outcome, "replayed_call", None)
     if replayed is None:
         return (
@@ -101,7 +106,7 @@ def _review_call_matches(
         or replayed.call_id != proof.get("model_call_id")
         or replayed.stage_key != "compilation"
         or replayed.state != StageCallState.RECORDED
-        or replayed.operation_key != "independent-discovery-final-review-" + final_hash
+        or replayed.operation_key != expected_operation
         or replayed.input_sha256 != context_hash
         or replayed.diagnostic
         or replayed.prompt_policy_sha256
@@ -182,6 +187,8 @@ def compose_discovery_review(
             final_hash,
             run_id,
             context.get("dependency_selection") is not None,
+            refined=bool(context.get("contract") == "product-discovery-review-context.830.v10"
+                and context.get("dependency_selection", {}).get("initial_review_sha256")),
         )
         or proof.get("review") != review.model_dump(mode="json")
         or proof.get("disposition_checks")

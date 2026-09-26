@@ -1571,6 +1571,7 @@ def render_independent_discovery_review_context(
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
         "product-discovery-review-context.830.v9",
+        "product-discovery-review-context.830.v10",
     ]
     | None = None,
 ) -> dict[str, Any]:
@@ -1586,9 +1587,15 @@ def render_independent_discovery_review_context(
     )
     has_relations = any(p.business_relation is not None for p in candidate_output.pages)
     selection = discovery_candidates.get("dependency_selection")
+    aggregated = (
+        selection is not None
+        and selection.get("contract") == "native-dependency-selection.830.v2"
+    )
     if context_version is None:
         context_version = (
-            "product-discovery-review-context.830.v9"
+            "product-discovery-review-context.830.v10"
+            if aggregated
+            else "product-discovery-review-context.830.v9"
             if has_relations
             else "product-discovery-review-context.830.v6"
             if selection is not None
@@ -1602,18 +1609,25 @@ def render_independent_discovery_review_context(
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
         "product-discovery-review-context.830.v9",
+        "product-discovery-review-context.830.v10",
     ):
         raise ValueError("unsupported discovery review context version")
+    if aggregated != (context_version == "product-discovery-review-context.830.v10"):
+        raise ValueError("aggregate dependency selection requires discovery review v10")
     if has_relations != (context_version == "product-discovery-review-context.830.v9"):
         raise ValueError("typed relations require discovery review v9")
     if context_version != "product-discovery-review-context.830.v9" and (selection is not None) != (
-        context_version == "product-discovery-review-context.830.v6"
+        context_version in {
+            "product-discovery-review-context.830.v6",
+            "product-discovery-review-context.830.v10",
+        }
     ):
         raise ValueError("dependency selection requires discovery review v6")
     if has_provenance and context_version not in {
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
         "product-discovery-review-context.830.v9",
+        "product-discovery-review-context.830.v10",
     }:
         raise ValueError("content provenance requires discovery review v5")
     expected_index = (
@@ -1645,6 +1659,23 @@ def render_independent_discovery_review_context(
         validate_dependency_selection(
             selection, set(member_ids), compile_request_hash_g3(request.base_request)
         )
+    if aggregated:
+        from insurance_harness.product_ingestion.native_dependency_aggregate import (
+            validate_aggregate_selection,
+        )
+
+        assert selection is not None
+        validate_aggregate_selection(selection, candidate_output)
+        # Complete contexts/raw projections remain in the aggregate artifact;
+        # the model needs the verified graph and explicit ownership only.
+        selection = {
+            key: value for key, value in selection.items()
+            if key not in {"domains", "review_pruning"}
+        }
+        if discovery_candidates["dependency_selection"].get("review_pruning") is not None:
+            selection["initial_review_sha256"] = (
+                discovery_candidates["dependency_selection"]["review_pruning"]["receipt_sha256"]
+            )
     final_definitions = {row.concept_id: row for row in final_composed_output.definitions}
     final_pages = {free_page_id(row): row for row in final_composed_output.pages}
     if any(
@@ -1654,13 +1685,20 @@ def render_independent_discovery_review_context(
         for identity, row in members
     ):
         raise ValueError("discovery candidates not in final composed output")
+    routed_sources = discovery_candidates["sources"]
+    if aggregated:
+        required_refs = {
+            evidence["source_ref"]
+            for row in discovery_candidates["dispositions"] for evidence in row["evidence"]
+        }
+        routed_sources = [row for row in routed_sources if row["source_ref"] in required_refs]
     validate_routed_selections(
         tuple(
             (evidence["source_ref"], evidence["quote"])
             for row in discovery_candidates["dispositions"]
             for evidence in row["evidence"]
         ),
-        discovery_candidates["sources"],
+        routed_sources,
     )
     evidence_by_member = {
         row["member_id"]: row["evidence"]
@@ -1702,6 +1740,7 @@ def render_independent_discovery_review_context(
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
         "product-discovery-review-context.830.v9",
+        "product-discovery-review-context.830.v10",
     }:
         from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
             free_page_content,
@@ -1773,7 +1812,7 @@ def render_independent_discovery_review_context(
         "entity_id": entity_id,
         "exclusion_index": exclusion_index,
         "candidate_members": member_views,
-        "source_options": discovery_candidates["sources"],
+        "source_options": routed_sources,
         "dispositions": discovery_candidates["dispositions"],
         "review_member_ids": member_ids,
         "max_context_bytes": max_context_bytes,

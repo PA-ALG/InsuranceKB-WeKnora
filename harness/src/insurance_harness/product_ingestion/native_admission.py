@@ -53,6 +53,7 @@ class NativeAdmissionProjection:
     isolated_candidates: tuple[dict[str, Any], ...] = ()
     dependency_selection: dict[str, Any] | None = None
     dependency_unavailable_count: int = 0
+    dependency_domain: dict[str, Any] | None = None
 
 
 def project_native_admission_response(
@@ -216,6 +217,7 @@ def project_native_admission_response(
         raise ValueError("native admission candidate coverage mismatch")
     covered: set[str] = set()
     dispositions: list[dict[str, Any]] = []
+    review_bindings: list[dict[str, Any]] = []
     for decision in response.decisions:
         native = candidates[decision.candidate_ref]
         if decision.decision == "REFERENCE" and decision.existing_target == entity_id:
@@ -272,11 +274,20 @@ def project_native_admission_response(
                     "native_content_origin": "MODEL_GENERATED",
                 }
             )
+            review_bindings.append(
+                {
+                    "review_candidate_id": dispositions[-1]["candidate_id"],
+                    "candidate_ref": decision.candidate_ref,
+                    "member_ref": ref,
+                    "member_id": dispositions[-1]["member_id"],
+                }
+            )
     if covered != set(by_ref):
         raise ValueError("native admission unbound promoted member")
     isolated: tuple[dict[str, Any], ...] = ()
     selection = None
     unavailable_count = 0
+    domain = None
     if isinstance(response, NativeAdmissionResponseV2):
         from insurance_harness.product_ingestion.native_dependency_selection import (
             select_native_dependencies,
@@ -284,6 +295,22 @@ def project_native_admission_response(
 
         kept, isolated, edges = select_native_dependencies(response, projected)
         unavailable_count = len(isolated)
+        from insurance_harness.product_ingestion.native_dependency_domain import (
+            build_window_dependency_domain,
+        )
+
+        domain = build_window_dependency_domain(
+            request_hash=compile_request_hash_g3(request.base_request),
+            snapshot=snapshot,
+            context=context,
+            raw=raw,
+            response=response,
+            projected=projected,
+            review_bindings=review_bindings,
+            retained_candidates=kept,
+            isolated_candidates=isolated,
+            effective_dependencies=edges,
+        )
     if isinstance(response, NativeAdmissionResponseV2) and context["isolation_enabled"]:
         retained_refs = {
             ref for d in response.decisions if d.candidate_ref in kept for ref in d.member_refs
@@ -341,4 +368,5 @@ def project_native_admission_response(
         isolated,
         selection,
         unavailable_count,
+        domain,
     )

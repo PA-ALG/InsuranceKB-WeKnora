@@ -100,6 +100,11 @@ def combine_discovery_summaries(generation: bytes | None, final: bytes | None) -
             "REJECTED",
         }:
             return generation
+        if reviewed.get("dependency_policy") == "candidate-dependencies.830.v1":
+            prior["dependency_policy"] = reviewed["dependency_policy"]
+            prior["pending_candidate_count"] = max(
+                prior.get("pending_candidate_count", 0), reviewed.get("pending_candidate_count", 0)
+            )
         partial = (
             prior.get("dependency_policy") == "candidate-dependencies.830.v1"
             and prior.get("pending_candidate_count", 0) > 0

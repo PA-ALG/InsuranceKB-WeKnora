@@ -146,10 +146,28 @@ def verified_discovery_replay_calls(
                 scope,
                 run_id,
                 "discovery_review_context",
-                "product",
+                marker.artifact_key,
                 input_sha,
             )
-            version = _object(context_row.payload).get("contract")
+            context = _object(context_row.payload)
+            version = context.get("contract")
+            refined = bool(version == "product-discovery-review-context.830.v10"
+                and context.get("dependency_selection", {}).get("initial_review_sha256"))
+            if marker.artifact_key != "product" and (
+                version != "product-discovery-review-context.830.v10"
+                or refined or marker.artifact_key != "initial:" + output_hash
+            ):
+                raise ValueError("discovery replay review artifact key changed")
+            if refined:
+                from insurance_harness.product_ingestion.discovery_stage import (
+                    independent_review_operation_key,
+                )
+
+                operation = independent_review_operation_key(
+                    output_hash, context_row.payload_sha256, refined=True
+                )
+                if proof.get("operation_key") != operation:
+                    raise ValueError("discovery replay refined operation changed")
             if version not in {
                 None,
                 "product-discovery-review-context.830.v3",
@@ -157,6 +175,7 @@ def verified_discovery_replay_calls(
                 "product-discovery-review-context.830.v5",
                 "product-discovery-review-context.830.v6",
                 "product-discovery-review-context.830.v9",
+                "product-discovery-review-context.830.v10",
             }:
                 raise ValueError("discovery replay review context contract changed")
             from insurance_harness.product_ingestion.relation_review import RELATION_REVIEW_PROMPT
@@ -165,7 +184,10 @@ def verified_discovery_replay_calls(
                 RELATION_REVIEW_PROMPT
                 if version == "product-discovery-review-context.830.v9"
                 else DEPENDENCY_DISCOVERY_REVIEW_PROMPT
-                if version == "product-discovery-review-context.830.v6"
+                if version in {
+                    "product-discovery-review-context.830.v6",
+                    "product-discovery-review-context.830.v10",
+                }
                 else PROVENANCE_DISCOVERY_REVIEW_PROMPT
                 if version == "product-discovery-review-context.830.v5"
                 else INDEPENDENT_DISCOVERY_REVIEW_PROMPT
@@ -176,7 +198,7 @@ def verified_discovery_replay_calls(
                 scope,
                 run_id,
                 "discovery_review_response",
-                "product",
+                marker.artifact_key,
                 proof.get("actual_review_raw_sha256"),
             )
             source_run = proof.get("replayed_from_run_id")

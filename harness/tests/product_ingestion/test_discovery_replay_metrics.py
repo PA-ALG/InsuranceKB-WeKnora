@@ -182,7 +182,9 @@ def test_generation_replay_counts_real_parent_once_with_persisted_receipt(
     assert artifacts.get_stage_call_metrics(scope=_scope(), run_id=child.run_id) == metrics
 
 
-@pytest.mark.parametrize("provenance", [False, True, "dependency"])
+@pytest.mark.parametrize(
+    "provenance", [False, True, "dependency", "aggregate", "refined", "initial"]
+)
 @pytest.mark.parametrize("wrong_prompt", [False, True])
 def test_review_replay_counts_real_parent_with_persisted_proof(
     api: typing.Any, factory: typing.Any, provenance: bool | str, wrong_prompt: bool
@@ -190,21 +192,31 @@ def test_review_replay_counts_real_parent_with_persisted_proof(
     context = {"final_composed_output_hash": "d" * 64}
     if provenance:
         context["contract"] = (
-            "product-discovery-review-context.830.v6"
+            "product-discovery-review-context.830.v10"
+            if provenance in {"aggregate", "refined", "initial"}
+            else "product-discovery-review-context.830.v6"
             if provenance == "dependency"
             else "product-discovery-review-context.830.v5"
         )
+    if provenance == "refined":
+        context["dependency_selection"] = {"initial_review_sha256": "c" * 64}
     content = json_bytes(context)
+    key = "initial:" + "d" * 64 if provenance == "initial" else "product"
+    operation = (
+        "independent-discovery-refined-review-" + _digest(content)
+        if provenance == "refined"
+        else "independent-discovery-final-review-" + "d" * 64
+    )
     raw = json_bytes({"choices": []})
     parent = _record_parent_call(
         api,
         factory,
         stage_key="compilation",
-        operation="independent-discovery-final-review-" + "d" * 64,
+        operation=operation,
         context=content,
         prompt=(
             discovery.DEPENDENCY_DISCOVERY_REVIEW_PROMPT
-            if provenance == "dependency" and not wrong_prompt
+            if provenance in {"dependency", "aggregate", "refined", "initial"} and not wrong_prompt
             else discovery.PROVENANCE_DISCOVERY_REVIEW_PROMPT
             if bool(provenance) != wrong_prompt
             else discovery.INDEPENDENT_DISCOVERY_REVIEW_PROMPT
@@ -232,10 +244,12 @@ def test_review_replay_counts_real_parent_with_persisted_proof(
         "review": {},
         "disposition_checks": [],
     }
+    if provenance == "refined":
+        proof["operation_key"] = operation
     drafts = (
-        _rule("discovery_review_context", "product", context),
-        _rule("discovery_review_response", "product", {"choices": []}),
-        _rule("discovery_review_proof", "product", proof),
+        _rule("discovery_review_context", key, context),
+        _rule("discovery_review_response", key, {"choices": []}),
+        _rule("discovery_review_proof", key, proof),
     )
     _settle(artifacts, products, jobs, child, running, "compilation", drafts)
     if wrong_prompt:

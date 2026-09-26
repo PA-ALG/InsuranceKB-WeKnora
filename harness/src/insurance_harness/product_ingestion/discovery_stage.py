@@ -145,6 +145,7 @@ def _validated_independent_review(
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
         "product-discovery-review-context.830.v9",
+        "product-discovery-review-context.830.v10",
     }:
         for member in context["candidate_members"]:
             if (
@@ -174,6 +175,15 @@ def _validated_independent_review(
     else:
         decision = "ACCEPTED"
     return checked, review_output, decision
+
+
+def independent_review_operation_key(
+    final_hash: str, context_hash: str, *, refined: bool = False
+) -> str:
+    """A refined disposition set can change while the composed body hash stays equal."""
+    if refined:
+        return "independent-discovery-refined-review-" + context_hash
+    return "independent-discovery-final-review-" + final_hash
 
 
 async def run_independent_discovery_final_review(
@@ -271,7 +281,10 @@ async def run_independent_discovery_final_review(
             content = json_bytes(context)
             review_context_sha256 = hashlib.sha256(content).hexdigest()
             keep("discovery_review_context", context)
-            operation = "independent-discovery-final-review-" + final_composed_output_hash
+            refined = bool(selection is not None and selection.get("review_pruning") is not None)
+            operation = independent_review_operation_key(
+                final_composed_output_hash, review_context_sha256, refined=refined
+            )
             prior_call = None
             if run.retry_of_run_id and hasattr(artifacts, "list_stage_calls"):
                 for recorded_call in artifacts.list_stage_calls(
@@ -376,6 +389,7 @@ async def run_independent_discovery_final_review(
                 "discovery_review_proof",
                 {
                     "contract": "product-discovery-review-proof.830.v1",
+                    **({"operation_key": operation} if refined else {}),
                     "decision": decision,
                     "final_composed_output_hash": final_composed_output_hash,
                     "actual_review_context_sha256": review_context_sha256,
