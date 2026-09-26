@@ -340,7 +340,9 @@ def test_native_replay_counts_only_actual_parent_custody(
     producer: str,
     tamper: str | None,
 ) -> None:
-    from insurance_harness.product_ingestion.native_admission import native_admission_prompt
+    from insurance_harness.product_ingestion.native_admission_contract import (
+        native_admission_prompt,
+    )
     from insurance_harness.product_ingestion.native_discovery import (
         NATIVE_DISCOVERY_EXECUTION_PROMPT,
     )

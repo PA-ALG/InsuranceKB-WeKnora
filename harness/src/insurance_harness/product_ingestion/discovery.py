@@ -151,6 +151,13 @@ def independent_discovery_review_policy(
     output: CompileOutput, *, dependency_selection: bool = False
 ) -> tuple[str, bytes]:
     """Select the explicitly authorized template without changing historical prompts."""
+    if any(page.business_relation is not None for page in output.pages):
+        from insurance_harness.product_ingestion.relation_review import (
+            RELATION_REVIEW_PROMPT,
+            RELATION_REVIEW_PURPOSE,
+        )
+
+        return RELATION_REVIEW_PURPOSE, RELATION_REVIEW_PROMPT
     if dependency_selection:
         return "g3-dependency-discovery-review", DEPENDENCY_DISCOVERY_REVIEW_PROMPT
     if any(row.content_provenance is not None for row in (*output.definitions, *output.pages)):
@@ -1563,10 +1570,11 @@ def render_independent_discovery_review_context(
         "product-discovery-review-context.830.v4",
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
+        "product-discovery-review-context.830.v9",
     ]
     | None = None,
 ) -> dict[str, Any]:
-    """Review free candidates against exact final composition, without field bodies."""
+    """Build validated semantics and enforce the final wire byte budget."""
     if final_composed_output is None or (
         compile_output_hash_g3(final_composed_output) != final_composed_output_hash
     ):
@@ -1576,10 +1584,13 @@ def render_independent_discovery_review_context(
         row.content_provenance is not None
         for row in (*candidate_output.definitions, *candidate_output.pages)
     )
+    has_relations = any(p.business_relation is not None for p in candidate_output.pages)
     selection = discovery_candidates.get("dependency_selection")
     if context_version is None:
         context_version = (
-            "product-discovery-review-context.830.v6"
+            "product-discovery-review-context.830.v9"
+            if has_relations
+            else "product-discovery-review-context.830.v6"
             if selection is not None
             else "product-discovery-review-context.830.v5"
             if has_provenance
@@ -1590,13 +1601,19 @@ def render_independent_discovery_review_context(
         "product-discovery-review-context.830.v4",
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
+        "product-discovery-review-context.830.v9",
     ):
         raise ValueError("unsupported discovery review context version")
-    if (selection is not None) != (context_version == "product-discovery-review-context.830.v6"):
+    if has_relations != (context_version == "product-discovery-review-context.830.v9"):
+        raise ValueError("typed relations require discovery review v9")
+    if context_version != "product-discovery-review-context.830.v9" and (selection is not None) != (
+        context_version == "product-discovery-review-context.830.v6"
+    ):
         raise ValueError("dependency selection requires discovery review v6")
     if has_provenance and context_version not in {
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
+        "product-discovery-review-context.830.v9",
     }:
         raise ValueError("content provenance requires discovery review v5")
     expected_index = (
@@ -1684,6 +1701,7 @@ def render_independent_discovery_review_context(
     if context_version in {
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
+        "product-discovery-review-context.830.v9",
     }:
         from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
             free_page_content,
@@ -1733,27 +1751,32 @@ def render_independent_discovery_review_context(
                 )
             view["evidence"] = evidence_view
         provenance_view["candidate_source_options"] = list(source_options.values())
-    return _limit(
-        {
-            "contract": context_version,
-            **provenance_view,
-            **({"dependency_selection": selection} if selection is not None else {}),
-            **(
-                {"existing_knowledge": build_discovery_knowledge_view(request, entity_id)}
-                if context_version != "product-discovery-review-context.830.v3"
-                else {}
-            ),
-            "request_hash": compile_request_hash_g3(request.base_request),
-            "output_hash": final_composed_output_hash,
-            "final_composed_output_hash": final_composed_output_hash,
-            "entity_id": entity_id,
-            "exclusion_index": exclusion_index,
-            "candidate_members": member_views,
-            "source_options": discovery_candidates["sources"],
-            "dispositions": discovery_candidates["dispositions"],
-            "review_member_ids": member_ids,
-            "max_context_bytes": max_context_bytes,
-            "response_schema": DiscoveryReview.model_json_schema(),
-        },
-        max_context_bytes,
+    knowledge_view = (
+        build_discovery_knowledge_view(request, entity_id)
+        if context_version != "product-discovery-review-context.830.v3"
+        else None
     )
+    relation_view = {}
+    if has_relations:
+        from insurance_harness.product_ingestion.relation_review import relation_review_view
+
+        relation_view = relation_review_view(candidate_output, member_views, selection)
+    value = {
+        "contract": context_version,
+        **relation_view,
+        **provenance_view,
+        **({"dependency_selection": selection} if selection is not None else {}),
+        **({"existing_knowledge": knowledge_view} if knowledge_view is not None else {}),
+        "request_hash": compile_request_hash_g3(request.base_request),
+        "output_hash": final_composed_output_hash,
+        "final_composed_output_hash": final_composed_output_hash,
+        "entity_id": entity_id,
+        "exclusion_index": exclusion_index,
+        "candidate_members": member_views,
+        "source_options": discovery_candidates["sources"],
+        "dispositions": discovery_candidates["dispositions"],
+        "review_member_ids": member_ids,
+        "max_context_bytes": max_context_bytes,
+        "response_schema": DiscoveryReview.model_json_schema(),
+    }
+    return _limit(value, max_context_bytes)

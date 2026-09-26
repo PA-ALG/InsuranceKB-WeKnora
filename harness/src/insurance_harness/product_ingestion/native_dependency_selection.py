@@ -21,7 +21,9 @@ if TYPE_CHECKING:
         BatchConceptCompileRequest830G3V1,
     )
     from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput
-    from insurance_harness.product_ingestion.native_admission import NativeAdmissionResponseV2
+    from insurance_harness.product_ingestion.native_admission_contract import (
+        NativeAdmissionResponseV2,
+    )
 
 
 def select_native_dependencies(
@@ -113,9 +115,8 @@ def validate_dependency_selection(
     selection: dict[str, Any], member_ids: set[str], request_hash: str
 ) -> None:
     """Bind the immutable selection envelope to the members sent for final review."""
-    from insurance_harness.product_ingestion.native_admission import (
+    from insurance_harness.product_ingestion.native_admission_contract import (
         NATIVE_DEPENDENCY_POLICY,
-        NativeAdmissionResponseV2,
     )
     from insurance_harness.product_ingestion.stages import json_bytes
 
@@ -136,7 +137,9 @@ def validate_dependency_selection(
         or hashlib.sha256(json_bytes(context)).hexdigest() != selection["admission_context_sha256"]
     ):
         raise ValueError("native dependency selection context mismatch")
-    response = NativeAdmissionResponseV2.model_validate(selection["response"])
+    from insurance_harness.product_ingestion.native_relation_admission import admission_response
+
+    response = admission_response(selection["response"], context)
     refs = {r.candidate_ref for r in response.decisions}
     kept = set(selection["retained_candidates"])
     isolated = {r["candidate_ref"] for r in selection["isolated_candidates"]}

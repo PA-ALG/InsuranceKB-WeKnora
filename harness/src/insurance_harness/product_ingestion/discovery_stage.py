@@ -144,6 +144,7 @@ def _validated_independent_review(
     if context.get("contract") in {
         "product-discovery-review-context.830.v5",
         "product-discovery-review-context.830.v6",
+        "product-discovery-review-context.830.v9",
     }:
         for member in context["candidate_members"]:
             if (

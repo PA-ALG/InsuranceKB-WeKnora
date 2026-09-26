@@ -25,13 +25,23 @@ from tests.product_ingestion.test_discovery_replay_metrics import _child, _diges
         "request_content",
     ],
 )
-def test_v2_admission_replay_metrics(api: Any, factory: Any, tamper: str | None) -> None:
-    context = {"wire_protocol": WIRE_PROTOCOL, "dependency_policy": "candidate-dependencies.830.v1"}
+@pytest.mark.parametrize("relation_wire", [False, True])
+def test_v2_admission_replay_metrics(
+    api: Any, factory: Any, tamper: str | None, relation_wire: bool
+) -> None:
+    from insurance_harness.product_ingestion.native_relation_wire import (
+        RELATION_WIRE_PROMPT,
+        RELATION_WIRE_PROTOCOL,
+    )
+
+    protocol = RELATION_WIRE_PROTOCOL if relation_wire else WIRE_PROTOCOL
+    prompt = RELATION_WIRE_PROMPT if relation_wire else WIRE_PROMPT
+    context = {"wire_protocol": protocol, "dependency_policy": "candidate-dependencies.830.v1"}
     content = json_bytes(context)
     request = json_bytes(
         {
             "messages": [
-                {"role": "system", "content": WIRE_PROMPT.decode()},
+                {"role": "system", "content": prompt.decode()},
                 {
                     "role": "user",
                     "content": content.decode() if tamper != "request_content" else "{}",
@@ -55,7 +65,7 @@ def test_v2_admission_replay_metrics(api: Any, factory: Any, tamper: str | None)
         call_id="v2-call",
         input_sha256=_digest(content),
         model_policy_sha256="b" * 64,
-        prompt_policy_sha256=_digest(WIRE_PROMPT),
+        prompt_policy_sha256=_digest(prompt),
     )
     artifacts.begin_stage_call(
         scope=_scope(),
@@ -82,9 +92,9 @@ def test_v2_admission_replay_metrics(api: Any, factory: Any, tamper: str | None)
     )
     proof = {
         "contract": "native-admission-execution-receipt.830.v2",
-        "wire_protocol": WIRE_PROTOCOL,
+        "wire_protocol": protocol,
         "template_id": "admission-wire",
-        "prompt_sha256": _digest(WIRE_PROMPT),
+        "prompt_sha256": _digest(prompt),
         "model_policy_sha256": "b" * 64,
         "operation_key": operation,
         "input_sha256": _digest(content),

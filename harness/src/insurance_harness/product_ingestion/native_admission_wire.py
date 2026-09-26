@@ -10,11 +10,12 @@ import hashlib
 from copy import deepcopy
 from typing import Any
 
-from insurance_harness.product_ingestion.native_admission import (
+from insurance_harness.product_ingestion.native_admission_contract import (
     NATIVE_ADMISSION_DEPENDENCY_PROMPT,
     NATIVE_DEPENDENCY_POLICY,
     NativeAdmissionResponseV2,
 )
+from insurance_harness.product_ingestion.native_evidence_wire import bind_evidence_refs
 from insurance_harness.product_ingestion.stages import json_bytes
 
 WIRE_PROTOCOL = "native-knowledge-admission.830.v3"
@@ -105,32 +106,7 @@ def expand_wire_response(
         if expanded["contract"] != WIRE_PROTOCOL:
             raise ValueError("native admission wire contract mismatch")
         expanded["contract"] = "native-knowledge-admission.830.v2"
-        for kind in ("definitions", "pages"):
-            for row in expanded[kind]:
-                if "evidence" in row:
-                    raise ValueError("native admission wire must select segment refs only")
-                segments = row["content_provenance"]["segments"]
-                selected: set[str] = set()
-                for segment in segments:
-                    refs = segment["evidence_refs"]
-                    if (
-                        not isinstance(refs, list)
-                        or any(not isinstance(r, str) for r in refs)
-                        or len(refs) != len(set(refs))
-                        or not set(refs) <= catalog.keys()
-                        or refs != [r for r in catalog if r in refs]
-                        or "evidence_indexes" in segment
-                    ):
-                        raise ValueError("native admission wire invalid evidence refs")
-                    if bool(refs) != (segment["origin"] == "SOURCE_SUPPORTED"):
-                        raise ValueError("native admission wire origin mismatch")
-                    selected.update(refs)
-                refs = [ref for ref in catalog if ref in selected]
-                row["evidence"] = [catalog[ref] for ref in refs]
-                for segment in segments:
-                    segment["evidence_indexes"] = [
-                        refs.index(r) for r in segment.pop("evidence_refs")
-                    ]
+        bind_evidence_refs(expanded, catalog)
         NativeAdmissionResponseV2.model_validate(expanded)
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValueError("native admission wire malformed envelope") from exc

@@ -25,6 +25,8 @@ from insurance_harness.product_ingestion.models import (
 )
 from insurance_harness.product_ingestion.native_admission import (
     NativeAdmissionProjection,
+)
+from insurance_harness.product_ingestion.native_admission_context import (
     render_native_admission_context,
 )
 from insurance_harness.product_ingestion.native_admission_policy import resolve_admission_policy
@@ -76,13 +78,12 @@ async def run_native_admission_window(
     this adapter never sends a repair call or authorizes publication.
     """
     policy = resolve_admission_policy(
-        service.configuration.model, dependency_policy,
+        service.configuration.model,
+        dependency_policy,
         getattr(service.configuration, "native_admission", None),
     )
     settings, prompt, template = policy.settings, policy.prompt, policy.template
-    executor = (
-        service.native_admission_executor if policy.wire_protocol else service.model_executor
-    )
+    executor = service.native_admission_executor if policy.wire_protocol else service.model_executor
     if executor is None:
         raise ValueError("native admission executor is not configured")
     base = request.base_request
@@ -94,6 +95,13 @@ async def run_native_admission_window(
     )
     if scope != settings.scope or scope != expected_scope:
         raise ValueError("native admission execution scope mismatch")
+    from insurance_harness.product_ingestion.native_relation_admission import RELATION_CAPABILITY
+    from insurance_harness.product_ingestion.native_relation_wire import (
+        RELATION_WIRE_PROTOCOL,
+        render_relation_wire_context,
+    )
+
+    relation_enabled = policy.wire_protocol == RELATION_WIRE_PROTOCOL
     context = await asyncio.to_thread(
         render_native_admission_context,
         request=request,
@@ -103,8 +111,15 @@ async def run_native_admission_window(
         max_context_bytes=template.max_context_bytes,
         dependency_policy=dependency_policy,
         isolation_enabled=isolation_enabled,
+        relation_capability=RELATION_CAPABILITY if relation_enabled else None,
     )
-    wire_context = render_wire_context(context) if policy.wire_protocol else context
+    wire_context = (
+        render_relation_wire_context(context)
+        if relation_enabled
+        else render_wire_context(context)
+        if policy.wire_protocol
+        else context
+    )
     content = json_bytes(wire_context)
     input_hash = hashlib.sha256(content).hexdigest()
     operation = "native-admission-" + input_hash
@@ -195,7 +210,7 @@ async def run_native_admission_window(
             source=source,
             context=context,
             wire_protocol=policy.wire_protocol,
-        )
+            )
         keep("native_admission_preflight", json_bytes(preflight.receipt))
         keep("native_admission_canonical_response", preflight.canonical)
         if preflight.projection is None:

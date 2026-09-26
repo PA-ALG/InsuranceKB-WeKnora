@@ -12,9 +12,11 @@ import pytest
 
 from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
 from insurance_harness.product_ingestion.models import ProductScope
-from insurance_harness.product_ingestion.native_admission import (
-    native_admission_prompt,
+from insurance_harness.product_ingestion.native_admission_context import (
     render_native_admission_context,
+)
+from insurance_harness.product_ingestion.native_admission_contract import (
+    native_admission_prompt,
 )
 from insurance_harness.product_ingestion.stages import json_bytes
 from tests.product_ingestion.test_discovery_replay_custody import _parent_call, _service

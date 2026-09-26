@@ -17,11 +17,15 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
 from insurance_harness.knowledge_compiler.evidence_occurrences import exact_quote_occurrences
 from insurance_harness.product_ingestion.extraction import decode_model_json
 from insurance_harness.product_ingestion.native_admission import (
-    NATIVE_DEPENDENCY_POLICY,
     NativeAdmissionProjection,
-    NativeAdmissionResponseV2,
     project_native_admission_response,
+)
+from insurance_harness.product_ingestion.native_admission_context import (
     render_native_admission_context,
+)
+from insurance_harness.product_ingestion.native_admission_contract import (
+    NATIVE_DEPENDENCY_POLICY,
+    NativeAdmissionResponseV2,
 )
 from insurance_harness.product_ingestion.native_discovery import NativeDiscoverySnapshot
 from insurance_harness.product_ingestion.platform import DecodedSourceSnapshot
@@ -128,6 +132,7 @@ def preflight_native_admission_response(
             max_context_bytes=context["max_context_bytes"],
             dependency_policy=context.get("dependency_policy"),
             isolation_enabled=context.get("isolation_enabled", False),
+            relation_capability=context.get("relation_capability"),
         )
         if json_bytes(expected) != json_bytes(context):
             raise ValueError("native admission context mismatch")
@@ -142,10 +147,17 @@ def preflight_native_admission_response(
                     WIRE_PROTOCOL,
                     expand_wire_response,
                 )
+                from insurance_harness.product_ingestion.native_relation_wire import (
+                    RELATION_WIRE_PROTOCOL,
+                    expand_relation_wire_response,
+                )
 
-                if wire_protocol != WIRE_PROTOCOL:
+                if wire_protocol == RELATION_WIRE_PROTOCOL:
+                    value, expansion = expand_relation_wire_response(value, context)
+                elif wire_protocol == WIRE_PROTOCOL and "relation_capability" not in context:
+                    value, expansion = expand_wire_response(value, context)
+                else:
                     raise ValueError("native admission wire protocol invalid")
-                value, expansion = expand_wire_response(value, context)
             else:
                 _bind_v2(value, context, changes)
             canonical = json_bytes(value)

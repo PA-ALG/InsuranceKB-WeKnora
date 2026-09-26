@@ -245,7 +245,9 @@ def test_runtime_configuration_rejects_a_cross_scope_source_key_union(
 def test_native_candidate_mode_requires_all_exact_templates(tmp_path: Path) -> None:
     from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
     from insurance_harness.product_ingestion.discovery import PROVENANCE_DISCOVERY_REVIEW_PROMPT
-    from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+    from insurance_harness.product_ingestion.native_admission_contract import (
+        NATIVE_ADMISSION_PROMPT,
+    )
     from insurance_harness.product_ingestion.native_discovery import (
         NATIVE_DISCOVERY_EXECUTION_PROMPT,
     )

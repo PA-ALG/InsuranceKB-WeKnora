@@ -55,7 +55,9 @@ async def test_native_stage_keeps_coverage_and_does_not_run_another_discovery(
     ctx = context(values)
     projection = project(values, ctx, response(ctx))
     if mode in {"PENDING", "REQUIRES_ENTITY_RESOLUTION"}:
-        from insurance_harness.product_ingestion.native_admission import NativeAdmissionDecision
+        from insurance_harness.product_ingestion.native_admission_contract import (
+            NativeAdmissionDecision,
+        )
 
         projection = replace(
             projection,

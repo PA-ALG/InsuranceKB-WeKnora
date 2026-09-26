@@ -16,20 +16,19 @@ from insurance_harness.product_ingestion.model_settings import (
     ModelTemplatePolicy,
     ProductModelSettings,
 )
-from insurance_harness.product_ingestion.native_admission import (
+from insurance_harness.product_ingestion.native_admission_contract import (
     NATIVE_DEPENDENCY_POLICY,
     native_admission_prompt,
 )
 from insurance_harness.product_ingestion.native_admission_wire import (
     WIRE_PROMPT,
-    WIRE_PROTOCOL,
     WIRE_PURPOSE,
 )
 
 
 class NativeAdmissionSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    protocol: Literal["native-knowledge-admission.830.v3"]
+    protocol: Literal["native-knowledge-admission.830.v3", "native-knowledge-admission.830.v4"]
     template: ModelTemplatePolicy
 
 
@@ -58,7 +57,7 @@ def resolve_admission_policy(
     old = require_discovery_template(base, "extract", "g3-native-admission", prompt)
     if override is None:
         return AdmissionPolicy(base, old, prompt, None)
-    if dependency_policy != NATIVE_DEPENDENCY_POLICY or override.protocol != WIRE_PROTOCOL:
+    if dependency_policy != NATIVE_DEPENDENCY_POLICY:
         raise ValueError("admission override requires explicit dependency policy")
     template = override.template
     if template.template_id in {row.template_id for row in base.templates}:
@@ -70,8 +69,19 @@ def resolve_admission_policy(
             "templates": tuple(template if row == old else row for row in base.templates),
         }
     )
-    selected = require_discovery_template(derived, "extract", WIRE_PURPOSE, WIRE_PROMPT)
-    return AdmissionPolicy(derived, selected, WIRE_PROMPT, WIRE_PROTOCOL)
+    from insurance_harness.product_ingestion.native_relation_wire import (
+        RELATION_WIRE_PROMPT,
+        RELATION_WIRE_PROTOCOL,
+        RELATION_WIRE_PURPOSE,
+    )
+
+    purpose, wire_prompt = (
+        (RELATION_WIRE_PURPOSE, RELATION_WIRE_PROMPT)
+        if override.protocol == RELATION_WIRE_PROTOCOL
+        else (WIRE_PURPOSE, WIRE_PROMPT)
+    )
+    selected = require_discovery_template(derived, "extract", purpose, wire_prompt)
+    return AdmissionPolicy(derived, selected, wire_prompt, override.protocol)
 
 
 def validate_admission_execution(

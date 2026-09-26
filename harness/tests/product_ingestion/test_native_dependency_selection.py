@@ -9,6 +9,8 @@ import pytest
 
 from insurance_harness.product_ingestion.native_admission import (
     project_native_admission_response,
+)
+from insurance_harness.product_ingestion.native_admission_context import (
     render_native_admission_context,
 )
 from insurance_harness.product_ingestion.stages import json_bytes

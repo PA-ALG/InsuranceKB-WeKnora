@@ -9,7 +9,9 @@ from typing import Any
 import pytest
 
 from insurance_harness.knowledge_compiler.evidence_occurrences import exact_quote_occurrences
-from insurance_harness.product_ingestion.native_admission import render_native_admission_context
+from insurance_harness.product_ingestion.native_admission_context import (
+    render_native_admission_context,
+)
 from insurance_harness.product_ingestion.native_admission_preflight import (
     preflight_native_admission_response,
 )

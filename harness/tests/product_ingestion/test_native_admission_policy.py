@@ -9,7 +9,9 @@ import pytest
 
 from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
 from insurance_harness.product_ingestion.discovery import DEPENDENCY_DISCOVERY_REVIEW_PROMPT
-from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_DEPENDENCY_PROMPT
+from insurance_harness.product_ingestion.native_admission_contract import (
+    NATIVE_ADMISSION_DEPENDENCY_PROMPT,
+)
 from insurance_harness.product_ingestion.native_admission_wire import WIRE_PROMPT, WIRE_PROTOCOL
 from tests.product_ingestion.test_native_runtime import native_settings
 from tests.product_ingestion.test_pipeline_runtime import _base_snapshot_with_navigation, _sha

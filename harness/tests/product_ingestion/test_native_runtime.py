@@ -14,7 +14,9 @@ from insurance_harness.db.base import Base, make_session_factory
 from insurance_harness.jobs import JobStore
 from insurance_harness.product_ingestion.discovery import PROVENANCE_DISCOVERY_REVIEW_PROMPT
 from insurance_harness.product_ingestion.models import ProductRunState
-from insurance_harness.product_ingestion.native_admission import NATIVE_ADMISSION_PROMPT
+from insurance_harness.product_ingestion.native_admission_contract import (
+    NATIVE_ADMISSION_PROMPT,
+)
 from insurance_harness.product_ingestion.native_discovery import NATIVE_DISCOVERY_EXECUTION_PROMPT
 from insurance_harness.product_ingestion.platform import platform_snapshot_payload_sha256
 from insurance_harness.product_ingestion.progression import admit_uploads

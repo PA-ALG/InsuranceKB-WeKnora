@@ -187,7 +187,8 @@ class ProductScopeRuntimeSettings(_FrozenModel):
         exclude_if=lambda value: value is None,
     )
     native_admission: NativeAdmissionSettings | None = Field(
-        default=None, exclude_if=lambda value: value is None,
+        default=None,
+        exclude_if=lambda value: value is None,
     )
 
     @model_validator(mode="after")
@@ -210,14 +211,18 @@ class ProductScopeRuntimeSettings(_FrozenModel):
                 require_discovery_template,
             )
             from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied
-            from insurance_harness.product_ingestion.native_admission import native_admission_prompt
+            from insurance_harness.product_ingestion.native_admission_contract import (
+                native_admission_prompt,
+            )
             from insurance_harness.product_ingestion.native_discovery import (
                 NATIVE_DISCOVERY_EXECUTION_PROMPT,
             )
 
             try:
                 resolve_admission_policy(
-                    self.model, self.native_discovery.dependency_policy, self.native_admission,
+                    self.model,
+                    self.native_discovery.dependency_policy,
+                    self.native_admission,
                 )
                 for role, purpose, prompt in (
                     ("extract", "g3-native-discovery", NATIVE_DISCOVERY_EXECUTION_PROMPT),
@@ -233,6 +238,18 @@ class ProductScopeRuntimeSettings(_FrozenModel):
                     ),
                 ):
                     require_discovery_template(self.model, role, purpose, prompt)
+                if (
+                    self.native_admission is not None
+                    and self.native_admission.protocol == "native-knowledge-admission.830.v4"
+                ):
+                    from insurance_harness.product_ingestion.relation_review import (
+                        RELATION_REVIEW_PROMPT,
+                        RELATION_REVIEW_PURPOSE,
+                    )
+
+                    require_discovery_template(
+                        self.model, "verify", RELATION_REVIEW_PURPOSE, RELATION_REVIEW_PROMPT
+                    )
                 if self.native_discovery.dependency_policy is not None:
                     require_discovery_template(
                         self.model,

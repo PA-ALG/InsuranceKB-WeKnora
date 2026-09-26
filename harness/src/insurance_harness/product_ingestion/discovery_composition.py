@@ -181,7 +181,7 @@ def compose_discovery_review(
             context_hash,
             final_hash,
             run_id,
-            context.get("contract") == "product-discovery-review-context.830.v6",
+            context.get("dependency_selection") is not None,
         )
         or proof.get("review") != review.model_dump(mode="json")
         or proof.get("disposition_checks")

@@ -24,7 +24,9 @@ from insurance_harness.product_ingestion.discovery import (
     PROVENANCE_DISCOVERY_REVIEW_PROMPT,
 )
 from insurance_harness.product_ingestion.models import ProductScope
-from insurance_harness.product_ingestion.native_admission import native_admission_prompt
+from insurance_harness.product_ingestion.native_admission_contract import (
+    native_admission_prompt,
+)
 from insurance_harness.product_ingestion.native_admission_wire import (
     WIRE_PROMPT,
     WIRE_PROTOCOL,
@@ -86,19 +88,12 @@ def verified_discovery_replay_calls(
             admission = marker.artifact_kind == "native_admission_execution"
             prefix = "native-admission" if admission else "native-discovery"
             admission_v2 = (
-                admission
-                and proof.get("contract") == "native-admission-execution-receipt.830.v2"
+                admission and proof.get("contract") == "native-admission-execution-receipt.830.v2"
             )
-            if (
-                not admission_v2
-                and proof.get("contract") != prefix + "-execution-receipt.830.v1"
-            ):
+            if not admission_v2 and proof.get("contract") != prefix + "-execution-receipt.830.v1":
                 raise ValueError("native replay receipt contract changed")
             input_sha = proof.get("input_sha256")
-            if (
-                not _hash(input_sha)
-                or proof.get("operation_key") != prefix + "-" + input_sha
-            ):
+            if not _hash(input_sha) or proof.get("operation_key") != prefix + "-" + input_sha:
                 raise ValueError("native replay operation/input changed")
             operation = prefix + "-" + input_sha
             native_context_row = _matching_child_artifact(
@@ -109,11 +104,19 @@ def verified_discovery_replay_calls(
                 marker.artifact_key,
                 input_sha,
             )
+            from insurance_harness.product_ingestion.native_relation_wire import (
+                RELATION_WIRE_PROMPT,
+                RELATION_WIRE_PROTOCOL,
+            )
+
             prompt_sha = hashlib.sha256(
-                WIRE_PROMPT
+                RELATION_WIRE_PROMPT
                 if admission_v2
                 and _object(native_context_row.payload).get("wire_protocol")
-                == WIRE_PROTOCOL
+                == RELATION_WIRE_PROTOCOL
+                else WIRE_PROMPT
+                if admission_v2
+                and _object(native_context_row.payload).get("wire_protocol") == WIRE_PROTOCOL
                 else native_admission_prompt(
                     _object(native_context_row.payload).get("dependency_policy")
                 )
@@ -153,10 +156,15 @@ def verified_discovery_replay_calls(
                 "product-discovery-review-context.830.v4",
                 "product-discovery-review-context.830.v5",
                 "product-discovery-review-context.830.v6",
+                "product-discovery-review-context.830.v9",
             }:
                 raise ValueError("discovery replay review context contract changed")
+            from insurance_harness.product_ingestion.relation_review import RELATION_REVIEW_PROMPT
+
             prompt = (
-                DEPENDENCY_DISCOVERY_REVIEW_PROMPT
+                RELATION_REVIEW_PROMPT
+                if version == "product-discovery-review-context.830.v9"
+                else DEPENDENCY_DISCOVERY_REVIEW_PROMPT
                 if version == "product-discovery-review-context.830.v6"
                 else PROVENANCE_DISCOVERY_REVIEW_PROMPT
                 if version == "product-discovery-review-context.830.v5"
@@ -176,10 +184,7 @@ def verified_discovery_replay_calls(
         else:
             _verify_replay_marker(marker, stage_key="discovery")
             receipt = _object(marker.payload)
-            if (
-                receipt.get("contract")
-                != "product-discovery-window-replay-receipt.830.v1"
-            ):
+            if receipt.get("contract") != "product-discovery-window-replay-receipt.830.v1":
                 raise ValueError("discovery replay window receipt contract changed")
             if receipt.get("source_stage_key") != "discovery":
                 raise ValueError("discovery replay window stage changed")
@@ -228,9 +233,7 @@ def verified_discovery_replay_calls(
         ):
             raise ValueError("discovery replay parent call provenance changed")
         if admission_v2:
-            _verify_admission_v2_custody(
-                proof, native_context_row.payload, call, prompt_sha
-            )
+            _verify_admission_v2_custody(proof, native_context_row.payload, call, prompt_sha)
         calls[call_id] = call
     return calls
 
@@ -239,9 +242,11 @@ def _verify_admission_v2_custody(
     proof: dict[str, Any], content: bytes, call: ProductStageModelCall, prompt_sha: str
 ) -> None:
     """Read historical accounting evidence; do not authorize replay or publication."""
+    from insurance_harness.product_ingestion.native_relation_wire import RELATION_WIRE_PROTOCOL
+
     protocol = _object(content).get("wire_protocol")
     if (
-        protocol not in (None, WIRE_PROTOCOL)
+        protocol not in (None, WIRE_PROTOCOL, RELATION_WIRE_PROTOCOL)
         or proof.get("wire_protocol") != protocol
         or proof.get("prompt_sha256") != prompt_sha
         or proof.get("model_policy_sha256") != call.model_policy_sha256
