@@ -1,0 +1,103 @@
+{
+  "definition": {
+    "aliases": [],
+    "body": "给付附加险的重大疾病保险金后，主险基本保险金额按给付金额等额减少。",
+    "canonical_key": "advance-critical-illness",
+    "evidence": [
+      {
+        "block_id": "block",
+        "end": 33,
+        "knowledge_id": "document",
+        "offset_unit": "UNICODE_CODE_POINT",
+        "page_number": 3,
+        "parse_attempt": 1,
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "quote": "给付附加险的重大疾病保险金后，主险基本保险金额按给付金额等额减少。",
+        "quote_hash": "6becfa9e22a16defcb2f3d7298e04e35f884377555e3bac5ac75ae215bec794a",
+        "raw_kb_id": "raw",
+        "revision_id": "revision",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_type": "DOCUMENT",
+        "space_id": "space",
+        "start": 0,
+        "tenant_id": 1
+      }
+    ],
+    "origin": "MODEL_COMPILE",
+    "sense_key": "category",
+    "space_id": "space",
+    "title": "提前给付型重大疾病保险"
+  },
+  "page": {
+    "body": "给付附加险的重大疾病保险金后，主险基本保险金额按给付金额等额减少。",
+    "business_relation": {
+      "contract": "product-concept-relation.830.v1",
+      "object_concept_id": "concept_336848f17ec0e694c70aae2c5e9c78f78eb4eab7a2f1b303ffa561518587cdcf",
+      "object_definition_sha256": "00d68e99518c9bbe75b854b17e27ad283a2d2868df4f7ded68edd4219cbdd062",
+      "object_type": "CONCEPT",
+      "predicate": "benefit_reduced_by_advance_payment",
+      "subject_type": "PRODUCT"
+    },
+    "concept_ids": [
+      "concept_336848f17ec0e694c70aae2c5e9c78f78eb4eab7a2f1b303ffa561518587cdcf"
+    ],
+    "conditions": [],
+    "content_provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "evidence_indexes": [
+            0
+          ],
+          "origin": "SOURCE_SUPPORTED",
+          "text": "给付附加险的重大疾病保险金后，主险基本保险金额按给付金额等额减少。"
+        }
+      ]
+    },
+    "entity_id": "product",
+    "entity_version": "2026",
+    "evidence": [
+      {
+        "block_id": "block",
+        "end": 33,
+        "knowledge_id": "document",
+        "offset_unit": "UNICODE_CODE_POINT",
+        "page_number": 3,
+        "parse_attempt": 1,
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "quote": "给付附加险的重大疾病保险金后，主险基本保险金额按给付金额等额减少。",
+        "quote_hash": "6becfa9e22a16defcb2f3d7298e04e35f884377555e3bac5ac75ae215bec794a",
+        "raw_kb_id": "raw",
+        "revision_id": "revision",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_type": "DOCUMENT",
+        "space_id": "space",
+        "start": 0,
+        "tenant_id": 1
+      }
+    ],
+    "exceptions": [],
+    "space_id": "space",
+    "stable_key": "relation_f580beb38f663c3460e1e0257e62bfe6a52d429140e2120ea9a89ae3df1b3e6a",
+    "title": "提前给付后的责任扣减",
+    "valid_time": ""
+  },
+  "page_sha256": "3fc4858fc65fb6bc76b8c12ba118ab1e464a90312734fcd4bddbd247dfdecee6",
+  "source": {
+    "block_id": "block",
+    "knowledge_id": "document",
+    "page_number": 3,
+    "parse_attempt": 1,
+    "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "parser_identity": "parser",
+    "raw_kb_id": "raw",
+    "revision_id": "revision",
+    "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_type": "DOCUMENT",
+    "space_id": "space",
+    "tenant_id": 1,
+    "text": "给付附加险的重大疾病保险金后，主险基本保险金额按给付金额等额减少。"
+  }
+}

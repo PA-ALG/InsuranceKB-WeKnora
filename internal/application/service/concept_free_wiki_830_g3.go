@@ -487,12 +487,23 @@ func batchConceptOverviewRelatedMembers830G3(
 			ids[field.MemberID] = struct{}{}
 		}
 	}
+	relationIDs := map[string]bool{}
+	for _, page := range bundle.CompileResult.Output.Pages {
+		if page.EntityID == overview.OwnerID && page.BusinessRelation != nil {
+			id, err := page.FreeWikiPageID()
+			if err != nil {
+				return nil, ErrSchemaWikiPreparationInvalid
+			}
+			ids[id] = struct{}{}
+			relationIDs[id] = true
+		}
+	}
 	result := make([]types.ConceptPageMember830G2, 0, len(ids))
 	for _, member := range bundle.PageManifest.Members {
 		if _, selected := ids[member.MemberID]; !selected {
 			continue
 		}
-		if member.Kind != "field_assertion" || member.OwnerID != overview.OwnerID {
+		if (member.Kind != "field_assertion" && !(member.Kind == "free_wiki_item" && relationIDs[member.MemberID])) || member.OwnerID != overview.OwnerID {
 			return nil, ErrSchemaWikiPreparationInvalid
 		}
 		member.Payload = append(json.RawMessage(nil), member.Payload...)

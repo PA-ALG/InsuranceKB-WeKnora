@@ -850,6 +850,13 @@ func conceptRelatedMembers830G2(
 				}
 			}
 		}
+
+		for _, page := range bundle.CompileResult.Output.Pages {
+			if page.BusinessRelation != nil && page.BusinessRelation.ObjectConceptID == target.MemberID {
+				id, _ := page.FreeWikiPageID()
+				ids[id] = true
+			}
+		}
 	} else if target.Kind == "entity_overview" || target.Kind == "free_wiki" {
 		var navigation struct {
 			MemberIDs []string `json:"member_ids"`

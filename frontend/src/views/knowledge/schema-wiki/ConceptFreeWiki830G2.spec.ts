@@ -266,3 +266,26 @@ it('labels mixed and related generated content and opens the exact segment citat
   await wrapper.get('[data-origin="SOURCE_SUPPORTED"] button').trigger('click')
   expect(wrapper.get('[data-testid="source-viewer"]').text()).toBe('release-a')
 })
+
+describe('formal business relation display', () => {
+  it('shows typed meaning, product version and the same-release concept link', async () => {
+    const concept = { kind: 'concept', member_id: 'concept_' + 'b'.repeat(64), owner_id: 'space', title: '提前给付型重疾险', content: '', payload: {} }
+    const member = { kind: 'free_wiki_item', member_id: 'relation-page', owner_id: 'product', title: '责任扣减', content: '给付后减少基本保险金额',
+      payload: { entity_version: '2026', business_relation: { contract: 'product-concept-relation.830.v1', subject_type: 'PRODUCT', object_type: 'CONCEPT',
+        predicate: 'benefit_reduced_by_advance_payment', object_concept_id: concept.member_id, object_definition_sha256: 'a'.repeat(64) } } }
+    route.query = { preparation_id: 'preparation-g3' }
+    const directory = { mode: 'g3-preparation', preparationID: 'preparation-g3', statusLabel: '待审核', members: [member, concept], entities: [], scope: {} }
+    mocks.loadPreparation.mockResolvedValue(directory)
+    mocks.readBatch.mockResolvedValue({ readMode: 'preparation', directory, member, relatedMembers: [concept], citations: [] })
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+    const panel = wrapper.get('[aria-label="业务关系"]')
+    expect(panel.text()).toContain('提前给付后的责任扣减')
+    expect(panel.text()).toContain('2026')
+    expect(panel.text()).toContain('提前给付型重疾险')
+    expect(panel.get('a').attributes('data-target')).toContain('preparation-g3')
+  })
+  it('does not label ordinary related knowledge as a formal relation', async () => {
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
+    expect(wrapper.find('[aria-label="业务关系"]').exists()).toBe(false)
+  })
+})

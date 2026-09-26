@@ -4934,6 +4934,9 @@ func validateConceptDispositions830G3(request ConceptCompileRequest830G2, output
 		id, _ := conceptFreePageID830G2(page)
 		disposition := promoted[id]
 		old, exists := existingPages[id]
+		if exists && (old.BusinessRelation == nil) != (page.BusinessRelation == nil) {
+			return ErrConceptCandidateBundle830G3
+		}
 		if disposition == "new_page" && exists ||
 			disposition == "update" && (!exists || batchConceptCanonicalEqual830G3(old, page)) ||
 			disposition == "alias_link" && (!exists || !batchConceptCanonicalEqual830G3(old, page)) {

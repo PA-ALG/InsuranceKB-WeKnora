@@ -216,6 +216,8 @@ def review_context(request: CompileRequest, output: CompileOutput) -> dict[str, 
 def validate_output(request: CompileRequest, output: CompileOutput) -> None:
     request = CompileRequest.model_validate(request)
     output = CompileOutput.model_validate(output)
+    if any(p.business_relation is not None for p in (*request.existing_pages, *output.pages)):
+        raise ValueError("RELATION_REQUIRES_G3")
     if output.request_hash != request.request_hash:
         raise ValueError("REQUEST_IDENTITY_MISMATCH")
     validate_output_member_semantics(request, output)
@@ -319,6 +321,10 @@ def validate_disposition_semantics(
                 raise ValueError("FIELD_DISPOSITION_INVALID")
             continue
         old = existing.get(key)
+        if isinstance(old, FreeWikiPage) and isinstance(obj, FreeWikiPage):
+            from .product_concept_relation import validate_relation_update
+
+            validate_relation_update(old, obj)
         if disposition in ("new_page", "sense"):
             if old is not None:
                 raise ValueError("EXISTING_IDENTITY_RECREATED")

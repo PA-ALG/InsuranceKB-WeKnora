@@ -51,6 +51,7 @@ function member(value: unknown, scope: SchemaWikiScopeV1): ConceptMember830G2 {
     || typeof value.title !== 'string' || typeof value.content !== 'string') {
     throw new Error('G2_MEMBER_INVALID')
   }
+  if (Object.hasOwn(value.payload, 'business_relation')) throw new Error('RELATION_REQUIRES_G3')
   id(value.member_id); id(value.owner_id)
   const domainMember = ['concept', 'field_assertion', 'free_wiki_item'].includes(String(value.kind))
   if ((domainMember || value.payload.space_id !== undefined) && value.payload.space_id !== scope.space_id) {

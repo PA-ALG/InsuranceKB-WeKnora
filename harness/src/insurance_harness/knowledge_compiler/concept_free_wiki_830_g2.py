@@ -18,6 +18,12 @@ from pydantic import (
     model_validator,
 )
 
+from .product_concept_relation import (
+    ProductConceptRelation,
+    validate_relation_page,
+    validate_relation_targets,
+)
+
 Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
 
@@ -321,6 +327,25 @@ class FieldAssertion(Frozen):
 
 
 class FreeWikiPage(_KnowledgeContent):
+    business_relation: ProductConceptRelation | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def reject_null_relation(cls, value: object, handler: ModelWrapValidatorHandler[Self]) -> Self:
+        if (
+            isinstance(value, Mapping)
+            and "business_relation" in value
+            and value["business_relation"] is None
+        ) or (
+            isinstance(value, cls)
+            and "business_relation" in value.model_fields_set
+            and value.business_relation is None
+        ):
+            raise ValueError("EMPTY_BUSINESS_RELATION_MUST_BE_OMITTED")
+        return handler(value)
+
     space_id: Identity
     entity_id: Identity
     stable_key: Identity
@@ -336,6 +361,7 @@ class FreeWikiPage(_KnowledgeContent):
     @model_validator(mode="after")
     def check_content_provenance(self) -> Self:
         validate_content_provenance(free_page_content(self), self.evidence, self.content_provenance)
+        validate_relation_page(self)
         return self
 
 
@@ -439,3 +465,4 @@ def lint_members(
     links = {link for a in linked_members for link in a.concept_ids}
     if links - set(ids):
         raise ValueError("DANGLING_CONCEPT_LINK")
+    validate_relation_targets(definitions, pages)

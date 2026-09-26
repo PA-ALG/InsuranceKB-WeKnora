@@ -80,6 +80,7 @@ type ConceptFieldAssertion830G2 struct {
 }
 
 type ConceptFreeWikiPage830G2 struct {
+	BusinessRelation  *ProductConceptRelation     `json:"business_relation,omitempty"`
 	ContentProvenance *KnowledgeContentProvenance `json:"content_provenance,omitempty"`
 	SpaceID           string                      `json:"space_id"`
 	EntityID          string                      `json:"entity_id"`
@@ -478,7 +479,7 @@ func conceptJSONExactKeys830G2(raw []byte, destination reflect.Type) bool {
 		}
 		delim, composite := token.(json.Delim)
 		if !composite {
-			if expected == reflect.TypeOf(KnowledgeContentProvenance{}) && token == nil {
+			if (expected == reflect.TypeOf(KnowledgeContentProvenance{}) || expected == reflect.TypeOf(ProductConceptRelation{})) && token == nil {
 				return false
 			}
 			return true
@@ -747,6 +748,13 @@ func validateConceptRequest830G2(request ConceptCompileRequest830G2) error {
 }
 
 func validateConceptOutput830G2(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) error {
+	for _, pages := range [][]ConceptFreeWikiPage830G2{request.ExistingPages, output.Pages} {
+		for _, page := range pages {
+			if page.BusinessRelation != nil {
+				return ErrConceptCandidateBundle830G2
+			}
+		}
+	}
 	if validateConceptOutputShapeCoverage830G2(request, output) != nil {
 		return ErrConceptCandidateBundle830G2
 	}
@@ -901,7 +909,7 @@ func validateConceptMembers830G2(spaceID string, definitions []ConceptDefinition
 			}
 		}
 	}
-	return nil
+	return validateProductConceptRelationTargets(definitions, pages)
 }
 
 func validateConceptDefinition830G2(value ConceptDefinition830G2) error {
@@ -957,6 +965,9 @@ func validateConceptField830G2(value ConceptFieldAssertion830G2) error {
 }
 
 func validateConceptPage830G2(value ConceptFreeWikiPage830G2) error {
+	if validateProductConceptRelationPage(value) != nil {
+		return ErrConceptCandidateBundle830G3
+	}
 	if !conceptIdentity830G2(value.SpaceID) || !conceptIdentity830G2(value.EntityID) || !conceptIdentity830G2(value.StableKey) || value.Title == "" || value.Body == "" || validateKnowledgeContentProvenance(conceptFreePageContent830G3(value), value.Evidence, value.ContentProvenance) != nil {
 		return ErrConceptCandidateBundle830G2
 	}

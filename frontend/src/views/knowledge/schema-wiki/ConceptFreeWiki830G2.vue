@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { productConceptRelation } from '@/api/schema-wiki/productConceptRelation'
 import { readConceptPage830G2, conceptCitationTransport830G2,
   type ConceptSession830G2, type ConceptMember830G2 } from '@/api/schema-wiki/conceptFreeWiki830G2'
 import {
@@ -83,6 +84,9 @@ function preparationEvidence(member: ConceptMember830G2 | BatchConceptMember830G
     && Number.isSafeInteger((item as Record<string, unknown>).page_number)
     && typeof (item as Record<string, unknown>).quote === 'string')
 }
+const relation = computed(() => read.value ? productConceptRelation(read.value.member) : null)
+const relationTarget = computed(() => read.value?.related_members.find(m => m.member_id === relation.value?.object_concept_id))
+const relatedRelations = computed(() => read.value?.related_members.filter(m => m.payload.business_relation) ?? [])
 const selectedEntity = computed(() => batchPage.value?.directory.entities.find(
   entity => entity.entityID === batchPage.value?.member.owner_id,
 ))
@@ -198,6 +202,16 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
         </p>
         <p v-if="batchPage" class="concept-page__quality">已登记，尚未完成质量验收</p>
       </header>
+      <section v-if="relation && relationTarget" aria-label="业务关系">
+        <h2>业务关系</h2>
+        <p><strong>产品：</strong>{{ selectedEntity?.displayName ?? read.member.owner_id }} · {{ read.member.payload.entity_version }}</p>
+        <p><strong>关系：</strong>提前给付后的责任扣减</p>
+        <p><strong>关联险种概念：</strong><RouterLink :to="link(relationTarget)">{{ relationTarget.title }}</RouterLink></p>
+      </section>
+      <section v-if="read.member.kind === 'entity_overview' && relatedRelations.length" aria-label="产品业务关系">
+        <h2>业务关系</h2>
+        <ul><li v-for="member in relatedRelations" :key="member.member_id"><RouterLink :to="link(member)">{{ member.title }}</RouterLink></li></ul>
+      </section>
       <KnowledgeContentBody class="concept-page__body" :member="read.member" :citations="read.citations" @source="selected = $event" />
       <section v-if="batchPage && read.member.kind === 'field_assertion'" aria-label="字段详情">
         <h2>字段详情</h2>

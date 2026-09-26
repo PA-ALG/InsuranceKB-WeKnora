@@ -442,3 +442,41 @@ it('parses the complete mixed/generated candidate using the shared cross-languag
   await refreshManifestHashes(broken)
   await expect(parseBatchConceptPreparation830G3(broken, scope, await catalog(), 'preparation-g3')).rejects.toThrow()
 })
+
+describe('typed product-concept relation', () => {
+  const relationCandidate = JSON.parse(gunzipSync(readFileSync(new URL(
+    '../../../../internal/types/testdata/product_concept_relation_candidate.json.gz', import.meta.url,
+  ))).toString()) as Record<string, any>
+  async function relationDirectory(mutate?: (page: Record<string, any>) => void) {
+    const response = await preparationResponse(value => {
+      value.page_manifest = structuredClone(relationCandidate.page_manifest)
+      value.candidate_sha256 = relationCandidate.candidate_hash
+      const relation = value.page_manifest.members.find((m: any) => m.payload.business_relation)
+      mutate?.(relation.payload)
+    })
+    await refreshManifestHashes(response)
+    return parseBatchConceptPreparation830G3(response, scope, await catalog(), 'preparation-g3')
+  }
+  it('reads a formal relation and exposes it from both concept and product', async () => {
+    const directory = await relationDirectory()
+    const relation = directory.members.find(m => m.payload.business_relation)!
+    const objectID = (relation.payload.business_relation as any).object_concept_id
+    const transport = { get: vi.fn() }
+    const concept = await readBatchConceptPage830G3(directory, objectID, transport)
+    expect(concept.relatedMembers.map(m => m.member_id)).toContain(relation.member_id)
+    const entity = directory.entities.find(e => e.entityID === relation.owner_id)!
+    const overview = await readBatchConceptPage830G3(directory, entity.overview.member_id, transport)
+    expect(overview.relatedMembers.map(m => m.member_id)).toContain(relation.member_id)
+    expect(transport.get).not.toHaveBeenCalled()
+  })
+  it.each(['null', 'target_revision', 'predicate', 'stable_key', 'provenance'])(
+    'rejects a rehashed but invalid relation %s', async mode => {
+      await expect(relationDirectory(page => {
+        if (mode === 'null') page.business_relation = null
+        if (mode === 'target_revision') page.business_relation.object_definition_sha256 = '0'.repeat(64)
+        if (mode === 'predicate') page.business_relation.predicate = 'related_to'
+        if (mode === 'stable_key') page.stable_key = 'ordinary'
+        if (mode === 'provenance') delete page.content_provenance
+      })).rejects.toThrow()
+    })
+})

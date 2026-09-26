@@ -1,3 +1,4 @@
+import { validateProductConceptRelations } from './productConceptRelation'
 import { knowledgeContentSegments, validateKnowledgeCitations, type KnowledgeCitation } from './knowledgeContentProvenance'
 import {
   buildSchemaWikiScopeBootstrapPath,
@@ -314,7 +315,7 @@ async function pageMember(value: unknown, scope: SchemaWikiScopeV1, tenantID?: n
     identity(p.canonical_key); identity(p.sense_key)
   } else if (kind === 'free_wiki_item') {
     const p = exact(payload, ['space_id', 'entity_id', 'stable_key', 'title', 'body', 'evidence', 'concept_ids',
-      'conditions', 'exceptions', 'entity_version', 'valid_time', ...(Object.hasOwn(payload, 'content_provenance') ? ['content_provenance'] : [])])
+      'conditions', 'exceptions', 'entity_version', 'valid_time', ...(Object.hasOwn(payload, 'content_provenance') ? ['content_provenance'] : []), ...(Object.hasOwn(payload, 'business_relation') ? ['business_relation'] : [])])
     const pageBody = bodyText(p.body); const conditions = bodyStrings(p.conditions); const exceptions = bodyStrings(p.exceptions)
     const validTime = bodyText(p.valid_time, true)
     const expected = [pageBody, ...conditions.map(item => `条件：${item}`), ...exceptions.map(item => `例外：${item}`),
@@ -459,6 +460,7 @@ async function validateMembers(rawMembers: unknown, scope: SchemaWikiScopeV1,
   for (const member of [...allFields, ...allFreeItems]) {
     if ((member.payload.concept_ids as string[]).some(id => !conceptIDs.has(id))) return invalid()
   }
+  await validateProductConceptRelations(members, schemaWikiHash)
   return { members, entities }
 }
 
@@ -656,11 +658,15 @@ export async function readPinnedBatchConceptPage830G3(wikiKBID: string, memberID
 
 function localRelated(directory: BatchConceptDirectory830G3, member: BatchConceptMember830G3) {
   let refs: string[] = []
-  if (member.kind === 'entity_overview') refs = (member.payload.sections as R[]).flatMap(section =>
-    (section.fields as R[]).map(field => String(field.member_id)))
+  if (member.kind === 'entity_overview') refs = [
+    ...(member.payload.sections as R[]).flatMap(section => (section.fields as R[]).map(field => String(field.member_id))),
+    ...directory.members.filter(item => item.kind === 'free_wiki_item' && item.owner_id === member.owner_id
+      && item.payload.business_relation).map(item => item.member_id),
+  ]
   else if (member.kind === 'free_wiki') refs = member.payload.member_ids as string[]
   else if (member.kind === 'concept') refs = directory.members.filter(item =>
-    item.kind === 'field_assertion' && (item.payload.concept_ids as string[]).includes(member.member_id)).map(item => item.member_id)
+    (item.kind === 'field_assertion' || (item.kind === 'free_wiki_item' && item.payload.business_relation))
+      && (item.payload.concept_ids as string[]).includes(member.member_id)).map(item => item.member_id)
   else refs = member.payload.concept_ids as string[]
   const wanted = new Set(refs)
   const related = directory.members.filter(item => wanted.has(item.member_id))
