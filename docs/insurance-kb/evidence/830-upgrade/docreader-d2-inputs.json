@@ -1,0 +1,472 @@
+{
+  "component": "docreader",
+  "build_source_head": "8a0863fa095bc27b901db90c5f744d1db84063b2",
+  "artifact_identity": "sha256:9ffe696ea58a46fd591e37151626ff4a2e4bf13b35fd97a10b646d366581e845",
+  "canonical": {
+    "inputs": [
+      {
+        "path": ".dockerignore",
+        "sha256": "d030c20e1ddb28718705a889d04533c5f929220d7a46cf54977141208efc0250"
+      },
+      {
+        "path": "docker/Dockerfile.docreader",
+        "sha256": "53c45316e460ce213f111b2f322f0e28ff80e2f96a627c26f70957b3f1ca1fb9"
+      },
+      {
+        "path": "docreader/.pylintrc",
+        "sha256": "302f80c5da072d984957ea44101d288173499f27e592eb149355ac4099a945bf"
+      },
+      {
+        "path": "docreader/Makefile",
+        "sha256": "049d25a44a93b242bc07b6b0d6f5a747d7d963410974d6c85e9da2de7dca548b"
+      },
+      {
+        "path": "docreader/README.md",
+        "sha256": "e0414571b096dc3fe9bc90c6298cab37506f7b274ecee4f949f3bac5e454bbdb"
+      },
+      {
+        "path": "docreader/auth.py",
+        "sha256": "ce3d37c4fae71c11b6111775d14893d539a778959a8b7a10f7b1855bc3b459df"
+      },
+      {
+        "path": "docreader/client/auth.go",
+        "sha256": "d7c75e49475fb555c3317e97eab9383a3d4c06de98c657e07cfe69e57619b459"
+      },
+      {
+        "path": "docreader/client/client.go",
+        "sha256": "63d83386ae86addef73b3fdf945b1d535dd76146e8a49e1df9511b8146b82776"
+      },
+      {
+        "path": "docreader/client/client_test.go",
+        "sha256": "efd9dc4cac064c0c9c3979c9d87abdd3c3e7ae004424c526d2073a9e67eac281"
+      },
+      {
+        "path": "docreader/config.py",
+        "sha256": "1424fb1bc57669e3baf6bb40fcdd8aa5b5adf919b3df56fa0ff4da14fde4ccbd"
+      },
+      {
+        "path": "docreader/main.py",
+        "sha256": "27445d3cbcdfa8e201dad6002d8ac69a7239884f2e1ded229ee5a2751c834548"
+      },
+      {
+        "path": "docreader/models/__init__.py",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "docreader/models/document.py",
+        "sha256": "108cd362a2731824a8151c844958537787246545dd8b8d6a52265cd75867c86e"
+      },
+      {
+        "path": "docreader/models/read_config.py",
+        "sha256": "7165b34147f7db94853cb6850d624c612798b72b9a1df501e8ac74b39cd201fc"
+      },
+      {
+        "path": "docreader/parser/__init__.py",
+        "sha256": "b15dedb668bc5fbf26be7c9bf13a7a0b451106becf18eaa24cbca5e08951ef7c"
+      },
+      {
+        "path": "docreader/parser/base_parser.py",
+        "sha256": "3b83ab59549ce08eba9dde84907b84214d4faffb38d82c4240f890f6c0d103ea"
+      },
+      {
+        "path": "docreader/parser/chain_parser.py",
+        "sha256": "02d419dd34129023d720b520a065c21d48fdd00210d4894f76c3d42dc2117431"
+      },
+      {
+        "path": "docreader/parser/concurrency.py",
+        "sha256": "149acd24b10b8924ca551846d89a648ff5e3798ea9b3eb747788302f83408617"
+      },
+      {
+        "path": "docreader/parser/doc_parser.py",
+        "sha256": "359a7b414a2f64a7d256f1ccc9a9440e50ceb6ba7e907b7e97c6bf0e2a11b834"
+      },
+      {
+        "path": "docreader/parser/docx2_parser.py",
+        "sha256": "76215c9fb64fd7630b0f58e0cb591157daed141827ae51cc8e0e1f571a020237"
+      },
+      {
+        "path": "docreader/parser/docx_merge.py",
+        "sha256": "d1d94ef7632c976c6d588bfb21dc5d2e37c0906b77933858f9a7a6465eb5f7b2"
+      },
+      {
+        "path": "docreader/parser/docx_parser.py",
+        "sha256": "c5ad355a202f56d99272afb4e6fbcbbf9a169b51c36fcfe3c7c19262ef30eb7b"
+      },
+      {
+        "path": "docreader/parser/epub_parser.py",
+        "sha256": "74a80e86b47c54718d7162228a437faceeb344ade18c3fd465feea5add7762b9"
+      },
+      {
+        "path": "docreader/parser/excel_convert.py",
+        "sha256": "f65b83fd2957d82661b56cbd02c7790739d56787ab34c0a8d0644a13616cc923"
+      },
+      {
+        "path": "docreader/parser/excel_parser.py",
+        "sha256": "8acdb16ccd5a81dfd656aec6ac380d24379bc276cba739ac217f854d554db1b5"
+      },
+      {
+        "path": "docreader/parser/html_parser.py",
+        "sha256": "462d23a94adf28cf02df7e34a038ee42f2b39436ad1a6d00e1bc8e5d3f9ca45b"
+      },
+      {
+        "path": "docreader/parser/image_parser.py",
+        "sha256": "755fffd16764bc6cbdd24135ee949afb7f9db5e77a261ee3e89a2926da1f4baa"
+      },
+      {
+        "path": "docreader/parser/markdown_parser.py",
+        "sha256": "37011d9ffa4ba2692103f19ac193776eac4f26a85f6d1763e4679126ccc00bd9"
+      },
+      {
+        "path": "docreader/parser/markitdown_parser.py",
+        "sha256": "75d16952a5d0b18f243909fcc784977009c03522394d7fdc6e86ebd9f4f7cb22"
+      },
+      {
+        "path": "docreader/parser/mhtml_parser.py",
+        "sha256": "4de9b90fdb020c7fa95d24f444dcbd2d53c29325d044cb354b2a986634d3a227"
+      },
+      {
+        "path": "docreader/parser/opendataloader_parser.py",
+        "sha256": "406967abff1c68d14ab114a493cb53cf843d07bc18e22e009a02cfdf323631b4"
+      },
+      {
+        "path": "docreader/parser/parser.py",
+        "sha256": "1db235c0f50dd975576d22faf62aa7752f9cc252a368dc29d940885034361ca3"
+      },
+      {
+        "path": "docreader/parser/pdf_parser.py",
+        "sha256": "e232a603c98a9cd82f70c0e23e8e7926d2d70303e010bade644c493169cf7b05"
+      },
+      {
+        "path": "docreader/parser/ppt_convert.py",
+        "sha256": "1e0160fa9fe6d43b033998ecdf6f6ae2065df9f93975a81e06c91a6e428308fc"
+      },
+      {
+        "path": "docreader/parser/pptx_media.py",
+        "sha256": "69ad9457d726c7c62d806f69c37f07d95be773baf39c1dc8ed2c01ce6df1b789"
+      },
+      {
+        "path": "docreader/parser/registry.py",
+        "sha256": "f08c4ab1be87ab25c642dbff9ba7206aa304bb47723404e6e8423f7e962b0af4"
+      },
+      {
+        "path": "docreader/parser/web_parser.py",
+        "sha256": "766550795d78a8feabb2a65301d18225469f3ff4790d9125d946908c357afc80"
+      },
+      {
+        "path": "docreader/parser/xlsx_merge.py",
+        "sha256": "502056dd1a7a51510532838c66c45bc09db591dfcefed94bc12651beee7eb7d4"
+      },
+      {
+        "path": "docreader/parser/xlsx_repair.py",
+        "sha256": "0b3494e25fc1247109ad906b91f0f11cebf8c30bc16db1cb39edc6cc8ee5836e"
+      },
+      {
+        "path": "docreader/parser/xmind_parser.py",
+        "sha256": "508aee94d0055f6d21292e904f59089e5d2b1cd307a651370feaa38531be7c7d"
+      },
+      {
+        "path": "docreader/proto/docreader.pb.go",
+        "sha256": "254feefc7bcba8d27fb12b1ad404ce0c8b12dedad2c47635d2c479b9e76f4d59"
+      },
+      {
+        "path": "docreader/proto/docreader.proto",
+        "sha256": "b6ca2def2757610620b5d451e0ffa282950ef7c5dff5ee23bcc127c040f2c6a7"
+      },
+      {
+        "path": "docreader/proto/docreader_grpc.pb.go",
+        "sha256": "79bcfe90148c8e3dbe1a0a149a5847140dea4c45b84127f029c189807c12357a"
+      },
+      {
+        "path": "docreader/proto/docreader_pb2.py",
+        "sha256": "337a97f59b343f05d8e5bb8e3687d50e208171b541e1a4053f04db1b9770c0fb"
+      },
+      {
+        "path": "docreader/proto/docreader_pb2.pyi",
+        "sha256": "d0bdcb10ea78eea018b7669e96da86aaa2bc6f772bf64c0487279374fe09122d"
+      },
+      {
+        "path": "docreader/proto/docreader_pb2_grpc.py",
+        "sha256": "03f25df21a883752b3b34642560fafcfd2098707c282c9da2312b4611247da38"
+      },
+      {
+        "path": "docreader/pyproject.toml",
+        "sha256": "757a432a66e826fbbc45f590bc41dd349cbafa2ecd1517596255a93b76d0259f"
+      },
+      {
+        "path": "docreader/scripts/generate_proto.sh",
+        "sha256": "b9663a6a7b02916982efc80dd0cb3ef0ee1a036172fd327caf59802f06bea4be"
+      },
+      {
+        "path": "docreader/scripts/parse_local.py",
+        "sha256": "7fbc4a52ccb06bf8136ed73694ae8eeedcb72351b60e88e3b6b55e02e35d3963"
+      },
+      {
+        "path": "docreader/splitter/header_hook.py",
+        "sha256": "f146dd6ef7a8159250a364513d9f22192d8129e02ab29284a3cd54389df52089"
+      },
+      {
+        "path": "docreader/splitter/splitter.py",
+        "sha256": "79ab8d8fce9da87a2cb81c829ae86909ec238618248fdd7f492f5a53cc82dfc7"
+      },
+      {
+        "path": "docreader/testdata/images/test_text.png",
+        "sha256": "6906b12505dfbe8326d83da8f515be2a056ac24743161f5e92980832068fe406"
+      },
+      {
+        "path": "docreader/testdata/test.html",
+        "sha256": "16f9ac0f3d5acc8be17ccd9bc326c9d32135982941744e516ed8cb71683d70de"
+      },
+      {
+        "path": "docreader/testdata/test.md",
+        "sha256": "6098d45cf0f780d638d9a16d58e98e4c0d6ea71e976b0c455aa6aee2f46ab8e6"
+      },
+      {
+        "path": "docreader/testdata/test.txt",
+        "sha256": "15063a5da523915989827512266f175f55995d783518bcf2fb6a2d74a5059878"
+      },
+      {
+        "path": "docreader/testdata/test_download.txt",
+        "sha256": "56d9032c89c7f186f9c5a53f8968ce33d5b094af00b3b3f916437c3064caec83"
+      },
+      {
+        "path": "docreader/tests/fixtures/generate_issue_2634_fixture.py",
+        "sha256": "6f7de5af0b331675f498be596957c95b89a0933cf715f510d57aaacb42b4875a"
+      },
+      {
+        "path": "docreader/tests/fixtures/issue_2634_vertical_merge.docx",
+        "sha256": "f0a5602e9da034d53474cdda0fc497fedd1b1abaa29b7f1257b00c4bfe9d4d1d"
+      },
+      {
+        "path": "docreader/tests/test_config.py",
+        "sha256": "03eefc13a34896370b136318f6a1a5b56f81fdfcf9d2e200ae13e7c56924a0b0"
+      },
+      {
+        "path": "docreader/tests/test_docx_merge.py",
+        "sha256": "70b59db90d8c218e914a3a9bfb904102cc468d26b37b4c2ef257dc0b20f7b95d"
+      },
+      {
+        "path": "docreader/tests/test_docx_tables.py",
+        "sha256": "611ffb2ee6a9d62ece3fee3a9cb758629b6bd633d912dbce555f05c7bc1e5fab"
+      },
+      {
+        "path": "docreader/tests/test_endecode.py",
+        "sha256": "b60ee3c4842c0a29cfd24356d7e4cbfd21d1ca6ce67b26d5ccc7ccc8f2fee7e4"
+      },
+      {
+        "path": "docreader/tests/test_epub_parser.py",
+        "sha256": "3c96fd953e944f23daf7f613314618ec901ed97aa099c311c086690d65c0c285"
+      },
+      {
+        "path": "docreader/tests/test_excel_parser.py",
+        "sha256": "d70f4560b717873cfbdd1d82838361d8543b2f41e46eb20d6713f8d91b6f4787"
+      },
+      {
+        "path": "docreader/tests/test_html_parser.py",
+        "sha256": "bd3adc07475f8abd42bec7805f95b3876a8f85bd62735612d8ee7d59f46545d1"
+      },
+      {
+        "path": "docreader/tests/test_markdown_table_util.py",
+        "sha256": "192fba7d9e0fc0b4d7e9a1e390bbe00b2f7728a2f836d65c92a3c901f3db3146"
+      },
+      {
+        "path": "docreader/tests/test_mhtml_parser.py",
+        "sha256": "663b138808b875416c2cbef6d99c0a5ba3086d18b54e0ba44dc8306475a17411"
+      },
+      {
+        "path": "docreader/tests/test_opendataloader_parser.py",
+        "sha256": "30c7424b74ebb920469a0a70622e59e38bd55e132a1df0c884499d8269fde47b"
+      },
+      {
+        "path": "docreader/tests/test_parser_concurrency.py",
+        "sha256": "0b6cba7c96c50cc620521f42fdde60344f01bba99c90ab48f57f507b89e64ad0"
+      },
+      {
+        "path": "docreader/tests/test_parser_routing.py",
+        "sha256": "9cce66f45f51888d16b60b1862b1aac7cf8db4d4f51c083d11aff70ce8245e7a"
+      },
+      {
+        "path": "docreader/tests/test_pdf_embedded_images.py",
+        "sha256": "4bb64e767e61c5f46540426df166be28c35d4931438a7320d92d21d5ce291e62"
+      },
+      {
+        "path": "docreader/tests/test_pdf_router.py",
+        "sha256": "dc02ce2f7c1cc4bd4fec50fe352c3e82cbb887e14fcb0bf38b21199b0b7a36dd"
+      },
+      {
+        "path": "docreader/tests/test_ppt_convert.py",
+        "sha256": "967f0949cbf08c385d7bf496c41e6a62fd16850813b15f1f5d7eb670aafda43c"
+      },
+      {
+        "path": "docreader/tests/test_sandbox_executor.py",
+        "sha256": "905bb04903ac015974fe8345f529da38481d492744dd7ed6e7a127f1e4f573d4"
+      },
+      {
+        "path": "docreader/tests/test_ssrf.py",
+        "sha256": "d2bad7a2a47703cb25d8c71b698b126d812162cccb2f46c076fc5bb2bef3784f"
+      },
+      {
+        "path": "docreader/tests/test_ssrf_proxy.py",
+        "sha256": "e0438fbfc180c778352481c6869dc7a27cfaf5bfd7c85569f08d8c919e5610da"
+      },
+      {
+        "path": "docreader/tests/test_tempfile_context.py",
+        "sha256": "a19ac0cd06b1c9725b6ed2ff64274131f1e6dd52de9060848a07e5cbd066f168"
+      },
+      {
+        "path": "docreader/tests/test_web_parser.py",
+        "sha256": "11a77d083bb8a7baf58f1ed8bbb9d2ffef3cddcb46fe0abc52ad964494fdf075"
+      },
+      {
+        "path": "docreader/tests/test_xmind_parser.py",
+        "sha256": "b0c5edb9fafaad80cee3f914001eafca7316121928cab7b8631a75682bf92b01"
+      },
+      {
+        "path": "docreader/utils/__init__.py",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "docreader/utils/endecode.py",
+        "sha256": "d1d18c7feb9ee79cd8fb43fd261a411070fffef40b64513f0308b7ee29f789ea"
+      },
+      {
+        "path": "docreader/utils/request.py",
+        "sha256": "ab85824b8b8d037e306dd2aa60c22faebeda171b806d7d8dfbc8f18dcf4e0e60"
+      },
+      {
+        "path": "docreader/utils/split.py",
+        "sha256": "560eab33ecd31120f896feaf9a2b043769e7bd258fa6dc806dd10ca500ab7cb8"
+      },
+      {
+        "path": "docreader/utils/ssrf.py",
+        "sha256": "06e23e8b8016d2feec0819c4368a8466b2f8bd8a0d1d88f9eeceb5cf5343b4ed"
+      },
+      {
+        "path": "docreader/utils/ssrf_proxy.py",
+        "sha256": "171579f9d957f40f8e06e2928bd2884594281d37858b64cb63a393a902b249e2"
+      },
+      {
+        "path": "docreader/utils/tempfile.py",
+        "sha256": "8e50f7a745e73ca51fb20209cb917c481b0856d339eed2e1e38ead68015ad5ac"
+      },
+      {
+        "path": "docreader/uv.lock",
+        "sha256": "57861b67cfcbbaeee7e8ae49b8f22985b6eae4d83ffd3c0b59f761181af1bf85"
+      },
+      {
+        "path": "packages/.gitkeep",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "packages/dsh-weknora/.gitignore",
+        "sha256": "58aea3d6b4b0f8799c1e00c3b023898516997f6369ee8e13d8d4b4215f70a62b"
+      },
+      {
+        "path": "packages/dsh-weknora/README.md",
+        "sha256": "ca93fd651194763e888a6df7d0e383b6ac0d3eb7ca8a67a7ba20b3ba68356b36"
+      },
+      {
+        "path": "packages/dsh-weknora/README_CN.md",
+        "sha256": "10622c041051dec41a5964360c9796e8e05adc87ffec86a6b846442967978ac2"
+      },
+      {
+        "path": "packages/dsh-weknora/contract/contract_test.go",
+        "sha256": "556261e0ed0efbee6b468412e9d4036fa419d4b8d1bed4c98b34720455150ceb"
+      },
+      {
+        "path": "packages/dsh-weknora/cordis.patch.yml",
+        "sha256": "1e150143346bdd83d4ce8cfb845fa9a29f6577f8103d924f091038c2b439123f"
+      },
+      {
+        "path": "packages/dsh-weknora/package-lock.json",
+        "sha256": "98eaee0305d0b2e07690bec52798ed2b0b53498cd55ad110e78d0ba0c0c97d41"
+      },
+      {
+        "path": "packages/dsh-weknora/package.json",
+        "sha256": "66c22ddbbb9e7dada04fe2d9fc5402d0eada4effbb0e9fd51d09c4aedd765864"
+      },
+      {
+        "path": "packages/dsh-weknora/src/client.ts",
+        "sha256": "d0dd7f970a4c7d1bb325e450cd181eab45009e0510e1da7ff3935de3721d32fb"
+      },
+      {
+        "path": "packages/dsh-weknora/src/config.ts",
+        "sha256": "f3dc476493b97c181a7911cd02603602b2a338e357e35f75385bf76744b2c525"
+      },
+      {
+        "path": "packages/dsh-weknora/src/harness.ts",
+        "sha256": "74966164303cceb453b9fe325aa5f375848b711b7085cf5335ba96fe4d72bf89"
+      },
+      {
+        "path": "packages/dsh-weknora/src/index.ts",
+        "sha256": "75d33b03bc483cdced47ef04bdf34da5cb4887a90f569d809208d9da9f599bac"
+      },
+      {
+        "path": "packages/dsh-weknora/src/render.ts",
+        "sha256": "5abc2ebe8d5afa8a90e98ae970da7ad3953cf40e52283dddd6c41bf8f77ec33d"
+      },
+      {
+        "path": "packages/dsh-weknora/src/tools.ts",
+        "sha256": "b0adb6b9fc060a55ff5b2c9e7631ea10ddcb25950bf52ab1b79b9ba1f9e66f99"
+      },
+      {
+        "path": "packages/dsh-weknora/test/client.test.mjs",
+        "sha256": "4b7c7141083c5977685c05ca275b9b984a7d6c2f44e51edc476f78eb4d322f0d"
+      },
+      {
+        "path": "packages/dsh-weknora/test/config.test.mjs",
+        "sha256": "fe2093db598e14f018040b932371de0cd220e9368428f8f22de0cceaec122e38"
+      },
+      {
+        "path": "packages/dsh-weknora/test/contract.test.mjs",
+        "sha256": "f448bab90d9bcced8b5471c0e4107a7a7ac75ea67bed9c4a9fd7703d233a002a"
+      },
+      {
+        "path": "packages/dsh-weknora/test/e2e/fake-model.mjs",
+        "sha256": "2740ece740dfab7c69f4acd673d31234b290a763f1593e9fc89215c94bf56e73"
+      },
+      {
+        "path": "packages/dsh-weknora/test/e2e/run-in-dsh.mjs",
+        "sha256": "03bea038f51e0d4d90457743287be3fa302bbb4fbf906832ef0637969a15e225"
+      },
+      {
+        "path": "packages/dsh-weknora/test/fixtures/api-contract.json",
+        "sha256": "e697303885ed6b733fc47463daa20c0eecf17ddaa3cd13a4eb2c730fdf9a7f5b"
+      },
+      {
+        "path": "packages/dsh-weknora/test/helpers/json-schema.mjs",
+        "sha256": "cc242aed21091742da7664be52dc3143f718d36fe54087cb99d3844a7af691a8"
+      },
+      {
+        "path": "packages/dsh-weknora/test/helpers/mock-weknora.mjs",
+        "sha256": "5be5ec47f2f80ec48ff3b31269fcf658452e66a7f1574f5a2c10d07ffc6ee6ad"
+      },
+      {
+        "path": "packages/dsh-weknora/test/tools.test.mjs",
+        "sha256": "579a7516eb85d68ddd0f8ea4593aa4a6eea08b9db3c1927408839bfd42bc1b8d"
+      },
+      {
+        "path": "packages/dsh-weknora/tsconfig.build.json",
+        "sha256": "3f1c7d501573cc1def68d9622c866e7a297c0e8c20ea02455bab3960a0bd2f0c"
+      },
+      {
+        "path": "packages/dsh-weknora/tsconfig.json",
+        "sha256": "67d5b917417c3ef1504b20543c1e5e6a479e4805f445d32e00f14462812a7f89"
+      }
+    ],
+    "dockerfile": "docker/Dockerfile.docreader",
+    "context": ".",
+    "platform": "linux/arm64",
+    "target": "runner",
+    "build_args": {
+      "TARGETARCH": "arm64",
+      "PLATFORM": "linux/arm64",
+      "APT_MIRROR": ""
+    },
+    "bases": [
+      "python:3.10.18-bookworm@sha256:ee0c7d26e2dba416773cb51c042496e9cffacc872459f57726935dd6833f2d96"
+    ],
+    "base_platform_manifest": "sha256:66c51ab85330ab6888e74a9d2d03f4e6e2a540f19655377a8f846b86195ef866"
+  },
+  "status": "NOT RUN",
+  "build_invocations": 0
+}

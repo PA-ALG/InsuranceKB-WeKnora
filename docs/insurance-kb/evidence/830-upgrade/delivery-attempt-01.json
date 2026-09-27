@@ -1,0 +1,59 @@
+{
+  "status": "BLOCKED",
+  "build_source_head": "8a0863fa095bc27b901db90c5f744d1db84063b2",
+  "app_selector_receipt": {
+    "artifact_identity": "sha256:dee7d33d449a9a3b382577dec1c45d9e8f246aa0acfab3ddb64f1b4921297f61",
+    "build_invocations": 1,
+    "build_source_head": "8a0863fa095bc27b901db90c5f744d1db84063b2",
+    "candidate_image_ids": [],
+    "contract": "ba0-app-build-receipt.v1",
+    "dependency_lock_sha256": "4eba510179e957a039c757c702d0702a12a8435724d46e393da33d33006393b2",
+    "docker_context": "colima",
+    "integration_head": "8a0863fa095bc27b901db90c5f744d1db84063b2",
+    "manifest_sha256": "4a535bf4c310f965bca4435b301f08b9d0216beb62ea823cb95e9e126faed850",
+    "platform": "linux/arm64",
+    "selector": "BUILD_AFFECTED",
+    "status": "INCOMPLETE",
+    "target": "runtime"
+  },
+  "app_exit_code": 1,
+  "app_build_history": {
+    "cached_steps": 0,
+    "completed_at": "2026-09-27T12:37:39.312326949Z",
+    "completed_steps": 0,
+    "created_at": "2026-09-27T12:34:22.259865466Z",
+    "name": "context/docker/Dockerfile.app (runtime)",
+    "ref": "colima/colima/8uutn0negsd0lb1asp0q8cbjo",
+    "status": "Completed",
+    "total_steps": 0
+  },
+  "build_wall_seconds": 197.052461483,
+  "failure": "no space left on device while expanding Rust toolchain snapshot",
+  "failed_path": "/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/3806/fs/usr/local/rustup/toolchains/1.90.0-aarch64-unknown-linux-gnu/lib/libLLVM.so.20.1-rust-1.90.0-stable",
+  "app_log_path": "/private/tmp/upg-app-d2-build.log",
+  "app_log_sha256": "2dd18bd2bc10dfef5a189a6f86d869c4b131a2e6c0a6606d2796f3a02251dea7",
+  "image_output": null,
+  "retry_invocations": 0,
+  "ui": "NOT RUN; exact lookup empty, blocked by shared capacity",
+  "docreader": "NOT RUN; exact lookup empty, blocked by shared capacity",
+  "capacity": {
+    "colima_data_size": "108G",
+    "colima_data_used": "106G",
+    "colima_data_available": "1.1G",
+    "host_available": "12GiB"
+  },
+  "effects": {
+    "new_service_deployments": 0,
+    "database_migrations": 0,
+    "provider_calls": 0,
+    "image_or_cache_deletions": 0
+  },
+  "push": {
+    "status": "BLOCKED",
+    "attempt_executed": false,
+    "destination": "PA-ALG/InsuranceKB-WeKnora",
+    "reason": "Automatic approval review rejected sending this exact code/evidence payload because explicit authorization and destination trust were not established",
+    "bypass_or_retry": false
+  },
+  "next": "Obtain explicit approval for any per-ID artifact deletion, one capacity-validated recovery App build, and exact branch push. Do not repeat builds while disk remains insufficient."
+}

@@ -10,6 +10,6 @@
 - [ ] D2 验证迁移和恢复，既有授权测试环境交付，真实tracer与source click。
 - [ ] D3 精确代码/CI/PR与G4交接，保留未测限制。
 
-CURRENT=D1 冻结提交与受影响制品准备；C2=PASS（最终独审0BLOCKER；43路径+单行router fixture匹配，软件检查通过，真实交付未执行）；NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
+CURRENT=D1 制品交付BLOCKED：App一次构建因Colima磁盘不足失败（无镜像），UI/DocReader尚未构建；软件8a0863fa0及最终独审通过。push另被自动审批拒绝，未执行。NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
 
-独审发现A1/RED映射未写齐，现由compatibility.md及current-slice-paths.json明确当前切片。初始A0仅身份核验，不是九项验收闭合。后续不回填历史门禁为已通过。
+空间恢复候选与精确失败回执已准备；镜像/cache/卷无删除，构建无重试。须先获得具体清理/一次恢复构建及推送授权，再继续既有队列。真实迁移/部署/业务仍NOT RUN。

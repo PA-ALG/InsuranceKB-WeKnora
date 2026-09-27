@@ -1,0 +1,265 @@
+{
+  "status": "NOT RUN; explicit approval required before deletion",
+  "selection": "Tagged historical business images with zero container references at read-only inventory; excludes generic base images, build-cache images and dependency images",
+  "protected": "All running and stopped containers, all volumes, every container-referenced image, build cache; no system/image/builder prune",
+  "candidates": [
+    {
+      "repository": "insurance-harness-g35",
+      "tag": "cb69e41aeffa",
+      "image_id": "sha256:ca42a65aa8224faeaed313c5aee2a9c5d01dd9c29ed30c3abecb0c3d211c0321",
+      "container_references": 0,
+      "reported_unique_size": "111.3MB",
+      "reported_unique_bytes": 111300000
+    },
+    {
+      "repository": "weknora-g3-harness",
+      "tag": "recovery-20260922",
+      "image_id": "sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155",
+      "container_references": 0,
+      "reported_unique_size": "111MB",
+      "reported_unique_bytes": 111000000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3bn-0940f36497a7",
+      "image_id": "sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+      "container_references": 0,
+      "reported_unique_size": "111MB",
+      "reported_unique_bytes": 111000000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3bm-63ac9e460092",
+      "image_id": "sha256:0e55b9e698940d6083f17982d21d395874b67b28d7d871fa51f22a54b22e9925",
+      "container_references": 0,
+      "reported_unique_size": "305MB",
+      "reported_unique_bytes": 305000000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3bk-954255a0f797",
+      "image_id": "sha256:c70f8b26a51cc1128632844a6beef702a5ba6a2219ae32e5c0cdb766d841c1d2",
+      "container_references": 0,
+      "reported_unique_size": "304.9MB",
+      "reported_unique_bytes": 304900000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3bj-964f968001f3",
+      "image_id": "sha256:da7caeb42f4cc5b5d6c078b09035f12ed00da0bb063c8c279e9d951d8de55370",
+      "container_references": 0,
+      "reported_unique_size": "304.9MB",
+      "reported_unique_bytes": 304900000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3bg-61e5e38f2ea4",
+      "image_id": "sha256:e1d73952de6c657227de57cd505f203c9c33e094c58139af684aea06141354ce",
+      "container_references": 0,
+      "reported_unique_size": "110.8MB",
+      "reported_unique_bytes": 110800000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3be-111c731e7d56",
+      "image_id": "sha256:8edff8538d159c64fe74efcaf830a32bcc3743bd2891664a1aa90aa2b7a7ca75",
+      "container_references": 0,
+      "reported_unique_size": "110.8MB",
+      "reported_unique_bytes": 110800000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3bb-e3b602261789",
+      "image_id": "sha256:6724bc88f43dd5c0e35e1dcbccb241848c9877c2f82fb2248564cec9a15e208a",
+      "container_references": 0,
+      "reported_unique_size": "110.8MB",
+      "reported_unique_bytes": 110800000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3ba-79c1d8b873a5",
+      "image_id": "sha256:30f06185cbe9b8cdf80c3caf60ee4c0a6680ff8b18faf446fa5a3873379335de",
+      "container_references": 0,
+      "reported_unique_size": "110.8MB",
+      "reported_unique_bytes": 110800000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3ax-d9d30adac653",
+      "image_id": "sha256:a2e0e7a476cdbb38d7ce1b8182861f5dd6ebfbe3be8bed7822a850ac14a9a155",
+      "container_references": 0,
+      "reported_unique_size": "110.8MB",
+      "reported_unique_bytes": 110800000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3at-c37e0813c82c",
+      "image_id": "sha256:e3f6cdf54d7c46542ecaa614071755e18bf38a7a6db40d911d67c4cd4b5c949d",
+      "container_references": 0,
+      "reported_unique_size": "110.7MB",
+      "reported_unique_bytes": 110700000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3as-4b1ece885a0d",
+      "image_id": "sha256:d7e419969349d60b398425e5ef02b1082b6e934d1c74743ceeb3a3653d1b85f6",
+      "container_references": 0,
+      "reported_unique_size": "110.7MB",
+      "reported_unique_bytes": 110700000
+    },
+    {
+      "repository": "insurancekb/g3-harness",
+      "tag": "task3aq-9a1fd106b81d",
+      "image_id": "sha256:28344e4fb10a0b341f088ced7f0c69986653ab7abc77f828dcccda551d9e758d",
+      "container_references": 0,
+      "reported_unique_size": "110.7MB",
+      "reported_unique_bytes": 110700000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-task3ap-2f2fe5ca",
+      "image_id": "sha256:64f7992a50ea4ea6e11c65e82a4706d46a55f6626f9a46518fa431ff1766ca1a",
+      "container_references": 0,
+      "reported_unique_size": "110.7MB",
+      "reported_unique_bytes": 110700000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-task3ao-194e6ff0",
+      "image_id": "sha256:f1534503d565a4889d0449d6f4e1a3ed5b988a404fc074a468c4170fd97a181c",
+      "container_references": 0,
+      "reported_unique_size": "110.7MB",
+      "reported_unique_bytes": 110700000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-task3an-5e62d5f9",
+      "image_id": "sha256:396560b8c7dbdc0ecf9f3b3d9616d2c40e7f86d8b85fab7383a0c27de6689127",
+      "container_references": 0,
+      "reported_unique_size": "110.6MB",
+      "reported_unique_bytes": 110600000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-task3am-0ae8d97e",
+      "image_id": "sha256:cdb94a73f8f180552cbd096f2d10115542763d9c8c48256b4c2d79efe871f15e",
+      "container_references": 0,
+      "reported_unique_size": "110.6MB",
+      "reported_unique_bytes": 110600000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-task3al-b455aca3",
+      "image_id": "sha256:c2a055e381ea5aece03e5558e7d355d8add2cb9654cae222efe959bf86354c77",
+      "container_references": 0,
+      "reported_unique_size": "110.6MB",
+      "reported_unique_bytes": 110600000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-task3ag-383b371a",
+      "image_id": "sha256:695bb60f3967f83b65f2f7edbcbf57b9e4c66cc59423a8f75daae5afe45e9c15",
+      "container_references": 0,
+      "reported_unique_size": "110.6MB",
+      "reported_unique_bytes": 110600000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-task3ae-02-9319698a",
+      "image_id": "sha256:14d1e1573303366db9ff6ffd63df93b4d0d36639d1d3f3e0591f1f9eb4d28ca2",
+      "container_references": 0,
+      "reported_unique_size": "110.6MB",
+      "reported_unique_bytes": 110600000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-task3ae-9319698a",
+      "image_id": "sha256:8f582a6df0ec8948aa8511ce2eaad59c4b185c1144e358680d20620303159b5b",
+      "container_references": 0,
+      "reported_unique_size": "110.6MB",
+      "reported_unique_bytes": 110600000
+    },
+    {
+      "repository": "insurancekb-harness",
+      "tag": "g3-null-collections-8dd22b32",
+      "image_id": "sha256:80420b69ce3dc44dcdaabe8867138eb7ce2752a4a9d0a9c34cb209159d74aff7",
+      "container_references": 0,
+      "reported_unique_size": "110.6MB",
+      "reported_unique_bytes": 110600000
+    },
+    {
+      "repository": "insurancekb-ui",
+      "tag": "product-incremental-e00f7908",
+      "image_id": "sha256:5f11d6a29dcd3fb74c5c2973cb1f44b74f450cd6702440ff376c3456612bb2e7",
+      "container_references": 0,
+      "reported_unique_size": "64.97MB",
+      "reported_unique_bytes": 64970000
+    },
+    {
+      "repository": "local/insurancekb-weknora-frontend",
+      "tag": "g1-m3-06b101665921",
+      "image_id": "sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0",
+      "container_references": 0,
+      "reported_unique_size": "64.84MB",
+      "reported_unique_bytes": 64840000
+    },
+    {
+      "repository": "local/insurancekb-weknora-app",
+      "tag": "g1-m3-06b101665921",
+      "image_id": "sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327",
+      "container_references": 0,
+      "reported_unique_size": "873.6MB",
+      "reported_unique_bytes": 873600000
+    },
+    {
+      "repository": "insurancekb-weknora-c5-frontend",
+      "tag": "f90fb9fe",
+      "image_id": "sha256:245ea13fda931b12a9dcc27aa5b644f733aacef60fa3605ae2760b924d651f4b",
+      "container_references": 0,
+      "reported_unique_size": "64.81MB",
+      "reported_unique_bytes": 64810000
+    },
+    {
+      "repository": "insurancekb-weknora-p0",
+      "tag": "8d8bff68",
+      "image_id": "sha256:90d3bb3f1b2f788b0acb8cb430764da9eb1e8cfc4b095f210ac879a31c17241a",
+      "container_references": 0,
+      "reported_unique_size": "788.8MB",
+      "reported_unique_bytes": 788800000
+    },
+    {
+      "repository": "insurancekb-weknora-p0",
+      "tag": "4ce93955",
+      "image_id": "sha256:dd1fe37ff32f283c3bea5fbad3b0e729fa31a060c4e0a4b84b658d1e04ce6de0",
+      "container_references": 0,
+      "reported_unique_size": "788.8MB",
+      "reported_unique_bytes": 788800000
+    },
+    {
+      "repository": "insurancekb-weknora-p0",
+      "tag": "3fa4c1fd",
+      "image_id": "sha256:69b56252b378b705cf4fbf705ec6ea373506d866a21aca64259381e4c7560365",
+      "container_references": 0,
+      "reported_unique_size": "796.5MB",
+      "reported_unique_bytes": 796500000
+    },
+    {
+      "repository": "insurancekb-weknora-p0",
+      "tag": "fac8dae7",
+      "image_id": "sha256:b8f0b0c6f3bbdfbf920158e7e409f931fce68da134f748060f509a0d0c443f94",
+      "container_references": 0,
+      "reported_unique_size": "796.5MB",
+      "reported_unique_bytes": 796500000
+    },
+    {
+      "repository": "insurancekb-weknora-app",
+      "tag": "p0-baseline-6af75c50",
+      "image_id": "sha256:01482fd79aa5bcbe3fa6a4f1f8aa4fb61015cf3e3d9b6c451379f81b062e83af",
+      "container_references": 0,
+      "reported_unique_size": "796.4MB",
+      "reported_unique_bytes": 796400000
+    }
+  ],
+  "reported_unique_bytes_sum": 8165020000,
+  "limitation": "Reported unique sizes are accounting estimates, not a promise of reclaimed disk; cache/layer references can retain bytes. Reinspect references immediately before any approved per-ID delete. If space remains insufficient, stop before any build retry."
+}

@@ -1,12 +1,14 @@
-## 2026-09-27 WeKnora 0.8.2 升级实施中
+## 2026-09-27 WeKnora 0.8.2：软件已冻结，交付被磁盘与推送审批阻断
 
-活动树 `830-upstream-plugin-boundary`，root 唯一集成；产品基线 `8ccc2ac9`（PR130已合入），固定上游 `3e8b0bfc`。no-commit merge 的38项冲突已消解，尚未提交/推送/部署。OpenSpec 130是执行与验证记录；已批准的设计原文SHA保持不变。
+活动树 `830-upstream-plugin-boundary`，root唯一集成。产品基线8ccc2ac9、固定上游3e8b0bfc已进入软件提交 `8a0863fa095bc27b901db90c5f744d1db84063b2`；设计SHA保持原值。未push/创建PR/合入main。
 
-CURRENT=D1 冻结提交与受影响制品准备；43路径core和附加router fixture最终独审0BLOCKER，root唯一后续写者。pin与mutation同row-lock、状态显式Updates、chunk原子generation fence及稳定UUID清理已实现，repo全包/service受影响及compile PASS；下游handler/container通过，router旧fixture补齐来源表后347项通过。普通KB重复finalizer列BACKLOG，当前G3关闭enrichment走direct commit，不在本轮加slot表/ledger。
+CODE=PASS（受影响范围）；core43+router fixture、frontend80、build18、migration13及DocReader base pin独审0BLOCKER。Source pin/attempt/chunk同锁与CAS、稳定UUID清理已闭合。最终repo全包/service受影响与compile、下游handler/container、router347、旧来源合同71通过；模型582+补充38、Harness/Ruff/mypy、前端tests/typecheck/build等详见证据。普通KB enrichment/finalizer和索引清理重试三项BACKLOG保留，不外推G3隔离路径结果。
 
-模型582包级test/subtest及追加38覆盖、仓储367、router/handler/config/container/types完整包、Wiki121/core106 focused、Harness边界47+领域独立1、fullruff/mypy735通过；组间有重叠，不相加。前端263初轮/14修复focused/最终typecheck与build2m4s通过。构建156与迁移包/adoption131通过；frontend80/build18/migration13路径独立复核0BLOCKER。新source并发改动须重新跑受影响检查，不能继承原core身份PASS。
+CURRENT=D1制品交付BLOCKED。BA0 App identity `sha256:dee7d33d449a9a3b382577dec1c45d9e8f246aa0acfab3ddb64f1b4921297f61` exact lookup未命中，build invocation=1，于12:34:22—12:37:39Z耗时197.05秒后因Colima数据盘no space left中止，无新镜像。Colima108G盘仅1.1G可用，宿主约12GiB可用。UI/DocReader输入已冻结且lookup为空，未启动构建。没有删镜像/cache/卷、没有重试，既有容器保持运行。
 
-NEXT=冻结commit→唯一D2 App/UI/DocReader受影响镜像→明确迁移恢复与真实tracer窗口。DocReader解析/依赖确有变化，旧a553镜像不可exact reuse；Harness生产src/lock未变，不因此重建。app image、真实DB migration/backup/restore、provider、业务发布和source click均NOT RUN；旧epoch27不能冒充升级后结果。当前旧容器/数据未改；G3/G3.5 FLOW_PASS / QUALITY_PARTIAL、Q0保持。下方历史“PR130待集成”不覆盖当前基线。
+分支push被automatic approval review拒绝，原因为未明确授权将这份代码/内部证据发送至PA-ALG/InsuranceKB-WeKnora。实际push未执行；不能绕过。PR正文已准备于evidence/830-upgrade/pr-draft.md。32个零容器引用历史业务镜像列入capacity-recovery-candidates.json，Docker报告独占大小合计约8.17GB，不保证实际回收；仍未授权/执行删除。所有容器、卷、容器引用镜像与build cache均保留。
+
+NEXT=用户明确选择空间恢复/一次构建恢复和推送授权。未具备空间前不再构建；source commit继续复用，证据提交不触发新组件identity。真实DB备份/恢复/迁移、provider、发布、升级后旧epoch27读取/新tracer/source click均NOT RUN。旧G3/G3.5 FLOW_PASS/QUALITY_PARTIAL、Q0不改变。下方历史状态不覆盖本块。
 
 ## 2026-09-27 最后两项 CI 元数据修复
 
