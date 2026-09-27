@@ -33,7 +33,7 @@ plan:
         base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
         provider_policy: bailian-deployment-detail-v1
         credential_env_name: HARNESS_DASHSCOPE_API_KEY
-    identity_contract_hash: 3570e7563e9dce74a889af39e67ca1c0df9a6e97e39a3ba6ec129886970dbef6
+    identity_contract_hash: f8ea7ffe811a01bd8087c45ed56dd5cd9a9d473583f568a9a233a7cde2081722
     budget_contract_hash: null
   approval_envelopes: []
   observations: []
@@ -212,7 +212,7 @@ identity_request:
     docs/insurance-kb/schema-baseline/whole-life.yaml: dc123550e42e41dd36bb71b9bfae395569491512ad9687b75c6a67bd72a80439
   execution_surface_digests:
     harness/pyproject.toml: 2675ba103b6486dd10203c15ddae1b47324f784f0e5bc700101f0e5a122330b4
-    harness/uv.lock: 211eee186c7d3dc69295f0d9d4d5d3c1075853bdfb1fcf1ec39bfc6af9a05c25
+    harness/uv.lock: 807e86c99d706f4c90fb4960eb988afc437fb6f7c36eb87e6b1ebb97c3058633
     harness/src/insurance_harness/__init__.py: b48887b1bc02bcc93f3bbf764f27bde25d3c870abe885305f1e4b82f04dbba91
     harness/src/insurance_harness/adapters/README.md: 58e13e71bb58fa3414d1775f6bd2177abb50c4d0c2dd3b13542a80699ca2ee19
     harness/src/insurance_harness/adapters/__init__.py: 1e288e03b0807ecdb62f3730e17e295bbb7b865aa894d3ec03ec911a1863a83f

@@ -104,3 +104,15 @@ App仍b393d855c/7d97028e，UI/模型配置保持，migration/provider/business w
 
 最终GitHub CI需以本次修复后精确HEAD为准；a7e2失败不能记为最终PASS。
 交付与只读证据归档于上述私密目录aggregate-route-delivery，远端CI/merge身份由PR130记录。
+
+## 最终 CI 元数据对齐
+
+b9db7772f push CI（36300078251）完整确定性测试为7721 PASS、18 SKIP、65 deselected、
+2 FAIL：旧联合身份测试仍期待v3，而正式编译器已为v4；020未批准静态模板仍绑定旧uv.lock。
+前者仅更新测试的精确版本断言；后者按020 D1.5仅同步lock摘要及对应identity_contract_hash，
+保持无approval envelope、无观测、无derived state与pending模型身份，不生成批准或READY。
+保留当前锁文件漂移门禁，不改为读取历史版本；其余旧surface不扩范围更新。
+
+三个受影响模块25测试PASS（20.93秒），包含静态模板继续BLOCKED及parser身份失败关闭；
+canonical identity hash和未批准状态核验PASS；fullruff、733文件mypy PASS。
+本轮仅测试/未批准模板/证据文档，制品SKIP，不部署、不调用模型；远端最终CI与合入仍待回执。

@@ -74,7 +74,7 @@ async def test_complementary_identity_reaches_publication_without_refilling_fiel
             ).payload
         )
         assert identity["resolution"]["compiler_version"] == (
-            "batch-entity-resolution-compiler.830.g3.v3"
+            "batch-entity-resolution-compiler.830.g3.v4"
         )
         proposals = identity["proposals"]["proposals"]
         terms = next(row for row in proposals if row["material_role"] == "terms")

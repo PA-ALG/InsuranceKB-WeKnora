@@ -16,7 +16,8 @@
 - [x] CI发现的测试类型声明修正：全mypy733/fullruff通过，25文件独审0BLOCKER。
 - [x] R6-ROUTE-1通用多材料误路由根因修复，旧fixture保持；79定向及持久恢复PASS。
 - [x] 9ebf5bd11 Harness-only交付06:18:25Z PASS；原任务/Head/账本只读PASS，新模型0。
-- [ ] 原PR130修复后精确HEAD远端CI及机械集成；不得沿用a7e2失败或更早PASS。
+- [x] 完整CI发现两项旧元数据：v4版本断言、未批准020模板lock/hash最小同步；25定向及静态BLOCKED验证PASS，制品SKIP。
+- [ ] 原PR130修复后精确HEAD远端CI及机械集成；不得沿用旧失败或更早PASS。
 
 ## 2026-09-27 最终流程门禁澄清
 

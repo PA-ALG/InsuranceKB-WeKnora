@@ -1,3 +1,10 @@
+## 2026-09-27 最后两项 CI 元数据修复
+
+b9db7772f完整CI为7721 PASS/18 SKIP/65 deselected/2 FAIL；失败仅为旧v3版本断言和
+未批准020模板的旧lock摘要。最小更新版本断言、lock及canonical identity hash；
+25定向测试/733文件mypy/fullruff通过，020保持BLOCKED且无批准，运行制品不变。
+CURRENT=修复冻结独审；NEXT=PR130最新HEAD CI通过后集成。业务epoch27/FLOW_PASS保持。
+
 ## 2026-09-27 当前：完整业务闭环已验收，最终路由修复已部署
 
 FLOW_PASS / QUALITY_PARTIAL，正常run d6d071a6到epoch27及原文第2页高亮PASS。
