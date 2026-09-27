@@ -1,3 +1,14 @@
+## 2026-09-27 当前：完整业务闭环已验收，最终路由修复已部署
+
+FLOW_PASS / QUALITY_PARTIAL，正常run d6d071a6到epoch27及原文第2页高亮PASS。
+最终测试暴露三材料单窗误入同源多窗聚合；保留旧fixture修复唯一路由Owner，
+源码9ebf5bd11，79定向PASS、733文件mypy/fullruff/OpenSpec PASS、独审0BLOCKER。
+Harness image59349303…已于06:18:25Z可回滚部署，App仍b393d855c/7d97028e…；
+UI/model/runtime配置不改。只读d6与epoch27/账本PASS，无新模型调用/发布/迁移。
+CURRENT=最终源码与运行交付闭合；NEXT=原PR130精确最新HEAD CI通过后集成。
+a7e2ec91a两组CI的PG/wheel通过，但typing失败；不得冒充最新HEAD CI PASS。
+质量后置范围保持，最新完整回执见published-read-restart-20260927.md最后一节；下方为历史。
+
 ## 2026-09-27 当前终态：正常完整流程到第27版，待最终CI/集成
 
 root唯一写者；活动树830-g35-multiwindow，App源码b393d855c、image7d97028e…；

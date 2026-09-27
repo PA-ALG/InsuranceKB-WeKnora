@@ -80,3 +80,27 @@ UI仅重载代理，Head epoch26/模型ledger不变，无migration/provider或�
 本轮FLOW_PASS，语义质量仍PARTIAL。个别字段/R7遗漏统一维护，非空多窗口语义结果
 NOT RUN/BACKLOG；不声明整体优于原生、100%覆盖或全部候选通过。
 最终精确HEAD的CI及集成由PR130远端回执记录；本文冻结时仍待执行。
+
+## 最终CI触发的通用路由修复与交付
+
+精确a7e2ec91a的GitHub push/PR两组检查：PostgreSQL与wheel均PASS；strict mypy发现
+25测试文件117项类型声明缺口（生产src无错误），deterministic尚未执行。只修测试double
+类型、Optional断言、JSON收窄及owner import；jsonschema仅单import-untyped标注，不改全局
+检查或生产协议。25文件独审0BLOCKER，全mypy733/fullruff PASS。
+
+定向25测试401PASS/1预期v2协议SKIP/2FAIL；两项为旧三材料恢复误进R6聚合，typing前
+同一fixture在29.36秒失败，不能将其当类型修复引入或改断言掩盖。R6-ROUTE-1在聚合
+深模块同源校验下区分完整同源多窗、合法独立材料单窗、非法组；后者仍FAILED。
+原多材料路径保留，最终聚合严格验证不放宽，不修改checkpoint/prompt/config。
+新增9态及旧两项失败、多窗持久发布/恢复等79定向全部PASS542.13秒；OpenSpec strict、
+733文件mypy、fullruff PASS，最终29路径独审0BLOCKER。源码9ebf5bd113807eaf184693a6490a38761f1be803。
+
+Harness-only真实build1；Python3.9首次仅解包预检失败、Docker未执行，改项目3.12后成功。
+镜像`sha256:593493031187b0ffaff1e2eacc6eef347e6206caf1b65f2eb6fa4e09be06c334`，
+部署manifest `e27d994a8e6051f1af5d12bd381ee64d3cd8d1c6293f8da843749fb96a38a0f5`独审0BLOCKER。
+06:17:58—06:18:25Z可回滚切换PASS；API d3a3ff1032dc、worker7ed9aeb217b5，旧容器保留。
+App仍b393d855c/7d97028e，UI/模型配置保持，migration/provider/business write均0。
+06:18:29Z只读原d6任务、Head epoch27及账本PASS；无新上传/模型/发布。
+
+最终GitHub CI需以本次修复后精确HEAD为准；a7e2失败不能记为最终PASS。
+交付与只读证据归档于上述私密目录aggregate-route-delivery，远端CI/merge身份由PR130记录。
