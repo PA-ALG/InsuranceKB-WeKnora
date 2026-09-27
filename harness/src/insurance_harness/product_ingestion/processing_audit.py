@@ -106,8 +106,23 @@ def read_audit(records: Iterable[AuditRecord]) -> tuple[Receipt, ...]:
     return tuple(values)
 
 
+def _historical(call: Receipt, admitted_at_unix_ms: int | None) -> bool:
+    # An interrupted span's end is observation time, not confirmed completion.
+    return (
+        admitted_at_unix_ms is not None
+        and call["state"] == "RECORDED"
+        and call["finished_at_unix_ms"] < admitted_at_unix_ms
+    )
+
+
+def _historical_receipt(receipt: Receipt, admitted_at_unix_ms: int | None) -> bool:
+    calls = [c for c in receipt.get("calls", []) if c["outcome"] != "NOT_DISPATCHED"]
+    return bool(calls) and all(_historical(c, admitted_at_unix_ms) for c in calls)
+
+
 def _account_calls(
     rows: Iterable[tuple[Receipt, bool]],
+    admitted_at_unix_ms: int | None,
 ) -> tuple[int, int, int, bool, bool]:
     """Aggregate dispatches without changing the receipts used by material views."""
     calls: dict[str, Receipt] = {}
@@ -122,8 +137,9 @@ def _account_calls(
         for call in receipt.get("calls", []):
             key = call["dispatch_id"]
             previous = calls.get(key)
+            owners[key] = owners.get(key, False) or reused
             if previous is None:
-                calls[key], owners[key] = call, reused
+                calls[key] = call
             elif _call_extends(previous, call):
                 calls[key] = call
             elif not _call_extends(call, previous):
@@ -132,7 +148,7 @@ def _account_calls(
     for key, call in calls.items():
         if call["outcome"] == "NOT_DISPATCHED":
             continue
-        if owners[key]:
+        if owners[key] or _historical(call, admitted_at_unix_ms):
             reused_attempts += 1
         else:
             attempts += 1
@@ -150,6 +166,8 @@ def _entry(receipt: Receipt, reused: bool) -> Receipt:
 def source_accounting(
     summary: Receipt | None,
     receipts: Sequence[Receipt],
+    *,
+    admitted_at_unix_ms: int | None = None,
 ) -> Receipt | None:
     """Read view of latest facts; persisted v1 summary and receipts stay unchanged."""
     latest = latest_attempts(receipts)
@@ -176,15 +194,18 @@ def source_accounting(
         else:
             assert key is not None
             represented.add(key)
-            rows.append((receipt, entry["reused"]))
-            entries.append(_entry(receipt, entry["reused"]))
+            reused = entry["reused"] or _historical_receipt(receipt, admitted_at_unix_ms)
+            rows.append((receipt, reused))
+            entries.append(_entry(receipt, reused))
     prior = [
         row
         for row in latest
         if attempt_identity(row) not in represented and row["knowledge_id"] not in unknown
     ]
-    rows.extend((row, False) for row in prior)
-    attempts, reused, interrupted, complete, reused_complete = _account_calls(rows)
+    rows.extend((row, _historical_receipt(row, admitted_at_unix_ms)) for row in prior)
+    attempts, reused, interrupted, complete, reused_complete = _account_calls(
+        rows, admitted_at_unix_ms
+    )
     for entry in opaque:
         available = entry["availability"] == "AVAILABLE" and entry["counts"] is not None
         if entry["reused"]:
@@ -195,7 +216,7 @@ def source_accounting(
             interrupted += entry["counts"]["interrupted"] if available else 0
             complete &= available
     if summary is None:
-        entries = [_entry(row, False) for row in latest]
+        entries = [_entry(row, _historical_receipt(row, admitted_at_unix_ms)) for row in latest]
         complete = False  # An in-progress journal is not sealed source accounting.
     if any(row["knowledge_id"] in unknown for row in latest):
         complete = False
@@ -211,5 +232,7 @@ def source_accounting(
         materials=sorted(entries, key=lambda row: row["knowledge_id"]),
     )
     if summary is not None and prior:
-        result["prior_attempts"] = [_entry(row, False) for row in prior]
+        result["prior_attempts"] = [
+            _entry(row, _historical_receipt(row, admitted_at_unix_ms)) for row in prior
+        ]
     return result

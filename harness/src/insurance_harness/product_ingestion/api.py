@@ -241,7 +241,9 @@ def install_product_api(
                 scope=scope, run_id=run_id, artifact_kind="source_processing_attempt"
             )
         )
-        summary = source_accounting(summary, attempts)
+        summary = source_accounting(
+            summary, attempts, admitted_at_unix_ms=int(run.created_at.timestamp() * 1000)
+        )
         if summary is not None:
             if checkpoint_receipt and summaries and summaries[0].run_id != run_id:
                 summary = {

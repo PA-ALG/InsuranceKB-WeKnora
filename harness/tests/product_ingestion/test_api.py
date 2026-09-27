@@ -146,6 +146,7 @@ def test_status_keeps_recorded_source_calls_when_sibling_receipt_is_unknown(
         headers=auth(),
         json={"idempotency_key": "source-partial-accounting", "expected_upload_count": 3},
     ).json()["data"]
+    dispatched_at = int(datetime.fromisoformat(run["created_at"]).timestamp() * 1000) + 1
     records = []
     for index in range(2):
         item = receipt()
@@ -165,8 +166,8 @@ def test_status_keeps_recorded_source_calls_when_sibling_receipt_is_unknown(
                 "state": "RECORDED",
                 "outcome": "HTTP_RESPONSE",
                 "http_status": 200,
-                "started_at_unix_ms": 1000,
-                "finished_at_unix_ms": 1020,
+                "started_at_unix_ms": dispatched_at,
+                "finished_at_unix_ms": dispatched_at + 20,
                 "duration_ms": 20,
             }
         ]
@@ -234,6 +235,11 @@ def test_source_audit_snapshots_do_not_double_count_calls(
         },
     ).json()["data"]
     first = _processing(0, True)
+    dispatched_at = int(datetime.fromisoformat(run["created_at"]).timestamp() * 1000) + 1
+    first["calls"][0].update(
+        started_at_unix_ms=dispatched_at, finished_at_unix_ms=dispatched_at + 20
+    )
+    first = sealed(first)
     latest = copy.deepcopy(first)
     second_call = {**latest["calls"][0], "dispatch_id": "call-second"}
     latest["calls"].append(second_call)
