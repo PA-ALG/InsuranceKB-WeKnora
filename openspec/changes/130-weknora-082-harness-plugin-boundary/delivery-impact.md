@@ -47,3 +47,5 @@
 用户“允许”后，精确32个镜像已删除，容器/卷/build cache完整保留，可用空间约6.63GiB。独立复核支持一次恢复尝试；相同App identity/source的恢复构建已执行，约13.50秒后在Dockerfile frontend元数据阶段因配置镜像源EOF失败，没有进入编译或生成镜像。新增1次预算已用完，累计App构建2次；停止D2序列，不自动重试，UI/DocReader仍NOT RUN。详见delivery-attempt-02.json。push/Draft PR已获明确授权，历史自动审批拒绝不再是当前授权障碍；普通上传HTTP400/408（直连也408）后，确认fork已有固定上游对象，在同一目标分支引用3e8b0bfc，再普通快进到f3ff602b9，push成功，未force或改写提交。迁移/部署仍NOT RUN。
 
 第三次恢复尝试已执行并失败（BrowserSkill子进程pnpm不可发现）；网络热重载在结束后已恢复，容器无重启。新增PATH修复属于App输入变更，旧8a/identity不可复用为修复制品。依赖锁保持；重新冻结/独审后才能使用新source和identity，未自动追加第四次。见delivery-attempt-03.json。
+
+修复源e71c72f7d（identity 12d583e5…）的第四次App尝试已获新授权并执行，10.095880297秒后于官方frontend metadata TLS超时失败，没有进入编译；本轮1/1用尽，无第五次。网络临时配置自动恢复且8容器启动身份不变。后续应先验证实际daemon registry/代理路径，而非用客体直连401代表构建网络稳定。见delivery-attempt-04.json。

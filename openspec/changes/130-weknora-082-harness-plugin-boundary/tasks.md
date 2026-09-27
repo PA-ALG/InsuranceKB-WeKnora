@@ -19,6 +19,6 @@
 - [ ] D2 验证迁移和恢复，既有授权测试环境交付，真实tracer与source click。
 - [ ] D3 精确代码/CI/PR与G4交接，保留未测限制。
 
-CURRENT=UPG-08第三次App尝试失败，BrowserSkill子进程PATH修复已RED→GREEN（130PASS），待独审/提交。原配置恢复，8运行容器身份不变，镜像仍未产出，本轮1/1已消耗、总3次。PR131保持Draft，六组CI问题已只读定位且仍BLOCKED，见ci-failures-4dec9ef.json。NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
+CURRENT=D2 BLOCKED：修复e71c72f7d已完成独审并推送PR131；第四次App构建在官方frontend metadata HEAD阶段TLS handshake timeout（10.095880297秒），未编译/无image；本轮追加1/1已用，累计4次，没有第五次。原daemon配置逐字恢复，8容器启动身份不变。六组CI仍BLOCKED，未由本轮网络失败关闭。NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
 
-NEXT=独审并推送此次PATH修复与回执；新制品输入不能沿用旧identity。未自动追加第四次构建，UI/DocReader及真实迁移/部署/业务仍NOT RUN。
+NEXT=先验证并稳定实际daemon registry/代理路径，再安排明确获准的新构建窗口；不自动重复旧失败请求。UI/DocReader、真实迁移/部署/业务仍NOT RUN，详见delivery-attempt-04.json。

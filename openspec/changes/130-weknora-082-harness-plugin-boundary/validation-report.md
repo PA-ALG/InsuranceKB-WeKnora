@@ -42,3 +42,7 @@ C2最终独审：43路径与附加router fixture全部匹配，0 BLOCKER。并�
 详见delivery-attempt-03.json：固定旧源8a的第三次尝试588.134369043秒后于BrowserSkill子进程pnpm查找失败，无image。本轮预算1/1已用完；临时镜像源修改已逐字恢复，8容器启动身份不变。UPG-08新增child-shell离线行为回归先RED（旧入口调用ambient pnpm，exit71），修复已验证pnpm可执行入口的PATH后130PASS/4.76s，fullruff PASS/mypy736 PASS。此为源修复，不是新镜像成功；依赖锁不变，App输入已改变，待冻结与新D2。
 
 GitHub live=BLOCKED，PR131@4dec9ef66六组真实CI失败详见ci-failures-4dec9ef.json；不再将该远端状态记NOT RUN，也不以局部软件测试PASS覆盖。已有软件PASS只代表当时受影响的有限测试集合，不代表完整CI。六组尚未修复，原部署/provider/local-live仍NOT RUN。
+
+## 第四次App尝试（修复源e71c72f7d）
+
+新增明确授权“再授权一次”已消费1/1；新identity 12d583e5…的10.095880297秒尝试在官方Dockerfile frontend HEAD阶段TLS握手超时，尚未编译、无镜像，总尝试4。失败不证明pnpm修复在真实镜像中通过或失败。原daemon配置逐字恢复、daemon PID和8容器启动身份不变；见delivery-attempt-04.json。事后直连/实际代理各3次HEAD均401，仅证实事后TLS/registry可达，代理有1次10.591052秒，不等于认证pull或稳定连接。本轮不追加第五次，GitHub六组CI与D3状态保持未关闭。

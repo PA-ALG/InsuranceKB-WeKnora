@@ -1,3 +1,13 @@
+## 2026-09-27 WeKnora 0.8.2：修复源已推送，第四次构建受官方镜像源TLS超时阻断
+
+用户“再授权一次”后，root在同一活动树执行1次App构建；此前pnpm子进程入口修复已通过130测试/fullruff/mypy736及独审0BLOCKER，并已推送PR131，软件源e71c72f7dd885e228c4f447c68902450fed7ae26，App identity sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4。后续纯证据提交不改变此软件源。
+
+CURRENT=D2 BLOCKED。第四次构建14:40:46.692108960—14:40:56.787989257Z，共10.095880297秒，在官方registry-1.docker.io的Dockerfile frontend HEAD阶段TLS handshake timeout，尚未编译，无镜像。本轮1/1已使用，累计4次，未执行第五次。原镜像源配置已自动逐字恢复，daemon PID及8容器Id/StartedAt/Pid保持，可用7042136KiB；无清理、迁移、部署/provider。
+
+构建前直连/v2/返回401不等于Docker实际代理链路稳定；事后同一manifest地址直连/daemon代理各3次HEAD均401，其中代理1次10.591052秒。该样本只证明事后可达且存在延迟波动，不证明认证pull或持续稳定，也不能把网络失败当作pnpm修复验证。详见delivery-attempt-04.json。
+
+NEXT=先稳定并验证实际daemon的registry/代理路径，再确定下一次构建窗口；本轮不自动追加次数。PR131继续Draft，六组CI问题仍未关闭，旧epoch27及现有服务不变；UI/DocReader镜像、迁移/部署/业务验收仍NOT RUN。下方为历史。
+
 ## 2026-09-27 WeKnora 0.8.2：第三次构建失败，BrowserSkill子进程入口已修复
 
 活动树830-upstream-plugin-boundary，root唯一写者/集成。PR131为Draft，原远端head4dec9ef66。用户“重新授权，再执行吧”追加1次App预算已执行；旧软件源8a0863fa0/identity dee7d33d…的第三次尝试14:00:24—14:10:12Z耗时588.134369043秒，22缓存步骤复用，BrowserSkill ext:build:zip子进程pnpm:not found失败，无镜像。总App尝试3，本轮1/1已用完；未自动发起第四次。
