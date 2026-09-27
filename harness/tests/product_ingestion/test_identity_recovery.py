@@ -384,7 +384,7 @@ async def test_legacy_v3_real_worker_reaches_publication_without_classify_resend
 ) -> None:
     from insurance_harness.db.base import Base, make_session_factory
     from insurance_harness.jobs import JobStore
-    from insurance_harness.knowledge_compiler import g3_bounded_model_execution as semantic_adapter
+    from insurance_harness.product_ingestion import identity as semantic_adapter
     from insurance_harness.product_ingestion.progression import admit_uploads
     from tests.product_ingestion.test_pipeline_runtime import (
         SCOPE,
@@ -405,12 +405,12 @@ async def test_legacy_v3_real_worker_reaches_publication_without_classify_resend
     jobs = JobStore(factory, settings.job_runtime_config())
     platform, model = FixturePlatform(base), FixtureModel()
 
-    def projection_failure(**kwargs: object) -> None:
+    def projection_failure(*args: object, **kwargs: object) -> None:
         raise ValueError("wrong-purpose identity evidence")
 
     with monkeypatch.context() as patch:
         if failed_stage == "identity":
-            patch.setattr(semantic_adapter, "assemble_c_semantic_response", projection_failure)
+            patch.setattr(semantic_adapter, "assemble_identity_response", projection_failure)
         else:
             from insurance_harness.product_ingestion import pipeline
             from insurance_harness.product_ingestion.model_execution import ModelPolicyDenied

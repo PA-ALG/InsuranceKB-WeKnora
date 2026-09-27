@@ -25,6 +25,12 @@ from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     _c_prompt_block,
 )
 from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import SchemaPackCatalogV1
+from insurance_harness.product_ingestion.identity_sources import (
+    assemble_identity_response as assemble_identity_response,
+)
+from insurance_harness.product_ingestion.identity_sources import (
+    prepare_identity_sources as prepare_identity_sources,
+)
 from insurance_harness.product_ingestion.models import MaterialSnapshot, ProductScope
 from insurance_harness.product_ingestion.platform import DecodedSourceSnapshot
 

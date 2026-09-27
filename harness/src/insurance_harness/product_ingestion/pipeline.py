@@ -187,18 +187,15 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
     from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
         CompileResult,
     )
-    from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
-        assemble_c_semantic_response,
-    )
     from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
     from insurance_harness.product_ingestion.composition import ProductPipelinePorts
     from insurance_harness.product_ingestion.extraction import _json
     from insurance_harness.product_ingestion.identity import (
         _name,
+        assemble_identity_response,
         build_current_corpus,
-        build_identity_context,
         hashed,
-        select_identity_block_ids,
+        prepare_identity_sources,
         validate_identity_offered_response,
     )
     from insurance_harness.product_ingestion.identity_adapter import (
@@ -217,7 +214,6 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
         sign_publish_authorization,
         sign_system_decision,
     )
-    from insurance_harness.product_ingestion.source_geometry import project_native_pages
     from insurance_harness.product_ingestion.stages import (
         StageOutput,
         artifact,
@@ -352,17 +348,6 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
             declared_by=service.configuration.automation.principal_id,
         )
         route = json.loads(read(scope, run.run_id, "routing"))
-        pages = await asyncio.to_thread(
-            lambda: tuple(
-                page
-                for knowledge_id, source in sorted(snapshots.items())
-                for page in project_native_pages(
-                    source,
-                    material_id=knowledge_id,
-                    selected_block_ids=select_identity_block_ids(source),
-                )
-            )
-        )
         # Read only immutable routing input hints. Sealing source roles after the
         # first attempt must not alter a replayed model request.
         route_materials = {row["material_id"]: row for row in route["materials"]}
@@ -398,18 +383,18 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
                     }
                 )
             )
-            prompt_context = await asyncio.to_thread(
-                build_identity_context,
+            prepared_identity = await asyncio.to_thread(
+                prepare_identity_sources,
                 corpus,
-                pages,
+                snapshots,
                 product_name=route.get("product_name"),
                 primary_label=(route.get("route") or {}).get("primary_label"),
                 material_roles=source_roles,
                 allowed_material_roles=roles,
                 allowed_taxonomy_labels=labels,
                 schema_candidates=route.get("schema_candidates", ()),
-                snapshots=snapshots,
             )
+            prompt_context = prepared_identity.context
             prompt_context["base_identity"] = {
                 "release_id": base["release_id"],
                 "activation_epoch": base["activation_epoch"],
@@ -457,20 +442,9 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
                 adaptation = adapt_identity_response(semantic, prompt_context)
                 semantic = adaptation.semantic_raw
                 adaptation_audit = adaptation.audit
-                offered_blocks = {
-                    block["block_ref"]
-                    for material in prompt_context["materials"]
-                    for block in material["blocks"]
-                }
-                proposed = assemble_c_semantic_response(
-                    raw=semantic,
-                    corpus=corpus,
-                    requested_material_ids=tuple(entry.material_id for entry in corpus.entries),
-                    native_pages=tuple(page for page in pages if page.block_ref in offered_blocks),
-                    allowed_material_roles=roles,
-                    allowed_taxonomy_labels=labels,
+                proposed = assemble_identity_response(
+                    semantic, prepared_identity,
                     model_request_sha256=result.execution_receipt.request_sha256,
-                    use_locator_refs=True,
                 )
                 material_bindings = tuple(
                     resolver.MaterialBindingV1(

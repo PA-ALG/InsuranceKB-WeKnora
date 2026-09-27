@@ -36,3 +36,25 @@ existing_entities，保留名称、年份、已有别名及冲突处理。不新
 顺序：契约审查→防历史输入污染 RED→删除输入耦合→身份/匹配/回放回归→冻结独审→
 仅构建/可回滚替换 Harness→正常上传→审核/发布/导航/来源回点。
 代码及离线测试不能替代真实流程验收。质量与覆盖度专项继续后置。
+
+## 2026-09-27 ID-PAGE-1—4：跨页身份来源视图
+
+Owner root；基础 a587823fe；用户 G3.5 全项授权持续。真实 run cdefcda9 的两个跨页块
+均以第1页起始，公司全称仅在实际第2页，旧身份输入漏掉该证据。修复输入，不改匹配门槛。
+
+- **ID-PAGE-1**：局部不可变 IdentitySourcePageView 区分 source_page_number 与
+  actual_page_number。从签名 mapping 选第1页片段；缺法律公司名时最多补一个实际第2—3页
+  公司片段。优先保留既有独立块选择维持旧输入；缺独立块时按实际页/全局命中/块ID选跨页片段。
+- **ID-PAGE-2**：原 SourceBlock、Corpus、Evidence 身份与坐标不变；不伪装G3v1投影。
+  每个连续range及locator经既有project_evidence_locations验证恰好一物理页，原Evidence
+  与投影piece一致。后页不能支持名称/分类/角色；跨材料、重复、未提供locator拒绝。
+- **ID-PAGE-3**：共享“已解析语义+已验证Evidence→Proposal”由compiler单一模块所有；
+  回调签名(material_id,locator)→Evidence，builder再次验证所属原corpus、start/end/quote/hash。
+  原C入口保留G3v1契约、排序、结构ID及全部业务门禁。身份深模块公开prepare/assemble，
+  封装选源、prompt、catalog；pipeline不再自行拼接三次推导。
+- **ID-PAGE-4**：无跨页补充保持旧v2字节，有补充升v3和包含物理页/range的opaque ref，
+  新input SHA不得复用旧响应。旧终态保留，走正常新上传并复用既有解析，不人工补issuer。
+
+写域为identity局部模块、pipeline、compiler共享proposal/ref解析及相关测试。无新依赖、
+DB迁移、Go/UI变更。先RED，定向兼容/恢复验证，冻结独审，再Harness-only可回滚交付和
+一次有界正常长材料上传。待人审Candidate/自动审核拦截是下一独立切片，不能混记完成。
