@@ -41,3 +41,7 @@
 ## D2实际结果（覆盖上方准备时态）
 
 软件提交8a0863fa0，App lookup miss后唯一构建于197.05秒因Colima磁盘不足失败，无image。UI/DocReader lookup miss，构建NOT RUN。详见delivery-attempt-01.json；不继续构建或自动prune。空间恢复候选32个无容器引用历史业务镜像需明确批准，所有容器/卷及build cache保留。push被自动审批拒绝，正文准备完成但未创建PR；真实迁移与切换仍NOT RUN。
+
+## 用户授权后的恢复结果（最新）
+
+用户“允许”后，精确32个镜像已删除，容器/卷/build cache完整保留，可用空间约6.63GiB。独立复核支持一次恢复尝试；相同App identity/source的恢复构建已执行，约13.50秒后在Dockerfile frontend元数据阶段因配置镜像源EOF失败，没有进入编译或生成镜像。新增1次预算已用完，累计App构建2次；停止D2序列，不自动重试，UI/DocReader仍NOT RUN。详见delivery-attempt-02.json。push/Draft PR已获明确授权，历史自动审批拒绝不再是当前授权障碍；普通上传HTTP400/408（直连也408）后，确认fork已有固定上游对象，在同一目标分支引用3e8b0bfc，再普通快进到f3ff602b9，push成功，未force或改写提交。迁移/部署仍NOT RUN。

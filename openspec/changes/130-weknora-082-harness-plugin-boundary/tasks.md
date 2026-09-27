@@ -10,6 +10,6 @@
 - [ ] D2 验证迁移和恢复，既有授权测试环境交付，真实tracer与source click。
 - [ ] D3 精确代码/CI/PR与G4交接，保留未测限制。
 
-CURRENT=D1 制品交付BLOCKED：App一次构建因Colima磁盘不足失败（无镜像），UI/DocReader尚未构建；软件8a0863fa0及最终独审通过。push另被自动审批拒绝，未执行。NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
+CURRENT=D2制品交付BLOCKED：软件8a0863fa0及最终独审通过；首次App构建因磁盘不足失败，已授权32镜像清理完成后，独立容量复核通过。唯一追加App恢复构建因镜像源EOF失败，未进入编译、无镜像；新增预算1/1已使用，不自动重试。UI/DocReader尚未构建。NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
 
-空间恢复候选与精确失败回执已准备；镜像/cache/卷无删除，构建无重试。须先获得具体清理/一次恢复构建及推送授权，再继续既有队列。真实迁移/部署/业务仍NOT RUN。
+32个已授权镜像已删除，容器/cache/卷保留，数据盘约6.63GiB可用。push/Draft PR已明确授权；普通上传HTTP400/408（直连也408）后，复用fork已有固定上游对象，将同一分支从3e8b0bfc普通快进到f3ff602b9成功；待补推本次机械证据并建Draft PR。真实迁移/部署/业务仍NOT RUN。详见delivery-attempt-02.json及recovery-authorization.md。

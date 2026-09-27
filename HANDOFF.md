@@ -1,14 +1,14 @@
-## 2026-09-27 WeKnora 0.8.2：软件已冻结，交付被磁盘与推送审批阻断
+## 2026-09-27 WeKnora 0.8.2：已授权清理完成，恢复构建受镜像源故障阻断
 
-活动树 `830-upstream-plugin-boundary`，root唯一集成。产品基线8ccc2ac9、固定上游3e8b0bfc已进入软件提交 `8a0863fa095bc27b901db90c5f744d1db84063b2`；设计SHA保持原值。未push/创建PR/合入main。
+活动树 `830-upstream-plugin-boundary`，root唯一集成。产品基线8ccc2ac9、固定上游3e8b0bfc已进入软件提交 `8a0863fa095bc27b901db90c5f744d1db84063b2`；设计SHA保持原值。已获明确push/Draft PR授权，普通上传遇到HTTP400/408（直连也408）。确认产品fork已持有固定上游提交后，同一目标分支先引用3e8b0bfc，再普通快进到f3ff602b9，增量约255KB，push已成功；未合入main。
 
 CODE=PASS（受影响范围）；core43+router fixture、frontend80、build18、migration13及DocReader base pin独审0BLOCKER。Source pin/attempt/chunk同锁与CAS、稳定UUID清理已闭合。最终repo全包/service受影响与compile、下游handler/container、router347、旧来源合同71通过；模型582+补充38、Harness/Ruff/mypy、前端tests/typecheck/build等详见证据。普通KB enrichment/finalizer和索引清理重试三项BACKLOG保留，不外推G3隔离路径结果。
 
-CURRENT=D1制品交付BLOCKED。BA0 App identity `sha256:dee7d33d449a9a3b382577dec1c45d9e8f246aa0acfab3ddb64f1b4921297f61` exact lookup未命中，build invocation=1，于12:34:22—12:37:39Z耗时197.05秒后因Colima数据盘no space left中止，无新镜像。Colima108G盘仅1.1G可用，宿主约12GiB可用。UI/DocReader输入已冻结且lookup为空，未启动构建。没有删镜像/cache/卷、没有重试，既有容器保持运行。
+CURRENT=D2制品交付BLOCKED。首次App构建197.05秒后因磁盘不足失败，无镜像（当时仅1.1GiB可用，未做清理）。用户随后回复“允许”，授权32个精确旧镜像清理、容量足够后1次App恢复构建及产品分支push/Draft PR。32镜像全部非强制删除成功，释放约5.6GiB，全部容器/卷/build cache保留，8个运行容器仍up。
 
-分支push被automatic approval review拒绝，原因为未明确授权将这份代码/内部证据发送至PA-ALG/InsuranceKB-WeKnora。实际push未执行；不能绕过。PR正文已准备于evidence/830-upgrade/pr-draft.md。32个零容器引用历史业务镜像列入capacity-recovery-candidates.json，Docker报告独占大小合计约8.17GB，不保证实际回收；仍未授权/执行删除。所有容器、卷、容器引用镜像与build cache均保留。
+独立容量复核PASS_TO_ATTEMPT_ONE后，恢复构建沿原BA0输入执行；source仍8a0863fa0，App identity仍 `sha256:dee7d33d449a9a3b382577dec1c45d9e8f246aa0acfab3ddb64f1b4921297f61`。13:38:37—13:38:51Z约13.50秒，Dockerfile frontend元数据请求被配置镜像源以EOF中断，未进入编译，无新image。累计App invocation=2，新增授权1/1已用完，余量0；未自动重试或额外清理。现可用约6.63GiB，UI/DocReader构建仍NOT RUN。回执见delivery-attempt-02.json。
 
-NEXT=用户明确选择空间恢复/一次构建恢复和推送授权。未具备空间前不再构建；source commit继续复用，证据提交不触发新组件identity。真实DB备份/恢复/迁移、provider、发布、升级后旧epoch27读取/新tracer/source click均NOT RUN。旧G3/G3.5 FLOW_PASS/QUALITY_PARTIAL、Q0不改变。下方历史状态不覆盖本块。
+NEXT=补推本次机械证据并创建已授权Draft PR；再次构建须先排查镜像源连接并取得额外预算，不能把本次EOF当作未消耗build invocation。真实DB备份/恢复/迁移、provider、发布、升级后旧epoch27读取/新tracer/source click均NOT RUN。旧G3/G3.5 FLOW_PASS/QUALITY_PARTIAL、Q0不改变。下方历史状态不覆盖本块。
 
 ## 2026-09-27 最后两项 CI 元数据修复
 

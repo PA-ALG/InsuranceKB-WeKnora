@@ -1,0 +1,319 @@
+{
+  "authorized_by": "user reply 允许 following exact 32-image cleanup + one conditional recovery build and branch-push request",
+  "started_at": "2026-09-27T13:20:22.210505+00:00",
+  "status": "PASS",
+  "container_count_before": 165,
+  "protected_container_images": [
+    "sha256:0047b47d113a654ee3037c965bb2cdee54d6c99dbaf6b4c8647da7ce799fefe3",
+    "sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf",
+    "sha256:073ba78af58fcc320b909519172d222bfd5154a5ab2df6620ea66fabed05a629",
+    "sha256:0b32d79b728e4dfeb4b8b90e1ad465602773f2fdb7b25dae2b59e8b3084a0a04",
+    "sha256:0be65d5a1f2b8fbb8e8e9b80e54ea56b8e3e171be12a5ea56ad0eed2a0614b43",
+    "sha256:1552aca965bd28f99e8ed3e251bc86f075e7cbd3b92c3e5ada081c74b2d654bc",
+    "sha256:1779877630eeab961912b080333e4d860d88dde58f33dcd5b84f622b715f9a43",
+    "sha256:1a23b42a0459f868617d944b29fdde7d93018902a377b3621574633c23956121",
+    "sha256:1d1095b0503145be79c79239372aefadfacf6b7c33c9245bbf99ce4b6b89c737",
+    "sha256:1d13701a5f9f3fb01aaa88cef2344d65b6b5bf6b7d9fa4cf0dca557a8d7702ba",
+    "sha256:20bbc34cad9c6fa43a238bc54b7a6383eaea55cd192d5994795e7352e17075ae",
+    "sha256:221e575cc6d89aa350de5a17cb0a99be0104db2762ee46773f32626241787b8b",
+    "sha256:2692c0125662aec5ef694fe4c05b4565ad1014c950d5344fa90d0c5c930c5a0e",
+    "sha256:2a2c94b516913a56e1dd98fa8be07f2cb9e2500610f7cacf80a6c63814a33d4b",
+    "sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43",
+    "sha256:30209d6bf6c96942b494570092dd43bbea3d393054072ab777c0eb142aed24c7",
+    "sha256:318f53f9f242baacc75737e5d2782ac6fb0bd156cf4977084a787b7a4298667d",
+    "sha256:334b4c27534d37629882ccefb0c0102333a2ff2535fe66f02f8e64208db0da78",
+    "sha256:33e4a75dbbb668cab19ca28b15146f58857dbf231b776f135ec3efdc437abdbb",
+    "sha256:364ba4d7c75aaa86b303027efd76c7c423d35220cd7cebc23bd19e704a5ba4a2",
+    "sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb",
+    "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55",
+    "sha256:38a71b35105d7898cf7e0e38184922d6ed079de2785d7c8528594ebfcaa6f0ea",
+    "sha256:38ddffd44b8332161447cc1de8d7475cc14763f55a88daac4a124df6556c7327",
+    "sha256:3a1c87ff627af4e2450393a858bfcc38cf54f7b1bc30048529172b86a22392c3",
+    "sha256:3a35b3a71ada2f9cb15cbfb6c7a6040733d7d8bacedb571cf8ab83d376ab168c",
+    "sha256:3ab6ebc7c605e5a32b7ae3ff19daed4925090245acc8100ce2230bd766c88212",
+    "sha256:418de99a454fdfee1592cc8346fad6f8e2601ed27107561aa745474d94b8b207",
+    "sha256:4283c11ce960781fdfdb6eefb7ed598f560f54cec1f3037711550ed812e28f26",
+    "sha256:444a3de28ef348317320968a0472d3823fde1598f4519a02c7ee67c6d2c2b158",
+    "sha256:4b9d0345bf0778b98c98ddef225a0aff5311418239b5badb51603a3b77c32088",
+    "sha256:4be2e1da08cb2c12207a0ad2154e48952ccea53f56e21e2ae1f9b212985150cb",
+    "sha256:4f8529ce7fd099798b9331d42a401b8e9847e4370959e58390ce1351ebf8f581",
+    "sha256:50a5fcdccdeb440003535ee386163f9974da35e424160976d444ab68b1b39348",
+    "sha256:54cadb3d3237a3fe775fb3aafb428c7aa030477b765cdc6506800b43f09c04eb",
+    "sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+    "sha256:5883324cd3a8cad8915d94febd491f986c896080aec5e7482929feb36e57456c",
+    "sha256:58b54dc326d601dcd981093167d9aeec69cbd4faf1b9e8c98c41987f500d5de7",
+    "sha256:593493031187b0ffaff1e2eacc6eef347e6206caf1b65f2eb6fa4e09be06c334",
+    "sha256:599a76d010befc5a7985ed569a22165ead47852da2f6bf5bd6bdf77516388601",
+    "sha256:5ad9982b10b8072ad569d834783cd2a6f0b849fb11ebf822e5dd7cca8387e4e7",
+    "sha256:5b454f391b61a6bace94cd2e07d7b9188bcfeae945ef06ef5dc56908af3bc2b4",
+    "sha256:5da4cdbc20a6437f2920c600bc7f3babef29e8f54504a5f927da299ff9356236",
+    "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+    "sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19",
+    "sha256:609802c5695183988548641299432632103f96c77b749778f38e06924ccdcd3d",
+    "sha256:61cc8357962ac823fdba942aa83f7a5f25d02a1efcc75d6b344d707e54fe5b04",
+    "sha256:61fab360423505bbcdbc77c5e4b34dde616be4ae78bc5f075afb59ff2fcc5ca6",
+    "sha256:646234d2d0ef037a2f542b20778b6c376342eef4830224ec4ac106d2e39812bc",
+    "sha256:69d82ed183f8ef2f24ffcb5c04b6cc1d5d841ffa9aba32b4c8e18db7626ba14f",
+    "sha256:6b6cc0c007e439f8a1dcb2902d47f4bebd3e1e0d4d9f97c7b60e905b4d736b36",
+    "sha256:7157ab3907179691ded962aeb6033a3b30f512a5b6f9e4e002041596601a9896",
+    "sha256:72a7eecd673e66aca8f4929db0058f74bb7953c95b9bda6507b1e3d8686666c2",
+    "sha256:73c39699dcb9298093e70aca06746f8b71889ec9d8094b9c6a896a24a699391a",
+    "sha256:75d617210fd20fcb3cb60d9bc4c604c48936f6432429cfe4b50f0adefe6ccc0e",
+    "sha256:7710b7d53c7bd341d28be66c5d190ec0334e5f7ca33712d0dae13dea80aed08a",
+    "sha256:77b6e1a62a07f259b31ecbc2766ab82ede83febc1eb560688c5b68244a56409d",
+    "sha256:7ba5bc8590bdf9b65cff92286e1417c8ed3624d86c792462e6b3700c1e0cd935",
+    "sha256:7d97028e6994b4a48cfbbc7dea0407e42454d35c076134c600a0c86049ff5527",
+    "sha256:8054e2fa5d5de4e85d377a38b4e5cafb2037034190a8860f6edb00e7ac62f473",
+    "sha256:821b5630d5ccc08f31f1349ad73e944b96c918afbddd5e295c4f1239fdc192ad",
+    "sha256:84cf24bb811a9a28e9239f8d8d3a4d8aeec6cb328e765dc0db098083eea16660",
+    "sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6",
+    "sha256:8dc6a8973dfc429f67dd96a1bf5346925eaa818d1790333c675e772aff23b653",
+    "sha256:93a3c0e874b16085e58e99e8426944be6a2a5f83e45c1f58800f791cd8d719c1",
+    "sha256:93d296c0b17153049aa59a53f5a1da55792fad6cfb65e11685b5509cf18af00e",
+    "sha256:96fc9d6eec639819458813f927013e280c497790115df5dd74db37472e6988c8",
+    "sha256:97470d28407afabfd84c3663f66e51c8437dd908d9e4d6aca4c99bbc0ffd413f",
+    "sha256:a065584063867ad3af6377607c2d73303d4a9ebf0aef2c26edb40e8cee5b2063",
+    "sha256:a1aa714b8f0d24bb6a47fb6c8b6d715aec3c1bae2203f7bffab9dc0142a4421c",
+    "sha256:a22aa7feb2ac810144aebecdfa3dfdca2af052c760615a8bf8eadf8a1ad459f1",
+    "sha256:a5533268445e42b4e7a3501cf65a59c0bc8b2bf94898fa1deb66cb36898b9966",
+    "sha256:a7fab5ca736d14171f7fcb1805617afeef69e4907b8316b6b2e997d0ce391536",
+    "sha256:a86c8705e9adb23456510f5fbd7aead2c3a61aef8084bcb67dfe9a9bca4e0278",
+    "sha256:ab332e7d1a9b7cefa59f9d8536c665dae6303220c98daddf036fc8d385db2e17",
+    "sha256:ab4870089c40822af819e3d769a927a6df8ff863f8c203311596b1ab35367b14",
+    "sha256:abb4af2f6773a09e657768190cc9c75eb17f2cae490f46ab20e36ff403823d6b",
+    "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+    "sha256:ad6f3c8944bb081f022ad74267787ab9f3d647d4b6f4360beeebdf6123836fa5",
+    "sha256:af585013f97f622715de01e48d00558f7edf17055d7b40deafc9f98ca8d99a56",
+    "sha256:b3041eb94c8918d370e381ad8dd0c9db144d7e4aa6c0e46774328bd688a65d88",
+    "sha256:b3bed2d2f43870f70fec8cfbf46525a2359d4d6828aa785b2704a8c4b77960eb",
+    "sha256:b4af8420616b575eb50095c735939ee341049bb750afe735acb1254bd836141d",
+    "sha256:bd23e4b0846214c67558be3e9a20c7f7ac49fc79cacf87a30f05509de65860b7",
+    "sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c",
+    "sha256:be22eb2abdf29a1e594ec07d2fe0ac4a05b0c5f0b64b5f10f25145f90954d5a1",
+    "sha256:becf81acc9872d64707c5c8ae71c18b64d87412b42f844acb2a4ec190f1e5cb4",
+    "sha256:bf05be59ff58dc33971660595846758cc0b7531ce6cfda8d244d3e56f3edd413",
+    "sha256:c06aaa141f022cd051232885c7015f6ee82dcc404900bb7b3b5cf5d8e3cbd911",
+    "sha256:c2f32062f5ca6360d9ca55ce70c2cae392d75960930d780845b49ef7f95227a3",
+    "sha256:c9174ba91cda27de02620324a37e63cc311962f404c33181ca66d24b5b85ccac",
+    "sha256:c9d92d840fd011c908f040592857c724ae6d877f2aba5c40ad963276507386b2",
+    "sha256:ca4123a38e30e2f7e6865bf40f4fdbf38e91e926c8023fc490ae8a13f03b0275",
+    "sha256:cfaa2155d6305b071f12c79ba206a8a102ae0951240b30545181bd0725e27e4f",
+    "sha256:d23e9cde49c2e310181acdd2fe770aebc251bf417374a7049d0970ec5234e635",
+    "sha256:d31218de5aa6f10e848881ba96e9b103d1a67f3c04b51ad050e5e34e624b3bb8",
+    "sha256:d488e95945f58a0967fd07108cacd32b0c83360e48d123d0bb57cc6ec2bfc57e",
+    "sha256:d8d1d91d2950d8fdcbe82e79c8debcd796d9c43de0b3c1666120f9c0b0b419fd",
+    "sha256:d9a757964bc5f7398ab1b2d58e6191484816900fbcc293c9f39ec6f5f17f7139",
+    "sha256:dc76c18f9da8d7f836a5bf9af4c63077b38cf59b628b714362b68b6a194e1d3d",
+    "sha256:deedd55a3bc75dc19f8d631609e18f4beb4dde62bc26cfa676e501dc00575907",
+    "sha256:eb4759788a2182f08257135e61a34f2cfc3c2914079f3465d64ee62350f4d081",
+    "sha256:ec541f19146437b88c8b04d467931185e0de59f607a18d3a46f6da1efd362aae",
+    "sha256:ec86ba2391dfca5f0cc648c6911e9ac776d3b373c1c933dd49842256109ed9eb",
+    "sha256:ed04d6c1d9f799eb1e374389aa3e99418da22cf43dcb85cc0e02ce01b315cbab",
+    "sha256:ed95cb8b171c0bb2ca491966240e5bc32c723e04f93ba7b22ac7efa4092526f5",
+    "sha256:fad365cb7af16c43e67093d4f8436e57ae53e6c35fae4161e661971612ba6c5a",
+    "sha256:ffa9d18f8753fc2f67e1365120c44ad8e756ffb6d275a9ca4ae0b422d0928f54"
+  ],
+  "results": [
+    {
+      "image_id": "sha256:ca42a65aa8224faeaed313c5aee2a9c5d01dd9c29ed30c3abecb0c3d211c0321",
+      "exit_code": 0,
+      "output": "Untagged: insurance-harness-g35:cb69e41aeffa\nDeleted: sha256:ca42a65aa8224faeaed313c5aee2a9c5d01dd9c29ed30c3abecb0c3d211c0321",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155",
+      "exit_code": 0,
+      "output": "Untagged: weknora-g3-harness:recovery-20260922\nDeleted: sha256:a7c6ebeccd77ebb263999093d7fb1c00b9b1dbbd86b607290ff4f6b6cf056155",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3bn-0940f36497a7\nDeleted: sha256:d76dbcaa3d034189eea096a87660996d434421d143ab0f9abcd0ce7b606b36d3",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:0e55b9e698940d6083f17982d21d395874b67b28d7d871fa51f22a54b22e9925",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3bm-63ac9e460092\nDeleted: sha256:0e55b9e698940d6083f17982d21d395874b67b28d7d871fa51f22a54b22e9925",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:c70f8b26a51cc1128632844a6beef702a5ba6a2219ae32e5c0cdb766d841c1d2",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3bk-954255a0f797\nDeleted: sha256:c70f8b26a51cc1128632844a6beef702a5ba6a2219ae32e5c0cdb766d841c1d2",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:da7caeb42f4cc5b5d6c078b09035f12ed00da0bb063c8c279e9d951d8de55370",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3bj-964f968001f3\nDeleted: sha256:da7caeb42f4cc5b5d6c078b09035f12ed00da0bb063c8c279e9d951d8de55370",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:e1d73952de6c657227de57cd505f203c9c33e094c58139af684aea06141354ce",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3bg-61e5e38f2ea4\nDeleted: sha256:e1d73952de6c657227de57cd505f203c9c33e094c58139af684aea06141354ce",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:8edff8538d159c64fe74efcaf830a32bcc3743bd2891664a1aa90aa2b7a7ca75",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3be-111c731e7d56\nDeleted: sha256:8edff8538d159c64fe74efcaf830a32bcc3743bd2891664a1aa90aa2b7a7ca75",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:6724bc88f43dd5c0e35e1dcbccb241848c9877c2f82fb2248564cec9a15e208a",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3bb-e3b602261789\nDeleted: sha256:6724bc88f43dd5c0e35e1dcbccb241848c9877c2f82fb2248564cec9a15e208a",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:30f06185cbe9b8cdf80c3caf60ee4c0a6680ff8b18faf446fa5a3873379335de",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3ba-79c1d8b873a5\nDeleted: sha256:30f06185cbe9b8cdf80c3caf60ee4c0a6680ff8b18faf446fa5a3873379335de",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:a2e0e7a476cdbb38d7ce1b8182861f5dd6ebfbe3be8bed7822a850ac14a9a155",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3ax-d9d30adac653\nDeleted: sha256:a2e0e7a476cdbb38d7ce1b8182861f5dd6ebfbe3be8bed7822a850ac14a9a155",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:e3f6cdf54d7c46542ecaa614071755e18bf38a7a6db40d911d67c4cd4b5c949d",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3at-c37e0813c82c\nDeleted: sha256:e3f6cdf54d7c46542ecaa614071755e18bf38a7a6db40d911d67c4cd4b5c949d",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:d7e419969349d60b398425e5ef02b1082b6e934d1c74743ceeb3a3653d1b85f6",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3as-4b1ece885a0d\nDeleted: sha256:d7e419969349d60b398425e5ef02b1082b6e934d1c74743ceeb3a3653d1b85f6",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:28344e4fb10a0b341f088ced7f0c69986653ab7abc77f828dcccda551d9e758d",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb/g3-harness:task3aq-9a1fd106b81d\nDeleted: sha256:28344e4fb10a0b341f088ced7f0c69986653ab7abc77f828dcccda551d9e758d",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:64f7992a50ea4ea6e11c65e82a4706d46a55f6626f9a46518fa431ff1766ca1a",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-task3ap-2f2fe5ca\nDeleted: sha256:64f7992a50ea4ea6e11c65e82a4706d46a55f6626f9a46518fa431ff1766ca1a",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:f1534503d565a4889d0449d6f4e1a3ed5b988a404fc074a468c4170fd97a181c",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-task3ao-194e6ff0\nDeleted: sha256:f1534503d565a4889d0449d6f4e1a3ed5b988a404fc074a468c4170fd97a181c",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:396560b8c7dbdc0ecf9f3b3d9616d2c40e7f86d8b85fab7383a0c27de6689127",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-task3an-5e62d5f9\nDeleted: sha256:396560b8c7dbdc0ecf9f3b3d9616d2c40e7f86d8b85fab7383a0c27de6689127",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:cdb94a73f8f180552cbd096f2d10115542763d9c8c48256b4c2d79efe871f15e",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-task3am-0ae8d97e\nDeleted: sha256:cdb94a73f8f180552cbd096f2d10115542763d9c8c48256b4c2d79efe871f15e",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:c2a055e381ea5aece03e5558e7d355d8add2cb9654cae222efe959bf86354c77",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-task3al-b455aca3\nDeleted: sha256:c2a055e381ea5aece03e5558e7d355d8add2cb9654cae222efe959bf86354c77",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:695bb60f3967f83b65f2f7edbcbf57b9e4c66cc59423a8f75daae5afe45e9c15",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-task3ag-383b371a\nDeleted: sha256:695bb60f3967f83b65f2f7edbcbf57b9e4c66cc59423a8f75daae5afe45e9c15",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:14d1e1573303366db9ff6ffd63df93b4d0d36639d1d3f3e0591f1f9eb4d28ca2",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-task3ae-02-9319698a\nDeleted: sha256:14d1e1573303366db9ff6ffd63df93b4d0d36639d1d3f3e0591f1f9eb4d28ca2",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:8f582a6df0ec8948aa8511ce2eaad59c4b185c1144e358680d20620303159b5b",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-task3ae-9319698a\nDeleted: sha256:8f582a6df0ec8948aa8511ce2eaad59c4b185c1144e358680d20620303159b5b",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:80420b69ce3dc44dcdaabe8867138eb7ce2752a4a9d0a9c34cb209159d74aff7",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-harness:g3-null-collections-8dd22b32\nDeleted: sha256:80420b69ce3dc44dcdaabe8867138eb7ce2752a4a9d0a9c34cb209159d74aff7",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:5f11d6a29dcd3fb74c5c2973cb1f44b74f450cd6702440ff376c3456612bb2e7",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-ui:product-incremental-e00f7908\nDeleted: sha256:5f11d6a29dcd3fb74c5c2973cb1f44b74f450cd6702440ff376c3456612bb2e7",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0",
+      "exit_code": 0,
+      "output": "Untagged: local/insurancekb-weknora-frontend:g1-m3-06b101665921\nDeleted: sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327",
+      "exit_code": 0,
+      "output": "Untagged: local/insurancekb-weknora-app:g1-m3-06b101665921\nDeleted: sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:245ea13fda931b12a9dcc27aa5b644f733aacef60fa3605ae2760b924d651f4b",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-weknora-c5-frontend:f90fb9fe\nDeleted: sha256:245ea13fda931b12a9dcc27aa5b644f733aacef60fa3605ae2760b924d651f4b",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:90d3bb3f1b2f788b0acb8cb430764da9eb1e8cfc4b095f210ac879a31c17241a",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-weknora-p0:8d8bff68\nDeleted: sha256:90d3bb3f1b2f788b0acb8cb430764da9eb1e8cfc4b095f210ac879a31c17241a",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:dd1fe37ff32f283c3bea5fbad3b0e729fa31a060c4e0a4b84b658d1e04ce6de0",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-weknora-p0:4ce93955\nDeleted: sha256:dd1fe37ff32f283c3bea5fbad3b0e729fa31a060c4e0a4b84b658d1e04ce6de0",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:69b56252b378b705cf4fbf705ec6ea373506d866a21aca64259381e4c7560365",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-weknora-p0:3fa4c1fd\nDeleted: sha256:69b56252b378b705cf4fbf705ec6ea373506d866a21aca64259381e4c7560365",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:b8f0b0c6f3bbdfbf920158e7e409f931fce68da134f748060f509a0d0c443f94",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-weknora-p0:fac8dae7\nDeleted: sha256:b8f0b0c6f3bbdfbf920158e7e409f931fce68da134f748060f509a0d0c443f94",
+      "error": ""
+    },
+    {
+      "image_id": "sha256:01482fd79aa5bcbe3fa6a4f1f8aa4fb61015cf3e3d9b6c451379f81b062e83af",
+      "exit_code": 0,
+      "output": "Untagged: insurancekb-weknora-app:p0-baseline-6af75c50\nDeleted: sha256:01482fd79aa5bcbe3fa6a4f1f8aa4fb61015cf3e3d9b6c451379f81b062e83af",
+      "error": ""
+    }
+  ],
+  "cache_prune": false,
+  "container_or_volume_deletion": false,
+  "completed_at": "2026-09-27T13:20:42.185893+00:00",
+  "post_cleanup_available_kib": 6948324,
+  "reported_before_available": "about 1.1GiB",
+  "observed_reclaimed": "about 5.6GiB; df approximation, not a layer-size sum",
+  "running_container_check": "All eight previously listed running containers remain up; Harness API/worker and legacy Redis report healthy",
+  "recovery_build_invocations": 0,
+  "capacity_decision": "Pending independent read-only assessment; no additional build has started"
+}

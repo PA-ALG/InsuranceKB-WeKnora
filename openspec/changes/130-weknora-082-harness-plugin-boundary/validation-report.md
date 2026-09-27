@@ -11,7 +11,7 @@
 | UPG-05 | model-final 582 项通过；reserve/mark 失败零发送、失败关闭、四协议 fallback、重定向实际发送、revision 队列 fence 与失败后续保留均有回归；真实进程恢复/成本未验 | 8a0863fa0 | NOT RUN |
 | UPG-06 | RAW-only 托管源、插件关闭/缺失 Head、普通 KB 工具、当前权限及 Release 负向回归通过；来源并发两项修复已冻结，仓储/服务受影响/下游回归PASS，最终独立复核0BLOCKER，真实环境验证未完成 | 8a0863fa0 | NOT RUN |
 | UPG-07 | 初轮 database 包及 adoption 131 项通过；独审发现中间 checkpoint 恢复和 skip_embedding 模式转换两个 BLOCKER，均已修复、数据库包通过，独立复核关闭。真实 DB/恢复未执行 | 8a0863fa0 | NOT RUN |
-| UPG-08 | BA0 输入/复用、运行资产及新增依赖合同 156 项通过；前端 tests/typecheck/build 已完成，最新构建2m4s。App D2一次尝试197.05秒后因磁盘不足失败，无镜像；UI/DocReader与smoke未执行 | 8a0863fa0 | BLOCKED |
+| UPG-08 | BA0 输入/复用、运行资产及新增依赖合同 156 项通过；前端 tests/typecheck/build 已完成，最新构建2m4s。App首次197.05秒磁盘不足；已授权清理32镜像后的唯一追加构建13.50秒镜像源EOF失败，均无镜像；追加预算已用完，UI/DocReader与smoke未执行 | 8a0863fa0 | BLOCKED |
 | UPG-09 | 核心保留理由与退出条件见 patch-ledger.md；旧模型模块/host skills 已替代删除；前端80/构建18/迁移13路径独审0BLOCKER；核心两项并发修复已冻结43路径，最终独审0BLOCKER | 8a0863fa0 | NOT RUN |
 
 ## 已执行的本地检查
@@ -34,3 +34,5 @@ software本地范围PASS，container health、真实 DB migration/backup/restore
 C2最终独审：43路径与附加router fixture全部匹配，0 BLOCKER。并发修复后旧来源/重解析/图片队列/revision再验71项PASS/2.945秒。UPG-04/05/06本地阻断已关闭，最终status仍NOT RUN，等待真实环境验收。三项普通KB/enrichment/索引清理重试BACKLOG见patch-ledger及独审JSON，不作为当前G3已验证能力。
 
 交付尝试与审批：delivery-attempt-01.json记录App失败、容量和零部署事实。自动审批拒绝向产品origin发送当前payload，push/PR/远端CI未执行。无清理与重复构建。
+
+最新授权恢复：用户已明确批准32镜像精确删除、一次条件恢复构建及push/Draft PR，历史审批拒绝已解除。清理PASS，空间约6.63GiB，保留容器/卷/cache。独立容量复核后已执行唯一追加App构建，配置镜像源在Dockerfile frontend元数据阶段返回EOF，13.50秒失败，无镜像；新增1/1已使用，不自动重试。回执delivery-attempt-02.json。普通上传HTTP400/408（直连也408）后，确认fork已持有3e8b0bfc并令同一目标分支引用该祖先，再普通快进到f3ff602b9，push成功。待补推本次证据并创建Draft PR；远端CI结果尚未取得，不能记PASS。
