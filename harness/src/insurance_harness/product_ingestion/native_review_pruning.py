@@ -55,8 +55,12 @@ def validated_review_seeds(selection: dict[str, Any], receipt: dict[str, Any]) -
         for row in context["dispositions"]
     ):
         raise ValueError("native pruning review ownership mismatch")
+    from insurance_harness.product_ingestion.review_quality import review_qualifications
+
     seeds: set[Node] = {
-        ("member", key) for key, score in review.page_scores.items() if score.total < 80
+        ("member", key)
+        for key, qualification in review_qualifications(context, review.page_scores).items()
+        if qualification.band != "ACCEPTED"
     }
     seeds.update(
         ("candidate", bindings[row.candidate_id]["candidate_key"])
@@ -88,6 +92,7 @@ def review_pruning_input(
         context["output_hash"],
         run_id,
         True,
+        quality_policy=context.get("quality_policy"),
     ):
         raise ValueError("native pruning review call custody mismatch")
     value = {

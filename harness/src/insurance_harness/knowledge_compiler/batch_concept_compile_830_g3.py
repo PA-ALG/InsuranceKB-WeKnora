@@ -341,6 +341,9 @@ class BatchConceptCompileRequest830G3V1(_FrozenModel):
     knowledge_update_policy: Literal["explicit-same-identity.830.v1"] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    quality_policy: Literal["provenance-applicable-score.830.v1"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     request_sha256: Hash
 
     @model_validator(mode="before")
@@ -350,6 +353,7 @@ class BatchConceptCompileRequest830G3V1(_FrozenModel):
             ("published_base" in value and value["published_base"] is None)
             or ("refresh_fields" in value and not value["refresh_fields"])
             or ("knowledge_update_policy" in value and value["knowledge_update_policy"] is None)
+            or ("quality_policy" in value and value["quality_policy"] is None)
         ):
             raise ValueError("EMPTY_INCREMENTAL_EXTENSION_MUST_BE_OMITTED")
         return value
@@ -1404,6 +1408,7 @@ def build_batch_compile_request(
     published_base: PublishedBaseBinding830G3V1 | None = None,
     refresh_fields: tuple[FieldRefresh830G3V1, ...] = (),
     knowledge_update_policy: Literal["explicit-same-identity.830.v1"] | None = None,
+    quality_policy: Literal["provenance-applicable-score.830.v1"] | None = None,
 ) -> BatchConceptCompileRequest830G3V1:
     """Build one exact, offline G3 request from Catalog and replayed C inputs."""
 
@@ -1481,6 +1486,8 @@ def build_batch_compile_request(
     }
     if knowledge_update_policy is not None:
         payload["knowledge_update_policy"] = knowledge_update_policy
+    if quality_policy is not None:
+        payload["quality_policy"] = quality_policy
     if published_base is not None:
         payload["published_base"] = published_base
     if refresh_fields:
@@ -2128,14 +2135,24 @@ def knowledge_admission_g3(
     if checked.decision not in ("PASS", "NEEDS_HUMAN"):
         raise BatchConceptCompileError("REVIEW_NOT_APPROVED_OR_STALE")
     changed = changed_knowledge_member_ids(request, output)
-    if request.knowledge_update_policy and set(checked.page_scores) != changed:
+    if (request.knowledge_update_policy or request.quality_policy) and (
+        set(checked.page_scores) != changed
+    ):
         raise BatchConceptCompileError("PAGE_ADMISSION_COVERAGE_MISMATCH")
+    from .knowledge_quality import qualify_member
+
+    members = {row.concept_id: row for row in output.definitions} | {
+        free_page_id(row): row for row in output.pages
+    }
     pending = []
     for member_id in sorted(changed):
         score = checked.page_scores.get(member_id)
-        if score is None or score.total < 60:
+        if score is None or member_id not in members:
             raise BatchConceptCompileError("PAGE_ADMISSION_REJECTED")
-        if score.total < 80:
+        qualification = qualify_member(request.quality_policy, members[member_id], score)
+        if qualification.band == "REJECTED":
+            raise BatchConceptCompileError("PAGE_ADMISSION_REJECTED")
+        if qualification.band == "PENDING":
             pending.append(member_id)
     return HumanBatchAdmission(
         contract="concept-admission.830.g2.v1",
@@ -2208,8 +2225,8 @@ def validate_candidate_bundle(bundle: BatchConceptCandidateBundle830G3V1) -> Non
     }
     if len(run_ids) != 3 or bundle.admission.status != "NEEDS_HUMAN":
         raise BatchConceptCompileError("EXECUTION_INDEPENDENCE_INVALID")
-    if request.knowledge_update_policy and bundle.admission != knowledge_admission_g3(
-        request, expected, review.output
+    if (request.knowledge_update_policy or request.quality_policy) and (
+        bundle.admission != knowledge_admission_g3(request, expected, review.output)
     ):
         raise BatchConceptCompileError("HUMAN_ADMISSION_BINDING_MISMATCH")
     if bundle.page_manifest != project_batch_members(

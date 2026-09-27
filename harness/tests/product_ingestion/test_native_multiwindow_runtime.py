@@ -194,7 +194,7 @@ class MultiwindowModel(NativeModel):
             self.reviews.append(context)
             scores = {
                 key: dict(
-                    business_value=25,
+                    business_value=16 if context.get("quality_policy") else 25,
                     reuse=20,
                     evidence_quality=0,
                     definability=15,
@@ -236,7 +236,7 @@ class MultiwindowModel(NativeModel):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "crash_point", ["after_first", "after_both", "v4", "audit_first", "audit_both"]
+    "crash_point", ["after_first", "after_both", "v4", "audit_first", "audit_both", "quality"]
 )
 async def test_multiwindow_worker_restarts_without_resending_and_publishes_survivor(
     tmp_path: Path, crash_point: str
@@ -251,6 +251,22 @@ async def test_multiwindow_worker_restarts_without_resending_and_publishes_survi
             )
         }
     )
+    if crash_point == "quality":
+        from insurance_harness.product_ingestion.review_quality import (
+            QUALITY_REVIEW_PURPOSE,
+            quality_review_prompt,
+        )
+        data = json.loads(settings.product_ingestion_runtime_json.get_secret_value())
+        binding = data["bindings"][0]
+        binding["native_discovery"]["quality_policy"] = "provenance-applicable-score.830.v1"
+        binding["model"]["templates"].append(dict(
+            template_id=QUALITY_REVIEW_PURPOSE, purpose=QUALITY_REVIEW_PURPOSE, role="verify",
+            run_schema_version="830-g3-v1", prompt_sha256=_sha(quality_review_prompt()),
+            max_context_bytes=8*1024*1024, max_output_tokens=8192,
+        ))
+        settings = settings.model_copy(
+            update={"product_ingestion_runtime_json": SecretStr(_json(data).decode())}
+        )
     engine = _sqlite_engine(tmp_path / "multiwindow.db")
     Base.metadata.create_all(engine)
     factory = make_session_factory(engine)
@@ -280,7 +296,7 @@ async def test_multiwindow_worker_restarts_without_resending_and_publishes_survi
             raise RuntimeError("fixture crash after both durable review calls")
         return prepare(**kwargs)
 
-    if crash_point in {"after_both", "v4", "audit_both"}:
+    if crash_point in {"after_both", "v4", "audit_both", "quality"}:
         context.artifacts.prepare_artifact_writes = crash
     else:
         executor = context.bindings[SCOPE.space_id].model_executor
@@ -329,6 +345,13 @@ async def test_multiwindow_worker_restarts_without_resending_and_publishes_survi
         )
         assert len(model.reviews) == len(model.admission_requests) == 2
         assert platform.activations == 1
+        if crash_point == "quality":
+            assert platform.candidate.request.quality_policy == "provenance-applicable-score.830.v1"
+            assert all(
+                view["quality_policy"] == platform.candidate.request.quality_policy
+                for view in model.reviews
+            )
+            assert all("effective_fields" in view["existing_knowledge"] for view in model.reviews)
         new_pages = [
             page
             for page in platform.candidate.compile_result.output.pages

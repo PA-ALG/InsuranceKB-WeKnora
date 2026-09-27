@@ -20,7 +20,10 @@ from insurance_harness.knowledge_compiler import (
 from insurance_harness.knowledge_compiler import (
     batch_entity_resolution_830_g3 as resolver,
 )
+from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileResult
+from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import FieldAssertion
 from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.checkpoints import RECEIPT_KIND
 from insurance_harness.product_ingestion.models import (
     ProductRunSnapshot,
@@ -54,6 +57,37 @@ class CheckpointValidationError(ValueError):
     def __init__(self, reason: CheckpointFailureReason):
         self.reason = reason
         super().__init__(reason.value)
+
+
+async def _checkpoint_effective_fields(
+    *,
+    artifacts: ProductArtifactStore,
+    scope: ProductScope,
+    run_id: str,
+    has_prior_rebase: bool,
+) -> tuple[compiler.BatchConceptCompileRequest830G3V1, tuple[FieldAssertion, ...]]:
+    """Reconstruct the field generation that produced the saved discovery."""
+    read = (
+        artifacts.read_prior_rebase_artifact
+        if has_prior_rebase
+        else artifacts.read_checkpoint_artifact
+    )
+    prefix = "rebased_" if has_prior_rebase else ""
+    saved_request, saved_delta = await asyncio.gather(
+        *(
+            asyncio.to_thread(
+                read,
+                scope=scope,
+                run_id=run_id,
+                artifact_kind=prefix + kind,
+            )
+            for kind in ("compile_request", "compile_delta")
+        )
+    )
+    request = compiler.BatchConceptCompileRequest830G3V1.model_validate_json(saved_request.payload)
+    delta = CompileResult.model_validate_json(saved_delta.payload)
+    composed = await asyncio.to_thread(compiler.compose_batch_output, request, delta)
+    return request, composed.fields
 
 
 async def validate_checkpoint(
@@ -219,11 +253,37 @@ async def validate_checkpoint(
                     artifacts.read_checkpoint_stage_calls,
                     scope=scope, run_id=run.run_id, stage_key="discovery",
                 )
+                field_generation = (
+                    await _checkpoint_effective_fields(
+                        artifacts=artifacts,
+                        scope=scope,
+                        run_id=run.run_id,
+                        has_prior_rebase=bool(plan.prior_rebase_artifacts),
+                    )
+                    if native.dependency_policy is not None
+                    else None
+                )
                 for ref in contexts:
                     saved_context = await asyncio.to_thread(
                         artifacts.read_checkpoint_artifact, scope=scope, run_id=run.run_id,
                         artifact_kind="native_admission_context", artifact_key=ref.artifact_key,
                     )
+                    if field_generation is not None:
+                        from insurance_harness.product_ingestion.field_comparison import (
+                            build_effective_field_view,
+                        )
+
+                        field_request, effective_fields = field_generation
+                        saved_view = json.loads(saved_context.payload)
+                        expected_view = build_effective_field_view(
+                            field_request,
+                            saved_view["entity"]["entity_id"],
+                            effective_fields,
+                        )
+                        if json_bytes(saved_view["existing_knowledge"].get("effective_fields")) != (
+                            json_bytes(expected_view)
+                        ):
+                            raise ValueError("checkpoint effective field comparison mismatch")
                     saved_execution = await asyncio.to_thread(
                         artifacts.read_checkpoint_artifact, scope=scope, run_id=run.run_id,
                         artifact_kind="native_admission_execution", artifact_key=ref.artifact_key,

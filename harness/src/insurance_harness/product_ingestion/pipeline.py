@@ -687,6 +687,7 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
             resolution=resolver.BatchEntityResolutionV1.model_validate(values["resolution"]),
             selected_refs=tuple(tuple(row) for row in values["selected_refs"]),
             refresh_fields=tuple(refresh),
+            quality_policy=native_settings.quality_policy if native_settings is not None else None,
             knowledge_update_policy=(
                 "explicit-same-identity.830.v1"
                 if native_settings is not None and native_settings.allow_knowledge_updates
@@ -893,6 +894,11 @@ def build_product_pipeline(context: ProductCompositionContext) -> ProductPipelin
             return await run_native_discovery_stage(
                 service=service, artifacts=artifacts, scope=scope, run=run, stage=stage,
                 job=job, request=request, sources=sources,
+                field_delta=await asyncio.to_thread(
+                    lambda: CompileResult.model_validate_json(
+                        read(scope, run.run_id, "compile_delta")
+                    )
+                ),
             )
         return await run_discovery_generation_stage(
             service=service_for(scope),

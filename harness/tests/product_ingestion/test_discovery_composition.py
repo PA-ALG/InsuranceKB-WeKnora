@@ -192,6 +192,15 @@ def test_composite_accepts_auditable_parent_call_without_claiming_child_model_ca
         request=request, final_output=composed, free_output=free, outcome=outcome, run_id="child"
     )
     assert result.output.output_hash == outcome.review_output.output_hash
+    # An old prompt cannot serve as the independent review for a new policy,
+    # even when output identity and raw custody are otherwise unchanged.
+    with pytest.raises(ValueError):
+        compose_discovery_review(
+            request=request.model_copy(
+                update={"quality_policy": "provenance-applicable-score.830.v1"}
+            ),
+            final_output=composed, free_output=free, outcome=outcome, run_id="child",
+        )
     call.raw_sha256 = "0" * 64
     with pytest.raises(ValueError):
         compose_discovery_review(

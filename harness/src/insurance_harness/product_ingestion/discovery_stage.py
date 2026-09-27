@@ -159,17 +159,19 @@ def _validated_independent_review(
     if len(ids) != len(set(ids)) or set(ids) != expected_ids:
         raise ValueError("discovery review disposition coverage mismatch")
     checks = {row.decision for row in checked.disposition_checks}
-    scores = [score.total for score in review_output.page_scores.values()]
+    from insurance_harness.product_ingestion.review_quality import review_qualifications
+
+    bands = [row.band for row in review_qualifications(context, review_output.page_scores).values()]
     if (
         review_output.decision == "REJECT"
         or "REJECT" in checks
-        or any(score < 60 for score in scores)
+        or "REJECTED" in bands
     ):
         decision = "REJECTED"
     elif (
         review_output.decision == "NEEDS_HUMAN"
         or "NEEDS_HUMAN" in checks
-        or any(score < 80 for score in scores)
+        or "PENDING" in bands
     ):
         decision = "PENDING"
     else:
@@ -265,6 +267,7 @@ async def run_independent_discovery_final_review(
             settings = service.configuration.model
             purpose, prompt = independent_discovery_review_policy(
                 candidate_output,
+                quality_policy=request.quality_policy,
                 dependency_selection=discovery_candidates.get("dependency_selection") is not None,
             )
             template = require_discovery_template(settings, "verify", purpose, prompt)

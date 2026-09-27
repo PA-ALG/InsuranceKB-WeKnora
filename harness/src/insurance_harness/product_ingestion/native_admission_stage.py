@@ -11,6 +11,7 @@ from insurance_harness.jobs import JobSnapshot
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCompileRequest830G3V1,
 )
+from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import FieldAssertion
 from insurance_harness.product_ingestion.artifact_models import ArtifactDraft, ArtifactOrigin
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
 from insurance_harness.product_ingestion.checkpoints import CURRENT_ARTIFACT_CONTRACTS
@@ -70,6 +71,7 @@ async def run_native_admission_window(
     replay_calls: NativeReplayIndex | None = None,
     dependency_policy: str | None = None,
     isolation_enabled: bool = False,
+    effective_fields: tuple[FieldAssertion, ...] | None = None,
 ) -> NativeAdmissionWindowOutcome:
     """Consume verified snapshots; stage owner persists these returned artifacts.
 
@@ -112,6 +114,7 @@ async def run_native_admission_window(
         dependency_policy=dependency_policy,
         isolation_enabled=isolation_enabled,
         relation_capability=RELATION_CAPABILITY if relation_enabled else None,
+        effective_fields=effective_fields,
     )
     wire_context = (
         render_relation_wire_context(context)
@@ -210,6 +213,7 @@ async def run_native_admission_window(
             source=source,
             context=context,
             wire_protocol=policy.wire_protocol,
+            effective_fields=effective_fields,
             )
         keep("native_admission_preflight", json_bytes(preflight.receipt))
         keep("native_admission_canonical_response", preflight.canonical)

@@ -148,9 +148,19 @@ is review context, never additional source evidence. Bind the supplied final has
 
 
 def independent_discovery_review_policy(
-    output: CompileOutput, *, dependency_selection: bool = False
+    output: CompileOutput, *, dependency_selection: bool = False,
+    quality_policy: str | None = None,
 ) -> tuple[str, bytes]:
     """Select the explicitly authorized template without changing historical prompts."""
+    if quality_policy is not None:
+        from insurance_harness.knowledge_compiler.knowledge_quality import QUALITY_POLICY
+        from insurance_harness.product_ingestion.review_quality import (
+            QUALITY_REVIEW_PURPOSE,
+            quality_review_prompt,
+        )
+        if quality_policy != QUALITY_POLICY:
+            raise ValueError("UNKNOWN_KNOWLEDGE_QUALITY_POLICY")
+        return QUALITY_REVIEW_PURPOSE, quality_review_prompt()
     if any(page.business_relation is not None for page in output.pages):
         from insurance_harness.product_ingestion.relation_review import (
             RELATION_REVIEW_PROMPT,
@@ -1453,6 +1463,11 @@ def render_discovery_review_context(
     return _limit(
         {
             "contract": "product-discovery-review-context.830.v1",
+            **(
+                {"quality_policy": request.quality_policy,
+                 "batch_request_sha256": request.request_sha256}
+                if request.quality_policy is not None else {}
+            ),
             "generation_context": {
                 "comparison": comparison,
                 "coverage": tuple(row["coverage"] for row in generations),
@@ -1525,16 +1540,24 @@ def project_discovery_review(
     )
     if deferred_update:
         reasons.append("EXISTING_KNOWLEDGE_UPDATE_ADAPTER_REQUIRED")
-    scores = [score.total for score in review.page_scores.values()]
+    from insurance_harness.knowledge_compiler.knowledge_quality import qualify_member
+
+    members = {row.concept_id: row for row in projection.new_output.definitions} | {
+        free_page_id(row): row for row in projection.new_output.pages
+    }
+    scores = [
+        qualify_member(request.quality_policy, members[key], score).band
+        for key, score in review.page_scores.items()
+    ]
     decisions = {row.decision for row in checked.disposition_checks}
     state: Literal["ACCEPTED", "PENDING", "REJECTED", "EMPTY"]
-    if review.decision == "REJECT" or "REJECT" in decisions or any(score < 60 for score in scores):
+    if review.decision == "REJECT" or "REJECT" in decisions or "REJECTED" in scores:
         state = "REJECTED"
         reasons.append("DISCOVERY_GROUP_REJECTED")
     elif (
         review.decision == "NEEDS_HUMAN"
         or "NEEDS_HUMAN" in decisions
-        or any(score < 80 for score in scores)
+        or "PENDING" in scores
     ):
         state = "PENDING"
         reasons.append("DISCOVERY_GROUP_NEEDS_HUMAN")
@@ -1741,7 +1764,7 @@ def render_independent_discovery_review_context(
         "product-discovery-review-context.830.v6",
         "product-discovery-review-context.830.v9",
         "product-discovery-review-context.830.v10",
-    }:
+    } or request.quality_policy is not None:
         from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
             free_page_content,
             verify_evidence,
@@ -1795,6 +1818,16 @@ def render_independent_discovery_review_context(
         if context_version != "product-discovery-review-context.830.v3"
         else None
     )
+    from insurance_harness.product_ingestion.field_comparison import verified_review_field_view
+
+    field_view = verified_review_field_view(
+        request, entity_id, final_composed_output.fields,
+        discovery_candidates.get("dependency_selection"),
+    )
+    if field_view is not None:
+        if knowledge_view is None:
+            raise ValueError("effective field comparison review view missing")
+        knowledge_view["effective_fields"] = field_view
     relation_view = {}
     if has_relations:
         from insurance_harness.product_ingestion.relation_review import relation_review_view
@@ -1804,6 +1837,13 @@ def render_independent_discovery_review_context(
         "contract": context_version,
         **relation_view,
         **provenance_view,
+        **(
+            {
+                "quality_policy": request.quality_policy,
+                "batch_request_sha256": request.request_sha256,
+            }
+            if request.quality_policy is not None else {}
+        ),
         **({"dependency_selection": selection} if selection is not None else {}),
         **({"existing_knowledge": knowledge_view} if knowledge_view is not None else {}),
         "request_hash": compile_request_hash_g3(request.base_request),

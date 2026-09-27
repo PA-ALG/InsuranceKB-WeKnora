@@ -166,6 +166,18 @@ class AutomationSignerSettings(_FrozenModel):
 
 
 class NativeDiscoverySettings(_FrozenModel):
+    quality_policy: Literal["provenance-applicable-score.830.v1"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    @model_validator(mode="before")
+    @classmethod
+    def quality_policy_must_be_explicit(cls, value: object) -> object:
+        if isinstance(value, Mapping) and (
+            "quality_policy" in value and value["quality_policy"] is None
+        ):
+            raise ValueError("EMPTY_QUALITY_POLICY_MUST_BE_OMITTED")
+        return value
+
     dependency_policy: Literal["candidate-dependencies.830.v1"] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -174,6 +186,13 @@ class NativeDiscoverySettings(_FrozenModel):
     granularity: Literal["focused", "standard", "exhaustive"]
     purpose: str = Field(max_length=16000)
     allow_knowledge_updates: bool = Field(default=False, strict=True)
+
+    @model_validator(mode="after")
+    def quality_requires_dependency_comparison(self) -> Self:
+        if self.quality_policy is not None and self.dependency_policy is None:
+            raise ValueError("quality policy requires dependency field comparison")
+        return self
+
 
 
 class ProductScopeRuntimeSettings(_FrozenModel):
@@ -219,6 +238,14 @@ class ProductScopeRuntimeSettings(_FrozenModel):
             )
 
             try:
+                if self.native_discovery.quality_policy is not None:
+                    from insurance_harness.product_ingestion.review_quality import (
+                        QUALITY_REVIEW_PURPOSE,
+                        quality_review_prompt,
+                    )
+                    require_discovery_template(
+                        self.model, "verify", QUALITY_REVIEW_PURPOSE, quality_review_prompt()
+                    )
                 resolve_admission_policy(
                     self.model,
                     self.native_discovery.dependency_policy,

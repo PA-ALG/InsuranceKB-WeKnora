@@ -22,6 +22,7 @@ from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
     ConceptDefinition,
     Evidence,
+    FieldAssertion,
     FreeWikiPage,
     evidence_for,
 )
@@ -64,6 +65,7 @@ def project_native_admission_response(
     snapshot: NativeDiscoverySnapshot,
     source: DecodedSourceSnapshot,
     context: dict[str, Any],
+    effective_fields: tuple[FieldAssertion, ...] | None = None,
 ) -> NativeAdmissionProjection:
     expected = render_native_admission_context(
         request=request,
@@ -74,6 +76,7 @@ def project_native_admission_response(
         dependency_policy=context.get("dependency_policy"),
         isolation_enabled=context.get("isolation_enabled", False),
         relation_capability=context.get("relation_capability"),
+        effective_fields=effective_fields,
     )
     if json_bytes(expected) != json_bytes(context):
         raise ValueError("native admission context mismatch")

@@ -629,6 +629,7 @@ type BatchConceptCompileRequest830G3 struct {
 	PublishedBase             *PublishedBaseBinding830G3             `json:"published_base,omitempty"`
 	RefreshFields             []FieldRefresh830G3                    `json:"refresh_fields,omitempty"`
 	KnowledgeUpdatePolicy     string                                 `json:"knowledge_update_policy,omitempty"`
+	QualityPolicy             string                                 `json:"quality_policy,omitempty"`
 	UnknownFieldKeyAlignments []UnknownFieldKeyAlignment830G3        `json:"unknown_field_key_alignments"`
 	QualityStatus             string                                 `json:"quality_status"`
 	ReleaseLane               string                                 `json:"release_lane"`
@@ -1353,7 +1354,7 @@ func batchConceptRootWithout830G3(value reflect.Value, hashKey string) (map[stri
 			if typeOf == reflect.TypeOf(BatchConceptCompileRequest830G3{}) &&
 				(field.Name == "PublishedBase" && value.Field(index).IsNil() ||
 					field.Name == "RefreshFields" && value.Field(index).Len() == 0 ||
-					field.Name == "KnowledgeUpdatePolicy" && value.Field(index).String() == "") {
+					(field.Name == "KnowledgeUpdatePolicy" || field.Name == "QualityPolicy") && value.Field(index).String() == "") {
 				continue
 			}
 			projected, err := batchConceptProjectRootField830G3(typeOf, field.Name, value.Field(index))
@@ -3678,6 +3679,7 @@ func batchConceptBaseKind830G3(base ConceptCompileRequest830G2) (string, error) 
 func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 	if request.Contract != conceptBatchRequest830G3 ||
 		(request.KnowledgeUpdatePolicy != "" && request.KnowledgeUpdatePolicy != "explicit-same-identity.830.v1") ||
+		(request.QualityPolicy != "" && request.QualityPolicy != provenanceQualityPolicy830) ||
 		request.QualityStatus != "REGISTERED_NOT_QUALITY_ADMITTED" ||
 		request.ReleaseLane != "ISOLATED_NOT_FOR_PRODUCTION" ||
 		!hashEqualWithout830G3(request.Contract, request, "request_sha256", request.RequestSHA256) ||
@@ -4462,7 +4464,7 @@ func validateBatchConceptBundle830G3(bundle BatchConceptCandidateBundle830G3) er
 }
 
 func validateKnowledgeUpdateAdmission830G3(bundle BatchConceptCandidateBundle830G3) error {
-	if bundle.Request.KnowledgeUpdatePolicy == "" {
+	if bundle.Request.KnowledgeUpdatePolicy == "" && bundle.Request.QualityPolicy == "" {
 		return nil
 	}
 	existingDefinitions := map[string]string{}
@@ -4499,7 +4501,7 @@ func validateKnowledgeUpdateAdmission830G3(bundle BatchConceptCandidateBundle830
 		}
 	}
 	for _, row := range output.Audit {
-		if row.Disposition == "update" {
+		if bundle.Request.KnowledgeUpdatePolicy != "" && row.Disposition == "update" {
 			changed[row.Key] = true
 		}
 	}
@@ -4507,13 +4509,25 @@ func validateKnowledgeUpdateAdmission830G3(bundle BatchConceptCandidateBundle830
 	if len(checked.PageScores) != len(changed) || (checked.Decision != "PASS" && checked.Decision != "NEEDS_HUMAN") {
 		return ErrConceptCandidateBundle830G3
 	}
+	members, err := knowledgeQualityMembers830(output)
+	if err != nil {
+		return ErrConceptCandidateBundle830G3
+	}
 	pending := make([]string, 0, len(changed))
 	for id := range changed {
 		score, exists := checked.PageScores[id]
-		if !exists || !validConceptScore830G2(score) || conceptScoreTotal830G2(score) < 60 {
+		if !exists {
 			return ErrConceptCandidateBundle830G3
 		}
-		if conceptScoreTotal830G2(score) < 80 {
+		member, present := members[id]
+		if !present {
+			return ErrConceptCandidateBundle830G3
+		}
+		qualification, err := qualifyKnowledge830(bundle.Request.QualityPolicy, member, score)
+		if err != nil || qualification.Band == "REJECTED" {
+			return ErrConceptCandidateBundle830G3
+		}
+		if qualification.Band == "PENDING" {
 			pending = append(pending, id)
 		}
 	}

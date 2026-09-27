@@ -14,6 +14,7 @@ from typing import Any
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCompileRequest830G3V1,
 )
+from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import FieldAssertion
 from insurance_harness.knowledge_compiler.evidence_occurrences import exact_quote_occurrences
 from insurance_harness.product_ingestion.extraction import decode_model_json
 from insurance_harness.product_ingestion.native_admission import (
@@ -114,6 +115,7 @@ def preflight_native_admission_response(
     source: DecodedSourceSnapshot,
     context: dict[str, Any],
     wire_protocol: str | None = None,
+    effective_fields: tuple[FieldAssertion, ...] | None = None,
 ) -> NativeAdmissionPreflight:
     """Return a full strict projection or a rejection, retaining the binding audit."""
     changes: list[dict[str, Any]] = []
@@ -133,6 +135,7 @@ def preflight_native_admission_response(
             dependency_policy=context.get("dependency_policy"),
             isolation_enabled=context.get("isolation_enabled", False),
             relation_capability=context.get("relation_capability"),
+            effective_fields=effective_fields,
         )
         if json_bytes(expected) != json_bytes(context):
             raise ValueError("native admission context mismatch")
@@ -171,6 +174,7 @@ def preflight_native_admission_response(
             snapshot=snapshot,
             source=source,
             context=context,
+            effective_fields=effective_fields,
         )
     except ValueError as exc:
         failure = str(exc)

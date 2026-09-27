@@ -75,6 +75,7 @@ def _review_call_matches(
     run_id: str,
     dependency_selection: bool,
     refined: bool = False,
+    quality_policy: str | None = None,
 ) -> bool:
     from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin, StageCallState
     from insurance_harness.product_ingestion.discovery import independent_discovery_review_policy
@@ -112,7 +113,8 @@ def _review_call_matches(
         or replayed.prompt_policy_sha256
         != hashlib.sha256(
             independent_discovery_review_policy(
-                outcome.reviewed_output, dependency_selection=dependency_selection
+                outcome.reviewed_output, dependency_selection=dependency_selection,
+                quality_policy=quality_policy
             )[1]
         ).hexdigest()
         or not replayed.raw
@@ -169,6 +171,8 @@ def compose_discovery_review(
     expected_members = {row.concept_id: row for row in free_output.definitions} | {
         free_page_id(row): row for row in free_output.pages
     }
+    from insurance_harness.knowledge_compiler.knowledge_quality import qualify_member
+
     checks = {row.candidate_id for row in checked.disposition_checks}
     if (
         proof.get("contract") != "product-discovery-review-proof.830.v1"
@@ -187,6 +191,7 @@ def compose_discovery_review(
             final_hash,
             run_id,
             context.get("dependency_selection") is not None,
+            quality_policy=request.quality_policy,
             refined=bool(context.get("contract") == "product-discovery-review-context.830.v10"
                 and context.get("dependency_selection", {}).get("initial_review_sha256")),
         )
@@ -199,7 +204,13 @@ def compose_discovery_review(
         or (context.get("request_hash"), context.get("output_hash")) != (request_hash, final_hash)
         or set(review.page_scores) != member_ids
         or set(context.get("review_member_ids", ())) != member_ids
-        or any(score.total < 80 for score in review.page_scores.values())
+        or context.get("quality_policy") != request.quality_policy
+        or (request.quality_policy is not None
+            and context.get("batch_request_sha256") != request.request_sha256)
+        or any(
+            qualify_member(request.quality_policy, expected_members[key], score).band != "ACCEPTED"
+            for key, score in review.page_scores.items()
+        )
         or any(final_members.get(key) != value for key, value in expected_members.items())
         or len(checks) != len(checked.disposition_checks)
         or checks != {row["candidate_id"] for row in context.get("dispositions", ())}

@@ -82,7 +82,7 @@ CURRENT_ARTIFACT_CONTRACTS = {
     "native_discovery_context": ("product-native_discovery_context.v1", "1"),
     "native_discovery_execution": ("product-native_discovery_execution.v1", "1"),
     "native_discovery_coverage": ("product-native_discovery_coverage.v1", "1"),
-    "native_admission_context": ("product-native_admission_context.v1", "1"),
+    "native_admission_context": ("product-native_admission_context.v2", "2"),
     "native_admission_execution": ("product-native_admission_execution.v2", "2"),
     "native_admission_response": ("product-native_admission_response.v1", "1"),
     "native_admission_projection": ("product-native_admission_projection.v2", "2"),

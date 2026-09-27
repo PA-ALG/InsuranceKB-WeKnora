@@ -211,6 +211,7 @@ def build_platform_compile_request(
     selected_refs: tuple[tuple[str, str], ...],
     refresh_fields: tuple[Mapping[str, str], ...] = (),
     knowledge_update_policy: Literal["explicit-same-identity.830.v1"] | None = None,
+    quality_policy: Literal["provenance-applicable-score.830.v1"] | None = None,
 ) -> compiler.BatchConceptCompileRequest830G3V1:
     """Build the exact parent carry plus current-C request; old C is never replayed."""
 
@@ -329,6 +330,7 @@ def build_platform_compile_request(
         published_base=published,
         refresh_fields=validated_refresh,
         knowledge_update_policy=knowledge_update_policy,
+        quality_policy=quality_policy,
     )
 
 

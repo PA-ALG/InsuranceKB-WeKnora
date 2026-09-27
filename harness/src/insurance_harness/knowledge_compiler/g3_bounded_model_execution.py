@@ -1819,7 +1819,8 @@ def _g3_d_display_context(
             else getattr(request, name)
         )
         for name in type(request).model_fields
-        if name != "knowledge_update_policy" or request.knowledge_update_policy is not None
+        if name not in {"knowledge_update_policy", "quality_policy"}
+        or getattr(request, name) is not None
     }
     return {
         "contract": "g3-d-compile-display-context.830.v1",

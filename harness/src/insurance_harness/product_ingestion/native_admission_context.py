@@ -8,6 +8,7 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCompileRequest830G3V1,
 )
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
+    FieldAssertion,
     SourceBlock,
 )
 from insurance_harness.product_ingestion.discovery import build_discovery_knowledge_view
@@ -81,6 +82,7 @@ def render_native_admission_context(
     max_context_bytes: int = 262144,
     dependency_policy: str | None = None,
     isolation_enabled: bool = False,
+    effective_fields: tuple[FieldAssertion, ...] | None = None,
     relation_capability: str | None = None,
 ) -> dict[str, Any]:
     native_admission_prompt(dependency_policy)
@@ -155,6 +157,12 @@ def render_native_admission_context(
                 "page": {"concept_refs": ["d1"]},
             },
         }
+    if dependency_policy is not None and effective_fields is not None:
+        from insurance_harness.product_ingestion.field_comparison import build_effective_field_view
+
+        value["existing_knowledge"]["effective_fields"] = build_effective_field_view(
+            request, entity_id, effective_fields
+        )
     from insurance_harness.product_ingestion.native_relation_admission import (
         enable_relation_context,
     )

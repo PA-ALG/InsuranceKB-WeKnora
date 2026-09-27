@@ -15,6 +15,7 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
 )
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
     CompileOutput,
+    CompileResult,
     free_page_id,
 )
 from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
@@ -73,6 +74,7 @@ async def run_native_discovery_stage(
     job: JobSnapshot,
     request: BatchConceptCompileRequest830G3V1,
     sources: Mapping[str, DecodedSourceSnapshot],
+    field_delta: CompileResult | None = None,
 ) -> StageOutput:
     settings = service.configuration.native_discovery
     if settings is None:
@@ -80,6 +82,15 @@ async def run_native_discovery_stage(
     expected_update = "explicit-same-identity.830.v1" if settings.allow_knowledge_updates else None
     if request.knowledge_update_policy != expected_update:
         raise ValueError("native admission update policy binding changed")
+    if request.quality_policy != getattr(settings, "quality_policy", None):
+        raise ValueError("native knowledge quality policy binding changed")
+    effective_fields = None
+    if field_delta is not None:
+        from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+            compose_batch_output,
+        )
+        composed = await asyncio.to_thread(compose_batch_output, request, field_delta)
+        effective_fields = composed.fields
     material_sources: dict[str, set[str]] = {}
     for entry in request.resolution_inputs.corpus.entries:
         for block in entry.blocks:
@@ -178,6 +189,7 @@ async def run_native_discovery_stage(
                     replay_calls=replay_calls,
                     dependency_policy=dependency_policy,
                     isolation_enabled=isolation_enabled,
+                    effective_fields=effective_fields,
                 )
             except (ValueError, ModelPolicyDenied) as exc:
                 failures.append(
