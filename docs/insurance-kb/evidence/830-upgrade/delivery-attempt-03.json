@@ -1,0 +1,93 @@
+{
+  "status": "BLOCKED",
+  "authorization_quote": "重新授权，再执行吧",
+  "build_source_head": "8a0863fa095bc27b901db90c5f744d1db84063b2",
+  "app_selector_receipt": {
+    "artifact_identity": "sha256:dee7d33d449a9a3b382577dec1c45d9e8f246aa0acfab3ddb64f1b4921297f61",
+    "build_invocations": 1,
+    "build_source_head": "8a0863fa095bc27b901db90c5f744d1db84063b2",
+    "candidate_image_ids": [],
+    "contract": "ba0-app-build-receipt.v1",
+    "dependency_lock_sha256": "4eba510179e957a039c757c702d0702a12a8435724d46e393da33d33006393b2",
+    "docker_context": "colima",
+    "integration_head": "4dec9ef66cd2a1ce194f84cf282ee8f1a19a6c86",
+    "manifest_sha256": "4a535bf4c310f965bca4435b301f08b9d0216beb62ea823cb95e9e126faed850",
+    "platform": "linux/arm64",
+    "selector": "BUILD_AFFECTED",
+    "status": "INCOMPLETE",
+    "target": "runtime"
+  },
+  "app_exit_code": 1,
+  "app_build_history": {
+    "cached_steps": 22,
+    "completed_at": "2026-09-27T14:10:12.63580989Z",
+    "completed_steps": 43,
+    "created_at": "2026-09-27T14:00:24.501440847Z",
+    "name": "context/docker/Dockerfile.app (runtime)",
+    "ref": "colima/colima/mcb0z291imqywixbu6iwb99fd",
+    "status": "Error",
+    "total_steps": 67
+  },
+  "build_wall_seconds": 588.134369043,
+  "failure": "BrowserSkill ext:build:zip lifecycle shell: pnpm: not found",
+  "failure_excerpt": "Done in 2m 20.1s using pnpm v10.17.0; ext:build:zip -> pnpm --filter @browser-skill/extension zip -> sh: 1: pnpm: not found; ELIFECYCLE Command failed.",
+  "image_output": null,
+  "total_app_build_invocations": 3,
+  "this_authorization_build_budget": 1,
+  "this_authorization_build_invocations": 1,
+  "this_authorization_budget_remaining": 0,
+  "network_preflight": {
+    "mirror": "docker.mirrors.ustc.edu.cn TLS SSL_ERROR_SYSCALL / HTTP000",
+    "official_registry": "registry-1.docker.io/v2/ HTTP401 authentication challenge",
+    "temporary_change": "registry-mirrors=[] with validated configuration and SIGHUP; no restart",
+    "official_reload_documentation": "https://docs.docker.com/reference/cli/dockerd/#configuration-reload-behavior"
+  },
+  "restoration": {
+    "status": "PASS",
+    "daemon_config_restored_byte_for_byte": true,
+    "daemon_config_sha256": "feb03b7ceb3fcf08fba574a2e33f197c4187846d049a3333ea93e0f7a2b27154",
+    "running_container_count": 8,
+    "container_ids_started_at_pids_unchanged": true,
+    "daemon_pid": 2434815
+  },
+  "post_attempt_disk": "Filesystem     1024-blocks      Used Available Capacity Mounted on\n/dev/vdb1        112946468 104839396   7042136      94% /var/lib/docker\n/dev/vdb1        112946468 104839396   7042136      94% /var/lib/containerd\n",
+  "app_log_path": "/private/tmp/upg-app-d2-recovery-03-build.log",
+  "app_log_sha256": "5a9e25dd34ed0d90c3e74841814953256f383582b7776aff2d885ded73594970",
+  "raw_log_publication": "Local only; includes transient signed public-image download URLs. Failure excerpt above omits query credentials.",
+  "effects": {
+    "new_service_deployments": 0,
+    "database_migrations": 0,
+    "provider_calls": 0,
+    "additional_cleanup": 0,
+    "daemon_or_container_restarts": 0
+  },
+  "source_fix": {
+    "requirement": "UPG-08",
+    "owner": "root",
+    "path": "scripts/build_browserskill.sh",
+    "change": "Expose verified pnpm.cjs as executable pnpm on child PATH; remove parent-only shell function",
+    "test": "harness/tests/test_browserskill_build_830.py",
+    "RED": "Old script fails exit71 because lifecycle child resolves ambient pnpm; 1 failed in 5.09s",
+    "GREEN": "New script plus runtime assets and BA0 contracts: 130 passed in 4.76s; full Ruff PASS; mypy 736 files PASS",
+    "new_image": "NOT RUN; source inputs changed, old identity cannot represent this fix"
+  },
+  "next": "Freeze/review and push the source fix and receipts to Draft PR131. No automatic fourth build under the exhausted one-attempt authorization.",
+  "validation_logs": {
+    "red": {
+      "path": "/private/tmp/upg3-pnpm-red.log",
+      "sha256": "51f4aba396db0596505ef1f95a05e14f9a5d0172ab09b0be0553ddfe6b911b21"
+    },
+    "green": {
+      "path": "/private/tmp/upg3-pnpm-green.log",
+      "sha256": "9c56487bd9d4815e2c647d3a07b71304fe9e4e1715a1ff9385b9eea05c70aa54"
+    },
+    "ruff": {
+      "path": "/private/tmp/upg3-ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "mypy": {
+      "path": "/private/tmp/upg3-mypy.log",
+      "sha256": "ce13d54afa5be66da0f97fdfa0a68e92329dfb5535e4bc92716bd6ef746280b0"
+    }
+  }
+}

@@ -1,5 +1,14 @@
 # 唯一执行队列
 
+## UPG-08 第三次构建反馈修复
+
+本次已授权App尝试在BrowserSkill生命周期子进程找不到pnpm时失败。root唯一写域为
+`scripts/build_browserskill.sh`、`harness/tests/test_browserskill_build_830.py`及本OpenSpec/交付证据。
+复用已校验的pnpm归档及原构建入口，不安装全局pnpm、不变更依赖锁或组件职责。
+先用真实shell子进程复现锁定包管理器不可发现的RED，再将已校验入口暴露给PATH，
+验证子进程不会误用宿主pnpm；相关制品合同回归后冻结独审。修复会改变App制品输入，
+不得以旧identity或本地fixture冒充修复后的镜像；本次1次预算已消耗，不自动追加整镜像构建。
+
 - [x] A0 核实工作树/规则/基线/设计，保存初始RED。
 - [x] A1 冻结模型配置、数据库与旧快照兼容方案；实际迁移/恢复单独记账。
 - [x] B1 适配固定上游；旧模型journal/no-retry先RED，再移入公开API运输边界；不恢复旧模块。
@@ -10,6 +19,6 @@
 - [ ] D2 验证迁移和恢复，既有授权测试环境交付，真实tracer与source click。
 - [ ] D3 精确代码/CI/PR与G4交接，保留未测限制。
 
-CURRENT=D2制品交付BLOCKED：软件8a0863fa0及最终独审通过；首次App构建因磁盘不足失败，已授权32镜像清理完成后，独立容量复核通过。唯一追加App恢复构建因镜像源EOF失败，未进入编译、无镜像；新增预算1/1已使用，不自动重试。UI/DocReader尚未构建。NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
+CURRENT=UPG-08第三次App尝试失败，BrowserSkill子进程PATH修复已RED→GREEN（130PASS），待独审/提交。原配置恢复，8运行容器身份不变，镜像仍未产出，本轮1/1已消耗、总3次。PR131保持Draft，六组CI问题已只读定位且仍BLOCKED，见ci-failures-4dec9ef.json。NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
 
-32个已授权镜像已删除，容器/cache/卷保留，数据盘约6.63GiB可用。push/Draft PR已明确授权；普通上传HTTP400/408（直连也408）后，复用fork已有固定上游对象，将同一分支从3e8b0bfc普通快进到f3ff602b9成功；待补推本次机械证据并建Draft PR。真实迁移/部署/业务仍NOT RUN。详见delivery-attempt-02.json及recovery-authorization.md。
+NEXT=独审并推送此次PATH修复与回执；新制品输入不能沿用旧identity。未自动追加第四次构建，UI/DocReader及真实迁移/部署/业务仍NOT RUN。

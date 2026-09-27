@@ -1,3 +1,13 @@
+## 2026-09-27 WeKnora 0.8.2：第三次构建失败，BrowserSkill子进程入口已修复
+
+活动树830-upstream-plugin-boundary，root唯一写者/集成。PR131为Draft，原远端head4dec9ef66。用户“重新授权，再执行吧”追加1次App预算已执行；旧软件源8a0863fa0/identity dee7d33d…的第三次尝试14:00:24—14:10:12Z耗时588.134369043秒，22缓存步骤复用，BrowserSkill ext:build:zip子进程pnpm:not found失败，无镜像。总App尝试3，本轮1/1已用完；未自动发起第四次。
+
+原镜像源TLS故障已通过临时registry-mirrors=[]及SIGHUP热重载越过。构建结束原daemon配置逐字恢复，8容器Id/StartedAt/Pid保持，不重启、不部署、不迁移、不调用provider、不追加清理；Colima可用7042136KiB。回执delivery-attempt-03.json。
+
+CURRENT=UPG-08源修复待冻结独审：scripts/build_browserskill.sh将已校验pnpm.cjs经可执行入口暴露给子进程PATH，删除仅父shell可见函数；依赖锁及版本不变。新离线真实shell回归先RED（旧脚本child误用ambient pnpm，exit71），后GREEN（相关130PASS/4.76s）；fullruff PASS，mypy736 PASS。该修复改变App输入，旧8a/identity不能作为修复后的镜像证据。
+
+GitHub CI=BLOCKED：独立复核发现App许可证fixture、前端styleGuard/route fixture、历史证据Go DTO、CLI/client lint六组问题，详见ci-failures-4dec9ef.json；这些没有被本次PATH小修复关闭。NEXT=完成本次修复独审并更新Draft PR；后续闭合CI并对修正后的精确源码执行重新获准的D2，不得自动重试旧失败输入。UI/DocReader镜像、DB迁移/部署/业务验证仍NOT RUN，旧epoch27不变。下方为历史。
+
 ## 2026-09-27 WeKnora 0.8.2：已授权清理完成，恢复构建受镜像源故障阻断
 
 活动树 `830-upstream-plugin-boundary`，root唯一集成。产品基线8ccc2ac9、固定上游3e8b0bfc已进入软件提交 `8a0863fa095bc27b901db90c5f744d1db84063b2`；设计SHA保持原值。已获明确push/Draft PR授权，普通上传遇到HTTP400/408（直连也408）。确认产品fork已持有固定上游提交后，同一目标分支先引用3e8b0bfc，再普通快进到f3ff602b9，增量约255KB，push已成功；未合入main。

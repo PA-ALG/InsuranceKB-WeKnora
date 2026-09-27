@@ -1,0 +1,75 @@
+{
+  "head": "4dec9ef66cd2a1ce194f84cf282ee8f1a19a6c86",
+  "build_source_head": "8a0863fa095bc27b901db90c5f744d1db84063b2",
+  "pr": "https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/131",
+  "reviewer": "migration_review",
+  "status": "BLOCKED",
+  "findings": [
+    {
+      "check": "App",
+      "cause": "License fixture omits third_party/anydoc-go/LICENSE required by upgraded checker",
+      "path": "scripts/test-license-bundle.sh",
+      "classification": "BLOCKER",
+      "origin": "merge omission"
+    },
+    {
+      "check": "Frontend tests",
+      "cause": "styleGuard: td fallback 10>0, radius 182>162, font-size 51>28; 8 retained fork UI files add literals beyond newly imported upstream ratchet",
+      "classification": "BLOCKER",
+      "origin": "new upstream guard versus retained fork styles"
+    },
+    {
+      "check": "Frontend Docker",
+      "cause": "Image build succeeds; route fixture leaves APP_DNS_RESOLVER placeholder unresolved while bypassing production entrypoint",
+      "path": "scripts/test_embed_nginx.py",
+      "classification": "BLOCKER",
+      "origin": "merge omission"
+    },
+    {
+      "check": "Go Lint root",
+      "cause": "Frozen offline evidence helper references removed embedding.OpenAIEmbedRequest",
+      "path": "docs/insurance-kb/evidence/830-g3/transport-preparation/main.go",
+      "classification": "BLOCKER",
+      "origin": "old helper versus removed upstream DTO"
+    },
+    {
+      "check": "Go Lint CLI",
+      "cause": "12 lint findings: 8 long lines and 4 unused parameters",
+      "classification": "BLOCKER",
+      "origin": "fixed upstream files do not satisfy product lint"
+    },
+    {
+      "check": "Go Lint client",
+      "cause": "8 findings: 7 long lines and unchecked deferred Close",
+      "classification": "BLOCKER",
+      "origin": "fixed upstream files do not satisfy product lint"
+    }
+  ],
+  "action": "Read-only diagnosis; these six groups are not fixed by the separate BrowserSkill PATH correction. Keep Draft; do not report CI as PASS.",
+  "local_failure_logs": [
+    {
+      "path": "/private/tmp/pr131-app-failed.log",
+      "sha256": "9fc7ccb57fb86174e913087e9741fa6fd2470f5c78d819259af4c2563c4e65f3"
+    },
+    {
+      "path": "/private/tmp/pr131-frontend-docker-failed.log",
+      "sha256": "bd4b6c47c43de6f429d0c4581e83b4c120b7a3e5b2d27be7ab71fbfe163f026f"
+    },
+    {
+      "path": "/private/tmp/pr131-frontend-test-failed.log",
+      "sha256": "c82290ce0cb7048f9f0cf6791697cf89c022110336b88b82dd9e6d60e51934d0"
+    },
+    {
+      "path": "/private/tmp/pr131-golint-cli-failed.log",
+      "sha256": "601cb0977dfc52bd06c1525913460d20862160d120a8c0753400e11b8cdecb5d"
+    },
+    {
+      "path": "/private/tmp/pr131-golint-client-failed.log",
+      "sha256": "02bfe6d1d05c6e0b6d6488c6c397be8d5d813a950a9cffc5ce6b7dd8625251b0"
+    },
+    {
+      "path": "/private/tmp/pr131-golint-root-failed.log",
+      "sha256": "fc94f4d9a123cbb4bfdd9cafe1f9f2448ef88f180ab9eceb04248b46c98bde3f"
+    }
+  ]
+}

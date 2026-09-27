@@ -75,9 +75,12 @@ tar -xzf "$pnpm_archive" -C "$build_dir/pnpm"
 package_manager="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["packageManager"])' "$build_dir/source/package.json")"
 [ "$package_manager" = "pnpm@$PNPM_VERSION" ] || { echo "BrowserSkill pnpm lock mismatch" >&2; exit 1; }
 
-pnpm() {
-  node "$build_dir/pnpm/package/bin/pnpm.cjs" "$@"
-}
+# Lifecycle scripts start child shells, so the verified package manager must be
+# an executable on PATH rather than a function visible only to this shell.
+mkdir -p "$build_dir/bin"
+chmod +x "$build_dir/pnpm/package/bin/pnpm.cjs"
+ln -s "$build_dir/pnpm/package/bin/pnpm.cjs" "$build_dir/bin/pnpm"
+export PATH="$build_dir/bin:$PATH"
 (
   cd "$build_dir/source"
   pnpm install --frozen-lockfile --store-dir "$PNPM_STORE_DIR"

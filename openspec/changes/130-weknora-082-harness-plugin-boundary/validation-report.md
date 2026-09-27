@@ -36,3 +36,9 @@ C2最终独审：43路径与附加router fixture全部匹配，0 BLOCKER。并�
 交付尝试与审批：delivery-attempt-01.json记录App失败、容量和零部署事实。自动审批拒绝向产品origin发送当前payload，push/PR/远端CI未执行。无清理与重复构建。
 
 最新授权恢复：用户已明确批准32镜像精确删除、一次条件恢复构建及push/Draft PR，历史审批拒绝已解除。清理PASS，空间约6.63GiB，保留容器/卷/cache。独立容量复核后已执行唯一追加App构建，配置镜像源在Dockerfile frontend元数据阶段返回EOF，13.50秒失败，无镜像；新增1/1已使用，不自动重试。回执delivery-attempt-02.json。普通上传HTTP400/408（直连也408）后，确认fork已持有3e8b0bfc并令同一目标分支引用该祖先，再普通快进到f3ff602b9，push成功。待补推本次证据并创建Draft PR；远端CI结果尚未取得，不能记PASS。
+
+## 重新授权的第三次App尝试与修复
+
+详见delivery-attempt-03.json：固定旧源8a的第三次尝试588.134369043秒后于BrowserSkill子进程pnpm查找失败，无image。本轮预算1/1已用完；临时镜像源修改已逐字恢复，8容器启动身份不变。UPG-08新增child-shell离线行为回归先RED（旧入口调用ambient pnpm，exit71），修复已验证pnpm可执行入口的PATH后130PASS/4.76s，fullruff PASS/mypy736 PASS。此为源修复，不是新镜像成功；依赖锁不变，App输入已改变，待冻结与新D2。
+
+GitHub live=BLOCKED，PR131@4dec9ef66六组真实CI失败详见ci-failures-4dec9ef.json；不再将该远端状态记NOT RUN，也不以局部软件测试PASS覆盖。已有软件PASS只代表当时受影响的有限测试集合，不代表完整CI。六组尚未修复，原部署/provider/local-live仍NOT RUN。
