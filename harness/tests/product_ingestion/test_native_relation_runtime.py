@@ -6,6 +6,7 @@ All platform/model ports are local fixtures; this is not a live business receipt
 import json
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -36,11 +37,11 @@ async def test_relation_worker_keeps_review_across_preparation_retry(tmp_path: P
     )
 
     class Model(NativeModel):
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__()
-            self.relation_reviews = []
+            self.relation_reviews: list[dict[str, Any]] = []
 
-        def __call__(self, request):
+        def __call__(self, request: httpx.Request) -> httpx.Response:
             context = json.loads(json.loads(request.content)["messages"][-1]["content"])
             if context.get("contract") == "native-knowledge-admission-context.830.v4":
                 self.admission_requests.append(context)
@@ -121,7 +122,7 @@ async def test_relation_worker_keeps_review_across_preparation_retry(tmp_path: P
     class Platform(FixturePlatform):
         fail_preparation = True
 
-        def __call__(self, request):
+        def __call__(self, request: httpx.Request) -> httpx.Response:
             if self.fail_preparation and request.url.path.endswith("/platform/preparations"):
                 return httpx.Response(
                     400, json={"success": False, "error": "fixture preparation failure"}

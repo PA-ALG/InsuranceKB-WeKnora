@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.jobs.models import JobSnapshot
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import free_page_id
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.composition import ProductScopeServices
+from insurance_harness.product_ingestion.models import (
+    ProductRunSnapshot,
+    ProductScope,
+    StageSnapshot,
+)
 from insurance_harness.product_ingestion.native_admission_context import (
     render_native_admission_context,
 )
@@ -222,12 +230,15 @@ async def test_normal_coordinator_aggregates_without_changing_admission_input(
         allow_knowledge_updates=False,
     )
     result = await native_pipeline.run_native_discovery_stage(
-        service=SimpleNamespace(configuration=SimpleNamespace(native_discovery=settings)),
-        artifacts=SimpleNamespace(),
-        scope=SimpleNamespace(),
-        run=SimpleNamespace(run_id="run", retry_of_run_id=None),
-        stage=SimpleNamespace(dependency_sha256="a" * 64),
-        job=SimpleNamespace(),
+        service=cast(
+            ProductScopeServices,
+            SimpleNamespace(configuration=SimpleNamespace(native_discovery=settings)),
+        ),
+        artifacts=cast(ProductArtifactStore, SimpleNamespace()),
+        scope=cast(ProductScope, SimpleNamespace()),
+        run=cast(ProductRunSnapshot, SimpleNamespace(run_id="run", retry_of_run_id=None)),
+        stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="a" * 64)),
+        job=cast(JobSnapshot, SimpleNamespace()),
         request=request,
         sources={snapshots[0].knowledge_id: source},
     )
@@ -258,7 +269,8 @@ def aggregated_candidates(case: Any) -> tuple[Any, str, Any, dict[str, Any]]:
     snapshots, projections = windows(case)
     request, entity = dependency_case(case)[:2]
     result = aggregate_native_dependencies(snapshots=snapshots, projections=projections)
-    sources, dispositions = [], []
+    sources: list[dict[str, Any]] = []
+    dispositions: list[dict[str, Any]] = []
     for snapshot, projection in zip(snapshots, projections, strict=True):
         prefix = hashlib.sha256(json_bytes([entity, snapshot.snapshot_sha256])).hexdigest() + ":"
         sources.extend(

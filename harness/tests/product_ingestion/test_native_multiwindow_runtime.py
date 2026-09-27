@@ -256,14 +256,21 @@ async def test_multiwindow_worker_restarts_without_resending_and_publishes_survi
             QUALITY_REVIEW_PURPOSE,
             quality_review_prompt,
         )
+
         data = json.loads(settings.product_ingestion_runtime_json.get_secret_value())
         binding = data["bindings"][0]
         binding["native_discovery"]["quality_policy"] = "provenance-applicable-score.830.v1"
-        binding["model"]["templates"].append(dict(
-            template_id=QUALITY_REVIEW_PURPOSE, purpose=QUALITY_REVIEW_PURPOSE, role="verify",
-            run_schema_version="830-g3-v1", prompt_sha256=_sha(quality_review_prompt()),
-            max_context_bytes=8*1024*1024, max_output_tokens=8192,
-        ))
+        binding["model"]["templates"].append(
+            dict(
+                template_id=QUALITY_REVIEW_PURPOSE,
+                purpose=QUALITY_REVIEW_PURPOSE,
+                role="verify",
+                run_schema_version="830-g3-v1",
+                prompt_sha256=_sha(quality_review_prompt()),
+                max_context_bytes=8 * 1024 * 1024,
+                max_output_tokens=8192,
+            )
+        )
         settings = settings.model_copy(
             update={"product_ingestion_runtime_json": SecretStr(_json(data).decode())}
         )
@@ -345,6 +352,7 @@ async def test_multiwindow_worker_restarts_without_resending_and_publishes_survi
         )
         assert len(model.reviews) == len(model.admission_requests) == 2
         assert platform.activations == 1
+        assert platform.candidate is not None
         if crash_point == "quality":
             assert platform.candidate.request.quality_policy == "provenance-applicable-score.830.v1"
             assert all(

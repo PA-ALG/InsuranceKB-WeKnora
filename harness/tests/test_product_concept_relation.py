@@ -145,7 +145,7 @@ def test_relation_requires_same_release_exact_concept(mutation: str) -> None:
     _, definition, raw = relation_case()
     page = d.FreeWikiPage.model_validate(raw)
     if mutation == "missing":
-        definitions = ()
+        definitions: tuple[d.ConceptDefinition, ...] = ()
     elif mutation == "other_space":
         definitions = (definition.model_copy(update={"space_id": "other"}),)
     else:

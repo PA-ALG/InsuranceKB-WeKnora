@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.product_ingestion.artifact_models import StageCallSnapshot
 from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
 from insurance_harness.product_ingestion.discovery import DEPENDENCY_DISCOVERY_REVIEW_PROMPT
 from insurance_harness.product_ingestion.native_admission_contract import (
@@ -17,10 +19,11 @@ from tests.product_ingestion.test_native_runtime import native_settings
 from tests.product_ingestion.test_pipeline_runtime import _base_snapshot_with_navigation, _sha
 
 
-def policy_payload(tmp_path: Path) -> dict:
+def policy_payload(tmp_path: Path) -> dict[str, Any]:
     _, parent = _base_snapshot_with_navigation()
     shell = native_settings(tmp_path, parent)
     data = json.loads(shell.product_ingestion_runtime_json.get_secret_value())
+    assert isinstance(data, dict)
     binding = data["bindings"][0]
     binding["native_discovery"]["dependency_policy"] = "candidate-dependencies.830.v1"
     template = next(
@@ -39,7 +42,7 @@ def policy_payload(tmp_path: Path) -> dict:
     return data
 
 
-def add_override(data: dict) -> None:
+def add_override(data: dict[str, Any]) -> None:
     binding = data["bindings"][0]
     template = next(
         t for t in binding["model"]["templates"] if t["purpose"] == "g3-native-admission"
@@ -65,6 +68,7 @@ def test_admission_override_keeps_base_policy_and_only_replaces_admission(tmp_pa
     assert current.native_discovery == old.native_discovery
     from insurance_harness.product_ingestion.native_admission_policy import resolve_admission_policy
 
+    assert current.native_discovery is not None
     resolved = resolve_admission_policy(
         current.model, current.native_discovery.dependency_policy, current.native_admission
     )
@@ -165,7 +169,7 @@ def test_complete_admission_execution_rejects_changed_custody(fault: str) -> Non
         "raw_sha256": call.raw_sha256,
         "model_call_id": call.call_id,
     }
-    validate_admission_execution(policy, receipt, content, call)
+    validate_admission_execution(policy, receipt, content, cast(StageCallSnapshot, call))
     if fault == "call_raw":
         call.raw += b"changed"
     elif fault == "call_request":
@@ -181,4 +185,4 @@ def test_complete_admission_execution_rejects_changed_custody(fault: str) -> Non
     else:
         receipt[fault] = "changed"
     with pytest.raises(ValueError):
-        validate_admission_execution(policy, receipt, content, call)
+        validate_admission_execution(policy, receipt, content, cast(StageCallSnapshot, call))

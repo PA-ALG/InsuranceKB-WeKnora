@@ -5,11 +5,14 @@ No provider or semantic-quality claim is made by this software test.
 
 import json
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.jobs.models import JobSnapshot
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.composition import ProductScopeServices
 from insurance_harness.product_ingestion.discovery import (
     build_discovery_exclusion_index,
     render_independent_discovery_review_context,
@@ -21,7 +24,11 @@ from insurance_harness.product_ingestion.discovery_composition import (
 from insurance_harness.product_ingestion.discovery_stage import (
     run_independent_discovery_final_review,
 )
-from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.models import (
+    ProductRunSnapshot,
+    ProductScope,
+    StageSnapshot,
+)
 from insurance_harness.product_ingestion.native_admission_context import (
     render_native_admission_context,
 )
@@ -139,14 +146,19 @@ async def test_normal_relation_reaches_full_candidate_and_reuses_exact_review(
     if mode == "unknown":
         prior.state = "dispatched"
     outcome = await run_independent_discovery_final_review(
-        service=service,
-        artifacts=SimpleNamespace(list_stage_calls=lambda **kw: [prior]),
-        scope=scope,
-        run=SimpleNamespace(
-            run_id="review-child", retry_of_run_id=None if mode == "new" else "parent-run"
+        service=cast(ProductScopeServices, service),
+        artifacts=cast(
+            ProductArtifactStore, SimpleNamespace(list_stage_calls=lambda **kw: [prior])
         ),
-        stage=SimpleNamespace(dependency_sha256="f" * 64),
-        job=SimpleNamespace(),
+        scope=scope,
+        run=cast(
+            ProductRunSnapshot,
+            SimpleNamespace(
+                run_id="review-child", retry_of_run_id=None if mode == "new" else "parent-run"
+            ),
+        ),
+        stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="f" * 64)),
+        job=cast(JobSnapshot, SimpleNamespace()),
         request=request,
         discovery_candidates=candidates,
         final_composed_output=final,

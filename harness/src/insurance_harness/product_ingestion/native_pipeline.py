@@ -33,6 +33,7 @@ from insurance_harness.product_ingestion.native_admission_stage import run_nativ
 from insurance_harness.product_ingestion.native_call_replay import read_native_replay_calls
 from insurance_harness.product_ingestion.native_dependency_aggregate import (
     aggregate_native_dependencies,
+    classify_native_window_group,
 )
 from insurance_harness.product_ingestion.native_discovery_stage import collect_native_discovery
 from insurance_harness.product_ingestion.platform import DecodedSourceSnapshot
@@ -89,6 +90,7 @@ async def run_native_discovery_stage(
         from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
             compose_batch_output,
         )
+
         composed = await asyncio.to_thread(compose_batch_output, request, field_delta)
         effective_fields = composed.fields
     material_sources: dict[str, set[str]] = {}
@@ -138,13 +140,14 @@ async def run_native_discovery_stage(
     }
     unresolved = False
     dependency_policy = getattr(settings, "dependency_policy", None)
-    admission_groups = sum(
-        1
+    admission_owners = [
+        (binding.entity_id, binding.entity_version)
         for snap in collection.snapshots
         if snap.candidates
         for binding in request.entity_bindings
         if set(binding.source_material_ids) & material_sources[snap.knowledge_id]
-    )
+    ]
+    admission_groups = len(admission_owners)
     isolation_enabled = bool(
         dependency_policy
         and collection.complete
@@ -154,7 +157,7 @@ async def run_native_discovery_stage(
         and len(collection.snapshots) == 1
         and len(collection.snapshots[0].windows) == 1
     )
-    aggregate_eligible = bool(
+    aggregation_requested = bool(
         dependency_policy
         and collection.complete
         and not failures
@@ -162,6 +165,20 @@ async def run_native_discovery_stage(
         and len(collection.snapshots) > 1
         and admission_groups > 0
     )
+    window_group = classify_native_window_group(collection.snapshots)
+    aggregate_eligible = bool(
+        aggregation_requested
+        and window_group == "aggregate"
+        and len(set(admission_owners)) == 1
+        and admission_groups == sum(bool(snap.candidates) for snap in collection.snapshots)
+    )
+    if aggregation_requested and window_group != "independent" and not aggregate_eligible:
+        failures.append(
+            {
+                "phase": "dependency-aggregate",
+                "detail": "aggregate source or owner coverage mismatch",
+            }
+        )
     projections: list[NativeAdmissionProjection] = []
     selection = None
     pending_count = 0

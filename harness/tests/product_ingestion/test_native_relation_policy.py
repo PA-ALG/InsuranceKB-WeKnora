@@ -2,11 +2,15 @@
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.jobs.models import JobSnapshot
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.composition import ProductScopeServices
 from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
+from insurance_harness.product_ingestion.models import ProductRunSnapshot, StageSnapshot
 from insurance_harness.product_ingestion.native_relation_wire import (
     RELATION_WIRE_PROMPT,
     RELATION_WIRE_PROTOCOL,
@@ -17,7 +21,7 @@ from tests.product_ingestion.test_native_admission_policy import add_override, p
 pytest_plugins = ("tests.product_ingestion.test_discovery",)
 
 
-def relation_policy(tmp_path: Any) -> dict:
+def relation_policy(tmp_path: Any) -> dict[str, Any]:
     data = policy_payload(tmp_path)
     add_override(data)
     binding = data["bindings"][0]
@@ -62,6 +66,7 @@ def test_v4_configuration_selects_distinct_relation_policy(tmp_path: Any) -> Non
 
     data = relation_policy(tmp_path)
     binding = ProductRuntimeSettings.model_validate_json(json.dumps(data)).bindings[0]
+    assert binding.native_discovery is not None
     policy = resolve_admission_policy(
         binding.model, binding.native_discovery.dependency_policy, binding.native_admission
     )
@@ -115,6 +120,7 @@ async def test_v4_stage_binds_wire_receipts_and_nonempty_relation(
     )
     from tests.product_ingestion.test_discovery_replay_custody import _parent_call
 
+    assert binding.native_discovery is not None
     policy = resolve_admission_policy(
         service.configuration.model, "candidate-dependencies.830.v1", binding.native_admission
     )
@@ -157,14 +163,17 @@ async def test_v4_stage_binds_wire_receipts_and_nonempty_relation(
         list_stage_calls=lambda **kw: [recorded], read_checkpoint_stage_calls=lambda **kw: []
     )
     outcome = await run_native_admission_window(
-        service=service,
-        artifacts=artifacts,
+        service=cast(ProductScopeServices, service),
+        artifacts=cast(ProductArtifactStore, artifacts),
         scope=scope,
-        run=SimpleNamespace(
-            run_id="relation-wire", retry_of_run_id=None if mode == "new" else "parent-run"
+        run=cast(
+            ProductRunSnapshot,
+            SimpleNamespace(
+                run_id="relation-wire", retry_of_run_id=None if mode == "new" else "parent-run"
+            ),
         ),
-        stage=SimpleNamespace(dependency_sha256="f" * 64),
-        job=SimpleNamespace(),
+        stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="f" * 64)),
+        job=cast(JobSnapshot, SimpleNamespace()),
         request=request,
         entity_id=entity,
         snapshot=snapshot,
@@ -179,6 +188,7 @@ async def test_v4_stage_binds_wire_receipts_and_nonempty_relation(
         assert outcome.failure and outcome.projection is None
         return
     assert outcome.failure is None
+    assert outcome.projection is not None
     assert outcome.projection.output.pages[0].business_relation is not None
     drafts = {row.artifact_kind: row for row in outcome.drafts}
     assert drafts["native_admission_response"].payload == decoded

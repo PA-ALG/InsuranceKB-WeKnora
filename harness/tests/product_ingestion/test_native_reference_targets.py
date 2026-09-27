@@ -4,7 +4,9 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
-from jsonschema import Draft202012Validator
+
+# jsonschema ships no py.typed; keep runtime schema validation unchanged.
+from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 
 from insurance_harness.product_ingestion.native_relation_wire import render_relation_wire_context
 from insurance_harness.product_ingestion.stages import json_bytes

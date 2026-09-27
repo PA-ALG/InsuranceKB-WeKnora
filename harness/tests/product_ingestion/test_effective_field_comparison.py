@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import importlib
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compiler
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.models import ProductScope
 from insurance_harness.product_ingestion.native_admission import (
     project_native_admission_response,
 )
@@ -252,17 +254,21 @@ async def test_checkpoint_reads_request_and_delta_from_same_generation(
                 value = prior.model_compile_result
             return SimpleNamespace(payload=value.model_dump_json().encode())
 
-    args = dict(
-        artifacts=Artifacts(),
-        scope=object(),
-        run_id="recovery",
-        has_prior_rebase=mode != "original",
-    )
     if mode == "mixed":
         with pytest.raises(ValueError):
-            await checkpoint_validation._checkpoint_effective_fields(**args)
+            await checkpoint_validation._checkpoint_effective_fields(
+                artifacts=cast(ProductArtifactStore, Artifacts()),
+                scope=cast(ProductScope, object()),
+                run_id="recovery",
+                has_prior_rebase=mode != "original",
+            )
     else:
-        request, fields = await checkpoint_validation._checkpoint_effective_fields(**args)
+        request, fields = await checkpoint_validation._checkpoint_effective_fields(
+            artifacts=cast(ProductArtifactStore, Artifacts()),
+            scope=cast(ProductScope, object()),
+            run_id="recovery",
+            has_prior_rebase=mode != "original",
+        )
         expected = original_request if mode == "original" else prior.request
         assert request == expected
         assert fields

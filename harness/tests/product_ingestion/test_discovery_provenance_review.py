@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.jobs.models import JobSnapshot
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import compile_output_hash_g3
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
     FreeWikiPage,
     free_page_content,
 )
 from insurance_harness.product_ingestion import discovery
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.composition import ProductScopeServices
+from insurance_harness.product_ingestion.models import ProductRunSnapshot, StageSnapshot
 from tests.product_ingestion.test_discovery_local_dependencies import _review_case
 
 pytest_plugins = ("tests.product_ingestion.test_discovery",)
@@ -180,12 +184,18 @@ async def test_final_review_uses_authorized_provenance_policy_and_honest_score(
     )
     record.diagnostic = None
     outcome = await run_independent_discovery_final_review(
-        service=service,
-        artifacts=SimpleNamespace(list_stage_calls=lambda **kwargs: [record] if parent else []),
+        service=cast(ProductScopeServices, service),
+        artifacts=cast(
+            ProductArtifactStore,
+            SimpleNamespace(list_stage_calls=lambda **kwargs: [record] if parent else []),
+        ),
         scope=service.configuration.model.scope,
-        run=SimpleNamespace(run_id="child", retry_of_run_id="parent-run" if parent else None),
-        stage=SimpleNamespace(dependency_sha256="b" * 64),
-        job=object(),
+        run=cast(
+            ProductRunSnapshot,
+            SimpleNamespace(run_id="child", retry_of_run_id="parent-run" if parent else None),
+        ),
+        stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="b" * 64)),
+        job=cast(JobSnapshot, object()),
         request=request,
         discovery_candidates=candidates,
         final_composed_output=output,

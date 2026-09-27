@@ -189,7 +189,7 @@ def test_generation_replay_counts_real_parent_once_with_persisted_receipt(
 def test_review_replay_counts_real_parent_with_persisted_proof(
     api: typing.Any, factory: typing.Any, provenance: bool | str, wrong_prompt: bool
 ) -> None:
-    context = {"final_composed_output_hash": "d" * 64}
+    context: dict[str, object] = {"final_composed_output_hash": "d" * 64}
     if provenance:
         context["contract"] = (
             "product-discovery-review-context.830.v10"

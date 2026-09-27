@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from insurance_harness.knowledge_compiler import concept_free_wiki_830_g2 as domain
+from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput
 
 
 def page() -> dict[str, Any]:
@@ -255,7 +256,7 @@ def test_carried_generated_content_keeps_synthesize_in_final_output() -> None:
     request = bundle.request.model_copy(
         update=dict(base_request=base, unknown_field_key_alignments=())
     )
-    output = compiler.CompileOutput(request_hash=compiler.compile_request_hash_g3(base), fields=())
+    output = CompileOutput(request_hash=compiler.compile_request_hash_g3(base), fields=())
     assert output.transformation == "EXTRACT"
     delta = compiler.record_model_compile(
         request,

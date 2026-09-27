@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.jobs.models import JobSnapshot
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.composition import ProductScopeServices
+from insurance_harness.product_ingestion.models import (
+    ProductRunSnapshot,
+    ProductScope,
+    StageSnapshot,
+)
 from insurance_harness.product_ingestion.native_admission import (
     project_native_admission_response,
 )
@@ -220,12 +228,15 @@ async def test_coordinator_keeps_selected_candidates_but_fences_unknown_windows(
         allow_knowledge_updates=False,
     )
     result = await native_pipeline.run_native_discovery_stage(
-        service=SimpleNamespace(configuration=SimpleNamespace(native_discovery=settings)),
-        artifacts=SimpleNamespace(),
-        scope=SimpleNamespace(),
-        run=SimpleNamespace(run_id="run", retry_of_run_id=None),
-        stage=SimpleNamespace(dependency_sha256="a" * 64),
-        job=SimpleNamespace(),
+        service=cast(
+            ProductScopeServices,
+            SimpleNamespace(configuration=SimpleNamespace(native_discovery=settings)),
+        ),
+        artifacts=cast(ProductArtifactStore, SimpleNamespace()),
+        scope=cast(ProductScope, SimpleNamespace()),
+        run=cast(ProductRunSnapshot, SimpleNamespace(run_id="run", retry_of_run_id=None)),
+        stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="a" * 64)),
+        job=cast(JobSnapshot, SimpleNamespace()),
         request=request,
         sources={snapshot.knowledge_id: source},
     )
@@ -246,26 +257,26 @@ def test_partial_review_acceptance_keeps_unresolved_status_visible() -> None:
 
     from insurance_harness.product_ingestion.api import combine_discovery_summaries
 
-    result = json.loads(
-        combine_discovery_summaries(
-            json_bytes(
-                {
-                    "state": "PENDING",
-                    "dependency_policy": POLICY,
-                    "pending_candidate_count": 2,
-                    "reason_codes": ["NATIVE_DISCOVERY_PENDING"],
-                    "accepted_member_count": 0,
-                }
-            ),
-            json_bytes(
-                {
-                    "state": "ACCEPTED",
-                    "reason_codes": ["DISCOVERY_ACCEPTED"],
-                    "accepted_member_count": 1,
-                }
-            ),
-        )
+    combined = combine_discovery_summaries(
+        json_bytes(
+            {
+                "state": "PENDING",
+                "dependency_policy": POLICY,
+                "pending_candidate_count": 2,
+                "reason_codes": ["NATIVE_DISCOVERY_PENDING"],
+                "accepted_member_count": 0,
+            }
+        ),
+        json_bytes(
+            {
+                "state": "ACCEPTED",
+                "reason_codes": ["DISCOVERY_ACCEPTED"],
+                "accepted_member_count": 1,
+            }
+        ),
     )
+    assert combined is not None
+    result = json.loads(combined)
     assert result["state"] == "PENDING"
     assert "NATIVE_CANDIDATES_ISOLATED" in result["reason_codes"]
     assert result["accepted_member_count"] == 1
@@ -277,10 +288,15 @@ def test_dependency_policy_is_explicit_and_omitted_for_legacy_configuration() ->
     values = dict(
         policy="native-candidates.830.v1", language="zh-CN", granularity="standard", purpose=""
     )
-    assert "dependency_policy" not in NativeDiscoverySettings(**values).model_dump()
-    assert NativeDiscoverySettings(**values, dependency_policy=POLICY).dependency_policy == POLICY
+    assert "dependency_policy" not in NativeDiscoverySettings.model_validate(values).model_dump()
+    assert (
+        NativeDiscoverySettings.model_validate(
+            {**values, "dependency_policy": POLICY}
+        ).dependency_policy
+        == POLICY
+    )
     with pytest.raises(ValueError):
-        NativeDiscoverySettings(**values, dependency_policy="unversioned")
+        NativeDiscoverySettings.model_validate({**values, "dependency_policy": "unversioned"})
 
 
 def test_selection_requires_whole_run_eligibility(case: Any) -> None:
@@ -526,12 +542,18 @@ async def test_final_review_binds_complete_plan_and_selected_final_hash(
         record.diagnostic = None
     parent = mode in {"replay", "old_prompt", "wide_parent"}
     outcome = await run_independent_discovery_final_review(
-        service=service,
-        artifacts=SimpleNamespace(list_stage_calls=lambda **kw: [record] if parent else []),
+        service=cast(ProductScopeServices, service),
+        artifacts=cast(
+            ProductArtifactStore,
+            SimpleNamespace(list_stage_calls=lambda **kw: [record] if parent else []),
+        ),
         scope=service.configuration.model.scope,
-        run=SimpleNamespace(run_id="child", retry_of_run_id="parent-run" if parent else None),
-        stage=SimpleNamespace(dependency_sha256="b" * 64),
-        job=object(),
+        run=cast(
+            ProductRunSnapshot,
+            SimpleNamespace(run_id="child", retry_of_run_id="parent-run" if parent else None),
+        ),
+        stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="b" * 64)),
+        job=cast(JobSnapshot, object()),
         request=request,
         discovery_candidates=candidates,
         final_composed_output=output,

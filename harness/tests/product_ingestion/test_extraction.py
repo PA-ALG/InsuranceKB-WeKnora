@@ -225,6 +225,7 @@ def test_explicit_null_valid_time_is_empty_without_changing_saved_raw(
     result = execute(source, selected, port)[0]
     assert result.outcome == ("not_provided" if state == "unknown" else "verified")
     assert result.validated_result.valid_time == ""
+    assert port.saved_raw is not None
     assert json.loads(port.saved_raw)["fields"][0]["valid_time"] is None
     assert module().VALIDATION_VERSION == "product-field-outcome.v2"
 
@@ -243,6 +244,7 @@ def test_present_missing_nullable_reason_preserves_raw_and_validates_evidence(
     result = execute(source, selected, port)[0]
     assert result.outcome == "verified"
     assert result.validated_result.unknown_reason is None
+    assert port.saved_raw is not None
     assert "unknown_reason" not in json.loads(port.saved_raw)["fields"][0]
 
 

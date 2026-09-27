@@ -298,6 +298,7 @@ def test_existing_brochure_matches_and_compiles_without_reuploading_terms(
     assert result.decisions[0].disposition == "MATCH"
     child = result.decisions[0].children[0]
     assert child.matched_entity_version == "existing-product@2026"
+    assert child.anchors.product_code is not None
     assert child.anchors.product_code.observed_value == "MED1"
     bindings = _build_entity_bindings(
         catalog=catalog,

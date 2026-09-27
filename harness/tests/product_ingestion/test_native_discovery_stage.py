@@ -8,15 +8,17 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import HttpUrl, SecretStr
 
+from insurance_harness.jobs.models import JobSnapshot
 from insurance_harness.product_ingestion.model_settings import (
     ModelTemplatePolicy,
     ProductModelSettings,
 )
+from insurance_harness.product_ingestion.models import ProductRunSnapshot, StageSnapshot
 from insurance_harness.product_ingestion.native_discovery import NATIVE_DISCOVERY_EXECUTION_PROMPT
 from insurance_harness.product_ingestion.platform import (
     DecodedSourceSnapshot,
@@ -167,9 +169,9 @@ async def collect(runtime: tuple[Any, ...], *, retry_of: str | None = None) -> A
         service=service,
         artifacts=store,
         scope=SCOPE,
-        run=SimpleNamespace(run_id="run", retry_of_run_id=retry_of),
-        stage=SimpleNamespace(dependency_sha256="b" * 64),
-        job=SimpleNamespace(id="job", lease_generation=1),
+        run=cast(ProductRunSnapshot, SimpleNamespace(run_id="run", retry_of_run_id=retry_of)),
+        stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="b" * 64)),
+        job=cast(JobSnapshot, SimpleNamespace(id="job", lease_generation=1)),
         sources=(source,),
         language="Chinese",
         granularity="standard",
@@ -236,7 +238,10 @@ async def test_native_stage_revalidates_parent_calls_without_resending(
     settings = service.configuration.model
     executor = ConfiguredModelExecutor(settings_provider=lambda: settings)
     transport = executor.field_transport(
-        SCOPE, "parent", SimpleNamespace(), prompt=NATIVE_DISCOVERY_EXECUTION_PROMPT
+        SCOPE,
+        "parent",
+        cast(JobSnapshot, SimpleNamespace()),
+        prompt=NATIVE_DISCOVERY_EXECUTION_PROMPT,
     )
     records = []
     for args in model.calls:
@@ -307,14 +312,16 @@ async def test_native_prompt_budget_includes_worst_case_serialized_envelopes(
 
     async def capture(scope: Any, knowledge_id: str, attempt: int, payload: bytes) -> bytes:
         captured.append(json.loads(payload))
-        return await platform_call(scope, knowledge_id, attempt, payload)
+        value = await platform_call(scope, knowledge_id, attempt, payload)
+        assert isinstance(value, bytes)
+        return value
 
     service.platform.native_discovery = capture
     result = await collect(native_runtime)
     assert result.complete
     budget = captured[0]["max_prompt_bytes"]
     transport = ConfiguredModelExecutor(settings_provider=lambda: settings).field_transport(
-        SCOPE, "run", SimpleNamespace(), prompt=NATIVE_DISCOVERY_EXECUTION_PROMPT
+        SCOPE, "run", cast(JobSnapshot, SimpleNamespace()), prompt=NATIVE_DISCOVERY_EXECUTION_PROMPT
     )
     for marker in ("\x00", '"', "\\", "\n"):
         prompt = marker * budget

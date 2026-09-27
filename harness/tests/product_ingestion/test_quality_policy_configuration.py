@@ -3,10 +3,13 @@
 import hashlib
 import json
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
+    BatchConceptCompileRequest830G3V1,
+)
 from insurance_harness.product_ingestion.configuration import ProductRuntimeSettings
 from insurance_harness.product_ingestion.review_quality import (
     QUALITY_REVIEW_PURPOSE,
@@ -36,6 +39,7 @@ def test_quality_template_is_explicit_and_policy_changes_recovery_identity(tmp_p
     old = ProductRuntimeSettings.model_validate_json(json.dumps(relation_policy(tmp_path)))
     data = quality_settings(tmp_path)
     current = ProductRuntimeSettings.model_validate_json(json.dumps(data))
+    assert current.bindings[0].native_discovery is not None
     assert (
         current.bindings[0].native_discovery.quality_policy == "provenance-applicable-score.830.v1"
     )
@@ -80,6 +84,20 @@ def test_quality_review_cannot_omit_comparison_selection() -> None:
 
     with pytest.raises(ValueError, match="field comparison"):
         verified_review_field_view(
-            SimpleNamespace(quality_policy="provenance-applicable-score.830.v1"), None, (), None
+            cast(
+                BatchConceptCompileRequest830G3V1,
+                SimpleNamespace(quality_policy="provenance-applicable-score.830.v1"),
+            ),
+            None,
+            (),
+            None,
         )
-    assert verified_review_field_view(SimpleNamespace(quality_policy=None), None, (), None) is None
+    assert (
+        verified_review_field_view(
+            cast(BatchConceptCompileRequest830G3V1, SimpleNamespace(quality_policy=None)),
+            None,
+            (),
+            None,
+        )
+        is None
+    )

@@ -6,12 +6,20 @@ import importlib
 import json
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.jobs.models import JobSnapshot
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.composition import ProductScopeServices
 from insurance_harness.product_ingestion.configuration import NativeDiscoverySettings
-from insurance_harness.product_ingestion.models import ProductRunState
+from insurance_harness.product_ingestion.models import (
+    ProductRunSnapshot,
+    ProductRunState,
+    ProductScope,
+    StageSnapshot,
+)
 from insurance_harness.product_ingestion.native_admission_stage import NativeAdmissionWindowOutcome
 from insurance_harness.product_ingestion.native_discovery_stage import (
     NativeDiscoveryCollection,
@@ -67,7 +75,9 @@ async def test_native_stage_keeps_coverage_and_does_not_run_another_discovery(
                         *projection.response.decisions,
                         NativeAdmissionDecision(
                             candidate_ref="c2",
-                            decision=mode,
+                            decision="PENDING"
+                            if mode == "PENDING"
+                            else "REQUIRES_ENTITY_RESOLUTION",
                             member_refs=(),
                             existing_target=None,
                             reason="待确定的必要依赖",
@@ -160,12 +170,12 @@ async def test_native_stage_keeps_coverage_and_does_not_run_another_discovery(
         empty = CompileOutput.model_validate(rows["discovery_candidates"]["output"])
         assert not empty.pages and not empty.definitions
         final = await run_independent_discovery_final_review(
-            service=SimpleNamespace(),
-            artifacts=SimpleNamespace(),
-            scope=SimpleNamespace(),
-            run=SimpleNamespace(),
-            stage=SimpleNamespace(dependency_sha256="a" * 64),
-            job=SimpleNamespace(),
+            service=cast(ProductScopeServices, SimpleNamespace()),
+            artifacts=cast(ProductArtifactStore, SimpleNamespace()),
+            scope=cast(ProductScope, SimpleNamespace()),
+            run=cast(ProductRunSnapshot, SimpleNamespace()),
+            stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="a" * 64)),
+            job=cast(JobSnapshot, SimpleNamespace()),
             request=request,
             discovery_candidates=rows["discovery_candidates"],
             final_composed_output=empty,

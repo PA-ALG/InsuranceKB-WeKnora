@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import CompileOutput, free_page_id
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
@@ -69,6 +69,56 @@ def _window(snapshot: NativeDiscoverySnapshot) -> dict[str, Any]:
     }
 
 
+_SOURCE_KEYS = (
+    "scope",
+    "knowledge_id",
+    "parse_attempt",
+    "source_snapshot_sha256",
+    "window_count",
+)
+
+
+def _validate_source_windows(windows: list[dict[str, Any]]) -> None:
+    if len(windows) < 2:
+        raise ValueError("aggregate requires multiple complete source windows")
+    base = windows[0]
+    if (
+        base["window_count"] != len(windows)
+        or [row["window_id"] for row in windows] != list(range(len(windows)))
+        or any(any(row[k] != base[k] for k in _SOURCE_KEYS) for row in windows)
+        or len({row["native_snapshot_sha256"] for row in windows}) != len(windows)
+    ):
+        raise ValueError("aggregate source window coverage mismatch")
+
+
+def classify_native_window_group(
+    snapshots: Sequence[NativeDiscoverySnapshot],
+) -> Literal["aggregate", "independent", "invalid"]:
+    """Route complete source cohorts while keeping malformed groups fail-closed.
+
+    Independent materials each have exactly one final window. Only one complete
+    source cohort can use aggregation; final domain/member checks remain mandatory.
+    """
+    try:
+        windows = sorted((_window(row) for row in snapshots), key=lambda row: row["window_id"])
+    except ValueError:
+        return "invalid"
+    if len(windows) < 2:
+        return "invalid"
+    if (
+        all(row["window_count"] == 1 and row["window_id"] == 0 for row in windows)
+        and all(row["scope"] == windows[0]["scope"] for row in windows)
+        and len({row["knowledge_id"] for row in windows}) == len(windows)
+        and len({row["native_snapshot_sha256"] for row in windows}) == len(windows)
+    ):
+        return "independent"
+    try:
+        _validate_source_windows(windows)
+    except ValueError:
+        return "invalid"
+    return "aggregate"
+
+
 def aggregate_native_dependencies(
     *,
     snapshots: Sequence[NativeDiscoverySnapshot],
@@ -107,21 +157,7 @@ def _compile(
 
     if len(windows) < 2 or not domains:
         raise ValueError("aggregate requires multiple complete windows with candidates")
-    base = windows[0]
-    source_keys = (
-        "scope",
-        "knowledge_id",
-        "parse_attempt",
-        "source_snapshot_sha256",
-        "window_count",
-    )
-    if (
-        base["window_count"] != len(windows)
-        or [row["window_id"] for row in windows] != list(range(len(windows)))
-        or any(any(row[k] != base[k] for k in source_keys) for row in windows)
-        or len({row["native_snapshot_sha256"] for row in windows}) != len(windows)
-    ):
-        raise ValueError("aggregate source window coverage mismatch")
+    _validate_source_windows(windows)
     by_snapshot = {row["native_snapshot_sha256"]: row for row in windows}
     expected = {row["native_snapshot_sha256"] for row in windows if row["candidate_count"]}
     observed = [row["domain"]["native_snapshot_sha256"] for row in domains]
@@ -144,7 +180,7 @@ def _compile(
             domain["contract"] != "native-window-dependency-domain.830.v1"
             or domain["domain_sha256"] != _sha(unsigned)
             or domain["admission_context_sha256"] != _sha(context)
-            or any(domain[k] != window[k] for k in (*source_keys[:-1], "window_id"))
+            or any(domain[k] != window[k] for k in (*_SOURCE_KEYS[:-1], "window_id"))
             or (domain["entity_id"], domain["entity_version"], domain["request_hash"]) != owner
             or context["dependency_policy"] != NATIVE_DEPENDENCY_POLICY
             or context["isolation_enabled"] is not False

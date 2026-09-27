@@ -76,12 +76,15 @@ def native_vector() -> dict[str, Any]:
         Path(__file__).resolve().parents[3]
         / "internal/application/service/testdata/g3_native_discovery_v1.json"
     )
-    return json.loads(path.read_bytes())
+    value = json.loads(path.read_bytes())
+    assert isinstance(value, dict)
+    return value
 
 
 def decode_vector(vector: dict[str, Any]) -> list[Any]:
     from insurance_harness.product_ingestion.native_discovery import (
         NativeDiscoveryRequest,
+        NativeDiscoverySnapshot,
         decode_native_discovery_snapshot,
     )
     from insurance_harness.product_ingestion.platform import DecodedSourceSnapshot
@@ -93,7 +96,7 @@ def decode_vector(vector: dict[str, Any]) -> list[Any]:
         unresolved_chunk_ids=(),
         native_bytes=b"",
     )
-    results = []
+    results: list[NativeDiscoverySnapshot] = []
     for i, (request, envelope) in enumerate(
         zip(vector["requests"], vector["envelopes"], strict=True)
     ):

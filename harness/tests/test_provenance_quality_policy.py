@@ -232,4 +232,5 @@ def test_legacy_model_display_omits_new_policy(compile_request: Any) -> None:
 
     _sources, _refs, keys = bounded._g3_d_source_index(compile_request)
     value = bounded._g3_d_display_context(compile_request, keys)
+    assert isinstance(value["semantic_request"], dict)
     assert "quality_policy" not in value["semantic_request"]

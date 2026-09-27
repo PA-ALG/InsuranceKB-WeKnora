@@ -6,12 +6,19 @@ import hashlib
 import importlib
 import json
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from insurance_harness.jobs.models import JobSnapshot
 from insurance_harness.product_ingestion.artifact_models import ArtifactOrigin
-from insurance_harness.product_ingestion.models import ProductScope
+from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
+from insurance_harness.product_ingestion.composition import ProductScopeServices
+from insurance_harness.product_ingestion.models import (
+    ProductRunSnapshot,
+    ProductScope,
+    StageSnapshot,
+)
 from insurance_harness.product_ingestion.native_admission_context import (
     render_native_admission_context,
 )
@@ -329,12 +336,12 @@ async def test_v3_stage_keeps_wire_raw_and_projects_nonempty_exact_source(
     service.configuration.native_admission = binding.native_admission
     service.native_admission_executor = service.model_executor
     outcome = await run_native_admission_window(
-        service=service,
-        artifacts=SimpleNamespace(),
+        service=cast(ProductScopeServices, service),
+        artifacts=cast(ProductArtifactStore, SimpleNamespace()),
         scope=scope,
-        run=SimpleNamespace(run_id="wire-run", retry_of_run_id=None),
-        stage=SimpleNamespace(dependency_sha256="f" * 64),
-        job=SimpleNamespace(),
+        run=cast(ProductRunSnapshot, SimpleNamespace(run_id="wire-run", retry_of_run_id=None)),
+        stage=cast(StageSnapshot, SimpleNamespace(dependency_sha256="f" * 64)),
+        job=cast(JobSnapshot, SimpleNamespace()),
         request=request,
         entity_id=entity,
         snapshot=snapshot,
@@ -343,6 +350,7 @@ async def test_v3_stage_keeps_wire_raw_and_projects_nonempty_exact_source(
         isolation_enabled=True,
     )
     assert outcome.failure is None
+    assert outcome.projection is not None
     assert len(outcome.projection.output.pages) == 1
     assert outcome.projection.output.pages[0].evidence[0].quote == source.blocks[0].text
     drafts = {row.artifact_kind: row for row in outcome.drafts}

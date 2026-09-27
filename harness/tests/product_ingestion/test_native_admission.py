@@ -85,9 +85,11 @@ def api() -> Any:
 
 def context(values: tuple[Any, ...]) -> dict[str, Any]:
     request, entity, snapshot, source = values
-    return api().render_native_admission_context(
+    value = api().render_native_admission_context(
         request=request, entity_id=entity, snapshot=snapshot, source=source
     )
+    assert isinstance(value, dict)
+    return value
 
 
 def response(ctx: dict[str, Any], *, supported: bool = False) -> dict[str, Any]:

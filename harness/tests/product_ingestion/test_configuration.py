@@ -274,6 +274,7 @@ def test_native_candidate_mode_requires_all_exact_templates(tmp_path: Path) -> N
         template.update(template_id=purpose, role=role, purpose=purpose, prompt_sha256=_sha(prompt))
         binding["model"]["templates"].append(template)
     configured = ProductRuntimeSettings.model_validate_json(json.dumps(payload))
+    assert configured.bindings[0].native_discovery is not None
     assert configured.bindings[0].native_discovery.allow_knowledge_updates
     binding["model"]["templates"][-1]["prompt_sha256"] = "0" * 64
     with pytest.raises(ValueError):

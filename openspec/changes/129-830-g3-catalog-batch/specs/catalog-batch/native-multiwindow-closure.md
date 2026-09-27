@@ -91,3 +91,20 @@ replay custody核验；原首次/旧版本operation不变，不借唯一键冲�
 v10审核输入按保留disposition的evidence source_ref过滤routed sources，并重新验证全部
 原文引用；二审按新disposition集合再次构造同一视图。成员自身provenance引用仍完整
 保留，原所有窗口context/raw仍在aggregate审计。不得用提高预算替代剔除无关原文。
+
+### R6-ROUTE-1：聚合资格不得误吞旧多材料单窗路径（2026-09-27）
+
+CI收口发现旧三材料恢复fixture被错误路由进单材料多窗口聚合：三个window_id=0、
+window_count=1的snapshot触发source window coverage mismatch，恢复点退回discovery。
+旧typing前fixture同样失败（29.36秒），这是通用coordinator回归，不能改旧fixture断言。
+
+聚合深模块复用同一source-window校验提供纯组分类：aggregate必须至少两窗、exact同scope/
+knowledge/parse/source snapshot/window_count，窗口0..n-1完整、snapshot hash唯一。只有每份材料各一个完整单窗、
+材料ID不同且scope一致才返回independent；其余invalid保留原FAILED围栏，不能降成PENDING。
+pipeline在完整collection/无失败/全部材料绑定基础上，仅同一实体版本且每个非空窗口
+恰有一个admission group时选择该能力；不同材料的独立单窗保留原逐窗准入路径。
+最后聚合校验不放宽；不吞聚合失败、不扩大到跨材料聚合，不改变模型输入或checkpoint。
+
+root唯一写者；实现写域native_dependency_aggregate.py、native_pipeline.py；新增纯资格
+反例测试，保留旧两项wire升级恢复回归及现有multiwindow worker。软件独审后只构建和
+替换Harness（沿原回滚部署），不重跑已闭合业务/逐case模型。App/UI/config/Head保持。

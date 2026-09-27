@@ -14,6 +14,9 @@ from insurance_harness.db.base import Base, make_session_factory
 from insurance_harness.jobs import JobStore
 from insurance_harness.product_ingestion.discovery import PROVENANCE_DISCOVERY_REVIEW_PROMPT
 from insurance_harness.product_ingestion.models import ProductRunState
+from insurance_harness.product_ingestion.native_admission_context import (
+    render_native_admission_context,
+)
 from insurance_harness.product_ingestion.native_admission_contract import (
     NATIVE_ADMISSION_PROMPT,
 )
@@ -348,7 +351,7 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
     platform, model, native = FixturePlatform(base), MemberModel(), NativePort()
     runtime, context, client = await _compose(settings, factory, platform, model)
     context.bindings[SCOPE.space_id].platform.native_discovery = native
-    current_render = native_admission_stage.render_native_admission_context
+    current_render = render_native_admission_context
     assemble = compilation.assemble_platform_candidate
 
     def fail_compilation(*args: Any, **kwargs: Any) -> Any:
@@ -393,9 +396,11 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
             await runtime.close()
             await client.aclose()
             add_override(data)
-            settings = settings.model_copy(update={
-                "product_ingestion_runtime_json": SecretStr(_json(data).decode()),
-            })
+            settings = settings.model_copy(
+                update={
+                    "product_ingestion_runtime_json": SecretStr(_json(data).decode()),
+                }
+            )
             runtime, context, client = await _compose(settings, factory, platform, model)
             service = context.bindings[SCOPE.space_id]
             service.platform.native_discovery = native
@@ -409,7 +414,8 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
         assert plan.failed_discovery_artifact.artifact_kind == "discovery_summary"
         second = await _finish(runtime, context, jobs, child.run_id)
         assert second.state in (
-            {ProductRunState.FAILED} if wire_upgrade
+            {ProductRunState.FAILED}
+            if wire_upgrade
             else {ProductRunState.SUCCEEDED, ProductRunState.PARTIAL_SUCCESS}
         ), (
             second.terminal_reason,
@@ -450,7 +456,9 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
 
             monkeypatch.setattr(compilation, "assemble_platform_candidate", assemble)
             grandchild = context.store.retry_processing(
-                scope=SCOPE, run_id=child.run_id, expected_version=second.version,
+                scope=SCOPE,
+                run_id=child.run_id,
+                expected_version=second.version,
             )
             plan = context.store.checkpoint_plan(scope=SCOPE, run_id=grandchild.run_id)
             assert plan.resume_stage == "compilation"
@@ -458,20 +466,38 @@ async def test_member_guidance_upgrade_reuses_source_fields_and_native_calls(
             await validate_checkpoint(context, SCOPE, grandchild, checkpoint)
             service = context.bindings[SCOPE.space_id]
             override = service.configuration.native_admission
-            for changed_override in (None, override.model_copy(update={
-                "template": override.template.model_copy(update={
-                    "max_output_tokens": 8193,
-                }),
-            })):
-                changed_settings = service.configuration.settings.model_copy(update={
-                    "native_admission": changed_override,
-                })
-                changed_service = replace(service, configuration=replace(
-                    service.configuration, settings=changed_settings,
-                ))
-                changed_context = replace(context, bindings=MappingProxyType({
-                    SCOPE.space_id: changed_service,
-                }))
+            for changed_override in (
+                None,
+                override.model_copy(
+                    update={
+                        "template": override.template.model_copy(
+                            update={
+                                "max_output_tokens": 8193,
+                            }
+                        ),
+                    }
+                ),
+            ):
+                changed_settings = service.configuration.settings.model_copy(
+                    update={
+                        "native_admission": changed_override,
+                    }
+                )
+                changed_service = replace(
+                    service,
+                    configuration=replace(
+                        service.configuration,
+                        settings=changed_settings,
+                    ),
+                )
+                changed_context = replace(
+                    context,
+                    bindings=MappingProxyType(
+                        {
+                            SCOPE.space_id: changed_service,
+                        }
+                    ),
+                )
                 with pytest.raises(CheckpointValidationError):
                     await validate_checkpoint(changed_context, SCOPE, grandchild, checkpoint)
             third = await _finish(runtime, context, jobs, grandchild.run_id)
