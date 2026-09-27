@@ -1,6 +1,6 @@
 # 升级验证矩阵
 
-本记录区分本地合同验证与最终真实验收。软件源码为 `8a0863fa095bc27b901db90c5f744d1db84063b2`（产品8ccc2ac9与固定上游3e8b0bfc合并）；无未解决 Git 冲突不等于升级完成。冻结指纹及测试摘要见 `docs/insurance-kb/evidence/830-upgrade/`。后续证据提交不改变该构建来源。
+本记录区分本地合同验证与最终真实验收。初始升级软件源码为 `8a0863fa095bc27b901db90c5f744d1db84063b2`（产品8ccc2ac9与固定上游3e8b0bfc合并）；无未解决 Git 冲突不等于升级完成。冻结指纹及测试摘要见 `docs/insurance-kb/evidence/830-upgrade/`。pnpm子进程修复后的当前App构建来源为 `e71c72f7dd885e228c4f447c68902450fed7ae26`；后续纯证据提交不改变该来源。
 
 | Requirement | implementation / 本地验证 | commit | 最终 status |
 |---|---|---|---|
@@ -11,7 +11,7 @@
 | UPG-05 | model-final 582 项通过；reserve/mark 失败零发送、失败关闭、四协议 fallback、重定向实际发送、revision 队列 fence 与失败后续保留均有回归；真实进程恢复/成本未验 | 8a0863fa0 | NOT RUN |
 | UPG-06 | RAW-only 托管源、插件关闭/缺失 Head、普通 KB 工具、当前权限及 Release 负向回归通过；来源并发两项修复已冻结，仓储/服务受影响/下游回归PASS，最终独立复核0BLOCKER，真实环境验证未完成 | 8a0863fa0 | NOT RUN |
 | UPG-07 | 初轮 database 包及 adoption 131 项通过；独审发现中间 checkpoint 恢复和 skip_embedding 模式转换两个 BLOCKER，均已修复、数据库包通过，独立复核关闭。真实 DB/恢复未执行 | 8a0863fa0 | NOT RUN |
-| UPG-08 | BA0 输入/复用、运行资产及新增依赖合同 156 项通过；前端 tests/typecheck/build 已完成，最新构建2m4s。App首次197.05秒磁盘不足；已授权清理32镜像后的唯一追加构建13.50秒镜像源EOF失败，均无镜像；追加预算已用完，UI/DocReader与smoke未执行 | 8a0863fa0 | BLOCKED |
+| UPG-08 | 软件回归见历史；e71源的第5次编译/导出完成、本机解包ENOSPC；22层摘要通过后，硬预算0 REUSE及隔离制品smoke PASS，image442701a3…。原构建失败保留。UI/DocReader镜像未执行，GitHub仍有7组BLOCKER，完整交付未闭合 | e71c72f7d | BLOCKED |
 | UPG-09 | 核心保留理由与退出条件见 patch-ledger.md；旧模型模块/host skills 已替代删除；前端80/构建18/迁移13路径独审0BLOCKER；核心两项并发修复已冻结43路径，最终独审0BLOCKER | 8a0863fa0 | NOT RUN |
 
 ## 已执行的本地检查
@@ -27,7 +27,7 @@
 
 早期宽泛 service 回归在历史大对象 canonical 校验上耗时，停止该次检查并按影响收窄；不得写为 service 全包 PASS。模型 parity 的旧 body-only 测试受到本机 DNS 返回 198.18 地址而触发 SSRF 拒绝，未以放宽生产安全检查解决，不宣称整个 models/... 通过。
 
-software本地范围PASS，container health、真实 DB migration/backup/restore/backfill、config 切换、provider、Candidate/Draft/review/publish/activation、历史 epoch27 运行读取、新 tracer、source click、local live/GitHub live 均 NOT RUN。代码/fixture 的 PASS 不代表部署或业务验收。
+早期验证时software本地范围PASS，container health、真实 DB migration/backup/restore/backfill、config 切换、provider、Candidate/Draft/review/publish/activation、历史 epoch27 运行读取、新 tracer、source click、local live/GitHub live 均 NOT RUN。代码/fixture 的 PASS 不代表部署或业务验收。
 
 来源并发最终代码检查：repository全包、service受影响组及全包compile PASS；handler/container全包PASS。router初轮旧fixture缺knowledge_revision_sources，补齐真实表后347项PASS/2.019秒。初轮失败日志保留，不把最终PASS追写到失败运行。稳定UUID清理覆盖迟到成功和失败+CAS失去，不清新attempt。真实PostgreSQL锁时序未在此本地组执行。
 
@@ -50,3 +50,13 @@ GitHub live=BLOCKED，PR131@4dec9ef66六组真实CI失败详见ci-failures-4dec9
 ## 下载链路恢复（不改变产品构建验收）
 
 用户要求解决网络下载问题，按UPG-08新增环境恢复场景执行。旧日本H下载2/6、日本D4/6（失败后恢复）、新加坡A6/6；全部成功下载均校验固定层摘要，候选标准未放宽。五项锁定依赖下载/摘要PASS，原生Docker固定frontend pull及平台/RepoDigest PASS，镜像源运行/持久配置一致且8容器身份不变；详见network-recovery.json。环境失败不是产品RED，纯环境配置不改产品源码/输入，不运行无关产品测试。App源码仍e71c72f7d，本轮build0，总4/余量0，镜像交付/CI/业务状态保持，不外推长期网络稳定。
+
+## 2026-09-28 第五次App尝试与独立制品恢复
+
+单次授权“继续”已消耗1/1，总5/余量0。固定源e71/identity12d583e5…完成全部编译与runtime22步，网络依赖和pnpm子进程通过，导出index442701a3…后在containerd解包时ENOSPC，原selector exit1/INCOMPLETE不改写。BuildKit摘要显示Completed/0steps不能覆盖明确失败，实际日志及3139.799075386秒区间见delivery-attempt-05.json。
+
+失败后空间自行恢复至3740424KiB（没有人工清理；未追踪Docker内部释放机制），核对manifest SHA6010ab…及22/22层摘要；解包tar总2202181632bytes，最大单层<4GiB，容量复核与独审0BLOCKER。随后既有selector以real_build_budget_remaining=0独立REUSE PASS，既有start_exact_image.py烟测PASS并自行清理；build0/pull0。它只证明可执行文件、动态库、AnyDoc许可和BrowserSkill扩展制品可用，未启动HTTP业务入口，不能外推App业务健康。
+
+8个原服务的Id/StartedAt/Pid未变；daemon未重启，无新增业务部署、迁移、provider或人工镜像/容器/卷/cache清理。烟测后可用1583464KiB。当前六维：software=PASS（既有受影响检查及已恢复制品，不宣称完整CI）；container health=PASS仅限隔离CONTAINER_ARTIFACT_SMOKE；provider probe/provisioning/upgraded local live=NOT RUN；GitHub live=BLOCKED。UI/DocReader升级镜像及升级业务验收仍NOT RUN。
+
+b64923远端快照独立复核为7组BLOCKER（前六组+固定上游dsh rc8 HMR启动竞态），详见ci-failures-b64923.json。该快照还有未结束检查，不宣称最终完整CI结果；本轮没有修复或重跑CI，不影响当前Draft状态。

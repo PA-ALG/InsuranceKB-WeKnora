@@ -1,3 +1,24 @@
+## 2026-09-28 App制品已恢复：零构建复用与隔离烟测PASS
+
+用户“继续”授权的第五次App构建完成全部编译和镜像导出，但本机解包因磁盘耗尽
+失败，原记录保留exit1/INCOMPLETE，耗时3139.799075386秒；本轮1/1、累计5、余量0。
+失败后可用空间自行恢复，未执行人工清理。核对OCI manifest及22/22压缩层摘要，
+解包总量2.051GiB、可用3.567GiB，独审0BLOCKER后沿既有BA0入口完成零预算REUSE
+和CONTAINER_ARTIFACT_SMOKE PASS（build0/pull0，临时容器自清理PASS）。
+
+软件源e71c72f7dd885e228c4f447c68902450fed7ae26、artifact identity
+sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4；
+可用镜像sha256:442701a3bde3de5ff8aee7dfc9f7f461df1819b050c417f38ecd4ff226e33775。
+网络下载及pnpm子进程已在此次真实构建越过。8个原容器Id/StartedAt/Pid保持，
+原daemon未重启；烟测后可用1583464KiB，无迁移、服务部署或provider调用。
+
+CURRENT=App制品恢复PASS，升级整体仍BLOCKED。PR131@b64923独立诊断7组CI问题，
+包括新增确认的固定上游dsh rc8 HMR启动竞态，均未在本轮修复，继续Draft。
+NEXT=关闭CI并在容量与后续授权窗口具备时继续其余制品/交付；不追加第六次App构建。
+UI/DocReader镜像、真实迁移/部署/业务仍NOT RUN，旧epoch27不变。详见
+`docs/insurance-kb/evidence/830-upgrade/delivery-attempt-05.json`及`ci-failures-b64923.json`。
+下方为历史，不能覆盖本块。
+
 ## 2026-09-27 下载链路已修复，App仍待下一授权窗口
 
 用户要求解决网络下载问题后，root完成UPG-08环境恢复：原日本H线路六轮固定层
