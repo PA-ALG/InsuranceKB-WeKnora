@@ -387,9 +387,6 @@ func (s *publishedBatchReadReuse830G3) read(p *types.WikiReleasePreparation, sco
 		if err != nil {
 			return bundle, nil, err
 		}
-		s.mu.Lock()
-		s.entries[key] = publishedBatchReadCache830G3{projection: projection, members: expected}
-		s.mu.Unlock()
 	}
 	if projection.Contract != publishedBatchReadProjectionContract830G3 || projection.InputKey != key ||
 		projection.Bundle.CandidateHash != p.CandidateDigest ||
@@ -403,6 +400,14 @@ func (s *publishedBatchReadReuse830G3) read(p *types.WikiReleasePreparation, sco
 	}
 	if p.Members != nil && !conceptMemberSnapshotSetsEqual830G2(expected, p.Members) {
 		return bundle, nil, ErrSchemaWikiPreparationInvalid
+	}
+	if !cached {
+		if err := restorePublishedGeneratedCollections830G3(&projection.Bundle); err != nil {
+			return bundle, nil, err
+		}
+		s.mu.Lock()
+		s.entries[key] = publishedBatchReadCache830G3{projection: projection, members: expected}
+		s.mu.Unlock()
 	}
 	return projection.Bundle, expected, nil
 }
