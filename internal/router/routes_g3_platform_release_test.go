@@ -113,9 +113,9 @@ func TestG3PlatformCompositionRegistersBothGroupsOnlyWhenConfigured(t *testing.T
 			require.Empty(t, e.Routes())
 			continue
 		}
-		require.Len(t, e.Routes(), 6)
+		require.Len(t, e.Routes(), 10)
 		prefix := "/api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/platform"
-		for _, route := range []struct{ method, path string }{{"GET", "/uploads/:run_id/:ordinal"}, {"POST", "/sources/:knowledge_id/attempts/:attempt/snapshot"}, {"GET", "/bases/:release_id/epochs/:epoch"}, {"POST", "/preparations"}, {"POST", "/preparations/:preparation_id/review"}, {"POST", "/activate"}} {
+		for _, route := range []struct{ method, path string }{{"GET", "/files/by-sha256/:sha256"}, {"GET", "/uploads/:run_id/:ordinal/reparse"}, {"POST", "/uploads/:run_id/:ordinal/reparse"}, {"POST", "/sources/:knowledge_id/attempts/:attempt/native-discovery"}, {"GET", "/uploads/:run_id/:ordinal"}, {"POST", "/sources/:knowledge_id/attempts/:attempt/snapshot"}, {"GET", "/bases/:release_id/epochs/:epoch"}, {"POST", "/preparations"}, {"POST", "/preparations/:preparation_id/review"}, {"POST", "/activate"}} {
 			_, ok := g.apiKeyAuthorizer.Lookup(route.method, prefix+route.path)
 			require.True(t, ok, route.path)
 		}
@@ -132,5 +132,5 @@ func TestG3PlatformCompositionMainRouterRegistersMachineRoutes(t *testing.T) {
 			found[route.Method+" "+route.Path] = true
 		}
 	}
-	require.Len(t, found, 6)
+	require.Len(t, found, 10)
 }
