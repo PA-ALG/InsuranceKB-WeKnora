@@ -22,3 +22,5 @@
 CURRENT=D2 BLOCKED：修复e71c72f7d已完成独审并推送PR131；第四次App构建在官方frontend metadata HEAD阶段TLS handshake timeout（10.095880297秒），未编译/无image；本轮追加1/1已用，累计4次，没有第五次。原daemon配置逐字恢复，8容器启动身份不变。六组CI仍BLOCKED，未由本轮网络失败关闭。NEXT_PHYSICAL_RESULT=升级后旧来源经原生发现与Harness准入到唯一Release的可保留切片。
 
 NEXT=先验证并稳定实际daemon registry/代理路径，再安排明确获准的新构建窗口；不自动重复旧失败请求。UI/DocReader、真实迁移/部署/业务仍NOT RUN，详见delivery-attempt-04.json。
+
+2026-09-27网络恢复：UPG-08环境局部PASS；新加坡A六轮完整下载/五项锁定依赖/原生固定frontend pull均通过，失效mirrors已热重载并持久移除，8容器身份不变。本轮App build=0，总4/余量0，D2制品及六组CI仍BLOCKED；详见network-recovery.md/json。

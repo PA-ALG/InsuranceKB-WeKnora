@@ -46,3 +46,7 @@ GitHub live=BLOCKED，PR131@4dec9ef66六组真实CI失败详见ci-failures-4dec9
 ## 第四次App尝试（修复源e71c72f7d）
 
 新增明确授权“再授权一次”已消费1/1；新identity 12d583e5…的10.095880297秒尝试在官方Dockerfile frontend HEAD阶段TLS握手超时，尚未编译、无镜像，总尝试4。失败不证明pnpm修复在真实镜像中通过或失败。原daemon配置逐字恢复、daemon PID和8容器启动身份不变；见delivery-attempt-04.json。事后直连/实际代理各3次HEAD均401，仅证实事后TLS/registry可达，代理有1次10.591052秒，不等于认证pull或稳定连接。本轮不追加第五次，GitHub六组CI与D3状态保持未关闭。
+
+## 下载链路恢复（不改变产品构建验收）
+
+用户要求解决网络下载问题，按UPG-08新增环境恢复场景执行。旧日本H下载2/6、日本D4/6（失败后恢复）、新加坡A6/6；全部成功下载均校验固定层摘要，候选标准未放宽。五项锁定依赖下载/摘要PASS，原生Docker固定frontend pull及平台/RepoDigest PASS，镜像源运行/持久配置一致且8容器身份不变；详见network-recovery.json。环境失败不是产品RED，纯环境配置不改产品源码/输入，不运行无关产品测试。App源码仍e71c72f7d，本轮build0，总4/余量0，镜像交付/CI/业务状态保持，不外推长期网络稳定。

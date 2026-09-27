@@ -1,3 +1,16 @@
+## 2026-09-27 下载链路已修复，App仍待下一授权窗口
+
+用户要求解决网络下载问题后，root完成UPG-08环境恢复：原日本H线路六轮固定层
+下载仅2成功，日本D候选4成功后自动恢复；新加坡A专线6/6完整下载并校验通过，
+11.24MB每次2.228—3.086秒，五项实际锁定依赖全部通过。已通过Clash原生UI保存
+Proxy选择；运行中Docker和Colima持久配置均移除三个失败旧mirrors。原生Docker
+固定frontend摘要pull PASS，不能代替App构建。配置备份、摘要、回滚与样本限制见
+`docs/insurance-kb/evidence/830-upgrade/network-recovery.md`及同名JSON。
+
+CURRENT=网络局部PASS，D2 App制品仍BLOCKED；本轮App构建0，累计4/余量0，源码
+e71c72f7d及identity12d583e5…不变。daemon PID及8容器启动身份未变，无服务重启、
+清理、迁移、部署或provider。六组CI仍未关闭，PR131继续Draft。下方为历史状态。
+
 ## 2026-09-27 WeKnora 0.8.2：修复源已推送，第四次构建受官方镜像源TLS超时阻断
 
 用户“再授权一次”后，root在同一活动树执行1次App构建；此前pnpm子进程入口修复已通过130测试/fullruff/mypy736及独审0BLOCKER，并已推送PR131，软件源e71c72f7dd885e228c4f447c68902450fed7ae26，App identity sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4。后续纯证据提交不改变此软件源。
