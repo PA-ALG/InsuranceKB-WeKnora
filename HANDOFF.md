@@ -1,3 +1,209 @@
+## 2026-09-27 当前终态：正常完整流程到第27版，待最终CI/集成
+
+root唯一写者；活动树830-g35-multiwindow，App源码b393d855c、image7d97028e…；
+Harness源码3da99755c、image5ad9982b…，运行配置保持。已修复重启后生成内容[]变null，
+签名codec为唯一Owner，严格候选合同不放宽；独审0BLOCKER、定向回归及App-only交付PASS。
+正常新run d6d071a6-b3a1-4cdb-ae3f-1892ea59451c：271.207秒partial_success，13jobs首次成功，
+7新语义/0新source/0复用；20287字2窗完整输入，字段沿用。审核/发布/verify全部PASS，epoch27
+release-fb536f81-b2c2-4c1e-bd33-01bb800cadf7；74字段26verified48missing，75members56citations。
+UI等待期查看原文第2页及黄色高亮PASS；历史第26版模型标志/正式关系已验收。
+本轮新free0、发现仍PENDING，保留真实结果。个别字段/R7语义缺口统一维护，非空多窗口live
+NOT RUN/BACKLOG，不再作本轮强制门禁；旧条目仅保留历史，不覆盖本块最新范围。
+CURRENT=FLOW_PASS / QUALITY_PARTIAL；NEXT=PR130最终HEAD CI/机械集成，禁止以旧head CI代替。
+Go service全包966测试10分钟总超时，不记PASS；定向受影响测试PASS，其余检查见
+[重启与完整流程回执](docs/insurance-kb/evidence/830-g35/published-read-restart-20260927.md)。
+用户G3.5授权持续，不逐项重复询问，不重开单case优化。
+
+## 2026-09-27 最新范围：通用能力修复优先，个别字段遗漏后置
+
+用户明确跨页、表格等通用缺陷需解决；个别字段遗漏先不处理。既有R7质量审计保留为后续维护基线，
+不将这类case遗漏继续作为本轮阻断。root唯一写者，active 830-g35-multiwindow，App运行031a2fb83，Harness运行3da99755c。
+CURRENT=SRC-REUSE-1—4修复、92定向测试、软件/交付独审0BLOCKER及本地部署完成。
+源码3da99755c，Harness image5ad9982b…；03:32:45Z原run GET=5新语义/0新source/3复用，receipt hash/Head/ledger不变。
+通用跨页、PDF表格、2/2窗口20287字完整输入已独立复核，无新解析BLOCKER；个别输出遗漏后置。
+NEXT=真实非空多窗口组合验收及当前最新代码远端CI/集成；不重开单case优化。
+证据docs/insurance-kb/evidence/830-g35/source-accounting-20260927.md。
+FLOW_PASS、epoch26及原文点击证据保持；最终集成/远端CI仍未执行。
+
+## 2026-09-27 最新：统一质量交付与非空正式关系流程PASS；集中质量仍有缺口
+
+HEAD 6135d3678（证据提交）；产品源码/运行仍031a2fb83a232354ed7e7621fa2f2838dda27dea。root唯一写者，活动树830-g35-multiwindow。
+32路径统一来源质量/有效字段比较独审0BLOCKER；App/Harness各build1及02:40:49Z可回滚部署PASS。
+App4be2e1da…、Harness d8d1d91d…、runtime555d2262…；旧容器保留，migration0，切换时epoch25/ledger不变。
+
+普通UI说明书run41b7009c-6ebe-499e-8d95-fcbd93d43f03，02:42:46—02:47:09Z，263.384秒partial_success。
+13jobs均成功；14原生候选=1新提议（2成员）+5引用+7拒绝+1待实体解析。
+新MODEL_GENERATED概念68/80及SOURCE_SUPPORTED typed关系93/100经正常独审/发布，epoch26：
+release-44971129-62a4-4af4-9b62-7746074e50cf，candidate4d36e210120fc836399f3ecbf2b8195e9adc0ef12f683070e288460a3e6b131b。
+verify PASS；UI模型标志、关系→概念导航、第2页原PDF黄色高亮均PASS，未直接改模型结果。
+5新增语义call均recorded，API另含3历史source回执，不能写8新调用；既有字段沿用，非重新完整抽取。
+
+CURRENT=FLOW_PASS / R7_QUALITY_PARTIAL。本产品联合知识18项15完整2部分1缺失，未确认硬事实错误。
+贷款细节、免责其他情形退款对象、利益演示缺口集中维护；旧中止页逐段引用前提缺口亦保留。
+不能声称整体优于原生或G3.5全部完成，不按单case追加提示/模型重跑。
+NEXT=按用户效果统一维护要求处理上述通用覆盖/修订职责；真实非空多窗口业务仍未验证，远端CI/最终合入NOT RUN。
+前轮c6恢复13成功语义call复用+2新准入、双窗聚合/发布到epoch25已PASS，新free0保持真实记录。
+最新证据 docs/insurance-kb/evidence/830-g35/provenance-quality-20260927.md；旧quality WIP与dirty文档保留。
+用户全G3.5授权持续，无需重复询问；软件/交付/业务/质量不得互相代替。
+
+## 2026-09-27 当前：跨页身份修复已部署，真实两窗口主流程到 epoch24
+
+用户G3.5全项授权持续，root唯一写者，活动树830-g35-multiwindow，HEAD d0157306cda48fd315b4fb4f101d249d942e837b。
+ID-PAGE-1—4跨物理页公司证据修复及来源全绑定完成，最终8路径manifest4a3c4556…独审0BLOCKER；
+22身份测试PASS，4持久workerPASS77.24秒。Harness-only必要build1和可回滚部署PASS，
+image b3041eb94c8918d370e381ad8dd0c9db144d7e4aa6c0e46774328bd688a65d88。
+App/UI/runtime保持，旧容器保留，migration0；切换前后Head epoch23不变。
+
+同护理保险条款正常UI run3965eb5b-7a66-4f9f-84ea-fd034112f6e0，01:17:57—01:23:42Z，
+344秒partial_success。身份成功；签名plan确认为2窗口，两窗发现+引用均成功（23/28候选，非去重总数）。
+全文20287字已提供，字段26成功37未提供11失败。窗口0准入0成员；窗口1 REFERENCE返回
+entity@version而合同仅允许entity_id，strict拒绝，原raw保留。正常编译/审核/发布/verify仍PASS，
+Active epoch24/release-c788d049-7c35-42a3-953c-82c0d395a797，74字段26verified48missing，75members56citations1search。
+页面等待期原文第2页高亮回点PASS。新增free0，不能声称多窗口非空聚合或模型生成/正式关系页面已验收。
+本轮Harness记录8字段+7StageCall均recorded；API21含历史source6，非新增21次provider。
+
+CURRENT=真实终态已冻结，独审定位准入目标协议问题；NEXT=通用准入边界与正常恢复，最后统一R7。
+PENDING隔离保留raw/原因符合规格，人工override是可选后续，不作为阻断；不新增签名平台。
+旧quality WIP和dirty文档保留不整包提交。完整G3.5仍未完成。
+详细证据docs/insurance-kb/evidence/830-g35/complete-flow-20260927.md。
+
+## 2026-09-26 R6 最新：已部署且正常任务终态，统一质量后置
+
+用户G3.5全项授权持续；root唯一写者，活动树830-g35-multiwindow，
+branch codex/830-g35-multiwindow，HEAD a587823fe38b6328297cf5cd42c85f36a84fabc4。
+原knowledge-admission树质量/coverage WIP保留后置，不得整体集成。
+
+R6同材料/同主体普通page-definition完整多窗口依赖并集，初审局部失败裁剪后最多一次复审已接原流程；
+旧单窗/typed路径保持，未扩多材料/多实体/typed聚合。Spec native-multiwindow-closure.md。
+最终21文件manifest703e07ff…，v2独审及机械typefix确认均0BLOCKER；103定向PASS、29metricsPASS、
+完整持久worker6PASS/202.95秒，15源码mypy/20py ruff PASS，旧合同71PASS。
+
+05:41:07Z Harness-only可回滚交付PASS，image4f8529ce7fd099798b9331d42a401b8e9847e4370959e58390ce1351ebf8f581。
+APP/UI/runtime未改，旧容器保留，无migration；切换前后Head仍epoch22、模型ledger不变。
+交付manifest9f766eab…独审0BLOCKER，回执/private/tmp/g35-r6-20260926/delivery/。
+同账号/同KB/同说明书正常UI run310651e0终态partial_success（218.11秒；当时API7/0，后续核实为4次新语义＋3历史source回执）。
+正常审核/发布/verify到epoch23；79字段26verified53missing、80members50citations1search。
+新free0：准入c11—c14 REJECT却带existing_target，被旧audit-only协议拒绝；调用未断联。
+未改raw/放宽门禁/继续重试，统一协议质量后置。
+此说明书原文单窗口，不能用该live结果推导多窗口模型效果；软件fixture与live分别记录。
+CURRENT=R6_DELIVERED_WINDOW_CLOSED_PARTIAL_SUCCESS；完整G3.5仍未完成，统一质量/覆盖验收后置。
+
+## 2026-09-26 当前：身份输入边界修复部署，正常任务到达 epoch22
+
+root唯一写者，活动树830-g35-knowledge-admission，HEAD=12fae12319149e3bd4880a27919bc3b1dfac252e；用户G3.5及此前具体Gemini外发授权有效。identity抽取删除已有实体提示，匹配仍由原V4 resolver执行。干净61PASS（含持久worker重启/恢复/发布）、mypy3文件/ruff PASS，revision2独审0BLOCKER；仅Harness build1/可回滚替换API+worker，APP/UI/运行配置不改。交付03:49:03Z PASS，image abb4af2f…。
+
+正常UI同说明书新run27d23f17-cb40-4136-83c6-d45e2308b5c0（03:50:38—03:55:18Z，279.676秒）终态partial_success；identity EXACT_EXISTING_MATCH，字段窗口0（已有结果沿用，不是丢失字段），正常发现/准入/审核/发布/verify均执行。正式epoch22/release-89ceefc7-6c91-4562-976f-cdbcb77d8215，verify PASS：79字段/26已核验/53缺失，80members，50citations、1search。界面详情已核对，计数8新call/0复用call（包含平台回执；Harness stage ledger5，不混作同一口径）。
+
+REL5真实生成1条SOURCE_SUPPORTED扣减关系+1个MODEL_GENERATED概念，v4准入/v9审核已执行；关系94分、定义71分，依赖组PENDING，新自由成员发布0。14候选中1新提议/1引用/12未通过、13待处理。不得把本轮publish成功说成新关系发布成功，也不得把发送完整6123字符说成语义全覆盖。模型生成评分evidence_quality必须0而仍80总分门槛的适配问题记后置质量，不为单case加分或改结果。
+
+CURRENT=本轮窗口CLOSED_PARTIAL_SUCCESS_NO_RETRY；NEXT_READY=原计划R6多完整窗口普通page/definition并集+局部失败裁剪后一次重审，再综合验收/集成。R6只读设计复核进行中，尚无实现。质量/coverage WIP继续后置。完整G3.5未完成，正式新关系/模型标志页面仍待验证。证据identity-source-boundary-20260926.md及insurancekb-private-evidence/g35-identity-boundary-20260926/。
+
+## 2026-09-26 当前：授权已明确，真实身份调用暴露历史提示污染
+
+用户再次明确授权 G3.5（含此前提出的当前 Gemini 网关与本流程输入范围）。正常 UI 上传已执行，任务02424c86-520a-40d5-b0d1-d80c808eeb94复用原文件解析；identity新调用1、正常recorded/stop，但模型复制已有实体的代码及备案号，当前说明书没有对应原文证据。离线验证offered PASS、adapter正确拒绝，终态needs_confirmation:IDENTITY_RESPONSE_INVALID:ValueError。不是调用断联、不是审批仍阻塞。
+
+CURRENT=修复身份抽取输入与已有实体匹配职责边界；Spec identity-source-boundary.md，source-only输入RED已验证。匹配继续由原resolver负责，不删除错误响应字段、不伪造证据、不放宽校验。旧失败任务保留，新输入不能回放旧调用；仅Harness必要构建/可回滚交付后再走正常上传。质量/coverage WIP继续后置。完整G3.5仍未完成。
+
+## 2026-09-26 当前：R4软件及本地交付完成，新真实任务被自动审批拦截
+
+root唯一写者，活动工作树830-g35-knowledge-admission，HEAD=ac12fca1af0485b117715b79ada5a73e84197668，foundation13290da2e。质量/coverage WIP保留未进入制品，按用户FLOW优先。
+
+REL-1—5软件闭合：typed产品→概念关系沿原FreeWikiPage/Candidate/Review/Release；v4准入/v9正常审核。最小干净31路径tree78daa8f0…，独审0BLOCKER；干净回归173PASS/1SKIP、持久worker1PASS、17源码mypy/ruff PASS。单完整窗口依赖域及同主体版本内容UPDATE；不支持跨版本迁移/多窗口正式关系。
+
+02:13:42Z exact ac12fca1a APP/Harness/UI各build1并可回滚交付PASS。APP599a76d0…、Harnessa7fab5ca…、UI目录2030d1ce…，runtime6fe6cb2f…（仅v4+v9，原Gemini/provider不变）。旧容器/UI资源保留、DocReader不变、无migration；最终197路径manifest1a9ec0f5…独审0BLOCKER。切换前后Active/call ledger不变。
+
+正常新上传准备复用同PDF解析（旧恢复会因全局policy变化拒绝）；浏览器最终setFiles自动审批明确拒绝，原因：之前具体批准DeepSeek官方隔离审核，当前Gemini完整流程的外发目的地/范围未明确确认。原文未提交、新任务和新模型调用0，未绕过。当前网关HTTP，需用户明确本流程目的地和输入范围后继续。02:23:44Z只读Active仍epoch21/release-42769a3b-4bea-4100-b095-fa6446bd9834，队列空、最新任务仍663bd92a。
+
+CURRENT=REL5业务BLOCKED_AUTO_REVIEW（不是模型执行失败）；NEXT_READY=取得具体外发确认后同账号正常新任务→审核/发布/导航/来源回点。后续R6只读边界已复核：先同实体完整多窗口普通页依赖并集+最多一次定位裁剪后重审；不偷带coverage、不声称任意跨窗口依赖。模型标志真实样本、增量/综合验收仍待完成。完整G3.5未完成。证据business-relation-admission-20260926.md；持久回执insurancekb-private-evidence/g35-rel5-20260926/。
+
+## 2026-09-25 当前：FLOW 主链路已真实贯通，质量统一后置
+
+用户明确停止逐case优化、先跑完整流程。root按此仅交付369882000作用域修复，正常UI恢复663bd92a（4分1秒、新call1/复用9），原审核通过4自由页，正常发布epoch21/release-42769a3b-4bea-4100-b095-fa6446bd9834，verification PASS，正式搜索命中新free页，浏览器“合同效力中止”原文第3页PDF高亮点击成功。
+
+真实暴露详情GET503：原统计器仅认v1但准入恢复回执为v2。Spec/RED→30PASS、精确冻结30PASS、独审0BLOCKER，仅3文件提交e9bbd31ef0c4259cf2f17152cc4e5d91074f3525并第2次必要Harness-only交付。14:32Z同任务GET200，published_confirmed=true/published4，原任务不重跑。原配置e0e3a79保持，当前原模型Gemini；未提交字段比较/coverage/UI不进制品。
+
+任务partial_success仍有26成功/51未提供/2失败与9隔离项；五项质量缺陷、MATCH误判、MODEL_GENERATED真实样本、G1 entity/free-wiki旧入口、R4/跨窗口R6剩余项统一待后续维护，完整G3.5未完成。本轮关闭CLOSED_FLOW_PASS_QUALITY_DEFERRED；不为单case继续模型优化。当前部署e9bbd31ef，工作树保留未提交质量改动及DEFERRED Spec；不要用旧实验或旧容器覆盖当前epoch21。详细证据flow-first-20260925.md。
+
+## 2026-09-25 当前：用户改序，先贯通完整流程，质量统一后置
+
+用户明确：“这些效果后面统一维护吧，现在先把完整的流程跑通吧，不要针对一个case一个case的优化”。root继续唯一写者。暂停新增MATCH核验、字段语义补抽及单case隔离模型评估；已有可选coverage代码保留，当前交付不启用新增深度审核配置。复用原正常上传/恢复、原生Wiki、准入、最终审核与唯一Active发布，不手工修改模型结果或绕过已有审核。
+
+最新隔离owner/context窗口已CLOSED_BLOCKED：5条原文成功调用复用、6新调用262.33秒；comparison通过结构校验，但退款收款人有false MATCH；candidate引用不合法导致完整审核未通过。候选引用枚举和失败即停的通用协议修正29定向测试PASS35.50秒，尚待独审；不据此继续语义调优。五项质量缺陷与误判统一后置，不能记为解决。
+
+当前选择：仅交付已提交且独审通过的369882000审核作用域修复；原配置e0e3a79保持。工作树未提交的字段比较、深度coverage及UI改动不进入本次制品。此为用户FLOW优先，非质量验收。
+
+CURRENT=冻结必要Harness-only交付；NEXT_READY=按既有构建/可回滚部署入口交付必要组件，再正常UI恢复→审核→发布→检索→原文点击/模型标志。现场UI仍43e71710部分完成，字段26/51/2，自由知识未发布。G3.5未完成，完整流程仍NOT RUN。
+
+## 2026-09-25 最新：真实94事实已核验，owner与引用上下文修正闭合；准备复用5调用继续审核
+
+root唯一写者，活动工作树830-g35-knowledge-admission，HEAD369882000bfe7a12047a70128c659bcdc985f8ed，用户G3.5一次性授权持续。源码未提交/部署，Active本轮未GET/未写，G3.5未完成。
+
+FIDELITY六阶段接线revision3 ce8e0e1e3a378997840bc62d69f8f7688143af0f7b7c04b8137e1acecf544975独审0BLOCKER/14files；112定向PASS105.52秒，worker成员PASS、恢复重验1PASS31.14秒，5源码mypy/ruff。实际首组27事实1call识别6项父条件/残句问题，独立复核通过。
+
+完整真实窗口source-fidelity-full-audit-20260925现CLOSED_BLOCKED：6calls187.12秒，清点94事实、4组fidelity92SUPPORTED/2INCOMPLETE。关键贷款/免责/演示内容均被清点，15行×7列原文值一致，数量下降不等于漏抽。第1组comparison模型将entity/member写入字段owner，校验正确拒绝。不是provider失败。另独审发现正确陈述的引用未涵盖前提/表头及fidelity补引未流向comparison。
+
+owner/context修正：provider owner_ref短o编号仅来自实际字段目录（含unknown），server原字段域/重复/证据归属不放宽；canonical fidelity v2将实际提供的完整原文窗口作为context witness，保留model_selected_source_evidence，不能声称每段都直接支持事实；exact身份见证保持。comparison输入与最终来源均使用该窗口。原清点/fidelity task/prompt/settings不变。2RED→44PASS，最终58PASS21.76秒、2srcmypy/ruff；6file冻结7a021022de62dbb1c7bfa122a21f5bab143a0c6cfecab0877ed2065440cf5002独审0BLOCKER（独立46PASS3.75秒）。
+
+NEXT_READY=新隔离恢复窗口，未dispatch：/private/tmp/g35-owner-context-resume-20260925，prepared78f829ffd08c371127ca1dfecb1423ab8e18085d7d7f8edf867ea89be6eba36f，script e1cd5099661f7e650720e455f72c18e992f0cbcf99c1eab7bcbd1cdb9c9a4ccc。已由原runtime完整离线重验前5source调用可复用；原policy f2e771...相同，新comparison身份改变。复制旧隔离SQLite、原JobStore原子建明确retry_of子任务；transport禁止新source_inventory/fidelity POST。最多11新call/0retry/low32768，同账号官方DeepSeek；不改原文件/平台/Active。窗口独审进行中。旧失败comparison不当新结果、旧窗口不复开。
+
+字段语义修订仍SPEC，五项真实质量、非空发布/检索/引用点击/模型标志、R4/跨窗口R6与完整G3.5均未闭合。私密档新增source-fidelity-integration/、source-fidelity-full-audit/、owner-context-rule/。
+
+## 2026-09-25 最新：单次 DeepSeek 输出预算截断；继续 Harness 任务分解
+
+用户一次性授权完成G3.5，进一步明确继续不中断、通过Harness拆任务提升模型效果。MODEL-ALT软件344 PASS/独审0 BLOCKER，未提交部署。用户具体材料/DeepSeek目的地确认后实际调用1次，call5256c668-1929-481c-b2b8-6e4cbea399e2，62.99秒，finish_reason=length；16384completion全部推理、正文0，窗口CLOSED_BLOCKED，不重试。截断来自本次客户端16K预算，不是DeepSeek 1M上下文限制；五缺陷语义评估NOT RUN。完整证据deepseek-model-audit-20260925.md及私密归档。
+
+CURRENT=原文清点纯模块source-only首切片，23 PASS/0.80秒、ruff/mypyPASS，冻结revision2独审中。真实18span/6123字符可组成1个19882-byte输入，未删原文；来源版本和prompt身份防止错复用。NEXT_READY=逐事实承载对照（集合覆盖与字段自身完整性分开）→原StageCall模块派发/恢复→受控质量实测。预算同时按任务难度和推理+正文设置；不把高推理16K当模型能力上限。
+
+旧Active最后只读证据epoch20，当前未新查。新的源码均未提交/部署；实际非空发布/检索/来源点击/模型补充标志、跨窗口R6、R4及完整G3.5仍未完成。以下为历史。
+
+## 2026-09-25 当前授权更新：用户一次性授权完成 G3.5，继续既定队列
+
+用户在明确139753-byte材料与8.148.158.241一次Gemini审核询问后回复“一次性授权，把3.5都完成了吧，授权都给”。该授权覆盖剩余G3.5实现、必要受控调用、部署与完整验收；不再为已覆盖的常规步骤反复询问。root仍唯一写者，按原Spec/RED/独审和deep modules/tracer bullet推进。每条具体调用/交付保持有界预算、精确身份和失败/未知记录，不将授权理解为无限重试。旧窗口不复开。
+
+CURRENT=GROUND-1—4软件闭合：最终84 PASS/319.92秒、8源码mypy/ruff、冻结13文件revision2独审0 BLOCKER。真实Gemini v7/v8各1次，五项已知质量缺陷均未识别；v8正规decoder解fence后仍2处目标摘录不存在，原校验拒绝。v8 call f8760810-04c2-4143-9f15-ec1ad08b111c，109.83秒，窗口CLOSED_BLOCKED。新增构建/部署/业务发布0。NEXT_READY=复用既有DeepSeek作一次隔离语义对照，先补原policy/settings/executor的明确模型身份支持；停止同类Gemini重试，不修补raw。源码与两轮评估私密归档coverage-grounding/，证据coverage-grounding-20260925.md。完整G3.5仍未完成。
+
+以下历史中的“等待用户确认”已被本次明确授权取代，历史无调用事实保持。
+
+## 2026-09-25 当前：五项质量根因已核对，受控模型评估等待具体输入/地址确认
+
+root继续既定顺序，仅只读核验真实记录，未改源码/部署。贷款与免责遗漏发生在生成value，原文与引用均包含遗漏条款，finish_reason=stop；c9旧准入未见有效字段全文；c8正文前提未被其段落引用覆盖。利益演示s14–s17已完整送入原生discover/cite，exhaustive和完整保险Purpose v2已生效，仍无独立候选，原生cite new_slugs现有适配未丢弃该能力。独立原生边界复核已确认。
+
+当前retry-fields只接受extraction_failed；正常恢复会保留这两个present字段，不能靠继续点击完成质量修订。已有编译refresh_fields可复用，但运行入口的已验证字段语义修订合同尚缺；不篡改旧outcome。新增覆盖审核负责识别缺口，不直接补字段或自由发现。
+
+CURRENT=自动审批阻止外部评估准备，已请求用户明确授权具体材料与8.148.158.241网关的一次Gemini审核；确认前不派发。NEXT_READY=用不含人工答案的139753-byte现有v7反事实输入验证审核是否识别五缺口，再决定原模块内最小补抽/补发现合同。最多1次审核，不重试，不写应用DB/候选/Active；此计划尚未执行，provider/build/deploy/business均0。旧真实窗口CLOSED_BLOCKED保持。
+
+证据：docs/insurance-kb/evidence/830-g35/quality-root-cause-20260925.md。前轮172/50等软件验证结果保持；五项质量、真实非空流程、R4/跨窗口R6与完整G3.5仍未完成。以下为历史状态。
+
+## 2026-09-25 当前：覆盖审核正常流程、恢复与展示软件验证完成，五项真实质量待继续
+
+root唯一写者，活动工作树830-g35-knowledge-admission，base369882000bfe7a12047a70128c659bcdc985f8ed。G35-R6-COVERAGE-RUNTIME-1—4已按Spec/RED接入原compilation、ConfiguredModelExecutor、StageCall、checkpoint及composite；不新建执行/恢复/发布路径。覆盖专用配置不改变上游模型和原生/准入策略。完整v7回执持久化，合法空候选仍审核；retained_decision统一阻止被否定的保留组发布，隔离异议/覆盖缺口明确partial。安全六字段贯通Harness/Go/TS/Vue，区分原文送达与模型评估覆盖。
+
+最终七文件172 PASS/891.64秒、1条现有Starlette/httpx弃用warning；12源码mypy/ruff、Vue50/类型检查和Go bridge PASS；冻结21文件revision2独审0 BLOCKER。连续失败跨代复用原审核调用、零候选/全拒绝和完成checkpoint配置漂移均由本地持久worker验证，外部端口模拟。真实旧材料离线请求139753/300000 bytes、完整HTTP149750 bytes，配置未应用，正式模型仍Gemini。不能推导真实模型已核验质量。
+
+CURRENT=覆盖审核接线软件闭合；NEXT_READY=按既定顺序处理五项真实质量反例，核对已修输入及必要的字段补抽/发现补漏，再集中交付与单独冻结有限真实窗口。五项为c8条件来源、c9重复、贷款细节、免责退款对象、利益演示遗漏；仍BLOCKED。非空自由知识发布/搜索/来源点击/模型补充标志、跨窗口R6、R4及完整G3.5未完成。
+
+源码未提交/部署；新增provider/build/deploy/UI业务提交均0，现场未新GET，旧真实窗口CLOSED_BLOCKED。DELIVERY只有software有本轮本地证据，其余五维NOT RUN。证据：docs/insurance-kb/evidence/830-g35/native-coverage-runtime-20260925.md；私密insurancekb-private-evidence/g35-wire-20260925/coverage-runtime/。以下为历史状态。
+
+## 2026-09-25 当前：全候选处置与原文覆盖审核纯合同已独审，正常任务接线待完成
+
+root唯一写者，活动工作树830-g35-knowledge-admission，base369882000bfe7a12047a70128c659bcdc985f8ed。COVERAGE-1—4先Spec/RED，新增纯native_coverage_review：保留全部候选、准入决定、隔离成员和完整原文，去重实际字段/原文表示；内容、处置、模型评估覆盖三个结论分离。复用原来源resolver、严格投影/PDF locator和最终review校验，不新增执行器或发布权威。零候选和全拒绝均有严格输入分支。
+
+最终150 PASS/72.05秒，4源码mypy/ruff和diff检查PASS；冻结7文件独审0 BLOCKER。真实签名材料离线139753/300000 bytes，18原文span、14候选/14决定、79字段，完整final hash/原文保持；这只证明保义输入和预算，不代表模型发现遗漏。源码未提交/部署；provider/build/deploy/UI业务提交均0，现场未新GET。
+
+CURRENT=覆盖审核纯合同软件闭合；NEXT_READY=专属模板/配置身份、原executor正常worker派发和artifact/checkpoint/recovery接线，再映射已有摘要/UI。覆盖结论本身不授权发布，本轮未改变发布规则。五项真实质量问题仍BLOCKED；G3.5、R4/跨窗口R6、非空自由知识发布、原文点击及模型补充标志验收未完成。原真实窗口CLOSED_BLOCKED保持。
+
+证据：docs/insurance-kb/evidence/830-g35/native-coverage-review-20260925.md；私密insurancekb-private-evidence/g35-wire-20260925/coverage-review/。以下为历史状态。
+
+## 2026-09-25 当前：有效字段正文已接入准入与独审，软件验证完成、未部署
+
+root继续既定tracer bullet/deep modules，活动工作树830-g35-knowledge-admission，base369882000bfe7a12047a70128c659bcdc985f8ed。FIELD-COMPARE-1—4先Spec/RED：复用原compiler合并当前delta和继承字段，纯field_comparison生成同实体/版本/完整键集视图；准入/preflight/投影及最终review共用，未知/失败理由保持，最终actual fields与准入视图必须一致。context产物v2截断旧完整发现，同版checkpoint从正确同代request/delta重建，禁止混代；source/身份/字段/原生发现成功调用继续exact复用。
+
+最终140 PASS（267.51秒）、9源码mypy/ruff PASS、冻结14文件独审0 BLOCKER。真实43e原数据仅用于离线反事实输入测量：79字段35825 bytes，准入97008，审核286480/300000，全finalhash保持。v6两份字段视图仅余13520 bytes；不可信数据内的comparison_rules不能冒充新增可信指令，内部optional field_delta后续可收紧。源码未提交/部署，新provider/build/deploy/UI提交均0，现场未新GET。
+
+CURRENT=字段比较输入软件闭合；NEXT_READY=在原审核职责中冻结全处置/零成员和未发现内容核验，结合字段补漏与原生发现覆盖后集中交付。五项真实质量阻断仍存在：c8条件证据、c9重复、贷款细节、免责退款对象、利益演示未发现；覆盖15完整/2部分/1缺失未变。完整G3.5、R4/跨窗口R6、非空自由知识发布及真实原文/模型补充标记验收尚未完成。上一真实窗口保持CLOSED_BLOCKED，不连续重试。
+
+证据：docs/insurance-kb/evidence/830-g35/effective-field-comparison-20260925.md；私密回执insurancekb-private-evidence/g35-wire-20260925/field-comparison/。以下为历史状态。
+
 ## 2026-09-25 当前：wire v3真实准入通过；审核上下文超限与5项内容缺口阻断
 
 root唯一写者，HEAD6ea5e023已Harness-only构建/交付一次（image b3bed2d2…、runtime e0e3a79b…），APP/UI/DocReader保持。原77ee恢复修复一并部署。真实43e71710任务3分39秒结束，新准入1/复用8，4页提议通过strict/原文定位，但最终审核准备730770 bytes超过300000，独立审核调用0、自由知识发布0；字段发布epoch20/release-848316db-db18-4265-bcc9-dc27d7d624e4（16:35:21Z GET），任务PARTIAL_SUCCESS。
