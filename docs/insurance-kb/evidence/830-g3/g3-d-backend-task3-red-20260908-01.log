@@ -1,0 +1,4 @@
+# github.com/Tencent/WeKnora/internal/handler [github.com/Tencent/WeKnora/internal/handler.test]
+internal/handler/concept_free_wiki_830_g3_test.go:45:96: request.BatchConceptCandidateBundle undefined (type schemaWikiCreateDraftRequest has no field or method BatchConceptCandidateBundle)
+FAIL	github.com/Tencent/WeKnora/internal/handler [build failed]
+FAIL

@@ -1,0 +1,29 @@
+{
+  "contract": "g35-offline-real-input-budget.v1",
+  "source_artifact_sha256": "0f9f651aaef9d3a916b8d0e2dcb762d9ccd7f4f3516872fc619c925790bfbb3a",
+  "rows": [
+    {
+      "entity_id": "ping-an-e-sheng-bao",
+      "display_name": "平安 e 生保（尊享版）医疗保险",
+      "source_block_count": 238,
+      "source_chars": 76859,
+      "status": "PASS",
+      "window_count": 4,
+      "serialized_bytes": [
+        118764,
+        119156,
+        119530,
+        53968
+      ],
+      "input_sha256": [
+        "0bdb99498cd690c225cf32cb58e0be63e6d17654de9d9e24e57e568c162768f7",
+        "98161f34dd2b364300bf226610ea4689f4c5dd4afb31cd567bed1b878887ea46",
+        "fbceff3eb00272b8382b20c93c099589880ce613ca22d9b35b41937654a7289d",
+        "e00082c400a29a8dfd38ef1c84f5e5d44cf87a668c977ec39b947c3337be9741"
+      ]
+    }
+  ],
+  "new_model_calls": 0,
+  "new_publications": 0,
+  "scope": "HISTORICAL_SOURCE_INPUT_RENDER_ONLY_NOT_BUSINESS_ACCEPTANCE"
+}

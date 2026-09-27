@@ -1,0 +1,16 @@
+--- FAIL: TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture (1.04s)
+    concept_free_wiki_830_g3_test.go:19: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:19
+        	Error:      	Received unexpected error:
+        	            	invalid concept candidate bundle 830 g3
+        	Test:       	TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture
+--- FAIL: TestBatchConceptPreparationActual342FitsExistingEightMiBLimit (0.00s)
+    concept_free_wiki_830_g3_test.go:92: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:92
+        	Error:      	Not equal: 
+        	            	expected: 2247500
+        	            	actual  : 2254490
+        	Test:       	TestBatchConceptPreparationActual342FitsExistingEightMiBLimit
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/types	6.424s
+FAIL

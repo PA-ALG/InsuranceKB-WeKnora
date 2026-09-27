@@ -1,0 +1,18 @@
+test_apply_parser_env_requires_exact_forced_empty_values (__main__.ProvisionReview2Tests) ... ok
+test_apply_source_env_requires_db_name_and_user (__main__.ProvisionReview2Tests) ... ok
+test_kb_expected_after_recomputes_capabilities (__main__.ProvisionReview2Tests) ... ok
+test_model_put_success_is_checkpointed_before_failed_readback (__main__.ProvisionReview2Tests) ... FAIL
+test_put_success_is_checkpointed_before_failed_readback (__main__.ProvisionReview2Tests) ... ok
+
+======================================================================
+FAIL: test_model_put_success_is_checkpointed_before_failed_readback (__main__.ProvisionReview2Tests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-runtime-provision-review2_test.py", line 194, in test_model_put_success_is_checkpointed_before_failed_readback
+    self.assertIn("model-api-put-succeeded", checkpoints)
+AssertionError: 'model-api-put-succeeded' not found in ['validated-human-admin-session', 'kb-api-prewrite-validated', 'kb-api-put-succeeded', 'kb-api-postwrite-readback', 'model-api-prewrite-validated']
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.207s
+
+FAILED (failures=1)

@@ -4197,6 +4197,7 @@ export default {
       issueAiLinter: "AI 巡检",
       issueIgnore: "忽略误报",
       globalIssuesTitle: "全库待修复内容问题",
+      failedGenerationCount: '有 {count} 条 Wiki 生成失败记录，请查看文档处理记录',
       globalIssuesCount: "待修复内容问题: {count} 项",
       globalIssuesEmpty: "暂无待处理的内容问题",
       issuePagePrefix: "页面: ",

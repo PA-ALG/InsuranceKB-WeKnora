@@ -1,0 +1,45 @@
+{
+  "checks": {
+    "all_mechanical_checks_pass": true,
+    "dispatch_effects_zero": true,
+    "dispatch_exact_four_paths": true,
+    "dispatch_report_design_bindings": true,
+    "dispatch_sha256": "0941c4de407000c38606225ab9475f8d165ea2b544faf680031a0250899ecb9d",
+    "exact_staged_set": true,
+    "expected_count": 81,
+    "freeze_sha256": "5ce69ab74960e7467e2e9af3b40bf365d5fde99c27c623dea138ec3e25ed30f3",
+    "independent_evidence_count": 8,
+    "independent_evidence_exact": true,
+    "independent_manifest_report_binding": true,
+    "independent_report_sha256": "416d80fa8186d56fdf116157e044a6aad6c7db385817b4e8bbc70694074207a5",
+    "interop_effects_zero": true,
+    "interop_evidence_count": 9,
+    "interop_evidence_exact": true,
+    "interop_status": "BLOCKED",
+    "no_implementation_paths": true,
+    "owner_logs_count": 31,
+    "owner_logs_exact": true,
+    "repair_design_evidence_count": 4,
+    "repair_design_evidence_exact": true,
+    "repair_proposal_sha256": "9ff57eb0baa470c4f602e361c452e410fada49e503f5e1c7e32297222a9c0e61",
+    "snapshot_11_count": 11,
+    "snapshot_11_exact": true,
+    "staged_count": 81,
+    "status_does_not_mark_backend_complete": true,
+    "status_records_runtime_not_run": true,
+    "status_records_two_blockers": true
+  },
+  "contract": "830-g3-d-backend-review-evidence-stage-check.v1",
+  "effects": {
+    "production_files_read": 0,
+    "repo_writes": 0,
+    "runtime": 0,
+    "tests_rerun": 0
+  },
+  "openspec_log": {
+    "classification": "validation success marker present; trailing PostHog DNS failure is telemetry environment output; command exit=0 supplied by root, not rerun",
+    "path": "/private/tmp/g3-d-backend-initial-review-openspec-01.log",
+    "sha256": "7e4c5408b4957f357454498d9fa5d1cc05251a878db7c30de9ecd027a6f0f9f4"
+  },
+  "verdict": "PASS"
+}

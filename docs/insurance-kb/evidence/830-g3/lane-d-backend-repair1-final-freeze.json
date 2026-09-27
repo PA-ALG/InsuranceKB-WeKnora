@@ -1,0 +1,164 @@
+{
+  "contract": "830-g3-d-backend-repair1-implementation-freeze.v1",
+  "status": "FROZEN_FOR_INDEPENDENT_REVIEW",
+  "workspace": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
+  "authorized_changed_paths": [
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3.go",
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go",
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go",
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/schema_wiki.go"
+  ],
+  "files": [
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g2.go",
+      "sha256": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+      "bytes": 35621,
+      "lines": 884
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3.go",
+      "sha256": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+      "bytes": 15042,
+      "lines": 362
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go",
+      "sha256": "0e04690036e80ae6261df9bc53e814851dbf7616672abb16c159773453fc5a6f",
+      "bytes": 39746,
+      "lines": 908
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2.go",
+      "sha256": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+      "bytes": 56870,
+      "lines": 1177
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go",
+      "sha256": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+      "bytes": 37312,
+      "lines": 659
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/wiki_release.go",
+      "sha256": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+      "bytes": 76181,
+      "lines": 2007
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g2.go",
+      "sha256": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+      "bytes": 4363,
+      "lines": 149
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go",
+      "sha256": "c2b4506057ccaf5a77c19da2af711394bee123ee9bb835c3c5aadb967bd175f4",
+      "bytes": 15446,
+      "lines": 378
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/schema_wiki.go",
+      "sha256": "ad388e0616cd0fc4a54c2aaedad95c49334f380e4c420f0aa2bee16259490b99",
+      "bytes": 50218,
+      "lines": 1449
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/router/routes_schema_wiki.go",
+      "sha256": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c",
+      "bytes": 8759,
+      "lines": 239
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/router/routes_batch_concept_830_g3_test.go",
+      "sha256": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+      "bytes": 2470,
+      "lines": 73
+    }
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/g3-d-backend-repair1-red-20260908-01.log",
+      "sha256": "9dcadd8dc695d5e756373ee2dba69d152c13669411f10ebf054073cf007096a3",
+      "bytes": 6679,
+      "lines": 94
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-repair1-red-20260908-02.log",
+      "sha256": "2b960eba95893f797a85a8e5693e1584e2dff7e4bdcf67ce57cf519b4e0503d2",
+      "bytes": 6679,
+      "lines": 94
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-repair1-focused-green-20260908-03.log",
+      "sha256": "7f1d3e896d75907908c5083a9ed608e9165f5ca1c02287bc7a4e02a1bb4f0ba0",
+      "bytes": 427,
+      "lines": 7
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-repair1-focused-green-20260908-04.log",
+      "sha256": "88f39819d1043a26196f51da85161285fcd346fb7124a9422a7e9baeac4f2080",
+      "bytes": 124,
+      "lines": 2
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-repair1-full-packages-green-20260908-05.log",
+      "sha256": "0b3ac10eaafa2504e71eb213e124b15ee945d6a271be26e974dabacdf16ab549",
+      "bytes": 181,
+      "lines": 3
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-repair1-vet-green-20260908-06.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "lines": 0
+    }
+  ],
+  "verification": {
+    "focused_green": {
+      "log": "/private/tmp/g3-d-backend-repair1-focused-green-20260908-04.log",
+      "exit_code": 0,
+      "summary": "service 9.330s; handler 3.537s"
+    },
+    "full_packages_green": {
+      "log": "/private/tmp/g3-d-backend-repair1-full-packages-green-20260908-05.log",
+      "exit_code": 0,
+      "summary": "service 408.944s; handler 3.427s; router 3.799s"
+    },
+    "go_vet": {
+      "log": "/private/tmp/g3-d-backend-repair1-vet-green-20260908-06.log",
+      "exit_code": 0
+    },
+    "gofmt": {
+      "exit_code": 0
+    },
+    "git_diff_check": {
+      "exit_code": 0
+    },
+    "index": "empty"
+  },
+  "red_evidence": {
+    "red01": {
+      "log": "/private/tmp/g3-d-backend-repair1-red-20260908-01.log",
+      "classification": "valid failures plus one hard-coded cross-status expected hash test setup mismatch; mismatch excluded"
+    },
+    "red02": {
+      "log": "/private/tmp/g3-d-backend-repair1-red-20260908-02.log",
+      "classification": "authoritative corrected behavior RED: real U+2028/U+2029 and actual342 logical read hash mismatch; Create and GET preparation_id normalization/control acceptance"
+    },
+    "green03": {
+      "log": "/private/tmp/g3-d-backend-repair1-focused-green-20260908-03.log",
+      "classification": "environment-only Go cache permission failure; tests did not execute"
+    }
+  },
+  "effects": {
+    "commit": false,
+    "push": false,
+    "http": false,
+    "database": false,
+    "model": false,
+    "build": false,
+    "container": false,
+    "deploy": false
+  }
+}

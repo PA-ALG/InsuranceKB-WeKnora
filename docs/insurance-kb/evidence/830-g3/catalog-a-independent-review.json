@@ -1,0 +1,24 @@
+{
+  "contract": "830-g3-catalog-a-independent-review.v1",
+  "reviewer": "g3_seam_audit",
+  "rounds": {
+    "initial_spec": "PASS",
+    "initial_code": "BLOCKER stable error boundary",
+    "single_fix_re_review": "PASS"
+  },
+  "blockers": 0,
+  "source_sha256": "0d5c105c8916075e629e4175945409a6937eea515b54f476d5f1ff8ce003df10",
+  "test_sha256": "db19fa1b9a37832100f43c08b0ad959894f2047a84042d043628b26e193bb123",
+  "verification": {
+    "tests_passed": 17,
+    "independent_metadata_mismatches": 0,
+    "independent_nested_hash_mismatches": 0,
+    "wire_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
+    "wire_bytes": 706985,
+    "successful_output_unchanged": true
+  },
+  "mechanical_integration": "internal/handler/schema_pack_catalog_830_g3.generated.json",
+  "reviewer_git_status_unchanged": true,
+  "flow": "NOT RUN",
+  "quality": "DEFERRED_TO_Q0"
+}

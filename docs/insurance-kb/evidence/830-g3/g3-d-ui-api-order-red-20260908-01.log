@@ -1,0 +1,38 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > parses the exact frozen 354-member/342-field preparation and derives Profile navigation 386ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects omitted, null, extra, non-NFC, duplicate and fully rehashed topology drift 1546ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects scope, identity and read-hash drift and maps READY distinctly 728ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > parses exact Active snapshots without casting the G3 overview to G2 262ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > uses preparation scope and immutable GET without current, and permits only the exact historical q-empty read 168ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > pins Active current then exact search 161ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > selects preparation members locally and reads Active pages through the pinned shared envelope 400ms
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > accepts overview related members only in frozen manifest order 265ms
+   → promise rejected "Error: BATCH_CONCEPT_830_G3_INVALID" instead of resolving
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > accepts overview related members only in frozen manifest order
+AssertionError: promise rejected "Error: BATCH_CONCEPT_830_G3_INVALID" instead of resolving
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:226:80
+    224|       member: overview, related_members: related, citations: [], defin…
+    225|     } }))
+    226|     await expect(readBatchConceptPage830G3(active, overview.member_id,…
+       |                                                                                ^
+    227|       relatedMembers: related,
+    228|     })
+
+Caused by: Error: BATCH_CONCEPT_830_G3_INVALID
+ ❯ invalid src/api/schema-wiki/batchConcept830G3.ts:153:72
+ ❯ readBatchConceptPage830G3 src/api/schema-wiki/batchConcept830G3.ts:602:143
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:226:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  00:29:06
+   Duration  4.66s (transform 303ms, setup 0ms, import 382ms, tests 3.92s, environment 1ms)
+

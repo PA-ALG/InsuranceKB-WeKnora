@@ -68,3 +68,11 @@ func TestFinalizeIndexedKnowledgeState(t *testing.T) {
 		})
 	}
 }
+
+func TestFinalizeIndexedKnowledgeClearsPreviousAttemptError(t *testing.T) {
+	knowledge := &types.Knowledge{ParseStatus: types.ParseStatusProcessing, ErrorMessage: "old attempt failed"}
+	finalizeIndexedKnowledgeState(knowledge, 1, 2, false, time.Now())
+	if knowledge.ErrorMessage != "" {
+		t.Fatalf("successful index still exposes previous attempt error: %q", knowledge.ErrorMessage)
+	}
+}

@@ -1,0 +1,140 @@
+{
+  "contract": "830-g3-cd-multiline-code-independent-review.v1",
+  "recorded_at": "2026-09-07T11:26:19.696624+00:00",
+  "reviewer": "830-G3 root; did not write implementation",
+  "implementation_owner": "g3_catalog_impl",
+  "status": "PASS",
+  "blockers": [],
+  "backlog": [],
+  "design_sha256": "975ae956c2c851b8f8fffffbffd5bbbebb6b4051fa031237db3c0afb224f9380",
+  "files": [
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/batch_canonical_830_g3.py",
+      "sha256": "1f9b655221d2fad058a8693d5058b943159b9e8da0e5422f68ae1479498d1d02"
+    },
+    {
+      "path": "harness/tests/test_batch_canonical_830_g3.py",
+      "sha256": "49b12c1acd2d4e6786678b2dd7baf4bcbf5194c32e60261561b4d0a7efe5d2ec"
+    },
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+      "sha256": "07dc26da46c3b2204ac6f21243e2af45f339f530304d9d2a81094f52dc79e310"
+    },
+    {
+      "path": "harness/tests/test_batch_entity_resolution_830_g3.py",
+      "sha256": "7dab537cd0ad11ef0c907d790796b19f0ed80dbb666d62a8b94e462ee239908d"
+    }
+  ],
+  "checks": [
+    "Static diff against exact amendment7v2: typed construction and validation guard before dump; explicit body field exemptions; exact G3 domains; G2/Catalog unchanged",
+    "Independent common+C+A: 81 passed in 43.67s",
+    "Independent TAB/LF/CR full-body Evidence and Corpus JSON roundtrip and typed _hashed construction PASS",
+    "Independent rehashed nested source parser identity TAB/LF/CR/NUL/DEL rejected",
+    "Owner raw effective old multiline/key RED and staged nested PolicyReceipt RED reviewed; wrong expected disposition superseded by contract rejection RED",
+    "Owner final ruff and strict mypy logs PASS; all frozen file/log hashes independently recomputed"
+  ],
+  "logs": [
+    {
+      "path": "g3-d-canonical-multiline-reproduction.log",
+      "sha256": "f57547209ef8a30f16e1f06bc081cbcfa22f0a2b070f3de77877030b32a3aad9",
+      "meaning": "readonly reproduction"
+    },
+    {
+      "path": "g3-canonical-common-red-01.log",
+      "sha256": "8df6846f4b663bf0e1c814a7cba57f32dab0ba2c37bc86659cb8b4af179651ce",
+      "meaning": "valid common behavior RED: multiline rejection and bad object-key acceptance"
+    },
+    {
+      "path": "g3-canonical-common-green-01.log",
+      "sha256": "3dda496087ef21e2a2cf70552e7962179ac5dbb2ea30ff9b654d99231ed1382d",
+      "meaning": "common 3 pass"
+    },
+    {
+      "path": "g3-canonical-c-red-01.log",
+      "sha256": "68b9ee45d38d5391dac48e2aab8a35e14c4684776458da25a29eaa5ff54d2f99",
+      "meaning": "old helper C multiline RED; nested case also blocked prematurely by old helper"
+    },
+    {
+      "path": "g3-canonical-c-red-02.log",
+      "sha256": "461c5d55f0115bad423f51a6989a32c5f864a88a8d9848b56a70fa4d818f458c",
+      "meaning": "valid staged RED after new helper: nested PolicyReceipt TAB incorrectly reached CREATE"
+    },
+    {
+      "path": "g3-canonical-c-red-03.log",
+      "sha256": "6626281158c1dda228fdcc1cab2fbf14f7cf5d214a2ccf188305f9b58a585e49",
+      "meaning": "same staged blocker expressed as exact contract-level rejection, DID NOT RAISE"
+    },
+    {
+      "path": "g3-canonical-c-green-01.log",
+      "sha256": "90adf64dd14ce33a6181a26b2bfdf162a2858b641b205384e308ecc0d4f67246",
+      "meaning": "initial multiline/policy 2 pass"
+    },
+    {
+      "path": "g3-canonical-focused-green-02.log",
+      "sha256": "ac37fb35480e543b52c76e57c66a29738b0a5400b0a7886f6409e7aeddeec1be",
+      "meaning": "common and typed boundary 8 pass"
+    },
+    {
+      "path": "g3-canonical-ac-green-03b.log",
+      "sha256": "4b44a8037811608c5e6edd8e2f92b2b038dc26b1c5cd9fc65a54d06f39b542a7",
+      "meaning": "rejected verification: 80 pass 1 obsolete newline-allowed assertion fail"
+    },
+    {
+      "path": "g3-canonical-ac-green-04.log",
+      "sha256": "86ddb02750c4430059879b087eb54c32fde69f7e6877029f1d90a8cc9063fe24",
+      "meaning": "81 pass before final formatting"
+    },
+    {
+      "path": "g3-canonical-ruff-01.log",
+      "sha256": "6155e182723d6b172f6203a1b74caa88ff8de5e45a2b018a43550c870c968acc",
+      "meaning": "rejected static check: import order only"
+    },
+    {
+      "path": "g3-canonical-ruff-02.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "meaning": "final ruff pass"
+    },
+    {
+      "path": "g3-canonical-mypy-01.log",
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8",
+      "meaning": "final strict mypy pass"
+    },
+    {
+      "path": "g3-canonical-ac-green-05.log",
+      "sha256": "36292850ab5fd77552536efa83baba3c126f8a4350b315e59678780bdfb02e6a",
+      "meaning": "final common C A regression 81 pass"
+    },
+    {
+      "path": "g3-common-c-root-review-01.log",
+      "sha256": "d2a0944e4e71ca0047fb35604e2d8b6a74daf4e9ee25e97f9d5dd5f7977944d0",
+      "meaning": "root independent verification"
+    },
+    {
+      "path": "g3-common-c-root-probe-01.log",
+      "sha256": "2c75ff0f4bc11893ae90b2f36cc8631639fc58a6081da1d1857f715eaa3ec5ab",
+      "meaning": "REJECTED reviewer keyword-only call error; no product finding"
+    },
+    {
+      "path": "g3-common-c-root-probe-02.log",
+      "sha256": "9aa74c679855a66b59e20e4f43e796331c79da256bae9d33fe481ede83f1b6b4",
+      "meaning": "root independent verification"
+    },
+    {
+      "path": "g3-common-c-root-probe-02.py",
+      "sha256": "e5e1207c813ecefe401e29834a54b6fb04b9fc7a0dc8dce71f4796367eaa4b4c",
+      "meaning": "root independent verification"
+    }
+  ],
+  "limitations": [
+    "Current W1 registered source receipt compatibility amendment8 still pending independent design review and implementation",
+    "D full342 and Go canonical validation not yet implemented or tested",
+    "Provider/live/source intake remain NOT RUN"
+  ],
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "container": 0,
+    "upload": 0,
+    "build": 0
+  }
+}

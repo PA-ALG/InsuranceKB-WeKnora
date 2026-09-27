@@ -1,0 +1,64 @@
+{
+  "contract": "g35-native-admission-validation.830.v1",
+  "base_commit": "12bb772a5fa3c8a875fa35795b43deaf62420e04",
+  "reviewed_tree": "c761124a6f37a027d38beb58a444872bbd7332dc",
+  "requirements": [
+    "G35-R2",
+    "G35-R3",
+    "G35-R5"
+  ],
+  "scope": "Pure native candidate admission and provenance review replay metrics; runtime remains disabled.",
+  "red": [
+    "Initial new adapter API absence: seven tests failed (capability smoke only, not an old behavior counterexample).",
+    "Independent review regression: old-page UPDATE + new supporting concept emitted UPDATE/UPDATE instead of UPDATE/NEW.",
+    "Persisted v5 review replay rejected valid parent StageCall prompt: one failure, historical path passed."
+  ],
+  "validation": {
+    "native_admission": "PASS: 10 tests, 7.61s; generated/supported, missing provenance/coverage/member/quote, exact update policy/revision, field merge and final v5 review, mixed member actions through published G3 fixture.",
+    "replay_metrics": "PASS: 9 tests, 1.60s; actual SQLite StageCall and artifact custody, old/new correct and mismatched prompts.",
+    "ruff": "PASS",
+    "mypy": "PASS, three source files",
+    "diff_check": "PASS",
+    "test_fixture_corrections": "First update integration fixture edited a frozen legacy G2 base and failed its snapshot validation. Replaced by existing complete published G3 fixture with empty field delta. Path-only pytest attempts ran no tests and are not RED."
+  },
+  "review": {
+    "admission": {
+      "reviewer": "semantic_view_review",
+      "tree": "c761124a6f37a027d38beb58a444872bbd7332dc",
+      "blockers": 0,
+      "fixed": "Per-member downstream disposition preserves NEW vs UPDATE; candidate-level UPDATE may include supporting NEW members."
+    },
+    "metrics": {
+      "reviewer": "native_boundary_review",
+      "tree": "ac5371b7fb57326601d9b73fb5bf1ff1447debe9",
+      "blockers": 0
+    },
+    "mechanical_docs_red_exemption": "Both reviewers explicitly confirmed identity/test/NOT RUN fact records in HANDOFF, plan top, OpenSpec validation and evidence JSON."
+  },
+  "boundaries": [
+    "Caller must supply already verified native/source snapshots.",
+    "Pure adapter does not execute provider, preserve stage artifacts, enable pipeline or prove PDF geometry.",
+    "Model provenance does not prove useful knowledge or fact entailment: final independent review remains required.",
+    "Structural entity/relation requests remain explicit REQUIRES_ENTITY_RESOLUTION; no invented entity creation."
+  ],
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "frozen_files": {
+    "harness/src/insurance_harness/product_ingestion/native_admission.py": "1e05704b7a9bb0412e4de448ce322d0118b4fbc904abf2f5fb50bac2ac78281c",
+    "harness/src/insurance_harness/product_ingestion/extraction.py": "ebe5c82ca82fa59ab45c92993cdaca9b77c5c0061ed954cd8753a9fb46b65242",
+    "harness/tests/product_ingestion/test_native_admission.py": "bb8d5e8211c58deefcaf8a4a167549a9ffeebee156c0a2f6b322155c5fd8d890",
+    "harness/src/insurance_harness/product_ingestion/discovery_replay_metrics.py": "5082c4f16b7b775059dcb5406a0c13d71f30a20cd9f97a8118700ad56ed0413d",
+    "harness/tests/product_ingestion/test_discovery_replay_metrics.py": "093d5cbef6f032133ada2144acac254526806acf5911aff11fb749a8b8479c47"
+  }
+}

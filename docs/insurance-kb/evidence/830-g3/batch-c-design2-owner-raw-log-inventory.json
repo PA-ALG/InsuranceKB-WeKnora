@@ -1,0 +1,118 @@
+{
+  "contract": "batch-c-design2-owner-raw-log-inventory.830.g3.v1",
+  "recorded_at": "2026-09-07T09:16:54.838159+00:00",
+  "logs": [
+    {
+      "path": "g3-batch-c-multi-design2-owner-green-final-01.log",
+      "sha256": "185dea1c63465a6ab202a1f8e5d9635a62c954b1df3ccd5f0524024b878cc4d6",
+      "bytes": 2908
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-green-final-02.log",
+      "sha256": "5487d601ffb6ce10cd631a4397ab51d7583c548579437047a494948f5fc3cbc1",
+      "bytes": 100
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-green-target-01.log",
+      "sha256": "5059e8cab1917830313cc43d37cfdd4ecf17d2efd090c6732645c0ea98e41ff8",
+      "bytes": 98
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-mypy-01.log",
+      "sha256": "52caea62278ecfc9ed75eac4ff4654ee3cc0175431a9ab5fffa535de54147be1",
+      "bytes": 6123
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-mypy-final-01.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e",
+      "bytes": 42
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-mypy-final-02.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e",
+      "bytes": 42
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-mypy-source-01.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e",
+      "bytes": 42
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-red-01.log",
+      "sha256": "fdacaf77f2a7d430924cfa88af3ce18a02e0855ab66059ccdd238acf46d7ac7e",
+      "bytes": 22861
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-red-02.log",
+      "sha256": "17e3cd7a80b13de052d97615a43bc35acacc670838f19f8d5d4671db06e15fba",
+      "bytes": 98
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-red-03.log",
+      "sha256": "75f4c1ac52037245b7ec4bc194421cd407d279d4f4c04acea96aaa48a5b30101",
+      "bytes": 1472
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-review-green-01.log",
+      "sha256": "ca45811d63590c6c0b74538e72ced0e268d4aa379df915f4ffb3e5da8d4cd830",
+      "bytes": 100
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-review-mypy-01.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e",
+      "bytes": 42
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-review-red-01.log",
+      "sha256": "8d36ede5c0b1db5199374629c524f5102474776088032bd76b5449c865641365",
+      "bytes": 4412
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-review-ruff-01.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-ruff-01.log",
+      "sha256": "55750af6d7d73b776957bf0968444b45788c2a71be9adf55fe84a15666bfab29",
+      "bytes": 572
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-ruff-02.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-ruff-final-01.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-ruff-final-02.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-test-01.log",
+      "sha256": "0ad5e55ab3d51daacc79af21f049a184edd12282eb67ff8274caf8ccfbd51f20",
+      "bytes": 5838
+    },
+    {
+      "path": "g3-batch-c-multi-design2-owner-test-02.log",
+      "sha256": "6996fb781faaedf56623995d6946b878122c7cc0ebf33d8117a15d31d814abad",
+      "bytes": 100
+    }
+  ],
+  "interpretation": {
+    "owner-red-01": "7 failed/43 passed on e915 base; 2 substring fixture setup failures excluded, 5 behavior failures valid",
+    "owner-red-02": "REJECTED RED: unrelated disposition_counts mismatch",
+    "owner-red-03": "valid 1 behavior failure on intermediate design2 source before bidirectional parent check; that intermediate source SHA was not recorded, do not attribute to e915",
+    "owner-review-red-01": "3 valid failures for scope/source/model invalid wire reasons on 971a56 pre-repair source",
+    "owner-review-green-01": "56 passed after concentrated repair",
+    "intermediate_errors": "fixture setup, E501 and test typing errors retained, not treated as product behavior RED or final gate"
+  },
+  "latest_source_sha256": "d67b515e2f61e8df3414693f572f6e1ab44a8d53c825c6392f16424d8cf2d5dc",
+  "latest_test_sha256": "76bbe8e4d936f8d454e4a6c9f092ddbe72d3db51d4682e1f090d2126244efc22",
+  "independent_rereview": "PENDING",
+  "runtime_effects": 0
+}

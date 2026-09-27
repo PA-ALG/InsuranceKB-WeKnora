@@ -1,0 +1,63 @@
+{
+  "contract": "830-g3-d-go-repair1-freeze.v1",
+  "status": "OWNER_GREEN_PENDING_INDEPENDENT_REREVIEW",
+  "files": [
+    {
+      "path": "internal/types/concept_free_wiki_830_g3.go",
+      "sha256": "8db0e765b4e24cc6e2f0e825105bc0d93c3934da02de4f4ebc17b07ad3fe3050",
+      "bytes": 160738
+    },
+    {
+      "path": "internal/types/concept_free_wiki_830_g3_test.go",
+      "sha256": "72e2c16660821f22988b5ef3f9e23a2750a6f11c78248a350eca85848b8729ec",
+      "bytes": 25205
+    }
+  ],
+  "logs": [
+    {
+      "path": "g3-d-go-wire-presence-review-red-20260908-01.log",
+      "sha256": "becefed8f92d413cd3ae373ae614db31fd0f1efb6e1b3fa84adc652f400c2eb6",
+      "bytes": 4802
+    },
+    {
+      "path": "g3-d-go-wire-presence-review-green-20260908-02.log",
+      "sha256": "5146cfdf4dab174ac3d924f73aac449c040b9779b6cdbaeab8b3680683c9a743",
+      "bytes": 55
+    },
+    {
+      "path": "g3-d-go-wire-presence-focused-green-20260908-03.log",
+      "sha256": "8c7c16da7b7542459ddf388f965257ebccdd3accbc25bc335aaff88fc672c11e",
+      "bytes": 55
+    },
+    {
+      "path": "g3-d-go-wire-presence-fulltypes-green-20260908-04.log",
+      "sha256": "4d2cdd6cb7b550db076b152c3c1aea60c2f1842c4e51fae40d75422cf9d57820",
+      "bytes": 55
+    },
+    {
+      "path": "g3-d-go-wire-presence-gofmt-green-20260908-05.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ],
+  "unchanged_fixtures": [
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783"
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4"
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb"
+    }
+  ],
+  "red_classification": "8 effective failures; parser_identity malformed case already rejected by prior consistency check and is not counted as RED.",
+  "repair_round": 1,
+  "maximum_high_risk_rounds": 2,
+  "backend_gate": "CLOSED",
+  "ui": "Mock-only local development under separate reviewed order amendment; final integration remains closed.",
+  "real_effects": 0
+}

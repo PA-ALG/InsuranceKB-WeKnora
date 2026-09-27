@@ -270,6 +270,55 @@ def test_scoped_source_and_existing_expert_definition_cannot_be_rebound() -> Non
         g.validate_output(req, changed)
 
 
+def test_fixed_semantic_phases_preserve_legacy_validation_order() -> None:
+    g = api()
+    initial_request = request(g)
+    initial = compiler(g).compile(initial_request, run_id="compile-phases")
+    expert = initial.output.definitions[0].model_copy(
+        update={"origin": "EXPERT_REVISION_RECORD"}
+    )
+    req = initial_request.model_copy(update={"existing_definitions": (expert,)})
+    changed_definition = expert.model_copy(update={"body": expert.body + "变更"})
+    changed = initial.output.model_copy(
+        update={
+            "request_hash": req.request_hash,
+            "definitions": (changed_definition,),
+            "fields": initial.output.fields[:1],
+        }
+    )
+
+    with pytest.raises(ValueError, match="REQUIRED_FIELD_COVERAGE_MISMATCH"):
+        g.validate_output(req, changed)
+    with pytest.raises(ValueError, match="PROTECTED_DEFINITION_REPLACED"):
+        g.validate_output(
+            req,
+            changed.model_copy(update={"fields": initial.output.fields}),
+        )
+
+
+def test_disposition_identity_error_precedes_later_member_shape_error() -> None:
+    g = api()
+    initial_request = request(g)
+    initial = compiler(g).compile(initial_request, run_id="compile-disposition-order")
+    req = initial_request.model_copy(
+        update={"existing_definitions": initial.output.definitions}
+    )
+    audit = tuple(
+        item.model_copy(update={"disposition": "update"})
+        if item.key == initial.output.definitions[0].concept_id
+        else item.model_copy(update={"disposition": "new_page"})
+        if item.key == initial.output.fields[0].assertion_id
+        else item
+        for item in initial.output.audit
+    )
+    output = initial.output.model_copy(
+        update={"request_hash": req.request_hash, "audit": audit}
+    )
+
+    with pytest.raises(ValueError, match="UPDATE_TARGET_MISSING_OR_DUPLICATE"):
+        g.validate_output(req, output)
+
+
 def test_disposition_must_cover_every_member_without_ghost_admission() -> None:
     g = api()
     req = request(g)

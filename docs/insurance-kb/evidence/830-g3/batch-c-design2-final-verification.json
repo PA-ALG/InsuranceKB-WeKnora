@@ -1,0 +1,51 @@
+{
+  "contract": "batch-c-design2-final-verification.830.g3.v1",
+  "checked_at": "2026-09-07T09:22:15.479313+00:00",
+  "source_sha256": "d67b515e2f61e8df3414693f572f6e1ab44a8d53c825c6392f16424d8cf2d5dc",
+  "test_sha256": "76bbe8e4d936f8d454e4a6c9f092ddbe72d3db51d4682e1f090d2126244efc22",
+  "design_sha256": "096340488f1e6e8efbb1632bba4aa33f7e714978c620f296909522371145daac",
+  "status": "PASS",
+  "reviewer": "g3_seam_audit",
+  "blocker_count": 0,
+  "backlog_count": 0,
+  "independent_tests_passed": 56,
+  "root_catalog_and_batch_tests_passed": 73,
+  "root_elapsed_seconds": 31.04,
+  "ruff": "PASS",
+  "production_strict_mypy": "PASS",
+  "prior_wire_bypass_probe": "REJECTED_WITH_COMPILED_BATCH_INVALID_AFTER_REPAIR",
+  "openspec_strict_exit_code": 0,
+  "openspec_note": "validation valid; telemetry flush network error does not change exit0",
+  "logs": [
+    {
+      "path": "g3-batch-c-design2-independent-rereview-green-20260907.log",
+      "sha256": "e3ac9cc3c0cbac931f570de6e71f9d38c3c5b7a7dccaffcf12c9c7aab5ceae9c"
+    },
+    {
+      "path": "g3-batch-c-design2-independent-rereview-mypy-20260907.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e"
+    },
+    {
+      "path": "g3-batch-c-design2-independent-rereview-probe-20260907.log",
+      "sha256": "c7457ecf768df1050f903b556ba5a193c53de18f7821069e92e0990b243c6eb1"
+    },
+    {
+      "path": "g3-batch-c-design2-independent-rereview-ruff-20260907.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "path": "g3-root-ac-design2-final-verification-20260907.log",
+      "sha256": "bba2e494d94fc6ceef6ed6b96763dcec38daf65c8144c7fab7bcc2e7d7ce97b7"
+    },
+    {
+      "path": "g3-root-design2-openspec-20260907.log",
+      "sha256": "7e4c5408b4957f357454498d9fa5d1cc05251a878db7c30de9ecd027a6f0f9f4"
+    }
+  ],
+  "raw_log_policy": "Preserve original bytes including whitespace; source/docs diff-check excludes raw logs",
+  "runtime_effects": 0,
+  "FLOW": "NOT RUN",
+  "QUALITY": "DEFERRED_TO_Q0",
+  "commit": "5efe84b5aebbe706a6a33329ce4802694aa2d3a1",
+  "commit_tree": "f7389ab016008b996eeeeb17f419cc7549388ab2"
+}

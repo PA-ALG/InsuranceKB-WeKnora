@@ -1,0 +1,165 @@
+{
+  "contract": "830-g3-d-final-input-integrity.v1",
+  "status": "PASS_FROZEN_INPUT_INTEGRITY_ONLY",
+  "files": [
+    {
+      "path": "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts",
+      "sha256": "37713e5c6627b87e3123136ddc9ba1944c782282154a47f4d500630d4eee8b67",
+      "bytes": 19384
+    },
+    {
+      "path": "frontend/src/api/schema-wiki/batchConcept830G3.ts",
+      "sha256": "52ec691d36c0984c60725ff9b8f6ed08de8c5f47817a1ca7f1a4b63075192b05",
+      "bytes": 37633
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts",
+      "sha256": "b6f59c29d0e803190436bd7397309c075ce53571c913ae679a1d7fb3f1f9f11f",
+      "bytes": 6470
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue",
+      "sha256": "9bf392988ff7b2586e5bca089373a385734a09b901194a7eef484212ba377878",
+      "bytes": 7789
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts",
+      "sha256": "a8c9509e786199c766b84ec4bb3ebf13548068b2345d993a007d49d815ef00f8",
+      "bytes": 8522
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue",
+      "sha256": "073a4671c08f2348dbacb0a4e5e4b4a9de2f7a717f493cfaff9847eb87951810",
+      "bytes": 12283
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts",
+      "sha256": "934e83718acde69aea4ebcbb43f68895ef57b9725e44ff4700a92647965af2cf",
+      "bytes": 7573
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "sha256": "979d1d9b3081f09d7a48bcc78c4dcdba3617056618c0f6f390dba7b71957a132",
+      "bytes": 4859
+    },
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/batch_canonical_830_g3.py",
+      "sha256": "1f9b655221d2fad058a8693d5058b943159b9e8da0e5422f68ae1479498d1d02",
+      "bytes": 1157
+    },
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "sha256": "e8e0dbcd8bf4cb1f2072d6fbf4ebf79f3554cbfef53c9c1f84011dbcc4357316",
+      "bytes": 71615
+    },
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+      "sha256": "050f5a0b65e8919142946e6f38a947220ec9181060b9d6ea89f3ed9778dfe2e5",
+      "bytes": 82334
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+      "bytes": 2254415
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+      "bytes": 2254490
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb",
+      "bytes": 1623
+    },
+    {
+      "path": "harness/tests/test_batch_canonical_830_g3.py",
+      "sha256": "49b12c1acd2d4e6786678b2dd7baf4bcbf5194c32e60261561b4d0a7efe5d2ec",
+      "bytes": 2718
+    },
+    {
+      "path": "harness/tests/test_batch_concept_compile_830_g3.py",
+      "sha256": "86edf3d9bad9984d37991fb23f305d5e582fe6ee602ab0a7284a7a73d6fb2495",
+      "bytes": 33527
+    },
+    {
+      "path": "harness/tests/test_batch_entity_resolution_830_g3.py",
+      "sha256": "16b4628e3f8a258cab97a03ab6daf6585c3fdeb3cbfaa4e4beb11c68845f2216",
+      "bytes": 95120
+    },
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g2.go",
+      "sha256": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+      "bytes": 35621
+    },
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g3.go",
+      "sha256": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+      "bytes": 15042
+    },
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g3_test.go",
+      "sha256": "0e04690036e80ae6261df9bc53e814851dbf7616672abb16c159773453fc5a6f",
+      "bytes": 39746
+    },
+    {
+      "path": "internal/application/service/concept_source_authority_830_g2.go",
+      "sha256": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+      "bytes": 56870
+    },
+    {
+      "path": "internal/application/service/concept_source_authority_830_g2_test.go",
+      "sha256": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+      "bytes": 37312
+    },
+    {
+      "path": "internal/application/service/wiki_release.go",
+      "sha256": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+      "bytes": 76181
+    },
+    {
+      "path": "internal/handler/concept_free_wiki_830_g2.go",
+      "sha256": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+      "bytes": 4363
+    },
+    {
+      "path": "internal/handler/concept_free_wiki_830_g3_test.go",
+      "sha256": "2caec79556c3ccd3e0ae1f0dc18337dd93e8f7aa98ea0abd30c720900b4e90b6",
+      "bytes": 20066
+    },
+    {
+      "path": "internal/handler/schema_wiki.go",
+      "sha256": "2489c272fc1338100a84f2bbc580a6faa0c2c8dbe065d3e69d1896e6d3e9b192",
+      "bytes": 50415
+    },
+    {
+      "path": "internal/router/routes_batch_concept_830_g3_test.go",
+      "sha256": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+      "bytes": 2470
+    },
+    {
+      "path": "internal/router/routes_schema_wiki.go",
+      "sha256": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c",
+      "bytes": 8759
+    },
+    {
+      "path": "internal/types/concept_free_wiki_830_g3.go",
+      "sha256": "8db0e765b4e24cc6e2f0e825105bc0d93c3934da02de4f4ebc17b07ad3fe3050",
+      "bytes": 160738
+    },
+    {
+      "path": "internal/types/concept_free_wiki_830_g3_test.go",
+      "sha256": "72e2c16660821f22988b5ef3f9e23a2750a6f11c78248a350eca85848b8729ec",
+      "bytes": 25205
+    }
+  ],
+  "count": 30,
+  "backend_independent_final_review": "PENDING",
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "live_http": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

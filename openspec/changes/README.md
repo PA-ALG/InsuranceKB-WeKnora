@@ -124,6 +124,7 @@
 | 126 | 830-g1-entity-field-assertion-pages | ✅ G1 PASS / MERGED PR #126 | 1 overview + 7 section + 67 实体作用域 FieldAssertion + 1 空 free_wiki 的 76 页原子图已进入同一隔离 Release；以 [validation-report](126-830-g1-entity-field-assertion-pages/validation-report.md) 与 [G1 closeout](../../docs/insurance-kb/evidence/830-g1/g1-closeout.json) 为准；G2+、质量优化、Provider、生产 8081 仍锁定 |
 | 127 | 830-ba0-local-build-reuse | 🚧 BA0 SPEC / WIP | 一次性非产品工程门；冻结完整 identity、lookup-before-build、共享 Go cache、versioned 外部依赖事实与 standalone exact-image smoke；真实 app build 总预算 1，effects=0，G1 保持 PASS，G2 保持锁定 |
 | 128 | 830-g2-concept-free-wiki | 🚧 G2 SPEC / WIP | 用户明确授权G2；真实G1输入回放先保存缺口，新版本候选/独立审核/共享定义与free_wiki，复用唯一WeKnora Release；QUALITY=DEFERRED，G3与生产未授权 |
+| 129 | 830-g3-catalog-batch | 🚧 G3 SPEC / WIP | 当前用户明确授权；真实合同缺口已保存；11 pack/Profile Catalog 首切片，后续真实批次沿 G3 卡；QUALITY=DEFERRED_TO_Q0，生产/G4 未授权 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

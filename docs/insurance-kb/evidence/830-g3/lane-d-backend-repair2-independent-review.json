@@ -1,0 +1,111 @@
+{
+  "contract": "830-g3-d-backend-repair2-independent-review.v1",
+  "workspace": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
+  "status": "PASS",
+  "scope": "Final bounded repair2 review of the two changed handler paths; unchanged service, types, UI, fixtures, runtime, and other backend paths were not reopened",
+  "frozen_input": {
+    "path": "docs/insurance-kb/evidence/830-g3/lane-d-backend-repair2-final-freeze.json",
+    "sha256": "2b32e49f0562e18eb58515a053d1a5b932f9faf36a54b41c8bb70da22f349830",
+    "changed_files": {
+      "internal/handler/schema_wiki.go": "2489c272fc1338100a84f2bbc580a6faa0c2c8dbe065d3e69d1896e6d3e9b192",
+      "internal/handler/concept_free_wiki_830_g3_test.go": "2caec79556c3ccd3e0ae1f0dc18337dd93e8f7aa98ea0abd30c720900b4e90b6"
+    },
+    "identity_result": "All 11 frozen backend source/test paths independently hash-match the final-freeze inventory; the other nine paths match repair1."
+  },
+  "spec_compliance": {
+    "raw_unicode_boundary": {
+      "status": "CLOSED",
+      "result": "After exact request-variant selection and before typed decoding, only batch-concept-830-g3 validates the original preparation_id JSON token with types.CanonicalConceptMemberPayload830G2 and discards the returned canonical bytes. Malformed UTF-8 and lone high/low surrogates are rejected before G3 service dispatch; the original whole request is still used for decoding."
+    },
+    "valid_forms": {
+      "status": "PASS",
+      "result": "Literal and escaped U+FFFD, an emoji surrogate pair, literal backslash-u text, and NFC identifiers reach the G3 spy with the exact intended decoded identity."
+    },
+    "legacy_compatibility": {
+      "status": "PASS",
+      "result": "The same malformed UTF-8 and lone high/low surrogate forms retain the frozen G1/G2 replacement-and-dispatch behavior, proving the new admission check is scoped to the exact G3 variant."
+    },
+    "previous_repair_items": {
+      "B1_read_hash": "CLOSED by repair1 and unaffected by this handler-only diff",
+      "B2_decoded_text_and_effect_order": "CLOSED by repair1 and unchanged",
+      "B2_raw_json_unicode": "CLOSED by repair2"
+    }
+  },
+  "code_quality": {
+    "status": "PASS",
+    "findings": [],
+    "assessment": [
+      "The production delta is one exact G3 branch and reuses the existing strict raw canonicalizer rather than adding a scanner or replacement logic.",
+      "It does not normalize preparation_id, alter body TAB/LF/CR handling, or change G1/G2 decoding.",
+      "The tests cover the original physical-byte failures, both lone-surrogate directions, valid replacement-character forms, supplementary-plane Unicode, literal escape text, and malformed-wire legacy compatibility."
+    ]
+  },
+  "independent_verification": {
+    "freeze_identity": {
+      "log": "/private/tmp/g3-d-backend-repair2-independent-freeze-identity-green-01.log",
+      "sha256": "0350b9f931c23e938068e342048a0252c80d9bbeca42342af16c04044deafa8f",
+      "exit_code": 0
+    },
+    "wire_matrix_and_original_unicode_probe": {
+      "overlay": "/private/tmp/g3_d_backend_repair2_independent_overlay.json",
+      "overlay_sha256": "9ed9c2a20f90f7059845f41797797cdafaf765b5ee8afc66524b51b47f38cae5",
+      "log": "/private/tmp/g3-d-backend-repair2-independent-wire-green-01.log",
+      "sha256": "c4dada989fe1263fd70bfea841361ece8654229d26bdda1cb54993382e9ae081",
+      "exit_code": 0,
+      "result": "PASS 2.628s: 3 G3 malformed negatives, 6 G3 valid positives, 6 malformed G1/G2 compatibility cases, and the unchanged original Unicode table probe"
+    },
+    "unchanged_original_invalid_utf8_probe": {
+      "source": "/private/tmp/g3_d_backend_repair1_handler_invalid_utf8_probe_test.go",
+      "source_sha256": "16e87c663857d3bf375aed1129d9d34e1bd1c210d01e1b8ec831bf99050428c3",
+      "log": "/private/tmp/g3-d-backend-repair2-independent-original-invalid-utf8-green-01.log",
+      "sha256": "a7554fabc81e38c2fe447de03c661d607986ec3f5b1fc0659dc2275289e10ba1",
+      "exit_code": 0,
+      "result": "PASS 2.295s"
+    },
+    "unchanged_original_unicode_probe": {
+      "source": "/private/tmp/g3_d_backend_repair1_handler_unicode_decode_probe_test.go",
+      "source_sha256": "358467d7dde73b8322e923acdcba0136da0687b3bfffca560261a872a60dbc17",
+      "result": "PASS within wire-matrix log"
+    },
+    "owner_frozen_evidence": {
+      "behavior_red": {
+        "sha256": "9bd22b39ffe73ab7d04bed50b02dbe95d28c4c187275e3e54944aa4fcd3a5ccb",
+        "classification": "valid pre-repair behavior RED: all three malformed G3 wire forms returned 201"
+      },
+      "focused_green": {
+        "sha256": "8ea7c336fc09a85eb4cceba6614b329a2f8262b0b60da23b3993a21c5bc77ce0",
+        "result": "PASS 2.581s"
+      },
+      "handler_router_full": {
+        "sha256": "57250f4363c32e80dfbbccd8cb6beb39977b09480b7bc82d46bac7ccd13b821f",
+        "result": "PASS: handler 2.802s; router 2.768s"
+      },
+      "vet": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_code": 0
+      }
+    }
+  },
+  "blocker": [],
+  "backlog": [
+    "Production HTTP/ACL, real source verification, persistent database, human review, activation, provider/model calls, build, container, deployment, and actual business release remain NOT RUN. Software and fixture PASS do not claim runtime or business acceptance."
+  ],
+  "rejected": [
+    "No repair2 failure evidence was reclassified. Unchanged repair1 environment-only logs and scaffold failures remain excluded as documented in the repair1 independent report."
+  ],
+  "effects": {
+    "repository_write": false,
+    "http": false,
+    "database": false,
+    "provider_or_model": false,
+    "build": false,
+    "container": false,
+    "deploy": false,
+    "commit": false
+  },
+  "final_counts": {
+    "blocker": 0,
+    "backlog": 1,
+    "software_entry_gate": "PASS"
+  }
+}

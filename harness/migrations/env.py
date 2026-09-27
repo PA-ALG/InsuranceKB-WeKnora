@@ -10,6 +10,8 @@ from insurance_harness.db.base import Base
 from insurance_harness.flywheel import tables as flywheel_tables  # noqa: F401
 from insurance_harness.jobs import tables as jobs_tables  # noqa: F401  # P1 两表（change 035）
 from insurance_harness.knowledge import tables  # noqa: F401  # 注册知识域表（change 007）
+from insurance_harness.product_ingestion import artifact_tables  # noqa: F401
+from insurance_harness.product_ingestion import tables as product_ingestion_tables  # noqa: F401
 
 config = context.config
 target_metadata = Base.metadata
@@ -17,8 +19,10 @@ target_metadata = Base.metadata
 
 def _resolve_url() -> str:
     x_args = context.get_x_argument(as_dictionary=True)
-    url = x_args.get("db_url") or os.environ.get("HARNESS_DB_URL") or config.get_main_option(
-        "sqlalchemy.url"
+    url = (
+        x_args.get("db_url")
+        or os.environ.get("HARNESS_DB_URL")
+        or config.get_main_option("sqlalchemy.url")
     )
     if not url:
         raise RuntimeError("缺少数据库连接串：用 -x db_url=... 或环境变量 HARNESS_DB_URL")

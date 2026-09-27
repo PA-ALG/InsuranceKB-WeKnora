@@ -38,6 +38,7 @@ class ServiceKind(StrEnum):
 
     SOURCE_READER = "source_reader"
     WIKI_PROJECTOR = "wiki_projector"
+    PRODUCT_INGESTION = "product_ingestion"
 
 
 class ServiceCapability(StrEnum):
@@ -45,9 +46,17 @@ class ServiceCapability(StrEnum):
 
     READ_RAW_KNOWLEDGE = "read_raw_knowledge"
     PROJECT_MANAGED_PAGE = "project_managed_page"
+    MANAGE_PRODUCT_INGESTION = "manage_product_ingestion"
+    READ_PRODUCT_INGESTION = "read_product_ingestion"
 
 
 _CAPABILITIES_BY_SERVICE: Mapping[ServiceKind, frozenset[ServiceCapability]] = {
+    ServiceKind.PRODUCT_INGESTION: frozenset(
+        {
+            ServiceCapability.MANAGE_PRODUCT_INGESTION,
+            ServiceCapability.READ_PRODUCT_INGESTION,
+        }
+    ),
     ServiceKind.SOURCE_READER: frozenset({ServiceCapability.READ_RAW_KNOWLEDGE}),
     ServiceKind.WIKI_PROJECTOR: frozenset({ServiceCapability.PROJECT_MANAGED_PAGE}),
 }
@@ -160,11 +169,7 @@ def require_space_role(
     if not isinstance(principal, HumanPrincipal):
         raise AuthorizationError("human_principal_required")
     super_admin_roles = next(
-        (
-            roles
-            for roles in principal.bindings.values()
-            if HumanRole.SUPER_ADMIN in roles
-        ),
+        (roles for roles in principal.bindings.values() if HumanRole.SUPER_ADMIN in roles),
         None,
     )
     if super_admin_roles is not None:
@@ -196,7 +201,5 @@ def require_super_admin(principal: Principal) -> None:
     """Authorize the explicitly global observation surface."""
     if not isinstance(principal, HumanPrincipal):
         raise AuthorizationError("human_principal_required")
-    if not any(
-        HumanRole.SUPER_ADMIN in roles for roles in principal.bindings.values()
-    ):
+    if not any(HumanRole.SUPER_ADMIN in roles for roles in principal.bindings.values()):
         raise AuthorizationError("super_admin_required")

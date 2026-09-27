@@ -1,0 +1,12 @@
+{
+  "contract": "830-g3-preparation-read-hash-cross-language-reproduction.v1",
+  "input_sha256": "563649b5a751bc77e36b0f38f3c7cec2b7626a00b2b530a8809bdaa59f93c429",
+  "go_read_sha256": "0e933f199d51779bb0cf14fff977f7aaf014cc51282839573dc1d0947103ca33",
+  "frozen_unicode_canonical_sha256": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+  "u2028_u2029_escaped_sha256": "0e933f199d51779bb0cf14fff977f7aaf014cc51282839573dc1d0947103ca33",
+  "u2028_count": 28,
+  "u2029_count": 0,
+  "go_matches_escaped": true,
+  "correct_canonical_matches_go": false,
+  "result": "BLOCKER_REPRODUCED"
+}

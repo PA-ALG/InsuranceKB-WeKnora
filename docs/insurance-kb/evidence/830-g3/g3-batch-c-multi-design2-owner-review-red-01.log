@@ -1,0 +1,82 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_ test_validate_batch_rejects_multi_child_with_global_trust_blocker[SCOPE_MISMATCH] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+blocker = 'SCOPE_MISMATCH'
+
+    @pytest.mark.parametrize(
+        "blocker",
+        ["SCOPE_MISMATCH", "SOURCE_RECEIPT_MISMATCH", "MODEL_RECEIPT_INVALID"],
+    )
+    def test_validate_batch_rejects_multi_child_with_global_trust_blocker(
+        catalog: SchemaPackCatalogV1,
+        blocker: str,
+    ) -> None:
+        wire = _multi_wire_with_identity_sets(catalog)
+        child = wire["decisions"][0]["children"][0]
+        child["disposition"] = "NEEDS_CONFIRM"
+        child["entity_candidate"] = None
+        child["reason_codes"] = [blocker]
+        child["queue_id"] = "queue-g3"
+        child["queue_owner"] = "product-owner-g3"
+>       with pytest.raises(g.BatchEntityResolutionError) as error:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE BatchEntityResolutionError
+
+harness/tests/test_batch_entity_resolution_830_g3.py:2237: Failed
+_ test_validate_batch_rejects_multi_child_with_global_trust_blocker[SOURCE_RECEIPT_MISMATCH] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+blocker = 'SOURCE_RECEIPT_MISMATCH'
+
+    @pytest.mark.parametrize(
+        "blocker",
+        ["SCOPE_MISMATCH", "SOURCE_RECEIPT_MISMATCH", "MODEL_RECEIPT_INVALID"],
+    )
+    def test_validate_batch_rejects_multi_child_with_global_trust_blocker(
+        catalog: SchemaPackCatalogV1,
+        blocker: str,
+    ) -> None:
+        wire = _multi_wire_with_identity_sets(catalog)
+        child = wire["decisions"][0]["children"][0]
+        child["disposition"] = "NEEDS_CONFIRM"
+        child["entity_candidate"] = None
+        child["reason_codes"] = [blocker]
+        child["queue_id"] = "queue-g3"
+        child["queue_owner"] = "product-owner-g3"
+>       with pytest.raises(g.BatchEntityResolutionError) as error:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE BatchEntityResolutionError
+
+harness/tests/test_batch_entity_resolution_830_g3.py:2237: Failed
+_ test_validate_batch_rejects_multi_child_with_global_trust_blocker[MODEL_RECEIPT_INVALID] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+blocker = 'MODEL_RECEIPT_INVALID'
+
+    @pytest.mark.parametrize(
+        "blocker",
+        ["SCOPE_MISMATCH", "SOURCE_RECEIPT_MISMATCH", "MODEL_RECEIPT_INVALID"],
+    )
+    def test_validate_batch_rejects_multi_child_with_global_trust_blocker(
+        catalog: SchemaPackCatalogV1,
+        blocker: str,
+    ) -> None:
+        wire = _multi_wire_with_identity_sets(catalog)
+        child = wire["decisions"][0]["children"][0]
+        child["disposition"] = "NEEDS_CONFIRM"
+        child["entity_candidate"] = None
+        child["reason_codes"] = [blocker]
+        child["queue_id"] = "queue-g3"
+        child["queue_owner"] = "product-owner-g3"
+>       with pytest.raises(g.BatchEntityResolutionError) as error:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE BatchEntityResolutionError
+
+harness/tests/test_batch_entity_resolution_830_g3.py:2237: Failed
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_validate_batch_rejects_multi_child_with_global_trust_blocker[SCOPE_MISMATCH]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_validate_batch_rejects_multi_child_with_global_trust_blocker[SOURCE_RECEIPT_MISMATCH]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_validate_batch_rejects_multi_child_with_global_trust_blocker[MODEL_RECEIPT_INVALID]
+3 failed in 4.48s

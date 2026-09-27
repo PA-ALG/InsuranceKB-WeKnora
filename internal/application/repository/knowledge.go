@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -117,6 +118,169 @@ func (r *knowledgeRepository) AllocateParseAttempt(
 		return nil
 	})
 	return allocated, err
+}
+
+const g3BoundReparseMetadataKey = "product_ingestion_recoveries"
+
+func parseG3BoundReparseMetadata(knowledge *types.Knowledge) (map[string]json.RawMessage, map[string]types.G3BoundReparseReceipt, error) {
+	metadata := map[string]json.RawMessage{}
+	if len(knowledge.Metadata) > 0 {
+		if err := json.Unmarshal(knowledge.Metadata, &metadata); err != nil {
+			return nil, nil, err
+		}
+	}
+	receipts := map[string]types.G3BoundReparseReceipt{}
+	if raw := metadata[g3BoundReparseMetadataKey]; len(raw) > 0 {
+		if err := json.Unmarshal(raw, &receipts); err != nil {
+			return nil, nil, err
+		}
+	}
+	return metadata, receipts, nil
+}
+
+// The worker saves a whole Knowledge row after reading it. Preserve receipt
+// transitions made while it was processing, without discarding its unrelated
+// metadata edits.
+func mergeG3BoundRecoveryMetadata(incoming, current types.JSON) (types.JSON, error) {
+	var currentFields map[string]json.RawMessage
+	if err := json.Unmarshal(current, &currentFields); err != nil {
+		return nil, err
+	}
+	if len(currentFields[g3BoundReparseMetadataKey]) == 0 {
+		return incoming, nil
+	}
+	var incomingFields map[string]json.RawMessage
+	if err := json.Unmarshal(incoming, &incomingFields); err != nil {
+		return nil, err
+	}
+	incomingFields[g3BoundReparseMetadataKey] = currentFields[g3BoundReparseMetadataKey]
+	merged, err := json.Marshal(incomingFields)
+	return types.JSON(merged), err
+}
+
+// AllocateG3BoundReparse serializes source binding, failed-state and expected
+// generation checks with the new attempt and recovery receipt on one row.
+func (r *knowledgeRepository) AllocateG3BoundReparse(
+	ctx context.Context, tenantID uint64, kbID, knowledgeID, runID string, ordinal int,
+	expected int64, key string, deadline time.Time, embeddingModelID, fileSHA256 string,
+) (types.G3BoundReparseReceipt, *types.Knowledge, bool, error) {
+	var receipt types.G3BoundReparseReceipt
+	var selected *types.Knowledge
+	fresh := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var knowledge types.Knowledge
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND tenant_id = ? AND knowledge_base_id = ? AND deleted_at IS NULL", knowledgeID, tenantID, kbID).First(&knowledge).Error; err != nil {
+			return err
+		}
+		metadata, receipts, err := parseG3BoundReparseMetadata(&knowledge)
+		if err != nil {
+			return err
+		}
+		var marker string
+		if json.Unmarshal(metadata["product_ingestion_upload"], &marker) != nil || marker != fmt.Sprintf("%s:%d", runID, ordinal) ||
+			knowledge.Type != "file" || knowledge.FileSize <= 0 || knowledge.FileSHA256 != fileSHA256 {
+			return fmt.Errorf("g3 bound reparse source binding mismatch")
+		}
+		if prior, ok := receipts[key]; ok {
+			if prior.KnowledgeID != knowledgeID || prior.RunID != runID || prior.Ordinal != ordinal || prior.ExpectedParseAttempt != expected || !prior.DeadlineAt.Equal(deadline) {
+				return fmt.Errorf("g3 bound reparse key conflict")
+			}
+			receipt, selected = prior, &knowledge
+			return nil
+		}
+		if expected <= 0 || knowledge.CurrentParseAttempt != expected || knowledge.ParseStatus != types.ParseStatusFailed {
+			return fmt.Errorf("g3 bound reparse stale or not failed")
+		}
+		if deadline.IsZero() || !deadline.After(time.Now()) {
+			return fmt.Errorf("g3 bound reparse deadline expired")
+		}
+		receipt = types.G3BoundReparseReceipt{
+			Contract: types.G3BoundReparseContractV1, RunID: runID, Ordinal: ordinal, KnowledgeID: knowledgeID,
+			ExpectedParseAttempt: expected, ParseAttempt: expected + 1, RecoveryKey: key,
+			DeadlineAt: deadline, DispatchState: "allocated", ParseStatus: types.ParseStatusPending,
+		}
+		receipts[key] = receipt
+		metadata[g3BoundReparseMetadataKey], err = json.Marshal(receipts)
+		if err != nil {
+			return err
+		}
+		metadataBytes, err := json.Marshal(metadata)
+		if err != nil {
+			return err
+		}
+		updates := map[string]interface{}{
+			"metadata": types.JSON(metadataBytes), "current_parse_attempt": expected + 1,
+			"parse_status": types.ParseStatusPending, "enable_status": "disabled",
+			"description": "", "error_message": "", "processed_at": nil,
+			"embedding_model_id": embeddingModelID, "pending_subtasks_count": 0,
+			"updated_at": time.Now(),
+		}
+		result := tx.Model(&types.Knowledge{}).Where("id = ? AND current_parse_attempt = ?", knowledgeID, expected).Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("g3 bound reparse allocation lost generation")
+		}
+		knowledge.Metadata, knowledge.CurrentParseAttempt, knowledge.ParseStatus = types.JSON(metadataBytes), expected+1, types.ParseStatusPending
+		knowledge.ErrorMessage = ""
+		knowledge.EmbeddingModelID = embeddingModelID
+		selected, fresh = &knowledge, true
+		return nil
+	})
+	return receipt, selected, fresh, err
+}
+
+// AdvanceG3BoundReparse updates only the receipt metadata under the parse
+// generation fence; a late enqueue response cannot overwrite a newer parse.
+func (r *knowledgeRepository) AdvanceG3BoundReparse(
+	ctx context.Context, tenantID uint64, knowledgeID, key string, target int64,
+	from, to string, queueTaskID *string,
+) (types.G3BoundReparseReceipt, error) {
+	var receipt types.G3BoundReparseReceipt
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var knowledge types.Knowledge
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", knowledgeID, tenantID).First(&knowledge).Error; err != nil {
+			return err
+		}
+		metadata, receipts, err := parseG3BoundReparseMetadata(&knowledge)
+		if err != nil {
+			return err
+		}
+		current, ok := receipts[key]
+		if !ok || current.ParseAttempt != target || knowledge.CurrentParseAttempt != target || current.DispatchState != from {
+			return fmt.Errorf("g3 bound reparse stale receipt transition")
+		}
+		current.DispatchState = to
+		current.QueueTaskID = queueTaskID
+		current.ParseStatus = knowledge.ParseStatus
+		if to == "failed" && knowledge.ParseStatus != types.ParseStatusCompleted {
+			current.ParseStatus = types.ParseStatusFailed
+		}
+		receipts[key] = current
+		metadata[g3BoundReparseMetadataKey], err = json.Marshal(receipts)
+		if err != nil {
+			return err
+		}
+		bytes, err := json.Marshal(metadata)
+		if err != nil {
+			return err
+		}
+		updates := map[string]interface{}{"metadata": types.JSON(bytes), "updated_at": time.Now()}
+		if to == "failed" && knowledge.ParseStatus != types.ParseStatusCompleted {
+			updates["parse_status"] = types.ParseStatusFailed
+		}
+		result := tx.Model(&types.Knowledge{}).Where("id = ? AND current_parse_attempt = ?", knowledgeID, target).Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("g3 bound reparse transition lost generation")
+		}
+		receipt = current
+		return nil
+	})
+	return receipt, err
 }
 
 // CommitDirectRevision atomically inserts the immutable manifest row and
@@ -938,8 +1102,25 @@ func (r *knowledgeRepository) ListPagedKnowledgeByKnowledgeBaseID(
 
 // UpdateKnowledge updates knowledge
 func (r *knowledgeRepository) UpdateKnowledge(ctx context.Context, knowledge *types.Knowledge) error {
-	err := r.db.WithContext(ctx).Omit(omitFieldsOnUpdate...).Save(knowledge).Error
-	return err
+	if !strings.Contains(string(knowledge.Metadata), `"product_ingestion_upload"`) {
+		return r.db.WithContext(ctx).Omit(omitFieldsOnUpdate...).Save(knowledge).Error
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var stored types.Knowledge
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id", "metadata", "current_parse_attempt").
+			Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", knowledge.ID, knowledge.TenantID).First(&stored).Error; err != nil {
+			return err
+		}
+		if stored.CurrentParseAttempt != knowledge.CurrentParseAttempt {
+			return fmt.Errorf("g3 knowledge update lost parse generation")
+		}
+		merged, err := mergeG3BoundRecoveryMetadata(knowledge.Metadata, stored.Metadata)
+		if err != nil {
+			return err
+		}
+		knowledge.Metadata = merged
+		return tx.Omit(omitFieldsOnUpdate...).Save(knowledge).Error
+	})
 }
 
 // UpdateKnowledgeBatch updates knowledge items in batch
@@ -1394,6 +1575,25 @@ func (r *knowledgeRepository) FindByMetadataKey(
 		Where("tenant_id = ? AND knowledge_base_id = ? AND deleted_at IS NULL", tenantID, kbID).
 		Where("metadata->>? = ?", key, value).
 		First(&knowledge).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &knowledge, nil
+}
+
+// FindFileBySHA256 is the scoped source-reuse lookup for an already stored
+// original. It never mutates metadata from a previous product ingestion run.
+func (r *knowledgeRepository) FindFileBySHA256(
+	ctx context.Context, tenantID uint64, kbID string, sha256 string,
+) (*types.Knowledge, error) {
+	var knowledge types.Knowledge
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND knowledge_base_id = ? AND type = ? AND file_sha256 = ? AND deleted_at IS NULL AND parse_status <> ?",
+			tenantID, kbID, "file", sha256, "failed").
+		Order("created_at, id").First(&knowledge).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

@@ -1,0 +1,6 @@
+=== RUN   TestIndependentG3RejectsInvalidTypedHash
+    g3_d_go_independent_review_test.go:103: BLOCKER: non-hash native_capture_sha256 accepted
+--- FAIL: TestIndependentG3RejectsInvalidTypedHash (3.26s)
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/types	6.927s
+FAIL

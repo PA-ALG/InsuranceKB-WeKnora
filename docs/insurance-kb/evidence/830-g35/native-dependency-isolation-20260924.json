@@ -1,0 +1,63 @@
+{
+  "base": "87f73ea1b85b1c13beb886f27a9bf5f8b9859aa5",
+  "source_manifest": {
+    "harness/src/insurance_harness/product_ingestion/api.py": "1f5e5351ef25eed450546f6443b8e14ae48378e91e3b3c360f50694fd86708c9",
+    "harness/src/insurance_harness/product_ingestion/checkpoints.py": "fbb88ce4f6bdd8d3c22c56150e28a931b3a17f9fafc3fbc9eaea06d1cfdc809c",
+    "harness/src/insurance_harness/product_ingestion/configuration.py": "989249e01f20abcef874a083c9b51cc66abf2b84ece5cdaf2a7f0bf678179b5c",
+    "harness/src/insurance_harness/product_ingestion/discovery.py": "12b8e53373d093c0c1fad49515c0881d27270066a57919944533611e1d0b712c",
+    "harness/src/insurance_harness/product_ingestion/discovery_composition.py": "853e93e85fa6415e641e5028bb92385e406ebd5a9105f814a0c654584c071d6d",
+    "harness/src/insurance_harness/product_ingestion/discovery_replay_metrics.py": "8e65ac34d5751f7d48b648e01baedd17fde7563f095ad058163bc28036cb8aec",
+    "harness/src/insurance_harness/product_ingestion/discovery_stage.py": "2348207d867724f6c67bd16d1eda3d27e8bfb8d097e5e61a76b1dca8f46c3f31",
+    "harness/src/insurance_harness/product_ingestion/native_admission.py": "7f14292c4da4797a5eb8f796acfdf70633d98940c616b2796d384695a2d63fe0",
+    "harness/src/insurance_harness/product_ingestion/native_admission_stage.py": "429cb9ef6bdaada60155d0226be1f021e608382ec58713195f10043f1b70fff9",
+    "harness/src/insurance_harness/product_ingestion/native_dependency_selection.py": "7c77e59475a8fc9902ecd026fef8faaaec7bcab9e0c200cfdbb097d5b9bc3d7d",
+    "harness/src/insurance_harness/product_ingestion/native_pipeline.py": "5367f37731a813a3ad19fe50ca5d90e6e79ce673ba22740d718a953139c88d4e",
+    "harness/tests/product_ingestion/test_discovery_replay_metrics.py": "aaae592ccdc491d5ede6adf5bcbd790aa65eb05529fc2026f8065ab667252e02",
+    "harness/tests/product_ingestion/test_native_admission_stage.py": "a0391990980c00fab4134ce4fc95aea6c31661f8925698fccf23f5dc6c9baa98",
+    "harness/tests/product_ingestion/test_native_dependency_selection.py": "93abeaa8e13fbd86079a34d180ca1132e39fcf11ebf3dfb8cebdd85e354a4a16",
+    "openspec/changes/129-830-g3-catalog-batch/specs/catalog-batch/spec.md": "838333dc41f4f7cd80a663d65e788c1acbabe46f87819685cd7e04504eda4e27"
+  },
+  "source_manifest_sha256": "70d1afe0e6661faf93942846be2d57216ea34e6f275caab269d0f70f13e6cb9c",
+  "independent_review": {
+    "reviewer": "/root/r6_contract_review",
+    "model": "gpt-5.6-sol",
+    "reasoning": "high",
+    "blockers": 0,
+    "backlog": [
+      "Defense-in-depth semantic recomputation of internally generated immutable selection receipts"
+    ],
+    "documentation_red_exemption": true
+  },
+  "software": {
+    "tests": {
+      "core_regression": 70,
+      "extended_dependency_and_custody": 64,
+      "counts_overlap": true
+    },
+    "mypy_source_files": 11,
+    "mypy": "PASS",
+    "ruff": "PASS",
+    "diff_check": "PASS"
+  },
+  "delivery": {
+    "container_health": "NOT RUN for new code",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN for new code",
+    "github_live": "NOT RUN"
+  },
+  "new_model_calls": 0,
+  "new_builds": 0,
+  "deployments": 0,
+  "business_writes": 0,
+  "full_R6_complete": false,
+  "G35_complete": false,
+  "existing_runtime_read_only_preflight": {
+    "app_docreader_ui_running": true,
+    "harness_api_worker_status": "healthy",
+    "harness_image_prefix": "cfaa2155d630",
+    "queues_checked": false,
+    "active_checked": false,
+    "new_version_deployed": false
+  }
+}

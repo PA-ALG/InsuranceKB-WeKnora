@@ -1,0 +1,35 @@
+{
+  "status": "EXACT_LOCAL_DERIVATION_NOT_APPLIED",
+  "alignments": [
+    {
+      "contract": "unknown-field-key-alignment.830.g3.v1",
+      "source_release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "source_activation_epoch": 5,
+      "source_candidate_sha256": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+      "entity_id": "ping-an-e-sheng-bao",
+      "entity_version": "ping-an-e-sheng-bao@596-1",
+      "old_field_key": "social_insurance_requirement",
+      "new_field_key": "social_insurance_requirements",
+      "old_member_id": "assertion_96fe1043734c2274ff8fc64793e27eb53ebc8bdf1adab4b8bfcd9853ae45e4ff",
+      "old_member_digest": "40e0f9a8f6e364f70f3d8c69cbd6de6411cb4f93ed8e8abcfb82cd0fa7f6f193",
+      "new_member_id": "assertion_716ae1fd5570d160c7642d30b3d85404195b5b08dd685564ed6310fc441beefe",
+      "new_member_digest": "c67ac96655039ebb23ecd656dca2897f4d6820c9edf0ad16730e1e4fdefaee24",
+      "alignment_sha256": "de1a8ca7a18882403fb97312531fd770e4bf5fa822b08db3c61b93bb828b22ce"
+    },
+    {
+      "contract": "unknown-field-key-alignment.830.g3.v1",
+      "source_release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "source_activation_epoch": 5,
+      "source_candidate_sha256": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+      "entity_id": "ping-an-e-sheng-bao-hui-xiang",
+      "entity_version": "ping-an-e-sheng-bao-hui-xiang@594-1",
+      "old_field_key": "social_insurance_requirement",
+      "new_field_key": "social_insurance_requirements",
+      "old_member_id": "assertion_5c9769fe70766fd9f175bfb1576158d12f20a2c05c250eadf31f7c50500ccc12",
+      "old_member_digest": "41f8508da09e373ea9b089969fdd53f51319540c4769da0415d7bc71c888e5a4",
+      "new_member_id": "assertion_76de518a60869cd4859801364b5326e8e428f82efaa8a4eb6ff911e162713f72",
+      "new_member_digest": "6b4d36ac712f9c5eb3e9880612247b1cfac790771fc306fa79e3ff6871666c71",
+      "alignment_sha256": "fbba36cd2226893f51e6ac2333523a22d5854938a987676e1075186df834d069"
+    }
+  ]
+}

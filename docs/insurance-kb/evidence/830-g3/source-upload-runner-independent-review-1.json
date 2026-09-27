@@ -1,0 +1,55 @@
+{
+  "backlog": [
+    "authorization is replayable when caller selects fresh receipt/artifact paths"
+  ],
+  "blocker_count": 7,
+  "contract": "830-g3-source-upload-runner-independent-review.v1",
+  "effects": {
+    "database": 0,
+    "docker": 0,
+    "http": 0,
+    "provider": 0,
+    "repo_writes": 0,
+    "uploads": 0
+  },
+  "logs_sha256": {
+    "g3-source-upload-runner-independent-probes-01.log": "1628a79101c9dda0a662fdc21d19ed6694999172599cd8b05f0a2132ce80151d",
+    "g3-source-upload-runner-independent-probes-02.log": "59d254b2c9ffe0b5afd3c796655ae59e9aba51f9b8ea5fe8c8147d5d675bea40",
+    "g3-source-upload-runner-independent-probes-02.py": "62e4ac8dcbf0e23086b28f16ac45a890e81ab10843a6c346a0653344a95e9d33",
+    "g3-source-upload-runner-independent-static-01.log": "6ac95d1b614cde304e9fefb4bb9019458ebb0e077e2f80fa4737e515f0e8fc60",
+    "g3-source-upload-runner-independent-tests-01.log": "4a71870a01404d7e16da5a72b8a2dadf90a42ed0fb9402581ded2246133ca7f9"
+  },
+  "probe_modes": {
+    "direct_fake_calls": [
+      "authorization scope",
+      "missing guard manifest",
+      "duplicate returned knowledge id",
+      "runtime port/mount/redis drift",
+      "docker argv forwarding with subprocess mocked"
+    ],
+    "static_control_flow": [
+      "old source-id validation order",
+      "guard lifetime versus runner poll budget",
+      "old descriptor missing frozen digest gate"
+    ]
+  },
+  "rejected": [
+    "owner RED is real stub execution but not behavior-specific RED: 6 NotImplemented errors and 2 regex failures caused by NotImplemented",
+    "independent probes-01 import failure is retained and not used as evidence"
+  ],
+  "reviewed_inputs": {
+    "design_sha256": "9a94c31f7101988e6ec7603de51a0ca518d0315ca99711c445db46608db90399",
+    "guard_sha256": "c52cfabf9f32214923e71e2f5926cb66c259cec9e99431033c508907aa7361a4",
+    "manifest_sha256": "75b40ece28a4219965a6a86be616bb90f17af53252afad6c2243dedb9e377225",
+    "notes_sha256": "a7314fa1bed10a4bb5fe137bd6e0ff7c3e016517fcadd8f17dccc36a91d34e4d",
+    "provision_v3_sha256": "823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4",
+    "runner_sha256": "9873ea8bd0cab1148354242e20d65145cd96800a735944d262b614a7d5977ce3",
+    "tests_sha256": "d5387f7874ac2df0b6a5d6c72886f3c3e1044865c3f57ecd7dcac0cc1fc4283a"
+  },
+  "status": "BLOCKED",
+  "verification": {
+    "ast": "PASS",
+    "focused_reproductions": "8/8 PASS",
+    "frozen_fake_tests": "21/21 PASS"
+  }
+}

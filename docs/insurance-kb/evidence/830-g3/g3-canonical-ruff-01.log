@@ -1,0 +1,47 @@
+I001 [*] Import block is un-sorted or un-formatted
+  --> harness/tests/test_batch_entity_resolution_830_g3.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import hashlib
+ 4 | | import json
+ 5 | | from copy import deepcopy
+ 6 | | from datetime import UTC, datetime, timedelta
+ 7 | | from itertools import count
+ 8 | | from pathlib import Path
+ 9 | | from typing import Any
+10 | |
+11 | | import pytest
+12 | | from pydantic import BaseModel
+13 | |
+14 | | from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as g
+15 | | from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
+16 | |     Evidence,
+17 | |     SourceBlock,
+18 | |     evidence_for,
+19 | | )
+20 | | from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import (
+21 | |     SchemaPackCatalogV1,
+22 | |     compile_catalog,
+23 | | )
+24 | | from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_596_1 import (
+25 | |     LiveRevisionSourceReceiptV1,
+26 | |     knowledge_revision_source_id,
+27 | |     live_revision_source_receipt_sha256,
+28 | | )
+29 | | from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_sha256_830_g3
+30 | | from insurance_harness.knowledge_compiler.schema_wiki_contracts import schema_wiki_sha256
+31 | | from insurance_harness.model_policy.models import (
+32 | |     ModelIdentity,
+33 | |     ModelPermitView,
+34 | |     PolicyReceipt,
+35 | |     _model_permit_view_digest,
+36 | | )
+   | |_^
+37 |
+38 |   _REPO = Path(__file__).parents[2]
+   |
+help: Organize imports
+
+Found 1 error.
+[*] 1 fixable with the `--fix` option.

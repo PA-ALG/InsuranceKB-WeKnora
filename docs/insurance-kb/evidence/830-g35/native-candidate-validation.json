@@ -1,0 +1,83 @@
+{
+  "contract": "g35-native-candidate-software-validation.830.v1",
+  "base_commit": "1fdc045c41f577a42e0dcc7450557d8d9ffed3a5",
+  "reviewed_tree": "669e8cce3b3d7497e2eea21efb210cf6898b6fa5",
+  "requirements": [
+    "G35-R1",
+    "G35-R3",
+    "G35-R5"
+  ],
+  "scope": "Native pure producer, signed REST plans/window snapshots, Python verifier and client. Runtime and final page provenance are NOT RUN.",
+  "red": [
+    {
+      "check": "native scope route missing",
+      "failed": 1
+    },
+    {
+      "check": "prompt budget/request binding missing",
+      "failed": 2
+    },
+    {
+      "check": "real signer rejects native domain",
+      "failed": 1
+    },
+    {
+      "check": "Python verifier rejects native kind",
+      "failed": 1
+    }
+  ],
+  "validation": {
+    "go": "PASS: TestNativeDiscovery*, TestG3PlatformSnapshotSigner*, scope route; service/handler/router",
+    "python": "30 passed in 0.68s: native_discovery, platform, platform_client",
+    "mypy": "PASS, 3 source files",
+    "ruff": "PASS",
+    "diff_check": "PASS"
+  },
+  "review": {
+    "reviewer": "native_boundary_review",
+    "blockers": 0,
+    "identity": "669e8cce3b3d7497e2eea21efb210cf6898b6fa5",
+    "mechanical_docs_exemption": "Confirmed for state synchronization; new Requirements are user-authorized, not hidden as mechanical changes."
+  },
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "remaining": [
+    "StageCall dispatch/recovery and full-window aggregation",
+    "explicit native direct-write mutual exclusion",
+    "semantic admission/update producer",
+    "segment provenance and clickable evidence display",
+    "real material acceptance"
+  ],
+  "frozen_files": {
+    "HANDOFF.md": "03df4a63dbb469aed9688775d9205d2425b0255d670c12d7350f0696157a0955",
+    "docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md": "f3de8762e15936afac510092a09482e65d5011af2dc416b3469e8c1e56d2e212",
+    "harness/src/insurance_harness/product_ingestion/native_discovery.py": "9a86b5b3f4172e4b3531d93a0be91c0914456132cec26c07c8b8eb08cfee2fe7",
+    "harness/src/insurance_harness/product_ingestion/platform.py": "cf91ba59a524af23ccaa195d4e150e22dd25a90f18955c7ce7920bbf49c1ce57",
+    "harness/src/insurance_harness/product_ingestion/platform_client.py": "849a92b8b6d39a83f48119eb6bbf72da5c00bdb6870e1bc1f69321f5d7b4d160",
+    "harness/tests/product_ingestion/test_native_discovery.py": "70204cc8604d6e2b9bbeb8e00d0053ae640e4a4ffc491b88b49c917590c10311",
+    "harness/tests/product_ingestion/test_platform_client.py": "c81b6decac26a7ae4b362aaa0c1dbf915319811f57d3fa77ed57192fa3eec32d",
+    "internal/application/service/g3_native_discovery.go": "06b2f19e4512e525df735ae7d8be05502c27fc85f232573ac12bc6cbe9128196",
+    "internal/application/service/g3_native_discovery_test.go": "4dc7c4551329f435e4f81410023ed5a97e693a5acde5a8400fcf90ab2e5350de",
+    "internal/application/service/g3_platform_snapshot_signer.go": "4331cc5c8a87df4291602872ddcbcac0bc07d277fa3eaec4379e57df2be597e6",
+    "internal/application/service/g3_platform_snapshot_signer_test.go": "c9bedcd661179e481aec85234a185d7c9e59ad874c1b7721025a59bd92399d70",
+    "internal/application/service/testdata/g3_native_discovery_v1.json": "c5bcd2cd29dcb67b92e41d5f39687de0cf13458fa1e227b80709164dbb84a4a9",
+    "internal/handler/g3_platform_composition.go": "6e8ecf9c4b8158fc8111025e3c0098a8b192550b716c2611956b554491490913",
+    "internal/handler/g3_platform_native_discovery.go": "264420d117c4c46175c44c5d84455d9e3c214d8fab31d1c8d2580a2af3e96b41",
+    "internal/handler/g3_platform_native_discovery_test.go": "733aee3c34f268b8e93cf603a70ad2dd4c1526ca82661d7e0244a81ed1b77438",
+    "internal/handler/g3_platform_snapshots.go": "3d960345c280755f9f61603ff386e0fe7960b90be170fdaaa825f1008108f580",
+    "internal/router/routes_g3_platform_snapshots.go": "683270c6a31f9d817dabeb1520e71304edbabe9655c1c60f6d50ac81ea603c78",
+    "internal/router/routes_g3_platform_snapshots_test.go": "0010d19f4d315b64d195ac73c32aed3e43a9b6f3d9c78b9a44b0cbbb89c589d0",
+    "openspec/changes/129-830-g3-catalog-batch/specs/catalog-batch/spec.md": "09bac0f2f09f2f7e3c1404a2423879326d0426470ac6e07b8127cc61fe1650c0"
+  }
+}

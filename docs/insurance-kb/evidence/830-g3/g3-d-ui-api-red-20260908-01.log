@@ -1,0 +1,30 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept client contract > exposes a strict preparation parser 39ms
+   → expected 'undefined' to be 'function' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept client contract > exposes a strict preparation parser
+AssertionError: expected 'undefined' to be 'function' // Object.is equality
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:6:63
+      4|   it('exposes a strict preparation parser', async () => {
+      5|     const subject = await import('./batchConcept830G3').catch(() => nu…
+      6|     expect(typeof subject?.parseBatchConceptPreparation830G3).toBe('fu…
+       |                                                               ^
+      7|   })
+      8| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  00:12:22
+   Duration  599ms (transform 70ms, setup 0ms, import 88ms, tests 42ms, environment 1ms)
+

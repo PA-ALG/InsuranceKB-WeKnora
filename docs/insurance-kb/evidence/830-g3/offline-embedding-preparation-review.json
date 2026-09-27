@@ -1,0 +1,15 @@
+{
+  "contract": "830-g3-offline-embedding-preparation-review.v1",
+  "reviewer": "g3_catalog_ui",
+  "status": "PASS",
+  "blockers": 0,
+  "script_sha256": "1adfdee987702d31a52dc592902773afc8049ddb50ad70159971c8ce989f3fe0",
+  "plan_sha256": "553abd2ae85c39c62d6792265edee08a3d78f9eed663e067d6ffacf3b1e171b3",
+  "hash_scope": "MODEL_INPUT_PROJECTION_NOT_HTTP_REQUEST",
+  "expected_request_count_precondition": "future BATCH_EMBED_SIZE=100 and no retries; not an executed request count",
+  "backlog": [
+    "Stronger outer inventory/corpus file hashes",
+    "Atomic output directory publication"
+  ],
+  "approval_scope": "local offline preparation only; provider and upload NOT RUN"
+}

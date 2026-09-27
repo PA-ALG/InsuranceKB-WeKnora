@@ -1,0 +1,72 @@
+{
+  "contract": "830-g3-existing-native-preservation.v1",
+  "recorded_at": "2026-09-07T10:01:37.510261+00:00",
+  "status": "THREE_ACTUAL_CAPTURES_PRESERVED_02_MISSING",
+  "documents": [
+    {
+      "material_id": "g3-material-01",
+      "source_path": "/private/tmp/weknora-g2-594/native-a-grpc.private.json",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/existing-native-captures/g3-material-01-native-original.json.gz",
+      "raw_capture_sha256": "2652c8e5745819d5501921a8b8c510de6e515fed930a6e764f67e6478707a09a",
+      "gzip_sha256": "7aad1eb2e807f1a71fa16ada5384e31d3ec5964b94c776930a8f364d594a74f6",
+      "raw_bytes": 4379182,
+      "gzip_bytes": 794917,
+      "canonical_native_sha256": "8f735c46740c4988a6d742a0c15f4baacc7c42ed8668e81aef922a0aff5a1bf6",
+      "markdown_sha256": "f37287894e8d8c023094ec185263e53cf000fa9a9fc8a88183ad65a44cadff39",
+      "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "pages": 39,
+      "historical_receipt": "docs/insurance-kb/evidence/830-g2/a-native-service-quote-validation.json",
+      "historical_receipt_sha256": "a8c3b9b81b9bb81f0384018e80723ac962622c355ee306b4b9e9a2a69fffe0ef",
+      "historical_raw_capture_digest_bound": true,
+      "provenance_note": "01/03 exact raw digest already bound in historical receipt; 04 canonical/source/parser digest matched historical receipt, raw bytes first preserved now; no historical raw binding inferred"
+    },
+    {
+      "material_id": "g3-material-03",
+      "source_path": "/private/tmp/weknora-g2-594/b-terms-native.private.json",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/existing-native-captures/g3-material-03-native-original.json.gz",
+      "raw_capture_sha256": "a3735e0d92a4e39f73829dd278660ef67ad7c9d67678857eabfb17b75c57b5be",
+      "gzip_sha256": "ffb9be17f53e49494a52d41c6d7f52d6bb145f6fce8b90c299e362e873c9be68",
+      "raw_bytes": 4790574,
+      "gzip_bytes": 858705,
+      "canonical_native_sha256": "5a6488fa79f8e7da65496a7617ecca8806bd41c446eb3b91ecf082ad1163ff05",
+      "markdown_sha256": "f465e5d2256377107bfbf89300e6667a0b28dc8ed6d1512649bfb5ba63c29dda",
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "pages": 44,
+      "historical_receipt": "docs/insurance-kb/evidence/830-g2/b-second-snapshot-preflight-v2.json",
+      "historical_receipt_sha256": "7cc26d92034950f7e5dad257ca8845f8485bd6acaee35747dfdd9f31d889e4e5",
+      "historical_raw_capture_digest_bound": true,
+      "provenance_note": "01/03 exact raw digest already bound in historical receipt; 04 canonical/source/parser digest matched historical receipt, raw bytes first preserved now; no historical raw binding inferred"
+    },
+    {
+      "material_id": "g3-material-04",
+      "source_path": "/private/tmp/weknora-g2-594/b-brochure-native.private.json",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/existing-native-captures/g3-material-04-native-original.json.gz",
+      "raw_capture_sha256": "9c1380858c9dae9ead94ec681660f0cdd477b4ceccc573e91bb8feaaef5b972a",
+      "gzip_sha256": "d04a3a33789788bc522ce8aae0b0312ecf90218176a33616e2cbb70fe646c841",
+      "raw_bytes": 1349200,
+      "gzip_bytes": 248895,
+      "canonical_native_sha256": "64dc878eb0764686b34b9321ee4b08ff3c407a74d731ceebb05fe15aa8d784a4",
+      "markdown_sha256": "2f840e5c6434ab5433e7962b780719ef31f89f570348acb3f71792070c8f163a",
+      "source_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "pages": 17,
+      "historical_receipt": "docs/insurance-kb/evidence/830-g2/b-native-preflight.json",
+      "historical_receipt_sha256": "e0089a90566472d957c0810a46958ae3e85dddd7acda99385511f1f40df3f0b1",
+      "historical_raw_capture_digest_bound": false,
+      "provenance_note": "01/03 exact raw digest already bound in historical receipt; 04 canonical/source/parser digest matched historical receipt, raw bytes first preserved now; no historical raw binding inferred"
+    }
+  ],
+  "missing": [
+    "g3-material-02"
+  ],
+  "effects": {
+    "parser_calls": 0,
+    "source_seals": 0,
+    "uploads": 0,
+    "provider": 0,
+    "db": 0
+  },
+  "scope": "Original existing bytes preserved losslessly; independent of current W1 source authority and not actual C inputs freeze. Target service readback remains required."
+}

@@ -1,0 +1,197 @@
+{
+  "contract": "830-g3-d-backend-freeze-custody.v1",
+  "status": "OWNER_GREEN_PENDING_INDEPENDENT_REVIEW",
+  "freeze": "lane-d-backend-freeze-1.json",
+  "freeze_sha256": "5ce69ab74960e7467e2e9af3b40bf365d5fde99c27c623dea138ec3e25ed30f3",
+  "snapshot_manifest_sha256": "5c3522e06566096a263159e228d85f6014f0717891648d5422a09f5c4356482e",
+  "source_files_verified": 11,
+  "logs": [
+    {
+      "original": "/private/tmp/g3-d-backend-final-full-packages-green-20260908-21.log",
+      "archive": "g3-d-backend-final-full-packages-green-20260908-21.log",
+      "sha256": "cb58cf12dfc013d4af344cae45103159cba8f405e73115135848e578e3151710",
+      "bytes": 181
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-final-go-vet-20260908-22.log",
+      "archive": "g3-d-backend-final-go-vet-20260908-22.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-final-handler-router-green-20260908-18.log",
+      "archive": "g3-d-backend-final-handler-router-green-20260908-18.log",
+      "sha256": "267affe2659f477be243de526900e3f87de298552b19a147b8f1165112e875e9",
+      "bytes": 828
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-final-handler-router-green-20260908-19.log",
+      "archive": "g3-d-backend-final-handler-router-green-20260908-19.log",
+      "sha256": "7f9103be0d6a5a253b5ec51edd8e76ac21707d3880c5cd262da5b2fb5ad85ad0",
+      "bytes": 111
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-final-service-correction-green-20260908-15.log",
+      "archive": "g3-d-backend-final-service-correction-green-20260908-15.log",
+      "sha256": "faae11348eeb6aeedc7d73a649737d15d4cd8391c21c4fcf544be8ec1744d2b9",
+      "bytes": 69
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-final-service-green-20260908-14.log",
+      "archive": "g3-d-backend-final-service-green-20260908-14.log",
+      "sha256": "f26ae08aab036813e2a2ddce91134a5c752a3bd4849504324e040de283b8289f",
+      "bytes": 73915
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-final-service-green-20260908-17.log",
+      "archive": "g3-d-backend-final-service-green-20260908-17.log",
+      "sha256": "234b0032fc94b14deaf4dd8c00f0bad1bc1da9d7c8f977eaabbe4c3c058a2531",
+      "bytes": 70
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-final-service-retry-green-20260908-16.log",
+      "archive": "g3-d-backend-final-service-retry-green-20260908-16.log",
+      "sha256": "d68d6dcb1a5589b48caed18060d3069914e4ceff89fa832dbb2d947a6412e5a5",
+      "bytes": 69
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task1-component-green-20260908-04.log",
+      "archive": "g3-d-backend-task1-component-green-20260908-04.log",
+      "sha256": "d93fb73ef80ebd4b8d763c0ed34db6cc2632f216665312ae97026732a6ebcd64",
+      "bytes": 69
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task1-green-20260908-05.log",
+      "archive": "g3-d-backend-task1-green-20260908-05.log",
+      "sha256": "4bc212b06bd66713ca00df4303c77cf9f7c1c763758630b351c8a9f4497acbc6",
+      "bytes": 219752
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task1-red-20260908-01.log",
+      "archive": "g3-d-backend-task1-red-20260908-01.log",
+      "sha256": "f3ff42def6b6706c92c2e2895fb1ec1db8341aae0a6280348961a056500c0db7",
+      "bytes": 228
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task1-red-20260908-02.log",
+      "archive": "g3-d-backend-task1-red-20260908-02.log",
+      "sha256": "f3ff42def6b6706c92c2e2895fb1ec1db8341aae0a6280348961a056500c0db7",
+      "bytes": 228
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task1-red-20260908-03.log",
+      "archive": "g3-d-backend-task1-red-20260908-03.log",
+      "sha256": "23ceb704e0f8bd60697db6c754d9b91297f61df8c6a8abc6f56cbf5a10f18527",
+      "bytes": 1026
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task1-targeted-green-20260908-06.log",
+      "archive": "g3-d-backend-task1-targeted-green-20260908-06.log",
+      "sha256": "060d89579ab4d71278b107f0309404b3cfdc0fba7ce23df3452af01800264deb",
+      "bytes": 69
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task2-component-green-20260908-03.log",
+      "archive": "g3-d-backend-task2-component-green-20260908-03.log",
+      "sha256": "ea9890b2f81adfd195cb452de0729b3d6ed95fcb2f61aa4cb532395cda29e376",
+      "bytes": 69
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task2-receipt-green-20260908-02.log",
+      "archive": "g3-d-backend-task2-receipt-green-20260908-02.log",
+      "sha256": "fe2a6b1534e1acb748f6eb8b62227a28fe0d1985c66a1ff71d745339b571096f",
+      "bytes": 68
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task2-red-20260908-01.log",
+      "archive": "g3-d-backend-task2-red-20260908-01.log",
+      "sha256": "cb42990b3f03d657358e79f40e69762538f8b6b30a3721b6f9aed0cba5d59cb5",
+      "bytes": 6825
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-active-cas-green-20260908-07.log",
+      "archive": "g3-d-backend-task3-active-cas-green-20260908-07.log",
+      "sha256": "86d48c813269fb557e3689cbe26bded95ea3f60a45162ef7f8ea74ccdf97b698",
+      "bytes": 3411
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-active-green-20260908-05.log",
+      "archive": "g3-d-backend-task3-active-green-20260908-05.log",
+      "sha256": "68cd1c357ad3276901d172bb90f3c8a7a5e334daee3ef7fc1f1a28d637925be1",
+      "bytes": 138553
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-active-green-20260908-06.log",
+      "archive": "g3-d-backend-task3-active-green-20260908-06.log",
+      "sha256": "19f43e1294ca88511cdbf7728494d93a2c30ba252d413a988441aebfac4ebd96",
+      "bytes": 1526
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-active-red-20260908-04.log",
+      "archive": "g3-d-backend-task3-active-red-20260908-04.log",
+      "sha256": "427f6eab116b43d36e043da5a1fa16903e662b7a0fbbfca2c6bbe938be92edca",
+      "bytes": 1933
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-component-green-20260908-03.log",
+      "archive": "g3-d-backend-task3-component-green-20260908-03.log",
+      "sha256": "541b7b228d7499f4c4d1ef1401bd4220050452f4935690ac8272a604d3e44812",
+      "bytes": 2402
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-query-green-20260908-09.log",
+      "archive": "g3-d-backend-task3-query-green-20260908-09.log",
+      "sha256": "bb51c884ea1bb1de51d94ac7cd8113c6b30f4cdb1684c00098de3f7ecb6f3c9a",
+      "bytes": 2120
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-query-green-20260908-10.log",
+      "archive": "g3-d-backend-task3-query-green-20260908-10.log",
+      "sha256": "9d63d5e947fe5763b2f31236a0c03599d03559fa7741ac862928135844d433c0",
+      "bytes": 56
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-query-handler-green-20260908-12.log",
+      "archive": "g3-d-backend-task3-query-handler-green-20260908-12.log",
+      "sha256": "7d08bcc80ccb0bbe7a993656c54403a702c3701a6565edcbd3bd49ba961b7ca9",
+      "bytes": 641
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-query-handler-green-20260908-13.log",
+      "archive": "g3-d-backend-task3-query-handler-green-20260908-13.log",
+      "sha256": "fb3531811ffa0a105cf9d6bf1458f20eb1b79915d9f0bc954f86d5c937802273",
+      "bytes": 56
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-query-red-20260908-08.log",
+      "archive": "g3-d-backend-task3-query-red-20260908-08.log",
+      "sha256": "35e00c3aad6d4823b4a16d72d89b7cc83ed478faa71ae43f9c73ab63d9b3f786",
+      "bytes": 5695
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-query-service-final-green-20260908-20.log",
+      "archive": "g3-d-backend-task3-query-service-final-green-20260908-20.log",
+      "sha256": "12d252d4986a870ffd7f1a9fefbef13f45a4e5d6fd6f7ad2504cc372def40d6e",
+      "bytes": 69
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-query-service-green-20260908-11.log",
+      "archive": "g3-d-backend-task3-query-service-green-20260908-11.log",
+      "sha256": "76e1fbad6c5fc6b75fc5a60484620df33f22041b3a61dfbf1975e570ac870abc",
+      "bytes": 69
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-red-20260908-01.log",
+      "archive": "g3-d-backend-task3-red-20260908-01.log",
+      "sha256": "6c047d5fe986be7e31e7ab4521df8a76b4af740fec2e749ec03481f8233cef24",
+      "bytes": 356
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-task3-red-20260908-02.log",
+      "archive": "g3-d-backend-task3-red-20260908-02.log",
+      "sha256": "40816325ef0d7abdbad00b7b80fa426de401ba5d22d37d53b003d0d4a4b148a8",
+      "bytes": 1926
+    }
+  ],
+  "warning": "Original filenames and owner classifications are preserved, not independently accepted verdicts. No actual runtime effects."
+}

@@ -1,0 +1,57 @@
+=== RUN   TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate
+=== RUN   TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/current
+    concept_free_wiki_830_g3_test.go:259: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:259
+        	Error:      	Not equal: 
+        	            	expected: 1
+        	            	actual  : 0
+        	Test:       	TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/current
+=== RUN   TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/pinned
+    concept_free_wiki_830_g3_test.go:259: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:259
+        	Error:      	Not equal: 
+        	            	expected: 1
+        	            	actual  : 0
+        	Test:       	TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/pinned
+=== RUN   TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/explicit_empty
+    concept_free_wiki_830_g3_test.go:258: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:258
+        	Error:      	Not equal: 
+        	            	expected: 503
+        	            	actual  : 200
+        	Test:       	TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/explicit_empty
+        	Messages:   	{"data":{"contract":"concept-page-read.830.g2.v1","read_mode":"","release_id":"","activation_epoch":0,"candidate_hash":"","space_id":"","raw_kb_id":"","wiki_kb_id":"","member":{"kind":"","member_id":"","owner_id":"","title":"","content":"","payload":null},"related_members":null,"citations":null,"definition_hash":"","aggregate_hash":""},"success":true}
+=== RUN   TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/repeated
+    concept_free_wiki_830_g3_test.go:258: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:258
+        	Error:      	Not equal: 
+        	            	expected: 503
+        	            	actual  : 200
+        	Test:       	TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/repeated
+        	Messages:   	{"data":{"contract":"concept-page-read.830.g2.v1","read_mode":"","release_id":"","activation_epoch":0,"candidate_hash":"","space_id":"","raw_kb_id":"","wiki_kb_id":"","member":{"kind":"","member_id":"","owner_id":"","title":"","content":"","payload":null},"related_members":null,"citations":null,"definition_hash":"","aggregate_hash":""},"success":true}
+=== RUN   TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/mixed_preparation
+    concept_free_wiki_830_g3_test.go:258: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:258
+        	Error:      	Not equal: 
+        	            	expected: 503
+        	            	actual  : 200
+        	Test:       	TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/mixed_preparation
+        	Messages:   	{"data":{"contract":"concept-page-read.830.g2.v1","read_mode":"","release_id":"","activation_epoch":0,"candidate_hash":"","space_id":"","raw_kb_id":"","wiki_kb_id":"","member":{"kind":"","member_id":"","owner_id":"","title":"","content":"","payload":null},"related_members":null,"citations":null,"definition_hash":"","aggregate_hash":""},"success":true}
+--- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate (0.00s)
+    --- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/current (0.00s)
+    --- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/pinned (0.00s)
+    --- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/explicit_empty (0.00s)
+    --- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/repeated (0.00s)
+    --- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/mixed_preparation (0.00s)
+=== RUN   TestBatchConceptCitationQuery830G3RejectsBeforeLegacyIssuer
+    concept_free_wiki_830_g3_test.go:284: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:284
+        	Error:      	Not equal: 
+        	            	expected: 503
+        	            	actual  : 200
+        	Test:       	TestBatchConceptCitationQuery830G3RejectsBeforeLegacyIssuer
+        	Messages:   	{"data":{"contract":"concept-citation-content-authority.830.g2.v1","token_key_id":"","release_id":"","activation_epoch":0,"candidate_hash":"","member_id":"","citation_id":"","scope":{"tenant_id":0,"space_id":"","raw_kb_id":"","wiki_kb_id":""},"source":{"tenant_id":0,"space_id":"","raw_kb_id":"","knowledge_id":"","parse_attempt":0,"revision_id":"","source_hash":"","parse_hash":"","parser_identity":""},"revision_source":{"binding_digest":"","file_sha256":"","page_count":0},"block_id":"","page_number":0,"quote_hash":"","bbox":{"coordinate_space":"","x0":0,"y0":0,"x1":0,"y1":0},"expires_at_unix":0,"authority_digest":"","opaque_token":""},"success":true}
+--- FAIL: TestBatchConceptCitationQuery830G3RejectsBeforeLegacyIssuer (0.00s)
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/handler	2.784s
+FAIL

@@ -216,6 +216,10 @@ func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
 	}
 
 	// Save the file to storage (use KB-level storage engine if configured)
+	if err := secutils.CheckDocumentStorageCapacity(file.Size); err != nil {
+		logger.Warnf(ctx, "File admission paused by storage capacity: %v", err)
+		return nil, werrors.NewServiceUnavailableError("存储空间不足或无法检查，请释放空间后重新上传")
+	}
 	logger.Infof(ctx, "Saving file, knowledge ID: %s", knowledge.ID)
 	fileSvc := s.resolveFileService(ctx, kb)
 	filePath, err := fileSvc.SaveFile(ctx, file, knowledge.TenantID, knowledge.ID)

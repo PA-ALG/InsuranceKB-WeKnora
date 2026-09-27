@@ -1,0 +1,51 @@
+{
+  "contract": "830-g3-d-go-mirror-freeze.v1",
+  "status": "OWNER_GREEN_PENDING_INDEPENDENT_REVIEW",
+  "files": [
+    {
+      "path": "internal/types/concept_free_wiki_830_g3.go",
+      "sha256": "d2d5f2efcb899ed0d18791cabdd435af6e72c0a4a32abd86de325a418b151a25",
+      "bytes": 159192
+    },
+    {
+      "path": "internal/types/concept_free_wiki_830_g3_test.go",
+      "sha256": "b669dbebae2a75c57e9fa4c7093600d3c91c0a581a6a6e4ad1e66f6b051a5833",
+      "bytes": 18828
+    }
+  ],
+  "owner_logs": [
+    {
+      "path": "g3-d-go-final-focused-green-20260907-13.log",
+      "sha256": "20e93d47f909ceed7445bf87271350427d0afb72ef8c756c188b020c071154cf",
+      "bytes": 55
+    },
+    {
+      "path": "g3-d-go-final-package-green-20260907-14.log",
+      "sha256": "e70ff5ca9781b5a0b655931ada563f69ad70d8fb12e2b4eb40545320cbc15029",
+      "bytes": 55
+    },
+    {
+      "path": "g3-d-go-final-gofmt-check-20260907-15.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "g3-d-go-independent-c-vectors-green-20260907-12.log",
+      "sha256": "601848a3c2c411494491ed1c285b0d94a6073f92ee9177fbaa00cc8d7331bc93",
+      "bytes": 54
+    }
+  ],
+  "python_freeze_ref": {
+    "path": "lane-d-source-coverage2-freeze.json",
+    "sha256": "811eb4d070f5f33743d2da6cd507abbacefa9debe7bab8ec910d274252c940c7"
+  },
+  "source_test_write_domain": "CLOSED_DURING_REVIEW",
+  "downstream_write_gate": "CLOSED",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

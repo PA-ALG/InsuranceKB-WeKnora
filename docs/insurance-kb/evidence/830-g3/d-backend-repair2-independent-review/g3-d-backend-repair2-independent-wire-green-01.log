@@ -1,0 +1,46 @@
+=== RUN   TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch
+=== RUN   TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/invalid_UTF-8
+=== RUN   TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/lone_high_surrogate
+=== RUN   TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/lone_low_surrogate
+--- PASS: TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/invalid_UTF-8 (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/lone_high_surrogate (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/lone_low_surrogate (0.00s)
+=== RUN   TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms
+=== RUN   TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/literal_U+FFFD
+=== RUN   TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/escaped_U+FFFD
+=== RUN   TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/emoji_surrogate_pair
+=== RUN   TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/literal_backslash_surrogate_text
+=== RUN   TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/literal_backslash_line_separator_text
+=== RUN   TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/NFC
+--- PASS: TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/literal_U+FFFD (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/escaped_U+FFFD (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/emoji_surrogate_pair (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/literal_backslash_surrogate_text (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/literal_backslash_line_separator_text (0.00s)
+    --- PASS: TestCreateBatchConceptDraft830G3AcceptsValidUnicodeWireForms/NFC (0.00s)
+=== RUN   TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility
+=== RUN   TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G1/invalid_UTF-8
+=== RUN   TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G1/lone_high_surrogate
+=== RUN   TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G1/lone_low_surrogate
+=== RUN   TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G2/invalid_UTF-8
+=== RUN   TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G2/lone_high_surrogate
+=== RUN   TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G2/lone_low_surrogate
+--- PASS: TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility (0.00s)
+    --- PASS: TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G1/invalid_UTF-8 (0.00s)
+    --- PASS: TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G1/lone_high_surrogate (0.00s)
+    --- PASS: TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G1/lone_low_surrogate (0.00s)
+    --- PASS: TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G2/invalid_UTF-8 (0.00s)
+    --- PASS: TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G2/lone_high_surrogate (0.00s)
+    --- PASS: TestCreateDraftLegacyVariantsKeepMalformedUnicodeCompatibility/G2/lone_low_surrogate (0.00s)
+=== RUN   TestIndependentG3HandlerUnicodeDecodeBoundary
+=== RUN   TestIndependentG3HandlerUnicodeDecodeBoundary/invalid_UTF-8_byte
+=== RUN   TestIndependentG3HandlerUnicodeDecodeBoundary/unpaired_surrogate
+=== RUN   TestIndependentG3HandlerUnicodeDecodeBoundary/literal_replacement_character
+--- PASS: TestIndependentG3HandlerUnicodeDecodeBoundary (0.00s)
+    --- PASS: TestIndependentG3HandlerUnicodeDecodeBoundary/invalid_UTF-8_byte (0.00s)
+    --- PASS: TestIndependentG3HandlerUnicodeDecodeBoundary/unpaired_surrogate (0.00s)
+    --- PASS: TestIndependentG3HandlerUnicodeDecodeBoundary/literal_replacement_character (0.00s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/handler	2.628s

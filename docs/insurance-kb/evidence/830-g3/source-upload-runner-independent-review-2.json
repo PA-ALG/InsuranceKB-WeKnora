@@ -1,0 +1,73 @@
+{
+  "accepted_red_evidence": {
+    "behavior": [
+      "v1 accepted a non-Colima Docker command",
+      "v1 accepted an old/repeated returned knowledge ID",
+      "v1 accepted an extra authorization field",
+      "v1 accepted a chunk whose knowledge ID did not match the requested path"
+    ],
+    "structural_feature_absence": [
+      "v1 lacked the deadline, exact guard header constants, frozen old-capture constant, and old-source immediate-validation loop"
+    ]
+  },
+  "actual_compatibility": {
+    "chunk_dto_scope_fields": "PASS",
+    "existing_w1_chunks": {
+      "g3-material-01": 162,
+      "g3-material-02": 79,
+      "g3-material-03": 37,
+      "g3-material-04": 9,
+      "total": 287
+    },
+    "provision_v3_docreader_env": "PASS"
+  },
+  "backlog": [
+    "The authorization artifact remains replayable when a caller chooses fresh receipt and artifact paths; bind a one-time run identity in a future hardening slice."
+  ],
+  "blocker_count": 0,
+  "contract": "830-g3-source-upload-runner-independent-review.v2",
+  "effects": {
+    "database": 0,
+    "docker": 0,
+    "http": 0,
+    "provider": 0,
+    "repo_writes": 0,
+    "upload": 0
+  },
+  "execution_gate": "No external-send authorization exists. Do not execute until the user explicitly authorizes the exact frozen runner/action scopes.",
+  "logs_sha256": {
+    "g3-source-upload-runner-v2-independent-probes-01.log": "48a308f765e7341795f78f6eded5d31997c232a8b8abbd382114e11e33c0bd07",
+    "g3-source-upload-runner-v2-independent-probes-01.py": "5d0e54e563ddc66a6fd29d8464e8cf4f517b77012d5e110e8f1526c36ef31c24",
+    "g3-source-upload-runner-v2-independent-static-01.log": "09055e310ba5bf8d136fa2eb4e1efd44900d536f68953519fb0cede85cebcbad",
+    "g3-source-upload-runner-v2-independent-static-02.log": "dc2dba880d61ff90da8d64591a6586c6ffb837b8edd3295a7b8400d582ffc16e",
+    "g3-source-upload-runner-v2-independent-tests-01.log": "1643a08862580168271ac7dac3de630e8f14c714f2f2162cb2caf341fdad5025"
+  },
+  "rejected": [
+    "Owner RED cases that failed because the test double lacked record_http, because the Docreader fixture itself drifted from the exact five-key provision-v3 projection, or because a static source substring did not match formatting are scaffold/test-fixture evidence, not behavior RED.",
+    "Independent py_compile cache attempt is rejected as verification because the sandbox denied its external cache path; the subsequent no-write AST parse passed."
+  ],
+  "reviewed_inputs": {
+    "freeze_sha256": "63b91e1946803ad54a3558420f7404066325b6f6525073556d11012ebd42ffb1",
+    "guard_sha256": "c52cfabf9f32214923e71e2f5926cb66c259cec9e99431033c508907aa7361a4",
+    "notes_sha256": "2d2c2cdef08071f153a0574af36a4ab812b877966ab409e59fca4ba19d1b57ed",
+    "provision_v3_sha256": "823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4",
+    "repair_plan_sha256": "3f3a8457ce1f4a15d7bd2cffb473053e164996a824452403dcff9bf74290cbbb",
+    "runner_sha256": "9dcaef873f85be4dd89e2332da718a8f77912b04aa3fb0aa383f8c45a581e323",
+    "tests_sha256": "df65920671759385525b35fd38d6cd7143af56dba7026baa2121ea8371157e59"
+  },
+  "seven_repairs": {
+    "action_scoped_authorization": "PASS",
+    "exact_colima_runtime_gate": "PASS",
+    "guard_ledger_header": "PASS",
+    "immediate_old_source_id_check": "PASS",
+    "knowledge_and_revision_identity_closure": "PASS",
+    "legacy_capture_sha_freeze": "PASS",
+    "single_1440_second_external_deadline": "PASS"
+  },
+  "status": "PASS_PENDING_EXPLICIT_EXTERNAL_SEND_AUTHORIZATION",
+  "verification": {
+    "ast": "PASS",
+    "focused_actual_shape_probes": "9/9 PASS",
+    "frozen_fake_tests": "33/33 PASS"
+  }
+}

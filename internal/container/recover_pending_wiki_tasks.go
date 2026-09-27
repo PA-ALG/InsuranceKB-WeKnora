@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/application/service"
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -29,7 +30,7 @@ type pendingWikiScope struct {
 // may also be absent after an interrupted Redis enqueue. Running this after all
 // handlers are registered closes that gap. Duplicate triggers are harmless:
 // ingest claims/peeks disjoint rows and finalize coalesces its pending lane.
-func recoverPendingWikiTasks(db *gorm.DB, task interfaces.TaskEnqueuer) {
+func recoverPendingWikiTasks(db *gorm.DB, task interfaces.TaskEnqueuer, cfg *config.Config) {
 	if db == nil || task == nil {
 		return
 	}
@@ -69,7 +70,7 @@ func recoverPendingWikiTasks(db *gorm.DB, task interfaces.TaskEnqueuer) {
 
 	recovered := 0
 	for _, scope := range scopes {
-		if scope.ScopeID == "" {
+		if scope.ScopeID == "" || cfg.NativeWikiWritesDisabled(scope.TenantID, scope.ScopeID) {
 			continue
 		}
 		payload, err := json.Marshal(service.WikiIngestPayload{

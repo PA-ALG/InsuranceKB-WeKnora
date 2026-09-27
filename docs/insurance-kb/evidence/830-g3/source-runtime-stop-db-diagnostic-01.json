@@ -1,0 +1,46 @@
+{
+  "postgres_log_exit": 0,
+  "postgres_log_sha256": "4b13e7f2d6635c9a9028e660cce6f3360bd4f236eb1a37df2657d41e63d42195",
+  "matched_categories": {
+    "permission denied": 0,
+    "must be superuser": 0,
+    "already exists": 0,
+    "does not exist": 0,
+    "extension": 0,
+    "out of shared memory": 0,
+    "invalid byte sequence": 0,
+    "unsupported version": 0,
+    "unrecognized configuration parameter": 0,
+    "could not open": 0,
+    "role": 0,
+    "syntax error": 0,
+    "transaction_timeout": 0
+  },
+  "database_role_exit": 0,
+  "database_role": {
+    "databases": [
+      {
+        "name": "weknora_g2_594",
+        "owner": "p0clone"
+      },
+      {
+        "name": "weknora_g3_830",
+        "owner": "p0clone"
+      }
+    ],
+    "role": {
+      "name": "p0clone",
+      "superuser": true,
+      "create_db": true
+    },
+    "server_version": "17.9 (Debian 17.9-1.pgdg13+1)"
+  },
+  "target_state_exit": 0,
+  "target_state": {
+    "database": "weknora_g3_830",
+    "user_tables": 0,
+    "extensions": [
+      "plpgsql"
+    ]
+  }
+}

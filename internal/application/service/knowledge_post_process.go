@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/tracing/langfuse"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -18,6 +19,7 @@ import (
 // KnowledgePostProcessService acts as an orchestrator for all post-processing tasks
 // after a document has been parsed and split into chunks (including multimodal OCR/Caption).
 type KnowledgePostProcessService struct {
+	config        *config.Config
 	knowledgeRepo interfaces.KnowledgeRepository
 	kbService     interfaces.KnowledgeBaseService
 	chunkService  interfaces.ChunkService
@@ -28,6 +30,7 @@ type KnowledgePostProcessService struct {
 }
 
 func NewKnowledgePostProcessService(
+	cfg *config.Config,
 	knowledgeRepo interfaces.KnowledgeRepository,
 	kbService interfaces.KnowledgeBaseService,
 	chunkService interfaces.ChunkService,
@@ -37,6 +40,7 @@ func NewKnowledgePostProcessService(
 	spanTracker SpanTracker,
 ) interfaces.TaskHandler {
 	return &KnowledgePostProcessService{
+		config:        cfg,
 		knowledgeRepo: knowledgeRepo,
 		kbService:     kbService,
 		chunkService:  chunkService,
@@ -175,7 +179,8 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 	willSpawnSummary := len(textChunks) > 0
 	willSpawnQuestion := willSpawnSummary && kb.NeedsEmbeddingModel() &&
 		eff.QuestionGenerationConfig.Enabled
-	willSpawnWiki := kb.IndexingStrategy.WikiEnabled && len(textChunks) > 0
+	willSpawnWiki := kb.IndexingStrategy.WikiEnabled && len(textChunks) > 0 &&
+		!s.config.NativeWikiWritesDisabled(kb.TenantID, kb.ID)
 
 	// Question generation now fans out one subtask per plain text chunk
 	// (mirroring the graph-extract per-chunk pattern) so each chunk's LLM

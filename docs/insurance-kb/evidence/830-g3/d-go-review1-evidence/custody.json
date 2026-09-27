@@ -1,0 +1,150 @@
+{
+  "contract": "830-g3-d-go-review1-custody.v1",
+  "review_sha256": "f26245641a354047aa578dc16d528e4ac125250f7eb7cfc1c6019b330650959a",
+  "files": [
+    {
+      "input_key": "overlay_test",
+      "original": "/private/tmp/g3_d_go_independent_review_test.go",
+      "saved": "g3_d_go_independent_review_test.go.gz",
+      "encoding": "gzip",
+      "raw_sha256": "cb24e310631c86009ba8bf47d3a3235ea267560096258c2f5e9c3565db2f89eb",
+      "raw_bytes": 8498,
+      "saved_sha256": "08b585afbe323ebfdcbb10bfbca0e479e8f1db7b50522982115d032cc0d27179"
+    },
+    {
+      "input_key": "overlay",
+      "original": "/private/tmp/g3-d-go-independent-overlay-01.json",
+      "saved": "g3-d-go-independent-overlay-01.json",
+      "encoding": "identity",
+      "raw_sha256": "49cb7ce60c2340241fef7c4d65c8deeb08eeaa378163e044de73c59d79b5bf5a",
+      "raw_bytes": 204,
+      "saved_sha256": "49cb7ce60c2340241fef7c4d65c8deeb08eeaa378163e044de73c59d79b5bf5a"
+    },
+    {
+      "input_key": "python_snapshots",
+      "original": "/private/tmp/g3-d-python-expected-snapshots-01.json",
+      "saved": "g3-d-python-expected-snapshots-01.json.gz",
+      "encoding": "gzip",
+      "raw_sha256": "0bc6023ac15a720cc04af180acf1654f8e6dd5799d0a845ba68ae48e7d988178",
+      "raw_bytes": 380222,
+      "saved_sha256": "359a45f8aad8293bf6cf1d04c15bf9ceac47e2ad1cf4e21d107eb0d09030a509"
+    },
+    {
+      "input_key": "package_green",
+      "original": "/private/tmp/g3-d-go-independent-full-package-green-01.log",
+      "saved": "g3-d-go-independent-full-package-green-01.log",
+      "encoding": "identity",
+      "raw_sha256": "435ce2bc0614aa0fd420a4091e7500c3cdafbe7fffda5af81a84d52ea4a4f4f3",
+      "raw_bytes": 55,
+      "saved_sha256": "435ce2bc0614aa0fd420a4091e7500c3cdafbe7fffda5af81a84d52ea4a4f4f3"
+    },
+    {
+      "input_key": "focused_green",
+      "original": "/private/tmp/g3-d-go-independent-package-tests-01.log",
+      "saved": "g3-d-go-independent-package-tests-01.log",
+      "encoding": "identity",
+      "raw_sha256": "9f51f0779e4c133f652861c385713ac8923c53077f18211fba98141eaf308971",
+      "raw_bytes": 2862,
+      "saved_sha256": "9f51f0779e4c133f652861c385713ac8923c53077f18211fba98141eaf308971"
+    },
+    {
+      "input_key": "oracle_snapshot_green",
+      "original": "/private/tmp/g3-d-go-independent-oracle-snapshot-green-01.log",
+      "saved": "g3-d-go-independent-oracle-snapshot-green-01.log",
+      "encoding": "identity",
+      "raw_sha256": "2159fdb642dc963fa521650153f13b56721e53ecfe1c9adb842bdc5246b23f81",
+      "raw_bytes": 201,
+      "saved_sha256": "2159fdb642dc963fa521650153f13b56721e53ecfe1c9adb842bdc5246b23f81"
+    },
+    {
+      "input_key": "exact_boundaries_green",
+      "original": "/private/tmp/g3-d-go-independent-exact-boundaries-green-01.log",
+      "saved": "g3-d-go-independent-exact-boundaries-green-01.log",
+      "encoding": "identity",
+      "raw_sha256": "c2649035ad3a39369f9c3b0cb02b95c3d7bac128fa66ae14fb025079d0c63707",
+      "raw_bytes": 631,
+      "saved_sha256": "c2649035ad3a39369f9c3b0cb02b95c3d7bac128fa66ae14fb025079d0c63707"
+    },
+    {
+      "input_key": "omitted_red",
+      "original": "/private/tmp/g3-d-go-independent-omitted-null-red-01.log",
+      "saved": "g3-d-go-independent-omitted-null-red-01.log",
+      "encoding": "identity",
+      "raw_sha256": "bc5a7d115266602e11af011261711897cd4b984d97e1fe612db0f4700f0455ec",
+      "raw_bytes": 296,
+      "saved_sha256": "bc5a7d115266602e11af011261711897cd4b984d97e1fe612db0f4700f0455ec"
+    },
+    {
+      "input_key": "matrix_red",
+      "original": "/private/tmp/g3-d-go-independent-omitted-matrix-red-01.log",
+      "saved": "g3-d-go-independent-omitted-matrix-red-01.log",
+      "encoding": "identity",
+      "raw_sha256": "04bb35b7a35227104937cabf249b397f5e588524284a4bb2608e24b672c7c4d9",
+      "raw_bytes": 3220,
+      "saved_sha256": "04bb35b7a35227104937cabf249b397f5e588524284a4bb2608e24b672c7c4d9"
+    },
+    {
+      "input_key": "null_array_red",
+      "original": "/private/tmp/g3-d-go-independent-null-array-red-01.log",
+      "saved": "g3-d-go-independent-null-array-red-01.log",
+      "encoding": "identity",
+      "raw_sha256": "eef088ff6d88ad929ef0bf105c9e82de04d6e0c9420f68ea8b09ec4ede982dff",
+      "raw_bytes": 278,
+      "saved_sha256": "eef088ff6d88ad929ef0bf105c9e82de04d6e0c9420f68ea8b09ec4ede982dff"
+    },
+    {
+      "input_key": "null_scalar_red",
+      "original": "/private/tmp/g3-d-go-independent-null-scalar-red-01.log",
+      "saved": "g3-d-go-independent-null-scalar-red-01.log",
+      "encoding": "identity",
+      "raw_sha256": "6a1a88e81bab22afbde8f31a8c6f9dceec588644ffa5c96205fc2c72cb67772a",
+      "raw_bytes": 297,
+      "saved_sha256": "6a1a88e81bab22afbde8f31a8c6f9dceec588644ffa5c96205fc2c72cb67772a"
+    },
+    {
+      "input_key": "invalid_hash_red",
+      "original": "/private/tmp/g3-d-go-independent-invalid-hash-red-01.log",
+      "saved": "g3-d-go-independent-invalid-hash-red-01.log",
+      "encoding": "identity",
+      "raw_sha256": "1932f688e1cf4dd266ac0c01588590095a27da81ddb8cba1e007e83f0a5d685e",
+      "raw_bytes": 267,
+      "saved_sha256": "1932f688e1cf4dd266ac0c01588590095a27da81ddb8cba1e007e83f0a5d685e"
+    },
+    {
+      "input_key": "null_array_case",
+      "original": "/private/tmp/g3-d-go-null-approved-aliases-01.json",
+      "saved": "g3-d-go-null-approved-aliases-01.json.gz",
+      "encoding": "gzip",
+      "raw_sha256": "ad169e860163fd668317907174308080b778aa4cbe209aa0e1275809f3cb03de",
+      "raw_bytes": 2254417,
+      "saved_sha256": "db56f73d36c5045d6595c03d5e20efdc1126eb5837d6bc911584e724864142c8"
+    },
+    {
+      "input_key": "null_array_materializer",
+      "original": "/private/tmp/g3-d-go-null-array-materialize-01.py",
+      "saved": "g3-d-go-null-array-materialize-01.py",
+      "encoding": "identity",
+      "raw_sha256": "f7a0e94808c65a1abaf2abd531be0622e1a43a0f93164d1714bf6d2abd39081d",
+      "raw_bytes": 2658,
+      "saved_sha256": "f7a0e94808c65a1abaf2abd531be0622e1a43a0f93164d1714bf6d2abd39081d"
+    },
+    {
+      "input_key": "invalid_hash_case",
+      "original": "/private/tmp/g3-d-go-invalid-native-capture-hash-01.json",
+      "saved": "g3-d-go-invalid-native-capture-hash-01.json.gz",
+      "encoding": "gzip",
+      "raw_sha256": "dd594a1f8c05f122aee3ff903ba3a8b9809f05a577d3bf368f26a01d4c443cde",
+      "raw_bytes": 2254363,
+      "saved_sha256": "5c2665e131bcda904e5d29fe12f64e340eee025f4f28d2785c387db84a5c8253"
+    },
+    {
+      "input_key": "invalid_hash_materializer",
+      "original": "/private/tmp/g3-d-go-invalid-hash-materialize-01.py",
+      "saved": "g3-d-go-invalid-hash-materialize-01.py",
+      "encoding": "identity",
+      "raw_sha256": "fda3ba49a89e6ae092f4b432efef1347c1c4dcf70a9048d777f9cd65d3a98a97",
+      "raw_bytes": 3602,
+      "saved_sha256": "fda3ba49a89e6ae092f4b432efef1347c1c4dcf70a9048d777f9cd65d3a98a97"
+    }
+  ]
+}

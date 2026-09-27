@@ -1,0 +1,154 @@
+{
+  "status": "PASS",
+  "capture_count": 15,
+  "capture_set_sha256": "70a6fe13275f7366c610abbed0d8c44b480197696b1f4a03624457f48d4cf4e5",
+  "documents": [
+    {
+      "material_id": "g3-material-01",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-02",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-03",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-04",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-07",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-08",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-09",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-11",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-12",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-13",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-14",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-17",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-18",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-19",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    },
+    {
+      "material_id": "g3-material-21",
+      "capture": "PASS",
+      "source": "PASS",
+      "markdown": "PASS",
+      "native": "PASS",
+      "pages": "PASS",
+      "parser": "PASS"
+    }
+  ],
+  "historical_raw_bound": [
+    "g3-material-01",
+    "g3-material-03"
+  ],
+  "historical_canonical_only": [
+    "g3-material-04"
+  ],
+  "supplement_02": "LOCAL_CAPTURE_ONLY_NOT_SOURCE_REVISION",
+  "preflight": "PASS_ZERO_EFFECTS_TARGET_ABSENT",
+  "missing_source_row_knowledge_id": [
+    "1265a343-c408-4620-8eed-c4f6a2adadc2"
+  ]
+}

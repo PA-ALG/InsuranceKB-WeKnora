@@ -1,0 +1,59 @@
+{
+  "contract": "830-g3-d-ui-repair-dispatch.v1",
+  "status": "DISPATCHED",
+  "owner": "g3_catalog_ui",
+  "requirements": [
+    "G3-R3",
+    "G3-R5",
+    "D Task4",
+    "cd-multiline-canonical-amendment-7-v2"
+  ],
+  "review": {
+    "path": "lane-d-ui-independent-review-01.json",
+    "sha256": "c206bffce381b98a4deaeeb20f6b5cfdd48835ab4089677b2985d2ea11e706a0"
+  },
+  "original_freeze": {
+    "path": "lane-d-ui-freeze-1.json",
+    "sha256": "4aa287e33371ba2d658731fc3361ba25a56c66f4594aa4acf3264a9cda0f209f"
+  },
+  "original_snapshot": {
+    "path": "d-ui-review1-snapshots/manifest.json",
+    "sha256": "682ced3ace20575a45fb8e94fe811f6f59051c0fb110241a3bb9cfaf1051c716"
+  },
+  "repair_round": 1,
+  "blockers": [
+    "UI-B1-STRUCTURED-CONTROL-PRESENCE"
+  ],
+  "exclusive_paths": [
+    "frontend/src/api/schema-wiki/batchConcept830G3.ts",
+    "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts"
+  ],
+  "existing_contract_only": true,
+  "instructions": [
+    "First add effective RED against the frozen UI for fully rehashed structured controls, preserving all original attempts.",
+    "Separate structured Text/identity/identity arrays/Profile labels and canonical object keys from exact typed body validation; structured strings reject U+0000-U+001F and U+007F.",
+    "Keep typed body TAB/LF/CR exactly, including existing G2 body exemptions in amendment7v2; move conditions/exceptions/unknown_reason to the explicit body path so strengthening identity does not reject legal content. Do not grant arbitrary dictionary values body authority.",
+    "Cover the single common root cause with bounded rehashed negative cases and positive TAB/LF/CR body cases, without changing DTO/hash domain/transport/scope/backend/Vue/fixtures.",
+    "Run focused UI suite, relevant existing G2 page/citation regression, vue-tsc and exact-path diff check. Do not install dependencies or modify PDF worker configuration.",
+    "Freeze final two-file identities and raw RED/GREEN evidence; stop for independent re-review. Other six original UI files remain exact and untouched."
+  ],
+  "closed_domains": [
+    "Python",
+    "Go types",
+    "C/common",
+    "Catalog/Profile source",
+    "backend",
+    "Vue",
+    "fixtures",
+    "dependencies",
+    "runtime"
+  ],
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

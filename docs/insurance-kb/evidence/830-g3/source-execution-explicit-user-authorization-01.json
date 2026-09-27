@@ -1,0 +1,27 @@
+{
+  "contract": "830-g3-source-explicit-user-authorization.v1",
+  "status": "APPROVED",
+  "user_reply_exact": "授权",
+  "received_context": "Current user reply to the immediately preceding source external-send authorization pending status",
+  "recorded_at": "2026-09-07T21:58:28.677601+00:00",
+  "preview": "source-execution-approval-preview.md",
+  "preview_sha256": "daed68c8d4cdd9534da8db7807552174a7bbb026c108208e6804f97dfee6050e",
+  "ready_package_sha256": "765c1405973ad2e361ddfe1fd6bd8170b1d641f565f2df94674ff77c76dee6cd",
+  "scopes": {
+    "provision_and_configure_isolated_runtime": true,
+    "new_pdf_uploads": 11,
+    "source_registrations": 15,
+    "embedding_provider": "Alibaba Cloud DashScope",
+    "embedding_model": "qwen3.7-text-embedding",
+    "embedding_inputs": 204,
+    "request_body_bytes": 693129,
+    "max_external_requests": 11,
+    "automatic_retries": 0
+  },
+  "not_in_this_window": [
+    "C classification/compile/review model execution",
+    "human release approval/activation",
+    "production deployment"
+  ],
+  "execution_status": "AUTHORIZED_NOT_YET_RUN"
+}

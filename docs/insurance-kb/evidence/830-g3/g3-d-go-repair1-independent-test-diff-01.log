@@ -1,0 +1,169 @@
+--- /private/tmp/old-concept_free_wiki_830_g3_test.go	2026-09-08 00:40:32
++++ internal/types/concept_free_wiki_830_g3_test.go	2026-09-08 00:24:59
+@@ -112,6 +112,43 @@
+ 	raw, err := json.Marshal(candidate)
+ 	require.NoError(t, err)
+ 	return raw
++}
++
++func rehashCorpusCandidateMap830G3(t *testing.T, candidate map[string]any) []byte {
++	t.Helper()
++	request := map830G3(t, candidate["request"])
++	inputs := map830G3(t, request["resolution_inputs"])
++	corpus := map830G3(t, inputs["corpus"])
++	entries := slice830G3(t, corpus["entries"])
++	entryHashes := make(map[string]any, len(entries))
++	for _, rawEntry := range entries {
++		entry := map830G3(t, rawEntry)
++		rehashMap830G3(t, entry, "corpus-entry.830.g3.v1", "entry_sha256")
++		entryHashes[entry["material_id"].(string)] = entry["entry_sha256"]
++	}
++	rehashMap830G3(t, corpus, "batch-corpus.830.g3.v1", "corpus_sha256")
++	proposals := map830G3(t, inputs["proposals"])
++	proposals["corpus_sha256"] = corpus["corpus_sha256"]
++	for _, rawProposal := range slice830G3(t, proposals["proposals"]) {
++		proposal := map830G3(t, rawProposal)
++		proposal["corpus_entry_sha256"] = entryHashes[proposal["material_id"].(string)]
++	}
++	for _, rawReceipt := range slice830G3(t, proposals["model_receipts"]) {
++		receipt := map830G3(t, rawReceipt)
++		bindings := slice830G3(t, receipt["material_bindings"])
++		for _, rawBinding := range bindings {
++			binding := map830G3(t, rawBinding)
++			binding["corpus_entry_sha256"] = entryHashes[binding["material_id"].(string)]
++		}
++		inputHash, err := batchConceptHash830G3("batch-classifier-input.830.g3.v1", map[string]any{
++			"corpus_sha256": corpus["corpus_sha256"], "material_bindings": bindings,
++		})
++		require.NoError(t, err)
++		receipt["input_sha256"] = inputHash
++	}
++	resolution := map830G3(t, request["resolution"])
++	resolution["corpus_sha256"] = corpus["corpus_sha256"]
++	return rehashCandidateMap830G3(t, candidate)
+ }
+ 
+ const batchConceptFixture830G3 = "../../harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json"
+@@ -247,6 +284,122 @@
+ 	}
+ }
+ 
++func TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull(t *testing.T) {
++	tests := map[string]func(*testing.T, map[string]any){
++		"confirmation nullable actor display name omitted": func(t *testing.T, candidate map[string]any) {
++			request := map830G3(t, candidate["request"])
++			confirmation := map830G3(t, request["profile_confirmation"])
++			delete(map830G3(t, confirmation["receipt"]), "actor_display_name")
++		},
++		"confirmation nullable queue owner omitted": func(t *testing.T, candidate map[string]any) {
++			request := map830G3(t, candidate["request"])
++			confirmation := map830G3(t, request["profile_confirmation"])
++			delete(map830G3(t, confirmation["receipt"]), "queue_owner")
++		},
++		"match nullable candidate id omitted": func(t *testing.T, candidate map[string]any) {
++			bindings := slice830G3(t, map830G3(t, candidate["request"])["entity_bindings"])
++			for _, rawBinding := range bindings {
++				binding := map830G3(t, rawBinding)
++				if binding["resolution_disposition"] == "MATCH" {
++					delete(binding, "candidate_id")
++					return
++				}
++			}
++			t.Fatal("fixture lacks MATCH binding")
++		},
++		"match nullable candidate hash omitted": func(t *testing.T, candidate map[string]any) {
++			bindings := slice830G3(t, map830G3(t, candidate["request"])["entity_bindings"])
++			for _, rawBinding := range bindings {
++				binding := map830G3(t, rawBinding)
++				if binding["resolution_disposition"] == "MATCH" {
++					delete(binding, "entity_candidate_sha256")
++					return
++				}
++			}
++			t.Fatal("fixture lacks MATCH binding")
++		},
++		"embedded G2 nullable value omitted": func(t *testing.T, candidate map[string]any) {
++			base := map830G3(t, map830G3(t, candidate["request"])["base_request"])
++			for _, rawField := range slice830G3(t, base["existing_fields"]) {
++				field := map830G3(t, rawField)
++				if field["value"] == nil {
++					delete(field, "value")
++					return
++				}
++			}
++			t.Fatal("fixture lacks nullable existing field value")
++		},
++		"embedded G2 nonnullable evidence start is null": func(t *testing.T, candidate map[string]any) {
++			base := map830G3(t, map830G3(t, candidate["request"])["base_request"])
++			for _, rawField := range slice830G3(t, base["existing_fields"]) {
++				for _, rawEvidence := range slice830G3(t, map830G3(t, rawField)["evidence"]) {
++					evidence := map830G3(t, rawEvidence)
++					if evidence["start"] == json.Number("0") {
++						evidence["start"] = nil
++						return
++					}
++				}
++			}
++			t.Fatal("fixture lacks start=0 evidence")
++		},
++	}
++	for name, mutate := range tests {
++		t.Run(name, func(t *testing.T) {
++			candidate := fixtureMap830G3(t)
++			mutate(t, candidate)
++			raw, err := json.Marshal(candidate)
++			require.NoError(t, err)
++			_, err = ParseBatchConceptCandidateBundle830G3(raw)
++			require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
++		})
++	}
++}
++
++func TestBatchConceptCandidateBundle830G3RejectsNullRequiredCollection(t *testing.T) {
++	candidate := fixtureMap830G3(t)
++	request := map830G3(t, candidate["request"])
++	inputs := map830G3(t, request["resolution_inputs"])
++	existing := map830G3(t, inputs["existing_entities"])
++	entity := map830G3(t, slice830G3(t, existing["entities"])[0])
++	require.Empty(t, slice830G3(t, entity["approved_aliases"]))
++	entity["approved_aliases"] = nil
++	rehashMap830G3(t, existing, "existing-entities.830.g3.v1", "snapshot_sha256")
++	resolution := map830G3(t, request["resolution"])
++	resolution["existing_snapshot_sha256"] = existing["snapshot_sha256"]
++
++	_, err := ParseBatchConceptCandidateBundle830G3(rehashCandidateMap830G3(t, candidate))
++	require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
++}
++
++func TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes(t *testing.T) {
++	tests := map[string]func(*testing.T, map[string]any){
++		"native capture": func(t *testing.T, entry map[string]any) {
++			entry["native_capture_sha256"] = "not-a-sha256"
++		},
++		"parser identity": func(t *testing.T, entry map[string]any) {
++			entry["parser_identity_sha256"] = "not-a-sha256"
++		},
++		"acquisition receipt": func(t *testing.T, entry map[string]any) {
++			provenance := map830G3(t, entry["provenance"])
++			provenance["acquisition_receipt_sha256"] = "not-a-sha256"
++			rehashMap830G3(t, provenance, "source-provenance.830.g3.v1", "declaration_sha256")
++		},
++	}
++	for name, mutate := range tests {
++		t.Run(name, func(t *testing.T) {
++			candidate := fixtureMap830G3(t)
++			request := map830G3(t, candidate["request"])
++			inputs := map830G3(t, request["resolution_inputs"])
++			corpus := map830G3(t, inputs["corpus"])
++			entry := map830G3(t, slice830G3(t, corpus["entries"])[0])
++			mutate(t, entry)
++
++			_, err := ParseBatchConceptCandidateBundle830G3(rehashCorpusCandidateMap830G3(t, candidate))
++			require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
++		})
++	}
++}
++
+ func TestBatchConceptCandidateBundle830G3RejectsRehashedProposalWithoutResolutionReplay(t *testing.T) {
+ 	candidate := fixtureMap830G3(t)
+ 	originalRaw, err := os.ReadFile(batchConceptFixture830G3)

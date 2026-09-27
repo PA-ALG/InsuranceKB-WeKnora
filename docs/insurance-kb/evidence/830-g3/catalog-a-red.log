@@ -1,0 +1,16 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________ test_g3_r1_real_v5_catalog_compiler_exists __________________
+
+    def test_g3_r1_real_v5_catalog_compiler_exists() -> None:
+        if importlib.util.find_spec(_MODULE) is None:
+>           pytest.fail(
+                "G3-R1 business RED: the frozen v5 workbook cannot produce the required "
+                "11-pack schema catalog because no catalog compiler exists"
+            )
+E           Failed: G3-R1 business RED: the frozen v5 workbook cannot produce the required 11-pack schema catalog because no catalog compiler exists
+
+tests/test_schema_pack_catalog_830_g3.py:13: Failed
+=========================== short test summary info ============================
+FAILED tests/test_schema_pack_catalog_830_g3.py::test_g3_r1_real_v5_catalog_compiler_exists
+1 failed in 0.51s

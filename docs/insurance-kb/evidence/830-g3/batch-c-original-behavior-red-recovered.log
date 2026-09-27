@@ -1,0 +1,206 @@
+........FF..F.F                                                          [100%]
+=================================== FAILURES ===================================
+_____ test_source_integrity_failure_quarantines_even_without_model_output ______
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_source_integrity_failure_quarantines_even_without_model_output(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        original = _entry(
+            material_id="bad-source",
+            text="平安保险 产品四 产品代码 D004 登记编号 RD004 版本 2026 医疗保险 官方条款",
+        )
+        block = SourceBlock(
+            **original.blocks[0].model_dump(exclude={"parse_hash"}),
+            parse_hash="d" * 64,
+        )
+        entry_values = original.model_dump(mode="python", exclude={"entry_sha256"})
+        entry_values["blocks"] = (block,)
+        entry = _new(
+            g.CorpusEntryV1,
+            "corpus-entry.830.g3.v1",
+            "entry_sha256",
+            **entry_values,
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry)
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), ()),
+            existing_entities=_existing(),
+            policy=_policy(),
+        )
+        assert result.model_attempted_count == 1
+>       assert result.decisions[0].disposition == "QUARANTINE"
+E       AssertionError: assert 'NEEDS_CONFIRM' == 'QUARANTINE'
+E         
+E         - QUARANTINE
+E         + NEEDS_CONFIRM
+
+harness/tests/test_batch_entity_resolution_830_g3.py:794: AssertionError
+___________ test_identity_evidence_cannot_borrow_material_role_scope ___________
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_identity_evidence_cannot_borrow_material_role_scope(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="bad-evidence-role",
+            text="平安保险 产品五 产品代码 E005 登记编号 RE005 版本 2026 医疗保险 官方条款",
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=({
+                "proposal_ref": "p",
+                "name": "产品五",
+                "product_code": "E005",
+                "filing": "RE005",
+            },),
+        )
+        role_id = proposal.material_role_evidence_ids[0]
+        borrowed = proposal.entities[0].model_copy(
+            update={"identity_evidence_ids": (role_id,)}
+        )
+        values = proposal.model_dump(mode="python", exclude={"proposal_sha256"})
+        values["entities"] = (borrowed,)
+        proposal = _new(
+            g.MaterialProposalV1,
+            "material-proposal.830.g3.v1",
+            "proposal_sha256",
+            **values,
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy(),
+        )
+        child = result.decisions[0].children[0]
+>       assert child.disposition == "QUARANTINE"
+E       AssertionError: assert 'NEEDS_CONFIRM' == 'QUARANTINE'
+E         
+E         - QUARANTINE
+E         + NEEDS_CONFIRM
+
+harness/tests/test_batch_entity_resolution_830_g3.py:840: AssertionError
+____ test_existing_entity_can_expose_multiple_versions_and_match_exact_one _____
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_existing_entity_can_expose_multiple_versions_and_match_exact_one(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        common = {
+            "entity_id": "serving-entity-7",
+            "product_id": "product-7",
+            "product_version_id": None,
+            "issuer": "平安保险",
+            "name": "多版本产品",
+            "product_code": "VERS7",
+            "approved_aliases": (),
+            "identity_evidence_sha256s": ("e" * 64,),
+        }
+        old = g.ExistingEntityV1(
+            **common,
+            entity_version="version-2025",
+            version_label="2025",
+            filing_or_registration=g.VersionAnchorV1(
+                kind="registration_number", value="VERS-REG-2025"
+            ),
+        )
+        current = g.ExistingEntityV1(
+            **common,
+            entity_version="version-2026",
+            version_label="2026",
+            filing_or_registration=g.VersionAnchorV1(
+                kind="registration_number", value="VERS-REG-2026"
+            ),
+        )
+        entry = _entry(
+            material_id="existing-versions",
+            text=(
+                "平安保险 多版本产品 产品代码 VERS7 登记编号 VERS-REG-2026 "
+                "版本 2026 医疗保险 官方条款"
+            ),
+        )
+        child = _resolve(
+            catalog,
+            (entry,),
+            (({
+                "proposal_ref": "p",
+                "name": "多版本产品",
+                "product_code": "VERS7",
+                "version_label": "2026",
+                "filing": "VERS-REG-2026",
+            },),),
+>           existing=_existing(old, current),
+                     ^^^^^^^^^^^^^^^^^^^^^^^
+        ).decisions[0].children[0]
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1004: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:415: in _existing
+    return _new(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+model = <class 'insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3.ExistingEntitySnapshotV1'>
+object_type = 'existing-entities.830.g3.v1', hash_field = 'snapshot_sha256'
+values = {'contract': 'existing-entities.830.g3.v1', 'tenant_id': 7, 'space_id': 'space-g3', 'raw_kb_id': 'raw-g3', ...}
+
+    def _new(model: type[Any], object_type: str, hash_field: str, **values: object) -> Any:
+        payload = {key: _jsonable(value) for key, value in values.items()}
+>       return model(**values, **{hash_field: schema_wiki_sha256(object_type, payload)})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for ExistingEntitySnapshotV1
+E         Value error, existing entities must be canonical unique [type=value_error, input_value={'contract': 'existing-en...8e61d06bfe9a10e35b770e'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+harness/tests/test_batch_entity_resolution_830_g3.py:65: ValidationError
+_ test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonical_text _
+
+    def test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonical_text() -> None:
+        with pytest.raises(ValueError):
+            g.LabelProposalV1(taxonomy_label="medical_insurance", confidence=0.95, evidence_ids=("e",))
+        with pytest.raises(ValueError):
+            g.LabelProposalV1(
+                taxonomy_label="medical_insurance",
+                confidence="0.95",
+                evidence_ids=("e",),
+            )
+        with pytest.raises(ValueError):
+            g.TrustRuleV1(
+                rule_id="r",
+                provenance_kinds=("official_public_document",),
+                material_roles=("terms",),
+                purposes=("issuer",),
+                field_keys=(),
+                space_ids=("space-g3",),
+                product_version_anchors=(),
+                validity_mode="identity_only",
+                valid_from=None,
+                valid_through=None,
+                priority=True,
+            )
+        with pytest.raises(ValueError):
+            g.VersionAnchorV1(kind="registration_number", value="e\u0301")
+>       assert g.VersionAnchorV1(kind="registration_number", value="A\nB").value == "A\nB"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for VersionAnchorV1
+E       value
+E         Value error, text must be non-empty canonical NFC without controls [type=value_error, input_value='A\nB', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+harness/tests/test_batch_entity_resolution_830_g3.py:1066: ValidationError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_source_integrity_failure_quarantines_even_without_model_output
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_identity_evidence_cannot_borrow_material_role_scope
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_existing_entity_can_expose_multiple_versions_and_match_exact_one
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonical_text
+4 failed, 11 passed in 8.73s

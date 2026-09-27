@@ -1,0 +1,95 @@
+{
+  "contract": "g3-d-python-repair1-independent-review.v1",
+  "reviewed_at_local": "2026-09-07",
+  "frozen_inputs": {
+    "freeze_path": "/private/tmp/g3-d-python-repair1-freeze-20260907-01.json",
+    "freeze_sha256": "ed823c125a0792476be03da7be09709f81623baf58ebcd78aea22a057c959cf4",
+    "repair_contract_sha256": "a363c33858f184c881a215081d001c716ad22da6f7aa997b434351516b8e87d1",
+    "source_sha256": "5e472c98c4cb10929cf90689c03b105c68d02da74ca04f5fe12f554d0e6a7ef5",
+    "test_sha256": "7f16886fbe4110082175ed5e93714fa647c30195af980c4724307c3de109183c",
+    "fixtures": {
+      "candidate": "179affc52b282ea16d3aecfda091c449de3d62992c4f5b337bb97609df414de0",
+      "preparation_request": "a23b4eeecc74fef40ac67968467b0c9e6a54ce777730272ca2588708fcaff3b0",
+      "provenance": "301a13a2f77ad4b361a85575028425e04782af5a181221fb58b5f5a5f4a52449"
+    }
+  },
+  "spec_compliance": {
+    "original_repair_findings": {
+      "D-PY-B1": "PASS: MATCH and CREATE binding facts/keys are rebound to every exact selected child; per-ref evidence equals the child's evidence_ids and foreign child evidence is rejected.",
+      "D-PY-B2": "PASS: embedded receipt self-hash plus frozen actual file SHA and independently recomputed semantic SHA are required; actor, actor_display_name, and queue_owner drift is rejected.",
+      "D-PY-B3": "PASS: corpus source identity is unique over full SourceBlock, base/corpus overlap is full-object equal, and selected evidence resolves through that same full block."
+    },
+    "blocker_count": 1,
+    "blockers": [
+      {
+        "id": "D-PY-R1-N1",
+        "title": "Request source closure rejects field-only blocks from an allowed selected material",
+        "evidence": [
+          "lane-d-consolidated-contract-v2.md:137 defines owner allowlist by selected source materials; line 175 requires base_request.sources to contain new selected-material needed blocks plus carryover blocks.",
+          "batch_concept_compile_830_g3.py:1398-1420 allows delta Evidence from every block in selected materials.",
+          "batch_concept_compile_830_g3.py:791-808 instead requires base_request.sources to equal only existing-member Evidence blocks plus resolution_evidence blocks before model output exists."
+        ],
+        "consequence": "A selected material with one identity block and a distinct field-fact block is rejected before compilation even though the field block is in the same owner allowlist and is required for a later FieldAssertion.",
+        "minimal_valid_source_shape": "One selected material M contains two valid SourceBlocks under the same registered source receipt: B_identity supports the selected MATCH/CREATE child; B_field supports a later field. base_request.sources contains B_identity, B_field, and exact carryover closure. Current equality treats B_field as surplus because it is absent from existing and resolution identity/classification Evidence.",
+        "disposition": "BLOCKER; return to the frozen source-coverage design. Do not append another patch under repair-1."
+      }
+    ],
+    "backlog": [],
+    "rejected": [
+      "The current 342 fixture is not coverage for this boundary: all five selected materials contain exactly one block.",
+      "The first source probe log ending -01 is rejected as evidence because the temporary probe used a nonexistent parser_identity_sha256 field; corrected -02/-03 logs preserve chronology.",
+      "No full synthetic C ModelReceipt/outer wire was fabricated: changing the CorpusEntry would require rebinding the recorded model input. The successful reproduction is intentionally source-layer structural plus the exact two contradictory predicates."
+    ]
+  },
+  "code_quality": {
+    "result": "PASS within the frozen two-file repair scope; no additional issue found.",
+    "ruff": "PASS",
+    "mypy_strict": "PASS"
+  },
+  "verification": {
+    "pytest": "24 passed in 74.18s",
+    "independent_checks": "8 passed",
+    "source_coverage_reproduction": "REPRODUCED",
+    "logs": {
+      "pytest": {
+        "path": "/private/tmp/g3-d-python-repair1-independent-green-01.log",
+        "sha256": "84b13c41cfdf589ceeb19d6e0a3e51d737d2a8184f593d7abd59f24c9ab75504"
+      },
+      "probes": {
+        "path": "/private/tmp/g3-d-python-repair1-independent-probes-02.log",
+        "sha256": "3b20da1a5ffba890e18795934951c911f6029943462fd85f6726dd337f5393ab"
+      },
+      "probe_script": {
+        "path": "/private/tmp/g3-d-python-repair1-independent-probes-01.py",
+        "sha256": "3135e080981a478d66d3c83f09f9855598845b5e8da70579ef25c2bb333572e4"
+      },
+      "ruff": {
+        "path": "/private/tmp/g3-d-python-repair1-independent-ruff-01.log",
+        "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+      },
+      "mypy": {
+        "path": "/private/tmp/g3-d-python-repair1-independent-mypy-01.log",
+        "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8"
+      },
+      "source_repro": {
+        "path": "/private/tmp/g3-d-python-repair1-source-allowlist-repro-03.log",
+        "sha256": "fcbda324e515d9c8ab32ad0aaa9db2639bc631f19c1069b2367c84f19fdb0e2d"
+      },
+      "source_repro_script": {
+        "path": "/private/tmp/g3-d-python-repair1-source-allowlist-repro-01.py",
+        "sha256": "01ead2c6b70501b8233f45893975cc5c9eab2008fcd827c84221a39aff52b07b"
+      }
+    }
+  },
+  "effects": {
+    "repo_writes": 0,
+    "go_reads": 0,
+    "model": 0,
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "container": 0,
+    "build": 0,
+    "commit": 0
+  }
+}

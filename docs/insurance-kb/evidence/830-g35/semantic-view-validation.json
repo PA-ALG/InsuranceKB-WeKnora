@@ -1,0 +1,102 @@
+{
+  "contract": "g35-semantic-view-validation.v1",
+  "base_commit": "8f7201dd428033de1e66f8783c125ebf2b617d53",
+  "reviewed_tree": "8e31ffd203452cfae38f34c7571f795b9aa132fa",
+  "requirements": [
+    "G35-R2",
+    "G35-R5"
+  ],
+  "red": {
+    "old_semantic_view": 8,
+    "candidate_identity_and_catalog_binding": 3
+  },
+  "validation": {
+    "focused_regression_before_fixture_fix": {
+      "passed": 65,
+      "failed": 1
+    },
+    "final_affected_recheck": {
+      "passed": 30,
+      "failed": 0
+    },
+    "failure_cause": "test ReviewFailsOnce recognized review v3 only; v4 caused exception before receipt; runtime correctly denied unknown-send retry. Fixture now recognizes v4.",
+    "legacy_generation_byte_equality": 10,
+    "legacy_review_byte_equality": 2,
+    "ruff": "PASS",
+    "mypy_two_files": "PASS",
+    "diff_check": "PASS"
+  },
+  "logs": [
+    {
+      "file": "/private/tmp/g35-readonly/semantic-view-red.txt",
+      "sha256": "9db02a9bee431fd8a4b7e7a167e4fc61427706fb4752e935a6650be8ea943fef",
+      "bytes": 23842
+    },
+    {
+      "file": "/private/tmp/g35-readonly/schema-comparison-red.txt",
+      "sha256": "28f8b6d8b5bf07938ba25c35105d0dbb35b31b13c88b9c7dc4f6a96666c2aa3d",
+      "bytes": 1397
+    },
+    {
+      "file": "/private/tmp/g35-readonly/review-identity-red.txt",
+      "sha256": "e60d5531dd244d70279871cebe6568f4ca1126a39c3143e40caa2317996634c9",
+      "bytes": 5923
+    },
+    {
+      "file": "/private/tmp/g35-readonly/semantic-view-final-tests.txt",
+      "sha256": "0fb4d19386c088d0c42e43e81a6a5098ab60e5b8535e1e3962928965df09c6d5",
+      "bytes": 7318
+    },
+    {
+      "file": "/private/tmp/g35-readonly/semantic-view-recovery-green.txt",
+      "sha256": "1a72552cfa27af9d7df8045443b199ec07794b83b222413cb6f1e8f2299c9e96",
+      "bytes": 693
+    },
+    {
+      "file": "/private/tmp/g35-readonly/legacy-review-validation.json",
+      "sha256": "319ff2fb240738efbd1a88d8d99f2e2333b7b85de58013aa4032e04bb475e187",
+      "bytes": 341
+    }
+  ],
+  "new_model_calls": 0,
+  "builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "business_status": "NOT RUN",
+  "remaining": [
+    "native candidate handoff decision",
+    "real discovery admission and page/source check",
+    "update admission",
+    "necessary service entity/relationship",
+    "smallest dependency group isolation",
+    "bounded real comparison"
+  ],
+  "frozen_product_files": [
+    {
+      "path": "harness/src/insurance_harness/product_ingestion/discovery.py",
+      "sha256": "3c104fec142798d2e61de398b8308cf75799f62cfbf0adf2de71d3d4ea51681e"
+    },
+    {
+      "path": "harness/tests/product_ingestion/test_discovery_local_dependencies.py",
+      "sha256": "38bff71f3cae31823033257f2d4199f91ed68f8a8ec320d71ac6a67b51388454"
+    },
+    {
+      "path": "harness/tests/product_ingestion/test_checkpoint_rebase.py",
+      "sha256": "250a242367f7fad52653feab2b52a0e43557027526907bd6669bf8b12feafcfe"
+    },
+    {
+      "path": "harness/tests/product_ingestion/test_pipeline_runtime.py",
+      "sha256": "7078176cf9214e76f1aa1a3fd6e609080a294a4a0a75ba813c1e60c13e2aa146"
+    }
+  ],
+  "independent_review": {
+    "reviewer": "semantic_view_review",
+    "tree": "8e31ffd203452cfae38f34c7571f795b9aa132fa",
+    "blockers": 0,
+    "mechanical_document_exemption": "CONFIRMED",
+    "limits": [
+      "not a real model/business acceptance",
+      "larger Space may hit explicit pre-send context budget"
+    ]
+  }
+}

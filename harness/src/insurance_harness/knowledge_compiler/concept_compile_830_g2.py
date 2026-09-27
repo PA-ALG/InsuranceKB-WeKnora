@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
 from typing import Literal, Protocol, Self
 
 from pydantic import Field, JsonValue, model_validator
@@ -20,6 +21,7 @@ from .concept_free_wiki_830_g2 import (
     SourceBlock,
     digest,
     evidence_for,
+    free_page_content,
     lint_members,
     verify_evidence,
 )
@@ -100,6 +102,14 @@ class CompileOutput(Frozen):
     pages: tuple[FreeWikiPage, ...] = ()
     audit: tuple[AuditDisposition, ...] = ()
     transformation: Literal["EXTRACT", "NORMALIZE", "COMPRESS", "SYNTHESIZE"] = "EXTRACT"
+
+    @model_validator(mode="after")
+    def check_generated_transformation(self) -> Self:
+        if self.transformation != "SYNTHESIZE" and any(
+            member.has_generated_content for member in (*self.definitions, *self.pages)
+        ):
+            raise ValueError("GENERATED_CONTENT_REQUIRES_SYNTHESIZE")
+        return self
 
     @property
     def output_hash(self) -> str:
@@ -206,14 +216,11 @@ def review_context(request: CompileRequest, output: CompileOutput) -> dict[str, 
 def validate_output(request: CompileRequest, output: CompileOutput) -> None:
     request = CompileRequest.model_validate(request)
     output = CompileOutput.model_validate(output)
+    if any(p.business_relation is not None for p in (*request.existing_pages, *output.pages)):
+        raise ValueError("RELATION_REQUIRES_G3")
     if output.request_hash != request.request_hash:
         raise ValueError("REQUEST_IDENTITY_MISMATCH")
-    expected = {(e, f) for e, fs in request.required_fields.items() for f in fs}
-    if {(f.entity_id, f.field_key) for f in output.fields} != expected:
-        raise ValueError("REQUIRED_FIELD_COVERAGE_MISMATCH")
-    if any(p.entity_id not in request.required_fields for p in output.pages):
-        raise ValueError("UNKNOWN_ENTITY")
-    lint_members(request.space_id, output.definitions, output.fields, output.pages)
+    validate_output_member_semantics(request, output)
     existing_defs = {d.concept_id: d for d in request.existing_definitions}
     for definition in output.definitions:
         old = existing_defs.get(definition.concept_id)
@@ -223,6 +230,26 @@ def validate_output(request: CompileRequest, output: CompileOutput) -> None:
             and old.definition_hash != definition.definition_hash
         ):
             raise ValueError("PROTECTED_DEFINITION_REPLACED")
+    validate_output_link_and_evidence_semantics(request, output)
+    validate_dispositions(request, output)
+
+
+def validate_output_member_semantics(request: CompileRequest, output: CompileOutput) -> None:
+    """Validate fixed member shape checks that precede protected-definition identity."""
+
+    expected = {(e, f) for e, fs in request.required_fields.items() for f in fs}
+    if {(f.entity_id, f.field_key) for f in output.fields} != expected:
+        raise ValueError("REQUIRED_FIELD_COVERAGE_MISMATCH")
+    if any(p.entity_id not in request.required_fields for p in output.pages):
+        raise ValueError("UNKNOWN_ENTITY")
+    lint_members(request.space_id, output.definitions, output.fields, output.pages)
+
+
+def validate_output_link_and_evidence_semantics(
+    request: CompileRequest, output: CompileOutput
+) -> None:
+    """Validate fixed entity links and evidence after protected-definition identity."""
+
     linked_members: tuple[FieldAssertion | FreeWikiPage, ...] = (*output.fields, *output.pages)
     if any(m.entity_version != request.entity_versions[m.entity_id] for m in linked_members):
         raise ValueError("ENTITY_VERSION_MISMATCH")
@@ -237,7 +264,6 @@ def validate_output(request: CompileRequest, output: CompileOutput) -> None:
     for member in all_members:
         for evidence in member.evidence:
             verify_evidence(evidence, request.sources)
-    validate_dispositions(request, output)
 
 
 def free_page_id(page: FreeWikiPage) -> str:
@@ -245,6 +271,31 @@ def free_page_id(page: FreeWikiPage) -> str:
 
 
 def validate_dispositions(request: CompileRequest, output: CompileOutput) -> None:
+    comparisons = validate_disposition_semantics(request, output)
+    for obj, old, disposition in comparisons:
+        if disposition == "update" and old == obj:
+            raise ValueError("UPDATE_TARGET_MISSING_OR_DUPLICATE")
+        if disposition == "alias_link":
+            unchanged = (
+                isinstance(old, ConceptDefinition)
+                and isinstance(obj, ConceptDefinition)
+                and old.definition_hash == obj.definition_hash
+            ) or old == obj
+            if not unchanged:
+                raise ValueError("ALIAS_TARGET_MISMATCH")
+
+
+def validate_disposition_semantics(
+    request: CompileRequest, output: CompileOutput
+) -> Iterator[
+    tuple[
+        ConceptDefinition | FreeWikiPage,
+        ConceptDefinition | FreeWikiPage | None,
+        Disposition,
+    ]
+]:
+    """Validate each disposition and yield its identity comparison in member order."""
+
     objects: dict[str, ConceptDefinition | FieldAssertion | FreeWikiPage] = {
         **{d.concept_id: d for d in output.definitions},
         **{f.assertion_id: f for f in output.fields},
@@ -270,6 +321,10 @@ def validate_dispositions(request: CompileRequest, output: CompileOutput) -> Non
                 raise ValueError("FIELD_DISPOSITION_INVALID")
             continue
         old = existing.get(key)
+        if isinstance(old, FreeWikiPage) and isinstance(obj, FreeWikiPage):
+            from .product_concept_relation import validate_relation_update
+
+            validate_relation_update(old, obj)
         if disposition in ("new_page", "sense"):
             if old is not None:
                 raise ValueError("EXISTING_IDENTITY_RECREATED")
@@ -282,18 +337,14 @@ def validate_dispositions(request: CompileRequest, output: CompileOutput) -> Non
             ):
                 raise ValueError("SENSE_IDENTITY_INVALID")
         elif disposition == "update":
-            if old is None or old == obj:
+            if old is None:
                 raise ValueError("UPDATE_TARGET_MISSING_OR_DUPLICATE")
         elif disposition == "alias_link":
-            unchanged = (
-                isinstance(old, ConceptDefinition)
-                and isinstance(obj, ConceptDefinition)
-                and old.definition_hash == obj.definition_hash
-            ) or old == obj
-            if old is None or not unchanged:
+            if old is None:
                 raise ValueError("ALIAS_TARGET_MISMATCH")
         else:
             raise ValueError("PAGE_DISPOSITION_INVALID")
+        yield obj, old, disposition
 
 
 class Compiler(Protocol):
@@ -600,7 +651,7 @@ def project_members(request: CompileRequest, output: CompileOutput) -> PageManif
                 member_id=member_id,
                 owner_id=p.entity_id,
                 title=p.title,
-                content=p.body,
+                content=free_page_content(p) if p.content_provenance else p.body,
                 payload=p.model_dump(mode="json"),
             )
         )

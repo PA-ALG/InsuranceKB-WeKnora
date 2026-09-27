@@ -1,0 +1,149 @@
+{
+  "contract": "g3-d-python-repair-1-freeze.v1",
+  "authority": {
+    "design_path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-python-repair-1.md",
+    "design_sha256": "a363c33858f184c881a215081d001c716ad22da6f7aa997b434351516b8e87d1",
+    "dispatch_path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-python-repair-dispatch-1.json",
+    "dispatch_sha256": "f9c4dcdf43f8abc5a6c3e97a00c98b4a01cfd914e372df474e0910eca47a9ff0"
+  },
+  "files": [
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "sha256": "5e472c98c4cb10929cf90689c03b105c68d02da74ca04f5fe12f554d0e6a7ef5",
+      "bytes": 70052
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/test_batch_concept_compile_830_g3.py",
+      "sha256": "7f16886fbe4110082175ed5e93714fa647c30195af980c4724307c3de109183c",
+      "bytes": 19079
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "sha256": "179affc52b282ea16d3aecfda091c449de3d62992c4f5b337bb97609df414de0",
+      "bytes": 2247425
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "sha256": "a23b4eeecc74fef40ac67968467b0c9e6a54ce777730272ca2588708fcaff3b0",
+      "bytes": 2247500
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "sha256": "301a13a2f77ad4b361a85575028425e04782af5a181221fb58b5f5a5f4a52449",
+      "bytes": 1623
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3.go",
+      "sha256": "7e612547a5ee75e428cb5cdc2a1ae39df5601cf0ef1bad1a6b483b09fd0e08bc",
+      "bytes": 66501
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go",
+      "sha256": "40965c4ce1b93e1da017a4f374a118df4c00172108a86839fad1846c3773fcc7",
+      "bytes": 3836
+    }
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/g3-d-python-repair1-red-20260907-01.log",
+      "sha256": "42c2123e6ee079f7c1aca7ee953426ca88a91ed049357167d32f01e42d359adf",
+      "bytes": 14942
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-green-focused-20260907-01.log",
+      "sha256": "4deca36e473ecdf88cde726b61631c0541ff57a35f08144dd86ea22facfbbc96",
+      "bytes": 115
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-green-full-20260907-01.log",
+      "sha256": "d59175d397c2607e8e90579ab94c136b11f7f4f8ce509176dd043f8cd5d954e4",
+      "bytes": 110
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-ruff-20260907-01.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-mypy-20260907-01.log",
+      "sha256": "0612614c4bb58852f3cb5818ca8dd5d49a5c4a1ca97a1ad824f36f7963c8621d",
+      "bytes": 414
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-ruff-20260907-02.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-mypy-20260907-02.log",
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8",
+      "bytes": 43
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-green-final-20260907-01.log",
+      "sha256": "052b27cee7d0f6a50e89586f82dcf6d8789531da1182e53f0bcdaa3623e08836",
+      "bytes": 110
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-ruff-final-20260907-01.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-mypy-final-20260907-01.log",
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8",
+      "bytes": 43
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-green-final-20260907-02.log",
+      "sha256": "5b52a81b4d7b3fe7d2e868cb910bb47a060587feff988eeca93c2cfd96db2f85",
+      "bytes": 110
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-ruff-final-20260907-02.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "/private/tmp/g3-d-python-repair1-mypy-final-20260907-02.log",
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8",
+      "bytes": 43
+    }
+  ],
+  "verification": {
+    "red": "10 failed, 11 deselected in 28.61s",
+    "attack_green": "10 passed, 11 deselected in 25.77s",
+    "final_focused": "24 passed in 72.53s",
+    "ruff": "All checks passed!",
+    "strict_mypy": "Success: no issues found in 2 source files"
+  },
+  "fixture_status": {
+    "changed": false,
+    "actual_base_fields": 134,
+    "carried_fields": 132,
+    "aligned_fields": 2,
+    "delta_fields": 208,
+    "final_fields": 342,
+    "preparation_post_bytes": 2247500,
+    "limit_bytes": 8388608
+  },
+  "scope": {
+    "changed": [
+      "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "harness/tests/test_batch_concept_compile_830_g3.py"
+    ],
+    "fixtures_changed": [],
+    "go_state": "paused and unchanged"
+  },
+  "effects": {
+    "provider": 0,
+    "model": 0,
+    "database": 0,
+    "http": 0,
+    "build": 0,
+    "container": 0,
+    "commit": 0,
+    "push": 0,
+    "upload": 0
+  }
+}

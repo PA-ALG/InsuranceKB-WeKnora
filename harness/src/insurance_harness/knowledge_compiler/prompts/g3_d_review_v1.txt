@@ -1,0 +1,2 @@
+G3 D independent review v1
+Return one canonical JSON object matching the supplied ReviewOutput schema. Review the exact composed candidate context and report PASS, NEEDS_HUMAN, or REJECT with the required evidence. Do not approve Draft, publish, or activation.

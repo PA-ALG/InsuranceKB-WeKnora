@@ -1,0 +1,60 @@
+{
+  "contract": "830-g3-source-upload-runner-freeze.v2",
+  "recorded_at": "2026-09-07T12:07:38.176559+00:00",
+  "status": "FROZEN_PENDING_INDEPENDENT_REVIEW",
+  "repair_plan_sha256": "3f3a8457ce1f4a15d7bd2cffb473053e164996a824452403dcff9bf74290cbbb",
+  "repair_round": 1,
+  "files": [
+    {
+      "path": "source_upload_runner_v2.py",
+      "sha256": "9dcaef873f85be4dd89e2332da718a8f77912b04aa3fb0aa383f8c45a581e323",
+      "origin": "/private/tmp/g3-source-upload-runner-review2.py"
+    },
+    {
+      "path": "source_upload_runner_v2_test.py",
+      "sha256": "df65920671759385525b35fd38d6cd7143af56dba7026baa2121ea8371157e59",
+      "origin": "/private/tmp/g3-source-upload-runner-review2_test.py"
+    },
+    {
+      "path": "source-upload-runner-v2-notes.md",
+      "sha256": "2d2c2cdef08071f153a0574af36a4ab812b877966ab409e59fca4ba19d1b57ed",
+      "origin": "/private/tmp/g3-source-upload-runner-review2-notes.md"
+    },
+    {
+      "path": "source-upload-runner-v2-red.log",
+      "sha256": "978a83e4de8187cf1b696f195ec51b689dc211eaaaf6b8fc4a07fec919b62072",
+      "origin": "/private/tmp/g3-source-upload-runner-repair1-red.log"
+    },
+    {
+      "path": "source-upload-runner-v2-green.log",
+      "sha256": "47d9fce8545ed03c4839c53d1f6df5c291ebe881ee8b013f519a37a57aa13966",
+      "origin": "/private/tmp/g3-source-upload-runner-repair1-green-final2.log"
+    },
+    {
+      "path": "source-upload-runner-v2-static.log",
+      "sha256": "f98bbe05c8c0ff27c79ee01f9e21b31fefaaa1dc1db9fb4970768168282322a5",
+      "origin": "/private/tmp/g3-source-upload-runner-repair1-static.log"
+    },
+    {
+      "path": "g3-source-upload-runner-repair1-green.log",
+      "sha256": "0f7a8a9fde1cf192d291096193ecce790909b811db92229d973d2b46a397ebac",
+      "status": "REJECTED_INTERMEDIATE_OR_OLDER_VERSION",
+      "origin": "/private/tmp/g3-source-upload-runner-repair1-green.log"
+    },
+    {
+      "path": "g3-source-upload-runner-repair1-green-final.log",
+      "sha256": "08a0fdd365c14bcc0bca8b7e930b27772b39d94042491117fc4b9dc91a54532f",
+      "status": "REJECTED_INTERMEDIATE_OR_OLDER_VERSION",
+      "origin": "/private/tmp/g3-source-upload-runner-repair1-green-final.log"
+    }
+  ],
+  "owner_fake_tests": 33,
+  "actual_effects": {
+    "http": 0,
+    "docker": 0,
+    "database": 0,
+    "provider": 0,
+    "upload": 0
+  },
+  "authorization": "NOT REQUESTED_OR_GRANTED; no approved authorization generated"
+}

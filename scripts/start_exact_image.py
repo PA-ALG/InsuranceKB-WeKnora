@@ -24,6 +24,7 @@ class ArtifactSmokeError(RuntimeError):
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 _CONTEXT = "colima-g1-build"
+_CONTEXTS = (_CONTEXT, "colima")
 _COMPOSE_FILE = "deploy/local-build/docker-compose.app-exact.yml"
 _IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -311,11 +312,13 @@ def _write_receipt(path: Path, receipt: Mapping[str, Any]) -> None:
             pass
 
 
-def _compose_arguments(env_path: Path, project: str, action: str) -> tuple[str, ...]:
+def _compose_arguments(
+    env_path: Path, project: str, action: str, docker_context: str,
+) -> tuple[str, ...]:
     prefix = (
         "docker",
         "--context",
-        _CONTEXT,
+        docker_context,
         "compose",
         "--project-name",
         project,
@@ -342,9 +345,12 @@ def _compose_arguments(env_path: Path, project: str, action: str) -> tuple[str, 
     return (*prefix, *suffixes[action])
 
 
-def _base_receipt(d2: Mapping[str, Any], image_id: str, project: str) -> dict[str, Any]:
+def _base_receipt(
+    d2: Mapping[str, Any], image_id: str, project: str, docker_context: str,
+) -> dict[str, Any]:
     return {
         "contract": "ba0-container-artifact-smoke.v1",
+        "docker_context": docker_context,
         "scope": "CONTAINER_ARTIFACT_SMOKE",
         "artifact_identity": d2["artifact_identity"],
         "build_source_head": d2["build_source_head"],
@@ -364,11 +370,17 @@ def run_exact_image_smoke(
     evidence_out: str | os.PathLike[str],
     nonce: str,
     runner: Runner = subprocess.run,
+    docker_context: str = _CONTEXT,
 ) -> dict[str, Any]:
     """Validate and start one isolated container by exact image ID."""
 
+    if docker_context not in _CONTEXTS:
+        raise ArtifactSmokeError("Docker context is not approved")
     root = Path(repo_root).resolve(strict=True)
     d2 = _read_object(Path(d2_receipt_path), "D2 receipt")
+    # Historical receipts predate explicit context and belong only to g1-build.
+    if d2.get("docker_context", _CONTEXT) != docker_context:
+        raise ArtifactSmokeError("D2 receipt Docker context differs from smoke context")
     labels = _required_labels(d2)
     image_id = str(d2["image_id"])
     if _NONCE.fullmatch(nonce) is None:
@@ -383,7 +395,7 @@ def run_exact_image_smoke(
         (
             "docker",
             "--context",
-            _CONTEXT,
+            docker_context,
             "image",
             "inspect",
             image_id,
@@ -408,7 +420,7 @@ def run_exact_image_smoke(
 
         config_result = _docker(
             runner,
-            _compose_arguments(env_path, project, "config"),
+            _compose_arguments(env_path, project, "config", docker_context),
             root=root,
             description="Compose config",
         )
@@ -425,7 +437,7 @@ def run_exact_image_smoke(
             (
                 "docker",
                 "--context",
-                _CONTEXT,
+                docker_context,
                 "ps",
                 "--all",
                 "--quiet",
@@ -446,7 +458,7 @@ def run_exact_image_smoke(
             mutation_started = True
             _docker(
                 runner,
-                _compose_arguments(env_path, project, "up"),
+                _compose_arguments(env_path, project, "up", docker_context),
                 root=root,
                 description="Compose up",
             )
@@ -455,7 +467,7 @@ def run_exact_image_smoke(
                 (
                     "docker",
                     "--context",
-                    _CONTEXT,
+                    docker_context,
                     "inspect",
                     container,
                     "--format",
@@ -485,7 +497,7 @@ def run_exact_image_smoke(
             if mutation_started:
                 cleanup_result = _docker(
                     runner,
-                    _compose_arguments(env_path, project, "down"),
+                    _compose_arguments(env_path, project, "down", docker_context),
                     root=root,
                     description="Compose cleanup",
                     check=False,
@@ -493,7 +505,7 @@ def run_exact_image_smoke(
                 cleanup = "PASS" if cleanup_result.returncode == 0 else "FAIL"
 
         receipt = {
-            **_base_receipt(d2, image_id, project),
+            **_base_receipt(d2, image_id, project, docker_context),
             "status": "FAIL" if failure is not None or cleanup != "PASS" else "PASS",
             "runtime_image_id": runtime_image_id,
             "cleanup": cleanup,
@@ -509,6 +521,7 @@ def run_exact_image_smoke(
 def _main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", default=".")
+    parser.add_argument("--context", default=_CONTEXT, choices=_CONTEXTS)
     parser.add_argument("--d2-receipt", required=True)
     parser.add_argument("--evidence-out", required=True)
     parser.add_argument("--nonce", default=None)
@@ -519,6 +532,7 @@ def _main(arguments: Sequence[str] | None = None) -> int:
         d2_receipt_path=parsed.d2_receipt,
         evidence_out=parsed.evidence_out,
         nonce=nonce,
+        docker_context=parsed.context,
     )
     print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
     return 0

@@ -1,0 +1,20 @@
+{
+  "contract": "830-g3-official-multi-source.v1",
+  "inventory_id": "g3-material-20",
+  "recorded_at": "2026-09-07T06:16:11.366057+00:00",
+  "url": "https://life.pingan.com/syncFile/20210915164110442422.pdf",
+  "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-20210915-product-service-manual-zunxiang.pdf",
+  "file_sha256": "de50dacd5fdd55ef714587e1a4725db783cbf4e96384e00f1a5539c25902eb93",
+  "size_bytes": 1664380,
+  "pages": 16,
+  "source_revision_status": "NOT_YET_CAPTURED",
+  "identity_anchor_note": "Official manual PDF page4 explicitly lists seven separate product names/codes:1618,1646,1649,1648,1655,1564,1580",
+  "independent_identity_evidence_page": 4,
+  "edition_note": "Historical2021 manual; not assumed currently effective; no filing/version anchor inferred",
+  "model_output": false,
+  "seed_status": "LOCAL_INSPECTION_PROPOSAL_NOT_FROZEN_EXPECTED_OUTCOME",
+  "multi_limit": "Each referenced product has independent name/code evidence, but exact terms version unresolved. Do not autoCREATE or grant service/coverage authority from mentions. All children remain eligible for human confirmation only.",
+  "raw_acquisition": "1 publicGET; whole originalPDF preserved",
+  "provider_calls": 0,
+  "user_material_external_transfers": 0
+}

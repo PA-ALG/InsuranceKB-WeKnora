@@ -1,0 +1,191 @@
+{
+  "directory": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/d-go-c-semantics-oracle-01",
+  "files": {
+    "01-identity-threshold-policy-drift.json.gz": {
+      "sha256": "2bce8fe485ed96de0a7a2e291f6f33b5308efd1f43feedb6cab3c70b6e19ed87",
+      "size": 341697
+    },
+    "02-classification-trust-rule-removed.json.gz": {
+      "sha256": "83e199d07e43470a8e5f04e894d42dfda3723ad8997b02f96768646036601e4f",
+      "size": 341683
+    },
+    "03-selected-proposal-unsupported-classification.json.gz": {
+      "sha256": "6ace90a624cf5b0e4a2438be7dd4db4bd5c21ffcf7f6e71ecfa28e9b89e98e11",
+      "size": 341690
+    },
+    "04-single-child-false-multi-parent.json.gz": {
+      "sha256": "d3d2143048f1bd9385961195eea20241ec6dd891d6578fd47e9276766ac2ecf3",
+      "size": 341713
+    },
+    "custody.json": {
+      "sha256": "92ce2e6baac04c0f1055844509a6e56d29fbe9995e82ba135e0141c01ccdc0bb",
+      "size": 3103
+    },
+    "g3-go-c-semantics-materialize-02.py": {
+      "sha256": "bc471569e9f9e6cf93748a410888f5dc7302f654ae59e2ac316639b4e4cb1ccc",
+      "size": 6803
+    },
+    "g3-go-c-semantics-oracle-01.json": {
+      "sha256": "b1f4eb5710a24d037b6a1ccfedade49582e6f3c147dd1b1b08d87694364692c5",
+      "size": 16301
+    },
+    "g3-go-c-semantics-oracle-01.py": {
+      "sha256": "cdce4bfc248c77c3cf045e46cfae0f31304de228a706aa175c26b9b3f33b93de",
+      "size": 16628
+    },
+    "manifest.json": {
+      "sha256": "9ce0d8ca1fee1f94dad5c77ea52aa5bceca2ef0d7040aa8b43b1b23e1f0a1f52",
+      "size": 3909
+    }
+  },
+  "copies": {
+    "g3-go-c-semantics-oracle-01.py": {
+      "original": "/private/tmp/g3-go-c-semantics-oracle-01.py",
+      "copied_sha256": "cdce4bfc248c77c3cf045e46cfae0f31304de228a706aa175c26b9b3f33b93de",
+      "original_sha256": "cdce4bfc248c77c3cf045e46cfae0f31304de228a706aa175c26b9b3f33b93de",
+      "byte_equal": true
+    },
+    "g3-go-c-semantics-oracle-01.json": {
+      "original": "/private/tmp/g3-go-c-semantics-oracle-01.json",
+      "copied_sha256": "b1f4eb5710a24d037b6a1ccfedade49582e6f3c147dd1b1b08d87694364692c5",
+      "original_sha256": "b1f4eb5710a24d037b6a1ccfedade49582e6f3c147dd1b1b08d87694364692c5",
+      "byte_equal": true
+    },
+    "g3-go-c-semantics-materialize-02.py": {
+      "original": "/private/tmp/g3-go-c-semantics-materialize-02.py",
+      "copied_sha256": "bc471569e9f9e6cf93748a410888f5dc7302f654ae59e2ac316639b4e4cb1ccc",
+      "original_sha256": "bc471569e9f9e6cf93748a410888f5dc7302f654ae59e2ac316639b4e4cb1ccc",
+      "byte_equal": true
+    },
+    "manifest.json": {
+      "original": "/private/tmp/g3-go-c-semantics-cases-01/manifest.json",
+      "copied_sha256": "9ce0d8ca1fee1f94dad5c77ea52aa5bceca2ef0d7040aa8b43b1b23e1f0a1f52",
+      "original_sha256": "9ce0d8ca1fee1f94dad5c77ea52aa5bceca2ef0d7040aa8b43b1b23e1f0a1f52",
+      "byte_equal": true
+    }
+  },
+  "gzip_cases": {
+    "01-identity-threshold-policy-drift.json.gz": {
+      "original": "/private/tmp/g3-go-c-semantics-cases-01/01-identity-threshold-policy-drift.json",
+      "gzip_sha256": "2bce8fe485ed96de0a7a2e291f6f33b5308efd1f43feedb6cab3c70b6e19ed87",
+      "raw_sha256": "166652fd9e6e3dab210e0100f710af9615797a9e151e333a0447625a694c095a",
+      "original_sha256": "166652fd9e6e3dab210e0100f710af9615797a9e151e333a0447625a694c095a",
+      "decompressed_byte_equal": true,
+      "gzip_mtime": 0,
+      "mtime_zero": true
+    },
+    "02-classification-trust-rule-removed.json.gz": {
+      "original": "/private/tmp/g3-go-c-semantics-cases-01/02-classification-trust-rule-removed.json",
+      "gzip_sha256": "83e199d07e43470a8e5f04e894d42dfda3723ad8997b02f96768646036601e4f",
+      "raw_sha256": "e1193bec8f8a36717038886e9db1e6a9dd83f0082ac7e5fb5613e9829485b680",
+      "original_sha256": "e1193bec8f8a36717038886e9db1e6a9dd83f0082ac7e5fb5613e9829485b680",
+      "decompressed_byte_equal": true,
+      "gzip_mtime": 0,
+      "mtime_zero": true
+    },
+    "03-selected-proposal-unsupported-classification.json.gz": {
+      "original": "/private/tmp/g3-go-c-semantics-cases-01/03-selected-proposal-unsupported-classification.json",
+      "gzip_sha256": "6ace90a624cf5b0e4a2438be7dd4db4bd5c21ffcf7f6e71ecfa28e9b89e98e11",
+      "raw_sha256": "115ef591aaacab65ac5aa523a6d87c409ef6a8eda64147dc22bb780fb04497af",
+      "original_sha256": "115ef591aaacab65ac5aa523a6d87c409ef6a8eda64147dc22bb780fb04497af",
+      "decompressed_byte_equal": true,
+      "gzip_mtime": 0,
+      "mtime_zero": true
+    },
+    "04-single-child-false-multi-parent.json.gz": {
+      "original": "/private/tmp/g3-go-c-semantics-cases-01/04-single-child-false-multi-parent.json",
+      "gzip_sha256": "d3d2143048f1bd9385961195eea20241ec6dd891d6578fd47e9276766ac2ecf3",
+      "raw_sha256": "13da9d109f3b2d796a8ad415c7a4e00ff39d4d51fb10da34c0cf3025788694aa",
+      "original_sha256": "13da9d109f3b2d796a8ad415c7a4e00ff39d4d51fb10da34c0cf3025788694aa",
+      "decompressed_byte_equal": true,
+      "gzip_mtime": 0,
+      "mtime_zero": true
+    }
+  },
+  "custody": {
+    "top_level_keys": [
+      "applicable_requirements",
+      "contract",
+      "effects",
+      "files",
+      "purpose",
+      "red_exemption"
+    ],
+    "raw": {
+      "contract": "830-g3-go-c-semantics-oracle-custody.v1",
+      "purpose": "Preserve independent fully rehashed C semantic rejection vectors for Go mirror review. No Go execution is claimed.",
+      "applicable_requirements": [
+        "G3-R3",
+        "G3-R4"
+      ],
+      "red_exemption": "Mechanical byte-preserving evidence custody only; no product, fixture, protocol or verification criterion changed.",
+      "files": [
+        {
+          "source": "/private/tmp/g3-go-c-semantics-oracle-01.py",
+          "saved": "g3-go-c-semantics-oracle-01.py",
+          "sha256": "cdce4bfc248c77c3cf045e46cfae0f31304de228a706aa175c26b9b3f33b93de"
+        },
+        {
+          "source": "/private/tmp/g3-go-c-semantics-oracle-01.json",
+          "saved": "g3-go-c-semantics-oracle-01.json",
+          "sha256": "b1f4eb5710a24d037b6a1ccfedade49582e6f3c147dd1b1b08d87694364692c5"
+        },
+        {
+          "source": "/private/tmp/g3-go-c-semantics-materialize-02.py",
+          "saved": "g3-go-c-semantics-materialize-02.py",
+          "sha256": "bc471569e9f9e6cf93748a410888f5dc7302f654ae59e2ac316639b4e4cb1ccc"
+        },
+        {
+          "source": "/private/tmp/g3-go-c-semantics-cases-01/manifest.json",
+          "saved": "manifest.json",
+          "sha256": "9ce0d8ca1fee1f94dad5c77ea52aa5bceca2ef0d7040aa8b43b1b23e1f0a1f52"
+        },
+        {
+          "source": "/private/tmp/g3-go-c-semantics-cases-01/01-identity-threshold-policy-drift.json",
+          "saved": "01-identity-threshold-policy-drift.json.gz",
+          "encoding": "gzip",
+          "raw_sha256": "166652fd9e6e3dab210e0100f710af9615797a9e151e333a0447625a694c095a",
+          "raw_bytes": 2254415,
+          "saved_sha256": "2bce8fe485ed96de0a7a2e291f6f33b5308efd1f43feedb6cab3c70b6e19ed87",
+          "saved_bytes": 341697
+        },
+        {
+          "source": "/private/tmp/g3-go-c-semantics-cases-01/02-classification-trust-rule-removed.json",
+          "saved": "02-classification-trust-rule-removed.json.gz",
+          "encoding": "gzip",
+          "raw_sha256": "e1193bec8f8a36717038886e9db1e6a9dd83f0082ac7e5fb5613e9829485b680",
+          "raw_bytes": 2254398,
+          "saved_sha256": "83e199d07e43470a8e5f04e894d42dfda3723ad8997b02f96768646036601e4f",
+          "saved_bytes": 341683
+        },
+        {
+          "source": "/private/tmp/g3-go-c-semantics-cases-01/03-selected-proposal-unsupported-classification.json",
+          "saved": "03-selected-proposal-unsupported-classification.json.gz",
+          "encoding": "gzip",
+          "raw_sha256": "115ef591aaacab65ac5aa523a6d87c409ef6a8eda64147dc22bb780fb04497af",
+          "raw_bytes": 2254405,
+          "saved_sha256": "6ace90a624cf5b0e4a2438be7dd4db4bd5c21ffcf7f6e71ecfa28e9b89e98e11",
+          "saved_bytes": 341690
+        },
+        {
+          "source": "/private/tmp/g3-go-c-semantics-cases-01/04-single-child-false-multi-parent.json",
+          "saved": "04-single-child-false-multi-parent.json.gz",
+          "encoding": "gzip",
+          "raw_sha256": "13da9d109f3b2d796a8ad415c7a4e00ff39d4d51fb10da34c0cf3025788694aa",
+          "raw_bytes": 2254456,
+          "saved_sha256": "d3d2143048f1bd9385961195eea20241ec6dd891d6578fd47e9276766ac2ecf3",
+          "saved_bytes": 341713
+        }
+      ],
+      "effects": {
+        "provider": 0,
+        "http": 0,
+        "database": 0,
+        "product_write": 0
+      }
+    }
+  },
+  "all_copy_equal": true,
+  "all_gzip_equal": true,
+  "all_gzip_mtime_zero": true
+}

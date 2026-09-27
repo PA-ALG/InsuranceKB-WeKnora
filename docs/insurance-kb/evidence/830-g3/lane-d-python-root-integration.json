@@ -1,0 +1,51 @@
+{
+  "contract": "830-g3-d-python-root-integration.v1",
+  "recorded_at": "2026-09-07T12:36:07.075386+00:00",
+  "status": "LOCAL_REGRESSION_PASS_PENDING_INDEPENDENT_REVIEW_AND_GO",
+  "frozen_inputs_sha256": "5628c9aa661cad22c61cefb3647976e029c0455c7bebdf1f3d6d08880b4ad61f",
+  "tests": {
+    "suite": "A/C/common/D Python",
+    "passed": 110,
+    "failed": 0,
+    "seconds": 134.79,
+    "log": "g3-d-python-root-integration-01.log",
+    "sha256": "5faa034144a9a8ac058a297e7fe39677b7693b47339ce0d1be9d4d9ac916e023"
+  },
+  "files": {
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py": {
+      "bytes": 65918,
+      "lines": 1691,
+      "sha256": "b7e39999060842d586d6d77a63115d7a86d14f5ba4054c374bfa87873e2315e7"
+    },
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json": {
+      "bytes": 2247425,
+      "lines": 1,
+      "sha256": "179affc52b282ea16d3aecfda091c449de3d62992c4f5b337bb97609df414de0"
+    },
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json": {
+      "bytes": 2247500,
+      "lines": 1,
+      "sha256": "a23b4eeecc74fef40ac67968467b0c9e6a54ce777730272ca2588708fcaff3b0"
+    },
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json": {
+      "bytes": 1623,
+      "lines": 1,
+      "sha256": "301a13a2f77ad4b361a85575028425e04782af5a181221fb58b5f5a5f4a52449"
+    },
+    "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/test_batch_concept_compile_830_g3.py": {
+      "bytes": 14292,
+      "lines": 368,
+      "sha256": "3fb6c9afe3ff159bcbc89e384a04d4d47c19c2b44215844f943fe11270ca5b2a"
+    }
+  },
+  "actual_model_source_runtime": "NOT RUN",
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "container": 0,
+    "upload": 0,
+    "draft": 0,
+    "review": 0,
+    "activate": 0
+  }
+}

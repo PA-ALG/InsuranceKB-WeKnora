@@ -1,0 +1,32 @@
+{
+  "contract": "830-g3-offline-embedding-preparation-result.v1",
+  "status": "PASS_LOCAL_PREPARATION_ONLY",
+  "documents": 11,
+  "input_count": 204,
+  "document_chunk_counts": {
+    "g3-material-07": 34,
+    "g3-material-08": 40,
+    "g3-material-09": 9,
+    "g3-material-11": 9,
+    "g3-material-12": 41,
+    "g3-material-13": 11,
+    "g3-material-14": 8,
+    "g3-material-17": 42,
+    "g3-material-18": 6,
+    "g3-material-19": 2,
+    "g3-material-21": 2
+  },
+  "prepared_whitelist": "embedding-whitelist.json",
+  "whitelist_sha256": "08427ba7c73ec820d387686948bde1f166c708c6dce6516636f038666362b3f7",
+  "log": "g3-offline-embedding-preparation.log",
+  "log_sha256": "00e0e2a4a0eb64efc9456a969bfbc83e767fe47b0296c58a72ef53f2c6dce1e4",
+  "exit_code": 0,
+  "provider_calls": 0,
+  "uploads": 0,
+  "hash_scope": "MODEL_INPUT_PROJECTION_NOT_HTTP_REQUEST",
+  "conditional_future_requests": {
+    "count": 11,
+    "requires": "BATCH_EMBED_SIZE=100, exact KB readback, outbound approval and no retries"
+  },
+  "runtime_kb_readback": "NOT RUN; target G3 runtime not provisioned"
+}

@@ -1,0 +1,47 @@
+{
+  "contract": "batch-d-design-final-independent-review.830.g3.v1",
+  "recorded_at": "2026-09-07T09:23:28.034977+00:00",
+  "reviewer": "g3_seam_audit",
+  "status": "PASS",
+  "blocker_count": 0,
+  "design_inputs": [
+    {
+      "path": "lane-d-contract-design.md",
+      "sha256": "415742f61d443ddeb5b00d13fcdddd8dae97ddc370bd8f61a42000f7c8924512"
+    },
+    {
+      "path": "lane-d-contract-review-amendment-1.md",
+      "sha256": "d70fc9ad4385921e018ca8c76e2ee7dc8e9cbbe9b5c2cb2b05c28c870c4eb309"
+    },
+    {
+      "path": "lane-d-base-binding-amendment-2.md",
+      "sha256": "7c71873a7af9017276f61942bc51b2a0b318e1fbd492deb8153122473466ad08"
+    },
+    {
+      "path": "lane-d-legacy-field-preservation-amendment-3.md",
+      "sha256": "dc9c8804183c9fb2c539f0d99559b03a646a8caa1ac964d8a8ee9b0070be4abe"
+    },
+    {
+      "path": "lane-d-compile-record-amendment-4.md",
+      "sha256": "ac46c90d91bce1133c9f7c4991b079cc721defda2050c4f9f06a73e64537fb8a"
+    },
+    {
+      "path": "lane-d-base-pack-compatibility-amendment-5.md",
+      "sha256": "408326eb72c966b60c30c7edf4293777913c385f47cd28cd06ae4e6adf816d75"
+    }
+  ],
+  "C_source_sha256": "d67b515e2f61e8df3414693f572f6e1ab44a8d53c825c6392f16424d8cf2d5dc",
+  "required_gates": [
+    "persist exact C inputs; selected child automatic eligibility and source reopen",
+    "all actual base entities must have selected automatic MATCH refs",
+    "exact old G2 medical schema/profile to current medical pack/profile compatibility; reject silent pack changes",
+    "standard Profile67 unchanged, two legacy extras retained, current base complete count344",
+    "actual model delta raw and deterministic carry logical raw/context separately recorded and hashed",
+    "exact manifest/preparation/overview legacy refs",
+    "existing fields/defs/free pages/Evidence/source complete preservation"
+  ],
+  "authorized_next": "mechanically consolidate then read-only no-loss check; first DTO/Go types/cross-language fixtures only",
+  "capacity": "measure full canonical275/344 including both compile results and full C closure; 8 MiB PASS before handler/service/UI",
+  "runtime": "NOT RUN",
+  "actual_base_model_MATCH": "NOT RUN"
+}

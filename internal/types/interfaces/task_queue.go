@@ -129,3 +129,15 @@ type TaskDeadLetterRepository interface {
 	// requeued the task manually).
 	DeleteByID(ctx context.Context, id int64) error
 }
+
+// TaskPendingOpsExecutionStore guards a one-shot queue operation. A marker
+// records permission to start, never proof of provider completion. Recovery
+// quarantines marked operations; this is not a model checkpoint store.
+type TaskPendingOpsExecutionStore interface {
+	// HasFailedOperation checks the authoritative archived op and full revision.
+	HasFailedOperation(ctx context.Context, claim *types.TaskPendingOp) (bool, error)
+	BeginOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error)
+	CompleteOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error)
+	ArchiveOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string, failure *types.TaskDeadLetter) (bool, error)
+	FailedOperationCount(ctx context.Context, tenantID uint64, taskType, scope, scopeID string) (int64, error)
+}

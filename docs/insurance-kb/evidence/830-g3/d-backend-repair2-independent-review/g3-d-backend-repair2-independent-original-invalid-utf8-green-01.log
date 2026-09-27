@@ -1,0 +1,4 @@
+=== RUN   TestIndependentG3HandlerRejectsInvalidUTF8PreparationIDBeforeReplacement
+--- PASS: TestIndependentG3HandlerRejectsInvalidUTF8PreparationIDBeforeReplacement (0.00s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/handler	2.295s

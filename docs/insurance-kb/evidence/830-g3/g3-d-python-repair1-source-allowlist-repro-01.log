@@ -1,0 +1,10 @@
+material_id=fixture-endowment-1826
+expanded_corpus_entry_valid=true
+expanded_base_compile_request_valid=true
+Traceback (most recent call last):
+  File "/private/tmp/g3-d-python-repair1-source-allowlist-repro-01.py", line 37, in <module>
+    print('extra_block_matches_same_registered_source_identity='+str(extra.concept_source_identity==identity_block.concept_source_identity).lower())
+                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/harness/.venv/lib/python3.12/site-packages/pydantic/main.py", line 1042, in __getattr__
+    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+AttributeError: 'SourceBlock' object has no attribute 'concept_source_identity'

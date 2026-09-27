@@ -1,0 +1,314 @@
+{
+  "contract": "830-g3-d-backend-implementation-freeze.v1",
+  "status": "FROZEN_FOR_INDEPENDENT_REVIEW",
+  "workspace": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
+  "files": [
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g2.go",
+      "sha256": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+      "bytes": 35621,
+      "lines": 884
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3.go",
+      "sha256": "9e1c4d50c9002f941de6c2ca99572e4f7249de569659c1a73a3c4a771652992a",
+      "bytes": 14363,
+      "lines": 337
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go",
+      "sha256": "a4b7497492a3b16173c8645a7c6ccfc799e4b9f30e73770fb06c31158b41f219",
+      "bytes": 34695,
+      "lines": 771
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2.go",
+      "sha256": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+      "bytes": 56870,
+      "lines": 1177
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go",
+      "sha256": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+      "bytes": 37312,
+      "lines": 659
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/wiki_release.go",
+      "sha256": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+      "bytes": 76181,
+      "lines": 2007
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g2.go",
+      "sha256": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+      "bytes": 4363,
+      "lines": 149
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go",
+      "sha256": "12307859c282a07f13893ec49b4df8c5059d7e06475cf13990fb4f8699784996",
+      "bytes": 13805,
+      "lines": 335
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/schema_wiki.go",
+      "sha256": "d48de4da18e86d424ddb69aa5c893744cf4cb8d6e4ab45904e71d6c989140192",
+      "bytes": 50256,
+      "lines": 1449
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/router/routes_schema_wiki.go",
+      "sha256": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c",
+      "bytes": 8759,
+      "lines": 239
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/router/routes_batch_concept_830_g3_test.go",
+      "sha256": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+      "bytes": 2470,
+      "lines": 73
+    }
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/g3-d-backend-final-full-packages-green-20260908-21.log",
+      "sha256": "cb58cf12dfc013d4af344cae45103159cba8f405e73115135848e578e3151710",
+      "bytes": 181,
+      "lines": 3
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-final-go-vet-20260908-22.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "lines": 0
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-final-handler-router-green-20260908-18.log",
+      "sha256": "267affe2659f477be243de526900e3f87de298552b19a147b8f1165112e875e9",
+      "bytes": 828,
+      "lines": 18
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-final-handler-router-green-20260908-19.log",
+      "sha256": "7f9103be0d6a5a253b5ec51edd8e76ac21707d3880c5cd262da5b2fb5ad85ad0",
+      "bytes": 111,
+      "lines": 2
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-final-service-correction-green-20260908-15.log",
+      "sha256": "faae11348eeb6aeedc7d73a649737d15d4cd8391c21c4fcf544be8ec1744d2b9",
+      "bytes": 69,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-final-service-green-20260908-14.log",
+      "sha256": "f26ae08aab036813e2a2ddce91134a5c752a3bd4849504324e040de283b8289f",
+      "bytes": 73915,
+      "lines": 563
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-final-service-green-20260908-17.log",
+      "sha256": "234b0032fc94b14deaf4dd8c00f0bad1bc1da9d7c8f977eaabbe4c3c058a2531",
+      "bytes": 70,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-final-service-retry-green-20260908-16.log",
+      "sha256": "d68d6dcb1a5589b48caed18060d3069914e4ceff89fa832dbb2d947a6412e5a5",
+      "bytes": 69,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task1-component-green-20260908-04.log",
+      "sha256": "d93fb73ef80ebd4b8d763c0ed34db6cc2632f216665312ae97026732a6ebcd64",
+      "bytes": 69,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task1-green-20260908-05.log",
+      "sha256": "4bc212b06bd66713ca00df4303c77cf9f7c1c763758630b351c8a9f4497acbc6",
+      "bytes": 219752,
+      "lines": 823
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task1-red-20260908-01.log",
+      "sha256": "f3ff42def6b6706c92c2e2895fb1ec1db8341aae0a6280348961a056500c0db7",
+      "bytes": 228,
+      "lines": 4
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task1-red-20260908-02.log",
+      "sha256": "f3ff42def6b6706c92c2e2895fb1ec1db8341aae0a6280348961a056500c0db7",
+      "bytes": 228,
+      "lines": 4
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task1-red-20260908-03.log",
+      "sha256": "23ceb704e0f8bd60697db6c754d9b91297f61df8c6a8abc6f56cbf5a10f18527",
+      "bytes": 1026,
+      "lines": 12
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task1-targeted-green-20260908-06.log",
+      "sha256": "060d89579ab4d71278b107f0309404b3cfdc0fba7ce23df3452af01800264deb",
+      "bytes": 69,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task2-component-green-20260908-03.log",
+      "sha256": "ea9890b2f81adfd195cb452de0729b3d6ed95fcb2f61aa4cb532395cda29e376",
+      "bytes": 69,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task2-receipt-green-20260908-02.log",
+      "sha256": "fe2a6b1534e1acb748f6eb8b62227a28fe0d1985c66a1ff71d745339b571096f",
+      "bytes": 68,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task2-red-20260908-01.log",
+      "sha256": "cb42990b3f03d657358e79f40e69762538f8b6b30a3721b6f9aed0cba5d59cb5",
+      "bytes": 6825,
+      "lines": 74
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-active-cas-green-20260908-07.log",
+      "sha256": "86d48c813269fb557e3689cbe26bded95ea3f60a45162ef7f8ea74ccdf97b698",
+      "bytes": 3411,
+      "lines": 27
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-active-green-20260908-05.log",
+      "sha256": "68cd1c357ad3276901d172bb90f3c8a7a5e334daee3ef7fc1f1a28d637925be1",
+      "bytes": 138553,
+      "lines": 79
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-active-green-20260908-06.log",
+      "sha256": "19f43e1294ca88511cdbf7728494d93a2c30ba252d413a988441aebfac4ebd96",
+      "bytes": 1526,
+      "lines": 13
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-active-red-20260908-04.log",
+      "sha256": "427f6eab116b43d36e043da5a1fa16903e662b7a0fbbfca2c6bbe938be92edca",
+      "bytes": 1933,
+      "lines": 19
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-component-green-20260908-03.log",
+      "sha256": "541b7b228d7499f4c4d1ef1401bd4220050452f4935690ac8272a604d3e44812",
+      "bytes": 2402,
+      "lines": 31
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-query-green-20260908-09.log",
+      "sha256": "bb51c884ea1bb1de51d94ac7cd8113c6b30f4cdb1684c00098de3f7ecb6f3c9a",
+      "bytes": 2120,
+      "lines": 28
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-query-green-20260908-10.log",
+      "sha256": "9d63d5e947fe5763b2f31236a0c03599d03559fa7741ac862928135844d433c0",
+      "bytes": 56,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-query-handler-green-20260908-12.log",
+      "sha256": "7d08bcc80ccb0bbe7a993656c54403a702c3701a6565edcbd3bd49ba961b7ca9",
+      "bytes": 641,
+      "lines": 11
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-query-handler-green-20260908-13.log",
+      "sha256": "fb3531811ffa0a105cf9d6bf1458f20eb1b79915d9f0bc954f86d5c937802273",
+      "bytes": 56,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-query-red-20260908-08.log",
+      "sha256": "35e00c3aad6d4823b4a16d72d89b7cc83ed478faa71ae43f9c73ab63d9b3f786",
+      "bytes": 5695,
+      "lines": 57
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-query-service-final-green-20260908-20.log",
+      "sha256": "12d252d4986a870ffd7f1a9fefbef13f45a4e5d6fd6f7ad2504cc372def40d6e",
+      "bytes": 69,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-query-service-green-20260908-11.log",
+      "sha256": "76e1fbad6c5fc6b75fc5a60484620df33f22041b3a61dfbf1975e570ac870abc",
+      "bytes": 69,
+      "lines": 1
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-red-20260908-01.log",
+      "sha256": "6c047d5fe986be7e31e7ab4521df8a76b4af740fec2e749ec03481f8233cef24",
+      "bytes": 356,
+      "lines": 4
+    },
+    {
+      "path": "/private/tmp/g3-d-backend-task3-red-20260908-02.log",
+      "sha256": "40816325ef0d7abdbad00b7b80fa426de401ba5d22d37d53b003d0d4a4b148a8",
+      "bytes": 1926,
+      "lines": 24
+    }
+  ],
+  "effective_behavior_red": [
+    "/private/tmp/g3-d-backend-task1-red-20260908-03.log",
+    "/private/tmp/g3-d-backend-task2-red-20260908-01.log",
+    "/private/tmp/g3-d-backend-task3-red-20260908-02.log",
+    "/private/tmp/g3-d-backend-task3-active-red-20260908-04.log",
+    "/private/tmp/g3-d-backend-task3-query-red-20260908-08.log"
+  ],
+  "excluded_as_environment_or_test_setup": {
+    "/private/tmp/g3-d-backend-task1-red-20260908-01.log": "invalid shell invocation; not behavior RED",
+    "/private/tmp/g3-d-backend-task1-red-20260908-02.log": "sandbox Go cache denial; not behavior RED",
+    "/private/tmp/g3-d-backend-task1-green-20260908-05.log": "test incorrectly compared JSON representation and rejected allowed outer whitespace",
+    "/private/tmp/g3-d-backend-task3-red-20260908-01.log": "compile-stage missing field; not behavior RED",
+    "/private/tmp/g3-d-backend-task3-active-green-20260908-05.log": "test compared escaped JSON representation instead of semantic JSON",
+    "/private/tmp/g3-d-backend-task3-query-green-20260908-09.log": "test expected 503 for ErrSchemaWikiPreparationInvalid; actual contract mapping is 400",
+    "/private/tmp/g3-d-backend-task3-query-handler-green-20260908-12.log": "test replaced request without preserving sealed access context",
+    "/private/tmp/g3-d-backend-final-service-green-20260908-14.log": "test expected three source checks but exact activation retry correctly performs a fourth fresh check",
+    "/private/tmp/g3-d-backend-final-handler-router-green-20260908-18.log": "route test expected 503 from nil service; contract mapping for invalid preparation is 400"
+  },
+  "final_verification": {
+    "full_packages": {
+      "log": "/private/tmp/g3-d-backend-final-full-packages-green-20260908-21.log",
+      "result": [
+        "application/service PASS 385.979s",
+        "handler PASS 2.734s",
+        "router PASS 2.334s"
+      ]
+    },
+    "go_vet": {
+      "log": "/private/tmp/g3-d-backend-final-go-vet-20260908-22.log",
+      "result": "PASS with no output"
+    },
+    "git_diff_check": "PASS"
+  },
+  "query_invariants": {
+    "one_pin_for_classification_and_read": true,
+    "g3_gate_before_member_projection_or_evidence_resolution": true,
+    "g2_first_value_compatibility": true,
+    "activation_retry_reverifies_source": true,
+    "activation_retry_adds_no_release_receipt_or_head_epoch": true
+  },
+  "actual_http_service_to_handler_sample": "DEFERRED: current handler test uses a controlled response; root will perform temporary post-freeze wiring check",
+  "effects": {
+    "provider": 0,
+    "live_http": 0,
+    "browser": 0,
+    "database": 0,
+    "model": 0,
+    "build": 0,
+    "container": 0,
+    "commit": 0,
+    "push": 0,
+    "deployment": 0
+  }
+}

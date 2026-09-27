@@ -9,7 +9,7 @@ from typing import Any, cast
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from insurance_harness.jobs import JobRuntimeConfig
+from insurance_harness.jobs import JobRuntimeConfig, JobTypePolicy
 
 
 class ShellConfigError(Exception):
@@ -30,6 +30,19 @@ class ShellSettings(BaseSettings):
         env_file=None,
         extra="ignore",
         frozen=True,
+    )
+
+    product_ingestion_enabled: bool = False
+    product_ingestion_scopes_json: SecretStr = SecretStr("[]")
+    product_ingestion_runtime_json: SecretStr = SecretStr("{}")
+    product_ingestion_max_upload_files: int = Field(default=100, ge=1)
+    product_ingestion_wait_max_attempts: int = Field(default=256, ge=2)
+    product_ingestion_wait_backoff_seconds: tuple[float, ...] = (
+        2.0,
+        5.0,
+        10.0,
+        15.0,
+        30.0,
     )
 
     postgres_dsn: SecretStr
@@ -60,39 +73,38 @@ class ShellSettings(BaseSettings):
     @classmethod
     def validate_postgres_dsn(cls, value: SecretStr) -> SecretStr:
         dsn = value.get_secret_value()
-        if not (
-            dsn.startswith("postgresql+psycopg://")
-            or dsn.startswith("postgresql://")
-        ):
+        if not (dsn.startswith("postgresql+psycopg://") or dsn.startswith("postgresql://")):
             raise ValueError("postgres_dsn must use PostgreSQL")
         return value
 
     @model_validator(mode="after")
     def validate_cross_field_contracts(self) -> ShellSettings:
         if self.heartbeat_interval_seconds >= self.lease_seconds:
-            raise ValueError(
-                "heartbeat_interval_seconds must be strictly less than lease_seconds"
-            )
+            raise ValueError("heartbeat_interval_seconds must be strictly less than lease_seconds")
         if self.total_shutdown_timeout_seconds < self.drain_deadline_seconds:
-            raise ValueError(
-                "total_shutdown_timeout_seconds must be >= drain_deadline_seconds"
-            )
+            raise ValueError("total_shutdown_timeout_seconds must be >= drain_deadline_seconds")
         if not self.transient_backoff_seconds or any(
             delay <= 0 for delay in self.transient_backoff_seconds
         ):
             raise ValueError("transient_backoff_seconds entries must be > 0")
-        if not self.job_backoff_seconds or any(
-            delay < 0 for delay in self.job_backoff_seconds
-        ):
+        if not self.job_backoff_seconds or any(delay < 0 for delay in self.job_backoff_seconds):
             raise ValueError("job_backoff_seconds entries must be >= 0")
-        if self.worker_id is not None and (
-            not self.worker_id or "\x00" in self.worker_id
+        if not self.product_ingestion_wait_backoff_seconds or any(
+            delay <= 0 for delay in self.product_ingestion_wait_backoff_seconds
         ):
+            raise ValueError("product_ingestion_wait_backoff_seconds entries must be > 0")
+        wait_budget = sum(
+            self.product_ingestion_wait_backoff_seconds[
+                min(attempt, len(self.product_ingestion_wait_backoff_seconds)) - 1
+            ]
+            for attempt in range(1, self.product_ingestion_wait_max_attempts)
+        )
+        if self.product_ingestion_enabled and wait_budget < 2 * 60 * 60:
+            raise ValueError("product ingestion wait retry budget must cover source deadlines")
+        if self.worker_id is not None and (not self.worker_id or "\x00" in self.worker_id):
             raise ValueError("worker_id must be non-empty and contain no NUL")
         if any(not space_id or "\x00" in space_id for space_id in self.principal_space_ids):
-            raise ValueError(
-                "principal_space_ids entries must be non-empty and contain no NUL"
-            )
+            raise ValueError("principal_space_ids entries must be non-empty and contain no NUL")
         if any(not space_id or "\x00" in space_id for space_id in self.worker_space_ids):
             raise ValueError("worker_space_ids entries must be non-empty and contain no NUL")
         return self
@@ -122,6 +134,17 @@ class ShellSettings(BaseSettings):
             per_space_concurrency_limit=self.job_per_space_concurrency_limit,
             global_concurrency_limit=self.job_global_concurrency_limit,
             maintenance_batch_size=self.job_maintenance_batch_size,
+            job_type_policies=(
+                {
+                    job_type: JobTypePolicy(
+                        max_attempts=self.product_ingestion_wait_max_attempts,
+                        backoff_seconds=self.product_ingestion_wait_backoff_seconds,
+                    )
+                    for job_type in ("product_stage_uploads", "product_stage_source")
+                }
+                if self.product_ingestion_enabled
+                else {}
+            ),
         )
 
 

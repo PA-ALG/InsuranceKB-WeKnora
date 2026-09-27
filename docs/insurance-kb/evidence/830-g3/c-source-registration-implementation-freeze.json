@@ -1,0 +1,111 @@
+{
+  "contract": "830-g3-source-registration-implementation-freeze.v1",
+  "status": "FROZEN_PENDING_INDEPENDENT_REVIEW",
+  "design_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+  "predecessor_commit": "de38eb252",
+  "files": [
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+      "sha256": "050f5a0b65e8919142946e6f38a947220ec9181060b9d6ea89f3ed9778dfe2e5"
+    },
+    {
+      "path": "harness/tests/test_batch_entity_resolution_830_g3.py",
+      "sha256": "16b4628e3f8a258cab97a03ab6daf6585c3fdeb3cbfaa4e4beb11c68845f2216"
+    }
+  ],
+  "paused_d_files": [
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "sha256": "ee3e6d2d635498322a6eb83139105ea4d35a43fa19e9b24c2dff2b5e802ca6b3"
+    },
+    {
+      "path": "harness/tests/test_batch_concept_compile_830_g3.py",
+      "sha256": "dc01fa122a0d33b516b1fb597f1797e02848351f0c77d0327aaec7f25c86ea93"
+    }
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/g3-source8-red-01.log",
+      "sha256": "9cdf259a09061030d14db468bd818bb7edce570111032537511a094d2361d962",
+      "meaning": "behavior RED: old C receipt DTO rejects exact existing HTTP 14-key shape"
+    },
+    {
+      "path": "/private/tmp/g3-source8-green-01.log",
+      "sha256": "59b9466559aeabf218a54ec041fd83cd357cf9bf1d80a17c47aab62ed0c205bf",
+      "meaning": "actual HTTP receipt shape round-trip 1 pass"
+    },
+    {
+      "path": "/private/tmp/g3-source8-focused-green-02.log",
+      "sha256": "cafd6893d2e477b0a2d236452032b7fba3db2cb61dfb4852a73ec3d009dc13bd",
+      "meaning": "initial registered receipt behaviors 15 pass"
+    },
+    {
+      "path": "/private/tmp/g3-source8-focused-green-03.log",
+      "sha256": "f0774b11fa82f7573cf9305615489d4d5f19b039f9bb62eb2c93b0d85a22fada",
+      "meaning": "final registered receipt focused 15 pass"
+    },
+    {
+      "path": "/private/tmp/g3-source8-ac-green-03.log",
+      "sha256": "4c6647ef24b96de88efb9702247f6a84221d0907da6ad5440e576cb20a4b1d5f",
+      "meaning": "96 pass before final union negatives"
+    },
+    {
+      "path": "/private/tmp/g3-source8-ac-green-04.log",
+      "sha256": "839efea49e26abf3d4e22e62fe596d7a1e323f5e0bcc153e374470cd12fa8831",
+      "meaning": "96 pass after formatting"
+    },
+    {
+      "path": "/private/tmp/g3-source8-ac-green-05.log",
+      "sha256": "4325e82770ebb1935f00b9f96c649ce1dbb922f822f00a91dfb13874e81d3f58",
+      "meaning": "final A C common 99 pass"
+    },
+    {
+      "path": "/private/tmp/g3-source8-ruff-01.log",
+      "sha256": "46d99a17b9fff0ebeb9ee36c6afbecf2e4eb85ae0a3ad03c6372eeb2b825abc0",
+      "meaning": "rejected static check: one long test line"
+    },
+    {
+      "path": "/private/tmp/g3-source8-ruff-02.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "meaning": "ruff pass before final tests"
+    },
+    {
+      "path": "/private/tmp/g3-source8-ruff-03.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "meaning": "final ruff pass"
+    },
+    {
+      "path": "/private/tmp/g3-source8-mypy-01.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e",
+      "meaning": "strict mypy pass"
+    }
+  ],
+  "coverage": {
+    "receipt_union": "Field(discriminator=contract), exact two Literal variants",
+    "actual_shape_source": "docs/insurance-kb/evidence/830-g2/a-source-backfill-verified.json source object; structure fixture only, not actual G3 read",
+    "required_sites": [
+      "entry source reasons",
+      "trust rule space",
+      "CREATE candidate space/key",
+      "batch duplicate source keys"
+    ],
+    "negative": [
+      "object/file mismatch",
+      "not pinned",
+      "block scope/attempt/revision/file/manifest/page/parser mismatch",
+      "unknown/missing/mixed/extra receipt keys"
+    ],
+    "legacy_preserved": true,
+    "mime_early_rejection_added": false,
+    "admission_or_resource_id_added": false
+  },
+  "effects": {
+    "http": 0,
+    "database": 0,
+    "provider": 0,
+    "container": 0,
+    "build": 0,
+    "commit": 0,
+    "push": 0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "contract": "830-g3-c-multi-design-independent-review.v1",
+  "reviewer": "g3_seam_audit",
+  "design": "lane-c-multi-identity-design-2.md",
+  "design_sha256": "096340488f1e6e8efbb1632bba4aa33f7e714978c620f296909522371145daac",
+  "status": "PASS",
+  "blockers": 0,
+  "closed": [
+    "MULTI name/code eligibility independent of missing/shared issuer and automatic candidate gates",
+    "exact input locator/span independence separate from ID-only wire checks"
+  ],
+  "implementation_authorized": "g3_catalog_impl original C source/test only; new RED before implementation",
+  "actual_batch": "NOT RUN",
+  "previous_design_review": {
+    "sha256": "ba40d6cb85e02c4be901ae9eee6262566977a27925f511e14f0355591dae1f81",
+    "blockers": 2,
+    "status": "superseded before code change"
+  }
+}

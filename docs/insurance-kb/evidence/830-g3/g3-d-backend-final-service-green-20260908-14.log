@@ -1,0 +1,563 @@
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.136ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.049ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.060ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.034ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:133 [35;1mrecord not found
+[0m[33m[0.035ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a") AND (preparation_id = "g2-source-gate-review" AND status = "ready") LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.039ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.036ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.148ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-a" AND wiki_kb_id = "wiki-a" AND nonce = "g2-source-gate-activate" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.035ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.040ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:34 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 1 AND space_id = "space-a" AND raw_kb_id = "raw-a" AND wiki_kb_id = "wiki-a" LIMIT 1
+
+2026/09/08 02:21:36 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.070ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:21:39 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.036ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:21:44 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.437ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-reopen-ready" AND status = "draft") LIMIT 1
+
+2026/09/08 02:21:48 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.039ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:21:51 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.152ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-denied" AND status = "draft") LIMIT 1
+
+2026/09/08 02:21:53 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.042ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:21:54 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.143ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-wrong-scope" AND status = "draft") LIMIT 1
+
+2026/09/08 02:21:56 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.041ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:21:59 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.051ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:22:02 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.051ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:22:02 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.052ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "missing" AND status = "draft") LIMIT 1
+
+2026/09/08 02:22:02 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:133 [35;1mrecord not found
+[0m[33m[0.034ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "missing" AND status = "ready") LIMIT 1
+
+2026/09/08 02:22:03 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.039ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:22:08 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.050ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:22:11 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.098ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-stored-member" AND status = "draft") LIMIT 1
+
+2026/09/08 02:22:15 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.037ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:22:17 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.226ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-stored-manifest" AND status = "draft") LIMIT 1
+
+2026/09/08 02:22:19 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.038ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:22:25 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.100ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-flow" LIMIT 1
+
+2026/09/08 02:22:27 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.246ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-flow" LIMIT 1
+--- FAIL: TestBatchConceptDraftReviewActivate830G3ReverifiesSourcesAndCASesHead (15.41s)
+    concept_free_wiki_830_g3_test.go:339: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go:339
+        	Error:      	
+        	Test:       	TestBatchConceptDraftReviewActivate830G3ReverifiesSourcesAndCASesHead
+
+2026/09/08 02:22:35 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.039ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:22:39 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.075ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-active-page" LIMIT 1
+
+2026/09/08 02:22:41 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.104ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-active-page" LIMIT 1
+
+2026/09/08 02:22:56 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.040ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:23:04 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.102ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-query-pin" LIMIT 1
+
+2026/09/08 02:23:06 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.207ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-query-pin" LIMIT 1
+
+2026/09/08 02:23:43 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.059ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:23:50 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.074ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-stale-head" LIMIT 1
+
+2026/09/08 02:23:53 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.151ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-stale-head" LIMIT 1
+
+2026/09/08 02:23:56 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.181ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-stale-head" LIMIT 1
+
+2026/09/08 02:23:58 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.039ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:24:07 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.063ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:24:14 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.144ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" AND nonce = "batch-g3-activate-drift" LIMIT 1
+
+2026/09/08 02:24:21 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.058ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:24:26 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.294ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-real-source-denied" AND status = "draft") LIMIT 1
+
+2026/09/08 02:24:28 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.052ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:24:35 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.311ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-manifest-algorithm" AND status = "draft") LIMIT 1
+
+2026/09/08 02:24:38 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.064ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:24:45 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[1.896ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-retention" AND status = "draft") LIMIT 1
+
+2026/09/08 02:24:47 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.054ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:24:55 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.382ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-contract" AND status = "draft") LIMIT 1
+
+2026/09/08 02:24:57 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.056ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:25:05 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.192ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-file" AND status = "draft") LIMIT 1
+
+2026/09/08 02:25:06 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.052ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:25:12 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.834ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-size" AND status = "draft") LIMIT 1
+
+2026/09/08 02:25:14 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.047ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:25:20 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.238ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-manifest-digest" AND status = "draft") LIMIT 1
+
+2026/09/08 02:25:21 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.041ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:25:27 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.221ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-chunk-count" AND status = "draft") LIMIT 1
+
+2026/09/08 02:25:28 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.055ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:25:36 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.992ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-binding" AND status = "draft") LIMIT 1
+
+2026/09/08 02:25:39 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.162ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:25:46 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.268ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-knowledge" AND status = "draft") LIMIT 1
+
+2026/09/08 02:25:49 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.086ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:25:57 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.791ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-attempt" AND status = "draft") LIMIT 1
+
+2026/09/08 02:25:59 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.069ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:26:06 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.270ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-revision-source" AND status = "draft") LIMIT 1
+
+2026/09/08 02:26:09 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.075ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:26:15 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.578ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-object" AND status = "draft") LIMIT 1
+
+2026/09/08 02:26:17 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.085ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:26:23 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.524ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-mime" AND status = "draft") LIMIT 1
+
+2026/09/08 02:26:24 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.063ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.260ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "batch-g3-receipt-drift-page-count" AND status = "draft") LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.066ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.032ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.036ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.028ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.050ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.048ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-loser" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.032ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.034ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.111ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.032ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-2" AND nonce = "nonce-second-wiki" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.099ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.045ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.040ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.028ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.036ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.045ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.028ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.028ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.035ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-reviewed" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.037ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-reviewed" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-reject" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.051ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.045ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-gate" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.034ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-gate" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.033ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-gate" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.036ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-gate" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.033ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "different-nonce" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.027ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.033ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.028ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.031ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.020ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.020ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.021ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.024ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-revert" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.020ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.018ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.020ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-revert" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-revert" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.020ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r0" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.022ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.023ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.026ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 42 AND space_id = "space-1" AND raw_kb_id = "raw-1" AND wiki_kb_id = "wiki-1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r1" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.025ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-revert" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.060ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r2" LIMIT 1
+
+2026/09/08 02:26:31 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:608 [35;1mrecord not found
+[0m[33m[0.029ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_receipts` WHERE space_id = "space-1" AND wiki_kb_id = "wiki-1" AND nonce = "nonce-r2" LIMIT 1
+
+2026/09/08 02:26:32 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:535 [35;1mrecord not found
+[0m[33m[0.034ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 7 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" LIMIT 1
+
+2026/09/08 02:26:32 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.071ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 7 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "raw-596-1" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:26:32 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.030ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 7 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "raw-596-1" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+
+2026/09/08 02:26:32 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.037ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 7 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "raw-596-1" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/application/service	299.539s
+FAIL

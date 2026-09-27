@@ -1,0 +1,52 @@
+{
+  "contract": "g35-native-discovery-stage-validation.830.v1",
+  "base_commit": "d04868fdd423ae4a1dd7764c5fbe1644b3d4d682",
+  "reviewed_tree": "0b2352e49d5df56df37240684cf4ee3cd39aa013",
+  "requirements": [
+    "G35-R1",
+    "G35-R3",
+    "G35-R5",
+    "G35-R6"
+  ],
+  "scope": "Pure signed-window collector reusing existing StageCall executor. Pipeline persistence/metrics, semantic admission and runtime policy not enabled.",
+  "red": [
+    "Collector entry point absent: initial import failure is capability smoke only, not a behavioral RED",
+    "Actual serialized content exceeds configured capacity with plan max_prompt_bytes: two context/request 4096 counterexamples"
+  ],
+  "validation": {
+    "initial": "47 passed in 27.95s: native collector (4), discovery_replay_custody, discovery_stage, native_discovery",
+    "after_budget_fix": "6 collector tests passed in 0.98s including two near-capacity actual-serializer counterexamples",
+    "ruff": "PASS",
+    "mypy": "PASS native collector/model_execution after fix; discovery_stage before subsequent source-review changes",
+    "diff_check": "PASS"
+  },
+  "review": {
+    "reviewer": "native_boundary_review",
+    "tree": "0b2352e49d5df56df37240684cf4ee3cd39aa013",
+    "blockers": 0,
+    "backlog": [
+      "Runtime must bind execution receipts to same-run StageCall or complete parent custody and include checkpoint/metrics consumption"
+    ],
+    "mechanical_docs_red_exemption": "Explicitly confirmed exact HANDOFF/plan top/evidence records; no behavioral authorization inferred"
+  },
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "frozen_files": {
+    "docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md": "87b59577eb5c6fe1d0da1f3abb221ccdd06463d71cfb81319c11388d7b06fb32",
+    "harness/src/insurance_harness/product_ingestion/discovery_stage.py": "40c344ba30fe32fe0cbc48d4a0818b3fb6a0f45f71a6fee7e0c1ac997a0a72e0",
+    "harness/src/insurance_harness/product_ingestion/model_execution.py": "0b5412165983555c6fda47796bffc6db0c5cc253bb2afe0e42f215d3cc9367b3",
+    "harness/src/insurance_harness/product_ingestion/native_discovery_stage.py": "3c2534a68efba88514f1f2f3eba809d359bc050366f9d59a842f3e1ebd6fbca8",
+    "harness/tests/product_ingestion/test_native_discovery_stage.py": "5efaab527fa27fd2c71a0cae633eb7242def70da050f4d79982597796c62f4ce"
+  }
+}

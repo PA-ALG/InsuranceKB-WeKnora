@@ -1,0 +1,9 @@
+PASS exact body/quote and typed construction: '首行\n第二行' 8d87d2a8053401821a5532213bab621005e8d6a58202016d151f13f078e2d55c
+PASS exact body/quote and typed construction: '首行\r\n第二行' 5c1d70c2aee90fe986427bf5e275649ab9983568b719780ff94ceefb3562f0cf
+PASS exact body/quote and typed construction: '首行\t第二行' 52065e795e82607bab375a9c94d98ed9fc12ad984b520426a761e78d63fefc49
+PASS rehashed nested identity rejected: '\t'
+PASS rehashed nested identity rejected: '\n'
+PASS rehashed nested identity rejected: '\r'
+PASS rehashed nested identity rejected: '\x00'
+PASS rehashed nested identity rejected: '\x7f'
+ROOT INDEPENDENT PROBE PASS; provider/DB/network/container/upload effects=0

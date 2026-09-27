@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/application/service"
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/hibiken/asynq"
 	"github.com/stretchr/testify/assert"
@@ -332,8 +333,20 @@ func TestRecoverPendingWikiTasks_RecreatesOneTriggerPerLaneAndKB(t *testing.T) {
 	}
 
 	recorder := &recordingTaskEnqueuer{}
-	recoverPendingWikiTasks(db, recorder)
+	recoverPendingWikiTasks(db, recorder, nil)
 	require.Len(t, recorder.tasks, 3)
+	scoped := &recordingTaskEnqueuer{}
+	recoverPendingWikiTasks(db, scoped, &config.Config{ProductIngestion: &config.ProductIngestionConfig{
+		Enabled: true, TenantID: 7, SpaceID: "space", RawKBID: "kb-a", WikiKBID: "serving",
+		WikiProducerPolicy: config.NativeCandidatesPolicy,
+	}})
+	require.Len(t, scoped.tasks, 1)
+	var remaining service.WikiIngestPayload
+	require.NoError(t, json.Unmarshal(scoped.tasks[0].Payload(), &remaining))
+	require.Equal(t, "kb-b", remaining.KnowledgeBaseID)
+	var retained int64
+	require.NoError(t, db.Model(&types.TaskPendingOp{}).Where("tenant_id = ? AND scope_id = ?", 7, "kb-a").Count(&retained).Error)
+	require.Equal(t, int64(3), retained)
 
 	seen := map[string]service.WikiIngestPayload{}
 	for _, task := range recorder.tasks {

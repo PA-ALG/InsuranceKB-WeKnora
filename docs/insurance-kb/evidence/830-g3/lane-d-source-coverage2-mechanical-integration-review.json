@@ -1,0 +1,36 @@
+{
+  "contract": "g3-d-source-coverage2-mechanical-integration-review.v1",
+  "status": "PASS",
+  "blockers": 0,
+  "backlog": 0,
+  "checked": [
+    "docs/insurance-kb/evidence/830-g3/startup.json",
+    "HANDOFF.md current G3 section",
+    "openspec/changes/129-830-g3-catalog-batch/validation-report.md current D section",
+    "docs/insurance-kb/evidence/830-g3/lane-d-go-resume-after-source-coverage2.json",
+    "docs/insurance-kb/evidence/830-g3/lane-d-source-coverage2-independent-review.json"
+  ],
+  "facts": {
+    "python_review": "30 passed in 97.68s; ruff and strict mypy PASS; BLOCKER0/BACKLOG0",
+    "fixture": "synthetic protocol, not actual C/model/provider/business result",
+    "preparation_bytes": 2254490,
+    "final_fields": 342,
+    "source_blocks": 27,
+    "go": "two-file mirror resumed but not reviewed or complete",
+    "actual_effects": 0,
+    "documentation_red": "EXEMPT_MECHANICAL_STATUS_ONLY_NO_BEHAVIOR_CHANGE"
+  },
+  "frozen_files": {
+    "source": "e8e0dbcd8bf4cb1f2072d6fbf4ebf79f3554cbfef53c9c1f84011dbcc4357316",
+    "test": "86edf3d9bad9984d37991fb23f305d5e582fe6ee602ab0a7284a7a73d6fb2495",
+    "candidate": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+    "preparation": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+    "provenance": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb"
+  },
+  "notes": [
+    "startup.json retains the older owner-provisional fixture and initial review as labeled history; its nested source_coverage2 record is the current result.",
+    "HANDOFF keeps superseded D failures as chronological history and then states the current PASS; this is not a contradiction.",
+    "No active Go file was read."
+  ],
+  "effects": 0
+}

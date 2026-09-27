@@ -1,0 +1,51 @@
+{
+  "contract": "830-g3-d-backend-repair1-design-inputs.v1",
+  "status": "DESIGN_INPUT_ONLY_NOT_REPAIR_AUTHORIZATION",
+  "finding_scope": [
+    "G3 preparation read canonical mismatch",
+    "G3 preparation ID D Text validation"
+  ],
+  "canonical_probe": "Existing exported types canonicalizer over original failing response payload matches frozen Python hash; temporary overlay, no production code changes.",
+  "expected_read_sha256": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+  "entries": [
+    {
+      "original": "/private/tmp/g3-d-backend-repair-readhash-prepid-proposal-01.md",
+      "raw_sha256": "9ff57eb0baa470c4f602e361c452e410fada49e503f5e1c7e32297222a9c0e61",
+      "raw_bytes": 9365,
+      "archive": "g3-d-backend-repair-readhash-prepid-proposal-01.md",
+      "gzip": false,
+      "archive_sha256": "9ff57eb0baa470c4f602e361c452e410fada49e503f5e1c7e32297222a9c0e61"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-canonical-helper-overlay-01.go",
+      "raw_sha256": "9e7c1a5e12f46047dbc1069407b714f9e0b3bb4cd73014d51e9dda886c4b6bca",
+      "raw_bytes": 37779,
+      "archive": "g3-d-root-canonical-helper-overlay-01.go.gz",
+      "gzip": true,
+      "archive_sha256": "f46a4eab6d132ebfe01fed1e0744a23e9ac00423f0f00b2451822402f63ffbe5"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-canonical-helper-overlay-01.json",
+      "raw_sha256": "3054f28235a1e07311b86eecea1a5ec5ac077747ee36e9b695dfb03c2f651e7c",
+      "raw_bytes": 235,
+      "archive": "g3-d-root-canonical-helper-overlay-01.json",
+      "gzip": false,
+      "archive_sha256": "3054f28235a1e07311b86eecea1a5ec5ac077747ee36e9b695dfb03c2f651e7c"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-canonical-helper-probe-01.log",
+      "raw_sha256": "887fccadb412f87d04cd70ecd8859974602b549a7da729d6c5b8dee1e5b1496d",
+      "raw_bytes": 362,
+      "archive": "g3-d-root-canonical-helper-probe-01.log",
+      "gzip": false,
+      "archive_sha256": "887fccadb412f87d04cd70ecd8859974602b549a7da729d6c5b8dee1e5b1496d"
+    }
+  ],
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "image_build": 0,
+    "deployment": 0,
+    "production_source_changes": 0
+  }
+}

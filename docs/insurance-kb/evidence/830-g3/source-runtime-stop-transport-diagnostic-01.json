@@ -1,0 +1,53 @@
+{
+  "public-stdin": {
+    "exit_code": 0,
+    "stdout_bytes": 68,
+    "stdout_sha256": "70218a0f58924b61edbee18f8e64463f5d146ebf80f495e2b135646a3c6e59e8",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "matches": true
+  },
+  "dump-version": {
+    "exit_code": 0,
+    "stdout_bytes": 51,
+    "stdout_sha256": "ba97328061fb2cabb3d7cc5d80bba43c3302ec4441c3c41c5e69f3de47969cf9",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "version": "pg_dump (PostgreSQL) 17.9 (Debian 17.9-1.pgdg13+1)"
+  },
+  "restore-version": {
+    "exit_code": 0,
+    "stdout_bytes": 54,
+    "stdout_sha256": "11d8d2190fba0ff863cdaf4b72586c8e9cf36ca66d26771f3bf0c0e5e31058d1",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "version": "pg_restore (PostgreSQL) 17.9 (Debian 17.9-1.pgdg13+1)"
+  },
+  "readonly-dump": {
+    "exit_code": 0,
+    "stdout_bytes": 5368392,
+    "stdout_sha256": "8afc230570424a2ec8b295aee8a0d76b301a327b47629973ef135d26dea14c3d",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "pgdmp_magic": true
+  },
+  "archive-list": {
+    "exit_code": 0,
+    "stdout_bytes": 42551,
+    "stdout_sha256": "408752fc76aa6d7d210703fb4211d45cc4a095b98cf47e94d99acbfd45a9eb0d",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "categories": {
+      "input file does not appear to be a valid archive": false,
+      "unsupported version": false,
+      "could not read": false,
+      "end of file": false,
+      "did not find magic": false,
+      "too short": false
+    }
+  },
+  "source_snapshot": {
+    "sha256": "2b3c77be83abf6b2ea8a83f201a427f40380b2878fe6cd17f6aa270350fe7e7c",
+    "matches_preflight": true
+  }
+}

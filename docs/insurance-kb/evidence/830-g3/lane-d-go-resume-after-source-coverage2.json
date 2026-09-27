@@ -1,0 +1,64 @@
+{
+  "contract": "830-g3-d-go-resume.v1",
+  "recorded_at": "2026-09-07T14:22:45.313752+00:00",
+  "owner": "g3_catalog_impl",
+  "status": "AUTHORIZED_WITHIN_FROZEN_G3_D_CONTRACT",
+  "python_freeze_sha256": "811eb4d070f5f33743d2da6cd507abbacefa9debe7bab8ec910d274252c940c7",
+  "independent_review_sha256": "0b21ea94a9e4ca0d22c273282916c6f07dda2bfc2d59b7f0664c4b3e7a5275f2",
+  "review_copies": [
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-python-source-coverage2-independent-green-01.log",
+      "sha256": "8cece7b502b43028df909f07b9a44464f214db9d7c4721afc6ac06d7e1314a27"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-python-source-coverage2-independent-mypy-01.log",
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-python-source-coverage2-independent-probes-01.log",
+      "sha256": "620025db3ce93e30a7861eb93e17fac76aeeaf2fe90001de87bfe420b998dc74"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-python-source-coverage2-independent-probes-01.py",
+      "sha256": "58439e21877de0101d6b3bdde94c1bd79f75202ef4bc54eb513934540afbd474"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-python-source-coverage2-independent-probes-02.log",
+      "sha256": "1e23894dcaef3d62724af5bb009186fde73909875d64cf6533be72361064460a"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-python-source-coverage2-independent-probes-03.log",
+      "sha256": "d8a8af46925b2365323d077f4f4ebfe4f0b9877f5382ba3be5f54b74910028c5"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/lane-d-source-coverage2-independent-review.json",
+      "sha256": "0b21ea94a9e4ca0d22c273282916c6f07dda2bfc2d59b7f0664c4b3e7a5275f2"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-d-python-source-coverage2-independent-ruff-01.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    }
+  ],
+  "write_paths": [
+    "internal/types/concept_free_wiki_830_g3.go",
+    "internal/types/concept_free_wiki_830_g3_test.go"
+  ],
+  "closed": [
+    "Python",
+    "fixtures",
+    "C",
+    "common",
+    "G2",
+    "handler",
+    "service",
+    "UI"
+  ],
+  "next_gate": "Full Go strict validation, Python-Go canonical equality and 342-field/8MiB capacity independent review before any downstream writes",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "upload": 0,
+    "build": 0
+  }
+}

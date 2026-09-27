@@ -1,0 +1,53 @@
+{
+  "contract": "830-g3-d-backend-query-owner-dispatch.v1",
+  "status": "DISPATCHED",
+  "owner": "g3_catalog_impl",
+  "requirements": [
+    "G3-R3",
+    "D Task3",
+    "d-active-page-transport-clarification-1.md"
+  ],
+  "amendment": {
+    "path": "lane-d-backend-query-owner-amendment-3.md",
+    "sha256": "1b8ff9d0d6366c6ed7cf444186926ef8313215143ce5751b06a5c1ef2f981a88"
+  },
+  "independent_review": {
+    "path": "lane-d-backend-query-owner-amendment3-independent-review.json",
+    "sha256": "cc80ae37613f4b63b71b7a7c90ef0bb65db7639bc705ef8bede71573808a526e",
+    "blockers": 0,
+    "backlog": 0
+  },
+  "existing_dispatch": "lane-d-backend-dispatch-1.json",
+  "sole_additional_production_path": "internal/handler/concept_free_wiki_830_g2.go",
+  "original_path_sha256": "118278af959f57c2ebcf1539cc7c14d78380a424fe223d4e4ab2490f75a768c1",
+  "tests_in_existing_open_path": "internal/handler/concept_free_wiki_830_g3_test.go",
+  "narrow_atomic_service_helpers_in_existing_open_paths": true,
+  "total_backend_paths": 12,
+  "workflow": [
+    "Effective behavior RED against unchanged handler before implementation; retain raw logs.",
+    "Implement exactly amendment3: same-pin page classification/projection and atomic citation before Evidence/token, preserving old G2 target selection.",
+    "Finish the original Task3 bounded tests and final service/handler/router regression; freeze all 12 source/test files and logs for independent backend review."
+  ],
+  "non_changes": [
+    "wire/DTO",
+    "routes beyond already-approved preparation GET",
+    "repository/table/Head",
+    "Python/Go types",
+    "C/common",
+    "fixtures",
+    "UI",
+    "dependencies/runtime"
+  ],
+  "prior_proposals": {
+    "v1": "REJECTED: bool/current TOCTOU and unrequested unknown-query hardening. Original preserved.",
+    "v2": "SUPERSEDED_BY_V3: atomic citation choice and exact extraction clarified before implementation."
+  },
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

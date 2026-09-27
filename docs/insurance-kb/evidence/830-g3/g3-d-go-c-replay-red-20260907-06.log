@@ -1,0 +1,8 @@
+--- FAIL: TestBatchConceptCandidateBundle830G3RejectsRehashedProposalWithoutResolutionReplay (8.06s)
+    concept_free_wiki_830_g3_test.go:266: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:266
+        	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+        	Test:       	TestBatchConceptCandidateBundle830G3RejectsRehashedProposalWithoutResolutionReplay
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/types	11.188s
+FAIL

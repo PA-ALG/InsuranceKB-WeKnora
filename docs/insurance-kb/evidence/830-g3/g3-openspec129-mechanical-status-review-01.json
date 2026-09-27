@@ -1,0 +1,42 @@
+{
+  "contract": "830-g3-openspec129-mechanical-status-review.v1",
+  "inputs": {
+    "openspec/changes/129-830-g3-catalog-batch/validation-report.md": {
+      "sha256": "671559682092ec61a0d80e71c5b8e13d63475faab640cababf27de8d56c67a21",
+      "bytes": 6870
+    },
+    "openspec/changes/129-830-g3-catalog-batch/tasks.md": {
+      "sha256": "bea60743f727c129461dfad9085b093170f4192e2ce66b6f415e03e6bd2948bc",
+      "bytes": 1700
+    },
+    "docs/insurance-kb/evidence/830-g3/profile-user-confirmation.json": {
+      "sha256": "7f6141c63db4a77e3d13a0a8d632ea5463761bedeee7bd1aabef165d68c86863",
+      "bytes": 3402
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-source-coverage2-independent-review.json": {
+      "sha256": "0b21ea94a9e4ca0d22c273282916c6f07dda2bfc2d59b7f0664c4b3e7a5275f2",
+      "bytes": 4377
+    }
+  },
+  "checks": {
+    "structure_confirmation_is_separate_pass": true,
+    "named_metadata_remains_not_run": true,
+    "no_identity_inference": true,
+    "d_python_both_reviewed_repairs_checked": true,
+    "d_go_independent_review_still_pending": true,
+    "downstream_write_domain_still_closed": true,
+    "requirements_acceptance_or_product_behavior_changed": false
+  },
+  "red_exemption": "PASS: documentation-only reconciliation of already persisted facts; no requirement, acceptance criterion, product behavior, fixture, or executable changed.",
+  "findings": {
+    "BLOCKER": [],
+    "BACKLOG": [],
+    "REJECTED": []
+  },
+  "effects": {
+    "product_write": 0,
+    "go_read": 0,
+    "runtime": 0
+  },
+  "verdict": "PASS"
+}

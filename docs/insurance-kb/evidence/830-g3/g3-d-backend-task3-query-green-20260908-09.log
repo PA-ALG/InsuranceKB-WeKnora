@@ -1,0 +1,28 @@
+--- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate (0.00s)
+    --- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/explicit_empty (0.00s)
+        concept_free_wiki_830_g3_test.go:258: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:258
+            	Error:      	Not equal: 
+            	            	expected: 503
+            	            	actual  : 400
+            	Test:       	TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/explicit_empty
+            	Messages:   	{"error":{"message":"schema wiki preparation invalid"},"success":false}
+    --- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/repeated (0.00s)
+        concept_free_wiki_830_g3_test.go:258: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:258
+            	Error:      	Not equal: 
+            	            	expected: 503
+            	            	actual  : 400
+            	Test:       	TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/repeated
+            	Messages:   	{"error":{"message":"schema wiki preparation invalid"},"success":false}
+    --- FAIL: TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/mixed_preparation (0.00s)
+        concept_free_wiki_830_g3_test.go:258: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:258
+            	Error:      	Not equal: 
+            	            	expected: 503
+            	            	actual  : 400
+            	Test:       	TestBatchConceptPageQuery830G3PreservesRawOccurrencesForAtomicServiceGate/mixed_preparation
+            	Messages:   	{"error":{"message":"schema wiki preparation invalid"},"success":false}
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/handler	3.167s
+FAIL

@@ -1,0 +1,45 @@
+--- FAIL: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull (7.38s)
+    --- FAIL: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/match_nullable_candidate_id_omitted (1.28s)
+        concept_free_wiki_830_g3_test.go:342: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:342
+            	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+            	Test:       	TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/match_nullable_candidate_id_omitted
+    --- FAIL: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/embedded_G2_nullable_value_omitted (1.70s)
+        concept_free_wiki_830_g3_test.go:342: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:342
+            	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+            	Test:       	TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/embedded_G2_nullable_value_omitted
+    --- FAIL: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/embedded_G2_nonnullable_evidence_start_is_null (1.33s)
+        concept_free_wiki_830_g3_test.go:342: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:342
+            	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+            	Test:       	TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/embedded_G2_nonnullable_evidence_start_is_null
+    --- FAIL: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/confirmation_nullable_actor_display_name_omitted (1.42s)
+        concept_free_wiki_830_g3_test.go:342: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:342
+            	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+            	Test:       	TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/confirmation_nullable_actor_display_name_omitted
+    --- FAIL: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/confirmation_nullable_queue_owner_omitted (1.66s)
+        concept_free_wiki_830_g3_test.go:342: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:342
+            	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+            	Test:       	TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/confirmation_nullable_queue_owner_omitted
+--- FAIL: TestBatchConceptCandidateBundle830G3RejectsNullRequiredCollection (2.13s)
+    concept_free_wiki_830_g3_test.go:360: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:360
+        	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+        	Test:       	TestBatchConceptCandidateBundle830G3RejectsNullRequiredCollection
+--- FAIL: TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes (4.37s)
+    --- FAIL: TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/acquisition_receipt (2.06s)
+        concept_free_wiki_830_g3_test.go:387: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:387
+            	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+            	Test:       	TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/acquisition_receipt
+    --- FAIL: TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/native_capture (1.42s)
+        concept_free_wiki_830_g3_test.go:387: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:387
+            	Error:      	Expected error with "invalid concept candidate bundle 830 g3" in chain but got nil.
+            	Test:       	TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/native_capture
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/types	16.035s
+FAIL

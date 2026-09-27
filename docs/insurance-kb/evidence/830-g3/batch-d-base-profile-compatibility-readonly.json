@@ -1,0 +1,45 @@
+{
+  "contract": "batch-d-base-profile-compatibility-readonly.830.g3.v1",
+  "recorded_at": "2026-09-07T09:12:16.843327+00:00",
+  "source_bundle": "docs/insurance-kb/evidence/830-g2/b-source-complete-candidate-bundle.json",
+  "source_bundle_sha256": "69dd25e29ea771a512cf24c083a52e8347386def68b30d90d379f2b0dfe181d1",
+  "source_candidate_hash": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+  "catalog_wire_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
+  "rows": [
+    {
+      "entity_id": "ping-an-e-sheng-bao",
+      "entity_version": "ping-an-e-sheng-bao@596-1",
+      "old_field_count": 67,
+      "catalog_field_count": 67,
+      "same_order": false,
+      "intersection_count": 66,
+      "old_only_keys": [
+        "social_insurance_requirement"
+      ],
+      "catalog_only_keys": [
+        "social_insurance_requirements"
+      ],
+      "full_union_count": 68
+    },
+    {
+      "entity_id": "ping-an-e-sheng-bao-hui-xiang",
+      "entity_version": "ping-an-e-sheng-bao-hui-xiang@594-1",
+      "old_field_count": 67,
+      "catalog_field_count": 67,
+      "same_order": false,
+      "intersection_count": 66,
+      "old_only_keys": [
+        "social_insurance_requirement"
+      ],
+      "catalog_only_keys": [
+        "social_insurance_requirements"
+      ],
+      "full_union_count": 68
+    }
+  ],
+  "status": "BLOCKED_DESIGN_FIELD_SET_MISMATCH",
+  "no_alias_inferred": true,
+  "minimum_standard_four_entity_fixture_fields": 275,
+  "actual_two_base_plus_three_new_fields_if_full_preservation": 344,
+  "runtime_effects": 0
+}

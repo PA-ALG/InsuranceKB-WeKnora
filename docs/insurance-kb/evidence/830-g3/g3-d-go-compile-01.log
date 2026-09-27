@@ -1,0 +1,4 @@
+# github.com/Tencent/WeKnora/internal/types [github.com/Tencent/WeKnora/internal/types.test]
+internal/types/concept_free_wiki_830_g3.go:9:2: "fmt" imported and not used
+FAIL	github.com/Tencent/WeKnora/internal/types [build failed]
+FAIL

@@ -12,6 +12,7 @@ deterministic 测试用，真实并发证据只来自 PG lane（P1.12）。
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
@@ -313,6 +314,8 @@ class JobStore:
         job_type: str,
         idempotency_key: str,
         payload: dict[str, Any] | None = None,
+        job_id: str | None = None,
+        domain_writes: Sequence[DomainWriteSpec] = (),
     ) -> EnqueueResult:
         """插入新任务或返回 typed dedup；键由消费方按批次/裁决铸造。
 
@@ -321,10 +324,20 @@ class JobStore:
         """
         validated_text(space_id, "space_id", max_length=MAX_SPACE_ID_LENGTH)
         validated_text(job_type, "job_type", max_length=MAX_JOB_TYPE_LENGTH)
-        validated_text(
-            idempotency_key, "idempotency_key", max_length=MAX_IDEMPOTENCY_KEY_LENGTH
-        )
+        validated_text(idempotency_key, "idempotency_key", max_length=MAX_IDEMPOTENCY_KEY_LENGTH)
         safe_payload = validated_payload(payload)
+        if job_id is not None:
+            from uuid import UUID
+
+            try:
+                if str(UUID(job_id)) != job_id:
+                    raise ValueError()
+            except (ValueError, TypeError, AttributeError):
+                raise InvalidJobInputError(
+                    "explicit enqueue job id must be a canonical UUID"
+                ) from None
+        if domain_writes and job_id is None:
+            raise InvalidJobInputError("atomic domain admission requires an explicit job id")
         with self._session_factory() as session:
             try:
                 with session.begin():
@@ -340,7 +353,13 @@ class JobStore:
                         available_at=now,
                         enqueued_at=now,
                     )
+                    if job_id is not None:
+                        row.id = job_id
                     session.add(row)
+                    session.flush()
+                    # Admission data and the claimable job become visible together.
+                    # Reuse the existing declarative, protected-table write boundary.
+                    _execute_domain_writes(session, domain_writes, job_id=row.id)
                 return _enqueue_result(row, deduplicated=False)
             except IntegrityError:
                 with session.begin():
@@ -353,6 +372,10 @@ class JobStore:
                     ).scalar_one_or_none()
                     if existing is None:
                         raise
+                    if job_id is not None and (
+                        existing.id != job_id or existing.payload != safe_payload
+                    ):
+                        raise InvalidJobInputError("atomic enqueue identity conflict") from None
                     return _enqueue_result(existing, deduplicated=True)
 
     # --- P1.2 claim（FOR UPDATE SKIP LOCKED） ---
@@ -420,8 +443,7 @@ class JobStore:
                 eligible = tuple(
                     space_id
                     for space_id in scope
-                    if active_by_space.get(space_id, 0)
-                    < self._config.per_space_concurrency_limit
+                    if active_by_space.get(space_id, 0) < self._config.per_space_concurrency_limit
                 )
                 if not eligible:
                     # per-Space 饱和同样先尝试有界回收再重算（同上合同）。
@@ -463,9 +485,7 @@ class JobStore:
                 candidate.state = JobState.LEASED.value
                 candidate.worker_id = worker_id
                 candidate.lease_generation += 1
-                candidate.lease_expires_at = now + timedelta(
-                    seconds=self._config.lease_seconds
-                )
+                candidate.lease_expires_at = now + timedelta(seconds=self._config.lease_seconds)
                 claimed = _snapshot(candidate)
         return ClaimedJob(job=claimed)
 
@@ -720,9 +740,7 @@ class JobStore:
         返回是否确实回收了行（决定调用方是否值得重算计数）。批量受
         `maintenance_batch_size` 约束，因此不会在串行段内产生无界工作。
         """
-        report = self._reclaim_locked(
-            session, None, now, limit=self._config.maintenance_batch_size
-        )
+        report = self._reclaim_locked(session, None, now, limit=self._config.maintenance_batch_size)
         return bool(report.requeued_job_ids or report.dead_lettered_job_ids)
 
     def _reclaim_locked(
@@ -756,6 +774,14 @@ class JobStore:
         requeued: list[str] = []
         dead_lettered: list[str] = []
         for row in expired_rows:
+            if row.lease_expires_at is None:
+                raise ValueError("expired job lease timestamp is missing")
+            diagnostic = {
+                "event": "job_lease_reclaimed", "job_id": row.id,
+                "space_id": row.space_id, "generation": row.lease_generation,
+                "expired_at": row.lease_expires_at.isoformat(),
+                "reclaimed_at": now.isoformat(), "attempt": row.attempt,
+            }
             policy = self._config.policy_for(row.job_type)
             if JobState(row.state) is JobState.LEASED:
                 # P1.1 第 10 条（D-2026-07-27-16）：本次投递从未进入 running，
@@ -763,9 +789,7 @@ class JobStore:
                 # claim→start 之间崩溃的任务永不推进 attempt、无界重排队。
                 # running 行的 attempt 已由 start 计入，不重复计数。
                 row.attempt += 1
-            target = (
-                JobState.DEAD_LETTER if row.attempt >= policy.max_attempts else JobState.QUEUED
-            )
+            target = JobState.DEAD_LETTER if row.attempt >= policy.max_attempts else JobState.QUEUED
             ensure_transition(JobState(row.state), target, row.id, storage_layer=True)
             row.state = target.value
             row.worker_id = None
@@ -779,6 +803,9 @@ class JobStore:
             else:
                 row.available_at = now
                 requeued.append(row.id)
+            # This records the attempted transaction transition; DB state remains
+            # authoritative if a later statement/commit fails.
+            logging.getLogger(__name__).warning(json.dumps(diagnostic), extra=diagnostic)
         return ReclaimReport(
             requeued_job_ids=tuple(requeued), dead_lettered_job_ids=tuple(dead_lettered)
         )

@@ -1,0 +1,60 @@
+{
+  "status": "PASS",
+  "scope": "CFG42 source-block citation location; source-only, not deployed",
+  "red": {
+    "result": "FAIL as expected: wrong recorded page rejected by old resolver",
+    "log_sha256": "744223650392de74f2308a724696cbdc0e471e83e574e7863c050278821db39c"
+  },
+  "focused": {
+    "top_level_tests": 24,
+    "subtests": 15,
+    "package_elapsed_seconds": 116.251,
+    "jsonl_sha256": "89e735bc9e8656e59c991303477dffa9cde5e92fa9a5477186264f54291b27bc",
+    "includes": "CFG42, frozen G2 authority vector/token domain, native request cache, legacy gates, G3 pinned query and active page"
+  },
+  "actual_native_replay": {
+    "actual_page_differs": 8,
+    "all_actual_pages_bboxes_equal_independent_diagnostic": true,
+    "effects": {
+      "db_changes": 0,
+      "http": 0,
+      "models": 0,
+      "pdf_reparse": 0,
+      "signatures": 0
+    },
+    "full_block_anchors": 282,
+    "legacy_not_replayed_requires_existing_proof": 17,
+    "native_replayed": 288,
+    "original_native_failures_recovered": 11,
+    "status": "PASS",
+    "strict_page_fallbacks": 6
+  },
+  "actual_candidate_file_sha256": "ee073d5cd7b907c45695fa5c8a70100c59c708b011afb0b3ed0af6258c82be22",
+  "vector": {
+    "bytes": 17389,
+    "synthetic_release_identity": true,
+    "fixed_clock": 1800000000,
+    "token_issued": false,
+    "exact_equal_to_go_replay_output": true
+  },
+  "files_sha256": {
+    "internal/application/service/concept_source_authority_830_g2.go": "514de1837d792f7a1690bca65b8f7174306aa33030ae3c949767629b1c4a2edb",
+    "internal/application/service/concept_source_locator_830_g3.go": "b79ed6bc51e10708db462f8b4e692acaec039f97b628bac88234a253fa1df152",
+    "internal/application/service/concept_free_wiki_830_g2.go": "a01c55d1d707e12dad623ecdbfd425a03d5bf213072dedc1a2512e6bee12d521",
+    "internal/application/service/schema_wiki.go": "4227165d845a7a2fe4ac8df283864465687604afb60a78914e6cf4de8705f05e",
+    "internal/application/service/concept_source_locator_830_g3_test.go": "98d287d464a3eb2bb9b0929473a754947a370714f7ad8963769d83ff5f9b030b",
+    "internal/application/service/testdata/concept_source_authority_830_g3_vector.json": "e47d8d3af563f3631354e2bc0eae452a398d09849a839233fc2925a2e909f01b"
+  },
+  "effects": {
+    "provider_calls": 0,
+    "production_db_changes": 0,
+    "production_signatures": 0,
+    "config_changes": 0,
+    "app_build_or_deploy": 0
+  },
+  "limits": [
+    "288 native citations replayed against archived validated native artifacts; 17 legacy citations are separate and were not counted as native replay.",
+    "Legacy compatibility checked by focused regression tests, not by a new live APP acceptance.",
+    "Live representative draft and citation rendering require integration deployment by root."
+  ]
+}

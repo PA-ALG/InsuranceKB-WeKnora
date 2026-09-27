@@ -212,6 +212,20 @@ class PunctuationMergeTest(unittest.TestCase):
 
 
 class PdfTextSanitizeTest(unittest.TestCase):
+    def test_preserves_numeric_table_without_figure_boundary(self):
+        from docreader.parser.pdf_parser import _postprocess_pdf_text
+
+        rows = "2 2 6350 12700 0 27600 2950\n3 3 6350 19050 0 41400 4800\n20 20 6350 127000 0 500000 67050"
+        raw = rows + "\nImportant: values are at policy year end."
+        self.assertEqual(_postprocess_pdf_text(raw), raw)
+
+    def test_unrelated_figure_does_not_authorize_numeric_table_removal(self):
+        from docreader.parser.pdf_parser import _postprocess_pdf_text
+
+        rows = "2 2 6350 12700 0 27600 2950\n3 3 6350 19050 0 41400 4800\n20 20 6350 127000 0 500000 67050"
+        raw = "Figure 1. An unrelated diagram.\n" + rows + "\nImportant: table assumptions."
+        self.assertEqual(_postprocess_pdf_text(raw), raw)
+
     def test_removes_fffe_placeholder(self):
         from docreader.parser.pdf_parser import _postprocess_pdf_text
 
@@ -715,12 +729,15 @@ class NativeStructureCaptureTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "page 1 image geometry"):
             self._capture([page])
 
-    def test_rotated_page_is_rejected_instead_of_mislabeling_coordinates(self):
+    def test_rotated_page_keeps_text_without_mislabeling_coordinates(self):
         page = self._Page("X", [(1, 1, 2, 2)], rotation=90)
-        with self.assertRaisesRegex(ValueError, "page 1 rotation"):
-            self._capture([page])
+        doc = self._capture([page])
+        self.assertEqual(doc.content, "X")
+        native = json.loads(doc.metadata["native_structure_artifact_v1"])["sanitized_json"]
+        self.assertEqual(native["pages"][0]["bboxes"], [])
+        self.assertEqual(native["pages"][0]["unavailable_ranges"][0]["reason"], "page_rotation_unsupported")
 
-    def test_missing_or_invalid_character_bbox_is_rejected(self):
+    def test_missing_or_invalid_character_bbox_preserves_text_and_good_locations(self):
         cases = [
             RuntimeError("no charbox"),
             (10, 20, 10, 40),
@@ -730,8 +747,24 @@ class NativeStructureCaptureTest(unittest.TestCase):
         ]
         for box in cases:
             with self.subTest(box=box):
-                with self.assertRaisesRegex(ValueError, "page 1 character 0 bbox"):
-                    self._capture([self._Page("X", [box])])
+                doc = self._capture([self._Page("XY", [box, (1, 1, 2, 2)]), self._Page("Z", [(1, 1, 2, 2)])])
+                self.assertEqual(doc.content, "XY\n\nZ")
+                native = json.loads(doc.metadata["native_structure_artifact_v1"])["sanitized_json"]
+                self.assertEqual(native["contract"], "builtin-pdfium-native-locators.v2")
+                self.assertEqual(native["pages"][0]["unavailable_ranges"], [{"global_codepoint_start": 0, "global_codepoint_end": 1, "reason": "bbox_unavailable" if isinstance(box, Exception) else "bbox_invalid"}])
+                self.assertEqual(len(native["pages"][0]["bboxes"]), 1)
+                self.assertEqual(native["pages"][0]["bboxes"][0]["global_codepoint_start"], 1)
+                self.assertEqual(len(native["pages"][1]["bboxes"]), 1)
+
+    def test_ambiguous_character_mapping_keeps_original_page_and_next_page(self):
+        page = self._Page("AB", [(1, 1, 2, 2)] * 2)
+        page.textpage.count_chars = lambda: 3
+        doc = self._capture([page, self._Page("C", [(1, 1, 2, 2)])])
+        self.assertEqual(doc.content, "AB\n\nC")
+        native = json.loads(doc.metadata["native_structure_artifact_v1"])["sanitized_json"]
+        self.assertEqual(native["pages"][0]["bboxes"], [])
+        self.assertEqual(native["pages"][0]["unavailable_ranges"][0]["reason"], "character_mapping_unavailable")
+        self.assertEqual(len(native["pages"][1]["bboxes"]), 1)
 
 
 if __name__ == "__main__":

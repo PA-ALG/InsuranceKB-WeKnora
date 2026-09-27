@@ -1,3 +1,4 @@
+import { knowledgeContentSegments, validateKnowledgeCitations, type KnowledgeCitation } from './knowledgeContentProvenance'
 import { buildSchemaWikiScopeBootstrapPath, createSchemaWikiCitationPreviewTransport,
   type SchemaWikiReadTransport, type SchemaWikiPreviewTransport,
   type SchemaWikiCitationPreviewTransport } from './index'
@@ -23,7 +24,7 @@ export interface ConceptRead830G2 {
   wiki_kb_id: string
   member: ConceptMember830G2
   related_members: ConceptMember830G2[]
-  citations: { citation_id: string, page_number: number, quote: string }[]
+  citations: KnowledgeCitation[]
   definition_hash: string
   aggregate_hash: string
 }
@@ -50,6 +51,7 @@ function member(value: unknown, scope: SchemaWikiScopeV1): ConceptMember830G2 {
     || typeof value.title !== 'string' || typeof value.content !== 'string') {
     throw new Error('G2_MEMBER_INVALID')
   }
+  if (Object.hasOwn(value.payload, 'business_relation')) throw new Error('RELATION_REQUIRES_G3')
   id(value.member_id); id(value.owner_id)
   const domainMember = ['concept', 'field_assertion', 'free_wiki_item'].includes(String(value.kind))
   if ((domainMember || value.payload.space_id !== undefined) && value.payload.space_id !== scope.space_id) {
@@ -59,7 +61,7 @@ function member(value: unknown, scope: SchemaWikiScopeV1): ConceptMember830G2 {
     : domainMember && value.owner_id !== value.payload.entity_id) throw new Error('G2_OWNER_DRIFT')
   if (domainMember) {
     if (!Array.isArray(value.payload.evidence)
-      || (value.kind !== 'field_assertion' && value.payload.evidence.length === 0)) throw new Error('G2_EVIDENCE_INVALID')
+      || (value.kind !== 'field_assertion' && value.payload.evidence.length === 0 && !Object.hasOwn(value.payload, 'content_provenance'))) throw new Error('G2_EVIDENCE_INVALID')
     for (const evidence of value.payload.evidence) {
       if (!record(evidence) || evidence.space_id !== scope.space_id || evidence.raw_kb_id !== scope.raw_kb_id) {
         throw new Error('G2_EVIDENCE_SCOPE_DRIFT')
@@ -76,6 +78,7 @@ function member(value: unknown, scope: SchemaWikiScopeV1): ConceptMember830G2 {
       throw new Error('G2_FIELD_INVALID')
     }
   }
+  knowledgeContentSegments(value as unknown as ConceptMember830G2)
   return value as unknown as ConceptMember830G2
 }
 
@@ -121,6 +124,7 @@ export async function readConceptPage830G2(wikiKB: string, memberID: string,
       || !Number.isSafeInteger(citation.page_number) || Number(citation.page_number) <= 0
       || typeof citation.quote !== 'string' || citation.quote === '') throw new Error('G2_CITATION_INVALID')
   }
+  await validateKnowledgeCitations(selected, String(raw.candidate_hash), raw.citations as KnowledgeCitation[])
   return { scope, read: { ...raw, member: selected, related_members: related } as unknown as ConceptRead830G2 }
 }
 

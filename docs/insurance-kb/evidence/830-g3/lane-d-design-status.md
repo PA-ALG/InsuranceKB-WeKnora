@@ -1,0 +1,25 @@
+# D 多pack Candidate接线设计状态
+
+状态：DESIGN_GAPS，不授权实现。C集中修复复核完成前不得消费当前C输出。G3-R3/R4/R5范围内只读接缝细化，非新Goal。
+
+已核事实：
+- G2 Python validate_output强制验证exact CompileRequest/CompileOutput，直接用带catalog附加字段的subclass不可行。G3应使用外层组合base_request并保留所有G2 v1/v2原结构、字节/hash。
+- Go现有RawMessage Candidate入口可按外层contract分派；仍走唯一Draft/Review/ActivateReviewed/CAS与现有source authority；不要新增route/注册服务/DB表/第二Head。
+- Profile.required_fields必须精确逐序匹配；FieldAssertion现有payload已有conditions/exceptions/evidence/valid_time，现有concept-member digest包含完整payload并独立于release revision。不为了增加新claim hash无谓修改旧字段对象。
+- Catalog完整实例只内联一次；exact结构确认是独立receipt，不能修改既有Catalog字节；具名缺项是当前实例状态，不能把actor_display_name/queue_owner在新DTO类型写死为None。
+- 原owner建议最小生产5路径为新batch_concept_compile_830_g3.py、新Go types/concept_free_wiki_830_g3.go、原concept service/wiki_release/sourceauthority，另必要共享跨语言fixture。此写域仍未冻结，须先核实真实UI接线需求。
+
+总控未接受的草案内容：
+1. 仅允许MATCH编译，CREATE必须先独立人工注册主数据/变成MATCH：与本G3高置信新实体自动Candidate及4代表pack页面DoD不闭合，且引入第二层前置。应核查既有逻辑entity_id生命周期，让CREATE在同一候选链提出稳定逻辑身份，直到同一整包审核/隔离Release才成为serving；不得让C直接分配Active身份。
+2. 把整SourceBlock硬设为某实体独占：同一真实Block可能含多个产品各自独立quote，禁止的是借用其他实体的身份/事实Evidence，不是禁止共享来源Block。需要基于每实体Evidence scope和独立quotes验证。
+3. 当前未知G3外层组合request是否被旧G2前端strict类型、目录标签/Profile renderer接受；必须只读追踪后追加真实必要接线，不能后补假验收。
+
+下一步：g3_catalog_ui只读核验新逻辑身份及实际页面消费边界；root冻结能完成CREATE页面链的最小版本化合同→独立review→有界RED/实现。真实模型/DB/发布仍NOT RUN。
+
+## 后续只读核查事实
+
+g3_catalog_ui已核实旧G2 b-complete-candidate-bundle.json就是同一候选加入新逻辑实体的真实先例；Go/Python不查InsuranceProduct/ProductVersion仓库，Existing*仅复验base，RequiredFields/EntityVersions可包含新增实体。建议CREATE由D基于已验证C key提出`entity_`+entity_key及对应版本ID，直到同一整包Review/Activate后才serving。旧G2 Active基础字段页可复用，但strict API/payload和raw实体标题不能显示CREATE/NOT_ACTIVE/pack/Profile；需G3适配与可重新打开的preparation/active directory。此为设计输入，尚未冻结DTO/派写。
+
+## Root 持久设计（待独立复核）
+
+新入口 `lane-d-contract-design.md`，SHA 415742f61d443ddeb5b00d13fcdddd8dae97ddc370bd8f61a42000f7c8924512。C B2父MULTI/子待审规则正在重新设计；D保持只消费自动MATCH/CREATE。最小fixture四类为医疗67、重疾67、两全79、意外62，共275字段；真实base保留两个医疗产品时，新增三类后5实体342字段，不能以fixture替代实际计数。用户打开完整preparation，无手填技术JSON流程。当前仍DESIGN_REVIEW_PENDING，未派D生产写域。

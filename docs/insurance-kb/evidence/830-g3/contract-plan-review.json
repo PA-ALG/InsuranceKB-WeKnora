@@ -1,0 +1,23 @@
+{
+  "contract": "830-g3-contract-plan-review.v1",
+  "reviewer": "g3_seam_audit",
+  "reviewed_at": "2026-09-07T05:25:23.755425+00:00",
+  "scope": "A catalog compiler kickoff only",
+  "status": "BLOCKER0",
+  "plan_sha256": "8c32fe0d7047b0d97b0c78a30cd4d53c0d18852536c4cfb7350b1ad628c0b266",
+  "spec_sha256": "c06b3d5ba8da5c17eb5ae47eeb68d62bf44c3c7928682cc8353065495132304c",
+  "mapping_config_sha256": "4be610b5eb9c4c665a932b0786eafc08a75982447fb14aaf1f1e32c7662fef18",
+  "findings": [
+    {
+      "class": "BACKLOG",
+      "finding": "plural classifications shape vs singular config key",
+      "resolution": "Frozen as one-element ordered array before dispatch A"
+    },
+    {
+      "class": "REJECTED",
+      "finding": "Use old schema loader/YAML as v5 authority",
+      "reason": "Observed counts57/49/57/53/59/59/57/59/57/58/58 and missing11-column metadata; B0 workbook is sole input"
+    }
+  ],
+  "product_state_change": false
+}

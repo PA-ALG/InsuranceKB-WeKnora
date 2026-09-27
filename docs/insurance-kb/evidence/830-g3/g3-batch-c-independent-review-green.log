@@ -1,0 +1,29 @@
+Using CPython 3.12.12
+Creating virtual environment at: .venv
+   Building insurance-harness @ file:///Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness
+Downloading cryptography (3.8MiB)
+Downloading ast-serialize (1.1MiB)
+Downloading pygments (1.2MiB)
+Downloading sqlalchemy (2.1MiB)
+Downloading pdfminer-six (6.3MiB)
+Downloading ruff (10.1MiB)
+Downloading mypy (13.2MiB)
+Downloading pillow (4.6MiB)
+Downloading pydantic-core (1.9MiB)
+Downloading pypdfium2 (3.4MiB)
+Downloading psycopg-binary (4.5MiB)
+ Downloaded pygments
+ Downloaded pydantic-core
+ Downloaded ast-serialize
+ Downloaded sqlalchemy
+ Downloaded psycopg-binary
+ Downloaded pillow
+ Downloaded pdfminer-six
+ Downloaded cryptography
+ Downloaded pypdfium2
+      Built insurance-harness @ file:///Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness
+ Downloaded ruff
+ Downloaded mypy
+Installed 76 packages in 456ms
+.......................................                                  [100%]
+39 passed in 15.88s

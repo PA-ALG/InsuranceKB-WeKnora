@@ -1,0 +1,46 @@
+{
+  "contract": "830-g3-d-go-repair-dispatch.v1",
+  "status": "ROOT_DISPATCH_AUTHORIZED",
+  "owner": "g3_catalog_impl",
+  "round": 1,
+  "maximum_high_risk_rounds": 2,
+  "inputs": [
+    {
+      "path": "lane-d-go-wire-presence-repair-1.md",
+      "sha256": "6438c5c91fb50a58f5c5aa6d185000402ec0d8ecfa39390d672e922a8be34b8a"
+    },
+    {
+      "path": "lane-d-go-wire-repair-plan-independent-review-1.json",
+      "sha256": "2867841bc3e424edc665f0634cb0856c40a035b4da3c32caf25254ee89ec622a"
+    },
+    {
+      "path": "lane-d-go-mirror-independent-review-01.json",
+      "sha256": "f26245641a354047aa578dc16d528e4ac125250f7eb7cfc1c6019b330650959a"
+    }
+  ],
+  "exclusive_paths": [
+    "internal/types/concept_free_wiki_830_g3.go",
+    "internal/types/concept_free_wiki_830_g3_test.go"
+  ],
+  "blockers": [
+    "D-GO-STRICT-WIRE-PRESENCE-NULL",
+    "D-GO-C-SOURCE-HASH-TYPE-PARITY"
+  ],
+  "next": "Meaningful RED, bounded two-file repair, focused and complete types GREEN, immutable freeze and independent re-review.",
+  "closed_domains": [
+    "Python",
+    "C/common",
+    "G2 helpers",
+    "fixtures",
+    "backend service/handler/router"
+  ],
+  "ui": "Separate owner, mock-only Task4 already dispatched under independently reviewed order amendment; no shared writes.",
+  "effects_authorized": {
+    "local_source_tests": true,
+    "provider": false,
+    "live_http": false,
+    "database": false,
+    "image_build": false,
+    "deployment": false
+  }
+}

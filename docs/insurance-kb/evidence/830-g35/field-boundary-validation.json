@@ -1,0 +1,131 @@
+{
+  "status": "PASS",
+  "source_base": "bfcf37233c5c35b5a6482cc74d09ebef356d823a",
+  "red": {
+    "failed": 3,
+    "seconds": 8.41
+  },
+  "green": {
+    "passed": 62,
+    "seconds": 34.21
+  },
+  "native_review_red": {
+    "failed": 2,
+    "passed": 1,
+    "seconds": 23.53
+  },
+  "native_green": {
+    "passed": 19,
+    "seconds": 81.31
+  },
+  "ruff": "PASS",
+  "mypy": "PASS",
+  "real_field_replay": {
+    "status": "PASS",
+    "validator": "product-field-outcome.v2",
+    "counts": {
+      "verified": 28,
+      "not_provided": 50,
+      "extraction_failed": 1
+    },
+    "remaining_failure": [
+      "surrender_and_cancellation_terms"
+    ],
+    "raw_file_sha256": "8d26f2da19c5d3c54b6fea0004fa8a17d12942123dff8b01508c194cb075a3ae",
+    "raw_unchanged": true,
+    "new_model_calls": 0,
+    "scope": "Offline complete saved field response projection; not live persistence or semantic coverage certification."
+  },
+  "runtime_config": {
+    "status": "PREPARED_OFFLINE_VALIDATED",
+    "template_changes": [
+      {
+        "before": {
+          "max_context_bytes": 300000,
+          "max_output_tokens": 16384,
+          "prompt_sha256": "a924148e22eac4d80957683615a40bcc1558a7432d7bb0605ad696686c8a7981",
+          "purpose": "g3-field-extraction",
+          "role": "extract",
+          "run_schema_version": "830-g3-v1",
+          "template_id": "field-window-v1"
+        },
+        "after": {
+          "max_context_bytes": 300000,
+          "max_output_tokens": 16384,
+          "prompt_sha256": "ef0b8c65e830e41bf790cbea1c698cf444267242201fed88754b178f281a375b",
+          "purpose": "g3-field-extraction",
+          "role": "extract",
+          "run_schema_version": "830-g3-v1",
+          "template_id": "field-window-v2"
+        }
+      },
+      {
+        "before": {
+          "max_context_bytes": 300000,
+          "max_output_tokens": 16384,
+          "prompt_sha256": "c83a70dd1a0ea19ad06907069f5bf7940619b0f9e61828cda458d147adeeb220",
+          "purpose": "g3-native-admission",
+          "role": "extract",
+          "run_schema_version": "830-g35-v1",
+          "template_id": "g3-native-admission-v1"
+        },
+        "after": {
+          "max_context_bytes": 300000,
+          "max_output_tokens": 16384,
+          "prompt_sha256": "65be405d4af6ec3d896a478144c842680bc7585bc4d673e770711f6657aa1b6a",
+          "purpose": "g3-native-admission",
+          "role": "extract",
+          "run_schema_version": "830-g35-v1",
+          "template_id": "g3-native-admission-v2"
+        }
+      }
+    ],
+    "purpose_sha256": "5d128efc1fb9741caa259670de6801492929fa5ea53deb5e8d6cc61bb10cc212",
+    "other_configuration_unchanged": true,
+    "model_policy_before": "850970f992b42fa711019ccfb5604358ca2f5164235782fc1948610f8e27a51b",
+    "model_policy_after": "0f3372f5e8a5aec113de70a96d9bd0fe4ddf2cdf59e286ced5a1360e18d1fd7a",
+    "effects": 0,
+    "note": "Policy identity and native purpose change; previous native calls are preserved but not exact reusable under new policy."
+  },
+  "independent_review": {
+    "reviewer": "semantic_view_review",
+    "blockers": 0,
+    "manifest": {
+      "harness/src/insurance_harness/product_ingestion/extraction.py": "261a0ada12ec6afcd30f34db36ceebc363c5acc07974a496e2748f635f31cafc",
+      "harness/src/insurance_harness/product_ingestion/pipeline.py": "415e06c5520d39c996f2940eb9b0500b5bc23a51efab1bc465aa54cc6bdd1e42",
+      "harness/src/insurance_harness/product_ingestion/native_admission.py": "32f0826e12b52142e48391259e600eea9dd5c8d611d4d916c76f52c145be25d8",
+      "harness/tests/product_ingestion/test_extraction.py": "78b9865da4715777b498068ef7a44bd00596fe1dc2ef0ed6a70deb2d6b09b160",
+      "harness/tests/product_ingestion/test_native_admission.py": "5958cc411aa3c4d1f8518fa18a9a3413139af8c76549b0e2736b54bcf392b43a",
+      "docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md": "3237e3eb6636d42616353deb7ef44892228ee8aa7a0ce0859aefbba1ec0de717",
+      "openspec/changes/129-830-g3-catalog-batch/specs/catalog-batch/spec.md": "41a573473b00a23e54f0693b3b4f3629183561e83a1f03aef814f47d98fe9862",
+      "docs/insurance-kb/evidence/830-g35/insurance-native-purpose-v2.txt": "5d128efc1fb9741caa259670de6801492929fa5ea53deb5e8d6cc61bb10cc212"
+    }
+  },
+  "build": "NOT RUN",
+  "deployment": "NOT RUN",
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "native_actual_replay": {
+    "status": "PASS",
+    "candidate_count": 13,
+    "dispositions": {
+      "REFERENCE": 1,
+      "REQUIRES_ENTITY_RESOLUTION": 2,
+      "REJECT": 10
+    },
+    "pages": 0,
+    "definitions": 0,
+    "new_model_calls": 0,
+    "scope": "Deterministic projection replay only; does not certify semantic admission quality."
+  },
+  "live_parent_run": {
+    "run_id": "e375979e-1118-58d5-b2e4-f5aba0ccec98",
+    "state": "failed",
+    "reason": "PRODUCT_STAGE_FAILED:publish",
+    "started_at": "2026-09-23T12:30:05.629891Z",
+    "finished_at": "2026-09-23T13:21:07.806144Z",
+    "model_calls": 11,
+    "reused_identity_calls": 1,
+    "quality": "NOT PASS"
+  }
+}

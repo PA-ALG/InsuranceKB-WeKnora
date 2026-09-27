@@ -1,0 +1,112 @@
+{
+  "contract": "830-g3-d-ui-independent-review.v1",
+  "reviewed_freeze": {
+    "path": "docs/insurance-kb/evidence/830-g3/lane-d-ui-freeze-1.json",
+    "sha256": "4aa287e33371ba2d658731fc3361ba25a56c66f4594aa4acf3264a9cda0f209f",
+    "source_sha256": "fd9bd413ff9c3faeac11352af1b8c9bba4a9834d81b051b82cf275951cd51fb9",
+    "test_sha256": "c254166c628ec803206185983f71bfa65553005f57225261829663c897f8b8b4",
+    "all_eight_files_match_freeze": true,
+    "snapshot_manifest_sha256": "682ced3ace20575a45fb8e94fe811f6f59051c0fb110241a3bb9cfaf1051c716",
+    "owner_log_files_checked": 17,
+    "owner_log_hash_or_size_mismatches": []
+  },
+  "verdict": {
+    "spec_compliance": "BLOCKED",
+    "code_quality": "BLOCKED_BY_SAME_ROOT_CAUSE",
+    "blocker_count": 1,
+    "backlog_count": 0,
+    "entry_gate": "CLOSED_PENDING_ONE_BOUNDED_UI_REPAIR"
+  },
+  "blockers": [
+    {
+      "id": "UI-B1-STRUCTURED-CONTROL-PRESENCE",
+      "location": [
+        "frontend/src/api/schema-wiki/batchConcept830G3.ts:26",
+        "frontend/src/api/schema-wiki/batchConcept830G3.ts:161",
+        "frontend/src/api/schema-wiki/batchConcept830G3.ts:166",
+        "frontend/src/api/schema-wiki/batchConcept830G3.ts:190",
+        "frontend/src/api/schema-wiki/batchConcept830G3.ts:254",
+        "frontend/src/api/schema-wiki/batchConcept830G3.ts:327",
+        "frontend/src/api/schema-wiki/batchConcept830G3.ts:332"
+      ],
+      "contract_evidence": "cd-multiline-canonical-amendment-7-v2.md lines 12-15 and 30: G3 structured Text/identities and object keys reject every U+0000-U+001F and U+007F; only exact typed body fields allow TAB/LF/CR.",
+      "finding": "INVALID_CONTROL excludes TAB, LF and CR. identity() delegates to text(), so internal TAB/LF/CR pass. strings() inherits the same behavior. Profile section display_name and field short_title call body-tolerant text() directly even though they are G3 structured Text.",
+      "reproduction": {
+        "script": "/private/tmp/g3-d-ui-independent-identity-control-probe-03.ts",
+        "log": "/private/tmp/g3-d-ui-independent-identity-control-probe-03.log",
+        "log_sha256": "5ea0fe75d21ff657a18bfcae5fe449c3966635fb5f2b4f955e16d6490967a426",
+        "positive_control": "ACCEPTED",
+        "mutation": "First actual-342 Evidence.parser_identity changed to parser\\nidentity; members_sha256 and read_sha256 recomputed.",
+        "mutated_manifest_sha256": "09df983accd0f8ebfba4c35a037d017f1f46d645f7d11f1994f4f0ed34323b57",
+        "mutated_read_sha256": "d08ac29769d82c4757e8d87892752807f912db8e29387d65613d689942f1919e",
+        "actual_result": "ACCEPTED",
+        "expected_result": "BATCH_CONCEPT_830_G3_INVALID"
+      },
+      "impact": "A fully rehashed wire object containing an invalid structured identity passes the browser parser, diverging from the frozen Python/Go contract and removing the required client fail-closed check.",
+      "bounded_repair_contract": [
+        "Separate structured Text validation from exact typed body validation. Structured validation rejects all ASCII controls including TAB/LF/CR and DEL; typed body validation preserves TAB/LF/CR while still rejecting the other controls and non-NFC.",
+        "Apply structured validation to identity(), identity arrays, Profile section display_name/field short_title, all G3 structured fields, and canonical object keys. Do not turn arbitrary values into body fields.",
+        "Keep the amendment-7-v2 body exemptions on the body path, including Evidence.quote, manifest/page title/content, FieldAssertion value/unknown_reason/conditions/exceptions/valid_time, FreeWiki title/body/conditions/exceptions/valid_time, AuditDisposition.reason, and citations/other exact G2 body fields.",
+        "Add a fully rehashed structured-control rejection and positive TAB/LF/CR body cases. No DTO, hash domain, scope, transport or backend change is needed."
+      ]
+    }
+  ],
+  "passed_bounded_checks": [
+    {
+      "log": "/private/tmp/g3-d-ui-independent-focused-01.log",
+      "sha256": "3e8f95ecc7446124784bed970dfdc6553f25d34977e71abdcb189f5e8ca68296",
+      "result": "4 files / 25 tests PASS"
+    },
+    {
+      "log": "/private/tmp/g3-d-ui-independent-g2-regression-01.log",
+      "sha256": "463e6935b5767ea9736075ffa661b3e64fed15a2074ce56372e5c3865b8ce9d8",
+      "result": "3 files / 46 tests PASS"
+    },
+    {
+      "log": "/private/tmp/g3-d-ui-independent-alignment-positive-probe-01.log",
+      "sha256": "dc46aa97af7419bc7a6d2e000fecc7ec3e7091f0a4c479fd20fa16dab2cbb38d",
+      "result": "PASS: actual saved G2 page payload plus frozen G3 fixture yields exactly the two authorized singular-to-plural empty-unknown alignments and does not call /current."
+    },
+    {
+      "owner_log": "docs/insurance-kb/evidence/830-g3/g3-d-ui-vue-tsc-green-20260908-03.log",
+      "sha256": "4d37bf60b781d94cb6d66ceb53e216fbb9afd83c7e8450c85bbf362557a4e662",
+      "result": "owner vue-tsc PASS; identity mechanically verified, not independently rerun"
+    },
+    {
+      "owner_log": "docs/insurance-kb/evidence/830-g3/g3-d-ui-staticcheck-green-20260908-01.log",
+      "sha256": "11e6a1809d2669a7f72a66fbea9ba2fd1d5636432595b6300f555cdef536cd46",
+      "result": "owner static diff PASS; identity mechanically verified"
+    }
+  ],
+  "spec_areas_without_other_findings": [
+    "strict exact keys/hash/scope/owner/Profile/member/free-page/manifest closure apart from UI-B1",
+    "preparation scope -> Catalog -> immutable preparation -> exact historical G2 read; no /current",
+    "Active /current pin -> exact release and existing citation session",
+    "DRAFT/READY/Active presentation, Profile order, manifest related-member order, and G1/G2 fallback",
+    "alignment has no tenant IDs in frontend constants and matches only two authorized empty-unknown base fields from authenticated data"
+  ],
+  "backlog": [],
+  "rejected": [
+    {
+      "claim": "Initial missing-module/scaffold log is a behavioral RED.",
+      "reason": "It proves absence/scaffolding only."
+    },
+    {
+      "claim": "pdfJsPort Denied ID is either a product regression or a PASS.",
+      "reason": "The direct run is unusable because Vite resolves an existing cross-worktree node_modules symlink. The frozen UI did not modify the port/config, and the bounded three-file G2 page/citation regression passed; classify the pdf worker result as an environment limitation, not product evidence."
+    },
+    {
+      "claim": "The five-product/342-field fixture proves an actual G3 business release or quality result.",
+      "reason": "It is a frozen protocol fixture only."
+    }
+  ],
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0,
+    "repo_files_written_by_reviewer": 0
+  }
+}

@@ -1,0 +1,144 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_builder_accepts_all_blocks_from_selected_material ____________
+
+    def test_builder_accepts_all_blocks_from_selected_material() -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        (
+            request,
+            expanded_base,
+            expanded_corpus,
+            expanded_proposals,
+            expanded_resolution,
+            field_block,
+            refs,
+        ) = _expanded_selected_material_inputs(module)
+    
+>       rebuilt = module.build_batch_compile_request(
+            base_request=expanded_base,
+            catalog_json=CATALOG.read_bytes(),
+            profile_confirmation_json=(
+                ROOT / "docs/insurance-kb/evidence/830-g3/profile-user-confirmation.json"
+            ).read_bytes(),
+            corpus=expanded_corpus,
+            proposals=expanded_proposals,
+            existing_entities=request.resolution_inputs.existing_entities,
+            policy=request.resolution_inputs.policy,
+            resolution=expanded_resolution,
+            selected_decision_refs=refs,
+        )
+
+harness/tests/test_batch_concept_compile_830_g3.py:511: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_request = CompileRequest(contract='concept-compile-request.830.g2.v1', request_id='g2-b-second-snapshot-compile-v1', tenant_id=1...69544e9e6c391a46d056f65ab70b', base_release_id='release-9cb493e3-8d27-4a0f-8f29-93e2a078725b', base_activation_epoch=5)
+catalog_json = b'{"catalog_id":"schema_catalog_insurance_product","catalog_sha256":"b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4a...0d3fe1caab5be52517d0625fd2cd257","workbook_sha256":"8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec"}'
+profile_confirmation_json = b'{\n  "contract": "830-g3-profile-user-confirmation.v1",\n  "confirmed_at_recorded": "2026-09-07T06:45:57.539579+00:0...r did not supply display name or queue assignee, so neither is invented. Named queue assignment remains pending."\n}\n'
+corpus = BatchCorpusV1(contract='batch-corpus.830.g3.v1', tenant_id=10003, space_id='a8751a40-83ce-55c8-a160-079b283483ca', raw...07ec9147a5d58692293c18929956cabeb')), corpus_sha256='82e66ffad05ce2483550c88d679cdec60d0896b2a2f7b0a66f257834964c89ca')
+proposals = ProposalBatchV1(contract='batch-identity-proposals.830.g3.v1', corpus_sha256='82e66ffad05ce2483550c88d679cdec60d0896b2...b54678125d4cb0bc5f9840ba6e3ae7')), proposals_sha256='2921416c76ded2c25b63885ad2b54a695a1eae12b015418773ea5caa502032de')
+existing_entities = ExistingEntitySnapshotV1(contract='existing-entities.830.g3.v1', tenant_id=10003, space_id='a8751a40-83ce-55c8-a160-07...(), identity_evidence_sha256s=())), snapshot_sha256='fe8457503a4171e355613a920765cda0d5f6c93b9aa6083b5342f471c7ca6006')
+policy = BatchResolutionPolicyV1(contract='batch-resolution-policy.830.g3.v1', policy_id='g3-d-fixture-policy', policy_version=... valid_through=None, priority=100),), policy_sha256='22e69e6907bb891ff9577afd06e8029d1022de30dfd7e03edff589cff3bb2795')
+resolution = BatchEntityResolutionV1(contract='batch-entity-resolution.830.g3.v1', compiler_version='batch-entity-resolution-compil...LTI=0, NEEDS_CONFIRM=0, QUARANTINE=0), batch_sha256='172eb6b7d549de5c4d6f0d9132448d77b3be8f8229d7c4c5c278eb56bfd2b77a')
+selected_decision_refs = (('fixture-accident-1814', 'product-main'), ('fixture-critical-1828', 'product-main'), ('fixture-endowment-1826', 'product-main'), ('fixture-medical-594', 'product-main'), ('fixture-medical-596', 'product-main'))
+
+    def build_batch_compile_request(
+        *,
+        base_request: CompileRequest,
+        catalog_json: bytes,
+        profile_confirmation_json: bytes,
+        corpus: BatchCorpusV1,
+        proposals: ProposalBatchV1,
+        existing_entities: ExistingEntitySnapshotV1,
+        policy: BatchResolutionPolicyV1,
+        resolution: BatchEntityResolutionV1,
+        selected_decision_refs: tuple[tuple[str, str], ...],
+    ) -> BatchConceptCompileRequest830G3V1:
+        """Build one exact, offline G3 request from Catalog and replayed C inputs."""
+    
+        try:
+            catalog = validate_catalog(catalog_json)
+            confirmation_receipt = CatalogProfileConfirmationReceipt830G3V1.model_validate_json(
+                profile_confirmation_json
+            )
+        except (TypeError, ValueError):
+            raise BatchConceptCompileError("BATCH_REQUEST_INVALID") from None
+        replayed = resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=proposals,
+            existing_entities=existing_entities,
+            policy=policy,
+        )
+        if replayed != resolution:
+            raise BatchConceptCompileError("RESOLUTION_REPLAY_MISMATCH")
+        bindings = _build_entity_bindings(
+            catalog=catalog,
+            proposals=proposals,
+            resolution=resolution,
+            selected_decision_refs=selected_decision_refs,
+        )
+        binding_index = {item.entity_id: item for item in bindings}
+        if any(
+            (binding := binding_index.get(entity_id)) is None
+            or binding.resolution_disposition != "MATCH"
+            or binding.entity_version != entity_version
+            for entity_id, entity_version in base_request.existing_entity_versions.items()
+        ):
+            raise BatchConceptCompileError("BASE_ENTITY_MATCH_REQUIRED")
+        confirmation = CatalogProfileConfirmationBinding830G3V1(
+            contract="catalog-profile-confirmation-binding.830.g3.v1",
+            receipt=confirmation_receipt,
+            receipt_file_sha256=hashlib.sha256(profile_confirmation_json).hexdigest(),
+            receipt_semantic_sha256=_batch_sha256(
+                confirmation_receipt.contract, confirmation_receipt
+            ),
+        )
+        inputs_payload: dict[str, object] = {
+            "contract": "batch-resolution-inputs.830.g3.v1",
+            "corpus": corpus,
+            "proposals": proposals,
+            "existing_entities": existing_entities,
+            "policy": policy,
+        }
+        resolution_inputs = BatchResolutionInputs830G3V1.model_validate(
+            {
+                **inputs_payload,
+                "inputs_sha256": _batch_sha256(
+                    "batch-resolution-inputs.830.g3.v1", inputs_payload
+                ),
+            }
+        )
+        payload: dict[str, object] = {
+            "contract": "batch-concept-compile-request.830.g3.v1",
+            "base_request": base_request,
+            "catalog": catalog,
+            "catalog_wire_sha256": _catalog_wire_sha256(catalog),
+            "profile_confirmation": confirmation,
+            "resolution_inputs": resolution_inputs,
+            "resolution": resolution,
+            "entity_bindings": bindings,
+            "unknown_field_key_alignments": _build_unknown_alignments(base_request, catalog),
+            "quality_status": "REGISTERED_NOT_QUALITY_ADMITTED",
+            "release_lane": "ISOLATED_NOT_FOR_PRODUCTION",
+        }
+        try:
+            return BatchConceptCompileRequest830G3V1.model_validate(
+                {
+                    **payload,
+                    "request_sha256": _batch_sha256(
+                        "batch-concept-compile-request.830.g3.v1", payload
+                    ),
+                }
+            )
+        except BatchConceptCompileError:
+            raise
+        except (TypeError, ValueError):
+>           raise BatchConceptCompileError("BATCH_REQUEST_INVALID") from None
+E           insurance_harness.knowledge_compiler.batch_concept_compile_830_g3.BatchConceptCompileError: BATCH_REQUEST_INVALID
+
+harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py:1194: BatchConceptCompileError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_builder_accepts_all_blocks_from_selected_material
+1 failed in 16.35s

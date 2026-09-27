@@ -1,0 +1,116 @@
+{
+  "contract": "830-g3-mechanical-oracle-custody-and-c-semantic-design-review.v1",
+  "scope": "Read-only mechanical custody and design delta review; oracle/scripts not executed; Go not read.",
+  "inputs": {
+    "custody": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/d-go-c-semantics-oracle-01/custody.json",
+      "sha256": "92ce2e6baac04c0f1055844509a6e56d29fbe9995e82ba135e0141c01ccdc0bb"
+    },
+    "documents": {
+      "g3-c-semantic-response-assembler-design-01.md": {
+        "sha256": "1fa83644dc2bd6328bd939077cfde5e7f24bf27dde021dffc7107c8c0a7a8c15",
+        "bytes": 11833
+      },
+      "g3-c-semantic-response-assembler-design-02.md": {
+        "sha256": "43f137e2e68f355a2141ce0a9059db78433c6f6f3ceae7591e8dd0089bdc7eff",
+        "bytes": 13351
+      },
+      "c-semantic-response-design-root-review-01.json": {
+        "sha256": "b91b93281d7cd87373d83ac01502655f6f45ba0076ead6090a926ca5f615f8dd",
+        "bytes": 1408
+      }
+    }
+  },
+  "custody_checks": [
+    {
+      "saved": "g3-go-c-semantics-oracle-01.py",
+      "sha_match": true,
+      "source_byte_equal": true
+    },
+    {
+      "saved": "g3-go-c-semantics-oracle-01.json",
+      "sha_match": true,
+      "source_byte_equal": true
+    },
+    {
+      "saved": "g3-go-c-semantics-materialize-02.py",
+      "sha_match": true,
+      "source_byte_equal": true
+    },
+    {
+      "saved": "manifest.json",
+      "sha_match": true,
+      "source_byte_equal": true
+    },
+    {
+      "saved": "01-identity-threshold-policy-drift.json.gz",
+      "saved_sha_match": true,
+      "saved_bytes_match": true,
+      "gzip_mtime": 0,
+      "gzip_mtime_zero": true,
+      "raw_sha_match": true,
+      "raw_bytes_match": true,
+      "source_byte_equal": true
+    },
+    {
+      "saved": "02-classification-trust-rule-removed.json.gz",
+      "saved_sha_match": true,
+      "saved_bytes_match": true,
+      "gzip_mtime": 0,
+      "gzip_mtime_zero": true,
+      "raw_sha_match": true,
+      "raw_bytes_match": true,
+      "source_byte_equal": true
+    },
+    {
+      "saved": "03-selected-proposal-unsupported-classification.json.gz",
+      "saved_sha_match": true,
+      "saved_bytes_match": true,
+      "gzip_mtime": 0,
+      "gzip_mtime_zero": true,
+      "raw_sha_match": true,
+      "raw_bytes_match": true,
+      "source_byte_equal": true
+    },
+    {
+      "saved": "04-single-child-false-multi-parent.json.gz",
+      "saved_sha_match": true,
+      "saved_bytes_match": true,
+      "gzip_mtime": 0,
+      "gzip_mtime_zero": true,
+      "raw_sha_match": true,
+      "raw_bytes_match": true,
+      "source_byte_equal": true
+    }
+  ],
+  "custody_verdict": "PASS",
+  "design_checks": {
+    "design_01_to_02_delta_only_changes_title_and_quote_page_bbox_boundary": true,
+    "whole_w1_or_block_quote_uniqueness_removed": true,
+    "exact_w1_unicode_offsets_remain_required": true,
+    "selected_native_page_exactly_one_occurrence_remains_required": true,
+    "complete_ordered_visible_codepoint_bbox_proof_required": true,
+    "bbox_must_be_finite_positive_and_inside_selected_page": true,
+    "premodel_anchor_cannot_substitute_for_actual_quote_bbox": true,
+    "root_review_hashes_match_both_design_docs": true,
+    "no_new_execution_authority": true
+  },
+  "red_exemption": {
+    "custody_copy": "PASS: byte-preserving evidence copy/compression changes no product, fixture, protocol, or verification criterion.",
+    "design_documents": "PASS for this design-only record: no product behavior or execution occurred; later implementation remains subject to behavioral RED and independent review."
+  },
+  "findings": {
+    "BLOCKER": [],
+    "BACKLOG": [],
+    "REJECTED": []
+  },
+  "effects": {
+    "oracle_execution": 0,
+    "go_read": 0,
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "product_write": 0
+  },
+  "verdict": "PASS"
+}

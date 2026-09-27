@@ -1,0 +1,85 @@
+{
+  "contract": "830-g3-d-backend-repair1-source-freeze.v1",
+  "status": "FROZEN_FOR_REREVIEW_FULL_PACKAGE_TESTS_STILL_RUNNING",
+  "files": [
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g2.go",
+      "sha256": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+      "bytes": 35621,
+      "changed_in_repair1": false
+    },
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g3.go",
+      "sha256": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+      "bytes": 15042,
+      "changed_in_repair1": true
+    },
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g3_test.go",
+      "sha256": "0e04690036e80ae6261df9bc53e814851dbf7616672abb16c159773453fc5a6f",
+      "bytes": 39746,
+      "changed_in_repair1": true
+    },
+    {
+      "path": "internal/application/service/concept_source_authority_830_g2.go",
+      "sha256": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+      "bytes": 56870,
+      "changed_in_repair1": false
+    },
+    {
+      "path": "internal/application/service/concept_source_authority_830_g2_test.go",
+      "sha256": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+      "bytes": 37312,
+      "changed_in_repair1": false
+    },
+    {
+      "path": "internal/application/service/wiki_release.go",
+      "sha256": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+      "bytes": 76181,
+      "changed_in_repair1": false
+    },
+    {
+      "path": "internal/handler/concept_free_wiki_830_g2.go",
+      "sha256": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+      "bytes": 4363,
+      "changed_in_repair1": false
+    },
+    {
+      "path": "internal/handler/concept_free_wiki_830_g3_test.go",
+      "sha256": "c2b4506057ccaf5a77c19da2af711394bee123ee9bb835c3c5aadb967bd175f4",
+      "bytes": 15446,
+      "changed_in_repair1": true
+    },
+    {
+      "path": "internal/handler/schema_wiki.go",
+      "sha256": "ad388e0616cd0fc4a54c2aaedad95c49334f380e4c420f0aa2bee16259490b99",
+      "bytes": 50218,
+      "changed_in_repair1": true
+    },
+    {
+      "path": "internal/router/routes_schema_wiki.go",
+      "sha256": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c",
+      "bytes": 8759,
+      "changed_in_repair1": false
+    },
+    {
+      "path": "internal/router/routes_batch_concept_830_g3_test.go",
+      "sha256": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+      "bytes": 2470,
+      "changed_in_repair1": false
+    }
+  ],
+  "repair_round": 1,
+  "dispatch_sha256": "0941c4de407000c38606225ab9475f8d165ea2b544faf680031a0250899ecb9d",
+  "root_interop": "d-backend-ui-interop-repair1/manifest.json",
+  "root_interop_sha256": "f4d4387ab6363b24c347c39b495f1d68f99c76edfb7bd6d0f24ea37fa3aea9b3",
+  "owner_focused": "PASS service9.330s/handler3.537s",
+  "owner_full_packages": "RUNNING",
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "live_http": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "contract": "g35-native-write-exclusion-validation.830.v1",
+  "base_commit": "c7e8a8cccdd1d69920c835c7fe713c8e5925e257",
+  "reviewed_tree": "81b75d36c0dee4db78989ba4dd5d2df113b0725a",
+  "requirements": [
+    "G35-R1",
+    "G35-R3"
+  ],
+  "scope": "Opt-in product candidate policy, native API/worker/postprocess/startup mutual exclusion; no runtime configuration changes.",
+  "red": [
+    "Unknown candidate mode in actual YAML decoding was ignored by ValidateConfig (expected error, got nil)",
+    "Native API without candidate mode called producer and returned 200 (expected 503/zero calls)",
+    "Missing new config/worker policy API compile failures are implementation smoke only"
+  ],
+  "validation": {
+    "go": "PASS: config 1.189s, application/service 1.731s, container 5.069s, handler 2.818s, router 1.604s; TestProductNativeCandidatePolicy*, TestNativeCandidatePolicy*, TestRecoverPendingWikiTasks*, TestNativeDiscovery*, TestG3PlatformSnapshot*",
+    "environment": "First container package setup denied access to existing go-build cache; no product RED. Same local test command with reviewed cache permission passed. Native sqlite deprecation warnings did not fail tests.",
+    "gofmt": "PASS",
+    "diff_check": "PASS"
+  },
+  "review": {
+    "reviewer": "native_boundary_review",
+    "tree": "81b75d36c0dee4db78989ba4dd5d2df113b0725a",
+    "blockers": 0,
+    "mechanical_docs_red_exemption": "Explicitly confirmed exact HANDOFF/plan top and evidence-only records."
+  },
+  "boundaries": [
+    "Enable only after old-config workers have exited and active tasks are quiescent; no in-process hot-switch barrier",
+    "Existing durable rows retained, not migrated or deleted",
+    "Other old enqueue entrances can leave pending rows; worker fence prevents consumption/model/page writes; observe at runtime integration"
+  ],
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "frozen_files": {
+    "docs/superpowers/plans/2026-09-23-830-g35-knowledge-admission.md": "a9eacc02896758f2f510b4b5eb9407c23988b0160ef385bd51719de04c6f0648",
+    "internal/application/service/knowledge_post_process.go": "9f89265f0d3ff89acdb866ace411be4bd2993c37e4c8b96caa31dab13308f8ed",
+    "internal/application/service/native_wiki_policy_test.go": "d9e9c45c18bd26f460a02a121391cf002abd04f76800168bd6a02a1932646463",
+    "internal/application/service/wiki_ingest.go": "c3a38c0bad199360b94ba66764c9f7a546bda10d3247f2fc3e3f6aa1d9d296ed",
+    "internal/application/service/wiki_ingest_batch.go": "ffc72becb04b3e149e58cae87db5b9b5db86196fdd58aaee3af78b02201a1502",
+    "internal/config/config.go": "7e471c71742bf3aa8d09be36a7bdfe414aa1b8e98cec227162951d285f910cc6",
+    "internal/config/product_ingestion.go": "b7a43913d1f3d03ceabe9c927e76a41ab682dcb27b995132296cff5531a5ef0a",
+    "internal/config/product_ingestion_native_test.go": "e002538d021fbcee879d262a311e25633c4d60bddce6ef112f408fb4fe6dd5ac",
+    "internal/container/recover_pending_wiki_tasks.go": "5f3fdd8710371762e2cc414317794bd014b9431c4f992e06986b0ac68a3d0d73",
+    "internal/container/reset_pending_tasks_test.go": "87fafab14a8019ed924d1adb3ffe186fa544971fa935a18884621beb83cb0601",
+    "internal/handler/g3_platform_composition.go": "cb9a9e1111e9913405bbcf38b88df14d6c7dff875adf8687e10c1a33040f0be2",
+    "internal/handler/g3_platform_native_discovery.go": "d41d2193c25f589d2902d5a6451a9a12ba53fe71aab51db41096625b7c9c727e",
+    "internal/handler/g3_platform_native_discovery_test.go": "ff2cf0020ecec806b3b5e76ac55eb1a382ba181f24af3cf67e93c5714a73c49a",
+    "internal/handler/g3_platform_snapshots.go": "5bc8974ed67642da1932b54a4b82d1f4507e9414fdfd3b6a1ff4ea6219f08ff6"
+  }
+}

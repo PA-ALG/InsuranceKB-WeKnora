@@ -1,0 +1,50 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_g3_canonical_json_preserves_multiline_content ______________
+
+    def test_g3_canonical_json_preserves_multiline_content() -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+    
+>       assert module._canonical_json({"body": "first\nsecond\tvalue\rline"}) == (
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            '{"body":"first\\nsecond\\tvalue\\rline"}'
+        )
+
+harness/tests/test_batch_concept_compile_830_g3.py:139: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py:81: in _canonical_json
+    preimage = schema_wiki_canonical_bytes("json", value)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:93: in schema_wiki_canonical_bytes
+    _json_tree(payload),
+    ^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:82: in _json_tree
+    tree[key] = _json_tree(item)
+                ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+value = 'first\nsecond\tvalue\rline'
+
+    def _json_tree(value: object) -> object:
+        if isinstance(value, BaseModel):
+            return _json_tree(
+                value.model_dump(
+                    mode="python",
+                    round_trip=True,
+                    warnings=False,
+                    exclude_computed_fields=True,
+                )
+            )
+        if type(value) is str:
+            if unicodedata.normalize("NFC", value) != value:
+                raise ValueError("Schema Wiki text must be NFC")
+            if _has_disallowed_control(value):
+>               raise ValueError("Schema Wiki text must not contain control characters")
+E               ValueError: Schema Wiki text must not contain control characters
+
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:69: ValueError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_g3_canonical_json_preserves_multiline_content
+1 failed in 0.66s

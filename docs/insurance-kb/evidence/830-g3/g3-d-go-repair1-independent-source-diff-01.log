@@ -1,0 +1,94 @@
+--- /private/tmp/old-concept_free_wiki_830_g3.go	2026-09-08 00:40:32
++++ internal/types/concept_free_wiki_830_g3.go	2026-09-08 00:23:31
+@@ -747,6 +747,10 @@
+ 	}
+ 	var trailing any
+ 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
++		return ErrConceptCandidateBundle830G3
++	}
++	if !canonicalRawEqualValue830G3(string(raw), destination) ||
++		!nonNullCollections830G3(reflect.ValueOf(destination)) {
+ 		return ErrConceptCandidateBundle830G3
+ 	}
+ 	return nil
+@@ -814,6 +818,60 @@
+ 	left, errLeft := canonicalConceptRawJSON830G2([]byte(raw))
+ 	right, errRight := conceptCanonicalJSON830G2(value)
+ 	return errLeft == nil && errRight == nil && bytes.Equal(left, right)
++}
++
++func nonNullCollections830G3(value reflect.Value) bool {
++	if !value.IsValid() {
++		return true
++	}
++	switch value.Kind() {
++	case reflect.Interface:
++		if value.IsNil() {
++			return true
++		}
++		return nonNullCollections830G3(value.Elem())
++	case reflect.Pointer:
++		if value.IsNil() {
++			return true
++		}
++		return nonNullCollections830G3(value.Elem())
++	case reflect.Slice, reflect.Map:
++		if value.IsNil() {
++			return false
++		}
++		if value.Kind() == reflect.Slice {
++			for index := 0; index < value.Len(); index++ {
++				if !nonNullCollections830G3(value.Index(index)) {
++					return false
++				}
++			}
++			return true
++		}
++		iterator := value.MapRange()
++		for iterator.Next() {
++			if !nonNullCollections830G3(iterator.Value()) {
++				return false
++			}
++		}
++		return true
++	case reflect.Array:
++		for index := 0; index < value.Len(); index++ {
++			if !nonNullCollections830G3(value.Index(index)) {
++				return false
++			}
++		}
++		return true
++	case reflect.Struct:
++		for index := 0; index < value.NumField(); index++ {
++			if value.Type().Field(index).PkgPath == "" &&
++				!nonNullCollections830G3(value.Field(index)) {
++				return false
++			}
++		}
++		return true
++	default:
++		return true
++	}
+ }
+ 
+ func validateRawContractHash830G3(
+@@ -902,7 +960,9 @@
+ 		return ErrConceptCandidateBundle830G3
+ 	}
+ 	var trailing any
+-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) || !canonicalRawEqualValue830G3(string(raw), *destination) {
++	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) ||
++		!canonicalRawEqualValue830G3(string(raw), *destination) ||
++		!nonNullCollections830G3(reflect.ValueOf(destination)) {
+ 		return ErrConceptCandidateBundle830G3
+ 	}
+ 	return nil
+@@ -2609,6 +2669,8 @@
+ func validateCorpusEntry830G3(corpus BatchCorpus830G3, entry CorpusEntry830G3) error {
+ 	_ = corpus
+ 	if !conceptIdentity830G2(entry.MaterialID) || len(entry.Blocks) == 0 ||
++		!validHash830G3(entry.NativeCaptureSHA256) || !validHash830G3(entry.ParserIdentitySHA256) ||
++		!validHash830G3(entry.Provenance.AcquisitionReceiptSHA256) ||
+ 		(entry.Provenance.Kind != "official_public_document" && entry.Provenance.Kind != "user_supplied_document" &&
+ 			entry.Provenance.Kind != "internal_document" && entry.Provenance.Kind != "unknown") ||
+ 		!validStructuredText830G3(entry.Provenance.ProvenanceID) || !validStructuredText830G3(entry.Provenance.SourceURI) ||

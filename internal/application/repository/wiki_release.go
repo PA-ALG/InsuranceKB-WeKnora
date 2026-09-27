@@ -137,6 +137,29 @@ func (r *WikiReleaseRepository) GetReadyPreparation(
 	return &preparation, err
 }
 
+// GetReadyPreparationMetadata returns the immutable authorization identity
+// without hydrating the potentially large manifest and member JSON columns.
+func (r *WikiReleaseRepository) GetReadyPreparationMetadata(
+	ctx context.Context,
+	scope types.WikiReleaseScope,
+	preparationID string,
+) (*types.WikiReleasePreparation, error) {
+	var preparation types.WikiReleasePreparation
+	err := scopeQuery(r.db.WithContext(ctx), scope).
+		Select(
+			"preparation_id", "tenant_id", "space_id", "raw_kb_id", "wiki_kb_id",
+			"candidate_digest", "manifest_digest", "ready_receipt_digest",
+			"review_decision_digest", "review_policy_id", "expected_release_id",
+			"expected_activation_epoch", "status", "preparation_digest", "created_at",
+		).
+		Where("preparation_id = ? AND status = ?", preparationID, types.WikiReleasePreparationReady).
+		Take(&preparation).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrWikiReleaseNotFound
+	}
+	return &preparation, err
+}
+
 // GetDraftPreparation returns only an immutable reviewer-visible Draft.
 func (r *WikiReleaseRepository) GetDraftPreparation(
 	ctx context.Context,

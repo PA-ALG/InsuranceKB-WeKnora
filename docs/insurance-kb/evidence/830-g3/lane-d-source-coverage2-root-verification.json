@@ -1,0 +1,37 @@
+{
+  "status": "PASS",
+  "canonical_candidate_valid": true,
+  "exact_actual_g2_base_preserved": true,
+  "base_fields": 134,
+  "delta_fields": 208,
+  "final_fields": 342,
+  "sources": 27,
+  "nonidentity_field_source_keys": [
+    [
+      "124798cf075514fa3fddf16c2044cb88bfdea8fd56dba09b67318e19f6f8be6b",
+      "block-fixture-endowment-1826-field-body"
+    ]
+  ],
+  "distinct_actual_fixture_raw_hashes": 3,
+  "post_bytes": 2254490,
+  "post_limit_bytes": 8388608,
+  "provider": 0,
+  "database": 0,
+  "build": 0,
+  "contract": "830-g3-d-source-coverage2-root-verification.v1",
+  "scope": "SYNTHETIC_PROTOCOL_FIXTURE_WITH_EXACT_ACTUAL_G2_BASE; NOT_REAL_MODEL_OR_BUSINESS",
+  "canonical_wire_equal": true,
+  "logs": [
+    {
+      "path": "g3-d-source-coverage2-root-verification.py",
+      "sha256": "daed372cbe5ad76cb05a0b9c0bdee177ea3e35793ee64e7191bb9b45474152e9"
+    },
+    {
+      "path": "g3-d-source-coverage2-root-verification-01.log",
+      "sha256": "a4525b499dbf321215fc0fd0ef8c6754ad627113ab6f3d7611a0c47e870aae24"
+    }
+  ],
+  "source_sha256": "e8e0dbcd8bf4cb1f2072d6fbf4ebf79f3554cbfef53c9c1f84011dbcc4357316",
+  "candidate_sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+  "independent_review": "PENDING"
+}

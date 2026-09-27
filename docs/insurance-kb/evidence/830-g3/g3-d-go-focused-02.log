@@ -1,0 +1,22 @@
+=== RUN   TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture
+    concept_free_wiki_830_g3_test.go:19: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:19
+        	Error:      	Received unexpected error:
+        	            	invalid concept candidate bundle 830 g3
+        	Test:       	TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture
+--- FAIL: TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture (0.29s)
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire/duplicate_top_key
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire/unknown_top_key
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire/unknown_registered_receipt
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire/binary_float
+--- PASS: TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire (0.76s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire/duplicate_top_key (0.02s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire/unknown_top_key (0.17s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire/unknown_registered_receipt (0.32s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire/binary_float (0.21s)
+=== RUN   TestBatchConceptCanonical830G3PreservesMultilineAndRejectsBadDomain
+--- PASS: TestBatchConceptCanonical830G3PreservesMultilineAndRejectsBadDomain (0.00s)
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/types	3.800s
+FAIL

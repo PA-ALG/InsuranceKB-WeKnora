@@ -1,0 +1,54 @@
+{
+  "contract": "830-g3-c-independent-review-1.v1",
+  "spec": "FAIL",
+  "code": "FAIL",
+  "blockers": 7,
+  "reviewer": "g3_seam_audit",
+  "findings": [
+    "existing identity competition",
+    "MULTI stable identity grouping",
+    "pre-eligibility candidate aggregation",
+    "model purpose/schema/role scope",
+    "interval dates and evidence",
+    "duplicate actual SourceRevision denominator",
+    "self-consistent forged candidate keys and auto semantics"
+  ],
+  "logs": {
+    "pytest": {
+      "path": "g3-batch-c-independent-pytest.log",
+      "sha256": "a325ef0e5acaca3966b2a1a65acd5811c030922cfe7e87ba3ad6cdf5a783a74b"
+    },
+    "ruff": {
+      "path": "g3-batch-c-independent-ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "mypy": {
+      "path": "g3-batch-c-independent-mypy.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e"
+    },
+    "probes": {
+      "path": "g3-batch-c-independent-probes.log",
+      "sha256": "95f0ee83b8d7641f4e264b2958285657d1992c2313afe043993bd4c3a6327393"
+    }
+  },
+  "amendment": "lane-c-review-amendment-1.md",
+  "amendment_sha256": "990872578886efa22593a3fa38da2ef61bc0faaf5a03c3fa3831e72d5d4d2efa",
+  "owner": "g3_catalog_impl",
+  "next": "OWNER_ONE_CONCENTRATED_RED_GREEN_FIX_RUNNING",
+  "original_red_artifact": "Later behavior regression RED recovered and independently verified; initial module/fixture failures remain rejected",
+  "runtime": "NOT RUN",
+  "amendment_review": {
+    "reviewer": "g3_seam_audit",
+    "status": "PASS",
+    "blockers": 0,
+    "covered_findings": 7,
+    "clarification": "Wire checks existing pack id/version/hash only; strict Catalog validates Profile at resolve. No new Profile wire fields."
+  },
+  "review_fix_red": {
+    "path": "g3-batch-c-review-red.log",
+    "sha256": "49790c1a40e13939420dfc1b386f5fef1ce347db9c222f4f3c721fb06b0023b2",
+    "result": "15 failed,21 passed in15.50s",
+    "pre_fix_source_sha256": "f93b682e8fecd4a7b9db22a3cb84f74ce9a117b22b8375a951fe3c1637b13bcd",
+    "scope": "Current7 findings regression RED before concentrated fix; original regression RED separately recovered"
+  }
+}

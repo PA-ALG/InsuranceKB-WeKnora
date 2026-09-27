@@ -1,0 +1,11 @@
+test_eleven_unique_attempts_bound_and_existing_ledger_refused (__main__.GuardTests.test_eleven_unique_attempts_bound_and_existing_ledger_refused) ... ok
+test_failure_consumes_attempt_and_stops_other_sources (__main__.GuardTests.test_failure_consumes_attempt_and_stops_other_sources) ... ok
+test_real_frozen_bodies_load_but_are_never_sent (__main__.GuardTests.test_real_frozen_bodies_load_but_are_never_sent) ... ok
+test_success_exact_bytes_once_and_no_credentials_persisted (__main__.GuardTests.test_success_exact_bytes_once_and_no_credentials_persisted) ... ok
+test_transport_exception_stops_run (__main__.GuardTests.test_transport_exception_stops_run) ... ok
+test_unknown_body_and_missing_bearer_do_not_count (__main__.GuardTests.test_unknown_body_and_missing_bearer_do_not_count) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.078s
+
+OK

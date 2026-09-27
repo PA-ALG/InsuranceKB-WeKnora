@@ -1,0 +1,20 @@
+{
+  "contract": "830-g3-c-model-seam-root-disposition.v1",
+  "report_sha256": "0818a6de647459d45baddb35d07b7572f23047c69cf513e2d99970bab1831324",
+  "status": "REAL_EXECUTION_DESIGN_PENDING_NO_NEW_IMPLEMENTATION_AUTHORITY",
+  "accepted_facts": [
+    "C requires exact real g3 purpose/schema/classify PolicyReceipt and permit audit binding",
+    "Generic canonical admission selector does not currently select G3",
+    "Old compiler CLI production adapter is unavailable and test-only gateway assembly is not execution authority",
+    "No current exact G3 classify model/request/window/real receipt is frozen"
+  ],
+  "qualification": "The report maps the old generic production path. It does not establish that reopening historical027/028 or building a generic adapter is the only G3 path. Actual G2 used separately reviewed bounded human-authorized provider runners, saved raw outputs and per-window budgets. Their data/audit shape must be distinguished from current C PolicyReceipt requirements; no receipt or permit may be fabricated to bridge the gap.",
+  "next": "Freeze the smallest actual G3 execution design within existing authority before any model call; do not implement an extra platform as an automatic prerequisite",
+  "current_source_authorization_question": "Only provision/configure/upload/source-backfill and11embedding sends; does not authorize C classifier/compiler/reviewer calls",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "product_write": 0
+  }
+}

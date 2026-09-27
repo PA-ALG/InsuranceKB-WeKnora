@@ -1,0 +1,82 @@
+{
+  "contract": "g3-d-python-source-coverage2-independent-review.v1",
+  "reviewed_at": "2026-09-07T22:18:00+08:00",
+  "freeze": {
+    "path": "/private/tmp/g3-d-python-source-coverage2-freeze-20260907-01.json",
+    "sha256": "811eb4d070f5f33743d2da6cd507abbacefa9debe7bab8ec910d274252c940c7",
+    "design_sha256": "ec64c6b90d2504b481686fc071ce1f6ed2bcf218339efafff8119aa6f7e21716",
+    "source_sha256": "e8e0dbcd8bf4cb1f2072d6fbf4ebf79f3554cbfef53c9c1f84011dbcc4357316",
+    "test_sha256": "86edf3d9bad9984d37991fb23f305d5e582fe6ee602ab0a7284a7a73d6fb2495",
+    "candidate_sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+    "preparation_sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+    "provenance_sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb"
+  },
+  "spec_compliance": {
+    "status": "PASS",
+    "blockers": 0,
+    "verified": [
+      "base_request.sources is the exact union of every block in each selected C material and every actual base definition/field/page Evidence block",
+      "missing selected block, extra unselected block, and same source identity with different complete bytes fail closed as SOURCE_CLOSURE_MISMATCH",
+      "delta owner authority includes that owner's selected material blocks, own carried field/page sources, and Evidence of existing definitions actually linked by those carried members",
+      "another owner's exclusive carried source is rejected as CROSS_ENTITY_EVIDENCE",
+      "the new field ProposalEvidence uses the selected material's second body block and is not part of resolution identity evidence",
+      "actual base134 remains byte-preserved; output is 132 carry plus 2 exact alignments plus 208 delta equals 342",
+      "model/final/review raw outputs are three distinct canonical execution records",
+      "complete canonical preparation POST is 2254490 bytes, below 8 MiB"
+    ]
+  },
+  "code_quality": {
+    "status": "PASS",
+    "blockers": 0,
+    "backlog": [],
+    "assessment": "The production delta from repair1 is limited to the two designed set derivations. It reuses validated C corpus, base snapshot, G2 Evidence verification, and existing entity bindings; it adds no selector, authority DTO, or fallback path. No repair-introduced issue was reproduced."
+  },
+  "regression": {
+    "repair1_b1": "PASS: exact binding anchors/keys and selected-child Evidence attacks remain covered",
+    "repair1_b2": "PASS: exact file plus semantic profile confirmation and actor tamper rejection remain covered",
+    "repair1_b3": "PASS: complete overlapping SourceBlock equality remains covered"
+  },
+  "independent_verification": {
+    "pytest": {
+      "result": "30 passed in 97.68s",
+      "log": "/private/tmp/g3-d-python-source-coverage2-independent-green-01.log",
+      "sha256": "8cece7b502b43028df909f07b9a44464f214db9d7c4721afc6ac06d7e1314a27"
+    },
+    "probes": {
+      "result": "PASS",
+      "script": "/private/tmp/g3-d-python-source-coverage2-independent-probes-01.py",
+      "script_sha256": "58439e21877de0101d6b3bdde94c1bd79f75202ef4bc54eb513934540afbd474",
+      "log": "/private/tmp/g3-d-python-source-coverage2-independent-probes-03.log",
+      "log_sha256": "d8a8af46925b2365323d077f4f4ebfe4f0b9877f5382ba3be5f54b74910028c5"
+    },
+    "ruff": {
+      "result": "All checks passed!",
+      "log": "/private/tmp/g3-d-python-source-coverage2-independent-ruff-01.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "mypy": {
+      "result": "Success: no issues found in 2 source files",
+      "log": "/private/tmp/g3-d-python-source-coverage2-independent-mypy-01.log",
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8"
+    }
+  },
+  "rejected": [
+    "Independent probe log 02 is scaffold failure only: the temporary probe used the wrong module for free_page_id before correction; it is not a production RED.",
+    "The capacity fixture is explicitly synthetic protocol evidence and is not an actual C model result or production readiness claim."
+  ],
+  "final": {
+    "blockers": 0,
+    "backlog": 0,
+    "status": "PASS_FOR_FROZEN_D_PYTHON_SOURCE_COVERAGE_SLICE"
+  },
+  "effects": {
+    "provider": 0,
+    "model": 0,
+    "database": 0,
+    "http": 0,
+    "build": 0,
+    "container": 0,
+    "upload": 0,
+    "repository_write": 0
+  }
+}

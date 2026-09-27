@@ -1,0 +1,19 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > parses the exact frozen 354-member/342-field preparation and derives Profile navigation
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects omitted, null, extra, non-NFC, duplicate and fully rehashed topology drift
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects scope, identity and read-hash drift and maps READY distinctly
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects ASCII controls in structured text while preserving exact typed multiline bodies 8786ms
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > parses exact Active snapshots without casting the G3 overview to G2
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > uses preparation scope and immutable GET without current, and permits only the exact historical q-empty read
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > pins Active current then exact search
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > leaves an ordinary G2 current release independent of the G3 Catalog
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > selects preparation members locally and reads Active pages through the pinned shared envelope
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > accepts overview related members only in frozen manifest order
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  01:24:08
+   Duration  10.25s (transform 535ms, setup 0ms, import 688ms, tests 8.79s, environment 1ms)
+

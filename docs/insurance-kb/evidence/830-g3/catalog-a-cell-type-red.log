@@ -1,0 +1,54 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_g3_r1_compiles_real_v5_workbook_without_metadata_loss __________
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='159a7ae16a58e042be750a5b95a4b4f99364375c42d47c23c6cf4a102a1b7ace')
+mapping_config = {'contract': 'schema-pack-profile-mapping.830.g3.v1', 'mapping_version': '1.0.0-candidate', 'workbook_sha256': '8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec', 'catalog_id': 'schema_catalog_insurance_product', ...}
+
+    def test_g3_r1_compiles_real_v5_workbook_without_metadata_loss(
+        catalog: Any,
+        mapping_config: dict[str, Any],
+    ) -> None:
+        assert catalog.contract == "schema-pack-catalog.830.g3.v1"
+        assert catalog.workbook_sha256 == _WORKBOOK_SHA256
+        assert catalog.mapping_config_sha256 == schema_wiki_sha256(
+            mapping_config["contract"], mapping_config
+        )
+        assert tuple(len(item.pack.fields) for item in catalog.entries) == _EXPECTED_COUNTS
+        assert catalog.field_name_union_count == 154
+        assert catalog.field_name_intersection_count == 47
+    
+        medical = _entry(catalog, "schemapack_medical_insurance")
+        first = medical.pack.fields[0]
+>       assert first.model_dump(mode="json") == {
+            "field_key": "product_code",
+            "short_title": "险种代码",
+            "schema_category": "02 产品主数据",
+            "value_spec": None,
+            "description": (
+                "产品在公司产品主数据中的唯一标识代码，用于关联产品元数据、条款、计划表及"
+                "其他业务材料；优先从产品主数据获取，必要时可从条款首页核验。"
+            ),
+            "source_guidance": "产品元数据，该字段允许从产品条款PDF第一页获取",
+            "formation_method": "外部映射",
+            "knowledge_role": "事实 Fact",
+            "common_field_marker": "是",
+            "other_applicable_products": (
+                "意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、"
+                "护理保险、补充养老保险、失能收入损失保险"
+            ),
+            "usage_frequency": 11,
+            "source_row": 6,
+            "semantic_sha256": first.semantic_sha256,
+        }
+E       AssertionError: assert {'field_key':...c': None, ...} == {'field_key':...c': None, ...}
+E         
+E         Omitting 12 identical items, use -vv to show
+E         Differing items:
+E         {'usage_frequency': '11'} != {'usage_frequency': 11}
+E         Use -v to get more diff
+
+tests/test_schema_pack_catalog_830_g3.py:106: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_schema_pack_catalog_830_g3.py::test_g3_r1_compiles_real_v5_workbook_without_metadata_loss
+1 failed in 2.10s

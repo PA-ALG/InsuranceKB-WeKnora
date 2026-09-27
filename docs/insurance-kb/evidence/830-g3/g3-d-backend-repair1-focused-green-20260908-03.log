@@ -1,0 +1,7 @@
+# ./internal/application/service
+open /Users/houjing/Library/Caches/go-build/72/72f7b8c39c4b756e75109e5ac40f233a3b683000a440019831cf05ab4459c4f0-d: operation not permitted
+FAIL	./internal/application/service [setup failed]
+# ./internal/handler
+open /Users/houjing/Library/Caches/go-build/7a/7a2981db0ac6943a341f9b1b218ec82c2aceef05d67aba9942e6c9dd339be5a8-a: operation not permitted
+FAIL	./internal/handler [setup failed]
+FAIL

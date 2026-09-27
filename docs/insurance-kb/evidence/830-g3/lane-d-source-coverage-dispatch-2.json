@@ -1,0 +1,19 @@
+{
+  "contract": "830-g3-d-source-coverage-dispatch.v1",
+  "recorded_at": "2026-09-07T13:36:43.423260+00:00",
+  "status": "AUTHORIZED_AFTER_DESIGN_RETURN_AND_INDEPENDENT_REVIEW",
+  "owner": "g3_catalog_impl",
+  "design_sha256": "ec64c6b90d2504b481686fc071ce1f6ed2bcf218339efafff8119aa6f7e21716",
+  "source_before_sha256": "5e472c98c4cb10929cf90689c03b105c68d02da74ca04f5fe12f554d0e6a7ef5",
+  "write_paths": [
+    "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+    "harness/tests/test_batch_concept_compile_830_g3.py",
+    "harness/tests/fixtures/batch_concept_compile_830_g3/**"
+  ],
+  "closed": "Go/C/common/Catalog/G2/exact alignment/handler/service/UI",
+  "repair_round": 2,
+  "repair_budget": "second and final bounded high-risk D Python repair; further same-domain foundational finding requires stop and user decision",
+  "sequence": "proper full request RED on frozen5e; source union+per-owner closure repair; sourceful342fixture and exactbytes capacity; focused/static freeze; independent review before Go",
+  "snapshot_history": "d-repair1-snapshots/inventory.json",
+  "effects_allowed": "local code and fake/static only"
+}

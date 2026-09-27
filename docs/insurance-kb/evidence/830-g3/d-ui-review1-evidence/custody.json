@@ -1,0 +1,61 @@
+{
+  "contract": "830-g3-d-ui-review1-evidence-custody.v1",
+  "review_sha256": "c206bffce381b98a4deaeeb20f6b5cfdd48835ab4089677b2985d2ea11e706a0",
+  "files": [
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-alignment-positive-probe-01.log",
+      "archive": "g3-d-ui-independent-alignment-positive-probe-01.log",
+      "sha256": "dc46aa97af7419bc7a6d2e000fecc7ec3e7091f0a4c479fd20fa16dab2cbb38d",
+      "bytes": 1981
+    },
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-alignment-positive-probe-01.ts",
+      "archive": "g3-d-ui-independent-alignment-positive-probe-01.ts",
+      "sha256": "44c48be29fb23b84f1b57d58ad2358cbfde15509b4d8fd00eea271a8d7347cb6",
+      "bytes": 3126
+    },
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-focused-01.log",
+      "archive": "g3-d-ui-independent-focused-01.log",
+      "sha256": "3e8f95ecc7446124784bed970dfdc6553f25d34977e71abdcb189f5e8ca68296",
+      "bytes": 286
+    },
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-g2-regression-01.log",
+      "archive": "g3-d-ui-independent-g2-regression-01.log",
+      "sha256": "463e6935b5767ea9736075ffa661b3e64fed15a2074ce56372e5c3865b8ce9d8",
+      "bytes": 284
+    },
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-identity-control-probe-01.log",
+      "archive": "g3-d-ui-independent-identity-control-probe-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-identity-control-probe-01.ts",
+      "archive": "g3-d-ui-independent-identity-control-probe-01.ts",
+      "sha256": "377e273535671ac8bc27b6440182c5e0b8312847f409272778b9aeb22112ee90",
+      "bytes": 3311
+    },
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-identity-control-probe-02.log",
+      "archive": "g3-d-ui-independent-identity-control-probe-02.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-identity-control-probe-03.log",
+      "archive": "g3-d-ui-independent-identity-control-probe-03.log",
+      "sha256": "5ea0fe75d21ff657a18bfcae5fe449c3966635fb5f2b4f955e16d6490967a426",
+      "bytes": 362
+    },
+    {
+      "original_path": "/private/tmp/g3-d-ui-independent-identity-control-probe-03.ts",
+      "archive": "g3-d-ui-independent-identity-control-probe-03.ts",
+      "sha256": "fac0adc351fdc645dd375b068780e45e9aeb2ed518deb267ffbfc71be492d2fe",
+      "bytes": 3392
+    }
+  ],
+  "note": "Original attempt logs preserved; filenames are not verdicts. Independent final report classifies usable evidence."
+}

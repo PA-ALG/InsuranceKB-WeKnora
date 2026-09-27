@@ -1,0 +1,99 @@
+{
+  "contract": "830-g3-runtime-config-readonly.v1",
+  "checked_at": "2026-09-07T07:54:02.699890+00:00",
+  "http_writes": 0,
+  "provider_calls": 0,
+  "observations": [
+    {
+      "path": "/api/v1/knowledge-bases/b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "status": 200,
+      "response_sha256": "89be3cd04a0280b91df54c052cf488622b72afcc4d9233d4c84450456636948d",
+      "selected": {
+        "id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+        "tenant_id": 10003,
+        "summary_model_id": "b2034da8-942c-4a19-945d-1bc09459222e",
+        "embedding_model_id": "42df7f04-f53f-42d5-909d-63b0e78a1223",
+        "vector_store_id": null,
+        "storage_backend_id": "30545abd-ae95-4de0-a796-29b5c4bc32c7",
+        "chunking_config": {
+          "child_chunk_size": 384,
+          "chunk_overlap": 80,
+          "chunk_size": 512,
+          "enable_parent_child": true,
+          "parent_chunk_size": 4096,
+          "separators": [
+            "\n\n",
+            "\n",
+            "。",
+            "！",
+            "？",
+            ";",
+            "；"
+          ],
+          "strategy": "auto"
+        },
+        "indexing_strategy": {
+          "graph_enabled": false,
+          "keyword_enabled": true,
+          "vector_enabled": true,
+          "wiki_enabled": true
+        },
+        "extract_config": {
+          "enabled": false
+        },
+        "question_generation_config": {
+          "enabled": true,
+          "question_count": 3
+        }
+      }
+    },
+    {
+      "path": "/api/v1/initialization/config/b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "status": 200,
+      "response_sha256": "ca7277cb7ebc8b3f1c8aa2873b9e75eb7d80a57f218beaa93cc885973ea05cd8",
+      "selected": {
+        "storage_backend_id": null,
+        "storage_type": null,
+        "vector_store_id": null,
+        "chunking_config": null,
+        "indexing_strategy": null
+      },
+      "top_level_keys": [
+        "documentSplitting",
+        "embedding",
+        "hasFiles",
+        "llm",
+        "multimodal",
+        "nodeExtract",
+        "questionGeneration",
+        "rerank"
+      ]
+    },
+    {
+      "path": "/api/v1/storage-backends/30545abd-ae95-4de0-a796-29b5c4bc32c7",
+      "status": 200,
+      "response_sha256": "2c55cd4edbbf0f1593dd8883ee74236c5c6be5053d060792dd7a6614e13ec82e",
+      "selected": {
+        "id": "30545abd-ae95-4de0-a796-29b5c4bc32c7",
+        "name": "System LOCAL",
+        "type": null,
+        "provider": "local",
+        "is_default": null,
+        "tenant_id": 10003
+      },
+      "top_level_keys": [
+        "config",
+        "created_at",
+        "deleted_at",
+        "id",
+        "legacy_alias",
+        "name",
+        "provider",
+        "source",
+        "status",
+        "tenant_id",
+        "updated_at"
+      ]
+    }
+  ]
+}

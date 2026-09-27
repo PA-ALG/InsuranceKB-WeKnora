@@ -13,8 +13,15 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ModelWrapValidatorHandler,
     StringConstraints,
     model_validator,
+)
+
+from .product_concept_relation import (
+    ProductConceptRelation,
+    validate_relation_page,
+    validate_relation_targets,
 )
 
 Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
@@ -188,17 +195,92 @@ def verify_evidence(evidence: Evidence, sources: Sequence[SourceBlock]) -> None:
         raise ValueError("QUOTE_MISMATCH")
 
 
-class ConceptDefinition(Frozen):
+class KnowledgeContentSegment(Frozen):
+    text: str = Field(min_length=1)
+    origin: Literal["SOURCE_SUPPORTED", "MODEL_GENERATED"]
+    evidence_indexes: tuple[Annotated[int, Field(strict=True, ge=0)], ...]
+
+
+class KnowledgeContentProvenance(Frozen):
+    contract: Literal["knowledge-content-provenance.830.v1"]
+    segments: tuple[KnowledgeContentSegment, ...] = Field(min_length=1)
+
+
+def validate_content_provenance(
+    content: str, evidence: Sequence[Evidence], provenance: KnowledgeContentProvenance | None
+) -> None:
+    if provenance is None:
+        if not evidence:
+            raise ValueError("KNOWLEDGE_EVIDENCE_REQUIRED")
+        return
+    if "".join(segment.text for segment in provenance.segments) != content:
+        raise ValueError("CONTENT_PROVENANCE_COVERAGE_MISMATCH")
+    identities = {
+        (e.revision_id, e.block_id, e.page_number, e.start, e.end, e.quote_hash) for e in evidence
+    }
+    if len(identities) != len(evidence):
+        raise ValueError("DUPLICATE_CONTENT_CITATION")
+    used: set[int] = set()
+    for segment in provenance.segments:
+        indexes = segment.evidence_indexes
+        if indexes != tuple(sorted(set(indexes))) or any(i >= len(evidence) for i in indexes):
+            raise ValueError("CONTENT_PROVENANCE_EVIDENCE_INVALID")
+        if bool(indexes) != (segment.origin == "SOURCE_SUPPORTED"):
+            raise ValueError("CONTENT_PROVENANCE_ORIGIN_MISMATCH")
+        used.update(indexes)
+    if used != set(range(len(evidence))):
+        raise ValueError("CONTENT_PROVENANCE_UNASSIGNED_EVIDENCE")
+
+
+class _KnowledgeContent(Frozen):
+    content_provenance: KnowledgeContentProvenance | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @property
+    def has_generated_content(self) -> bool:
+        return self.content_provenance is not None and any(
+            row.origin == "MODEL_GENERATED" for row in self.content_provenance.segments
+        )
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def reject_null_provenance(
+        cls, value: object, handler: ModelWrapValidatorHandler[Self]
+    ) -> Self:
+        # Inspect the original model before revalidation expands omitted defaults.
+        explicit_null = (
+            isinstance(value, Mapping)
+            and "content_provenance" in value
+            and value["content_provenance"] is None
+        ) or (
+            isinstance(value, cls)
+            and "content_provenance" in value.model_fields_set
+            and value.content_provenance is None
+        )
+        if explicit_null:
+            raise ValueError("EMPTY_CONTENT_PROVENANCE_MUST_BE_OMITTED")
+        return handler(value)
+
+
+class ConceptDefinition(_KnowledgeContent):
     space_id: Identity
     canonical_key: Identity
     sense_key: Identity
     title: str = Field(min_length=1)
     body: str = Field(min_length=1)
-    evidence: tuple[Evidence, ...] = Field(min_length=1)
+    evidence: tuple[Evidence, ...]
     aliases: tuple[Identity, ...] = ()
     origin: Literal["SCHEMA_DEFINITION", "MODEL_COMPILE", "EXPERT_REVISION_RECORD"] = (
         "MODEL_COMPILE"
     )
+
+    @model_validator(mode="after")
+    def check_content_provenance(self) -> Self:
+        validate_content_provenance(self.body, self.evidence, self.content_provenance)
+        if self.origin != "MODEL_COMPILE" and self.has_generated_content:
+            raise ValueError("PROTECTED_DEFINITION_GENERATED_CONTENT")
+        return self
 
     @property
     def concept_id(self) -> str:
@@ -244,18 +326,53 @@ class FieldAssertion(Frozen):
         )
 
 
-class FreeWikiPage(Frozen):
+class FreeWikiPage(_KnowledgeContent):
+    business_relation: ProductConceptRelation | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def reject_null_relation(cls, value: object, handler: ModelWrapValidatorHandler[Self]) -> Self:
+        if (
+            isinstance(value, Mapping)
+            and "business_relation" in value
+            and value["business_relation"] is None
+        ) or (
+            isinstance(value, cls)
+            and "business_relation" in value.model_fields_set
+            and value.business_relation is None
+        ):
+            raise ValueError("EMPTY_BUSINESS_RELATION_MUST_BE_OMITTED")
+        return handler(value)
+
     space_id: Identity
     entity_id: Identity
     stable_key: Identity
     title: str = Field(min_length=1)
     body: str = Field(min_length=1)
-    evidence: tuple[Evidence, ...] = Field(min_length=1)
+    evidence: tuple[Evidence, ...]
     concept_ids: tuple[Identity, ...] = ()
     conditions: tuple[str, ...] = ()
     exceptions: tuple[str, ...] = ()
     entity_version: str = ""
     valid_time: str = ""
+
+    @model_validator(mode="after")
+    def check_content_provenance(self) -> Self:
+        validate_content_provenance(free_page_content(self), self.evidence, self.content_provenance)
+        validate_relation_page(self)
+        return self
+
+
+def free_page_content(page: FreeWikiPage) -> str:
+    """The single display renderer also defines provenance coverage."""
+    lines = [page.body]
+    lines.extend("条件：" + item for item in page.conditions)
+    lines.extend("例外：" + item for item in page.exceptions)
+    if page.valid_time:
+        lines.append("有效期：" + page.valid_time)
+    return "\n".join(lines)
 
 
 class ConceptAggregate(Frozen):
@@ -348,3 +465,4 @@ def lint_members(
     links = {link for a in linked_members for link in a.concept_ids}
     if links - set(ids):
         raise ValueError("DANGLING_CONCEPT_LINK")
+    validate_relation_targets(definitions, pages)

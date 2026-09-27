@@ -1,0 +1,79 @@
+{
+  "contract": "830-g3-profile-user-confirmation.v1",
+  "confirmed_at_recorded": "2026-09-07T06:45:57.539579+00:00",
+  "decision": "CONFIRMED",
+  "user_reply_verbatim": "结构确认",
+  "actor": "current user in Codex task01a07a47-ffa3-7490-b819-862482a61686",
+  "actor_display_name": null,
+  "confirmation_channel": "User answer to exact profile-review.md structural confirmation question",
+  "review_document": "profile-review.md",
+  "review_document_sha256": "f9af2747637a603bc7ddfc9877ba77722c676f3b6f047aa507342d774e2d3cc3",
+  "catalog_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
+  "catalog_wire_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
+  "profiles": [
+    {
+      "profile_id": "profile_medical_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "61595e9b2fec127dfca4c31ef95f161d55a9b0939211316b4508ccc4b7d21cf3"
+    },
+    {
+      "profile_id": "profile_accident_medical_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "99c40175fffee344081b8090237b9a434b93045bb791900075343a0089bf8c77"
+    },
+    {
+      "profile_id": "profile_accident_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "12ca8ca665464a76608943f7e0df57b60c8a50cddebb534fc072534331eebf49"
+    },
+    {
+      "profile_id": "profile_critical_illness_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "1c41afee407096b18999a5d8797be138c5279edbef7d45b2e859fddc04d76ca9"
+    },
+    {
+      "profile_id": "profile_term_life_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "1b4f646248291001020446b79d5d030d703c6785592312479e8e6761904df0f4"
+    },
+    {
+      "profile_id": "profile_whole_life_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "b0b226886448e7717ed698d6ff33f6e4fa98484d74bd5569513177fc22a4cb6a"
+    },
+    {
+      "profile_id": "profile_endowment_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "78fe6eb7eb595836e97540ea0324749ca11ad5b9493bb67026b30fd5dfa16f08"
+    },
+    {
+      "profile_id": "profile_annuity_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "dc8cb313afbc93f55090f0c7d3aefe3d27a1566c987ca46a7760396781c35c72"
+    },
+    {
+      "profile_id": "profile_nursing_care_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "5517a230a791bcba8a653e40638eda8e30471f772444b34ba13f8b62a71a1239"
+    },
+    {
+      "profile_id": "profile_supplementary_pension_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "096e8257c1f66cb3aefebe7caa516ecd15cdb85ef5848cdbb3830adb06328c8b"
+    },
+    {
+      "profile_id": "profile_disability_income_insurance",
+      "profile_version": "1.0.0-candidate",
+      "profile_sha256": "bba94b5f95ed657d512044aa19569294cdde3a72b80637066e524952258483c0"
+    }
+  ],
+  "scope": "11pack section names/order and all field-to-primary-section mapping",
+  "not_included": [
+    "domain quality admission",
+    "material ambiguity decisions",
+    "production publication",
+    "provider outbound authorization"
+  ],
+  "queue_owner": null,
+  "identity_metadata_note": "Structural decision is accepted; user did not supply display name or queue assignee, so neither is invented. Named queue assignment remains pending."
+}

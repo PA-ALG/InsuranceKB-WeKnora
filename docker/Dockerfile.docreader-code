@@ -1,0 +1,5 @@
+# Update parser code on an exact, locally verified DocReader runtime. Dependencies,
+# generated protocol, entrypoint and runtime configuration remain in the base.
+ARG EXISTING_DOCREADER_RUNTIME
+FROM ${EXISTING_DOCREADER_RUNTIME}
+COPY docreader/parser/pdf_parser.py /app/docreader/parser/pdf_parser.py

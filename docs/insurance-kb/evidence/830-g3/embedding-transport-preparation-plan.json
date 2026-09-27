@@ -1,0 +1,20 @@
+{
+  "contract": "830-g3-embedding-transport-preparation-plan.v1",
+  "status": "OFFLINE_PREPARATION_ONLY",
+  "script": "docs/insurance-kb/evidence/830-g3/transport-preparation/main.go",
+  "script_sha256": "edc12f630d134a04df5c29599314b9c8371c9f18b9cf69281839cf508073c405",
+  "readback": "existing-model-config-readonly.json",
+  "model_config_readback_sha256": "1748e661fcad996581e2c5a73f61708c9fa9d3e5805f448c1f38dac21dceda15",
+  "request_dto_source": "internal/models/embedding/openai.go",
+  "request_dto_source_sha256": "6b6425ad332fff89c44d4b70c33b179f3f7168460bf7da935100d81b30574786",
+  "input": "/private/tmp/g3-embedding-prepared-v1",
+  "output": "/private/tmp/g3-embedding-transport-v1",
+  "parameters": {
+    "model": "qwen3.7-text-embedding",
+    "encoding_format": "float",
+    "truncate_prompt_tokens": 511,
+    "dimensions": "OMITTED; supports_dimension_override=false"
+  },
+  "effects": "serialize11request bodies locally with existingGoDTO; HTTP0/provider0",
+  "future_runtime_requirement": "G3 model readback must match these parameters and gate input body SHA; this receipt is not future runtime readback"
+}

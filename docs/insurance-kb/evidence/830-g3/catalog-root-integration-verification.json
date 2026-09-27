@@ -1,0 +1,54 @@
+{
+  "contract": "830-g3-catalog-root-integration-verification.v1",
+  "recorded_at": "2026-09-07T07:03:07.393397+00:00",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "python",
+      "exit_code": 0,
+      "log": "g3-root-integration-python.log",
+      "log_sha256": "1e441d2f14798a28de29f9572622a0278c1ebe0319a8292bf8bf6cff81a4467c"
+    },
+    {
+      "check": "go",
+      "exit_code": 0,
+      "log": "g3-root-integration-go.log",
+      "log_sha256": "5ef75b6f98555d17932ea97b7a82b4207f008cacfca1256257271613afb87842"
+    },
+    {
+      "check": "vitest",
+      "exit_code": 0,
+      "log": "g3-root-integration-vitest.log",
+      "log_sha256": "ba76f7b12dfe1d42e949515a43f01427d8570dcd922df173623fadea24a44210"
+    },
+    {
+      "check": "vue-tsc",
+      "exit_code": 0,
+      "log": "g3-root-integration-vue-tsc.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "pytest_passed": 17,
+  "vitest_passed": 17,
+  "go_packages": [
+    "internal/handler",
+    "internal/router"
+  ],
+  "source_identity_receipts": [
+    "catalog-generation.json",
+    "catalog-b-verification.json"
+  ],
+  "route_red_reproduction": {
+    "log": "catalog-b-route-replay-red.log",
+    "exit_code": 1,
+    "expected": "200",
+    "observed": "404",
+    "note": "Fresh root Go overlay reproduction against base route; not fabricated historical owner log"
+  },
+  "openspec_strict_exit_code": 0,
+  "openspec_note": "Validation passed; post-command telemetry DNS failure did not affect validation exit0",
+  "runtime": "NOT RUN",
+  "provider_calls": 0,
+  "db_writes": 0,
+  "builds": 0
+}

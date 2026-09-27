@@ -1,0 +1,14 @@
+test_arbitrary_docker_command_is_accepted_and_forwarded (__main__.Probe) ... ok
+test_authorization_passes_while_all_four_old_backfills_are_outside_material_scope (__main__.Probe) ... ok
+test_guard_ledger_without_manifest_is_accepted (__main__.Probe) ... ok
+test_guard_lifetime_is_shorter_than_runner_serial_poll_budget (__main__.Probe) ... ok
+test_old_descriptor_files_have_no_frozen_digest_gate (__main__.Probe) ... ok
+test_old_identity_validation_occurs_after_all_four_post_calls_in_main (__main__.Probe) ... ok
+test_two_distinct_uploads_can_accept_same_knowledge_id (__main__.Probe) ... ok
+test_wrong_host_port_shared_mount_and_redis_password_mismatch_pass_runtime_gate (__main__.Probe) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.143s
+
+OK
+runner_sha256=9873ea8bd0cab1148354242e20d65145cd96800a735944d262b614a7d5977ce3

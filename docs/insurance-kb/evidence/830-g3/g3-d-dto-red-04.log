@@ -1,0 +1,23 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________ test_batch_candidate_rejects_duplicate_json_key ________________
+
+    def test_batch_candidate_rejects_duplicate_json_key() -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        wire = G3_FIXTURE.read_text()
+        duplicate = wire.replace(
+            '{"admission":',
+            '{"contract":"batch-concept-candidate-bundle.830.g3.v1","admission":',
+            1,
+        )
+    
+>       with pytest.raises(module.BatchConceptCompileError, match="BATCH_CANDIDATE_INVALID"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE BatchConceptCompileError
+
+harness/tests/test_batch_concept_compile_830_g3.py:156: Failed
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_batch_candidate_rejects_duplicate_json_key
+1 failed in 7.58s

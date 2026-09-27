@@ -1,0 +1,26 @@
+{
+  "contract": "830-g3-embedding-guard-review-repair.v1",
+  "status": "AWAITING_INDEPENDENT_REREVIEW",
+  "blockers": {
+    "B1": "save exceptions stop memory immediately; return503; one best-effort stopped receipt; subsequent source rejected",
+    "B2": "O_CREAT|O_EXCL ledger reservation before first replacement; interrupted initializer leaves reservation"
+  },
+  "red": "6 PASS / 2 behavior OSError / 1 missing expected rejection",
+  "green": "9 PASS",
+  "effects": {
+    "network": 0,
+    "provider_calls": 0,
+    "serve": 0
+  },
+  "files": {
+    "embedding_guard.py": "c52cfabf9f32214923e71e2f5926cb66c259cec9e99431033c508907aa7361a4",
+    "embedding_guard_test.py": "256018f977dadd12c368511e2f83a1660025625f5b80934d2ea91770e0108b6c"
+  },
+  "logs": {
+    "g3-embedding-guard-review-red.log": "f127ccd1035baf47f358b3d3bcc594f6e6467dc828511bcfebfbf5ce85d7fc42",
+    "g3-embedding-guard-review-green.log": "b595e79275a0c58f563f0a4bac546d2df8e94ad42831d67ac11875f83657fe03",
+    "g3-embedding-guard-independent-persist-failure-probe.log": "128fffb037283af96cfac00e53307bae5d2184e695dabbec0b3eec9405233303",
+    "g3-embedding-guard-independent-redirect-probe.log": "56a083f680c5f0674c65b77c416cccce9ddc143626210f04aa3e8505cec3462c",
+    "g3-embedding-guard-independent-tests.log": "7b86291b37cb634af5195202c0758a163d4a9c13965b0604b083e8d0d77f781a"
+  }
+}

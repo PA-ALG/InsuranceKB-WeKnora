@@ -1,0 +1,84 @@
+{
+  "contract": "830-g3-source-runtime-provision-apply.v1",
+  "status": "STOPPED",
+  "started_at": "2026-09-07T21:59:22.938138+00:00",
+  "stopped_at": "2026-09-07T22:01:19.001669+00:00",
+  "last_step": "created-target-database",
+  "failure": "RuntimeError: docker operation failed (exec), rc=1",
+  "effects": {
+    "builds": 0,
+    "guard_starts": 0,
+    "provider_calls": 0,
+    "pulls": 0,
+    "uploads": 0
+  },
+  "steps": [
+    {
+      "at": "2026-09-07T21:59:59.161270+00:00",
+      "evidence": {
+        "source_snapshot_sha256": "2b3c77be83abf6b2ea8a83f201a427f40380b2878fe6cd17f6aa270350fe7e7c"
+      },
+      "step": "revalidated-preconditions"
+    },
+    {
+      "at": "2026-09-07T22:00:25.997054+00:00",
+      "evidence": {
+        "bytes": 5368392,
+        "dump_sha256": "055f4d0a58e5932cb227b93ebb9c37f413010ac858586a60e23cdd7e9c4a016c"
+      },
+      "step": "captured-consistent-source-dump"
+    },
+    {
+      "at": "2026-09-07T22:00:36.142797+00:00",
+      "evidence": {},
+      "step": "created-target-database"
+    }
+  ],
+  "stop_evidence": {
+    "containers": {
+      "weknora-g3-830-app": {
+        "after": "absent",
+        "before": "absent"
+      },
+      "weknora-g3-830-docreader": {
+        "after": "absent",
+        "before": "absent"
+      },
+      "weknora-g3-830-redis": {
+        "after": "absent",
+        "before": "absent"
+      },
+      "weknora-g3-830-seed": {
+        "after": "absent",
+        "before": "absent"
+      }
+    },
+    "failures": []
+  },
+  "secret_cleanup": {
+    "attempted": false,
+    "clean": true,
+    "reason": "no-staged-secret-files"
+  },
+  "public_contract": "830-g3-source-runtime-apply-stop-public.v1",
+  "private_receipt_sha256": "1f65d31c52e38f4da4c3e6f14b2cfe2b9df2d75347e71f51fec5f67aae1db967",
+  "user_authorization_receipt": "source-execution-explicit-user-authorization-01.json",
+  "user_authorization_sha256": "102c4def5921673854ca994be681127db462fcfa9f5526695444e4e3e815e9a1",
+  "actual_database_effects": {
+    "created_database": "weknora_g3_830",
+    "user_tables_observed_after_stop": 0,
+    "extensions_observed_after_stop": [
+      "plpgsql"
+    ],
+    "database_not_deleted": true
+  },
+  "observed_postgres_availability_event": "source-runtime-stop-process-events-01.json",
+  "source_selected_snapshot_unchanged": true,
+  "source_snapshot_limit": "Only task/source rows and knowledge file references, not a whole-database equality or availability proof.",
+  "upload_execution": "NOT RUN",
+  "source_backfill": "NOT RUN",
+  "provider_probe": "NOT RUN",
+  "retries": 0,
+  "recovery_execution": "NOT RUN",
+  "next": "New isolated-PostgreSQL recovery design; old v3 and the original failed window stay frozen."
+}

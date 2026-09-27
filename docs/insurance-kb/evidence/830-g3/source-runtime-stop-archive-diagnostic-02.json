@@ -1,0 +1,71 @@
+{
+  "source_config_exit": 0,
+  "source_config": {
+    "extensions": [
+      {
+        "name": "plpgsql",
+        "version": "1.0"
+      },
+      {
+        "name": "pg_search",
+        "version": "0.22.2"
+      },
+      {
+        "name": "pg_ivm",
+        "version": "1.13"
+      },
+      {
+        "name": "fuzzystrmatch",
+        "version": "1.2"
+      },
+      {
+        "name": "pg_stat_statements",
+        "version": "1.11"
+      },
+      {
+        "name": "pg_trgm",
+        "version": "1.6"
+      },
+      {
+        "name": "postgis",
+        "version": "3.6.2"
+      },
+      {
+        "name": "postgis_tiger_geocoder",
+        "version": "3.6.2"
+      },
+      {
+        "name": "postgis_topology",
+        "version": "3.6.2"
+      },
+      {
+        "name": "uuid-ossp",
+        "version": "1.1"
+      },
+      {
+        "name": "vector",
+        "version": "0.8.1"
+      }
+    ],
+    "log_settings": {
+      "log_destination": "stderr",
+      "log_directory": "log",
+      "log_filename": "postgresql-%Y-%m-%d_%H%M%S.log",
+      "log_min_error_statement": "error",
+      "log_min_messages": "warning",
+      "logging_collector": "off"
+    }
+  },
+  "dump": {
+    "exit_code": 0,
+    "bytes": 5368392,
+    "sha256": "9f1c4908a9bb1cc37db03b2b43e41ec8eb4e63e9b241ae8580700810972876c0"
+  },
+  "full_archive_decode_without_database": {
+    "exit_code": 0,
+    "sql_bytes": 18832354,
+    "sql_sha256": "20c98e17696ed02a3830307d54d144e9fa3378a87e444cd8fc0b3c73296df292",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

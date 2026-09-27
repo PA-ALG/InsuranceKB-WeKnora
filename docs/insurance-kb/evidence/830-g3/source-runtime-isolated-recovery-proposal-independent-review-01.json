@@ -1,0 +1,88 @@
+{
+  "contract": "830-g3-source-runtime-isolated-recovery-proposal-independent-review.v1",
+  "status": "PASS_DESIGN_SCOPE_READY_FOR_USER_APPROVAL",
+  "proposal": {
+    "path": "docs/insurance-kb/evidence/830-g3/source-runtime-isolated-recovery-proposal-01.md",
+    "sha256": "ecb7aa8611478de1df7ec3b6da074163d51a68189edd3dd1d7a9c616cb27112a",
+    "blockers": 0
+  },
+  "consistency_review": {
+    "independent_initial_report_sha256": "2b9f1ba842e896e400abe0fa8f887c8b86f7d9be6b70d6f381c3626f5219ae28",
+    "independent_supplement_sha256": "76d3cd894f597d602a7aec72c1930e3a258725dcd35cd8114092fd6b6985a5bc",
+    "result": [
+      "The proposal preserves STOP, the empty shared target database and the original v3 bytes; it does not present the concrete crash trigger as known.",
+      "It correctly treats the backend-process exit and cluster restart as a shared-PostgreSQL isolation blocker even though PID/statement causality is unavailable.",
+      "The exact PostgreSQL image sha256:af585013f97f622715de01e48d00558f7edf17055d7b40deafc9f98ca8d99a56 matches the frozen v3 preflight source postgres_image.",
+      "A dedicated PostgreSQL container, new data volume and G3-only internal network remove the direct shared-postmaster failure domain. The proposal separately acknowledges remaining shared Colima host-resource risk.",
+      "The old PostgreSQL container/database/data volume remain unmodified; source access is limited to gates, read-only checks and one new consistency dump.",
+      "It preserves the original upload v2, guard, 11-upload/204-input/maximum-11-vector-request/15-registration contract and requires STOP if the new provision receipt is incompatible.",
+      "It does not reset the exhausted v3 repair budget. The new recovery slice is separately bounded to one repair round and one execution window."
+    ]
+  },
+  "approval_scope_assessment": {
+    "ready": true,
+    "scope_user_can_review": [
+      "Create one named dedicated PostgreSQL container from the exact existing local image with build=0 and pull=0.",
+      "Create one named G3-only database volume and use the existing planned G3 internal network/alias without attaching the old PostgreSQL server.",
+      "Perform at most one separately gated transactional restore into the dedicated server, then continue the already-authorized frozen source package only after provision/readback passes.",
+      "Retain private raw diagnostics with 0700/0600 permissions and public receipts containing only operation/result fingerprints and safe categories.",
+      "Stop on any failure, uncertainty, timeout, configuration mismatch or upload-runner incompatibility; no automatic retry, cleanup, rename or alternate route."
+    ],
+    "not_execution_ready": "The proposal intentionally requires implementation-time freezing and independent review of initialization parameters, exact image startup inputs, credentials path, resource limits/headroom, timeouts, permissions, commands, state transitions and the complete execution package before any runtime action.",
+    "authorization_boundary": "Approval of this proposal may authorize implementation of the isolated recovery slice and one later execution window if the independently reviewed implementation stays within these exact objects/actions. It does not approve product compilation/review models, publication, activation, production deployment, host resource enlargement, old-database cleanup, a second recovery attempt or changed upload/model payloads."
+  },
+  "required_pre_execution_gates_not_design_blockers": [
+    "Freeze exact CPU/memory/PID/shared-memory limits and prove current host headroom without changing Colima resources; process isolation alone does not eliminate host-level contention.",
+    "Freeze exact PostgreSQL initialization environment/files, role/database creation, health/readiness and extension-availability checks without copying secrets to repository evidence.",
+    "Freeze target network membership and application DB_HOST/DB_NAME/DB_USER handoff so the application cannot reconnect to the old shared PostgreSQL server.",
+    "Validate the new provision PASS receipt against the unchanged upload v2 admission before starting upload/embedding/source registration.",
+    "Retain the original shared target database as evidence; any later removal requires separate scope and authorization."
+  ],
+  "rejected_claims": [
+    "The selected source snapshot match does not prove zero availability or whole-database impact.",
+    "Fresh archive decode does not prove the discarded failed archive or restore execution was safe.",
+    "The observed crash/recovery correlation does not identify the crashing statement or establish that pg_restore caused it.",
+    "An isolated PostgreSQL process does not guarantee host-wide resource isolation."
+  ],
+  "mechanical_document_review": {
+    "status": "PASS",
+    "changed_paths": {
+      "count": 13,
+      "tracked_modified": 3,
+      "untracked_evidence": 10,
+      "implementation_or_test_paths": 0
+    },
+    "paths_and_sha256": {
+      "HANDOFF.md": "0722a5c0d6792885a633d7931e7613ebd12990a7501cd3c30e2064cc8312b10e",
+      "docs/insurance-kb/evidence/830-g3/g3-local-progress.md": "f24d175c19f7b1293e0c25b12387637dc265d786745dabfdaa59ebc5d9f61e13",
+      "docs/insurance-kb/evidence/830-g3/startup.json": "f96fca808f7970b27ce591ed2bd54dd25ac98ad39fd9c4f7dba7bea05081b61d",
+      "docs/insurance-kb/evidence/830-g3/source-execution-explicit-user-authorization-01.json": "102c4def5921673854ca994be681127db462fcfa9f5526695444e4e3e815e9a1",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-apply-stop-independent-review-01.json": "2b9f1ba842e896e400abe0fa8f887c8b86f7d9be6b70d6f381c3626f5219ae28",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-apply-stop-independent-supplement-02.json": "76d3cd894f597d602a7aec72c1930e3a258725dcd35cd8114092fd6b6985a5bc",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-apply-stop-public-01.json": "1186f9adc689edff09fc4b60909dc0c1b1eb1fb6333ad0c38b4e0a540343c1f4",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-isolated-recovery-proposal-01.md": "ecb7aa8611478de1df7ec3b6da074163d51a68189edd3dd1d7a9c616cb27112a",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-stop-archive-diagnostic-02.json": "00ccdf88f7ff82c101d88afe2445cbacb052f62c97ad0395415f7c64033642a8",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-stop-current-postgres-01.json": "790162edf8b3c720ba329fc1d788598dae16f1a25a294c60525577136449a236",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-stop-db-diagnostic-01.json": "3ea65ef4c7497615fa0137d4632ef00fc354f29cb5c4eb07492454020d587f67",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-stop-process-events-01.json": "ff9d243d050652bb54ce1de2de0ab7c91ee8cf6d1f2eb7a4c439787f6038b3a3",
+      "docs/insurance-kb/evidence/830-g3/source-runtime-stop-transport-diagnostic-01.json": "550d4b3cc487f8bced62c449a099dbdda0cc902808f64c4f8589d660d652765b"
+    },
+    "content_boundary": "The changes record the explicit original authorization, actual STOP and effects, sanitized diagnostics, independent reports, status updates and the isolated recovery proposal. No implementation, test, upload body, guard, model payload or prior frozen execution file is modified.",
+    "mechanical_red_exemption": "Applicable to these status/evidence/design document changes only; it does not constitute implementation or execution acceptance."
+  },
+  "effects": {
+    "runtime": 0,
+    "database": 0,
+    "container": 0,
+    "network": 0,
+    "volume": 0,
+    "http": 0,
+    "provider": 0,
+    "repo_write_by_reviewer": 0
+  },
+  "findings": {
+    "blocker": 0,
+    "backlog": 0,
+    "rejected_claims": 4
+  }
+}

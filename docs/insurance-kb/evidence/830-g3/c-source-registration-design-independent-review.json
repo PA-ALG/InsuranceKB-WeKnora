@@ -1,0 +1,35 @@
+{
+  "contract": "830-g3-source-registration-design-review.v1",
+  "recorded_at": "2026-09-07T11:31:37.343546+00:00",
+  "reviewer": "g3_catalog_ui",
+  "design": "c-source-registration-amendment-8.md",
+  "design_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+  "status": "PASS",
+  "blockers": [],
+  "backlog": [
+    {
+      "item": "Early non-PDF MIME quarantine",
+      "reason": "Current actual service normalizes and requires application/pdf; D authoritative re-open remains required; not part of this bounded amendment"
+    }
+  ],
+  "verified": [
+    "Exact 14 JSON keys incl contract mirror handler lines42-56/74-81",
+    "C identity/classification do not consume three legacy admission fields; no generic admission adapter prerequisite",
+    "Exact nested outer hash binding; legacy self-hash and scope preserved",
+    "Actual authenticated acquisition capture binds BatchCorpus scope; D reopens current server authority and historical G1/C5 chain",
+    "Require real discriminated union; reject unknown/mixed/extra shapes"
+  ],
+  "required_implementation_sites": [
+    "_entry_source_reasons",
+    "_matching_rule",
+    "CREATE _decision candidate scope/key",
+    "resolve_batch.source_keys"
+  ],
+  "source_scope": "Registered uses exact BatchCorpus scope, never guesses from block/receipt; legacy retains receipt scope checks",
+  "effects": {
+    "http": 0,
+    "database": 0,
+    "provider": 0,
+    "container": 0
+  }
+}

@@ -1,0 +1,587 @@
+[
+  {
+    "name": "generated-47",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "补充",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 0,
+      "definability": 2,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 80,
+    "band": "REJECTED",
+    "error": false
+  },
+  {
+    "name": "generated-48",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "补充",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 0,
+      "definability": 3,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 80,
+    "band": "PENDING",
+    "error": false
+  },
+  {
+    "name": "generated-63",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "补充",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 0,
+      "definability": 15,
+      "novel_identity": 3,
+      "name_stability": 0
+    },
+    "maximum": 80,
+    "band": "PENDING",
+    "error": false
+  },
+  {
+    "name": "generated-64",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "补充",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 0,
+      "definability": 15,
+      "novel_identity": 4,
+      "name_stability": 0
+    },
+    "maximum": 80,
+    "band": "ACCEPTED",
+    "error": false
+  },
+  {
+    "name": "generated-71",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "补充",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 0,
+      "definability": 15,
+      "novel_identity": 10,
+      "name_stability": 1
+    },
+    "maximum": 80,
+    "band": "ACCEPTED",
+    "error": false
+  },
+  {
+    "name": "source-59",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "原文",
+    "evidence": [
+      {
+        "tenant_id": 1,
+        "space_id": "space",
+        "raw_kb_id": "raw",
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "revision_id": "rev",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "source_type": "DOCUMENT",
+        "block_id": "block",
+        "page_number": 1,
+        "offset_unit": "UNICODE_CODE_POINT",
+        "start": 0,
+        "end": 2,
+        "quote": "原文",
+        "quote_hash": "354b28c85333456866931a77eacdf6cd18d80b79981ccf1f4ca927b84fd99302"
+      }
+    ],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "原文",
+          "origin": "SOURCE_SUPPORTED",
+          "evidence_indexes": [
+            0
+          ]
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 14,
+      "evidence_quality": 20,
+      "definability": 0,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 100,
+    "band": "REJECTED",
+    "error": false
+  },
+  {
+    "name": "source-60",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "原文",
+    "evidence": [
+      {
+        "tenant_id": 1,
+        "space_id": "space",
+        "raw_kb_id": "raw",
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "revision_id": "rev",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "source_type": "DOCUMENT",
+        "block_id": "block",
+        "page_number": 1,
+        "offset_unit": "UNICODE_CODE_POINT",
+        "start": 0,
+        "end": 2,
+        "quote": "原文",
+        "quote_hash": "354b28c85333456866931a77eacdf6cd18d80b79981ccf1f4ca927b84fd99302"
+      }
+    ],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "原文",
+          "origin": "SOURCE_SUPPORTED",
+          "evidence_indexes": [
+            0
+          ]
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 15,
+      "evidence_quality": 20,
+      "definability": 0,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 100,
+    "band": "PENDING",
+    "error": false
+  },
+  {
+    "name": "source-79",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "原文",
+    "evidence": [
+      {
+        "tenant_id": 1,
+        "space_id": "space",
+        "raw_kb_id": "raw",
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "revision_id": "rev",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "source_type": "DOCUMENT",
+        "block_id": "block",
+        "page_number": 1,
+        "offset_unit": "UNICODE_CODE_POINT",
+        "start": 0,
+        "end": 2,
+        "quote": "原文",
+        "quote_hash": "354b28c85333456866931a77eacdf6cd18d80b79981ccf1f4ca927b84fd99302"
+      }
+    ],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "原文",
+          "origin": "SOURCE_SUPPORTED",
+          "evidence_indexes": [
+            0
+          ]
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 20,
+      "definability": 14,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 100,
+    "band": "PENDING",
+    "error": false
+  },
+  {
+    "name": "source-80",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "原文",
+    "evidence": [
+      {
+        "tenant_id": 1,
+        "space_id": "space",
+        "raw_kb_id": "raw",
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "revision_id": "rev",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "source_type": "DOCUMENT",
+        "block_id": "block",
+        "page_number": 1,
+        "offset_unit": "UNICODE_CODE_POINT",
+        "start": 0,
+        "end": 2,
+        "quote": "原文",
+        "quote_hash": "354b28c85333456866931a77eacdf6cd18d80b79981ccf1f4ca927b84fd99302"
+      }
+    ],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "原文",
+          "origin": "SOURCE_SUPPORTED",
+          "evidence_indexes": [
+            0
+          ]
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 20,
+      "definability": 15,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 100,
+    "band": "ACCEPTED",
+    "error": false
+  },
+  {
+    "name": "mixed-71",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "原文补充",
+    "evidence": [
+      {
+        "tenant_id": 1,
+        "space_id": "space",
+        "raw_kb_id": "raw",
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "revision_id": "rev",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "source_type": "DOCUMENT",
+        "block_id": "block",
+        "page_number": 1,
+        "offset_unit": "UNICODE_CODE_POINT",
+        "start": 0,
+        "end": 2,
+        "quote": "原文",
+        "quote_hash": "354b28c85333456866931a77eacdf6cd18d80b79981ccf1f4ca927b84fd99302"
+      }
+    ],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "原文",
+          "origin": "SOURCE_SUPPORTED",
+          "evidence_indexes": [
+            0
+          ]
+        },
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 20,
+      "definability": 6,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 100,
+    "band": "PENDING",
+    "error": false
+  },
+  {
+    "name": "mixed-80",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "原文补充",
+    "evidence": [
+      {
+        "tenant_id": 1,
+        "space_id": "space",
+        "raw_kb_id": "raw",
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "revision_id": "rev",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "source_type": "DOCUMENT",
+        "block_id": "block",
+        "page_number": 1,
+        "offset_unit": "UNICODE_CODE_POINT",
+        "start": 0,
+        "end": 2,
+        "quote": "原文",
+        "quote_hash": "354b28c85333456866931a77eacdf6cd18d80b79981ccf1f4ca927b84fd99302"
+      }
+    ],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "原文",
+          "origin": "SOURCE_SUPPORTED",
+          "evidence_indexes": [
+            0
+          ]
+        },
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 20,
+      "definability": 15,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 100,
+    "band": "ACCEPTED",
+    "error": false
+  },
+  {
+    "name": "legacy-71",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "原文",
+    "evidence": [
+      {
+        "tenant_id": 1,
+        "space_id": "space",
+        "raw_kb_id": "raw",
+        "knowledge_id": "doc",
+        "parse_attempt": 1,
+        "revision_id": "rev",
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser",
+        "source_type": "DOCUMENT",
+        "block_id": "block",
+        "page_number": 1,
+        "offset_unit": "UNICODE_CODE_POINT",
+        "start": 0,
+        "end": 2,
+        "quote": "原文",
+        "quote_hash": "354b28c85333456866931a77eacdf6cd18d80b79981ccf1f4ca927b84fd99302"
+      }
+    ],
+    "provenance": null,
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 20,
+      "definability": 6,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 100,
+    "band": "PENDING",
+    "error": false
+  },
+  {
+    "name": "old-generated-71",
+    "policy": "",
+    "content": "补充",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 0,
+      "definability": 15,
+      "novel_identity": 10,
+      "name_stability": 1
+    },
+    "maximum": 100,
+    "band": "PENDING",
+    "error": false
+  },
+  {
+    "name": "generated-evidence-points",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "补充",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 20,
+      "definability": 6,
+      "novel_identity": 0,
+      "name_stability": 0
+    },
+    "maximum": 80,
+    "band": "ACCEPTED",
+    "error": true
+  },
+  {
+    "name": "provenance-gap",
+    "policy": "provenance-applicable-score.830.v1",
+    "content": "未覆盖正文",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 0,
+      "definability": 15,
+      "novel_identity": 10,
+      "name_stability": 1
+    },
+    "maximum": 80,
+    "band": "ACCEPTED",
+    "error": true
+  },
+  {
+    "name": "unknown-policy",
+    "policy": "bad",
+    "content": "补充",
+    "evidence": [],
+    "provenance": {
+      "contract": "knowledge-content-provenance.830.v1",
+      "segments": [
+        {
+          "text": "补充",
+          "origin": "MODEL_GENERATED",
+          "evidence_indexes": []
+        }
+      ]
+    },
+    "score": {
+      "business_value": 25,
+      "reuse": 20,
+      "evidence_quality": 0,
+      "definability": 15,
+      "novel_identity": 10,
+      "name_stability": 1
+    },
+    "maximum": 80,
+    "band": "ACCEPTED",
+    "error": true
+  }
+]

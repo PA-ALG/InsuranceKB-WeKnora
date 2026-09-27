@@ -1,0 +1,60 @@
+{
+  "contract": "830-g3-source-runtime-apply-stop-independent-supplement.v1",
+  "status": "STOP_CONFIRMED_SHARED_POSTGRES_RETRY_BLOCKED",
+  "supplements": {
+    "report": "/private/tmp/g3-source-runtime-apply-stop-independent-review-01.json",
+    "sha256": "2b9f1ba842e896e400abe0fa8f887c8b86f7d9be6b70d6f381c3626f5219ae28"
+  },
+  "reviewed_inputs": {
+    "postgres_system_tail": {
+      "path": "/private/tmp/g3-source-provision-stop-diagnostic-01/postgres-tail.private.log",
+      "sha256": "4be7224ab0a59bb2c66af771429c20ac8a96f6b928dbdb34e25dc736c0492d29",
+      "review_boundary": "Only the allowlisted 2026-09-07T22:00:49 through 22:02:01 system lifecycle events were used; no SQL, unrelated log text, or credentials are reproduced."
+    },
+    "archive_summary": {
+      "path": "/private/tmp/g3-source-provision-stop-diagnostic-01/archive-summary.json",
+      "sha256": "00ccdf88f7ff82c101d88afe2445cbacb052f62c97ad0395415f7c64033642a8"
+    }
+  },
+  "new_proved_facts": [
+    "At 2026-09-07T22:00:49.593Z, during the restore window, a PostgreSQL server process exited with code 2.",
+    "The postmaster then terminated other active server processes, issued SIGKILL at 22:00:55, reinitialized at 22:00:56, entered recovery during 22:01:11 through 22:01:43, and was ready again at 22:02:01.835Z.",
+    "The earlier taxonomy report was incomplete: it searched SQL/error categories but did not classify backend-process exit, peer termination, reinitialization, or recovery events. Its zero category counts cannot be read as no PostgreSQL anomaly.",
+    "A fresh archive was fully decoded without a database into 18,832,354 bytes of SQL with exit 0 and empty stderr. No SQL was executed by that diagnostic."
+  ],
+  "causality_boundary": {
+    "known": "The pg_restore rc=1 and a PostgreSQL backend-process crash followed by cluster restart/recovery occurred in the same restore interval.",
+    "unknown": "The preserved evidence does not bind the exited PID to pg_restore or identify a statement, extension, signal source, kernel event, or server bug. It cannot establish whether restore triggered the process exit, merely observed the restart, or failed for a related cause.",
+    "fresh_archive_limit": "Successful full decode proves the fresh archive and present no-write decode path are readable. The original failed in-memory archive was discarded, so this does not prove its bytes or execution safety."
+  },
+  "risk_assessment": {
+    "blocker": "A recovery attempt must not restore into the shared PostgreSQL server that hosts the G2 source database.",
+    "reason": "The actual restore interval caused or coincided with a backend-process failure severe enough for PostgreSQL to terminate peer processes and restart the cluster. Reusing the shared server would again expose G2 and every co-hosted database to availability interruption, regardless of whether the exact crashing statement is known.",
+    "source_snapshot_limit": "The post-recovery selected source rows/jobs snapshot matches preflight, but that is not a whole-database byte identity, transaction-history, client-availability, or absence-of-impact proof."
+  },
+  "minimum_recovery_design_direction": [
+    "Freeze a new design and obtain a new explicit execution approval; do not treat the prior failed apply authorization as approval for changed infrastructure.",
+    "Keep the existing shared target database and failure state untouched for custody unless a separate cleanup action is designed and authorized.",
+    "Use a dedicated G3 PostgreSQL container from the exact frozen PostgreSQL image identity, with a new G3-only data volume and isolated network. Do not create or restore the G3 target database inside the shared G2 PostgreSQL server.",
+    "Read the source only for a new consistency dump after the same source-idle and identity gates. Send the dump to the isolated target PostgreSQL container; preserve single-transaction/first-failure STOP semantics.",
+    "Before restore, record client/server versions, archive size/SHA, PGDMP validation and full no-write decode or table-of-contents digest/count. During failure, persist an operation-specific label plus safe stderr/stdout byte counts and SHA-256, allowlisted error classes, and isolated PostgreSQL lifecycle-log hashes without secrets or SQL text.",
+    "Validate extension inventory/availability, target database identity, exact restored source snapshot and target idle state before starting any G3 app, DocReader, Redis, upload or provider operation.",
+    "Keep the isolated database off the G2 network and without a reused host port; any later app attachment and port exposure remain separate frozen steps."
+  ],
+  "current_decision": "STOP. No restore, retry, target cleanup, script modification, container creation, volume creation, network creation, upload, model call, or provider call is authorized or performed by this review.",
+  "effects": {
+    "runtime": 0,
+    "database": 0,
+    "container": 0,
+    "network": 0,
+    "volume": 0,
+    "http": 0,
+    "provider": 0,
+    "repo_write": 0
+  },
+  "findings": {
+    "blocker": 1,
+    "backlog": 0,
+    "root_cause": "UNKNOWN_WITH_CONFIRMED_POSTGRES_CRASH_RECOVERY_EVENT"
+  }
+}

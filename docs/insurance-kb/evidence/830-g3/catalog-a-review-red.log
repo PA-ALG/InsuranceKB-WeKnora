@@ -1,0 +1,140 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_____ test_g3_r2_rejects_duplicate_section_keys_with_stable_error_boundary _____
+
+catalog_module = <module 'insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3' from '/Users/houjing/Documents/LLM_wiki/insu...knora/.worktrees/830-g3-implementation/harness/src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py'>
+workbook_bytes = b'PK\x03\x04\n\x00\x00\x00\x00\x00\x87N\xe2@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\t\x00\x00\x00docProps/PK\...\xc4\x00\x00xl/worksheets/sheet9.xmlPK\x05\x06\x00\x00\x00\x00\x1c\x00\x1c\x00\x0c\x07\x00\x00\x17\xaf\x01\x00\x00\x00'
+mapping_config = {'contract': 'schema-pack-profile-mapping.830.g3.v1', 'mapping_version': '1.0.0-candidate', 'workbook_sha256': '8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec', 'catalog_id': 'schema_catalog_insurance_product', ...}
+
+    def test_g3_r2_rejects_duplicate_section_keys_with_stable_error_boundary(
+        catalog_module: ModuleType,
+        workbook_bytes: bytes,
+        mapping_config: dict[str, Any],
+    ) -> None:
+        changed = deepcopy(mapping_config)
+        changed["packs"][0]["sections"][1]["section_key"] = changed["packs"][0]["sections"][
+            0
+        ]["section_key"]
+        with pytest.raises(catalog_module.SchemaPackCatalogError) as exc:
+>           catalog_module.compile_catalog(workbook_bytes, changed)
+
+tests/test_schema_pack_catalog_830_g3.py:247: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py:580: in compile_catalog
+    entries.append(_compile_entry(workbook_sha256, rows, mapping))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+workbook_sha256 = '8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec'
+rows = (('02 产品主数据', '险种代码', None, 'product_code', '产品在公司产品主数据中的唯一标识代码，用于关联产品元数据、条款、计划表及其他业务材料；优先从产品主数据获取，必要时可从条款首页核验。', '产品元...uct_type', '产品利益类型，如普通型、分红型、万能型、投资连结型等；以产品主数据为准，不建议仅依据产品名称推断。', '产品元数据，需要从"全量产品基础信息.xlsx"文件中获取（根据险种代码映射得到）', ...), ...)
+mapping = _PackMapping(workbook_sheet='医疗险', schema_pack_id='schemapack_medical_insurance', schema_version='2026-08-12-v5', disp...eys=None), _SectionMapping(section_key='sales-support', display_name='销售支持', category_codes=('10',), field_keys=None)))
+
+    def _compile_entry(
+        workbook_sha256: str,
+        rows: tuple[tuple[CellValue, ...], ...],
+        mapping: _PackMapping,
+    ) -> SchemaPackCatalogEntryV1:
+        fields = _compile_fields(rows, mapping.schema_pack_id)
+        if len(fields) != mapping.expected_field_count:
+            raise SchemaPackCatalogError("FIELD_COUNT_MISMATCH")
+        profile_ref = PresentationProfileRefV1(
+            profile_id=mapping.profile_id,
+            profile_version=mapping.profile_version,
+        )
+        pack_values: dict[str, object] = {
+            "contract": PACK_CONTRACT,
+            "schema_pack_id": mapping.schema_pack_id,
+            "schema_version": mapping.schema_version,
+            "display_name": mapping.display_name,
+            "entity_type": "insurance_product",
+            "applicable_classifications": (mapping.classification,),
+            "workbook_sha256": workbook_sha256,
+            "workbook_sheet": mapping.workbook_sheet,
+            "fields": fields,
+            "presentation_profile_ref": profile_ref,
+        }
+        pack_values["schema_pack_sha256"] = schema_wiki_sha256(PACK_CONTRACT, pack_values)
+        pack = SchemaPackDefinitionV1.model_validate(pack_values)
+        profile_values: dict[str, object] = {
+            "contract": "presentation-profile.v1",
+            "profile_id": mapping.profile_id,
+            "profile_version": mapping.profile_version,
+            "schema_pack_id": mapping.schema_pack_id,
+            "schema_version": mapping.schema_version,
+            "schema_pack_sha256": pack.schema_pack_sha256,
+            "sections": _compile_profile_sections(fields, mapping.sections),
+        }
+        profile_values["profile_sha256"] = schema_wiki_sha256(
+            "presentation-profile.v1",
+            profile_values,
+        )
+>       profile = PresentationProfileV1.model_validate(profile_values)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PresentationProfileV1
+E         Value error, presentation profile topology or hash is invalid [type=value_error, input_value={'contract': 'presentatio...a59a33017d77994152b513'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py:546: ValidationError
+___________ test_g3_r2_normalizes_unexpected_entry_validation_errors ___________
+
+catalog_module = <module 'insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3' from '/Users/houjing/Documents/LLM_wiki/insu...knora/.worktrees/830-g3-implementation/harness/src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py'>
+workbook_bytes = b'PK\x03\x04\n\x00\x00\x00\x00\x00\x87N\xe2@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\t\x00\x00\x00docProps/PK\...\xc4\x00\x00xl/worksheets/sheet9.xmlPK\x05\x06\x00\x00\x00\x00\x1c\x00\x1c\x00\x0c\x07\x00\x00\x17\xaf\x01\x00\x00\x00'
+mapping_config = {'contract': 'schema-pack-profile-mapping.830.g3.v1', 'mapping_version': '1.0.0-candidate', 'workbook_sha256': '8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec', 'catalog_id': 'schema_catalog_insurance_product', ...}
+
+    def test_g3_r2_normalizes_unexpected_entry_validation_errors(
+        catalog_module: ModuleType,
+        workbook_bytes: bytes,
+        mapping_config: dict[str, Any],
+    ) -> None:
+        changed = deepcopy(mapping_config)
+        changed["packs"][0]["display_name"] = ""
+        with pytest.raises(catalog_module.SchemaPackCatalogError) as exc:
+>           catalog_module.compile_catalog(workbook_bytes, changed)
+
+tests/test_schema_pack_catalog_830_g3.py:259: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py:580: in compile_catalog
+    entries.append(_compile_entry(workbook_sha256, rows, mapping))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+workbook_sha256 = '8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec'
+rows = (('02 产品主数据', '险种代码', None, 'product_code', '产品在公司产品主数据中的唯一标识代码，用于关联产品元数据、条款、计划表及其他业务材料；优先从产品主数据获取，必要时可从条款首页核验。', '产品元...uct_type', '产品利益类型，如普通型、分红型、万能型、投资连结型等；以产品主数据为准，不建议仅依据产品名称推断。', '产品元数据，需要从"全量产品基础信息.xlsx"文件中获取（根据险种代码映射得到）', ...), ...)
+mapping = _PackMapping(workbook_sheet='医疗险', schema_pack_id='schemapack_medical_insurance', schema_version='2026-08-12-v5', disp...eys=None), _SectionMapping(section_key='sales-support', display_name='销售支持', category_codes=('10',), field_keys=None)))
+
+    def _compile_entry(
+        workbook_sha256: str,
+        rows: tuple[tuple[CellValue, ...], ...],
+        mapping: _PackMapping,
+    ) -> SchemaPackCatalogEntryV1:
+        fields = _compile_fields(rows, mapping.schema_pack_id)
+        if len(fields) != mapping.expected_field_count:
+            raise SchemaPackCatalogError("FIELD_COUNT_MISMATCH")
+        profile_ref = PresentationProfileRefV1(
+            profile_id=mapping.profile_id,
+            profile_version=mapping.profile_version,
+        )
+        pack_values: dict[str, object] = {
+            "contract": PACK_CONTRACT,
+            "schema_pack_id": mapping.schema_pack_id,
+            "schema_version": mapping.schema_version,
+            "display_name": mapping.display_name,
+            "entity_type": "insurance_product",
+            "applicable_classifications": (mapping.classification,),
+            "workbook_sha256": workbook_sha256,
+            "workbook_sheet": mapping.workbook_sheet,
+            "fields": fields,
+            "presentation_profile_ref": profile_ref,
+        }
+        pack_values["schema_pack_sha256"] = schema_wiki_sha256(PACK_CONTRACT, pack_values)
+>       pack = SchemaPackDefinitionV1.model_validate(pack_values)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for SchemaPackDefinitionV1
+E         Value error, schema pack topology or hash is invalid [type=value_error, input_value={'contract': 'schema-pack...c55bb3b6c3b1dacc49c92d'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py:532: ValidationError
+=========================== short test summary info ============================
+FAILED tests/test_schema_pack_catalog_830_g3.py::test_g3_r2_rejects_duplicate_section_keys_with_stable_error_boundary
+FAILED tests/test_schema_pack_catalog_830_g3.py::test_g3_r2_normalizes_unexpected_entry_validation_errors
+2 failed in 2.69s

@@ -1,0 +1,113 @@
+{
+  "batch_embed_size": 100,
+  "contract": "830-g3-prepared-embedding-transport.v1",
+  "dimensions_sent": false,
+  "encoding_format": "float",
+  "model": "qwen3.7-text-embedding",
+  "note": "Exact offline Go DTO serialization. Actual proxy must compare inbound body SHA before forwarding; generation is not evidence of an actual request.",
+  "provider_calls": 0,
+  "requests": [
+    {
+      "body_bytes": 111744,
+      "input_count": 34,
+      "material_id": "g3-material-07",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-07-request.json",
+      "request_sha256": "3ba0ebbc63da1e4721bc0ef8423c6236922479e77fc58cd632bc443758bdb0df",
+      "source_sha256": "53eb3b5b6c2d66c09cea593f9cb40faa596182ad82523e72bd394f49466913cc",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-07-request.json"
+    },
+    {
+      "body_bytes": 132644,
+      "input_count": 40,
+      "material_id": "g3-material-08",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-08-request.json",
+      "request_sha256": "301ebca9f74f1fdede1a340c153a2d407abfa1da07cc31b2c0bfb3d7b8166266",
+      "source_sha256": "f043311c2257f6f5e5cd14120c4f418ed9ef2245dda21fc1eb80d75ae21f1079",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-08-request.json"
+    },
+    {
+      "body_bytes": 30198,
+      "input_count": 9,
+      "material_id": "g3-material-09",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-09-request.json",
+      "request_sha256": "3ced67fd565e6843b7268b94e1aeb2a7cbecb04884211cd793893157d8ed31f1",
+      "source_sha256": "734fe177e498de35ceb551eb02a770bb0de41d0e7bf03b163327e9afdc4118ec",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-09-request.json"
+    },
+    {
+      "body_bytes": 30273,
+      "input_count": 9,
+      "material_id": "g3-material-11",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-11-request.json",
+      "request_sha256": "991b1e796bbdc44490a2970ad7f551d3dcabfde309f2b95aeb8af8d14cb0f77e",
+      "source_sha256": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-11-request.json"
+    },
+    {
+      "body_bytes": 139337,
+      "input_count": 41,
+      "material_id": "g3-material-12",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-12-request.json",
+      "request_sha256": "2fa85e42a8365069270aee658818b3fbe09dd4aae78adb80b9883020481e1962",
+      "source_sha256": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-12-request.json"
+    },
+    {
+      "body_bytes": 43244,
+      "input_count": 11,
+      "material_id": "g3-material-13",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-13-request.json",
+      "request_sha256": "b60f79ec4676f42df92b935e49583dc5f74b666df411ee4b9b27250e623ed883",
+      "source_sha256": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-13-request.json"
+    },
+    {
+      "body_bytes": 28851,
+      "input_count": 8,
+      "material_id": "g3-material-14",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-14-request.json",
+      "request_sha256": "c086e3f295a7173a15aac5bac470512f9943b315fe8d20591d35e7794799484f",
+      "source_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-14-request.json"
+    },
+    {
+      "body_bytes": 145110,
+      "input_count": 42,
+      "material_id": "g3-material-17",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-17-request.json",
+      "request_sha256": "ba1145559b6369de3cec4944221567cd7d56a11232b648636f414888329853db",
+      "source_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-17-request.json"
+    },
+    {
+      "body_bytes": 21191,
+      "input_count": 6,
+      "material_id": "g3-material-18",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-18-request.json",
+      "request_sha256": "31fc030c478bb55d4f4627329cff646385725d35c70ce6c01a464b4afacc10cc",
+      "source_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-18-request.json"
+    },
+    {
+      "body_bytes": 2798,
+      "input_count": 2,
+      "material_id": "g3-material-19",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-19-request.json",
+      "request_sha256": "670f5f309cdbd2ccb871a96459856e3cb59d7d1c3b93052a5193f594d192bde9",
+      "source_sha256": "62b7c75958120effcba98adc71e6236f18728d900a05f312efc405f8be1aa5b8",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-19-request.json"
+    },
+    {
+      "body_bytes": 7739,
+      "input_count": 2,
+      "material_id": "g3-material-21",
+      "path": "/private/tmp/g3-embedding-transport-v1/g3-material-21-request.json",
+      "request_sha256": "d9a09070877458ec1e64c0fed7b16263e6dd3599b6c2c49cf761ad409a2e8266",
+      "source_sha256": "fcba0b42ee84b4ee961ba49f650a82b3057fa3f5aaed5c0a7fba41dfb254685e",
+      "persisted_path": "docs/insurance-kb/evidence/830-g3/inputs/embedding-requests/g3-material-21-request.json"
+    }
+  ],
+  "status": "PREPARED_NOT_SENT",
+  "truncate_prompt_tokens": 511,
+  "upstream": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+}

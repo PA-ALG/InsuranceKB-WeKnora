@@ -858,11 +858,22 @@ func (s *wikiPageService) GetStats(ctx context.Context, kbID string) (*types.Wik
 
 	var pendingTasks int64
 	var pendingIssues int64
+	var failedOperations int64
 	var isActive bool
 	if s.taskPendingRepo != nil {
 		// Pending wiki ingest ops live in task_pending_ops keyed by
 		// (task_type="wiki:ingest", scope="knowledge_base", scope_id=kbID).
 		pendingTasks, _ = s.taskPendingRepo.PendingCount(ctx, wikiTaskType, wikiTaskScope, kbID)
+	}
+	if outcomes, ok := s.taskPendingRepo.(interfaces.TaskPendingOpsExecutionStore); ok {
+		tenantID, scoped := types.TenantIDFromContext(ctx)
+		if !scoped {
+			return nil, errors.New("wiki failure status requires tenant scope")
+		}
+		failedOperations, err = outcomes.FailedOperationCount(ctx, tenantID, wikiTaskType, wikiTaskScope, kbID)
+		if err != nil {
+			return nil, fmt.Errorf("wiki failure status: %w", err)
+		}
 	}
 	if s.redisClient != nil {
 		// The "active batch in progress" flag is still a Redis-only
@@ -876,14 +887,15 @@ func (s *wikiPageService) GetStats(ctx context.Context, kbID string) (*types.Wik
 	pendingIssues = int64(len(issues))
 
 	return &types.WikiStats{
-		TotalPages:    total,
-		PagesByType:   counts,
-		TotalLinks:    totalLinks,
-		OrphanCount:   orphans,
-		RecentUpdates: recentPages,
-		PendingTasks:  pendingTasks,
-		PendingIssues: pendingIssues,
-		IsActive:      isActive,
+		TotalPages:       total,
+		PagesByType:      counts,
+		TotalLinks:       totalLinks,
+		OrphanCount:      orphans,
+		RecentUpdates:    recentPages,
+		PendingTasks:     pendingTasks,
+		PendingIssues:    pendingIssues,
+		FailedOperations: failedOperations,
+		IsActive:         isActive,
 	}, nil
 }
 

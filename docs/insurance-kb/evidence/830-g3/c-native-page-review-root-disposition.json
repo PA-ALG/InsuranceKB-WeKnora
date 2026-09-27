@@ -1,0 +1,20 @@
+{
+  "contract": "830-g3-native-page-review-disposition.v1",
+  "recorded_at": "2026-09-07T11:44:40.473950+00:00",
+  "review_sha256": "23229edf210fe5cf6c0e934a8ba989456769fbc4c64aac724fd1fd63308df982",
+  "accepted_facts": [
+    "native_capture_sha256 is canonical sanitized projection/native_sha256; gzip/raw-wrapper/markdown/parser digests separately bound",
+    "Evidence offsets remain exact current W1 block Unicode positions; quote must uniquely resolve on chosen native page",
+    "Cross-page chunks may carry only one assigned page per C revision/block key",
+    "Material21 can cover at most two pages with current predicted two blocks; never claim full five-page product-row coverage"
+  ],
+  "conditional_finding_disposition": "BACKLOG_FOR_EXHAUSTIVE_PRODUCT_LIST_COVERAGE; G3 requires genuine MULTI identity evidence, not exhaustive historical-list ingestion. Actual target readback and model evidence remain required; no current source change or fabricated MULTI outcome.",
+  "intake_order_constraint": "Freeze actual C Corpus (including SourceBlock.page_number) before classifier request/corpus_sha256. Do not choose pages after model output and silently rehash/rebind its input. Determine allowable page-local ranges mechanically before model; no labels or Evidence facts from regex feasibility observations. Exact selection procedure remains to freeze after actual source readback.",
+  "status": "READ_ONLY_FACTS_ACCEPTED_INTAKE_NOT_RUN",
+  "effects": {
+    "http": 0,
+    "database": 0,
+    "provider": 0,
+    "upload": 0
+  }
+}

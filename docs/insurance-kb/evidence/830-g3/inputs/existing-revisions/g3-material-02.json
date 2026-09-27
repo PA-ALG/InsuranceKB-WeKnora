@@ -1,0 +1,3041 @@
+{
+  "descriptor": {
+    "chunk_manifest": {
+      "algorithm": "weknora.chunk_manifest.v1",
+      "chunk_count": 79,
+      "digest": "9995d0f3f2962ec8a879e77ae3850bba0d34e5984d82356ae440cce695bb27ee"
+    },
+    "completed_at": "2026-08-10T06:00:10.687814Z",
+    "file_digest": {
+      "algorithm": "sha256",
+      "value": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279"
+    },
+    "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+    "parse_attempt": 1,
+    "parser_identity": {
+      "app_version": "unknown",
+      "app_commit": "unknown",
+      "docreader": "unknown",
+      "parser_engine": "builtin",
+      "chunk_size": 512,
+      "chunk_overlap": 80,
+      "separators_digest": "7df6b651efc0aedf6eebe28d34b551c7adaad61b47d2ad83019471f788f0da3f",
+      "chunker_config_digest": "20e5c1dc49c4a9963d4b48250a1307c0823580d88e82a2c93df491ea595bcdf7",
+      "embedding_model_id": "42df7f04-f53f-42d5-909d-63b0e78a1223"
+    }
+  },
+  "chunk_pages": [
+    {
+      "data": [
+        {
+          "id": "5832501f-2840-4986-9625-e9955c2d24d7",
+          "seq_id": 100000905,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "平安 e 生保（尊享版）医疗保险产品说明书\n在本说明书中，“您”指投保人，“我们”、“本公司”均指中国平安人寿保险股份有限公司，“合同”指\n平安 e 生保（尊享版）医疗保险合同，“条款”指平安 e 生保（尊享版）医疗保险条款。 产品特色\n 特需国际省心住，尊享品质医疗\n保障范围包含医院里的普通部、特需部及国际部\n 药械疗法安心用，尊享前沿医疗\n保障部分院外药械和处方、海外特药等\n 保障术后康复，尊享复健医疗\n保障术后康复住院费用，强化治疗效果\n主要保单利益\n保险责任\n在合同保险期间内，我们承担如下保险责任：\n 等待期\n自合同生效之日起（含生效当日）30 日内，被保险人经二级及以上医保定点医院确诊疾\n病，无论治疗该疾病的时间与合同生效之日是否间隔超过 30 日，因治疗该疾病发生的费用，\n我们都不承担给付任何保险金的责任。\n",
+          "chunk_index": 0,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 0,
+          "end_at": 369,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "52290731-64bf-4bb5-ac9e-db8991d2d3fb",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340319861970259",
+                "question": "平安 e 生保（尊享版）医疗保险有哪些产品特色和保障范围？"
+              },
+              {
+                "id": "q1786340319861975259",
+                "question": "平安 e 生保（尊享版）的等待期是多久？等待期内确诊疾病如何处理？"
+              },
+              {
+                "id": "q1786340319862038714",
+                "question": "平安 e 生保（尊享版）是否保障院外药械、海外特药和术后康复费用？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472098Z",
+          "updated_at": "2026-08-10T05:38:39.873096Z",
+          "deleted_at": null
+        },
+        {
+          "id": "5b9e2625-7a4e-4800-b518-bd425ec64048",
+          "seq_id": 100000907,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "病，无论治疗该疾病的时间与合同生效之日是否间隔超过 30 日，因治疗该疾病发生的费用，\n我们都不承担给付任何保险金的责任。\n自合同生效之日起（含生效当日）30 日内，被保险人经二级及以上医保定点医院确诊合\n同约定的“恶性肿瘤——重度”，我们不承担给付任何保险金的责任，向您返还所交保险费，\n合同终止。\n上述 30 日的时间为等待期。\n以下三种情形，无等待期：\n",
+          "chunk_index": 1,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 307,
+          "end_at": 487,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "52290731-64bf-4bb5-ac9e-db8991d2d3fb",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340326072624610",
+                "question": "平安e生保（尊享版）医疗保险的等待期是如何规定的？"
+              },
+              {
+                "id": "q1786340326072641568",
+                "question": "在等待期内确诊恶性肿瘤重度，平安e生保（尊享版）"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472101Z",
+          "updated_at": "2026-08-10T05:38:46.89932Z",
+          "deleted_at": null
+        },
+        {
+          "id": "935978e8-7082-4933-ae40-10c8ac42b9bd",
+          "seq_id": 100000909,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1. 被保险人因意外伤害发生上述情形的；\n\n2. 您在不迟于上一保险期间届满后 60 日重新投保本产品且经我们审核同意的；\n3. 您已投保指定的产品，并在我们指定的期限内首次投保本产品且经我们审核同意的。\n 一般医疗保险金\n被保险人因疾病或意外伤害在二级及以上医保定点医院接受治疗的，我们依照下列约定\n给付一般医疗保险金。一般医疗保险金包含住院医疗费用、指定门诊医疗费用和住院前后门\n诊急诊医疗费用三项。\n",
+          "chunk_index": 2,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 487,
+          "end_at": 691,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "52290731-64bf-4bb5-ac9e-db8991d2d3fb",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340339306511679",
+                "question": "保险合同中的无等待期情形有哪些？"
+              },
+              {
+                "id": "q1786340339306520721",
+                "question": "一般医疗保险金包含哪些医疗费用项目？"
+              },
+              {
+                "id": "q1786340339306521055",
+                "question": "重新投保该产品时，在上一个保险期间届满后多少日内可以免除等待期？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472104Z",
+          "updated_at": "2026-08-10T05:38:59.326051Z",
+          "deleted_at": null
+        },
+        {
+          "id": "31a117b3-5a51-48e1-8ff2-b96404b3f237",
+          "seq_id": 100000911,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1. 住院医疗费用\n被保险人因疾病或意外伤害经二级及以上医保定点医院诊断必须住院治疗的，对于住院\n期间发生的合理且必要的住院医疗费用，我们按照合同约定的保险金计算方法计算并在一般\n医疗保险金的给付限额内（见平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的“住院医疗费用”包含如下内容：\n（1）床位费：指住院期间实际发生的、不高于单人病房的住院床位费（不包括套房、家\n庭病床）。\n（2）加床费：指未满 18 周岁的被保险人在住院治疗期间，我们根据合同约定给付其合\n法监护人（限一人）在医院留宿发生的加床费；或女性被保险人在住院治疗期间，我们根据\n合同约定给付其 1 周岁以下哺乳期婴儿在医院留宿发生的加床费。\n（3）重症监护室床位费：指住院期间出于医学必要被保险人需在重症监护病房进行合理\n且必要的医疗而产生的床位费。\n",
+          "chunk_index": 3,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 691,
+          "end_at": 1055,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "52290731-64bf-4bb5-ac9e-db8991d2d3fb",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340341609272521",
+                "question": "住院医疗费用具体包含哪些项目？"
+              },
+              {
+                "id": "q1786340341609276313",
+                "question": "什么是床位费和加床费？在什么情况下可以给付？"
+              },
+              {
+                "id": "q1786340341609277064",
+                "question": "重症监护室床位费在什么条件下属于住院医疗费用？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472105Z",
+          "updated_at": "2026-08-10T05:39:01.641167Z",
+          "deleted_at": null
+        },
+        {
+          "id": "375843cd-3521-4ee3-991c-659c232445d3",
+          "seq_id": 100000913,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "（3）重症监护室床位费：指住院期间出于医学必要被保险人需在重症监护病房进行合理\n且必要的医疗而产生的床位费。\n（4）护理费：指住院期间根据医嘱所示的护理等级确定的护理费用。\n（5）膳食费：指住院期间根据医生的医嘱，由作为医院内部专属部门的、为住院病人配\n餐的食堂配送的膳食费用。膳食费应包含在医疗账单内；根据各医疗机构的惯例，可以作为\n医院独立的款项、也可以合并在病房费等其他款项内。\n（6）检查检验费：指住院期间实际发生的，以诊断为目的，采取必要的医学手段进行检\n查及检验而发生的合理的医疗费用，包括 X 光费、心电图费、B 超费、脑电图费、内窥镜费、\n肺功能仪费、分子生化检验费和血、尿、便常规检验费等。\n（7）治疗费：指住院期间以治疗为目的，提供必要的医学手段而发生的合理的治疗者的\n技术劳务费以及消耗品的费用，具体以就诊医院的费用项目划分为准。\n",
+          "chunk_index": 4,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 1000,
+          "end_at": 1377,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "52290731-64bf-4bb5-ac9e-db8991d2d3fb",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472107Z",
+          "updated_at": "2026-08-10T05:38:05.472107Z",
+          "deleted_at": null
+        },
+        {
+          "id": "092b1862-fee3-4092-b2d9-e415a1c98117",
+          "seq_id": 100000915,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "（7）治疗费：指住院期间以治疗为目的，提供必要的医学手段而发生的合理的治疗者的\n技术劳务费以及消耗品的费用，具体以就诊医院的费用项目划分为准。\n本项责任不包含如下费用：物理治疗、中医理疗及其他特殊疗法费用。\n\n（8）药品费和医疗器械使用费：药品费指住院期间实际发生的合理且必要的由医生开具\n的一般药品和医疗器械保障目录范围内的药品费用。药品费中不包含中草药费用。医疗器械\n使用费指以治疗为目的，提供必要的医学手段而购买、租用和使用在一般药品和医疗器械保\n障目录范围内的医疗器械发生的费用。\n（9）医生费：指包括外科医生、麻醉师、内科医生、专科医生的费用。\n（10）手术费：指当地卫生行政部门规定的手术项目的费用。包括麻醉费、手术监测费、\n手术材料费、术中用药费、手术设备费；若因器官移植而发生的手术费用，不包括器官本身\n的费用和获取器官过程中的费用。\n",
+          "chunk_index": 5,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 1305,
+          "end_at": 1681,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "52290731-64bf-4bb5-ac9e-db8991d2d3fb",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472108Z",
+          "updated_at": "2026-08-10T05:38:05.472108Z",
+          "deleted_at": null
+        },
+        {
+          "id": "6f7699f3-4982-4c3f-be01-51b2605d4570",
+          "seq_id": 100000916,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "手术材料费、术中用药费、手术设备费；若因器官移植而发生的手术费用，不包括器官本身\n的费用和获取器官过程中的费用。\n（11）转诊救护车使用费：指住院期间以抢救生命或治疗为目的，根据医生建议，被保\n险人需医院转诊过程中的医院用车费用，救护车的使用仅限于同一地级市或直辖市中的医疗\n运送。\n（12）住院期间门诊费用：指住院期间因与该次住院相同原因而产生的门诊费用，包括\n医生诊疗费、检查检验费、治疗费、药品费和医疗器械使用费。医生诊疗费指主诊医生或会\n诊医生的劳务费用，包括挂号费；检查检验费、治疗费、药品费和医疗器械使用费同以上第\n（6）（7）（8）项约定。\n",
+          "chunk_index": 6,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 1624,
+          "end_at": 1902,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "52290731-64bf-4bb5-ac9e-db8991d2d3fb",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340365201729760",
+                "question": "转诊救护车使用费的报销范围和条件是什么？"
+              },
+              {
+                "id": "q1786340365201742219",
+                "question": "住院期间门诊费用具体包括哪些医疗项目？"
+              },
+              {
+                "id": "q1786340365201743761",
+                "question": "住院期间因相同原因发生的门诊费用能否纳入医疗保险理赔？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.47211Z",
+          "updated_at": "2026-08-10T05:39:25.945619Z",
+          "deleted_at": null
+        },
+        {
+          "id": "cb9e12ea-f9ca-4ae9-9640-cd01700dc3ae",
+          "seq_id": 100000918,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "2. 指定门诊医疗费用\n被保险人因疾病或意外伤害在二级及以上医保定点医院进行如下治疗发生的合理且必要\n的医疗费用，我们按照合同约定的保险金计算方法计算并在一般医疗保险金的给付限额内（见\n平安 e 生保（尊享版）医疗保险计划表）给付。\n（1）门诊肾透析费；\n（2）门诊恶性肿瘤治疗费，包括肿瘤化学疗法、肿瘤放射疗法、肿瘤免疫疗法、肿瘤内\n分泌疗法、肿瘤靶向疗法的治疗费用；\n（3）器官移植后的门诊抗排异治疗费；\n（4）门诊手术费。\n",
+          "chunk_index": 7,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 1902,
+          "end_at": 2117,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "52290731-64bf-4bb5-ac9e-db8991d2d3fb",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340369889170942",
+                "question": "指定门诊医疗费用包括哪些具体项目？"
+              },
+              {
+                "id": "q1786340369889179068",
+                "question": "门诊恶性肿瘤治疗费涵盖哪些疗法？"
+              },
+              {
+                "id": "q1786340369889179360",
+                "question": "器官移植后的门诊抗排异治疗费是否属于指定门诊医疗费用？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472112Z",
+          "updated_at": "2026-08-10T05:39:34.177081Z",
+          "deleted_at": null
+        },
+        {
+          "id": "f190a97a-4d72-4484-b35a-fef2a780a6b3",
+          "seq_id": 100000920,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "（2）门诊恶性肿瘤治疗费，包括肿瘤化学疗法、肿瘤放射疗法、肿瘤免疫疗法、肿瘤内\n分泌疗法、肿瘤靶向疗法的治疗费用；\n（3）器官移植后的门诊抗排异治疗费；\n（4）门诊手术费。\n3. 住院前后门诊急诊费用\n被保险人在住院前 30 日内或出院后 30 日内（含住院和出院当日），因与该次住院治疗\n相同原因而发生的合理且必要的门诊急诊费用（不包括上述第 2 项“指定门诊医疗费用”中\n\n的治疗项目），我们按照合同约定的保险金计算方法计算并在一般医疗保险金的给付限额内\n（见平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的“住院前后门诊急诊费用”包含如下内容：\n（1）医生诊疗费：指被保险人门急诊期间发生的主诊医生或会诊医生的劳务费用，包括\n挂号费。\n（2）治疗费：指门急诊期间发生的以治疗为目的，提供必要的医学手段而发生的合理的\n",
+          "chunk_index": 8,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 2030,
+          "end_at": 2396,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "f8e4a5d1-cbcd-4580-872d-1bb699d4d40c",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340379314630562",
+                "question": "平安e生保（尊享版）医疗保险的指定门诊医疗费用包括哪些项目？"
+              },
+              {
+                "id": "q1786340379314638146",
+                "question": "住院前30日或出院后30日内因相同原因发生的门诊急诊费用能否报销？"
+              },
+              {
+                "id": "q1786340379314639230",
+                "question": "平安e生保（尊享版）住院前后门诊急诊费用包含哪些具体费用项目？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472113Z",
+          "updated_at": "2026-08-10T05:39:39.376846Z",
+          "deleted_at": null
+        },
+        {
+          "id": "853a10d2-7df1-46eb-8b76-2089074c1782",
+          "seq_id": 100000922,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "挂号费。\n（2）治疗费：指门急诊期间发生的以治疗为目的，提供必要的医学手段而发生的合理的\n治疗者的技术劳务费以及消耗品的费用，具体以就诊医院的费用项目划分为准。\n本项责任不包含如下费用：物理治疗、中医理疗及其他特殊疗法费用。\n（3）检查检验费：指门急诊期间发生的以诊断为目的，采取必要的医学手段进行检查及\n检验而发生的合理的医疗费用，包括 X 光费、心电图费、B 超费、脑电图费、内窥镜费、肺\n功能仪费、分子生化检验费和血、尿、便常规检验费等。\n（4）药品费和医疗器械使用费：药品费指门急诊期间发生的，合理且必要的由医生开具\n的一般药品和医疗器械保障目录范围内的药品费用。药品费中不包含中草药费用。\n医疗器械使用费指以治疗为目的，提供必要的医学手段而购买、租用和使用在一般药品\n和医疗器械保障目录范围内的医疗器械发生的费用。\n",
+          "chunk_index": 9,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 2351,
+          "end_at": 2714,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "f8e4a5d1-cbcd-4580-872d-1bb699d4d40c",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340386097188122",
+                "question": "住院前后门诊急诊费用包含哪些具体项目？"
+              },
+              {
+                "id": "q1786340386097197497",
+                "question": "门急诊治疗费不包括哪些项目？"
+              },
+              {
+                "id": "q1786340386097198331",
+                "question": "门急诊药品费包含中草药费用吗？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472116Z",
+          "updated_at": "2026-08-10T05:39:46.102788Z",
+          "deleted_at": null
+        },
+        {
+          "id": "0931a088-2170-4851-8a6f-ad03e479236f",
+          "seq_id": 100000923,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "医疗器械使用费指以治疗为目的，提供必要的医学手段而购买、租用和使用在一般药品\n和医疗器械保障目录范围内的医疗器械发生的费用。\n（5）救护车使用费：指为抢救生命由急救中心派出的救护车运送被保险人至医院的费用，\n救护车的使用仅限于同一地级市或直辖市中的医疗运送。\n 术后康复住院医疗保险金\n被保险人因疾病或意外伤害经二级及以上医保定点医院诊断必须住院进行手术治疗并在\n住院期间实施了合同约定的手术，且手术后 30 日内转至同一家医院的康复科室或在出院后\n30 日内入住定点医院中二级及以上医保定点医院的康复科室进行治疗的，对于被保险人在康\n复科室进行治疗而发生的合理且必要的术后康复住院医疗费用，我们按照合同约定的保险金\n计算方法计算并在术后康复住院医疗保险金的给付限额内（见平安 e 生保（尊享版）医疗保\n险计划表）给付。\n",
+          "chunk_index": 10,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 2651,
+          "end_at": 3013,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "f8e4a5d1-cbcd-4580-872d-1bb699d4d40c",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340389125797963",
+                "question": "医疗器械使用费包含哪些费用范围？"
+              },
+              {
+                "id": "q1786340389125810380",
+                "question": "申请术后康复住院医疗保险金需要满足哪些条件？"
+              },
+              {
+                "id": "q1786340389125810714",
+                "question": "术后康复住院医疗费用具体包含哪些项目？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472118Z",
+          "updated_at": "2026-08-10T05:39:49.136126Z",
+          "deleted_at": null
+        },
+        {
+          "id": "f9edacab-7b46-407b-9053-47e19ed1fba3",
+          "seq_id": 100000924,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "计算方法计算并在术后康复住院医疗保险金的给付限额内（见平安 e 生保（尊享版）医疗保\n险计划表）给付。\n合同约定的“术后康复住院医疗费用”包含如下内容：\n（1）床位费：指在康复科室住院期间实际发生的、不高于单人病房的住院床位费（不包\n括套房、家庭病床）。\n（2）加床费：指未满 18 周岁的被保险人在康复科室住院治疗期间，我们根据合同约定\n\n给付其合法监护人（限一人）在医院留宿发生的加床费；或女性被保险人在医院康复科住院\n治疗期间，我们根据合同约定给付其 1 周岁以下哺乳期婴儿在医院留宿发生的加床费。\n（3）重症监护室床位费：指在康复科室住院期间出于医学必要被保险人需在重症监护病\n房进行合理且必要的医疗而产生的床位费。\n（4）护理费：指在康复科室住院期间根据医嘱所示的护理等级确定的护理费用。\n",
+          "chunk_index": 11,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 2961,
+          "end_at": 3311,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "f8e4a5d1-cbcd-4580-872d-1bb699d4d40c",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472119Z",
+          "updated_at": "2026-08-10T05:38:05.47212Z",
+          "deleted_at": null
+        },
+        {
+          "id": "564a389e-4482-472b-92a4-aaeba6276c37",
+          "seq_id": 100000925,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "房进行合理且必要的医疗而产生的床位费。\n（4）护理费：指在康复科室住院期间根据医嘱所示的护理等级确定的护理费用。\n（5）膳食费：指在康复科室住院期间根据医生的医嘱，由作为医院内部专属部门的、为\n住院病人配餐的食堂配送的膳食费用。膳食费应包含在医疗账单内；根据各医疗机构的惯例，\n可以作为医院独立的款项、也可以合并在病房费等其他款项内。\n（6）检查检验费：指在康复科室住院期间实际发生的，以诊断为目的，采取必要的医学\n手段进行检查及检验而发生的合理的医疗费用，包括 X 光费、心电图费、B 超费、脑电图费、\n内窥镜费、肺功能仪费、分子生化检验费和血、尿、便常规检验费等。\n（7）治疗费：指在康复科室住院期间以治疗为目的，提供必要的医学手段而发生的合理\n的治疗者的技术劳务费以及消耗品的费用，具体以就诊医院的费用项目划分为准。\n",
+          "chunk_index": 12,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 3254,
+          "end_at": 3616,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "f8e4a5d1-cbcd-4580-872d-1bb699d4d40c",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340403167895667",
+                "question": "康复科室住院期间产生的护理费如何确定？"
+              },
+              {
+                "id": "q1786340403167913542",
+                "question": "康复住院期间检查检验费包括哪些具体项目？"
+              },
+              {
+                "id": "q1786340403167914126",
+                "question": "康复住院期间膳食费的具体定义是什么？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472121Z",
+          "updated_at": "2026-08-10T05:40:05.04109Z",
+          "deleted_at": null
+        },
+        {
+          "id": "116bf7cd-be5e-4b29-8589-35799008e768",
+          "seq_id": 100000926,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "的治疗者的技术劳务费以及消耗品的费用，具体以就诊医院的费用项目划分为准。\n（8）药品费和医疗器械使用费：药品费指在康复科室住院期间实际发生的合理且必要的\n由医生开具的一般药品和医疗器械保障目录范围内的药品费用。\n医疗器械使用费指以治疗为目的，提供必要的医学手段而购买、租用和使用在一般药品\n和医疗器械保障目录范围内的医疗器械发生的费用。\n（9）医生费：指包括外科医生、麻醉师、内科医生、专科医生的费用。\n（10）手术费：指当地卫生行政部门规定的手术项目的费用。包括麻醉费、手术监测费、\n手术材料费、术中用药费、手术设备费；若因器官移植而发生的手术费用，不包括器官本身\n的费用和获取器官过程中的费用。\n（11）转诊救护车使用费：指在康复科室住院期间以抢救生命或治疗为目的，根据医生\n建议，被保险人需医院转诊过程中的医院用车费用，救护车的使用仅限于同一地级市或直辖\n",
+          "chunk_index": 13,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 3579,
+          "end_at": 3960,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "f8e4a5d1-cbcd-4580-872d-1bb699d4d40c",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340412175566929",
+                "question": "康复科住院费用中治疗费具体指哪些项目？"
+              },
+              {
+                "id": "q1786340412175576096",
+                "question": "药品费和医疗器械使用费在康复科室住院期间的保障范围是什么？"
+              },
+              {
+                "id": "q1786340412175576972",
+                "question": "康复科住院期间转诊救护车使用费的报销条件有哪些？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472122Z",
+          "updated_at": "2026-08-10T05:40:13.932665Z",
+          "deleted_at": null
+        },
+        {
+          "id": "ef3c01d3-e340-4b7c-8559-76ddd561e435",
+          "seq_id": 100000927,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "建议，被保险人需医院转诊过程中的医院用车费用，救护车的使用仅限于同一地级市或直辖\n市中的医疗运送。\n（12）住院期间门诊费用：指在康复科室住院期间因与该次住院相同原因而产生的门诊\n费用，包括医生诊疗费、检查检验费、治疗费、药品费和医疗器械使用费。医生诊疗费指主\n诊医生或会诊医生的劳务费用，包括挂号费；检查检验费、治疗费、药品费和医疗器械使用\n费同以上第（6）（7）（8）项约定。\n 住院期间及住院前后院外购药费用保险金\n\n",
+          "chunk_index": 14,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 3919,
+          "end_at": 4132,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "f8e4a5d1-cbcd-4580-872d-1bb699d4d40c",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472148Z",
+          "updated_at": "2026-08-10T05:38:05.472148Z",
+          "deleted_at": null
+        },
+        {
+          "id": "c1738a83-925a-4379-a191-33bb42d82154",
+          "seq_id": 100000928,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "被保险人因疾病或意外伤害经二级及以上医保定点医院确诊必须住院治疗的，在住院期\n间以及住院前 30 日内或出院后 30 日内（含住院和出院当日），由于本次住院治疗所必需的\n药品无法在医院内获得，而发生需从医院外购买满足以下所有条件的药品的费用，我们按照\n购买药品费用乘以给付比例后在住院期间及住院前后院外购药费用保险金的给付限额内（见\n平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的从医院外购买药品的费用须同时满足以下所有条件：\n1.购买药品须持有当前住院治疗所在的二级及以上医保定点医院的专科医生开具外配处\n方或我们指定互联网医院的医生开具药品处方，且为被保险人本次住院治疗所必需的药品；\n2. 外配处方或药品处方开具时该药品在一般药品和医疗器械保障目录范围内，且符合中\n国国家药品监督管理部门批准的药品说明书所列明的适应症和用法用量；\n",
+          "chunk_index": 15,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 4132,
+          "end_at": 4507,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "f8e4a5d1-cbcd-4580-872d-1bb699d4d40c",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340427334358337",
+                "question": "平安e生保尊享版报销住院期间及前后30天院外购药费用需满足哪些条件？"
+              },
+              {
+                "id": "q1786340427334365296",
+                "question": "住院期间因医院内无法获得所需药品而外购，申请院外购药费用保险金需要什么要求？"
+              },
+              {
+                "id": "q1786340427334365756",
+                "question": "院外购药费用理赔时，外配处方和药品目录范围的具体规定是什么？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472149Z",
+          "updated_at": "2026-08-10T05:40:27.352556Z",
+          "deleted_at": null
+        },
+        {
+          "id": "5bacfcf0-c1dc-4ff0-a9cb-2861c309fcc1",
+          "seq_id": 100000929,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "2. 外配处方或药品处方开具时该药品在一般药品和医疗器械保障目录范围内，且符合中\n国国家药品监督管理部门批准的药品说明书所列明的适应症和用法用量；\n",
+          "chunk_index": 16,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 4433,
+          "end_at": 4507,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340432964570746",
+                "question": "院外购药时，外配处方药品需要符合什么目录和适应症要求？"
+              },
+              {
+                "id": "q1786340432964580080",
+                "question": "中国国家药品监督管理部门批准的药品说明书对院外购药有哪些限制？"
+              },
+              {
+                "id": "q1786340432964580622",
+                "question": "保险理赔的院外购药是否必须在一般药品和医疗器械保障目录内？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472156Z",
+          "updated_at": "2026-08-10T05:40:33.044606Z",
+          "deleted_at": null
+        },
+        {
+          "id": "6ec8fcd9-175e-41e1-ad5d-33ad8fb33ba3",
+          "seq_id": 100000930,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "3. 我们承担责任的每次院外购药的外配处方或药品处方剂量不超过 30 天，不包括为未\n来治疗提前购买的药物，购买药品前您需提交院外购药预审核申请并经我们审核同意。\n本项责任所称药品不包含合同约定的指定细胞免疫疗法药品、恶性肿瘤（重度）特定药\n品、恶性肿瘤（重度）临床急需进口药品、恶性肿瘤（重度）海外特定药品。\n院外购药预审核\n您在院外购买药品前须先向我们提交院外购药预审核申请，申请时需提供材料详见\n“5.3.2 院外购药预审核、住院期间及住院前后院外购药费用保险金申请所需的证明和资料”。\n您在院外购买药品前按合同约定提交院外购药预审核申请并经我们审核同意的，住院期\n间及住院前后院外购药费用保险金的给付比例为 100%；若您在院外购买药品前未提交院外购\n药预审核申请，购买药品后再向我们申请住院期间及住院前后院外购药费用保险金并经我们\n",
+          "chunk_index": 17,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 4507,
+          "end_at": 4878,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340443031621486",
+                "question": "院外购药预审核通过后，住院期间及住院前后院外购药费用保险金的给付比例是多少"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472159Z",
+          "updated_at": "2026-08-10T05:40:44.197954Z",
+          "deleted_at": null
+        },
+        {
+          "id": "72c44169-3fe9-4ce4-8a33-91108144c892",
+          "seq_id": 100000931,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "药预审核申请，购买药品后再向我们申请住院期间及住院前后院外购药费用保险金并经我们\n审核通过的，我们按 60%的给付比例给付住院期间及住院前后院外购药费用保险金；对于不\n符合约定条件的购药费用，无法通过预审核及保险金申请审核，我们不承担给付保险金的责\n任。\n 质子重离子医疗保险金\n被保险人经二级及以上医保定点医院确诊初次发生合同约定的“恶性肿瘤——重度”，\n并在我们指定质子重离子医疗机构接受质子重离子放射治疗的，对于被保险人因接受质子重\n离子放射治疗所实际支出的合理且必要的质子重离子医疗费用，我们在质子重离子医疗保险\n金的给付限额内（见平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的“质子重离子医疗费用”包含如下内容：\n\n（1）床位费：指住院期间实际发生的、不高于单人病房的住院床位费（不包括套房、家\n庭病床）。\n",
+          "chunk_index": 18,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 4837,
+          "end_at": 5203,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472183Z",
+          "updated_at": "2026-08-10T05:38:05.472184Z",
+          "deleted_at": null
+        },
+        {
+          "id": "c89fd60f-317d-4402-a41d-6470092f2f36",
+          "seq_id": 100000932,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "合同约定的“质子重离子医疗费用”包含如下内容：\n\n（1）床位费：指住院期间实际发生的、不高于单人病房的住院床位费（不包括套房、家\n庭病床）。\n（2）护理费：指住院期间根据医嘱所示的护理等级确定的护理费用。\n（3）膳食费：指住院期间根据医生的医嘱，由作为医院内部专属部门的、为住院病人配\n餐的食堂配送的膳食费用。膳食费应包含在医疗账单内；根据各医疗机构的惯例，可以作为\n医院独立的款项、也可以合并在病房费等其他款项内。\n（4）检查检验费：指住院期间实际发生的，以诊断疾病为目的，采取必要的医学手段进\n行检查及检验而发生的合理的医疗费用，包括 X 光费、心电图费、B 超费、脑电图费、内窥\n镜费、肺功能仪费、分子生化检验费和血、尿、便常规检验费等。\n（5）治疗费：指住院期间以治疗疾病为目的，提供必要的医学手段而发生的合理的治疗\n",
+          "chunk_index": 19,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 5132,
+          "end_at": 5495,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340456870041959",
+                "question": "质子重离子医疗费用具体包含哪些项目？"
+              },
+              {
+                "id": "q1786340456870046043",
+                "question": "质子重离子放射治疗中的床位费、护理费和膳食费如何定义？"
+              },
+              {
+                "id": "q1786340456870046377",
+                "question": "质子重离子医疗费用中的检查检验费和治疗费包括哪些内容？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472185Z",
+          "updated_at": "2026-08-10T05:40:56.923612Z",
+          "deleted_at": null
+        },
+        {
+          "id": "9524fa96-f607-4e46-8839-554daf0b8354",
+          "seq_id": 100000933,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "镜费、肺功能仪费、分子生化检验费和血、尿、便常规检验费等。\n（5）治疗费：指住院期间以治疗疾病为目的，提供必要的医学手段而发生的合理的治疗\n者的技术劳务费以及消耗品的费用，具体以就诊医院的费用项目划分为准。本项责任不包含\n如下费用：物理治疗、中医理疗及其他特殊疗法费用。\n（6）医生费：指包括外科医生、麻醉师、内科医生、专科医生的费用。\n（7）药品费和医疗器械使用费：药品费指住院期间实际发生的合理且必要的由医生开具\n的一般药品和医疗器械保障目录范围内的药品费用。药品费中不包含中草药费用。医疗器械\n使用费指以治疗疾病为目的，提供必要的医学手段而购买、租用和使用在一般药品和医疗器\n械保障目录范围内的医疗器械发生的费用。\n合同约定的“质子重离子医疗费用”不包括肿瘤化学疗法、肿瘤免疫疗法、肿瘤内分泌\n疗法和肿瘤靶向疗法所产生的医疗费用。\n",
+          "chunk_index": 20,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 5425,
+          "end_at": 5794,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472187Z",
+          "updated_at": "2026-08-10T05:38:05.472187Z",
+          "deleted_at": null
+        },
+        {
+          "id": "659fddbc-3ba7-42b2-a773-983a9d066955",
+          "seq_id": 100000934,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "合同约定的“质子重离子医疗费用”不包括肿瘤化学疗法、肿瘤免疫疗法、肿瘤内分泌\n疗法和肿瘤靶向疗法所产生的医疗费用。\n因本产品为费用补偿型医疗保险，对于符合一般医疗保险金给付条件的质子重离子医疗\n费用，我们将按质子重离子医疗保险金给付，不会重复给付一般医疗保险金。\n 细胞免疫疗法医疗保险金\n合同保险期间内被保险人经二级及以上医保定点医院确诊初次发生合同约定的“恶性肿\n瘤——重度”，并在确诊后 3 年内符合合同约定的指定细胞免疫疗法适应症，对于被保险人\n按照合同“细胞免疫疗法审核评估及就医安排流程”（见条款附录 3）的约定、在经我们安\n排的医疗机构接受满足以下约定的细胞免疫疗法医学治疗的，对于被保险人在细胞免疫疗法\n医学治疗时所实际支出的合理且必要的评估费用和治疗费用，我们在细胞免疫疗法医疗保险\n\n",
+          "chunk_index": 21,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 5736,
+          "end_at": 6089,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340325932269113",
+                "question": "质子重离子医疗费用是否包含肿瘤化学疗法、免疫疗法、内分泌疗法和靶向疗法产生的费用？"
+              },
+              {
+                "id": "q1786340325932278113",
+                "question": "细胞免疫疗法医疗保险金的赔付条件有哪些？"
+              },
+              {
+                "id": "q1786340325932278406",
+                "question": "细胞免疫疗法医疗保险金具体包含哪些费用项目？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472188Z",
+          "updated_at": "2026-08-10T05:38:46.197695Z",
+          "deleted_at": null
+        },
+        {
+          "id": "e05425a9-4890-4aed-ae00-7a76eca719ac",
+          "seq_id": 100000935,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "医学治疗时所实际支出的合理且必要的评估费用和治疗费用，我们在细胞免疫疗法医疗保险\n\n金的给付限额内（见平安 e 生保（尊享版）医疗保险计划表）给付。\n我们承担的细胞免疫疗法医疗保险金包含评估费用和治疗费用两项：\n",
+          "chunk_index": 22,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 6047,
+          "end_at": 6153,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340335941562722",
+                "question": "细胞免疫疗法医疗保险金具体包含哪两项费用？"
+              },
+              {
+                "id": "q1786340335941569347",
+                "question": "细胞免疫疗法医疗保险金的保障范围是什么？"
+              },
+              {
+                "id": "q1786340335941570015",
+                "question": "细胞免疫疗法中保险公司承担哪些合理且必要的费用？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.47219Z",
+          "updated_at": "2026-08-10T05:38:55.951106Z",
+          "deleted_at": null
+        },
+        {
+          "id": "c5762fb4-a11a-41bb-8cf6-fc946b25a838",
+          "seq_id": 100000936,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1. 评估费用：指被保险人经我们安排通过细胞免疫疗法就医资格评估认为适合接受细胞\n免疫疗法的，在此评估过程中发生的下列医疗费用。\n（1）医生费：指包括外科医生、麻醉师、内科医生、专科医生的费用。\n（2）检查检验费：指实际发生的，以诊断疾病为目的，采取必要的医学手段进行检查及\n检验而发生的合理的医疗费用，包括 X 光费、心电图费、B 超费、脑电图费、内窥镜费、肺\n功能仪费、分子生化检验费和血、尿、便常规检验费等。\n",
+          "chunk_index": 23,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 6153,
+          "end_at": 6361,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340339097717014",
+                "question": "细胞免疫疗法医疗保险金中的评估费用具体包括哪些项目？"
+              },
+              {
+                "id": "q1786340339097725847",
+                "question": "细胞免疫疗法的评估费用是否包含医生费和检查检验费？"
+              },
+              {
+                "id": "q1786340339097726182",
+                "question": "细胞免疫疗法就医资格评估过程中发生的哪些医疗费用属于评估费用？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472191Z",
+          "updated_at": "2026-08-10T05:38:59.294151Z",
+          "deleted_at": null
+        },
+        {
+          "id": "a06bb8e6-95f6-4589-b2f8-1ba079037aed",
+          "seq_id": 100000937,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "2. 治疗费用：指被保险人经我们安排在细胞免疫疗法治疗期内发生的下列医疗费用。\n（1）床位费：指住院期间实际发生的、不高于单人病房的住院床位费（不包括套房、家\n庭病床）。\n（2）重症监护室床位费：指住院期间出于医学必要被保险人需在重症监护室进行合理且\n必要的医疗而产生的床位费。重症监护室指配有中心监护台、心电监护仪及其他监护抢救设\n施，相对封闭管理，符合重症监护病房（ICU）、冠心病重症监护病房（CCU）标准的单人或\n多人监护病房。\n（3）护理费：指住院期间根据医嘱所示的护理等级确定的护理费用。\n（4）膳食费：指住院期间根据医生的医嘱，由作为经我们安排的细胞免疫疗法医疗机构\n内部专属部门的、为住院病人配餐的食堂配送的膳食费用。膳食费应包含在医疗账单内；根\n据各医疗机构的惯例，可以作为医院独立的款项、也可以合并在病房费等其他款项内。\n",
+          "chunk_index": 24,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 6361,
+          "end_at": 6732,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340343947482699",
+                "question": "细胞免疫疗法的治疗费用具体包括哪些医疗项目？"
+              },
+              {
+                "id": "q1786340343947491741",
+                "question": "治疗费用中的重症监护室床位费指什么？"
+              },
+              {
+                "id": "q1786340343947518281",
+                "question": "细胞免疫疗法治疗期间的膳食费如何规定？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472193Z",
+          "updated_at": "2026-08-10T05:39:03.969071Z",
+          "deleted_at": null
+        },
+        {
+          "id": "91cb4797-46fb-40c6-8798-b3531ea15eed",
+          "seq_id": 100000938,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "据各医疗机构的惯例，可以作为医院独立的款项、也可以合并在病房费等其他款项内。\n（5）药品费和医疗器械使用费：指被保险人实际发生的合理且必要的由医生开具的一般\n药品和医疗器械保障目录范围内的药品费用及指定细胞免疫疗法药品费用。药品费中不包含\n中草药费用。\n指定细胞免疫疗法药品的使用次数以一次为限，被保险人使用本合同约定的指定细胞免\n疫疗法药品所产生的药品费用我们仅给付一次。\n医疗器械使用费指以治疗疾病为目的，提供必要的医学手段而购买、租用和使用在一般\n药品和医疗器械保障目录范围内的医疗器械发生的费用。\n（6）检查检验费：指实际发生的，以诊断疾病为目的，采取必要的医学手段进行检查及\n检验而发生的合理的医疗费用，包括 X 光费、心电图费、B 超费、脑电图费、内窥镜费、肺\n功能仪费、分子生化检验费和血、尿、便常规检验费等。\n\n",
+          "chunk_index": 25,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 6693,
+          "end_at": 7057,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340350925018955",
+                "question": "细胞免疫疗法中药品费和医疗器械使用费包含哪些内容？"
+              },
+              {
+                "id": "q1786340350925024831",
+                "question": "指定细胞免疫疗法药品的使用次数有什么限制？"
+              },
+              {
+                "id": "q1786340350925025290",
+                "question": "细胞免疫疗法中的检查检验费具体包括哪些项目？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472194Z",
+          "updated_at": "2026-08-10T05:39:11.256943Z",
+          "deleted_at": null
+        },
+        {
+          "id": "cf6bc771-e545-4183-82a0-15e49d36a179",
+          "seq_id": 100000939,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "检验而发生的合理的医疗费用，包括 X 光费、心电图费、B 超费、脑电图费、内窥镜费、肺\n功能仪费、分子生化检验费和血、尿、便常规检验费等。\n\n（7）治疗费：指以治疗疾病为目的，提供必要的医学手段而发生的合理的治疗者的技术\n劳务费以及消耗品的费用，具体以就诊经我们安排的细胞免疫疗法医疗机构的费用项目划分\n为准。本项责任不包含如下费用：物理治疗、中医理疗及其他特殊疗法费用。\n（8）医生费：指包括外科医生、麻醉师、内科医生、专科医生的费用。\n细胞免疫疗法医学治疗\n我们承担被保险人按照合同“细胞免疫疗法审核评估及就医安排流程”（见条款附录 3）\n的约定、在我们安排的细胞免疫疗法医疗机构按照国家药品监督管理局批准的药品说明书使\n用指定细胞免疫疗法药品进行的细胞免疫疗法医学治疗所产生的评估费用和治疗费用，细胞\n免疫疗法医学治疗包括以下八个步骤：\n",
+          "chunk_index": 26,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 6986,
+          "end_at": 7358,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472196Z",
+          "updated_at": "2026-08-10T05:38:05.472196Z",
+          "deleted_at": null
+        },
+        {
+          "id": "067b35c7-c9b5-4cdb-a5b5-7e9a678b3bba",
+          "seq_id": 100000940,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "用指定细胞免疫疗法药品进行的细胞免疫疗法医学治疗所产生的评估费用和治疗费用，细胞\n免疫疗法医学治疗包括以下八个步骤：\n（1）单采前的检查：被保险人经我们安排的细胞免疫疗法医疗机构评估确认适合使用指\n定细胞免疫疗法药品进行细胞免疫疗法并开具指定细胞免疫疗法药品处方后，在经我们安排\n的细胞免疫疗法医疗机构接受单采相关的各项检查，确保被保险人的身体状况适合单采。\n（2）单采：被保险人在经我们安排的细胞免疫疗法医疗机构进行单采，提取白细胞。\n（3）CAR-T 细胞的制备：利用被保险人的白细胞，在制药中心制备 CAR-T 细胞。\n（4）回输前的检查：被保险人在经我们安排的细胞免疫疗法医疗机构接受 CAR-T 细胞回\n输相关的各项检查，确保被保险人的身体状况适合进行预处理化疗和回输。\n（5）预处理化疗：被保险人在经我们安排的细胞免疫疗法医疗机构接受 CAR-T 细胞回输",
+          "chunk_index": 27,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 7299,
+          "end_at": 7683,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472198Z",
+          "updated_at": "2026-08-10T05:38:05.472198Z",
+          "deleted_at": null
+        },
+        {
+          "id": "c5e84c07-0646-4ac2-a2f7-b0faf8b0b52b",
+          "seq_id": 100000941,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "（5）预处理化疗：被保险人在经我们安排的细胞免疫疗法医疗机构接受 CAR-T 细胞回输\n前的预处理化疗。\n（6）CAR-T 细胞的回输：在经我们安排的细胞免疫疗法医疗机构将 CAR-T 细胞回输到被\n保险人体内。\n（7）反应监控：经我们安排的细胞免疫疗法医疗机构监护被保险人，控制 CAR-T 治疗可\n能带来的不良反应。\n（8）治疗效果评估:被保险人到接受治疗的医疗机构接受各项检查，评估治疗效果。\n细胞免疫疗法治疗期\n细胞免疫疗法治疗期指自被保险人首次进行细胞免疫疗法医学治疗中的第 2 步“单采”\n的第 1 日起，至下列二者最早达到之日结束：\n（1）首次进行细胞免疫疗法医学治疗中的第 2 步“单采”第 1 日后的第 365 日（含当日）；\n（2）首次进行细胞免疫疗法医学治疗中的第 6 步“CAR-T 细胞回输”治疗之日后的第 30\n\n",
+          "chunk_index": 28,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 7640,
+          "end_at": 8011,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.4722Z",
+          "updated_at": "2026-08-10T05:38:05.4722Z",
+          "deleted_at": null
+        },
+        {
+          "id": "0e8e8963-14cb-47a9-bd01-3aae63246945",
+          "seq_id": 100000942,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "（2）首次进行细胞免疫疗法医学治疗中的第 6 步“CAR-T 细胞回输”治疗之日后的第 30\n\n日（含当日）。\n未经我们安排自行进行细胞免疫疗法医学治疗所产生的治疗费用，我们不承担给付本\n项保险金的责任。\n因本产品为费用补偿型医疗保险，对于符合一般医疗保险金给付条件的细胞免疫疗法医\n学治疗的评估费用和治疗费用，我们将按细胞免疫疗法医疗保险金给付，不会重复给付一般\n医疗保险金。\n 恶性肿瘤特定用药基因检测费用保险金\n被保险人经二级及以上医保定点医院确诊初次发生合同约定的“恶性肿瘤”，为治疗该\n“恶性肿瘤”而经专科医生明确诊断建议发生的合理且必要的满足下列条件的恶性肿瘤特定\n用药基因检测费用，我们在恶性肿瘤特定用药基因检测费用保险金的给付限额内（见平安 e\n生保（尊享版）医疗保险计划表）给付。\n",
+          "chunk_index": 29,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 7963,
+          "end_at": 8314,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472201Z",
+          "updated_at": "2026-08-10T05:38:05.472201Z",
+          "deleted_at": null
+        },
+        {
+          "id": "06ba99bf-8f0c-49e8-90c1-27f4941bf45f",
+          "seq_id": 100000943,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1. 恶性肿瘤特定用药基因检测以确定该恶性肿瘤的用药方案为目的，且该基因检测需有\n专科医生明确诊断建议；\n",
+          "chunk_index": 30,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 8314,
+          "end_at": 8367,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "c0a2acc1-f948-4d34-b38d-dc12fb741cb9",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340388259537707",
+                "question": "恶性肿瘤特定用药基因检测的目的是什么？"
+              },
+              {
+                "id": "q1786340388259546666",
+                "question": "进行恶性肿瘤特定用药基因检测需要满足哪些条件？"
+              },
+              {
+                "id": "q1786340388259548291",
+                "question": "恶性肿瘤特定用药基因检测是否必须有专科医生的明确诊断建议？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472203Z",
+          "updated_at": "2026-08-10T05:39:48.260733Z",
+          "deleted_at": null
+        },
+        {
+          "id": "240dec05-7c80-47bb-ad3b-cfdcddfd98db",
+          "seq_id": 100000944,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1. 恶性肿瘤特定用药基因检测以确定该恶性肿瘤的用药方案为目的，且该基因检测需有\n专科医生明确诊断建议；\n2. 恶性肿瘤特定用药基因检测必须在中国内地具有合法有效资质且合法提供基因临床\n检验服务的基因检测机构内进行。\n 恶性肿瘤（重度）院外特定药品费用保险金\n被保险人经二级及以上医保定点医院确诊初次发生合同约定的“恶性肿瘤——重度”，\n对用于治疗该“恶性肿瘤——重度”而产生的合理且必要的满足下列所有条件的恶性肿瘤（重\n度）特定药品（以下简称“特定药品”）费用，我们乘以给付比例后在恶性肿瘤（重度）院\n外特定药品费用保险金给付限额内（见平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的恶性肿瘤（重度）特定药品费用必须同时满足以下条件：\n",
+          "chunk_index": 31,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 8314,
+          "end_at": 8639,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "3755ff80-fe55-4eef-85f0-3c2830c97d90",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472204Z",
+          "updated_at": "2026-08-10T05:38:05.472204Z",
+          "deleted_at": null
+        },
+        {
+          "id": "9298ce8e-aa48-432b-9d91-6fb053393092",
+          "seq_id": 100000945,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "度）特定药品（以下简称“特定药品”）费用，我们乘以给付比例后在恶性肿瘤（重度）院\n外特定药品费用保险金给付限额内（见平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的恶性肿瘤（重度）特定药品费用必须同时满足以下条件：\n1. 该特定药品的药品处方必须由二级及以上医保定点医院专科医生开具，且属于恶性肿\n瘤（重度）特定药品清单中的药品并为被保险人当前治疗“恶性肿瘤——重度”所必需；\n2. 每次开具的特定药品处方需为当前治疗所必需的合理剂量，且药品剂量不超过 30 天；\n3. 特定药品必须在合同约定的药店购买；\n4. 在购买特定药品前，使用特定药品的药品处方必须经过我们的用药合理性审核流程并\n按合同约定的流程取药（见“条款附录 4 恶性肿瘤（重度）特定药品购买流程”）；\n\n",
+          "chunk_index": 32,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 8526,
+          "end_at": 8867,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "3755ff80-fe55-4eef-85f0-3c2830c97d90",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340405308650751",
+                "question": "恶性肿瘤（重度）院外特定药品费用保险金中，特定药品费用必须满足哪些条件？"
+              },
+              {
+                "id": "q1786340405308655043",
+                "question": "平安e生保（尊享版）医疗保险中，院外特定药品费用报销需满足哪些条件？"
+              },
+              {
+                "id": "q1786340405308655544",
+                "question": "恶性肿瘤（重度）院外特定药品的处方开具、剂量限制及购买流程有哪些要求？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472206Z",
+          "updated_at": "2026-08-10T05:40:06.052411Z",
+          "deleted_at": null
+        },
+        {
+          "id": "136eb2de-1c0f-48c8-9225-298c5199edfb",
+          "seq_id": 100000946,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "5. 该特定药品的使用至少符合以下两个条件之一：\n（1）符合中华人民共和国药品监督管理机构批准的药品说明书中所列明的适应症和用法\n用量；\n（2）经我们特定药品用药合理性审核后，符合当前临床医学的先进治疗规范建议的用药\n标准。\n恶性肿瘤（重度）院外特定药品费用保险金的给付比例为 100%；若您按被保险人拥有基\n本医疗保险或公费医疗的情况进行投保，但在用药时对于医保目录范围内的特定药品无法经\n基本医疗保险或公费医疗结算，我们将按 60%的给付比例给付恶性肿瘤（重度）院外特定药\n品费用保险金。\n 恶性肿瘤（重度）临床急需进口药品费用保险金\n被保险人经二级及以上医保定点医院确诊初次发生合同约定的“恶性肿瘤——重度”，\n对用于治疗该“恶性肿瘤——重度”而产生的合理且必要的满足下列所有条件的恶性肿瘤（重\n",
+          "chunk_index": 33,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 8867,
+          "end_at": 9219,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "3755ff80-fe55-4eef-85f0-3c2830c97d90",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472208Z",
+          "updated_at": "2026-08-10T05:38:05.472208Z",
+          "deleted_at": null
+        },
+        {
+          "id": "22da93be-4f3e-43a2-9c77-0749708dc9a1",
+          "seq_id": 100000947,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "对用于治疗该“恶性肿瘤——重度”而产生的合理且必要的满足下列所有条件的恶性肿瘤（重\n度）临床急需进口药品（以下简称“进口药品”）费用，我们在恶性肿瘤（重度）临床急需\n进口药品费用保险金给付限额内（见平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的恶性肿瘤（重度）临床急需进口药品费用必须同时满足以下条件：\n",
+          "chunk_index": 34,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 9177,
+          "end_at": 9335,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "3755ff80-fe55-4eef-85f0-3c2830c97d90",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340422239602309",
+                "question": "恶性肿瘤（重度）临床急需进口药品费用保险金的给付条件是什么？"
+              },
+              {
+                "id": "q1786340422239605560",
+                "question": "哪些进口药品费用可以纳入恶性肿瘤（重度）临床急需进口药品费用保险金？"
+              },
+              {
+                "id": "q1786340422239605894",
+                "question": "恶性肿瘤（重度）临床急需进口药品费用保险金在什么情况下可以赔付？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.47221Z",
+          "updated_at": "2026-08-10T05:40:22.507547Z",
+          "deleted_at": null
+        },
+        {
+          "id": "7e3fed93-1a73-4a1a-aea8-4943fa16d5f0",
+          "seq_id": 100000948,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1. 该进口药品的药品处方必须由指定的临床急需进口药品医疗机构的专科医生开具，且\n属于恶性肿瘤（重度）临床急需进口药品清单中的药品并为被保险人当前治疗“恶性肿瘤—\n—重度”所必需；\n2. 每次开具的进口药品处方需为当前治疗所必需的合理剂量，且药品剂量不超过 30 天；\n3. 进口药品必须在该药品处方开具的临床急需进口药品医疗机构购买；\n4. 在购买进口药品前，使用进口药品的药品处方必须经过我们的药品用药合理性审核流\n程并按合同约定的流程取药（见“条款附录 5 恶性肿瘤（重度）临床急需进口药品购买流程”）；\n",
+          "chunk_index": 35,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 9335,
+          "end_at": 9591,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "3755ff80-fe55-4eef-85f0-3c2830c97d90",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340429809342900",
+                "question": "恶性肿瘤（重度）临床急需进口药品费用理赔需要满足哪些条件？"
+              },
+              {
+                "id": "q1786340429809348192",
+                "question": "临床急需进口药品的处方开具和购买机构有哪些具体要求？"
+              },
+              {
+                "id": "q1786340429809348818",
+                "question": "进口药品处方在购买前必须经过什么审核流程？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472234Z",
+          "updated_at": "2026-08-10T05:40:30.941917Z",
+          "deleted_at": null
+        },
+        {
+          "id": "e3de0fcd-05d2-4cab-b34d-02b2d700f9b0",
+          "seq_id": 100000949,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "4. 在购买进口药品前，使用进口药品的药品处方必须经过我们的药品用药合理性审核流\n程并按合同约定的流程取药（见“条款附录 5 恶性肿瘤（重度）临床急需进口药品购买流程”）；\n5. 该进口药品的使用须符合该进口药品出口地区药品监督管理机构批准的药品说明书\n中所列明的适应症和用法用量，且该进口药品须经中华人民共和国国家或者地方政府药品监\n督监管机构审批通过并获得进口许可。\n 恶性肿瘤（重度）特定医疗器械费用保险金\n被保险人经二级及以上医保定点医院确诊初次发生合同约定的“恶性肿瘤——重度”，\n\n对用于治疗该“恶性肿瘤——重度”而产生的合理且必要的满足下列所有条件的恶性肿瘤（重\n度）特定医疗器械（以下简称“特定器械”）费用，我们在恶性肿瘤（重度）特定医疗器械\n费用保险金给付限额内（见平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的恶性肿瘤（重度）特定医疗器械费用必须同时满足以下条件：\n",
+          "chunk_index": 36,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 9504,
+          "end_at": 9904,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "3755ff80-fe55-4eef-85f0-3c2830c97d90",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340442987371200",
+                "question": "平安e生保（尊享版）报销临床急需进口药品费用需要满足哪些条件？"
+              },
+              {
+                "id": "q1786340442987390700",
+                "question": "临床急需进口药品处方需经过什么审核流程并符合哪些规定才能获得赔付？"
+              },
+              {
+                "id": "q1786340442987391409",
+                "question": "恶性肿瘤特定医疗器械费用保险金的给付条件有哪些？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472236Z",
+          "updated_at": "2026-08-10T05:40:44.242589Z",
+          "deleted_at": null
+        },
+        {
+          "id": "cb99e63b-1f57-42fa-9b05-6b6426ec235d",
+          "seq_id": 100000950,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "度）特定医疗器械（以下简称“特定器械”）费用，我们在恶性肿瘤（重度）特定医疗器械\n费用保险金给付限额内（见平安 e 生保（尊享版）医疗保险计划表）给付。\n合同约定的恶性肿瘤（重度）特定医疗器械费用必须同时满足以下条件：\n1. 该特定器械的使用必须由二级及以上医保定点医院专科医生明确诊断建议开具，且属\n于恶性肿瘤（重度）特定医疗器械清单中的医疗器械并为被保险人当前治疗“恶性肿瘤——\n重度”所必需；\n2. 该特定器械必须在二级及以上医保定点医院或合同约定的药店购买；\n3. 在购买特定器械前，必须经过我们的器械合理性审核流程并按合同约定的流程购买该\n特定器械（见“条款附录 6 恶性肿瘤（重度）特定医疗器械购买流程”）；\n",
+          "chunk_index": 37,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 9794,
+          "end_at": 10105,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "3755ff80-fe55-4eef-85f0-3c2830c97d90",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340449582277441",
+                "question": "恶性肿瘤（重度）特定医疗器械费用保险金的给付需要满足哪些条件？"
+              },
+              {
+                "id": "q1786340449582283399",
+                "question": "购买恶性肿瘤（重度）特定医疗器械前必须经过什么审核流程？"
+              },
+              {
+                "id": "q1786340449582283859",
+                "question": "恶性肿瘤（重度）特定医疗器械必须在哪里购买才能获得费用赔付？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472245Z",
+          "updated_at": "2026-08-10T05:40:49.604308Z",
+          "deleted_at": null
+        },
+        {
+          "id": "6ccdb190-452e-4174-aec3-98e69ca1366c",
+          "seq_id": 100000951,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "4. 该特定器械的使用须符合中华人民共和国药品监督管理机构批准的医疗器械说明书\n中所列明的适用范围。\n 恶性肿瘤（重度）海外特定药品及医疗费用保险金\n合同保险期间内被保险人经二级及以上医保定点医院确诊初次发生合同约定的“恶性肿\n瘤——重度”且符合恶性肿瘤（重度）海外特定药品清单中恶性肿瘤（重度）海外特定药品\n适应症，并按照合同“恶性肿瘤（重度）海外特定药品及医疗费用保险金的申请与给付流程”\n（见条款附录 7）的约定提交资格预评估及海外专家诊疗意见评估，经我们海外特定药品及\n医疗资格审核通过，我们对于被保险人经我们安排、在合同约定的海外医院针对符合恶性肿\n瘤（重度）海外特定药品清单中的药品用药及后续治疗所产生的必需且合理的医疗费用、交\n通费用、住宿费用和遗体送返费用，在合同约定的恶性肿瘤（重度）海外治疗期内依照下列\n",
+          "chunk_index": 38,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 10105,
+          "end_at": 10468,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472271Z",
+          "updated_at": "2026-08-10T05:38:05.472271Z",
+          "deleted_at": null
+        },
+        {
+          "id": "c7d67096-94ae-44c1-8e40-450e7a918150",
+          "seq_id": 100000952,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "通费用、住宿费用和遗体送返费用，在合同约定的恶性肿瘤（重度）海外治疗期内依照下列\n约定在恶性肿瘤（重度）海外特定药品及医疗费用保险金给付限额内（见平安 e 生保（尊享\n版）医疗保险计划表）给付。\n被保险人在首次提交海外特定药品及医疗资格申请前 12 个月内需在中国内地居住累计\n满 240 天。\n被保险人未通过海外特定药品及医疗资格审核的，对于用药及后续治疗所产生的相关费\n用我们均不承担给付本项保险金的责任。\n海外特定药品及医疗资格审核通过后，我们将为被保险人安排海外就医，未经我们安排\n自行前往海外就医所产生的费用，我们不承担给付本项保险金的责任。\n\n我们承担的医疗费用、交通费用、住宿费用和遗体送返费用，包括如下内容：\n1.医疗费用\n（1）床位费：指住院期间不超过普通单人间病房（不包括套房）标准的费用。普通单人\n",
+          "chunk_index": 39,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 10427,
+          "end_at": 10787,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472273Z",
+          "updated_at": "2026-08-10T05:38:05.472273Z",
+          "deleted_at": null
+        },
+        {
+          "id": "aafd88ad-b7af-4ec6-a2cb-6df57b946c57",
+          "seq_id": 100000953,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1.医疗费用\n（1）床位费：指住院期间不超过普通单人间病房（不包括套房）标准的费用。普通单人\n间病房指：病房为单间设计，除独立卫生间外无其他隔间。病房设一张病床加独立卫生间的\n单人病房。若某一医院的病房有两种或以上符合定义的病房，则应按其中床位费相对较低的\n病房计算。\n（2）陪床费：指被保险人住院期间由合同约定的海外医院为其陪同人员提供床位产生的\n费用（本项责任仅涵盖一名陪同人员的床位费）。\n（3）膳食费：指住院期间，由作为医院内部专门部门的、为住院病人配餐的机构配送的\n膳食所产生的费用。膳食费应包含在医疗账单内；根据各医疗机构的惯例，可以作为医院独\n立的款项、也可以合并在病房费等其他款项内。\n（4）护理费：指就医期间由该医院执业护士根据医嘱所示的护理等级提供医疗护理所发\n生的护理费用。\n",
+          "chunk_index": 40,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 10740,
+          "end_at": 11089,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340322839511290",
+                "question": "海外就医的医疗费用具体包括哪些项目？"
+              },
+              {
+                "id": "q1786340322839518207",
+                "question": "海外医疗保险中的床位费按什么标准计算？"
+              },
+              {
+                "id": "q1786340322839518542",
+                "question": "海外就医时陪床费、膳食费和护理费的保障内容是什么？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472274Z",
+          "updated_at": "2026-08-10T05:38:42.88992Z",
+          "deleted_at": null
+        },
+        {
+          "id": "76d3ff6a-f90e-4c6e-8d37-54582576b3ef",
+          "seq_id": 100000954,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "立的款项、也可以合并在病房费等其他款项内。\n（4）护理费：指就医期间由该医院执业护士根据医嘱所示的护理等级提供医疗护理所发\n生的护理费用。\n（5）重症监护室床位费：指出于医学必要被保险人需在重症监护室进行必需且合理的医\n疗而产生的床位费。重症监护室指配有中心监护台、心电监护仪及其他监护抢救设施，相对\n封闭管理，符合重症监护病房（ICU）、冠心病重症监护病房（CCU）标准的单人或多人监护\n病房。\n（6）药品费：被保险人在合同约定的海外医院就医期间实际发生的以下费用：\n①被保险人在合同约定的海外医院接受治疗过程中，在该海外医院使用的根据医生处方\n开具的药品的费用；\n②被保险人在合同约定的海外医院住院接受手术治疗的，在手术治疗结束并出院后、返\n回中国内地之前，在合同约定的海外医院购买的、由治疗方案授权书约定的保障期间的主诊\n",
+          "chunk_index": 41,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 11019,
+          "end_at": 11383,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340331691481389",
+                "question": "海外医疗保险中的护理费具体指什么？"
+              },
+              {
+                "id": "q1786340331691493556",
+                "question": "海外医疗保险中重症监护室床位费的定义是什么？"
+              },
+              {
+                "id": "q1786340331691493890",
+                "question": "海外就医期间哪些药品费用属于保险合同约定的药品费？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472276Z",
+          "updated_at": "2026-08-10T05:38:52.061459Z",
+          "deleted_at": null
+        },
+        {
+          "id": "e421a633-d1d9-4e30-85a3-5ff3d9db5116",
+          "seq_id": 100000955,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "回中国内地之前，在合同约定的海外医院购买的、由治疗方案授权书约定的保障期间的主诊\n医生开具的、手术后治疗所需的处方药品产生的药品费用，且该处方药品的剂量在治疗方案\n授权书约定的保障期间内以 30 天为限。\n（7）检查检验费：指实际发生的、以诊断疾病为目的，采取必要的医学手段进行检查及\n检验而发生的必需且合理的医疗费用，包括 X 光费、心电图费、B 超费、脑电图费、内窥镜\n费、肺功能仪费、分子生化检验费和血、尿、便常规检验费等。\n（8）治疗费：指以治疗疾病为目的，提供必要的医学手段而发生的合理的治疗者的技术\n劳务费以及相关消耗品的费用，具体以就诊医院的费用项目划分为准。本项责任不包含中医\n理疗、物理治疗、及其他特殊疗法费用。\n\n（9）海外转诊救护车费：指遵循医嘱且预先通过我们指定的第三方服务供应商批准使用\n",
+          "chunk_index": 42,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 11342,
+          "end_at": 11699,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340339007780745",
+                "question": "海外医疗保险的药品费包括哪些情形下"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472277Z",
+          "updated_at": "2026-08-10T05:38:59.054774Z",
+          "deleted_at": null
+        },
+        {
+          "id": "6279be89-64fa-4b0a-8191-a4280e1ddb01",
+          "seq_id": 100000956,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "理疗、物理治疗、及其他特殊疗法费用。\n\n（9）海外转诊救护车费：指遵循医嘱且预先通过我们指定的第三方服务供应商批准使用\n救护车在被保险人就诊的海外医院所在城市内进行转院或者运送时产生的费用。\n（10）手术费：指住院期间发生的必需且合理的治疗性手术医疗费用，包括外科医生费、\n手术室费、恢复室费、麻醉费、手术监测费、手术辅助费、材料费、一次性用品费、术中用\n药费、手术设备费；\n（11）门诊或诊疗费：被保险人在合同约定的海外医院进行治疗时，所发生的主诊医生\n或会诊医生的劳务费用，含挂号费、医生诊疗费或医事服务费。\n（12）输血费：指被保险人每次输血所实际发生的血浆费用、输血实施费用等。\n（13）医学翻译费：在合同约定的海外医院就诊时与治疗相关的因医学翻译而产生的医\n学翻译费用。\n（14）治疗直接并发症的费用：指被保险人在合同约定的海外医院进行恶性肿瘤（重度）\n",
+          "chunk_index": 43,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 11639,
+          "end_at": 12021,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472279Z",
+          "updated_at": "2026-08-10T05:38:05.472279Z",
+          "deleted_at": null
+        },
+        {
+          "id": "04dd6b3c-27f2-499c-b2ef-487503d8e1d6",
+          "seq_id": 100000957,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "学翻译费用。\n（14）治疗直接并发症的费用：指被保险人在合同约定的海外医院进行恶性肿瘤（重度）\n海外特定药品适应症的治疗所引起的直接并发症的费用，这些费用需同时满足以下两个条件：\n①被保险人遵医嘱需要立即在海外医院进行医疗处置；\n②治疗目的是使被保险人的身体状况满足归国行程所需。\n（15）骨髓移植(BMT)、外周血干细胞移植(PBSCT)捐赠者医疗费用：指被保险人的骨髓\n或外周血干细胞捐赠者在被保险人接受骨髓移植(BMT)或外周血干细胞移植(PBSCT)过程中在\n合同约定的海外医院发生的与骨髓移植或外周血干细胞移植直接相关的床位费、陪床费、膳\n食费、护理费、重症监护病房费、药品费、检查检验费、治疗费、手术费、门诊诊疗费、输\n血费、医学翻译费。我们不承担除骨髓移植(BMT)、外周血干细胞移植(PBSCT)以外的器官移\n植所产生的相关费用。\n",
+          "chunk_index": 44,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 11973,
+          "end_at": 12347,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340350974750382",
+                "question": "治疗恶性肿瘤海外特定药品适应症时，直接并发症费用需满足哪些条件？"
+              },
+              {
+                "id": "q1786340350974756174",
+                "question": "骨髓移植或外周血干细胞移植捐赠者的医疗费用包括哪些保障项目？"
+              },
+              {
+                "id": "q1786340350974756633",
+                "question": "海外医疗保险是否承担骨髓移植和外周血干细胞移植以外的器官移植费用？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.47228Z",
+          "updated_at": "2026-08-10T05:39:11.340355Z",
+          "deleted_at": null
+        },
+        {
+          "id": "4151700e-119f-4711-9456-b4c3f3eb0cc5",
+          "seq_id": 100000958,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "血费、医学翻译费。我们不承担除骨髓移植(BMT)、外周血干细胞移植(PBSCT)以外的器官移\n植所产生的相关费用。\n2.交通费用：被保险人及陪同人员以治疗被保险人所患恶性肿瘤（重度）海外特定药品\n清单中的恶性肿瘤（重度）海外特定药品适应症为目的经我们安排前往合同约定的海外医院\n所产生的，满足以下条件的交通费用。包括：\n（1）从中国内地常住地前往中国内地指定机场或国际火车站的交通费用；\n（2）从中国内地指定机场或国际火车站前往海外治疗地的飞机、铁路的费用（飞机舱位\n以经济舱为限、铁路座位以二等座为限）；\n（3）从海外治疗地城市指定机场或国际火车站到达该治疗城市指定酒店或医疗机构的交\n通费用；\n\n（4）从海外治疗地指定酒店或海外指定医院到达海外治疗地指定机场或国际火车站的交\n通费用；\n（5）从海外治疗地指定机场或国际火车站返回中国内地指定机场或国际火车站的飞机、",
+          "chunk_index": 45,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 12289,
+          "end_at": 12673,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340357456771464",
+                "question": "海外医疗保险中骨髓移植或外周血干细胞移植捐赠者可报销哪些医疗费用？"
+              },
+              {
+                "id": "q1786340357456781797",
+                "question": "恶性肿瘤患者赴海外治疗的交通费用报销范围包括哪些？"
+              },
+              {
+                "id": "q1786340357456782090",
+                "question": "海外就医报销的交通费用中飞机舱位和铁路座位分别有什么限制"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.4723Z",
+          "updated_at": "2026-08-10T05:39:17.461575Z",
+          "deleted_at": null
+        },
+        {
+          "id": "57193b14-6070-44a7-9e2c-d675570d4d02",
+          "seq_id": 100000959,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "通费用；\n（5）从海外治疗地指定机场或国际火车站返回中国内地指定机场或国际火车站的飞机、\n铁路的费用（飞机舱位以经济舱为限、铁路座位以二等座为限）；\n（6）由中国内地指定机场或国际火车站到达中国内地常住地或常住地医疗机构的交通费\n用。\n未经我们认可的、由被保险人或其陪同人员自行做出的行程安排产生的费用或变更行程\n安排（包括出行日期或路线）而产生的相关费用，我们不承担给付本项保险金的责任。\n3.住宿费用\n被保险人及陪同人员因治疗被保险人所患恶性肿瘤（重度）海外特定药品清单中的恶性\n肿瘤（重度）海外特定药品适应症经我们安排在合同约定的海外医院所在城市产生的、满足\n以下条件的住宿费用：每一次治疗开始时间前一天至治疗结束时间后一天，在被保险人就诊\n的合同约定的海外医院 10 公里以内的酒店产生的必需且合理的住宿费用（以就诊当地 1 间三\n",
+          "chunk_index": 46,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 12629,
+          "end_at": 12999,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340365510404767",
+                "question": "海外治疗恶性肿瘤产生的交通费用报销范围包括哪些？"
+              },
+              {
+                "id": "q1786340365510407851",
+                "question": "海外就医产生的住宿费用在什么条件下可以报销？"
+              },
+              {
+                "id": "q1786340365510408352",
+                "question": "未经保险公司认可的行程安排产生的费用能否报销？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472303Z",
+          "updated_at": "2026-08-10T05:39:25.835159Z",
+          "deleted_at": null
+        },
+        {
+          "id": "bbe7aec5-6b38-446a-aa91-d87bba650186",
+          "seq_id": 100000960,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "的合同约定的海外医院 10 公里以内的酒店产生的必需且合理的住宿费用（以就诊当地 1 间三\n或四星级酒店的双人标准间为限）。\n住宿费用不包含除住宿费以外的酒店用餐、其他酒店费用以及因升级房间产生的费用。\n我们根据已签署的治疗方案授权书安排住宿，并根据治疗结束日期和治疗医生的意见，\n确定适合被保险人的返程日期，未经我们认可的、由被保险人或其陪同人员自行做出的住宿\n安排产生的费用，或自行变更安排的酒店或安排的住宿日期而产生的相关费用，我们不承担\n给付本项保险金的责任。\n4.遗体送返费用\n若被保险人在合同约定的海外医院因所患恶性肿瘤（重度）海外特定药品清单中恶性肿\n瘤（重度）海外特定药品适应症接受治疗的过程中身故，我们承担将逝者遗体送返至中国内\n地的费用，包括：\n（1）进行国际遗体送返的殡葬公司提供的服务费用，包括在治疗地的防腐处理、当地火\n",
+          "chunk_index": 47,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 12953,
+          "end_at": 13326,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472304Z",
+          "updated_at": "2026-08-10T05:38:05.472304Z",
+          "deleted_at": null
+        },
+        {
+          "id": "452eadf5-c466-40f5-8e4f-f4c6d3ad35c7",
+          "seq_id": 100000961,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "地的费用，包括：\n（1）进行国际遗体送返的殡葬公司提供的服务费用，包括在治疗地的防腐处理、当地火\n葬以及所有行政手续产生的费用；\n（2）可容纳遗体的合理尺寸的灵柩或骨灰盒的费用；\n（3）逝者遗体或骨灰从机场到达中国内地指定地点的交通服务费用。\n\n遗体送返费用不包括由于葬礼仪式或宗教仪式所产生的任何费用。\n恶性肿瘤（重度）海外治疗期\n恶性肿瘤（重度）海外治疗期自被保险人在保险期间内首次提交《出国就医申请表》之\n日起 2 年。\n被保险人签署《出国就医申请表》后，无论最终是否出国就医，在合同保险期间届满后，\n我们均不再接受该被保险人作为保障对象的重新投保申请。 保险金计算方法\n对于一般医疗保险金、术后康复住院医疗保险金，我们按照如下公式计算每次就诊应当\n给付金额：\n一次就诊应当给付的金额 = （被保险人发生的医疗费用的有效金额 - 年免赔额余额）\n× 给付比例\n",
+          "chunk_index": 48,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 13277,
+          "end_at": 13660,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340379319280234",
+                "question": "恶性肿瘤海外治疗期从何时开始计算，持续多久？"
+              },
+              {
+                "id": "q1786340379319307317",
+                "question": "海外治疗期间遗体送返费用包括哪些项目？"
+              },
+              {
+                "id": "q1786340379319308151",
+                "question": "一般医疗保险金和术后康复住院医疗保险金的给付金额如何计算？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472305Z",
+          "updated_at": "2026-08-10T05:39:39.334998Z",
+          "deleted_at": null
+        },
+        {
+          "id": "193738db-b4c0-469c-8035-09def4aec45a",
+          "seq_id": 100000962,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "给付金额：\n一次就诊应当给付的金额 = （被保险人发生的医疗费用的有效金额 - 年免赔额余额）\n× 给付比例\n说明：\n（1）一次就诊指一次住院或一次门诊（包括指定门诊或住院前后的门急诊）。\n一次住院指被保险人因疾病或意外伤害住院治疗，自入院日起至出院日止之期间；但如\n果因同一原因再次住院，且前次出院与下次住院间隔未超过 30 日，视为同一次住院。\n一次门诊指被保险人在一日内（零时起至二十四时止）在同一所医院同一个科室的就诊。\n（2）被保险人发生的医疗费用的有效金额 = 被保险人每次就诊发生的合理且必要的属\n于保险责任范围内的医疗费用 - 被保险人从基本医疗保险（包括城镇职工基本医疗保险、城\n镇居民基本医疗保险、新型农村合作医疗等政府举办的基本医疗保障项目）、城乡居民大病\n保险或公费医疗获得的费用补偿\n",
+          "chunk_index": 49,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 13605,
+          "end_at": 13960,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340384126369044",
+                "question": "一次就诊应当给付的金额如何计算？"
+              },
+              {
+                "id": "q1786340384126377461",
+                "question": "医疗费用的有效金额如何计算，是否需要扣除基本医疗保险补偿？"
+              },
+              {
+                "id": "q1786340384126378045",
+                "question": "一次住院和一次门诊分别如何定义？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472307Z",
+          "updated_at": "2026-08-10T05:39:44.210936Z",
+          "deleted_at": null
+        },
+        {
+          "id": "c0b3917a-9b46-4f72-91c4-5f875f9e7c1d",
+          "seq_id": 100000963,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "镇居民基本医疗保险、新型农村合作医疗等政府举办的基本医疗保障项目）、城乡居民大病\n保险或公费医疗获得的费用补偿\n多次就诊被保险人累计发生的医疗费用的有效金额等于单次就诊被保险人发生的医疗费\n用的有效金额相加。\n（3）年免赔额指一个保险期间内对应的免赔额（见平安 e 生保（尊享版）医疗保险计划\n表），被保险人从工作单位、商业保险等其他途径报销部分以及个人自行承担的部分，均可\n\n",
+          "chunk_index": 50,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 13904,
+          "end_at": 14093,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "613b76db-0874-481d-9b69-8206a87e0ac4",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472309Z",
+          "updated_at": "2026-08-10T05:38:05.472309Z",
+          "deleted_at": null
+        },
+        {
+          "id": "bd4f6a36-cd3d-4fda-a38c-aee208e17151",
+          "seq_id": 100000964,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "以计入免赔额，但计入金额不超过年免赔额余额。从基本医疗保险、城乡居民大病保险或公\n费医疗报销部分，不能计入免赔额。具体的年免赔额由您与我们在投保时约定，并在保险合\n同中载明。\n年免赔额余额指一个保险期间内免赔额经前次理赔中“被保险人发生的医疗费用的有效\n金额”抵扣过后剩余的金额。举例来说，假设年免赔额为 10000 元，如未就诊过，则年免赔\n额余额为 10000 元；如第一次就诊累计的“被保险人发生的医疗费用的有效金额”为 8000 元，\n则针对本次就诊理赔后年免赔额余额为 2000 元，本次给付为 0 元；如第二次就诊累计的“被\n保险人发生的医疗费用的有效金额”为 6000 元，则针对本次就诊理赔后年免赔额余额为 0 元，\n本次给付为 4000 元。\n（4）当被保险人某次就诊发生的医疗费用的有效金额＞年免赔额余额时，本次给付金额\n＞0 元；\n",
+          "chunk_index": 51,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 14093,
+          "end_at": 14470,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "af79f2a0-4db0-488a-a72e-432d10c026cc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340392244344744",
+                "question": "年免赔额余额是如何计算的，哪些医疗费用可以计入免赔额？"
+              },
+              {
+                "id": "q1786340392244356161",
+                "question": "当次就诊医疗费用的有效金额超过年免赔额余额时，保险公司如何给付？"
+              },
+              {
+                "id": "q1786340392244356495",
+                "question": "年免赔额经前次理赔抵扣后余额如何影响后续就诊的赔付金额？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472322Z",
+          "updated_at": "2026-08-10T05:39:52.641264Z",
+          "deleted_at": null
+        },
+        {
+          "id": "8780238b-86fb-4c7a-a1c3-1e2c9b0431b6",
+          "seq_id": 100000965,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "本次给付为 4000 元。\n（4）当被保险人某次就诊发生的医疗费用的有效金额＞年免赔额余额时，本次给付金额\n＞0 元；\n当被保险人某次就诊发生的医疗费用的有效金额≤年免赔额余额时，本次给付金额=0元。\n（6）给付比例：一般医疗保险金、术后康复住院医疗保险金的给付比例为 100%；若您\n按被保险人拥有基本医疗保险或公费医疗的情况进行投保，但申请理赔时未从上述途径获得\n医疗费用补偿的，则上述保险金的给付比例为 60%；但因就诊的医疗机构原因无法进行基本\n医疗保险或公费医疗结算的，则上述保险金的给付比例仍为 100%。 补偿原则\n若被保险人已从其他途径（包括基本医疗保险、城乡居民大病保险、公费医疗、工作单\n位、第三方侵权责任人（包括法人）或本公司在内的任何商业保险机构等）取得补偿的，对\n",
+          "chunk_index": 52,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 14410,
+          "end_at": 14755,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "af79f2a0-4db0-488a-a72e-432d10c026cc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340400356663272",
+                "question": "当某次就诊的医疗费用有效金额大于年免赔额余额时，本次给付金额如何计算？"
+              },
+              {
+                "id": "q1786340400356670314",
+                "question": "有基本医疗保险但申请理赔时未获得医疗费用补偿，一般医疗保险金的给付比例是多少？"
+              },
+              {
+                "id": "q1786340400356670815",
+                "question": "被保险人已从其他途径获得医疗费用补偿后，保险公司如何确定剩余部分的给付金额？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472323Z",
+          "updated_at": "2026-08-10T05:40:00.438214Z",
+          "deleted_at": null
+        },
+        {
+          "id": "7d8d2277-d6e8-4235-b5a2-429991f33de0",
+          "seq_id": 100000966,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "位、第三方侵权责任人（包括法人）或本公司在内的任何商业保险机构等）取得补偿的，对\n于被保险人发生的保险责任范围内的费用支出，我们在扣除被保险人已从其他途径获得的补\n偿后，对于剩余部分在该项保险金给付限额内按约定给付。 责任延续\n本合同如下保险责任适用本条款。\n对本合同保险期间届满前发生的且延续至本合同保险期间届满后 30 日内的合理且必要\n的医疗费用，我们按照本合同约定给付保险金。\n\n保险责任\n",
+          "chunk_index": 53,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 14714,
+          "end_at": 14913,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "af79f2a0-4db0-488a-a72e-432d10c026cc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340411680069453",
+                "question": "投保人已有社保但未通过社保结算时，商业医疗险的给付比例是多少？"
+              },
+              {
+                "id": "q1786340411680080287",
+                "question": "商业医疗险理赔时已从其他渠道获得补偿，剩余医疗费用如何计算给付？"
+              },
+              {
+                "id": "q1786340411680080663",
+                "question": "保单保险期间届满后30日内发生的医疗费用，保险公司是否仍承担给付责任？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472325Z",
+          "updated_at": "2026-08-10T05:40:13.605327Z",
+          "deleted_at": null
+        },
+        {
+          "id": "dbe06a4a-704c-4b8c-9f1c-d1317f3d4fb1",
+          "seq_id": 100000967,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1.5.2 一般医疗保险金中的“1.住院医疗费用”责任\n1.5.3 术后康复住院医疗保险金\n1.5.4 住院期间及住院前后院外购药费用保险金\n1.5.5 质子重离子医疗保险金\n1.5.7 恶性肿瘤特定用药基因检测费用保险金\n1.5.8 恶性肿瘤（重度）院外特定药品费用保险金\n1.5.9 恶性肿瘤（重度）临床急需进口药品费用保险金\n",
+          "chunk_index": 54,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 14913,
+          "end_at": 15079,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340421933316670",
+                "question": "平安e生保（尊享版）医疗保险包含哪些具体的保险责任？"
+              },
+              {
+                "id": "q1786340421933363042",
+                "question": "住院期间及住院前后院外购药费用是否能通过该保险报销？"
+              },
+              {
+                "id": "q1786340421933363543",
+                "question": "恶性肿瘤（重度）院外特定药品费用和临床急需进口药品费用是否属于保障范围？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472335Z",
+          "updated_at": "2026-08-10T05:40:22.270969Z",
+          "deleted_at": null
+        },
+        {
+          "id": "c875719b-2510-4c5e-a121-6d2143e520ba",
+          "seq_id": 100000968,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1.5.10 恶性肿瘤（重度）特定医疗器械费用保险金\n保险金给付限额\n在合同保险期间内，对于上述各项保险责任，被保险人不论一次或多次进行治疗，我们\n均按上述约定给付保险金。但各项保险金的累计给付金额以平安 e 生保（尊享版）医疗保险\n计划表《平安 e 生保（尊享版）医疗保险计划表》中约定的各项保险责任对应的给付限额为\n限，各项保险金的累计给付金额达到其对应的限额时，该项保险责任终止。各项保险金给付\n金额之和达到约定的保险金总给付限额时，合同终止。\n合同保险期间内各项保险金适用的医疗机构及药店范围、给付限额、给付比例、免赔额\n详见下表：\n平安 e 生保（尊享版）医疗保险计划表\n单位：人民币元\n保障区域\n中国内地\n（“恶性肿瘤（重度）海外特定药品及医疗费用保险金”除外）\n保险期间内保险金总给付\n限额\n400 万元\n",
+          "chunk_index": 55,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 15079,
+          "end_at": 15439,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472337Z",
+          "updated_at": "2026-08-10T05:38:05.472337Z",
+          "deleted_at": null
+        },
+        {
+          "id": "92496f6d-14b5-43a8-962e-48be9b4e6eb9",
+          "seq_id": 100000969,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "单位：人民币元\n保障区域\n中国内地\n（“恶性肿瘤（重度）海外特定药品及医疗费用保险金”除外）\n保险期间内保险金总给付\n限额\n400 万元\n保险责任 医疗机构及药店范围 给付限额 给付比例 免赔额\n一般医\n疗保险\n金\n住院医疗费用\n二级及以上医保定点\n医院普通部、特需部、\n国际部等（不含昂贵医\n院）\n400 万元\n100%\n（如被保险人以拥有基本医疗保\n险或公费医疗投保，但在理赔时\n未从基本医疗保险或公费医疗取\n得医疗费用补偿，则给付比例为\n计划一为 1\n万元\n计划二为 0\n元\n（由您在投\n指定门诊医疗\n费用\n住院前后门诊\n急诊费用\n\n- 责任免除\n因下列情形之一造成被保险人医疗费用支出或导致被保险人初次发生“恶性肿瘤”的，\n60%，但因就诊医疗机构原因无法\n进行基本医疗保险或公费医疗结\n算的除外）\n保时选择确\n定）\n术后康复住院医疗保险金\n二级及以上医保定点",
+          "chunk_index": 56,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 15370,
+          "end_at": 15754,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472338Z",
+          "updated_at": "2026-08-10T05:38:05.472338Z",
+          "deleted_at": null
+        },
+        {
+          "id": "d45b3917-f194-49aa-910c-79faaf5b99af",
+          "seq_id": 100000970,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "60%，但因就诊医疗机构原因无法\n进行基本医疗保险或公费医疗结\n算的除外）\n保时选择确\n定）\n术后康复住院医疗保险金\n二级及以上医保定点\n医院的康复科室或公\n司定点医院中的二级\n及以上医保定点医院\n的康复科室（均不含昂\n贵医院）\n3 万元\n住院期间及住院前后院外\n购药费用保险金\n二级及以上医保定点\n医院（不含昂贵医院）\n或指定互联网医院\n（以上医院指开具处\n方的医院）\n50 万元\n100%\n（如被保险人在院外购买药品前\n未提交院外购药预审核申请，购\n买药品后再向我们申请该项保险\n金并经我们审核通过的，给付比\n例为 60%）\n0 元\n质子重离子医疗保险金\n指定质子重离子医疗\n机构\n400 万元\n细胞免疫疗法医疗保险金 100%\n经我们安排的医疗机\n构\n400 万元\n恶性肿瘤特定用药基因检\n测费用保险金\n具有合法有效资质的\n基因检测机构\n3 万元\n",
+          "chunk_index": 57,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 15686,
+          "end_at": 16063,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340446852205162",
+                "question": "质子重离子医疗保险金的保障范围和给付限额是多少？"
+              },
+              {
+                "id": "q1786340446852210038",
+                "question": "住院期间及住院前后院外购药费用保险金的报销条件和给付比例是什么？"
+              },
+              {
+                "id": "q1786340446852210622",
+                "question": "细胞免疫疗法医疗保险金由哪些医疗机构提供，最高给付限额为多少？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472339Z",
+          "updated_at": "2026-08-10T05:40:46.871505Z",
+          "deleted_at": null
+        },
+        {
+          "id": "afab3262-22c1-4ce2-ad40-eeb32cde9eeb",
+          "seq_id": 100000971,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "经我们安排的医疗机\n构\n400 万元\n恶性肿瘤特定用药基因检\n测费用保险金\n具有合法有效资质的\n基因检测机构\n3 万元\n恶性肿瘤（重度）院外特\n定药品费用保险金\n合同约定的药店 400 万元\n100%\n（如被保险人以拥有基本医疗保\n险或公费医疗身份投保，但在用\n药时对于医保目录范围内的特定\n药品无法经基本医疗保险或公费\n医疗结算，则给付比例为 60%）\n恶性肿瘤（重度）临床急\n需进口药品费用保险金\n临床急需进口药品医\n疗机构\n400 万元\n100%\n恶性肿瘤（重度）特定医\n疗器械费用保险金\n二级及以上医保定点\n医院（不含昂贵医院）\n或合同约定的药店\n400 万元\n恶性肿瘤（重度）海外特\n定药品及医疗费用保险金\n合同约定的海外医院 400 万元\n\n我们不承担给付保险金的责任：\n（1）被保险人所患既往症及保险单中特别约定的除外疾病引起的相关费用；\n",
+          "chunk_index": 58,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 16003,
+          "end_at": 16380,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340449588573569",
+                "question": "恶性肿瘤重度院外特定药品费用保险金的给付比例和适用条件是什么？"
+              },
+              {
+                "id": "q1786340449588584110",
+                "question": "哪些医疗机构或药店可以提供恶性肿瘤重度特定医疗器械费用保险金报销？"
+              },
+              {
+                "id": "q1786340449588584570",
+                "question": "海外特定药品及医疗费用保险金在合同约定的海外医院最高赔付多少？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472347Z",
+          "updated_at": "2026-08-10T05:40:51.101696Z",
+          "deleted_at": null
+        },
+        {
+          "id": "c424d013-0ec7-4d17-b7dd-4647c6d246c7",
+          "seq_id": 100000972,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "合同约定的海外医院 400 万元\n\n我们不承担给付保险金的责任：\n（1）被保险人所患既往症及保险单中特别约定的除外疾病引起的相关费用；\n（2）遗传性疾病，先天性畸形、变形或染色体异常，先天性恶性肿瘤（BRCA1/BRCA2 基\n因突变家族性乳腺癌、遗传性非息肉病性结直肠癌、肾母细胞瘤即 Wilms 瘤、李-佛美尼综合\n症（即 Li-Fraumeni 综合症））；\n（3）疗养、视力矫正手术、各种健康体检项目及预防性医疗项目、牙科保健、牙科费用、\n非意外伤害所致整容手术；\n（4）如下项目的治疗：皮肤色素沉着、痤疮治疗、红斑痤疮治疗；雀斑、老年斑、痣的\n治疗和去除；对蜘蛛脉、除瘢痕疙瘩型外的其它瘢痕、纹身去除、皮肤变色、上肢肘关节远\n端及面部静脉曲张的治疗或手术；激光美容、除皱、除眼袋、开双眼皮、治疗斑秃、白发、\n秃发、脱发、植毛、脱毛、隆鼻、隆胸、除腋臭；\n",
+          "chunk_index": 59,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 16312,
+          "end_at": 16694,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340463392010754",
+                "question": "保险公司对哪些既往症和遗传性疾病不承担给付保险金责任？"
+              },
+              {
+                "id": "q1786340463392018213",
+                "question": "哪些美容整形项目属于保险免责范围，不能获得赔付？"
+              },
+              {
+                "id": "q1786340463392018756",
+                "question": "产品说明书中明确列出的除外责任包括哪些治疗和手术项目？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.47235Z",
+          "updated_at": "2026-08-10T05:41:04.131982Z",
+          "deleted_at": null
+        },
+        {
+          "id": "424eb837-4d37-4172-b886-4b39e9796338",
+          "seq_id": 100000973,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "端及面部静脉曲张的治疗或手术；激光美容、除皱、除眼袋、开双眼皮、治疗斑秃、白发、\n秃发、脱发、植毛、脱毛、隆鼻、隆胸、除腋臭；\n（5）各种矫形及生理缺陷的手术和检查治疗项目，包括但不限于平足及各种非功能性整\n容、矫形手术费用；\n（6）各种健美治疗项目，包括但不限于营养、减肥、增胖、增高费用；\n（7）不孕不育治疗、人工受精、怀孕、分娩（含难产）、流产、堕胎、节育（含绝育）、\n产前产后检查以及由以上原因引起的并发症；\n（8）包皮环切术、包皮剥离术、包皮气囊扩张术、性功能障碍治疗；\n（9）除心脏瓣膜、人工晶体、人工关节之外的其他人工器官材料费、安装和置换等费用、\n各种康复治疗器械、假体、义肢、自用的按摩保健和治疗用品、所有非处方医疗器械；\n（10）耐用医疗设备（指各种康复设备、矫形支具以及其他耐用医疗设备）的购买或租\n",
+          "chunk_index": 60,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 16630,
+          "end_at": 16991,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472352Z",
+          "updated_at": "2026-08-10T05:38:05.472352Z",
+          "deleted_at": null
+        },
+        {
+          "id": "285f571d-49c3-41c5-b4d6-283ad72e611d",
+          "seq_id": 100000974,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "（10）耐用医疗设备（指各种康复设备、矫形支具以及其他耐用医疗设备）的购买或租\n赁费用；各类为生活提供便利和舒适的设备（如轮椅、拐杖等各类助行器械、自动床、电话\n托臂、床上多用桌、空调、空气净化器等其他类似设备）的购买、租赁、维修和置换费用；\n保健食品及用品；\n（11）被保险人感染艾滋病病毒或患艾滋病期间因疾病导致的；\n（12）非医院药房购买的药品（不适用于住院期间及住院前后院外购药费用保险金、恶\n性肿瘤（重度）院外特定药品费用保险金、恶性肿瘤（重度）海外特定药品及医疗费用保险\n金）；未经医生处方自行购买的药品；\n（13）滋补类中草药及其泡制的各类酒制剂；\n（14）精神和行为障碍（依照世界卫生组织《疾病和有关健康问题的国际统计分类》第\n\n十次修订版（ICD-10）确定）治疗、各种医疗咨询和健康预测：如健康咨询、睡眠咨询、性\n",
+          "chunk_index": 61,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 16951,
+          "end_at": 17318,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340331495402099",
+                "question": "哪些医疗费用属于该保险产品的免责范围？"
+              },
+              {
+                "id": "q1786340331495412516",
+                "question": "耐用医疗设备的购买或租赁费用能否通过医疗保险报销？"
+              },
+              {
+                "id": "q1786340331495617334",
+                "question": "感染艾滋病病毒或患艾滋病期间的治疗费用，保险公司是否赔付？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472353Z",
+          "updated_at": "2026-08-10T05:38:52.174543Z",
+          "deleted_at": null
+        },
+        {
+          "id": "6ffbb9a1-76b7-4966-ad75-3bcd5685b051",
+          "seq_id": 100000975,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "十次修订版（ICD-10）确定）治疗、各种医疗咨询和健康预测：如健康咨询、睡眠咨询、性\n咨询、心理咨询（精神和行为障碍以外的一般心理问题，如职场问题、家庭问题、婚恋问题、\n个人发展、情绪管理等）等费用；\n（15）投保人对被保险人的故意杀害、故意伤害；\n（16）被保险人故意自伤、故意犯罪或抗拒依法采取的刑事强制措施；\n（17）被保险人服用、吸食或注射毒品；\n（18）从事潜水、跳伞、攀岩、蹦极、驾驶滑翔机或滑翔伞、探险、武术比赛、摔跤比\n赛、特技表演、赛马、赛车等高风险运动导致的伤害引起的治疗；\n（19）由于职业病、医疗事故引起的医疗费用；\n（20）被保险人酒后驾驶机动车；\n（21）核爆炸、核辐射或核污染、化学污染；恐怖袭击、战争、军事冲突、暴乱或武装\n叛乱；\n（22）不符合入院标准、挂床住院或住院病人应当出院而拒不出院（从医院确定出院之\n",
+          "chunk_index": 62,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 17274,
+          "end_at": 17647,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472354Z",
+          "updated_at": "2026-08-10T05:38:05.472355Z",
+          "deleted_at": null
+        },
+        {
+          "id": "05b831e2-b9d6-4315-ab36-eb12cc96e4ff",
+          "seq_id": 100000976,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "叛乱；\n（22）不符合入院标准、挂床住院或住院病人应当出院而拒不出院（从医院确定出院之\n日起发生的一切医疗费用）；\n（23）未被治疗所在地权威部门批准的治疗，未获得治疗所在地政府许可或批准的药品\n或药物；\n（24）预防性治疗、休养或疗养、保健治疗、医疗鉴定、医疗咨询和健康预测；\n（25）被保险人因精神疾病、未遵医嘱使用管制药物或处方药物、未按照说明书所示的\n内容使用非处方药物或有毒物质；\n（26）康复治疗（不适用于术后康复住院医疗保险金）、并发症的治疗（不包括合同约\n定的治疗直接并发症的费用）、减缓慢性症状的治疗、心理治疗；\n（27）姑息疗法、替代疗法、基因疗法、辅助疗法（如补钙、补充维生素等），再造手\n术、以及安全性和可靠性未经相关科学证明的诊断、治疗和外科手术所产生的任何费用；\n（28）经我们审核被保险人的疾病状况，确定对申领药品已经耐药。\n",
+          "chunk_index": 63,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 17603,
+          "end_at": 17981,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340341458295283",
+                "question": "保险公司对哪些医疗费用不予赔付？"
+              },
+              {
+                "id": "q1786340341458305034",
+                "question": "哪些情形属于保险免责范围，例如康复治疗或精神疾病治疗？"
+              },
+              {
+                "id": "q1786340341458305576",
+                "question": "产品说明书中规定的不承担保险责任的情形有哪些？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472356Z",
+          "updated_at": "2026-08-10T05:39:01.495322Z",
+          "deleted_at": null
+        },
+        {
+          "id": "dcaa0e76-cab6-4a30-82c2-04ae6bdb3c6f",
+          "seq_id": 100000977,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "术、以及安全性和可靠性未经相关科学证明的诊断、治疗和外科手术所产生的任何费用；\n（28）经我们审核被保险人的疾病状况，确定对申领药品已经耐药。\n因下列情形之一造成被保险人医疗费用支出的，我们不承担给付恶性肿瘤（重度）海外\n特定药品及医疗费用保险金的责任：\n（1）假体、人造部件或器官（如人工关节）材料费以及相关安装和置换等费用；\n\n（2）因认知障碍、脑损伤或衰老而需要医学治疗或医学护理所产生的相关费用；\n（3）因治疗流行病、传染病，以及治疗因病毒感染、细菌感染导致的疾病所产生的费用；\n（4）未经医生建议自行进行的任何治疗，或未遵书面医嘱私自服用、涂用、注射药物所\n产生的费用；\n（5）被保险人在中国以外国家和地区进行的任何医学随访；或无相关医学检查证明需进\n一步治疗的任何出国就医或检查；\n",
+          "chunk_index": 64,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 17909,
+          "end_at": 18256,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340344759091484",
+                "question": "恶性肿瘤海外特定药品医疗险的免责情形有哪些？"
+              },
+              {
+                "id": "q1786340344759096735",
+                "question": "哪些费用不属于恶性肿瘤海外特定药品及医疗费用保险金的赔付范围？"
+              },
+              {
+                "id": "q1786340344759097277",
+                "question": "被保险人自行治疗或未遵医嘱用药导致的相关费用能否获得赔付？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472357Z",
+          "updated_at": "2026-08-10T05:39:04.827269Z",
+          "deleted_at": null
+        },
+        {
+          "id": "17938881-21db-4687-91eb-121793f61712",
+          "seq_id": 100000978,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "产生的费用；\n（5）被保险人在中国以外国家和地区进行的任何医学随访；或无相关医学检查证明需进\n一步治疗的任何出国就医或检查；\n（6）接受治疗过程中发生的非因医疗必需产生的费用，包括但不限于护照费用、签证费\n用、因个人原因使用翻译的费用等。\n 其他免责条款\n除以上责任免除外，合同中还有一些免除保险人责任的条款，详见平安 e 生保（尊享版）\n医疗保险条款条款中背景突出显示的内容：“1.5 保险责任”、“1.6 保险金计算方法”、“1.7\n补偿原则”、“5.2 保险事故通知”、“6.1 犹豫期”、“7.3 年龄错误的处理”、“脚注 2\n二级及以上医保定点医院”、“脚注 4 住院”、“脚注 11 肿瘤放射疗法”、“脚注 12 肿瘤\n免疫疗法”、“脚注 16 合同约定的手术”、“脚注 33 合同约定的海外医院”、“脚注 37 治\n",
+          "chunk_index": 65,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 18193,
+          "end_at": 18559,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340350034161715",
+                "question": "平安e生保尊享版医疗保险对恶性肿瘤海外特定药品及医疗费用的免责情形有哪些？"
+              },
+              {
+                "id": "q1786340350034198380",
+                "question": "哪些费用属于恶性肿瘤重度海外特定药品及医疗费用保险金的责任免除范围？"
+              },
+              {
+                "id": "q1786340350034198840",
+                "question": "平安e生保尊享版医疗保险合同中除责任免除外还有哪些免除保险人责任的条款？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472374Z",
+          "updated_at": "2026-08-10T05:39:11.446402Z",
+          "deleted_at": null
+        },
+        {
+          "id": "d2e1469c-8bed-4b1b-8acc-a0771043b872",
+          "seq_id": 100000979,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "免疫疗法”、“脚注 16 合同约定的手术”、“脚注 33 合同约定的海外医院”、“脚注 37 治\n疗方案授权书”、“脚注 38 组织病理学检查”及附录。\n 保险事故通知\n您、被保险人或受益人知道保险事故发生后应当在 10 日内通知我们。\n如果您、被保险人或受益人故意或者因重大过失未及时通知，致使保险事故的性质、原\n因、损失程度等难以确定的，我们对无法确定的部分不承担保险责任，但我们通过其他途径\n已经及时知道或者应当及时知道保险事故发生或者虽未及时通知但不影响我们确定保险事故\n的性质、原因、损失程度的除外。\n 年龄错误的处理\n您在申请投保时，应将与有效身份证件相符的被保险人的出生日期在投保单上填明，如\n果发生错误按照下列方式办理：\n1.您申报的被保险人年龄不真实，并且其真实年龄不符合合同约定投保年龄限制的，我\n",
+          "chunk_index": 66,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 18510,
+          "end_at": 18871,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340355018947622",
+                "question": "保险事故发生后，被保险人应在多长时间内通知保险公司？"
+              },
+              {
+                "id": "q1786340355018973496",
+                "question": "未及时通知保险事故会有什么后果？"
+              },
+              {
+                "id": "q1786340355018975080",
+                "question": "投保时申报的被保险人年龄不真实，保险公司如何处理？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472375Z",
+          "updated_at": "2026-08-10T05:39:15.038325Z",
+          "deleted_at": null
+        },
+        {
+          "id": "b29b4c56-f90f-4025-bf33-0ee2abd95da8",
+          "seq_id": 100000980,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "果发生错误按照下列方式办理：\n1.您申报的被保险人年龄不真实，并且其真实年龄不符合合同约定投保年龄限制的，我\n们有权解除合同，并向您退还合同的现金价值。对于合同解除前发生的保险事故，我们不承\n\n",
+          "chunk_index": 67,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 18816,
+          "end_at": 18913,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "83c1afa0-97eb-4b4e-8df4-1f21d84512fc",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340360046952835",
+                "question": "投保时申报的被保险人年龄不真实且真实年龄不符合投保年龄限制，保险公司如何处理？"
+              },
+              {
+                "id": "q1786340360046963627",
+                "question": "如果投保时年龄填错导致真实年龄超出合同约定投保年龄限制，保险公司能否解除合同？"
+              },
+              {
+                "id": "q1786340360046963961",
+                "question": "被保险人年龄申报错误且真实年龄不符合投保条件，合同解除前发生的保险事故保险公司是否承担保险责任？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472377Z",
+          "updated_at": "2026-08-10T05:39:20.525192Z",
+          "deleted_at": null
+        },
+        {
+          "id": "9fba29c1-51ed-422f-b6ca-039d4627850c",
+          "seq_id": 100000981,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "担保险责任；\n2.您申报的被保险人年龄不真实，致使您实付保险费少于应付保险费的，我们有权更正\n并要求您补交保险费。如果已经发生保险事故，在给付保险金时按实付保险费和应付保险费\n的比例给付；\n3.您申报的被保险人年龄不真实，致使您实付保险费多于应付保险费的，我们向您退还\n多收的保险费。 犹豫期及合同解除（退保）\n 犹豫期\n自您签收合同之日起，有 15 日的犹豫期。\n 退保金及合同解除（退保）风险\n合同成立后，您可以解除合同。解除合同时，您需要填写解除合同通知书，并向我们提\n供您的保险合同及有效身份证件。自我们收到解除合同通知书时起，合同即被解除。\n您在犹豫期内解除合同的，我们将退还您所支付的全部保险费，合同解除前发生的保险\n事故我们不承担保险责任。\n您在犹豫期后解除合同的，我们自收到解除合同通知书之日起 30 日内向您退还合同的现\n金价值。\n",
+          "chunk_index": 68,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 18913,
+          "end_at": 19290,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "93bcb726-13a5-4c95-9b51-6df7c29a9a2d",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340367974553702",
+                "question": "退保时现金价值如何计算？"
+              },
+              {
+                "id": "q1786340367974564202",
+                "question": "年龄申报不真实导致少付或多付保险费时如何处理？"
+              },
+              {
+                "id": "q1786340367974564703",
+                "question": "犹豫期内解除合同可以退回全部保险费吗？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472379Z",
+          "updated_at": "2026-08-10T05:39:28.031523Z",
+          "deleted_at": null
+        },
+        {
+          "id": "21f2ed2f-9970-4cc0-985f-87935b840330",
+          "seq_id": 100000982,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "事故我们不承担保险责任。\n您在犹豫期后解除合同的，我们自收到解除合同通知书之日起 30 日内向您退还合同的现\n金价值。\n现金价值的计算分两种情况：\n（1）首次投保或在上一保险期间届满 60 日后重新投保的：\n如果保险经过天数≤30 天，现金价值=保险费×（1-35%）；\n如果保险经过天数＞30 天，现金价值=保险费×（1-35%）×[1－(保险经过天数-30) /（保\n险期间的天数-30）]，经过天数不足 1 天的按 1 天计算。\n（2）已投保指定的产品并在指定期限内首次投保、不迟于上一保险期间届满后 60 日内\n重新投保的：\n现金价值=保险费×（1-35%）×（1－保险经过天数/ 保险期间的天数），经过天数不足\n1 天的按 1 天计算。\n考虑到保单平均承担的本公司经营支出，保险责任对应的成本以及客户提前终止保单对\n\n",
+          "chunk_index": 69,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 19230,
+          "end_at": 19594,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "93bcb726-13a5-4c95-9b51-6df7c29a9a2d",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.47238Z",
+          "updated_at": "2026-08-10T05:38:05.47238Z",
+          "deleted_at": null
+        },
+        {
+          "id": "78e0ca9d-4e3b-4538-998f-b05c2306436b",
+          "seq_id": 100000983,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1 天的按 1 天计算。\n考虑到保单平均承担的本公司经营支出，保险责任对应的成本以及客户提前终止保单对\n\n本公司的影响，我们从您所交的保险费中扣除了相关费用。因此，您在犹豫期后解除合同可\n能会遭受一定的损失。\n解除合同后，您不再享有原有的保障。 投保范围\n合同接受的被保险人投保年龄为 0 周岁(须出生满 28 日)至 70 周岁，且须符合投保当时\n我们的规定。\n若您在被保险人 71 周岁至 100 周岁期间投保本产品的，需要满足如下情形之一，并经我\n们审核同意：\n（1）非首次投保且在上一个保险期间届满后 60 日内提出重新投保申请；\n（2）您已投保指定的产品，并在我们指定的期限内首次投保本产品。\n您可以同时为符合我们承保条件的家庭成员投保本产品，家庭成员仅指投保人本人、投\n保时与投保人具有合法婚姻关系的配偶、投保人的父母以及投保人的子女。 保险期间\n",
+          "chunk_index": 70,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 19541,
+          "end_at": 19921,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "93bcb726-13a5-4c95-9b51-6df7c29a9a2d",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340381888225572",
+                "question": "这款保险产品在犹豫期后解除合同时，现金价值如何计算？"
+              },
+              {
+                "id": "q1786340381888278778",
+                "question": "这款保险产品的投保年龄范围是多少？71周岁至"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472381Z",
+          "updated_at": "2026-08-10T05:39:42.252086Z",
+          "deleted_at": null
+        },
+        {
+          "id": "8be591db-a519-4935-92f5-289ce167f0d3",
+          "seq_id": 100000984,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "保时与投保人具有合法婚姻关系的配偶、投保人的父母以及投保人的子女。 保险期间\n合同为不保证续保合同。\n本产品保险期间为一年，自合同生效时起算。保险期间届满，您需要重新向我们申请投\n保本产品，并经我们审核同意，交纳保险费，获得新的保险合同。\n若保险期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您提供投保其\n他保险产品的建议。 交费方式\n合同保险费的交费方式和交费期间由您与我们约定并在保险单上载明。 明确说明与如实告知\n订立合同时，我们应当向您说明合同的内容。对保险条款中免除我们责任的条款，我们\n在订立合同时应当在投保单、保险单或者其他保险凭证上作出足以引起您注意的提示，并对\n该条款的内容以书面或者口头形式向您作出明确说明，未作提示或者明确说明的，该条款不\n\n成为合同的内容。\n订立合同时，我们就您和被保险人的有关情况提出询问，您应当如实告知。\n",
+          "chunk_index": 71,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 19882,
+          "end_at": 20263,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "93bcb726-13a5-4c95-9b51-6df7c29a9a2d",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340388512634250",
+                "question": "平安e生保产品的保险期间是多久，是否保证续保？"
+              },
+              {
+                "id": "q1786340388512637751",
+                "question": "投保平安e生保时，投保人和被保险人有哪些如实告知义务？"
+              },
+              {
+                "id": "q1786340388512638502",
+                "question": "平安e生保保险期间届满后如何续保，若产品停售会怎样处理？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472383Z",
+          "updated_at": "2026-08-10T05:39:48.556249Z",
+          "deleted_at": null
+        },
+        {
+          "id": "2249b8c0-8248-45a9-b0f7-ff2f30cd61d7",
+          "seq_id": 100000985,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "成为合同的内容。\n订立合同时，我们就您和被保险人的有关情况提出询问，您应当如实告知。\n如果您故意或者因重大过失未履行前款规定的如实告知义务，足以影响我们决定是否同\n意承保或者提高保险费率的，我们有权解除合同。\n如果您故意不履行如实告知义务，对于合同解除前发生的保险事故，我们不承担保险责\n任，并不退还保险费。\n如果您因重大过失未履行如实告知义务，对保险事故的发生有严重影响的，对于合同解\n除前发生的保险事故，我们不承担保险责任，但会向您退还保险费。 投保举例\n王先生（35 周岁，拥有基本医疗保险）首次为自己投保平安 e 生保（尊享版）医疗保险，\n免赔额为 1 万元，医疗职业等级一级，首次投保保险费 1435 元。\n保险金 领取人 给付金额 领取条件\n一般医疗保险金 王先生\n（合理且必要的属于保险责任范围内的\n医疗费用 151 万元-基本医疗保险费用\n",
+          "chunk_index": 72,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 20220,
+          "end_at": 20598,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "93bcb726-13a5-4c95-9b51-6df7c29a9a2d",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472384Z",
+          "updated_at": "2026-08-10T05:38:05.472384Z",
+          "deleted_at": null
+        },
+        {
+          "id": "02fa6075-947f-4f68-99fc-948b8a73b87c",
+          "seq_id": 100000986,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "保险金 领取人 给付金额 领取条件\n一般医疗保险金 王先生\n（合理且必要的属于保险责任范围内的\n医疗费用 151 万元-基本医疗保险费用\n补偿 50 万元-免赔额余额 1 万元）*给付\n比例 100%=100 万元\n假设：等待期后王先生经医院确诊\n疾病必须住院医疗，住院期间发生\n合同约定的住院医疗费用 151 万\n元，同时王先生从基本医疗保险获\n得费用补偿 50 万元\n术后康复住院医疗保险\n金\n王先生\n（发生的合理且必要的术后康复住院医\n疗费用 2 万元-免赔额余额 0 元）*给付\n比例 100%=2 万元\n假设：王先生在住院期间进行了合\n同约定的手术治疗，且手术后 30\n日内入住该医院的康复科室治疗，\n康复住院医疗费用 2 万元\n\n",
+          "chunk_index": 73,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 20529,
+          "end_at": 20850,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "93bcb726-13a5-4c95-9b51-6df7c29a9a2d",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340398246489167",
+                "question": "一般医疗保险金的给付金额如何计算？"
+              },
+              {
+                "id": "q1786340398246497543",
+                "question": "术后康复住院医疗保险金的领取条件和给付金额是什么？"
+              },
+              {
+                "id": "q1786340398246497877",
+                "question": "王先生投保平安e生保后，100万元一般医疗保险金是如何算出来的？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472385Z",
+          "updated_at": "2026-08-10T05:39:58.247927Z",
+          "deleted_at": null
+        },
+        {
+          "id": "2ae0ad99-2870-44d1-a12b-767044fea0f7",
+          "seq_id": 100000987,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "同约定的手术治疗，且手术后 30\n日内入住该医院的康复科室治疗，\n康复住院医疗费用 2 万元\n\n利益演示表\n单位：人民币元\n保险费 1435 元 一般医疗保险金给付限额 400 万元\n术后康复住院医疗保险金给付限额 3 万元\n住院期间及住院前后院外购药费用保险金给付限额 50 万元\n质子重离子医疗保险金给付限额 400 万元\n细胞免疫疗法医疗保险金给付限额 400 万元\n恶性肿瘤特定用药基因检测费用保险金给付限额 3 万元\n恶性肿瘤（重度）院外特定药品费用保险金给付限额 400 万元\n恶性肿瘤（重度）临床急需进口药品费用保险金给付限额 400 万元\n恶性肿瘤（重度）特定医疗器械费用保险金给付限额 400 万元\n恶性肿瘤（重度）海外特定药品及医疗费用保险金给付限额 400 万元\n现金价值\n现金价值具体计算方法详见本说明书“犹豫期\n及退保”对应内容\n重要提示：\n",
+          "chunk_index": 74,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 20802,
+          "end_at": 21186,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "93bcb726-13a5-4c95-9b51-6df7c29a9a2d",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472387Z",
+          "updated_at": "2026-08-10T05:38:05.472387Z",
+          "deleted_at": null
+        },
+        {
+          "id": "9f12dc4f-08d4-4fa8-802d-65bab7d60853",
+          "seq_id": 100000988,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "1. 以上利益演示数据仅反映被保险人在此前未发生保险事故的情况下当前保单年度的对应\n数值。\n2. 以上表所列保险利益、数值等，均根据投保案例中被保险人的周岁年龄、免赔额计算所得。\n如果设定的周岁年龄、免赔额与实际周岁年龄、免赔额不同，对应的保险利益和数据等将会\n有所不同。\n3. 本产品的保险费按照被保险人的周岁年龄确定，同时根据首次投保或在上一保险期间届满\n60 日后重新投保本产品、不迟于上一保险期间届满后 60 日重新投保、已投保指定的产品并\n在指定期限内首次投保本产品、有无基本医疗保险或公费医疗等不同，所需交纳的保费也存\n在不同。具体详见费率表。\n",
+          "chunk_index": 75,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 21186,
+          "end_at": 21465,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "bea93080-4543-4ab9-9904-dc0a8bbcae35",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472388Z",
+          "updated_at": "2026-08-10T05:38:05.472388Z",
+          "deleted_at": null
+        },
+        {
+          "id": "93dd16d1-4f48-4e6b-9c3a-29ce17c8c744",
+          "seq_id": 100000989,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "3. 本产品的保险费按照被保险人的周岁年龄确定，同时根据首次投保或在上一保险期间届满\n60 日后重新投保本产品、不迟于上一保险期间届满后 60 日重新投保、已投保指定的产品并\n在指定期限内首次投保本产品、有无基本医疗保险或公费医疗等不同，所需交纳的保费也存\n在不同。具体详见费率表。\n4. 本产品保险期间为一年。以上利益演示仅展示一个保险期间数值。保险期间届满，您需要\n重新向我们申请投保本产品，并经我们审核同意，交纳保险费，获得新的保险合同。若保险\n期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您提供投保其他保险产品\n的建议。\n",
+          "chunk_index": 76,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 21323,
+          "end_at": 21595,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "bea93080-4543-4ab9-9904-dc0a8bbcae35",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340417719861259",
+                "question": "这个保险产品的保费根据哪些因素确定？"
+              },
+              {
+                "id": "q1786340417719865426",
+                "question": "保险期间为一年，到期后如何重新投保？"
+              },
+              {
+                "id": "q1786340417719865802",
+                "question": "如果保险产品停售，投保人还能续保吗？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.47239Z",
+          "updated_at": "2026-08-10T05:40:18.164523Z",
+          "deleted_at": null
+        },
+        {
+          "id": "f6399658-36e2-4b21-9eb5-f41a07e0a738",
+          "seq_id": 100000990,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "4. 本产品保险期间为一年。以上利益演示仅展示一个保险期间数值。保险期间届满，您需要\n重新向我们申请投保本产品，并经我们审核同意，交纳保险费，获得新的保险合同。若保险\n期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您提供投保其他保险产品\n的建议。\n5. 恶性肿瘤特定用药基因检测费用保险金、恶性肿瘤（重度）院外特定药品费用保险金、恶\n性肿瘤（重度）临床急需进口药品费用保险金、恶性肿瘤（重度）特定医疗器械费用保险金、\n恶性肿瘤（重度）海外特定药品及医疗费用保险金，需满足约定的给付条件，详见条款。\n",
+          "chunk_index": 77,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 21465,
+          "end_at": 21720,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "bea93080-4543-4ab9-9904-dc0a8bbcae35",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340429869603831",
+                "question": "本产品的保险期间是多长？期满后如何续保？"
+              },
+              {
+                "id": "q1786340429869615414",
+                "question": "保险期间届满时，如果本产品已停止销售，投保人还能续保吗？"
+              },
+              {
+                "id": "q1786340429869615790",
+                "question": "保险期满后重新投保本产品需要满足哪些条件和流程？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472391Z",
+          "updated_at": "2026-08-10T05:40:29.899477Z",
+          "deleted_at": null
+        },
+        {
+          "id": "be785ddd-ced1-49f2-b254-42178808ab7c",
+          "seq_id": 100000991,
+          "tenant_id": 10003,
+          "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+          "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "tag_id": "",
+          "content": "5. 恶性肿瘤特定用药基因检测费用保险金、恶性肿瘤（重度）院外特定药品费用保险金、恶\n性肿瘤（重度）临床急需进口药品费用保险金、恶性肿瘤（重度）特定医疗器械费用保险金、\n恶性肿瘤（重度）海外特定药品及医疗费用保险金，需满足约定的给付条件，详见条款。\n6. 本资料所载内容仅供您理解保险条款所用，在某些情况下，我们不承担给付保险金的责任，\n具体保险责任、责任免除、合同解除及其他内容详见保险条款。\n\n本产品说明书所载资料供您理解保险条款所用， 各项内容均以保险条款为准。\n本产品说明书中背景突出的内容属于免除保险人责任的内容， 加下划波浪线的内容为\n其他我们认为需要特别提示您注意的内容， 请您重点关注； 但具体保险责任免除、 减\n轻及其他与您有重大利害关系的内容详见保险条款。\n中国平安人寿保险股份有限公司\n深圳市福田 区益田路 5033 号平安金融中心 邮编 518033\n全 国 统 一 总 机 8 6 4 0 0 8 8 6 6 3 3 8\n全国服务热线 95511",
+          "chunk_index": 78,
+          "parse_attempt": 1,
+          "is_enabled": true,
+          "flags": 1,
+          "status": 0,
+          "start_at": 21595,
+          "end_at": 22031,
+          "pre_chunk_id": "",
+          "next_chunk_id": "",
+          "chunk_type": "text",
+          "parent_chunk_id": "bea93080-4543-4ab9-9904-dc0a8bbcae35",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": {
+            "generated_questions": [
+              {
+                "id": "q1786340437223848168",
+                "question": "恶性肿瘤特定用药基因检测费用保险金等五项保险金需要满足什么给付条件？"
+              },
+              {
+                "id": "q1786340437223875875",
+                "question": "中国平安人寿保险产品说明书与保险条款内容不一致时以哪个为准？"
+              },
+              {
+                "id": "q1786340437223876334",
+                "question": "平安人寿保险产品说明书中免除保险人责任的内容是如何标注的？"
+              }
+            ]
+          },
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-08-10T05:38:05.472393Z",
+          "updated_at": "2026-08-10T05:40:42.287369Z",
+          "deleted_at": null
+        }
+      ],
+      "page": 1,
+      "page_size": 100,
+      "revision": {
+        "chunk_count": 79,
+        "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+        "manifest_digest": "9995d0f3f2962ec8a879e77ae3850bba0d34e5984d82356ae440cce695bb27ee",
+        "parse_attempt": 1
+      },
+      "success": true,
+      "total": 79
+    }
+  ]
+}

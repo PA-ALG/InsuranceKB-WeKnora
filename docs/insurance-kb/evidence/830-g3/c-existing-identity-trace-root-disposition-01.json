@@ -1,0 +1,37 @@
+{
+  "contract": "830-g3-existing-identity-trace-root-disposition.v1",
+  "status": "READ_ONLY_FINDINGS_QUALIFIED_NOT_ACTUAL_SNAPSHOT",
+  "inputs": [
+    {
+      "path": "g3-c-existing-entity-g2-identity-trace-readonly-01.md",
+      "sha256": "6fdb0297bc0d3bcda73a1b7b5ea45540bd40df5cb1c97945a1c80e356089d675"
+    },
+    {
+      "path": "g3-c-existing-entity-g2-identity-trace-clarification-01.md",
+      "sha256": "f4936943f1a88f861bbc831106e4e687ec4f0124de4158767cf59eb4df2683ae"
+    }
+  ],
+  "accepted_facts": [
+    "Actual approved G2 bundle binds exactly two existing serving entity IDs and entity versions.",
+    "Official source observations exist for issuer, formal name, product code and filing anchor; exact evidence paths and spans are preserved.",
+    "G2 published unknown fields remain unchanged. New C identity projection is a separately reviewable source interpretation and does not rewrite that release.",
+    "An empty approved_aliases collection is allowed and means this snapshot uses no aliases. Nonempty aliases require the specified approval receipt."
+  ],
+  "open_actual_input_work": [
+    "Freeze the source-to-typed-identity projection including observed version_label semantics.",
+    "Read and bind the fresh exact Head and source receipts before constructing an actual ExistingEntitySnapshot."
+  ],
+  "rejected_inferences": [
+    "Do not infer source product codes by splitting serving version IDs.",
+    "Do not infer that G2 unknown fields prohibit all later source-based identity mapping.",
+    "Do not require a new product-master registry or alias approval merely to use an empty alias collection.",
+    "Do not copy synthetic fixture identity as actual source authority."
+  ],
+  "scope": "No new C code, protocol, model execution, snapshot or public authority is dispatched. Existing downstream D work remains independent.",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "product_write": 0
+  }
+}

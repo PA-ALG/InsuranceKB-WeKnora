@@ -1,0 +1,69 @@
+{
+  "blockers": [],
+  "checks": {
+    "guard_bound": true,
+    "manifest_11_204_693129": true,
+    "manifest_bound": true,
+    "manifest_distinct": true,
+    "preflight_exact": true,
+    "preview_bound": true,
+    "provision_runner_bound": true,
+    "ready_status_pending": true,
+    "request_status_pending": true,
+    "reserved_outputs_absent": true,
+    "upload_runner_bound": true
+  },
+  "contract": "830-g3-source-execution-package-independent-check.v1",
+  "effects": {
+    "api": 0,
+    "authorization_generated": 0,
+    "database": 0,
+    "docker": 0,
+    "provider": 0,
+    "source_backfill": 0,
+    "upload": 0
+  },
+  "private_path_summary": {
+    "provision_preflight": {
+      "mode": "0o600",
+      "nlink": 1,
+      "nonempty": true,
+      "regular": true
+    },
+    "provision_private_auth": {
+      "mode": "0o600",
+      "nlink": 1,
+      "nonempty": true,
+      "regular": true
+    },
+    "upload_email_file": {
+      "mode": "0o600",
+      "nlink": 1,
+      "nonempty": true,
+      "regular": true
+    },
+    "upload_password_file": {
+      "mode": "0o600",
+      "nlink": 1,
+      "nonempty": true,
+      "regular": true
+    }
+  },
+  "reviewed_sha256": {
+    "embedding-transport-manifest.json": "75b40ece28a4219965a6a86be616bb90f17af53252afad6c2243dedb9e377225",
+    "embedding_guard.py": "c52cfabf9f32214923e71e2f5926cb66c259cec9e99431033c508907aa7361a4",
+    "source-execution-approval-preview.md": "daed68c8d4cdd9534da8db7807552174a7bbb026c108208e6804f97dfee6050e",
+    "source-execution-authorization-request.json": "f2a669495d05ca3201d354ce5c25fc6674f19deb11dc5e68ab684727f52e5157",
+    "source-execution-ready.json": "765c1405973ad2e361ddfe1fd6bd8170b1d641f565f2df94674ff77c76dee6cd",
+    "source-runtime-v3-actual-preflight-03.json": "8c45741c5976d465a2c1d229046258382bd82fcbd366c82bc677a37417ca6872",
+    "source_upload_runner_v2.py": "9dcaef873f85be4dd89e2332da718a8f77912b04aa3fb0aa383f8c45a581e323"
+  },
+  "scopes": {
+    "external_requests_max": 11,
+    "inputs": 204,
+    "request_body_bytes": 693129,
+    "source_backfills": 15,
+    "uploads": 11
+  },
+  "status": "PASS_PENDING_EXPLICIT_USER_REPLY"
+}

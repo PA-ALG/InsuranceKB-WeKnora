@@ -1,0 +1,60 @@
+name: g3-platform-product
+x-runtime: &runtime
+  image: ${G3_HARNESS_IMAGE:?set the verified immutable Harness image ID}
+  pull_policy: never
+  env_file:
+    - ${G3_HARNESS_ENV_FILE:?set the private runtime env file}
+  volumes:
+    - ${G3_TRUSTED_CONFIG_DIR:?set the trusted configuration directory}:/run/product-config:ro
+  read_only: true
+  tmpfs:
+    - /tmp:size=128m,mode=1777
+  networks:
+    - platform
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  stop_grace_period: 45s
+services:
+  migrate:
+    <<: *runtime
+    command: ["python", "-m", "alembic", "-c", "/opt/harness/alembic.ini", "upgrade", "head"]
+    restart: "no"
+  product-api:
+    <<: *runtime
+    command: ["python", "-c", "from insurance_harness.service_shell.cli import api_main; api_main()"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz',timeout=5).read()"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 20s
+  product-worker:
+    <<: *runtime
+    networks:
+      - platform
+      - provider-egress
+    command: ["python", "-c", "from insurance_harness.service_shell.cli import worker_main; worker_main()"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/readyz',timeout=5).read()"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 20s
+networks:
+  platform:
+    external: true
+    name: ${G3_PLATFORM_NETWORK:?set the existing isolated platform network}
+
+  provider-egress:
+    external: true
+    name: ${G3_PROVIDER_NETWORK:?set the permanent outbound provider network}

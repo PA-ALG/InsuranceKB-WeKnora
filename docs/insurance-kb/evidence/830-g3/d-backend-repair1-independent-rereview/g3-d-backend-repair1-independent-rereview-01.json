@@ -1,0 +1,151 @@
+{
+  "contract": "830-g3-d-backend-repair1-independent-rereview.v1",
+  "workspace": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
+  "status": "BLOCKED",
+  "review_scope": "Frozen backend repair1 only; original two blockers, bounded repair regressions, and repair2 design suitability",
+  "frozen_inputs": {
+    "source_freeze": {
+      "path": "docs/insurance-kb/evidence/830-g3/lane-d-backend-repair1-source-freeze.json",
+      "sha256": "17c984d79801019d941ee592d1486082d62ab8a412e9117506b150a8983cf164"
+    },
+    "final_freeze": {
+      "path": "docs/insurance-kb/evidence/830-g3/lane-d-backend-repair1-final-freeze.json",
+      "sha256": "d9c373acef21fd51e8c223ea06c6bb3af4d118e603621ace5f5b2371093fb4ff"
+    },
+    "production": {
+      "internal/application/service/concept_free_wiki_830_g3.go": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+      "internal/handler/schema_wiki.go": "ad388e0616cd0fc4a54c2aaedad95c49334f380e4c420f0aa2bee16259490b99"
+    },
+    "tests": {
+      "internal/application/service/concept_free_wiki_830_g3_test.go": "0e04690036e80ae6261df9bc53e814851dbf7616672abb16c159773453fc5a6f",
+      "internal/handler/concept_free_wiki_830_g3_test.go": "c2b4506057ccaf5a77c19da2af711394bee123ee9bb835c3c5aadb967bd175f4"
+    },
+    "unchanged_files": "The other seven backend freeze paths match the final-freeze inventory; fixtures and previously frozen Go/Python/UI inputs were not modified or reopened."
+  },
+  "spec_compliance": {
+    "B1_read_hash": {
+      "status": "CLOSED",
+      "evidence": [
+        "G3 read_sha now uses the existing strict canonical helper rather than the G2 encoder that escapes U+2028/U+2029.",
+        "DRAFT and READY service-to-Gin-JSON samples are accepted by the frozen UI parser; the recomputed Python read_sha equals the Go result for both payloads.",
+        "DRAFT read_sha=3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7; READY read_sha=42a28167f152d803e35f5da73821b19a1d0796f444b4feaf87bb859ba857f4dc.",
+        "The 28 literal U+2028 characters and the 354-member/342-field payload are preserved."
+      ]
+    },
+    "B2_preparation_id": {
+      "status": "PARTIAL_OPEN",
+      "closed_part": [
+        "Create and Load validate the decoded preparation_id before source verification or repository access.",
+        "NFC, edge whitespace, empty input, C0/DEL controls and stored-ID validation are enforced; identifiers longer than 512 remain legal as required.",
+        "Load also rejects an invalid stored ID and a stored ID different from the requested ID."
+      ],
+      "blocker": {
+        "title": "G3 handler accepts malformed JSON-string Unicode after encoding/json replacement",
+        "behavior": "The first and second standard Go JSON decodes replace malformed UTF-8 and unpaired JSON surrogates with U+FFFD. The service therefore receives a different valid string and the frozen handler returns 201/calls the G3 spy instead of rejecting the original wire bytes.",
+        "impact": "preparation_id is an identity/hash input. Accepting a lossy decoded identity violates the frozen D Text and strict-wire boundary and can bind a Draft to bytes other than those supplied on the wire.",
+        "reproduction": {
+          "invalid_raw_utf8": {
+            "source": "/private/tmp/g3_d_backend_repair1_handler_invalid_utf8_probe_test.go",
+            "source_sha256": "16e87c663857d3bf375aed1129d9d34e1bd1c210d01e1b8ec831bf99050428c3",
+            "log": "/private/tmp/g3-d-backend-repair1-independent-handler-invalid-utf8-red-01.log",
+            "log_sha256": "56b484034e49562e6a77d8769e7a7abb97b607415c47edfb4be2820332d791a0",
+            "result": "expected 400; actual 201"
+          },
+          "unicode_table": {
+            "source": "/private/tmp/g3_d_backend_repair1_handler_unicode_decode_probe_test.go",
+            "source_sha256": "358467d7dde73b8322e923acdcba0136da0687b3bfffca560261a872a60dbc17",
+            "overlay_sha256": "54bcd68379d4fc9b6f8b9ade0e7d41cd6d06e1afdefc48fc8e1792504c526c18",
+            "log": "/private/tmp/g3-d-backend-repair1-independent-handler-unicode-decode-red-02.log",
+            "log_sha256": "c16106d8c466328c3a9ba1b3261abf04664224088dfa11dcb0f0ab6eb22ed3f4",
+            "result": "invalid raw byte and lone high surrogate both returned 201 and reached the spy as bad�id; literal valid U+FFFD remained a valid positive control"
+          }
+        }
+      }
+    }
+  },
+  "code_quality": {
+    "status": "NO_ADDITIONAL_FINDINGS",
+    "notes": [
+      "The G3-only service predicate is small, ordered before effects, and does not tighten the C text rules or legacy G1/G2 paths.",
+      "The existing raw canonical helper is the correct narrow primitive for closing the remaining handler boundary; no scanner, replacement, normalization, or global decoder change is needed."
+    ]
+  },
+  "repair2_design_review": {
+    "proposal": {
+      "path": "/private/tmp/g3-d-backend-repair2-unicode-wire-proposal-01.md",
+      "sha256": "5b67f955bddbfd2c77fd063de130828c3a23291335e2fdccc7fa409ffd6a037c"
+    },
+    "verdict": "PASS_WITH_REQUIRED_SCOPING_TEST",
+    "blockers": 0,
+    "accepted_design": "After exact variant selection and before the second typed decode, only for batch-concept-830-g3, validate fields[preparation_id] with types.CanonicalConceptMemberPayload830G2, discard the canonical bytes, then continue with the unchanged original request bytes and existing service validator.",
+    "helper_probe": {
+      "source": "/private/tmp/g3_d_backend_repair2_canonical_guard_probe_test.go",
+      "source_sha256": "bec17c62c3c1f3114420849e455ad345d0930e47901e9682aac3ad307b913a4c",
+      "overlay_sha256": "b6fe2bc117938e246384861b845dc80d70a8f803ddee5dcdc33ba90cdb23544e",
+      "log": "/private/tmp/g3-d-backend-repair2-independent-canonical-guard-green-01.log",
+      "log_sha256": "5d742d94bcf985178c8215f3bfdd7d5c858e318bf61964ac34eebe6171cb02b7",
+      "result": "PASS 2.123s: rejects malformed UTF-8 and lone high/low surrogates; accepts emoji surrogate pair, valid U+FFFD forms, and literal backslash-u text"
+    },
+    "required_test_detail": "Add one same-wire legacy compatibility pair: a malformed preparation_id body must retain the frozen G1/G2 dispatch/response behavior while the byte-identical G3 case is rejected. This proves the guard is after exact variant selection and is not global. The proposal's branch is already structurally correct; this is a required high-risk scope regression, not a design blocker."
+  },
+  "verification": {
+    "owner_full_packages": {
+      "log": "/private/tmp/g3-d-backend-repair1-full-packages-green-20260908-05.log",
+      "sha256": "0b3ac10eaafa2504e71eb213e124b15ee945d6a271be26e974dabacdf16ab549",
+      "result": "PASS: service 408.944s; handler 3.427s; router 3.799s"
+    },
+    "owner_vet": "exit 0; empty log sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "independent_matrix": {
+      "log": "/private/tmp/g3-d-backend-repair1-independent-prepid-matrix-green-02.log",
+      "sha256": "874dbca802fba1258b593e391c77cac40c98cde9da62de4cf49cfa006f9b49ff",
+      "result": "PASS 8.567s"
+    },
+    "independent_service": {
+      "log": "/private/tmp/g3-d-backend-repair1-independent-service-focused-green-01.log",
+      "sha256": "71ac5556c122468a150ac4f6fc69a52ddca04b7e4813123a69ea031c64194b7b",
+      "result": "PASS 15.661s"
+    },
+    "independent_handler": {
+      "log": "/private/tmp/g3-d-backend-repair1-independent-handler-focused-green-01.log",
+      "sha256": "af5a5ce9ba82f89dacb956faa23c77c7ce912d9cf3d6f2279ee96de9e7059fea",
+      "result": "PASS 3.414s"
+    },
+    "independent_load_stored": {
+      "log": "/private/tmp/g3-d-backend-repair1-independent-load-stored-green-01.log",
+      "sha256": "e2ba1ddb402017f1376f20092d9de231ee80246d5e42a93228219bff1d298cbf",
+      "result": "PASS 7.628s"
+    },
+    "interop_manifest": {
+      "path": "docs/insurance-kb/evidence/830-g3/d-backend-ui-interop-repair1/manifest.json",
+      "sha256": "f4d4387ab6363b24c347c39b495f1d68f99c76edfb7bd6d0f24ea37fa3aea9b3"
+    },
+    "interop_independent": {
+      "path": "/private/tmp/g3-d-backend-repair1-independent-interop-check-01.json",
+      "sha256": "22a5b0ebf7ef5afc43914ca5093515d40662e3fe70c4ffc0eebf9b13b719f3bd"
+    }
+  },
+  "rejected_evidence": [
+    "The independent matrix-green-01 log is an environment/cache setup failure and is not behavior evidence.",
+    "Owner focused-green-03 is likewise an environment setup failure and is not behavior evidence.",
+    "Owner RED01's hard-coded cross-status expected-hash mismatch is a test setup mismatch; RED02 is the authoritative repair1 behavior RED.",
+    "The earlier catalog source_guidance panic subcase was scaffold failure and is unrelated to this backend repair."
+  ],
+  "backlog": [
+    "Production HTTP/ACL, persistent DB, real source verification, human review, activation, provider calls, build, deployment, and actual business release remain NOT RUN; fixture interoperability is software evidence only."
+  ],
+  "effects": {
+    "repository_write": false,
+    "http": false,
+    "database": false,
+    "provider_or_model": false,
+    "build": false,
+    "container": false,
+    "deploy": false,
+    "commit": false
+  },
+  "final_counts": {
+    "blocker": 1,
+    "backlog": 1,
+    "rejected_evidence_classes": 4
+  }
+}

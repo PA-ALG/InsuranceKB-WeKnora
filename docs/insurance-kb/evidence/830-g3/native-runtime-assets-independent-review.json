@@ -1,0 +1,45 @@
+{
+  "contract": "830-g3-native-runtime-assets-independent-review.v1",
+  "recorded_at": "2026-09-07T10:20:38.970959+00:00",
+  "reviewer": "g3_seam_audit",
+  "status": "PASS",
+  "blockers": [],
+  "backlog": [],
+  "rejected": [
+    "First review probe selected obsolete corpus-v3 by filename and failed correctly because it ends in20; reviewed inventory declares v4 set ending21. Exact declared v4 then15/15 passed. This was reviewer input-selection error, not product RED."
+  ],
+  "verified": {
+    "native_inventory_sha256": "3cbbf7776f16e216d28902580acf34197b56475a1c29f9654b2bdde5892e2de8",
+    "captures": 15,
+    "raw_file_set_sha256": "0fa401475bf868a5f0f49f406da40214b6e1af7b88cca64e65c2e2b84fc4648f",
+    "capture_set_sha256": "70a6fe13275f7366c610abbed0d8c44b480197696b1f4a03624457f48d4cf4e5",
+    "actual_preflight_sha256": "8c45741c5976d465a2c1d229046258382bd82fcbd366c82bc677a37417ca6872",
+    "d_final_design_sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
+    "active_state_docs_and_openspec": "Match reviewed frozen constraints; historical344 withdrawn; current342"
+  },
+  "provenance": [
+    "01/03 old raw digest matches persisted historical receipt",
+    "04 raw first persisted now; historical canonical/source/parser exact match only",
+    "02 actual standalone local parse27p; no WeKnora reparse and no current source seal"
+  ],
+  "deployment": {
+    "apply": "NOT RUN",
+    "provider": "NOT RUN",
+    "source_rows": 3,
+    "missing_source_material_id": "g3-material-02"
+  },
+  "logs": [
+    {
+      "path": "native-runtime-assets-independent-review-01.log",
+      "sha256": "9b27c42b29830ae55bd1708024906c8e21a73f1ce680a9414c9a40821aa63249"
+    },
+    {
+      "path": "native-runtime-assets-independent-identity-01.log",
+      "sha256": "12ba11f8d2192f62d4c420126b3cb201becbbda1ae104f53733a5b9d652e0823"
+    },
+    {
+      "path": "native_runtime_assets_independent_verify.py",
+      "sha256": "f826451095cd5b36bea9300bf1dbab495698e6697d2b76a1dbc460ec1014fbe3"
+    }
+  ]
+}

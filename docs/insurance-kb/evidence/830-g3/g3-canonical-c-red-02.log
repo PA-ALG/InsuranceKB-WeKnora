@@ -1,0 +1,85 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+____________ test_nested_policy_receipt_control_text_is_quarantined ____________
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_nested_policy_receipt_control_text_is_quarantined(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="nested-control",
+            text=(
+                "平安保险 平安安心医疗保险 产品代码 MED-NESTED 登记编号 REG-NESTED "
+                "版本 2026 医疗保险 官方条款"
+            ),
+        )
+        corpus = _corpus(entry)
+        clean = _policy_receipt()
+        assert clean.permit_view is not None
+        bad_identity = ModelIdentity(
+            provider="fixture-provider",
+            deployment_id="fixture\tclassifier",
+            family="deepseek",
+            role="classify",
+            policy_version="fixture-policy-v1",
+        )
+        bad_permit = ModelPermitView.model_validate(
+            {**clean.permit_view.model_dump(mode="python"), "identity": bad_identity}
+        )
+        bad_receipt = PolicyReceipt.model_validate(
+            {
+                **clean.model_dump(mode="python"),
+                "identity_key": bad_identity.identity_key,
+                "permit_view": bad_permit,
+                "permit_digest": _model_permit_view_digest(bad_permit),
+            }
+        )
+        material_binding = g.MaterialBindingV1(
+            material_id=entry.material_id,
+            corpus_entry_sha256=entry.entry_sha256,
+        )
+        receipt = g.ModelReceiptBindingV1(
+            policy_receipt=bad_receipt,
+            material_bindings=(material_binding,),
+            request_sha256=hashlib.sha256(b"nested-control-request").hexdigest(),
+            input_sha256=schema_wiki_sha256(
+                "batch-classifier-input.830.g3.v1",
+                {
+                    "corpus_sha256": corpus.corpus_sha256,
+                    "material_bindings": [material_binding.model_dump(mode="json")],
+                },
+            ),
+            raw_output_sha256=hashlib.sha256(b"nested-control-output").hexdigest(),
+            execution_receipt_sha256=hashlib.sha256(b"nested-control-execution").hexdigest(),
+        )
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(
+                {
+                    "proposal_ref": "product-main",
+                    "name": "平安安心医疗保险",
+                    "product_code": "MED-NESTED",
+                    "filing": "REG-NESTED",
+                },
+            ),
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy(),
+        )
+    
+>       assert result.decisions[0].disposition == "QUARANTINE"
+E       AssertionError: assert 'CREATE' == 'QUARANTINE'
+E         
+E         - QUARANTINE
+E         + CREATE
+
+harness/tests/test_batch_entity_resolution_830_g3.py:738: AssertionError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_nested_policy_receipt_control_text_is_quarantined
+1 failed, 1 passed in 2.91s

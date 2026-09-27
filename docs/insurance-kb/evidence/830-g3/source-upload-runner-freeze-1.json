@@ -1,0 +1,33 @@
+{
+  "status": "FROZEN_PENDING_INDEPENDENT_REVIEW",
+  "files": [
+    {
+      "path": "source_upload_runner_v1.py",
+      "sha256": "9873ea8bd0cab1148354242e20d65145cd96800a735944d262b614a7d5977ce3"
+    },
+    {
+      "path": "source_upload_runner_v1_test.py",
+      "sha256": "d5387f7874ac2df0b6a5d6c72886f3c3e1044865c3f57ecd7dcac0cc1fc4283a"
+    },
+    {
+      "path": "source-upload-runner-v1-notes.md",
+      "sha256": "a7314fa1bed10a4bb5fe137bd6e0ff7c3e016517fcadd8f17dccc36a91d34e4d"
+    },
+    {
+      "path": "source-upload-runner-v1-red.log",
+      "sha256": "2a5a6ad7208b8a20deb6f6492fd62d67e70251fd9f05f436be0033aa7aa1eab4"
+    },
+    {
+      "path": "source-upload-runner-v1-green-final2.log",
+      "sha256": "81475e6a032b3c7bfd7853866f761d65234cc1c232b01c1bcb4b4566b260e385"
+    },
+    {
+      "path": "source-upload-runner-v1-static-final2.log",
+      "sha256": "0e4c5c7b19f1303edc58cb664f55db6af11a9990f93fffc00a8ff2f165002548"
+    }
+  ],
+  "owner_fake_tests": 21,
+  "red_scope": "8 stub cases,2 failures/6 errors; raw retained, exact behavior provenance subject to review",
+  "actual_effects": 0,
+  "C_input_status": "NOT_CLOSED; existing actual source registration only, no fake C5 fields"
+}

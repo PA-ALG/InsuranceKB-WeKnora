@@ -1,0 +1,227 @@
+{
+  "contract": "830-g3-existing-source-readonly-probe.v1",
+  "checked_at": "2026-09-07T07:10:06.512209+00:00",
+  "target": "existing G2 isolated API loopback18195",
+  "documents": [
+    {
+      "material_id": "g3-material-01",
+      "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+      "expected_attempt": 2,
+      "expected_file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "observations": [
+        {
+          "kind": "knowledge",
+          "http_status": 200,
+          "response_sha256": "767e67000bcde739634c7a810c91bf21a87e05ee58c563ca9ca94faf8e37b03b",
+          "observed": {
+            "id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+            "tenant_id": 10003,
+            "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+            "parse_status": "completed",
+            "current_parse_attempt": 2,
+            "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "deleted_at": null
+          },
+          "matches_expected": true
+        },
+        {
+          "kind": "revision",
+          "http_status": 200,
+          "response_sha256": "f27bcabd383e167260c000dd3b60ef935c4f05f46abb2f850de72a005ca7926b",
+          "descriptor": {
+            "chunk_manifest": {
+              "algorithm": "weknora.chunk_manifest.v1",
+              "chunk_count": 162,
+              "digest": "f2190b125469819ea0d97603c71f4fb19e4a92fa09117582b4d581947a0de414"
+            },
+            "completed_at": "2026-08-10T05:36:21.154157Z",
+            "file_digest": {
+              "algorithm": "sha256",
+              "value": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+            },
+            "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+            "parse_attempt": 2,
+            "parser_identity": {
+              "app_version": "unknown",
+              "app_commit": "unknown",
+              "docreader": "unknown",
+              "parser_engine": "builtin",
+              "chunk_size": 512,
+              "chunk_overlap": 80,
+              "separators_digest": "7df6b651efc0aedf6eebe28d34b551c7adaad61b47d2ad83019471f788f0da3f",
+              "chunker_config_digest": "20e5c1dc49c4a9963d4b48250a1307c0823580d88e82a2c93df491ea595bcdf7",
+              "embedding_model_id": "42df7f04-f53f-42d5-909d-63b0e78a1223"
+            }
+          },
+          "matches_expected": true
+        }
+      ]
+    },
+    {
+      "material_id": "g3-material-02",
+      "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+      "expected_attempt": 1,
+      "expected_file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "observations": [
+        {
+          "kind": "knowledge",
+          "http_status": 200,
+          "response_sha256": "feb5963fdc9622e8193a43898811020e3bcdd8c0792af3035c2db0c488f87ca7",
+          "observed": {
+            "id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+            "tenant_id": 10003,
+            "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+            "parse_status": "completed",
+            "current_parse_attempt": 1,
+            "file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+            "deleted_at": null
+          },
+          "matches_expected": true
+        },
+        {
+          "kind": "revision",
+          "http_status": 200,
+          "response_sha256": "bf0c8636d6502cecaefd1a9e54440fae0648667ecd1f967b8ee67af3881e9db8",
+          "descriptor": {
+            "chunk_manifest": {
+              "algorithm": "weknora.chunk_manifest.v1",
+              "chunk_count": 79,
+              "digest": "9995d0f3f2962ec8a879e77ae3850bba0d34e5984d82356ae440cce695bb27ee"
+            },
+            "completed_at": "2026-08-10T06:00:10.687814Z",
+            "file_digest": {
+              "algorithm": "sha256",
+              "value": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279"
+            },
+            "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+            "parse_attempt": 1,
+            "parser_identity": {
+              "app_version": "unknown",
+              "app_commit": "unknown",
+              "docreader": "unknown",
+              "parser_engine": "builtin",
+              "chunk_size": 512,
+              "chunk_overlap": 80,
+              "separators_digest": "7df6b651efc0aedf6eebe28d34b551c7adaad61b47d2ad83019471f788f0da3f",
+              "chunker_config_digest": "20e5c1dc49c4a9963d4b48250a1307c0823580d88e82a2c93df491ea595bcdf7",
+              "embedding_model_id": "42df7f04-f53f-42d5-909d-63b0e78a1223"
+            }
+          },
+          "matches_expected": true
+        }
+      ]
+    },
+    {
+      "material_id": "g3-material-03",
+      "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+      "expected_attempt": 3,
+      "expected_file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "observations": [
+        {
+          "kind": "knowledge",
+          "http_status": 200,
+          "response_sha256": "f57558471845f5f4f5006e8de5d45cae43c113394d2e6357cbc6d194b755e4ac",
+          "observed": {
+            "id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+            "tenant_id": 10003,
+            "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+            "parse_status": "completed",
+            "current_parse_attempt": 3,
+            "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+            "deleted_at": null
+          },
+          "matches_expected": true
+        },
+        {
+          "kind": "revision",
+          "http_status": 200,
+          "response_sha256": "7f4dfd60d5ba9c04d4d5d9a777a3579fed8e81dd75a4d06124036eba18e2a81b",
+          "descriptor": {
+            "chunk_manifest": {
+              "algorithm": "weknora.chunk_manifest.v1",
+              "chunk_count": 37,
+              "digest": "0ffe45e1ddd83576fdee7a68718693637b51a38a666952303aaa0bc942431aaa"
+            },
+            "completed_at": "2026-09-06T01:30:18.253677Z",
+            "file_digest": {
+              "algorithm": "sha256",
+              "value": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5"
+            },
+            "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+            "parse_attempt": 3,
+            "parser_identity": {
+              "app_version": "unknown",
+              "app_commit": "unknown",
+              "docreader": "unknown",
+              "parser_engine": "builtin",
+              "chunk_size": 2048,
+              "chunk_overlap": 80,
+              "separators_digest": "bebd1aad2c9ab9afb979119d1aefe87a37a963c75f79c8fc23bba78e6c60a98b",
+              "chunker_config_digest": "c6b32de1fec19fa40380c28953c43b1c521f60efa4ea61ca609d05ec517da17a",
+              "embedding_model_id": "42df7f04-f53f-42d5-909d-63b0e78a1223"
+            }
+          },
+          "matches_expected": true
+        }
+      ]
+    },
+    {
+      "material_id": "g3-material-04",
+      "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+      "expected_attempt": 1,
+      "expected_file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "observations": [
+        {
+          "kind": "knowledge",
+          "http_status": 200,
+          "response_sha256": "7c43c48e197d7fef00235afad714e46bbc32152ce3debdcf5e2df5eaffbda6b9",
+          "observed": {
+            "id": "e7722140-3486-437b-9952-f3d66d6fb539",
+            "tenant_id": 10003,
+            "knowledge_base_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+            "parse_status": "completed",
+            "current_parse_attempt": 1,
+            "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+            "deleted_at": null
+          },
+          "matches_expected": true
+        },
+        {
+          "kind": "revision",
+          "http_status": 200,
+          "response_sha256": "42e349575931f8532f2e32cc0140da60d3cbee3e87fa783becb99009f7341c53",
+          "descriptor": {
+            "chunk_manifest": {
+              "algorithm": "weknora.chunk_manifest.v1",
+              "chunk_count": 9,
+              "digest": "7c9bf9d1d54824129a382232750aa8cae393ce5fec2899996071396d8fe7672c"
+            },
+            "completed_at": "2026-09-06T01:30:30.449736Z",
+            "file_digest": {
+              "algorithm": "sha256",
+              "value": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f"
+            },
+            "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+            "parse_attempt": 1,
+            "parser_identity": {
+              "app_version": "unknown",
+              "app_commit": "unknown",
+              "docreader": "unknown",
+              "parser_engine": "builtin",
+              "chunk_size": 2048,
+              "chunk_overlap": 80,
+              "separators_digest": "bebd1aad2c9ab9afb979119d1aefe87a37a963c75f79c8fc23bba78e6c60a98b",
+              "chunker_config_digest": "c6b32de1fec19fa40380c28953c43b1c521f60efa4ea61ca609d05ec517da17a",
+              "embedding_model_id": "42df7f04-f53f-42d5-909d-63b0e78a1223"
+            }
+          },
+          "matches_expected": true
+        }
+      ]
+    }
+  ],
+  "provider_calls": 0,
+  "writes": 0,
+  "source_custody_reopen": "NOT RUN; current knowledge/revision descriptor only",
+  "status": "PASS"
+}

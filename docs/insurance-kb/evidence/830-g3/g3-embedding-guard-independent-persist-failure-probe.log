@@ -1,0 +1,13 @@
+embedding_guard_sha256=c99c181efa8e9f05ac45e9957715e9c6add08ca2134d9c68f31eb40f41cd80d6
+post_first_exception=OSError
+post_first_calls=1
+post_first_stopped=False
+post_second_status=200
+post_total_calls=2
+post_final_stopped=False
+pre_first_exception=OSError
+pre_first_calls=0
+pre_first_stopped=False
+pre_second_status=200
+pre_total_calls=1
+pre_final_stopped=False

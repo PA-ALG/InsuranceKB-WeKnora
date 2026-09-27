@@ -1,0 +1,72 @@
+{
+  "backlog": [],
+  "blocker_count": 3,
+  "blockers": [
+    {
+      "finding": "Deserialized entity bindings are not rebound to the selected C child anchors and identity-key formulas.",
+      "id": "D-PY-B1",
+      "location": "batch_concept_compile_830_g3.py:621-693",
+      "minimum_repair": "For every ref, compare all observed/normalized anchors and version_anchor with the binding; recompute MATCH entity/version candidate keys and require CREATE key fields equal the EntityCandidate; reject bound evidence not referenced by that exact child.",
+      "reproduction": "Change a frozen binding product_code, recompute binding_sha256 and request_sha256; BatchConceptCompileRequest830G3V1 accepts it."
+    },
+    {
+      "finding": "The embedded profile confirmation is not cryptographically tied to the frozen saved confirmation bytes/semantics.",
+      "id": "D-PY-B2",
+      "location": "batch_concept_compile_830_g3.py:509-527",
+      "minimum_repair": "Require the independently frozen receipt semantic SHA cd40072b3c4c32c3ed9440c7ff1ff5effc502c506b4ab11c86bbe438c7649b66 in addition to file SHA 7f6141c63db4a77e3d13a0a8d632ea5463761bedeee7bd1aabef165d68c86863.",
+      "reproduction": "Change receipt.actor, recompute receipt_semantic_sha256 and request_sha256 while retaining the claimed fixed receipt_file_sha256; validation accepts it."
+    },
+    {
+      "finding": "Source closure compares only revision_id/block_id sets and permits different SourceBlock bytes for the same C/base identity.",
+      "id": "D-PY-B3",
+      "location": "batch_concept_compile_830_g3.py:696-713",
+      "minimum_repair": "Build the unique C block map and require every overlapping/selected source key in base_request.sources to equal the exact C SourceBlock, rejecting duplicate identity with different bytes.",
+      "reproduction": "Append text outside Evidence spans to a base_request source sharing its identity with the replayed C corpus, recompute request_sha256; validation accepts it."
+    }
+  ],
+  "code_quality": "BLOCKED_BY_THREE_STRICT_VALIDATION_GAPS",
+  "contract": "830-g3-d-python-dto-fixture-independent-review.v1",
+  "effects": {
+    "build": 0,
+    "database": 0,
+    "go_review": 0,
+    "model": 0,
+    "provider": 0,
+    "repo_write": 0
+  },
+  "logs_sha256": {
+    "g3-d-python-independent-mypy-01.log": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8",
+    "g3-d-python-independent-probes-01.log": "d81464bc1362245c49f80ffb2bb33e075ae63270d143f782ebc347b4d89cd8a2",
+    "g3-d-python-independent-probes-01.py": "878ac6f8880380a95cb980134343b7520faa7554f9994b7d262f2520a36177ad",
+    "g3-d-python-independent-ruff-01.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "g3-d-python-independent-tests-01.log": "c4f7bdb5e3fd62448061a1bacf6dac0b6116761f92a1e34071c448f5acec3937"
+  },
+  "rejected": [],
+  "reviewed_inputs": {
+    "amendment7_sha256": "975ae956c2c851b8f8fffffbffd5bbbebb6b4051fa031237db3c0afb224f9380",
+    "amendment8_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+    "candidate_fixture_sha256": "179affc52b282ea16d3aecfda091c449de3d62992c4f5b337bb97609df414de0",
+    "contract_sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
+    "freeze_sha256": "5628c9aa661cad22c61cefb3647976e029c0455c7bebdf1f3d6d08880b4ad61f",
+    "preparation_fixture_sha256": "a23b4eeecc74fef40ac67968467b0c9e6a54ce777730272ca2588708fcaff3b0",
+    "provenance_fixture_sha256": "301a13a2f77ad4b361a85575028425e04782af5a181221fb58b5f5a5f4a52449",
+    "source_sha256": "b7e39999060842d586d6d77a63115d7a86d14f5ba4054c374bfa87873e2315e7",
+    "test_sha256": "3fb6c9afe3ff159bcbc89e384a04d4d47c19c2b44215844f943fe11270ca5b2a"
+  },
+  "spec_compliance": "BLOCKED",
+  "status": "BLOCKED",
+  "verification": {
+    "frozen_tests": "11/11 PASS",
+    "independent_negative_probes": "3 invalid inputs accepted (BLOCKER reproductions), 1 strict-extra control PASS",
+    "mypy_strict": "PASS",
+    "ruff": "PASS"
+  },
+  "verified_pass": [
+    "Frozen identities match the supplied SHA inventory.",
+    "Actual epoch5 base has 134 exact old fields; composition gives 132 unchanged carry plus 2 exact alignments plus 208 delta equals 342.",
+    "Five entities project 62/67/67/67/79 fields and 7/7/7/8/8 sections.",
+    "Model, mechanical-final, and review raw/context identities are distinct and validate.",
+    "Preparation POST is exact canonical 2247500 bytes, below 8388608.",
+    "Duplicate JSON keys, nested extra keys, multiline body handling, control-free identity, alignment tamper, base-MATCH deletion, and current manifest projection tests pass."
+  ]
+}

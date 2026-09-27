@@ -1,0 +1,5 @@
+existing_name_different_code_disposition= CREATE
+duplicate_source_revision_counts= 2 2 ['NEEDS_CONFIRM', 'NEEDS_CONFIRM']
+rehash_unrelated_candidate_key_accepted= ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+same_stable_key_parent_children= MULTI ['QUARANTINE', 'QUARANTINE']
+lexical_out_of_interval_disposition= CREATE

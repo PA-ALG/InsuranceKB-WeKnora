@@ -1,0 +1,33 @@
+{
+  "contract": "830-g3-runtime-readiness.v1",
+  "action": "read-only docker ps",
+  "result": "EXISTING_RUNTIME_VISIBLE_THROUGH_VM_TRANSPORT",
+  "endpoint": "unix:///Users/houjing/.colima/default/docker.sock",
+  "software": "NOT RUN",
+  "container_health": "NOT RUN",
+  "provider_probe": "NOT RUN",
+  "provisioning": "NOT RUN",
+  "local_live": "NOT RUN",
+  "github_live": "NOT RUN",
+  "current_slice_blocked": false,
+  "current_slice": "D1 catalog and frontend configuration; Docker SKIP",
+  "builds": 0,
+  "pulls": 0,
+  "model_calls": 0,
+  "note": "No runtime start/stop/repair/build occurred. G3 deployment/business still NOT RUN; running G2 is historical reuse input only.",
+  "additional_observations": [
+    {
+      "tool": "colima list (elevated read-only)",
+      "result": "default and g1-build report Running; 4CPU8GiB each"
+    },
+    {
+      "tool": "docker ps (elevated read-only)",
+      "result": "Cannot connect default docker.sock; daemon unavailable"
+    },
+    {
+      "tool": "colima ssh --profile default -- sudo docker ps (elevated read-only)",
+      "result": "PASS; existing G2app600a5a1cf93f, UI444a3de28ef3, docreaderac944d934fcd running; loopback18194/18195 present",
+      "meaning": "Host docker.sock forwarding unavailable; established VM-internal docker transport works. Earlier sandbox/host socket observations did not prove stoppedVM/appfailure."
+    }
+  ]
+}

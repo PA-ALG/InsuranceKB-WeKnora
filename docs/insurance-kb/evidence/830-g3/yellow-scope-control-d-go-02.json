@@ -1,0 +1,34 @@
+{
+  "contract": "830-g3-yellow-scope-control.v1",
+  "recorded_at": "2026-09-07T14:43:54.131172+00:00",
+  "goal": "G3",
+  "next_physical_result": "Exact complete batch crosses existing preparation authority and pinned UI; current software edge is strict Go acceptance/rejection of reviewed342 fixture",
+  "status": "YELLOW_REVIEWED_CURRENT_TWO_FILE_DOMAIN_CONTINUES",
+  "trigger": "Full C semantic replay absent in inherited partial Go implementation; completing required Dv2 mirror exceeds500 production lines",
+  "owner": "g3_catalog_impl",
+  "write_paths": [
+    "internal/types/concept_free_wiki_830_g3.go",
+    "internal/types/concept_free_wiki_830_g3_test.go"
+  ],
+  "facts": [
+    "Original full fixture RED preserved536935c9…; no real runtime/provider failure claimed.",
+    "Owner found Catalog map mutation and numeric decode/hash drift in partial Go; component fixture checks now pass.",
+    "Full typed C proposals/existing/policy/decision replay and source/per-owner closure remain incomplete; self-hash-only validation is not acceptable."
+  ],
+  "five_control_questions": {
+    "goal_and_next": "Same G3 complete candidate preparation/pinned flow, no new Goal.",
+    "real_product_state_changed": "No G3 actual C/provider/DB/serving product change; software progress only.",
+    "diff_scope": "Only two approved Go files; Python/C/common/fixtures and downstream services/UI closed.",
+    "recursion_and_risk": "This is the already frozen Dv2 full C replay requirement, not a newly introduced platform prerequisite. C real-model signed profile remains separate unapproved design, no code dispatch. No new service/table/authority/Goal/result gate.",
+    "handoff_evidence": "Frozen Python+342fixture+review commit e85fa570d, paused Go snapshots and current RED support independent continuation."
+  },
+  "decision": "Continue exact original D Go contract with negative tests before semantic mirror implementation. Freeze full Go identity and independent review before any downstream write. Do not report whole-Go PASS after positive fixture alone.",
+  "stop": "Return to root for any contract expansion, unavailable needed authority, additional production path, repeated foundational repair, or day2 demo/timebox boundary.",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "upload": 0,
+    "build": 0
+  }
+}

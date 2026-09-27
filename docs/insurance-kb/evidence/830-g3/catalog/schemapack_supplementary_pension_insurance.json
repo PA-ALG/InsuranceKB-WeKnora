@@ -1,0 +1,1659 @@
+{
+  "pack": {
+    "contract": "schema-pack-definition.830.g3.v1",
+    "schema_pack_id": "schemapack_supplementary_pension_insurance",
+    "schema_version": "2026-08-12-v5",
+    "display_name": "补充养老保险",
+    "entity_type": "insurance_product",
+    "applicable_classifications": [
+      "supplementary_pension_insurance"
+    ],
+    "workbook_sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
+    "workbook_sheet": "补充养老保险",
+    "fields": [
+      {
+        "field_key": "product_code",
+        "short_title": "险种代码",
+        "schema_category": "02 产品主数据",
+        "value_spec": null,
+        "description": "产品在公司产品主数据中的唯一标识代码，用于关联产品元数据、条款、利益演示及其他业务材料；优先从产品主数据获取，必要时可从条款首页核验。",
+        "source_guidance": "产品元数据，该字段允许从产品条款PDF第一页获取",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 6,
+        "semantic_sha256": "d123bc3dda11dc683e72ff53ad6abc5ad3d2c91edbf44e75e3287b2e125c103b"
+      },
+      {
+        "field_key": "product_short_name",
+        "short_title": "险种简称",
+        "schema_category": "02 产品主数据",
+        "value_spec": null,
+        "description": "产品对内或对外使用的规范简称；优先使用产品主数据中的正式简称，不由大模型自行缩写或改写。",
+        "source_guidance": "产品元数据，该字段允许从产品条款PDF第一页获取",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 7,
+        "semantic_sha256": "9b2e4dffe55ae43d3cd51cb97791478451fc77460838a0c2d5dc3c092003ee37"
+      },
+      {
+        "field_key": "product_name",
+        "short_title": "险种名称",
+        "schema_category": "02 产品主数据",
+        "value_spec": null,
+        "description": "产品经审批、备案或正式发布使用的完整名称，应与产品主数据或条款首页保持一致。",
+        "source_guidance": "产品元数据，该字段允许从产品条款PDF第一页获取",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 8,
+        "semantic_sha256": "57e78b33844a063dc5db987aaf5ed7d9393867b8931d11188ede54820cfca686"
+      },
+      {
+        "field_key": "sales_start_date",
+        "short_title": "开始使用时间",
+        "schema_category": "02 产品主数据",
+        "value_spec": null,
+        "description": "产品开始允许销售或接受新投保申请的日期，不等同于单张保单的合同生效日期。",
+        "source_guidance": "产品元数据，需要从\"全量产品基础信息.xlsx\"文件中获取（根据险种代码映射得到）",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 9,
+        "semantic_sha256": "adca9a83ba4d779995e4d233bd8582480e2acec58da81c4c2310d98af5cdbeb5"
+      },
+      {
+        "field_key": "sales_end_date",
+        "short_title": "结束使用时间",
+        "schema_category": "02 产品主数据",
+        "value_spec": null,
+        "description": "产品停止销售或停止接受新投保申请的日期，不代表已生效保单的保障终止日期。",
+        "source_guidance": "产品元数据，需要从\"全量产品基础信息.xlsx\"文件中获取（根据险种代码映射得到）",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 10,
+        "semantic_sha256": "26736065e70f7963bff13c8fca27ace6bb654183178654488abfaac76a4d9269"
+      },
+      {
+        "field_key": "product_type",
+        "short_title": "产品类型",
+        "schema_category": "02 产品主数据",
+        "value_spec": "普通型、分红型、万能型、投资连结型、其他",
+        "description": "产品利益类型，如普通型、分红型、万能型、投资连结型等；以产品主数据为准，不建议仅依据产品名称推断。",
+        "source_guidance": "产品元数据，需要从\"全量产品基础信息.xlsx\"文件中获取（根据险种代码映射得到）",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 11,
+        "semantic_sha256": "f8e2a0fea0bb6d8479fe4b4377e99a358e9209069a34490b0c1b77f3b834654d"
+      },
+      {
+        "field_key": "insurance_category",
+        "short_title": "产品类别",
+        "schema_category": "02 产品主数据",
+        "value_spec": "意外伤害保险、医疗保险、定期寿险、终身寿险、两全保险、年金保险、疾病保险、护理保险、意外医疗保险、补充养老保险、失能收入损失保险、其他",
+        "description": "产品所属保险业务类别，使用统一产品分类枚举；补充养老保险应以产品主数据中的正式分类为准，不根据产品名称自行判断。",
+        "source_guidance": "产品元数据，需要从\"全量产品基础信息.xlsx\"文件中获取（根据险种代码映射得到）",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 12,
+        "semantic_sha256": "d0a9d10efd19140b4057ef1a9ab2fa79d108b4f1ca468ac67a3b65179a279e25"
+      },
+      {
+        "field_key": "sales_channels",
+        "short_title": "销售渠道",
+        "schema_category": "02 产品主数据",
+        "value_spec": "个人代理、银行代理、电话销售、网络销售、保险经纪、专业代理、兼业代理、其他渠道（可多选）",
+        "description": "产品允许销售的渠道列表，如个险、银保、经代、互联网等；存在多个渠道时应以数组或多值形式保存。",
+        "source_guidance": "产品元数据，需要从\"全量产品基础信息.xlsx\"文件中获取（根据险种代码映射得到）",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 13,
+        "semantic_sha256": "ff052eb28cadcf22b9739ed18b64b38a798453d001db669c81e9e1b6b69696e0"
+      },
+      {
+        "field_key": "external_publication_status",
+        "short_title": "发布外网",
+        "schema_category": "02 产品主数据",
+        "value_spec": "是、否",
+        "description": "产品信息是否已获准在公司外部网站或其他公开渠道发布；应直接读取权威系统状态，不根据是否能搜索到网页推断。",
+        "source_guidance": "产品元数据，需要从\"全量产品基础信息.xlsx\"文件中获取（根据险种代码映射得到）",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 14,
+        "semantic_sha256": "208a8e78bc38cf9e367bece85172906f1e0a3a47f650b348691802b3d459a57b"
+      },
+      {
+        "field_key": "sales_status",
+        "short_title": "销售状态",
+        "schema_category": "02 产品主数据",
+        "value_spec": "在售、停售",
+        "description": "产品当前所处的销售生命周期状态，用于区分在售、停售等情形。",
+        "source_guidance": "产品元数据，需要从\"全量产品基础信息.xlsx\"文件中获取（根据险种代码映射得到）",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 15,
+        "semantic_sha256": "9b84918b44a751c607423ec546cf369a023889d5c4ad514e310a5c8016fd4cee"
+      },
+      {
+        "field_key": "policy_role",
+        "short_title": "主附加险",
+        "schema_category": "02 产品主数据",
+        "value_spec": "主险、附加险",
+        "description": "产品在保险合同组合中的角色，包括主险、附加险；优先读取产品主数据，缺失时可依据正式名称及组合规则判断。",
+        "source_guidance": "险种名称",
+        "formation_method": "外部映射；规则衍生",
+        "knowledge_role": "关系 Relation",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 16,
+        "semantic_sha256": "af54e81d7adf2dd1c55b129acf38c3ebab758c48ff07cc48efd0c272ba792f81"
+      },
+      {
+        "field_key": "product_summary",
+        "short_title": "产品简介",
+        "schema_category": "03 产品定位与摘要",
+        "value_spec": null,
+        "description": "根据产品说明书、条款、利益演示及培训材料中的产品特色、保障责任、投保与缴费规则、养老年金领取规则等内容加工生成。要求约200字，需包含产品养老定位、缴费安排、保障期间、养老年金起领时间、核心领取型保险金、身故/满期责任，以及现金价值、万能账户、分红或税优等重要特点；使用通俗语言，不得省略重要领取条件、限制或非保证属性。",
+        "source_guidance": "产品说明书、产品培训材料等其他业务材料",
+        "formation_method": "LLM生成",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 17,
+        "semantic_sha256": "56eac3639d14d2a7d68a99077db4d1c91e31e84b671d5ad763e68078e83f17f3"
+      },
+      {
+        "field_key": "official_product_features",
+        "short_title": "产品特色",
+        "schema_category": "03 产品定位与摘要",
+        "value_spec": null,
+        "description": "优先提取产品说明书或官方材料明确列示的产品特色；材料未明确时，可基于已核验的养老领取安排、保障责任、税优资格和保单价值事实归纳，但不得将补充养老保险的通用功能表述为产品独有优势。",
+        "source_guidance": "产品说明书",
+        "formation_method": "原文抽取；LLM生成",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 18,
+        "semantic_sha256": "05a2f3e4cc480cd8e5fe2422bd975180678887cdb200ca4399d1764294dd51d7"
+      },
+      {
+        "field_key": "target_customer_profile",
+        "short_title": "适用人群",
+        "schema_category": "03 产品定位与摘要",
+        "value_spec": null,
+        "description": "优先提取培训或销售材料中的目标客群；材料缺失时，可依据投保年龄、健康告知、缴费能力、养老目标、起领年龄、领取期限及产品形态生成50字以内的客群画像，不代表客户必然符合投保条件。",
+        "source_guidance": "产品培训材料、产品销售逻辑材料、产品说明书",
+        "formation_method": "原文抽取；LLM生成",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 19,
+        "semantic_sha256": "627cf00e27f114ebfe6e4906522befa90ff7b8885ba9a56767f8d816843ab26f"
+      },
+      {
+        "field_key": "marketing_tagline",
+        "short_title": "产品宣传语",
+        "schema_category": "03 产品定位与摘要",
+        "value_spec": null,
+        "description": "官方宣传材料中使用的产品宣传语、传播口号或核心文案；只提取正式材料内容，不由大模型自行创作。",
+        "source_guidance": "产品宣传海报",
+        "formation_method": "原文抽取",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 20,
+        "semantic_sha256": "3bb37d4ac1551060e5c1921a7cd83335ff4a20cae0c75fa5a59f50916f05eb9d"
+      },
+      {
+        "field_key": "product_overview",
+        "short_title": "产品概览",
+        "schema_category": "03 产品定位与摘要",
+        "value_spec": null,
+        "description": "面向阅读展示的产品总览，聚合核心保险责任、缴费安排、养老年金起领时间、领取频率与期间、给付金额规则、税优资格及现金价值/账户价值等关键规则，优先采用表格或一图流结构；仅作为展示内容，不作为其他字段的事实来源。",
+        "source_guidance": "产品销售逻辑PPT、产品培训材料",
+        "formation_method": "LLM生成",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 21,
+        "semantic_sha256": "9c8ba728d340175b84deb3613e356893321cd8ca03140de5bde50db327878ca9"
+      },
+      {
+        "field_key": "entry_age_range",
+        "short_title": "投保年龄",
+        "schema_category": "04 投保与承保规则",
+        "value_spec": null,
+        "description": "被保险人首次投保时允许的年龄范围，应保留年龄计算口径、起止年龄及不同缴费方式、领取方式或渠道的差异。",
+        "source_guidance": "产品条款",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 22,
+        "semantic_sha256": "898b3559461b5873d2a134d7667b3de99f2b0fc91e950568e0a63d11a9dcbc3e"
+      },
+      {
+        "field_key": "insured_eligibility",
+        "short_title": "投保范围",
+        "schema_category": "04 投保与承保规则",
+        "value_spec": null,
+        "description": "对投保人、被保险人身份、关系及其他投保资格的规定；应完整列示适用对象和限制条件，不与投保年龄、地域限制重复。",
+        "source_guidance": "产品条款",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 23,
+        "semantic_sha256": "5435b1ae3a0ca2709def0429829f4f627b54787d19a7a493f2e3eb6aec2d4477"
+      },
+      {
+        "field_key": "health_declaration_requirements",
+        "short_title": "健康告知要求",
+        "schema_category": "04 投保与承保规则",
+        "value_spec": "需要健康告知、健康告知宽松、无需健康告知",
+        "description": "投保时被保险人需要履行的健康告知要求，包括是否需要健康告知、健康问卷涉及的主要事项、免健康告知条件及特殊渠道差异；不得根据产品名称或经验推断。",
+        "source_guidance": "产品条款、产品投保规则PDF",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 24,
+        "semantic_sha256": "5c6e5c1fa117da8cc7c7bca0e174abcec636cd2a03ed76b530f787b4c744eb29"
+      },
+      {
+        "field_key": "geographic_eligibility_requirements",
+        "short_title": "投保地区或常住地限制",
+        "schema_category": "04 投保与承保规则",
+        "value_spec": null,
+        "description": "产品对投保地区、被保险人常住地、工作地或投保机构所在地等地域条件的限制，包括允许地区、限制地区及特殊适用条件；材料未明确时不得推断为全国可投保。",
+        "source_guidance": "产品投保规则PDF、产品说明书、产品销售规则、投保页面",
+        "formation_method": "原文抽取；外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 25,
+        "semantic_sha256": "0c7f628176685d962333c44dabc91b2e5d527c2134548bdf7cd10097591c7cfb"
+      },
+      {
+        "field_key": "eligible_occupation_classes",
+        "short_title": "可投保职业",
+        "schema_category": "04 投保与承保规则",
+        "value_spec": null,
+        "description": "产品允许投保的职业类别或具体职业范围，应同时保留除外职业、特殊职业及附加条件。",
+        "source_guidance": "产品投保规则PDF",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 26,
+        "semantic_sha256": "5564dcd251518ce49d93c1af1eef1d49ee7486b828c21966317a9684a626b519"
+      },
+      {
+        "field_key": "underwriting_method",
+        "short_title": "核保方式",
+        "schema_category": "04 投保与承保规则",
+        "value_spec": "免核保、智能核保、人工核保、智能+人工核保",
+        "description": "当前适用的核保模式，如免核保、智能核保、人工核保或智能与人工结合；应记录适用渠道、触发条件及生效时间。",
+        "source_guidance": "产品核保规则PDF、产品宣传海报、产品培训材料",
+        "formation_method": "原文抽取；外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 27,
+        "semantic_sha256": "5e361cb480df2ef69d5f4243901104468812b55a702f73b172b5bb5955d1f1a2"
+      },
+      {
+        "field_key": "purchase_limitations",
+        "short_title": "购买限制",
+        "schema_category": "04 投保与承保规则",
+        "value_spec": null,
+        "description": "产品对购买份数、累计保费、投保人身份、被保险人与投保人关系、特定账户购买资格、同类养老产品累计购买以及其他购买条件的限制；应与投保年龄、保费金额规则和契约调查要求分别记录。",
+        "source_guidance": "产品条款、产品核保规则PDF、产品投保规则PDF",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 9,
+        "source_row": 28,
+        "semantic_sha256": "ee4712b9bee337be29b1515fdadd082b304dbc395092224d80d82a7a398a70a8"
+      },
+      {
+        "field_key": "underwriting_investigation_requirements",
+        "short_title": "契约调查要求",
+        "schema_category": "04 投保与承保规则",
+        "value_spec": null,
+        "description": "产品在达到特定保费、保额、年龄、职业、收入或其他核保条件时，对投保人或被保险人进行契约调查、财务调查或其他补充核实的触发条件及材料要求。",
+        "source_guidance": "产品投保规则PDF、产品核保规则PDF、契约调查规则",
+        "formation_method": "原文抽取；外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "定期寿险、终身寿险、两全保险、年金险",
+        "usage_frequency": 5,
+        "source_row": 29,
+        "semantic_sha256": "1ec1dd56f09fdeb256e873cd2ead2f5a41ecd8183d60af34a301d51fad17632b"
+      },
+      {
+        "field_key": "premium_payment_term",
+        "short_title": "缴费期限",
+        "schema_category": "05 合同与交费规则",
+        "value_spec": "趸缴、1年、5年、10年、15年、20年、30年等",
+        "description": "投保人需要持续缴纳保险费的期限，如趸缴、1年、5年、10年等；存在多种缴费期限时应完整列示。",
+        "source_guidance": "产品投保规则PDF、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 30,
+        "semantic_sha256": "8d46464681b3caec044051930fec8bb2fac3d9ad2ec2e07e07ac597249034134"
+      },
+      {
+        "field_key": "premium_payment_frequency",
+        "short_title": "缴费方式",
+        "schema_category": "05 合同与交费规则",
+        "value_spec": "趸缴、年缴、半年缴、季缴、月缴",
+        "description": "保险费的缴纳频率或方式，如趸缴、年缴、半年缴、季缴、月缴；应区分缴费期限与缴费频率。",
+        "source_guidance": "产品投保规则PDF、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 31,
+        "semantic_sha256": "a7df9d889cce04bdf08252f2d402a9c820f64888880fc58267c15449964193f6"
+      },
+      {
+        "field_key": "cooling_off_period",
+        "short_title": "犹豫期",
+        "schema_category": "05 合同与交费规则",
+        "value_spec": null,
+        "description": "投保人收到保险合同后，可按条款约定解除合同并退还相应款项的期间；只允许从正式条款中抽取，并保留起算方式。",
+        "source_guidance": "产品条款",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 32,
+        "semantic_sha256": "8cb8eca6d2741d4a0312d821e9d3131bc19b7a151278e8522b8b250f892c3b68"
+      },
+      {
+        "field_key": "waiting_period",
+        "short_title": "等待期",
+        "schema_category": "05 合同与交费规则",
+        "value_spec": null,
+        "description": "合同生效后，因约定疾病或医疗原因发生保险事故暂不承担责任的期间；只允许从正式条款中抽取，应分别记录不同责任的等待期及例外情形。",
+        "source_guidance": "产品条款",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 33,
+        "semantic_sha256": "a20c809dd3f91decefe75eb7685db4b0500d297acf5e38c9afeefbda62f3a21a"
+      },
+      {
+        "field_key": "premium_grace_period",
+        "short_title": "宽限期",
+        "schema_category": "05 合同与交费规则",
+        "value_spec": null,
+        "description": "续期保险费到期未缴时，合同继续有效的宽限期间及其起算、终止和期间内责任承担规则，只允许从正式条款中抽取。",
+        "source_guidance": "产品条款",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 34,
+        "semantic_sha256": "4d69c66f6cfdaed9cf8179afb743e474d00e74abf684e830bfa773866f631861"
+      },
+      {
+        "field_key": "coverage_period",
+        "short_title": "保障期间",
+        "schema_category": "05 合同与交费规则",
+        "value_spec": null,
+        "description": "单个保险期间的具体长度或截止方式，如1年、至约定年龄或终身；应保留不同计划的差异。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 35,
+        "semantic_sha256": "645fa694d7bbcc629bffe3f78c9606c5ec29f57a1d407a49d2e23d3a5905b03c"
+      },
+      {
+        "field_key": "coverage_term_category",
+        "short_title": "保障期间分类",
+        "schema_category": "05 合同与交费规则",
+        "value_spec": "短期、长期、终身",
+        "description": "根据保障期间映射产品期限类别：不超过1年为短期，超过1年且非终身为长期，条款明确保障终身时为终身。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "规则衍生",
+        "knowledge_role": "衍生 Derived",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 36,
+        "semantic_sha256": "8793f25b56a9a62ead0de2996b1013774794913895a94575456476bb4f81bb87"
+      },
+      {
+        "field_key": "surrender_and_cancellation_terms",
+        "short_title": "犹豫期及合同解除（退保）",
+        "schema_category": "05 合同与交费规则",
+        "value_spec": null,
+        "description": "犹豫期内外解除合同的条件、办理方式、退还金额、费用扣除及可能损失；应以条款为准并区分不同阶段。",
+        "source_guidance": "产品条款",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 37,
+        "semantic_sha256": "bd81b54b1c56c0d507cf32de33a2891547db96d155372f52f6efd6417133225b"
+      },
+      {
+        "field_key": "covered_risk_categories",
+        "short_title": "可覆盖风险",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": "可选值“身故风险、养老风险、意外风险、医疗风险、重疾风险、财务风险、传承风险、子女教育风险”",
+        "description": "根据保险责任及产品功能映射产品可覆盖的风险类别，如养老、身故、财务、传承等；补充养老保险应至少准确标记其养老风险属性，仅用于分类和检索，不替代具体保险责任。",
+        "source_guidance": "产品条款",
+        "formation_method": "规则衍生",
+        "knowledge_role": "衍生 Derived",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 38,
+        "semantic_sha256": "1056e90ba1d7a777ebf158c02cf5a6699af497ce7da538e46c8f2e581c9df0c5"
+      },
+      {
+        "field_key": "coverage_responsibilities",
+        "short_title": "保险责任",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": null,
+        "description": "从正式产品材料中逐项提取全部保险责任，完整保留责任名称、触发条件、给付条件、保险金额或计算方式及主要限制；不得将养老年金、生存保险金、满期保险金或身故责任合并。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 39,
+        "semantic_sha256": "207f5dd5a4131a9d2e36b353a66422faa33f98fdc72c59c363a39616ad1ff6fd"
+      },
+      {
+        "field_key": "coverage_summary",
+        "short_title": "保什么",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": null,
+        "description": "将产品各项保险责任及核心给付内容转化为通俗摘要，如养老保险金/养老年金、生存保险金、满期保险金和身故保险金等；应明确首次领取时间、给付金额或计算口径和重要条件。",
+        "source_guidance": "产品条款",
+        "formation_method": "原文抽取；LLM生成",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 40,
+        "semantic_sha256": "7302b712f494dc47a4a585a2d1ec44e5b52a75e66c5e149bea5d189a961b2852"
+      },
+      {
+        "field_key": "age_segment_tags",
+        "short_title": "保障人群",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": "儿童（0-17岁）、成人（18-59岁）、老年人（60岁及以上）（可多选）",
+        "description": "根据投保年龄范围映射年龄客群标签，仅用于分类检索；存在跨年龄段时可多选，不能替代正式投保年龄规则。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "规则衍生",
+        "knowledge_role": "衍生 Derived",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 41,
+        "semantic_sha256": "54ea98036534581e27a0320433a9b17c33e43155a064c55d5157169917ebda20"
+      },
+      {
+        "field_key": "sum_assured_range",
+        "short_title": "基本保险金额/保额范围",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": null,
+        "description": "记录产品基本保险金额或其他作为养老年金给付计算基准的保险金额范围，包括最低/最高金额、单位及不同年龄、缴费方式或其他条件下的限制；如产品不以基本保险金额为核心，应按条款实际结构填写。",
+        "source_guidance": "产品投保规则PDF、产品说明书、产品条款、产品核保规则PDF",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 9,
+        "source_row": 42,
+        "semantic_sha256": "783903f766201dab8273a97f9dac472efe0ca15ed3d89bfc850acd96d7e0e592"
+      },
+      {
+        "field_key": "sum_assured_pattern",
+        "short_title": "保额形态",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": "定额、增额、其他",
+        "description": "根据保险金额在保险期间内是否按约定规则增长，判断产品为定额型、增额型或其他形态；仅作为分类标签，实际增长方式以“保额增长规则”为准。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "规则衍生",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 6,
+        "source_row": 43,
+        "semantic_sha256": "72046cd4503c9854d7bc439abd86b33fdb27b1d9b86446e210797461ff019fba"
+      },
+      {
+        "field_key": "sum_assured_growth_rules",
+        "short_title": "保额增长规则",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": null,
+        "description": "对增额型终身寿险，记录有效保险金额或其他保险金额随保单年度增长的规则，包括初始基本保险金额、增长起点、年度增长比例或计算方式、复利/单利口径、增长后的保险金额定义及适用责任；定额型产品可为空。",
+        "source_guidance": "产品条款、产品说明书、利益演示",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 6,
+        "source_row": 44,
+        "semantic_sha256": "3d5d7525e65f5c70ae468461598084aca13cd24f4abd7cd7bff32e8de1bb61d6"
+      },
+      {
+        "field_key": "sum_assured_growth_rate",
+        "short_title": "产品利率",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": null,
+        "description": "指产品合同明确约定的、用于基本保险金额或有效保险金额随保单年度增长的比例，如“有效保险金额每年按3.0%增长”。该字段仅记录保险金额的约定增长比例，不等同于预定利率、现金价值增长率、万能账户最低保证利率、结算利率、分红水平或客户实际收益率/IRR，不适用时为空。仅在正式材料明确约定保险金额按固定或分阶段比例增长时提取，不得根据现金价值表、利益演示或产品收益表现反推。如果不同期间采用不同增长比例，不能只抽一个百分比。例如：第1—5年度为产品封闭期，第6年度起按2.5%增长",
+        "source_guidance": "产品条款优先，其次产品说明书、正式产品材料",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 6,
+        "source_row": 45,
+        "semantic_sha256": "ac96ec4457e608f4c939d9f1fe121c77c661d93e059fcea60f4849a104efad81"
+      },
+      {
+        "field_key": "maturity_benefit_flag",
+        "short_title": "满期生存金",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": "支持满期给付、否",
+        "description": "根据保险责任是否包含满期保险金、满期生存保险金等责任规则衍生；仅作为搜索和分类标签，具体给付时点、金额和条件以“满期给付规则”为准。",
+        "source_guidance": "产品条款",
+        "formation_method": "规则衍生",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "意外险、重疾险、定期寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 8,
+        "source_row": 46,
+        "semantic_sha256": "9051a023113a5260b01bbd48fba8a67cb0f88f5dcfdc09d35813e1546a7863b4"
+      },
+      {
+        "field_key": "special_coverage_and_exclusion_tags",
+        "short_title": "特殊承保与除外标签",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": "条件承保、除外不保、自杀可赔、加费承保、特别约定承保等（标签化，多选）",
+        "description": "对容易与一般认知产生差异的特殊承保或除外情形进行标签化标记；每个标签须明确属于可保、条件承保或除外不保，并关联对应依据。",
+        "source_guidance": "产品条款、产品核保规则PDF、特别约定",
+        "formation_method": "规则衍生",
+        "knowledge_role": "衍生 Derived",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 47,
+        "semantic_sha256": "49808266534eb8d92270561a3a9e44645ac8532034dcbc49b56bdc86de4ab104"
+      },
+      {
+        "field_key": "exclusions",
+        "short_title": "责任免除",
+        "schema_category": "07 保障责任与额度",
+        "value_spec": null,
+        "description": "条款中不承担保险责任的全部情形，应完整保留原文，并可按故意行为、违法犯罪、自杀相关约定、战争及其他原因或行为主题进行结构化整理。",
+        "source_guidance": "产品条款",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 48,
+        "semantic_sha256": "f66c1913aff91a5f54628c0a432f88269ee2ada8500052eebfe77d729fef9602"
+      },
+      {
+        "field_key": "death_benefit_rules",
+        "short_title": "身故给付规则",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录被保险人在不同保单年度、养老年金开始领取前后身故时的保险金给付规则，包括已交保险费、现金价值、基本保险金额或其他计算基准，以及与已领取养老年金、保证领取余额和账户价值等利益之间的关系。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "定期寿险、终身寿险、两全保险、年金险、护理保险",
+        "usage_frequency": 6,
+        "source_row": 49,
+        "semantic_sha256": "5af375928f8de6b91ad39acdee69ff850a83f385df96e5a59b19d85f0254a816"
+      },
+      {
+        "field_key": "maturity_benefit_rules",
+        "short_title": "满期给付规则",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录产品是否包含满期生存保险金或其他合同满期给付责任，以及满期时点、给付条件、给付金额或计算方式，并说明其与已领取养老年金等利益之间的关系；未约定满期给付时可为空。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "意外险、重疾险、定期寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 8,
+        "source_row": 50,
+        "semantic_sha256": "bbb0b34d0527a53b198cf34964d6441edceb316691cb0c4bd0b66af8ee52129c"
+      },
+      {
+        "field_key": "beneficiary_rules",
+        "short_title": "受益人规则",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录条款关于身故保险金受益人的指定、变更、顺位、比例及无指定受益人时保险金处理方式等规则；养老年金、生存保险金等由被保险人领取的责任及未领取保证年金的给付对象应分别说明。",
+        "source_guidance": "产品条款、产品保全规则",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "定期寿险、终身寿险、两全保险、年金险",
+        "usage_frequency": 5,
+        "source_row": 51,
+        "semantic_sha256": "004939e679e85556be445fb318c882fe31f4e1ac6e9f68b316f159d2573d0537"
+      },
+      {
+        "field_key": "benefit_interaction_rules",
+        "short_title": "责任间给付关系",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录养老年金、生存保险金、身故保险金、满期保险金、保证领取余额及账户价值等利益之间是否可以累计、是否互斥、给付先后关系，以及某项保险金给付后合同是否终止或其他责任是否继续有效。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "关系 Relation",
+        "common_field_marker": "否",
+        "other_applicable_products": "重疾险、定期寿险、终身寿险、两全保险、护理保险、失能收入损失保险",
+        "usage_frequency": 7,
+        "source_row": 52,
+        "semantic_sha256": "d6d67093255706da7017a0eca4473caa95da3a1ff8b19d8daa1fd586694579c5"
+      },
+      {
+        "field_key": "claim_application_deadline_and_documents",
+        "short_title": "理赔申请时效与申请材料",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "保险事故通知、理赔申请时限及不同责任所需的申请材料；身故、满期或其他需申请的给付责任应分别列示证明材料、身份/受益人材料及其他必要文件。",
+        "source_guidance": "产品条款、产品说明书、理赔服务指引",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 53,
+        "semantic_sha256": "586b8752d5d1dfb38357e9e59998c46d905f9eaa52580b76c9f67e59a4dd7968"
+      },
+      {
+        "field_key": "annuity_benefit_types",
+        "short_title": "领取型保险金类别",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": "养老保险金、养老年金、生存保险金、特别生存保险金、满期保险金、其他（多选）",
+        "description": "根据保险责任映射产品包含的领取型保险金类别，用于分类与检索；应保留原责任名称，补充养老保险不得仅凭产品用途将所有生存给付统称为“养老金”。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "规则衍生",
+        "knowledge_role": "衍生 Derived",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 54,
+        "semantic_sha256": "b9fe1d694354567a86e2f2f50a0b06ea7fe6227b50bd20671a14f4c0d176cb57"
+      },
+      {
+        "field_key": "annuity_start_time",
+        "short_title": "年金开始领取时间",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录各项养老年金或其他领取型保险金首次达到给付条件的具体时间，如60周岁后的首个保单周年日、约定保单年度等；不同保险金开始领取时间不同的，应分别列示。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 55,
+        "semantic_sha256": "cf18fef8236d03beab9021fad4b2d1583c0b98d48732bfe808c51cbfd6e367d3"
+      },
+      {
+        "field_key": "annuity_start_age",
+        "short_title": "起领年龄",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录产品允许或约定开始领取养老年金的年龄，如55岁、60岁、65岁等；存在多个可选年龄时应完整列示，并与实际首次领取时点区分。",
+        "source_guidance": "产品条款、产品说明书、产品投保规则PDF",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 56,
+        "semantic_sha256": "9d2e7a105eaf7b749b00141b88650066da4cf3d70d017605ae37174628d46658"
+      },
+      {
+        "field_key": "pension_annuity_eligibility_rules",
+        "short_title": "养老年金领取条件",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录养老年金首次及持续领取需要满足的合同条件，包括达到约定起领年龄、合同持续有效、被保险人生存以及其他产品明确约定的领取资格；存在多种领取方案时，应分别记录对应条件。",
+        "source_guidance": "产品条款、产品说明书、产品投保规则PDF",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "",
+        "usage_frequency": 1,
+        "source_row": 57,
+        "semantic_sha256": "9a00cad988e48d33f04f67db55375293a9988d941bb30c62a8b8775c6667ec33"
+      },
+      {
+        "field_key": "annuity_payment_frequency",
+        "short_title": "领取频率",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": "月领、季领、半年领、年领、一次性领取等",
+        "description": "记录各项养老年金或其他领取型保险金的给付频率，如月领、季领、半年领、年领或一次性领取；不同领取方案存在差异时应分别列示。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 58,
+        "semantic_sha256": "ac835a6b31949b76e47b9794cd4b4c4b1b17d0bb680ea6167543a5dafaa72133"
+      },
+      {
+        "field_key": "annuity_payment_period",
+        "short_title": "领取期间",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录各项养老年金自首次领取后持续给付的期间或终止条件，如领取10年、20年、至被保险人身故、至约定年龄等；不得与保险合同的保障期间混淆。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 59,
+        "semantic_sha256": "b4f54d9a3448080aed5ca4102b43d66d130273f7883aab9c62ac152584825727"
+      },
+      {
+        "field_key": "annuity_payment_amount_rules",
+        "short_title": "年金给付金额/计算规则",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "按不同养老年金或领取型保险金记录每次给付金额或计算公式，包括基本保险金额比例、已交保险费比例、固定金额、账户价值相关方式等；存在月领与年领转换关系或不同领取年度给付比例变化时，应完整保留。",
+        "source_guidance": "产品条款、产品说明书、利益演示",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 60,
+        "semantic_sha256": "ad0c788659f69fdfb647bd6b329acca9af6e54c7cb40452b01c8b0f8f3412cb1"
+      },
+      {
+        "field_key": "guaranteed_payment_status",
+        "short_title": "保证领取状态",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": "保证领取、否",
+        "description": "根据条款是否明确承诺在约定保证领取期间或保证领取额度内继续给付养老年金形成的检索标签；普通养老年金领取、红利或账户价值不等同于保证领取。",
+        "source_guidance": "产品条款",
+        "formation_method": "规则衍生",
+        "knowledge_role": "衍生 Derived",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 61,
+        "semantic_sha256": "5f7d7ac0a9f6dbd909a78bcba783d9d4c35b1ae6573291dc13800b6ea4df13b8"
+      },
+      {
+        "field_key": "guaranteed_payment_rules",
+        "short_title": "保证领取规则",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录条款是否承诺在约定保证领取期间内给付养老年金，以及保证领取期间、保证领取总额或次数、给付方式、被保险人提前身故后的剩余保证领取金额处理方式等。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 62,
+        "semantic_sha256": "78bcdb2f7620fda97aef1bd441d81add4ffc343bfd1ebcc803e397d56b37537e"
+      },
+      {
+        "field_key": "guaranteed_payment_period",
+        "short_title": "保证领取期间",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录条款明确约定的保证领取年限、保证领取至某年龄或其他保证给付期间；仅在存在保证领取责任时填写。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 63,
+        "semantic_sha256": "292817ce50d442dd81b477e8402da3633e3d18059f5d8739c3fd56aecbd8b556"
+      },
+      {
+        "field_key": "unpaid_guaranteed_benefit_rules",
+        "short_title": "未领取年金/保证领取余额处理规则",
+        "schema_category": "08 理赔与给付规则",
+        "value_spec": null,
+        "description": "记录被保险人在保证领取期间或养老年金领取期内身故时，尚未领取的保证年金、剩余领取金额或其他合同约定利益如何处理，包括一次性给付、继续按期给付及给付对象。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 64,
+        "semantic_sha256": "ee946e7c1a6f18f3535138d34ef631514df2e6ee9cb13095fd252247a3044ba4"
+      },
+      {
+        "field_key": "policyholder_rights",
+        "short_title": "保单权益",
+        "schema_category": "09 服务与权益",
+        "value_spec": "保单红利、现金价值、保单贷款、自动垫交、减额交清（多选，可为空）",
+        "description": "条款明确约定的保单红利、现金价值、保单贷款、自动垫交、减额交清等合同权益；允许为空，未约定时不得补充。",
+        "source_guidance": "产品条款、产品培训材料等其他业务材料",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 65,
+        "semantic_sha256": "3c5ceb056cae1c01e24eaddb57e8f67532992670fc2662c6e44d4310dd27aa5f"
+      },
+      {
+        "field_key": "eligible_service_packages",
+        "short_title": "可享服务",
+        "schema_category": "09 服务与权益",
+        "value_spec": "安有医、安有护、居家养老、高端康养、私董保健医、御享国医、臻享家医、就医通",
+        "description": "客户购买产品并满足准入条件后，可获得的公司级权益服务包；应根据最新准入清单映射，并保留适用条件。",
+        "source_guidance": "康养&居家养老等服务准入清单Excel表格",
+        "formation_method": "外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 66,
+        "semantic_sha256": "e87e7a5668accedc1130173a27867c70a96a7dcf6fdfe3f61078538fd74610e1"
+      },
+      {
+        "field_key": "medical_service_benefits",
+        "short_title": "增值服务",
+        "schema_category": "09 服务与权益",
+        "value_spec": "就医绿通、费用垫付、预赔、闪赔、线上理赔等（多选）",
+        "description": "随产品提供的就医绿通、费用垫付、预赔、闪赔、线上理赔等医疗或理赔服务；应明确服务内容、准入条件和适用限制。",
+        "source_guidance": "产品保全规则、产品核保规则PDF及其他业务材料",
+        "formation_method": "原文抽取；外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 67,
+        "semantic_sha256": "f3d222b2256061404f6cd77e7ff1355aa3bd7293ed158cc31fb1a326ddac75b8"
+      },
+      {
+        "field_key": "tax_qualified_status",
+        "short_title": "可享税优",
+        "schema_category": "09 服务与权益",
+        "value_spec": "是、否",
+        "description": "产品是否属于可使用个人养老金账户或享受相关税收优惠的合格产品，以正式销售规则或合格产品清单为准。",
+        "source_guidance": "产品销售规则",
+        "formation_method": "原文抽取；外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 68,
+        "semantic_sha256": "b462ea37a15ad846efa419b5700f24e5e0e60bdc2d1e927fa6ed6d3cb93f8642"
+      },
+      {
+        "field_key": "tax_benefit_rules",
+        "short_title": "税优规则",
+        "schema_category": "09 服务与权益",
+        "value_spec": null,
+        "description": "产品适用的税优资格、购买账户、适用对象、缴费和税前扣除等具体规则；对补充养老保险，应在正式材料支持时同时记录个人养老金等账户资格、年度缴费/购买限制以及领取阶段相关税务规则和适用条件。",
+        "source_guidance": "产品销售规则",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 69,
+        "semantic_sha256": "d9dd20713d6ec670b89c4775ec3f3b482ec4df42f8665aa3304ed3994f4478a3"
+      },
+      {
+        "field_key": "product_bundle_rules",
+        "short_title": "产品搭配规则",
+        "schema_category": "10 销售赋能",
+        "value_spec": null,
+        "description": "产品与附加险、万能账户或其他养老产品组合销售时的必选、可选、互斥、顺序、保费/保额关系及养老年金转入账户等组合规则。",
+        "source_guidance": "产品组合销售方案相关文档",
+        "formation_method": "原文抽取",
+        "knowledge_role": "关系 Relation",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 70,
+        "semantic_sha256": "f4bd487788a5747f6a6a7a0a5d353d2b5c48e32a42adb565bfc605da2702c160"
+      },
+      {
+        "field_key": "objection_handling_scripts",
+        "short_title": "产品异议话术",
+        "schema_category": "10 销售赋能",
+        "value_spec": null,
+        "description": "针对缴费期、起领年龄、领取金额、保证领取、现金价值、退保、税优、万能账户、分红/结算利率和非保证利益等常见异议形成的话术集合，应按异议主题逐条保存并与产品事实一致。",
+        "source_guidance": "业务方提供的异议处理汇总内容、产品培训材料、产品常见问题清单",
+        "formation_method": "原文抽取",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 71,
+        "semantic_sha256": "610aac1d4eed8f09fbb47c438bcee387dafb970d5537e05f3321b0cb5f14f2df"
+      },
+      {
+        "field_key": "product_faq",
+        "short_title": "产品Q&A",
+        "schema_category": "10 销售赋能",
+        "value_spec": null,
+        "description": "产品常见问题及标准答案，应逐条保存问题、答案、适用版本、依据来源和必要风险提示。",
+        "source_guidance": "产品Q&A清单、产品销售逻辑PPT",
+        "formation_method": "原文抽取",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 72,
+        "semantic_sha256": "029125077934b730c6010f9773ad0b9958ff1852a5bba09aa1d75b3354a31fa7"
+      },
+      {
+        "field_key": "four_step_sales_script",
+        "short_title": "四步法讲解话术",
+        "schema_category": "10 销售赋能",
+        "value_spec": null,
+        "description": "按观念导入、需求激发、方案呈现、讲解促成四个阶段组织的产品讲解话术及相关方案呈现内容。",
+        "source_guidance": "产品销售逻辑PPT、产品培训材料",
+        "formation_method": "原文抽取",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 73,
+        "semantic_sha256": "8d77de648a4a5b3cc3ee7ee335c1886d02f5d293c3a2d88868c38af0f24cc2b3"
+      },
+      {
+        "field_key": "sales_pitch_script",
+        "short_title": "Pitch话术",
+        "schema_category": "10 销售赋能",
+        "value_spec": null,
+        "description": "面向完整销售沟通流程的结构化话术，包括建立联系、需求挖掘、价值呈现、异议处理、促成交易和后续服务。",
+        "source_guidance": "产品销售逻辑PPT、产品培训材料",
+        "formation_method": "原文抽取",
+        "knowledge_role": "内容 Content",
+        "common_field_marker": "是",
+        "other_applicable_products": "医疗险、意外医疗保险、意外险、重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险、失能收入损失保险",
+        "usage_frequency": 11,
+        "source_row": 74,
+        "semantic_sha256": "cca8353b394481c25e03b428f945d93e4b361a5c3507d8e8beb7f1b655509ba9"
+      },
+      {
+        "field_key": "cash_value_rules",
+        "short_title": "现金价值规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "记录产品现金价值的形成方式、适用期间、查询依据，以及现金价值与退保、保单贷款、身故保险金和养老年金领取等权益之间的关系；具体金额以合同现金价值表或正式利益演示为准，不使用“高/低/快速”等缺乏统一阈值的主观标签。",
+        "source_guidance": "产品条款、现金价值表、利益演示",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险",
+        "usage_frequency": 7,
+        "source_row": 75,
+        "semantic_sha256": "de7aeb715f27a5e7ef57cc2fba503ba9b01f5e449106c0a05e76bef2ecc4f972"
+      },
+      {
+        "field_key": "sum_assured_reduction_rules",
+        "short_title": "减保规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "产品是否允许减少基本保险金额或有效保险金额，以及可申请时间、最低/最高减保额度或比例、减保频率、减保后保险金额和现金价值变化、领取金额及其他限制。",
+        "source_guidance": "产品保全规则、产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险、护理保险",
+        "usage_frequency": 5,
+        "source_row": 76,
+        "semantic_sha256": "bd9c6c6bd16f44d97014c025eccbf2ea409ccbdad61bd303b93c41cf6e756412"
+      },
+      {
+        "field_key": "partial_withdrawal_rules",
+        "short_title": "部分领取规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "对具有保单账户或投资账户价值的产品，记录是否允许部分领取账户价值，以及最低/最高领取金额、领取频率、账户最低保留金额、领取后的账户价值及保险责任影响；传统补充养老保险通过退保或保单贷款取得资金时不得混同为“部分领取”。",
+        "source_guidance": "产品说明书、产品条款、产品保全规则",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险",
+        "usage_frequency": 4,
+        "source_row": 77,
+        "semantic_sha256": "514043fb0983eda382f6d82daebf93d19392f9a42cc25b35b9528a694116886d"
+      },
+      {
+        "field_key": "policy_loan_rules",
+        "short_title": "保单贷款规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "产品是否支持保单贷款，以及最高贷款比例、贷款期限、利率或计息方式、利息处理和逾期影响等规则。",
+        "source_guidance": "产品条款、产品保全规则",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "重疾险、定期寿险、终身寿险、两全保险、年金险、护理保险",
+        "usage_frequency": 7,
+        "source_row": 78,
+        "semantic_sha256": "f2028189997261477520359ea3f89a1b9db82ae763b6ed930475455b71ba886c"
+      },
+      {
+        "field_key": "universal_account_linkage_rules",
+        "short_title": "万能账户关联规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "记录补充养老产品是否可附加或关联万能账户，以及可关联账户、关联条件、投保/组合关系、养老年金进入账户的方式、账户生效条件和主要限制；仅有“可附加万能账户”标签不足以替代具体规则。",
+        "source_guidance": "产品投保规则PDF、产品组合销售方案、产品说明书",
+        "formation_method": "原文抽取；外部映射",
+        "knowledge_role": "关系 Relation",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 79,
+        "semantic_sha256": "946888f316740cb120ef5d3a5e2f4008807e38b53374ad4c9cea852e61ed67bf"
+      },
+      {
+        "field_key": "annuity_transfer_to_universal_account_rules",
+        "short_title": "年金转入万能账户规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "记录养老年金、生存保险金等领取型保险金是否可以或默认转入关联万能账户，以及可转入范围、转入比例、转入时间、初始费用、客户是否可选择现金领取及其他限制。",
+        "source_guidance": "产品条款、产品说明书、万能账户关联规则、产品组合销售方案",
+        "formation_method": "原文抽取；外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "年金险",
+        "usage_frequency": 2,
+        "source_row": 80,
+        "semantic_sha256": "000edb8baa1008dd7c2d5b4971093666a12949dd12efed3d9e3b13ff7de5bcea"
+      },
+      {
+        "field_key": "universal_account_guaranteed_interest_rate",
+        "short_title": "万能账户最低保证利率",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "万能保险合同对保单账户价值约定的最低保证利率，仅适用于万能账户；高于最低保证利率的实际结算利率不属于保证利益，不得与预定利率、养老年金给付率或客户实际收益率混用。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险",
+        "usage_frequency": 4,
+        "source_row": 81,
+        "semantic_sha256": "ca556685e82d70c637c6bed007fcbce77719a36d960ba21c156e199dd0ecc1b2"
+      },
+      {
+        "field_key": "universal_account_settlement_rules",
+        "short_title": "万能账户结算规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "记录万能账户利息结算方式、结算频率、结算利率确定机制、最低保证利率与实际结算利率关系，以及账户价值计算相关规则；当期结算利率等动态数据不建议写死在静态Wiki中。",
+        "source_guidance": "产品条款、产品说明书、万能账户结算规则/公告",
+        "formation_method": "原文抽取；外部映射",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险",
+        "usage_frequency": 4,
+        "source_row": 82,
+        "semantic_sha256": "868f5dc080ba412dddcc539d97a7b7a4344514ddc978fd6204059505193bd8fa"
+      },
+      {
+        "field_key": "initial_charge_rules",
+        "short_title": "初始费用规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "对万能账户等账户型产品，记录趸交、追加或转入保险费进入账户前扣除初始费用的比例、金额、分段规则及适用范围；非适用产品为空。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险",
+        "usage_frequency": 4,
+        "source_row": 83,
+        "semantic_sha256": "9c3bd3eacceeba8861690302ea32a12fc6f7ff4acd17bd6fed6de6b3b3e8c29d"
+      },
+      {
+        "field_key": "withdrawal_charge_rules",
+        "short_title": "领取手续费规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "对账户价值部分领取、退保等适用的手续费、退保费用或其他扣费规则，包括不同保单年度的比例及减免条件；非适用产品为空。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险",
+        "usage_frequency": 4,
+        "source_row": 84,
+        "semantic_sha256": "a6e48e57dadfae5db1608e5f02928e58eae3681b3863f58f76e9049426a01ef5"
+      },
+      {
+        "field_key": "dividend_rules",
+        "short_title": "分红规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "对分红型补充养老产品，记录红利来源或分配规则、红利实现方式、领取或累积方式，以及红利属于非保证利益等重要约束；未明确分红的产品为空。",
+        "source_guidance": "产品条款、产品说明书、利益演示",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "定期寿险、终身寿险、两全保险、年金险",
+        "usage_frequency": 5,
+        "source_row": 85,
+        "semantic_sha256": "abd4ec218e4da42efafd82d1e84bddd0fb4abe0c9dcce94588256ab2ddde458e"
+      },
+      {
+        "field_key": "non_guaranteed_benefit_rules",
+        "short_title": "非保证利益规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "记录产品中不属于合同保证利益的部分，如保单红利、万能账户高于最低保证利率的结算利益、投资连结账户价值等，并明确其不确定性及影响因素；不得将利益演示值表述为保证养老金、保证领取或保证收益。",
+        "source_guidance": "产品条款、产品说明书、利益演示",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险",
+        "usage_frequency": 4,
+        "source_row": 86,
+        "semantic_sha256": "f4ddd54f4a7d5bcfe050f2debedda9e193f73612ac503e4dbbde44592538fca0"
+      },
+      {
+        "field_key": "investment_account_rules",
+        "short_title": "投资账户规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": null,
+        "description": "对投资连结型补充养老保险产品，记录可选投资账户、账户价值确定方式、单位价格、账户切换、投资风险及相关费用；非投资连结型产品为空。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "终身寿险、两全保险、年金险",
+        "usage_frequency": 4,
+        "source_row": 87,
+        "semantic_sha256": "f49a41b19e943f66fa7d13bb55945c898c46c031571c48cdf854a73b6bb6ddca"
+      },
+      {
+        "field_key": "multiple_insured_rules",
+        "short_title": "双被保人/联合被保人规则",
+        "schema_category": "11 保单价值、账户与保全规则",
+        "value_spec": "支持双被保人/联合被保人、否",
+        "description": "产品是否支持同一保险合同设置两个或多个被保险人，以及被保险人组合要求、年金开始/持续给付条件、其中一人或全部被保险人身故时的给付、现金价值归属及合同终止规则。",
+        "source_guidance": "产品条款、产品说明书",
+        "formation_method": "原文抽取",
+        "knowledge_role": "事实 Fact",
+        "common_field_marker": "否",
+        "other_applicable_products": "定期寿险、终身寿险、两全保险、年金险",
+        "usage_frequency": 5,
+        "source_row": 88,
+        "semantic_sha256": "ae18b8dcbe1548629aaef7b73b4e136a15e8a5b9e6931afe7dac23d2e23da080"
+      }
+    ],
+    "presentation_profile_ref": {
+      "profile_id": "profile_supplementary_pension_insurance",
+      "profile_version": "1.0.0-candidate"
+    },
+    "schema_pack_sha256": "80ae7fdf59a65160f3424d690486b3661e5054cf7766c02f2b1e9ef5d5cad6d8"
+  },
+  "profile": {
+    "contract": "presentation-profile.v1",
+    "profile_id": "profile_supplementary_pension_insurance",
+    "profile_version": "1.0.0-candidate",
+    "schema_pack_id": "schemapack_supplementary_pension_insurance",
+    "schema_version": "2026-08-12-v5",
+    "schema_pack_sha256": "80ae7fdf59a65160f3424d690486b3661e5054cf7766c02f2b1e9ef5d5cad6d8",
+    "sections": [
+      {
+        "section_key": "overview",
+        "display_name": "产品概览",
+        "fields": [
+          {
+            "field_key": "product_code",
+            "short_title": "险种代码"
+          },
+          {
+            "field_key": "product_short_name",
+            "short_title": "险种简称"
+          },
+          {
+            "field_key": "product_name",
+            "short_title": "险种名称"
+          },
+          {
+            "field_key": "sales_start_date",
+            "short_title": "开始使用时间"
+          },
+          {
+            "field_key": "sales_end_date",
+            "short_title": "结束使用时间"
+          },
+          {
+            "field_key": "product_type",
+            "short_title": "产品类型"
+          },
+          {
+            "field_key": "insurance_category",
+            "short_title": "产品类别"
+          },
+          {
+            "field_key": "sales_channels",
+            "short_title": "销售渠道"
+          },
+          {
+            "field_key": "external_publication_status",
+            "short_title": "发布外网"
+          },
+          {
+            "field_key": "sales_status",
+            "short_title": "销售状态"
+          },
+          {
+            "field_key": "policy_role",
+            "short_title": "主附加险"
+          },
+          {
+            "field_key": "product_summary",
+            "short_title": "产品简介"
+          },
+          {
+            "field_key": "official_product_features",
+            "short_title": "产品特色"
+          },
+          {
+            "field_key": "target_customer_profile",
+            "short_title": "适用人群"
+          },
+          {
+            "field_key": "marketing_tagline",
+            "short_title": "产品宣传语"
+          },
+          {
+            "field_key": "product_overview",
+            "short_title": "产品概览"
+          }
+        ]
+      },
+      {
+        "section_key": "application-underwriting",
+        "display_name": "投保与承保",
+        "fields": [
+          {
+            "field_key": "entry_age_range",
+            "short_title": "投保年龄"
+          },
+          {
+            "field_key": "insured_eligibility",
+            "short_title": "投保范围"
+          },
+          {
+            "field_key": "health_declaration_requirements",
+            "short_title": "健康告知要求"
+          },
+          {
+            "field_key": "geographic_eligibility_requirements",
+            "short_title": "投保地区或常住地限制"
+          },
+          {
+            "field_key": "eligible_occupation_classes",
+            "short_title": "可投保职业"
+          },
+          {
+            "field_key": "underwriting_method",
+            "short_title": "核保方式"
+          },
+          {
+            "field_key": "purchase_limitations",
+            "short_title": "购买限制"
+          },
+          {
+            "field_key": "underwriting_investigation_requirements",
+            "short_title": "契约调查要求"
+          }
+        ]
+      },
+      {
+        "section_key": "contract-payment",
+        "display_name": "合同与交费",
+        "fields": [
+          {
+            "field_key": "premium_payment_term",
+            "short_title": "缴费期限"
+          },
+          {
+            "field_key": "premium_payment_frequency",
+            "short_title": "缴费方式"
+          },
+          {
+            "field_key": "cooling_off_period",
+            "short_title": "犹豫期"
+          },
+          {
+            "field_key": "waiting_period",
+            "short_title": "等待期"
+          },
+          {
+            "field_key": "premium_grace_period",
+            "short_title": "宽限期"
+          },
+          {
+            "field_key": "coverage_period",
+            "short_title": "保障期间"
+          },
+          {
+            "field_key": "coverage_term_category",
+            "short_title": "保障期间分类"
+          },
+          {
+            "field_key": "surrender_and_cancellation_terms",
+            "short_title": "犹豫期及合同解除（退保）"
+          }
+        ]
+      },
+      {
+        "section_key": "coverage-exclusions",
+        "display_name": "保障责任与除外",
+        "fields": [
+          {
+            "field_key": "covered_risk_categories",
+            "short_title": "可覆盖风险"
+          },
+          {
+            "field_key": "coverage_responsibilities",
+            "short_title": "保险责任"
+          },
+          {
+            "field_key": "coverage_summary",
+            "short_title": "保什么"
+          },
+          {
+            "field_key": "age_segment_tags",
+            "short_title": "保障人群"
+          },
+          {
+            "field_key": "sum_assured_range",
+            "short_title": "基本保险金额/保额范围"
+          },
+          {
+            "field_key": "sum_assured_pattern",
+            "short_title": "保额形态"
+          },
+          {
+            "field_key": "sum_assured_growth_rules",
+            "short_title": "保额增长规则"
+          },
+          {
+            "field_key": "sum_assured_growth_rate",
+            "short_title": "产品利率"
+          },
+          {
+            "field_key": "maturity_benefit_flag",
+            "short_title": "满期生存金"
+          },
+          {
+            "field_key": "special_coverage_and_exclusion_tags",
+            "short_title": "特殊承保与除外标签"
+          },
+          {
+            "field_key": "exclusions",
+            "short_title": "责任免除"
+          }
+        ]
+      },
+      {
+        "section_key": "claims-benefits",
+        "display_name": "理赔与给付",
+        "fields": [
+          {
+            "field_key": "death_benefit_rules",
+            "short_title": "身故给付规则"
+          },
+          {
+            "field_key": "maturity_benefit_rules",
+            "short_title": "满期给付规则"
+          },
+          {
+            "field_key": "beneficiary_rules",
+            "short_title": "受益人规则"
+          },
+          {
+            "field_key": "benefit_interaction_rules",
+            "short_title": "责任间给付关系"
+          },
+          {
+            "field_key": "claim_application_deadline_and_documents",
+            "short_title": "理赔申请时效与申请材料"
+          },
+          {
+            "field_key": "annuity_benefit_types",
+            "short_title": "领取型保险金类别"
+          },
+          {
+            "field_key": "annuity_start_time",
+            "short_title": "年金开始领取时间"
+          },
+          {
+            "field_key": "annuity_start_age",
+            "short_title": "起领年龄"
+          },
+          {
+            "field_key": "pension_annuity_eligibility_rules",
+            "short_title": "养老年金领取条件"
+          },
+          {
+            "field_key": "annuity_payment_frequency",
+            "short_title": "领取频率"
+          },
+          {
+            "field_key": "annuity_payment_period",
+            "short_title": "领取期间"
+          },
+          {
+            "field_key": "annuity_payment_amount_rules",
+            "short_title": "年金给付金额/计算规则"
+          },
+          {
+            "field_key": "guaranteed_payment_status",
+            "short_title": "保证领取状态"
+          },
+          {
+            "field_key": "guaranteed_payment_rules",
+            "short_title": "保证领取规则"
+          },
+          {
+            "field_key": "guaranteed_payment_period",
+            "short_title": "保证领取期间"
+          },
+          {
+            "field_key": "unpaid_guaranteed_benefit_rules",
+            "short_title": "未领取年金/保证领取余额处理规则"
+          }
+        ]
+      },
+      {
+        "section_key": "services",
+        "display_name": "服务与权益",
+        "fields": [
+          {
+            "field_key": "policyholder_rights",
+            "short_title": "保单权益"
+          },
+          {
+            "field_key": "eligible_service_packages",
+            "short_title": "可享服务"
+          },
+          {
+            "field_key": "medical_service_benefits",
+            "short_title": "增值服务"
+          },
+          {
+            "field_key": "tax_qualified_status",
+            "short_title": "可享税优"
+          },
+          {
+            "field_key": "tax_benefit_rules",
+            "short_title": "税优规则"
+          }
+        ]
+      },
+      {
+        "section_key": "sales-support",
+        "display_name": "销售支持",
+        "fields": [
+          {
+            "field_key": "product_bundle_rules",
+            "short_title": "产品搭配规则"
+          },
+          {
+            "field_key": "objection_handling_scripts",
+            "short_title": "产品异议话术"
+          },
+          {
+            "field_key": "product_faq",
+            "short_title": "产品Q&A"
+          },
+          {
+            "field_key": "four_step_sales_script",
+            "short_title": "四步法讲解话术"
+          },
+          {
+            "field_key": "sales_pitch_script",
+            "short_title": "Pitch话术"
+          }
+        ]
+      },
+      {
+        "section_key": "policy-value",
+        "display_name": "保单价值与保全",
+        "fields": [
+          {
+            "field_key": "cash_value_rules",
+            "short_title": "现金价值规则"
+          },
+          {
+            "field_key": "sum_assured_reduction_rules",
+            "short_title": "减保规则"
+          },
+          {
+            "field_key": "partial_withdrawal_rules",
+            "short_title": "部分领取规则"
+          },
+          {
+            "field_key": "policy_loan_rules",
+            "short_title": "保单贷款规则"
+          },
+          {
+            "field_key": "universal_account_linkage_rules",
+            "short_title": "万能账户关联规则"
+          },
+          {
+            "field_key": "annuity_transfer_to_universal_account_rules",
+            "short_title": "年金转入万能账户规则"
+          },
+          {
+            "field_key": "universal_account_guaranteed_interest_rate",
+            "short_title": "万能账户最低保证利率"
+          },
+          {
+            "field_key": "universal_account_settlement_rules",
+            "short_title": "万能账户结算规则"
+          },
+          {
+            "field_key": "initial_charge_rules",
+            "short_title": "初始费用规则"
+          },
+          {
+            "field_key": "withdrawal_charge_rules",
+            "short_title": "领取手续费规则"
+          },
+          {
+            "field_key": "dividend_rules",
+            "short_title": "分红规则"
+          },
+          {
+            "field_key": "non_guaranteed_benefit_rules",
+            "short_title": "非保证利益规则"
+          },
+          {
+            "field_key": "investment_account_rules",
+            "short_title": "投资账户规则"
+          },
+          {
+            "field_key": "multiple_insured_rules",
+            "short_title": "双被保人/联合被保人规则"
+          }
+        ]
+      }
+    ],
+    "profile_sha256": "096e8257c1f66cb3aefebe7caa516ecd15cdb85ef5848cdbb3830adb06328c8b"
+  },
+  "profile_confirmation_status": "PENDING_PRODUCT_OWNER_CONFIRMATION",
+  "quality_status": "REGISTERED_NOT_QUALITY_ADMITTED"
+}

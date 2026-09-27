@@ -1,0 +1,18 @@
+{
+  "contract": "830-g3-d-python-repair-dispatch.v1",
+  "recorded_at": "2026-09-07T12:56:18.618786+00:00",
+  "owner": "g3_catalog_impl",
+  "status": "AUTHORIZED_BOUNDED_REPAIR_1",
+  "plan_sha256": "a363c33858f184c881a215081d001c716ad22da6f7aa997b434351516b8e87d1",
+  "review_sha256": "a6a14af286957755302a0cf12edc18489de00427972b93c68153f9a00f3efca3",
+  "write_paths": [
+    "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+    "harness/tests/test_batch_concept_compile_830_g3.py",
+    "harness/tests/fixtures/batch_concept_compile_830_g3/**"
+  ],
+  "go_status": "PAUSED_INCOMPLETE_NOT_GREEN",
+  "sequence": "RED against frozen implementation, concentrated repair, freeze and independent review",
+  "effects_allowed": "local code/static/fake only",
+  "original_plan_sha256": "89e85c11a12dacf867c4b396070e263f3747d721c7332ace3caba817794fd313",
+  "wording_correction": "preserve existing nonempty actor; only actor_display_name and queue_owner are null"
+}

@@ -3,6 +3,8 @@ package embedding
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/logger"
+	"github.com/Tencent/WeKnora/internal/types"
 	secutils "github.com/Tencent/WeKnora/internal/utils"
 )
 
@@ -94,7 +97,11 @@ func (e *OpenAIEmbedder) SetSupportsDimensionOverride(supported bool) {
 
 // Embed converts text to vector
 func (e *OpenAIEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
-	for range 3 {
+	attempts := 3
+	if types.ModelAutomaticRetryDisabled(ctx) {
+		attempts = 1
+	}
+	for range attempts {
 		embeddings, err := e.BatchEmbed(ctx, []string{text})
 		if err != nil {
 			return nil, err
@@ -111,14 +118,18 @@ func (e *OpenAIEmbedder) doRequestWithRetry(ctx context.Context, jsonData []byte
 	var err error
 	url := e.baseURL + "/embeddings"
 
-	for i := 0; i <= e.maxRetries; i++ {
+	maxRetries := e.maxRetries
+	if types.ModelAutomaticRetryDisabled(ctx) {
+		maxRetries = 0
+	}
+	for i := 0; i <= maxRetries; i++ {
 		if i > 0 {
 			backoffTime := time.Duration(1<<uint(i-1)) * time.Second
 			if backoffTime > 10*time.Second {
 				backoffTime = 10 * time.Second
 			}
 			logger.GetLogger(ctx).
-				Infof("OpenAIEmbedder retrying request (%d/%d), waiting %v", i, e.maxRetries, backoffTime)
+				Infof("OpenAIEmbedder retrying request (%d/%d), waiting %v", i, maxRetries, backoffTime)
 
 			select {
 			case <-time.After(backoffTime):
@@ -149,7 +160,34 @@ func (e *OpenAIEmbedder) doRequestWithRetry(ctx context.Context, jsonData []byte
 		req.Header.Set("Authorization", "Bearer "+e.apiKey)
 		secutils.ApplyCustomHeaders(req, e.customHeaders)
 
+		purpose, _ := types.LLMCallMetadataFromContext(ctx)
+		digest := sha256.Sum256(jsonData)
+		reservation, reserveErr := types.ReserveModelDispatch(ctx, types.ModelDispatchSpec{
+			Operation: "embedding", Purpose: purpose, ModelID: e.modelID, ModelName: e.modelName,
+			RequestSHA256: hex.EncodeToString(digest[:]), TransportRetryIndex: i,
+		})
+		if reserveErr != nil {
+			return nil, fmt.Errorf("%w: reserve embedding dispatch: %v", types.ErrModelDispatchJournalUnavailable, reserveErr)
+		}
+		if reservation != nil {
+			if dispatchErr := reservation.MarkDispatching(ctx); dispatchErr != nil {
+				return nil, fmt.Errorf("%w: mark embedding dispatch: %v", types.ErrModelDispatchJournalUnavailable, dispatchErr)
+			}
+		}
 		resp, err = e.httpClient.Do(req)
+		if reservation != nil {
+			result := types.ModelDispatchResult{Outcome: "TRANSPORT_ERROR"}
+			if err == nil && resp != nil {
+				result.Outcome = "HTTP_RESPONSE"
+				result.HTTPStatus = resp.StatusCode
+			}
+			if recordErr := reservation.RecordModelDispatch(ctx, result); recordErr != nil {
+				if resp != nil && resp.Body != nil {
+					_ = resp.Body.Close()
+				}
+				return nil, fmt.Errorf("%w: record embedding dispatch: %v", types.ErrModelDispatchJournalUnavailable, recordErr)
+			}
+		}
 		if err == nil {
 			return resp, nil
 		}

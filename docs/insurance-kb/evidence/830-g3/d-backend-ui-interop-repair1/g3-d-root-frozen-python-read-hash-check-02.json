@@ -1,0 +1,37 @@
+{
+  "contract": "830-g3-d-repair1-root-frozen-python-read-hash.v1",
+  "status": "PASS",
+  "production_source_sha256": {
+    "internal/application/service/concept_free_wiki_830_g3.go": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+    "internal/handler/schema_wiki.go": "ad388e0616cd0fc4a54c2aaedad95c49334f380e4c420f0aa2bee16259490b99"
+  },
+  "results": [
+    {
+      "status": "DRAFT",
+      "file_sha256": "26cc154568917d15ef0087cd4a624b9701cf9162250c35a6a75ae9f521f3dac8",
+      "old_read_sha256": "0e933f199d51779bb0cf14fff977f7aaf014cc51282839573dc1d0947103ca33",
+      "claimed_read_sha256": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+      "frozen_python_read_sha256": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+      "equal": true,
+      "logical_response_changed_only_read_sha256": true,
+      "u2028_count": 28
+    },
+    {
+      "status": "READY",
+      "file_sha256": "9ee1f25d1fece0ded91fd754d7137db4fd1955104eedbe57d83f4207b3609a8d",
+      "old_read_sha256": "d2625486749a0c2107d53154eb8246473ec5e77d20cc503afae5096edb2ec52c",
+      "claimed_read_sha256": "42a28167f152d803e35f5da73821b19a1d0796f444b4feaf87bb859ba857f4dc",
+      "frozen_python_read_sha256": "42a28167f152d803e35f5da73821b19a1d0796f444b4feaf87bb859ba857f4dc",
+      "equal": true,
+      "logical_response_changed_only_read_sha256": true,
+      "u2028_count": 28
+    }
+  ],
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "live_http": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

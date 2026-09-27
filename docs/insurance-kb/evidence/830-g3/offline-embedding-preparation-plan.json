@@ -1,0 +1,55 @@
+{
+  "contract": "830-g3-offline-embedding-preparation-plan.v1",
+  "script": "docs/insurance-kb/evidence/830-g3/offline_embedding_inputs.go",
+  "script_sha256": "1adfdee987702d31a52dc592902773afc8049ddb50ad70159971c8ce989f3fe0",
+  "input": "native-capture-inventory.json",
+  "expected_documents": 11,
+  "process_config": {
+    "parser_engine_rules": [
+      {
+        "file_types": [
+          "pdf"
+        ],
+        "engine": "builtin"
+      }
+    ],
+    "parser_engine_overrides": {
+      "pdf_native_structure_capture": "builtin-pdfium-charbox-v1"
+    },
+    "chunking_config": {
+      "strategy": "legacy",
+      "chunk_size": 2048,
+      "chunk_overlap": 80,
+      "separators": [
+        "\n\n",
+        "\n",
+        "。"
+      ],
+      "enable_parent_child": false
+    },
+    "enable_multimodel": false,
+    "graph_enabled": false,
+    "question_generation_config": {
+      "enabled": false,
+      "question_count": 0
+    }
+  },
+  "fileName": "corpus-files-v4 entry.path basename",
+  "kb_readback_required": {
+    "token_limit": 0,
+    "languages": [],
+    "summary_model_id": "",
+    "wiki_enabled": false
+  },
+  "batch_embed_size": 100,
+  "code_sha256s": {
+    "internal/application/service/knowledge_process.go": "983ad62140ff31d751295ee56533491abc7bbe3198b4a1838949e14c0dd7a4c3",
+    "internal/infrastructure/chunker/splitter.go": "e552dc1ae0a752e7173f8667d642c84a8c5047b6bed369afff9df6f28693fcbe",
+    "internal/infrastructure/chunker/strategy.go": "973ded5a633433f6ee8317523e55c4075470d023420d099a8361fa8fd94c8113",
+    "internal/application/service/retriever/keywords_vector_hybrid_indexer.go": "bff805ccafc0bf611fc5dd6ded0e4a2a0aba91301eea51873402caced723fc15",
+    "internal/models/embedding/batch.go": "8cc0a430989cb1d230ad7425d8e45b651f8d54dc4edfbace27091cc37977a46a"
+  },
+  "effects": "local saved-capture splitting only; no HTTP/provider/DB/upload",
+  "outbound_authorization": "NOT REQUESTED; this plan authorizes preparation only",
+  "output_directory": "/private/tmp/g3-embedding-prepared-v1"
+}

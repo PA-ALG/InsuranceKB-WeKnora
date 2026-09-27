@@ -1,0 +1,42 @@
+{
+  "contract": "source-runtime-provision-independent-review.830.g3.v2",
+  "recorded_at": "2026-09-07T09:46:40.861763+00:00",
+  "reviewer": "g3_catalog_impl",
+  "script_sha256": "60bf4ae89838a3e3063113d7bf98f0a709578f0910e9f269bd416bbf6b2c3695",
+  "notes_sha256": "7e37b34844212fbcc5fa6714c313b96c06673e29245e9ed19110f4e3b2cc07ba",
+  "status": "BLOCKED",
+  "blocker_count": 4,
+  "backlog_count": 0,
+  "findings": [
+    {
+      "id": "B1",
+      "reason": "PUT success must be checkpointed before subsequent GET can fail",
+      "lines": "795-799 and843-848"
+    },
+    {
+      "id": "B2",
+      "reason": "derived KB capabilities must reflect wiki=false; otherwise full GET readback deterministically mismatches",
+      "lines": "772-799; actual Go KnowledgeBase.Capabilities 658-685"
+    },
+    {
+      "id": "B3",
+      "reason": "apply must revalidate source DB_NAME/DB_USER, not only DB_HOST/PORT",
+      "lines": "898-903"
+    },
+    {
+      "id": "B4",
+      "reason": "strict parser_env allowlist/forced values/CRLFNUL must also run before first apply mutation; forced hybrid URL must explicitly empty",
+      "lines": "1031-1036"
+    }
+  ],
+  "closed_original_items": [
+    "STOP includes SEED/all targets and inspect",
+    "human Admin active tenant before PUT",
+    "regular files exact tar",
+    "secret staging cleanup on both paths",
+    "real missing-network error shape"
+  ],
+  "evidence_kind": "independent static Go/Python seam inspection and in-memory fake reproduction; no runtime calls",
+  "next": "second and last concentrated high-risk repair; then rereview; same-domain fundamentals thereafter require design return",
+  "apply": "NOT RUN"
+}

@@ -1,0 +1,63 @@
+{
+  "contract": "830-g3-d-ui-original-snapshot.v1",
+  "freeze_sha256": "4aa287e33371ba2d658731fc3361ba25a56c66f4594aa4acf3264a9cda0f209f",
+  "purpose": "Preserve the exact owner-GREEN UI under independent review before any repair. Not acceptance.",
+  "files": [
+    {
+      "source_path": "frontend/src/api/schema-wiki/batchConcept830G3.ts",
+      "source_sha256": "fd9bd413ff9c3faeac11352af1b8c9bba4a9834d81b051b82cf275951cd51fb9",
+      "source_bytes": 36791,
+      "archive": "frontend__src__api__schema-wiki__batchConcept830G3.ts.gz",
+      "archive_sha256": "2277929dc6b017d92b51c60a605b89a62e35ac01454b3a4d09a204a8eebf684c"
+    },
+    {
+      "source_path": "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts",
+      "source_sha256": "c254166c628ec803206185983f71bfa65553005f57225261829663c897f8b8b4",
+      "source_bytes": 14171,
+      "archive": "frontend__src__api__schema-wiki__batchConcept830G3.spec.ts.gz",
+      "archive_sha256": "23df8b7407ab47814a7de1db95b3aa4bab80277ef44555cf37252c6d7cdbe12d"
+    },
+    {
+      "source_path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "source_sha256": "979d1d9b3081f09d7a48bcc78c4dcdba3617056618c0f6f390dba7b71957a132",
+      "source_bytes": 4859,
+      "archive": "frontend__src__views__knowledge__schema-wiki__SchemaWikiCatalogEntry830G2.vue.gz",
+      "archive_sha256": "4a23760a5c25a5270ed6a6ce882cba548cdd0306033adaf44f9777600b4792d9"
+    },
+    {
+      "source_path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts",
+      "source_sha256": "934e83718acde69aea4ebcbb43f68895ef57b9725e44ff4700a92647965af2cf",
+      "source_bytes": 7573,
+      "archive": "frontend__src__views__knowledge__schema-wiki__SchemaWikiCatalogEntry830G2.spec.ts.gz",
+      "archive_sha256": "fdf42c2602be08e020d341117327fed21da5a2bc584637307149d95b03629770"
+    },
+    {
+      "source_path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue",
+      "source_sha256": "9bf392988ff7b2586e5bca089373a385734a09b901194a7eef484212ba377878",
+      "source_bytes": 7789,
+      "archive": "frontend__src__views__knowledge__schema-wiki__ConceptDirectory830G2.vue.gz",
+      "archive_sha256": "e2c04a94730e7aa971da7df287b139bc40729e0ea8e6dc2f887f7bf9001ca133"
+    },
+    {
+      "source_path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts",
+      "source_sha256": "b6f59c29d0e803190436bd7397309c075ce53571c913ae679a1d7fb3f1f9f11f",
+      "source_bytes": 6470,
+      "archive": "frontend__src__views__knowledge__schema-wiki__ConceptDirectory830G2.spec.ts.gz",
+      "archive_sha256": "6fda9ecb65fa2f45176004f4ab6cb2e805d84a4b0a9d78bd5fdee930d009e845"
+    },
+    {
+      "source_path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue",
+      "source_sha256": "073a4671c08f2348dbacb0a4e5e4b4a9de2f7a717f493cfaff9847eb87951810",
+      "source_bytes": 12283,
+      "archive": "frontend__src__views__knowledge__schema-wiki__ConceptFreeWiki830G2.vue.gz",
+      "archive_sha256": "d030bf2fe7e7ce2a34e5e991185bd3cf68fe7482c41ad11d97162d14360c3a26"
+    },
+    {
+      "source_path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts",
+      "source_sha256": "a8c9509e786199c766b84ec4bb3ebf13548068b2345d993a007d49d815ef00f8",
+      "source_bytes": 8522,
+      "archive": "frontend__src__views__knowledge__schema-wiki__ConceptFreeWiki830G2.spec.ts.gz",
+      "archive_sha256": "ed13cc63b133547d14f54cbfe00bd7e0887a3545d36abdf02238128087ea5fd7"
+    }
+  ]
+}

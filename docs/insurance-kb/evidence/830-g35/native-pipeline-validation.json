@@ -1,0 +1,146 @@
+{
+  "contract": "g35-native-pipeline-validation.830.v1",
+  "base_commit": "f168ef1deceebea444a330d96fe6e7b7f763eeec",
+  "reviewed_tree": "2a10bcb6bb88a6d2f9071be06a8c51cc837a34a7",
+  "commit": "Containing commit; source identities additionally frozen below.",
+  "scope": "Explicit native route and immutable configuration binding through existing worker, compiler, final review, checkpoint and call metrics. Runtime opt-in remains disabled.",
+  "requirement_matrix": [
+    {
+      "requirement": "G35-R1",
+      "implementation": [
+        "native_pipeline.py",
+        "pipeline.py",
+        "configuration.py"
+      ],
+      "tests": [
+        "test_native_pipeline.py",
+        "test_native_runtime.py",
+        "test_configuration.py"
+      ],
+      "status": "PASS",
+      "boundary": "Software-only existing native producer composition; no real-provider quality claim."
+    },
+    {
+      "requirement": "G35-R3",
+      "implementation": [
+        "native_pipeline.py",
+        "native_admission_stage.py"
+      ],
+      "tests": [
+        "test_native_pipeline.py",
+        "test_native_admission_stage.py"
+      ],
+      "status": "PASS",
+      "boundary": "Reuses previously verified provenance and PDF projection; this slice adds no live UI proof."
+    },
+    {
+      "requirement": "G35-R5",
+      "implementation": [
+        "native_call_replay.py",
+        "checkpoint_artifacts.py",
+        "checkpoint_validation.py",
+        "checkpoint_rebase.py",
+        "discovery_replay_metrics.py"
+      ],
+      "tests": [
+        "test_native_checkpoint_calls.py",
+        "test_native_runtime.py",
+        "test_discovery_replay_metrics.py"
+      ],
+      "status": "PASS",
+      "boundary": "Real local SQLite call/checkpoint custody; external platform/model use fixtures."
+    },
+    {
+      "requirement": "G35-R6",
+      "implementation": [
+        "native_pipeline.py"
+      ],
+      "tests": [
+        "test_native_pipeline.py"
+      ],
+      "status": "NOT RUN",
+      "boundary": "Minimum dependency-group isolation deferred. Current whole free group fence verified; fields remain independent."
+    }
+  ],
+  "red": [
+    "Native configured full worker produced 0 native calls instead of expected 6 before pipeline wiring (1 failed in 23.32s).",
+    "Builder optional update policy rejected as unexpected keyword; legacy variant passed (1 failed / 1 passed).",
+    "Native configuration remained extra_forbidden with all required templates supplied before settings extension.",
+    "Eight native replay custody cases failed because native receipt markers were ignored before metrics support.",
+    "Authorized ancestor adapter cases redispatched instead of replaying before shared checkpoint call reader (2 failed / 1 passed).",
+    "Independent review found unresolved candidates bypassed whole-free-group fence. Mixed NEW+PENDING/RER retained a page. Admission/preflight failure coverage also failed real API consistency projection: 4 failed / 4 passed in 3.26s."
+  ],
+  "validation": {
+    "initial_bounded": "PASS: 43 tests 17.68s (configuration, metrics, native adapters, checkpoint reader and coordinator before final pending cases).",
+    "final_coordinator_admission": "PASS: 14 tests 5.24s; mixed pending/RER group empty, no final-review call, API preserves PENDING; admission/preflight failure summary valid; changed knowledge triggers new admission call.",
+    "durable_three_generations": "PASS: actual SQLite worker R1 partial -> R2 partial -> R3 recovery with unrelated serving Head change; 6 native discovery/citation calls plus 1 admission only in R1, R2/R3 reuse original authorized raw. Rebase retains explicit update policy. Part of 7 passed / 1 fixture failure run in 84.72s; sole fixture failure separately corrected below.",
+    "policy_drift_worker_restart": "PASS: 1 test 20.16s, worker closed and rebuilt with changed purpose; NEEDS_CONFIRMATION / CHECKPOINT_COMPILE_INPUT_INVALID, no new native/admission calls.",
+    "legacy_worker_checkpoint": "PASS: 12 tests 141.29s; workflow2/3 restart, changed-head checkpoint rebase, selection/custody/unknown-send/failure recovery. One existing Starlette deprecation warning.",
+    "builder_optional_update": "PASS: 2 tests, legacy exact fixture bytes and optional update hash/roundtrip.",
+    "ruff": "PASS",
+    "mypy": "PASS: 11 changed source modules, final coordinator checked again after two-line fence/coverage fix.",
+    "diff_check": "PASS"
+  },
+  "test_corrections": [
+    "Missing module/path and JSON-vs-strict DTO fixture setup failures were not counted as behavioral RED.",
+    "Policy drift fixture initially tried mutation of frozen dataclass/bindings; replaced by real worker restart. Expected FAILED corrected to existing NEEDS_CONFIRMATION checkpoint contract.",
+    "Unrelated Head change alone does not invalidate identical semantic admission context. Test corrected to require zero calls and current reprojection; separately changed existing knowledge context requires a new call."
+  ],
+  "review": {
+    "semantic_and_pipeline": {
+      "reviewer": "semantic_view_review",
+      "tree": "2a10bcb6bb88a6d2f9071be06a8c51cc837a34a7",
+      "blockers": 0
+    },
+    "native_recovery": {
+      "reviewer": "native_boundary_review",
+      "tree": "2a10bcb6bb88a6d2f9071be06a8c51cc837a34a7",
+      "blockers": 0
+    },
+    "mechanical_docs_red_exemption": "Both independent reviewers explicitly confirmed mechanical identity/test/NOT RUN fact records."
+  },
+  "boundaries": [
+    "No native runtime configuration enabled; Go scoped native mode/quiescence prerequisite remains.",
+    "No new queue, projection cache, checkpoint protocol or serving authority.",
+    "Partial native success remains in existing call journal and stage artifacts; unresolved candidates fence the current whole free group.",
+    "Coverage reports source offering separately from semantic admission readiness.",
+    "Full request/model policy and immutable context govern raw reuse; received but semantically invalid results are not blindly repaired.",
+    "Necessary structural entities/relations, R6 isolation and real-material quality/cost/live verification remain incomplete. G35 is not complete."
+  ],
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_real_model_calls": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "frozen_files": {
+    "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py": "91fdf9a504164bbc45a63634b1aac26389b8876eddba35944915500c88a26a86",
+    "harness/src/insurance_harness/product_ingestion/checkpoint_artifacts.py": "965efb445c10ae35e4084eb5bb1b17bb2a602637600a481756b5083118534d7a",
+    "harness/src/insurance_harness/product_ingestion/checkpoint_rebase.py": "bafd53ff4272a863c08af9e43cd7113584477c815a8da814f2c6cc9902a474fe",
+    "harness/src/insurance_harness/product_ingestion/checkpoint_validation.py": "715320406ccee3852bbe2a62a5ba383fe592218b41cd9a9d626d09dc6e3e2c12",
+    "harness/src/insurance_harness/product_ingestion/checkpoints.py": "a2d9fc22f6ce2974b9ea4ac87c3e859bec80346e8f902c2a893cf5aa9de97ada",
+    "harness/src/insurance_harness/product_ingestion/compilation.py": "636317b1a80da8a83a0f3a17f321f8837e6d6e9d23c582db29b09fc26abef969",
+    "harness/src/insurance_harness/product_ingestion/configuration.py": "c89d636b45a822f3927e744ed20d54631dae8b6472fcfd0da248b007446a9477",
+    "harness/src/insurance_harness/product_ingestion/discovery_replay_metrics.py": "56155070298dbaba52198d08dfc74893860b8ee0f6687d233e4dd74f279f68c8",
+    "harness/src/insurance_harness/product_ingestion/native_admission_stage.py": "add82363a4853bdaa66760fe059d9a7aea7e938beaf55159d9ad4a04fa9c11f7",
+    "harness/src/insurance_harness/product_ingestion/native_call_replay.py": "77015f938645c32d7b3e1aeff44458ea3b28e1e088faa9b9d7ca1174453970c7",
+    "harness/src/insurance_harness/product_ingestion/native_discovery_stage.py": "b6269c602f9a5462018f2990ba6aababd770608ace3a26408992f2cafcc03884",
+    "harness/src/insurance_harness/product_ingestion/native_pipeline.py": "8f99cb4144d76a603eb86916d7b0cd440d3ffdb1bc4d04c40e78800e6cffd611",
+    "harness/src/insurance_harness/product_ingestion/pipeline.py": "d73a6159faea9300073b7f2c6253c67e948a9a6773645c31cb2a52911c44abd0",
+    "harness/tests/product_ingestion/test_configuration.py": "e4b0a23126391ac26f84abe67092ee74ca16e342765dee910db54cc8f9fb9089",
+    "harness/tests/product_ingestion/test_discovery_replay_metrics.py": "44a684375fe1dbfb2e1cef545c319b7430863d671b51b2bb0a8ecf08b09ac20c",
+    "harness/tests/product_ingestion/test_native_admission_stage.py": "0dcb01d91327f0ef696fae7ee94bc7dadc8560dc375c5d89d61b7d33f78973e4",
+    "harness/tests/product_ingestion/test_native_checkpoint_calls.py": "f71b935a36cd3fd89a716344b196ba95d367acfc08a45737b78514f2ef6a3d93",
+    "harness/tests/product_ingestion/test_native_discovery_stage.py": "60d7c96283453e615b7f1e32ef0cfbf68310baf4540d79e0c05afaf18e05b5c1",
+    "harness/tests/product_ingestion/test_native_pipeline.py": "15c4af201797408bdd4b6091f19d9070272822217cbfac3c8bf43e0e0a5d4d50",
+    "harness/tests/product_ingestion/test_native_runtime.py": "d97a7e2807e68e5b94d5183c8ee104622d0343d0f49e0a6c9467da79ea5eb79b",
+    "harness/tests/test_batch_concept_compile_830_g3.py": "97967cb2310d0dceec9830ae66f82c73e206679e11046d11effaec59f0b212d2"
+  }
+}

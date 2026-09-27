@@ -1,0 +1,16 @@
+{
+  "contract": "830-g3-source-runtime-script-freeze.v1",
+  "files": {
+    "g3-source-runtime-provision-draft.py": "36c3eaea032a909ea7855c50f2aa1f2a6d7d13e2b3bf5bcf50fc002fc800ec77",
+    "g3-source-runtime-provision-draft.md": "44ed1fe029fdec988b90b550d45f871dc40780ed6cfe1d6ff6b04561ec3bebfd",
+    "g3-source-runtime-provision-draft-check.log": "d8748f0299e91f37b52e0c693a52d50716c96c530465b627f117a954c9f16b20"
+  },
+  "root_review": "Known config copy, actual digests, Go omission defaults, no proxy, script/preflight binding corrected before execution; preflight path read-only reviewed",
+  "independent_apply_review": "NOT RUN",
+  "apply_authorization": "NOT YET_RECORDED; scope is existing G3 local reversible provisioning only",
+  "provider_authorization": "NOT GRANTED; provider/guard/upload absent from script",
+  "effects": {
+    "apply": 0,
+    "provider": 0
+  }
+}

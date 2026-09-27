@@ -1,0 +1,736 @@
+{
+  "contract": "schema-pack-profile-mapping.830.g3.v1",
+  "mapping_version": "1.0.0-candidate",
+  "workbook_sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
+  "catalog_id": "schema_catalog_insurance_product",
+  "catalog_version": "2026-08-12-v5",
+  "confirmation_status": "PENDING_PRODUCT_OWNER_CONFIRMATION",
+  "expected_field_name_union_count": 154,
+  "expected_field_name_intersection_count": 47,
+  "packs": [
+    {
+      "workbook_sheet": "医疗险",
+      "schema_pack_id": "schemapack_medical_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "医疗险",
+      "classification": "medical_insurance",
+      "profile_id": "profile_medical_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 67,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-contract",
+          "display_name": "投保与合同",
+          "category_codes": [
+            "04",
+            "05"
+          ]
+        },
+        {
+          "section_key": "renewal-pricing",
+          "display_name": "续保与费率",
+          "category_codes": [
+            "06"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "意外医疗",
+      "schema_pack_id": "schemapack_accident_medical_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "意外医疗保险",
+      "classification": "accident_medical_insurance",
+      "profile_id": "profile_accident_medical_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 70,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-contract",
+          "display_name": "投保与合同",
+          "category_codes": [
+            "04",
+            "05"
+          ]
+        },
+        {
+          "section_key": "renewal-pricing",
+          "display_name": "续保与费率",
+          "category_codes": [
+            "06"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "意外险",
+      "schema_pack_id": "schemapack_accident_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "意外险",
+      "classification": "accident_insurance",
+      "profile_id": "profile_accident_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 62,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-contract",
+          "display_name": "投保与合同",
+          "category_codes": [
+            "04",
+            "05"
+          ]
+        },
+        {
+          "section_key": "renewal-pricing",
+          "display_name": "续保与费率",
+          "category_codes": [
+            "06"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "重疾险",
+      "schema_pack_id": "schemapack_critical_illness_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "重疾险",
+      "classification": "critical_illness_insurance",
+      "profile_id": "profile_critical_illness_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 67,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-contract",
+          "display_name": "投保与合同",
+          "category_codes": [
+            "04",
+            "05"
+          ]
+        },
+        {
+          "section_key": "renewal-pricing",
+          "display_name": "续保与费率",
+          "category_codes": [
+            "06"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        },
+        {
+          "section_key": "policy-value",
+          "display_name": "保单价值与保全",
+          "category_codes": [
+            "11"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "定期寿险",
+      "schema_pack_id": "schemapack_term_life_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "定期寿险",
+      "classification": "term_life_insurance",
+      "profile_id": "profile_term_life_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 66,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-contract",
+          "display_name": "投保与合同",
+          "category_codes": [
+            "04",
+            "05"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        },
+        {
+          "section_key": "policy-value",
+          "display_name": "保单价值与保全",
+          "category_codes": [
+            "11"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "终身寿险",
+      "schema_pack_id": "schemapack_whole_life_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "终身寿险",
+      "classification": "whole_life_insurance",
+      "profile_id": "profile_whole_life_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 75,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-underwriting",
+          "display_name": "投保与承保",
+          "category_codes": [
+            "04"
+          ]
+        },
+        {
+          "section_key": "contract-payment",
+          "display_name": "合同与交费",
+          "category_codes": [
+            "05"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        },
+        {
+          "section_key": "policy-value",
+          "display_name": "保单价值与保全",
+          "category_codes": [
+            "11"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "两全保险",
+      "schema_pack_id": "schemapack_endowment_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "两全保险",
+      "classification": "endowment_insurance",
+      "profile_id": "profile_endowment_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 79,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-underwriting",
+          "display_name": "投保与承保",
+          "category_codes": [
+            "04"
+          ]
+        },
+        {
+          "section_key": "contract-payment",
+          "display_name": "合同与交费",
+          "category_codes": [
+            "05"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        },
+        {
+          "section_key": "policy-value",
+          "display_name": "保单价值与保全",
+          "category_codes": [
+            "11"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "年金险",
+      "schema_pack_id": "schemapack_annuity_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "年金险",
+      "classification": "annuity_insurance",
+      "profile_id": "profile_annuity_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 82,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-underwriting",
+          "display_name": "投保与承保",
+          "category_codes": [
+            "04"
+          ]
+        },
+        {
+          "section_key": "contract-payment",
+          "display_name": "合同与交费",
+          "category_codes": [
+            "05"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        },
+        {
+          "section_key": "policy-value",
+          "display_name": "保单价值与保全",
+          "category_codes": [
+            "11"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "护理保险",
+      "schema_pack_id": "schemapack_nursing_care_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "护理保险",
+      "classification": "nursing_care_insurance",
+      "profile_id": "profile_nursing_care_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 74,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-contract",
+          "display_name": "投保与合同",
+          "category_codes": [
+            "04",
+            "05"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        },
+        {
+          "section_key": "policy-value",
+          "display_name": "保单价值与保全",
+          "category_codes": [
+            "11"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "补充养老保险",
+      "schema_pack_id": "schemapack_supplementary_pension_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "补充养老保险",
+      "classification": "supplementary_pension_insurance",
+      "profile_id": "profile_supplementary_pension_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 83,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-underwriting",
+          "display_name": "投保与承保",
+          "category_codes": [
+            "04"
+          ]
+        },
+        {
+          "section_key": "contract-payment",
+          "display_name": "合同与交费",
+          "category_codes": [
+            "05"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        },
+        {
+          "section_key": "policy-value",
+          "display_name": "保单价值与保全",
+          "category_codes": [
+            "11"
+          ]
+        }
+      ]
+    },
+    {
+      "workbook_sheet": "失能收入损失保险",
+      "schema_pack_id": "schemapack_disability_income_insurance",
+      "schema_version": "2026-08-12-v5",
+      "display_name": "失能收入损失保险",
+      "classification": "disability_income_insurance",
+      "profile_id": "profile_disability_income_insurance",
+      "profile_version": "1.0.0-candidate",
+      "expected_field_count": 76,
+      "sections": [
+        {
+          "section_key": "overview",
+          "display_name": "产品概览",
+          "category_codes": [
+            "02",
+            "03"
+          ]
+        },
+        {
+          "section_key": "application-contract",
+          "display_name": "投保与合同",
+          "category_codes": [
+            "04",
+            "05"
+          ]
+        },
+        {
+          "section_key": "renewal-pricing",
+          "display_name": "续保与费率",
+          "category_codes": [
+            "06"
+          ]
+        },
+        {
+          "section_key": "coverage-exclusions",
+          "display_name": "保障责任与除外",
+          "category_codes": [
+            "07"
+          ]
+        },
+        {
+          "section_key": "claims-benefits",
+          "display_name": "理赔与给付",
+          "category_codes": [
+            "08"
+          ]
+        },
+        {
+          "section_key": "services",
+          "display_name": "服务与权益",
+          "category_codes": [
+            "09"
+          ]
+        },
+        {
+          "section_key": "sales-support",
+          "display_name": "销售支持",
+          "category_codes": [
+            "10"
+          ]
+        }
+      ]
+    }
+  ]
+}

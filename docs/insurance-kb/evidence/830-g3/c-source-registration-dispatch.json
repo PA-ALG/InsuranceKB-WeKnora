@@ -1,0 +1,30 @@
+{
+  "contract": "830-g3-source-registration-dispatch.v1",
+  "recorded_at": "2026-09-07T11:31:37.343546+00:00",
+  "owner": "g3_catalog_impl",
+  "status": "AUTHORIZED_WITHIN_G3_AFTER_DESIGN_REVIEW",
+  "design_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+  "predecessor_common_c_commit": "de38eb252",
+  "write_paths": [
+    "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+    "harness/tests/test_batch_entity_resolution_830_g3.py"
+  ],
+  "required_implementation_sites": [
+    "_entry_source_reasons",
+    "_matching_rule",
+    "CREATE _decision candidate scope/key",
+    "resolve_batch.source_keys"
+  ],
+  "sequence": "RED actual HTTP receipt rejected by old DTO; implementation and focused/AC regressions; frozen files and independent review before actual C corpus",
+  "non_goals": [
+    "No new admission prerequisite/resource_id/self-hash",
+    "No shared legacy receipt/server/DB/model/upload changes",
+    "No D handler/service/UI expansion"
+  ],
+  "effects": {
+    "http": 0,
+    "database": 0,
+    "provider": 0,
+    "container": 0
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "contract": "830-g3-d-dispatch-mechanical-independent-review.v1",
+  "inputs": {
+    "go_dispatch": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-go-repair-dispatch-1.json",
+      "sha256": "d562fba32e0687ad7bf4343c7f49a9efc3e70c6248e8884f18c8bb9ba476da9b",
+      "expected": "d562fba32e0687ad7bf4343c7f49a9efc3e70c6248e8884f18c8bb9ba476da9b"
+    },
+    "ui_dispatch": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-ui-local-dispatch-1.json",
+      "sha256": "bf6656a579c7466609976975b1545d2466ad09c1624b900c67111ed3b25e428d",
+      "expected": "bf6656a579c7466609976975b1545d2466ad09c1624b900c67111ed3b25e428d"
+    }
+  },
+  "go_input_bindings": [
+    {
+      "path": "lane-d-go-wire-presence-repair-1.md",
+      "exists": true,
+      "actual_sha256": "6438c5c91fb50a58f5c5aa6d185000402ec0d8ecfa39390d672e922a8be34b8a",
+      "expected_sha256": "6438c5c91fb50a58f5c5aa6d185000402ec0d8ecfa39390d672e922a8be34b8a",
+      "match": true
+    },
+    {
+      "path": "lane-d-go-wire-repair-plan-independent-review-1.json",
+      "exists": true,
+      "actual_sha256": "2867841bc3e424edc665f0634cb0856c40a035b4da3c32caf25254ee89ec622a",
+      "expected_sha256": "2867841bc3e424edc665f0634cb0856c40a035b4da3c32caf25254ee89ec622a",
+      "match": true
+    },
+    {
+      "path": "lane-d-go-mirror-independent-review-01.json",
+      "exists": true,
+      "actual_sha256": "f26245641a354047aa578dc16d528e4ac125250f7eb7cfc1c6019b330650959a",
+      "expected_sha256": "f26245641a354047aa578dc16d528e4ac125250f7eb7cfc1c6019b330650959a",
+      "match": true
+    }
+  ],
+  "ui_input_bindings": [
+    {
+      "path": "lane-d-ui-local-order-amendment-1.md",
+      "exists": true,
+      "actual_sha256": "df52a2049b76b41b9ab493cc38abd248aa1cea408c287bae7108ed21311c10ee",
+      "expected_sha256": "df52a2049b76b41b9ab493cc38abd248aa1cea408c287bae7108ed21311c10ee",
+      "match": true
+    },
+    {
+      "path": "lane-d-ui-local-order-amendment-review-1.json",
+      "exists": true,
+      "actual_sha256": "dcf96bcabd2f0021b72364db955af14b5ba928919d48ab432fe195228a3b66c4",
+      "expected_sha256": "dcf96bcabd2f0021b72364db955af14b5ba928919d48ab432fe195228a3b66c4",
+      "match": true
+    },
+    {
+      "path": "lane-d-downstream-execution-plan-1.md",
+      "exists": true,
+      "actual_sha256": "a5cbf39c74f2bd26d52590580b7d2a059858d2951577614ad1cae3ed8727f3ab",
+      "expected_sha256": "a5cbf39c74f2bd26d52590580b7d2a059858d2951577614ad1cae3ed8727f3ab",
+      "match": true
+    },
+    {
+      "path": "d-preparation-alignment-display-clarification-1.md",
+      "exists": true,
+      "actual_sha256": "5e12a1e0f81677986aa8483c79e6376f9266b410655564be8ee96ec858b0daab",
+      "expected_sha256": "5e12a1e0f81677986aa8483c79e6376f9266b410655564be8ee96ec858b0daab",
+      "match": true
+    },
+    {
+      "path": "lane-d-source-coverage2-freeze.json",
+      "exists": true,
+      "actual_sha256": "811eb4d070f5f33743d2da6cd507abbacefa9debe7bab8ec910d274252c940c7",
+      "expected_sha256": "811eb4d070f5f33743d2da6cd507abbacefa9debe7bab8ec910d274252c940c7",
+      "match": true
+    },
+    {
+      "path": "lane-d-go-mirror-freeze-1.json",
+      "exists": true,
+      "actual_sha256": "32f6c8c6dce01f221cf0e8ded1c59e2a312b880b7f24f5552208b2d3722e1019",
+      "expected_sha256": "32f6c8c6dce01f221cf0e8ded1c59e2a312b880b7f24f5552208b2d3722e1019",
+      "match": true
+    },
+    {
+      "path": "lane-d-go-mirror-independent-review-01.json",
+      "exists": true,
+      "actual_sha256": "f26245641a354047aa578dc16d528e4ac125250f7eb7cfc1c6019b330650959a",
+      "expected_sha256": "f26245641a354047aa578dc16d528e4ac125250f7eb7cfc1c6019b330650959a",
+      "match": true
+    }
+  ],
+  "old_snapshots": [
+    {
+      "source_path": "internal/types/concept_free_wiki_830_g3.go",
+      "gzip_sha_match": true,
+      "raw_sha_match": true,
+      "raw_bytes_match": true,
+      "mtime_zero": true
+    },
+    {
+      "source_path": "internal/types/concept_free_wiki_830_g3_test.go",
+      "gzip_sha_match": true,
+      "raw_sha_match": true,
+      "raw_bytes_match": true,
+      "mtime_zero": true
+    }
+  ],
+  "checks": {
+    "go_dispatch_inputs_all_match": true,
+    "go_exact_two_paths": true,
+    "go_exact_two_blockers": true,
+    "go_closed_domains_preserved": true,
+    "go_no_external_effects": true,
+    "ui_dispatch_inputs_all_match": true,
+    "ui_task4_local_only": true,
+    "ui_final_gate_preserved": true,
+    "ui_no_external_effects": true,
+    "old_snapshot_identity_all_match": true
+  },
+  "verdict": {
+    "status": "PASS",
+    "blocker_count": 0,
+    "backlog_count": 0,
+    "rejected_count": 0,
+    "scope": "mechanical dispatch integration only; no product behavior review",
+    "red_boundary": "Mechanical dispatch/custody is RED-exempt; repair and UI implementation still require the RED/GREEN gates stated in their frozen plans."
+  },
+  "effects": {
+    "repo_writes_by_reviewer": 0,
+    "runtime_calls": 0,
+    "provider_calls": 0,
+    "db_calls": 0,
+    "docker_calls": 0,
+    "active_go_reads": 0,
+    "active_ui_reads": 0
+  }
+}

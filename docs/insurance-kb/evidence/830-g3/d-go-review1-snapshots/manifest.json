@@ -1,0 +1,22 @@
+{
+  "contract": "830-g3-d-go-review1-snapshots.v1",
+  "status": "ORIGINAL_INDEPENDENT_REVIEW_INPUT_WITH_REPRODUCED_OMITTED_NULL_BLOCKER",
+  "freeze_sha256": "32f6c8c6dce01f221cf0e8ded1c59e2a312b880b7f24f5552208b2d3722e1019",
+  "files": [
+    {
+      "source_path": "internal/types/concept_free_wiki_830_g3.go",
+      "raw_sha256": "d2d5f2efcb899ed0d18791cabdd435af6e72c0a4a32abd86de325a418b151a25",
+      "raw_bytes": 159192,
+      "snapshot": "concept_free_wiki_830_g3.go.gz",
+      "gzip_sha256": "81c276a7a3fec7a7a5e9c8497c45d1292dc3d83242b0377f02d0c099959952c5"
+    },
+    {
+      "source_path": "internal/types/concept_free_wiki_830_g3_test.go",
+      "raw_sha256": "b669dbebae2a75c57e9fa4c7093600d3c91c0a581a6a6e4ad1e66f6b051a5833",
+      "raw_bytes": 18828,
+      "snapshot": "concept_free_wiki_830_g3_test.go.gz",
+      "gzip_sha256": "0ad0b96204b143b25136e2a2f024edc130c1d1762fcb7c0d8f164a53af45b84d"
+    }
+  ],
+  "no_behavior_change": true
+}

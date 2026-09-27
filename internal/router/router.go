@@ -42,6 +42,9 @@ type RouterParams struct {
 	AgentShareService              interfaces.AgentShareService
 	KBHandler                      *handler.KnowledgeBaseHandler
 	KnowledgeHandler               *handler.KnowledgeHandler
+	ProductIngestionHandler        *handler.ProductIngestionHandler
+	G3PlatformSnapshotsHandler     *handler.G3PlatformSnapshotsHandler
+	G3PlatformReleaseHandler       *handler.G3PlatformReleaseHandler
 	KnowledgeRevisionSourceHandler *handler.KnowledgeRevisionSourceHandler
 	TenantHandler                  *handler.TenantHandler
 	TenantService                  interfaces.TenantService
@@ -245,6 +248,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		)
 		RegisterKnowledgeTagRoutes(v1, params.TagHandler, rbacGuards)
 		RegisterKnowledgeRoutes(v1, params.KnowledgeHandler, rbacGuards)
+		RegisterProductIngestionRoutes(v1, params.ProductIngestionHandler, rbacGuards)
 		RegisterKnowledgeRevisionSourceRoutes(
 			v1,
 			params.KnowledgeRevisionSourceHandler,
@@ -293,6 +297,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 			params.WikiReleaseHandler,
 			rbacGuards,
 		)
+		registerConfiguredG3PlatformRoutes(v1, params, rbacGuards)
 		RegisterChunkerDebugRoutes(v1, rbacGuards)
 
 		// Fail fast if any declared API-key policy points at a route
@@ -329,4 +334,12 @@ func trustedProxies() []string {
 		}
 	}
 	return proxies
+}
+
+func registerConfiguredG3PlatformRoutes(v1 *gin.RouterGroup, params RouterParams, guards *rbacGuards) {
+	if params.SchemaWikiHandler == nil || params.WikiReleaseHandler == nil {
+		return
+	}
+	RegisterG3PlatformSnapshotRoutes(v1, params.G3PlatformSnapshotsHandler, params.SchemaWikiHandler, params.WikiReleaseHandler, guards)
+	RegisterG3PlatformReleaseRoutes(v1, params.G3PlatformReleaseHandler, params.SchemaWikiHandler, params.WikiReleaseHandler, guards)
 }

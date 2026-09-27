@@ -1,0 +1,28 @@
+{
+  "contract": "830-g3-native-preflight-plan.v1",
+  "owner": "root",
+  "authorization": "G3 standing implementation authorization and user continue instruction; necessary local parser verification only",
+  "source_file_set_sha256": "7fc60c849ca26dd038f94fa4b2d0af4cfe4aa3d8f330eb9d8c28eda39f1a3145",
+  "input_files": 11,
+  "script": "docs/insurance-kb/evidence/830-g3/native_preflight.py",
+  "script_sha256": "0534bf9aa4cdd349c5c6292f00c1197ccd0f59500b6eef2a3cf4b973c04cd1a9",
+  "existing_image": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+  "existing_container": "weknora-g2-594-docreader",
+  "effects": [
+    "Only uniquely named G3 /tmp files inside existing local parser container",
+    "Local parser process with socket connection disabled",
+    "Private local capture archive and public compact receipt"
+  ],
+  "provider_calls_max": 0,
+  "uploads_max": 0,
+  "db_writes_max": 0,
+  "builds_max": 0,
+  "pulls_max": 0,
+  "source_revision_status": "NOT_YET_CAPTURED; preflight is not lifecycle capture",
+  "status": "FOCUSED_REVIEW_FIX_COMPLETE",
+  "review_fix": "Explicit optimized-mode refusal before effects; run-local archive hash distinguished from canonical capture-set hash",
+  "independent_review": "g3_corpus_audit BLOCKER0 after single focused fix",
+  "execution": "native-preflight-attempt1.json;10nativePASS, officialmanual20fails on scannedpage7",
+  "actual_calls": 0,
+  "actual_uploads": 0
+}

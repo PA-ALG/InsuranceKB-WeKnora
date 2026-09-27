@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "scope": "Task3y first parse source/locator reuse",
+  "command": "GOMAXPROCS=2 go test -p 2 ./internal/application/service -run 'TestG3FirstParse|TestG3PlatformSourceSnapshot|TestConceptSourceReuse|TestConceptLegacy|TestConceptDerivedArtifact|TestCFG42' -count=1 -json",
+  "elapsed_test_seconds": 60.119,
+  "top_level_test_count": 35,
+  "test_and_subtest_count": 50,
+  "failed_tests": 0,
+  "raw_report_sha256": "41cda6c2e1e0cb337ad37af130d5e3ec803f242c413d88f798713cb02616fc66",
+  "source_sha256": {
+    "internal/application/service/knowledge.go": "333430662afffd413e5f2012b59fa5877e10637993c8c29fcc19718e98bc5e87",
+    "internal/application/service/knowledge_process.go": "3502525c7bcc1a69f768825e958cd3fb4aeb63661c055abdcb6ff5dd55bc5e56",
+    "internal/application/service/concept_source_reuse_830_g3.go": "eaacf4f763c3665229705de2e3a2edfc42f7389c0427481e2f3aa0701c415878",
+    "internal/application/service/g3_platform_source_snapshot.go": "62708a33d71c6a7b27f7cca5a1f9598f3d418f0118786b35da52cddfbb6a0670",
+    "internal/application/service/concept_source_locator_830_g3.go": "ea44a1b83ac39001c75051a5f6114e219bb981175df653be78e4312d473c2b2a",
+    "internal/application/service/g3_first_parse.go": "3b446b6f1ff8cc02d7975f1723c54b93bebb55789d1bdf27ca8f3663fabaf774",
+    "internal/application/service/g3_first_parse_test.go": "5c910bce45bbab5a447b2ccbe61f2c175b86a49708bc6746e26bfd2f9d6f3502",
+    "internal/application/service/g3_platform_source_snapshot_test.go": "a15c5bf984b0353b110e0d15ba95e4a965a95f4bd94814e4e5a5a8329871da8e",
+    "internal/container/container.go": "7856d3676cde5e1e0cba9007ee4b1d6efe4f96fe367610ca44e4471bd4ed17ac"
+  },
+  "independent_review": "PASS: unique parent/child indexes and first-artifact cache binding closed",
+  "deployed": false,
+  "real_uploads": 0,
+  "model_calls": 0,
+  "release_writes": 0
+}

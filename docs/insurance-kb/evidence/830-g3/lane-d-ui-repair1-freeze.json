@@ -1,0 +1,142 @@
+{
+  "contract": "830-g3-d-ui-repair1-freeze.v1",
+  "status": "OWNER_GREEN_PENDING_INDEPENDENT_REREVIEW",
+  "repair_round": 1,
+  "original_freeze_sha256": "4aa287e33371ba2d658731fc3361ba25a56c66f4594aa4acf3264a9cda0f209f",
+  "dispatch_sha256": "d600c0cc8ab44a73e3dda551679e6c9d1910f0b3d8e16e222f215adfa68ad157",
+  "files": [
+    {
+      "path": "frontend/src/api/schema-wiki/batchConcept830G3.ts",
+      "sha256": "52ec691d36c0984c60725ff9b8f6ed08de8c5f47817a1ca7f1a4b63075192b05",
+      "bytes": 37633,
+      "changed_in_repair": true
+    },
+    {
+      "path": "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts",
+      "sha256": "37713e5c6627b87e3123136ddc9ba1944c782282154a47f4d500630d4eee8b67",
+      "bytes": 19384,
+      "changed_in_repair": true
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "sha256": "979d1d9b3081f09d7a48bcc78c4dcdba3617056618c0f6f390dba7b71957a132",
+      "bytes": 4859,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts",
+      "sha256": "934e83718acde69aea4ebcbb43f68895ef57b9725e44ff4700a92647965af2cf",
+      "bytes": 7573,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue",
+      "sha256": "9bf392988ff7b2586e5bca089373a385734a09b901194a7eef484212ba377878",
+      "bytes": 7789,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts",
+      "sha256": "b6f59c29d0e803190436bd7397309c075ce53571c913ae679a1d7fb3f1f9f11f",
+      "bytes": 6470,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue",
+      "sha256": "073a4671c08f2348dbacb0a4e5e4b4a9de2f7a717f493cfaff9847eb87951810",
+      "bytes": 12283,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts",
+      "sha256": "a8c9509e786199c766b84ec4bb3ebf13548068b2345d993a007d49d815ef00f8",
+      "bytes": 8522,
+      "changed_in_repair": false
+    }
+  ],
+  "logs": [
+    {
+      "path": "g3-d-ui-repair1-diffcheck-green-20260908-01.log",
+      "original": "/private/tmp/g3-d-ui-repair1-diffcheck-green-20260908-01.log",
+      "sha256": "76a61a533b67eb3a8352ae9a321788d4411d62625d15e4a0a2f5d10621ef980c",
+      "bytes": 29
+    },
+    {
+      "path": "g3-d-ui-repair1-exact-path-green-20260908-01.log",
+      "original": "/private/tmp/g3-d-ui-repair1-exact-path-green-20260908-01.log",
+      "sha256": "f1a424747bdbe26b3b70e05ca674c4023dc9fef31db34c1709f310debafc41e8",
+      "bytes": 697
+    },
+    {
+      "path": "g3-d-ui-repair1-exact-path-green-20260908-02.log",
+      "original": "/private/tmp/g3-d-ui-repair1-exact-path-green-20260908-02.log",
+      "sha256": "a06499fb949a20cc8c72ecabd198662fec4577df523a0ddb9761c1b0a720462d",
+      "bytes": 696
+    },
+    {
+      "path": "g3-d-ui-repair1-focused-green-20260908-01.log",
+      "original": "/private/tmp/g3-d-ui-repair1-focused-green-20260908-01.log",
+      "sha256": "28c9d1e2dd1d1c2bf38d641b5d51f6cdf064ceaff133ca02f0d78a30659c2008",
+      "bytes": 11918
+    },
+    {
+      "path": "g3-d-ui-repair1-focused-green-20260908-02.log",
+      "original": "/private/tmp/g3-d-ui-repair1-focused-green-20260908-02.log",
+      "sha256": "6b99eb98bfba1b2b1fba7bcd1896606fa1b0ffb98633532bc492fbb1f843e080",
+      "bytes": 11911
+    },
+    {
+      "path": "g3-d-ui-repair1-g2-regression-green-20260908-01.log",
+      "original": "/private/tmp/g3-d-ui-repair1-g2-regression-green-20260908-01.log",
+      "sha256": "f0dc8dc17436f15d1a11b1a0d5c0da94062e2810ff24c1fb792776c2a832800b",
+      "bytes": 7135
+    },
+    {
+      "path": "g3-d-ui-repair1-structured-green-20260908-01.log",
+      "original": "/private/tmp/g3-d-ui-repair1-structured-green-20260908-01.log",
+      "sha256": "36a55066364ddc513fbe92824c06c1884b4a8cd673234244d5fa6c23f964c20d",
+      "bytes": 3274
+    },
+    {
+      "path": "g3-d-ui-repair1-structured-green-20260908-02.log",
+      "original": "/private/tmp/g3-d-ui-repair1-structured-green-20260908-02.log",
+      "sha256": "cbcd994f9327c4bfb86f76dd232024c79c8dd12a94591faefed5ca3fc50ff191",
+      "bytes": 2082
+    },
+    {
+      "path": "g3-d-ui-repair1-structured-green-20260908-03.log",
+      "original": "/private/tmp/g3-d-ui-repair1-structured-green-20260908-03.log",
+      "sha256": "da2ef0d9564fc1752edf36c6b558e910958ed5e5aee826221e40749e37dd7656",
+      "bytes": 2081
+    },
+    {
+      "path": "g3-d-ui-repair1-structured-red-20260908-01.log",
+      "original": "/private/tmp/g3-d-ui-repair1-structured-red-20260908-01.log",
+      "sha256": "06dd72f55ad819b37d037a4c262325539e0dd826e464df4f573dc53f74c1c6c2",
+      "bytes": 1313967
+    },
+    {
+      "path": "g3-d-ui-repair1-vue-tsc-green-20260908-01.log",
+      "original": "/private/tmp/g3-d-ui-repair1-vue-tsc-green-20260908-01.log",
+      "sha256": "a3ac01e44a621a9951d1733ac0f457f601bf6125f7821ae7a54ccacfc3bac640",
+      "bytes": 29
+    }
+  ],
+  "owner_final_results": {
+    "targeted": "GREEN03 1/1",
+    "focused": "GREEN02 4 files /26 tests",
+    "g2_page_citation": "GREEN01 3 files /46 tests",
+    "vue_tsc": "PASS",
+    "exact_path": "GREEN02 PASS",
+    "diff_check": "PASS"
+  },
+  "historical_attempts": "structured-green01 failed due test FreeWiki projected-content construction; green02/focused01 preceded final assertions; exact-path01 script list-order mismatch, not source scope failure. Original attempts preserved; names are not verdicts.",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

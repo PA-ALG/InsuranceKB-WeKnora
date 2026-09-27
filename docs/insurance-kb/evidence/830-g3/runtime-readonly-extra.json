@@ -1,0 +1,77 @@
+{
+  "contract": "830-g3-runtime-readonly-extra.v1",
+  "checked_at": "2026-09-07T08:00:42.466676+00:00",
+  "effects": {
+    "writes": 0,
+    "provider_calls": 0
+  },
+  "source_aes_key": {
+    "env_name": "SYSTEM_AES_KEY",
+    "present": true,
+    "sha256": "376af9ff738810be97989f85cca89465509e3dd5059fba102ce6652e01617a54",
+    "private_source": "existing G2 app inspect memory; never persisted plaintext"
+  },
+  "config_sha256": "f0c30a2d9fef33d727e00f06845247d0137dac0376c4e23f1ec646445b478947",
+  "files": [
+    {
+      "id": "10d8ea5c-97ed-4ce8-8a3e-6877e8e5c821",
+      "handle": "-tdrjtBIk-FRDhwN2Tehzg",
+      "provider": "local",
+      "physical_path": "storage://30545abd-ae95-4de0-a796-29b5c4bc32c7/local://10003/e7722140-3486-437b-9952-f3d66d6fb539/1788658223741084589.pdf",
+      "content_hash": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "size": 395696,
+      "storage_backend_id": "30545abd-ae95-4de0-a796-29b5c4bc32c7",
+      "resolved_local_path": "/data/files/10003/e7722140-3486-437b-9952-f3d66d6fb539/1788658223741084589.pdf",
+      "observed_file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "observed_size": 395696
+    },
+    {
+      "id": "46ea6872-d26e-4bab-b3ad-151ab6eedd29",
+      "handle": "2hNe9Q-sAFtCOhdsLA8oNQ",
+      "provider": "local",
+      "physical_path": "storage://30545abd-ae95-4de0-a796-29b5c4bc32c7/local://10003/f987fc16-222a-4246-8ca0-22c1a81dd6d9/1786326932437537688.pdf",
+      "content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "size": 1047811,
+      "storage_backend_id": "30545abd-ae95-4de0-a796-29b5c4bc32c7",
+      "resolved_local_path": "/data/files/10003/f987fc16-222a-4246-8ca0-22c1a81dd6d9/1786326932437537688.pdf",
+      "observed_file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "observed_size": 1047811
+    },
+    {
+      "id": "8af0b514-6be0-49f0-b1d7-6cb9f7e7822a",
+      "handle": "M22i_VqDy9ruSBBBMxuoiw",
+      "provider": "local",
+      "physical_path": "storage://30545abd-ae95-4de0-a796-29b5c4bc32c7/local://10003/1265a343-c408-4620-8eed-c4f6a2adadc2/1786340266849525928.pdf",
+      "content_hash": "",
+      "size": 492101,
+      "storage_backend_id": "30545abd-ae95-4de0-a796-29b5c4bc32c7",
+      "resolved_local_path": "/data/files/10003/1265a343-c408-4620-8eed-c4f6a2adadc2/1786340266849525928.pdf",
+      "observed_file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "observed_size": 492101
+    },
+    {
+      "id": "ea1399d4-0410-4dff-8bcb-66f5a1a23e51",
+      "handle": "FVUX9FsxUDI9UpWjzS021g",
+      "provider": "local",
+      "physical_path": "storage://30545abd-ae95-4de0-a796-29b5c4bc32c7/local://10003/5ad208d2-a9a1-4b66-a292-45ab06cb10c8/1788657074418341276.pdf",
+      "content_hash": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "size": 1332078,
+      "storage_backend_id": "30545abd-ae95-4de0-a796-29b5c4bc32c7",
+      "resolved_local_path": "/data/files/10003/5ad208d2-a9a1-4b66-a292-45ab06cb10c8/1788657074418341276.pdf",
+      "observed_file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "observed_size": 1332078
+    }
+  ],
+  "docreader_image": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+  "redis_image": "sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf",
+  "redis_image_platform": {
+    "Os": "linux",
+    "Architecture": "arm64"
+  },
+  "storage_backend": {
+    "provider": "local",
+    "source": "env",
+    "config": {},
+    "root": "/data/files"
+  }
+}

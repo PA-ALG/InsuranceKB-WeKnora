@@ -1,3 +1,4 @@
+import { knowledgeContentSegments } from './knowledgeContentProvenance'
 import { buildSchemaWikiScopeBootstrapPath, type SchemaWikiReadTransport } from './index'
 import { parseSchemaWikiScope, type SchemaWikiScopeV1 } from '../../views/knowledge/schema-wiki/schemaWikiContract'
 import { buildScopedSchemaWikiPath } from '../../views/knowledge/schema-wiki/schemaWikiNavigation'
@@ -159,17 +160,17 @@ function parseG2(rows: readonly R[], scope: SchemaWikiScopeV1,
     let ownerID = ''
     if (kind === 'concept') {
       if (!/^concept_[a-f0-9]{64}$/.test(memberID)) return fail()
-      const p = exact(row.payload, ['space_id', 'canonical_key', 'sense_key', 'title', 'body', 'evidence', 'aliases', 'origin'])
+      const p = exact(row.payload, ['space_id', 'canonical_key', 'sense_key', 'title', 'body', 'evidence', 'aliases', 'origin', ...(Object.hasOwn(row.payload as R, 'content_provenance') ? ['content_provenance'] : [])])
       conceptIdentity(p.space_id); conceptIdentity(p.canonical_key); conceptIdentity(p.sense_key)
       list(p.aliases, conceptIdentity)
       if (p.space_id !== scope.space_id || p.title !== row.title || p.body !== row.content
-        || evidence(p.evidence, scope).length === 0
+        || (evidence(p.evidence, scope).length === 0 && !Object.hasOwn(p, 'content_provenance'))
         || !['SCHEMA_DEFINITION', 'MODEL_COMPILE', 'EXPERT_REVISION_RECORD'].includes(String(p.origin))) return fail()
       ownerID = scope.space_id; conceptIDs.add(memberID)
     } else if (kind === 'field_assertion') {
       if (!/^assertion_[a-f0-9]{64}$/.test(memberID)) return fail()
       const p = exact(row.payload, ['space_id', 'entity_id', 'field_key', 'state', 'value', 'attempted',
-        'unknown_reason', 'evidence', 'concept_ids', 'conditions', 'exceptions', 'entity_version', 'valid_time'])
+        'unknown_reason', 'evidence', 'concept_ids', 'conditions', 'exceptions', 'entity_version', 'valid_time', ...(Object.hasOwn(row.payload as R, 'content_provenance') ? ['content_provenance'] : [])])
       ownerID = conceptIdentity(p.entity_id); const version = conceptIdentity(p.entity_version)
       if (p.space_id !== scope.space_id || p.field_key !== row.title || p.attempted !== true) return fail()
       const proofs = evidence(p.evidence, scope); list(p.concept_ids, pathIdentity, true)
@@ -184,10 +185,12 @@ function parseG2(rows: readonly R[], scope: SchemaWikiScopeV1,
     } else if (kind === 'free_wiki_item') {
       if (!/^free_[a-f0-9]{64}$/.test(memberID)) return fail()
       const p = exact(row.payload, ['space_id', 'entity_id', 'stable_key', 'title', 'body', 'evidence',
-        'concept_ids', 'conditions', 'exceptions', 'entity_version', 'valid_time'])
+        'concept_ids', 'conditions', 'exceptions', 'entity_version', 'valid_time', ...(Object.hasOwn(row.payload as R, 'content_provenance') ? ['content_provenance'] : [])])
       ownerID = conceptIdentity(p.entity_id); const version = conceptIdentity(p.entity_version); conceptIdentity(p.stable_key)
       list(p.concept_ids, pathIdentity, true); list(p.conditions); list(p.exceptions); text(p.valid_time)
-      if (p.space_id !== scope.space_id || p.title !== row.title || p.body !== row.content || !evidence(p.evidence, scope).length) return fail()
+      const expectedContent = Object.hasOwn(p, 'content_provenance') ? [p.body, ...list(p.conditions).map(v => `条件：${v}`), ...list(p.exceptions).map(v => `例外：${v}`), ...(p.valid_time ? [`有效期：${p.valid_time}`] : [])].join('\n') : p.body
+      if (p.space_id !== scope.space_id || p.title !== row.title || expectedContent !== row.content
+        || (!evidence(p.evidence, scope).length && !Object.hasOwn(p, 'content_provenance'))) return fail()
       if (versions.has(ownerID) && versions.get(ownerID) !== version) return fail(); versions.set(ownerID, version)
     } else {
       const prefix = kind === 'entity_overview' ? 'entity_overview_' : 'free_wiki_'
@@ -196,6 +199,7 @@ function parseG2(rows: readonly R[], scope: SchemaWikiScopeV1,
       if (!equalList(refs, [...refs].sort())) return fail()
       if (kind === 'entity_overview') { ownerID = conceptIdentity(row.title) } else if (row.title !== '开放知识') return fail()
     }
+    knowledgeContentSegments({ kind, member_id: memberID, content: String(row.content), payload: row.payload as R })
     members.push({ kind, member_id: memberID, revision_id: String(row.revision_id), member_digest: String(row.member_digest),
       owner_id: ownerID, title: String(row.title), content: String(row.content), payload: row.payload as R })
   }

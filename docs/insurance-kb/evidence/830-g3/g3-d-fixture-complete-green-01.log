@@ -1,0 +1,46 @@
+[('fixture-accident-1814', 'CREATE', ('NEW_ENTITY_CANDIDATE',)), ('fixture-critical-1828', 'CREATE', ('NEW_ENTITY_CANDIDATE',)), ('fixture-endowment-1826', 'CREATE', ('NEW_ENTITY_CANDIDATE',)), ('fixture-medical-594', 'MATCH', ('EXACT_EXISTING_MATCH',)), ('fixture-medical-596', 'MATCH', ('EXACT_EXISTING_MATCH',))]
+{
+  "contract": "batch-concept-compile-fixture-provenance.830.g3.v1",
+  "status": "SYNTHETIC_PROTOCOL_FIXTURE_NOT_ACTUAL_C_OR_MODEL_RESULT",
+  "actual_base": {
+    "source_bundle": "docs/insurance-kb/evidence/830-g2/b-source-complete-candidate-bundle.json",
+    "source_bundle_file_sha256": "69dd25e29ea771a512cf24c083a52e8347386def68b30d90d379f2b0dfe181d1",
+    "old_candidate_request_epoch": 4,
+    "old_candidate_request_existing_field_count": 67,
+    "rebuilt_base_epoch": 5,
+    "rebuilt_base_existing_field_count": 134,
+    "rebuild_source": "final compile output plus active epoch5 Head"
+  },
+  "fixture_counts": {
+    "entities": 5,
+    "fields": 342,
+    "carried_fields": 132,
+    "aligned_fields": 2,
+    "delta_fields": 208,
+    "source_blocks": 26
+  },
+  "input_sha256": {
+    "catalog_json": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
+    "profile_confirmation_json": "7f6141c63db4a77e3d13a0a8d632ea5463761bedeee7bd1aabef165d68c86863",
+    "unknown_alignment_json": "89eda07c37c8e0859bc97d121bf9e5e067123afc3f1b19d04d5c96f95b1960d4",
+    "resolution_inputs": "610230736d0bfa759cffa8a0ed3500c83e4d0faa4fdee3cd118318fffcab0fc8",
+    "request": "bd2354b1a3db98e9ce69704a0f6a6f1a6e261ec84dc4a7e63b1cd70732cd993a"
+  },
+  "serialized_bytes": {
+    "base_request": 258159,
+    "catalog": 706985,
+    "resolution_inputs": 54354,
+    "resolution": 16433,
+    "model_compile_result": 283037,
+    "compile_result": 482481,
+    "review_result": 908,
+    "page_manifest": 394680,
+    "candidate_bundle": 2247425,
+    "preparation_post": 2247500,
+    "handler_limit": 8388608
+  },
+  "wire_sha256": "179affc52b282ea16d3aecfda091c449de3d62992c4f5b337bb97609df414de0",
+  "wire_bytes": 2247425,
+  "preparation_post_sha256": "a23b4eeecc74fef40ac67968467b0c9e6a54ce777730272ca2588708fcaff3b0",
+  "preparation_post_bytes": 2247500
+}

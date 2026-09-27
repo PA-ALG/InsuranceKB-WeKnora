@@ -1,0 +1,21 @@
+{
+  "container": "WeKnora-p0-clone-postgres-vsnd11r2",
+  "id": "d298b05a3eac9d942f80b35a4c152d6ae225fedf015666dac8dfbd384b9f6527",
+  "image": "sha256:af585013f97f622715de01e48d00558f7edf17055d7b40deafc9f98ca8d99a56",
+  "state": {
+    "Status": "running",
+    "Running": true,
+    "Restarting": false,
+    "OOMKilled": false,
+    "RestartCount": null,
+    "StartedAt": "2026-08-31T00:36:23.406886392Z"
+  },
+  "restart_count": 0,
+  "read_exit": 0,
+  "database_state": {
+    "in_recovery": false,
+    "postmaster_started_at": "2026-08-31T00:36:27.100527+00:00",
+    "database": "weknora_g2_594",
+    "user": "p0clone"
+  }
+}

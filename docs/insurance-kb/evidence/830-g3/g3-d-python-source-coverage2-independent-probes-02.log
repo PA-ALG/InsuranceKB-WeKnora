@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/private/tmp/g3-d-python-source-coverage2-independent-probes-01.py", line 137, in <module>
+    key=concept.free_page_id(linked_page),
+        ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'insurance_harness.knowledge_compiler.concept_free_wiki_830_g2' has no attribute 'free_page_id'

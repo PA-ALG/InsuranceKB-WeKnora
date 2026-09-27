@@ -1,0 +1,20 @@
+{
+  "contract": "830-g3-official-source-acquisition.v1",
+  "recorded_at": "2026-09-07T05:35:52.495650+00:00",
+  "url": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?attachmentType=1&planCode=1827&versionNo=1827-1",
+  "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1827-1-critical-illness-terms.pdf",
+  "file_sha256": "49042161ab876fdf4815f8f935ba0d4866f5631b76e6fddf05845c6ceb4306f1",
+  "bytes": 1163899,
+  "pages": 43,
+  "name_from_page1": "平安附加守护百分百（2026）提前给付重大疾病保险",
+  "product_code_from_page1": "1827",
+  "filing_from_page1": "平安人寿〔2025〕疾病保险153号",
+  "download_attempts": 1,
+  "download_status": "PASS",
+  "inspection": "pdfplumber local page1 text; exact PDF header and43pages opened",
+  "upstream_discovery": "g3_corpus_audit bounded2searches/3official opens; brochure1827-1 opened; initial web terms open timed out; this download succeeded",
+  "source_revision": "NOT_YET_CAPTURED",
+  "seed_only": true,
+  "external_user_material_sent": false,
+  "model_calls": 0
+}

@@ -1,0 +1,156 @@
+test_authorization_binds_three_exact_action_scopes_and_timestamp (__main__.RepairOneBehaviorTests) ... ERROR
+test_docker_runtime_only_accepts_exact_colima_transport (__main__.RepairOneBehaviorTests) ... FAIL
+test_external_deadline_is_1440_seconds_and_clamps_http_and_sleep (__main__.RepairOneBehaviorTests) ... ERROR
+test_guard_ledger_requires_exact_header_even_when_attempts_match (__main__.RepairOneBehaviorTests) ... ERROR
+test_old_descriptor_manifest_and_exact_capture_files_are_frozen (__main__.RepairOneBehaviorTests) ... ERROR
+test_old_source_id_is_checked_before_pass_checkpoint (__main__.RepairOneBehaviorTests) ... ERROR
+test_runtime_gate_binds_port_volumes_env_and_redis_password (__main__.RepairOneBehaviorTests) ... ERROR
+test_upload_rejects_old_or_repeated_returned_knowledge_id_immediately (__main__.RepairOneBehaviorTests) ... FAIL
+test_wait_and_revision_capture_bind_requested_knowledge (__main__.RepairOneBehaviorTests) ... ERROR
+
+======================================================================
+ERROR: test_authorization_binds_three_exact_action_scopes_and_timestamp (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 429, in test_authorization_binds_three_exact_action_scopes_and_timestamp
+    value = module.validate_authorization(path, "a" * 64, "b" * 64)
+  File "/private/tmp/g3-source-upload-runner-review2.py", line 796, in validate_authorization
+    raise RuntimeError("external-send authorization mismatch")
+RuntimeError: external-send authorization mismatch
+
+======================================================================
+ERROR: test_external_deadline_is_1440_seconds_and_clamps_http_and_sleep (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 569, in test_external_deadline_is_1440_seconds_and_clamps_http_and_sleep
+    deadline = module.ExternalDeadline(clock=lambda: now[0])
+AttributeError: module 'g3_source_upload_runner' has no attribute 'ExternalDeadline'
+
+======================================================================
+ERROR: test_guard_ledger_requires_exact_header_even_when_attempts_match (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 552, in test_guard_ledger_requires_exact_header_even_when_attempts_match
+    "upstream": module.GUARD_UPSTREAM, "manifest_sha256": module.MANIFEST_SHA256,
+AttributeError: module 'g3_source_upload_runner' has no attribute 'GUARD_UPSTREAM'
+
+======================================================================
+ERROR: test_old_descriptor_manifest_and_exact_capture_files_are_frozen (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 561, in test_old_descriptor_manifest_and_exact_capture_files_are_frozen
+    self.assertEqual(module.EXISTING_CHUNK_CAPTURE_SHA256,
+AttributeError: module 'g3_source_upload_runner' has no attribute 'EXISTING_CHUNK_CAPTURE_SHA256'
+
+======================================================================
+ERROR: test_old_source_id_is_checked_before_pass_checkpoint (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 501, in test_old_source_id_is_checked_before_pass_checkpoint
+    loop = source.index("for mid in OLD_MATERIAL_IDS")
+ValueError: substring not found
+
+======================================================================
+ERROR: test_runtime_gate_binds_port_volumes_env_and_redis_password (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 484, in test_runtime_gate_binds_port_volumes_env_and_redis_password
+    values = self._runtime(module)
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 460, in _runtime
+    {"Type": "volume", "Name": module.FILES_VOLUME, "Destination": "/data/files", "RW": True},
+AttributeError: module 'g3_source_upload_runner' has no attribute 'FILES_VOLUME'
+
+======================================================================
+ERROR: test_wait_and_revision_capture_bind_requested_knowledge (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 547, in test_wait_and_revision_capture_bind_requested_knowledge
+    executor.wait_completed("expected", material)
+  File "/private/tmp/g3-source-upload-runner-review2.py", line 671, in wait_completed
+    value = self.request_json("GET", f"/api/v1/knowledge/{knowledge_id}",
+  File "/private/tmp/g3-source-upload-runner-review2.py", line 603, in request_json
+    self.state.record_http(label, status, digest, artifact)
+AttributeError: 'State' object has no attribute 'record_http'
+
+======================================================================
+FAIL: test_docker_runtime_only_accepts_exact_colima_transport (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 440, in test_docker_runtime_only_accepts_exact_colima_transport
+    module.DockerRuntime(["docker"])
+AssertionError: RuntimeError not raised
+
+======================================================================
+FAIL: test_upload_rejects_old_or_repeated_returned_knowledge_id_immediately (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 530, in test_upload_rejects_old_or_repeated_returned_knowledge_id_immediately
+    executor.upload(material)
+AssertionError: RuntimeError not raised
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.503s
+
+FAILED (failures=2, errors=7)
+test_authorization_binds_three_exact_action_scopes_and_timestamp (__main__.RepairOneBehaviorTests) ... FAIL
+test_guard_launch_time_anchors_external_deadline_before_probe_delay (__main__.RepairOneBehaviorTests) ... ERROR
+
+======================================================================
+ERROR: test_guard_launch_time_anchors_external_deadline_before_probe_delay (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 569, in test_guard_launch_time_anchors_external_deadline_before_probe_delay
+    start = source.index("guard_launch_started = time.monotonic()")
+ValueError: substring not found
+
+======================================================================
+FAIL: test_authorization_binds_three_exact_action_scopes_and_timestamp (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 419, in test_authorization_binds_three_exact_action_scopes_and_timestamp
+    module.validate_authorization(path, "a" * 64, "b" * 64)
+AssertionError: RuntimeError not raised
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.244s
+
+FAILED (failures=1, errors=1)
+test_runtime_gate_binds_port_volumes_env_and_redis_password (__main__.RepairOneBehaviorTests) ... ERROR
+test_empty_guard_header_is_validated_before_egress_creation (__main__.RepairOneBehaviorTests) ... ERROR
+
+======================================================================
+ERROR: test_runtime_gate_binds_port_volumes_env_and_redis_password (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 469, in test_runtime_gate_binds_port_volumes_env_and_redis_password
+    module.validate_runtime_precondition(*values)
+  File "/private/tmp/g3-source-upload-runner-review2.py", line 390, in validate_runtime_precondition
+    raise RuntimeError("docreader env binding drift")
+RuntimeError: docreader env binding drift
+
+======================================================================
+ERROR: test_empty_guard_header_is_validated_before_egress_creation (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 551, in test_empty_guard_header_is_validated_before_egress_creation
+    validate = source.index("validate_guard_ledger(runtime.read_guard_ledger", launch)
+ValueError: substring not found
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.373s
+
+FAILED (errors=2)
+test_chunk_pages_bind_requested_scope_and_attempt (__main__.RepairOneBehaviorTests) ... FAIL
+
+======================================================================
+FAIL: test_chunk_pages_bind_requested_scope_and_attempt (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 551, in test_chunk_pages_bind_requested_scope_and_attempt
+    executor.chunks("expected", 1, "chunks")
+AssertionError: RuntimeError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.116s
+
+FAILED (failures=1)

@@ -1,0 +1,57 @@
+F....................................................                    [100%]
+=================================== FAILURES ===================================
+____ test_high_confidence_exact_evidence_creates_only_not_active_candidate _____
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_high_confidence_exact_evidence_creates_only_not_active_candidate(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        text = "平安保险 平安安心医疗保险 产品代码 MED001 登记编号 REG001 版本 2026 医疗保险 官方条款"
+        result = _resolve(
+            catalog,
+            (_entry(material_id="m1", text=text),),
+            (
+                (
+                    {
+                        "proposal_ref": "product-main",
+                        "name": "平安安心医疗保险",
+                        "product_code": "MED001",
+                    },
+                ),
+            ),
+        )
+    
+        decision = result.decisions[0]
+        child = decision.children[0]
+        assert decision.disposition == child.disposition == "CREATE"
+        assert child.matched_entity_id is None and child.matched_entity_version is None
+        assert child.entity_candidate is not None
+        assert child.entity_candidate.status == "NOT_ACTIVE"
+        normalized_code = "MED001"
+        entity_key = schema_wiki_sha256(
+            "entity-candidate-key.830.g3.v1",
+            {"space_id": "space-g3", "product_code": normalized_code},
+        )
+        version_key = schema_wiki_sha256(
+            "entity-version-candidate-key.830.g3.v1",
+            {
+                "entity_key_sha256": entity_key,
+                "version_label": "2026",
+                "version_anchor": {"kind": "registration_number", "value": "REG001"},
+            },
+        )
+        assert child.entity_candidate.entity_key_sha256 == entity_key
+        assert child.entity_candidate.version_candidate_key_sha256 == version_key
+        assert child.entity_candidate.candidate_id == "entity_candidate_" + version_key
+        assert child.classification.schema_pack_id == "schemapack_medical_insurance"
+>       assert child.multi_identity_name_evidence_ids == ("m1-p-name",)
+E       AssertionError: assert ('m1-product-main-name',) == ('m1-p-name',)
+E         
+E         At index 0 diff: 'm1-product-main-name' != 'm1-p-name'
+E         Use -v to get more diff
+
+harness/tests/test_batch_entity_resolution_830_g3.py:626: AssertionError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_high_confidence_exact_evidence_creates_only_not_active_candidate
+1 failed, 52 passed in 13.60s

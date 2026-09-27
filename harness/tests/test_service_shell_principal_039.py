@@ -55,10 +55,16 @@ def test_t1_principal_enums_are_closed() -> None:
         "space_admin",
         "super_admin",
     }
-    assert {kind.value for kind in ServiceKind} == {"source_reader", "wiki_projector"}
+    assert {kind.value for kind in ServiceKind} == {
+        "source_reader",
+        "wiki_projector",
+        "product_ingestion",
+    }
     assert {capability.value for capability in ServiceCapability} == {
         "read_raw_knowledge",
         "project_managed_page",
+        "manage_product_ingestion",
+        "read_product_ingestion",
     }
     with pytest.raises(ValueError):
         HumanRole("owner")
@@ -134,8 +140,8 @@ def test_t1_minted_human_principal_bindings_are_deeply_immutable() -> None:
     assert isinstance(principal, HumanPrincipal)
 
     with pytest.raises(TypeError):
-        cast(dict[str, frozenset[HumanRole]], principal.bindings)["space-c"] = (
-            frozenset({HumanRole.SUPER_ADMIN})
+        cast(dict[str, frozenset[HumanRole]], principal.bindings)["space-c"] = frozenset(
+            {HumanRole.SUPER_ADMIN}
         )
 
     with pytest.raises(AuthorizationError, match="space_scope_forbidden"):

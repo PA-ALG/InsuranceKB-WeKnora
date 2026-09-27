@@ -1,0 +1,14 @@
+{
+  "contract": "830-g3-d-final-contract-review.v1",
+  "status": "PASS",
+  "reviewer": "g3_seam_audit",
+  "design_path": "docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md",
+  "design_sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
+  "blockers": [],
+  "backlog": [],
+  "withdrawn_finding": "Prior duplicate3.1 heading was reviewer overlapping-output artifact; exact originals each contain one header.",
+  "mechanical_change": "Only restore three original hash definitions; no new protocol.",
+  "authorized_stage": "DTO/types/cross-language fixture only; full342 serializer capacity before handler/service/UI",
+  "deferred": "Actual provider executor HTTP envelope persistence to freeze before provider; future G3-as-base out of scope",
+  "raw_log_sha256": "64b7ef063cbe024c1758a1a612a652c3559ff0aec75a44f7f720c771ac4144c1"
+}

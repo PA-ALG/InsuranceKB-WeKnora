@@ -1,0 +1,38 @@
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/embedded_G2_nullable_value
+    g3_d_go_independent_review_test.go:91: BLOCKER accepted omitted nested field: embedded G2 nullable value
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/confirmation_actor_display_name
+    g3_d_go_independent_review_test.go:91: BLOCKER accepted omitted nested field: confirmation actor_display_name
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/confirmation_queue_owner
+    g3_d_go_independent_review_test.go:91: BLOCKER accepted omitted nested field: confirmation queue_owner
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/MATCH_candidate_id
+    g3_d_go_independent_review_test.go:91: BLOCKER accepted omitted nested field: MATCH candidate_id
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/MATCH_entity_candidate_sha256
+    g3_d_go_independent_review_test.go:91: BLOCKER accepted omitted nested field: MATCH entity_candidate_sha256
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/catalog_nullable_source_guidance
+--- FAIL: TestIndependentG3RejectsOmittedNestedFieldsMatrix (10.19s)
+    --- FAIL: TestIndependentG3RejectsOmittedNestedFieldsMatrix/embedded_G2_nullable_value (1.78s)
+    --- FAIL: TestIndependentG3RejectsOmittedNestedFieldsMatrix/confirmation_actor_display_name (2.18s)
+    --- FAIL: TestIndependentG3RejectsOmittedNestedFieldsMatrix/confirmation_queue_owner (2.46s)
+    --- FAIL: TestIndependentG3RejectsOmittedNestedFieldsMatrix/MATCH_candidate_id (2.08s)
+    --- FAIL: TestIndependentG3RejectsOmittedNestedFieldsMatrix/MATCH_entity_candidate_sha256 (1.65s)
+    --- FAIL: TestIndependentG3RejectsOmittedNestedFieldsMatrix/catalog_nullable_source_guidance (0.03s)
+panic: no null source_guidance [recovered, repanicked]
+
+goroutine 6 [running]:
+testing.tRunner.func1.2({0x10366daa0, 0x1037bc900})
+	/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/src/testing/testing.go:1974 +0x1a0
+testing.tRunner.func1()
+	/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/src/testing/testing.go:1977 +0x318
+panic({0x10366daa0?, 0x1037bc900?})
+	/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/src/runtime/panic.go:860 +0x12c
+github.com/Tencent/WeKnora/internal/types.TestIndependentG3RejectsOmittedNestedFieldsMatrix.func5(0x3f4f666fe000?)
+	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/g3_d_go_independent_review_test.go:80 +0x1f8
+github.com/Tencent/WeKnora/internal/types.TestIndependentG3RejectsOmittedNestedFieldsMatrix.func7(0x3f4f66582d88)
+	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/g3_d_go_independent_review_test.go:89 +0x144
+testing.tRunner(0x3f4f66582d88, 0x3f4f6727c000)
+	/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/src/testing/testing.go:2036 +0xc4
+created by testing.(*T).Run in goroutine 23
+	/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/src/testing/testing.go:2101 +0x3a8
+FAIL	github.com/Tencent/WeKnora/internal/types	13.250s
+FAIL

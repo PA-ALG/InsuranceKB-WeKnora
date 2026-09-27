@@ -35,6 +35,10 @@
               </template>
             </t-popup>
           </div>
+          <div v-if="stats && (stats.failed_operations || 0) > 0" role="status" class="wiki-global-issues-status">
+            <t-icon name="error-circle" style="color: var(--td-warning-color);" />
+            <span class="queue-text">{{ $t('knowledgeEditor.wikiBrowser.failedGenerationCount', { count: stats.failed_operations }) }}</span>
+          </div>
           <div v-if="stats && stats.pending_issues > 0" class="wiki-global-issues-status graph-issues-badge"
             @click="showGlobalIssuesDrawer = true">
             <t-icon name="error-circle" style="color: var(--td-warning-color);" />
@@ -169,6 +173,10 @@
             }) }}</span>
           </div>
           <!-- Global Issues -->
+          <div v-if="stats && (stats.failed_operations || 0) > 0" role="status" class="wiki-global-issues-status">
+            <t-icon name="error-circle" style="color: var(--td-warning-color);" />
+            <span class="queue-text">{{ $t('knowledgeEditor.wikiBrowser.failedGenerationCount', { count: stats.failed_operations }) }}</span>
+          </div>
           <div v-if="stats && stats.pending_issues > 0" class="wiki-global-issues-status"
             @click="showGlobalIssuesDrawer = true">
             <t-icon name="error-circle" style="color: var(--td-warning-color);" />

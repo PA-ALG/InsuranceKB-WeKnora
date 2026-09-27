@@ -1,0 +1,129 @@
+{
+  "status": "PASS",
+  "layer": "CODE_ONLY",
+  "source_binding_tests": 61,
+  "gateway_initial_tests": 22,
+  "gateway_strict_final_tests": 12,
+  "frontend_tests": 38,
+  "independent_review": "PASS",
+  "live_acceptance": "NOT RUN",
+  "records": [
+    {
+      "path": "/private/tmp/g3-first-parse-subset-red-20260914.jsonl",
+      "sha256": "47624a1a4e40847542f7da337a65b2fececb045bdc673cae3042b96896ca3cb3"
+    },
+    {
+      "path": "/private/tmp/g3-first-parse-subset-green-20260914.jsonl",
+      "sha256": "c045076fa50563131292bb15a6000337ee8ac69c4736f6d79dfe46f3eee72caf"
+    },
+    {
+      "path": "/private/tmp/g3-task3z-gateway-red.jsonl",
+      "sha256": "af2813763f943e993ce420bd0823c2ee2fdb37f5a9d8fad2e46c4355805ab0b0"
+    },
+    {
+      "path": "/private/tmp/g3-task3z-gateway-green.jsonl",
+      "sha256": "0f26057f68df23b6c26969d656bee00cc7062f663fe85463b597fb3b7304a3a4"
+    },
+    {
+      "path": "/private/tmp/g3-task3z-ui-red.log",
+      "sha256": "ed3513fc994be3a5805f5754fcbfdbe9012651baaef6d185aecf5452d3237d8a"
+    },
+    {
+      "path": "/private/tmp/g3-task3z-ui-green.log",
+      "sha256": "d313e2d08eaf30a11edf087850e87ac4669dd7fe6fe15b2ac31c3eebfc954e75"
+    },
+    {
+      "path": "/private/tmp/g3-task3z-strict-red.jsonl",
+      "sha256": "4c0f0427e056c75665dd8cb9740d60005d0f68df4df895d89e1f16d25fc94c2b"
+    },
+    {
+      "path": "/private/tmp/g3-task3z-strict-green.jsonl",
+      "sha256": "c0969c58b51e6dee04adb5ac5957f7dd5b93d0c5505856209f5680a2be7dbf7d"
+    }
+  ],
+  "harness_distinct_tests": 46,
+  "harness_fixture_pipeline": "PASS: source reuse, identity, extraction, discovery, publish, verify; no real provider",
+  "harness_test_note": "Owner final: recovery 9 PASS; focused 36 PASS with heartbeat fixture failure subsequently fixed; final heartbeat/discovery 9 PASS. Independent reviewer PASS.",
+  "implementation_files": [
+    {
+      "path": "frontend/src/api/product-ingestion.spec.ts",
+      "sha256": "938a135c454f2ce5e8082293eca5adddd1eec46cab9970d3975cdc6fac21c8ae"
+    },
+    {
+      "path": "frontend/src/api/product-ingestion.ts",
+      "sha256": "7f8f78cf4b1ce67be5af6fe14c0042e963567fe3f29ca704ce6ae3ae083e67cc"
+    },
+    {
+      "path": "frontend/src/components/knowledge-base/product-ingestion-status.spec.ts",
+      "sha256": "40cb80414f55b516d57563ba3b88b963c9da7753d102e79b4e37247bfac83971"
+    },
+    {
+      "path": "frontend/src/components/knowledge-base/product-ingestion-status.vue",
+      "sha256": "9baa947fd26ea233db0c8a12f330d4f1b0f595ded0bbffad9667d4aaef5f9e79"
+    },
+    {
+      "path": "harness/src/insurance_harness/product_ingestion/api.py",
+      "sha256": "cdd906eb5b0954b1884feb49d7ad9e54601c5bb31316fa03d2b6ed8657be8781"
+    },
+    {
+      "path": "harness/src/insurance_harness/product_ingestion/discovery_stage.py",
+      "sha256": "f29cce740a48f02ce89280dacc87e40abfc2e1224121b65248f020bff253ebaf"
+    },
+    {
+      "path": "harness/src/insurance_harness/product_ingestion/pipeline.py",
+      "sha256": "520e063c4043a203e357714bfa7ae3bba3ecabc4328939da9ac3c8e699bb8add"
+    },
+    {
+      "path": "harness/src/insurance_harness/product_ingestion/stages.py",
+      "sha256": "c7cc7f139896169ed25487284486d3fb87799338f8640ddb992f94a3e1e41bb1"
+    },
+    {
+      "path": "harness/src/insurance_harness/product_ingestion/store.py",
+      "sha256": "a3ef50a7a4f088f6dc4579e9928b2afaa096bec1c95436b73484a62006847208"
+    },
+    {
+      "path": "harness/tests/product_ingestion/test_pipeline.py",
+      "sha256": "382ee55e2313796d11fcca16bd9c93c706768ccac254f7ce35c44f7262e5a284"
+    },
+    {
+      "path": "internal/application/service/g3_first_parse.go",
+      "sha256": "480d2017ba27b81f23d4f43ed3a7fd4b6fd2f4202791dca25ac487f7359f00a5"
+    },
+    {
+      "path": "internal/application/service/g3_first_parse_test.go",
+      "sha256": "1a6497bd78e49c824941feca251fc13aa361a8b77ebcda039e75d047db3f24c3"
+    },
+    {
+      "path": "internal/application/service/product_ingestion_bridge.go",
+      "sha256": "cf48ee0f31e7e4d2ecb33995d52ea06e75f5a3a3eb06facd46cfa7a879367a07"
+    },
+    {
+      "path": "internal/application/service/product_ingestion_bridge_test.go",
+      "sha256": "fb12dbd8ca2b8bbc5dd9094dfa16566818329f1270105cf7523a52a1f169a5d0"
+    },
+    {
+      "path": "internal/handler/product_ingestion.go",
+      "sha256": "53b720f828aa290db325b833f095092f85cb474788da15082cd416e300e1912d"
+    },
+    {
+      "path": "internal/handler/product_ingestion_test.go",
+      "sha256": "1577e10c642a08f3e8e928ed87d3e6df78662eb7d17bcac579cea125333d9e62"
+    },
+    {
+      "path": "internal/router/routes_product_ingestion.go",
+      "sha256": "8b35e40b5578d9d3f000ac887965ec684528030a2d0f835234a1fcb9f7e52f27"
+    },
+    {
+      "path": "internal/router/routes_product_ingestion_test.go",
+      "sha256": "3356945e951b380251365ebf66284275dde50f5ec2685c499720b38fe4e72438"
+    },
+    {
+      "path": "harness/src/insurance_harness/product_ingestion/recovery.py",
+      "sha256": "203027a93f71db231664ef50d0f17c780ba23b43cb39080fe04712f19b9595a5"
+    },
+    {
+      "path": "harness/tests/product_ingestion/test_recovery.py",
+      "sha256": "da260ddd39e1992fa5a5f755c7854f6177a61fb1467ec9478237ab8858c10393"
+    }
+  ]
+}

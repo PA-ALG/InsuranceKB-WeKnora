@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "canonical_candidate_valid": true,
+  "exact_actual_g2_base_preserved": true,
+  "base_fields": 134,
+  "delta_fields": 208,
+  "final_fields": 342,
+  "sources": 27,
+  "nonidentity_field_source_keys": [
+    [
+      "124798cf075514fa3fddf16c2044cb88bfdea8fd56dba09b67318e19f6f8be6b",
+      "block-fixture-endowment-1826-field-body"
+    ]
+  ],
+  "distinct_actual_fixture_raw_hashes": 3,
+  "post_bytes": 2254490,
+  "post_limit_bytes": 8388608,
+  "provider": 0,
+  "database": 0,
+  "build": 0
+}

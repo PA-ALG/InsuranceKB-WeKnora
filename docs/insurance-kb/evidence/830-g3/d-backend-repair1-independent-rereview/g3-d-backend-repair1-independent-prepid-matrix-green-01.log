@@ -1,0 +1,4 @@
+# ./internal/application/service
+open /Users/houjing/Library/Caches/go-build/25/253aa1c54083fa08d06aba74eeedc3cae360e05f0db1ad848ca2f3f8df289286-d: operation not permitted
+FAIL	./internal/application/service [setup failed]
+FAIL

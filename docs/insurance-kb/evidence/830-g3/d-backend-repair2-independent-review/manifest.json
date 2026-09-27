@@ -1,0 +1,31 @@
+{
+  "contract": "830-g3-d-backend-repair2-independent-custody.v1",
+  "report_sha256": "5e9c4f0b72f7288f8020feb8de09c24126cf75e9f561cbe8c9601b4bd8192efd",
+  "entries": [
+    {
+      "original": "/private/tmp/g3_d_backend_repair2_independent_overlay.json",
+      "raw_sha256": "9ed9c2a20f90f7059845f41797797cdafaf765b5ee8afc66524b51b47f38cae5",
+      "raw_bytes": 504,
+      "archive": "g3_d_backend_repair2_independent_overlay.json"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair2-independent-freeze-identity-green-01.log",
+      "raw_sha256": "0350b9f931c23e938068e342048a0252c80d9bbeca42342af16c04044deafa8f",
+      "raw_bytes": 2377,
+      "archive": "g3-d-backend-repair2-independent-freeze-identity-green-01.log"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair2-independent-wire-green-01.log",
+      "raw_sha256": "c4dada989fe1263fd70bfea841361ece8654229d26bdda1cb54993382e9ae081",
+      "raw_bytes": 4171,
+      "archive": "g3-d-backend-repair2-independent-wire-green-01.log"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-repair2-independent-original-invalid-utf8-green-01.log",
+      "raw_sha256": "a7554fabc81e38c2fe447de03c661d607986ec3f5b1fc0659dc2275289e10ba1",
+      "raw_bytes": 235,
+      "archive": "g3-d-backend-repair2-independent-original-invalid-utf8-green-01.log"
+    }
+  ],
+  "unchanged_original_probe_archives": "d-backend-repair1-independent-rereview"
+}

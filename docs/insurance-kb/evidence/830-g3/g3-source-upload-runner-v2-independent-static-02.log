@@ -1,0 +1,2 @@
+AST PASS docs/insurance-kb/evidence/830-g3/source_upload_runner_v2.py docs/insurance-kb/evidence/830-g3/source_upload_runner_v2_test.py
+EFFECTS http=0 docker=0 database=0 provider=0 upload=0

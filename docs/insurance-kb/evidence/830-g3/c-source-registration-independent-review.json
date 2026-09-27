@@ -1,0 +1,44 @@
+{
+  "backlog": [
+    "Early rejection of non-application/pdf remains the accepted design backlog; current resolution relies on source authority and D re-open."
+  ],
+  "blockers": [],
+  "contract": "830-g3-source-registration-independent-review.v1",
+  "effects": {
+    "build": 0,
+    "container": 0,
+    "database": 0,
+    "http": 0,
+    "provider": 0,
+    "repo_writes": 0
+  },
+  "logs_sha256": {
+    "g3-source8-independent-focused-01.log": "4bab13a3aae0c0545cac230ee84e2692f39c533a064b266476bbfd41676724c2",
+    "g3-source8-independent-green-01.log": "a31f97fea06423acf26562ed4d06ec087dd54e15a23724877d201cf8c51b801a",
+    "g3-source8-independent-green-02.log": "5fb703e10c41392d93e88c64a79bab26e618733a90228dbce45aa7d24a9a6007",
+    "g3-source8-independent-green-03.log": "e9da49fd5e2d65d9269788b56d336c82be61a49dc9b9285b59d97b7a19b4d72e",
+    "g3-source8-independent-mypy-01.log": "20afd87e8fc6a94d9469ac0c4c61866abf3fd3cbd0a2ec709c335027edf041c3",
+    "g3-source8-independent-mypy-02.log": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e",
+    "g3-source8-independent-ruff-01.log": "2b4a0525fb8a3259567fc088f62713b1adb4928407df69e2505a65f99faa35c2",
+    "g3-source8-independent-ruff-02.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+  },
+  "rejected": [
+    "Registered receipt does not prove tenant/KB scope by itself; design assigns that proof to acquisition receipt and D authority re-open, so C must not invent absent scope fields.",
+    "The first independent green/ruff/mypy logs only record a nonexistent worktree interpreter path and are not test evidence."
+  ],
+  "reviewed": {
+    "actual_receipt_fixture": "046f75cc72a633b4da18c2ee6fd3b63c55cf25d5f6ecfb5a80949adc7828a2c5",
+    "design": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+    "freeze": "6e8a07a067fd98970c1a6aa3add5c41c37aa09d1ce460a4b2042eab1af2ae328",
+    "source": "050f5a0b65e8919142946e6f38a947220ec9181060b9d6ea89f3ed9778dfe2e5",
+    "test": "16b4628e3f8a258cab97a03ab6daf6585c3fdeb3cbfaa4e4beb11c68845f2216"
+  },
+  "status": "PASS",
+  "verification": {
+    "mypy_strict": "PASS",
+    "registered_focused": "15 PASS, 64 deselected",
+    "ruff": "PASS",
+    "source_plus_common": "82 PASS",
+    "source_test": "79 PASS"
+  }
+}

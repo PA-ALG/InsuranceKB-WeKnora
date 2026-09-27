@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/private/tmp/g3-common-c-root-probe-01.py", line 14, in <module>
+    typed=g._hashed(g.CorpusEntryV1,'corpus-entry.830.g3.v1','entry_sha256',entry.model_dump(mode='python',exclude={'entry_sha256','blocks'})|{'blocks':entry.blocks})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: _hashed() takes 1 positional argument but 4 were given

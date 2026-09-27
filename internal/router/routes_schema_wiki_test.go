@@ -439,6 +439,11 @@ func TestSchemaWikiHumanRoutesDenyMachineAndViewerBeforeScopeOrSeal(t *testing.T
 			recorder := httptest.NewRecorder()
 			for _, request := range []*http.Request{
 				httptest.NewRequest(
+					http.MethodGet,
+					"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/preparations/preparation-596-1/product-bindings",
+					nil,
+				),
+				httptest.NewRequest(
 					http.MethodPost,
 					"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/preparations/preparation-596-1/review",
 					nil,

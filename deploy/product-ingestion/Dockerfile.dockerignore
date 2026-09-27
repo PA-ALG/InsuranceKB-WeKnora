@@ -1,0 +1,13 @@
+**
+!deploy/
+!deploy/product-ingestion/
+!deploy/product-ingestion/Dockerfile
+!deploy/product-ingestion/requirements.lock
+!harness/
+!harness/src/
+!harness/src/**
+!harness/migrations/
+!harness/migrations/**
+!harness/alembic.ini
+**/__pycache__/
+**/*.pyc

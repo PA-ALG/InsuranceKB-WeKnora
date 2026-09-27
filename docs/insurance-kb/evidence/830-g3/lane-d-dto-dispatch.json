@@ -1,0 +1,41 @@
+{
+  "contract": "830-g3-d-dto-stage-dispatch.v1",
+  "recorded_at": "2026-09-07T10:11:40.363627+00:00",
+  "status": "AUTHORIZED_WITHIN_EXISTING_G3",
+  "owner": "g3_catalog_impl",
+  "design": "docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md",
+  "design_sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
+  "requirements": [
+    "G3-R3",
+    "G3-R5"
+  ],
+  "write_paths": [
+    "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+    "harness/tests/test_batch_concept_compile_830_g3.py",
+    "internal/types/concept_free_wiki_830_g3.go",
+    "internal/types/concept_free_wiki_830_g3_test.go",
+    "harness/tests/fixtures/batch_concept_compile_830_g3/**"
+  ],
+  "order": [
+    "behavior RED using existing validator/candidate incapability, not missing import",
+    "Python strict models/validation/base alignment/composition/projection and actual342 fixture",
+    "Go strict types/cross-language parser/validation using exact same fixture",
+    "full canonical serialized POST size<=8MiB; retain every closure/raw/base",
+    "focused existing-venv Python and bounded Go tests/ruff/strict mypy then frozen SHA handoff"
+  ],
+  "stop": [
+    "shared contract change requires root",
+    "no handler/service/UI until capacity and independent review",
+    "no provider/DB/container/build/upload/Draft/Review/Active",
+    "no commit/push by lane"
+  ],
+  "validation_identity": "actual input bytes in fixture do not make fixture outputs or execution records actual model/business results",
+  "openspec": {
+    "path": "openspec/changes/129-830-g3-catalog-batch/specs/catalog-batch/spec.md",
+    "sha256": "3e6828309e57e316b50982fb7dceab267aca53ef479f2cc62bf6ec8b1626b733",
+    "strict_status": "PASS",
+    "strict_exit_code": 0,
+    "log": "d-dto-openspec-freeze.log",
+    "telemetry_note": "PostHog DNS failure after validation valid; not a validation failure"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "contract": "830-g3-cd-multiline-dispatch.v1",
+  "recorded_at": "2026-09-07T10:55:24.121828+00:00",
+  "owner": "g3_catalog_impl",
+  "status": "AUTHORIZED_WITHIN_G3_AFTER_DESIGN_REVIEW",
+  "design_sha256": "975ae956c2c851b8f8fffffbffd5bbbebb6b4051fa031237db3c0afb224f9380",
+  "write_paths": [
+    "harness/src/insurance_harness/knowledge_compiler/batch_canonical_830_g3.py",
+    "harness/tests/test_batch_canonical_830_g3.py",
+    "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+    "harness/tests/test_batch_entity_resolution_830_g3.py"
+  ],
+  "first_goal": "Real multiline C inputs with old hashes retained on common accepted inputs and nested IDs still control-free",
+  "checks": [
+    "behavior RED original multiline + nested LiveReceipt/PolicyReceipt TAB",
+    "common and C tests plus A regression",
+    "ruff/strict mypy for production",
+    "exact frozen hashes then independent review before D"
+  ],
+  "no_effects": [
+    "provider",
+    "DB",
+    "container",
+    "upload",
+    "build",
+    "shared helper edit",
+    "G2/Catalog edit"
+  ]
+}

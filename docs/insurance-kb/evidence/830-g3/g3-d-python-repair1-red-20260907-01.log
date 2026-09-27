@@ -1,0 +1,359 @@
+FFFFFFFFFF                                                               [100%]
+=================================== FAILURES ===================================
+______ test_request_rejects_rehashed_binding_identity_drift[display_name] ______
+
+field_name = 'display_name'
+
+    @pytest.mark.parametrize(
+        "field_name",
+        (
+            "display_name",
+            "issuer",
+            "product_code",
+            "version_label",
+            "version_anchor",
+            "entity_key_sha256",
+            "version_candidate_key_sha256",
+        ),
+    )
+    def test_request_rejects_rehashed_binding_identity_drift(field_name: str) -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        binding = next(
+            item
+            for item in request["entity_bindings"]
+            if item["resolution_disposition"] == "MATCH"
+        )
+        if field_name == "version_anchor":
+            binding[field_name] = deepcopy(binding[field_name])
+            binding[field_name]["observed_value"] += "-TAMPER"
+            binding[field_name]["normalized_value"] += "-TAMPER"
+        elif field_name.endswith("_sha256"):
+            binding[field_name] = "0" * 64
+        else:
+            binding[field_name] += "-TAMPER"
+        _rehash_binding(module, binding)
+    
+>       with pytest.raises(ValueError, match="RESOLUTION_REFERENCE_INVALID"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:233: Failed
+_________ test_request_rejects_rehashed_binding_identity_drift[issuer] _________
+
+field_name = 'issuer'
+
+    @pytest.mark.parametrize(
+        "field_name",
+        (
+            "display_name",
+            "issuer",
+            "product_code",
+            "version_label",
+            "version_anchor",
+            "entity_key_sha256",
+            "version_candidate_key_sha256",
+        ),
+    )
+    def test_request_rejects_rehashed_binding_identity_drift(field_name: str) -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        binding = next(
+            item
+            for item in request["entity_bindings"]
+            if item["resolution_disposition"] == "MATCH"
+        )
+        if field_name == "version_anchor":
+            binding[field_name] = deepcopy(binding[field_name])
+            binding[field_name]["observed_value"] += "-TAMPER"
+            binding[field_name]["normalized_value"] += "-TAMPER"
+        elif field_name.endswith("_sha256"):
+            binding[field_name] = "0" * 64
+        else:
+            binding[field_name] += "-TAMPER"
+        _rehash_binding(module, binding)
+    
+>       with pytest.raises(ValueError, match="RESOLUTION_REFERENCE_INVALID"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:233: Failed
+______ test_request_rejects_rehashed_binding_identity_drift[product_code] ______
+
+field_name = 'product_code'
+
+    @pytest.mark.parametrize(
+        "field_name",
+        (
+            "display_name",
+            "issuer",
+            "product_code",
+            "version_label",
+            "version_anchor",
+            "entity_key_sha256",
+            "version_candidate_key_sha256",
+        ),
+    )
+    def test_request_rejects_rehashed_binding_identity_drift(field_name: str) -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        binding = next(
+            item
+            for item in request["entity_bindings"]
+            if item["resolution_disposition"] == "MATCH"
+        )
+        if field_name == "version_anchor":
+            binding[field_name] = deepcopy(binding[field_name])
+            binding[field_name]["observed_value"] += "-TAMPER"
+            binding[field_name]["normalized_value"] += "-TAMPER"
+        elif field_name.endswith("_sha256"):
+            binding[field_name] = "0" * 64
+        else:
+            binding[field_name] += "-TAMPER"
+        _rehash_binding(module, binding)
+    
+>       with pytest.raises(ValueError, match="RESOLUTION_REFERENCE_INVALID"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:233: Failed
+_____ test_request_rejects_rehashed_binding_identity_drift[version_label] ______
+
+field_name = 'version_label'
+
+    @pytest.mark.parametrize(
+        "field_name",
+        (
+            "display_name",
+            "issuer",
+            "product_code",
+            "version_label",
+            "version_anchor",
+            "entity_key_sha256",
+            "version_candidate_key_sha256",
+        ),
+    )
+    def test_request_rejects_rehashed_binding_identity_drift(field_name: str) -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        binding = next(
+            item
+            for item in request["entity_bindings"]
+            if item["resolution_disposition"] == "MATCH"
+        )
+        if field_name == "version_anchor":
+            binding[field_name] = deepcopy(binding[field_name])
+            binding[field_name]["observed_value"] += "-TAMPER"
+            binding[field_name]["normalized_value"] += "-TAMPER"
+        elif field_name.endswith("_sha256"):
+            binding[field_name] = "0" * 64
+        else:
+            binding[field_name] += "-TAMPER"
+        _rehash_binding(module, binding)
+    
+>       with pytest.raises(ValueError, match="RESOLUTION_REFERENCE_INVALID"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:233: Failed
+_____ test_request_rejects_rehashed_binding_identity_drift[version_anchor] _____
+
+field_name = 'version_anchor'
+
+    @pytest.mark.parametrize(
+        "field_name",
+        (
+            "display_name",
+            "issuer",
+            "product_code",
+            "version_label",
+            "version_anchor",
+            "entity_key_sha256",
+            "version_candidate_key_sha256",
+        ),
+    )
+    def test_request_rejects_rehashed_binding_identity_drift(field_name: str) -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        binding = next(
+            item
+            for item in request["entity_bindings"]
+            if item["resolution_disposition"] == "MATCH"
+        )
+        if field_name == "version_anchor":
+            binding[field_name] = deepcopy(binding[field_name])
+            binding[field_name]["observed_value"] += "-TAMPER"
+            binding[field_name]["normalized_value"] += "-TAMPER"
+        elif field_name.endswith("_sha256"):
+            binding[field_name] = "0" * 64
+        else:
+            binding[field_name] += "-TAMPER"
+        _rehash_binding(module, binding)
+    
+>       with pytest.raises(ValueError, match="RESOLUTION_REFERENCE_INVALID"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:233: Failed
+___ test_request_rejects_rehashed_binding_identity_drift[entity_key_sha256] ____
+
+field_name = 'entity_key_sha256'
+
+    @pytest.mark.parametrize(
+        "field_name",
+        (
+            "display_name",
+            "issuer",
+            "product_code",
+            "version_label",
+            "version_anchor",
+            "entity_key_sha256",
+            "version_candidate_key_sha256",
+        ),
+    )
+    def test_request_rejects_rehashed_binding_identity_drift(field_name: str) -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        binding = next(
+            item
+            for item in request["entity_bindings"]
+            if item["resolution_disposition"] == "MATCH"
+        )
+        if field_name == "version_anchor":
+            binding[field_name] = deepcopy(binding[field_name])
+            binding[field_name]["observed_value"] += "-TAMPER"
+            binding[field_name]["normalized_value"] += "-TAMPER"
+        elif field_name.endswith("_sha256"):
+            binding[field_name] = "0" * 64
+        else:
+            binding[field_name] += "-TAMPER"
+        _rehash_binding(module, binding)
+    
+>       with pytest.raises(ValueError, match="RESOLUTION_REFERENCE_INVALID"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:233: Failed
+_ test_request_rejects_rehashed_binding_identity_drift[version_candidate_key_sha256] _
+
+field_name = 'version_candidate_key_sha256'
+
+    @pytest.mark.parametrize(
+        "field_name",
+        (
+            "display_name",
+            "issuer",
+            "product_code",
+            "version_label",
+            "version_anchor",
+            "entity_key_sha256",
+            "version_candidate_key_sha256",
+        ),
+    )
+    def test_request_rejects_rehashed_binding_identity_drift(field_name: str) -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        binding = next(
+            item
+            for item in request["entity_bindings"]
+            if item["resolution_disposition"] == "MATCH"
+        )
+        if field_name == "version_anchor":
+            binding[field_name] = deepcopy(binding[field_name])
+            binding[field_name]["observed_value"] += "-TAMPER"
+            binding[field_name]["normalized_value"] += "-TAMPER"
+        elif field_name.endswith("_sha256"):
+            binding[field_name] = "0" * 64
+        else:
+            binding[field_name] += "-TAMPER"
+        _rehash_binding(module, binding)
+    
+>       with pytest.raises(ValueError, match="RESOLUTION_REFERENCE_INVALID"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:233: Failed
+_________ test_request_rejects_evidence_borrowed_from_unselected_child _________
+
+    def test_request_rejects_evidence_borrowed_from_unselected_child() -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        target, foreign = request["entity_bindings"][:2]
+        target["resolution_evidence"].append(deepcopy(foreign["resolution_evidence"][0]))
+        target["resolution_evidence"].sort(
+            key=lambda item: (item["material_id"], item["evidence_id"])
+        )
+        _rehash_binding(module, target)
+    
+>       with pytest.raises(ValueError, match="RESOLUTION_EVIDENCE_MISSING"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:249: Failed
+________ test_request_rejects_rehashed_fabricated_profile_confirmation _________
+
+    def test_request_rejects_rehashed_fabricated_profile_confirmation() -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        confirmation = request["profile_confirmation"]
+        confirmation["receipt"]["actor"] = "fabricated-confirmation-actor"
+        confirmation["receipt_semantic_sha256"] = module._batch_sha256(
+            confirmation["receipt"]["contract"], confirmation["receipt"]
+        )
+    
+>       with pytest.raises(ValueError, match="PROFILE_CONFIRMATION_MISMATCH"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:264: Failed
+_____ test_request_rejects_different_bytes_for_same_corpus_source_identity _____
+
+    def test_request_rejects_different_bytes_for_same_corpus_source_identity() -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        request = _fixture_request_json()
+        corpus_block = request["resolution_inputs"]["corpus"]["entries"][0]["blocks"][0]
+        base_source = next(
+            item
+            for item in request["base_request"]["sources"]
+            if (item["revision_id"], item["block_id"])
+            == (corpus_block["revision_id"], corpus_block["block_id"])
+        )
+        base_source["text"] += "\nTAMPER_OUTSIDE_EVIDENCE"
+    
+>       with pytest.raises(ValueError, match="SOURCE_CLOSURE_MISMATCH"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:282: Failed
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_rehashed_binding_identity_drift[display_name]
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_rehashed_binding_identity_drift[issuer]
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_rehashed_binding_identity_drift[product_code]
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_rehashed_binding_identity_drift[version_label]
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_rehashed_binding_identity_drift[version_anchor]
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_rehashed_binding_identity_drift[entity_key_sha256]
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_rehashed_binding_identity_drift[version_candidate_key_sha256]
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_evidence_borrowed_from_unselected_child
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_rehashed_fabricated_profile_confirmation
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_request_rejects_different_bytes_for_same_corpus_source_identity
+10 failed, 11 deselected in 28.61s

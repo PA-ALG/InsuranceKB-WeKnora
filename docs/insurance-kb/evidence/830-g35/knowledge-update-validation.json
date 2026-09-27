@@ -1,0 +1,130 @@
+{
+  "contract": "g35-knowledge-update-validation.v1",
+  "base_commit": "fc4f670ffcbe8e168a1b9aff723f437d1bd061c5",
+  "frozen_tree": "269f586b329d857d5e5d6573441e159966b3dd24",
+  "requirements": [
+    "G35-R2",
+    "G35-R3",
+    "G35-R5"
+  ],
+  "scope": "EXPLICIT_INCREMENTAL_COMPILER_AND_ADMISSION_NOT_PRODUCER",
+  "red": {
+    "python_same_identity_updates": 2,
+    "go_same_identity_updates": 2,
+    "display_and_admission_fences": 4
+  },
+  "checks": {
+    "python_broad": {
+      "passed": 77,
+      "failed": 3,
+      "skipped": 1,
+      "failure": "Tests expected internal BatchConceptCompileError; Pydantic constructor correctly wrapped admission rejection in ValueError. Test exception type corrected."
+    },
+    "python_final_affected_and_bounded": {
+      "passed": 26,
+      "failed": 0,
+      "deselected": 58,
+      "seconds": 49.22
+    },
+    "go_incremental_update_legacy_full_candidate": "PASS 34.909s",
+    "mypy": "PASS 3 files",
+    "ruff": "PASS",
+    "diff_check": "PASS",
+    "full_python_go_candidate_hash": "5bc149f5becb1d7ba618df6b674cd13ae7911ef1d104816604b7c283233f1d24"
+  },
+  "product_files": [
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "sha256": "7cd501dea5db7c33d94817506f96cf3f15b7c14b7d15f248297a69f6e36f853b"
+    },
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/g3_bounded_model_execution.py",
+      "sha256": "e4109e95eace3252f4aed45f2a95f40952ade014983d8b6e6fcad2f643e3e75a"
+    },
+    {
+      "path": "harness/tests/test_batch_concept_compile_830_g3_updates.py",
+      "sha256": "c92b13bd9bec7861bda35d9cd7a90c2474c3d6cb19280c2f7609814675b3400a"
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/knowledge-updates-candidate.json.gz",
+      "sha256": "bdf15ae2de9f1cf8655823e158178be3be7cba1bfc9f62229ecc6e7731c487f7"
+    },
+    {
+      "path": "internal/types/concept_free_wiki_830_g3.go",
+      "sha256": "1e571d7a1660f969851e318b093252cccc9550c4a61ff386412364c990da5dec"
+    },
+    {
+      "path": "internal/types/concept_free_wiki_830_g3_updates_test.go",
+      "sha256": "77764fed25f2b58269e3e80f6180eb7493934304942fba3b6226e0e4c2a90bdc"
+    }
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/g35-readonly/update-python-red.txt",
+      "sha256": "b668edbdb37e079511e80854f68863d1fa9a3036b1a5b4d7e1c7eae0165c889f",
+      "bytes": 7903
+    },
+    {
+      "path": "/private/tmp/g35-readonly/update-go-red.txt",
+      "sha256": "b2d222319b343a83cc000e9a1cdc570b2aa77d022c357a16d8585bda1e43b8d0",
+      "bytes": 1187
+    },
+    {
+      "path": "/private/tmp/g35-readonly/update-admission-red.txt",
+      "sha256": "9df728619b91846ac24c1fa92ba8cf75f81bb64179334feedf0d6fb047969507",
+      "bytes": 6105
+    },
+    {
+      "path": "/private/tmp/g35-readonly/update-python-regression.txt",
+      "sha256": "3a08e7f140b79f3df3c04b85c2eebe001bf72c674e4f491065cd576707b75ba3",
+      "bytes": 14037
+    },
+    {
+      "path": "/private/tmp/g35-readonly/update-bounded-regression.txt",
+      "sha256": "29d82c59652ca33a2aef841cf1de0569069065375aea8e621896e910daf94cc3",
+      "bytes": 115
+    },
+    {
+      "path": "/private/tmp/g35-readonly/update-go-regression.txt",
+      "sha256": "b5daa698e44a05fad974f925eaf13bd6e4d77029176f01b5b30b4a769c12b889",
+      "bytes": 55
+    },
+    {
+      "path": "/private/tmp/g35-readonly/update-mypy.txt",
+      "sha256": "8228fcc5ce46d42d01caf3cd941f4e9c5f2bcc372bb5b147a2f0572d2dd675a8",
+      "bytes": 43
+    }
+  ],
+  "review": {
+    "reviewer": "native_boundary_review",
+    "tree": "269f586b329d857d5e5d6573441e159966b3dd24",
+    "blockers": 0,
+    "mechanical_document_exemption": "CONFIRMED",
+    "limits": [
+      "producer/window response/projector update support remains unimplemented",
+      "no real model/business acceptance",
+      "alias-only coverage is structural, no standalone test"
+    ]
+  },
+  "delivery": {
+    "software": "PASS",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "business": "NOT RUN",
+  "new_model_calls": 0,
+  "new_parses": 0,
+  "application_builds": 0,
+  "deployments": 0,
+  "publications": 0,
+  "remaining": [
+    "native producer boundary choice",
+    "versioned update response/projector/prompt and runtime request enabling",
+    "real material discovery, independent review, unique Active publication and source page check",
+    "necessary service entities and formal relationships",
+    "minimal dependency group isolation and bounded comparison"
+  ]
+}

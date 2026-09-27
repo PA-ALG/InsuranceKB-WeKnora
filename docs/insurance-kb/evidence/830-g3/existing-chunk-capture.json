@@ -1,0 +1,55 @@
+{
+  "contract": "830-g3-existing-chunk-capture.v1",
+  "checked_at": "2026-09-07T07:11:58.084785+00:00",
+  "status": "PASS",
+  "documents": [
+    {
+      "material_id": "g3-material-01",
+      "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+      "parse_attempt": 2,
+      "chunk_count": 162,
+      "manifest_digest": "f2190b125469819ea0d97603c71f4fb19e4a92fa09117582b4d581947a0de414",
+      "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/existing-revisions/g3-material-01.json",
+      "capture_sha256": "11feb31fd9987ab3c880b5eb740e9eff6ecf3768f7ebeeb71f0fb19f19d5f9b6",
+      "post_descriptor_unchanged": true
+    },
+    {
+      "material_id": "g3-material-02",
+      "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+      "parse_attempt": 1,
+      "chunk_count": 79,
+      "manifest_digest": "9995d0f3f2962ec8a879e77ae3850bba0d34e5984d82356ae440cce695bb27ee",
+      "file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/existing-revisions/g3-material-02.json",
+      "capture_sha256": "55fb02f580d28f37aeb362839438dc69ea4118a02ced7d6c816e912602954084",
+      "post_descriptor_unchanged": true
+    },
+    {
+      "material_id": "g3-material-03",
+      "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+      "parse_attempt": 3,
+      "chunk_count": 37,
+      "manifest_digest": "0ffe45e1ddd83576fdee7a68718693637b51a38a666952303aaa0bc942431aaa",
+      "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/existing-revisions/g3-material-03.json",
+      "capture_sha256": "e76c71eab127791ab21e6bf50fa4596e33691ea3c8d59f3820fa694c95771372",
+      "post_descriptor_unchanged": true
+    },
+    {
+      "material_id": "g3-material-04",
+      "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+      "parse_attempt": 1,
+      "chunk_count": 9,
+      "manifest_digest": "7c9bf9d1d54824129a382232750aa8cae393ce5fec2899996071396d8fe7672c",
+      "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/existing-revisions/g3-material-04.json",
+      "capture_sha256": "bee7b1cdd77b1b5b993b016e99998c8400a541afa98ea8114b0538dd184cfdd3",
+      "post_descriptor_unchanged": true
+    }
+  ],
+  "provider_calls": 0,
+  "writes_to_application": 0,
+  "native_source_custody": "NOT CLAIMED; captured current W1 descriptor/chunks only",
+  "actual_get_count": 9
+}

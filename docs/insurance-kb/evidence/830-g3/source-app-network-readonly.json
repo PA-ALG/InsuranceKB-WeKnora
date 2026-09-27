@@ -1,0 +1,39 @@
+{
+  "contract": "830-g3-source-network-readonly.v1",
+  "recorded_at": "2026-09-07T12:00:09.230797+00:00",
+  "source_container": "weknora-g2-594-app",
+  "status": "DNS_AND_VERIFIED_TLS_OBSERVED",
+  "probes": [
+    {
+      "capture": {
+        "host": "dashscope.aliyuncs.com",
+        "addresses": [
+          "198.18.0.105"
+        ],
+        "all_global": false,
+        "scope": "source G2 app DNS-only; no HTTP, provider, upload or configuration write"
+      },
+      "raw_sha256": "403d0392fd93e23e51a1d3c148068b50ab3054f679b01ff7c98d8656aef66009"
+    },
+    {
+      "capture": {
+        "host": "dashscope.aliyuncs.com",
+        "probe": "TLS handshake only; no HTTP/application data/provider request",
+        "status": "PASS",
+        "tls_version": "TLSv1.3",
+        "peer_address": "198.18.0.105"
+      },
+      "raw_sha256": "26f36a2090d2bf65b5f371971c9a05492dbad246cceff7cbb10039f2de89f179"
+    }
+  ],
+  "interpretation": "DNS resolves to existing proxy benchmark range; successful TLSv1.3 handshake used default trust and official SNI. Non-global DNS alone is not treated as failure. No host/proxy/DNS/container changes. This is existing G2 source transport only; no claim target G3 or model HTTP success.",
+  "effects": {
+    "dns_queries": 1,
+    "tls_handshakes": 1,
+    "http": 0,
+    "provider_requests": 0,
+    "material_bytes_sent": 0,
+    "database_writes": 0,
+    "container_mutations": 0
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "contract": "830-g3-c-premodel-page-root-disposition.v1",
+  "status": "READ_ONLY_FEASIBILITY_PASS_ACTUAL_MAP_NOT_FROZEN",
+  "evidence": [
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-c-premodel-page-freeze-readonly-01.md",
+      "sha256": "9acd21beea4fb6fc97563a783dd1ff506ffbc6f89334c7a7c410f534c4fd4712"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-c-premodel-page-freeze-probe-01.py",
+      "sha256": "00f2207de0a62cfc8f0ce62c4530e98df96da036dec8821e31f86329d096b8c2"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-c-premodel-page-freeze-probe-01.json",
+      "sha256": "45d46d4f30271b81b4cdf6593be3f1ccc4f9d29a506660d135cd3046354165ab"
+    }
+  ],
+  "actual_saved_w1_sample": "material01: four actual saved rows only; native joins valid",
+  "offline_feasibility": "material17/21 predictions only, never source IDs or complete actual ingestion",
+  "accepted": "Full immutable W1 text/ID stays unchanged. Freeze one reviewed native page and exact page-local Unicode/bbox anchor per actual unique revision/block key before model. Recheck later model quotes on the same page.",
+  "gate": "Actual SOURCE_PASS and exact current W1/native/acquisition inputs required before authoritative C map/corpus creation",
+  "backlog": "source21 full five-page list coverage; maximum two assigned pages under two unique blocks. No protocol expansion.",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "parse": 0,
+    "upload": 0,
+    "product_write": 0
+  }
+}

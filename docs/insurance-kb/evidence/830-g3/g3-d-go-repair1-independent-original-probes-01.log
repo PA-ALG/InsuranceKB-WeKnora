@@ -1,0 +1,18 @@
+=== RUN   TestIndependentG3OracleFourRejectAndSnapshotsMatchPython
+--- PASS: TestIndependentG3OracleFourRejectAndSnapshotsMatchPython (7.74s)
+=== RUN   TestIndependentG3RejectsOmittedNestedNullable
+--- PASS: TestIndependentG3RejectsOmittedNestedNullable (0.78s)
+=== RUN   TestIndependentG3RejectsNullRequiredArray
+--- PASS: TestIndependentG3RejectsNullRequiredArray (0.94s)
+=== RUN   TestIndependentG3RejectsInvalidTypedHash
+--- PASS: TestIndependentG3RejectsInvalidTypedHash (0.77s)
+=== RUN   TestIndependentG3CustomReceiptAndRawMessageOmissionsReject
+=== RUN   TestIndependentG3CustomReceiptAndRawMessageOmissionsReject/registered_receipt_exact_keys
+=== RUN   TestIndependentG3CustomReceiptAndRawMessageOmissionsReject/resolution_raw_nullable_presence
+--- PASS: TestIndependentG3CustomReceiptAndRawMessageOmissionsReject (1.05s)
+    --- PASS: TestIndependentG3CustomReceiptAndRawMessageOmissionsReject/registered_receipt_exact_keys (0.18s)
+    --- PASS: TestIndependentG3CustomReceiptAndRawMessageOmissionsReject/resolution_raw_nullable_presence (0.87s)
+=== RUN   TestIndependentG3RejectsNullForNonNullableScalar
+--- PASS: TestIndependentG3RejectsNullForNonNullableScalar (0.47s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/types	14.668s

@@ -1,0 +1,28 @@
+{
+  "contract": "830-g3-source-upload-repair-dispatch.v1",
+  "recorded_at": "2026-09-07T11:41:06.029772+00:00",
+  "owner": "g3_catalog_ui",
+  "status": "AUTHORIZED_FIRST_CONCENTRATED_REPAIR",
+  "repair_plan": "source-upload-runner-repair-1.md",
+  "repair_plan_sha256": "3f3a8457ce1f4a15d7bd2cffb473053e164996a824452403dcff9bf74290cbbb",
+  "review": "source-upload-runner-independent-review-1.json",
+  "write_paths": [
+    "/private/tmp/g3-source-upload-runner-review2.py",
+    "/private/tmp/g3-source-upload-runner-review2_test.py",
+    "/private/tmp/g3-source-upload-runner-review2-notes.md",
+    "/private/tmp/g3-source-upload-runner-repair1-*.log"
+  ],
+  "forbidden_writes": [
+    "source_upload_runner_v1.py",
+    "source_runtime_provision_v3.py",
+    "embedding_guard.py",
+    "production code"
+  ],
+  "effects": {
+    "http": 0,
+    "docker": 0,
+    "database": 0,
+    "provider": 0,
+    "upload": 0
+  }
+}

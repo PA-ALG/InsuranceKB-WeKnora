@@ -1,0 +1,47 @@
+{
+  "ast": "PASS",
+  "compile": "PASS",
+  "draft_sha256": {
+    "notes": "a7314fa1bed10a4bb5fe137bd6e0ff7c3e016517fcadd8f17dccc36a91d34e4d",
+    "runner": "9873ea8bd0cab1148354242e20d65145cd96800a735944d262b614a7d5977ce3",
+    "tests": "d5387f7874ac2df0b6a5d6c72886f3c3e1044865c3f57ecd7dcac0cc1fc4283a"
+  },
+  "effects": {
+    "database": 0,
+    "docker": 0,
+    "http": 0,
+    "provider": 0,
+    "uploads": 0
+  },
+  "frozen_sha256": {
+    "corpus": "3260b23abec9740cc7cbed161273922a3c7a63771fe60fc4cbad013f481a9753",
+    "design": "9a94c31f7101988e6ec7603de51a0ca518d0315ca99711c445db46608db90399",
+    "guard": "c52cfabf9f32214923e71e2f5926cb66c259cec9e99431033c508907aa7361a4",
+    "manifest": "75b40ece28a4219965a6a86be616bb90f17af53252afad6c2243dedb9e377225",
+    "offline_plan": "553abd2ae85c39c62d6792265edee08a3d78f9eed663e067d6ffacf3b1e171b3",
+    "provision_v3": "823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4",
+    "runtime_preflight": "3d8fff08813ccbc2e9f437132644c5a39be2f60e69dfe5de598caf5187cd0765"
+  },
+  "material_count": 11,
+  "material_order": [
+    "g3-material-07",
+    "g3-material-08",
+    "g3-material-09",
+    "g3-material-11",
+    "g3-material-12",
+    "g3-material-13",
+    "g3-material-14",
+    "g3-material-17",
+    "g3-material-18",
+    "g3-material-19",
+    "g3-material-21"
+  ],
+  "old_source_ids": {
+    "g3-material-01": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+    "g3-material-03": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+    "g3-material-04": "aed62bb6045daf632084f85970244cb840a2ea81932d3620bfa4efb1a4a03d0e"
+  },
+  "process_config_sha256": "32bd80dabbe2c7cdb388b9eb25980748d74be76352e1fd1cc9c2fde1abd64181",
+  "status": "PASS",
+  "unique_source_sha256": 11
+}

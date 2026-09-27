@@ -1,0 +1,70 @@
+{
+  "contract": "830-g3-d-backend-independent-review1-custody.v1",
+  "report_sha256": "416d80fa8186d56fdf116157e044a6aad6c7db385817b4e8bbc70694074207a5",
+  "entries": [
+    {
+      "original": "/private/tmp/g3-d-backend-independent-handler-830g3-green-01.log",
+      "raw_sha256": "25c6d00effdfbff63ba7441be13f5cd7ca81ffca43e96f89f3c99eb5d114cb79",
+      "raw_bytes": 56,
+      "archive": "g3-d-backend-independent-handler-830g3-green-01.log",
+      "gzip": false,
+      "archive_sha256": "25c6d00effdfbff63ba7441be13f5cd7ca81ffca43e96f89f3c99eb5d114cb79"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-independent-preparation-id-matrix-red-01.log",
+      "raw_sha256": "9d31c8f49e1538d84ac3b8c8a4381f6c9d6def56b35ebdd901e4d2d0b284b6de",
+      "raw_bytes": 1890,
+      "archive": "g3-d-backend-independent-preparation-id-matrix-red-01.log",
+      "gzip": false,
+      "archive_sha256": "9d31c8f49e1538d84ac3b8c8a4381f6c9d6def56b35ebdd901e4d2d0b284b6de"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-independent-preparation-id-red-01.log",
+      "raw_sha256": "0ccf84286e6172fa576ac942f32d3ec6cc45010bc7dc8b9941879f8cd61f8304",
+      "raw_bytes": 1048,
+      "archive": "g3-d-backend-independent-preparation-id-red-01.log",
+      "gzip": false,
+      "archive_sha256": "0ccf84286e6172fa576ac942f32d3ec6cc45010bc7dc8b9941879f8cd61f8304"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-independent-read-hash-probe-01.json",
+      "raw_sha256": "8cbe08a54dc1ecfb5fd940d2d7cc00a21456381a3112d29cccf42e1715ef0735",
+      "raw_bytes": 480,
+      "archive": "g3-d-backend-independent-read-hash-probe-01.json",
+      "gzip": false,
+      "archive_sha256": "8cbe08a54dc1ecfb5fd940d2d7cc00a21456381a3112d29cccf42e1715ef0735"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-independent-router-830g3-green-01.log",
+      "raw_sha256": "2acfd67db879192d38b10d5a328c2a6fd03a661f1b17882c7075f510e1e61ff3",
+      "raw_bytes": 55,
+      "archive": "g3-d-backend-independent-router-830g3-green-01.log",
+      "gzip": false,
+      "archive_sha256": "2acfd67db879192d38b10d5a328c2a6fd03a661f1b17882c7075f510e1e61ff3"
+    },
+    {
+      "original": "/private/tmp/g3-d-backend-independent-service-830g3-green-01.log",
+      "raw_sha256": "c3735fdb8d0ced3d77c39b68db6d7d72720f22717a1e4823b5ae8693e2f156b1",
+      "raw_bytes": 70,
+      "archive": "g3-d-backend-independent-service-830g3-green-01.log",
+      "gzip": false,
+      "archive_sha256": "c3735fdb8d0ced3d77c39b68db6d7d72720f22717a1e4823b5ae8693e2f156b1"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_prep_id_matrix_overlay.json",
+      "raw_sha256": "99f0a3737f3407c66889d6774acf769c66cf368c87b87d5b9843860d664e6955",
+      "raw_bytes": 231,
+      "archive": "g3_d_backend_prep_id_matrix_overlay.json",
+      "gzip": false,
+      "archive_sha256": "99f0a3737f3407c66889d6774acf769c66cf368c87b87d5b9843860d664e6955"
+    },
+    {
+      "original": "/private/tmp/g3_d_backend_prep_id_matrix_probe_test.go",
+      "raw_sha256": "03fdfd8295e3f00f97dbeef35d3f764f137e96b5563a656c7b69310e08c72d3a",
+      "raw_bytes": 1107,
+      "archive": "g3_d_backend_prep_id_matrix_probe_test.go.gz",
+      "gzip": true,
+      "archive_sha256": "7e9c896cd1ec1e82cb4aaeae9de8891c0df746929eff48e3c2db0f1e4fd38a91"
+    }
+  ]
+}

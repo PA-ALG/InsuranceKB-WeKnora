@@ -1,0 +1,8 @@
+=== RUN   TestIndependentG3CustomReceiptAndRawMessageOmissionsReject
+=== RUN   TestIndependentG3CustomReceiptAndRawMessageOmissionsReject/resolution_raw_nullable_presence
+=== RUN   TestIndependentG3CustomReceiptAndRawMessageOmissionsReject/registered_receipt_exact_keys
+--- PASS: TestIndependentG3CustomReceiptAndRawMessageOmissionsReject (1.98s)
+    --- PASS: TestIndependentG3CustomReceiptAndRawMessageOmissionsReject/resolution_raw_nullable_presence (1.23s)
+    --- PASS: TestIndependentG3CustomReceiptAndRawMessageOmissionsReject/registered_receipt_exact_keys (0.75s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/types	5.379s

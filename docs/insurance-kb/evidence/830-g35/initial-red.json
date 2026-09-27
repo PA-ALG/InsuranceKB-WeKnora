@@ -1,0 +1,27 @@
+{
+  "contract": "g35-software-red.v1",
+  "requirement_ids": [
+    "G35-R2",
+    "G35-R5"
+  ],
+  "base": "8f7201dd428033de1e66f8783c125ebf2b617d53",
+  "status": "RED",
+  "mechanism": "Existing page body/scope/evidence revisions are absent from generation context; semantic comparison has only names.",
+  "results": [
+    "7 failed / 16 deselected / 3.12s",
+    "1 failed: missing existing_knowledge"
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/g35-readonly/semantic-view-red.txt",
+      "sha256": "9db02a9bee431fd8a4b7e7a167e4fc61427706fb4752e935a6650be8ea943fef"
+    },
+    {
+      "path": "/private/tmp/g35-readonly/schema-comparison-red.txt",
+      "sha256": "28f8b6d8b5bf07938ba25c35105d0dbb35b31b13c88b9c7dc4f6a96666c2aa3d"
+    }
+  ],
+  "provider_calls": 0,
+  "deployment_effects": 0,
+  "business_status": "NOT RUN"
+}

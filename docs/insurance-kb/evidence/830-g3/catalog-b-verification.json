@@ -1,0 +1,49 @@
+{
+  "contract": "830-g3-catalog-b-verification.v1",
+  "status": "SPEC_CODE_PASS_PENDING_RUNTIME",
+  "owner": "g3_catalog_ui",
+  "original_logs": "Original RED/GREEN were tool outputs in implementation agent session; no original log files saved. Root does not manufacture them.",
+  "implementation_report": {
+    "go_focused": "handler4.558s/router3.824sPASS",
+    "vitest": "3files17PASS",
+    "vue_tsc": "exit0",
+    "static_asset_leak_check": "exit0",
+    "no_effects": "DB/provider/build/container/live0"
+  },
+  "root_red_replay": {
+    "method": "go test -overlay maps only routes_schema_wiki.go to base075d9c38 source; current test and handler unchanged",
+    "base_route_sha256": "2c12e8570488f3b80132541a08a68184bf4d8a29475d128e6be3c025f449fe9a",
+    "test": "TestSchemaPackCatalog830G3AuthorizedRouteReturnsCatalog",
+    "expected": 200,
+    "actual": 404,
+    "test_seconds": 2.785,
+    "log": "catalog-b-route-replay-red.log",
+    "log_sha256": "0a7a3ecd563bb4d883640ca536b29b389b43c3bb2ff1d0fd6406786558812fb1",
+    "meaning": "New timestamped actual RED reproduction, not a reconstructed historical log"
+  },
+  "file_sha256s": {
+    "internal/handler/schema_pack_catalog_830_g3.go": "5995ae2f653a4996b6bf7fa994d84f6990c535f79509c68081ddd2bbddd934ac",
+    "internal/router/routes_schema_wiki.go": "92c7ef4f3420e62468312084ed94569dfc354c7f24b5576198cba06bc4f492ee",
+    "frontend/src/api/schema-wiki/schemaPackCatalog830G3.ts": "2d07d9c89c8d9985567e4e4e82201f5d4083a6877af572b850d1008df784fb06",
+    "frontend/src/views/knowledge/schema-wiki/SchemaPackCatalog830G3.vue": "b64d0bb41dc5ad6c7b6ec56fd21ad90b95d9b3c321ad54f9d86e5e4deebe5ba3",
+    "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue": "cbc0c65a919350f46647ba032419ea74463392c3b253f80084fe5f33aeb004d7",
+    "internal/handler/schema_pack_catalog_830_g3_test.go": "11b9a2118413675c10a6729a1feac78485b2c9c8a57da8e03693afcdcd33bb4f",
+    "internal/router/routes_schema_pack_catalog_830_g3_test.go": "9a4b7154cf6cdbe7af86becaece346de60049ec6f42f61fe2ed99b8f15e79e3c",
+    "frontend/src/api/schema-wiki/schemaPackCatalog830G3.spec.ts": "b68dddfb9286b0229ea5564aa60ce9a7e58f6289a4cfe41d372396d2a78bd039",
+    "frontend/src/views/knowledge/schema-wiki/SchemaPackCatalog830G3.spec.ts": "0e2c5d0aa83ce32784ed22b669f526323737fb6a33a03e31dcf2bfd5b4ac866f",
+    "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts": "2c67eccd0413915d0232cd97974ce7fb5e04bbc9aca421b024e07a2f13a06162"
+  },
+  "independent_review": {
+    "reviewer": "g3_seam_audit",
+    "spec": "PASS",
+    "code": "PASS",
+    "blockers": 0,
+    "backlog": [
+      "Optional G3 request can delay G2 display through Promise.allSettled up to existing30s timeout; no explicitSLA violation, nonblocking"
+    ],
+    "go": "handler3.008/router2.510PASS",
+    "vitest": "3files17PASS",
+    "vue_tsc": "exit0",
+    "logs": "catalog-b-independent-*.log; new reviewer executions, not originalOwnerlogs"
+  }
+}

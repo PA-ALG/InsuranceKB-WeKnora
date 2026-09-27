@@ -1,0 +1,8 @@
+G3 D concept compile v1
+Return one canonical JSON object matching the supplied CompileOutput schema. Compile only the supplied eligible automatic-child source closure and new-member fields. Do not change mechanical carry fields or create release authority.
+
+For every requested field, use exactly one of these semantic forms:
+- present: value is a nonempty string, evidence contains exact source quotes that directly support this value, and unknown_reason is null.
+- absent_explicitly: value is a nonempty string stating the explicit exclusion or absence, evidence quotes the source statement that explicitly establishes this absence, and unknown_reason is null. A list of other benefits, a heading, or a missing mention does not establish explicit absence.
+- unknown: value is null, evidence is an empty array, and unknown_reason is a nonempty explanation of what the supplied sources do not establish.
+Do not infer that an unmentioned feature is excluded. Do not emit absent_explicitly with a null value. If no direct supporting quote exists, use unknown instead of inventing a value or evidence.

@@ -1,0 +1,147 @@
+{
+  "contract": "830-g3-d-final-stage-independent-mechanical-review.v1",
+  "status": "PASS",
+  "scope": "Mechanical staged integration only; no code review or test rerun",
+  "counts": {
+    "staged": 76,
+    "backend": 11,
+    "documents_and_evidence": 65
+  },
+  "checks": {
+    "allowlist_exact_set": true,
+    "allowlist_exact_order": true,
+    "staged_count_76": true,
+    "backend_count_11": true,
+    "docs_or_status_count_65": true,
+    "no_unlisted_internal": true,
+    "no_harness_or_frontend": true,
+    "all_backend_hashes_match": true,
+    "all_custody_entries_match": true,
+    "all_named_document_hashes_match": true,
+    "root_receipt_local_software_only": true,
+    "root_receipt_effects_zero": true,
+    "status_docs_preserve_not_run_boundary": true
+  },
+  "backend_hashes": {
+    "internal/application/service/concept_free_wiki_830_g2.go": {
+      "actual": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+      "expected": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+      "match": true
+    },
+    "internal/application/service/concept_free_wiki_830_g3.go": {
+      "actual": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+      "expected": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+      "match": true
+    },
+    "internal/application/service/concept_free_wiki_830_g3_test.go": {
+      "actual": "0e04690036e80ae6261df9bc53e814851dbf7616672abb16c159773453fc5a6f",
+      "expected": "0e04690036e80ae6261df9bc53e814851dbf7616672abb16c159773453fc5a6f",
+      "match": true
+    },
+    "internal/application/service/concept_source_authority_830_g2.go": {
+      "actual": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+      "expected": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+      "match": true
+    },
+    "internal/application/service/concept_source_authority_830_g2_test.go": {
+      "actual": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+      "expected": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+      "match": true
+    },
+    "internal/application/service/wiki_release.go": {
+      "actual": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+      "expected": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+      "match": true
+    },
+    "internal/handler/concept_free_wiki_830_g2.go": {
+      "actual": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+      "expected": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+      "match": true
+    },
+    "internal/handler/concept_free_wiki_830_g3_test.go": {
+      "actual": "2caec79556c3ccd3e0ae1f0dc18337dd93e8f7aa98ea0abd30c720900b4e90b6",
+      "expected": "2caec79556c3ccd3e0ae1f0dc18337dd93e8f7aa98ea0abd30c720900b4e90b6",
+      "match": true
+    },
+    "internal/handler/schema_wiki.go": {
+      "actual": "2489c272fc1338100a84f2bbc580a6faa0c2c8dbe065d3e69d1896e6d3e9b192",
+      "expected": "2489c272fc1338100a84f2bbc580a6faa0c2c8dbe065d3e69d1896e6d3e9b192",
+      "match": true
+    },
+    "internal/router/routes_batch_concept_830_g3_test.go": {
+      "actual": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+      "expected": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+      "match": true
+    },
+    "internal/router/routes_schema_wiki.go": {
+      "actual": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c",
+      "expected": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c",
+      "match": true
+    }
+  },
+  "custody": [
+    {
+      "manifest": "docs/insurance-kb/evidence/830-g3/d-backend-repair1-independent-rereview/manifest.json",
+      "entries": 18,
+      "all_match": true
+    },
+    {
+      "manifest": "docs/insurance-kb/evidence/830-g3/d-backend-repair1-snapshots/manifest.json",
+      "entries": 4,
+      "all_match": true
+    },
+    {
+      "manifest": "docs/insurance-kb/evidence/830-g3/d-backend-repair2-independent-review/manifest.json",
+      "entries": 4,
+      "all_match": true
+    },
+    {
+      "manifest": "docs/insurance-kb/evidence/830-g3/d-backend-ui-interop-repair1/manifest.json",
+      "entries": 10,
+      "all_match": true
+    }
+  ],
+  "document_hashes": {
+    "docs/insurance-kb/evidence/830-g3/lane-d-root-software-integration.json": {
+      "actual": "c36869b150bbd667cd08170b9f0d6e61eaae3ec08421b14f87e9270d3f6534b3",
+      "expected": "c36869b150bbd667cd08170b9f0d6e61eaae3ec08421b14f87e9270d3f6534b3",
+      "match": true
+    },
+    "docs/insurance-kb/evidence/830-g3/g3-d-final-openspec-01.log": {
+      "actual": "bab95d11348026f3d990b8b0245ae0b00d3eb97864c07987436a431ad5e52f24",
+      "expected": "bab95d11348026f3d990b8b0245ae0b00d3eb97864c07987436a431ad5e52f24",
+      "match": true
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-final-input-integrity.json": {
+      "actual": "533c3988f2e0d903205e2646f37c63adcfd2df626d238e37dd9528c9da5a929e",
+      "expected": "533c3988f2e0d903205e2646f37c63adcfd2df626d238e37dd9528c9da5a929e",
+      "match": true
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-backend-repair2-independent-review.json": {
+      "actual": "5e9c4f0b72f7288f8020feb8de09c24126cf75e9f561cbe8c9601b4bd8192efd",
+      "expected": "5e9c4f0b72f7288f8020feb8de09c24126cf75e9f561cbe8c9601b4bd8192efd",
+      "match": true
+    },
+    "docs/insurance-kb/evidence/830-g3/lane-d-backend-repair1-independent-rereview.json": {
+      "actual": "4b45e09d5de02dadcb16650f8e3c253d799caffe9f5b4f52eb0677c692f4c453",
+      "expected": "4b45e09d5de02dadcb16650f8e3c253d799caffe9f5b4f52eb0677c692f4c453",
+      "match": true
+    }
+  },
+  "manual_statement_review": {
+    "status": "PASS",
+    "result": "Current sections state LOCAL SOFTWARE PASS while G3 remains WIP/FLOW NOT RUN/QUALITY deferred; SOURCE, provider/model, database, build, deployment, release and other real effects remain NOT RUN. Historical interop records retain the repair1 handler hash and explicitly say the producer did not invoke the handler; the final handler is supported separately by the repair2 independent report."
+  },
+  "mechanical_red_exemption": "Applicable only to staging/custody/status documentation. These files record already-run verification and do not change product behavior or acceptance criteria.",
+  "effects": {
+    "repository_write": false,
+    "test_rerun": false,
+    "http": false,
+    "database": false,
+    "provider": false,
+    "build": false,
+    "deploy": false,
+    "commit": false
+  },
+  "blocker": []
+}

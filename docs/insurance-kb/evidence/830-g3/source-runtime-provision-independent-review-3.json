@@ -1,0 +1,28 @@
+{
+  "contract": "830-g3-source-runtime-independent-review.v3",
+  "recorded_at": "2026-09-07T10:03:32.805303+00:00",
+  "reviewer": "g3_seam_audit",
+  "status": "PASS",
+  "source_sha256": "823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4",
+  "test_sha256": "a92626a0906d653b5c9301da45752e86315961a73b405ab231e4fc53dd2722e4",
+  "notes_sha256": "844bfdb4d16b5e871956b4c57f265acb137efd01948724c7344557c5e1262a13",
+  "blockers": [],
+  "closed": [
+    "B1 durable immediate successful PUT checkpoint before GET for KB and model",
+    "B2 expected full readback recomputes Go capabilities",
+    "B3 database and user bound and prewrite rechecked",
+    "B4 strict parser env allowlist/forced values/live prewrite comparison"
+  ],
+  "backlog": [
+    "Test hardcodes private source path; this review verified private bytes exactly equal frozen repository source before 10 fake tests. Clean-environment test portability deferred; no additional high-risk repair."
+  ],
+  "fake_tests": {
+    "passed": 10,
+    "log": "source-runtime-provision-v3-independent-test-01.log",
+    "sha256": "e0a141fa9f484db72c1755151a58754350ca6c5f10a6fc9cc1f895f4b330e1b0"
+  },
+  "identity_log_sha256": "c94cb7b32738ca0e3abd87b93975a02a6cee6dca2609b0b5538306489d192590",
+  "actual_preflight": "NOT RUN",
+  "apply": "NOT RUN",
+  "provider": 0
+}

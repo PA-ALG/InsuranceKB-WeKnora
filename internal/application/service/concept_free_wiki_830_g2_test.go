@@ -1000,3 +1000,27 @@ func TestValidateConceptBase830G2RejectsSynchronizedPreparationDigestDrift(t *te
 	err = schema.validateConceptBase830G2(fixture.ctx, fixture.scope, next)
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 }
+
+func TestKnowledgeContentCitationKeepsEvidenceIndexAcrossSorting(t *testing.T) {
+	page := types.ConceptFreeWikiPage830G2{SpaceID: "space", EntityID: "entity", StableKey: "guide", Evidence: []types.ConceptEvidence830G2{
+		{ConceptSourceIdentity830G2: types.ConceptSourceIdentity830G2{RevisionID: "revision-a"}, BlockID: "block-a", PageNumber: 1, Start: 0, End: 2, Quote: "同文", QuoteHash: strings.Repeat("a", 64)},
+		{ConceptSourceIdentity830G2: types.ConceptSourceIdentity830G2{RevisionID: "revision-b"}, BlockID: "block-b", PageNumber: 2, Start: 0, End: 2, Quote: "同文", QuoteHash: strings.Repeat("a", 64)},
+	}, ContentProvenance: &types.KnowledgeContentProvenance{Contract: "knowledge-content-provenance.830.v1"}}
+	id, err := page.FreeWikiPageID()
+	require.NoError(t, err)
+	bundle := types.ConceptCandidateBundle830G2{CandidateHash: strings.Repeat("b", 64)}
+	bundle.CompileResult.Output.Pages = []types.ConceptFreeWikiPage830G2{page}
+	citations := conceptMemberCitations830G2(bundle, types.ConceptPageMember830G2{MemberID: id})
+	raw, err := json.Marshal(citations)
+	require.NoError(t, err)
+	var rows []map[string]any
+	require.NoError(t, json.Unmarshal(raw, &rows))
+	for _, row := range rows {
+		require.Contains(t, row, "evidence_index")
+		require.Equal(t, int(row["page_number"].(float64))-1, int(row["evidence_index"].(float64)))
+	}
+	bundle.CompileResult.Output.Pages[0].ContentProvenance = nil
+	raw, err = json.Marshal(conceptMemberCitations830G2(bundle, types.ConceptPageMember830G2{MemberID: id}))
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "evidence_index")
+}

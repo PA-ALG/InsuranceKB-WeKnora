@@ -49,4 +49,13 @@ __all__ = [
     "ReceiptSink",
     "StrictAdmissionRequestBinding",
     "VerifiedAdmission",
+    "build_g3_bounded_model_client",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name == "build_g3_bounded_model_client":
+        from .g3_bounded_gateway import build_g3_bounded_model_client
+
+        return build_g3_bounded_model_client
+    raise AttributeError(name)

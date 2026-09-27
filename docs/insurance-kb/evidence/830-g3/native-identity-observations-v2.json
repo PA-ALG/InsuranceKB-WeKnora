@@ -1,0 +1,259 @@
+{
+  "contract": "830-g3-native-identity-inspection.v2",
+  "recorded_at": "2026-09-07T10:15:24.401225+00:00",
+  "status": "LOCAL_SOURCE_OBSERVATIONS_NOT_MODEL_RESULTS_OR_GOLDEN",
+  "rows": [
+    {
+      "material_id": "g3-material-01",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/existing-native-captures/g3-material-01-native-original.json.gz",
+      "capture_sha256": "7aad1eb2e807f1a71fa16ada5384e31d3ec5964b94c776930a8f364d594a74f6",
+      "markdown_sha256": "f37287894e8d8c023094ec185263e53cf000fa9a9fc8a88183ad65a44cadff39",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：596",
+          "start": 13,
+          "end": 21,
+          "quote_sha256": "a7e2750ec230cbcb5e733b56d51a408074429fd2d79f9b55782f7668f8ce1681"
+        },
+        {
+          "quote": "平安人寿〔2025〕医疗保险 172 号",
+          "start": 1272,
+          "end": 1292,
+          "quote_sha256": "9b81fab14cb6ef2916373428491027641077b9cd68674b3028fa09b60f560d21"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-02",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/existing-native-captures/g3-material-02-native.json.gz",
+      "capture_sha256": "2a4688929a3273949f0999fffb409e10453b990cbdd89fe3fdfa65c381a9a87d",
+      "markdown_sha256": "8fda17612bfb0e5af79d1e6654e97de2c08543a8bb29b371b3ca5aa2e3b8c67e",
+      "observed_code_and_filing_spans": [],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-03",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/existing-native-captures/g3-material-03-native-original.json.gz",
+      "capture_sha256": "ffb9be17f53e49494a52d41c6d7f52d6bb145f6fce8b90c299e362e873c9be68",
+      "markdown_sha256": "f465e5d2256377107bfbf89300e6667a0b28dc8ed6d1512649bfb5ba63c29dda",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：594",
+          "start": 12,
+          "end": 20,
+          "quote_sha256": "dbaf7218d095d394aedf91a3e9586effccc06fe3726d7f3d9b858fd0bc23c61a"
+        },
+        {
+          "quote": "险种代码：594",
+          "start": 35,
+          "end": 43,
+          "quote_sha256": "dbaf7218d095d394aedf91a3e9586effccc06fe3726d7f3d9b858fd0bc23c61a"
+        },
+        {
+          "quote": "平安人寿〔2025〕医疗保险 170 号",
+          "start": 1102,
+          "end": 1122,
+          "quote_sha256": "bd6e23f3a6300cc9824716c2c1e37f0a6c2ee6c438b553672396fc2a0447bd49"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-04",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/existing-native-captures/g3-material-04-native-original.json.gz",
+      "capture_sha256": "d04a3a33789788bc522ce8aae0b0312ecf90218176a33616e2cbb70fe646c841",
+      "markdown_sha256": "2f840e5c6434ab5433e7962b780719ef31f89f570348acb3f71792070c8f163a",
+      "observed_code_and_filing_spans": [],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-07",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-07-native.json.gz",
+      "capture_sha256": "e25e87313cb4ec2e5ab2e57487d41135c6387cf4e874685a8e6cf8dae9306506",
+      "markdown_sha256": "a72af4d05e91621921d3c8595a09d4e0e66b80a41ef744bc0e38443e603fb246",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：1072",
+          "start": 14,
+          "end": 23,
+          "quote_sha256": "3eea342755eabc917a10b0163aebf918a9eb34299ab148c9bb5ceb07f0cf9670"
+        },
+        {
+          "quote": "平安人寿[2020]医疗保险 168 号",
+          "start": 926,
+          "end": 946,
+          "quote_sha256": "023b8a08aeb4ee7d7d4cdc60f6de7d31e6e3ac94b710e45970a99121564a7933"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-08",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-08-native.json.gz",
+      "capture_sha256": "88db835214869b144acbaa253af8e99a3650de2e1b5663af8eb5b89e705b8696",
+      "markdown_sha256": "1dfda6a1e9398198d4b7688cbdd78938879694d836ebae406081b75f5b8d7513",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：1072",
+          "start": 14,
+          "end": 23,
+          "quote_sha256": "3eea342755eabc917a10b0163aebf918a9eb34299ab148c9bb5ceb07f0cf9670"
+        },
+        {
+          "quote": "平安人寿〔2021〕医疗保险 155 号",
+          "start": 1027,
+          "end": 1047,
+          "quote_sha256": "a9b6183f0bf754ee82aac4de8085c31d956fdd86369e46d0063192e85f1a5634"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-09",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-09-native.json.gz",
+      "capture_sha256": "fecfc7c17404f4976f732ae7242c8b915479488ed122e993eb254d3b5f1a8070",
+      "markdown_sha256": "3f3700adc5118591ba9c6fbfab9a8f5818ece7bf716d0792bc32f60e9ea8c1ba",
+      "observed_code_and_filing_spans": [],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-11",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-11-native.json.gz",
+      "capture_sha256": "8fe1d5b89f5536a983c35cad0235e0f4e01f41187683e85caeac2eda4af4c294",
+      "markdown_sha256": "fcda1ef806ab13fa6bc1fc6b4bc7f9eafe29d94b6bffee36ef65c42bdaf00afe",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：1826",
+          "start": 954,
+          "end": 963,
+          "quote_sha256": "5c1a41fe64ee56eb9d25d7854401d8430eccf25589a1bb21a5f614c3066756fc"
+        },
+        {
+          "quote": "平安人寿〔2025〕两全保险 152 号",
+          "start": 1399,
+          "end": 1419,
+          "quote_sha256": "ad7acd6ba849b2fdc8b0dae380a22c4479ca7bdc704a62daad938be25bfce46f"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-12",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-12-native.json.gz",
+      "capture_sha256": "549143dde35df75e1cd6c4565e035c5241cb64c5f4342f3935c3e2e5567ec049",
+      "markdown_sha256": "a134d6b66c25f95959f3998f0c88988b0249d1b253ced415fec1f3f43848b804",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：1816",
+          "start": 1424,
+          "end": 1433,
+          "quote_sha256": "d80eb5cdedcff6dafd7268421f7c6c4cafbdad875dce76291f7b833264ddd1a2"
+        },
+        {
+          "quote": "平安人寿〔2025〕失能收入损失保险 128 号",
+          "start": 1435,
+          "end": 1459,
+          "quote_sha256": "a3799d711a054b006acce0dca6d5c0b98fcdd8854369dea3cbbc0282e69b41ee"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-13",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-13-native.json.gz",
+      "capture_sha256": "4bb6e95db4eafaa1d55096e4609f3e59c3c419273d4028d3e2eb7fb568c1e6d4",
+      "markdown_sha256": "71dcc17ceebf9b016ce6658f94de60f439fcd9321702a71ef21d5b1a37008fb0",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：1814",
+          "start": 50,
+          "end": 59,
+          "quote_sha256": "9c08b7f8c52a2c8a3da56d39d2695806b731c1cbe69586eabe1d28fa3aa29b7a"
+        },
+        {
+          "quote": "平安人寿〔2025〕意外伤害保险 126 号",
+          "start": 0,
+          "end": 22,
+          "quote_sha256": "0d26ddd303215c8e60cb8e72d526770ecdc35d9fc77d88206e1140768574a9a9"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-14",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-14-native.json.gz",
+      "capture_sha256": "df9f05b86ca3128e314d6e4965a9c81a969f2e6fa807dadeabfd937567b8c25d",
+      "markdown_sha256": "7c36ff3907f94f6fa2e76b8601e7be7c742bf0a97e03c59ad7e90b34999f5a09",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：1824",
+          "start": 1092,
+          "end": 1101,
+          "quote_sha256": "b3984058b27512730ae2ab01b645126260b88fc6c7bc71c90d002755f6f62c7e"
+        },
+        {
+          "quote": "平安人寿〔2025〕终身寿险 150 号",
+          "start": 1395,
+          "end": 1415,
+          "quote_sha256": "574e2187c490a833e1de51b41e3cb0b6434f63539993a2f19ba19b42f323768f"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-17",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-17-native.json.gz",
+      "capture_sha256": "9fc6987e83c2dc107a7770bf1ab06d34d67d5743081c9edd8274a78994830468",
+      "markdown_sha256": "912a2125cc768d0f2f165c93c67cbe4fc6cdc9536f9d280c6cdcc8ae385db7c0",
+      "observed_code_and_filing_spans": [
+        {
+          "quote": "险种代码：1828",
+          "start": 1694,
+          "end": 1703,
+          "quote_sha256": "e27754093c6555eda53922f820120d21106e4c9c43fb27e55050d0b1ac988cda"
+        },
+        {
+          "quote": "平安人寿〔2025〕疾病保险 174 号",
+          "start": 1705,
+          "end": 1725,
+          "quote_sha256": "b809c8ba24c5190f9b6bdd9809a592e36abe0ed7de1890684a0ec514f5883936"
+        }
+      ],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-18",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-18-native.json.gz",
+      "capture_sha256": "29af9db806702e26c2b7a2ce4a39bc8cfe991d5adffe95e208cde1871cac86f3",
+      "markdown_sha256": "827abacedcae76b5fa533afe83a81c07d5ef4e66ef7ba6ab5995a8b06bca511e",
+      "observed_code_and_filing_spans": [],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-19",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-19-native.json.gz",
+      "capture_sha256": "7f5fa4acb35c3e80444e7d1b2be08b770c925d3ebeafecb34bceb0715997d171",
+      "markdown_sha256": "532a94d8402e44cb23e804b5166fc864c59ea8716861ad6343ee9fce6e950f7b",
+      "observed_code_and_filing_spans": [],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    },
+    {
+      "material_id": "g3-material-21",
+      "capture_file": "docs/insurance-kb/evidence/830-g3/inputs/native-captures/g3-material-21-native.json.gz",
+      "capture_sha256": "4bf31d980926b8d5a7845c865b0c3851bfac756369316678f4c736c2607cea41",
+      "markdown_sha256": "a8670f07aace99698d469d256126135b2efab9ee7e4a07d2b5c7d68ea067b643",
+      "observed_code_and_filing_spans": [],
+      "locator_scope": "inspection offsets within saved native markdown; not admitted SourceBlock/C Evidence"
+    }
+  ],
+  "facts": [
+    "07/08 both explicitly say product code1072, but filing numbers are2020医疗168 and2021医疗155; filename suffixes are not separate product codes",
+    "11 code1826 is endowment,12 code1816 disability income,13 code1814 accident,14 code1824 whole life,17 code1828 critical illness per observed formal filing text",
+    "09/18/19 did not match these explicit code/filing patterns; absence of regex match is not an exhaustive absence proof",
+    "21 historical product list contains multiple distinct names/codes, requires separate row spans, not this code-label regex"
+  ],
+  "future_seed": "must bind actual SourceRevisions/policy before model; do not backfill expected labels from future output",
+  "runtime_effects": 0,
+  "extension_note": "Old01 literalcode596/2025医疗172;old03 literalcode594/2025医疗170. Existing serving version IDs596-1/594-1 are not literal product codes. Old02/04 regex has no code/filing hit; this is not exhaustive absence proof. All15 observations remain neither Seed nor actual model decisions."
+}

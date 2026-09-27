@@ -1,0 +1,20 @@
+{
+  "contract": "830-g3-source-runtime-script-freeze.v2",
+  "files": {
+    "source_runtime_provision.py": "8560873c4af84079a5b4e3109452f03ecbd90d4006c1d5624ea2d0ddcbafcabe",
+    "source-runtime-provision-notes.md": "d46316e078e20277173898c480f01af77284fcb323473f0ba27f812cc6ff6644",
+    "g3-source-runtime-inspect-missing-fix-check.log": "3d30fa64d2a4f9da0ae4b154d75f7122e9de4ea29947967cee7422dcf7b97fde"
+  },
+  "previous_script_sha256": "36c3eaea032a909ea7855c50f2aa1f2a6d7d13e2b3bf5bcf50fc002fc800ec77",
+  "preflight_1": {
+    "status": "FAILED_READONLY",
+    "reason": "missing Docker container produces nonzero [] response, interpreted as invalid cardinality",
+    "log": "g3-source-runtime-preflight-20260907-01.log",
+    "log_sha256": "630702ab145e3abe429a18d9c11763bd03cfe2e07ee9dca17eb66368c7107580",
+    "environment_writes": 0
+  },
+  "current_change": "one bounded inspect absence fix after preserved fake behavior RED; transport/permission errors not accepted as absence",
+  "independent_apply_review": "PENDING",
+  "apply": "NOT RUN",
+  "provider": "NOT RUN"
+}
