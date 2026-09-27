@@ -1,0 +1,36 @@
+{
+  "upstream": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+  "files": [
+    {
+      "path": "internal/application/service/tenant_skill_install.go",
+      "byte_identical_to_fixed_upstream": true,
+      "sha256": "e63bcc498be13c0bf1d450c9c0d0f03b44e33dd4db710b416b77a6e1c63e5d13"
+    },
+    {
+      "path": "mcp-server/requirements.txt",
+      "byte_identical_to_fixed_upstream": true,
+      "sha256": "af4e5b3aa5536fbfe0ec5d02778d380c928a10b3bf8fff09dd5bd353f34751a2"
+    },
+    {
+      "path": "website-docs/sample-data/01-产品手册-智能家居中控.md",
+      "byte_identical_to_fixed_upstream": true,
+      "sha256": "ad94b23ddda00fa76c2225630f74022deb2df95050dbc2cdffe5fdb40382381b"
+    },
+    {
+      "path": "website-docs/sample-data/02-会议纪要-Q1产品规划.md",
+      "byte_identical_to_fixed_upstream": true,
+      "sha256": "28b74ee094bee9317a183eae0ef38436ddc71a23fe5a016229591349c1a732ef"
+    },
+    {
+      "path": "website-docs/sample-data/03-员工手册-报销与休假.md",
+      "byte_identical_to_fixed_upstream": true,
+      "sha256": "8735f7a0ecab21e1fe63af2c963440fae7a0a1dda0cd23778eab6a0113f9dad8"
+    },
+    {
+      "path": "website-docs/sample-data/04-技术方案-售后知识库POC.md",
+      "byte_identical_to_fixed_upstream": true,
+      "sha256": "242a6a18d9daec4697903833206c57c27f426cc1f43d450a20701d8b5724d59e"
+    }
+  ],
+  "decision": "Inherited verbatim. Preserve fixed upstream CRLF/Markdown line breaks; no unrelated formatting patch. Product delta whitespace gate remains required."
+}

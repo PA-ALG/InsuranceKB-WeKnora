@@ -56,6 +56,9 @@ func TestAllocateG3BoundReparseIsScopedAndIdempotent(t *testing.T) {
 		error_message TEXT, pending_subtasks_count INTEGER, processed_at DATETIME, updated_at DATETIME,
 		deleted_at DATETIME
 	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE knowledge_revision_sources (
+		tenant_id INTEGER, knowledge_id TEXT, retention_state TEXT
+	)`).Error)
 	require.NoError(t, db.Exec(`INSERT INTO knowledges
 		(id,tenant_id,knowledge_base_id,type,metadata,current_parse_attempt,parse_status,enable_status,file_size,file_sha256)
 		VALUES ('source',7,'raw','file','{"product_ingestion_upload":"original:0","other":"keep"}',3,'failed','disabled',12,?)`,

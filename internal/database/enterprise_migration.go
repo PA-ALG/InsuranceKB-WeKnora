@@ -162,76 +162,26 @@ func runPostgresMigrations(ctx context.Context, dsn string, _ MigrationOptions) 
 			return acquireLegacyW1MigrationGuard(ctx, rawDB, inspectLegacyW1BridgeState)
 		},
 		func() error {
-			return runPostgresMigrationSet(
-				ctx,
-				officialPostgresMigrationSource,
-				dsn,
-				true,
-			)
+			return runOfficialPostgresMigrationPhase(ctx, rawDB, func() error {
+				return runPostgresMigrationSet(
+					ctx,
+					officialPostgresMigrationSource,
+					dsn,
+					true,
+				)
+			})
 		},
 		func() error {
-			if err := validateEmbeddingsForwardRepairPreflight(ctx, rawDB); err != nil {
-				return err
-			}
-			return runPostgresMigrationSet(
-				ctx,
-				enterprisePostgresMigrationSource,
-				enterpriseDSN,
-				false,
-			)
+			return runEnterprisePostgresMigrationPhase(ctx, rawDB, func() error {
+				return runPostgresMigrationSet(
+					ctx,
+					enterprisePostgresMigrationSource,
+					enterpriseDSN,
+					false,
+				)
+			})
 		},
 	)
-}
-
-func validateEmbeddingsForwardRepairPreflight(
-	ctx context.Context,
-	db *sql.DB,
-) error {
-	var skipEmbedding sql.NullString
-	if err := db.QueryRowContext(
-		ctx,
-		"SELECT current_setting('app.skip_embedding', true)",
-	).Scan(&skipEmbedding); err != nil {
-		return newMigrationSafetyError(
-			"read PostgreSQL embeddings migration mode",
-			err,
-		)
-	}
-	if !skipEmbedding.Valid || skipEmbedding.String != "false" {
-		return nil
-	}
-
-	var tableExists bool
-	if err := db.QueryRowContext(
-		ctx,
-		"SELECT to_regclass('public.embeddings') IS NOT NULL",
-	).Scan(&tableExists); err != nil {
-		return newMigrationSafetyError(
-			"inspect existing PostgreSQL embeddings table",
-			err,
-		)
-	}
-	if !tableExists {
-		return nil
-	}
-
-	var contractValid bool
-	if err := db.QueryRowContext(
-		ctx,
-		embeddingsForwardRepairContractSQL,
-	).Scan(&contractValid); err != nil {
-		return newMigrationSafetyError(
-			"inspect existing PostgreSQL embeddings contract",
-			err,
-		)
-	}
-	if !contractValid {
-		return newMigrationSafetyError(
-			"existing public.embeddings does not satisfy the current PostgreSQL repository contract",
-			nil,
-		)
-	}
-	return nil
 }
 
 func runPostgresMigrationSet(

@@ -125,6 +125,7 @@
 | 127 | 830-ba0-local-build-reuse | 🚧 BA0 SPEC / WIP | 一次性非产品工程门；冻结完整 identity、lookup-before-build、共享 Go cache、versioned 外部依赖事实与 standalone exact-image smoke；真实 app build 总预算 1，effects=0，G1 保持 PASS，G2 保持锁定 |
 | 128 | 830-g2-concept-free-wiki | 🚧 G2 SPEC / WIP | 用户明确授权G2；真实G1输入回放先保存缺口，新版本候选/独立审核/共享定义与free_wiki，复用唯一WeKnora Release；QUALITY=DEFERRED，G3与生产未授权 |
 | 129 | 830-g3-catalog-batch | 🚧 G3 SPEC / WIP | 当前用户明确授权；真实合同缺口已保存；11 pack/Profile Catalog 首切片，后续真实批次沿 G3 卡；QUALITY=DEFERRED_TO_Q0，生产/G4 未授权 |
+| 130 | weknora-082-harness-plugin-boundary | SPEC / WIP | 用户2026-09-27启动执行；UPG-01—09，固定v0.8.2；root唯一集成Owner，G4不在范围 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

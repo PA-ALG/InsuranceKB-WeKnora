@@ -1,3 +1,13 @@
+## 2026-09-27 WeKnora 0.8.2 升级实施中
+
+活动树 `830-upstream-plugin-boundary`，root 唯一集成；产品基线 `8ccc2ac9`（PR130已合入），固定上游 `3e8b0bfc`。no-commit merge 的38项冲突已消解，尚未提交/推送/部署。OpenSpec 130是执行与验证记录；已批准的设计原文SHA保持不变。
+
+CURRENT=D1 冻结提交与受影响制品准备；43路径core和附加router fixture最终独审0BLOCKER，root唯一后续写者。pin与mutation同row-lock、状态显式Updates、chunk原子generation fence及稳定UUID清理已实现，repo全包/service受影响及compile PASS；下游handler/container通过，router旧fixture补齐来源表后347项通过。普通KB重复finalizer列BACKLOG，当前G3关闭enrichment走direct commit，不在本轮加slot表/ledger。
+
+模型582包级test/subtest及追加38覆盖、仓储367、router/handler/config/container/types完整包、Wiki121/core106 focused、Harness边界47+领域独立1、fullruff/mypy735通过；组间有重叠，不相加。前端263初轮/14修复focused/最终typecheck与build2m4s通过。构建156与迁移包/adoption131通过；frontend80/build18/migration13路径独立复核0BLOCKER。新source并发改动须重新跑受影响检查，不能继承原core身份PASS。
+
+NEXT=冻结commit→唯一D2 App/UI/DocReader受影响镜像→明确迁移恢复与真实tracer窗口。DocReader解析/依赖确有变化，旧a553镜像不可exact reuse；Harness生产src/lock未变，不因此重建。app image、真实DB migration/backup/restore、provider、业务发布和source click均NOT RUN；旧epoch27不能冒充升级后结果。当前旧容器/数据未改；G3/G3.5 FLOW_PASS / QUALITY_PARTIAL、Q0保持。下方历史“PR130待集成”不覆盖当前基线。
+
 ## 2026-09-27 最后两项 CI 元数据修复
 
 b9db7772f完整CI为7721 PASS/18 SKIP/65 deselected/2 FAIL；失败仅为旧v3版本断言和

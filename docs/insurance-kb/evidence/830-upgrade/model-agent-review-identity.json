@@ -1,0 +1,19 @@
+{
+  "frozen_at": "2026-09-27T10:59:57.036325+00:00",
+  "base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+  "upstream": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+  "scope": "model dispatch and agent tool isolation only; not whole tree approval",
+  "sha256": {
+    "internal/models/api/model_dispatch.go": "60ef931a2bb6314a8c54a65a6dc277f7cebc7ee4169dbf5cfb661555523b7421",
+    "internal/models/api/model_dispatch_test.go": "b8ada0a08ce02d68bc1b3217b37303a18ae5ef5b63903b4f2e54decb0deb4c75",
+    "internal/models/api/endpoint.go": "c88cd646775fd3101dc7ac1c810f7d1c25af6e73d71c7ccc79ccd35fd5203410",
+    "internal/models/api/retry.go": "70daf480205764f3ede836d5379b10eb9affcc876993a49eb9f40ac31c8f486c",
+    "internal/models/api/openaicompletions/client.go": "c49b1517db6b0cd12b2cb7cf7e9a46dc1c217e0765bf4394bf2571ff6162a552",
+    "internal/models/runtime/connection.go": "c1507fa917e1009a2ba74efd258e1d7fd33371a9a1602f0eeba3a60d40d200bb",
+    "internal/models/chat/model_dispatch_test.go": "39b677582d9681e1488930d9fc842306b226c38583dd82c0ba822a919b8d0205",
+    "internal/models/embedding/model_dispatch_test.go": "f8b206e29cd1e80d7ae6f76c9ba21d5996f1932cdfdabed29121e3a129d15554",
+    "internal/application/service/agent_service.go": "e4b3b33257458c695dfa221bb68c91afbad7f387e49f75aea97d23548ffadcde",
+    "internal/application/service/concept_agent_830_g2_test.go": "b387ee74b6b9573b5e80aff391a63c326b01fd63ac8e218717e4b38d479d17f0",
+    "internal/application/service/agent_tool_surface_test.go": "9b4276c6209006335293dcf9630c896f6c20c7ef9f8c13d00b544e2b24fd4a66"
+  }
+}

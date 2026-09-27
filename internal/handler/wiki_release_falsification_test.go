@@ -553,6 +553,7 @@ func TestWikiReleaseFalsificationManagedMutationGuard(t *testing.T) {
 func TestWikiReleaseFalsificationProductionRouterInventoryAndAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.NewRouter(router.RouterParams{
+		SystemHandler:      &handler.SystemHandler{},
 		Config:             &config.Config{},
 		WikiReleaseHandler: handler.NewWikiReleaseHandler(nil),
 	})
@@ -684,6 +685,7 @@ func newWikiReleaseProductionRouter(
 	rbacOff := false
 	tenantID := uint64(42)
 	return router.NewRouter(router.RouterParams{
+		SystemHandler: &handler.SystemHandler{},
 		Config: &config.Config{
 			Tenant: &config.TenantConfig{EnableRBAC: &rbacOff},
 		},
@@ -694,6 +696,7 @@ func newWikiReleaseProductionRouter(
 		WikiPageHandler: handler.NewWikiPageHandler(
 			wikiService,
 			kbService,
+			nil,
 			nil,
 			nil,
 		),

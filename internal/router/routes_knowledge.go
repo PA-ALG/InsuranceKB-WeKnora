@@ -35,18 +35,22 @@ func RegisterChunkRoutes(r *gin.RouterGroup, handler *handler.ChunkHandler, g *r
 		chunkRead.GET("/:knowledge_id", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("knowledge_id"), handler.ListKnowledgeChunks)
 		// 通过chunk_id获取单个chunk（不需要knowledge_id） — Viewer+ 且对父 KB 有 read 权限
 		chunkRead.GET("/by-id/:id", g.Viewer(), g.KBAccessReadFromChunkIDParam("id"), handler.GetChunkByIDOnly)
+		chunkRead.GET("/:knowledge_id/:id/revisions", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("knowledge_id"), handler.ListChunkRevisions)
 		// 删除分块 — KB owner OR Admin+，且对父 KB 有 write 权限
 		chunks.DELETE("/:knowledge_id/:id", g.OwnedChunkKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.DeleteChunk)
 		// 删除知识下的所有分块 — KB owner OR Admin+，且对父 KB 有 write 权限
 		chunks.DELETE("/:knowledge_id", g.OwnedChunkKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.DeleteChunksByKnowledgeID)
 		// 更新分块信息 — KB owner OR Admin+，且对父 KB 有 write 权限
 		chunks.PUT("/:knowledge_id/:id", g.OwnedChunkKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.UpdateChunk)
+		chunks.POST("/:knowledge_id/:id/revert", g.OwnedChunkKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.RevertChunk)
 		// 删除单个生成的问题（通过分块 id） — 与其它 chunk mutation 一致：
 		// KB owner OR Admin+。早期这里因为链路 (chunk_id -> knowledge_id ->
 		// kb -> creator_id) 还没接通，被临时降级成 Contributor，导致一个
 		// 「能编辑所有 chunk 的同样规则在这条路由上反而更宽松」的不一致。
 		// 现在通过 KBCreatorLookupFromChunkIDParam 把那一跳补上，统一矩阵。
 		chunks.DELETE("/by-id/:id/questions", g.OwnedChunkKBOrAdminFromChunkID(), g.KBAccessWriteFromChunkIDParam("id"), handler.DeleteGeneratedQuestion)
+		chunks.PUT("/by-id/:id/questions", g.OwnedChunkKBOrAdminFromChunkID(), g.KBAccessWriteFromChunkIDParam("id"), handler.UpsertGeneratedQuestion)
+		chunks.POST("/by-id/:id/questions/regenerate", g.OwnedChunkKBOrAdminFromChunkID(), g.KBAccessWriteFromChunkIDParam("id"), handler.RegenerateGeneratedQuestions)
 	}
 }
 
@@ -58,8 +62,8 @@ func RegisterChunkRoutes(r *gin.RouterGroup, handler *handler.ChunkHandler, g *r
 // edit/delete any of its documents while a non-owner Contributor gets
 // 403. KB-scoped upload routes (`/knowledge-bases/:id/knowledge/...`)
 // reuse OwnedKBOrAdmin because the URL :id is the KB id directly.
-// Cross-:id batch operations stay Contributor-gated — they don't have
-// a single owning KB to check against.
+// Body-scoped batch operations have a Contributor route gate and resolve
+// their KB ownership plus Editor operation grant inside the handler.
 func RegisterKnowledgeRoutes(r *gin.RouterGroup, handler *handler.KnowledgeHandler, g *rbacGuards) {
 	// 知识库下的知识路由组（URL :id is the KB id）。Scoped API key 需要
 	// ingest 能力才能写内容，且仍受 KB 范围限制；清空 KB 只允许 full-access key。
@@ -70,6 +74,10 @@ func RegisterKnowledgeRoutes(r *gin.RouterGroup, handler *handler.KnowledgeHandl
 		kb.POST("/url", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.CreateKnowledgeFromURL)
 		kb.POST("/manual", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.CreateManualKnowledge)
 		kbRead.GET("", g.Viewer(), g.KBAccessRead("id"), handler.ListKnowledge)
+		// 原始文件下载沿用单文件下载的 Contributor + Editor 权限边界。
+		kbRead.POST("/batch-download", g.Contributor(), g.KBAccessWrite("id"), handler.BatchDownloadKnowledge)
+		kbRead.GET("/folders", g.Viewer(), g.KBAccessRead("id"), handler.ListKnowledgeFolders)
+		kb.PUT("/folders", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.RenameKnowledgeFolder)
 		// Clearing all contents under a KB is a destructive op; gate
 		// behind Admin instead of Contributor.
 		kb.With(apiKeyFullAccess()).DELETE("", g.Admin(), g.KBAccessWrite("id"), handler.ClearKnowledgeBaseContents)
@@ -99,6 +107,7 @@ func RegisterKnowledgeRoutes(r *gin.RouterGroup, handler *handler.KnowledgeHandl
 		kRead.GET("/:id/spans", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.GetKnowledgeSpans)
 		k.DELETE("/:id", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.DeleteKnowledge)
 		k.PUT("/:id", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.UpdateKnowledge)
+		k.POST("/:id/regenerate-summary", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.RegenerateKnowledgeSummary)
 		k.PUT("/manual/:id", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.UpdateManualKnowledge)
 		k.POST("/:id/reparse", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.ReparseKnowledge)
 		k.POST("/:id/cancel-parse", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.CancelKnowledgeParse)
@@ -121,6 +130,7 @@ func RegisterKnowledgeRoutes(r *gin.RouterGroup, handler *handler.KnowledgeHandl
 		k.PUT("/tags", g.Contributor(), handler.UpdateKnowledgeTagBatch)
 		k.POST("/batch-reparse", g.Contributor(), handler.BatchReparseKnowledge)
 		k.POST("/batch-delete", g.Contributor(), handler.BatchDeleteKnowledge)
+		k.POST("/folder", g.Contributor(), handler.MoveKnowledgeToFolder)
 		k.POST("/move", g.Contributor(), handler.MoveKnowledge)
 	}
 }
@@ -205,6 +215,9 @@ func RegisterKnowledgeBaseRoutes(r *gin.RouterGroup, handler *handler.KnowledgeB
 		// 以调用者「自身」租户(c.Keys，未被 KBAccess 改写)校验 kb.TenantID，
 		// 把删除锁死为「所有者租户 + Admin」，共享 editor 无法删除源 KB。
 		kbManagement.PUT("/:id", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.UpdateKnowledgeBase)
+		// 立即重新生成知识库 AI 描述 — 与更新知识库同档鉴权；同步执行一次小模型调用。
+		kbManagement.POST("/:id/profile/generate", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"),
+			handler.GenerateKnowledgeBaseProfile)
 		kbManagement.DELETE("/:id", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.DeleteKnowledgeBase)
 		// 置顶/取消置顶知识库 — 创建者本人 OR Admin+ 且对 KB 有 write 权限
 		// Pin state is now per-(user, kb) (migration 000050). Anyone with
@@ -359,7 +372,6 @@ func registerWikiPageRoutes(
 
 		// Special pages
 		wikiRead.GET("/index", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetIndex)
-		wikiRead.GET("/log", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetLog)
 
 		// Graph and stats
 		wikiRead.GET("/graph", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetGraph)

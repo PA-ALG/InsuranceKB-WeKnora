@@ -125,7 +125,7 @@ func TestG3PlatformCompositionRegistersBothGroupsOnlyWhenConfigured(t *testing.T
 func TestG3PlatformCompositionMainRouterRegistersMachineRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	access := handler.NewWikiReleaseHandler(nil)
-	engine := NewRouter(RouterParams{Config: &config.Config{}, WikiReleaseHandler: access, SchemaWikiHandler: &handler.SchemaWikiHandler{}, G3PlatformSnapshotsHandler: handler.NewG3PlatformSnapshotsHandler(access, nil, nil, nil), G3PlatformReleaseHandler: handler.NewG3PlatformReleaseHandler(access, nil, nil)})
+	engine := NewRouter(RouterParams{Config: &config.Config{}, SystemHandler: &handler.SystemHandler{}, WikiReleaseHandler: access, SchemaWikiHandler: &handler.SchemaWikiHandler{}, G3PlatformSnapshotsHandler: handler.NewG3PlatformSnapshotsHandler(access, nil, nil, nil), G3PlatformReleaseHandler: handler.NewG3PlatformReleaseHandler(access, nil, nil)})
 	found := map[string]bool{}
 	for _, route := range engine.Routes() {
 		if strings.Contains(route.Path, "/platform/") {

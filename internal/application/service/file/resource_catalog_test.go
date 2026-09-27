@@ -53,6 +53,10 @@ func (c *catalogStub) MarkDeleted(context.Context, string) error {
 	c.markCalls++
 	return c.markDeleteErr
 }
+
+func (c *catalogStub) Release(context.Context, string, string, string) (int64, error) {
+	return 0, nil
+}
 func (c *catalogStub) CreateAccessGrant(context.Context, string, time.Duration) (string, error) {
 	return "GrantTokenAbCdEfGhIjKl", nil
 }

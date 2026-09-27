@@ -67,8 +67,10 @@ func TestRuntimeOfficialMigrationHeadMatchesAdoptionManifest(t *testing.T) {
 	))
 	require.NoError(t, err)
 	var manifest struct {
-		SchemaVersion         int   `json:"schema_version"`
-		OfficialMigrationHead int64 `json:"official_migration_head"`
+		SchemaVersion         int    `json:"schema_version"`
+		Commit                string `json:"commit"`
+		Tree                  string `json:"tree"`
+		OfficialMigrationHead int64  `json:"official_migration_head"`
 	}
 	require.NoError(t, json.Unmarshal(manifestBytes, &manifest))
 
@@ -78,6 +80,9 @@ func TestRuntimeOfficialMigrationHeadMatchesAdoptionManifest(t *testing.T) {
 	require.Equal(t, manifest.OfficialMigrationHead, target.OfficialMigrationHead)
 	require.Equal(t, manifest.OfficialMigrationHead, upstream.OfficialMigrationHead())
 	require.Positive(t, upstream.OfficialMigrationHead())
+	require.Equal(t, "3e8b0bfc80b845b2d4b2ed683994748741450a97", manifest.Commit)
+	require.Equal(t, "9533ab2071e71f4bc2ebb09c85d3ac246841ff9a", manifest.Tree)
+	require.EqualValues(t, 110, manifest.OfficialMigrationHead)
 }
 
 func TestClassifyLegacyW1Origin(t *testing.T) {
@@ -213,7 +218,7 @@ func TestClassifyLegacyW1Origin(t *testing.T) {
 			want: legacyW1OriginFullCurrent,
 		},
 		{
-			name: "packaged enterprise head before official head is unknown",
+			name: "packaged enterprise head at a resumable official checkpoint",
 			state: legacyW1BridgeState{
 				fixtureChecksumValid:   true,
 				officialLedgerExists:   true,
@@ -223,7 +228,7 @@ func TestClassifyLegacyW1Origin(t *testing.T) {
 				enterpriseLedgerExists: true,
 				enterpriseVersion:      int64(packagedEnterpriseMigrationHead),
 			},
-			wantErr: "unknown legacy W1 migration origin",
+			want: legacyW1OriginFullCurrent,
 		},
 		{
 			name: "full current at packaged enterprise head",
@@ -231,6 +236,19 @@ func TestClassifyLegacyW1Origin(t *testing.T) {
 				fixtureChecksumValid:   true,
 				officialLedgerExists:   true,
 				officialVersion:        officialHead,
+				w1State:                legacyW1Exact,
+				spanState:              spanNameExpanded255,
+				enterpriseLedgerExists: true,
+				enterpriseVersion:      int64(packagedEnterpriseMigrationHead),
+			},
+			want: legacyW1OriginFullCurrent,
+		},
+		{
+			name: "released official75 enterprise5 is an upgradeable checkpoint",
+			state: legacyW1BridgeState{
+				fixtureChecksumValid:   true,
+				officialLedgerExists:   true,
+				officialVersion:        75,
 				w1State:                legacyW1Exact,
 				spanState:              spanNameExpanded255,
 				enterpriseLedgerExists: true,
@@ -399,6 +417,62 @@ func TestClassifyLegacyW1Origin(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestClassifyLegacyW1OriginAllowsPackagedUpgradeResumeCheckpoints(t *testing.T) {
+	officialHead := upstream.OfficialMigrationHead()
+	for version := releasedOfficial75Checkpoint; version <= officialHead; version++ {
+		t.Run(fmt.Sprintf("official%d_enterprise5", version), func(t *testing.T) {
+			state := legacyW1BridgeState{
+				fixtureChecksumValid:   true,
+				officialLedgerExists:   true,
+				officialVersion:        version,
+				w1State:                legacyW1Exact,
+				spanState:              spanNameExpanded255,
+				dependencyState:        dependencyAnchorsExact,
+				enterpriseLedgerExists: true,
+				enterpriseVersion:      int64(packagedEnterpriseMigrationHead),
+			}
+
+			got, err := classifyLegacyW1Origin(state)
+
+			require.NoError(t, err)
+			require.Equal(t, legacyW1OriginFullCurrent, got)
+		})
+	}
+
+	for _, version := range []int64{releasedOfficial75Checkpoint - 1, officialHead + 1} {
+		t.Run(fmt.Sprintf("official%d_is_outside_packaged_chain", version), func(t *testing.T) {
+			state := legacyW1BridgeState{
+				fixtureChecksumValid:   true,
+				officialLedgerExists:   true,
+				officialVersion:        version,
+				w1State:                legacyW1Exact,
+				spanState:              spanNameExpanded255,
+				dependencyState:        dependencyAnchorsExact,
+				enterpriseLedgerExists: true,
+				enterpriseVersion:      int64(packagedEnterpriseMigrationHead),
+			}
+
+			_, err := classifyLegacyW1Origin(state)
+
+			require.Error(t, err)
+		})
+	}
+
+	dirty := legacyW1BridgeState{
+		fixtureChecksumValid:   true,
+		officialLedgerExists:   true,
+		officialVersion:        releasedOfficial75Checkpoint + 1,
+		officialDirty:          true,
+		w1State:                legacyW1Exact,
+		spanState:              spanNameExpanded255,
+		dependencyState:        dependencyAnchorsExact,
+		enterpriseLedgerExists: true,
+		enterpriseVersion:      int64(packagedEnterpriseMigrationHead),
+	}
+	_, err := classifyLegacyW1Origin(dirty)
+	require.ErrorContains(t, err, "dirty")
 }
 
 type bridgeStateSequence struct {

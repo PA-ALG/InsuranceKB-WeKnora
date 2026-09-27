@@ -12,6 +12,12 @@ func TestSanitizeBody(t *testing.T) {
 		want string
 	}{
 		{
+			name: "browser device credentials",
+			in: `{"pairing_link":"wss://example.com/#secret",` +
+				`"next_token":"new-secret","deviceToken":"device-secret"}`,
+			want: `{"pairing_link":"***","next_token":"***","deviceToken":"***"}`,
+		},
+		{
 			name: "camelCase apiKey",
 			in:   `{"modelName":"gpt-5.2","apiKey":"sk-secret-123","provider":"azure_openai"}`,
 			want: `{"modelName":"gpt-5.2","apiKey":"***","provider":"azure_openai"}`,
@@ -40,6 +46,11 @@ func TestSanitizeBody(t *testing.T) {
 			name: "password and token preserved as masked",
 			in:   `{"password":"p","token":"t"}`,
 			want: `{"password":"***","token":"***"}`,
+		},
+		{
+			name: "sandbox terminal handshake ticket in JSON body",
+			in:   `{"success":true,"data":{"ticket":"eyJhbGciOiJIUzI1NiJ9.payload.signature","expires_in":120}}`,
+			want: `{"success":true,"data":{"ticket":"***","expires_in":120}}`,
 		},
 		{
 			name: "snake_case new_password and old_password",
@@ -112,5 +123,21 @@ func TestR3_3OrdinaryResponseKeepsExistingFieldSanitization(t *testing.T) {
 	const want = `{"api_key":"***","content":"ordinary response"}`
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
+
+	}
+}
+
+// The sandbox terminal presents its handshake credential as a query parameter
+// because a browser WebSocket upgrade cannot carry Authorization. Holding that
+// value for its TTL is enough to open a shell in the session's sandbox, so the
+// redaction is a security boundary, not cosmetics.
+func TestSanitizeQueryRedactsTerminalTicket(t *testing.T) {
+	got := sanitizeQuery("ticket=eyJhbGciOiJIUzI1NiJ9.payload.signature&provision=1&cols=120")
+	want := "cols=120&provision=1&ticket=%2A%2A%2A"
+	if got != want {
+		t.Fatalf("sanitizeQuery() = %q, want %q", got, want)
+	}
+	if strings.Contains(got, "signature") {
+		t.Fatalf("sanitizeQuery() leaked the ticket: %q", got)
 	}
 }

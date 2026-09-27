@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/longbridgeapp/opencc"
+	"github.com/Tencent/WeKnora/internal/textconv"
 )
 
 // FAQChunkMetadata 定义 FAQ 条目在 Chunk.Metadata 中的结构
@@ -26,8 +26,27 @@ type FAQChunkMetadata struct {
 
 // GeneratedQuestion 表示AI生成的单个问题
 type GeneratedQuestion struct {
-	ID       string `json:"id"`       // 唯一标识，用于构造 source_id
-	Question string `json:"question"` // 问题内容
+	ID              string `json:"id"`                         // 唯一标识，用于构造 source_id
+	Question        string `json:"question"`                   // 问题内容
+	ContentRevision *int   `json:"content_revision,omitempty"` // 该问题对应的 Chunk 内容版本
+}
+
+const maxGeneratedQuestionSourceIDLength = 64
+
+// GeneratedQuestionSourceID builds the retrieval source identifier for a
+// generated question. PostgreSQL stores source_id as varchar(64), while a
+// chunk UUID plus a question UUID would be 73 bytes. Preserve the historical
+// representation for short IDs and hash only oversized question IDs so
+// existing index rows remain addressable by delete/reindex operations.
+func GeneratedQuestionSourceID(chunkID, questionID string) string {
+	candidate := chunkID + "-" + questionID
+	if len(candidate) <= maxGeneratedQuestionSourceIDLength {
+		return candidate
+	}
+	digest := sha256.Sum256([]byte(questionID))
+	// UUID chunk IDs use 36 bytes; "-q" plus 24 hex characters keeps the
+	// complete identifier at 62 bytes while retaining ample collision space.
+	return chunkID + "-q" + hex.EncodeToString(digest[:12])
 }
 
 // DocumentChunkMetadata 定义文档 Chunk 的元数据结构
@@ -36,6 +55,19 @@ type DocumentChunkMetadata struct {
 	// GeneratedQuestions 存储AI为该Chunk生成的相关问题
 	// 这些问题会被独立索引以提高召回率
 	GeneratedQuestions []GeneratedQuestion `json:"generated_questions,omitempty"`
+	// GeneratedQuestionsRevision ties the questions to Chunk.ContentRevision.
+	GeneratedQuestionsRevision int `json:"generated_questions_revision,omitempty"`
+}
+
+// IsQuestionCurrent reports whether a generated question was authored for the
+// current chunk body. This is advisory metadata for the UI: questions remain
+// valid retrieval aliases across chunk edits. Legacy rows fall back to the
+// metadata-level revision.
+func (m *DocumentChunkMetadata) IsQuestionCurrent(question GeneratedQuestion, chunkRevision int) bool {
+	if question.ContentRevision != nil {
+		return *question.ContentRevision == chunkRevision
+	}
+	return m != nil && m.GeneratedQuestionsRevision == chunkRevision
 }
 
 // GetQuestionStrings 返回问题内容字符串列表（兼容旧代码）
@@ -539,18 +571,6 @@ const (
 	URLKeepDomainAndPath
 )
 
-// t2sConverter 繁体转简体转换器（单例）
-var t2sConverter *opencc.OpenCC
-
-func init() {
-	var err error
-	t2sConverter, err = opencc.New("t2s") // Traditional to Simplified
-	if err != nil {
-		// 初始化失败时使用空转换器，不影响其他功能
-		t2sConverter = nil
-	}
-}
-
 // NormalizeQuestion 对问题文本进行归一化处理以提高向量匹配命中率
 // 处理顺序参考: query = convert_st(trim_url(query.lower().strip().strip("？。，；、：""！?.,;!:'\"")), 1)
 // 1. 去除首尾空白
@@ -717,14 +737,7 @@ func parseURL(raw string) (domain, path string) {
 
 // toSimplified 繁体中文转简体中文
 func toSimplified(s string) string {
-	if t2sConverter == nil {
-		return s
-	}
-	result, err := t2sConverter.Convert(s)
-	if err != nil {
-		return s
-	}
-	return result
+	return textconv.ToSimplified(s)
 }
 
 // toHalfWidth 将全角字符转换为半角字符

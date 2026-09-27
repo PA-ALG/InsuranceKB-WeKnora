@@ -45,6 +45,12 @@ Fixes #
 
 ## Testing
 <!-- Describe how these changes were tested. Include reproduction or verification steps. -->
+<!--
+For a focused change, run checks scoped to the files/packages you changed.
+See the Contributing section in README.md for examples. If a full-repository
+check is blocked by unrelated baseline or environment failures, record the
+exact command and failure here.
+-->
 
 ## Checklist
 - [ ] Goal, OpenSpec, Requirement IDs and frozen Spec identity are present
@@ -55,7 +61,7 @@ Fixes #
 - [ ] Applicable focused/static/docs gates pass; inapplicable full/live gates are marked `NOT RUN`
 - [ ] Self-reviewed the code
 - [ ] Added/updated tests covering the change
-- [ ] Updated related documentation (README, `docs/`, Swagger annotations, etc.)
+- [ ] Updated related documentation (README, `website-docs/`, Swagger annotations, etc.)
 - [ ] Breaking changes are clearly called out in the description above
 
 ## Screenshots / Recordings

@@ -49,6 +49,10 @@ func (wikiOutcomePages) FindSimilarPages(context.Context, string, string, []stri
 	return nil, nil
 }
 
+func (wikiOutcomePages) FindPagesByNormalizedTitles(context.Context, string, string, []string) ([]*types.WikiPageLite, error) {
+	return nil, nil
+}
+
 type wikiCitationFailureModel struct{ templateCaptureChatModel }
 
 func (*wikiCitationFailureModel) Chat(ctx context.Context, _ []chat.Message, _ *chat.ChatOptions) (*types.ChatResponse, error) {

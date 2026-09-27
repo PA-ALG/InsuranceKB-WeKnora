@@ -1,0 +1,212 @@
+{
+  "fixed_upstream": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+  "upstream_adoption": "exact git diff --name-status 80a5003..3e8b0bfc; no arbitrary new upstream",
+  "conflict_paths": [
+    ".github/pull_request_template.md",
+    ".gitignore",
+    "Makefile",
+    "README.md",
+    "docker/Dockerfile.app",
+    "frontend/Dockerfile",
+    "frontend/docker-entrypoint.sh",
+    "frontend/nginx.conf",
+    "frontend/package-lock.json",
+    "frontend/package.json",
+    "frontend/public/config.js",
+    "frontend/src/i18n/locales/en-US.ts",
+    "frontend/src/i18n/locales/ko-KR.ts",
+    "frontend/src/i18n/locales/ru-RU.ts",
+    "frontend/src/i18n/locales/workspaceTerminology.test.ts",
+    "frontend/src/i18n/locales/zh-CN.ts",
+    "frontend/src/utils/index.ts",
+    "frontend/src/views/knowledge/KnowledgeBase.vue",
+    "internal/application/repository/knowledge.go",
+    "internal/application/repository/knowledge_finalize_test.go",
+    "internal/application/service/agent_service.go",
+    "internal/application/service/file/resource_catalog_test.go",
+    "internal/application/service/knowledge_clone_move.go",
+    "internal/application/service/knowledge_create.go",
+    "internal/application/service/knowledge_delete.go",
+    "internal/application/service/knowledge_move_wiki_test.go",
+    "internal/application/service/knowledge_post_process.go",
+    "internal/application/service/knowledge_process.go",
+    "internal/application/service/knowledge_process_status_test.go",
+    "internal/application/service/wiki_ingest.go",
+    "internal/application/service/wiki_ingest_batch.go",
+    "internal/container/container.go",
+    "internal/middleware/logger_test.go",
+    "internal/models/chat/remote_api.go",
+    "internal/models/embedding/openai.go",
+    "internal/router/router.go",
+    "internal/types/interfaces/knowledge.go",
+    "scripts/build_images.sh"
+  ],
+  "root_product_rewire": [
+    "internal/models/api/model_dispatch.go",
+    "internal/models/api/model_dispatch_test.go",
+    "internal/models/api/endpoint.go",
+    "internal/models/api/retry.go",
+    "internal/models/api/openaicompletions/client.go",
+    "internal/models/runtime/connection.go",
+    "internal/models/chat/model_dispatch_test.go",
+    "internal/models/embedding/model_dispatch_test.go",
+    "internal/application/service/knowledge_revision*.go",
+    "internal/application/service/g3_native_discovery*.go",
+    "internal/application/service/wiki_execution*.go",
+    "internal/application/service/wiki_*test.go",
+    "internal/application/service/knowledge_*test.go",
+    "internal/application/repository/knowledge_*test.go",
+    "internal/application/repository/task_queue.go",
+    "internal/application/repository/task_queue_revision_upgrade_test.go",
+    "internal/application/service/knowledge_write.go",
+    "internal/application/service/concept_agent_830_g2_test.go",
+    "internal/application/service/agent_tool_surface_test.go",
+    "internal/router/routes_g3_platform_release_test.go",
+    "internal/container/reset_pending_tasks_test.go",
+    "internal/models/embedding/protocol_test.go",
+    "internal/application/service/concept_agent_830_g2.go",
+    "internal/types/interfaces/concept_agent_830_g2.go",
+    "internal/application/service/concept_agent_upgrade_test.go",
+    "internal/handler/product_ingestion_test.go",
+    "internal/application/service/g3_docreader_recovery_test.go",
+    "internal/application/service/g3_first_parse_test.go",
+    "internal/handler/wiki_release_falsification_test.go",
+    "harness/tests/test_upgrade_plugin_boundary_830.py",
+    "internal/router/task_processing_scope_test.go"
+  ],
+  "supersede": [
+    "internal/models/chat/remote_api.go",
+    "internal/models/embedding/openai.go"
+  ],
+  "migration_reserved": [
+    "internal/database/legacy_w1_bridge.go",
+    "internal/database/legacy_w1_bridge_test.go",
+    "internal/database/upstream_adoption_test.go",
+    "deploy/upstream/weknora-adoption-target.json",
+    "migrations/versioned/000077_remove_wiki_log.up.sql",
+    "migrations/versioned/000077_remove_wiki_log.down.sql"
+  ],
+  "evidence": [
+    "docs/insurance-kb/evidence/830-upgrade/**",
+    "docs/superpowers/plans/2026-09-27-weknora-082-harness-plugin-boundary.md",
+    "openspec/changes/130-weknora-082-harness-plugin-boundary/**",
+    "openspec/changes/README.md",
+    "HANDOFF.md"
+  ],
+  "frontend_exclusive_lane": {
+    "owner": "root (frontend writer complete; bounded upload capability race repair)",
+    "paths": [
+      "frontend/**"
+    ],
+    "requirements": [
+      "UPG-01",
+      "UPG-04",
+      "UPG-06",
+      "UPG-08",
+      "UPG-09"
+    ],
+    "constraints": "Only fixed upstream merge and existing product mounts/contracts; no Docker/provider/deploy. Tests first for newly discovered behavior gap; existing tests protect unchanged contracts.",
+    "current_requirements": [
+      "UPG-01",
+      "UPG-04",
+      "UPG-09"
+    ],
+    "deferred_requirements": [
+      "UPG-06",
+      "UPG-08"
+    ]
+  },
+  "migration_exclusive_lane": {
+    "owner": "migration_audit",
+    "paths": [
+      "internal/database/enterprise_migration.go",
+      "internal/database/legacy_w1_bridge.go",
+      "internal/database/*upgrade*.go",
+      "internal/database/*adoption*.go",
+      "internal/database/*migration*test.go",
+      "internal/database/legacy_w1_bridge_test.go",
+      "migrations/versioned/000077_*",
+      "deploy/upstream/weknora-adoption-target.json",
+      "internal/database/official_migration_checkpoints.go",
+      "internal/database/pg_search_migration.go",
+      "harness/tests/test_prepare_weknora_adoption_045.py"
+    ],
+    "requirements": [
+      "UPG-01",
+      "UPG-07",
+      "UPG-09"
+    ],
+    "effects": "local code/tests only; no DB connection/start/deploy"
+  },
+  "build_exclusive_lane": {
+    "owner": "root (build writer complete; independent-review fixes)",
+    "paths": [
+      "docker/Dockerfile.app",
+      "deploy/local-build/app-build-inputs.v1.json",
+      "deploy/local-build/app-external-dependencies.v1.json",
+      "deploy/local-build/docker-compose.app-exact.yml",
+      "scripts/app_artifact.py",
+      "scripts/build-anydoc-lib.sh",
+      "scripts/browserskill-release.json",
+      "harness/tests/test_local_app_build_830_ba0.py",
+      "scripts/build_browserskill.sh",
+      "scripts/start_exact_image.py",
+      "harness/tests/test_app_runtime_reuse_830.py",
+      "scripts/copy-licenses.sh",
+      "scripts/check-license-bundle.sh",
+      "scripts/verify-browserskill-extension.py",
+      "THIRD_PARTY_NOTICES.md",
+      "harness/tests/test_upgrade_runtime_assets_830.py",
+      "docker/Dockerfile.docreader"
+    ],
+    "requirements": [
+      "UPG-01",
+      "UPG-07",
+      "UPG-08",
+      "UPG-09"
+    ],
+    "effects": "local code and provider-zero tests; no image build/pull/deploy. Root integrates; later independent reviewer must not be this writer."
+  },
+  "model_fallback_exclusive_lane": {
+    "owner": "root (original writer complete; review coverage tests only)",
+    "paths": [
+      "internal/models/api/openairesponses/client.go",
+      "internal/models/api/anthropicmessages/client.go",
+      "internal/models/api/googlegenai/client.go",
+      "internal/models/chat/model_dispatch_test.go",
+      "internal/models/chat/model_fallback_upgrade_test.go"
+    ],
+    "requirements": [
+      "UPG-05",
+      "UPG-09"
+    ],
+    "effects": "local code/tests only; no external model calls"
+  },
+  "source_concurrency_exclusive_lane": {
+    "owner": "migration_audit (migration writer complete; bounded source concurrency repair)",
+    "paths": [
+      "internal/application/repository/knowledge.go",
+      "internal/application/repository/knowledge_transfer.go",
+      "internal/application/repository/knowledge_*test.go",
+      "internal/application/repository/knowledge_*upgrade.go",
+      "internal/application/service/knowledge_process.go",
+      "internal/application/service/knowledge_delete.go",
+      "internal/application/service/knowledge_clone_move.go",
+      "internal/application/service/knowledge_*test.go",
+      "internal/types/interfaces/chunk.go",
+      "internal/application/repository/chunk.go",
+      "internal/application/repository/chunk_*test.go",
+      "internal/application/service/chunk_*test.go",
+      "internal/application/service/knowledge_*upgrade.go",
+      "internal/application/service/knowledge.go",
+      "internal/application/repository/g3_bound_reparse_test.go"
+    ],
+    "requirements": [
+      "UPG-04",
+      "UPG-05",
+      "UPG-06",
+      "UPG-09"
+    ],
+    "constraints": "Two confirmed reachable concurrency gaps; first RED, no new schema/ledger/queue; root does not edit these paths while writer active; only existing module ownership and resource generation contracts."
+  }
+}

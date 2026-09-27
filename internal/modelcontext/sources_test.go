@@ -1,6 +1,7 @@
 package modelcontext
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -136,6 +137,10 @@ func TestEncodeMessagesCompactsCanonicalCitationsFromHistory(t *testing.T) {
 	require.Equal(t, `Knowledge <ref id="c1"/>; web <ref id="w1"/>`, encoded[0].Content)
 	require.NotContains(t, encoded[0].Content, "chunk-real")
 	require.NotContains(t, encoded[0].Content, "https://example.com")
+	require.Equal(t, " ", registry.ExpandText(`<ref id="c1"/> <ref id="w1"/>`), "history is not current evidence")
+	// A fresh retrieval promotes the same handles, retaining canonical metadata.
+	registry.RegisterChunk(ChunkReference{ChunkID: "chunk-real"})
+	registry.RegisterWeb("https://example.com/a?x=1&y=2", "")
 	require.Equal(t,
 		`<kb doc="A &amp; B.pdf" chunk_id="chunk-real" kb_id="kb-real" /> <web url="https://example.com/a?x=1&amp;y=2" title="Example &amp; More" />`,
 		registry.ExpandText(`<ref id="c1"/> <ref id="w1"/>`),
@@ -173,6 +178,8 @@ func TestEncodeMessagesMigratesLegacyToolHistoryAtReadTime(t *testing.T) {
 	require.Contains(t, encoded[1].Content, `knowledge_id="d1"`)
 	require.Contains(t, encoded[1].Content, `knowledge_base_id="b1"`)
 	require.Equal(t, `Legacy answer <ref id="c1"/>`, encoded[2].Content)
+	require.Empty(t, registry.ExpandText(`<ref id="c1"/>`), "legacy tool history does not authorize new citations")
+	registry.RegisterChunk(ChunkReference{ChunkID: "chunk-real"})
 	require.Equal(t,
 		`<kb doc="Legacy Doc" chunk_id="chunk-real" kb_id="kb-real" />`,
 		registry.ExpandText(`<ref id="c1"/>`),
@@ -234,6 +241,32 @@ func TestModelOutputGroupsChunksAndReusesAliasAcrossTools(t *testing.T) {
 	require.False(t, strings.Contains(second, "c2"))
 }
 
+func TestModelOutputRendersKnowledgeMetadataOncePerDocument(t *testing.T) {
+	registry := newSourceRegistry()
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"display_type": "search_results",
+			"results": []map[string]interface{}{
+				{
+					"chunk_id": "chunk-1", "chunk_index": 1, "content": "first",
+					"knowledge_id": "document-1", "knowledge_base_id": "kb-1", "knowledge_title": "Doc",
+					"knowledge_metadata": "region: Shanghai & Suzhou",
+				},
+				{
+					"chunk_id": "chunk-2", "chunk_index": 2, "content": "second",
+					"knowledge_id": "document-1", "knowledge_base_id": "kb-1", "knowledge_title": "Doc",
+					"knowledge_metadata": "region: Shanghai & Suzhou",
+				},
+			},
+		},
+	})
+
+	require.Equal(t, 1, strings.Count(output, "<metadata>"))
+	require.Contains(t, output, "<metadata>region: Shanghai &amp; Suzhou</metadata>")
+	require.Equal(t, 2, strings.Count(output, "<chunk "))
+}
+
 func TestModelOutputWebAliasExpandsToWebCitation(t *testing.T) {
 	registry := newSourceRegistry()
 	output := registry.ModelOutput(&types.ToolResult{
@@ -246,11 +279,173 @@ func TestModelOutputWebAliasExpandsToWebCitation(t *testing.T) {
 		},
 	})
 	require.Contains(t, output, `<page id="w1" title="Example">`)
+	require.Contains(t, output, `<evidence type="search_summary" verified="false" />`)
 	require.NotContains(t, output, "https://example.com/a")
 	require.Equal(t,
 		`<web url="https://example.com/a" title="Example" />`,
 		registry.ExpandText(`<ref id="w1"/>`),
 	)
+}
+
+func TestModelOutputWebSearchRetainsContentOnlyEvidence(t *testing.T) {
+	registry := newSourceRegistry()
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"display_type": "web_search_results",
+			"results": []map[string]interface{}{
+				{
+					"title":   "Content-only provider",
+					"url":     "https://example.com/content",
+					"content": "search evidence from provider content",
+				},
+			},
+		},
+	})
+
+	require.Contains(t, output, `<content>search evidence from provider content</content>`)
+	require.Contains(t, output, `<evidence type="search_summary" verified="false" />`)
+}
+
+func TestModelOutputWebSearchLimitsProviderContent(t *testing.T) {
+	registry := newSourceRegistry()
+	content := strings.Repeat("provider evidence ", 1000)
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"display_type": "web_search_results",
+			"results": []map[string]interface{}{{
+				"title":   "Long provider result",
+				"url":     "https://example.com/long",
+				"content": content,
+			}},
+		},
+	})
+
+	require.Contains(t, output, `<content truncated="true">`)
+	require.NotContains(t, output, content)
+}
+
+func TestModelOutputWebFetchPreservesPartialFailureStatus(t *testing.T) {
+	registry := newSourceRegistry()
+	registry.RegisterWeb("https://example.com/verified", "Verified")
+	registry.RegisterWeb("https://example.com/forbidden", "Forbidden")
+
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"display_type": "web_fetch_results",
+			"results": []map[string]interface{}{
+				{
+					"url":         "https://example.com/verified",
+					"status":      "success",
+					"raw_content": "verified page content",
+				},
+				{
+					"url":           "https://example.com/forbidden",
+					"status":        "failed",
+					"retryable":     false,
+					"error_code":    "http_403",
+					"error_message": "access denied",
+				},
+			},
+		},
+	})
+
+	require.Contains(t, output, `<page id="w1" status="success" view="excerpt">`)
+	require.Contains(t, output, "verified page content")
+	require.Contains(t, output, `<page id="w2" status="failed" retryable="false" error_code="http_403">`)
+	require.Contains(t, output, `<error>access denied</error>`)
+	require.Contains(t, output, "failed URLs do not invalidate successful evidence")
+	require.NotContains(t, output, "https://example.com")
+}
+
+func TestModelOutputWebFetchAllFailuresIncludeSearchFallback(t *testing.T) {
+	registry := newSourceRegistry()
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"display_type": "web_fetch_results",
+			"results": []map[string]interface{}{
+				{
+					"url":           "https://example.com/dns",
+					"status":        "failed",
+					"retryable":     true,
+					"error_code":    "dns_failed",
+					"error_message": "DNS lookup failed",
+				},
+			},
+		},
+	})
+
+	require.Contains(t, output, `status="failed" retryable="true" error_code="dns_failed"`)
+	require.Contains(t, output, "use another relevant source")
+	require.Contains(t, output, "page content was not verified")
+}
+
+func TestModelOutputWebFetchAllFailuresStillStructuredWhenToolNotSuccessful(t *testing.T) {
+	registry := newSourceRegistry()
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: false,
+		Error:   "all page fetches failed",
+		Data: map[string]interface{}{
+			"display_type": "web_fetch_results",
+			"results": []map[string]interface{}{
+				{
+					"url":           "https://example.com/dns",
+					"status":        "failed",
+					"retryable":     true,
+					"error_code":    "dns_failed",
+					"error_message": "DNS lookup failed",
+				},
+			},
+		},
+	})
+
+	require.Contains(t, output, `status="failed" retryable="true" error_code="dns_failed"`)
+	require.Contains(t, output, "use another relevant source")
+	require.NotContains(t, output, "Error: all page fetches failed")
+}
+
+func TestModelOutputWebFetchKeepsContentWhenSummaryFails(t *testing.T) {
+	registry := newSourceRegistry()
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"display_type": "web_fetch_results",
+			"results": []map[string]interface{}{
+				{
+					"url":                   "https://example.com/specs",
+					"status":                "success",
+					"summary_status":        "failed",
+					"summary_error_code":    "summary_failed",
+					"summary_error_message": "model unavailable",
+					"raw_content":           "official specifications",
+				},
+			},
+		},
+	})
+
+	require.Contains(t, output, `<summary_error code="summary_failed">model unavailable</summary_error>`)
+	require.Contains(t, output, `<content>official specifications</content>`)
+}
+
+func TestModelOutputWebFetchLimitsRawContentAcrossPages(t *testing.T) {
+	registry := newSourceRegistry()
+	pageContent := strings.Repeat("verified page content ", 1000)
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"display_type": "web_fetch_results",
+			"results": []map[string]interface{}{
+				{"url": "https://example.com/one", "status": "success", "raw_content": pageContent},
+				{"url": "https://example.com/two", "status": "success", "raw_content": pageContent},
+			},
+		},
+	})
+
+	require.Contains(t, output, `truncated="true"`)
+	require.Less(t, len([]rune(output)), modelWebFetchTotalMaxRunes+3000)
 }
 
 func TestModelOutputDocumentInfoUsesDocumentAndFAQAliases(t *testing.T) {
@@ -361,4 +556,24 @@ func TestModelOutputDoesNotRegisterInternalSchemesAsWebSources(t *testing.T) {
 		`<web url="https://example.com/page" title="" />`,
 		registry.ExpandText(`<ref id="w1"/>`),
 	)
+}
+
+func TestModelOutputWebFetchKeepsEveryPageAndAccurateContinuation(t *testing.T) {
+	registry := newSourceRegistry()
+	rows := []map[string]interface{}{}
+	for i := 0; i < 8; i++ {
+		rows = append(rows, map[string]interface{}{
+			"url": fmt.Sprintf("https://example.com/%d", i), "status": "success",
+			"raw_content": strings.Repeat("文字", 5000), "offset": 100, "content_length": 20000, "truncated": true,
+		})
+	}
+	output := registry.ModelOutput(&types.ToolResult{
+		Success: true, Data: map[string]interface{}{"display_type": "web_fetch_results", "results": rows},
+	})
+	for i := 1; i <= 8; i++ {
+		require.Contains(t, output, fmt.Sprintf(`url="w%d" next_offset="2100"`, i))
+	}
+	require.Equal(t, 8, strings.Count(output, `<content truncated="true">文字`))
+	require.NotContains(t, output, `view="full"`)
+	require.Contains(t, output, `trust="untrusted"`)
 }

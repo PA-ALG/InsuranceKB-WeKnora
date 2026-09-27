@@ -493,7 +493,7 @@ func TestPinnedRevisionSourceBlocksDirectReparseBeforeAnyMutation(t *testing.T) 
 
 	require.ErrorIs(t, err, ErrKnowledgeRevisionSourcePinned)
 	require.Nil(t, result)
-	require.Equal(t, 1, repo.knowledgeCalls)
+	require.Zero(t, repo.knowledgeCalls, "pinned source is rejected before loading mutable write state")
 	require.Equal(t, 1, repo.pinnedCalls)
 }
 

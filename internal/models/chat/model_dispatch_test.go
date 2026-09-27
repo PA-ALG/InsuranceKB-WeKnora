@@ -71,15 +71,11 @@ func TestStandardSDKChatJournalsEachHTTPDispatch(t *testing.T) {
 				_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"summary"}}]}`))
 			}))
 			defer server.Close()
-			chat, err := NewRemoteAPIChat(&ChatConfig{BaseURL: server.URL, ModelName: "sdk-model", ModelID: "sdk-id", Provider: "openai", APIKey: "test"})
+			chat, err := NewRemoteChat(&ChatConfig{BaseURL: server.URL, ModelName: "sdk-model", ModelID: "sdk-id", Provider: "openai", APIKey: "test"})
 			if err != nil {
 				t.Fatal(err)
 			}
 			messages := []Message{{Role: "user", Content: "source", Images: []string{"data:image/png;base64,aGVsbG8="}}}
-			_, _, raw, err := chat.buildOutbound(messages, &ChatOptions{}, false)
-			if err != nil || raw {
-				t.Fatalf("not standard SDK branch: %v %v", raw, err)
-			}
 			recorder := &chatDispatchRecorderStub{}
 			failure := errors.New("image unsupported journal")
 			switch mode {
@@ -141,15 +137,10 @@ func TestGeminiRawHTTPChatJournalsTheRealDispatch(t *testing.T) {
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"summary"}}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}`))
 	}))
 	defer server.Close()
-	previous := rawHTTPClient
-	rawHTTPClient = server.Client()
-	defer func() { rawHTTPClient = previous }()
-
-	chat := newTestRemoteChat(t)
-	chat.baseURL = server.URL
-	chat.modelID = "gemini-id"
-	chat.modelName = "gemini"
-	chat.adapter = geminiProvider{}
+	chat, err := NewRemoteChat(&ChatConfig{BaseURL: server.URL + "/openai", ModelName: "gemini", ModelID: "gemini-id", Provider: "gemini", APIKey: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	recorder := &chatDispatchRecorderStub{}
 	ctx := types.WithModelDispatchRecorder(context.Background(), recorder)
 	ctx = types.WithLLMCallMetadata(ctx, "document_summary", "")

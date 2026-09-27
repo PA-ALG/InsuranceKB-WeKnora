@@ -1,0 +1,74 @@
+{
+  "reviewer": "migration_review",
+  "mode": "independent read-only",
+  "recorded_at": "2026-09-27T11:48:50.355803+00:00",
+  "reviewed_base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+  "fixed_upstream": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+  "scopes": {
+    "frontend": {
+      "identity": "frontend-review-identity.json",
+      "identity_sha256": "6df1002344f8f0b067d0eef65417c169699d95b2e0d1e8c726b2867e1d825658",
+      "path_count": 80,
+      "blocker": [],
+      "backlog": [],
+      "end_hash_match": true
+    },
+    "build": {
+      "identity": "build-review-identity.json",
+      "identity_sha256": "ddf1b11f37e1b2f799cb7ed7a47be520891a7a17d102b109791c5ff49e26bfcd",
+      "path_count": 18,
+      "blocker": [],
+      "backlog": [],
+      "end_hash_match": true
+    },
+    "migration": {
+      "identity": "migration-review-identity.json",
+      "identity_sha256": "f28f3a3b1e1b5b7b0725bae422a338417904dfe8e5ec0a1143c15655cbf383f4",
+      "path_count": 13,
+      "blocker": [],
+      "backlog": [],
+      "end_hash_match": true
+    }
+  },
+  "limitations": "No real database migration/restore, image build, smoke or deployment executed by reviewer; local test logs inspected only.",
+  "closed_findings": {
+    "frontend": [
+      "duplicate capability decision could silently drop upload",
+      "busy second selection needed explicit feedback"
+    ],
+    "build": [
+      "AnyDoc license absent from distributed bundle",
+      "ZIP existence did not prove valid extension",
+      "local AnyDoc required unprovided environment lock",
+      "runtime reuse omitted source AnyDoc license"
+    ],
+    "migration": [
+      "clean intermediate migration checkpoints rejected",
+      "skip_embedding mode transition could not reconcile extensions/schema"
+    ]
+  },
+  "additional_core_review": {
+    "reviewer": "plan_review",
+    "identity": "core-review-identity.json",
+    "identity_sha256": "603abba86c42d70c11b92e790d0a5ac6b18e549aaa2a3455bb6a015e024b941a",
+    "path_count": 43,
+    "end_hash_match": true,
+    "blocker": [],
+    "closed_findings": [
+      "pin precheck/mutation TOCTOU",
+      "stale worker generation writes and knowledge-wide cleanup"
+    ],
+    "backlog": [
+      "Ordinary KB enrichment finalizer has no persistent slot identity; duplicate delivery can decrement twice. Current G3 disables enrichment and uses direct revision commit.",
+      "Ordinary KB graph/enrichment knowledge-scoped delete and UpdateChunk/finalizer retain inherited cross-generation behavior; current G3 disables these paths.",
+      "Exact cleanup deletes chunk rows before best-effort index deletion. Failure can leave orphan vectors that hydration drops but that can consume TopK. Follow-up: idempotent index-first cleanup with propagated retry or existing durable pending op. G3 managed RAW is excluded from ordinary tool retrieval."
+    ],
+    "additional_fixture": {
+      "path": "internal/router/task_processing_scope_test.go",
+      "sha256": "f313bc74d43e346c4b0d72df3fc933c6d6dba0053d92c62ceeaaf5d41c2ddcca",
+      "review": "no blocker; adds actual prerequisite table to SQLite fixture only"
+    },
+    "coverage": "307/308 and four protocol chat/stream fallback; 38 focused test/subtests PASS",
+    "limits": "No image, DB/provider or live execution; software review only"
+  }
+}

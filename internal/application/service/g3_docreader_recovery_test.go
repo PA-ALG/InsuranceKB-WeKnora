@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Tencent/WeKnora/internal/application/access"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,7 +31,7 @@ func docreaderRecoveryFixture(t *testing.T) (*knowledgeService, *types.Knowledge
 	ref := map[string]any{"origin_parse_attempt": 1, "origin_processing_attempt": 1, "source_sha256": id.SourceSHA256, "artifact_sha256": g3FirstParseRecordSHA(old)}
 	reader := &firstParseReader{result: firstParseNative(t, "不应该重新调用解析器")}
 	k := &types.Knowledge{ID: id.KnowledgeID, TenantID: id.TenantID, KnowledgeBaseID: id.RawKBID, FileType: "pdf", FileName: "source.pdf", FilePath: "fixture.pdf", FileSHA256: id.SourceSHA256, CurrentParseAttempt: 2}
-	kb := &types.KnowledgeBase{ID: id.RawKBID, ChunkingConfig: types.ChunkingConfig{ChunkSize: 40, ChunkOverlap: 0}}
+	kb := &types.KnowledgeBase{ID: id.RawKBID, TenantID: id.TenantID, ChunkingConfig: types.ChunkingConfig{ChunkSize: 40, ChunkOverlap: 0}}
 	s := &knowledgeService{config: &config.Config{G3PlatformProcessing: &config.G3PlatformProcessingConfig{Enabled: true, TenantID: 17, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki"}}, firstParse: store, fileSvc: &revisionSourceFileServiceStub{data: []byte("pdf")}, documentReader: reader}
 	journal, spans := newKnowledgeDispatchJournalTest(t)
 	stamp := time.Unix(1700000000, 0)
@@ -190,6 +191,8 @@ func TestG3DocReaderRecoveryReparseStillAllocatesNewFenceAndHonorsPin(t *testing
 			s.kbService = &createKnowledgeFileKBServiceStub{kb: kb}
 			files := s.fileSvc.(*revisionSourceFileServiceStub)
 			ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(17))
+			ctx, grantErr := access.WithKBTaskWrite(ctx, kb, 17)
+			require.NoError(t, grantErr)
 			_, err := s.ReparseKnowledge(ctx, k.ID, nil)
 			if pinned {
 				require.ErrorIs(t, err, ErrKnowledgeRevisionSourcePinned)

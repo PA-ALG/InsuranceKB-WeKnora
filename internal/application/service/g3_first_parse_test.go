@@ -238,6 +238,8 @@ func (r *firstParseKnowledgeRepo) UpdateKnowledge(_ context.Context, k *types.Kn
 	return nil
 }
 
+type firstParseTenantService struct{ interfaces.TenantService }
+
 type firstParseTenantRepo struct{ interfaces.TenantRepository }
 
 func (*firstParseTenantRepo) GetTenantByID(_ context.Context, id uint64) (*types.Tenant, error) {
@@ -254,7 +256,7 @@ func TestG3FirstParseActualConvertScopesParserAndReusesResult(t *testing.T) {
 	k := &types.Knowledge{ID: "knowledge-1", TenantID: scope.TenantID, KnowledgeBaseID: scope.RawKBID, FileType: "pdf", FileSHA256: testSHA256830G2("pdf"), CurrentParseAttempt: 1}
 	kb := &types.KnowledgeBase{ID: scope.RawKBID, ChunkingConfig: types.ChunkingConfig{ParserEngineRules: []types.ParserEngineRule{{FileTypes: []string{"pdf"}, Engine: "auto"}}}}
 	cfg := &config.Config{G3PlatformProcessing: &config.G3PlatformProcessingConfig{Enabled: true, TenantID: scope.TenantID, RawKBID: scope.RawKBID}}
-	s := &knowledgeService{config: cfg, documentReader: reader, fileSvc: &revisionSourceFileServiceStub{data: []byte("pdf")}, firstParse: &G3FirstParseStore{reuse: authority.sourceReuse}}
+	s := &knowledgeService{config: cfg, tenantService: &firstParseTenantService{}, documentReader: reader, fileSvc: &revisionSourceFileServiceStub{data: []byte("pdf")}, firstParse: &G3FirstParseStore{reuse: authority.sourceReuse}}
 	eff := ResolveProcessConfig(kb, nil)
 	payload := types.DocumentProcessPayload{FileType: "pdf", FileName: "source.pdf", FilePath: "fixture.pdf", Revision: newRevisionBinding(1, k.FileSHA256, kb, eff, "pdf"), Attempt: 99}
 	got, err := s.convert(context.Background(), payload, kb, k, eff, true)
@@ -285,13 +287,13 @@ func TestG3FirstParseProcessDocumentWriteFailureClosesDocreader(t *testing.T) {
 	seedDispatchSpan(t, spans, types.KnowledgeProcessingSpan{KnowledgeID: "knowledge", Attempt: 4, SpanID: "root", Name: "root", Kind: types.SpanKindRoot, Status: types.SpanStatusRunning})
 	seedDispatchSpan(t, spans, types.KnowledgeProcessingSpan{KnowledgeID: "knowledge", Attempt: 4, SpanID: "doc", ParentSpanID: "root", Name: types.StageDocReader, Kind: types.SpanKindStage, Status: types.SpanStatusPending})
 	k := &types.Knowledge{ID: "knowledge", TenantID: 1, KnowledgeBaseID: "raw", FileType: "pdf", FileName: "source.pdf", FileSHA256: testSHA256830G2("pdf"), CurrentParseAttempt: 3, ParseStatus: types.ParseStatusPending}
-	kb := &types.KnowledgeBase{ID: "raw", ChunkingConfig: types.ChunkingConfig{ChunkSize: 100, ChunkOverlap: 0, ParserEngineRules: []types.ParserEngineRule{{FileTypes: []string{"pdf"}, Engine: "auto"}}}}
+	kb := &types.KnowledgeBase{ID: "raw", TenantID: 1, ChunkingConfig: types.ChunkingConfig{ChunkSize: 100, ChunkOverlap: 0, ParserEngineRules: []types.ParserEngineRule{{FileTypes: []string{"pdf"}, Engine: "auto"}}}}
 	repo := &firstParseKnowledgeRepo{knowledge: k}
 	store := NewG3FirstParseStore(sourceReuseTestCodec830G3(t))
 	store.reuse.root = filepath.Join(t.TempDir(), "file")
 	require.NoError(t, os.WriteFile(store.reuse.root, []byte("occupied"), 0600))
 	reader := &firstParseReader{result: firstParseNative(t, "平安测试两全保险\r\n保险条款\r\n")}
-	s := &knowledgeService{config: &config.Config{G3PlatformProcessing: &config.G3PlatformProcessingConfig{Enabled: true, TenantID: 1, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki"}}, repo: repo, tenantRepo: &firstParseTenantRepo{}, kbService: &createKnowledgeFileKBServiceStub{kb: kb}, documentReader: reader, fileSvc: &revisionSourceFileServiceStub{data: []byte("pdf")}, firstParse: store, spanTracker: NewSpanTracker(spans, nil)}
+	s := &knowledgeService{config: &config.Config{G3PlatformProcessing: &config.G3PlatformProcessingConfig{Enabled: true, TenantID: 1, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki"}}, repo: repo, tenantRepo: &firstParseTenantRepo{}, tenantService: &firstParseTenantService{}, kbService: &createKnowledgeFileKBServiceStub{kb: kb}, documentReader: reader, fileSvc: &revisionSourceFileServiceStub{data: []byte("pdf")}, firstParse: store, spanTracker: NewSpanTracker(spans, nil)}
 	payload := types.DocumentProcessPayload{TenantID: 1, KnowledgeID: k.ID, KnowledgeBaseID: kb.ID, FileType: "pdf", FileName: "source.pdf", FilePath: "fixture.pdf", Attempt: 4, Revision: newRevisionBinding(3, k.FileSHA256, kb, ResolveProcessConfig(kb, nil), "pdf")}
 	raw, err := json.Marshal(payload)
 	require.NoError(t, err)

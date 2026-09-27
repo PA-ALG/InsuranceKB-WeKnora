@@ -3,11 +3,15 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
+	secutils "github.com/Tencent/WeKnora/internal/utils"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/redis/go-redis/v9"
 )
@@ -52,12 +56,19 @@ func (m *OAuthManager) newHandler(
 	if service.URL == nil || *service.URL == "" {
 		return nil, fmt.Errorf("MCP service URL is required for OAuth")
 	}
+	if err := ValidateServiceOutboundURLs(service); err != nil {
+		return nil, err
+	}
+	httpCfg := secutils.DefaultSSRFSafeHTTPClientConfig()
+	httpCfg.SameOriginRedirectsOnly = true
+	httpCfg.Timeout = 30 * time.Second
 	cfg := transport.OAuthConfig{
 		RedirectURI:           redirectURI,
 		Scopes:                service.AuthConfig.Scopes,
 		TokenStore:            newDBTokenStore(m.repo, tenantID, principal, service.ID),
 		PKCEEnabled:           true,
 		AuthServerMetadataURL: service.AuthConfig.AuthServerMetadataURL,
+		HTTPClient:            secutils.NewSSRFSafeHTTPClient(httpCfg),
 	}
 	if existing, err := m.repo.GetClient(ctx, tenantID, service.ID); err == nil && existing != nil {
 		cfg.ClientID = existing.ClientID
@@ -85,6 +96,11 @@ func (m *OAuthManager) StartAuthorization(
 	principal = principal.Normalize()
 	if !principal.Valid() {
 		return "", "", fmt.Errorf("principal context is required to authorize OAuth MCP service %s", service.ID)
+	}
+
+	frontendRedirect, err = validateFrontendRedirect(frontendRedirect)
+	if err != nil {
+		return "", "", err
 	}
 
 	h, err := m.newHandler(ctx, service, tenantID, principal, redirectURI)
@@ -179,7 +195,10 @@ func (m *OAuthManager) CompleteAuthorization(
 	if err != nil {
 		return "", "", err
 	}
-	frontendRedirect = st.FrontendRedirect
+	frontendRedirect, err = validateFrontendRedirect(st.FrontendRedirect)
+	if err != nil {
+		return "/", "", err
+	}
 	serviceID = st.ServiceID
 	principal := st.Principal.Normalize()
 	if !principal.Valid() && st.UserID != "" {
@@ -270,4 +289,27 @@ func (m *OAuthManager) Revoke(
 	ctx context.Context, tenantID uint64, principal types.Principal, serviceID string,
 ) error {
 	return m.repo.DeleteTokenForPrincipal(ctx, tenantID, principal, serviceID)
+}
+
+// validateFrontendRedirect accepts application-relative paths or the explicitly
+// configured frontend origin. Request Host/Origin headers are not trusted.
+func validateFrontendRedirect(raw string) (string, error) {
+	if raw == "" {
+		return "/", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Fragment != "" ||
+		strings.ContainsAny(raw, "\\\r\n\t") || strings.ContainsAny(u.Path, "\\\r\n\t") {
+		return "", fmt.Errorf("invalid frontend_redirect")
+	}
+	if u.IsAbs() || u.Host != "" {
+		trusted, err := url.Parse(strings.TrimSpace(os.Getenv("APP_EXTERNAL_URL")))
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || trusted.Host == "" ||
+			!strings.EqualFold(u.Scheme, trusted.Scheme) || !strings.EqualFold(u.Host, trusted.Host) {
+			return "", fmt.Errorf("frontend_redirect origin is not configured")
+		}
+	} else if !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
+		return "", fmt.Errorf("frontend_redirect must be an application-relative path")
+	}
+	return u.String(), nil
 }

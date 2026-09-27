@@ -21,17 +21,18 @@ from scripts.prepare_weknora_adoption import (
 )
 
 REPOSITORY = "https://github.com/Tencent/WeKnora.git"
-TARGET_COMMIT = "80a5003cc99a427098afe184eee6601916d3d156"
-TARGET_TREE = "18fcf68e7a008ce69929e32233f0b6914040c223"
+TARGET_COMMIT = "3e8b0bfc80b845b2d4b2ed683994748741450a97"
+TARGET_TREE = "9533ab2071e71f4bc2ebb09c85d3ac246841ff9a"
 RELEASE_COMMIT = "c64a48647cd6f7eb8b0fb020b2e8fec74ee375fb"
+CAPABILITY_COMMIT = "80a5003cc99a427098afe184eee6601916d3d156"
 MANIFEST = {
     "schema_version": 1,
     "repository": REPOSITORY,
     "commit": TARGET_COMMIT,
     "tree": TARGET_TREE,
     "release_ancestor": {"tag": "v0.7.1", "commit": RELEASE_COMMIT},
-    "required_capability_commits": [TARGET_COMMIT],
-    "official_migration_head": 75,
+    "required_capability_commits": [CAPABILITY_COMMIT],
+    "official_migration_head": 110,
 }
 COMMITTED_MANIFEST = (
     Path(__file__).resolve().parents[2] / "deploy" / "upstream" / "weknora-adoption-target.json"
@@ -150,8 +151,8 @@ def test_manifest_exact_target_passes_and_is_immutable(tmp_path: Path) -> None:
     assert target.tree == TARGET_TREE
     assert target.release_ancestor.tag == "v0.7.1"
     assert target.release_ancestor.commit == RELEASE_COMMIT
-    assert target.required_capability_commits == (TARGET_COMMIT,)
-    assert target.official_migration_head == 75
+    assert target.required_capability_commits == (CAPABILITY_COMMIT,)
+    assert target.official_migration_head == 110
     with pytest.raises(FrozenInstanceError):
         target.commit = "0" * 40  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
@@ -292,7 +293,7 @@ def test_discover_resolves_full_immutable_proposal_with_fakes(
         "commit": expected_revision.commit,
         "tree": expected_revision.tree,
         "release_ancestor": {"tag": "v1.2.3", "commit": "1" * 40},
-        "required_capability_commits": [TARGET_COMMIT],
+        "required_capability_commits": [CAPABILITY_COMMIT],
         "official_migration_head": expected_revision.official_migration_head,
     }
     assert "refs/" not in rendered

@@ -18,8 +18,8 @@ import subprocess
 import sys
 import tempfile
 import tarfile
-from contextlib import contextmanager
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -42,11 +42,20 @@ _MANIFEST_FIELDS = {
     "external_dependency_lock",
     "build_contract",
 }
-_BUILD_CONTRACT_FIELDS = {"target", "platform", "goos", "goarch", "cgo_enabled"}
+_BUILD_CONTRACT_FIELDS = {
+    "target",
+    "platform",
+    "goos",
+    "goarch",
+    "cgo_enabled",
+    "go_build_tags",
+    "components",
+}
 _LOCK_FIELDS = {
     "schema_version",
     "platform",
     "base_images",
+    "toolchains",
     "debian",
     "python_tools",
     "downloads",
@@ -55,6 +64,7 @@ _HEX_SHA256 = re.compile(r"[0-9a-f]{64}")
 _IMAGE_REFERENCE = re.compile(r"[^@\s]+@sha256:[0-9a-f]{64}")
 _SNAPSHOT = re.compile(r"https://snapshot\.debian\.org/archive/[^/]+/\d{8}T\d{6}Z/")
 _IGNORED_DIRECTORY_PARTS = {".git", "__pycache__", ".pytest_cache", ".ruff_cache"}
+_IGNORED_ANYDOC_OUTPUT_PARTS = {"target", "lib", "patched-anydoc"}
 _INPUT_FILE_FIELDS = (
     "GoFiles",
     "CgoFiles",
@@ -216,6 +226,8 @@ def load_manifest(path: str | os.PathLike[str]) -> dict[str, Any]:
         "goos": "linux",
         "goarch": "arm64",
         "cgo_enabled": True,
+        "go_build_tags": ["anydoc"],
+        "components": ["anydoc", "browserskill"],
     }
     if dict(contract) != expected_contract:
         raise ArtifactContractError(
@@ -262,8 +274,12 @@ def load_dependency_lock(path: str | os.PathLike[str]) -> dict[str, Any]:
     duckdb_platform = _nonempty_string(platform["duckdb"], "DuckDB platform")
 
     images = _mapping(document["base_images"], "base images")
-    _closed_fields(images, {"builder", "runtime"}, "base images")
-    for stage in ("builder", "runtime"):
+    _closed_fields(
+        images,
+        {"builder", "browserskill", "rust", "runtime"},
+        "base images",
+    )
+    for stage in ("builder", "browserskill", "rust", "runtime"):
         record = _mapping(images[stage], f"{stage} base image")
         _closed_fields(record, {"reference"}, f"{stage} base image")
         reference = _nonempty_string(
@@ -273,6 +289,12 @@ def load_dependency_lock(path: str | os.PathLike[str]) -> dict[str, Any]:
             raise ArtifactContractError(
                 f"{stage} base image must be pinned by immutable sha256 digest"
             )
+
+    toolchains = _mapping(document["toolchains"], "toolchains")
+    _closed_fields(toolchains, {"rust"}, "toolchains")
+    rust_version = _nonempty_string(toolchains["rust"], "Rust toolchain version")
+    if rust_version not in str(images["rust"]["reference"]):
+        raise ArtifactContractError("Rust toolchain differs from its base image")
 
     debian = _mapping(document["debian"], "Debian lock")
     _closed_fields(debian, {"repositories", "packages"}, "Debian lock")
@@ -316,7 +338,11 @@ def load_dependency_lock(path: str | os.PathLike[str]) -> dict[str, Any]:
         _sha(record["sha256"], f"Python tool {name} sha256")
 
     downloads = _mapping(document["downloads"], "downloads")
-    _closed_fields(downloads, {"go_tools", "uv", "duckdb"}, "downloads")
+    _closed_fields(
+        downloads,
+        {"go_tools", "uv", "anydoc", "browserskill", "pnpm", "duckdb"},
+        "downloads",
+    )
     go_tools = _mapping(downloads["go_tools"], "Go tools")
     _closed_fields(go_tools, {"migrate"}, "Go tools")
     migrate = _mapping(go_tools["migrate"], "migrate tool")
@@ -329,6 +355,25 @@ def load_dependency_lock(path: str | os.PathLike[str]) -> dict[str, Any]:
         raise ArtifactContractError("migrate go_sum is missing its h1 digest")
 
     _download_record(downloads["uv"], "uv download")
+    _download_record(downloads["anydoc"], "AnyDoc source download")
+    _download_record(downloads["pnpm"], "pnpm download")
+    browserskill = _mapping(downloads["browserskill"], "BrowserSkill source download")
+    _closed_fields(
+        browserskill,
+        {"version", "source_commit", "platform", "origin", "sha256"},
+        "BrowserSkill source download",
+    )
+    _nonempty_string(browserskill["version"], "BrowserSkill version")
+    source_commit = _nonempty_string(
+        browserskill["source_commit"], "BrowserSkill source commit"
+    )
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise ArtifactContractError("BrowserSkill source commit must be a full commit ID")
+    _nonempty_string(browserskill["platform"], "BrowserSkill source platform")
+    origin = _nonempty_string(browserskill["origin"], "BrowserSkill source origin")
+    if source_commit not in origin:
+        raise ArtifactContractError("BrowserSkill source origin differs from its commit")
+    _sha(browserskill["sha256"], "BrowserSkill source sha256")
     duckdb = _mapping(downloads["duckdb"], "DuckDB download")
     _closed_fields(duckdb, {"version", "extensions"}, "DuckDB download")
     _nonempty_string(duckdb["version"], "DuckDB version")
@@ -424,6 +469,13 @@ def _manifest_files(repo_root: Path, manifest: Mapping[str, Any]) -> set[Path]:
         for candidate in resolved.rglob("*"):
             if any(part in _IGNORED_DIRECTORY_PARTS for part in candidate.parts):
                 continue
+            if relative_name == "third_party/anydoc-go":
+                relative_candidate = candidate.relative_to(resolved)
+                if (
+                    relative_candidate.parts
+                    and relative_candidate.parts[0] in _IGNORED_ANYDOC_OUTPUT_PARTS
+                ):
+                    continue
             if candidate.is_file():
                 entries.add(
                     _inside_repository(
@@ -484,9 +536,12 @@ def resolve_inputs(
         "GOARCH": str(contract["goarch"]),
         "CGO_ENABLED": "1" if contract["cgo_enabled"] else "0",
     }
+    tags = ",".join(str(tag) for tag in contract["go_build_tags"])
     arguments = (
         "go",
         "list",
+        "-tags",
+        tags,
         "-deps",
         "-json",
         *tuple(str(package) for package in manifest["go_packages"]),
@@ -760,7 +815,10 @@ def runtime_reuse_facts(
         "scripts",
         "migrations",
         "dataset/samples",
-        "skills/preloaded",
+        "LICENSE",
+        "THIRD_PARTY_NOTICES.md",
+        "licenses",
+        "third_party/anydoc-go/LICENSE",
         "go.mod",
         "go.sum",
         "cmd/download",
@@ -1058,6 +1116,11 @@ def _dependency_facts(
     )
     duckdb = _mapping(downloads["duckdb"], "DuckDB download")
     extensions = _mapping(duckdb["extensions"], "DuckDB extensions")
+    anydoc = _mapping(downloads["anydoc"], "AnyDoc source download")
+    browserskill = _mapping(
+        downloads["browserskill"], "BrowserSkill source download"
+    )
+    pnpm = _mapping(downloads["pnpm"], "pnpm download")
 
     facts: list[tuple[str, str, str]] = [
         ("schema_version", "validate", str(lock["schema_version"])),
@@ -1108,6 +1171,23 @@ def _dependency_facts(
     )
     facts.append(
         ("downloads.go_tools.migrate.go_sum", "go-sum", str(migrate["go_sum"]))
+    )
+    facts.extend(
+        (f"downloads.anydoc.{name}", "component-build", str(anydoc[name]))
+        for name in sorted(anydoc)
+    )
+    facts.append(("toolchains.rust", "component-build", str(lock["toolchains"]["rust"])))
+    facts.extend(
+        (
+            f"downloads.browserskill.{name}",
+            "component-build",
+            str(browserskill[name]),
+        )
+        for name in sorted(browserskill)
+    )
+    facts.extend(
+        (f"downloads.pnpm.{name}", "component-build", str(pnpm[name]))
+        for name in sorted(pnpm)
     )
     facts.extend(
         (
@@ -1321,7 +1401,10 @@ def _selector_build_args(root: Path, identity: Mapping[str, Any]) -> dict[str, s
 
     arguments = {
         "BUILDER_IMAGE": lock["base_images"]["builder"]["reference"],
+        "BROWSERSKILL_IMAGE": lock["base_images"]["browserskill"]["reference"],
+        "RUST_IMAGE": lock["base_images"]["rust"]["reference"],
         "RUNTIME_IMAGE": lock["base_images"]["runtime"]["reference"],
+        "BROWSERSKILL_VERSION": lock["downloads"]["browserskill"]["version"],
         "DEBIAN_SNAPSHOT_BOOTSTRAP": repositories["debian"]["snapshot"],
         "DEBIAN_SECURITY_SNAPSHOT_BOOTSTRAP": repositories["debian-security"][
             "snapshot"

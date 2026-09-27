@@ -1,0 +1,9 @@
+{
+  "queried_at": "2026-09-27T12:06:01.352543+00:00",
+  "action": "read-only registry manifest query; zero image layers pulled; zero containers changed",
+  "target_tag": "paradedb/paradedb:v0.22.6-pg17",
+  "platform": "linux/arm64",
+  "platform_manifest_digest": "sha256:ea992f2ee1e44d961d3b0f8b4b184cb2061fc9a8fc1dbfafb88f88180e3a16db",
+  "raw_manifest_listing_sha256": "65fe43410e4165c0f7de85c79f74529d7d67f7471b66c70f4a7a33cede64feb4",
+  "raw_manifest_listing": "Name:      docker.io/paradedb/paradedb:v0.22.6-pg17\nMediaType: application/vnd.oci.image.index.v1+json\nDigest:    sha256:58bf87d2a6f1e72f56590b0f0ae1467e82c3f99ca203dde646672c8ac13148b2\n           \nManifests: \n  Name:        docker.io/paradedb/paradedb:v0.22.6-pg17@sha256:3b8e10c460ef82b8afdc5bbc8699ee32779b334069243c011d3c4a3f642b6b52\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    linux/amd64\n               \n  Name:        docker.io/paradedb/paradedb:v0.22.6-pg17@sha256:91e7501328a88d44c6827f58dd15b96fde0e4f9ea4df84edb1b29944eeb73a7f\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    unknown/unknown\n  Annotations: \n    vnd.docker.reference.digest: sha256:3b8e10c460ef82b8afdc5bbc8699ee32779b334069243c011d3c4a3f642b6b52\n    vnd.docker.reference.type:   attestation-manifest\n               \n  Name:        docker.io/paradedb/paradedb:v0.22.6-pg17@sha256:ea992f2ee1e44d961d3b0f8b4b184cb2061fc9a8fc1dbfafb88f88180e3a16db\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    linux/arm64\n               \n  Name:        docker.io/paradedb/paradedb:v0.22.6-pg17@sha256:fd0b75e532caa224f90d1fbcc9303eb3e1c7b5c3c37314e3a77ce83b3bfec3b8\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    unknown/unknown\n  Annotations: \n    vnd.docker.reference.digest: sha256:ea992f2ee1e44d961d3b0f8b4b184cb2061fc9a8fc1dbfafb88f88180e3a16db\n    vnd.docker.reference.type:   attestation-manifest\n"
+}

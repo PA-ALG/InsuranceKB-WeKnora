@@ -9,9 +9,18 @@
     "builder": {
       "reference": "golang:1.26-bookworm@sha256:9fdc884aacc3bec89b20ffc69f4bb369c78210e3e4f600387b5128b12c199f81"
     },
+    "browserskill": {
+      "reference": "node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e"
+    },
+    "rust": {
+      "reference": "rust:1.90.0-bookworm@sha256:3914072ca0c3b8aad871db9169a651ccfce30cf58303e5d6f2db16d1d8a7e58f"
+    },
     "runtime": {
       "reference": "debian:12.12-slim@sha256:d5d3f9c23164ea16f31852f95bd5959aad1c5e854332fe00f7b3a20fcc9f635c"
     }
+  },
+  "toolchains": {
+    "rust": "1.90.0"
   },
   "debian": {
     "repositories": {
@@ -46,7 +55,9 @@
       "nodejs": "18.20.4+dfsg-1~deb12u2",
       "npm": "9.2.0~ds1-1",
       "gosu": "1.14-1+b10",
-      "ffmpeg": "7:5.1.9-0+deb12u1"
+      "ffmpeg": "7:5.1.9-0+deb12u1",
+      "cmake": "3.25.1-1",
+      "pkg-config": "1.8.1-1"
     }
   },
   "python_tools": {
@@ -84,6 +95,25 @@
       "platform": "aarch64-unknown-linux-gnu",
       "origin": "https://github.com/astral-sh/uv/releases/download/0.9.26/uv-aarch64-unknown-linux-gnu.tar.gz",
       "sha256": "f71040c59798f79c44c08a7a1c1af7de95a8d334ea924b47b67ad6b9632be270"
+    },
+    "anydoc": {
+      "version": "0.1.9",
+      "platform": "source",
+      "origin": "https://crates.io/api/v1/crates/anydoc/0.1.9/download",
+      "sha256": "93a8b0dbecf79be9329111093b493d256db2a573ed3f1cc827c96bdbbe32a936"
+    },
+    "browserskill": {
+      "version": "0.3.1",
+      "source_commit": "da6bf4eed2dd7256567e152df8c903c87f6598c3",
+      "platform": "source",
+      "origin": "https://codeload.github.com/Tencent/BrowserSkill/tar.gz/da6bf4eed2dd7256567e152df8c903c87f6598c3",
+      "sha256": "3784ef02aaeb11637fbdafca60260aaf4e47f76b70d13b1f4161d15482152057"
+    },
+    "pnpm": {
+      "version": "10.17.0",
+      "platform": "source",
+      "origin": "https://registry.npmjs.org/pnpm/-/pnpm-10.17.0.tgz",
+      "sha256": "bd9ec5417641391e0acb3912b2912bd5b0385407a82da94744a7407b567fdb4f"
     },
     "duckdb": {
       "version": "v1.5.2",

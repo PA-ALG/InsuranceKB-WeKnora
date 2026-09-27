@@ -25,50 +25,70 @@ describe('knowledge base product upload wiring', () => {
   let ports: Record<string, any>
   beforeEach(() => {
     ports = {
-      kbId: { value: 'kb' }, uploading: { value: false },
+      kbId: { value: 'kb' }, productUploadChecking: { value: false },
       productIngestionEnabled: { value: false }, productIngestionRefresh: { value: 0 },
-      selectedTagIds: { value: ['tag'] }, getFolderUploadFileName: () => undefined,
-      uploadProductBatchIfEnabled: vi.fn(), uploadKnowledgeFile: vi.fn(), getProductIngestionEnabled: vi.fn(),
-      executeUploadBatch: vi.fn(), ensureDocumentKbReady: vi.fn(), openUploadConfirmDialog: vi.fn(),
+      kbInfo: { value: { name: 'Products' } },
+      uploadTasksStore: { enqueue: vi.fn() },
+      ROOT_FOLDER_PATH: '', buildUploadFileName: (file: File, folder: string) => `${folder}${file.name}`,
+      uploadProductBatchIfEnabled: vi.fn(), getProductIngestionEnabled: vi.fn(),
+      executeProductUploadBatch: vi.fn(), ensureDocumentKbReady: vi.fn(), openUploadConfirmDialog: vi.fn(),
       showUploadResultMessages: vi.fn(), MessagePlugin: { error: vi.fn(), warning: vi.fn(), success: vi.fn() }, t: (key: string) => key,
     }
   })
   it('passes the entire original batch to the platform and never per-file upload', async () => {
     ports.uploadProductBatchIfEnabled.mockResolvedValue({ run_id: 'r', accepted_file_count: 3, rejected_file_count: 0 })
     const files = ['a', 'b', 'c'].map(name => new File(['original'], `${name}.pdf`))
-    expect(await action('executeUploadBatch', ports)(files, { processConfig: { ignored: true } })).toEqual({ successCount: 3, failCount: 0 })
+    expect(await action('executeProductUploadBatch', ports)(files)).toEqual({ successCount: 3, failCount: 0 })
     expect(ports.uploadProductBatchIfEnabled).toHaveBeenCalledWith('kb', files)
-    expect(ports.uploadKnowledgeFile).not.toHaveBeenCalled()
+    expect(ports.uploadTasksStore.enqueue).not.toHaveBeenCalled()
     expect(ports.productIngestionRefresh.value).toBe(1)
   })
-  it('retains existing upload options only when capability is disabled', async () => {
-    ports.uploadProductBatchIfEnabled.mockResolvedValue(null)
-    ports.uploadKnowledgeFile.mockResolvedValue({ success: true })
+  it('hands disabled-capability uploads to the native global queue with their options', async () => {
     const file = new File(['original'], 'a.pdf')
     const processConfig = { foo: true }
-    await action('executeUploadBatch', ports)([file], { processConfig })
-    expect(ports.uploadKnowledgeFile).toHaveBeenCalledWith('kb', { file, tag_ids: ['tag'], process_config: processConfig })
+    action('enqueueUploads', ports)([file], { processConfig, tagIds: ['tag'], targetFolder: 'folder/' })
+    expect(ports.uploadTasksStore.enqueue).toHaveBeenCalledWith({
+      kbId: 'kb', kbName: 'Products', targetFolder: 'folder/', tagIds: ['tag'], processConfig,
+      uploads: [{ file, fileName: 'folder/a.pdf' }],
+    })
+    expect(ports.uploadProductBatchIfEnabled).not.toHaveBeenCalled()
   })
   it('never falls back or reuploads after an uncertain platform response', async () => {
     ports.uploadProductBatchIfEnabled.mockRejectedValue(new Error('timeout'))
-    await action('executeUploadBatch', ports)([new File(['x'], 'a.pdf')])
-    expect(ports.uploadKnowledgeFile).not.toHaveBeenCalled()
+    await action('executeProductUploadBatch', ports)([new File(['x'], 'a.pdf')])
+    expect(ports.uploadTasksStore.enqueue).not.toHaveBeenCalled()
     expect(ports.MessagePlugin.error).toHaveBeenCalledTimes(1)
   })
   it('enabled file selection goes directly to server upload without browser processing configuration', async () => {
-    ports.getProductIngestionEnabled.mockResolvedValue(true)
+    ports.executeProductUploadBatch.mockResolvedValue({ successCount: 1, failCount: 0 })
     const files = [new File(['x'], 'a.pdf')]
     await action('handleUploadSourceFiles', ports)(files)
-    expect(ports.executeUploadBatch).toHaveBeenCalledWith(files)
+    expect(ports.executeProductUploadBatch).toHaveBeenCalledWith(files)
     expect(ports.ensureDocumentKbReady).not.toHaveBeenCalled()
     expect(ports.openUploadConfirmDialog).not.toHaveBeenCalled()
   })
+  it('uses one capability decision and preserves native upload on an explicit disabled result', async () => {
+    ports.getProductIngestionEnabled.mockResolvedValue(true)
+    ports.executeProductUploadBatch.mockResolvedValue(null)
+    ports.ensureDocumentKbReady.mockReturnValue(true)
+    const files = [new File(['x'], 'a.pdf')]
+    await action('handleUploadSourceFiles', ports)(files)
+    expect(ports.executeProductUploadBatch).toHaveBeenCalledWith(files)
+    expect(ports.getProductIngestionEnabled).not.toHaveBeenCalled()
+    expect(ports.openUploadConfirmDialog).toHaveBeenCalledWith(files)
+  })
+  it('reports a busy submission instead of silently discarding another selected batch', async () => {
+    ports.productUploadChecking.value = true
+    await action('handleUploadSourceFiles', ports)([new File(['x'], 'second.pdf')])
+    expect(ports.MessagePlugin.warning).toHaveBeenCalledTimes(1)
+    expect(ports.executeProductUploadBatch).not.toHaveBeenCalled()
+  })
   it('disabled file selection preserves the old readiness check and dialog', async () => {
-    ports.getProductIngestionEnabled.mockResolvedValue(false)
+    ports.executeProductUploadBatch.mockResolvedValue(null)
     ports.ensureDocumentKbReady.mockReturnValue(true)
     const files = [new File(['x'], 'a.pdf')]
     await action('handleUploadSourceFiles', ports)(files)
     expect(ports.openUploadConfirmDialog).toHaveBeenCalledWith(files)
-    expect(ports.executeUploadBatch).not.toHaveBeenCalled()
+    expect(ports.executeProductUploadBatch).toHaveBeenCalledWith(files)
   })
 })
