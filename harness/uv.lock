@@ -905,6 +905,7 @@ llm = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "jsonschema" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -939,6 +940,7 @@ provides-extras = ["llm"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "jsonschema", specifier = ">=4.26" },
     { name = "mypy", specifier = ">=1.11" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },

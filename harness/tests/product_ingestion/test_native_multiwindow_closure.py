@@ -58,6 +58,10 @@ def windows(case: Any, mode: str = "independent") -> tuple[list[Any], list[Any]]
             payload["decisions"][1]["depends_on"] = ["c1"]
         if index == 1 and mode == "conflict":
             payload["pages"][0]["title"] += "不同内容"
+        if mode == "empty":
+            payload["pages"], payload["definitions"] = [], []
+            for decision in payload["decisions"]:
+                decision.update(decision="REJECT", member_refs=[], depends_on=[])
         context = render_native_admission_context(
             request=request,
             entity_id=entity,
@@ -69,6 +73,20 @@ def windows(case: Any, mode: str = "independent") -> tuple[list[Any], list[Any]]
         snapshots.append(snapshot)
         projections.append(project((request, entity, snapshot, source, context, payload)))
     return snapshots, projections
+
+
+def test_empty_windows_keep_complete_audit_without_inventing_members(case: Any) -> None:
+    from insurance_harness.product_ingestion.native_dependency_aggregate import (
+        aggregate_native_dependencies,
+        validate_aggregate_selection,
+    )
+
+    snapshots, projections = windows(case, "empty")
+    outcome = aggregate_native_dependencies(snapshots=snapshots, projections=projections)
+    assert not outcome.output.pages and not outcome.output.definitions
+    assert not outcome.selection["retained_candidates"]
+    assert outcome.pending_candidate_count == 6
+    validate_aggregate_selection(outcome.selection, outcome.output)
 
 
 def test_multiple_local_refs_are_namespaced_and_independent_members_survive(case: Any) -> None:
