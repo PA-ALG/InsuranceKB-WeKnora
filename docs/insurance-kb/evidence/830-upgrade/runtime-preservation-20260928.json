@@ -1,0 +1,65 @@
+{
+  "status": "PASS",
+  "checked_at": "2026-09-28T03:55:06.624016+00:00",
+  "original_service_count": 8,
+  "services": [
+    {
+      "name": "/g3-platform-product-product-worker-1",
+      "container_id": "7ed9aeb217b54165a00492ca620016805707a39744e47609d22560b7a9a79797",
+      "image_id": "sha256:593493031187b0ffaff1e2eacc6eef347e6206caf1b65f2eb6fa4e09be06c334",
+      "identity_mounts_ports_networks_unchanged": true,
+      "running": true
+    },
+    {
+      "name": "/g3-platform-product-product-api-1",
+      "container_id": "d3a3ff1032dc44e23b6c99823dc562b02252ab4b3ca3ca21938a1d7cc677d833",
+      "image_id": "sha256:593493031187b0ffaff1e2eacc6eef347e6206caf1b65f2eb6fa4e09be06c334",
+      "identity_mounts_ports_networks_unchanged": true,
+      "running": true
+    },
+    {
+      "name": "/weknora-g3-830-release-app-issuer-closeout-01",
+      "container_id": "33cd9ff6678016d0636854e345764e0652ee635dacc2641dfe3ed5dcbae82893",
+      "image_id": "sha256:7d97028e6994b4a48cfbbc7dea0407e42454d35c076134c600a0c86049ff5527",
+      "identity_mounts_ports_networks_unchanged": true,
+      "running": true
+    },
+    {
+      "name": "/weknora-g3-830-docreader",
+      "container_id": "3708c452f7471fbee4025300f3143c5f49551278eb1320462f8eb26818f9ace8",
+      "image_id": "sha256:a5533268445e42b4e7a3501cf65a59c0bc8b2bf94898fa1deb66cb36898b9966",
+      "identity_mounts_ports_networks_unchanged": true,
+      "running": true
+    },
+    {
+      "name": "/weknora-g3-830-release-ui-bounded-read-01",
+      "container_id": "910dbd30ef29a86058980381040eb1bec2b75ee91edebbb89ff1323b2195d19e",
+      "image_id": "sha256:d488e95945f58a0967fd07108cacd32b0c83360e48d123d0bb57cc6ec2bfc57e",
+      "identity_mounts_ports_networks_unchanged": true,
+      "running": true
+    },
+    {
+      "name": "/weknora-g3-830-redis",
+      "container_id": "47f77a1644da6f295f6399e52542ce8b6a242b788be36450b983800fe42927e7",
+      "image_id": "sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf",
+      "identity_mounts_ports_networks_unchanged": true,
+      "running": true
+    },
+    {
+      "name": "/weknora-g3-830-postgres-recovery-02",
+      "container_id": "8edeba34929d268d7c344bb816d56fca5e049357b9855cb34af0adcbf9bac8b2",
+      "image_id": "sha256:af585013f97f622715de01e48d00558f7edf17055d7b40deafc9f98ca8d99a56",
+      "identity_mounts_ports_networks_unchanged": true,
+      "running": true
+    },
+    {
+      "name": "/WeKnora-redis",
+      "container_id": "c74f21a2239e26c6c401e14778102f05bdb95f5f98907b8066e0de8201ed368d",
+      "image_id": "sha256:c9d92d840fd011c908f040592857c724ae6d877f2aba5c40ad963276507386b2",
+      "identity_mounts_ports_networks_unchanged": true,
+      "running": true
+    }
+  ],
+  "postgres_memory_restored_bytes": 1073741824,
+  "limitations": "Container continuity does not prove database contents, restart continuity, migration or business acceptance."
+}

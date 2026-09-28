@@ -1,3 +1,6 @@
+//go:build ignore
+
+// Standalone historical tool: invoke with go run <file>, not as a shared package.
 // Local, provider-free preparation: reuse the production splitter on saved native captures.
 package main
 

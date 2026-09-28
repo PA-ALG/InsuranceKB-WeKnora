@@ -18,15 +18,34 @@ import (
 
 type automaticReleaseRouteStub struct{ calls int }
 
-func (s *automaticReleaseRouteStub) CreateBatchConceptDraftAutomated830G3(_ context.Context, _ types.WikiReleasePrincipal, scope types.WikiReleaseScope, id string, _ json.RawMessage) (*types.WikiReleasePreparation, error) {
+func (s *automaticReleaseRouteStub) CreateBatchConceptDraftAutomated830G3(
+	_ context.Context,
+	_ types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	id string,
+	_ json.RawMessage,
+) (*types.WikiReleasePreparation, error) {
 	s.calls++
 	return &types.WikiReleasePreparation{ID: id, WikiReleaseScope: scope}, nil
 }
-func (s *automaticReleaseRouteStub) ReviewDraftAutomated(context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope, string, []byte) (*types.WikiReleasePreparation, error) {
+
+func (s *automaticReleaseRouteStub) ReviewDraftAutomated(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	[]byte,
+) (*types.WikiReleasePreparation, error) {
 	s.calls++
 	return &types.WikiReleasePreparation{}, nil
 }
-func (s *automaticReleaseRouteStub) ActivateAutomated(context.Context, types.WikiReleasePrincipal, []byte, []byte) (*types.WikiReleaseReceipt, error) {
+
+func (s *automaticReleaseRouteStub) ActivateAutomated(
+	context.Context,
+	types.WikiReleasePrincipal,
+	[]byte,
+	[]byte,
+) (*types.WikiReleaseReceipt, error) {
 	s.calls++
 	return &types.WikiReleaseReceipt{}, nil
 }
@@ -61,29 +80,65 @@ func TestG3PlatformReleaseRoutesRequireRealDualKBEvidenceBeforeService(t *testin
 			e := gin.New()
 			enabled := true
 			events := []string{}
-			kbs := map[string]*types.KnowledgeBase{"wiki-1": {ID: "wiki-1", TenantID: 42}, "raw-1": {ID: "raw-1", TenantID: 42}}
+			kbs := map[string]*types.KnowledgeBase{
+				"wiki-1": {ID: "wiki-1", TenantID: 42},
+				"raw-1":  {ID: "raw-1", TenantID: 42},
+			}
 			if denyRaw {
 				delete(kbs, "raw-1")
 			}
-			g := &rbacGuards{cfg: &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}}, kbService: &orderedSchemaWikiKBLookup{kbs: kbs, events: &events}, apiKeyAuthorizer: middleware.NewAPIKeyRouteAuthorizer()}
+			g := &rbacGuards{
+				cfg:              &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
+				kbService:        &orderedSchemaWikiKBLookup{kbs: kbs, events: &events},
+				apiKeyAuthorizer: middleware.NewAPIKeyRouteAuthorizer(),
+			}
 			e.Use(middleware.ErrorHandler())
 			e.Use(func(c *gin.Context) {
 				terminal := types.Principal{Type: types.PrincipalAPITenant, ID: "42"}
 				ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, uint64(42))
 				ctx = types.WithPrincipal(ctx, terminal)
-				ctx = types.WithTenantAPIKeyScope(ctx, types.TenantAPIKeyScope{KeyID: 9, KnowledgeBaseIDs: types.StringArray{"raw-1", "wiki-1"}, Capabilities: types.StringArray{"ingest"}})
+				ctx = types.WithTenantAPIKeyScope(
+					ctx,
+					types.TenantAPIKeyScope{
+						KeyID:            9,
+						KnowledgeBaseIDs: types.StringArray{"raw-1", "wiki-1"},
+						Capabilities:     types.StringArray{"ingest"},
+					},
+				)
 				c.Request = c.Request.WithContext(ctx)
 				c.Set(types.TenantIDContextKey.String(), uint64(42))
 				c.Set(types.PrincipalContextKey.String(), terminal)
 				c.Next()
 			})
-			resolver := &schemaWikiRouteScopeResolver{head: &types.WikiReleaseHead{WikiReleaseScope: types.WikiReleaseScope{TenantID: 42, SpaceID: "space-1", RawKBID: "raw-1", WikiKBID: "wiki-1"}, ActiveReleaseID: "parent", ActivationEpoch: 9}, events: &events}
+			resolver := &schemaWikiRouteScopeResolver{
+				head: &types.WikiReleaseHead{
+					WikiReleaseScope: types.WikiReleaseScope{
+						TenantID: 42,
+						SpaceID:  "space-1",
+						RawKBID:  "raw-1",
+						WikiKBID: "wiki-1",
+					},
+					ActiveReleaseID: "parent",
+					ActivationEpoch: 9,
+				},
+				events: &events,
+			}
 			access := handler.NewWikiReleaseHandler(nil)
 			port := &automaticReleaseRouteStub{}
 			h := handler.NewG3PlatformReleaseHandler(access, port, port)
-			RegisterG3PlatformReleaseRoutes(e.Group("/api/v1"), h, handler.NewSchemaWikiHandler(resolver, nil), access, g)
+			RegisterG3PlatformReleaseRoutes(
+				e.Group("/api/v1"),
+				h,
+				handler.NewSchemaWikiHandler(resolver, nil),
+				access,
+				g,
+			)
 			r := httptest.NewRecorder()
-			q := httptest.NewRequest(http.MethodPost, "/api/v1/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/platform/preparations", strings.NewReader(`{"preparation_id":"draft-1","bundle":{}}`))
+			q := httptest.NewRequest(
+				http.MethodPost,
+				"/api/v1/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/platform/preparations",
+				strings.NewReader(`{"preparation_id":"draft-1","bundle":{}}`),
+			)
 			q.Header.Set("Content-Type", "application/json")
 			e.ServeHTTP(r, q)
 			if denyRaw {
@@ -103,9 +158,17 @@ func TestG3PlatformCompositionRegistersBothGroupsOnlyWhenConfigured(t *testing.T
 	for _, enabled := range []bool{false, true} {
 		e := gin.New()
 		g := &rbacGuards{apiKeyAuthorizer: middleware.NewAPIKeyRouteAuthorizer()}
-		params := RouterParams{WikiReleaseHandler: handler.NewWikiReleaseHandler(nil), SchemaWikiHandler: &handler.SchemaWikiHandler{}}
+		params := RouterParams{
+			WikiReleaseHandler: handler.NewWikiReleaseHandler(nil),
+			SchemaWikiHandler:  &handler.SchemaWikiHandler{},
+		}
 		if enabled {
-			params.G3PlatformSnapshotsHandler = handler.NewG3PlatformSnapshotsHandler(params.WikiReleaseHandler, nil, nil, nil)
+			params.G3PlatformSnapshotsHandler = handler.NewG3PlatformSnapshotsHandler(
+				params.WikiReleaseHandler,
+				nil,
+				nil,
+				nil,
+			)
 			params.G3PlatformReleaseHandler = handler.NewG3PlatformReleaseHandler(params.WikiReleaseHandler, nil, nil)
 		}
 		registerConfiguredG3PlatformRoutes(e.Group("/api/v1"), params, g)
@@ -115,7 +178,48 @@ func TestG3PlatformCompositionRegistersBothGroupsOnlyWhenConfigured(t *testing.T
 		}
 		require.Len(t, e.Routes(), 10)
 		prefix := "/api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/platform"
-		for _, route := range []struct{ method, path string }{{"GET", "/files/by-sha256/:sha256"}, {"GET", "/uploads/:run_id/:ordinal/reparse"}, {"POST", "/uploads/:run_id/:ordinal/reparse"}, {"POST", "/sources/:knowledge_id/attempts/:attempt/native-discovery"}, {"GET", "/uploads/:run_id/:ordinal"}, {"POST", "/sources/:knowledge_id/attempts/:attempt/snapshot"}, {"GET", "/bases/:release_id/epochs/:epoch"}, {"POST", "/preparations"}, {"POST", "/preparations/:preparation_id/review"}, {"POST", "/activate"}} {
+		for _, route := range []struct{ method, path string }{
+			{
+				"GET",
+				"/files/by-sha256/:sha256",
+			},
+			{
+				"GET",
+				"/uploads/:run_id/:ordinal/reparse",
+			},
+			{
+				"POST",
+				"/uploads/:run_id/:ordinal/reparse",
+			},
+			{
+				"POST",
+				"/sources/:knowledge_id/attempts/:attempt/native-discovery",
+			},
+			{
+				"GET",
+				"/uploads/:run_id/:ordinal",
+			},
+			{
+				"POST",
+				"/sources/:knowledge_id/attempts/:attempt/snapshot",
+			},
+			{
+				"GET",
+				"/bases/:release_id/epochs/:epoch",
+			},
+			{
+				"POST",
+				"/preparations",
+			},
+			{
+				"POST",
+				"/preparations/:preparation_id/review",
+			},
+			{
+				"POST",
+				"/activate",
+			},
+		} {
 			_, ok := g.apiKeyAuthorizer.Lookup(route.method, prefix+route.path)
 			require.True(t, ok, route.path)
 		}
@@ -125,7 +229,16 @@ func TestG3PlatformCompositionRegistersBothGroupsOnlyWhenConfigured(t *testing.T
 func TestG3PlatformCompositionMainRouterRegistersMachineRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	access := handler.NewWikiReleaseHandler(nil)
-	engine := NewRouter(RouterParams{Config: &config.Config{}, WikiReleaseHandler: access, SchemaWikiHandler: &handler.SchemaWikiHandler{}, G3PlatformSnapshotsHandler: handler.NewG3PlatformSnapshotsHandler(access, nil, nil, nil), G3PlatformReleaseHandler: handler.NewG3PlatformReleaseHandler(access, nil, nil)})
+	engine := NewRouter(
+		RouterParams{
+			Config:                     &config.Config{},
+			SystemHandler:              &handler.SystemHandler{},
+			WikiReleaseHandler:         access,
+			SchemaWikiHandler:          &handler.SchemaWikiHandler{},
+			G3PlatformSnapshotsHandler: handler.NewG3PlatformSnapshotsHandler(access, nil, nil, nil),
+			G3PlatformReleaseHandler:   handler.NewG3PlatformReleaseHandler(access, nil, nil),
+		},
+	)
 	found := map[string]bool{}
 	for _, route := range engine.Routes() {
 		if strings.Contains(route.Path, "/platform/") {

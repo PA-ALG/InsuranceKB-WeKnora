@@ -49,6 +49,7 @@ var noAuthAPI = map[string][]string{
 	"/api/v1/auth/config":             {"GET"},
 	"/api/v1/auth/oidc/config":        {"GET"},
 	"/api/v1/auth/oidc/url":           {"GET"},
+	"/api/v1/auth/oidc/start":         {"GET"},
 	"/api/v1/auth/oidc/callback":      {"GET"},
 	// MCP OAuth provider redirect: the third-party authorization server
 	// redirects the browser here without a WeKnora bearer token. The request
@@ -462,6 +463,7 @@ func attachPlatformAPIKeyAuthContext(c *gin.Context, key *types.TenantAPIKey) {
 		Role: types.TenantRoleViewer,
 		APIKeyScope: &types.TenantAPIKeyScope{
 			KeyID:        key.ID,
+			Name:         key.Name,
 			ScopeType:    types.APIKeyScopePlatform,
 			FullAccess:   false,
 			Capabilities: key.Capabilities,
@@ -548,6 +550,7 @@ func attachAPIKeyAuthContext(
 	if key != nil {
 		session.APIKeyScope = &types.TenantAPIKeyScope{
 			KeyID:            key.ID,
+			Name:             key.Name,
 			ScopeType:        key.ScopeType,
 			FullAccess:       fullAccess,
 			KnowledgeBaseIDs: key.KnowledgeBaseIDs,

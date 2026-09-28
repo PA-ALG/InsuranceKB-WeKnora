@@ -43,6 +43,16 @@ func kbActivityTrigger(ctx context.Context) string {
 	return "system"
 }
 
+func kbActivityAPIKey(ctx context.Context) (uint64, string, bool) {
+	if key, ok := types.AuditAPIKeyFromContext(ctx); ok {
+		return key.ID, key.Name, true
+	}
+	if scope, ok := types.TenantAPIKeyScopeFromContext(ctx); ok && (scope.KeyID > 0 || scope.Name != "") {
+		return scope.KeyID, scope.Name, true
+	}
+	return 0, "", false
+}
+
 // kbActivityAppendSampleTitles adds a bounded, human-readable preview of batch
 // mutations into activity details. The first sample is also mirrored as title so
 // list views can show what was affected without opening the drawer.
@@ -122,6 +132,14 @@ func recordKBActivity(
 	for key, value := range details {
 		activityDetails[key] = value
 	}
+	if id, name, ok := kbActivityAPIKey(ctx); ok {
+		if _, exists := activityDetails["api_key_id"]; !exists && id > 0 {
+			activityDetails["api_key_id"] = id
+		}
+		if _, exists := activityDetails["api_key_name"]; !exists && name != "" {
+			activityDetails["api_key_name"] = name
+		}
+	}
 	if task, ok := ctx.Value(kbActivityTaskContextKey{}).(kbActivityTaskMetadata); ok {
 		if task.TaskID != "" {
 			if _, exists := activityDetails["task_id"]; !exists {
@@ -171,4 +189,28 @@ func recordKBActivity(
 		Outcome:     outcome,
 		Details:     detailJSON,
 	})
+}
+
+// RecordWikiContentActivity writes the bounded Wiki mutation summary shown in
+// the knowledge-base activity feed. Wiki mutations used to reach this feed as
+// a side effect of inserting rows into the dedicated wiki_log_entries table;
+// keeping the projection explicit lets the activity feed remain authoritative
+// without maintaining a second, Wiki-only event store.
+func RecordWikiContentActivity(
+	ctx context.Context,
+	audit interfaces.AuditLogService,
+	tenantID uint64,
+	kbID string,
+	actions map[string]int,
+) {
+	count := 0
+	for _, actionCount := range actions {
+		count += actionCount
+	}
+	if count == 0 {
+		return
+	}
+	recordKBActivity(ctx, audit, tenantID, kbID, types.AuditActionWikiContentChanged,
+		"wiki", kbID, types.AuditOutcomeSuccess,
+		map[string]any{"count": count, "actions": actions})
 }

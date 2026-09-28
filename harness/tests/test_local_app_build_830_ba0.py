@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import inspect
 import json
 import re
 import shlex
@@ -55,6 +56,8 @@ DOCKERFILE_PATH = REPO_ROOT / "docker/Dockerfile.app"
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
 BUILD_IMAGES_PATH = REPO_ROOT / "scripts/build_images.sh"
 GET_VERSION_PATH = REPO_ROOT / "scripts/get_version.sh"
+BROWSER_SKILL_BUILD_PATH = REPO_ROOT / "scripts/build_browserskill.sh"
+ANYDOC_BUILD_PATH = REPO_ROOT / "scripts/build-anydoc-lib.sh"
 
 CONTEXT = "colima-g1-build"
 PLATFORM = "linux/arm64"
@@ -99,11 +102,14 @@ REQUIRED_CRITICAL_INPUTS = {
 }
 
 REQUIRED_COPY_ROOTS = {
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
     "config",
+    "licenses",
     "scripts",
     "migrations",
     "dataset/samples",
-    "skills/preloaded",
+    "third_party/anydoc-go",
 }
 
 REQUIRED_LABELS = {
@@ -466,6 +472,8 @@ def _write_synthetic_contract(repo_root: Path) -> tuple[Path, Path]:
             "goos": "linux",
             "goarch": "arm64",
             "cgo_enabled": True,
+            "go_build_tags": ["anydoc"],
+            "components": ["anydoc", "browserskill"],
         },
     }
     lock = _synthetic_dependency_lock()
@@ -485,11 +493,13 @@ def _write_synthetic_contract(repo_root: Path) -> tuple[Path, Path]:
         "docker/Dockerfile.app": "FROM scratch AS runtime\n",
         "scripts/build_images.sh": "#!/bin/sh\n",
         "scripts/get_version.sh": "#!/bin/sh\n",
+        "LICENSE": "fixture license\n",
+        "THIRD_PARTY_NOTICES.md": "fixture notices\n",
+        "licenses/sources/modules.tsv": "fixture/module v1.0.0 " + "a" * 64 + "\n",
         "config/app.yml": "mode: test\n",
         "scripts/docker-entrypoint.sh": "#!/bin/sh\n",
         "migrations/000001.sql": "select 1;\n",
         "dataset/samples/sample.txt": "sample\n",
-        "skills/preloaded/sample/SKILL.md": "sample\n",
         "cmd/server/main.go": (
             'package main\n\nimport _ "github.com/Tencent/WeKnora/internal/newtopsentinel"\n'
         ),
@@ -519,6 +529,11 @@ def _write_synthetic_contract(repo_root: Path) -> tuple[Path, Path]:
         "deploy/upstream/adoption_target.go": "package upstream\n",
         "deploy/upstream/weknora-adoption-target.json": "{}\n",
         "deploy/upstream/weknora-plugin-contract.yaml": "version: 1\n",
+        "third_party/anydoc-go/Cargo.lock": "# fixture lock\n",
+        "third_party/anydoc-go/Cargo.toml": "[package]\nname='anydoc-go'\nversion='0.1.9'\n",
+        "third_party/anydoc-go/go.mod": "module github.com/firecrawl/anydoc/go\n",
+        "third_party/anydoc-go/anydoc.go": "package anydoc\n",
+        "third_party/anydoc-go/src/lib.rs": "pub fn fixture() {}\n",
     }
     for relative, content in files.items():
         path = repo_root / relative
@@ -539,10 +554,17 @@ def _synthetic_dependency_lock() -> dict[str, Any]:
             "builder": {
                 "reference": "golang:1.26-bookworm@sha256:" + "3" * 64,
             },
+            "browserskill": {
+                "reference": "node:24-bookworm-slim@sha256:" + "c" * 64,
+            },
+            "rust": {
+                "reference": "rust:1.90.0-bookworm@sha256:" + "d" * 64,
+            },
             "runtime": {
                 "reference": "debian:12.12-slim@sha256:" + "4" * 64,
             },
         },
+        "toolchains": {"rust": "1.90.0"},
         "debian": {
             "repositories": {
                 "debian": {
@@ -582,6 +604,8 @@ def _synthetic_dependency_lock() -> dict[str, Any]:
                         "npm",
                         "gosu",
                         "ffmpeg",
+                        "cmake",
+                        "pkg-config",
                     ),
                     start=1,
                 )
@@ -612,6 +636,25 @@ def _synthetic_dependency_lock() -> dict[str, Any]:
                 "platform": "fixture-linux-arm64",
                 "origin": "https://dependencies.invalid/uv/0.9.26/install.sh",
                 "sha256": "9" * 64,
+            },
+            "anydoc": {
+                "version": "0.1.9",
+                "platform": "source",
+                "origin": "https://crates.io/api/v1/crates/anydoc/0.1.9/download",
+                "sha256": "c" * 64,
+            },
+            "browserskill": {
+                "version": "0.3.1",
+                "source_commit": "d" * 40,
+                "platform": "source",
+                "origin": "https://codeload.github.com/Tencent/BrowserSkill/tar.gz/" + "d" * 40,
+                "sha256": "d" * 64,
+            },
+            "pnpm": {
+                "version": "10.17.0",
+                "platform": "source",
+                "origin": "https://registry.npmjs.org/pnpm/-/pnpm-10.17.0.tgz",
+                "sha256": "e" * 64,
             },
             "duckdb": {
                 "version": "v1.5.2",
@@ -871,6 +914,9 @@ def _dependency_lock_uses(lock: Mapping[str, Any]) -> tuple[LockUse, ...]:
     downloads = lock["downloads"]
     migrate = downloads["go_tools"]["migrate"]
     duckdb = downloads["duckdb"]
+    anydoc = downloads["anydoc"]
+    browserskill = downloads["browserskill"]
+    pnpm = downloads["pnpm"]
 
     def use(
         items: list[tuple[str, object]],
@@ -902,6 +948,23 @@ def _dependency_lock_uses(lock: Mapping[str, Any]) -> tuple[LockUse, ...]:
             "from-builder",
             r"^FROM\b",
             "builder base image",
+        ),
+        use(
+            [
+                (
+                    "base_images.browserskill.reference",
+                    lock["base_images"]["browserskill"]["reference"],
+                )
+            ],
+            "from-browserskill",
+            r"^FROM\b",
+            "BrowserSkill base image",
+        ),
+        use(
+            [("base_images.rust.reference", lock["base_images"]["rust"]["reference"])],
+            "from-rust",
+            r"^FROM\b",
+            "Rust base image",
         ),
         use(
             [("base_images.runtime.reference", lock["base_images"]["runtime"]["reference"])],
@@ -992,6 +1055,23 @@ def _dependency_lock_uses(lock: Mapping[str, Any]) -> tuple[LockUse, ...]:
             "go-sum",
             r"\bgrep\b",
             "migrate go_sum",
+        ),
+        use(
+            [("toolchains.rust", lock["toolchains"]["rust"])]
+            + [(f"downloads.anydoc.{name}", anydoc[name]) for name in sorted(anydoc)],
+            "component-build",
+            r"\benv\b",
+            "AnyDoc locked source and Rust toolchain",
+        ),
+        use(
+            [
+                (f"downloads.browserskill.{name}", browserskill[name])
+                for name in sorted(browserskill)
+            ]
+            + [(f"downloads.pnpm.{name}", pnpm[name]) for name in sorted(pnpm)],
+            "component-build",
+            r"\benv\b",
+            "BrowserSkill locked source and pnpm",
         ),
         use(
             [
@@ -1533,6 +1613,8 @@ def test_manifest_is_closed_versioned_and_names_real_app_inputs() -> None:
         "goos": "linux",
         "goarch": "arm64",
         "cgo_enabled": True,
+        "go_build_tags": ["anydoc"],
+        "components": ["anydoc", "browserskill"],
     }
     manifest_text = _json_text(document)
     for required in REQUIRED_COPY_ROOTS | REQUIRED_CRITICAL_INPUTS:
@@ -1562,8 +1644,15 @@ def test_manifest_resolver_includes_known_real_go_and_embed_closure() -> None:
     assert "VERSION" in paths
     go_list_calls = [call for call in runner.calls if call.arguments[0:2] == ("go", "list")]
     assert len(go_list_calls) == 1
-    assert go_list_calls[0].arguments[:4] == ("go", "list", "-deps", "-json")
-    assert set(go_list_calls[0].arguments[4:]) == {
+    assert go_list_calls[0].arguments[:6] == (
+        "go",
+        "list",
+        "-tags",
+        "anydoc",
+        "-deps",
+        "-json",
+    )
+    assert set(go_list_calls[0].arguments[6:]) == {
         "./cmd/server",
         "./cmd/download/duckdb",
     }
@@ -1576,6 +1665,29 @@ def test_manifest_resolver_includes_known_real_go_and_embed_closure() -> None:
         "CGO_ENABLED": "1",
     }
     assert all(call.arguments[0] != "docker" for call in runner.calls)
+
+
+def test_manifest_resolver_excludes_generated_anydoc_outputs(tmp_path: Path) -> None:
+    module = _artifact_module()
+    repo_root = tmp_path / "repository"
+    manifest_path, _ = _write_synthetic_contract(repo_root)
+    generated = {
+        "third_party/anydoc-go/target/release/libanydoc_go.a",
+        "third_party/anydoc-go/lib/linux_arm64_gnu/libanydoc_go.a",
+        "third_party/anydoc-go/patched-anydoc/src/lib.rs",
+    }
+    for relative in generated:
+        path = repo_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("generated\n", encoding="utf-8")
+
+    resolved = module.resolve_inputs(
+        repo_root,
+        module.load_manifest(manifest_path),
+        runner=_identity_runner(repo_root),
+    )
+
+    assert generated.isdisjoint(_resolved_paths(resolved))
 
 
 def test_manifest_resolver_follows_new_top_level_import_and_embed_sentinel(
@@ -2106,9 +2218,11 @@ def test_dependency_lock_covers_all_versioned_external_facts_without_proxy() -> 
     assert document["schema_version"] == 1
     assert document["platform"]["os"] == "linux"
     assert document["platform"]["arch"] == "arm64"
-    for stage in ("builder", "runtime"):
+    for stage in ("builder", "browserskill", "rust", "runtime"):
         reference = document["base_images"][stage]["reference"]
         assert re.fullmatch(r"[^@\s]+@sha256:[0-9a-f]{64}", reference)
+    assert document["toolchains"] == {"rust": "1.90.0"}
+    assert document["toolchains"]["rust"] in document["base_images"]["rust"]["reference"]
 
     debian = document["debian"]
     assert set(debian["repositories"]) == {"debian", "debian-security"}
@@ -2141,6 +2255,8 @@ def test_dependency_lock_covers_all_versioned_external_facts_without_proxy() -> 
         "npm",
         "gosu",
         "ffmpeg",
+        "cmake",
+        "pkg-config",
     }
     assert required_packages <= set(debian["packages"])
     assert all(value and "latest" not in value for value in debian["packages"].values())
@@ -2156,10 +2272,23 @@ def test_dependency_lock_covers_all_versioned_external_facts_without_proxy() -> 
     assert migrate["module"] == "github.com/golang-migrate/migrate/v4/cmd/migrate"
     assert migrate["version"] == "v4.19.1"
     assert migrate["go_sum"].startswith("h1:")
-    for item in (downloads["uv"], *downloads["duckdb"]["extensions"].values()):
+    for item in (
+        downloads["uv"],
+        downloads["anydoc"],
+        downloads["browserskill"],
+        downloads["pnpm"],
+        *downloads["duckdb"]["extensions"].values(),
+    ):
         assert item["platform"]
         assert item["origin"] and not re.search(r"\s", item["origin"])
         assert re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+    assert re.fullmatch(r"[0-9a-f]{40}", downloads["browserskill"]["source_commit"])
+    release = json.loads(
+        (REPO_ROOT / "scripts/browserskill-release.json").read_text(encoding="utf-8")
+    )
+    assert downloads["browserskill"]["version"] == release["version"]
+    assert downloads["browserskill"]["source_commit"] == release["daemon"]["source_commit"]
+    assert downloads["browserskill"]["source_commit"] == release["extension"]["source_commit"]
     assert set(downloads["duckdb"]["extensions"]) == {"spatial", "excel"}
     assert downloads["duckdb"]["version"] == _duckdb_version_from_go_mod(REPO_ROOT)
     assert all(
@@ -2171,6 +2300,97 @@ def test_dependency_lock_covers_all_versioned_external_facts_without_proxy() -> 
     for forbidden in ("mirror", "proxy", "credential", "password", "secret", "token"):
         assert forbidden not in public
     assert "latest" not in public
+
+
+def test_upstream_component_scripts_verify_locked_archives_before_extracting() -> None:
+    anydoc = ANYDOC_BUILD_PATH.read_text(encoding="utf-8")
+    browser = BROWSER_SKILL_BUILD_PATH.read_text(encoding="utf-8")
+
+    for variable in ("ANYDOC_CRATE_VERSION", "ANYDOC_CRATE_ORIGIN", "ANYDOC_CRATE_SHA256"):
+        assert variable in anydoc
+    assert "rsproxy.cn" not in anydoc
+    assert anydoc.index("sha256sum -c") < anydoc.index("tar -x")
+
+    for variable in (
+        "BROWSERSKILL_VERSION",
+        "BROWSERSKILL_SOURCE_COMMIT",
+        "BROWSERSKILL_SOURCE_ORIGIN",
+        "BROWSERSKILL_SOURCE_SHA256",
+        "PNPM_VERSION",
+        "PNPM_ORIGIN",
+        "PNPM_SHA256",
+        "PNPM_STORE_DIR",
+        "CARGO_TARGET_DIR",
+    ):
+        assert variable in browser
+    assert "git clone" not in browser
+    assert "npx" not in browser
+    assert browser.index("sha256sum -c") < browser.index("tar -x")
+    assert "pnpm install --frozen-lockfile" in browser
+    assert "cargo build --locked" in browser
+
+
+def test_dockerfile_isolates_and_caches_anydoc_and_browserskill() -> None:
+    source = DOCKERFILE_PATH.read_text(encoding="utf-8")
+    assert not re.search(r"^(?:<<<<<<<|=======|>>>>>>>)", source, re.M)
+    assert "ARG BROWSERSKILL_IMAGE" in source
+    assert "ARG RUST_IMAGE" in source
+    assert "FROM ${RUST_IMAGE} AS anydoc-builder" in source
+    assert "FROM --platform=$TARGETPLATFORM ${BROWSERSKILL_IMAGE} AS browserskill" in source
+    assert "FROM ${BUILDER_IMAGE} AS lock-plan" in source
+    assert "FROM lock-plan AS builder" in source
+
+    anydoc_start = source.index("FROM ${RUST_IMAGE} AS anydoc-builder")
+    browser_start = source.index(
+        "FROM --platform=$TARGETPLATFORM ${BROWSERSKILL_IMAGE} AS browserskill"
+    )
+    builder_start = source.index("FROM lock-plan AS builder")
+    first_component = min(anydoc_start, browser_start)
+    component_region = source[first_component:builder_start]
+    assert "COPY . ." not in component_region
+
+    instructions = _dockerfile_instructions(source)
+    anydoc_run = next(
+        item
+        for item in instructions
+        if item.startswith("RUN ") and "build-anydoc-lib.sh" in item
+    )
+    browser_run = next(
+        item
+        for item in instructions
+        if item.startswith("RUN ") and "build_browserskill.sh" in item
+    )
+    browser_region = source[browser_start:builder_start]
+    assert (
+        "COPY --from=lock-plan /etc/ssl/certs/ca-certificates.crt "
+        "/etc/ssl/certs/ca-certificates.crt"
+    ) in browser_region
+    assert set(_cache_mounts(anydoc_run)) == {
+        "/usr/local/cargo/registry",
+        "/usr/local/cargo/git",
+        "/app/third_party/anydoc-go/target",
+    }
+    assert set(_cache_mounts(browser_run)) == {
+        "/root/.local/share/pnpm/store",
+        "/usr/local/cargo/registry",
+        "/usr/local/cargo/git",
+        "/var/cache/browserskill-cargo-target",
+    }
+    assert "COPY --from=anydoc-builder" in source
+    assert "make build-prod GO_BUILD_TAGS=anydoc" in source
+    assert "go version -m /app/WeKnora" in source
+    assert "-tags=anydoc" in source
+    assert "COPY --from=browserskill /opt/weknora/browserskill" in source
+    assert "COPY --from=builder /license-bundle/ ./" in source
+    for floating in ("rustup.rs", "default-toolchain stable", "@latest", "npx --yes"):
+        assert floating not in source
+
+
+def test_runtime_reuse_protects_upstream_runtime_resources() -> None:
+    module = _artifact_module()
+    source = inspect.getsource(module.runtime_reuse_facts)
+    for path in ("LICENSE", "THIRD_PARTY_NOTICES.md", "licenses"):
+        assert path in source
 
 
 def test_dockerfile_build_path_wires_locked_facts_into_consuming_instructions(
@@ -2309,6 +2529,8 @@ def test_lock_dataflow_guard_rejects_ineffective_consumers(
     dockerfile = "\n".join(
         (
             "FROM $BUILDER AS builder",
+            "FROM $BROWSERSKILL AS browserskill",
+            "FROM $RUST AS rust",
             "FROM $RUNTIME AS runtime",
             f"COPY {lock_path} {lock_path}",
             (f"RUN {parser} --lock {lock_path} --output /tmp/ba0-dependency-plan.env"),
@@ -2320,6 +2542,8 @@ def test_lock_dataflow_guard_rejects_ineffective_consumers(
             lock,
             {
                 "BUILDER": lock["base_images"]["builder"]["reference"],
+                "BROWSERSKILL": lock["base_images"]["browserskill"]["reference"],
+                "RUST": lock["base_images"]["rust"]["reference"],
                 "RUNTIME": lock["base_images"]["runtime"]["reference"],
             },
             dockerfile,
@@ -2979,6 +3203,10 @@ def test_d3_exact_image_compose_is_single_service_read_only_and_standalone() -> 
     for command in (entrypoint, healthcheck):
         assert re.search(r"\btest\s+-x\s+['\"]?/app/WeKnora\b", command)
         assert re.search(r"\bldd\s+['\"]?/app/WeKnora\b", command)
+        assert re.search(
+            r"\btest\s+-x\s+['\"]?/opt/weknora/browserskill/bsk\b", command
+        )
+        assert re.search(r"\bldd\s+['\"]?/opt/weknora/browserskill/bsk\b", command)
         assert "not found" in command.lower() and re.search(r"\bgrep\b", command)
         assert "!" in command or re.search(r"\bexit\s+1\b", command)
         assert not _has_ignored_failure(command)
@@ -2990,8 +3218,13 @@ def test_d3_exact_image_compose_is_single_service_read_only_and_standalone() -> 
         "/app/scripts",
         "/app/migrations",
         "/app/dataset/samples",
-        "/app/skills/preloaded",
         "/home/appuser/.duckdb",
+        "/app/LICENSE",
+        "/app/THIRD_PARTY_NOTICES.md",
+        "/app/licenses",
+        "/opt/weknora/browserskill/bsk",
+        "/opt/weknora/browserskill/browser-skill-weknora-0.3.1.zip",
+        "/opt/weknora/browserskill/BrowserSkill-LICENSE",
     ):
         assert re.search(
             rf"\btest\s+-[derx]\s+['\"]?{re.escape(required_path)}\b",

@@ -1,0 +1,112 @@
+{
+  "recorded_at": "2026-09-27T11:40:27Z",
+  "source_state": "uncommitted fixed-upstream merge; migration paths are staged and frozen; not a deployed artifact",
+  "identity": {
+    "head": "8ccc2ac942df7572499ac7b25e14587c594918db",
+    "merge_head": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+    "merge_base": "80a5003cc99a427098afe184eee6601916d3d156",
+    "review_identity": "docs/insurance-kb/evidence/830-upgrade/migration-review-identity.json",
+    "frozen_path_count": 13
+  },
+  "review_rounds": [
+    {
+      "round": 1,
+      "findings": [
+        "The released official75/enterprise5 product checkpoint needed an explicit, fingerprint-gated bridge to upstream official110 without renumbering either ledger.",
+        "The upstream 000077 migration deleted legacy wiki log history and page identity required for product recovery.",
+        "The pg_search 0.22.2 to 0.22.6 image transition needed fail-closed preflight and postcondition checks.",
+        "The adoption manifest still identified the common ancestor and official75 instead of the fixed upstream release-v0.8.2 target and official110."
+      ],
+      "repairs": [
+        "Accepted the exact released official75/enterprise5 checkpoint only through the legacy W1 fixture, dependency-anchor, span, and clean-ledger classifier.",
+        "Replaced destructive 000077 behavior with archival plus deleted_at soft deletion of the legacy log page while preserving wiki_log_entries, page identity, and body; down is intentionally non-restorative.",
+        "Added pg_search 0.22.6 preflight and postcondition gates for PostgreSQL retrieval migrations.",
+        "Pinned the adoption target to commit 3e8b0bfc80b845b2d4b2ed683994748741450a97, tree 9533ab2071e71f4bc2ebb09c85d3ac246841ff9a, and official migration head 110 while retaining the historical release ancestor and capability commit."
+      ],
+      "red_logs": [
+        {
+          "path": "/tmp/weknora-082-migration-red.txt",
+          "sha256": "b1b9673a282b917efd148255e7bde98634e1e6adc1aa5638ad576df7af171102"
+        },
+        {
+          "path": "/tmp/weknora-082-migration-red-2.txt",
+          "sha256": "99f7ad5e9ffa8638829b789e0c0cfe94aab3acef7981b9ed6c440eecabc83432"
+        },
+        {
+          "path": "/tmp/weknora-082-migration-077-soft-delete-red.txt",
+          "sha256": "e212cc9199e6e202680281edf06280a1993b175506f86cf527ae33f3c05ba7ad"
+        },
+        {
+          "path": "/tmp/weknora-082-adoption-manifest-red.txt",
+          "sha256": "06ea1f5a9ee642b2bca4cff5350a672bfc63e75fb49d1bec1d25f851ab902db3"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "findings": [
+        "A process interruption after any clean official migration 76 through 109 left a legitimate officialN/enterprise5 checkpoint that the bridge rejected on restart.",
+        "A deployment that reached official110/enterprise5 with skip_embedding=true could not safely activate PostgreSQL retrieval later: pg_search was absent or old and enterprise000003 would not replay after its ledger had advanced."
+      ],
+      "repairs": [
+        "Classified every clean official75 through official110 checkpoint with enterprise2 through enterprise5 as a resumable point in the fixed packaged chain while continuing to reject versions outside that range, dirty ledgers, and non-exact fingerprints.",
+        "Inside the existing cross-phase advisory-lock lifetime, reconciled pg_search after official migrations only when app.skip_embedding is exactly false: missing installs exactly 0.22.6, 0.22.2 through 0.22.5 update exactly to 0.22.6, and unsupported or unavailable states fail closed before the postcondition.",
+        "Before enterprise ledger advancement, replayed the exact packaged enterprise000003 SQL only when embeddings is absent and PostgreSQL retrieval is explicitly active; file-read, execution, and full column/index contract failures stop the phase. No ledger force or historical migration edit is used."
+      ],
+      "red_logs": [
+        {
+          "path": "/tmp/weknora-082-resume-checkpoints-red.txt",
+          "sha256": "962c18b9e52137d380fd5895dc7a9afdf8008f78824ce23cf764f8ffff5bac1f"
+        },
+        {
+          "path": "/tmp/weknora-082-mode-transition-red.txt",
+          "sha256": "bd3bffc9086c03552546aac57ea17fc9fdea2335a106e83309b9fa38071b8161"
+        }
+      ]
+    }
+  ],
+  "final_verification": [
+    {
+      "scope": "resume-checkpoint classifier focused test",
+      "result": "PASS",
+      "log": "/tmp/weknora-082-resume-checkpoints-green.txt",
+      "log_sha256": "a10e2cc5ec6a0188efce3de00babdfe6d9533218e337022059ccd1dfd6600445"
+    },
+    {
+      "scope": "pg_search and embeddings mode-transition focused tests, including full lock lifetime",
+      "result": "PASS",
+      "log": "/tmp/weknora-082-mode-transition-focused-green.txt",
+      "log_sha256": "0b6abbf6510e104ce37422da95ca660ffad8d35cb8e40b2d787f68c1c1b1729f"
+    },
+    {
+      "scope": "go test -p 2 ./internal/database -count=1",
+      "result": "PASS",
+      "summary": "ok github.com/Tencent/WeKnora/internal/database 2.143s",
+      "log": "/tmp/weknora-082-mode-transition-full-green.txt",
+      "log_sha256": "06bdeeabc3f2b4c0cc35cf153d4cc609b79b6898983091a72c2cb3cc8c2cb7dc"
+    },
+    {
+      "scope": "harness adoption manifest tests with PYTHONPATH bound to this worktree",
+      "result": "PASS",
+      "summary": "131 passed in 13.48s",
+      "log": "/tmp/weknora-082-adoption-manifest-green-final.txt",
+      "log_sha256": "e99d4a7758641efedaeac820d95e4592f6c9f58aba5704e8a85d3326638cf98c"
+    },
+    {
+      "scope": "real PostgreSQL migration tests",
+      "result": "NOT RUN",
+      "summary": "All three real-PostgreSQL tests were invoked with connection variables explicitly unset and reported SKIP; no database connection or migration was attempted.",
+      "log": "/tmp/weknora-082-real-postgres-not-run.txt",
+      "log_sha256": "ec34dd3b61dedb2b33cac1f8e18ebfe5612bb537c2cfe78a457e509e958f47fe"
+    },
+    {
+      "scope": "staged and unstaged whitespace validation for all frozen migration paths",
+      "result": "PASS"
+    }
+  ],
+  "limitations": [
+    "Real PostgreSQL, live migration, old-image rollback, backup restore, Docker, deployment, and provider tests were NOT RUN.",
+    "The 000077 down migration cannot reconstruct historical rows; actual rollback requires the pre-upgrade database backup and matching old application image.",
+    "No commit or push was performed."
+  ]
+}

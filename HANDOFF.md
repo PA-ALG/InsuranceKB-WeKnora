@@ -1,3 +1,162 @@
+## 2026-09-28 本地CI修复验证闭合，等待最终远端复验（当前）
+
+软件源码d5be03b3b/tree e2c8f488已提交，290路径精确冻结独审0BLOCKER。
+完整root lint最终exit0/0项、57.981秒，原产品比较基线及规则保持；19不可拆分tag逐行例外
+均经独审并保留原字节。非service214项PASS，原3组Go失败修复及来源SHA回归保持。
+首轮四包完整本地测试741.06秒结束，无超时：3706PASS/11SKIP/48FAIL事件（含父子测试），
+失败由本机fake-IP DNS、Python3.9/用户包污染及旧OSS外网测试触发，原记录保留。
+仅3测试文件消除外部依赖、使用隔离Python3.12后，265项恢复验证PASS；48原失败事件及
+121指定顶层测试无遗漏，相关安全负例保持。此为已审组合证据，不冒称首轮完整测试PASS。
+远端旧2a6为19成功/2失败/5跳过；NEXT=源码锁/证据独审后推同一Draft并跟进新HEAD全部CI，
+不得停在“已推送”。原8服务不改，新App构建/provider/原环境切换/merge不执行。
+隔离迁移既有e71/442701制品PASS仍独立有效，不能当作后续d5be源码已经部署。
+详见root-lint-closure-20260928.json与ci-followup-20260928.json；下方均为历史。
+
+## 2026-09-28 隔离升级及有界源码修复通过，最终CI待闭合（历史）
+
+原App精确配置获用户“授权”后私密恢复，旧版61业务表与epoch27/source/PDF连续性PASS。
+目标PG唯一pull与新版App唯一正式迁移PASS：official110/false、enterprise5/false、pg_search0.22.6。
+原61表旧列无意外变化，4存储alias只有预期updated_at、21行/216 spans保持，20新表均空。
+发布版本、members、来源字段及PDF696913字节/SHA b2ade27c…一致；citation按原生算法
+重算各自有效，仅到期时间归一后完整authority相同。比较器首次误判与配置前置STOP均保留。
+旧wiki_log_entries6条摘要保持；legacy log页0，非空页改写场景NOT EXERCISED。
+两测试App均已停止，原8服务未变；追加构建/provider/切换0。迁移receipt fca2ae6e…绑定
+既有e71/442701制品，不代表后续源码修复已运行；完整结果见isolated-restore-20260928.json。
+
+8b121远端最终19成功/2失败/5跳过，dsh真实E2E与deterministic PASS；Go/root lint未闭合。
+8路径测试/CI准备修正独审0BLOCKER、14定向PASS；新增独立RED确认替换文件仍绑定旧SHA，
+最小生产修复已提交07d0e3e48/tree8eb1c1f2，最终10路径独审0BLOCKER；
+19项+4子测试PASS，14定向及mineru PASS，不削弱断言、不扩大lint范围。
+source lock已绑定07d0/tree8eb1，verify/report PASS，dfaf报告与18c5逐字一致。
+CURRENT=有界源码修复与隔离迁移已分别闭合；NEXT=完成最终证据审查，更新同一Draft并检查CI。
+原环境切换、新业务tracer/provider及新可信镜像均NOT RUN，不合并。下方为历史。
+
+## 2026-09-28 五库恢复完成，配置恢复与最终 CI 仍阻断（历史）
+
+用户明确“确认”后，在新内部网络/新卷恢复五份数据库备份。第五库首次缺角色导致
+事务回滚；独审后仅补非特权角色、重建失败副本并唯一重试PASS。原8服务身份保持，
+没有原环境切换。恢复副本75/false、enterprise5/false、pg_search0.22.2。
+
+原Lite启动方案会把21条历史summary pending和3条软删除deleting改为failed，正确STOP。
+已独审修订为新隔离空Redis、关闭housekeeping，保护21行与216 spans，保留实际队列0。
+旧App首次隔离启动及正常登录/epoch27 GET通过，release search500；DB/文件摘要与源相同，
+但原容器writable-layer的/app/config未恢复，与镜像默认配置不同。旧测试App已停止，
+新App启动/目标PG pull/实际迁移/provider均0。登录产生的2条auth token插入独立记录。
+
+自动审批再次拒绝归档并复制可能含密钥的原/app/config，要求对该具体目录明确授权；
+命令未执行。准备脚本已显式强制0700目录/0600文件，SHAff14232f…，仅恢复到隔离容器。
+已通过异步问题向用户请求精确授权；未收到该答复前保持STOP，不换路径绕过。
+此前“确认”已用于五库恢复/原计划配置归档，不能把本次拒绝写成用户未批准任何隔离工作。
+
+Go历史工具包冲突与dsh rc8/HMR兼容已修正。完整根lint关闭报告条数上限后出现973项
+（279路径、8分钟exit4），973/973确为相对产品基线的改动行；不能记为CI通过。
+已冻结当前96路径最小机械修正，独立代码审查0BLOCKER，提示词/模型schema字节保持；
+完整CI与大量未纳入当前写域的检查项仍BLOCKED，不静默扩成大范围改写或放宽门禁。
+机械修正已提交18c5f74c3/tree8bf6a405，最终source lock verify/report PASS，报告dfaf与原844逐字相同。
+已有App e71、DocReader e71、UI82制品保持各自身份，不能称为后续软件提交的exact reuse。
+
+CURRENT=保存隔离恢复结果、完成已审代码/证据集成与同一Draft PR更新；待/app/config精确授权。
+NEXT=授权后先补配置并完成旧版来源/PDF恢复验证，再执行已审一次迁移；另需收敛剩余CI范围。
+实际升级验收、原环境部署、新tracer/provider与发布保持NOT RUN。结构化证据见
+isolated-restore-20260928.json及ci-followup-20260928.json。下方为历史。
+
+## 2026-09-28 容量恢复后的升级续行（历史）
+
+活动工作树 `830-upstream-plugin-boundary`，root 唯一集成 Owner；PR #131 继续 Draft。
+Colima 已由 110 扩至 130 GiB，原 8 服务恢复；OnlyOffice 测试容器/镜像已按用户要求
+移除，四个卷保留。容量恢复回执见 `colima-capacity-recovery.json`。五份 PostgreSQL
+备份已保存本机私有目录并通过归档目录校验，约 405 MiB；备份期间旧 PG 的 1 GiB
+限额触发一次 OOM，自动恢复后临时提高限额完成备份并还原原限额，未迁移数据库。
+详见 `database-backup-20260928.json`；归档目录校验不能替代实际恢复。
+
+App 仍复用 e71/442701 制品，累计构建 5、追加预算 0。DocReader e71/d1777c 制品
+一次构建 PASS，健康与 Markdown gRPC 解析烟测 PASS（无网络、无卷、provider 0、
+临时容器已清理），见 `docreader-delivery-20260928.json`。最初 txt 样本不受支持的
+失败保留，修正样本未重建镜像。UI 样式以 82ff324de 冻结，全测试 1283 PASS/1 SKIP、
+type-check 与 styleGuard PASS；最终 UI 镜像1ca8b0…一次构建及无网络静态资源烟测PASS，
+未部署。错误生成的制品label与正确canonical预期不匹配，exact reuse仍BLOCKED；
+实际image ID、观察label、正确预期与烟测分别列于 `ui-delivery-20260928.json`。
+
+新增确认 Harness trusted source lock 也过时，共 8 组 CI 阻断；保留 077 Wiki 日志
+的例外现由共享冻结 policy 约束，只接受固定上游与双向四个精确 SHA，报告强制
+MANUAL，不能降格为自动 PASS。root 功能修复独审 0 BLOCKER，56cf7e0b6 已提交；
+最后一次测试参数列表换行机械修正也获独审；最终源844f03c55与报告dfaf453e…已冻结，
+独审0 BLOCKER，最终源码锁verify及verify-report PASS。完整本地Harness测试有界中止，
+dsh真实E2E因两次依赖安装未完成而BLOCKED；不声称全CI已通过。
+可信发布源与已有本地 App 制品来源分别记录，不声称旧镜像等于新源的 exact REUSE。
+
+CURRENT=CI 修复与组件构建/烟测已记录，完整CI和升级验收未完成。隔离数据库恢复尚未开始：
+自动审批拒绝创建隔离卷/网络及归档可能含密钥的原配置，已向用户说明并提出明确
+授权问题；未答复前不绕过执行。既有 epoch27、serving authority 与服务不切换。
+NEXT=完成剩余 CI 证据及独立冻结审查，更新同一 Draft PR；获明确答复后再执行隔离
+恢复/迁移。实际迁移、升级后业务 tracer、provider 与部署均 NOT RUN。下方均为历史。
+
+## 2026-09-28 App制品已恢复：零构建复用与隔离烟测PASS
+
+用户“继续”授权的第五次App构建完成全部编译和镜像导出，但本机解包因磁盘耗尽
+失败，原记录保留exit1/INCOMPLETE，耗时3139.799075386秒；本轮1/1、累计5、余量0。
+失败后可用空间自行恢复，未执行人工清理。核对OCI manifest及22/22压缩层摘要，
+解包总量2.051GiB、可用3.567GiB，独审0BLOCKER后沿既有BA0入口完成零预算REUSE
+和CONTAINER_ARTIFACT_SMOKE PASS（build0/pull0，临时容器自清理PASS）。
+
+软件源e71c72f7dd885e228c4f447c68902450fed7ae26、artifact identity
+sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4；
+可用镜像sha256:442701a3bde3de5ff8aee7dfc9f7f461df1819b050c417f38ecd4ff226e33775。
+网络下载及pnpm子进程已在此次真实构建越过。8个原容器Id/StartedAt/Pid保持，
+原daemon未重启；烟测后可用1583464KiB，无迁移、服务部署或provider调用。
+
+CURRENT=App制品恢复PASS，升级整体仍BLOCKED。PR131@b64923独立诊断7组CI问题，
+包括新增确认的固定上游dsh rc8 HMR启动竞态，均未在本轮修复，继续Draft。
+NEXT=关闭CI并在容量与后续授权窗口具备时继续其余制品/交付；不追加第六次App构建。
+UI/DocReader镜像、真实迁移/部署/业务仍NOT RUN，旧epoch27不变。详见
+`docs/insurance-kb/evidence/830-upgrade/delivery-attempt-05.json`及`ci-failures-b64923.json`。
+下方为历史，不能覆盖本块。
+
+## 2026-09-27 下载链路已修复，App仍待下一授权窗口
+
+用户要求解决网络下载问题后，root完成UPG-08环境恢复：原日本H线路六轮固定层
+下载仅2成功，日本D候选4成功后自动恢复；新加坡A专线6/6完整下载并校验通过，
+11.24MB每次2.228—3.086秒，五项实际锁定依赖全部通过。已通过Clash原生UI保存
+Proxy选择；运行中Docker和Colima持久配置均移除三个失败旧mirrors。原生Docker
+固定frontend摘要pull PASS，不能代替App构建。配置备份、摘要、回滚与样本限制见
+`docs/insurance-kb/evidence/830-upgrade/network-recovery.md`及同名JSON。
+
+CURRENT=网络局部PASS，D2 App制品仍BLOCKED；本轮App构建0，累计4/余量0，源码
+e71c72f7d及identity12d583e5…不变。daemon PID及8容器启动身份未变，无服务重启、
+清理、迁移、部署或provider。六组CI仍未关闭，PR131继续Draft。下方为历史状态。
+
+## 2026-09-27 WeKnora 0.8.2：修复源已推送，第四次构建受官方镜像源TLS超时阻断
+
+用户“再授权一次”后，root在同一活动树执行1次App构建；此前pnpm子进程入口修复已通过130测试/fullruff/mypy736及独审0BLOCKER，并已推送PR131，软件源e71c72f7dd885e228c4f447c68902450fed7ae26，App identity sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4。后续纯证据提交不改变此软件源。
+
+CURRENT=D2 BLOCKED。第四次构建14:40:46.692108960—14:40:56.787989257Z，共10.095880297秒，在官方registry-1.docker.io的Dockerfile frontend HEAD阶段TLS handshake timeout，尚未编译，无镜像。本轮1/1已使用，累计4次，未执行第五次。原镜像源配置已自动逐字恢复，daemon PID及8容器Id/StartedAt/Pid保持，可用7042136KiB；无清理、迁移、部署/provider。
+
+构建前直连/v2/返回401不等于Docker实际代理链路稳定；事后同一manifest地址直连/daemon代理各3次HEAD均401，其中代理1次10.591052秒。该样本只证明事后可达且存在延迟波动，不证明认证pull或持续稳定，也不能把网络失败当作pnpm修复验证。详见delivery-attempt-04.json。
+
+NEXT=先稳定并验证实际daemon的registry/代理路径，再确定下一次构建窗口；本轮不自动追加次数。PR131继续Draft，六组CI问题仍未关闭，旧epoch27及现有服务不变；UI/DocReader镜像、迁移/部署/业务验收仍NOT RUN。下方为历史。
+
+## 2026-09-27 WeKnora 0.8.2：第三次构建失败，BrowserSkill子进程入口已修复
+
+活动树830-upstream-plugin-boundary，root唯一写者/集成。PR131为Draft，原远端head4dec9ef66。用户“重新授权，再执行吧”追加1次App预算已执行；旧软件源8a0863fa0/identity dee7d33d…的第三次尝试14:00:24—14:10:12Z耗时588.134369043秒，22缓存步骤复用，BrowserSkill ext:build:zip子进程pnpm:not found失败，无镜像。总App尝试3，本轮1/1已用完；未自动发起第四次。
+
+原镜像源TLS故障已通过临时registry-mirrors=[]及SIGHUP热重载越过。构建结束原daemon配置逐字恢复，8容器Id/StartedAt/Pid保持，不重启、不部署、不迁移、不调用provider、不追加清理；Colima可用7042136KiB。回执delivery-attempt-03.json。
+
+CURRENT=UPG-08源修复待冻结独审：scripts/build_browserskill.sh将已校验pnpm.cjs经可执行入口暴露给子进程PATH，删除仅父shell可见函数；依赖锁及版本不变。新离线真实shell回归先RED（旧脚本child误用ambient pnpm，exit71），后GREEN（相关130PASS/4.76s）；fullruff PASS，mypy736 PASS。该修复改变App输入，旧8a/identity不能作为修复后的镜像证据。
+
+GitHub CI=BLOCKED：独立复核发现App许可证fixture、前端styleGuard/route fixture、历史证据Go DTO、CLI/client lint六组问题，详见ci-failures-4dec9ef.json；这些没有被本次PATH小修复关闭。NEXT=完成本次修复独审并更新Draft PR；后续闭合CI并对修正后的精确源码执行重新获准的D2，不得自动重试旧失败输入。UI/DocReader镜像、DB迁移/部署/业务验证仍NOT RUN，旧epoch27不变。下方为历史。
+
+## 2026-09-27 WeKnora 0.8.2：已授权清理完成，恢复构建受镜像源故障阻断
+
+活动树 `830-upstream-plugin-boundary`，root唯一集成。产品基线8ccc2ac9、固定上游3e8b0bfc已进入软件提交 `8a0863fa095bc27b901db90c5f744d1db84063b2`；设计SHA保持原值。已获明确push/Draft PR授权，普通上传遇到HTTP400/408（直连也408）。确认产品fork已持有固定上游提交后，同一目标分支先引用3e8b0bfc，再普通快进到f3ff602b9，增量约255KB，push已成功；未合入main。
+
+CODE=PASS（受影响范围）；core43+router fixture、frontend80、build18、migration13及DocReader base pin独审0BLOCKER。Source pin/attempt/chunk同锁与CAS、稳定UUID清理已闭合。最终repo全包/service受影响与compile、下游handler/container、router347、旧来源合同71通过；模型582+补充38、Harness/Ruff/mypy、前端tests/typecheck/build等详见证据。普通KB enrichment/finalizer和索引清理重试三项BACKLOG保留，不外推G3隔离路径结果。
+
+CURRENT=D2制品交付BLOCKED。首次App构建197.05秒后因磁盘不足失败，无镜像（当时仅1.1GiB可用，未做清理）。用户随后回复“允许”，授权32个精确旧镜像清理、容量足够后1次App恢复构建及产品分支push/Draft PR。32镜像全部非强制删除成功，释放约5.6GiB，全部容器/卷/build cache保留，8个运行容器仍up。
+
+独立容量复核PASS_TO_ATTEMPT_ONE后，恢复构建沿原BA0输入执行；source仍8a0863fa0，App identity仍 `sha256:dee7d33d449a9a3b382577dec1c45d9e8f246aa0acfab3ddb64f1b4921297f61`。13:38:37—13:38:51Z约13.50秒，Dockerfile frontend元数据请求被配置镜像源以EOF中断，未进入编译，无新image。累计App invocation=2，新增授权1/1已用完，余量0；未自动重试或额外清理。现可用约6.63GiB，UI/DocReader构建仍NOT RUN。回执见delivery-attempt-02.json。
+
+NEXT=补推本次机械证据并创建已授权Draft PR；再次构建须先排查镜像源连接并取得额外预算，不能把本次EOF当作未消耗build invocation。真实DB备份/恢复/迁移、provider、发布、升级后旧epoch27读取/新tracer/source click均NOT RUN。旧G3/G3.5 FLOW_PASS/QUALITY_PARTIAL、Q0不改变。下方历史状态不覆盖本块。
+
 ## 2026-09-27 最后两项 CI 元数据修复
 
 b9db7772f完整CI为7721 PASS/18 SKIP/65 deselected/2 FAIL；失败仅为旧v3版本断言和

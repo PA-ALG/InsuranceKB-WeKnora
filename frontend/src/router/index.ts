@@ -1,7 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useDeploymentCapabilitiesStore } from '@/stores/deploymentCapabilities'
 import { autoSetup, getCurrentUser, userInfoFromApi } from '@/api/auth'
+import type { DeploymentCapabilityKey } from '@/config/deploymentCapabilities'
+import { MessagePlugin } from 'tdesign-vue-next'
+import i18n from '@/i18n'
+import { normalizeSettingsSection } from '@/config/settingsRoute'
+import { isToolboxSection, toolboxLocation } from '@/config/toolbox'
 
 /** Lite /桌面 WebView 硬刷新时可能只打开 `/`，用 session 记住上次页面以便恢复 */
 const LITE_LAST_PATH_KEY = 'weknora_lite_last_path'
@@ -179,20 +185,38 @@ const router = createRouter({
           },
         },
         {
-          path: "agents",
-          name: "agentList",
-          component: () => import("../views/agent/AgentList.vue"),
+          path: "artifacts",
+          name: "artifactLibrary",
+          component: () => import("../views/artifacts/ArtifactLibrary.vue"),
+          meta: { requiresInit: true, requiresAuth: true, requiredCapability: 'settings.sandbox' }
+        },
+        {
+          path: "toolbox/:section?",
+          name: "toolbox",
+          component: () => import("../views/toolbox/Toolbox.vue"),
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
+          path: "agents",
+          name: "agentList",
+          component: () => import("../views/agent/AgentList.vue"),
+          meta: { requiresInit: true, requiresAuth: true, requiredCapability: 'agents' }
+        },
+        {
           path: "integrations",
-          redirect: (to) => ({
-            path: "/platform/settings",
-            query: {
-              ...to.query,
-              section: "integrations",
-            },
-          }),
+          redirect: (to) => {
+            const tab = typeof to.query.tab === 'string' ? to.query.tab : undefined
+            const incoming = typeof to.query.section === 'string' ? to.query.section : 'integrations'
+            const rest = { ...to.query }
+            delete rest.tab
+            return {
+              path: '/platform/settings',
+              query: {
+                ...rest,
+                section: normalizeSettingsSection(incoming, tab),
+              },
+            }
+          },
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
@@ -217,7 +241,7 @@ const router = createRouter({
           path: "organizations",
           name: "organizationList",
           component: () => import("../views/organization/OrganizationList.vue"),
-          meta: { requiresInit: true, requiresAuth: true }
+          meta: { requiresInit: true, requiresAuth: true, requiredCapability: 'organizations' }
         },
         // Compatibility redirects for /platform/system/* URLs. System
         // administration surfaces live as dedicated sections inside the
@@ -331,6 +355,10 @@ async function hydrateSessionFromToken(authStore: ReturnType<typeof useAuthStore
       authStore.setCanCreateTenant(canCreateTenant)
     }
 
+    authStore.setAutoAcceptInvitation(
+      response.data?.capabilities?.auto_accept_invitation === true,
+    )
+
     return true
   } catch {
     return false
@@ -348,6 +376,13 @@ router.beforeEach(async (to, from, next) => {
   // 如果这里先按“未登录”拦截到 /login，会导致回调结果没有机会落盘。
   if (hasPendingOIDCCallback()) {
     next()
+    return
+  }
+
+  // Preserve bookmarks for tools that have moved out of Settings.
+  if (to.path === '/platform/settings' && isToolboxSection(to.query.section)) {
+    next({ ...toolboxLocation(to.query.section,
+      typeof to.query.sandboxId === 'string' ? to.query.sandboxId : undefined), replace: true })
     return
   }
 
@@ -430,6 +465,17 @@ router.beforeEach(async (to, from, next) => {
 
   if (to.meta.requiresTenant !== false && !authStore.hasValidTenant) {
     next('/onboarding/workspace')
+    return
+  }
+
+  // 部署能力只描述“后端是否提供该功能”，不反映服务健康或是否已配置。
+  // 探测失败时 Store 会 fail-open，真正的权限和可用性仍由后端接口校验。
+  const deploymentCapabilities = useDeploymentCapabilitiesStore()
+  await deploymentCapabilities.ensureLoaded()
+  const requiredCapability = to.meta.requiredCapability as DeploymentCapabilityKey | undefined
+  if (requiredCapability && !deploymentCapabilities.isSupported(requiredCapability)) {
+    MessagePlugin.warning(i18n.global.t('settings.capabilityUnavailable'))
+    next('/platform/knowledge-bases')
     return
   }
 

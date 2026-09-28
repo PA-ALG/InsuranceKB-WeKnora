@@ -1,0 +1,136 @@
+{
+  "head": "b64923c465facbb074555a7f5825ac64bf1ace1f",
+  "pr": "https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/131",
+  "reviewer": "migration_review",
+  "status": "BLOCKED",
+  "snapshot": {
+    "path": "/private/tmp/upg5-ci-status.json",
+    "sha256": "1f6013f48260638edd9edd0e159f62fe271845f18fec91aad4c0588853162680"
+  },
+  "method": "read-only log and source-package diagnosis; no CI rerun, build, container operation, product edit, or message",
+  "findings": [
+    {
+      "check": "Build & Publish (dsh-weknora) / End-to-end inside dsh (pinned)",
+      "classification": "BLOCKER",
+      "origin": "fixed-upstream dsh rc.8 runtime/test compatibility defect; not introduced by this integration",
+      "cause": "The rc.8 headless bundle disables the HMR row. Its launcher sees no hmr service, awaits loader.create(hmr), then immediately calls watchUserPatches without waiting for service activation. watchUserPatches synchronously reads ctx.get(hmr), sees undefined, and exits before any WeKnora tool assertion.",
+      "observed": "npm install and dsh plugin add succeeded; profile bundles contained dsh-base, dsh-headless and dsh-weknora. Scenario A then exited 1 with `dsh: user patch-layer watching requires the Cordis HMR service`; run-in-dsh.mjs:141 reported the secondary headless-run assertion.",
+      "repo_evidence": [
+        ".github/workflows/dsh-plugin.yml:44 pins @deepseek-ai/dsh@0.1.0-rc.8",
+        ".github/workflows/dsh-plugin.yml:148-153 runs the real profile test",
+        "packages/dsh-weknora/test/e2e/run-in-dsh.mjs:128-141 writes the profile patch, boots headless, and correctly requires exit 0",
+        "Both repository files are byte-identical to fixed upstream 3e8b0bfc80b845b2d4b2ed683994748741450a97"
+      ],
+      "published_package_evidence": [
+        "/private/tmp/dsh-headless-0.1.0-rc.8.tgz::package/cordis.patch.yml explicitly sets id hmr disabled:true",
+        "/private/tmp/dsh-0.1.0-rc.8.tgz::package/lib/profile-boot-DG5t9aNs.js:256-264 creates hmr and immediately calls watchUserPatches without loader activation wait",
+        "/private/tmp/dsh-app-boot-0.1.0-rc.8.tgz::package/lib/index.js:761-765 immediately rejects when ctx.get(hmr) is undefined"
+      ],
+      "minimum_repair": "Prefer a dsh release whose launcher waits for HMR activation, and bind the complete e2e install closure/cache identity. If an rc.8-only repository workaround is required, explicitly enable the existing hmr row with config root:[] in the generated test profile before boot; keep run-in-dsh.mjs:141 and all downstream tool assertions. Do not skip or make the pinned job advisory.",
+      "repair_validation": "NOT RUN. The suggested upstream upgrade or profile workaround was not implemented or executed in this review."
+    },
+    {
+      "check": "App / Format, vet, test, and build",
+      "classification": "BLOCKER",
+      "same_as_4dec": true,
+      "cause": "scripts/test-license-bundle.sh creates an isolated fixture without third_party/anydoc-go/LICENSE, while scripts/check-license-bundle.sh:39 requires it.",
+      "minimum_repair": "Create fixture/third_party/anydoc-go and copy the real AnyDoc LICENSE before invoking the checker; retain the source-bundle assertions."
+    },
+    {
+      "check": "Frontend / Test, type-check, and build",
+      "classification": "BLOCKER",
+      "same_as_4dec": true,
+      "cause": "The same three styleGuard assertions fail: td-token-fallback 10>0, radius-literal 182>162, font-size-literal 51>28.",
+      "minimum_repair": "Replace retained fork literals/fallbacks with existing theme tokens; do not raise the ratchet baselines. Primary td offender: frontend/src/components/knowledge-base/product-ingestion-status.vue."
+    },
+    {
+      "check": "Frontend / Docker multi-stage image",
+      "classification": "BLOCKER",
+      "same_as_4dec": true,
+      "cause": "scripts/test_embed_nginx.py bypasses the production entrypoint and leaves ${APP_DNS_RESOLVER} unresolved; nginx fails before route assertions.",
+      "minimum_repair": "Make the fixture consume the production substitution path or explicitly substitute APP_DNS_RESOLVER before nginx starts, then retain the existing embed/MCP assertions."
+    },
+    {
+      "check": "Go Lint / golangci-lint (.)",
+      "classification": "BLOCKER",
+      "same_as_4dec": true,
+      "cause": "docs/insurance-kb/evidence/830-g3/transport-preparation/main.go:62 references removed embedding.OpenAIEmbedRequest.",
+      "minimum_repair": "Serialize through internal/models/api/openaiembeddings.Client.BuildRequestBody with explicit EmbeddingsSettings, preserving the offline exact-body assertion."
+    },
+    {
+      "check": "Go Lint / golangci-lint (cli)",
+      "classification": "BLOCKER",
+      "same_as_4dec": true,
+      "cause": "Same 12 findings: 8 lll and 4 revive unused-parameter errors.",
+      "minimum_repair": "Wrap the eight reported lines and rename truly unused test parameters to _."
+    },
+    {
+      "check": "Go Lint / golangci-lint (client)",
+      "classification": "BLOCKER",
+      "same_as_4dec": true,
+      "cause": "Same 8 findings: 7 lll and unchecked body.Close at client/knowledge.go:573.",
+      "minimum_repair": "Wrap the seven reported lines and explicitly consume/handle the deferred Close result without changing streaming ownership."
+    }
+  ],
+  "relevant_diff": "The six pre-existing failure paths have no diff from 4dec9ef66cd2a1ce194f84cf282ee8f1a19a6c86 to b64923c465facbb074555a7f5825ac64bf1ace1f. The dsh workflow and e2e script have no diff from fixed upstream 3e8b0bfc80b845b2d4b2ed683994748741450a97.",
+  "logs": [
+    {
+      "check": "app",
+      "path": "/private/tmp/pr131-b64923-app-failed.log",
+      "sha256": "416a8dfc3c8e408bb1a0ae5984b901d3ff79e0f324568e9c96625fbdb3191ccb"
+    },
+    {
+      "check": "frontend_tests",
+      "path": "/private/tmp/pr131-b64923-frontend-test-failed.log",
+      "sha256": "b0e1788e8e3db9d24795a70f006b58f4ce33ed3896822759bf9933f91f711312"
+    },
+    {
+      "check": "frontend_docker",
+      "path": "/private/tmp/pr131-b64923-frontend-docker-failed.log",
+      "sha256": "3a284013e7913bfc554206c3f374f8c24c981e628dd941992259826c296a545f"
+    },
+    {
+      "check": "go_lint_root",
+      "path": "/private/tmp/pr131-b64923-golint-root-failed.log",
+      "sha256": "12c6aeca7cfc5e25ea9d8122bb8686fca8925ce7813f25afeec6587e5227ef0a"
+    },
+    {
+      "check": "go_lint_cli",
+      "path": "/private/tmp/pr131-b64923-golint-cli-failed.log",
+      "sha256": "6cfef7b7e69b009c744c29251063ae52458dbb133df0f9e1749538d693f81734"
+    },
+    {
+      "check": "go_lint_client",
+      "path": "/private/tmp/pr131-b64923-golint-client-failed.log",
+      "sha256": "a52fbfc1456972ce924729420d69fbf0be36788eebd4672ab76b45c2149e53ab"
+    },
+    {
+      "check": "dsh_pinned",
+      "path": "/private/tmp/pr131-b64923-dsh-pinned-failed.log",
+      "sha256": "349df36467a5f74b25d06f4f4b5df4a1b5e1f9b095e7fac94bce91c89058e6e3"
+    }
+  ],
+  "source_artifacts": [
+    {
+      "path": "/private/tmp/dsh-app-boot-0.1.0-rc.8.tgz",
+      "sha256": "bc62a6c698b4b5285c43f6b7910648bc0861aa3d5cf40c2bbdc8a4709b29c423"
+    },
+    {
+      "path": "/private/tmp/dsh-0.1.0-rc.8.tgz",
+      "sha256": "b8b0db6f3bcf3aed77c25bb901fdb9d0ef0f79bd8ca403b52e34c14a71d1487f"
+    },
+    {
+      "path": "/private/tmp/dsh-base-0.1.0-rc.8.tgz",
+      "sha256": "1101c9010a1a438c7894777cbaaba1d83d77ce1b0aa493134f20554081e1d0e3"
+    },
+    {
+      "path": "/private/tmp/dsh-headless-0.1.0-rc.8.tgz",
+      "sha256": "e7ae2c30e777e5cb3fa7c16de4ca90bdccd14af0300af586a5c67a07f002ceb2"
+    }
+  ],
+  "limits": [
+    "This is a diagnosis of the seven failures present in the supplied snapshot; harness deterministic was still in progress in that snapshot.",
+    "No proposed repair was implemented or dynamically validated.",
+    "The separately running App build was outside this review and is not represented as complete."
+  ]
+}

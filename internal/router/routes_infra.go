@@ -22,6 +22,9 @@ func RegisterModelRoutes(
 	{
 		// 获取模型厂商列表 — Viewer+
 		models.GET("/providers", g.Viewer(), handler.ListModelProviders)
+		// 解析模型的有效接入配置（协议 / 思考等级 / 上下文）— Viewer+
+		models.GET("/catalog/resolve", g.Viewer(), handler.ResolveModelCatalog)
+		models.POST("/catalog/resolve", g.Viewer(), handler.ResolveModelCatalog)
 		// 创建模型 — Admin+
 		models.POST("", g.Admin(), handler.CreateModel)
 		// 获取模型列表 — Viewer+
@@ -37,6 +40,44 @@ func RegisterModelRoutes(
 		// Per-field credential subresource (see internal/handler/model_credentials.go) — Admin+
 		models.PUT("/:id/credentials", g.AdminOrSystemAdmin(), credHandler.Put)
 		models.DELETE("/:id/credentials/:field", g.AdminOrSystemAdmin(), credHandler.DeleteField)
+	}
+}
+
+// RegisterSandboxConfigRoutes Sandbox configs are workspace infrastructure that hold provider credentials.
+// Scoped API keys cannot safely receive partial authority over them yet because
+// mutation can strand remote sandboxes.
+func RegisterSandboxConfigRoutes(
+	r *gin.RouterGroup,
+	h *handler.SandboxConfigHandler,
+	skills *handler.SandboxSkillHandler,
+	g *rbacGuards,
+) {
+	configs := g.apiKeyGroup(r.Group("/sandbox-configs"), apiKeyFullAccess())
+	{
+		configs.GET("", g.Viewer(), h.List)
+		configs.PUT("/workspace-policy", g.Admin(), h.SetWorkspacePolicy)
+		configs.POST("/templates/query", g.Admin(), h.QueryTemplates)
+		configs.POST("", g.Admin(), h.Create)
+		configs.GET("/:id", g.Viewer(), h.Get)
+		configs.PUT("/:id", g.Admin(), h.Update)
+		configs.DELETE("/:id", g.Admin(), h.Delete)
+		configs.GET("/:id/sandboxes", g.Admin(), h.Inventory)
+		// Skills are Admin+ throughout, reads included: an upload drives a
+		// root shell whose output is baked into the image every session of
+		// this config boots, and the listing names what that image carries.
+		configs.GET("/:id/skills", g.Admin(), skills.List)
+		configs.POST("/:id/skills", g.Admin(), skills.Upload)
+		configs.GET("/:id/skills/:skillId", g.Admin(), skills.Get)
+		configs.GET("/:id/skills/:skillId/files", g.Admin(), skills.ListFiles)
+		configs.GET("/:id/skills/:skillId/files/content", g.Admin(), skills.GetFile)
+		configs.POST("/:id/skills/:skillId/reinstall", g.Admin(), skills.Reinstall)
+		configs.GET("/:id/skills/:skillId/guidance", g.Admin(), skills.InstallGuidance)
+		configs.POST("/:id/skills/:skillId/guidance", g.Admin(), skills.SteerInstall)
+		configs.POST("/:id/skills/:skillId/stop", g.Admin(), skills.Stop)
+		configs.PATCH("/:id/skills/:skillId", g.Admin(), skills.Patch)
+		configs.DELETE("/:id/skills/:skillId", g.Admin(), skills.Delete)
+		configs.GET("/:id/skills/:skillId/install-events", g.Admin(), skills.InstallEvents)
+		configs.GET("/:id/skills/:skillId/transcript", g.Admin(), skills.InstallTranscript)
 	}
 }
 
@@ -60,31 +101,147 @@ func RegisterInitializationRoutes(r *gin.RouterGroup, handler *handler.Initializ
 	// InitializeByKB / UpdateKBConfig 都是改 KB 的核心模型/storage 配置 —
 	// 跟 PUT /knowledge-bases/:id 同等敏感，挂同款 OwnedKB 矩阵 + KBAccessWrite
 	//（API-key 主体短路 Owned* 守卫，KB allow-list 只能靠 KBAccess 兜底）。
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/initialize/:kbId",
-		apiKeyManageKnowledgeBases(apiKeyFullAccess()), g.OwnedKBOrAdminFromKbIDParam(), g.KBAccessWrite("kbId"), handler.InitializeByKB)
-	g.apiKeyRoute(r, http.MethodPut, "/initialization/config/:kbId",
-		apiKeyManageKnowledgeBases(apiKeyFullAccess()), g.OwnedKBOrAdminFromKbIDParam(), g.KBAccessWrite("kbId"), handler.UpdateKBConfig)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/initialize/:kbId",
+		apiKeyManageKnowledgeBases(
+			apiKeyFullAccess(),
+		),
+		g.OwnedKBOrAdminFromKbIDParam(),
+		g.KBAccessWrite("kbId"),
+		handler.InitializeByKB,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPut,
+		"/initialization/config/:kbId",
+		apiKeyManageKnowledgeBases(
+			apiKeyFullAccess(),
+		),
+		g.OwnedKBOrAdminFromKbIDParam(),
+		g.KBAccessWrite("kbId"),
+		handler.UpdateKBConfig,
+	)
 
 	// Ollama / 远程 API / 抽取等系统级检测/下载操作。这些不绑某个 KB，
 	// 会改空间级模型配置或拉远端模型；JWT 侧只读探测 Viewer+、变更 Admin+。
 	// 对 API key 均为空间级：full-access key 可用，scoped key 需要 manage_models。
-	g.apiKeyRoute(r, http.MethodGet, "/initialization/ollama/status", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.CheckOllamaStatus)
-	g.apiKeyRoute(r, http.MethodGet, "/initialization/ollama/models", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.ListOllamaModels)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/ollama/models/check", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.CheckOllamaModels)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/ollama/models/download", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.DownloadOllamaModel)
-	g.apiKeyRoute(r, http.MethodGet, "/initialization/ollama/download/progress/:taskId", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.GetDownloadProgress)
-	g.apiKeyRoute(r, http.MethodGet, "/initialization/ollama/download/tasks", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.ListDownloadTasks)
+	g.apiKeyRoute(
+		r,
+		http.MethodGet,
+		"/initialization/ollama/status",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Viewer(),
+		handler.CheckOllamaStatus,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodGet,
+		"/initialization/ollama/models",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Viewer(),
+		handler.ListOllamaModels,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/ollama/models/check",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.CheckOllamaModels,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/ollama/models/download",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.DownloadOllamaModel,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodGet,
+		"/initialization/ollama/download/progress/:taskId",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Viewer(),
+		handler.GetDownloadProgress,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodGet,
+		"/initialization/ollama/download/tasks",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Viewer(),
+		handler.ListDownloadTasks,
+	)
 
 	// 远程API相关接口
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/remote/check", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.CheckRemoteModel)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/embedding/test", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.TestEmbeddingModel)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/rerank/check", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.CheckRerankModel)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/asr/check", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.CheckASRModel)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/multimodal/test", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.TestMultimodalFunction)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/remote/check",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.CheckRemoteModel,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/embedding/test",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.TestEmbeddingModel,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/rerank/check",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.CheckRerankModel,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/asr/check",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.CheckASRModel,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/multimodal/test",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.TestMultimodalFunction,
+	)
 
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/text-relation", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.ExtractTextRelations)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/fabri-tag", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.FabriTag)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/fabri-text", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.FabriText)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/extract/text-relation",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.ExtractTextRelations,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/extract/fabri-tag",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.FabriTag,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/initialization/extract/fabri-text",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.FabriText,
+	)
 }
 
 // RegisterMCPServiceRoutes registers MCP service routes.
@@ -124,6 +281,12 @@ func RegisterMCPServiceRoutes(
 		mcpServices.POST("/:id/test", g.Admin(), handler.TestMCPService)
 		// Get MCP service tools — Viewer+
 		mcpServices.GET("/:id/tools", g.Viewer(), handler.GetMCPServiceTools)
+		mcpServices.GET("/:id/metadata", g.Viewer(), handler.GetMCPMetadata)
+		// Refresh writes a principal-scoped OAuth snapshot for the caller
+		// (Viewer+), or a tenant-wide snapshot for static auth (Admin+ in the
+		// handler). GET /tools remains Viewer+ and does not persist.
+		mcpServices.POST("/:id/metadata/refresh", g.Viewer(), handler.RefreshMCPMetadata)
+		mcpServices.POST("/:id/usage-instructions/generate", g.Admin(), handler.GenerateMCPUsageInstructions)
 		// Get MCP service resources — Viewer+
 		mcpServices.GET("/:id/resources", g.Viewer(), handler.GetMCPServiceResources)
 		// Per-field credential subresource: secrets never travel via the main
@@ -294,6 +457,20 @@ func RegisterDataSourceRoutes(
 // management endpoints. SaveCredentials persists external SaaS keys
 // for the tenant (Admin+), Status is a low-risk readiness probe (Viewer+).
 func RegisterWeKnoraCloudRoutes(r *gin.RouterGroup, handler *handler.WeKnoraCloudHandler, g *rbacGuards) {
-	g.apiKeyRoute(r, http.MethodPost, "/weknoracloud/credentials", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.SaveCredentials)
-	g.apiKeyRoute(r, http.MethodGet, "/models/weknoracloud/status", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.Status)
+	g.apiKeyRoute(
+		r,
+		http.MethodPost,
+		"/weknoracloud/credentials",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Admin(),
+		handler.SaveCredentials,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodGet,
+		"/models/weknoracloud/status",
+		apiKeyManageModels(apiKeyFullAccess()),
+		g.Viewer(),
+		handler.Status,
+	)
 }

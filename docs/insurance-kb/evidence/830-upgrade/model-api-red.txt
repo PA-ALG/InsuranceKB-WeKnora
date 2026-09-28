@@ -1,0 +1,23 @@
+--- FAIL: TestUPGDispatchJournalSurvivesProtocolUpgrade (0.00s)
+    --- FAIL: TestUPGDispatchJournalSurvivesProtocolUpgrade/success (0.00s)
+        model_dispatch_test.go:74: sends=1 records=0 want=1
+    --- FAIL: TestUPGDispatchJournalSurvivesProtocolUpgrade/http_error (0.00s)
+        model_dispatch_test.go:74: sends=1 records=0 want=1
+    --- FAIL: TestUPGDispatchJournalSurvivesProtocolUpgrade/transport_error (0.00s)
+        model_dispatch_test.go:74: sends=1 records=0 want=1
+    --- FAIL: TestUPGDispatchJournalSurvivesProtocolUpgrade/reserve_error (0.00s)
+        model_dispatch_test.go:74: sends=1 records=0 want=0
+    --- FAIL: TestUPGDispatchJournalSurvivesProtocolUpgrade/mark_error (0.00s)
+        model_dispatch_test.go:74: sends=1 records=0 want=0
+    --- FAIL: TestUPGDispatchJournalSurvivesProtocolUpgrade/record_error (0.00s)
+        model_dispatch_test.go:74: sends=1 records=0 want=1
+json
+json
+--- FAIL: TestUPGDisabledRetryDoesNotReplayUnknownSend (0.00s)
+    --- FAIL: TestUPGDisabledRetryDoesNotReplayUnknownSend/false (0.00s)
+        model_dispatch_test.go:119: sends=2 records=0 want=2 err=embedding: send request: Post "https://model.invalid/embeddings": connection reset
+    --- FAIL: TestUPGDisabledRetryDoesNotReplayUnknownSend/true (0.00s)
+        model_dispatch_test.go:119: sends=2 records=0 want=1 err=embedding: send request: Post "https://model.invalid/embeddings": connection reset
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/models/api	1.222s
+FAIL

@@ -1,0 +1,111 @@
+{
+  "status": "BLOCKED",
+  "authorization_quote": "再授权一次",
+  "source_head": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+  "started_at": "2026-09-27T14:40:28.780780+00:00",
+  "disk_before": "Filesystem     1024-blocks      Used Available Capacity Mounted on\n/dev/vdb1        112946468 104839264   7042268      94% /var/lib/docker\n/dev/vdb1        112946468 104839264   7042268      94% /var/lib/containerd\n",
+  "selector_exit_code": 1,
+  "restoration": {
+    "config_restored_byte_for_byte": true,
+    "original_config_sha256": "feb03b7ceb3fcf08fba574a2e33f197c4187846d049a3333ea93e0f7a2b27154",
+    "daemon_pid_unchanged": true,
+    "container_ids_start_times_pids_unchanged": true,
+    "running_container_count": 8
+  },
+  "disk_after": "Filesystem     1024-blocks      Used Available Capacity Mounted on\n/dev/vdb1        112946468 104839396   7042136      94% /var/lib/docker\n/dev/vdb1        112946468 104839396   7042136      94% /var/lib/containerd\n",
+  "finished_at": "2026-09-27T14:40:56.944097+00:00",
+  "requirement": "UPG-08",
+  "app_selector_receipt": {
+    "artifact_identity": "sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4",
+    "build_invocations": 1,
+    "build_source_head": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+    "candidate_image_ids": [],
+    "contract": "ba0-app-build-receipt.v1",
+    "dependency_lock_sha256": "4eba510179e957a039c757c702d0702a12a8435724d46e393da33d33006393b2",
+    "docker_context": "colima",
+    "integration_head": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+    "manifest_sha256": "4a535bf4c310f965bca4435b301f08b9d0216beb62ea823cb95e9e126faed850",
+    "platform": "linux/arm64",
+    "selector": "BUILD_AFFECTED",
+    "status": "INCOMPLETE",
+    "target": "runtime"
+  },
+  "app_build_history": {
+    "cached_steps": 0,
+    "completed_at": "2026-09-27T14:40:56.787989257Z",
+    "completed_steps": 2,
+    "created_at": "2026-09-27T14:40:46.69210896Z",
+    "name": "context/docker/Dockerfile.app (runtime)",
+    "ref": "colima/colima/p53b0azovz5u2nwdar29xpnnh",
+    "status": "Error",
+    "total_steps": 2
+  },
+  "build_wall_seconds": 10.095880297,
+  "failure": "TLS handshake timeout on HEAD https://registry-1.docker.io/v2/docker/dockerfile/manifests/1.7",
+  "failure_stage": "Dockerfile frontend metadata, before compilation",
+  "image_output": null,
+  "total_app_build_invocations": 4,
+  "this_authorization_build_budget": 1,
+  "this_authorization_build_invocations": 1,
+  "this_authorization_budget_remaining": 0,
+  "registry_route_probes": {
+    "observed_at": "2026-09-27T14:43:39.634481+00:00",
+    "method": "unauthenticated HEAD; 401 proves TLS/registry reachability, not an authenticated image download",
+    "endpoint": "https://registry-1.docker.io/v2/docker/dockerfile/manifests/1.7",
+    "results": [
+      {
+        "route": "guest_direct",
+        "attempt": 1,
+        "exit_code": 0,
+        "metrics": "401 2.227147 0",
+        "error": ""
+      },
+      {
+        "route": "guest_direct",
+        "attempt": 2,
+        "exit_code": 0,
+        "metrics": "401 2.312418 0",
+        "error": ""
+      },
+      {
+        "route": "guest_direct",
+        "attempt": 3,
+        "exit_code": 0,
+        "metrics": "401 3.846649 0",
+        "error": ""
+      },
+      {
+        "route": "daemon_proxy",
+        "attempt": 1,
+        "exit_code": 0,
+        "metrics": "401 0.911687 0",
+        "error": ""
+      },
+      {
+        "route": "daemon_proxy",
+        "attempt": 2,
+        "exit_code": 0,
+        "metrics": "401 10.591052 0",
+        "error": ""
+      },
+      {
+        "route": "daemon_proxy",
+        "attempt": 3,
+        "exit_code": 0,
+        "metrics": "401 1.740347 0",
+        "error": ""
+      }
+    ]
+  },
+  "probe_interpretation": "All six unauthenticated HEAD requests reached HTTP401 with valid TLS; one daemon-proxy request took 10.591052s. These are post-failure reachability samples, not authenticated pulls, proof of stable networking, or proof of the exact timeout cause. Docker independently logged TLS handshake timeout.",
+  "next": "Stabilize and verify the actual daemon registry/proxy route before seeking another App build attempt. Do not repeat the build automatically.",
+  "effects": {
+    "new_service_deployments": 0,
+    "database_migrations": 0,
+    "provider_calls": 0,
+    "additional_cleanup": 0,
+    "daemon_or_container_restarts": 0
+  },
+  "app_log": "Docker app image build failed: #0 building with \"colima\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile.app\n#1 transferring dockerfile: 15.57kB 0.0s done\n#1 DONE 0.0s\n\n#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.7\n#2 ERROR: failed to do request: Head \"https://registry-1.docker.io/v2/docker/dockerfile/manifests/1.7\": net/http: TLS handshake timeout\n------\n > resolve image config for docker-image://docker.io/docker/dockerfile:1.7:\n------\nDockerfile.app:1\n--------------------\n   1 | >>> # syntax=docker/dockerfile:1.7\n   2 |     \n   3 |     ARG BUILDER_IMAGE\n--------------------\nERROR: failed to build: failed to solve: failed to resolve source metadata for docker.io/docker/dockerfile:1.7: failed to do request: Head \"https://registry-1.docker.io/v2/docker/dockerfile/manifests/1.7\": net/http: TLS handshake timeout\n",
+  "app_log_sha256": "2eb862173db422420822213747154926803d9819d626eb415bb1e6d6dd3e17bc"
+}

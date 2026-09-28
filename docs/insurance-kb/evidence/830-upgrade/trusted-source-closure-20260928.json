@@ -1,0 +1,45 @@
+{
+  "status": "PASS",
+  "build_source": {
+    "repository": "https://github.com/PA-ALG/InsuranceKB-WeKnora.git",
+    "commit": "844f03c55c8d25cff2fbccc9eb639cc343d932ab",
+    "tree": "ee7945e8638bbd392215d8397bb64daf317ed4f8"
+  },
+  "lock_sha256": "c2f7104db50fab8d4396bbb7d010be1d2f8cd9cdd10ceeefb1de4ca147e2cce5",
+  "report_sha256": "dfaf453e844b9169a5bc82c5c4d3ed6eed742c9af95ebf608812b9a622f6da7c",
+  "verdict": "manual_review_required",
+  "independent_review": "0 BLOCKER; exact source/target clean, report reproduced byte-for-byte, 222 migration files, exact 077 pair and 16 W1 overlaps reviewed",
+  "verify_exit_codes": [
+    0,
+    0
+  ],
+  "commands": [
+    [
+      "harness/.venv/bin/python",
+      "harness/scripts/verify_weknora_app_source.py",
+      "verify",
+      "--lock",
+      "deploy/local-live/weknora-app-source.lock.json",
+      "--source-checkout",
+      "/private/tmp/upg-ci-closure-20260928/thin-844-source",
+      "--workflow-checkout",
+      "."
+    ],
+    [
+      "harness/.venv/bin/python",
+      "harness/scripts/verify_weknora_app_source.py",
+      "verify-report",
+      "--lock",
+      "deploy/local-live/weknora-app-source.lock.json",
+      "--report",
+      "docs/insurance-kb/evidence/830-upgrade/thin-report-844f03c55.json"
+    ]
+  ],
+  "trusted_publication_images": "NOT RUN",
+  "local_app_exact_reuse_for_this_source": "NOT RUN; existing App belongs to e71 source",
+  "final_lock_tests": {
+    "status": "PASS",
+    "passed": 22,
+    "wall_seconds": 18.37
+  }
+}

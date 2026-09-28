@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Tencent/WeKnora/internal/common"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"gorm.io/gorm"
@@ -22,6 +23,9 @@ var (
 	ErrRevisionSuperseded       = errors.New("revision superseded")
 	ErrRevisionCommitFailed     = errors.New("revision commit failed")
 )
+
+// likeEscapeChar is the SQL ESCAPE character paired with escapeLikeKeyword.
+const likeEscapeChar = `\`
 
 // escapeLikeKeyword escapes SQL LIKE wildcards (%, _) in a keyword
 // so they are treated as literal characters.
@@ -58,6 +62,24 @@ type knowledgeRepository struct {
 	db *gorm.DB
 }
 
+// rejectPinnedRevisionSourceLocked is called only after the caller has locked
+// the owning knowledge row. SealRevisionSourceBinding uses the same lock order,
+// so checking the pin inside that critical section closes the precheck/write
+// race without adding a second lock protocol.
+func rejectPinnedRevisionSourceLocked(tx *gorm.DB, tenantID uint64, knowledgeID string) error {
+	var count int64
+	if err := tx.Model(&types.KnowledgeRevisionSource{}).Where(
+		"tenant_id = ? AND knowledge_id = ? AND retention_state = ?",
+		tenantID, knowledgeID, types.KnowledgeRevisionSourcePinned,
+	).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrResourcePinned
+	}
+	return nil
+}
+
 // NewKnowledgeRepository creates a new knowledge repository
 func NewKnowledgeRepository(db *gorm.DB) interfaces.KnowledgeRepository {
 	return &knowledgeRepository{db: db}
@@ -65,6 +87,7 @@ func NewKnowledgeRepository(db *gorm.DB) interfaces.KnowledgeRepository {
 
 // CreateKnowledge creates knowledge
 func (r *knowledgeRepository) CreateKnowledge(ctx context.Context, knowledge *types.Knowledge) error {
+	knowledge.ErrorMessage = common.CleanInvalidUTF8(knowledge.ErrorMessage)
 	err := r.db.WithContext(ctx).Create(knowledge).Error
 	return err
 }
@@ -87,6 +110,9 @@ func (r *knowledgeRepository) AllocateParseAttempt(
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrKnowledgeNotFound
 			}
+			return err
+		}
+		if err := rejectPinnedRevisionSourceLocked(tx, knowledge.TenantID, knowledge.ID); err != nil {
 			return err
 		}
 
@@ -158,6 +184,27 @@ func mergeG3BoundRecoveryMetadata(incoming, current types.JSON) (types.JSON, err
 	return types.JSON(merged), err
 }
 
+func knowledgeTransferIsMoving(metadata types.JSON) (bool, error) {
+	if len(metadata) == 0 {
+		return false, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(metadata, &fields); err != nil {
+		return false, err
+	}
+	raw := fields[types.KnowledgeTransferMetadataKey]
+	if len(raw) == 0 {
+		return false, nil
+	}
+	var state struct {
+		Phase string `json:"phase"`
+	}
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return false, err
+	}
+	return state.Phase == "moving", nil
+}
+
 // AllocateG3BoundReparse serializes source binding, failed-state and expected
 // generation checks with the new attempt and recovery receipt on one row.
 func (r *knowledgeRepository) AllocateG3BoundReparse(
@@ -170,6 +217,9 @@ func (r *knowledgeRepository) AllocateG3BoundReparse(
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var knowledge types.Knowledge
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND tenant_id = ? AND knowledge_base_id = ? AND deleted_at IS NULL", knowledgeID, tenantID, kbID).First(&knowledge).Error; err != nil {
+			return err
+		}
+		if err := rejectPinnedRevisionSourceLocked(tx, knowledge.TenantID, knowledge.ID); err != nil {
 			return err
 		}
 		metadata, receipts, err := parseG3BoundReparseMetadata(&knowledge)
@@ -1008,6 +1058,28 @@ func (r *knowledgeRepository) ListKnowledgeByKnowledgeBaseID(
 	return knowledges, nil
 }
 
+// ListKnowledgeProfileRows selects only the columns the knowledge-base
+// description aggregation needs. Documents still in "finalizing" are
+// included on purpose: their title and file type already count, and the
+// summary task that completes them re-triggers the aggregation with their
+// profile attached.
+func (r *knowledgeRepository) ListKnowledgeProfileRows(
+	ctx context.Context, tenantID uint64, kbID string,
+) ([]*types.KnowledgeProfileRow, error) {
+	var rows []*types.KnowledgeProfileRow
+	err := r.db.WithContext(ctx).Model(&types.Knowledge{}).
+		Select("id", "title", "file_name", "file_type", "folder_path", "created_at", "profile").
+		Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, kbID).
+		Where("parse_status IN ?", []string{types.ParseStatusCompleted, types.ParseStatusFinalizing}).
+		Where("enable_status = ?", "enabled").
+		Order("created_at ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // applyKnowledgeListFilter applies the optional filter dimensions of
 // KnowledgeListFilter to a GORM query. Tenant / knowledge base scoping must be
 // applied by the caller before invoking this helper.
@@ -1064,7 +1136,41 @@ func applyKnowledgeListFilter(query *gorm.DB, filter types.KnowledgeListFilter) 
 	if !filter.UpdatedTo.IsZero() {
 		query = query.Where("updated_at <= ?", filter.UpdatedTo)
 	}
+	switch filter.FolderScope {
+	case types.FolderScopeExact:
+		query = query.Where("folder_path = ?", filter.FolderPath)
+	case types.FolderScopeSubtree:
+		// An empty path means "the whole knowledge base", so no predicate is
+		// needed; otherwise match the folder itself plus everything below it.
+		if filter.FolderPath != "" {
+			query = query.Where(
+				"(folder_path = ? OR folder_path LIKE ? ESCAPE ?)",
+				filter.FolderPath,
+				escapeLikeKeyword(filter.FolderPath)+"/%",
+				likeEscapeChar,
+			)
+		}
+	}
 	return query
+}
+
+// knowledgeListOrderClause 只从固定白名单生成排序语句，避免将请求参数直接拼入 SQL。
+func knowledgeListOrderClause(filter types.KnowledgeListFilter) string {
+	// 零值保留仓储层和公开接口原有的创建时间倒序行为。
+	column := "created_at"
+	switch filter.SortBy {
+	case types.KnowledgeListSortByUpdatedAt:
+		column = "updated_at"
+	case types.KnowledgeListSortByFileName:
+		// 与前端展示名称保持一致：文件名为空时依次使用标题和来源。
+		column = "LOWER(COALESCE(NULLIF(file_name, ''), NULLIF(title, ''), source))"
+	}
+
+	direction := "DESC"
+	if filter.SortOrder == types.KnowledgeListSortAscending {
+		direction = "ASC"
+	}
+	return fmt.Sprintf("%s %s", column, direction)
 }
 
 // ListPagedKnowledgeByKnowledgeBaseID lists all knowledge in a knowledge base with pagination
@@ -1090,7 +1196,9 @@ func (r *knowledgeRepository) ListPagedKnowledgeByKnowledgeBaseID(
 	}
 
 	if err := scope(r.db.WithContext(ctx)).
-		Order("created_at DESC").
+		Order(knowledgeListOrderClause(filter)).
+		// 相同排序值使用主键兜底，保证 OFFSET 分页顺序稳定。
+		Order("id ASC").
 		Offset(page.Offset()).
 		Limit(page.Limit()).
 		Find(&knowledges).Error; err != nil {
@@ -1100,26 +1208,161 @@ func (r *knowledgeRepository) ListPagedKnowledgeByKnowledgeBaseID(
 	return knowledges, total, nil
 }
 
+// ListKnowledgeFolderCounts aggregates how many knowledge entries live directly
+// in each folder of a knowledge base. Rows mid-deletion are excluded so the
+// sidebar tree counts match the document list.
+func (r *knowledgeRepository) ListKnowledgeFolderCounts(
+	ctx context.Context,
+	tenantID uint64,
+	kbID string,
+) ([]*types.KnowledgeFolderCount, error) {
+	var counts []*types.KnowledgeFolderCount
+	if err := r.db.WithContext(ctx).
+		Model(&types.Knowledge{}).
+		Select("folder_path AS folder_path, COUNT(*) AS count").
+		Where("tenant_id = ? AND knowledge_base_id = ? AND parse_status <> ?",
+			tenantID, kbID, types.ParseStatusDeleting).
+		Group("folder_path").
+		Find(&counts).Error; err != nil {
+		return nil, err
+	}
+	return counts, nil
+}
+
+// UpdateKnowledgeFolderPath files the given knowledge entries under folderPath.
+// Only the display/navigation column is touched: chunks, embeddings and the
+// stored file are unaffected, which is why re-filing needs no re-processing.
+// Returns the number of affected rows.
+func (r *knowledgeRepository) UpdateKnowledgeFolderPath(
+	ctx context.Context,
+	tenantID uint64,
+	kbID string,
+	ids []string,
+	folderPath string,
+) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := r.db.WithContext(ctx).
+		Model(&types.Knowledge{}).
+		Where("tenant_id = ? AND knowledge_base_id = ? AND id IN (?)", tenantID, kbID, ids).
+		Updates(map[string]interface{}{"folder_path": folderPath, "updated_at": time.Now()})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}
+
+// RenameKnowledgeFolderPath rewrites folder_path for a folder and every folder
+// below it, which is how a folder rename or move is applied. Renaming onto an
+// existing path merges the two folders. Returns the number of affected rows.
+func (r *knowledgeRepository) RenameKnowledgeFolderPath(
+	ctx context.Context,
+	tenantID uint64,
+	kbID string,
+	from string,
+	to string,
+) (int64, error) {
+	if from == "" {
+		return 0, errors.New("source folder path is required")
+	}
+
+	// The rewrite is done row by row rather than with SQL string functions so it
+	// behaves identically on PostgreSQL and SQLite.
+	var rows []*types.Knowledge
+	if err := r.db.WithContext(ctx).
+		Select("id", "folder_path").
+		Where("tenant_id = ? AND knowledge_base_id = ? AND (folder_path = ? OR folder_path LIKE ? ESCAPE ?)",
+			tenantID, kbID, from, escapeLikeKeyword(from)+"/%", likeEscapeChar).
+		Find(&rows).Error; err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
+	// Group by destination so each distinct rewrite is a single UPDATE.
+	byTarget := map[string][]string{}
+	for _, row := range rows {
+		suffix := strings.TrimPrefix(row.FolderPath, from)
+		byTarget[types.NormalizeKnowledgeFolderPath(to+suffix)] = append(
+			byTarget[types.NormalizeKnowledgeFolderPath(to+suffix)], row.ID)
+	}
+
+	var affected int64
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for target, targetIDs := range byTarget {
+			result := tx.Model(&types.Knowledge{}).
+				Where("tenant_id = ? AND knowledge_base_id = ? AND id IN (?)", tenantID, kbID, targetIDs).
+				Updates(map[string]interface{}{"folder_path": target, "updated_at": time.Now()})
+			if result.Error != nil {
+				return result.Error
+			}
+			affected += result.RowsAffected
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return affected, nil
+}
+
 // UpdateKnowledge updates knowledge
 func (r *knowledgeRepository) UpdateKnowledge(ctx context.Context, knowledge *types.Knowledge) error {
-	if !strings.Contains(string(knowledge.Metadata), `"product_ingestion_upload"`) {
-		return r.db.WithContext(ctx).Omit(omitFieldsOnUpdate...).Save(knowledge).Error
+	if knowledge == nil || knowledge.ID == "" || knowledge.TenantID == 0 {
+		return ErrKnowledgeNotFound
+	}
+	knowledge.ErrorMessage = common.CleanInvalidUTF8(knowledge.ErrorMessage)
+	omit := omitFieldsOnUpdate
+	// Legacy/unit-test schemas created before custom_metadata should continue
+	// to support unrelated updates when the caller did not provide the field.
+	if knowledge.CustomMetadata == nil {
+		omit = append(append([]string{}, omitFieldsOnUpdate...), "custom_metadata")
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var stored types.Knowledge
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id", "metadata", "current_parse_attempt").
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", knowledge.ID, knowledge.TenantID).First(&stored).Error; err != nil {
 			return err
 		}
-		if stored.CurrentParseAttempt != knowledge.CurrentParseAttempt {
-			return fmt.Errorf("g3 knowledge update lost parse generation")
+		if stored.CurrentParseAttempt != knowledge.CurrentParseAttempt ||
+			stored.FileSHA256 != knowledge.FileSHA256 ||
+			stored.KnowledgeBaseID != knowledge.KnowledgeBaseID {
+			if strings.Contains(string(knowledge.Metadata), `"product_ingestion_upload"`) {
+				return fmt.Errorf("%w: g3 knowledge update lost parse generation", ErrRevisionSuperseded)
+			}
+			return fmt.Errorf("%w: knowledge update lost parse generation or source binding", ErrRevisionSuperseded)
 		}
-		merged, err := mergeG3BoundRecoveryMetadata(knowledge.Metadata, stored.Metadata)
+		if (stored.ParseStatus == types.ParseStatusDeleting || stored.ParseStatus == types.ParseStatusCancelled) &&
+			stored.ParseStatus != knowledge.ParseStatus {
+			return fmt.Errorf("%w: knowledge is %s", ErrRevisionSuperseded, stored.ParseStatus)
+		}
+		moving, err := knowledgeTransferIsMoving(stored.Metadata)
 		if err != nil {
 			return err
 		}
-		knowledge.Metadata = merged
-		return tx.Omit(omitFieldsOnUpdate...).Save(knowledge).Error
+		if moving {
+			return fmt.Errorf("%w: knowledge transfer is moving", ErrRevisionSuperseded)
+		}
+		if strings.Contains(string(knowledge.Metadata), `"product_ingestion_upload"`) {
+			merged, err := mergeG3BoundRecoveryMetadata(knowledge.Metadata, stored.Metadata)
+			if err != nil {
+				return err
+			}
+			knowledge.Metadata = merged
+		}
+		result := tx.Model(&types.Knowledge{}).
+			Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", knowledge.ID, knowledge.TenantID).
+			Select("*").Omit(append(append([]string{}, omit...), "ID", "TenantID")...).
+			Updates(knowledge)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("%w: knowledge update lost locked row", ErrRevisionSuperseded)
+		}
+		return nil
 	})
 }
 
@@ -1127,6 +1370,11 @@ func (r *knowledgeRepository) UpdateKnowledge(ctx context.Context, knowledge *ty
 func (r *knowledgeRepository) UpdateKnowledgeBatch(ctx context.Context, knowledgeList []*types.Knowledge) error {
 	if len(knowledgeList) == 0 {
 		return nil
+	}
+	for _, knowledge := range knowledgeList {
+		if knowledge != nil {
+			knowledge.ErrorMessage = common.CleanInvalidUTF8(knowledge.ErrorMessage)
+		}
 	}
 	return r.db.Debug().WithContext(ctx).Omit(omitFieldsOnUpdate...).Save(knowledgeList).Error
 }
@@ -1202,15 +1450,33 @@ func (r *knowledgeRepository) CheckKnowledgeExists(
 	kbID string,
 	params *types.KnowledgeCheckParams,
 ) (bool, *types.Knowledge, error) {
+	// Failed rows never block a retry, and neither do rows whose deletion is
+	// in flight: a deleting row is on its way out, so an upload landing while
+	// the async delete task is still queued/running ends with exactly one
+	// live row whichever way the task concludes (success soft-deletes the old
+	// row; exhaustion marks it failed). Letting deleting rows block the
+	// duplicate check turned a task that never finishes into a permanent
+	// "document already exists" that only manual SQL could clear (issue #3338).
 	query := r.db.WithContext(ctx).Model(&types.Knowledge{}).
-		Where("tenant_id = ? AND knowledge_base_id = ? AND parse_status <> ?", tenantID, kbID, "failed")
+		Where("tenant_id = ? AND knowledge_base_id = ? AND parse_status NOT IN ?",
+			tenantID, kbID, []string{"failed", "deleting"})
 
 	switch params.Type {
 	case "file":
-		// If file hash exists, prioritize exact match using hash
+		if params.DataSourceID != "" && params.ExternalID != "" {
+			query = query.Where("metadata->>'datasource_id' = ? AND metadata->>'external_id' = ?",
+				params.DataSourceID, params.ExternalID)
+		}
+		// File content is only a duplicate within the same file type. This keeps
+		// same-content documents with distinct formats (for example, .md and
+		// .txt) available as separate knowledge items.
 		if params.FileHash != "" {
 			var knowledge types.Knowledge
-			err := query.Where("file_hash = ?", params.FileHash).First(&knowledge).Error
+			duplicateQuery := query.Where("type = ? AND file_hash = ?", "file", params.FileHash)
+			if params.FileType != "" {
+				duplicateQuery = duplicateQuery.Where("LOWER(file_type) = ?", strings.ToLower(params.FileType))
+			}
+			err := duplicateQuery.First(&knowledge).Error
 			if err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return false, nil, nil
@@ -1220,13 +1486,17 @@ func (r *knowledgeRepository) CheckKnowledgeExists(
 			return true, &knowledge, nil
 		}
 
-		// If no hash or hash doesn't match, use filename and size
+		// If no hash or hash doesn't match, use filename, size, and file type.
 		if params.FileName != "" && params.FileSize > 0 {
 			var knowledge types.Knowledge
-			err := query.Where(
-				"file_name = ? AND file_size = ?",
-				params.FileName, params.FileSize,
-			).First(&knowledge).Error
+			duplicateQuery := query.Where(
+				"type = ? AND file_name = ? AND file_size = ?",
+				"file", params.FileName, params.FileSize,
+			)
+			if params.FileType != "" {
+				duplicateQuery = duplicateQuery.Where("LOWER(file_type) = ?", strings.ToLower(params.FileType))
+			}
+			err := duplicateQuery.First(&knowledge).Error
 			if err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return false, nil, nil
@@ -1351,6 +1621,14 @@ func (r *knowledgeRepository) UpdateKnowledgeColumn(
 	column string,
 	value interface{},
 ) error {
+	if column == "error_message" {
+		switch v := value.(type) {
+		case string:
+			value = common.CleanInvalidUTF8(v)
+		case []byte:
+			value = common.CleanInvalidUTF8(string(v))
+		}
+	}
 	err := r.db.WithContext(ctx).Model(&types.Knowledge{}).Where("id = ?", id).Update(column, value).Error
 	return err
 }
@@ -1367,6 +1645,14 @@ func (r *knowledgeRepository) UpdateKnowledgeColumns(
 	if len(values) == 0 {
 		return nil
 	}
+	if value, ok := values["error_message"]; ok {
+		switch v := value.(type) {
+		case string:
+			values["error_message"] = common.CleanInvalidUTF8(v)
+		case []byte:
+			values["error_message"] = common.CleanInvalidUTF8(string(v))
+		}
+	}
 	return r.db.WithContext(ctx).Model(&types.Knowledge{}).Where("id = ?", id).Updates(values).Error
 }
 
@@ -1374,15 +1660,20 @@ func (r *knowledgeRepository) UpdateKnowledgeColumns(
 // to normal queries and have not moved out of the transient deleting state.
 func (r *knowledgeRepository) UpdateActiveDeletingKnowledgeColumns(
 	ctx context.Context,
-	id string,
+	tenantID uint64,
+	kbID, id string,
 	values map[string]interface{},
 ) (bool, error) {
-	if len(values) == 0 {
+	if tenantID == 0 || kbID == "" || len(values) == 0 {
 		return false, nil
 	}
 	result := r.db.WithContext(ctx).
 		Model(&types.Knowledge{}).
-		Where("id = ? AND parse_status = ?", id, types.ParseStatusDeleting).
+		Where("tenant_id = ? AND knowledge_base_id = ? AND id = ? AND parse_status = ?",
+			tenantID,
+			kbID,
+			id,
+			types.ParseStatusDeleting).
 		Updates(values)
 	if result.Error != nil {
 		return false, result.Error
@@ -1393,7 +1684,10 @@ func (r *knowledgeRepository) UpdateActiveDeletingKnowledgeColumns(
 // FinalizeSubtask atomically decrements pending_subtasks_count and, when
 // the counter reaches zero while parse_status is still 'finalizing',
 // flips the row to 'completed' in the same statement so concurrent
-// subtask completions can't race the promotion.
+// subtask completions can't race the promotion. Both this promotion and
+// SetFinalizing clear error_message: a row that re-enters processing or
+// finishes successfully must not keep displaying a failure from a
+// previous attempt.
 //
 // Returns (newCount, promoted, error). promoted is true iff this caller
 // was the one whose UPDATE flipped 'finalizing'→'completed'.
@@ -1406,19 +1700,42 @@ func (r *knowledgeRepository) UpdateActiveDeletingKnowledgeColumns(
 func (r *knowledgeRepository) FinalizeSubtask(
 	ctx context.Context, id string,
 ) (int, bool, error) {
+	promoted, err := finalizeSubtask(r.db.WithContext(ctx), id)
+	if err != nil {
+		return 0, false, err
+	}
+
+	// 3) Best-effort re-read of the new count for diagnostics/return value
+	//    only. This read may be replica-stale and is intentionally NOT used
+	//    to decide whether to promote (see finalizeSubtask). A read failure here does
+	//    not affect correctness, so we don't propagate it as an error.
+	var snap struct {
+		PendingSubtasksCount int `gorm:"column:pending_subtasks_count"`
+	}
+	if err := r.db.WithContext(ctx).Model(&types.Knowledge{}).
+		Select("pending_subtasks_count").
+		Where("id = ?", id).Take(&snap).Error; err != nil {
+		return 0, promoted, nil
+	}
+	return snap.PendingSubtasksCount, promoted, nil
+}
+
+// finalizeSubtask releases one finalizing slot on db, which may be a
+// transaction: decrement, then promote when the counter reaches zero.
+func finalizeSubtask(db *gorm.DB, id string) (bool, error) {
 	now := time.Now()
 	// 1) Atomic decrement, clamped at zero. The `pending_subtasks_count > 0`
 	//    guard is purely a safety net for accounting bugs — under normal
 	//    operation each subtask handler decrements at most once per task,
 	//    so the counter cannot go negative.
-	res := r.db.WithContext(ctx).Model(&types.Knowledge{}).
+	res := db.Model(&types.Knowledge{}).
 		Where("id = ? AND pending_subtasks_count > 0", id).
 		Updates(map[string]interface{}{
 			"pending_subtasks_count": gorm.Expr("pending_subtasks_count - 1"),
 			"updated_at":             now,
 		})
 	if res.Error != nil {
-		return 0, false, res.Error
+		return false, res.Error
 	}
 
 	// 2) Guarded promote. EVERY caller unconditionally attempts this after
@@ -1433,32 +1750,20 @@ func (r *knowledgeRepository) FinalizeSubtask(
 	//    the single authoritative, atomic check on the live row: only the
 	//    caller whose decrement actually brought the counter to zero matches,
 	//    and cancel/delete cannot be clobbered by a late promote.
-	promoteRes := r.db.WithContext(ctx).Model(&types.Knowledge{}).
+	promoteRes := db.Model(&types.Knowledge{}).
 		Where("id = ? AND parse_status = ? AND pending_subtasks_count = 0",
 			id, types.ParseStatusFinalizing).
 		Updates(map[string]interface{}{
-			"parse_status": types.ParseStatusCompleted,
-			"processed_at": now,
-			"updated_at":   now,
+			"parse_status":  types.ParseStatusCompleted,
+			"error_message": "",
+			"processed_at":  now,
+			"updated_at":    now,
 		})
 	if promoteRes.Error != nil {
-		return 0, false, promoteRes.Error
+		return false, promoteRes.Error
 	}
 	promoted := promoteRes.RowsAffected > 0
-
-	// 3) Best-effort re-read of the new count for diagnostics/return value
-	//    only. This read may be replica-stale and is intentionally NOT used
-	//    to decide whether to promote (see above). A read failure here does
-	//    not affect correctness, so we don't propagate it as an error.
-	var snap struct {
-		PendingSubtasksCount int `gorm:"column:pending_subtasks_count"`
-	}
-	if err := r.db.WithContext(ctx).Model(&types.Knowledge{}).
-		Select("pending_subtasks_count").
-		Where("id = ?", id).Take(&snap).Error; err != nil {
-		return 0, promoted, nil
-	}
-	return snap.PendingSubtasksCount, promoted, nil
+	return promoted, nil
 }
 
 // SetFinalizing atomically transitions a row from 'processing' to
@@ -1482,6 +1787,7 @@ func (r *knowledgeRepository) SetFinalizing(
 		Updates(map[string]interface{}{
 			"parse_status":           types.ParseStatusFinalizing,
 			"pending_subtasks_count": expectedSubtasks,
+			"error_message":          "",
 			"updated_at":             now,
 		})
 	if res.Error != nil {
@@ -1521,6 +1827,24 @@ func (r *knowledgeRepository) SetFinalizingRevision(
 	return res.RowsAffected > 0, nil
 }
 
+// CompleteProcessingWithoutSubtasks is the zero-enrichment counterpart of
+// SetFinalizing. Keep the state check and completion fields in one write so a
+// concurrent cancel/delete or duplicate delivery cannot be overwritten.
+func (r *knowledgeRepository) CompleteProcessingWithoutSubtasks(ctx context.Context, id string) (bool, error) {
+	now := time.Now()
+	res := r.db.WithContext(ctx).Model(&types.Knowledge{}).
+		Where("id = ? AND parse_status = ?", id, types.ParseStatusProcessing).
+		Updates(map[string]interface{}{
+			"parse_status":           types.ParseStatusCompleted,
+			"summary_status":         types.SummaryStatusNone,
+			"pending_subtasks_count": 0,
+			"error_message":          "",
+			"processed_at":           now,
+			"updated_at":             now,
+		})
+	return res.RowsAffected > 0, res.Error
+}
+
 // CountKnowledgeByKnowledgeBaseID counts the number of knowledge items in a knowledge base
 func (r *knowledgeRepository) CountKnowledgeByKnowledgeBaseID(
 	ctx context.Context,
@@ -1528,8 +1852,12 @@ func (r *knowledgeRepository) CountKnowledgeByKnowledgeBaseID(
 	kbID string,
 ) (int64, error) {
 	var count int64
+	// Mirror the document list's view (applyKnowledgeListFilter): rows
+	// mid-deletion are hidden there, so counting them here is what produced
+	// the "4 documents, 3 listed" ghost on the KB card (issues #3338/#3345).
 	err := r.db.WithContext(ctx).Model(&types.Knowledge{}).
-		Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, kbID).
+		Where("tenant_id = ? AND knowledge_base_id = ? AND parse_status <> ?",
+			tenantID, kbID, types.ParseStatusDeleting).
 		Count(&count).Error
 	return count, err
 }
@@ -1601,6 +1929,81 @@ func (r *knowledgeRepository) FindFileBySHA256(
 		return nil, err
 	}
 	return &knowledge, nil
+}
+
+// FindByMetadataKeyPrefix finds knowledge items whose metadata[key] starts with
+// the given prefix. Used to sweep an external node's attachment sub-items on re-sync.
+func (r *knowledgeRepository) FindByMetadataKeyPrefix(
+	ctx context.Context,
+	tenantID uint64,
+	kbID string,
+	key string,
+	prefix string,
+) ([]*types.Knowledge, error) {
+	escaped := escapeLikeKeyword(prefix)
+	var items []*types.Knowledge
+	// The JSON key is embedded as a SQL literal (metadata->>'external_id'), NOT a
+	// bind parameter. PostgreSQL only uses the expression index
+	// idx_knowledges_kb_metadata_external_id (built on the literal expression
+	// (metadata->>'external_id')) when that exact expression appears in the query;
+	// a bound metadata->>$1 is a structurally different expression the planner
+	// cannot match, so it would silently fall back to a heap scan. key is an
+	// internal, caller-supplied field name (always "external_id"); single-quotes
+	// are doubled defensively so the literal is always well-formed.
+	//
+	// The prefix pattern stays a bind parameter: an unnamed prepared statement is
+	// custom-planned with the actual value, so LIKE 'prefix%' still extracts the
+	// prefix and drives the index. The explicit ESCAPE '\' keeps backslash-escaped
+	// wildcards (e.g. \_) literal on both PostgreSQL and SQLite.
+	keyExpr := "metadata->>'" + strings.ReplaceAll(key, "'", "''") + "'"
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND knowledge_base_id = ? AND deleted_at IS NULL", tenantID, kbID).
+		Where(keyExpr+" LIKE ? ESCAPE ?", escaped+"%", `\`).
+		Find(&items).Error
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// FindByDataSourceExternalID locates a synced knowledge item without allowing
+// identical external IDs from two data sources to collide in one knowledge base.
+func (r *knowledgeRepository) FindByDataSourceExternalID(
+	ctx context.Context,
+	tenantID uint64,
+	kbID, dataSourceID, externalID string,
+) (*types.Knowledge, error) {
+	var knowledge types.Knowledge
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND knowledge_base_id = ? AND deleted_at IS NULL", tenantID, kbID).
+		Where("metadata->>'datasource_id' = ? AND metadata->>'external_id' = ?", dataSourceID, externalID).
+		First(&knowledge).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &knowledge, nil
+}
+
+// HardDeleteKnowledge physically removes a knowledge row. Call it AFTER
+// DeleteKnowledge's soft-delete cascade so sync-internal deletions never
+// become tombstones that block a later re-sync of the same external item.
+func (r *knowledgeRepository) HardDeleteKnowledge(ctx context.Context, tenantID uint64, id string) error {
+	return r.db.Unscoped().WithContext(ctx).
+		Where("tenant_id = ? AND id = ?", tenantID, id).
+		Delete(&types.Knowledge{}).Error
+}
+
+// HardDeleteKnowledgeList is the batch counterpart of HardDeleteKnowledge.
+func (r *knowledgeRepository) HardDeleteKnowledgeList(ctx context.Context, tenantID uint64, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.Unscoped().WithContext(ctx).
+		Where("tenant_id = ? AND id IN ?", tenantID, ids).
+		Delete(&types.Knowledge{}).Error
 }
 
 func (r *knowledgeRepository) SearchKnowledge(

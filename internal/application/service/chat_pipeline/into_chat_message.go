@@ -3,6 +3,7 @@ package chatpipeline
 import (
 	"context"
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/searchutil"
@@ -17,7 +18,10 @@ type PluginIntoChatMessage struct {
 }
 
 // NewPluginIntoChatMessage creates and registers a new PluginIntoChatMessage instance
-func NewPluginIntoChatMessage(eventManager *EventManager, messageService interfaces.MessageService) *PluginIntoChatMessage {
+func NewPluginIntoChatMessage(
+	eventManager *EventManager,
+	messageService interfaces.MessageService,
+) *PluginIntoChatMessage {
 	res := &PluginIntoChatMessage{messageService: messageService}
 	eventManager.Register(res)
 	return res
@@ -136,7 +140,10 @@ func (p *PluginIntoChatMessage) OnEvent(ctx context.Context,
 		for i, result := range faqResults {
 			passage := getEnrichedPassageForChat(ctx, result)
 			if hasHighConfidenceFAQ && i == 0 {
-				contextsBuilder.WriteString(fmt.Sprintf("<context id=\"FAQ-%d\" match=\"exact\">%s</context>\n", i+1, passage))
+				// strings.Builder writes cannot fail.
+				_, _ = fmt.Fprintf(
+					&contextsBuilder, "<context id=\"FAQ-%d\" match=\"exact\">%s</context>\n", i+1, passage,
+				)
 			} else {
 				contextsBuilder.WriteString(fmt.Sprintf("<context id=\"FAQ-%d\">%s</context>\n", i+1, passage))
 			}
@@ -240,6 +247,7 @@ func buildDocumentHeader(results []*types.SearchResult) string {
 	type docMeta struct {
 		title       string
 		description string
+		metadata    string
 	}
 
 	seen := make(map[string]struct{})
@@ -265,6 +273,7 @@ func buildDocumentHeader(results []*types.SearchResult) string {
 		docs = append(docs, docMeta{
 			title:       title,
 			description: r.KnowledgeDescription,
+			metadata:    r.KnowledgeCustomMetadata,
 		})
 	}
 
@@ -273,12 +282,16 @@ func buildDocumentHeader(results []*types.SearchResult) string {
 	}
 
 	var b strings.Builder
+	// strings.Builder writes cannot fail.
 	b.WriteString("<documents>\n")
 	for _, d := range docs {
 		b.WriteString("<document>\n")
-		b.WriteString(fmt.Sprintf("<title>%s</title>\n", d.title))
+		_, _ = fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(d.title))
 		if d.description != "" {
-			b.WriteString(fmt.Sprintf("<description>%s</description>\n", d.description))
+			_, _ = fmt.Fprintf(&b, "<description>%s</description>\n", html.EscapeString(d.description))
+		}
+		if d.metadata != "" {
+			_, _ = fmt.Fprintf(&b, "<metadata>%s</metadata>\n", html.EscapeString(d.metadata))
 		}
 		b.WriteString("</document>\n")
 	}

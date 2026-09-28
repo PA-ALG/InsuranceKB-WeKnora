@@ -18,10 +18,19 @@ services:
         test -d /app/scripts
         test -d /app/migrations
         test -d /app/dataset/samples
-        test -d /app/skills/preloaded
         test -d /home/appuser/.duckdb
+        test -e /app/LICENSE
+        test -e /app/THIRD_PARTY_NOTICES.md
+        test -d /app/licenses
+        test -s /app/licenses/AnyDoc-MIT.txt
+        test -x /opt/weknora/browserskill/bsk
+        test -e /opt/weknora/browserskill/browser-skill-weknora-0.3.1.zip
+        test -e /opt/weknora/browserskill/BrowserSkill-LICENSE
+        python3 /app/scripts/verify-browserskill-extension.py /opt/weknora/browserskill/browser-skill-weknora-0.3.1.zip 0.3.1
         ldd /app/WeKnora > /tmp/ba0-ldd.out
         ! grep -q 'not found' /tmp/ba0-ldd.out
+        ldd /opt/weknora/browserskill/bsk > /tmp/ba0-browserskill-ldd.out
+        ! grep -q 'not found' /tmp/ba0-browserskill-ldd.out
         sleep infinity
     healthcheck:
       test:
@@ -33,10 +42,19 @@ services:
           test -d /app/scripts;
           test -d /app/migrations;
           test -d /app/dataset/samples;
-          test -d /app/skills/preloaded;
           test -d /home/appuser/.duckdb;
+          test -e /app/LICENSE;
+          test -e /app/THIRD_PARTY_NOTICES.md;
+          test -d /app/licenses;
+          test -s /app/licenses/AnyDoc-MIT.txt;
+          test -x /opt/weknora/browserskill/bsk;
+          test -e /opt/weknora/browserskill/browser-skill-weknora-0.3.1.zip;
+          test -e /opt/weknora/browserskill/BrowserSkill-LICENSE;
+          python3 /app/scripts/verify-browserskill-extension.py /opt/weknora/browserskill/browser-skill-weknora-0.3.1.zip 0.3.1;
           ldd /app/WeKnora > /tmp/ba0-health-ldd.out;
-          ! grep -q 'not found' /tmp/ba0-health-ldd.out
+          ! grep -q 'not found' /tmp/ba0-health-ldd.out;
+          ldd /opt/weknora/browserskill/bsk > /tmp/ba0-health-browserskill-ldd.out;
+          ! grep -q 'not found' /tmp/ba0-health-browserskill-ldd.out
       interval: 2s
       timeout: 2s
       retries: 10

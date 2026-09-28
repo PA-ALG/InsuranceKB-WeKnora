@@ -22,7 +22,14 @@ func (wikiOutcomeKnowledge) GetKnowledgeByIDOnly(context.Context, string) (*type
 type wikiOutcomeChunks struct{ interfaces.ChunkRepository }
 
 func (wikiOutcomeChunks) ListChunksByKnowledgeID(context.Context, uint64, string) ([]*types.Chunk, error) {
-	return []*types.Chunk{{ID: "chunk-1", KnowledgeID: "source", Content: strings.Repeat("A loan has eligibility requirements, limits and exceptions. ", 4), ChunkType: types.ChunkTypeText}}, nil
+	return []*types.Chunk{
+		{
+			ID:          "chunk-1",
+			KnowledgeID: "source",
+			Content:     strings.Repeat("A loan has eligibility requirements, limits and exceptions. ", 4),
+			ChunkType:   types.ChunkTypeText,
+		},
+	}, nil
 }
 
 func (wikiOutcomeChunks) ListChunksByParentIDs(context.Context, uint64, []string) ([]*types.Chunk, error) {
@@ -37,6 +44,7 @@ type wikiOutcomePages struct {
 func (*wikiOutcomePages) GetPageBySlug(context.Context, string, string) (*types.WikiPage, error) {
 	return nil, nil
 }
+
 func (p *wikiOutcomePages) CreatePage(_ context.Context, page *types.WikiPage) (*types.WikiPage, error) {
 	p.writes++
 	return page, nil
@@ -45,17 +53,40 @@ func (p *wikiOutcomePages) CreatePage(_ context.Context, page *types.WikiPage) (
 func (wikiOutcomePages) ListSlugsBySourceRef(context.Context, string, string) ([]string, error) {
 	return nil, nil
 }
-func (wikiOutcomePages) FindSimilarPages(context.Context, string, string, []string, int) ([]*types.WikiPageLite, error) {
+
+func (wikiOutcomePages) FindSimilarPages(
+	context.Context,
+	string,
+	string,
+	[]string,
+	int,
+) ([]*types.WikiPageLite, error) {
+	return nil, nil
+}
+
+func (wikiOutcomePages) FindPagesByNormalizedTitles(
+	context.Context,
+	string,
+	string,
+	[]string,
+) ([]*types.WikiPageLite, error) {
 	return nil, nil
 }
 
 type wikiCitationFailureModel struct{ templateCaptureChatModel }
 
-func (*wikiCitationFailureModel) Chat(ctx context.Context, _ []chat.Message, _ *chat.ChatOptions) (*types.ChatResponse, error) {
+func (*wikiCitationFailureModel) Chat(
+	ctx context.Context,
+	_ []chat.Message,
+	_ *chat.ChatOptions,
+) (*types.ChatResponse, error) {
 	purpose, _ := types.LLMCallMetadataFromContext(ctx)
 	switch purpose {
 	case wikiPromptPurpose(agent.WikiCandidateSlugPrompt):
-		return &types.ChatResponse{Content: `{"entities":[],"concepts":[{"name":"Loan","slug":"concept/loan","description":"Loan rules","details":"A short outline"}]}`}, nil
+		return &types.ChatResponse{
+			Content: "{\"entities\":[],\"concepts\":[{\"name\":\"Loan\",\"slug\":\"concept/loan\"" +
+				",\"description\":\"Loan rules\",\"details\":\"A short outline\"}]}",
+		}, nil
 	case wikiPromptPurpose(agent.WikiChunkCitationPrompt):
 		return nil, io.EOF
 	default:
@@ -64,10 +95,25 @@ func (*wikiCitationFailureModel) Chat(ctx context.Context, _ []chat.Message, _ *
 }
 
 func TestMapOneDocumentDoesNotUseShortDetailsWhenCitationIncomplete(t *testing.T) {
-	svc := &wikiIngestService{knowledgeSvc: wikiOutcomeKnowledge{}, chunkRepo: wikiOutcomeChunks{}, wikiService: &wikiOutcomePages{}}
-	result, updates, err := svc.mapOneDocument(context.Background(), &wikiCitationFailureModel{}, WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"}, WikiPendingOp{Op: WikiOpIngest, KnowledgeID: "source"}, wikiOutcomeBatchContext())
+	svc := &wikiIngestService{
+		knowledgeSvc: wikiOutcomeKnowledge{},
+		chunkRepo:    wikiOutcomeChunks{},
+		wikiService:  &wikiOutcomePages{},
+	}
+	result, updates, err := svc.mapOneDocument(
+		context.Background(),
+		&wikiCitationFailureModel{},
+		WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"},
+		WikiPendingOp{Op: WikiOpIngest, KnowledgeID: "source"},
+		wikiOutcomeBatchContext(),
+	)
 	if err == nil || result != nil || len(updates) != 0 {
-		t.Fatalf("citation failure must stop page generation, got result=%+v updates=%d error=%v", result, len(updates), err)
+		t.Fatalf(
+			"citation failure must stop page generation, got result=%+v updates=%d error=%v",
+			result,
+			len(updates),
+			err,
+		)
 	}
 }
 
@@ -87,16 +133,34 @@ func TestReduceSlugUpdatesReportsGenerationFailure(t *testing.T) {
 		Item: extractedItem{Name: "Loan", Slug: "concept/loan", Details: "Loan conditions"},
 	}}, 1, wikiOutcomeBatchContext(), nil)
 	if err == nil || changed || !failed || pages.writes != 0 {
-		t.Fatalf("generation failure must remain a failure without writes: changed=%v failed=%v writes=%d error=%v", changed, failed, pages.writes, err)
+		t.Fatalf("generation failure must remain a failure without writes: changed=%v"+
+			" failed=%v writes=%d error=%v", changed, failed, pages.writes, err)
 	}
 }
 
 func TestMapOneDocumentDoesNotFallbackAfterUnknownDiscovery(t *testing.T) {
 	model := &interruptedWikiChatModel{}
-	svc := &wikiIngestService{knowledgeSvc: wikiOutcomeKnowledge{}, chunkRepo: wikiOutcomeChunks{}, wikiService: &wikiOutcomePages{}}
-	result, updates, err := svc.mapOneDocument(context.Background(), model, WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"}, WikiPendingOp{Op: WikiOpIngest, KnowledgeID: "source"}, wikiOutcomeBatchContext())
-	if result != nil || len(updates) != 0 || err == nil || model.calls != 1 || wikiFailureOutcome(err) != wikiOutcomeUnknown {
-		t.Fatalf("unknown discovery cannot fallback: result=%v updates=%d calls=%d error=%v", result, len(updates), model.calls, err)
+	svc := &wikiIngestService{
+		knowledgeSvc: wikiOutcomeKnowledge{},
+		chunkRepo:    wikiOutcomeChunks{},
+		wikiService:  &wikiOutcomePages{},
+	}
+	result, updates, err := svc.mapOneDocument(
+		context.Background(),
+		model,
+		WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"},
+		WikiPendingOp{Op: WikiOpIngest, KnowledgeID: "source"},
+		wikiOutcomeBatchContext(),
+	)
+	if result != nil || len(updates) != 0 || err == nil || model.calls != 1 ||
+		wikiFailureOutcome(err) != wikiOutcomeUnknown {
+		t.Fatalf(
+			"unknown discovery cannot fallback: result=%v updates=%d calls=%d error=%v",
+			result,
+			len(updates),
+			model.calls,
+			err,
+		)
 	}
 }
 
@@ -105,7 +169,11 @@ type wikiCitationPeerModel struct {
 	invalidJSON bool
 }
 
-func (m *wikiCitationPeerModel) Chat(_ context.Context, messages []chat.Message, _ *chat.ChatOptions) (*types.ChatResponse, error) {
+func (m *wikiCitationPeerModel) Chat(
+	_ context.Context,
+	messages []chat.Message,
+	_ *chat.ChatOptions,
+) (*types.ChatResponse, error) {
 	if strings.Contains(messages[0].Content, "FAILED-CHUNK") {
 		if m.invalidJSON {
 			return &types.ChatResponse{Content: "{broken"}, nil
@@ -118,15 +186,29 @@ func (m *wikiCitationPeerModel) Chat(_ context.Context, messages []chat.Message,
 func TestCitationOutcomePreservesSuccessfulPeers(t *testing.T) {
 	for _, invalidJSON := range []bool{false, true} {
 		model := &wikiCitationPeerModel{invalidJSON: invalidJSON}
-		result := (&wikiIngestService{}).classifyChunkCitations(context.Background(), model, "concept/loan", []*types.Chunk{
-			{ID: "success", ChunkIndex: 0, Content: strings.Repeat("source ", 2000), ChunkType: types.ChunkTypeText},
-			{ID: "failed", ChunkIndex: 1, Content: "FAILED-CHUNK", ChunkType: types.ChunkTypeText},
-		}, "en", wikiOutcomeBatchContext(), nil)
+		result := (&wikiIngestService{}).classifyChunkCitations(
+			context.Background(),
+			model,
+			"concept/loan",
+			[]*types.Chunk{
+				{
+					ID:         "success",
+					ChunkIndex: 0,
+					Content:    strings.Repeat("source ", 2000),
+					ChunkType:  types.ChunkTypeText,
+				},
+				{ID: "failed", ChunkIndex: 1, Content: "FAILED-CHUNK", ChunkType: types.ChunkTypeText},
+			},
+			"en",
+			wikiOutcomeBatchContext(),
+			nil,
+		)
 		want := wikiOutcomeUnknown
 		if invalidJSON {
 			want = wikiOutcomeFailed
 		}
-		if len(result.BatchErrors) != 2 || result.BatchErrors[0] != nil || result.BatchErrors[1] == nil || wikiFailureOutcome(result.Err()) != want {
+		if len(result.BatchErrors) != 2 || result.BatchErrors[0] != nil || result.BatchErrors[1] == nil ||
+			wikiFailureOutcome(result.Err()) != want {
 			t.Fatalf("lost per-batch status: %+v error=%v", result, result.Err())
 		}
 		if got := result.Citations["concept/loan"]; len(got) != 1 || got[0] != "success" {
@@ -137,7 +219,11 @@ func TestCitationOutcomePreservesSuccessfulPeers(t *testing.T) {
 
 func TestWikiPendingRecoveryCannotHideMarkedSibling(t *testing.T) {
 	ops, _ := (&wikiIngestService{}).decodePendingRows(context.Background(), []*types.TaskPendingOp{
-		{ID: 1, DedupKey: "source", Payload: []byte(`{"op":"ingest","knowledge_id":"source","execution_id":"started"}`)},
+		{
+			ID:       1,
+			DedupKey: "source",
+			Payload:  []byte(`{"op":"ingest","knowledge_id":"source","execution_id":"started"}`),
+		},
 		{ID: 2, DedupKey: "source", Payload: []byte(`{"op":"ingest","knowledge_id":"source"}`)},
 	})
 	if len(ops) != 1 || !ops[0].recoveryBlocked || len(ops[0].queueRows) != 2 {
@@ -152,7 +238,15 @@ func (*wikiUnknownCitationModel) Chat(context.Context, []chat.Message, *chat.Cha
 }
 
 func TestCitationOutcomeRejectsUnknownHandle(t *testing.T) {
-	result := (&wikiIngestService{}).classifyChunkCitations(context.Background(), &wikiUnknownCitationModel{}, "concept/loan", []*types.Chunk{{ID: "source", Content: "Loan rules", ChunkType: types.ChunkTypeText}}, "en", wikiOutcomeBatchContext(), nil)
+	result := (&wikiIngestService{}).classifyChunkCitations(
+		context.Background(),
+		&wikiUnknownCitationModel{},
+		"concept/loan",
+		[]*types.Chunk{{ID: "source", Content: "Loan rules", ChunkType: types.ChunkTypeText}},
+		"en",
+		wikiOutcomeBatchContext(),
+		nil,
+	)
 	if result.Err() == nil {
 		t.Fatal("unknown chunk handle must fail the batch")
 	}
@@ -179,6 +273,7 @@ func (p *wikiPublishOutcomePages) GetPageBySlug(_ context.Context, _ string, slu
 	}
 	return &types.WikiPage{Slug: slug, Status: types.WikiPageStatusDraft}, nil
 }
+
 func (p *wikiPublishOutcomePages) UpdatePageMeta(_ context.Context, page *types.WikiPage) error {
 	if page.Slug == "write-failed" {
 		return errors.New("write failed")
@@ -186,11 +281,17 @@ func (p *wikiPublishOutcomePages) UpdatePageMeta(_ context.Context, page *types.
 	p.published = append(p.published, page.Slug)
 	return nil
 }
+
 func TestPublishDraftPagesPreservesSuccessfulSiblingAndReportsFailures(t *testing.T) {
 	pages := &wikiPublishOutcomePages{}
 	svc := &wikiIngestService{wikiService: pages}
-	failures := svc.publishDraftPages(context.Background(), "kb", []string{"read-failed", "ok", "missing", "write-failed"})
-	if len(failures) != 3 || failures["read-failed"] == nil || failures["missing"] == nil || failures["write-failed"] == nil {
+	failures := svc.publishDraftPages(
+		context.Background(),
+		"kb",
+		[]string{"read-failed", "ok", "missing", "write-failed"},
+	)
+	if len(failures) != 3 || failures["read-failed"] == nil || failures["missing"] == nil ||
+		failures["write-failed"] == nil {
 		t.Fatalf("publication errors disappeared: %v", failures)
 	}
 	if len(pages.published) != 1 || pages.published[0] != "ok" {
@@ -200,7 +301,14 @@ func TestPublishDraftPagesPreservesSuccessfulSiblingAndReportsFailures(t *testin
 
 func TestWikiPageFailureLedgerTracksUnwrittenAdditions(t *testing.T) {
 	failures := newWikiPageFailures()
-	failures.record("concept/loan", []SlugUpdate{{Type: types.WikiPageTypeConcept, KnowledgeID: "a"}, {Type: types.WikiPageTypeConcept, KnowledgeID: "b"}}, errors.New("repository unavailable"))
+	failures.record(
+		"concept/loan",
+		[]SlugUpdate{
+			{Type: types.WikiPageTypeConcept, KnowledgeID: "a"},
+			{Type: types.WikiPageTypeConcept, KnowledgeID: "b"},
+		},
+		errors.New("repository unavailable"),
+	)
 	failures.record("old", []SlugUpdate{{Type: "retract", KnowledgeID: "c"}}, errors.New("lock unavailable"))
 	if _, ok := failures.additions["concept/loan"]; !ok {
 		t.Fatal("repository failure left a missing page eligible for successful links")

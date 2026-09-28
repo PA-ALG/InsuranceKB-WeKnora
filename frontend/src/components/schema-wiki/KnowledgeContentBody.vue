@@ -33,7 +33,7 @@ function sources(segment: KnowledgeContentSegment) {
 <style scoped>
 .knowledge-content { white-space: pre-wrap; line-height: 1.8; }
 .knowledge-content__segment { margin-bottom: 16px; }
-.knowledge-content__label { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 4px; background: #edf4f0; color: #305d48; }
+.knowledge-content__label { display: inline-block; font-size: var(--app-text-sm); padding: 1px 8px; border-radius: var(--app-radius-xs); background: #edf4f0; color: #305d48; }
 [data-origin="MODEL_GENERATED"] .knowledge-content__label { background: #fff3da; color: #755314; }
 .knowledge-content button { margin: 4px 8px 0 0; cursor: pointer; }
 </style>

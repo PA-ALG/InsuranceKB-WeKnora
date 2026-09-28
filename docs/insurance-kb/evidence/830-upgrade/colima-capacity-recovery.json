@@ -1,0 +1,36 @@
+{
+  "recorded_at": "2026-09-28T03:02:25.759701+00:00",
+  "requirement": "UPG-08",
+  "status": "PASS",
+  "authorization": "Colima 的虚拟磁盘目前配置为110GiB，再增加到130G配置吧",
+  "disk_gib_before": 110,
+  "disk_gib_after": 130,
+  "free_after_gib": 26.81978988647461,
+  "checks": {
+    "containers_preserved": true,
+    "images_preserved": true,
+    "volumes_preserved": true,
+    "running_set_restored": true,
+    "health": {
+      "g3-platform-product-product-worker-1": "healthy",
+      "g3-platform-product-product-api-1": "healthy",
+      "weknora-g3-830-release-app-issuer-closeout-01": "not-configured",
+      "weknora-g3-830-docreader": "not-configured",
+      "weknora-g3-830-release-ui-bounded-read-01": "not-configured",
+      "weknora-g3-830-redis": "not-configured",
+      "weknora-g3-830-postgres-recovery-02": "not-configured",
+      "WeKnora-redis": "healthy"
+    },
+    "disk_after": "Filesystem     1K-blocks      Used Available Use% Mounted on\n/dev/vdb1      133589028 104401504  28122588  79% /var/lib/docker",
+    "block_devices": "NAME            SIZE MOUNTPOINTS\nvda      21474836480 \n├─vda1   20400029184 /\n├─vda15    103809536 /boot/efi\n└─vda16    967836160 /boot\nvdb     139586437120 \n└─vdb1  139585371648 /var/lib/cni\n                     /var/lib/rancher\n                     /var/lib/containerd\n                     /var/lib/docker\n                     /mnt/lima-colima\nvdc         55685120 /mnt/lima-cidata",
+    "registry_mirrors": null
+  },
+  "configuration_change": "disk: 110 -> disk: 130; all other colima.yaml lines unchanged",
+  "backup_path": "/private/tmp/colima-resize-130-20260928/colima.yaml.before",
+  "backup_sha256": "3661dc075de1c41d7c0336a5e65b806d4a60511fc9c25a1f6f25f83c25417276",
+  "limits": [
+    "Colima restarted to apply expansion; historical container StartedAt/Pid invariance no longer describes current runtime.",
+    "Eight pre-expansion running container IDs restored; no new app build, migration, provider or product deployment.",
+    "Capacity recovery does not imply upgrade acceptance."
+  ]
+}

@@ -9,7 +9,9 @@
     "./cmd/download/duckdb"
   ],
   "required_paths": [
+    "LICENSE",
     "VERSION",
+    "THIRD_PARTY_NOTICES.md",
     "Makefile",
     "cmd/server/main.go",
     "cmd/server/bootstrap.go",
@@ -36,11 +38,12 @@
     "internal/router/router.go",
     "internal/runtime/server.go",
     "internal/types/interfaces/user.go",
+    "licenses",
     "migrations",
     "scripts",
     "scripts/build_images.sh",
     "scripts/get_version.sh",
-    "skills/preloaded"
+    "third_party/anydoc-go"
   ],
   "external_dependency_lock": "deploy/local-build/app-external-dependencies.v1.json",
   "build_contract": {
@@ -48,6 +51,13 @@
     "platform": "linux/arm64",
     "goos": "linux",
     "goarch": "arm64",
-    "cgo_enabled": true
+    "cgo_enabled": true,
+    "go_build_tags": [
+      "anydoc"
+    ],
+    "components": [
+      "anydoc",
+      "browserskill"
+    ]
   }
 }

@@ -133,19 +133,19 @@ const totalFields = computed(() => props.catalog.mode === 'g2' ? 0
 
 <style scoped>
 .concept-directory { max-width: 1080px; margin: 0 auto; padding: 28px 32px; color: var(--td-text-color-primary); }
-.concept-directory__header span { color: var(--td-brand-color); font-size: 13px; }
-.concept-directory__header h2 { margin: 6px 0; font-size: 26px; }
+.concept-directory__header span { color: var(--td-brand-color); font-size: var(--app-text-md); }
+.concept-directory__header h2 { margin: 6px 0; font-size: var(--app-text-concept-directory-title); }
 .concept-directory__header p, li p { color: var(--td-text-color-secondary); }
 h3 { margin: 28px 0 12px; }
 ul { list-style: none; margin: 0; padding: 0; }
 li { padding: 16px 0; border-bottom: 1px solid var(--td-component-border); }
 .concept-directory__entities { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-.concept-directory__entities li { padding: 18px; border: 1px solid var(--td-component-border); border-radius: 8px; }
+.concept-directory__entities li { padding: 18px; border: 1px solid var(--td-component-border); border-radius: var(--app-radius-md); }
 .concept-directory__quality { font-weight: 600; color: var(--td-warning-color); }
 .concept-directory__section { margin-top: 18px; }
-.concept-directory__section h5 { margin: 0 0 6px; font-size: 15px; }
+.concept-directory__section h5 { margin: 0 0 6px; font-size: var(--app-text-lg); }
 .concept-directory__section li { padding: 5px 0; border: 0; }
-.concept-directory__alignment { margin-top: 24px; padding: 16px 20px; border: 1px solid var(--td-component-border); border-radius: 8px; }
+.concept-directory__alignment { margin-top: 24px; padding: 16px 20px; border: 1px solid var(--td-component-border); border-radius: var(--app-radius-md); }
 .concept-directory__alignment li > span { display: block; margin-bottom: 8px; font-weight: 600; }
 details { margin-top: 12px; color: var(--td-text-color-secondary); }
 a { margin-right: 18px; color: var(--td-brand-color); font-weight: 600; text-decoration: none; }

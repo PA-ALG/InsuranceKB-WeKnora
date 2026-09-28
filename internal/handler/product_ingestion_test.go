@@ -148,7 +148,7 @@ func productGatewayRouter(t *testing.T, bridge *productGatewayBridgeStub, kb *pr
 	gin.SetMode(gin.TestMode)
 	kg := &productGatewayUploadStub{bridge: bridge, t: t}
 	cfg := &config.Config{}
-	kh := NewKnowledgeHandler(cfg, kg, kb, nil, nil, nil, nil)
+	kh := NewKnowledgeHandler(cfg, kg, kb, nil, nil, nil, nil, nil)
 	handler := NewProductIngestionHandler(kh, bridge)
 	r := gin.New()
 	r.Use(middleware.ErrorHandler())

@@ -3,12 +3,13 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"testing"
+
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/hibiken/asynq"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestNativeCandidatePolicyStopsQueuedWorkersBeforeAnyIO(t *testing.T) {
@@ -34,11 +35,29 @@ type nativePolicyKnowledgeRepo struct {
 }
 
 func (r *nativePolicyKnowledgeRepo) GetKnowledgeByIDOnly(context.Context, string) (*types.Knowledge, error) {
-	return &types.Knowledge{ID: "doc", ParseStatus: types.ParseStatusProcessing}, nil
+	return &types.Knowledge{
+		ID:              "doc",
+		TenantID:        42,
+		KnowledgeBaseID: "raw",
+		ParseStatus:     types.ParseStatusProcessing,
+	}, nil
 }
+
 func (r *nativePolicyKnowledgeRepo) SetFinalizing(_ context.Context, _ string, count int) (bool, error) {
 	r.expected = count
 	return false, nil // stop after observing the exact counter, before queue mutation
+}
+
+type nativePolicyPending struct {
+	interfaces.TaskPendingOpsRepository
+	knowledge *nativePolicyKnowledgeRepo
+}
+
+func (p nativePolicyPending) SeedKnowledgeFinalizingWithPendingOp(
+	_ context.Context, _ string, count int, _ *types.TaskPendingOp,
+) (bool, error) {
+	p.knowledge.expected = count
+	return false, nil // observe the atomic handoff count without queue mutation
 }
 
 type nativePolicyKB struct {
@@ -46,21 +65,41 @@ type nativePolicyKB struct {
 }
 
 func (nativePolicyKB) GetKnowledgeBaseByIDOnly(context.Context, string) (*types.KnowledgeBase, error) {
-	return &types.KnowledgeBase{ID: "raw", TenantID: 42, IndexingStrategy: types.IndexingStrategy{WikiEnabled: true}}, nil
+	return &types.KnowledgeBase{
+		ID:               "raw",
+		TenantID:         42,
+		IndexingStrategy: types.IndexingStrategy{WikiEnabled: true},
+	}, nil
 }
 
-type nativePolicyChunks struct{ interfaces.ChunkService }
+type nativePolicyChunks struct{ interfaces.ChunkRepository }
 
-func (nativePolicyChunks) ListChunksByKnowledgeID(context.Context, string) ([]*types.Chunk, error) {
-	return []*types.Chunk{{ID: "chunk", ChunkType: types.ChunkTypeText, Content: "original source"}}, nil
+func (nativePolicyChunks) ListChunksByKnowledgeIDAndTypes(
+	context.Context, uint64, string, []types.ChunkType,
+) ([]*types.Chunk, error) {
+	return []*types.Chunk{{
+		ID: "chunk", TenantID: 42, KnowledgeBaseID: "raw", KnowledgeID: "doc",
+		ChunkType: types.ChunkTypeText, Content: "original source",
+	}}, nil
 }
+
 func TestNativeCandidatePolicyRemovesWikiSlotFromPostprocess(t *testing.T) {
 	for _, policy := range []string{"", config.NativeCandidatesPolicy} {
 		repo := &nativePolicyKnowledgeRepo{}
-		svc := &KnowledgePostProcessService{config: &config.Config{ProductIngestion: &config.ProductIngestionConfig{
-			Enabled: true, TenantID: 42, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki", WikiProducerPolicy: policy,
-		}}, knowledgeRepo: repo, kbService: nativePolicyKB{}, chunkService: nativePolicyChunks{}}
-		payload, err := json.Marshal(types.KnowledgePostProcessPayload{TenantID: 42, KnowledgeID: "doc", KnowledgeBaseID: "raw", Attempt: 1})
+		svc := &KnowledgePostProcessService{
+			config: &config.Config{ProductIngestion: &config.ProductIngestionConfig{
+				Enabled:            true,
+				TenantID:           42,
+				SpaceID:            "space",
+				RawKBID:            "raw",
+				WikiKBID:           "wiki",
+				WikiProducerPolicy: policy,
+			}}, knowledgeRepo: repo, pendingRepo: nativePolicyPending{knowledge: repo},
+			kbService: nativePolicyKB{}, chunkRepo: nativePolicyChunks{},
+		}
+		payload, err := json.Marshal(
+			types.KnowledgePostProcessPayload{TenantID: 42, KnowledgeID: "doc", KnowledgeBaseID: "raw", Attempt: 1},
+		)
 		require.NoError(t, err)
 		require.NoError(t, svc.Handle(context.Background(), asynq.NewTask("postprocess", payload)))
 		want := 2 // unchanged: document summary + native wiki

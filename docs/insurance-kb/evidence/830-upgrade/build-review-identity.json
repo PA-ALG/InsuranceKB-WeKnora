@@ -1,0 +1,25 @@
+{
+  "base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+  "upstream": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+  "frozen_at": "2026-09-27T11:45:16.132969+00:00",
+  "sha256": {
+    "docker/Dockerfile.app": "539ab7217133423673640883d8c2a67da636b46322919d40bc73567e8566ee17",
+    "deploy/local-build/app-build-inputs.v1.json": "1ec551d92cc07f4b83d62f280a21d84c970e2021085bb05e1962ca113431e819",
+    "deploy/local-build/app-external-dependencies.v1.json": "3779f1cb81885de3648d092104b7233f109063af1a6fee6041237eecca1ced3d",
+    "deploy/local-build/docker-compose.app-exact.yml": "078190d91e3be44e98fb4f0307f68aa5af6c9b8bfb9f51062073661e43d05834",
+    "scripts/app_artifact.py": "a8b2aa6a02119afc630bd5710d89a50a853119f4a21289a7650c66da9283627e",
+    "scripts/build-anydoc-lib.sh": "c3e4fb319fdf294e5bddb49c224884d271ba64cd10614fbf727d96d7c11c34d6",
+    "scripts/browserskill-release.json": "1ad038a429aac1891408fe8b6362da678db69c9b85ce1543970e242e0b918f37",
+    "harness/tests/test_local_app_build_830_ba0.py": "1faf4c3764ee79ebb4411bef0369b960895c290efa3eec06f5f8cd469ff560f1",
+    "scripts/build_browserskill.sh": "6aeb714127f32ccfc7c6fb76ef3697feeefe42c681b23a65f04970bcef7badb5",
+    "scripts/start_exact_image.py": "6333ec2adbbdcef6f626295c32f485d4b196bbe2506de13fc4c732053b3a0f3b",
+    "harness/tests/test_app_runtime_reuse_830.py": "7f3d31867383cd1ce62df7a99df2334d4e3590ccc635527a720f5eace763e84b",
+    "scripts/copy-licenses.sh": "6b5a254e56eacb2eea6ffb1b889048fd34cd0afa0759259eadfe554bfd9beabc",
+    "scripts/check-license-bundle.sh": "04f61c6a09654129d3089e46f4bbdc69689a81abe1ce4fd578aa1ea8974550a6",
+    "scripts/verify-browserskill-extension.py": "aff32d3cac63a87712cf3c88fbb45fc0a5cbbd418926706729b0e63e6128330d",
+    "THIRD_PARTY_NOTICES.md": "229d55a22a0282661d04838c5cd0571e74bd24c53ca19882e28ef9cbd661c0f2",
+    "harness/tests/test_upgrade_runtime_assets_830.py": "a9eb245754734a6cd3848350c5871e839559d15dcf23ac8ed80d7adbe80a32d1",
+    "Makefile": "979f8a97c98eeaf643134962e731e096d1cb4f73eb14b39d83845d2a462a8201",
+    "scripts/build_images.sh": "6b17e3f95a3bab934cff9820570e7a45d6f81bd30e5ea0eb4c79e5fb5219c197"
+  }
+}

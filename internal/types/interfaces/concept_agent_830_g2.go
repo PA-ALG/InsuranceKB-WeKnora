@@ -39,17 +39,18 @@ type ConceptAgentRelease830G2 struct {
 }
 
 // ConceptAgentTurn830G2 separates release-managed Wiki KBs from ordinary Wiki
-// KBs. Absence from Releases means the existing unmanaged path remains valid.
+// KBs. ManagedSourceKBIDs also protects RAW-only targets without pinning a Wiki.
 type ConceptAgentTurn830G2 struct {
-	Releases map[string]ConceptAgentRelease830G2 `json:"releases"`
+	Releases           map[string]ConceptAgentRelease830G2 `json:"releases"`
+	ManagedSourceKBIDs []string                            `json:"managed_source_kb_ids"`
 }
 
-// ConceptAgentWikiScope830G2 is the server-resolved owner identity for one
-// Wiki search target. TenantID is re-read from the current KB row before the
+// ConceptAgentKnowledgeScope830G2 is the server-resolved owner identity for one
+// knowledge search target. TenantID is re-read from the current KB row before the
 // release authority is consulted.
-type ConceptAgentWikiScope830G2 struct {
-	WikiKBID string `json:"wiki_kb_id"`
-	TenantID uint64 `json:"tenant_id"`
+type ConceptAgentKnowledgeScope830G2 struct {
+	KnowledgeBaseID string `json:"knowledge_base_id"`
+	TenantID        uint64 `json:"tenant_id"`
 }
 
 // ConceptAgentTurnProvider830G2 resolves every managed Wiki scope and freezes
@@ -57,6 +58,6 @@ type ConceptAgentWikiScope830G2 struct {
 type ConceptAgentTurnProvider830G2 interface {
 	PinConceptAgentTurn830G2(
 		ctx context.Context,
-		wikiScopes []ConceptAgentWikiScope830G2,
+		wikiScopes []ConceptAgentKnowledgeScope830G2,
 	) (*ConceptAgentTurn830G2, error)
 }

@@ -78,6 +78,10 @@
               <span class="legend-dot" style="background: #d54941"></span>
               {{ $t('knowledgeEditor.wikiBrowser.filterComparison') }}
             </div>
+            <div v-if="graphFamiliarCount > 0" class="legend-item">
+              <span class="legend-familiar-ring"></span>
+              {{ $t('knowledgeEditor.wikiBrowser.legendFamiliar') }}
+            </div>
           </div>
           <div class="legend-divider"></div>
           <div class="legend-actions">
@@ -128,7 +132,7 @@
 
         <!-- Graph page detail drawer -->
         <t-drawer v-model:visible="graphDrawerVisible" :header="graphDrawerPage?.title || ''" size="480px"
-          :footer="false" placement="right" :attach="false" :show-overlay="false" :close-btn="true" destroy-on-close
+          :footer="false" placement="right" :show-overlay="false" :close-btn="true" destroy-on-close
           class="wiki-graph-drawer">
           <template v-if="graphDrawerPage">
             <div class="wiki-reader-meta" style="margin-bottom: 8px;">
@@ -218,15 +222,7 @@
               <span class="wiki-nav-text">{{ $t('knowledgeEditor.wikiBrowser.indexTitle') }}</span>
             </div>
 
-            <!-- Log feed (pinned). Events live in wiki_log_entries and
-                 are loaded lazily when the user clicks this entry. -->
-            <div v-if="logAvailable" :class="['wiki-nav-item', { active: activeSystemView === 'log' }]"
-              @click="openLogView">
-              <t-icon name="history" class="wiki-nav-icon" />
-              <span class="wiki-nav-text">{{ $t('knowledgeEditor.wikiBrowser.logTitle') }}</span>
-            </div>
-
-            <div class="wiki-sidebar-divider" v-if="indexAvailable || logAvailable"></div>
+            <div class="wiki-sidebar-divider" v-if="indexAvailable"></div>
 
             <!-- Tab bar + tree share one horizontal inset so the "new folder"
                  action lines up with the folder rows below. -->
@@ -336,7 +332,7 @@
                       <t-loading v-if="item.loading" size="small" />
                       <template v-else>
                         <t-icon name="chevron-down" />
-                        <span>{{ $t('knowledgeEditor.wikiBrowser.logLoadMore') }}</span>
+                        <span>{{ $t('knowledgeEditor.wikiBrowser.loadMoreShort') }}</span>
                       </template>
                     </div>
                     <div v-else
@@ -411,130 +407,166 @@
 
               <!-- Page header -->
               <div class="wiki-reader-header">
-                <h2 class="wiki-reader-title" style="display: flex; align-items: center;">
-                  {{ selectedPage.title }}
+                <div class="wiki-reader-title-row">
+                  <div class="wiki-reader-title-block">
+                    <h2 v-if="!editingPage" class="wiki-reader-title">
+                      <span class="wiki-reader-title-text">{{ selectedPage.title }}</span>
 
-                  <t-popup v-if="pageIssues.length > 0" v-model="showIssuesBox" placement="bottom-left" trigger="click"
-                    :overlayInnerStyle="{ padding: 0, boxShadow: 'var(--td-shadow-3)', borderRadius: '8px', width: '560px', maxWidth: '90vw' }">
-                    <span class="wiki-issue-trigger"
-                      :title="$t('knowledgeEditor.wikiBrowser.issueTitle', { count: pageIssues.length })">
-                      <t-icon name="error-circle-filled" style="color: var(--td-warning-color);" />
-                    </span>
+                      <t-popup v-if="pageIssues.length > 0" v-model="showIssuesBox" placement="bottom-left"
+                        trigger="click"
+                        :overlayInnerStyle="{ padding: 0, boxShadow: 'var(--td-shadow-3)', borderRadius: '8px', width: '560px', maxWidth: '90vw' }">
+                        <span class="wiki-issue-trigger"
+                          :title="$t('knowledgeEditor.wikiBrowser.issueTitle', { count: pageIssues.length })">
+                          <t-icon name="error-circle-filled" style="color: var(--td-warning-color);" />
+                        </span>
 
-                    <template #content>
-                      <div class="wiki-issue-popup-content">
-                        <div class="wiki-issue-popup-header">
-                          <div class="wiki-issue-popup-title">
-                            <span>{{ $t('knowledgeEditor.wikiBrowser.issueFixSuggestions', { count: pageIssues.length })
-                            }}</span>
-                          </div>
-                          <t-button v-if="props.canEdit" size="small" theme="primary" variant="base"
-                            @click="triggerAutoFix">
-                            <template #icon><t-icon name="tools" /></template>
-                            {{ $t('knowledgeEditor.wikiBrowser.issueFixBtn') }}
-                          </t-button>
-                        </div>
-                        <div class="wiki-issue-popup-list">
-                          <div v-for="issue in pageIssues" :key="issue.id" class="wiki-issue-popup-item">
-                            <div class="wiki-issue-popup-main">
-                              <div class="wiki-issue-popup-tags">
-                                <t-tag v-if="issue.issue_type === 'mixed_entities'" theme="warning" variant="light"
-                                  size="small">{{
-                                    $t('knowledgeEditor.wikiBrowser.issueMixed') }}</t-tag>
-                                <t-tag v-else-if="issue.issue_type === 'contradictory_facts'" theme="danger"
-                                  variant="light" size="small">{{
-                                    $t('knowledgeEditor.wikiBrowser.issueConflict') }}</t-tag>
-                                <t-tag v-else-if="issue.issue_type === 'out_of_date'" theme="default" variant="light"
-                                  size="small">{{
-                                    $t('knowledgeEditor.wikiBrowser.issueOutdated') }}</t-tag>
-                                <t-tag v-else theme="primary" variant="light" size="small">{{
-                                  $t('knowledgeEditor.wikiBrowser.issueAttention') }}</t-tag>
+                        <template #content>
+                          <div class="wiki-issue-popup-content">
+                            <div class="wiki-issue-popup-header">
+                              <div class="wiki-issue-popup-title">
+                                <span>{{ $t('knowledgeEditor.wikiBrowser.issueFixSuggestions', {
+                                  count:
+                                    pageIssues.length
+                                })
+                                }}</span>
                               </div>
-                              <div class="wiki-issue-popup-desc">
-                                {{ issue.description }}
-                              </div>
-                              <div class="wiki-issue-popup-meta">
-                                <span class="wiki-issue-popup-reporter">
-                                  {{ issue.reported_by === 'wiki-researcher-agent' ?
-                                    $t('knowledgeEditor.wikiBrowser.issueAiLinter') :
-                                    $t('knowledgeEditor.wikiBrowser.issueReportedBy', { reporter: issue.reported_by }) }}
-                                </span>
-                                <div v-if="props.canEdit" class="wiki-issue-popup-actions">
-                                  <span class="wiki-issue-popup-action" @click="triggerFixIssue(issue)"
-                                    style="margin-right: 12px; font-weight: 500;">
-                                    <t-icon name="tools" style="margin-right: 4px;" />{{
-                                      $t('knowledgeEditor.wikiBrowser.issueFixSingle') }}
-                                  </span>
-                                  <span class="wiki-issue-popup-action" style="color: var(--td-text-color-placeholder);"
-                                    @click="handleIssueIgnore(issue.id)">{{
-                                      $t('knowledgeEditor.wikiBrowser.issueIgnore') }}</span>
+                              <t-button v-if="props.canEdit" size="small" theme="primary" variant="base"
+                                @click="triggerAutoFix">
+                                <template #icon><t-icon name="tools" /></template>
+                                {{ $t('knowledgeEditor.wikiBrowser.issueFixBtn') }}
+                              </t-button>
+                            </div>
+                            <div class="wiki-issue-popup-list">
+                              <div v-for="issue in pageIssues" :key="issue.id" class="wiki-issue-popup-item">
+                                <div class="wiki-issue-popup-main">
+                                  <div class="wiki-issue-popup-tags">
+                                    <t-tag v-if="issue.issue_type === 'mixed_entities'" theme="warning" variant="light"
+                                      size="small">{{
+                                        $t('knowledgeEditor.wikiBrowser.issueMixed') }}</t-tag>
+                                    <t-tag v-else-if="issue.issue_type === 'contradictory_facts'" theme="danger"
+                                      variant="light" size="small">{{
+                                        $t('knowledgeEditor.wikiBrowser.issueConflict') }}</t-tag>
+                                    <t-tag v-else-if="issue.issue_type === 'out_of_date'" theme="default" variant="light"
+                                      size="small">{{
+                                        $t('knowledgeEditor.wikiBrowser.issueOutdated') }}</t-tag>
+                                    <t-tag v-else theme="primary" variant="light" size="small">{{
+                                      $t('knowledgeEditor.wikiBrowser.issueAttention') }}</t-tag>
+                                  </div>
+                                  <div class="wiki-issue-popup-desc">
+                                    {{ issue.description }}
+                                  </div>
+                                  <div class="wiki-issue-popup-meta">
+                                    <span class="wiki-issue-popup-reporter">
+                                      {{ issue.reported_by === 'wiki-researcher-agent' ?
+                                        $t('knowledgeEditor.wikiBrowser.issueAiLinter') :
+                                        $t('knowledgeEditor.wikiBrowser.issueReportedBy', {
+                                          reporter:
+                                            issue.reported_by
+                                        }) }}
+                                    </span>
+                                    <div v-if="props.canEdit" class="wiki-issue-popup-actions">
+                                      <span class="wiki-issue-popup-action" @click="triggerFixIssue(issue)"
+                                        style="margin-right: 12px; font-weight: 500;">
+                                        <t-icon name="tools" style="margin-right: 4px;" />{{
+                                          $t('knowledgeEditor.wikiBrowser.issueFixSingle') }}
+                                      </span>
+                                      <span class="wiki-issue-popup-action"
+                                        style="color: var(--td-text-color-placeholder);"
+                                        @click="handleIssueIgnore(issue.id)">{{
+                                          $t('knowledgeEditor.wikiBrowser.issueIgnore') }}</span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    </template>
-                  </t-popup>
-                </h2>
-                <div v-if="selectedPage.aliases && selectedPage.aliases.length" class="wiki-reader-aliases">
-                  <span class="wiki-alias-label">{{ $t('knowledgeEditor.wikiBrowser.aliases') }}:</span>
-                  <t-tag v-for="alias in selectedPage.aliases" :key="alias" size="small" variant="light"
-                    class="wiki-alias-tag">
-                    {{ alias }}
-                  </t-tag>
+                        </template>
+                      </t-popup>
+                    </h2>
+                    <t-input v-else v-model="editForm.title" class="wiki-edit-field wiki-edit-field--title"
+                      :placeholder="$t('knowledgeEditor.wikiBrowser.editTitlePlaceholder')" />
+                    <div class="wiki-reader-title-badges wiki-reader-title-badges--secondary">
+                      <span v-if="editingPage" class="wiki-badge wiki-badge--editing">
+                        {{ $t('knowledgeEditor.wikiBrowser.editingBadge') }}
+                      </span>
+                      <span class="wiki-badge wiki-badge--type">
+                        <t-icon :name="getPageIcon(selectedPage)" />
+                        {{ getTypeLabel(selectedPage.page_type) }}
+                      </span>
+                      <span class="wiki-badge wiki-badge--ver">
+                        {{ $t('knowledgeEditor.wikiBrowser.version', { ver: selectedPage.version }) }}
+                      </span>
+                      <t-tooltip v-if="editSourceVisible(selectedPage.last_edit_source)"
+                        :content="editSourceLabel(selectedPage.last_edit_source)">
+                        <span class="wiki-badge wiki-badge--source">
+                          <t-icon :name="editSourceIcon(selectedPage.last_edit_source)" />
+                          {{ editSourceLabel(selectedPage.last_edit_source) }}
+                        </span>
+                      </t-tooltip>
+                      <span v-for="alias in (selectedPage.aliases || [])" :key="alias"
+                        class="wiki-badge wiki-badge--alias"
+                        :title="`${$t('knowledgeEditor.wikiBrowser.aliases')} ${alias}`">
+                        <t-icon name="link" />
+                        {{ alias }}
+                      </span>
+                    </div>
+                    <p v-if="!editingPage && selectedPage.summary" class="wiki-reader-lead">{{ selectedPage.summary }}</p>
+                    <t-textarea v-if="editingPage" v-model="editForm.summary"
+                      class="wiki-edit-field wiki-edit-field--summary" :autosize="{ minRows: 2, maxRows: 4 }"
+                      :placeholder="$t('knowledgeEditor.wikiBrowser.editSummaryPlaceholder')" />
+                  </div>
+                  <div class="wiki-reader-aside">
+                    <div class="wiki-reader-actions" role="toolbar"
+                      :aria-label="$t('knowledgeEditor.wikiBrowser.pageActions')">
+                      <template v-if="editingPage">
+                        <t-button theme="primary" size="small" :loading="savingPage" @click="savePageEdit()">
+                          {{ $t('common.save') }}
+                        </t-button>
+                        <t-button variant="text" size="small" :disabled="savingPage" @click="cancelEditPage">
+                          {{ $t('common.cancel') }}
+                        </t-button>
+                      </template>
+                      <template v-else>
+                        <t-tooltip v-if="props.canEdit" :content="$t('knowledgeEditor.wikiBrowser.editBtn')"
+                          placement="top">
+                          <button type="button" class="wiki-action-btn"
+                            :aria-label="$t('knowledgeEditor.wikiBrowser.editBtn')" @click="startEditPage">
+                            <t-icon name="edit" />
+                          </button>
+                        </t-tooltip>
+                        <t-tooltip :content="$t('knowledgeEditor.wikiBrowser.historyBtn')" placement="top">
+                          <button type="button" class="wiki-action-btn"
+                            :aria-label="$t('knowledgeEditor.wikiBrowser.historyBtn')" @click="openRevisionDrawer">
+                            <t-icon name="history" />
+                          </button>
+                        </t-tooltip>
+                        <t-tooltip :content="$t('knowledgeEditor.wikiBrowser.viewInGraph')" placement="top">
+                          <button type="button" class="wiki-action-btn"
+                            :aria-label="$t('knowledgeEditor.wikiBrowser.viewInGraph')"
+                            @click="emit('view-graph', selectedPage.slug)">
+                            <t-icon name="chart-bubble" />
+                          </button>
+                        </t-tooltip>
+                        <t-popconfirm v-if="props.canEdit" theme="danger"
+                          :content="$t('knowledgeEditor.wikiBrowser.deletePageConfirm', { title: selectedPage.title })"
+                          @confirm="confirmDeletePage">
+                          <t-tooltip :content="$t('knowledgeEditor.wikiBrowser.deletePageBtn')" placement="top">
+                            <button type="button" class="wiki-action-btn wiki-action-btn--danger"
+                              :aria-label="$t('knowledgeEditor.wikiBrowser.deletePageBtn')">
+                              <t-icon name="delete" />
+                            </button>
+                          </t-tooltip>
+                        </t-popconfirm>
+                      </template>
+                    </div>
+                    <div v-if="!editingPage" class="wiki-reader-aside-meta">
+                      <span class="wiki-reader-aside-meta-item">
+                        <t-icon name="time" size="14px" />
+                        {{ formatDate(selectedPage.updated_at) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div class="wiki-reader-meta">
-                  <t-tag size="small" :theme="getTypeTheme(selectedPage.page_type)" variant="light-outline">
-                    {{ getTypeLabel(selectedPage.page_type) }}
-                  </t-tag>
-                  <span class="wiki-reader-meta-text">{{ $t('knowledgeEditor.wikiBrowser.version', {
-                    ver:
-                      selectedPage.version
-                  })
-                  }}</span>
-                  <!-- Provenance of the current version; only surfaced when a
-                       human / agent / revert touched it — pipeline is the
-                       default and would just be noise. -->
-                  <t-tag v-if="editSourceVisible(selectedPage.last_edit_source)" size="small"
-                    :theme="editSourceTheme(selectedPage.last_edit_source)" variant="light">
-                    {{ editSourceLabel(selectedPage.last_edit_source) }}
-                  </t-tag>
-                  <span class="wiki-reader-meta-text">{{ formatDate(selectedPage.updated_at) }}</span>
-                  <t-link theme="primary" hover="color" class="wiki-reader-graph-link"
-                    @click="emit('view-graph', selectedPage.slug)">
-                    <template #prefixIcon><t-icon name="chart-bubble" /></template>
-                    {{ $t('knowledgeEditor.wikiBrowser.viewInGraph') }}
-                  </t-link>
-                  <span class="wiki-reader-actions">
-                    <t-link theme="default" hover="color" @click="openRevisionDrawer">
-                      <template #prefixIcon><t-icon name="history" /></template>
-                      {{ $t('knowledgeEditor.wikiBrowser.historyBtn') }}
-                    </t-link>
-                    <t-link v-if="props.canEdit && !editingPage" theme="primary" hover="color" @click="startEditPage">
-                      <template #prefixIcon><t-icon name="edit" /></template>
-                      {{ $t('knowledgeEditor.wikiBrowser.editBtn') }}
-                    </t-link>
-                    <t-popconfirm v-if="props.canEdit" theme="danger"
-                      :content="$t('knowledgeEditor.wikiBrowser.deletePageConfirm', { title: selectedPage.title })"
-                      @confirm="confirmDeletePage">
-                      <t-link theme="danger" hover="color">
-                        <template #prefixIcon><t-icon name="delete" /></template>
-                        {{ $t('knowledgeEditor.wikiBrowser.deletePageBtn') }}
-                      </t-link>
-                    </t-popconfirm>
-                  </span>
-                </div>
-              </div>
-
-              <!-- Backlinks (in_links) -->
-              <div v-if="selectedPage.in_links?.length" class="wiki-reader-backlinks">
-                <span class="wiki-backlink-label">
-                  <t-icon name="link" size="14px" />
-                  {{ $t('knowledgeEditor.wikiBrowser.linkedFrom') }}
-                </span>
-                <a v-for="link in selectedPage.in_links" :key="'in-' + link" href="#" class="wiki-backlink-tag"
-                  @click.prevent="navigateToSlug(link)">{{ slugDisplayName(link) }}</a>
               </div>
 
               <!-- Content -->
@@ -546,43 +578,46 @@
                    the page version captured at edit start; the backend answers
                    409 when someone (or the pipeline) edited in between. -->
               <div v-else class="wiki-page-editor">
-                <t-input v-model="editForm.title" class="wiki-page-editor-title"
-                  :placeholder="$t('knowledgeEditor.wikiBrowser.editTitlePlaceholder')" />
-                <t-textarea v-model="editForm.summary" class="wiki-page-editor-summary"
-                  :autosize="{ minRows: 2, maxRows: 4 }"
-                  :placeholder="$t('knowledgeEditor.wikiBrowser.editSummaryPlaceholder')" />
-                <t-textarea v-model="editForm.content" class="wiki-page-editor-content"
+                <t-textarea v-model="editForm.content" class="wiki-edit-field wiki-edit-field--content"
                   :autosize="{ minRows: 16, maxRows: 40 }"
                   :placeholder="$t('knowledgeEditor.wikiBrowser.editContentPlaceholder')" />
-                <div v-if="editConflictVersion !== null" class="wiki-page-editor-conflict">
-                  <t-icon name="error-circle" />
-                  <span>{{ $t('knowledgeEditor.wikiBrowser.editConflictHint', { ver: editConflictVersion }) }}</span>
-                  <t-link theme="primary" hover="color" @click="reloadLatestIntoEditor">
-                    {{ $t('knowledgeEditor.wikiBrowser.editConflictReload') }}
-                  </t-link>
-                  <t-link theme="warning" hover="color" @click="overwriteSavePage">
-                    {{ $t('knowledgeEditor.wikiBrowser.editConflictOverwrite') }}
-                  </t-link>
-                </div>
-                <div class="wiki-page-editor-footer">
-                  <t-button theme="primary" :loading="savingPage" @click="savePageEdit()">
-                    {{ $t('common.save') }}
-                  </t-button>
-                  <t-button variant="outline" :disabled="savingPage" @click="cancelEditPage">
-                    {{ $t('common.cancel') }}
-                  </t-button>
-                </div>
+                <t-alert v-if="editConflictVersion !== null" theme="warning" class="wiki-page-editor-conflict"
+                  :message="t('knowledgeEditor.wikiBrowser.editConflictHint', { ver: editConflictVersion })">
+                  <template #operation>
+                    <span class="wiki-page-editor-conflict-actions">
+                      <t-link theme="primary" hover="color" @click="reloadLatestIntoEditor">
+                        {{ $t('knowledgeEditor.wikiBrowser.editConflictReload') }}
+                      </t-link>
+                      <t-link theme="warning" hover="color" @click="overwriteSavePage">
+                        {{ $t('knowledgeEditor.wikiBrowser.editConflictOverwrite') }}
+                      </t-link>
+                    </span>
+                  </template>
+                </t-alert>
               </div>
 
-              <!-- Source refs -->
-              <div v-if="parsedSourceRefs.length" class="wiki-reader-sources">
-                <span class="wiki-link-label">{{ $t('knowledgeEditor.wikiBrowser.sources') }}</span>
-                <a v-for="ref in parsedSourceRefs" :key="ref.id" href="#" class="wiki-source-ref"
-                  @click.prevent="emit('open-source-doc', ref.id)">
-                  <t-icon name="file" size="14px" />
-                  {{ ref.title }}
-                </a>
-              </div>
+              <!-- Page footer: backlinks + sources -->
+              <footer v-if="!editingPage && (selectedPage.in_links?.length || parsedSourceRefs.length)"
+                class="wiki-reader-footer">
+                <div v-if="selectedPage.in_links?.length" class="wiki-reader-footer-row">
+                  <span class="wiki-reader-footer-label">{{ $t('knowledgeEditor.wikiBrowser.linkedFrom') }}</span>
+                  <span class="wiki-reader-footer-value">
+                    <a v-for="link in selectedPage.in_links" :key="'in-' + link" href="#"
+                      class="wiki-content-link" @click.prevent="navigateToSlug(link)">
+                      {{ slugDisplayName(link) }}
+                    </a>
+                  </span>
+                </div>
+                <div v-if="parsedSourceRefs.length" class="wiki-reader-footer-row">
+                  <span class="wiki-reader-footer-label">{{ $t('knowledgeEditor.wikiBrowser.sources') }}</span>
+                  <span class="wiki-reader-footer-value">
+                    <a v-for="ref in parsedSourceRefs" :key="ref.id" href="#" class="wiki-content-link"
+                      @click.prevent="emit('open-source-doc', ref.id)">
+                      {{ ref.title }}
+                    </a>
+                  </span>
+                </div>
+              </footer>
             </template>
 
             <!-- System view: index overview rendered as markdown. Starts
@@ -602,57 +637,19 @@
                 </div>
               </div>
               <div v-if="indexLoading && !indexMarkdown" class="wiki-reader-empty">
-                <p class="wiki-empty-title">{{ $t('knowledgeEditor.wikiBrowser.logLoading') }}</p>
+                <p class="wiki-empty-title">{{ $t('knowledgeEditor.wikiBrowser.loading') }}</p>
               </div>
               <template v-else-if="indexMarkdown">
                 <div ref="indexBodyRef" class="wiki-reader-body wiki-index-body" v-html="renderedIndexMarkdown"
                   @click="handleContentClick"></div>
                 <div v-if="indexHasMore" ref="indexSentinelRef" class="wiki-index-sentinel">
                   <span v-if="indexLoading" class="wiki-index-loading">
-                    {{ $t('knowledgeEditor.wikiBrowser.logLoading') }}
+                    {{ $t('knowledgeEditor.wikiBrowser.loading') }}
                   </span>
                 </div>
               </template>
               <div v-else-if="!indexLoading" class="wiki-reader-empty">
                 <p class="wiki-empty-title">{{ $t('knowledgeEditor.wikiBrowser.indexEmpty') }}</p>
-              </div>
-            </template>
-
-            <!-- System view: log feed. Mutually exclusive with selectedPage. -->
-            <template v-else-if="activeSystemView === 'log'">
-              <div class="wiki-reader-header">
-                <h2 class="wiki-reader-title">{{ $t('knowledgeEditor.wikiBrowser.logTitle') }}</h2>
-                <div class="wiki-reader-meta">
-                  <t-tag size="small" theme="default" variant="light-outline">
-                    {{ $t('knowledgeEditor.wikiBrowser.logFeedTag') }}
-                  </t-tag>
-                </div>
-              </div>
-              <div class="wiki-log-feed">
-                <div v-if="logEntries.length === 0 && logInitialized" class="wiki-log-empty">
-                  {{ $t('knowledgeEditor.wikiBrowser.logEmpty') }}
-                </div>
-                <div v-for="entry in logEntries" :key="entry.id" class="wiki-log-entry">
-                  <div class="wiki-log-entry-header">
-                    <t-tag size="small" :theme="logActionTheme(entry.action)" variant="light">
-                      {{ logActionLabel(entry.action) }}
-                    </t-tag>
-                    <span class="wiki-log-entry-title">{{ entry.doc_title || entry.knowledge_id || '—' }}</span>
-                    <span class="wiki-log-entry-time">{{ formatDate(entry.created_at) }}</span>
-                  </div>
-                  <div v-if="entry.summary" class="wiki-log-entry-summary">{{ entry.summary }}</div>
-                  <div v-if="entry.pages_affected && entry.pages_affected.length" class="wiki-log-entry-pages">
-                    <a v-for="ref in entry.pages_affected" :key="entry.id + ':' + ref.slug" href="#"
-                      class="wiki-log-entry-page" :title="ref.slug" @click.prevent="navigateToSlug(ref.slug)">{{
-                        ref.title || ref.slug }}</a>
-                  </div>
-                </div>
-                <div v-if="logNextCursor || !logInitialized" class="wiki-log-load-more">
-                  <t-button size="small" variant="outline" theme="default" :loading="logLoading" @click="loadMoreLog">
-                    {{ logInitialized ? $t('knowledgeEditor.wikiBrowser.logLoadMore') :
-                      $t('knowledgeEditor.wikiBrowser.logLoading') }}
-                  </t-button>
-                </div>
               </div>
             </template>
 
@@ -802,7 +799,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { useSettingsStore } from '@/stores/settings'
@@ -811,9 +808,15 @@ import { marked } from 'marked'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import { hydrateProtectedFileImages, sanitizeMarkdownHTML } from '@/utils/security'
+import type { ProtectedFileAccessContext } from '@/utils/protectedFileAccess'
 import picturePreview from '@/components/picture-preview.vue'
 import WikiFolderActions from './WikiFolderActions.vue'
 import WikiRevisionDrawer from './WikiRevisionDrawer.vue'
+import {
+  expandedWikiDirectoryPaths,
+  expandWikiDirectoryPath,
+} from './wikiDirectoryState'
+import { getKnowledgeDetails } from '@/api/knowledge-base'
 import { createSessions } from '@/api/chat'
 import ChatView from '@/views/chat/index.vue'
 import {
@@ -828,7 +831,6 @@ import {
   deleteWikiPage,
   getWikiPage,
   getWikiIndex,
-  getWikiLog,
   getWikiGraph,
   getWikiStats,
   searchWikiPages,
@@ -839,7 +841,6 @@ import {
   type WikiGraphData,
   type WikiStats,
   type WikiPageIssue,
-  type WikiLogEntry,
   type WikiIndexGroup,
   type WikiIndexEntryDTO,
 } from '@/api/wiki'
@@ -866,6 +867,13 @@ const emit = defineEmits<{
   (e: 'status-change', payload: { pendingTasks: number; isActive: boolean; pendingIssues: number }): void
   (e: 'view-graph', slug: string): void
 }>()
+
+// Wiki content can reference objects owned by the KB's source tenant (shared
+// KBs), which the tenant-scoped /files proxy rejects as cross-tenant.
+const kbFileAccess = computed<ProtectedFileAccessContext>(() => ({
+  mode: 'knowledgeBase',
+  kbId: props.knowledgeBaseId,
+}))
 const pages = ref<WikiPage[]>([])
 const selectedPage = ref<WikiPage | null>(null)
 
@@ -967,27 +975,10 @@ const INDEX_SECTION_ORDER = [
   'synthesis',
   'comparison',
 ] as const
-// logAvailable is a flag: the sidebar "Log" entry is always shown once a
-// KB exists, because the backing wiki_log_entries table is KB-independent
-// and `GET /wiki/log` returns an empty entries list when nothing has been
-// logged yet. We don't need a full WikiPage object anymore — selecting
-// Log swaps the reader into a dedicated feed view below.
-const logAvailable = ref(true)
-
-// activeSystemView lets the reader toggle between a regular wiki page
-// (selectedPage) and a "virtual" system view — index overview and log
-// feed. These modes are mutually exclusive: entering a system view
-// clears selectedPage, and picking a page clears the system view flag.
-const activeSystemView = ref<'' | 'index' | 'log'>('')
-
-// Paginated state for the log view. `entries` grows as the user scrolls;
-// `nextCursor` is the opaque cursor returned by the backend and empty
-// signals end-of-feed. `loading` is the guard that prevents overlapping
-// loadMore calls while a request is in flight.
-const logEntries = ref<WikiLogEntry[]>([])
-const logNextCursor = ref('')
-const logLoading = ref(false)
-const logInitialized = ref(false)
+// activeSystemView lets the reader toggle between a regular wiki page and the
+// virtual index overview. Entering the index clears the selected page, and
+// picking a page clears the system view flag.
+const activeSystemView = ref<'' | 'index'>('')
 
 // When the user types into the search box we leave pagination mode and
 // show a flat result list instead. Bucketed state is preserved behind
@@ -1012,7 +1003,7 @@ const graphReady = ref(false)
 const showArrows = ref(true)
 
 // Graph filtering
-const graphFilterTypes = ref<Set<string>>(new Set(['summary', 'entity', 'concept', 'synthesis', 'comparison', 'index', 'log']))
+const graphFilterTypes = ref<Set<string>>(new Set(['summary', 'entity', 'concept', 'synthesis', 'comparison', 'index']))
 
 // Graph slicing state. The backend caps an overview fetch at 500 nodes —
 // tens-of-thousands-page wikis would otherwise crash the browser trying to
@@ -1156,17 +1147,13 @@ function fitGraphToView() {
 const graphDrawerVisible = ref(false)
 const graphDrawerPage = ref<WikiPage | null>(null)
 const navHistory = ref<WikiPage[]>([])
-// navFromSystemView remembers which system view (Index / Log) the user
-// was viewing when they clicked into a slug, so goBack can restore it
+// navFromSystemView remembers that the user was viewing the Index when they
+// clicked into a slug, so goBack can restore it
 // once the page-level history stack is empty. We keep this parallel to
 // navHistory rather than widening its element type — navHistory is
 // consumed everywhere as `WikiPage[]` and that contract stays cleaner
 // if the system-view sentinel lives in its own ref.
-const navFromSystemView = ref<'' | 'index' | 'log'>('')
-// Index and log pages are now state refs (loaded by their own endpoints
-// at startup) rather than computed over the full page list. The old
-// computed implementation required pulling every page into memory just
-// to pluck two system pages.
+const navFromSystemView = ref<'' | 'index'>('')
 
 // typeOrder drives the order of groups in the sidebar. Keep in sync
 // with WIKI_PAGE_TYPES on the backend; unknown types fall through to
@@ -1244,7 +1231,7 @@ const groupedPages = computed(() => {
   // order so the sidebar doesn't suddenly hide a future tab.
   for (const tab of Object.keys(pagesByType.value)) {
     if (seen.has(tab)) continue
-    if (tab === 'index' || tab === 'log') continue
+    if (tab === 'index') continue
     push(tab)
   }
   return out
@@ -1261,18 +1248,55 @@ const hasContentPages = computed(() => {
   return false
 })
 
-// Parse source refs in "id|title" format
+// Pipeline ingest stores source_refs as bare knowledge IDs (see wiki_ingest_batch)
+// so filenames do not leak into LLM citation strings. Resolve titles for display.
+const sourceRefTitleCache = reactive<Record<string, string>>({})
+let sourceRefTitleRequestSeq = 0
+
+function parseSourceRefEntry(ref: string): { id: string; title: string } {
+  const pipeIdx = ref.indexOf('|')
+  if (pipeIdx > 0) {
+    return { id: ref.substring(0, pipeIdx), title: ref.substring(pipeIdx + 1) }
+  }
+  const cached = sourceRefTitleCache[ref]
+  if (cached) {
+    return { id: ref, title: cached }
+  }
+  return {
+    id: ref,
+    title: ref.length > 20 ? ref.substring(0, 8) + '...' : ref,
+  }
+}
+
 const parsedSourceRefs = computed(() => {
   if (!selectedPage.value?.source_refs?.length) return []
-  return selectedPage.value.source_refs.map(ref => {
-    const pipeIdx = ref.indexOf('|')
-    if (pipeIdx > 0) {
-      return { id: ref.substring(0, pipeIdx), title: ref.substring(pipeIdx + 1) }
-    }
-    // Fallback: show raw ref (backwards compat with old data)
-    return { id: ref, title: ref.length > 20 ? ref.substring(0, 8) + '...' : ref }
-  })
+  return selectedPage.value.source_refs.map(parseSourceRefEntry)
 })
+
+async function hydrateSourceRefTitles(refs: string[]) {
+  const ids = refs.filter((ref) => ref.indexOf('|') < 0 && !sourceRefTitleCache[ref])
+  if (!ids.length) return
+  const seq = ++sourceRefTitleRequestSeq
+  for (const id of ids) {
+    try {
+      const res = await getKnowledgeDetails(id)
+      if (seq !== sourceRefTitleRequestSeq) return
+      const data = (res as any)?.data ?? res
+      const title = data?.title || data?.file_name || data?.fileName
+      if (title) sourceRefTitleCache[id] = title
+    } catch {
+      // Keep truncated-ID fallback when the doc was deleted or is inaccessible.
+    }
+  }
+}
+
+watch(
+  () => selectedPage.value?.source_refs,
+  (refs) => {
+    if (refs?.length) hydrateSourceRefTitles(refs)
+  },
+  { immediate: true },
+)
 
 // Rendered content for graph drawer
 const graphDrawerContent = computed(() => {
@@ -1416,6 +1440,8 @@ const graphFrontierCount = computed(() => {
   return count
 })
 
+const graphFamiliarCount = computed(() => graphData.value?.meta?.familiar_count || 0)
+
 // graphStatusCard drives the little summary panel below the legend.
 //
 // The old design ("以 A 为中心 · 1 跳 · 7 个节点" / "showing 500 / 40000,
@@ -1500,7 +1526,7 @@ function closeImagePreview() {
 watch(graphDrawerContent, async () => {
   await nextTick()
   if (drawerBodyRef.value) {
-    await hydrateProtectedFileImages(drawerBodyRef.value, undefined, props.knowledgeBaseId)
+    await hydrateProtectedFileImages(drawerBodyRef.value, kbFileAccess.value)
   }
 })
 
@@ -1938,7 +1964,7 @@ watch([activeTreeRows, treeListRef], () => {
 function getTypeTheme(type: string): string {
   const map: Record<string, string> = {
     summary: 'primary', entity: 'success', concept: 'warning',
-    synthesis: 'primary', comparison: 'danger', index: 'default', log: 'default',
+    synthesis: 'primary', comparison: 'danger', index: 'default',
   }
   return map[type] || 'default'
 }
@@ -1952,7 +1978,6 @@ function getTypeLabel(type: string): string {
     synthesis: t('knowledgeEditor.wikiBrowser.filterSynthesis'),
     comparison: t('knowledgeEditor.wikiBrowser.filterComparison'),
     index: 'Index',
-    log: 'Log',
   }
   return map[type] || type
 }
@@ -1972,12 +1997,29 @@ function getPageIcon(page: WikiPage): string {
 
 const renderedContent = computed(() => {
   if (!selectedPage.value) return ''
-  return renderMarkdown(selectedPage.value.content)
+  const body = stripDuplicateLeadingTitle(selectedPage.value.content || '', selectedPage.value.title)
+  return renderMarkdown(body)
 })
+
+function stripDuplicateLeadingTitle(content: string, title: string): string {
+  if (!content || !title) return content
+  const lines = content.split('\n')
+  let i = 0
+  while (i < lines.length && lines[i].trim() === '') i++
+  if (i >= lines.length) return content
+  const headingMatch = lines[i].match(/^#\s+(.+?)\s*$/)
+  if (!headingMatch) return content
+  const heading = headingMatch[1].trim()
+  const pageTitle = title.trim()
+  if (heading !== pageTitle && heading.toLowerCase() !== pageTitle.toLowerCase()) return content
+  i++
+  while (i < lines.length && lines[i].trim() === '') i++
+  return lines.slice(i).join('\n')
+}
 
 // Label shown next to the back arrow on page headers. Prefers the
 // nearest page-history entry when available so the user sees where
-// they'll land; falls back to the Index/Log label when the current
+// they'll land; falls back to the Index label when the current
 // page was opened directly from a system view.
 const backLabel = computed(() => {
   if (navHistory.value.length > 0) {
@@ -1985,9 +2027,6 @@ const backLabel = computed(() => {
   }
   if (navFromSystemView.value === 'index') {
     return t('knowledgeEditor.wikiBrowser.indexTitle')
-  }
-  if (navFromSystemView.value === 'log') {
-    return t('knowledgeEditor.wikiBrowser.logTitle')
   }
   return ''
 })
@@ -2011,7 +2050,7 @@ const indexHasMore = computed(() => {
 watch(renderedContent, async () => {
   await nextTick()
   if (readerBodyRef.value) {
-    await hydrateProtectedFileImages(readerBodyRef.value, undefined, props.knowledgeBaseId)
+    await hydrateProtectedFileImages(readerBodyRef.value, kbFileAccess.value)
   }
 })
 
@@ -2021,7 +2060,7 @@ watch(renderedContent, async () => {
 watch(renderedIndexMarkdown, async () => {
   await nextTick()
   if (indexBodyRef.value) {
-    await hydrateProtectedFileImages(indexBodyRef.value, undefined, props.knowledgeBaseId)
+    await hydrateProtectedFileImages(indexBodyRef.value, kbFileAccess.value)
   }
 })
 
@@ -2188,11 +2227,28 @@ async function loadCategoriesForType(type: string, opts: { reset?: boolean; pare
 // pages for one tab. Used after a structural mutation (move page, create /
 // rename / delete folder) so the tree reflects the new layout authoritatively
 // instead of guessing at the optimistic delta.
-async function reloadDirectoryForType(type: string) {
+async function reloadDirectoryForType(
+  type: string,
+  opts: { preserveDirectoryState?: boolean } = {},
+) {
   const refreshFlatList = sidebarViewMode.value === 'list' || ensureBucket(type).flatInitialized
-  clearDirectoryStateForType(type)
-  await loadPagesForType(type, { reset: true })
+  const expandedPaths = opts.preserveDirectoryState
+    ? expandedWikiDirectoryPaths(type, collapsedDirectories.value, touchedDirectories.value)
+    : []
+  if (!opts.preserveDirectoryState) clearDirectoryStateForType(type)
+  await loadPagesForType(type, {
+    reset: true,
+    preserveDirectoryState: opts.preserveDirectoryState,
+  })
   await loadCategoriesForType(type, { reset: true })
+  // Folder data is fetched one level at a time. Reload preserved paths in
+  // parent-first order so each child request can resolve its parent folder id.
+  for (const path of expandedPaths) {
+    await Promise.all([
+      loadPagesForType(type, { categoryPath: path }),
+      loadCategoriesForType(type, { parentPath: path }),
+    ])
+  }
   if (refreshFlatList) await loadFlatPagesForType(type, true)
 }
 
@@ -2332,16 +2388,28 @@ async function confirmPendingMove() {
 // the API call, surface a toast, and reload the affected tab so the tree
 // reflects the new layout authoritatively.
 async function createFolder(parentId: string, parentPath: string[], name: string) {
+  const type = activeTab.value
+  const scrollTop = pageListRef.value?.scrollTop
   try {
     await createWikiFolder(props.knowledgeBaseId, parentId, name)
     MessagePlugin.success(t('knowledgeEditor.wikiBrowser.createFolderSuccess'))
-    // Keep the parent expanded so the new child is visible.
+    // Keep the current path expanded so refreshing the authoritative tree does
+    // not collapse it and clamp the sidebar scroll position back to the root.
     if (parentPath.length > 0) {
-      collapsedDirectories.value = new Set(
-        [...collapsedDirectories.value].filter(k => k !== directoryPathKey(activeTab.value, parentPath)),
+      const state = expandWikiDirectoryPath(
+        type,
+        parentPath,
+        collapsedDirectories.value,
+        touchedDirectories.value,
       )
+      collapsedDirectories.value = state.collapsed
+      touchedDirectories.value = state.touched
     }
-    await reloadDirectoryForType(activeTab.value)
+    await reloadDirectoryForType(type, { preserveDirectoryState: true })
+    await nextTick()
+    if (activeTab.value === type && scrollTop !== undefined && pageListRef.value) {
+      pageListRef.value.scrollTop = scrollTop
+    }
   } catch (e: any) {
     console.error('Failed to create wiki folder:', e)
     MessagePlugin.error(e?.message || t('knowledgeEditor.wikiBrowser.createFolderFailed'))
@@ -2428,7 +2496,10 @@ async function deleteFolder(folderId: string) {
 // checks work without another round-trip. Guard against concurrent
 // invocations for the same type (e.g. scroll event fires rapidly while
 // a network request is still in flight).
-async function loadPagesForType(type: string, opts: { reset?: boolean; categoryPath?: string[] } = {}) {
+async function loadPagesForType(
+  type: string,
+  opts: { reset?: boolean; categoryPath?: string[]; preserveDirectoryState?: boolean } = {},
+) {
   const bucket = ensureBucket(type)
   const categoryPath = opts.categoryPath || []
   const scopedToCategory = categoryPath.length > 0
@@ -2477,7 +2548,7 @@ async function loadPagesForType(type: string, opts: { reset?: boolean; categoryP
         bucket.items = batch
         bucket.nextPage = 2
         bucket.directoryPages = {}
-        clearDirectoryStateForType(type)
+        if (!opts.preserveDirectoryState) clearDirectoryStateForType(type)
       } else {
         const seenItems = new Set(bucket.items.map(p => p.id))
         for (const p of batch) {
@@ -2531,17 +2602,11 @@ async function loadPagesForType(type: string, opts: { reset?: boolean; categoryP
   await nextTick()
 }
 
-// loadIndexAndLog probes the wiki index so the sidebar knows to show
-// the pinned Index/Log entries. We ask the backend for intro only (zero
+// loadIndex probes the wiki index so the sidebar knows to show the pinned
+// Index entry. We ask the backend for intro only (zero
 // group types) — a bounded response regardless of KB size. Sections are
 // fetched lazily after the user actually opens the Index view; see
 // loadMoreIndexSection.
-//
-// The log "page" is no longer stored in wiki_pages — it lives in the
-// dedicated wiki_log_entries table. We don't need to pre-fetch anything
-// here to decide whether to render the sidebar Log entry; the flag is
-// always on, and the actual feed is fetched lazily when the user clicks
-// the entry (see openLogView / loadMoreLog).
 // stripLegacyIndexDirectory removes the inline "## Summary (N)\n[[...]]
 // ..." directory listing from a legacy index row. Old wiki_pages rows
 // stored "intro + directory markdown" in content; after the refactor
@@ -2557,7 +2622,7 @@ function stripLegacyIndexDirectory(intro: string): string {
   return intro.slice(0, idx).trim()
 }
 
-async function loadIndexAndLog() {
+async function loadIndex() {
   try {
     // We only need intro on the initial probe — the directory groups
     // are fetched lazily once the user opens the Index view. Passing
@@ -2572,7 +2637,6 @@ async function loadIndexAndLog() {
     indexAvailable.value = true
     indexSections.value = {}
     indexSectionIdx.value = 0
-    logAvailable.value = true
   } catch (e) {
     console.error('Failed to load wiki index:', e)
   }
@@ -2587,7 +2651,7 @@ async function openIndexView() {
   if (!indexMarkdown.value) {
     indexLoading.value = true
     try {
-      await loadIndexAndLog()
+      await loadIndex()
     } finally {
       indexLoading.value = false
     }
@@ -2745,44 +2809,6 @@ onUnmounted(() => {
   }
 })
 
-// openLogView switches the reader into the log feed and (re)loads the
-// first page. Called when the user clicks the sidebar Log entry.
-async function openLogView() {
-  selectedPage.value = null
-  activeSystemView.value = 'log'
-  logEntries.value = []
-  logNextCursor.value = ''
-  logInitialized.value = false
-  await loadMoreLog()
-}
-
-// loadMoreLog appends the next page of log entries using the cursor from
-// the previous response. Guarded so overlapping scroll events don't fire
-// multiple requests and double-append entries.
-async function loadMoreLog() {
-  if (logLoading.value) return
-  // Once a previous request reported end-of-feed (empty next_cursor), we
-  // stop — but only after the first fetch, so a fresh KB still runs the
-  // initial empty request to populate logInitialized.
-  if (logInitialized.value && !logNextCursor.value) return
-  logLoading.value = true
-  try {
-    const res = await getWikiLog(props.knowledgeBaseId, {
-      cursor: logNextCursor.value || undefined,
-      limit: 50,
-    })
-    const body: any = (res as any).data || res
-    const entries: WikiLogEntry[] = body?.entries || []
-    logEntries.value.push(...entries)
-    logNextCursor.value = body?.next_cursor || ''
-    logInitialized.value = true
-  } catch (e) {
-    console.error('Failed to load wiki log:', e)
-  } finally {
-    logLoading.value = false
-  }
-}
-
 // loadPages is the sidebar's top-level initialization. It wires up the
 // empty buckets (so groupedPages produces stable group slots even
 // before any fetch completes), pulls the pinned system pages, and then
@@ -2798,7 +2824,7 @@ async function loadPages() {
   try {
     searchResults.value = null
     for (const tab of CONTENT_TABS) ensureBucket(tab)
-    await loadIndexAndLog()
+    await loadIndex()
     await Promise.all(CONTENT_TABS.map(async tab => {
       await loadPagesForType(tab, { reset: true })
       await loadCategoriesForType(tab, { reset: true })
@@ -3058,36 +3084,6 @@ function updateSidebarPageTitle(slug: string, title: string) {
   }
 }
 
-// Log actions written by the manual editing paths. Pipeline actions keep
-// their raw tag (they are already short English verbs the log has always
-// shown); these four are new and would otherwise read as snake_case.
-const MANUAL_LOG_ACTION_KEYS: Record<string, string> = {
-  manual_create: 'logActionManualCreate',
-  manual_edit: 'logActionManualEdit',
-  manual_delete: 'logActionManualDelete',
-  revert: 'logActionRevert',
-}
-
-function logActionLabel(action: string): string {
-  const key = MANUAL_LOG_ACTION_KEYS[action]
-  return key ? t(`knowledgeEditor.wikiBrowser.${key}`) : action
-}
-
-function logActionTheme(action: string): 'primary' | 'danger' | 'warning' | 'success' {
-  switch (action) {
-    case 'retract':
-    case 'manual_delete':
-      return 'danger'
-    case 'revert':
-      return 'warning'
-    case 'manual_create':
-    case 'manual_edit':
-      return 'success'
-    default:
-      return 'primary'
-  }
-}
-
 function editSourceVisible(source?: string): boolean {
   return source === 'user' || source === 'agent' || source === 'revert'
 }
@@ -3102,6 +3098,19 @@ function editSourceLabel(source?: string): string {
       return t('knowledgeEditor.wikiBrowser.editSourceRevert')
     default:
       return t('knowledgeEditor.wikiBrowser.editSourcePipeline')
+  }
+}
+
+function editSourceIcon(source?: string): string {
+  switch (source) {
+    case 'user':
+      return 'user'
+    case 'agent':
+      return 'tools'
+    case 'revert':
+      return 'rollback'
+    default:
+      return 'file-code'
   }
 }
 
@@ -3139,7 +3148,7 @@ async function refreshSelectedPage() {
 // there (empty == no filter == return everything, the opposite of what
 // the user meant).
 function graphFilterTypesToArray(): string[] | undefined {
-  const all = ['summary', 'entity', 'concept', 'synthesis', 'comparison', 'index', 'log']
+  const all = ['summary', 'entity', 'concept', 'synthesis', 'comparison', 'index']
   if (all.every(t => graphFilterTypes.value.has(t))) {
     return undefined
   }
@@ -3330,9 +3339,12 @@ function mergeGraphData(
   const nodeBySlug = new Map<string, WikiGraphData['nodes'][number]>()
   for (const n of base.nodes) nodeBySlug.set(n.slug, n)
   for (const n of incoming.nodes) {
-    if (!nodeBySlug.has(n.slug)) {
+    const existing = nodeBySlug.get(n.slug)
+    if (!existing) {
       nodeBySlug.set(n.slug, n)
       bloomGenerations.set(n.slug, gen)
+    } else if (n.familiar) {
+      existing.familiar = true
     }
   }
   const edgeKey = (e: { source: string; target: string }) => `${e.source}→${e.target}`
@@ -3346,15 +3358,18 @@ function mergeGraphData(
     const k = edgeKey(e)
     if (!edgeSeen.has(k)) { edgeSeen.add(k); edges.push(e) }
   }
+  const nodes = Array.from(nodeBySlug.values())
+  const familiarCount = nodes.filter((n) => n.familiar).length
   return {
-    nodes: Array.from(nodeBySlug.values()),
+    nodes,
     edges,
     meta: {
       // Meta from the latest ego response describes the most recent
       // bloom, but we keep the overview denominator so the truncation
       // hint still reflects the KB-wide total.
       ...incoming.meta,
-      returned: nodeBySlug.size,
+      returned: nodes.length,
+      familiar_count: familiarCount || undefined,
     },
   }
 }
@@ -3412,7 +3427,7 @@ const GROW_FRONTIER_CONCURRENCY = 6
 // interesting neighborhood"). We keep them visible and individually
 // expandable (double-click / shift-click / ⊕ all still work), but they
 // don't participate in batch expansion.
-const GRAPH_SYSTEM_PAGE_TYPES = new Set(['index', 'log'])
+const GRAPH_SYSTEM_PAGE_TYPES = new Set(['index'])
 
 function isFrontierCandidate(
   node: { slug: string; page_type: string; link_count: number },
@@ -3580,11 +3595,7 @@ function goBack() {
     const view = navFromSystemView.value
     navFromSystemView.value = ''
     selectedPage.value = null
-    if (view === 'index') {
-      openIndexView()
-    } else if (view === 'log') {
-      openLogView()
-    }
+    if (view === 'index') openIndexView()
   }
 }
 
@@ -3708,6 +3719,7 @@ interface GNode {
   x: number; y: number; vx: number; vy: number
   slug: string; title: string; type: string
   linkCount: number; pinned: boolean
+  familiar: boolean
 }
 
 // Persistent graph state so it survives re-renders
@@ -3733,7 +3745,7 @@ const graphSelectedSlug = ref<string | null>(null)
 // Color map for node types
 const nodeColorMap: Record<string, string> = {
   summary: '#0052d9', entity: '#2ba471', concept: '#e37318',
-  synthesis: '#0594fa', comparison: '#d54941', index: '#8c8c8c', log: '#8c8c8c',
+  synthesis: '#0594fa', comparison: '#d54941', index: '#8c8c8c',
 }
 
 // RenderGraphOpts tweaks how renderGraph initializes node positions when
@@ -3859,6 +3871,7 @@ function renderGraph(opts: RenderGraphOpts = {}) {
       x, y, vx, vy,
       slug: n.slug, title: n.title, type: n.page_type,
       linkCount: n.link_count || 0, pinned,
+      familiar: !!n.familiar,
     }
     nodeMap.set(n.slug, node)
     return node
@@ -4001,6 +4014,21 @@ function renderGraph(opts: RenderGraphOpts = {}) {
     expansionRing.classList.add('node-expansion-ring')
     g.appendChild(expansionRing)
 
+    // Solid outer ring: this page was built from a document the current
+    // person keeps citing. Distinct from the dashed expansion ring so
+    // "I use this" and "there are more neighbors" do not look the same.
+    if (n.familiar) {
+      const familiarRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+      familiarRing.setAttribute('r', String(r + 7))
+      familiarRing.setAttribute('fill', 'none')
+      familiarRing.setAttribute('stroke', '#0052d9')
+      familiarRing.setAttribute('stroke-width', '2')
+      familiarRing.setAttribute('pointer-events', 'none')
+      familiarRing.style.opacity = '0.9'
+      familiarRing.classList.add('node-familiar-ring')
+      g.appendChild(familiarRing)
+    }
+
     // Pulse ring for selected state
     const activeRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
     activeRing.setAttribute('r', String(r + 5))
@@ -4064,8 +4092,8 @@ function renderGraph(opts: RenderGraphOpts = {}) {
       btnBg.setAttribute('cx', String(btnX))
       btnBg.setAttribute('cy', String(btnY))
       btnBg.setAttribute('r', '8')
-      btnBg.setAttribute('fill', 'var(--td-bg-color-container, #fff)')
-      btnBg.setAttribute('stroke', 'var(--td-brand-color, #0052d9)')
+      btnBg.setAttribute('fill', 'var(--td-bg-color-container)')
+      btnBg.setAttribute('stroke', 'var(--td-brand-color)')
       btnBg.setAttribute('stroke-width', '1.5')
       bloomBtn.appendChild(btnBg)
 
@@ -4075,7 +4103,7 @@ function renderGraph(opts: RenderGraphOpts = {}) {
       btnCrossV.setAttribute('x2', String(btnX))
       btnCrossV.setAttribute('y1', String(btnY - 4))
       btnCrossV.setAttribute('y2', String(btnY + 4))
-      btnCrossV.setAttribute('stroke', 'var(--td-brand-color, #0052d9)')
+      btnCrossV.setAttribute('stroke', 'var(--td-brand-color)')
       btnCrossV.setAttribute('stroke-width', '1.8')
       btnCrossV.setAttribute('stroke-linecap', 'round')
       bloomBtn.appendChild(btnCrossV)
@@ -4085,7 +4113,7 @@ function renderGraph(opts: RenderGraphOpts = {}) {
       btnCrossH.setAttribute('x2', String(btnX + 4))
       btnCrossH.setAttribute('y1', String(btnY))
       btnCrossH.setAttribute('y2', String(btnY))
-      btnCrossH.setAttribute('stroke', 'var(--td-brand-color, #0052d9)')
+      btnCrossH.setAttribute('stroke', 'var(--td-brand-color)')
       btnCrossH.setAttribute('stroke-width', '1.8')
       btnCrossH.setAttribute('stroke-linecap', 'round')
       bloomBtn.appendChild(btnCrossH)
@@ -4809,7 +4837,7 @@ watch(() => props.view, (v) => {
   } else if (v === 'browser') {
     nextTick(async () => {
       if (readerBodyRef.value && renderedContent.value) {
-        await hydrateProtectedFileImages(readerBodyRef.value, undefined, props.knowledgeBaseId)
+        await hydrateProtectedFileImages(readerBodyRef.value, kbFileAccess.value)
       }
     })
   }
@@ -4862,6 +4890,10 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   background: var(--td-bg-color-container);
+  // Align list rows with the session sidebar grid (menu.vue).
+  --wiki-list-inset-x: 10px;
+  --wiki-list-row-radius: 6px;
+  --wiki-list-row-min-height: 30px;
 }
 
 // ── Left Sidebar ──
@@ -4876,10 +4908,12 @@ onUnmounted(() => {
 }
 
 .wiki-sidebar-header {
-  padding: 16px 16px 12px;
+  padding: 0 10px 8px 0;
+  margin-left: -8px;
+  padding-left: 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .wiki-queue-status {
@@ -4888,9 +4922,9 @@ onUnmounted(() => {
   gap: 8px;
   padding: 8px 12px;
   background: var(--td-bg-color-secondarycontainer);
-  border-radius: 6px;
+  border-radius: var(--app-radius-sm);
   color: var(--td-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--app-text-md);
 
   .queue-text {
     line-height: 1.2;
@@ -4903,11 +4937,11 @@ onUnmounted(() => {
   gap: 8px;
   padding: 8px 12px;
   background: var(--td-warning-color-light);
-  border-radius: 6px;
+  border-radius: var(--app-radius-sm);
   color: var(--td-warning-color-8);
-  font-size: 13px;
+  font-size: var(--app-text-md);
   cursor: pointer;
-  transition: filter 0.2s;
+  transition: filter var(--app-motion-base);
 
   &:hover {
     filter: brightness(0.95);
@@ -4922,7 +4956,9 @@ onUnmounted(() => {
 .wiki-page-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 12px 12px;
+  padding: 0 8px 12px 0;
+  margin-left: -8px;
+  padding-left: 8px;
 }
 
 .wiki-tree-list {
@@ -4933,7 +4969,7 @@ onUnmounted(() => {
 // left-aligned; only folder rows reserve trailing space for count / actions.
 .wiki-tree-panel {
   --wiki-tree-depth-indent: 14px;
-  padding: 0 8px;
+  padding: 0;
 }
 
 .wiki-tab-bar {
@@ -4971,8 +5007,9 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   padding: 2px;
-  border-radius: 6px;
-  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--app-radius-sm);
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-component-stroke);
 }
 
 .wiki-view-toggle-btn {
@@ -4980,14 +5017,14 @@ onUnmounted(() => {
   height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--app-radius-xs);
   background: transparent;
   color: var(--td-text-color-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: background-color var(--app-motion-instant) ease, color var(--app-motion-instant) ease;
 
   &:hover {
     color: var(--td-text-color-primary);
@@ -5000,7 +5037,7 @@ onUnmounted(() => {
   }
 
   .t-icon {
-    font-size: 15px;
+    font-size: var(--app-text-lg);
   }
 }
 
@@ -5009,7 +5046,7 @@ onUnmounted(() => {
   height: 26px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--app-radius-sm);
   background: transparent;
   color: var(--td-text-color-secondary);
   display: inline-flex;
@@ -5017,10 +5054,10 @@ onUnmounted(() => {
   justify-content: center;
   flex-shrink: 0;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color var(--app-motion-fast) ease, color var(--app-motion-fast) ease;
 
   .t-icon {
-    font-size: 15px;
+    font-size: var(--app-text-lg);
   }
 
   &:hover {
@@ -5062,22 +5099,23 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
+  min-height: var(--wiki-list-row-min-height);
+  padding: 0 10px 0 var(--wiki-list-inset-x);
+  border-radius: var(--wiki-list-row-radius);
   cursor: pointer;
-  margin-bottom: 4px;
-  transition: all 0.15s;
+  margin-bottom: 0;
+  transition: background var(--app-motion-fast) ease, color var(--app-motion-fast) ease;
 
   &:hover {
     background: var(--td-bg-color-container-hover);
   }
 
   &.active {
-    background: var(--td-brand-color-light);
+    background: var(--td-bg-color-container-hover);
 
     .wiki-nav-text {
       color: var(--td-brand-color);
-      font-weight: 600;
+      font-weight: 400;
     }
 
     .wiki-nav-icon {
@@ -5086,13 +5124,14 @@ onUnmounted(() => {
   }
 
   .wiki-nav-icon {
-    font-size: 16px;
+    font-size: var(--app-text-xl);
     color: var(--td-text-color-secondary);
   }
 
   .wiki-nav-text {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: var(--app-text-base);
+    font-weight: 400;
+    line-height: 20px;
     color: var(--td-text-color-primary);
   }
 }
@@ -5100,7 +5139,7 @@ onUnmounted(() => {
 .wiki-sidebar-divider {
   height: 1px;
   background: var(--td-component-stroke);
-  margin: 8px 12px;
+  margin: 6px 0;
 }
 
 .wiki-tab {
@@ -5109,13 +5148,13 @@ onUnmounted(() => {
   gap: 5px;
   padding: 7px 2px 8px;
   border-radius: 0;
-  font-size: 13px;
+  font-size: var(--app-text-md);
   color: var(--td-text-color-secondary);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
   position: relative;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--app-motion-fast), color var(--app-motion-fast);
 
   &:hover {
     color: var(--td-text-color-primary);
@@ -5138,7 +5177,7 @@ onUnmounted(() => {
   }
 
   .wiki-tab-count {
-    font-size: 11px;
+    font-size: var(--app-text-xs);
     padding: 0;
     line-height: 1;
     color: var(--td-text-color-placeholder);
@@ -5151,24 +5190,26 @@ onUnmounted(() => {
 }
 
 .wiki-page-item {
-  min-height: 64px;
+  min-height: var(--wiki-list-row-min-height);
   box-sizing: border-box;
   overflow: hidden;
-  padding: 10px 12px;
-  border-radius: 6px;
+  padding: 6px 10px 6px var(--wiki-list-inset-x);
+  border-radius: var(--wiki-list-row-radius);
   cursor: pointer;
-  margin-bottom: 2px;
-  // Without this, mousedown-drag on the title text starts a text selection
-  // instead of an HTML5 drag, so the page never picks up.
+  margin-bottom: 0;
   user-select: none;
-  transition: background 0.15s;
+  transition: background var(--app-motion-fast) ease, color var(--app-motion-fast) ease;
 
   &:hover {
     background: var(--td-bg-color-container-hover);
   }
 
   &.active {
-    background: var(--td-brand-color-light);
+    background: var(--td-bg-color-container-hover);
+
+    .wiki-page-item-title {
+      color: var(--td-brand-color);
+    }
   }
 }
 
@@ -5179,18 +5220,21 @@ onUnmounted(() => {
 
 .wiki-page-item--list {
   height: 98px;
-  padding: 10px 2px;
+  padding: 8px 10px 8px var(--wiki-list-inset-x);
 }
 
 .wiki-page-item--list .wiki-page-item-title {
   display: block;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--app-text-base);
+  font-weight: 400;
+  line-height: 20px;
   margin-bottom: 4px;
+  color: var(--td-text-color-primary);
+  transition: color var(--app-motion-fast) ease;
 }
 
 .wiki-page-item-summary {
-  font-size: 12px;
+  font-size: var(--app-text-sm);
   line-height: 1.5;
   color: var(--td-text-color-secondary);
   display: -webkit-box;
@@ -5204,7 +5248,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--app-text-xs);
   color: var(--td-text-color-placeholder);
 }
 
@@ -5215,14 +5259,14 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-left: calc(var(--wiki-tree-depth, 0) * var(--wiki-tree-depth-indent, 14px));
-  border-radius: 6px;
+  padding: 0 10px 0 calc(var(--wiki-tree-depth, 0) * var(--wiki-tree-depth-indent, 14px) + var(--wiki-list-inset-x));
+  border-radius: var(--wiki-list-row-radius);
   cursor: pointer;
-  margin: 1px 0;
+  margin: 0;
   color: var(--td-text-color-secondary);
   background: transparent;
   user-select: none;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--app-motion-fast) ease, color var(--app-motion-fast) ease;
 
   &:hover {
     background: var(--td-bg-color-container-hover);
@@ -5239,9 +5283,9 @@ onUnmounted(() => {
   min-width: 0;
   height: 24px;
   border: 1px solid var(--td-brand-color);
-  border-radius: 4px;
+  border-radius: var(--app-radius-xs);
   padding: 0 6px;
-  font-size: 13px;
+  font-size: var(--app-text-md);
   color: var(--td-text-color-primary);
   background: var(--td-bg-color-container);
   outline: none;
@@ -5272,11 +5316,11 @@ onUnmounted(() => {
   }
 
   :deep(.wiki-folder-action-btn) {
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    border-radius: var(--app-radius-xs);
+    transition: all var(--app-motion-base) ease;
 
     .t-icon {
-      font-size: 14px;
+      font-size: var(--app-text-base);
     }
   }
 
@@ -5304,7 +5348,7 @@ onUnmounted(() => {
 // While dragging, the whole list is the "move to root" target; a subtle inset
 // ring signals it without inserting any element that would shift the layout.
 .wiki-tree-list--root-drop {
-  border-radius: 6px;
+  border-radius: var(--app-radius-sm);
   box-shadow: inset 0 0 0 1px var(--td-brand-color);
 }
 
@@ -5326,14 +5370,14 @@ onUnmounted(() => {
 .wiki-page-file-icon {
   flex: 0 0 auto;
   color: var(--td-text-color-placeholder);
-  font-size: 15px;
+  font-size: var(--app-text-lg);
 }
 
 .wiki-directory-title,
 .wiki-page-item-title {
   min-width: 0;
   flex: 1;
-  font-size: 13px;
+  font-size: var(--app-text-md);
   color: var(--td-text-color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5346,14 +5390,12 @@ onUnmounted(() => {
 
 .wiki-directory-count {
   flex: 0 0 auto;
-  min-width: 22px;
-  text-align: center;
-  font-size: 11px;
+  min-width: 16px;
+  text-align: right;
+  font-size: var(--app-text-xs);
   line-height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
   color: var(--td-text-color-placeholder);
-  background: var(--td-bg-color-secondarycontainer);
+  font-variant-numeric: tabular-nums;
 }
 
 .wiki-directory-load-more {
@@ -5363,11 +5405,11 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding-left: calc(var(--wiki-tree-depth, 0) * var(--wiki-tree-depth-indent, 14px));
-  border-radius: 6px;
+  border-radius: var(--app-radius-sm);
   cursor: pointer;
   margin: 1px 0;
   color: var(--td-brand-color);
-  font-size: 12px;
+  font-size: var(--app-text-sm);
 
   &:hover {
     background: var(--td-brand-color-light);
@@ -5380,14 +5422,23 @@ onUnmounted(() => {
   gap: 6px;
   height: 34px;
   min-height: 34px;
-  padding: 0;
-  padding-left: calc(var(--wiki-tree-depth, 0) * var(--wiki-tree-depth-indent, 14px));
-  border-radius: 6px;
-  margin: 1px 0;
+  padding: 4px 10px 4px calc(var(--wiki-tree-depth, 0) * var(--wiki-tree-depth-indent, 14px) + var(--wiki-list-inset-x));
+  border-radius: var(--wiki-list-row-radius);
+  margin: 0;
+
+  &.active {
+    .wiki-page-file-icon {
+      color: var(--td-brand-color);
+    }
+  }
 }
 
 .wiki-page-item--tree .wiki-page-item-title {
-  font-weight: 500;
+  font-size: var(--app-text-base);
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--td-text-color-primary);
+  transition: color var(--app-motion-fast) ease;
 }
 
 // ── Right Content ──
@@ -5402,7 +5453,7 @@ onUnmounted(() => {
 .wiki-reader {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 24px;
+  padding: 0 24px 16px;
 }
 
 .wiki-reader-inner {
@@ -5410,24 +5461,102 @@ onUnmounted(() => {
 }
 
 .wiki-reader-header {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
+}
+
+.wiki-reader-lead {
+  margin: 10px 0 0;
+  font-size: var(--app-text-lg);
+  line-height: 1.65;
+  color: var(--td-text-color-secondary);
+}
+
+.wiki-reader-title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.wiki-reader-aside {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.wiki-reader-aside-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.wiki-reader-aside-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--app-text-sm);
+  line-height: 1.4;
+  color: var(--td-text-color-placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wiki-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--app-radius-xs);
+  font-size: var(--app-text-sm);
+  line-height: 1.4;
+  color: var(--td-text-color-secondary);
+  background: var(--td-bg-color-secondarycontainer);
+
+  .t-icon {
+    font-size: var(--app-text-md);
+    flex-shrink: 0;
+  }
+}
+
+.wiki-badge--ver {
+  font-family: var(--td-font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.wiki-badge--editing {
+  color: var(--td-warning-color);
+  background: var(--td-warning-color-1);
+}
+
+.wiki-badge--source {
+  cursor: default;
+}
+
+.wiki-badge--alias {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wiki-nav-bar {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .wiki-nav-back {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: var(--app-text-md);
   color: var(--td-text-color-secondary);
   text-decoration: none;
   padding: 4px 8px;
   margin-left: -8px;
-  border-radius: 4px;
-  transition: all 0.15s;
+  border-radius: var(--app-radius-xs);
+  transition: all var(--app-motion-fast);
 
   &:hover {
     color: var(--td-brand-color);
@@ -5435,12 +5564,125 @@ onUnmounted(() => {
   }
 }
 
+.wiki-reader-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
 .wiki-reader-title {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 26px;
   font-weight: 600;
   line-height: 1.3;
   color: var(--td-text-color-primary);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wiki-reader-title-text {
+  min-width: 0;
+}
+
+.wiki-reader-title-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wiki-reader-title-badges--secondary {
+  margin-top: 8px;
+}
+
+.wiki-edit-field {
+  width: 100%;
+
+  :deep(.t-input),
+  :deep(.t-textarea) {
+    border-radius: var(--app-radius-md);
+    background: var(--td-bg-color-container);
+    transition: border-color var(--app-motion-fast) ease, box-shadow var(--app-motion-fast) ease;
+  }
+
+  :deep(.t-input:focus-within),
+  :deep(.t-textarea:focus-within) {
+    border-color: var(--td-brand-color);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--td-brand-color) 10%, transparent);
+  }
+}
+
+.wiki-edit-field--title {
+  width: 100%;
+
+  :deep(.t-input__inner) {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.35;
+    padding: 10px 12px;
+    height: auto;
+    min-height: 44px;
+  }
+}
+
+.wiki-edit-field--summary {
+  margin: 10px 0 0;
+
+  :deep(.t-textarea__inner) {
+    font-size: var(--app-text-base);
+    line-height: 1.6;
+    padding: 10px 12px;
+    resize: vertical;
+  }
+}
+
+.wiki-edit-field--content {
+  :deep(.t-textarea__inner) {
+    font-family: var(--td-font-family-mono);
+    font-size: var(--app-text-base);
+    line-height: 1.7;
+    padding: 12px 14px;
+    resize: vertical;
+  }
+}
+
+.wiki-reader-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.wiki-action-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--app-radius-sm);
+  background: transparent;
+  color: var(--td-text-color-placeholder);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color var(--app-motion-fast) ease;
+
+  .t-icon {
+    font-size: var(--app-text-xl);
+  }
+
+  &:hover {
+    color: var(--td-text-color-primary);
+  }
+
+  &.wiki-action-btn--danger:hover {
+    color: var(--td-error-color);
+  }
 }
 
 .wiki-reader-aliases {
@@ -5448,14 +5690,14 @@ onUnmounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 8px;
-  margin: 0 0 10px;
-  font-size: 13px;
+  margin: 0 0 8px;
+  font-size: var(--app-text-md);
   line-height: 1.4;
 }
 
 .wiki-alias-label {
   color: var(--td-text-color-placeholder);
-  font-size: 13px;
+  font-size: var(--app-text-md);
   line-height: 1.4;
 }
 
@@ -5467,59 +5709,31 @@ onUnmounted(() => {
 .wiki-reader-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .wiki-reader-meta-text {
-  font-size: 13px;
+  font-size: var(--app-text-md);
   color: var(--td-text-color-placeholder);
-}
-
-.wiki-reader-graph-link {
-  margin-left: auto;
-  font-size: 13px;
-}
-
-.wiki-reader-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
 }
 
 .wiki-page-editor {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 8px;
-
-  .wiki-page-editor-title :deep(.t-input__inner) {
-    font-weight: 600;
-  }
-
-  .wiki-page-editor-content :deep(textarea) {
-    font-family: var(--td-font-family-mono, monospace);
-    font-size: 13px;
-    line-height: 1.7;
-  }
+  margin-top: 16px;
 }
 
 .wiki-page-editor-conflict {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: var(--td-warning-color-1);
-  color: var(--td-warning-color-7);
-  font-size: 13px;
-  flex-wrap: wrap;
+  margin-bottom: 0;
 }
 
-.wiki-page-editor-footer {
-  display: flex;
-  gap: 8px;
+.wiki-page-editor-conflict-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .wiki-create-page-form {
@@ -5533,13 +5747,13 @@ onUnmounted(() => {
     gap: 6px;
 
     label {
-      font-size: 13px;
+      font-size: var(--app-text-md);
       color: var(--td-text-color-secondary);
     }
   }
 
   .wiki-create-page-hint {
-    font-size: 12px;
+    font-size: var(--app-text-sm);
     color: var(--td-text-color-placeholder);
   }
 }
@@ -5547,7 +5761,7 @@ onUnmounted(() => {
 .wiki-reader-links {
   padding: 12px 16px;
   background: var(--td-bg-color-secondarycontainer);
-  border-radius: 8px;
+  border-radius: var(--app-radius-md);
   margin-bottom: 20px;
   display: flex;
   flex-direction: column;
@@ -5559,7 +5773,7 @@ onUnmounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--app-text-md);
 }
 
 .wiki-link-label {
@@ -5572,14 +5786,14 @@ onUnmounted(() => {
   color: var(--td-brand-color);
   text-decoration: none;
   font-family: var(--app-font-family-mono);
-  font-size: 12px;
+  font-size: var(--app-text-sm);
   padding: 2px 8px;
-  background: rgba(7, 192, 95, 0.06);
-  border-radius: 4px;
-  transition: background 0.15s;
+  background: color-mix(in srgb, var(--td-brand-color) 6%, transparent);
+  border-radius: var(--app-radius-xs);
+  transition: background var(--app-motion-fast);
 
   &:hover {
-    background: rgba(7, 192, 95, 0.12);
+    background: color-mix(in srgb, var(--td-brand-color) 12%, transparent);
   }
 }
 
@@ -5587,25 +5801,25 @@ onUnmounted(() => {
 // Chat answer Markdown styles are centralized in components/css/chat-markdown.less.
 .wiki-reader-body {
   line-height: 1.6;
-  font-size: 14px;
+  font-size: var(--app-text-base);
   color: var(--td-text-color-primary);
 
   :deep(h1) {
-    font-size: 24px;
+    font-size: var(--app-text-4xl);
     margin: 28px 0 16px;
     font-weight: 600;
     line-height: 1.4;
   }
 
   :deep(h2) {
-    font-size: 18px;
+    font-size: var(--app-text-2xl);
     margin: 24px 0 12px;
     font-weight: 600;
     line-height: 1.4;
   }
 
   :deep(h3) {
-    font-size: 16px;
+    font-size: var(--app-text-xl);
     margin: 20px 0 10px;
     font-weight: 600;
     line-height: 1.5;
@@ -5614,7 +5828,7 @@ onUnmounted(() => {
   :deep(h4),
   :deep(h5),
   :deep(h6) {
-    font-size: 14px;
+    font-size: var(--app-text-base);
     margin: 16px 0 8px;
     font-weight: 600;
     line-height: 1.5;
@@ -5650,10 +5864,10 @@ onUnmounted(() => {
 
   :deep(code) {
     font-family: var(--app-font-family-mono);
-    font-size: 13px;
+    font-size: var(--app-text-md);
     padding: 2px 4px;
     background: var(--td-bg-color-secondarycontainer);
-    border-radius: 4px;
+    border-radius: var(--app-radius-xs);
     color: var(--td-brand-color);
   }
 
@@ -5661,7 +5875,7 @@ onUnmounted(() => {
     margin: 0 0 14px;
     padding: 12px 16px;
     background: var(--td-bg-color-secondarycontainer);
-    border-radius: 6px;
+    border-radius: var(--app-radius-sm);
     overflow-x: auto;
 
     code {
@@ -5674,7 +5888,7 @@ onUnmounted(() => {
   :deep(p:has(img)) {
     text-align: center;
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--app-text-md);
     margin-top: 16px;
     margin-bottom: 24px;
 
@@ -5682,11 +5896,11 @@ onUnmounted(() => {
       max-width: 100%;
       max-height: 400px;
       object-fit: contain;
-      border-radius: 6px;
+      border-radius: var(--app-radius-sm);
       display: block;
       margin: 0 auto 8px;
       cursor: zoom-in;
-      transition: opacity 0.2s;
+      transition: opacity var(--app-motion-base);
 
       &:hover {
         opacity: 0.9;
@@ -5718,11 +5932,11 @@ onUnmounted(() => {
     overflow-x: auto;
     margin: 0 0 16px;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: var(--app-text-md);
     line-height: 1.55;
     background: var(--td-bg-color-container);
     border: 1px solid var(--td-component-stroke);
-    border-radius: 6px;
+    border-radius: var(--app-radius-sm);
     -webkit-overflow-scrolling: touch;
   }
 
@@ -5760,72 +5974,52 @@ onUnmounted(() => {
   }
 
   :deep(table code) {
-    font-size: 12px;
+    font-size: var(--app-text-sm);
   }
 }
 
-.wiki-reader-backlinks {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--td-component-stroke);
-  margin-bottom: 24px;
-}
-
-.wiki-backlink-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--td-text-color-placeholder);
-  font-weight: 500;
-  flex-shrink: 0;
-  margin-right: 4px;
-}
-
-.wiki-backlink-tag {
-  color: var(--td-text-color-secondary);
-  text-decoration: none;
-  font-size: 13px;
-  padding: 2px 8px;
-  background: var(--td-bg-color-secondarycontainer);
-  border-radius: 4px;
-  transition: all 0.15s;
-
-  &:hover {
-    color: var(--td-brand-color);
-    background: var(--td-brand-color-light);
-  }
-}
-
-.wiki-reader-sources {
-  margin-top: 24px;
-  padding-top: 16px;
+.wiki-reader-footer {
+  margin-top: 32px;
+  padding-top: 18px;
   border-top: 1px solid var(--td-component-stroke);
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 13px;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.wiki-source-ref {
-  display: inline-flex;
+.wiki-reader-footer-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  font-size: var(--app-text-md);
+  line-height: 1.65;
+}
+
+.wiki-reader-footer-label {
+  flex: 0 0 64px;
+  font-size: var(--app-text-sm);
+  color: var(--td-text-color-placeholder);
+}
+
+.wiki-reader-footer-value {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  padding: 2px 10px;
-  background: var(--td-bg-color-secondarycontainer);
-  border-radius: 4px;
+  gap: 8px 20px;
+}
+
+.wiki-reader-footer .wiki-content-link {
   color: var(--td-brand-color);
-  font-size: 12px;
   text-decoration: none;
+  border-bottom: 1px dashed var(--td-brand-color);
   cursor: pointer;
-  transition: background 0.15s;
+  font-weight: 500;
 
   &:hover {
-    background: var(--td-brand-color-light);
+    border-bottom-style: solid;
+    text-decoration: none !important;
   }
 }
 
@@ -5840,17 +6034,6 @@ onUnmounted(() => {
   text-align: center;
 }
 
-// ── Log feed (system view) ──
-// Rendered when activeSystemView === 'log'. Sits where the markdown body
-// would be for a regular wiki page — so the header/meta rules above
-// already apply. We just style the feed list itself.
-.wiki-log-feed {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 12px;
-}
-
 // ── Index overview (system view) ──
 // The index view renders as markdown through the same pipeline as a
 // normal wiki page, so it inherits .wiki-reader-body styling automatically.
@@ -5863,77 +6046,11 @@ onUnmounted(() => {
   min-height: 32px;
   padding: 16px 0 24px;
   color: var(--td-text-color-placeholder);
-  font-size: 13px;
+  font-size: var(--app-text-md);
 }
 
 .wiki-index-loading {
   opacity: 0.7;
-}
-
-.wiki-log-empty {
-  color: var(--td-text-color-placeholder);
-  text-align: center;
-  padding: 40px 0;
-  font-size: 13px;
-}
-
-.wiki-log-entry {
-  border: 1px solid var(--td-border-level-1-color);
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: var(--td-bg-color-container);
-}
-
-.wiki-log-entry-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.wiki-log-entry-title {
-  font-weight: 500;
-  color: var(--td-text-color-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.wiki-log-entry-time {
-  color: var(--td-text-color-placeholder);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.wiki-log-entry-summary {
-  color: var(--td-text-color-secondary);
-  font-size: 13px;
-  margin: 4px 0;
-}
-
-.wiki-log-entry-pages {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  margin-top: 4px;
-}
-
-.wiki-log-entry-page {
-  color: var(--td-brand-color);
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.wiki-log-entry-page:hover {
-  text-decoration: underline;
-}
-
-.wiki-log-load-more {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0;
 }
 
 .wiki-empty-icon {
@@ -5949,14 +6066,14 @@ onUnmounted(() => {
 }
 
 .wiki-empty-title {
-  font-size: 14px;
+  font-size: var(--app-text-base);
   font-weight: 500;
   color: var(--td-text-color-secondary);
   margin: 0 0 4px;
 }
 
 .wiki-empty-desc {
-  font-size: 13px;
+  font-size: var(--app-text-md);
   color: var(--td-text-color-placeholder);
   margin: 0;
 }
@@ -5981,7 +6098,7 @@ onUnmounted(() => {
 }
 
 .help-glyph-icon {
-  font-size: 14px !important;
+  font-size: var(--app-text-base) !important;
   font-weight: 600;
   line-height: 14px !important;
   text-align: center;
@@ -5994,7 +6111,7 @@ onUnmounted(() => {
   max-width: 320px;
 
   .help-section-title {
-    font-size: 11px;
+    font-size: var(--app-text-xs);
     line-height: 14px;
     color: var(--td-text-color-placeholder);
     text-transform: uppercase;
@@ -6013,7 +6130,7 @@ onUnmounted(() => {
     display: grid;
     grid-template-columns: 110px 1fr;
     gap: 12px;
-    font-size: 12px;
+    font-size: var(--app-text-sm);
     line-height: 16px;
   }
 
@@ -6042,7 +6159,7 @@ onUnmounted(() => {
 .wiki-graph-search {
   width: 100%;
   box-shadow: var(--td-shadow-1);
-  border-radius: 4px;
+  border-radius: var(--app-radius-xs);
 }
 
 .graph-issues-badge {
@@ -6091,10 +6208,10 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   color: var(--td-text-color-placeholder);
-  font-size: 18px;
+  font-size: var(--app-text-2xl);
   cursor: pointer;
   user-select: none;
-  transition: color 0.15s ease;
+  transition: color var(--app-motion-fast) ease;
 }
 
 .wiki-graph-help-trigger:hover {
@@ -6107,7 +6224,7 @@ onUnmounted(() => {
   right: 16px;
   background: var(--td-bg-color-container);
   border: 1px solid var(--td-component-stroke);
-  border-radius: 6px;
+  border-radius: var(--app-radius-sm);
   padding: 10px 12px;
   box-shadow: var(--td-shadow-1);
   display: flex;
@@ -6115,7 +6232,7 @@ onUnmounted(() => {
   gap: 12px;
   z-index: 10;
   opacity: 0.95;
-  transition: right 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
+  transition: right var(--app-motion-slow) cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
 .wiki-graph-legend.legend-shifted {
@@ -6132,12 +6249,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--app-text-xs);
   color: var(--td-text-color-secondary);
 
   &.clickable {
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all var(--app-motion-fast);
 
     &:hover {
       color: var(--td-text-color-primary);
@@ -6159,6 +6276,17 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.legend-familiar-ring {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border: 2px solid #0052d9;
+  background: transparent;
+}
+
 .legend-divider {
   height: 1px;
   background: var(--td-component-stroke);
@@ -6175,12 +6303,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--app-text-xs);
   line-height: 14px;
   color: var(--td-text-color-secondary);
   cursor: pointer;
   user-select: none;
-  transition: all 0.15s;
+  transition: all var(--app-motion-fast);
 
   &:hover {
     color: var(--td-brand-color);
@@ -6200,7 +6328,7 @@ onUnmounted(() => {
 }
 
 .wiki-graph-truncation-hint {
-  font-size: 11px;
+  font-size: var(--app-text-xs);
   line-height: 14px;
   color: var(--td-text-color-placeholder);
   user-select: none;
@@ -6220,12 +6348,12 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--app-text-xs);
     line-height: 14px;
     color: var(--td-text-color-placeholder);
 
     .t-icon {
-      font-size: 12px;
+      font-size: var(--app-text-sm);
     }
   }
 
@@ -6234,7 +6362,7 @@ onUnmounted(() => {
   }
 
   .status-card-primary {
-    font-size: 12px;
+    font-size: var(--app-text-sm);
     line-height: 16px;
     color: var(--td-text-color-primary);
     overflow: hidden;
@@ -6243,14 +6371,14 @@ onUnmounted(() => {
   }
 
   .status-card-secondary {
-    font-size: 11px;
+    font-size: var(--app-text-xs);
     line-height: 14px;
     color: var(--td-text-color-secondary);
   }
 }
 
 .wiki-drawer-neighbor-hint {
-  font-size: 12px;
+  font-size: var(--app-text-sm);
   line-height: 16px;
   color: var(--td-text-color-secondary);
   user-select: none;
@@ -6263,13 +6391,13 @@ onUnmounted(() => {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: var(--app-text-md);
   line-height: 1;
   color: var(--td-text-color-placeholder);
-  transition: color 0.15s;
+  transition: color var(--app-motion-fast);
 
   .t-icon {
-    font-size: 13px;
+    font-size: var(--app-text-md);
     line-height: 1;
   }
 }
@@ -6298,8 +6426,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  transition: opacity 0.2s ease;
+  font-size: var(--app-text-3xl);
+  transition: opacity var(--app-motion-base) ease;
 
   &:hover {
     opacity: 0.8;
@@ -6310,7 +6438,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: var(--td-bg-color-container);
-  border-radius: 8px;
+  border-radius: var(--app-radius-md);
   overflow: hidden;
 }
 
@@ -6327,13 +6455,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   font-weight: 500;
-  font-size: 14px;
+  font-size: var(--app-text-base);
   color: var(--td-text-color-primary);
 
   .wiki-issue-popup-icon {
     color: var(--td-brand-color);
     margin-right: 8px;
-    font-size: 16px;
+    font-size: var(--app-text-xl);
   }
 }
 
@@ -6351,8 +6479,8 @@ onUnmounted(() => {
   padding: 16px;
   gap: 12px;
   border: 1px solid var(--td-component-border);
-  border-radius: 6px;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  border-radius: var(--app-radius-sm);
+  transition: box-shadow var(--app-motion-base) ease, border-color var(--app-motion-base) ease;
   background: var(--td-bg-color-container);
 
   &:hover {
@@ -6374,7 +6502,7 @@ onUnmounted(() => {
 }
 
 .wiki-issue-popup-desc {
-  font-size: 13px;
+  font-size: var(--app-text-md);
   color: var(--td-text-color-primary);
   line-height: 1.6;
   white-space: pre-wrap;
@@ -6391,7 +6519,7 @@ onUnmounted(() => {
 
 .wiki-issue-popup-desc::-webkit-scrollbar-thumb {
   background: var(--td-scrollbar-color);
-  border-radius: 4px;
+  border-radius: var(--app-radius-xs);
 }
 
 .wiki-issue-popup-desc::-webkit-scrollbar-track {
@@ -6408,7 +6536,7 @@ onUnmounted(() => {
 }
 
 .wiki-issue-popup-reporter {
-  font-size: 12px;
+  font-size: var(--app-text-sm);
   color: var(--td-text-color-placeholder);
   flex: 1;
 }
@@ -6419,10 +6547,10 @@ onUnmounted(() => {
 }
 
 .wiki-issue-popup-action {
-  font-size: 12px;
+  font-size: var(--app-text-sm);
   color: var(--td-brand-color);
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--app-motion-base) ease;
 
   &:hover {
     opacity: 0.8;
@@ -6470,3 +6598,4 @@ onUnmounted(() => {
   }
 }
 </style>
+<style lang="less" src="@/components/css/wiki-graph-drawer.less"></style>

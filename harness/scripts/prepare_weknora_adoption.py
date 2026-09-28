@@ -18,6 +18,11 @@ from typing import NoReturn, Protocol
 
 import yaml
 
+# Both direct CLI execution and package imports use the same policy module.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.adoption_migration_policy import check_preservations  # noqa: E402
+
 _REPOSITORY = "https://github.com/Tencent/WeKnora.git"
 _CAPABILITY_COMMIT = "80a5003cc99a427098afe184eee6601916d3d156"
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
@@ -1423,6 +1428,7 @@ def _official_migrations(
     return files, raw
 
 
+
 def _plugin_summary(contract: PluginContract) -> dict[str, object]:
     nodes = [node for lane in contract.validation_lanes for node in lane.nodes]
     return {
@@ -1555,13 +1561,24 @@ def run_adoption_check(
             )
         except (AdoptionTargetError, OSError):
             return _blocked(report, "project_migrations_mismatch")
-        if project_bytes != target_bytes:
+        preservations = check_preservations(
+            {"repository": target.repository, "commit": target.commit, "tree": target.tree},
+            target.official_migration_head, target_bytes, project_bytes,
+        )
+        if preservations is None:
             return _blocked(report, "project_migrations_mismatch")
+        if preservations:
+            migration_report = report["official_migrations"]
+            assert isinstance(migration_report, dict)
+            migration_report["reviewed_preservations"] = preservations
 
     overlaps = report["overlaps"]
     assert isinstance(overlaps, dict)
     has_overlap = bool(overlaps["project_merge_base_to_target"] or overlaps["runtime_to_target"])
-    report["verdict"] = "manual_review_required" if has_overlap else "pass"
+    migration_report = report["official_migrations"]
+    assert isinstance(migration_report, dict)
+    needs_review = has_overlap or bool(migration_report.get("reviewed_preservations"))
+    report["verdict"] = "manual_review_required" if needs_review else "pass"
     report["hard_checks"] = {"code": "ok", "status": "pass"}
     return report
 

@@ -56,8 +56,16 @@ _COMMON_SMOKE_COMMANDS = (
     "test -d /app/scripts",
     "test -d /app/migrations",
     "test -d /app/dataset/samples",
-    "test -d /app/skills/preloaded",
     "test -d /home/appuser/.duckdb",
+    "test -e /app/LICENSE",
+    "test -e /app/THIRD_PARTY_NOTICES.md",
+    "test -d /app/licenses",
+    "test -s /app/licenses/AnyDoc-MIT.txt",
+    "test -x /opt/weknora/browserskill/bsk",
+    "test -e /opt/weknora/browserskill/browser-skill-weknora-0.3.1.zip",
+    "test -e /opt/weknora/browserskill/BrowserSkill-LICENSE",
+    "python3 /app/scripts/verify-browserskill-extension.py "
+    "/opt/weknora/browserskill/browser-skill-weknora-0.3.1.zip 0.3.1",
 )
 
 
@@ -186,10 +194,17 @@ def _validate_script(script: str, *, healthcheck: bool) -> None:
     library_output = (
         "/tmp/ba0-health-ldd.out" if healthcheck else "/tmp/ba0-ldd.out"
     )
+    browserskill_library_output = (
+        "/tmp/ba0-health-browserskill-ldd.out"
+        if healthcheck
+        else "/tmp/ba0-browserskill-ldd.out"
+    )
     expected = (
         *_COMMON_SMOKE_COMMANDS,
         f"ldd /app/WeKnora > {library_output}",
         f"! grep -q 'not found' {library_output}",
+        f"ldd /opt/weknora/browserskill/bsk > {browserskill_library_output}",
+        f"! grep -q 'not found' {browserskill_library_output}",
         *(("sleep infinity",) if not healthcheck else ()),
     )
     commands = tuple(command.strip() for command in re.split(r"[;\n]+", script))

@@ -1,14 +1,23 @@
 services:
   frontend:
     image: wechatopenai/weknora-ui:${WEKNORA_VERSION:-latest}
-    # Requires frontend/dist — run ./scripts/build_frontend_dist.sh before --build
+    # Multi-stage Dockerfile builds dist inside the image (no host npm required).
+    # Optional: NPM_REGISTRY=https://registry.npmmirror.com docker compose build frontend
+    # VITE_FRONTEND_COMMIT: start_all.sh / make docker-build-frontend inject git;
+    # otherwise pass it explicitly or the system-info page shows "unknown".
     build:
       context: ./frontend
+      args:
+        VITE_FRONTEND_COMMIT: ${VITE_FRONTEND_COMMIT:-unknown}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        NODE_MAX_OLD_SPACE_SIZE: ${NODE_MAX_OLD_SPACE_SIZE:-4096}
     container_name: WeKnora-frontend
     ports:
       - "${FRONTEND_PORT:-80}:80"
     environment:
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      - MAX_SKILL_BUNDLE_SIZE_MB=${MAX_SKILL_BUNDLE_SIZE_MB:-256}
+      - DEFAULT_LOCALE=${DEFAULT_LOCALE:-}
       - APP_HOST=${APP_HOST:-app}
       # APP_BACKEND_PORT: the port NGINX proxies to (default 8080).
       # For local deployment this is the App container's listening port, independent of host-mapped APP_PORT.
@@ -31,6 +40,7 @@ services:
       dockerfile: docker/Dockerfile.app
       args:
         - APK_MIRROR_ARG=${APK_MIRROR_ARG:-}
+        - WITH_ANYDOC=${WITH_ANYDOC:-1}
     container_name: WeKnora-app
     ports:
       - "${APP_PORT:-8080}:8080"
@@ -38,12 +48,17 @@ services:
       - data-files:/data/files
       - docreader-tmp:/tmp/docreader:ro
       - ./config/config.yaml:/app/config/config.yaml
-      # Optional: mount custom skills directory (allows adding skills without rebuilding image)
-      - ./skills/preloaded:/app/skills/preloaded
+      # Docker 沙箱默认关闭（见 WEKNORA_SANDBOX_DOCKER_ENABLED）。需要本机 daemon 时
+      # 同时设 true 并挂载实际 socket——这等同宿主机 root，仅私有化单机。
+      # 入口脚本会按 socket GID 把 appuser 加入对应组（compose group_add 在 gosu 后无效）。
+      # - /var/run/docker.sock:/var/run/docker.sock
       # Optional: declarative built-in models. Copy config/builtin_models.yaml.example
       # to config/builtin_models.yaml, edit it for your deployment, then
-      # uncomment the line below. See docs/BUILTIN_MODELS.md.
+      # uncomment the line below. See website-docs/03-features/06-models.md.
       # - ./config/builtin_models.yaml:/app/config/builtin_models.yaml:ro
+      # Optional: model catalog overlay (extra vendors / model overrides).
+      # Copy config/models.json.example to config/models.json, then
+      # - ./config/models.json:/app/config/models.json:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -81,12 +96,17 @@ services:
       # 文档处理语言（问题/摘要生成）。优先级：此环境变量（部署级覆盖，非空即生效）
       # > Accept-Language 请求头 > 内置默认值 (zh-CN)。留空则跟随请求方 Accept-Language。
       - WEKNORA_LANGUAGE=${WEKNORA_LANGUAGE:-}
+      # Docker 沙箱默认关闭：本机 docker.sock 等同宿主机 root。
+      # 系统管理员也可在「设置 → 系统设置」打开（立即生效）。未落库时读本变量。
+      - WEKNORA_SANDBOX_DOCKER_ENABLED=${WEKNORA_SANDBOX_DOCKER_ENABLED:-false}
       # gin 信任的代理 CIDR（逗号分隔）；显式设为空字符串则禁用代理信任。
       # 默认信任 loopback + 私网段（容器网络内 nginx 已覆盖）
       # - WEKNORA_TRUSTED_PROXIES=${WEKNORA_TRUSTED_PROXIES:-}
       # 启动时自动执行数据库迁移；设为 false 禁用，默认启用
       - AUTO_MIGRATE=${AUTO_MIGRATE:-true}
-      # 本地存储后端生成下载链接用的外部可达 URL（IM 渠道 local 后端必填）
+      # IM 渠道图片/文件外链的外部可达 URL。IM 显示知识库图片需二选一：
+      # 存储后端公网可达（如 MINIO_ENDPOINT 设为公网），或设本变量走 <APP_EXTERNAL_URL>/r/<token>（需 nginx 代理 /r/）。
+      # 默认 MinIO 内网部署 / local 后端需设本变量。
       # - APP_EXTERNAL_URL=${APP_EXTERNAL_URL:-}
       # 前端外部 origin，用于邀请链接等绝对 URL（留空走 host-relative）
       - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-}
@@ -100,18 +120,20 @@ services:
       - COS_TEMP_BUCKET_NAME=${COS_TEMP_BUCKET_NAME:-}
       - COS_TEMP_REGION=${COS_TEMP_REGION:-}
 
-      # 认证 / 租户 / RBAC / 审计
+      # 认证 / 空间 / RBAC / 审计
       # 禁止新用户注册（生产建议 true）
       - DISABLE_REGISTRATION=${DISABLE_REGISTRATION:-false}
+      # 开启后密码必须包含大小写字母、数字和特殊字符，特殊字符包含：!@#$%^&*()_+-=[]{}|;:,.<>?
+      - WEKNORA_AUTH_COMPLEX_PASSWORD_ENABLED=${WEKNORA_AUTH_COMPLEX_PASSWORD_ENABLED:-false}
       # 公开注册后的默认空间策略：create_personal（默认，自动创建个人空间）/ tenantless
       - WEKNORA_AUTH_DEFAULT_TENANT_MODE=${WEKNORA_AUTH_DEFAULT_TENANT_MODE:-create_personal}
       # 是否允许普通用户登录后主动创建空间（默认 true；false 仅能邀请加入，超管不受影响）
       - WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED=${WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED:-true}
-      # 启用跨租户访问（需配合用户的 CanAccessAllTenants 权限；默认 false
+      # 启用跨空间访问（需配合用户的 CanAccessAllTenants 权限；默认 false
       - WEKNORA_TENANT_ENABLE_CROSS_TENANT_ACCESS=${WEKNORA_TENANT_ENABLE_CROSS_TENANT_ACCESS:-false}
       # 新建空间默认存储配额（GB，默认 10）
       - WEKNORA_TENANT_DEFAULT_STORAGE_QUOTA_GB=${WEKNORA_TENANT_DEFAULT_STORAGE_QUOTA_GB:-10}
-      # 租户邀请链接 TTL（Go duration，默认 168h=7 天）
+      # 空间邀请链接 TTL（Go duration，默认 168h=7 天）
       - WEKNORA_INVITATION_TTL=${WEKNORA_INVITATION_TTL:-168h}
       # 审计日志保留天数（0 禁用清理，默认 90）
       - WEKNORA_AUDIT_RETENTION_DAYS=${WEKNORA_AUDIT_RETENTION_DAYS:-90}
@@ -126,7 +148,7 @@ services:
       # - DB_PATH=${DB_PATH:-}
       # ========== Langfuse (optional observability) ==========
       # Enabled automatically when LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY are set.
-      # See docs/Langfuse集成.md for the full list of tuning knobs.
+      # See website-docs/03-features/16-observability.md for the full list of tuning knobs.
       - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-}
       - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
@@ -280,46 +302,48 @@ services:
       # （TENANT_AES_KEY / CRYPTO_MASTER_KEY / CRYPTO_SALT 已废弃：v0.4.0 起加密统一
       #   改用 SYSTEM_AES_KEY，Go 主应用不再读取这三个变量。）
       - SYSTEM_AES_KEY=${SYSTEM_AES_KEY:-}
+      - SYSTEM_SIGNING_KEY=${SYSTEM_SIGNING_KEY:-}
       - SSRF_WHITELIST=${SSRF_WHITELIST:-}
       # 保留原始 URL 的图片域名白名单（逗号分隔，不替换为 provider://）
       - IMAGE_HOST_KEEP_URL=${IMAGE_HOST_KEEP_URL:-}
-      # Always allow the optional searxng sidecar and the bundled vector-store
-      # service hostnames (compose service names). Vector-store create/test now
-      # runs SSRF validation on user-supplied addresses, which would otherwise
-      # reject these private docker-network hosts; whitelisting them keeps the
+      # Always allow the optional searxng sidecar, bundled vector stores, and
+      # the default MinIO storage host (compose service names). User-controlled
+      # endpoints are SSRF-validated and these private docker-network hosts
+      # would otherwise be rejected; whitelisting them keeps the
       # out-of-box experience. Merged on top of SSRF_WHITELIST so user
       # overrides don't clobber it. (postgres is intentionally NOT listed: it
       # is not a user-registerable vector store, and whitelisting the app's own
       # DB host would skip the 5432 port block.)
       # doris-be: Stream Load follows FE→BE redirects that must receive Basic
       # credentials on whitelisted BE hosts.
-      - SSRF_WHITELIST_EXTRA=${SSRF_WHITELIST_EXTRA:-searxng,qdrant,milvus,weaviate,doris-fe,doris-be}
+      - SSRF_WHITELIST_EXTRA=${SSRF_WHITELIST_EXTRA:-searxng,qdrant,milvus,weaviate,doris-fe,doris-be,minio}
+      # 仅允许白名单出站（默认关闭）。开启前请把所有需要访问的地址加入白名单，
+      # 见 website-docs/01-getting-started/04-configuration.md「开启 SSRF_DNS_WHITELIST_ONLY 之前」。
+      - SSRF_DNS_WHITELIST_ONLY=${SSRF_DNS_WHITELIST_ONLY:-}
       - CONCURRENCY_POOL_SIZE=${CONCURRENCY_POOL_SIZE:-5}
       - JWT_SECRET=${JWT_SECRET:-}
       # File size limit (in MB)
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      # Skill zip / GitHub source download cap (in MB); the GitHub zipball is the whole repo, not the skill subtree
+      - MAX_SKILL_BUNDLE_SIZE_MB=${MAX_SKILL_BUNDLE_SIZE_MB:-256}
       # 文档处理任务总超时（Go duration，默认 2h）
       - WEKNORA_DOCUMENT_PROCESS_TIMEOUT=${WEKNORA_DOCUMENT_PROCESS_TIMEOUT:-}
       # 单次 DocReader RPC 超时（默认 30m，须小于上一项）
       - WEKNORA_DOCREADER_CALL_TIMEOUT=${WEKNORA_DOCREADER_CALL_TIMEOUT:-}
+      # 自建 PaddleOCR-VL HTTP 请求超时（Go duration，默认 1000s）
+      - WEKNORA_PADDLEOCR_VL_TIMEOUT=${WEKNORA_PADDLEOCR_VL_TIMEOUT:-}
       # 知识库巡检回收（回收卡在 processing 的脏数据；false 禁用，不建议）
       - WEKNORA_HOUSEKEEPING_ENABLED=${WEKNORA_HOUSEKEEPING_ENABLED:-}
-      # 自定义 Skills 目录（挂载后指定，免重建镜像）
-      - WEKNORA_SKILLS_DIR=${WEKNORA_SKILLS_DIR:-}
       - WEKNORA_CHAT_ATTACHMENT_TTL_HOURS=${WEKNORA_CHAT_ATTACHMENT_TTL_HOURS:-24}
       - WEKNORA_CHAT_ATTACHMENT_WAIT_TIMEOUT_SEC=${WEKNORA_CHAT_ATTACHMENT_WAIT_TIMEOUT_SEC:-60}
       - WEKNORA_CHAT_ATTACHMENT_OCR_CONCURRENCY=${WEKNORA_CHAT_ATTACHMENT_OCR_CONCURRENCY:-8}
       - WEKNORA_CHAT_ATTACHMENT_OCR_MAX_PAGES=${WEKNORA_CHAT_ATTACHMENT_OCR_MAX_PAGES:-8}
-      # Agent Skills Sandbox
-      - WEKNORA_SANDBOX_MODE=${WEKNORA_SANDBOX_MODE:-docker}
-      - WEKNORA_SANDBOX_TIMEOUT=${WEKNORA_SANDBOX_TIMEOUT:-60}
-      - WEKNORA_SANDBOX_DOCKER_IMAGE=${WEKNORA_SANDBOX_DOCKER_IMAGE:-wechatopenai/weknora-sandbox:${WEKNORA_VERSION:-latest}}
       # Agent LLM call timeout
       - WEKNORA_AGENT_LLM_TIMEOUT=${WEKNORA_AGENT_LLM_TIMEOUT:-}
       - WEKNORA_AGENT_TOOL_APPROVAL_TIMEOUT=${WEKNORA_AGENT_TOOL_APPROVAL_TIMEOUT:-}
       # MCP 工具人工审批失败时是否放行（true 放行 / 默认 fail-close 拒绝）
       - WEKNORA_AGENT_TOOL_APPROVAL_FAIL_OPEN=${WEKNORA_AGENT_TOOL_APPROVAL_FAIL_OPEN:-}
-      # Tenant / RBAC（详见 docs/RBAC说明.md 与 .env.example 注释）
+      # Tenant / RBAC（详见 website-docs/03-features/01-tenant-auth.md 与 .env.example 注释）
       # - WEKNORA_TENANT_ENABLE_RBAC: 是否启用空间角色强制鉴权（true / false），默认 true
       # - WEKNORA_TENANT_MAX_OWNED_PER_USER: 单个非超管自助创建空间的上限
       #   >0 强制限额；=0 走 handler 默认；<0 关闭限额（不建议共享部署使用）
@@ -347,9 +371,12 @@ services:
       - OIDC_AUTH_AUTHORIZATION_ENDPOINT=${OIDC_AUTH_AUTHORIZATION_ENDPOINT:-}
       - OIDC_AUTH_TOKEN_ENDPOINT=${OIDC_AUTH_TOKEN_ENDPOINT:-}
       - OIDC_AUTH_USER_INFO_ENDPOINT=${OIDC_AUTH_USER_INFO_ENDPOINT:-}
+      - OIDC_AUTH_JWKS_URI=${OIDC_AUTH_JWKS_URI:-}
       - OIDC_AUTH_SCOPES=${OIDC_AUTH_SCOPES:-}
       - OIDC_USER_INFO_MAPPING_USER_NAME=${OIDC_USER_INFO_MAPPING_USER_NAME:-}
       - OIDC_USER_INFO_MAPPING_EMAIL=${OIDC_USER_INFO_MAPPING_EMAIL:-}
+      # 飞书云文档解析模式 export：导出为docx，blocks：根据飞书云文档块解析为markdown。默认为:export
+      - FEISHU_DOCX_PARSE_MODE=${FEISHU_DOCX_PARSE_MODE:-export}
     depends_on:
       redis:
         condition: service_started
@@ -363,13 +390,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # Sandbox 镜像：仅用于 build/pull，非常驻服务；app 执行 Skills 时按需 docker run 该镜像，用毕即释
+  # Sandbox 镜像：仅用于 build/pull，非常驻。Docker 沙箱默认关闭，需
+  # WEKNORA_SANDBOX_DOCKER_ENABLED=true 并挂载 docker.sock 后，app 才会按会话创建容器。
   sandbox:
     image: wechatopenai/weknora-sandbox:${WEKNORA_VERSION:-latest}
     container_name: WeKnora-sandbox
     build:
       context: .
       dockerfile: docker/Dockerfile.sandbox
+      target: sandbox
     profiles:
       - full
     command: ["true"]
@@ -402,6 +431,7 @@ services:
       # docreader 对外 HTTP 抓取的 SSRF 白名单（逗号分隔；与 app 共用同名变量）
       - SSRF_WHITELIST=${SSRF_WHITELIST:-}
       - SSRF_WHITELIST_EXTRA=${SSRF_WHITELIST_EXTRA:-}
+      - SSRF_DNS_WHITELIST_ONLY=${SSRF_DNS_WHITELIST_ONLY:-}
       # ========== gRPC 服务端 TLS / 认证 ==========
       - GRPC_TLS_ENABLED=${GRPC_TLS_ENABLED:-false}
       - GRPC_TLS_CERT=${GRPC_TLS_CERT:-}
@@ -499,7 +529,7 @@ services:
 
   # 修改的PostgreSQL配置
   postgres:
-    image: paradedb/paradedb:v0.22.2-pg17
+    image: paradedb/paradedb:v0.22.6-pg17
     container_name: WeKnora-postgres
     environment:
       - POSTGRES_USER=${DB_USER}
@@ -510,7 +540,7 @@ services:
     networks:
       - WeKnora-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s # 增加时间间隔
       timeout: 10s # 增加超时时间
       retries: 3 # 减少重试次数，让失败更快反馈
@@ -580,7 +610,7 @@ services:
       - full
 
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: WeKnora-minio
     ports:
       - "${MINIO_PORT:-9000}:9000"
@@ -777,7 +807,7 @@ services:
   # 一次性初始化脚本：在已有的 WeKnora-postgres 里创建 langfuse 数据库（幂等，数据库已存在则跳过）
   # 复用 WeKnora-postgres 的 ParadeDB 镜像，避免多拉一个 postgres 镜像
   langfuse-db-init:
-    image: paradedb/paradedb:v0.22.2-pg17
+    image: paradedb/paradedb:v0.22.6-pg17
     container_name: WeKnora-langfuse-db-init
     depends_on:
       postgres:
@@ -834,7 +864,7 @@ services:
       - full
 
   langfuse-minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: WeKnora-langfuse-minio
     restart: unless-stopped
     entrypoint: sh

@@ -76,16 +76,6 @@ type WikiPageService interface {
 	// the consumer.
 	GetIndexView(ctx context.Context, kbID string, pageTypes []string, limit int, cursor string) (*types.WikiIndexResponse, error)
 
-	// GetLog returns the log page for a knowledge base.
-	//
-	// Wiki operation events now live in the dedicated wiki_log_entries
-	// table, so this method no longer auto-creates a placeholder row on
-	// miss and may legitimately return (nil, nil) for KBs that never had
-	// the legacy row written. Retained for back-compat with callers that
-	// still probe the row (lint, knowledge delete); new code should use
-	// WikiLogEntryService.List for the event feed instead.
-	GetLog(ctx context.Context, kbID string) (*types.WikiPage, error)
-
 	// GetGraph returns the link graph data for visualization. The caller
 	// supplies a WikiGraphRequest describing the desired slice of the graph
 	// (overview top-N or ego neighborhood around a center slug). Callers
@@ -107,7 +97,7 @@ type WikiPageService interface {
 	// RebuildIndexPage regenerates the index page.
 	RebuildIndexPage(ctx context.Context, kbID string) error
 
-	// ListAllPages retrieves all wiki pages in a knowledge base without pagination.
+	// ListAllPages retrieves all non-archived wiki pages in a knowledge base without pagination.
 	// Used for index rebuild, graph generation, cross-link injection, etc.
 	ListAllPages(ctx context.Context, kbID string) ([]*types.WikiPage, error)
 
@@ -162,6 +152,19 @@ type WikiPageService interface {
 	// page titles. Used by the dedup pre-filter to surface candidate
 	// merge targets server-side.
 	FindSimilarPages(ctx context.Context, kbID string, query string, pageTypes []string, limit int) ([]*types.WikiPageLite, error)
+
+	// FindPagesByNormalizedTitle returns non-archived pages of pageType whose
+	// display title matches identity after the same whitespace/case fold used
+	// by wiki ingest identity claims. Used so exact same-title pages are found
+	// even when they miss the trigram top-K.
+	FindPagesByNormalizedTitle(ctx context.Context, kbID, pageType, identity string) ([]*types.WikiPageLite, error)
+
+	// FindPagesByNormalizedTitles is the batched form of
+	// FindPagesByNormalizedTitle. identities are already whitespace-stripped
+	// and lowercased; empty entries are ignored.
+	FindPagesByNormalizedTitles(
+		ctx context.Context, kbID, pageType string, identities []string,
+	) ([]*types.WikiPageLite, error)
 
 	// ListDistinctCategoryPaths returns the existing wiki folder paths (split
 	// into segments), capped at maxPaths. Used by wiki ingest's taxonomy
@@ -236,8 +239,8 @@ type WikiPageService interface {
 	// ListIssues retrieves issues for a knowledge base, optionally filtered by slug and status.
 	ListIssues(ctx context.Context, kbID string, slug string, status string) ([]*types.WikiPageIssue, error)
 
-	// UpdateIssueStatus updates the status of an issue (e.g. pending -> resolved/ignored).
-	UpdateIssueStatus(ctx context.Context, issueID string, status string) error
+	// UpdateIssueStatus updates the status of an issue of kbID (e.g. pending -> resolved/ignored).
+	UpdateIssueStatus(ctx context.Context, kbID string, issueID string, status string) error
 }
 
 // WikiPageRepository defines the wiki page data persistence interface.
@@ -328,6 +331,16 @@ type WikiPageRepository interface {
 	// surface candidate merge targets server-side.
 	FindSimilarPages(ctx context.Context, kbID string, query string, pageTypes []string, limit int) ([]*types.WikiPageLite, error)
 
+	// FindPagesByNormalizedTitle returns non-archived pages of pageType whose
+	// whitespace-stripped, lowercased title equals identity.
+	FindPagesByNormalizedTitle(ctx context.Context, kbID, pageType, identity string) ([]*types.WikiPageLite, error)
+
+	// FindPagesByNormalizedTitles is the batched form of
+	// FindPagesByNormalizedTitle.
+	FindPagesByNormalizedTitles(
+		ctx context.Context, kbID, pageType string, identities []string,
+	) ([]*types.WikiPageLite, error)
+
 	// ListDistinctCategoryPaths returns the materialized paths of existing
 	// wiki folders (split into segments), capped at maxPaths. Used by the
 	// wiki ingest taxonomy planner as the pool of folders to reuse.
@@ -364,13 +377,13 @@ type WikiPageRepository interface {
 	// Used to recompute cached paths when a folder subtree is moved/renamed.
 	ListPagesByFolderIDs(ctx context.Context, kbID string, folderIDs []string) ([]*types.WikiPage, error)
 
-	// ListAll retrieves all wiki pages in a knowledge base (for link rebuilding, graph generation).
+	// ListAll retrieves all non-archived wiki pages in a knowledge base (for link rebuilding, graph generation).
 	ListAll(ctx context.Context, kbID string) ([]*types.WikiPage, error)
 
 	// ListRecentForSuggestions returns recent user-visible wiki pages under the given
 	// knowledge bases, used to produce fallback suggested questions for Wiki-only KBs
 	// that do not have AI-generated document questions or recommended FAQ entries.
-	// Excludes index/log pages and archived pages. Returns up to `limit` rows sorted
+	// Excludes the index page and archived pages. Returns up to `limit` rows sorted
 	// by updated_at descending.
 	ListRecentForSuggestions(ctx context.Context, tenantID uint64, kbIDs []string, limit int) ([]*types.WikiPage, error)
 
@@ -409,12 +422,38 @@ type WikiPageRepository interface {
 	// DeleteRevisionsByPage hard-deletes a page's entire snapshot history.
 	DeleteRevisionsByPage(ctx context.Context, pageID string) error
 
+	// DeleteByKnowledgeBaseID soft-deletes all wiki pages for tenantID+kbID.
+	// Used by KB delete cleanup to batch-soft-delete every page without walking
+	// the folder tree. Bypasses the per-page chunk/link reconciliation that
+	// DeletePage does — the whole KB is going away, so cross-link cleanup is
+	// the KB delete flow's responsibility. tenantID is required so a tampered
+	// delete payload cannot wipe another tenant's wiki by kbID alone.
+	DeleteByKnowledgeBaseID(ctx context.Context, tenantID uint64, kbID string) error
+
+	// DeleteFoldersByKnowledgeBaseID soft-deletes all wiki folders for
+	// tenantID+kbID. Unlike DeleteFolder this does NOT enforce the emptiness
+	// guard — the KB is being deleted, so non-empty folders must go too.
+	DeleteFoldersByKnowledgeBaseID(ctx context.Context, tenantID uint64, kbID string) error
+
+	// DeleteRevisionsByKnowledgeBaseID hard-deletes all wiki page revisions
+	// for tenantID+kbID. Revisions have no deleted_at column (they are
+	// immutable snapshots, not soft-deletable rows), so this is a physical
+	// DELETE — same semantics as DeleteRevisionsByPage but scoped to the
+	// whole KB.
+	DeleteRevisionsByKnowledgeBaseID(ctx context.Context, tenantID uint64, kbID string) error
+
+	// DeleteIssuesByKnowledgeBaseID soft-deletes all wiki page issues for
+	// tenantID+kbID. Issues reference the KB and must be cleaned up
+	// alongside pages to avoid orphans.
+	DeleteIssuesByKnowledgeBaseID(ctx context.Context, tenantID uint64, kbID string) error
+
 	// CreateIssue inserts a new wiki page issue record.
 	CreateIssue(ctx context.Context, issue *types.WikiPageIssue) error
 
 	// ListIssues retrieves issues with optional filtering by slug and status.
 	ListIssues(ctx context.Context, kbID string, slug string, status string) ([]*types.WikiPageIssue, error)
 
-	// UpdateIssueStatus updates an issue's status.
-	UpdateIssueStatus(ctx context.Context, issueID string, status string) error
+	// UpdateIssueStatus updates the status of an issue of kbID; ErrWikiIssueNotFound
+	// when no such issue belongs to it.
+	UpdateIssueStatus(ctx context.Context, kbID string, issueID string, status string) error
 }

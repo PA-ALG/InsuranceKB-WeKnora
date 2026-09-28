@@ -1,0 +1,24 @@
+{
+  "base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+  "upstream": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+  "merge_head": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+  "merge_base": "80a5003cc99a427098afe184eee6601916d3d156",
+  "frozen_at": "2026-09-27T11:40:27Z",
+  "scope": "migration compatibility, recovery, adoption identity, and focused verification only",
+  "path_count": 13,
+  "sha256": {
+    "deploy/upstream/weknora-adoption-target.json": "6c5514a6ed2d8b72c935f10deacb384df50821b103e5dc07baab5a35fba58664",
+    "harness/tests/test_prepare_weknora_adoption_045.py": "d380c37f20a768e153e4b9c52a08de75928c9e5e44517e2ceddb261196ffaf82",
+    "internal/database/embeddings_upgrade.go": "b0365839a07271283a8beaaa6cc269b8fd92eaed7b798758fd643e846d1285de",
+    "internal/database/embeddings_upgrade_test.go": "f004bf16bea38efab16d97bd74a2acfd2095dc9f5838733565697bebd1fe2604",
+    "internal/database/enterprise_migration.go": "8de4b5d5e8ad2b11bb4fdfa5ac81c88599faadfc75674a4dbf0e84787218d544",
+    "internal/database/legacy_w1_bridge.go": "278b2aab8d4b4d3e87f99eb0d8636269ee46326f5a9af3d6880c6c5873a1fdd1",
+    "internal/database/legacy_w1_bridge_test.go": "61b4f685dc30ba5df50df5ffc72f53f060af2c9cfa3d906102ff3a00f8ad9593",
+    "internal/database/migration_versions_test.go": "06d082c34e7f08f5c7c82723550daf0db18ff9736b13dbb15fc462b3b0689525",
+    "internal/database/official_migration_checkpoints.go": "bc8af2bf85327e5e34fae71f55ccfdd13863a93050fec654a98c8e43fd8acb5a",
+    "internal/database/pg_search_migration.go": "750f773967a3de6941be62df729004dd2442e3ad3f43dbf874b765566b798b7a",
+    "internal/database/pg_search_migration_test.go": "07b623c0879dabcd8aad9d86c65b1ea1c037e315b595f23989c1a18b2fbafdee",
+    "migrations/versioned/000077_remove_wiki_log.down.sql": "da2c4ed60be8001957efa5fcd4a3a96828d6bb7c14a6bf378650061e0c269eb5",
+    "migrations/versioned/000077_remove_wiki_log.up.sql": "161172d066c4f0f00605745ff2ac69646b75a866783857109ac1a18328b5fc2a"
+  }
+}

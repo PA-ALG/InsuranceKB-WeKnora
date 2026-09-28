@@ -1,0 +1,71 @@
+{
+  "status": "BLOCKED",
+  "authorization": "recovery-authorization.md",
+  "capacity_review": {
+    "reviewer": "migration_review",
+    "decision": "PASS_TO_ATTEMPT_ONE",
+    "available_kib": 6948316,
+    "basis": "Retained Rust/Node layers, completed lock-plan and builder COPY, 25 regular cache records about 0.680 GB, existing Go build/mod caches 3.47 GB + 3.707 GB; remaining Cargo/pnpm peak unmeasured, not a success guarantee"
+  },
+  "app_selector_receipt": {
+    "artifact_identity": "sha256:dee7d33d449a9a3b382577dec1c45d9e8f246aa0acfab3ddb64f1b4921297f61",
+    "build_invocations": 1,
+    "build_source_head": "8a0863fa095bc27b901db90c5f744d1db84063b2",
+    "candidate_image_ids": [],
+    "contract": "ba0-app-build-receipt.v1",
+    "dependency_lock_sha256": "4eba510179e957a039c757c702d0702a12a8435724d46e393da33d33006393b2",
+    "docker_context": "colima",
+    "integration_head": "f3ff602b9613381b9d722d7ffdf2fcdb29621c32",
+    "manifest_sha256": "4a535bf4c310f965bca4435b301f08b9d0216beb62ea823cb95e9e126faed850",
+    "platform": "linux/arm64",
+    "selector": "BUILD_AFFECTED",
+    "status": "INCOMPLETE",
+    "target": "runtime"
+  },
+  "app_exit_code": 1,
+  "app_build_history": {
+    "cached_steps": 0,
+    "completed_at": "2026-09-27T13:38:51.385357942Z",
+    "completed_steps": 2,
+    "created_at": "2026-09-27T13:38:37.885886081Z",
+    "name": "context/docker/Dockerfile.app (runtime)",
+    "ref": "colima/colima/wqxk2x51kac7sxog3vc8gjfug",
+    "status": "Error",
+    "total_steps": 2
+  },
+  "build_wall_seconds": 13.499471861,
+  "failure": "Dockerfile frontend metadata resolution returned EOF from configured docker.mirrors.ustc.edu.cn before compilation",
+  "app_log_sha256": "ffe282d7be34df69c5c53ac128ffc6f219e0be5f00cc95540f7c212d5af37d26",
+  "app_log": "Docker app image build failed: #0 building with \"colima\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile.app\n#1 transferring dockerfile: 15.57kB 0.0s done\n#1 DONE 0.0s\n\n#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.7\n#2 ERROR: failed to do request: Head \"https://docker.mirrors.ustc.edu.cn/v2/docker/dockerfile/manifests/1.7?ns=docker.io\": EOF\n------\n > resolve image config for docker-image://docker.io/docker/dockerfile:1.7:\n------\nDockerfile.app:1\n--------------------\n   1 | >>> # syntax=docker/dockerfile:1.7\n   2 |     \n   3 |     ARG BUILDER_IMAGE\n--------------------\nERROR: failed to build: failed to solve: failed to resolve source metadata for docker.io/docker/dockerfile:1.7: failed to do request: Head \"https://docker.mirrors.ustc.edu.cn/v2/docker/dockerfile/manifests/1.7?ns=docker.io\": EOF\n",
+  "image_output": null,
+  "total_app_build_invocations": 2,
+  "authorized_additional_build_budget": 1,
+  "additional_build_invocations": 1,
+  "additional_build_budget_remaining": 0,
+  "post_attempt_disk": "Filesystem     1024-blocks      Used Available Capacity Mounted on\n/dev/vdb1        112946468 104933388   6948144      94% /var/lib/docker\n/dev/vdb1        112946468 104933388   6948144      94% /var/lib/containerd\n",
+  "existing_running_containers": "g3-platform-product-product-worker-1 Up 7 hours (healthy)\ng3-platform-product-product-api-1 Up 7 hours (healthy)\nweknora-g3-830-release-app-issuer-closeout-01 Up 7 hours\nweknora-g3-830-docreader Up 3 days\nweknora-g3-830-release-ui-bounded-read-01 Up 5 days\nweknora-g3-830-redis Up 5 days\nweknora-g3-830-postgres-recovery-02 Up 5 days\nWeKnora-redis Up 5 days (healthy)\n",
+  "effects": {
+    "new_service_deployments": 0,
+    "database_migrations": 0,
+    "provider_calls": 0,
+    "additional_cleanup_after_exact_32": 0
+  },
+  "ui": "NOT RUN; D2 sequence stopped after App failure",
+  "docreader": "NOT RUN; D2 sequence stopped after App failure",
+  "next": "Keep Draft PR; diagnose registry connectivity before requesting any further App build budget. Do not automatically retry, prune, migrate or deploy.",
+  "push": {
+    "destination": "PA-ALG/InsuranceKB-WeKnora",
+    "status": "PASS",
+    "pushed_head": "f3ff602b9613381b9d722d7ffdf2fcdb29621c32",
+    "branch": "codex/830-upstream-plugin-boundary",
+    "prior_failures": [
+      "HTTP400 via configured proxy",
+      "HTTP408 with HTTP1.1/postBuffer via proxy",
+      "HTTP408 with command-local direct configuration"
+    ],
+    "recovery": "Verified fork already holds pinned upstream commit; created authorized target ref at upstream ancestor 3e8b0bfc, then ordinary fast-forward to f3ff602b9. No forced update, commit rewrite, main update or alternate branch. Incremental pack estimate 254678 bytes, versus 49299041 bytes excluding only origin/main.",
+    "push_log": "To https://github.com/PA-ALG/InsuranceKB-WeKnora.git\n   3e8b0bfc8..f3ff602b9  codex/830-upstream-plugin-boundary -> codex/830-upstream-plugin-boundary\nbranch 'codex/830-upstream-plugin-boundary' set up to track 'origin/codex/830-upstream-plugin-boundary'.\n",
+    "current_evidence_commit": "Pending D0 review and commit at this receipt snapshot",
+    "draft_pr": "Pending current evidence commit"
+  }
+}

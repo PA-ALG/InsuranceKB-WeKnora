@@ -1,0 +1,752 @@
+{
+  "status": "PASS",
+  "scope": "Five databases and exact runtime config restored; existing e71 App isolated migration and historical published-read continuity passed; no original-runtime cutover",
+  "resources": {
+    "containers": [
+      "upg-082-20260928-pg-0226",
+      "upg-082-20260928-redis",
+      "upg-082-20260928-app-old (stopped)",
+      "upg-082-20260928-app-new (stopped)"
+    ],
+    "networks": [
+      "upg-082-20260928-net"
+    ],
+    "volumes": [
+      "upg-082-20260928-c5",
+      "upg-082-20260928-files",
+      "upg-082-20260928-pgdata"
+    ]
+  },
+  "archives": [
+    {
+      "archive": "files-volume.tar",
+      "sha256": "8d822100c8d0703f8d796a821a2d392278a9743b26ed681ad87e36fafc389eed",
+      "bytes": 836106240,
+      "members": 259,
+      "files": 189,
+      "readable": true
+    },
+    {
+      "archive": "c5-authority-volume.tar",
+      "sha256": "f31b4dea793cdba1ee7e5c975ebd8325d4434d3eb944a53b7baf63f518c9468a",
+      "bytes": 2805760,
+      "members": 17,
+      "files": 16,
+      "readable": true
+    },
+    {
+      "archive": "trusted-config.tar",
+      "sha256": "56a71aee96a6024d6bbfe38e93f6feab8b514fe490831f090a96673d2c8d667b",
+      "bytes": 727040,
+      "members": 5,
+      "files": 4,
+      "readable": true
+    }
+  ],
+  "first_four_restores": [
+    {
+      "database": "paradedb",
+      "dump_sha256": "5ccd2d7fc2de1cef5c0d4aa96244230f66f554adc5c3fb782bed22683710a17a",
+      "status": "PASS",
+      "elapsed_seconds": 1.176
+    },
+    {
+      "database": "postgres",
+      "dump_sha256": "b7f4449c8e5cba92280f730835f59d3adbda0901767fc632cdd75b195d9cfa39",
+      "status": "PASS",
+      "elapsed_seconds": 0.109
+    },
+    {
+      "database": "weknora",
+      "dump_sha256": "5e3035656d32e3bce348e83831e8027959016d4782f092d8ab304d1e0ac17063",
+      "status": "PASS",
+      "elapsed_seconds": 1.11
+    },
+    {
+      "database": "weknora_g3_830",
+      "dump_sha256": "b30521c4c2200d8c113385b4cca25da9e0dde57e2884a4f275bb047a5665b4e1",
+      "status": "PASS",
+      "elapsed_seconds": 53.936
+    }
+  ],
+  "fifth_restore": {
+    "status": "PASS",
+    "first_failure_preserved": true,
+    "recovery_invocation": 1,
+    "total_fifth_restore_invocations": 2,
+    "dump_sha256": "6d0de144541df8d58b5f488365e1378cba9b2c7307bfa4ad34f93da3056755dd",
+    "elapsed_seconds": 109.502,
+    "owner_matches_source": true,
+    "harness_credential_authentication": "NOT RUN",
+    "public_base_tables": 41,
+    "globals_backup_sha256": "4e1315a0b442c66b56160022e9cf4a83ede245677027628a3334945042614e02"
+  },
+  "initial_fifth_failure": {
+    "status": "BLOCKED",
+    "reason": "Missing cluster role needed by ownership statements",
+    "transaction_rolled_back": true,
+    "failure_preserved": true,
+    "recovery": "Reviewed missing nonprivileged role without password; recreate only failed isolated database with matching source owner; one bounded restore retry"
+  },
+  "restored_app_ledger": {
+    "official": {
+      "version": 75,
+      "dirty": false
+    },
+    "enterprise": {
+      "version": 5,
+      "dirty": false
+    },
+    "pg_search": "0.22.2"
+  },
+  "pending_work_check": {
+    "status": "BLOCKED_PENDING_SUMMARY",
+    "summary_state_counts_source": [
+      {
+        "summary_status": "pending",
+        "parse_status": "completed",
+        "soft_deleted": false,
+        "count": 18
+      },
+      {
+        "summary_status": "pending",
+        "parse_status": "deleting",
+        "soft_deleted": true,
+        "count": 3
+      }
+    ],
+    "summary_state_counts_restored": [
+      {
+        "summary_status": "pending",
+        "parse_status": "completed",
+        "soft_deleted": false,
+        "count": 18
+      },
+      {
+        "summary_status": "pending",
+        "parse_status": "deleting",
+        "soft_deleted": true,
+        "count": 3
+      }
+    ],
+    "settings_restored": [
+      {
+        "is_target_database": true,
+        "is_missing_role": false,
+        "keys": [
+          "search_path"
+        ]
+      }
+    ],
+    "role_attributes_equal": true,
+    "database_metadata_equal": true,
+    "original_catalog_restored_byte_identically": true,
+    "original_catalog_sha256": "e82d647abdce3d210885e6312ca68162ab3db793cc4940c7ee1e54f0d8e43254",
+    "original_eight_unchanged": true,
+    "app_starts": 0,
+    "target_pg_pulls": 0,
+    "migration_attempts": 0,
+    "checkpoint": "Initial pre-start STOP; superseded only by the reviewed isolated Redis/housekeeping configuration"
+  },
+  "credential_access": {
+    "direct_database_token_extraction": "BLOCKED by automatic approval; command not executed; removed",
+    "normal_operator_login": "PASS; one normal existing-operator login during initial old-App start; two expected auth_tokens inserts recorded"
+  },
+  "original_eight_unchanged": true,
+  "app_builds": 0,
+  "app_starts": 3,
+  "target_pg_pulls": 1,
+  "migration_attempts": 1,
+  "provider_calls": 0,
+  "old_app_restore_GET": "PASS: exact configuration restored; epoch27, release search, source fields, citation page2 and byte-identical PDF verified",
+  "post_migration_GET": "PASS: epoch27/member/field/source/citation/PDF; signed authority independently recomputed and expiry-normalized",
+  "cutover": "NOT RUN",
+  "private_material": "Local private backup and execution directories only; no credentials or row contents committed",
+  "restore_configuration_difference": {
+    "provenance": "CREATE EXTENSION postgis_topology/postgis_tiger_geocoder executes AddToSearchPath installation helper that ALTER DATABASE current_database SET search_path",
+    "extension_script_proof": [
+      {
+        "script": "postgis_tiger_geocoder--3.6.2.sql",
+        "sha256": "b5b0d2a149e8c76dba2088f46542632dd520ada200e392368ca21e6f4d6c80ad",
+        "matches": [
+          {
+            "line": 13573,
+            "text": "CREATE FUNCTION postgis_extension_AddToSearchPath(a_schema_name text)"
+          },
+          {
+            "line": 13622,
+            "text": "EXECUTE 'ALTER DATABASE ' || quote_ident(current_database())"
+          },
+          {
+            "line": 13653,
+            "text": "SELECT postgis_extension_AddToSearchPath('tiger');"
+          },
+          {
+            "line": 13671,
+            "text": "DROP FUNCTION IF EXISTS postgis_extension_AddToSearchPath(varchar);"
+          },
+          {
+            "line": 13672,
+            "text": "DROP FUNCTION IF EXISTS postgis_extension_AddToSearchPath(text);"
+          }
+        ]
+      },
+      {
+        "script": "postgis_topology--3.6.2.sql",
+        "sha256": "b25dec795e33f0963c71fa5ebf0211cd7b6315dfc2ab1af2b9b7d882889342d0",
+        "matches": [
+          {
+            "line": 5388,
+            "text": "--  AddToSearchPath(schema_name)"
+          },
+          {
+            "line": 5394,
+            "text": "CREATE OR REPLACE FUNCTION topology.AddToSearchPath(a_schema_name varchar)"
+          },
+          {
+            "line": 5443,
+            "text": "EXECUTE 'ALTER DATABASE ' || quote_ident(current_database())"
+          },
+          {
+            "line": 5457,
+            "text": "--} AddToSearchPath"
+          },
+          {
+            "line": 9089,
+            "text": "SELECT topology.AddToSearchPath('topology');"
+          }
+        ]
+      }
+    ],
+    "source_and_isolated_effective_searchpath_equal": false,
+    "source_effective_schema_count": 1,
+    "isolated_effective_schema_count": 2,
+    "persistent_setting_scope": "database-wide, setrole=0",
+    "setting_altered_by_executor": false
+  },
+  "startup_amendment": {
+    "status": "PASS",
+    "meaning": "Pre-execution plan review only; not runtime acceptance",
+    "plan_sha256": "cb6a227a9de398d41582c8f1f4c64ed82971cff2742d2b47b378348efd0529fb",
+    "review_blockers": 0,
+    "old_source": "b393d855c7c3e6b6acaf71683861255ee9710b83",
+    "new_source": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+    "shared_reset_pending_blob": "349f9e4944e6b28c8018386aded101da76e3dcc8",
+    "configuration": {
+      "redis": "New isolated empty Redis, existing local immutable image, no original Redis attachment",
+      "housekeeping_enabled": false,
+      "old_auto_migrate": false,
+      "new_auto_migrate": true,
+      "auto_recover_dirty": false
+    },
+    "guards": [
+      "Exact 21 historical summary-pending and 3 soft-deleted/deleting rows and spans preserved before/after both Apps",
+      "Parse pending/processing/finalizing and actual tasks/subtasks/sync/schedules/Harness jobs/outbox must be zero",
+      "Require distributed Redis and housekeeping-disabled startup evidence",
+      "Closed declared native post-hooks; unexpected business state delta means STOP",
+      "Normal existing operator login; expected auth metadata writes accounted separately",
+      "One new App migration startup only, no restart/ledger repair/manual SQL",
+      "No original service or provider effects"
+    ],
+    "execution": "Old restore continuity and the single new-App migration/continuity both passed; historical preflight and comparator STOP checkpoints preserved below.",
+    "closed_posthooks_plan_sha256": "7a7cc7d3148238807c0cacd06344d8ed120ccb80c869cf8192b125d21aae8a2c",
+    "closed_posthooks": {
+      "four_storage_aliases": "updated_at only; name/config/source/status equal",
+      "sequences": [
+        "chunks_seq_id_seq",
+        "knowledge_tags_seq_id_seq"
+      ],
+      "models": "14-row digest unchanged; optional config absent",
+      "login": "Only access+refresh auth_tokens inserts per successful login; users/preferences/memberships unchanged",
+      "protected_rows": 21,
+      "protected_spans": 216
+    },
+    "posthooks_preflight": {
+      "storage_alias_count": 4,
+      "content_delta_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "content_differing_fields": [],
+      "expected_storage_changes": "4 updated_at timestamps only",
+      "builtin_models": {
+        "present": false,
+        "loader_effect": "no-op missing config"
+      },
+      "builtin_config_env_override_present": false,
+      "old_auto_migrate_false_skips_database_posthooks": true,
+      "new_posthooks_sequence_changes": {
+        "chunks_seq_id_seq": {
+          "last_value": 100007280,
+          "is_called": true
+        },
+        "knowledge_tags_seq_id_seq": {
+          "last_value": 10000011,
+          "is_called": true
+        }
+      },
+      "storage_backends_before": {
+        "count": 4,
+        "sha256": "3103c044204e594ae9962f8673bbfb719212246a042e72ae6c885c58812e3fa4"
+      },
+      "models_before": {
+        "count": 14,
+        "sha256": "328986a36957b8f032fb3a32d5f69f2a7f0ea58c70996105e6580765aabbd40c"
+      },
+      "tenants_before": {
+        "count": 4,
+        "sha256": "cadb222031cfd4fac7a2619a89e332cd34c821d807daad97633c36399eb73315"
+      },
+      "knowledge_bases_before": {
+        "count": 12,
+        "sha256": "39ddbc1ae38299b3a6ff67de665ce20ee42f5e5d773de6f6868372afc3a0d240"
+      },
+      "app_process_starts": 0,
+      "image_inspection_container_started": false,
+      "image_inspection_container_removed": true
+    },
+    "checkpoint": "Pre-execution plan and preflight evidence; actual old-App outcome is recorded in old_app_initial_start and config_recovery_stop"
+  },
+  "old_app_initial_configuration": {
+    "status": "BLOCKED",
+    "config_difference": {
+      "path": "/app/config/config.yaml",
+      "source_sha256": "195af92686a8e6f95fce69313ae120ec3aacf601fd79cfe11963890ef19a449e",
+      "isolated_sha256": "5d2d448435bc912d7d95a012673387fe1555e2e6419fc35bb968f8685aadca94",
+      "equal": false
+    },
+    "diagnosis": "Original writable-layer App config was not included in first isolated startup; database/file integrity matches alone do not prove application recovery",
+    "recovery_plan_sha256": "443e65bc157caa688b2d577493fc723399995fb93ad7ff8147f0b51944ca7baa",
+    "archive_and_stop_review_blockers": 0,
+    "additional_old_start": "BLOCKED pending exact archived-config/effect review",
+    "initial_old_login": 1,
+    "expected_auth_tokens_inserts": 2
+  },
+  "old_app_initial_start": {
+    "container_health": "PASS",
+    "epoch27_GET": "PASS",
+    "release_search_GET": "BLOCKED",
+    "new_migration": "NOT RUN",
+    "redis_tasks": 0,
+    "protected_knowledge_and_spans_unchanged": true
+  },
+  "config_recovery_stop": {
+    "status": "BLOCKED_APP_CONFIG_ARCHIVE_APPROVAL",
+    "isolated_old_app_stopped": true,
+    "original_eight_unchanged": true,
+    "auth_record_count_before": 777,
+    "auth_record_count_after": 779,
+    "auth_record_delta": 2,
+    "users_full_digest_unchanged": true,
+    "old_app_starts": 1,
+    "old_app_config_recovery_starts": 0,
+    "new_app_starts": 0,
+    "target_pg_pulls": 0,
+    "migration_attempts": 0,
+    "provider_calls": 0,
+    "source_app_config_archive_created": false,
+    "source_app_config_copied": false,
+    "source_original_service_changes": 0,
+    "preserved_resources": [
+      "upg-082-20260928-pg-old",
+      "upg-082-20260928-redis",
+      "upg-082-20260928-app-old (stopped)"
+    ],
+    "checkpoint": "Historical stop before explicit exact-path authorization"
+  },
+  "config_recovery_prepared": {
+    "status": "PREPARED_NOT_EXECUTED_PENDING_EXACT_APPROVAL",
+    "sha256": "ff14232f6c1d73c54159f9e6f8b358120759f015ce0cebe0c1fd8e4896b913ad",
+    "source": "exact original old-App container /app/config/.",
+    "target": "upg-082-20260928-app-old:/app/config (must be stopped)",
+    "file_mode": "0600 enforced with os.open/fchmod/chmod",
+    "directory_mode": "0700 enforced",
+    "credential_values_printed": false,
+    "starts": 0,
+    "checkpoint": "Prepared-script identity before execution; actual archive/copy result in config_recovery_preflight"
+  },
+  "config_approval": {
+    "status": "PASS",
+    "reason": "Automatic approval required explicit authorization for possibly secret-bearing original /app/config archive and copy; command did not start",
+    "file_mode_issue": "Resolved: executed script explicitly enforces0600 archive and0700 directories",
+    "user_question": "Answered: 授权",
+    "resolved_by": "User explicitly authorized original /app/config private archive and isolated copy after the exact-path question",
+    "previous_rejection_preserved": true
+  },
+  "config_recovery_preflight": {
+    "status": "RESTORED_STOPPED_PENDING_FINAL_REVIEW",
+    "archive_sha256": "87672de153fb3c7786a8205b68db44185650f5abab217f93aff326c78d75ae09",
+    "archive_bytes": 151552,
+    "files": 15,
+    "manifest_sha256": "d243544c510430162ebbff55f28c5071be007341fe80374aa96a115497842b8e",
+    "yaml_file_count": 14,
+    "main_config_sha256": "195af92686a8e6f95fce69313ae120ec3aacf601fd79cfe11963890ef19a449e",
+    "changed_default_file_count": 1,
+    "extra_default_file_count": 0,
+    "builtin_models_config_present": false,
+    "builtin_models_config_env_override": false,
+    "restored_all_file_bytes_modes_match": true,
+    "archive_mode": "0600",
+    "private_directory_modes": "0700",
+    "isolated_app_status": "exited",
+    "distributed_redis_configured": true,
+    "housekeeping_disabled_env": true,
+    "auto_migrate": false,
+    "published_ports": false,
+    "only_internal_network": true,
+    "original_eight_unchanged": true,
+    "additional_old_app_starts": 0,
+    "new_app_starts": 0,
+    "pyyaml_available": false,
+    "checkpoint": "Historical copied-but-not-started preflight; subsequently independently reviewed with zero blockers and recovery startup passed",
+    "yaml_schema_check": "14 YAML files parsed with Ruby safe_load; no classes/symbols/aliases permitted",
+    "closed_preflight_sha256": "30ebf29e17b020b61a0c9b8a9736e01342298eef7866f5902e502e63bed903c3",
+    "review_blockers": 0
+  },
+  "old_app_restored_continuity": {
+    "status": "PASS_OLD_RESTORE_CONTINUITY",
+    "compared_business_tables": 61,
+    "unexpected_business_table_differences": 0,
+    "full_users_preferences_memberships_unchanged": true,
+    "epoch": 27,
+    "release_id": "release-fb536f81-b2c2-4c1e-bd33-01bb800cadf7",
+    "ledger": {
+      "official": {
+        "version": 75,
+        "dirty": false
+      },
+      "enterprise": {
+        "version": 5,
+        "dirty": false
+      },
+      "pg_search": "0.22.2"
+    },
+    "auth_token_count_delta": 2,
+    "successful_normal_logins_total": 1,
+    "config_recovery_new_logins": 0,
+    "old_app_starts_total": 2,
+    "config_recovery_additional_starts": 1,
+    "old_app_stopped": true,
+    "protected_tuples": 21,
+    "protected_spans": 216,
+    "redis_task_count": 0,
+    "source_pdf": {
+      "status": "PASS",
+      "epoch": 27,
+      "release_id": "release-fb536f81-b2c2-4c1e-bd33-01bb800cadf7",
+      "pdf_page": 2,
+      "pdf_bytes": 696913,
+      "pdf_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+      "source_identity_matches_prior_evidence": true,
+      "field_sha256": "5c6658422abd3ec2b8a5734e9cc976c96f22a578700cdd5fb2e2dba92d505c18"
+    },
+    "original_eight_unchanged": true,
+    "target_pg_pulls": 0,
+    "migration_attempts": 0,
+    "provider_calls": 0,
+    "readiness_first_probe": "connection-before-listener; later same process healthy200; no restart",
+    "receipt_sha256": "e126cfb86a0315c233a69cc1178e9b2c116319927dedb0b925c09622073d7966"
+  },
+  "target_pg_image": {
+    "id": "sha256:ea992f2ee1e44d961d3b0f8b4b184cb2061fc9a8fc1dbfafb88f88180e3a16db",
+    "reference": "paradedb/paradedb@sha256:ea992f2ee1e44d961d3b0f8b4b184cb2061fc9a8fc1dbfafb88f88180e3a16db",
+    "os": "linux",
+    "arch": "arm64"
+  },
+  "target_pg_ready": {
+    "available_pg_search": "0.22.6",
+    "ledger_before": 75,
+    "dirty": false,
+    "memory_limit": 2147483648,
+    "original_eight_unchanged": true
+  },
+  "new_config_prestart_stop": {
+    "status": "STOP_CONFIG_PREFLIGHT",
+    "copied_original_files": 15,
+    "actual_files": 17,
+    "extra_new_image_default_files": 2,
+    "missing_original_files": 0,
+    "different_original_files": 0,
+    "same_bytes_but_mode_diff": 0,
+    "new_app_status": "created",
+    "target_pg_pull_attempts": 1,
+    "migration_attempts": 0,
+    "migration_marker_exists": false,
+    "original_eight_unchanged": true
+  },
+  "new_native_config_preflight": {
+    "status": "REVIEWED_INPUTS_PENDING_CLEARANCE",
+    "archive_files": 15,
+    "archive_all_bytes_modes_match": true,
+    "native_extra_files": 2,
+    "native_extra_allowlist_sha256": "db83540549c70bf5a4dbf7bc30bdba5d6b5a5d1b214f800a1efac99a0b4c45af",
+    "all_native_extra_files_match_exact_new_source": true,
+    "all_native_extra_files_unchanged_in_container_diff": true,
+    "native_example_loader_effect": "not read; default overlay path differs and MODELS_CONFIG unset",
+    "native_yaml_loader_effect": "prompt template loaded into memory only; constructor does not enqueue or call model",
+    "builtin_models_file_present": false,
+    "builtin_models_override_present": false,
+    "expected_model_database_effect": "no-op; 14 model rows unchanged required",
+    "closed_database_posthooks_unchanged": true,
+    "file_changes_required": false,
+    "new_app_created_not_started": true,
+    "migration_attempts": 0,
+    "target_pg_pull_attempts": 1,
+    "independent_review_blockers": 0,
+    "resume_script_sha256": "4d50cd3406061764fa7dd39a2d9838013a1904ab28aab112d97eab12e612004e",
+    "checkpoint": "Pre-start reviewed; actual migration outcome recorded separately"
+  },
+  "native_migration_result": {
+    "ledger": {
+      "official": {
+        "version": 110,
+        "dirty": false
+      },
+      "enterprise": {
+        "version": 5,
+        "dirty": false
+      },
+      "pg_search": "0.22.6"
+    },
+    "formal_attempts": 1,
+    "health": 200,
+    "startup_guards": true,
+    "original_eight_unchanged": true,
+    "scope": "Native migration and health only; business continuity verification recorded separately"
+  },
+  "postverify_initial_stop": {
+    "status": "STOP_CITATION_AUTHORITY_DIGEST_CHANGED",
+    "migration_attempts": 1,
+    "app_restarts": 0,
+    "full_continuity": "BLOCKED",
+    "pdf_diagnostic": {
+      "http_status": 200,
+      "bytes": 696913,
+      "sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+      "old_bytes_equal": true
+    },
+    "original_column_table_count": 61,
+    "changed_original_column_tables": [
+      "schema_migrations",
+      "storage_backends"
+    ],
+    "new_tables": [
+      "browser_devices",
+      "browser_pairings",
+      "browser_task_interruptions",
+      "chunk_revisions",
+      "fork_snapshot_leases",
+      "mcp_endpoints",
+      "mcp_metadata",
+      "memory_doc_affinity",
+      "memory_extraction_sessions",
+      "memory_item_embeddings",
+      "memory_items",
+      "memory_subjects",
+      "memory_tombstones",
+      "memory_topic_stats",
+      "message_artifacts",
+      "tenant_sandbox_configs",
+      "tenant_skill_catalog",
+      "tenant_skill_snapshots",
+      "tenant_skills",
+      "tenant_user_env_vars"
+    ],
+    "head_equal": true,
+    "auth_token_record_delta": 0,
+    "legacy_log_pages": {
+      "total": 0,
+      "archived": 0,
+      "soft_deleted": 0
+    },
+    "legacy_log_mutation_case": "NOT EXERCISED",
+    "ledger": {
+      "official": {
+        "version": 110,
+        "dirty": false
+      },
+      "enterprise": {
+        "version": 5,
+        "dirty": false
+      },
+      "pg_search": "0.22.6"
+    },
+    "storage_aliases_expected_updated_at_only": false,
+    "new_app_stopped": true,
+    "old_app_stopped": true,
+    "original_eight_unchanged": true
+  },
+  "citation_digest_proof": {
+    "old_digest_recomputes": true,
+    "new_digest_recomputes": true,
+    "expires_changed": true,
+    "normalized_preimages_equal": true,
+    "normalized_digests_equal": true,
+    "raw_digest_was_correctly_different": true,
+    "source_pdf_old_bytes_equal": true,
+    "method": "hex SHA256 of contract newline + canonical JSON excluding authority_digest/opaque_token; normalize only expires_at_unix",
+    "initial_postverify_stop_preserved": true,
+    "independent_review_blockers": 0,
+    "native_old_new_source_algorithm_identical": true
+  },
+  "storage_posthook_proof": {
+    "row_differences": [
+      {
+        "row_index": 0,
+        "changed_fields": [
+          "updated_at"
+        ],
+        "new_fields": [
+          "created_at",
+          "deleted_at"
+        ]
+      },
+      {
+        "row_index": 1,
+        "changed_fields": [
+          "updated_at"
+        ],
+        "new_fields": [
+          "created_at",
+          "deleted_at"
+        ]
+      },
+      {
+        "row_index": 2,
+        "changed_fields": [
+          "updated_at"
+        ],
+        "new_fields": [
+          "created_at",
+          "deleted_at"
+        ]
+      },
+      {
+        "row_index": 3,
+        "changed_fields": [
+          "updated_at"
+        ],
+        "new_fields": [
+          "created_at",
+          "deleted_at"
+        ]
+      }
+    ],
+    "new_schema_columns": [],
+    "full_original_column_normalized_hash_equal": true,
+    "total_row_count_equal": true,
+    "normalization": "same original-column projection as snapshot plus exact four updated_at baselines",
+    "updated_at_sql_type": "timestamp without time zone",
+    "initial_mismatch_cause": "comparison cast to timestamptz introduced timezone text",
+    "no_database_writes": true,
+    "independent_review_blockers": 0
+  },
+  "final_isolated_upgrade": {
+    "status": "PASS_ISOLATED_RESTORE_UPGRADE_CONTINUITY",
+    "migration_attempts": 1,
+    "target_pg_pull_attempts": 1,
+    "old_app_total_starts": 2,
+    "new_app_total_starts": 1,
+    "both_test_apps_stopped": true,
+    "original_eight_unchanged": true,
+    "ledger": {
+      "official": {
+        "version": 110,
+        "dirty": false
+      },
+      "enterprise": {
+        "version": 5,
+        "dirty": false
+      },
+      "pg_search": "0.22.6"
+    },
+    "embeddings_contract": true,
+    "paradedb_version_info_verified": true,
+    "business_original_column_tables_compared": 61,
+    "unexpected_business_delta_count": 0,
+    "storage_aliases_updated_at_only": 4,
+    "storage_comparator_correct_sql_type": "timestamp without time zone",
+    "models_unchanged": true,
+    "users_preferences_memberships_unchanged": true,
+    "protected_tuples": 21,
+    "protected_spans": 216,
+    "legacy_wiki_log_entries": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "knowledge_base_id",
+        "action",
+        "knowledge_id",
+        "doc_title",
+        "summary",
+        "pages_affected",
+        "created_at"
+      ],
+      "count": 6,
+      "sha256": "8107adb274f025ebe711c25a7b0e0df12c4430ec44fb57452b80aad02247459d"
+    },
+    "legacy_log_pages": {
+      "total": 0,
+      "archived": 0,
+      "soft_deleted": 0
+    },
+    "legacy_log_page_update_exercised": false,
+    "legacy_log_page_mutation_case": "NOT EXERCISED: zero legacy log pages",
+    "epoch": 27,
+    "release_head_equal": true,
+    "members_bytes_equal": true,
+    "field_bytes_equal": true,
+    "citation_authority_expiry_normalized_equal": true,
+    "citation_old_and_new_digest_recomputed_valid": true,
+    "pdf_http_status": 200,
+    "pdf_page": 2,
+    "pdf_bytes": 696913,
+    "pdf_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+    "pdf_bytes_equal": true,
+    "new_normal_login_auth_record_delta": 0,
+    "sequences_after": {
+      "chunks": 100007281,
+      "knowledge_tags": 10000012
+    },
+    "new_schema_table_count": 20,
+    "new_schema_table_row_counts": {
+      "browser_devices": 0,
+      "browser_pairings": 0,
+      "browser_task_interruptions": 0,
+      "chunk_revisions": 0,
+      "fork_snapshot_leases": 0,
+      "mcp_endpoints": 0,
+      "mcp_metadata": 0,
+      "memory_doc_affinity": 0,
+      "memory_extraction_sessions": 0,
+      "memory_item_embeddings": 0,
+      "memory_items": 0,
+      "memory_subjects": 0,
+      "memory_tombstones": 0,
+      "memory_topic_stats": 0,
+      "message_artifacts": 0,
+      "tenant_sandbox_configs": 0,
+      "tenant_skill_catalog": 0,
+      "tenant_skill_snapshots": 0,
+      "tenant_skills": 0,
+      "tenant_user_env_vars": 0
+    },
+    "provider_calls": 0,
+    "app_image_builds": 0,
+    "cutover": false,
+    "harness_password_auth": "NOT RUN",
+    "preserved_target_pg": "upg-082-20260928-pg-0226",
+    "initial_verification_stop_preserved": true,
+    "verification_corrections_only": [
+      "recompute authority digests using native contract and normalize expiry in preimages",
+      "normalize storage timestamp using actual timestamp-without-time-zone type"
+    ],
+    "new_app_restarts_for_verification": 0,
+    "receipt_sha256": "fca2ae6ef844e144e5538c58c5c3e822e2e81e692d101dd2c359a09fa940b18c",
+    "source_commit": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+    "app_image": "sha256:442701a3bde3de5ff8aee7dfc9f7f461df1819b050c417f38ecd4ff226e33775",
+    "independent_review_blockers": 0
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "reviewer": "migration_review",
+  "mode": "read-only local diagnostics",
+  "source": "fixed upstream merge before D2; no target image built",
+  "evidence_location": "reviewer tool outputs in current task; no separate raw log files were retained",
+  "checks": [
+    {
+      "check": "syntax compile of changed Python paths",
+      "interpreter": "managed CPython 3.12.12",
+      "result": "PASS",
+      "count": 38,
+      "exit_code": 0
+    },
+    {
+      "check": "stdlib SSRF/tempfile unittest selection",
+      "interpreter": "managed CPython 3.12.12",
+      "result": "PASS",
+      "count": 14,
+      "exit_code": 0
+    },
+    {
+      "check": "SSRF proxy loopback-only unittest selection",
+      "interpreter": "managed CPython 3.12.12",
+      "result": "PASS",
+      "count": 2,
+      "exit_code": 0,
+      "network": "127.0.0.1 only"
+    },
+    {
+      "check": "endecode pytest",
+      "interpreter": "system Python 3.9.6",
+      "result": "PASS",
+      "count": 6,
+      "exit_code": 0,
+      "limitation": "not target interpreter; limited diagnostic only"
+    },
+    {
+      "check": "go test -v -tags=docreader_integration ./docreader/client -count=1",
+      "result": "PASS",
+      "exit_code": 0,
+      "live_tests": "2 SKIP: localhost:50051 unavailable; compile only"
+    }
+  ],
+  "new_image_validation": {
+    "status": "NOT RUN",
+    "plan": "Run unittest discovery for docreader/tests in exact new image with network=none, excluding two DNS-dependent tests and reporting exclusions explicitly",
+    "excluded_test_suffixes": [
+      "TestSSRFValidation.test_allows_public_https",
+      "TestSSRFValidation.test_blocks_invalid_port"
+    ]
+  },
+  "limitations": [
+    "No complete host dependency environment",
+    "No image build, runtime, provider, or real parser acceptance result"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+  "upstream": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+  "upg_01_ancestor_exit": 1,
+  "merge_conflicts": 38,
+  "semantic_gap": "Deleted legacy model transports contain dispatch journal and no-retry behavior absent from upstream api.Endpoint/withRetry. Existing UPG-05 contract must move, not be dropped.",
+  "effects": "read-only; no DB/provider/build/deploy"
+}

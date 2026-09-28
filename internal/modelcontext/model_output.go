@@ -3,10 +3,18 @@ package modelcontext
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/types"
+)
+
+const (
+	modelWebSearchEvidenceMaxRunes = 1500
+	modelWebFetchSummaryMaxRunes   = 4000
+	modelWebFetchContentMaxRunes   = 8000
+	modelWebFetchTotalMaxRunes     = 16000
 )
 
 // ModelOutput returns a compact, source-centric representation for the LLM.
@@ -15,28 +23,41 @@ func (r *sourceRegistry) ModelOutput(result *types.ToolResult) string {
 	if result == nil {
 		return ""
 	}
-	if !result.Success {
-		if result.Error != "" {
-			return "Error: " + r.CompactKnownText(result.Error)
-		}
-		return "Error: tool call failed"
+	// Legacy-format output from a current source tool is evidence too. Replay
+	// registration alone must never grant this eligibility.
+	if result.Success {
+		r.registerLegacyToolReferences(result.Output, true)
+		copyResult := *result
+		copyResult.Output = r.CompactPublicCitations(result.Output, true)
+		result = &copyResult
 	}
 	displayType := stringValue(result.Data, "display_type")
+	if displayType == "web_fetch_results" {
+		return r.modelWebFetchOutput(mapsValue(result.Data["results"]), result.Output)
+	}
+	if !result.Success {
+		return failedToolModelText(result.Output, result.Error)
+	}
 	switch displayType {
 	case "grep_results":
 		return r.modelKnowledgeOutput("keyword", mapsValue(result.Data["chunk_results"]), result.Output)
 	case "search_results":
-		return r.modelKnowledgeOutput("semantic", mapsValue(result.Data["results"]), result.Output)
+		// search_knowledge reports the mode it actually used; legacy
+		// knowledge_search payloads carry none and were always semantic.
+		mode := stringValue(result.Data, "mode")
+		if mode == "" {
+			mode = "semantic"
+		}
+		output := r.modelKnowledgeOutput(mode, mapsValue(result.Data["results"]), result.Output)
+		return r.annotateModeFallbacks(output, result.Data)
 	case "knowledge_chunks_list":
 		return r.modelKnowledgeChunksOutput(result.Data, result.Output)
 	case "document_info":
-		return r.modelDocumentInfoOutput(mapsValue(result.Data["documents"]), result.Output)
+		return r.modelDocumentInfoOutput(result.Data, result.Output)
 	case "graph_query_results":
 		return r.modelKnowledgeOutput("graph", mapsValue(result.Data["results"]), result.Output)
 	case "web_search_results":
 		return r.modelWebSearchOutput(mapsValue(result.Data["results"]), result.Output)
-	case "web_fetch_results":
-		return r.modelWebFetchOutput(mapsValue(result.Data["results"]), result.Output)
 	case "database_query":
 		return r.modelDatabaseQueryOutput(mapsValue(result.Data["rows"]), result.Output)
 	default:
@@ -58,7 +79,7 @@ func (r *sourceRegistry) registerStructuredReferences(raw string) {
 	walk = func(key string, value interface{}) {
 		switch typed := value.(type) {
 		case string:
-			r.registerSourceIDByKey(key, typed)
+			r.registerSourceIDByKey(key, typed, true)
 		case []interface{}:
 			for _, item := range typed {
 				walk(key, item)
@@ -76,19 +97,33 @@ func (r *sourceRegistry) modelDatabaseQueryOutput(rows []map[string]interface{},
 	for _, row := range rows {
 		for key, raw := range row {
 			if value, ok := raw.(string); ok {
-				r.registerSourceIDByKey(key, value)
+				r.registerSourceIDByKey(key, value, true)
 			}
 		}
 	}
 	return r.CompactKnownText(fallback)
 }
 
-func (r *sourceRegistry) modelDocumentInfoOutput(rows []map[string]interface{}, fallback string) string {
+func (r *sourceRegistry) modelDocumentInfoOutput(data map[string]interface{}, fallback string) string {
+	rows := mapsValue(data["documents"])
 	if len(rows) == 0 {
 		return r.CompactKnownText(fallback)
 	}
 	var b strings.Builder
-	b.WriteString("<documents>\n")
+	b.WriteString("<documents")
+	if kbHandle := r.RegisterKnowledgeBase(stringValue(data, "knowledge_base_id")); kbHandle != "" {
+		fmt.Fprintf(&b, " kb=\"%s\"", escapeAttr(kbHandle))
+	}
+	if total := intValue(data, "total_docs"); total > 0 {
+		fmt.Fprintf(&b, " total=\"%d\"", total)
+	}
+	if page := intValue(data, "page"); page > 0 {
+		fmt.Fprintf(&b, " page=\"%d\"", page)
+	}
+	if next := intValue(data, "next_page"); next > 0 {
+		fmt.Fprintf(&b, " next_page=\"%d\"", next)
+	}
+	b.WriteString(">\n")
 	count := 0
 	for _, row := range rows {
 		knowledgeID := stringValue(row, "knowledge_id")
@@ -131,7 +166,16 @@ func (r *sourceRegistry) modelDocumentInfoOutput(rows []map[string]interface{}, 
 		if fileType := stringValue(row, "file_type"); fileType != "" {
 			fmt.Fprintf(&b, " file_type=\"%s\"", escapeAttr(fileType))
 		}
-		fmt.Fprintf(&b, " chunk_count=\"%d\">\n", intValue(row, "chunk_count"))
+		if chunkCount := intValue(row, "chunk_count"); chunkCount > 0 {
+			fmt.Fprintf(&b, " chunk_count=\"%d\"", chunkCount)
+		}
+		if status := stringValue(row, "parse_status"); status != "" {
+			fmt.Fprintf(&b, " parse_status=\"%s\"", escapeAttr(status))
+		}
+		if updated := stringValue(row, "updated_at"); len(updated) >= 10 {
+			fmt.Fprintf(&b, " updated_at=\"%s\"", escapeAttr(updated[:10]))
+		}
+		b.WriteString(">\n")
 		if description := stringValue(row, "description"); description != "" {
 			fmt.Fprintf(&b, "    <description>%s</description>\n", escapeText(description))
 		}
@@ -150,9 +194,11 @@ type modelChunk struct {
 	docHandle  string
 	kbHandle   string
 	title      string
+	metadata   string
 	chunkType  string
 	index      int
 	view       string
+	role       string
 	match      string
 	content    string
 	question   string
@@ -165,6 +211,16 @@ type modelChunk struct {
 }
 
 func (r *sourceRegistry) modelKnowledgeOutput(mode string, rows []map[string]interface{}, fallback string) string {
+	chunks := r.modelChunksFromRows(mode, rows)
+	if len(chunks) == 0 {
+		return r.CompactKnownText(fallback)
+	}
+	return renderKnowledgeChunks(mode, chunks, nil)
+}
+
+// modelChunksFromRows registers every row's handles and converts it into the
+// renderer's chunk model.
+func (r *sourceRegistry) modelChunksFromRows(mode string, rows []map[string]interface{}) []modelChunk {
 	chunks := make([]modelChunk, 0, len(rows))
 	for idx, row := range rows {
 		chunkID := firstNonEmpty(stringValue(row, "chunk_id"), stringValue(row, "faq_id"), stringValue(row, "id"))
@@ -195,9 +251,11 @@ func (r *sourceRegistry) modelKnowledgeOutput(mode string, rows []map[string]int
 			docHandle:  r.RegisterDocument(knowledgeID),
 			kbHandle:   r.RegisterKnowledgeBase(kbID),
 			title:      title,
+			metadata:   stringValue(row, "knowledge_metadata"),
 			chunkType:  chunkType,
 			index:      chunkIndex,
 			view:       viewForRow(row, mode),
+			role:       stringValue(row, "role"),
 			match:      firstNonEmpty(stringValue(row, "match_snippet"), stringValue(row, "matched_content")),
 			content:    stringValue(row, "content"),
 			question:   firstNonEmpty(stringValue(row, "faq_question"), stringValue(row, "faq_standard_question")),
@@ -209,10 +267,28 @@ func (r *sourceRegistry) modelKnowledgeOutput(mode string, rows []map[string]int
 			inputOrder: idx,
 		})
 	}
-	if len(chunks) == 0 {
-		return r.CompactKnownText(fallback)
+	return chunks
+}
+
+// annotateModeFallbacks adds the requested mode and one <mode_fallback> per
+// knowledge base that was searched with a different retrieval path.
+func (r *sourceRegistry) annotateModeFallbacks(output string, data map[string]interface{}) string {
+	fallbacks := mapsValue(data["mode_fallbacks"])
+	requested := stringValue(data, "requested_mode")
+	if len(fallbacks) == 0 || !strings.HasSuffix(output, "</retrieval>") {
+		return output
 	}
-	return renderKnowledgeChunks(mode, chunks)
+	if requested != "" {
+		output = strings.Replace(output, "<retrieval ",
+			fmt.Sprintf("<retrieval requested_mode=\"%s\" ", escapeAttr(requested)), 1)
+	}
+	var b strings.Builder
+	for _, fb := range fallbacks {
+		fmt.Fprintf(&b, "  <mode_fallback kb=\"%s\" mode=\"%s\" reason=\"%s\" />\n",
+			escapeAttr(r.RegisterKnowledgeBase(stringValue(fb, "knowledge_base_id"))),
+			escapeAttr(stringValue(fb, "mode")), escapeAttr(stringValue(fb, "reason")))
+	}
+	return strings.TrimSuffix(output, "</retrieval>") + b.String() + "</retrieval>"
 }
 
 func viewForRow(row map[string]interface{}, mode string) string {
@@ -237,24 +313,116 @@ func (r *sourceRegistry) modelKnowledgeChunksOutput(data map[string]interface{},
 			row["knowledge_title"] = title
 		}
 	}
-	output := r.modelKnowledgeOutput("deep_read", rows, fallback)
+	var info map[string]interface{}
+	if raw, ok := data["document"].(map[string]interface{}); ok {
+		info = raw
+	}
 	if len(rows) == 0 {
+		// A document that has no chunks (or a query with no matches) still
+		// deserves its header so the model learns what it read.
+		if info == nil {
+			return r.CompactKnownText(fallback)
+		}
+		docHandle := r.RegisterDocument(knowledgeID)
+		var b strings.Builder
+		b.WriteString("<retrieval type=\"knowledge\" mode=\"deep_read\">\n")
+		fmt.Fprintf(&b, "  <document id=\"%s\" title=\"%s\">\n", escapeAttr(docHandle), escapeAttr(title))
+		writeDocumentInfo(&b, info)
+		if query := stringValue(data, "query"); query != "" {
+			fmt.Fprintf(&b, "    <matches query=\"%s\" count=\"0\" />\n", escapeAttr(query))
+			b.WriteString("    <hint>No chunk contains every word of the query. Retry with fewer or different " +
+				"words (the document's own language and terms), or read a chunk from search_knowledge " +
+				"results with id=cN and context.</hint>\n")
+		}
+		b.WriteString("  </document>\n</retrieval>")
+		return b.String()
+	}
+	chunks := r.modelChunksFromRows("deep_read", rows)
+	if len(chunks) == 0 {
+		return r.CompactKnownText(fallback)
+	}
+	output := renderKnowledgeChunks("deep_read", chunks, info)
+	if info == nil {
+		// Legacy list_knowledge_chunks payloads carry no document header.
+		remaining := intValue(data, "total_chunks") - intValue(data, "fetched_chunks")
+		if remaining > 0 {
+			output = strings.TrimSuffix(output, "</retrieval>")
+			output += fmt.Sprintf("  <pagination remaining=\"%d\" page=\"%d\" page_size=\"%d\" />\n</retrieval>",
+				remaining, intValue(data, "page"), intValue(data, "page_size"))
+		}
 		return output
 	}
-	remaining := intValue(data, "total_chunks") - intValue(data, "fetched_chunks")
-	if remaining > 0 {
-		output = strings.TrimSuffix(output, "</retrieval>")
-		output += fmt.Sprintf("  <pagination remaining=\"%d\" page=\"%d\" page_size=\"%d\" />\n</retrieval>",
-			remaining, intValue(data, "page"), intValue(data, "page_size"))
+	var footer strings.Builder
+	if query := stringValue(data, "query"); query != "" {
+		fmt.Fprintf(&footer, "  <matches query=\"%s\" count=\"%d\"", escapeAttr(query), intValue(data, "match_count"))
+		if boolValue(data, "truncated") {
+			footer.WriteString(" truncated=\"true\"")
+		}
+		footer.WriteString(" />\n")
+	} else if _, ok := data["next_offset"]; ok {
+		remaining := intValue(data, "total_chunks") - (intValue(data, "offset") + intValue(data, "fetched_chunks"))
+		if remaining < 0 {
+			remaining = 0
+		}
+		fmt.Fprintf(&footer, "  <pagination next_offset=\"%d\" remaining=\"%d\" />\n",
+			intValue(data, "next_offset"), remaining)
+	}
+	if footer.Len() > 0 {
+		output = strings.TrimSuffix(output, "</retrieval>") + footer.String() + "</retrieval>"
 	}
 	return output
 }
 
-func renderKnowledgeChunks(mode string, chunks []modelChunk) string {
+// writeDocumentInfo renders the read_document metadata header as one
+// <info> element under the document.
+func writeDocumentInfo(b *strings.Builder, info map[string]interface{}) {
+	if len(info) == 0 {
+		return
+	}
+	b.WriteString("    <info")
+	for _, key := range []string{"source", "file_name", "file_type", "file_size", "parse_status"} {
+		if value := stringValue(info, key); value != "" {
+			fmt.Fprintf(b, " %s=\"%s\"", key, escapeAttr(value))
+		}
+	}
+	if count := intValue(info, "chunk_count"); count > 0 {
+		fmt.Fprintf(b, " chunk_count=\"%d\"", count)
+	}
+	description := stringValue(info, "description")
+	metadata, _ := info["metadata"].(map[string]interface{})
+	if description == "" && len(metadata) == 0 {
+		b.WriteString(" />\n")
+		return
+	}
+	b.WriteString(">\n")
+	if description != "" {
+		fmt.Fprintf(b, "      <description>%s</description>\n", escapeText(description))
+	}
+	if len(metadata) > 0 {
+		keys := make([]string, 0, len(metadata))
+		for key := range metadata {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		b.WriteString("      <metadata>")
+		for i, key := range keys {
+			if i > 0 {
+				b.WriteString("; ")
+			}
+			fmt.Fprintf(b, "%s: %v", escapeText(key), metadata[key])
+		}
+		b.WriteString("</metadata>\n")
+	}
+	b.WriteString("    </info>\n")
+}
+
+func renderKnowledgeChunks(mode string, chunks []modelChunk, info map[string]interface{}) string {
 	type docGroup struct {
 		handle   string
+		realID   string
 		kbHandle string
 		title    string
+		metadata string
 		chunks   []modelChunk
 		order    int
 	}
@@ -267,9 +435,14 @@ func renderKnowledgeChunks(mode string, chunks []modelChunk) string {
 		}
 		group := groupsByKey[key]
 		if group == nil {
-			group = &docGroup{handle: chunk.docHandle, kbHandle: chunk.kbHandle, title: chunk.title, order: chunk.inputOrder}
+			group = &docGroup{
+				handle: chunk.docHandle, realID: chunk.docRealID, kbHandle: chunk.kbHandle, title: chunk.title,
+				metadata: chunk.metadata, order: chunk.inputOrder,
+			}
 			groupsByKey[key] = group
 			groups = append(groups, group)
+		} else if group.metadata == "" {
+			group.metadata = chunk.metadata
 		}
 		group.chunks = append(group.chunks, chunk)
 	}
@@ -289,10 +462,19 @@ func renderKnowledgeChunks(mode string, chunks []modelChunk) string {
 			fmt.Fprintf(&b, " title=\"%s\"", escapeAttr(group.title))
 		}
 		b.WriteString(">\n")
+		if group.metadata != "" {
+			fmt.Fprintf(&b, "    <metadata>%s</metadata>\n", escapeText(group.metadata))
+		}
+		if info != nil && stringValue(info, "knowledge_id") == group.realID {
+			writeDocumentInfo(&b, info)
+		}
 		for _, chunk := range group.chunks {
 			fmt.Fprintf(&b, "    <chunk id=\"%s\" index=\"%d\" view=\"%s\"", chunk.handle, chunk.index, chunk.view)
 			if chunk.chunkType != "" {
 				fmt.Fprintf(&b, " type=\"%s\"", escapeAttr(chunk.chunkType))
+			}
+			if chunk.role != "" {
+				fmt.Fprintf(&b, " role=\"%s\"", escapeAttr(chunk.role))
 			}
 			b.WriteString(">\n")
 			if chunk.question != "" {
@@ -328,7 +510,15 @@ func (r *sourceRegistry) modelWebSearchOutput(rows []map[string]interface{}, fal
 		return r.CompactKnownText(fallback)
 	}
 	var b strings.Builder
-	b.WriteString("<retrieval type=\"web\" mode=\"search\">\n")
+	b.WriteString("<retrieval type=\"web\" mode=\"search\" trust=\"untrusted\">\n")
+	evidenceFields := 2
+	for _, row := range rows {
+		if boolValue(row, "page_verified") {
+			evidenceFields = 3
+			break
+		}
+	}
+	perEvidence := min(modelWebSearchEvidenceMaxRunes, 16000/max(1, len(rows)*evidenceFields))
 	count := 0
 	for _, row := range rows {
 		rawURL := stringValue(row, "url")
@@ -337,8 +527,30 @@ func (r *sourceRegistry) modelWebSearchOutput(rows []map[string]interface{}, fal
 		}
 		handle := r.RegisterWeb(rawURL, stringValue(row, "title"))
 		fmt.Fprintf(&b, "  <page id=\"%s\" title=\"%s\">\n", handle, escapeAttr(stringValue(row, "title")))
+		b.WriteString("    <evidence type=\"search_summary\" verified=\"false\" />\n")
+		if u, err := url.Parse(rawURL); err == nil {
+			fmt.Fprintf(&b, "    <domain>%s</domain>\n", escapeText(u.Hostname()))
+		}
 		if snippet := stringValue(row, "snippet"); snippet != "" {
-			fmt.Fprintf(&b, "    <match>%s</match>\n", escapeText(snippet))
+			writeLimitedWebEvidence(&b, "match", snippet, perEvidence, nil)
+		}
+		if content := stringValue(row, "content"); content != "" && content != stringValue(row, "snippet") {
+			writeLimitedWebEvidence(&b, "content", content, perEvidence, nil)
+		}
+		if age := stringValue(row, "age"); age != "" {
+			fmt.Fprintf(&b, "    <age>%s</age>\n", escapeText(age))
+		}
+		if boolValue(row, "page_verified") {
+			writeLimitedWebEvidence(&b, "fetched_content", stringValue(row, "page_content"), perEvidence, nil)
+			b.WriteString("    <page_fetch status=\"success\" verified=\"true\" />\n")
+			writeWebPageFileHint(&b, row)
+			if stringValue(row, "full_output_path") == "" {
+				fmt.Fprintf(&b, "    <continue url=\"%s\" next_offset=\"0\">"+
+					"Read with web_fetch for more page content.</continue>\n", handle)
+			}
+		} else if stringValue(row, "page_status") == "failed" {
+			fmt.Fprintf(&b, "    <page_fetch status=\"failed\">%s</page_fetch>\n",
+				escapeText(stringValue(row, "page_error")))
 		}
 		if published := stringValue(row, "published_at"); published != "" {
 			fmt.Fprintf(&b, "    <published>%s</published>\n", escapeText(published))
@@ -358,8 +570,16 @@ func (r *sourceRegistry) modelWebFetchOutput(rows []map[string]interface{}, fall
 		return r.CompactKnownText(fallback)
 	}
 	var b strings.Builder
-	b.WriteString("<retrieval type=\"web\" mode=\"fetch\">\n")
-	count := 0
+	b.WriteString("<retrieval type=\"web\" mode=\"fetch\" trust=\"untrusted\">\n")
+	count, successCount, failedCount := 0, 0, 0
+	// Allocate a share to every successful page, including legacy stored results.
+	successPages := 0
+	for _, row := range rows {
+		if stringValue(row, "status") == "success" || stringValue(row, "status") == "" {
+			successPages++
+		}
+	}
+	perPage := modelWebFetchTotalMaxRunes / max(1, successPages)
 	for _, row := range rows {
 		rawURL := stringValue(row, "url")
 		if rawURL == "" {
@@ -367,16 +587,60 @@ func (r *sourceRegistry) modelWebFetchOutput(rows []map[string]interface{}, fall
 		}
 		title := stringValue(row, "title")
 		handle := r.RegisterWeb(rawURL, title)
-		fmt.Fprintf(&b, "  <page id=\"%s\"", handle)
+		status := stringValue(row, "status")
+		if status == "" {
+			status = "success"
+		}
+		fmt.Fprintf(&b, "  <page id=\"%s\" status=\"%s\"", handle, escapeAttr(status))
 		if title != "" {
 			fmt.Fprintf(&b, " title=\"%s\"", escapeAttr(title))
 		}
-		b.WriteString(" view=\"full\">\n")
-		if summary := stringValue(row, "summary"); summary != "" {
-			fmt.Fprintf(&b, "    <summary>%s</summary>\n", escapeText(summary))
-		}
-		if content := stringValue(row, "raw_content"); content != "" {
-			fmt.Fprintf(&b, "    <content>%s</content>\n", escapeText(content))
+		if status == "success" {
+			b.WriteString(" view=\"excerpt\">\n")
+			writeWebPageFileHint(&b, row)
+			remainingEvidence := perPage
+			successCount++
+			if summary := stringValue(row, "summary"); summary != "" {
+				writeLimitedWebEvidence(&b, "summary", summary, modelWebFetchSummaryMaxRunes, &remainingEvidence)
+			}
+			if summaryStatus := stringValue(row, "summary_status"); summaryStatus == "failed" {
+				fmt.Fprintf(
+					&b,
+					"    <summary_error code=\"%s\">%s</summary_error>\n",
+					escapeAttr(
+						stringValue(row, "summary_error_code"),
+					),
+					escapeText(stringValue(row, "summary_error_message")),
+				)
+			}
+			if content := stringValue(row, "raw_content"); content != "" {
+				limit := min(modelWebFetchContentMaxRunes, remainingEvidence)
+				writeLimitedWebEvidence(&b, "content", content, limit, &remainingEvidence)
+				shown := min(len([]rune(content)), limit)
+				offset := intValue(row, "offset")
+				total := intValue(row, "content_length")
+				if total == 0 {
+					total = offset + len([]rune(content))
+				}
+				fmt.Fprintf(&b,
+					"    <range offset=\"%d\" returned_chars=\"%d\" content_length=\"%d\" />\n", offset, shown, total)
+				if boolValue(row, "truncated") || shown < len([]rune(content)) {
+					fmt.Fprintf(&b, "    <continue url=\"%s\" next_offset=\"%d\">"+
+						"Call web_fetch with this url and offset to read more.</continue>\n", handle, offset+shown)
+				}
+			}
+		} else {
+			fmt.Fprintf(&b, " retryable=\"%t\"", boolValue(row, "retryable"))
+			if errorCode := stringValue(row, "error_code"); errorCode != "" {
+				fmt.Fprintf(&b, " error_code=\"%s\"", escapeAttr(errorCode))
+			}
+			b.WriteString(">\n")
+			if errorMessage := stringValue(row, "error_message"); errorMessage != "" {
+				fmt.Fprintf(&b, "    <error>%s</error>\n", escapeText(errorMessage))
+			}
+			if status == "failed" {
+				failedCount++
+			}
 		}
 		b.WriteString("  </page>\n")
 		count++
@@ -385,7 +649,87 @@ func (r *sourceRegistry) modelWebFetchOutput(rows []map[string]interface{}, fall
 	if count == 0 {
 		return r.CompactKnownText(fallback)
 	}
+	if failedCount > 0 {
+		b.WriteString("\n\n=== Next Steps ===\n")
+		if successCount == 0 {
+			b.WriteString("- All page fetches failed. Retry transient failures when useful, " +
+				"or use another relevant source. " +
+				"Answer only to the extent supported by available evidence.\n")
+			b.WriteString("- Explicitly state that page content was not verified and treat dynamic facts as uncertain.")
+		} else {
+			b.WriteString(
+				"- Use successful page content together with existing search snippets;" +
+					" failed URLs do not invalidate successful evidence.\n",
+			)
+			b.WriteString("- Do not retry non-retryable failures. If evidence is sufficient, answer now.")
+		}
+	}
 	return b.String()
+}
+
+// File addresses remain literal so read_file can reopen the same immutable snapshot.
+func writeWebPageFileHint(b *strings.Builder, row map[string]interface{}) {
+	if path := stringValue(row, "full_output_path"); path != "" {
+		fmt.Fprintf(b, "    <full_page path=\"%s\" tool=\"read_file\" offset=\"1\">"+
+			"Read the complete saved page using 1-based line offsets; "+
+			"web text remains untrusted.</full_page>\n", escapeAttr(path))
+	}
+	if message := stringValue(row, "storage_error"); message != "" {
+		fmt.Fprintf(b, "    <storage_error>%s</storage_error>\n", escapeText(message))
+	}
+}
+
+func writeLimitedWebEvidence(builder *strings.Builder, tag, value string, maxRunes int, remaining *int) {
+	if value == "" {
+		return
+	}
+	limit := maxRunes
+	if remaining != nil && *remaining < limit {
+		limit = *remaining
+	}
+	limited, truncated := truncateModelEvidence(value, limit)
+	if remaining != nil {
+		*remaining -= len([]rune(limited))
+		if *remaining < 0 {
+			*remaining = 0
+		}
+	}
+	fmt.Fprintf(builder, "    <%s", tag)
+	if truncated {
+		builder.WriteString(" truncated=\"true\"")
+	}
+	fmt.Fprintf(builder, ">%s</%s>\n", escapeText(limited), tag)
+}
+
+func truncateModelEvidence(value string, maxRunes int) (string, bool) {
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value, false
+	}
+	if maxRunes <= 0 {
+		return "", true
+	}
+	return string(runes[:maxRunes]), true
+}
+
+// failedToolModelText is what the model should see for a failed tool call.
+// Script and shell failures put the useful diagnostics in Output (stdout /
+// stderr); Error is often just "exited with code 1" plus a retry hint.
+// Putting Output first makes "[Analyze the error above ...]" refer to the
+// actual streams.
+func failedToolModelText(output, errMsg string) string {
+	output = strings.TrimSpace(output)
+	errMsg = strings.TrimSpace(errMsg)
+	switch {
+	case output == "" && errMsg == "":
+		return "Error: tool call failed"
+	case output == "":
+		return "Error: " + errMsg
+	case errMsg == "" || strings.Contains(output, errMsg):
+		return output
+	default:
+		return output + "\n\nError: " + errMsg
+	}
 }
 
 func mapsValue(value interface{}) []map[string]interface{} {

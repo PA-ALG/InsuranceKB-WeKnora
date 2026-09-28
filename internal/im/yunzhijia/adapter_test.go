@@ -112,6 +112,45 @@ func TestToIncomingMessageParsesMsgParamImage(t *testing.T) {
 	}
 }
 
+func TestToIncomingMessageUsesYunzhijiaReplyRootAsThreadID(t *testing.T) {
+	msg := &callbackMessage{
+		Type:           2,
+		RobotID:        "BOT-1",
+		RobotName:      "Websocket",
+		GroupID:        "group-1",
+		OperatorOpenid: "user-b",
+		Time:           123,
+		MsgID:          "message-b",
+		Content:        "@Websocket follow up",
+		MsgParam:       `{"replyMsgId":"BOT-answer-1","replyRootMsgId":"BOT-answer-1","replyPersonId":"BOT-1"}`,
+	}
+
+	got := toIncomingMessage(t.Context(), msg)
+	if got == nil {
+		t.Fatal("toIncomingMessage() returned nil")
+	}
+	if got.ThreadID != "BOT-answer-1" {
+		t.Fatalf("ThreadID = %q, want BOT-answer-1", got.ThreadID)
+	}
+}
+
+func TestThreadIDForTopLevelMessage(t *testing.T) {
+	if got := threadIDForMessage("message-a", &messageParam{}); got != "message-a" {
+		t.Fatalf("threadIDForMessage() = %q, want message-a", got)
+	}
+}
+
+func TestToIncomingMessageAcceptsStringNotifyType(t *testing.T) {
+	msg := &callbackMessage{
+		Type: 2, RobotID: "BOT-1", RobotName: "Websocket", OperatorOpenid: "user",
+		Time: 123, MsgID: "message", Content: "reply text",
+		MsgParam: `{"notifyTo":["BOT-1"],"notifyType":"1","replyMsgId":"BOT-answer"}`,
+	}
+	if got := toIncomingMessage(t.Context(), msg); got == nil {
+		t.Fatal("toIncomingMessage() = nil; string notifyType must not prevent bot mention detection")
+	}
+}
+
 func TestToIncomingMessageAcceptsMsgParamMention(t *testing.T) {
 	msg := &callbackMessage{
 		Type:           2,
@@ -177,11 +216,37 @@ func TestSendReplyAcceptsAny2xxAndBuildsPayload(t *testing.T) {
 	if payload.MsgType != textMessageType || payload.Content != "answer" {
 		t.Fatalf("payload = %#v", payload)
 	}
-	if len(payload.NotifyParams) != 1 || len(payload.NotifyParams[0].Values) != 1 || payload.NotifyParams[0].Values[0] != "user" {
+	if len(payload.NotifyParams) != 1 || len(payload.NotifyParams[0].Values) != 1 ||
+		payload.NotifyParams[0].Values[0] != "user" {
 		t.Fatalf("notify params = %#v", payload.NotifyParams)
 	}
 	if payload.Param == nil || payload.Param.FormatType != markdownFormatType {
 		t.Fatalf("expected markdown format param by default, got %#v", payload.Param)
+	}
+}
+
+func TestSendReplyReferencesIncomingMessage(t *testing.T) {
+	adapter := NewAdapter("https://www.yunzhijia.com/send", "", "", "", 10, "yunzhijia.com")
+	var payload sendMessagePayload
+	adapter.httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"data":{"msgId":"BOT-answer-1"}}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+
+	incoming := &im.IncomingMessage{MessageID: "message-a", Content: "question", UserName: "Alice"}
+	reply := &im.ReplyMessage{Content: "answer"}
+	if err := adapter.SendReply(context.Background(), incoming, reply); err != nil {
+		t.Fatalf("SendReply() error = %v", err)
+	}
+	if payload.ParamType != 3 || payload.Param == nil || payload.Param.ReplyMsgID != "message-a" ||
+		!payload.Param.IsReference {
+		t.Fatalf("reference payload = %#v", payload)
 	}
 }
 
@@ -246,7 +311,9 @@ func TestDownloadFile(t *testing.T) {
 				t.Fatalf("token request = %#v", tokenReq)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`))
+			_, _ = w.Write(
+				[]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`),
+			)
 		case "/gateway/docrest/doc/file/downloadfileOpen":
 			if r.Header.Get("Authorization") != "Bearer token-1" {
 				t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
@@ -298,7 +365,9 @@ func TestDownloadFileFollowsSingleRedirect(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/oauth2_v12/auth/getAppAccessToken":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`))
+			_, _ = w.Write(
+				[]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`),
+			)
 		case "/gateway/docrest/doc/file/downloadfileOpen":
 			http.Redirect(w, r, "/cdn/file-1", http.StatusFound)
 		case "/cdn/file-1":
@@ -328,7 +397,10 @@ func TestDownloadFileFollowsSingleRedirect(t *testing.T) {
 
 	adapter := NewAdapter("https://www.yunzhijia.com/send", "", "app-id", "app-secret", 10, "yunzhijia.com")
 	adapter.httpClient = noRedirectClient(server)
-	reader, _, err := adapter.DownloadFile(context.Background(), &im.IncomingMessage{FileKey: "file-1", FileName: "message.png"})
+	reader, _, err := adapter.DownloadFile(
+		context.Background(),
+		&im.IncomingMessage{FileKey: "file-1", FileName: "message.png"},
+	)
 	if err != nil {
 		t.Fatalf("DownloadFile() error = %v", err)
 	}
@@ -357,7 +429,9 @@ func TestDownloadFileRejectsRedirectOffAllowedHost(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/oauth2_v12/auth/getAppAccessToken":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`))
+			_, _ = w.Write(
+				[]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`),
+			)
 		case "/gateway/docrest/doc/file/downloadfileOpen":
 			http.Redirect(w, r, "https://evil.example.com/steal", http.StatusFound)
 		default:

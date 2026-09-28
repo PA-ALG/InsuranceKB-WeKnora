@@ -1,0 +1,165 @@
+{
+  "frozen_at": "2026-09-27T12:24:51.379390+00:00",
+  "writer": "migration_audit",
+  "requirements": [
+    "UPG-04",
+    "UPG-05",
+    "UPG-06",
+    "UPG-09"
+  ],
+  "review_identity": "core-review-identity.json",
+  "independent_review": "PASS: plan_review verified frozen 43 paths and separate router fixture; no BLOCKER",
+  "logs": [
+    {
+      "log": "/tmp/weknora-082-source-pin-race-red.txt",
+      "sha256": "3995c49500f459008f317e718bf8cc955552f3d051d4d02fbaeee6a11d2152ef",
+      "output": "\r\n2026/09/27 19:55:15 \u001b[34;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n\u001b[0m\u001b[35m[warn] \u001b[0mremoving callback `test:pin-after-knowledge-lock:f74708ef-e625-43dd-9590-bcffa08b8fa1` from /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n\r\n2026/09/27 19:55:15 \u001b[34;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n\u001b[0m\u001b[35m[warn] \u001b[0mremoving callback `test:pin-after-knowledge-lock:f836d1df-2825-45c4-b1c7-ef07e2cf79ef` from /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n\r\n2026/09/27 19:55:15 \u001b[34;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n\u001b[0m\u001b[35m[warn] \u001b[0mremoving callback `test:pin-after-knowledge-lock:f5915c09-d9cc-4545-b935-b59731daa6c7` from /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n--- FAIL: TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock (0.01s)\n    --- FAIL: TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/allocate_parse_attempt (0.00s)\n        knowledge_concurrency_upgrade_test.go:86: \n            \tError Trace:\t/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:86\n            \tError:      \tExpected error with \"resource is pinned by an immutable knowledge revision\" in chain but got nil.\n            \tTest:       \tTestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/allocate_parse_attempt\n    --- FAIL: TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/allocate_G3_bound_reparse (0.00s)\n        knowledge_concurrency_upgrade_test.go:112: \n            \tError Trace:\t/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:112\n            \tError:      \tExpected error with \"resource is pinned by an immutable knowledge revision\" in chain but got nil.\n            \tTest:       \tTestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/allocate_G3_bound_reparse\n    --- FAIL: TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/transfer_checkpoint (0.00s)\n        knowledge_concurrency_upgrade_test.go:139: \n            \tError Trace:\t/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:139\n            \tError:      \tExpected error with \"resource is pinned by an immutable knowledge revision\" in chain but got nil.\n            \tTest:       \tTestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/transfer_checkpoint\nFAIL\nFAIL\tgithub.com/Tencent/WeKnora/internal/application/repository\t1.467s\nFAIL\n"
+    },
+    {
+      "log": "/tmp/weknora-082-source-pin-race-green.txt",
+      "sha256": "27c704c2a174a49fb1d5b9f563d652ad90fb5fd191cdf803632474b197544b01",
+      "output": "=== RUN   TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock\n=== RUN   TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/allocate_parse_attempt\n\r\n2026/09/27 19:57:08 \u001b[34;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n\u001b[0m\u001b[35m[warn] \u001b[0mremoving callback `test:pin-after-knowledge-lock:73fc604f-355c-42b5-982f-7fd0acdd417c` from /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n=== RUN   TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/allocate_G3_bound_reparse\n\r\n2026/09/27 19:57:08 \u001b[34;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n\u001b[0m\u001b[35m[warn] \u001b[0mremoving callback `test:pin-after-knowledge-lock:ad399eff-cfe0-454b-9688-ef3ed460570b` from /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n=== RUN   TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/transfer_checkpoint\n\r\n2026/09/27 19:57:08 \u001b[34;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n\u001b[0m\u001b[35m[warn] \u001b[0mremoving callback `test:pin-after-knowledge-lock:8a189145-a789-4971-af9a-cbb92b12ebf7` from /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:65\n--- PASS: TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock (0.01s)\n    --- PASS: TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/allocate_parse_attempt (0.01s)\n    --- PASS: TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/allocate_G3_bound_reparse (0.00s)\n    --- PASS: TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock/transfer_checkpoint (0.00s)\nPASS\nok  \tgithub.com/Tencent/WeKnora/internal/application/repository\t1.020s\n"
+    },
+    {
+      "log": "/tmp/weknora-082-update-knowledge-cas-red.txt",
+      "sha256": "cd96b608b23dc081ed07669dc326458c87aecc3123ac7ee4c57f7824707ca577",
+      "output": "--- FAIL: TestUpdateKnowledgeRejectsSupersededWorkerAndControlStateRegression (0.01s)\n    --- FAIL: TestUpdateKnowledgeRejectsSupersededWorkerAndControlStateRegression/newer_parse_generation_and_source_digest (0.01s)\n        knowledge_concurrency_upgrade_test.go:165: \n            \tError Trace:\t/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:165\n            \tError:      \tExpected error with \"revision superseded\" in chain but got nil.\n            \tTest:       \tTestUpdateKnowledgeRejectsSupersededWorkerAndControlStateRegression/newer_parse_generation_and_source_digest\n    --- FAIL: TestUpdateKnowledgeRejectsSupersededWorkerAndControlStateRegression/deleting_is_terminal_for_a_stale_full_row (0.00s)\n        knowledge_concurrency_upgrade_test.go:187: \n            \tError Trace:\t/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:187\n            \tError:      \tExpected error with \"revision superseded\" in chain but got nil.\n            \tTest:       \tTestUpdateKnowledgeRejectsSupersededWorkerAndControlStateRegression/deleting_is_terminal_for_a_stale_full_row\n    --- FAIL: TestUpdateKnowledgeRejectsSupersededWorkerAndControlStateRegression/moving_metadata_and_knowledge_base_cannot_be_rolled_back (0.00s)\n        knowledge_concurrency_upgrade_test.go:211: \n            \tError Trace:\t/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/knowledge_concurrency_upgrade_test.go:211\n            \tError:      \tExpected error with \"revision superseded\" in chain but got nil.\n            \tTest:       \tTestUpdateKnowledgeRejectsSupersededWorkerAndControlStateRegression/moving_metadata_and_knowledge_base_cannot_be_rolled_back\nFAIL\nFAIL\tgithub.com/Tencent/WeKnora/internal/application/repository\t1.688s\nFAIL\n"
+    },
+    {
+      "log": "/tmp/weknora-082-update-knowledge-cas-green.txt",
+      "sha256": "1aa027878c3739df473de13a51e7ae06eff1da3371e9925ca0116aa6a88ad796",
+      "output": "ok  \tgithub.com/Tencent/WeKnora/internal/application/repository\t1.401s\n"
+    },
+    {
+      "log": "/tmp/weknora-082-chunk-generation-fence-red.txt",
+      "sha256": "83e8221152b3d5a686c3760b9b2355e4b8181e22207a3c697d47b38ca6604c64",
+      "output": "--- FAIL: TestCreateChunksAtRevisionRejectsSupersededAttemptWithoutPartialInsert (0.01s)\n    chunk_concurrency_upgrade_test.go:29: \n        \tError Trace:\t/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/chunk_concurrency_upgrade_test.go:29\n        \tError:      \tExpected error with \"revision superseded\" in chain but got nil.\n        \tTest:       \tTestCreateChunksAtRevisionRejectsSupersededAttemptWithoutPartialInsert\n--- FAIL: TestCreateChunksAtRevisionRejectsCrossScopeBatch (0.00s)\n    chunk_concurrency_upgrade_test.go:51: \n        \tError Trace:\t/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-boundary/internal/application/repository/chunk_concurrency_upgrade_test.go:51\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestCreateChunksAtRevisionRejectsCrossScopeBatch\nFAIL\nFAIL\tgithub.com/Tencent/WeKnora/internal/application/repository\t1.006s\nFAIL\n"
+    },
+    {
+      "log": "/tmp/weknora-082-chunk-generation-fence-green.txt",
+      "sha256": "7443695dfb1159b0ac77f2faaec6da6b49623c352f8f26cabb32fe2cd4463b1d",
+      "output": "ok  \tgithub.com/Tencent/WeKnora/internal/application/repository\t1.320s\n"
+    },
+    {
+      "log": "/tmp/weknora-082-source-concurrency-focused-green.txt",
+      "sha256": "d5df8a89934b081744a9890a216f5cc6240735b7aa156781440dc57dd74b9552",
+      "output": "ok  \tgithub.com/Tencent/WeKnora/internal/application/service\t1.925s\n"
+    },
+    {
+      "log": "/tmp/weknora-082-source-repository-package-final.txt",
+      "sha256": "35789ab997c3fb5e99d4ed17cffe91935234d10cbe2cb773c27cf55cca1ef71d",
+      "output": "ok  \tgithub.com/Tencent/WeKnora/internal/application/repository\t2.925s\n"
+    },
+    {
+      "log": "/tmp/weknora-082-source-service-affected-final.txt",
+      "sha256": "f3f51d8db24c34f4482d842f00c85a76e9b5a7dad47a889dd5cb63b75f44d538",
+      "output": "ok  \tgithub.com/Tencent/WeKnora/internal/application/service\t3.515s\n"
+    },
+    {
+      "log": "/tmp/weknora-082-source-service-compile-final.txt",
+      "sha256": "17e9dd51102789b5959a2082f593fff5b62406956ab5c1e8f18bee4f113fc6ed",
+      "output": "ok  \tgithub.com/Tencent/WeKnora/internal/application/service\t1.875s [no tests to run]\n"
+    }
+  ],
+  "limitations": [
+    "No real PostgreSQL row-lock test or migration",
+    "No provider or live parser activity",
+    "Ordinary KB async enrichment summary UpdateChunk/graph/finalizer concurrency remains BACKLOG; G3 direct commit disables these tasks"
+  ],
+  "final_commands": [
+    {
+      "command": "GOMAXPROCS=2 GOCACHE=/tmp/weknora-082-go-cache go test -p 2 ./internal/application/repository -count=1",
+      "result": "PASS",
+      "elapsed_package_seconds": 2.925
+    },
+    {
+      "command": "GOMAXPROCS=2 GOCACHE=/tmp/weknora-082-go-cache go test -p 2 ./internal/application/service -run <source_concurrency_regex> -count=1",
+      "regex": "^(TestBatchIndexFailureCleansOnlyItsStableBatchIDs|TestSuccessfulOldBatchIndexCleansOwnArtifactsAfterNewAttemptWins|TestCleanupChunkIDsForAttemptExcludesNewerGeneration|TestReparsePinRaceDoesNotOpenAttemptBeforeAtomicAllocation|TestProcessChunks.*|TestKnowledgePostProcessOptionalSummary|TestKnowledgePostProcessWithoutSummaryCompletionFailure|TestSummarySourceChanged.*|TestTableSummaryCleanupDoesNotFollowMovedDocument|TestBuildSummaryChunkContent)$",
+      "result": "PASS",
+      "elapsed_package_seconds": 3.515
+    },
+    {
+      "command": "GOMAXPROCS=2 GOCACHE=/tmp/weknora-082-go-cache go test -p 2 ./internal/application/service -run ^$ -count=1",
+      "result": "PASS",
+      "elapsed_package_seconds": 1.875,
+      "scope": "compile only"
+    }
+  ],
+  "downstream_logs": [
+    {
+      "path": "/private/tmp/upg-source-downstream-final.jsonl",
+      "sha256": "87727ad2b7abdc44273f3358b49109b6689f201769e3ccd523a8bd0ac836b1c6",
+      "test_results": {
+        "pass": 1288,
+        "fail": 2
+      },
+      "package_results": [
+        {
+          "Package": "github.com/Tencent/WeKnora/internal/handler",
+          "Action": "pass",
+          "Elapsed": 3.144
+        },
+        {
+          "Package": "github.com/Tencent/WeKnora/internal/router",
+          "Action": "fail",
+          "Elapsed": 4.037
+        },
+        {
+          "Package": "github.com/Tencent/WeKnora/internal/container",
+          "Action": "pass",
+          "Elapsed": 6.668
+        }
+      ]
+    },
+    {
+      "path": "/private/tmp/upg-source-router-fixture-final.jsonl",
+      "sha256": "2f7329024de5b48ad16bd474b2415ff7ab031e4e0be6b9f35c30b302bf549df5",
+      "test_results": {
+        "pass": 347
+      },
+      "package_results": [
+        {
+          "Package": "github.com/Tencent/WeKnora/internal/router",
+          "Action": "pass",
+          "Elapsed": 2.019
+        }
+      ]
+    }
+  ],
+  "downstream_fixture_repair": {
+    "path": "internal/router/task_processing_scope_test.go",
+    "sha256": "f313bc74d43e346c4b0d72df3fc933c6d6dba0053d92c62ceeaaf5d41c2ddcca",
+    "change": "AutoMigrate KnowledgeRevisionSource in existing SQLite fixture; no production fallback",
+    "review": "PASS"
+  },
+  "preserved_contract_regression": {
+    "command": [
+      "go",
+      "test",
+      "-p",
+      "2",
+      "./internal/application/service",
+      "-run",
+      "^(TestEnqueueImageMultimodalTasksClearsCounterOnCancelledContext|TestEnqueueImageMultimodalTasksFinalizesWhenNoTaskEnqueued|TestEnqueueImageMultimodalTasksGivesUpSlotReleaseAfterRetries|TestEnqueueImageMultimodalTasksReleaseFinalizesWhenSiblingsAlreadyDone|TestEnqueueImageMultimodalTasksReleasesUnownedSlots|TestEnqueueImageMultimodalTasksRetriesSlotRelease|TestEnqueueImageMultimodalTasksSeedsCounterForEveryImage|TestEnqueueImageMultimodalTasksWithoutRedisLeavesFinalizeToWorkers|TestG3DocReaderRecoveryActuallyBypassesParserAndKeepsOldArtifact|TestG3DocReaderRecoveryOriginSurvivesRecordSerialization|TestG3DocReaderRecoveryRejectsInvalidReferenceWithoutParserFallback|TestG3DocReaderRecoveryReparseStillAllocatesNewFenceAndHonorsPin|TestG3FirstParseActualConvertScopesParserAndReusesResult|TestG3FirstParseBatchOperationVerifiesOnceAndNextOperationRechecks|TestG3FirstParseCRLFRestartSnapshotAndTamperedArtifact|TestG3FirstParseCanonicalSubsetRejectsInvalidMembers|TestG3FirstParseCanonicalSubsetRestartSnapshot|TestG3FirstParseProcessDocumentWriteFailureClosesDocreader|TestG3FirstParseRealParentChildTableCoordinates|TestG3FirstParseRejectsLegacyCacheWithExistingFirstArtifact|TestG3FirstParseRepeatedBlockUsesSignedLocation|TestG3FirstParseResidentReadReusesBindingWork|TestG3FirstParseScopeConfigAndExactChunkContent|TestG3FirstParseSnapshotMissingArtifactNeverReparses|TestG3FirstParseStoreRejectsDriftAndWriteFailure|TestKnowledgePostProcessAtomicallySeedsWikiSlot|TestKnowledgePostProcessGraphEnqueueSelection|TestKnowledgePostProcessOptionalSummary|TestKnowledgePostProcessRetriesWikiTriggerWithoutDoubleAccounting|TestKnowledgePostProcessTaskOptionsUseDedicatedQueue|TestKnowledgePostProcessWithoutSummaryCompletionFailure|TestKnowledgeRevisionSourceSystemEnsureUsesExactScopeAndAttempt|TestPinnedRevisionSourceBlocksDirectReparseBeforeAnyMutation|TestPinnedRevisionSourceBlocksKnowledgeDeleteBeforeMutation|TestUPGDeleteRequiresExecutionTenantBeforeSourceGuard|TestUPGImageEnqueueFailurePreservesRevisionForCompletion|TestUPGRawOnlyAgentChecksReleaseCustodyBeforeTools|TestUPGRawOnlyCustodySurvivesMissingHeadAndPluginOffline)$",
+      "-count=1",
+      "-json"
+    ],
+    "path": "/private/tmp/upg-source-preserved-final.jsonl",
+    "sha256": "08f7ca337922a936af8b37c7f888ec0613ef1f8b74abdc3dd8862e1ff0fdc291",
+    "test_results": {
+      "pass": 71
+    },
+    "package_results": [
+      {
+        "Package": "github.com/Tencent/WeKnora/internal/application/service",
+        "Action": "pass",
+        "Elapsed": 2.945
+      }
+    ]
+  },
+  "backlog": [
+    "Ordinary KB enrichment finalizer has no persistent slot identity; duplicate delivery can decrement twice. Current G3 disables enrichment and uses direct revision commit.",
+    "Ordinary KB graph/enrichment knowledge-scoped delete and UpdateChunk/finalizer retain inherited cross-generation behavior; current G3 disables these paths.",
+    "Exact cleanup deletes chunk rows before best-effort index deletion. Failure can leave orphan vectors that hydration drops but that can consume TopK. Follow-up: idempotent index-first cleanup with propagated retry or existing durable pending op. G3 managed RAW is excluded from ordinary tool retrieval."
+  ]
+}

@@ -4,12 +4,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/google/uuid"
 )
+
+// EmptyTruncatedAnswerFallback explains an output-budget exhaustion with no answer text.
+const EmptyTruncatedAnswerFallback = "Sorry, this answer hit the model's per-response output limit " +
+	"before any text was produced. Try narrowing the question, or raise max_completion_tokens."
+
+// IsLengthFinishReason reports whether a provider ended a response because its
+// completion-token budget was exhausted.
+func IsLengthFinishReason(reason string) bool {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "length", "max_tokens", "max_output_tokens":
+		return true
+	default:
+		return false
+	}
+}
 
 // PluginChatCompletionStream implements streaming chat completion functionality
 // as a plugin that can be registered to EventManager
@@ -56,6 +72,7 @@ func (p *PluginChatCompletionStream) OnEvent(ctx context.Context,
 
 	chatMessages, modelContext := prepareMessagesWithModelContext(ctx, chatManage)
 	chatMessages = modelContext.EncodeMessages(chatMessages)
+	reportModelContextLeaks(ctx, "Stream", modelContext, chatMessages)
 	ctx = withPromptCacheMetadata(ctx, chatModel, chatMessages, opt, "knowledge_qa")
 	pipelineInfo(ctx, "Stream", "messages_ready", map[string]interface{}{
 		"message_count": len(chatMessages),
@@ -112,6 +129,8 @@ func (p *PluginChatCompletionStream) OnEvent(ctx context.Context,
 		thinkingID := fmt.Sprintf("%s-thinking", uuid.New().String()[:8])
 		answerID := fmt.Sprintf("%s-answer", uuid.New().String()[:8])
 		thinkingOpen := false
+		answerCompleted := false
+		answerProduced := false
 
 		closeThinking := func() {
 			if !thinkingOpen {
@@ -216,9 +235,25 @@ func (p *PluginChatCompletionStream) OnEvent(ctx context.Context,
 				}
 
 				if response.ResponseType == types.ResponseTypeAnswer {
+					// Providers can emit a completion once for finish_reason and again
+					// for their EOF sentinel. A final answer is a terminal event for a
+					// single stream, so forwarding a later duplicate would put an answer
+					// after the session's complete event.
+					if answerCompleted {
+						continue
+					}
 					response.Content = answerDecoder.Feed(response.Content)
 					if response.Done {
 						response.Content += answerDecoder.Flush()
+						answerCompleted = true
+					}
+					if strings.TrimSpace(response.Content) != "" {
+						answerProduced = true
+					}
+					truncated := response.Done && IsLengthFinishReason(response.FinishReason)
+					if truncated && !answerProduced {
+						response.Content = EmptyTruncatedAnswerFallback
+						answerProduced = true
 					}
 					closeThinking()
 					eventBus.Emit(ctx, types.Event{
@@ -226,8 +261,9 @@ func (p *PluginChatCompletionStream) OnEvent(ctx context.Context,
 						Type:      types.EventType(event.EventAgentFinalAnswer),
 						SessionID: chatManage.SessionID,
 						Data: event.AgentFinalAnswerData{
-							Content: response.Content,
-							Done:    response.Done,
+							Content:   response.Content,
+							Done:      response.Done,
+							Truncated: truncated,
 						},
 					})
 				}

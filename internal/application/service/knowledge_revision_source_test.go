@@ -183,9 +183,9 @@ func TestRevisionSourceUsesStoredBackendForBackfillAndFixedRead(t *testing.T) {
 	repo.resource.PhysicalPath = types.BuildStorageBackendPath(backendID, "local://terms.pdf")
 	catalog := s.resources.(*revisionSourceResourceCatalogStub)
 	local := filesvc.NewLocalFileService(root, "")
-	// This is the live failing deployment chain: resource:// resolves to a
-	// storage:// path, which the unscoped local reader cannot interpret.
-	legacy := filesvc.NewResourceCatalogFileService(local, catalog)
+	// Parsing storage:// alone cannot select its configured backend root.
+	// The default reader must not resolve a source stored in a different root.
+	legacy := filesvc.NewResourceCatalogFileService(filesvc.NewLocalFileService(t.TempDir(), ""), catalog)
 	_, err := legacy.GetFile(revisionSourceContext(), repo.knowledge.FilePath)
 	require.Error(t, err)
 	s.files = defaultFiles
@@ -493,7 +493,7 @@ func TestPinnedRevisionSourceBlocksDirectReparseBeforeAnyMutation(t *testing.T) 
 
 	require.ErrorIs(t, err, ErrKnowledgeRevisionSourcePinned)
 	require.Nil(t, result)
-	require.Equal(t, 1, repo.knowledgeCalls)
+	require.Zero(t, repo.knowledgeCalls, "pinned source is rejected before loading mutable write state")
 	require.Equal(t, 1, repo.pinnedCalls)
 }
 

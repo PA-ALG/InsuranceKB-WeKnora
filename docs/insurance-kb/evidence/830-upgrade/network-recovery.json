@@ -1,0 +1,515 @@
+{
+  "status": "PASS_BOUNDED_NETWORK_RECOVERY",
+  "authorization_quote": "你看下有没办法解决这些网络下载之类的问题",
+  "requirement": "UPG-08",
+  "recorded_at": "2026-09-27T15:12:16.496599+00:00",
+  "software_source_unchanged": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+  "app_identity_unchanged": "sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4",
+  "app_builds_this_turn": 0,
+  "app_builds_total": 4,
+  "app_build_budget_remaining": 0,
+  "frontend": {
+    "index": "sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+    "platform": "linux/arm64",
+    "manifest": "sha256:c8678869a83fab70232869ba24acc1c0be661f4d65135c0eeacb6a8e78420fdd",
+    "layers": [
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:6e230fe0035dc5b9d8d5e65513d1f11ae3b25d14362031fb540a4c23bf862933",
+        "size": 11235607
+      }
+    ]
+  },
+  "probe_bounds": {
+    "connect_timeout_seconds": 10,
+    "request_timeout_seconds": 35,
+    "automatic_retries": 0,
+    "rounds_per_route": 3,
+    "full_download_digest_checked": true
+  },
+  "baseline_japan_h": {
+    "log_path": "/private/tmp/network-download-probe-baseline.jsonl",
+    "log_sha256": "6e503fd7c3774a73ffab96fc93df8cc8b79ade06d9d2b01bc7a7532d0cc587a9",
+    "rounds": [
+      {
+        "round": 1,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 2,
+        "route": "daemon-proxy",
+        "result": "FAIL",
+        "error": "request failed, curl exit 28"
+      },
+      {
+        "round": 3,
+        "route": "daemon-proxy",
+        "result": "FAIL",
+        "error": "request failed, curl exit 28"
+      },
+      {
+        "round": 1,
+        "route": "tun-without-explicit-proxy",
+        "result": "FAIL",
+        "error": "request failed, curl exit 28"
+      },
+      {
+        "round": 2,
+        "route": "tun-without-explicit-proxy",
+        "result": "FAIL",
+        "error": "request failed, curl exit 28"
+      },
+      {
+        "round": 3,
+        "route": "tun-without-explicit-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      }
+    ],
+    "failed_requests": [
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 28,
+        "metrics": "200 0.002262 3.741666 35.338731 2193396 0",
+        "sha256_ok": null
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 28,
+        "metrics": "000 0.001810 2.969845 35.002484 0 0",
+        "sha256_ok": null
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 28,
+        "metrics": "200 0.017673 3.219563 35.069943 9208487 0",
+        "sha256_ok": null
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 28,
+        "metrics": "200 0.015979 1.482120 35.092970 3984793 0",
+        "sha256_ok": null
+      }
+    ],
+    "successful_layer_requests": [
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 0,
+        "metrics": "200 0.002326 1.608693 9.827162 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 0,
+        "metrics": "200 0.011573 1.783245 28.322166 11235607 0",
+        "sha256_ok": true
+      }
+    ],
+    "metrics_order": [
+      "http_status",
+      "connect_seconds",
+      "tls_seconds",
+      "total_seconds",
+      "download_bytes",
+      "tls_verify_result"
+    ]
+  },
+  "rejected_japan_d": {
+    "log_path": "/private/tmp/network-download-probe-after.jsonl",
+    "log_sha256": "1bb3fd915f94156480618ef09194955702d0ba2052da8991c1ca9d09a50668ee",
+    "rounds": [
+      {
+        "round": 1,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 2,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 3,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 1,
+        "route": "tun-without-explicit-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 2,
+        "route": "tun-without-explicit-proxy",
+        "result": "FAIL",
+        "error": "request failed, curl exit 28"
+      },
+      {
+        "round": 3,
+        "route": "tun-without-explicit-proxy",
+        "result": "FAIL",
+        "error": "request failed, curl exit 28"
+      }
+    ],
+    "failed_requests": [
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 28,
+        "metrics": "200 0.011424 2.210525 35.396573 1278744 0",
+        "sha256_ok": null
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 28,
+        "metrics": "200 0.012385 1.399678 35.207826 6064250 0",
+        "sha256_ok": null
+      }
+    ],
+    "successful_layer_requests": [
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 0,
+        "metrics": "200 0.002027 1.124851 7.576145 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 0,
+        "metrics": "200 0.002501 1.388423 6.822742 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 0,
+        "metrics": "200 0.002718 0.897911 27.989931 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 0,
+        "metrics": "200 0.017221 1.393867 25.677391 11235607 0",
+        "sha256_ok": true
+      }
+    ],
+    "metrics_order": [
+      "http_status",
+      "connect_seconds",
+      "tls_seconds",
+      "total_seconds",
+      "download_bytes",
+      "tls_verify_result"
+    ]
+  },
+  "accepted_singapore_a": {
+    "log_path": "/private/tmp/network-download-probe-singapore.jsonl",
+    "log_sha256": "eb804ff37516bcd74a38dcd314798e2add4cbc70e6a6b96a2704aef5def159e0",
+    "rounds": [
+      {
+        "round": 1,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 2,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 3,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 1,
+        "route": "tun-without-explicit-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 2,
+        "route": "tun-without-explicit-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 3,
+        "route": "tun-without-explicit-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      }
+    ],
+    "failed_requests": [],
+    "successful_layer_requests": [
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 0,
+        "metrics": "200 0.002165 0.715512 2.781551 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 0,
+        "metrics": "200 0.002872 0.669044 3.086488 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "daemon-proxy",
+        "exit": 0,
+        "metrics": "200 0.004412 0.654189 2.228087 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 0,
+        "metrics": "200 0.014114 0.668890 2.781047 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 0,
+        "metrics": "200 0.010689 0.780085 2.641584 11235607 0",
+        "sha256_ok": true
+      },
+      {
+        "host": "registry-1.docker.io",
+        "route": "tun-without-explicit-proxy",
+        "exit": 0,
+        "metrics": "200 0.012335 0.672462 2.736976 11235607 0",
+        "sha256_ok": true
+      }
+    ],
+    "metrics_order": [
+      "http_status",
+      "connect_seconds",
+      "tls_seconds",
+      "total_seconds",
+      "download_bytes",
+      "tls_verify_result"
+    ]
+  },
+  "rejected_candidate_rollback": {
+    "started_at": "2026-09-27T15:00:52.801270+00:00",
+    "old": "日本 H - 基础节点 | 直连×0.2 | IPv6",
+    "new": "日本 D - 基础节点 | 国际专线",
+    "status": "FAILED_AND_RESTORED",
+    "finished_at": "2026-09-27T15:03:40.459391+00:00"
+  },
+  "accepted_proxy_change": {
+    "started_at": "2026-09-27T15:04:09.807277+00:00",
+    "old": "日本 H - 基础节点 | 直连×0.2 | IPv6",
+    "new": "新加坡 A - 基础节点 | 国际专线",
+    "status": "PASS",
+    "rounds": [
+      {
+        "round": 1,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 2,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 3,
+        "route": "daemon-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 1,
+        "route": "tun-without-explicit-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 2,
+        "route": "tun-without-explicit-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      },
+      {
+        "round": 3,
+        "route": "tun-without-explicit-proxy",
+        "result": "PASS",
+        "layer_bytes": 11235607
+      }
+    ],
+    "finished_at": "2026-09-27T15:04:41.382471+00:00"
+  },
+  "mirror_repair_and_engine_pull": {
+    "started_at": "2026-09-27T15:05:37.600268+00:00",
+    "host_backup": "/Users/houjing/.colima/default/colima.yaml.network-recovery-20260927.bak",
+    "guest_backup": "/etc/docker/daemon.json.network-recovery-20260927.bak",
+    "status": "PASS",
+    "frontend_image_present_before_pull": false,
+    "frontend_pull": {
+      "reference": "docker.io/docker/dockerfile@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+      "image_id": "sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+      "repo_digests": [
+        "docker/dockerfile@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e"
+      ],
+      "platform": "linux/arm64",
+      "seconds": 1.847203
+    },
+    "mirrors_before": [
+      "https://docker.mirrors.ustc.edu.cn",
+      "https://hub-mirror.c.163.com",
+      "https://mirror.baidubce.com"
+    ],
+    "mirrors_after": [],
+    "daemon_pid_unchanged": true,
+    "containers_unchanged": true,
+    "running_count": 8,
+    "host_before_sha256": "9b06d7eab663dfefeb8717341f5b8a794d2127c8b893ebf6c34960332bc6fc96",
+    "host_after_sha256": "3661dc075de1c41d7c0336a5e65b806d4a60511fc9c25a1f6f25f83c25417276",
+    "daemon_before_sha256": "feb03b7ceb3fcf08fba574a2e33f197c4187846d049a3333ea93e0f7a2b27154",
+    "daemon_after_sha256": "977ef72f1887fe340ad2d1c83c50829c87d198619da852981615fc6c9ea384d8",
+    "finished_at": "2026-09-27T15:05:42.336023+00:00"
+  },
+  "old_mirror_checks": [
+    {
+      "host": "docker.mirrors.ustc.edu.cn",
+      "curl_exit": 35,
+      "http_status": "000",
+      "seconds": 3.99833
+    },
+    {
+      "host": "hub-mirror.c.163.com",
+      "curl_exit": 35,
+      "http_status": "000",
+      "seconds": 0.028662
+    },
+    {
+      "host": "mirror.baidubce.com",
+      "curl_exit": 35,
+      "http_status": "000",
+      "seconds": 2.066706
+    }
+  ],
+  "locked_dependency_checks": [
+    {
+      "name": "browserskill",
+      "origin": "https://codeload.github.com/Tencent/BrowserSkill/tar.gz/da6bf4eed2dd7256567e152df8c903c87f6598c3",
+      "expected_sha256": "3784ef02aaeb11637fbdafca60260aaf4e47f76b70d13b1f4161d15482152057",
+      "exit": 0,
+      "metrics": "200 2.849752 3668527 0",
+      "sha256_ok": true
+    },
+    {
+      "name": "pnpm",
+      "origin": "https://registry.npmjs.org/pnpm/-/pnpm-10.17.0.tgz",
+      "expected_sha256": "bd9ec5417641391e0acb3912b2912bd5b0385407a82da94744a7407b567fdb4f",
+      "exit": 0,
+      "metrics": "200 0.746624 4191863 0",
+      "sha256_ok": true
+    },
+    {
+      "name": "anydoc",
+      "origin": "https://crates.io/api/v1/crates/anydoc/0.1.9/download",
+      "expected_sha256": "93a8b0dbecf79be9329111093b493d256db2a573ed3f1cc827c96bdbbe32a936",
+      "exit": 0,
+      "metrics": "200 0.441482 183823 0",
+      "sha256_ok": true
+    },
+    {
+      "name": "pip",
+      "origin": "https://files.pythonhosted.org/packages/f3/6e/1736e5b4ae2b778ef2f81c47d797de9f891d4d8acb047a24ca37a60294dd/pip-26.2.1-py3-none-any.whl",
+      "expected_sha256": "71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e",
+      "exit": 0,
+      "metrics": "200 3.155809 1816632 0",
+      "sha256_ok": true
+    },
+    {
+      "name": "debian-release",
+      "origin": "https://snapshot.debian.org/archive/debian/20260903T023604Z/dists/bookworm/Release",
+      "expected_sha256": "abcf5882746e0f68171f41adbb4ac01b74b49d62d203379befb9265804311a4f",
+      "exit": 0,
+      "metrics": "200 0.474087 149266 0",
+      "sha256_ok": true
+    }
+  ],
+  "dependency_metrics_order": [
+    "http_status",
+    "total_seconds",
+    "download_bytes",
+    "tls_verify_result"
+  ],
+  "selection_persistence": {
+    "runtime_proxy_group": "新加坡 A - 基础节点 | 国际专线",
+    "mihomo_store_selected": true,
+    "clash_ui_saved_proxy_selection": "新加坡 A - 基础节点 | 国际专线",
+    "saved_using": "Clash Verge native UI",
+    "rule_mode_unchanged": true,
+    "global_mode_selection_unchanged": true
+  },
+  "limitations": [
+    "Bounded recovery only; not a guarantee against future upstream or proxy outages.",
+    "Docker pull is not claimed as a cold layer transfer: target image was absent from image inspect, but BuildKit/containerd content may already have existed. Separate curl probes performed six full transfers.",
+    "Full App build, CI fixes, deployment, migration and provider validation were not performed.",
+    "Proxy app / Colima restart was deliberately not performed; saved configuration and live selection were checked."
+  ],
+  "sources": [
+    "https://docs.docker.com/reference/cli/dockerd/#configuration-reload-behavior",
+    "https://docs.docker.com/engine/daemon/proxy/",
+    "https://wiki.metacubex.one/en/api/",
+    "https://github.com/abiosoft/colima/blob/main/embedded/defaults/colima.yaml"
+  ],
+  "old_mirror_checks_on_repaired_route": [
+    {
+      "host": "docker.mirrors.ustc.edu.cn",
+      "route": "Singapore A daemon proxy",
+      "curl_exit": 35,
+      "metrics": "000 0.994922"
+    },
+    {
+      "host": "hub-mirror.c.163.com",
+      "route": "Singapore A daemon proxy",
+      "curl_exit": 35,
+      "metrics": "000 0.030597"
+    },
+    {
+      "host": "mirror.baidubce.com",
+      "route": "Singapore A daemon proxy",
+      "curl_exit": 35,
+      "metrics": "000 0.502827"
+    }
+  ],
+  "independent_review": {
+    "reviewer": "migration_review",
+    "blocker": 0,
+    "backlog": 0,
+    "rejected": 0,
+    "original_manifest": "/private/tmp/network-review-manifest.json",
+    "app_build_not_required": true
+  }
+}

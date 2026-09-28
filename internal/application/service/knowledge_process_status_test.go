@@ -16,18 +16,23 @@ func TestFinalizeIndexedKnowledgeState(t *testing.T) {
 		textChunkCount       int
 		wantParseStatus      string
 		wantSummaryStatus    string
+		wantErrorMessage     string
 	}{
 		{
 			name:              "text document stays processing so post-process can fan out enrichment",
 			textChunkCount:    2,
 			wantParseStatus:   types.ParseStatusProcessing,
 			wantSummaryStatus: types.SummaryStatusNone,
+			// Successful indexing clears the previous attempt error even
+			// while enrichment is still pending.
+			wantErrorMessage: "",
 		},
 		{
 			name:              "empty indexed document is completed without summary work",
 			textChunkCount:    0,
 			wantParseStatus:   types.ParseStatusCompleted,
 			wantSummaryStatus: types.SummaryStatusNone,
+			wantErrorMessage:  "",
 		},
 		{
 			name:                 "document waits while multimodal image work is pending",
@@ -35,6 +40,7 @@ func TestFinalizeIndexedKnowledgeState(t *testing.T) {
 			textChunkCount:       2,
 			wantParseStatus:      types.ParseStatusProcessing,
 			wantSummaryStatus:    types.SummaryStatusNone,
+			wantErrorMessage:     "",
 		},
 	}
 
@@ -43,9 +49,14 @@ func TestFinalizeIndexedKnowledgeState(t *testing.T) {
 			knowledge := &types.Knowledge{
 				ParseStatus:   types.ParseStatusProcessing,
 				SummaryStatus: types.SummaryStatusCompleted,
+				ErrorMessage:  "previous attempt failed",
 			}
 
 			finalizeIndexedKnowledgeState(knowledge, 4096, tt.textChunkCount, tt.hasPendingMultimodal, now)
+
+			if knowledge.ErrorMessage != tt.wantErrorMessage {
+				t.Fatalf("ErrorMessage = %q, want %q", knowledge.ErrorMessage, tt.wantErrorMessage)
+			}
 
 			if knowledge.ParseStatus != tt.wantParseStatus {
 				t.Fatalf("ParseStatus = %q, want %q", knowledge.ParseStatus, tt.wantParseStatus)
@@ -74,5 +85,30 @@ func TestFinalizeIndexedKnowledgeClearsPreviousAttemptError(t *testing.T) {
 	finalizeIndexedKnowledgeState(knowledge, 1, 2, false, time.Now())
 	if knowledge.ErrorMessage != "" {
 		t.Fatalf("successful index still exposes previous attempt error: %q", knowledge.ErrorMessage)
+	}
+}
+
+// TestMarkKnowledgeProcessingClearsPreviousAttemptError covers the transition
+// every worker performs before it starts a new attempt. A row that failed
+// earlier still carries that attempt's error_message, and leaving it in place
+// makes the UI report a failure on a document it is simultaneously showing as
+// processing.
+func TestMarkKnowledgeProcessingClearsPreviousAttemptError(t *testing.T) {
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	knowledge := &types.Knowledge{
+		ParseStatus:  types.ParseStatusFailed,
+		ErrorMessage: "Task interrupted due to application restart",
+	}
+
+	markKnowledgeProcessing(knowledge, now)
+
+	if knowledge.ParseStatus != types.ParseStatusProcessing {
+		t.Fatalf("ParseStatus = %q, want %q", knowledge.ParseStatus, types.ParseStatusProcessing)
+	}
+	if knowledge.ErrorMessage != "" {
+		t.Fatalf("ErrorMessage = %q, want empty", knowledge.ErrorMessage)
+	}
+	if !knowledge.UpdatedAt.Equal(now) {
+		t.Fatalf("UpdatedAt = %v, want %v", knowledge.UpdatedAt, now)
 	}
 }

@@ -285,17 +285,17 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
 .concept-page__navigation summary { cursor: pointer; font-weight: 600; }
 .concept-page__navigation ul { list-style: none; padding-left: 12px; }
 .concept-page__content { min-width: 0; }
-.concept-page__label { color: var(--td-brand-color); font-size: 13px; }
-h1 { margin: 8px 0 24px; font-size: 28px; }
-h2 { margin: 28px 0 12px; font-size: 18px; }
+.concept-page__label { color: var(--td-brand-color); font-size: var(--app-text-md); }
+h1 { margin: 8px 0 24px; font-size: var(--app-text-concept-page-title); }
+h2 { margin: 28px 0 12px; font-size: var(--app-text-2xl); }
 .concept-page__body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
-.concept-page__meta { color: var(--td-text-color-secondary); font-size: 13px; }
+.concept-page__meta { color: var(--td-text-color-secondary); font-size: var(--app-text-md); }
 .concept-page__quality { color: var(--td-warning-color); font-weight: 600; }
 .concept-page__related { list-style: none; padding: 0; }
 .concept-page__related li { padding: 18px 0; border-bottom: 1px solid var(--td-component-border); }
 .concept-page__related a { color: var(--td-brand-color); text-decoration: none; font-weight: 600; }
 .concept-page__sources button { margin: 0 10px 8px 0; border: 1px solid var(--td-component-border);
-  border-radius: 6px; padding: 8px 12px; color: var(--td-brand-color); background: transparent; cursor: pointer; }
+  border-radius: var(--app-radius-sm); padding: 8px 12px; color: var(--td-brand-color); background: transparent; cursor: pointer; }
 @media (max-width: 700px) {
   .concept-page { padding: 20px; }
   .concept-page__layout.with-navigation { grid-template-columns: 1fr; }

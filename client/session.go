@@ -207,18 +207,34 @@ type ImageAttachment struct {
 	Caption string `json:"caption,omitempty"` // VLM analysis result
 }
 
+// QuestionOrigin names the knowledge source a suggested question was generated
+// from (SuggestedQuestion.KnowledgeBaseID / KnowledgeID). Send it with the
+// question the user picked: the agent searches that source before answering.
+// It is a hint inside the request's retrieval scope and never widens it; for an
+// agent that retrieves only on @mention, it selects the origin base when the
+// agent may read it.
+type QuestionOrigin struct {
+	KnowledgeBaseID string `json:"knowledge_base_id"`
+	KnowledgeID     string `json:"knowledge_id,omitempty"`
+}
+
 // KnowledgeQARequest knowledge Q&A request
 type KnowledgeQARequest struct {
-	Query            string            `json:"query"`              // Query text for knowledge base search
-	KnowledgeBaseIDs []string          `json:"knowledge_base_ids"` // Selected knowledge base IDs for this request
-	KnowledgeIDs     []string          `json:"knowledge_ids"`      // Selected knowledge IDs for this request
-	AgentEnabled     bool              `json:"agent_enabled"`      // Whether agent mode is enabled for this request
-	AgentID          string            `json:"agent_id"`           // Selected custom agent ID for this request
-	WebSearchEnabled bool              `json:"web_search_enabled"` // Whether web search is enabled for this request
-	SummaryModelID   string            `json:"summary_model_id"`   // Optional summary model ID (overrides session default)
-	DisableTitle     bool              `json:"disable_title"`      // Whether to disable auto title generation
-	Images           []ImageAttachment `json:"images,omitempty"`   // Attached images for multimodal chat
-	Channel          string            `json:"channel,omitempty"`  // Source channel: "web", "api", "im", etc.
+	Query string `json:"query"` // Query text for knowledge base search
+	// KnowledgeBaseIDs selects knowledge bases for this request.
+	KnowledgeBaseIDs []string `json:"knowledge_base_ids"`
+	KnowledgeIDs     []string `json:"knowledge_ids"` // Selected knowledge IDs for this request
+	// AgentEnabled controls whether agent mode is enabled for this request.
+	AgentEnabled bool   `json:"agent_enabled"`
+	AgentID      string `json:"agent_id"` // Selected custom agent ID for this request
+	// WebSearchEnabled controls web search for this request.
+	WebSearchEnabled bool `json:"web_search_enabled"`
+	// SummaryModelID optionally overrides the session's summary model.
+	SummaryModelID string            `json:"summary_model_id"`
+	DisableTitle   bool              `json:"disable_title"`             // Whether to disable auto title generation
+	Images         []ImageAttachment `json:"images,omitempty"`          // Attached images for multimodal chat
+	Channel        string            `json:"channel,omitempty"`         // Source channel: "web", "api", "im", etc.
+	QuestionOrigin *QuestionOrigin   `json:"question_origin,omitempty"` // Source of a picked suggested question
 }
 
 // LLMToolCall represents a function/tool call from the LLM
@@ -262,17 +278,24 @@ type StreamResponse struct {
 	Data                map[string]interface{} `json:"data,omitempty"`                 // Additional metadata for enhanced display
 }
 
-// KnowledgeQAStream knowledge Q&A streaming API
+// KnowledgeQAStream knowledge Q&A streaming API.
+// Pass ResourceURLOptions to receive public HTTP(S) file URLs in the stream.
 func (c *Client) KnowledgeQAStream(
 	ctx context.Context,
 	sessionID string,
 	request *KnowledgeQARequest,
 	callback func(*StreamResponse) error,
+	opts ...ResourceURLOptions,
 ) error {
 	path := fmt.Sprintf("/api/v1/knowledge-chat/%s", sessionID)
 	debugLogger.Debug("knowledge_qa_stream_start", "session_id", sessionID, "query", request.Query)
 
-	resp, err := c.doRequestStream(ctx, http.MethodPost, path, request, nil)
+	queryParams := url.Values{}
+	if len(opts) > 0 {
+		applyResourceURLQuery(queryParams, &opts[0])
+	}
+
+	resp, err := c.doRequestStream(ctx, http.MethodPost, path, request, queryParams)
 	if err != nil {
 		debugLogger.Debug("request_failed", "error", err)
 		return err
@@ -350,17 +373,22 @@ func (c *Client) KnowledgeQAStream(
 	return nil
 }
 
-// ContinueStream continues to receive an active stream for a session
+// ContinueStream continues to receive an active stream for a session.
+// Pass ResourceURLOptions to receive public HTTP(S) file URLs in the stream.
 func (c *Client) ContinueStream(
 	ctx context.Context,
 	sessionID string,
 	messageID string,
 	callback func(*StreamResponse) error,
+	opts ...ResourceURLOptions,
 ) error {
 	path := fmt.Sprintf("/api/v1/sessions/continue-stream/%s", sessionID)
 
 	queryParams := url.Values{}
 	queryParams.Add("message_id", messageID)
+	if len(opts) > 0 {
+		applyResourceURLQuery(queryParams, &opts[0])
+	}
 
 	resp, err := c.doRequestStream(ctx, http.MethodGet, path, nil, queryParams)
 	if err != nil {
@@ -463,15 +491,25 @@ type SearchKnowledgeResponse struct {
 	Data    []*SearchResult `json:"data"`
 }
 
-// SearchKnowledge performs knowledge base search without LLM summarization
-func (c *Client) SearchKnowledge(ctx context.Context, request *SearchKnowledgeRequest) ([]*SearchResult, error) {
+// SearchKnowledge performs knowledge base search without LLM summarization.
+// Pass ResourceURLOptions to receive public HTTP(S) file URLs in results.
+func (c *Client) SearchKnowledge(
+	ctx context.Context,
+	request *SearchKnowledgeRequest,
+	opts ...ResourceURLOptions,
+) ([]*SearchResult, error) {
 	debugLogger.Debug("search_knowledge_start",
 		"knowledge_base_ids", request.KnowledgeBaseIDs,
 		"knowledge_ids", request.KnowledgeIDs,
 		"query", request.Query,
 	)
 
-	resp, err := c.doRequest(ctx, http.MethodPost, "/api/v1/knowledge-search", request, nil)
+	queryParams := url.Values{}
+	if len(opts) > 0 {
+		applyResourceURLQuery(queryParams, &opts[0])
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodPost, "/api/v1/knowledge-search", request, queryParams)
 	if err != nil {
 		debugLogger.Debug("request_failed", "error", err)
 		return nil, err

@@ -1,0 +1,474 @@
+{
+  "recorded_at": "2026-09-27T11:40:59.182177+00:00",
+  "source_state": "uncommitted fixed-upstream merge; core source covered by core-review-identity.json; not a deployed artifact",
+  "suites": [
+    {
+      "log": "/private/tmp/upg-core5.jsonl",
+      "log_sha256": "039a74858a47aad00cbb52eeacec4e0d81842d7c7083fe35ec6a8b96ad11949a",
+      "tests": {
+        "pass": 106
+      },
+      "package_results": [
+        {
+          "Time": "2026-09-27T19:04:08.90776+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/router",
+          "Elapsed": 5.368
+        },
+        {
+          "Time": "2026-09-27T19:04:28.135874+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/application/service",
+          "Elapsed": 24.749
+        },
+        {
+          "Time": "2026-09-27T19:04:44.390222+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/embedding",
+          "Elapsed": 1.353
+        },
+        {
+          "Time": "2026-09-27T19:04:48.136829+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/container",
+          "Elapsed": 5.101
+        }
+      ],
+      "failed_tests": []
+    },
+    {
+      "log": "/private/tmp/upg-contract6.jsonl",
+      "log_sha256": "93ea5a3f0c30b12099c422cedf8d6a16874c481a9460ccd0f88c81306fe1a8b0",
+      "tests": {
+        "pass": 169,
+        "skip": 1,
+        "fail": 1
+      },
+      "package_results": [
+        {
+          "Time": "2026-09-27T19:17:51.189893+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/handler",
+          "Elapsed": 4.8309999999999995
+        },
+        {
+          "Time": "2026-09-27T19:17:52.596164+08:00",
+          "Action": "fail",
+          "Package": "github.com/Tencent/WeKnora/internal/application/service",
+          "Elapsed": 6.2379999999999995
+        },
+        {
+          "Time": "2026-09-27T19:17:54.292633+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/config",
+          "Elapsed": 3.072
+        }
+      ],
+      "failed_tests": [
+        "TestMapOneDocumentDoesNotUseShortDetailsWhenCitationIncomplete"
+      ]
+    },
+    {
+      "log": "/private/tmp/upg-wiki7.jsonl",
+      "log_sha256": "f1c3ad9cbadc928bbe43dd585af0f70dfb899848c72a75df291923d673088bc4",
+      "tests": {
+        "pass": 121,
+        "skip": 1
+      },
+      "package_results": [
+        {
+          "Time": "2026-09-27T19:19:47.565452+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/application/service",
+          "Elapsed": 2.121
+        }
+      ],
+      "failed_tests": []
+    },
+    {
+      "log": "/private/tmp/upg-model-final.jsonl",
+      "log_sha256": "9776221185b24d35fa092eb556b2df1ee6295ec266f338235953e964f8ad94b9",
+      "tests": {
+        "pass": 582
+      },
+      "package_results": [
+        {
+          "Time": "2026-09-27T19:25:53.217645+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/embedding",
+          "Elapsed": 2.399
+        },
+        {
+          "Time": "2026-09-27T19:25:53.248224+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api",
+          "Elapsed": 1.141
+        },
+        {
+          "Time": "2026-09-27T19:25:54.819408+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/anthropicmessages",
+          "Elapsed": 1.498
+        },
+        {
+          "Time": "2026-09-27T19:25:56.767007+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/arkembeddings",
+          "Elapsed": 1.173
+        },
+        {
+          "Time": "2026-09-27T19:25:59.074828+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/cohererank",
+          "Elapsed": 1.879
+        },
+        {
+          "Time": "2026-09-27T19:26:02.030055+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/dashscopeembeddings",
+          "Elapsed": 1.831
+        },
+        {
+          "Time": "2026-09-27T19:26:03.697476+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/dashscoperank",
+          "Elapsed": 1.533
+        },
+        {
+          "Time": "2026-09-27T19:26:05.531179+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/googleembeddings",
+          "Elapsed": 1.2389999999999999
+        },
+        {
+          "Time": "2026-09-27T19:26:06.83439+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/googlegenai",
+          "Elapsed": 1.2429999999999999
+        },
+        {
+          "Time": "2026-09-27T19:26:08.196889+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/nimrerank",
+          "Elapsed": 1.104
+        },
+        {
+          "Time": "2026-09-27T19:26:10.339464+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/openaichataudio",
+          "Elapsed": 2.078
+        },
+        {
+          "Time": "2026-09-27T19:26:10.972423+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/openaicompletions",
+          "Elapsed": 1.156
+        },
+        {
+          "Time": "2026-09-27T19:26:12.844349+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/openaiembeddings",
+          "Elapsed": 1.099
+        },
+        {
+          "Time": "2026-09-27T19:26:14.420771+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/openairesponses",
+          "Elapsed": 1.6600000000000001
+        },
+        {
+          "Time": "2026-09-27T19:26:14.447472+08:00",
+          "Action": "skip",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/tencentlkeap",
+          "Elapsed": 0
+        },
+        {
+          "Time": "2026-09-27T19:26:14.465941+08:00",
+          "Action": "skip",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/volcengineknowledge",
+          "Elapsed": 0
+        },
+        {
+          "Time": "2026-09-27T19:26:15.01685+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/api/openaitranscriptions",
+          "Elapsed": 1.076
+        },
+        {
+          "Time": "2026-09-27T19:26:17.550157+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/runtime",
+          "Elapsed": 1.371
+        },
+        {
+          "Time": "2026-09-27T19:26:19.73288+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/models/chat",
+          "Elapsed": 1.446
+        }
+      ],
+      "failed_tests": []
+    },
+    {
+      "log": "/private/tmp/upg-platform-final.jsonl",
+      "log_sha256": "1284efb7ece9c5be887a2f5b12f68b0a31486cbc644406fde437ac6ecb24db7f",
+      "tests": {
+        "pass": 2771,
+        "fail": 1,
+        "skip": 16
+      },
+      "package_results": [
+        {
+          "Time": "2026-09-27T19:31:53.068689+08:00",
+          "Action": "fail",
+          "Package": "github.com/Tencent/WeKnora/internal/application/repository",
+          "Elapsed": 4.184
+        },
+        {
+          "Time": "2026-09-27T19:32:13.642697+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/router",
+          "Elapsed": 4.999
+        },
+        {
+          "Time": "2026-09-27T19:33:35.762792+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/handler",
+          "Elapsed": 5.602
+        },
+        {
+          "Time": "2026-09-27T19:33:37.376471+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/config",
+          "Elapsed": 1.5859999999999999
+        },
+        {
+          "Time": "2026-09-27T19:33:38.804985+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/container",
+          "Elapsed": 14.621
+        },
+        {
+          "Time": "2026-09-27T19:36:01.000772+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/types",
+          "Elapsed": 139.964
+        }
+      ],
+      "failed_tests": [
+        "TestGetKnowledgeBatch_TracksDeletionUntilSoftDelete"
+      ]
+    },
+    {
+      "log": "/private/tmp/upg-repository-final.jsonl",
+      "log_sha256": "a542b41562fe7eefa2e565bd86724967927fce85d509c40603eeba43293ab3c8",
+      "tests": {
+        "pass": 367,
+        "skip": 8
+      },
+      "package_results": [
+        {
+          "Time": "2026-09-27T19:38:37.986511+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/application/repository",
+          "Elapsed": 3.383
+        }
+      ],
+      "failed_tests": []
+    }
+  ],
+  "superseded_failure": {
+    "upg-contract6.jsonl": "Wiki fixture lacked upstream FindPagesByNormalizedTitles; test stub fixed; upg-wiki7.jsonl reran applicable Wiki suite PASS. Other 169 successes retained.",
+    "upg-platform-final.jsonl": "New upstream delete test SQLite fixture lacked retained KnowledgeRevisionSource table; fixture AutoMigrate added; repository full suite rerun PASS. Other five package PASS retained."
+  },
+  "cross_language_fixture": {
+    "path": "internal/application/service/testdata/g3_native_discovery_v1.json",
+    "old_base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+    "sha256": "c5bcd2cd29dcb67b92e41d5f39687de0cf13458fa1e227b80709164dbb84a4a9",
+    "byte_identical": true,
+    "current_go_test": "TestNativeDiscoveryCrossLanguageVector830G35",
+    "harness_log": "/private/tmp/upg-harness-contract2.log"
+  },
+  "non_go_logs": {
+    "upg-harness-contract2.log": {
+      "sha256": "20ad5306d7bffe8afd10448db919e30d17acacdfac1e9562f2e986e183a62769",
+      "tail": [
+        "...............................................                          [100%]",
+        "47 passed in 6.74s"
+      ]
+    },
+    "upg-domain-independence.log": {
+      "sha256": "15fc3f2757fa2a96b1b038426bcc9545428b30c51c31ca23f5133f5bc83222dc",
+      "tail": [
+        ".                                                                        [100%]",
+        "1 passed in 3.43s"
+      ]
+    },
+    "upg-domain-mypy.log": {
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e",
+      "tail": [
+        "Success: no issues found in 1 source file"
+      ]
+    },
+    "weknora-082-adoption-suite-green.txt": {
+      "sha256": "cd4a2816beaa6ace9e81cdd669d058c65da47fefcef859d801d1d50e89bcc029",
+      "tail": [
+        "........................................................................ [ 54%]",
+        "...........................................................              [100%]",
+        "131 passed in 20.26s"
+      ]
+    },
+    "upg-frontend-components.log": {
+      "sha256": "56320fbb4751af240eebad6f98351abcd6594b09aa2e99c48b46258a6b364e40",
+      "tail": [
+        "",
+        "",
+        " Test Files  20 passed (20)",
+        "      Tests  263 passed (263)",
+        "   Start at  19:29:03",
+        "   Duration  13.15s (transform 9.92s, setup 0ms, import 22.22s, tests 18.54s, environment 13.93s)",
+        ""
+      ]
+    },
+    "upg-upload-race-red.log": {
+      "sha256": "fd90dc71faa79c3cf6df5faa37b1d5f7c4aaa78c66a17cd99f0080d0252d0edd",
+      "tail": [
+        "",
+        "",
+        " Test Files  1 failed (1)",
+        "      Tests  1 failed | 5 passed (6)",
+        "   Start at  19:30:04",
+        "   Duration  1.23s (transform 202ms, setup 0ms, import 664ms, tests 144ms, environment 287ms)",
+        ""
+      ]
+    },
+    "upg-upload-busy-red.log": {
+      "sha256": "533329c321919d38920965b3c60ec241f13168516d8cad25b853f6550cabcc6d",
+      "tail": [
+        "",
+        "",
+        " Test Files  1 failed (1)",
+        "      Tests  1 failed | 6 passed (7)",
+        "   Start at  19:37:21",
+        "   Duration  2.24s (transform 304ms, setup 0ms, import 1.04s, tests 400ms, environment 586ms)",
+        ""
+      ]
+    },
+    "upg-upload-final.log": {
+      "sha256": "8ab258b8abd7dc0081f45436e6e58b602d2a8a339deb50c5e84fa3c46b599d79",
+      "tail": [
+        "",
+        "",
+        " Test Files  2 passed (2)",
+        "      Tests  14 passed (14)",
+        "   Start at  19:38:17",
+        "   Duration  3.07s (transform 584ms, setup 0ms, import 1.56s, tests 520ms, environment 1.72s)",
+        ""
+      ]
+    },
+    "upg-runtime-assets-red.log": {
+      "sha256": "017f360bdfb127e8a9bb44ec714b658783bcac7a557bcecd813288aa7c7b64ee",
+      "tail": [
+        "FAILED harness/tests/test_upgrade_runtime_assets_830.py::test_extension_validation_rejects_broken_runtime_assets[empty]",
+        "FAILED harness/tests/test_upgrade_runtime_assets_830.py::test_extension_validation_rejects_broken_runtime_assets[invalid]",
+        "FAILED harness/tests/test_upgrade_runtime_assets_830.py::test_extension_validation_rejects_broken_runtime_assets[wrong-version]",
+        "FAILED harness/tests/test_upgrade_runtime_assets_830.py::test_extension_validation_rejects_broken_runtime_assets[missing-worker]",
+        "FAILED harness/tests/test_upgrade_runtime_assets_830.py::test_both_exact_image_probes_validate_extension_contents",
+        "FAILED harness/tests/test_upgrade_runtime_assets_830.py::test_local_anydoc_entrypoint_loads_the_fixed_dependency_lock",
+        "8 failed in 1.53s"
+      ]
+    },
+    "upg-anydoc-local-red.log": {
+      "sha256": "0bdea0c1456c662294ee379c361a31b5a751f0f615d4a9801ad0bec13964770a",
+      "tail": [
+        "E       assert 'unsupported target' in 'Traceback (most recent call last):\\n  File \"<stdin>\", line 2, in <module>\\nKeyError: \\'anydoc_crate\\'\\n'",
+        "E        +  where 'Traceback (most recent call last):\\n  File \"<stdin>\", line 2, in <module>\\nKeyError: \\'anydoc_crate\\'\\n' = CompletedProcess(args=['bash', '/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-upstream-plugin-b...t='', stderr='Traceback (most recent call last):\\n  File \"<stdin>\", line 2, in <module>\\nKeyError: \\'anydoc_crate\\'\\n').stderr",
+        "",
+        "harness/tests/test_upgrade_runtime_assets_830.py:78: AssertionError",
+        "=========================== short test summary info ============================",
+        "FAILED harness/tests/test_upgrade_runtime_assets_830.py::test_local_anydoc_lock_defaults_are_read_before_target_validation",
+        "1 failed, 8 deselected in 0.78s"
+      ]
+    },
+    "upg-runtime-assets-final2.log": {
+      "sha256": "81af12e88669764b1745ebd0f007486e86b6e02ff2a9b713b3efb33a4e775468",
+      "tail": [
+        "........................................................................ [ 46%]",
+        "........................................................................ [ 92%]",
+        "...........                                                              [100%]",
+        "155 passed in 9.72s"
+      ]
+    },
+    "upg-runtime-assets-mypy.log": {
+      "sha256": "f9b031e5c45aa702cd4fef028d465551cb20a2c4698e0913c7b00766b20ac4d8",
+      "tail": [
+        "Success: no issues found in 2 source files"
+      ]
+    },
+    "upg-frontend-typecheck-final.log": {
+      "sha256": "6544bfb7e8f68ad6ef7610b77db55cd5b13a731efa0d14c3e1c63627ceff5967",
+      "tail": [
+        "",
+        "> knowledage-base@0.8.2 type-check",
+        "> vue-tsc --build",
+        ""
+      ]
+    },
+    "upg-frontend-build-final.log": {
+      "sha256": "acc3c5bdcfd0652ef8bac57acaea4ecd0a7a7c4dee17091d110134b2e14a0b56",
+      "tail": [
+        "dist/assets/tdesign-icon-offline-DiMQ1qE8.js                                 3,448.70 kB │ gzip: 984.60 kB",
+        "",
+        "(!) Some chunks are larger than 500 kB after minification. Consider:",
+        "- Using dynamic import() to code-split the application",
+        "- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks",
+        "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.",
+        "✓ built in 2m 4s"
+      ]
+    },
+    "upg-harness-ruff-full.log": {
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "tail": [
+        "All checks passed!"
+      ]
+    },
+    "upg-harness-mypy-full.log": {
+      "sha256": "7c39374bafa26b0e8927721f452b7570044bf513464083ca58e685c9e64e10ce",
+      "tail": [
+        "Success: no issues found in 735 source files"
+      ]
+    },
+    "upg-build-final3.log": {
+      "sha256": "c1b5d24d4ff5d659ced1d5d6603f1b821bdac5d54df8ba70c2313ee8a26180ce",
+      "summary": [
+        "........................................................................ [ 46%]",
+        "........................................................................ [ 92%]",
+        "............                                                             [100%]",
+        "156 passed in 10.70s"
+      ]
+    },
+    "upg-runtime-license-red.log": {
+      "sha256": "b7dfc9d060f3cf99a4f5ca074e275c7d4902685d5284f5bf698b821ab6343a77",
+      "summary": [
+        "E       Failed: DID NOT RAISE ArtifactContractError",
+        "",
+        "harness/tests/test_app_runtime_reuse_830.py:190: Failed",
+        "=========================== short test summary info ============================",
+        "FAILED harness/tests/test_app_runtime_reuse_830.py::test_runtime_resource_or_dependency_drift_rejected[third_party/anydoc-go/LICENSE]",
+        "1 failed, 9 passed, 17 deselected in 3.36s"
+      ]
+    },
+    "upg-openspec-validation.log": {
+      "sha256": "9d854467e5685114ae7007a0c29a34f6ca7149e346da9a28f83a493ce9d0bd8d",
+      "summary": [
+        "Change '130-weknora-082-harness-plugin-boundary' is valid"
+      ]
+    }
+  },
+  "limitations": [
+    "No live migration, restore, provider, deployment, historical epoch27 read or source-click run.",
+    "Earlier broad service run stopped at expensive historical canonical validation; this is not a full service-suite pass.",
+    "Earlier model parity body-only tests rejected environment fake DNS 198.18.x; parity whole-suite not claimed PASS.",
+    "Frontend source build reported completed by frontend writer; immutable image identity and deployment not established."
+  ]
+}

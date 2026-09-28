@@ -1,0 +1,381 @@
+{
+  "authorization_quote": "继续",
+  "scope": "ONE_NEXT_APP_ATTEMPT_AFTER_NETWORK_RECOVERY",
+  "source_head": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+  "prior_total_app_attempts": 4,
+  "additional_budget": 1,
+  "status": "BLOCKED",
+  "started_at": "2026-09-27T15:46:50.956756+00:00",
+  "selector_exit_code": 1,
+  "containers_unchanged": true,
+  "daemon_pid_unchanged": true,
+  "disk_after": "Filesystem     1024-blocks      Used Available Capacity Mounted on\n/dev/vdb1        112946468 112930084         0     100% /var/lib/docker\n",
+  "finished_at": "2026-09-27T16:39:22.735561+00:00",
+  "requirement": "UPG-08",
+  "attempt_status": "BLOCKED",
+  "artifact_recovery_status": "PASS",
+  "app_selector_receipt": {
+    "artifact_identity": "sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4",
+    "build_invocations": 1,
+    "build_source_head": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+    "candidate_image_ids": [],
+    "contract": "ba0-app-build-receipt.v1",
+    "dependency_lock_sha256": "4eba510179e957a039c757c702d0702a12a8435724d46e393da33d33006393b2",
+    "docker_context": "colima",
+    "integration_head": "b64923c465facbb074555a7f5825ac64bf1ace1f",
+    "manifest_sha256": "4a535bf4c310f965bca4435b301f08b9d0216beb62ea823cb95e9e126faed850",
+    "platform": "linux/arm64",
+    "selector": "BUILD_AFFECTED",
+    "status": "INCOMPLETE",
+    "target": "runtime"
+  },
+  "app_build_history": {
+    "cached_steps": 0,
+    "completed_at": "2026-09-27T16:39:21.912794138Z",
+    "completed_steps": 0,
+    "created_at": "2026-09-27T15:47:02.113718752Z",
+    "name": "context/docker/Dockerfile.app (runtime)",
+    "ref": "colima/colima/swvgrtlj9cguhwg8i43tqd5x6",
+    "status": "Completed",
+    "total_steps": 0
+  },
+  "history_interpretation": "BuildKit history reports Completed with zero step counters; client exit 1 and explicit ENOSPC govern attempt failure, not the summary status.",
+  "build_wall_seconds": 3139.799075386,
+  "failure_stage": "OCI image export completed; local containerd layer unpack failed",
+  "failure": "no space left on device while extracting /usr/bin/git-shell in layer sha256:3b7c82a89b3cee244bf9d5b3d44644331abdb167e7534c39a0fb69fa8bf780ce",
+  "image_exported_but_initially_not_unpacked": "sha256:442701a3bde3de5ff8aee7dfc9f7f461df1819b050c417f38ecd4ff226e33775",
+  "total_app_build_invocations": 5,
+  "this_authorization_build_invocations": 1,
+  "this_authorization_budget_remaining": 0,
+  "build_cancellation_sent": false,
+  "milestones": [
+    "#43 178.1 ✔ Finished in 51.4 s",
+    "#40 1797.9     Finished `release` profile [optimized] target(s) in 29m 54s",
+    "#40 DONE 1803.4s",
+    "#43 1989.2     Finished `release` profile [optimized] target(s) in 30m 07s",
+    "#43 DONE 2016.8s",
+    "#46 DONE 485.4s",
+    "#53 421.6 Fetched 262 MB in 6min 46s (646 kB/s)",
+    "#67 DONE 6.9s"
+  ],
+  "export_integrity": {
+    "manifest_sha256": "6010ab47429a4464126847accdfe6b9748bf4b2a4ffe5006056db9c40fa97e24",
+    "manifest": {
+      "schemaVersion": 2,
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "config": {
+        "mediaType": "application/vnd.oci.image.config.v1+json",
+        "digest": "sha256:bf1cdfde3fe923cc101a72fffecee42ba4c9cce93e2671763840be35beb8bd25",
+        "size": 10829
+      },
+      "layers": [
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:b1efea88fbf7c88bbbdeec2e84bd4f8d0b814c210ee65763f6d4cc91c28365e8",
+          "size": 28102210
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:4dd60ffe151079246d78499d43052ba29ca654d39d4a24f5f47991621600aeda",
+          "size": 93
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:48b8763d4abd91d3a025c9620b9a7cc51cc44ff759dfdebe190d939f061ac8f2",
+          "size": 6547208
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:2056ba97773feac08953ff6bdd3dd35a76b3db09d58e4ba6e579560597c552bd",
+          "size": 2072
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:fb14e48ce0af1b97f139c693c1fa79d72a3552031ebe9e25a1dea288b95aa9b0",
+          "size": 43944
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:eef633dda20256513ab70446360410891ab73e079f91bb2b8a3c9c86b8a8e4d5",
+          "size": 5668
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:5e211b2d7cabb6c69ba2971c494de413569b67d4b64fa83e6d57b86f578c42a7",
+          "size": 129498
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:6154daff034229acbe8a3f1f17fb558189e7c43749e5c24bb58d381f8296b9cf",
+          "size": 390242629
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:9bc4a61332ddbfcb8db4107f7a121d8a8c9b943a1e19ace74ecf7ac036768e3c",
+          "size": 3313
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:81f1c50cf31a817775a248a4928003118d25201415d0bf965ff2b00a6e394b2c",
+          "size": 8800925
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:a42e0e8f48c4ed99cf17212e66ac13c6d81cfda6d62b1796a4eb88a320725b59",
+          "size": 66209602
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:9c4e72fb7123231935bbd124f9a459ecd22299462d95549670b2179b1912adcc",
+          "size": 22417560
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:bfe076add86891ac28c08f502cbfd091c09b646897bad68bd20e08521e15833d",
+          "size": 4425976
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:a1c4d4c3b3cd95263caac80ff3ac95e8891a1b6d5223c62b22cd789fc959377b",
+          "size": 8260440
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:2722c091d028c19d7a44fcafb4f1eb7a9e69af8803bdb187b8db82ce76a4f42a",
+          "size": 37109
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:2ac410d6c2c86abd1cb23c85637020c80bbcddcef737f6ea5652b8e6a80559dd",
+          "size": 88065
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:d0036ce9bcdd7972dc7ad3c98584ca86bd4517d64703ac22c09763901122f85e",
+          "size": 97411
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:89c0e95e437bde32b1ab1d6397bcc2cef9bc75d9e07ac1479cd61db777a49216",
+          "size": 3401
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:943c98b282fbd2b10e1bd833bba71eac6ea75b7693962d59d88c87e2168c1d0c",
+          "size": 30989246
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:ed89a48e85f2e51c7f6cead50ab5921458c229e35c754f51b81f829c08647d9b",
+          "size": 86737633
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:95dd7e71a585a2f269f8e04be53f14d9e91f5a30cad2b6e6f914f65dd4019c72",
+          "size": 191485
+        },
+        {
+          "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+          "digest": "sha256:00720cee4eab6ad2194f4b5b90bcd3cddb3f0a3296713d7c46fd5c84fd083bac",
+          "size": 118145007
+        }
+      ]
+    },
+    "all_22_compressed_layer_hashes_match": true,
+    "compressed_bytes": 771480495,
+    "expanded_tar_bytes": 2202181632,
+    "max_expanded_layer_bytes": 1152143360,
+    "expanded_bytes_by_blob": {
+      "b1efea88fbf7c88bbbdeec2e84bd4f8d0b814c210ee65763f6d4cc91c28365e8": 100229120,
+      "4dd60ffe151079246d78499d43052ba29ca654d39d4a24f5f47991621600aeda": 1536,
+      "48b8763d4abd91d3a025c9620b9a7cc51cc44ff759dfdebe190d939f061ac8f2": 12608000,
+      "2056ba97773feac08953ff6bdd3dd35a76b3db09d58e4ba6e579560597c552bd": 7168,
+      "fb14e48ce0af1b97f139c693c1fa79d72a3552031ebe9e25a1dea288b95aa9b0": 151552,
+      "eef633dda20256513ab70446360410891ab73e079f91bb2b8a3c9c86b8a8e4d5": 35328,
+      "5e211b2d7cabb6c69ba2971c494de413569b67d4b64fa83e6d57b86f578c42a7": 227840,
+      "6154daff034229acbe8a3f1f17fb558189e7c43749e5c24bb58d381f8296b9cf": 1152143360,
+      "9bc4a61332ddbfcb8db4107f7a121d8a8c9b943a1e19ace74ecf7ac036768e3c": 21504,
+      "81f1c50cf31a817775a248a4928003118d25201415d0bf965ff2b00a6e394b2c": 22244864,
+      "a42e0e8f48c4ed99cf17212e66ac13c6d81cfda6d62b1796a4eb88a320725b59": 119149568,
+      "9c4e72fb7123231935bbd124f9a459ecd22299462d95549670b2179b1912adcc": 48871424,
+      "bfe076add86891ac28c08f502cbfd091c09b646897bad68bd20e08521e15833d": 8104448,
+      "a1c4d4c3b3cd95263caac80ff3ac95e8891a1b6d5223c62b22cd789fc959377b": 20965888,
+      "2722c091d028c19d7a44fcafb4f1eb7a9e69af8803bdb187b8db82ce76a4f42a": 136192,
+      "2ac410d6c2c86abd1cb23c85637020c80bbcddcef737f6ea5652b8e6a80559dd": 329216,
+      "d0036ce9bcdd7972dc7ad3c98584ca86bd4517d64703ac22c09763901122f85e": 648704,
+      "89c0e95e437bde32b1ab1d6397bcc2cef9bc75d9e07ac1479cd61db777a49216": 17920,
+      "943c98b282fbd2b10e1bd833bba71eac6ea75b7693962d59d88c87e2168c1d0c": 82567168,
+      "ed89a48e85f2e51c7f6cead50ab5921458c229e35c754f51b81f829c08647d9b": 274641920,
+      "95dd7e71a585a2f269f8e04be53f14d9e91f5a30cad2b6e6f914f65dd4019c72": 373248,
+      "00720cee4eab6ad2194f4b5b90bcd3cddb3f0a3296713d7c46fd5c84fd083bac": 358705664
+    },
+    "size_method": "gzip -l ISIZE; every layer below 4GiB; tar byte total used conservatively for capacity preflight"
+  },
+  "recovery": {
+    "method": "Existing BA0 selector with real_build_budget_remaining=0, then existing standalone exact-image smoke; no new build or pull",
+    "free_space_after_failed_attempt_kib": 3740424,
+    "free_space_before_smoke_kib": 3740620,
+    "capacity_preflight_kib_minimum": 2700000,
+    "independent_pre_smoke_review": "migration_review: 0 BLOCKER; exact identity, 22 layer hashes, 2.051GiB expanded tar vs 3.567GiB available, existing bounded smoke constraints verified",
+    "reuse_receipt": {
+      "artifact_identity": "sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4",
+      "build_invocations": 0,
+      "build_source_head": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+      "candidate_image_ids": [
+        "sha256:442701a3bde3de5ff8aee7dfc9f7f461df1819b050c417f38ecd4ff226e33775"
+      ],
+      "contract": "ba0-app-build-receipt.v1",
+      "dependency_lock_sha256": "4eba510179e957a039c757c702d0702a12a8435724d46e393da33d33006393b2",
+      "docker_context": "colima",
+      "image_id": "sha256:442701a3bde3de5ff8aee7dfc9f7f461df1819b050c417f38ecd4ff226e33775",
+      "integration_head": "b64923c465facbb074555a7f5825ac64bf1ace1f",
+      "labels": {
+        "io.insurancekb.app.artifact-identity": "sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4",
+        "io.insurancekb.app.build-source-head": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+        "io.insurancekb.app.dependency-lock-sha256": "4eba510179e957a039c757c702d0702a12a8435724d46e393da33d33006393b2",
+        "io.insurancekb.app.manifest-sha256": "4a535bf4c310f965bca4435b301f08b9d0216beb62ea823cb95e9e126faed850",
+        "io.insurancekb.app.platform": "linux/arm64",
+        "io.insurancekb.app.target": "runtime"
+      },
+      "manifest_sha256": "4a535bf4c310f965bca4435b301f08b9d0216beb62ea823cb95e9e126faed850",
+      "platform": "linux/arm64",
+      "selector": "REUSE",
+      "status": "PASS",
+      "target": "runtime"
+    },
+    "smoke_receipt": {
+      "artifact_identity": "sha256:12d583e5de9f3ad36cad01490250962a18c4d5197b9da0494fa874747c5a1da4",
+      "build_invocations": 0,
+      "build_source_head": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+      "cleanup": "PASS",
+      "contract": "ba0-container-artifact-smoke.v1",
+      "docker_context": "colima",
+      "effects": {
+        "business_db": 0,
+        "dependencies": 0,
+        "g2": 0,
+        "networks": 0,
+        "production_8081": 0,
+        "production_active": 0,
+        "provider_model": 0,
+        "published_ports": 0,
+        "volumes": 0
+      },
+      "image_id": "sha256:442701a3bde3de5ff8aee7dfc9f7f461df1819b050c417f38ecd4ff226e33775",
+      "integration_head": "b64923c465facbb074555a7f5825ac64bf1ace1f",
+      "project": "insurancekb-ba0-d3-91e01795061a22a4",
+      "pull_invocations": 0,
+      "runtime_image_id": "sha256:442701a3bde3de5ff8aee7dfc9f7f461df1819b050c417f38ecd4ff226e33775",
+      "scope": "CONTAINER_ARTIFACT_SMOKE",
+      "status": "PASS"
+    },
+    "post_smoke": {
+      "observed_at": "2026-09-27T16:46:10.805469+00:00",
+      "container_count": 8,
+      "container_ids_start_times_pids_unchanged": true,
+      "services": [
+        {
+          "name": "g3-platform-product-product-worker-1",
+          "state": "running",
+          "status": "Up 10 hours (healthy)"
+        },
+        {
+          "name": "g3-platform-product-product-api-1",
+          "state": "running",
+          "status": "Up 10 hours (healthy)"
+        },
+        {
+          "name": "weknora-g3-830-release-app-issuer-closeout-01",
+          "state": "running",
+          "status": "Up 10 hours"
+        },
+        {
+          "name": "weknora-g3-830-docreader",
+          "state": "running",
+          "status": "Up 3 days"
+        },
+        {
+          "name": "weknora-g3-830-release-ui-bounded-read-01",
+          "state": "running",
+          "status": "Up 5 days"
+        },
+        {
+          "name": "weknora-g3-830-redis",
+          "state": "running",
+          "status": "Up 5 days"
+        },
+        {
+          "name": "weknora-g3-830-postgres-recovery-02",
+          "state": "running",
+          "status": "Up 5 days"
+        },
+        {
+          "name": "WeKnora-redis",
+          "state": "running",
+          "status": "Up 5 days (healthy)"
+        }
+      ],
+      "disk_after_smoke": "Filesystem     1024-blocks      Used Available Capacity Mounted on\n/dev/vdb1        112946468 110298068   1583464      99% /var/lib/docker\n",
+      "mirrors": null
+    },
+    "space_recovery_observation": "Available space recovered after failed build without manual cleanup; exact internal garbage-collection/temporary-release mechanism was not instrumented."
+  },
+  "effects": {
+    "new_service_deployments": 0,
+    "database_migrations": 0,
+    "provider_calls": 0,
+    "manual_image_container_volume_cache_cleanup": 0,
+    "daemon_or_existing_service_restarts": 0,
+    "temporary_isolated_smoke_containers": 1,
+    "smoke_self_cleanup": "PASS"
+  },
+  "limitations": [
+    "Original fifth build remains exit1/INCOMPLETE; separate zero-build REUSE and artifact smoke PASS do not rewrite it.",
+    "Smoke overrides entrypoint and proves container artifacts, not App HTTP/business health.",
+    "UI/DocReader upgraded images, migration, deployment and upgraded business acceptance NOT RUN.",
+    "GitHub snapshot b64923 has seven known blocker groups; not repaired here.",
+    "Post-smoke Colima space is 1583464KiB; no further builds are authorized or attempted."
+  ],
+  "raw_evidence": [
+    {
+      "path": "/private/tmp/upg-app-d2-recovery-05-build.log",
+      "sha256": "7288f790b8593bb0c392c9588fabeb9ada750fe8f891c218230eab39d4f423be"
+    },
+    {
+      "path": "/private/tmp/upg-app-d2-recovery-05-progress.log",
+      "sha256": "3749b55c3768798476c96a0f043e36a6fabe2b2dfc19b4ec5fbc76724db6a55f"
+    },
+    {
+      "path": "/private/tmp/upg-app-d2-recovery-05-receipt.json",
+      "sha256": "afee9941c0231c2ec19b51e67ab8a704fcd01cfb513b722fdf65fbb3e3af7a00"
+    },
+    {
+      "path": "/private/tmp/upg-app-d2-recovery-05-reuse.json",
+      "sha256": "f736f6d9d66ece5428694f70cf206ac16ff26cb520716aafb4ed6a17e5c4fb24"
+    },
+    {
+      "path": "/private/tmp/upg-app-d3-recovery-05-smoke.json",
+      "sha256": "73fd1c03658687653ca8fccca5ef7f2403c087360b116af9c75fb2eed269828c"
+    },
+    {
+      "path": "/private/tmp/upg5-layer-checksums.txt",
+      "sha256": "c59b4bd08eff5326988a95e6e4a52f747c801f993bdedeb981af09abfbda7159"
+    },
+    {
+      "path": "/private/tmp/upg5-layer-expanded-sizes.txt",
+      "sha256": "5985ea167d3a1447ab3700cef33ab959e72c5acefa51db1be86eb980b8e5c316"
+    },
+    {
+      "path": "/private/tmp/upg5-containers-before.txt",
+      "sha256": "d4330ab82ca0960e8493921dec224eb1e9298e0d1197d20a004050f33ba1008b"
+    },
+    {
+      "path": "/private/tmp/upg5-containers-post-smoke.txt",
+      "sha256": "d4330ab82ca0960e8493921dec224eb1e9298e0d1197d20a004050f33ba1008b"
+    },
+    {
+      "path": "/private/tmp/upg5-post-smoke.json",
+      "sha256": "3dc10f2a6e6485d1bac15392dbd461459d88a2ab560a8a946657bb98b37d1755"
+    }
+  ]
+}

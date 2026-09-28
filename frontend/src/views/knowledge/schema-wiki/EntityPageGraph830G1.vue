@@ -374,27 +374,27 @@ watch(() => route.fullPath, load, { immediate: true })
 .entity-page-graph__navigation { overflow: auto; padding: 24px 16px; border-right: 1px solid var(--td-component-border); }
 .entity-page-graph__entity { display: grid; gap: 6px; margin: 0 8px 20px; }
 .entity-page-graph__entity span, .entity-page-graph__entity small { color: var(--td-text-color-secondary); }
-.entity-page-graph__navigation a { display: block; padding: 8px; border-radius: 6px; color: inherit; text-decoration: none; }
+.entity-page-graph__navigation a { display: block; padding: 8px; border-radius: var(--app-radius-sm); color: inherit; text-decoration: none; }
 .entity-page-graph__navigation a.active { background: var(--td-brand-color-light); color: var(--td-brand-color); }
 .entity-page-graph__navigation section > a { margin-top: 8px; font-weight: 600; }
 .entity-page-graph__navigation ul { margin: 2px 0 8px; padding-left: 16px; list-style: none; }
 .entity-page-graph__navigation li span, .entity-page-graph__navigation li code { display: block; }
-.entity-page-graph__navigation li code { margin-top: 2px; color: var(--td-text-color-placeholder); font-size: 11px; }
+.entity-page-graph__navigation li code { margin-top: 2px; color: var(--td-text-color-placeholder); font-size: var(--app-text-xs); }
 .entity-page-graph__content { min-width: 0; padding: 40px; overflow: auto; }
 .entity-page-graph__content header { padding-bottom: 24px; border-bottom: 1px solid var(--td-component-border); }
 .entity-page-graph__content h1 { margin: 6px 0 8px; }
-.entity-page-graph__eyebrow { margin: 0; color: var(--td-text-color-secondary); font-size: 12px; }
+.entity-page-graph__eyebrow { margin: 0; color: var(--td-text-color-secondary); font-size: var(--app-text-sm); }
 .entity-page-graph__overview dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 24px; }
-.entity-page-graph__overview dl div { padding: 16px; border-radius: 8px; background: var(--td-bg-color-secondarycontainer); }
+.entity-page-graph__overview dl div { padding: 16px; border-radius: var(--app-radius-md); background: var(--td-bg-color-secondarycontainer); }
 .entity-page-graph__overview dt { color: var(--td-text-color-secondary); }
 .entity-page-graph__overview dd { margin: 8px 0 0; font-weight: 600; }
 .entity-page-graph__section-page ul { display: grid; gap: 10px; padding: 0; list-style: none; }
-.entity-page-graph__section-page a { display: flex; justify-content: space-between; padding: 14px; border: 1px solid var(--td-component-border); border-radius: 8px; color: inherit; text-decoration: none; }
+.entity-page-graph__section-page a { display: flex; justify-content: space-between; padding: 14px; border: 1px solid var(--td-component-border); border-radius: var(--app-radius-md); color: inherit; text-decoration: none; }
 .entity-page-graph__field { max-width: 900px; padding-top: 24px; }
-.entity-page-graph__field-state { display: inline-flex; padding: 4px 10px; border-radius: 999px; background: var(--td-bg-color-secondarycontainer); }
+.entity-page-graph__field-state { display: inline-flex; padding: 4px 10px; border-radius: var(--app-radius-pill); background: var(--td-bg-color-secondarycontainer); }
 .entity-page-graph__field-value { margin-top: 24px; white-space: pre-wrap; line-height: 1.75; }
 .entity-page-graph__sources { margin-top: 32px; }
-.entity-page-graph__sources button, .entity-page-graph__source-options button { border: 1px solid var(--td-component-border); border-radius: 6px; padding: 6px 10px; background: transparent; cursor: pointer; }
+.entity-page-graph__sources button, .entity-page-graph__source-options button { border: 1px solid var(--td-component-border); border-radius: var(--app-radius-sm); padding: 6px 10px; background: transparent; cursor: pointer; }
 .entity-page-graph__source-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .entity-page-graph__source-options button[aria-selected='true'] { border-color: var(--td-brand-color); color: var(--td-brand-color); }
 .entity-page-graph__empty { padding: 64px 0; color: var(--td-text-color-secondary); text-align: center; }

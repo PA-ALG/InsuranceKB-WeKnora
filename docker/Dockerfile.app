@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1.7
 
 ARG BUILDER_IMAGE
+ARG BROWSERSKILL_IMAGE
+ARG RUST_IMAGE
 ARG RUNTIME_IMAGE
 ARG EXISTING_APP_RUNTIME=${RUNTIME_IMAGE}
+ARG BROWSERSKILL_VERSION
 
-FROM ${BUILDER_IMAGE} AS builder
+FROM ${BUILDER_IMAGE} AS lock-plan
 
 WORKDIR /app
 
-# Python is the only bootstrap dependency needed to turn the copied, validated
-# lock into shell data. Its source, Release files, and package version are still
-# passed from the same lock by the selector and verified before apt installs it.
 ARG DEBIAN_SNAPSHOT_BOOTSTRAP
 ARG DEBIAN_SECURITY_SNAPSHOT_BOOTSTRAP
 ARG DEBIAN_RELEASE_SHA256_BOOTSTRAP
@@ -34,8 +34,6 @@ RUN . /tmp/ba0-dependency-plan.env && \
     test "$BA0_PLATFORM_OS" = "linux" && \
     test "$BA0_PLATFORM_ARCH" = "arm64"
 
-# Reconfigure from the exact parser output. Bootstrap values are deliberately
-# not trusted as the installation dataflow after the plan exists.
 RUN . /tmp/ba0-dependency-plan.env && \
     printf 'deb [check-valid-until=no] %s bookworm main\ndeb [check-valid-until=no] %s bookworm-security main\n' "$BA0_DEBIAN_REPOSITORIES_DEBIAN_SNAPSHOT" "$BA0_DEBIAN_REPOSITORIES_DEBIAN_SECURITY_SNAPSHOT" > /etc/apt/sources.list && \
     curl -fsSL "${BA0_DEBIAN_REPOSITORIES_DEBIAN_SNAPSHOT}dists/bookworm/Release" -o /tmp/debian-Release && \
@@ -49,7 +47,83 @@ RUN . /tmp/ba0-dependency-plan.env && \
         "libsqlite3-dev=$BA0_DEBIAN_PACKAGES_LIBSQLITE3_DEV" && \
     rm -rf /var/lib/apt/lists/*
 
+
+FROM ${RUST_IMAGE} AS rust-toolchain
+
+
+FROM ${RUST_IMAGE} AS anydoc-builder
+
+WORKDIR /app
+COPY --from=lock-plan /tmp/ba0-dependency-plan.env /tmp/ba0-dependency-plan.env
+COPY scripts/build-anydoc-lib.sh scripts/build-anydoc-lib.sh
+COPY third_party/anydoc-go third_party/anydoc-go
+RUN --mount=type=cache,id=ba0-app-anydoc-cargo-registry-v1,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=ba0-app-anydoc-cargo-git-v1,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=ba0-app-anydoc-target-v1,target=/app/third_party/anydoc-go/target,sharing=locked \
+    . /tmp/ba0-dependency-plan.env && \
+    env \
+        ANYDOC_CRATE_VERSION="$BA0_DOWNLOADS_ANYDOC_VERSION" \
+        ANYDOC_CRATE_PLATFORM="$BA0_DOWNLOADS_ANYDOC_PLATFORM" \
+        ANYDOC_CRATE_ORIGIN="$BA0_DOWNLOADS_ANYDOC_ORIGIN" \
+        ANYDOC_CRATE_SHA256="$BA0_DOWNLOADS_ANYDOC_SHA256" \
+        RUSTUP_TOOLCHAIN="$BA0_TOOLCHAINS_RUST" \
+        bash scripts/build-anydoc-lib.sh
+
+
+FROM --platform=$TARGETPLATFORM ${BROWSERSKILL_IMAGE} AS browserskill
+
+WORKDIR /build
+COPY --from=lock-plan /tmp/ba0-dependency-plan.env /tmp/ba0-dependency-plan.env
+COPY --from=lock-plan /tmp/debian-Release /tmp/debian-Release
+COPY --from=lock-plan /tmp/debian-security-Release /tmp/debian-security-Release
+COPY --from=lock-plan /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY scripts/build_browserskill.sh scripts/browserskill-release.json ./scripts/
+RUN . /tmp/ba0-dependency-plan.env && \
+    printf 'deb [check-valid-until=no] %s bookworm main\ndeb [check-valid-until=no] %s bookworm-security main\n' "$BA0_DEBIAN_REPOSITORIES_DEBIAN_SNAPSHOT" "$BA0_DEBIAN_REPOSITORIES_DEBIAN_SECURITY_SNAPSHOT" > /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/debian.sources && \
+    printf '%s  %s\n' "$BA0_DEBIAN_REPOSITORIES_DEBIAN_RELEASE_SHA256" /tmp/debian-Release | sha256sum -c - && \
+    printf '%s  %s\n' "$BA0_DEBIAN_REPOSITORIES_DEBIAN_SECURITY_RELEASE_SHA256" /tmp/debian-security-Release | sha256sum -c - && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        "python3=$BA0_DEBIAN_PACKAGES_PYTHON3" \
+        "ca-certificates=$BA0_DEBIAN_PACKAGES_CA_CERTIFICATES" \
+        "curl=$BA0_DEBIAN_PACKAGES_CURL" \
+        "build-essential=$BA0_DEBIAN_PACKAGES_BUILD_ESSENTIAL" \
+        "cmake=$BA0_DEBIAN_PACKAGES_CMAKE" \
+        "pkg-config=$BA0_DEBIAN_PACKAGES_PKG_CONFIG" && \
+    rm -rf /var/lib/apt/lists/*
+COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
+COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+ARG TARGETOS
+ARG TARGETARCH
+RUN --mount=type=cache,id=ba0-app-browserskill-pnpm-v1,target=/root/.local/share/pnpm/store,sharing=locked \
+    --mount=type=cache,id=ba0-app-browserskill-cargo-registry-v1,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=ba0-app-browserskill-cargo-git-v1,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=ba0-app-browserskill-target-v1,target=/var/cache/browserskill-cargo-target,sharing=locked \
+    . /tmp/ba0-dependency-plan.env && \
+    env \
+        BROWSERSKILL_VERSION="$BA0_DOWNLOADS_BROWSERSKILL_VERSION" \
+        BROWSERSKILL_SOURCE_COMMIT="$BA0_DOWNLOADS_BROWSERSKILL_SOURCE_COMMIT" \
+        BROWSERSKILL_SOURCE_PLATFORM="$BA0_DOWNLOADS_BROWSERSKILL_PLATFORM" \
+        BROWSERSKILL_SOURCE_ORIGIN="$BA0_DOWNLOADS_BROWSERSKILL_ORIGIN" \
+        BROWSERSKILL_SOURCE_SHA256="$BA0_DOWNLOADS_BROWSERSKILL_SHA256" \
+        PNPM_VERSION="$BA0_DOWNLOADS_PNPM_VERSION" \
+        PNPM_PLATFORM="$BA0_DOWNLOADS_PNPM_PLATFORM" \
+        PNPM_ORIGIN="$BA0_DOWNLOADS_PNPM_ORIGIN" \
+        PNPM_SHA256="$BA0_DOWNLOADS_PNPM_SHA256" \
+        PNPM_STORE_DIR=/root/.local/share/pnpm/store \
+        CARGO_TARGET_DIR=/var/cache/browserskill-cargo-target \
+        RUSTUP_TOOLCHAIN="$BA0_TOOLCHAINS_RUST" \
+        bash scripts/build_browserskill.sh /opt/weknora/browserskill "${TARGETOS}/${TARGETARCH}"
+
+
+FROM lock-plan AS builder
+
 COPY go.mod go.sum ./
+COPY third_party/anydoc-go/go.mod third_party/anydoc-go/go.mod
 RUN --mount=type=cache,id=ba0-app-go-mod-v1,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=ba0-app-go-build-v1,target=/root/.cache/go-build,sharing=locked \
     go mod download
@@ -82,6 +156,11 @@ RUN --mount=type=cache,id=ba0-app-go-mod-v1,target=/go/pkg/mod,sharing=locked \
     test -s /root/.cache/go-build/.ba0-app-cache-v1
 
 COPY . .
+COPY --from=anydoc-builder /app/third_party/anydoc-go/lib/linux_arm64_gnu/libanydoc_go.a /app/third_party/anydoc-go/lib/linux_arm64_gnu/libanydoc_go.a
+
+RUN --mount=type=cache,id=ba0-app-go-mod-v1,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=ba0-app-go-build-v1,target=/root/.cache/go-build,sharing=locked \
+    bash ./scripts/copy-licenses.sh /license-bundle
 
 ARG VERSION_ARG
 ARG COMMIT_ID_ARG
@@ -95,7 +174,8 @@ RUN --mount=type=cache,id=ba0-app-go-mod-v1,target=/go/pkg/mod,sharing=locked \
     test -n "$SOURCE_DATE_EPOCH" && \
     GO_VERSION="$(go version)" && \
     BUILD_TIME="$(date -u -d "@$SOURCE_DATE_EPOCH" '+%Y-%m-%d %H:%M:%S UTC')" && \
-    VERSION="$VERSION" COMMIT_ID="$COMMIT_ID" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION" make build-prod
+    VERSION="$VERSION" COMMIT_ID="$COMMIT_ID" BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION" make build-prod GO_BUILD_TAGS=anydoc && \
+    go version -m /app/WeKnora | grep -F -- '-tags=anydoc'
 
 RUN --mount=type=cache,id=ba0-app-go-mod-v1,target=/go/pkg/mod,sharing=locked \
     mkdir -p /app/yanyiwu && \
@@ -106,18 +186,21 @@ FROM ${EXISTING_APP_RUNTIME} AS runtime-rebase
 COPY --from=builder --chown=1000:1000 /app/WeKnora /app/WeKnora
 COPY --from=builder --chown=1000:1000 /app/scripts/app_artifact.py /app/scripts/app_artifact.py
 
+
 FROM ${RUNTIME_IMAGE} AS runtime
 
 WORKDIR /app
+
+ARG BROWSERSKILL_VERSION
+ENV BROWSERSKILL_BINARY=/opt/weknora/browserskill/bsk \
+    BROWSERSKILL_EXTENSION_PATH=/opt/weknora/browserskill/browser-skill-weknora-${BROWSERSKILL_VERSION}.zip
+COPY --from=browserskill /opt/weknora/browserskill /opt/weknora/browserskill
 
 COPY --from=builder /tmp/ba0-dependency-plan.env /tmp/ba0-dependency-plan.env
 COPY --from=builder /tmp/debian-Release /tmp/debian-Release
 COPY --from=builder /tmp/debian-security-Release /tmp/debian-security-Release
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-# The pinned builder supplies only the TLS trust anchor and the Release files it
-# already verified. Re-verify those files from the runtime lock plan before the
-# first apt network operation, then install the complete pinned runtime set.
 RUN . /tmp/ba0-dependency-plan.env && \
     printf 'deb [check-valid-until=no] %s bookworm main\ndeb [check-valid-until=no] %s bookworm-security main\n' "$BA0_DEBIAN_REPOSITORIES_DEBIAN_SNAPSHOT" "$BA0_DEBIAN_REPOSITORIES_DEBIAN_SECURITY_SNAPSHOT" > /etc/apt/sources.list && \
     rm -f /etc/apt/sources.list.d/debian.sources && \
@@ -182,10 +265,9 @@ COPY --from=builder /app/config ./config
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/dataset/samples ./dataset/samples
-COPY --from=builder /app/skills/preloaded ./skills/preloaded
-COPY --from=builder /app/skills/preloaded ./skills/_builtin
 COPY --from=builder /root/.duckdb /home/appuser/.duckdb
 COPY --from=builder /app/WeKnora ./WeKnora
+COPY --from=builder /license-bundle/ ./
 
 RUN chmod +x ./scripts/*.sh && \
     chown -R appuser:appuser /app /home/appuser/.duckdb

@@ -8,8 +8,14 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple, NoReturn
+
+# Support the existing standalone command and package-based test imports.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.adoption_migration_policy import validate_report_preservations  # noqa: E402
 
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
@@ -368,6 +374,10 @@ def verify_thin_report(lock: SourceLock, report_path: Path) -> None:
         _fail("official migrations are not merged")
     if plugin.get("status") != "valid":
         _fail("plugin contract is not valid")
+    try:
+        validate_report_preservations(target, official, verdict)
+    except ValueError as exc:
+        raise SourceVerificationError(str(exc)) from exc
     if verdict == "manual_review_required":
         digest = hashlib.sha256(report_bytes).hexdigest()
         if digest != lock.reviewed_thin_report_sha256:

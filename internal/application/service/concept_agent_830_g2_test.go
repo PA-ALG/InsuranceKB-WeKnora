@@ -77,15 +77,15 @@ type conceptAgentTurnProviderStub830G2 struct {
 	turn   *interfaces.ConceptAgentTurn830G2
 	err    error
 	calls  int
-	scopes []interfaces.ConceptAgentWikiScope830G2
+	scopes []interfaces.ConceptAgentKnowledgeScope830G2
 }
 
 func (s *conceptAgentTurnProviderStub830G2) PinConceptAgentTurn830G2(
 	_ context.Context,
-	scopes []interfaces.ConceptAgentWikiScope830G2,
+	scopes []interfaces.ConceptAgentKnowledgeScope830G2,
 ) (*interfaces.ConceptAgentTurn830G2, error) {
 	s.calls++
-	s.scopes = append([]interfaces.ConceptAgentWikiScope830G2(nil), scopes...)
+	s.scopes = append([]interfaces.ConceptAgentKnowledgeScope830G2(nil), scopes...)
 	return s.turn, s.err
 }
 
@@ -161,8 +161,8 @@ func TestRegisterToolsPinsManagedWikiOnceAndRemovesRawFallback(t *testing.T) {
 		AllowedTools: []string{
 			agenttools.ToolWikiSearch,
 			agenttools.ToolWikiReadPage,
-			agenttools.ToolWikiReadSourceDoc,
-			agenttools.ToolKnowledgeSearch,
+			agenttools.ToolReadDocument,
+			agenttools.ToolSearchKnowledge,
 		},
 		SearchTargets: types.SearchTargets{{
 			Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "wiki-a", TenantID: 1,
@@ -171,15 +171,22 @@ func TestRegisterToolsPinsManagedWikiOnceAndRemovesRawFallback(t *testing.T) {
 
 	require.NoError(t, service.registerTools(context.Background(), registry, config, nil, nil, "session-a"))
 	require.Equal(t, 1, pinner.calls, "search and read must share one turn pin")
-	require.Equal(t, []interfaces.ConceptAgentWikiScope830G2{{WikiKBID: "wiki-a", TenantID: 1}}, pinner.scopes)
-	_, err := registry.GetTool(agenttools.ToolWikiReadSourceDoc)
+	require.Equal(
+		t,
+		[]interfaces.ConceptAgentKnowledgeScope830G2{{KnowledgeBaseID: "wiki-a", TenantID: 1}},
+		pinner.scopes,
+	)
+	_, err := registry.GetTool(agenttools.ToolReadDocument)
 	require.Error(t, err, "managed Wiki must not register a RAW source reader")
-	_, err = registry.GetTool(agenttools.ToolKnowledgeSearch)
+	_, err = registry.GetTool(agenttools.ToolSearchKnowledge)
 	require.Error(t, err, "managed Wiki must not register mutable/RAG retrieval")
 
 	search, err := registry.GetTool(agenttools.ToolWikiSearch)
 	require.NoError(t, err)
-	searchResult, err := search.Execute(context.Background(), json.RawMessage(`{"queries":["body-only release phrase"]}`))
+	searchResult, err := search.Execute(
+		context.Background(),
+		json.RawMessage(`{"queries":["body-only release phrase"]}`),
+	)
 	require.NoError(t, err)
 	require.True(t, searchResult.Success)
 	require.Contains(t, searchResult.Output, "release-a")
@@ -206,7 +213,7 @@ func TestRegisterToolsFailsClosedWhenManagedPinFails(t *testing.T) {
 	}
 	registry := agenttools.NewToolRegistry()
 	config := &types.AgentConfig{
-		AllowedTools: []string{agenttools.ToolWikiSearch, agenttools.ToolWikiReadPage, agenttools.ToolWikiReadSourceDoc},
+		AllowedTools: []string{agenttools.ToolWikiSearch, agenttools.ToolWikiReadPage, agenttools.ToolReadDocument},
 		SearchTargets: types.SearchTargets{{
 			Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "wiki-a", TenantID: 1,
 		}},
@@ -250,7 +257,7 @@ func TestRegisterToolsExcludesManagedReleaseRawKBFromGenericRetrieval(t *testing
 	}
 	registry := agenttools.NewToolRegistry()
 	config := &types.AgentConfig{
-		AllowedTools: []string{agenttools.ToolWikiSearch, agenttools.ToolKnowledgeSearch},
+		AllowedTools: []string{agenttools.ToolWikiSearch, agenttools.ToolSearchKnowledge},
 		SearchTargets: types.SearchTargets{
 			{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "wiki-a", TenantID: 1},
 			{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "raw-a", TenantID: 1},
@@ -258,7 +265,7 @@ func TestRegisterToolsExcludesManagedReleaseRawKBFromGenericRetrieval(t *testing
 	}
 
 	require.NoError(t, service.registerTools(context.Background(), registry, config, nil, nil, "session-a"))
-	_, err := registry.GetTool(agenttools.ToolKnowledgeSearch)
+	_, err := registry.GetTool(agenttools.ToolSearchKnowledge)
 	require.Error(t, err, "managed release RAW KB must not remain in generic retrieval")
 }
 
@@ -491,6 +498,6 @@ func TestConceptAgentServiceRejectsHeadActivationEpochDrift(t *testing.T) {
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 }
 
-func conceptAgentWikiScopes830G2(scope types.WikiReleaseScope) []interfaces.ConceptAgentWikiScope830G2 {
-	return []interfaces.ConceptAgentWikiScope830G2{{WikiKBID: scope.WikiKBID, TenantID: scope.TenantID}}
+func conceptAgentWikiScopes830G2(scope types.WikiReleaseScope) []interfaces.ConceptAgentKnowledgeScope830G2 {
+	return []interfaces.ConceptAgentKnowledgeScope830G2{{KnowledgeBaseID: scope.WikiKBID, TenantID: scope.TenantID}}
 }

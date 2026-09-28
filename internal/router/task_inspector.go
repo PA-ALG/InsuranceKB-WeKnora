@@ -153,10 +153,33 @@ func (a *asynqTaskInspector) CancelTasksForKnowledgeBase(
 		return matchesKnowledgeBase(taskType, payload, knowledgeBaseID, knowledgeIDSet, dataSourceIDSet)
 	})
 	logger.Infof(ctx,
-		"[TaskInspector] knowledge_base=%s cancel summary: deleted_from_queue=%d active_cancel_signaled=%d",
+		"[TaskInspector] knowledge_base=%s cancel summary: deleted_from_queue=%d"+
+			" active_cancel_signaled=%d",
 		knowledgeBaseID, deleted, cancelled,
 	)
 	return deleted, cancelled, nil
+}
+
+// matchesKnowledgeListDelete identifies a knowledge:list_delete task whose
+// batch payload covers knowledgeID. Delete tasks carry knowledge_ids (plural)
+// and are deliberately outside taskTypesForKnowledgeCancel, so they need
+// their own matcher for the housekeeping delete sweep's liveness probe.
+func matchesKnowledgeListDelete(taskType string, payload []byte, knowledgeID string) bool {
+	if taskType != types.TypeKnowledgeListDelete {
+		return false
+	}
+	var probe struct {
+		KnowledgeIDs []string `json:"knowledge_ids"`
+	}
+	if err := json.Unmarshal(payload, &probe); err != nil {
+		return false
+	}
+	for _, id := range probe.KnowledgeIDs {
+		if id == knowledgeID {
+			return true
+		}
+	}
+	return false
 }
 
 // HasQueuedTasksForKnowledge reports whether any pending / scheduled /
@@ -172,6 +195,64 @@ func (a *asynqTaskInspector) HasQueuedTasksForKnowledge(
 	}
 	matcher := func(taskType string, payload []byte) bool {
 		return matchesKnowledge(taskType, payload, knowledgeID)
+	}
+	for _, queue := range queuesScanned {
+		for _, state := range a.cancellableTaskStates() {
+			if a.queueStateHasMatch(ctx, queue, state.name, state.list, matcher) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// QueuedKnowledgeIDs scans every cancellable state of every queue once and
+// collects the knowledge IDs its tasks reference.
+func (a *asynqTaskInspector) QueuedKnowledgeIDs(_ context.Context) (map[string]struct{}, error) {
+	out := make(map[string]struct{})
+	if a == nil || a.inspector == nil {
+		return out, nil
+	}
+	for _, queue := range queuesScanned {
+		for _, state := range a.cancellableTaskStates() {
+			for page := 1; ; page++ {
+				tasks, err := state.list(queue, asynq.PageSize(listPageSize), asynq.Page(page))
+				if err != nil {
+					if isAsynqQueueNotFound(err) {
+						break
+					}
+					return nil, fmt.Errorf("list %s tasks in queue %s: %w", state.name, queue, err)
+				}
+				for _, task := range tasks {
+					if _, ok := taskTypesForKnowledgeCancel[task.Type]; !ok {
+						continue
+					}
+					var probe knowledgeIDProbe
+					if json.Unmarshal(task.Payload, &probe) == nil && probe.KnowledgeID != "" {
+						out[probe.KnowledgeID] = struct{}{}
+					}
+				}
+				if len(tasks) < listPageSize {
+					break
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+// HasQueuedDeleteTasksForKnowledge is the delete-task counterpart of
+// HasQueuedTasksForKnowledge: it matches knowledge:list_delete batch
+// payloads that still cover the knowledge ID. The housekeeping delete
+// sweep uses it to protect backlogged-but-alive deletes from recovery.
+func (a *asynqTaskInspector) HasQueuedDeleteTasksForKnowledge(
+	ctx context.Context, knowledgeID string,
+) (bool, error) {
+	if a == nil || a.inspector == nil || knowledgeID == "" {
+		return false, nil
+	}
+	matcher := func(taskType string, payload []byte) bool {
+		return matchesKnowledgeListDelete(taskType, payload, knowledgeID)
 	}
 	for _, queue := range queuesScanned {
 		for _, state := range a.cancellableTaskStates() {
@@ -625,7 +706,7 @@ func (a *asynqTaskInspector) ListRuntimeTasks(
 }
 
 func (a *asynqTaskInspector) GetRuntimeTask(
-	ctx context.Context, queue, taskID string,
+	_ context.Context, queue, taskID string,
 ) (*types.RuntimeTaskInfo, bool, error) {
 	if a == nil || a.inspector == nil {
 		return nil, false, nil
@@ -675,7 +756,7 @@ func (a *asynqTaskInspector) DeleteRuntimeTask(ctx context.Context, queue, taskI
 	return true, a.inspector.DeleteTask(queue, taskID)
 }
 
-func (a *asynqTaskInspector) ForceDeleteRuntimeTask(ctx context.Context, queue, taskID string) (bool, error) {
+func (a *asynqTaskInspector) ForceDeleteRuntimeTask(_ context.Context, queue, taskID string) (bool, error) {
 	if a == nil || a.inspector == nil {
 		return false, nil
 	}
@@ -685,7 +766,7 @@ func (a *asynqTaskInspector) ForceDeleteRuntimeTask(ctx context.Context, queue, 
 // PurgeArchivedRuntimeTasks clears the whole archived (dead-letter) set for one
 // queue. asynq's DeleteAllArchivedTasks scopes strictly to the archived list,
 // so pending/active/scheduled/retry work is never at risk.
-func (a *asynqTaskInspector) PurgeArchivedRuntimeTasks(ctx context.Context, queue string) (int, bool, error) {
+func (a *asynqTaskInspector) PurgeArchivedRuntimeTasks(_ context.Context, queue string) (int, bool, error) {
 	if a == nil || a.inspector == nil {
 		return 0, false, nil
 	}
@@ -697,7 +778,7 @@ func (a *asynqTaskInspector) PurgeArchivedRuntimeTasks(ctx context.Context, queu
 }
 
 func (a *asynqTaskInspector) WorkerServerStats(
-	ctx context.Context,
+	_ context.Context,
 ) ([]types.WorkerServerStat, bool, error) {
 	if a == nil || a.inspector == nil {
 		return nil, false, nil
@@ -867,7 +948,13 @@ func (a *asynqTaskInspector) deleteCancelledTransitions(ctx context.Context, tas
 			case asynq.TaskStatePending, asynq.TaskStateScheduled, asynq.TaskStateRetry:
 				if err := a.inspector.DeleteTask(ref.queue, ref.id); err != nil {
 					if !errors.Is(err, asynq.ErrTaskNotFound) {
-						logger.Warnf(ctx, "[TaskInspector] delete cancelled transition queue=%s id=%s: %v", ref.queue, ref.id, err)
+						logger.Warnf(
+							ctx,
+							"[TaskInspector] delete cancelled transition queue=%s id=%s: %v",
+							ref.queue,
+							ref.id,
+							err,
+						)
 						next = append(next, ref)
 					}
 					continue
@@ -938,7 +1025,15 @@ func (a *asynqTaskInspector) processQueueStateMatches(
 				continue
 			}
 			if err := action(task); err != nil {
-				logger.Warnf(ctx, "[TaskInspector] %s %s type=%s id=%s: %v", actionName, state.name, task.Type, task.ID, err)
+				logger.Warnf(
+					ctx,
+					"[TaskInspector] %s %s type=%s id=%s: %v",
+					actionName,
+					state.name,
+					task.Type,
+					task.ID,
+					err,
+				)
 				continue
 			}
 			processed++
@@ -1067,7 +1162,7 @@ type noopTaskInspector struct{}
 func NewNoopTaskInspector() interfaces.TaskInspector { return noopTaskInspector{} }
 
 func (noopTaskInspector) CancelTasksForKnowledge(
-	ctx context.Context, knowledgeID string,
+	_ context.Context, _ string,
 ) (int, int, error) {
 	return 0, 0, nil
 }
@@ -1076,7 +1171,21 @@ func (noopTaskInspector) CancelTasksForKnowledge(
 // executors never enqueue, so there is no backlog to protect against and
 // the housekeeping sweep's span/updated_at checks stay authoritative.
 func (noopTaskInspector) HasQueuedTasksForKnowledge(
-	ctx context.Context, knowledgeID string,
+	_ context.Context, _ string,
+) (bool, error) {
+	return false, nil
+}
+
+// QueuedKnowledgeIDs is empty in Lite mode: inline executors never queue.
+func (noopTaskInspector) QueuedKnowledgeIDs(context.Context) (map[string]struct{}, error) {
+	return map[string]struct{}{}, nil
+}
+
+// HasQueuedDeleteTasksForKnowledge always reports false in Lite mode:
+// deletes also run inline there, so a stale "deleting" row genuinely has
+// no task left and the delete sweep may recover it.
+func (noopTaskInspector) HasQueuedDeleteTasksForKnowledge(
+	_ context.Context, _ string,
 ) (bool, error) {
 	return false, nil
 }
@@ -1085,13 +1194,13 @@ func (noopTaskInspector) HasQueuedTasksForKnowledge(
 // asynq backend to inspect, so the runtime dashboard renders an
 // "unavailable in this deployment" state instead of an empty table.
 func (noopTaskInspector) QueueStats(
-	ctx context.Context,
+	_ context.Context,
 ) ([]types.QueueStat, bool, error) {
 	return nil, false, nil
 }
 
 func (noopTaskInspector) WorkerServerStats(
-	ctx context.Context,
+	_ context.Context,
 ) ([]types.WorkerServerStat, bool, error) {
 	return nil, false, nil
 }

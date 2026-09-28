@@ -35,7 +35,7 @@ func NewConceptAgentService830G2(
 
 func (s *ConceptAgentService830G2) PinConceptAgentTurn830G2(
 	ctx context.Context,
-	wikiScopes []interfaces.ConceptAgentWikiScope830G2,
+	wikiScopes []interfaces.ConceptAgentKnowledgeScope830G2,
 ) (*interfaces.ConceptAgentTurn830G2, error) {
 	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil ||
 		s.knowledgeBaseService == nil {
@@ -52,7 +52,7 @@ func (s *ConceptAgentService830G2) PinConceptAgentTurn830G2(
 	}
 	seen := make(map[string]uint64, len(wikiScopes))
 	for _, requested := range wikiScopes {
-		wikiKBID := strings.TrimSpace(requested.WikiKBID)
+		wikiKBID := strings.TrimSpace(requested.KnowledgeBaseID)
 		tenantID := requested.TenantID
 		if tenantID == 0 {
 			tenantID = contextTenantID
@@ -67,10 +67,18 @@ func (s *ConceptAgentService830G2) PinConceptAgentTurn830G2(
 			continue
 		}
 		seen[wikiKBID] = tenantID
+		managedSource, err := s.hasConceptReleaseCustody830G2(ctx, tenantID, wikiKBID, true)
+		if err != nil {
+			return nil, ErrWikiReleaseAccessDenied
+		}
+		if managedSource {
+			turn.ManagedSourceKBIDs = append(turn.ManagedSourceKBIDs, wikiKBID)
+			continue
+		}
 
 		head, err := s.releaseAuthority.repository.GetHeadForWikiKB(ctx, tenantID, wikiKBID)
 		if errors.Is(err, wikirepository.ErrWikiReleaseNotFound) {
-			managed, stateErr := s.hasConceptReleaseCustody830G2(ctx, tenantID, wikiKBID)
+			managed, stateErr := s.hasConceptReleaseCustody830G2(ctx, tenantID, wikiKBID, false)
 			if stateErr != nil || managed {
 				return nil, ErrWikiReleaseAccessDenied
 			}
@@ -139,11 +147,17 @@ func (s *ConceptAgentService830G2) hasConceptReleaseCustody830G2(
 	ctx context.Context,
 	tenantID uint64,
 	wikiKBID string,
+	source bool,
 ) (bool, error) {
 	if s.db == nil {
 		return false, errors.New("concept Agent release database unavailable")
 	}
+	column := "wiki_kb_id"
+	if source {
+		column = "raw_kb_id"
+	}
 	models := []any{
+		&types.WikiReleaseHead{},
 		&types.WikiReleasePreparation{},
 		&types.WikiRelease{},
 		&types.WikiReleaseReceipt{},
@@ -151,7 +165,7 @@ func (s *ConceptAgentService830G2) hasConceptReleaseCustody830G2(
 	for _, model := range models {
 		var count int64
 		if err := s.db.WithContext(ctx).Model(model).
-			Where("tenant_id = ? AND wiki_kb_id = ?", tenantID, wikiKBID).
+			Where("tenant_id = ? AND "+column+" = ?", tenantID, wikiKBID).
 			Limit(1).Count(&count).Error; err != nil {
 			return false, err
 		}

@@ -1,0 +1,876 @@
+{
+  "status": "PASS",
+  "scope": "Full uncapped local root-module lint; remote CI is a separate gate",
+  "source_commit": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83",
+  "source_tree": "e2c8f4882ff9afd6c5e73c21f1f7fc1db84f33ea",
+  "current": {
+    "status": "PASS",
+    "base_head": "2a6bd5c5ae3d66857408bd58295aae3fa0620c81",
+    "product_merge_base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+    "plan_sha256": "aeba2ebd8e44c5f397ebb9640275cbd19f7f54b5c3cc129eaa75614598013d13",
+    "historical_candidate_count": 964,
+    "candidate_count_is_fresh_scan": false,
+    "nonservice": {
+      "owner_paths": 191,
+      "changed_paths": 185,
+      "patch_sha256": "692e7cf67cbdb7ca83a762e43b058077eec212e4d713b44a3ca34623a8d6c03e",
+      "gin_error_return_objects_explicitly_ignored": 118,
+      "builder_calls": 7,
+      "readonly_response_closes": 5,
+      "checked_fixture_writes": 2,
+      "unused_bindings_proven_zero_refs": 108,
+      "previous_broad_gin_edits_reverted": 683,
+      "extra_message_builder_edits_reverted": 6
+    },
+    "service": {
+      "owned_paths_including_fixtures": 94,
+      "lint_paths": 91,
+      "patch_sha256": "72034dfe437ee010fa1f0deb3c5e6d414d5e3ef6f51b2db284441f011c31c475",
+      "builder_calls": 4,
+      "unused_bindings_proven_zero_refs": 12,
+      "targeted_fixture_tests": "PASS3.103s"
+    },
+    "mechanical_proof": {
+      "preserved": [
+        "evaluated string bytes and concatenation order",
+        "raw struct tag bytes",
+        "call ellipsis presence",
+        "type alias assignment presence",
+        "compiler directive comments"
+      ],
+      "nonservice_format": {
+        "equal": 188,
+        "total": 189,
+        "exception": "One adjacent explicit constant declaration group without iota; separate manual review"
+      },
+      "nonservice_residual_wrap": {
+        "equal": 189,
+        "total": 189
+      },
+      "service_format": {
+        "equal": 91,
+        "total": 91,
+        "explicit_grouping_normalizations": "Three import groups and one adjacent var group; original snapshots retained"
+      }
+    },
+    "policy": "No global exclusions, lint baseline changes, reduced test assertions or skipped test selection; indivisible tag exceptions require exact-line justification and independent review",
+    "build_provider_deployment_actions": 0,
+    "complete_scan_pass3": {
+      "exit": 1,
+      "elapsed_seconds": 312.229,
+      "output_truncation_disabled": true,
+      "merge_base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+      "findings": 112,
+      "report_sha256": "e5133ef52ccde0e18a0fbc97343c761853e5793d875ad21c729cca11fecb7b8e",
+      "status": "BLOCKED",
+      "categories": {
+        "errcheck": 11,
+        "gofmt": 3,
+        "gofumpt": 6,
+        "lll": 42,
+        "revive": 44,
+        "staticcheck": 6
+      }
+    },
+    "scan_preflight_failures": [
+      {
+        "attempt": "pass1",
+        "exit": 3,
+        "reason": "runner selected Go1.25 instead of already cached required Go1.26; corrected explicit toolchain, no dependency download"
+      },
+      {
+        "attempt": "pass2",
+        "exit": -15,
+        "seconds": 61.045,
+        "reason": "Root stopped this check after writer identified two fixture helper references to unavailable testing.T; corrected to existing controlled panic(err) helper convention before pass3"
+      }
+    ],
+    "final_nonservice_checkpoint": {
+      "owned_paths": 192,
+      "diff_sha256": "6acae5454eebd10fdfb7901985bfb331dd87da690d12ac549ab0804c605b615e",
+      "incremental_sha256": "ed4a3afd367f5ad135d06cd060668248d4182eb8129243d42b9eaaea7eabe7cb",
+      "fresh_findings_addressed": 100,
+      "new_exact_tag_exceptions": 19,
+      "all_192_field_tag_literal_bytes_unchanged": true,
+      "fresh_gin_explicit_discard": 8,
+      "previous_gin_explicit_discard": 118,
+      "fresh_fixture_write_encode_checks": 3,
+      "fresh_QF1012_exact_builder_calls": 2,
+      "fresh_regexp_literals_exact_bytes": 2,
+      "gofmt_gofumpt_diff_exit": 0,
+      "gofmt_gofumpt_diff_bytes": 0,
+      "review_blockers": 0,
+      "final_patch_sha256": "edbfb3d9832e33e5365d5a80d87c3956cf1658063a196e1350f65c58c434a3b8",
+      "last_incremental_sha256": "5bafaee31c0f78913fa09150d41647749aa5ad685e69ab95fb47b09c95aa9b53",
+      "last_fix": "Only Go field spelling KnowledgeIds→KnowledgeIDs in declaration and sole caller; JSON knowledge_ids exact bytes unchanged"
+    },
+    "final_service_checkpoint": {
+      "paths": 95,
+      "patch_sha256": "b9bda5e3551f20e79f1de0b828bbf243c92ae123f3283c742c9143939293aef7",
+      "incremental_sha256": "bac6d277a65ae1ead384dc72bfca903a582acd4c7126107a06281c14416a1e87",
+      "unused_bindings": 14,
+      "additional_builder_calls": 1,
+      "new_share_permission": "Unconditionally viewer before/after; remove overwritten parameter only",
+      "review_blockers": 0
+    },
+    "exact_tag_line_exemptions": [
+      {
+        "path": "internal/agent/tools/shell_exec.go",
+        "field": "Stdin",
+        "tag_sha256": "0115bc6d5c52ac97c417a74bd5f5e4a97e6e118a476d7240b046357df15af06b",
+        "minimal_field_declaration_width": 219,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/shell_exec.go",
+        "field": "Command",
+        "tag_sha256": "8dec0ce7079bbb5a398fc4641fcb28fe13d2b5e54a4867938d7c7481f0663131",
+        "minimal_field_declaration_width": 137,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/shell_exec.go",
+        "field": "TimeoutSec",
+        "tag_sha256": "020e3a23546238a73d0b07097b7e7838ee46af070127f6246ae1081b071b9a2e",
+        "minimal_field_declaration_width": 128,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/shell_exec.go",
+        "field": "MaxOutputBytes",
+        "tag_sha256": "52be9f8707922f1c124ff12dd9030cf64a63039d9a8d57fa11157e689ef0254a",
+        "minimal_field_declaration_width": 247,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/shell_exec.go",
+        "field": "MaxStderrBytes",
+        "tag_sha256": "a8e9e0a1de19be8b7b079c83243de53cfa93437a4d0a8c4e968ab11b043ce9a4",
+        "minimal_field_declaration_width": 147,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/shell_exec.go",
+        "field": "Env",
+        "tag_sha256": "9bdbfd3d2941af6f6199ed79095d317a90f5fcfe5a6a5d847f671baee05b3efb",
+        "minimal_field_declaration_width": 169,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/skill_file.go",
+        "field": "Path",
+        "tag_sha256": "9778d5ac22802569b3a059f8183fb5d44b0fe1dc547b7044edd42bd6f4d424c9",
+        "minimal_field_declaration_width": 154,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/skill_file.go",
+        "field": "Content",
+        "tag_sha256": "671720236b6567d4519fcfe5811c0ffd2313a993820a986935a1fc9ced78813c",
+        "minimal_field_declaration_width": 166,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/skill_file.go",
+        "field": "Path",
+        "tag_sha256": "06c0b38040c0a2397636dfba84ad4978725040811620df657c1dbf63ef7b062f",
+        "minimal_field_declaration_width": 157,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/skill_file.go",
+        "field": "OldString",
+        "tag_sha256": "6d6f14c6344d002ebd178dbfe26651dc97d1ca3312593faca614dafae8fbc785",
+        "minimal_field_declaration_width": 157,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/agent/tools/skill_file.go",
+        "field": "ReplaceAll",
+        "tag_sha256": "84c321e52958d081806f28d14df3d60b760167961b9a5beac1044fbcbdfb20b1",
+        "minimal_field_declaration_width": 154,
+        "reason": "JSON Schema reflection consumes this exact tool description; splitting the tag into an expression is illegal Go, and inserting newlines changes the schema contract."
+      },
+      {
+        "path": "internal/types/mcp.go",
+        "field": "ServiceID",
+        "tag_sha256": "c67a7ff4b94d8c4e7d843b9043d0687bf3a3a6dd5b5b894a226297bea9a69982",
+        "minimal_field_declaration_width": 136,
+        "reason": "GORM reflection consumes column constraints and composite index names/priorities; the tag must stay a single Go string literal with unchanged bytes."
+      },
+      {
+        "path": "internal/types/mcp.go",
+        "field": "ToolName",
+        "tag_sha256": "ede37239219609fc3a66c8c63eb6e1b9e934b4665c9e08622042f4f4f9112487",
+        "minimal_field_declaration_width": 130,
+        "reason": "GORM reflection consumes column constraints and composite index names/priorities; the tag must stay a single Go string literal with unchanged bytes."
+      },
+      {
+        "path": "internal/types/memory.go",
+        "field": "SubjectID",
+        "tag_sha256": "a08ba55e407e6ec26f54b66cb147fab349a4439e9e29d92d4b27773fd7aac4b8",
+        "minimal_field_declaration_width": 123,
+        "reason": "GORM reflection consumes column constraints and composite index names/priorities; the tag must stay a single Go string literal with unchanged bytes."
+      },
+      {
+        "path": "internal/types/memory.go",
+        "field": "NormalizedKey",
+        "tag_sha256": "cb44b01a5dcf49d0f0f34dce616d346d98e2383ad533cae82175db3130244615",
+        "minimal_field_declaration_width": 125,
+        "reason": "GORM reflection consumes column constraints and composite index names/priorities; the tag must stay a single Go string literal with unchanged bytes."
+      },
+      {
+        "path": "internal/types/memory.go",
+        "field": "KnowledgeID",
+        "tag_sha256": "453890251be9b70f878c747d872cfb46a2ffde3fc08c218056297a53996f7e0c",
+        "minimal_field_declaration_width": 123,
+        "reason": "GORM reflection consumes column constraints and composite index names/priorities; the tag must stay a single Go string literal with unchanged bytes."
+      },
+      {
+        "path": "internal/types/tenant_env_vars.go",
+        "field": "TenantID",
+        "tag_sha256": "ad3da3928f13c0cb22c38aae1966e25e5c3b8f145a6b91b5149a1474c825cd9f",
+        "minimal_field_declaration_width": 148,
+        "reason": "GORM reflection consumes column constraints and composite index names/priorities; the tag must stay a single Go string literal with unchanged bytes."
+      },
+      {
+        "path": "internal/types/tenant_env_vars.go",
+        "field": "SandboxConfigID",
+        "tag_sha256": "d4c90562bf0546c8d9d40ead941b906fa5441660e9922d95a1232db1c176bf93",
+        "minimal_field_declaration_width": 141,
+        "reason": "GORM reflection consumes column constraints and composite index names/priorities; the tag must stay a single Go string literal with unchanged bytes."
+      },
+      {
+        "path": "internal/types/tenant_env_vars.go",
+        "field": "SkillID",
+        "tag_sha256": "aa0272fc907cf1dfe22d785ba135b8469138dab8bccd3a7701cf7669ad8fa222",
+        "minimal_field_declaration_width": 132,
+        "reason": "GORM reflection consumes column constraints and composite index names/priorities; the tag must stay a single Go string literal with unchanged bytes."
+      }
+    ],
+    "exemption_review": "0 BLOCKER; all19 reported by fresh complete scan, tag literal bytes kept, only lll on those exact declarations; no global rule relaxation",
+    "api_documentation_changes": "Swagger descriptions preserve word order with parser-supported line breaks; Param changes only unquoted alignment spaces; field constraints and quoted descriptions unchanged",
+    "complete_scan_pass4": {
+      "exit": 1,
+      "elapsed_seconds": 227.837,
+      "output_truncation_disabled": true,
+      "merge_base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+      "findings": 1,
+      "report_sha256": "65bdc24cec5d40b582849cac87ac562ef25ac4dc08d4d6e89902150741ed5b5a",
+      "status": "BLOCKED",
+      "remaining": "One Go field spelling KnowledgeIds, declaration and sole caller in existing handler/session owner paths; JSON knowledge_ids unchanged"
+    },
+    "complete_scan_pass5": {
+      "exit": 0,
+      "elapsed_seconds": 34.894,
+      "output_truncation_disabled": true,
+      "merge_base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+      "findings": 0,
+      "report_sha256": "8b6b3084755ff46197bdc908dac1a11b5c2d7509fcb50da05b78e6b28b3e2b87",
+      "status": "PASS"
+    },
+    "local_lint_is_not_remote_ci": true,
+    "affected_tests": "PASS reviewed composite coverage: initial full attempt preserved, all48failure events and changed-test/security cases passed in265-event recovery, plus214nonservice focused passes. No claim that initial full attempt passed.",
+    "complete_scan_pass6": {
+      "exit": 0,
+      "elapsed_seconds": 57.981,
+      "output_truncation_disabled": true,
+      "merge_base": "8ccc2ac942df7572499ac7b25e14587c594918db",
+      "findings": 0,
+      "report_sha256": "8b6b3084755ff46197bdc908dac1a11b5c2d7509fcb50da05b78e6b28b3e2b87",
+      "status": "PASS"
+    },
+    "final_code_review": {
+      "blockers": 0,
+      "paths": 290,
+      "patch_sha256": "ab06aea9686ab4f276695ed2a39326fb908cc1c599a2f7a5ac624c92ccfb048a",
+      "tree": "e2c8f4882ff9afd6c5e73c21f1f7fc1db84f33ea"
+    }
+  },
+  "historical_bounded_closure": {
+    "source_commit": "3507e8fcbd996971d047d1ec914a847f4557b9de",
+    "final_diff_sha256": "33f0388bab3690e2405b8ced71516f983c900b44c7ecb84450bdb9784339fa86",
+    "files": 96,
+    "full_lint_command": "env GOMAXPROCS=2 GOCACHE=/tmp/weknora-082-go-cache GOLANGCI_LINT_CACHE=/tmp/upg-ci-closure-20260928/golangci-cache /tmp/upg-ci-closure-20260928/golangci-lint-2.12.2-darwin-arm64/golangci-lint run --concurrency=2 --timeout=8m --max-issues-per-linter=0 --max-same-issues=0 --new-from-merge-base=8ccc2ac942df7572499ac7b25e14587c594918db",
+    "full_lint_exit_code": 4,
+    "checks": [
+      {
+        "log": "root-lint-affected-tests.log",
+        "sha256": "77d85f2fe4d7aaac83c74670f070a1842ed4e55bdbc33175d8f607f18ae0d647",
+        "status": "BLOCKED",
+        "detail": "skills/tools/approval/core/drive PASS; types150s package timeout; sandbox public DNS test failed because reserved address; wiki helper compile error later fixed",
+        "observed_result": "FAIL"
+      },
+      {
+        "log": "root-lint-compile-focused.log",
+        "sha256": "0b9eb903d16c5c4c14f03399053bcfa0033340b612e9f04326b33e89cce2b8d5",
+        "status": "BLOCKED",
+        "detail": "all four packages compiled; service added NotSame assertion failed then removed; repository no matchedtests; chat_pipeline PASS",
+        "observed_result": "FAIL"
+      },
+      {
+        "log": "root-lint-wiki-tests.log",
+        "sha256": "030a3a8566ecc4becbe5ab5d43589c7ad52f913c481604ee93065b068e616ffb",
+        "status": "BLOCKED",
+        "detail": "only summary log test failed under inherited LOG_FORMAT=json; literal output",
+        "observed_result": "FAIL"
+      },
+      {
+        "log": "root-lint-wiki-baseline-3507.log",
+        "sha256": "ed701af0f2b028366c0832ac9cf3ff4f997fd68d6e37aaf7cd722cb651dc6873",
+        "status": "BLOCKED",
+        "detail": "same single summary log failure reproduced in unchanged3507 source",
+        "observed_result": "FAIL"
+      },
+      {
+        "log": "root-lint-focused-final.log",
+        "sha256": "c80ccc9a3bc463b7d6a4e840784756bcc394f86360fe7ffb5bcc2fca231d794a",
+        "status": "PASS",
+        "detail": "default logger format: wiki FetchAll6.804s/serviceProcessChunks+ArtifactSessionSource6.522s/chat_pipelineMemoryRecall3.110s"
+      },
+      {
+        "log": "root-lint-mechanical-pass1.log",
+        "sha256": "542f2e5a9a6c191318ba6611c85424a4388e33bcc1e787586f455e761d36985b",
+        "status": "BLOCKED",
+        "detail": "typecheck undefinedt in testhelper, fixed",
+        "observed_result": "FAIL"
+      },
+      {
+        "log": "root-lint-mechanical-pass2.log",
+        "sha256": "3294df0005f519fc98e8601d5bf247391971f08c45b7745b01ea9a6cb2b2c138",
+        "status": "BLOCKED",
+        "detail": "exit4 configured8m timeout;973 findings;9 touched-line fixes applied afterward without full rerun"
+      }
+    ],
+    "scope_decision": "STOP at frozen96paths;279reportedpaths/234outside lane need revisedrootplan",
+    "known_findings_snapshot": 973,
+    "snapshot_findings_on_lines_unchanged_by_lane": 964,
+    "delta9_paths": [
+      "internal/agent/approval/gate_test.go",
+      "internal/agent/grounding_prompt_test.go",
+      "internal/agent/skills/shell_staging.go",
+      "internal/container/engine_factory.go",
+      "internal/datasource/connector/feishu/wiki/connector_golden_test.go",
+      "internal/handler/session/artifact_download.go",
+      "internal/types/tenant_env_vars.go"
+    ],
+    "provider_calls": 0,
+    "docker_actions": 0,
+    "git_commit_push": 0,
+    "narrow_exceptions": [
+      "exact grpc.WithTimeout SA1019 line: pinnedMilvus2.6.4 uses supportedDialContext",
+      "exact MaxEntries structtag lll: same literal bytes required byreflection"
+    ],
+    "private_evidence_exclusion": "No inherited environment values included",
+    "log_observed_window_seconds": 568.646,
+    "configured_timeout_seconds": 480,
+    "status": "BLOCKED",
+    "meaning": "Bounded code correction reviewed; full lint remains failing/incomplete, no runtime deployment",
+    "preliminary_review": {
+      "blockers": 0,
+      "paths": 96,
+      "diff_sha256": "85e3e52480f8333c9b97b3ddf40ece23aad591ca0d083087f384fc7057ef7933"
+    },
+    "final_delta_review": {
+      "status": "PASS",
+      "blockers": 0,
+      "delta_paths": 7,
+      "delta_sha256": "db08546eb4df9bf4c4162697a1407b6358dfbab4bf360603c2a2a040900ee6d9",
+      "mechanical_RED_exemption_confirmed": true
+    },
+    "string_value_proof": [
+      {
+        "after_sha256": "da08bea7af828abd6266ce47e73f956504d8cd56ac48d9bab09c2d4c18170a9b",
+        "before_sha256": "da08bea7af828abd6266ce47e73f956504d8cd56ac48d9bab09c2d4c18170a9b",
+        "identical": true,
+        "literal_count": 16,
+        "path": "internal/agent/prompts_wiki.go"
+      },
+      {
+        "after_sha256": "f23982a2e242de07ca105d58aab4549a436f4fe7b0fc96901858ac586bf5091b",
+        "before_sha256": "f23982a2e242de07ca105d58aab4549a436f4fe7b0fc96901858ac586bf5091b",
+        "identical": true,
+        "literal_count": 164,
+        "path": "internal/agent/observe.go"
+      },
+      {
+        "after_sha256": "7e1d4246025cf8395fb2fd3e6724852b52812376dcadf9a1a642317bf5e70055",
+        "before_sha256": "7e1d4246025cf8395fb2fd3e6724852b52812376dcadf9a1a642317bf5e70055",
+        "identical": true,
+        "literal_count": 90,
+        "path": "internal/agent/tools/definitions.go"
+      },
+      {
+        "after_sha256": "207bdf07f7198b346e613e463fddebd48b0e16a5580226845a6ffb2b08eff84d",
+        "before_sha256": "207bdf07f7198b346e613e463fddebd48b0e16a5580226845a6ffb2b08eff84d",
+        "identical": true,
+        "literal_count": 57,
+        "path": "internal/agent/tools/read_file.go"
+      },
+      {
+        "after_sha256": "8bef175c0cb0a95ab24b030f51ecc79e2327aec55ecc59a2c671372cad8d6b68",
+        "before_sha256": "8bef175c0cb0a95ab24b030f51ecc79e2327aec55ecc59a2c671372cad8d6b68",
+        "identical": true,
+        "literal_count": 75,
+        "path": "internal/agent/tools/sandbox_edit.go"
+      },
+      {
+        "after_sha256": "43bd0b07cd21ae284226a157723265ebf2d5aec2e0b0a0cc97c0075d12a73057",
+        "before_sha256": "43bd0b07cd21ae284226a157723265ebf2d5aec2e0b0a0cc97c0075d12a73057",
+        "identical": true,
+        "literal_count": 57,
+        "path": "internal/agent/grounding_prompt_test.go"
+      },
+      {
+        "after_sha256": "d034312736cd29b223278226a4ea7d1cf7f019056bc697b60260dafae238dc87",
+        "before_sha256": "d034312736cd29b223278226a4ea7d1cf7f019056bc697b60260dafae238dc87",
+        "identical": true,
+        "literal_count": 28,
+        "path": "internal/agent/skills/skill_frontmatter_test.go"
+      },
+      {
+        "after_sha256": "4f711730b4094c71fe35a5ed1c6c4a218b92a60d9e93b7ab4ff4984a6fabc754",
+        "before_sha256": "4f711730b4094c71fe35a5ed1c6c4a218b92a60d9e93b7ab4ff4984a6fabc754",
+        "identical": true,
+        "literal_count": 44,
+        "path": "internal/agent/tools/sandbox_ls.go"
+      },
+      {
+        "after_sha256": "846f40382a7d9095c7034f90dcc4a3f6b7d86a7c551ae7e416add6bba930bcc2",
+        "before_sha256": "846f40382a7d9095c7034f90dcc4a3f6b7d86a7c551ae7e416add6bba930bcc2",
+        "identical": true,
+        "literal_count": 53,
+        "path": "internal/agent/skills/shell_staging.go"
+      },
+      {
+        "after_sha256": "ff18869d9262361d086296394bd57848b7d7341c656b9797674899b60068142a",
+        "before_sha256": "ff18869d9262361d086296394bd57848b7d7341c656b9797674899b60068142a",
+        "identical": true,
+        "literal_count": 79,
+        "path": "internal/container/engine_factory.go"
+      },
+      {
+        "after_sha256": "de7cc46fe379bf4342451ea958fb2142f4534221c24121b0eab02e93eb1d5e00",
+        "before_sha256": "de7cc46fe379bf4342451ea958fb2142f4534221c24121b0eab02e93eb1d5e00",
+        "identical": true,
+        "literal_count": 157,
+        "path": "internal/datasource/connector/feishu/wiki/connector_golden_test.go"
+      },
+      {
+        "after_sha256": "bb9acc06eee48d7f29a973e55d0ab0ec11403679dd950884a6cf4fbf4a57a2a8",
+        "before_sha256": "bb9acc06eee48d7f29a973e55d0ab0ec11403679dd950884a6cf4fbf4a57a2a8",
+        "identical": true,
+        "literal_count": 65,
+        "path": "internal/handler/session/artifact_download.go"
+      },
+      {
+        "after_sha256": "3c27c6782c1a83a30f8de85a786ba25a1331ffd4d998bc72884e4fc9b38ec949",
+        "before_sha256": "3c27c6782c1a83a30f8de85a786ba25a1331ffd4d998bc72884e4fc9b38ec949",
+        "identical": true,
+        "literal_count": 79,
+        "path": "internal/agent/approval/gate_test.go"
+      },
+      {
+        "after_sha256": "8bce93ff7e4134312231ec25cea47baad64860df44ac1ff17f139c4832a882fb",
+        "before_sha256": "8bce93ff7e4134312231ec25cea47baad64860df44ac1ff17f139c4832a882fb",
+        "identical": true,
+        "literal_count": 38,
+        "path": "internal/types/tenant_env_vars.go"
+      }
+    ],
+    "final_files": [
+      {
+        "path": "internal/agent/act_order_test.go",
+        "sha256": "ce7bd62fb5010380dcb04f8b9fc99af23ca8dd42eb40a0ecbb5294c8e611c7aa"
+      },
+      {
+        "path": "internal/agent/approval/gate_test.go",
+        "sha256": "7cfafb277bc43bb69562721a60ada6e386ffec721098346704e12973672ed0b9"
+      },
+      {
+        "path": "internal/agent/grounding_prompt_test.go",
+        "sha256": "30788e815342bef5711c8b376ec6c3eeec62043b405bb25a0916da6eaa3845c2"
+      },
+      {
+        "path": "internal/agent/observe.go",
+        "sha256": "c6ee8cc2a7879957c60eb0435d444f4f55172937e58d34e3c8ba16b75ee212ff"
+      },
+      {
+        "path": "internal/agent/prompts_wiki.go",
+        "sha256": "c99a1f874a4489a10f5bed3c89ba4957b7953cfb2095b5cd7e3f48e5084b43c3"
+      },
+      {
+        "path": "internal/agent/skills/loader.go",
+        "sha256": "7460f32955b62940cffbb6c9bf1785ed461421962388da0fce7f29f170ad059f"
+      },
+      {
+        "path": "internal/agent/skills/manager.go",
+        "sha256": "5e86b4dcf1530feafa3e5e30bc6c3463d062cca335c5a989231db7d3fddc521c"
+      },
+      {
+        "path": "internal/agent/skills/shell_environment.go",
+        "sha256": "8074479bd2c68a5b7d73970977e8118c8af9aadb3a4bbe2973f40ec5e21ee604"
+      },
+      {
+        "path": "internal/agent/skills/shell_staging.go",
+        "sha256": "240f3a11dcc04be5bf385b3ef33cac85701d3fff3a5a20270adf4503e0d5764c"
+      },
+      {
+        "path": "internal/agent/skills/shell_staging_test.go",
+        "sha256": "8a3f9f5f289c3de4f1637d0dc40f831be3d9d7a07b46bf8e7ce3fc4686a06df4"
+      },
+      {
+        "path": "internal/agent/skills/skill_frontmatter.go",
+        "sha256": "267a8366eb89e798989a7ffac43fe6b0f9599c9f5d553d86c80845f830ebe0e4"
+      },
+      {
+        "path": "internal/agent/skills/skill_frontmatter_test.go",
+        "sha256": "39720cdbf7d174242892af827d84afaabd12ec3e0c57bdb692e77809b5b4dc4a"
+      },
+      {
+        "path": "internal/agent/terminal_event_test.go",
+        "sha256": "c3276c9d2931eefbdd11891d40b87c52cbed6453364ccdc81c97c04c63b1885c"
+      },
+      {
+        "path": "internal/agent/tools/definitions.go",
+        "sha256": "ab43e0a9946d316632c2079afe5c74185927f397c4df8d4d1016e8864f683a01"
+      },
+      {
+        "path": "internal/agent/tools/persist.go",
+        "sha256": "e9e70764f4b01e706e5b5aaf0da043292dec244ed484069392b040762e6a4621"
+      },
+      {
+        "path": "internal/agent/tools/read_file.go",
+        "sha256": "7140e5e89451717c6e33ba43763cf8efd632048486892fce2b3225d00aff3a8c"
+      },
+      {
+        "path": "internal/agent/tools/sandbox_edit.go",
+        "sha256": "fb3740c64d5911dfabfec89de37204da4fd5e0ec2ed89797fcc48497c47aa318"
+      },
+      {
+        "path": "internal/agent/tools/sandbox_ls.go",
+        "sha256": "de0e7d06f6cbeb6c68569dd120fdbec04828a77e229a9a48dd25a18a77dd2c1e"
+      },
+      {
+        "path": "internal/agent/tools/skill_resources.go",
+        "sha256": "5ef4736348cfad59cabb36fb0018fe2ead016a2241a98e4c9aa061948991aa4b"
+      },
+      {
+        "path": "internal/application/repository/chunk_revision_test.go",
+        "sha256": "573cb3747173dc068023eaab3db9d0fb7230d881ca66698f90f6cf350d3b8b6c"
+      },
+      {
+        "path": "internal/application/repository/knowledge_concurrency_upgrade_test.go",
+        "sha256": "d615111ba63a9473e7a8ba8f2383897b15e8b508acb449cb3e293a6657a8b831"
+      },
+      {
+        "path": "internal/application/repository/memory_vector.go",
+        "sha256": "ead8ff457ec86960a5a5c12aca25832f473681fbaacdfc66c6290ca5866555c5"
+      },
+      {
+        "path": "internal/application/repository/model_usage.go",
+        "sha256": "c4ed9a6c363d84fa052d3161baf86cf051456fa92db3de2a6c281c5e50afbd5d"
+      },
+      {
+        "path": "internal/application/repository/task_queue.go",
+        "sha256": "238ebc9f16677f4e93b9eb9f80b7c922d3f5ed4ec8b167eeefdb483c417da1fc"
+      },
+      {
+        "path": "internal/application/service/artifact_collector.go",
+        "sha256": "4c8e1883a0d2abcc012b92b2a2bf9bbd949428fb0114eb574663b2d7078ef594"
+      },
+      {
+        "path": "internal/application/service/chat_pipeline/memory_recall.go",
+        "sha256": "69679adecb1e62f26e86ebcfd6aa01f6f501daad10190956df5d611d7bbbbf5d"
+      },
+      {
+        "path": "internal/application/service/chat_pipeline/memory_recall_test.go",
+        "sha256": "48f9ab0796ebd79a30bd94fb9a3768463436162da8c134f6683b4bdc58d2174c"
+      },
+      {
+        "path": "internal/application/service/chat_pipeline/memory_retrieval_test.go",
+        "sha256": "648cc09201852f99f153472c2d71f3a242c701b8da9e0ccb428272c765f8e30a"
+      },
+      {
+        "path": "internal/application/service/chat_pipeline/query_understand.go",
+        "sha256": "afce0767dfe0d457513694a27a2d2ca2651424be0e55cd0836a497ced8b90b78"
+      },
+      {
+        "path": "internal/application/service/knowledge_process.go",
+        "sha256": "98497d3c6a0b4b62b7fd19595a9e4737d502a47faa9d34f05de6cf81034294e4"
+      },
+      {
+        "path": "internal/application/service/knowledge_process_embedding_failure_test.go",
+        "sha256": "6fe12a9354db79e0a38cd1763467b3a6e4d52ab8259b7c7f5a1e5f8cbabeb6cd"
+      },
+      {
+        "path": "internal/application/service/memory/extract.go",
+        "sha256": "52dfeb7d2aca396bf39df84a6a2b8e0e00c21e22e85919f15e4a80dcc16129e6"
+      },
+      {
+        "path": "internal/application/service/memory/topic_resolve.go",
+        "sha256": "e2ddde961f9fbab01c356b94ab6924dcef241daf5f04d895306cb1a922ec7505"
+      },
+      {
+        "path": "internal/application/service/resource.go",
+        "sha256": "b0b42c60839fb4cfc62166a4ff1b552c02e36da36e60fb04f68b27de3bc4e698"
+      },
+      {
+        "path": "internal/application/service/session.go",
+        "sha256": "41b53ae50fd36ffafb400b2d57fb7fbebb31d55b2c82c81461b1040554fed3cf"
+      },
+      {
+        "path": "internal/application/service/session_knowledge_qa.go",
+        "sha256": "ae6844f5eaee8b2c4cac40e659e0f4c4650d5b7543410df86534824ab505b438"
+      },
+      {
+        "path": "internal/application/service/session_sandbox_entry_test.go",
+        "sha256": "c4b791f1eaf6f2192e9d3b0991a38f34f9f1b1606fb6d67fcc15d6ab7cf46e79"
+      },
+      {
+        "path": "internal/application/service/tenant_sandbox_config.go",
+        "sha256": "b99840c54f33a8cd9f844a065b937e8f7b5e3d560a7b4ed7cbfa48290619a4e3"
+      },
+      {
+        "path": "internal/application/service/user_env_test.go",
+        "sha256": "b7b0a52a6380d2dde1ff01801955577cfce2edf3aefe223c943b376af5eb9f4c"
+      },
+      {
+        "path": "internal/application/service/wiki_ingest.go",
+        "sha256": "a41c152530cedc187bb7ffce113b07d3f236e659615aa8f8bfb28417027868f4"
+      },
+      {
+        "path": "internal/application/service/wiki_ingest_dedup_test.go",
+        "sha256": "42e48f6bb2dbff9229583a2a614de06f370d035def2790b761f3ca173dafbfb7"
+      },
+      {
+        "path": "internal/container/engine_factory.go",
+        "sha256": "557785ed339452c08a42d908648d5f3a019ce5b71279059cc5670a4de7238e0a"
+      },
+      {
+        "path": "internal/datasource/connector/feishu/core/client.go",
+        "sha256": "83cab1097a58107268fde0880052b6d500d7c3ec202cc454fdcf575ca1b03d8b"
+      },
+      {
+        "path": "internal/datasource/connector/feishu/core/helpers_test.go",
+        "sha256": "91735a542b5d6f9d7cb4220b4b3cf1365bfff3fed3f9a0ffd1841f3b859bdfbb"
+      },
+      {
+        "path": "internal/datasource/connector/feishu/core/types.go",
+        "sha256": "8d6824a417000604b07474d3a6c65fb5fa9f7cf4702796fc94e5789f38bb8961"
+      },
+      {
+        "path": "internal/datasource/connector/feishu/drive/helpers_test.go",
+        "sha256": "c71bac93bf8281dfcf265eadec9c4d9ba85d05685ff2da734bc8f004477e95e7"
+      },
+      {
+        "path": "internal/datasource/connector/feishu/wiki/connector_golden_test.go",
+        "sha256": "d11ad6cc7c20c785bbd0cdce823c14fe0e9aa566542c05fc8a53a8ee46b8b143"
+      },
+      {
+        "path": "internal/datasource/connector/feishu/wiki/connector_test.go",
+        "sha256": "522a251451317f5d0f7d616b9d3a5202303fe21cdecff44b48a37f5e98d0f3ff"
+      },
+      {
+        "path": "internal/datasource/connector/gitlab/client.go",
+        "sha256": "c309add9f6f5d47a2be67a3df9c97e711274180969ee45f71edc481b43ad72d5"
+      },
+      {
+        "path": "internal/event/event.go",
+        "sha256": "c505202efb4207fe9cf2de148bef8b95e7331e9449e2a879388529e5fe28e2ea"
+      },
+      {
+        "path": "internal/handler/knowledge.go",
+        "sha256": "7b1e1c4791035bb9aeb998fc09a6194c6f9261cab79d89231409c26b33a2d971"
+      },
+      {
+        "path": "internal/handler/session/artifact_download.go",
+        "sha256": "7b8ffd72ea9a25ef10c0f6194e03f8b33171d3d1dafced5e09cee1eca93d1241"
+      },
+      {
+        "path": "internal/handler/session/helpers.go",
+        "sha256": "664ffbd6100079b2d7762da8d6789fc8bb8fc6424f7e0c1d73d4afc3502d6491"
+      },
+      {
+        "path": "internal/im/service.go",
+        "sha256": "b37ba19ec1de6e109ac43160c2f0d7f193e54e4210e8b2d5d69af87219a6b27e"
+      },
+      {
+        "path": "internal/im/service_lifecycle_test.go",
+        "sha256": "b407c68dd033e2385bcbf70d2ce4f8ef8b76d2baa532cb95a89206757356ed04"
+      },
+      {
+        "path": "internal/im/yunzhijia/websocket_test.go",
+        "sha256": "cce68488cbfe33d9c0023cdb5134e932c52228228ed5d2f27183dc2d776b8c72"
+      },
+      {
+        "path": "internal/infrastructure/web_fetch/fetcher.go",
+        "sha256": "bb520ebd446f065a8a984828dcf5cab2f257fb99536042e534d798d93ef0314c"
+      },
+      {
+        "path": "internal/infrastructure/web_search/bocha.go",
+        "sha256": "328c6872b804a7ca9c823c80c6d41434269c1e092e294b8c2f079fb9b14f5829"
+      },
+      {
+        "path": "internal/sandbox/capabilities.go",
+        "sha256": "87fbdabf38fff8a72a7d86f872483620cbc2e43233bf1f4700e492fe53456b38"
+      },
+      {
+        "path": "internal/sandbox/config_identity.go",
+        "sha256": "82dc091f82e6c193570047fd2721f3bb03f7bafc0a7babef67712cf54affabee"
+      },
+      {
+        "path": "internal/sandbox/config_identity_test.go",
+        "sha256": "15509c83046d1c98e5678cbe64fe1e650f2d762f9a3a46b1e125dc88fcaad45b"
+      },
+      {
+        "path": "internal/sandbox/config_required.go",
+        "sha256": "f946d8fa008eccba3809f98f70eeb233f2057c400aaeba40fb344c39e1588439"
+      },
+      {
+        "path": "internal/sandbox/cube_mock_test.go",
+        "sha256": "818b25ee319ce9c7e67157b6bc0a7b27e37da728a03830ac8808ea5f1e8ff5b7"
+      },
+      {
+        "path": "internal/sandbox/cube_remote_client.go",
+        "sha256": "290585e18c9d91a3f6348e74ed5e689719f98ab0aafb8bb9da4843aa4bd40b67"
+      },
+      {
+        "path": "internal/sandbox/cube_terminal_test.go",
+        "sha256": "30350f5d917c3edcc059eaf08146f362031e86c6680cc58ebc0166411a060229"
+      },
+      {
+        "path": "internal/sandbox/e2b_exec_timeout_test.go",
+        "sha256": "125895fac7d5a6c943b09144dec0a9e9e5f29d835caaf5afbbabf708b4915510"
+      },
+      {
+        "path": "internal/sandbox/e2b_remote_client.go",
+        "sha256": "839899b1af62df627b37a1ea6157e0dc5374f926cbe177e01130098bf157236a"
+      },
+      {
+        "path": "internal/sandbox/gateway_transport.go",
+        "sha256": "24614980bc3277f97f8459bb8321f0e735c21e8358c3c9e7c72ee44b08172662"
+      },
+      {
+        "path": "internal/sandbox/manager.go",
+        "sha256": "7e8a0ac05684a440cf058fe20709ca01e09b09db40d68dce3fa23aa1a130a81f"
+      },
+      {
+        "path": "internal/sandbox/mkdir.go",
+        "sha256": "2533e77812287ebc9655d21d7fede500b68137dc1216760da2c42ca249a94a60"
+      },
+      {
+        "path": "internal/sandbox/tenant_resolver.go",
+        "sha256": "e0549f3839d25f83af3d733ff101a3f8ae8d6906ca44f87cf5def8aba62f8d57"
+      },
+      {
+        "path": "internal/sandbox/url_guard.go",
+        "sha256": "7eacb624cb53695379ba89ad80a403b1903b3f5cbab1378c2aaef5d03442137b"
+      },
+      {
+        "path": "internal/sandbox/websocket_dialer.go",
+        "sha256": "75a63cea400e76efa78f410ec718107287f8ddad6e034f7431861b430e87f14b"
+      },
+      {
+        "path": "internal/types/agent_share_source.go",
+        "sha256": "d7ae59dd2c9a34634b542f21e18b16fc7c53b70fd03ff1e49769b2db34878fcb"
+      },
+      {
+        "path": "internal/types/artifact_versions.go",
+        "sha256": "2deb92e367d9a801378b3fc8ea60455b4e0312e9bf320562be1f56c663224f65"
+      },
+      {
+        "path": "internal/types/audit_log.go",
+        "sha256": "dd16c90419569a3ee0f13d0047f4a6d334d91eb5d407be523637414175c7efb2"
+      },
+      {
+        "path": "internal/types/builtin_agent_localization_test.go",
+        "sha256": "9f75f97594f19dbf09d0337de52bf09c833f391010a8084ce3bdb407de246040"
+      },
+      {
+        "path": "internal/types/chat.go",
+        "sha256": "726f7baeac18d611e8be7ecb819b5262ebe9de2cb9265ebee13a3abfd02fffb2"
+      },
+      {
+        "path": "internal/types/chat_manage.go",
+        "sha256": "734c8c41bb1ddd3a68c0ecf91de596a4fa9983cbe01a22ea7eea0a5e608d958a"
+      },
+      {
+        "path": "internal/types/context_helpers.go",
+        "sha256": "17ddbf82bd844496f907a08618ce8bb570322802a669dedf0a4465508ad92618"
+      },
+      {
+        "path": "internal/types/context_helpers_test.go",
+        "sha256": "623b74ab2570d7a151922bffc49d60bb927cb60cb6761a87c7d4064e369b2836"
+      },
+      {
+        "path": "internal/types/interfaces/chunk.go",
+        "sha256": "2361182773e15c4f642b875fa3e27a47282ee26695f8bd82f414bada65fc7b3f"
+      },
+      {
+        "path": "internal/types/interfaces/knowledge.go",
+        "sha256": "001708668ef28adba9d0d35caf6d37c05d22af2efd4a52bf3f190f7efaabd9b8"
+      },
+      {
+        "path": "internal/types/interfaces/memory.go",
+        "sha256": "804ccbb67e4b4e203d6d62cb71e0a6357402ef6ae1fa64da9438c90ca47e6d17"
+      },
+      {
+        "path": "internal/types/interfaces/message.go",
+        "sha256": "e2a82a553c5bc4b353b54d92e481a54b2bb3d15857606d99b644228a4dee1a4f"
+      },
+      {
+        "path": "internal/types/interfaces/organization.go",
+        "sha256": "861c832eb283627f28e990b4145d862d4a0077e14ade70e3399019da754d7a66"
+      },
+      {
+        "path": "internal/types/interfaces/stream_manager.go",
+        "sha256": "789f925949a0ef4c392996a1539449820d423ef350ceebaff46509986d88bfa7"
+      },
+      {
+        "path": "internal/types/interfaces/wiki_page.go",
+        "sha256": "45280a599ca35f0566fb3c59e3117894bf0dfb792307e18c6b235d092483b5f6"
+      },
+      {
+        "path": "internal/types/memory.go",
+        "sha256": "4e37df682b174588e06f9ff8567bd8128bfa639fee6b10b300ba69c39c116934"
+      },
+      {
+        "path": "internal/types/memory_extraction.go",
+        "sha256": "fb98cbdb68e1bcc7dd8e34382a881dea05906cf97004fa0a930a96910ee1282d"
+      },
+      {
+        "path": "internal/types/tenant.go",
+        "sha256": "76a936203217d6f10c696c5c67cb462984f0e4f994e416001aae5f0085fe7b8e"
+      },
+      {
+        "path": "internal/types/tenant_env_vars.go",
+        "sha256": "6a62c73bed295988212893241d136b1a39caa02869b3d6ba59df4aea6f0b1825"
+      },
+      {
+        "path": "internal/types/tenant_sandbox_config_entity.go",
+        "sha256": "8f10b655f933c73421b0a7c91ad0f2a0aa09dcc3453009a41ff702e6a5112f75"
+      },
+      {
+        "path": "internal/types/tenant_skill.go",
+        "sha256": "cef9fd0a61defcbf950c4cd76567d29122246df6097628d0316f5a7e33c47bdd"
+      },
+      {
+        "path": "internal/types/token_usage_test.go",
+        "sha256": "f055555bc6553ed3ccd2f608cf5daad89265ffc7876f5b14e954dcf723dea4ef"
+      },
+      {
+        "path": "internal/utils/security.go",
+        "sha256": "9e0b01a4f21e68966cbd5542b22af3cdef9b8886d1d893afac4d78abc7f0300e"
+      }
+    ],
+    "repair_commit": "18c5f74c321f1b467fdf113b78564379b2ab62ff",
+    "repair_tree": "8bf6a405da349f128ea8adf436d5403b21bb3365",
+    "final_types_focused": {
+      "status": "PASS",
+      "seconds": 2.694,
+      "log_sha256": "4cfcdc73a8b4342a1ac6d9074f1a858cedac8b5b3ac0946560eb528824504175",
+      "scope": "TaskRetryMetadataContext, agent tenant source, memory key/config/permission, token usage"
+    }
+  }
+}

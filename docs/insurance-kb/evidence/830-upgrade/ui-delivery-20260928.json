@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "component": "ui",
+  "build": {
+    "component": "ui",
+    "build_source_head": "82ff324de9c43ed3e80460d1c82a9930e6298139",
+    "archive_sha256": "82d27c6ceba0657e62b90d911675d045c7fb451c727c18be82e0962b789f715c",
+    "status": "PASS",
+    "build_invocations": 1,
+    "budget_remaining": 0,
+    "started_at": "2026-09-28T03:38:04.344028+00:00",
+    "disk_before": "Filesystem     1K-blocks      Used Available Use% Mounted on\n/dev/vdb1      133589028 109467468  23056624  83% /var/lib/docker\n",
+    "command": [
+      "docker",
+      "--context",
+      "colima",
+      "build",
+      "--platform",
+      "linux/arm64",
+      "--build-arg",
+      "VITE_FRONTEND_COMMIT=82ff324de",
+      "--build-arg",
+      "NPM_REGISTRY=",
+      "--build-arg",
+      "NODE_MAX_OLD_SPACE_SIZE=4096",
+      "--label",
+      "io.insurancekb.ui.artifact-identity=sha256:e3da57003408b5cb16dce65b9baece1ad23e5c1e5799019385ab684a90884770",
+      "--label",
+      "io.insurancekb.ui.build-source-head=82ff324de9c43ed3e80460d1c82a9930e6298139",
+      "--progress",
+      "plain",
+      "--iidfile",
+      "/private/tmp/upg-resume-20260928/ui-image-id.txt",
+      "-f",
+      "frontend/Dockerfile",
+      "-t",
+      "insurancekb/ui:upgrade-082-82ff324de",
+      "frontend"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 994.644,
+    "finished_at": "2026-09-28T03:54:39.018411+00:00",
+    "image_id": "sha256:1ca8b0cce1903b59116c8ddee9cc5dc005deb6d302c260a83ba66a81cc245d56",
+    "disk_after": "Filesystem     1K-blocks      Used Available Use% Mounted on\n/dev/vdb1      133589028 110838464  21685628  84% /var/lib/docker\n",
+    "observed_build_label": "sha256:e3da57003408b5cb16dce65b9baece1ad23e5c1e5799019385ab684a90884770"
+  },
+  "artifact_smoke": {
+    "component": "ui",
+    "image_id": "sha256:1ca8b0cce1903b59116c8ddee9cc5dc005deb6d302c260a83ba66a81cc245d56",
+    "build_source_head": "82ff324de9c43ed3e80460d1c82a9930e6298139",
+    "network": "none",
+    "mounts": [],
+    "published_ports": [],
+    "provider_calls": 0,
+    "build_invocations": 0,
+    "pulls": 0,
+    "status": "PASS",
+    "container_id": "ef2e7797e6415f2ce75fc76ae9b504627744c9e6d20e20c83b63f96df8ec196c",
+    "index_sha256": "df2e476daa0ef449ddd05c91d717bf6b0876926cef819e0697d830771d8f173a",
+    "index_assets_served": 14,
+    "nginx_config": "PASS",
+    "source_commit_marker": "PASS",
+    "runtime_config": "PASS",
+    "observed_labels": {
+      "io.insurancekb.ui.artifact-identity": "sha256:e3da57003408b5cb16dce65b9baece1ad23e5c1e5799019385ab684a90884770",
+      "io.insurancekb.ui.build-source-head": "82ff324de9c43ed3e80460d1c82a9930e6298139",
+      "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+    },
+    "platform": "linux/arm64",
+    "cleanup": true
+  },
+  "identity_correction": {
+    "schema_version": 1,
+    "component": "ui",
+    "review_kind": "artifact_identity_correction",
+    "build_source_head": "82ff324de9c43ed3e80460d1c82a9930e6298139",
+    "build_source_tree": "f5304142eac4e9319f5abd62889b7fd5cd8bf19e",
+    "source_archive_sha256": "82d27c6ceba0657e62b90d911675d045c7fb451c727c18be82e0962b789f715c",
+    "source_archive_embedded_commit": "82ff324de9c43ed3e80460d1c82a9930e6298139",
+    "baseline_identity_evidence": "docs/insurance-kb/evidence/830-upgrade/ui-d2-inputs.json",
+    "canonical_identity_definition": {
+      "algorithm": "sha256",
+      "payload": "canonical",
+      "encoding": "UTF-8 JSON",
+      "json_sort_keys": true,
+      "json_separators": [
+        ",",
+        ":"
+      ],
+      "json_trailing_newline": false,
+      "input_order": "preserve existing ui-d2 canonical string-path order",
+      "note": "ensure_ascii=True and ensure_ascii=False are byte-identical because this canonical payload is ASCII-only"
+    },
+    "canonical_bytes_sha256": "9feb81303bd45548589375466c352e350d58814f737b63dfdb171b61ef37afc3",
+    "expected_artifact_identity": "sha256:9feb81303bd45548589375466c352e350d58814f737b63dfdb171b61ef37afc3",
+    "observed_build_label": "sha256:e3da57003408b5cb16dce65b9baece1ad23e5c1e5799019385ab684a90884770",
+    "observed_label_recomputed": "sha256:e3da57003408b5cb16dce65b9baece1ad23e5c1e5799019385ab684a90884770",
+    "observed_generated_canonical_sha256": "89671e570b48ec87ffe05161b0f6093352973128ff740fffec020acd13dd5fde",
+    "mismatch_reasons": [
+      "the build script hashed a wrapper containing build_source_head instead of hashing canonical bytes only",
+      "the build script changed canonical target from final to default-final-stage although the Docker invocation omitted --target and used the Dockerfile final stage",
+      "the build script added frontend/.gitignore and frontend/package.json.md5 even though frontend/.dockerignore excludes both from the build context",
+      "the build script sorted pathlib.Path objects by path components instead of preserving the existing canonical string-path order"
+    ],
+    "excluded_non_inputs": [
+      "frontend/.gitignore",
+      "frontend/package.json.md5"
+    ],
+    "input_count": 872,
+    "dockerfile_final_stage": "unnamed nginx runtime stage",
+    "docker_target_argument": null,
+    "build_label_status": "MISMATCH",
+    "canonical_exact_reuse": "BLOCKED",
+    "build_and_smoke_status_source": "/private/tmp/upg-resume-20260928/ui-build-receipt.json",
+    "status_boundary": "This correction does not infer build, smoke, deployment, provider, or business status."
+  },
+  "canonical_inputs_receipt": "ui-reviewed-inputs-20260928.json",
+  "prior_smoke_fixture_failures": [
+    {
+      "status": "BLOCKED",
+      "reason": "Smoke wrapper decoded binary font download as UTF-8; product homepage already responded; changed asset probe to discard binary output.",
+      "cleanup": true
+    },
+    {
+      "status": "BLOCKED",
+      "reason": "Smoke wrapper expected 9-character commit, but existing Vite config intentionally emits 7; corrected probe to match actual source behavior.",
+      "cleanup": true
+    }
+  ],
+  "raw_build_receipt_sha256": "93bd7c1b17cbf37ddb74cf1a24cf194ec5a3d3569386f7b5f80629a1b8011ce6",
+  "deployment": "NOT RUN",
+  "provider_probe": "NOT RUN",
+  "business": "NOT RUN"
+}
