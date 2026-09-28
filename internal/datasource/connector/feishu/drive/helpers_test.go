@@ -13,14 +13,18 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	os.Setenv("SSRF_WHITELIST", "127.0.0.1,localhost")
+	if err := os.Setenv("SSRF_WHITELIST", "127.0.0.1,localhost"); err != nil {
+		panic(err)
+	}
 	secutils.ResetSSRFWhitelistForTest()
 	os.Exit(m.Run())
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		panic(err)
+	}
 }
 
 func makeConfig(cfg *core.Config, resourceIDs []string) *types.DataSourceConfig {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -328,7 +329,7 @@ func TestWikiIdentityClaimConvergesDifferentSlugs(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { require.NoError(t, rdb.Close()) }()
 	svc := &wikiIngestService{redisClient: rdb}
 	ctx := context.Background()
 
@@ -430,7 +431,7 @@ func TestWikiIdentityClaimRedisOverridesStaleLocal(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { require.NoError(t, rdb.Close()) }()
 	svc := &wikiIngestService{redisClient: rdb}
 	ctx := context.Background()
 	batch := &WikiBatchContext{}
@@ -457,7 +458,7 @@ func TestStabilizeLLMMergeDoesNotOverrideRedisClaim(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { require.NoError(t, rdb.Close()) }()
 	svc := &wikiIngestService{redisClient: rdb}
 	ctx := context.Background()
 	batch := &WikiBatchContext{}

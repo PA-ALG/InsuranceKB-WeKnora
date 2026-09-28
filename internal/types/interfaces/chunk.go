@@ -101,7 +101,9 @@ type ChunkRepository interface {
 	CreateChunkRevision(ctx context.Context, revision *types.ChunkRevision) error
 	// SaveChunkRevision atomically snapshots the old row and applies the new
 	// row only when its revision still matches expectedRevision.
-	SaveChunkRevision(ctx context.Context, chunk *types.Chunk, revision *types.ChunkRevision, expectedRevision int) error
+	SaveChunkRevision(
+		ctx context.Context, chunk *types.Chunk, revision *types.ChunkRevision, expectedRevision int,
+	) error
 	// ListChunkRevisions returns snapshots ordered newest first.
 	ListChunkRevisions(ctx context.Context, tenantID uint64, chunkID string) ([]*types.ChunkRevision, error)
 	// GetChunkRevision returns one historical snapshot.
@@ -208,11 +210,15 @@ type ChunkService interface {
 	// This updates the chunk metadata and removes the corresponding vector index
 	DeleteGeneratedQuestion(ctx context.Context, chunkID string, questionID string) error
 	// UpdateDocumentChunk applies a revision-checked edit and synchronizes retrieval indices.
-	UpdateDocumentChunk(ctx context.Context, chunkID string, content *string, isEnabled *bool, expectedRevision *int) (*types.Chunk, error)
+	UpdateDocumentChunk(
+		ctx context.Context, chunkID string, content *string, isEnabled *bool, expectedRevision *int,
+	) (*types.Chunk, error)
 	// ListChunkRevisions lists immutable snapshots for a chunk.
 	ListChunkRevisions(ctx context.Context, chunkID string) ([]*types.ChunkRevision, error)
 	// RevertDocumentChunk restores a historical revision as a new current revision.
 	RevertDocumentChunk(ctx context.Context, chunkID string, revision int, expectedRevision *int) (*types.Chunk, error)
 	// UpsertGeneratedQuestion creates or updates a generated retrieval question.
-	UpsertGeneratedQuestion(ctx context.Context, chunkID string, questionID string, question string) (*types.GeneratedQuestion, error)
+	UpsertGeneratedQuestion(
+		ctx context.Context, chunkID string, questionID string, question string,
+	) (*types.GeneratedQuestion, error)
 }

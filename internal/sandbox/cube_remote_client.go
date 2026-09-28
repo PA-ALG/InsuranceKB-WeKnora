@@ -57,7 +57,7 @@ func NewCubeRemoteClient(config *Config) (*CubeRemoteClient, error) {
 // proxy dial rewrite for the data plane. A nil pool keeps the SDK defaults.
 func NewCubeRemoteClientWithPool(
 	config *Config,
-	pool *SandboxGatewayTransportPool,
+	pool *GatewayTransportPool,
 ) (*CubeRemoteClient, error) {
 	if config == nil {
 		return nil, errors.New("cube remote client config is required")

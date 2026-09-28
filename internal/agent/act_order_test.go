@@ -59,7 +59,9 @@ func TestParallelReadsRespectMutationBarriers(t *testing.T) {
 	}
 	response := &types.ChatResponse{}
 	for _, name := range names {
-		response.ToolCalls = append(response.ToolCalls, types.LLMToolCall{ID: name, Function: types.FunctionCall{Name: name, Arguments: `{}`}})
+		response.ToolCalls = append(response.ToolCalls, types.LLMToolCall{
+			ID: name, Function: types.FunctionCall{Name: name, Arguments: `{}`},
+		})
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

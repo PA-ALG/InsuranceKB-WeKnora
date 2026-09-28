@@ -56,7 +56,7 @@ func TestMemoryReachesTheMessagesSentToTheModel(t *testing.T) {
 	chatManage.SummaryConfig.Prompt = "你是一个助手。"
 
 	nextCalled := false
-	err := plugin.OnEvent(t.Context(), types.MEMORY_RECALL, chatManage, func() *PluginError {
+	err := plugin.OnEvent(t.Context(), types.MemoryRecall, chatManage, func() *PluginError {
 		nextCalled = true
 		return nil
 	})
@@ -81,7 +81,7 @@ func TestMemoryIsAbsentWhenNothingRecalled(t *testing.T) {
 	chatManage.Query = "随便问点什么"
 	chatManage.SummaryConfig.Prompt = "你是一个助手。"
 
-	require.Nil(t, plugin.OnEvent(t.Context(), types.MEMORY_RECALL, chatManage, func() *PluginError { return nil }))
+	require.Nil(t, plugin.OnEvent(t.Context(), types.MemoryRecall, chatManage, func() *PluginError { return nil }))
 	require.Empty(t, chatManage.MemoryPrompt)
 	require.Empty(t, chatManage.UsedMemories)
 
@@ -114,7 +114,7 @@ func TestMemoryRecallEmitsWhatTheAnswerSaw(t *testing.T) {
 	chatManage.Query = "继续上次的事"
 	chatManage.EventBus = bus.AsEventBusInterface()
 
-	require.Nil(t, plugin.OnEvent(t.Context(), types.MEMORY_RECALL, chatManage, func() *PluginError { return nil }))
+	require.Nil(t, plugin.OnEvent(t.Context(), types.MemoryRecall, chatManage, func() *PluginError { return nil }))
 
 	// The chat UI promises "these are the memories this answer saw", so the
 	// streamed list has to be the same one that was injected.
@@ -128,7 +128,7 @@ func TestMemoryRecallToleratesNoService(t *testing.T) {
 	plugin := newMemoryRecallPlugin(nil)
 	chatManage := &types.ChatManage{}
 	chatManage.SummaryConfig.Prompt = "你是一个助手。"
-	require.Nil(t, plugin.OnEvent(t.Context(), types.MEMORY_RECALL, chatManage, func() *PluginError { return nil }))
+	require.Nil(t, plugin.OnEvent(t.Context(), types.MemoryRecall, chatManage, func() *PluginError { return nil }))
 	require.Empty(t, chatManage.MemoryPrompt)
 }
 
@@ -136,5 +136,5 @@ func TestMemoryRecallStageIsRegisteredInThePipeline(t *testing.T) {
 	// A stage nobody runs is the failure mode this whole feature has had
 	// before, so assert the plugin declares the event the assembler adds.
 	plugin := newMemoryRecallPlugin(&stubMemoryService{})
-	require.Equal(t, []types.EventType{types.MEMORY_RECALL}, plugin.ActivationEvents())
+	require.Equal(t, []types.EventType{types.MemoryRecall}, plugin.ActivationEvents())
 }

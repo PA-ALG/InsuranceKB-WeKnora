@@ -351,7 +351,9 @@ type KnowledgeRepository interface {
 	FindFileBySHA256(ctx context.Context, tenantID uint64, kbID string, sha256 string) (*types.Knowledge, error)
 	// FindByMetadataKeyPrefix finds knowledge items whose metadata[key] starts
 	// with the given prefix. Used to sweep an external node's attachment sub-items.
-	FindByMetadataKeyPrefix(ctx context.Context, tenantID uint64, kbID string, key string, prefix string) ([]*types.Knowledge, error)
+	FindByMetadataKeyPrefix(
+		ctx context.Context, tenantID uint64, kbID string, key string, prefix string,
+	) ([]*types.Knowledge, error)
 	// FindByDataSourceExternalID finds a knowledge item owned by one data source
 	// and identified by the source's external item ID.
 	FindByDataSourceExternalID(

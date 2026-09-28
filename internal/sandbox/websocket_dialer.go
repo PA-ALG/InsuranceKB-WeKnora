@@ -29,7 +29,7 @@ import (
 )
 
 // WebsocketDialer dials one data-plane port of one sandbox over
-// WebSocket. Build it with SandboxGatewayTransportPool.WebsocketDialerFor.
+// WebSocket. Build it with GatewayTransportPool.WebsocketDialerFor.
 type WebsocketDialer struct {
 	// tokens is the registry of the pool that built this dialer.
 	tokens *InboundTokenRegistry
@@ -52,7 +52,7 @@ type WebsocketDialer struct {
 // reach a sandbox data-plane port. It is the ws:// sibling of RoundTripperFor
 // and MUST stay the only place that knows how: same gateway target, same
 // SafeDialControlForPolicy guard, same inbound-token registry.
-func (p *SandboxGatewayTransportPool) WebsocketDialerFor(cfg *Config) *WebsocketDialer {
+func (p *GatewayTransportPool) WebsocketDialerFor(cfg *Config) *WebsocketDialer {
 	if p == nil {
 		return nil
 	}

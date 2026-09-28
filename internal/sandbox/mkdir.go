@@ -23,11 +23,12 @@ func makeDirTree(dir string, mkdir func(path string) error) error {
 		if part == "" || part == "." {
 			continue
 		}
-		if current == "/" {
+		switch current {
+		case "/":
 			current = "/" + part
-		} else if current == "" {
+		case "":
 			current = part
-		} else {
+		default:
 			current += "/" + part
 		}
 		if err := ignoreExistingDir(mkdir(current)); err != nil {

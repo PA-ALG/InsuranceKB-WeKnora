@@ -166,12 +166,6 @@ return proposed
 	// exceed the longest plausible ingest run (LLM extraction + reduce).
 	wikiDeletedTTL = 1 * time.Hour
 
-	// wikiLLMMaxAttempts is the total attempt count (initial + retries) for
-	// every LLM call routed through generateWithTemplate. 3 was chosen to
-	// absorb transient 504/timeouts from upstream gateways without
-	// materially prolonging task runtime when the remote is genuinely down.
-	wikiLLMMaxAttempts = 3
-
 	// wikiLLMMaxTokens is the completion-token budget for every LLM call
 	// routed through generateWithTemplate. Combined wiki extraction emits a
 	// single large JSON document (entities + concepts + details). When
@@ -201,11 +195,6 @@ return proposed
 	// wikiPageModifyContinuationDone is the sentinel a model may reply with
 	// when a continuation round finds nothing left to write.
 	wikiPageModifyContinuationDone = "(complete)"
-
-	// wikiLLMBackoffBase is the base delay for the exponential backoff
-	// between retry attempts. The nth retry waits base << (n-1) — so with
-	// a 2s base we wait 2s, 4s, 8s between attempts.
-	wikiLLMBackoffBase = 2 * time.Second
 
 	// wikiTaskType is the task_type stamp used in task_pending_ops and
 	// task_dead_letters rows for this pipeline. Stable across the lifetime

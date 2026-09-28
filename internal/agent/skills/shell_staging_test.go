@@ -46,7 +46,9 @@ func (s *stagingStore) WriteSessionWorkspaceFile(_ context.Context, sessionID, f
 	return nil
 }
 
-func (s *stagingStore) WriteSessionWorkspaceFiles(ctx context.Context, sessionID string, files []sandbox.SessionWorkspaceFile) error {
+func (s *stagingStore) WriteSessionWorkspaceFiles(
+	ctx context.Context, sessionID string, files []sandbox.SessionWorkspaceFile,
+) error {
 	s.batches++
 	for _, file := range files {
 		if err := s.WriteSessionWorkspaceFile(ctx, sessionID, file.Path, file.Content); err != nil {
@@ -66,10 +68,12 @@ func (m *stagingManager) SessionShellExecutor() sandbox.SessionShellExecutor { r
 
 func TestShellStagesHostResourcesOncePerSession(t *testing.T) {
 	root := hostSkillDir(t, "host-skill", "host resource staging")
-	require.NoError(t, os.WriteFile(filepath.Join(root, "host-skill", "asset.bin"), []byte{0, 255, 1}, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "host-skill", "asset.bin"), []byte{0, 255, 1}, 0o644))
 	store := &stagingStore{files: make(map[string][]byte)}
 	backend := &stagingManager{store: store}
-	mgr := NewManager(&ManagerConfig{Enabled: true, SkillDirs: []string{root}, AllowedSkills: []string{"host-skill"}}, backend)
+	mgr := NewManager(
+		&ManagerConfig{Enabled: true, SkillDirs: []string{root}, AllowedSkills: []string{"host-skill"}}, backend,
+	)
 	require.NoError(t, mgr.Initialize(context.Background()))
 	command := `python3 "$WEKNORA_SKILL_DIR/scripts/run.py"`
 	_, env, err := mgr.PrepareShellEnvironment(context.Background(), "session-1", "host-skill", command, nil)

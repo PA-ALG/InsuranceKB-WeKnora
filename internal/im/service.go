@@ -623,7 +623,8 @@ func (s *Service) prepareIMAttachments(ctx context.Context, msg *IncomingMessage
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	defer reader.Close()
+	// Closing this read-only resource cannot change the completed result.
+	defer func() { _ = reader.Close() }()
 	content, err := io.ReadAll(io.LimitReader(reader, maxIMAttachmentBytes+1))
 	if err != nil {
 		return nil, nil, nil, err
@@ -1033,7 +1034,8 @@ func (s *Service) startChannelConfigSubscriber() {
 
 func (s *Service) channelConfigSubscriberLoop() {
 	pubsub := s.redis.Subscribe(context.Background(), RedisChannelConfig)
-	defer pubsub.Close()
+	// Subscription shutdown is best effort after the receive loop exits.
+	defer func() { _ = pubsub.Close() }()
 
 	messages := pubsub.Channel()
 	for {

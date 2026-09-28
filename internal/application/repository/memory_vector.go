@@ -28,7 +28,7 @@ const fallbackVectorScanCap = 5000
 // with every vector crossing the wire.
 func (r *memoryRepository) vectorColumnReady() bool {
 	r.vectorOnce.Do(func() {
-		if r.db == nil || r.db.Dialector == nil || r.db.Dialector.Name() != "postgres" {
+		if r.db == nil || r.db.Dialector == nil || r.db.Name() != "postgres" {
 			return
 		}
 		r.vectorColumn = r.db.Migrator().HasColumn(&types.MemoryItemEmbedding{}, "embedding")

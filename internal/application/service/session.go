@@ -659,10 +659,8 @@ func (s *sessionService) DeleteAllSessions(ctx context.Context) error {
 	}
 
 	// Tear down sandboxes while session rows (and pins) are still readable.
-	if sessions != nil {
-		for _, session := range sessions {
-			s.destroyBoundSandbox(ctx, session.ID)
-		}
+	for _, session := range sessions {
+		s.destroyBoundSandbox(ctx, session.ID)
 	}
 
 	if _, err := s.sessionRepo.DeleteAllByTenantID(ctx, tenantID, userID); err != nil {

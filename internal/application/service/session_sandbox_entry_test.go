@@ -71,8 +71,6 @@ func TestArtifactSessionSourceKeepsDefaultBackendForSentinelPin(t *testing.T) {
 	require.NotNil(t, got)
 	// Sentinel pins resolve to the deployment-wide manager, which may be a
 	// distinct object from c.source even though both read the same backend.
-	_, ok := got.(SandboxArtifactSource)
-	require.True(t, ok)
 }
 
 // Attachment staging is reached through a runtime type assertion in

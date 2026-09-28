@@ -65,7 +65,7 @@ func TestWhoIsAskingReachesTheQueryRewriter(t *testing.T) {
 	// Conditioning the rewriter is not a recall. The background is fed in
 	// whole, relevant or not, so counting it as "memories this answer used"
 	// would report unrelated memories on every single turn. That list is
-	// MEMORY_RECALL's to build, from what the question actually matched.
+	// MemoryRecall's to build, from what the question actually matched.
 	require.Empty(t, chatManage.UsedMemories)
 }
 

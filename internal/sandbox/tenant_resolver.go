@@ -18,7 +18,7 @@
 // That left the construction-time Health probe as the only real cost, which
 // SkipHealthProbe removes. Connection reuse is preserved by sharing one
 // http.Transport across tenants (Cube additionally routes its data plane
-// through SandboxGatewayTransportPool; see gateway_transport.go). The upshot: no cache, no
+// through GatewayTransportPool; see gateway_transport.go). The upshot: no cache, no
 // eviction, no invalidation plumbing, and a config change takes effect on the
 // next request.
 package sandbox
@@ -100,8 +100,8 @@ type tenantSandboxResolver struct {
 
 	// gatewayTransports must outlive the per-request clients it serves, which is
 	// the whole point of holding it here rather than building it per Resolve.
-	gatewayTransports        *SandboxGatewayTransportPool
-	privateGatewayTransports *SandboxGatewayTransportPool
+	gatewayTransports        *GatewayTransportPool
+	privateGatewayTransports *GatewayTransportPool
 }
 
 // NewTenantSandboxResolver validates the wiring and returns a resolver.

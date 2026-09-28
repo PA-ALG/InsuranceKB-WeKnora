@@ -267,7 +267,9 @@ func buildMilvusClientConfig(cc types.ConnectionConfig) milvusclient.ClientConfi
 	milvusCfg := milvusclient.ClientConfig{
 		Address: addr,
 		DialOptions: []grpc.DialOption{
-			grpc.WithTimeout(5 * time.Second),
+			// Milvus v2.6.4 uses DialContext: retain its dial-only timeout. Remove
+			// when the SDK exposes an equivalent or migrates to NewClient.
+			grpc.WithTimeout(5 * time.Second), //nolint:staticcheck // SA1019: pinned SDK uses DialContext.
 			grpc.WithContextDialer(utils.SSRFSafeGRPCDialer),
 		},
 	}

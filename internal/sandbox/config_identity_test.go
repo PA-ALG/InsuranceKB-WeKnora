@@ -19,7 +19,7 @@ func TestIdentityOfReadsStoredFieldsOnly(t *testing.T) {
 		},
 	})
 
-	require.Equal(t, SandboxIdentity{
+	require.Equal(t, Identity{
 		Provider:      "e2b",
 		APIURL:        "https://api.e2b.app",
 		APIKey:        "key-a",
@@ -39,7 +39,7 @@ func TestIdentityOfDoesNotInherit(t *testing.T) {
 		},
 	})
 
-	require.Equal(t, SandboxIdentity{Provider: "cube"}, blank)
+	require.Equal(t, Identity{Provider: "cube"}, blank)
 	require.NotEqual(t, blank, spelledOut)
 	require.Equal(t, DefaultCubeProxyURL, spelledOut.ProxyURL)
 }
@@ -65,11 +65,11 @@ func TestIdentityOfDockerWithoutHostCarriesProviderOnly(t *testing.T) {
 	docker := IdentityOf(&types.TenantSandboxConfig{SandboxType: "docker"})
 	cube := IdentityOf(&types.TenantSandboxConfig{SandboxType: "cube"})
 
-	require.Equal(t, SandboxIdentity{Provider: "docker"}, docker)
+	require.Equal(t, Identity{Provider: "docker"}, docker)
 	require.NotEqual(t, docker, cube)
 }
 
 // A nil config must not panic: Update compares against it when creating.
 func TestIdentityOfToleratesNilConfig(t *testing.T) {
-	require.Equal(t, SandboxIdentity{}, IdentityOf(nil))
+	require.Equal(t, Identity{}, IdentityOf(nil))
 }

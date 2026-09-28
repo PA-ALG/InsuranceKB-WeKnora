@@ -33,7 +33,9 @@ func TestGroundingGuidanceSurvivesTemplateSelection(t *testing.T) {
 			prompt := BuildSystemPromptWithOptions(tc.kbs, false, &BuildSystemPromptOptions{Config: cfg}, tc.custom)
 			require.Contains(t, prompt, "consult relevant available sources before drafting unsupported content")
 			require.Contains(t, prompt, "presentations, reports, tutorials, and technical instructions")
-			require.Contains(t, prompt, "Reading a generator's instructions or successfully running its script does not verify the subject matter")
+			require.Contains(t, prompt,
+				"Reading a generator's instructions or successfully running its script does not"+
+					" verify the subject matter")
 			require.Contains(t, prompt, "translation or formatting of supplied content do not require research")
 			require.Contains(t, prompt, "If relevant sources are unavailable or searches leave gaps")
 			if tc.custom != "" {
@@ -114,7 +116,9 @@ func TestGroundingUsesRegistryInsteadOfConfiguration(t *testing.T) {
 
 func TestPinnedGenerationSkillKeepsResearchAndKnowledgeScope(t *testing.T) {
 	engine := newTestEngine(t, &mockChat{})
-	engine.knowledgeBasesInfo = []*KnowledgeBaseInfo{{ID: "kb", Name: "Server operations", Capabilities: []string{"chunks"}}}
+	engine.knowledgeBasesInfo = []*KnowledgeBaseInfo{{
+		ID: "kb", Name: "Server operations", Capabilities: []string{"chunks"},
+	}}
 	engine.SetPinnedMentions(nil, []*PinnedSkillInfo{{Name: "pptx-generator"}})
 	prompt := engine.RenderUserTurnContent("session", "如何在 Windows Server 2008 上连接 WiFi 网络？制作相关 PPT")
 	require.Contains(t, prompt, "Server operations")

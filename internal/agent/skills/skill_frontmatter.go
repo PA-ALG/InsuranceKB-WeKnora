@@ -39,7 +39,7 @@ func UnmarshalSkillFrontmatter(frontmatter string, dest any) (repaired bool, err
 
 func unmarshalFrontmatterCopy(src string, dest any) error {
 	rv := reflect.ValueOf(dest)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return fmt.Errorf("frontmatter dest must be a non-nil pointer")
 	}
 	tmp := reflect.New(rv.Elem().Type())

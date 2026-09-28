@@ -41,7 +41,7 @@ func TestApplyBuiltinAgentLocalizationOverlaysYAMLLocale(t *testing.T) {
 	}
 }
 
-func TestApplyBuiltinAgentLocalizationNilSafe(t *testing.T) {
+func TestApplyBuiltinAgentLocalizationNilSafe(_ *testing.T) {
 	ApplyBuiltinAgentLocalization(context.Background(), nil)
 }
 

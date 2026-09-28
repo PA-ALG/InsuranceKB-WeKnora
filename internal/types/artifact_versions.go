@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-// Do not silently redirect old handles: the user may be comparing versions.
+// ClarifyArtifactVersions Do not silently redirect old handles: the user may be comparing versions.
 // When an answer references a previous version of a regenerated output, attach
 // an explicit old/current pair. Preserve all original prose and destinations.
 func ClarifyArtifactVersions(content string, current, previous MessageArtifacts, language string) string {

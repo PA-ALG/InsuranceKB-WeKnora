@@ -222,11 +222,11 @@ func TestLLMCallMetadataContext(t *testing.T) {
 }
 
 func TestTaskRetryMetadataContext(t *testing.T) {
-	if _, _, ok := TaskRetryMetadataFromContext(nil); ok {
-		t.Fatal("nil context should not contain task retry metadata")
-	}
-	if _, _, ok := TaskRetryMetadataFromContext(context.Background()); ok {
-		t.Fatal("background context should not contain task retry metadata")
+	// Both absent and empty contexts must exercise the no-metadata path.
+	for _, empty := range []context.Context{nil, context.Background()} {
+		if _, _, ok := TaskRetryMetadataFromContext(empty); ok {
+			t.Fatalf("context %v should not contain task retry metadata", empty)
+		}
 	}
 
 	ctx := WithTaskRetryMetadata(context.Background(), 2, 3)

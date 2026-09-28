@@ -52,7 +52,8 @@ func (h *Handler) ListSessionArtifacts(c *gin.Context) {
 	ctx := c.Request.Context()
 	sessionID := secutils.SanitizeForLog(paramSessionID(c))
 	if sessionID == "" {
-		c.Error(errors.NewBadRequestError(errors.ErrInvalidSessionID.Error()))
+		// Error is recorded on the Gin context for middleware.
+		_ = c.Error(errors.NewBadRequestError(errors.ErrInvalidSessionID.Error()))
 		return
 	}
 
@@ -60,10 +61,10 @@ func (h *Handler) ListSessionArtifacts(c *gin.Context) {
 	// unknown / non-owned sessions matches the rest of the session routes.
 	if _, err := h.sessionService.GetSession(ctx, sessionID); err != nil {
 		if stderrors.Is(err, errors.ErrSessionNotFound) {
-			c.Error(errors.NewNotFoundError(err.Error()))
+			_ = c.Error(errors.NewNotFoundError(err.Error())) // Error is recorded on the Gin context for middleware.
 			return
 		}
-		c.Error(errors.NewInternalServerError(err.Error()))
+		_ = c.Error(errors.NewInternalServerError(err.Error())) // Error is recorded on the Gin context for middleware.
 		return
 	}
 

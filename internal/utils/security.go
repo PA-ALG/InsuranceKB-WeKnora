@@ -778,6 +778,7 @@ type SSRFValidatingRoundTripper struct {
 	Base http.RoundTripper
 }
 
+// RoundTrip validates the outbound request before sending it.
 func (t *SSRFValidatingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req == nil || req.URL == nil {
 		return nil, fmt.Errorf("outbound request blocked: request URL is required")

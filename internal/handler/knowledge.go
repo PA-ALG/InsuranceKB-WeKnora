@@ -1326,8 +1326,6 @@ func (h *KnowledgeHandler) ListKnowledge(c *gin.Context) {
 // @Security     ApiKeyAuth
 // @Router       /knowledge-bases/{id}/knowledge/folders [get]
 func (h *KnowledgeHandler) ListKnowledgeFolders(c *gin.Context) {
-	ctx := c.Request.Context()
-
 	// Read access mirrors ListKnowledge so the sidebar tree is available to
 	// every viewer of a shared knowledge base.
 	_, kbID, effectiveTenantID, _, err := h.validateKnowledgeBaseAccess(c)
@@ -1335,7 +1333,7 @@ func (h *KnowledgeHandler) ListKnowledgeFolders(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	ctx = types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
+	ctx := types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
 
 	tree, err := h.kgService.ListKnowledgeFolderTree(ctx, kbID)
 	if err != nil {
@@ -1376,8 +1374,6 @@ type MoveKnowledgeToFolderRequest struct {
 // @Security     ApiKeyAuth
 // @Router       /knowledge/folder [post]
 func (h *KnowledgeHandler) MoveKnowledgeToFolder(c *gin.Context) {
-	ctx := c.Request.Context()
-
 	var req MoveKnowledgeToFolderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(errors.NewBadRequestError("Invalid request parameters: " + err.Error()))
@@ -1400,7 +1396,7 @@ func (h *KnowledgeHandler) MoveKnowledgeToFolder(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	ctx = types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
+	ctx := types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
 
 	// Guard against cross-KB moves: the service layer scopes by tenant, so the
 	// handler must confirm every entry belongs to the requested knowledge base.
@@ -1451,8 +1447,6 @@ type RenameKnowledgeFolderRequest struct {
 // @Security     ApiKeyAuth
 // @Router       /knowledge-bases/{id}/knowledge/folders [put]
 func (h *KnowledgeHandler) RenameKnowledgeFolder(c *gin.Context) {
-	ctx := c.Request.Context()
-
 	var req RenameKnowledgeFolderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(errors.NewBadRequestError("Invalid request parameters: " + err.Error()))
@@ -1472,7 +1466,7 @@ func (h *KnowledgeHandler) RenameKnowledgeFolder(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	ctx = types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
+	ctx := types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
 
 	affected, err := h.kgService.RenameKnowledgeFolder(ctx, kbID, req.From, req.To)
 	if err != nil {

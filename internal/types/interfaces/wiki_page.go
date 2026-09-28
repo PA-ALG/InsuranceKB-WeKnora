@@ -162,7 +162,9 @@ type WikiPageService interface {
 	// FindPagesByNormalizedTitles is the batched form of
 	// FindPagesByNormalizedTitle. identities are already whitespace-stripped
 	// and lowercased; empty entries are ignored.
-	FindPagesByNormalizedTitles(ctx context.Context, kbID, pageType string, identities []string) ([]*types.WikiPageLite, error)
+	FindPagesByNormalizedTitles(
+		ctx context.Context, kbID, pageType string, identities []string,
+	) ([]*types.WikiPageLite, error)
 
 	// ListDistinctCategoryPaths returns the existing wiki folder paths (split
 	// into segments), capped at maxPaths. Used by wiki ingest's taxonomy
@@ -335,7 +337,9 @@ type WikiPageRepository interface {
 
 	// FindPagesByNormalizedTitles is the batched form of
 	// FindPagesByNormalizedTitle.
-	FindPagesByNormalizedTitles(ctx context.Context, kbID, pageType string, identities []string) ([]*types.WikiPageLite, error)
+	FindPagesByNormalizedTitles(
+		ctx context.Context, kbID, pageType string, identities []string,
+	) ([]*types.WikiPageLite, error)
 
 	// ListDistinctCategoryPaths returns the materialized paths of existing
 	// wiki folders (split into segments), capped at maxPaths. Used by the

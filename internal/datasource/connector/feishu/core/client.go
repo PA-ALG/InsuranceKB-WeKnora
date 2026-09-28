@@ -510,23 +510,6 @@ func (c *Client) listWikiNodeDescendants(ctx context.Context, spaceID string, ro
 	return allNodes, nil
 }
 
-// getDocumentRawContent retrieves the raw text content of a Feishu docx document.
-// This returns plain text (not rich text / block structure).
-// Deprecated: prefer ExportAndDownload which preserves formatting.
-func (c *Client) getDocumentRawContent(ctx context.Context, documentID string) (string, error) {
-	path := fmt.Sprintf("/open-apis/docx/v1/documents/%s/raw_content", documentID)
-
-	var resp docRawContentResponse
-	if err := c.DoRequest(ctx, http.MethodGet, path, nil, &resp); err != nil {
-		return "", fmt.Errorf("get document raw content: %w", err)
-	}
-	if resp.Code != 0 {
-		return "", fmt.Errorf("get document raw content error: code=%d msg=%s", resp.Code, resp.Msg)
-	}
-
-	return resp.Data.Content, nil
-}
-
 // Ping verifies the credentials by attempting to get a tenant access token.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.GetTenantAccessToken(ctx)
@@ -747,7 +730,7 @@ func (c *Client) downloadRawBytes(ctx context.Context, path string) ([]byte, err
 
 		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxFeishuDownloadBytes+1))
 		if readErr == nil && int64(len(data)) > maxFeishuDownloadBytes {
-			resp.Body.Close()
+			_ = resp.Body.Close() // The rejected response is being discarded.
 			return nil, fmt.Errorf("download exceeds max size (%d bytes): %s", maxFeishuDownloadBytes, path)
 		}
 		resp.Body.Close()

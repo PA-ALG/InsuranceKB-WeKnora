@@ -1,4 +1,4 @@
-// Package sandbox: session-scoped capability interfaces.
+// Package sandbox provides session-scoped capability interfaces.
 //
 // The Sandbox / Manager pair intentionally hides provider identity (Cube,
 // E2B, Docker) from the application layer. Higher layers should never

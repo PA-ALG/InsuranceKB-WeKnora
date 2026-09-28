@@ -76,7 +76,9 @@ func TestUnmarshalSkillFrontmatterDoesNotPolluteDestOnFailedRepair(t *testing.T)
 	// tags would decode, but the nested name/description plus broken
 	// metadata list is still invalid after the two repairs. dest must
 	// stay zero — not a mix of a partial first attempt and a later one.
-	fm := "tags:\n  - a\n  - b\nname: alpha\n  version: 9.9.9\n  description: |\n    hello\nmetadata:\n  openclaw:\n    install:\n      - kind: node\n      package: iztro\n"
+	fm := "tags:\n  - a\n  - b\nname: alpha\n  version: 9.9.9\n  description: |\n   " +
+		" hello\nmetadata:\n  openclaw:\n    install:\n      - kind: node\n      package:" +
+		" iztro\n"
 	var d dest
 	repaired, err := UnmarshalSkillFrontmatter(fm, &d)
 	require.Error(t, err)
@@ -127,5 +129,6 @@ func TestParseSkillFileRejectsSkillHubFrontmatterWithBrokenExtraYAML(t *testing.
 	require.NoError(t, err)
 
 	_, err = ParseSkillFile(string(content))
-	require.Error(t, err, "nest repair is not enough when extra keys (metadata.openclaw.install) are still invalid YAML")
+	require.Error(t, err, "nest repair is not enough when extra keys (metadata.openclaw.install) are"+
+		" still invalid YAML")
 }

@@ -56,9 +56,6 @@ func resolveLocation(name string) *time.Location {
 // defaultBaseURL is the default Feishu Open Platform API base URL.
 const defaultBaseURL = "https://open.feishu.cn"
 
-// larkBaseURL is the Lark (international) API base URL.
-const larkBaseURL = "https://open.larksuite.com"
-
 // GetBaseURL returns the effective base URL, defaulting to Feishu if not set.
 func (c *Config) GetBaseURL() string {
 	if c.BaseURL != "" {
@@ -185,18 +182,6 @@ type WikiNodeInfoResponse struct {
 
 // --- Export task API responses ---
 
-// docRawContentData is the data payload of docRawContentResponse.
-type docRawContentData struct {
-	Content string `json:"content"`
-}
-
-// docRawContentResponse is the response for GET /open-apis/docx/v1/documents/:document_id/raw_content.
-// Deprecated: prefer export API for full-fidelity document export.
-type docRawContentResponse struct {
-	ApiResponse
-	Data docRawContentData `json:"data"`
-}
-
 // ExportTaskCreateData is the data payload of ExportTaskCreateResponse.
 type ExportTaskCreateData struct {
 	Ticket string `json:"ticket"`
@@ -230,24 +215,6 @@ type ExportTaskStatusResponse struct {
 }
 
 // --- File download response ---
-
-// driveFileMeta is one entry of driveFileMetaData.Metas.
-type driveFileMeta struct {
-	DocToken string `json:"doc_token"`
-	DocType  string `json:"doc_type"`
-	Title    string `json:"title"`
-}
-
-// driveFileMetaData is the data payload of driveFileMetaResponse.
-type driveFileMetaData struct {
-	Metas []driveFileMeta `json:"metas"`
-}
-
-// driveFileMetaResponse is the response for GET /drive/v1/metas for file type nodes.
-type driveFileMetaResponse struct {
-	ApiResponse
-	Data driveFileMetaData `json:"data"`
-}
 
 // FeishuCursor stores incremental sync state for Feishu.
 type FeishuCursor struct {

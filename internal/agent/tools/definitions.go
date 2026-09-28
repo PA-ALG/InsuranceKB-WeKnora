@@ -206,7 +206,8 @@ func NormalizeAllowedTools(allowed []string) []string {
 func RetiredToolReplacement(name string) string {
 	switch name {
 	case LegacyToolExecuteSkillScript:
-		return "execute_skill_script is no longer available; use shell_exec(skill_name=..., command=...) to run skill scripts"
+		return "execute_skill_script is no longer available; use shell_exec(skill_name=...," +
+			" command=...) to run skill scripts"
 	case LegacyToolReadSkill:
 		return `read_skill is no longer available; use read_file(path="skill://<name>/<file_path or SKILL.md>")`
 	case LegacyToolReadSandboxFile:

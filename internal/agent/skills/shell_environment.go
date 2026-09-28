@@ -10,7 +10,9 @@ import (
 // PrepareShellEnvironment attaches an allowed, installed skill's runtime to
 // the same shell primitive used for ordinary commands. Credentials remain the
 // caller's responsibility and are resolved per tool call, never persisted here.
-func (m *Manager) PrepareShellEnvironment(ctx context.Context, sessionID, skillName, command string, env map[string]string) (string, map[string]string, error) {
+func (m *Manager) PrepareShellEnvironment(
+	ctx context.Context, sessionID, skillName, command string, env map[string]string,
+) (string, map[string]string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", nil, err
 	}
@@ -40,6 +42,7 @@ func (m *Manager) PrepareShellEnvironment(ctx context.Context, sessionID, skillN
 	// child non-login shell so leading assignments and arbitrary shell grammar
 	// keep their original meaning and cannot consume the setup prefix.
 	prefix := sandbox.SkillCommandPath(dir)
-	wrapped := "export PATH=" + sandbox.ShellQuote(prefix) + ":\"$PATH\"; exec /bin/bash --noprofile --norc -c " + sandbox.ShellQuote(command)
+	wrapped := "export PATH=" + sandbox.ShellQuote(prefix) + ":\"$PATH\"; exec /bin/bash --noprofile --norc -c " +
+		sandbox.ShellQuote(command)
 	return wrapped, runtimeEnv, nil
 }

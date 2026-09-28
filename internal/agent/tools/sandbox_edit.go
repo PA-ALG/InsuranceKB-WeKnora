@@ -49,8 +49,12 @@ var editSandboxFileTool = BaseTool{
 	name: ToolEditSandboxFile,
 	description: `Apply exact text replacements to an existing text file inside the session sandbox,
 excluding /workspace/input.
-Read the relevant content first. Send edits as an array, even for one replacement. Every old_string matches the original file, must be unique unless replace_all=true, and must not overlap another edit. Include enough surrounding text to identify the intended occurrence.
-All replacements are validated before writing; a failed match leaves the file unchanged. The result includes a diff. Use write_sandbox_file for new files.`,
+Read the relevant content first. Send edits as an array, even for one replacement. Every` +
+		` old_string matches the original file, must be unique unless replace_all=true, and must` +
+		` not overlap another edit. Include enough surrounding text to identify the intended` +
+		` occurrence.
+All replacements are validated before writing; a failed match leaves the file unchanged.` +
+		` The result includes a diff. Use write_sandbox_file for new files.`,
 	schema: utils.GenerateSchema[EditSandboxFileInput](),
 }
 
@@ -221,7 +225,8 @@ func (t *EditSandboxFileTool) Execute(ctx context.Context, args json.RawMessage)
 		return &types.ToolResult{
 			Success: false,
 			Error: fmt.Sprintf(
-				"file too large to edit (%d bytes; max %d). Split the work or rewrite a smaller file with write_sandbox_file",
+				"file too large to edit (%d bytes; max %d). Split the work or rewrite a smaller"+
+					" file with write_sandbox_file",
 				stat.Size, maxWriteSandboxBytes,
 			),
 		}, nil

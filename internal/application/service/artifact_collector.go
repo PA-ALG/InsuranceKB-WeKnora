@@ -572,7 +572,8 @@ func (c *ArtifactCollector) hashStoredArtifact(ctx context.Context, art types.Me
 	if err != nil || file == nil {
 		return ""
 	}
-	defer file.Close()
+	// Closing this read-only resource cannot change the completed result.
+	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(file)
 	if err != nil {
 		return ""

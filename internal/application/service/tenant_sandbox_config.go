@@ -993,7 +993,7 @@ func pickDesktopTemplate(items []sandbox.RemoteTemplate) *sandbox.RemoteTemplate
 // carries an API key, so it is hashed rather than formatted: this string is
 // only ever compared, and it should not be able to surface a credential in a
 // panic trace or a heap dump.
-func ensureTemplateKey(tenantID uint64, identity sandbox.SandboxIdentity) string {
+func ensureTemplateKey(tenantID uint64, identity sandbox.Identity) string {
 	sum := sha256.Sum256([]byte(fmt.Sprintf("%d|%#v", tenantID, identity)))
 	return hex.EncodeToString(sum[:])
 }

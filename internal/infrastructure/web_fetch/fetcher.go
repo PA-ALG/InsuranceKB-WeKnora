@@ -226,7 +226,8 @@ func (f *Fetcher) fetchHTTP(ctx context.Context, rawURL string, parsedURL *url.U
 	if err != nil {
 		return nil, classifyRequestError(err)
 	}
-	defer resp.Body.Close()
+	// Closing this read-only resource cannot change the completed result.
+	defer func() { _ = resp.Body.Close() }()
 	success := resp.StatusCode == http.StatusOK
 	if f.markdown {
 		success = resp.StatusCode >= 200 && resp.StatusCode < 300

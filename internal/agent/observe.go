@@ -280,7 +280,8 @@ func trimToolResultsToBudget(
 
 func compactedToolResultMarker(content string) string {
 	return fmt.Sprintf(
-		"[Tool result compacted: original_bytes=%d. Re-run the tool with narrower filters or a smaller range if more detail is needed.]",
+		"[Tool result compacted: original_bytes=%d. Re-run the tool with narrower"+
+			" filters or a smaller range if more detail is needed.]",
 		len(content),
 	)
 }

@@ -402,17 +402,6 @@ func TestSetMineKeepsTheTwoScopesApart(t *testing.T) {
 	require.Len(t, repo.userEnvs, 2)
 }
 
-func userEnvByName(t *testing.T, rows []*types.TenantUserEnvVar, name string) *types.TenantUserEnvVar {
-	t.Helper()
-	for _, row := range rows {
-		if row != nil && row.Name == name && row.SkillID == "sk-ready" {
-			return row
-		}
-	}
-	t.Fatalf("no skill-scoped row for %q (%+v)", name, rows)
-	return nil
-}
-
 func TestCaptureSkillEnvWritesDeclaredNamesForTheSpeaker(t *testing.T) {
 	svc, repo := newUserEnvFixture(t)
 	ctx := userEnvCtx(userEnvTenantID, "alice")

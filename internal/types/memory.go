@@ -173,7 +173,7 @@ func MemoryAllowedForAgent(ctx context.Context) bool {
 		return true
 	}
 	disabled, ok := ctx.Value(MemoryDisabledContextKey).(bool)
-	return !(ok && disabled)
+	return !ok || !disabled
 }
 
 // ApplyAgentMemoryPreference threads an agent's memory switch into ctx. A nil
@@ -238,6 +238,7 @@ type MemoryPendingSessions []string
 // MaxMemoryPendingSessions bounds one processing batch, never the durable queue.
 const MaxMemoryPendingSessions = 32
 
+// Value implements driver.Valuer for JSON persistence.
 func (p MemoryPendingSessions) Value() (driver.Value, error) {
 	if p == nil {
 		return json.Marshal([]string{})
@@ -245,6 +246,7 @@ func (p MemoryPendingSessions) Value() (driver.Value, error) {
 	return json.Marshal(p)
 }
 
+// Scan implements sql.Scanner for JSON persistence.
 func (p *MemoryPendingSessions) Scan(value interface{}) error {
 	if value == nil {
 		*p = nil
@@ -282,6 +284,7 @@ func (p MemoryPendingSessions) Append(sessionID string) MemoryPendingSessions {
 	return updated
 }
 
+// TableName returns the persistence table name.
 func (MemorySubject) TableName() string { return "memory_subjects" }
 
 // MemoryItem is a single remembered statement.
@@ -325,6 +328,7 @@ type MemoryItem struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// TableName returns the persistence table name.
 func (MemoryItem) TableName() string { return "memory_items" }
 
 // MemoryConfig is the workspace-level memory switch, stored as JSONB on
@@ -424,8 +428,10 @@ func (c *MemoryConfig) EffectiveInterestThreshold() int {
 // cannot turn every distillation call into a large prompt.
 const MaxMemoryExtractInstructionsRunes = 1000
 
+// Value implements driver.Valuer for JSON persistence.
 func (c MemoryConfig) Value() (driver.Value, error) { return json.Marshal(c) }
 
+// Scan implements sql.Scanner for JSON persistence.
 func (c *MemoryConfig) Scan(value interface{}) error {
 	if value == nil {
 		return nil
@@ -723,11 +729,13 @@ type MemoryTopicStat struct {
 	UpdatedAt  time.Time          `json:"updated_at"`
 }
 
+// TableName returns the persistence table name.
 func (MemoryTopicStat) TableName() string { return "memory_topic_stats" }
 
 // MemoryTopicAliases is the list of surface forms that resolved to one topic.
 type MemoryTopicAliases []string
 
+// Value implements driver.Valuer for JSON persistence.
 func (a MemoryTopicAliases) Value() (driver.Value, error) {
 	if len(a) == 0 {
 		return "[]", nil
@@ -739,6 +747,7 @@ func (a MemoryTopicAliases) Value() (driver.Value, error) {
 	return string(data), nil
 }
 
+// Scan implements sql.Scanner for JSON persistence.
 func (a *MemoryTopicAliases) Scan(value interface{}) error {
 	if value == nil {
 		*a = nil
@@ -794,6 +803,7 @@ type MemoryDocAffinity struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+// TableName returns the persistence table name.
 func (MemoryDocAffinity) TableName() string { return "memory_doc_affinity" }
 
 // MemoryTombstone records that a statement was deliberately forgotten, so the
@@ -832,6 +842,7 @@ type MemoryTombstone struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// TableName returns the persistence table name.
 func (MemoryTombstone) TableName() string { return "memory_tombstones" }
 
 // MaxMemoryTombstones bounds how many rejections one subject accumulates.
@@ -1093,6 +1104,7 @@ type UsedMemory struct {
 // UsedMemories is the persisted per-message list.
 type UsedMemories []UsedMemory
 
+// Value implements driver.Valuer for JSON persistence.
 func (u UsedMemories) Value() (driver.Value, error) {
 	if u == nil {
 		return json.Marshal([]UsedMemory{})
@@ -1100,6 +1112,7 @@ func (u UsedMemories) Value() (driver.Value, error) {
 	return json.Marshal(u)
 }
 
+// Scan implements sql.Scanner for JSON persistence.
 func (u *UsedMemories) Scan(value interface{}) error {
 	if value == nil {
 		*u = make(UsedMemories, 0)
@@ -1384,6 +1397,7 @@ type MemoryItemEmbedding struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// TableName returns the persistence table name.
 func (MemoryItemEmbedding) TableName() string { return "memory_item_embeddings" }
 
 // EncodeEmbedding packs a vector as little-endian float32.

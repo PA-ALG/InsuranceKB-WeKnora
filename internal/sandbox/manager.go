@@ -81,12 +81,12 @@ func (m *DefaultManager) Execute(ctx context.Context, config *ExecuteConfig) (*E
 
 	effective := config
 	if config != nil && len(m.config.EnvVars) > 0 {
-		copy := *config
-		copy.Env = cloneMetadata(m.config.EnvVars)
+		configCopy := *config
+		configCopy.Env = cloneMetadata(m.config.EnvVars)
 		for key, value := range config.Env {
-			copy.Env[key] = value
+			configCopy.Env[key] = value
 		}
-		effective = &copy
+		effective = &configCopy
 	}
 
 	// Perform security validation unless explicitly skipped

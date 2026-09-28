@@ -75,6 +75,8 @@ type ListSandboxFilesInput struct {
 	Path string `json:"path,omitempty" jsonschema:"Optional absolute or /workspace-relative sandbox path to list. Defaults to /workspace/output on remote sandboxes, or the working directory on host."` //nolint:lll // one-line struct tag
 	// MaxEntries caps the listing size to protect the LLM context.
 	// Zero uses defaultListSandboxMaxEntries.
+	// Keep the schema description byte-for-byte; Go struct tags require one literal.
+	//nolint:lll // A struct tag cannot be split by concatenation without changing reflection.
 	MaxEntries int `json:"max_entries,omitempty" jsonschema:"Optional cap on the number of entries returned. Defaults to 200, hard-capped at 500. Use a smaller value when you only need to check whether a specific file exists."`
 }
 
@@ -213,13 +215,14 @@ func (t *ListSandboxFilesTool) Execute(ctx context.Context, args json.RawMessage
 	// Build human-readable output for the LLM. Machine-consumable data
 	// goes into ToolResult.Data.
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("=== Sandbox listing: %s ===\n\n", targetDir))
+	// strings.Builder writes cannot fail.
+	_, _ = fmt.Fprintf(&b, "=== Sandbox listing: %s ===\n\n", targetDir)
 	if len(entries) == 0 {
 		b.WriteString("No files found under this path. Either nothing has been written here yet, or the sandbox has been reaped.\n")
 	} else {
-		b.WriteString(fmt.Sprintf("Found %d file(s)", len(entries)))
+		_, _ = fmt.Fprintf(&b, "Found %d file(s)", len(entries))
 		if truncated {
-			b.WriteString(fmt.Sprintf(" (truncated to %d; increase max_entries to see more)", maxEntries))
+			_, _ = fmt.Fprintf(&b, " (truncated to %d; increase max_entries to see more)", maxEntries)
 		}
 		b.WriteString(":\n\n")
 		for _, e := range entries {

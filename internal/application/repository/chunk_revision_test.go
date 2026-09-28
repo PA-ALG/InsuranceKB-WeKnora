@@ -58,5 +58,5 @@ func TestSaveChunkRevisionIsAtomicAndOptimistic(t *testing.T) {
 	count := int64(0)
 	require.NoError(t, db.Model(&types.ChunkRevision{}).Count(&count).Error)
 	require.Equal(t, int64(1), count)
-	require.False(t, errors.Is(gorm.ErrRecordNotFound, ErrChunkRevisionConflict))
+	require.False(t, errors.Is(ErrChunkRevisionConflict, gorm.ErrRecordNotFound))
 }

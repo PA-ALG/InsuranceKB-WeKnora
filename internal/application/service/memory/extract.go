@@ -131,12 +131,13 @@ func (s *Service) ScheduleExtraction(ctx context.Context, sessionID, messageID, 
 	// The minimum interval only defers: if the previous run was recent, the
 	// task is queued further out rather than the turn being discarded.
 	if previous != nil && previous.LastExtractedAt != nil {
-		if remaining := cfg.ExtractMinInterval() - time.Now().Sub(*previous.LastExtractedAt); remaining > delay {
+		if remaining := cfg.ExtractMinInterval() - time.Since(*previous.LastExtractedAt); remaining > delay {
 			delay = remaining
 		}
 	}
 
-	s.enqueueExtraction(ctx, scope, sessionID, messageID, chatModelID, delay)
+	// enqueueExtraction logs failures and releases the slot before returning.
+	_ = s.enqueueExtraction(ctx, scope, sessionID, messageID, chatModelID, delay)
 }
 
 // enqueueExtraction pushes one distillation task. The in-flight slot is

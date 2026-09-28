@@ -172,7 +172,9 @@ func CompactToolOutputForHistory(toolName string, result *types.ToolResult) stri
 }
 
 func isSandboxContentTool(toolName string) bool {
-	return toolName == ToolShellExec || toolName == ToolReadFile || toolName == LegacyToolReadSandboxFile || toolName == LegacyToolExecuteSkillScript
+	return toolName == ToolShellExec ||
+		toolName == ToolReadFile ||
+		toolName == LegacyToolReadSandboxFile || toolName == LegacyToolExecuteSkillScript
 }
 
 // failedToolVisibleContent keeps stdout/stderr (in Output) when a tool fails.

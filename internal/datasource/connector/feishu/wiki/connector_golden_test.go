@@ -94,17 +94,27 @@ func fakeFeishuGolden(nodes []core.WikiNode, docToken string, blocks []core.Docx
 	// nested anonymous-struct literals.
 	mux.HandleFunc("/open-apis/sheets/v2/spreadsheets/sht_spread/values/0", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"code":0,"msg":"","data":{"valueRange":{"values":[["名称","数量"],["苹果",3]]}}}`))
+		_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"valueRange":{"values":[["名称","数量"],["苹果",3]]}}}`))
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	// bitable-v1 fields + records: bascApp_tblMain → app "bascApp", table "tblMain".
 	mux.HandleFunc("/open-apis/bitable/v1/apps/bascApp/tables/tblMain/fields", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"code":0,"msg":"","data":{"items":[{"field_name":"任务"},{"field_name":"状态"}]}}`))
+		_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"items":[{"field_name":"任务"},{"field_name":"状态"}]}}`))
+		if err != nil {
+			panic(err)
+		}
 	})
 	mux.HandleFunc("/open-apis/bitable/v1/apps/bascApp/tables/tblMain/records/search", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"code":0,"msg":"","data":{"has_more":false,"page_token":"","items":[{"fields":{"任务":"写码","状态":"完成"}}]}}`))
+		_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"has_more":false,"page_token":"",` +
+			`"items":[{"fields":{"任务":"写码","状态":"完成"}}]}}`))
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	// medias download, routed by token embedded in the path.

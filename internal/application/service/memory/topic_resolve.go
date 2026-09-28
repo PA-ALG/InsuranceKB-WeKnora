@@ -26,8 +26,6 @@ const (
 	// adjudicating model. One person's topic list is small; this is a guard
 	// against a pathological account, not a normal working limit.
 	topicCandidateLimit = 40
-	// topicMaxAliases bounds the alias list on one topic.
-	topicMaxAliases = 12
 )
 
 // topicResolution is where one surface form ended up.

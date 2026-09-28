@@ -46,7 +46,7 @@ func NewPluginMemoryRecall(
 }
 
 func (p *PluginMemoryRecall) ActivationEvents() []types.EventType {
-	return []types.EventType{types.MEMORY_RECALL}
+	return []types.EventType{types.MemoryRecall}
 }
 
 func (p *PluginMemoryRecall) OnEvent(ctx context.Context,

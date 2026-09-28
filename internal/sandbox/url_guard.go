@@ -57,6 +57,7 @@ func ValidateOutboundURL(raw string) error {
 	return DefaultOutboundURLPolicy().Validate(raw)
 }
 
+// ValidateOutboundURLWithPolicy checks an outbound URL against the supplied policy.
 func ValidateOutboundURLWithPolicy(raw string, policy OutboundURLPolicy) error {
 	return policy.Validate(raw)
 }
@@ -66,6 +67,7 @@ func SafeDialControl(network string, address string, conn syscall.RawConn) error
 	return DefaultOutboundURLPolicy().DialControl(network, address, conn)
 }
 
+// SafeDialControlForPolicy returns a dial guard enforcing the outbound policy.
 func SafeDialControlForPolicy(policy OutboundURLPolicy) func(string, string, syscall.RawConn) error {
 	return func(network string, address string, conn syscall.RawConn) error {
 		return policy.DialControl(network, address, conn)

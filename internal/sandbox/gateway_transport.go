@@ -37,10 +37,10 @@ import (
 	"time"
 )
 
-// SandboxGatewayTransportPool owns the transports handed to per-request remote
+// GatewayTransportPool owns the transports handed to per-request remote
 // clients. One instance lives for the process; clients built from it come and
 // go.
-type SandboxGatewayTransportPool struct {
+type GatewayTransportPool struct {
 	control       http.RoundTripper
 	policy        OutboundURLPolicy
 	inboundTokens *InboundTokenRegistry
@@ -51,18 +51,19 @@ type SandboxGatewayTransportPool struct {
 
 // NewSandboxGatewayTransportPool returns a pool whose control plane rides
 // control. A nil control transport installs a guarded one.
-func NewSandboxGatewayTransportPool(control http.RoundTripper) *SandboxGatewayTransportPool {
+func NewSandboxGatewayTransportPool(control http.RoundTripper) *GatewayTransportPool {
 	return NewSandboxGatewayTransportPoolWithPolicy(control, DefaultOutboundURLPolicy())
 }
 
+// NewSandboxGatewayTransportPoolWithPolicy creates a transport pool with the supplied outbound policy.
 func NewSandboxGatewayTransportPoolWithPolicy(
 	control http.RoundTripper,
 	policy OutboundURLPolicy,
-) *SandboxGatewayTransportPool {
+) *GatewayTransportPool {
 	if control == nil {
 		control = NewGuardedTransportWithPolicy(policy)
 	}
-	return &SandboxGatewayTransportPool{
+	return &GatewayTransportPool{
 		control:       control,
 		policy:        policy,
 		inboundTokens: NewInboundTokenRegistry(),
@@ -71,14 +72,14 @@ func NewSandboxGatewayTransportPoolWithPolicy(
 
 // InboundTokens is the registry the data-plane transport consults to attach a
 // sandbox's inbound credential. Adapters register on create / connect.
-func (p *SandboxGatewayTransportPool) InboundTokens() *InboundTokenRegistry {
+func (p *GatewayTransportPool) InboundTokens() *InboundTokenRegistry {
 	return p.inboundTokens
 }
 
 // RoundTripperFor returns the transport a client built from cfg should use.
 // Configs without a usable gateway URL keep every request on the control
 // transport, matching the SDKs' behaviour when no gateway is configured.
-func (p *SandboxGatewayTransportPool) RoundTripperFor(cfg *Config) http.RoundTripper {
+func (p *GatewayTransportPool) RoundTripperFor(cfg *Config) http.RoundTripper {
 	gatewayURL, controlURL := gatewayEndpointFor(cfg)
 	split := &gatewaySplitTransport{
 		control:      p.control,
@@ -146,7 +147,7 @@ func hostOfURL(raw string) string {
 }
 
 // dataTransport returns the transport dialling target, creating it once.
-func (p *SandboxGatewayTransportPool) dataTransport(target string) http.RoundTripper {
+func (p *GatewayTransportPool) dataTransport(target string) http.RoundTripper {
 	if existing, ok := p.data.Load(target); ok {
 		return existing.(http.RoundTripper)
 	}

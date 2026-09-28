@@ -272,7 +272,7 @@ const (
 	// MCPOAuthResolved: authorization completed / timed out / canceled;
 	// informational for UI replay.
 	ResponseTypeMCPOAuthResolved ResponseType = "mcp_oauth_resolved"
-	// MemoryRecalled: the long-term memories injected into this answer, so
+	// ResponseTypeMemoryRecalled MemoryRecalled: the long-term memories injected into this answer, so
 	// the UI can show and let the user delete what influenced it.
 	ResponseTypeMemoryRecalled ResponseType = "memory_recalled"
 	// ResponseTypeSteer is the per-run control signal a client POSTs while a

@@ -70,7 +70,7 @@ func NewE2BRemoteClientWithTransport(
 // A nil pool falls back to the SDK defaults.
 func NewE2BRemoteClientWithPool(
 	cfg *Config,
-	pool *SandboxGatewayTransportPool,
+	pool *GatewayTransportPool,
 ) (*E2BRemoteClient, error) {
 	if pool == nil {
 		return newE2BRemoteClient(cfg, nil, NewInboundTokenRegistry(), nil)

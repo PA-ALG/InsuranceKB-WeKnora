@@ -102,6 +102,7 @@ type AuditAPIKey struct {
 	Name string
 }
 
+// WithAuditAPIKey adds API-key audit metadata to the context.
 func WithAuditAPIKey(ctx context.Context, key AuditAPIKey) context.Context {
 	if key.ID == 0 && key.Name == "" {
 		return ctx
@@ -109,6 +110,7 @@ func WithAuditAPIKey(ctx context.Context, key AuditAPIKey) context.Context {
 	return context.WithValue(ctx, AuditAPIKeyContextKey, key)
 }
 
+// AuditAPIKeyFromContext reads API-key audit metadata from the context.
 func AuditAPIKeyFromContext(ctx context.Context) (AuditAPIKey, bool) {
 	if ctx == nil {
 		return AuditAPIKey{}, false

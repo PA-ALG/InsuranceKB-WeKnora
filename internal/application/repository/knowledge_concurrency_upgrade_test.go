@@ -58,7 +58,7 @@ func injectPinnedSourceAfterKnowledgeLock(
 				CreatedAt:      now, UpdatedAt: now,
 			}
 			if err := tx.Session(&gorm.Session{NewDB: true, SkipHooks: true}).Create(pin).Error; err != nil {
-				tx.AddError(err)
+				_ = tx.AddError(err) // AddError stores the error on tx; its return repeats tx.Error.
 			}
 		},
 	))

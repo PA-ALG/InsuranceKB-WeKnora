@@ -154,14 +154,16 @@ type TenantUserEnvVar struct {
 // TableName pins the table so GORM's pluralizer cannot drift.
 func (TenantUserEnvVar) TableName() string { return "tenant_user_env_vars" }
 
-func (e *TenantUserEnvVar) BeforeCreate(tx *gorm.DB) error {
+// BeforeCreate assigns an ID and encrypts the value before insertion.
+func (e *TenantUserEnvVar) BeforeCreate(_ *gorm.DB) error {
 	if e.ID == "" {
 		e.ID = uuid.New().String()
 	}
 	return e.encryptValue()
 }
 
-func (e *TenantUserEnvVar) BeforeSave(tx *gorm.DB) error {
+// BeforeSave encrypts the value before persistence.
+func (e *TenantUserEnvVar) BeforeSave(_ *gorm.DB) error {
 	return e.encryptValue()
 }
 
@@ -177,7 +179,8 @@ func (e *TenantUserEnvVar) encryptValue() error {
 	return nil
 }
 
-func (e *TenantUserEnvVar) AfterFind(tx *gorm.DB) error {
+// AfterFind decrypts the stored value after loading.
+func (e *TenantUserEnvVar) AfterFind(_ *gorm.DB) error {
 	e.Value = decryptEnvValue("tenant_user_env_vars", e.Name, e.Value)
 	return nil
 }

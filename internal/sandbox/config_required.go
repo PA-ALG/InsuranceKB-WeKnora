@@ -1,4 +1,4 @@
-// Package sandbox: what a named backend config must carry on its own.
+// Package sandbox provides what a named backend config must carry on its own.
 //
 // A named config is self-contained. Every value the provider client cannot
 // synthesize has to be present in the workspace config itself, so this file

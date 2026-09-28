@@ -71,7 +71,7 @@ const (
 	// Error events
 	EventError EventType = "error" // 错误事件
 
-	// Long-term memory recalled for this turn. Emitted once, before the answer
+	// EventMemoryRecalled Long-term memory recalled for this turn. Emitted once, before the answer
 	// streams, so the UI can show which memories the answer saw.
 	EventMemoryRecalled EventType = "memory_recalled"
 

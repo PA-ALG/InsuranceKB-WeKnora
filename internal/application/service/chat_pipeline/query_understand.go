@@ -358,7 +358,7 @@ func (p *PluginQueryUnderstand) memoryBackground(ctx context.Context, chatManage
 	// the whole standing background, unfiltered — that is the right input for a
 	// rewriter, but reporting it would claim every turn recalled memories that
 	// have nothing to do with the question. Which memories this turn actually
-	// used is decided in MEMORY_RECALL, by relevance, and the profile entries
+	// used is decided in MemoryRecall, by relevance, and the profile entries
 	// here are already reported from there.
 	fields := map[string]interface{}{
 		"session_id": chatManage.SessionID,

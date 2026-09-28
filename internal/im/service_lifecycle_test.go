@@ -12,6 +12,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -491,7 +492,7 @@ func TestLeadershipLossStopsAdapterAndSchedulesRecovery(t *testing.T) {
 
 	// Simulate another owner replacing the lease before the next renewal.
 	key := RedisKeyLeader + channel.ID
-	redisServer.Set(key, "instance-two")
+	require.NoError(t, redisServer.Set(key, "instance-two"))
 	svc.handleWSLeadershipLoss(channel.ID)
 
 	if _, _, ok := svc.GetChannelAdapter(channel.ID); ok {

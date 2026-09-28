@@ -348,6 +348,7 @@ type ParserEngineConfig struct {
 }
 
 const (
+	// MinerUParseMethodAuto selects automatic text or OCR parsing.
 	MinerUParseMethodAuto = "auto"
 	MinerUParseMethodOCR  = "ocr"
 	MinerUParseMethodText = "txt"
@@ -373,6 +374,7 @@ func ResolveMinerUParseMethod(method string, legacyOCREnabled *bool) string {
 	return MinerUParseMethodAuto
 }
 
+// ResolveChatParserEngine resolves the configured chat parser for the file type.
 func (c *ParserEngineConfig) ResolveChatParserEngine(fileType string) string {
 	if c != nil {
 		normalized := normalizeParserFileType(fileType)

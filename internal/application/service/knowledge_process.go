@@ -4242,7 +4242,9 @@ func (s *knowledgeService) convert(
 		knowledge.ParseStatus = "failed"
 		knowledge.ErrorMessage = "Parser endpoint is not allowed for security reasons"
 		knowledge.UpdatedAt = time.Now()
-		s.repo.UpdateKnowledge(ctx, knowledge)
+		if updateErr := s.repo.UpdateKnowledge(ctx, knowledge); updateErr != nil {
+			logger.Warnf(ctx, "Failed to persist parser endpoint rejection")
+		}
 		s.failStage(ctx, knowledge.ID, types.StageDocReader,
 			werrors.ErrCodeDocReaderParseFailed, knowledge.ErrorMessage, err)
 		return nil, nil

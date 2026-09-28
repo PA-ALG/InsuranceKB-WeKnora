@@ -83,7 +83,8 @@ func (c *client) get(ctx context.Context, endpoint string, out interface{}) erro
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	// Closing this read-only resource cannot change the completed result.
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err

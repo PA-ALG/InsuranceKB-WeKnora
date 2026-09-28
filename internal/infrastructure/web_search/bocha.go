@@ -126,7 +126,7 @@ func (p *BochaProvider) Search(ctx context.Context, query string, maxResults int
 		return nil, fmt.Errorf("failed to unmarshal Bocha response: %w", err)
 	}
 	if response.Code != 0 && response.Code != bochaCode(http.StatusOK) {
-		return nil, fmt.Errorf("Bocha API returned code %d", response.Code)
+		return nil, fmt.Errorf("bocha API returned code %d", response.Code)
 	}
 	results := make([]*types.WebSearchResult, 0, len(response.Data.WebPages.Value))
 	for _, item := range response.Data.WebPages.Value {
@@ -160,7 +160,7 @@ func readBochaResponseBody(reader io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read Bocha response: %w", err)
 	}
 	if len(body) > maxBochaResponseBytes {
-		return nil, fmt.Errorf("Bocha response exceeds %d bytes", maxBochaResponseBytes)
+		return nil, fmt.Errorf("bocha response exceeds %d bytes", maxBochaResponseBytes)
 	}
 	return body, nil
 }
@@ -176,7 +176,7 @@ func bochaHTTPError(statusCode int, body []byte) error {
 			detail = strings.TrimSpace(apiError.Msg)
 		}
 		if detail != "" {
-			return fmt.Errorf("Bocha API returned status %d: %s", statusCode, detail)
+			return fmt.Errorf("bocha API returned status %d: %s", statusCode, detail)
 		}
 	}
 	detail := strings.TrimSpace(string(body))

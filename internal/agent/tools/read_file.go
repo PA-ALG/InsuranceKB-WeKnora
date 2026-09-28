@@ -101,9 +101,15 @@ func (t *ReadFileTool) updateDescription() {
 		}
 	}
 	if t.skills != nil && t.skills.IsEnabled() {
-		scopes = append(scopes, "Skill resources: skill://<name>/SKILL.md loads the allowed skill's instructions, file list and execution guidance; skill://<name>/<relative-file> reads a bundled resource. These are package resources, not shell paths or arbitrary host files.")
+		scopes = append(scopes, "Skill resources: skill://<name>/SKILL.md loads the allowed skill's"+
+			" instructions, file list and execution guidance;"+
+			" skill://<name>/<relative-file> reads a bundled resource. These are package"+
+			" resources, not shell paths or arbitrary host files.")
 	}
-	t.description = "Read text from the available file sources.\n" + strings.Join(scopes, "\n") + "\noffset is a 1-based line number; limit defaults to 2000 lines. max_bytes is capped at 65536; the tool output budget also applies. Continue at the returned next_offset when truncated. Binary content is suppressed."
+	t.description = "Read text from the available file sources.\n" + strings.Join(scopes, "\n") +
+		"\noffset is a 1-based line number; limit defaults to 2000 lines. max_bytes is" +
+		" capped at 65536; the tool output budget also applies. Continue at the" +
+		" returned next_offset when truncated. Binary content is suppressed."
 }
 
 func (t *ReadFileTool) Execute(ctx context.Context, args json.RawMessage) (*types.ToolResult, error) {
@@ -191,7 +197,9 @@ func (t *ReadFileTool) readSkillResource(ctx context.Context, input ReadFileInpu
 				"(host virtualenvs and node_modules are not copied). "+
 				"Deliverables belong in /workspace/output.\n\n", name, dir)
 		} else {
-			b.WriteString("Execution is unavailable: this agent has no sandbox shell. The skill instructions can be read; configuring a shell-capable sandbox is required to run scripts.\n\n")
+			b.WriteString("Execution is unavailable: this agent has no sandbox shell. The skill" +
+				" instructions can be read; configuring a shell-capable sandbox is required to" +
+				" run scripts.\n\n")
 		}
 		b.WriteString(skill.Instructions)
 		files, err := t.skills.ListSkillFiles(ctx, name)
@@ -209,7 +217,8 @@ func (t *ReadFileTool) readSkillResource(ctx context.Context, input ReadFileInpu
 		}
 	}
 	if int64(len(content)) > maxReadSandboxDownloadBytes {
-		return fail(fmt.Errorf("skill resource exceeds the %d-byte read limit; split the package resource into smaller files", maxReadSandboxDownloadBytes))
+		return fail(fmt.Errorf("skill resource exceeds the %d-byte read limit; split the package resource into"+
+			" smaller files", maxReadSandboxDownloadBytes))
 	}
 	result := renderFilePage(ctx, input, []byte(content), resolveSessionID(ctx), input.Path, "skill://"+name)
 	if result.Data != nil {

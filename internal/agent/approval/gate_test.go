@@ -22,7 +22,7 @@ func (s *stubChecker) IsRequired(ctx context.Context, tenantID uint64, serviceID
 	return s.required, s.err
 }
 
-func (s *stubChecker) IsEnabled(ctx context.Context, tenantID uint64, serviceID, toolName string) (bool, error) {
+func (s *stubChecker) IsEnabled(_ context.Context, _ uint64, _, _ string) (bool, error) {
 	if s.enabledErr != nil {
 		return false, s.enabledErr
 	}

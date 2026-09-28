@@ -65,7 +65,7 @@ func TestTokenUsageAccumulatePreservesUnsupported(t *testing.T) {
 	}
 }
 
-func TestTokenUsageAccumulateOnNilReceiverIsNoOp(t *testing.T) {
+func TestTokenUsageAccumulateOnNilReceiverIsNoOp(_ *testing.T) {
 	var u *TokenUsage
 	u.Accumulate(TokenUsage{PromptTokens: 1, TotalTokens: 1}) // must not panic
 }

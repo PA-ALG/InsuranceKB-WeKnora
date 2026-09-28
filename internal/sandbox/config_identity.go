@@ -1,4 +1,4 @@
-// Package sandbox: what makes an existing sandbox operable.
+// Package sandbox provides what makes an existing sandbox operable.
 //
 // Two groups of configuration fields decide whether the sandboxes a config has
 // already created can still be acted on. This file names them in one place
@@ -22,9 +22,9 @@ import (
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
-// SandboxIdentity is the comparable projection of a config: two configs with
+// Identity is the comparable projection of a config: two configs with
 // equal identities can operate each other's sandboxes.
-type SandboxIdentity struct {
+type Identity struct {
 	Provider              string
 	AllowPrivateEndpoints bool
 
@@ -50,11 +50,11 @@ type SandboxIdentity struct {
 // edit strand anything", a question that must stay answerable when the OLD
 // endpoint no longer resolves — precisely the situation in which an admin needs
 // to re-point the config. Validating the incoming URLs is the save path's job.
-func IdentityOf(tenantCfg *types.TenantSandboxConfig) SandboxIdentity {
+func IdentityOf(tenantCfg *types.TenantSandboxConfig) Identity {
 	if tenantCfg == nil {
-		return SandboxIdentity{}
+		return Identity{}
 	}
-	identity := SandboxIdentity{
+	identity := Identity{
 		Provider:              tenantCfg.SandboxType,
 		AllowPrivateEndpoints: tenantCfg.AllowPrivateEndpoints,
 	}

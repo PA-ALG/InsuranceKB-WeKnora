@@ -205,6 +205,7 @@ func TestCubeTerminalCloseIsIdempotentUnderConcurrency(t *testing.T) {
 	go func() {
 		defer close(drained)
 		for range session.Output() {
+			// Drain output until the terminal session closes.
 		}
 	}()
 

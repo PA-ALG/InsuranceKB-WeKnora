@@ -164,7 +164,7 @@ func (r *taskPendingOpsRepository) SeedKnowledgeFinalizingWithPendingOp(
 		query := tx.Model(&types.KnowledgeBase{}).
 			Select("id").
 			Where("id = ? AND tenant_id = ?", op.ScopeID, op.TenantID)
-		if tx.Dialector.Name() == "postgres" {
+		if tx.Name() == "postgres" {
 			query = query.Clauses(clause.Locking{Strength: "SHARE"})
 		}
 		var kb types.KnowledgeBase
