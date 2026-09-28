@@ -363,5 +363,45 @@
       "internal/utils/security.go"
     ],
     "constraints": "Confirmed 174 diff-scoped v2.12.2 findings across 85 paths after duplicate-package blocker removed. Mechanical comments/formatting/value-preserving simplification only; preserve prompt string bytes and runtime behavior; no disabling linters, broad exclusions, ratchet changes, new product features, Docker/build/deploy/provider. Explicitly account for ignored infallible hash writes and cleanup errors; substantive error handling changes require separate RED and root review before writing. Remove only genuinely unreachable private unused helpers/constants. Existing >500-line files may receive minimal lint edits without unrelated split. Root owns docs/git; writer freezes diff and runs bounded affected checks; independent review mandatory. Root-approved bounded rename of the three internal Go identifiers and exact callers is allowed; serialized values unchanged, no aliases. Error logging may expose only static context (no provider/body/secret), preserve prior return/control flow; regression required if behavior changes. grpc timeout decision remains pending SDK source inspection; no suppression preauthorized. Reviewed one-line exception: retain grpc.WithTimeout in buildMilvusClientConfig because pinned Milvus v2.6.4 still uses supported grpc.DialContext and moving timeout to parent context changes RPC semantics; narrowly document SA1019 with removal condition when SDK migrates to NewClient or equivalent dial-only timeout. This is not a global exclusion or generic suppression authorization. Second exact exception: sandbox_ls.go MaxEntries jsonschema tag must remain one Go literal to preserve reflection/model schema bytes; permit lll only on that field with reason. Do not shorten/change schema text or exclude any other lines."
+  },
+  "go_ci_8b121_fixture_lane": {
+    "owner": "continuation_fixture",
+    "integration_owner": "root",
+    "reviewer": "continuation_review",
+    "plan_sha256": "6dd230aa9b0f50be814891233a8a3e3858691a154b0e2546e5c3665cbf4f33b1",
+    "status": "CODE PASS: bounded tests and final independent diff review0BLOCKER",
+    "paths": [
+      ".github/workflows/app.yml",
+      "internal/application/service/agent_browser_source_test.go",
+      "internal/application/service/document_write_access_test.go",
+      "internal/application/service/knowledge_batch_reparse_test.go",
+      "internal/application/service/knowledge_move_wiki_test.go",
+      "internal/application/service/knowledge_process_status_test.go",
+      "internal/application/service/knowledge_replace_test.go",
+      "internal/application/service/knowledge_replace_fixture_test.go"
+    ],
+    "limits": "CI-only Linux private-temp prerequisite and six test fixtures; preserve existing assertions and production guards; no runtime production edits; no lint backlog expansion; replacement SHA-binding risk requires separate RED and scope review",
+    "previous_owner": "root_lint_closure",
+    "fixture_split": "Existing replacement test file446 lines; move existing fixture/harness to companion test file to preserve <=500 lines, no behavior/assertion scope expansion",
+    "commit": "07d0e3e48833135b1a76858a688c6feb14976c13"
+  },
+  "replacement_source_sha_fix": {
+    "owner": "continuation_fixture",
+    "reviewer": "continuation_review",
+    "integration_owner": "root",
+    "plan_sha256": "eec418da2a990ba7a738ca94284504d1189c0548c0afcccac97541eefd6fc518",
+    "production_paths": [
+      "internal/application/service/knowledge_replace.go",
+      "internal/application/service/knowledge_util.go"
+    ],
+    "test_paths": [
+      "internal/application/service/knowledge_replace_test.go",
+      "internal/application/service/knowledge_replace_fixture_test.go"
+    ],
+    "scope": "Reuse existing calculateFileHashes, bind SHA alongside new source path in existing update, restore previous SHA with previous source on compensation; actual independent RED demonstrated",
+    "status": "CODE PASS: bounded tests and final independent diff review0BLOCKER",
+    "no_new_image_claim": true,
+    "dead_wrapper_removal": "Remove only unused calculateFileHash wrapper after its sole replacement caller consumes existing dual hashes",
+    "commit": "07d0e3e48833135b1a76858a688c6feb14976c13"
   }
 }

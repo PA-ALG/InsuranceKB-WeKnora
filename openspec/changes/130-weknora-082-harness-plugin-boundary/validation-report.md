@@ -1,6 +1,25 @@
 # 升级验证矩阵
 
-## 2026-09-28 最终有界修正与恢复阻断（当前）
+## 2026-09-28 隔离升级及有界源码修复通过，最终CI待闭合（当前）
+
+原App精确配置获用户“授权”后私密恢复，旧版61业务表与epoch27/source/PDF连续性PASS。
+目标PG唯一pull与新版App唯一正式迁移PASS：official110/false、enterprise5/false、pg_search0.22.6。
+原61表旧列无意外变化，4存储alias只有预期updated_at、21行/216 spans保持，20新表均空。
+发布版本、members、来源字段及PDF696913字节/SHA b2ade27c…一致；citation按原生算法
+重算各自有效，仅到期时间归一后完整authority相同。比较器首次误判与配置前置STOP均保留。
+旧wiki_log_entries6条摘要保持；legacy log页0，非空页改写场景NOT EXERCISED。
+两测试App均已停止，原8服务未变；追加构建/provider/切换0。迁移receipt fca2ae6e…绑定
+既有e71/442701制品，不代表后续源码修复已运行；完整结果见isolated-restore-20260928.json。
+
+8b121远端最终19成功/2失败/5跳过，dsh真实E2E与deterministic PASS；Go/root lint未闭合。
+8路径测试/CI准备修正独审0BLOCKER、14定向PASS；新增独立RED确认替换文件仍绑定旧SHA，
+最小生产修复已提交07d0e3e48/tree8eb1c1f2，最终10路径独审0BLOCKER；
+19项+4子测试PASS，14定向及mineru PASS，不削弱断言、不扩大lint范围。
+source lock已绑定07d0/tree8eb1，verify/report PASS，dfaf报告与18c5逐字一致。
+CURRENT=有界源码修复与隔离迁移已分别闭合；NEXT=完成最终证据审查，更新同一Draft并检查CI。
+原环境切换、新业务tracer/provider及新可信镜像均NOT RUN，不合并。下方为历史。
+
+## 2026-09-28 最终有界修正与恢复阻断（历史）
 
 机械代码96路径提交18c5f74c321f1b467fdf113b78564379b2ab62ff/tree8bf6a405…，两轮冻结独审0BLOCKER；
 14文件字符串值逐字一致，定向wiki/service/chat_pipeline/types等PASS。原失败、完整types超时、

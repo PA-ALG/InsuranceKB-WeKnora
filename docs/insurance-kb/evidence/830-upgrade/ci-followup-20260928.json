@@ -101,5 +101,463 @@
     "code_review_blockers": 0,
     "full_lint": "BLOCKED",
     "receipt": "root-lint-closure-20260928.json"
+  },
+  "remote_ci_8b121_checkpoint": {
+    "head": "8b1215519354c56e274cacae0ece1f81e8a57cb5",
+    "draft": true,
+    "status": "BLOCKED",
+    "conclusions": {
+      "IN_PROGRESS": 3,
+      "SKIPPED": 4,
+      "SUCCESS": 17,
+      "FAILURE": 1
+    },
+    "checks": [
+      {
+        "name": "Format, vet, test, and build",
+        "status": "IN_PROGRESS",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744013/job/108810631366"
+      },
+      {
+        "name": "deterministic",
+        "status": "IN_PROGRESS",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744025/job/108810631656"
+      },
+      {
+        "name": "rag full loop",
+        "status": "COMPLETED",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744000/job/108810631705"
+      },
+      {
+        "name": "anydoc parser engine",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744014/job/108810631322"
+      },
+      {
+        "name": "Typecheck, test, pack",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743990/job/108810631187"
+      },
+      {
+        "name": "Test (Python 3.10)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744001/job/108810631189"
+      },
+      {
+        "name": "test (ubuntu-latest / go 1.26)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743961/job/108810630899"
+      },
+      {
+        "name": "Python tests and Go client tests",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743883/job/108810630689"
+      },
+      {
+        "name": "Test, type-check, and build",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743973/job/108810631174"
+      },
+      {
+        "name": "detect lint modules",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743959/job/108810631249"
+      },
+      {
+        "name": "Test (Python 3.11)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744001/job/108810631463"
+      },
+      {
+        "name": "test (macos-latest / go 1.26)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743961/job/108810631096"
+      },
+      {
+        "name": "Test (Python 3.12)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744001/job/108810631503"
+      },
+      {
+        "name": "test (windows-latest / go 1.26)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743961/job/108810631155"
+      },
+      {
+        "name": "Test (Python 3.13)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744001/job/108810631360"
+      },
+      {
+        "name": "golangci-lint (.)",
+        "status": "COMPLETED",
+        "conclusion": "FAILURE",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743959/job/108810690998"
+      },
+      {
+        "name": "End-to-end inside dsh (pinned)",
+        "status": "IN_PROGRESS",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743990/job/108810631074"
+      },
+      {
+        "name": "Build sdist + wheel",
+        "status": "COMPLETED",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744001/job/108810857927"
+      },
+      {
+        "name": "Docker multi-stage image",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743973/job/108810631398"
+      },
+      {
+        "name": "integration-postgres",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744025/job/108810631389"
+      },
+      {
+        "name": "golangci-lint (cli)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743959/job/108810691133"
+      },
+      {
+        "name": "golangci-lint (client)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743959/job/108810691157"
+      },
+      {
+        "name": "End-to-end inside dsh (latest, advisory)",
+        "status": "COMPLETED",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385743990/job/108810632483"
+      },
+      {
+        "name": "Publish to PyPI",
+        "status": "COMPLETED",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744001/job/108810859391"
+      },
+      {
+        "name": "wheel-smoke",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36385744025/job/108810631620"
+      }
+    ],
+    "root_lint": {
+      "reported_issues": 123,
+      "output_capped": true,
+      "categories": {
+        "errcheck": 13,
+        "gofumpt": 3,
+        "lll": 50,
+        "revive": 50,
+        "staticcheck": 7
+      },
+      "elapsed_ms": 335147,
+      "log_sha256": "e34d858eb14e443095305c63e75d72cf4962a1211df9574712e72f642781e4a8",
+      "meaning": "Final-head remote lint failed; capped output cannot replace earlier uncapped973 findings. No new blanket repair or gate relaxation."
+    }
+  },
+  "dsh_head8b121_final": {
+    "status": "PASS",
+    "run_id": 36385743990,
+    "head": "8b1215519354c56e274cacae0ece1f81e8a57cb5",
+    "pinned_real_e2e": "PASS",
+    "typecheck_test_pack": "PASS",
+    "latest_advisory": "SKIPPED",
+    "publish": "SKIPPED"
+  },
+  "go_head8b121_final": {
+    "status": "BLOCKED",
+    "run_id": 36385744013,
+    "head": "8b1215519354c56e274cacae0ece1f81e8a57cb5",
+    "failed_packages": [
+      "cmd/mineru-capture-596-1",
+      "internal/application/service"
+    ],
+    "failure_names": [
+      "TestRunThreeSourceCaptureUsesFixedSequenceAndSanitizedOutput",
+      "TestRunThreeSourceCaptureReusesExactTermsCustodyAndCallsOnlyRemainingSources",
+      "TestRunThreeSourceCaptureRejectsNonPrivateArtifactMode",
+      "TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture",
+      "TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture/source-sha-drift",
+      "TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture/brochure-source-missing",
+      "TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture/brochure-source-sha-drift",
+      "TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture/rate-source-missing",
+      "TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture/rate-source-sha-drift",
+      "TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture/credential-missing",
+      "TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture/output-root-exists",
+      "TestRunThreeSourceCaptureStopsAndPreservesBoundedPartialCustody",
+      "TestRunThreeSourceCaptureStopsAndPreservesBoundedPartialCustody/failure-1",
+      "TestRunThreeSourceCaptureStopsAndPreservesBoundedPartialCustody/failure-2",
+      "TestRunThreeSourceCaptureStopsAndPreservesBoundedPartialCustody/failure-3",
+      "TestRunThreeSourceCaptureRetainsFixedReasonAcrossPrefixAndLogFormat",
+      "TestRunThreeSourceCaptureRetainsFixedReasonAcrossPrefixAndLogFormat/terms",
+      "TestRunThreeSourceCaptureRetainsFixedReasonAcrossPrefixAndLogFormat/partial",
+      "TestBrowserSourceKeepsOtherConfiguredTools",
+      "TestDeleteTaskRetriesAfterPartialCleanupAndAlreadyDeletedRows",
+      "TestKnowledgeCleanupScopeCannotAuthorizeGeneralWritesOrExtraIDs",
+      "TestReferencedKnowledgeCleanupPinsItsIndependentKB",
+      "TestLegacySingleKBDeleteTaskRemainsExecutable",
+      "TestMultiKBDeleteRequiresAndAcceptsEveryKBGrant",
+      "TestReparseKnowledgeManualEnqueueFailureIsVisible",
+      "TestReparseKnowledgePreservesOrChangesSummaryChoice",
+      "TestReparseKnowledgePreservesOrChangesSummaryChoice/reuse_upload_choice",
+      "TestReparseKnowledgePreservesOrChangesSummaryChoice/explicitly_keep_disabled",
+      "TestReparseKnowledgePreservesOrChangesSummaryChoice/enable_on_reparse",
+      "TestDeleteWikiRemovesEveryChunkType",
+      "TestMoveReparseKBLookupFailurePreservesSourceCheckpoint",
+      "TestMoveReparseRejectsPinnedRevisionSourceBeforeMutation",
+      "TestMoveReparseWikiUsesDurableSourceRefsAfterChunksDeleted",
+      "TestFinalizeIndexedKnowledgeState",
+      "TestFinalizeIndexedKnowledgeState/text_document_stays_processing_so_post-process_can_fan_out_enrichment",
+      "TestFinalizeIndexedKnowledgeState/document_waits_while_multimodal_image_work_is_pending",
+      "TestReplaceKnowledgeFilePreservesIDAndReparsesNewContent"
+    ],
+    "panic": "TestReplaceKnowledgeFilePreservesIDAndReparsesNewContent: nil pointer dereference",
+    "log_sha256": "d269db9e8749259e3eb8ec25bba9834f965f5a13155f4a621b39476669a60adf",
+    "root_cause": "Read-only bounded diagnosis in progress; no new repair authorized by this receipt"
+  },
+  "remote_ci_8b121_final": {
+    "head": "8b1215519354c56e274cacae0ece1f81e8a57cb5",
+    "status": "BLOCKED",
+    "success": 19,
+    "failure": 2,
+    "skipped": 5,
+    "failed_checks": [
+      "Format, vet, test, and build",
+      "golangci-lint (.)"
+    ],
+    "dsh_pinned": "PASS",
+    "deterministic": "PASS",
+    "later_head_ci": "NOT RUN"
+  },
+  "fixture_repair_checkpoint": {
+    "base_head": "8b1215519354c56e274cacae0ece1f81e8a57cb5",
+    "status": "BLOCKED_PRODUCTION_SHA_BINDING_RED",
+    "plan_sha256": "6dd230aa9b0f50be814891233a8a3e3858691a154b0e2546e5c3665cbf4f33b1",
+    "addendum_sha256": "c04507bcef98a3308285088ef3a8324d6792c218173d030ba062a7eaa0e05973",
+    "patch_sha256": "0e60e20d70765b1bf3dc58422f45bce634c8fa111168b0cbec42b05ff4ec1627",
+    "paths": [
+      {
+        "path": ".github/workflows/app.yml",
+        "sha256": "14ea98d23977723bf6b123f3ab1aea6a83b7a9970d499d47f29682a7a4328593",
+        "lines": 151
+      },
+      {
+        "path": "internal/application/service/agent_browser_source_test.go",
+        "sha256": "71a2df946ceb117aadc20372d127d3287709de70600598edff6a135d01097bcb",
+        "lines": 137
+      },
+      {
+        "path": "internal/application/service/document_write_access_test.go",
+        "sha256": "2854034bf03f2e86d28e8f126e228bb01e71dc795031f4d960c150b5db87cecc",
+        "lines": 661
+      },
+      {
+        "path": "internal/application/service/knowledge_batch_reparse_test.go",
+        "sha256": "e9b89d1d4184e507afee04d360809cda42d06e9f27f86e8eed83d3d06b9a9009",
+        "lines": 218
+      },
+      {
+        "path": "internal/application/service/knowledge_move_wiki_test.go",
+        "sha256": "31bf631a3701508cb007b3c909308e8379832b1f7ce70b4df4ef4f89e1032c56",
+        "lines": 406
+      },
+      {
+        "path": "internal/application/service/knowledge_process_status_test.go",
+        "sha256": "4e0e96efaeb3e742930baae3be5d02903a866d361af19850ed30457a02e30adb",
+        "lines": 115
+      },
+      {
+        "path": "internal/application/service/knowledge_replace_test.go",
+        "sha256": "37b71e12978cf22fb248a800ab3a9f608a9ff970787060db95fcc41e65b777c4",
+        "lines": 248
+      },
+      {
+        "path": "internal/application/service/knowledge_replace_fixture_test.go",
+        "sha256": "e8f1dbcb96386dca6dd695b058b7d588c6bef14c86df532386c7206f1f3c2362",
+        "lines": 283
+      }
+    ],
+    "checks": {
+      "diff_check": "PASS",
+      "gofmt": "PASS",
+      "workflow_yaml_parse": "PASS",
+      "focused_initial": "BLOCKED: two miniredis localhost listen attempts denied by sandbox, not code failure",
+      "focused_with_local_listen": "PASS: selected 14 top-level tests, 2.060s",
+      "replacement_family": "BLOCKED: only newly added nonempty old SHA regression failed; prior assertions passed; 1.890s",
+      "capture_local": "NOT RUN: STOP after confirmed production risk",
+      "linux_ci": "NOT RUN",
+      "full_suite": "NOT RUN",
+      "production_edits": 0
+    },
+    "red": {
+      "test": "TestReplaceKnowledgeFileBindsNewBytesWhenPreviousSHAIsNonempty",
+      "expected_new_sha": "fa55f2c58941ae28c7c4a1e40177dd37ce94a20497f17d7dde1815f005a3c57c",
+      "actual_old_sha": "cba06b5736faf67e54b07b561eae94395e774c517a7d910a54369e1263ccfbd4",
+      "observations": "New file bytes persist and parse attempt advances 3 to 4; returned row, allocation argument and queued revision all retain the old SHA. File mock saves uploaded bytes and never fabricates SHA; revision mock records caller SHA without recomputing. Production ReplaceKnowledgeFile sourceColumns does not set file_sha256; reparseKnowledge hashes files only when existing SHA is empty."
+    },
+    "independent_review_blockers": 0,
+    "meaning": "Fixture changes reviewed; newly demonstrated production SHA bug remains RED. No all-pass claim."
+  },
+  "source_sha_repair_final": {
+    "base_head": "8b1215519354c56e274cacae0ece1f81e8a57cb5",
+    "writer": "continuation_fixture",
+    "reviewer": "continuation_review",
+    "status": "PASS_BOUNDED_CHECKS_AND_INDEPENDENT_REVIEW",
+    "plan_sha256": "6dd230aa9b0f50be814891233a8a3e3858691a154b0e2546e5c3665cbf4f33b1",
+    "fixture_addendum_sha256": "c04507bcef98a3308285088ef3a8324d6792c218173d030ba062a7eaa0e05973",
+    "sha_plan_sha256": "eec418da2a990ba7a738ca94284504d1189c0548c0afcccac97541eefd6fc518",
+    "sha_addendum_sha256": "451f0e89f62a2b47b729daf35361541a15343da1e27fce75eccd03cf27d251b4",
+    "patch": "go8b121-final.patch",
+    "patch_sha256": "c421199758f03115789222128568fe14a3346665eb847ac55a1f0f923667cfac",
+    "paths": [
+      {
+        "path": ".github/workflows/app.yml",
+        "sha256": "14ea98d23977723bf6b123f3ab1aea6a83b7a9970d499d47f29682a7a4328593",
+        "lines": 151
+      },
+      {
+        "path": "internal/application/service/agent_browser_source_test.go",
+        "sha256": "71a2df946ceb117aadc20372d127d3287709de70600598edff6a135d01097bcb",
+        "lines": 137
+      },
+      {
+        "path": "internal/application/service/document_write_access_test.go",
+        "sha256": "2854034bf03f2e86d28e8f126e228bb01e71dc795031f4d960c150b5db87cecc",
+        "lines": 661
+      },
+      {
+        "path": "internal/application/service/knowledge_batch_reparse_test.go",
+        "sha256": "e9b89d1d4184e507afee04d360809cda42d06e9f27f86e8eed83d3d06b9a9009",
+        "lines": 218
+      },
+      {
+        "path": "internal/application/service/knowledge_move_wiki_test.go",
+        "sha256": "31bf631a3701508cb007b3c909308e8379832b1f7ce70b4df4ef4f89e1032c56",
+        "lines": 406
+      },
+      {
+        "path": "internal/application/service/knowledge_process_status_test.go",
+        "sha256": "4e0e96efaeb3e742930baae3be5d02903a866d361af19850ed30457a02e30adb",
+        "lines": 115
+      },
+      {
+        "path": "internal/application/service/knowledge_replace_test.go",
+        "sha256": "29008ea165b4295095e5b409a75c2fcfea8d44900c486a054fe48ca065b99ecb",
+        "lines": 307
+      },
+      {
+        "path": "internal/application/service/knowledge_replace_fixture_test.go",
+        "sha256": "97b799e2fb405f4473aa1bc7205cd6d557a5d1584695bac4c8bf0f2e3fd3d9ec",
+        "lines": 286
+      },
+      {
+        "path": "internal/application/service/knowledge_replace.go",
+        "sha256": "907ac0ce33e0b333fa827060118fadcb5bf3368aff49033afcba92c5dcca8809",
+        "lines": 254
+      },
+      {
+        "path": "internal/application/service/knowledge_util.go",
+        "sha256": "ffb8eb1dd383581cedb4cb5fe21ff5050e0b2fd81cfcee636aa776e066f090cd",
+        "lines": 526
+      }
+    ],
+    "checks": {
+      "diff_check": "PASS",
+      "gofmt": "PASS",
+      "workflow_yaml_parse": "PASS",
+      "focused_initial": "BLOCKED: two miniredis localhost listen attempts denied by sandbox, not code failure",
+      "focused_with_local_listen": "PASS: selected 14 top-level tests, 2.060s",
+      "replacement_before_fix": "RED: 14 existing tests pass, newly added nonempty old SHA regression fails; 1.890s",
+      "sha_compensation_before_fix": "RED: source SHA success and all four compensation cases fail for the exact omission; 1.859s",
+      "sha_green": {
+        "top_level_pass": 19,
+        "subtest_pass": 4,
+        "failures": 0,
+        "package_result": [
+          {
+            "Time": "2026-09-28T15:19:38.312701+08:00",
+            "Action": "pass",
+            "Package": "github.com/Tencent/WeKnora/internal/application/service",
+            "Elapsed": 1.883
+          }
+        ]
+      },
+      "capture_local": "PASS: 1.633s; does not prove Linux workflow prerequisite",
+      "linux_ci": "NOT RUN",
+      "full_suite": "NOT RUN",
+      "lint_backlog": "UNTOUCHED",
+      "production_edits": "3 minimum replacement hash/source/compensation edits plus obsolete wrapper deletion"
+    },
+    "logs": [
+      {
+        "path": "go8b121-fixture-focused.log",
+        "sha256": "5be82bb9fc392837d58508157eb722a4756e6f3fffb00b7966a484918d809d55"
+      },
+      {
+        "path": "go8b121-fixture-focused-local-listen.log",
+        "sha256": "d7a3de2ddb800c357c49996271eeb8dc724588ba6b443f09b6e08eb08fe5d951"
+      },
+      {
+        "path": "go8b121-fixture-replace.log",
+        "sha256": "4e3a2414dca039c87408c34430a69f15dd38f691410deefb2e473903bde47282"
+      },
+      {
+        "path": "go8b121-fixture-mineru.log",
+        "sha256": "8b1da0f0ca64892630714e6ccdf8ab104999ac4177f2bded6adf1331d653dfa7"
+      },
+      {
+        "path": "go8b121-replace-sha-red.log",
+        "sha256": "8730eea68f24e3870d6a691304ce71ae5d7b754711f333cc3216bf04f47e5d28"
+      },
+      {
+        "path": "go8b121-replace-sha-green.jsonl",
+        "sha256": "71895936306b3be6495f9b3cf2bb98c395b9815ab94bee04ee0feab105a478c6"
+      }
+    ],
+    "limits": [
+      "No repository-wide tests/lint or application build",
+      "No provider, Docker, live DB or deployment effect",
+      "Existing image is not built from this software change",
+      "Exact final-head CI required; partial fixture results do not close full GitHub CI"
+    ],
+    "independent_review_blockers": 0,
+    "commit": "07d0e3e48833135b1a76858a688c6feb14976c13",
+    "tree": "8eb1c1f2cbdd9c909341210689e20a9149baec94"
+  },
+  "source_lock_rebind_07d0": {
+    "status": "PASS",
+    "commit": "07d0e3e48833135b1a76858a688c6feb14976c13",
+    "tree": "8eb1c1f2cbdd9c909341210689e20a9149baec94",
+    "report_sha256": "dfaf453e844b9169a5bc82c5c4d3ed6eed742c9af95ebf608812b9a622f6da7c",
+    "report_byte_identical_to_18c5": true,
+    "verify_exit": 0,
+    "verify_report_exit": 0,
+    "initial_checker_invocation": "BLOCKED inventory_path_mismatch: passed workflow checkout inventory instead of clean source inventory; rerun using canonical clean-source path passed; no source change",
+    "new_image": "NOT RUN",
+    "runtime_evidence_source": "e71c72f7dd885e228c4f447c68902450fed7ae26"
   }
 }

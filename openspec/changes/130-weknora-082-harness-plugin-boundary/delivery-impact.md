@@ -1,12 +1,12 @@
 ## 2026-09-28 当前交付边界
 
-software：18c5f74c3机械修正独审及定向验证PASS，完整lint/最终CI仍BLOCKED（973项快照）。
-source lock绑定18c5/tree8bf6a405，实际verify/report PASS，dfaf报告字节不变；已有e71/82镜像不冒充新源。
-provisioning：五库隔离恢复PASS；旧App配置层缺失，发布内容读取BLOCKED，测试App已停止。
-/app/config私有归档复制遭自动审批拒绝，精确授权待答复；新PG pull/迁移/新App启动0。
-container health：旧App初次隔离启动PASS，仅限该次，不能推出升级健康。
-provider probe、升级local live、新业务tracer、原环境切换均NOT RUN；原8服务身份保持。
-GitHub live：5bd远端21成功/3失败/5跳过，最终head以实际推送后的状态为准；Draft不合并。
+software：07d0e3e48测试前置及ReplaceFile来源SHA修复独审/定向PASS；完整CI未闭合。
+source lock绑定07d0/8eb1，verify/report PASS；已有e71/82镜像不冒充新源。
+provisioning：五库/准确配置恢复及既有e71 App唯一隔离75→110/e5/pg_search0.22.6迁移PASS。
+container health/local live：旧版b393与新版e71隔离App健康及epoch27/source/PDF连续性PASS，测试Apps已停。
+61旧表闭合、无意外业务变化；legacy log页0的非空改写场景NOT EXERCISED，详见最终回执fca2ae6e…。
+provider probe、新业务tracer、原环境切换/新源码镜像NOT RUN；原8保持，App追加构建0。
+GitHub live：8b121最终19成功/2失败/5跳过；Go/root lint失败，Draft不合并。
 
 下方为历史影响记录，不能覆盖本块。
 

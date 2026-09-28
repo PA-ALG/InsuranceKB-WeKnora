@@ -1,6 +1,45 @@
 # 唯一执行队列
 
-## 2026-09-28 当前阻断与已保存结果
+## 2026-09-28 隔离升级及有界源码修复通过，最终CI待闭合（当前）
+
+原App精确配置获用户“授权”后私密恢复，旧版61业务表与epoch27/source/PDF连续性PASS。
+目标PG唯一pull与新版App唯一正式迁移PASS：official110/false、enterprise5/false、pg_search0.22.6。
+原61表旧列无意外变化，4存储alias只有预期updated_at、21行/216 spans保持，20新表均空。
+发布版本、members、来源字段及PDF696913字节/SHA b2ade27c…一致；citation按原生算法
+重算各自有效，仅到期时间归一后完整authority相同。比较器首次误判与配置前置STOP均保留。
+旧wiki_log_entries6条摘要保持；legacy log页0，非空页改写场景NOT EXERCISED。
+两测试App均已停止，原8服务未变；追加构建/provider/切换0。迁移receipt fca2ae6e…绑定
+既有e71/442701制品，不代表后续源码修复已运行；完整结果见isolated-restore-20260928.json。
+
+8b121远端最终19成功/2失败/5跳过，dsh真实E2E与deterministic PASS；Go/root lint未闭合。
+8路径测试/CI准备修正独审0BLOCKER、14定向PASS；新增独立RED确认替换文件仍绑定旧SHA，
+最小生产修复已提交07d0e3e48/tree8eb1c1f2，最终10路径独审0BLOCKER；
+19项+4子测试PASS，14定向及mineru PASS，不削弱断言、不扩大lint范围。
+source lock已绑定07d0/tree8eb1，verify/report PASS，dfaf报告与18c5逐字一致。
+CURRENT=有界源码修复与隔离迁移已分别闭合；NEXT=完成最终证据审查，更新同一Draft并检查CI。
+原环境切换、新业务tracer/provider及新可信镜像均NOT RUN，不合并。下方为历史。
+
+## 2026-09-28 Go CI 有界测试准备修订（UPG-08）
+
+远端8b121的失败日志为RED；冻结计划SHA6dd230aa…独审0BLOCKER；8路径写域列于current-slice-paths。
+第8路径只分离既有ReplaceFile测试替身，避免446行原文件追加后超过500行，不扩大行为。
+continuation_fixture唯一写者、continuation_review只读独审、root唯一集成；独审通过才实施。
+此前两lane在计划冻结后终止，本轮接续身份取代旧owner，不覆盖已完成历史审查。
+范围仅Linux runner缺失/private/tmp前置、测试KB租户/必需表/文件与revision替身、
+有效pinned输入和两条已被既有回归取代的旧error期望。保留原有安全/权限/副作用断言，
+不改生产、不扩973lint范围、不跳测试。ReplaceFile旧SHA绑定疑点先独立RED，若证实再审
+生产写域；不能用测试替身伪造正确结果。定向测试不代表全包或最终CI通过。
+
+## 文件替换来源摘要修复（UPG-04/08）
+
+非空旧SHA独立RED已证实：替换新bytes后row/allocator/task仍绑定旧SHA，不是fixture问题。
+冻结计划eec418da…，新增生产写域knowledge_replace.go及knowledge_util.go（只删除失去唯一调用者的6行wrapper），
+复用既有calculateFileHashes，
+同一source更新写新SHA，补偿同一旧source快照恢复旧SHA；现有两测试文件补正常/回滚验证。
+独审后才实施，不改revision/pin/队列顺序，不追加镜像或live操作。已有e71隔离迁移证据
+不冒充包含本修复；最终软件identity另记，完整CI仍待验证。
+
+## 2026-09-28 授权前阻断与已保存结果（历史）
 
 五库恢复PASS；旧App初次容器/正常登录/epoch27读取PASS，完整旧版来源连续性BLOCKED：
 release search500，缺少原writable-layer /app/config（DB/文件摘要相同）。测试App已停止，
