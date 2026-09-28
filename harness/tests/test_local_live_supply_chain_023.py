@@ -27,9 +27,7 @@ IMAGE_PATHS = {
 
 
 def _load_verifier() -> ModuleType:
-    spec = importlib.util.spec_from_file_location(
-        "verify_weknora_app_source_023", VERIFIER_PATH
-    )
+    spec = importlib.util.spec_from_file_location("verify_weknora_app_source_023", VERIFIER_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -63,9 +61,7 @@ def _locked_source_bytes(path: str) -> bytes:
     commit = str(build_source["commit"])
     assert _git(REPO_ROOT, "rev-parse", f"{commit}^{{tree}}") == build_source["tree"]
     _git(REPO_ROOT, "merge-base", "--is-ancestor", commit, "HEAD")
-    return subprocess.check_output(
-        ("git", "show", f"{commit}:{path}"), cwd=REPO_ROOT
-    )
+    return subprocess.check_output(("git", "show", f"{commit}:{path}"), cwd=REPO_ROOT)
 
 
 def test_source_lock_is_closed_and_pins_runtime_build_target_and_three_images() -> None:
@@ -113,9 +109,7 @@ def test_source_lock_is_closed_and_pins_runtime_build_target_and_three_images() 
         image = images[image_id]
         assert isinstance(image, dict)
         assert set(image) == {"repository", "context", "dockerfile"}
-        assert image["repository"] == (
-            f"ghcr.io/pa-alg/insurancekb-weknora-{image_id}"
-        )
+        assert image["repository"] == (f"ghcr.io/pa-alg/insurancekb-weknora-{image_id}")
         assert image["context"] == context
         dockerfile = image["dockerfile"]
         assert isinstance(dockerfile, dict)
@@ -123,6 +117,28 @@ def test_source_lock_is_closed_and_pins_runtime_build_target_and_three_images() 
             "path": dockerfile_path,
             "sha256": hashlib.sha256(_locked_source_bytes(dockerfile_path)).hexdigest(),
         }
+
+
+def test_locked_build_source_contains_the_adopted_manifest_and_target() -> None:
+    lock = _load_json(LOCK_PATH)
+    adoption = lock["adoption_manifest"]
+    build_source = lock["build_source"]
+    assert isinstance(adoption, dict)
+    assert isinstance(build_source, dict)
+    manifest_bytes = _locked_source_bytes(str(adoption["path"]))
+    assert manifest_bytes == MANIFEST_PATH.read_bytes()
+    assert hashlib.sha256(manifest_bytes).hexdigest() == adoption["sha256"]
+    manifest = json.loads(manifest_bytes)
+    assert manifest["commit"] == adoption["commit"]
+    assert manifest["tree"] == adoption["tree"]
+    assert _git(REPO_ROOT, "rev-parse", f"{adoption['commit']}^{{tree}}") == adoption["tree"]
+    _git(
+        REPO_ROOT,
+        "merge-base",
+        "--is-ancestor",
+        str(adoption["commit"]),
+        str(build_source["commit"]),
+    )
 
 
 def test_verifier_rejects_unknown_mutable_or_incomplete_lock(tmp_path: Path) -> None:
@@ -243,6 +259,60 @@ def test_verifier_checks_exact_merged_source_manifest_and_dockerfiles(
         module.verify_source(lock, source_checkout, workflow_checkout)
 
 
+def _reviewed_preservation_rows() -> list[dict[str, str]]:
+    from scripts.adoption_migration_policy import reviewed_rows
+
+    return reviewed_rows()
+
+
+@pytest.mark.parametrize(
+    "mutation", ["missing", "duplicate", "extra_key", "wrong_sha", "wrong_head", "pass", "extra_target_key"]
+)
+def test_verifier_rejects_invalid_preservation_even_with_reviewed_digest(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    module = _load_verifier()
+    lock = module.load_source_lock(LOCK_PATH)
+    rows = _reviewed_preservation_rows()
+    official: dict[str, object] = {"status": "merged", "head": 110, "reviewed_preservations": rows}
+    verdict = "manual_review_required"
+    if mutation == "missing":
+        del official["reviewed_preservations"]
+    elif mutation == "duplicate":
+        rows.append(dict(rows[0]))
+    elif mutation == "extra_key":
+        rows[0]["override"] = "true"
+    elif mutation == "wrong_sha":
+        rows[0]["project_sha256"] = "0" * 64
+    elif mutation == "wrong_head":
+        official["head"] = 109
+    elif mutation == "pass":
+        verdict = "pass"
+    report_value = {
+        "verdict": verdict,
+        "hard_checks": {"status": "pass", "code": "ok"},
+        "target": {
+            "repository": lock.adoption_manifest.repository,
+            "commit": lock.adoption_manifest.commit,
+            "tree": lock.adoption_manifest.tree,
+        },
+        "official_migrations": official,
+        "plugin_contract": {"status": "valid"},
+    }
+    if mutation == "extra_target_key":
+        target = report_value["target"]
+        assert isinstance(target, dict)
+        target["extra"] = "bypass"
+        del official["reviewed_preservations"]
+        report_value["verdict"] = "pass"
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps(report_value), encoding="utf-8")
+    reviewed = lock._replace(reviewed_thin_report_sha256=_sha256(report))
+    with pytest.raises(module.SourceVerificationError, match="preservation"):
+        module.verify_thin_report(reviewed, report)
+
+
 def test_manual_thin_report_requires_exact_reviewed_digest(tmp_path: Path) -> None:
     module = _load_verifier()
     lock = module.load_source_lock(LOCK_PATH)
@@ -255,7 +325,11 @@ def test_manual_thin_report_requires_exact_reviewed_digest(tmp_path: Path) -> No
             "commit": lock.adoption_manifest.commit,
             "tree": lock.adoption_manifest.tree,
         },
-        "official_migrations": {"status": "merged"},
+        "official_migrations": {
+            "status": "merged",
+            "head": 110,
+            "reviewed_preservations": _reviewed_preservation_rows(),
+        },
         "plugin_contract": {"status": "valid"},
     }
     report = tmp_path / "report.json"
@@ -265,8 +339,7 @@ def test_manual_thin_report_requires_exact_reviewed_digest(tmp_path: Path) -> No
 
     module.verify_thin_report(reviewed, report)
     report.write_text(
-        json.dumps({**report_value, "overlaps": {"unexpected": ["path"]}}, sort_keys=True)
-        + "\n",
+        json.dumps({**report_value, "overlaps": {"unexpected": ["path"]}}, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     with pytest.raises(module.SourceVerificationError, match="reviewed digest"):
@@ -350,20 +423,26 @@ def test_trusted_workflow_is_main_only_gated_and_builds_three_attested_images() 
 
 def test_model_debug_redaction_is_in_merged_source_not_a_workflow_patch() -> None:
     source = (REPO_ROOT / "internal/middleware/logger.go").read_text(encoding="utf-8")
-    test_source = (REPO_ROOT / "internal/middleware/logger_test.go").read_text(
-        encoding="utf-8"
-    )
+    test_source = (REPO_ROOT / "internal/middleware/logger_test.go").read_text(encoding="utf-8")
     dockerfile = _locked_source_bytes("docker/Dockerfile.app").decode("utf-8")
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "[model debug response omitted]" in source
     assert "TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog" in test_source
-    assert "migrate/v4/cmd/migrate@v4.19.1" in dockerfile
-    assert "migrate/v4/cmd/migrate@latest" not in dockerfile
-    assert "https://astral.sh/uv/0.9.26/install.sh" in dockerfile
+    dependencies = json.loads(
+        _locked_source_bytes("deploy/local-build/app-external-dependencies.v1.json")
+    )["downloads"]
+    assert dependencies["go_tools"]["migrate"]["version"] == "v4.19.1"
+    assert dependencies["uv"]["version"] == "0.9.26"
+    assert dependencies["uv"]["sha256"] == (
+        "f71040c59798f79c44c08a7a1c1af7de95a8d334ea924b47b67ad6b9632be270"
+    )
+    assert 'grep -F "$BA0_DOWNLOADS_GO_TOOLS_MIGRATE_GO_SUM" go.sum' in dockerfile
     assert (
-        "09ace6a888bd5941b5d44f1177a9a8a6145552ec8aa81c51b1b57ff73e6b9e18"
+        "${BA0_DOWNLOADS_GO_TOOLS_MIGRATE_MODULE}@${BA0_DOWNLOADS_GO_TOOLS_MIGRATE_VERSION}"
         in dockerfile
     )
+    assert 'curl -fsSL "$BA0_DOWNLOADS_UV_ORIGIN"' in dockerfile
+    assert '"$BA0_DOWNLOADS_UV_SHA256"' in dockerfile
     assert "sha256sum -c -" in dockerfile
     assert "git apply" not in workflow
