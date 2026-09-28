@@ -98,7 +98,7 @@ func (s *knowledgeService) ReplaceKnowledgeFile(ctx context.Context,
 		return nil, err
 	}
 
-	hash, err := calculateFileHash(file)
+	hash, fileSHA256, err := calculateFileHashes(file)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +152,7 @@ func (s *knowledgeService) ReplaceKnowledgeFile(ctx context.Context,
 		"file_type":     fileType,
 		"file_size":     file.Size,
 		"file_hash":     hash,
+		"file_sha256":   fileSHA256,
 		"file_path":     newPath,
 		"metadata":      newMetadata,
 		"parse_status":  types.ParseStatusPending,
@@ -181,6 +182,7 @@ func (s *knowledgeService) ReplaceKnowledgeFile(ctx context.Context,
 			"file_type":     existing.FileType,
 			"file_size":     existing.FileSize,
 			"file_hash":     existing.FileHash,
+			"file_sha256":   existing.FileSHA256,
 			"file_path":     existing.FilePath,
 			"metadata":      previousMetadata,
 			"parse_status":  types.ParseStatusFailed,

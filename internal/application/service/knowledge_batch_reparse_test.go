@@ -14,8 +14,11 @@ import (
 
 type reparseFailureKnowledgeRepo struct {
 	interfaces.KnowledgeRepository
-	knowledge   *types.Knowledge
-	updateCalls int
+	knowledge            *types.Knowledge
+	updateCalls          int
+	allocatedKnowledgeID string
+	allocatedModelID     string
+	allocatedFileSHA256  string
 }
 
 func (r *reparseFailureKnowledgeRepo) GetKnowledgeByID(
@@ -41,6 +44,33 @@ func (r *reparseFailureKnowledgeRepo) UpdateKnowledgeColumn(
 	_ interface{},
 ) error {
 	return nil
+}
+
+// Allocation records the service boundary; no worker commits run in these tests.
+func (r *reparseFailureKnowledgeRepo) AllocateParseAttempt(
+	_ context.Context, knowledgeID, modelID, fileSHA256 string,
+) (int64, error) {
+	if knowledgeID != r.knowledge.ID {
+		return 0, errors.New("unexpected knowledge allocation")
+	}
+	r.allocatedKnowledgeID, r.allocatedModelID, r.allocatedFileSHA256 = knowledgeID, modelID, fileSHA256
+	r.knowledge.CurrentParseAttempt++
+	r.knowledge.EmbeddingModelID = modelID
+	r.knowledge.FileSHA256 = fileSHA256
+	r.knowledge.ErrorMessage = ""
+	return r.knowledge.CurrentParseAttempt, nil
+}
+
+func (*reparseFailureKnowledgeRepo) CommitDirectRevision(
+	context.Context, string, types.RevisionCommitBinding,
+) (*types.KnowledgeRevision, error) {
+	return nil, errors.New("unexpected direct revision commit during enqueue")
+}
+
+func (*reparseFailureKnowledgeRepo) FinalizeSubtaskRevision(
+	context.Context, string, types.RevisionCommitBinding,
+) (int, bool, error) {
+	return 0, false, errors.New("unexpected revision finalization during enqueue")
 }
 
 type reparseFailureKBService struct {

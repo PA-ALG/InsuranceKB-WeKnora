@@ -23,9 +23,9 @@ func TestFinalizeIndexedKnowledgeState(t *testing.T) {
 			textChunkCount:    2,
 			wantParseStatus:   types.ParseStatusProcessing,
 			wantSummaryStatus: types.SummaryStatusNone,
-			// Still processing: FinalizeSubtask clears the column when this
-			// row is eventually promoted to completed.
-			wantErrorMessage: "previous attempt failed",
+			// Successful indexing clears the previous attempt error even
+			// while enrichment is still pending.
+			wantErrorMessage: "",
 		},
 		{
 			name:              "empty indexed document is completed without summary work",
@@ -40,7 +40,7 @@ func TestFinalizeIndexedKnowledgeState(t *testing.T) {
 			textChunkCount:       2,
 			wantParseStatus:      types.ParseStatusProcessing,
 			wantSummaryStatus:    types.SummaryStatusNone,
-			wantErrorMessage:     "previous attempt failed",
+			wantErrorMessage:     "",
 		},
 	}
 

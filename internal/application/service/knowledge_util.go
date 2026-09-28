@@ -129,13 +129,6 @@ func calculateReaderSHA256(reader io.Reader) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-// calculateFileHash preserves the legacy helper for callers that only need
-// the MD5 deduplication identity.
-func calculateFileHash(file *multipart.FileHeader) (string, error) {
-	md5Digest, _, err := calculateFileHashes(file)
-	return md5Digest, err
-}
-
 func calculateStr(strList ...string) string {
 	h := md5.New()
 	input := strings.Join(strList, "")

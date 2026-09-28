@@ -218,6 +218,10 @@ func TestMoveReparseRejectsPinnedRevisionSourceBeforeMutation(t *testing.T) {
 	svc, wikiRepo, pendingRepo, chunkRepo := newMoveWikiService(t)
 	repo := svc.repo.(*moveWikiKnowledgeRepo)
 	repo.pinned = true
+	repo.knowledge.Type = "file"
+	repo.knowledge.FilePath = "source/document.md"
+	repo.knowledge.FileName = "document.md"
+	repo.knowledge.FileType = "md"
 
 	err := svc.moveOneKnowledge(
 		moveWikiCtx(), "kn-1", wikiEnabledKB("kb-src"), wikiEnabledKB("kb-dst"), "reparse",

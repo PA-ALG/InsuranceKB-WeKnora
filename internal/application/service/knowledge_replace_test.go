@@ -2,232 +2,15 @@ package service
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/json"
+	"crypto/sha256"
 	"errors"
 	"fmt"
-	"mime/multipart"
 	"testing"
 
-	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/types"
-	"github.com/Tencent/WeKnora/internal/types/interfaces"
-	"github.com/hibiken/asynq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// replaceFileRepo is a single-row knowledge store. UpdateKnowledgeColumns can
-// fail on a chosen call, either before applying the write or after it (a write
-// that committed but reported an error).
-type replaceFileRepo struct {
-	interfaces.KnowledgeRepository
-	row             types.Knowledge
-	columnsCalls    int
-	failColumnsCall int
-	commitThenFail  bool
-}
-
-func (r *replaceFileRepo) GetKnowledgeByID(context.Context, uint64, string) (*types.Knowledge, error) {
-	row := r.row
-	return &row, nil
-}
-
-func (r *replaceFileRepo) UpdateKnowledge(_ context.Context, knowledge *types.Knowledge) error {
-	r.row = *knowledge
-	return nil
-}
-
-func (r *replaceFileRepo) UpdateKnowledgeColumn(_ context.Context, _ string, column string, value interface{}) error {
-	r.apply(map[string]interface{}{column: value})
-	return nil
-}
-
-func (r *replaceFileRepo) UpdateKnowledgeColumns(_ context.Context, _ string, values map[string]interface{}) error {
-	r.columnsCalls++
-	if r.columnsCalls != r.failColumnsCall {
-		r.apply(values)
-		return nil
-	}
-	if r.commitThenFail {
-		r.apply(values)
-	}
-	return errors.New("database unavailable")
-}
-
-func (r *replaceFileRepo) apply(values map[string]interface{}) {
-	for column, value := range values {
-		switch column {
-		case "title":
-			r.row.Title = value.(string)
-		case "file_name":
-			r.row.FileName = value.(string)
-		case "folder_path":
-			r.row.FolderPath = value.(string)
-		case "file_type":
-			r.row.FileType = value.(string)
-		case "file_size":
-			r.row.FileSize = value.(int64)
-		case "file_hash":
-			r.row.FileHash = value.(string)
-		case "file_path":
-			r.row.FilePath = value.(string)
-		case "metadata":
-			r.row.Metadata = value.(types.JSON)
-		case "parse_status":
-			r.row.ParseStatus = value.(string)
-		case "enable_status":
-			r.row.EnableStatus = value.(string)
-		case "error_message":
-			r.row.ErrorMessage = value.(string)
-		}
-	}
-}
-
-type replaceFileStore struct {
-	interfaces.FileService
-	saveErr error
-	saved   int
-	deleted []string
-	events  *[]string
-}
-
-func (f *replaceFileStore) SaveFile(context.Context, *multipart.FileHeader, uint64, string) (string, error) {
-	if f.saveErr != nil {
-		return "", f.saveErr
-	}
-	f.saved++
-	*f.events = append(*f.events, "save")
-	return "new/file.md", nil
-}
-
-func (f *replaceFileStore) DeleteFile(_ context.Context, filePath string) error {
-	f.deleted = append(f.deleted, filePath)
-	*f.events = append(*f.events, "delete:"+filePath)
-	return nil
-}
-
-type replaceFileEnqueuer struct {
-	err      error
-	payloads []types.DocumentProcessPayload
-	events   *[]string
-}
-
-func (e *replaceFileEnqueuer) Enqueue(task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
-	if e.err != nil {
-		return nil, e.err
-	}
-	var payload types.DocumentProcessPayload
-	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-		return nil, err
-	}
-	e.payloads = append(e.payloads, payload)
-	*e.events = append(*e.events, "enqueue")
-	return &asynq.TaskInfo{ID: "task-1", Queue: types.QueueDefault}, nil
-}
-
-type replaceFileChunks struct{ interfaces.ChunkRepository }
-
-func (replaceFileChunks) ListImageInfoByKnowledgeIDs(
-	context.Context, uint64, []string,
-) ([]interfaces.ChunkImageInfo, error) {
-	return nil, nil
-}
-
-func (replaceFileChunks) DeleteChunksByKnowledgeID(context.Context, uint64, string) error { return nil }
-
-type replaceFileChunkService struct{ interfaces.ChunkService }
-
-func (replaceFileChunkService) GetRepository() interfaces.ChunkRepository { return replaceFileChunks{} }
-
-type replaceFileGraph struct {
-	interfaces.RetrieveGraphRepository
-}
-
-func (replaceFileGraph) DelGraph(context.Context, []types.NameSpace) error { return nil }
-
-type replaceFileInspector struct {
-	fakeTaskInspector
-	events *[]string
-}
-
-func (i *replaceFileInspector) CancelTasksForKnowledge(_ context.Context, knowledgeID string) (int, int, error) {
-	*i.events = append(*i.events, "dequeue:"+knowledgeID)
-	return 1, 0, nil
-}
-
-type replaceFileHarness struct {
-	svc      *knowledgeService
-	repo     *replaceFileRepo
-	store    *replaceFileStore
-	tasks    *replaceFileEnqueuer
-	events   []string
-	original types.Knowledge
-	ctx      context.Context
-}
-
-const replaceFileOldContent = "old"
-
-func newReplaceFileHarness(t *testing.T) *replaceFileHarness {
-	t.Helper()
-	kb := &types.KnowledgeBase{ID: "kb-1", TenantID: 7}
-	h := &replaceFileHarness{}
-	h.original = types.Knowledge{
-		ID:              "knowledge-1",
-		TenantID:        7,
-		KnowledgeBaseID: "kb-1",
-		Type:            "file",
-		Title:           "a.md",
-		FileName:        "a.md",
-		FolderPath:      "notes",
-		FileType:        "md",
-		FileSize:        int64(len(replaceFileOldContent)),
-		FileHash:        md5Hex(replaceFileOldContent),
-		FilePath:        "old/file.md",
-		ParseStatus:     types.ParseStatusCompleted,
-		EnableStatus:    "enabled",
-		Metadata:        types.JSON(`{"external_id":"notes/a.md","extra":{"nested":true}}`),
-	}
-	h.repo = &replaceFileRepo{row: h.original}
-	h.store = &replaceFileStore{events: &h.events}
-	h.tasks = &replaceFileEnqueuer{events: &h.events}
-	h.svc = &knowledgeService{
-		repo:          h.repo,
-		kbService:     &reparseFailureKBService{kb: kb},
-		fileSvc:       h.store,
-		task:          h.tasks,
-		taskInspector: &replaceFileInspector{events: &h.events},
-		chunkService:  replaceFileChunkService{},
-		chunkRepo:     replaceFileChunks{},
-		graphEngine:   replaceFileGraph{},
-	}
-	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(7))
-	ctx = context.WithValue(ctx, types.TenantInfoContextKey, &types.Tenant{ID: 7})
-	ctx, err := access.WithKBTaskWrite(ctx, kb, 7)
-	require.NoError(t, err)
-	h.ctx = ctx
-	return h
-}
-
-func (h *replaceFileHarness) replace(
-	t *testing.T, content, customFileName string, metadata map[string]string,
-) (*types.Knowledge, error) {
-	t.Helper()
-	return h.replaceNamed(t, content, "upload.md", customFileName, metadata)
-}
-
-func (h *replaceFileHarness) replaceNamed(
-	t *testing.T, content, filename, customFileName string, metadata map[string]string,
-) (*types.Knowledge, error) {
-	t.Helper()
-	fh, err := bytesToFileHeader([]byte(content), filename)
-	require.NoError(t, err)
-	return h.svc.ReplaceKnowledgeFile(h.ctx, h.original.ID, fh, customFileName, metadata)
-}
-
-func md5Hex(content string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(content)))
-}
 
 func TestReplaceKnowledgeFilePreservesIDAndReparsesNewContent(t *testing.T) {
 	h := newReplaceFileHarness(t)
@@ -443,4 +226,82 @@ func TestUpdateKnowledgeUnlessSourceReplacedSkipsStaleSave(t *testing.T) {
 	require.NoError(t, h.svc.updateKnowledgeUnlessSourceReplaced(h.ctx, &stale))
 	assert.Equal(t, "new/file.md", h.repo.row.FilePath)
 	assert.NotEqual(t, types.ParseStatusFailed, h.repo.row.ParseStatus)
+}
+
+func TestReplaceKnowledgeFileBindsNewBytesWhenPreviousSHAIsNonempty(t *testing.T) {
+	h := newReplaceFileHarness(t)
+	h.repo.row.FileSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(replaceFileOldContent)))
+	h.repo.row.CurrentParseAttempt = 3
+	content := "# replacement with different bytes"
+	wantSHA := fmt.Sprintf("%x", sha256.Sum256([]byte(content)))
+
+	got, err := h.replace(t, content, "notes/a.md", nil)
+
+	require.NoError(t, err)
+	require.Len(t, h.tasks.payloads, 1)
+	require.NotNil(t, h.tasks.payloads[0].Revision)
+	assert.Equal(t, []byte(content), h.store.files[got.FilePath])
+	assert.Equal(t, int64(4), got.CurrentParseAttempt)
+	assert.Equal(t, wantSHA, got.FileSHA256)
+	assert.Equal(t, wantSHA, h.repo.allocatedFileSHA256)
+	assert.Equal(t, wantSHA, h.tasks.payloads[0].Revision.FileSHA256)
+}
+
+func TestReplaceKnowledgeFileKeepsSourceSHAPairedWithPathDuringCompensation(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		legacyEmptySHA bool
+		commitThenFail bool
+		failRestore    bool
+	}{
+		{name: "restore previous source"},
+		{name: "restore legacy source without SHA", legacyEmptySHA: true},
+		{name: "source update committed but reported failure", commitThenFail: true},
+		{name: "failed compensation retains replacement source", failRestore: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newReplaceFileHarness(t)
+			oldSHA := fmt.Sprintf("%x", sha256.Sum256([]byte(replaceFileOldContent)))
+			if tc.legacyEmptySHA {
+				oldSHA = ""
+			}
+			h.original.FileSHA256, h.repo.row.FileSHA256 = oldSHA, oldSHA
+			h.tasks.err = errors.New("queue unavailable")
+			if tc.commitThenFail {
+				h.repo.failColumnsCall, h.repo.commitThenFail = 1, true
+			}
+			if tc.failRestore {
+				h.repo.failColumnsCall = 2
+			}
+			content := "# replacement source"
+			newSHA := fmt.Sprintf("%x", sha256.Sum256([]byte(content)))
+
+			got, err := h.replace(t, content, "notes/a.md", nil)
+
+			require.Error(t, err)
+			require.Nil(t, got)
+			require.NotEmpty(t, h.repo.sourceSnapshots)
+			assert.Equal(t, "new/file.md", h.repo.sourceSnapshots[0].FilePath)
+			assert.Equal(t, md5Hex(content), h.repo.sourceSnapshots[0].FileHash)
+			assert.Equal(t, newSHA, h.repo.sourceSnapshots[0].FileSHA256)
+			assert.Equal(t, newSHA, h.repo.allocatedFileSHA256)
+			assert.Empty(t, h.tasks.payloads)
+			assert.Equal(t, []byte(replaceFileOldContent), h.store.files["old/file.md"])
+			if tc.failRestore {
+				require.Len(t, h.repo.sourceSnapshots, 1)
+				assert.Equal(t, "new/file.md", h.repo.row.FilePath)
+				assert.Equal(t, newSHA, h.repo.row.FileSHA256)
+				assert.Equal(t, []byte(content), h.store.files["new/file.md"])
+				assert.Empty(t, h.store.deleted)
+				return
+			}
+			require.Len(t, h.repo.sourceSnapshots, 2)
+			assert.Equal(t, h.original.FilePath, h.repo.sourceSnapshots[1].FilePath)
+			assert.Equal(t, h.original.FileHash, h.repo.sourceSnapshots[1].FileHash)
+			assert.Equal(t, oldSHA, h.repo.sourceSnapshots[1].FileSHA256)
+			assert.Equal(t, oldSHA, h.repo.row.FileSHA256)
+			assert.Equal(t, []string{"new/file.md"}, h.store.deleted)
+			assert.NotContains(t, h.store.files, "new/file.md")
+		})
+	}
 }

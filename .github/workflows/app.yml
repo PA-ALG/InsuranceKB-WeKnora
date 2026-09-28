@@ -131,6 +131,14 @@ jobs:
       - name: Verify Git hook test coverage
         run: bash ./scripts/test-git-hooks.sh
 
+      # Historical capture fixtures require this exact private output root.
+      - name: Prepare private capture test directory
+        shell: bash
+        run: |
+          if [ ! -e /private/tmp ]; then
+            sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" /private/tmp
+          fi
+
       - name: Vet and test
         shell: bash
         run: |
