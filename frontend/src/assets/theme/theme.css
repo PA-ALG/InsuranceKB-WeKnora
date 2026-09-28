@@ -226,7 +226,7 @@ select:-webkit-autofill {
 
 /* ============================================================
  * 应用级设计令牌
- * 按代码库的事实刻度整理（圆角 4/6/8/10/12、字号 10~24、4px 间距网格、
+ * 按代码库的事实刻度整理（圆角 4/6/8/10/12、基础字号 10~24、4px 间距网格、
  * 150/200ms 动效），值与既有写法一致，目的是让后续调整只改这里。
  * 新代码请引用令牌，样式守卫会统计残留字面量。
  * ============================================================ */
@@ -235,6 +235,7 @@ select:-webkit-autofill {
     --app-chat-header-height: 40px;
 
     /* 圆角 */
+    --app-radius-status: 5px;
     --app-radius-xs: 4px;
     --app-radius-sm: 6px;
     --app-radius-md: 8px;
@@ -253,6 +254,8 @@ select:-webkit-autofill {
     --app-text-2xl: 18px;
     --app-text-3xl: 20px;
     --app-text-4xl: 24px;
+    --app-text-concept-directory-title: 26px;
+    --app-text-concept-page-title: 28px;
 
     /* 间距（4px 网格） */
     --app-space-1: 4px;

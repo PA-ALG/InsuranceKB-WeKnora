@@ -293,7 +293,7 @@ onUnmounted(() => { generation++; stopTimers() })
 </template>
 
 <style scoped>
-.product-ingestion-status { margin: 0 24px 20px; padding: 20px; border: 1px solid var(--td-component-border, #e5e7eb); border-radius: 10px; color: var(--td-text-color-primary, #20242b); background: var(--td-bg-color-container, #fff); }
+.product-ingestion-status { margin: 0 24px 20px; padding: 20px; border: 1px solid var(--td-component-border); border-radius: var(--app-radius-lg); color: var(--td-text-color-primary); background: var(--td-bg-color-container); }
 .product-ingestion-status {
   /* Keep the document pane reachable as task history and details grow. */
   flex-shrink: 0;
@@ -303,19 +303,19 @@ onUnmounted(() => { generation++; stopTimers() })
 }
 header, .run-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
 header { justify-content: space-between; }
-h3 { margin: 0; font-size: 16px; }
-p { margin: 8px 0; font-size: 13px; }
-header p, .run-id { color: var(--td-text-color-secondary, #667085); }
-article { border-top: 1px solid var(--td-component-border, #e5e7eb); margin-top: 16px; padding-top: 16px; }
-.run-heading { font-size: 13px; }
+h3 { margin: 0; font-size: var(--app-text-xl); }
+p { margin: 8px 0; font-size: var(--app-text-md); }
+header p, .run-id { color: var(--td-text-color-secondary); }
+article { border-top: 1px solid var(--td-component-border); margin-top: 16px; padding-top: 16px; }
+.run-heading { font-size: var(--app-text-md); }
 .run-id { overflow-wrap: anywhere; }
-.run-state { padding: 4px 8px; border-radius: 5px; background: var(--td-bg-color-secondarycontainer, #f3f4f6); }
+.run-state { padding: 4px 8px; border-radius: var(--app-radius-status); background: var(--td-bg-color-secondarycontainer); }
 .succeeded { color: #13804a; } .partial_success, .needs_confirmation { color: #976200; } .failed, [role=alert] { color: #bf3535; }
 .stages { overflow-x: auto; margin: 12px 0; }
-table { width: 100%; text-align: left; border-collapse: collapse; font-size: 13px; }
-th, td { padding: 8px 12px; border-bottom: 1px solid var(--td-component-border, #e5e7eb); white-space: nowrap; }
-summary { cursor: pointer; font-size: 13px; margin: 12px 0; }
-ul { padding: 0; list-style: none; } li { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; font-size: 13px; overflow-wrap: anywhere; }
-input { margin-right: 6px; } button { padding: 6px 12px; border: 1px solid var(--td-component-border, #d1d5db); border-radius: 6px; background: var(--td-bg-color-container, #fff); color: inherit; cursor: pointer; }
-button:disabled { opacity: .5; cursor: default; } a { color: var(--td-brand-color, #2563eb); }
+table { width: 100%; text-align: left; border-collapse: collapse; font-size: var(--app-text-md); }
+th, td { padding: 8px 12px; border-bottom: 1px solid var(--td-component-border); white-space: nowrap; }
+summary { cursor: pointer; font-size: var(--app-text-md); margin: 12px 0; }
+ul { padding: 0; list-style: none; } li { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; font-size: var(--app-text-md); overflow-wrap: anywhere; }
+input { margin-right: 6px; } button { padding: 6px 12px; border: 1px solid var(--td-component-border); border-radius: var(--app-radius-sm); background: var(--td-bg-color-container); color: inherit; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; } a { color: var(--td-brand-color); }
 </style>

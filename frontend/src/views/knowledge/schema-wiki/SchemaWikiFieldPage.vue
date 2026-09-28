@@ -140,13 +140,13 @@ watch(
 .schema-wiki-field { max-width: 880px; }
 .schema-wiki-field header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .schema-wiki-field h2 { margin: 0; }
-.schema-wiki-field__id { display: inline-block; margin-top: 6px; color: var(--td-text-color-placeholder); font-size: 12px; }
-.schema-wiki-field__state { padding: 4px 10px; border-radius: 999px; background: var(--td-bg-color-secondarycontainer); color: var(--td-text-color-secondary); }
+.schema-wiki-field__id { display: inline-block; margin-top: 6px; color: var(--td-text-color-placeholder); font-size: var(--app-text-sm); }
+.schema-wiki-field__state { padding: 4px 10px; border-radius: var(--app-radius-pill); background: var(--td-bg-color-secondarycontainer); color: var(--td-text-color-secondary); }
 .schema-wiki-field__value { margin-top: 24px; white-space: pre-wrap; line-height: 1.7; }
 .schema-wiki-field__unknown { margin-top: 24px; color: var(--td-text-color-placeholder); }
 .schema-wiki-field__citations { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
-.schema-wiki-field__citations button { border: 1px solid var(--td-component-border); border-radius: 6px; padding: 6px 10px; background: transparent; cursor: pointer; }
+.schema-wiki-field__citations button { border: 1px solid var(--td-component-border); border-radius: var(--app-radius-sm); padding: 6px 10px; background: transparent; cursor: pointer; }
 .schema-wiki-field__source-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.schema-wiki-field__source-options button { border: 1px solid var(--td-component-border); border-radius: 6px; padding: 6px 10px; background: transparent; cursor: pointer; }
+.schema-wiki-field__source-options button { border: 1px solid var(--td-component-border); border-radius: var(--app-radius-sm); padding: 6px 10px; background: transparent; cursor: pointer; }
 .schema-wiki-field__source-options button[aria-selected='true'] { border-color: var(--td-brand-color); color: var(--td-brand-color); }
 </style>

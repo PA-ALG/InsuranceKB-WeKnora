@@ -338,15 +338,15 @@ watch(() => props.knowledgeBaseId, load, { immediate: true })
 .schema-wiki-browser__navigation { overflow: auto; padding: 24px 16px; border-right: 1px solid var(--td-component-border); }
 .schema-wiki-browser__heading { margin: 0 8px 20px; }
 .schema-wiki-browser__navigation h3 { margin: 0 0 10px; }
-.schema-wiki-browser__badge { display: inline-flex; padding: 3px 9px; border-radius: 999px; background: var(--td-success-color-light); color: var(--td-success-color); font-size: 12px; }
-.schema-wiki-browser__counts { margin: 10px 0 0; color: var(--td-text-color-secondary); font-size: 12px; }
-.schema-wiki-browser__navigation button { width: 100%; padding: 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
+.schema-wiki-browser__badge { display: inline-flex; padding: 3px 9px; border-radius: var(--app-radius-pill); background: var(--td-success-color-light); color: var(--td-success-color); font-size: var(--app-text-sm); }
+.schema-wiki-browser__counts { margin: 10px 0 0; color: var(--td-text-color-secondary); font-size: var(--app-text-sm); }
+.schema-wiki-browser__navigation button { width: 100%; padding: 8px; border: 0; border-radius: var(--app-radius-sm); background: transparent; text-align: left; cursor: pointer; }
 .schema-wiki-browser__section > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; }
 .schema-wiki-browser__section > button small { color: var(--td-text-color-placeholder); font-weight: 400; }
 .schema-wiki-browser__navigation button.active { background: var(--td-brand-color-light); color: var(--td-brand-color); }
 .schema-wiki-browser__section ul { margin: 4px 0 12px; padding: 0 0 0 16px; list-style: none; }
 .schema-wiki-browser__section li button span { display: block; }
-.schema-wiki-browser__section li button code { display: block; margin-top: 3px; overflow: hidden; color: var(--td-text-color-placeholder); font-size: 11px; text-overflow: ellipsis; }
+.schema-wiki-browser__section li button code { display: block; margin-top: 3px; overflow: hidden; color: var(--td-text-color-placeholder); font-size: var(--app-text-xs); text-overflow: ellipsis; }
 .schema-wiki-browser__content { min-width: 0; overflow: auto; padding: 32px; }
 @media (max-width: 900px) {
   .schema-wiki-browser { grid-template-columns: 260px minmax(0, 1fr); }
