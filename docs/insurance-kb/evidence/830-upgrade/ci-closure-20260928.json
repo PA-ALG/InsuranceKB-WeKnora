@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "source_commit": "844f03c55c8d25cff2fbccc9eb639cc343d932ab",
+  "source_tree": "ee7945e8638bbd392215d8397bb64daf317ed4f8",
+  "requirements": [
+    "UPG-07",
+    "UPG-08"
+  ],
+  "independent_code_review": "0 BLOCKER: UI9, root7 plus mechanical wrap, remaining18 exact hashes",
+  "checks": [
+    {
+      "name": "frontend_tests",
+      "status": "PASS",
+      "scope": "1283 passed / 1 skipped",
+      "log_sha256": "38c29cbcc7653d752fb91a0de6bceb7b321adfeb73b781dad56739bfeccb395e",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/frontend-full-test-green.log"
+    },
+    {
+      "name": "frontend_typecheck",
+      "status": "PASS",
+      "scope": "vue-tsc --build exit 0",
+      "log_sha256": "90dcdc74485d36ed0e49e8218686d813f12aa650af63b4ca10484946d9559eb1",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/frontend-typecheck-green.log"
+    },
+    {
+      "name": "frontend_style",
+      "status": "PASS",
+      "scope": "10/10; ratchet baseline unchanged",
+      "log_sha256": "f0710d9e74b7d652194582e73acc7f256e08e2a4d933e1dcfd373b8033511ca9",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/frontend-style-final-green.log"
+    },
+    {
+      "name": "license_fixture",
+      "status": "PASS",
+      "scope": "Real AnyDoc LICENSE fixture",
+      "log_sha256": "149fabfcc4126b5d8a47e9850e3116b67354534b87b48cee7176f68e51b1d9f6",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/license-green.log"
+    },
+    {
+      "name": "nginx_fixture",
+      "status": "PASS",
+      "scope": "Real container CSP/embed/MCP route checks",
+      "log_sha256": "60c558eeb5bcaf5da43ffd485367331383fa80fb2a97a3379c0575557755f627",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/nginx-green.log"
+    },
+    {
+      "name": "cli_lint",
+      "status": "PASS",
+      "scope": "golangci-lint v2.12.2 / 0 issues",
+      "log_sha256": "dc1a5be7baa1399c2ae3fae22f3dc881aa9794ed99fe192c94fc09a4501c0d42",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/cli-lint-green.log"
+    },
+    {
+      "name": "client_lint",
+      "status": "PASS",
+      "scope": "golangci-lint v2.12.2 / 0 issues",
+      "log_sha256": "92c0eb790b3b88b97d05cdfeb65acafc6c9c82ebe91140ad3327c2066c6c48a3",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/client-lint-green.log"
+    },
+    {
+      "name": "harness_ruff",
+      "status": "PASS",
+      "scope": "All checks passed",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/harness-final-ruff.log"
+    },
+    {
+      "name": "harness_mypy",
+      "status": "PASS",
+      "scope": "737 source files",
+      "log_sha256": "6b6c58ea53bb919bfdc1d60d54e5f3d956b7f453cc0292eda5f9faf3f7085e90",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/harness-final-mypy.log"
+    },
+    {
+      "name": "harness_adoption",
+      "status": "PASS",
+      "scope": "152 tests before final extra-target case",
+      "log_sha256": "7f12f23113e8c7f47b7838308ea4653a8af72b7e1e91c3a6b48c4cd13c9bf604",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/adoption-final-green.log"
+    },
+    {
+      "name": "harness_report_negative",
+      "status": "PASS",
+      "scope": "7 verifier negative cases",
+      "log_sha256": "7dbf70b7ce326ff9214ba2481360d6cf650b80440c8e8d97f7bfc0eb6af9087c",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/target-shape-green.log"
+    },
+    {
+      "name": "harness_full_local",
+      "status": "BLOCKED",
+      "scope": "125 passed / 65 deselected then interrupted after 1112.67s; remainder unverified",
+      "log_sha256": "4499048a099aca2feb149c35726f3ef76bc5af1ab35d39ed04de440a24d2b7ec",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/harness-deterministic-green.log"
+    },
+    {
+      "name": "dsh_e2e",
+      "status": "BLOCKED",
+      "scope": "Fixed rc8 dependency installation did not complete within bounded attempt; no dynamic E2E result",
+      "log_sha256": "d6ad9c6f913c99e72c5f49f05bce548dc53375649c369fbfcefb496b4c81ad49",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/dsh-e2e-green.log"
+    },
+    {
+      "name": "final_source_lock",
+      "status": "PASS",
+      "scope": "22 focused tests in 18.37s; exact source verify and independently reviewed report verify each exit 0",
+      "log_sha256": "6400da5e560e0e172cf88bbda3acbee99b23bae22f80622220739a33fdd12290",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/final-lock-tests.log"
+    },
+    {
+      "name": "openspec_strict",
+      "status": "PASS",
+      "scope": "OpenSpec130 valid; exit 0. Optional telemetry DNS failure did not affect validation.",
+      "log_sha256": "9d854467e5685114ae7007a0c29a34f6ca7149e346da9a28f83a493ce9d0bd8d"
+    },
+    {
+      "name": "root_lint",
+      "status": "BLOCKED",
+      "scope": "golangci-lint v2.12.2 interrupted at 1243.14s; no completed result; not a lint pass",
+      "log_sha256": "d5c8e5bcd1d8d2918507dae4818da797b5d255ed3028774de9cd86b6e3340cc9",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/root-lint-green.log"
+    },
+    {
+      "name": "dsh_build",
+      "status": "PASS",
+      "scope": "TypeScript build, 4.04s",
+      "log_sha256": "3ab111e9b7974cad2b3d93df04066a40735ea1259901f0a7dc31ce822046afdf",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/dsh-build-green.log"
+    },
+    {
+      "name": "dsh_unit",
+      "status": "PASS",
+      "scope": "58/58, 5.10s",
+      "log_sha256": "c31b20c1b867eb527c24ba51efb9a5ab2cf84338b9e362ebbf470202ae203884",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/dsh-unit-green.log"
+    },
+    {
+      "name": "transport_compile",
+      "status": "PASS",
+      "scope": "Historical evidence transport package compile, 1.06s",
+      "log_sha256": "cf95d48117a71ef75ff17202fcf98d126f18d48e9e74d6e215ad21fe27716446",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/transport-green.log"
+    },
+    {
+      "name": "client_tests",
+      "status": "PASS",
+      "scope": "All client packages, 6.84s",
+      "log_sha256": "fbeb51c829dda668329ee47f0449f5eb7f140fe53c71db113657ad51651d3892",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/client-test-green.log"
+    },
+    {
+      "name": "cli_tests",
+      "status": "PASS",
+      "scope": "All CLI packages, 159.34s",
+      "log_sha256": "0762e6624bab0bce7cbc83c255f30e4d4532b550a192c2be965278038b425fa3",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/cli-test-green.log"
+    },
+    {
+      "name": "cli_final_affected",
+      "status": "PASS",
+      "scope": "Four affected packages after final mechanical fake parameter corrections, 19.15s",
+      "log_sha256": "da3dfeaa6a2fd813dab3a5509e137289e386a8981d8ff3cf9d4565507f875785",
+      "local_log": "/private/tmp/upg-ci-closure-20260928/cli-focused-green.log"
+    }
+  ],
+  "remote_ci": "NOT RUN for final source/evidence head",
+  "merge": "NOT RUN",
+  "deployment": "NOT RUN"
+}

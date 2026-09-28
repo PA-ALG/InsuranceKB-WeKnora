@@ -208,5 +208,41 @@
       "UPG-09"
     ],
     "constraints": "Two confirmed reachable concurrency gaps; first RED, no new schema/ledger/queue; root does not edit these paths while writer active; only existing module ownership and resource generation contracts."
+  },
+  "ci_closure_exclusive_lane": {
+    "owner": "migration_audit",
+    "requirements": [
+      "UPG-01",
+      "UPG-08",
+      "UPG-09"
+    ],
+    "paths": [
+      "scripts/test-license-bundle.sh",
+      "scripts/test_embed_nginx.py",
+      "frontend/**",
+      "docs/insurance-kb/evidence/830-g3/transport-preparation/main.go",
+      "cli/**",
+      "client/**",
+      "packages/dsh-weknora/test/**"
+    ],
+    "constraints": "Close the seven diagnosed CI failures from b64923 using existing tests and exact pinned dependencies. No ratchet threshold increases, test skips, product behavior expansion, Docker image builds, live service changes, provider, DB, commit or push. New defect tests first; formatting-only changes use existing lint RED. Root owns evidence/spec and integration."
+  },
+  "trusted_lock_closure_exclusive_lane": {
+    "owner": "root",
+    "requirements": [
+      "UPG-01",
+      "UPG-08",
+      "UPG-09"
+    ],
+    "paths": [
+      "deploy/local-live/weknora-app-source.lock.json",
+      "harness/tests/test_local_live_supply_chain_023.py",
+      "harness/scripts/prepare_weknora_adoption.py",
+      "harness/tests/test_adoption_migration_preservation_130.py",
+      "harness/scripts/adoption_migration_policy.py",
+      "harness/scripts/verify_weknora_app_source.py",
+      "harness/scripts/__init__.py"
+    ],
+    "constraints": "Refresh exact build-source/adoption/Dockerfile/report binding after upstream adoption; preserve historical runtime baseline semantics; strengthen source ancestry and content closure regression; no trusted-image publish or App build. Exact fixed-upstream 077 up/down preservation pair only; reject all other migration drift. Locked source must include checker repair. See UPG-07 approved history-retention requirement."
   }
 }

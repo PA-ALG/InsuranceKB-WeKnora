@@ -1,3 +1,34 @@
+## 2026-09-28 容量恢复后的升级续行（当前）
+
+活动工作树 `830-upstream-plugin-boundary`，root 唯一集成 Owner；PR #131 继续 Draft。
+Colima 已由 110 扩至 130 GiB，原 8 服务恢复；OnlyOffice 测试容器/镜像已按用户要求
+移除，四个卷保留。容量恢复回执见 `colima-capacity-recovery.json`。五份 PostgreSQL
+备份已保存本机私有目录并通过归档目录校验，约 405 MiB；备份期间旧 PG 的 1 GiB
+限额触发一次 OOM，自动恢复后临时提高限额完成备份并还原原限额，未迁移数据库。
+详见 `database-backup-20260928.json`；归档目录校验不能替代实际恢复。
+
+App 仍复用 e71/442701 制品，累计构建 5、追加预算 0。DocReader e71/d1777c 制品
+一次构建 PASS，健康与 Markdown gRPC 解析烟测 PASS（无网络、无卷、provider 0、
+临时容器已清理），见 `docreader-delivery-20260928.json`。最初 txt 样本不受支持的
+失败保留，修正样本未重建镜像。UI 样式以 82ff324de 冻结，全测试 1283 PASS/1 SKIP、
+type-check 与 styleGuard PASS；最终 UI 镜像1ca8b0…一次构建及无网络静态资源烟测PASS，
+未部署。错误生成的制品label与正确canonical预期不匹配，exact reuse仍BLOCKED；
+实际image ID、观察label、正确预期与烟测分别列于 `ui-delivery-20260928.json`。
+
+新增确认 Harness trusted source lock 也过时，共 8 组 CI 阻断；保留 077 Wiki 日志
+的例外现由共享冻结 policy 约束，只接受固定上游与双向四个精确 SHA，报告强制
+MANUAL，不能降格为自动 PASS。root 功能修复独审 0 BLOCKER，56cf7e0b6 已提交；
+最后一次测试参数列表换行机械修正也获独审；最终源844f03c55与报告dfaf453e…已冻结，
+独审0 BLOCKER，最终源码锁verify及verify-report PASS。完整本地Harness测试有界中止，
+dsh真实E2E因两次依赖安装未完成而BLOCKED；不声称全CI已通过。
+可信发布源与已有本地 App 制品来源分别记录，不声称旧镜像等于新源的 exact REUSE。
+
+CURRENT=CI 修复与组件构建/烟测已记录，完整CI和升级验收未完成。隔离数据库恢复尚未开始：
+自动审批拒绝创建隔离卷/网络及归档可能含密钥的原配置，已向用户说明并提出明确
+授权问题；未答复前不绕过执行。既有 epoch27、serving authority 与服务不切换。
+NEXT=完成剩余 CI 证据及独立冻结审查，更新同一 Draft PR；获明确答复后再执行隔离
+恢复/迁移。实际迁移、升级后业务 tracer、provider 与部署均 NOT RUN。下方均为历史。
+
 ## 2026-09-28 App制品已恢复：零构建复用与隔离烟测PASS
 
 用户“继续”授权的第五次App构建完成全部编译和镜像导出，但本机解包因磁盘耗尽

@@ -1,5 +1,23 @@
 # 升级验证矩阵
 
+## 2026-09-28 续行最新验证（覆盖下方历史时态）
+
+源码冻结 `844f03c55c8d25cff2fbccc9eb639cc343d932ab`，UI组件源 `82ff324de…`；
+App/DocReader构建源仍e71，不能混称同一新源码制品。077迁移保留policy先RED后GREEN，
+152项定向回归及7项最终报告负例PASS，full Ruff与737文件mypy PASS，独审0 BLOCKER。
+前端1283 PASS/1 SKIP、类型检查与styleGuard10项PASS；许可证/Nginx真实fixture、
+CLI/client检查分别通过。完整本地Harness套件125项通过后有界中止（1112.67秒），
+不记完整PASS；dsh固定rc8两次安装阻断，动态E2E修复仍待验证，远端CI以最终HEAD为准。
+
+Colima130GiB和五份DB归档备份PASS；DocReader一次构建、无网络健康及Markdown
+解析烟测PASS。UI一次构建及无网络14项资源/配置/源码标记烟测PASS，image1ca8b0…；
+构建label错误原样保留，正确canonical预期另列，exact reuse BLOCKED。最终源码锁与
+dfaf453e报告独审0 BLOCKER，verify/verify-report PASS。真实恢复/迁移、现有服务升级
+与业务tracer未执行。
+隔离恢复的新资源和敏感配置归档被自动审批拒绝，明确用户确认已请求但尚未收到；
+不得绕过。结构化结果见 `ci-closure-20260928.json`、`database-backup-20260928.json`
+及 `docreader-delivery-20260928.json`。下表主要保留初轮规格/验证基线，未闭合项不升级状态。
+
 本记录区分本地合同验证与最终真实验收。初始升级软件源码为 `8a0863fa095bc27b901db90c5f744d1db84063b2`（产品8ccc2ac9与固定上游3e8b0bfc合并）；无未解决 Git 冲突不等于升级完成。冻结指纹及测试摘要见 `docs/insurance-kb/evidence/830-upgrade/`。pnpm子进程修复后的当前App构建来源为 `e71c72f7dd885e228c4f447c68902450fed7ae26`；后续纯证据提交不改变该来源。
 
 | Requirement | implementation / 本地验证 | commit | 最终 status |

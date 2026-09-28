@@ -1,0 +1,47 @@
+{
+  "status": "PASS",
+  "source_read_only": true,
+  "container_id": "8edeba34929d268d7c344bb816d56fca5e049357b9855cb34af0adcbf9bac8b2",
+  "image": "sha256:af585013f97f622715de01e48d00558f7edf17055d7b40deafc9f98ca8d99a56",
+  "memory_before": {
+    "Memory": 1073741824,
+    "MemorySwap": 1073741824,
+    "MemoryReservation": 0
+  },
+  "temporary_memory_bytes": 4294967296,
+  "memory_restored": true,
+  "finished_at": "2026-09-28T03:10:05.080626+00:00",
+  "database_archives": [
+    {
+      "bytes": 8202,
+      "sha256": "5ccd2d7fc2de1cef5c0d4aa96244230f66f554adc5c3fb782bed22683710a17a",
+      "toc_readable": true
+    },
+    {
+      "bytes": 2490,
+      "sha256": "b7f4449c8e5cba92280f730835f59d3adbda0901767fc632cdd75b195d9cfa39",
+      "toc_readable": true
+    },
+    {
+      "bytes": 8196,
+      "sha256": "5e3035656d32e3bce348e83831e8027959016d4782f092d8ab304d1e0ac17063",
+      "toc_readable": true
+    },
+    {
+      "bytes": 100427009,
+      "sha256": "b30521c4c2200d8c113385b4cca25da9e0dde57e2884a4f275bb047a5665b4e1",
+      "toc_readable": true
+    },
+    {
+      "bytes": 324386913,
+      "sha256": "6d0de144541df8d58b5f488365e1378cba9b2c7307bfa4ad34f93da3056755dd",
+      "toc_readable": true
+    }
+  ],
+  "private_receipt_sha256": "53fce3840e7ca2ab839c33631c385e98f8635c9b8c242ffad00390c25c829fa7",
+  "limits": [
+    "TOC validation proves readable archive metadata; full restore NOT RUN.",
+    "The initial Harness database backup failed under a 1GiB cgroup limit; incomplete archive retained. The single 4GiB recovery backup succeeded and original limit was restored.",
+    "No migration, activation or upgraded deployment is established by this backup."
+  ]
+}

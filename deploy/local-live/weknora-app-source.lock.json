@@ -6,24 +6,24 @@
   "platform": "linux/arm64",
   "build_source": {
     "repository": "https://github.com/PA-ALG/InsuranceKB-WeKnora.git",
-    "commit": "a8bf55ae18441abd380e594afba5000c51cc9633",
-    "tree": "754504a9c20cdbd7d5ab234d7c900e2ce940bfad"
+    "commit": "844f03c55c8d25cff2fbccc9eb639cc343d932ab",
+    "tree": "ee7945e8638bbd392215d8397bb64daf317ed4f8"
   },
   "adoption_manifest": {
     "path": "deploy/upstream/weknora-adoption-target.json",
-    "sha256": "ddfb62ed158b4e0bec1b7a0993e2367cf2b018e6dd7b2e81700373e35e2544cd",
+    "sha256": "6c5514a6ed2d8b72c935f10deacb384df50821b103e5dc07baab5a35fba58664",
     "repository": "https://github.com/Tencent/WeKnora.git",
-    "commit": "80a5003cc99a427098afe184eee6601916d3d156",
-    "tree": "18fcf68e7a008ce69929e32233f0b6914040c223"
+    "commit": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
+    "tree": "9533ab2071e71f4bc2ebb09c85d3ac246841ff9a"
   },
-  "reviewed_thin_report_sha256": "9a40eb29a984a3dfabde1423e2987a2136a5f7108e644e9c115ff72c1b35a21d",
+  "reviewed_thin_report_sha256": "dfaf453e844b9169a5bc82c5c4d3ed6eed742c9af95ebf608812b9a622f6da7c",
   "images": {
     "app": {
       "repository": "ghcr.io/pa-alg/insurancekb-weknora-app",
       "context": ".",
       "dockerfile": {
         "path": "docker/Dockerfile.app",
-        "sha256": "b4a8bf435191c97068862e8766bd0d7ec28d052fce50640f49faee64898654cc"
+        "sha256": "539ab7217133423673640883d8c2a67da636b46322919d40bc73567e8566ee17"
       }
     },
     "frontend": {
@@ -31,7 +31,7 @@
       "context": "frontend",
       "dockerfile": {
         "path": "frontend/Dockerfile",
-        "sha256": "3435582ac2165ee65357baff3fd7be4b68f6c191f8901bd5288f99f96d79fb68"
+        "sha256": "7fc6d359c2eb2ef7cd33c1a6d36290e18df399d79e87b72e267af3e4d2374b9d"
       }
     },
     "docreader": {
@@ -39,7 +39,7 @@
       "context": ".",
       "dockerfile": {
         "path": "docker/Dockerfile.docreader",
-        "sha256": "8bdb39fe9160c18710476dd795f10b953059ed7b04520a9a305252d0ef02fd92"
+        "sha256": "53c45316e460ce213f111b2f322f0e28ff80e2f96a627c26f70957b3f1ca1fb9"
       }
     }
   }

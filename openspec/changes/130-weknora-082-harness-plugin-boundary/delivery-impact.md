@@ -1,5 +1,18 @@
 # 升级交付影响与现有运行基线
 
+## 2026-09-28 当前续行
+
+Colima 130 GiB已生效；App追加构建0，继续固定e71/442701。DocReader以e71固定
+112项输入构建一次，image d1777c…，健康与Markdown解析烟测PASS。UI以82ff324de
+冻结872项实际输入，一次构建PASS，image1ca8b0…；构建wrapper错误生成的label作为observed记录，
+正确canonical预期9feb8130…与实际label e3da5700…不匹配，exact reuse保持BLOCKED，
+不能虚报匹配或追加重建。按immutable image ID的无网络烟测PASS，14项静态资源、
+Nginx配置、运行配置和7位源码标记已验证；两次烟测脚本错误保留，不冒充产品失败。
+
+数据库五份备份已完成，恢复未执行。自动审批对新建隔离资源及归档敏感配置的拒绝
+已报告用户，待明确答复；不切换旧服务、不迁移原卷。App、UI、DocReader来源与未来
+trusted publication source 844f03c55分别列明，可信发布镜像NOT RUN。下方均为历史。
+
 下表记录2026-09-27既有运行基线与原计划。当前2026-09-28 App制品已零构建恢复并通过隔离smoke，实际镜像仍未部署；其余组件状态不外推。最新回执为delivery-attempt-05.json。
 
 | 组件 | 现有不可变镜像 | 当前升级影响 | 计划动作 |
