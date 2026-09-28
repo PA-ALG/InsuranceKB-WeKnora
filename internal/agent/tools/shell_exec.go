@@ -107,7 +107,14 @@ var shellExecBlacklist = []struct {
 	// Reject any rm with a recursive+force flag targeting the filesystem
 	// root. We intentionally do NOT block `rm -rf /workspace/foo` — a
 	// skill legitimately might clean up its scratch directory.
-	{name: "rm_root", re: regexp.MustCompile(`(?i)\brm\s+(?:-[a-z]*[rR][a-z]*[fF][a-z]*|-[a-z]*[fF][a-z]*[rR][a-z]*|--recursive[^;|&]*--force|--force[^;|&]*--recursive)\s+(?:--no-preserve-root\s+)?/(?:\s|$)`)},
+	{
+		name: "rm_root",
+		re: regexp.MustCompile(
+			"(?i)\\brm\\s+(?:-[a-z]*[rR][a-z]*[fF][a-z]*|-[a-z]*[fF][a-z]*[rR][a-z]*|--" +
+				"recursive[^;|&]*--force|--force[^;|&]*--recursive)\\s+(?:--no-preserve-ro" +
+				"ot\\s+)?/(?:\\s|$)",
+		),
+	},
 	// Classic fork bomb.
 	{name: "fork_bomb", re: regexp.MustCompile(`:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:`)},
 	// Filesystem-format / raw-device writes.
@@ -133,28 +140,49 @@ var shellExecTool = BaseTool{
 
 // legacyShellExecDescription is the remote /workspace prompt text. Host
 // layouts rewrite the same copy through shellExecDescription.
-const legacyShellExecDescription = `Execute a command in the current session's isolated sandbox as root.
-The sandbox belongs to this session alone; nothing here runs on the host.
-- CWD defaults to /workspace on every call; cd does not persist.
-  work_dir selects any directory inside the session sandbox; missing directories are created as the same user.
-- Use ls/find to discover files, grep/awk to search, and cat/head/tail/sed to inspect text. Read known paths directly; no mandatory discovery call.
-- Use write_sandbox_file for scripts or large text; edit_sandbox_file for precise changes. Commands are limited to 8192 bytes. Execution is synchronous (no nohup or trailing &).
-- skill_name selects a listed skill for this call. Installed skills use their Python virtualenv and Node modules;
-  host resources are staged automatically and use the system runtime until a local .venv is created.
-  Scoped credentials apply to both. Example: skill_name="pdf", command="python3 report.py".
-  Run bundled scripts via "$WEKNORA_SKILL_DIR/scripts/...". Omit skill_name for system commands.
-- /workspace/input contains user attachments: preserve originals. /workspace/output is the only directory collected
-  for download, so it takes finished deliverables only; keep scratch and intermediate files elsewhere under /workspace.
-  apt-get is available when the sandbox network policy allows it; permanent dependencies belong in the skill installer.
-- Install extras with skill_name set and the default work_dir:
-  ` + "`" + skillPythonPackageInstallCommand + "`" + ` (no pip needed), or
-  ` + "`" + skillNodePackageInstallCommand + "`" + `.
-  If .venv is absent, create it with python3 -m venv --without-pip "${WEKNORA_SKILL_DIR:?}/.venv".
-  Without uv, run the venv Python with -m ensurepip --upgrade before -m pip install.
-  Changes live and die with this session.
-- Non-zero exit_code is a command result: inspect stderr before deciding whether a corrected call is useful. Transport failures/timeouts are tool failures. Changing tools does not change permissions; do not repeat a denied operation through another tool.
-- stdout/stderr have independent byte limits, preserving head and tail when truncated. Full output is not automatically saved; redirect verbose commands to a workspace log when it must be retained. Binary bytes are suppressed.
-- Use ![description](sandbox:<file name>) with exact links from Output files, never stdout or temporary paths.`
+const legacyShellExecDescription = "Execute a command in the current session's isolated sandbox as root.\nThe" +
+	" sandbox belongs to this session alone; nothing here runs on the host.\n-" +
+	" CWD defaults to /workspace on every call; cd does not persist.\n " +
+	" work_dir selects any directory inside the session sandbox; missing" +
+	" directories are created as the same user.\n- Use ls/find to discover" +
+	" files, grep/awk to search, and cat/head/tail/sed to inspect text. Read" +
+	" known paths directly; no mandatory discovery call.\n- Use" +
+	" write_sandbox_file for scripts or large text; edit_sandbox_file for" +
+	" precise changes. Commands are limited to 8192 bytes. Execution is" +
+	" synchronous (no nohup or trailing &).\n- skill_name selects a listed" +
+	" skill for this call. Installed skills use their Python virtualenv and" +
+	" Node modules;\n  host resources are staged automatically and use the" +
+	" system runtime until a local .venv is created.\n  Scoped credentials" +
+	" apply to both. Example: skill_name=\"pdf\", command=\"python3 report.py\".\n" +
+	"  Run bundled scripts via \"$WEKNORA_SKILL_DIR/scripts/...\". Omit" +
+	" skill_name for system commands.\n- /workspace/input contains user" +
+	" attachments: preserve originals. /workspace/output is the only" +
+	" directory collected\n  for download, so it takes finished deliverables" +
+	" only; keep scratch and intermediate files elsewhere under /workspace.\n " +
+	" apt-get is available when the sandbox network policy allows it;" +
+	" permanent dependencies belong in the skill installer.\n- Install extras" +
+	" with skill_name set and the default work_dir:\n  " +
+	"`" +
+	skillPythonPackageInstallCommand +
+	"`" +
+	` (no pip needed), or
+  ` +
+	"`" +
+	skillNodePackageInstallCommand +
+	"`" +
+	".\n  If .venv is absent, create it with python3 -m venv --without-pip" +
+
+	" \"${WEKNORA_SKILL_DIR:?}/.venv\".\n  Without uv, run the venv Python with" +
+	" -m ensurepip --upgrade before -m pip install.\n  Changes live and die" +
+	" with this session.\n- Non-zero exit_code is a command result: inspect" +
+	" stderr before deciding whether a corrected call is useful. Transport" +
+	" failures/timeouts are tool failures. Changing tools does not change" +
+	" permissions; do not repeat a denied operation through another tool.\n-" +
+	" stdout/stderr have independent byte limits, preserving head and tail" +
+	" when truncated. Full output is not automatically saved; redirect" +
+	" verbose commands to a workspace log when it must be retained. Binary" +
+	" bytes are suppressed.\n- Use ![description](sandbox:<file name>) with" +
+	" exact links from Output files, never stdout or temporary paths."
 
 func shellExecDescription(l sandbox.WorkspaceLayout) string {
 	if l.IsHost() {
@@ -172,28 +200,29 @@ const hostShellExecDescription = "Execute a command in %s. The process is OS-san
 	"- Use write_sandbox_file for scripts or large text; edit_sandbox_file for precise changes. " +
 	"Commands are limited to 8192 bytes. Execution is synchronous (no nohup or trailing &).\n" +
 	"- Edit files in place under %s.\n" +
-	"- Non-zero exit_code is a command result: inspect stderr before deciding whether a corrected call is useful. " +
+	"- Non-zero exit_code is a command result: inspect stderr before deciding" +
+	" whether a corrected call is useful. " +
 	"Do not bypass permission or policy denials through another tool.\n" +
 	"- stdout/stderr have independent byte limits. " +
 	"Redirect verbose commands to a workspace log when output must be kept."
 
 // ShellExecInput defines the input parameters for shell_exec.
 type ShellExecInput struct {
-	Stdin string `json:"stdin,omitempty" jsonschema:"Optional text passed to the command's stdin, up to 65536 bytes. Preserves quotes and newlines exactly; for larger input write a workspace file and redirect from it."`
+	Stdin string `json:"stdin,omitempty" jsonschema:"Optional text passed to the command's stdin, up to 65536 bytes. Preserves quotes and newlines exactly; for larger input write a workspace file and redirect from it."` //nolint:lll // Preserve the reflected tool schema tag bytes.
 	// Command is the shell command to execute. Runs under Bash.
-	Command string `json:"command" jsonschema:"Shell command to execute (single line, supports pipes and && chaining). Runs under Bash."`
+	Command string `json:"command" jsonschema:"Shell command to execute (single line, supports pipes and && chaining). Runs under Bash."` //nolint:lll // Preserve the reflected tool schema tag bytes.
 	// WorkDir is the working directory for the command; defaults to /workspace.
 	WorkDir string `json:"work_dir,omitempty" jsonschema:"Absolute or relative work dir. Commands already start in /workspace; omit unless the command must run elsewhere."` //nolint:lll // one-line struct tag
 	// TimeoutSec caps execution time. Zero uses the default (120s); the
 	// value is hard-capped at 600s regardless of what the LLM requests.
-	TimeoutSec int `json:"timeout_sec,omitempty" jsonschema:"Per-call timeout in seconds. Defaults to 120, hard-capped at 600."`
+	TimeoutSec int `json:"timeout_sec,omitempty" jsonschema:"Per-call timeout in seconds. Defaults to 120, hard-capped at 600."` //nolint:lll // Preserve the reflected tool schema tag bytes.
 	// MaxOutputBytes caps returned stdout. Stderr has an independent smaller
 	// fixed budget, and the complete model-visible output is capped at 64 KiB.
-	MaxOutputBytes int `json:"max_output_bytes,omitempty" jsonschema:"Maximum bytes returned from stdout. Defaults to 16384, hard-capped at 65536. Stderr defaults to 8192 and is hard-capped at 16384; total visible output is hard-capped at 65536."`
+	MaxOutputBytes int `json:"max_output_bytes,omitempty" jsonschema:"Maximum bytes returned from stdout. Defaults to 16384, hard-capped at 65536. Stderr defaults to 8192 and is hard-capped at 16384; total visible output is hard-capped at 65536."` //nolint:lll // Preserve the reflected tool schema tag bytes.
 	// MaxStderrBytes caps returned stderr independently from stdout.
-	MaxStderrBytes int `json:"max_stderr_bytes,omitempty" jsonschema:"Maximum bytes returned from stderr. Defaults to 8192, hard-capped at 16384."`
+	MaxStderrBytes int `json:"max_stderr_bytes,omitempty" jsonschema:"Maximum bytes returned from stderr. Defaults to 8192, hard-capped at 16384."` //nolint:lll // Preserve the reflected tool schema tag bytes.
 	// Env carries extra environment variables merged into the shell's env.
-	Env map[string]string `json:"env,omitempty" jsonschema:"Optional extra environment variables, e.g. {\"PIP_INDEX_URL\":\"https://mirrors.example.com/pypi/simple\"}."`
+	Env map[string]string `json:"env,omitempty" jsonschema:"Optional extra environment variables, e.g. {\"PIP_INDEX_URL\":\"https://mirrors.example.com/pypi/simple\"}."` //nolint:lll // Preserve the reflected tool schema tag bytes.
 	// SkillName, when set, pulls that skill's scoped environment variables
 	// (API keys) into this one command's process only. Resolution
 	// uses the caller-scoped SkillEnvResolver, so values
@@ -268,6 +297,7 @@ type ShellExecTool struct {
 	skillEnvironment *skills.Manager
 }
 
+// WithSkillEnvironment sets the tenant and user context for skill execution.
 func (t *ShellExecTool) WithSkillEnvironment(manager *skills.Manager) *ShellExecTool {
 	t.skillEnvironment = manager
 	return t
@@ -387,7 +417,7 @@ func (t *ShellExecTool) WithEnvCapture(capture SkillEnvCapture) *ShellExecTool {
 
 // OutputLimitChars lets ToolRegistry preserve shell_exec's explicitly bounded,
 // caller-configurable output instead of applying its lower generic limit again.
-func (t *ShellExecTool) OutputLimitChars(args json.RawMessage) int {
+func (t *ShellExecTool) OutputLimitChars(_ json.RawMessage) int {
 	return maxShellExecVisibleBytes
 }
 
@@ -410,11 +440,17 @@ func (t *ShellExecTool) Execute(ctx context.Context, args json.RawMessage) (*typ
 		}, nil
 	}
 	if input.SkillName != "" && t.skillEnvironment == nil {
-		return &types.ToolResult{Success: false, Error: "no skill environment is available for this call; omit skill_name for system commands"}, nil
+		return &types.ToolResult{
+			Success: false,
+			Error:   "no skill environment is available for this call; omit skill_name for system commands",
+		}, nil
 	}
 
 	if len(input.Stdin) > 65536 {
-		return &types.ToolResult{Success: false, Error: "stdin exceeds 65536 bytes; write the input to a workspace file and redirect from it"}, nil
+		return &types.ToolResult{
+			Success: false,
+			Error:   "stdin exceeds 65536 bytes; write the input to a workspace file and redirect from it",
+		}, nil
 	}
 	command := strings.TrimSpace(input.Command)
 	if command == "" {
@@ -427,7 +463,8 @@ func (t *ShellExecTool) Execute(ctx context.Context, args json.RawMessage) (*typ
 		return &types.ToolResult{
 			Success: false,
 			Error: fmt.Sprintf(
-				"command too long (%d bytes; max %d). Put the file in write_sandbox_file, then run it with shell_exec",
+				"command too long (%d bytes; max %d). Put the file in write_sandbox_file,"+
+					" then run it with shell_exec",
 				len(command), shellExecMaxCommandBytes,
 			),
 		}, nil
@@ -533,7 +570,13 @@ func (t *ShellExecTool) Execute(ctx context.Context, args json.RawMessage) (*typ
 	execCommand := command
 	if input.SkillName != "" && t.skillEnvironment != nil {
 		var prepErr error
-		execCommand, env, prepErr = t.skillEnvironment.PrepareShellEnvironment(ctx, sessionID, input.SkillName, command, env)
+		execCommand, env, prepErr = t.skillEnvironment.PrepareShellEnvironment(
+			ctx,
+			sessionID,
+			input.SkillName,
+			command,
+			env,
+		)
 		if prepErr != nil {
 			return &types.ToolResult{Success: false, Error: prepErr.Error()}, nil
 		}
@@ -604,19 +647,26 @@ func (t *ShellExecTool) Execute(ctx context.Context, args json.RawMessage) (*typ
 
 	// Human-readable summary for the LLM.
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("=== Shell Exec (session=%s) ===\n\n", sessionID))
-	b.WriteString(fmt.Sprintf("**Command**: `%s`\n", command))
-	b.WriteString(fmt.Sprintf("**Work Dir**: %s\n", workDir))
-	b.WriteString(fmt.Sprintf("**Exit Code**: %d\n", res.ExitCode))
-	b.WriteString(fmt.Sprintf("**Duration**: %v\n", res.Duration))
+	fmt.Fprintf(&b, "=== Shell Exec (session=%s) ===\n\n", sessionID)
+	fmt.Fprintf(&b, "**Command**: `%s`\n", command)
+	fmt.Fprintf(&b, "**Work Dir**: %s\n", workDir)
+	fmt.Fprintf(&b, "**Exit Code**: %d\n", res.ExitCode)
+	fmt.Fprintf(&b, "**Duration**: %v\n", res.Duration)
 	if res.Killed {
 		b.WriteString("**Killed**: yes (timeout or terminated)\n")
 	}
 	if truncated {
-		b.WriteString("**Truncated**: yes (head+tail kept; full output was not saved. For future commands, redirect verbose output to a workspace log and read that file.)\n")
+		b.WriteString(
+			"**Truncated**: yes (head+tail kept; full output was not saved. For" +
+				" future commands, redirect verbose output to a workspace log and read" +
+				" that file.)\n",
+		)
 	}
 	if stdoutBinary || stderrBinary {
-		b.WriteString("**Binary Output Suppressed**: yes (write binary files to the artifact output directory for download)\n")
+		b.WriteString(
+			"**Binary Output Suppressed**: yes (write binary files to the artifact" +
+				" output directory for download)\n",
+		)
 	}
 	b.WriteString("\n")
 
@@ -848,7 +898,9 @@ func (t *ShellExecTool) recoveryHint(skillName string, exitCode int, command, st
 	}
 	if isMissingInterpreterModule(stderr) {
 		if skillName == "" {
-			return "If this command needs an installed skill's packages, repeat shell_exec with that skill_name to select its runtime. Otherwise install the missing dependency in the writable workspace."
+			return "If this command needs an installed skill's packages, repeat shell_exec" +
+				" with that skill_name to select its runtime. Otherwise install the" +
+				" missing dependency in the writable workspace."
 		}
 		if strings.Contains(stderr, "Cannot find module") || strings.Contains(stderr, "MODULE_NOT_FOUND") {
 			return missingSkillPackageGuidance(skillName) +
@@ -940,9 +992,14 @@ func shellCommandNotFoundHint(exitCode int, command, stderr string) string {
 	missing := inferredMissingCommand(command, stderr)
 	switch missing {
 	case "tree", "less", "more", "nano", "vim", "vi":
-		return "Hint: `" + missing + "` is not in the default sandbox image. Use find/ls, head, sed, and `file`. Skill scripts: `read_file` for skill instructions, then the execution tool named there. Do not apt-get install inspection tools — session packages are discarded."
+		return "Hint: `" + missing + "` is not in the default sandbox image. Use find/ls, head, sed, and" +
+			" `file`. Skill scripts: `read_file` for skill instructions, then the" +
+			" execution tool named there. Do not apt-get install inspection tools —" +
+			" session packages are discarded."
 	default:
-		return "Hint: that command is not installed. Prefer find, ls, head, tail, cat, sed, grep, awk, file. apt-get install only for a package this task actually needs — session installs are discarded."
+		return "Hint: that command is not installed. Prefer find, ls, head, tail, cat," +
+			" sed, grep, awk, file. apt-get install only for a package this task" +
+			" actually needs — session installs are discarded."
 	}
 }
 
@@ -1014,7 +1071,7 @@ func isBinaryShellOutput(s string) bool {
 }
 
 // Cleanup releases any resources.
-func (t *ShellExecTool) Cleanup(ctx context.Context) error {
+func (t *ShellExecTool) Cleanup(_ context.Context) error {
 	return nil
 }
 
@@ -1035,8 +1092,10 @@ func rejectExecutableStdin(command, stdin string) string {
 	}
 	if len(stdin) > shellExecMaxCommandBytes {
 		return fmt.Sprintf(
-			"stdin program too long (%d bytes; max %d). Put the program in write_sandbox_file, then run it with shell_exec",
-			len(stdin), shellExecMaxCommandBytes,
+			"stdin program too long (%d bytes; max %d). Put the program in"+
+				" write_sandbox_file, then run it with shell_exec",
+			len(stdin),
+			shellExecMaxCommandBytes,
 		)
 	}
 	if reason := checkShellExecBlacklist(stdin); reason != "" {

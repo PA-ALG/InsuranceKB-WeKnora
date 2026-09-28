@@ -211,11 +211,11 @@ func TestProcessChunksIndexesEveryTextChild(t *testing.T) {
 		{Content: "standalone child", Seq: 1, Start: 12, End: 28, ParentIndex: -1},
 	}
 
-	svc.processChunks(ctx, kb, knowledge, chunks, ProcessChunksOptions{
+	require.NoError(t, svc.processChunks(ctx, kb, knowledge, chunks, ProcessChunksOptions{
 		ParentChunks: []types.ParsedParentChunk{
 			{Content: "parent context", Seq: 0, Start: 0, End: 28},
 		},
-	})
+	}))
 
 	var textChunkIDs []string
 	for _, chunk := range chunkService.created {

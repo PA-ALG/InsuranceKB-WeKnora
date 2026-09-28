@@ -180,16 +180,16 @@ func TestUpdateMCPService_RespectsScalarFieldPresence(t *testing.T) {
 }
 
 func TestUpdateMCPService_AppliesNonScalarUpdateWithoutName(t *testing.T) {
+	withSSRFWhitelist(t, "mcp.allowed.test")
 	ctx := context.Background()
 	svc, repo := newTestService()
 	id := seedService(t, repo, "stored-api", "stored-token")
-	// Use resolvable example.com paths: subdomains like before.example.com fail
-	// SSRF DNS checks because they do not resolve to a public IP.
-	beforeURL := "https://example.com/before"
+	// Scope the DNS-free success fixture to this test; URL validation still runs.
+	beforeURL := "https://mcp.allowed.test/before"
 	repo.store[id].Description = "before"
 	repo.store[id].URL = &beforeURL
 
-	afterURL := "https://example.com/after"
+	afterURL := "https://mcp.allowed.test/after"
 	update := &types.MCPService{
 		ID:       id,
 		TenantID: 1,

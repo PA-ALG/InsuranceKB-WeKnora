@@ -309,10 +309,15 @@ func (r stubEnvResolver) ResolveEnv(
 
 func TestShellExecCapturesUsedEnvAfterSuccessfulCommand(t *testing.T) {
 	recorder := &recordedCapture{}
-	tool := NewShellExecTool(&fakeShellExecutor{}, nil).WithEnvCapture(recorder.capture).WithSkillEnvironment(shellTestSkillEnvironment(t))
+	tool := NewShellExecTool(
+		&fakeShellExecutor{},
+		nil,
+	).WithEnvCapture(recorder.capture).
+		WithSkillEnvironment(shellTestSkillEnvironment(t))
 
 	result, err := tool.Execute(shellExecTestContext(), json.RawMessage(
-		`{"command":"export USER_TOKEN=from-command; python x.py","skill_name":"pdf-tools","env":{"EXTRA_TOKEN":"from-tool"}}`,
+		"{\"command\":\"export USER_TOKEN=from-command; python x.py\""+
+			",\"skill_name\":\"pdf-tools\",\"env\":{\"EXTRA_TOKEN\":\"from-tool\"}}",
 	))
 
 	require.NoError(t, err)
@@ -327,10 +332,15 @@ func TestShellExecCapturesUsedEnvAfterSuccessfulCommand(t *testing.T) {
 // mentions a skill directory write into that skill's credentials.
 func TestShellExecDoesNotCaptureWithoutAnExplicitSkillName(t *testing.T) {
 	recorder := &recordedCapture{}
-	tool := NewShellExecTool(&fakeShellExecutor{}, nil).WithEnvCapture(recorder.capture).WithSkillEnvironment(shellTestSkillEnvironment(t))
+	tool := NewShellExecTool(
+		&fakeShellExecutor{},
+		nil,
+	).WithEnvCapture(recorder.capture).
+		WithSkillEnvironment(shellTestSkillEnvironment(t))
 
 	result, err := tool.Execute(shellExecTestContext(), json.RawMessage(
-		`{"command":"export USER_TOKEN=from-command; cd /opt/weknora/tenant/skills/pdf-tools && python x.py"}`,
+		"{\"command\":\"export USER_TOKEN=from-command; cd"+
+			" /opt/weknora/tenant/skills/pdf-tools && python x.py\"}",
 	))
 
 	require.NoError(t, err)
@@ -343,10 +353,15 @@ func TestShellExecDoesNotCaptureWithoutAnExplicitSkillName(t *testing.T) {
 func TestShellExecDoesNotCaptureAlreadyResolvedNames(t *testing.T) {
 	recorder := &recordedCapture{}
 	resolver := stubEnvResolver{resolved: map[string]string{"USER_TOKEN": "stored"}}
-	tool := NewShellExecTool(&fakeShellExecutor{}, resolver).WithEnvCapture(recorder.capture).WithSkillEnvironment(shellTestSkillEnvironment(t))
+	tool := NewShellExecTool(
+		&fakeShellExecutor{},
+		resolver,
+	).WithEnvCapture(recorder.capture).
+		WithSkillEnvironment(shellTestSkillEnvironment(t))
 
 	result, err := tool.Execute(shellExecTestContext(), json.RawMessage(
-		`{"command":"python x.py","skill_name":"pdf-tools","env":{"USER_TOKEN":"model-made-this-up","NEW_TOKEN":"fresh"}}`,
+		"{\"command\":\"python x.py\",\"skill_name\":\"pdf-tools\""+
+			",\"env\":{\"USER_TOKEN\":\"model-made-this-up\",\"NEW_TOKEN\":\"fresh\"}}",
 	))
 
 	require.NoError(t, err)
@@ -361,7 +376,11 @@ func TestShellExecDoesNotCaptureAlreadyResolvedNames(t *testing.T) {
 func TestShellExecRunsWhenTheCallSuppliesTheMissingRequiredValue(t *testing.T) {
 	recorder := &recordedCapture{}
 	resolver := stubEnvResolver{missing: []string{"USER_TOKEN"}}
-	tool := NewShellExecTool(&fakeShellExecutor{}, resolver).WithEnvCapture(recorder.capture).WithSkillEnvironment(shellTestSkillEnvironment(t))
+	tool := NewShellExecTool(
+		&fakeShellExecutor{},
+		resolver,
+	).WithEnvCapture(recorder.capture).
+		WithSkillEnvironment(shellTestSkillEnvironment(t))
 
 	result, err := tool.Execute(shellExecTestContext(), json.RawMessage(
 		`{"command":"python x.py","skill_name":"pdf-tools","env":{"USER_TOKEN":"typed-in-chat"}}`,
@@ -532,7 +551,8 @@ func TestShellExecHintsWhenVenvHasNoPip(t *testing.T) {
 	}}, nil)
 
 	result, err := tool.Execute(shellExecTestContext(), json.RawMessage(
-		`{"command":"/opt/weknora/tenant/skills/律师助手/.venv/bin/python /opt/weknora/tenant/skills/律师助手/scripts/install_deps.py --word --yes"}`,
+		"{\"command\":\"/opt/weknora/tenant/skills/律师助手/.venv/bin/python"+
+			" /opt/weknora/tenant/skills/律师助手/scripts/install_deps.py --word --yes\"}",
 	))
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -553,7 +573,10 @@ func shellTestSkillEnvironment(t *testing.T) *skills.Manager {
 
 func TestShellExecNeverSilentlyFallsBackFromNamedSkill(t *testing.T) {
 	executor := &fakeShellExecutor{}
-	result, err := NewShellExecTool(executor, nil).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 report.py","skill_name":"missing"}`))
+	result, err := NewShellExecTool(
+		executor,
+		nil,
+	).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 report.py","skill_name":"missing"}`))
 	require.NoError(t, err)
 	require.False(t, result.Success)
 	require.Zero(t, executor.calls)

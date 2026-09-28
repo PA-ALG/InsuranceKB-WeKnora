@@ -33,7 +33,10 @@ const (
 
 // NewQdrantRetrieveEngineRepository creates and initializes a new Qdrant repository.
 // indexCfg is optional — pass nil to use env var / default values (env path).
-func NewQdrantRetrieveEngineRepository(client *qdrant.Client, indexCfg *types.IndexConfig) interfaces.RetrieveEngineRepository {
+func NewQdrantRetrieveEngineRepository(
+	client *qdrant.Client,
+	indexCfg *types.IndexConfig,
+) interfaces.RetrieveEngineRepository {
 	log := logger.GetLogger(context.Background())
 	log.Info("[Qdrant] Initializing Qdrant retriever engine repository")
 
@@ -121,7 +124,12 @@ func isMissingCollectionErr(err error) bool {
 // When that happens the process-local initialized cache is dropped so the
 // following write (ensureCollection) will recreate the collection instead of
 // skipping create and failing the upsert.
-func (q *qdrantRepository) deletePoints(ctx context.Context, dimension int, collectionName string, points *qdrant.PointsSelector) error {
+func (q *qdrantRepository) deletePoints(
+	ctx context.Context,
+	dimension int,
+	collectionName string,
+	points *qdrant.PointsSelector,
+) error {
 	_, err := q.client.Delete(ctx, &qdrant.DeletePoints{
 		CollectionName: collectionName,
 		Points:         points,
@@ -354,7 +362,12 @@ func (q *qdrantRepository) BatchSave(ctx context.Context,
 }
 
 // DeleteByChunkIDList removes points from the collection based on chunk IDs
-func (q *qdrantRepository) DeleteByChunkIDList(ctx context.Context, chunkIDList []string, dimension int, knowledgeType string) error {
+func (q *qdrantRepository) DeleteByChunkIDList(
+	ctx context.Context,
+	chunkIDList []string,
+	dimension int,
+	_ string,
+) error {
 	log := logger.GetLogger(ctx)
 	if len(chunkIDList) == 0 {
 		log.Warn("[Qdrant] Empty chunk ID list provided for deletion, skipping")
@@ -388,7 +401,7 @@ func (q *qdrantRepository) DeleteByChunkIDList(ctx context.Context, chunkIDList 
 
 // DeleteByKnowledgeIDList removes points from the collection based on knowledge IDs
 func (q *qdrantRepository) DeleteByKnowledgeIDList(ctx context.Context,
-	knowledgeIDList []string, dimension int, knowledgeType string,
+	knowledgeIDList []string, dimension int, _ string,
 ) error {
 	log := logger.GetLogger(ctx)
 	if len(knowledgeIDList) == 0 {
@@ -423,7 +436,7 @@ func (q *qdrantRepository) DeleteByKnowledgeIDList(ctx context.Context,
 
 // DeleteBySourceIDList removes points from the collection based on source IDs
 func (q *qdrantRepository) DeleteBySourceIDList(ctx context.Context,
-	sourceIDList []string, dimension int, knowledgeType string,
+	sourceIDList []string, dimension int, _ string,
 ) error {
 	log := logger.GetLogger(ctx)
 	if len(sourceIDList) == 0 {
@@ -515,7 +528,10 @@ func (q *qdrantRepository) BatchUpdateChunkEnabledStatus(ctx context.Context, ch
 			})
 			if err != nil {
 				log.Warnf("[Qdrant] Failed to update enabled chunks in %s: %v", collectionName, err)
-				updateErr = errors.Join(updateErr, fmt.Errorf("enable chunks in collection %s: %w", collectionName, err))
+				updateErr = errors.Join(
+					updateErr,
+					fmt.Errorf("enable chunks in collection %s: %w", collectionName, err),
+				)
 			}
 		}
 
@@ -535,7 +551,10 @@ func (q *qdrantRepository) BatchUpdateChunkEnabledStatus(ctx context.Context, ch
 			})
 			if err != nil {
 				log.Warnf("[Qdrant] Failed to update disabled chunks in %s: %v", collectionName, err)
-				updateErr = errors.Join(updateErr, fmt.Errorf("disable chunks in collection %s: %w", collectionName, err))
+				updateErr = errors.Join(
+					updateErr,
+					fmt.Errorf("disable chunks in collection %s: %w", collectionName, err),
+				)
 			}
 		}
 	}
@@ -772,7 +791,11 @@ func (q *qdrantRepository) KeywordsRetrieve(ctx context.Context,
 		// Only process collections that start with our base name
 		if len(collectionName) <= len(q.collectionBaseName) ||
 			collectionName[:len(q.collectionBaseName)] != q.collectionBaseName {
-			log.Debugf("[Qdrant] Skipping collection %s (doesn't match base name %s)", collectionName, q.collectionBaseName)
+			log.Debugf(
+				"[Qdrant] Skipping collection %s (doesn't match base name %s)",
+				collectionName,
+				q.collectionBaseName,
+			)
 			continue
 		}
 
@@ -847,11 +870,12 @@ func (q *qdrantRepository) CopyIndices(ctx context.Context,
 	sourceToTargetChunkIDMap map[string]string,
 	targetKnowledgeBaseID string,
 	dimension int,
-	knowledgeType string,
+	_ string,
 ) error {
 	log := logger.GetLogger(ctx)
 	log.Infof(
-		"[Qdrant] Copying indices from source knowledge base %s to target knowledge base %s, count: %d, dimension: %d",
+		"[Qdrant] Copying indices from source knowledge base %s to target"+
+			" knowledge base %s, count: %d, dimension: %d",
 		sourceKnowledgeBaseID, targetKnowledgeBaseID, len(sourceToTargetChunkIDMap), dimension,
 	)
 
@@ -1068,7 +1092,10 @@ func (q *qdrantRepository) calculateStorageSize(embedding *QdrantVectorEmbedding
 }
 
 // toQdrantVectorEmbedding converts IndexInfo to Qdrant payload format
-func toQdrantVectorEmbedding(embedding *types.IndexInfo, additionalParams map[string]interface{}) *QdrantVectorEmbedding {
+func toQdrantVectorEmbedding(
+	embedding *types.IndexInfo,
+	additionalParams map[string]interface{},
+) *QdrantVectorEmbedding {
 	vector := &QdrantVectorEmbedding{
 		Content:         embedding.Content,
 		SourceID:        embedding.SourceID,

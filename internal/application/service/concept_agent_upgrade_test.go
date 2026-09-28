@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"testing"
+
+	"github.com/Tencent/WeKnora/internal/types/interfaces"
 
 	agenttools "github.com/Tencent/WeKnora/internal/agent/tools"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -22,8 +23,10 @@ func TestUPGRawOnlyAgentChecksReleaseCustodyBeforeTools(t *testing.T) {
 	}
 	registry := agenttools.NewToolRegistry()
 	cfg := &types.AgentConfig{
-		AllowedTools:  []string{agenttools.ToolSearchKnowledge, agenttools.ToolReadDocument},
-		SearchTargets: types.SearchTargets{{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "raw", TenantID: 1}},
+		AllowedTools: []string{agenttools.ToolSearchKnowledge, agenttools.ToolReadDocument},
+		SearchTargets: types.SearchTargets{
+			{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "raw", TenantID: 1},
+		},
 	}
 	err := svc.registerTools(context.Background(), registry, cfg, nil, nil, "session")
 	require.ErrorContains(t, err, "custody unavailable")
@@ -42,20 +45,49 @@ func TestUPGRawOnlyCustodySurvivesMissingHeadAndPluginOffline(t *testing.T) {
 				require.NoError(t, db.Create(&types.WikiReleaseHead{WikiReleaseScope: fixture.scope}).Error)
 			}
 			kbs := &conceptAgentKBServiceStub830G2{kbs: map[string]*types.KnowledgeBase{
-				fixture.scope.RawKBID: {ID: fixture.scope.RawKBID, TenantID: fixture.scope.TenantID, IndexingStrategy: types.IndexingStrategy{VectorEnabled: true}},
+				fixture.scope.RawKBID: {
+					ID:               fixture.scope.RawKBID,
+					TenantID:         fixture.scope.TenantID,
+					IndexingStrategy: types.IndexingStrategy{VectorEnabled: true},
+				},
 			}}
 			reader := NewConceptAgentService830G2(fixture.service, kbs, db)
-			ctx := types.WithPrincipal(context.Background(), types.Principal{Type: types.PrincipalWebUser, ID: "viewer"})
+			ctx := types.WithPrincipal(
+				context.Background(),
+				types.Principal{Type: types.PrincipalWebUser, ID: "viewer"},
+			)
 			ctx = types.WithExecutionTenant(ctx, fixture.scope.TenantID)
-			turn, err := reader.PinConceptAgentTurn830G2(ctx, []interfaces.ConceptAgentKnowledgeScope830G2{{KnowledgeBaseID: fixture.scope.RawKBID, TenantID: fixture.scope.TenantID}})
+			turn, err := reader.PinConceptAgentTurn830G2(
+				ctx,
+				[]interfaces.ConceptAgentKnowledgeScope830G2{
+					{KnowledgeBaseID: fixture.scope.RawKBID, TenantID: fixture.scope.TenantID},
+				},
+			)
 			require.NoError(t, err)
 			require.Empty(t, turn.Releases, "raw-only selection does not authorize a Wiki release read")
 			require.Equal(t, []string{fixture.scope.RawKBID}, turn.ManagedSourceKBIDs)
 			svc := &agentService{knowledgeBaseService: kbs, conceptAgentTurnProvider830G2: reader}
 			registry := agenttools.NewToolRegistry()
-			cfg := &types.AgentConfig{AllowedTools: []string{agenttools.ToolSearchKnowledge, agenttools.ToolReadDocument, agenttools.ToolListDocuments}, SearchTargets: types.SearchTargets{{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: fixture.scope.RawKBID, TenantID: fixture.scope.TenantID}}}
+			cfg := &types.AgentConfig{
+				AllowedTools: []string{
+					agenttools.ToolSearchKnowledge,
+					agenttools.ToolReadDocument,
+					agenttools.ToolListDocuments,
+				},
+				SearchTargets: types.SearchTargets{
+					{
+						Type:            types.SearchTargetTypeKnowledgeBase,
+						KnowledgeBaseID: fixture.scope.RawKBID,
+						TenantID:        fixture.scope.TenantID,
+					},
+				},
+			}
 			require.NoError(t, svc.registerTools(ctx, registry, cfg, nil, nil, "session"))
-			require.Empty(t, registry.ListTools(), "offline plugin must not expose unpublished source through raw tools")
+			require.Empty(
+				t,
+				registry.ListTools(),
+				"offline plugin must not expose unpublished source through raw tools",
+			)
 		})
 	}
 }

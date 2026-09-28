@@ -142,8 +142,8 @@ type MCPTool struct {
 type MCPToolApproval struct {
 	ID              string `json:"id"               gorm:"type:varchar(36);primaryKey"`
 	TenantID        uint64 `json:"tenant_id"        gorm:"not null;uniqueIndex:idx_mcp_tool_approvals_tenant_svc_tool"`
-	ServiceID       string `json:"service_id"       gorm:"type:varchar(36);not null;uniqueIndex:idx_mcp_tool_approvals_tenant_svc_tool;index"`
-	ToolName        string `json:"tool_name"        gorm:"type:varchar(512);not null;uniqueIndex:idx_mcp_tool_approvals_tenant_svc_tool"`
+	ServiceID       string `json:"service_id"       gorm:"type:varchar(36);not null;uniqueIndex:idx_mcp_tool_approvals_tenant_svc_tool;index"` //nolint:lll // Preserve the GORM schema/index tag bytes.
+	ToolName        string `json:"tool_name"        gorm:"type:varchar(512);not null;uniqueIndex:idx_mcp_tool_approvals_tenant_svc_tool"`      //nolint:lll // Preserve the GORM schema/index tag bytes.
 	RequireApproval bool   `json:"require_approval" gorm:"not null;default:false"`
 	// Enabled controls whether this tool is exposed to the Agent. Missing rows
 	// are treated as enabled for backwards compatibility. The DB/GORM default is
@@ -269,13 +269,19 @@ func (c *MCPAuthConfig) Scan(value interface{}) error {
 	if plain, ok := utils.DecryptStoredSecretLenient(c.APIKey); ok {
 		c.APIKey = plain
 	} else {
-		log.Printf("[crypto] mcp auth_config api_key: decrypt failed (SYSTEM_AES_KEY missing/rotated?), treating as unconfigured")
+		log.Printf(
+			"[crypto] mcp auth_config api_key: decrypt failed (SYSTEM_AES_KEY" +
+				" missing/rotated?), treating as unconfigured",
+		)
 		c.APIKey = ""
 	}
 	if plain, ok := utils.DecryptStoredSecretLenient(c.Token); ok {
 		c.Token = plain
 	} else {
-		log.Printf("[crypto] mcp auth_config token: decrypt failed (SYSTEM_AES_KEY missing/rotated?), treating as unconfigured")
+		log.Printf(
+			"[crypto] mcp auth_config token: decrypt failed (SYSTEM_AES_KEY" +
+				" missing/rotated?), treating as unconfigured",
+		)
 		c.Token = ""
 	}
 	return nil

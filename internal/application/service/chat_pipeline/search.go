@@ -195,7 +195,13 @@ func removeDuplicateResults(results []*types.SearchResult) []*types.SearchResult
 		sig := buildContentSignature(r.Content)
 		if sig != "" {
 			if firstChunk, exists := contentSig[sig]; exists {
-				logger.Debugf(context.Background(), "Dedup: chunk %s removed due to content signature (dup of %s, sig prefix: %.50s...)", r.ID, firstChunk, sig)
+				logger.Debugf(
+					context.Background(),
+					"Dedup: chunk %s removed due to content signature (dup of %s, sig prefix: %.50s...)",
+					r.ID,
+					firstChunk,
+					sig,
+				)
 				continue
 			}
 			contentSig[sig] = r.ID
@@ -424,7 +430,9 @@ func (p *PluginSearch) searchByTargets(
 							searchableTargets = append(searchableTargets, target)
 							continue
 						}
-						recordError(fmt.Errorf("knowledge base %s has no keyword fallback: %w", target.KnowledgeBaseID, err))
+						recordError(
+							fmt.Errorf("knowledge base %s has no keyword fallback: %w", target.KnowledgeBaseID, err),
+						)
 					}
 					pipelineWarn(ctx, "Search", "group_embed_degrade_keyword", map[string]interface{}{
 						"model_key":        modelKey,

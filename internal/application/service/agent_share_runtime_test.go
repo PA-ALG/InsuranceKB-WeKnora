@@ -22,13 +22,20 @@ func (r *sharedAgentWebSearchRepo) Create(context.Context, *types.WebSearchProvi
 	return nil
 }
 
-func (r *sharedAgentWebSearchRepo) GetByID(_ context.Context, tenantID uint64, id string) (*types.WebSearchProviderEntity, error) {
+func (r *sharedAgentWebSearchRepo) GetByID(
+	_ context.Context,
+	tenantID uint64,
+	id string,
+) (*types.WebSearchProviderEntity, error) {
 	r.byIDTenant = tenantID
 	r.byID = id
 	return r.explicit, nil
 }
 
-func (r *sharedAgentWebSearchRepo) GetDefault(_ context.Context, tenantID uint64) (*types.WebSearchProviderEntity, error) {
+func (r *sharedAgentWebSearchRepo) GetDefault(
+	_ context.Context,
+	tenantID uint64,
+) (*types.WebSearchProviderEntity, error) {
 	r.defaultTenant = tenantID
 	return r.defaultProvider, nil
 }
@@ -105,7 +112,13 @@ func TestFilterSharedAgentWriteToolsCoversAllWikiMutations(t *testing.T) {
 		}
 		filtered := withoutWikiWriteTools([]string{definition.Name})
 		if readOnlyWikiTools[definition.Name] {
-			require.Equal(t, []string{definition.Name}, filtered, "read-only wiki tool %q should remain available", definition.Name)
+			require.Equal(
+				t,
+				[]string{definition.Name},
+				filtered,
+				"read-only wiki tool %q should remain available",
+				definition.Name,
+			)
 			continue
 		}
 		require.Empty(t, filtered, "wiki mutation tool %q must be filtered for shared agents", definition.Name)

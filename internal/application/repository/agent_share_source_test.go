@@ -24,7 +24,8 @@ func TestGetShareByAgentIDAndSourceForTenantDisambiguatesSource(t *testing.T) {
 		`INSERT INTO organizations(id) VALUES ('org')`,
 		`INSERT INTO organization_tenant_members(organization_id, tenant_id)
 			VALUES ('org', 7), ('org', 42), ('org', 84)`,
-		`INSERT INTO custom_agents(id, tenant_id) VALUES ('builtin-smart-reasoning', 42), ('builtin-smart-reasoning', 84)`,
+		"INSERT INTO custom_agents(id, tenant_id) VALUES" +
+			" ('builtin-smart-reasoning', 42), ('builtin-smart-reasoning', 84)",
 		`INSERT INTO agent_shares(id, agent_id, organization_id, source_tenant_id) VALUES
 			('share-42', 'builtin-smart-reasoning', 'org', 42),
 			('share-84', 'builtin-smart-reasoning', 'org', 84)`,

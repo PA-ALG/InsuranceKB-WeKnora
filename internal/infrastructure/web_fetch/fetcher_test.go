@@ -67,11 +67,26 @@ func TestFetcherClassifiesNetworkFailures(t *testing.T) {
 		code      ErrorCode
 		retryable bool
 	}{
-		{name: "dns", err: &net.DNSError{Err: "no such host", Name: "invalid.example"}, code: ErrorDNS, retryable: true},
+		{
+			name:      "dns",
+			err:       &net.DNSError{Err: "no such host", Name: "invalid.example"},
+			code:      ErrorDNS,
+			retryable: true,
+		},
 		{name: "timeout", err: context.DeadlineExceeded, code: ErrorTimeout, retryable: true},
 		{name: "tls", err: x509.HostnameError{Host: "example.com"}, code: ErrorTLS, retryable: false},
-		{name: "redirect", err: errors.New("redirect blocked by SSRF private address"), code: ErrorRedirectRejected, retryable: false},
-		{name: "dial-time SSRF", err: errors.New("connection blocked: host resolves to restricted IP"), code: ErrorSSRFRejected, retryable: false},
+		{
+			name:      "redirect",
+			err:       errors.New("redirect blocked by SSRF private address"),
+			code:      ErrorRedirectRejected,
+			retryable: false,
+		},
+		{
+			name:      "dial-time SSRF",
+			err:       errors.New("connection blocked: host resolves to restricted IP"),
+			code:      ErrorSSRFRejected,
+			retryable: false,
+		},
 	}
 
 	for _, test := range tests {

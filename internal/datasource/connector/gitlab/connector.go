@@ -14,6 +14,7 @@ import (
 
 var _ datasource.StreamingConnector = (*Connector)(nil)
 
+// Connector reads repository resources through the GitLab API.
 type Connector struct {
 	client        *client
 	canonicalBase string
@@ -21,7 +22,9 @@ type Connector struct {
 
 // NewConnector creates a stateless connector. Each data source provides its
 // own GitLab URL and access token in its encrypted credentials.
-func NewConnector() *Connector    { return &Connector{} }
+func NewConnector() *Connector { return &Connector{} }
+
+// Type returns the connector type identifier.
 func (c *Connector) Type() string { return types.ConnectorTypeGitLab }
 
 func (c *Connector) configured(ds *types.DataSourceConfig) (*Connector, error) {
@@ -37,6 +40,7 @@ func (c *Connector) configured(ds *types.DataSourceConfig) (*Connector, error) {
 	return &Connector{client: client, canonicalBase: client.baseURL}, nil
 }
 
+// Validate checks the datasource configuration and credentials.
 func (c *Connector) Validate(ctx context.Context, ds *types.DataSourceConfig) error {
 	configured, err := c.configured(ds)
 	if err != nil {
@@ -54,7 +58,13 @@ func (c *Connector) Validate(ctx context.Context, ds *types.DataSourceConfig) er
 	}
 	return nil
 }
-func (c *Connector) ListResources(ctx context.Context, ds *types.DataSourceConfig, parent string) ([]types.Resource, error) {
+
+// ListResources lists resources visible to the configured datasource.
+func (c *Connector) ListResources(
+	ctx context.Context,
+	ds *types.DataSourceConfig,
+	parent string,
+) ([]types.Resource, error) {
 	var err error
 	if c, err = c.configured(ds); err != nil {
 		return nil, err
@@ -69,7 +79,16 @@ func (c *Connector) ListResources(ctx context.Context, ds *types.DataSourceConfi
 		}
 		out := make([]types.Resource, 0, len(ps))
 		for _, p := range ps {
-			out = append(out, types.Resource{ExternalID: fmt.Sprint(p.ID), Name: p.PathWithNamespace, Type: "project", URL: p.WebURL, HasChildren: true})
+			out = append(
+				out,
+				types.Resource{
+					ExternalID:  fmt.Sprint(p.ID),
+					Name:        p.PathWithNamespace,
+					Type:        "project",
+					URL:         p.WebURL,
+					HasChildren: true,
+				},
+			)
 		}
 		return out, nil
 	}
@@ -86,14 +105,27 @@ func (c *Connector) ListResources(ctx context.Context, ds *types.DataSourceConfi
 	out := make([]types.Resource, 0, len(entries))
 	for _, e := range entries {
 		if e.Type == "tree" {
-			out = append(out, types.Resource{ExternalID: id + ":" + e.Path, Name: e.Name, Type: "directory", ParentID: parent, HasChildren: true})
+			out = append(
+				out,
+				types.Resource{
+					ExternalID:  id + ":" + e.Path,
+					Name:        e.Name,
+					Type:        "directory",
+					ParentID:    parent,
+					HasChildren: true,
+				},
+			)
 		}
 	}
 	return out, nil
 }
+
+// ResolveResourceAncestors returns the ancestor resources for the selected resource.
 func (c *Connector) ResolveResourceAncestors(context.Context, *types.DataSourceConfig, []string) ([]string, error) {
 	return []string{}, nil
 }
+
+// FetchAll fetches documents for a complete datasource synchronization.
 func (c *Connector) FetchAll(ctx context.Context, ds *types.DataSourceConfig, _ []string) ([]types.FetchedItem, error) {
 	var err error
 	if c, err = c.configured(ds); err != nil {
@@ -132,7 +164,12 @@ type cursor struct {
 	Projects map[string]string `json:"projects"`
 }
 
-func (c *Connector) FetchIncremental(ctx context.Context, ds *types.DataSourceConfig, old *types.SyncCursor) ([]types.FetchedItem, *types.SyncCursor, error) {
+// FetchIncremental fetches documents changed since the supplied cursor.
+func (c *Connector) FetchIncremental(
+	ctx context.Context,
+	ds *types.DataSourceConfig,
+	old *types.SyncCursor,
+) ([]types.FetchedItem, *types.SyncCursor, error) {
 	var err error
 	if c, err = c.configured(ds); err != nil {
 		return nil, nil, err
@@ -204,7 +241,10 @@ func (c *Connector) FetchIncremental(ctx context.Context, ds *types.DataSourceCo
 		next.Projects[s.ProjectID] = head
 	}
 	raw, _ := json.Marshal(next)
-	return out, &types.SyncCursor{LastSyncTime: time.Now().UTC(), ConnectorCursor: map[string]interface{}{"projects": next.Projects, "raw": string(raw)}}, nil
+	return out, &types.SyncCursor{
+		LastSyncTime:    time.Now().UTC(),
+		ConnectorCursor: map[string]interface{}{"projects": next.Projects, "raw": string(raw)},
+	}, nil
 }
 
 // FetchStream is the production sync path. It emits each supported repository
@@ -426,9 +466,15 @@ func knowledgeRelativePath(projectName, ref, file string) string {
 	root := strings.TrimSpace(projectName) + "-" + strings.ReplaceAll(strings.TrimSpace(ref), "/", "-")
 	return path.Join(root, file)
 }
+
 func (c *Connector) deleted(p *project, ref, file string) types.FetchedItem {
-	return types.FetchedItem{ExternalID: fmt.Sprintf("gitlab:%s:%d:%s:%s", c.canonicalBase, p.ID, ref, file), IsDeleted: true, Metadata: map[string]string{"channel": types.ConnectorTypeGitLab, "gitlab_path": file}}
+	return types.FetchedItem{
+		ExternalID: fmt.Sprintf("gitlab:%s:%d:%s:%s", c.canonicalBase, p.ID, ref, file),
+		IsDeleted:  true,
+		Metadata:   map[string]string{"channel": types.ConnectorTypeGitLab, "gitlab_path": file},
+	}
 }
+
 func (c *Connector) inScope(file string, roots []string) bool {
 	if len(roots) == 0 {
 		return true
@@ -440,6 +486,7 @@ func (c *Connector) inScope(file string, roots []string) bool {
 	}
 	return false
 }
+
 func splitResourceID(value string) (string, string) {
 	parts := strings.SplitN(value, ":", 2)
 	if len(parts) == 1 {

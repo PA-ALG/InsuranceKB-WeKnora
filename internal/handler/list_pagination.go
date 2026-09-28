@@ -51,7 +51,7 @@ func parseOffsetPagination(c *gin.Context) (offset, limit int, ok bool) {
 	if s := strings.TrimSpace(c.Query("offset")); s != "" {
 		parsedOffset, err := strconv.Atoi(s)
 		if err != nil || parsedOffset < 0 {
-			c.Error(apperrors.NewValidationError("offset must be a non-negative integer"))
+			_ = c.Error(apperrors.NewValidationError("offset must be a non-negative integer"))
 			return 0, 0, false
 		}
 		offset = parsedOffset
@@ -59,7 +59,7 @@ func parseOffsetPagination(c *gin.Context) (offset, limit int, ok bool) {
 	if s := strings.TrimSpace(c.Query("limit")); s != "" {
 		parsedLimit, err := strconv.Atoi(s)
 		if err != nil || parsedLimit < 1 || parsedLimit > maxSearchLimit {
-			c.Error(apperrors.NewValidationError(fmt.Sprintf("limit must be between 1 and %d", maxSearchLimit)))
+			_ = c.Error(apperrors.NewValidationError(fmt.Sprintf("limit must be between 1 and %d", maxSearchLimit)))
 			return 0, 0, false
 		}
 		limit = parsedLimit

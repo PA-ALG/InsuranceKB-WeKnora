@@ -291,7 +291,9 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 			memberships, listErr := h.memberService.ListByUser(ctx, caller.ID)
 			if listErr != nil {
 				logger.Errorf(ctx, "Failed to count owned tenants for user %s: %v", caller.ID, listErr)
-				c.Error(errors.NewInternalServerError("Failed to validate workspace quota").WithDetails(listErr.Error()))
+				_ = c.Error(
+					errors.NewInternalServerError("Failed to validate workspace quota").WithDetails(listErr.Error()),
+				)
 				return
 			}
 			ownedCount := 0
@@ -728,21 +730,26 @@ func (h *TenantHandler) UpdateAPIKey(c *gin.Context) {
 	ctx := c.Request.Context()
 	tenantID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || tenantID == 0 {
-		c.Error(errors.NewBadRequestError("Invalid workspace ID"))
+		_ = c.Error(errors.NewBadRequestError("Invalid workspace ID"))
 		return
 	}
 	keyID, err := strconv.ParseUint(c.Param("key_id"), 10, 64)
 	if err != nil || keyID == 0 {
-		c.Error(errors.NewBadRequestError("Invalid API key ID"))
+		_ = c.Error(errors.NewBadRequestError("Invalid API key ID"))
 		return
 	}
 	var req tenantAPIKeyUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(errors.NewValidationError("Invalid request data").WithDetails(err.Error()))
+		_ = c.Error(errors.NewValidationError("Invalid request data").WithDetails(err.Error()))
 		return
 	}
-	if appErr := validateTenantAPIKeyRequest(ctx, h.kbService, tenantID, tenantAPIKeyCreateRequest(req)); appErr != nil {
-		c.Error(appErr)
+	if appErr := validateTenantAPIKeyRequest(
+		ctx,
+		h.kbService,
+		tenantID,
+		tenantAPIKeyCreateRequest(req),
+	); appErr != nil {
+		_ = c.Error(appErr)
 		return
 	}
 	var expiresAt *time.Time
@@ -756,7 +763,7 @@ func (h *TenantHandler) UpdateAPIKey(c *gin.Context) {
 		KnowledgeBaseIDs: req.KnowledgeBaseIDs, Capabilities: req.Capabilities, ExpiresAt: expiresAt,
 	})
 	if err != nil {
-		c.Error(errors.NewNotFoundError("API key not found"))
+		_ = c.Error(errors.NewNotFoundError("API key not found"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": tenantAPIKeyForResponse(updated)})
@@ -1428,7 +1435,9 @@ func (h *TenantHandler) updateTenantWebSearchConfigInternal(c *gin.Context) {
 			c.Error(appErr)
 		} else {
 			logger.ErrorWithFields(ctx, err, nil)
-			c.Error(errors.NewInternalServerError("Failed to update workspace web search config").WithDetails(err.Error()))
+			_ = c.Error(
+				errors.NewInternalServerError("Failed to update workspace web search config").WithDetails(err.Error()),
+			)
 		}
 		return
 	}
@@ -1514,7 +1523,10 @@ func (h *TenantHandler) updateTenantParserEngineConfigInternal(c *gin.Context) {
 			c.Error(appErr)
 		} else {
 			logger.ErrorWithFields(ctx, err, nil)
-			c.Error(errors.NewInternalServerError("Failed to update workspace parser engine config").WithDetails(err.Error()))
+			_ = c.Error(
+				errors.NewInternalServerError("Failed to update workspace parser engine config").
+					WithDetails(err.Error()),
+			)
 		}
 		return
 	}
@@ -1580,7 +1592,10 @@ func (h *TenantHandler) updateTenantStorageEngineConfigInternal(c *gin.Context) 
 			c.Error(appErr)
 		} else {
 			logger.ErrorWithFields(ctx, err, nil)
-			c.Error(errors.NewInternalServerError("Failed to update workspace storage engine config").WithDetails(err.Error()))
+			_ = c.Error(
+				errors.NewInternalServerError("Failed to update workspace storage engine config").
+					WithDetails(err.Error()),
+			)
 		}
 		return
 	}
@@ -1688,7 +1703,12 @@ func (h *TenantHandler) updateTenantChatHistoryConfigInternal(c *gin.Context) {
 		} else {
 			// Embedding model changed — the old KB is incompatible.
 			// We'll create a new one below. The old KB remains but is orphaned (can be cleaned up later).
-			logger.Infof(ctx, "Embedding model changed from %s to %s, will create new chat history KB", existing.EmbeddingModelID, req.EmbeddingModelID)
+			logger.Infof(
+				ctx,
+				"Embedding model changed from %s to %s, will create new chat history KB",
+				existing.EmbeddingModelID,
+				req.EmbeddingModelID,
+			)
 		}
 	}
 
@@ -1704,7 +1724,9 @@ func (h *TenantHandler) updateTenantChatHistoryConfigInternal(c *gin.Context) {
 		createdKB, err := h.kbService.CreateKnowledgeBase(ctx, kb)
 		if err != nil {
 			logger.ErrorWithFields(ctx, err, nil)
-			c.Error(errors.NewInternalServerError("Failed to create chat history knowledge base").WithDetails(err.Error()))
+			_ = c.Error(
+				errors.NewInternalServerError("Failed to create chat history knowledge base").WithDetails(err.Error()),
+			)
 			return
 		}
 		cfg.KnowledgeBaseID = createdKB.ID
@@ -1812,7 +1834,7 @@ func (h *TenantHandler) GetTenantMemoryConfig(c *gin.Context) {
 	tenant, _ := types.TenantInfoFromContext(ctx)
 	if tenant == nil {
 		logger.Error(ctx, "Workspace is empty")
-		c.Error(errors.NewBadRequestError("Workspace is empty"))
+		_ = c.Error(errors.NewBadRequestError("Workspace is empty"))
 		return
 	}
 	data := tenant.MemoryConfig
@@ -1835,42 +1857,42 @@ func (h *TenantHandler) updateTenantMemoryConfigInternal(c *gin.Context) {
 	var cfg types.MemoryConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
 		logger.Error(ctx, "Failed to parse request parameters", err)
-		c.Error(errors.NewValidationError("Invalid request data").WithDetails(err.Error()))
+		_ = c.Error(errors.NewValidationError("Invalid request data").WithDetails(err.Error()))
 		return
 	}
 	if cfg.WriteMode != "" &&
 		cfg.WriteMode != types.MemoryWriteExplicitOnly &&
 		cfg.WriteMode != types.MemoryWriteAuto {
-		c.Error(errors.NewBadRequestError("write_mode must be explicit_only or auto"))
+		_ = c.Error(errors.NewBadRequestError("write_mode must be explicit_only or auto"))
 		return
 	}
 	if cfg.MaxItems < 0 || cfg.MaxItems > 2000 {
-		c.Error(errors.NewBadRequestError("max_items must be between 0 and 2000"))
+		_ = c.Error(errors.NewBadRequestError("max_items must be between 0 and 2000"))
 		return
 	}
 	if cfg.ExtractDelaySeconds < 0 || cfg.ExtractDelaySeconds > types.MaxMemoryExtractDelaySeconds {
-		c.Error(errors.NewBadRequestError(fmt.Sprintf(
+		_ = c.Error(errors.NewBadRequestError(fmt.Sprintf(
 			"extract_delay_seconds must be between 0 and %d", types.MaxMemoryExtractDelaySeconds)))
 		return
 	}
 	if cfg.ExtractMinIntervalSeconds < 0 ||
 		cfg.ExtractMinIntervalSeconds > types.MaxMemoryExtractMinIntervalSeconds {
-		c.Error(errors.NewBadRequestError(fmt.Sprintf(
+		_ = c.Error(errors.NewBadRequestError(fmt.Sprintf(
 			"extract_min_interval_seconds must be between 0 and %d",
 			types.MaxMemoryExtractMinIntervalSeconds)))
 		return
 	}
 	if len(cfg.EmbeddingModelID) > 64 {
-		c.Error(errors.NewBadRequestError("embedding_model_id is too long"))
+		_ = c.Error(errors.NewBadRequestError("embedding_model_id is too long"))
 		return
 	}
 	if cfg.InterestThreshold < 0 || cfg.InterestThreshold > types.MaxMemoryInterestThreshold {
-		c.Error(errors.NewBadRequestError(fmt.Sprintf(
+		_ = c.Error(errors.NewBadRequestError(fmt.Sprintf(
 			"interest_threshold must be between 1 and %d", types.MaxMemoryInterestThreshold)))
 		return
 	}
 	if len([]rune(cfg.ExtractInstructions)) > types.MaxMemoryExtractInstructionsRunes {
-		c.Error(errors.NewBadRequestError(fmt.Sprintf(
+		_ = c.Error(errors.NewBadRequestError(fmt.Sprintf(
 			"extract_instructions must be at most %d characters",
 			types.MaxMemoryExtractInstructionsRunes)))
 		return
@@ -1880,7 +1902,7 @@ func (h *TenantHandler) updateTenantMemoryConfigInternal(c *gin.Context) {
 	tenant, _ := types.TenantInfoFromContext(ctx)
 	if tenant == nil {
 		logger.Error(ctx, "Workspace is empty")
-		c.Error(errors.NewBadRequestError("Workspace is empty"))
+		_ = c.Error(errors.NewBadRequestError("Workspace is empty"))
 		return
 	}
 
@@ -1888,10 +1910,10 @@ func (h *TenantHandler) updateTenantMemoryConfigInternal(c *gin.Context) {
 	updatedTenant, err := h.service.UpdateTenant(ctx, tenant)
 	if err != nil {
 		if appErr, ok := errors.IsAppError(err); ok {
-			c.Error(appErr)
+			_ = c.Error(appErr)
 		} else {
 			logger.ErrorWithFields(ctx, err, nil)
-			c.Error(errors.NewInternalServerError("Failed to update memory config").WithDetails(err.Error()))
+			_ = c.Error(errors.NewInternalServerError("Failed to update memory config").WithDetails(err.Error()))
 		}
 		return
 	}

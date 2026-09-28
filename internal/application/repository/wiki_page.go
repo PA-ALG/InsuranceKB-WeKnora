@@ -41,7 +41,7 @@ func (r *wikiPageRepository) wikiDialect() string {
 }
 
 func (r *wikiPageRepository) wikiCategoryRankOrder() string {
-	if r.db != nil && r.db.Dialector != nil && r.db.Dialector.Name() == "sqlite" {
+	if r.db != nil && r.db.Dialector != nil && r.db.Name() == "sqlite" {
 		return "CASE WHEN COALESCE(json_array_length(category_path), 0) > 0 THEN 0 ELSE 1 END ASC"
 	}
 	return "CASE WHEN COALESCE(jsonb_array_length(category_path), 0) > 0 THEN 0 ELSE 1 END ASC"
@@ -84,7 +84,7 @@ func (r *wikiPageRepository) applyWikiPageListOrder(query *gorm.DB, sortBy, sort
 }
 
 func (r *wikiPageRepository) wikiEmptyInLinksPredicate() string {
-	if r.db != nil && r.db.Dialector != nil && r.db.Dialector.Name() == "sqlite" {
+	if r.db != nil && r.db.Dialector != nil && r.db.Name() == "sqlite" {
 		return "(in_links IS NULL OR json_array_length(in_links) = 0)"
 	}
 	return "(in_links IS NULL OR in_links = '[]'::JSONB)"
@@ -352,7 +352,10 @@ func (r *wikiPageRepository) GetBySlug(ctx context.Context, kbID string, slug st
 }
 
 // List retrieves wiki pages with filtering and pagination
-func (r *wikiPageRepository) List(ctx context.Context, req *types.WikiPageListRequest) ([]*types.WikiPage, int64, error) {
+func (r *wikiPageRepository) List(
+	ctx context.Context,
+	req *types.WikiPageListRequest,
+) ([]*types.WikiPage, int64, error) {
 	query := r.db.WithContext(ctx).Model(&types.WikiPage{}).
 		Where("knowledge_base_id = ?", req.KnowledgeBaseID)
 
@@ -367,7 +370,8 @@ func (r *wikiPageRepository) List(ctx context.Context, req *types.WikiPageListRe
 	if req.Query != "" {
 		// Use PostgreSQL full-text search + ILIKE for aliases
 		query = query.Where(
-			"(to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('simple', ?) OR aliases::text ILIKE ?)",
+			"(to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(content,"+
+				" '')) @@ plainto_tsquery('simple', ?) OR aliases::text ILIKE ?)",
 			req.Query,
 			"%"+req.Query+"%",
 		)
@@ -497,7 +501,11 @@ func (r *wikiPageRepository) ListByTypeLight(
 
 // ListBySourceRef retrieves all wiki pages that reference a given source knowledge ID.
 // Handles both old format ("knowledgeID") and new format ("knowledgeID|title") in source_refs JSON array.
-func (r *wikiPageRepository) ListBySourceRef(ctx context.Context, kbID string, sourceKnowledgeID string) ([]*types.WikiPage, error) {
+func (r *wikiPageRepository) ListBySourceRef(
+	ctx context.Context,
+	kbID string,
+	sourceKnowledgeID string,
+) ([]*types.WikiPage, error) {
 	// Build the JSON needle safely so arbitrary IDs cannot break out of the
 	// quoted string (e.g. ids containing quotes or backslashes).
 	needle, err := json.Marshal([]string{sourceKnowledgeID})
@@ -543,7 +551,11 @@ func (r *wikiPageRepository) ListBySourceRef(ctx context.Context, kbID string, s
 // Backed by idx_wiki_pages_source_refs (GIN jsonb_path_ops) for the
 // containment branch and idx_wiki_pages_source_refs_text for the legacy
 // text-LIKE branch — both added in migration 000041.
-func (r *wikiPageRepository) ListSlugsBySourceRef(ctx context.Context, kbID string, sourceKnowledgeID string) ([]string, error) {
+func (r *wikiPageRepository) ListSlugsBySourceRef(
+	ctx context.Context,
+	kbID string,
+	sourceKnowledgeID string,
+) ([]string, error) {
 	needle, err := json.Marshal([]string{sourceKnowledgeID})
 	if err != nil {
 		return nil, fmt.Errorf("marshal source ref needle: %w", err)
@@ -1088,11 +1100,13 @@ func (r *wikiPageRepository) FindSimilarPages(
 }
 
 func wikiNormalizedTitleSQL(db *gorm.DB) string {
-	if db != nil && db.Dialector != nil && db.Dialector.Name() == "sqlite" {
+	if db != nil && db.Dialector != nil && db.Name() == "sqlite" {
 		// SQLite has no POSIX [[:space:]]. Strip the common separators that
 		// model formatting drift actually produces; callers still re-check
 		// with the Go identity fold so extras cannot leak through.
-		return "lower(replace(replace(replace(replace(replace(replace(title, ' ', ''), char(9), ''), char(10), ''), char(13), ''), char(160), ''), char(12288), ''))"
+		return "lower(replace(replace(replace(replace(replace(replace(title, ' ', '')," +
+			" char(9), ''), char(10), ''), char(13), ''), char(160), ''), char(12288)" +
+			", ''))"
 	}
 	return "regexp_replace(lower(title), '[[:space:]]+', '', 'g')"
 }
@@ -1330,7 +1344,12 @@ func escapeLikePattern(s string) string {
 // see pages like "华为" or "Index" ahead of the actual 王新 page just
 // because they mention 王新 in their body and were updated more recently.
 // updated_at stays as the tiebreaker so same-rank ties stay deterministic.
-func (r *wikiPageRepository) Search(ctx context.Context, kbID string, query string, limit int) ([]*types.WikiPage, error) {
+func (r *wikiPageRepository) Search(
+	ctx context.Context,
+	kbID string,
+	query string,
+	limit int,
+) ([]*types.WikiPage, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -1405,7 +1424,12 @@ func (r *wikiPageRepository) CreateIssue(ctx context.Context, issue *types.WikiP
 	return r.db.WithContext(ctx).Create(issue).Error
 }
 
-func (r *wikiPageRepository) ListIssues(ctx context.Context, kbID string, slug string, status string) ([]*types.WikiPageIssue, error) {
+func (r *wikiPageRepository) ListIssues(
+	ctx context.Context,
+	kbID string,
+	slug string,
+	status string,
+) ([]*types.WikiPageIssue, error) {
 	query := r.db.WithContext(ctx).Where("knowledge_base_id = ?", kbID)
 	if slug != "" {
 		query = query.Where("slug = ?", slug)

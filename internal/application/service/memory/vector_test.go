@@ -121,7 +121,7 @@ func TestALaterWordingRebuildsTheInterestVector(t *testing.T) {
 		Enabled: true, WriteMode: types.MemoryWriteAuto, InterestThreshold: 2,
 		EmbeddingModelID: "embed-1",
 	})
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 
 	svc.ObserveQuestionTopics(ctx, []string{"门店排班管理"})
 	require.NotEmpty(t, svc.ObserveQuestionTopics(ctx, []string{"门店排班管理"}))
@@ -370,7 +370,7 @@ func TestRecallUsesThePinnedModelNotTheFirstListed(t *testing.T) {
 func TestRecallIgnoresVectorsFromAnotherModel(t *testing.T) {
 	svc, tenantRepo, _ := newVectorHarness(t)
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 
 	stored, err := svc.Remember(ctx, types.MemoryItem{
 		Kind: types.MemoryKindFact, Topic: "回答风格", Content: "回答直接给结论",

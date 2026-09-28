@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// ErrChunkRevisionConflict reports a concurrent change to the chunk revision.
 var ErrChunkRevisionConflict = errors.New("chunk revision conflict")
 
 // ErrChunkNotFound is returned when a chunk lookup finds no row. A typed
@@ -170,7 +171,10 @@ func (r *chunkRepository) GetChunkByIDOnly(ctx context.Context, id string) (*typ
 // GetChunkBySeqID retrieves a chunk by its seq_id and tenant ID
 func (r *chunkRepository) GetChunkBySeqID(ctx context.Context, tenantID uint64, seqID int64) (*types.Chunk, error) {
 	var chunk types.Chunk
-	if err := r.db.WithContext(ctx).Where("tenant_id = ? AND seq_id = ?", tenantID, seqID).First(&chunk).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND seq_id = ?", tenantID, seqID).
+		First(&chunk).
+		Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrChunkNotFound
 		}
@@ -682,7 +686,10 @@ func (r *chunkRepository) DeleteChunks(ctx context.Context, tenantID uint64, ids
 		if end > len(ids) {
 			end = len(ids)
 		}
-		if err := r.db.WithContext(ctx).Where("tenant_id = ? AND id IN ?", tenantID, ids[i:end]).Delete(&types.Chunk{}).Error; err != nil {
+		if err := r.db.WithContext(ctx).
+			Where("tenant_id = ? AND id IN ?", tenantID, ids[i:end]).
+			Delete(&types.Chunk{}).
+			Error; err != nil {
 			return err
 		}
 	}
@@ -718,7 +725,12 @@ func (r *chunkRepository) DeleteByKnowledgeList(ctx context.Context, tenantID ui
 }
 
 // MoveChunksByKnowledgeID updates knowledge_base_id for all chunks of a knowledge item
-func (r *chunkRepository) MoveChunksByKnowledgeID(ctx context.Context, tenantID uint64, knowledgeID string, targetKBID string) error {
+func (r *chunkRepository) MoveChunksByKnowledgeID(
+	ctx context.Context,
+	tenantID uint64,
+	knowledgeID string,
+	targetKBID string,
+) error {
 	return r.db.WithContext(ctx).Model(&types.Chunk{}).
 		Where("tenant_id = ? AND knowledge_id = ?", tenantID, knowledgeID).
 		Updates(map[string]any{"knowledge_base_id": targetKBID, "tag_id": ""}).Error
@@ -726,7 +738,13 @@ func (r *chunkRepository) MoveChunksByKnowledgeID(ctx context.Context, tenantID 
 
 // DeleteChunksByTagID deletes all chunks with the specified tag ID
 // Returns the IDs of deleted chunks for index cleanup
-func (r *chunkRepository) DeleteChunksByTagID(ctx context.Context, tenantID uint64, kbID string, tagID string, excludeIDs []string) ([]string, error) {
+func (r *chunkRepository) DeleteChunksByTagID(
+	ctx context.Context,
+	tenantID uint64,
+	kbID string,
+	tagID string,
+	excludeIDs []string,
+) ([]string, error) {
 	// Build exclude set for O(1) lookup
 	excludeSet := make(map[string]struct{}, len(excludeIDs))
 	for _, id := range excludeIDs {
@@ -1348,8 +1366,18 @@ func (r *chunkRepository) ListRecommendedFAQChunks(
 	var chunks []*types.Chunk
 	query := r.db.WithContext(ctx).
 		Select("id, knowledge_id, knowledge_base_id, chunk_type, metadata, flags, updated_at").
-		Where("tenant_id = ? AND chunk_type = ? AND status IN ? AND is_enabled = ? AND flags & ? != 0",
-			tenantID, types.ChunkTypeFAQ, []int{int(types.ChunkStatusIndexed), int(types.ChunkStatusDefault)}, true, int(types.ChunkFlagRecommended))
+		Where(
+			"tenant_id = ? AND chunk_type = ? AND status IN ? AND is_enabled = ? AND flags & ? != 0",
+
+			tenantID,
+			types.ChunkTypeFAQ,
+			[]int{
+				int(types.ChunkStatusIndexed),
+				int(types.ChunkStatusDefault),
+			},
+			true,
+			int(types.ChunkFlagRecommended),
+		)
 	var scopeClauses []string
 	var scopeArgs []interface{}
 	if len(kbIDs) > 0 {
@@ -1421,7 +1449,11 @@ func (r *chunkRepository) ListRecentDocumentChunksWithQuestions(
 	switch r.db.Name() {
 	case "postgres":
 		if err := baseQuery.
-			Where("metadata IS NOT NULL AND metadata::text != '{}' AND jsonb_array_length(COALESCE(metadata->'generated_questions', '[]'::jsonb)) > 0").
+			Where(
+				"metadata IS NOT NULL AND metadata::text != '{}' AND" +
+					" jsonb_array_length(COALESCE(metadata->'generated_questions'," +
+					" '[]'::jsonb)) > 0",
+			).
 			Order(orderClause).
 			Limit(limit).
 			Find(&chunks).Error; err != nil {
@@ -1437,7 +1469,8 @@ func (r *chunkRepository) ListRecentDocumentChunksWithQuestions(
 		}
 	default: // sqlite
 		if err := baseQuery.
-			Where("metadata IS NOT NULL AND json_array_length(json_extract(metadata, '$.generated_questions')) > 0").
+			Where("metadata IS NOT NULL AND json_array_length(json_extract(metadata," +
+				" '$.generated_questions')) > 0").
 			Order(orderClause).
 			Limit(limit).
 			Find(&chunks).Error; err != nil {

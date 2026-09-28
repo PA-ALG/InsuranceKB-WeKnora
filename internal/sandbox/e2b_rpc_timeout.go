@@ -15,7 +15,8 @@ type e2bRPCTimeoutTransport struct {
 }
 
 func (t *e2bRPCTimeoutTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if t.timeout <= 0 || req.URL.Path == "/process.Process/Start" || req.URL.Path == "/process.Process/Connect" || isFilesystemContentRPC(req.URL.Path) {
+	if t.timeout <= 0 || req.URL.Path == "/process.Process/Start" || req.URL.Path == "/process.Process/Connect" ||
+		isFilesystemContentRPC(req.URL.Path) {
 		return t.next.RoundTrip(req)
 	}
 	ctx, cancel := context.WithTimeout(req.Context(), t.timeout)

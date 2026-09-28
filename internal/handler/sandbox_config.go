@@ -44,7 +44,7 @@ type sandboxTemplateQueryRequest struct {
 func (h *SandboxConfigHandler) QueryTemplates(c *gin.Context) {
 	var req sandboxTemplateQueryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.NewBadRequestError(err.Error()))
+		_ = c.Error(apperrors.NewBadRequestError(err.Error()))
 		return
 	}
 	result, err := h.service.QueryTemplates(c.Request.Context(), sandboxConfigTenantID(c),
@@ -66,10 +66,12 @@ func (h *SandboxConfigHandler) QueryTemplates(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
 }
 
+// SandboxConfigHandler handles tenant sandbox configuration requests.
 type SandboxConfigHandler struct {
 	service sandboxConfigService
 }
 
+// NewSandboxConfigHandler creates sandbox configuration handlers.
 func NewSandboxConfigHandler(
 	service *service.TenantSandboxConfigService,
 ) *SandboxConfigHandler {
@@ -208,9 +210,9 @@ func respondSandboxConfigServiceError(c *gin.Context, err error) {
 		stderrors.Is(err, sandbox.ErrUnsafeOutboundURL),
 		stderrors.Is(err, sandbox.ErrSandboxConfigIncomplete),
 		stderrors.Is(err, sandbox.ErrDockerBackendDisabled):
-		c.Error(apperrors.NewBadRequestError(err.Error()))
+		_ = c.Error(apperrors.NewBadRequestError(err.Error()))
 	default:
-		c.Error(err)
+		_ = c.Error(err)
 	}
 }
 
@@ -229,12 +231,12 @@ func (h *SandboxConfigHandler) List(c *gin.Context) {
 	tenantID := sandboxConfigTenantID(c)
 	configs, err := h.service.List(ctx, tenantID)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	disabled, err := h.service.WorkspaceScriptsDisabled(ctx, tenantID)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	data := make([]sandboxConfigResponse, 0, len(configs))
@@ -256,12 +258,12 @@ type workspacePolicyRequest struct {
 func (h *SandboxConfigHandler) SetWorkspacePolicy(c *gin.Context) {
 	var req workspacePolicyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.NewBadRequestError(err.Error()))
+		_ = c.Error(apperrors.NewBadRequestError(err.Error()))
 		return
 	}
 	tenantID := sandboxConfigTenantID(c)
 	if err := h.service.SetWorkspaceScriptsDisabled(c.Request.Context(), tenantID, req.ScriptsDisabled); err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "workspace_scripts_disabled": req.ScriptsDisabled})
@@ -283,7 +285,7 @@ func (h *SandboxConfigHandler) SetWorkspacePolicy(c *gin.Context) {
 func (h *SandboxConfigHandler) Create(c *gin.Context) {
 	var req sandboxConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.NewBadRequestError(err.Error()))
+		_ = c.Error(apperrors.NewBadRequestError(err.Error()))
 		return
 	}
 	created, err := h.service.Create(c.Request.Context(), sandboxConfigTenantID(c),
@@ -314,11 +316,11 @@ func (h *SandboxConfigHandler) Create(c *gin.Context) {
 func (h *SandboxConfigHandler) Get(c *gin.Context) {
 	cfg, err := h.service.Get(c.Request.Context(), sandboxConfigTenantID(c), c.Param("id"))
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	if cfg == nil {
-		c.Error(apperrors.NewNotFoundError("sandbox config not found"))
+		_ = c.Error(apperrors.NewNotFoundError("sandbox config not found"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": toSandboxConfigResponse(cfg)})
@@ -326,7 +328,8 @@ func (h *SandboxConfigHandler) Get(c *gin.Context) {
 
 // Update godoc
 // @Summary      Update sandbox config
-// @Description  Update a sandbox backend config. Identity-field changes are refused while the config owns live or paused sandboxes.
+// @Description Update a sandbox backend config. Identity-field changes are refused while the config owns live or
+// @Description paused sandboxes.
 // @Tags         SandboxConfig
 // @Accept       json
 // @Produce      json
@@ -344,7 +347,7 @@ func (h *SandboxConfigHandler) Get(c *gin.Context) {
 func (h *SandboxConfigHandler) Update(c *gin.Context) {
 	var req sandboxConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.NewBadRequestError(err.Error()))
+		_ = c.Error(apperrors.NewBadRequestError(err.Error()))
 		return
 	}
 	updated, err := h.service.Update(c.Request.Context(), sandboxConfigTenantID(c), c.Param("id"),
@@ -361,7 +364,7 @@ func (h *SandboxConfigHandler) Update(c *gin.Context) {
 		return
 	}
 	if updated == nil {
-		c.Error(apperrors.NewNotFoundError("sandbox config not found"))
+		_ = c.Error(apperrors.NewNotFoundError("sandbox config not found"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": toSandboxConfigResponse(updated)})
@@ -369,7 +372,8 @@ func (h *SandboxConfigHandler) Update(c *gin.Context) {
 
 // Delete godoc
 // @Summary      Delete sandbox config
-// @Description  Soft-delete a sandbox backend config. force=true only overrides unverifiable provider inventory, never confirmed live sandboxes.
+// @Description Soft-delete a sandbox backend config. force=true only overrides unverifiable provider inventory,
+// @Description never confirmed live sandboxes.
 // @Tags         SandboxConfig
 // @Produce      json
 // @Param        id     path   string  true   "Sandbox config ID"
@@ -386,7 +390,7 @@ func (h *SandboxConfigHandler) Delete(c *gin.Context) {
 		if respondSandboxConfigRefusal(c, err) {
 			return
 		}
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -406,7 +410,7 @@ func (h *SandboxConfigHandler) Delete(c *gin.Context) {
 func (h *SandboxConfigHandler) Inventory(c *gin.Context) {
 	inv, err := h.service.Inventory(c.Request.Context(), sandboxConfigTenantID(c), c.Param("id"))
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": inv})

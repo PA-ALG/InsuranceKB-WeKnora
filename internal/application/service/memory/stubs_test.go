@@ -374,13 +374,20 @@ func (e *stubEmbedder) GetModelName() string { return "stub-embedder" }
 func (e *stubEmbedder) GetDimensions() int   { return 3 }
 func (e *stubEmbedder) GetModelID() string   { return "embed-1" }
 
-func (s *stubMessageRepo) ListMessagesBySessionAfterCursor(ctx context.Context, sessionID string, cursor types.MemoryMessageCursor, limit int) ([]*types.Message, error) {
+func (s *stubMessageRepo) ListMessagesBySessionAfterCursor(
+	ctx context.Context,
+	sessionID string,
+	cursor types.MemoryMessageCursor,
+	limit int,
+) ([]*types.Message, error) {
 	messages, err := s.ListMessagesBySessionAfterTime(ctx, sessionID, time.Time{}, 0)
 	if err != nil {
 		return nil, err
 	}
 	sort.SliceStable(messages, func(i, j int) bool {
-		return (types.MemoryMessageCursor{At: messages[j].CreatedAt, ID: messages[j].ID}).After(types.MemoryMessageCursor{At: messages[i].CreatedAt, ID: messages[i].ID})
+		return (types.MemoryMessageCursor{At: messages[j].CreatedAt, ID: messages[j].ID}).After(
+			types.MemoryMessageCursor{At: messages[i].CreatedAt, ID: messages[i].ID},
+		)
 	})
 	var out []*types.Message
 	for _, message := range messages {

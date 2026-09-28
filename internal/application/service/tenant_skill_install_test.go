@@ -224,8 +224,10 @@ func TestSkillTreeVerifyCommandQuotesPaths(t *testing.T) {
 func TestVerifySkillTreeIssuesOneCommandRegardlessOfScriptCount(t *testing.T) {
 	fx := newInstallFixture(t)
 	files := map[string][]byte{"SKILL.md": []byte(validSkillMD)}
-	rels := []string{"run.sh", "scripts/a.py", "scripts/b.py",
-		"scripts/c.py", "scripts/d.py", "scripts/e.py"}
+	rels := []string{
+		"run.sh", "scripts/a.py", "scripts/b.py",
+		"scripts/c.py", "scripts/d.py", "scripts/e.py",
+	}
 	for _, rel := range rels {
 		files[rel] = []byte("pass\n")
 	}
@@ -2700,7 +2702,11 @@ func (r *installSkillRepo) CreateCatalog(_ context.Context, e *types.TenantSkill
 	return nil
 }
 
-func (r *installSkillRepo) GetCatalog(_ context.Context, _ uint64, catalogID string) (*types.TenantSkillCatalogEntity, error) {
+func (r *installSkillRepo) GetCatalog(
+	_ context.Context,
+	_ uint64,
+	catalogID string,
+) (*types.TenantSkillCatalogEntity, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	stored := r.catalogs[catalogID]
@@ -2711,7 +2717,11 @@ func (r *installSkillRepo) GetCatalog(_ context.Context, _ uint64, catalogID str
 	return &cp, nil
 }
 
-func (r *installSkillRepo) GetCatalogByName(_ context.Context, tenantID uint64, name string) (*types.TenantSkillCatalogEntity, error) {
+func (r *installSkillRepo) GetCatalogByName(
+	_ context.Context,
+	tenantID uint64,
+	name string,
+) (*types.TenantSkillCatalogEntity, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, row := range r.catalogs {
@@ -2723,7 +2733,10 @@ func (r *installSkillRepo) GetCatalogByName(_ context.Context, tenantID uint64, 
 	return nil, nil
 }
 
-func (r *installSkillRepo) ListCatalogsByTenant(_ context.Context, tenantID uint64) ([]*types.TenantSkillCatalogEntity, error) {
+func (r *installSkillRepo) ListCatalogsByTenant(
+	_ context.Context,
+	tenantID uint64,
+) ([]*types.TenantSkillCatalogEntity, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []*types.TenantSkillCatalogEntity
@@ -2757,7 +2770,11 @@ func (r *installSkillRepo) DeleteCatalog(_ context.Context, _ uint64, catalogID 
 	return nil
 }
 
-func (r *installSkillRepo) ListSkillsByCatalog(_ context.Context, tenantID uint64, catalogID string) ([]*types.TenantSkillEntity, error) {
+func (r *installSkillRepo) ListSkillsByCatalog(
+	_ context.Context,
+	tenantID uint64,
+	catalogID string,
+) ([]*types.TenantSkillEntity, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []*types.TenantSkillEntity
@@ -3416,6 +3433,7 @@ func (s installFileService) SaveBytes(_ context.Context, data []byte, _ uint64, 
 	}
 	return "file://bundle.zip", nil
 }
+
 func (s installFileService) GetFile(_ context.Context, ref string) (io.ReadCloser, error) {
 	if s.fx != nil {
 		s.fx.getFileCalls.Add(1)

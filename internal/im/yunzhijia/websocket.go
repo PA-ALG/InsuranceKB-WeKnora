@@ -64,6 +64,7 @@ type LongConnClient struct {
 	reconnectCount        atomic.Int64
 }
 
+// NewLongConnClient creates a Yunzhijia WebSocket client.
 func NewLongConnClient(
 	channelID, webSocketURL string,
 	handler func(context.Context, *im.IncomingMessage) error,
@@ -104,7 +105,8 @@ func (c *LongConnClient) Start(ctx context.Context) error {
 		attempt++
 		reconnectCount := c.reconnectCount.Add(1)
 		logger.Warnf(ctx,
-			"[Yunzhijia] WebSocket connection lost channel_id=%s reconnect_count=%d reason=%v; reconnecting in %v; %s",
+			"[Yunzhijia] WebSocket connection lost channel_id=%s reconnect_count=%d"+
+				" reason=%v; reconnecting in %v; %s",
 			c.channelID, reconnectCount, err, delay, c.healthStatus(),
 		)
 		select {
@@ -226,7 +228,8 @@ func (c *LongConnClient) maxConnectionAgeLoop(ctx context.Context, conn *ws.Conn
 	case <-timer.C:
 		close(maxAgeReached)
 		logger.Infof(ctx,
-			"[Yunzhijia] WebSocket rotating after maximum connection age channel_id=%s max_connection_age=%s %s",
+			"[Yunzhijia] WebSocket rotating after maximum connection age"+
+				" channel_id=%s max_connection_age=%s %s",
 			c.channelID, c.maxConnectionAge, c.healthStatus(),
 		)
 		_ = conn.Close()
@@ -234,9 +237,18 @@ func (c *LongConnClient) maxConnectionAgeLoop(ctx context.Context, conn *ws.Conn
 }
 
 func (c *LongConnClient) logFrame(ctx context.Context, frame *webSocketFrame) {
-	logger.Debugf(ctx,
-		"[Yunzhijia] WebSocket frame channel_id=%s cmd=%s type=%s event=%s seq=%d has_seq=%t need_ack=%t has_message=%t",
-		c.channelID, frame.cmd, frame.typeName, frame.event, frame.seq, frame.hasSeq, frame.needAck, frame.message != nil,
+	logger.Debugf(
+		ctx,
+		"[Yunzhijia] WebSocket frame channel_id=%s cmd=%s type=%s event=%s seq=%d"+
+			" has_seq=%t need_ack=%t has_message=%t",
+		c.channelID,
+		frame.cmd,
+		frame.typeName,
+		frame.event,
+		frame.seq,
+		frame.hasSeq,
+		frame.needAck,
+		frame.message != nil,
 	)
 }
 

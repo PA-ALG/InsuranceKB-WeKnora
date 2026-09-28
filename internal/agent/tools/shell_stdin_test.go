@@ -17,12 +17,21 @@ import (
 // A controlled test executor exercises stdin's shell quoting with real Bash.
 type stdinTestExecutor struct{}
 
-func (stdinTestExecutor) ExecShellCommand(ctx context.Context, _, command, _ string, _ time.Duration, _ map[string]string) (*sandbox.ExecuteResult, error) {
+func (stdinTestExecutor) ExecShellCommand(
+	ctx context.Context,
+	_, command, _ string,
+	_ time.Duration,
+	_ map[string]string,
+) (*sandbox.ExecuteResult, error) {
 	cmd := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", command)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
-	return &sandbox.ExecuteResult{Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: cmd.ProcessState.ExitCode()}, err
+	return &sandbox.ExecuteResult{
+		Stdout:   stdout.String(),
+		Stderr:   stderr.String(),
+		ExitCode: cmd.ProcessState.ExitCode(),
+	}, err
 }
 
 func TestShellStdinPreservesLiteralDataForTheEntireCommand(t *testing.T) {
@@ -45,7 +54,11 @@ func TestShellRejectsOversizeInputAndResolverFailuresBeforeExecution(t *testing.
 	require.False(t, result.Success)
 	require.Zero(t, executor.calls)
 	resolver := stubEnvResolver{err: errors.New("credentials unavailable")}
-	result, err = NewShellExecTool(executor, resolver).WithSkillEnvironment(shellTestSkillEnvironment(t)).Execute(shellExecTestContext(), json.RawMessage(`{"skill_name":"pdf-tools","command":"true"}`))
+	result, err = NewShellExecTool(
+		executor,
+		resolver,
+	).WithSkillEnvironment(shellTestSkillEnvironment(t)).
+		Execute(shellExecTestContext(), json.RawMessage(`{"skill_name":"pdf-tools","command":"true"}`))
 	require.NoError(t, err)
 	require.False(t, result.Success)
 	require.Contains(t, result.Error, "credentials unavailable")
@@ -55,7 +68,9 @@ func TestShellRejectsOversizeInputAndResolverFailuresBeforeExecution(t *testing.
 func TestShellRejectsStdinWhenTheCommandWouldExecuteIt(t *testing.T) {
 	executor := &fakeShellExecutor{}
 	tool := NewShellExecTool(executor, nil)
-	oversize, err := json.Marshal(ShellExecInput{Command: "python3", Stdin: strings.Repeat("x", shellExecMaxCommandBytes+1)})
+	oversize, err := json.Marshal(
+		ShellExecInput{Command: "python3", Stdin: strings.Repeat("x", shellExecMaxCommandBytes+1)},
+	)
 	require.NoError(t, err)
 	result, err := tool.Execute(shellExecTestContext(), oversize)
 	require.NoError(t, err)

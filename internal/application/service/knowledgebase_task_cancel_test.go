@@ -297,12 +297,15 @@ func (kbDeleteDeferredRegistry) GetRetrieveEngineService(types.RetrieverEngineTy
 ) {
 	return nil, nil
 }
+
 func (kbDeleteDeferredRegistry) GetAllRetrieveEngineServices() []interfaces.RetrieveEngineService {
 	return nil
 }
+
 func (kbDeleteDeferredRegistry) GetByStoreID(string) (interfaces.RetrieveEngineService, error) {
 	return nil, errors.New("store not in registry")
 }
+
 func (r kbDeleteDeferredRegistry) GetOrLoadByStoreID(
 	context.Context, uint64, string,
 ) (interfaces.RetrieveEngineService, error) {

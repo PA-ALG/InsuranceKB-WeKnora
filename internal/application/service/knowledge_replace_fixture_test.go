@@ -245,7 +245,9 @@ func newReplaceFileHarness(t *testing.T) *replaceFileHarness {
 		Metadata:        types.JSON(`{"external_id":"notes/a.md","extra":{"nested":true}}`),
 	}
 	h.repo = &replaceFileRepo{row: h.original}
-	h.store = &replaceFileStore{events: &h.events, files: map[string][]byte{"old/file.md": []byte(replaceFileOldContent)}}
+	h.store = &replaceFileStore{
+		events: &h.events, files: map[string][]byte{"old/file.md": []byte(replaceFileOldContent)},
+	}
 	h.tasks = &replaceFileEnqueuer{events: &h.events}
 	h.svc = &knowledgeService{
 		repo:          h.repo,

@@ -17,7 +17,11 @@ type workspaceFailureClient struct {
 	requests []RemoteExecRequest
 }
 
-func (c *workspaceFailureClient) Exec(_ context.Context, _ RemoteSandboxHandle, req RemoteExecRequest) (*RemoteExecResult, error) {
+func (c *workspaceFailureClient) Exec(
+	_ context.Context,
+	_ RemoteSandboxHandle,
+	req RemoteExecRequest,
+) (*RemoteExecResult, error) {
 	c.requests = append(c.requests, req)
 	return c.result, c.err
 }
@@ -40,9 +44,22 @@ func TestWorkspaceFailureStopsBeforeCommandOrFileWrite(t *testing.T) {
 			ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(10000))
 			_, err := mgr.ExecShellCommand(ctx, "session", "echo must-not-run", "/workspace/project", time.Second, nil)
 			require.ErrorContains(t, err, "workspace preparation failed")
-			err = mgr.WriteSessionWorkspaceFile(ctx, "session", "/workspace/output/result.txt", []byte("must-not-write"))
+			err = mgr.WriteSessionWorkspaceFile(
+				ctx,
+				"session",
+				"/workspace/output/result.txt",
+				[]byte("must-not-write"),
+			)
 			require.ErrorContains(t, err, "workspace preparation failed")
-			_, err = mgr.Execute(ctx, &ExecuteConfig{SessionID: "session", Script: "test.py", ScriptContent: "print('must-not-run')", SkipValidation: true})
+			_, err = mgr.Execute(
+				ctx,
+				&ExecuteConfig{
+					SessionID:      "session",
+					Script:         "test.py",
+					ScriptContent:  "print('must-not-run')",
+					SkipValidation: true,
+				},
+			)
 			require.ErrorContains(t, err, "workspace preparation failed")
 			require.Empty(t, client.writeFiles)
 			require.Len(t, failing.requests, 3)

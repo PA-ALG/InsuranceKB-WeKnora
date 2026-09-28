@@ -33,10 +33,10 @@ type userEnvResolver struct {
 	configID string
 }
 
-// NewUserEnvResolver builds the resolver for one agent run. rows are this run's
+// newUserEnvResolver builds the resolver for one agent run. rows are this run's
 // installed skills, already carrying their declarations and admin values; they
 // may be empty, in which case only config-wide variables are resolved.
-func NewUserEnvResolver(
+func newUserEnvResolver(
 	rows []*types.TenantSkillEntity,
 	userEnvs userEnvReader,
 	containerEnv map[string]string,

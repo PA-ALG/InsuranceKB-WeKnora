@@ -81,12 +81,19 @@ func pdfMarkdownIsEmpty(converted *anydoc.Result, err error) bool {
 	return strings.TrimSpace(converted.Markdown) == ""
 }
 
-func (r *AnydocReader) readScannedPDF(ctx context.Context, req *types.ReadRequest, convertErr error) (*types.ReadResult, error) {
+func (r *AnydocReader) readScannedPDF(
+	ctx context.Context,
+	req *types.ReadRequest,
+	convertErr error,
+) (*types.ReadResult, error) {
 	if !r.canFallback() {
 		if convertErr != nil {
 			return nil, fmt.Errorf("anydoc conversion failed for %q: %w", req.FileName, convertErr)
 		}
-		return nil, fmt.Errorf("anydoc conversion failed for %q: PDF has no extractable text; OCR is required", req.FileName)
+		return nil, fmt.Errorf(
+			"anydoc conversion failed for %q: PDF has no extractable text; OCR is required",
+			req.FileName,
+		)
 	}
 
 	logger.Infof(ctx, "[anydoc] %q has no text layer, falling back to builtin for scanned-PDF OCR", req.FileName)

@@ -644,7 +644,12 @@ func TestNormalizeCubeError(t *testing.T) {
 		{"path not found", "Stat", &cubesandbox.NotFoundError{Path: "/x"}, RemoteErrorKindNotFound},
 		{"gone", "Get", &cubesandbox.APIError{StatusCode: http.StatusGone}, RemoteErrorKindTerminal},
 		{"conflict", "Connect", &cubesandbox.APIError{StatusCode: http.StatusConflict}, RemoteErrorKindConflict},
-		{"rate limited", "Create", &cubesandbox.APIError{StatusCode: http.StatusTooManyRequests}, RemoteErrorKindCapacity},
+		{
+			"rate limited",
+			"Create",
+			&cubesandbox.APIError{StatusCode: http.StatusTooManyRequests},
+			RemoteErrorKindCapacity,
+		},
 		{"bad gateway", "List", &cubesandbox.APIError{StatusCode: http.StatusBadGateway}, RemoteErrorKindUnavailable},
 		{"deadline", "Exec", context.DeadlineExceeded, RemoteErrorKindTimeout},
 		{"unknown", "List", errors.New("unknown"), RemoteErrorKindInternal},

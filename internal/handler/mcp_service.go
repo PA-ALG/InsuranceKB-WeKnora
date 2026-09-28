@@ -106,7 +106,7 @@ func (h *MCPServiceHandler) CreateMCPService(c *gin.Context) {
 	}
 	if err := mcpsecurity.ValidateServiceOutboundURLs(&service); err != nil {
 		logger.Warnf(ctx, "SSRF validation failed for MCP service configuration: %v", err)
-		c.Error(errors.NewBadRequestError(err.Error()))
+		_ = c.Error(errors.NewBadRequestError(err.Error()))
 		return
 	}
 
@@ -442,7 +442,7 @@ func (h *MCPServiceHandler) UpdateMCPService(c *gin.Context) {
 	}
 	if err := mcpsecurity.ValidateServiceOutboundURLs(&service); err != nil {
 		logger.Warnf(ctx, "SSRF validation failed for MCP service update: %v", err)
-		c.Error(errors.NewBadRequestError(err.Error()))
+		_ = c.Error(errors.NewBadRequestError(err.Error()))
 		return
 	}
 
@@ -692,14 +692,14 @@ func (h *MCPServiceHandler) SetMCPToolApproval(c *gin.Context) {
 		return
 	}
 	if body.RequireApproval == nil && body.Enabled == nil {
-		c.Error(errors.NewBadRequestError("require_approval or enabled is required"))
+		_ = c.Error(errors.NewBadRequestError("require_approval or enabled is required"))
 		return
 	}
 	if err := h.mcpToolApprovalService.SetPolicy(
 		ctx, tenantID, serviceID, toolName, body.RequireApproval, body.Enabled,
 	); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			c.Error(errors.NewNotFoundError(err.Error()))
+			_ = c.Error(errors.NewNotFoundError(err.Error()))
 			return
 		}
 		c.Error(errors.NewInternalServerError(err.Error()))

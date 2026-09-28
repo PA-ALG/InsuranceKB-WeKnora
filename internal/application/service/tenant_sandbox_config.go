@@ -1,4 +1,4 @@
-// Package service: sandbox backend config management.
+// Package service provides sandbox backend config management.
 //
 // The load-bearing rule: some fields decide whether a config can still OPERATE
 // the sandboxes it already created. Overwriting them in place while sandboxes
@@ -285,6 +285,7 @@ type SandboxTemplateQueryInput struct {
 	ReplaceDesktop  bool
 }
 
+// SandboxTemplateCatalog lists templates available for a sandbox configuration.
 type SandboxTemplateCatalog struct {
 	Templates          []sandbox.RemoteTemplate `json:"templates"`
 	StandardTemplateID string                   `json:"standard_template_id,omitempty"`

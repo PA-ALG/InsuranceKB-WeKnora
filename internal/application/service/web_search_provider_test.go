@@ -40,7 +40,10 @@ func TestValidateProviderParametersExa(t *testing.T) {
 		t.Fatal("Exa provider type is not accepted")
 	}
 
-	if err := validateProviderParameters(types.WebSearchProviderTypeExa, types.WebSearchProviderParameters{}); err == nil {
+	if err := validateProviderParameters(
+		types.WebSearchProviderTypeExa,
+		types.WebSearchProviderParameters{},
+	); err == nil {
 		t.Fatal("missing Exa API key was accepted")
 	}
 }
@@ -76,7 +79,10 @@ func TestValidateProviderParametersBocha(t *testing.T) {
 	if err := validateProviderParameters(types.WebSearchProviderTypeBocha, invalid); err == nil {
 		t.Fatal("invalid Bocha freshness was accepted")
 	}
-	if err := validateProviderParameters(types.WebSearchProviderTypeBocha, types.WebSearchProviderParameters{}); err == nil {
+	if err := validateProviderParameters(
+		types.WebSearchProviderTypeBocha,
+		types.WebSearchProviderParameters{},
+	); err == nil {
 		t.Fatal("missing Bocha API key was accepted")
 	}
 	if !isValidProviderType(types.WebSearchProviderTypeBocha) {

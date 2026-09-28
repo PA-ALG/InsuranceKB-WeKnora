@@ -50,8 +50,26 @@ func TestGroupAndMergeOverlapping_DeterministicOrdering(t *testing.T) {
 		// then the merged result competes with a higher-scored summary chunk
 		// across the inner-map boundary.
 		chunks := []*types.SearchResult{
-			{ID: "low-a", KnowledgeID: "kb-001", ChunkType: "text", ChunkIndex: 1, Content: "first body", StartAt: 0, EndAt: 50, Score: 0.5},
-			{ID: "low-b", KnowledgeID: "kb-001", ChunkType: "text", ChunkIndex: 2, Content: "second body", StartAt: 30, EndAt: 80, Score: 0.7},
+			{
+				ID:          "low-a",
+				KnowledgeID: "kb-001",
+				ChunkType:   "text",
+				ChunkIndex:  1,
+				Content:     "first body",
+				StartAt:     0,
+				EndAt:       50,
+				Score:       0.5,
+			},
+			{
+				ID:          "low-b",
+				KnowledgeID: "kb-001",
+				ChunkType:   "text",
+				ChunkIndex:  2,
+				Content:     "second body",
+				StartAt:     30,
+				EndAt:       80,
+				Score:       0.7,
+			},
 			{ID: "high", KnowledgeID: "kb-001", ChunkType: "summary", StartAt: 200, EndAt: 300, Score: 0.9},
 		}
 		results := plugin.groupAndMergeCurrentContent(context.Background(), chunks)

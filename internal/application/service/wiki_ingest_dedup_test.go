@@ -437,7 +437,11 @@ func TestWikiIdentityClaimRedisOverridesStaleLocal(t *testing.T) {
 	batch := &WikiBatchContext{}
 	identity := normalizeWikiIdentityTitle("孔子")
 	batch.identityClaims.Store(types.WikiPageTypeEntity+"\x00"+identity, "entity/kong-zi")
-	if err := rdb.Set(ctx, wikiIdentityClaimPrefix+"kb-1:"+types.WikiPageTypeEntity+":"+identity, "entity/confucius", wikiIdentityClaimTTL).Err(); err != nil {
+	if err := rdb.Set(
+		ctx, wikiIdentityClaimPrefix+"kb-1:"+types.WikiPageTypeEntity+":"+identity,
+		"entity/confucius", wikiIdentityClaimTTL,
+	).
+		Err(); err != nil {
 		t.Fatalf("seed redis claim: %v", err)
 	}
 
@@ -445,7 +449,9 @@ func TestWikiIdentityClaimRedisOverridesStaleLocal(t *testing.T) {
 	if got != "entity/confucius" {
 		t.Fatalf("redis claim should beat stale local map: got %q", got)
 	}
-	if stored, _ := batch.identityClaims.Load(types.WikiPageTypeEntity + "\x00" + identity); stored != "entity/confucius" {
+	if stored, _ := batch.identityClaims.Load(
+		types.WikiPageTypeEntity + "\x00" + identity,
+	); stored != "entity/confucius" {
 		t.Fatalf("local cache not refreshed from redis: %#v", stored)
 	}
 }
@@ -484,7 +490,7 @@ func TestStabilizeExactTargetIsAuthoritative(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { require.NoError(t, rdb.Close()) }()
 	svc := &wikiIngestService{redisClient: rdb}
 	ctx := context.Background()
 	batch := &WikiBatchContext{}
@@ -497,7 +503,15 @@ func TestStabilizeExactTargetIsAuthoritative(t *testing.T) {
 		t.Fatalf("exact existing page should replace provisional claim: %#v", got)
 	}
 
-	follow := svc.claimWikiIdentitySlug(ctx, "kb-1", types.WikiPageTypeEntity, "孔子", "entity/kongqiu", false, &WikiBatchContext{})
+	follow := svc.claimWikiIdentitySlug(
+		ctx,
+		"kb-1",
+		types.WikiPageTypeEntity,
+		"孔子",
+		"entity/kongqiu",
+		false,
+		&WikiBatchContext{},
+	)
 	if follow != "entity/confucius" {
 		t.Fatalf("authoritative exact hit did not stick in redis: %q", follow)
 	}
@@ -562,7 +576,15 @@ func TestRemapSlugUpdatesByIdentityConverges(t *testing.T) {
 func TestReclaimExtractedIdentitiesCoalescesCitationSlugs(t *testing.T) {
 	svc := &wikiIngestService{}
 	batch := &WikiBatchContext{}
-	svc.claimWikiIdentitySlug(context.Background(), "kb-1", types.WikiPageTypeEntity, "孔子", "entity/kong-zi", false, batch)
+	svc.claimWikiIdentitySlug(
+		context.Background(),
+		"kb-1",
+		types.WikiPageTypeEntity,
+		"孔子",
+		"entity/kong-zi",
+		false,
+		batch,
+	)
 
 	entities, concepts := svc.reclaimExtractedIdentities(context.Background(), "kb-1", []extractedItem{
 		{Name: "孔子", Slug: "entity/kong-zi", SourceChunks: []string{"c1"}},
@@ -587,19 +609,39 @@ func TestWikiIdentityClaimReplacesInvalidRedisValue(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { require.NoError(t, rdb.Close()) }()
 	svc := &wikiIngestService{redisClient: rdb}
 	ctx := context.Background()
 	identity := normalizeWikiIdentityTitle("孔子")
-	if err := rdb.Set(ctx, wikiIdentityClaimPrefix+"kb-1:"+types.WikiPageTypeEntity+":"+identity, "garbage", wikiIdentityClaimTTL).Err(); err != nil {
+	if err := rdb.Set(
+		ctx, wikiIdentityClaimPrefix+"kb-1:"+types.WikiPageTypeEntity+":"+identity,
+		"garbage", wikiIdentityClaimTTL,
+	).
+		Err(); err != nil {
 		t.Fatalf("seed invalid redis claim: %v", err)
 	}
 
-	first := svc.claimWikiIdentitySlug(ctx, "kb-1", types.WikiPageTypeEntity, "孔子", "entity/kong-zi", false, &WikiBatchContext{})
+	first := svc.claimWikiIdentitySlug(
+		ctx,
+		"kb-1",
+		types.WikiPageTypeEntity,
+		"孔子",
+		"entity/kong-zi",
+		false,
+		&WikiBatchContext{},
+	)
 	if first != "entity/kong-zi" {
 		t.Fatalf("invalid redis value should be replaced: got %q", first)
 	}
-	second := svc.claimWikiIdentitySlug(ctx, "kb-1", types.WikiPageTypeEntity, "孔子", "entity/confucius", false, &WikiBatchContext{})
+	second := svc.claimWikiIdentitySlug(
+		ctx,
+		"kb-1",
+		types.WikiPageTypeEntity,
+		"孔子",
+		"entity/confucius",
+		false,
+		&WikiBatchContext{},
+	)
 	if second != "entity/kong-zi" {
 		t.Fatalf("callers did not converge after replacing invalid value: %q", second)
 	}

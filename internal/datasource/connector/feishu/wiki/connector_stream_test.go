@@ -19,24 +19,27 @@ import (
 // for each supported node — modelling a rate-limited / broken export.
 func fakeFeishuFailingExport(nodes []core.WikiNode) (*httptest.Server, *core.Config) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, core.TokenResponse{ApiResponse: core.ApiResponse{Code: 0}, TenantAccessToken: "fake-token", Expire: 7200})
+	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(
+			w,
+			core.TokenResponse{APIResponse: core.APIResponse{Code: 0}, TenantAccessToken: "fake-token", Expire: 7200},
+		)
 	})
-	mux.HandleFunc("/open-apis/wiki/v2/spaces", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/open-apis/wiki/v2/spaces", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.WikiSpaceListResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.WikiSpaceListData{Items: []core.WikiSpace{{SpaceID: "space1", Name: "Test Space"}}},
 		})
 	})
-	mux.HandleFunc("/open-apis/wiki/v2/spaces/space1/nodes", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/open-apis/wiki/v2/spaces/space1/nodes", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.WikiNodeListResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.WikiNodeListData{Items: nodes},
 		})
 	})
 	// Export creation fails for every document.
-	mux.HandleFunc("/open-apis/drive/v1/export_tasks", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, core.ApiResponse{Code: 1, Msg: "export unavailable"})
+	mux.HandleFunc("/open-apis/drive/v1/export_tasks", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, core.APIResponse{Code: 1, Msg: "export unavailable"})
 	})
 	ts := httptest.NewServer(mux)
 	return ts, &core.Config{AppID: "test-app-id", AppSecret: "test-app-secret", BaseURL: ts.URL}
@@ -111,7 +114,7 @@ type recordingHandler struct {
 	emitErr     func(item types.FetchedItem) error
 }
 
-func (h *recordingHandler) Emit(ctx context.Context, item types.FetchedItem) error {
+func (h *recordingHandler) Emit(_ context.Context, item types.FetchedItem) error {
 	if h.emitErr != nil {
 		if err := h.emitErr(item); err != nil {
 			return err
@@ -121,7 +124,7 @@ func (h *recordingHandler) Emit(ctx context.Context, item types.FetchedItem) err
 	return nil
 }
 
-func (h *recordingHandler) Checkpoint(ctx context.Context, cursor *types.SyncCursor) error {
+func (h *recordingHandler) Checkpoint(_ context.Context, cursor *types.SyncCursor) error {
 	var fc core.FeishuCursor
 	b, _ := json.Marshal(cursor.ConnectorCursor)
 	_ = json.Unmarshal(b, &fc)
@@ -284,7 +287,7 @@ func TestFetchStream_EmitErrorAborts(t *testing.T) {
 
 	boom := errors.New("ingest failed")
 	c := NewConnector(core.RegionFeishu)
-	h := &recordingHandler{emitErr: func(item types.FetchedItem) error { return boom }}
+	h := &recordingHandler{emitErr: func(_ types.FetchedItem) error { return boom }}
 	_, err := c.FetchStream(context.Background(), makeConfig(cfg, []string{"space1"}), nil, h)
 	if !errors.Is(err, boom) {
 		t.Fatalf("FetchStream() error = %v, want %v", err, boom)
@@ -363,29 +366,29 @@ func TestFetchStream_DocxMultiItem(t *testing.T) {
 func fakeFeishuWithBlocksFallback(nodes []core.WikiNode, docToken string) (*httptest.Server, *core.Config) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.TokenResponse{
-			ApiResponse:       core.ApiResponse{Code: 0},
+			APIResponse:       core.APIResponse{Code: 0},
 			TenantAccessToken: "fake-token",
 			Expire:            7200,
 		})
 	})
-	mux.HandleFunc("/open-apis/wiki/v2/spaces", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/open-apis/wiki/v2/spaces", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.WikiSpaceListResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.WikiSpaceListData{Items: []core.WikiSpace{{SpaceID: "space1", Name: "Test Space"}}},
 		})
 	})
-	mux.HandleFunc("/open-apis/wiki/v2/spaces/space1/nodes", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/open-apis/wiki/v2/spaces/space1/nodes", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.WikiNodeListResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.WikiNodeListData{Items: nodes},
 		})
 	})
 
 	// Blocks API — always returns HTTP 500 (missing scope / permission denied).
 	blocksPath := "/open-apis/docx/v1/documents/" + docToken + "/blocks"
-	mux.HandleFunc(blocksPath, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(blocksPath, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"code":99991400,"msg":"insufficient scope"}`))
 	})
@@ -394,7 +397,7 @@ func fakeFeishuWithBlocksFallback(nodes []core.WikiNode, docToken string) (*http
 	mux.HandleFunc("/open-apis/drive/v1/export_tasks", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			writeJSON(w, core.ExportTaskCreateResponse{
-				ApiResponse: core.ApiResponse{Code: 0},
+				APIResponse: core.APIResponse{Code: 0},
 				Data:        core.ExportTaskCreateData{Ticket: "ticket-fb"},
 			})
 			return
@@ -402,9 +405,9 @@ func fakeFeishuWithBlocksFallback(nodes []core.WikiNode, docToken string) (*http
 		http.NotFound(w, r)
 	})
 	// Export task status polling.
-	mux.HandleFunc("/open-apis/drive/v1/export_tasks/ticket-fb", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/open-apis/drive/v1/export_tasks/ticket-fb", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.ExportTaskStatusResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data: core.ExportTaskStatusData{
 				Result: core.ExportTaskResult{
 					FileToken: "ft-export-fallback",
@@ -416,10 +419,13 @@ func fakeFeishuWithBlocksFallback(nodes []core.WikiNode, docToken string) (*http
 		})
 	})
 	// Export file download.
-	mux.HandleFunc("/open-apis/drive/v1/export_tasks/file/ft-export-fallback/download", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		_, _ = w.Write([]byte("fake-exported-fallback-binary"))
-	})
+	mux.HandleFunc(
+		"/open-apis/drive/v1/export_tasks/file/ft-export-fallback/download",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write([]byte("fake-exported-fallback-binary"))
+		},
+	)
 	// Drive file download endpoint (not expected to be called in the fallback path,
 	// but registered to avoid 404 panic if the mux catches a stray request).
 	mux.HandleFunc("/open-apis/drive/v1/files/", func(w http.ResponseWriter, r *http.Request) {
@@ -472,7 +478,10 @@ func TestFetchStream_DocxBlocksFallback(t *testing.T) {
 		t.Errorf("item.ExternalID = %q, want %q", item.ExternalID, nodeToken)
 	}
 	if item.ContentType == "text/markdown" {
-		t.Errorf("item.ContentType = %q; want application/octet-stream (export fallback, not blocks path)", item.ContentType)
+		t.Errorf(
+			"item.ContentType = %q; want application/octet-stream (export fallback, not blocks path)",
+			item.ContentType,
+		)
 	}
 	if item.ContentType != "application/octet-stream" {
 		t.Errorf("item.ContentType = %q, want application/octet-stream", item.ContentType)
@@ -485,6 +494,9 @@ func TestFetchStream_DocxBlocksFallback(t *testing.T) {
 	// sweep and permanently delete the good attachment children from the prior
 	// blocks-path sync with nothing to replace them.
 	if item.ReplacesSubtree {
-		t.Error("export-fallback item must not set ReplacesSubtree (would delete good prior attachments on a transient failure)")
+		t.Error(
+			"export-fallback item must not set ReplacesSubtree (would delete good" +
+				" prior attachments on a transient failure)",
+		)
 	}
 }

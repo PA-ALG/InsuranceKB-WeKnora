@@ -29,7 +29,12 @@ func TestCubeFilesystemIdentityIsRequestScoped(t *testing.T) {
 			_, err := transport.RoundTrip(req)
 			require.NoError(t, err)
 			require.Equal(t, basicAuthorizationFor(user), recorder.request.Header.Get("Authorization"))
-			require.Equal(t, basicAuthorizationFor("root"), req.Header.Get("Authorization"), "input request must not be mutated")
+			require.Equal(
+				t,
+				basicAuthorizationFor("root"),
+				req.Header.Get("Authorization"),
+				"input request must not be mutated",
+			)
 		}
 	}
 	for _, route := range []string{"/sandboxes", "/process.Process/Start"} {
@@ -55,7 +60,7 @@ func TestEnvdMaintenanceFilesystemIdentity(t *testing.T) {
 func TestWorkspaceBootstrapDoesNotRemoveOrMoveFiles(t *testing.T) {
 	root := t.TempDir()
 	blocked := filepath.Join(root, "existing-file")
-	require.NoError(t, os.WriteFile(blocked, []byte("keep this"), 0600))
+	require.NoError(t, os.WriteFile(blocked, []byte("keep this"), 0o600))
 	cmd := exec.Command("/bin/sh", "-c", workspaceBootstrapCommand(blocked))
 	require.Error(t, cmd.Run())
 	content, err := os.ReadFile(blocked)

@@ -57,6 +57,7 @@ func TestGetWebSearchProviderTypesIncludesExa(t *testing.T) {
 		t.Fatalf("unexpected Exa config options: %+v", field.Options)
 	}
 }
+
 func TestGetWebSearchProviderTypesIncludesMetaso(t *testing.T) {
 	var metaso *WebSearchProviderTypeInfo
 	providerTypes := GetWebSearchProviderTypes()

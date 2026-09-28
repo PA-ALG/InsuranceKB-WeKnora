@@ -314,7 +314,13 @@ func (s *Service) write(
 	return s.writeReplacing(ctx, scope, cfg, item, "")
 }
 
-func (s *Service) writeReplacing(ctx context.Context, scope interfaces.MemoryScope, cfg *types.MemoryConfig, item types.MemoryItem, targetID string) (*types.MemoryItem, error) {
+func (s *Service) writeReplacing(
+	ctx context.Context,
+	scope interfaces.MemoryScope,
+	cfg *types.MemoryConfig,
+	item types.MemoryItem,
+	targetID string,
+) (*types.MemoryItem, error) {
 	content := types.SanitizeMemoryContent(item.Content)
 	if content == "" {
 		return nil, errors.New("memory: empty content")
@@ -375,7 +381,8 @@ func (s *Service) writeReplacing(ctx context.Context, scope interfaces.MemorySco
 	if err != nil {
 		return nil, fmt.Errorf("find conflicting memory: %w", err)
 	}
-	if existing != nil && existing.Status == types.MemoryStatusActive && types.SanitizeMemoryContent(existing.Content) == content {
+	if existing != nil && existing.Status == types.MemoryStatusActive &&
+		types.SanitizeMemoryContent(existing.Content) == content {
 		// Same statement about the same topic: nothing changed, so keep the
 		// original timestamps instead of churning the row on every turn.
 		return existing, nil
@@ -390,7 +397,8 @@ func (s *Service) writeReplacing(ctx context.Context, scope interfaces.MemorySco
 		if err != nil {
 			return nil, err
 		}
-		if duplicate != nil && !longer && (duplicate.Status == types.MemoryStatusActive || statusForWrite(item) == types.MemoryStatusPending) {
+		if duplicate != nil && !longer &&
+			(duplicate.Status == types.MemoryStatusActive || statusForWrite(item) == types.MemoryStatusPending) {
 			return duplicate, nil
 		}
 		// The new statement subsumes the old one, so let it supersede.

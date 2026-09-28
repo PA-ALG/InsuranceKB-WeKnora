@@ -73,8 +73,8 @@ var writeSkillFileTool = BaseTool{
 
 // WriteSkillFileInput defines the input parameters for write_skill_file.
 type WriteSkillFileInput struct {
-	Path    string `json:"path" jsonschema:"Path of the file to write, inside the skill directory being installed. Absolute, or relative to that directory."`
-	Content string `json:"content" jsonschema:"Full text contents of the file. Overwrites any existing file at path. Maximum 262144 bytes. Do not send binary bytes."`
+	Path    string `json:"path" jsonschema:"Path of the file to write, inside the skill directory being installed. Absolute, or relative to that directory."`          //nolint:lll // Preserve the reflected tool schema tag bytes.
+	Content string `json:"content" jsonschema:"Full text contents of the file. Overwrites any existing file at path. Maximum 262144 bytes. Do not send binary bytes."` //nolint:lll // Preserve the reflected tool schema tag bytes.
 }
 
 // WriteSkillFileTool writes a text file into the skill directory under install.
@@ -179,7 +179,7 @@ func (t *WriteSkillFileTool) Execute(ctx context.Context, args json.RawMessage) 
 }
 
 // Cleanup releases any resources.
-func (t *WriteSkillFileTool) Cleanup(ctx context.Context) error {
+func (t *WriteSkillFileTool) Cleanup(_ context.Context) error {
 	return nil
 }
 
@@ -215,10 +215,10 @@ var editSkillFileTool = BaseTool{
 
 // EditSkillFileInput defines the input parameters for edit_skill_file.
 type EditSkillFileInput struct {
-	Path       string `json:"path" jsonschema:"Path of an existing text file inside the skill directory being installed. Absolute, or relative to that directory."`
-	OldString  string `json:"old_string" jsonschema:"Exact text to find. Include enough surrounding lines so the match is unique unless replace_all is true."`
+	Path       string `json:"path" jsonschema:"Path of an existing text file inside the skill directory being installed. Absolute, or relative to that directory."` //nolint:lll // Preserve the reflected tool schema tag bytes.
+	OldString  string `json:"old_string" jsonschema:"Exact text to find. Include enough surrounding lines so the match is unique unless replace_all is true."`      //nolint:lll // Preserve the reflected tool schema tag bytes.
 	NewString  string `json:"new_string" jsonschema:"Replacement text. Use an empty string to delete the matched text."`
-	ReplaceAll bool   `json:"replace_all,omitempty" jsonschema:"If true, replace every occurrence. If false (default), old_string must match exactly once."`
+	ReplaceAll bool   `json:"replace_all,omitempty" jsonschema:"If true, replace every occurrence. If false (default), old_string must match exactly once."` //nolint:lll // Preserve the reflected tool schema tag bytes.
 }
 
 // EditSkillFileTool applies an exact string replacement inside the skill tree.
@@ -376,7 +376,7 @@ func (t *EditSkillFileTool) Execute(ctx context.Context, args json.RawMessage) (
 }
 
 // Cleanup releases any resources.
-func (t *EditSkillFileTool) Cleanup(ctx context.Context) error {
+func (t *EditSkillFileTool) Cleanup(_ context.Context) error {
 	return nil
 }
 

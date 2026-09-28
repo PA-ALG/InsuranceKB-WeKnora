@@ -255,28 +255,49 @@ func (r *memoryRepository) FindActiveByKey(
 func (r *memoryRepository) UpdateItemContent(
 	ctx context.Context, scope interfaces.MemoryScope, id, content, normalizedKey string, importance int,
 ) error {
-	return r.withSubject(ctx, scope, func(tx *gorm.DB, _ *types.MemorySubject) error {
-		var current types.MemoryItem
-		if err := tx.Where("tenant_id = ? AND subject_id = ? AND id = ?", scope.TenantID, scope.SubjectID, id).First(&current).Error; err != nil {
-			return err
-		}
-		if current.Content != content {
-			if err := tx.Where("tenant_id = ? AND subject_id = ? AND item_id = ?", scope.TenantID, scope.SubjectID, id).Delete(&types.MemoryItemEmbedding{}).Error; err != nil {
+	return r.withSubject(
+
+		ctx,
+
+		scope,
+
+		func(tx *gorm.DB, _ *types.MemorySubject) error {
+			var current types.MemoryItem
+			if err := tx.Where("tenant_id = ? AND subject_id = ? AND id = ?", scope.TenantID, scope.SubjectID, id).
+				First(&current).
+				Error; err != nil {
 				return err
 			}
-			// Editing a confirmed fact invalidates proposals based on its old wording.
-			if err := tx.Model(&types.MemoryItem{}).
-				Where("tenant_id = ? AND subject_id = ? AND replaces_id = ? AND status = ?",
-					scope.TenantID, scope.SubjectID, id, types.MemoryStatusPending).
-				Updates(map[string]interface{}{"status": types.MemoryStatusSuperseded, "invalid_at": time.Now(), "superseded_by": id}).Error; err != nil {
-				return err
+			if current.Content != content {
+				if err := tx.Where(
+					"tenant_id = ? AND subject_id = ? AND item_id = ?",
+					scope.TenantID,
+					scope.SubjectID,
+					id,
+				).
+					Delete(&types.MemoryItemEmbedding{}).
+					Error; err != nil {
+					return err
+				}
+				// Editing a confirmed fact invalidates proposals based on its old wording.
+				if err := tx.Model(&types.MemoryItem{}).
+					Where("tenant_id = ? AND subject_id = ? AND replaces_id = ? AND status = ?",
+						scope.TenantID, scope.SubjectID, id, types.MemoryStatusPending).
+					Updates(map[string]interface{}{
+						"status":        types.MemoryStatusSuperseded,
+						"invalid_at":    time.Now(),
+						"superseded_by": id,
+					}).
+					Error; err != nil {
+					return err
+				}
 			}
-		}
-		return tx.Model(&current).Updates(map[string]interface{}{
-			"content": content, "normalized_key": normalizedKey, "importance": importance,
-			"origin": types.MemoryOriginManual, "updated_at": time.Now(),
-		}).Error
-	})
+			return tx.Model(&current).Updates(map[string]interface{}{
+				"content": content, "normalized_key": normalizedKey, "importance": importance,
+				"origin": types.MemoryOriginManual, "updated_at": time.Now(),
+			}).Error
+		},
+	)
 }
 
 func (r *memoryRepository) SupersedeItem(
@@ -284,7 +305,8 @@ func (r *memoryRepository) SupersedeItem(
 ) error {
 	return r.withSubject(ctx, scope, func(tx *gorm.DB, _ *types.MemorySubject) error {
 		return tx.Model(&types.MemoryItem{}).
-			Where("tenant_id = ? AND subject_id = ? AND ((id = ? AND status = ?) OR (replaces_id = ? AND status = ?))",
+			Where("tenant_id = ? AND subject_id = ? AND ((id = ? AND status = ?) OR"+
+				" (replaces_id = ? AND status = ?))",
 				scope.TenantID, scope.SubjectID, id, types.MemoryStatusActive, id, types.MemoryStatusPending).
 			Updates(map[string]interface{}{
 				"status": types.MemoryStatusSuperseded, "invalid_at": time.Now(),
@@ -491,34 +513,45 @@ func (r *memoryRepository) UpsertItemEmbedding(
 	if embedding.CreatedAt.IsZero() {
 		embedding.CreatedAt = now
 	}
-	return r.withSubject(ctx, scope, func(tx *gorm.DB, _ *types.MemorySubject) error {
-		if embedding.SourceContent != "" {
-			var current types.MemoryItem
-			err := tx.Where("tenant_id = ? AND subject_id = ? AND id = ?", scope.TenantID, scope.SubjectID, embedding.ItemID).First(&current).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil
+	return r.withSubject(
+		ctx,
+		scope,
+		func(tx *gorm.DB, _ *types.MemorySubject) error {
+			if embedding.SourceContent != "" {
+				var current types.MemoryItem
+				err := tx.Where(
+					"tenant_id = ? AND subject_id = ? AND id = ?",
+					scope.TenantID,
+					scope.SubjectID,
+					embedding.ItemID,
+				).
+					First(&current).
+					Error
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if current.Content != embedding.SourceContent || current.Topic != embedding.SourceTopic {
+					return nil
+				}
 			}
+			err := tx.
+				Clauses(clause.OnConflict{
+					Columns:   []clause.Column{{Name: "item_id"}},
+					DoUpdates: clause.AssignmentColumns([]string{"model_id", "dims", "vector", "updated_at"}),
+				}).
+				Create(embedding).Error
 			if err != nil {
 				return err
 			}
-			if current.Content != embedding.SourceContent || current.Topic != embedding.SourceTopic {
-				return nil
-			}
-		}
-		err := tx.
-			Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "item_id"}},
-				DoUpdates: clause.AssignmentColumns([]string{"model_id", "dims", "vector", "updated_at"}),
-			}).
-			Create(embedding).Error
-		if err != nil {
-			return err
-		}
-		// The blob above is what every deployment reads; this is the same
-		// vector in the type the database can sort by. Written in the same
-		// transaction so a row is never searchable with a stale vector.
-		return r.writeVectorColumn(tx, embedding.ItemID, embedding.Vector)
-	})
+			// The blob above is what every deployment reads; this is the same
+			// vector in the type the database can sort by. Written in the same
+			// transaction so a row is never searchable with a stale vector.
+			return r.writeVectorColumn(tx, embedding.ItemID, embedding.Vector)
+		},
+	)
 }
 
 // DeleteItemEmbedding drops one memory's vector so the backfill rebuilds it.

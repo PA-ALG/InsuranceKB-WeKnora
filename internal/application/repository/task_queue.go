@@ -181,7 +181,11 @@ func (r *taskPendingOpsRepository) SeedKnowledgeFinalizingWithPendingOp(
 				knowledgeID, op.TenantID, op.ScopeID, types.ParseStatusProcessing,
 			)
 		if payload.Revision != nil {
-			update = update.Where("current_parse_attempt = ? AND file_sha256 = ?", payload.Revision.ParseAttempt, payload.Revision.FileSHA256)
+			update = update.Where(
+				"current_parse_attempt = ? AND file_sha256 = ?",
+				payload.Revision.ParseAttempt,
+				payload.Revision.FileSHA256,
+			)
 		}
 		res := update.Updates(map[string]interface{}{
 			"parse_status":           types.ParseStatusFinalizing,
@@ -637,7 +641,18 @@ func (r *taskDeadLetterRepository) DeleteByID(ctx context.Context, id int64) err
 // pendingClaimQuery binds every queue dimension and the generation returned
 // by ClaimBatch. Lite mode uses NULL while its existing process lock is held.
 func pendingClaimQuery(db *gorm.DB, op *types.TaskPendingOp) *gorm.DB {
-	q := db.Model(&types.TaskPendingOp{}).Where("id = ? AND tenant_id = ? AND task_type = ? AND scope = ? AND scope_id = ? AND op = ? AND dedup_key = ?", op.ID, op.TenantID, op.TaskType, op.Scope, op.ScopeID, op.Op, op.DedupKey)
+	q := db.Model(&types.TaskPendingOp{}).
+		Where(
+			"id = ? AND tenant_id = ? AND task_type = ? AND scope = ? AND scope_id ="+
+				" ? AND op = ? AND dedup_key = ?",
+			op.ID,
+			op.TenantID,
+			op.TaskType,
+			op.Scope,
+			op.ScopeID,
+			op.Op,
+			op.DedupKey,
+		)
 	if op.ClaimedAt == nil {
 		return q.Where("claimed_at IS NULL")
 	}
@@ -651,7 +666,11 @@ func pendingExecutionQuery(q *gorm.DB, executionID string) *gorm.DB {
 	return q.Where("COALESCE(json_extract(payload, '$.execution_id'), '') = ?", executionID)
 }
 
-func (r *taskPendingOpsRepository) BeginOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error) {
+func (r *taskPendingOpsRepository) BeginOperation(
+	ctx context.Context,
+	claim *types.TaskPendingOp,
+	executionID string,
+) (bool, error) {
 	if claim == nil || claim.ID == 0 || executionID == "" {
 		return false, errors.New("task execution: claim and execution id required")
 	}
@@ -665,19 +684,33 @@ func (r *taskPendingOpsRepository) BeginOperation(ctx context.Context, claim *ty
 	return result.Error == nil && result.RowsAffected == 1, result.Error
 }
 
-func (r *taskPendingOpsRepository) CompleteOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error) {
+func (r *taskPendingOpsRepository) CompleteOperation(
+	ctx context.Context,
+	claim *types.TaskPendingOp,
+	executionID string,
+) (bool, error) {
 	if claim == nil || claim.ID == 0 || executionID == "" {
 		return false, errors.New("task execution: claim and execution id required")
 	}
-	result := pendingExecutionQuery(pendingClaimQuery(r.db.WithContext(ctx), claim), executionID).Delete(&types.TaskPendingOp{})
+	result := pendingExecutionQuery(
+		pendingClaimQuery(r.db.WithContext(ctx), claim),
+		executionID,
+	).Delete(&types.TaskPendingOp{})
 	return result.Error == nil && result.RowsAffected == 1, result.Error
 }
 
-func (r *taskPendingOpsRepository) ArchiveOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string, failure *types.TaskDeadLetter) (bool, error) {
+func (r *taskPendingOpsRepository) ArchiveOperation(
+	ctx context.Context,
+	claim *types.TaskPendingOp,
+	executionID string,
+	failure *types.TaskDeadLetter,
+) (bool, error) {
 	if claim == nil || claim.ID == 0 || executionID == "" || failure == nil {
 		return false, errors.New("task execution: claim, execution id and failure required")
 	}
-	if claim.TenantID != failure.TenantID || claim.TaskType != failure.TaskType || claim.Scope != failure.Scope || claim.ScopeID != failure.ScopeID || claim.DedupKey != failure.RelatedID {
+	if claim.TenantID != failure.TenantID || claim.TaskType != failure.TaskType || claim.Scope != failure.Scope ||
+		claim.ScopeID != failure.ScopeID ||
+		claim.DedupKey != failure.RelatedID {
 		return false, errors.New("task execution: archive scope mismatch")
 	}
 	settled := false
@@ -713,9 +746,17 @@ func (r *taskPendingOpsRepository) ArchiveOperation(ctx context.Context, claim *
 	return err == nil && settled, err
 }
 
-func (r *taskPendingOpsRepository) FailedOperationCount(ctx context.Context, tenantID uint64, taskType, scope, scopeID string) (int64, error) {
+func (r *taskPendingOpsRepository) FailedOperationCount(
+	ctx context.Context,
+	tenantID uint64,
+	taskType, scope, scopeID string,
+) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&types.TaskDeadLetter{}).Where("tenant_id = ? AND task_type = ? AND scope = ? AND scope_id = ?", tenantID, taskType, scope, scopeID).Count(&count).Error
+	err := r.db.WithContext(ctx).
+		Model(&types.TaskDeadLetter{}).
+		Where("tenant_id = ? AND task_type = ? AND scope = ? AND scope_id = ?", tenantID, taskType, scope, scopeID).
+		Count(&count).
+		Error
 	return count, err
 }
 
@@ -736,7 +777,18 @@ func (r *taskPendingOpsRepository) HasFailedOperation(ctx context.Context, claim
 		return false, err
 	}
 	target.Op = claim.Op
-	rows, err := r.db.WithContext(ctx).Model(&types.TaskDeadLetter{}).Select("payload").Where("tenant_id = ? AND task_type = ? AND scope = ? AND scope_id = ? AND related_id = ?", claim.TenantID, claim.TaskType, claim.Scope, claim.ScopeID, claim.DedupKey).Rows()
+	rows, err := r.db.WithContext(ctx).
+		Model(&types.TaskDeadLetter{}).
+		Select("payload").
+		Where(
+			"tenant_id = ? AND task_type = ? AND scope = ? AND scope_id = ? AND related_id = ?",
+			claim.TenantID,
+			claim.TaskType,
+			claim.Scope,
+			claim.ScopeID,
+			claim.DedupKey,
+		).
+		Rows()
 	if err != nil {
 		return false, err
 	}

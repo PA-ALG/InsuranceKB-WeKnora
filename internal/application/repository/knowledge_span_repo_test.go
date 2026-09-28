@@ -158,11 +158,59 @@ func TestKnowledgeSpanRepo_CancelDescendants(t *testing.T) {
 	// Tree: chunking → embedding (running) → batch[0] (running)
 	//                → multimodal (running) → image[0] (done)
 	for _, r := range []*types.KnowledgeProcessingSpan{
-		{KnowledgeID: kid, Attempt: 1, SpanID: "chunking", Name: types.StageChunking, Kind: types.SpanKindStage, Status: types.SpanStatusRunning, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "embedding", ParentSpanID: "chunking", Name: types.StageEmbedding, Kind: types.SpanKindStage, Status: types.SpanStatusRunning, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "batch0", ParentSpanID: "embedding", Name: "embedding.batch[0]", Kind: types.SpanKindGeneration, Status: types.SpanStatusRunning, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "multimodal", ParentSpanID: "chunking", Name: types.StageMultimodal, Kind: types.SpanKindStage, Status: types.SpanStatusRunning, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "image0", ParentSpanID: "multimodal", Name: "multimodal.image[0]", Kind: types.SpanKindGeneration, Status: types.SpanStatusDone, StartedAt: &now},
+		{
+			KnowledgeID: kid,
+			Attempt:     1,
+			SpanID:      "chunking",
+			Name:        types.StageChunking,
+			Kind:        types.SpanKindStage,
+			Status:      types.SpanStatusRunning,
+			StartedAt:   &now,
+		},
+
+		{
+			KnowledgeID:  kid,
+			Attempt:      1,
+			SpanID:       "embedding",
+			ParentSpanID: "chunking",
+			Name:         types.StageEmbedding,
+			Kind:         types.SpanKindStage,
+			Status:       types.SpanStatusRunning,
+			StartedAt:    &now,
+		},
+
+		{
+			KnowledgeID:  kid,
+			Attempt:      1,
+			SpanID:       "batch0",
+			ParentSpanID: "embedding",
+			Name:         "embedding.batch[0]",
+			Kind:         types.SpanKindGeneration,
+			Status:       types.SpanStatusRunning,
+			StartedAt:    &now,
+		},
+
+		{
+			KnowledgeID:  kid,
+			Attempt:      1,
+			SpanID:       "multimodal",
+			ParentSpanID: "chunking",
+			Name:         types.StageMultimodal,
+			Kind:         types.SpanKindStage,
+			Status:       types.SpanStatusRunning,
+			StartedAt:    &now,
+		},
+
+		{
+			KnowledgeID:  kid,
+			Attempt:      1,
+			SpanID:       "image0",
+			ParentSpanID: "multimodal",
+			Name:         "multimodal.image[0]",
+			Kind:         types.SpanKindGeneration,
+			Status:       types.SpanStatusDone,
+			StartedAt:    &now,
+		},
 	} {
 		require.NoError(t, repo.Upsert(ctx, r))
 	}
@@ -179,7 +227,12 @@ func TestKnowledgeSpanRepo_CancelDescendants(t *testing.T) {
 	for _, r := range rows {
 		statusBy[r.SpanID] = r.Status
 	}
-	assert.Equal(t, types.SpanStatusRunning, statusBy["chunking"], "the failed span itself stays untouched (FailSpan layer flips it)")
+	assert.Equal(
+		t,
+		types.SpanStatusRunning,
+		statusBy["chunking"],
+		"the failed span itself stays untouched (FailSpan layer flips it)",
+	)
 	assert.Equal(t, types.SpanStatusCancelled, statusBy["embedding"])
 	assert.Equal(t, types.SpanStatusCancelled, statusBy["batch0"])
 	assert.Equal(t, types.SpanStatusCancelled, statusBy["multimodal"])
@@ -193,9 +246,35 @@ func TestKnowledgeSpanRepo_CancelOpenSpansByName(t *testing.T) {
 	now := time.Now()
 
 	for _, r := range []*types.KnowledgeProcessingSpan{
-		{KnowledgeID: kid, Attempt: 1, SpanID: "sum-old", Name: "postprocess.summary", Kind: types.SpanKindSubSpan, Status: types.SpanStatusRunning, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "sum-done", Name: "postprocess.summary", Kind: types.SpanKindSubSpan, Status: types.SpanStatusDone, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "q-old", Name: "postprocess.question", Kind: types.SpanKindSubSpan, Status: types.SpanStatusRunning, StartedAt: &now},
+		{
+			KnowledgeID: kid,
+			Attempt:     1,
+			SpanID:      "sum-old",
+			Name:        "postprocess.summary",
+			Kind:        types.SpanKindSubSpan,
+			Status:      types.SpanStatusRunning,
+			StartedAt:   &now,
+		},
+
+		{
+			KnowledgeID: kid,
+			Attempt:     1,
+			SpanID:      "sum-done",
+			Name:        "postprocess.summary",
+			Kind:        types.SpanKindSubSpan,
+			Status:      types.SpanStatusDone,
+			StartedAt:   &now,
+		},
+
+		{
+			KnowledgeID: kid,
+			Attempt:     1,
+			SpanID:      "q-old",
+			Name:        "postprocess.question",
+			Kind:        types.SpanKindSubSpan,
+			Status:      types.SpanStatusRunning,
+			StartedAt:   &now,
+		},
 	} {
 		require.NoError(t, repo.Upsert(ctx, r))
 	}
@@ -221,10 +300,46 @@ func TestKnowledgeSpanRepo_CancelPathsSanitizeErrorFields(t *testing.T) {
 	kid := "kid-cancel-invalid-utf8"
 	now := time.Now()
 	for _, r := range []*types.KnowledgeProcessingSpan{
-		{KnowledgeID: kid, Attempt: 1, SpanID: "root", Name: "root", Kind: types.SpanKindRoot, Status: types.SpanStatusRunning, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "descendant", ParentSpanID: "root", Name: "descendant", Kind: types.SpanKindSubSpan, Status: types.SpanStatusRunning, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "bulk", Name: "bulk", Kind: types.SpanKindSubSpan, Status: types.SpanStatusRunning, StartedAt: &now},
-		{KnowledgeID: kid, Attempt: 1, SpanID: "named", Name: "named", Kind: types.SpanKindSubSpan, Status: types.SpanStatusRunning, StartedAt: &now},
+		{
+			KnowledgeID: kid,
+			Attempt:     1,
+			SpanID:      "root",
+			Name:        "root",
+			Kind:        types.SpanKindRoot,
+			Status:      types.SpanStatusRunning,
+			StartedAt:   &now,
+		},
+
+		{
+			KnowledgeID:  kid,
+			Attempt:      1,
+			SpanID:       "descendant",
+			ParentSpanID: "root",
+			Name:         "descendant",
+			Kind:         types.SpanKindSubSpan,
+			Status:       types.SpanStatusRunning,
+			StartedAt:    &now,
+		},
+
+		{
+			KnowledgeID: kid,
+			Attempt:     1,
+			SpanID:      "bulk",
+			Name:        "bulk",
+			Kind:        types.SpanKindSubSpan,
+			Status:      types.SpanStatusRunning,
+			StartedAt:   &now,
+		},
+
+		{
+			KnowledgeID: kid,
+			Attempt:     1,
+			SpanID:      "named",
+			Name:        "named",
+			Kind:        types.SpanKindSubSpan,
+			Status:      types.SpanStatusRunning,
+			StartedAt:   &now,
+		},
 	} {
 		require.NoError(t, repo.Upsert(ctx, r))
 	}
@@ -289,8 +404,9 @@ func TestKnowledgeSpanRepo_LastActivity(t *testing.T) {
 	base := time.Date(2026, 9, 22, 10, 0, 0, 0, time.UTC)
 	for i, at := range []time.Time{base, base.Add(7 * time.Minute), base.Add(3 * time.Minute)} {
 		require.NoError(t, db.Exec(
-			`INSERT INTO knowledge_processing_spans (knowledge_id, attempt, span_id, name, kind, status, updated_at)
-			 VALUES ('k-1', ?, ?, 'docreader', 'stage', 'running', ?)`, i+1, fmt.Sprintf("s-%d", i), at,
+			"INSERT INTO knowledge_processing_spans (knowledge_id, attempt, span_id,"+
+				" name, kind, status, updated_at)\n\t\t\t VALUES ('k-1', ?, ?, 'docreader',"+
+				" 'stage', 'running', ?)", i+1, fmt.Sprintf("s-%d", i), at,
 		).Error)
 	}
 

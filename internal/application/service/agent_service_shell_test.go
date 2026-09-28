@@ -34,6 +34,7 @@ func (m *capableManager) GetType() sandbox.SandboxType  { return m.typ }
 func (m *capableManager) SessionShellExecutor() sandbox.SessionShellExecutor {
 	return m.shell
 }
+
 func (m *capableManager) SessionFileStore() sandbox.SessionFileStore {
 	return m.files
 }

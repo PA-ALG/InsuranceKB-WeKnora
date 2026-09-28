@@ -141,8 +141,19 @@ func holdbackCutoff(chunk string) int {
 }
 
 // formatIMOutboundAnswer strips thinking/tool blocks and applies IM content cleanup.
-func formatIMOutboundAnswer(ctx context.Context, raw string, tenant *types.Tenant, defaultFileSvc interfaces.FileService, storageResolvers ...interfaces.StorageBackendResolver) string {
-	return cleanIMContent(ctx, FormatIMDisplayContent(raw, StreamDisplayFinal), tenant, defaultFileSvc, storageResolvers...)
+func formatIMOutboundAnswer(
+	ctx context.Context,
+	raw string,
+	tenant *types.Tenant,
+	defaultFileSvc interfaces.FileService,
+	storageResolvers ...interfaces.StorageBackendResolver,
+) string {
+	return cleanIMContent(
+		ctx,
+		FormatIMDisplayContent(raw, StreamDisplayFinal),
+		tenant,
+		defaultFileSvc,
+		storageResolvers...)
 }
 
 // formatIMOutboundAnswerOrFallback guarantees that cleanup cannot turn a
@@ -185,7 +196,13 @@ func imQAFailureReply(err error) string {
 //  1. Collapse <image> XML blocks back to plain markdown
 //  2. Strip <kb/> and <web/> citation tags
 //  3. Rewrite provider:// URLs to HTTP URLs (scheme-aware per tenant config)
-func cleanIMContent(ctx context.Context, content string, tenant *types.Tenant, defaultFileSvc interfaces.FileService, storageResolvers ...interfaces.StorageBackendResolver) string {
+func cleanIMContent(
+	ctx context.Context,
+	content string,
+	tenant *types.Tenant,
+	defaultFileSvc interfaces.FileService,
+	storageResolvers ...interfaces.StorageBackendResolver,
+) string {
 	content = stripImageXMLTags(content)
 	content = stripIMCitationTags(content)
 	resolver := newIMFileServiceResolver(tenant, defaultFileSvc, storageResolvers...).WithContext(ctx)
@@ -213,7 +230,11 @@ func buildIMFileServiceForProvider(
 }
 
 // resolveIMFileServiceForPath is a test/helper entry point without caching.
-func resolveIMFileServiceForPath(tenant *types.Tenant, filePath string, defaultSvc interfaces.FileService) interfaces.FileService {
+func resolveIMFileServiceForPath(
+	tenant *types.Tenant,
+	filePath string,
+	defaultSvc interfaces.FileService,
+) interfaces.FileService {
 	return newIMFileServiceResolver(tenant, defaultSvc).ResolveFileService(filePath)
 }
 
@@ -272,7 +293,11 @@ type channelConfigEvent struct {
 
 // AdapterFactory creates an Adapter from an IMChannel configuration.
 // The second return value is an optional cleanup function (e.g., for stopping websocket connections).
-type AdapterFactory func(ctx context.Context, channel *IMChannel, msgHandler func(ctx context.Context, msg *IncomingMessage) error) (Adapter, context.CancelFunc, error)
+type AdapterFactory func(
+	ctx context.Context,
+	channel *IMChannel,
+	msgHandler func(ctx context.Context, msg *IncomingMessage) error,
+) (Adapter, context.CancelFunc, error)
 
 // inflightEntry tracks a running QA request, keyed by userKey in the inflight map.
 type inflightEntry struct {
@@ -561,7 +586,11 @@ func buildIMQARequest(
 	}
 }
 
-func buildIMLastRequestState(agentID string, customAgent *types.CustomAgent, kbIDs []string) *types.SessionLastRequestState {
+func buildIMLastRequestState(
+	agentID string,
+	customAgent *types.CustomAgent,
+	kbIDs []string,
+) *types.SessionLastRequestState {
 	state := &types.SessionLastRequestState{
 		AgentID:          agentID,
 		KnowledgeBaseIDs: append([]string(nil), kbIDs...),
@@ -581,7 +610,10 @@ func buildIMLastRequestState(agentID string, customAgent *types.CustomAgent, kbI
 	return state
 }
 
-func createIMUserMessagePayload(sessionID, content, requestID string, attachments ...types.MessageAttachments) *types.Message {
+func createIMUserMessagePayload(
+	sessionID, content, requestID string,
+	attachments ...types.MessageAttachments,
+) *types.Message {
 	var messageAttachments types.MessageAttachments
 	if len(attachments) > 0 {
 		messageAttachments = attachments[0]
@@ -606,7 +638,11 @@ type imDownloadedAttachment struct {
 // prepareIMAttachments downloads an IM attachment and exposes its parsed text
 // (and, for images, a bounded data URI) to the QA pipeline. This is separate
 // from the optional background knowledge-base save.
-func (s *Service) prepareIMAttachments(ctx context.Context, msg *IncomingMessage, adapter Adapter) (types.MessageAttachments, []string, *imDownloadedAttachment, error) {
+func (s *Service) prepareIMAttachments(
+	ctx context.Context,
+	msg *IncomingMessage,
+	adapter Adapter,
+) (types.MessageAttachments, []string, *imDownloadedAttachment, error) {
 	if msg.MessageType != MessageTypeFile && msg.MessageType != MessageTypeImage {
 		return nil, nil, nil, nil
 	}
@@ -672,9 +708,19 @@ func (s *Service) prepareIMAttachments(ctx context.Context, msg *IncomingMessage
 		}
 		imageURLs = []string{"data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(content)}
 	} else if isImage {
-		logger.Warnf(ctx, "[IM] image is too large for direct vision input: size=%d limit=%d", len(content), maxIMVisionAttachmentBytes)
+		logger.Warnf(
+			ctx,
+			"[IM] image is too large for direct vision input: size=%d limit=%d",
+			len(content),
+			maxIMVisionAttachmentBytes,
+		)
 	}
-	return types.MessageAttachments{attachment}, imageURLs, &imDownloadedAttachment{fileName: fileName, content: content}, nil
+	return types.MessageAttachments{
+			attachment,
+		}, imageURLs, &imDownloadedAttachment{
+			fileName: fileName,
+			content:  content,
+		}, nil
 }
 
 func applyIMAttachmentTruncation(content string, attachment *types.MessageAttachment) {
@@ -807,7 +853,9 @@ func mergeIMAgentAnswerBuffers(answerBuilder, answerOuter, agentLiveAnswer *stri
 
 // resolveIMConfig extracts IM tuning parameters from the application config,
 // falling back to built-in defaults for any zero/nil values.
-func resolveIMConfig(appCfg *config.Config) (workers, maxQueue, maxPerUser, globalMaxWorkers int, rlWindow time.Duration, rlMax int) {
+func resolveIMConfig(
+	appCfg *config.Config,
+) (workers, maxQueue, maxPerUser, globalMaxWorkers int, rlWindow time.Duration, rlMax int) {
 	workers = defaultWorkers
 	maxQueue = defaultMaxQueueSize
 	maxPerUser = defaultMaxPerUser
@@ -912,8 +960,14 @@ func NewService(
 		if globalMaxWorkers > 0 {
 			globalInfo = fmt.Sprintf("%d", globalMaxWorkers)
 		}
-		logger.Infof(context.Background(), "[IM] Multi-instance mode enabled (instance=%s, workers=%d, queue=%d, global_max=%s)",
-			s.instanceID[:8], workers, maxQueue, globalInfo)
+		logger.Infof(
+			context.Background(),
+			"[IM] Multi-instance mode enabled (instance=%s, workers=%d, queue=%d, global_max=%s)",
+			s.instanceID[:8],
+			workers,
+			maxQueue,
+			globalInfo,
+		)
 	} else {
 		logger.Infof(context.Background(), "[IM] Single-instance mode (no Redis, workers=%d, queue=%d)",
 			workers, maxQueue)
@@ -1230,7 +1284,11 @@ func (s *Service) stopChannelLocked(channelID string, cs *channelState) {
 	// For websocket channels, the connection closes synchronously, so
 	// immediate release is safe.
 	if cs.Channel != nil && cs.Channel.Mode == "longpoll" {
-		logger.Infof(context.Background(), "[IM] Stopped longpoll channel: id=%s (leader lock will expire via TTL)", channelID)
+		logger.Infof(
+			context.Background(),
+			"[IM] Stopped longpoll channel: id=%s (leader lock will expire via TTL)",
+			channelID,
+		)
 	} else {
 		s.releaseWSLeader(channelID)
 		logger.Infof(context.Background(), "[IM] Stopped channel: id=%s", channelID)
@@ -1248,7 +1306,12 @@ func (s *Service) tryAcquireWSLeader(channelID string) bool {
 	key := RedisKeyLeader + channelID
 	ok, err := s.redis.SetNX(context.Background(), key, s.instanceID, wsLeaderTTL).Result()
 	if err != nil {
-		logger.Warnf(context.Background(), "[IM] Redis leader election failed for %s: %v; connection will retry without taking leadership", channelID, err)
+		logger.Warnf(
+			context.Background(),
+			"[IM] Redis leader election failed for %s: %v; connection will retry without taking leadership",
+			channelID,
+			err,
+		)
 		return false
 	}
 	return ok
@@ -1311,8 +1374,12 @@ func (s *Service) wsLeaderRenewLoop(ctx context.Context, channelID string) {
 			if err != nil {
 				// Transient DB error — don't stop a possibly-healthy channel
 				// on a DB hiccup. Skip this round; the next renewal re-checks.
-				logger.Warnf(context.Background(),
-					"[IM] DB check failed for channel %s during leader renewal: %v (skipping this round)", channelID, err)
+				logger.Warnf(
+					context.Background(),
+					"[IM] DB check failed for channel %s during leader renewal: %v (skipping this round)",
+					channelID,
+					err,
+				)
 				continue
 			}
 			if !ch.Enabled {
@@ -1645,7 +1712,9 @@ func (s *Service) GetChannelByID(channelID string) (*IMChannel, error) {
 // GetChannelByIDAndTenant loads a channel from the database, scoped to a specific tenant.
 func (s *Service) GetChannelByIDAndTenant(channelID string, tenantID uint64) (*IMChannel, error) {
 	var ch IMChannel
-	if err := s.db.Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", channelID, tenantID).First(&ch).Error; err != nil {
+	if err := s.db.Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", channelID, tenantID).
+		First(&ch).
+		Error; err != nil {
 		return nil, err
 	}
 	return &ch, nil
@@ -1925,9 +1994,18 @@ func emptyIncomingMessageReply(msg *IncomingMessage) (string, bool) {
 	}
 }
 
-func (s *Service) persistIMLastRequestState(ctx context.Context, sessionID, agentID string, customAgent *types.CustomAgent, kbIDs []string) {
+func (s *Service) persistIMLastRequestState(
+	ctx context.Context,
+	sessionID, agentID string,
+	customAgent *types.CustomAgent,
+	kbIDs []string,
+) {
 	state := buildIMLastRequestState(agentID, customAgent, kbIDs)
-	if err := s.sessionService.UpdateSessionLastRequestState(logger.CloneContext(context.WithoutCancel(ctx)), sessionID, state); err != nil {
+	if err := s.sessionService.UpdateSessionLastRequestState(
+		logger.CloneContext(context.WithoutCancel(ctx)),
+		sessionID,
+		state,
+	); err != nil {
 		logger.Warnf(ctx, "[IM] persist last_request_state failed for session %s: %v", sessionID, err)
 	}
 }
@@ -1958,7 +2036,11 @@ func (s *Service) executeQARequest(req *qaRequest) {
 	attachments, imageURLs, downloaded, err := s.prepareIMAttachments(ctx, req.msg, req.adapter)
 	if err != nil {
 		logger.Warnf(ctx, "[IM] attachment preparation failed: %v", err)
-		if sendErr := req.adapter.SendReply(ctx, req.msg, &ReplyMessage{Content: "❌ 无法读取此附件，请重试或改用文字描述。", IsFinal: true}); sendErr != nil {
+		if sendErr := req.adapter.SendReply(
+			ctx,
+			req.msg,
+			&ReplyMessage{Content: "❌ 无法读取此附件，请重试或改用文字描述。", IsFinal: true},
+		); sendErr != nil {
 			logger.Warnf(ctx, "[IM] Failed to send attachment error reply: %v", sendErr)
 		}
 		return
@@ -1998,7 +2080,17 @@ func (s *Service) executeQARequest(req *qaRequest) {
 	}
 
 	// Non-streaming fallback: collect full answer then send.
-	answer, err := s.runQA(ctx, req.session, req.msg.Content, req.agent, kbIDs, attachments, imageURLs, req.userKey, req.msg.Quote)
+	answer, err := s.runQA(
+		ctx,
+		req.session,
+		req.msg.Content,
+		req.agent,
+		kbIDs,
+		attachments,
+		imageURLs,
+		req.userKey,
+		req.msg.Quote,
+	)
 	if err != nil {
 		logger.Errorf(ctx, "[IM] QA failed: %v, sending fallback reply", err)
 		answer = imQAFailureReply(err)
@@ -2202,7 +2294,12 @@ func (s *Service) handleCommand(
 }
 
 // sendStreamReply sends a complete content string via the streaming interface.
-func (s *Service) sendStreamReply(ctx context.Context, msg *IncomingMessage, streamer StreamSender, content string) error {
+func (s *Service) sendStreamReply(
+	ctx context.Context,
+	msg *IncomingMessage,
+	streamer StreamSender,
+	content string,
+) error {
 	streamID, err := streamer.StartStream(ctx, msg)
 	if err != nil {
 		return fmt.Errorf("start stream: %w", err)
@@ -2230,7 +2327,14 @@ func isSessionNotFound(err error) bool {
 
 // resolveSession dispatches to the appropriate session resolution strategy
 // based on the channel's session mode.
-func (s *Service) resolveSession(ctx context.Context, msg *IncomingMessage, tenantID uint64, agentID string, imChannelID string, sessionMode string) (*ChannelSession, error) {
+func (s *Service) resolveSession(
+	ctx context.Context,
+	msg *IncomingMessage,
+	tenantID uint64,
+	agentID string,
+	imChannelID string,
+	sessionMode string,
+) (*ChannelSession, error) {
 	switch SessionMode(sessionMode) {
 	case SessionModeThread:
 		return s.resolveThreadSession(ctx, msg, tenantID, agentID, imChannelID)
@@ -2302,9 +2406,16 @@ func imInitialSessionTitle(msg *IncomingMessage, identityTitle func(*IncomingMes
 // mapping to an existing session. The session-list source filter (repository
 // QueryPaged) relies on this one-mapping-per-session property; if this ever
 // re-maps an existing session, that JOIN needs a one-row-per-session guard.
-func (s *Service) resolveUserSession(ctx context.Context, msg *IncomingMessage, tenantID uint64, agentID string, imChannelID string) (*ChannelSession, error) {
+func (s *Service) resolveUserSession(
+	ctx context.Context,
+	msg *IncomingMessage,
+	tenantID uint64,
+	agentID string,
+	imChannelID string,
+) (*ChannelSession, error) {
 	var cs ChannelSession
-	result := s.db.Where("platform = ? AND user_id = ? AND chat_id = ? AND tenant_id = ? AND agent_id = ? AND deleted_at IS NULL",
+	result := s.db.Where("platform = ? AND user_id = ? AND chat_id = ? AND tenant_id = ? AND"+
+		" agent_id = ? AND deleted_at IS NULL",
 		string(msg.Platform), msg.UserID, msg.ChatID, tenantID, agentID).
 		First(&cs)
 
@@ -2348,9 +2459,11 @@ func (s *Service) resolveUserSession(ctx context.Context, msg *IncomingMessage, 
 			logger.Warnf(ctx, "[IM] Failed to clean up orphaned session %s: %v", createdSession.ID, delErr)
 		}
 		var existing ChannelSession
-		if findErr := s.db.Where("platform = ? AND user_id = ? AND chat_id = ? AND tenant_id = ? AND agent_id = ? AND deleted_at IS NULL",
+		if findErr := s.db.Where("platform = ? AND user_id = ? AND chat_id = ? AND tenant_id = ? AND"+
+			" agent_id = ? AND deleted_at IS NULL",
 			string(msg.Platform), msg.UserID, msg.ChatID, tenantID, agentID).
-			First(&existing).Error; findErr != nil {
+			First(&existing).
+			Error; findErr != nil {
 			return nil, fmt.Errorf("create channel session: %w (lookup fallback: %v)", err, findErr)
 		}
 		return &existing, nil
@@ -2366,19 +2479,31 @@ func (s *Service) resolveUserSession(ctx context.Context, msg *IncomingMessage, 
 // In thread mode, each message thread gets its own session. Multiple users in the
 // same thread share the same session. Top-level messages use their own ID as
 // ThreadID, creating a new session per top-level message.
-func (s *Service) resolveThreadSession(ctx context.Context, msg *IncomingMessage, tenantID uint64, agentID string, imChannelID string) (*ChannelSession, error) {
+func (s *Service) resolveThreadSession(
+	ctx context.Context,
+	msg *IncomingMessage,
+	tenantID uint64,
+	agentID string,
+	imChannelID string,
+) (*ChannelSession, error) {
 	threadID := msg.ThreadID
 	if threadID == "" {
 		// Defense-in-depth: frontend blocks thread mode for unsupported platforms,
 		// but if ThreadID is somehow empty, fall back to user-mode resolution
 		// to avoid creating a shared session for all empty-thread messages.
-		logger.Warnf(ctx, "[IM] Thread mode but ThreadID is empty (platform=%s chat=%s), falling back to user session", msg.Platform, msg.ChatID)
+		logger.Warnf(
+			ctx,
+			"[IM] Thread mode but ThreadID is empty (platform=%s chat=%s), falling back to user session",
+			msg.Platform,
+			msg.ChatID,
+		)
 		return s.resolveUserSession(ctx, msg, tenantID, agentID, imChannelID)
 	}
 
 	var cs ChannelSession
 	result := s.db.Where(
-		"platform = ? AND chat_id = ? AND thread_id = ? AND tenant_id = ? AND agent_id = ? AND deleted_at IS NULL",
+		"platform = ? AND chat_id = ? AND thread_id = ? AND tenant_id = ? AND"+
+			" agent_id = ? AND deleted_at IS NULL",
 		string(msg.Platform), msg.ChatID, threadID, tenantID, agentID,
 	).First(&cs)
 
@@ -2423,7 +2548,8 @@ func (s *Service) resolveThreadSession(ctx context.Context, msg *IncomingMessage
 		}
 		var existing ChannelSession
 		if findErr := s.db.Where(
-			"platform = ? AND chat_id = ? AND thread_id = ? AND tenant_id = ? AND agent_id = ? AND deleted_at IS NULL",
+			"platform = ? AND chat_id = ? AND thread_id = ? AND tenant_id = ? AND"+
+				" agent_id = ? AND deleted_at IS NULL",
 			string(msg.Platform), msg.ChatID, threadID, tenantID, agentID,
 		).First(&existing).Error; findErr != nil {
 			return nil, fmt.Errorf("create thread session: %w (lookup fallback: %v)", err, findErr)
@@ -2489,12 +2615,35 @@ func briefToolSummary(output string) string {
 // handleMessageStream runs the QA pipeline and streams answer chunks to the IM platform
 // in real-time via the StreamSender interface. Chunks are batched at streamFlushInterval
 // to avoid API rate-limiting.
-func (s *Service) handleMessageStream(ctx context.Context, msg *IncomingMessage, session *types.Session, customAgent *types.CustomAgent, kbIDs []string, attachments types.MessageAttachments, imageURLs []string, streamer StreamSender, adapter Adapter, userKey string, tenant *types.Tenant) error {
+func (s *Service) handleMessageStream(
+	ctx context.Context,
+	msg *IncomingMessage,
+	session *types.Session,
+	customAgent *types.CustomAgent,
+	kbIDs []string,
+	attachments types.MessageAttachments,
+	imageURLs []string,
+	streamer StreamSender,
+	adapter Adapter,
+	userKey string,
+	tenant *types.Tenant,
+) error {
 	// Start the stream on the IM platform (e.g., create Feishu streaming card)
 	streamID, err := streamer.StartStream(ctx, msg)
 	if err != nil {
 		logger.Warnf(ctx, "[IM] StartStream failed, falling back to non-streaming: %v", err)
-		return s.fallbackNonStream(ctx, msg, session, customAgent, kbIDs, attachments, imageURLs, adapter, userKey, tenant)
+		return s.fallbackNonStream(
+			ctx,
+			msg,
+			session,
+			customAgent,
+			kbIDs,
+			attachments,
+			imageURLs,
+			adapter,
+			userKey,
+			tenant,
+		)
 	}
 
 	// Prepare the QA pipeline
@@ -2770,7 +2919,10 @@ func (s *Service) handleMessageStream(ctx context.Context, msg *IncomingMessage,
 	requestID := uuid.New().String()
 
 	// Create user message
-	userMsg, err := s.messageService.CreateMessage(qaCtx, createIMUserMessagePayload(session.ID, msg.Content, requestID, attachments))
+	userMsg, err := s.messageService.CreateMessage(
+		qaCtx,
+		createIMUserMessagePayload(session.ID, msg.Content, requestID, attachments),
+	)
 	if err != nil {
 		return fmt.Errorf("create user message: %w", err)
 	}
@@ -2805,7 +2957,16 @@ func (s *Service) handleMessageStream(ctx context.Context, msg *IncomingMessage,
 			defer closeComplete()
 		}
 		var err error
-		req := buildIMQARequest(session, msg.Content, assistantMsg.ID, userMsg.ID, customAgent, kbIDs, msg.Quote, attachments)
+		req := buildIMQARequest(
+			session,
+			msg.Content,
+			assistantMsg.ID,
+			userMsg.ID,
+			customAgent,
+			kbIDs,
+			msg.Quote,
+			attachments,
+		)
 		req.ImageURLs = imageURLs
 		if req.QuotedContext != "" {
 			logger.Debugf(qaCtx, "[IM] QuotedContext set: length=%d", len(req.QuotedContext))
@@ -2936,12 +3097,29 @@ loop:
 	if finalizeErr != nil && fallbackErr != nil {
 		return errors.Join(finalizeErr, endErr, fallbackErr)
 	}
-	logger.Infof(ctx, "[IM] Stream reply sent: platform=%s user=%s answer_len=%d", msg.Platform, msg.UserID, len(answer))
+	logger.Infof(
+		ctx,
+		"[IM] Stream reply sent: platform=%s user=%s answer_len=%d",
+		msg.Platform,
+		msg.UserID,
+		len(answer),
+	)
 	return endErr
 }
 
 // fallbackNonStream is used when streaming initialization fails.
-func (s *Service) fallbackNonStream(ctx context.Context, msg *IncomingMessage, session *types.Session, customAgent *types.CustomAgent, kbIDs []string, attachments types.MessageAttachments, imageURLs []string, adapter Adapter, userKey string, tenant *types.Tenant) error {
+func (s *Service) fallbackNonStream(
+	ctx context.Context,
+	msg *IncomingMessage,
+	session *types.Session,
+	customAgent *types.CustomAgent,
+	kbIDs []string,
+	attachments types.MessageAttachments,
+	imageURLs []string,
+	adapter Adapter,
+	userKey string,
+	tenant *types.Tenant,
+) error {
 	answer, err := s.runQA(ctx, session, msg.Content, customAgent, kbIDs, attachments, imageURLs, userKey, msg.Quote)
 	if err != nil {
 		logger.Errorf(ctx, "[IM] QA fallback failed: %v", err)
@@ -2956,7 +3134,17 @@ func (s *Service) fallbackNonStream(ctx context.Context, msg *IncomingMessage, s
 }
 
 // runQA executes the WeKnora QA pipeline and returns the full answer text.
-func (s *Service) runQA(ctx context.Context, session *types.Session, query string, customAgent *types.CustomAgent, kbIDs []string, attachments types.MessageAttachments, imageURLs []string, userKey string, quote *QuotedMessage) (string, error) {
+func (s *Service) runQA(
+	ctx context.Context,
+	session *types.Session,
+	query string,
+	customAgent *types.CustomAgent,
+	kbIDs []string,
+	attachments types.MessageAttachments,
+	imageURLs []string,
+	userKey string,
+	quote *QuotedMessage,
+) (string, error) {
 	// Cancellable context (no hard deadline): each agent round has its own
 	// LLMCallTimeout. The context can still be cancelled by /stop.
 	ctx, cancel := context.WithCancel(ctx)
@@ -3028,7 +3216,10 @@ func (s *Service) runQA(ctx context.Context, session *types.Session, query strin
 	requestID := uuid.New().String()
 
 	// Create user message so it appears in conversation history
-	userMsg, err := s.messageService.CreateMessage(ctx, createIMUserMessagePayload(session.ID, query, requestID, attachments))
+	userMsg, err := s.messageService.CreateMessage(
+		ctx,
+		createIMUserMessagePayload(session.ID, query, requestID, attachments),
+	)
 	if err != nil {
 		return "", fmt.Errorf("create user message: %w", err)
 	}
@@ -3349,7 +3540,9 @@ func (s *Service) DeleteChannel(channelID string, tenantID uint64) error {
 // ToggleChannel enables or disables a channel. Only toggles if the channel belongs to the given tenant.
 func (s *Service) ToggleChannel(channelID string, tenantID uint64) (*IMChannel, error) {
 	var ch IMChannel
-	if err := s.db.Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", channelID, tenantID).First(&ch).Error; err != nil {
+	if err := s.db.Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", channelID, tenantID).
+		First(&ch).
+		Error; err != nil {
 		return nil, err
 	}
 	ch.Enabled = !ch.Enabled
@@ -3389,7 +3582,12 @@ func (s *Service) checkDuplicateBot(channel *IMChannel, excludeID string) error 
 		}
 		return fmt.Errorf("check duplicate bot: %w", err)
 	}
-	return fmt.Errorf("duplicate_bot: this bot is already bound to channel %q (%s); each bot can only be connected to one channel", existing.Name, existing.ID)
+	return fmt.Errorf(
+		"duplicate_bot: this bot is already bound to channel %q (%s); each bot"+
+			" can only be connected to one channel",
+		existing.Name,
+		existing.ID,
+	)
 }
 
 // ── File message handling ──────────────────────────────────────────────
@@ -3427,7 +3625,11 @@ func fileMessageQAContent(msg *IncomingMessage) string {
 // processDownloadedFileToKnowledgeBase stores bytes already downloaded for QA.
 // It deliberately has no user-facing notifications: the originating file message
 // receives exactly its normal QA reply, while persistence remains background work.
-func (s *Service) processDownloadedFileToKnowledgeBase(ctx context.Context, channel *IMChannel, file *imDownloadedAttachment) {
+func (s *Service) processDownloadedFileToKnowledgeBase(
+	ctx context.Context,
+	channel *IMChannel,
+	file *imDownloadedAttachment,
+) {
 	kbID := channel.KnowledgeBaseID
 	tenantID := channel.TenantID
 
@@ -3451,7 +3653,17 @@ func (s *Service) processDownloadedFileToKnowledgeBase(ctx context.Context, chan
 	fh := newInMemoryFileHeader(fileName, file.content)
 
 	// Create knowledge entry via the knowledge service
-	knowledge, err := s.knowledgeService.CreateKnowledgeFromFile(kbCtx, kbID, fh, nil, nil, "", nil, imPlatformToChannel(channel.Platform), nil)
+	knowledge, err := s.knowledgeService.CreateKnowledgeFromFile(
+		kbCtx,
+		kbID,
+		fh,
+		nil,
+		nil,
+		"",
+		nil,
+		imPlatformToChannel(channel.Platform),
+		nil,
+	)
 	if err != nil {
 		errMsg := err.Error()
 		// Check for duplicate file

@@ -1,3 +1,4 @@
+// Package middleware enforces request authentication and access policy.
 // Package middleware: authentication for browser WebSocket upgrades.
 //
 // Browsers cannot attach custom headers (Authorization / X-API-Key) to a

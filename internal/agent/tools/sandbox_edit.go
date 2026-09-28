@@ -251,7 +251,8 @@ func (t *EditSandboxFileTool) Execute(ctx context.Context, args json.RawMessage)
 	if isBinaryShellOutput(string(raw)) {
 		return &types.ToolResult{
 			Success: false,
-			Error: "binary files cannot be edited; write a text script and have it produce binary artifacts under " +
+			Error: "binary files cannot be edited; write a text script and have it produce" +
+				" binary artifacts under " +
 				modelSafeLayoutPath(layout.OutputDir, "the artifact output directory"),
 		}, nil
 	}
@@ -342,7 +343,7 @@ func (t *EditSandboxFileTool) Execute(ctx context.Context, args json.RawMessage)
 }
 
 // Cleanup releases any resources.
-func (t *EditSandboxFileTool) Cleanup(ctx context.Context) error {
+func (t *EditSandboxFileTool) Cleanup(_ context.Context) error {
 	return nil
 }
 
@@ -447,10 +448,12 @@ func validateSandboxEdit(e SandboxEdit, index int, multi bool) error {
 func notFoundSandboxEditError(index int, multi bool) error {
 	if multi {
 		return fmt.Errorf(
-			"edits[%d].old_string was not found in the file. Copy the exact text (including whitespace) from the file",
+			"edits[%d].old_string was not found in the file. Copy the exact text"+
+				" (including whitespace) from the file",
 			index)
 	}
-	return fmt.Errorf("old_string was not found in the file. Copy the exact text (including whitespace) from the file")
+	return fmt.Errorf("old_string was not found in the file. Copy the exact text (including" +
+		" whitespace) from the file")
 }
 
 func ambiguousSandboxEditError(index int, multi bool, occurrences int) error {
@@ -461,12 +464,14 @@ func ambiguousSandboxEditError(index int, multi bool, occurrences int) error {
 			index, occurrences)
 	}
 	return fmt.Errorf(
-		"old_string matched %d times. Include more surrounding context so it is unique, or set replace_all",
+		"old_string matched %d times. Include more surrounding context so it is"+
+			" unique, or set replace_all",
 		occurrences)
 }
 
 func overlappingSandboxEditError(a, b int) error {
 	return fmt.Errorf(
-		"edits[%d] and edits[%d] cover overlapping text. Merge them into one edit that spans both changes",
+		"edits[%d] and edits[%d] cover overlapping text. Merge them into one edit"+
+			" that spans both changes",
 		a, b)
 }

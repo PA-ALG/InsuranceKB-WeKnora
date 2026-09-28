@@ -150,7 +150,15 @@ func TestStreamIgnoresDuplicateTerminalAnswer(t *testing.T) {
 	chatManage.SessionID = "sess-duplicate-done"
 	chatManage.EventBus = bus
 	plugin := &PluginChatCompletionStream{modelService: &stubModelService{model: model}}
-	require.Nil(t, plugin.OnEvent(context.Background(), types.CHAT_COMPLETION_STREAM, chatManage, func() *PluginError { return nil }))
+	require.Nil(
+		t,
+		plugin.OnEvent(
+			context.Background(),
+			types.CHAT_COMPLETION_STREAM,
+			chatManage,
+			func() *PluginError { return nil },
+		),
+	)
 
 	require.Eventually(t, func() bool {
 		bus.mu.Lock()

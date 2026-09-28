@@ -27,7 +27,7 @@ func newConsolidationHarness(t *testing.T) (*Service, *stubTenantRepo, *stubMode
 }
 
 func seedItem(
-	t *testing.T, svc *Service, ctx context.Context, scope interfaces.MemoryScope,
+	ctx context.Context, t *testing.T, svc *Service, scope interfaces.MemoryScope,
 	kind, topic, content, key string,
 ) {
 	t.Helper()
@@ -39,20 +39,20 @@ func seedItem(
 	}))
 }
 
-func seedSimilarPreferences(t *testing.T, svc *Service, ctx context.Context, scope interfaces.MemoryScope) {
+func seedSimilarPreferences(ctx context.Context, t *testing.T, svc *Service, scope interfaces.MemoryScope) {
 	t.Helper()
-	seedItem(t, svc, ctx, scope, types.MemoryKindPreference, "回答风格", "回答直接给结论不要铺垫", "k-a")
-	seedItem(t, svc, ctx, scope, types.MemoryKindPreference, "回答风格", "回答直接给结论不用铺垫", "k-b")
+	seedItem(ctx, t, svc, scope, types.MemoryKindPreference, "回答风格", "回答直接给结论不要铺垫", "k-a")
+	seedItem(ctx, t, svc, scope, types.MemoryKindPreference, "回答风格", "回答直接给结论不用铺垫", "k-b")
 }
 
 func TestConsolidateNowMergesNearDuplicatesWithoutWaiting(t *testing.T) {
 	svc, tenantRepo, _ := newConsolidationHarness(t)
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := svc.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
 	require.NoError(t, svc.repo.MarkConsolidated(ctx, scope))
-	seedSimilarPreferences(t, svc, ctx, scope)
+	seedSimilarPreferences(ctx, t, svc, scope)
 
 	result, err := svc.ConsolidateNow(ctx)
 	require.NoError(t, err)
@@ -76,11 +76,11 @@ func TestAReviewSomeoneAskedForShowsTheModelBorderlinePairs(t *testing.T) {
 	svc, tenantRepo, models := newConsolidationHarness(t)
 	models.response = `{"statement":"我叫wizardchen，我是一个作家"}`
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := svc.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
-	seedItem(t, svc, ctx, scope, types.MemoryKindProfile, "", "我叫wizard，我是一个画家", "p-a")
-	seedItem(t, svc, ctx, scope, types.MemoryKindProfile, "职业", "我叫wizardchen，我是一个作家", "p-b")
+	seedItem(ctx, t, svc, scope, types.MemoryKindProfile, "", "我叫wizard，我是一个画家", "p-a")
+	seedItem(ctx, t, svc, scope, types.MemoryKindProfile, "职业", "我叫wizardchen，我是一个作家", "p-b")
 
 	items, _, err := svc.repo.ListItems(ctx, scope, types.MemoryStatusActive, 50, 0)
 	require.NoError(t, err)
@@ -101,10 +101,10 @@ func TestTheModelGetsTheFinalSayOnWhatIsADuplicate(t *testing.T) {
 	svc, tenantRepo, models := newConsolidationHarness(t)
 	models.response = `{"statement":""}`
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := svc.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
-	seedSimilarPreferences(t, svc, ctx, scope)
+	seedSimilarPreferences(ctx, t, svc, scope)
 
 	result, err := svc.ConsolidateNow(ctx)
 	require.NoError(t, err)
@@ -124,10 +124,10 @@ func TestAnUnreachableModelStopsTheReviewInsteadOfGuessing(t *testing.T) {
 	svc, tenantRepo, _ := newConsolidationHarness(t)
 	svc.modelService = nil
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := svc.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
-	seedSimilarPreferences(t, svc, ctx, scope)
+	seedSimilarPreferences(ctx, t, svc, scope)
 
 	result, err := svc.ConsolidateNow(ctx)
 	require.NoError(t, err)
@@ -144,11 +144,11 @@ func TestAnUnreachableModelStopsTheReviewInsteadOfGuessing(t *testing.T) {
 func TestAReviewThatChangesNothingSaysWhy(t *testing.T) {
 	svc, tenantRepo, _ := newConsolidationHarness(t)
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := svc.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
-	seedItem(t, svc, ctx, scope, types.MemoryKindInterest, "小微SDK设备接入", "小微SDK设备接入", "i-a")
-	seedItem(t, svc, ctx, scope, types.MemoryKindInterest, "WeKnora混合检索", "WeKnora混合检索", "i-b")
+	seedItem(ctx, t, svc, scope, types.MemoryKindInterest, "小微SDK设备接入", "小微SDK设备接入", "i-a")
+	seedItem(ctx, t, svc, scope, types.MemoryKindInterest, "WeKnora混合检索", "WeKnora混合检索", "i-b")
 
 	result, err := svc.ConsolidateNow(ctx)
 	require.NoError(t, err)
@@ -161,10 +161,10 @@ func TestAReviewThatChangesNothingSaysWhy(t *testing.T) {
 func TestASecondReviewRightAwayIsRefused(t *testing.T) {
 	svc, tenantRepo, models := newConsolidationHarness(t)
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := svc.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
-	seedSimilarPreferences(t, svc, ctx, scope)
+	seedSimilarPreferences(ctx, t, svc, scope)
 
 	first, err := svc.ConsolidateNow(ctx)
 	require.NoError(t, err)
@@ -184,10 +184,10 @@ func TestASecondReviewRightAwayIsRefused(t *testing.T) {
 func TestTheDailyPassDoesNotRateLimitTheButton(t *testing.T) {
 	svc, tenantRepo, _ := newConsolidationHarness(t)
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := svc.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
-	seedSimilarPreferences(t, svc, ctx, scope)
+	seedSimilarPreferences(ctx, t, svc, scope)
 
 	svc.consolidateIfDue(ctx, scope, svc.workspaceConfig(ctx, 1), "chat-1")
 
@@ -200,10 +200,10 @@ func TestTheDailyPassDoesNotRateLimitTheButton(t *testing.T) {
 func TestScheduledConsolidationIgnoresAHandfulOfMemories(t *testing.T) {
 	svc, tenantRepo, models := newConsolidationHarness(t)
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := svc.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
-	seedSimilarPreferences(t, svc, ctx, scope)
+	seedSimilarPreferences(ctx, t, svc, scope)
 
 	svc.consolidateIfDue(ctx, scope, svc.workspaceConfig(ctx, 1), "chat-1")
 	require.Zero(t, models.callCount(),

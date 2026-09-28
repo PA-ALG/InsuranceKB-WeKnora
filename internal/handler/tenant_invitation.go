@@ -174,7 +174,10 @@ func (h *TenantInvitationHandler) hydrateUsers(c *gin.Context, invs []*types.Ten
 
 // hydrateTenants is the same idea over the distinct tenant_ids touched
 // by `invs`. Used by the /me inbox view where invitations span tenants.
-func (h *TenantInvitationHandler) hydrateTenants(c *gin.Context, invs []*types.TenantInvitation) map[uint64]*types.Tenant {
+func (h *TenantInvitationHandler) hydrateTenants(
+	c *gin.Context,
+	invs []*types.TenantInvitation,
+) map[uint64]*types.Tenant {
 	if len(invs) == 0 || h.tenantService == nil {
 		return map[uint64]*types.Tenant{}
 	}
@@ -253,7 +256,8 @@ func (h *TenantInvitationHandler) ListTenantInvitations(c *gin.Context) {
 
 // CreateInvitation godoc
 // @Summary      发出空间邀请
-// @Description  Owner 通过邮箱邀请已注册用户加入空间。开启 tenant.auto_accept_invitation 后被邀请人立即自动加入（响应为成员结构），否则需在 /me/invitations 接受后成为成员。
+// @Description Owner 通过邮箱邀请已注册用户加入空间。开启 tenant.auto_accept_invitation 后被邀请人立即自动加入（响应为成员结构），否则需在 /me/invitations
+// @Description 接受后成为成员。
 // @Tags         空间邀请
 // @Accept       json
 // @Produce      json
@@ -301,13 +305,18 @@ func (h *TenantInvitationHandler) CreateInvitation(c *gin.Context) {
 	// Auto-accept switch (tenant.auto_accept_invitation): skip the pending
 	// invitation and add the already-registered invitee as a member.
 	if h.systemSettingSvc != nil &&
-		h.systemSettingSvc.GetBool(ctx, "tenant.auto_accept_invitation", "WEKNORA_TENANT_AUTO_ACCEPT_INVITATION", false) {
+		h.systemSettingSvc.GetBool(
+			ctx,
+			"tenant.auto_accept_invitation",
+			"WEKNORA_TENANT_AUTO_ACCEPT_INVITATION",
+			false,
+		) {
 		if h.memberService == nil {
 			logger.Errorf(ctx, "auto_accept_invitation enabled but memberService is nil; tenant=%d", tenantID)
-			c.Error(apperrors.NewInternalServerError("failed to add member"))
+			_ = c.Error(apperrors.NewInternalServerError("failed to add member"))
 			return
 		}
-		h.autoAcceptInvitationAndRespond(c, ctx, user, tenantID, req.Role, invitedBy)
+		h.autoAcceptInvitationAndRespond(ctx, c, user, tenantID, req.Role, invitedBy)
 		return
 	}
 
@@ -350,8 +359,8 @@ func (h *TenantInvitationHandler) CreateInvitation(c *gin.Context) {
 // tenant as the invitee's home tenant when they are tenantless (same as
 // AcceptMyInvitation).
 func (h *TenantInvitationHandler) autoAcceptInvitationAndRespond(
-	c *gin.Context,
 	ctx context.Context,
+	c *gin.Context,
 	user *types.User,
 	tenantID uint64,
 	role types.TenantRole,
@@ -359,7 +368,7 @@ func (h *TenantInvitationHandler) autoAcceptInvitationAndRespond(
 ) {
 	member, err := h.memberService.AddMember(ctx, user.ID, tenantID, role, invitedBy)
 	if err != nil {
-		writeAddMemberError(c, ctx, user, tenantID, err)
+		writeAddMemberError(ctx, c, user, tenantID, err)
 		return
 	}
 	if h.invitationService != nil {
@@ -375,7 +384,7 @@ func (h *TenantInvitationHandler) autoAcceptInvitationAndRespond(
 			logger.Errorf(ctx,
 				"auto_accept: member added but default tenant update failed: user=%s tenant=%d err=%v",
 				user.ID, tenantID, updateErr)
-			c.Error(apperrors.NewInternalServerError(
+			_ = c.Error(apperrors.NewInternalServerError(
 				"member added but default workspace update failed").WithDetails(updateErr.Error()))
 			return
 		}
@@ -559,7 +568,10 @@ func (h *TenantInvitationHandler) AcceptMyInvitation(c *gin.Context) {
 		if updateErr := h.userService.UpdateUser(ctx, user); updateErr != nil {
 			logger.Errorf(ctx, "AcceptMyInvitation failed to set default tenant: user=%s tenant=%d err=%v",
 				caller, member.TenantID, updateErr)
-			c.Error(apperrors.NewInternalServerError("invitation accepted but default workspace update failed").WithDetails(updateErr.Error()))
+			_ = c.Error(
+				apperrors.NewInternalServerError("invitation accepted but default workspace update failed").
+					WithDetails(updateErr.Error()),
+			)
 			return
 		}
 	}
@@ -598,18 +610,18 @@ func (h *TenantInvitationHandler) AcceptMyInvitationByToken(c *gin.Context) {
 	ctx := c.Request.Context()
 	caller, ok := types.UserIDFromContext(ctx)
 	if !ok || caller == "" {
-		c.Error(apperrors.NewUnauthorizedError("caller user id missing from context"))
+		_ = c.Error(apperrors.NewUnauthorizedError("caller user id missing from context"))
 		return
 	}
 
 	var req acceptInvitationByTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.NewValidationError("token is required").WithDetails(err.Error()))
+		_ = c.Error(apperrors.NewValidationError("token is required").WithDetails(err.Error()))
 		return
 	}
 	token := strings.TrimSpace(req.Token)
 	if token == "" {
-		c.Error(apperrors.NewValidationError("token is required"))
+		_ = c.Error(apperrors.NewValidationError("token is required"))
 		return
 	}
 
@@ -618,14 +630,14 @@ func (h *TenantInvitationHandler) AcceptMyInvitationByToken(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrInvitationTokenInvalid):
 			// 无效/过期/撤销统一返回 410（与 LookupInvitationByToken 一致）。
-			c.Error(&apperrors.AppError{
+			_ = c.Error(&apperrors.AppError{
 				Code:     apperrors.ErrNotFound,
 				Message:  "invitation link is invalid or has been revoked",
 				HTTPCode: http.StatusGone,
 			})
 		default:
 			logger.Errorf(ctx, "AcceptMyInvitationByToken failed: user=%s err=%v", caller, err)
-			c.Error(apperrors.NewInternalServerError("failed to accept invitation").WithDetails(err.Error()))
+			_ = c.Error(apperrors.NewInternalServerError("failed to accept invitation").WithDetails(err.Error()))
 		}
 		return
 	}
@@ -636,7 +648,10 @@ func (h *TenantInvitationHandler) AcceptMyInvitationByToken(c *gin.Context) {
 		if updateErr := h.userService.UpdateUser(ctx, user); updateErr != nil {
 			logger.Errorf(ctx, "AcceptMyInvitationByToken failed to set default tenant: user=%s tenant=%d err=%v",
 				caller, member.TenantID, updateErr)
-			c.Error(apperrors.NewInternalServerError("invitation accepted but default workspace update failed").WithDetails(updateErr.Error()))
+			_ = c.Error(
+				apperrors.NewInternalServerError("invitation accepted but default workspace update failed").
+					WithDetails(updateErr.Error()),
+			)
 			return
 		}
 	}

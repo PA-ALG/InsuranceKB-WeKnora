@@ -1,4 +1,4 @@
-// Package service: session -> sandbox config pin.
+// Package service provides session -> sandbox config pin.
 //
 // A session's remote sandbox is long-lived (created with onTimeout=pause, so
 // its TTL pauses rather than destroys it), while the operations around it -
@@ -205,7 +205,8 @@ func (p *SessionSandboxPinner) recordOwner(
 	}
 	return p.db.WithContext(ctx).
 		Model(&types.Session{}).
-		Where("id = ? AND sandbox_config_tenant_id = 0 AND sandbox_config_id IS NOT NULL AND sandbox_config_id <> ?",
+		Where("id = ? AND sandbox_config_tenant_id = 0 AND sandbox_config_id IS NOT"+
+			" NULL AND sandbox_config_id <> ?",
 			sessionID, "").
 		Update("sandbox_config_tenant_id", tenantID).Error
 }

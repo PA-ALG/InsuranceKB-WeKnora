@@ -30,6 +30,7 @@ func (s *stubAuthTokenRepo) GetTokenByValue(_ context.Context, tokenValue string
 	}
 	return token, nil
 }
+
 func (s *stubAuthTokenRepo) GetTokenByID(_ context.Context, id string) (*types.AuthToken, error) {
 	for _, token := range s.tokens {
 		if token != nil && token.ID == id {
@@ -38,6 +39,7 @@ func (s *stubAuthTokenRepo) GetTokenByID(_ context.Context, id string) (*types.A
 	}
 	return nil, errors.New("token not found")
 }
+
 func (s *stubAuthTokenRepo) GetTokensByUserID(context.Context, string) ([]*types.AuthToken, error) {
 	return nil, nil
 }
@@ -62,18 +64,23 @@ func (s *stubUserRepoForAuth) GetUserByID(_ context.Context, id string) (*types.
 	}
 	return user, nil
 }
+
 func (s *stubUserRepoForAuth) GetUsersByIDs(context.Context, []string) (map[string]*types.User, error) {
 	return nil, nil
 }
+
 func (s *stubUserRepoForAuth) GetUserByEmail(context.Context, string) (*types.User, error) {
 	return nil, nil
 }
+
 func (s *stubUserRepoForAuth) GetUserByUsername(context.Context, string) (*types.User, error) {
 	return nil, nil
 }
+
 func (s *stubUserRepoForAuth) GetUserByTenantID(context.Context, uint64) (*types.User, error) {
 	return nil, nil
 }
+
 func (s *stubUserRepoForAuth) UpdateUser(context.Context, *types.User) error {
 	s.updateCalls++
 	return nil
@@ -82,12 +89,15 @@ func (s *stubUserRepoForAuth) DeleteUser(context.Context, string) error { return
 func (s *stubUserRepoForAuth) ListUsers(context.Context, int, int) ([]*types.User, error) {
 	return nil, nil
 }
+
 func (s *stubUserRepoForAuth) ListSystemAdmins(context.Context, int, int) ([]*types.User, int64, error) {
 	return nil, 0, nil
 }
+
 func (s *stubUserRepoForAuth) RevokeSystemAdmin(context.Context, string, string) (*types.User, error) {
 	return nil, nil
 }
+
 func (s *stubUserRepoForAuth) SearchUsers(context.Context, string, int) ([]*types.User, error) {
 	return nil, nil
 }
@@ -276,7 +286,10 @@ func TestChangePasswordRequiresPolicyAndRevokesSessions(t *testing.T) {
 	if err := svc.ChangePassword(ctx, "user-1", "OldSecure9", "NewSecure9"); err != nil {
 		t.Fatalf("ChangePassword() err = %v", err)
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(repo.users["user-1"].PasswordHash), []byte("NewSecure9")); err != nil {
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(repo.users["user-1"].PasswordHash),
+		[]byte("NewSecure9"),
+	); err != nil {
 		t.Fatalf("stored hash does not match new password: %v", err)
 	}
 	if len(tokenRepo.revokedUserIDs) != 1 || tokenRepo.revokedUserIDs[0] != "user-1" {
@@ -300,7 +313,11 @@ func TestChangePasswordRejectsSamePassword(t *testing.T) {
 		t.Fatalf("ChangePassword(same) err = %v, want ErrSamePassword", err)
 	}
 	if repo.updateCalls != 0 || len(tokenRepo.revokedUserIDs) != 0 {
-		t.Fatalf("same password caused side effects: updates=%d revocations=%v", repo.updateCalls, tokenRepo.revokedUserIDs)
+		t.Fatalf(
+			"same password caused side effects: updates=%d revocations=%v",
+			repo.updateCalls,
+			tokenRepo.revokedUserIDs,
+		)
 	}
 }
 

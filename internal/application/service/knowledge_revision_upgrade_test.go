@@ -21,9 +21,13 @@ func (q *upgradeFailedImageQueue) Enqueue(task *asynq.Task, _ ...asynq.Option) (
 	q.post = task
 	return &asynq.TaskInfo{}, nil
 }
+
 func TestUPGImageEnqueueFailurePreservesRevisionForCompletion(t *testing.T) {
 	knowledge, kb, images, chunks := slotReleaseFixture(1)
-	revision := &types.RevisionCommitBinding{ParseAttempt: 3, FileSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+	revision := &types.RevisionCommitBinding{
+		ParseAttempt: 3,
+		FileSHA256:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
 	queue := &upgradeFailedImageQueue{}
 	svc := &knowledgeService{task: queue}
 	svc.enqueueImageMultimodalTasks(context.Background(), knowledge, kb, images, chunks, nil, revision)

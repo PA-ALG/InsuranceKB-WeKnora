@@ -29,12 +29,15 @@ func (c *contractClient) Health(context.Context) error { return nil }
 func (c *contractClient) Create(_ context.Context, req RemoteCreateRequest) (RemoteSandboxHandle, error) {
 	return &contractHandle{id: "sandbox-1", provider: c.provider, metadata: req.Metadata}, nil
 }
+
 func (c *contractClient) Connect(context.Context, RemoteConnectRequest) (RemoteSandboxHandle, error) {
 	return &contractHandle{id: "sandbox-1", provider: c.provider}, nil
 }
+
 func (c *contractClient) Get(context.Context, string) (*RemoteSandboxSummary, error) {
 	return &RemoteSandboxSummary{ID: "sandbox-1", State: RemoteStateRunning}, nil
 }
+
 func (c *contractClient) List(context.Context, RemoteListFilter) ([]RemoteSandboxSummary, error) {
 	return []RemoteSandboxSummary{{ID: "sandbox-1", State: RemoteStateRunning}}, nil
 }
@@ -46,21 +49,27 @@ func (c *contractClient) Exec(
 ) (*RemoteExecResult, error) {
 	return &RemoteExecResult{ExitCode: 0}, nil
 }
+
 func (c *contractClient) WriteFile(context.Context, RemoteSandboxHandle, string, []byte) error {
 	return nil
 }
+
 func (c *contractClient) ReadFile(context.Context, RemoteSandboxHandle, string) ([]byte, error) {
 	return []byte("content"), nil
 }
+
 func (c *contractClient) ListDir(context.Context, RemoteSandboxHandle, string) ([]RemoteDirEntry, error) {
 	return []RemoteDirEntry{{Name: "file", Type: RemoteEntryFile}}, nil
 }
+
 func (c *contractClient) MakeDir(context.Context, RemoteSandboxHandle, string) error {
 	return nil
 }
+
 func (c *contractClient) Remove(context.Context, RemoteSandboxHandle, string) error {
 	return nil
 }
+
 func (c *contractClient) Stat(context.Context, RemoteSandboxHandle, string) (*RemoteStatEntry, error) {
 	return &RemoteStatEntry{Path: "/workspace/file", Type: RemoteEntryFile}, nil
 }

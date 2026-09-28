@@ -28,42 +28,85 @@ func (s *resolveAgentShareStub) GetSharedAgentForTenant(
 	return s.agent, s.err
 }
 
-func (s *resolveAgentShareStub) ShareAgent(context.Context, string, string, string, uint64, types.OrgMemberRole) (*types.AgentShare, error) {
+func (s *resolveAgentShareStub) ShareAgent(
+	context.Context,
+	string,
+	string,
+	string,
+	uint64,
+	types.OrgMemberRole,
+) (*types.AgentShare, error) {
 	panic("not implemented")
 }
+
 func (s *resolveAgentShareStub) RemoveShare(context.Context, string, string, uint64) error {
 	panic("not implemented")
 }
+
 func (s *resolveAgentShareStub) ListSharesByAgent(context.Context, string, uint64) ([]*types.AgentShare, error) {
 	panic("not implemented")
 }
+
 func (s *resolveAgentShareStub) ListSharesByOrganization(context.Context, string) ([]*types.AgentShare, error) {
 	panic("not implemented")
 }
-func (s *resolveAgentShareStub) ListSharedAgents(context.Context, uint64, types.TenantRole) ([]*types.SharedAgentInfo, error) {
+
+func (s *resolveAgentShareStub) ListSharedAgents(
+	context.Context,
+	uint64,
+	types.TenantRole,
+) ([]*types.SharedAgentInfo, error) {
 	panic("not implemented")
 }
-func (s *resolveAgentShareStub) ListSharedAgentsInOrganization(context.Context, string, uint64, types.TenantRole) ([]*types.OrganizationSharedAgentItem, error) {
+
+func (s *resolveAgentShareStub) ListSharedAgentsInOrganization(
+	context.Context,
+	string,
+	uint64,
+	types.TenantRole,
+) ([]*types.OrganizationSharedAgentItem, error) {
 	panic("not implemented")
 }
-func (s *resolveAgentShareStub) ListSharedAgentsInOrganizations(context.Context, []string, uint64, types.TenantRole) (map[string][]*types.OrganizationSharedAgentItem, error) {
+
+func (s *resolveAgentShareStub) ListSharedAgentsInOrganizations(
+	context.Context,
+	[]string,
+	uint64,
+	types.TenantRole,
+) (map[string][]*types.OrganizationSharedAgentItem, error) {
 	panic("not implemented")
 }
+
 func (s *resolveAgentShareStub) SetSharedAgentDisabledByMe(context.Context, uint64, string, uint64, bool) error {
 	panic("not implemented")
 }
-func (s *resolveAgentShareStub) TenantCanAccessKBViaSomeSharedAgent(context.Context, uint64, types.TenantRole, *types.KnowledgeBase) (bool, error) {
+
+func (s *resolveAgentShareStub) TenantCanAccessKBViaSomeSharedAgent(
+	context.Context,
+	uint64,
+	types.TenantRole,
+	*types.KnowledgeBase,
+) (bool, error) {
 	panic("not implemented")
 }
+
 func (s *resolveAgentShareStub) GetShare(context.Context, string) (*types.AgentShare, error) {
 	panic("not implemented")
 }
+
 func (s *resolveAgentShareStub) GetShareByAgentAndOrg(context.Context, string, string) (*types.AgentShare, error) {
 	panic("not implemented")
 }
-func (s *resolveAgentShareStub) GetShareByAgentIDForTenant(context.Context, uint64, string, uint64) (*types.AgentShare, error) {
+
+func (s *resolveAgentShareStub) GetShareByAgentIDForTenant(
+	context.Context,
+	uint64,
+	string,
+	uint64,
+) (*types.AgentShare, error) {
 	panic("not implemented")
 }
+
 func (s *resolveAgentShareStub) CountByOrganizations(context.Context, []string) (map[string]int64, error) {
 	panic("not implemented")
 }
@@ -80,27 +123,48 @@ func (s *resolveOwnAgentStub) GetAgentByID(context.Context, string) (*types.Cust
 func (s *resolveOwnAgentStub) CreateAgent(context.Context, *types.CustomAgent) (*types.CustomAgent, error) {
 	panic("not implemented")
 }
+
 func (s *resolveOwnAgentStub) GetAgentByIDAndTenant(context.Context, string, uint64) (*types.CustomAgent, error) {
 	panic("not implemented")
 }
+
 func (s *resolveOwnAgentStub) ListAgents(context.Context) ([]*types.CustomAgent, error) {
 	panic("not implemented")
 }
+
 func (s *resolveOwnAgentStub) UpdateAgent(
 	context.Context, *types.CustomAgent, *string,
 ) (*types.CustomAgent, error) {
 	panic("not implemented")
 }
+
 func (s *resolveOwnAgentStub) DeleteAgent(context.Context, string) error {
 	panic("not implemented")
 }
+
 func (s *resolveOwnAgentStub) CopyAgent(context.Context, string) (*types.CustomAgent, error) {
 	panic("not implemented")
 }
-func (s *resolveOwnAgentStub) GetSuggestedQuestions(context.Context, string, []string, []string, []types.TagScope, int) ([]types.SuggestedQuestion, error) {
+
+func (s *resolveOwnAgentStub) GetSuggestedQuestions(
+	context.Context,
+	string,
+	[]string,
+	[]string,
+	[]types.TagScope,
+	int,
+) ([]types.SuggestedQuestion, error) {
 	panic("not implemented")
 }
-func (s *resolveOwnAgentStub) GetKnowledgeSuggestedQuestions(context.Context, string, []string, []string, []types.TagScope, int) ([]types.SuggestedQuestion, error) {
+
+func (s *resolveOwnAgentStub) GetKnowledgeSuggestedQuestions(
+	context.Context,
+	string,
+	[]string,
+	[]string,
+	[]types.TagScope,
+	int,
+) ([]types.SuggestedQuestion, error) {
 	panic("not implemented")
 }
 

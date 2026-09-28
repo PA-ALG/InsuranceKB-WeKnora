@@ -34,6 +34,7 @@ type MeEnvVarHandler struct {
 	service meEnvVarService
 }
 
+// NewMeEnvVarHandler creates handlers for the current user environment settings.
 func NewMeEnvVarHandler(s *service.UserEnvService) *MeEnvVarHandler {
 	return &MeEnvVarHandler{service: s}
 }
@@ -58,15 +59,17 @@ type meEnvVarRequest struct {
 func respondEnvVarError(c *gin.Context, err error) {
 	switch {
 	case stderrors.Is(err, types.ErrEnvVarNotFound):
-		c.Error(apperrors.NewNotFoundError("this environment variable is not set"))
+		_ = c.Error(apperrors.NewNotFoundError("this environment variable is not set"))
 	default:
-		c.Error(err)
+		_ = c.Error(err)
 	}
 }
 
 // List godoc
 // @Summary      List my environment variables
-// @Description  List every sandbox config of this workspace with the caller's own config-wide variables and the credentials its skills declared, each reporting whether it is unset, filled in workspace-wide, or filled in by the caller. Values are never returned.
+// @Description List every sandbox config of this workspace with the caller's own config-wide variables and the
+// @Description credentials its skills declared, each reporting whether it is unset, filled in workspace-wide, or
+// @Description filled in by the caller. Values are never returned.
 // @Tags         Me
 // @Produce      json
 // @Success      200  {object}  map[string]interface{}  "One group per sandbox config"
@@ -76,7 +79,7 @@ func respondEnvVarError(c *gin.Context, err error) {
 func (h *MeEnvVarHandler) List(c *gin.Context) {
 	groups, err := h.service.ListMine(c.Request.Context())
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": groups})
@@ -84,7 +87,8 @@ func (h *MeEnvVarHandler) List(c *gin.Context) {
 
 // SetSkill godoc
 // @Summary      Set one of my skill credentials
-// @Description  Store the caller's own value for one variable the skill declared. It overrides the workspace-wide value for this caller only, and is injected only into executions that name this skill.
+// @Description Store the caller's own value for one variable the skill declared. It overrides the workspace-wide
+// @Description value for this caller only, and is injected only into executions that name this skill.
 // @Tags         Me
 // @Accept       json
 // @Produce      json
@@ -130,7 +134,8 @@ func (h *MeEnvVarHandler) DeleteSkill(c *gin.Context) {
 
 // SetSandbox godoc
 // @Summary      Set one of my sandbox environment variables
-// @Description  Store the caller's own value for one variable on a sandbox config. It is injected into every skill script and shell command this caller's turns run on that config.
+// @Description Store the caller's own value for one variable on a sandbox config. It is injected into every skill
+// @Description script and shell command this caller's turns run on that config.
 // @Tags         Me
 // @Accept       json
 // @Produce      json
@@ -186,11 +191,11 @@ func bindEnvVarRequest(
 ) (meEnvVarRequest, bool) {
 	var req meEnvVarRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.NewBadRequestError(err.Error()))
+		_ = c.Error(apperrors.NewBadRequestError(err.Error()))
 		return req, false
 	}
 	if scope(req) == "" || req.Name == "" {
-		c.Error(apperrors.NewBadRequestError(scopeField + " and name are required"))
+		_ = c.Error(apperrors.NewBadRequestError(scopeField + " and name are required"))
 		return req, false
 	}
 	return req, true

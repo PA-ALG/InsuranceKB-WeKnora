@@ -216,7 +216,8 @@ func TestSendReplyAcceptsAny2xxAndBuildsPayload(t *testing.T) {
 	if payload.MsgType != textMessageType || payload.Content != "answer" {
 		t.Fatalf("payload = %#v", payload)
 	}
-	if len(payload.NotifyParams) != 1 || len(payload.NotifyParams[0].Values) != 1 || payload.NotifyParams[0].Values[0] != "user" {
+	if len(payload.NotifyParams) != 1 || len(payload.NotifyParams[0].Values) != 1 ||
+		payload.NotifyParams[0].Values[0] != "user" {
 		t.Fatalf("notify params = %#v", payload.NotifyParams)
 	}
 	if payload.Param == nil || payload.Param.FormatType != markdownFormatType {
@@ -243,7 +244,8 @@ func TestSendReplyReferencesIncomingMessage(t *testing.T) {
 	if err := adapter.SendReply(context.Background(), incoming, reply); err != nil {
 		t.Fatalf("SendReply() error = %v", err)
 	}
-	if payload.ParamType != 3 || payload.Param == nil || payload.Param.ReplyMsgID != "message-a" || !payload.Param.IsReference {
+	if payload.ParamType != 3 || payload.Param == nil || payload.Param.ReplyMsgID != "message-a" ||
+		!payload.Param.IsReference {
 		t.Fatalf("reference payload = %#v", payload)
 	}
 }
@@ -309,7 +311,9 @@ func TestDownloadFile(t *testing.T) {
 				t.Fatalf("token request = %#v", tokenReq)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`))
+			_, _ = w.Write(
+				[]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`),
+			)
 		case "/gateway/docrest/doc/file/downloadfileOpen":
 			if r.Header.Get("Authorization") != "Bearer token-1" {
 				t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
@@ -361,7 +365,9 @@ func TestDownloadFileFollowsSingleRedirect(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/oauth2_v12/auth/getAppAccessToken":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`))
+			_, _ = w.Write(
+				[]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`),
+			)
 		case "/gateway/docrest/doc/file/downloadfileOpen":
 			http.Redirect(w, r, "/cdn/file-1", http.StatusFound)
 		case "/cdn/file-1":
@@ -391,7 +397,10 @@ func TestDownloadFileFollowsSingleRedirect(t *testing.T) {
 
 	adapter := NewAdapter("https://www.yunzhijia.com/send", "", "app-id", "app-secret", 10, "yunzhijia.com")
 	adapter.httpClient = noRedirectClient(server)
-	reader, _, err := adapter.DownloadFile(context.Background(), &im.IncomingMessage{FileKey: "file-1", FileName: "message.png"})
+	reader, _, err := adapter.DownloadFile(
+		context.Background(),
+		&im.IncomingMessage{FileKey: "file-1", FileName: "message.png"},
+	)
 	if err != nil {
 		t.Fatalf("DownloadFile() error = %v", err)
 	}
@@ -420,7 +429,9 @@ func TestDownloadFileRejectsRedirectOffAllowedHost(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/oauth2_v12/auth/getAppAccessToken":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`))
+			_, _ = w.Write(
+				[]byte(`{"data":{"accessToken":"token-1","expireIn":7136},"error":null,"errorCode":0,"success":true}`),
+			)
 		case "/gateway/docrest/doc/file/downloadfileOpen":
 			http.Redirect(w, r, "https://evil.example.com/steal", http.StatusFound)
 		default:

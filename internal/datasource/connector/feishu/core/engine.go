@@ -11,7 +11,7 @@ import (
 )
 
 // engine.go holds the single generic streaming sync engine shared by the wiki
-// Connector and the Drive DriveConnector. The per-connector differences (node
+// Connector and the Drive Connector. The per-connector differences (node
 // type, listing API, edit-time field, cursor wire format, fetch dispatch,
 // log tag) are isolated behind the NodeOps adapter interface. FetchAll /
 // FetchIncremental are thin wrappers over the same engine that collect Emits
@@ -74,11 +74,13 @@ type CollectHandler struct {
 	items []types.FetchedItem
 }
 
+// Emit appends a document to the collected batch.
 func (h *CollectHandler) Emit(_ context.Context, item types.FetchedItem) error {
 	h.items = append(h.items, item)
 	return nil
 }
 
+// Checkpoint accepts a checkpoint without persisting collection state.
 func (h *CollectHandler) Checkpoint(_ context.Context, _ *types.SyncCursor) error { return nil }
 
 // runSync is the single implementation behind FetchStream / FetchAll /
@@ -185,7 +187,8 @@ func runSync[N any](
 			}
 
 			processed++
-			if processed%FeishuStreamCheckpointInterval == 0 || time.Since(lastCheckpoint) >= FeishuStreamCheckpointMaxInterval {
+			if processed%FeishuStreamCheckpointInterval == 0 ||
+				time.Since(lastCheckpoint) >= FeishuStreamCheckpointMaxInterval {
 				if cerr := h.Checkpoint(ctx, ops.EncodeCursor(newTimes, lastSync)); cerr != nil {
 					logger.Warnf(ctx, "%s stream Checkpoint failed: %v", ops.LogTag(), cerr)
 				}

@@ -2,9 +2,19 @@ package file
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/Tencent/WeKnora/internal/utils"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseOssFilePath(t *testing.T) {
@@ -127,6 +137,11 @@ func TestNewOSSClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			endpoint, err := url.Parse(tt.endpoint)
+			require.NoError(t, err)
+			t.Setenv("SSRF_WHITELIST", endpoint.Hostname())
+			utils.ResetSSRFWhitelistForTest()
+			t.Cleanup(utils.ResetSSRFWhitelistForTest)
 			client, err := newOSSClient(tt.endpoint, tt.region, tt.accessKey, tt.secretKey)
 			if tt.wantErr {
 				if err == nil {
@@ -170,40 +185,85 @@ func TestCheckOssConnectivity_InvalidEndpoint(t *testing.T) {
 }
 
 func TestOssEnsureBucket_NonExistent(t *testing.T) {
-	client, err := newOSSClient(
-		"https://oss-cn-hangzhou.aliyuncs.com",
-		"cn-hangzhou",
-		"test-invalid-key",
-		"test-invalid-secret",
-	)
-	if err != nil {
-		t.Fatalf("newOSSClient() error: %v", err)
-	}
+	client, requests := newOSSBucketFailureClient(t)
 
-	// Bucket that definitely doesn't exist - should return error
-	err = ossEnsureBucket(client, "this-bucket-definitely-does-not-exist-12345")
+	// The local service reports a missing bucket and denies its creation.
+	const bucket = "this-bucket-definitely-does-not-exist-12345"
+	err := ossEnsureBucket(client, bucket)
 	if err == nil {
 		t.Error("ossEnsureBucket with non-existent bucket should return an error")
 	}
+	assertOSSBucketCreationDenied(t, err, bucket, requests())
 }
 
 func TestOssEnsureBucket_CreateFails(t *testing.T) {
-	client, err := newOSSClient(
-		"https://oss-cn-hangzhou.aliyuncs.com",
-		"cn-hangzhou",
-		"test-invalid-key",
-		"test-invalid-secret",
-	)
-	if err != nil {
-		t.Fatalf("newOSSClient() error: %v", err)
-	}
+	client, requests := newOSSBucketFailureClient(t)
 
-	// Use a bucket that does not exist so IsBucketExist returns false and the
-	// create path is exercised; with invalid credentials PutBucket then fails.
-	// A common name like "test-bucket" already exists globally on OSS, which
-	// would short-circuit at IsBucketExist and make this assertion flaky.
-	err = ossEnsureBucket(client, "weknora-nonexistent-bucket-create-fails-12345")
+	// A real SDK NoSuchBucket response reaches PutBucket, which returns AccessDenied.
+	const bucket = "weknora-nonexistent-bucket-create-fails-12345"
+	err := ossEnsureBucket(client, bucket)
 	if err == nil {
 		t.Error("ossEnsureBucket with invalid credentials should return an error")
 	}
+	assertOSSBucketCreationDenied(t, err, bucket, requests())
+}
+
+// ossBucketRequest records only routing data, never request credentials.
+type ossBucketRequest struct {
+	method string
+	path   string
+	acl    bool
+}
+
+func newOSSBucketFailureClient(t *testing.T) (*oss.Client, func() []ossBucketRequest) {
+	t.Helper()
+	var mu sync.Mutex
+	var requests []ossBucketRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests = append(requests, ossBucketRequest{r.Method, r.URL.Path, r.URL.Query().Has("acl")})
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/xml")
+		status, code := http.StatusInternalServerError, "UnexpectedRequest"
+		switch r.Method {
+		case http.MethodGet:
+			status, code = http.StatusNotFound, "NoSuchBucket"
+		case http.MethodPut:
+			status, code = http.StatusForbidden, "AccessDenied"
+		}
+		w.WriteHeader(status)
+		if _, err := io.WriteString(
+			w,
+			"<Error><Code>"+code+"</Code><Message>fixture response</Message></Error>",
+		); err != nil {
+			t.Errorf("write OSS fixture response: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	creds := credentials.NewStaticCredentialsProvider("test-invalid-key", "test-invalid-secret", "")
+	cfg := oss.LoadDefaultConfig().
+		WithCredentialsProvider(creds).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithUsePathStyle(true).
+		WithHttpClient(server.Client()).
+		WithRetryMaxAttempts(1)
+	return oss.NewClient(cfg), func() []ossBucketRequest {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]ossBucketRequest(nil), requests...)
+	}
+}
+
+func assertOSSBucketCreationDenied(t *testing.T, err error, bucket string, requests []ossBucketRequest) {
+	t.Helper()
+	require.ErrorContains(t, err, "failed to create OSS bucket")
+	var serviceErr *oss.ServiceError
+	require.ErrorAs(t, err, &serviceErr)
+	require.Equal(t, http.StatusForbidden, serviceErr.StatusCode)
+	require.Equal(t, "AccessDenied", serviceErr.Code)
+	require.Equal(t, []ossBucketRequest{
+		{http.MethodGet, "/" + bucket + "/", true},
+		{http.MethodPut, "/" + bucket + "/", false},
+	}, requests)
 }

@@ -50,13 +50,28 @@ func TestValidateTenantAPIKeyKnowledgeBaseOwnership(t *testing.T) {
 		}
 	}
 
-	if err := validateTenantAPIKeyKnowledgeBaseIDsWithLookup(context.Background(), 42, []string{"kb-owned"}, lookup); err != nil {
+	if err := validateTenantAPIKeyKnowledgeBaseIDsWithLookup(
+		context.Background(),
+		42,
+		[]string{"kb-owned"},
+		lookup,
+	); err != nil {
 		t.Fatalf("owned knowledge base validation error = %v", err)
 	}
-	if err := validateTenantAPIKeyKnowledgeBaseIDsWithLookup(context.Background(), 42, []string{"kb-other"}, lookup); err == nil {
+	if err := validateTenantAPIKeyKnowledgeBaseIDsWithLookup(
+		context.Background(),
+		42,
+		[]string{"kb-other"},
+		lookup,
+	); err == nil {
 		t.Fatal("expected cross-tenant knowledge base to be rejected")
 	}
-	if err := validateTenantAPIKeyKnowledgeBaseIDsWithLookup(context.Background(), 42, []string{"kb-missing"}, lookup); err == nil {
+	if err := validateTenantAPIKeyKnowledgeBaseIDsWithLookup(
+		context.Background(),
+		42,
+		[]string{"kb-missing"},
+		lookup,
+	); err == nil {
 		t.Fatal("expected missing knowledge base to be rejected")
 	}
 }

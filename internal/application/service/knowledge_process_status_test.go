@@ -85,7 +85,6 @@ func TestFinalizeIndexedKnowledgeClearsPreviousAttemptError(t *testing.T) {
 	finalizeIndexedKnowledgeState(knowledge, 1, 2, false, time.Now())
 	if knowledge.ErrorMessage != "" {
 		t.Fatalf("successful index still exposes previous attempt error: %q", knowledge.ErrorMessage)
-
 	}
 }
 

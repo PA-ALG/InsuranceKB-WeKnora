@@ -20,8 +20,10 @@ func TestFeishuFailure(t *testing.T) {
 		noLeak        []string // must appear in neither code nor fallback
 	}{
 		{
-			name:        "rate limited",
-			err:         errors.New("feishu rate limited: status=429 body={\"code\":99991400,\"msg\":\"too many request\"}"),
+			name: "rate limited",
+			err: errors.New(
+				"feishu rate limited: status=429 body={\"code\":99991400,\"msg\":\"too many request\"}",
+			),
 			wantCode:    "feishu_rate_limited",
 			fallbackHas: []string{"retry"},
 			noLeak:      []string{"body=", "{", "99991400"},
@@ -39,8 +41,11 @@ func TestFeishuFailure(t *testing.T) {
 			noLeak:   []string{"ticket=", "abc"},
 		},
 		{
-			name:          "api error carries the feishu code as a param",
-			err:           errors.New("feishu api error: status=500 body={\"code\":1663,\"msg\":\"internal error\",\"Error\":{\"log_id\":\"20260\"}}"),
+			name: "api error carries the feishu code as a param",
+			err: errors.New(
+				"feishu api error: status=500 body={\"code\":1663,\"msg\":\"internal error\"" +
+					",\"Error\":{\"log_id\":\"20260\"}}",
+			),
 			wantCode:      "feishu_api_error",
 			wantCodeValue: "1663",
 			noLeak:        []string{"log_id", "body=", "{"},

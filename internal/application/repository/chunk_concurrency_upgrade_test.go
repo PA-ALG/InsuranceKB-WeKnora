@@ -41,7 +41,14 @@ func TestCreateChunksAtRevisionRejectsCrossScopeBatch(t *testing.T) {
 	require.NoError(t, db.Create(stored).Error)
 	chunks := []*types.Chunk{
 		{ID: "owned", TenantID: 7, KnowledgeBaseID: "raw", KnowledgeID: stored.ID, ParseAttempt: 2, Content: "owned"},
-		{ID: "foreign", TenantID: 8, KnowledgeBaseID: "raw", KnowledgeID: stored.ID, ParseAttempt: 2, Content: "foreign"},
+		{
+			ID:              "foreign",
+			TenantID:        8,
+			KnowledgeBaseID: "raw",
+			KnowledgeID:     stored.ID,
+			ParseAttempt:    2,
+			Content:         "foreign",
+		},
 	}
 
 	err := (&chunkRepository{db: db}).CreateChunksAtRevision(

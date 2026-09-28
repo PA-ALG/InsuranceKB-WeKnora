@@ -53,7 +53,13 @@ func (s *sessionService) resolveKnowledgeBases(
 		// When using a shared agent, restrict @mentions to the agent's allowed KB scope
 		// to prevent users from injecting KB/knowledge IDs outside the agent's configured range.
 		if customAgent != nil && req.Session != nil && req.Session.TenantID != customAgent.TenantID {
-			kbIDs, knowledgeIDs = s.restrictMentionsToAgentScope(ctx, customAgent, req.Session.TenantID, kbIDs, knowledgeIDs)
+			kbIDs, knowledgeIDs = s.restrictMentionsToAgentScope(
+				ctx,
+				customAgent,
+				req.Session.TenantID,
+				kbIDs,
+				knowledgeIDs,
+			)
 			req.TagScopes = s.restrictTagScopesToAgentScope(ctx, customAgent, req.Session.TenantID, req.TagScopes)
 		}
 	} else if customAgent != nil && customAgent.Config.RetrieveKBOnlyWhenMentioned {
@@ -120,7 +126,11 @@ func (s *sessionService) restrictTagScopesToAgentScope(
 			filtered = append(filtered, scope)
 			continue
 		}
-		logger.Warnf(ctx, "Blocking @mentioned tag scope for KB %s: not in shared agent's allowed scope", scope.KnowledgeBaseID)
+		logger.Warnf(
+			ctx,
+			"Blocking @mentioned tag scope for KB %s: not in shared agent's allowed scope",
+			scope.KnowledgeBaseID,
+		)
 	}
 	return filtered
 }
@@ -160,14 +170,22 @@ func (s *sessionService) resolveChatModelID(
 		if configuredAgentModelID != "" {
 			model, err := s.modelService.GetModelByID(ctx, configuredAgentModelID)
 			if err != nil || model == nil || model.Type != types.ModelTypeKnowledgeQA {
-				return "", fmt.Errorf("configured chat model %s is unavailable for agent %s", configuredAgentModelID, customAgent.ID)
+				return "", fmt.Errorf(
+					"configured chat model %s is unavailable for agent %s",
+					configuredAgentModelID,
+					customAgent.ID,
+				)
 			}
 		} else {
 			// The wiki fixer is an internal agent and is intentionally omitted
 			// from the agent-management list. It therefore cannot receive a
 			// user-configured model_id; resolve it from the current Wiki KB or
 			// the normal system KnowledgeQA fallback below instead.
-			logger.Infof(ctx, "No model_id configured for internal wiki fixer %s, using KB/system fallback", customAgent.ID)
+			logger.Infof(
+				ctx,
+				"No model_id configured for internal wiki fixer %s, using KB/system fallback",
+				customAgent.ID,
+			)
 		}
 	}
 

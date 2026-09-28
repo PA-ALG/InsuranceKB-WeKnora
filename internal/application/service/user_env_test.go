@@ -60,15 +60,19 @@ func (r *userEnvConfigRepo) ListByTenant(
 func (r *userEnvConfigRepo) ListAll(context.Context) ([]*types.TenantSandboxConfigEntity, error) {
 	panic("ListAll is outside the user env surface")
 }
+
 func (r *userEnvConfigRepo) Update(context.Context, *types.TenantSandboxConfigEntity) error {
 	panic("Update is outside the user env surface")
 }
+
 func (r *userEnvConfigRepo) SoftDelete(context.Context, uint64, string) error {
 	panic("SoftDelete is outside the user env surface")
 }
+
 func (r *userEnvConfigRepo) SetCordon(context.Context, uint64, string, time.Time) error {
 	panic("SetCordon is outside the user env surface")
 }
+
 func (r *userEnvConfigRepo) ClearCordon(context.Context, uint64, string) error {
 	panic("ClearCordon is outside the user env surface")
 }

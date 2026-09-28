@@ -19,7 +19,7 @@ func remoteImageServer(t *testing.T) (*httptest.Server, *int64) {
 	t.Helper()
 	var hits int64
 	png := createTestPNG(200, 200)
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&hits, 1)
 		w.Header().Set("Content-Type", "image/png")
 		w.WriteHeader(http.StatusOK)

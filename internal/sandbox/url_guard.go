@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: outbound URL guard for tenant-supplied endpoints.
 //
 // Tenants configure their own sandbox control-plane URLs and the server dials

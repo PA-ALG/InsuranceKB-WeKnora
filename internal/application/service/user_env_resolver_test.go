@@ -81,7 +81,7 @@ func searchSkillRow() *types.TenantSkillEntity {
 }
 
 func newTestResolver(reader userEnvReader, rows ...*types.TenantSkillEntity) *userEnvResolver {
-	return NewUserEnvResolver(rows, reader, nil, testEnvTenantID, testEnvConfigID)
+	return newUserEnvResolver(rows, reader, nil, testEnvTenantID, testEnvConfigID)
 }
 
 func TestResolverUserValueOverridesWorkspaceValue(t *testing.T) {
@@ -295,7 +295,7 @@ func TestResolverWorksWithNoInstalledSkills(t *testing.T) {
 	reader := &fakeUserEnvReader{tenantID: testEnvTenantID}
 	reader.put(webPrincipal("u1"), testEnvConfigID, "",
 		map[string]string{"HTTP_PROXY": "http://proxy:8080"})
-	resolver := NewUserEnvResolver(nil, reader, nil, testEnvTenantID, testEnvConfigID)
+	resolver := newUserEnvResolver(nil, reader, nil, testEnvTenantID, testEnvConfigID)
 	ctx := types.WithPrincipal(context.Background(), webPrincipal("u1"))
 
 	env, _, err := resolver.ResolveEnv(ctx, "")
@@ -311,7 +311,7 @@ func TestResolverWorksWithNoInstalledSkills(t *testing.T) {
 func TestResolverSandboxConfigSatisfiesRequiredWithoutInjecting(t *testing.T) {
 	row := searchSkillRow()
 	row.Envs = types.SkillEnvVars{{Name: "TAVILY_API_KEY", Required: true}}
-	resolver := NewUserEnvResolver(
+	resolver := newUserEnvResolver(
 		[]*types.TenantSkillEntity{row},
 		&fakeUserEnvReader{tenantID: testEnvTenantID},
 		map[string]string{"TAVILY_API_KEY": "sandbox-key"},
@@ -329,7 +329,7 @@ func TestResolverSandboxConfigSatisfiesRequiredWithoutInjecting(t *testing.T) {
 func TestResolverEmptySandboxConfigValueDoesNotSatisfyRequired(t *testing.T) {
 	row := searchSkillRow()
 	row.Envs = types.SkillEnvVars{{Name: "TAVILY_API_KEY", Required: true}}
-	resolver := NewUserEnvResolver(
+	resolver := newUserEnvResolver(
 		[]*types.TenantSkillEntity{row},
 		&fakeUserEnvReader{tenantID: testEnvTenantID},
 		map[string]string{"TAVILY_API_KEY": ""},

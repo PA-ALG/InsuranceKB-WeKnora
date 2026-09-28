@@ -187,7 +187,8 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 	// Gather all text-like chunks (including newly added OCR and Caption from multimodal tasks)
 	var textChunks []*types.Chunk
 	for _, c := range chunks {
-		if c.ChunkType == types.ChunkTypeText || c.ChunkType == types.ChunkTypeImageOCR || c.ChunkType == types.ChunkTypeImageCaption {
+		if c.ChunkType == types.ChunkTypeText || c.ChunkType == types.ChunkTypeImageOCR ||
+			c.ChunkType == types.ChunkTypeImageCaption {
 			textChunks = append(textChunks, c)
 		}
 	}
@@ -425,13 +426,19 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 	enqueuedGraphCount := 0
 	if graphChunkCount > 0 {
 		logger.Infof(ctx,
-			"[KnowledgePostProcess] Spawning Graph RAG extract tasks for %d text/OCR chunks (of %d text-like)",
+			"[KnowledgePostProcess] Spawning Graph RAG extract tasks for %d text/OCR"+
+				" chunks (of %d text-like)",
 			len(graphChunks), len(textChunks))
 		for i, chunk := range graphChunks {
 			ok, err := NewChunkExtractTask(ctx, s.taskEnqueuer, payload.TenantID, chunk.ID, kb.SummaryModelID,
 				payload.KnowledgeID, attempt, i, payload.Revision)
 			if err != nil {
-				logger.Errorf(ctx, "[KnowledgePostProcess] Failed to create chunk extract task for %s: %v", chunk.ID, err)
+				logger.Errorf(
+					ctx,
+					"[KnowledgePostProcess] Failed to create chunk extract task for %s: %v",
+					chunk.ID,
+					err,
+				)
 			}
 			if ok {
 				enqueuedGraphCount++
@@ -566,7 +573,12 @@ func (s *KnowledgePostProcessService) enqueueAutoTagTask(
 	task := asynq.NewTask(types.TypeKnowledgeAutoTag, payloadBytes,
 		asynq.Queue(types.QueueSummary), asynq.MaxRetry(2), asynq.Timeout(2*time.Minute))
 	if _, err := s.taskEnqueuer.Enqueue(task); err != nil {
-		logger.Warnf(ctx, "[KnowledgePostProcess] Failed to enqueue automatic tagging for %s: %v", payload.KnowledgeID, err)
+		logger.Warnf(
+			ctx,
+			"[KnowledgePostProcess] Failed to enqueue automatic tagging for %s: %v",
+			payload.KnowledgeID,
+			err,
+		)
 		return false
 	}
 	logger.Infof(ctx, "[KnowledgePostProcess] Enqueued automatic tagging for %s", payload.KnowledgeID)
@@ -576,7 +588,11 @@ func (s *KnowledgePostProcessService) enqueueAutoTagTask(
 // enqueueSummaryGenerationTask enqueues the summary task. Returns true only
 // when a task was actually placed on the queue, so the caller can release the
 // seeded pending-subtask slot when enqueue is skipped or fails.
-func (s *KnowledgePostProcessService) enqueueSummaryGenerationTask(ctx context.Context, payload types.KnowledgePostProcessPayload, attempt int) bool {
+func (s *KnowledgePostProcessService) enqueueSummaryGenerationTask(
+	ctx context.Context,
+	payload types.KnowledgePostProcessPayload,
+	attempt int,
+) bool {
 	if s.taskEnqueuer == nil {
 		return false
 	}
@@ -599,7 +615,12 @@ func (s *KnowledgePostProcessService) enqueueSummaryGenerationTask(ctx context.C
 	task := asynq.NewTask(types.TypeSummaryGeneration, payloadBytes,
 		asynq.Queue(types.QueueSummary), asynq.MaxRetry(3), asynq.Timeout(30*time.Minute))
 	if _, err := s.taskEnqueuer.Enqueue(task); err != nil {
-		logger.Warnf(ctx, "[KnowledgePostProcess] Failed to enqueue summary generation for %s: %v", payload.KnowledgeID, err)
+		logger.Warnf(
+			ctx,
+			"[KnowledgePostProcess] Failed to enqueue summary generation for %s: %v",
+			payload.KnowledgeID,
+			err,
+		)
 		return false
 	}
 	logger.Infof(ctx, "[KnowledgePostProcess] Enqueued summary generation task for %s", payload.KnowledgeID)
@@ -689,19 +710,31 @@ func (s *KnowledgePostProcessService) enqueueQuestionGenerationTasks(
 		langfuse.InjectTracing(ctx, &taskPayload)
 		payloadBytes, err := json.Marshal(taskPayload)
 		if err != nil {
-			logger.Warnf(ctx, "[KnowledgePostProcess] Failed to marshal question generation payload for batch %d: %v", batchIndex-1, err)
+			logger.Warnf(
+				ctx,
+				"[KnowledgePostProcess] Failed to marshal question generation payload for batch %d: %v",
+				batchIndex-1,
+				err,
+			)
 			continue
 		}
 
 		task := asynq.NewTask(types.TypeQuestionGeneration, payloadBytes,
 			asynq.Queue(types.QueueQuestion), asynq.MaxRetry(3), asynq.Timeout(30*time.Minute))
 		if _, err := s.taskEnqueuer.Enqueue(task); err != nil {
-			logger.Warnf(ctx, "[KnowledgePostProcess] Failed to enqueue question generation batch %d for %s: %v", batchIndex-1, payload.KnowledgeID, err)
+			logger.Warnf(
+				ctx,
+				"[KnowledgePostProcess] Failed to enqueue question generation batch %d for %s: %v",
+				batchIndex-1,
+				payload.KnowledgeID,
+				err,
+			)
 			continue
 		}
 		enqueued++
 	}
-	logger.Infof(ctx, "[KnowledgePostProcess] Enqueued %d question generation batch tasks (%d chunks, batch_size=%d) for %s (count=%d)",
+	logger.Infof(ctx, "[KnowledgePostProcess] Enqueued %d question generation batch tasks (%d"+
+		" chunks, batch_size=%d) for %s (count=%d)",
 		enqueued, total, questionGenChunkBatchSize, payload.KnowledgeID, questionCount)
 	return enqueued
 }

@@ -126,10 +126,16 @@ var protectedPatterns = []*regexp.Regexp{
 	// cannot swallow a paragraph (CommonMark forbids blank-line spans).
 	regexp.MustCompile(`!\[[^\]\n]{0,200}\]\([^)\n]{1,500}\)`),
 	regexp.MustCompile(`\[[^\]\n]{1,200}\]\([^)\n]{1,500}\)`),
-	regexp.MustCompile("(?m)[ ]*(?:\\|[^|\\n]*)+\\|[\\r\\n]+\\s*(?:\\|\\s*:?-{3,}:?\\s*)+\\|[\\r\\n]+"), // Table header+separator
-	regexp.MustCompile("(?m)[ ]*(?:\\|[^|\\n]*)+\\|[\\r\\n]+"),                                          // Table rows
-	regexp.MustCompile("(?s)```(?:\\w+)?[\\r\\n].*?```"),                                                // Fenced code blocks
-	regexp.MustCompile("`[^`\\r\\n]+`"),                                                                 // Markdown inline code
+	regexp.MustCompile(
+		`(?m)[ ]*(?:\|[^|\n]*)+\|[\r\n]+\s*(?:\|\s*:?-{3,}:?\s*)+\|[\r\n]+`,
+	), // Table header+separator
+	regexp.MustCompile(`(?m)[ ]*(?:\|[^|\n]*)+\|[\r\n]+`), // Table rows
+	regexp.MustCompile(
+		"(?s)```(?:\\w+)?[\\r\\n].*?```",
+	), // Fenced code blocks
+	regexp.MustCompile(
+		"`[^`\\r\\n]+`",
+	), // Markdown inline code
 }
 
 type span struct {

@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: Cube adapter for the provider-neutral RemoteSandboxClient.
 //
 // CubeRemoteClient implements RemoteSandboxClient on top of the Cube SDK and
@@ -153,8 +154,10 @@ func (h *cubeRemoteHandle) TrafficAccessToken() string {
 
 // --- RemoteSandboxClient ------------------------------------------------------
 
+// Provider returns the remote sandbox provider identifier.
 func (c *CubeRemoteClient) Provider() RemoteProvider { return SandboxTypeCube }
 
+// Capabilities reports supported remote sandbox operations.
 func (c *CubeRemoteClient) Capabilities() RemoteSandboxCapabilities {
 	return RemoteSandboxCapabilities{
 		SupportsReconnect:             true,
@@ -177,6 +180,7 @@ func (c *CubeRemoteClient) Capabilities() RemoteSandboxCapabilities {
 	}
 }
 
+// Health checks connectivity to the remote sandbox service.
 func (c *CubeRemoteClient) Health(ctx context.Context) error {
 	if _, err := c.client.Health(ctx); err != nil {
 		logger.Errorf(ctx, "cube remote client health check failed: %v", err)
@@ -185,6 +189,7 @@ func (c *CubeRemoteClient) Health(ctx context.Context) error {
 	return nil
 }
 
+// ListTemplates returns templates available from the sandbox provider.
 func (c *CubeRemoteClient) ListTemplates(ctx context.Context) ([]RemoteTemplate, error) {
 	items, err := c.client.ListTemplates(ctx)
 	if err != nil {
@@ -668,6 +673,7 @@ func cubeDesktopTemplateSpec(dns []string) map[string]any {
 	return spec
 }
 
+// Create creates a remote sandbox from the requested configuration.
 func (c *CubeRemoteClient) Create(
 	ctx context.Context,
 	request RemoteCreateRequest,
@@ -754,6 +760,7 @@ func (c *CubeRemoteClient) Create(
 	}, nil
 }
 
+// Connect connects to an existing remote sandbox.
 func (c *CubeRemoteClient) Connect(
 	ctx context.Context,
 	request RemoteConnectRequest,
@@ -800,6 +807,7 @@ func (c *CubeRemoteClient) ConnectSession(ctx context.Context, req RemoteConnect
 	return handle, nil
 }
 
+// Get retrieves metadata for a remote sandbox.
 func (c *CubeRemoteClient) Get(
 	ctx context.Context,
 	sandboxID string,
@@ -830,6 +838,7 @@ func (c *CubeRemoteClient) Get(
 	return cubeRemoteSummary(*info), nil
 }
 
+// List lists remote sandboxes matching the requested filter.
 func (c *CubeRemoteClient) List(
 	ctx context.Context,
 	filter RemoteListFilter,
@@ -850,6 +859,7 @@ func (c *CubeRemoteClient) List(
 	return result, nil
 }
 
+// Delete deletes the requested remote sandbox.
 func (c *CubeRemoteClient) Delete(ctx context.Context, sandboxID string) error {
 	if strings.TrimSpace(sandboxID) == "" {
 		return cubeInvalidRequest("Delete", "sandbox ID is required", nil)
@@ -864,6 +874,7 @@ func (c *CubeRemoteClient) Delete(ctx context.Context, sandboxID string) error {
 	return nil
 }
 
+// Exec runs a command in the remote sandbox.
 func (c *CubeRemoteClient) Exec(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -953,6 +964,7 @@ func (c *CubeRemoteClient) Exec(
 	}, nil
 }
 
+// WriteFile writes content to a remote sandbox file.
 func (c *CubeRemoteClient) WriteFile(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -969,6 +981,7 @@ func (c *CubeRemoteClient) WriteFile(
 	return nil
 }
 
+// ReadFile reads content from a remote sandbox file.
 func (c *CubeRemoteClient) ReadFile(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -985,6 +998,7 @@ func (c *CubeRemoteClient) ReadFile(
 	return []byte(content), nil
 }
 
+// ListDir lists entries in a remote sandbox directory.
 func (c *CubeRemoteClient) ListDir(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1033,6 +1047,7 @@ func normaliseFileType(t string) string {
 	}
 }
 
+// MakeDir creates a directory in the remote sandbox.
 func (c *CubeRemoteClient) MakeDir(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1048,6 +1063,7 @@ func (c *CubeRemoteClient) MakeDir(
 	})
 }
 
+// Remove removes a path from the remote sandbox.
 func (c *CubeRemoteClient) Remove(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1063,6 +1079,7 @@ func (c *CubeRemoteClient) Remove(
 	return nil
 }
 
+// Stat reads metadata for a remote sandbox path.
 func (c *CubeRemoteClient) Stat(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1328,6 +1345,7 @@ func cubeModTime(value string) time.Time {
 	return time.Time{}
 }
 
+// StateMatches reports whether a sandbox state matches the requested state filter.
 func StateMatches(candidate RemoteSandboxState, allowed []RemoteSandboxState) bool {
 	if len(allowed) == 0 {
 		return true

@@ -61,9 +61,30 @@ func (r *expandChunkRepo) ListChunksByParentIDsOnly(
 
 func TestExpandShortContextKeepsSourceCoordinates(t *testing.T) {
 	repo := &expandChunkRepo{chunks: map[string]*types.Chunk{
-		"prev": {ID: "prev", KnowledgeID: "doc", ChunkType: types.ChunkTypeText, Content: "edited previous body", NextChunkID: "base"},
-		"base": {ID: "base", KnowledgeID: "doc", ChunkType: types.ChunkTypeText, Content: "edited base body", PreChunkID: "prev", NextChunkID: "next", StartAt: 100, EndAt: 120},
-		"next": {ID: "next", KnowledgeID: "doc", ChunkType: types.ChunkTypeText, Content: "edited next body", PreChunkID: "base"},
+		"prev": {
+			ID:          "prev",
+			KnowledgeID: "doc",
+			ChunkType:   types.ChunkTypeText,
+			Content:     "edited previous body",
+			NextChunkID: "base",
+		},
+		"base": {
+			ID:          "base",
+			KnowledgeID: "doc",
+			ChunkType:   types.ChunkTypeText,
+			Content:     "edited base body",
+			PreChunkID:  "prev",
+			NextChunkID: "next",
+			StartAt:     100,
+			EndAt:       120,
+		},
+		"next": {
+			ID:          "next",
+			KnowledgeID: "doc",
+			ChunkType:   types.ChunkTypeText,
+			Content:     "edited next body",
+			PreChunkID:  "base",
+		},
 	}}
 	plugin := &PluginMerge{chunkRepo: repo}
 	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))

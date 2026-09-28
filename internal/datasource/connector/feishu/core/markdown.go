@@ -23,7 +23,11 @@ type pendingAttachment struct {
 // blocksToMarkdown renders a flat docx block array to Markdown, inlining
 // embedded spreadsheet/bitable tables (Task 5) and collecting downloadable
 // attachments. client may be nil when the block set has no downdrill blocks.
-func blocksToMarkdown(ctx context.Context, client sheetReader, blocks []DocxBlock) ([]byte, []pendingAttachment, error) {
+func blocksToMarkdown(
+	ctx context.Context,
+	client sheetReader,
+	blocks []DocxBlock,
+) ([]byte, []pendingAttachment, error) {
 	byID := make(map[string]DocxBlock, len(blocks))
 	for _, b := range blocks {
 		byID[b.BlockID] = b

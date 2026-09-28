@@ -406,11 +406,35 @@ func TestSessionSandboxBindingValidation(t *testing.T) {
 	require.NoError(t, valid.Validate(key))
 
 	tests := []SessionSandboxBinding{
-		{Version: SessionSandboxBindingVersion + 1, Provider: SandboxTypeCube, TenantID: 42, SessionID: "session-a", SandboxID: "sandbox-a"},
+		{
+			Version:   SessionSandboxBindingVersion + 1,
+			Provider:  SandboxTypeCube,
+			TenantID:  42,
+			SessionID: "session-a",
+			SandboxID: "sandbox-a",
+		},
 		{Version: SessionSandboxBindingVersion, TenantID: 42, SessionID: "session-a", SandboxID: "sandbox-a"},
-		{Version: SessionSandboxBindingVersion, Provider: "unknown", TenantID: 42, SessionID: "session-a", SandboxID: "sandbox-a"},
-		{Version: SessionSandboxBindingVersion, Provider: SandboxTypeCube, TenantID: 43, SessionID: "session-a", SandboxID: "sandbox-a"},
-		{Version: SessionSandboxBindingVersion, Provider: SandboxTypeCube, TenantID: 42, SessionID: "other", SandboxID: "sandbox-a"},
+		{
+			Version:   SessionSandboxBindingVersion,
+			Provider:  "unknown",
+			TenantID:  42,
+			SessionID: "session-a",
+			SandboxID: "sandbox-a",
+		},
+		{
+			Version:   SessionSandboxBindingVersion,
+			Provider:  SandboxTypeCube,
+			TenantID:  43,
+			SessionID: "session-a",
+			SandboxID: "sandbox-a",
+		},
+		{
+			Version:   SessionSandboxBindingVersion,
+			Provider:  SandboxTypeCube,
+			TenantID:  42,
+			SessionID: "other",
+			SandboxID: "sandbox-a",
+		},
 		{Version: SessionSandboxBindingVersion, Provider: SandboxTypeCube, TenantID: 42, SessionID: "session-a"},
 	}
 	for _, binding := range tests {

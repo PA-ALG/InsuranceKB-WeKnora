@@ -362,7 +362,10 @@ func (s *wikiPageService) GetPageByID(ctx context.Context, id string) (*types.Wi
 }
 
 // ListPages lists wiki pages with optional filtering and pagination
-func (s *wikiPageService) ListPages(ctx context.Context, req *types.WikiPageListRequest) (*types.WikiPageListResponse, error) {
+func (s *wikiPageService) ListPages(
+	ctx context.Context,
+	req *types.WikiPageListRequest,
+) (*types.WikiPageListResponse, error) {
 	pages, total, err := s.repo.List(ctx, req)
 	if err != nil {
 		return nil, err
@@ -429,7 +432,8 @@ func (s *wikiPageService) GetIndex(ctx context.Context, kbID string) (*types.Wik
 		if errors.Is(err, repository.ErrWikiPageNotFound) {
 			// Create default index page
 			return s.createDefaultPage(ctx, kbID, "index", "Index", types.WikiPageTypeIndex,
-				"# Wiki Index\n\nThis is the index page. It will be automatically updated as pages are added.\n")
+				"# Wiki Index\n\nThis is the index page. It will be automatically updated"+
+					" as pages are added.\n")
 		}
 		return nil, err
 	}
@@ -946,7 +950,11 @@ func (s *wikiPageService) ListByType(ctx context.Context, kbID string, pageType 
 // ListPagesBySourceRef exposes the repository's source-ref lookup so higher
 // layers (delete flow, retract reconciliation) can re-query the current wiki
 // state without depending on a stale caller-captured slug list.
-func (s *wikiPageService) ListPagesBySourceRef(ctx context.Context, kbID string, knowledgeID string) ([]*types.WikiPage, error) {
+func (s *wikiPageService) ListPagesBySourceRef(
+	ctx context.Context,
+	kbID string,
+	knowledgeID string,
+) ([]*types.WikiPage, error) {
 	return s.repo.ListBySourceRef(ctx, kbID, knowledgeID)
 }
 
@@ -963,14 +971,22 @@ func (s *wikiPageService) ListSlugsBySourceRef(ctx context.Context, kbID string,
 // for the requested slugs, in a single IN query. Used in place of the
 // pre-batch ListAllPages dump that historically pulled hundreds of MB
 // for KBs in the tens of thousands of pages.
-func (s *wikiPageService) ListBySlugs(ctx context.Context, kbID string, slugs []string) (map[string]*types.WikiPageLite, error) {
+func (s *wikiPageService) ListBySlugs(
+	ctx context.Context,
+	kbID string,
+	slugs []string,
+) (map[string]*types.WikiPageLite, error) {
 	return s.repo.ListBySlugs(ctx, kbID, slugs)
 }
 
 // ListSummariesByKnowledgeIDs is the lazy fetcher for the retract /
 // reparse branches of reduceSlugUpdates. Returns the content of each
 // surviving summary page keyed by its source knowledge id.
-func (s *wikiPageService) ListSummariesByKnowledgeIDs(ctx context.Context, kbID string, kids []string) (map[string]string, error) {
+func (s *wikiPageService) ListSummariesByKnowledgeIDs(
+	ctx context.Context,
+	kbID string,
+	kids []string,
+) (map[string]string, error) {
 	return s.repo.ListSummariesByKnowledgeIDs(ctx, kbID, kids)
 }
 
@@ -989,37 +1005,64 @@ func (s *wikiPageService) ListAllSlugs(ctx context.Context, kbID string) ([]stri
 }
 
 // ListPagesCursor is the lint-side cursor pagination over wiki_pages.
-func (s *wikiPageService) ListPagesCursor(ctx context.Context, kbID string, cursor string, limit int) ([]*types.WikiPage, string, error) {
+func (s *wikiPageService) ListPagesCursor(
+	ctx context.Context,
+	kbID string,
+	cursor string,
+	limit int,
+) ([]*types.WikiPage, string, error) {
 	return s.repo.ListPagesCursor(ctx, kbID, cursor, limit)
 }
 
 // ListByTypeRecent caps the page count for first-time index intro
 // generation so the LLM prompt stays bounded on large KBs.
-func (s *wikiPageService) ListByTypeRecent(ctx context.Context, kbID string, pageType string, limit int) ([]types.WikiIndexEntry, error) {
+func (s *wikiPageService) ListByTypeRecent(
+	ctx context.Context,
+	kbID string,
+	pageType string,
+	limit int,
+) ([]types.WikiIndexEntry, error) {
 	return s.repo.ListByTypeRecent(ctx, kbID, pageType, limit)
 }
 
 // FindSimilarPages performs a pg_trgm similarity search; used by the
 // dedup pre-filter to surface candidate merge targets.
-func (s *wikiPageService) FindSimilarPages(ctx context.Context, kbID string, query string, pageTypes []string, limit int) ([]*types.WikiPageLite, error) {
+func (s *wikiPageService) FindSimilarPages(
+	ctx context.Context,
+	kbID string,
+	query string,
+	pageTypes []string,
+	limit int,
+) ([]*types.WikiPageLite, error) {
 	return s.repo.FindSimilarPages(ctx, kbID, query, pageTypes, limit)
 }
 
 // FindPagesByNormalizedTitle looks up exact same-type title identities for
 // wiki ingest, independent of the trigram top-K used for semantic dedup.
-func (s *wikiPageService) FindPagesByNormalizedTitle(ctx context.Context, kbID, pageType, identity string) ([]*types.WikiPageLite, error) {
+func (s *wikiPageService) FindPagesByNormalizedTitle(
+	ctx context.Context,
+	kbID, pageType, identity string,
+) ([]*types.WikiPageLite, error) {
 	return s.repo.FindPagesByNormalizedTitle(ctx, kbID, pageType, identity)
 }
 
 // FindPagesByNormalizedTitles looks up several normalized title identities
 // in one query so wiki ingest does not seq-scan once per extracted item.
-func (s *wikiPageService) FindPagesByNormalizedTitles(ctx context.Context, kbID, pageType string, identities []string) ([]*types.WikiPageLite, error) {
+func (s *wikiPageService) FindPagesByNormalizedTitles(
+	ctx context.Context,
+	kbID, pageType string,
+	identities []string,
+) ([]*types.WikiPageLite, error) {
 	return s.repo.FindPagesByNormalizedTitles(ctx, kbID, pageType, identities)
 }
 
 // ListDistinctCategoryPaths returns the existing wiki folder paths. Used by
 // wiki ingest's taxonomy planner to ground folder reuse.
-func (s *wikiPageService) ListDistinctCategoryPaths(ctx context.Context, kbID string, maxPaths int) ([][]string, error) {
+func (s *wikiPageService) ListDistinctCategoryPaths(
+	ctx context.Context,
+	kbID string,
+	maxPaths int,
+) ([][]string, error) {
 	return s.repo.ListDistinctCategoryPaths(ctx, kbID, maxPaths)
 }
 
@@ -1030,7 +1073,12 @@ func (s *wikiPageService) CountByType(ctx context.Context, kbID string) (map[str
 }
 
 // SearchPages performs full-text search over wiki pages
-func (s *wikiPageService) SearchPages(ctx context.Context, kbID string, query string, limit int) ([]*types.WikiPage, error) {
+func (s *wikiPageService) SearchPages(
+	ctx context.Context,
+	kbID string,
+	query string,
+	limit int,
+) ([]*types.WikiPage, error) {
 	return s.repo.Search(ctx, kbID, query, limit)
 }
 
@@ -1212,7 +1260,12 @@ func (s *wikiPageService) RepairContentLinks(
 }
 
 // updateInLinks adds the source slug to the in_links of target pages
-func (s *wikiPageService) updateInLinks(ctx context.Context, kbID string, sourceSlug string, targets types.StringArray) {
+func (s *wikiPageService) updateInLinks(
+	ctx context.Context,
+	kbID string,
+	sourceSlug string,
+	targets types.StringArray,
+) {
 	for _, targetSlug := range targets {
 		targetPage, err := s.repo.GetBySlug(ctx, kbID, targetSlug)
 		if err != nil {
@@ -1229,7 +1282,12 @@ func (s *wikiPageService) updateInLinks(ctx context.Context, kbID string, source
 }
 
 // removeInLinks removes the source slug from the in_links of target pages
-func (s *wikiPageService) removeInLinks(ctx context.Context, kbID string, sourceSlug string, targets types.StringArray) {
+func (s *wikiPageService) removeInLinks(
+	ctx context.Context,
+	kbID string,
+	sourceSlug string,
+	targets types.StringArray,
+) {
 	for _, targetSlug := range targets {
 		targetPage, err := s.repo.GetBySlug(ctx, kbID, targetSlug)
 		if err != nil {
@@ -1260,7 +1318,14 @@ func (s *wikiPageService) deleteChunkForPage(ctx context.Context, page *types.Wi
 }
 
 // createDefaultPage creates the default index page.
-func (s *wikiPageService) createDefaultPage(ctx context.Context, kbID string, slug string, title string, pageType string, content string) (*types.WikiPage, error) {
+func (s *wikiPageService) createDefaultPage(
+	ctx context.Context,
+	kbID string,
+	slug string,
+	title string,
+	pageType string,
+	content string,
+) (*types.WikiPage, error) {
 	// Get KB to get tenant ID
 	kb, err := s.kbService.GetKnowledgeBaseByIDOnly(ctx, kbID)
 	if err != nil {
@@ -1376,7 +1441,12 @@ func (s *wikiPageService) CreateIssue(ctx context.Context, issue *types.WikiPage
 }
 
 // ListIssues retrieves issues for a knowledge base
-func (s *wikiPageService) ListIssues(ctx context.Context, kbID string, slug string, status string) ([]*types.WikiPageIssue, error) {
+func (s *wikiPageService) ListIssues(
+	ctx context.Context,
+	kbID string,
+	slug string,
+	status string,
+) ([]*types.WikiPageIssue, error) {
 	return s.repo.ListIssues(ctx, kbID, slug, status)
 }
 

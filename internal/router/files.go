@@ -141,7 +141,14 @@ func resolveFileService(
 // streamStoredFile writes the shared success response of every file proxy:
 // safe content type, nosniff, disposition for non-inline types, the route's
 // cache policy, then the body (skipped for HEAD). Closes reader.
-func streamStoredFile(c *gin.Context, reader io.ReadCloser, contentType string, inline bool, cacheControl, logTag string, fileNames ...string) {
+func streamStoredFile(
+	c *gin.Context,
+	reader io.ReadCloser,
+	contentType string,
+	inline bool,
+	cacheControl, logTag string,
+	fileNames ...string,
+) {
 	name := ""
 	if len(fileNames) > 0 {
 		name = fileNames[0]
@@ -210,8 +217,14 @@ func newFileServeHandler(
 
 		reader, err := fileSvc.GetFile(c.Request.Context(), filePath)
 		if err != nil {
-			logger.Warnf(c.Request.Context(), "[Router] /files get file failed: tenant_id=%d provider=%s path=%q err=%v",
-				tenant.ID, resolvedProvider, filePath, err)
+			logger.Warnf(
+				c.Request.Context(),
+				"[Router] /files get file failed: tenant_id=%d provider=%s path=%q err=%v",
+				tenant.ID,
+				resolvedProvider,
+				filePath,
+				err,
+			)
 			c.Status(http.StatusNotFound)
 			return
 		}
@@ -221,7 +234,11 @@ func newFileServeHandler(
 	}
 }
 
-func serveFiles(r getRouteRegistrar, globalFileService interfaces.FileService, resolvers ...interfaces.StorageBackendResolver) {
+func serveFiles(
+	r getRouteRegistrar,
+	globalFileService interfaces.FileService,
+	resolvers ...interfaces.StorageBackendResolver,
+) {
 	var storageResolver interfaces.StorageBackendResolver
 	if len(resolvers) > 0 {
 		storageResolver = resolvers[0]
@@ -291,7 +308,12 @@ func serveResourceGrants(
 			fileSvc = globalFileService
 		}
 		if err != nil || fileSvc == nil {
-			logger.Warnf(ctx, "[Router] resource grant storage resolution failed: resource_id=%s err=%v", resource.ID, err)
+			logger.Warnf(
+				ctx,
+				"[Router] resource grant storage resolution failed: resource_id=%s err=%v",
+				resource.ID,
+				err,
+			)
 			c.Status(http.StatusNotFound)
 			return
 		}
@@ -531,7 +553,11 @@ func serveMessageScopedFiles(
 // Without this it is otherwise impossible to tell whether a "broken image" is
 // caused by an expired signature, a stale URL cached by the platform, the
 // platform's IP being blocked, or the URL simply never reaching us.
-func servePresignedFiles(r *gin.Engine, tenantService interfaces.TenantService, storageResolver interfaces.StorageBackendResolver) {
+func servePresignedFiles(
+	r *gin.Engine,
+	tenantService interfaces.TenantService,
+	storageResolver interfaces.StorageBackendResolver,
+) {
 	handler := presignedFileHandler(tenantService, localStorageAbsDir(), storageResolver)
 	r.GET("/api/v1/files/presigned", handler)
 	r.HEAD("/api/v1/files/presigned", handler)
@@ -541,7 +567,11 @@ func servePresignedFiles(r *gin.Engine, tenantService interfaces.TenantService, 
 // For HEAD requests it returns the same status + headers but does not stream
 // the body — this is enough for IM platforms to validate the URL while saving
 // us a full read of the backing object.
-func presignedFileHandler(tenantService interfaces.TenantService, absDir string, resolvers ...interfaces.StorageBackendResolver) gin.HandlerFunc {
+func presignedFileHandler(
+	tenantService interfaces.TenantService,
+	absDir string,
+	resolvers ...interfaces.StorageBackendResolver,
+) gin.HandlerFunc {
 	var storageResolver interfaces.StorageBackendResolver
 	if len(resolvers) > 0 {
 		storageResolver = resolvers[0]
@@ -557,20 +587,40 @@ func presignedFileHandler(tenantService interfaces.TenantService, absDir string,
 		sig := strings.TrimSpace(c.Query("sig"))
 
 		if filePath == "" || tenantIDStr == "" || expiresStr == "" || sig == "" {
-			logger.Warnf(ctx, "[Router] /files/presigned missing params: client_ip=%s ua=%q file_path=%q tenant_id=%q expires=%q has_sig=%v",
-				clientIP, userAgent, filePath, tenantIDStr, expiresStr, sig != "")
+			logger.Warnf(
+				ctx,
+				"[Router] /files/presigned missing params: client_ip=%s ua=%q"+
+					" file_path=%q tenant_id=%q expires=%q has_sig=%v",
+				clientIP,
+				userAgent,
+				filePath,
+				tenantIDStr,
+				expiresStr,
+				sig != "",
+			)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing required parameters"})
 			return
 		}
 		if strings.Contains(filePath, "..") {
-			logger.Warnf(ctx, "[Router] /files/presigned rejected path traversal: client_ip=%s file_path=%q", clientIP, filePath)
+			logger.Warnf(
+				ctx,
+				"[Router] /files/presigned rejected path traversal: client_ip=%s file_path=%q",
+				clientIP,
+				filePath,
+			)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file path"})
 			return
 		}
 
 		tenantID, err := strconv.ParseUint(tenantIDStr, 10, 64)
 		if err != nil {
-			logger.Warnf(ctx, "[Router] /files/presigned invalid tenant_id: client_ip=%s tenant_id=%q err=%v", clientIP, tenantIDStr, err)
+			logger.Warnf(
+				ctx,
+				"[Router] /files/presigned invalid tenant_id: client_ip=%s tenant_id=%q err=%v",
+				clientIP,
+				tenantIDStr,
+				err,
+			)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant_id"})
 			return
 		}
@@ -580,15 +630,29 @@ func presignedFileHandler(tenantService interfaces.TenantService, absDir string,
 		// with, the IM platform cached an expired URL, or SYSTEM_AES_KEY was
 		// rotated without invalidating in-flight links.
 		if !secutils.VerifyFileURLSig(filePath, tenantID, expiresStr, sig) {
-			logger.Warnf(ctx, "[Router] /files/presigned sig invalid or expired: client_ip=%s ua=%q tenant_id=%d file_path=%q expires=%s",
-				clientIP, userAgent, tenantID, filePath, expiresStr)
+			logger.Warnf(
+				ctx,
+				"[Router] /files/presigned sig invalid or expired: client_ip=%s ua=%q"+
+					" tenant_id=%d file_path=%q expires=%s",
+				clientIP,
+				userAgent,
+				tenantID,
+				filePath,
+				expiresStr,
+			)
 			c.JSON(http.StatusForbidden, gin.H{"error": "invalid or expired signature"})
 			return
 		}
 
 		tenant, err := tenantService.GetTenantByID(ctx, tenantID)
 		if err != nil {
-			logger.Warnf(ctx, "[Router] /files/presigned tenant lookup failed: client_ip=%s tenant_id=%d err=%v", clientIP, tenantID, err)
+			logger.Warnf(
+				ctx,
+				"[Router] /files/presigned tenant lookup failed: client_ip=%s tenant_id=%d err=%v",
+				clientIP,
+				tenantID,
+				err,
+			)
 			c.Status(http.StatusNotFound)
 			return
 		}
@@ -596,8 +660,15 @@ func presignedFileHandler(tenantService interfaces.TenantService, absDir string,
 		backendID, provider := parseStorageTarget(filePath)
 		fileSvc, resolvedProvider, err := resolveFileService(ctx, tenant, backendID, provider, absDir, storageResolver)
 		if err != nil {
-			logger.Warnf(ctx, "[Router] /files/presigned resolve file service failed: client_ip=%s tenant_id=%d provider=%s err=%v",
-				clientIP, tenantID, provider, err)
+			logger.Warnf(
+				ctx,
+				"[Router] /files/presigned resolve file service failed: client_ip=%s"+
+					" tenant_id=%d provider=%s err=%v",
+				clientIP,
+				tenantID,
+				provider,
+				err,
+			)
 			c.Status(http.StatusBadRequest)
 			return
 		}
@@ -609,8 +680,16 @@ func presignedFileHandler(tenantService interfaces.TenantService, absDir string,
 		// mysteriously fail.
 		reader, err := fileSvc.GetFile(ctx, filePath)
 		if err != nil {
-			logger.Warnf(ctx, "[Router] /files/presigned get file failed: client_ip=%s tenant_id=%d provider=%s path=%q err=%v",
-				clientIP, tenantID, resolvedProvider, filePath, err)
+			logger.Warnf(
+				ctx,
+				"[Router] /files/presigned get file failed: client_ip=%s tenant_id=%d"+
+					" provider=%s path=%q err=%v",
+				clientIP,
+				tenantID,
+				resolvedProvider,
+				filePath,
+				err,
+			)
 			c.Status(http.StatusNotFound)
 			return
 		}
@@ -675,7 +754,14 @@ func servePresignedPreview(
 			}
 
 			backendID, provider := parseStorageTarget(filePath)
-			fileSvc, resolvedProvider, err := resolveFileService(ctx, tenant, backendID, provider, absDir, storageResolver)
+			fileSvc, resolvedProvider, err := resolveFileService(
+				ctx,
+				tenant,
+				backendID,
+				provider,
+				absDir,
+				storageResolver,
+			)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"error":    err.Error(),

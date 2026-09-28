@@ -228,7 +228,7 @@ func (h *ChunkHandler) UpdateChunk(c *gin.Context) {
 	if err != nil {
 		logger.ErrorWithFields(ctx, err, nil)
 		if stderrors.Is(err, service.ErrChunkRevisionConflict) {
-			c.Error(errors.NewConflictError("Chunk was modified by another user; refresh and retry"))
+			_ = c.Error(errors.NewConflictError("Chunk was modified by another user; refresh and retry"))
 			return
 		}
 		var appErr *errors.AppError
@@ -254,10 +254,11 @@ func (h *ChunkHandler) UpdateChunk(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// ListChunkRevisions returns stored revisions of a chunk.
 func (h *ChunkHandler) ListChunkRevisions(c *gin.Context) {
 	chunk, _, err := h.fetchChunkAndVerifyOwnership(c)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	items, err := h.service.ListChunkRevisions(c.Request.Context(), chunk.ID)
@@ -268,29 +269,31 @@ func (h *ChunkHandler) ListChunkRevisions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": items})
 }
 
+// RevertChunkRequest identifies the revision to restore.
 type RevertChunkRequest struct {
 	Revision         *int `json:"revision" binding:"required"`
 	ExpectedRevision *int `json:"expected_revision"`
 }
 
+// RevertChunk restores a chunk from a stored revision.
 func (h *ChunkHandler) RevertChunk(c *gin.Context) {
 	chunk, knowledgeID, err := h.fetchChunkAndVerifyOwnership(c)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	var req RevertChunkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(errors.NewBadRequestError(err.Error()))
+		_ = c.Error(errors.NewBadRequestError(err.Error()))
 		return
 	}
 	if req.Revision == nil || *req.Revision < 0 {
-		c.Error(errors.NewBadRequestError("revision must be a non-negative integer"))
+		_ = c.Error(errors.NewBadRequestError("revision must be a non-negative integer"))
 		return
 	}
 	updated, err := h.service.RevertDocumentChunk(c.Request.Context(), chunk.ID, *req.Revision, req.ExpectedRevision)
 	if stderrors.Is(err, service.ErrChunkRevisionConflict) {
-		c.Error(errors.NewConflictError("Chunk was modified by another user; refresh and retry"))
+		_ = c.Error(errors.NewConflictError("Chunk was modified by another user; refresh and retry"))
 		return
 	}
 	if err != nil {
@@ -304,7 +307,12 @@ func (h *ChunkHandler) RevertChunk(c *gin.Context) {
 	}
 	knowledge, getErr := h.kgService.GetKnowledgeByID(c.Request.Context(), knowledgeID)
 	if getErr != nil {
-		logger.Warnf(c.Request.Context(), "Chunk reverted but failed to reload summary status for %s: %v", knowledgeID, getErr)
+		logger.Warnf(
+			c.Request.Context(),
+			"Chunk reverted but failed to reload summary status for %s: %v",
+			knowledgeID,
+			getErr,
+		)
 	}
 	response := gin.H{"success": true, "data": updated}
 	if knowledge != nil {
@@ -314,39 +322,42 @@ func (h *ChunkHandler) RevertChunk(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// UpsertGeneratedQuestionRequest specifies a generated question to create or update.
 type UpsertGeneratedQuestionRequest struct {
 	QuestionID string `json:"question_id"`
 	Question   string `json:"question" binding:"required"`
 }
 
+// UpsertGeneratedQuestion creates or updates a generated chunk question.
 func (h *ChunkHandler) UpsertGeneratedQuestion(c *gin.Context) {
 	chunkID := secutils.SanitizeForLog(c.Param("id"))
 	if chunkID == "" {
-		c.Error(errors.NewBadRequestError("Chunk ID is required"))
+		_ = c.Error(errors.NewBadRequestError("Chunk ID is required"))
 		return
 	}
 	var req UpsertGeneratedQuestionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(errors.NewBadRequestError(err.Error()))
+		_ = c.Error(errors.NewBadRequestError(err.Error()))
 		return
 	}
 	item, err := h.service.UpsertGeneratedQuestion(c.Request.Context(), chunkID, req.QuestionID, req.Question)
 	if err != nil {
-		c.Error(errors.NewBadRequestError(err.Error()))
+		_ = c.Error(errors.NewBadRequestError(err.Error()))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": item})
 }
 
+// RegenerateGeneratedQuestions requests regeneration of questions for the chunk.
 func (h *ChunkHandler) RegenerateGeneratedQuestions(c *gin.Context) {
 	chunkID := secutils.SanitizeForLog(c.Param("id"))
 	if chunkID == "" {
-		c.Error(errors.NewBadRequestError("Chunk ID is required"))
+		_ = c.Error(errors.NewBadRequestError("Chunk ID is required"))
 		return
 	}
 	items, err := h.kgService.RegenerateChunkQuestions(c.Request.Context(), chunkID)
 	if err != nil {
-		c.Error(errors.NewBadRequestError(err.Error()))
+		_ = c.Error(errors.NewBadRequestError(err.Error()))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": items})

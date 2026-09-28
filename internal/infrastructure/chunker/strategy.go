@@ -141,11 +141,18 @@ func SplitParentChild(text string, parentCfg, childCfg SplitterConfig) ParentChi
 // SplitParentChild. The result is identical to SplitParentChild; diagnostics
 // describe the strategy selected for the parent split over the full document.
 // It is intended for debug surfaces rather than the ingestion hot path.
-func SplitParentChildWithDiagnostics(text string, parentCfg, childCfg SplitterConfig) (ParentChildResult, *Diagnostics) {
+func SplitParentChildWithDiagnostics(
+	text string,
+	parentCfg, childCfg SplitterConfig,
+) (ParentChildResult, *Diagnostics) {
 	return splitParentChild(text, parentCfg, childCfg, true)
 }
 
-func splitParentChild(text string, parentCfg, childCfg SplitterConfig, withDiagnostics bool) (ParentChildResult, *Diagnostics) {
+func splitParentChild(
+	text string,
+	parentCfg, childCfg SplitterConfig,
+	withDiagnostics bool,
+) (ParentChildResult, *Diagnostics) {
 	parentCfg = ensureDefaults(parentCfg)
 	childCfg = ensureDefaults(childCfg)
 

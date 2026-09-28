@@ -16,7 +16,7 @@ import (
 func TestMemoryConsistencyInvalidDecisionsDoNotBlockValidOnes(t *testing.T) {
 	s, _, tr := newMemoryHarness(t)
 	ctx := enabledCtx(t, tr, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	old, err := s.Remember(ctx, types.MemoryItem{Kind: types.MemoryKindFact, Topic: "职业", Content: "我是工程师"})
 	require.NoError(t, err)
 	require.NoError(t, s.repo.DeleteItem(ctx, scope, old.ID)) // Snapshot became stale during the model call.
@@ -71,14 +71,14 @@ func TestMemoryConsistencyPoisonSegmentHasBoundedRetries(t *testing.T) {
 	}
 	require.Equal(t, 3, poisonCalls)
 	require.Contains(t, models.seenTranscripts(), "valid-marker")
-	pending, err := s.repo.HasPendingExtraction(ctx, scopeFor(t, ctx))
+	pending, err := s.repo.HasPendingExtraction(ctx, scopeFor(ctx, t))
 	require.NoError(t, err)
 	require.False(t, pending)
 
 	// Failure metadata is checked through a repository claim after a fresh turn.
-	_, _, err = s.repo.EnqueuePendingSession(ctx, scopeFor(t, ctx), "bad", time.Minute)
+	_, _, err = s.repo.EnqueuePendingSession(ctx, scopeFor(ctx, t), "bad", time.Minute)
 	require.NoError(t, err)
-	batch, err := s.repo.ClaimPendingSessions(ctx, scopeFor(t, ctx), "", "inspect", time.Minute)
+	batch, err := s.repo.ClaimPendingSessions(ctx, scopeFor(ctx, t), "", "inspect", time.Minute)
 	require.NoError(t, err)
 	require.Len(t, batch.Sessions, 1)
 	progress := batch.Sessions[0]
@@ -87,7 +87,7 @@ func TestMemoryConsistencyPoisonSegmentHasBoundedRetries(t *testing.T) {
 	require.Equal(t, "invalid_model_output", progress.FailureCode)
 	require.True(t, progress.Cursor.At.Equal(progress.FailedTo.At))
 	require.Equal(t, progress.Cursor.ID, progress.FailedTo.ID)
-	require.NoError(t, s.repo.FinishExtraction(ctx, scopeFor(t, ctx), "inspect"))
+	require.NoError(t, s.repo.FinishExtraction(ctx, scopeFor(ctx, t), "inspect"))
 	// Later messages in the same conversation still run, without re-reading the poison input.
 	messages.set("bad", []*types.Message{
 		badMessage,
@@ -110,7 +110,7 @@ func containsTranscript(prompt, marker string) bool {
 func TestMemoryConsistencyProgressDoesNotGrowSubjectJSON(t *testing.T) {
 	s, db, tr := newMemoryHarness(t)
 	ctx := enabledCtx(t, tr, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	subject, err := s.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
 	legacyBoundary := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
@@ -168,7 +168,7 @@ func TestMemoryConsistencyDecisionDatabaseErrorsRemainRetryable(t *testing.T) {
 	s, _, tr := newMemoryHarness(t)
 	ctx := enabledCtx(t, tr, 1, "alice")
 	s.repo = brokenDecisionLookup{s.repo}
-	err := s.applyDecisions(ctx, scopeFor(t, ctx), s.workspaceConfig(ctx, 1),
+	err := s.applyDecisions(ctx, scopeFor(ctx, t), s.workspaceConfig(ctx, 1),
 		transcriptSegment{}, nil, []extractionDecision{{Action: "update", Topic: "职业", Content: "经理"}})
 	require.ErrorContains(t, err, "database unavailable")
 }

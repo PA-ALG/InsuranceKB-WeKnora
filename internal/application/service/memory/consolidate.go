@@ -152,8 +152,7 @@ func (s *Service) reviewStore(
 	result.Reviewed = len(items)
 	result.Demoted = s.demoteStaleTasks(ctx, scope, items)
 	if force || len(items) >= consolidateMinItems {
-		result.Merged, result.Candidates, result.Skipped =
-			s.mergeRedundant(ctx, scope, cfg, modelID, items, force)
+		result.Merged, result.Candidates, result.Skipped = s.mergeRedundant(ctx, scope, cfg, modelID, items, force)
 	} else {
 		result.Skipped = types.MemoryConsolidationSkipTooFewItems
 	}
@@ -183,7 +182,8 @@ func (s *Service) reviewStore(
 	// is indistinguishable from one that is broken.
 	if force || result.Merged > 0 || result.Demoted > 0 || result.Expired > 0 {
 		logger.Infof(ctx,
-			"memory: consolidation reviewed %d, candidates %d, merged %d, demoted %d, expired %d, skipped=%q for %s",
+			"memory: consolidation reviewed %d, candidates %d, merged %d, demoted %d,"+
+				" expired %d, skipped=%q for %s",
 			result.Reviewed, result.Candidates, result.Merged, result.Demoted, result.Expired,
 			result.Skipped, scope.SubjectID)
 	}
@@ -480,9 +480,10 @@ func (s *Service) callConsolidationModel(
 	}
 
 	var b strings.Builder
+	// strings.Builder writes cannot fail.
 	for _, item := range cluster {
-		b.WriteString(fmt.Sprintf("- (%s) %s\n",
-			item.ValidFrom.Format("2006-01-02"), types.SanitizeMemoryContent(item.Content)))
+		_, _ = fmt.Fprintf(&b, "- (%s) %s\n",
+			item.ValidFrom.Format("2006-01-02"), types.SanitizeMemoryContent(item.Content))
 	}
 
 	// Thinking off, for the reason given on completeExtraction: a reasoning

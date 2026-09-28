@@ -165,7 +165,11 @@ func (s *agentService) stageSessionAttachments(
 				return nil, fmt.Errorf("close attachment %q: %w", attachment.FileName, closeErr)
 			}
 			if int64(len(content)) > maxBytes {
-				return nil, fmt.Errorf("attachment %q exceeds sandbox staging limit of %d bytes", attachment.FileName, maxBytes)
+				return nil, fmt.Errorf(
+					"attachment %q exceeds sandbox staging limit of %d bytes",
+					attachment.FileName,
+					maxBytes,
+				)
 			}
 			if writeErr := store.WriteSessionInputFile(ctx, sessionID, remotePath, content); writeErr != nil {
 				return nil, fmt.Errorf("stage attachment %q: %w", attachment.FileName, writeErr)

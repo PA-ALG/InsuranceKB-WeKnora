@@ -23,7 +23,7 @@ import (
 func TestVectorSearchRanksTheWholeSubjectNotAListedWindow(t *testing.T) {
 	svc, tenantRepo, _ := newVectorHarness(t)
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 
 	// The memory that answers the question is the least important one, so any
 	// importance-ordered window of size one excludes it.
@@ -62,7 +62,7 @@ func TestVectorSearchRanksTheWholeSubjectNotAListedWindow(t *testing.T) {
 func TestVectorSearchHonoursKindAndLifecycleFilters(t *testing.T) {
 	svc, db, tenantRepo, _ := newVectorHarnessWithDB(t)
 	ctx := enabledCtx(t, tenantRepo, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 
 	_, err := svc.Remember(ctx, types.MemoryItem{
 		Kind: types.MemoryKindPreference, Topic: "回答风格", Content: "回答直接给结论",
@@ -136,7 +136,7 @@ func TestLexicalPoolCoversEveryLiveMemory(t *testing.T) {
 		Enabled: true, WriteMode: types.MemoryWriteAuto, MaxItems: 3,
 	}
 	tenantRepo.set(1, cfg)
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 
 	for _, content := range []string{"第一条记忆", "第二条记忆", "第三条记忆", "第四条记忆", "第五条记忆"} {
 		_, err := svc.Remember(ctx, types.MemoryItem{

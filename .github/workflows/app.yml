@@ -144,7 +144,9 @@ jobs:
         run: |
           mapfile -t pkgs < <(go list ./... | grep -v '/docreader/')
           go vet "${pkgs[@]}"
-          go test "${pkgs[@]}"
+          # The expanded service suite outgrew Go's default 10m package budget.
+          # Keep the enclosing 30m job bound; assertions and test selection are unchanged.
+          go test -timeout 20m "${pkgs[@]}"
           go test -tags desktop ./internal/container
 
       - name: Build server

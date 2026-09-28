@@ -26,9 +26,11 @@ func (f *stagingFileService) CheckConnectivity(context.Context) error { return n
 func (f *stagingFileService) SaveFile(context.Context, *multipart.FileHeader, uint64, string) (string, error) {
 	panic("unexpected SaveFile")
 }
+
 func (f *stagingFileService) SaveBytes(context.Context, []byte, uint64, string, bool) (string, error) {
 	panic("unexpected SaveBytes")
 }
+
 func (f *stagingFileService) GetFile(_ context.Context, filePath string) (io.ReadCloser, error) {
 	if f.getCalls == nil {
 		f.getCalls = make(map[string]int)
@@ -36,6 +38,7 @@ func (f *stagingFileService) GetFile(_ context.Context, filePath string) (io.Rea
 	f.getCalls[filePath]++
 	return io.NopCloser(bytes.NewReader(f.files[filePath])), nil
 }
+
 func (f *stagingFileService) GetFileURL(context.Context, string) (string, error) {
 	panic("unexpected GetFileURL")
 }
@@ -77,20 +80,32 @@ func (m *stagingSandboxManager) SessionFileStore() sandbox.SessionFileStore {
 func (m *stagingSandboxManager) EnsureSessionDir(context.Context, string, string) error {
 	return nil
 }
+
 func (m *stagingSandboxManager) StatSessionFile(context.Context, string, string) (*sandbox.RemoteStatEntry, error) {
 	panic("unexpected StatSessionFile")
 }
+
 func (m *stagingSandboxManager) ReadSessionFile(context.Context, string, string) ([]byte, error) {
 	panic("unexpected ReadSessionFile")
 }
+
 func (m *stagingSandboxManager) ListSessionFiles(context.Context, string, string) ([]sandbox.RemoteDirEntry, error) {
 	entries := make([]sandbox.RemoteDirEntry, 0, len(m.files))
 	for filePath, content := range m.files {
-		entries = append(entries, sandbox.RemoteDirEntry{Path: filePath, Size: int64(len(content)), Type: sandbox.RemoteEntryFile})
+		entries = append(
+			entries,
+			sandbox.RemoteDirEntry{Path: filePath, Size: int64(len(content)), Type: sandbox.RemoteEntryFile},
+		)
 	}
 	return entries, nil
 }
-func (m *stagingSandboxManager) WriteSessionInputFile(_ context.Context, _ string, filePath string, content []byte) error {
+
+func (m *stagingSandboxManager) WriteSessionInputFile(
+	_ context.Context,
+	_ string,
+	filePath string,
+	content []byte,
+) error {
 	if m.files == nil {
 		m.files = make(map[string][]byte)
 	}
@@ -98,10 +113,20 @@ func (m *stagingSandboxManager) WriteSessionInputFile(_ context.Context, _ strin
 	m.writes = append(m.writes, filePath)
 	return nil
 }
-func (m *stagingSandboxManager) WriteSessionWorkspaceFile(ctx context.Context, sessionID, filePath string, content []byte) error {
+
+func (m *stagingSandboxManager) WriteSessionWorkspaceFile(
+	ctx context.Context,
+	sessionID, filePath string,
+	content []byte,
+) error {
 	return m.WriteSessionInputFile(ctx, sessionID, filePath, content)
 }
-func (m *stagingSandboxManager) WriteSessionWorkspaceFiles(ctx context.Context, sessionID string, files []sandbox.SessionWorkspaceFile) error {
+
+func (m *stagingSandboxManager) WriteSessionWorkspaceFiles(
+	ctx context.Context,
+	sessionID string,
+	files []sandbox.SessionWorkspaceFile,
+) error {
 	for _, file := range files {
 		if err := m.WriteSessionWorkspaceFile(ctx, sessionID, file.Path, file.Content); err != nil {
 			return err
@@ -109,6 +134,7 @@ func (m *stagingSandboxManager) WriteSessionWorkspaceFiles(ctx context.Context, 
 	}
 	return nil
 }
+
 func (m *stagingSandboxManager) RemoveSessionInputPath(_ context.Context, _ string, targetPath string) error {
 	for filePath := range m.files {
 		if filePath == targetPath || strings.HasPrefix(filePath, targetPath+"/") {

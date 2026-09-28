@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: per-config sandbox inventory.
 //
 // Identity changes (provider / endpoint / API key) and config deletion both

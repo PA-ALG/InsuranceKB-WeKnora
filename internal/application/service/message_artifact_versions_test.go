@@ -22,7 +22,11 @@ func (r *versionMessageRepo) GetSessionArtifacts(context.Context, string) (types
 }
 
 func TestHistoricalVersionClarificationAcrossPagination(t *testing.T) {
-	old := types.MessageArtifact{URL: "resource://dHZ_fFslfs0GgJGaJZGjGA", FileName: "deck.pptx", SourcePath: "/workspace/output/deck.pptx"}
+	old := types.MessageArtifact{
+		URL:        "resource://dHZ_fFslfs0GgJGaJZGjGA",
+		FileName:   "deck.pptx",
+		SourcePath: "/workspace/output/deck.pptx",
+	}
 	next := old
 	next.URL = "resource://4N1nAo-FZZoDEExDQz2yoA"
 	repo := &versionMessageRepo{artifacts: []types.MessageArtifact{old, next}}
@@ -34,7 +38,11 @@ func TestHistoricalVersionClarificationAcrossPagination(t *testing.T) {
 	require.Equal(t, body, message.Content, "read repair must not mutate stored history")
 	require.Equal(t, 1, repo.calls)
 	first := &types.Message{Content: body, Artifacts: types.MessageArtifacts{old}}
-	require.Equal(t, body, s.clarifyReadArtifactVersions(context.Background(), "session", []*types.Message{first})[0].Content)
+	require.Equal(
+		t,
+		body,
+		s.clarifyReadArtifactVersions(context.Background(), "session", []*types.Message{first})[0].Content,
+	)
 	require.Equal(t, 1, repo.calls, "matching current references need no session-wide lookup")
 }
 

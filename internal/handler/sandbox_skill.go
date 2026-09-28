@@ -424,7 +424,9 @@ func (h *SandboxSkillHandler) Reinstall(c *gin.Context) {
 
 // Stop godoc
 // @Summary      Stop a skill install
-// @Description  Abort an in-flight install so the operator can retry or uninstall. After a process restart the row may still say installing with no live process; this rewrites it immediately instead of waiting for the stuck-run reaper. Removal is not stopped.
+// @Description Abort an in-flight install so the operator can retry or uninstall. After a process restart the row
+// @Description may still say installing with no live process; this rewrites it immediately instead of waiting for
+// @Description the stuck-run reaper. Removal is not stopped.
 // @Tags         SandboxConfig
 // @Produce      json
 // @Param        id       path      string  true  "Sandbox config ID"
@@ -476,7 +478,9 @@ type skillPatchRequest struct {
 
 // Patch godoc
 // @Summary      Update an installed skill
-// @Description  Show or hide an installed skill and set the workspace-wide values of the environment variables it declared. Either field may be sent, or both. The files stay in the image either way; removal is a separate flow.
+// @Description Show or hide an installed skill and set the workspace-wide values of the environment variables it
+// @Description declared. Either field may be sent, or both. The files stay in the image either way; removal is a
+// @Description separate flow.
 // @Tags         SandboxConfig
 // @Accept       json
 // @Produce      json

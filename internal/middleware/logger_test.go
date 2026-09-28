@@ -69,7 +69,8 @@ func TestSanitizeBody(t *testing.T) {
 		},
 		{
 			name: "OAuth authorization response fields",
-			in:   `{"authorization_url":"https://idp.example/authorize?state=secret","authorization_attempt":"secret-state"}`,
+			in: "{\"authorization_url\":\"https://idp.example/authorize?state=secret\"" +
+				",\"authorization_attempt\":\"secret-state\"}",
 			want: `{"authorization_url":"***","authorization_attempt":"***"}`,
 		},
 	}
@@ -93,7 +94,10 @@ func TestSanitizeQuery(t *testing.T) {
 }
 
 func TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog(t *testing.T) {
-	const body = `{"success":true,"data":{"ok":true,"elapsed_ms":12,"request":{"input":"private prompt"},"raw_response":{"content":"private model output","reasoning_content":"private reasoning"},"error":"private provider error"}}`
+	const body = "{\"success\":true,\"data\":{\"ok\":true,\"elapsed_ms\":12" +
+		",\"request\":{\"input\":\"private prompt\"},\"raw_response\":{\"content\":\"private" +
+		" model output\",\"reasoning_content\":\"private reasoning\"},\"error\":\"private" +
+		" provider error\"}}"
 
 	got := sanitizeResponseBodyForLog(
 		"/api/v1/models/model-1/debug?trace=1",
@@ -123,7 +127,6 @@ func TestR3_3OrdinaryResponseKeepsExistingFieldSanitization(t *testing.T) {
 	const want = `{"api_key":"***","content":"ordinary response"}`
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
-
 	}
 }
 

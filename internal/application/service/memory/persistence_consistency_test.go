@@ -19,9 +19,29 @@ func TestMemoryConsistencyRealMessagePaging(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&types.Message{}, &types.MessageArtifactRecord{}))
 	at := time.Now().UTC().Truncate(time.Second)
 	for i := 0; i < 85; i++ {
-		require.NoError(t, db.Exec("INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)", fmt.Sprintf("m%03d", i), "s", "user", "hello", at).Error)
+		require.NoError(
+			t,
+			db.Exec(
+				"INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+				fmt.Sprintf("m%03d", i),
+				"s",
+				"user",
+				"hello",
+				at,
+			).Error,
+		)
 	}
-	require.NoError(t, db.Exec("INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)", "other", "unrelated", "user", "private", at).Error)
+	require.NoError(
+		t,
+		db.Exec(
+			"INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+			"other",
+			"unrelated",
+			"user",
+			"private",
+			at,
+		).Error,
+	)
 	require.NoError(t, db.Create(&types.Message{
 		ID: "deleted", SessionID: "s", Role: "user", CreatedAt: at, DeletedAt: gorm.DeletedAt{Time: at, Valid: true},
 	}).Error)
@@ -64,7 +84,7 @@ func TestMemoryConsistencyLeaseRecoveryRetainsProgress(t *testing.T) {
 	s, db, tr := newMemoryHarness(t)
 	at := time.Now()
 	ctx := enabledCtx(t, tr, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	_, err := s.repo.EnsureSubject(ctx, scope)
 	require.NoError(t, err)
 	_, _, err = s.repo.EnqueuePendingSession(ctx, scope, "s", time.Minute)
@@ -89,7 +109,7 @@ func TestMemoryConsistencyLeaseRecoveryRetainsProgress(t *testing.T) {
 func TestMemoryConsistencyRedeliveryWaitsForCrashedWorkerLease(t *testing.T) {
 	s, tr, messages, models, queue := newExtractionHarness(t)
 	ctx := enabledCtx(t, tr, 1, "alice")
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	models.response = `{"memories":[]}`
 	messages.set("s", []*types.Message{userMessage("s", "must-survive-restart", time.Now().Add(-time.Hour))})
 	s.ScheduleExtraction(ctx, "s", "m", "model")
@@ -155,7 +175,8 @@ func testMemoryConsistencyMigration(t *testing.T, db *gorm.DB, dialect string) {
 		{"newer", "database", "active", ""},
 	} {
 		require.NoError(t, db.Exec("INSERT INTO memory_items "+
-			"(id, tenant_id, subject_id, normalized_key, status, superseded_by, valid_from, kind, content) "+
+			"(id, tenant_id, subject_id, normalized_key, status, superseded_by,"+
+			" valid_from, kind, content) "+
 			"VALUES (?, 1, 'alice', ?, ?, ?, ?, 'fact', 'legacy fact')",
 			row.id, row.key, row.status, row.by, time.Now()).Error)
 	}
@@ -171,7 +192,10 @@ func testMemoryConsistencyMigration(t *testing.T, db *gorm.DB, dialect string) {
 	require.Equal(t, "old", proposal.ReplacesID)
 	require.Equal(t, types.MemoryStatusSuperseded, untouched.Status, "do not override a newer active fact")
 	var active int64
-	require.NoError(t, db.Model(&types.MemoryItem{}).Where("normalized_key = 'database' AND status = 'active'").Count(&active).Error)
+	require.NoError(
+		t,
+		db.Model(&types.MemoryItem{}).Where("normalized_key = 'database' AND status = 'active'").Count(&active).Error,
+	)
 	require.Equal(t, int64(1), active)
 	execMemoryMigration(t, db, "../../../../migrations/"+migration+".down.sql")
 	require.False(t, db.Migrator().HasTable(&types.MemoryExtractionSession{}))

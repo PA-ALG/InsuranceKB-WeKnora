@@ -131,6 +131,7 @@ const (
 	AuditActionSystemUserCreated AuditAction = "system.user_created"
 	// AuditActionSystemAPIKeyCreated records system API key creation.
 	AuditActionSystemAPIKeyCreated AuditAction = "system.api_key_created"
+	// AuditActionSystemAPIKeyRevoked identifies revocation of a system API key.
 	AuditActionSystemAPIKeyRevoked AuditAction = "system.api_key_revoked"
 
 	// Runtime queue mutations are privileged SystemAdmin actions. Retrying an

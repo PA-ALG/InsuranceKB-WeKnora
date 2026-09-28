@@ -55,7 +55,7 @@ func (p *PluginMemoryAffinity) ActivationEvents() []types.EventType {
 // OnEvent applies the per-person document boost after reranking.
 func (p *PluginMemoryAffinity) OnEvent(
 	ctx context.Context,
-	eventType types.EventType,
+	_ types.EventType,
 	chatManage *types.ChatManage,
 	next func() *PluginError,
 ) *PluginError {

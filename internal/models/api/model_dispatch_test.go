@@ -19,7 +19,10 @@ type dispatchRecorder struct {
 	reserveErr, markErr, recordErr error
 }
 
-func (r *dispatchRecorder) ReserveModelDispatch(_ context.Context, s types.ModelDispatchSpec) (types.ModelDispatchReservation, error) {
+func (r *dispatchRecorder) ReserveModelDispatch(
+	_ context.Context,
+	s types.ModelDispatchSpec,
+) (types.ModelDispatchReservation, error) {
 	r.specs = append(r.specs, s)
 	return r, r.reserveErr
 }
@@ -41,12 +44,24 @@ func (d *dispatchTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if d.err != nil {
 		return nil, d.err
 	}
-	return &http.Response{StatusCode: d.status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`)), Request: r}, nil
+	return &http.Response{
+		StatusCode: d.status,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(`{}`)),
+		Request:    r,
+	}, nil
 }
 
 func TestUPGDispatchJournalSurvivesProtocolUpgrade(t *testing.T) {
 	t.Setenv("SSRF_WHITELIST", "127.0.0.1")
-	for _, mode := range []string{"success", "http_error", "transport_error", "reserve_error", "mark_error", "record_error"} {
+	for _, mode := range []string{
+		"success",
+		"http_error",
+		"transport_error",
+		"reserve_error",
+		"mark_error",
+		"record_error",
+	} {
 		t.Run(mode, func(t *testing.T) {
 			rec := &dispatchRecorder{}
 			tr := &dispatchTransport{status: 200}
@@ -63,8 +78,18 @@ func TestUPGDispatchJournalSurvivesProtocolUpgrade(t *testing.T) {
 			case "record_error":
 				rec.recordErr = failure
 			}
-			ep := Endpoint{BaseURL: "https://127.0.0.1", DispatchOperation: "embedding", Model: "remote", ModelID: "row", Client: &http.Client{Transport: tr}}
-			ctx := types.WithLLMCallMetadata(types.WithModelDispatchRecorder(context.Background(), rec), "document_embedding", "")
+			ep := Endpoint{
+				BaseURL:           "https://127.0.0.1",
+				DispatchOperation: "embedding",
+				Model:             "remote",
+				ModelID:           "row",
+				Client:            &http.Client{Transport: tr},
+			}
+			ctx := types.WithLLMCallMetadata(
+				types.WithModelDispatchRecorder(context.Background(), rec),
+				"document_embedding",
+				"",
+			)
 			err := ep.PostJSON(ctx, ep.Resolve("/embeddings"), map[string]any{"input": []string{"private source"}}, nil)
 			want := 1
 			if mode == "reserve_error" || mode == "mark_error" {
@@ -76,14 +101,18 @@ func TestUPGDispatchJournalSurvivesProtocolUpgrade(t *testing.T) {
 			if (mode == "success") != (err == nil) {
 				t.Fatalf("unexpected result: %v", err)
 			}
-			if strings.HasSuffix(mode, "_error") && (mode == "reserve_error" || mode == "mark_error" || mode == "record_error") && !errors.Is(err, types.ErrModelDispatchJournalUnavailable) {
+			if strings.HasSuffix(mode, "_error") &&
+				(mode == "reserve_error" || mode == "mark_error" || mode == "record_error") &&
+				!errors.Is(err, types.ErrModelDispatchJournalUnavailable) {
 				t.Fatalf("journal failure lost: %v", err)
 			}
 			if want == 0 {
 				return
 			}
 			spec := rec.specs[0]
-			if spec.ModelID != "row" || spec.ModelName != "remote" || spec.Operation != "embedding" || spec.Purpose != "document_embedding" || spec.RequestSHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(tr.bodies[0]))) {
+			if spec.ModelID != "row" || spec.ModelName != "remote" || spec.Operation != "embedding" ||
+				spec.Purpose != "document_embedding" ||
+				spec.RequestSHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(tr.bodies[0]))) {
 				t.Fatalf("wrong safe identity: %#v", spec)
 			}
 			outcome := "HTTP_RESPONSE"
@@ -105,12 +134,27 @@ func TestUPGDisabledRetryDoesNotReplayUnknownSend(t *testing.T) {
 		t.Run(fmt.Sprint(disabled), func(t *testing.T) {
 			rec := &dispatchRecorder{}
 			tr := &dispatchTransport{err: errors.New("connection reset")}
-			ep := Endpoint{BaseURL: "https://127.0.0.1", DispatchOperation: "embedding", Client: &http.Client{Transport: tr}}
-			ctx := types.WithLLMCallMetadata(types.WithModelDispatchRecorder(context.Background(), rec), "document_embedding", "")
+			ep := Endpoint{
+				BaseURL:           "https://127.0.0.1",
+				DispatchOperation: "embedding",
+				Client:            &http.Client{Transport: tr},
+			}
+			ctx := types.WithLLMCallMetadata(
+				types.WithModelDispatchRecorder(context.Background(), rec),
+				"document_embedding",
+				"",
+			)
 			if disabled {
 				ctx = types.WithModelAutomaticRetryDisabled(ctx)
 			}
-			err := ep.PostJSONWithRetry(ctx, ep.Resolve("/embeddings"), map[string]string{"input": "source"}, nil, RetryPolicy{MaxRetries: 1}, "embedding")
+			err := ep.PostJSONWithRetry(
+				ctx,
+				ep.Resolve("/embeddings"),
+				map[string]string{"input": "source"},
+				nil,
+				RetryPolicy{MaxRetries: 1},
+				"embedding",
+			)
 			want := 2
 			if disabled {
 				want = 1
@@ -140,7 +184,12 @@ func (d *redirectDispatchTransport) RoundTrip(r *http.Request) (*http.Response, 
 		status = d.status
 		header.Set("Location", "https://127.0.0.1/redirected")
 	}
-	return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(`{}`)), Request: r}, nil
+	return &http.Response{
+		StatusCode: status,
+		Header:     header,
+		Body:       io.NopCloser(strings.NewReader(`{}`)),
+		Request:    r,
+	}, nil
 }
 
 func TestUPGRedirectCannotReplayGovernedModelRequest(t *testing.T) {

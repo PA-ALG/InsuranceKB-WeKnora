@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: provider-neutral remote sandbox contract.
 //
 // This file introduces the RemoteSandboxClient interface and the neutral
@@ -270,22 +271,22 @@ type RemoteSandboxSummary struct {
 type RemoteSandboxState string
 
 const (
-	// RemoteStateRunning: sandbox is up and reachable.
+	// RemoteStateRunning sandbox is up and reachable.
 	RemoteStateRunning RemoteSandboxState = "running"
 
-	// RemoteStatePaused: sandbox is paused; resumable.
+	// RemoteStatePaused sandbox is paused; resumable.
 	RemoteStatePaused RemoteSandboxState = "paused"
 
-	// RemoteStateTransitioning: sandbox is in a transient lifecycle state
+	// RemoteStateTransitioning sandbox is in a transient lifecycle state
 	// (pausing, resuming, provisioning, ...). Treated as "still owned" by
 	// SessionBoundManager but not immediately usable.
 	RemoteStateTransitioning RemoteSandboxState = "transitioning"
 
-	// RemoteStateTerminal: sandbox is gone. Bindings referencing this state
+	// RemoteStateTerminal sandbox is gone. Bindings referencing this state
 	// can be replaced.
 	RemoteStateTerminal RemoteSandboxState = "terminal"
 
-	// RemoteStateUnknown: adapter could not classify the raw state. Treated
+	// RemoteStateUnknown adapter could not classify the raw state. Treated
 	// as transient (do not replace the binding).
 	RemoteStateUnknown RemoteSandboxState = "unknown"
 )
@@ -379,8 +380,10 @@ type RemoteDirEntry struct {
 type RemoteDirEntryType string
 
 const (
+	// RemoteEntryFile identifies a regular file entry.
 	RemoteEntryFile RemoteDirEntryType = "file"
-	RemoteEntryDir  RemoteDirEntryType = "dir"
+	// RemoteEntryDir identifies a directory entry.
+	RemoteEntryDir RemoteDirEntryType = "dir"
 	// RemoteEntryOther covers symlinks, sockets, devices, etc. WeKnora
 	// artifact code treats these as opaque and skips them.
 	RemoteEntryOther RemoteDirEntryType = "other"

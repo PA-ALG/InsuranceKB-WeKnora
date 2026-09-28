@@ -21,7 +21,10 @@ type stubOIDCStartUserService struct {
 	getOIDCAuthorizationURL func(ctx context.Context, redirectURI string) (*types.OIDCAuthURLResponse, error)
 }
 
-func (s *stubOIDCStartUserService) GetOIDCAuthorizationURL(ctx context.Context, redirectURI string) (*types.OIDCAuthURLResponse, error) {
+func (s *stubOIDCStartUserService) GetOIDCAuthorizationURL(
+	ctx context.Context,
+	redirectURI string,
+) (*types.OIDCAuthURLResponse, error) {
 	return s.getOIDCAuthorizationURL(ctx, redirectURI)
 }
 

@@ -182,7 +182,7 @@ func TestStaleTasksAreDemotedRatherThanDeleted(t *testing.T) {
 		Where("id = ?", stored.ID).
 		Updates(map[string]interface{}{"valid_from": old, "last_used_at": nil}).Error)
 
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	items, _, err := svc.repo.ListItems(ctx, scope, types.MemoryStatusActive, 50, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, svc.demoteStaleTasks(ctx, scope, items))
@@ -219,7 +219,7 @@ func TestMemoriesOfDifferentKindsAreNeverMerged(t *testing.T) {
 		"what someone is doing and what is true of their system are different claims")
 }
 
-func scopeFor(t *testing.T, ctx context.Context) interfaces.MemoryScope {
+func scopeFor(ctx context.Context, t *testing.T) interfaces.MemoryScope {
 	t.Helper()
 	scope, err := ResolveScope(ctx)
 	require.NoError(t, err)

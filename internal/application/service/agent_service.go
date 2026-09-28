@@ -270,7 +270,8 @@ func (s *agentService) CreateAgentEngine(
 	// The shell is registered above by registerSandboxShellIfAllowed and
 	// follows SkillsEnabled rather than requiring a ready skill to already
 	// exist. offerSkills only gates the skills manager that feeds the model
-	// the installed-skill list and the read_file / shell_exec environment. A sandbox whose skills are still installing —
+	// the installed-skill list and the read_file / shell_exec environment.
+	// A sandbox whose skills are still installing —
 	// or that simply has none yet — therefore gets a shell without an
 	// empty skills manager or skill tools that cannot succeed.
 	offerSkills := config.SkillsEnabled &&
@@ -800,7 +801,7 @@ func (s *agentService) userEnvResolver(
 	if tenantID == 0 {
 		return nil
 	}
-	return NewUserEnvResolver(
+	return newUserEnvResolver(
 		rows,
 		repository.NewTenantSkillRepository(s.db),
 		sandboxCreateTimeEnvVars(ctx, s.db, tenantID, configID),
@@ -985,7 +986,10 @@ func (s *agentService) registerTools(
 			(target.TenantID != 0 && target.TenantID != kb.TenantID) {
 			return fmt.Errorf("search target tenant does not match current KB owner")
 		}
-		resolvedKnowledgeScopes830G2 = append(resolvedKnowledgeScopes830G2, interfaces.ConceptAgentKnowledgeScope830G2{KnowledgeBaseID: kb.ID, TenantID: kb.TenantID})
+		resolvedKnowledgeScopes830G2 = append(
+			resolvedKnowledgeScopes830G2,
+			interfaces.ConceptAgentKnowledgeScope830G2{KnowledgeBaseID: kb.ID, TenantID: kb.TenantID},
+		)
 		resolvedTargets830G2[kb.ID] = true
 		if kb.IsWikiEnabled() {
 			wikiKBIDs = append(wikiKBIDs, kb.ID)
@@ -1247,7 +1251,13 @@ func (s *agentService) registerTools(
 				config.WebSearchMaxResults,
 				config.WebSearchProviderID,
 			)
-			logger.Infof(ctx, "Registered web_search tool for session: %s, maxResults: %d, providerID: %s", sessionID, config.WebSearchMaxResults, config.WebSearchProviderID)
+			logger.Infof(
+				ctx,
+				"Registered web_search tool for session: %s, maxResults: %d, providerID: %s",
+				sessionID,
+				config.WebSearchMaxResults,
+				config.WebSearchProviderID,
+			)
 
 		case tools.ToolWebFetch:
 			toolToRegister = tools.NewWebFetchTool()
@@ -1257,7 +1267,10 @@ func (s *agentService) registerTools(
 			if len(unmanagedSearchTargets830G2) == 0 {
 				break
 			}
-			toolToRegister = tools.NewDataAnalysisTool(s.knowledgeBaseService, s.knowledgeService, s.tenantService, s.fileService, s.duckdb, sessionID, s.storageResolver).
+			toolToRegister = tools.NewDataAnalysisTool(
+				s.knowledgeBaseService, s.knowledgeService, s.tenantService,
+				s.fileService, s.duckdb, sessionID, s.storageResolver,
+			).
 				WithSearchTargets(unmanagedSearchTargets830G2)
 			logger.Infof(ctx, "Registered data_analysis tool for session: %s", sessionID)
 
@@ -1367,7 +1380,11 @@ func (s *agentService) ValidateConfig(config *types.AgentConfig) error {
 // getKnowledgeBaseInfos retrieves detailed information for knowledge bases.
 // kbTenantMap carries the tenant each KB should be queried under (source tenant
 // for directly shared KBs); a missing entry falls back to the request tenant.
-func (s *agentService) getKnowledgeBaseInfos(ctx context.Context, kbIDs []string, kbTenantMap map[string]uint64) ([]*agent.KnowledgeBaseInfo, error) {
+func (s *agentService) getKnowledgeBaseInfos(
+	ctx context.Context,
+	kbIDs []string,
+	kbTenantMap map[string]uint64,
+) ([]*agent.KnowledgeBaseInfo, error) {
 	if len(kbIDs) == 0 {
 		return []*agent.KnowledgeBaseInfo{}, nil
 	}
@@ -1558,7 +1575,10 @@ func (s *agentService) resolveQuestionOriginInfo(
 	return info
 }
 
-func (s *agentService) getSelectedDocumentInfos(ctx context.Context, knowledgeIDs []string) ([]*agent.SelectedDocumentInfo, error) {
+func (s *agentService) getSelectedDocumentInfos(
+	ctx context.Context,
+	knowledgeIDs []string,
+) ([]*agent.SelectedDocumentInfo, error) {
 	if len(knowledgeIDs) == 0 {
 		return []*agent.SelectedDocumentInfo{}, nil
 	}

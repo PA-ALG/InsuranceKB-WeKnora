@@ -234,7 +234,14 @@ func TestPreviewChunking_ParentChildMatchesIngestion(t *testing.T) {
 			t.Errorf("chunk %d content differs", i)
 		}
 		if int(previewChunk["start"].(float64)) != child.Start || int(previewChunk["end"].(float64)) != child.End {
-			t.Errorf("chunk %d span: got %v-%v want %d-%d", i, previewChunk["start"], previewChunk["end"], child.Start, child.End)
+			t.Errorf(
+				"chunk %d span: got %v-%v want %d-%d",
+				i,
+				previewChunk["start"],
+				previewChunk["end"],
+				child.Start,
+				child.End,
+			)
 		}
 		gotHeader, _ := previewChunk["context_header"].(string)
 		if gotHeader != child.ContextHeader {
@@ -308,12 +315,15 @@ func TestPreviewChunking_LineEndingsMatchUpload(t *testing.T) {
 		Separators:   []string{"\n\n", "\n", "。", "！", "？", ";", "；"},
 		Strategy:     chunker.StrategyHeading,
 	}
-	actual := chunker.Split(chunker.NormalizeLineEndings(uploaded), chunker.NormalizeSplitterConfig(chunker.SplitterConfig{
-		ChunkSize:    payload.ChunkSize,
-		ChunkOverlap: payload.ChunkOverlap,
-		Separators:   payload.Separators,
-		Strategy:     payload.Strategy,
-	}))
+	actual := chunker.Split(
+		chunker.NormalizeLineEndings(uploaded),
+		chunker.NormalizeSplitterConfig(chunker.SplitterConfig{
+			ChunkSize:    payload.ChunkSize,
+			ChunkOverlap: payload.ChunkOverlap,
+			Separators:   payload.Separators,
+			Strategy:     payload.Strategy,
+		}),
+	)
 	for name, text := range map[string]string{
 		"uploaded CRLF": uploaded,
 		"pasted LF":     pasted,
@@ -333,8 +343,16 @@ func TestPreviewChunking_LineEndingsMatchUpload(t *testing.T) {
 				if previewChunk["content"] != chunk.Content {
 					t.Errorf("chunk %d content differs", i)
 				}
-				if int(previewChunk["start"].(float64)) != chunk.Start || int(previewChunk["end"].(float64)) != chunk.End {
-					t.Errorf("chunk %d span: got %v-%v want %d-%d", i, previewChunk["start"], previewChunk["end"], chunk.Start, chunk.End)
+				if int(previewChunk["start"].(float64)) != chunk.Start ||
+					int(previewChunk["end"].(float64)) != chunk.End {
+					t.Errorf(
+						"chunk %d span: got %v-%v want %d-%d",
+						i,
+						previewChunk["start"],
+						previewChunk["end"],
+						chunk.Start,
+						chunk.End,
+					)
 				}
 			}
 		})

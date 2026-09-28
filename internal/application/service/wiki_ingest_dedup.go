@@ -311,7 +311,12 @@ func (s *wikiIngestService) claimWikiIdentitySlug(
 		res, err := s.redisClient.Eval(ctx, wikiIdentityClaimScript, []string{claimKey},
 			proposedSlug, ttlSec, authArg, expectedPrefix).Result()
 		if err != nil {
-			logger.Warnf(ctx, "wiki ingest: identity claim failed for %s: %v (using batch-local claim)", proposedSlug, err)
+			logger.Warnf(
+				ctx,
+				"wiki ingest: identity claim failed for %s: %v (using batch-local claim)",
+				proposedSlug,
+				err,
+			)
 		} else if existing := identityClaimString(res); strings.HasPrefix(existing, expectedPrefix) {
 			claim = existing
 			usedRedis = true
@@ -546,7 +551,13 @@ func (s *wikiIngestService) attachExactIdentityPages(
 	if len(miss) > 0 {
 		pages, err := s.wikiService.FindPagesByNormalizedTitles(ctx, kbID, pageType, miss)
 		if err != nil {
-			logger.Warnf(ctx, "wiki ingest: exact identity lookup failed for %s (%d titles): %v", pageType, len(miss), err)
+			logger.Warnf(
+				ctx,
+				"wiki ingest: exact identity lookup failed for %s (%d titles): %v",
+				pageType,
+				len(miss),
+				err,
+			)
 		} else {
 			byIdentity := make(map[string][]*types.WikiPageLite, len(miss))
 			for _, p := range pages {

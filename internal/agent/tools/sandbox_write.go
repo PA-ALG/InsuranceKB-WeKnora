@@ -94,14 +94,18 @@ type SandboxFileSink interface {
 
 // writeSandboxFileDescription carries one %s, filled with the size guidance
 // derived from the round's completion-token budget.
-const writeSandboxFileDescription = `Create, overwrite, or append a text file inside the session sandbox,
-excluding /workspace/input.
-/workspace/output is collected for download, so it holds finished deliverables only; put drafts, scratch and
-intermediate files in any other directory under /workspace. Send both path and content (path first).
-Use edit_sandbox_file for small changes to an existing file. File content does not pass through shell quoting.
-Large files: first call uses mode=overwrite (default), subsequent calls use mode=append with only the next chunk. Keep calls in order and inspect the reported running byte count. A refused/truncated call wrote nothing; retry that chunk with complete JSON, never duplicate successful chunks.
-%s
-Binary content is not accepted. The result reports the absolute path and total size without echoing content.`
+const writeSandboxFileDescription = "Create, overwrite, or append a text file inside the session sandbox," +
+	"\nexcluding /workspace/input.\n/workspace/output is collected for download" +
+	", so it holds finished deliverables only; put drafts, scratch and" +
+	"\nintermediate files in any other directory under /workspace. Send both" +
+	" path and content (path first).\nUse edit_sandbox_file for small changes" +
+	" to an existing file. File content does not pass through shell quoting." +
+	"\nLarge files: first call uses mode=overwrite (default), subsequent calls" +
+	" use mode=append with only the next chunk. Keep calls in order and" +
+	" inspect the reported running byte count. A refused/truncated call wrote" +
+	" nothing; retry that chunk with complete JSON, never duplicate" +
+	" successful chunks.\n%s\nBinary content is not accepted. The result" +
+	" reports the absolute path and total size without echoing content."
 
 // WriteSandboxFileInput defines the input parameters for write_sandbox_file.
 //
@@ -171,7 +175,8 @@ func writeSandboxDescription(l sandbox.WorkspaceLayout, sizeGuidance string) str
 }
 
 const hostWriteSandboxFileDescription = "Create, overwrite, or append a text file in %s.\n" +
-	"Send both path and content (path first). Use edit_sandbox_file for small changes to an existing file. " +
+	"Send both path and content (path first). Use edit_sandbox_file for small" +
+	" changes to an existing file. " +
 	"File content does not pass through shell quoting.\n" +
 	"Large files: first call uses mode=overwrite (default), " +
 	"subsequent calls use mode=append with only the next chunk. " +
@@ -179,7 +184,8 @@ const hostWriteSandboxFileDescription = "Create, overwrite, or append a text fil
 	"A refused/truncated call wrote nothing; retry that chunk with complete JSON, " +
 	"never duplicate successful chunks.\n" +
 	"%s\n" +
-	"Binary content is not accepted. The result reports the absolute path and total size without echoing content."
+	"Binary content is not accepted. The result reports the absolute path and" +
+	" total size without echoing content."
 
 // writeSizeGuidance states how much content one call should carry and why.
 //
@@ -406,7 +412,8 @@ func (t *WriteSandboxFileTool) readForAppend(
 	stat, err := t.sink.StatSessionFile(ctx, sessionID, filePath)
 	if err != nil || stat == nil {
 		return nil, fmt.Sprintf(
-			"cannot append to %s: it does not exist yet (%v). Write the first chunk with mode=%q, then append the rest",
+			"cannot append to %s: it does not exist yet (%v). Write the first chunk"+
+				" with mode=%q, then append the rest",
 			filePath, err, writeModeOverwrite)
 	}
 	if stat.Type != sandbox.RemoteEntryFile {
@@ -420,6 +427,6 @@ func (t *WriteSandboxFileTool) readForAppend(
 }
 
 // Cleanup releases any resources.
-func (t *WriteSandboxFileTool) Cleanup(ctx context.Context) error {
+func (t *WriteSandboxFileTool) Cleanup(_ context.Context) error {
 	return nil
 }

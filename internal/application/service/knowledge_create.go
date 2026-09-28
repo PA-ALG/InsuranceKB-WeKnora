@@ -22,8 +22,15 @@ import (
 )
 
 // CreateKnowledgeFromFile creates a knowledge entry from an uploaded file
-func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
-	kbID string, file *multipart.FileHeader, metadata map[string]string, enableMultimodel *bool, customFileName string, tagIDs []string, channel string,
+func (s *knowledgeService) CreateKnowledgeFromFile(
+	ctx context.Context,
+	kbID string,
+	file *multipart.FileHeader,
+	metadata map[string]string,
+	enableMultimodel *bool,
+	customFileName string,
+	tagIDs []string,
+	channel string,
 	processOverrides *types.KnowledgeProcessOverrides,
 ) (*types.Knowledge, error) {
 	logger.Info(ctx, "Start creating knowledge from file")
@@ -207,7 +214,12 @@ func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
 	if err := s.repo.CreateKnowledge(ctx, knowledge); err != nil {
 		logger.Errorf(ctx, "Failed to create knowledge record, ID: %s, error: %v", knowledge.ID, err)
 		if deleteErr := fileSvc.DeleteFile(ctx, filePath); deleteErr != nil {
-			logger.Errorf(ctx, "Failed to delete saved file after knowledge creation failed, path: %s, error: %v", filePath, deleteErr)
+			logger.Errorf(
+				ctx,
+				"Failed to delete saved file after knowledge creation failed, path: %s, error: %v",
+				filePath,
+				deleteErr,
+			)
 		}
 		return nil, err
 	}
@@ -292,7 +304,16 @@ func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
 		knowledge.ID,
 	)
 
-	enqueueDataTableSummaryIfNeeded(ctx, s.task, tenantID, knowledge.ID, safeFilename, getFileType(safeFilename), kb.SummaryModelID, kb.EmbeddingModelID)
+	enqueueDataTableSummaryIfNeeded(
+		ctx,
+		s.task,
+		tenantID,
+		knowledge.ID,
+		safeFilename,
+		getFileType(safeFilename),
+		kb.SummaryModelID,
+		kb.EmbeddingModelID,
+	)
 
 	logger.Infof(ctx, "Knowledge from file created successfully, ID: %s", knowledge.ID)
 	return knowledge, nil
@@ -314,8 +335,16 @@ func isFileURL(rawURL, fileName, fileType string) bool {
 	return fileName != "" || fileType != ""
 }
 
-func (s *knowledgeService) CreateKnowledgeFromURL(ctx context.Context,
-	kbID string, rawURL string, fileName string, fileType string, enableMultimodel *bool, title string, tagIDs []string, channel string,
+func (s *knowledgeService) CreateKnowledgeFromURL(
+	ctx context.Context,
+	kbID string,
+	rawURL string,
+	fileName string,
+	fileType string,
+	enableMultimodel *bool,
+	title string,
+	tagIDs []string,
+	channel string,
 	processOverrides *types.KnowledgeProcessOverrides,
 ) (*types.Knowledge, error) {
 	logger.Info(ctx, "Start creating knowledge from URL")
@@ -722,9 +751,24 @@ func (s *knowledgeService) createKnowledgeFromFileURL(
 			"title": knowledge.Title, "source_type": "file_url", "file_type": knowledge.FileType,
 			"processing_status": "pending", "task_id": info.ID, "trigger": kbActivityTrigger(ctx),
 		})
-	logger.Infof(ctx, "Enqueued file URL process task: id=%s queue=%s knowledge_id=%s", info.ID, info.Queue, knowledge.ID)
+	logger.Infof(
+		ctx,
+		"Enqueued file URL process task: id=%s queue=%s knowledge_id=%s",
+		info.ID,
+		info.Queue,
+		knowledge.ID,
+	)
 
-	enqueueDataTableSummaryIfNeeded(ctx, s.task, tenantID, knowledge.ID, fileName, fileType, kb.SummaryModelID, kb.EmbeddingModelID)
+	enqueueDataTableSummaryIfNeeded(
+		ctx,
+		s.task,
+		tenantID,
+		knowledge.ID,
+		fileName,
+		fileType,
+		kb.SummaryModelID,
+		kb.EmbeddingModelID,
+	)
 
 	logger.Infof(ctx, "Knowledge from file URL created successfully, ID: %s", knowledge.ID)
 	return knowledge, nil
@@ -1001,7 +1045,13 @@ func (s *knowledgeService) createKnowledgeFromPassageInternal(ctx context.Contex
 				"title": knowledge.Title, "source_type": "passage", "processing_status": "pending",
 				"task_id": info.ID, "trigger": kbActivityTrigger(ctx),
 			})
-		logger.Infof(ctx, "Enqueued passage process task: id=%s queue=%s knowledge_id=%s", info.ID, info.Queue, knowledge.ID)
+		logger.Infof(
+			ctx,
+			"Enqueued passage process task: id=%s queue=%s knowledge_id=%s",
+			info.ID,
+			info.Queue,
+			knowledge.ID,
+		)
 		logger.Infof(ctx, "Knowledge from passage created successfully, ID: %s", knowledge.ID)
 	}
 	return knowledge, nil
@@ -1327,7 +1377,12 @@ func (s *knowledgeService) triggerManualProcessingAtAttempt(ctx context.Context,
 			clean = afterDataURI
 			resolvedImages = append(resolvedImages, fromDataURI...)
 		}
-		updatedContent, storedImages, resolveErr := s.imageResolver.ResolveRemoteImages(ctx, clean, fileSvc, knowledge.TenantID)
+		updatedContent, storedImages, resolveErr := s.imageResolver.ResolveRemoteImages(
+			ctx,
+			clean,
+			fileSvc,
+			knowledge.TenantID,
+		)
 		if resolveErr != nil {
 			logger.Warnf(ctx, "Remote image resolution partially failed: %v", resolveErr)
 		}

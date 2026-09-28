@@ -18,10 +18,18 @@ func TestCheckKnowledgeExists_FileHashIsScopedByFileType(t *testing.T) {
 	kbID := uuid.NewString()
 	const fileHash = "same-content-hash"
 
-	require.NoError(t, db.Exec(`
-		INSERT INTO knowledges (id, tenant_id, knowledge_base_id, type, title, file_name, file_type, file_hash, parse_status)
-		VALUES (?, ?, ?, 'file', 'document.md', 'document.md', 'md', ?, 'completed')
-	`, uuid.NewString(), tenantID, kbID, fileHash).Error)
+	require.NoError(
+		t,
+		db.Exec(
+			"\n\t\tINSERT INTO knowledges (id, tenant_id, knowledge_base_id, type, title"+
+				", file_name, file_type, file_hash, parse_status)\n\t\tVALUES (?, ?, ?,"+
+				" 'file', 'document.md', 'document.md', 'md', ?, 'completed')\n\t",
+			uuid.NewString(),
+			tenantID,
+			kbID,
+			fileHash,
+		).Error,
+	)
 
 	t.Run("same content with another file type is allowed", func(t *testing.T) {
 		exists, knowledge, err := repo.CheckKnowledgeExists(ctx, tenantID, kbID, &types.KnowledgeCheckParams{
@@ -66,12 +74,10 @@ func TestCheckKnowledgeExists_FileSourceIdentity(t *testing.T) {
 	db := setupKnowledgeTestDB(t)
 	repo := NewKnowledgeRepository(db)
 	const metadata = `{"datasource_id":"ds-1","external_id":"gitlab:1:main:README.md"}`
-	require.NoError(t, db.Exec(`
-		INSERT INTO knowledges (
-			id, tenant_id, knowledge_base_id, type, file_name, file_type, file_size, file_hash, parse_status, metadata
-		)
-		VALUES (?, 1, 'kb-1', 'file', 'README.md', 'md', 10, 'same-hash', 'completed', ?)
-	`, uuid.NewString(), metadata).Error)
+	require.NoError(t, db.Exec("\n\t\tINSERT INTO knowledges (\n\t\t\tid, tenant_id, knowledge_base_id, type,"+
+		" file_name, file_type, file_size, file_hash, parse_status, metadata\n\t\t)"+
+		"\n\t\tVALUES (?, 1, 'kb-1', 'file', 'README.md', 'md', 10, 'same-hash',"+
+		" 'completed', ?)\n\t", uuid.NewString(), metadata).Error)
 	for _, tc := range []struct {
 		name, source, externalID, hash, fileType string
 		want                                     bool
@@ -115,27 +121,45 @@ func TestCheckKnowledgeExists_ParseStatusMatrix(t *testing.T) {
 		{"processing", true},
 		{"completed", true},
 	} {
-		t.Run("parse_status="+tc.parseStatus, func(t *testing.T) {
-			db := setupKnowledgeTestDB(t)
-			repo := NewKnowledgeRepository(db)
-			require.NoError(t, db.Exec(`
-				INSERT INTO knowledges (id, tenant_id, knowledge_base_id, type, file_name, file_type, file_size, file_hash, parse_status)
-				VALUES (?, 1, 'kb-1', 'file', 'doc.md', 'md', 10, 'hash-1', ?)
-			`, uuid.NewString(), tc.parseStatus).Error)
+		t.Run(
 
-			exists, _, err := repo.CheckKnowledgeExists(context.Background(), 1, "kb-1", &types.KnowledgeCheckParams{
-				Type: "file", FileHash: "hash-1", FileType: "md",
-			})
-			require.NoError(t, err)
-			require.Equal(t, tc.want, exists)
+			"parse_status="+tc.parseStatus,
 
-			// The filename/size fallback path shares the same base filter.
-			exists, _, err = repo.CheckKnowledgeExists(context.Background(), 1, "kb-1", &types.KnowledgeCheckParams{
-				Type: "file", FileName: "doc.md", FileSize: 10,
-			})
-			require.NoError(t, err)
-			require.Equal(t, tc.want, exists)
-		})
+			func(t *testing.T) {
+				db := setupKnowledgeTestDB(t)
+				repo := NewKnowledgeRepository(db)
+				require.NoError(
+					t,
+					db.Exec(
+						"\n\t\t\t\tINSERT INTO knowledges (id, tenant_id, knowledge_base_id, type,"+
+							" file_name, file_type, file_size, file_hash, parse_status)\n\t\t\t\tVALUES (?"+
+							", 1, 'kb-1', 'file', 'doc.md', 'md', 10, 'hash-1', ?)\n\t\t\t",
+						uuid.NewString(),
+						tc.parseStatus,
+					).Error,
+				)
+
+				exists, _, err := repo.CheckKnowledgeExists(
+					context.Background(),
+					1,
+					"kb-1",
+					&types.KnowledgeCheckParams{
+						Type:     "file",
+						FileHash: "hash-1",
+						FileType: "md",
+					},
+				)
+				require.NoError(t, err)
+				require.Equal(t, tc.want, exists)
+
+				// The filename/size fallback path shares the same base filter.
+				exists, _, err = repo.CheckKnowledgeExists(context.Background(), 1, "kb-1", &types.KnowledgeCheckParams{
+					Type: "file", FileName: "doc.md", FileSize: 10,
+				})
+				require.NoError(t, err)
+				require.Equal(t, tc.want, exists)
+			},
+		)
 	}
 }
 

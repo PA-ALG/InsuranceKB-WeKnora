@@ -358,7 +358,9 @@ func (h *InitializationHandler) UpdateKBConfig(c *gin.Context) {
 		kb.ChunkingConfig.Languages = *req.DocumentSplitting.Languages
 	}
 	if req.DocumentSplitting.TableMetadataInstructions != nil {
-		kb.ChunkingConfig.TableMetadataInstructions = strings.TrimSpace(*req.DocumentSplitting.TableMetadataInstructions)
+		kb.ChunkingConfig.TableMetadataInstructions = strings.TrimSpace(
+			*req.DocumentSplitting.TableMetadataInstructions,
+		)
 	}
 
 	// 更新多模态配置
@@ -515,7 +517,8 @@ func (h *InitializationHandler) applyKBStorageBinding(
 				kbID, &types.Pagination{Page: 1, PageSize: 1}, types.KnowledgeListFilter{})
 			if listErr == nil && knowledgeList != nil && knowledgeList.Total > 0 {
 				return errors.NewBadRequestError(
-					"Storage backend cannot be changed while the knowledge base contains files; migrate storage first")
+					"Storage backend cannot be changed while the knowledge base contains" +
+						" files; migrate storage first")
 			}
 		}
 		kb.StorageBackendID = &backend.ID
@@ -614,7 +617,10 @@ func (h *InitializationHandler) InitializeByKB(c *gin.Context) {
 	})
 }
 
-func (h *InitializationHandler) bindInitializationRequest(ctx context.Context, c *gin.Context) (*InitializationRequest, error) {
+func (h *InitializationHandler) bindInitializationRequest(
+	ctx context.Context,
+	c *gin.Context,
+) (*InitializationRequest, error) {
 	var req InitializationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.Error(ctx, "Failed to parse initialization request", err)
@@ -623,8 +629,11 @@ func (h *InitializationHandler) bindInitializationRequest(ctx context.Context, c
 	return &req, nil
 }
 
-func (h *InitializationHandler) getKnowledgeBaseForInitialization(ctx context.Context, kbIdStr string) (*types.KnowledgeBase, error) {
-	kb, err := h.kbService.GetKnowledgeBaseByID(ctx, kbIdStr)
+func (h *InitializationHandler) getKnowledgeBaseForInitialization(
+	ctx context.Context,
+	kbIDStr string,
+) (*types.KnowledgeBase, error) {
+	kb, err := h.kbService.GetKnowledgeBaseByID(ctx, kbIDStr)
 	if err != nil {
 		// The repo's not-found sentinel must surface as 404, not 500.
 		// Without this, every probe of a stale kb id from the
@@ -633,7 +642,7 @@ func (h *InitializationHandler) getKnowledgeBaseForInitialization(ctx context.Co
 		if stderrors.Is(err, repository.ErrKnowledgeBaseNotFound) {
 			return nil, errors.NewNotFoundError("知识库不存在")
 		}
-		logger.ErrorWithFields(ctx, err, map[string]interface{}{"kbId": utils.SanitizeForLog(kbIdStr)})
+		logger.ErrorWithFields(ctx, err, map[string]interface{}{"kbId": utils.SanitizeForLog(kbIDStr)})
 		return nil, errors.NewInternalServerError("获取知识库信息失败: " + err.Error())
 	}
 	if kb == nil {
@@ -2063,7 +2072,18 @@ func classifyConnectionError(errMsg string) string {
 		return "API端点不存在，请检查Base URL"
 	case strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "context deadline exceeded"):
 		return "连接超时，请检查网络连接"
-	case strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "dial tcp"):
+	case strings.Contains(
+		errMsg,
+		"connection refused",
+	) ||
+		strings.Contains(
+			errMsg,
+			"no such host",
+		) ||
+		strings.Contains(
+			errMsg,
+			"dial tcp",
+		):
 		return "无法连接到服务器，请检查Base URL"
 	default:
 		return "连接失败"
@@ -2257,13 +2277,35 @@ func (h *InitializationHandler) CheckASRModel(c *gin.Context) {
 		// Always include the raw upstream error after the hint — see
 		// classifyConnectionError comment for rationale.
 		switch {
-		case strings.Contains(errMsg, "401") || strings.Contains(errMsg, "Unauthorized") || strings.Contains(errMsg, "authentication"):
+		case strings.Contains(
+			errMsg,
+			"401",
+		) ||
+			strings.Contains(
+				errMsg,
+				"Unauthorized",
+			) ||
+			strings.Contains(
+				errMsg,
+				"authentication",
+			):
 			available = false
 			message = fmt.Sprintf("认证失败，请检查API Key：%s", errMsg)
 		case strings.Contains(errMsg, "404") || strings.Contains(errMsg, "Not Found"):
 			available = false
 			message = fmt.Sprintf("API端点不存在，请检查Base URL：%s", errMsg)
-		case strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "dial tcp"):
+		case strings.Contains(
+			errMsg,
+			"connection refused",
+		) ||
+			strings.Contains(
+				errMsg,
+				"no such host",
+			) ||
+			strings.Contains(
+				errMsg,
+				"dial tcp",
+			):
 			available = false
 			message = fmt.Sprintf("无法连接到服务器，请检查Base URL：%s", errMsg)
 		case strings.Contains(errMsg, "model") && strings.Contains(errMsg, "not found"):
@@ -2400,7 +2442,7 @@ func (h *InitializationHandler) TestMultimodalFunction(c *gin.Context) {
 	if err != nil {
 		if isRequestBodyTooLarge(err) {
 			logger.Error(ctx, "File size too large")
-			c.Error(errors.NewBadRequestError(fmt.Sprintf("图片文件大小不能超过%dMB", maxSizeMB)))
+			_ = c.Error(errors.NewBadRequestError(fmt.Sprintf("图片文件大小不能超过%dMB", maxSizeMB)))
 			return
 		}
 		logger.Error(ctx, "Failed to get uploaded image", err)

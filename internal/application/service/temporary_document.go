@@ -82,12 +82,39 @@ func envPositiveInt(key string, def int) int {
 var markdownImagePattern = regexp.MustCompile(`!\[[^\]]*\]\([^)]*\)`)
 
 var temporaryDocumentExtensions = map[string]struct{}{
-	".docx": {}, ".doc": {}, ".pdf": {}, ".ppt": {}, ".pptx": {}, ".epub": {}, ".mhtml": {},
-	".xmind": {},
-	".xlsx":  {}, ".xls": {},
-	".md": {}, ".markdown": {}, ".txt": {}, ".csv": {}, ".json": {}, ".xml": {}, ".yaml": {}, ".yml": {}, ".log": {}, ".html": {},
-	".jpg": {}, ".jpeg": {}, ".png": {}, ".gif": {}, ".bmp": {}, ".tiff": {}, ".webp": {},
-	".mp3": {}, ".wav": {}, ".m4a": {}, ".flac": {}, ".ogg": {}, ".aac": {},
+	".docx":     {},
+	".doc":      {},
+	".pdf":      {},
+	".ppt":      {},
+	".pptx":     {},
+	".epub":     {},
+	".mhtml":    {},
+	".xmind":    {},
+	".xlsx":     {},
+	".xls":      {},
+	".md":       {},
+	".markdown": {},
+	".txt":      {},
+	".csv":      {},
+	".json":     {},
+	".xml":      {},
+	".yaml":     {},
+	".yml":      {},
+	".log":      {},
+	".html":     {},
+	".jpg":      {},
+	".jpeg":     {},
+	".png":      {},
+	".gif":      {},
+	".bmp":      {},
+	".tiff":     {},
+	".webp":     {},
+	".mp3":      {},
+	".wav":      {},
+	".m4a":      {},
+	".flac":     {},
+	".ogg":      {},
+	".aac":      {},
 }
 
 var temporaryTextExtensions = map[string]struct{}{
@@ -201,7 +228,13 @@ func (s *temporaryDocumentService) Create(
 		return nil, fmt.Errorf("create attachment record: %w", err)
 	}
 	if s.resourceCatalog != nil {
-		if err := s.resourceCatalog.Bind(ctx, resourceRef, types.ResourceOwnerTemporaryDocument, document.ID, types.ResourceRelationSourceFile); err != nil {
+		if err := s.resourceCatalog.Bind(
+			ctx,
+			resourceRef,
+			types.ResourceOwnerTemporaryDocument,
+			document.ID,
+			types.ResourceRelationSourceFile,
+		); err != nil {
 			_ = s.repo.DeleteScoped(ctx, tenantID, sessionID, document.ID)
 			_ = s.fileService.DeleteFile(ctx, resourceRef)
 			return nil, fmt.Errorf("bind attachment resource: %w", err)
@@ -253,11 +286,19 @@ func (s *temporaryDocumentService) supportsExtension(ctx context.Context, tenant
 	return false
 }
 
-func (s *temporaryDocumentService) Get(ctx context.Context, tenantID uint64, sessionID, documentID string) (*types.TemporaryDocument, error) {
+func (s *temporaryDocumentService) Get(
+	ctx context.Context,
+	tenantID uint64,
+	sessionID, documentID string,
+) (*types.TemporaryDocument, error) {
 	return s.resolveInSession(ctx, tenantID, sessionID, documentID)
 }
 
-func (s *temporaryDocumentService) OpenFile(ctx context.Context, tenantID uint64, sessionID, documentID string) (io.ReadCloser, string, error) {
+func (s *temporaryDocumentService) OpenFile(
+	ctx context.Context,
+	tenantID uint64,
+	sessionID, documentID string,
+) (io.ReadCloser, string, error) {
 	document, err := s.resolveInSession(ctx, tenantID, sessionID, documentID)
 	if err != nil {
 		return nil, "", err
@@ -318,7 +359,11 @@ func (s *temporaryDocumentService) sessionReferencesAttachment(
 	return false, nil
 }
 
-func (s *temporaryDocumentService) List(ctx context.Context, tenantID uint64, sessionID string) ([]*types.TemporaryDocument, error) {
+func (s *temporaryDocumentService) List(
+	ctx context.Context,
+	tenantID uint64,
+	sessionID string,
+) ([]*types.TemporaryDocument, error) {
 	return s.repo.ListScoped(ctx, tenantID, sessionID)
 }
 
@@ -407,7 +452,10 @@ func (s *temporaryDocumentService) Process(ctx context.Context, task *asynq.Task
 		chunker.ApproxTokenCount(content, lang), len(chunks), time.Now())
 }
 
-func (s *temporaryDocumentService) parse(ctx context.Context, document *types.TemporaryDocument) (string, []types.TemporaryDocumentImage, map[string]string, error) {
+func (s *temporaryDocumentService) parse(
+	ctx context.Context,
+	document *types.TemporaryDocument,
+) (string, []types.TemporaryDocumentImage, map[string]string, error) {
 	file, err := s.fileService.GetFile(ctx, document.ResourceRef)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("open source file: %w", err)
@@ -451,7 +499,8 @@ func (s *temporaryDocumentService) parse(ctx context.Context, document *types.Te
 		FileContent: data, FileName: document.FileName, FileType: strings.TrimPrefix(ext, "."),
 		ParserEngine: parserEngine,
 	}
-	if tenant, ok := ctx.Value(types.TenantInfoContextKey).(*types.Tenant); ok && tenant != nil && tenant.ParserEngineConfig != nil {
+	if tenant, ok := ctx.Value(types.TenantInfoContextKey).(*types.Tenant); ok && tenant != nil &&
+		tenant.ParserEngineConfig != nil {
 		request.ParserEngineOverrides = tenant.ParserEngineConfig.ToOverridesMap()
 	}
 	deps := docparser.ReaderDeps{Overrides: request.ParserEngineOverrides, Remote: s.documentReader}
@@ -487,9 +536,22 @@ func (s *temporaryDocumentService) parse(ctx context.Context, document *types.Te
 		} else {
 			result.MarkdownContent = updated
 			for _, image := range stored {
-				images = append(images, types.TemporaryDocumentImage{OriginalRef: image.OriginalRef, URL: image.ServingURL, MimeType: image.MimeType})
+				images = append(
+					images,
+					types.TemporaryDocumentImage{
+						OriginalRef: image.OriginalRef,
+						URL:         image.ServingURL,
+						MimeType:    image.MimeType,
+					},
+				)
 				if s.resourceCatalog != nil {
-					_ = s.resourceCatalog.Bind(ctx, image.ServingURL, types.ResourceOwnerTemporaryDocument, document.ID, types.ResourceRelationExtractedImage)
+					_ = s.resourceCatalog.Bind(
+						ctx,
+						image.ServingURL,
+						types.ResourceOwnerTemporaryDocument,
+						document.ID,
+						types.ResourceRelationExtractedImage,
+					)
 				}
 			}
 		}
@@ -658,7 +720,13 @@ func approxTextContentRunes(md string) int {
 	return len([]rune(strings.TrimSpace(stripped)))
 }
 
-func (s *temporaryDocumentService) ResolveForPrompt(ctx context.Context, tenantID uint64, sessionID string, documentIDs []string, query string) (*types.TemporaryDocumentPromptResult, error) {
+func (s *temporaryDocumentService) ResolveForPrompt(
+	ctx context.Context,
+	tenantID uint64,
+	sessionID string,
+	documentIDs []string,
+	query string,
+) (*types.TemporaryDocumentPromptResult, error) {
 	result := &types.TemporaryDocumentPromptResult{}
 	if len(documentIDs) > types.MaxTemporaryAttachmentsPerMessage {
 		return nil, fmt.Errorf("a message can use at most %d attachments", types.MaxTemporaryAttachmentsPerMessage)
@@ -711,7 +779,11 @@ func selectTemporaryDocumentContent(document *types.TemporaryDocument, query str
 	return selectTemporaryDocumentContentWithBudget(document, query, temporaryDocumentPromptBudget)
 }
 
-func selectTemporaryDocumentContentWithBudget(document *types.TemporaryDocument, query string, budget int) (string, int, int) {
+func selectTemporaryDocumentContentWithBudget(
+	document *types.TemporaryDocument,
+	query string,
+	budget int,
+) (string, int, int) {
 	var chunks []types.TemporaryDocumentChunk
 	_ = json.Unmarshal(document.Chunks, &chunks)
 	if budget <= 0 {
@@ -772,7 +844,13 @@ func selectTemporaryDocumentContentWithBudget(document *types.TemporaryDocument,
 // Embedded interface methods forward to the original service.
 type temporarySaveFileService struct{ interfaces.FileService }
 
-func (s temporarySaveFileService) SaveBytes(ctx context.Context, data []byte, tenantID uint64, fileName string, _ bool) (string, error) {
+func (s temporarySaveFileService) SaveBytes(
+	ctx context.Context,
+	data []byte,
+	tenantID uint64,
+	fileName string,
+	_ bool,
+) (string, error) {
 	return s.FileService.SaveBytes(ctx, data, tenantID, fileName, true)
 }
 
@@ -780,7 +858,9 @@ func temporaryDocumentQueryTerms(query string) []string {
 	query = strings.ToLower(strings.TrimSpace(query))
 	seen := make(map[string]struct{})
 	var terms []string
-	for _, field := range strings.FieldsFunc(query, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsPunct(r) }) {
+	for _, field := range strings.FieldsFunc(query, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsPunct(r)
+	}) {
 		if len([]rune(field)) < 2 {
 			continue
 		}

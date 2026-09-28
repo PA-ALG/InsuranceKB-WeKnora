@@ -105,7 +105,8 @@ func TestReapStuckRunsDeletesAbandonedRemovalAfterPointerMoved(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 	require.Nil(t, fx.skills.rows["sk-1"],
-		"the pointer already left this skill behind; restoring ready would offer files the image no longer has")
+		"the pointer already left this skill behind; restoring ready would offer"+
+			" files the image no longer has")
 }
 
 func TestReapStuckRunsDeletesAbandonedRemovalThatNeverReachedAnImage(t *testing.T) {
@@ -920,24 +921,29 @@ func (r *reaperSkillStore) ListSkillsByTenant(
 	}
 	return out, nil
 }
+
 func (r *reaperSkillStore) ListUserEnvVars(
 	context.Context, uint64, types.Principal, string, string,
 ) ([]*types.TenantUserEnvVar, error) {
 	panic("ListUserEnvVars is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) ListUserEnvVarsByConfig(
 	context.Context, uint64, types.Principal, string,
 ) ([]*types.TenantUserEnvVar, error) {
 	panic("ListUserEnvVarsByConfig is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) UpsertUserEnvVar(context.Context, *types.TenantUserEnvVar) error {
 	panic("UpsertUserEnvVar is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) DeleteUserEnvVar(
 	context.Context, uint64, types.Principal, string, string, string,
 ) error {
 	panic("DeleteUserEnvVar is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) DeleteUserEnvVarsByConfig(context.Context, uint64, string) error {
 	panic("DeleteUserEnvVarsByConfig is outside the reaper surface")
 }
@@ -945,12 +951,15 @@ func (r *reaperSkillStore) DeleteUserEnvVarsByConfig(context.Context, uint64, st
 func (r *reaperSkillStore) CreateCatalog(context.Context, *types.TenantSkillCatalogEntity) error {
 	panic("CreateCatalog is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) GetCatalog(context.Context, uint64, string) (*types.TenantSkillCatalogEntity, error) {
 	panic("GetCatalog is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) GetCatalogByName(context.Context, uint64, string) (*types.TenantSkillCatalogEntity, error) {
 	panic("GetCatalogByName is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) ListCatalogsByTenant(
 	_ context.Context, tenantID uint64,
 ) ([]*types.TenantSkillCatalogEntity, error) {
@@ -963,12 +972,15 @@ func (r *reaperSkillStore) ListCatalogsByTenant(
 	}
 	return out, nil
 }
+
 func (r *reaperSkillStore) UpdateCatalog(context.Context, *types.TenantSkillCatalogEntity) error {
 	panic("UpdateCatalog is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) DeleteCatalog(context.Context, uint64, string) error {
 	panic("DeleteCatalog is outside the reaper surface")
 }
+
 func (r *reaperSkillStore) ListSkillsByCatalog(context.Context, uint64, string) ([]*types.TenantSkillEntity, error) {
 	panic("ListSkillsByCatalog is outside the reaper surface")
 }

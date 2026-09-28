@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: provider-neutral error contract for RemoteSandboxClient.
 //
 // Adapters normalize provider-native errors (HTTP status codes, SDK error
@@ -27,42 +28,42 @@ import (
 type RemoteErrorKind string
 
 const (
-	// RemoteErrorKindNotFound: sandbox / file / path does not exist.
+	// RemoteErrorKindNotFound sandbox / file / path does not exist.
 	RemoteErrorKindNotFound RemoteErrorKind = "not_found"
 
-	// RemoteErrorKindTerminal: sandbox is permanently gone (killed,
+	// RemoteErrorKindTerminal sandbox is permanently gone (killed,
 	// crashed, terminated). Semantically equivalent to NotFound for
 	// lifecycle purposes but distinct for observability.
 	RemoteErrorKindTerminal RemoteErrorKind = "terminal"
 
-	// RemoteErrorKindAuthentication: bad credentials, expired token, etc.
+	// RemoteErrorKindAuthentication bad credentials, expired token, etc.
 	RemoteErrorKindAuthentication RemoteErrorKind = "authentication"
 
-	// RemoteErrorKindInvalidRequest: caller-side error (bad template ID,
+	// RemoteErrorKindInvalidRequest caller-side error (bad template ID,
 	// bad path, oversized payload). Not retryable.
 	RemoteErrorKindInvalidRequest RemoteErrorKind = "invalid_request"
 
-	// RemoteErrorKindUnsupported: provider does not implement the requested
+	// RemoteErrorKindUnsupported provider does not implement the requested
 	// capability (e.g. metadata, "never" timeout).
 	RemoteErrorKindUnsupported RemoteErrorKind = "unsupported"
 
-	// RemoteErrorKindConflict: concurrent modification (e.g. sandbox state
+	// RemoteErrorKindConflict concurrent modification (e.g. sandbox state
 	// changed under us, template being built).
 	RemoteErrorKindConflict RemoteErrorKind = "conflict"
 
-	// RemoteErrorKindCapacity: quota / rate-limit / out-of-capacity.
+	// RemoteErrorKindCapacity quota / rate-limit / out-of-capacity.
 	RemoteErrorKindCapacity RemoteErrorKind = "capacity"
 
-	// RemoteErrorKindTimeout: request exceeded its deadline before the
+	// RemoteErrorKindTimeout request exceeded its deadline before the
 	// provider responded. Distinct from execution timeout, which is a
 	// normal RemoteExecResult with Killed=true.
 	RemoteErrorKindTimeout RemoteErrorKind = "timeout"
 
-	// RemoteErrorKindUnavailable: transient provider outage (5xx, network
+	// RemoteErrorKindUnavailable transient provider outage (5xx, network
 	// error, control-plane unreachable).
 	RemoteErrorKindUnavailable RemoteErrorKind = "unavailable"
 
-	// RemoteErrorKindInternal: catch-all for unclassified failures.
+	// RemoteErrorKindInternal catch-all for unclassified failures.
 	// Adapters SHOULD narrow this to a more specific kind when possible.
 	RemoteErrorKindInternal RemoteErrorKind = "internal"
 )
@@ -121,7 +122,13 @@ func (e *RemoteError) Unwrap() error {
 }
 
 // NewRemoteError builds a RemoteError. Convenience for adapters.
-func NewRemoteError(provider RemoteProvider, op string, kind RemoteErrorKind, message string, cause error) *RemoteError {
+func NewRemoteError(
+	provider RemoteProvider,
+	op string,
+	kind RemoteErrorKind,
+	message string,
+	cause error,
+) *RemoteError {
 	return &RemoteError{
 		Kind:     kind,
 		Provider: provider,

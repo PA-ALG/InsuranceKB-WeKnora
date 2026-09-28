@@ -36,9 +36,13 @@ func (m *artifactFallbackManager) GetType() sandbox.SandboxType {
 	return sandbox.SandboxTypeCube
 }
 
-func (m *artifactFallbackManager) ListSessionFiles(ctx context.Context, sessionID, dir string) ([]sandbox.RemoteDirEntry, error) {
+func (m *artifactFallbackManager) ListSessionFiles(
+	ctx context.Context,
+	sessionID, dir string,
+) ([]sandbox.RemoteDirEntry, error) {
 	return m.source.ListSessionFiles(ctx, sessionID, dir)
 }
+
 func (m *artifactFallbackManager) ReadSessionFile(ctx context.Context, sessionID, path string) ([]byte, error) {
 	return m.source.ReadSessionFile(ctx, sessionID, path)
 }

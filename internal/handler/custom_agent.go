@@ -105,7 +105,7 @@ func (h *CustomAgentHandler) CreateAgent(c *gin.Context) {
 		return
 	}
 	if err := h.validateAgentSandboxConfig(ctx, req.Config); err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	if err := normalizeAgentReasoningEffort(&req.Config); err != nil {
@@ -375,7 +375,7 @@ func (h *CustomAgentHandler) UpdateAgent(c *gin.Context) {
 		return
 	}
 	if err := h.validateAgentSandboxConfig(ctx, req.Config); err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	if err := normalizeAgentReasoningEffort(&req.Config); err != nil {

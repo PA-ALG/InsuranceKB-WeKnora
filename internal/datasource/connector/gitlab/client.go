@@ -1,3 +1,4 @@
+// Package gitlab connects GitLab repositories to datasource synchronization.
 package gitlab
 
 import (
@@ -73,6 +74,7 @@ func newClient(baseURL, token string) (*client, error) {
 	}
 	return &client{baseURL: baseURL, token: token, http: datasource.NewConnectorHTTPClient(30 * time.Second)}, nil
 }
+
 func (c *client) get(ctx context.Context, endpoint string, out interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
 	if err != nil {
@@ -94,6 +96,7 @@ func (c *client) get(ctx context.Context, endpoint string, out interface{}) erro
 	}
 	return json.Unmarshal(body, out)
 }
+
 func (c *client) getRaw(ctx context.Context, endpoint string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
 	if err != nil {
@@ -104,7 +107,8 @@ func (c *client) getRaw(ctx context.Context, endpoint string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	// The response is read to completion; closing it cannot alter the returned result.
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, &apiError{endpoint: endpoint, status: resp.StatusCode}
 	}
@@ -137,11 +141,13 @@ func projectPath(id string) string {
 	}
 	return url.PathEscape(decoded)
 }
+
 func (c *client) project(ctx context.Context, id string) (*project, error) {
 	var p project
 	err := c.get(ctx, "/projects/"+projectPath(id), &p)
 	return &p, err
 }
+
 func (c *client) projects(ctx context.Context) ([]project, error) {
 	q := url.Values{
 		"membership": {"true"}, "per_page": {"100"}, "page": {"1"},
@@ -171,6 +177,7 @@ func (c *client) ping(ctx context.Context) error {
 	}
 	return c.get(ctx, "/user", &user)
 }
+
 func (c *client) commitSHA(ctx context.Context, id, ref string) (string, error) {
 	var v struct {
 		ID string `json:"id"`
@@ -178,6 +185,7 @@ func (c *client) commitSHA(ctx context.Context, id, ref string) (string, error) 
 	err := c.get(ctx, "/projects/"+projectPath(id)+"/repository/commits/"+url.PathEscape(ref), &v)
 	return v.ID, err
 }
+
 func (c *client) tree(ctx context.Context, id, ref, dir string) ([]treeEntry, error) {
 	q := url.Values{"ref": {ref}, "per_page": {"100"}, "page": {"1"}}
 	if dir != "" {
@@ -209,7 +217,8 @@ func (c *client) getPage(ctx context.Context, endpoint string, query url.Values,
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	// The response is read to completion; closing it cannot alter the returned result.
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -222,6 +231,7 @@ func (c *client) getPage(ctx context.Context, endpoint string, query url.Values,
 	}
 	return resp.Header.Get("X-Next-Page"), nil
 }
+
 func (c *client) raw(ctx context.Context, id, ref, file string) ([]byte, error) {
 	q := url.Values{"ref": {ref}}
 	encodedFile := gitlabFilePathEscape(file)
@@ -274,6 +284,7 @@ func gitlabFilePathEscape(file string) string {
 	}
 	return b.String()
 }
+
 func (c *client) compare(ctx context.Context, id, from, to string) (*comparison, error) {
 	q := url.Values{"from": {from}, "to": {to}}
 	var v comparison

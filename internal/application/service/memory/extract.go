@@ -306,7 +306,14 @@ func (s *Service) Handle(ctx context.Context, task *asynq.Task) error {
 		if s.enqueuer == nil {
 			return fmt.Errorf("memory extraction is leased until %s", batch.RetryAt)
 		}
-		return s.enqueueExtraction(ctx, scope, payload.SessionID, payload.MessageID, payload.ChatModelID, time.Until(batch.RetryAt)+time.Second)
+		return s.enqueueExtraction(
+			ctx,
+			scope,
+			payload.SessionID,
+			payload.MessageID,
+			payload.ChatModelID,
+			time.Until(batch.RetryAt)+time.Second,
+		)
 	}
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
@@ -358,7 +365,14 @@ func (s *Service) Handle(ctx context.Context, task *asynq.Task) error {
 						session.SessionID)
 				}
 			}
-			if err := s.repo.CheckpointExtraction(ctx, scope, leaseID, session, cursor, !more && i == len(segments)-1); err != nil {
+			if err := s.repo.CheckpointExtraction(
+				ctx,
+				scope,
+				leaseID,
+				session,
+				cursor,
+				!more && i == len(segments)-1,
+			); err != nil {
 				return err
 			}
 			session.Cursor = cursor
@@ -384,7 +398,13 @@ func (s *Service) Handle(ctx context.Context, task *asynq.Task) error {
 	return nil
 }
 
-func (s *Service) extractSegment(ctx context.Context, scope interfaces.MemoryScope, cfg *types.MemoryConfig, payload types.MemoryExtractPayload, segment transcriptSegment) error {
+func (s *Service) extractSegment(
+	ctx context.Context,
+	scope interfaces.MemoryScope,
+	cfg *types.MemoryConfig,
+	payload types.MemoryExtractPayload,
+	segment transcriptSegment,
+) error {
 	existing, err := s.relevantExisting(ctx, scope, cfg, segment)
 	if err != nil {
 		return fmt.Errorf("load existing memories: %w", err)
@@ -462,8 +482,16 @@ type transcriptSegment struct {
 // collectSessionSegments reads a bounded page using a session-local cursor.
 // Every row, including assistant-only pages, belongs to a checkpoint. A gap
 // is flushed before admitting the next message so it cannot advance over it.
-func (s *Service) collectSessionSegments(ctx context.Context, session types.MemoryExtractionSession) ([]transcriptSegment, bool, error) {
-	messages, err := s.messageRepo.ListMessagesBySessionAfterCursor(ctx, session.SessionID, session.Cursor, extractMaxMessagesPerRun+1)
+func (s *Service) collectSessionSegments(
+	ctx context.Context,
+	session types.MemoryExtractionSession,
+) ([]transcriptSegment, bool, error) {
+	messages, err := s.messageRepo.ListMessagesBySessionAfterCursor(
+		ctx,
+		session.SessionID,
+		session.Cursor,
+		extractMaxMessagesPerRun+1,
+	)
 	if err != nil {
 		return nil, false, fmt.Errorf("load session messages: %w", err)
 	}
@@ -501,7 +529,15 @@ func (s *Service) collectSessionSegments(ctx context.Context, session types.Memo
 		if runes := []rune(content); len(runes) > extractMaxLineRunes {
 			content = string(runes[:extractMaxLineRunes])
 		}
-		current.lines = append(current.lines, transcriptLine{sessionID: session.SessionID, messageID: message.ID, at: message.CreatedAt, content: content})
+		current.lines = append(
+			current.lines,
+			transcriptLine{
+				sessionID: session.SessionID,
+				messageID: message.ID,
+				at:        message.CreatedAt,
+				content:   content,
+			},
+		)
 	}
 	flush()
 	for i := range segments {

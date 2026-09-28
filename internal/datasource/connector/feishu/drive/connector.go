@@ -1,3 +1,4 @@
+// Package drive connects Feishu Drive resources to datasource synchronization.
 package drive
 
 import (
@@ -14,34 +15,34 @@ import (
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
-// DriveConnector implements the datasource.Connector (and StreamingConnector)
+// Connector implements the datasource.Connector (and StreamingConnector)
 // interface for Feishu/Lark Drive (云盘) mode. It shares core.Client/core.Config/core.Region
 // and the export/download logic with the wiki Connector; only resource
 // enumeration and Fetch dispatch differ. See 飞书云盘数据源设计.md and
 // ADR-0001..0004.
-type DriveConnector struct {
+type Connector struct {
 	region core.Region
 }
 
 // NewDriveConnector creates a Drive connector for the given region
 // (RegionFeishuDrive or RegionLarkDrive).
-func NewDriveConnector(region core.Region) *DriveConnector {
-	return &DriveConnector{region: region}
+func NewDriveConnector(region core.Region) *Connector {
+	return &Connector{region: region}
 }
 
 // Drive supports resumable streaming sync; the service prefers FetchStream over
 // FetchAll/FetchIncremental when a connector implements StreamingConnector.
-var _ datasource.StreamingConnector = (*DriveConnector)(nil)
+var _ datasource.StreamingConnector = (*Connector)(nil)
 
 // Type returns the connector type identifier.
-func (c *DriveConnector) Type() string {
+func (c *Connector) Type() string {
 	return c.region.ConnectorType
 }
 
 // Validate verifies that the Drive configuration is valid by testing
 // connectivity. It does not validate folder_token here - that is done in
 // ListResources when the user loads the tree root. Mirrors the wiki Connector.
-func (c *DriveConnector) Validate(ctx context.Context, config *types.DataSourceConfig) error {
+func (c *Connector) Validate(ctx context.Context, config *types.DataSourceConfig) error {
 	feishuConfig, err := core.ParseFeishuConfig(config, c.region)
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func (c *DriveConnector) Validate(ctx context.Context, config *types.DataSourceC
 // Each core.DriveFile becomes a Resource: folder HasChildren=true, others false.
 // resourceID encoding: root = folderToken; child = folderToken + ":" + fileToken
 // (reuses core.FeishuWikiNodeResourceSeparator). See ADR-0001 §3.4.
-func (c *DriveConnector) ListResources(
+func (c *Connector) ListResources(
 	ctx context.Context, config *types.DataSourceConfig, parentID string,
 ) ([]types.Resource, error) {
 	feishuConfig, err := core.ParseFeishuConfig(config, c.region)
@@ -133,7 +134,7 @@ func (c *DriveConnector) ListResources(
 // metas/batch_query does not return parent), so we walk top-down from the root
 // folder with ListDriveFiles and share the traversal across all selections in
 // the same root. Best-effort: a broken path just stays collapsed. See ADR-0003.
-func (c *DriveConnector) ResolveResourceAncestors(
+func (c *Connector) ResolveResourceAncestors(
 	ctx context.Context, config *types.DataSourceConfig, resourceIDs []string,
 ) ([]string, error) {
 	feishuConfig, err := core.ParseFeishuConfig(config, c.region)
@@ -228,7 +229,7 @@ func buildDriveAncestorChain(rootFolderToken, cur string, parentChain map[string
 // FetchAll performs a full sync of all documents from the selected Drive
 // folders. Defensive fallback path - the service prefers FetchStream when the
 // connector implements StreamingConnector.
-func (c *DriveConnector) FetchAll(
+func (c *Connector) FetchAll(
 	ctx context.Context, config *types.DataSourceConfig, resourceIDs []string,
 ) ([]types.FetchedItem, error) {
 	feishuConfig, err := core.ParseFeishuConfig(config, c.region)
@@ -243,7 +244,7 @@ func (c *DriveConnector) FetchAll(
 // against the previously recorded state. Defensive fallback path - the service
 // prefers FetchStream. Routed through the same engine as FetchStream, so the
 // #2136 failure-doesn't-advance-cursor semantics apply here too.
-func (c *DriveConnector) FetchIncremental(
+func (c *Connector) FetchIncremental(
 	ctx context.Context, config *types.DataSourceConfig, cursor *types.SyncCursor,
 ) ([]types.FetchedItem, *types.SyncCursor, error) {
 	feishuConfig, err := core.ParseFeishuConfig(config, c.region)
@@ -266,7 +267,7 @@ func (c *DriveConnector) FetchIncremental(
 //
 // The per-node loop lives in the shared engine (engine.go); this shell only
 // wires the Drive NodeOps adapter.
-func (c *DriveConnector) FetchStream(
+func (c *Connector) FetchStream(
 	ctx context.Context, config *types.DataSourceConfig,
 	cursor *types.SyncCursor, h datasource.StreamHandler,
 ) (*types.SyncCursor, error) {
@@ -282,7 +283,7 @@ func (c *DriveConnector) FetchStream(
 	return core.FetchStreamEngine(ctx, client, config, cursor, h, ops)
 }
 
-// driveOps adapts the Drive DriveConnector to the generic sync engine. It
+// driveOps adapts the Drive Connector to the generic sync engine. It
 // carries the region (for channel + URL) and encodes/decodes the Drive cursor
 // wire format (core.FeishuDriveCursor / file_times) so the engine stays format-agnostic.
 type driveOps struct {
@@ -306,7 +307,13 @@ func (o driveOps) Title(n core.DriveFile) string    { return n.Name }
 func (o driveOps) ObjType(n core.DriveFile) string  { return n.Type }
 func (o driveOps) EditTime(n core.DriveFile) string { return n.ModifiedTime }
 
-func (o driveOps) Fetch(ctx context.Context, client *core.Client, n core.DriveFile, resourceID string, multimodal bool) ([]*types.FetchedItem, error) {
+func (o driveOps) Fetch(
+	ctx context.Context,
+	client *core.Client,
+	n core.DriveFile,
+	resourceID string,
+	multimodal bool,
+) ([]*types.FetchedItem, error) {
 	return fetchDriveFileContent(ctx, client, n, resourceID, multimodal, o.region)
 }
 
@@ -356,7 +363,12 @@ func (o driveOps) EncodeCursor(times map[string]map[string]string, lastSync time
 //   - file                   -> DownloadDriveFile -> original file
 //   - mindnote/slides/board  -> Skip (no API), returns (nil, nil)
 func fetchDriveFileContent(
-	ctx context.Context, client *core.Client, file core.DriveFile, resourceID string, multimodalEnabled bool, region core.Region,
+	ctx context.Context,
+	client *core.Client,
+	file core.DriveFile,
+	resourceID string,
+	multimodalEnabled bool,
+	region core.Region,
 ) ([]*types.FetchedItem, error) {
 	if !core.IsSupportedDocType(file.Type) {
 		return nil, nil
@@ -546,7 +558,7 @@ func driveRootFolderToken(config *types.DataSourceConfig) string {
 // suffix) so it matches the resource_id the user saved in
 // form.config.resource_ids = [folderToken]. A "token:token" encoding would
 // break selection matching on edit.
-func (c *DriveConnector) driveFolderToResource(rootFolderToken, parentToken, folderToken, name string) types.Resource {
+func (c *Connector) driveFolderToResource(rootFolderToken, _, folderToken, name string) types.Resource {
 	if name == "" {
 		name = folderToken
 	}
@@ -568,7 +580,7 @@ func (c *DriveConnector) driveFolderToResource(rootFolderToken, parentToken, fol
 // sub-folder's ExternalID is "rootFolderToken:folderToken". Direct children of
 // the root have file.ParentToken == rootFolderToken, so their ParentID is the
 // bare rootFolderToken; deeper descendants use the encoded form.
-func (c *DriveConnector) driveFileToResource(rootFolderToken string, file core.DriveFile) types.Resource {
+func (c *Connector) driveFileToResource(rootFolderToken string, file core.DriveFile) types.Resource {
 	name := file.Name
 	if name == "" {
 		name = file.Token
@@ -602,7 +614,11 @@ func (c *DriveConnector) driveFileToResource(rootFolderToken string, file core.D
 // appendDriveFileListFailureItems converts Drive listing failures into error
 // FetchedItems so the sync log surfaces which sub-folders could not be listed.
 // Mirrors appendWikiNodeListFailureItems.
-func appendDriveFileListFailureItems(items []types.FetchedItem, resourceID, channel string, failures []core.DriveFileListFailure) []types.FetchedItem {
+func appendDriveFileListFailureItems(
+	items []types.FetchedItem,
+	resourceID, channel string,
+	failures []core.DriveFileListFailure,
+) []types.FetchedItem {
 	for _, failure := range failures {
 		items = append(items, types.FetchedItem{
 			ExternalID:       failure.FolderToken,

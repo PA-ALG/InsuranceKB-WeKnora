@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: orphan sandbox reconciliation.
 //
 // Session sandboxes are created with onTimeout=pause + autoResume (see

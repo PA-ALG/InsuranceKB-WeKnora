@@ -50,7 +50,7 @@ func TestRephrasedTopicStillCountsTowardsTheSameSubject(t *testing.T) {
 	tenantRepo.set(1, &types.MemoryConfig{
 		Enabled: true, WriteMode: types.MemoryWriteAuto, InterestThreshold: 3,
 	})
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 
 	// Three sightings, three different wordings, one subject. The first is an
 	// exact match after normalisation, the second is close enough for the
@@ -78,7 +78,7 @@ func TestDifferentSubjectsAreStillCountedApart(t *testing.T) {
 	tenantRepo.set(1, &types.MemoryConfig{
 		Enabled: true, WriteMode: types.MemoryWriteAuto, InterestThreshold: 2,
 	})
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 
 	svc.ObserveQuestionTopics(ctx, []string{"PostgreSQL 连接池"})
 	svc.ObserveQuestionTopics(ctx, []string{"PostgreSQL 备份恢复"})
@@ -149,7 +149,7 @@ func TestASynonymIsResolvedByTheModelAndThenRemembered(t *testing.T) {
 		Enabled: true, WriteMode: types.MemoryWriteAuto,
 		ExtractModelID: "model-1", InterestThreshold: 3,
 	})
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	models.responseFor = map[string]string{
 		"你在维护一个人的关注主题列表": `{"resolutions":[{"index":0,"same_as":0}]}`,
 	}
@@ -186,7 +186,7 @@ func TestTheModelCanDeclineToMergeTopics(t *testing.T) {
 		Enabled: true, WriteMode: types.MemoryWriteAuto,
 		ExtractModelID: "model-1", InterestThreshold: 3,
 	})
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	models.responseFor = map[string]string{
 		"你在维护一个人的关注主题列表": `{"resolutions":[{"index":0,"same_as":null}]}`,
 	}
@@ -208,7 +208,7 @@ func TestAdjudicationCannotOverrideACheaperTier(t *testing.T) {
 		Enabled: true, WriteMode: types.MemoryWriteAuto,
 		ExtractModelID: "model-1", InterestThreshold: 5,
 	})
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	models.responseFor = map[string]string{
 		"你在维护一个人的关注主题列表": `{"resolutions":[{"index":0,"same_as":0},{"index":1,"same_as":0}]}`,
 	}
@@ -235,7 +235,7 @@ func TestAMergeCanAdoptTheBetterName(t *testing.T) {
 		Enabled: true, WriteMode: types.MemoryWriteAuto,
 		ExtractModelID: "model-1", InterestThreshold: 2,
 	})
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	models.responseFor = map[string]string{
 		"你在维护一个人的关注主题列表": `{"resolutions":[{"index":0,"same_as":0,"label":"持续集成流水线"}]}`,
 	}
@@ -267,7 +267,7 @@ func TestAMergeCannotMakeTheSubjectVaguer(t *testing.T) {
 		Enabled: true, WriteMode: types.MemoryWriteAuto,
 		ExtractModelID: "model-1", InterestThreshold: 5,
 	})
-	scope := scopeFor(t, ctx)
+	scope := scopeFor(ctx, t)
 	models.responseFor = map[string]string{
 		"你在维护一个人的关注主题列表": `{"resolutions":[{"index":0,"same_as":0,"label":"排班"}]}`,
 	}

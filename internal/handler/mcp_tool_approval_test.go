@@ -46,7 +46,11 @@ func newMCPToolApprovalRouter(svc interfaces.MCPToolApprovalService) *gin.Engine
 
 func TestSetMCPToolApprovalRejectsEmptyBody(t *testing.T) {
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPut, "/mcp-services/svc-1/tool-approvals/get_forecast", bytes.NewBufferString(`{}`))
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/mcp-services/svc-1/tool-approvals/get_forecast",
+		bytes.NewBufferString(`{}`),
+	)
 	req.Header.Set("Content-Type", "application/json")
 	newMCPToolApprovalRouter(&stubMCPToolApprovalService{}).ServeHTTP(w, req)
 	require.Equal(t, http.StatusBadRequest, w.Code)

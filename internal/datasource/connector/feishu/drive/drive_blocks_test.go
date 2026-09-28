@@ -35,13 +35,16 @@ func fakeFeishuDriveDocx(t *testing.T, files []core.DriveFile, docToken string,
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, core.TokenResponse{ApiResponse: core.ApiResponse{Code: 0}, TenantAccessToken: "fake-token", Expire: 7200})
+		writeJSON(
+			w,
+			core.TokenResponse{APIResponse: core.APIResponse{Code: 0}, TenantAccessToken: "fake-token", Expire: 7200},
+		)
 	})
 
 	// Drive file listing (single page).
 	mux.HandleFunc("/open-apis/drive/v1/files", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.DriveFileListResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.DriveFileListData{Files: files},
 		})
 	})
@@ -55,16 +58,18 @@ func fakeFeishuDriveDocx(t *testing.T, files []core.DriveFile, docToken string,
 			_, _ = w.Write([]byte(`{"code":99991400,"msg":"insufficient scope"}`))
 		})
 	case "empty":
-		mux.HandleFunc(blocksPath, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(blocksPath, func(w http.ResponseWriter, _ *http.Request) {
 			writeJSON(w, core.DocxBlocksResponse{
-				ApiResponse: core.ApiResponse{Code: 0},
-				Data:        core.DocxBlocksData{Items: []core.DocxBlock{{BlockID: "b1", BlockType: core.BlockTypePage}}},
+				APIResponse: core.APIResponse{Code: 0},
+				Data: core.DocxBlocksData{
+					Items: []core.DocxBlock{{BlockID: "b1", BlockType: core.BlockTypePage}},
+				},
 			})
 		})
 	default: // "ok"
-		mux.HandleFunc(blocksPath, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(blocksPath, func(w http.ResponseWriter, _ *http.Request) {
 			writeJSON(w, core.DocxBlocksResponse{
-				ApiResponse: core.ApiResponse{Code: 0},
+				APIResponse: core.APIResponse{Code: 0},
 				Data:        core.DocxBlocksData{Items: blocks},
 			})
 		})
@@ -81,24 +86,32 @@ func fakeFeishuDriveDocx(t *testing.T, files []core.DriveFile, docToken string,
 	})
 
 	// Export trio for the fallback path.
-	mux.HandleFunc("/open-apis/drive/v1/export_tasks", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/open-apis/drive/v1/export_tasks", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.ExportTaskCreateResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.ExportTaskCreateData{Ticket: "ticket-drv"},
 		})
 	})
-	mux.HandleFunc("/open-apis/drive/v1/export_tasks/ticket-drv", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/open-apis/drive/v1/export_tasks/ticket-drv", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, core.ExportTaskStatusResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data: core.ExportTaskStatusData{
-				Result: core.ExportTaskResult{FileToken: "ft-export-drv", FileSize: 512, JobStatus: 0, FileName: "drive-fallback.docx"},
+				Result: core.ExportTaskResult{
+					FileToken: "ft-export-drv",
+					FileSize:  512,
+					JobStatus: 0,
+					FileName:  "drive-fallback.docx",
+				},
 			},
 		})
 	})
-	mux.HandleFunc("/open-apis/drive/v1/export_tasks/file/ft-export-drv/download", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		_, _ = w.Write([]byte("fake-drive-export-binary"))
-	})
+	mux.HandleFunc(
+		"/open-apis/drive/v1/export_tasks/file/ft-export-drv/download",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write([]byte("fake-drive-export-binary"))
+		},
+	)
 
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)

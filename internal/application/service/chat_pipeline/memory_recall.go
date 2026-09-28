@@ -36,6 +36,7 @@ type PluginMemoryRecall struct {
 	memoryService interfaces.MemoryService
 }
 
+// NewPluginMemoryRecall registers tenant-scoped memory recall in the chat pipeline.
 func NewPluginMemoryRecall(
 	eventManager *EventManager,
 	memoryService interfaces.MemoryService,
@@ -45,12 +46,14 @@ func NewPluginMemoryRecall(
 	return res
 }
 
+// ActivationEvents selects the memory recall stage.
 func (p *PluginMemoryRecall) ActivationEvents() []types.EventType {
 	return []types.EventType{types.MemoryRecall}
 }
 
+// OnEvent loads relevant memories before the remaining chat stages.
 func (p *PluginMemoryRecall) OnEvent(ctx context.Context,
-	eventType types.EventType, chatManage *types.ChatManage, next func() *PluginError,
+	_ types.EventType, chatManage *types.ChatManage, next func() *PluginError,
 ) *PluginError {
 	if p.memoryService == nil {
 		pipelineInfo(ctx, "MemoryRecall", "skip", map[string]interface{}{

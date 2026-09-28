@@ -147,7 +147,11 @@ type SessionTerminalManager interface {
 	// is set, so a panel open cannot silently resume (and re-bill) a paused
 	// instance. A backend that cannot stream PTYs returns
 	// ErrTerminalUnsupported, not "no sandbox".
-	OpenSessionTerminal(ctx context.Context, sessionID string, opts RemoteTerminalOptions) (RemoteTerminalSession, error)
+	OpenSessionTerminal(
+		ctx context.Context,
+		sessionID string,
+		opts RemoteTerminalOptions,
+	) (RemoteTerminalSession, error)
 }
 
 // SessionTerminalProvider is implemented by managers that MAY offer

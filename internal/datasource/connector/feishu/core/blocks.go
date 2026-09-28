@@ -38,12 +38,13 @@ const (
 // against pathological/adversarial documents. Far above any real Feishu doc.
 const maxDocumentBlocks = 50000
 
-// TextElement is one inline run inside a text-bearing block.
+// TextRun TextElement is one inline run inside a text-bearing block.
 // TextRun is the text_run payload of a TextElement.
 type TextRun struct {
 	Content string `json:"content"`
 }
 
+// TextElement represents a rich-text element returned by Feishu.
 type TextElement struct {
 	TextRun *TextRun `json:"text_run"`
 }
@@ -117,7 +118,7 @@ type DocxBlocksData struct {
 
 // DocxBlocksResponse is the response for GET .../documents/:id/blocks.
 type DocxBlocksResponse struct {
-	ApiResponse
+	APIResponse
 	Data DocxBlocksData `json:"data"`
 }
 
@@ -175,7 +176,7 @@ type sheetValuesData struct {
 
 // sheetValuesResponse is the response for sheets-v2 values read.
 type sheetValuesResponse struct {
-	ApiResponse
+	APIResponse
 	Data sheetValuesData `json:"data"`
 }
 
@@ -335,7 +336,7 @@ type bitableFieldsData struct {
 }
 
 type bitableFieldsResponse struct {
-	ApiResponse
+	APIResponse
 	Data bitableFieldsData `json:"data"`
 }
 
@@ -357,7 +358,7 @@ type bitableRecordsData struct {
 }
 
 type bitableRecordsResponse struct {
-	ApiResponse
+	APIResponse
 	Data bitableRecordsData `json:"data"`
 }
 

@@ -15,7 +15,7 @@ func retryTestServer(target string, h http.HandlerFunc) (*httptest.Server, *Conf
 	mux := http.NewServeMux()
 	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, TokenResponse{
-			ApiResponse:       ApiResponse{Code: 0},
+			APIResponse:       APIResponse{Code: 0},
 			TenantAccessToken: "fake-token",
 			Expire:            7200,
 		})
@@ -36,12 +36,12 @@ func TestDoRequest_RetriesOn429ThenSucceeds(t *testing.T) {
 			_, _ = io.WriteString(w, `{"code":99991400,"msg":"rate limited"}`)
 			return
 		}
-		writeJSON(w, ApiResponse{Code: 0})
+		writeJSON(w, APIResponse{Code: 0})
 	})
 	defer ts.Close()
 
 	c := NewClient(cfg)
-	var resp ApiResponse
+	var resp APIResponse
 	if err := c.DoRequest(context.Background(), http.MethodGet, "/target", nil, &resp); err != nil {
 		t.Fatalf("expected success after retry, got %v", err)
 	}

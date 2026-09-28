@@ -29,36 +29,46 @@ func NewWikiReplaceTextTool(
 ) *wikiReplaceTextTool {
 	return &wikiReplaceTextTool{
 		BaseTool: NewBaseTool(
+
 			ToolWikiReplaceText,
-			"Replace all occurrences of specific exact text in a Wiki page. Ideal for consistent minor corrections.",
-			json.RawMessage(`{
-				"type": "object",
-				"properties": {
-					"slug": {
-						"type": "string",
-						"description": "The slug of the Wiki page"
-					},
-					"old_text": {
-						"type": "string",
-						"description": "The exact text to find and replace"
-					},
-					"new_text": {
-						"type": "string",
-						"description": "The new text to insert"
-					},
-					"source_refs": {
-						"type": "array",
-						"items": {"type": "string"},
-						"description": "An optional list of short dN source document IDs that justify this change. If provided, these will COMPLETELY REPLACE the existing source_refs of the page."
-					}
-				},
-				"required": ["slug", "old_text", "new_text"]
-			}`),
+
+			"Replace all occurrences of specific exact text in a Wiki page. Ideal for"+
+				" consistent minor corrections.",
+
+			json.RawMessage(
+				"{\n\t\t\t\t\"type\": \"object\","+
+					"\n\t\t\t\t\"properties\": {\n\t\t\t\t\t\"slug\": {"+
+					"\n\t\t\t\t\t\t\"type\":"+
+
+					" \"string\",\n\t\t\t\t\t\t\"description\": \"The"+
+					" slug of the Wiki page\"\n\t\t\t\t\t},"+
+					"\n\t\t\t\t\t\"old_text\": {\n\t\t\t\t\t\t\"type\":"+
+					" \"string\",\n\t\t\t\t\t\t\"description\": \"The"+
+
+					" exact text to find and replace\"\n\t\t\t\t\t},"+
+					"\n\t\t\t\t\t\"new_text\": {"+
+					"\n\t\t\t\t\t\t\"type\": \"string\","+
+					"\n\t\t\t\t\t\t\"description\": \"The new text to"+
+					" insert\""+
+					"\n\t\t\t\t\t},\n\t\t\t\t\t\"source_refs\": {"+
+					"\n\t\t\t\t\t\t\"type\": \"array\",\n\t\t\t\t\t\t\"items\":"+
+
+					" {\"type\": \"string\"},\n\t\t\t\t\t\t\"description\""+
+					": \"An optional list of short dN"+
+					" source document IDs that justify this change. If provided, these will"+
+					" COMPLETELY REPLACE the existing"+
+					" source_refs of the page.\"\n\t\t\t\t\t}\n\t\t\t\t},"+
+					"\n\t\t\t\t\"required\": [\"slug\", \"old_text\", \"new_text\"]\n\t\t\t}",
+			),
 		),
-		wikiPageService:  wikiPageService,
+
+		wikiPageService: wikiPageService,
+
 		knowledgeService: knowledgeService,
-		kbIDs:            kbIDs,
-		routes:           firstWikiRoute(routes),
+
+		kbIDs: kbIDs,
+
+		routes: firstWikiRoute(routes),
 	}
 }
 
@@ -100,12 +110,20 @@ func (t *wikiReplaceTextTool) Execute(ctx context.Context, args json.RawMessage)
 	// Get the existing page
 	existingPage, _, err := resolveUniqueWikiPage(ctx, t.wikiPageService, params.Slug, t.kbIDs, t.routes)
 	if err != nil {
-		return &types.ToolResult{Success: false, Error: fmt.Sprintf("Failed to fetch page %s: %v", params.Slug, err)}, nil
+		return &types.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to fetch page %s: %v", params.Slug, err),
+		}, nil
 	}
 
 	replacementCount := strings.Count(existingPage.Content, params.OldText)
 	if replacementCount == 0 {
-		return &types.ToolResult{Success: false, Error: "old_text not found in the current page content. Ensure you copy it exactly as it appears."}, nil
+		return &types.ToolResult{
+			Success: false,
+			Error: "old_text not found in the current page" +
+				" content. Ensure you copy it exactly as" +
+				" it appears.",
+		}, nil
 	}
 
 	existingPage.Content = strings.ReplaceAll(existingPage.Content, params.OldText, params.NewText)
@@ -128,7 +146,14 @@ func (t *wikiReplaceTextTool) Execute(ctx context.Context, args json.RawMessage)
 	oldPreview := truncateRunes(params.OldText, 80)
 	newPreview := truncateRunes(params.NewText, 80)
 
-	output := fmt.Sprintf("Successfully replaced %d occurrence(s) on page [[%s]].\n- Old: %s\n- New: %s", replacementCount, params.Slug, oldPreview, newPreview)
+	output := fmt.Sprintf(
+		"Successfully replaced %d occurrence(s)"+
+			" on page [[%s]].\n- Old: %s\n- New: %s",
+		replacementCount,
+		params.Slug,
+		oldPreview,
+		newPreview,
+	)
 
 	return &types.ToolResult{
 		Success: true,

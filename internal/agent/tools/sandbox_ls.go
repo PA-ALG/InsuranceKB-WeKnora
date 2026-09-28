@@ -218,7 +218,10 @@ func (t *ListSandboxFilesTool) Execute(ctx context.Context, args json.RawMessage
 	// strings.Builder writes cannot fail.
 	_, _ = fmt.Fprintf(&b, "=== Sandbox listing: %s ===\n\n", targetDir)
 	if len(entries) == 0 {
-		b.WriteString("No files found under this path. Either nothing has been written here yet, or the sandbox has been reaped.\n")
+		b.WriteString(
+			"No files found under this path. Either nothing has been written here yet" +
+				", or the sandbox has been reaped.\n",
+		)
 	} else {
 		_, _ = fmt.Fprintf(&b, "Found %d file(s)", len(entries))
 		if truncated {
@@ -226,8 +229,8 @@ func (t *ListSandboxFilesTool) Execute(ctx context.Context, args json.RawMessage
 		}
 		b.WriteString(":\n\n")
 		for _, e := range entries {
-			b.WriteString(fmt.Sprintf("- %s (size=%d, modified=%s)\n",
-				e.Path, e.Size, formatSandboxModTime(e.ModTime)))
+			fmt.Fprintf(&b, "- %s (size=%d, modified=%s)\n",
+				e.Path, e.Size, formatSandboxModTime(e.ModTime))
 		}
 	}
 
@@ -260,7 +263,7 @@ func (t *ListSandboxFilesTool) Execute(ctx context.Context, args json.RawMessage
 }
 
 // Cleanup releases any resources.
-func (t *ListSandboxFilesTool) Cleanup(ctx context.Context) error {
+func (t *ListSandboxFilesTool) Cleanup(_ context.Context) error {
 	return nil
 }
 

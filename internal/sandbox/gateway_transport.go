@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: connection pooling and data-plane routing for per-request
 // remote clients.
 //

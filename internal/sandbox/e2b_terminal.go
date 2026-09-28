@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: interactive terminal capability for the E2B adapter.
 //
 // go-e2b wraps envd's PTY service (sandbox.Pty). Output is delivered through

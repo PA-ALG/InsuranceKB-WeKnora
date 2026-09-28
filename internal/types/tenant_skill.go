@@ -30,7 +30,9 @@ const (
 const (
 	// SkillSnapshotTriggerInstall identifies a snapshot created by skill installation.
 	SkillSnapshotTriggerInstall = "install"
-	SkillSnapshotTriggerRemove  = "remove"
+	// SkillSnapshotTriggerRemove identifies a snapshot taken when a skill is removed.
+	SkillSnapshotTriggerRemove = "remove"
+	// SkillSnapshotTriggerRebuild identifies a snapshot taken when a skill is rebuilt.
 	SkillSnapshotTriggerRebuild = "rebuild"
 )
 

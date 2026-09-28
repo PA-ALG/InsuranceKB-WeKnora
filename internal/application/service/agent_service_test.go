@@ -99,9 +99,11 @@ func (stubSessionFileStore) ReadSessionFile(context.Context, string, string) ([]
 func (stubSessionFileStore) WriteSessionInputFile(context.Context, string, string, []byte) error {
 	return nil
 }
+
 func (stubSessionFileStore) WriteSessionWorkspaceFile(context.Context, string, string, []byte) error {
 	return nil
 }
+
 func (stubSessionFileStore) WriteSessionWorkspaceFiles(context.Context, string, []sandbox.SessionWorkspaceFile) error {
 	return nil
 }
@@ -180,7 +182,8 @@ func TestCreateAgentEngineOpensSandboxToolsOnlyForInstallMode(t *testing.T) {
 		require.False(t, toolOffered(chatModel.lastToolNames, tools.LegacyToolReadSkill))
 		require.False(t, toolOffered(chatModel.lastToolNames, tools.LegacyToolExecuteSkillScript))
 		require.False(t, toolOffered(chatModel.lastToolNames, tools.ToolListSandboxFiles),
-			"session file tools only accept /workspace; the installer must write the skill tree via shell_exec")
+			"session file tools only accept /workspace; the installer must write the"+
+				" skill tree via shell_exec")
 		require.False(t, toolOffered(chatModel.lastToolNames, tools.ToolReadFile))
 		require.False(t, toolOffered(chatModel.lastToolNames, tools.ToolWriteSandboxFile))
 		require.False(t, toolOffered(chatModel.lastToolNames, tools.ToolEditSandboxFile))
@@ -218,7 +221,8 @@ func TestCreateAgentEngineOpensSandboxToolsOnlyForInstallMode(t *testing.T) {
 		require.Nil(t, engine.(*agent.AgentEngine).GetSkillsManager())
 	})
 
-	t.Run("skills disabled without skills or install mode gets no shell or skill tools but keeps file tools", func(t *testing.T) {
+	t.Run("skills disabled without skills or install mode gets no shell or skill"+
+		" tools but keeps file tools", func(t *testing.T) {
 		chatModel := &fakeAgentChatModel{}
 		svc := &agentService{
 			sandboxResolver: stubSandboxResolver{
@@ -538,7 +542,11 @@ func TestGetKnowledgeBaseInfos_SharedKnowledgeBaseUsesSourceTenant(t *testing.T)
 	}
 	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, receiverTenantID)
 
-	infos, err := service.getKnowledgeBaseInfos(ctx, []string{"shared-kb"}, map[string]uint64{"shared-kb": sourceTenantID})
+	infos, err := service.getKnowledgeBaseInfos(
+		ctx,
+		[]string{"shared-kb"},
+		map[string]uint64{"shared-kb": sourceTenantID},
+	)
 
 	require.NoError(t, err)
 	require.Len(t, infos, 1)

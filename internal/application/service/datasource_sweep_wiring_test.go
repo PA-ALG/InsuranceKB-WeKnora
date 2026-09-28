@@ -20,7 +20,11 @@ type sweepFakeRepo struct {
 	prefixReturn []*types.Knowledge // children to return from FindByMetadataKeyPrefix
 }
 
-func (r *sweepFakeRepo) FindByMetadataKey(ctx context.Context, tenantID uint64, kbID, key, value string) (*types.Knowledge, error) {
+func (r *sweepFakeRepo) FindByMetadataKey(
+	_ context.Context,
+	_ uint64,
+	_, _, _ string,
+) (*types.Knowledge, error) {
 	return nil, nil // no existing main item → skip the case-1 update delete
 }
 
@@ -38,7 +42,11 @@ func (r *sweepFakeRepo) HardDeleteKnowledgeList(context.Context, uint64, []strin
 	return nil
 }
 
-func (r *sweepFakeRepo) FindByMetadataKeyPrefix(ctx context.Context, tenantID uint64, kbID, key, prefix string) ([]*types.Knowledge, error) {
+func (r *sweepFakeRepo) FindByMetadataKeyPrefix(
+	_ context.Context,
+	_ uint64,
+	_, key, prefix string,
+) ([]*types.Knowledge, error) {
 	r.prefixCalls = append(r.prefixCalls, key+"|"+prefix)
 	return r.prefixReturn, nil
 }
@@ -62,7 +70,7 @@ func (k *sweepFakeKS) CreateKnowledgeFromURL(
 	return k.createURLKnowledge, nil
 }
 
-func (k *sweepFakeKS) DeleteKnowledge(ctx context.Context, id string) error {
+func (k *sweepFakeKS) DeleteKnowledge(_ context.Context, id string) error {
 	k.events = append(k.events, "delete:"+id)
 	k.deleted = append(k.deleted, id)
 	return k.deleteErr
@@ -70,7 +78,7 @@ func (k *sweepFakeKS) DeleteKnowledge(ctx context.Context, id string) error {
 
 // DeleteKnowledgeList is the batched delete the subtree sweep now uses; record
 // each id in order so create-before-delete ordering is still asserted.
-func (k *sweepFakeKS) DeleteKnowledgeList(ctx context.Context, ids []string) error {
+func (k *sweepFakeKS) DeleteKnowledgeList(_ context.Context, ids []string) error {
 	for _, id := range ids {
 		k.events = append(k.events, "delete:"+id)
 		k.deleted = append(k.deleted, id)
@@ -79,9 +87,9 @@ func (k *sweepFakeKS) DeleteKnowledgeList(ctx context.Context, ids []string) err
 }
 
 func (k *sweepFakeKS) CreateKnowledgeFromFile(
-	ctx context.Context, kbID string, file *multipart.FileHeader, metadata map[string]string,
-	enableMultimodel *bool, customFileName string, tagIDs []string, channel string,
-	processOverrides *types.KnowledgeProcessOverrides,
+	_ context.Context, _ string, _ *multipart.FileHeader, _ map[string]string,
+	_ *bool, customFileName string, _ []string, _ string,
+	_ *types.KnowledgeProcessOverrides,
 ) (*types.Knowledge, error) {
 	k.events = append(k.events, "create:"+customFileName)
 	if k.createErr != nil {

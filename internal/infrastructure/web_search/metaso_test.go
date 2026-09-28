@@ -31,11 +31,11 @@ func TestMetasoProviderSearch(t *testing.T) {
 			t.Fatalf("unexpected content options: %+v", request)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"webpages":[
-			{"title":"First","link":"https://example.com/1","summary":"Summary","snippet":"Snippet","date":"2026-08-09"},
-			{"title":"Second","link":"https://example.com/2","snippet":"Fallback snippet","date":"invalid"},
-			{"title":"Third","link":"https://example.com/3","snippet":"must be capped"}
-		]}`))
+		_, _ = w.Write([]byte("{\"webpages\":[\n\t\t\t{\"title\":\"First\",\"link\":\"https://example.com/1\"" +
+			",\"summary\":\"Summary\",\"snippet\":\"Snippet\",\"date\":\"2026-08-09\"}," +
+			"\n\t\t\t{\"title\":\"Second\",\"link\":\"https://example.com/2\",\"snippet\":\"Fallback" +
+			" snippet\",\"date\":\"invalid\"},\n\t\t\t{\"title\":\"Third\"" +
+			",\"link\":\"https://example.com/3\",\"snippet\":\"must be capped\"}\n\t\t]}"))
 	}))
 	defer server.Close()
 
@@ -65,7 +65,9 @@ func TestValidateMetasoParameters(t *testing.T) {
 	if err := ValidateMetasoParameters(types.WebSearchProviderParameters{}); err == nil {
 		t.Fatal("expected missing API key error")
 	}
-	if err := ValidateMetasoParameters(types.WebSearchProviderParameters{APIKey: "mk-test", ExtraConfig: map[string]string{"scope": "unknown"}}); err == nil {
+	if err := ValidateMetasoParameters(
+		types.WebSearchProviderParameters{APIKey: "mk-test", ExtraConfig: map[string]string{"scope": "unknown"}},
+	); err == nil {
 		t.Fatal("expected invalid scope error")
 	}
 	if err := ValidateMetasoParameters(types.WebSearchProviderParameters{APIKey: "mk-test"}); err != nil {

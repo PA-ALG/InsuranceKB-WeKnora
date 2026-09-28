@@ -35,7 +35,11 @@ func imageBlk(id, token string) core.DocxBlock {
 }
 
 func fileBlk(id, token, name string) core.DocxBlock {
-	return core.DocxBlock{BlockID: id, BlockType: core.BlockTypeFile, File: &core.BlockFileRef{Token: token, Name: name}}
+	return core.DocxBlock{
+		BlockID:   id,
+		BlockType: core.BlockTypeFile,
+		File:      &core.BlockFileRef{Token: token, Name: name},
+	}
 }
 
 // cellBlk builds a table_cell container. A real Feishu table_cell holds no
@@ -63,14 +67,29 @@ func fakeFeishuGolden(nodes []core.WikiNode, docToken string, blocks []core.Docx
 ) (*httptest.Server, *core.Config) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, core.TokenResponse{ApiResponse: core.ApiResponse{Code: 0}, TenantAccessToken: "fake-token", Expire: 7200})
+	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(
+			w,
+			core.TokenResponse{APIResponse: core.APIResponse{Code: 0}, TenantAccessToken: "fake-token", Expire: 7200},
+		)
 	})
-	mux.HandleFunc("/open-apis/wiki/v2/spaces", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, core.WikiSpaceListResponse{ApiResponse: core.ApiResponse{Code: 0}, Data: core.WikiSpaceListData{Items: []core.WikiSpace{{SpaceID: "space1", Name: "Test Space"}}}})
+	mux.HandleFunc("/open-apis/wiki/v2/spaces", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(
+			w,
+			core.WikiSpaceListResponse{
+				APIResponse: core.APIResponse{Code: 0},
+				Data:        core.WikiSpaceListData{Items: []core.WikiSpace{{SpaceID: "space1", Name: "Test Space"}}},
+			},
+		)
 	})
-	mux.HandleFunc("/open-apis/wiki/v2/spaces/space1/nodes", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, core.WikiNodeListResponse{ApiResponse: core.ApiResponse{Code: 0}, Data: core.WikiNodeListData{Items: nodes}})
+	mux.HandleFunc("/open-apis/wiki/v2/spaces/space1/nodes", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(
+			w,
+			core.WikiNodeListResponse{
+				APIResponse: core.APIResponse{Code: 0},
+				Data:        core.WikiNodeListData{Items: nodes},
+			},
+		)
 	})
 
 	// docx blocks — paginated across two pages to exercise the paging glue.
@@ -86,36 +105,51 @@ func fakeFeishuGolden(nodes []core.WikiNode, docToken string, blocks []core.Docx
 		if !hasMore {
 			nextTok = ""
 		}
-		writeJSON(w, core.DocxBlocksResponse{ApiResponse: core.ApiResponse{Code: 0}, Data: core.DocxBlocksData{Items: page, HasMore: hasMore, PageToken: nextTok}})
+		writeJSON(
+			w,
+			core.DocxBlocksResponse{
+				APIResponse: core.APIResponse{Code: 0},
+				Data:        core.DocxBlocksData{Items: page, HasMore: hasMore, PageToken: nextTok},
+			},
+		)
 	})
 
 	// sheets-v2 values: sht_spread_0 → spreadsheet "sht_spread", sheet "0".
 	// Raw JSON keeps the fake honest to the real wire shape without wrestling
 	// nested anonymous-struct literals.
-	mux.HandleFunc("/open-apis/sheets/v2/spreadsheets/sht_spread/values/0", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"valueRange":{"values":[["名称","数量"],["苹果",3]]}}}`))
-		if err != nil {
-			panic(err)
-		}
-	})
+	mux.HandleFunc(
+		"/open-apis/sheets/v2/spreadsheets/sht_spread/values/0",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"valueRange":{"values":[["名称","数量"],["苹果",3]]}}}`))
+			if err != nil {
+				panic(err)
+			}
+		},
+	)
 
 	// bitable-v1 fields + records: bascApp_tblMain → app "bascApp", table "tblMain".
-	mux.HandleFunc("/open-apis/bitable/v1/apps/bascApp/tables/tblMain/fields", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"items":[{"field_name":"任务"},{"field_name":"状态"}]}}`))
-		if err != nil {
-			panic(err)
-		}
-	})
-	mux.HandleFunc("/open-apis/bitable/v1/apps/bascApp/tables/tblMain/records/search", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"has_more":false,"page_token":"",` +
-			`"items":[{"fields":{"任务":"写码","状态":"完成"}}]}}`))
-		if err != nil {
-			panic(err)
-		}
-	})
+	mux.HandleFunc(
+		"/open-apis/bitable/v1/apps/bascApp/tables/tblMain/fields",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"items":[{"field_name":"任务"},{"field_name":"状态"}]}}`))
+			if err != nil {
+				panic(err)
+			}
+		},
+	)
+	mux.HandleFunc(
+		"/open-apis/bitable/v1/apps/bascApp/tables/tblMain/records/search",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, err := w.Write([]byte(`{"code":0,"msg":"","data":{"has_more":false,"page_token":"",` +
+				`"items":[{"fields":{"任务":"写码","状态":"完成"}}]}}`))
+			if err != nil {
+				panic(err)
+			}
+		},
+	)
 
 	// medias download, routed by token embedded in the path.
 	mux.HandleFunc("/open-apis/drive/v1/medias/", func(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +166,9 @@ func fakeFeishuGolden(nodes []core.WikiNode, docToken string, blocks []core.Docx
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			panic(err)
+		}
 	})
 
 	ts := httptest.NewServer(mux)

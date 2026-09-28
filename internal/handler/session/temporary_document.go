@@ -41,12 +41,12 @@ func (h *Handler) UploadTemporaryDocument(c *gin.Context) {
 
 	sourceTenantID, parseErr := types.ParseAgentSourceTenantID(c.PostForm(types.AgentSourceTenantIDParam))
 	if parseErr != nil {
-		c.Error(apperrors.NewBadRequestError(parseErr.Error()))
+		_ = c.Error(apperrors.NewBadRequestError(parseErr.Error()))
 		return
 	}
 	agent, resourceTenantID, _ := h.resolveAgent(ctx, c, c.PostForm("agent_id"), sourceTenantID)
 	if sourceTenantID != 0 && agent == nil {
-		c.Error(apperrors.NewNotFoundError("Shared agent not found"))
+		_ = c.Error(apperrors.NewNotFoundError("Shared agent not found"))
 		return
 	}
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(fileHeader.Filename)), ".")
@@ -120,7 +120,12 @@ func (h *Handler) GetTemporaryDocument(c *gin.Context) {
 		c.Error(apperrors.NewNotFoundError("Session not found"))
 		return
 	}
-	document, err := h.temporaryDocuments.Get(ctx, c.GetUint64(types.TenantIDContextKey.String()), sessionID, c.Param("attachment_id"))
+	document, err := h.temporaryDocuments.Get(
+		ctx,
+		c.GetUint64(types.TenantIDContextKey.String()),
+		sessionID,
+		c.Param("attachment_id"),
+	)
 	if err != nil {
 		c.Error(apperrors.NewInternalServerError(err.Error()))
 		return
@@ -172,7 +177,12 @@ func (h *Handler) DeleteTemporaryDocument(c *gin.Context) {
 		c.Error(apperrors.NewNotFoundError("Session not found"))
 		return
 	}
-	if err := h.temporaryDocuments.Delete(ctx, c.GetUint64(types.TenantIDContextKey.String()), sessionID, c.Param("attachment_id")); err != nil {
+	if err := h.temporaryDocuments.Delete(
+		ctx,
+		c.GetUint64(types.TenantIDContextKey.String()),
+		sessionID,
+		c.Param("attachment_id"),
+	); err != nil {
 		c.Error(apperrors.NewInternalServerError(err.Error()))
 		return
 	}

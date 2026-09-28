@@ -1,3 +1,4 @@
+// Package router registers application routes and deployment capabilities.
 package router
 
 import (

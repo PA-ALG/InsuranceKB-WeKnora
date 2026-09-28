@@ -18,8 +18,18 @@ func TestApplyAuthAndTenantDefaults_DisableRegistrationDrivesRegistrationMode(t 
 	}{
 		{"true coerces empty YAML to invite_only", "true", "", AuthRegistrationModeInviteOnly},
 		{"case-insensitive TRUE also coerces", "TRUE", "", AuthRegistrationModeInviteOnly},
-		{"true overrides explicit self_serve YAML", "true", AuthRegistrationModeSelfServe, AuthRegistrationModeInviteOnly},
-		{"true is a no-op when YAML already invite_only", "true", AuthRegistrationModeInviteOnly, AuthRegistrationModeInviteOnly},
+		{
+			"true overrides explicit self_serve YAML",
+			"true",
+			AuthRegistrationModeSelfServe,
+			AuthRegistrationModeInviteOnly,
+		},
+		{
+			"true is a no-op when YAML already invite_only",
+			"true",
+			AuthRegistrationModeInviteOnly,
+			AuthRegistrationModeInviteOnly,
+		},
 		{"false leaves YAML untouched", "false", AuthRegistrationModeSelfServe, AuthRegistrationModeSelfServe},
 		{"unset falls back to default self_serve", "", "", AuthRegistrationModeSelfServe},
 		{"unset keeps explicit invite_only YAML", "", AuthRegistrationModeInviteOnly, AuthRegistrationModeInviteOnly},
@@ -76,7 +86,11 @@ func TestApplyAuthAndTenantDefaults_DefaultTenantMode(t *testing.T) {
 		applyAuthAndTenantDefaults(cfg)
 
 		if cfg.Auth.DefaultTenantMode != AuthDefaultTenantModeCreatePersonal {
-			t.Fatalf("default_tenant_mode = %q, want %q", cfg.Auth.DefaultTenantMode, AuthDefaultTenantModeCreatePersonal)
+			t.Fatalf(
+				"default_tenant_mode = %q, want %q",
+				cfg.Auth.DefaultTenantMode,
+				AuthDefaultTenantModeCreatePersonal,
+			)
 		}
 	})
 
@@ -139,7 +153,10 @@ func TestApplyAuthAndTenantDefaults_CrossTenantAccess(t *testing.T) {
 		applyAuthAndTenantDefaults(cfg)
 
 		if !cfg.Tenant.EnableCrossTenantAccess {
-			t.Fatal("WEKNORA_TENANT_ENABLE_CROSS_TENANT_ACCESS=TRUE should enable cross-tenant access (case-insensitive)")
+			t.Fatal(
+				"WEKNORA_TENANT_ENABLE_CROSS_TENANT_ACCESS=TRUE should enable" +
+					" cross-tenant access (case-insensitive)",
+			)
 		}
 	})
 

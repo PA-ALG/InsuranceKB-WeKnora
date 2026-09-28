@@ -148,8 +148,10 @@ func TestSandboxToolPersistenceStripsDuplicatePayloadsAndCompactsHistory(t *test
 		assert(!exists, key+" should be stripped")
 	}
 	assert(result.Data["exit_code"] == 0, "exit metadata should remain")
-	assert(len(CompactToolOutputForHistory(ToolShellExec, steps[0].ToolCalls[0].Result)) <= historicalSandboxOutputChars,
-		"historical replay must independently cap legacy raw output")
+	assert(
+		len(CompactToolOutputForHistory(ToolShellExec, steps[0].ToolCalls[0].Result)) <= historicalSandboxOutputChars,
+		"historical replay must independently cap legacy raw output",
+	)
 }
 
 func TestSanitizeAgentStepsForStorage_shellExecKeepsStructuredOutput(t *testing.T) {
@@ -251,7 +253,8 @@ func TestCompactToolOutputForHistory_recoversStreamsFromPlaceholder(t *testing.T
 
 func TestCompactToolOutputForHistory_failedSkillScriptKeepsStdout(t *testing.T) {
 	stdout := `{"chart":{"success":false,"error":{"error":"X轴字段不存在：工作项目","available":["name","value"]}}}`
-	output := "=== Script Execution: smart-charts/scripts/cli.py ===\n\n**Exit Code**: 1\n\n## Standard Output\n\n```\n" + stdout + "\n```\n"
+	output := "=== Script Execution: smart-charts/scripts/cli.py ===\n\n**Exit Code**: 1\n" +
+		"\n## Standard Output\n\n```\n" + stdout + "\n```\n"
 	errMsg := "Script exited with code 1\n\n[Analyze the error above and try a different approach.]"
 	history := CompactToolOutputForHistory(LegacyToolExecuteSkillScript, &types.ToolResult{
 		Success: false,

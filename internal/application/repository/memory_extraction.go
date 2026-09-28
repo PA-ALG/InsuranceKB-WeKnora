@@ -10,7 +10,11 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func (r *memoryRepository) withSubject(ctx context.Context, scope interfaces.MemoryScope, fn func(*gorm.DB, *types.MemorySubject) error) error {
+func (r *memoryRepository) withSubject(
+	ctx context.Context,
+	scope interfaces.MemoryScope,
+	fn func(*gorm.DB, *types.MemorySubject) error,
+) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var subject types.MemorySubject
 		if err := tx.Where("tenant_id = ? AND subject_id = ?", scope.TenantID, scope.SubjectID).
@@ -78,7 +82,12 @@ func (r *memoryRepository) HasPendingExtraction(ctx context.Context, scope inter
 	return hasPendingExtraction(r.db.WithContext(ctx), scope)
 }
 
-func (r *memoryRepository) EnqueuePendingSession(ctx context.Context, scope interfaces.MemoryScope, sessionID string, timeout time.Duration) (*types.MemorySubject, bool, error) {
+func (r *memoryRepository) EnqueuePendingSession(
+	ctx context.Context,
+	scope interfaces.MemoryScope,
+	sessionID string,
+	timeout time.Duration,
+) (*types.MemorySubject, bool, error) {
 	var snapshot types.MemorySubject
 	shouldSend := false
 	err := r.withSubject(ctx, scope, func(tx *gorm.DB, subject *types.MemorySubject) error {
@@ -107,7 +116,12 @@ func (r *memoryRepository) EnqueuePendingSession(ctx context.Context, scope inte
 	return &snapshot, shouldSend, err
 }
 
-func (r *memoryRepository) ClaimPendingSessions(ctx context.Context, scope interfaces.MemoryScope, fallbackSession, leaseID string, ttl time.Duration) (*types.MemoryExtractionBatch, error) {
+func (r *memoryRepository) ClaimPendingSessions(
+	ctx context.Context,
+	scope interfaces.MemoryScope,
+	fallbackSession, leaseID string,
+	ttl time.Duration,
+) (*types.MemoryExtractionBatch, error) {
 	var batch *types.MemoryExtractionBatch
 	err := r.withSubject(ctx, scope, func(tx *gorm.DB, subject *types.MemorySubject) error {
 		now := time.Now()
@@ -143,7 +157,14 @@ func validExtractionLease(subject *types.MemorySubject, leaseID string) bool {
 	return subject.ExtractionState.LeaseID == leaseID && subject.ExtractionState.LeaseUntil.After(time.Now())
 }
 
-func (r *memoryRepository) CheckpointExtraction(ctx context.Context, scope interfaces.MemoryScope, leaseID string, session types.MemoryExtractionSession, cursor types.MemoryMessageCursor, drained bool) error {
+func (r *memoryRepository) CheckpointExtraction(
+	ctx context.Context,
+	scope interfaces.MemoryScope,
+	leaseID string,
+	session types.MemoryExtractionSession,
+	cursor types.MemoryMessageCursor,
+	drained bool,
+) error {
 	return r.withSubject(ctx, scope, func(tx *gorm.DB, subject *types.MemorySubject) error {
 		if !validExtractionLease(subject, leaseID) {
 			return types.ErrMemoryExtractionLeaseLost
@@ -217,7 +238,11 @@ func (r *memoryRepository) FinishExtraction(ctx context.Context, scope interface
 	})
 }
 
-func (r *memoryRepository) ReleaseExtractionSlot(ctx context.Context, scope interfaces.MemoryScope, leaseID string) error {
+func (r *memoryRepository) ReleaseExtractionSlot(
+	ctx context.Context,
+	scope interfaces.MemoryScope,
+	leaseID string,
+) error {
 	return r.withSubject(ctx, scope, func(tx *gorm.DB, subject *types.MemorySubject) error {
 		if subject.ExtractionState.LeaseID != leaseID {
 			return nil

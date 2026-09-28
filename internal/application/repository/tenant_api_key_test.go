@@ -51,9 +51,28 @@ func TestTenantAPIKeyRepositoryUpdateIsTenantScoped(t *testing.T) {
 	ctx := context.Background()
 	tenant42, tenant43 := uint64(42), uint64(43)
 	keys := []*types.TenantAPIKey{
-		{TenantID: &tenant42, ScopeType: types.APIKeyScopeTenant, Name: "scoped", KeyHash: "hash-scoped", APIKey: "sk-scoped"},
-		{TenantID: &tenant43, ScopeType: types.APIKeyScopeTenant, Name: "other", KeyHash: "hash-other", APIKey: "sk-other"},
-		{TenantID: &tenant42, ScopeType: types.APIKeyScopeTenant, Name: "full", KeyHash: "hash-full", APIKey: "sk-full", FullAccess: true},
+		{
+			TenantID:  &tenant42,
+			ScopeType: types.APIKeyScopeTenant,
+			Name:      "scoped",
+			KeyHash:   "hash-scoped",
+			APIKey:    "sk-scoped",
+		},
+		{
+			TenantID:  &tenant43,
+			ScopeType: types.APIKeyScopeTenant,
+			Name:      "other",
+			KeyHash:   "hash-other",
+			APIKey:    "sk-other",
+		},
+		{
+			TenantID:   &tenant42,
+			ScopeType:  types.APIKeyScopeTenant,
+			Name:       "full",
+			KeyHash:    "hash-full",
+			APIKey:     "sk-full",
+			FullAccess: true,
+		},
 	}
 	for _, key := range keys {
 		require.NoError(t, repo.CreateAPIKey(ctx, key))

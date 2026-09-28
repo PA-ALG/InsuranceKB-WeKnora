@@ -15,14 +15,31 @@ func ClarifyArtifactVersions(content string, current, previous MessageArtifacts,
 	seen := make(map[string]bool)
 	for _, old := range previous {
 		for _, next := range current {
-			if old.SourcePath == "" || old.SourcePath != next.SourcePath || old.URL == next.URL || seen[next.URL] || strings.Contains(content, next.URL) {
+			if old.SourcePath == "" || old.SourcePath != next.SourcePath || old.URL == next.URL || seen[next.URL] ||
+				strings.Contains(content, next.URL) {
 				continue
 			}
 			if _, ok := ParseResourcePath(next.URL); !ok {
 				continue
 			}
 			seen[next.URL] = true
-			name := strings.NewReplacer("\\", "\\\\", "[", "\\[", "]", "\\]", "(", "\\(", ")", "\\)", "\n", " ", "\r", " ").Replace(next.FileName)
+			name := strings.NewReplacer(
+				"\\",
+				"\\\\",
+				"[",
+				"\\[",
+				"]",
+				"\\]",
+				"(",
+				"\\(",
+				")",
+				"\\)",
+				"\n",
+				" ",
+				"\r",
+				" ",
+			).
+				Replace(next.FileName)
 			content += "\n\n" + oldLabel + ": ![" + name + "](" + old.URL + ")\n\n" +
 				newLabel + ": ![" + name + "](" + next.URL + ")"
 		}

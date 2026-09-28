@@ -186,7 +186,8 @@ func TestUpdateDocumentChunkPreservesGeneratedQuestionsAcrossRevision(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(updatedMetadata.GeneratedQuestions) != 1 || updatedMetadata.GeneratedQuestions[0].Question != "old question" {
+	if len(updatedMetadata.GeneratedQuestions) != 1 ||
+		updatedMetadata.GeneratedQuestions[0].Question != "old question" {
 		t.Fatalf("generated questions were cleared: %+v", updatedMetadata.GeneratedQuestions)
 	}
 	if updatedMetadata.IsQuestionCurrent(updatedMetadata.GeneratedQuestions[0], updated.ContentRevision) {

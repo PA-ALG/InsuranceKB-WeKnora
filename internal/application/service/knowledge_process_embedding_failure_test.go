@@ -221,8 +221,8 @@ func TestProcessChunksSkipsEmbeddingFailureWriteWhenSourceReplaced(t *testing.T)
 		IndexingStrategy: types.IndexingStrategy{VectorEnabled: true},
 	}
 
-	svc.processChunks(context.Background(), kb, knowledge,
-		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}})
+	require.NoError(t, svc.processChunks(context.Background(), kb, knowledge,
+		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}}))
 
 	require.Greater(t, repo.reads, 2, "the guard must re-read after resolving the model")
 	require.Empty(t, repo.updates,
@@ -252,8 +252,8 @@ func TestProcessChunksSkipsEmbeddingModelWhenIndexingDisabled(t *testing.T) {
 	kb := &types.KnowledgeBase{ID: "kb-1", TenantID: 1}
 	require.False(t, kb.NeedsEmbeddingModel())
 
-	svc.processChunks(ctx, kb, knowledge,
-		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}})
+	require.NoError(t, svc.processChunks(ctx, kb, knowledge,
+		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}}))
 
 	require.Len(t, chunkRepo.created, 1, "chunks are persisted even without vector indexing")
 	require.NotEqual(t, types.ParseStatusFailed, knowledge.ParseStatus)

@@ -43,8 +43,19 @@ func TestValidatePgSearchUpgradePreflight(t *testing.T) {
 		{name: "external retriever skips extension gate", mode: "true"},
 		{name: "supported installed source can upgrade", mode: "false", version: "0.22.2", targetAvailable: true},
 		{name: "target already installed", mode: "false", version: pgSearchTargetVersion, targetAvailable: true},
-		{name: "missing target package blocks before migration", mode: "false", version: "0.22.2", wantErr: "is not available"},
-		{name: "unsupported installed line blocks before migration", mode: "false", version: "0.21.0", targetAvailable: true, wantErr: "unsupported installed pg_search version"},
+		{
+			name:    "missing target package blocks before migration",
+			mode:    "false",
+			version: "0.22.2",
+			wantErr: "is not available",
+		},
+		{
+			name:            "unsupported installed line blocks before migration",
+			mode:            "false",
+			version:         "0.21.0",
+			targetAvailable: true,
+			wantErr:         "unsupported installed pg_search version",
+		},
 	}
 
 	for _, tt := range tests {
@@ -94,8 +105,16 @@ func TestValidatePgSearchUpgradePostcondition(t *testing.T) {
 		wantErr string
 	}{
 		{name: "external retriever skips extension gate", mode: "true"},
+
 		{name: "target installed", mode: "false", version: pgSearchTargetVersion},
-		{name: "migration notice cannot mask old version", mode: "false", version: "0.22.2", wantErr: "expected pg_search 0.22.6"},
+
+		{
+			name:    "migration notice cannot mask old version",
+			mode:    "false",
+			version: "0.22.2",
+			wantErr: "expected pg_search 0.22.6",
+		},
+
 		{name: "missing extension is rejected", mode: "false", version: nil, wantErr: "expected pg_search 0.22.6"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -222,7 +241,13 @@ func TestReconcilePgSearchAfterOfficialMigrationsIsBoundedAndFailClosed(t *testi
 		wantErr         string
 	}{
 		{name: "target package unavailable", installed: "0.22.2", wantErr: "is not available"},
-		{name: "unsupported version", installed: "0.21.0", targetAvailable: true, wantErr: "unsupported installed pg_search version"},
+
+		{
+			name:            "unsupported version",
+			installed:       "0.21.0",
+			targetAvailable: true,
+			wantErr:         "unsupported installed pg_search version",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := newPgSearchSQLMock(t)

@@ -71,7 +71,7 @@ func (h *Handler) ListSessionArtifacts(c *gin.Context) {
 	artifacts, err := h.messageService.GetSessionArtifacts(ctx, sessionID)
 	if err != nil {
 		logger.Errorf(ctx, "list session artifacts failed: session=%s err=%v", sessionID, err)
-		c.Error(errors.NewInternalServerError(err.Error()))
+		_ = c.Error(errors.NewInternalServerError(err.Error()))
 		return
 	}
 
@@ -111,22 +111,22 @@ func (h *Handler) ListMessageArtifacts(c *gin.Context) {
 	sessionID := secutils.SanitizeForLog(paramSessionID(c))
 	messageID := secutils.SanitizeForLog(c.Param("message_id"))
 	if sessionID == "" || messageID == "" {
-		c.Error(errors.NewBadRequestError("session_id and message_id are required"))
+		_ = c.Error(errors.NewBadRequestError("session_id and message_id are required"))
 		return
 	}
 
 	if _, err := h.sessionService.GetSession(ctx, sessionID); err != nil {
 		if stderrors.Is(err, errors.ErrSessionNotFound) {
-			c.Error(errors.NewNotFoundError(err.Error()))
+			_ = c.Error(errors.NewNotFoundError(err.Error()))
 			return
 		}
-		c.Error(errors.NewInternalServerError(err.Error()))
+		_ = c.Error(errors.NewInternalServerError(err.Error()))
 		return
 	}
 
 	msg, err := h.messageService.GetMessage(ctx, sessionID, messageID)
 	if err != nil || msg == nil {
-		c.Error(errors.NewNotFoundError("message not found"))
+		_ = c.Error(errors.NewNotFoundError("message not found"))
 		return
 	}
 
@@ -165,12 +165,12 @@ func (h *Handler) DownloadMessageArtifact(c *gin.Context) {
 	messageID := secutils.SanitizeForLog(c.Param("message_id"))
 	indexParam := c.Param("index")
 	if sessionID == "" || messageID == "" || indexParam == "" {
-		c.Error(errors.NewBadRequestError("session_id, message_id and index are required"))
+		_ = c.Error(errors.NewBadRequestError("session_id, message_id and index are required"))
 		return
 	}
 	index, err := strconv.Atoi(indexParam)
 	if err != nil || index < 0 {
-		c.Error(errors.NewBadRequestError("invalid artifact index"))
+		_ = c.Error(errors.NewBadRequestError("invalid artifact index"))
 		return
 	}
 
@@ -179,16 +179,16 @@ func (h *Handler) DownloadMessageArtifact(c *gin.Context) {
 	// both "not found" and "forbidden" without leaking existence.
 	if _, err := h.sessionService.GetSession(ctx, sessionID); err != nil {
 		if stderrors.Is(err, errors.ErrSessionNotFound) {
-			c.Error(errors.NewNotFoundError(err.Error()))
+			_ = c.Error(errors.NewNotFoundError(err.Error()))
 			return
 		}
-		c.Error(errors.NewInternalServerError(err.Error()))
+		_ = c.Error(errors.NewInternalServerError(err.Error()))
 		return
 	}
 
 	msg, err := h.messageService.GetMessage(ctx, sessionID, messageID)
 	if err != nil || msg == nil {
-		c.Error(errors.NewNotFoundError("message not found"))
+		_ = c.Error(errors.NewNotFoundError("message not found"))
 		return
 	}
 	if index >= len(msg.Artifacts) {
@@ -206,7 +206,7 @@ func (h *Handler) DownloadMessageArtifact(c *gin.Context) {
 	}
 
 	if h.fileService == nil {
-		c.Error(errors.NewInternalServerError("file service unavailable"))
+		_ = c.Error(errors.NewInternalServerError("file service unavailable"))
 		return
 	}
 	file, err := access.ResolveMessageArtifact(ctx, msg, index, h.agentShareService, h.resourceCatalog,

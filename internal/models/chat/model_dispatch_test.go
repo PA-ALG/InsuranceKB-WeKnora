@@ -44,7 +44,15 @@ func (r *chatDispatchReservationStub) RecordModelDispatch(
 }
 
 func TestStandardSDKChatJournalsEachHTTPDispatch(t *testing.T) {
-	for _, mode := range []string{"success", "http_error", "transport_error", "image_retry", "reserve_error", "mark_error", "record_error"} {
+	for _, mode := range []string{
+		"success",
+		"http_error",
+		"transport_error",
+		"image_retry",
+		"reserve_error",
+		"mark_error",
+		"record_error",
+	} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("SSRF_WHITELIST", "127.0.0.1")
 			var bodies [][]byte
@@ -71,7 +79,15 @@ func TestStandardSDKChatJournalsEachHTTPDispatch(t *testing.T) {
 				_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"summary"}}]}`))
 			}))
 			defer server.Close()
-			chat, err := NewRemoteChat(&ChatConfig{BaseURL: server.URL, ModelName: "sdk-model", ModelID: "sdk-id", Provider: "openai", APIKey: "test"})
+			chat, err := NewRemoteChat(
+				&ChatConfig{
+					BaseURL:   server.URL,
+					ModelName: "sdk-model",
+					ModelID:   "sdk-id",
+					Provider:  "openai",
+					APIKey:    "test",
+				},
+			)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -86,7 +102,11 @@ func TestStandardSDKChatJournalsEachHTTPDispatch(t *testing.T) {
 			case "record_error":
 				recorder.recordErr = failure
 			}
-			ctx := types.WithLLMCallMetadata(types.WithModelDispatchRecorder(context.Background(), recorder), "document_summary", "")
+			ctx := types.WithLLMCallMetadata(
+				types.WithModelDispatchRecorder(context.Background(), recorder),
+				"document_summary",
+				"",
+			)
 			_, err = chat.Chat(ctx, messages, &ChatOptions{})
 			want := 1
 			if mode == "image_retry" {
@@ -110,7 +130,11 @@ func TestStandardSDKChatJournalsEachHTTPDispatch(t *testing.T) {
 			}
 			for i, body := range bodies {
 				spec := recorder.specs[i]
-				if spec.RequestSHA256 != fmt.Sprintf("%x", sha256.Sum256(body)) || spec.TransportRetryIndex != i || spec.Operation != "document_summary" || spec.Purpose != "document_summary" || spec.ModelID != "sdk-id" || spec.ModelName != "sdk-model" {
+				if spec.RequestSHA256 != fmt.Sprintf("%x", sha256.Sum256(body)) || spec.TransportRetryIndex != i ||
+					spec.Operation != "document_summary" ||
+					spec.Purpose != "document_summary" ||
+					spec.ModelID != "sdk-id" ||
+					spec.ModelName != "sdk-model" {
 					t.Fatalf("wrong dispatch spec: %#v", spec)
 				}
 				wantStatus, wantOutcome := 200, "HTTP_RESPONSE"
@@ -134,10 +158,23 @@ func TestGeminiRawHTTPChatJournalsTheRealDispatch(t *testing.T) {
 	t.Setenv("SSRF_WHITELIST", "127.0.0.1")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"summary"}}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}`))
+		_, _ = w.Write(
+			[]byte(
+				"{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"summary\"}}]" +
+					",\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1,\"total_tokens\":4}}",
+			),
+		)
 	}))
 	defer server.Close()
-	chat, err := NewRemoteChat(&ChatConfig{BaseURL: server.URL + "/openai", ModelName: "gemini", ModelID: "gemini-id", Provider: "gemini", APIKey: "test"})
+	chat, err := NewRemoteChat(
+		&ChatConfig{
+			BaseURL:   server.URL + "/openai",
+			ModelName: "gemini",
+			ModelID:   "gemini-id",
+			Provider:  "gemini",
+			APIKey:    "test",
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

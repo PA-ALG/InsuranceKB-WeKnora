@@ -1,3 +1,4 @@
+// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: per-config sandbox manager resolution.
 //
 // A manager is built for one (tenant, sandbox config) pair — a workspace holds
@@ -138,6 +139,7 @@ func NewGuardedTransport() *http.Transport {
 	return NewGuardedTransportWithPolicy(DefaultOutboundURLPolicy())
 }
 
+// NewGuardedTransportWithPolicy creates a transport enforcing the supplied outbound policy.
 func NewGuardedTransportWithPolicy(policy OutboundURLPolicy) *http.Transport {
 	return &http.Transport{
 		DialContext:         GuardedDialContext(policy),

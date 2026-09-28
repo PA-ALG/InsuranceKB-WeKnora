@@ -113,7 +113,11 @@ func (s *membershipLookupService) ListByUser(context.Context, string) ([]*types.
 	return s.members, nil
 }
 
-func (s *membershipLookupService) GetMembership(_ context.Context, _ string, tenantID uint64) (*types.TenantMember, error) {
+func (s *membershipLookupService) GetMembership(
+	_ context.Context,
+	_ string,
+	tenantID uint64,
+) (*types.TenantMember, error) {
 	if s.getErr != nil {
 		return nil, s.getErr
 	}

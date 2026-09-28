@@ -61,8 +61,12 @@ func TestParseIMAConfig(t *testing.T) {
 			wantErr:     datasource.ErrInvalidCredentials,
 		},
 		{
-			name:        "loopback base_url rejected by SSRF policy",
-			credentials: map[string]interface{}{"client_id": "cid", "api_key": "key", "base_url": "http://169.254.169.254"},
+			name: "loopback base_url rejected by SSRF policy",
+			credentials: map[string]interface{}{
+				"client_id": "cid",
+				"api_key":   "key",
+				"base_url":  "http://169.254.169.254",
+			},
 			wantErrText: "SSRF",
 		},
 	}

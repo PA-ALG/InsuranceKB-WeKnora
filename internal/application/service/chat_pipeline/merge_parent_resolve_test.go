@@ -90,7 +90,10 @@ func TestResolveImageChunkKeepsGrandparentContextWithoutCoordinateSlicing(t *tes
 	if len(got) != 1 {
 		t.Fatalf("result count = %d, want 1", len(got))
 	}
-	for _, want := range []string{"grandparent context before", "grandparent context after", "current edited text child", "u1"} {
+	for _, want := range []string{
+		"grandparent context before", "grandparent context after",
+		"current edited text child", "u1",
+	} {
 		if !strings.Contains(got[0].Content, want) {
 			t.Fatalf("image result lost %q: %q", want, got[0].Content)
 		}

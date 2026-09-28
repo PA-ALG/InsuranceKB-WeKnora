@@ -171,7 +171,11 @@ func TestRegisterToolsPinsManagedWikiOnceAndRemovesRawFallback(t *testing.T) {
 
 	require.NoError(t, service.registerTools(context.Background(), registry, config, nil, nil, "session-a"))
 	require.Equal(t, 1, pinner.calls, "search and read must share one turn pin")
-	require.Equal(t, []interfaces.ConceptAgentKnowledgeScope830G2{{KnowledgeBaseID: "wiki-a", TenantID: 1}}, pinner.scopes)
+	require.Equal(
+		t,
+		[]interfaces.ConceptAgentKnowledgeScope830G2{{KnowledgeBaseID: "wiki-a", TenantID: 1}},
+		pinner.scopes,
+	)
 	_, err := registry.GetTool(agenttools.ToolReadDocument)
 	require.Error(t, err, "managed Wiki must not register a RAW source reader")
 	_, err = registry.GetTool(agenttools.ToolSearchKnowledge)
@@ -179,7 +183,10 @@ func TestRegisterToolsPinsManagedWikiOnceAndRemovesRawFallback(t *testing.T) {
 
 	search, err := registry.GetTool(agenttools.ToolWikiSearch)
 	require.NoError(t, err)
-	searchResult, err := search.Execute(context.Background(), json.RawMessage(`{"queries":["body-only release phrase"]}`))
+	searchResult, err := search.Execute(
+		context.Background(),
+		json.RawMessage(`{"queries":["body-only release phrase"]}`),
+	)
 	require.NoError(t, err)
 	require.True(t, searchResult.Success)
 	require.Contains(t, searchResult.Output, "release-a")

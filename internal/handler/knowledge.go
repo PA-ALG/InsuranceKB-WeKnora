@@ -125,7 +125,9 @@ func (h *KnowledgeHandler) requireKBOwnershipOrAdmin(c *gin.Context, kbID string
 
 // validateKnowledgeBaseAccess validates access permissions to a knowledge base
 // using the ":id" URL path parameter. It delegates to validateKnowledgeBaseAccessWithKBID.
-func (h *KnowledgeHandler) validateKnowledgeBaseAccess(c *gin.Context) (*types.KnowledgeBase, string, uint64, types.OrgMemberRole, error) {
+func (h *KnowledgeHandler) validateKnowledgeBaseAccess(
+	c *gin.Context,
+) (*types.KnowledgeBase, string, uint64, types.OrgMemberRole, error) {
 	kbID := secutils.SanitizeForLog(c.Param("id"))
 	return h.validateKnowledgeBaseAccessWithKBID(c, kbID)
 }
@@ -327,7 +329,7 @@ func (h *KnowledgeHandler) CreateKnowledgeFromFile(c *gin.Context) {
 	if err != nil {
 		if isRequestBodyTooLarge(err) {
 			logger.Error(ctx, "File size too large")
-			c.Error(errors.NewBadRequestError(fmt.Sprintf("文件大小不能超过%dMB", maxSizeMB)))
+			_ = c.Error(errors.NewBadRequestError(fmt.Sprintf("文件大小不能超过%dMB", maxSizeMB)))
 			return
 		}
 		logger.Error(ctx, "File upload failed", err)
@@ -400,7 +402,17 @@ func (h *KnowledgeHandler) CreateKnowledgeFromFile(c *gin.Context) {
 	channel := c.PostForm("channel")
 
 	// Create knowledge entry from the file
-	knowledge, err := h.kgService.CreateKnowledgeFromFile(ctx, kbID, file, metadata, enableMultimodel, customFileName, tagIDs, channel, processOverrides)
+	knowledge, err := h.kgService.CreateKnowledgeFromFile(
+		ctx,
+		kbID,
+		file,
+		metadata,
+		enableMultimodel,
+		customFileName,
+		tagIDs,
+		channel,
+		processOverrides,
+	)
 	// Check for duplicate knowledge error
 	if err != nil {
 		if h.handleDuplicateKnowledgeError(c, err, knowledge, "file") {
@@ -497,7 +509,16 @@ func (h *KnowledgeHandler) CreateKnowledgeFromURL(c *gin.Context) {
 
 	// Create knowledge entry from the URL
 	knowledge, err := h.kgService.CreateKnowledgeFromURL(
-		ctx, kbID, req.URL, req.FileName, req.FileType, req.EnableMultimodel, req.Title, req.TagIDs, req.Channel, req.ProcessConfig,
+		ctx,
+		kbID,
+		req.URL,
+		req.FileName,
+		req.FileType,
+		req.EnableMultimodel,
+		req.Title,
+		req.TagIDs,
+		req.Channel,
+		req.ProcessConfig,
 	)
 	// Check for duplicate knowledge error
 	if err != nil {
@@ -1330,7 +1351,7 @@ func (h *KnowledgeHandler) ListKnowledgeFolders(c *gin.Context) {
 	// every viewer of a shared knowledge base.
 	_, kbID, effectiveTenantID, _, err := h.validateKnowledgeBaseAccess(c)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	ctx := types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
@@ -1338,7 +1359,7 @@ func (h *KnowledgeHandler) ListKnowledgeFolders(c *gin.Context) {
 	tree, err := h.kgService.ListKnowledgeFolderTree(ctx, kbID)
 	if err != nil {
 		logger.ErrorWithFields(ctx, err, nil)
-		c.Error(errors.NewInternalServerError(err.Error()))
+		_ = c.Error(errors.NewInternalServerError(err.Error()))
 		return
 	}
 
@@ -1376,24 +1397,24 @@ type MoveKnowledgeToFolderRequest struct {
 func (h *KnowledgeHandler) MoveKnowledgeToFolder(c *gin.Context) {
 	var req MoveKnowledgeToFolderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(errors.NewBadRequestError("Invalid request parameters: " + err.Error()))
+		_ = c.Error(errors.NewBadRequestError("Invalid request parameters: " + err.Error()))
 		return
 	}
 
 	ids := dedupeKnowledgeIDs(req.IDs)
 	if len(ids) == 0 {
-		c.Error(errors.NewBadRequestError("knowledge_ids cannot be empty"))
+		_ = c.Error(errors.NewBadRequestError("knowledge_ids cannot be empty"))
 		return
 	}
 	const maxBatch = 200
 	if len(ids) > maxBatch {
-		c.Error(errors.NewBadRequestError(fmt.Sprintf("too many ids (max %d per batch)", maxBatch)))
+		_ = c.Error(errors.NewBadRequestError(fmt.Sprintf("too many ids (max %d per batch)", maxBatch)))
 		return
 	}
 
 	kbID, effectiveTenantID, err := h.requireKnowledgeWriteAccess(c, req.KBID)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	ctx := types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
@@ -1401,18 +1422,18 @@ func (h *KnowledgeHandler) MoveKnowledgeToFolder(c *gin.Context) {
 	// Guard against cross-KB moves: the service layer scopes by tenant, so the
 	// handler must confirm every entry belongs to the requested knowledge base.
 	if err := h.requireKnowledgeInKB(ctx, effectiveTenantID, kbID, ids); err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 
 	affected, err := h.kgService.MoveKnowledgeToFolder(ctx, kbID, ids, req.FolderPath)
 	if err != nil {
 		if appErr, ok := errors.IsAppError(err); ok {
-			c.Error(appErr)
+			_ = c.Error(appErr)
 			return
 		}
 		logger.ErrorWithFields(ctx, err, nil)
-		c.Error(errors.NewInternalServerError(err.Error()))
+		_ = c.Error(errors.NewInternalServerError(err.Error()))
 		return
 	}
 
@@ -1449,21 +1470,21 @@ type RenameKnowledgeFolderRequest struct {
 func (h *KnowledgeHandler) RenameKnowledgeFolder(c *gin.Context) {
 	var req RenameKnowledgeFolderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(errors.NewBadRequestError("Invalid request parameters: " + err.Error()))
+		_ = c.Error(errors.NewBadRequestError("Invalid request parameters: " + err.Error()))
 		return
 	}
 
 	_, kbID, effectiveTenantID, permission, err := h.validateKnowledgeBaseWriteAccessWithKBID(c, c.Param("id"))
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	if permission != types.OrgRoleAdmin && permission != types.OrgRoleEditor {
-		c.Error(errors.NewForbiddenError("No permission to modify knowledge"))
+		_ = c.Error(errors.NewForbiddenError("No permission to modify knowledge"))
 		return
 	}
 	if err := h.requireKBOwnershipOrAdmin(c, kbID); err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	ctx := types.WithExecutionTenant(c.Request.Context(), effectiveTenantID)
@@ -1471,11 +1492,11 @@ func (h *KnowledgeHandler) RenameKnowledgeFolder(c *gin.Context) {
 	affected, err := h.kgService.RenameKnowledgeFolder(ctx, kbID, req.From, req.To)
 	if err != nil {
 		if appErr, ok := errors.IsAppError(err); ok {
-			c.Error(appErr)
+			_ = c.Error(appErr)
 			return
 		}
 		logger.ErrorWithFields(ctx, err, nil)
-		c.Error(errors.NewInternalServerError(err.Error()))
+		_ = c.Error(errors.NewInternalServerError(err.Error()))
 		return
 	}
 
@@ -1883,10 +1904,13 @@ func (h *KnowledgeHandler) PreviewKnowledgeFile(c *gin.Context) {
 
 // GetKnowledgeBatchRequest defines parameters for batch knowledge retrieval
 type GetKnowledgeBatchRequest struct {
-	IDs                 []string `form:"ids" binding:"required"` // List of knowledge IDs
-	KBID                string   `form:"kb_id"`                  // Optional: scope to this KB (validates access and uses effective tenant for shared KB)
-	AgentID             string   `form:"agent_id"`               // Optional: when using a shared agent, use agent's tenant for retrieval (validates shared agent access)
-	AgentSourceTenantID uint64   `form:"agent_source_tenant_id"` // Optional source selector, verified against the share relation
+	IDs []string `form:"ids" binding:"required"` // List of knowledge IDs
+	// Optional: scope to this KB (validates access and uses effective tenant for shared KB)
+	KBID string `form:"kb_id"`
+	// Optional: when using a shared agent, use agent's tenant for retrieval (validates shared agent access)
+	AgentID string `form:"agent_id"`
+	// Optional source selector, verified against the share relation
+	AgentSourceTenantID uint64 `form:"agent_source_tenant_id"`
 }
 
 // GetKnowledgeBatch godoc
@@ -1919,7 +1943,7 @@ func (h *KnowledgeHandler) GetKnowledgeBatch(c *gin.Context) {
 		return
 	}
 	if _, parseErr := types.ParseAgentSourceTenantID(c.Query(types.AgentSourceTenantIDParam)); parseErr != nil {
-		c.Error(errors.NewBadRequestError(parseErr.Error()))
+		_ = c.Error(errors.NewBadRequestError(parseErr.Error()))
 		return
 	}
 
@@ -2181,12 +2205,12 @@ func (h *KnowledgeHandler) RegenerateKnowledgeSummary(c *gin.Context) {
 	ctx := c.Request.Context()
 	id := secutils.SanitizeForLog(c.Param("id"))
 	if id == "" {
-		c.Error(errors.NewBadRequestError("Knowledge ID cannot be empty"))
+		_ = c.Error(errors.NewBadRequestError("Knowledge ID cannot be empty"))
 		return
 	}
 	_, effCtx, err := h.resolveKnowledgeAndValidateKBAccess(c, id, types.OrgRoleEditor)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 	knowledge, err := h.kgService.GetKnowledgeByID(effCtx, id)
@@ -2555,7 +2579,7 @@ func (h *KnowledgeHandler) UpdateImageInfo(c *gin.Context) {
 // @Produce      json
 // @Param        keyword    query     string  false "Keyword to search"
 // @Param        offset     query     int     false "Offset for pagination (minimum 0)" minimum(0)
-// @Param        limit      query     int     false "Limit for pagination (default 20, maximum 100)" minimum(1) maximum(100)
+// @Param limit query int false "Limit for pagination (default 20, maximum 100)" minimum(1) maximum(100)
 // @Param        file_types query     string  false "Comma-separated file extensions to filter (e.g., csv,xlsx)"
 // @Param        agent_id   query     string  false "Shared agent ID (search within agent's KB scope)"
 // @Param        recent     query     bool    false "Return recent files when keyword is empty"
@@ -2648,7 +2672,14 @@ func (h *KnowledgeHandler) SearchKnowledge(c *gin.Context) {
 			})
 			return
 		}
-		knowledges, hasMore, total, err := h.kgService.SearchKnowledgeForScopes(ctx, scopes, keyword, offset, limit, fileTypes)
+		knowledges, hasMore, total, err := h.kgService.SearchKnowledgeForScopes(
+			ctx,
+			scopes,
+			keyword,
+			offset,
+			limit,
+			fileTypes,
+		)
 		if err != nil {
 			logger.ErrorWithFields(ctx, err, nil)
 			c.Error(errors.NewInternalServerError("Failed to search knowledge").WithDetails(err.Error()))
@@ -2673,7 +2704,14 @@ func (h *KnowledgeHandler) SearchKnowledge(c *gin.Context) {
 			})
 			return
 		}
-		knowledges, hasMore, total, err := h.kgService.SearchKnowledgeForScopes(ctx, scopes, keyword, offset, limit, fileTypes)
+		knowledges, hasMore, total, err := h.kgService.SearchKnowledgeForScopes(
+			ctx,
+			scopes,
+			keyword,
+			offset,
+			limit,
+			fileTypes,
+		)
 		if err != nil {
 			logger.ErrorWithFields(ctx, err, nil)
 			c.Error(errors.NewInternalServerError("Failed to search knowledge").WithDetails(err.Error()))
@@ -2854,7 +2892,15 @@ func (h *KnowledgeHandler) MoveKnowledge(c *gin.Context) {
 			return
 		}
 		if knowledge.ParseStatus != types.ParseStatusCompleted {
-			c.Error(errors.NewBadRequestError(fmt.Sprintf("Knowledge item %s is not in completed status (current: %s)", kID, knowledge.ParseStatus)))
+			_ = c.Error(
+				errors.NewBadRequestError(
+					fmt.Sprintf(
+						"Knowledge item %s is not in completed status (current: %s)",
+						kID,
+						knowledge.ParseStatus,
+					),
+				),
+			)
 			return
 		}
 	}
@@ -2889,8 +2935,15 @@ func (h *KnowledgeHandler) MoveKnowledge(c *gin.Context) {
 		return
 	}
 
-	logger.Infof(ctx, "MoveKnowledge: task enqueued: %s, asynq_id: %s, source: %s, target: %s, count: %d",
-		taskID, info.ID, secutils.SanitizeForLog(req.SourceKBID), secutils.SanitizeForLog(req.TargetKBID), len(req.KnowledgeIDs))
+	logger.Infof(
+		ctx,
+		"MoveKnowledge: task enqueued: %s, asynq_id: %s, source: %s, target: %s, count: %d",
+		taskID,
+		info.ID,
+		secutils.SanitizeForLog(req.SourceKBID),
+		secutils.SanitizeForLog(req.TargetKBID),
+		len(req.KnowledgeIDs),
+	)
 
 	// Save initial progress
 	initialProgress := &types.KnowledgeMoveProgress{
@@ -3157,7 +3210,10 @@ func filterKnowledgesByKBAllowSet(knowledges []*types.Knowledge, allowed map[str
 	return filtered
 }
 
-func filterKnowledgeSearchScopesForAPIKey(ctx context.Context, scopes []types.KnowledgeSearchScope) []types.KnowledgeSearchScope {
+func filterKnowledgeSearchScopesForAPIKey(
+	ctx context.Context,
+	scopes []types.KnowledgeSearchScope,
+) []types.KnowledgeSearchScope {
 	allowed := tenantAPIKeyAllowedKBSet(ctx)
 	if allowed == nil {
 		return scopes

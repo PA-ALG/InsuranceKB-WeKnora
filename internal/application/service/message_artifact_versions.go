@@ -10,7 +10,11 @@ import (
 // Existing conversations receive the same version clarification as new turns,
 // including when the original producing message is outside the loaded page.
 // All callers have already authorized access to the containing session.
-func (s *messageService) clarifyReadArtifactVersions(ctx context.Context, sessionID string, messages []*types.Message) []*types.Message {
+func (s *messageService) clarifyReadArtifactVersions(
+	ctx context.Context,
+	sessionID string,
+	messages []*types.Message,
+) []*types.Message {
 	needsHistory := false
 	for _, message := range messages {
 		if message == nil || len(message.Artifacts) == 0 {
@@ -52,14 +56,14 @@ func (s *messageService) clarifyReadArtifactVersions(ctx context.Context, sessio
 				referenced = append(referenced, artifact)
 			}
 		}
-		copy := *message
-		copy.Content = types.ClarifyArtifactVersions(
+		cloned := *message
+		cloned.Content = types.ClarifyArtifactVersions(
 			message.Content,
 			message.Artifacts.Live(),
 			referenced,
 			types.LanguageFromContextOrDefault(ctx),
 		)
-		result[i] = &copy
+		result[i] = &cloned
 	}
 	return result
 }

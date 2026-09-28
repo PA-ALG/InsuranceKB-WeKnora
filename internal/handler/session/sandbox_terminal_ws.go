@@ -1,3 +1,4 @@
+// Package session handles session requests and sandbox terminal connections.
 // Package session: sandbox terminal WebSocket.
 //
 // GET /api/v1/sessions/:session_id/sandbox/terminal?ticket=<short-lived JWT>

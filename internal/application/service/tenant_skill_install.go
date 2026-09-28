@@ -1075,7 +1075,8 @@ func (r *installerRun) round(ctx context.Context, prompt string) error {
 				strings.Join(r.steer.guidance, "\n\n")
 		}
 		if continuation > 0 {
-			input += "\nContinue from the existing sandbox state to address the newly queued administrator guidance. " +
+			input += "\nContinue from the existing sandbox state to address the newly queued" +
+				" administrator guidance. " +
 				"Do not repeat completed installation work."
 		}
 		state, err := r.engine.Execute(ctx, r.sessionID, r.transcript.assistantMessageID, input, nil)
@@ -1141,14 +1142,11 @@ func buildRepairPrompt(skillDir string, gate *skillVerificationError) string {
 		findings.WriteString(problem)
 		findings.WriteString("\n")
 	}
-	return fmt.Sprintf(`Verification of the skill you just installed failed. Fix only this and stop.
-
-The %s check reported:
-%s
-Resolve the findings above. For missing packages, install them. For a missing or invalid runtime report,
-assess prerequisites from SKILL.md and write the report. Never erase a prerequisite to pass the check.
-
-- Python packages go into %s/.venv (`+"`uv pip install`"+`, or
+	return fmt.Sprintf("Verification of the skill you just installed failed. Fix only this and"+
+		" stop.\n\nThe %s check reported:\n%s\nResolve the findings above. For"+
+		" missing packages, install them. For a missing or invalid runtime report"+
+		",\nassess prerequisites from SKILL.md and write the report. Never erase a"+
+		" prerequisite to pass the check.\n\n- Python packages go into %s/.venv ("+"`uv pip install`"+`, or
   %s/.venv/bin/python -m pip install). Node packages go under %s/node_modules.
 - Do NOT edit SKILL.md, requirements.txt, pyproject.toml or package.json to
   make the check pass. Those files are what read_skill serves, so weakening a
@@ -1931,48 +1929,62 @@ func buildInstallPrompt(skillDir string, bundle *SkillBundle, tools map[string]s
 		skillMD = string(bundle.Files["SKILL.md"])
 		requirementsPath = sandbox.SkillRequirementsPath(bundle.Name)
 	}
-	return fmt.Sprintf(`Install this WeKnora skill into the sandbox image.
-
-Skill directory: %s
-%s
-
-Hard requirements:
-- Install dependencies for exactly this one skill.
-- Python dependencies must go into %s/.venv. Do not install into system Python.
-- Node dependencies must go under %s/node_modules. Do not install global packages unless no local alternative exists.
-- shell_exec already starts every command in %s. Use relative paths
-  (`+"`ls -la scripts/`"+`, `+"`uv venv --seed .venv`"+`) and do NOT prefix
-  `+"`cd <skill-dir> &&`"+` onto them.
+	return fmt.Sprintf("Install this WeKnora skill into the sandbox image.\n\nSkill directory: %s"+
+		"\n%s\n\nHard requirements:\n- Install dependencies for exactly this one"+
+		" skill.\n- Python dependencies must go into %s/.venv. Do not install into"+
+		" system Python.\n- Node dependencies must go under %s/node_modules. Do"+
+		" not install global packages unless no local alternative exists.\n-"+
+		" shell_exec already starts every command in %s. Use relative paths\n  ("+
+		"`ls -la scripts/`"+
+		`, `+
+		"`uv venv --seed .venv`"+
+		`) and do NOT prefix
+  `+
+		"`cd <skill-dir> &&`"+
+		` onto them.
 - To create or change a file in this tree use write_skill_file /
-  edit_skill_file, NOT a shell heredoc or `+"`cat`"+`: those truncate at the
-  command-length cap and mangle quoting.
-  write_sandbox_file only writes /workspace, which is wiped before the
-  snapshot, so it cannot help you here.
-- Each command has a 10-minute budget; you do not need to set timeout_sec.
-- When finished, report what you installed and any global/system packages you changed.
-- Declare the environment variables this skill needs AT RUN TIME. Decide from the SKILL.md text
-  at the end of this message: declare what it documents as needed to run the skill. Ignore 
-  anything only the installation itself needed. Write the declaration with write_skill_file to %s, as JSON of this exact shape:
-  {"env":[{"name":"TAVILY_API_KEY","description":"what the skill uses it for","required":true}]}
-  Each name must be UPPER_SNAKE_CASE and must appear literally somewhere in the skill's own files.
-  Never write any value, placeholder or example credential: this file declares what is needed, and
-  a value you invent would be stored as this workspace's real credential. If one environment
-  variable is required, set required to true; if it is optional, set required to false. If the
-  skill needs no environment variables, write {"env":[]}.
-  Do not declare WEKNORA_SKILL_DIR, WEKNORA_SKILL_OUTPUT_DIR, WEKNORA_SKILL_HISTORY_ROOT or
-  WEKNORA_SESSION_INPUT_DIR: the sandbox injects those. Other WEKNORA_* names the skill reads
-  (WEKNORA_API_KEY, WEKNORA_BASE_URL, WEKNORA_HOST, WEKNORA_TOKEN, WEKNORA_KB_ID) MUST be declared.
-
-On-demand / optional extras MUST be installed now. Every chat session starts
-from the image this install produces, and whatever a session installs dies with
-it, so an extra deferred to chat time is paid for again on every session and
-fails outright wherever the sandbox has no egress. Skills that ship
-scripts/install_deps.py or say "pip install when the user needs Word/PPT" will
-stall at chat time unless those packages are already in the venv.
-- Create the venv with pip present: `+"`uv venv --seed %s/.venv`"+` (or `+"`python3 -m venv`"+`).
-- Install requirements.txt / pyproject.toml with `+"`uv pip install`"+`.
+  edit_skill_file, NOT a shell heredoc or `+
+		"`cat`"+
+		": those truncate at the\n  command-length cap and mangle quoting.\n "+
+		" write_sandbox_file only writes /workspace, which is wiped before the\n "+
+		" snapshot, so it cannot help you here.\n- Each command has a 10-minute"+
+		" budget; you do not need to set timeout_sec.\n- When finished, report"+
+		" what you installed and any global/system packages you changed.\n-"+
+		" Declare the environment variables this skill needs AT RUN TIME. Decide"+
+		" from the SKILL.md text\n  at the end of this message: declare what it"+
+		" documents as needed to run the skill. Ignore \n  anything only the"+
+		" installation itself needed. Write the declaration with write_skill_file"+
+		" to %s, as JSON of this exact shape:\n  {\"env\":[{\"name\":\"TAVILY_API_KEY\""+
+		",\"description\":\"what the skill uses it for\",\"required\":true}]}\n  Each"+
+		" name must be UPPER_SNAKE_CASE and must appear literally somewhere in"+
+		" the skill's own files.\n  Never write any value, placeholder or example"+
+		" credential: this file declares what is needed, and\n  a value you invent"+
+		" would be stored as this workspace's real credential. If one environment"+
+		"\n  variable is required, set required to true; if it is optional, set"+
+		" required to false. If the\n  skill needs no environment variables, write"+
+		" {\"env\":[]}.\n  Do not declare WEKNORA_SKILL_DIR,"+
+		" WEKNORA_SKILL_OUTPUT_DIR, WEKNORA_SKILL_HISTORY_ROOT or\n "+
+		" WEKNORA_SESSION_INPUT_DIR: the sandbox injects those. Other WEKNORA_*"+
+		" names the skill reads\n  (WEKNORA_API_KEY, WEKNORA_BASE_URL,"+
+		" WEKNORA_HOST, WEKNORA_TOKEN, WEKNORA_KB_ID) MUST be declared.\n"+
+		"\nOn-demand / optional extras MUST be installed now. Every chat session"+
+		" starts\nfrom the image this install produces, and whatever a session"+
+		" installs dies with\nit, so an extra deferred to chat time is paid for"+
+		" again on every session and\nfails outright wherever the sandbox has no"+
+		" egress. Skills that ship\nscripts/install_deps.py or say \"pip install"+
+		" when the user needs Word/PPT\" will\nstall at chat time unless those"+
+		" packages are already in the venv.\n- Create the venv with pip present: "+
+		"`uv venv --seed %s/.venv`"+
+		` (or `+
+		"`python3 -m venv`"+
+		`).
+- Install requirements.txt / pyproject.toml with `+
+		"`uv pip install`"+
+		`.
 - Read SKILL.md and any on-demand installer for extra packages (python-docx,
-  python-pptx, …) and `+"`uv pip install`"+` every extra, not only the default set.
+  python-pptx, …) and `+
+		"`uv pip install`"+
+		` every extra, not only the default set.
 %s
 - If an installer script needs --yes / --all / every extra flag, pass them.
 %s
@@ -1981,8 +1993,12 @@ run it. The server's own check cannot: it parses files without executing them,
 so it never learns whether an import would have worked. You have the real
 interpreter, so this is your job and yours only.
 - For each script the skill offers, run the import the way the skill would:
-  `+"`%s/.venv/bin/python -c 'import x'`"+`, or the script's own
-  `+"`--help`"+` if it has one.
+  `+
+		"`%s/.venv/bin/python -c 'import x'`"+
+		`, or the script's own
+  `+
+		"`--help`"+
+		` if it has one.
 - A failure here is usually one of two things. A missing distribution: install
   it. Or a module the skill ships that Python cannot find — then the script
   needs the directory on sys.path, and you fix the script with edit_skill_file

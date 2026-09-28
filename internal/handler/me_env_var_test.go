@@ -121,8 +121,10 @@ func TestEnvVarGroupJSONCarriesNoSecrets(t *testing.T) {
 			SkillID:   "sk-1",
 			SkillName: "pdf-tools",
 			Vars: []service.EnvVarView{
-				{Name: "API_TOKEN", Description: "the workspace token", Required: true,
-					Source: service.EnvSourceWorkspace},
+				{
+					Name: "API_TOKEN", Description: "the workspace token", Required: true,
+					Source: service.EnvSourceWorkspace,
+				},
 				{Name: "USER_TOKEN", Source: service.EnvSourceUser, UpdatedAt: &updated},
 				{Name: "REGION", Source: service.EnvSourceUnset},
 			},

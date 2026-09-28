@@ -16,6 +16,7 @@ type MemoryScope struct {
 	SubjectID string
 }
 
+// Valid reports whether the memory scope contains the required identifiers.
 func (s MemoryScope) Valid() bool {
 	return s.TenantID > 0 && s.SubjectID != ""
 }
@@ -289,6 +290,7 @@ type RetrievalContext struct {
 	Items []*types.MemoryItem
 }
 
+// Empty reports whether retrieval has no contextual constraints.
 func (c RetrievalContext) Empty() bool {
 	return c.Background == "" && len(c.Interests) == 0 && len(c.Documents) == 0
 }

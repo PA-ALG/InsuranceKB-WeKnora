@@ -28,7 +28,11 @@ func TestRegistryOwnsEncodingOrderForSummarySlugs(t *testing.T) {
 		Arguments: `{"slugs":["res://0001"],"knowledge_id":"d1"}`,
 	}}}
 	registry.DecodeToolCalls(calls)
-	require.JSONEq(t, `{"slugs":["summary/`+knowledgeID+`"],"knowledge_id":"`+knowledgeID+`"}`, calls[0].Function.Arguments)
+	require.JSONEq(
+		t,
+		`{"slugs":["summary/`+knowledgeID+`"],"knowledge_id":"`+knowledgeID+`"}`,
+		calls[0].Function.Arguments,
+	)
 	require.JSONEq(t, `{"slugs":["res://0001"],"knowledge_id":"d1"}`, calls[0].ModelArguments)
 	require.Equal(t, ArgumentResolutionResolved, calls[0].ArgumentResolution)
 	require.Empty(t, calls[0].UnresolvedHandles)
@@ -49,7 +53,11 @@ func TestRegistryProtocolOwnsResourceHandleRules(t *testing.T) {
 func TestOutputFilesAreRenderedOnlyForLiveModelResults(t *testing.T) {
 	result := &types.ToolResult{Success: true, Output: "generated", OutputFiles: []string{"sandbox:比赛信息.pptx"}}
 	registry := NewRegistry(true)
-	require.Equal(t, "generated\nOutput files: `sandbox:比赛信息.pptx`", registry.ModelToolResultForTool("shell_exec", result))
+	require.Equal(
+		t,
+		"generated\nOutput files: `sandbox:比赛信息.pptx`",
+		registry.ModelToolResultForTool("shell_exec", result),
+	)
 	require.Equal(t, "generated", result.Output)
 	encoded, err := json.Marshal(result)
 	require.NoError(t, err)
@@ -199,9 +207,16 @@ func TestRegistryOwnsWikiIssueHandles(t *testing.T) {
 	registry := NewRegistry(true)
 	modelResult := registry.ModelToolResultForTool("wiki_read_issue", &types.ToolResult{
 		Success: true,
-		Output:  `[{"id":"issue-uuid","knowledge_base_id":"kb-real","suspected_knowledge_ids":["doc-real"],"slug":"concept/a","status":"pending"}]`,
+		Output: "[{\"id\":\"issue-uuid\",\"knowledge_base_id\":\"kb-real\"" +
+			",\"suspected_knowledge_ids\":[\"doc-real\"],\"slug\":\"concept/a\"" +
+			",\"status\":\"pending\"}]",
 	})
-	require.JSONEq(t, `[{"id":"i1","knowledge_base_id":"b1","suspected_knowledge_ids":["d1"],"slug":"concept/a","status":"pending"}]`, modelResult)
+	require.JSONEq(
+		t,
+		"[{\"id\":\"i1\",\"knowledge_base_id\":\"b1\",\"suspected_knowledge_ids\":[\"d1\"]"+
+			",\"slug\":\"concept/a\",\"status\":\"pending\"}]",
+		modelResult,
+	)
 
 	calls := []types.LLMToolCall{{Function: types.FunctionCall{
 		Name:      "wiki_update_issue",
@@ -268,7 +283,11 @@ func TestRegistryDoesNotApplyBuiltInFieldPoliciesToDynamicTools(t *testing.T) {
 		Arguments: `{"issue_id":"i1","knowledge_id":"d1","url":"w1","sql":"SELECT 'd1'"}`,
 	}}}
 	registry.DecodeToolCalls(calls)
-	require.JSONEq(t, `{"issue_id":"i1","knowledge_id":"d1","url":"w1","sql":"SELECT 'd1'"}`, calls[0].Function.Arguments)
+	require.JSONEq(
+		t,
+		`{"issue_id":"i1","knowledge_id":"d1","url":"w1","sql":"SELECT 'd1'"}`,
+		calls[0].Function.Arguments,
+	)
 	require.Equal(t, ArgumentResolutionUnchanged, calls[0].ArgumentResolution)
 	require.Empty(t, calls[0].UnresolvedHandles)
 
@@ -311,11 +330,18 @@ func TestRegistryCompactsKnownIDsInBuiltInValidationErrors(t *testing.T) {
 func TestModelToolResultForTool_failedSkillScriptKeepsStdout(t *testing.T) {
 	registry := NewRegistry(true)
 	stdout := `{"chart":{"success":false,"error":{"error":"X轴字段不存在：工作项目","available":["name","value"]}}}`
-	got := registry.ModelToolResultForTool("execute_skill_script", &types.ToolResult{
-		Success: false,
-		Output:  "=== Script Execution: smart-charts/scripts/cli.py ===\n\n## Standard Output\n\n```\n" + stdout + "\n```\n",
-		Error:   "Script exited with code 1\n\n[Analyze the error above and try a different approach.]",
-	})
+	got := registry.ModelToolResultForTool(
+		"execute_skill_script",
+		&types.ToolResult{
+			Success: false,
+
+			Output: "=== Script Execution: smart-charts/scripts/cli.py ===\n\n## Standard Output\n\n```\n" +
+				stdout +
+				"\n```\n",
+
+			Error: "Script exited with code 1\n\n[Analyze the error above and try a different approach.]",
+		},
+	)
 	require.Contains(t, got, "X轴字段不存在：工作项目")
 	require.Contains(t, got, "available")
 	require.Contains(t, got, "Error: Script exited with code 1")
@@ -359,24 +385,64 @@ func TestRegistryDecodesCanonicalArgumentsForEveryBuiltInReferenceTool(t *testin
 		raw  string
 		want string
 	}{
-		{"knowledge search KB", "knowledge_search", `{"queries":["d1"],"knowledge_base_ids":["b1"]}`, `{"queries":["d1"],"knowledge_base_ids":["kb-real"]}`},
+		{
+			"knowledge search KB",
+			"knowledge_search",
+			`{"queries":["d1"],"knowledge_base_ids":["b1"]}`,
+			`{"queries":["d1"],"knowledge_base_ids":["kb-real"]}`,
+		},
 		{"list document", "list_knowledge_chunks", `{"knowledge_id":"d1"}`, `{"knowledge_id":"doc-real"}`},
 		{"list chunk", "list_knowledge_chunks", `{"chunk_id":"c1"}`, `{"chunk_id":"chunk-real"}`},
-		{"document info", "get_document_info", `{"knowledge_ids":["d1"],"faq_ids":["c1"]}`, `{"knowledge_ids":["doc-real"],"faq_ids":["chunk-real"]}`},
-		{"knowledge graph", "query_knowledge_graph", `{"knowledge_base_ids":["b1"],"query":"topic"}`, `{"knowledge_base_ids":["kb-real"],"query":"topic"}`},
+		{
+			"document info",
+			"get_document_info",
+			`{"knowledge_ids":["d1"],"faq_ids":["c1"]}`,
+			`{"knowledge_ids":["doc-real"],"faq_ids":["chunk-real"]}`,
+		},
+		{
+			"knowledge graph",
+			"query_knowledge_graph",
+			`{"knowledge_base_ids":["b1"],"query":"topic"}`,
+			`{"knowledge_base_ids":["kb-real"],"query":"topic"}`,
+		},
 		{
 			"data analysis SQL", "data_analysis",
 			`{"knowledge_id":"d1","sql":"SELECT COUNT(*) FROM dataset WHERE label = 'd1'"}`,
 			`{"knowledge_id":"doc-real","sql":"SELECT COUNT(*) FROM dataset WHERE label = 'd1'"}`,
 		},
 		{"data schema", "data_schema", `{"knowledge_id":"d1"}`, `{"knowledge_id":"doc-real"}`},
-		{"database SQL", "database_query", `{"sql":"SELECT * FROM chunks WHERE knowledge_base_id='b1'"}`, `{"sql":"SELECT * FROM chunks WHERE knowledge_base_id='kb-real'"}`},
+		{
+			"database SQL",
+			"database_query",
+			`{"sql":"SELECT * FROM chunks WHERE knowledge_base_id='b1'"}`,
+			`{"sql":"SELECT * FROM chunks WHERE knowledge_base_id='kb-real'"}`,
+		},
 		{"web fetch", "web_fetch", `{"items":[{"url":"w1"}]}`, `{"items":[{"url":"https://example.com/page"}]}`},
 		{"wiki source", "wiki_read_source_doc", `{"knowledge_id":"d1"}`, `{"knowledge_id":"doc-real"}`},
-		{"wiki source refs", "wiki_write_page", `{"slug":"res://0001","source_refs":["d1"]}`, `{"slug":"summary/00000000-0000-0000-0000-000000000001","source_refs":["doc-real"]}`},
-		{"wiki suspected refs", "wiki_flag_issue", `{"slug":"concept/a","suspected_knowledge_ids":["d1"]}`, `{"slug":"concept/a","suspected_knowledge_ids":["doc-real"]}`},
-		{"wiki search KB", "wiki_search", `{"queries":["topic"],"knowledge_base_id":"b1"}`, `{"queries":["topic"],"knowledge_base_id":"kb-real"}`},
-		{"wiki issue", "wiki_update_issue", `{"issue_id":"i1","status":"resolved"}`, `{"issue_id":"issue-real","status":"resolved"}`},
+		{
+			"wiki source refs",
+			"wiki_write_page",
+			`{"slug":"res://0001","source_refs":["d1"]}`,
+			`{"slug":"summary/00000000-0000-0000-0000-000000000001","source_refs":["doc-real"]}`,
+		},
+		{
+			"wiki suspected refs",
+			"wiki_flag_issue",
+			`{"slug":"concept/a","suspected_knowledge_ids":["d1"]}`,
+			`{"slug":"concept/a","suspected_knowledge_ids":["doc-real"]}`,
+		},
+		{
+			"wiki search KB",
+			"wiki_search",
+			`{"queries":["topic"],"knowledge_base_id":"b1"}`,
+			`{"queries":["topic"],"knowledge_base_id":"kb-real"}`,
+		},
+		{
+			"wiki issue",
+			"wiki_update_issue",
+			`{"issue_id":"i1","status":"resolved"}`,
+			`{"issue_id":"issue-real","status":"resolved"}`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -640,7 +706,8 @@ func TestModelOutputRendersDocumentListWithPagination(t *testing.T) {
 	}})
 	require.Contains(t, out, `<documents kb="b1" total="3" page="1" next_page="2">`)
 	require.Contains(t, out,
-		`<document id="d1" title="Alpha" file_type="pdf" parse_status="completed" updated_at="2026-03-04">`)
+		"<document id=\"d1\" title=\"Alpha\" file_type=\"pdf\" parse_status=\"completed\""+
+			" updated_at=\"2026-03-04\">")
 	require.Contains(t, out, `<description>First</description>`)
 	require.Contains(t, out, `<document id="d2" title="Beta"`)
 	require.NotContains(t, out, "doc-a")
@@ -672,7 +739,8 @@ func TestModelOutputReportsSearchModeAndFallbacks(t *testing.T) {
 	})
 	require.Contains(t, fallback, `<retrieval requested_mode="keyword" type="knowledge" mode="semantic">`)
 	require.Contains(t, fallback,
-		`<mode_fallback kb="b1" mode="semantic" reason="FAQ bases are indexed for semantic search only" />`)
+		"<mode_fallback kb=\"b1\" mode=\"semantic\" reason=\"FAQ bases are indexed for"+
+			" semantic search only\" />")
 	require.NotContains(t, fallback, "kb-faq")
 
 	legacy := registry.ModelToolResultForTool("knowledge_search", &types.ToolResult{Success: true, Data: map[string]any{

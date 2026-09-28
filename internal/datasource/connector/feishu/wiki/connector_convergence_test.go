@@ -42,17 +42,20 @@ func newStatefulFeishu(nodes []core.WikiNode) (*httptest.Server, *core.Config, *
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/open-apis/auth/v3/tenant_access_token/internal", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, core.TokenResponse{ApiResponse: core.ApiResponse{Code: 0}, TenantAccessToken: "fake-token", Expire: 7200})
+		writeJSON(
+			w,
+			core.TokenResponse{APIResponse: core.APIResponse{Code: 0}, TenantAccessToken: "fake-token", Expire: 7200},
+		)
 	})
 	mux.HandleFunc("/open-apis/wiki/v2/spaces", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, core.WikiSpaceListResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.WikiSpaceListData{Items: []core.WikiSpace{{SpaceID: "space1", Name: "Test Space"}}},
 		})
 	})
 	mux.HandleFunc("/open-apis/wiki/v2/spaces/space1/nodes", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, core.WikiNodeListResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.WikiNodeListData{Items: nodes},
 		})
 	})
@@ -63,7 +66,7 @@ func newStatefulFeishu(nodes []core.WikiNode) (*httptest.Server, *core.Config, *
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		writeJSON(w, core.ExportTaskCreateResponse{
-			ApiResponse: core.ApiResponse{Code: 0},
+			APIResponse: core.APIResponse{Code: 0},
 			Data:        core.ExportTaskCreateData{Ticket: body.Token},
 		})
 	})
@@ -79,7 +82,7 @@ func newStatefulFeishu(nodes []core.WikiNode) (*httptest.Server, *core.Config, *
 		if s.shouldFail(token) {
 			status = 3 // failed job
 		}
-		resp := core.ExportTaskStatusResponse{ApiResponse: core.ApiResponse{Code: 0}}
+		resp := core.ExportTaskStatusResponse{APIResponse: core.APIResponse{Code: 0}}
 		resp.Data.Result.FileToken = "file-" + token
 		resp.Data.Result.FileName = "exported.docx"
 		resp.Data.Result.JobStatus = status

@@ -77,12 +77,33 @@ func TestOpenAIEmbedderJournalsEveryRealTransportRetry(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[{"embedding":[0.1,0.2],"index":0}]}`))
 	}))
 	defer server.Close()
-	embedder, err := newRemoteEmbedder(Config{BaseURL: server.URL, Provider: "openai", ModelName: "qwen", ModelID: "qwen-id", Dimensions: 2, APIKey: "key"}, nil)
+	embedder, err := newRemoteEmbedder(
+		Config{
+			BaseURL:    server.URL,
+			Provider:   "openai",
+			ModelName:  "qwen",
+			ModelID:    "qwen-id",
+			Dimensions: 2,
+			APIKey:     "key",
+		},
+		nil,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	transport := &failFirstEmbeddingTransport{next: http.DefaultTransport}
-	embedder.(*protocolEmbedder).inner = openaiembeddings.New(openaiembeddings.Config{Endpoint: api.Endpoint{BaseURL: server.URL, Model: "qwen", ModelID: "qwen-id", DispatchOperation: "embedding", Client: &http.Client{Transport: transport}}, Retry: api.RetryPolicy{MaxRetries: 1}})
+	embedder.(*protocolEmbedder).inner = openaiembeddings.New(
+		openaiembeddings.Config{
+			Endpoint: api.Endpoint{
+				BaseURL:           server.URL,
+				Model:             "qwen",
+				ModelID:           "qwen-id",
+				DispatchOperation: "embedding",
+				Client:            &http.Client{Transport: transport},
+			},
+			Retry: api.RetryPolicy{MaxRetries: 1},
+		},
+	)
 	recorder := &embeddingDispatchRecorderStub{}
 	ctx := types.WithModelDispatchRecorder(context.Background(), recorder)
 	ctx = types.WithLLMCallMetadata(ctx, "document_embedding", "")
@@ -90,7 +111,12 @@ func TestOpenAIEmbedderJournalsEveryRealTransportRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(recorder.specs) != 2 || len(recorder.results) != 2 || transport.calls != 2 {
-		t.Fatalf("specs=%d results=%d transport=%d, want 2 each", len(recorder.specs), len(recorder.results), transport.calls)
+		t.Fatalf(
+			"specs=%d results=%d transport=%d, want 2 each",
+			len(recorder.specs),
+			len(recorder.results),
+			transport.calls,
+		)
 	}
 	if recorder.specs[0].TransportRetryIndex != 0 || recorder.specs[1].TransportRetryIndex != 1 ||
 		recorder.results[0].Outcome != "TRANSPORT_ERROR" || recorder.results[1].HTTPStatus != http.StatusOK {
@@ -106,14 +132,30 @@ func TestOpenAIEmbedderJournalFailurePreventsProviderDispatch(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
-	embedder, err := newRemoteEmbedder(Config{BaseURL: server.URL, Provider: "openai", ModelName: "qwen", ModelID: "qwen-id", Dimensions: 2, APIKey: "key"}, nil)
+	embedder, err := newRemoteEmbedder(
+		Config{
+			BaseURL:    server.URL,
+			Provider:   "openai",
+			ModelName:  "qwen",
+			ModelID:    "qwen-id",
+			Dimensions: 2,
+			APIKey:     "key",
+		},
+		nil,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	recorder := &embeddingDispatchRecorderStub{reserveError: types.ErrModelDispatchJournalUnavailable}
 	ctx := types.WithModelDispatchRecorder(context.Background(), recorder)
 	ctx = types.WithLLMCallMetadata(ctx, "document_embedding", "")
-	if _, err := embedder.BatchEmbed(ctx, []string{"input"}); !errors.Is(err, types.ErrModelDispatchJournalUnavailable) {
+	if _, err := embedder.BatchEmbed(
+		ctx,
+		[]string{"input"},
+	); !errors.Is(
+		err,
+		types.ErrModelDispatchJournalUnavailable,
+	) {
 		t.Fatalf("BatchEmbed error = %v", err)
 	}
 	if calls != 0 {
@@ -132,7 +174,13 @@ func (r *noRetryEmbeddingTransport) RoundTrip(req *http.Request) (*http.Response
 	if r.err != nil {
 		return nil, r.err
 	}
-	return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(r.body)), Header: make(http.Header), Request: req}, nil
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader(r.body)),
+		Header:     make(http.Header),
+		Request:    req,
+	}, nil
 }
 
 func TestOpenAIEmbeddingExplicitPolicyDisablesTransportRetry(t *testing.T) {
@@ -152,7 +200,13 @@ func TestOpenAIEmbeddingExplicitPolicyDisablesTransportRetry(t *testing.T) {
 				want = 1
 			}
 			if transport.calls != want || len(recorder.specs) != want || len(recorder.results) != want {
-				t.Fatalf("transport=%d reservations=%d results=%d, want %d", transport.calls, len(recorder.specs), len(recorder.results), want)
+				t.Fatalf(
+					"transport=%d reservations=%d results=%d, want %d",
+					transport.calls,
+					len(recorder.specs),
+					len(recorder.results),
+					want,
+				)
 			}
 			if !errors.Is(err, failure) {
 				t.Fatalf("lost original transport error: %v", err)
@@ -200,6 +254,12 @@ func TestOpenAIEmbeddingExplicitPolicyDisablesEmptyResultReplay(t *testing.T) {
 
 func dispatchTestEmbedder(transport http.RoundTripper, retries int) *protocolEmbedder {
 	return &protocolEmbedder{inner: openaiembeddings.New(openaiembeddings.Config{
-		Endpoint: api.Endpoint{BaseURL: "https://127.0.0.1/v1", Model: "fixture", DispatchOperation: "embedding", Client: &http.Client{Transport: transport}}, Retry: api.RetryPolicy{MaxRetries: retries},
+		Endpoint: api.Endpoint{
+			BaseURL:           "https://127.0.0.1/v1",
+			Model:             "fixture",
+			DispatchOperation: "embedding",
+			Client:            &http.Client{Transport: transport},
+		},
+		Retry: api.RetryPolicy{MaxRetries: retries},
 	})}
 }

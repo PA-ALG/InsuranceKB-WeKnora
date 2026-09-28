@@ -23,7 +23,11 @@ type acceptByTokenInvitationSvc struct {
 	acceptErr error
 }
 
-func (s *acceptByTokenInvitationSvc) AcceptByToken(_ context.Context, _ string, userID string) (*types.TenantMember, error) {
+func (s *acceptByTokenInvitationSvc) AcceptByToken(
+	_ context.Context,
+	_ string,
+	_ string,
+) (*types.TenantMember, error) {
 	if s.acceptErr != nil {
 		return nil, s.acceptErr
 	}
@@ -183,7 +187,11 @@ func TestAcceptMyInvitationByTokenIdempotent(t *testing.T) {
 	users := &acceptByTokenUserSvc{homeTenant: 42}
 	h := &TenantInvitationHandler{
 		invitationService: &acceptByTokenInvitationSvc{
-			member: &types.TenantMember{TenantID: 42, Role: types.TenantRoleContributor, Status: types.TenantMemberStatusActive},
+			member: &types.TenantMember{
+				TenantID: 42,
+				Role:     types.TenantRoleContributor,
+				Status:   types.TenantMemberStatusActive,
+			},
 		},
 		userService:   users,
 		tenantService: &acceptByTokenTenantSvc{},

@@ -114,7 +114,7 @@ func TestBindContentResourcesSkipsForeignAndUnknownHandles(t *testing.T) {
 	}
 }
 
-func TestBindContentResourcesIsInertWithoutCatalog(t *testing.T) {
+func TestBindContentResourcesIsInertWithoutCatalog(_ *testing.T) {
 	svc := &knowledgeService{}
 	// Must not panic; a deployment without a resource registry has nothing to
 	// claim and keeps the pre-binding behaviour.

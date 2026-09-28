@@ -54,7 +54,11 @@ type TenantSkillRepository interface {
 	// MarkSnapshotState updates ledger state and stores the provider snapshot ID once known.
 	MarkSnapshotState(ctx context.Context, tenantID uint64, id, state, snapshotID string) error
 	// ListSnapshotsByConfig returns the full chain for audit and troubleshooting.
-	ListSnapshotsByConfig(ctx context.Context, tenantID uint64, configID string) ([]*types.TenantSkillSnapshotEntity, error)
+	ListSnapshotsByConfig(
+		ctx context.Context,
+		tenantID uint64,
+		configID string,
+	) ([]*types.TenantSkillSnapshotEntity, error)
 	// DeleteSnapshotRowsByConfig removes ledger rows only when an entire sandbox
 	// config is deleted and its provider-side snapshots are already gone; never
 	// call this during an ordinary image switch (old snapshots stay in the ledger).
@@ -372,8 +376,12 @@ func (r *tenantSkillRepository) UpsertUserEnvVar(
 	return r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns: []clause.Column{
-				{Name: "tenant_id"}, {Name: "principal_type"}, {Name: "principal_id"},
-				{Name: "sandbox_config_id"}, {Name: "skill_id"}, {Name: "name"},
+				{Name: "tenant_id"},
+				{Name: "principal_type"},
+				{Name: "principal_id"},
+				{Name: "sandbox_config_id"},
+				{Name: "skill_id"},
+				{Name: "name"},
 			},
 			DoUpdates: clause.AssignmentColumns([]string{"value", "updated_at"}),
 		}).

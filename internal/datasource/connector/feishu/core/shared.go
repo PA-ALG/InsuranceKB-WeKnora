@@ -19,10 +19,11 @@ import (
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
+// FeishuWikiNodeResourceSeparator separates a wiki space ID from its node token.
 const FeishuWikiNodeResourceSeparator = ":"
 
 // shared.go holds the helpers used by BOTH the wiki Connector (connector.go)
-// and the Drive DriveConnector (connector.go): error classification,
+// and the Drive Connector (connector.go): error classification,
 // config parsing, stream-Checkpoint tuning, the fetch tally, filename/time
 // utilities, attachment rules, and the docx blocks fetch path. Anything that
 // is specific to one connector stays in that connector's own file.
@@ -304,7 +305,7 @@ type DocxFetchInput struct {
 // FetchDocxWithBlocks retrieves a docx document via the blocks API, converts it
 // to Markdown, and returns a main item plus any parseable attachment/image
 // sub-items. Falls back to the export API if the blocks API errors or renders
-// empty. Shared by the wiki Connector and the Drive DriveConnector.
+// empty. Shared by the wiki Connector and the Drive Connector.
 func FetchDocxWithBlocks(ctx context.Context, client *Client, in DocxFetchInput) ([]*types.FetchedItem, error) {
 	// FEISHU_DOCX_PARSE_MODE selects the docx parsing path. The blocks path
 	// renders image blocks as empty `![图片]()` placeholders and fans images out
@@ -315,7 +316,8 @@ func FetchDocxWithBlocks(ctx context.Context, client *Client, in DocxFetchInput)
 	// images associate with the document; set "blocks" for the blocks-first
 	// behaviour (faster, keeps docx attachments, but images are detached).
 
-	// This is a temporary solution. If a better parsing solution is available later, this environment variable will be removed and replaced with a better one.
+	// This is a temporary solution. If a better parsing solution is available later, this environment variable
+	// will be removed and replaced with a better one.
 	parsingMode := strings.TrimSpace(os.Getenv("FEISHU_DOCX_PARSE_MODE"))
 	if parsingMode == "" {
 		parsingMode = "export"

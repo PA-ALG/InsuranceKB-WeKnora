@@ -28,9 +28,9 @@ func TestEffectiveTerminalIdleDisconnect(t *testing.T) {
 }
 
 func TestStartTerminalTTLRefreshCallsImmediately(t *testing.T) {
-	prevMin := terminalTTLRefreshMin
-	terminalTTLRefreshMin = 40 * time.Millisecond
-	t.Cleanup(func() { terminalTTLRefreshMin = prevMin })
+	prevMin := terminalTTLRefreshMinimum
+	terminalTTLRefreshMinimum = 40 * time.Millisecond
+	t.Cleanup(func() { terminalTTLRefreshMinimum = prevMin })
 
 	var n atomic.Int32
 	ctx, cancel := context.WithCancel(context.Background())

@@ -16,10 +16,9 @@ import (
 func insertKnowledgeInFolder(t *testing.T, db *gorm.DB, tenantID uint64, kbID, folderPath, fileName string) string {
 	t.Helper()
 	id := uuid.New().String()
-	require.NoError(t, db.Exec(`
-		INSERT INTO knowledges (id, tenant_id, knowledge_base_id, type, title, source, parse_status, file_name, folder_path)
-		VALUES (?, ?, ?, 'file', ?, 'manual', 'completed', ?, ?)
-	`, id, tenantID, kbID, fileName, fileName, folderPath).Error)
+	require.NoError(t, db.Exec("\n\t\tINSERT INTO knowledges (id, tenant_id, knowledge_base_id, type, title"+
+		", source, parse_status, file_name, folder_path)\n\t\tVALUES (?, ?, ?,"+
+		" 'file', ?, 'manual', 'completed', ?, ?)\n\t", id, tenantID, kbID, fileName, fileName, folderPath).Error)
 	return id
 }
 

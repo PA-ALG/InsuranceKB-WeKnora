@@ -24,7 +24,10 @@ func TestListDocumentBlocks_Paginates(t *testing.T) {
 		}
 		if r.URL.Query().Get("page_token") == "" {
 			_ = json.NewEncoder(w).Encode(map[string]any{"code": 0, "data": map[string]any{
-				"items":      []map[string]any{{"block_id": "b1", "block_type": 2}, {"block_id": "b2", "block_type": 2}},
+				"items": []map[string]any{
+					{"block_id": "b1", "block_type": 2},
+					{"block_id": "b2", "block_type": 2},
+				},
 				"has_more":   true,
 				"page_token": "p2",
 			}})

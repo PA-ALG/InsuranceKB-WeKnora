@@ -76,10 +76,10 @@ func doChangePassword(t *testing.T, r *gin.Engine, body any) *httptest.ResponseR
 func TestChangePassword_MapsInvalidOldPasswordDetail(t *testing.T) {
 	h := &AuthHandler{
 		userService: &stubChangePasswordUserService{
-			getCurrentUser: func(ctx context.Context) (*types.User, error) {
+			getCurrentUser: func(_ context.Context) (*types.User, error) {
 				return &types.User{ID: "user-1", Email: "alice@example.com"}, nil
 			},
-			changePassword: func(ctx context.Context, userID, oldPassword, newPassword string) error {
+			changePassword: func(_ context.Context, _, _, _ string) error {
 				return service.ErrInvalidOldPassword
 			},
 		},
@@ -109,10 +109,10 @@ func TestChangePassword_MapsInvalidOldPasswordDetail(t *testing.T) {
 func TestChangePassword_MapsSamePasswordDetail(t *testing.T) {
 	h := &AuthHandler{
 		userService: &stubChangePasswordUserService{
-			getCurrentUser: func(ctx context.Context) (*types.User, error) {
+			getCurrentUser: func(_ context.Context) (*types.User, error) {
 				return &types.User{ID: "user-1", Email: "alice@example.com"}, nil
 			},
-			changePassword: func(ctx context.Context, userID, oldPassword, newPassword string) error {
+			changePassword: func(_ context.Context, _, _, _ string) error {
 				return service.ErrSamePassword
 			},
 		},

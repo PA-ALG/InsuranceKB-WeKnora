@@ -117,7 +117,8 @@ func TestTheCloneTableHasNoEntriesForKeysThatNoLongerExist(t *testing.T) {
 	for key := range contextCloneAcrossDetach {
 		if _, ok := declared[key]; !ok {
 			t.Errorf(
-				"contextCloneAcrossDetach has an entry for %q, but no context key with that value is declared in internal/",
+				"contextCloneAcrossDetach has an entry for %q, but no context key with"+
+					" that value is declared in internal/",
 				key,
 			)
 		}

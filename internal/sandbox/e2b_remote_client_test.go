@@ -945,9 +945,9 @@ func TestNormalizeE2BTemplateBuildStatus(t *testing.T) {
 }
 
 func TestE2BDialDesktopRefreshesSandboxTTL(t *testing.T) {
-	prevMin := terminalTTLRefreshMin
-	terminalTTLRefreshMin = 40 * time.Millisecond
-	t.Cleanup(func() { terminalTTLRefreshMin = prevMin })
+	prevMin := terminalTTLRefreshMinimum
+	terminalTTLRefreshMinimum = 40 * time.Millisecond
+	t.Cleanup(func() { terminalTTLRefreshMinimum = prevMin })
 
 	mock := newE2BMockServer(t)
 	var seen http.Request
@@ -1042,7 +1042,6 @@ func TestE2BRemoteClientCreateWritesMetadataAndPauseLifecycle(t *testing.T) {
 	networkPayload, ok := mock.createBody["network"].(map[string]any)
 	require.True(t, ok, "network payload missing: %#v", mock.createBody["network"])
 	require.Equal(t, false, networkPayload["allowPublicTraffic"])
-
 }
 
 func TestE2BRemoteClientCreateValidatesTimeoutAction(t *testing.T) {
@@ -1708,22 +1707,102 @@ func TestNormalizeE2BError(t *testing.T) {
 		{"deadline", "Exec", context.DeadlineExceeded, RemoteErrorKindTimeout},
 		{"network timeout", "List", e2bTestNetError{timeout: true}, RemoteErrorKindTimeout},
 		{"network unavailable", "List", e2bTestNetError{}, RemoteErrorKindUnavailable},
-		{"connect canceled", "List", connect.NewError(connect.CodeCanceled, errors.New("canceled")), RemoteErrorKindTimeout},
-		{"connect deadline", "List", connect.NewError(connect.CodeDeadlineExceeded, errors.New("deadline")), RemoteErrorKindTimeout},
-		{"connect unavailable", "List", connect.NewError(connect.CodeUnavailable, errors.New("unavailable")), RemoteErrorKindUnavailable},
-		{"connect unauthenticated", "List", connect.NewError(connect.CodeUnauthenticated, errors.New("unauthenticated")), RemoteErrorKindAuthentication},
-		{"connect permission denied", "List", connect.NewError(connect.CodePermissionDenied, errors.New("permission denied")), RemoteErrorKindAuthentication},
-		{"connect resource exhausted", "List", connect.NewError(connect.CodeResourceExhausted, errors.New("resource exhausted")), RemoteErrorKindCapacity},
-		{"connect invalid argument", "List", connect.NewError(connect.CodeInvalidArgument, errors.New("invalid argument")), RemoteErrorKindInvalidRequest},
-		{"connect out of range", "List", connect.NewError(connect.CodeOutOfRange, errors.New("out of range")), RemoteErrorKindInvalidRequest},
-		{"connect not found", "List", connect.NewError(connect.CodeNotFound, errors.New("not found")), RemoteErrorKindNotFound},
-		{"connect already exists", "List", connect.NewError(connect.CodeAlreadyExists, errors.New("already exists")), RemoteErrorKindConflict},
-		{"connect aborted", "List", connect.NewError(connect.CodeAborted, errors.New("aborted")), RemoteErrorKindConflict},
-		{"connect failed precondition", "List", connect.NewError(connect.CodeFailedPrecondition, errors.New("failed precondition")), RemoteErrorKindConflict},
-		{"connect unimplemented", "List", connect.NewError(connect.CodeUnimplemented, errors.New("unimplemented")), RemoteErrorKindUnsupported},
-		{"connect internal", "List", connect.NewError(connect.CodeInternal, errors.New("internal")), RemoteErrorKindInternal},
-		{"connect data loss", "List", connect.NewError(connect.CodeDataLoss, errors.New("data loss")), RemoteErrorKindInternal},
-		{"connect unknown", "List", connect.NewError(connect.CodeUnknown, errors.New("unknown")), RemoteErrorKindInternal},
+		{
+			"connect canceled",
+			"List",
+			connect.NewError(connect.CodeCanceled, errors.New("canceled")),
+			RemoteErrorKindTimeout,
+		},
+		{
+			"connect deadline",
+			"List",
+			connect.NewError(connect.CodeDeadlineExceeded, errors.New("deadline")),
+			RemoteErrorKindTimeout,
+		},
+		{
+			"connect unavailable",
+			"List",
+			connect.NewError(connect.CodeUnavailable, errors.New("unavailable")),
+			RemoteErrorKindUnavailable,
+		},
+		{
+			"connect unauthenticated",
+			"List",
+			connect.NewError(connect.CodeUnauthenticated, errors.New("unauthenticated")),
+			RemoteErrorKindAuthentication,
+		},
+		{
+			"connect permission denied",
+			"List",
+			connect.NewError(connect.CodePermissionDenied, errors.New("permission denied")),
+			RemoteErrorKindAuthentication,
+		},
+		{
+			"connect resource exhausted",
+			"List",
+			connect.NewError(connect.CodeResourceExhausted, errors.New("resource exhausted")),
+			RemoteErrorKindCapacity,
+		},
+		{
+			"connect invalid argument",
+			"List",
+			connect.NewError(connect.CodeInvalidArgument, errors.New("invalid argument")),
+			RemoteErrorKindInvalidRequest,
+		},
+		{
+			"connect out of range",
+			"List",
+			connect.NewError(connect.CodeOutOfRange, errors.New("out of range")),
+			RemoteErrorKindInvalidRequest,
+		},
+		{
+			"connect not found",
+			"List",
+			connect.NewError(connect.CodeNotFound, errors.New("not found")),
+			RemoteErrorKindNotFound,
+		},
+		{
+			"connect already exists",
+			"List",
+			connect.NewError(connect.CodeAlreadyExists, errors.New("already exists")),
+			RemoteErrorKindConflict,
+		},
+		{
+			"connect aborted",
+			"List",
+			connect.NewError(connect.CodeAborted, errors.New("aborted")),
+			RemoteErrorKindConflict,
+		},
+		{
+			"connect failed precondition",
+			"List",
+			connect.NewError(connect.CodeFailedPrecondition, errors.New("failed precondition")),
+			RemoteErrorKindConflict,
+		},
+		{
+			"connect unimplemented",
+			"List",
+			connect.NewError(connect.CodeUnimplemented, errors.New("unimplemented")),
+			RemoteErrorKindUnsupported,
+		},
+		{
+			"connect internal",
+			"List",
+			connect.NewError(connect.CodeInternal, errors.New("internal")),
+			RemoteErrorKindInternal,
+		},
+		{
+			"connect data loss",
+			"List",
+			connect.NewError(connect.CodeDataLoss, errors.New("data loss")),
+			RemoteErrorKindInternal,
+		},
+		{
+			"connect unknown",
+			"List",
+			connect.NewError(connect.CodeUnknown, errors.New("unknown")),
+			RemoteErrorKindInternal,
+		},
 		{"unknown", "List", errors.New("mystery"), RemoteErrorKindInternal},
 		{"delete snapshot in use", "DeleteSnapshot", &e2b.Error{
 			StatusCode: http.StatusBadRequest,
