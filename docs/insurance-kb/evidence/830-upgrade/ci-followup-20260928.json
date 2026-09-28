@@ -1,4 +1,18 @@
 {
+  "current": {
+    "source_commit": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83",
+    "source_tree": "e2c8f4882ff9afd6c5e73c21f1f7fc1db84f33ea",
+    "local_lint": "PASS0 findings, uncapped, original product merge base",
+    "local_affected_validation": "PASS reviewed composite coverage; first complete local attempt remains exit1 environmental failure, all48 failed events subsequently passed",
+    "nonservice_pass_events": 214,
+    "recovery_pass_events": 265,
+    "review_blockers": 0,
+    "remote_ci": "NOT RUN for new source; prior2a6 completed19success2failure5skip",
+    "original_runtime_cutover": false,
+    "new_app_builds": 0,
+    "provider_calls": 0,
+    "historical_fields_note": "Legacy source_head/remote_ci fields below describe their explicitly recorded older runs, not current source."
+  },
   "source_head": "5bd50ba78445f01deda4d82fdb1960f2f731b76b",
   "remote_ci": {
     "success": 21,
@@ -559,5 +573,512 @@
     "initial_checker_invocation": "BLOCKED inventory_path_mismatch: passed workflow checkout inventory instead of clean source inventory; rerun using canonical clean-source path passed; no source change",
     "new_image": "NOT RUN",
     "runtime_evidence_source": "e71c72f7dd885e228c4f447c68902450fed7ae26"
+  },
+  "remote_ci_2a6_final": {
+    "head": "2a6bd5c5ae3d66857408bd58295aae3fa0620c81",
+    "success": 19,
+    "failure": 2,
+    "skipped": 5,
+    "failed_checks": [
+      "Format, vet, test, and build",
+      "golangci-lint (.)"
+    ],
+    "deterministic": "PASS",
+    "complete_snapshot_sha256": "9f381fa46e9254c591c7c2f3e5c2d4e34dcb006acbfdc1bf76fda1040212ce3e",
+    "raw_go_log": "go-head2a6-job-raw.log",
+    "raw_go_log_sha256": "0706fecc8916cb0c3011b7190f7cb4ecb7e6a751914547ec5410cf33d29bddfa",
+    "remaining_go_causes": [
+      "Three fixture prerequisite failures",
+      "Default ten-minute package timeout during an actively computing test; not evidence of an individual hung test"
+    ],
+    "repair_status": "NOT RUN final validation; targeted three fixture groups PASS 3.103s",
+    "timeout_change": "Explicit20m package budget; unchanged30m CI job budget; no test selection/assertion reduction"
+  },
+  "continuous_go_ci_repair_2a6": {
+    "requirement": "UPG-08",
+    "base_head": "2a6bd5c5ae3d66857408bd58295aae3fa0620c81",
+    "fixture_plan_sha256": "d2593a7a6f598dec98944b5238046427ae70a5ccb64c13fec0b60fc89f5cbb61",
+    "fixture_repairs": [
+      "Native Wiki policy fixture tenant/KB/repository/finalizing prerequisites reflect current native processing contract; unchanged2/1 assertion",
+      "Document write test spy forwards revision extension calls to real SQLite repository instead of hiding them",
+      "Stored-backend negative test uses a distinct empty default root; local storage:// parsing is current native behavior"
+    ],
+    "targeted_groups": {
+      "status": "PASS",
+      "seconds": 3.103,
+      "log": "go2a6-fixture-focused-handoff.log"
+    },
+    "package_timeout": {
+      "go_test": "20m",
+      "ci_job": "30m",
+      "reason": "Complete raw log shows default10m package expiration while current test actively computes; no test selection/assertion weakening",
+      "review_blockers": 0
+    },
+    "service_frozen_patch_sha256": "b9bda5e3551f20e79f1de0b828bbf243c92ae123f3283c742c9143939293aef7",
+    "service_review_blockers": 0,
+    "full_package_test": "Initial complete4-package run retained exit1; unchanged passed tests reused and all48failed events plus every affected test passed in reviewed recovery. Exact remote full run pending.",
+    "new_app_builds": 0,
+    "provider_calls": 0,
+    "original_runtime_cutover": false,
+    "first_full_four_package_attempt": {
+      "exit_code": 1,
+      "overall_timeout": false,
+      "elapsed_seconds": 741.06,
+      "source_unchanged": true,
+      "test_counts": {
+        "pass": 3706,
+        "skip": 11,
+        "fail": 48
+      },
+      "failures": [
+        "TestUpdateMCPService_AppliesNonScalarUpdateWithoutName",
+        "TestQueryTemplatesEnsuresMissingWeKnoraTemplate",
+        "TestQueryTemplatesEnsuresMissingDesktopTemplate",
+        "TestQueryTemplatesEnsureDesktopFailureKeepsCatalog",
+        "TestQueryTemplatesReplaceDesktopFailureIsFatal",
+        "TestQueryTemplatesCollapsesConcurrentProvisioning",
+        "TestQueryTemplatesProvisionsPerClusterIndependently",
+        "TestQueryTemplatesReprovisionsOverFailedStandardTemplate",
+        "TestQueryTemplatesReportsFailedStandardTemplateWithoutEnsure",
+        "TestQueryTemplatesSurfacesFailedEnsureWithoutProvisioning",
+        "TestQueryTemplatesReplaceStandardPersistsNewTemplateID",
+        "TestQueryTemplatesReplaceStandardKeepsOldTemplateWhileReplacementBuilds",
+        "TestQueryTemplatesReplaceStandardKeepsOldTemplateWhenPersistFails",
+        "TestUpdateRefusesTemplateChangeWhenSkillSnapshotExists",
+        "TestUpdateRefusesDesktopEnabledChangeWhenSkillSnapshotExists",
+        "TestUpdateRefusesIdentityChangeWhenSkillSnapshotExists",
+        "TestUpdateRefusesIdentityChangeWhileSkillIsInstalling",
+        "TestQueryTemplatesEnsureAndReplaceDoNotShareSingleflight",
+        "TestUpdateRefusesPrivateEndpointChangeWhenSkillSnapshotExists",
+        "TestQueryTemplatesDeduplicatesSameProviderTemplateID",
+        "TestQueryTemplatesResolvesMaskedStoredCredential",
+        "TestUpdateRefusesIdentityChangeWhileSandboxesLive",
+        "TestUpdateIdentityChangeCordonsThenWrites",
+        "TestUpdateNonIdentityEditSkipsCordon",
+        "TestUpdateKeepsSkillImageWhenEditorOmitsIt",
+        "TestUpdateRefusalCarriesInventory",
+        "TestUpdateSweepsSandboxCreatedDuringCordonWindow",
+        "TestUpdateClearsCordonWhenRequestContextCancelled",
+        "TestDeleteRefusesWhileSandboxesLive",
+        "TestDeleteForceStillRefusesVerifiedLiveSandboxes",
+        "TestUpdateProceedsWhenInventoryUnverifiable",
+        "TestDeleteSoftDeletesWhenEmpty",
+        "TestDeleteReleasesSkillSnapshotsBeforeSoftDelete",
+        "TestDeleteReclaimsArchivePinnedOnlyByThisConfig",
+        "TestDeleteKeepsArchiveAnotherConfigStillPins",
+        "TestDeleteKeepsPinnedArchiveWhenReadersCannotBeListed",
+        "TestDeleteRefusesWhenSnapshotReleaseFailsWithoutForce",
+        "TestDeleteWithForceProceedsAndRecordsThePartialSuccess",
+        "TestDeleteReleasesAnAbandonedBuildByPlannedName",
+        "TestDeleteAcceptsAnAbandonedBuildThatNeverCommitted",
+        "TestSkillPythonVerifier/a_requirement_the_venv_does_not_carry",
+        "TestSkillPythonVerifier/a_pyproject.toml_dependency_the_venv_does_not_carry",
+        "TestSkillPythonVerifier",
+        "TestNewOSSClient/valid_parameters_create_client",
+        "TestNewOSSClient/custom_endpoint",
+        "TestNewOSSClient",
+        "TestOssEnsureBucket_NonExistent",
+        "TestOssEnsureBucket_CreateFails"
+      ],
+      "skips": [
+        "TestConceptNativePartialActualCapture",
+        "TestLegacyPreparedActualC5ReceiptUsesDistinctManifestDomains830G3",
+        "TestG3FirstParseExportedCanonicalSubset",
+        "TestG3PublishedSourceReuseRecordedCandidate",
+        "TestG3PublishedReadCost",
+        "TestCreateStore_DifferentEndpointSameIndex_Allowed",
+        "TestWikiReleaseFalsificationPostgresConcurrency",
+        "TestPromptEval",
+        "TestMemoryConsistencyPostgres",
+        "TestTopicMergeEval",
+        "TestVectorSearchRanksInPostgres"
+      ],
+      "packages": [
+        {
+          "Time": "2026-09-28T17:05:53.134266+08:00",
+          "Action": "fail",
+          "Package": "github.com/Tencent/WeKnora/internal/application/service",
+          "Elapsed": 703.439
+        },
+        {
+          "Time": "2026-09-28T17:06:01.843757+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/application/service/memory",
+          "Elapsed": 4.724
+        },
+        {
+          "Time": "2026-09-28T17:06:07.178501+08:00",
+          "Action": "pass",
+          "Package": "github.com/Tencent/WeKnora/internal/application/service/chat_pipeline",
+          "Elapsed": 1.126
+        },
+        {
+          "Time": "2026-09-28T17:06:10.643733+08:00",
+          "Action": "fail",
+          "Package": "github.com/Tencent/WeKnora/internal/application/service/file",
+          "Elapsed": 1.075
+        }
+      ],
+      "slowest": [
+        {
+          "test": "TestBatchConceptCreate830G3RejectsEveryRegisteredReceiptFieldBeforeDraftWrite",
+          "elapsed": 119.84
+        },
+        {
+          "test": "TestAutomatedWikiReleaseCreateDraftReplayRejectsStoredConflicts",
+          "elapsed": 39.36
+        },
+        {
+          "test": "TestAutomatedWikiReleaseDraftReadyActivationAndReplay",
+          "elapsed": 22.61
+        },
+        {
+          "test": "TestSchemaWikiReviewDraftCASRejectsConcurrentDraftDigestDrift",
+          "elapsed": 22.38
+        },
+        {
+          "test": "TestLoadBatchConceptPreparation830G3RejectsMissingAccessAndStoredDrift",
+          "elapsed": 22.25
+        },
+        {
+          "test": "TestAutomatedWikiReleasePreservesACLSourceAndCAS",
+          "elapsed": 19.55
+        },
+        {
+          "test": "TestAutomatedWikiReleaseCreateDraftExactReplay",
+          "elapsed": 19.37
+        },
+        {
+          "test": "TestG3CandidateTransferUsesExistingDraftAuthorityAndExactManifest",
+          "elapsed": 19.36
+        },
+        {
+          "test": "TestAutomatedWikiReleasePolicyIdentityAndReceiptFailuresWriteNothing",
+          "elapsed": 18.99
+        },
+        {
+          "test": "TestBatchConceptSourceDrift830G3PreservesPreparationAndHead",
+          "elapsed": 18.78
+        },
+        {
+          "test": "TestBatchConceptDraftReviewActivate830G3ReverifiesSourcesAndCASesHead",
+          "elapsed": 16.06
+        },
+        {
+          "test": "TestAgentHistoryCompactsInsteadOfDroppingTurns",
+          "elapsed": 14.63
+        },
+        {
+          "test": "TestSchemaWikiReviewDraftRequiresTrustedHumanAdminBeforeVerifier",
+          "elapsed": 14.46
+        },
+        {
+          "test": "TestCreateBatchConceptDraft830G3FailsClosedBeforeStorage",
+          "elapsed": 13.49
+        },
+        {
+          "test": "TestSchemaWikiReviewDraftFailuresLeaveExactDraftUnchanged",
+          "elapsed": 13.29
+        },
+        {
+          "test": "TestSchemaWikiPostgresJSONBNormalizationReturnsCanonicalPayloadAcrossReads",
+          "elapsed": 12.65
+        },
+        {
+          "test": "TestConceptLegacyCarryover830G3FollowsValidatedPublishedParent",
+          "elapsed": 12.44
+        },
+        {
+          "test": "TestGeneratedPublishedBaseSnapshotAfterRestart",
+          "elapsed": 11.31
+        },
+        {
+          "test": "TestAutomatedWikiReleaseDecisionExpiryAtWriteEdge",
+          "elapsed": 10.91
+        },
+        {
+          "test": "TestLoadBatchConceptPreparation830G3ReopensDraftAndReadyWithoutCurrentHead",
+          "elapsed": 10.62
+        }
+      ],
+      "jsonl_sha256": "bd8ecafc27b4be8b42566748b1a5552fcc789787be28346357213def07bf1122"
+    },
+    "local_environment_correction": {
+      "plan_sha256": "0cd08d97c24c546d124b612a84144efd04b24a67e281db3e58cea73f61247a5f",
+      "review_blockers": 0,
+      "python_version": "3.12.12",
+      "isolated_venv_without_pip": true,
+      "tomllib_present": true,
+      "pandas_present": false,
+      "missing_fixture_distribution_present": false,
+      "credential_environment": "Explicit allowlist; no provider/database/SSRF whitelist environment inherited",
+      "validation_strategy": "Preserve failed full attempt, rerun every failed event and all tests affected by3 test-file changes plus complete file package and relevant security negatives. Reuse unchanged passing tests. Exact remote App run remains required for full CI closure.",
+      "final_patch_sha256": "89cd6397abd221d1e36d0f26c6e3d0e4c8218afa48e41a28b62f2ed6fd5a84dd",
+      "recovery": {
+        "runs": [
+          {
+            "label": "service-env-recovery-main",
+            "exit": 0,
+            "elapsed_seconds": 45.75,
+            "counts": {
+              "pass": 180
+            },
+            "failures": [],
+            "packages": [
+              {
+                "Package": "github.com/Tencent/WeKnora/internal/application/service",
+                "Action": "pass",
+                "Elapsed": 3.677
+              }
+            ],
+            "log_sha256": "a79f7d6806182281fc9f8eb8d23fdbde17d488fb19660b16559e152a8ca5c718"
+          },
+          {
+            "label": "service-env-recovery-file",
+            "exit": 0,
+            "elapsed_seconds": 6.54,
+            "counts": {
+              "pass": 85
+            },
+            "failures": [],
+            "packages": [
+              {
+                "Package": "github.com/Tencent/WeKnora/internal/application/service/file",
+                "Action": "pass",
+                "Elapsed": 1.065
+              }
+            ],
+            "log_sha256": "5d0f3925faeaeb8af0eabe4ac7a9297b9abafaf352cbe3f0c9f831b794bb0303"
+          }
+        ],
+        "required_prior_failed_events": [
+          "TestDeleteAcceptsAnAbandonedBuildThatNeverCommitted",
+          "TestDeleteForceStillRefusesVerifiedLiveSandboxes",
+          "TestDeleteKeepsArchiveAnotherConfigStillPins",
+          "TestDeleteKeepsPinnedArchiveWhenReadersCannotBeListed",
+          "TestDeleteReclaimsArchivePinnedOnlyByThisConfig",
+          "TestDeleteRefusesWhenSnapshotReleaseFailsWithoutForce",
+          "TestDeleteRefusesWhileSandboxesLive",
+          "TestDeleteReleasesAnAbandonedBuildByPlannedName",
+          "TestDeleteReleasesSkillSnapshotsBeforeSoftDelete",
+          "TestDeleteSoftDeletesWhenEmpty",
+          "TestDeleteWithForceProceedsAndRecordsThePartialSuccess",
+          "TestNewOSSClient",
+          "TestNewOSSClient/custom_endpoint",
+          "TestNewOSSClient/valid_parameters_create_client",
+          "TestOssEnsureBucket_CreateFails",
+          "TestOssEnsureBucket_NonExistent",
+          "TestQueryTemplatesCollapsesConcurrentProvisioning",
+          "TestQueryTemplatesDeduplicatesSameProviderTemplateID",
+          "TestQueryTemplatesEnsureAndReplaceDoNotShareSingleflight",
+          "TestQueryTemplatesEnsureDesktopFailureKeepsCatalog",
+          "TestQueryTemplatesEnsuresMissingDesktopTemplate",
+          "TestQueryTemplatesEnsuresMissingWeKnoraTemplate",
+          "TestQueryTemplatesProvisionsPerClusterIndependently",
+          "TestQueryTemplatesReplaceDesktopFailureIsFatal",
+          "TestQueryTemplatesReplaceStandardKeepsOldTemplateWhenPersistFails",
+          "TestQueryTemplatesReplaceStandardKeepsOldTemplateWhileReplacementBuilds",
+          "TestQueryTemplatesReplaceStandardPersistsNewTemplateID",
+          "TestQueryTemplatesReportsFailedStandardTemplateWithoutEnsure",
+          "TestQueryTemplatesReprovisionsOverFailedStandardTemplate",
+          "TestQueryTemplatesResolvesMaskedStoredCredential",
+          "TestQueryTemplatesSurfacesFailedEnsureWithoutProvisioning",
+          "TestSkillPythonVerifier",
+          "TestSkillPythonVerifier/a_pyproject.toml_dependency_the_venv_does_not_carry",
+          "TestSkillPythonVerifier/a_requirement_the_venv_does_not_carry",
+          "TestUpdateClearsCordonWhenRequestContextCancelled",
+          "TestUpdateIdentityChangeCordonsThenWrites",
+          "TestUpdateKeepsSkillImageWhenEditorOmitsIt",
+          "TestUpdateMCPService_AppliesNonScalarUpdateWithoutName",
+          "TestUpdateNonIdentityEditSkipsCordon",
+          "TestUpdateProceedsWhenInventoryUnverifiable",
+          "TestUpdateRefusalCarriesInventory",
+          "TestUpdateRefusesDesktopEnabledChangeWhenSkillSnapshotExists",
+          "TestUpdateRefusesIdentityChangeWhenSkillSnapshotExists",
+          "TestUpdateRefusesIdentityChangeWhileSandboxesLive",
+          "TestUpdateRefusesIdentityChangeWhileSkillIsInstalling",
+          "TestUpdateRefusesPrivateEndpointChangeWhenSkillSnapshotExists",
+          "TestUpdateRefusesTemplateChangeWhenSkillSnapshotExists",
+          "TestUpdateSweepsSandboxCreatedDuringCordonWindow"
+        ],
+        "prior_failures_not_passed": [],
+        "selected_tests_not_passed": [],
+        "source_unchanged": true,
+        "source_sha256": {
+          "internal/application/service/tenant_sandbox_config_test.go": "59c76d410f9349cad33b51c84d1d4d8c019fe5ebcf9583f5ce94d3c99ce3c8de",
+          "internal/application/service/mcp_service_test.go": "f435bcaa74862ec3b5551a998e23a6f1f27c6eec365a114eb4b8b8b68095ae02",
+          "internal/application/service/file/oss_test.go": "511a5c282a73a2582673ca0992f0f00ba14382adf11bf6cbb855b7a9a34c8508"
+        },
+        "python_probe": {
+          "version": "3.12.12",
+          "executable": "/private/tmp/upg-ci-closure-20260928/python312-verifier-venv/bin/python3",
+          "tomllib": true,
+          "pandas": false,
+          "absent_distribution": false
+        }
+      },
+      "selected_service_top_level_tests": 121,
+      "result_receipt_sha256": "ff4377e2a3e1f8fb2d6bae9fee11ca67418c2e277574ec60fc30b1648c164d2f"
+    },
+    "nonservice_focused_tests": [
+      {
+        "index": 1,
+        "command": [
+          "/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/bin/go",
+          "test",
+          "-json",
+          "-p=1",
+          "-count=1",
+          "-timeout=5m",
+          "-run",
+          ".",
+          "./internal/datasource/connector/feishu/core",
+          "./internal/datasource/connector/feishu/drive"
+        ],
+        "exit": 0,
+        "elapsed_seconds": 15.33,
+        "counts": {
+          "pass": 59
+        },
+        "failures": [],
+        "packages": [
+          {
+            "Package": "github.com/Tencent/WeKnora/internal/datasource/connector/feishu/core",
+            "Action": "pass",
+            "Elapsed": 4.787
+          },
+          {
+            "Package": "github.com/Tencent/WeKnora/internal/datasource/connector/feishu/drive",
+            "Action": "pass",
+            "Elapsed": 2.932
+          }
+        ],
+        "log_sha256": "b576d526226ba8dfb874100defdafa632f158f6681e38c1d5da02dc1df07011b"
+      },
+      {
+        "index": 2,
+        "command": [
+          "/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/bin/go",
+          "test",
+          "-json",
+          "-p=1",
+          "-count=1",
+          "-timeout=5m",
+          "-run",
+          "TestGolden_RichDocxAllCapabilities|TestFetchDocxWithBlocks|TestFetchAll|TestFetchIncremental",
+          "./internal/datasource/connector/feishu/wiki"
+        ],
+        "exit": 0,
+        "elapsed_seconds": 15.85,
+        "counts": {
+          "pass": 22
+        },
+        "failures": [],
+        "packages": [
+          {
+            "Package": "github.com/Tencent/WeKnora/internal/datasource/connector/feishu/wiki",
+            "Action": "pass",
+            "Elapsed": 11.516
+          }
+        ],
+        "log_sha256": "30466c35f4d69480746007e4ff723402d7ead0ea3c960d53986f84ae36e6e7e7"
+      },
+      {
+        "index": 3,
+        "command": [
+          "/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/bin/go",
+          "test",
+          "-json",
+          "-p=1",
+          "-count=1",
+          "-timeout=5m",
+          "-run",
+          "Test(Bocha|Metaso|Exa|ValidateBocha|ValidateMetaso)",
+          "./internal/infrastructure/web_search"
+        ],
+        "exit": 0,
+        "elapsed_seconds": 5.85,
+        "counts": {
+          "pass": 19
+        },
+        "failures": [],
+        "packages": [
+          {
+            "Package": "github.com/Tencent/WeKnora/internal/infrastructure/web_search",
+            "Action": "pass",
+            "Elapsed": 0.924
+          }
+        ],
+        "log_sha256": "820abc4c6569acb8a15aa02c69787cf7118c8b1db9b59b7bc44a33a927b8dd8f"
+      },
+      {
+        "index": 4,
+        "command": [
+          "/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/bin/go",
+          "test",
+          "-json",
+          "-p=1",
+          "-count=1",
+          "-timeout=5m",
+          "-run",
+          "Test(FirstBrokenPythonQuote|PythonScriptSyntaxHint|PythonSyntaxErrorHint|ShellExec|InstallShellExec|WebFetch|ListSandboxFiles)",
+          "./internal/agent/tools"
+        ],
+        "exit": 0,
+        "elapsed_seconds": 10.35,
+        "counts": {
+          "pass": 76
+        },
+        "failures": [],
+        "packages": [
+          {
+            "Package": "github.com/Tencent/WeKnora/internal/agent/tools",
+            "Action": "pass",
+            "Elapsed": 1.976
+          }
+        ],
+        "log_sha256": "5ad3971c17cfdfed557e10a02d7e4570c08252c81734a69193fb544f3fc503b4"
+      },
+      {
+        "index": 5,
+        "command": [
+          "/Users/houjing/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.0.darwin-arm64/bin/go",
+          "test",
+          "-json",
+          "-p=1",
+          "-count=1",
+          "-timeout=5m",
+          "-run",
+          "Test(TenantMember|CreateInvitation_AutoAccept|AcceptMyInvitationByToken)",
+          "./internal/handler"
+        ],
+        "exit": 0,
+        "elapsed_seconds": 17.15,
+        "counts": {
+          "pass": 38
+        },
+        "failures": [],
+        "packages": [
+          {
+            "Package": "github.com/Tencent/WeKnora/internal/handler",
+            "Action": "pass",
+            "Elapsed": 1.7690000000000001
+          }
+        ],
+        "log_sha256": "94b4f150c3dcd876e9b7ad46035cec3b8899eaf6ea9a5516a039991a822fb2f9"
+      }
+    ],
+    "local_validation_status": "PASS affected-test closure, not a single all-green local full-suite invocation"
+  },
+  "source_lock_rebind_d5be": {
+    "status": "PASS",
+    "source_commit": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83",
+    "source_tree": "e2c8f4882ff9afd6c5e73c21f1f7fc1db84f33ea",
+    "report_sha256": "dfaf453e844b9169a5bc82c5c4d3ed6eed742c9af95ebf608812b9a622f6da7c",
+    "same_report_as_reviewed_07d0": true,
+    "verify_exit": 0,
+    "verify_report_exit": 0,
+    "new_trusted_images": "NOT RUN",
+    "local_runtime_images": "unchanged"
   }
 }
