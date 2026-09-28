@@ -771,6 +771,103 @@
     "tree": "e2c8f4882ff9afd6c5e73c21f1f7fc1db84f33ea",
     "software_paths": 290,
     "review_blockers": 0,
-    "remote_ci": "NOT RUN final head; continue after push"
+    "remote_ci": "PASS PR444ab56:21success/5skip; merged mainc5beb1:9successful workflows"
+  },
+  "final_delivery_20260928": {
+    "owner": "root",
+    "reviewer": "continuation_review",
+    "authorization_quote": "可以，就这么执行吧",
+    "requirements": [
+      "UPG-01",
+      "UPG-04",
+      "UPG-07",
+      "UPG-08"
+    ],
+    "software_source": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83",
+    "merged_main": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+    "paths": [
+      "docs/superpowers/plans/2026-09-28-upgrade-082-final-delivery.md",
+      "docs/insurance-kb/evidence/830-upgrade/final-delivery-20260928.json",
+      "HANDOFF.md",
+      "openspec/changes/130-weknora-082-harness-plugin-boundary/tasks.md",
+      "openspec/changes/130-weknora-082-harness-plugin-boundary/validation-report.md",
+      "openspec/changes/130-weknora-082-harness-plugin-boundary/delivery-impact.md",
+      "openspec/changes/130-weknora-082-harness-plugin-boundary/current-slice-paths.json"
+    ],
+    "private_preparation_root": "/private/tmp/upg-final-delivery-20260928",
+    "component_script_preparer": "continuation_executor; only components-d2.py and component frozen inputs/context; root alone executes D2",
+    "stages": "D2 prior to any D3 mutations; exact D3 script/objects reviewed before execution",
+    "max_builds_per_component": {
+      "app": 1,
+      "ui": 3,
+      "docreader": 1,
+      "harness": 0
+    },
+    "historical_budget_superseded_by_new_user_authorization": true,
+    "private_validation_preparer": "continuation_executor: validate-runtime-prepare.py and validate-runtime-plan.md only; no Docker mutation",
+    "private_upload_preparer": "continuation_fixture: upload-validation.py, upload-validation-plan.md and synthetic-upload.md only; no API/provider/network mutation",
+    "private_cutover_preparer": "continuation_executor: cutover_common.py, cutover_backup_restore.py, cutover_services.py, cutover_validate.py only after validation script frozen; root owns cutover-plan.md and execution",
+    "ui_recovery_reason": "Two npm ECONNRESET failures stopped unchanged retries. BuildKit had no proxy args while Colima probes used its existing proxy. One full-lock/npm diagnostic must PASS, then one reviewed transport-corrected build with predefined proxy args; canonical inputs unchanged, both failures retained.",
+    "upload_preflight_recovery": {
+      "owner": "continuation_fixture",
+      "reviewer": "continuation_review",
+      "private_paths": [
+        "upload-validation.py",
+        "upload-validation-plan.md",
+        "upload-recovery-once.py"
+      ],
+      "scope": "Two SELECT EXISTS values encoded with to_json; one reviewed wrapper preserves preflight failure and uses independent evidence directory, same owned App one start, root global upload-once lock. No previous login/upload/provider/egress; no product or artifact changes.",
+      "upload_budget": 1,
+      "automatic_retries": 0
+    },
+    "pdf_acceptance_correction": {
+      "owner": "continuation_fixture",
+      "reviewer": "continuation_review",
+      "scope": "MD synthetic acceptance sample violated PDF-only revision seal present in base8ccc. Preserve failed source and sole terminal archived task byte-for-byte. One genuine PDF uses native builtin parser and prevalidated native structure; no product or image change.",
+      "private_paths": [
+        "upload-validation.py",
+        "upload-pdf-validation.py",
+        "upload-pdf-plan.md",
+        "synthetic-upload.pdf",
+        "pdf-parser-proof.py",
+        "frozen PDF/MD/Redis evidence and prior executed scripts"
+      ],
+      "markdown_actual_dispatches": 1,
+      "pdf_upload_budget": 1,
+      "pdf_dispatch_success_expectation": 1,
+      "native_task_max_retry": 3,
+      "native_pdf_potential_dispatches": 4,
+      "actual_pdf_dispatches": 1,
+      "actual_total_embedding_dispatches": 2,
+      "observed_embedding_worker_retries": 0,
+      "observed_model_transport_retries": 0,
+      "unexpected_call_or_retry": "observer STOP; native retry capability remains, not a hard exactly-once limit"
+    },
+    "backup_memory_recovery": {
+      "owner": "continuation_executor",
+      "reviewer": "continuation_review",
+      "scope": "Source backend killed during product_ingestion_artifacts hash at1GiB before any dump; exact old pair rollback PASS. Extend temporary4GiB window over all full snapshots/dumps/archives with finally restore. One new recovery once; preserve original failure/rollback/OLD baseline, bind recovered uptime and owned empty backup directory.",
+      "product_changes": 0,
+      "migration_attempts_before_recovery": 0
+    },
+    "backup_preflight_order_correction": {
+      "owner": "continuation_executor",
+      "reviewer": "continuation_review",
+      "scope": "Docker Mounts permutation caused preflight-only false drift; compare full mount objects in deterministic destination order. Preserve all original identities/config/uptime and empty backup-directory inode. One exclusive recovery2; unique nonoverwriting rollback receipts and current-attempt maintenance guard.",
+      "product_changes": 0,
+      "backup_recovery1_actual_backup_started": false,
+      "successful_archive": "cutover-backup-attempt2-evidence"
+    },
+    "redis_native_stdout_recovery": {
+      "owner": "continuation_executor",
+      "reviewer": "continuation_review",
+      "scope": "Replace redis-cli --rdb /dev/stdout by documented --rdb - after successful native export/check proof. Fresh sibling backup directory and separately frozen running baseline; preserve all prior partial outputs and failures.",
+      "backup_directory": "tmp/upg-final-backup-20260928-recovery3",
+      "native_probe": "PASS export0/check0",
+      "product_changes": 0,
+      "migration_attempts_so_far": 0
+    },
+    "status": "PASS",
+    "closeout_evidence": "docs/insurance-kb/evidence/830-upgrade/final-delivery-20260928.json"
   }
 }

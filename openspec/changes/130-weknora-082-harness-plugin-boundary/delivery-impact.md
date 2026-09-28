@@ -1,3 +1,26 @@
+## 2026-09-28 0.8.2 最终交付与本地切换通过（当前）
+
+PR #131 已合入 main@c5beb1afc；可信软件源 d5be03b3b，主干9项远端工作流全部成功。
+本轮 App/DocReader各构建1次，UI前两次下载失败后通过已有代理完成第3次构建，Harness复用。
+三个最终镜像均绑定完整输入身份；本地入口 http://127.0.0.1:18295 实测 version0.8.2、
+commit d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83、DB110，正常登录/静态资源/Harness链路通过。
+
+停写后的五库、文件、配置、C5、可信配置与Redis已备份；在新卷恢复并通过一次原生迁移，
+official110/false、enterprise5/false、pg_search0.22.6。原数据库卷未原位升级，旧服务与卷保留。
+原数据旧列保持，仅有已审迁移例外；epoch27、members、来源字段、引用权限与696913字节PDF一致。
+真实PDF样本上传、原生解析、嵌入、revision/source下载通过；MD错误样本的失败保留，实际embedding
+合计2次embedding HTTP200/模型传输重试0（MD后处理失败与内部重试另存），样本只在隔离副本，不形成新业务Release或质量结论。
+
+首次备份在1GiB全表校验时OOM，旧环境自动恢复；其后一次预检把挂载顺序变化误判为漂移，未停服。
+失败现场均保留；Redis导出同步错误经原生导出/完整性检查后修正，重新完成一致备份。
+有效备份位于工作区tmp/upg-final-backup-20260928-recovery3，旧部分备份原样保留；
+私密恢复元数据已持久保存。入口开放后禁止自动倒回旧快照，以免丢失新增数据。
+revision内app_commit/app_version未知的既有局限与legacy log非空页未覆盖均明确保留；不推导语义质量或发布验收。
+
+CURRENT=已批准升级交付完成；NEXT=用户正常使用0.8.2，后续产品功能另按既有任务授权。
+精确镜像、六维状态、回执SHA、备份及验收边界见 docs/insurance-kb/evidence/830-upgrade/final-delivery-20260928.json。
+以下状态均为历史，不覆盖本块。
+
 ## 2026-09-28 当前交付边界
 
 software：07d0e3e48测试前置及ReplaceFile来源SHA修复独审/定向PASS；完整CI未闭合。

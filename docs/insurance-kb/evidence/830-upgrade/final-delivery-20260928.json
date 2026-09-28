@@ -1,0 +1,418 @@
+{
+  "status": "PASS",
+  "scope": "OpenSpec130 authorized upgrade final delivery; no new product Goal or knowledge Release",
+  "recorded_at": "2026-09-28T14:36:35.706180+00:00",
+  "authorization": "可以，就这么执行吧",
+  "owner": "root",
+  "requirements": [
+    "UPG-01",
+    "UPG-04",
+    "UPG-07",
+    "UPG-08"
+  ],
+  "software_source": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83",
+  "product_merge_commit": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+  "product_pr": "https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/131",
+  "images": {
+    "app": {
+      "image_id": "sha256:1759adb029c6b2b902b720bcb8a3b85fe0ca79ecf65e47be27bae44da4316649",
+      "artifact_identity": "sha256:ffd27ee68069a1a81249f4ba0fcf9e7b3fb46625791e233e8e09e951ad13d42c",
+      "build_source_head": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83"
+    },
+    "ui": {
+      "image_id": "sha256:854c0c66bf153d131d247d3b00c7971b41d9360f8d8368d0d019f2c5bb28ca15",
+      "artifact_identity": "sha256:77137ec467d070b3159740f5061fbabd567661d97254907f093bebb25ef786fb",
+      "build_source_head": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83"
+    },
+    "docreader": {
+      "image_id": "sha256:c34b8cafd3e2532530d566ba5024b67115a58462f1cdf6e671d2f92576829b42",
+      "artifact_identity": "sha256:a94d5efc871e4f80abbd7c6c0d689ebfc2a9fd6dc602a42680582067111a283f",
+      "build_source_head": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83"
+    }
+  },
+  "final_window_builds": {
+    "app": 1,
+    "docreader": 1,
+    "ui": 3,
+    "harness": 0
+  },
+  "ui_transport_recovery": "Two npm ECONNRESET failures retained; exact full-lock diagnostic and third build PASS with existing proxy passed via standard Docker proxy args. No dependency/source/runtime-proxy change.",
+  "delivery": {
+    "software": {
+      "status": "PASS",
+      "source": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83",
+      "evidence": "prior reviewed local tests/source lock plus exact D2 builds; historical local failures retained separately"
+    },
+    "container_health": {
+      "status": "PASS",
+      "receipt": "cutover-dependents-receipt.json"
+    },
+    "provider_probe": {
+      "status": "PASS",
+      "actual_embedding_http200": 2,
+      "observed_retries": 0,
+      "scope": "isolated acceptance only; Markdown embedded but PDF-only revision seal rejected; genuine PDF completed. No semantic business-quality claim.",
+      "model_binding": {
+        "id": "42df7f04-f53f-42d5-909d-63b0e78a1223",
+        "name": "qwen3.7-text-embedding",
+        "type": "Embedding",
+        "status": "PASS",
+        "configured_base_url_exact_utf8_sha256": "5891aed827c4e67b2d7c0c73ea819327ce3f2b6ef72213cd79669486a26b1ead",
+        "isolated_and_source_configuration_equal": true,
+        "wire_endpoint_independently_logged": false,
+        "credential_fields_read": false
+      },
+      "journals": {
+        "upload-pdf-acceptance-1/upload-journal.private.json": {
+          "sha256": "4ec7b835c7b329d4dc9820747e120ccd0a67ea8d2644a80842bcbb381bf23b89",
+          "scope": "PDF successful embedding"
+        },
+        "upload-markdown-state.private.json": {
+          "sha256": "807ab8b1871e84350f05ef2765a04397de362f37170fbffedb088baccef462b9",
+          "scope": "retained MD failure; rows.spans[name=model-dispatch.embedding]"
+        }
+      }
+    },
+    "provisioning": {
+      "status": "PASS",
+      "databases_restored": 5,
+      "official_schema": 110,
+      "enterprise_schema": 5,
+      "pg_search": "0.22.6",
+      "native_migration_attempts": 1,
+      "original_database_volume_migrated": false
+    },
+    "local_live": {
+      "status": "PASS",
+      "endpoint": "http://127.0.0.1:18295",
+      "system_info": {
+        "version": "0.8.2",
+        "commit_id": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83",
+        "db_version": "110"
+      },
+      "release_epoch": 27,
+      "source_pdf_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+      "source_pdf_bytes": 696913,
+      "unauthenticated_status": 401
+    },
+    "github_live": {
+      "status": "PASS",
+      "scope": "merged product source CI; no remote application deployment claimed",
+      "main_workflows": [
+        {
+          "conclusion": "success",
+          "databaseId": 36410357743,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "Build & Publish (mcp-server)",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357743"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36410357661,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "Frontend",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357661"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36410357626,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "DocReader",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357626"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36410357833,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "CLI",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357833"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36410357805,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "Go Lint Cache",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357805"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36410357601,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "Anydoc",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357601"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36410357758,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "App",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357758"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36410357783,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "Build & Publish (dsh-weknora)",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357783"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36410357666,
+          "headSha": "c5beb1afc779a1a42d3658b4da62badd62f94b28",
+          "name": "harness-ci",
+          "status": "completed",
+          "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/36410357666"
+        }
+      ]
+    }
+  },
+  "backup": {
+    "path": "/Users/houjing/Documents/LLM_wiki/tmp/upg-final-backup-20260928-recovery3",
+    "receipt_sha256": "7e3ae26b10d6bac826c278527f0c694f87c38aba2be52493a1fe29cf395621da",
+    "private_recovery_manifest_sha256": "2f41f15a2e97c820587a3b0f6c87bfab456b8a7bbc0d5f6dc7f8f9b3745dde77",
+    "old_containers_and_original_volumes_retained": true,
+    "source_memory_restored": true,
+    "write_open_boundary": "WRITE_OPEN_POSSIBLE.json; after opening, stop new writers and preserve new DB/files before recovery; never automatically revert to old snapshot"
+  },
+  "historical_failures": [
+    "Second actual backup completed dumps/archives but native Redis export failed fsync on /dev/stdout; old pair rollback PASS. Documented --rdb - passed real export/native check before fresh recovery3 backup; prior partial files retained.",
+    "Initial final backup OOM during full hash at 1GiB, before dumps; old pair rollback PASS. Temporary4GiB now covers both snapshots/all backups with finally restoration.",
+    "Recovery1 preflight falsely rejected reordered Docker Mounts; no new maintenance/dump. Full mount attributes canonicalized, recovery2 separately reviewed and once-guarded.",
+    "MD acceptance fixture violated preexisting PDF-only source seal; failed source/terminal task preserved in isolated copy."
+  ],
+  "runtime": {
+    "status": "PASS",
+    "containers": [
+      {
+        "component": "pg",
+        "id": "91a308a7eba829a076b73ddb39152c564b00892cbd520292766dd4b9304cd14c",
+        "name": "upg-final-082-20260928-live-pg",
+        "image_id": "sha256:ea992f2ee1e44d961d3b0f8b4b184cb2061fc9a8fc1dbfafb88f88180e3a16db",
+        "running": true,
+        "health": null,
+        "started_at": "2026-09-28T14:33:14.951385656Z",
+        "restart_policy": {
+          "Name": "no",
+          "MaximumRetryCount": 0
+        },
+        "networks": [
+          "upg-final-082-20260928-live-net"
+        ]
+      },
+      {
+        "component": "redis",
+        "id": "89dbed05b42edd1cec2adeea9c2899fddaf8559d9d6887b3d7439810742007df",
+        "name": "upg-final-082-20260928-live-redis",
+        "image_id": "sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf",
+        "running": true,
+        "health": null,
+        "started_at": "2026-09-28T14:33:17.324344534Z",
+        "restart_policy": {
+          "Name": "no",
+          "MaximumRetryCount": 0
+        },
+        "networks": [
+          "upg-final-082-20260928-live-net"
+        ]
+      },
+      {
+        "component": "app",
+        "id": "b14341099ec46613f401f073df31abde3f92508b2af5c37ff21bbc7d78ec192b",
+        "name": "upg-final-082-20260928-live-app",
+        "image_id": "sha256:1759adb029c6b2b902b720bcb8a3b85fe0ca79ecf65e47be27bae44da4316649",
+        "running": true,
+        "health": null,
+        "started_at": "2026-09-28T14:33:27.083167643Z",
+        "restart_policy": {
+          "Name": "no",
+          "MaximumRetryCount": 0
+        },
+        "networks": [
+          "upg-final-082-20260928-live-net",
+          "weknora-g3-830-provider-egress"
+        ]
+      },
+      {
+        "component": "docreader",
+        "id": "46c8d62eaa74ca4644e81c34613e8a8f5842563f2a207b67ab775d11024b2736",
+        "name": "upg-final-082-20260928-live-docreader",
+        "image_id": "sha256:c34b8cafd3e2532530d566ba5024b67115a58462f1cdf6e671d2f92576829b42",
+        "running": true,
+        "health": null,
+        "started_at": "2026-09-28T14:33:20.409601361Z",
+        "restart_policy": {
+          "Name": "no",
+          "MaximumRetryCount": 0
+        },
+        "networks": [
+          "upg-final-082-20260928-live-net"
+        ]
+      },
+      {
+        "component": "harness-api",
+        "id": "21c577ea7232ff4ec476ef8693627485a7cdb62240c43716e462d723f3bbaa4d",
+        "name": "upg-final-082-20260928-live-harness-api",
+        "image_id": "sha256:593493031187b0ffaff1e2eacc6eef347e6206caf1b65f2eb6fa4e09be06c334",
+        "running": true,
+        "health": "healthy",
+        "started_at": "2026-09-28T14:35:37.6730539Z",
+        "restart_policy": {
+          "Name": "unless-stopped",
+          "MaximumRetryCount": 0
+        },
+        "networks": [
+          "upg-final-082-20260928-live-net"
+        ]
+      },
+      {
+        "component": "harness-worker",
+        "id": "2286bbe8dd581f56f61a95282f9c66b00530bf8fdc24c97d7680152dc726e421",
+        "name": "upg-final-082-20260928-live-harness-worker",
+        "image_id": "sha256:593493031187b0ffaff1e2eacc6eef347e6206caf1b65f2eb6fa4e09be06c334",
+        "running": true,
+        "health": "healthy",
+        "started_at": "2026-09-28T14:35:41.067332051Z",
+        "restart_policy": {
+          "Name": "unless-stopped",
+          "MaximumRetryCount": 0
+        },
+        "networks": [
+          "upg-final-082-20260928-live-net",
+          "weknora-g3-830-provider-egress"
+        ]
+      },
+      {
+        "component": "ui",
+        "id": "540b31edf1e77f9a06c5ee6f5411d7ee510546444746ce48b22f87b857431dec",
+        "name": "upg-final-082-20260928-live-ui",
+        "image_id": "sha256:854c0c66bf153d131d247d3b00c7971b41d9360f8d8368d0d019f2c5bb28ca15",
+        "running": true,
+        "health": null,
+        "started_at": "2026-09-28T14:36:22.128047897Z",
+        "restart_policy": {
+          "Name": "no",
+          "MaximumRetryCount": 0
+        },
+        "networks": [
+          "upg-final-082-20260928-live-net",
+          "weknora-g3-830-ui-edge"
+        ]
+      }
+    ],
+    "retained_originals": [
+      {
+        "component": "app",
+        "id": "33cd9ff6678016d0636854e345764e0652ee635dacc2641dfe3ed5dcbae82893",
+        "image_id": "sha256:7d97028e6994b4a48cfbbc7dea0407e42454d35c076134c600a0c86049ff5527",
+        "running": false
+      },
+      {
+        "component": "ui",
+        "id": "910dbd30ef29a86058980381040eb1bec2b75ee91edebbb89ff1323b2195d19e",
+        "image_id": "sha256:d488e95945f58a0967fd07108cacd32b0c83360e48d123d0bb57cc6ec2bfc57e",
+        "running": false
+      },
+      {
+        "component": "docreader",
+        "id": "3708c452f7471fbee4025300f3143c5f49551278eb1320462f8eb26818f9ace8",
+        "image_id": "sha256:a5533268445e42b4e7a3501cf65a59c0bc8b2bf94898fa1deb66cb36898b9966",
+        "running": false
+      },
+      {
+        "component": "pg",
+        "id": "8edeba34929d268d7c344bb816d56fca5e049357b9855cb34af0adcbf9bac8b2",
+        "image_id": "sha256:af585013f97f622715de01e48d00558f7edf17055d7b40deafc9f98ca8d99a56",
+        "running": true
+      },
+      {
+        "component": "redis",
+        "id": "47f77a1644da6f295f6399e52542ce8b6a242b788be36450b983800fe42927e7",
+        "image_id": "sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf",
+        "running": true
+      },
+      {
+        "component": "harness-api",
+        "id": "d3a3ff1032dc44e23b6c99823dc562b02252ab4b3ca3ca21938a1d7cc677d833",
+        "image_id": "sha256:593493031187b0ffaff1e2eacc6eef347e6206caf1b65f2eb6fa4e09be06c334",
+        "running": false
+      },
+      {
+        "component": "harness-worker",
+        "id": "7ed9aeb217b54165a00492ca620016805707a39744e47609d22560b7a9a79797",
+        "image_id": "sha256:593493031187b0ffaff1e2eacc6eef347e6206caf1b65f2eb6fa4e09be06c334",
+        "running": false
+      }
+    ],
+    "final_schema_verified": true
+  },
+  "runtime_controls": {
+    "housekeeping_enabled": false,
+    "preopen_automatic_restart": false,
+    "final_restart_policies": "See each final runtime container; Harness policies restored after acceptance"
+  },
+  "acceptance_limits": [
+    "Synthetic PDF verifies upload/parse/embedding/revision/source path; no Candidate, quality evaluation, publish or Release activation.",
+    "Revision app_commit and app_version are unknown (existing build metadata gap); actual final App image and full software source are independently known.",
+    "Legacy log nonempty-page rewrite NOT EXERCISED.",
+    "Private recovery scripts retain fixed paths; saved metadata is audited recovery evidence, not a standalone automatic restore command.",
+    "Native PDF task MaxRetry3 remains capable of up to four PDF dispatches in failure cases; the observer STOP is not a hard exactly-once guarantee. The actual observed acceptance used MD1 + PDF1, with zero embedding-worker/model-transport retries."
+  ],
+  "receipts": {
+    "app-d2-receipt.json": {
+      "status": "PASS",
+      "sha256": "7bd83bab3908a67073e4df5ef9d96ccfa09319520240726b58b942f0960d8305"
+    },
+    "ui-d2-receipt.json": {
+      "status": "PASS",
+      "sha256": "c3339c61d815f5d47f811759ea8e0285278837a4b9e6b089d0fc599ec8cbd20d"
+    },
+    "docreader-d2-receipt.json": {
+      "status": "PASS",
+      "sha256": "be1adbad8c90e7f6c0d33c4853e06ff4d6719280e24bef6699e36466fb448081"
+    },
+    "upload-validation-receipt.json": {
+      "status": "PASS",
+      "sha256": "b3793a7af9e2e569cad59076e5425c401acd81d331b69f38422f8fc454a06a28"
+    },
+    "cutover-backup-receipt.json": {
+      "status": "PASS",
+      "sha256": "7e3ae26b10d6bac826c278527f0c694f87c38aba2be52493a1fe29cf395621da"
+    },
+    "cutover-restore-receipt.json": {
+      "status": "PASS",
+      "sha256": "edb653b0c77ff59f9284bf00db0f29c77fe3a20b7a072acc719441ffdade1115"
+    },
+    "cutover-migration-receipt.json": {
+      "status": "PASS",
+      "sha256": "6dcc899d64698f19fd5affad2d8e240718991308204d7a0c11f025f16fb7850e"
+    },
+    "cutover-dependents-receipt.json": {
+      "status": "PASS",
+      "sha256": "eab87dee6d7b802681e2ff00708a4d82f6eabaf64d5f55ad0e0bbce238a4578a"
+    },
+    "cutover-preopen-receipt.json": {
+      "status": "PASS",
+      "sha256": "10d2562c3e0a185b7c0c78b27fe6a3024d5280806693770b46d2d1faf9d0b85e"
+    },
+    "cutover-public-receipt.json": {
+      "status": "PASS",
+      "sha256": "52104dadda9ff8addae9c7a4ef9e4e071eee260295464dd33bb9c658aaab045d"
+    },
+    "cutover-open-receipt.json": {
+      "status": "PASS",
+      "sha256": "a369c519e786a9cc7098c6c4017494f8da5cf290feca220aee447dfd42ebc1e7"
+    },
+    "cutover-final-runtime.json": {
+      "status": "PASS",
+      "sha256": "ed9a3346901f010a501b3fb225413de03963876c0ee13b95c9ca0d6456881b3a"
+    }
+  }
+}
