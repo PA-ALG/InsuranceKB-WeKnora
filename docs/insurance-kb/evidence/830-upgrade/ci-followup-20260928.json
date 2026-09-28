@@ -1,0 +1,105 @@
+{
+  "source_head": "5bd50ba78445f01deda4d82fdb1960f2f731b76b",
+  "remote_ci": {
+    "success": 21,
+    "failure": 3,
+    "skipped": 5
+  },
+  "go_root_failure": {
+    "jobs": [
+      "Format, vet, test, and build",
+      "golangci-lint (.)"
+    ],
+    "root_cause": "Two historical standalone main programs in one Go package",
+    "repair_commit": "0565517ce88fe1a7db9a836d50c6988fe569faf5",
+    "package_enumeration_count": 134,
+    "standalone_explicit_build": "PASS",
+    "tool_execution": "NOT RUN",
+    "historical_receipts": "unchanged",
+    "full_root_lint": {
+      "status": "BLOCKED",
+      "exit_code": 1,
+      "seconds": 396.56,
+      "issues": 174,
+      "files": 85,
+      "note": "Historical duplicate package fix unmasked remaining diff-scoped findings; not a lint PASS",
+      "categories": {
+        "errcheck": 34,
+        "gofumpt": 3,
+        "govet": 1,
+        "ineffassign": 3,
+        "lll": 50,
+        "revive": 50,
+        "staticcheck": 17,
+        "unused": 16
+      }
+    },
+    "uncapped_followup": {
+      "status": "BLOCKED",
+      "exit_code": 4,
+      "timeout_minutes": 8,
+      "reported_findings": 973,
+      "reported_paths": 279,
+      "diff_membership": "973/973 findings map to changed lines against product base 8ccc2ac9",
+      "current_lane_touched_findings": 9,
+      "outside_current_lane_paths": 234,
+      "issue_caps_disabled": true,
+      "categories": {
+        "errcheck": 130,
+        "gofumpt": 36,
+        "lll": 562,
+        "revive": 227,
+        "staticcheck": 18
+      },
+      "scope_decision": "Do not silently expand the frozen mechanical lane or relax CI rules; preserve bounded reviewed corrections and remaining gate explicitly"
+    }
+  },
+  "dsh_failure": {
+    "job": "End-to-end inside dsh (pinned)",
+    "root_cause": "rc8 app-boot requires HMR registerConfig API removed by range-compatible 1.0.18/1.0.19 dependency",
+    "repair_sha256": "4e3fc3a0c6660e30ef4f30d8e9c452de8d4e621ec52773f0c2bed6162f0e4962",
+    "real_e2e": "NOT RUN for repair; next exact CI required",
+    "repair_commit": "3507e8fcbd996971d047d1ec914a847f4557b9de",
+    "focused_unit_tests": {
+      "status": "PASS",
+      "count": 58
+    },
+    "independent_review_blockers": 0
+  },
+  "restore_user_authorization": "User explicitly confirmed isolated resources, private config archives and backup restore after prior auto-review refusal; original runtime cutover not included",
+  "source_lock_rebind_3507": {
+    "status": "PASS",
+    "commit": "3507e8fcbd996971d047d1ec914a847f4557b9de",
+    "tree": "08a124d552d061ae786d2f9af62295341f598fbc",
+    "report_sha256": "dfaf453e844b9169a5bc82c5c4d3ed6eed742c9af95ebf608812b9a622f6da7c",
+    "same_report_as_reviewed_844": true,
+    "verify_exit": 0,
+    "verify_report_exit": 0,
+    "trusted_publication_images": "NOT RUN",
+    "local_runtime_image_sources": "unchanged",
+    "focused_tests": {
+      "status": "PASS",
+      "count": 22,
+      "seconds": 8.43
+    },
+    "independent_review_blockers": 0
+  },
+  "source_lock_rebind": {
+    "status": "PASS",
+    "commit": "18c5f74c321f1b467fdf113b78564379b2ab62ff",
+    "tree": "8bf6a405da349f128ea8adf436d5403b21bb3365",
+    "report_sha256": "dfaf453e844b9169a5bc82c5c4d3ed6eed742c9af95ebf608812b9a622f6da7c",
+    "report_byte_identical_to_844_and_3507": true,
+    "verify_exit": 0,
+    "verify_report_exit": 0,
+    "new_trusted_publication_images": "NOT RUN",
+    "local_image_sources": "unchanged"
+  },
+  "bounded_lint_repair": {
+    "commit": "18c5f74c321f1b467fdf113b78564379b2ab62ff",
+    "paths": 96,
+    "code_review_blockers": 0,
+    "full_lint": "BLOCKED",
+    "receipt": "root-lint-closure-20260928.json"
+  }
+}

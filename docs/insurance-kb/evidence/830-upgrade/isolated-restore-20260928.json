@@ -1,0 +1,371 @@
+{
+  "status": "PASS",
+  "scope": "Five custom database dumps restored into isolated copy; not migration or application acceptance",
+  "resources": {
+    "containers": [
+      "upg-082-20260928-pg-old"
+    ],
+    "networks": [
+      "upg-082-20260928-net"
+    ],
+    "volumes": [
+      "upg-082-20260928-c5",
+      "upg-082-20260928-files",
+      "upg-082-20260928-pgdata"
+    ]
+  },
+  "archives": [
+    {
+      "archive": "files-volume.tar",
+      "sha256": "8d822100c8d0703f8d796a821a2d392278a9743b26ed681ad87e36fafc389eed",
+      "bytes": 836106240,
+      "members": 259,
+      "files": 189,
+      "readable": true
+    },
+    {
+      "archive": "c5-authority-volume.tar",
+      "sha256": "f31b4dea793cdba1ee7e5c975ebd8325d4434d3eb944a53b7baf63f518c9468a",
+      "bytes": 2805760,
+      "members": 17,
+      "files": 16,
+      "readable": true
+    },
+    {
+      "archive": "trusted-config.tar",
+      "sha256": "56a71aee96a6024d6bbfe38e93f6feab8b514fe490831f090a96673d2c8d667b",
+      "bytes": 727040,
+      "members": 5,
+      "files": 4,
+      "readable": true
+    }
+  ],
+  "first_four_restores": [
+    {
+      "database": "paradedb",
+      "dump_sha256": "5ccd2d7fc2de1cef5c0d4aa96244230f66f554adc5c3fb782bed22683710a17a",
+      "status": "PASS",
+      "elapsed_seconds": 1.176
+    },
+    {
+      "database": "postgres",
+      "dump_sha256": "b7f4449c8e5cba92280f730835f59d3adbda0901767fc632cdd75b195d9cfa39",
+      "status": "PASS",
+      "elapsed_seconds": 0.109
+    },
+    {
+      "database": "weknora",
+      "dump_sha256": "5e3035656d32e3bce348e83831e8027959016d4782f092d8ab304d1e0ac17063",
+      "status": "PASS",
+      "elapsed_seconds": 1.11
+    },
+    {
+      "database": "weknora_g3_830",
+      "dump_sha256": "b30521c4c2200d8c113385b4cca25da9e0dde57e2884a4f275bb047a5665b4e1",
+      "status": "PASS",
+      "elapsed_seconds": 53.936
+    }
+  ],
+  "fifth_restore": {
+    "status": "PASS",
+    "first_failure_preserved": true,
+    "recovery_invocation": 1,
+    "total_fifth_restore_invocations": 2,
+    "dump_sha256": "6d0de144541df8d58b5f488365e1378cba9b2c7307bfa4ad34f93da3056755dd",
+    "elapsed_seconds": 109.502,
+    "owner_matches_source": true,
+    "harness_credential_authentication": "NOT RUN",
+    "public_base_tables": 41,
+    "globals_backup_sha256": "4e1315a0b442c66b56160022e9cf4a83ede245677027628a3334945042614e02"
+  },
+  "initial_fifth_failure": {
+    "status": "BLOCKED",
+    "reason": "Missing cluster role needed by ownership statements",
+    "transaction_rolled_back": true,
+    "failure_preserved": true,
+    "recovery": "Reviewed missing nonprivileged role without password; recreate only failed isolated database with matching source owner; one bounded restore retry"
+  },
+  "restored_app_ledger": {
+    "official": {
+      "version": 75,
+      "dirty": false
+    },
+    "enterprise": {
+      "version": 5,
+      "dirty": false
+    },
+    "pg_search": "0.22.2"
+  },
+  "pending_work_check": {
+    "status": "BLOCKED_PENDING_SUMMARY",
+    "summary_state_counts_source": [
+      {
+        "summary_status": "pending",
+        "parse_status": "completed",
+        "soft_deleted": false,
+        "count": 18
+      },
+      {
+        "summary_status": "pending",
+        "parse_status": "deleting",
+        "soft_deleted": true,
+        "count": 3
+      }
+    ],
+    "summary_state_counts_restored": [
+      {
+        "summary_status": "pending",
+        "parse_status": "completed",
+        "soft_deleted": false,
+        "count": 18
+      },
+      {
+        "summary_status": "pending",
+        "parse_status": "deleting",
+        "soft_deleted": true,
+        "count": 3
+      }
+    ],
+    "settings_restored": [
+      {
+        "is_target_database": true,
+        "is_missing_role": false,
+        "keys": [
+          "search_path"
+        ]
+      }
+    ],
+    "role_attributes_equal": true,
+    "database_metadata_equal": true,
+    "original_catalog_restored_byte_identically": true,
+    "original_catalog_sha256": "e82d647abdce3d210885e6312ca68162ab3db793cc4940c7ee1e54f0d8e43254",
+    "original_eight_unchanged": true,
+    "app_starts": 0,
+    "target_pg_pulls": 0,
+    "migration_attempts": 0,
+    "checkpoint": "Initial pre-start STOP; superseded only by the reviewed isolated Redis/housekeeping configuration"
+  },
+  "credential_access": {
+    "direct_database_token_extraction": "BLOCKED by automatic approval; command not executed; removed",
+    "normal_operator_login": "PASS; one normal existing-operator login during initial old-App start; two expected auth_tokens inserts recorded"
+  },
+  "original_eight_unchanged": true,
+  "app_builds": 0,
+  "app_starts": 1,
+  "target_pg_pulls": 0,
+  "migration_attempts": 0,
+  "provider_calls": 0,
+  "old_app_restore_GET": "BLOCKED: epoch GET passed but release search failed with incomplete runtime config restore",
+  "post_migration_GET": "NOT RUN",
+  "cutover": "NOT RUN",
+  "private_material": "Local private backup and execution directories only; no credentials or row contents committed",
+  "restore_configuration_difference": {
+    "provenance": "CREATE EXTENSION postgis_topology/postgis_tiger_geocoder executes AddToSearchPath installation helper that ALTER DATABASE current_database SET search_path",
+    "extension_script_proof": [
+      {
+        "script": "postgis_tiger_geocoder--3.6.2.sql",
+        "sha256": "b5b0d2a149e8c76dba2088f46542632dd520ada200e392368ca21e6f4d6c80ad",
+        "matches": [
+          {
+            "line": 13573,
+            "text": "CREATE FUNCTION postgis_extension_AddToSearchPath(a_schema_name text)"
+          },
+          {
+            "line": 13622,
+            "text": "EXECUTE 'ALTER DATABASE ' || quote_ident(current_database())"
+          },
+          {
+            "line": 13653,
+            "text": "SELECT postgis_extension_AddToSearchPath('tiger');"
+          },
+          {
+            "line": 13671,
+            "text": "DROP FUNCTION IF EXISTS postgis_extension_AddToSearchPath(varchar);"
+          },
+          {
+            "line": 13672,
+            "text": "DROP FUNCTION IF EXISTS postgis_extension_AddToSearchPath(text);"
+          }
+        ]
+      },
+      {
+        "script": "postgis_topology--3.6.2.sql",
+        "sha256": "b25dec795e33f0963c71fa5ebf0211cd7b6315dfc2ab1af2b9b7d882889342d0",
+        "matches": [
+          {
+            "line": 5388,
+            "text": "--  AddToSearchPath(schema_name)"
+          },
+          {
+            "line": 5394,
+            "text": "CREATE OR REPLACE FUNCTION topology.AddToSearchPath(a_schema_name varchar)"
+          },
+          {
+            "line": 5443,
+            "text": "EXECUTE 'ALTER DATABASE ' || quote_ident(current_database())"
+          },
+          {
+            "line": 5457,
+            "text": "--} AddToSearchPath"
+          },
+          {
+            "line": 9089,
+            "text": "SELECT topology.AddToSearchPath('topology');"
+          }
+        ]
+      }
+    ],
+    "source_and_isolated_effective_searchpath_equal": false,
+    "source_effective_schema_count": 1,
+    "isolated_effective_schema_count": 2,
+    "persistent_setting_scope": "database-wide, setrole=0",
+    "setting_altered_by_executor": false
+  },
+  "startup_amendment": {
+    "status": "PASS",
+    "meaning": "Pre-execution plan review only; not runtime acceptance",
+    "plan_sha256": "cb6a227a9de398d41582c8f1f4c64ed82971cff2742d2b47b378348efd0529fb",
+    "review_blockers": 0,
+    "old_source": "b393d855c7c3e6b6acaf71683861255ee9710b83",
+    "new_source": "e71c72f7dd885e228c4f447c68902450fed7ae26",
+    "shared_reset_pending_blob": "349f9e4944e6b28c8018386aded101da76e3dcc8",
+    "configuration": {
+      "redis": "New isolated empty Redis, existing local immutable image, no original Redis attachment",
+      "housekeeping_enabled": false,
+      "old_auto_migrate": false,
+      "new_auto_migrate": true,
+      "auto_recover_dirty": false
+    },
+    "guards": [
+      "Exact 21 historical summary-pending and 3 soft-deleted/deleting rows and spans preserved before/after both Apps",
+      "Parse pending/processing/finalizing and actual tasks/subtasks/sync/schedules/Harness jobs/outbox must be zero",
+      "Require distributed Redis and housekeeping-disabled startup evidence",
+      "Closed declared native post-hooks; unexpected business state delta means STOP",
+      "Normal existing operator login; expected auth metadata writes accounted separately",
+      "One new App migration startup only, no restart/ledger repair/manual SQL",
+      "No original service or provider effects"
+    ],
+    "execution": "Old App first startup executed; continuity BLOCKED; see later actual outcome fields. New migration NOT RUN.",
+    "closed_posthooks_plan_sha256": "7a7cc7d3148238807c0cacd06344d8ed120ccb80c869cf8192b125d21aae8a2c",
+    "closed_posthooks": {
+      "four_storage_aliases": "updated_at only; name/config/source/status equal",
+      "sequences": [
+        "chunks_seq_id_seq",
+        "knowledge_tags_seq_id_seq"
+      ],
+      "models": "14-row digest unchanged; optional config absent",
+      "login": "Only access+refresh auth_tokens inserts per successful login; users/preferences/memberships unchanged",
+      "protected_rows": 21,
+      "protected_spans": 216
+    },
+    "posthooks_preflight": {
+      "storage_alias_count": 4,
+      "content_delta_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "content_differing_fields": [],
+      "expected_storage_changes": "4 updated_at timestamps only",
+      "builtin_models": {
+        "present": false,
+        "loader_effect": "no-op missing config"
+      },
+      "builtin_config_env_override_present": false,
+      "old_auto_migrate_false_skips_database_posthooks": true,
+      "new_posthooks_sequence_changes": {
+        "chunks_seq_id_seq": {
+          "last_value": 100007280,
+          "is_called": true
+        },
+        "knowledge_tags_seq_id_seq": {
+          "last_value": 10000011,
+          "is_called": true
+        }
+      },
+      "storage_backends_before": {
+        "count": 4,
+        "sha256": "3103c044204e594ae9962f8673bbfb719212246a042e72ae6c885c58812e3fa4"
+      },
+      "models_before": {
+        "count": 14,
+        "sha256": "328986a36957b8f032fb3a32d5f69f2a7f0ea58c70996105e6580765aabbd40c"
+      },
+      "tenants_before": {
+        "count": 4,
+        "sha256": "cadb222031cfd4fac7a2619a89e332cd34c821d807daad97633c36399eb73315"
+      },
+      "knowledge_bases_before": {
+        "count": 12,
+        "sha256": "39ddbc1ae38299b3a6ff67de665ce20ee42f5e5d773de6f6868372afc3a0d240"
+      },
+      "app_process_starts": 0,
+      "image_inspection_container_started": false,
+      "image_inspection_container_removed": true
+    },
+    "checkpoint": "Pre-execution plan and preflight evidence; actual old-App outcome is recorded in old_app_initial_start and config_recovery_stop"
+  },
+  "old_app_initial_configuration": {
+    "status": "BLOCKED",
+    "config_difference": {
+      "path": "/app/config/config.yaml",
+      "source_sha256": "195af92686a8e6f95fce69313ae120ec3aacf601fd79cfe11963890ef19a449e",
+      "isolated_sha256": "5d2d448435bc912d7d95a012673387fe1555e2e6419fc35bb968f8685aadca94",
+      "equal": false
+    },
+    "diagnosis": "Original writable-layer App config was not included in first isolated startup; database/file integrity matches alone do not prove application recovery",
+    "recovery_plan_sha256": "443e65bc157caa688b2d577493fc723399995fb93ad7ff8147f0b51944ca7baa",
+    "archive_and_stop_review_blockers": 0,
+    "additional_old_start": "BLOCKED pending exact archived-config/effect review",
+    "initial_old_login": 1,
+    "expected_auth_tokens_inserts": 2
+  },
+  "old_app_initial_start": {
+    "container_health": "PASS",
+    "epoch27_GET": "PASS",
+    "release_search_GET": "BLOCKED",
+    "new_migration": "NOT RUN",
+    "redis_tasks": 0,
+    "protected_knowledge_and_spans_unchanged": true
+  },
+  "config_recovery_stop": {
+    "status": "BLOCKED_APP_CONFIG_ARCHIVE_APPROVAL",
+    "isolated_old_app_stopped": true,
+    "original_eight_unchanged": true,
+    "auth_record_count_before": 777,
+    "auth_record_count_after": 779,
+    "auth_record_delta": 2,
+    "users_full_digest_unchanged": true,
+    "old_app_starts": 1,
+    "old_app_config_recovery_starts": 0,
+    "new_app_starts": 0,
+    "target_pg_pulls": 0,
+    "migration_attempts": 0,
+    "provider_calls": 0,
+    "source_app_config_archive_created": false,
+    "source_app_config_copied": false,
+    "source_original_service_changes": 0,
+    "preserved_resources": [
+      "upg-082-20260928-pg-old",
+      "upg-082-20260928-redis",
+      "upg-082-20260928-app-old (stopped)"
+    ]
+  },
+  "config_recovery_prepared": {
+    "status": "PREPARED_NOT_EXECUTED_PENDING_EXACT_APPROVAL",
+    "sha256": "ff14232f6c1d73c54159f9e6f8b358120759f015ce0cebe0c1fd8e4896b913ad",
+    "source": "exact original old-App container /app/config/.",
+    "target": "upg-082-20260928-app-old:/app/config (must be stopped)",
+    "file_mode": "0600 enforced with os.open/fchmod/chmod",
+    "directory_mode": "0700 enforced",
+    "credential_values_printed": false,
+    "starts": 0
+  },
+  "config_approval": {
+    "status": "BLOCKED",
+    "reason": "Automatic approval required explicit authorization for possibly secret-bearing original /app/config archive and copy; command did not start",
+    "file_mode_issue": "Prepared script now explicitly enforces 0600 and directory0700; not executed",
+    "user_question": "Exact path/action authorization requested asynchronously; pending response"
+  }
+}

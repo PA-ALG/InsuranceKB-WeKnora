@@ -1,6 +1,36 @@
 # 升级验证矩阵
 
-## 2026-09-28 续行最新验证（覆盖下方历史时态）
+## 2026-09-28 最终有界修正与恢复阻断（当前）
+
+机械代码96路径提交18c5f74c321f1b467fdf113b78564379b2ab62ff/tree8bf6a405…，两轮冻结独审0BLOCKER；
+14文件字符串值逐字一致，定向wiki/service/chat_pipeline/types等PASS。原失败、完整types超时、
+本机DNS与日志格式限制逐项保留。未限报告条数的根lint输出973项/279路径并以exit4超时，
+不是完整PASS；只关闭本lane新增9条，不静默扩改另外234路径。最终source lock实际verify及
+verify-report PASS，报告dfaf与844/3507逐字一致；不代表新可信发布镜像已构建。
+
+五库副本恢复PASS；旧App/登录/epoch27读取PASS，release search500，已确认漏恢复原容器
+/app/config运行层（其余数据与文件摘要相同）。测试App已停止，原8身份保持；新增PG pull、
+新App、迁移、provider均0。可能含密钥的准确/app/config归档复制被自动审批拒绝，准备脚本
+显式强制0700/0600，已向用户请求该路径精确授权，尚未收到。完整恢复/升级验收保持BLOCKED。
+见root-lint-closure-20260928.json、ci-followup-20260928.json及isolated-restore-20260928.json。
+
+## 2026-09-28 确认后的隔离恢复与 CI 追检（执行历史）
+
+用户明确“确认”后，五份数据库备份已在新内部网络/新卷恢复，原8服务不切换。
+第五库首次缺角色导致事务回滚；独立审查后补齐非特权角色（不复制密码），仅重建失败
+副本数据库，唯一恢复重试PASS。四份已成功副本保留。数据库恢复PASS不等于应用恢复或迁移PASS。
+源/副本均有21条历史summary pending，其他队列/计划为0；启动前安全核对仍在进行。
+第五库PostGIS扩展安装生成database-wide search_path差异，已归因并保留，不宣称配置完全相同。
+数据库令牌提取被自动审批拒绝且未执行；改用既有操作员的正常登录入口，尚未启动App。
+实际迁移、旧/新App GET、provider及原环境切换仍NOT RUN，见isolated-restore-20260928.json。
+
+远端5bd最终为21 SUCCESS/3 FAILURE/5 SKIPPED。Go历史工具冲突已以0565517ce修正，
+134包枚举及两个显式单文件build PASS；dsh固定rc8的HMR兼容依赖已以3507e8fcb修正，
+58单测PASS，真实E2E待最终CI。3507源码锁与dfaf报告独审0BLOCKER，22定向检查PASS。
+Go根lint在396.56秒完成并报告174项，先前类型冲突掩盖了这些发现；独占最小机械修复正在进行，
+不能记为lint PASS，源码锁需随最终软件提交重新绑定。已有e71/82制品身份不随代码提交变化。
+
+## 2026-09-28 续行验证（下方为历史）
 
 源码冻结 `844f03c55c8d25cff2fbccc9eb639cc343d932ab`，UI组件源 `82ff324de…`；
 App/DocReader构建源仍e71，不能混称同一新源码制品。077迁移保留policy先RED后GREEN，

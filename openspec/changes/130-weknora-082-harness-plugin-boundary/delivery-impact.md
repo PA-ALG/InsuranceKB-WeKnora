@@ -1,3 +1,15 @@
+## 2026-09-28 当前交付边界
+
+software：18c5f74c3机械修正独审及定向验证PASS，完整lint/最终CI仍BLOCKED（973项快照）。
+source lock绑定18c5/tree8bf6a405，实际verify/report PASS，dfaf报告字节不变；已有e71/82镜像不冒充新源。
+provisioning：五库隔离恢复PASS；旧App配置层缺失，发布内容读取BLOCKED，测试App已停止。
+/app/config私有归档复制遭自动审批拒绝，精确授权待答复；新PG pull/迁移/新App启动0。
+container health：旧App初次隔离启动PASS，仅限该次，不能推出升级健康。
+provider probe、升级local live、新业务tracer、原环境切换均NOT RUN；原8服务身份保持。
+GitHub live：5bd远端21成功/3失败/5跳过，最终head以实际推送后的状态为准；Draft不合并。
+
+下方为历史影响记录，不能覆盖本块。
+
 # 升级交付影响与现有运行基线
 
 ## 2026-09-28 当前续行

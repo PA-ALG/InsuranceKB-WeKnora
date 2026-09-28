@@ -1,4 +1,33 @@
-## 2026-09-28 容量恢复后的升级续行（当前）
+## 2026-09-28 五库恢复完成，配置恢复与最终 CI 仍阻断（当前）
+
+用户明确“确认”后，在新内部网络/新卷恢复五份数据库备份。第五库首次缺角色导致
+事务回滚；独审后仅补非特权角色、重建失败副本并唯一重试PASS。原8服务身份保持，
+没有原环境切换。恢复副本75/false、enterprise5/false、pg_search0.22.2。
+
+原Lite启动方案会把21条历史summary pending和3条软删除deleting改为failed，正确STOP。
+已独审修订为新隔离空Redis、关闭housekeeping，保护21行与216 spans，保留实际队列0。
+旧App首次隔离启动及正常登录/epoch27 GET通过，release search500；DB/文件摘要与源相同，
+但原容器writable-layer的/app/config未恢复，与镜像默认配置不同。旧测试App已停止，
+新App启动/目标PG pull/实际迁移/provider均0。登录产生的2条auth token插入独立记录。
+
+自动审批再次拒绝归档并复制可能含密钥的原/app/config，要求对该具体目录明确授权；
+命令未执行。准备脚本已显式强制0700目录/0600文件，SHAff14232f…，仅恢复到隔离容器。
+已通过异步问题向用户请求精确授权；未收到该答复前保持STOP，不换路径绕过。
+此前“确认”已用于五库恢复/原计划配置归档，不能把本次拒绝写成用户未批准任何隔离工作。
+
+Go历史工具包冲突与dsh rc8/HMR兼容已修正。完整根lint关闭报告条数上限后出现973项
+（279路径、8分钟exit4），973/973确为相对产品基线的改动行；不能记为CI通过。
+已冻结当前96路径最小机械修正，独立代码审查0BLOCKER，提示词/模型schema字节保持；
+完整CI与大量未纳入当前写域的检查项仍BLOCKED，不静默扩成大范围改写或放宽门禁。
+机械修正已提交18c5f74c3/tree8bf6a405，最终source lock verify/report PASS，报告dfaf与原844逐字相同。
+已有App e71、DocReader e71、UI82制品保持各自身份，不能称为后续软件提交的exact reuse。
+
+CURRENT=保存隔离恢复结果、完成已审代码/证据集成与同一Draft PR更新；待/app/config精确授权。
+NEXT=授权后先补配置并完成旧版来源/PDF恢复验证，再执行已审一次迁移；另需收敛剩余CI范围。
+实际升级验收、原环境部署、新tracer/provider与发布保持NOT RUN。结构化证据见
+isolated-restore-20260928.json及ci-followup-20260928.json。下方为历史。
+
+## 2026-09-28 容量恢复后的升级续行（历史）
 
 活动工作树 `830-upstream-plugin-boundary`，root 唯一集成 Owner；PR #131 继续 Draft。
 Colima 已由 110 扩至 130 GiB，原 8 服务恢复；OnlyOffice 测试容器/镜像已按用户要求

@@ -6,8 +6,8 @@
   "platform": "linux/arm64",
   "build_source": {
     "repository": "https://github.com/PA-ALG/InsuranceKB-WeKnora.git",
-    "commit": "844f03c55c8d25cff2fbccc9eb639cc343d932ab",
-    "tree": "ee7945e8638bbd392215d8397bb64daf317ed4f8"
+    "commit": "18c5f74c321f1b467fdf113b78564379b2ab62ff",
+    "tree": "8bf6a405da349f128ea8adf436d5403b21bb3365"
   },
   "adoption_manifest": {
     "path": "deploy/upstream/weknora-adoption-target.json",
