@@ -42,6 +42,11 @@ const dshSpec = process.env.DSH_PACKAGE_SPEC ?? '@deepseek-ai/dsh@latest'
 const API_KEY = 'e2e-api-key'
 const QUESTION = 'WeKnora 的默认检索阈值是多少？请查知识库后回答。'
 const transcript = []
+const headlessRuntimePatch = {
+  id: 'hmr',
+  disabled: false,
+  config: { root: [] },
+}
 
 function log(line) {
   transcript.push(line)
@@ -126,7 +131,7 @@ async function scenario(options) {
   try {
     await writeFile(
       join(home, 'profiles', 'headless', 'cordis.patch.yml'),
-      JSON.stringify([...patch, ...modelPatchRows(model.url)], null, 2),
+      JSON.stringify([headlessRuntimePatch, ...patch, ...modelPatchRows(model.url)], null, 2),
     )
 
     const dump = await run(dsh, ['--profile', 'headless', '--dump-config'], { env })

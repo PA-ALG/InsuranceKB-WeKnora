@@ -9,7 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Tencent/WeKnora/internal/models/embedding"
+	"github.com/Tencent/WeKnora/internal/models/api"
+	"github.com/Tencent/WeKnora/internal/models/api/openaiembeddings"
 )
 
 func main() {
@@ -57,9 +58,18 @@ func main() {
 		if p.Model != "qwen3.7-text-embedding" || len(p.Input) < 1 || len(p.Input) > 100 {
 			panic("projection shape")
 		}
-		// Current model readback: truncate=0 is normalized by NewOpenAIEmbedder to511;
-		// dimension=1024 is not sent because supports_dimension_override=false.
-		body, err := json.Marshal(embedding.OpenAIEmbedRequest{Model: p.Model, Input: p.Input, EncodingFormat: "float", TruncatePromptTokens: 511})
+		// Current model readback: truncate=0 is normalized to 511 for this
+		// vLLM-class runtime; dimension=1024 is not sent because the row does
+		// not support a dimension override.
+		client := openaiembeddings.New(openaiembeddings.Config{
+			Endpoint: api.Endpoint{Model: p.Model},
+			Settings: api.EmbeddingsSettings{
+				SendEncodingFormat:          true,
+				AcceptsTruncatePromptTokens: true,
+				TruncatePromptTokens:        511,
+			},
+		})
+		body, err := json.Marshal(client.BuildRequestBody(p.Input, api.EmbedDocument))
 		if err != nil {
 			panic(err)
 		}

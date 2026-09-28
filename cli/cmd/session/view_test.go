@@ -35,7 +35,13 @@ func (f *fakeViewService) GetSession(_ context.Context, id string) (*sdk.Session
 	return f.s, f.err
 }
 
-func (f *fakeViewService) LoadMessages(_ context.Context, sessionID string, limit int, _ *time.Time, opts ...sdk.ResourceURLOptions) ([]sdk.Message, error) {
+func (f *fakeViewService) LoadMessages(
+	_ context.Context,
+	sessionID string,
+	limit int,
+	_ *time.Time,
+	_ ...sdk.ResourceURLOptions,
+) ([]sdk.Message, error) {
 	f.loadCall.called = true
 	f.loadCall.sessionID = sessionID
 	f.loadCall.limit = limit

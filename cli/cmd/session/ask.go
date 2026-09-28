@@ -46,7 +46,13 @@ type AskOptions struct {
 // agent / KB-chat invocations.
 type AskService interface {
 	CreateSession(ctx context.Context, req *sdk.CreateSessionRequest) (*sdk.Session, error)
-	AgentQAStreamWithRequest(ctx context.Context, sessionID string, req *sdk.AgentQARequest, cb sdk.AgentEventCallback, opts ...sdk.ResourceURLOptions) error
+	AgentQAStreamWithRequest(
+		ctx context.Context,
+		sessionID string,
+		req *sdk.AgentQARequest,
+		cb sdk.AgentEventCallback,
+		opts ...sdk.ResourceURLOptions,
+	) error
 }
 
 // NewCmdAsk builds `weknora session ask --agent <agent-id> "<text>"`.

@@ -27,7 +27,13 @@ type fakeListSvc struct {
 	gotBefore *time.Time
 }
 
-func (s *fakeListSvc) LoadMessages(_ context.Context, sessionID string, limit int, before *time.Time, opts ...sdk.ResourceURLOptions) ([]sdk.Message, error) {
+func (s *fakeListSvc) LoadMessages(
+	_ context.Context,
+	sessionID string,
+	limit int,
+	before *time.Time,
+	_ ...sdk.ResourceURLOptions,
+) ([]sdk.Message, error) {
 	s.gotSessID, s.gotLimit, s.gotBefore = sessionID, limit, before
 	return s.items, s.err
 }

@@ -266,7 +266,8 @@ def _reviewed_preservation_rows() -> list[dict[str, str]]:
 
 
 @pytest.mark.parametrize(
-    "mutation", ["missing", "duplicate", "extra_key", "wrong_sha", "wrong_head", "pass", "extra_target_key"]
+    "mutation",
+    ["missing", "duplicate", "extra_key", "wrong_sha", "wrong_head", "pass", "extra_target_key"],
 )
 def test_verifier_rejects_invalid_preservation_even_with_reviewed_digest(
     tmp_path: Path,

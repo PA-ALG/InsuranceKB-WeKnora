@@ -30,6 +30,7 @@ def check():
         config = (ROOT / "frontend/nginx.conf").read_text()
         for key, value in {
             "APP_SCHEME": "http", "APP_HOST": "127.0.0.1", "APP_PORT": "18081",
+            "APP_DNS_RESOLVER": "127.0.0.11",
             "MAX_FILE_SIZE": "50m", "MAX_SKILL_BUNDLE_SIZE": "100m",
         }.items():
             config = config.replace("${" + key + "}", value)
@@ -103,7 +104,7 @@ def check():
                         assert "X-Frame-Options" not in response.headers
                         assert response.read() == (b"embed entry" if method == "GET" else b"")
             for path, status in (("/embed/disabled", 403), ("/embed/empty", 403),
-                                 ("/embed/unavailable", 500), ("/_embed-frame-policy", 404),
+                                 ("/embed/unavailable", 503), ("/_embed-frame-policy", 404),
                                  ("/embed.html", 404)):
                 with request(path) as response:
                     assert response.status == status, (path, response.status)

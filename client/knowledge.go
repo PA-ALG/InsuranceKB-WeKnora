@@ -440,7 +440,10 @@ type MoveKnowledgeToFolderResponse struct {
 
 // MoveKnowledgeToFolder updates folder_path for the given knowledge entries.
 // An empty FolderPath moves documents back to the knowledge base root.
-func (c *Client) MoveKnowledgeToFolder(ctx context.Context, req *MoveKnowledgeToFolderRequest) (*MoveKnowledgeToFolderResponse, error) {
+func (c *Client) MoveKnowledgeToFolder(
+	ctx context.Context,
+	req *MoveKnowledgeToFolderRequest,
+) (*MoveKnowledgeToFolderResponse, error) {
 	resp, err := c.doRequest(ctx, http.MethodPost, "/api/v1/knowledge/folder", req, nil)
 	if err != nil {
 		return nil, err
@@ -565,12 +568,17 @@ type BatchDownloadKnowledgeRequest struct {
 // DownloadKnowledgeFiles downloads a ZIP of original files for the given
 // knowledge IDs to destPath. On any error after the file is opened, the
 // partial file is removed.
-func (c *Client) DownloadKnowledgeFiles(ctx context.Context, knowledgeBaseID string, ids []string, destPath string) error {
+func (c *Client) DownloadKnowledgeFiles(
+	ctx context.Context,
+	knowledgeBaseID string,
+	ids []string,
+	destPath string,
+) error {
 	_, body, err := c.OpenKnowledgeFilesArchive(ctx, knowledgeBaseID, ids)
 	if err != nil {
 		return err
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	out, err := os.Create(destPath)
 	if err != nil {
@@ -588,7 +596,11 @@ func (c *Client) DownloadKnowledgeFiles(ctx context.Context, knowledgeBaseID str
 // server-suggested ZIP filename and a streaming reader. Callers MUST Close
 // the returned reader. The request uses the streaming HTTP client so the
 // default 30s timeout does not cut off large archives.
-func (c *Client) OpenKnowledgeFilesArchive(ctx context.Context, knowledgeBaseID string, ids []string) (string, io.ReadCloser, error) {
+func (c *Client) OpenKnowledgeFilesArchive(
+	ctx context.Context,
+	knowledgeBaseID string,
+	ids []string,
+) (string, io.ReadCloser, error) {
 	path := fmt.Sprintf("/api/v1/knowledge-bases/%s/knowledge/batch-download", knowledgeBaseID)
 	resp, err := c.doRequestStream(ctx, http.MethodPost, path, BatchDownloadKnowledgeRequest{IDs: ids}, nil)
 	if err != nil {

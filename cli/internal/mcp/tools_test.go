@@ -104,7 +104,13 @@ func (f *fakeSvc) CreateSession(_ context.Context, req *sdk.CreateSessionRequest
 	}
 	return f.createSess, f.createSessErr
 }
-func (f *fakeSvc) KnowledgeQAStream(_ context.Context, sess string, req *sdk.KnowledgeQARequest, cb func(*sdk.StreamResponse) error, opts ...sdk.ResourceURLOptions) error {
+func (f *fakeSvc) KnowledgeQAStream(
+	_ context.Context,
+	sess string,
+	req *sdk.KnowledgeQARequest,
+	cb func(*sdk.StreamResponse) error,
+	_ ...sdk.ResourceURLOptions,
+) error {
 	f.calls.kbQASess, f.calls.kbQAReq = sess, req
 	for _, e := range f.kbStreamEvents {
 		if err := cb(e); err != nil {
@@ -121,7 +127,13 @@ func (f *fakeSvc) GetAgent(_ context.Context, id string) (*sdk.Agent, error) {
 	f.calls.agentViewID = id
 	return f.agent, f.agentErr
 }
-func (f *fakeSvc) AgentQAStreamWithRequest(_ context.Context, sess string, req *sdk.AgentQARequest, cb sdk.AgentEventCallback, opts ...sdk.ResourceURLOptions) error {
+func (f *fakeSvc) AgentQAStreamWithRequest(
+	_ context.Context,
+	sess string,
+	req *sdk.AgentQARequest,
+	cb sdk.AgentEventCallback,
+	_ ...sdk.ResourceURLOptions,
+) error {
 	f.calls.agentSess, f.calls.agentReq = sess, req
 	for _, e := range f.agentEvents {
 		if err := cb(e); err != nil {

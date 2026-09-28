@@ -6,9 +6,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fixture="$(mktemp -d)"
 trap 'rm -rf "${fixture}"' EXIT
 mkdir -p "${fixture}/scripts" "${fixture}/bin" "${fixture}/licenses/sources"
+mkdir -p "${fixture}/third_party/anydoc-go"
 cp "${repo_root}/scripts/"{check-license-bundle,copy-licenses}.sh "${fixture}/scripts/"
 cp "${repo_root}/LICENSE" "${repo_root}/THIRD_PARTY_NOTICES.md" "${fixture}/"
 cp "${repo_root}/licenses/"*.txt "${fixture}/licenses/"
+cp "${repo_root}/third_party/anydoc-go/LICENSE" "${fixture}/third_party/anydoc-go/"
 touch "${fixture}/go.sum"
 
 checksum() {

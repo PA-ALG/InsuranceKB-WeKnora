@@ -51,7 +51,12 @@ type ResumeOptions struct {
 // *sdk.Client satisfies it; tests substitute a fake. Compile-time check
 // at the bottom of this file.
 type ResumeService interface {
-	ContinueStream(ctx context.Context, sessionID, messageID string, cb func(*sdk.StreamResponse) error, opts ...sdk.ResourceURLOptions) error
+	ContinueStream(
+		ctx context.Context,
+		sessionID, messageID string,
+		cb func(*sdk.StreamResponse) error,
+		opts ...sdk.ResourceURLOptions,
+	) error
 }
 
 // NewCmdResume builds `weknora session resume <session-id> --message <id>`.
