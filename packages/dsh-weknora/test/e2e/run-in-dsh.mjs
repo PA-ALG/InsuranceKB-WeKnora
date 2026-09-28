@@ -39,6 +39,10 @@ import { startMockWeknora } from '../helpers/mock-weknora.mjs'
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const installDir = process.env.DSH_INSTALL_DIR ?? join(tmpdir(), 'dsh-e2e-install')
 const dshSpec = process.env.DSH_PACKAGE_SPEC ?? '@deepseek-ai/dsh@latest'
+// dsh 0.1.0-rc.8's app boot calls hmr.registerConfig(), which exists in
+// cordis-plugin-hmr 1.0.16 but was removed in 1.0.18. Remove this override when
+// the pinned dsh release no longer calls that API.
+const hmrCompatVersion = dshSpec === '@deepseek-ai/dsh@0.1.0-rc.8' ? '1.0.16' : undefined
 const API_KEY = 'e2e-api-key'
 const QUESTION = 'WeKnora 的默认检索阈值是多少？请查知识库后回答。'
 const transcript = []
@@ -78,15 +82,39 @@ function run(command, args, options = {}) {
 async function resolveDsh() {
   if (process.env.DSH_BIN !== undefined) return process.env.DSH_BIN
   const binary = join(installDir, 'node_modules', '.bin', 'dsh')
-  if (existsSync(binary)) {
+  const hmrManifest = join(
+    installDir,
+    'node_modules',
+    '@deepseek-ai',
+    'cordis-plugin-hmr',
+    'package.json',
+  )
+  const installedHmrVersion = existsSync(hmrManifest)
+    ? JSON.parse(await readFile(hmrManifest, 'utf8')).version
+    : undefined
+  if (existsSync(binary) && (hmrCompatVersion === undefined || installedHmrVersion === hmrCompatVersion)) {
     log(`# reusing the dsh install at ${installDir}`)
     return binary
   }
-  log(`# installing ${dshSpec} into ${installDir} (first run only)`)
+  if (existsSync(binary)) {
+    log(`# refreshing the dsh install: cordis-plugin-hmr ${installedHmrVersion ?? 'is missing'}; expected ${hmrCompatVersion}`)
+  }
+  log(`# installing ${dshSpec} into ${installDir}`)
   await mkdir(installDir, { recursive: true })
-  await writeFile(join(installDir, 'package.json'), JSON.stringify({ name: 'dsh-e2e-install', private: true }, null, 2))
+  const installManifest = {
+    name: 'dsh-e2e-install',
+    private: true,
+  }
+  if (hmrCompatVersion !== undefined) {
+    installManifest.overrides = { '@deepseek-ai/cordis-plugin-hmr': hmrCompatVersion }
+  }
+  await writeFile(join(installDir, 'package.json'), JSON.stringify(installManifest, null, 2))
   const install = await run('npm', ['install', '--no-audit', '--no-fund', dshSpec], { cwd: installDir })
   if (install.code !== 0) throw new Error(`npm install ${dshSpec} failed:\n${install.stderr}`)
+  if (hmrCompatVersion !== undefined) {
+    const resolvedHmrVersion = JSON.parse(await readFile(hmrManifest, 'utf8')).version
+    assert.equal(resolvedHmrVersion, hmrCompatVersion, 'the rc.8-compatible HMR release must be installed')
+  }
   return binary
 }
 
