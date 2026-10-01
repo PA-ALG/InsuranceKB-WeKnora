@@ -1,0 +1,5 @@
+tests/test_ci_lanes_022.py::test_rh6_1_claude_points_to_single_authority_and_ci_defaults_deterministic — 原有文档断言：CLAUDE.md 只引用 @AGENTS.md，未包含历史测试期待的三段文字。
+tests/test_run_admission_session_lock_020.py::test_d1_5_competitor_fails_before_recovery_or_ledger_mutation — 进程锁持有子进程未在 3 秒内响应；完整文件定向复核仍失败。
+tests/test_run_admission_session_lock_020.py::test_d1_5_different_accounts_can_hold_session_locks_concurrently — 进程锁持有子进程未在 3 秒内响应；完整文件定向复核仍失败。
+tests/test_run_admission_session_lock_020.py::test_d1_5_lock_covers_recovery_through_settlement — 原始分组运行：进程锁探测未在 10 秒内响应；完整文件定向复核该项通过。
+tests/test_run_admission_session_lock_020.py::test_d1_5_same_account_lock_is_cross_process_and_nonblocking — 进程锁持有子进程未在 3 秒内响应；完整文件定向复核仍失败。

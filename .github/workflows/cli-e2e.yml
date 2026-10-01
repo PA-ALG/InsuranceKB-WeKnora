@@ -1,24 +1,17 @@
 name: CLI E2E
 
 # Runs the cli/acceptance/e2e/ suite against a real WeKnora server.
-# Cost-gated so it doesn't fire on every PR:
-#   - workflow_dispatch: maintainer can trigger manually
-#   - pull_request labeled "acceptance-e2e": adding the label kicks a run
+# Maintainers explicitly request a run with workflow_dispatch.
 #
-# Required repo secrets (only set on Tencent/WeKnora; cross-fork PRs have no
-# access and the job exits early via the secrets-present guard):
+# Required repo secrets (the job exits early via the secrets-present guard
+# when the new private repository has not configured them):
 #   WEKNORA_E2E_HOST   - https URL of the test server
 #   WEKNORA_E2E_TOKEN  - bearer token / API key for that host
 #
-# Mirrors gh acceptance/ trigger pattern: env-gated, opt-in, single matrix.
+# Env-gated, manual, single matrix.
 
 on:
   workflow_dispatch:
-  pull_request:
-    types: [labeled, synchronize]
-    paths:
-      - 'cli/**'
-      - '.github/workflows/cli-e2e.yml'
 
 defaults:
   run:
@@ -31,11 +24,6 @@ permissions:
 jobs:
   e2e:
     name: rag full loop
-    # Skip auto-trigger on label-add unless the label is exactly "acceptance-e2e".
-    # Manual workflow_dispatch always runs.
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'acceptance-e2e'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

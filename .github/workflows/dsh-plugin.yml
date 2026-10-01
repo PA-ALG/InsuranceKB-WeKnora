@@ -7,7 +7,7 @@ name: Build & Publish (dsh-weknora)
 #             packaging check
 #   e2e       install the package into a throwaway dsh profile and drive real
 #             tool calls through the harness agent loop against a mock backend
-#   publish   on a `dsh-weknora-v*` tag only, publish to npm with provenance
+#   publish   manually on a `dsh-weknora-v*` tag, publish to npm with provenance
 #
 # The e2e job pins the harness version so a plugin change is the only thing that
 # can turn it red. The weekly drift job runs the same check against dsh@latest and
@@ -112,6 +112,7 @@ jobs:
 
   e2e:
     name: End-to-end inside dsh (pinned)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Cold cache: npm install @deepseek-ai/dsh takes ~15 min; keep headroom.
     timeout-minutes: 25
@@ -208,7 +209,7 @@ jobs:
   publish:
     name: Publish to npm
     needs: [test, e2e]
-    if: startsWith(github.ref, 'refs/tags/dsh-weknora-v')
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/dsh-weknora-v')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
