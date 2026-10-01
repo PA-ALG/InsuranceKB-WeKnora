@@ -1,68 +1,42 @@
-<!-- Title should follow Conventional Commits, e.g. `feat: ...`, `fix: ...`, `docs: ...` -->
+**[by Codex]**
 
-> **READY REQUIRED GATE:** Any production-affecting PR MUST remain **Draft** and MUST NOT
-> be marked Ready while Goal, OpenSpec ID, Requirement IDs, frozen Spec identity, RED (or
-> reviewer-confirmed mechanical exemption), unique Owner/paths, implementation evidence,
-> validation matrix, or deployment status is blank or unconfirmed. Unchecked boxes are
-> unresolved gates, not optional reminders.
+Closes #
 
-## Description
-<!-- Briefly describe the purpose and changes of this PR -->
+## 切片与 Spec
 
-## Goal / Spec Authority
-- Goal:
-- OpenSpec ID(s):
-- Requirement ID(s):
-- Spec commit/tree:
-- Unique write Owner / owner paths:
+- 切片：
+- Spec：`docs/design/slices/`
 
-## SDD Evidence
-- RED (old behavior and exact failure):
-- Implementation (exact paths/commit):
-- Validation (`Requirement → implementation → test → commit → PASS|BLOCKED|NOT RUN`):
-- Deployment/live status (`PASS|BLOCKED|NOT RUN`; list migration/backfill/provider/Candidate/Draft/review/publish/activation separately):
+## 改动
 
-## Mechanical Exemption
-<!-- If no RED/OpenSpec applies, explain why this is purely mechanical/read-only/docs-only. -->
-- [ ] Not used
-- [ ] Used; exact reason and paths:
-- [ ] Reviewer explicitly confirmed the exemption
+| 文件 | 净行数 | 说明 |
+|---|---|---|
+|  |  |  |
 
-## Type of Change
-<!-- Check applicable items -->
-- [ ] 🐛 Bug fix
-- [ ] ✨ New feature
-- [ ] 💥 Breaking change
-- [ ] 📚 Documentation update
-- [ ] 🎨 Refactor
-- [ ] ⚡ Performance improvement
-- [ ] 🧪 Test
-- [ ] 🔧 Configuration / Build / CI
+删除的旧实现：无 / 逐条列出。
 
-## Related Issue
-<!-- If this PR resolves an issue, use "Fixes #123" or "Closes #123" -->
-Fixes #
+## 与 Spec 的偏差
 
-## Testing
-<!-- Describe how these changes were tested. Include reproduction or verification steps. -->
-<!--
-For a focused change, run checks scoped to the files/packages you changed.
-See the Contributing section in README.md for examples. If a full-repository
-check is blocked by unrelated baseline or environment failures, record the
-exact command and failure here.
--->
+无 / 逐条写：偏差内容、原因、影响。
 
-## Checklist
-- [ ] Goal, OpenSpec, Requirement IDs and frozen Spec identity are present
-- [ ] RED precedes implementation, or the mechanical exemption is justified and reviewer-confirmed
-- [ ] Requirement-to-evidence matrix has no implicit/blank status
-- [ ] Fixture/provider-zero results are not described as business or live truth
-- [ ] Deployment and all `NOT RUN`/`BLOCKED` items are explicit
-- [ ] Applicable focused/static/docs gates pass; inapplicable full/live gates are marked `NOT RUN`
-- [ ] Self-reviewed the code
-- [ ] Added/updated tests covering the change
-- [ ] Updated related documentation (README, `website-docs/`, Swagger annotations, etc.)
-- [ ] Breaking changes are clearly called out in the description above
+## 门禁结果（本地）
 
-## Screenshots / Recordings
-<!-- Required for user-visible UI changes -->
+- [ ] 验收：Spec 指定的命令 → 通过 N / 共 N
+- [ ] 守卫：`pytest -q tests/architecture` → 全过；基线是否下降：否 / 是（写明哪几项）
+- [ ] Go：受影响包 `go test` → 相对 S0 失败清单新增 0 项
+- [ ] Harness：`uv run pytest`、`uv run ruff check .`、`uv run mypy src tests`（在 `harness/`）
+- [ ] 前端：`npm run type-check`、相关测试、`npm run build`（在 `frontend/`）
+- [ ] 已 rebase 到最新 `main`
+
+## 受保护路径
+
+- [ ] 未修改 `docs/design/`、`tests/acceptance/`、`tests/architecture/`、`contracts/`（基线只在数字下降时经脚本更新；`contracts/` 只由 Spec 规定的导出命令生成）
+- [ ] 未 deselect、未加 xfail/skip、未改已有断言
+
+## 真实调用与环境变更
+
+未使用 / 场景数、发送次数、模型、结果摘要、原始输出存放位置（不得超过 Issue 中的预算）。
+
+## 未完成项与风险
+
+无 / 逐条写。
