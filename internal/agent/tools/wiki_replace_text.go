@@ -108,12 +108,15 @@ func (t *wikiReplaceTextTool) Execute(ctx context.Context, args json.RawMessage)
 	params.Slug = normalizedSlug
 
 	// Get the existing page
-	existingPage, _, err := resolveUniqueWikiPage(ctx, t.wikiPageService, params.Slug, t.kbIDs, t.routes)
+	existingPage, kbID, err := resolveUniqueWikiPage(ctx, t.wikiPageService, params.Slug, t.kbIDs, t.routes)
 	if err != nil {
 		return &types.ToolResult{
 			Success: false,
 			Error:   fmt.Sprintf("Failed to fetch page %s: %v", params.Slug, err),
 		}, nil
+	}
+	if err := checkWikiWrite(ctx, t.wikiPageService, kbID); err != nil {
+		return &types.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 
 	replacementCount := strings.Count(existingPage.Content, params.OldText)

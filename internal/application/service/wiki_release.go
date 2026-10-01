@@ -2006,32 +2006,6 @@ func wikiReleaseMemberSnapshotsEqual(
 	return true
 }
 
-// IsManagedWikiKB is the only Task B guard support; ordinary PUT/DELETE
-// wiring remains a later task.
-func (s *WikiReleaseService) IsManagedWikiKB(
-	ctx context.Context,
-	principal types.WikiReleasePrincipal,
-	scope types.WikiReleaseScope,
-) (bool, error) {
-	if err := s.verifyAccess(ctx, principal, scope, "is-managed"); err != nil {
-		return false, err
-	}
-	return s.repository.IsManagedWikiKB(ctx, scope)
-}
-
-// IsActiveManagedWikiKB is the ordinary PUT/DELETE guard lookup. It only
-// considers an activated Head and lets callers fail closed on lookup errors.
-func (s *WikiReleaseService) IsActiveManagedWikiKB(
-	ctx context.Context,
-	tenantID uint64,
-	wikiKBID string,
-) (bool, error) {
-	if s.repository == nil || tenantID == 0 || strings.TrimSpace(wikiKBID) == "" {
-		return false, errors.New("invalid active managed wiki lookup")
-	}
-	return s.repository.HasActiveHeadForWikiKB(ctx, tenantID, strings.TrimSpace(wikiKBID))
-}
-
 func (s *WikiReleaseService) verifyAccess(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,

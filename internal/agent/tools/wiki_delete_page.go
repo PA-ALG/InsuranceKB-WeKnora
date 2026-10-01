@@ -74,6 +74,9 @@ func (t *wikiDeletePageTool) Execute(ctx context.Context, args json.RawMessage) 
 	if err != nil {
 		return &types.ToolResult{Success: false, Error: "Failed to fetch page to delete: " + err.Error()}, nil
 	}
+	if err := checkWikiWrite(ctx, t.wikiPageService, kbID); err != nil {
+		return &types.ToolResult{Success: false, Error: err.Error()}, nil
+	}
 	inLinks := make([]string, len(existingPage.InLinks))
 	copy(inLinks, existingPage.InLinks)
 

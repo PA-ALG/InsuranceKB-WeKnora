@@ -69,6 +69,7 @@ import (
 	notionConnector "github.com/Tencent/WeKnora/internal/datasource/connector/notion"
 	rssConnector "github.com/Tencent/WeKnora/internal/datasource/connector/rss"
 	yuqueConnector "github.com/Tencent/WeKnora/internal/datasource/connector/yuque"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
@@ -291,6 +292,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewCustomAgentService))
 	must(container.Provide(service.NewUserResourceFavoriteService))
 	must(container.Provide(service.NewWikiPageService))
+	must(managed.Register(container))
 	must(container.Provide(service.NewWikiIngestService, dig.Name("wikiIngest")))
 	must(container.Provide(service.NewWikiLintService))
 	must(container.Provide(service.NewContextWikiReleaseAccessVerifier))
@@ -316,6 +318,11 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	}))
 	must(container.Provide(service.NewWikiReleaseService))
 	must(container.Provide(service.NewConceptAgentService830G2))
+	must(container.Decorate(func(
+		s *service.ConceptAgentService830G2, classifier managed.Classifier,
+	) *service.ConceptAgentService830G2 {
+		return s.WithManagedClassifier(classifier)
+	}))
 	must(container.Provide(func() (*repository.SchemaWikiFormalCandidatePreviewRegistry, error) {
 		return repository.NewSchemaWikiFormalCandidatePreviewRegistry(
 			os.Getenv("WEKNORA_SCHEMA_WIKI_C5_INPUT_MANIFEST"),
@@ -350,6 +357,9 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewEmbedChannelService))
 	must(container.Provide(service.NewMCPEndpointService))
 	must(container.Provide(mcpserver.NewServer))
+	must(container.Decorate(func(server *mcpserver.Server, classifier managed.Classifier) *mcpserver.Server {
+		return server.WithManagedClassifier(classifier)
+	}))
 
 	// Web search service (needed by AgentService)
 	logger.Debugf(ctx, "[Container] Registering web search registry and providers...")

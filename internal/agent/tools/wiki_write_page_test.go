@@ -15,6 +15,8 @@ type sourceRefWikiService struct {
 	createdKB string
 }
 
+func (*sourceRefWikiService) CheckWikiWrite(context.Context, string) error { return nil }
+
 func (s *sourceRefWikiService) GetPageBySlug(context.Context, string, string) (*types.WikiPage, error) {
 	return s.page, nil
 }

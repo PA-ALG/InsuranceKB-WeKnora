@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -148,6 +149,9 @@ func (t *wikiWritePageTool) Execute(ctx context.Context, args json.RawMessage) (
 	if err != nil {
 		return &types.ToolResult{Success: false, Error: "Failed to resolve wiki target: " + err.Error()}, nil
 	}
+	if err := checkWikiWrite(ctx, t.wikiPageService, kbID); err != nil {
+		return &types.ToolResult{Success: false, Error: err.Error()}, nil
+	}
 
 	// Summary pages are system-owned: they are generated deterministically
 	// from a source document and keyed by its knowledge ID
@@ -274,4 +278,16 @@ func normalizeAndValidateWikiSlug(raw string) (string, error) {
 // namespace (summary/…).
 func isSummaryNamespace(slug string) bool {
 	return strings.HasPrefix(slug, types.WikiPageTypeSummary+"/")
+}
+
+// checkWikiWrite runs after server-side routing and before any mutation or
+// link maintenance. An undecorated service cannot silently bypass custody.
+func checkWikiWrite(ctx context.Context, service interfaces.WikiPageService, kbID string) error {
+	checker, ok := service.(interface {
+		CheckWikiWrite(context.Context, string) error
+	})
+	if !ok {
+		return &managed.WriteError{Code: managed.ErrorCodeClassificationUnavailable}
+	}
+	return checker.CheckWikiWrite(ctx, kbID)
 }

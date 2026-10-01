@@ -340,44 +340,6 @@ func (h *WikiReleaseHandler) MinimalSearch(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": results})
 }
 
-// RejectManagedWikiWrite blocks ordinary Wiki PUT/DELETE only after an active
-// release Head exists. Lookup errors are intentionally fail closed.
-func (h *WikiReleaseHandler) RejectManagedWikiWrite() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if h == nil || h.releaseService == nil {
-			writeWikiReleaseError(c, errorsUnavailableWikiReleaseService())
-			c.Abort()
-			return
-		}
-		tenantValue, exists := c.Get(types.TenantIDContextKey.String())
-		tenantID, ok := tenantValue.(uint64)
-		wikiKBID := strings.TrimSpace(c.Param("kb_id"))
-		if !exists || !ok || tenantID == 0 || wikiKBID == "" {
-			writeWikiReleaseError(c, service.ErrWikiReleaseAccessDenied)
-			c.Abort()
-			return
-		}
-		managed, err := h.releaseService.IsActiveManagedWikiKB(
-			c.Request.Context(),
-			tenantID,
-			wikiKBID,
-		)
-		if err != nil {
-			writeWikiReleaseError(c, errorsUnavailableWikiReleaseService())
-			c.Abort()
-			return
-		}
-		if managed {
-			writeWikiReleaseError(c, &service.WikiReleaseConflictError{
-				Cause: stderrors.New("ordinary mutation rejected for release-managed Wiki KB"),
-			})
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
-}
-
 func errorsUnavailableWikiReleaseService() error {
 	return apperrors.NewServiceUnavailableError("wiki release service unavailable")
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"gorm.io/gorm"
@@ -20,7 +21,7 @@ import (
 type ConceptAgentService830G2 struct {
 	releaseAuthority     *WikiReleaseService
 	knowledgeBaseService interfaces.KnowledgeBaseService
-	db                   *gorm.DB
+	classifier           managed.Classifier
 }
 
 func NewConceptAgentService830G2(
@@ -28,9 +29,20 @@ func NewConceptAgentService830G2(
 	knowledgeBaseService interfaces.KnowledgeBaseService,
 	db *gorm.DB,
 ) *ConceptAgentService830G2 {
-	return &ConceptAgentService830G2{
-		releaseAuthority: releaseAuthority, knowledgeBaseService: knowledgeBaseService, db: db,
+	var heads managed.HeadLookup
+	if releaseAuthority != nil {
+		heads = releaseAuthority.repository
 	}
+	return &ConceptAgentService830G2{
+		releaseAuthority: releaseAuthority, knowledgeBaseService: knowledgeBaseService,
+		classifier: managed.NewClassifier(heads, managed.NewCustodyLookup(db)),
+	}
+}
+
+// WithManagedClassifier shares the production write policy with turn pinning.
+func (s *ConceptAgentService830G2) WithManagedClassifier(classifier managed.Classifier) *ConceptAgentService830G2 {
+	s.classifier = classifier
+	return s
 }
 
 func (s *ConceptAgentService830G2) PinConceptAgentTurn830G2(
@@ -38,7 +50,7 @@ func (s *ConceptAgentService830G2) PinConceptAgentTurn830G2(
 	wikiScopes []interfaces.ConceptAgentKnowledgeScope830G2,
 ) (*interfaces.ConceptAgentTurn830G2, error) {
 	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil ||
-		s.knowledgeBaseService == nil {
+		s.knowledgeBaseService == nil || s.classifier == nil {
 		return nil, fmt.Errorf("%w: concept Agent release service unavailable", ErrWikiReleaseAccessDenied)
 	}
 	contextTenantID, tenantOK := types.TenantIDFromContext(ctx)
@@ -67,22 +79,24 @@ func (s *ConceptAgentService830G2) PinConceptAgentTurn830G2(
 			continue
 		}
 		seen[wikiKBID] = tenantID
-		managedSource, err := s.hasConceptReleaseCustody830G2(ctx, tenantID, wikiKBID, true)
+		role, err := s.classifier.Classify(ctx, tenantID, wikiKBID)
 		if err != nil {
 			return nil, ErrWikiReleaseAccessDenied
 		}
-		if managedSource {
+		if role.Kind == managed.KindRaw {
 			turn.ManagedSourceKBIDs = append(turn.ManagedSourceKBIDs, wikiKBID)
 			continue
+		}
+		if role.State == managed.StateUnmanaged {
+			continue
+		}
+		if role.State != managed.StateActive || role.Kind != managed.KindWiki {
+			return nil, ErrWikiReleaseAccessDenied
 		}
 
 		head, err := s.releaseAuthority.repository.GetHeadForWikiKB(ctx, tenantID, wikiKBID)
 		if errors.Is(err, wikirepository.ErrWikiReleaseNotFound) {
-			managed, stateErr := s.hasConceptReleaseCustody830G2(ctx, tenantID, wikiKBID, false)
-			if stateErr != nil || managed {
-				return nil, ErrWikiReleaseAccessDenied
-			}
-			continue
+			return nil, ErrWikiReleaseAccessDenied
 		}
 		if err != nil {
 			return nil, mapWikiReleaseRepositoryError(err)
@@ -138,42 +152,6 @@ func (s *ConceptAgentService830G2) requireOwnedConceptAgentScope830G2(
 		}
 	}
 	return nil
-}
-
-// hasConceptReleaseCustody830G2 distinguishes an ordinary mutable Wiki from a
-// release-managed Wiki whose Head was lost or removed. Once any immutable
-// preparation, release, or receipt exists, missing Head must fail closed.
-func (s *ConceptAgentService830G2) hasConceptReleaseCustody830G2(
-	ctx context.Context,
-	tenantID uint64,
-	wikiKBID string,
-	source bool,
-) (bool, error) {
-	if s.db == nil {
-		return false, errors.New("concept Agent release database unavailable")
-	}
-	column := "wiki_kb_id"
-	if source {
-		column = "raw_kb_id"
-	}
-	models := []any{
-		&types.WikiReleaseHead{},
-		&types.WikiReleasePreparation{},
-		&types.WikiRelease{},
-		&types.WikiReleaseReceipt{},
-	}
-	for _, model := range models {
-		var count int64
-		if err := s.db.WithContext(ctx).Model(model).
-			Where("tenant_id = ? AND "+column+" = ?", tenantID, wikiKBID).
-			Limit(1).Count(&count).Error; err != nil {
-			return false, err
-		}
-		if count > 0 {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (s *ConceptAgentService830G2) pinConceptAgentRelease830G2(
