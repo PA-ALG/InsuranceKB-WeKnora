@@ -64,6 +64,19 @@ func nativeWikiRoutes(engine *gin.Engine) []gin.RouteInfo {
 	return out
 }
 
+// nativeWikiWriteRoutes is the S1a scope: mutation routes only. Read routes are
+// bound to a release in S1b, not here.
+func nativeWikiWriteRoutes(engine *gin.Engine) []gin.RouteInfo {
+	var out []gin.RouteInfo
+	for _, route := range nativeWikiRoutes(engine) {
+		switch route.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+			out = append(out, route)
+		}
+	}
+	return out
+}
+
 func concretePath(pattern, kbID string) string {
 	parts := strings.Split(pattern, "/")
 	for i, part := range parts {
@@ -126,14 +139,14 @@ func TestNativeWikiRoutesIncludeKnownWriteAndReadPaths(t *testing.T) {
 	}
 }
 
-func TestNativeWikiRoutesRejectReleaseManagedKB(t *testing.T) {
+func TestNativeWikiWriteRoutesRejectReleaseManagedKB(t *testing.T) {
 	for _, state := range []managed.State{managed.StatePending, managed.StateActive} {
 		for _, kind := range []managed.Kind{managed.KindWiki, managed.KindRaw} {
 			classifier := &stubClassifier{roles: map[string]managed.Role{
 				"kb-allowed": {Kind: kind, State: state},
 			}}
 			engine := newGuardedWikiEngine(t, classifier)
-			routes := nativeWikiRoutes(engine)
+			routes := nativeWikiWriteRoutes(engine)
 			require.NotEmpty(t, routes)
 			for _, route := range routes {
 				rec := serve(engine, route.Method, concretePath(route.Path, "kb-allowed"))
@@ -148,7 +161,7 @@ func TestNativeWikiRoutesRejectReleaseManagedKB(t *testing.T) {
 
 func TestNativeWikiGuardFailsClosedWhenClassificationFails(t *testing.T) {
 	engine := newGuardedWikiEngine(t, &stubClassifier{err: errors.New("database unavailable")})
-	for _, route := range nativeWikiRoutes(engine) {
+	for _, route := range nativeWikiWriteRoutes(engine) {
 		rec := serve(engine, route.Method, concretePath(route.Path, "kb-allowed"))
 		require.Equalf(t, http.StatusServiceUnavailable, rec.Code, "%s %s body=%s",
 			route.Method, route.Path, rec.Body.String())
@@ -167,13 +180,31 @@ func TestNativeWikiGuardPassesUnmanagedKBToNormalGuards(t *testing.T) {
 		RegisterWikiPageRoutesWithRelease(r, &handler.WikiPageHandler{}, nil, guards, classifier)
 	})
 	for _, tc := range []struct{ method, path string }{
-		{http.MethodGet, "/api/v1/knowledgebase/kb-victim/wiki/pages"},
 		{http.MethodPost, "/api/v1/knowledgebase/kb-victim/wiki/pages"},
 		{http.MethodPost, "/api/v1/knowledgebase/kb-victim/wiki/revert"},
+		{http.MethodPost, "/api/v1/knowledgebase/kb-victim/wiki/rebuild-links"},
 	} {
 		rec := serve(engine, tc.method, tc.path)
 		require.Equalf(t, http.StatusForbidden, rec.Code, "%s %s body=%s", tc.method, tc.path, rec.Body.String())
 		require.NotEqual(t, managed.ErrorCodeReleaseManaged, errorCode(t, rec))
 	}
 	require.Contains(t, classifier.calls, "kb-victim", "guard must classify before RBAC")
+}
+
+// TestNativeWikiReadRoutesAreNotWriteGuarded records the S1a boundary: read
+// routes stay on the native tables until S1b binds them to a release. S1b
+// replaces this expectation with a release-bound assertion.
+func TestNativeWikiReadRoutesAreNotWriteGuarded(t *testing.T) {
+	classifier := &stubClassifier{roles: map[string]managed.Role{
+		"kb-allowed": {Kind: managed.KindWiki, State: managed.StateActive},
+	}}
+	engine := newGuardedWikiEngine(t, classifier)
+	for _, route := range nativeWikiRoutes(engine) {
+		if route.Method != http.MethodGet {
+			continue
+		}
+		rec := serve(engine, route.Method, concretePath(route.Path, "kb-allowed"))
+		require.NotEqual(t, http.StatusConflict, rec.Code,
+			"read route %s %s must not be blocked by the S1a write guard", route.Method, route.Path)
+	}
 }

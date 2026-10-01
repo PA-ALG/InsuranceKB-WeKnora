@@ -118,17 +118,27 @@ Codex 另需补充（同目录、可自行命名）：
   `internal/application/repository/wiki_release.go`（仅删除被删函数独占的方法）、
   `internal/application/service/concept_agent_830_g2.go`（改用 `managed.Classifier`）、
   `internal/agent/tools/` 与 `internal/mcpserver/` 中写工具的受管检查点。
+- 允许修改（仅为同步既有测试装配，断言不变、不得引入兼容 shim）：`internal/handler/wiki_release_falsification_test.go`、
+  `internal/router/router_api_key_capabilities_test.go`。
 - 不得修改：`internal/router/native_wiki_guard_test.go`、蓝图、`docs/design/`、`tests/architecture/`、`contracts/`、`harness/`、`frontend/`。
 - 不新增表、不新增服务、不改迁移。
 
 ## 6. 门禁与基线
 
-- 会新增上游补丁：`internal/mcpserver/scope.go`、`server.go`（若改动）。Codex 在 PR 中列出实际被改的上游文件；
-  Claude 复核后将 G10 基线增量写入 `tests/architecture/baseline.json`（蓝图 §4.3：改上游需登记原因与退出条件）。
+- 会新增上游补丁：`internal/mcpserver/scope.go`、`server.go`（若改动）。Codex 在 PR 中列出实际被改的上游文件，并补入
+  `docs/design/upstream-patches.md`（登记原因、可否上游化、退出条件）；Claude 审查后更新 `tests/architecture/baseline.json`。
 - CI 需全绿：`architecture-guards`、`App`、`go-lint`，以及受影响的 `harness-ci`/`frontend`（预期不受影响，若被触发如实记录）。
 
 ## 7. 非目标
 
-- 不改读入口（S1b）。
+- **不改读入口（S1b）**：本片只挂写路由守卫。验收测试用 `nativeWikiWriteRoutes` 过滤出写方法，
+  并另有一条 `TestNativeWikiReadRoutesAreNotWriteGuarded` 明确记录"读路由在 S1a 不受写守卫影响"；S1b 会用
+  按 Release 读取的断言替换它。
+- **不动配置判定**：`internal/config/product_ingestion.go` 的 `NativeWikiWritesDisabled` 及摄取、
+  恢复调用点（`wiki_ingest_batch.go`、`knowledge_post_process.go`、`recover_pending_wiki_tasks.go`）
+  属摄取链的配置开关，语义与路由守卫不同，本片保留不动；S1b 复核是否改由统一分类器驱动。
+- **G10 基线**：本片会新增上游补丁（MCP 侧等）。处理方式见蓝图 §8 G10 的修订：新增上游改动必须登记
+  `docs/design/upstream-patches.md` 并在本 Spec 允许的文件内，Claude 审查后更新基线；
+  Codex 不自行改动 `tests/architecture/baseline.json`，也不为省登记而扩大退役范围。
 - 不改发布链、不改 Candidate/Release 语义。
 - 不为非受管库增加新行为，不引入新权限模型。
