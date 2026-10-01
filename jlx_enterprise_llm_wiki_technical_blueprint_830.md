@@ -1,5 +1,7 @@
 # Enterprise LLM Wiki 技术蓝图 830 · 统一企业知识库扩展版
 
+> **已被取代（2026-10-01）**：当前唯一技术权威是 [`jlx_enterprise_llm_wiki_technical_blueprint_1001.md`](jlx_enterprise_llm_wiki_technical_blueprint_1001.md)。本文仅作历史背景，不作为实现依据。
+
 > 修订日期：2026-09-05
 > 状态：`CURRENT_830_TECHNICAL_BLUEPRINT`
 > 基线：`815 FLOW=PASS`；`QUALITY=DEFERRED`

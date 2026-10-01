@@ -1,5 +1,7 @@
 # 企业级寿险 LLM Wiki：四文档完整合订本（JLX 728 · v3）
 
+> **2026-10-01 说明**：本文 §2–§4（业务背景、问题与目标）仍是项目目标来源；其余技术方案已被 [`jlx_enterprise_llm_wiki_technical_blueprint_1001.md`](jlx_enterprise_llm_wiki_technical_blueprint_1001.md) 取代。
+
 > 日期：2026-07-28
 > 版本标识：728-v3
 > 文档类型：完整合订本（第三版）

@@ -1,5 +1,7 @@
 # 29 · 830 Goal Cards（统一知识库与真实验收版）
 
+> **已被取代（2026-10-01）**：当前唯一技术权威是 [`jlx_enterprise_llm_wiki_technical_blueprint_1001.md`](../../jlx_enterprise_llm_wiki_technical_blueprint_1001.md)。本文仅作历史背景，不作为实现依据。
+
 > 修订日期：2026-09-05
 > 当前授权：`NONE`
 > 当前产品状态：`G1_PASS / AFTER_G1_BEFORE_G2`

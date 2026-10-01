@@ -1,3 +1,7 @@
+# HANDOFF（已冻结，2026-10-01）
+
+> **已被取代（2026-10-01）**：当前唯一技术权威是 [`jlx_enterprise_llm_wiki_technical_blueprint_1001.md`](jlx_enterprise_llm_wiki_technical_blueprint_1001.md)。本文件不再追加状态；进度看 GitHub Issue 与 PR。下方内容仅作历史背景，不作为实现依据。
+
 ## 2026-09-28 0.8.2 最终交付与本地切换通过（当前）
 
 PR #131 已合入 main@c5beb1afc；可信软件源 d5be03b3b，主干9项远端工作流全部成功。

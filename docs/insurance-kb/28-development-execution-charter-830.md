@@ -1,5 +1,7 @@
 # 28 · 830 开发执行章程
 
+> **已被取代（2026-10-01）**：当前唯一技术权威是 [`jlx_enterprise_llm_wiki_technical_blueprint_1001.md`](../../jlx_enterprise_llm_wiki_technical_blueprint_1001.md)。本文仅作历史背景，不作为实现依据。
+
 > 适用范围：830 技术蓝图的开发、联调、验收与合并
 > 本文只定义 HOW：队列、WIP、证据、停线、写域与合并纪律；WHY/WHAT、数据合同和
 > 组件归属只引用 830 技术蓝图，不在此重复。

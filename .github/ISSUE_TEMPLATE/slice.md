@@ -14,7 +14,7 @@ labels: []
 ## 依据
 
 - Spec：`docs/design/slices/SN-*.md`
-- 架构总览相关章节：
+- 蓝图相关章节：`jlx_enterprise_llm_wiki_technical_blueprint_1001.md` §
 
 ## 分支
 

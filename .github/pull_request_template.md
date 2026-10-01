@@ -30,7 +30,7 @@ Closes #
 
 ## 受保护路径
 
-- [ ] 未修改 `docs/design/`、`tests/acceptance/`、`tests/architecture/`、`contracts/`（基线只在数字下降时经脚本更新；`contracts/` 只由 Spec 规定的导出命令生成）
+- [ ] 未修改蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`、`contracts/`（基线只在数字下降时经脚本更新；`contracts/` 只由 Spec 规定的导出命令生成）
 - [ ] 未 deselect、未加 xfail/skip、未改已有断言
 
 ## 真实调用与环境变更
