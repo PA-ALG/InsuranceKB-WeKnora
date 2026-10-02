@@ -41,11 +41,13 @@ func TestReadDocumentCustody(t *testing.T) {
 		code    string
 	}{
 		{
-			"raw pending", managed.Role{Kind: managed.KindRaw, State: managed.StatePending},
+			"raw pending",
+			managed.Role{Kind: managed.KindRaw, State: managed.StatePending},
 			nil, managed.ErrorCodeReleaseManaged,
 		},
 		{
-			"wiki active", managed.Role{Kind: managed.KindWiki, State: managed.StateActive},
+			"wiki active",
+			managed.Role{Kind: managed.KindWiki, State: managed.StateActive},
 			nil, managed.ErrorCodeReleaseManaged,
 		},
 		{"unavailable", managed.Role{}, errors.New("private failure"), managed.ErrorCodeClassificationUnavailable},

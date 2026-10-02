@@ -36,11 +36,15 @@ func TestReleaseCustodyRoute(t *testing.T) {
 		body   string
 	}{
 		{
-			"managed", managed.Role{Kind: managed.KindRaw, State: managed.StatePending}, nil, 200,
+			"managed",
+			managed.Role{Kind: managed.KindRaw, State: managed.StatePending},
+			nil, 200,
 			`{"managed":true,"kind":"raw","state":"pending"}`,
 		},
 		{
-			"plain", managed.Role{Kind: managed.KindNone, State: managed.StateUnmanaged}, nil, 200,
+			"plain",
+			managed.Role{Kind: managed.KindNone, State: managed.StateUnmanaged},
+			nil, 200,
 			`{"managed":false,"kind":"none","state":"unmanaged"}`,
 		},
 		{"unavailable", managed.Role{}, errors.New("private database detail"), 503, ""},
