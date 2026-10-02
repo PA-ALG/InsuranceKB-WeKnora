@@ -285,10 +285,10 @@ def _terms_in_order(text: str, *terms: str) -> bool:
 
 
 def test_rh6_1_claude_points_to_single_authority_and_ci_defaults_deterministic() -> None:
+    # Since PR #1 CLAUDE.md only imports AGENTS.md (the single authority).
     document = (REPO_ROOT / "CLAUDE.md").read_text()
     assert _pytest_commands(document) == []
-    prose = _prose_text(document)
-    assert _terms_in_order(prose, "唯一", "`AGENTS.md`", "先读")
+    assert document.strip() == "@AGENTS.md"
 
     workflow = _workflow(CI_WORKFLOW)
     deterministic = _mapping(_mapping(workflow["jobs"])["deterministic"])
