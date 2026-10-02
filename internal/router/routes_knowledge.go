@@ -7,7 +7,11 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/handler"
+	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
+
+// Keep the owner lookup required by native Wiki guards when the upstream service interface changes.
+var _ managed.KnowledgeBaseLookup = (interfaces.KnowledgeBaseService)(nil)
 
 // RegisterChunkerDebugRoutes wires the read-only chunker preview endpoint
 // used by the KB editor's debug panel. Stateless — uses no service deps.
