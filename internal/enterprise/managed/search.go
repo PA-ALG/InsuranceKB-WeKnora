@@ -45,8 +45,10 @@ type SharedKnowledgeLookup interface {
 // CheckSearchRead rejects a selected managed KB before target building or model
 // work. Missing lookups fail closed: a partial batch is not a safe classification.
 // Tag-only targets are selections too. Agent QA does not call this boundary.
-func CheckSearchRead(ctx context.Context, kbs interfaces.KnowledgeBaseService, documents SharedKnowledgeLookup,
-	tenant uint64, kbIDs, knowledgeIDs []string, tags []types.TagScope) error {
+func CheckSearchRead(
+	ctx context.Context, kbs interfaces.KnowledgeBaseService, documents SharedKnowledgeLookup,
+	tenant uint64, kbIDs, knowledgeIDs []string, tags []types.TagScope,
+) error {
 	ids := make(map[string]struct{})
 	for _, id := range kbIDs {
 		if id = strings.TrimSpace(id); id != "" {
