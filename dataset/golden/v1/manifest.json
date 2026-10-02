@@ -44,5 +44,57 @@
   },
   "generation": "insurance_harness.eval.convert.golden_from_legacy; exact pack short_title matching",
   "provenance": "Legacy approved annotations retained as legacy:gs-s0q-596-v1; no reannotation or model call.",
-  "scope": "Offline deterministic value comparison only; evidence accuracy and production model quality are not certified."
+  "scope": "Offline deterministic value comparison only; evidence accuracy and production model quality are not certified.",
+  "products": {
+    "1828": {
+      "product_id": "1828",
+      "pack_id": "schemapack_critical_illness_insurance",
+      "status": "pending_judge",
+      "source_sha256": {
+        "保险条款.pdf": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+        "产品说明书.pdf": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
+        "费率表.pdf": "62b7c75958120effcba98adc71e6236f18728d900a05f312efc405f8be1aa5b8"
+      }
+    },
+    "1826": {
+      "product_id": "1826",
+      "pack_id": "schemapack_endowment_insurance",
+      "status": "pending_judge",
+      "source_sha256": {
+        "产品说明书.pdf": "d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a",
+        "保险条款.pdf": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+        "费率表.pdf": "9ea421ad68d443e5e6572b7c2c91fcd2302ab18103a7b85f733c0ea29439ea19"
+      }
+    },
+    "1824": {
+      "product_id": "1824",
+      "pack_id": "schemapack_whole_life_insurance",
+      "status": "pending_judge",
+      "source_sha256": {
+        "产品说明书.pdf": "a484e0757d1989ef2fd3f3700273a081b30f026547b4f965a77854c028a713f6",
+        "保险条款.pdf": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+        "费率表.pdf": "9811367acd0d3875260e926fe64901e3423c07569ae06bf1438926769860c66f"
+      }
+    },
+    "1814": {
+      "product_id": "1814",
+      "pack_id": "schemapack_accident_insurance",
+      "status": "pending_judge",
+      "source_sha256": {
+        "产品说明书.pdf": "68105656802ea7ad267d9d1def1f78c1fb706a807bc75fc93ba8ef1aeae83abf",
+        "保险条款.pdf": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+        "费率表.pdf": "72224c36ed2455365fcbcd361444d3f26b50ee88d62aba7673d41525c27b99c7"
+      }
+    },
+    "1816": {
+      "product_id": "1816",
+      "pack_id": "schemapack_disability_income_insurance",
+      "status": "pending_judge",
+      "source_sha256": {
+        "产品说明书.pdf": "c156596bb234188ec324a5a9e56efb905e91804ee5bc29fd4ece1bc62dbc7db7",
+        "保险条款.pdf": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+        "费率表.pdf": "b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a"
+      }
+    }
+  }
 }
