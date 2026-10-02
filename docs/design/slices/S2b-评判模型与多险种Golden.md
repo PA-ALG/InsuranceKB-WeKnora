@@ -101,7 +101,23 @@ CalibrationReport: compared, not_judged: list[field_key], state_agreement,
 4. 引文必须从所在页原文**逐字复制**，并核对它确实在你声明的 `[page N]` 之下；原文没有依据就答 `unknown`，不要猜。
 5. 不修改 `requests/`、`run.json` 与本文件。
 
-### 3.4 运行顺序
+### 3.4 每款产品一道题
+
+题目文件是**自包含**的：每道题都带该产品的全部页面原文（§3.1），因此同一份原文在多个批次里会重复出现，
+既浪费评委会话的上下文，也没有必要。`--batch-size` 取**大于该 pack 原文抽取字段数**（当前最大 56，取 60 即可），
+使每款产品只产生**一道题**：评委每款产品只开一个会话、只读一个文件，`max_calls` 也远够用。
+
+```sh
+uv run python -m insurance_harness.eval.annotate prepare --product 1824 \
+  --run-root "$HOME/judge-runs/s2b" --batch-size 60
+```
+
+不再改题目文件之间的引用关系：题目自包含是受保护验收 `test_judge_files.py` 钉住的协议，
+改成共享原文会引入"哪份原文、被谁引用"的额外校验，得不偿失。
+
+596 已有的 2 道题**保持现状**，不为去重重出——作废一次校准机会的代价高于重复一次原文。其余五款按本节出题。
+
+### 3.5 运行顺序
 
 1. **校准**：`prepare` 596 → 在 `<run_root>/596` 开评委会话答题 → `ingest --calibrate`，对照 `dataset/golden/v1/596.jsonl`。
    达标条件（初值，可在 PR 中提出调整）：三态一致率 ≥ 90%，双方都是 present 的字段值一致率 ≥ 80%，且
@@ -129,7 +145,7 @@ Claude 提供的 `harness/tests/eval/test_judge_annotation.py` 与 `harness/test
 
 - `uv run pytest tests/eval`、`uv run ruff check .`、`uv run mypy src tests`（在 `harness/`）通过；
 - 仓库根架构守卫通过；CI 全绿；
-- 校准达标（§3.4），或按 §3.4 停下并在 PR 中说明。
+- 校准达标（§3.5），或按 §3.5 停下并在 PR 中说明。
 
 ## 6. 评判工作量
 
