@@ -285,8 +285,7 @@ def _terms_in_order(text: str, *terms: str) -> bool:
 
 
 def test_rh6_1_claude_points_to_single_authority_and_ci_defaults_deterministic() -> None:
-    # Since blueprint 1001 (PR #1), CLAUDE.md only imports AGENTS.md so the
-    # single authority is loaded verbatim; it must not restate commands.
+    # Since PR #1 CLAUDE.md only imports AGENTS.md (the single authority).
     document = (REPO_ROOT / "CLAUDE.md").read_text()
     assert _pytest_commands(document) == []
     assert document.strip() == "@AGENTS.md"
