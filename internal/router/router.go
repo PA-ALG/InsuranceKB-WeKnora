@@ -15,6 +15,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -99,6 +100,7 @@ type RouterParams struct {
 	G3PlatformReleaseHandler       *handler.G3PlatformReleaseHandler
 	KnowledgeRevisionSourceHandler *handler.KnowledgeRevisionSourceHandler
 	WikiReleaseHandler             *handler.WikiReleaseHandler
+	ManagedClassifier              managed.Classifier
 	SchemaWikiHandler              *handler.SchemaWikiHandler
 }
 
@@ -348,6 +350,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 			params.WikiPageHandler,
 			params.WikiReleaseHandler,
 			rbacGuards,
+			params.ManagedClassifier,
 		)
 		RegisterSchemaWikiRoutes(
 			v1,

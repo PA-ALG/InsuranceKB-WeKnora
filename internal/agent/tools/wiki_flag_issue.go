@@ -98,6 +98,9 @@ func (t *wikiFlagIssueTool) Execute(ctx context.Context, args json.RawMessage) (
 	if err != nil {
 		return &types.ToolResult{Success: false, Error: err.Error()}, nil
 	}
+	if err := checkWikiWrite(ctx, t.wikiService, kbID); err != nil {
+		return &types.ToolResult{Success: false, Error: err.Error()}, nil
+	}
 	suspectedKnowledgeIDs := params.SuspectedKnowledgeIDs
 	if t.scopeEnforced && len(suspectedKnowledgeIDs) > 0 {
 		resolved, scopeErr := resolveWikiSourceDocuments(

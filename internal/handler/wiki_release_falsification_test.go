@@ -17,6 +17,7 @@ import (
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/router"
@@ -35,7 +36,7 @@ func TestWikiReleaseFalsificationHandlerIsExplicitlyConstructed(t *testing.T) {
 
 type wikiReleaseHandlerFixture struct {
 	handler         *handler.WikiReleaseHandler
-	service         *service.WikiReleaseService
+	classifier      managed.Classifier
 	repository      *wikirepository.WikiReleaseRepository
 	scope           types.WikiReleaseScope
 	privateKey      ed25519.PrivateKey
@@ -81,8 +82,7 @@ func newWikiReleaseHandlerFixture(t *testing.T) *wikiReleaseHandlerFixture {
 	)
 	return &wikiReleaseHandlerFixture{
 		handler:    handler.NewWikiReleaseHandler(releaseService),
-		service:    releaseService,
-		repository: repository,
+		repository: repository, classifier: managed.NewDatabaseClassifier(db),
 		scope: types.WikiReleaseScope{
 			TenantID: 42,
 			SpaceID:  "space-1",
@@ -528,12 +528,12 @@ func TestWikiReleaseFalsificationManagedMutationGuard(t *testing.T) {
 	}
 	mutationEngine.PUT(
 		"/knowledgebase/:kb_id/wiki/pages/*slug",
-		fixture.handler.RejectManagedWikiWrite(),
+		managed.GuardWikiWrite(fixture.classifier),
 		legacy,
 	)
 	mutationEngine.DELETE(
 		"/knowledgebase/:kb_id/wiki/pages/*slug",
-		fixture.handler.RejectManagedWikiWrite(),
+		managed.GuardWikiWrite(fixture.classifier),
 		legacy,
 	)
 
@@ -588,6 +588,12 @@ func TestWikiReleaseFalsificationProductionRouterInventoryAndAuth(t *testing.T) 
 type wikiReleaseKBServiceStub struct {
 	interfaces.KnowledgeBaseService
 	knowledgeBases map[string]*types.KnowledgeBase
+}
+
+func (s *wikiReleaseKBServiceStub) GetKnowledgeBaseByIDOnly(
+	ctx context.Context, id string,
+) (*types.KnowledgeBase, error) {
+	return s.GetKnowledgeBaseByID(ctx, id)
 }
 
 func (s *wikiReleaseKBServiceStub) GetKnowledgeBaseByID(
@@ -678,7 +684,7 @@ func (s *wikiReleaseWikiPageServiceStub) RenameOrMoveFolder(
 }
 
 func newWikiReleaseProductionRouter(
-	releaseHandler *handler.WikiReleaseHandler,
+	fixture *wikiReleaseHandlerFixture,
 	kbService *wikiReleaseKBServiceStub,
 	wikiService *wikiReleaseWikiPageServiceStub,
 ) *gin.Engine {
@@ -693,14 +699,9 @@ func newWikiReleaseProductionRouter(
 		KBService:           kbService,
 		TenantService:       wikiReleaseTenantServiceStub{},
 		TenantAPIKeyService: wikiReleaseAPIKeyServiceStub{tenantID: tenantID},
-		WikiPageHandler: handler.NewWikiPageHandler(
-			wikiService,
-			kbService,
-			nil,
-			nil,
-			nil,
-		),
-		WikiReleaseHandler: releaseHandler,
+		WikiPageHandler:     handler.NewWikiPageHandler(wikiService, kbService, nil, nil, nil),
+		WikiReleaseHandler:  fixture.handler,
+		ManagedClassifier:   fixture.classifier,
 	})
 }
 
@@ -749,7 +750,7 @@ func TestWikiReleaseFalsificationSealRequiresBothSuccessfulKBACLs(t *testing.T) 
 				},
 			}
 			engine := newWikiReleaseProductionRouter(
-				fixture.handler,
+				fixture,
 				kbService,
 				&wikiReleaseWikiPageServiceStub{},
 			)
@@ -805,7 +806,7 @@ func TestWikiReleaseFalsificationProductionManagedMutationCoverage(t *testing.T)
 		},
 	}
 	wikiService := &wikiReleaseWikiPageServiceStub{}
-	engine := newWikiReleaseProductionRouter(fixture.handler, kbService, wikiService)
+	engine := newWikiReleaseProductionRouter(fixture, kbService, wikiService)
 
 	recorder = performAPIKeyJSON(
 		t,
@@ -836,5 +837,4 @@ func TestWikiReleaseFalsificationProductionManagedMutationCoverage(t *testing.T)
 	)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	require.Equal(t, 1, wikiService.moveCalls)
-
 }

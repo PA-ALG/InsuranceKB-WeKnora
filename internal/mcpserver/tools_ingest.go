@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/application/access"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -75,6 +76,9 @@ func (s *Server) handleAddDocument(ctx context.Context, req mcp.CallToolRequest)
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	kb := kbs[0]
+	if err := managed.CheckWrite(ctx, s.managedClassifier, kb.TenantID, kb.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	ctx, err = s.scopedKBContext(ctx, kb, types.OrgRoleEditor)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -124,6 +128,9 @@ func (s *Server) handleUpdateDocument(ctx context.Context, req mcp.CallToolReque
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	if err := managed.CheckWrite(ctx, s.managedClassifier, kb.TenantID, kb.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	ctx, err = s.scopedKBContext(ctx, kb, types.OrgRoleEditor)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -158,6 +165,9 @@ func (s *Server) handleDeleteDocument(ctx context.Context, req mcp.CallToolReque
 	}
 	existing, kb, err := s.knowledgeInScope(ctx, ep, knowledgeID)
 	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := managed.CheckWrite(ctx, s.managedClassifier, kb.TenantID, kb.ID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	ctx, err = s.scopedKBContext(ctx, kb, types.OrgRoleEditor)

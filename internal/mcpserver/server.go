@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/ratelimit"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -57,6 +58,8 @@ type Server struct {
 	endpointRepo     interfaces.MCPEndpointRepository
 	db               *gorm.DB
 	cfg              *config.Config
+
+	managedClassifier managed.Classifier
 
 	limiter   *ratelimit.Limiter
 	lastTouch sync.Map // endpoint id -> time.Time of the last last_used_at write
@@ -119,6 +122,14 @@ func NewServer(
 		s.mcp,
 		server.WithStateLess(true),
 	)
+	return s
+}
+
+// WithManagedClassifier injects release-custody protection during server
+// assembly, before the transport starts serving requests. Without it, writes
+// fail closed through managed.CheckWrite.
+func (s *Server) WithManagedClassifier(classifier managed.Classifier) *Server {
+	s.managedClassifier = classifier
 	return s
 }
 

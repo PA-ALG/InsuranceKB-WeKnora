@@ -95,7 +95,9 @@ Candidate。
 - **给 Codex 的规则**：
   - 只做 Issue 指定的切片，只改 Spec"改动范围"列出的路径；
   - 不修改蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`、`contracts/`（守卫基线只在
-    数字下降时用脚本更新；`contracts/` 只由 Spec 规定的导出命令生成）；
+    数字下降时用脚本更新；`contracts/` 只由 Spec 规定的导出命令生成）。唯一例外：切片 Spec 允许修改
+    上游文件时，实现者在 `docs/design/upstream-patches.md` 追加对应登记行（不改已有行）；G10 基线仍由
+    Claude 审查后更新；
   - 提审前本地过完验收、守卫与受影响组件门禁（相对 S0 失败清单不新增失败），rebase 到最新
     `main`；
   - 不 deselect、不加 xfail/skip、不改已有断言；

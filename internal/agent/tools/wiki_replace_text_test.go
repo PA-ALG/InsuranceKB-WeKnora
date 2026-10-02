@@ -16,6 +16,8 @@ type replaceTextWikiService struct {
 	updateCalls int
 }
 
+func (*replaceTextWikiService) CheckWikiWrite(context.Context, string) error { return nil }
+
 func (s *replaceTextWikiService) GetPageBySlug(_ context.Context, _, _ string) (*types.WikiPage, error) {
 	pageCopy := *s.page
 	return &pageCopy, nil

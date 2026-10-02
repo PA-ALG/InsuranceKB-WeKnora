@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/handler"
 )
 
@@ -384,29 +385,17 @@ func RegisterKnowledgeTagRoutes(r *gin.RouterGroup, tagHandler *handler.TagHandl
 	}
 }
 
-// RegisterWikiPageRoutes registers wiki page related routes.
-//
-// Wiki pages are KB content (wiki mode): reads are Viewer+ and gated by
-// KBAccessRead (own / org-shared / via shared agent), matching FAQ /
-// chunk / tag read routes. Content mutations (create/update/delete) and
-// maintenance actions (rebuild-links, auto-fix, change issue status)
-// honour per-KB ownership via OwnedWikiKBOrAdmin (PR 5, #1303): the URL
-// :kb_id resolves directly to the owning KB so a Contributor who owns
-// the KB can manage its wiki, while a non-owner Contributor gets 403.
-func RegisterWikiPageRoutes(r *gin.RouterGroup, wikiHandler *handler.WikiPageHandler, g *rbacGuards) {
-	registerWikiPageRoutes(r, wikiHandler, nil, g)
-}
-
-// RegisterWikiPageRoutesWithRelease is the strict production wrapper. It
-// preserves the legacy wrapper while explicitly injecting release routes and
-// the active-managed ordinary mutation guard.
+// RegisterWikiPageRoutesWithRelease is the single native Wiki entry point.
+// Separate method groups keep reads unchanged and put every ordinary write
+// behind the same managed guard before the existing ownership/RBAC handlers.
 func RegisterWikiPageRoutesWithRelease(
 	r *gin.RouterGroup,
 	wikiHandler *handler.WikiPageHandler,
 	releaseHandler *handler.WikiReleaseHandler,
 	g *rbacGuards,
+	classifier managed.Classifier,
 ) {
-	registerWikiPageRoutes(r, wikiHandler, releaseHandler, g)
+	registerWikiPageRoutes(r, wikiHandler, releaseHandler, g, classifier)
 }
 
 func registerWikiPageRoutes(
@@ -414,84 +403,36 @@ func registerWikiPageRoutes(
 	wikiHandler *handler.WikiPageHandler,
 	releaseHandler *handler.WikiReleaseHandler,
 	g *rbacGuards,
+	classifier managed.Classifier,
 ) {
-	wiki := g.apiKeyGroup(r.Group("/knowledgebase/:kb_id/wiki"), apiKeyIngest(apiKeyFullAccess()))
-	wikiRead := wiki.With(apiKeyRetrieve(apiKeyFullAccess()))
-	{
-		// Page CRUD
-		wikiRead.GET("/pages", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListPages)
-		wiki.POST("/pages", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreatePage)
-		movePageHandlers := []gin.HandlerFunc{
-			g.OwnedWikiKBOrAdmin(),
-			g.KBAccessWrite("kb_id"),
-		}
-		if releaseHandler != nil {
-			movePageHandlers = append(movePageHandlers, releaseHandler.RejectManagedWikiWrite())
-		}
-		movePageHandlers = append(movePageHandlers, wikiHandler.MovePage)
-		wiki.PUT("/move-page", movePageHandlers...)
-		wikiRead.GET("/pages/*slug", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetPage)
-		updatePageHandlers := []gin.HandlerFunc{
-			g.OwnedWikiKBOrAdmin(),
-			g.KBAccessWrite("kb_id"),
-		}
-		deletePageHandlers := append([]gin.HandlerFunc(nil), updatePageHandlers...)
-		if releaseHandler != nil {
-			updatePageHandlers = append(updatePageHandlers, releaseHandler.RejectManagedWikiWrite())
-			deletePageHandlers = append(deletePageHandlers, releaseHandler.RejectManagedWikiWrite())
-		}
-		updatePageHandlers = append(updatePageHandlers, wikiHandler.UpdatePage)
-		deletePageHandlers = append(deletePageHandlers, wikiHandler.DeletePage)
-		wiki.PUT("/pages/*slug", updatePageHandlers...)
-		wiki.DELETE("/pages/*slug", deletePageHandlers...)
-
-		// Revision history (slug is a catch-all like /pages; revert carries
-		// the slug in the body for the same reason move-page does)
-		wikiRead.GET("/revisions/*slug", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListRevisions)
-		wiki.POST("/revert", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.RevertPage)
-
-		// Folder tree (directory nodes)
-		wikiRead.GET("/folders", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListFolders)
-		wiki.POST("/folders", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreateFolder)
-		updateFolderHandlers := []gin.HandlerFunc{
-			g.OwnedWikiKBOrAdmin(),
-			g.KBAccessWrite("kb_id"),
-		}
-		deleteFolderHandlers := append([]gin.HandlerFunc(nil), updateFolderHandlers...)
-		if releaseHandler != nil {
-			updateFolderHandlers = append(updateFolderHandlers, releaseHandler.RejectManagedWikiWrite())
-			deleteFolderHandlers = append(deleteFolderHandlers, releaseHandler.RejectManagedWikiWrite())
-		}
-		updateFolderHandlers = append(updateFolderHandlers, wikiHandler.UpdateFolder)
-		deleteFolderHandlers = append(deleteFolderHandlers, wikiHandler.DeleteFolder)
-		wiki.PUT("/folders/:folder_id", updateFolderHandlers...)
-		wiki.DELETE("/folders/:folder_id", deleteFolderHandlers...)
-
-		// Special pages
-		wikiRead.GET("/index", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetIndex)
-
-		// Graph and stats
-		wikiRead.GET("/graph", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetGraph)
-		wikiRead.GET("/stats", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetStats)
-
-		// Search and maintenance
-		wikiRead.GET("/search", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.SearchPages)
-		wiki.POST("/rebuild-links", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.RebuildLinks)
-		wikiRead.GET("/lint", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.Lint)
-		wiki.POST("/auto-fix", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.AutoFix)
-
-		// Issues
-		wikiRead.GET("/issues", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListIssues)
-		updateIssueHandlers := []gin.HandlerFunc{
-			g.OwnedWikiKBOrAdmin(),
-			g.KBAccessWrite("kb_id"),
-		}
-		if releaseHandler != nil {
-			updateIssueHandlers = append(updateIssueHandlers, releaseHandler.RejectManagedWikiWrite())
-		}
-		updateIssueHandlers = append(updateIssueHandlers, wikiHandler.UpdateIssueStatus)
-		wiki.PUT("/issues/:issue_id/status", updateIssueHandlers...)
-	}
+	prefix := "/knowledgebase/:kb_id/wiki"
+	wikiRead := g.apiKeyGroup(r.Group(prefix), apiKeyRetrieve(apiKeyFullAccess()))
+	ownerLookup, _ := g.kbService.(managed.KnowledgeBaseLookup)
+	wiki := g.apiKeyGroup(r.Group(prefix,
+		managed.GuardWikiWrite(managed.ForKnowledgeBaseOwner(classifier, ownerLookup))),
+		apiKeyIngest(apiKeyFullAccess()))
+	wikiRead.GET("/pages", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListPages)
+	wiki.POST("/pages", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreatePage)
+	wiki.PUT("/move-page", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.MovePage)
+	wikiRead.GET("/pages/*slug", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetPage)
+	wiki.PUT("/pages/*slug", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.UpdatePage)
+	wiki.DELETE("/pages/*slug", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.DeletePage)
+	wikiRead.GET("/revisions/*slug", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListRevisions)
+	wiki.POST("/revert", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.RevertPage)
+	wikiRead.GET("/folders", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListFolders)
+	wiki.POST("/folders", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreateFolder)
+	wiki.PUT("/folders/:folder_id", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.UpdateFolder)
+	wiki.DELETE("/folders/:folder_id", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.DeleteFolder)
+	wikiRead.GET("/index", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetIndex)
+	wikiRead.GET("/graph", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetGraph)
+	wikiRead.GET("/stats", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetStats)
+	wikiRead.GET("/search", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.SearchPages)
+	wiki.POST("/rebuild-links", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.RebuildLinks)
+	wikiRead.GET("/lint", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.Lint)
+	wiki.POST("/auto-fix", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.AutoFix)
+	wikiRead.GET("/issues", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListIssues)
+	wiki.PUT("/issues/:issue_id/status", g.OwnedWikiKBOrAdmin(),
+		g.KBAccessWrite("kb_id"), wikiHandler.UpdateIssueStatus)
 
 	if releaseHandler == nil {
 		return

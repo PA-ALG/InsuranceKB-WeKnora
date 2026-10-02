@@ -488,7 +488,7 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 | G7 写路由守卫 | 所有 Wiki 写路由都挂 managed 守卫 | S1 |
 | G8 读入口绑定 | Wiki、搜索、Agent、KnowledgeQA、MCP 读入口在受管 KB 上经 release resolver | S1 |
 | G9 合同漂移 | `contracts/*.schema.json` 与 pydantic 导出逐字节一致 | S3 |
-| G10 上游补丁 | 相对固定上游版本被修改或删除的上游文件（`.github/` 除外）数量只减不增；S7 起每个都在 `docs/design/upstream-patches.md` 登记原因 | S0（基线 440 个，其中 `internal/` 非测试 222 个） |
+| G10 上游补丁 | 相对固定上游版本被修改或删除的上游文件（`.github/` 除外）数量**只减不增**：新增一处上游改动必须同时登记 `docs/design/upstream-patches.md`（文件、原因、可否上游化、退出条件）并说明为何无法用扩展点解决；未登记的改动一律失败。登记不等于许可——该切片 Spec 必须显式允许该文件，且 Claude 在审查时逐条确认后才会更新基线。替换或回退已登记的补丁可相应下调基线（S7 回退格式改动即属此类） | S0（基线 440 个，其中 `internal/` 非测试 222 个） |
 | G11 新文件位置 | Harness 新源码只能在 §4.2 目标目录，新测试只能在 `harness/tests/<目标目录>/`；Go 项目新增非测试文件只能在 `internal/enterprise/`，新迁移只能在 `migrations/enterprise/`；前端项目新增非测试文件只能在 `src/enterprise/`；测试文件可与被测代码同目录；旧位置的文件清单只减不增 | S0（基线 847 个） |
 
 ## 9. 协作与交付

@@ -64,6 +64,9 @@ func (t *wikiUpdateIssueTool) Execute(ctx context.Context, args json.RawMessage)
 	if err != nil {
 		return &types.ToolResult{Success: false, Error: err.Error()}, nil
 	}
+	if err := checkWikiWrite(ctx, t.wikiService, issue.KnowledgeBaseID); err != nil {
+		return &types.ToolResult{Success: false, Error: err.Error()}, nil
+	}
 
 	// Update only after the issue has been proven to belong to an allowed KB.
 	err = t.wikiService.UpdateIssueStatus(ctx, issue.KnowledgeBaseID, params.IssueID, params.Status)

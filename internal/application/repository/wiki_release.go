@@ -665,33 +665,6 @@ func (r *WikiReleaseRepository) GetReleaseMembers(
 	return members, nil
 }
 
-// IsManagedWikiKB reports whether the experimental release state owns the KB.
-func (r *WikiReleaseRepository) IsManagedWikiKB(
-	ctx context.Context,
-	scope types.WikiReleaseScope,
-) (bool, error) {
-	var count int64
-	err := scopeQuery(r.db.WithContext(ctx).Model(&types.WikiReleasePreparation{}), scope).
-		Count(&count).Error
-	return count > 0, err
-}
-
-// HasActiveHeadForWikiKB reports whether ordinary Wiki mutations must be
-// guarded for the tenant-scoped KB. Preparations alone do not make a KB
-// release-managed.
-func (r *WikiReleaseRepository) HasActiveHeadForWikiKB(
-	ctx context.Context,
-	tenantID uint64,
-	wikiKBID string,
-) (bool, error) {
-	var count int64
-	err := r.db.WithContext(ctx).
-		Model(&types.WikiReleaseHead{}).
-		Where("tenant_id = ? AND wiki_kb_id = ?", tenantID, wikiKBID).
-		Count(&count).Error
-	return count > 0, err
-}
-
 // CountState returns bounded per-table row counts for falsification tests.
 func (r *WikiReleaseRepository) CountState(
 	ctx context.Context,
