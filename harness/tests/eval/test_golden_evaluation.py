@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -35,15 +36,34 @@ def ev(page: int = 3, quote: str = "等待期为90日", sha: str = "a" * 64) -> 
     return GoldenEvidence(document="保险条款.pdf", document_sha256=sha, page=page, quote=quote)
 
 
-def golden(field: str, state: str = "present", value: str | None = "90日", **kw: object) -> GoldenItem:
-    evidence = kw.pop("evidence", [ev()] if state != "unknown" else [])
+StateName = Literal["present", "absent_explicitly", "unknown"]
+
+
+def golden(
+    field: str,
+    state: StateName = "present",
+    value: str | None = "90日",
+    *,
+    evidence: list[GoldenEvidence] | None = None,
+    components: list[ValueComponent] | None = None,
+    forbidden: tuple[str, ...] = (),
+) -> GoldenItem:
+    if evidence is None:
+        evidence = [ev()] if state != "unknown" else []
     return GoldenItem(
-        pack_id=PACK, product_id="p1", field_key=field, state=state, value=value,
-        evidence=evidence, judged_by="human:test", **kw,
+        pack_id=PACK,
+        product_id="p1",
+        field_key=field,
+        state=state,
+        value=value,
+        evidence=evidence,
+        components=components or [],
+        forbidden=forbidden,
+        judged_by="human:test",
     )
 
 
-def pred(field: str, state: str = "present", value: str | None = "90日") -> Prediction:
+def pred(field: str, state: StateName = "present", value: str | None = "90日") -> Prediction:
     return Prediction(pack_id=PACK, product_id="p1", field_key=field, state=state, value=value)
 
 
@@ -94,7 +114,8 @@ def test_correct_mismatch_missed_and_hallucination_are_counted_per_field() -> No
     report = evaluate(items, preds)
     f = report.per_field
     assert (f["waiting_period"].tp, f["waiting_period"].fp, f["waiting_period"].fn) == (1, 0, 0)
-    assert (f["cooling_off_period"].tp, f["cooling_off_period"].fp, f["cooling_off_period"].fn) == (0, 1, 1)
+    cooling = f["cooling_off_period"]
+    assert (cooling.tp, cooling.fp, cooling.fn) == (0, 1, 1)
     assert (f["coverage_period"].tp, f["coverage_period"].fn) == (0, 1)
     assert f["deductible_rules"].fp == 1
     assert report.hallucinations == 1
@@ -137,7 +158,10 @@ def test_forbidden_terms_reject_otherwise_matching_value() -> None:
 
 
 def test_predictions_outside_golden_are_unscored_not_hallucinated() -> None:
-    report = evaluate([golden("waiting_period")], [pred("waiting_period"), pred("coverage_period", value="1年")])
+    report = evaluate(
+        [golden("waiting_period")],
+        [pred("waiting_period"), pred("coverage_period", value="1年")],
+    )
     assert report.unscored_predictions == 1
     assert report.hallucinations == 0
 
@@ -181,7 +205,9 @@ def test_catalog_resolves_pack_and_field_by_chinese_title() -> None:
 
 def test_legacy_596_golden_converts_to_v5_keys() -> None:
     catalog = load_catalog(CATALOG)
-    result = golden_from_legacy(LEGACY_596, catalog, pack_display_name="医疗险", dataset_root=DATASET_ROOT)
+    result = golden_from_legacy(
+        LEGACY_596, catalog, pack_display_name="医疗险", dataset_root=DATASET_ROOT
+    )
     assert len(result.items) == 40
     assert len(result.unmapped) == 20
     assert {i.state for i in result.items} == {"present", "unknown", "absent_explicitly"}
@@ -196,29 +222,38 @@ def test_legacy_596_golden_converts_to_v5_keys() -> None:
 
 
 def test_candidate_predictions_map_entities_and_fail_on_unknown_names() -> None:
-    candidate = {
-        "request": {
-            "entity_bindings": [
-                {"entity_id": "e1", "display_name": "平安 e 生保（尊享版）医疗保险", "schema_pack_id": PACK},
-                {"entity_id": "e2", "display_name": "未登记产品", "schema_pack_id": PACK},
-            ]
+    bindings: list[dict[str, object]] = [
+        {
+            "entity_id": "e1",
+            "display_name": "平安 e 生保（尊享版）医疗保险",
+            "schema_pack_id": PACK,
         },
-        "compile_result": {
-            "output": {
-                "fields": [
-                    {"entity_id": "e1", "field_key": "waiting_period", "state": "present", "value": "90日",
-                     "evidence": [{"page_number": 3, "quote": "等待期为90日"}]},
-                ]
-            }
-        },
+        {"entity_id": "e2", "display_name": "未登记产品", "schema_pack_id": PACK},
+    ]
+    field = {
+        "entity_id": "e1",
+        "field_key": "waiting_period",
+        "state": "present",
+        "value": "90日",
+        "evidence": [{"page_number": 3, "quote": "等待期为90日"}],
+    }
+    candidate: dict[str, object] = {
+        "request": {"entity_bindings": bindings},
+        "compile_result": {"output": {"fields": [field]}},
     }
     names = {"平安e生保（尊享版）医疗保险": "596"}
     with pytest.raises(ValueError, match="未登记产品"):
         predictions_from_candidate(candidate, names)
-    candidate["request"]["entity_bindings"].pop()
+    bindings.pop()
     preds = predictions_from_candidate(candidate, names)
     assert preds == [
-        Prediction(pack_id=PACK, product_id="596", field_key="waiting_period", state="present", value="90日")
+        Prediction(
+            pack_id=PACK,
+            product_id="596",
+            field_key="waiting_period",
+            state="present",
+            value="90日",
+        )
     ]
 
 
