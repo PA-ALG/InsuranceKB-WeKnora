@@ -40,6 +40,9 @@ MCP、快问快答都不能再读到未经发布的内容；被拒绝时给出�
 - 分类器出错或未注入 → 错误消息包含 `MANAGED_KB_CLASSIFICATION_UNAVAILABLE`（失败关闭）。
 - 分类按 KB 属主租户（`kb.TenantID`），与 S1a 写工具一致。
 - `list_knowledge_bases` 在结果中给受管 KB 标注 `release_managed: true`，不隐藏（让调用方知道它存在、该怎么读）。
+- `read_document`（`tools_retrieve.go:334`）走的是 `knowledgeInScope` → `allowedKnowledgeBases`，不经 `selectKnowledgeBases`：
+  在该 handler 取得 KB 后调用 `internal/enterprise/managed/` 的共用读取检查，受管则拒绝（消息含 `RELEASE_MANAGED_KB`）。
+  `knowledgeInScope` 本身不改，摄取链（`tools_ingest.go:127,166`）因此不受影响（2026-10-03 评审补入）。
 
 ### 3.3 快问快答与检索（Go）
 
@@ -94,7 +97,7 @@ CI 全绿。新改的上游文件按 G10 规则登记到 `docs/design/upstream-p
 
 - 允许新增：`internal/enterprise/managed/` 下的文件；`frontend/src/enterprise/` 下的文件；对应测试。
 - 允许修改：`internal/router/routes_knowledge.go`、`internal/router/router.go`、`internal/router/rbac.go`（仅 kbService
-  类型约束）、`internal/mcpserver/scope.go`、`internal/mcpserver/tools_retrieve.go`（仅 list 标注）、
+  类型约束）、`internal/mcpserver/scope.go`、`internal/mcpserver/tools_retrieve.go`（list 标注，以及 `handleReadDocument` 的受管读取检查；`knowledgeInScope` 不改）、
   `internal/application/service/session_knowledge_qa.go`、`internal/im/cmd_search.go`、`internal/container/container.go`、
   `frontend/src/views/knowledge/KnowledgeBase.vue`、`frontend/src/views/chat/components/AgentStreamDisplay.vue`、
   `frontend/src/api/wiki/index.ts`（仅新增发布读取调用）、`docs/design/upstream-patches.md`（只追加登记行）。
