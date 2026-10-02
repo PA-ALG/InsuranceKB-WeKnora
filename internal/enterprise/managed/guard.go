@@ -30,19 +30,8 @@ func (e *WriteError) message() string {
 
 // CheckWrite gives HTTP, Agent and MCP one denial policy and error vocabulary.
 func CheckWrite(ctx context.Context, classifier Classifier, tenantID uint64, kbID string) error {
-	unavailable := &WriteError{Code: ErrorCodeClassificationUnavailable}
-	if classifier == nil || tenantID == 0 || strings.TrimSpace(kbID) == "" {
-		return unavailable
-	}
-	role, err := classifier.Classify(ctx, tenantID, strings.TrimSpace(kbID))
-	if err != nil {
-		return unavailable
-	}
-	if role.Kind == KindWiki || role.Kind == KindRaw || role.State == StatePending || role.State == StateActive {
-		return &WriteError{Code: ErrorCodeReleaseManaged}
-	}
-	if (role.Kind != KindNone && role.Kind != "") || (role.State != StateUnmanaged && role.State != "") {
-		return unavailable
+	if err := CheckRead(ctx, classifier, tenantID, kbID); err != nil {
+		return &WriteError{Code: err.(*ReadError).Code}
 	}
 	return nil
 }

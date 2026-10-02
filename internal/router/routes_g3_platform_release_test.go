@@ -232,6 +232,7 @@ func TestG3PlatformCompositionMainRouterRegistersMachineRoutes(t *testing.T) {
 	engine := NewRouter(
 		RouterParams{
 			Config:                     &config.Config{},
+			KBService:                  &routeRegistrationKBService{},
 			SystemHandler:              &handler.SystemHandler{},
 			WikiReleaseHandler:         access,
 			SchemaWikiHandler:          &handler.SchemaWikiHandler{},

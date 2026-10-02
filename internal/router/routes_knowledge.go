@@ -386,7 +386,7 @@ func RegisterKnowledgeTagRoutes(r *gin.RouterGroup, tagHandler *handler.TagHandl
 }
 
 // RegisterWikiPageRoutesWithRelease is the single native Wiki entry point.
-// Separate method groups keep reads unchanged and put every ordinary write
+// Separate method groups put every native read and write
 // behind the same managed guard before the existing ownership/RBAC handlers.
 func RegisterWikiPageRoutesWithRelease(
 	r *gin.RouterGroup,
@@ -406,8 +406,14 @@ func registerWikiPageRoutes(
 	classifier managed.Classifier,
 ) {
 	prefix := "/knowledgebase/:kb_id/wiki"
-	wikiRead := g.apiKeyGroup(r.Group(prefix), apiKeyRetrieve(apiKeyFullAccess()))
-	ownerLookup, _ := g.kbService.(managed.KnowledgeBaseLookup)
+	ownerLookup, ok := g.kbService.(managed.KnowledgeBaseLookup)
+	if !ok {
+		panic("native Wiki routes require managed.KnowledgeBaseLookup")
+	}
+	ownerClassifier := managed.ForKnowledgeBaseOwner(classifier, ownerLookup)
+	wikiRead := g.apiKeyGroup(r.Group(prefix, managed.GuardWikiWrite(ownerClassifier)), apiKeyRetrieve(apiKeyFullAccess()))
+	custody := g.apiKeyGroup(r.Group("/knowledgebase/:kb_id/release-custody"), apiKeyRetrieve(apiKeyFullAccess()))
+	custody.GET("", g.Viewer(), g.KBAccessRead("kb_id"), managed.CustodyHandler(ownerClassifier))
 	wiki := g.apiKeyGroup(r.Group(prefix,
 		managed.GuardWikiWrite(managed.ForKnowledgeBaseOwner(classifier, ownerLookup))),
 		apiKeyIngest(apiKeyFullAccess()))

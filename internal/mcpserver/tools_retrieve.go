@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"github.com/Tencent/WeKnora/internal/agent/tools"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -87,11 +88,12 @@ func readDocumentTool() mcp.Tool {
 }
 
 type knowledgeBaseSummary struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Description  string   `json:"description,omitempty"`
-	Type         string   `json:"type"`
-	Capabilities []string `json:"capabilities"`
+	ReleaseManaged bool     `json:"release_managed"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description,omitempty"`
+	Type           string   `json:"type"`
+	Capabilities   []string `json:"capabilities"`
 }
 
 func summarizeKnowledgeBase(kb *types.KnowledgeBase) knowledgeBaseSummary {
@@ -125,7 +127,13 @@ func (s *Server) handleListKnowledgeBases(ctx context.Context, _ mcp.CallToolReq
 	}
 	out := make([]knowledgeBaseSummary, 0, len(kbs))
 	for _, kb := range kbs {
-		out = append(out, summarizeKnowledgeBase(kb))
+		custody, err := managed.LookupCustody(ctx, s.managedClassifier, kb.TenantID, kb.ID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		summary := summarizeKnowledgeBase(kb)
+		summary.ReleaseManaged = custody.Managed
+		out = append(out, summary)
 	}
 	return jsonResult(map[string]any{"knowledge_bases": out, "total": len(out)})
 }
@@ -333,6 +341,9 @@ func (s *Server) handleReadDocument(ctx context.Context, req mcp.CallToolRequest
 	}
 	k, kb, err := s.knowledgeInScope(ctx, ep, knowledgeID)
 	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := managed.CheckRead(ctx, s.managedClassifier, kb.TenantID, kb.ID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	ctx, err = s.scopedKBContext(ctx, kb, types.OrgRoleViewer)

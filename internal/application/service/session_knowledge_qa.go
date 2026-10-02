@@ -9,6 +9,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/agent/tools"
 	chatpipeline "github.com/Tencent/WeKnora/internal/application/service/chat_pipeline"
 	"github.com/Tencent/WeKnora/internal/common"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/modelcontext"
@@ -66,6 +67,11 @@ func (s *sessionService) KnowledgeQA(
 	// Resolve knowledge bases using shared helper
 	knowledgeBaseIDs, knowledgeIDs, err := s.resolveKnowledgeBases(ctx, req)
 	if err != nil {
+		return err
+	}
+
+	if err := managed.CheckSearchRead(ctx, s.knowledgeBaseService, s.knowledgeService,
+		s.resolveRetrievalTenantID(ctx, req), knowledgeBaseIDs, knowledgeIDs, req.TagScopes); err != nil {
 		return err
 	}
 
@@ -842,6 +848,11 @@ func (s *sessionService) SearchKnowledge(ctx context.Context,
 	if !ok {
 		logger.Error(ctx, "Failed to get tenant ID from context")
 		return nil, fmt.Errorf("workspace ID not found in context")
+	}
+
+	if err := managed.CheckSearchRead(ctx, s.knowledgeBaseService, s.knowledgeService,
+		tenantID, knowledgeBaseIDs, knowledgeIDs, tagScopes); err != nil {
+		return nil, err
 	}
 
 	// Build unified search targets (computed once, used throughout pipeline)
