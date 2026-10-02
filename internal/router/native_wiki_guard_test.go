@@ -173,15 +173,18 @@ func TestNativeWikiRoutesIncludeKnownWriteAndReadPaths(t *testing.T) {
 	}
 }
 
-func TestNativeWikiWriteRoutesRejectReleaseManagedKB(t *testing.T) {
+// S1a guarded writes; S1b extends the same guard to every native route, reads
+// included: a managed KB's native wiki tables are not a published read source.
+func TestNativeWikiRoutesRejectReleaseManagedKB(t *testing.T) {
 	for _, state := range []managed.State{managed.StatePending, managed.StateActive} {
 		for _, kind := range []managed.Kind{managed.KindWiki, managed.KindRaw} {
 			classifier := &stubClassifier{roles: map[string]managed.Role{
 				"kb-allowed": {Kind: kind, State: state},
 			}}
 			engine := newGuardedWikiEngine(t, classifier)
-			routes := nativeWikiWriteRoutes(engine)
+			routes := nativeWikiRoutes(engine)
 			require.NotEmpty(t, routes)
+			require.NotEmpty(t, nativeWikiWriteRoutes(engine))
 			for _, route := range routes {
 				rec := serve(engine, route.Method, concretePath(route.Path, "kb-allowed"))
 				require.Equalf(t, http.StatusConflict, rec.Code,
@@ -195,7 +198,7 @@ func TestNativeWikiWriteRoutesRejectReleaseManagedKB(t *testing.T) {
 
 func TestNativeWikiGuardFailsClosedWhenClassificationFails(t *testing.T) {
 	engine := newGuardedWikiEngine(t, &stubClassifier{err: errors.New("database unavailable")})
-	for _, route := range nativeWikiWriteRoutes(engine) {
+	for _, route := range nativeWikiRoutes(engine) {
 		rec := serve(engine, route.Method, concretePath(route.Path, "kb-allowed"))
 		require.Equalf(t, http.StatusServiceUnavailable, rec.Code, "%s %s body=%s",
 			route.Method, route.Path, rec.Body.String())
@@ -214,6 +217,7 @@ func TestNativeWikiGuardPassesUnmanagedKBToNormalGuards(t *testing.T) {
 		RegisterWikiPageRoutesWithRelease(r, &handler.WikiPageHandler{}, nil, guards, classifier)
 	})
 	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/knowledgebase/kb-victim/wiki/pages"},
 		{http.MethodPost, "/api/v1/knowledgebase/kb-victim/wiki/pages"},
 		{http.MethodPost, "/api/v1/knowledgebase/kb-victim/wiki/revert"},
 		{http.MethodPost, "/api/v1/knowledgebase/kb-victim/wiki/rebuild-links"},
@@ -229,16 +233,13 @@ func TestNativeWikiGuardPassesUnmanagedKBToNormalGuards(t *testing.T) {
 	require.Contains(t, classifier.calls, "kb-victim", "guard must classify before RBAC")
 }
 
-// TestNativeWikiReadRoutesAreNotWriteGuarded records the S1a boundary: read
-// routes stay on the native tables until S1b binds them to a release. S1b
-// replaces this expectation with a release-bound assertion.
-func TestNativeWikiReadRoutesAreNotWriteGuarded(t *testing.T) {
-	classifier := &stubClassifier{roles: map[string]managed.Role{
-		"kb-allowed": {Kind: managed.KindWiki, State: managed.StateActive},
-	}}
+// TestNativeWikiReadRoutesPassUnmanagedKB keeps native reads unchanged for
+// ordinary knowledge bases. The zero-value handler panics once a request
+// reaches it; the recovering engine turns that into a 500, which proves the
+// guard classified the KB and let the read through.
+func TestNativeWikiReadRoutesPassUnmanagedKB(t *testing.T) {
+	classifier := &stubClassifier{roles: map[string]managed.Role{}}
 	engine := newRecoveringGuardedWikiEngine(t, classifier)
-	routes := engine.Routes()
-	require.NotEmpty(t, routes)
 	checked := 0
 	for _, route := range nativeWikiRoutes(engine) {
 		if route.Method != http.MethodGet {
@@ -247,9 +248,10 @@ func TestNativeWikiReadRoutesAreNotWriteGuarded(t *testing.T) {
 		checked++
 		rec := serve(engine, route.Method, concretePath(route.Path, "kb-allowed"))
 		require.NotEqual(t, http.StatusConflict, rec.Code,
-			"read route %s %s must not be blocked by the S1a write guard", route.Method, route.Path)
+			"unmanaged read %s %s must not be rejected as managed", route.Method, route.Path)
 		require.NotEqual(t, managed.ErrorCodeReleaseManaged, errorCode(t, rec))
+		require.NotEqual(t, managed.ErrorCodeClassificationUnavailable, errorCode(t, rec))
 	}
 	require.NotZero(t, checked, "expected at least one native wiki read route")
-	require.Empty(t, classifier.calls, "S1a must not classify read routes")
+	require.Len(t, classifier.calls, checked, "every native read must be classified")
 }
