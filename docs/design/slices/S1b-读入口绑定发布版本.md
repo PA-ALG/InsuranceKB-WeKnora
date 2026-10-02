@@ -28,8 +28,12 @@ MCP、快问快答都不能再读到未经发布的内容；被拒绝时给出�
   行为不变：受管 409 `RELEASE_MANAGED_KB`，分类失败 503 `MANAGED_KB_CLASSIFICATION_UNAVAILABLE`，先于 RBAC）。
 - 非受管库的读行为完全不变。
 - `release-scopes/...` 下的发布读路由**不挂**此守卫（它们读的是发布版本）。
-- 启动时断言：`g.kbService` 必须实现 `managed.KnowledgeBaseLookup`；不满足时 router 构造直接 panic，
-  不再在运行时静默得到 nil（S1a 审查遗留项）。最好改成编译期约束（字段类型直接要求该接口）。
+- 装配约束：`g.kbService` 必须实现 `managed.KnowledgeBaseLookup`（S1a 审查遗留项：不再在运行时静默得到 nil）。
+  **主保障是编译期断言**，放在 `internal/router/`：让生产装配提供的实例必须满足该接口，缺了在编译时暴露。
+  `RouterParams.KBService` 的字段类型**不**收窄为复合接口（容器按 `interfaces.KnowledgeBaseService` 提供服务），
+  因此 `registerWikiPageRoutes` 里保留一条 `panic` 兜底——它只在装配被绕过时才会触发，不是主保障。
+  （2026-10-03 修正：原写法把运行时 panic 当主保障，导致 046 的既有测试
+  `internal/handler/wiki_release_falsification_test.go` 因构造 router 时没给 `KBService` 而 panic 挂掉。）
 
 ### 3.2 MCP 读工具（Go）
 
@@ -104,6 +108,10 @@ CI 全绿。新改的上游文件按 G10 规则登记到 `docs/design/upstream-p
 - 允许修改（上游既有测试的**装配**，仅补新依赖，不得改断言或加 skip/xfail）：
   `internal/mcpserver/scope_test.go`、`internal/router/router_api_key_capabilities_test.go`。
   二者都被 G10 计入，登记在 `docs/design/upstream-patches.md`，基线由 Claude 审查后更新。
+- 允许修改（**项目自有的**既有测试装配，同样仅补装配、不改断言）：
+  `internal/handler/wiki_release_falsification_test.go`——给构造 `router.RouterParams` 的字面量补一个满足
+  `managed.KnowledgeBaseLookup` 的 stub；该文件已有 `wikiReleaseKBServiceStub`，其 `GetKnowledgeBaseByIDOnly`
+  正是接口所需方法。该文件不在上游，不计入 G10。
 - 不得修改：`internal/router/native_wiki_guard_test.go`、`internal/mcpserver/managed_read_test.go`、蓝图、`docs/design/`
   其他文件、`tests/architecture/`、`contracts/`、`harness/`、Agent QA 路径与摄取链。
 
