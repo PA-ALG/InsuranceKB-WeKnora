@@ -79,15 +79,14 @@ Candidate。
 
 - 分工：用户决策；Claude 负责调研、架构、切片 Spec、验收测试、架构守卫与审计；Codex 负责
   实现。同一时间只有一个实现切片修改运行时代码。流程全文见蓝图 §9。
-- 协作通道是 GitHub 私有仓库 `PA-ALG/InsuranceKB-WeKnora-private`（2026-10-01 起；旧公开仓库
-  `PA-ALG/InsuranceKB-WeKnora` 只保留历史 PR，不再开新 PR）：Claude 写 Spec 与验收测试，推到
+- 协作通道是 GitHub 公开仓库 `PA-ALG/InsuranceKB-WeKnora`：Claude 写 Spec 与验收测试，推到
   `slice/sN`，开 Issue → 用户批准 → Codex 收到"做 issue #N"后在 `slice/sN` 上实现 → Codex
   开 PR（`Closes #N`），按 `.github/pull_request_template.md` 交接 → Claude 本地重跑门禁并用
   `gh pr review` 审计 → 用户 Squash merge。
 - **Codex 的职责**：按 Issue 与 Spec 写出高质量实现代码和配套测试。架构、方案、Spec、验收
   标准、任务拆分与排期不归 Codex；遇到这类问题在 Issue 或 PR 中提出，由 Claude 与用户决定。
 - 收到"做 issue #N"时：
-  1. `gh issue view N --repo PA-ALG/InsuranceKB-WeKnora-private` 读取任务；
+  1. `gh issue view N --repo PA-ALG/InsuranceKB-WeKnora` 读取任务；
   2. 读 Issue 指定的 Spec，以及蓝图、调研结论中与本切片相关的章节；
   3. 在 Issue 下回复一条评论，用自己的话复述目标、改动范围与完成标准，再列实施计划；
   4. 按 Issue 中"开工方式"执行：小切片发出计划即开工；大切片等 Claude 或用户确认。
