@@ -143,7 +143,12 @@ def test_absent_explicitly_needs_verified_negative_quote_and_no_value() -> None:
 
 
 def test_unknown_is_kept_without_evidence() -> None:
-    unknown: dict[str, object] = {"field_key": "deductible_rules", "state": "unknown", "value": None, "evidence": []}
+    unknown: dict[str, object] = {
+        "field_key": "deductible_rules",
+        "state": "unknown",
+        "value": None,
+        "evidence": [],
+    }
     result = annotator(FakeJudge([answer(unknown)])).annotate(
         "596", PACK, ["deductible_rules"], PAGES
     )
