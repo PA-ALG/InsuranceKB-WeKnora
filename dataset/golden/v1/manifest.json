@@ -1,0 +1,48 @@
+{
+  "dataset_version": "v1",
+  "source": "gs-s0q-596-v1",
+  "source_file": "dataset/goldenset/gs-s0q-596-v1/596.jsonl",
+  "source_sha256": "562c37c7cf262e2e78f0b3ca4b7de4b0dab2f407d3cd7318a8a69b5dca33d8fb",
+  "source_manifest_sha256": "d926cc3da4af4c531dffd05c12e5b8214fb8b79e50652ca5c30bd5db35f377c1",
+  "product_id": "596",
+  "product_version": "596-1",
+  "pack_id": "schemapack_medical_insurance",
+  "catalog_file": "internal/handler/schema_pack_catalog_830_g3.generated.json",
+  "catalog_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
+  "catalog_declared_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
+  "catalog_version": "2026-08-12-v5",
+  "items": 40,
+  "tri_state": {
+    "present": 30,
+    "unknown": 8,
+    "absent_explicitly": 2
+  },
+  "unmapped_fields": [
+    "条款生效日期",
+    "条款版本标识",
+    "减额缴清",
+    "条款备案/批复文号",
+    "复效条款",
+    "等待期内出险处理",
+    "交费期限",
+    "交费方式",
+    "保单件数",
+    "理赔金额",
+    "高危职业",
+    "给付限额",
+    "津贴",
+    "费用",
+    "退保率",
+    "产品档次",
+    "报销门诊住院范围",
+    "投保职业",
+    "理赔件数",
+    "特殊免责"
+  ],
+  "files": {
+    "596.jsonl": "257112a16d3e90e68c5016dd14561d0f4c639aea21262a7ed5d9fafac453d902"
+  },
+  "generation": "insurance_harness.eval.convert.golden_from_legacy; exact pack short_title matching",
+  "provenance": "Legacy approved annotations retained as legacy:gs-s0q-596-v1; no reannotation or model call.",
+  "scope": "Offline deterministic value comparison only; evidence accuracy and production model quality are not certified."
+}
