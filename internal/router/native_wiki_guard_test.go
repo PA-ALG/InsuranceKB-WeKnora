@@ -15,8 +15,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/handler"
+	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -46,6 +48,38 @@ func newGuardedWikiEngine(t *testing.T, classifier managed.Classifier) *gin.Engi
 	return newKBRouteTestEngine(t, 1, tenantKBLookupFixture(), nil, func(r *gin.RouterGroup, guards *rbacGuards) {
 		RegisterWikiPageRoutesWithRelease(r, &handler.WikiPageHandler{}, nil, guards, classifier)
 	})
+}
+
+// newRecoveringGuardedWikiEngine adds panic recovery so read routes can be
+// requested with a zero-value handler: S1a does not guard reads, and the real
+// handlers dereference unset services. A 500 therefore proves the write guard
+// did not intercept, which is exactly the S1a boundary.
+func newRecoveringGuardedWikiEngine(t *testing.T, classifier managed.Classifier) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	enabled := true
+	cfg := &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}}
+	guards := &rbacGuards{cfg: cfg, kbService: tenantKBLookupFixture()}
+
+	engine := gin.New()
+	engine.Use(gin.Recovery())
+	engine.Use(middleware.ErrorHandler())
+	engine.Use(func(c *gin.Context) {
+		ctx := c.Request.Context()
+		ctx = context.WithValue(ctx, types.TenantIDContextKey, uint64(1))
+		ctx = context.WithValue(ctx, types.TenantRoleContextKey, types.TenantRoleViewer)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set(types.TenantIDContextKey.String(), uint64(1))
+		c.Next()
+	})
+	RegisterWikiPageRoutesWithRelease(
+		engine.Group("/api/v1"),
+		&handler.WikiPageHandler{},
+		nil,
+		guards,
+		classifier,
+	)
+	return engine
 }
 
 // nativeWikiRoutes returns every registered native wiki route, excluding the
@@ -185,8 +219,12 @@ func TestNativeWikiGuardPassesUnmanagedKBToNormalGuards(t *testing.T) {
 		{http.MethodPost, "/api/v1/knowledgebase/kb-victim/wiki/rebuild-links"},
 	} {
 		rec := serve(engine, tc.method, tc.path)
-		require.Equalf(t, http.StatusForbidden, rec.Code, "%s %s body=%s", tc.method, tc.path, rec.Body.String())
+		// Unmanaged KBs must reach the normal guards: any denial here is an
+		// ownership/permission decision, never the managed-write decision.
+		require.NotEqual(t, http.StatusConflict, rec.Code, "%s %s body=%s", tc.method, tc.path, rec.Body.String())
 		require.NotEqual(t, managed.ErrorCodeReleaseManaged, errorCode(t, rec))
+		require.NotEqual(t, managed.ErrorCodeClassificationUnavailable, errorCode(t, rec),
+			"the managed guard itself must not fail closed for a classifiable unmanaged KB")
 	}
 	require.Contains(t, classifier.calls, "kb-victim", "guard must classify before RBAC")
 }
@@ -198,13 +236,20 @@ func TestNativeWikiReadRoutesAreNotWriteGuarded(t *testing.T) {
 	classifier := &stubClassifier{roles: map[string]managed.Role{
 		"kb-allowed": {Kind: managed.KindWiki, State: managed.StateActive},
 	}}
-	engine := newGuardedWikiEngine(t, classifier)
+	engine := newRecoveringGuardedWikiEngine(t, classifier)
+	routes := engine.Routes()
+	require.NotEmpty(t, routes)
+	checked := 0
 	for _, route := range nativeWikiRoutes(engine) {
 		if route.Method != http.MethodGet {
 			continue
 		}
+		checked++
 		rec := serve(engine, route.Method, concretePath(route.Path, "kb-allowed"))
 		require.NotEqual(t, http.StatusConflict, rec.Code,
 			"read route %s %s must not be blocked by the S1a write guard", route.Method, route.Path)
+		require.NotEqual(t, managed.ErrorCodeReleaseManaged, errorCode(t, rec))
 	}
+	require.NotZero(t, checked, "expected at least one native wiki read route")
+	require.Empty(t, classifier.calls, "S1a must not classify read routes")
 }
