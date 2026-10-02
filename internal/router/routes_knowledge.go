@@ -417,7 +417,7 @@ func registerWikiPageRoutes(
 	custody := g.apiKeyGroup(r.Group("/knowledgebase/:kb_id/release-custody"), apiKeyRetrieve(apiKeyFullAccess()))
 	custody.GET("", g.Viewer(), g.KBAccessRead("kb_id"), managed.CustodyHandler(ownerClassifier))
 	wiki := g.apiKeyGroup(r.Group(prefix,
-		managed.GuardWikiWrite(managed.ForKnowledgeBaseOwner(classifier, ownerLookup))),
+		managed.GuardWikiWrite(ownerClassifier)),
 		apiKeyIngest(apiKeyFullAccess()))
 	wikiRead.GET("/pages", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListPages)
 	wiki.POST("/pages", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreatePage)

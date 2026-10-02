@@ -2,6 +2,7 @@ package managed
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -31,12 +32,16 @@ func (e *WriteError) message() string {
 // CheckWrite gives HTTP, Agent and MCP one denial policy and error vocabulary.
 func CheckWrite(ctx context.Context, classifier Classifier, tenantID uint64, kbID string) error {
 	if err := CheckRead(ctx, classifier, tenantID, kbID); err != nil {
-		return &WriteError{Code: err.(*ReadError).Code}
+		var readErr *ReadError
+		if errors.As(err, &readErr) && readErr != nil {
+			return &WriteError{Code: readErr.Code}
+		}
+		return &WriteError{Code: ErrorCodeClassificationUnavailable}
 	}
 	return nil
 }
 
-// GuardWikiWrite rejects managed targets before normal route permission checks.
+// GuardWikiWrite rejects native reads and writes before normal route permission checks.
 func GuardWikiWrite(classifier Classifier) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tenant, exists := c.Get(types.TenantIDContextKey.String())
