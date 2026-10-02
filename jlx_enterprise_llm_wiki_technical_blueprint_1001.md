@@ -504,8 +504,10 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 | 5 | Claude | 本地重跑验收、守卫与受影响组件门禁，检查 diff 范围，`gh pr review` 批准或列出编号修改项 |
 | 6 | 用户 | Squash merge，`main` 上一个切片一个提交 |
 
-- **仓库**：私有 `PA-ALG/InsuranceKB-WeKnora-private`；旧公开仓库只保留历史 PR，本机 remote 名为 `public-archive`，
-  只读。完整备份在私有归档仓库 `PA-ALG/InsuranceKB-WeKnora-backup`。
+- **仓库**：公开仓库 `PA-ALG/InsuranceKB-WeKnora`（`Tencent/WeKnora` 的 fork，本机 remote 名 `origin`）。
+  2026-10-01 至 10-02 曾在私有仓库 `PA-ALG/InsuranceKB-WeKnora-private` 工作（已归档，只读）；完整备份在私有
+  归档仓库 `PA-ALG/InsuranceKB-WeKnora-backup`。用 `gh` 操作时必须显式写 `--repo PA-ALG/InsuranceKB-WeKnora`，
+  否则 fork 会默认指向上游 `Tencent/WeKnora`。
 - **受保护路径**（实现者不改）：本蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`（基线只经脚本下降）、
   `contracts/`（只由 Spec 规定的导出命令生成）。
 - **门禁**：Actions 在 S0 精简后启用，此前以本地门禁为准。Go 受影响包 `go test`；Harness `uv run pytest`、
@@ -608,13 +610,13 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 新旧代码长期并存 | 每片删除被替代的实现；G11 禁止旧目录新增文件；S7 集中清理 |
 | 上游升级冲突 | 自有包 + 挂载点；补丁登记只减不增；每版升级切片记录冲突 |
 | 私有化后 OCR 与模型能力不足 | I3 提前演练；自建 MinerU；模型只改配置即可切换 |
-| 私有仓库 CI 分钟数有限 | CI 只跑受影响组件；构建镜像按需触发 |
+| CI 用量随切片增长 | 公开仓库标准 runner 免费；仍只跑受影响组件，构建镜像按需触发 |
 | 规模到十万级后 Release 成员过多 | 成员按内容寻址；页面不存储；S5 用规模夹具验证 |
 | 多个业务模块同时发布互相覆盖 | 实体级 delta + 激活时 rebase |
 
 ## 13. 未决事项
 
-1. **仓库转私有**：等待 GitHub 官方答复是否能保留 PR 转私有；当前在新私有仓库工作，历史 PR 与备份已保全。
+1. **仓库可见性**：2026-10-02 起回到公开仓库开发（见 §14）。若日后需要转私有，先按 §12 的风险重新评估 CI 成本。
 2. **缺失险种材料**：意外医疗、定期寿险、补充养老（护理险待核对）尚无真实产品，S12 前从公司官网补充。
 3. **专家回归后的复核**：评判模型产出的 Golden 由业务专家抽检复核的时间与方式。
 4. **Harness 现有主链细节**：JobStore、StageCall 记账、checkpoint 与 workflow v1–v3 的逐项保留范围，S5 Spec 前补入
@@ -642,6 +644,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-01 | 旧数据与旧代码删除，不迁移，不保留只读 adapter | §10 |
 | 2026-10-01 | V5 同学在主仓库按 Issue 流程开发 | §9 |
 | 2026-10-01 | 新工作仓库为私有 `PA-ALG/InsuranceKB-WeKnora-private`；旧公开仓库只保留历史，完整备份在私有归档仓库 | §9 |
+| 2026-10-02 | 回到公开仓库 `PA-ALG/InsuranceKB-WeKnora` 开发：私有仓库 Actions 因组织计费受阻，用户确认公开不影响。私有仓库归档只读。`main` 上 `(#1)`、`(#3)`、`(#6)` 等编号指私有仓库的 PR，与公开仓库同号 PR 无关 | §9 |
 | 2026-10-01 | 持续跟随 WeKnora 升级，降低耦合；以最终效果为准，必要时可改上游或重写接口，但须登记 | §4.3、G10 |
 | 2026-10-01 | `absent_explicitly` value 为空且必须有否定原文；有内容的禁止规则属于 present | §5.1 |
 | 2026-10-01 | 本蓝图取代 830 蓝图、28/29 号文档与 `docs/design/00-架构总览.md` | 文首 |
