@@ -101,6 +101,9 @@ CI 全绿。新改的上游文件按 G10 规则登记到 `docs/design/upstream-p
   `internal/application/service/session_knowledge_qa.go`、`internal/im/cmd_search.go`、`internal/container/container.go`、
   `frontend/src/views/knowledge/KnowledgeBase.vue`、`frontend/src/views/chat/components/AgentStreamDisplay.vue`、
   `frontend/src/api/wiki/index.ts`（仅新增发布读取调用）、`docs/design/upstream-patches.md`（只追加登记行）。
+- 允许修改（上游既有测试的**装配**，仅补新依赖，不得改断言或加 skip/xfail）：
+  `internal/mcpserver/scope_test.go`、`internal/router/router_api_key_capabilities_test.go`。
+  二者都被 G10 计入，登记在 `docs/design/upstream-patches.md`，基线由 Claude 审查后更新。
 - 不得修改：`internal/router/native_wiki_guard_test.go`、`internal/mcpserver/managed_read_test.go`、蓝图、`docs/design/`
   其他文件、`tests/architecture/`、`contracts/`、`harness/`、Agent QA 路径与摄取链。
 
