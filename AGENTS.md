@@ -82,7 +82,8 @@ Candidate。
 - 协作通道是 GitHub 公开仓库 `PA-ALG/InsuranceKB-WeKnora`：Claude 写 Spec 与验收测试，推到
   `slice/sN`，开 Issue → 用户批准 → Codex 收到"做 issue #N"后在 `slice/sN` 上实现 → Codex
   开 PR（`Closes #N`），按 `.github/pull_request_template.md` 交接 → Claude 本地重跑门禁并用
-  `gh pr review` 审计 → 用户 Squash merge。
+  `gh pr review` 审计 → Claude Squash merge（2026-10-02 用户授权：审过当前 head、CI 通过、范围
+  符合 Spec 即可合并，合并后告知用户；部署、迁移、仓库设置与超出 Issue 预算的真实调用仍需用户批准）。
 - **Codex 的职责**：按 Issue 与 Spec 写出高质量实现代码和配套测试。架构、方案、Spec、验收
   标准、任务拆分与排期不归 Codex；遇到这类问题在 Issue 或 PR 中提出，由 Claude 与用户决定。
 - 收到"做 issue #N"时：
@@ -101,7 +102,7 @@ Candidate。
   - 提审前本地过完验收、守卫与受影响组件门禁（相对 S0 失败清单不新增失败），rebase 到最新
     `main`；
   - 不 deselect、不加 xfail/skip、不改已有断言；
-  - 不自行合并；不自行申请或扩大真实模型调用、构建、部署与数据库迁移；
+  - 不自行合并（合并由 Claude 执行）；不自行申请或扩大真实模型调用、构建、部署与数据库迁移；
   - Spec 有错或走不通时停下，在 PR 里写明，不自行换方案。
 - **不再沿用的旧流程**：Mission Card、六维 DELIVERY 台账、构建预算、逐文件哈希清单、
   HANDOFF 状态块、向仓库提交大体量证据与日志。证据用 commit SHA 加测试/评测报告摘要；真实

@@ -502,7 +502,7 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 | 3 | 实现者 | 在 Issue 下复述目标、范围、完成标准并列计划；小切片即开工，大切片等确认 |
 | 4 | 实现者 | 在 `slice/sN` 实现，本地过门禁，rebase 到最新 `main`，开 PR（`Closes #N`） |
 | 5 | Claude | 本地重跑验收、守卫与受影响组件门禁，检查 diff 范围，`gh pr review` 批准或列出编号修改项 |
-| 6 | 用户 | Squash merge，`main` 上一个切片一个提交 |
+| 6 | Claude | 审过当前 head 且 CI 通过后 Squash merge，`main` 上一个切片一个提交；合并后告知用户 |
 
 - **仓库**：公开仓库 `PA-ALG/InsuranceKB-WeKnora`（`Tencent/WeKnora` 的 fork，本机 remote 名 `origin`）。
   2026-10-01 至 10-02 曾在私有仓库 `PA-ALG/InsuranceKB-WeKnora-private` 工作（已归档，只读）；完整备份在私有
@@ -644,6 +644,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-01 | 旧数据与旧代码删除，不迁移，不保留只读 adapter | §10 |
 | 2026-10-01 | V5 同学在主仓库按 Issue 流程开发 | §9 |
 | 2026-10-01 | 新工作仓库为私有 `PA-ALG/InsuranceKB-WeKnora-private`；旧公开仓库只保留历史，完整备份在私有归档仓库 | §9 |
+| 2026-10-02 | 合并权交给 Claude：审过当前 head、CI 通过、范围符合 Spec 即可 Squash merge，事后告知用户；部署、迁移、仓库设置、超预算真实调用仍需用户批准 | §9 |
 | 2026-10-02 | 回到公开仓库 `PA-ALG/InsuranceKB-WeKnora` 开发：私有仓库 Actions 因组织计费受阻，用户确认公开不影响。私有仓库归档只读。`main` 上 `(#1)`、`(#3)`、`(#6)` 等编号指私有仓库的 PR，与公开仓库同号 PR 无关 | §9 |
 | 2026-10-01 | 持续跟随 WeKnora 升级，降低耦合；以最终效果为准，必要时可改上游或重写接口，但须登记 | §4.3、G10 |
 | 2026-10-01 | `absent_explicitly` value 为空且必须有否定原文；有内容的禁止规则属于 present | §5.1 |
