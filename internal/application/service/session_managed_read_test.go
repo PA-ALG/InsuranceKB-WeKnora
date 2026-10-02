@@ -32,9 +32,11 @@ type selectionKBService struct {
 func (s *selectionKBService) GetKnowledgeBaseByID(context.Context, string) (*types.KnowledgeBase, error) {
 	return s.kb, nil
 }
+
 func (s *selectionKBService) GetKnowledgeBaseByIDOnly(context.Context, string) (*types.KnowledgeBase, error) {
 	return s.kb, nil
 }
+
 func (s *selectionKBService) GetKnowledgeBasesByIDsOnly(context.Context, []string) ([]*types.KnowledgeBase, error) {
 	s.targetReads++
 	return []*types.KnowledgeBase{s.kb}, nil
@@ -67,7 +69,8 @@ func TestSessionReadRejectsManagedSelections(t *testing.T) {
 	for _, entry := range []string{"qa", "search"} {
 		for _, selection := range []string{"kb", "document", "tag"} {
 			for _, unavailable := range []bool{false, true} {
-				t.Run(entry+"/"+selection+map[bool]string{true: "/unavailable", false: "/managed"}[unavailable], func(t *testing.T) {
+				name := entry + "/" + selection + map[bool]string{true: "/unavailable", false: "/managed"}[unavailable]
+				t.Run(name, func(t *testing.T) {
 					c := &selectionClassifier{role: managed.Role{Kind: managed.KindRaw, State: managed.StatePending}}
 					code := managed.ErrorCodeReleaseManaged
 					if unavailable {
@@ -75,7 +78,10 @@ func TestSessionReadRejectsManagedSelections(t *testing.T) {
 						code = managed.ErrorCodeClassificationUnavailable
 					}
 					original := &selectionKBService{kb: &types.KnowledgeBase{ID: "library", TenantID: 1}}
-					svc := &sessionService{knowledgeBaseService: managed.DecorateKnowledgeBaseService(original, c), knowledgeService: &selectionDocs{}}
+					svc := &sessionService{
+						knowledgeBaseService: managed.DecorateKnowledgeBaseService(original, c),
+						knowledgeService:     &selectionDocs{},
+					}
 					ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))
 					req := &types.QARequest{Session: &types.Session{ID: "session", TenantID: 1}, TurnLeaseHeld: true}
 					switch selection {
@@ -90,7 +96,9 @@ func TestSessionReadRejectsManagedSelections(t *testing.T) {
 					if entry == "qa" {
 						err = svc.KnowledgeQA(ctx, req, nil)
 					} else {
-						_, err = svc.SearchKnowledge(ctx, req.KnowledgeBaseIDs, req.KnowledgeIDs, req.TagScopes, "query")
+						_, err = svc.SearchKnowledge(
+							ctx, req.KnowledgeBaseIDs, req.KnowledgeIDs, req.TagScopes, "query",
+						)
 					}
 					var denial *managed.ReadError
 					require.ErrorAs(t, err, &denial)
@@ -110,12 +118,19 @@ func TestSessionReadPreservesUnmanagedPath(t *testing.T) {
 			c := &selectionClassifier{role: managed.Role{Kind: managed.KindNone, State: managed.StateUnmanaged}}
 			original := &selectionKBService{kb: &types.KnowledgeBase{ID: "library", TenantID: 1}}
 			models := &selectionModels{err: sentinel}
-			svc := &sessionService{cfg: &config.Config{Conversation: &config.ConversationConfig{}}, knowledgeBaseService: managed.DecorateKnowledgeBaseService(original, c), knowledgeService: &selectionDocs{}, modelService: models, tenantService: &selectionTenants{}}
+			svc := &sessionService{
+				cfg:                  &config.Config{Conversation: &config.ConversationConfig{}},
+				knowledgeBaseService: managed.DecorateKnowledgeBaseService(original, c),
+				knowledgeService:     &selectionDocs{}, modelService: models, tenantService: &selectionTenants{},
+			}
 			ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))
 			ctx = types.WithCaller(ctx, types.Caller{TenantID: 1, UserID: "viewer", Role: types.TenantRoleViewer})
 			var err error
 			if entry == "qa" {
-				err = svc.KnowledgeQA(ctx, &types.QARequest{Session: &types.Session{ID: "session", TenantID: 1}, TurnLeaseHeld: true, KnowledgeBaseIDs: []string{"library"}}, nil)
+				err = svc.KnowledgeQA(ctx, &types.QARequest{
+					Session:       &types.Session{ID: "session", TenantID: 1},
+					TurnLeaseHeld: true, KnowledgeBaseIDs: []string{"library"},
+				}, nil)
 			} else {
 				_, err = svc.SearchKnowledge(ctx, []string{"library"}, nil, nil, "query")
 			}

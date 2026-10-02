@@ -45,6 +45,7 @@ func LookupCustody(ctx context.Context, c Classifier, tenant uint64, kbID string
 	return Custody{Kind: KindNone, State: StateUnmanaged}, nil
 }
 
+// CheckRead rejects native content reads for any release-managed KB.
 func CheckRead(ctx context.Context, c Classifier, tenant uint64, kbID string) error {
 	status, err := LookupCustody(ctx, c, tenant, kbID)
 	if err != nil {

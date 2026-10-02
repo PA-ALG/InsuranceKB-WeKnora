@@ -35,8 +35,10 @@ func TestReleaseCustodyRoute(t *testing.T) {
 		status int
 		body   string
 	}{
-		{"managed", managed.Role{Kind: managed.KindRaw, State: managed.StatePending}, nil, 200, `{"managed":true,"kind":"raw","state":"pending"}`},
-		{"plain", managed.Role{Kind: managed.KindNone, State: managed.StateUnmanaged}, nil, 200, `{"managed":false,"kind":"none","state":"unmanaged"}`},
+		{"managed", managed.Role{Kind: managed.KindRaw, State: managed.StatePending}, nil, 200,
+			`{"managed":true,"kind":"raw","state":"pending"}`},
+		{"plain", managed.Role{Kind: managed.KindNone, State: managed.StateUnmanaged}, nil, 200,
+			`{"managed":false,"kind":"none","state":"unmanaged"}`},
 		{"unavailable", managed.Role{}, errors.New("private database detail"), 503, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -67,6 +69,8 @@ type routeRegistrationKBService struct {
 	interfaces.KnowledgeBaseService
 }
 
-func (*routeRegistrationKBService) GetKnowledgeBaseByIDOnly(ctx context.Context, id string) (*types.KnowledgeBase, error) {
+func (*routeRegistrationKBService) GetKnowledgeBaseByIDOnly(
+	ctx context.Context, id string,
+) (*types.KnowledgeBase, error) {
 	return tenantKBLookupFixture().GetKnowledgeBaseByIDOnly(ctx, id)
 }

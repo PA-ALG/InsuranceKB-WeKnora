@@ -36,7 +36,9 @@ type readDocuments struct {
 	err  error
 }
 
-func (s *readDocuments) GetKnowledgeBatchWithSharedAccess(context.Context, uint64, []string) ([]*types.Knowledge, error) {
+func (s *readDocuments) GetKnowledgeBatchWithSharedAccess(
+	context.Context, uint64, []string,
+) ([]*types.Knowledge, error) {
 	return s.docs, s.err
 }
 
@@ -91,12 +93,21 @@ func TestSearchReadChecksAllSelectionsUnderOwner(t *testing.T) {
 		})
 	}
 }
+
 func TestSearchReadFailsClosedOnMissingDocumentsOrPolicy(t *testing.T) {
 	c := &readClassifier{role: Role{Kind: KindNone, State: StateUnmanaged}}
 	plain := &readKBs{kb: &types.KnowledgeBase{ID: "library", TenantID: 1}}
 	decorated := DecorateKnowledgeBaseService(plain, c)
-	require.ErrorContains(t, CheckSearchRead(context.Background(), plain, nil, 1, []string{"library"}, nil, nil), ErrorCodeClassificationUnavailable)
-	require.ErrorContains(t, CheckSearchRead(context.Background(), decorated, &readDocuments{}, 1, nil, []string{"missing"}, nil), ErrorCodeClassificationUnavailable)
-	require.NoError(t, CheckSearchRead(context.Background(), decorated, nil, 1, []string{"library", "library"}, nil, nil))
+	require.ErrorContains(t,
+		CheckSearchRead(context.Background(), plain, nil, 1, []string{"library"}, nil, nil),
+		ErrorCodeClassificationUnavailable,
+	)
+	require.ErrorContains(t,
+		CheckSearchRead(context.Background(), decorated, &readDocuments{}, 1, nil, []string{"missing"}, nil),
+		ErrorCodeClassificationUnavailable,
+	)
+	require.NoError(t,
+		CheckSearchRead(context.Background(), decorated, nil, 1, []string{"library", "library"}, nil, nil),
+	)
 	require.NoError(t, CheckSearchRead(context.Background(), plain, nil, 1, nil, nil, nil))
 }

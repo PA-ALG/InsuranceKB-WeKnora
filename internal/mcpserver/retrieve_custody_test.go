@@ -18,7 +18,10 @@ type custodyChunks struct {
 	reads int
 }
 
-func (c *custodyChunks) ListPagedChunksByKnowledgeID(context.Context, uint64, string, *types.Pagination, []types.ChunkType, []string, string, string, string, string, *bool) ([]*types.Chunk, int64, error) {
+func (c *custodyChunks) ListPagedChunksByKnowledgeID(
+	context.Context, uint64, string, *types.Pagination, []types.ChunkType,
+	[]string, string, string, string, string, *bool,
+) ([]*types.Chunk, int64, error) {
 	c.reads++
 	return nil, 0, nil
 }
@@ -37,14 +40,18 @@ func TestReadDocumentCustody(t *testing.T) {
 		failure error
 		code    string
 	}{
-		{"raw pending", managed.Role{Kind: managed.KindRaw, State: managed.StatePending}, nil, managed.ErrorCodeReleaseManaged},
-		{"wiki active", managed.Role{Kind: managed.KindWiki, State: managed.StateActive}, nil, managed.ErrorCodeReleaseManaged},
+		{"raw pending", managed.Role{Kind: managed.KindRaw, State: managed.StatePending},
+			nil, managed.ErrorCodeReleaseManaged},
+		{"wiki active", managed.Role{Kind: managed.KindWiki, State: managed.StateActive},
+			nil, managed.ErrorCodeReleaseManaged},
 		{"unavailable", managed.Role{}, errors.New("private failure"), managed.ErrorCodeClassificationUnavailable},
 		{"plain", managed.Role{Kind: managed.KindNone, State: managed.StateUnmanaged}, nil, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			classifier := &recordingManagedClassifier{role: tc.role, err: tc.failure}
-			srv, _, ctx, req := newDocumentWriteFixture(9, classifier, documentWriteCase{tool: types.MCPEndpointToolReadDocument, args: map[string]any{"knowledge_id": "document"}})
+			srv, _, ctx, req := newDocumentWriteFixture(9, classifier, documentWriteCase{
+				tool: types.MCPEndpointToolReadDocument, args: map[string]any{"knowledge_id": "document"},
+			})
 			chunks := &custodyChunks{}
 			srv.chunkService = &custodyChunkService{repo: chunks}
 			result, err := srv.handleReadDocument(ctx, req)
@@ -62,6 +69,7 @@ func TestReadDocumentCustody(t *testing.T) {
 		})
 	}
 }
+
 func TestListKnowledgeBasesIncludesCustody(t *testing.T) {
 	srv, ep := managedReadFixture(activeManaged())
 	result, err := srv.handleListKnowledgeBases(mcpCallContext(1, ep), mcp.CallToolRequest{})

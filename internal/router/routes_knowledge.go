@@ -411,7 +411,9 @@ func registerWikiPageRoutes(
 		panic("native Wiki routes require managed.KnowledgeBaseLookup")
 	}
 	ownerClassifier := managed.ForKnowledgeBaseOwner(classifier, ownerLookup)
-	wikiRead := g.apiKeyGroup(r.Group(prefix, managed.GuardWikiWrite(ownerClassifier)), apiKeyRetrieve(apiKeyFullAccess()))
+	wikiRead := g.apiKeyGroup(
+		r.Group(prefix, managed.GuardWikiWrite(ownerClassifier)), apiKeyRetrieve(apiKeyFullAccess()),
+	)
 	custody := g.apiKeyGroup(r.Group("/knowledgebase/:kb_id/release-custody"), apiKeyRetrieve(apiKeyFullAccess()))
 	custody.GET("", g.Viewer(), g.KBAccessRead("kb_id"), managed.CustodyHandler(ownerClassifier))
 	wiki := g.apiKeyGroup(r.Group(prefix,

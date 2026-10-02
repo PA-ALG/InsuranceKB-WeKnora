@@ -13,14 +13,19 @@ import (
 type NativeReadChecker interface {
 	CheckNativeRead(context.Context, string) error
 }
+
 type classifiedKnowledgeBaseService struct {
 	interfaces.KnowledgeBaseService
 	classifier Classifier
 }
 
-func DecorateKnowledgeBaseService(service interfaces.KnowledgeBaseService, classifier Classifier) interfaces.KnowledgeBaseService {
+// DecorateKnowledgeBaseService adds native-read policy without changing other KB methods.
+func DecorateKnowledgeBaseService(
+	service interfaces.KnowledgeBaseService, classifier Classifier,
+) interfaces.KnowledgeBaseService {
 	return &classifiedKnowledgeBaseService{KnowledgeBaseService: service, classifier: classifier}
 }
+
 func (s *classifiedKnowledgeBaseService) CheckNativeRead(ctx context.Context, kbID string) error {
 	if s.KnowledgeBaseService == nil {
 		return &ReadError{Code: ErrorCodeClassificationUnavailable}
@@ -32,6 +37,7 @@ func (s *classifiedKnowledgeBaseService) CheckNativeRead(ctx context.Context, kb
 	return CheckRead(ctx, s.classifier, kb.TenantID, kb.ID)
 }
 
+// SharedKnowledgeLookup resolves authorized documents to their owning KBs.
 type SharedKnowledgeLookup interface {
 	GetKnowledgeBatchWithSharedAccess(context.Context, uint64, []string) ([]*types.Knowledge, error)
 }
