@@ -28,11 +28,17 @@ MCP、快问快答都不能再读到未经发布的内容；被拒绝时给出�
   行为不变：受管 409 `RELEASE_MANAGED_KB`，分类失败 503 `MANAGED_KB_CLASSIFICATION_UNAVAILABLE`，先于 RBAC）。
 - 非受管库的读行为完全不变。
 - `release-scopes/...` 下的发布读路由**不挂**此守卫（它们读的是发布版本）。
-- 装配约束：`g.kbService` 必须实现 `managed.KnowledgeBaseLookup`（S1a 审查遗留项：不再在运行时静默得到 nil）。
-  **主保障是编译期断言**，放在 `internal/router/`：让生产装配提供的实例必须满足该接口，缺了在编译时暴露。
-  `RouterParams.KBService` 的字段类型**不**收窄为复合接口（容器按 `interfaces.KnowledgeBaseService` 提供服务），
-  因此 `registerWikiPageRoutes` 里保留一条 `panic` 兜底——它只在装配被绕过时才会触发，不是主保障。
-  （2026-10-03 修正：原写法把运行时 panic 当主保障，导致 046 的既有测试
+- 装配约束（S1a 审查遗留项：不再在运行时静默得到 nil）。**先厘清事实**：`interfaces.KnowledgeBaseService`
+  **本来就包含** `GetKnowledgeBaseByIDOnly`（`internal/types/interfaces/knowledgebase.go:45`），因此
+  `g.kbService.(managed.KnowledgeBaseLookup)` 的类型断言**只在装配为 nil 时失败**，它不检查"接口是否缺少方法"。
+  据此拆成两条，各司其职：
+  1. **运行时检查**（`registerWikiPageRoutes` 里保留）：负责"装配缺失/为 nil"这一真实失败模式，失败即 panic，
+     因为路由注册在进程启动阶段，此时继续跑等于把受管读旁路留给运行期。
+  2. **编译期 pin**：在 `internal/router/` 加 `var _ managed.KnowledgeBaseLookup = (interfaces.KnowledgeBaseService)(nil)`。
+     它今天**恒真**（已实测编译通过），价值不在当下而在**上游漂移**：WeKnora 若从 `KnowledgeBaseService` 移除
+     `GetKnowledgeBaseByIDOnly`，这一行会在编译期报错，而不是等到运行时断言失败。按 G10 在上游改动时一并复核。
+  `RouterParams.KBService` 的字段类型不变（容器按 `interfaces.KnowledgeBaseService` 提供服务，不收窄为复合接口）。
+  （2026-10-03 修正：原写法把运行时 panic 当主保障、且误以为它检查接口符合性，导致 046 的既有测试
   `internal/handler/wiki_release_falsification_test.go` 因构造 router 时没给 `KBService` 而 panic 挂掉。）
 
 ### 3.2 MCP 读工具（Go）
