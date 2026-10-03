@@ -8,8 +8,8 @@
 ## 1. 目标
 
 S2a 的尺子能用，但唯一有 Golden 的产品 596 在 epoch9 里没被重新抽取（67 个字段只有 2 个有值），测出的 0% 不代表
-G3 的抽取能力。本片用离线评判模型，为 G3 实际抽取过的 5 款产品生成 Golden，覆盖 5 个险种 pack，然后给出
-G3 在这 5 款上的逐 pack、逐字段 precision / recall——这是项目第一份能说明问题的质量数字。
+G3 的抽取能力。本片用离线评判模型，为 G3 实际抽取过的 4 款产品生成 Golden，覆盖 4 个险种 pack，然后给出
+G3 在这 4 款上的逐 pack、逐字段 precision / recall——这是项目第一份能说明问题的质量数字。
 
 | 产品 | 名称 | pack | epoch9 有值字段 |
 |---|---|---|---|
@@ -17,7 +17,10 @@ G3 在这 5 款上的逐 pack、逐字段 precision / recall——这是项目�
 | 1824 | 平安盛世金越（尊享版26）终身寿险 | `schemapack_whole_life_insurance` | 39/75 |
 | 1814 | 平安附加（2026）意外伤害保险 | `schemapack_accident_insurance` | 38/62 |
 | 1816 | 平安附加（2026）失能收入损失保险 | `schemapack_disability_income_insurance` | 49/76 |
-| 1828 | 平安安佑福（全能版）重大疾病保险 | `schemapack_critical_illness_insurance` | 41/67 |
+
+**1828（重疾险）暂缓**（用户 2026-10-03 决定）：仓库里另外 13 款都有完整的 `product_meta.json`，1828 只有三份 PDF，
+缺备案字段（`versionNo` 等）会让 `test_i8_real_dataset_bootstrap_full_and_zero_claims` 失败；备案字段不能猜。
+拿到同源主数据快照后单独补一片，重疾险 pack 届时再出数。
 
 ## 2. 原则
 
@@ -27,7 +30,7 @@ G3 在这 5 款上的逐 pack、逐字段 precision / recall——这是项目�
   的字段不进（它们不来自 PDF）。评分时这些字段计为 unscored。每个 pack 约 38–55 个字段。
 - **证据确定性回验**：评判模型给出的每条引文必须在它声明的页面原文里找到（归一化后子串匹配）；找不到就丢弃该引文，
   present / absent 若没有一条通过回验，整个字段记为 `evidence_not_verified` 并排除出 Golden，不改成 unknown。
-- **先校准再使用**：先在 596 上对照已批准的 40 条 Golden 校准，达标才生成 5 款产品的 Golden（§4）。
+- **先校准再使用**：先在 596 上对照已批准的 40 条 Golden 校准，达标才生成 4 款产品的 Golden（§4）。
 - **来源标注**：生成的条目 `judged_by="model:<模型 ID>"`，与人工、旧金标区分；业务专家回归后抽检复核，不覆盖原记录。
 
 ## 3. 设计
@@ -115,27 +118,27 @@ uv run python -m insurance_harness.eval.annotate prepare --product 1824 \
 不再改题目文件之间的引用关系：题目自包含是受保护验收 `test_judge_files.py` 钉住的协议，
 改成共享原文会引入"哪份原文、被谁引用"的额外校验，得不偿失。
 
-596 已有的 2 道题**保持现状**，不为去重重出——作废一次校准机会的代价高于重复一次原文。其余五款按本节出题。
+596 已有的 2 道题**保持现状**，不为去重重出——作废一次校准机会的代价高于重复一次原文。其余四款按本节出题。
 
 ### 3.5 运行顺序
 
 1. **校准**：`prepare` 596 → 在 `<run_root>/596` 开评委会话答题 → `ingest --calibrate`，对照 `dataset/golden/v1/596.jsonl`。
    达标条件（初值，可在 PR 中提出调整）：三态一致率 ≥ 90%，双方都是 present 的字段值一致率 ≥ 80%，且
    `evidence_not_verified` ≤ 10%。不达标：**停下**，在 PR 中贴出不一致明细，允许修改一次 prompt（提升 prompt 版本，
-   换新的 `run_root` 重新出题）后重跑一次校准；仍不达标则不生成 5 款产品的 Golden，交回 Claude 与用户决定。
-2. **生成**：校准达标后才 `prepare` 5 款产品（同一 prompt 版本），**每款产品单开一个评委会话**，答完后逐个 `ingest`。
-   先校准再出题，是为了 prompt 一旦要改，不会白答 5 款产品的题。
-3. **评分**：用 report CLI 对 epoch9 candidate 评分，覆盖 5 个 pack（596 也一并报告）。
+   换新的 `run_root` 重新出题）后重跑一次校准；仍不达标则不生成 4 款产品的 Golden，交回 Claude 与用户决定。
+2. **生成**：校准达标后才 `prepare` 4 款产品（同一 prompt 版本），**每款产品单开一个评委会话**，答完后逐个 `ingest`。
+   先校准再出题，是为了 prompt 一旦要改，不会白答 4 款产品的题。
+3. **评分**：用 report CLI 对 epoch9 candidate 评分，覆盖 4 个 pack（596 也一并报告）。
 
 ## 4. 交付物
 
 - 上述模块与测试（验收测试之外的单测自行补充，测试中只用假评判客户端，CI 不发真实调用）。
-- `dataset/golden/v1/{1826,1824,1814,1816,1828}.jsonl` 与更新后的 `manifest.json`（每个产品：pack、评判模型 ID、
+- `dataset/golden/v1/{1826,1824,1814,1816}.jsonl` 与更新后的 `manifest.json`（每个产品：pack、评判模型 ID、
   评判方式 `codex-session-file-exchange`、题目数、条目数、三态分布、`evidence_not_verified` 数与字段清单、源文件 SHA256、
   prompt 版本与每道题的 SHA256）。
-- 1828 的原文目前只在本机 `~/Downloads/shouxian_product/平安安佑福(全能版)重大疾病保险/`，复制到
-  `dataset/shouxian_product/` 下与其他产品同样的目录结构，并在 manifest 记录 SHA256。
-- PR 描述：校准报告（一致率与不一致明细）；5 个 pack 的 per-pack 结果表与 gate 结论；每个 pack 列出漏抽最多的 10 个字段；
+- 撤回已加入的 1828：删除 `dataset/shouxian_product/平安安佑福(全能版)重大疾病保险/` 与 manifest 里的 1828 条目，
+  相应调整实现提交自己加的 `test_scheduled_products_have_declared_pack_inputs`。
+- PR 描述：校准报告（一致率与不一致明细）；4 个 pack 的 per-pack 结果表与 gate 结论；每个 pack 列出漏抽最多的 10 个字段；
   每个产品的题目数、评委会话数及所用模型与推理档位。题目与答案文件留在 `run_root`，**不入库**。
 
 ## 5. 验收
@@ -150,16 +153,16 @@ Claude 提供的 `harness/tests/eval/test_judge_annotation.py` 与 `harness/test
 ## 6. 评判工作量
 
 - **评判模型**：GPT-6.1 sol，在用户自己开的 Codex 会话里答题；与生产编译模型 DeepSeek v4 flash 不同族。**无 API 调用、无密钥。**
-- **题目数**：`batch_size` 默认 25，每款产品约 2–3 道题，6 款产品约 12–15 道；`max_calls` 每款产品 ≤ 3，总上限 **20 道**
+- **题目数**：`batch_size` 默认 25，按 §3.4 出题时取 60，每款产品 1 道题（596 已有 2 道），5 款产品共约 6 道；`max_calls` 每款产品 ≤ 3，总上限 **20 道**
   （含一次 prompt 修订后的校准重跑）。
-- **数据量**：6 款产品原文合计约 35 万字（1814 约 11 万字，含费率表）。每道题都带该产品全部原文，单个题目文件约 3–11 万字；
+- **数据量**：596 与 4 款产品，单款原文 3–11 万字（1814 约 11 万字，含费率表）。每道题都带该产品全部原文，单个题目文件约 3–11 万字；
   评委按需 grep 查找，不必整篇读入。
 - **外发内容**：产品条款、说明书、费率表原文进入用户的 Codex 会话（开发阶段用户已同意外发评测）。
 
 ## 7. 改动范围
 
 - 允许新增：`eval/pdf_text.py`、`eval/judge.py`、`eval/judge_files.py`、`eval/annotate.py`、对应测试、
-  `dataset/golden/v1/` 下 5 个新 jsonl、`dataset/shouxian_product/平安安佑福(全能版)重大疾病保险/`。
+  `dataset/golden/v1/` 下 4 个新 jsonl。删除：`dataset/shouxian_product/平安安佑福(全能版)重大疾病保险/`（见 §4）。
 - 允许修改：`eval/catalog.py`、`eval/report.py`、`dataset/golden/v1/manifest.json`。
 - 不得修改：`harness/tests/eval/test_judge_annotation.py`、`harness/tests/eval/test_judge_files.py`、
   `harness/tests/eval/test_golden_evaluation.py`、旧目录、蓝图、
@@ -168,5 +171,6 @@ Claude 提供的 `harness/tests/eval/test_judge_annotation.py` 与 `harness/test
 ## 8. 非目标
 
 - 不与 V5 对比（V5 的结果文件与业务反馈表还未提供）。
+- 不做 1828 与重疾险 pack（缺主数据快照，见 §1）。
 - 不评证据页码与引文是否与候选一致（只回验 Golden 自己的证据）。
 - 不接 CI 质量门；不重新编译产品；不调用生产编译模型。
