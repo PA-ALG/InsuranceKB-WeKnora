@@ -53,6 +53,7 @@ def main() -> int:
     if not guards.improved(current, baseline):
         print("baseline unchanged")
         return 0
+    doc = guards.document(guards.lowered(current, baseline))
     write(doc)
     print("baseline lowered:", json.dumps(doc["totals"], ensure_ascii=False))
     return 0
