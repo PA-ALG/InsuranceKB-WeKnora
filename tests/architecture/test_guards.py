@@ -119,11 +119,19 @@ def test_g11_locations() -> None:
 
 
 def test_regression_logic() -> None:
-    baseline = {"guards": {"G3_file_size": {"a.py": 800}}}
+    baseline = {"guards": {"G3_file_size": {"a.py": 800}, "G5_hardcoded": {"c.py": 2}}}
     assert not guards.regressions({"G3_file_size": {"a.py": 700}}, baseline)
-    assert guards.regressions({"G3_file_size": {"a.py": 900}}, baseline)
-    assert guards.regressions({"G3_file_size": {"b.py": 501}}, baseline)
+    assert not guards.regressions({"G3_file_size": {"a.py": 850}}, baseline)  # within allowance
+    assert guards.regressions({"G3_file_size": {"a.py": 851}}, baseline)
+    assert guards.regressions({"G3_file_size": {"b.py": 501}}, baseline)  # new oversize file
+    assert guards.regressions({"G5_hardcoded": {"c.py": 3}}, baseline)  # no allowance elsewhere
     assert guards.improved({"G3_file_size": {}}, baseline)
+
+
+def test_lowering_never_raises_a_key() -> None:
+    baseline = {"guards": {"G3_file_size": {"a.py": 800, "b.py": 700}}}
+    current = {"G3_file_size": {"a.py": 830, "b.py": 650}}
+    assert guards.lowered(current, baseline) == {"G3_file_size": {"a.py": 800, "b.py": 650}}
 
 
 def test_baseline_file_is_readable() -> None:

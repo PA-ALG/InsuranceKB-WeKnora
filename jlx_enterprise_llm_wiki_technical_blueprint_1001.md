@@ -475,13 +475,14 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 本节只定义可自动检查的守卫。
 
 守卫在仓库根 `tests/architecture/`，用标准库 `ast`、正则与 git 实现，随 CI 运行。现有违例写入
-`tests/architecture/baseline.json`，**只减不增**；新增违例一律失败，不设例外口。基线只能由脚本在数字下降时更新。
+`tests/architecture/baseline.json`，**只减不增**；新增违例一律失败，不设例外口。基线只能由脚本在数字下降时更新，
+且只会逐项取更小值。唯一的固定容差写在 G3 一行里，不靠修改基线实现。
 
 | 守卫 | 规则 | 生效 |
 |---|---|---|
 | G1 依赖方向 | Harness §4.2 目标目录不 import 旧目录；核心目录（`contracts`、`jobs`、`models`、`compile`、`evidence`、`review`、`changes`、`bundle`、`governance`）不 import `compilers`。Go 侧的隔离由 G2 与 G11 保证 | S0（基线 10 处：`jobs`、`service_shell` 对 `db`、`product_ingestion` 的引用） |
 | G2 核心纯净 | Harness 核心目录、Go `internal/enterprise`、前端 `src/enterprise` 不出现险种名、field_key 字面量、Schema67、Golden（词表 `tests/architecture/domain_terms.txt`，由 Catalog v5 冻结生成）；`internal/` 其他非测试 Go 文件中的 Schema67/Golden 次数记基线 | S0（核心 0；Go 旧代码 294 处） |
-| G3 文件规模 | 手写 `.py/.go/.ts/.vue`（含测试）不超过 500 行；生成代码、锁文件、迁移除外 | S0 |
+| G3 文件规模 | 手写 `.py/.go/.ts/.vue`（含测试）不超过 500 行；生成代码、锁文件、迁移除外。新文件、原本不超过 500 行的文件越线一律失败；S0 时已超限的文件允许在基线行数上最多再多 50 行（固定容差，不随基线上移），超出即须拆分。这些文件在 S7 清理旧代码后一次性拆分 | S0 |
 | G4 命名 | 新文件名不含 Goal、mission 或版本后缀（`_596`、`_815`、`_830`、`g3_`、`g35`、`m1NN`、`_vN` 等） | S0 |
 | G5 无实例硬编码 | 非测试代码不出现本机绝对路径、`/private/tmp`、IP 字面量、release/run UUID 字面量、固定 tenant 或人名 | S0 |
 | G6 私有访问 | Python 不跨模块 import 或访问 `_private` 名；生产代码不含 `_for_test` 钩子 | S0 |
@@ -584,7 +585,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | | S4 字段编译器 | V5 引擎拆为 `compilers/schema_fields`；FieldExtractionConfig 数据化；PageText 由 ParseArtifact 重建；DeepSeek v4 flash 经 `models/` | 一款真实产品（建议 1828 重疾险）上传→编译→发布→回跳；Golden 评分不低于 V5 |
 | C 统一与扩展 | S5 CompileJob 统一 | 任务键缓存与恢复、多产品批次、按实体提交；退役 workflow v1–v3、checkpoint 多版本、G3 执行器 | 7 款批次跑通；中断恢复重复调用 0；新增材料只触及所属产品 |
 | | S6 开放知识与概念 | 原生 discover/cite 作为候选源；准入与归属；"模型补充"标注；Harness 自有发现退役 | 一条 Schema 外有价值知识发布并可回跳；噪声与重复被拒 |
-| | S7 平台收敛与清理 | 删除 Go 领域重放与 variant、旧前端页面家族、约 175 个格式改动、Harness 不可达模块；evidence 目录移出 | 守卫基线显著下降；`internal/` 上游补丁降到约 47 个且全部登记 |
+| | S7 平台收敛与清理 | 删除 Go 领域重放与 variant、旧前端页面家族、约 175 个格式改动、Harness 不可达模块；evidence 目录移出；删除完成后一次性拆分仍超过 500 行的文件 | 守卫基线显著下降；`internal/` 上游补丁降到约 47 个且全部登记；G3 基线清零或只剩登记的例外 |
 | D 上线能力 | S8 增量更新 | 判定器进生产；Claim 级 delta、显式撤回、维护记录、实体级回退 | 第二批材料生成新 Release：判定符合预期、无关 Claim digest 不变、冲突不改线上、回退 A 保留 B |
 | | S9 专家编辑 | ExpertRevision、expert_lock、编辑界面 | 编辑→新 Release→来源打开修订记录；模型新值只产生冲突 |
 | | S10 扫描件与图片 | 自建 MinerU/PaddleOCR-VL，content_list → ParseArtifact，OCR_REGION 回跳 | 扫描 PDF 与图片精确高亮；无坐标结果被拒 |
@@ -649,6 +650,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-01 | 持续跟随 WeKnora 升级，降低耦合；以最终效果为准，必要时可改上游或重写接口，但须登记 | §4.3、G10 |
 | 2026-10-01 | `absent_explicitly` value 为空且必须有否定原文；有内容的禁止规则属于 present | §5.1 |
 | 2026-10-01 | 本蓝图取代 830 蓝图、28/29 号文档与 `docs/design/00-架构总览.md` | 文首 |
+| 2026-10-03 | 500 行仍是原则；S0 时已超限的文件少量增长不逼当场拆分，固定容差 50 行，S7 清理旧代码后一次性拆分 | §8 G3、§11 S7 |
 
 ## 附录 A · 术语
 
