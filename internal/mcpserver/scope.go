@@ -8,6 +8,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/agent/tools"
 	"github.com/Tencent/WeKnora/internal/application/access"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -107,7 +108,7 @@ func (s *Server) authorizeKB(
 
 // selectKnowledgeBases narrows the allowed set to the ones a caller named,
 // accepting either IDs or exact (case-insensitive) names. With no selector
-// every allowed knowledge base is returned.
+// every unmanaged allowed knowledge base is returned.
 func (s *Server) selectKnowledgeBases(
 	ctx context.Context, ep *types.MCPEndpoint, requested []string,
 ) ([]*types.KnowledgeBase, error) {
@@ -125,7 +126,20 @@ func (s *Server) selectKnowledgeBases(
 		}
 	}
 	if len(cleaned) == 0 {
-		return allowed, nil
+		out := make([]*types.KnowledgeBase, 0, len(allowed))
+		for _, kb := range allowed {
+			custody, err := managed.LookupCustody(ctx, s.managedClassifier, kb.TenantID, kb.ID)
+			if err != nil {
+				return nil, err
+			}
+			if !custody.Managed {
+				out = append(out, kb)
+			}
+		}
+		if len(out) == 0 {
+			return nil, &managed.ReadError{Code: managed.ErrorCodeReleaseManaged}
+		}
+		return out, nil
 	}
 	out := make([]*types.KnowledgeBase, 0, len(cleaned))
 	seen := map[string]struct{}{}
@@ -137,6 +151,9 @@ func (s *Server) selectKnowledgeBases(
 		}
 		if _, dup := seen[kb.ID]; dup {
 			continue
+		}
+		if err := managed.CheckRead(ctx, s.managedClassifier, kb.TenantID, kb.ID); err != nil {
+			return nil, err
 		}
 		seen[kb.ID] = struct{}{}
 		out = append(out, kb)

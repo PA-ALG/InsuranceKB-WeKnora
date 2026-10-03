@@ -590,7 +590,12 @@
   <t-drawer v-if="wikiDrawerVisible" v-model:visible="wikiDrawerVisible" :header="wikiDrawerPage?.title || ''" size="480px" :footer="false"
     placement="right" attach="body" :show-overlay="true" :close-btn="true" :close-on-overlay-click="true"
     class="wiki-graph-drawer">
-    <template v-if="wikiDrawerPage">
+    <p v-if="wikiDrawerLoading" role="status">正在加载引用内容…</p>
+    <div v-else-if="wikiDrawerError" role="alert">
+      <p>{{ wikiDrawerError }}</p>
+      <t-button size="small" @click="wikiDrawer.retry">重试</t-button>
+    </div>
+    <template v-else-if="wikiDrawerPage">
       <div class="wiki-reader-meta"
         style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
         <div style="display: flex; align-items: center; gap: 12px;">
@@ -603,6 +608,7 @@
           }) }}</span>
         </div>
         <t-link
+          v-if="!wikiDrawerAuthority"
           theme="primary"
           hover="color"
           :href="wikiGraphHref"
@@ -654,7 +660,7 @@ import { useChatCitationPopover } from '@/composables/useChatCitationPopover';
 import { useChatReferencesDrawer } from '@/composables/useChatReferencesDrawer';
 import type { KnowledgeReferenceLike, ReferenceHighlightTarget } from '@/utils/referenceSources';
 import { resolveCitationChunkId } from '@/utils/citationMarkdown';
-import { getWikiPage, type WikiPage } from '@/api/wiki';
+import { resolveReleaseCitationKb, resolveWikiReleaseAuthority, useReleaseWikiDrawer } from '@/enterprise/useReleaseWikiDrawer';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useUIStore } from '@/stores/ui';
 import { useSettingsStore } from '@/stores/settings';
@@ -859,10 +865,10 @@ const closeImagePreview = () => {
 };
 
 // Wiki Drawer 状态
-const wikiDrawerVisible = ref(false);
-const wikiDrawerPage = ref<WikiPage | null>(null);
+const wikiDrawer = useReleaseWikiDrawer();
+const { visible: wikiDrawerVisible, page: wikiDrawerPage, kbId: currentWikiKbId,
+  authority: wikiDrawerAuthority, loading: wikiDrawerLoading, error: wikiDrawerError } = wikiDrawer;
 const wikiDrawerBodyRef = ref<HTMLElement | null>(null);
-const currentWikiKbId = ref<string>('');
 
 function getTypeTheme(type: string): string {
   const map: Record<string, string> = {
@@ -914,15 +920,12 @@ watch(wikiDrawerContent, async () => {
 });
 
 const openWikiDrawer = async (kbId: string, slug: string) => {
-  if (!kbId || !slug) return;
   try {
-    currentWikiKbId.value = kbId;
-    const res = await getWikiPage(kbId, slug);
-    wikiDrawerPage.value = (res as any).data || res as any;
-    wikiDrawerVisible.value = true;
-  } catch (e) {
-    console.error(`Failed to load page ${slug}:`, e);
-    MessagePlugin.warning(t('agentStream.citation.loadFailed'));
+    const pin = resolveWikiReleaseAuthority(props.session?.agentEventStream || [], kbId, slug);
+    await wikiDrawer.open(kbId, slug, pin);
+  } catch {
+    wikiDrawer.visible.value = false;
+    MessagePlugin.warning('该引用来自旧版本，请重新提问');
   }
 };
 
@@ -945,7 +948,7 @@ const handleWikiDrawerClick = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const slug = target.closest('.citation-wiki')?.getAttribute('data-slug');
-    if (slug) openWikiDrawer(currentWikiKbId.value, slug);
+    if (slug) void wikiDrawer.follow(slug);
   } else if (target.tagName.toLowerCase() === 'img') {
     e.preventDefault();
     const src = target.getAttribute('src');
@@ -2308,6 +2311,8 @@ const handleCitationActivate = (el: HTMLElement) => {
 };
 
 const getKbIdForWiki = (slug: string): string => {
+  const releaseKbId = resolveReleaseCitationKb(props.session?.agentEventStream || [], slug);
+  if (releaseKbId) return releaseKbId;
   if (route.params.kbId) return route.params.kbId as string;
 
   // The backend ships `found_kbs` as a map<slug, string[]> — a single slug can

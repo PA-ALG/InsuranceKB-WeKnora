@@ -54,6 +54,8 @@ import type { KnowledgeProcessOverrides } from '@/types/knowledgeProcess';
 import { useUploadConfirmStore, type UploadConfirmResult } from '@/stores/uploadConfirm';
 import { useUploadTasksStore } from '@/stores/uploadTasks';
 import WikiBrowser from './wiki/WikiBrowser.vue';
+import { useReleaseCustody } from '@/enterprise/useReleaseCustody';
+import ReleaseCustodyGate from '@/enterprise/ReleaseCustodyGate.vue';
 import SchemaWikiCatalogEntry830G2 from './schema-wiki/SchemaWikiCatalogEntry830G2.vue';
 import ProductIngestionStatus from '@/components/knowledge-base/product-ingestion-status.vue';
 import { getProductIngestionEnabled, uploadProductBatchIfEnabled } from '@/api/product-ingestion';
@@ -109,11 +111,13 @@ const uploadSourceRef = ref<InstanceType<typeof KbUploadSourceDropdown> | null>(
 const kbLoading = ref(false);
 const docListLoading = ref(true);
 const isFAQ = computed(() => (kbInfo.value?.type || '') === 'faq');
-const isWiki = computed(() => !!kbInfo.value?.indexing_strategy?.wiki_enabled);
+const isWiki = computed(() => isReleaseManaged.value || !!kbInfo.value?.indexing_strategy?.wiki_enabled);
 const validTabs = ['schema', 'materials', 'documents', 'graph'] as const
 type KbTab = typeof validTabs[number]
 const initTab = validTabs.includes(route.query.tab as any) ? (route.query.tab as KbTab) : 'schema'
 const activeKbTab = ref<KbTab>(initTab);
+const { isManaged: isReleaseManaged, nativeWikiAllowed, loading: custodyLoading,
+  error: custodyError, retry: retryCustody } = useReleaseCustody(kbId, activeKbTab);
 
 // Wiki 状态用于面包屑上的索引中指示。父组件自行拉取，避免依赖 WikiBrowser 挂载状态
 // （用户切到"文档" tab 时 WikiBrowser 会卸载，这里仍需持续反映后台索引进度）。
@@ -150,7 +154,7 @@ const clearWikiStatusProbes = () => {
   wikiStatusProbeTimers = []
 }
 const fetchWikiStatusOnce = async () => {
-  if (!kbId.value || !isWiki.value) return
+  if (!kbId.value || !isWiki.value || !nativeWikiAllowed.value) return
   try {
     const res: any = await getWikiStats(kbId.value)
     const data = res?.data || res
@@ -175,7 +179,7 @@ const fetchWikiStatusOnce = async () => {
 // 面包屑的"索引中"会延迟很久才亮起。所以这里安排几次退避重试，
 // 主动把面包屑的 loading 尽快点亮，一旦探测到任务就会走正常的 5s 轮询。
 const scheduleWikiStatusProbes = () => {
-  if (!kbId.value || !isWiki.value) return
+  if (!kbId.value || !isWiki.value || !nativeWikiAllowed.value) return
   clearWikiStatusProbes()
   const delays = [500, 2000, 5000, 10000]
   delays.forEach(delay => {
@@ -183,11 +187,11 @@ const scheduleWikiStatusProbes = () => {
     wikiStatusProbeTimers.push(timer)
   })
 }
-watch([kbId, isWiki], ([newKbId, newIsWiki]) => {
+watch([kbId, isWiki, nativeWikiAllowed], ([newKbId, newIsWiki, nativeAllowed]) => {
   stopWikiStatusPolling()
   clearWikiStatusProbes()
   wikiStatus.value = { pendingTasks: 0, isActive: false, pendingIssues: 0 }
-  if (newKbId && newIsWiki) {
+  if (newKbId && newIsWiki && nativeAllowed) {
     fetchWikiStatusOnce()
   }
 }, { immediate: true })
@@ -2326,6 +2330,8 @@ const handleKBEditorSuccess = (kbIdValue: string) => {
                 <span class="breadcrumb-tab-sep">/</span>
                 <span :class="['breadcrumb-tab', { active: activeKbTab === 'documents' }]"
                   @click="activeKbTab = 'documents'">{{ $t('knowledgeEditor.wikiBrowser.tabDocuments') }}</span>
+                <ReleaseCustodyGate :managed="isReleaseManaged" :native-allowed="nativeWikiAllowed"
+                  :loading="custodyLoading" :error="custodyError" @retry="retryCustody">
                 <span class="breadcrumb-tab-sep">/</span>
                 <span :class="['breadcrumb-tab', { active: activeKbTab === 'materials', indexing: wikiIsIndexing }]"
                   @click="activeKbTab = 'materials'">
@@ -2344,8 +2350,13 @@ const handleKBEditorSuccess = (kbIdValue: string) => {
                     </t-tooltip>
                   </span>
                 </t-tooltip>
+                </ReleaseCustodyGate>
               </template>
-              <span v-else class="breadcrumb-current">{{ $t('knowledgeEditor.document.title') }}</span>
+              <template v-else>
+                <span class="breadcrumb-current">{{ $t('knowledgeEditor.document.title') }}</span>
+                <ReleaseCustodyGate :managed="isReleaseManaged" :native-allowed="nativeWikiAllowed"
+                  :loading="custodyLoading" :error="custodyError" @retry="retryCustody" />
+              </template>
             </h2>
             <!-- 标题行右侧的动作锚点：聚拢"信息"和"设置"两个圆形按钮。 -->
             <div class="kb-title-actions">
@@ -2382,7 +2393,7 @@ const handleKBEditorSuccess = (kbIdValue: string) => {
       </div>
 
       <!-- Materials Wiki Browser / Graph -->
-      <div v-if="isWiki && (activeKbTab === 'materials' || activeKbTab === 'graph')" class="wiki-main-area">
+      <div v-if="isWiki && nativeWikiAllowed && (activeKbTab === 'materials' || activeKbTab === 'graph')" class="wiki-main-area">
         <WikiBrowser v-if="kbId" :knowledge-base-id="kbId" :view="activeKbTab === 'graph' ? 'graph' : 'browser'"
           :can-edit="canEdit" @open-source-doc="openSourceDoc" @status-change="onWikiStatusChange"
           @view-graph="onViewWikiInGraph" />

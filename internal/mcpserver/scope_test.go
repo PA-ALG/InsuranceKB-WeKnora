@@ -88,6 +88,7 @@ func TestSelectKnowledgeBasesMatchesIDOrName(t *testing.T) {
 		&types.KnowledgeBase{ID: "kb-2", TenantID: 1, Name: "Support"},
 		&types.KnowledgeBase{ID: "kb-3", TenantID: 2, Name: "Other tenant"},
 	)
+	srv.WithManagedClassifier(&kbRoleClassifier{})
 	ep := &types.MCPEndpoint{ID: "ep", TenantID: 1}
 	ctx := mcpCallContext(1, ep)
 
