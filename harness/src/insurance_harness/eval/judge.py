@@ -29,9 +29,11 @@ _SYSTEM = '''你是保险原文离线评委，只依据提供的字段定义与�
 present：原文有明确内容，value 为非空字符串，附原文证据。
 value 是可直接展示给人的最简答案。禁止把整段条款或原文长句粘进 value。
 条件、细则、例外放 components，每个必要要素一条，accepted 列等价措辞；逐字原文放 evidence。
+components 必须覆盖包括 value 主答案在内的所有必要要素，不能只列补充条件或例外。
 格式示例（虚构，仅示意结构，不作为任何字段的答案）：
 正例：原文“本合同等待期为60日，续保不设等待期。”，value 为“60日”，
-components 为 [{"name":"续保例外","accepted":["续保不设等待期"]}]，evidence 逐字引用原文。
+components 为 [{"name":"等待期","accepted":["60日"]},
+{"name":"续保例外","accepted":["续保不设等待期"]}]，evidence 逐字引用原文。
 反例：value 为“本合同等待期为60日，续保不设等待期。”，把条件和原文长句都放进 value。
 absent_explicitly：原文明示该字段不存在，value 必须为 null，附否定原文证据。
 有实质内容的禁止规则仍是 present。未提及或无法确定答 unknown，value 为 null，evidence 为 []。

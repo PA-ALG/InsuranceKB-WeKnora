@@ -1,11 +1,13 @@
 """Calibration diagnostics explain mismatches without changing quality gates."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
 
 from insurance_harness.eval.catalog import load_catalog
+from insurance_harness.eval.compare import compare_value
 from insurance_harness.eval.golden import GoldenEvidence, GoldenItem, State, ValueComponent
 from insurance_harness.eval.judge import PROMPT_VERSION, JudgeAnnotator, JudgeRequest, calibrate
 
@@ -94,3 +96,12 @@ def test_prompt_requires_concise_display_values_and_preserves_blind_input(tmp_pa
         assert rule in request.system
     assert "禁止把整段条款" in request.system
     assert "reference" not in request.user and "candidate" not in request.user
+    # The example itself must protect the main answer when downstream scoring
+    # checks components instead of comparing the whole display value.
+    match = re.search(r"components 为 (\[.*\])，evidence", request.system, flags=re.DOTALL)
+    assert match is not None
+    example = item("duration", "60日").model_copy(update={
+        "components": [ValueComponent.model_validate(c) for c in json.loads(match.group(1))],
+    })
+    assert compare_value(example, "60日，续保不设等待期").correct
+    assert not compare_value(example, "90日，续保不设等待期").correct
