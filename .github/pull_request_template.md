@@ -26,7 +26,7 @@ Closes #
 - [ ] Go：受影响包 `go test` → 相对 S0 失败清单新增 0 项
 - [ ] Harness：`uv run pytest`、`uv run ruff check .`、`uv run mypy src tests`（在 `harness/`）
 - [ ] 前端：`npm run type-check`、相关测试、`npm run build`（在 `frontend/`）
-- [ ] 已 rebase 到最新 `main`
+- [ ] 已把最新 `main` merge 进本分支（不 rebase）
 
 ## 受保护路径
 

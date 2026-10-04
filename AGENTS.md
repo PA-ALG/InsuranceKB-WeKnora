@@ -78,9 +78,10 @@ Candidate。
 ## 分工与协作
 
 - 分工：用户决策；Claude 负责调研、架构、切片 Spec、验收测试、架构守卫与审计；Codex 负责
-  实现。同一时间只有一个实现切片修改运行时代码。流程全文见蓝图 §9。
+  实现。同一组件的运行时代码同时只有一个实现切片；写域不重叠的切片在各自的工作目录里并行。
+  流程全文见蓝图 §9。
 - 协作通道是 GitHub 公开仓库 `PA-ALG/InsuranceKB-WeKnora`：Claude 写 Spec 与验收测试，推到
-  `slice/sN`，开 Issue → 用户批准 → Codex 收到"做 issue #N"后在 `slice/sN` 上实现 → Codex
+  `slice/sN`，开 Issue → 用户批准 → Codex 收到"做 issue #N"后在该 Issue 的工作目录里实现 → Codex
   开 PR（`Closes #N`），按 `.github/pull_request_template.md` 交接 → Claude 本地重跑门禁并用
   `gh pr review` 审计 → Claude Squash merge（2026-10-02 用户授权：审过当前 head、CI 通过、范围
   符合 Spec 即可合并，合并后告知用户；部署、迁移、仓库设置与超出 Issue 预算的真实调用仍需用户批准）。
@@ -90,17 +91,28 @@ Candidate。
   1. `gh issue view N --repo PA-ALG/InsuranceKB-WeKnora` 读取任务；
   2. 读 Issue 指定的 Spec，以及蓝图、调研结论中与本切片相关的章节；
   3. 在 Issue 下回复一条评论，用自己的话复述目标、改动范围与完成标准，再列实施计划；
-  4. 按 Issue 中"开工方式"执行：小切片发出计划即开工；大切片等 Claude 或用户确认。
+  4. 按 Issue 中"开工方式"执行：小切片发出计划即开工；大切片等 Claude 或用户确认（Claude 每 30 分钟
+     巡检一次 GitHub，通常在下一轮巡检内答复）。
 
   Issue 与仓库文档已包含全部背景，不需要其他转述。
+- **工作目录**：每个 Issue 一个独立的 git worktree：`.worktrees/sN`，分支 `slice/sN`，由 Claude 开 Issue
+  时建好并装好依赖（Harness `uv sync`，涉及前端时 `npm ci`），Issue 里写明路径。
+  - 只在本 Issue 的工作目录里改代码、跑门禁；不切换主目录的分支，不进入其他 Issue 的工作目录；
+  - 门禁用本目录自己的环境（`harness/.venv`、`frontend/node_modules`），不借用其他目录的：
+    Harness 的 editable 安装会让测试实际导入那个目录的源码；
+  - 主目录 `insurancekb-weknora/` 只用来查看 `main`，不在上面开发；PR 合并后由 Claude 删除对应工作目录。
+- **何时停下**：GitHub 上首行为 `**[by Claude Code]**` 的明确指示等同于确认，不需要再找用户转述。
+  Spec 范围内的步骤直接做，只有以下情况停下并在 Issue/PR 中说明：要改"改动范围"以外或受保护的路径；
+  Spec、蓝图与代码事实冲突；超出 Issue 的真实调用预算；部署、迁移、环境或仓库设置变更；需要只有用户
+  才有的材料。停下时如果还有其他已批准、未阻塞的 Issue，先去做它，不空等。
 - **给 Codex 的规则**：
   - 只做 Issue 指定的切片，只改 Spec"改动范围"列出的路径；
   - 不修改蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`、`contracts/`（守卫基线只在
     数字下降时用脚本更新；`contracts/` 只由 Spec 规定的导出命令生成）。唯一例外：切片 Spec 允许修改
     上游文件时，实现者在 `docs/design/upstream-patches.md` 追加对应登记行（不改已有行）；G10 基线仍由
     Claude 审查后更新；
-  - 提审前本地过完验收、守卫与受影响组件门禁（相对 S0 失败清单不新增失败），rebase 到最新
-    `main`；
+  - 提审前本地过完验收、守卫与受影响组件门禁（相对 S0 失败清单不新增失败），把最新 `main`
+    merge 进本分支（不要 rebase：`main` 是 squash 合并，rebase 会重放已合并的提交并冲突）；
   - 不 deselect、不加 xfail/skip、不改已有断言；
   - 不自行合并（合并由 Claude 执行）；不自行申请或扩大真实模型调用、构建、部署与数据库迁移；
   - Spec 有错或走不通时停下，在 PR 里写明，不自行换方案。
