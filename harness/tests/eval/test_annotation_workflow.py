@@ -95,6 +95,21 @@ def test_failed_calibration_does_not_unlock_generation(workspace: tuple[Path, Pa
         prepare(repo, root, "other")
 
 
+def test_atom_coverage_is_diagnostic_and_does_not_unlock_generation(
+    workspace: tuple[Path, Path],
+) -> None:
+    repo, root = workspace
+    prepare(repo, root)
+    answer(root / "596", value="期限为90日")
+    result = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    assert result["reference_atom_coverage"] == 1.0
+    assert result["present_value_agreement_rate"] == 0.0
+    assert result["passed"] is False
+    assert json.loads((root / "calibration.json").read_text())["reference_atom_coverage"] == 1.0
+    with pytest.raises(ValueError, match="calibration"):
+        prepare(repo, root, "other")
+
+
 @pytest.mark.parametrize("mutation", ["pdf", "batch", "fields", "hash", "extra", "prompt"])
 def test_ingest_rejects_changed_inputs(workspace: tuple[Path, Path], mutation: str) -> None:
     repo, root = workspace
