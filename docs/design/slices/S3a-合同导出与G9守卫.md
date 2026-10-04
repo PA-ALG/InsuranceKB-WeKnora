@@ -122,3 +122,120 @@ def check(destination: Path) -> list[str]        # 返回与定义不一致的�
 - 不做前端类型生成与页面（S3c）。
 - 不迁移旧模型，不改 `eval/`（S2b 在用）。
 - 不接 CI 合同门以外的流程；不调用真实模型。
+
+## 8. 合同参数裁决（2026-10-05，Claude；实现按此冻结，不要再猜）
+
+以下是 Codex 在 #146 提出的待裁决参数。**以本节为准**；与 §3 冲突时以本节为准。
+
+### 8.1 G9 必须在 baseline 里留一个空映射（修正 §3.3 的措辞）
+
+§3.3 原写"baseline.json 不记录 G9 的任何键"——**这句是错的**：`test_baseline_file_is_readable` 断言
+`set(ACTIVE_GUARDS) <= set(doc["guards"])`，G9 进了 `ACTIVE_GUARDS` 就必须在 baseline 里有键。正确做法：
+
+- `guards` 下写 `"G9_contract_drift": {}`（空映射，**没有任何文件键**），`totals` 下写 `0`；
+- 因为没有任何文件键，`allowed_count("G9_contract_drift", 任意文件名, {})` 恒为 0，任何漂移都是新增违规；
+- **不要**给 G9 任何文件键，也不要给容差。Codex 暂存里的写法是对的。
+
+### 8.2 Locator：单模型 + 按 kind 校验，保留 `Locator(kind=..., ...)` 构造
+
+不改成 discriminated union（受保护验收按关键字构造，union 会破坏调用面）。一个 `Locator` 模型，
+`extra="forbid"`，字段全部可选，用 `model_validator` 按 `kind` 强制必填项：
+
+| kind | 必填字段 | 口径 |
+|---|---|---|
+| `PDF_TEXT_SPAN` | `page`, `start`, `end` | `page` 1 起；`start`/`end` 为 0 起、半开区间的**码点**偏移（该页文本内） |
+| `OCR_REGION` | `page`, `bbox` | `bbox` = `{x, y, w, h}`，0..1 归一化浮点，左上原点（S10 用） |
+| `DOCX_BLOCK` | `block_index` | 0 起（S11 用） |
+| `DOCX_TABLE_CELL` | `table_index`, `row`, `column` | 均 0 起（S11 用） |
+| `PPTX_SHAPE` | `slide`, `shape_id` | `slide` 1 起；`shape_id` 非空字符串（S11 用） |
+| `XLSX_CELL_RANGE` | `sheet`, `cell_range` | `sheet` 非空；`cell_range` A1 风格字符串（S11 用） |
+| `CHUNK_SPAN` | `chunk_id`, `start`, `end` | 历史片段，无原件 |
+| `STRUCTURED_PATH` | `path` | 非空字符串列表 |
+| `EXPERT_REVISION` | `revision_record_id` | 非空字符串 |
+
+九种**现在一次定义完**，避免 S10/S11 再改合同。
+
+### 8.3 Claim 的值与元数据
+
+- `value: str | int | float | bool | list[str] | None`（§5 的"typed"在 v1 收敛到这几种；复杂结构按 V5 规则
+  转成语义完整的字符串）。`present` 时非 None；其余状态必须为 None。`unit: str | None = None`。
+- `applicability`：四个维度**都是字符串列表**，各自默认空：`region`、`channel`、`population`、`scenario`。
+  模型 `extra="forbid"`。
+- `unknown_reason`：**闭集枚举**，值用大写串：`NOT_IN_MATERIAL`、`MATERIAL_AMBIGUOUS`、`LOCATOR_UNSUPPORTED`、
+  `EXTRACTION_FAILED`、`OUT_OF_SCOPE`。`state="unknown"` 时**必填**，其余状态必须为 None。
+- `provenance`：封闭小模型，可默认：`compiler: str`、`compiler_version: str`、`model: str | None = None`、
+  `run_id: str | None = None`、`call_receipt_ref: str | None = None`。
+- `maintenance` 默认（验收里最小 Claim 不传也要通过）：`revision_no: int = 0`、`changed_at: str | None = None`、
+  `changed_by: ChangedBy = ChangedBy.COMPILE`、`reason: str | None = None`、`first_release_id: str | None = None`、
+  `last_changed_release_id: str | None = None`。
+- `review` 默认：`mode: ReviewMode = ReviewMode.MACHINE`、`score: float | None = None`、`reviewer: str | None = None`、
+  `reviewed_at: str | None = None`。
+- `expert_lock: bool = False`；`effective_from` / `effective_to`: `str | None = None`（半开区间，格式留给 S4 的
+  数据层校验，合同只要求字符串）。
+- **absence 的"否定原文"**：只要求 `state="absent_explicitly"` 时 `value is None` **且 `evidence` 非空**，
+  **不加**任何"领域关键词"结构标记——合同必须与领域无关（G2），"是否是合格否定证据"由证据层判定，不由合同发明规则。
+
+### 8.4 Evidence / ExpertRevision / SchemaSnapshot
+
+- `Evidence.quote_sha256`：用 `default_factory` **从 `quote` 自动生成**（归一化后 sha256，hex），验收不传；
+  调用方显式传入时以传入值为准。`source_ref`、`quote`、`access_scope` 均为**非空字符串**；`file_sha256` 必须是
+  64 位 hex；`match: EvidenceMatch = EvidenceMatch.EXACT`。
+- `ExpertRevision`：`revision_record_id`、`actor`、`role`、`recorded_at`、`target` 均为非空字符串；
+  `before: str | None = None`、`after: str | None = None`、`reason: str | None = None`、
+  `attachments: list[str] = []`；整模型 `frozen=True`（不可变）。
+- `SchemaSnapshot`：`schema_pack_id`、`schema_pack_sha256`（64 hex）、`presentation_profile_ref`、
+  `catalog_version` 均为非空字符串。
+
+### 8.5 编译与治理模型
+
+- `PageText`：`source_revision_id`、`parse_artifact_digest`（64 hex）、`document_role` 非空字符串；
+  `page_number: int >= 1`；`text: str`；`text_origin: TextOrigin`；`blocks: list[Block]`，
+  `Block{block_id: str, start: int >= 0, end: int >= start, locator: Locator}`（均可默认空列表）。
+- `CompileTask`：`task_key`、`entity_version`、`config_ref` 非空字符串；`kind: CompileTaskKind`；
+  `material_set: list[str] = []`、`targets: list[str] = []`、`budget: int = 0`（>=0）。
+- `CompileResult`：`task_key` 非空；`status: CompileStatus`（枚举 `SUCCEEDED`、`FAILED`、`CANCELLED`、`SKIPPED`）；
+  `claims: list[Claim] = []`、`relations: list[Relation] = []`、`candidates: list[str] = []`、
+  `diagnostics: list[str] = []`、`call_receipts: list[str] = []`。
+- `GapTask`：`gap_id`、`target` 非空；`trigger: GapTrigger`；`search_scope: list[str] = []`、
+  `attempts: list[str] = []`；`status: GapStatus`（枚举 `OPEN`、`IN_PROGRESS`、`RESOLVED`、`ABANDONED`，默认 `OPEN`）。
+- `ReviewItem`：`item_id`、`target` 非空；`kind: ReviewKind`；`evidence: list[str] = []`；
+  `status: ReviewStatus`（枚举 `OPEN`、`RESOLVED`、`WAIVED`，默认 `OPEN`）；`resolution_candidate: str | None = None`。
+- `Relation`、`QAItem`、`Entity` 按 §5.1：字段名照抄，字符串列表默认空，`evidence: list[Evidence] = []`；
+  `Entity.entity_type`、`names` 非空。
+
+### 8.6 Bundle
+
+- `BundleMember`：`kind: str`（`^[a-z][a-z0-9_]*$`，**不做枚举**——成员种类词表属 Catalog/§5，写进合同会碰 G2）、
+  `logical_slug: str` 非空、`payload: dict[str, Any]`、`member_digest: str`（64 hex）、`evidence_refs: list[str] = []`。
+- `CandidateBundle`：`contract_version: str`、`origin: Origin`、`compiler_identity: str` 非空；
+  `base_release_id: str | None = None`、`base_epoch: int | None = None`（首次发布没有 base，用 None；
+  **不要**填 `""` 或 `0` 冒充）、`members: list[BundleMember] = []`、`removals: list[str] = []`、
+  `review_plan: list[ReviewPlan] = []`（**列表**，受保护验收传 `review_plan=[]`）。
+- `ReviewPlan`：`mode: ReviewMode`、`policy_ref: str | None = None`、`sample_size: int | None = None`（>=0）。
+
+### 8.7 验收命令的实际写法（修正 §5 的歧义）
+
+守卫在**仓库根** `tests/architecture/`，合同测试在 **`harness/tests/contracts/`**，两者分开跑：
+
+- 仓库根：`harness/.venv/bin/python -m pytest -q tests/architecture`
+- `harness/` 下：`PYTHONPATH=src .venv/bin/python -m pytest -q tests/contracts`
+- 导出检查：`cd harness && PYTHONPATH=src .venv/bin/python -m insurance_harness.contracts.export --check`
+
+### 8.8 CI 范围批准（Codex 提的缺口）
+
+**批准修改 `.github/workflows/architecture-guards.yml`**：G9 需要 `pydantic` 与 Harness 源码，而该工作流现在
+只装 `pytest`。采用仓库既有做法，不新增依赖：
+
+```yaml
+      - uses: astral-sh/setup-uv@v4        # 与 mcp-server.yml 一致；harness-ci 用带 sha 的 v5.4.2，二者皆可
+      - name: Install the Harness runtime dependencies
+        working-directory: harness
+        run: uv sync --locked --no-dev
+      - name: Check architecture boundaries and detector self-tests
+        env:
+          PYTHONPATH: harness/src
+        run: python -m pytest -q tests/architecture
+```
+
+（`--no-dev` 即可：G9 只需要运行时依赖里的 `pydantic`。）**不得**让 G9 在缺少 pydantic 时静默跳过——那等于
+把守卫关掉。若 `uv sync --locked --no-dev` 在 CI 上不可行，改 `uv sync --locked`，但**不允许**绕过 lock。
