@@ -555,6 +555,7 @@ func TestWikiReleaseFalsificationProductionRouterInventoryAndAuth(t *testing.T) 
 	engine := router.NewRouter(router.RouterParams{
 		SystemHandler:      &handler.SystemHandler{},
 		Config:             &config.Config{},
+		KBService:          &wikiReleaseKBServiceStub{},
 		WikiReleaseHandler: handler.NewWikiReleaseHandler(nil),
 	})
 

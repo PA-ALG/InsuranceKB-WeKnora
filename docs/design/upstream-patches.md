@@ -33,3 +33,19 @@
 S1a 实际修改 16 个上游文件，其中 11 个此前未偏离上游：Agent 五个写源文件与两个夹具、MCP 两个文件、
 路由两个夹具。`internal/mcpserver/scope.go` 未改。按 S1a Spec §6 登记，G10 基线由 Claude 审查后更新；
 Codex 未修改守卫基线，也未为抵消新增补丁扩大退役范围。
+
+| 文件 | 切片 | 原因 | 可否上游化 | 退出条件 |
+|---|---|---|---|---|
+| `internal/router/routes_knowledge.go` | S1b | 原生 Wiki 读路由接共用受管守卫，启动时验证属主查询依赖，并挂载只读 custody 端点；现有路由注册无策略扩展点 | 部分（通用路由策略） | 上游提供原生读策略与扩展路由挂载后移除接缝 |
+| `internal/router/router_api_key_capabilities_test.go` | S1b | 路由能力测试夹具补属主查询依赖以满足启动断言，保留原断言 | 否（测试装配） | 上游提供受管读取扩展点后恢复 |
+| `internal/mcpserver/scope.go` | S1b | 显式 KB 受管拒绝，默认范围排除受管 KB；现有 scope 选择无读取策略扩展点 | 部分（通用读取策略） | 上游支持 scope 读取策略注入后移除本地检查点 |
+| `internal/mcpserver/scope_test.go` | S1b | 非受管选择测试装配分类器，保留原断言及未注入失败关闭验收 | 否（测试装配） | 上游读取策略测试装配可复用时恢复 |
+| `internal/mcpserver/tools_retrieve.go` | S1b | 列表标注 release_managed，read_document 在获取 KB 后检查读取策略；后者不经 scope 选择入口，不能改共用摄取路径 | 部分（通用读取策略） | 上游提供文档读取前检查与列表扩展后移除接缝 |
+| `internal/application/service/session_knowledge_qa.go` | S1b | 快问快答与搜索在模型解析及目标构建前调用 enterprise 共用读取检查；共用目标构建同时用于 Agent，不能在那里无条件拦截 | 部分（检索准入扩展点） | 上游提供按调用路径配置的检索前检查后移除接缝 |
+| `internal/im/cmd_search.go` | S1b | 将类型化读取拒绝显示给用户；现有命令分发会把 error 统一改成执行异常 | 部分（公开业务错误显示） | 上游命令层支持类型化公开错误后移除适配 |
+| `internal/container/container.go` | S1b | 经现有 DI Decorate 注入 KB 读取策略，原构造签名及 Agent 路径保持不变 | 部分（模块装配） | 上游提供企业模块装配扩展点后移除接缝 |
+| `frontend/src/views/knowledge/KnowledgeBase.vue` | S1b | 最小接入 enterprise custody 组合式函数与状态组件，按受管状态控制原生标签页；无标签页策略扩展点 | 部分（标签页策略） | 上游支持标签页可见性策略后移除接缝 |
+| `frontend/src/views/chat/components/AgentStreamDisplay.vue` | S1b | 引用与抽屉内导航交给 enterprise 发布读取逻辑，保留引用版本且禁止旧版回落；无引用解析扩展点 | 部分（引用解析器） | 上游支持注入引用解析器后移除接缝 |
+| `frontend/src/api/wiki/index.ts` | S1b | 增加按 scope/release/logical_slug 读取发布页调用，供 enterprise 引用解析使用 | 否（发布协议） | S3 通用发布读取 API 接替时迁入 enterprise 并移除接缝 |
+
+S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断言保持不变；基线更新由 Claude 审查后执行。

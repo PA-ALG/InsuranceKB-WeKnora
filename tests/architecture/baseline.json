@@ -8,7 +8,7 @@
   "G4_naming": 357,
   "G5_hardcoded": 79,
   "G6_private_access": 339,
-  "G10_upstream_patches": 451,
+  "G10_upstream_patches": 456,
   "G11_new_file_location": 847
  },
  "guards": {
@@ -1280,7 +1280,12 @@
    "scripts/get_version.sh": 1,
    "scripts/migrate.sh": 1,
    "scripts/test-license-bundle.sh": 1,
-   "scripts/test_embed_nginx.py": 1
+   "scripts/test_embed_nginx.py": 1,
+   "frontend/src/views/chat/components/AgentStreamDisplay.vue": 1,
+   "internal/im/cmd_search.go": 1,
+   "internal/mcpserver/scope.go": 1,
+   "internal/mcpserver/scope_test.go": 1,
+   "internal/mcpserver/tools_retrieve.go": 1
   },
   "G11_new_file_location": {
    "cmd/mineru-capture-596-1/main.go": 1,

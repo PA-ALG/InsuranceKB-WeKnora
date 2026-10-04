@@ -293,6 +293,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewUserResourceFavoriteService))
 	must(container.Provide(service.NewWikiPageService))
 	must(managed.Register(container))
+	must(container.Decorate(managed.DecorateKnowledgeBaseService))
 	must(container.Provide(service.NewWikiIngestService, dig.Name("wikiIngest")))
 	must(container.Provide(service.NewWikiLintService))
 	must(container.Provide(service.NewContextWikiReleaseAccessVerifier))

@@ -288,7 +288,7 @@ func TestKnowledgeBaseLifecycleRoutesDeclareManageCapability(t *testing.T) {
 
 func TestKnowledgeReadRoutesDeclareRetrieveCapability(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	g := &rbacGuards{}
+	g := &rbacGuards{kbService: tenantKBLookupFixture()}
 	v1 := gin.New().Group("/api/v1")
 
 	RegisterKnowledgeBaseRoutes(v1, &handler.KnowledgeBaseHandler{}, g)

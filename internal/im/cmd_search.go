@@ -2,10 +2,12 @@ package im
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/agent/tools"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -86,6 +88,10 @@ func (c *SearchCommand) Execute(ctx context.Context, cmdCtx *CommandContext, arg
 
 	results, err := c.sessionService.SearchKnowledge(ctx, kbIDs, nil, nil, query)
 	if err != nil {
+		var denial *managed.ReadError
+		if errors.As(err, &denial) {
+			return &CommandResult{Content: denial.Error()}, nil
+		}
 		return nil, fmt.Errorf("search knowledge: %w", err)
 	}
 

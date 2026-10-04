@@ -352,3 +352,16 @@ export function updateWikiIssueStatus(kbId: string, issueId: string, status: str
 export function rebuildWikiLinks(kbId: string) {
   return post(`/api/v1/knowledgebase/${kbId}/wiki/rebuild-links`, {});
 }
+
+export interface WikiReleaseAuthority {
+  wiki_kb_id: string;
+  space_id: string;
+  raw_kb_id: string;
+  release_id: string;
+}
+
+// A release logical slug is a single route parameter, unlike a native wiki path.
+export function getReleaseWikiPage(authority: WikiReleaseAuthority, logicalSlug: string) {
+  const encode = encodeURIComponent;
+  return get(`/api/v1/knowledgebase/${encode(authority.wiki_kb_id)}/wiki/release-scopes/${encode(authority.space_id)}/raw/${encode(authority.raw_kb_id)}/releases/${encode(authority.release_id)}/pages/${encode(logicalSlug)}`);
+}
