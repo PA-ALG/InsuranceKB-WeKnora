@@ -2,7 +2,7 @@
 
 > 状态：待用户批准 ｜ 作者：Claude Code ｜ 依据：技术蓝图 1001 §7.7、§11（S2）
 > 分支：`slice/s2b`（S2a 合并后同步到 `main`） ｜ 开工方式：**等确认再开工**
-> 评判模型：**GPT-6.1 sol**（用户 2026-10-02 确认），在**独立的 Codex 会话**里担任评委，与代码用文件交换题目和答案；
+> 评判模型：**GPT-6 Astra，推理档位 xhigh**（用户 2026-10-03 改定，原定 GPT-6.1 sol），在**独立的 Codex 会话**里担任评委，与代码用文件交换题目和答案；
 > 不走 API，不需要密钥。工作量见 §6。
 
 ## 1. 目标
@@ -90,10 +90,10 @@ CalibrationReport: compared, not_judged: list[field_key], state_agreement,
   `unconsumed()` 返回没被读到的题号。
 - **`annotate prepare --product <id> --run-root <dir>`**：读 PDF → `source_extractable_fields` → `build_requests` →
   `write_requests`，再写 `AGENTS.md` 与 `run.json`。目录已存在就失败。
-- **`annotate ingest --product <id> --run-root <dir> --judge-model gpt-6.1-sol [--calibrate]`**：从 `run.json` 读字段与
+- **`annotate ingest --product <id> --run-root <dir> --judge-model gpt-6-astra [--calibrate]`**：从 `run.json` 读字段与
   `batch_size`，重读 PDF 重建题目，用 `FileJudgeClient` 回放；`unconsumed()` 非空即失败。`--judge-model` 必填，原样写入
   `judged_by="model:<id>"` 与 manifest。`--calibrate` 只允许 596，只输出 `CalibrationReport`，**不写** `596.jsonl`。
-- 哈希只能证明题目没变，证明不了答题的是哪个模型：开评委会话的人必须选 GPT-6.1 sol，PR 里写明每个会话的模型与推理档位。
+- 哈希只能证明题目没变，证明不了答题的是哪个模型：开评委会话的人必须选 GPT-6 Astra、推理档位 xhigh，596 与 4 款产品全部用同一模型与档位，PR 里写明每个会话的模型与推理档位。
 
 ### 3.3 评委会话规则（prepare 写进每个产品目录的 `AGENTS.md`）
 
@@ -152,7 +152,7 @@ Claude 提供的 `harness/tests/eval/test_judge_annotation.py` 与 `harness/test
 
 ## 6. 评判工作量
 
-- **评判模型**：GPT-6.1 sol，在用户自己开的 Codex 会话里答题；与生产编译模型 DeepSeek v4 flash 不同族。**无 API 调用、无密钥。**
+- **评判模型**：GPT-6 Astra（xhigh），在用户自己开的 Codex 会话里答题；与生产编译模型 DeepSeek v4 flash 不同族。**无 API 调用、无密钥。**
 - **题目数**：`batch_size` 默认 25，按 §3.4 出题时取 60，每款产品 1 道题（596 已有 2 道），5 款产品共约 6 道；`max_calls` 每款产品 ≤ 3，总上限 **20 道**
   （含一次 prompt 修订后的校准重跑）。
 - **数据量**：596 与 4 款产品，单款原文 3–11 万字（1814 约 11 万字，含费率表）。每道题都带该产品全部原文，单个题目文件约 3–11 万字；
