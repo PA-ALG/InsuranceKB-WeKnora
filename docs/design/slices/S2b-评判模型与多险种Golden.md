@@ -62,9 +62,19 @@ CalibrationReport: compared, not_judged: list[field_key], state_agreement,
   以及带 `[page N]` 标记的全部页面原文。**不包含任何预测或候选值。**
 - 输出 JSON `{"fields":[{field_key, state, value, components:[{name, accepted:[...]}], evidence:[{document, page, quote}]}]}`；
   允许 ```json 代码块包裹。
+- **`value` 的形态（prompt v2 起，2026-10-04 修订）**：`value` 是该字段**可直接展示给人的最简答案**，不是原文摘抄。
+  例：`一年`、`30日`、`计划一1万元；计划二0元`。细则、条件、例外放 `components`（每个必要要素一条，`accepted` 列等价措辞），
+  逐字原文放 `evidence`。禁止把整段条款粘进 `value`。系统提示词必须写明这条，并给出正反例各一个。
+  理由：v1 的 `value` 写成了原文长句（`exclusions` 参考 397 字、评委 2493 字），与人工金标的简明形态不同，
+  整值比较必然不等，596 校准值一致率 0/19 即由此而来；三态一致 91.3%、145 条引文 100% 回验通过说明评委读懂了原文，
+  差别只在形态。
 - 以下一律 `JudgeProtocolError`：无法解析；缺少请求的字段；出现未请求或重复的字段；三态与值、证据的形状不符。
 - `calibrate(judged, reference)`：只比较两边都有的字段；三态一致计 `state_agreement`；双方 present 时用 S2a 的
   `compare_value`（参考 Golden 的值与组成要素）判定 `present_value_agreement`。
+- 校准报告另加**形态无关的诊断项** `reference_atom_coverage`（**只报告，不进门槛**）：参考 Golden 无组成要素时，
+  把参考 `value` 按 `；;。` 与 `，` 切成原子（归一化后长度 ≥2 的保留），逐个看是否出现在评委的 `value` 或
+  其任一 `components[].accepted` 里；报告"全部原子都命中"的字段占比。用来区分"评委漏了内容"与"只是说法不同"。
+  两个 state 不一致的字段（`premium_grace_period`、`product_bundle_rules`）在校准报告里逐条列出，供人工判断。
 - `build_requests(product_id, pack_id, field_keys, pages) -> list[JudgeRequest]`：返回 `annotate` 会发出的同一批请求
   （同样的分批与 prompt），不调用 client、不占预算。每批 prompt 只取决于产品、pack、本批字段与页面原文，**不含**批次序号、
   批次总数、时间戳，因此"同样输入出同样题目"。
@@ -126,6 +136,8 @@ uv run python -m insurance_harness.eval.annotate prepare --product 1824 \
    达标条件（初值，可在 PR 中提出调整）：三态一致率 ≥ 90%，双方都是 present 的字段值一致率 ≥ 80%，且
    `evidence_not_verified` ≤ 10%。不达标：**停下**，在 PR 中贴出不一致明细，允许修改一次 prompt（提升 prompt 版本，
    换新的 `run_root` 重新出题）后重跑一次校准；仍不达标则不生成 4 款产品的 Golden，交回 Claude 与用户决定。
+   2026-10-04 已用掉这唯一一次修订（v1 → v2，`value` 形态）；v2 的校准若仍不达标，**停下交回 Claude 与用户**，
+   不再自行修订 prompt。
 2. **生成**：校准达标后才 `prepare` 4 款产品（同一 prompt 版本），**每款产品单开一个评委会话**，答完后逐个 `ingest`。
    先校准再出题，是为了 prompt 一旦要改，不会白答 4 款产品的题。
 3. **评分**：用 report CLI 对 epoch9 candidate 评分，覆盖 4 个 pack（596 也一并报告）。
