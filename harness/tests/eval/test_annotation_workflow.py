@@ -177,6 +177,21 @@ def test_scheduled_products_have_declared_pack_inputs() -> None:
         "1824": "schemapack_whole_life_insurance",
         "1814": "schemapack_accident_insurance",
         "1816": "schemapack_disability_income_insurance",
-        "1828": "schemapack_critical_illness_insurance",
     }
     assert {product: manifest["products"][product]["pack_id"] for product in expected} == expected
+
+
+def test_default_prepare_cli_resolves_legacy_manifest_and_tracked_product_metadata(
+    workspace: tuple[Path, Path], capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo, root = workspace
+    # No products[596], --pack or --source-dir: the original manifest declares
+    # its own product at the top level, and planCode identifies the source folder.
+    assert annotate.main([
+        "prepare", "--repo", str(repo), "--product", "596", "--run-root", str(root),
+    ]) == 0
+    run = json.loads(capsys.readouterr().out)
+    assert run["pack_id"] == "pack"
+    assert run["source_directory"] == "dataset/shouxian_product/Product"
+    assert run["field_keys"] == ["duration"]
+    assert len(run["request_sha256"]) == 1

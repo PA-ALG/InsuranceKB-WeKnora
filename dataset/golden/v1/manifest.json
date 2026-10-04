@@ -46,16 +46,6 @@
   "provenance": "Legacy approved annotations retained as legacy:gs-s0q-596-v1; no reannotation or model call.",
   "scope": "Offline deterministic value comparison only; evidence accuracy and production model quality are not certified.",
   "products": {
-    "1828": {
-      "product_id": "1828",
-      "pack_id": "schemapack_critical_illness_insurance",
-      "status": "pending_judge",
-      "source_sha256": {
-        "保险条款.pdf": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-        "产品说明书.pdf": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-        "费率表.pdf": "62b7c75958120effcba98adc71e6236f18728d900a05f312efc405f8be1aa5b8"
-      }
-    },
     "1826": {
       "product_id": "1826",
       "pack_id": "schemapack_endowment_insurance",
