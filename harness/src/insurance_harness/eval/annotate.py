@@ -17,9 +17,17 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from insurance_harness.eval.catalog import load_catalog
+from insurance_harness.eval.equivalence import (
+    EQUIVALENCE_PROMPT_VERSION,
+    EquivalenceQuestion,
+    EquivalenceReport,
+    build_equivalence_requests,
+    compare_equivalence,
+)
 from insurance_harness.eval.golden import GoldenItem
 from insurance_harness.eval.judge import PROMPT_VERSION, JudgeAnnotator, JudgeRequest, calibrate
 from insurance_harness.eval.judge_files import FileJudgeClient, check_run_directory, write_requests
+from insurance_harness.eval.normalize import values_equal
 from insurance_harness.eval.pdf_text import PageText, read_pdf
 
 _RULES = '''# 保险条款离线评委
@@ -32,6 +40,14 @@ _RULES = '''# 保险条款离线评委
 5. 不修改 requests/、run.json 与本文件。
 '''
 _CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+_EQUIVALENCE_RULES = '''# 语义等价独立评委
+
+只读当前目录，不打开其他路径，不联网，不重新抽取材料。
+按 requests/ 题目中的 system_lines 规则比较 user_lines 中两种表述，
+逐字段输出判定与理由到 responses/ 的同名 JSON 文件。已有答案跳过。
+如实报告矛盾与遗漏，不为通过校准放宽判断。
+不修改 requests/、run.json 或本文件，不用脚本批量生成答案。
+'''
 
 
 class _Run(BaseModel):
@@ -187,6 +203,63 @@ def _save_golden(
             lock.unlink(missing_ok=True)
 
 
+def _equivalence(
+    repo: Path, product_id: str, root: Path, *, model_id: str,
+    judged: list[GoldenItem], reference: list[GoldenItem],
+) -> EquivalenceReport | None:
+    """Return None only when new L2 questions await an independent session.
+
+    Bind both inputs before publishing questions. On replay verify this even if
+    changed answers would now pass L1, so they cannot bypass the pending review.
+    """
+    by_identity = {item.identity: item for item in judged}
+    questions = []
+    literal = 0
+    for ref in reference:
+        item = by_identity.get(ref.identity)
+        if item is None or ref.state != "present" or item.state != "present":
+            continue
+        if values_equal(ref.value, item.value):
+            literal += 1
+        else:
+            assert ref.value is not None
+            questions.append(EquivalenceQuestion(
+                field_key=ref.field_key, reference=ref.value, judged=item.value,
+                components=item.components,
+            ))
+    directory = root / f"{product_id}-equivalence"
+    requests = build_equivalence_requests(questions, product_id=product_id, batch_size=60)
+    metadata = {
+        "product_id": product_id, "model_id": model_id, "batch_size": 60,
+        "prompt_version": EQUIVALENCE_PROMPT_VERSION,
+        "request_sha256": [request.sha256 for request in requests],
+        "reference_sha256": hashlib.sha256(
+            (repo / f"dataset/golden/v1/{product_id}.jsonl").read_bytes(),
+        ).hexdigest(),
+        "annotation_sha256": {
+            path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted((root / product_id / "responses").glob("*.json"))
+        },
+    }
+    if directory.exists():
+        if _json(directory / "run.json") != metadata:
+            raise ValueError("equivalence inputs changed since prepare")
+    elif questions:
+        write_requests(requests, directory)
+        _write(directory / "run.json", metadata)
+        with (directory / "AGENTS.md").open("x", encoding="utf-8") as stream:
+            stream.write(_EQUIVALENCE_RULES)
+        return None
+    client = FileJudgeClient(directory, model_id=model_id)
+    report = compare_equivalence(client, questions, max_calls=2, batch_size=60)
+    if client.unconsumed():
+        raise ValueError("unconsumed equivalence request files")
+    report.compared += literal
+    report.equivalent += literal
+    report.rate = report.equivalent / report.compared if report.compared else None
+    return report
+
+
 def ingest(
     repo: Path, product_id: str, run_root: Path, *, judge_model: str, calibrate_only: bool = False,
 ) -> dict[str, Any]:
@@ -237,13 +310,26 @@ def ingest(
         )
         rejected_rate = len(result.rejected) / len(run.field_keys)
         summary.update(report.model_dump())
+        equivalence = _equivalence(
+            repo, product_id, run_root, model_id=judge_model,
+            judged=result.items, reference=reference,
+        )
         summary.update(
             state_agreement_rate=state_rate, present_value_agreement_rate=value_rate,
+            literal_agreement_rate=(
+                report.literal_agreement / report.both_present if report.both_present else None
+            ),
             evidence_not_verified_rate=rejected_rate,
-            passed=(state_rate is not None and state_rate >= 0.9 and value_rate is not None
-                    and value_rate >= 0.8 and rejected_rate <= 0.1),
+            equivalence=equivalence.model_dump() if equivalence is not None else None,
+            passed=(state_rate is not None and state_rate >= 0.9 and equivalence is not None
+                    and equivalence.passes() is True and rejected_rate <= 0.1),
+            status="complete" if equivalence is not None else "awaiting_equivalence",
         )
-        _write(run_root / "calibration.json", summary)
+        if equivalence is None:
+            summary["equivalence_directory"] = f"{product_id}-equivalence"
+            _write(run_root / "calibration.pending.json", summary)
+        else:
+            _write(run_root / "calibration.json", summary)
     else:
         if not result.items:
             raise ValueError("no verified Golden items")

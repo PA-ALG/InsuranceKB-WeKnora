@@ -95,19 +95,117 @@ def test_failed_calibration_does_not_unlock_generation(workspace: tuple[Path, Pa
         prepare(repo, root, "other")
 
 
-def test_atom_coverage_is_diagnostic_and_does_not_unlock_generation(
+def test_semantic_calibration_waits_for_separate_judge_and_reuses_immutable_requests(
     workspace: tuple[Path, Path],
+) -> None:
+    repo, root = workspace
+    original = (repo / "dataset/golden/v1/596.jsonl").read_bytes()
+    prepare(repo, root)
+    answer(root / "596", value="期限为90日")
+    pending = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    assert pending["status"] == "awaiting_equivalence"
+    assert pending["literal_agreement"] == 0 and pending["passed"] is False
+    assert not (root / "calibration.json").exists()
+    eq = root / "596-equivalence"
+    question_bytes = (eq / "requests/001.json").read_bytes()
+    with pytest.raises(ValueError, match="calibration"):
+        prepare(repo, root, "other")
+    write_json(eq / "responses/001.json", {"fields": [{
+        "field_key": "duration", "verdict": "equivalent", "reason": "同一时长",
+    }]})
+    report = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    assert report["passed"] is True
+    assert report["equivalence"]["equivalent"] == report["equivalence"]["compared"] == 1
+    assert report["literal_agreement"] == 0
+    assert (eq / "requests/001.json").read_bytes() == question_bytes
+    assert (repo / "dataset/golden/v1/596.jsonl").read_bytes() == original
+
+
+@pytest.mark.parametrize("verdict", ["contradicted", "insufficient"])
+def test_semantic_verdict_does_not_hide_failures(
+    workspace: tuple[Path, Path], verdict: str,
+) -> None:
+    repo, root = workspace
+    prepare(repo, root)
+    answer(root / "596", value="180日")
+    annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    write_json(root / "596-equivalence/responses/001.json", {"fields": [{
+        "field_key": "duration", "verdict": verdict, "reason": "时长不符或不足",
+    }]})
+    report = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    assert report["passed"] is False
+    assert report["equivalence"]["compared"] == 1
+    assert "duration" in report["equivalence"][verdict]
+
+
+@pytest.mark.parametrize("mutation", ["response", "reference", "model", "request"])
+def test_equivalence_rejects_changed_calibration_inputs(
+    workspace: tuple[Path, Path], mutation: str,
 ) -> None:
     repo, root = workspace
     prepare(repo, root)
     answer(root / "596", value="期限为90日")
-    result = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
-    assert result["reference_atom_coverage"] == 1.0
-    assert result["present_value_agreement_rate"] == 0.0
-    assert result["passed"] is False
-    assert json.loads((root / "calibration.json").read_text())["reference_atom_coverage"] == 1.0
-    with pytest.raises(ValueError, match="calibration"):
-        prepare(repo, root, "other")
+    annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    eq = root / "596-equivalence"
+    write_json(eq / "responses/001.json", {"fields": [{
+        "field_key": "duration", "verdict": "equivalent", "reason": "same",
+    }]})
+    model = "fake"
+    if mutation == "response":
+        answer(root / "596", value="90日")
+    elif mutation == "reference":
+        path = repo / "dataset/golden/v1/596.jsonl"
+        path.write_text(path.read_text() + "\n")
+    elif mutation == "model":
+        model = "changed"
+    else:
+        write_json(eq / "requests/001.json", {})
+    with pytest.raises((ValueError, JudgeProtocolError)):
+        annotate.ingest(repo, "596", root, judge_model=model, calibrate_only=True)
+    assert not (root / "calibration.json").exists()
+
+
+@pytest.mark.parametrize("last_verdict,passed", [("insufficient", True), ("contradicted", False)])
+def test_combined_l1_l2_rate_keeps_insufficient_in_denominator_and_contradictions_fatal(
+    workspace: tuple[Path, Path], last_verdict: str, passed: bool,
+) -> None:
+    repo, root = workspace
+    catalog_path = repo / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+    catalog = json.loads(catalog_path.read_text())
+    template = catalog["entries"][0]["pack"]["fields"][0]
+    keys = ["duration", "second", "third", "fourth", "fifth"]
+    catalog["entries"][0]["pack"]["fields"] = [
+        template | {"field_key": key, "short_title": key} for key in keys
+    ]
+    write_json(catalog_path, catalog)
+    golden_path = repo / "dataset/golden/v1/596.jsonl"
+    reference = json.loads(golden_path.read_text())
+    golden_path.write_text("\n".join(
+        json.dumps(reference | {"field_key": key}) for key in keys
+    ))
+    prepare(repo, root)
+    answer(root / "596")
+    path = root / "596/responses/001.json"
+    row = json.loads(path.read_text())["fields"][0]
+    write_json(path, {"fields": [
+        row | {"field_key": key, "value": "90日" if key == "duration" else "期限为90日"}
+        for key in keys
+    ]})
+    pending = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    assert pending["literal_agreement"] == 1
+    eq = root / "596-equivalence"
+    question = json.loads((eq / "requests/001.json").read_text())
+    fields = json.loads("\n".join(question["user_lines"]))["fields"]
+    assert [field["field_key"] for field in fields] == keys[1:]
+    write_json(eq / "responses/001.json", {"fields": [
+        {"field_key": key, "verdict": last_verdict if key == "fifth" else "equivalent",
+         "reason": "独立判断"} for key in keys[1:]
+    ]})
+    report = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    assert report["equivalence"]["compared"] == 5
+    assert report["equivalence"]["equivalent"] == 4
+    assert report["equivalence"]["rate"] == 0.8
+    assert report["passed"] is passed
 
 
 @pytest.mark.parametrize("mutation", ["pdf", "batch", "fields", "hash", "extra", "prompt"])
