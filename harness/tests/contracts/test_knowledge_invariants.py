@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from insurance_harness.contracts import Claim, Evidence, Locator
+from insurance_harness.contracts.enums import EvidenceMatch
 
 
 def evidence(match: str = "EXACT", quote: str = "A supported source statement") -> Evidence:
@@ -14,7 +15,7 @@ def evidence(match: str = "EXACT", quote: str = "A supported source statement") 
         file_sha256="b" * 64,
         locator=Locator(kind="PDF_TEXT_SPAN", page=2, start=0, end=28),
         quote=quote,
-        match=match,
+        match=EvidenceMatch(match),
         access_scope="internal",
     )
 
@@ -69,6 +70,9 @@ def test_unknown_rejects_untyped_reasons(reason: str) -> None:
         supported_claim(state="unknown", value=None, evidence=[], unknown_reason=reason)
 
 
-def test_explicit_absence_needs_verified_evidence() -> None:
-    with pytest.raises(ValidationError):
-        supported_claim(state="absent_explicitly", value=None, evidence=[evidence("FUZZY_REVIEW")])
+def test_explicit_absence_leaves_evidence_semantics_to_the_evidence_layer() -> None:
+    # Spec §8.3: the contract only requires a null value and nonempty evidence.
+    claim = supported_claim(
+        state="absent_explicitly", value=None, evidence=[evidence("FUZZY_REVIEW")]
+    )
+    assert claim.state == "absent_explicitly"

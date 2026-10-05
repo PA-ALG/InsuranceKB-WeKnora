@@ -84,3 +84,31 @@ class ReviewKind(StrEnum):
     ACL_SHRINK = "acl_shrink"
     REGRESSION = "regression"
     SAMPLE = "sample"
+
+
+class UnknownReason(StrEnum):
+    NOT_IN_MATERIAL = "NOT_IN_MATERIAL"
+    MATERIAL_AMBIGUOUS = "MATERIAL_AMBIGUOUS"
+    LOCATOR_UNSUPPORTED = "LOCATOR_UNSUPPORTED"
+    EXTRACTION_FAILED = "EXTRACTION_FAILED"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+
+
+class CompileStatus(StrEnum):
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    SKIPPED = "SKIPPED"
+
+
+class GapStatus(StrEnum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    ABANDONED = "ABANDONED"
+
+
+class ReviewStatus(StrEnum):
+    OPEN = "OPEN"
+    RESOLVED = "RESOLVED"
+    WAIVED = "WAIVED"

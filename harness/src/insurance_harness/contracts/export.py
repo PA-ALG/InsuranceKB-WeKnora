@@ -10,7 +10,12 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 from pydantic import BaseModel
 
-from insurance_harness.contracts.bundle import BundleMember, CandidateBundle, ReviewPlan
+from insurance_harness.contracts.bundle import (
+    CONTRACT_VERSION,
+    BundleMember,
+    CandidateBundle,
+    ReviewPlan,
+)
 from insurance_harness.contracts.compile import (
     CompileResult,
     CompileTask,
@@ -37,12 +42,38 @@ MODELS: tuple[type[BaseModel], ...] = (
     PageText, CompileTask, CompileResult, GapTask, ReviewItem,
     CandidateBundle, BundleMember, ReviewPlan,
 )
+README = f'''# Generated contracts
+
+contract_version: "{CONTRACT_VERSION}"
+
+These JSON Schemas are generated from `insurance_harness.contracts`.
+From `harness/`, run `uv run python -m insurance_harness.contracts.export`
+to regenerate, or append `--check` to check schema bytes without writing.
+Do not edit the generated schemas. G9 reports every changed, missing or extra
+schema as a violation, with no per-file baseline allowance.
+
+Pydantic validators also enforce cross-field rules (locator required fields,
+offset ordering and Claim states). JSON Schema provides structural validation;
+consumers must additionally enforce platform and source-verification invariants.
+'''
 
 
 def schema_filename(model: type[BaseModel]) -> str:
     """Keep acronyms together: QAItem becomes qa_item, not q_a_item."""
     name = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", model.__name__)
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name).lower() + ".schema.json"
+
+
+def write_generated(path: Path, content: str) -> None:
+    """Replace the directory entry without following an existing file symlink."""
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as out:
+        temporary_path = Path(out.name)
+        try:
+            out.write(content)
+            out.close()
+            temporary_path.replace(path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
 
 def export(destination: Path) -> list[Path]:
@@ -55,16 +86,11 @@ def export(destination: Path) -> list[Path]:
         schema["$schema"] = SCHEMA_URI
         schema["$id"] = CONTRACT_URI + filename
         path = destination / filename
-        # Replace the directory entry instead of following an existing symlink.
-        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=destination, delete=False) as out:
-            temporary_path = Path(out.name)
-            try:
-                out.write(json.dumps(schema, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
-                out.close()
-                temporary_path.replace(path)
-            finally:
-                temporary_path.unlink(missing_ok=True)
+        write_generated(
+            path, json.dumps(schema, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+        )
         paths.append(path)
+    write_generated(destination / "README.md", README)
     return paths
 
 

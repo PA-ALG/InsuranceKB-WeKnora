@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "ReviewKind": {
+      "enum": [
+        "conflict",
+        "low_score",
+        "feedback",
+        "lint",
+        "acl_shrink",
+        "regression",
+        "sample"
+      ],
+      "title": "ReviewKind",
+      "type": "string"
+    },
+    "ReviewStatus": {
+      "enum": [
+        "OPEN",
+        "RESOLVED",
+        "WAIVED"
+      ],
+      "title": "ReviewStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/review_item.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "evidence": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "item_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/ReviewKind"
+    },
+    "resolution_candidate": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resolution Candidate"
+    },
+    "status": {
+      "$ref": "#/$defs/ReviewStatus",
+      "default": "OPEN"
+    },
+    "target": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Target",
+      "type": "string"
+    }
+  },
+  "required": [
+    "item_id",
+    "kind",
+    "target"
+  ],
+  "title": "ReviewItem",
+  "type": "object"
+}

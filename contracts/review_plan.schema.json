@@ -1,0 +1,50 @@
+{
+  "$defs": {
+    "ReviewMode": {
+      "enum": [
+        "machine",
+        "human"
+      ],
+      "title": "ReviewMode",
+      "type": "string"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/review_plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "$ref": "#/$defs/ReviewMode"
+    },
+    "policy_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Policy Ref"
+    },
+    "sample_size": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sample Size"
+    }
+  },
+  "required": [
+    "mode"
+  ],
+  "title": "ReviewPlan",
+  "type": "object"
+}

@@ -1,0 +1,38 @@
+{
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/schema_snapshot.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "catalog_version": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "presentation_profile_ref": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Presentation Profile Ref",
+      "type": "string"
+    },
+    "schema_pack_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Schema Pack Id",
+      "type": "string"
+    },
+    "schema_pack_sha256": {
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "title": "Schema Pack Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_pack_id",
+    "schema_pack_sha256",
+    "presentation_profile_ref",
+    "catalog_version"
+  ],
+  "title": "SchemaSnapshot",
+  "type": "object"
+}

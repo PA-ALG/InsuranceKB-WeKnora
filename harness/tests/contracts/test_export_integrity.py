@@ -24,6 +24,13 @@ def test_exports_all_blueprint_contracts_in_name_order(tmp_path: Path) -> None:
     )
 
 
+def test_generated_readme_and_bundle_agree_on_version(tmp_path: Path) -> None:
+    export(tmp_path)
+    bundle = json.loads((tmp_path / "candidate_bundle.schema.json").read_text(encoding="utf-8"))
+    version = bundle["properties"]["contract_version"]["const"]
+    assert f'contract_version: "{version}"' in (tmp_path / "README.md").read_text(encoding="utf-8")
+
+
 def test_exported_schemas_have_resolvable_local_refs(tmp_path: Path) -> None:
     for path in export(tmp_path):
         schema = json.loads(path.read_text(encoding="utf-8"))

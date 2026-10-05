@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "CompileTaskKind": {
+      "enum": [
+        "schema_fields",
+        "discovery",
+        "concepts",
+        "qa",
+        "gap_fill"
+      ],
+      "title": "CompileTaskKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/compile_task.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "budget": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Budget",
+      "type": "integer"
+    },
+    "config_ref": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Config Ref",
+      "type": "string"
+    },
+    "entity_version": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Entity Version",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/CompileTaskKind"
+    },
+    "material_set": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Material Set",
+      "type": "array"
+    },
+    "targets": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Targets",
+      "type": "array"
+    },
+    "task_key": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Task Key",
+      "type": "string"
+    }
+  },
+  "required": [
+    "task_key",
+    "kind",
+    "entity_version",
+    "config_ref"
+  ],
+  "title": "CompileTask",
+  "type": "object"
+}
