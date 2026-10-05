@@ -8,6 +8,7 @@ most GROWTH_ALLOWANCE lines; new or previously compliant files get none.
 
 from __future__ import annotations
 
+import checks_contracts
 import checks_files
 import checks_python
 from common import UPSTREAM_BASE, load_baseline
@@ -26,6 +27,7 @@ ACTIVE_GUARDS = (
     "G4_naming",
     "G5_hardcoded",
     "G6_private_access",
+    "G9_contract_drift",
     "G10_upstream_patches",
     "G11_new_file_location",
 )
@@ -35,6 +37,7 @@ def collect() -> Results:
     results: Results = {}
     results.update(checks_python.scan())
     results.update(checks_files.scan())
+    results.update(checks_contracts.scan())
     missing = set(ACTIVE_GUARDS) - set(results)
     if missing:
         raise RuntimeError(f"guards produced no result: {sorted(missing)}")

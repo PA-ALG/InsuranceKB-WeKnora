@@ -1,0 +1,50 @@
+{
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/bundle_member.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "access_scope": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Access Scope",
+      "type": "string"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "kind": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Kind",
+      "type": "string"
+    },
+    "logical_slug": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Logical Slug",
+      "type": "string"
+    },
+    "member_digest": {
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "title": "Member Digest",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "kind",
+    "logical_slug",
+    "payload",
+    "member_digest",
+    "access_scope"
+  ],
+  "title": "BundleMember",
+  "type": "object"
+}

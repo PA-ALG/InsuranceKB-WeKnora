@@ -137,3 +137,36 @@ def test_lowering_never_raises_a_key() -> None:
 def test_baseline_file_is_readable() -> None:
     doc = load_baseline()
     assert set(guards.ACTIVE_GUARDS) <= set(doc["guards"])
+
+
+def test_g9_detects_changed_bytes(tmp_path: Path) -> None:
+    import checks_contracts
+    from insurance_harness.contracts.export import export
+
+    target = export(tmp_path)[0]
+    target.write_bytes(target.read_bytes() + b" ")
+    current = checks_contracts.scan(tmp_path)
+    assert current == {"G9_contract_drift": {target.name: 1}}
+    assert guards.regressions(current, {"guards": {}})
+
+
+def test_g9_detects_missing_schema(tmp_path: Path) -> None:
+    import checks_contracts
+    from insurance_harness.contracts.export import export
+
+    target = export(tmp_path)[0]
+    target.unlink()
+    current = checks_contracts.scan(tmp_path)
+    assert current == {"G9_contract_drift": {target.name: 1}}
+    assert guards.regressions(current, {"guards": {}})
+
+
+def test_g9_detects_extra_schema(tmp_path: Path) -> None:
+    import checks_contracts
+    from insurance_harness.contracts.export import export
+
+    export(tmp_path)
+    (tmp_path / "extra.schema.json").write_text("{}\n", encoding="utf-8")
+    current = checks_contracts.scan(tmp_path)
+    assert current == {"G9_contract_drift": {"extra.schema.json": 1}}
+    assert guards.regressions(current, {"guards": {}})
