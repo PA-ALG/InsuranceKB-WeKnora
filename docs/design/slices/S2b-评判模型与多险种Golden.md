@@ -65,16 +65,13 @@ CalibrationReport: compared, not_judged: list[field_key], state_agreement,
 - **`value` 的形态（prompt v2 起，2026-10-04 修订）**：`value` 是该字段**可直接展示给人的最简答案**，不是原文摘抄。
   例：`一年`、`30日`、`计划一1万元；计划二0元`。细则、条件、例外放 `components`（每个必要要素一条，`accepted` 列等价措辞），
   逐字原文放 `evidence`。禁止把整段条款粘进 `value`。系统提示词必须写明这条，并给出正反例各一个。
-  理由：v1 的 `value` 写成了原文长句（`exclusions` 参考 397 字、评委 2493 字），与人工金标的简明形态不同，
-  整值比较必然不等，596 校准值一致率 0/19 即由此而来；三态一致 91.3%、145 条引文 100% 回验通过说明评委读懂了原文，
-  差别只在形态。
+  理由与最终取值口径见 **§8**（2026-10-05 用户裁决）：`value` 短答案逐字取自原文、长答案裁剪但保留全部核心事实、
+  允许不改变语义的适度润色；比较按语义等价而非整值相等。
 - 以下一律 `JudgeProtocolError`：无法解析；缺少请求的字段；出现未请求或重复的字段；三态与值、证据的形状不符。
 - `calibrate(judged, reference)`：只比较两边都有的字段；三态一致计 `state_agreement`；双方 present 时用 S2a 的
   `compare_value`（参考 Golden 的值与组成要素）判定 `present_value_agreement`。
-- 校准报告另加**形态无关的诊断项** `reference_atom_coverage`（**只报告，不进门槛**）：参考 Golden 无组成要素时，
-  把参考 `value` 按 `；;。` 与 `，` 切成原子（归一化后长度 ≥2 的保留），逐个看是否出现在评委的 `value` 或
-  其任一 `components[].accepted` 里；报告"全部原子都命中"的字段占比。用来区分"评委漏了内容"与"只是说法不同"。
-  两个 state 不一致的字段（`premium_grace_period`、`product_bundle_rules`）在校准报告里逐条列出，供人工判断。
+- 两个 state 不一致的字段（`premium_grace_period`、`product_bundle_rules`）在该报告中逐条列出，供人工判断。
+- 原 `reference_atom_coverage` 诊断已**删除**（切句后仍要求整句逐字命中，粒度不对），由 §8.2 的语义等价层取代。
 - `build_requests(product_id, pack_id, field_keys, pages) -> list[JudgeRequest]`：返回 `annotate` 会发出的同一批请求
   （同样的分批与 prompt），不调用 client、不占预算。每批 prompt 只取决于产品、pack、本批字段与页面原文，**不含**批次序号、
   批次总数、时间戳，因此"同样输入出同样题目"。
@@ -133,11 +130,11 @@ uv run python -m insurance_harness.eval.annotate prepare --product 1824 \
 ### 3.5 运行顺序
 
 1. **校准**：`prepare` 596 → 在 `<run_root>/596` 开评委会话答题 → `ingest --calibrate`，对照 `dataset/golden/v1/596.jsonl`。
-   达标条件（初值，可在 PR 中提出调整）：三态一致率 ≥ 90%，双方都是 present 的字段值一致率 ≥ 80%，且
-   `evidence_not_verified` ≤ 10%。不达标：**停下**，在 PR 中贴出不一致明细，允许修改一次 prompt（提升 prompt 版本，
-   换新的 `run_root` 重新出题）后重跑一次校准；仍不达标则不生成 4 款产品的 Golden，交回 Claude 与用户决定。
-   2026-10-04 已用掉这唯一一次修订（v1 → v2，`value` 形态）；v2 的校准若仍不达标，**停下交回 Claude 与用户**，
-   不再自行修订 prompt。
+   达标条件见 **§8.1**：三态一致率 ≥ 90%、**语义等价率 ≥ 80%（§8.1 的 L1+L2 三层口径）**、`contradicted` 必须为 0、
+   `evidence_not_verified` ≤ 10%。**不再使用"值整串一致率 ≥ 80%"**——596 的两次校准证明它对 legacy 参考不可达
+   （v1 详写 0/19、v2 简写 1/19），度量的不是事实对错。不达标：**停下**，在 PR 中贴出不一致与矛盾明细，交回 Claude 与用户。
+   prompt 修订额度已在 2026-10-04 用尽（v1 → v2）；本次口径调整是用户裁决的**度量口径变更**，按 §8.3 升 `PROMPT_VERSION`
+   到 `"3"` 并**新开 run root**，旧的 v1/v2 题目与答卷全部保留。
 2. **生成**：校准达标后才 `prepare` 4 款产品（同一 prompt 版本），**每款产品单开一个评委会话**，答完后逐个 `ingest`。
    先校准再出题，是为了 prompt 一旦要改，不会白答 4 款产品的题。
 3. **评分**：用 report CLI 对 epoch9 candidate 评分，覆盖 4 个 pack（596 也一并报告）。
@@ -180,7 +177,83 @@ Claude 提供的 `harness/tests/eval/test_judge_annotation.py` 与 `harness/test
   `harness/tests/eval/test_golden_evaluation.py`、旧目录、蓝图、
   `docs/design/`、`tests/architecture/`、`contracts/`。不新增依赖。
 
-## 8. 非目标
+## 8. 取值与比较的口径（2026-10-05 用户裁决，取代 §3.1 的整值比较）
+
+596 两次校准证明"整值相等"这把尺子是坏的：legacy 参考金标 `gs-s0q-596-v1` 的 40 条**全无 components**、
+值是人工摘要（中位 58 字），比较器在参考无 components 时退化为整串相等；v1（详写原文）得 0/19、v2（简写）
+得 5.3%（1/19，仅 `coverage_period` 的"一年"=="一年"）。**两种相反风格被同一门槛判死**，说明度量的是
+"有没有写出和人一样的摘要"，不是"事实对不对"。我加的 `reference_atom_coverage` 也无效：它切句后仍要求整句
+逐字命中，粒度只从整段降到整句。
+
+用户 2026-10-05 裁决：**按语义等价比较，不要求一模一样；细节由实现方定。**
+
+### 8.1 比较分三层，各司其职
+
+| 层 | 判据 | 谁执行 | 结果 |
+|---|---|---|---|
+| L1 确定性 | 归一化相等、数值相等、日期相等、枚举同义（`eval/normalize.py` 的 `values_equal`） | 代码 | equal / not-equal |
+| L2 语义等价 | 参考列出的事实是否被评委的 `value` + `components[].accepted` 覆盖，措辞不同不算错 | 离线上限模型（同一文件交换机制） | equivalent / contradicted / insufficient |
+| L3 人工 | L2 判 contradicted 或 insufficient 的明细 | 人工抽检 | 最终裁定 |
+
+- **门槛（取代 §3.5 的值一致率 ≥80%）**：`compared` ≥ 1 时，
+  **`equivalent / compared` ≥ 80%**，且 **`contradicted` 必须为 0**。
+  "矛盾"是事实错误（如参考"30日"、评委"90日"），不是措辞差异，**一条都不允许**。
+- `insufficient`（参考或评委信息不足以判定）计入分母、不计入分子，并在报告中单独列出。
+- 报告保留 L1 的原始结果作为 `literal_agreement` 诊断项，**不进门槛**——用来观察措辞分布，不参与裁定。
+- **删除 `reference_atom_coverage`**：它不是正确的粒度，由 L2 取代。
+
+### 8.2 L2 的实现：等价问题走同一套文件交换
+
+复用 §3.2 的 `requests/` ↔ `responses/` 机制，不新造通道：
+
+```python
+# eval/equivalence.py
+EQUIVALENCE_PROMPT_VERSION = "1"
+
+class EquivalenceQuestion(BaseModel):        # frozen, extra="forbid"
+    field_key: str
+    reference: str                           # 参考 value 原文
+    judged: str | None                       # 评委 value
+    components: list[ValueComponent] = []    # 评委 components
+
+class EquivalenceReport(BaseModel):
+    compared: int = 0
+    equivalent: int = 0
+    contradicted: dict[str, str] = {}        # field_key -> 理由
+    insufficient: list[str] = []
+    rate: float | None = None                # equivalent / compared
+
+def build_equivalence_requests(
+    questions: Sequence[EquivalenceQuestion], *, product_id: str, batch_size: int = 25,
+) -> list[JudgeRequest]: ...
+
+def compare_equivalence(
+    client: JudgeClient, questions: Sequence[EquivalenceQuestion], *, max_calls: int, batch_size: int = 25,
+) -> EquivalenceReport: ...
+```
+
+- 每题只含 `field_key`、参考 `value`、评委 `value` 与 `components`；**不含原文、不含页码**——L2 判的是
+  "两句说法是否同义"，不是"是否有原文依据"（后者已由 §3.1 的引文回验负责）。
+- 输出严格 JSON：`{"fields":[{"field_key":..., "verdict":"equivalent|contradicted|insufficient",
+  "reason":"一句话理由"}]}`；缺字段、多字段、重复字段、非法 verdict 一律 `JudgeProtocolError`（fail closed）。
+- 预算：19 个字段 → 1 道题；`max_calls=2`。校准与 4 款产品的 Golden 都用它。
+- **判等不是重新抽原文**：L2 只读参考与评委的两段文字，不打开 PDF。
+
+### 8.3 取值形态（`value` 的写法，prompt v3）
+
+用户口径：**短的用原文；长的做裁剪但不得丢失核心信息；允许在不改变语义的前提下适度润色，便于人阅读。**
+
+- 短答案（时长、金额、比例、枚举、日期等）**逐字取自原文**，如 `15日`、`计划一1万元，计划二0元`。
+- 长答案（清单、责任、免责等）**裁剪为要点，保留全部核心事实**：项目数不能少、数值不能丢、条件不能省；
+  **禁止**用"等""包括但不限于""详见条款"带过材料已列明的内容。
+- 允许适度润色（补主语、调整语序、统一标点）**当且仅当不改变语义**；改变数值、范围、条件、责任方向的
+  改写属**禁止**。
+- `components` 必须覆盖包括 `value` 主答案在内的**全部必要要素**（每个要素一条，`accepted` 列等价措辞）；
+  **不得**只列补充条件而漏掉主答案。
+- `evidence` 仍是逐字原文，不受本节影响。
+- `PROMPT_VERSION` 升到 `"3"`；**v1、v2 的题目与答卷全部保留**，作为口径演进的证据，不覆盖、不删除。
+
+## 9. 非目标
 
 - 不与 V5 对比（V5 的结果文件与业务反馈表还未提供）。
 - 不做 1828 与重疾险 pack（缺主数据快照，见 §1）。
