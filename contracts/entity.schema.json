@@ -1,0 +1,64 @@
+{
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/entity.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "aliases": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Aliases",
+      "type": "array"
+    },
+    "classification_labels": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Classification Labels",
+      "type": "array"
+    },
+    "entity_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Entity Id",
+      "type": "string"
+    },
+    "entity_type": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Entity Type",
+      "type": "string"
+    },
+    "identifiers": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Identifiers",
+      "type": "object"
+    },
+    "names": {
+      "items": {
+        "minLength": 1,
+        "pattern": "\\S",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Names",
+      "type": "array"
+    },
+    "owner_module": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Owner Module",
+      "type": "string"
+    }
+  },
+  "required": [
+    "entity_id",
+    "entity_type",
+    "names",
+    "owner_module"
+  ],
+  "title": "Entity",
+  "type": "object"
+}
