@@ -42,9 +42,10 @@ _RULES = '''# 保险条款离线评委
 _CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 _EQUIVALENCE_RULES = '''# 语义等价独立评委
 
-只读当前目录，不打开其他路径，不联网，不重新抽取材料。
-按 requests/ 题目中的 system_lines 规则比较 user_lines 中两种表述，
-逐字段输出判定与理由到 responses/ 的同名 JSON 文件。已有答案跳过。
+只读本等价题根目录及其各产品子目录，不打开标注目录、PDF 或其他路径，不联网。
+本会话可逐个处理各产品子目录，不重新抽取材料，也不兼任标注评委。
+按各产品 requests/ 题目中的 system_lines 规则比较 user_lines 中两种表述，
+逐字段输出判定与理由到同一产品 responses/ 的同名 JSON 文件。已有答案跳过。
 如实报告矛盾与遗漏，不为通过校准放宽判断。
 不修改 requests/、run.json 或本文件，不用脚本批量生成答案。
 '''
@@ -227,7 +228,8 @@ def _equivalence(
                 field_key=ref.field_key, reference=ref.value, judged=item.value,
                 components=item.components,
             ))
-    directory = root / f"{product_id}-equivalence"
+    shared_directory = root / "equivalence"
+    directory = shared_directory / product_id
     requests = build_equivalence_requests(questions, product_id=product_id, batch_size=60)
     metadata = {
         "product_id": product_id, "model_id": model_id, "batch_size": 60,
@@ -245,10 +247,17 @@ def _equivalence(
         if _json(directory / "run.json") != metadata:
             raise ValueError("equivalence inputs changed since prepare")
     elif questions:
+        check_run_directory(shared_directory)
+        shared_directory.mkdir(parents=True, exist_ok=True)
+        rules = shared_directory / "AGENTS.md"
+        if rules.exists():
+            if rules.read_text(encoding="utf-8") != _EQUIVALENCE_RULES:
+                raise ValueError("shared equivalence rules changed")
+        else:
+            with rules.open("x", encoding="utf-8") as stream:
+                stream.write(_EQUIVALENCE_RULES)
         write_requests(requests, directory)
         _write(directory / "run.json", metadata)
-        with (directory / "AGENTS.md").open("x", encoding="utf-8") as stream:
-            stream.write(_EQUIVALENCE_RULES)
         return None
     client = FileJudgeClient(directory, model_id=model_id)
     report = compare_equivalence(client, questions, max_calls=2, batch_size=60)
@@ -326,7 +335,7 @@ def ingest(
             status="complete" if equivalence is not None else "awaiting_equivalence",
         )
         if equivalence is None:
-            summary["equivalence_directory"] = f"{product_id}-equivalence"
+            summary["equivalence_directory"] = f"equivalence/{product_id}"
             _write(run_root / "calibration.pending.json", summary)
         else:
             _write(run_root / "calibration.json", summary)

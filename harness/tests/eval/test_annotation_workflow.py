@@ -104,9 +104,13 @@ def test_semantic_calibration_waits_for_separate_judge_and_reuses_immutable_requ
     answer(root / "596", value="期限为90日")
     pending = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
     assert pending["status"] == "awaiting_equivalence"
+    assert pending["equivalence_directory"] == "equivalence/596"
+    rules = (root / "equivalence/AGENTS.md").read_text()
+    assert "各产品子目录" in rules and "标注" in rules
+    assert not (root / "equivalence/596/AGENTS.md").exists()
     assert pending["literal_agreement"] == 0 and pending["passed"] is False
     assert not (root / "calibration.json").exists()
-    eq = root / "596-equivalence"
+    eq = root / "equivalence" / "596"
     question_bytes = (eq / "requests/001.json").read_bytes()
     with pytest.raises(ValueError, match="calibration"):
         prepare(repo, root, "other")
@@ -129,7 +133,7 @@ def test_semantic_verdict_does_not_hide_failures(
     prepare(repo, root)
     answer(root / "596", value="180日")
     annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
-    write_json(root / "596-equivalence/responses/001.json", {"fields": [{
+    write_json(root / "equivalence/596/responses/001.json", {"fields": [{
         "field_key": "duration", "verdict": verdict, "reason": "时长不符或不足",
     }]})
     report = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
@@ -146,7 +150,7 @@ def test_equivalence_rejects_changed_calibration_inputs(
     prepare(repo, root)
     answer(root / "596", value="期限为90日")
     annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
-    eq = root / "596-equivalence"
+    eq = root / "equivalence" / "596"
     write_json(eq / "responses/001.json", {"fields": [{
         "field_key": "duration", "verdict": "equivalent", "reason": "same",
     }]})
@@ -193,7 +197,7 @@ def test_combined_l1_l2_rate_keeps_insufficient_in_denominator_and_contradiction
     ]})
     pending = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
     assert pending["literal_agreement"] == 1
-    eq = root / "596-equivalence"
+    eq = root / "equivalence" / "596"
     question = json.loads((eq / "requests/001.json").read_text())
     fields = json.loads("\n".join(question["user_lines"]))["fields"]
     assert [field["field_key"] for field in fields] == keys[1:]
