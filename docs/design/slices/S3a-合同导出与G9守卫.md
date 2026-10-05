@@ -206,7 +206,9 @@ def check(destination: Path) -> list[str]        # 返回与定义不一致的�
 ### 8.6 Bundle
 
 - `BundleMember`：`kind: str`（`^[a-z][a-z0-9_]*$`，**不做枚举**——成员种类词表属 Catalog/§5，写进合同会碰 G2）、
-  `logical_slug: str` 非空、`payload: dict[str, Any]`、`member_digest: str`（64 hex）、`evidence_refs: list[str] = []`。
+  `logical_slug: str` 非空、`payload: dict[str, Any]`、`member_digest: str`（64 hex）、`evidence_refs: list[str] = []`、
+  **`access_scope: str` 非空且必填**（2026-10-06 补：蓝图 §5.3 第 273–274 行的成员形状含 `access_scope`，§5.6/431 行
+  要求"每个成员携带由其 Evidence 来源推导的 access_scope，读时按调用者当前权限过滤"。我先前漏写，实现按蓝图取必填是对的）。
 - `CandidateBundle`：`contract_version: str`、`origin: Origin`、`compiler_identity: str` 非空；
   `base_release_id: str | None = None`、`base_epoch: int | None = None`（首次发布没有 base，用 None；
   **不要**填 `""` 或 `0` 冒充）、`members: list[BundleMember] = []`、`removals: list[str] = []`、
