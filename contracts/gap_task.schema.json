@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "GapStatus": {
+      "enum": [
+        "OPEN",
+        "IN_PROGRESS",
+        "RESOLVED",
+        "ABANDONED"
+      ],
+      "title": "GapStatus",
+      "type": "string"
+    },
+    "GapTrigger": {
+      "enum": [
+        "schema",
+        "feedback",
+        "lint",
+        "new_material"
+      ],
+      "title": "GapTrigger",
+      "type": "string"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/gap_task.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Attempts",
+      "type": "array"
+    },
+    "gap_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Gap Id",
+      "type": "string"
+    },
+    "search_scope": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Search Scope",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/GapStatus",
+      "default": "OPEN"
+    },
+    "target": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Target",
+      "type": "string"
+    },
+    "trigger": {
+      "$ref": "#/$defs/GapTrigger"
+    }
+  },
+  "required": [
+    "gap_id",
+    "target",
+    "trigger"
+  ],
+  "title": "GapTask",
+  "type": "object"
+}

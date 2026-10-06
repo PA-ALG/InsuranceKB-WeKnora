@@ -1,0 +1,331 @@
+{
+  "$defs": {
+    "BoundingBox": {
+      "additionalProperties": false,
+      "description": "Top-left origin; dimensions normalized to the page extent.",
+      "properties": {
+        "h": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "H",
+          "type": "number"
+        },
+        "w": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "W",
+          "type": "number"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
+      "title": "BoundingBox",
+      "type": "object"
+    },
+    "EvidenceMatch": {
+      "enum": [
+        "EXACT",
+        "NORMALIZED",
+        "FUZZY_REVIEW"
+      ],
+      "title": "EvidenceMatch",
+      "type": "string"
+    },
+    "Locator": {
+      "additionalProperties": false,
+      "description": "Kind-specific required fields with a stable keyword constructor.\n\nPage/slide indices are one-based; other indices and half-open text offsets\nare zero-based. Text offsets count Unicode code points, not bytes.",
+      "properties": {
+        "bbox": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoundingBox"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "block_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Index"
+        },
+        "cell_range": {
+          "anyOf": [
+            {
+              "pattern": "^\\$?[A-Z]+\\$?[1-9][0-9]*(:\\$?[A-Z]+\\$?[1-9][0-9]*)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cell Range"
+        },
+        "chunk_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chunk Id"
+        },
+        "column": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Column"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "kind": {
+          "$ref": "#/$defs/LocatorKind"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "revision_record_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision Record Id"
+        },
+        "row": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row"
+        },
+        "shape_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shape Id"
+        },
+        "sheet": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sheet"
+        },
+        "slide": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slide"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "table_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table Index"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Locator",
+      "type": "object"
+    },
+    "LocatorKind": {
+      "enum": [
+        "PDF_TEXT_SPAN",
+        "OCR_REGION",
+        "DOCX_BLOCK",
+        "DOCX_TABLE_CELL",
+        "PPTX_SHAPE",
+        "XLSX_CELL_RANGE",
+        "CHUNK_SPAN",
+        "STRUCTURED_PATH",
+        "EXPERT_REVISION"
+      ],
+      "title": "LocatorKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/evidence.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "access_scope": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Access Scope",
+      "type": "string"
+    },
+    "file_sha256": {
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "title": "File Sha256",
+      "type": "string"
+    },
+    "locator": {
+      "$ref": "#/$defs/Locator"
+    },
+    "match": {
+      "$ref": "#/$defs/EvidenceMatch",
+      "default": "EXACT"
+    },
+    "quote": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Quote",
+      "type": "string"
+    },
+    "quote_sha256": {
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "title": "Quote Sha256",
+      "type": "string"
+    },
+    "source_ref": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Source Ref",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_ref",
+    "file_sha256",
+    "locator",
+    "quote",
+    "access_scope"
+  ],
+  "title": "Evidence",
+  "type": "object"
+}

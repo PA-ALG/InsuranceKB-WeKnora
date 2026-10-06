@@ -1,0 +1,737 @@
+{
+  "$defs": {
+    "Applicability": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Channel",
+          "type": "array"
+        },
+        "population": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Population",
+          "type": "array"
+        },
+        "region": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Region",
+          "type": "array"
+        },
+        "scenario": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scenario",
+          "type": "array"
+        }
+      },
+      "title": "Applicability",
+      "type": "object"
+    },
+    "BoundingBox": {
+      "additionalProperties": false,
+      "description": "Top-left origin; dimensions normalized to the page extent.",
+      "properties": {
+        "h": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "H",
+          "type": "number"
+        },
+        "w": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "W",
+          "type": "number"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
+      "title": "BoundingBox",
+      "type": "object"
+    },
+    "ChangedBy": {
+      "enum": [
+        "compile",
+        "expert",
+        "feedback",
+        "import"
+      ],
+      "title": "ChangedBy",
+      "type": "string"
+    },
+    "ClaimState": {
+      "enum": [
+        "present",
+        "absent_explicitly",
+        "unknown"
+      ],
+      "title": "ClaimState",
+      "type": "string"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "access_scope": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Access Scope",
+          "type": "string"
+        },
+        "file_sha256": {
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "title": "File Sha256",
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/Locator"
+        },
+        "match": {
+          "$ref": "#/$defs/EvidenceMatch",
+          "default": "EXACT"
+        },
+        "quote": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Quote",
+          "type": "string"
+        },
+        "quote_sha256": {
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "title": "Quote Sha256",
+          "type": "string"
+        },
+        "source_ref": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Source Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_ref",
+        "file_sha256",
+        "locator",
+        "quote",
+        "access_scope"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "EvidenceMatch": {
+      "enum": [
+        "EXACT",
+        "NORMALIZED",
+        "FUZZY_REVIEW"
+      ],
+      "title": "EvidenceMatch",
+      "type": "string"
+    },
+    "Locator": {
+      "additionalProperties": false,
+      "description": "Kind-specific required fields with a stable keyword constructor.\n\nPage/slide indices are one-based; other indices and half-open text offsets\nare zero-based. Text offsets count Unicode code points, not bytes.",
+      "properties": {
+        "bbox": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoundingBox"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "block_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Index"
+        },
+        "cell_range": {
+          "anyOf": [
+            {
+              "pattern": "^\\$?[A-Z]+\\$?[1-9][0-9]*(:\\$?[A-Z]+\\$?[1-9][0-9]*)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cell Range"
+        },
+        "chunk_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chunk Id"
+        },
+        "column": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Column"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "kind": {
+          "$ref": "#/$defs/LocatorKind"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "revision_record_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision Record Id"
+        },
+        "row": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row"
+        },
+        "shape_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shape Id"
+        },
+        "sheet": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sheet"
+        },
+        "slide": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slide"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "table_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table Index"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Locator",
+      "type": "object"
+    },
+    "LocatorKind": {
+      "enum": [
+        "PDF_TEXT_SPAN",
+        "OCR_REGION",
+        "DOCX_BLOCK",
+        "DOCX_TABLE_CELL",
+        "PPTX_SHAPE",
+        "XLSX_CELL_RANGE",
+        "CHUNK_SPAN",
+        "STRUCTURED_PATH",
+        "EXPERT_REVISION"
+      ],
+      "title": "LocatorKind",
+      "type": "string"
+    },
+    "Maintenance": {
+      "additionalProperties": false,
+      "properties": {
+        "changed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Changed At"
+        },
+        "changed_by": {
+          "$ref": "#/$defs/ChangedBy",
+          "default": "compile"
+        },
+        "first_release_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Release Id"
+        },
+        "last_changed_release_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Changed Release Id"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "revision_no": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Revision No",
+          "type": "integer"
+        }
+      },
+      "title": "Maintenance",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "call_receipt_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Call Receipt Ref"
+        },
+        "compiler": {
+          "default": "",
+          "title": "Compiler",
+          "type": "string"
+        },
+        "compiler_version": {
+          "default": "",
+          "title": "Compiler Version",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "title": "Provenance",
+      "type": "object"
+    },
+    "Review": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ReviewMode",
+          "default": "machine"
+        },
+        "reviewed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed At"
+        },
+        "reviewer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewer"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        }
+      },
+      "title": "Review",
+      "type": "object"
+    },
+    "ReviewMode": {
+      "enum": [
+        "machine",
+        "human"
+      ],
+      "title": "ReviewMode",
+      "type": "string"
+    },
+    "SourceClass": {
+      "enum": [
+        "SOURCE_SUPPORTED",
+        "MIXED",
+        "MODEL_GENERATED",
+        "EXPERT_REVISION",
+        "STRUCTURED_IMPORT"
+      ],
+      "title": "SourceClass",
+      "type": "string"
+    },
+    "UnknownReason": {
+      "enum": [
+        "NOT_IN_MATERIAL",
+        "MATERIAL_AMBIGUOUS",
+        "LOCATOR_UNSUPPORTED",
+        "EXTRACTION_FAILED",
+        "OUT_OF_SCOPE"
+      ],
+      "title": "UnknownReason",
+      "type": "string"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/claim.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applicability": {
+      "$ref": "#/$defs/Applicability"
+    },
+    "claim_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Claim Id",
+      "type": "string"
+    },
+    "effective_from": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Effective From"
+    },
+    "effective_to": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Effective To"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "expert_lock": {
+      "default": false,
+      "title": "Expert Lock",
+      "type": "boolean"
+    },
+    "logical_key": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Logical Key",
+      "type": "string"
+    },
+    "maintenance": {
+      "$ref": "#/$defs/Maintenance"
+    },
+    "origin": {
+      "$ref": "#/$defs/SourceClass"
+    },
+    "predicate": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Predicate",
+      "type": "string"
+    },
+    "product_version_ref": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Product Version Ref"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "review": {
+      "$ref": "#/$defs/Review"
+    },
+    "state": {
+      "$ref": "#/$defs/ClaimState"
+    },
+    "subject_ref": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Subject Ref",
+      "type": "string"
+    },
+    "unit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Unit"
+    },
+    "unknown_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UnknownReason"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value"
+    }
+  },
+  "required": [
+    "claim_id",
+    "logical_key",
+    "subject_ref",
+    "predicate",
+    "state",
+    "origin"
+  ],
+  "title": "Claim",
+  "type": "object"
+}

@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "BundleMember": {
+      "additionalProperties": false,
+      "properties": {
+        "access_scope": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Access Scope",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "kind": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "logical_slug": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Logical Slug",
+          "type": "string"
+        },
+        "member_digest": {
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "title": "Member Digest",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "logical_slug",
+        "payload",
+        "member_digest",
+        "access_scope"
+      ],
+      "title": "BundleMember",
+      "type": "object"
+    },
+    "Origin": {
+      "enum": [
+        "compile",
+        "expert_edit",
+        "revert",
+        "incremental",
+        "feedback",
+        "import"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "ReviewMode": {
+      "enum": [
+        "machine",
+        "human"
+      ],
+      "title": "ReviewMode",
+      "type": "string"
+    },
+    "ReviewPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ReviewMode"
+        },
+        "policy_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Ref"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Size"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "ReviewPlan",
+      "type": "object"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/candidate_bundle.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "base_epoch": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Epoch"
+    },
+    "base_release_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Release Id"
+    },
+    "compiler_identity": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Compiler Identity",
+      "type": "string"
+    },
+    "contract_version": {
+      "const": "1",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "members": {
+      "items": {
+        "$ref": "#/$defs/BundleMember"
+      },
+      "title": "Members",
+      "type": "array"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin"
+    },
+    "removals": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Removals",
+      "type": "array"
+    },
+    "review_plan": {
+      "items": {
+        "$ref": "#/$defs/ReviewPlan"
+      },
+      "title": "Review Plan",
+      "type": "array"
+    }
+  },
+  "required": [
+    "contract_version",
+    "origin",
+    "compiler_identity"
+  ],
+  "title": "CandidateBundle",
+  "type": "object"
+}
