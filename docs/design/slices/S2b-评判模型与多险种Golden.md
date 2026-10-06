@@ -257,7 +257,12 @@ def apply_adjudications(
   "两句说法是否同义"，不是"是否有原文依据"（后者已由 §3.1 的引文回验负责）。
 - 输出严格 JSON：`{"fields":[{"field_key":..., "verdict":"equivalent|contradicted|insufficient",
   "reason":"一句话理由"}]}`；缺字段、多字段、重复字段、非法 verdict 一律 `JudgeProtocolError`（fail closed）。
-- 预算：19 个字段 → 1 道题；`max_calls=2`。校准与 4 款产品的 Golden 都用它。
+- 预算：19 个字段 → 1 道题；`max_calls=2`。**只有 596 校准用它**（见下条）。
+- **L2 只用于 596 校准，不用于 4 款产品**（2026-10-06 澄清）：L2 判的是"参考 value 与评委 value 是否同义"，
+  而**只有 596 有参考**（legacy `gs-s0q-596-v1`）。4 款产品的 Golden 由评委**新生成**，没有第二份参考可比，
+  `ingest` 的非校准分支走 `_save_golden`，不建 reference、不调 L2。**4 款产品的质量数字来自 G3 抽取
+  与该 Golden 之间的 `evaluate`（precision/recall，见 `eval/report.py`），与 L2 无关。** 故 §8.4/§8.5 的
+  prompt 版本与 L3 裁定均不影响 4 款产品的评分口径。
 - **判等不是重新抽原文**：L2 只读参考与评委的两段文字，不打开 PDF。
 
 ### 8.3 取值形态（`value` 的写法，prompt v3）
