@@ -120,7 +120,9 @@ func newStore() *fakeStore {
 	}
 }
 
-func (s *fakeStore) CreateCandidate(_ context.Context, c release.Candidate, b release.Bundle) (release.Candidate, error) {
+func (s *fakeStore) CreateCandidate(
+	_ context.Context, c release.Candidate, b release.Bundle,
+) (release.Candidate, error) {
 	if id, ok := s.byDigest[c.BundleDigest]; ok {
 		existing := s.candidates[id]
 		existing.Status = "existing"

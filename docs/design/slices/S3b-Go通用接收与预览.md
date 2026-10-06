@@ -144,8 +144,15 @@ func (s *Service) Preview(ctx context.Context, p Principal, spaceID, candidateID
 - 在 `internal/enterprise/` 新增 `mount.go`：一个 `Mount(r gin.IRouter, deps Deps)`，注册
   `POST /candidates`、`GET /candidates/:candidate_id/preview`，并挂服务间认证与租户解析（复用 `managed` 旁边
   已有中间件的做法；**不新建第二套认证**）。
-- 在 `internal/router/` 里**加一行**调用 `enterpriseMount.Mount(...)`（这是必需的上游接缝，按 G10 登记）。
 - 旧路由 `/release-scopes/.../preparations` 与 `/current` 等**保持不变**（S3c 再迁）。
+
+> **2026-10-06 范围裁定（Claude）**：本节原写"在 `internal/router/` 里加一行 `Mount(...)`"，**该条移出本片，改由 S3c 接通**。
+> 依据：本片规定的 `release.Store` 与 `EvidenceResolver` 在仓库里**没有生产实现**——`RouterParams` 不含这两者，
+> `internal/container/container.go` 也没有 `enterprise/release` 的提供者，且 container 不属本片改动范围；
+> 生产 `Store` 还需数据库迁移，而 §7 非目标明说本片不加迁移。所以"一行挂载"依赖**尚不存在**，是我写 Spec 时的错。
+> 本片交付**可注入的 `Service` 与 `Mount`**（依赖缺失时显式失败关闭，已由 `mount_test.go` 覆盖并验证）；
+> **router 挂载、container 依赖接缝、生产 `Store`/`EvidenceResolver` 实现、`docs/design/upstream-patches.md` 登记
+> 与 G10 基线更新，全部归 S3c。** 受保护验收 `acceptance_test.go` 不依赖 router（已核），故本片验收不受影响。
 
 ## 4. 交付物
 
@@ -153,7 +160,8 @@ func (s *Service) Preview(ctx context.Context, p Principal, spaceID, candidateID
 - 测试 `internal/enterprise/release/*_test.go`：用假 `Store`（内存 map）与假 `EvidenceResolver`，不连数据库、
   不发网络请求；schema 用 S3a 的真实产物（`os.ReadFile("../.../contracts/...")` 或内联最小 fixture，二者择一并在
   PR 说明）。
-- `internal/router/` 的一行挂载与对应登记。
+- `internal/enterprise/mount_test.go`：用真实认证中间件与共享 `APIKeyRouteAuthorizer` 验证接收/预览、拒绝未认证与受限密钥。
+- **不含** `internal/router/` 挂载与 `upstream-patches.md` 登记（见 §3.4 裁定，归 S3c）。
 
 ## 5. 验收
 
@@ -165,15 +173,15 @@ func (s *Service) Preview(ctx context.Context, p Principal, spaceID, candidateID
   空 Head 时预览把全部成员记为 `Added` 且 `NeedsRebase=false`；Head 前进时 `NeedsRebase=true`；
   未知 candidate 返回 `CANDIDATE_NOT_FOUND`；跨租户预览返回 `RELEASE_ACCESS_DENIED`。
   **具体断言以测试文件为准**，实现不要改它。
-- `go test ./internal/enterprise/... ./internal/router/...` 通过；`go vet` 通过；`gofumpt` 通过。
-- 仓库根架构守卫通过，G10 新登记 1 个文件后基线**只增这一项**（由 Claude 审查后更新）。
+- `go test ./internal/enterprise/...` 通过；`go vet ./internal/enterprise/...` 通过；
+  格式以 CI 的 `golangci-lint` 为准（本机无独立 `gofumpt` 命令，本地用 `gofmt -l .` 自查）。
+- 仓库根架构守卫 `pytest -q tests/architecture` 通过；**G10 基线本片不动**（无上游接缝改动，见 §3.4 裁定）。
 - CI 全绿。
 
 ## 6. 改动范围
 
 - 允许新增：`internal/enterprise/release/`、`internal/enterprise/mount.go`、对应测试。
-- 允许修改：`internal/router/routes_knowledge.go`（或 `router.go`）**仅新增一行挂载**、
-  `docs/design/upstream-patches.md`（只追加登记行）。
+- **不得修改 `internal/router/`**（2026-10-06 裁定后归 S3c；见 §3.4）。
 - 不得修改：蓝图、`docs/design/` 其他文件、`contracts/`（只读）、`tests/architecture/`、`harness/`、
   旧 `internal/application/service/wiki_release.go`、`internal/handler/wiki_release.go`、既有路由语义。
 
@@ -182,5 +190,7 @@ func (s *Service) Preview(ctx context.Context, p Principal, spaceID, candidateID
 - 不做决定（`/decisions`）、激活、CAS、rebase（S3c）。
 - 不删 ed25519 校验器（S3c）。
 - 不做前端页面（S3d）。
+- **不接生产接线**：`internal/router/` 挂载、container 依赖接缝、生产 `Store`/`EvidenceResolver` 实现、
+  `docs/design/upstream-patches.md` 登记与 G10 基线更新，均属 S3c（2026-10-06 裁定，见 §3.4）。
 - 不改旧 `/release-scopes/...` 路由行为；不新增数据库迁移（S3c 若需要迁移，那时再开）。
 - 不调用真实模型。
