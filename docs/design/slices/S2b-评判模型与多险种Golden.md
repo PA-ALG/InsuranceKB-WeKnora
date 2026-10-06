@@ -170,12 +170,14 @@ Claude 提供的 `harness/tests/eval/test_judge_annotation.py` 与 `harness/test
 
 ## 7. 改动范围
 
-- 允许新增：`eval/pdf_text.py`、`eval/judge.py`、`eval/judge_files.py`、`eval/annotate.py`、对应测试、
-  `dataset/golden/v1/` 下 4 个新 jsonl。删除：`dataset/shouxian_product/平安安佑福(全能版)重大疾病保险/`（见 §4）。
+- 允许新增：`eval/pdf_text.py`、`eval/judge.py`、`eval/judge_files.py`、`eval/annotate.py`、`eval/equivalence.py`、
+  对应测试、`dataset/golden/v1/` 下 4 个新 jsonl。删除：`dataset/shouxian_product/平安安佑福(全能版)重大疾病保险/`（见 §4）。
 - 允许修改：`eval/catalog.py`、`eval/report.py`、`dataset/golden/v1/manifest.json`。
+- **受保护（由 Claude 写，实现方不得改）**：`harness/tests/eval/test_equivalence.py`。
+  它钉住 §8.2–§8.5 的公开 API 与 L3 裁定口径，当前为 RED；实现完成即变绿，不得改动其中的断言。
 - 不得修改：`harness/tests/eval/test_judge_annotation.py`、`harness/tests/eval/test_judge_files.py`、
-  `harness/tests/eval/test_golden_evaluation.py`、旧目录、蓝图、
-  `docs/design/`、`tests/architecture/`、`contracts/`。不新增依赖。
+  `harness/tests/eval/test_golden_evaluation.py`、`docs/design/`（Claude 可改）、旧目录、蓝图、
+  `tests/architecture/`、`contracts/`。不新增依赖。
 
 ## 8. 取值与比较的口径（2026-10-05 用户裁决，取代 §3.1 的整值比较）
 
@@ -193,7 +195,7 @@ Claude 提供的 `harness/tests/eval/test_judge_annotation.py` 与 `harness/test
 |---|---|---|---|
 | L1 确定性 | 归一化相等、数值相等、日期相等、枚举同义（`eval/normalize.py` 的 `values_equal`） | 代码 | equal / not-equal |
 | L2 语义等价 | 参考列出的事实是否被评委的 `value` + `components[].accepted` 覆盖，措辞不同不算错 | 离线上限模型（同一文件交换机制） | equivalent / contradicted / insufficient |
-| L3 人工 | L2 判 contradicted 或 insufficient 的明细 | 人工抽检 | 最终裁定 |
+| L3 人工 | L2 判 contradicted 或 insufficient 的明细 | 人工抽检，落地方式见 §8.5 | 最终裁定 |
 
 - **门槛（取代 §3.5 的值一致率 ≥80%）**：`compared` ≥ 1 时，
   **`equivalent / compared` ≥ 80%**，且 **`contradicted` 必须为 0**。
@@ -208,7 +210,7 @@ Claude 提供的 `harness/tests/eval/test_judge_annotation.py` 与 `harness/test
 
 ```python
 # eval/equivalence.py
-EQUIVALENCE_PROMPT_VERSION = "1"
+EQUIVALENCE_PROMPT_VERSION = "2"             # 新题用当前版本；旧 run 用自己 run.json 里记的版本
 
 class EquivalenceQuestion(BaseModel):        # frozen, extra="forbid"
     field_key: str
@@ -219,18 +221,37 @@ class EquivalenceQuestion(BaseModel):        # frozen, extra="forbid"
 class EquivalenceReport(BaseModel):
     compared: int = 0
     equivalent: int = 0
-    contradicted: dict[str, str] = {}        # field_key -> 理由
+    contradicted: dict[str, str] = {}        # field_key -> 理由（L3 之后的最终分桶）
     insufficient: list[str] = []
+    insufficient_reasons: dict[str, str] = {}
     rate: float | None = None                # equivalent / compared
+    adjudicated: dict[str, str] = {}         # L3 记录：field_key -> "contradicted->equivalent"
+    raw_contradicted: dict[str, str] = {}    # L2 原始判定，诊断用，不进门槛
+    raw_insufficient: list[str] = []
 
 def build_equivalence_requests(
-    questions: Sequence[EquivalenceQuestion], *, product_id: str, batch_size: int = 25,
+    questions: Sequence[EquivalenceQuestion], *, product_id: str,
+    batch_size: int = 25, prompt_version: str = EQUIVALENCE_PROMPT_VERSION,
 ) -> list[JudgeRequest]: ...
 
 def compare_equivalence(
-    client: JudgeClient, questions: Sequence[EquivalenceQuestion], *, max_calls: int, batch_size: int = 25,
+    client: JudgeClient, questions: Sequence[EquivalenceQuestion], *, max_calls: int,
+    batch_size: int = 25, prompt_version: str = EQUIVALENCE_PROMPT_VERSION,
+) -> EquivalenceReport: ...
+
+def apply_adjudications(
+    report: EquivalenceReport, adjudications: Sequence[Adjudication],
 ) -> EquivalenceReport: ...
 ```
+
+- **system 文本按版本冻结**：模块内维护一张版本→完整 system 文本的冻结表（私有实现细节，
+  测试只钉行为、不访问私有名），`build_equivalence_requests` 按 `prompt_version` 取用。
+  `prompt_version` 不在表内即 `ValueError`（fail closed）。v1 文本**原样保留**，不得改写——
+  改一个字节就会让已答的 596 卷子对不上 sha。这样改 prompt 不会让旧 run 失效：
+  `prepare`/`ingest` 读回该 run 目录 `run.json` 里记的版本，再用同一文本重建题目。
+- **`Adjudication`**（L3 输入，§8.5）：`field_key`、`from`（`contradicted`/`insufficient`）、
+  `to`（`equivalent`/`insufficient`）、`reason`、`by`、`on`；全部非空，`extra="forbid"`。
+  JSON 里字段名就是 `from` / `to`（Python 侧用 `from_verdict` / `to_verdict` 加 `alias`，或允许 `from` 作别名）。
 
 - 每题只含 `field_key`、参考 `value`、评委 `value` 与 `components`；**不含原文、不含页码**——L2 判的是
   "两句说法是否同义"，不是"是否有原文依据"（后者已由 §3.1 的引文回验负责）。
@@ -252,6 +273,70 @@ def compare_equivalence(
   **不得**只列补充条件而漏掉主答案。
 - `evidence` 仍是逐字原文，不受本节影响。
 - `PROMPT_VERSION` 升到 `"3"`；**v1、v2 的题目与答卷全部保留**，作为口径演进的证据，不覆盖、不删除。
+
+### 8.4 L2 判定规则（prompt v2，2026-10-06 用户裁决）
+
+596 第一轮等价题（v1）暴露一个系统性偏差：评委把"**评委答比参考更具体**"判成了 `contradicted`。
+两处实例（均已回原文核实，见下表）：参考是人工摘要，把原文的限定条件漏掉了；评委答按 §8.3 要求
+保留了原文条件（如"**知道**保险事故发生后"、特药的"**按拥有基本医保或公费医疗投保**"），
+**逐字与原文一致**。评委却把这种"更精确"读成了"条件不同"。这会在 4 款产品上重复发生，
+污染全部数字，所以改 prompt 而不是改分数。
+
+**规则（写入 `_SYSTEM_BY_VERSION["2"]`）**：v2 文本 = v1 文本**逐字保留**，仅**追加**下面两行
+（追加位置在 v1 最后一行之后、结尾"只输出严格 JSON"之后另起）。这两行是受保护测试逐字断言的对象，
+**必须原样出现在 v2 的 system 文本中**：
+
+```
+判定单向：只问参考列出的核心事实是否被评委答案覆盖；评委答额外给出或更精确地给出参考未列的条件，
+而参考列出的事实仍成立时判 equivalent，不得判 contradicted。
+contradicted 只留给同一事实上的互斥：数值不同、范围不相交、条件互相排斥、责任方向相反。
+```
+
+- 判定**单向**：只问"参考列出的核心事实是否被评委的 `value` + `components[].accepted` 覆盖"。
+  评委答**额外**给出、或**更精确**地给出参考未列的条件/限定，而参考列出的事实**全部仍成立**时，
+  判 `equivalent`，**不得**判 `contradicted`。
+- `contradicted` 只留给**同一事实上的互斥**：数值不同（30日 ≠ 90日）、范围不相交、条件互相排斥、
+  责任方向相反（赔 ↔ 不赔）。
+- `insufficient` 保持不变：参考漏答、或两边信息不足以判定。**参考漏答不算评委的错**，但也不进分子。
+- **v1 文本一个字都不许改**：v1 必须仍含 `遗漏不得按措辞不同放过。`，且**不得**含 `不得判 contradicted`。
+
+### 8.5 L3 裁定（人工）的落地与先例
+
+L2 是模型判定，会误判；§8.1 的 L3 是最终裁定。落地方式：
+
+- **裁定文件**：等价 run 根目录下的 `adjudications.json`，形状为
+  `{"entries":[{"field_key":..., "from":"contradicted|insufficient", "to":"equivalent|insufficient", "reason":..., "by":"Claude Code", "on":"YYYY-MM-DD"}]}`。
+  由 Claude 写入，随 run 目录保存。**不得**修改 `requests/`、`responses/` 或 `run.json`。
+- **生效点**：`ingest` 调用 `compare_equivalence` 之后、算 `passed` 之前，读该文件并 `apply_adjudications`。
+  每条裁定必须**指向 L2 确实判过该 field_key 且断言与原始判定一致**，否则 `ValueError`（fail closed）。
+- **报告口径**：`contradicted` / `insufficient` 是**裁定后**的最终分桶，进门槛；
+  L2 原始判定留在 `raw_contradicted` / `raw_insufficient`，同 `literal_agreement` 一样只作诊断，
+  **不进门槛**。报告另记 `adjudicated`，让"改过几条"始终可见。
+- 裁定必须在报告与 PR 里**逐条给出理由与原文依据**（field_key + 为什么 L2 判错/判对），不写"人工复核通过"。
+
+**先例（596，prompt v1，2026-10-06 裁定）**：
+
+| field_key | L2 原判 | 裁定 | 依据（原文） |
+|---|---|---|---|
+| `claim_application_deadline_and_documents` | contradicted | equivalent | 条款 5.2"您、被保险人或受益人**知道**保险事故发生后应当在 10 日内通知我们"——评委答与原文逐字一致，参考漏"知道" |
+| `reimbursement_rate_rules` | contradicted | equivalent | 条款 1.5.8 / page 19"若您**按被保险人拥有基本医疗保险或公费医疗的情况进行投保**……我们将按 60% 的给付比例给付"——该前置条件是原文的，参考在特药条省略 |
+
+裁定后 596 的等价结果：**equivalent 16 / compared 19 = 84.2% ≥ 80%，contradicted 0 → 通过**
+（`insufficient` 3 条维持，见 §8.6）。
+
+### 8.6 596 维持为 insufficient 的 3 条（真缺陷，记入 4 款产品的教训）
+
+以下三条裁定**维持 insufficient**，是评委答的真实遗漏，不是参考的问题：
+
+- `policyholder_rights`：参考列"15 日犹豫期全额退费 / 享受合同保障 / 享受健康管理服务 / 可退保"，
+  评委答的是**现金价值计算公式**（属 `surrender_and_cancellation_terms`），**答错了字段**。
+- `insured_eligibility`：只答家庭成员定义，**漏掉常规投保年龄**（出生满 28 日至 70 周岁）与 71–100 周岁条件。
+- `entry_age_range`：只答"已投保指定产品"一条例外，**漏掉"上一保险期间届满后 60 日内重新投保"另一条**
+  （原文 page 2 两条并列）。
+
+> **给 4 款产品的教训**：`insured_eligibility` 与 `entry_age_range` 取材自**同一段"投保范围"原文**，
+> 模型把年龄类事实全塞进后者、家庭类塞进前者，两字段各缺一半。这是**字段描述的重叠**，不是模型能力问题；
+> 生成前应检查 pack 内字段描述的取材边界是否互斥。此项不改 596 的既有结论，只在 4 款产品上避免重犯。
 
 ## 9. 非目标
 
