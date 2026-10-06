@@ -212,6 +212,72 @@ def test_combined_l1_l2_rate_keeps_insufficient_in_denominator_and_contradiction
     assert report["passed"] is passed
 
 
+@pytest.mark.parametrize("version", ["1", "2"])
+def test_equivalence_ingest_replays_recorded_version_and_keeps_l3_evidence(
+    workspace: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, version: str,
+) -> None:
+    repo, root = workspace
+    prepare(repo, root)
+    answer(root / "596", value="期限为90日")
+    monkeypatch.setattr(annotate, "EQUIVALENCE_PROMPT_VERSION", version)
+    annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    eq = root / "equivalence/596"
+    assert json.loads((eq / "run.json").read_text())["prompt_version"] == version
+    write_json(eq / "responses/001.json", {"fields": [{
+        "field_key": "duration", "verdict": "contradicted", "reason": "起算条件不同",
+    }]})
+    ruling = {
+        "field_key": "duration", "from": "contradicted", "to": "equivalent",
+        "reason": "terms 第1页期限为90日，评委仅补全主语",
+        "by": "test reviewer", "on": "2026-10-06",
+    }
+    write_json(root / "equivalence/adjudications.json", {"entries": [ruling]})
+    before = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    monkeypatch.setattr(annotate, "EQUIVALENCE_PROMPT_VERSION", "2")
+
+    report = annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+
+    assert report["passed"] is True
+    assert report["equivalence"]["rate"] == 1
+    assert report["equivalence"]["raw_contradicted"] == {"duration": "起算条件不同"}
+    assert report["equivalence"]["adjudicated"] == {"duration": "contradicted->equivalent"}
+    assert report["equivalence"]["adjudication_details"] == [ruling]
+    assert all(path.read_bytes() == original for path, original in before.items())
+
+
+@pytest.mark.parametrize("mutation", ["version", "missing_version", "entries", "extra", "field"])
+def test_equivalence_ingest_refuses_invalid_version_or_adjudication_without_final_report(
+    workspace: tuple[Path, Path], mutation: str,
+) -> None:
+    repo, root = workspace
+    prepare(repo, root)
+    answer(root / "596", value="期限为90日")
+    annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    eq = root / "equivalence/596"
+    write_json(eq / "responses/001.json", {"fields": [{
+        "field_key": "duration", "verdict": "contradicted", "reason": "起算条件不同",
+    }]})
+    if mutation in {"version", "missing_version"}:
+        metadata = json.loads((eq / "run.json").read_text())
+        metadata["prompt_version"] = "unrecognized"
+        if mutation == "missing_version":
+            del metadata["prompt_version"]
+        write_json(eq / "run.json", metadata)
+    else:
+        payload: dict[str, Any] = {"entries": [{
+            "field_key": "unrequested", "from": "contradicted", "to": "equivalent",
+            "reason": "原文依据", "by": "test reviewer", "on": "2026-10-06",
+        }]}
+        if mutation == "entries":
+            payload = {}
+        elif mutation == "extra":
+            payload = {"entries": [], "unexpected": True}
+        write_json(root / "equivalence/adjudications.json", payload)
+    with pytest.raises(ValueError):
+        annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    assert not (root / "calibration.json").exists()
+
+
 @pytest.mark.parametrize("mutation", ["pdf", "batch", "fields", "hash", "extra", "prompt"])
 def test_ingest_rejects_changed_inputs(workspace: tuple[Path, Path], mutation: str) -> None:
     repo, root = workspace

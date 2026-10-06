@@ -19,8 +19,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from insurance_harness.eval.catalog import load_catalog
 from insurance_harness.eval.equivalence import (
     EQUIVALENCE_PROMPT_VERSION,
+    Adjudication,
     EquivalenceQuestion,
     EquivalenceReport,
+    apply_adjudications,
     build_equivalence_requests,
     compare_equivalence,
 )
@@ -61,6 +63,11 @@ class _Run(BaseModel):
     source_directory: str
     source_sha256: dict[str, str]
     request_sha256: list[str] = Field(min_length=1, max_length=3)
+
+
+class _Adjudications(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    entries: list[Adjudication]
 
 
 class _PrepareClient:
@@ -230,10 +237,19 @@ def _equivalence(
             ))
     shared_directory = root / "equivalence"
     directory = shared_directory / product_id
-    requests = build_equivalence_requests(questions, product_id=product_id, batch_size=60)
+    stored = _json(directory / "run.json") if directory.exists() else None
+    prompt_version = EQUIVALENCE_PROMPT_VERSION
+    if stored is not None:
+        version = stored.get("prompt_version")
+        if not isinstance(version, str):
+            raise ValueError("equivalence prompt version missing or invalid")
+        prompt_version = version
+    requests = build_equivalence_requests(
+        questions, product_id=product_id, batch_size=60, prompt_version=prompt_version,
+    )
     metadata = {
         "product_id": product_id, "model_id": model_id, "batch_size": 60,
-        "prompt_version": EQUIVALENCE_PROMPT_VERSION,
+        "prompt_version": prompt_version,
         "request_sha256": [request.sha256 for request in requests],
         "reference_sha256": hashlib.sha256(
             (repo / f"dataset/golden/v1/{product_id}.jsonl").read_bytes(),
@@ -243,8 +259,8 @@ def _equivalence(
             for path in sorted((root / product_id / "responses").glob("*.json"))
         },
     }
-    if directory.exists():
-        if _json(directory / "run.json") != metadata:
+    if stored is not None:
+        if stored != metadata:
             raise ValueError("equivalence inputs changed since prepare")
     elif questions:
         check_run_directory(shared_directory)
@@ -260,9 +276,15 @@ def _equivalence(
         _write(directory / "run.json", metadata)
         return None
     client = FileJudgeClient(directory, model_id=model_id)
-    report = compare_equivalence(client, questions, max_calls=2, batch_size=60)
+    report = compare_equivalence(
+        client, questions, max_calls=2, batch_size=60, prompt_version=prompt_version,
+    )
     if client.unconsumed():
         raise ValueError("unconsumed equivalence request files")
+    adjudication_path = shared_directory / "adjudications.json"
+    if adjudication_path.exists():
+        adjudications = _Adjudications.model_validate_json(adjudication_path.read_text("utf-8"))
+        report = apply_adjudications(report, adjudications.entries)
     report.compared += literal
     report.equivalent += literal
     report.rate = report.equivalent / report.compared if report.compared else None
@@ -329,7 +351,7 @@ def ingest(
                 report.literal_agreement / report.both_present if report.both_present else None
             ),
             evidence_not_verified_rate=rejected_rate,
-            equivalence=equivalence.model_dump() if equivalence is not None else None,
+            equivalence=equivalence.model_dump(by_alias=True) if equivalence is not None else None,
             passed=(state_rate is not None and state_rate >= 0.9 and equivalence is not None
                     and equivalence.passes() is True and rejected_rate <= 0.1),
             status="complete" if equivalence is not None else "awaiting_equivalence",
