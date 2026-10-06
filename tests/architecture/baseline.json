@@ -8,6 +8,7 @@
   "G4_naming": 357,
   "G5_hardcoded": 79,
   "G6_private_access": 339,
+  "G9_contract_drift": 0,
   "G10_upstream_patches": 456,
   "G11_new_file_location": 847
  },
@@ -829,6 +830,7 @@
    "harness/src/insurance_harness/runtime/settings.py": 1,
    "harness/src/insurance_harness/template_packages/resolver.py": 3
   },
+  "G9_contract_drift": {},
   "G10_upstream_patches": {
    ".dockerignore": 1,
    ".gitignore": 1,

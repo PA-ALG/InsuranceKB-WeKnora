@@ -1,0 +1,89 @@
+{
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/expert_revision.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actor": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Actor",
+      "type": "string"
+    },
+    "after": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "After"
+    },
+    "attachments": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Attachments",
+      "type": "array"
+    },
+    "before": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Before"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "recorded_at": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Recorded At",
+      "type": "string"
+    },
+    "revision_record_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Revision Record Id",
+      "type": "string"
+    },
+    "role": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Role",
+      "type": "string"
+    },
+    "target": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Target",
+      "type": "string"
+    }
+  },
+  "required": [
+    "revision_record_id",
+    "actor",
+    "role",
+    "recorded_at",
+    "target"
+  ],
+  "title": "ExpertRevision",
+  "type": "object"
+}
