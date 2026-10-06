@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 
@@ -23,11 +24,12 @@ from insurance_harness.compilers.schema_fields.engine import (
     SchemaFieldsCompiler,
     to_candidate,
 )
-from insurance_harness.eval.catalog import load_catalog
 from insurance_harness.eval.convert import predictions_from_candidate
 from insurance_harness.evidence.quote_verification import QuoteMatch, verify_quote
 
-REPO_CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+# Resolve from this file so the suite runs from harness/ or the repo root alike.
+REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_CATALOG = REPO_ROOT / "internal/handler/schema_pack_catalog_830_g3.generated.json"
 PACK = "schemapack_medical_insurance"
 SHA = "c" * 64
 
@@ -122,8 +124,10 @@ GOOD = payload(
 )
 
 
-def compiler(completion: RecordingCompletion, **kwargs: object) -> SchemaFieldsCompiler:
-    return SchemaFieldsCompiler(completion, batch_size=10, max_calls=5, **kwargs)  # type: ignore[arg-type]
+def compiler(
+    completion: RecordingCompletion, *, batch_size: int = 10, max_calls: int = 5
+) -> SchemaFieldsCompiler:
+    return SchemaFieldsCompiler(completion, batch_size=batch_size, max_calls=max_calls)
 
 
 # ---- catalog wiring ---------------------------------------------------------------------------
@@ -132,9 +136,21 @@ def compiler(completion: RecordingCompletion, **kwargs: object) -> SchemaFieldsC
 def test_pack_definitions_come_from_the_catalog_in_a_stable_order() -> None:
     from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 
-    catalog = load_catalog(REPO_CATALOG)
+    # Count source-extractable fields straight from the catalog JSON: this slice
+    # may not touch eval/, and the pack filter is the engine's own responsibility.
+    document = json.loads(REPO_CATALOG.read_text(encoding="utf-8"))
+    pack = next(
+        entry["pack"] for entry in document["entries"] if entry["pack"]["schema_pack_id"] == PACK
+    )
+    expected = {
+        field["field_key"]
+        for field in pack["fields"]
+        if "原文抽取" in (field.get("formation_method") or "")
+    }
+    assert "waiting_period" in expected and "product_type" not in expected
+
     fields = pack_definitions(REPO_CATALOG, PACK)
-    assert len(fields) == len(catalog.source_extractable_fields(PACK))
+    assert {f.field_key for f in fields} == expected
     assert [f.ordinal for f in fields] == list(range(len(fields)))
     keys = {f.field_key for f in fields}
     assert {"waiting_period", "coverage_period"} <= keys
@@ -169,11 +185,10 @@ def test_the_same_input_builds_the_same_request() -> None:
 
 def test_batching_splits_fields_in_order() -> None:
     completion = RecordingCompletion([GOOD])
-    requests = compiler(completion, batch_size=1).build_requests("596-1", definitions(), PAGES)  # type: ignore[call-arg]
+    requests = compiler(completion, batch_size=1).build_requests("596-1", definitions(), PAGES)
     assert len(requests) == 2
-    assert (
-        requests[0].user.index("waiting_period") < requests[0].user.index("coverage_period") or True
-    )
+    assert "waiting_period" in requests[0].user and "coverage_period" not in requests[0].user
+    assert "coverage_period" in requests[1].user and "waiting_period" not in requests[1].user
 
 
 # ---- compile and verify -------------------------------------------------------------------------
@@ -268,7 +283,10 @@ def test_unparseable_output_is_an_error() -> None:
 
 
 def test_budget_is_checked_before_each_call() -> None:
-    completion = RecordingCompletion([GOOD])
+    # batch_size=1 puts waiting_period alone in the first batch, so the canned
+    # answer must be legal for that batch rather than the two-field GOOD.
+    first_batch = payload(row("waiting_period", 0, "90日", quote="本合同等待期为90日"))
+    completion = RecordingCompletion([first_batch])
     with pytest.raises(CompileBudgetExceeded):
         SchemaFieldsCompiler(completion, batch_size=1, max_calls=1).compile(
             "596-1", definitions(), PAGES
