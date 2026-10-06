@@ -105,8 +105,11 @@ type fakeStore struct {
 	candidates map[string]release.Candidate
 	bundles    map[string]release.Bundle
 	byDigest   map[string]string
-	head       release.Head
-	created    int
+	// members is the active Head's logical_slug -> member_digest map, which
+	// Preview compares the candidate against.
+	members map[string]string
+	head    release.Head
+	created int
 }
 
 func newStore() *fakeStore {
@@ -201,7 +204,7 @@ func TestReceiveAcceptsAValidBundleWithAStableDigest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "1", first.ContractVersion)
 	require.Equal(t, "release-base", first.BaseReleaseID)
-	require.Equal(t, 7, first.TenantID)
+	require.Equal(t, uint64(7), first.TenantID)
 
 	second, err := service.Receive(context.Background(), principal(), spaceID, raw)
 	require.NoError(t, err)
