@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 )
 
+// SupportedContractVersion is the contract version supported by this package, as declared in contracts/README.md.
 const (
 	SupportedContractVersion = "1"
 	MaxBundleBytes           = 2 << 20
