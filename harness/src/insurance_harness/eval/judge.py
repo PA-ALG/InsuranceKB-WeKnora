@@ -118,6 +118,7 @@ class _Answer(BaseModel):
     value: str | None
     components: list[ValueComponent] = Field(default_factory=list)
     evidence: list[_Citation]
+    unknown_reason: NonBlank | None = None
 
     @model_validator(mode="after")
     def validate_shape(self) -> Self:
@@ -130,6 +131,8 @@ class _Answer(BaseModel):
             raise ValueError("unknown requires no evidence")
         if self.state != "unknown" and not self.evidence:
             raise ValueError("present/absent requires evidence")
+        if self.state != "unknown" and self.unknown_reason is not None:
+            raise ValueError("unknown_reason requires unknown state")
         return self
 
 
@@ -226,6 +229,7 @@ class JudgeAnnotator:
                     pack_id=pack_id, product_id=product_id, field_key=key,
                     state=answer.state, value=answer.value, components=answer.components,
                     evidence=evidence, judged_by=f"model:{self.client.model_id}",
+                    note=answer.unknown_reason,
                 ))
         return AnnotationResult(items, rejected, self.calls - initial_calls, self.client.model_id)
 

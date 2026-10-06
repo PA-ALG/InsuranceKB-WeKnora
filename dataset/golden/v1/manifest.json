@@ -1,21 +1,125 @@
 {
-  "dataset_version": "v1",
-  "source": "gs-s0q-596-v1",
-  "source_file": "dataset/goldenset/gs-s0q-596-v1/596.jsonl",
-  "source_sha256": "562c37c7cf262e2e78f0b3ca4b7de4b0dab2f407d3cd7318a8a69b5dca33d8fb",
-  "source_manifest_sha256": "d926cc3da4af4c531dffd05c12e5b8214fb8b79e50652ca5c30bd5db35f377c1",
-  "product_id": "596",
-  "product_version": "596-1",
-  "pack_id": "schemapack_medical_insurance",
+  "catalog_declared_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
   "catalog_file": "internal/handler/schema_pack_catalog_830_g3.generated.json",
   "catalog_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
-  "catalog_declared_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
   "catalog_version": "2026-08-12-v5",
+  "dataset_version": "v1",
+  "files": {
+    "1814.jsonl": "225534cce09cec8938f6359203c124c8cb793209559d15546e8dc80ba1424034",
+    "1816.jsonl": "de6aa039c82cf3494b2d7930b6de5a9d8574d014cc828072d53dd8704dc5904b",
+    "1824.jsonl": "4e413717021f548fb9a1f20444401b9f9f632a91f41a08b55be1174308fc899b",
+    "1826.jsonl": "617e37ccf6e59139d0155a7e48836e47ec88a0cf8c13f5d18d4b08f1267042e5",
+    "596.jsonl": "257112a16d3e90e68c5016dd14561d0f4c639aea21262a7ed5d9fafac453d902"
+  },
+  "generation": "insurance_harness.eval.convert.golden_from_legacy; exact pack short_title matching",
   "items": 40,
+  "pack_id": "schemapack_medical_insurance",
+  "product_id": "596",
+  "product_version": "596-1",
+  "products": {
+    "1814": {
+      "evidence_not_verified": 0,
+      "items": 42,
+      "judging_method": "codex-session-file-exchange",
+      "model_id": "gpt-6-astra",
+      "pack_id": "schemapack_accident_insurance",
+      "product_id": "1814",
+      "prompt_version": "3",
+      "question_count": 1,
+      "rejected": {},
+      "request_sha256": [
+        "3ab653fd0f8ced81e6a0380327a911ff322041dda13ee244683359bc835280fe"
+      ],
+      "source_sha256": {
+        "产品说明书.pdf": "68105656802ea7ad267d9d1def1f78c1fb706a807bc75fc93ba8ef1aeae83abf",
+        "保险条款.pdf": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+        "费率表.pdf": "72224c36ed2455365fcbcd361444d3f26b50ee88d62aba7673d41525c27b99c7"
+      },
+      "tri_state": {
+        "present": 26,
+        "unknown": 16
+      }
+    },
+    "1816": {
+      "evidence_not_verified": 0,
+      "items": 56,
+      "judging_method": "codex-session-file-exchange",
+      "model_id": "gpt-6-astra",
+      "pack_id": "schemapack_disability_income_insurance",
+      "product_id": "1816",
+      "prompt_version": "3",
+      "question_count": 1,
+      "rejected": {},
+      "request_sha256": [
+        "2458e25dff95f33423d56282b1ec9039d5ed8eb7e462f693a6f287ef64ab7ebf"
+      ],
+      "source_sha256": {
+        "产品说明书.pdf": "c156596bb234188ec324a5a9e56efb905e91804ee5bc29fd4ece1bc62dbc7db7",
+        "保险条款.pdf": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+        "费率表.pdf": "b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a"
+      },
+      "tri_state": {
+        "present": 34,
+        "unknown": 22
+      }
+    },
+    "1824": {
+      "evidence_not_verified": 0,
+      "items": 53,
+      "judging_method": "codex-session-file-exchange",
+      "model_id": "gpt-6-astra",
+      "pack_id": "schemapack_whole_life_insurance",
+      "product_id": "1824",
+      "prompt_version": "3",
+      "question_count": 1,
+      "rejected": {},
+      "request_sha256": [
+        "c4003e31f5076038e6df066ad119411f22796142c2be7076bd860f2117b9f836"
+      ],
+      "source_sha256": {
+        "产品说明书.pdf": "a484e0757d1989ef2fd3f3700273a081b30f026547b4f965a77854c028a713f6",
+        "保险条款.pdf": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+        "费率表.pdf": "9811367acd0d3875260e926fe64901e3423c07569ae06bf1438926769860c66f"
+      },
+      "tri_state": {
+        "present": 25,
+        "unknown": 28
+      }
+    },
+    "1826": {
+      "evidence_not_verified": 0,
+      "items": 56,
+      "judging_method": "codex-session-file-exchange",
+      "model_id": "gpt-6-astra",
+      "pack_id": "schemapack_endowment_insurance",
+      "product_id": "1826",
+      "prompt_version": "3",
+      "question_count": 1,
+      "rejected": {},
+      "request_sha256": [
+        "a039744deb1ea0d88e5efcc1aafbd0134296403753029b0e2b7fae0fc029b874"
+      ],
+      "source_sha256": {
+        "产品说明书.pdf": "d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a",
+        "保险条款.pdf": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+        "费率表.pdf": "9ea421ad68d443e5e6572b7c2c91fcd2302ab18103a7b85f733c0ea29439ea19"
+      },
+      "tri_state": {
+        "present": 23,
+        "unknown": 33
+      }
+    }
+  },
+  "provenance": "Legacy approved annotations retained as legacy:gs-s0q-596-v1; no reannotation or model call.",
+  "scope": "Offline deterministic value comparison only; evidence accuracy and production model quality are not certified.",
+  "source": "gs-s0q-596-v1",
+  "source_file": "dataset/goldenset/gs-s0q-596-v1/596.jsonl",
+  "source_manifest_sha256": "d926cc3da4af4c531dffd05c12e5b8214fb8b79e50652ca5c30bd5db35f377c1",
+  "source_sha256": "562c37c7cf262e2e78f0b3ca4b7de4b0dab2f407d3cd7318a8a69b5dca33d8fb",
   "tri_state": {
+    "absent_explicitly": 2,
     "present": 30,
-    "unknown": 8,
-    "absent_explicitly": 2
+    "unknown": 8
   },
   "unmapped_fields": [
     "条款生效日期",
@@ -38,53 +142,5 @@
     "投保职业",
     "理赔件数",
     "特殊免责"
-  ],
-  "files": {
-    "596.jsonl": "257112a16d3e90e68c5016dd14561d0f4c639aea21262a7ed5d9fafac453d902"
-  },
-  "generation": "insurance_harness.eval.convert.golden_from_legacy; exact pack short_title matching",
-  "provenance": "Legacy approved annotations retained as legacy:gs-s0q-596-v1; no reannotation or model call.",
-  "scope": "Offline deterministic value comparison only; evidence accuracy and production model quality are not certified.",
-  "products": {
-    "1826": {
-      "product_id": "1826",
-      "pack_id": "schemapack_endowment_insurance",
-      "status": "pending_judge",
-      "source_sha256": {
-        "产品说明书.pdf": "d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a",
-        "保险条款.pdf": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
-        "费率表.pdf": "9ea421ad68d443e5e6572b7c2c91fcd2302ab18103a7b85f733c0ea29439ea19"
-      }
-    },
-    "1824": {
-      "product_id": "1824",
-      "pack_id": "schemapack_whole_life_insurance",
-      "status": "pending_judge",
-      "source_sha256": {
-        "产品说明书.pdf": "a484e0757d1989ef2fd3f3700273a081b30f026547b4f965a77854c028a713f6",
-        "保险条款.pdf": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
-        "费率表.pdf": "9811367acd0d3875260e926fe64901e3423c07569ae06bf1438926769860c66f"
-      }
-    },
-    "1814": {
-      "product_id": "1814",
-      "pack_id": "schemapack_accident_insurance",
-      "status": "pending_judge",
-      "source_sha256": {
-        "产品说明书.pdf": "68105656802ea7ad267d9d1def1f78c1fb706a807bc75fc93ba8ef1aeae83abf",
-        "保险条款.pdf": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
-        "费率表.pdf": "72224c36ed2455365fcbcd361444d3f26b50ee88d62aba7673d41525c27b99c7"
-      }
-    },
-    "1816": {
-      "product_id": "1816",
-      "pack_id": "schemapack_disability_income_insurance",
-      "status": "pending_judge",
-      "source_sha256": {
-        "产品说明书.pdf": "c156596bb234188ec324a5a9e56efb905e91804ee5bc29fd4ece1bc62dbc7db7",
-        "保险条款.pdf": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
-        "费率表.pdf": "b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a"
-      }
-    }
-  }
+  ]
 }

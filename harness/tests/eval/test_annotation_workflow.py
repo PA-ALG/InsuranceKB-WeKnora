@@ -95,6 +95,60 @@ def test_failed_calibration_does_not_unlock_generation(workspace: tuple[Path, Pa
         prepare(repo, root, "other")
 
 
+@pytest.mark.parametrize("reason", [None, "原文未说明该字段"])
+def test_unknown_reason_is_preserved_in_golden_note_without_changing_requests(
+    workspace: tuple[Path, Path], reason: str | None,
+) -> None:
+    repo, root = workspace
+    prepare(repo, root)
+    answer(root / "596")
+    annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    other = repo / "dataset/shouxian_product/Other"
+    write_json(other / "product_meta.json", {"planCode": "other"})
+    (other / "terms.pdf").write_bytes(b"other terms")
+    prepare(repo, root, "other")
+    request_path = root / "other/requests/001.json"
+    before = request_path.read_bytes()
+    row: dict[str, Any] = {
+        "field_key": "duration", "state": "unknown", "value": None,
+        "components": [], "evidence": [],
+    }
+    if reason is not None:
+        row["unknown_reason"] = reason
+    write_json(root / "other/responses/001.json", {"fields": [row]})
+    annotate.ingest(repo, "other", root, judge_model="fake")
+    item = json.loads((repo / "dataset/golden/v1/other.jsonl").read_text())
+    assert item["state"] == "unknown" and item["note"] == reason
+    assert request_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("state,reason,extra", [
+    ("unknown", "", False), ("unknown", " \t", False), ("unknown", 12, False),
+    ("present", "有原因", False), ("absent_explicitly", "有原因", False),
+    ("unknown", "原文未说明", True),
+])
+def test_unknown_reason_extension_keeps_strict_state_and_extra_field_validation(
+    workspace: tuple[Path, Path], state: str, reason: object, extra: bool,
+) -> None:
+    repo, root = workspace
+    prepare(repo, root)
+    answer(root / "596")
+    path = root / "596/responses/001.json"
+    data = json.loads(path.read_text())
+    row = data["fields"][0]
+    row.update(state=state, unknown_reason=reason)
+    if state != "present":
+        row["value"] = None
+    if state == "unknown":
+        row["evidence"] = []
+    if extra:
+        row["unrecognized"] = "still forbidden"
+    write_json(path, data)
+    with pytest.raises(JudgeProtocolError):
+        annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
+    assert not (root / "calibration.json").exists()
+
+
 def test_semantic_calibration_waits_for_separate_judge_and_reuses_immutable_requests(
     workspace: tuple[Path, Path],
 ) -> None:
