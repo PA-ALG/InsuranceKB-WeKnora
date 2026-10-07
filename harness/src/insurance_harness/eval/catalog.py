@@ -21,15 +21,19 @@ class _CatalogRecord(BaseModel):
         return value
 
 
-class _Field(_CatalogRecord):
+class FieldDefinition(_CatalogRecord):
     short_title: Text
     field_key: Text
+    description: str = ""
+    source_guidance: str = ""
+    value_spec: str | None = None
+    formation_method: str = ""
 
 
 class _Pack(_CatalogRecord):
     display_name: Text
     schema_pack_id: Text
-    fields: list[_Field]
+    fields: list[FieldDefinition]
 
 
 class _Entry(_CatalogRecord):
@@ -46,6 +50,7 @@ class Catalog:
 
     _pack_ids: dict[str, str]
     _fields: dict[str, dict[str, str]]
+    _definitions: dict[str, dict[str, FieldDefinition]]
 
     def pack_id(self, display_name: str) -> str:
         try:
@@ -59,6 +64,19 @@ class Catalog:
     def fields(self, pack_id: str) -> tuple[str, ...]:
         return tuple(self._pack_fields(pack_id).values())
 
+    def field_definition(self, pack_id: str, field_key: str) -> FieldDefinition:
+        self._pack_fields(pack_id)
+        try:
+            return self._definitions[pack_id][field_key].model_copy(deep=True)
+        except KeyError as exc:
+            raise ValueError(f"unknown catalog field: {field_key}") from exc
+
+    def source_extractable_fields(self, pack_id: str) -> tuple[str, ...]:
+        return tuple(
+            key for key in self.fields(pack_id)
+            if "原文抽取" in self.field_definition(pack_id, key).formation_method
+        )
+
     def _pack_fields(self, pack_id: str) -> dict[str, str]:
         try:
             return self._fields[pack_id]
@@ -71,6 +89,7 @@ def load_catalog(path: str | Path) -> Catalog:
     document = _CatalogDocument.model_validate(json.loads(Path(path).read_text(encoding="utf-8")))
     pack_ids: dict[str, str] = {}
     fields: dict[str, dict[str, str]] = {}
+    definitions: dict[str, dict[str, FieldDefinition]] = {}
     for entry in document.entries:
         pack = entry.pack
         if pack.display_name in pack_ids or pack.schema_pack_id in fields:
@@ -84,4 +103,5 @@ def load_catalog(path: str | Path) -> Catalog:
             keys.add(field.field_key)
         pack_ids[pack.display_name] = pack.schema_pack_id
         fields[pack.schema_pack_id] = by_title
-    return Catalog(pack_ids, fields)
+        definitions[pack.schema_pack_id] = {field.field_key: field for field in pack.fields}
+    return Catalog(pack_ids, fields, definitions)

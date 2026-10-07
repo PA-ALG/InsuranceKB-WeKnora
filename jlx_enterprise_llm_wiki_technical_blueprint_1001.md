@@ -127,7 +127,7 @@ SchemaPack 参数化与 PresentationProfile；来源定位失败即拒绝；所�
 | 时间 | 七语义 + ClaimRevision + 双时态 | 五类判定；Claim 带业务有效期与维护记录；系统时间轴由 Release 历史提供 | 能回答"何时维护"，不另建时态引擎 |
 | 专家来源 | 专家修订伪装为 SourceRevision + 文本偏移 | 独立不可变 ExpertRevision，Evidence 直接指向它 | 模型更直接 |
 | 发布授权 | ed25519 签名信封 | 审核记录绑定 digest + 审计日志 + 服务间认证 | 审核与发布在同一系统，签名增加密钥管理成本 |
-| 质量评判 | 专家 Canonical Golden（专家休假则阻塞） | 评判模型（Opus 5.5 / GPT-6.1 sol）校准后产出 Golden，专家回归后抽检 | 不因专家缺席停摆 |
+| 质量评判 | 专家 Canonical Golden（专家休假则阻塞） | 评判模型（Opus 5.5 / GPT-6.1 sol / GPT-6 Astra）校准后产出 Golden，专家回归后抽检 | 不因专家缺席停摆 |
 | 模型 | 生产只用 MiniMax/Qwen 弱模型 | DeepSeek v4 flash（官方 API，开发可用 Gemini 降本），上线切私有化；只改配置 | 用户确认 |
 | 知识服务 | 页面 + 原生检索 | 一等的 Knowledge Query API，Wiki/Agent/MCP/外部应用都是消费者 | 知识底层服务的定位 |
 | 反馈、权限、规模 | 推到企业阶段 | 合同现在定下，按切片逐步实现 | 首期就要能演进 |
@@ -443,7 +443,7 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 
 ### 7.7 质量闭环
 
-- **评判模型**（业务专家回归前）：Opus 5.5 或 GPT-6.1 sol，只做离线评测，不进生产流程，与生产编译/审核模型不同族。
+- **评判模型**（业务专家回归前）：Opus 5.5、GPT-6.1 sol 或 GPT-6 Astra（取高推理档位），实际所用模型与档位记入 Golden 的 judged_by 与 manifest；只做离线评测，不进生产流程，与生产编译/审核模型不同族。
   先在已有人工结论上校准（V5 的 30 条业务反馈与 31 项原文回归集、`gs-s0q-596-v1`）；一致性达标后，对每个 pack 的
   冻结样本逐字段核对原文产出 Golden，标记"模型评判"，专家回归后抽检复核。开发阶段允许把产品材料发给评判模型。
 - **Golden 行**：沿用 `goldenset/records.py` 的 GoldenRecord，键为 `pack, product_version, field_key`；期望含 state、
@@ -650,6 +650,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-01 | 持续跟随 WeKnora 升级，降低耦合；以最终效果为准，必要时可改上游或重写接口，但须登记 | §4.3、G10 |
 | 2026-10-01 | `absent_explicitly` value 为空且必须有否定原文；有内容的禁止规则属于 present | §5.1 |
 | 2026-10-01 | 本蓝图取代 830 蓝图、28/29 号文档与 `docs/design/00-架构总览.md` | 文首 |
+| 2026-10-03 | S2b 评委改用 GPT-6 Astra（xhigh），在独立 Codex 会话中以文件交换答题，不走 API | §7.7 |
 | 2026-10-03 | 每个 Issue 一个独立 git worktree，写域不重叠的切片并行；GitHub 上 Claude 的明确指示即确认，Codex 只在越界、冲突、超预算、部署迁移时停下；Claude 每 30 分钟巡检 | §9、`AGENTS.md` |
 | 2026-10-03 | 500 行仍是原则；S0 时已超限的文件少量增长不逼当场拆分，固定容差 50 行，S7 清理旧代码后一次性拆分 | §8 G3、§11 S7 |
 

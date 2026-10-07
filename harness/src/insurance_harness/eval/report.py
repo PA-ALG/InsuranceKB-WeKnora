@@ -91,8 +91,18 @@ def _manifest(path: Path, golden_sha: str, golden_name: str) -> dict[str, Any] |
     }
 
 
-def _report(inputs: dict[str, Path]) -> dict[str, Any]:
+def _report(inputs: dict[str, Path], golden_paths: list[Path]) -> dict[str, Any]:
     content = {name: path.read_bytes() for name, path in inputs.items()}
+    golden_content = [path.read_bytes() for path in golden_paths]
+    golden_files = [
+        {
+            "sha256": _digest(raw),
+            "manifest": _manifest(path.parent / "manifest.json", _digest(raw), path.name),
+        }
+        for path, raw in zip(golden_paths, golden_content, strict=True)
+    ]
+    # Preserve the single-file digest while also binding the ordered aggregate.
+    content["golden"] = b"\n".join(golden_content)
     golden = [
         GoldenItem.model_validate_json(line)
         for line in content["golden"].decode("utf-8").splitlines() if line.strip()
@@ -117,13 +127,21 @@ def _report(inputs: dict[str, Path]) -> dict[str, Any]:
     provenance: dict[str, Any] = {
         name: {"sha256": _digest(raw)} for name, raw in content.items()
     }
-    provenance["manifest"] = _manifest(
-        inputs["golden"].parent / "manifest.json",
-        provenance["golden"]["sha256"], inputs["golden"].name,
-    )
+    provenance["golden_files"] = golden_files
+    provenance["manifest"] = golden_files[0]["manifest"] if len(golden_files) == 1 else None
     provenance["supplied_candidate_metadata"] = _supplied_metadata(candidate)
     provenance["model_identity_status"] = "supplied metadata only; no model identity inferred"
+    missed: dict[str, Counter[str]] = {pack: Counter() for pack in report.per_pack}
+    for outcome in report.outcomes:
+        if outcome.result == "missed":
+            missed[outcome.pack_id][outcome.field_key] += 1
+    top_missed = {
+        pack: [{"field_key": key, "missed": count} for key, count in
+               sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))[:10]]
+        for pack, counts in sorted(missed.items())
+    }
     return {
+        "top_missed_fields": top_missed,
         "scope": _SCOPE, "metric_definition": _DEFINITIONS, "provenance": provenance,
         "thresholds": {"min_precision": 0.95, "min_recall": 0.90, "max_hallucinations": 0},
         "golden_items": len(golden), "prediction_items": len(predictions),
@@ -158,6 +176,8 @@ def _markdown(data: dict[str, Any]) -> str:
     lines = ["# Golden evaluation", "", _SCOPE, "", "## Reproducibility", ""]
     for name in ("golden", "candidate", "product-map"):
         lines.append(f"- {name} SHA256: `{data['provenance'][name]['sha256']}`")
+    for number, source in enumerate(data["provenance"]["golden_files"], 1):
+        lines.append(f"- Golden file {number} SHA256: `{source['sha256']}`")
     manifest = data["provenance"]["manifest"]
     if manifest is not None:
         lines.extend([
@@ -186,6 +206,11 @@ def _markdown(data: dict[str, Any]) -> str:
     lines.extend(_table(
         ["pack", "TP", "FP", "FN", "precision", "recall", "gate", "reasons"], pack_rows,
     ))
+    lines.extend(["", "## Top missed fields", ""])
+    lines.extend(_table(["pack", "field", "missed"], [
+        [pack, row["field_key"], row["missed"]]
+        for pack, rows in data["top_missed_fields"].items() for row in rows
+    ]))
     lines.extend(["", "## Golden item results", "", "Only Golden identities appear below.", ""])
     keys = [
         "pack_id", "product_id", "field_key", "golden_state", "predicted_state", "result",
@@ -208,15 +233,21 @@ def _check_destinations(paths: list[Path], inputs: list[Path]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    for option in ("golden", "candidate", "product-map", "out"):
+    parser.add_argument("--golden", type=Path, action="append", required=True)
+    for option in ("candidate", "product-map", "out"):
         parser.add_argument(f"--{option}", type=Path, required=True)
     args = parser.parse_args(argv)
-    inputs = {"golden": args.golden, "candidate": args.candidate, "product-map": args.product_map}
+    inputs = {
+        "golden": args.golden[0], "candidate": args.candidate, "product-map": args.product_map,
+    }
     paths = [Path(f"{args.out}.json"), Path(f"{args.out}.md")]
     created: list[Path] = []
     try:
-        _check_destinations(paths, [*inputs.values(), args.golden.parent / "manifest.json"])
-        data = _report(inputs)
+        _check_destinations(paths, [
+            *inputs.values(), *args.golden,
+            *(path.parent / "manifest.json" for path in args.golden),
+        ])
+        data = _report(inputs, args.golden)
         outputs = [
             json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2) + "\n", _markdown(data),
         ]
