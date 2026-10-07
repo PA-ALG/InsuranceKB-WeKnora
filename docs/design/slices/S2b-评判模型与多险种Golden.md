@@ -264,6 +264,10 @@ def apply_adjudications(
   与该 Golden 之间的 `evaluate`（precision/recall，见 `eval/report.py`），与 L2 无关。** 故 §8.4/§8.5 的
   prompt 版本与 L3 裁定均不影响 4 款产品的评分口径。
 - **判等不是重新抽原文**：L2 只读参考与评委的两段文字，不打开 PDF。
+- **2026-10-07 更正（Claude Code）**：上面"4 款产品的质量数字来自 `evaluate`、与 L2 无关"一条**作废**。它与用户 2026-10-05
+  "按语义等价比较"的裁决冲突：`evaluate` 的逐字 component 匹配下，Golden 自身 value 只命中自身 components 21/108，
+  PR #142 的 G3 分数（0%–12%）因此不作质量结论。G3 对 4 款 Golden 的有效评分改由
+  [S2c](S2c-语义评分.md) 以 L1/L2/L3 给出；本片交付的是评委流程、596 校准与 4 款 Golden。
 
 ### 8.3 取值形态（`value` 的写法，prompt v3）
 
