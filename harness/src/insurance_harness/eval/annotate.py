@@ -136,9 +136,7 @@ def _pack(repo: Path, product_id: str, pack_id: str | None) -> str:
     if pack_id is not None:
         return pack_id
     manifest = _json(repo / "dataset/golden/v1/manifest.json")
-    metadata = manifest if manifest.get("product_id") == product_id else (
-        manifest.get("products", {}).get(product_id, {})
-    )
+    metadata = manifest.get("products", {}).get(product_id, {})
     value = metadata.get("pack_id")
     if not isinstance(value, str):
         raise ValueError("pack is not declared; supply --pack")

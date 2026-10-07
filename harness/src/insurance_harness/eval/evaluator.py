@@ -42,7 +42,10 @@ class ItemOutcome(BaseModel):
     result: Literal[
         "correct", "mismatch", "missed", "hallucination", "contradiction",
         "correct_non_present", "state_mismatch", "missing", "unscored",
+        "incomplete", "wrong_value", "misfiled", "golden_defect",
     ]
+    basis: Literal["L1", "L2", "L3"] | None = None
+    reason: str | None = None
     tp: int = 0
     fp: int = 0
     fn: int = 0
@@ -59,6 +62,10 @@ class Report(BaseModel):
     correct_non_present: int = 0
     missing_predictions: int = 0
     unscored_predictions: int = 0
+    incomplete: int = 0
+    wrong_values: int = 0
+    misfiled: int = 0
+    golden_defects: int = 0
     component_misses: dict[str, list[str]] = Field(default_factory=dict)
     outcomes: list[ItemOutcome] = Field(default_factory=list)
 
@@ -119,18 +126,34 @@ def evaluate(golden: Iterable[GoldenItem], predictions: Iterable[Prediction]) ->
     """Score unique (pack, product, field) identities without silently overwriting."""
     goldens = _index(golden, "golden")
     predicted = _index(predictions, "prediction")
-    report = Report()
+    outcomes = []
     for identity, item in goldens.items():
-        prediction = predicted.get(identity)
-        outcome = _outcome(item, prediction)
+        outcomes.append(_outcome(item, predicted.get(identity)))
+    for identity, prediction in predicted.items():
+        if identity not in goldens:
+            outcomes.append(_outcome(None, prediction))
+    return report_from_outcomes(outcomes)
+
+
+def report_from_outcomes(outcomes: Iterable[ItemOutcome]) -> Report:
+    """Aggregate final decisions so literal and semantic reports use one set of counts."""
+    report = Report()
+    for outcome in outcomes:
         report.outcomes.append(outcome)
-        report.missing_predictions += prediction is None
+        if outcome.golden_state is None:
+            report.unscored_predictions += 1
+            continue
+        report.missing_predictions += outcome.predicted_state is None
         report.hallucinations += outcome.result == "hallucination"
         report.contradictions += outcome.result == "contradiction"
         report.correct_non_present += outcome.result == "correct_non_present"
+        report.incomplete += outcome.result == "incomplete"
+        report.wrong_values += outcome.result == "wrong_value"
+        report.misfiled += outcome.result == "misfiled"
+        report.golden_defects += outcome.result == "golden_defect"
         for metrics in (
-            report.per_field.setdefault(item.field_key, Metrics()),
-            report.per_pack.setdefault(item.pack_id, Metrics()),
+            report.per_field.setdefault(outcome.field_key, Metrics()),
+            report.per_pack.setdefault(outcome.pack_id, Metrics()),
             report.micro,
         ):
             metrics.tp += outcome.tp
@@ -140,12 +163,10 @@ def evaluate(golden: Iterable[GoldenItem], predictions: Iterable[Prediction]) ->
         if outcome.component_misses:
             # The spec's display key lacks pack_id. Preserve all missing names;
             # outcomes above retain each pack's separate, auditable result.
-            misses = report.component_misses.setdefault(f"{item.product_id}/{item.field_key}", [])
+            misses = report.component_misses.setdefault(
+                f"{outcome.product_id}/{outcome.field_key}", [],
+            )
             misses.extend(name for name in outcome.component_misses if name not in misses)
-    for identity, prediction in predicted.items():
-        if identity not in goldens:
-            report.outcomes.append(_outcome(None, prediction))
-            report.unscored_predictions += 1
     return report
 
 
