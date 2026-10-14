@@ -2,20 +2,29 @@
 
 Products compile in argument order. The first truncation, oversize input,
 non-retryable HTTP error, exhausted retries, budget refusal, compiler contract
-violation or served-model change stops the run; later products are not sent.
-Completed products are reused on rerun, and every attempt is appended to
-ledger.jsonl. Exit 0: all products compiled and the candidate was written;
-exit 2: the run stopped or the input was invalid.
+violation or served-model change stops the run; later sends do not happen.
+Completed products are reused on rerun. Exit 0: all products compiled and the
+candidate was written; exit 2: the run stopped or the input was invalid.
+
+Run-root files: budget.jsonl gains one line before every send (so a send that
+was in flight when the process died still counts), ledger.jsonl gains every
+attempt record as it lands, <product>/responses/attempt-NN/ keeps raw
+completions, and .lock serializes runs that share the root.
 """
 
 import argparse
+import fcntl
 import json
 import math
 import os
 import sys
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+from pydantic import ValidationError
 
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
@@ -45,7 +54,11 @@ _CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 
 
 class ServedModelChanged(RuntimeError):
-    """A floating model alias resolved to a different version within one run."""
+    """A floating model alias resolved to a different version within one run root."""
+
+
+class RunRootBusy(RuntimeError):
+    """Another process holds the run root; sharing it could double-spend the budget."""
 
 
 @dataclass(frozen=True)
@@ -67,6 +80,61 @@ def _write_new(path: Path, text: str) -> None:
         os.link(temporary, path)
     finally:
         temporary.unlink()
+
+
+def _append_durably(path: Path, line: str) -> None:
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(line + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def _lines(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    return [line for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+def stored_records(run_root: Path) -> list[CallRecord]:
+    return [CallRecord.model_validate_json(line) for line in _lines(run_root / "ledger.jsonl")]
+
+
+def prior_sends(run_root: Path) -> int:
+    """Sends already spent in this root, counting reservations whose outcome never landed."""
+    recorded = sum(record.outcome not in ("input_too_large", "budget_exceeded")
+                   for record in stored_records(run_root))
+    # Roots written before budget.jsonl existed only have the ledger to go on.
+    return max(len(_lines(run_root / "budget.jsonl")), recorded)
+
+
+class _DurableLedger(CallLedger):
+    """Persist each send reservation before transport entry and each record on arrival.
+
+    The served-model guard runs at reservation time, so a changed version stops
+    the very next send, including retries and later batches of the same product.
+    """
+
+    def __init__(self, run_root: Path, *, max_sent: int, served: set[str]) -> None:
+        super().__init__(max_sent=max_sent)
+        self._root, self._served = run_root, served
+
+    @property
+    def served(self) -> set[str]:
+        return set(self._served)
+
+    def reserve_send(self) -> bool:
+        if len(self._served) > 1:
+            raise ServedModelChanged("served model changed; no further sends")
+        if not super().reserve_send():
+            return False
+        _append_durably(self._root / "budget.jsonl", '{"reserved":1}')
+        return True
+
+    def append(self, record: CallRecord) -> None:
+        super().append(record)
+        _append_durably(self._root / "ledger.jsonl", record.model_dump_json())
+        if record.served_model:
+            self._served.add(record.served_model)
 
 
 class _RawResponses:
@@ -91,59 +159,46 @@ class _RawResponses:
         return raw
 
 
-class _LedgerFile:
-    """Append each attempt exactly once, including those of a failed product."""
-
-    def __init__(self, path: Path, ledger: CallLedger) -> None:
-        self._path, self._ledger, self._written = path, ledger, 0
-
-    def stored(self) -> list[CallRecord]:
-        if not self._path.exists():
-            return []
-        return [CallRecord.model_validate_json(line)
-                for line in self._path.read_text(encoding="utf-8").splitlines() if line]
-
-    def flush(self) -> None:
-        records = self._ledger.records[self._written:]
-        if records:
-            with self._path.open("a", encoding="utf-8") as stream:
-                stream.writelines(record.model_dump_json() + "\n" for record in records)
-            self._written += len(records)
-
-
 def _next_attempt(directory: Path) -> str:
     """Each compile attempt of a product keeps its own raw-response folder."""
     existing = [path.name for path in directory.glob("attempt-*") if path.is_dir()]
     return f"attempt-{len(existing) + 1:02d}"
 
 
-def prior_sends(run_root: Path) -> int:
-    """Sends already spent by earlier runs in this root; the budget is cumulative."""
-    path = run_root / "ledger.jsonl"
-    if not path.exists():
-        return 0
-    return sum(
-        CallRecord.model_validate_json(line).outcome not in ("input_too_large", "budget_exceeded")
-        for line in path.read_text(encoding="utf-8").splitlines() if line
-    )
+@contextmanager
+def _exclusive(run_root: Path) -> Iterator[None]:
+    descriptor = os.open(run_root / ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RunRootBusy("run root is in use by another process") from None
+        yield
+    finally:
+        os.close(descriptor)
 
 
 def compile_products(
-    repo: Path, products: list[str], *, completion: CompletionPort, ledger: CallLedger,
-    run_root: Path, batch_size: int = 25,
+    repo: Path, products: list[str], *,
+    completion_factory: Callable[[CallLedger], CompletionPort],
+    run_root: Path, max_sent: int, batch_size: int = 25,
 ) -> list[ProductRun]:
-    """Compile or reuse each product in order; raise on the first stopping condition."""
+    """Compile or reuse each product in order; raise on the first stopping condition.
+
+    max_sent is cumulative for the run root: earlier runs' sends count against it.
+    """
     check_run_directory(run_root)
-    if ledger.records:
-        # The sink appends every record of this ledger; a reused one would duplicate.
-        raise ValueError("compile_products needs a fresh ledger")
     run_root.mkdir(parents=True, exist_ok=True)
-    sink = _LedgerFile(run_root / "ledger.jsonl", ledger)
-    served = {record.served_model for record in sink.stored() if record.served_model}
-    if len(served) > 1:
-        raise ServedModelChanged("ledger already records more than one served model")
-    runs: list[ProductRun] = []
-    try:
+    with _exclusive(run_root):
+        served = {record.served_model for record in stored_records(run_root)
+                  if record.served_model}
+        if len(served) > 1:
+            raise ServedModelChanged("ledger already records more than one served model")
+        ledger = _DurableLedger(
+            run_root, max_sent=max(0, max_sent - prior_sends(run_root)), served=served,
+        )
+        completion = completion_factory(ledger)
+        runs: list[ProductRun] = []
         for product in products:
             check_product_id(product)
             directory = source_directory(repo, product)
@@ -157,23 +212,18 @@ def compile_products(
                 continue
             definitions = pack_definitions(repo / _CATALOG, pack)
             attempt = _next_attempt(run_root / product / "responses")
-            recorder = _RawResponses(completion, run_root / product / "responses" / attempt)
             compiler = SchemaFieldsCompiler(
-                recorder, batch_size=batch_size,
-                max_calls=math.ceil(len(definitions) / batch_size),
+                _RawResponses(completion, run_root / product / "responses" / attempt),
+                batch_size=batch_size, max_calls=math.ceil(len(definitions) / batch_size),
             )
             output = compiler.compile(product, definitions, source_pages(directory))
-            sink.flush()
-            served |= {record.served_model for record in ledger.records if record.served_model}
-            if len(served) > 1:
-                # Results from two model versions cannot form one quality number.
+            if len(ledger.served) > 1:
+                # The last batch itself came from a new version: nothing is written.
                 raise ServedModelChanged(f"{product}: served model changed within the run")
             path.parent.mkdir(exist_ok=True)
             _write_new(path, output.model_dump_json(indent=2) + "\n")
             runs.append(ProductRun(product, name, pack, False, output.calls, len(output.fields)))
-    finally:
-        sink.flush()
-    return runs
+        return runs
 
 
 def write_candidate(run_root: Path, runs: list[ProductRun]) -> None:
@@ -197,15 +247,20 @@ def write_candidate(run_root: Path, runs: list[ProductRun]) -> None:
                json.dumps(product_map, ensure_ascii=False, indent=2) + "\n")
 
 
-def _summary(runs: list[ProductRun], ledger: CallLedger) -> dict[str, Any]:
-    records = ledger.records
+def _summary(run_root: Path, runs: list[ProductRun]) -> dict[str, Any]:
+    """Cumulative for the run root, read back from its durable files."""
+    try:
+        records = stored_records(run_root)
+        sent = prior_sends(run_root)
+    except (OSError, ValueError):
+        records, sent = [], 0
 
     def total(name: str) -> int:
         return sum(getattr(record, name) or 0 for record in records)
 
     return {
         "products": [asdict(run) for run in runs],
-        "sent": ledger.sent,
+        "sent": sent,
         "attempts_by_outcome": {
             outcome: sum(record.outcome == outcome for record in records)
             for outcome in sorted({record.outcome for record in records})
@@ -215,6 +270,19 @@ def _summary(runs: list[ProductRun], ledger: CallLedger) -> dict[str, Any]:
         "reasoning_tokens": total("reasoning_tokens"),
         "served_models": sorted({record.served_model for record in records if record.served_model}),
     }
+
+
+def _stop_reason(exc: BaseException) -> str:
+    """Fixed, content-free diagnostics: stored files and model output may hold source text."""
+    if isinstance(exc, ValidationError):
+        return "invalid_record_shape"
+    if isinstance(exc, json.JSONDecodeError):
+        return "invalid_json"
+    if isinstance(exc, OSError):
+        return f"file_operation_failed:{type(exc).__name__}"
+    if isinstance(exc, (ModelCallError, CompileError, ServedModelChanged, RunRootBusy)):
+        return f"{type(exc).__name__}: {exc}"
+    return type(exc).__name__
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -228,24 +296,29 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-sent", type=int, default=30)
     args = parser.parse_args(argv)
     runs: list[ProductRun] = []
-    ledger = CallLedger(max_sent=max(0, args.max_sent - prior_sends(args.run_root)))
+    clients: list[OpenAICompatibleCompletion] = []
     try:
         config = load_stage_config(args.stage_config, args.stage)
-        completion = OpenAICompatibleCompletion(config, ledger=ledger)
+
+        def factory(ledger: CallLedger) -> CompletionPort:
+            clients.append(OpenAICompatibleCompletion(config, ledger=ledger))
+            return clients[-1]
+
         try:
             runs = compile_products(
-                args.repo, args.products, completion=completion, ledger=ledger,
-                run_root=args.run_root, batch_size=args.batch_size,
+                args.repo, args.products, completion_factory=factory, run_root=args.run_root,
+                max_sent=args.max_sent, batch_size=args.batch_size,
             )
         finally:
-            completion.close()
+            for client in clients:
+                client.close()
         write_candidate(args.run_root, runs)
-    except (ModelCallError, CompileError, ServedModelChanged, ValueError, OSError) as exc:
-        # Model and compiler errors carry metadata only; OS errors may hold local paths.
-        detail = type(exc).__name__ if isinstance(exc, OSError) else str(exc)
-        print(json.dumps({"stopped": detail, **_summary(runs, ledger)}, ensure_ascii=False))
+    except (ModelCallError, CompileError, ServedModelChanged, RunRootBusy, ValueError,
+            OSError) as exc:
+        print(json.dumps({"stopped": _stop_reason(exc), **_summary(args.run_root, runs)},
+                         ensure_ascii=False))
         return 2
-    print(json.dumps(_summary(runs, ledger), ensure_ascii=False))
+    print(json.dumps(_summary(args.run_root, runs), ensure_ascii=False))
     return 0
 
 
