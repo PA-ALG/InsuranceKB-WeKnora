@@ -25,14 +25,15 @@ precision / recall，并把这套评分器留给 S4b（V5 编译器 + DeepSeek v
 |---|---|---|---|---|
 | present | present，`values_equal` 或 `compare_value(...).correct` | L1 代码 | `correct` | 1 / 0 / 0 |
 | present | present，L1 未判定 | L2 `equivalent` | `correct` | 1 / 0 / 0 |
-| present | present，L1 未判定 | L2 `insufficient` | `incomplete` | 0 / **0** / 1 |
+| present | present，L1 未判定 | L2 `insufficient` | `incomplete` | 0 / 0 / 1，另计 **partial 1** |
 | present | present，L1 未判定 | L2 `contradicted` | `wrong_value` | 0 / 1 / 1 |
 | present | 非 present 或缺失 | 代码 | `missed` | 0 / 0 / 1 |
 | unknown | present | 代码 | `hallucination`（计入门槛的幻觉数） | 0 / 1 / 0 |
 | absent_explicitly | present | 代码 | `contradiction` | 0 / 1 / 0 |
 | 非 present | 非 present / 缺失 | 代码 | 与 `evaluate` 相同（`correct_non_present`、`state_mismatch`、`missing`） | 不计 |
 
-- **`incomplete` 只计 FN、不计 FP**（用户 2026-10-14 裁决）：precision 衡量"发布出去的内容有没有说错"，recall 衡量"材料里的事实写全没有"。缺内容但没说错，只扣 recall；`wrong_value` 是说错了，FP 与 FN 都计。两者分开计数。
+- **`incomplete` 在准确率里算"没说错"，在完整率里算"漏"**（用户 2026-10-14 裁决）：precision 衡量"发布出去的内容有没有说错"，recall 衡量"材料里的事实写全没有"。因此每个 pack 另计 `partial`（= incomplete 数）：
+  **precision = (TP + partial) / (TP + partial + FP)**，**recall = TP / (TP + FN)**；incomplete 计 partial 1、FN 1，不计 FP。`wrong_value` 是说错了，FP 与 FN 都计。字面口径的 `evaluate` 没有 incomplete，partial 恒为 0，公式与原来一致。
   首轮 G3 报告（2026-10-14 前的口径）把 `incomplete` 计为 FP+FN，P 与 R 同时被压到 9%–26%，掩盖了"几乎不说错、普遍写不全"的事实。
 - **L2 是单向的**：只问 Golden 列出的核心事实是否被预测覆盖、是否被预测否定。预测**额外**写出、Golden 没有的事实，
   L2 不核对；这类内容的正确性由来源回跳负责（蓝图 §2.5"已发布事实来源回跳 = 100%"，S4 的严格回验）。报告须写明这一局限。
