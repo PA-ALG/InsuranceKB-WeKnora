@@ -344,7 +344,17 @@ def test_cli_holds_the_lock_while_writing_the_candidate(
     assert (root / "candidate.json").exists()
 
 
-@pytest.mark.parametrize("budget", ["", '{"reserved":1}\n'])
+@pytest.mark.parametrize("budget", [
+    "",
+    '{"reserved":1}\n',
+    '{"baseline":-1}\n',
+    '{"baseline":1.5}\n',
+    '{"baseline":true}\n',
+    '[2]\n',
+    '{"baseline":0,"extra":1}\n',
+    '{"baseline":0}\n{"reserved":7}\n',
+    '{"baseline":0}\n{"reserved":true}\n',
+])
 def test_budget_without_a_baseline_fails_closed(
     repo: Path, tmp_path: Path, budget: str,
 ) -> None:
@@ -354,7 +364,7 @@ def test_budget_without_a_baseline_fails_closed(
     (root / "ledger.jsonl").write_text(legacy_record(1) + "\n" + legacy_record(2) + "\n")
     (root / "budget.jsonl").write_text(budget)
     build, sent = factory(["m"])
-    with pytest.raises(ValueError, match="baseline"):
+    with pytest.raises(ValueError, match="budget.jsonl"):
         run(repo, root, ["p1"], build, max_sent=30)
     assert sent == []
 

@@ -120,11 +120,19 @@ def prior_sends(run_root: Path) -> int:
     if not budget.exists():
         return _recorded_sends(run_root)
     entries = [json.loads(line) for line in _lines(budget)]
-    if not entries or set(entries[0]) != {"baseline"}:
+    if not entries or not _is_entry(entries[0], "baseline"):
         raise ValueError("budget.jsonl lacks its baseline line; refusing to infer spent sends")
-    if any(set(entry) != {"reserved"} for entry in entries[1:]):
+    if not all(_is_entry(entry, "reserved") and entry["reserved"] == 1 for entry in entries[1:]):
         raise ValueError("budget.jsonl has an unexpected entry")
     return int(entries[0]["baseline"]) + len(entries) - 1
+
+
+def _is_entry(entry: object, key: str) -> bool:
+    """Exactly {key: non-negative int}; bools, floats and extra keys are rejected."""
+    if not isinstance(entry, dict) or set(entry) != {key}:
+        return False
+    value = entry[key]
+    return type(value) is int and value >= 0
 
 
 def _adopt_legacy_budget(run_root: Path) -> None:
