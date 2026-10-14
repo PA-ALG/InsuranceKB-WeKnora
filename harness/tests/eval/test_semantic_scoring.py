@@ -131,7 +131,7 @@ def test_l2_verdicts_map_to_correct_incomplete_and_wrong_value() -> None:
     report = evaluate_semantic(GOLDEN, PREDICTIONS, VERDICTS)
     expected = {
         "a_scope": ("correct", "L2", 1, 0, 0),
-        "b_terms": ("incomplete", "L2", 0, 1, 1),
+        "b_terms": ("incomplete", "L2", 0, 0, 1),
         "c_wait": ("wrong_value", "L2", 0, 1, 1),
         "d_age": ("hallucination", None, 0, 1, 0),
         "e_limit": ("missed", None, 0, 0, 1),
@@ -142,8 +142,9 @@ def test_l2_verdicts_map_to_correct_incomplete_and_wrong_value() -> None:
         assert (item.result, item.basis, item.tp, item.fp, item.fn) == (result, basis, tp, fp, fn)
     assert outcome(report, "b_terms").reason == "理由"
     metrics = report.per_pack["pack-a"]
-    assert (metrics.tp, metrics.fp, metrics.fn) == (2, 3, 3)
-    assert metrics.precision == pytest.approx(0.4)
+    # incomplete is a recall miss only: nothing it states contradicts the Golden.
+    assert (metrics.tp, metrics.fp, metrics.fn) == (2, 2, 3)
+    assert metrics.precision == pytest.approx(0.5)
     assert metrics.recall == pytest.approx(0.4)
     assert (report.incomplete, report.wrong_values, report.hallucinations) == (1, 1, 1)
     assert "hallucination" in gate(report, "pack-a").reasons
@@ -206,9 +207,9 @@ def test_only_l2_correct_items_can_be_tightened() -> None:
     report = evaluate_semantic(
         GOLDEN, PREDICTIONS, VERDICTS, [ruling("a_scope", "correct", "incomplete")],
     )
-    assert (outcome(report, "a_scope").result, outcome(report, "a_scope").basis) == (
-        "incomplete", "L3",
-    )
+    tightened = outcome(report, "a_scope")
+    assert (tightened.result, tightened.basis) == ("incomplete", "L3")
+    assert (tightened.tp, tightened.fp, tightened.fn) == (0, 0, 1)
     with pytest.raises(ValueError):
         evaluate_semantic(
             GOLDEN, PREDICTIONS, VERDICTS, [ruling("f_term", "correct", "incomplete")],
