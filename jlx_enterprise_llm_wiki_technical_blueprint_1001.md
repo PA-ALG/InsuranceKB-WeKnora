@@ -501,8 +501,8 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 | 1 | Claude（总控） | 拆分切片、排期；写 Spec 与验收测试（单独一个 RED 提交）推到 `slice/sN`，建好工作目录 `.worktrees/sN` 并装好依赖，按模板开 Issue（写明实现方、审核方、RED 提交、开工方式与真实调用预算） |
 | 2 | 用户 | 批准方向与预算；Codex 是实现方时对它说"做 issue #N"，是审核方时说"审 PR #N" |
 | 3 | 实现方 | 默认 Claude；Go/前端为主、长时间构建或需要独立实现视角的切片由 Codex（或 V5 同学）。在 Issue 下复述目标与计划，在 `.worktrees/sN` 实现，本地过门禁，merge 最新 `main`（不 rebase），开 PR（`Closes #N`） |
-| 4 | 审核方 | 与实现方不同的一方。核对 Spec 符合度、正确性、守卫与边界、验收测试自 RED 提交起未改；一次给出"批准 head"或编号修改项 |
-| 5 | Claude | 审核方已批准当前 head、CI 通过、范围符合 Spec 后 Squash merge，`main` 上一个切片一个提交；合并后告知用户 |
+| 4 | 审核方 | 与实现方不同的一方；Claude 实现的简单改动（文档、配置、测试、小重构、约 200 行内且不碰接口/合同/持久化/安全/并发/真实调用/评分口径）由 Claude 自审，复杂改动交 Codex。核对 Spec 符合度、正确性、守卫与边界、验收测试自 RED 提交起未改；一次给出"批准 head"或编号修改项 |
+| 5 | Claude | 审核方已批准当前 head（简单改动为自审结论）、CI 通过、范围符合 Spec 后 Squash merge，`main` 上一个切片一个提交；合并后告知用户 |
 
 - **仓库**：公开仓库 `PA-ALG/InsuranceKB-WeKnora`（`Tencent/WeKnora` 的 fork，本机 remote 名 `origin`）。
   2026-10-01 至 10-02 曾在私有仓库 `PA-ALG/InsuranceKB-WeKnora-private` 工作（已归档，只读）；完整备份在私有
@@ -652,7 +652,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-03 | S2b 评委改用 GPT-6 Astra（xhigh），在独立 Codex 会话中以文件交换答题，不走 API | §7.7 |
 | 2026-10-03 | 每个 Issue 一个独立 git worktree，写域不重叠的切片并行；GitHub 上 Claude 的明确指示即确认，Codex 只在越界、冲突、超预算、部署迁移时停下；Claude 每 30 分钟巡检 | §9、`AGENTS.md` |
 | 2026-10-03 | 500 行仍是原则；S0 时已超限的文件少量增长不逼当场拆分，固定容差 50 行，S7 清理旧代码后一次性拆分 | §8 G3、§11 S7 |
-| 2026-10-14 | Codex 额度有限：Claude 任总控并默认实现，Codex 默认审核；Go/前端为主或需独立视角的切片由 Codex 实现、Claude 审核；实现方与审核方不得相同，合并须审核方批准当前 head | §9、`AGENTS.md` |
+| 2026-10-14 | Codex 额度有限：Claude 任总控并默认实现，Codex 默认审核；Go/前端为主或需独立视角的切片由 Codex 实现、Claude 审核；实现方与审核方不得相同，合并须审核方批准当前 head；Claude 实现的简单改动可自审后合并，复杂改动交 Codex 审 | §9、`AGENTS.md` |
 
 ## 附录 A · 术语
 

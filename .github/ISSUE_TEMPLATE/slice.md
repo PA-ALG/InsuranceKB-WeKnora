@@ -19,7 +19,7 @@ labels: []
 ## 实现与审核
 
 - 实现方：Claude Code / Codex（二选一）
-- 审核方：Codex / Claude Code（不得与实现方相同）
+- 审核方：Codex / Claude Code（不得与实现方相同）；Claude 实现的简单改动可写"Claude 自审（简单改动：理由）"
 - 验收测试 RED 提交：`<sha>`（实现提交不改其中的验收测试；Claude 实现时如需修正，单独提交并由审核方确认）
 
 ## 分支与工作目录
