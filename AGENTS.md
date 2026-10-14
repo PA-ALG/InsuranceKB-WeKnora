@@ -77,27 +77,55 @@ Candidate。
 
 ## 分工与协作
 
-- 分工：用户决策；Claude 负责调研、架构、切片 Spec、验收测试、架构守卫与审计；Codex 负责
-  实现。同一组件的运行时代码同时只有一个实现切片；写域不重叠的切片在各自的工作目录里并行。
-  流程全文见蓝图 §9。
-- 协作通道是 GitHub 公开仓库 `PA-ALG/InsuranceKB-WeKnora`：Claude 写 Spec 与验收测试，推到
-  `slice/sN`，开 Issue → 用户批准 → Codex 收到"做 issue #N"后在该 Issue 的工作目录里实现 → Codex
-  开 PR（`Closes #N`），按 `.github/pull_request_template.md` 交接 → Claude 本地重跑门禁并用
-  `gh pr review` 审计 → Claude Squash merge（2026-10-02 用户授权：审过当前 head、CI 通过、范围
-  符合 Spec 即可合并，合并后告知用户；部署、迁移、仓库设置与超出 Issue 预算的真实调用仍需用户批准）。
-- **Codex 的职责**：按 Issue 与 Spec 写出高质量实现代码和配套测试。架构、方案、Spec、验收
-  标准、任务拆分与排期不归 Codex；遇到这类问题在 Issue 或 PR 中提出，由 Claude 与用户决定。
-- 收到"做 issue #N"时：
-  1. `gh issue view N --repo PA-ALG/InsuranceKB-WeKnora` 读取任务；
+- **分工（2026-10-14 用户调整：Codex 额度有限）**：用户决定方向、批准预算、提供只有用户才有的材料。
+  **Claude 是总控**：进度与排期、切片拆分、调研与架构、Spec、验收测试、架构守卫、开 Issue、合并、交接记录与巡检。
+  **实现与审核交叉进行**：每个 Issue 写明"实现方"与"审核方"，两者不能是同一方（下面"简单改动"例外）。
+  - 默认 **Claude 实现**。审核按复杂度分两档（Claude 在 Issue 或 PR 里写明归哪一档和理由，用户可随时改档）：
+    - **简单改动，Claude 自审后直接合并**：只改文档、模板、注释或配置取值；只改测试或让守卫基线下降；
+      不改行为的小重构；按审核意见做的修改；单个模块内、净改动约 200 行以内，且不涉及下面任何一项的 Harness 改动；
+    - **复杂改动，交 Codex 审核**：新模块或 Spec 冻结的公开接口；跨组件合同（`contracts/`、REST、事件）；Go 平台或前端；
+      持久化格式、数据库迁移；安全、权限、租户隔离；并发、重试、预算与真实调用链路；质量评分口径；净改动超过约 200 行；
+  - 以下情况改为 **Codex 实现、Claude 审核**：以 Go 平台（`internal/`）或前端为主的切片；需要长时间本地构建或全量测试的切片；
+    Claude 判断需要独立实现视角的关键路径。Codex 额度紧张时一律由 Claude 实现，Codex 只做审核；
+  - V5 同学按 Codex 的角色参与。
+  同一组件的运行时代码同时只有一个实现切片；写域不重叠的切片在各自的工作目录里并行。流程全文见蓝图 §9。
+- 协作通道是 GitHub 公开仓库 `PA-ALG/InsuranceKB-WeKnora`。每个切片的步骤：
+  1. Claude 写 Spec 与验收测试，验收测试**单独一个 RED 提交**推到 `slice/sN`，开 Issue（写明实现方、审核方、RED 提交 SHA、工作目录、预算）；
+  2. 实现方在该 Issue 的工作目录里实现，本地过门禁，把最新 `main` merge 进来（不 rebase），开 PR（`Closes #N`），按
+     `.github/pull_request_template.md` 交接；
+  3. 审核方审计当前 head（见下"审核方的做法"），批准或列出编号修改项；实现方修改后，审核方只复核增量；
+  4. Claude 在**审核方已批准当前 head（简单改动为 Claude 自审结论）、CI 全绿、范围符合 Spec** 时 Squash merge，合并后告知用户。部署、迁移、仓库设置与超出
+     Issue 预算的真实调用仍需用户批准。Claude 实现的 PR，若 Codex 48 小时内无法审核（如额度用尽），由用户决定放行或等待。
+- **实现方的规则**（Claude 或 Codex 实现时都适用）：
+  - 只做 Issue 指定的切片，只改 Spec"改动范围"列出的路径；
+  - 实现提交不改 RED 提交里的验收测试、蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`、`contracts/`（守卫基线只在
+    数字下降时用脚本更新；`contracts/` 只由 Spec 规定的导出命令生成）。Codex 实现时这些路径一律不改；Claude 实现时如发现
+    Spec 或验收测试有错，**单独提交**修正并在 PR 中写明原因，由审核方逐条确认。唯一例外：Spec 允许修改上游文件时，实现方在
+    `docs/design/upstream-patches.md` 追加登记行（不改已有行）；G10 基线仍由 Claude 审查后更新；
+  - 提审前本地过完验收、守卫与受影响组件门禁（相对 S0 失败清单不新增失败）；不 deselect、不加 xfail/skip、不改已有断言；
+  - 不自行申请或扩大真实模型调用、构建、部署与数据库迁移；Spec 有错或走不通时停下，在 Issue/PR 中写明，不自行换方案；
+  - Codex 实现时不自行合并，合并由 Claude 执行。
+- **审核方的做法**：
+  - 读 Issue、Spec 与 PR diff；核对与 Spec 的符合度、正确性（边界、失败路径、并发与资源）、守卫与边界规则，以及
+    `git diff <RED 提交>..HEAD` 未改验收测试（改了必须是单独提交且写明原因）；
+  - 可以跑相关测试；全量测试以 CI 为准，不重复跑；
+  - 用 `gh pr review --comment` 发**一次完整结论**：首行署名，写明"批准 head `<sha>`"或编号修改项（每项写文件、行与理由）；
+  - Claude 审 Codex 的 PR 时另外在本地重跑验收、守卫与受影响组件门禁；
+  - Claude 自审简单改动时，在 PR 里写明归档理由、自查过的失败路径与门禁结果，不写"自审通过"了事。
+- **Codex 节省额度**：只看指派给自己的 Issue/PR；审核一次给全结论，不分多轮零散评论；不重复跑 CI 已覆盖的全量测试。
+- **Codex 的职责边界**：架构、方案、Spec、验收标准、任务拆分与排期归 Claude；Codex 遇到这类问题在 Issue 或 PR 中提出，
+  由 Claude 与用户决定。
+- 收到"做 issue #N"（Codex 是实现方）或"审 PR #N"（Codex 是审核方）时：
+  1. `gh issue view N --repo PA-ALG/InsuranceKB-WeKnora`（或 `gh pr view N --repo ...`）读取任务；
   2. 读 Issue 指定的 Spec，以及蓝图、调研结论中与本切片相关的章节；
-  3. 在 Issue 下回复一条评论，用自己的话复述目标、改动范围与完成标准，再列实施计划；
-  4. 按 Issue 中"开工方式"执行：小切片发出计划即开工；大切片等 Claude 或用户确认（Claude 每 30 分钟
-     巡检一次 GitHub，通常在下一轮巡检内答复）。
+  3. 实现方在 Issue 下回复一条评论，用自己的话复述目标、改动范围与完成标准，再列实施计划；按 Issue 中"开工方式"执行：
+     小切片发出计划即开工；大切片等 Claude 或用户确认。审核方直接按上面的做法给结论。
 
   Issue 与仓库文档已包含全部背景，不需要其他转述。
 - **工作目录**：每个 Issue 一个独立的 git worktree：`.worktrees/sN`，分支 `slice/sN`，由 Claude 开 Issue
   时建好并装好依赖（Harness `uv sync`，涉及前端时 `npm ci`），Issue 里写明路径。
-  - 只在本 Issue 的工作目录里改代码、跑门禁；不切换主目录的分支，不进入其他 Issue 的工作目录；
+  - 实现方只在本 Issue 的工作目录里改代码、跑门禁；不切换主目录的分支，不进入其他 Issue 的工作目录；
+    审核方用 detached 的临时工作树（如 `/tmp/review-sN`）查看代码，审完删除；
   - 门禁用本目录自己的环境（`harness/.venv`、`frontend/node_modules`），不借用其他目录的：
     Harness 的 editable 安装会让测试实际导入那个目录的源码；
   - 主目录 `insurancekb-weknora/` 只用来查看 `main`，不在上面开发；PR 合并后由 Claude 删除对应工作目录。
@@ -105,17 +133,6 @@ Candidate。
   Spec 范围内的步骤直接做，只有以下情况停下并在 Issue/PR 中说明：要改"改动范围"以外或受保护的路径；
   Spec、蓝图与代码事实冲突；超出 Issue 的真实调用预算；部署、迁移、环境或仓库设置变更；需要只有用户
   才有的材料。停下时如果还有其他已批准、未阻塞的 Issue，先去做它，不空等。
-- **给 Codex 的规则**：
-  - 只做 Issue 指定的切片，只改 Spec"改动范围"列出的路径；
-  - 不修改蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`、`contracts/`（守卫基线只在
-    数字下降时用脚本更新；`contracts/` 只由 Spec 规定的导出命令生成）。唯一例外：切片 Spec 允许修改
-    上游文件时，实现者在 `docs/design/upstream-patches.md` 追加对应登记行（不改已有行）；G10 基线仍由
-    Claude 审查后更新；
-  - 提审前本地过完验收、守卫与受影响组件门禁（相对 S0 失败清单不新增失败），把最新 `main`
-    merge 进本分支（不要 rebase：`main` 是 squash 合并，rebase 会重放已合并的提交并冲突）；
-  - 不 deselect、不加 xfail/skip、不改已有断言；
-  - 不自行合并（合并由 Claude 执行）；不自行申请或扩大真实模型调用、构建、部署与数据库迁移；
-  - Spec 有错或走不通时停下，在 PR 里写明，不自行换方案。
 - **不再沿用的旧流程**：Mission Card、六维 DELIVERY 台账、构建预算、逐文件哈希清单、
   HANDOFF 状态块、向仓库提交大体量证据与日志。证据用 commit SHA 加测试/评测报告摘要；真实
   调用原始输出存仓库外的私有位置，PR 中只写摘要与位置。

@@ -1,6 +1,8 @@
-**[by Codex]**
+**[by Claude Code]** / **[by Codex]**（实现方署名，二选一）
 
 Closes #
+
+- 实现方：　　审核方：　　验收测试 RED 提交：`<sha>`
 
 ## 切片与 Spec
 
@@ -32,6 +34,7 @@ Closes #
 
 - [ ] 未修改蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`、`contracts/`（基线只在数字下降时经脚本更新；`contracts/` 只由 Spec 规定的导出命令生成；`docs/design/upstream-patches.md` 只追加 Spec 允许的上游补丁登记行）
 - [ ] 未 deselect、未加 xfail/skip、未改已有断言
+- [ ] `git diff <RED 提交>..HEAD` 未改验收测试；如有修正，已单独提交并在下方"与 Spec 的偏差"写明原因
 
 ## 真实调用与环境变更
 

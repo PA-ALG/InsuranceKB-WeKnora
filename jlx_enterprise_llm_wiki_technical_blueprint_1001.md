@@ -498,18 +498,17 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 
 | 步骤 | 谁 | 做什么 |
 |---|---|---|
-| 1 | Claude | 写切片 Spec 与验收测试，推到 `slice/sN`，建好工作目录 `.worktrees/sN` 并装好依赖，按模板开 Issue（写明工作目录、开工方式与真实调用预算） |
-| 2 | 用户 → 实现者 | 对 Codex 或 V5 同学说"做 issue #N"（交出即批准） |
-| 3 | 实现者 | 在 Issue 下复述目标、范围、完成标准并列计划；小切片即开工，大切片等确认（Claude 在下一轮巡检内答复）；GitHub 上 Claude 的明确指示即确认 |
-| 4 | 实现者 | 在 `.worktrees/sN`（分支 `slice/sN`）实现，本地过门禁，把最新 `main` merge 进来（不 rebase），开 PR（`Closes #N`） |
-| 5 | Claude | 本地重跑验收、守卫与受影响组件门禁，检查 diff 范围，`gh pr review` 批准或列出编号修改项 |
-| 6 | Claude | 审过当前 head 且 CI 通过后 Squash merge，`main` 上一个切片一个提交；合并后告知用户 |
+| 1 | Claude（总控） | 拆分切片、排期；写 Spec 与验收测试（单独一个 RED 提交）推到 `slice/sN`，建好工作目录 `.worktrees/sN` 并装好依赖，按模板开 Issue（写明实现方、审核方、RED 提交、开工方式与真实调用预算） |
+| 2 | 用户 | 批准方向与预算；Codex 是实现方时对它说"做 issue #N"，是审核方时说"审 PR #N" |
+| 3 | 实现方 | 默认 Claude；Go/前端为主、长时间构建或需要独立实现视角的切片由 Codex（或 V5 同学）。在 Issue 下复述目标与计划，在 `.worktrees/sN` 实现，本地过门禁，merge 最新 `main`（不 rebase），开 PR（`Closes #N`） |
+| 4 | 审核方 | 与实现方不同的一方；Claude 实现的简单改动（文档、配置、测试、小重构、约 200 行内且不碰接口/合同/持久化/安全/并发/真实调用/评分口径）由 Claude 自审，复杂改动交 Codex。核对 Spec 符合度、正确性、守卫与边界、验收测试自 RED 提交起未改；一次给出"批准 head"或编号修改项 |
+| 5 | Claude | 审核方已批准当前 head（简单改动为自审结论）、CI 通过、范围符合 Spec 后 Squash merge，`main` 上一个切片一个提交；合并后告知用户 |
 
 - **仓库**：公开仓库 `PA-ALG/InsuranceKB-WeKnora`（`Tencent/WeKnora` 的 fork，本机 remote 名 `origin`）。
   2026-10-01 至 10-02 曾在私有仓库 `PA-ALG/InsuranceKB-WeKnora-private` 工作（已归档，只读）；完整备份在私有
   归档仓库 `PA-ALG/InsuranceKB-WeKnora-backup`。用 `gh` 操作时必须显式写 `--repo PA-ALG/InsuranceKB-WeKnora`，
   否则 fork 会默认指向上游 `Tencent/WeKnora`。
-- **受保护路径**（实现者不改）：本蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`（基线只经脚本下降）、
+- **受保护路径**（实现提交不改；Claude 实现时如需修正 Spec 或验收测试，单独提交并由审核方逐条确认）：本蓝图、`docs/design/`、`tests/acceptance/`、`tests/architecture/`（基线只经脚本下降）、
   `contracts/`（只由 Spec 规定的导出命令生成）。
 - **门禁**：Actions 在 S0 精简后启用，此前以本地门禁为准。Go 受影响包 `go test`；Harness `uv run pytest`、
   `uv run ruff check .`、`uv run mypy src tests`；前端 `npm run type-check`、相关测试、`npm run build`；守卫
@@ -519,7 +518,7 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 - **真实调用与环境**：每个 Issue 写明"场景数 + 发送上限 + 模型"，批准即授权；部署、迁移、环境变更单独开 Issue 并附
   回滚方式。
 - **构建与部署**：镜像由 CI 构建，环境按 digest 拉取；开发阶段沿用现有阿里云配置；上线前做私有化演练。
-- **队列**：Claude 始终保持至少两个已就绪的 Issue。同一组件的运行时代码同时只有一个实现切片；写域不重叠的不同组件、
+- **队列**：Claude 负责工作不断档：自己实现的切片连续推进；有 Codex 额度时保持至少一个可派给 Codex 的就绪 Issue。同一组件的运行时代码同时只有一个实现切片；写域不重叠的不同组件、
   CI/部署切片在各自工作目录并行。Claude 每 30 分钟巡检一次 GitHub：审计划与 PR，满足条件即合并。
 
 ## 10. 现有资产处置
@@ -653,6 +652,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-03 | S2b 评委改用 GPT-6 Astra（xhigh），在独立 Codex 会话中以文件交换答题，不走 API | §7.7 |
 | 2026-10-03 | 每个 Issue 一个独立 git worktree，写域不重叠的切片并行；GitHub 上 Claude 的明确指示即确认，Codex 只在越界、冲突、超预算、部署迁移时停下；Claude 每 30 分钟巡检 | §9、`AGENTS.md` |
 | 2026-10-03 | 500 行仍是原则；S0 时已超限的文件少量增长不逼当场拆分，固定容差 50 行，S7 清理旧代码后一次性拆分 | §8 G3、§11 S7 |
+| 2026-10-14 | Codex 额度有限：Claude 任总控并默认实现，Codex 默认审核；Go/前端为主或需独立视角的切片由 Codex 实现、Claude 审核；实现方与审核方不得相同，合并须审核方批准当前 head；Claude 实现的简单改动可自审后合并，复杂改动交 Codex 审 | §9、`AGENTS.md` |
 | 2026-10-14 | 生产编译模型改为 DeepSeek 官方 `deepseek-flash`（原 `deepseek-v4-flash` 已退役，请求由 V4.1-Flash 服务）；别名浮动，调用记录实际服务版本，版本变化须重测 | §7.6 |
 
 ## 附录 A · 术语

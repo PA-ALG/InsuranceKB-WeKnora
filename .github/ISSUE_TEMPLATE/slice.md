@@ -1,6 +1,6 @@
 ---
 name: 切片任务
-about: 由 Claude 创建，用户批准后交给 Codex 实现
+about: 由 Claude 创建；写明实现方与审核方，用户批准后开工
 title: "SN "
 labels: []
 ---
@@ -15,6 +15,12 @@ labels: []
 
 - Spec：`docs/design/slices/SN-*.md`
 - 蓝图相关章节：`jlx_enterprise_llm_wiki_technical_blueprint_1001.md` §
+
+## 实现与审核
+
+- 实现方：Claude Code / Codex（二选一）
+- 审核方：Codex / Claude Code（不得与实现方相同）；Claude 实现的简单改动可写"Claude 自审（简单改动：理由）"
+- 验收测试 RED 提交：`<sha>`（实现提交不改其中的验收测试；Claude 实现时如需修正，单独提交并由审核方确认）
 
 ## 分支与工作目录
 
@@ -31,7 +37,8 @@ labels: []
 - [ ] 架构守卫全过，基线不回升
 - [ ] 受影响组件的完整门禁相对 S0 失败清单不新增失败（Go / Harness / 前端，按 Spec 列出的命令）
 - [ ] GitHub Actions 全绿（仓库 Actions 启用后适用；未启用前以本地门禁为准）
-- [ ] 未修改受保护路径
+- [ ] 未修改受保护路径；验收测试自 RED 提交起未改（或单独提交并经审核方确认）
+- [ ] 审核方已批准当前 head
 - [ ] 已把最新 `main` merge 进本分支（不 rebase），PR 按模板写全
 
 ## 开工方式
@@ -49,4 +56,4 @@ labels: []
 
 ## 批准
 
-- [ ] 用户已批准（用户把本 Issue 交给 Codex，即视为批准）
+- [ ] 用户已批准（Codex 实现时，用户把本 Issue 交给 Codex 即视为批准；Claude 实现时，用户在对话或 Issue 中确认）
