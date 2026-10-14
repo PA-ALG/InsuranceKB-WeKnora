@@ -1,15 +1,16 @@
 # S4b · 生产模型接入与第一份 DeepSeek 质量数字
 
-> 状态：待用户批准（含真实调用预算与 API 密钥） ｜ 作者：Claude Code ｜ 依据：技术蓝图 1001 §4.2、§7.6、§7.7、§11（S4）；S4a、S2c Spec
+> 状态：用户已批准（2026-10-14：改用 `deepseek-flash`，预算可略超 20 次） ｜ 作者：Claude Code ｜ 依据：技术蓝图 1001 §4.2、§7.6、§7.7、§11（S4）；S4a、S2c Spec
 > 分支：`slice/s4b`（基于 `main@eb0b2ab6b`） ｜ 工作目录：`.worktrees/s4b` ｜ 开工方式：**写完计划即开工**（第 2 部分的前置条件见 §4）
-> 生产编译模型：**DeepSeek v4 flash**（官方 API，OpenAI 兼容）。
+> 生产编译模型：**`deepseek-flash`**（官方 API，OpenAI 兼容；2026-10-14 实际服务版本为 DeepSeek-V4.1-Flash）。
+> 实现方：**Claude**（第 1 部分接手 Codex 的 `81179469a`，由 Claude 审核；第 1 部分补充与第 2 部分由 Claude 实现，**Codex 审核**）。
 
 ## 1. 目标
 
 1. 建 `models/`：按阶段配置的 OpenAI 兼容调用器，满足蓝图 §7.6——输出预算含推理 token、每条调用链只有一个重试 Owner、
    有界退避、成功/失败/超时全部计量、代码里没有模型家族特判、密钥只从环境变量读。它在结构上实现 S4a 的 `CompletionPort`，
    S4a 引擎**不改**。
-2. 用 DeepSeek v4 flash 对 S2b 的 4 款产品（1824、1826、1816、1814）**真实编译一次**，用 S2c 的语义评分给出项目第一份
+2. 用 `deepseek-flash` 对 S2b 的 4 款产品（1824、1826、1816、1814）**真实编译一次**，用 S2c 的语义评分给出项目第一份
    **生产目标模型**的逐 pack 质量数字，并与 G3 epoch9 的 S2c 数字对照。
 
 蓝图 §11 S4 的另外两项——"PageText 由 ParseArtifact 重建"与"一款真实产品上传→编译→发布→回跳"——**不在本片**，归 S4c（§9）。
@@ -22,8 +23,9 @@
 - 旧 `compiler/llm.py::OpenAICompatClient`（async，S7 删除）记录了已踩的坑，本片移植为同步实现：
   `max_tokens` 不足时推理会吃光预算、正文为空；`finish_reason == "length"` 是截断；只取 `message.content`，忽略 `reasoning_content`；
   `httpx` 必须 `trust_env=False`（本机代理环境变量曾让请求全部失败）。
+- **模型名变更（2026-10-07 核实，2026-10-14 用户批准）**：官方已退役 `deepseek-v4-flash`，旧名请求由 DeepSeek-V4.1-Flash 服务；推荐 ID `deepseek-flash` 是**浮动别名**，文档没有锁定版本的 ID。上下文 1M，最大输出 384K（393216）；`thinking` 默认开启，`thinking.reasoning_effort` 可取 `none`/`low`/`high`/`max`，默认 `high`；thinking 模式下 `temperature` 不生效；`finish_reason` 还可能是 `insufficient_system_resource`、`aborted`。来源：https://api-docs.deepseek.com/quick_start/pricing/ 、https://api-docs.deepseek.com/api/create-chat-completion/ 。
 - 4 款原文长度（S2b 题目实测，含字段定义）：1814 ≈ 12.4 万字符、1816 ≈ 7.6 万、1826 ≈ 5.2 万、1824 ≈ 3.4 万。
-  1814 可能超过模型上下文，因此需要 §3.2 的 `InputTooLarge`。
+  上下文 1M，4 款都装得下；`InputTooLarge` 仍保留，作为配置给定的输入上限。
 - 守卫：`models/` 属于 core 目录（G2：不得出现险种名、field_key；G1：不得 import `compilers/` 与旧目录）；`eval/` 可以 import `compilers/` 与 `models/`。
 
 ## 3. 设计
@@ -55,6 +57,7 @@ class StageModelConfig(BaseModel):          # frozen, extra="forbid"
     max_attempts: int = 3                   # 1–5，含首次
     max_input_chars: int | None = None      # > 0；len(system) + len(user) 超过即拒绝
     thinking: Literal["enabled", "disabled"] | None = None
+    reasoning_effort: Literal["none", "low", "high", "max"] | None = None   # 只能与 thinking 同时配置，写进 thinking 对象
     response_format: Literal["json_object"] | None = None
     policy_version: NonBlank                # 配置版本，写进每条 CallRecord
 
@@ -75,6 +78,7 @@ class CallRecord(BaseModel):                # frozen, extra="forbid"
     completion_tokens: int | None = None
     reasoning_tokens: int | None = None     # usage.completion_tokens_details.reasoning_tokens
     finish_reason: str | None = None
+    served_model: str | None = None         # 响应里的 model 字段（浮动别名的实际版本）；只接受 ^[A-Za-z0-9._:/-]{1,128}$
 
 class CallLedger:
     def __init__(self, *, max_sent: int | None = None) -> None: ...
@@ -102,11 +106,11 @@ class OpenAICompatibleCompletion:           # 结构上实现 S4a 的 Completion
 
 1. **构造**：从 `environ`（默认 `os.environ`）读 `config.api_key_env`；缺失或空白 → `ModelConfigError`，不发请求。
 2. **请求**：`POST {base_url}/chat/completions`，JSON 含 `model`、`messages`（system、user 各一条）、`max_tokens`、`temperature`；
-   `thinking` 非空时加 `{"thinking": {"type": ...}}`；`response_format` 非空时加 `{"response_format": {"type": "json_object"}}`。
+   `thinking` 非空时加 `{"thinking": {"type": ...}}`，`reasoning_effort` 非空时写进同一对象 `{"thinking": {"type": ..., "reasoning_effort": ...}}`；`response_format` 非空时加 `{"response_format": {"type": "json_object"}}`。
    请求头 `Authorization: Bearer <key>`。同一输入每次产生相同字节（`request_sha256` 稳定）。`httpx` 客户端 `trust_env=False`。
 3. **输入上限**：`max_input_chars` 已设且超出 → 记一条 `input_too_large`，抛 `InputTooLarge`，**不发送**。
-4. **成功响应**：返回 `choices[0].message.content`，忽略 `reasoning_content`。`finish_reason == "length"` 或正文为空白 →
-   记 `truncated`，抛 `TruncatedCompletion`，**不重试**（同样的预算重试只会再次截断；要改配置）。
+4. **成功响应**：返回 `choices[0].message.content`，忽略 `reasoning_content`；记录响应的 `model` 为 `served_model`。`finish_reason` 不是 `stop`（含 `length`、`content_filter`）或正文为空白 →
+   记 `truncated`，抛 `TruncatedCompletion`，**不重试**（同样的预算重试只会再次截断；要改配置）。例外：`insufficient_system_resource` 是供应商侧临时资源不足，按 `server_error` 重试。
 5. **重试只在这里**：只对 429、5xx、超时、传输错误重试，总尝试数 ≤ `max_attempts`；等待时间取 `Retry-After` 秒数（上限 60），
    没有则 `2 ** (attempt - 1)` 秒（上限 30），经注入的 `sleep` 执行。用尽后抛 `ModelUnavailable`。其他 4xx 立即抛 `ModelHTTPError`，不重试。
    超时后重试可能导致供应商重复计费（Chat Completions 没有幂等键可对账），因此每次尝试都记账，PR 里如实汇总。
@@ -118,22 +122,25 @@ class OpenAICompatibleCompletion:           # 结构上实现 S4a 的 Completion
 
 ### 3.3 `models/stages.json`
 
-先只有一个阶段 `schema_fields`：`provider` = `deepseek`，`base_url` = `https://api.deepseek.com`，`model` = DeepSeek v4 flash 的官方模型名，
-`api_key_env` = `HARNESS_SCHEMA_FIELDS_API_KEY`，`policy_version` = `2026-10-07.1`。`max_tokens`、`max_input_chars`、`thinking` 按 DeepSeek
-**官方文档**取值，PR 里写明文档地址与查阅日期；`max_input_chars` 按上下文窗口保守折算（中文按 1 字符 ≈ 1 token 估算，留出输出预算）。
+先只有一个阶段 `schema_fields`：`provider` = `deepseek`，`base_url` = `https://api.deepseek.com`，`model` = `deepseek-flash`，
+`api_key_env` = `HARNESS_SCHEMA_FIELDS_API_KEY`，`thinking` = `enabled`，`reasoning_effort` = `high`（官方默认，显式写出），
+`response_format` = `json_object`，`max_tokens` = 65536（含推理，远低于 384K 上限），`max_input_chars` = 800000（1M 上下文按 1 字符 ≈ 1 token
+保守折算并留出输出预算），`timeout_s` = 600，`max_attempts` = 3，`policy_version` = `2026-10-14.1`。
+
+因为 `deepseek-flash` 是浮动别名：`compile_run` 在一次运行内发现 `served_model` 变化即停下；报告与 PR 写明实际服务版本；服务版本变化后，质量数字必须重测。
 
 ### 3.4 真实编译 CLI：`python -m insurance_harness.eval.compile_run`
 
 ```text
 --products 1824 1826 1816 1814 --stage schema_fields --stage-config <stages.json> --run-root R
-[--batch-size 25] [--max-sent 20]
+[--batch-size 25] [--max-sent 30]
 ```
 
 - `R` 必须在任何 git 仓库之外。全部产品共享一个 `CallLedger(max_sent=--max-sent)`。
 - 每款产品：pack 取 `dataset/golden/v1/manifest.json` 的 `products[<id>].pack_id`；字段 = `pack_definitions(catalog, pack)`（只取可原文抽取字段，
   与 Golden 的字段集合一致）；页文本 = 该产品 `dataset/shouxian_product/<目录>/*.pdf` 经 `eval/pdf_text.read_pdf`；
   `SchemaFieldsCompiler(..., max_calls=ceil(字段数 / batch_size))`。
-- **按参数顺序逐款编译**（由小到大），第一款出现 `TruncatedCompletion`、`InputTooLarge`、`ModelHTTPError` 就**停下**，后面的不发。
+- **按参数顺序逐款编译**（由小到大），第一款出现 `TruncatedCompletion`、`InputTooLarge`、`ModelHTTPError`，或 `served_model` 与前面不一致，就**停下**，后面的不发。
 - 产物：每款成功后原子写 `R/<id>/output.json`（`CompileOutput`）；每次尝试追加到 `R/ledger.jsonl`。重跑时已有 `output.json` 的产品**复用、不重编**，
   复用数单独统计。全部完成后写 `R/candidate.json`（各款 `to_candidate` 合并：bindings 与 fields 依次拼接）与 `R/product-map.json`
   （display_name → 产品号）；这两个文件已存在则退出码 2，不覆盖。
@@ -161,7 +168,7 @@ class OpenAICompatibleCompletion:           # 结构上实现 S4a 的 Completion
 
 - `models/` 全部文件与单测；`eval/compile_run.py`、`eval/product_sources.py`（或同等）及测试；`annotate.py` 改为调用公开函数。
 - PR 描述：
-  - 逐 pack 结果表：DeepSeek v4 flash 与 G3 epoch9（S2c 数字）并列，P / R / 幻觉 / 缺内容 / 说错 / 放错字段 / 门槛；
+  - 逐 pack 结果表：`deepseek-flash`（写明实际服务版本）与 G3 epoch9（S2c 数字）并列，P / R / 幻觉 / 缺内容 / 说错 / 放错字段 / 门槛；
   - 调用汇总：发送数、重试数、复用数、prompt / completion / reasoning token 合计、总耗时，按供应商公开价格估算的费用；
   - 引文回验被丢弃的字段数（逐款）；停下或失败的情况如实写出；
   - `stages.json` 的取值依据（文档地址与日期）；
@@ -185,12 +192,12 @@ class OpenAICompatibleCompletion:           # 结构上实现 S4a 的 Completion
 
 ## 8. 真实调用预算
 
-- 模型：DeepSeek v4 flash（官方 API），阶段 `schema_fields`。
+- 模型：`deepseek-flash`（官方 API，当前服务版本 DeepSeek-V4.1-Flash），阶段 `schema_fields`。
 - 场景：4 款产品各编译一次。预计发送 **11 次**（1824 = 3、1826 = 3、1816 = 3、1814 = 2，按每批 25 个字段计）；
-  **发送上限 20 次**（含重试与一次 `max_tokens` 调整后的重跑），由 `--max-sent 20` 强制执行。
+  **发送上限 30 次**（含重试与一次 `max_tokens` 调整后的重跑；用户 2026-10-14 同意可略超 20），由 `--max-sent 30` 强制执行。
 - 数据量：每次发送都带该产品全部原文，输入合计约 70 万字符；外发内容为产品条款、说明书、费率表（开发阶段用户已同意外发）。
-- 密钥：用户在运行 Codex 的环境里设置 `HARNESS_SCHEMA_FIELDS_API_KEY`；**密钥不进入仓库、日志、PR 或 Issue**。
-- 评分：GPT-6 Astra（xhigh），用户新开 1 个 Codex 会话，预计 4 道题、上限 8 道；无 API。
+- 密钥：用户在运行环境里设置 `HARNESS_SCHEMA_FIELDS_API_KEY`（Claude 不读取密钥文件）；**密钥不进入仓库、日志、PR 或 Issue**。
+- 评分：GPT-6 Astra（xhigh），由 Claude 以 `codex exec` 启动独立会话（2026-10-14 用户同意），预计 4 道题、上限 8 道；无 API。
 - 无构建、部署、数据库迁移。
 
 ## 9. 非目标（S4c 及以后）

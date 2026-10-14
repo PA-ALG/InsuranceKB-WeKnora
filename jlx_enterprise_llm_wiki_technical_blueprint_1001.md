@@ -434,7 +434,7 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 
 ### 7.6 模型接入与调用治理
 
-- OpenAI 兼容接口，按阶段配置 provider、endpoint、model 与输出预算；当前 DeepSeek v4 flash 官方 API，开发可用 Gemini，
+- OpenAI 兼容接口，按阶段配置 provider、endpoint、model 与输出预算；当前 DeepSeek 官方 API 的 `deepseek-flash`（2026-10-14 起；原 v4 flash 已被官方退役，别名会随官方升级浮动，每次调用记录实际服务版本，版本变化须重测质量），开发可用 Gemini，
   上线切私有化部署，只改配置。代码中不出现模型家族特判。
 - 输出预算同时计入推理与正文 token（DeepSeek 曾出现推理耗尽 16K、正文为 0）。
 - 每条调用链一个重试 Owner；限流按供应商提示有界退避；结果未知先对账。发送次数、耗时、用量在成功、失败、取消、
@@ -653,6 +653,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-03 | S2b 评委改用 GPT-6 Astra（xhigh），在独立 Codex 会话中以文件交换答题，不走 API | §7.7 |
 | 2026-10-03 | 每个 Issue 一个独立 git worktree，写域不重叠的切片并行；GitHub 上 Claude 的明确指示即确认，Codex 只在越界、冲突、超预算、部署迁移时停下；Claude 每 30 分钟巡检 | §9、`AGENTS.md` |
 | 2026-10-03 | 500 行仍是原则；S0 时已超限的文件少量增长不逼当场拆分，固定容差 50 行，S7 清理旧代码后一次性拆分 | §8 G3、§11 S7 |
+| 2026-10-14 | 生产编译模型改为 DeepSeek 官方 `deepseek-flash`（原 `deepseek-v4-flash` 已退役，请求由 V4.1-Flash 服务）；别名浮动，调用记录实际服务版本，版本变化须重测 | §7.6 |
 
 ## 附录 A · 术语
 
