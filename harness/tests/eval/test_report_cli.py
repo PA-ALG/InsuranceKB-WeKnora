@@ -76,7 +76,7 @@ def test_report_counters_pack_gates_and_scoped_rows(
     assert result.returncode == 0, result.stderr  # Gate failure still writes a usable report.
     data = json.loads(out.with_suffix(".json").read_text())
     assert data["report"]["micro"] == {
-        "tp": 1, "fp": 1, "fn": 2, "hallucinations": 0,
+        "tp": 1, "fp": 1, "fn": 2, "partial": 0, "hallucinations": 0,
         "precision": 0.5, "recall": 1 / 3,
     }
     assert data["counts"]["missed"] == 2
