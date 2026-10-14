@@ -14,13 +14,16 @@ class Metrics(BaseModel):
     tp: int = 0
     fp: int = 0
     fn: int = 0
+    # Present answers that state nothing wrong but miss Golden facts (semantic
+    # incomplete): not wrong for precision, a miss for recall. Always 0 literally.
+    partial: int = 0
     hallucinations: int = 0
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def precision(self) -> float | None:
-        denominator = self.tp + self.fp
-        return self.tp / denominator if denominator else None
+        denominator = self.tp + self.partial + self.fp
+        return (self.tp + self.partial) / denominator if denominator else None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -49,6 +52,7 @@ class ItemOutcome(BaseModel):
     tp: int = 0
     fp: int = 0
     fn: int = 0
+    partial: int = 0
     component_misses: list[str] = Field(default_factory=list)
     forbidden_hits: list[str] = Field(default_factory=list)
 
@@ -159,6 +163,7 @@ def report_from_outcomes(outcomes: Iterable[ItemOutcome]) -> Report:
             metrics.tp += outcome.tp
             metrics.fp += outcome.fp
             metrics.fn += outcome.fn
+            metrics.partial += outcome.partial
             metrics.hallucinations += outcome.result == "hallucination"
         if outcome.component_misses:
             # The spec's display key lacks pack_id. Preserve all missing names;

@@ -59,15 +59,16 @@ class Ruling(BaseModel):
 
 type _Key = tuple[str, str]
 
-# (TP, FP, FN) per final result. Precision asks whether published content is
-# wrong; recall asks whether the material's facts were captured. An incomplete
-# answer contradicts nothing, so it is a recall miss only (user ruling 2026-10-14).
-_COUNTS: dict[str, tuple[int, int, int]] = {
-    "correct": (1, 0, 0),
-    "incomplete": (0, 0, 1),
-    "wrong_value": (0, 1, 1),
-    "misfiled": (0, 1, 0),
-    "golden_defect": (0, 0, 0),
+# (TP, FP, FN, partial) per final result. Precision asks whether published
+# content is wrong; recall asks whether the material's facts were captured. An
+# incomplete answer contradicts nothing, so it counts as not-wrong for precision
+# (partial) and as a miss for recall (FN) — user ruling 2026-10-14.
+_COUNTS: dict[str, tuple[int, int, int, int]] = {
+    "correct": (1, 0, 0, 0),
+    "incomplete": (0, 0, 1, 1),
+    "wrong_value": (0, 1, 1, 0),
+    "misfiled": (0, 1, 0, 0),
+    "golden_defect": (0, 0, 0, 0),
 }
 
 
@@ -158,7 +159,7 @@ def _apply_rulings(outcomes: list[ItemOutcome], rulings: Iterable[Ruling]) -> No
             raise ValueError(f"{ruling.field_key}: only L2 correct results can be ruled")
         outcome.result = ruling.to_result
         outcome.basis, outcome.reason = "L3", ruling.reason
-        outcome.tp, outcome.fp, outcome.fn = _COUNTS[ruling.to_result]
+        outcome.tp, outcome.fp, outcome.fn, outcome.partial = _COUNTS[ruling.to_result]
         ruled.add(key)
 
 
@@ -184,7 +185,7 @@ def evaluate_semantic(
             outcome.result = "correct"
         else:
             outcome.result = "incomplete" if decision.verdict == "insufficient" else "wrong_value"
-        outcome.tp, outcome.fp, outcome.fn = _COUNTS[outcome.result]
+        outcome.tp, outcome.fp, outcome.fn, outcome.partial = _COUNTS[outcome.result]
         # Literal misses are not semantic failures; the L2 reason supplies the
         # explanation. Non-present cases retain evaluate's original diagnostics.
         outcome.component_misses, outcome.forbidden_hits = [], []

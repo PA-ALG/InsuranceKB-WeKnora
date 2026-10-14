@@ -47,10 +47,11 @@ _RULES = '''# 独立语义评分评委
 '''
 _DEFINITION = {
     "metric_id": "golden.semantic_comparison.v1",
-    "precision": "TP / (TP + FP)", "recall": "TP / (TP + FN)",
+    "precision": "(TP + partial) / (TP + partial + FP)", "recall": "TP / (TP + FN)",
     "scoring": (
         "L1 equality or component match, then independent L2 equivalence, then attributed L3. "
-        "Correct present: TP; incomplete: FN only (states nothing wrong, misses Golden facts); "
+        "Correct present: TP; incomplete: partial + FN "
+        "(states nothing wrong, misses Golden facts); "
         "wrong_value: FP + FN; missed present: FN; "
         "hallucination/contradiction/misfiled: FP; golden_defect: excluded from denominators. "
         "Only hallucination counts toward the zero-hallucination gate. "
