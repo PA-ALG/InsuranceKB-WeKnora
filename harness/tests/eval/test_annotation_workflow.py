@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from insurance_harness.eval import annotate
+from insurance_harness.eval import annotate, product_sources
 from insurance_harness.eval.judge import JudgeProtocolError
 from insurance_harness.eval.pdf_text import PageText, read_pdf
 
@@ -44,7 +44,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Pa
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         return [PageText(path.name, digest, 1, "期限为90日。")]
 
-    monkeypatch.setattr(annotate, "read_pdf", pages)
+    monkeypatch.setattr(product_sources, "read_pdf", pages)
     return repo, tmp_path / "runs"
 
 
