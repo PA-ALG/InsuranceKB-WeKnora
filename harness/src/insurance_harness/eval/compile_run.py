@@ -69,18 +69,39 @@ def _write_new(path: Path, text: str) -> None:
         temporary.unlink()
 
 
+class _RawResponses:
+    """Keep every raw completion beside the product so rejected output can be diagnosed.
+
+    Completions are untrusted model output that may quote source material; they
+    stay in the private run root and never enter logs, errors or the repository.
+    """
+
+    def __init__(self, inner: CompletionPort, directory: Path) -> None:
+        self._inner, self._directory, self._count = inner, directory, 0
+
+    @property
+    def model(self) -> str:
+        return self._inner.model
+
+    def complete(self, *, system: str, user: str) -> str:
+        raw = self._inner.complete(system=system, user=user)
+        self._count += 1
+        self._directory.mkdir(parents=True, exist_ok=True)
+        _write_new(self._directory / f"{self._count:03d}.txt", raw)
+        return raw
+
+
 class _LedgerFile:
     """Append each attempt exactly once, including those of a failed product."""
 
     def __init__(self, path: Path, ledger: CallLedger) -> None:
         self._path, self._ledger, self._written = path, ledger, 0
 
-    def served_models(self) -> set[str]:
+    def stored(self) -> list[CallRecord]:
         if not self._path.exists():
-            return set()
-        records = [CallRecord.model_validate_json(line)
-                   for line in self._path.read_text(encoding="utf-8").splitlines() if line]
-        return {record.served_model for record in records if record.served_model}
+            return []
+        return [CallRecord.model_validate_json(line)
+                for line in self._path.read_text(encoding="utf-8").splitlines() if line]
 
     def flush(self) -> None:
         records = self._ledger.records[self._written:]
@@ -90,15 +111,35 @@ class _LedgerFile:
             self._written += len(records)
 
 
+def _next_attempt(directory: Path) -> str:
+    """Each compile attempt of a product keeps its own raw-response folder."""
+    existing = [path.name for path in directory.glob("attempt-*") if path.is_dir()]
+    return f"attempt-{len(existing) + 1:02d}"
+
+
+def prior_sends(run_root: Path) -> int:
+    """Sends already spent by earlier runs in this root; the budget is cumulative."""
+    path = run_root / "ledger.jsonl"
+    if not path.exists():
+        return 0
+    return sum(
+        CallRecord.model_validate_json(line).outcome not in ("input_too_large", "budget_exceeded")
+        for line in path.read_text(encoding="utf-8").splitlines() if line
+    )
+
+
 def compile_products(
     repo: Path, products: list[str], *, completion: CompletionPort, ledger: CallLedger,
     run_root: Path, batch_size: int = 25,
 ) -> list[ProductRun]:
     """Compile or reuse each product in order; raise on the first stopping condition."""
     check_run_directory(run_root)
+    if ledger.records:
+        # The sink appends every record of this ledger; a reused one would duplicate.
+        raise ValueError("compile_products needs a fresh ledger")
     run_root.mkdir(parents=True, exist_ok=True)
     sink = _LedgerFile(run_root / "ledger.jsonl", ledger)
-    served = sink.served_models()
+    served = {record.served_model for record in sink.stored() if record.served_model}
     if len(served) > 1:
         raise ServedModelChanged("ledger already records more than one served model")
     runs: list[ProductRun] = []
@@ -115,11 +156,14 @@ def compile_products(
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / _CATALOG, pack)
+            attempt = _next_attempt(run_root / product / "responses")
+            recorder = _RawResponses(completion, run_root / product / "responses" / attempt)
             compiler = SchemaFieldsCompiler(
-                completion, batch_size=batch_size,
+                recorder, batch_size=batch_size,
                 max_calls=math.ceil(len(definitions) / batch_size),
             )
             output = compiler.compile(product, definitions, source_pages(directory))
+            sink.flush()
             served |= {record.served_model for record in ledger.records if record.served_model}
             if len(served) > 1:
                 # Results from two model versions cannot form one quality number.
@@ -184,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-sent", type=int, default=30)
     args = parser.parse_args(argv)
     runs: list[ProductRun] = []
-    ledger = CallLedger(max_sent=args.max_sent)
+    ledger = CallLedger(max_sent=max(0, args.max_sent - prior_sends(args.run_root)))
     try:
         config = load_stage_config(args.stage_config, args.stage)
         completion = OpenAICompatibleCompletion(config, ledger=ledger)

@@ -7,11 +7,13 @@ from pathlib import Path
 import httpx
 import pytest
 
+from insurance_harness.compilers.schema_fields.engine import CompileError
 from insurance_harness.eval import product_sources
 from insurance_harness.eval.compile_run import (
     ServedModelChanged,
     compile_products,
     main,
+    prior_sends,
     write_candidate,
 )
 from insurance_harness.eval.convert import predictions_from_candidate
@@ -194,3 +196,47 @@ def test_cli_without_a_key_stops_before_sending(
     report = json.loads(capsys.readouterr().out)
     assert code == 2 and report["sent"] == 0 and "config_error" in report["stopped"]
     assert not (tmp_path / "run/ledger.jsonl").exists()
+
+
+def test_raw_completions_are_kept_per_attempt(repo: Path, tmp_path: Path) -> None:
+    root, ledger = tmp_path / "run", CallLedger()
+    client, _ = completion(["m"], ledger)
+    compile_products(repo, ["p1"], completion=client, ledger=ledger, run_root=root)
+    raw = (root / "p1/responses/attempt-01/001.txt").read_text(encoding="utf-8")
+    assert json.loads(raw)["fields"][0]["field_key"] == "waiting_period"
+
+
+def test_rejected_output_keeps_raw_text_and_spends_cumulative_budget(
+    repo: Path, tmp_path: Path,
+) -> None:
+    root, ledger = tmp_path / "run", CallLedger()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"model": "m", "choices": [{
+            "message": {"content": '{"fields": [{"field_key": "x"}]}'}, "finish_reason": "stop",
+        }]})
+
+    config = StageModelConfig(
+        stage="schema_fields", provider="example", base_url="https://api.example.com",
+        model="example-flash", api_key_env="TEST_KEY", max_tokens=4096, policy_version="test.1",
+    )
+
+    def client(book: CallLedger) -> OpenAICompatibleCompletion:
+        return OpenAICompatibleCompletion(
+            config, environ={"TEST_KEY": "k"}, ledger=book,
+            transport=httpx.MockTransport(handler),
+        )
+
+    with pytest.raises(CompileError):
+        compile_products(repo, ["p1"], completion=client(ledger), ledger=ledger, run_root=root)
+    assert (root / "p1/responses/attempt-01/001.txt").exists()
+    assert prior_sends(root) == 1
+    # A second attempt keeps its own folder and the earlier send still counts.
+    second = CallLedger()
+    with pytest.raises(CompileError):
+        compile_products(repo, ["p1"], completion=client(second), ledger=second, run_root=root)
+    # A ledger that already holds records cannot be flushed again.
+    with pytest.raises(ValueError):
+        compile_products(repo, ["p1"], completion=client(second), ledger=second, run_root=root)
+    assert (root / "p1/responses/attempt-02/001.txt").exists()
+    assert prior_sends(root) == 2
