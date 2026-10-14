@@ -25,14 +25,15 @@ precision / recall，并把这套评分器留给 S4b（V5 编译器 + DeepSeek v
 |---|---|---|---|---|
 | present | present，`values_equal` 或 `compare_value(...).correct` | L1 代码 | `correct` | 1 / 0 / 0 |
 | present | present，L1 未判定 | L2 `equivalent` | `correct` | 1 / 0 / 0 |
-| present | present，L1 未判定 | L2 `insufficient` | `incomplete` | 0 / 1 / 1 |
+| present | present，L1 未判定 | L2 `insufficient` | `incomplete` | 0 / **0** / 1 |
 | present | present，L1 未判定 | L2 `contradicted` | `wrong_value` | 0 / 1 / 1 |
 | present | 非 present 或缺失 | 代码 | `missed` | 0 / 0 / 1 |
 | unknown | present | 代码 | `hallucination`（计入门槛的幻觉数） | 0 / 1 / 0 |
 | absent_explicitly | present | 代码 | `contradiction` | 0 / 1 / 0 |
 | 非 present | 非 present / 缺失 | 代码 | 与 `evaluate` 相同（`correct_non_present`、`state_mismatch`、`missing`） | 不计 |
 
-- `incomplete` 与 `wrong_value` 都算错（预测发布出去会误导读者），但分开计数：前者是**缺内容**，后者是**说错了**。
+- **`incomplete` 只计 FN、不计 FP**（用户 2026-10-14 裁决）：precision 衡量"发布出去的内容有没有说错"，recall 衡量"材料里的事实写全没有"。缺内容但没说错，只扣 recall；`wrong_value` 是说错了，FP 与 FN 都计。两者分开计数。
+  首轮 G3 报告（2026-10-14 前的口径）把 `incomplete` 计为 FP+FN，P 与 R 同时被压到 9%–26%，掩盖了"几乎不说错、普遍写不全"的事实。
 - **L2 是单向的**：只问 Golden 列出的核心事实是否被预测覆盖、是否被预测否定。预测**额外**写出、Golden 没有的事实，
   L2 不核对；这类内容的正确性由来源回跳负责（蓝图 §2.5"已发布事实来源回跳 = 100%"，S4 的严格回验）。报告须写明这一局限。
 - 门槛不变：`gate(report, pack_id)`，precision ≥ 95%、recall ≥ 90%、`hallucination` = 0。
@@ -57,7 +58,7 @@ precision / recall，并把这套评分器留给 S4b（V5 编译器 + DeepSeek v
 | `correct`（仅 L2 判定的） | `incomplete` / `wrong_value` | 抽检发现 L2 放水；L1 判定的 `correct` 不可裁定 |
 | `hallucination` | `misfiled` / `golden_defect` | 原文有但不属于该字段；或原文有且属于该字段、Golden 漏标 |
 
-- `misfiled`：FP 1，**不计幻觉**（内容有原文依据，只是放错字段）。
+- `misfiled`：FP 1，**不计幻觉**（内容有原文依据，只是放错字段）。裁定为 `incomplete` 时同样只计 FN。
 - `golden_defect`：不计 TP/FP/FN，单独计数并逐条列出，留给 Golden v2 修正（专家回归后复核，不覆盖原记录）。
 - 裁定后的条目 `basis = "L3"`，`reason` 取裁定理由。理由必须写明原文出处（文件、页码或条款号）与判断依据，不写"人工复核通过"。
 - 裁定必须指向一个实际存在、且当前 `result` 等于 `from` 的条目；同一条目最多一条裁定；否则 `ValueError`。
