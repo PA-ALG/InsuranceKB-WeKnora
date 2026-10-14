@@ -46,8 +46,11 @@ def config(**overrides: object) -> StageModelConfig:
     return StageModelConfig.model_validate({**data, **overrides})
 
 
-def ok(content: str = ANSWER, *, finish: str = "stop") -> httpx.Response:
+def ok(
+    content: str = ANSWER, *, finish: str = "stop", served: str = "example-model-2026",
+) -> httpx.Response:
     return httpx.Response(200, json={
+        "model": served,
         "choices": [{
             "message": {"role": "assistant", "content": content, "reasoning_content": "推理过程"},
             "finish_reason": finish,
@@ -102,6 +105,8 @@ def outcomes(completion: OpenAICompatibleCompletion) -> list[str]:
     {"max_input_chars": 0},
     {"thinking": "maybe"},
     {"api_key": KEY},
+    {"reasoning_effort": "high"},
+    {"thinking": "enabled", "reasoning_effort": "extreme"},
 ])
 def test_config_rejects_invalid_or_secret_bearing_values(override: dict[str, object]) -> None:
     with pytest.raises(ValueError):
@@ -128,6 +133,8 @@ def test_repository_stage_config_names_deepseek_without_a_key() -> None:
     stage = load_stage_config(path, "schema_fields")
     assert (stage.provider, stage.base_url) == ("deepseek", "https://api.deepseek.com")
     assert stage.api_key_env == "HARNESS_SCHEMA_FIELDS_API_KEY"
+    assert stage.model == "deepseek-flash"
+    assert (stage.thinking, stage.reasoning_effort) == ("enabled", "high")
     assert "sk-" not in path.read_text(encoding="utf-8")
 
 
@@ -170,6 +177,32 @@ def test_sends_the_configured_openai_payload_and_returns_content_only() -> None:
     first, second = completion.ledger.records
     assert first.request_sha256 == second.request_sha256
     assert server.requests[0].content == server.requests[1].content
+
+
+def test_reasoning_effort_is_sent_inside_the_thinking_object() -> None:
+    server = Server(ok())
+    make(server, thinking="enabled", reasoning_effort="max").complete(system="规则", user=PROMPT)
+    assert json.loads(server.requests[0].content)["thinking"] == {
+        "type": "enabled", "reasoning_effort": "max",
+    }
+
+
+def test_served_model_is_recorded_only_when_it_is_a_plain_identifier() -> None:
+    completion = make(Server(ok(served="example-model-2026"), ok(served=PROMPT)))
+    completion.complete(system="规则", user=PROMPT)
+    completion.complete(system="规则", user=PROMPT)
+    assert [record.served_model for record in completion.ledger.records] == [
+        "example-model-2026", None,
+    ]
+
+
+def test_provider_resource_shortage_is_retried() -> None:
+    sleeps: list[float] = []
+    server = Server(ok(finish="insufficient_system_resource"), ok())
+    completion = make(server, sleeps=sleeps)
+    assert completion.complete(system="规则", user=PROMPT) == ANSWER
+    assert outcomes(completion) == ["server_error", "ok"]
+    assert sleeps == [1]
 
 
 def test_optional_fields_are_omitted_when_not_configured() -> None:
