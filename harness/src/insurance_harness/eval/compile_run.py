@@ -204,8 +204,7 @@ class _Replay:
     model = "replay"
 
     def __init__(self, source: Path, product: str) -> None:
-        attempts = sorted(path for path in (source / product / "responses").glob("attempt-*")
-                          if path.is_dir())
+        attempts = _attempts(source / product / "responses")
         if not attempts:
             raise ValueError(f"{product}: replay source has no saved responses")
         self._saved = iter(sorted(attempts[-1].glob("*.txt")))
@@ -217,10 +216,18 @@ class _Replay:
         return path.read_text(encoding="utf-8")
 
 
+def _attempts(directory: Path) -> list[Path]:
+    """Attempt folders in numeric order; zero padding is only a minimum width."""
+    found = [(int(path.name[len("attempt-"):]), path) for path in directory.glob("attempt-*")
+             if path.is_dir() and path.name[len("attempt-"):].isdigit()]
+    return [path for _, path in sorted(found)]
+
+
 def _next_attempt(directory: Path) -> str:
     """Each compile attempt of a product keeps its own raw-response folder."""
-    existing = [path.name for path in directory.glob("attempt-*") if path.is_dir()]
-    return f"attempt-{len(existing) + 1:02d}"
+    attempts = _attempts(directory)
+    latest = int(attempts[-1].name[len("attempt-"):]) if attempts else 0
+    return f"attempt-{latest + 1:02d}"
 
 
 _HELD: dict[Path, int] = {}
@@ -267,6 +274,13 @@ def compile_products(
     """
     if replay_from is None and completion_factory is None:
         raise ValueError("a completion factory is required unless replaying")
+    if replay_from is not None:
+        # Saved responses include a last batch that a served-model change rejected
+        # in the source run; replaying a mixed-version source would accept it.
+        source_served = {record.served_model for record in stored_records(replay_from)
+                         if record.served_model}
+        if len(source_served) > 1:
+            raise ServedModelChanged("replay source records more than one served model")
     with run_lock(run_root):
         _adopt_legacy_budget(run_root)
         served = {record.served_model for record in stored_records(run_root)

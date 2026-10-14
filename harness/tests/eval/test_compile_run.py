@@ -389,3 +389,23 @@ def test_another_thread_cannot_share_a_held_run_root(repo: Path, tmp_path: Path)
     finally:
         release.set()
         thread.join(5)
+
+
+def test_attempts_are_ordered_numerically(repo: Path, tmp_path: Path) -> None:
+    root = tmp_path / "run"
+    for number in (99, 100):
+        (root / "p1/responses" / f"attempt-{number:02d}").mkdir(parents=True)
+    assert compile_run._next_attempt(root / "p1/responses") == "attempt-101"
+    saved = root / "p1/responses/attempt-100"
+    (saved / "001.txt").write_text("newest")
+    (root / "p1/responses/attempt-99/001.txt").write_text("older")
+    assert compile_run._Replay(root, "p1").complete(system="", user="") == "newest"
+
+
+def test_replay_refuses_a_mixed_version_source(repo: Path, tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    with pytest.raises(ServedModelChanged):
+        run(repo, source, ["p1"], factory(["v1", "v2", "v2"])[0], batch_size=1)
+    with pytest.raises(ServedModelChanged):
+        compile_products(repo, ["p1"], completion_factory=None, run_root=tmp_path / "replayed",
+                         max_sent=0, replay_from=source)
