@@ -8,7 +8,6 @@ Non-calibration products require a passing calibration in the same run root.
 import argparse
 import hashlib
 import json
-import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -30,7 +29,12 @@ from insurance_harness.eval.golden import GoldenItem
 from insurance_harness.eval.judge import PROMPT_VERSION, JudgeAnnotator, JudgeRequest, calibrate
 from insurance_harness.eval.judge_files import FileJudgeClient, check_run_directory, write_requests
 from insurance_harness.eval.normalize import values_equal
-from insurance_harness.eval.pdf_text import PageText, read_pdf
+from insurance_harness.eval.product_sources import (
+    check_product_id,
+    declared_pack,
+    source_directory,
+    source_pages,
+)
 
 _RULES = '''# 保险条款离线评委
 
@@ -92,11 +96,6 @@ def _write(path: Path, data: object) -> None:
         stream.write("\n")
 
 
-def _product(product_id: str) -> None:
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", product_id):
-        raise ValueError("invalid product identifier")
-
-
 def _calibration(root: Path, model_id: str | None = None) -> None:
     path = root / "calibration.json"
     if not path.exists():
@@ -108,47 +107,12 @@ def _calibration(root: Path, model_id: str | None = None) -> None:
         raise ValueError("judge model differs from calibration")
 
 
-def _sources(repo: Path, product_id: str, directory: Path | None) -> Path:
-    if directory is None:
-        matches = [
-            path.parent for path in (repo / "dataset/shouxian_product").glob("*/product_meta.json")
-            if _json(path).get("planCode") == product_id
-        ]
-        if len(matches) != 1:
-            raise ValueError("product source directory ambiguous or missing; supply --source-dir")
-        directory = matches[0]
-    directory = directory.resolve()
-    directory.relative_to((repo / "dataset/shouxian_product").resolve())
-    return directory
-
-
-def _pages(directory: Path) -> list[PageText]:
-    paths = sorted(directory.glob("*.pdf"))
-    if not paths:
-        raise ValueError("no source PDFs")
-    pages = [page for path in paths for page in read_pdf(path)]
-    if not any(page.text.strip() for page in pages):
-        raise ValueError("no source page text")
-    return pages
-
-
-def _pack(repo: Path, product_id: str, pack_id: str | None) -> str:
-    if pack_id is not None:
-        return pack_id
-    manifest = _json(repo / "dataset/golden/v1/manifest.json")
-    metadata = manifest.get("products", {}).get(product_id, {})
-    value = metadata.get("pack_id")
-    if not isinstance(value, str):
-        raise ValueError("pack is not declared; supply --pack")
-    return value
-
-
 def prepare(
     repo: Path, product_id: str, run_root: Path, *, pack_id: str | None = None,
     source_dir: Path | None = None, batch_size: int = 25,
 ) -> dict[str, Any]:
     """Write one immutable question set outside Git, only after calibration if needed."""
-    _product(product_id)
+    check_product_id(product_id)
     run_dir = run_root / product_id
     check_run_directory(run_dir)
     if run_dir.exists():
@@ -157,10 +121,10 @@ def prepare(
     if product_id != "596":
         _calibration(run_root)
     catalog = load_catalog(repo / _CATALOG)
-    pack_id = _pack(repo, product_id, pack_id)
+    pack_id = declared_pack(repo, product_id, pack_id)
     fields = list(catalog.source_extractable_fields(pack_id))
-    directory = _sources(repo, product_id, source_dir)
-    pages = _pages(directory)
+    directory = source_directory(repo, product_id, source_dir)
+    pages = source_pages(directory)
     builder = JudgeAnnotator(_PrepareClient(), catalog, max_calls=3, batch_size=batch_size)
     requests = builder.build_requests(product_id, pack_id, fields, pages)
     run = _Run(
@@ -293,7 +257,7 @@ def ingest(
     repo: Path, product_id: str, run_root: Path, *, judge_model: str, calibrate_only: bool = False,
 ) -> dict[str, Any]:
     """Rebuild prompts from original PDF bytes and fail closed before publishing records."""
-    _product(product_id)
+    check_product_id(product_id)
     if calibrate_only != (product_id == "596"):
         raise ValueError("596 requires --calibrate; --calibrate is only allowed for 596")
     run_dir = run_root / product_id
@@ -306,8 +270,8 @@ def ingest(
     catalog = load_catalog(repo / _CATALOG)
     if run.field_keys != list(catalog.source_extractable_fields(run.pack_id)):
         raise ValueError("run fields changed")
-    directory = _sources(repo, product_id, repo / run.source_directory)
-    pages = _pages(directory)
+    directory = source_directory(repo, product_id, repo / run.source_directory)
+    pages = source_pages(directory)
     if {page.document: page.document_sha256 for page in pages} != run.source_sha256:
         raise ValueError("source PDF bytes changed")
     client = FileJudgeClient(run_dir, model_id=judge_model)
