@@ -228,8 +228,9 @@ def test_semantic_l2_outcomes_keep_incomplete_and_wrong_value_separate() -> None
         verdict(items[0], "insufficient"), verdict(items[1], "contradicted"), verdict(items[2]),
     ])
     assert [item.result for item in report.outcomes] == ["incomplete", "wrong_value", "correct"]
+    # incomplete is a recall miss only (2026-10-14 ruling); wrong_value is FP + FN.
     assert (report.incomplete, report.wrong_values, report.micro.tp, report.micro.fp,
-            report.micro.fn) == (1, 1, 1, 2, 2)
+            report.micro.fn) == (1, 1, 1, 1, 2)
     assert all(item.basis == "L2" and item.reason == "核心事实判断" for item in report.outcomes)
 
 

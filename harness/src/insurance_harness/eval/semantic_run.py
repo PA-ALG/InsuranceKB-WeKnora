@@ -50,7 +50,8 @@ _DEFINITION = {
     "precision": "TP / (TP + FP)", "recall": "TP / (TP + FN)",
     "scoring": (
         "L1 equality or component match, then independent L2 equivalence, then attributed L3. "
-        "Correct present: TP; incomplete/wrong_value: FP + FN; missed present: FN; "
+        "Correct present: TP; incomplete: FN only (states nothing wrong, misses Golden facts); "
+        "wrong_value: FP + FN; missed present: FN; "
         "hallucination/contradiction/misfiled: FP; golden_defect: excluded from denominators. "
         "Only hallucination counts toward the zero-hallucination gate. "
         "Non-present comparisons and unscored predictions do not enter P/R denominators."
