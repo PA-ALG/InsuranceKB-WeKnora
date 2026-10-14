@@ -142,9 +142,10 @@ def test_l2_verdicts_map_to_correct_incomplete_and_wrong_value() -> None:
         assert (item.result, item.basis, item.tp, item.fp, item.fn) == (result, basis, tp, fp, fn)
     assert outcome(report, "b_terms").reason == "理由"
     metrics = report.per_pack["pack-a"]
-    # incomplete is a recall miss only: nothing it states contradicts the Golden.
-    assert (metrics.tp, metrics.fp, metrics.fn) == (2, 2, 3)
-    assert metrics.precision == pytest.approx(0.5)
+    # incomplete states nothing wrong (counts toward precision) but misses Golden
+    # facts (counts against recall): precision = (TP + partial) / (TP + partial + FP).
+    assert (metrics.tp, metrics.fp, metrics.fn, metrics.partial) == (2, 2, 3, 1)
+    assert metrics.precision == pytest.approx(0.6)
     assert metrics.recall == pytest.approx(0.4)
     assert (report.incomplete, report.wrong_values, report.hallucinations) == (1, 1, 1)
     assert "hallucination" in gate(report, "pack-a").reasons
@@ -209,7 +210,7 @@ def test_only_l2_correct_items_can_be_tightened() -> None:
     )
     tightened = outcome(report, "a_scope")
     assert (tightened.result, tightened.basis) == ("incomplete", "L3")
-    assert (tightened.tp, tightened.fp, tightened.fn) == (0, 0, 1)
+    assert (tightened.tp, tightened.fp, tightened.fn, tightened.partial) == (0, 0, 1, 1)
     with pytest.raises(ValueError):
         evaluate_semantic(
             GOLDEN, PREDICTIONS, VERDICTS, [ruling("f_term", "correct", "incomplete")],
