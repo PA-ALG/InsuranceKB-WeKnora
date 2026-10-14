@@ -18,6 +18,7 @@ import json
 import math
 import os
 import sys
+import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
@@ -72,10 +73,12 @@ class ProductRun:
 
 
 def _write_new(path: Path, text: str) -> None:
-    """Create path atomically; an existing file (or stale temp) is never replaced."""
+    """Create path atomically and durably; an existing file (or stale temp) is never replaced."""
     temporary = path.with_name(f".{path.name}.tmp")
     with temporary.open("x", encoding="utf-8") as stream:
         stream.write(text)
+        stream.flush()
+        os.fsync(stream.fileno())
     try:
         os.link(temporary, path)
     finally:
@@ -107,26 +110,28 @@ def _recorded_sends(run_root: Path) -> int:
 def prior_sends(run_root: Path) -> int:
     """Sends already spent in this root, counting reservations whose outcome never landed.
 
-    budget.jsonl is authoritative once it exists: a baseline line carried over
-    from an older ledger plus one line per reservation. Roots that predate it
+    budget.jsonl is authoritative once it exists. It is created atomically with
+    a baseline line (an older root's recorded sends, else 0), followed by one
+    line per reservation. A file without that first baseline line cannot be
+    trusted to be complete, so it fails closed. Roots that predate the file
     only have the ledger's recorded sends.
     """
     budget = run_root / "budget.jsonl"
     if not budget.exists():
         return _recorded_sends(run_root)
-    total = 0
-    for line in _lines(budget):
-        entry = json.loads(line)
-        total += entry.get("baseline", 0) + entry.get("reserved", 0)
-    return total
+    entries = [json.loads(line) for line in _lines(budget)]
+    if not entries or set(entries[0]) != {"baseline"}:
+        raise ValueError("budget.jsonl lacks its baseline line; refusing to infer spent sends")
+    if any(set(entry) != {"reserved"} for entry in entries[1:]):
+        raise ValueError("budget.jsonl has an unexpected entry")
+    return int(entries[0]["baseline"]) + len(entries) - 1
 
 
 def _adopt_legacy_budget(run_root: Path) -> None:
-    """Persist an older root's recorded sends as the budget baseline, under the lock."""
+    """Create budget.jsonl atomically with its baseline, under the lock."""
     if not (run_root / "budget.jsonl").exists():
-        _append_durably(
-            run_root / "budget.jsonl", json.dumps({"baseline": _recorded_sends(run_root)}),
-        )
+        _write_new(run_root / "budget.jsonl",
+                   json.dumps({"baseline": _recorded_sends(run_root)}) + "\n")
 
 
 class _DurableLedger(CallLedger):
@@ -187,20 +192,21 @@ def _next_attempt(directory: Path) -> str:
     return f"attempt-{len(existing) + 1:02d}"
 
 
-_HELD: set[Path] = set()
+_HELD: dict[Path, int] = {}
 
 
 @contextmanager
 def run_lock(run_root: Path) -> Iterator[None]:
-    """Exclusive across processes, reentrant within this one.
+    """Exclusive across processes and threads; reentrant only for the owning thread.
 
     The CLI holds it from the budget read until the candidate is written, and
     compile_products takes it again so direct callers are protected as well.
+    Another thread opens its own descriptor, which flock then refuses.
     """
     check_run_directory(run_root)
     run_root.mkdir(parents=True, exist_ok=True)
     key = run_root.resolve()
-    if key in _HELD:
+    if _HELD.get(key) == threading.get_ident():
         yield
         return
     descriptor = os.open(run_root / ".lock", os.O_CREAT | os.O_RDWR, 0o600)
@@ -209,11 +215,11 @@ def run_lock(run_root: Path) -> Iterator[None]:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise RunRootBusy("run root is in use by another process") from None
-        _HELD.add(key)
+        _HELD[key] = threading.get_ident()
         try:
             yield
         finally:
-            _HELD.discard(key)
+            del _HELD[key]
     finally:
         os.close(descriptor)
 

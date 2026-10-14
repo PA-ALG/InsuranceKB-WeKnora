@@ -4,6 +4,7 @@ import fcntl
 import hashlib
 import json
 import os
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -341,3 +342,40 @@ def test_cli_holds_the_lock_while_writing_the_candidate(
                  "--stage-config", str(stages), "--run-root", str(root)])
     assert code == 0 and observed == [True]
     assert (root / "candidate.json").exists()
+
+
+@pytest.mark.parametrize("budget", ["", '{"reserved":1}\n'])
+def test_budget_without_a_baseline_fails_closed(
+    repo: Path, tmp_path: Path, budget: str,
+) -> None:
+    """An interrupted creation or an older format must not be read as zero sends."""
+    root = tmp_path / "run"
+    root.mkdir()
+    (root / "ledger.jsonl").write_text(legacy_record(1) + "\n" + legacy_record(2) + "\n")
+    (root / "budget.jsonl").write_text(budget)
+    build, sent = factory(["m"])
+    with pytest.raises(ValueError, match="baseline"):
+        run(repo, root, ["p1"], build, max_sent=30)
+    assert sent == []
+
+
+def test_another_thread_cannot_share_a_held_run_root(repo: Path, tmp_path: Path) -> None:
+    root = tmp_path / "run"
+    held, release = threading.Event(), threading.Event()
+
+    def owner() -> None:
+        with compile_run.run_lock(root):
+            held.set()
+            release.wait(5)
+
+    thread = threading.Thread(target=owner)
+    thread.start()
+    try:
+        assert held.wait(5)
+        build, sent = factory(["m"])
+        with pytest.raises(RunRootBusy):
+            run(repo, root, ["p1"], build, max_sent=1)
+        assert sent == []
+    finally:
+        release.set()
+        thread.join(5)
