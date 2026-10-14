@@ -5,10 +5,17 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from .errors import ModelConfigError
 
@@ -31,6 +38,7 @@ class StageModelConfig(BaseModel):
     max_attempts: int = Field(default=3, ge=1, le=5)
     max_input_chars: int | None = Field(default=None, gt=0)
     thinking: Literal["enabled", "disabled"] | None = None
+    reasoning_effort: Literal["none", "low", "high", "max"] | None = None
     response_format: Literal["json_object"] | None = None
     policy_version: NonBlank
 
@@ -47,6 +55,13 @@ class StageModelConfig(BaseModel):
         ):
             raise ValueError("endpoint must be credential-free HTTPS")
         return value
+
+    @model_validator(mode="after")
+    def validate_reasoning(self) -> Self:
+        # The effort is a property of the thinking object, so it cannot stand alone.
+        if self.reasoning_effort is not None and self.thinking is None:
+            raise ValueError("reasoning_effort requires thinking")
+        return self
 
     @field_validator("api_key_env")
     @classmethod

@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -33,6 +34,10 @@ class _Response:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     reasoning_tokens: int | None = None
+    served_model: str | None = None
+
+
+_SERVED_MODEL = re.compile(r"[A-Za-z0-9._:/-]{1,128}")
 
 
 def _tokens(value: object) -> int | None:
@@ -47,6 +52,10 @@ def _parse_response(response: httpx.Response) -> _Response:
         return parsed
     if not isinstance(body, dict):
         return parsed
+    served = body.get("model")
+    # Only a plain identifier may enter the ledger; arbitrary text could echo inputs.
+    if isinstance(served, str) and _SERVED_MODEL.fullmatch(served):
+        parsed.served_model = served
     usage = body.get("usage")
     if isinstance(usage, dict):
         parsed.prompt_tokens = _tokens(usage.get("prompt_tokens"))
@@ -62,8 +71,13 @@ def _parse_response(response: httpx.Response) -> _Response:
     # Only protocol values may enter the ledger; unknown text could echo inputs.
     if isinstance(finish, str) and finish in {
         "stop", "length", "content_filter", "tool_calls", "function_call",
+        "insufficient_system_resource", "aborted",
     }:
         parsed.finish_reason = finish
+    if finish == "insufficient_system_resource":
+        # A provider-side capacity shortage is transient, unlike a budget truncation.
+        parsed.outcome = "server_error"
+        return parsed
     message = choice.get("message")
     if not isinstance(message, dict):
         return parsed
@@ -130,7 +144,7 @@ class OpenAICompatibleCompletion:
             request_sha256=digest, attempt=attempt, outcome=result.outcome, status_code=status_code,
             latency_ms=latency_ms, prompt_tokens=result.prompt_tokens,
             completion_tokens=result.completion_tokens, reasoning_tokens=result.reasoning_tokens,
-            finish_reason=result.finish_reason,
+            finish_reason=result.finish_reason, served_model=result.served_model,
         )
         self._ledger.append(record)
         return record
@@ -176,7 +190,10 @@ class OpenAICompatibleCompletion:
             "max_tokens": config.max_tokens, "temperature": config.temperature,
         }
         if config.thinking is not None:
-            payload["thinking"] = {"type": config.thinking}
+            thinking: dict[str, str] = {"type": config.thinking}
+            if config.reasoning_effort is not None:
+                thinking["reasoning_effort"] = config.reasoning_effort
+            payload["thinking"] = thinking
         if config.response_format is not None:
             payload["response_format"] = {"type": config.response_format}
         body = json.dumps(

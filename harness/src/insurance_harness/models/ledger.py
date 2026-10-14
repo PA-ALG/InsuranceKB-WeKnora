@@ -28,6 +28,8 @@ class CallRecord(BaseModel):
     completion_tokens: int | None = Field(default=None, ge=0)
     reasoning_tokens: int | None = Field(default=None, ge=0)
     finish_reason: str | None = None
+    # Floating model aliases resolve server-side; quality numbers must name the served version.
+    served_model: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._:/-]{1,128}$")
 
 
 class CallLedger:
