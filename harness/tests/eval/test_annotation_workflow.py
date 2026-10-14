@@ -30,7 +30,9 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Pa
         }]}}],
     })
     golden = repo / "dataset/golden/v1"
-    write_json(golden / "manifest.json", {"product_id": "596", "pack_id": "pack", "files": {}})
+    write_json(golden / "manifest.json", {
+        "products": {"596": {"product_id": "596", "pack_id": "pack"}}, "files": {},
+    })
     write_json(golden / "596.jsonl", {
         "pack_id": "pack", "product_id": "596", "field_key": "duration", "state": "present",
         "value": "90日", "judged_by": "human:reference", "evidence": [{
@@ -418,12 +420,12 @@ def test_scheduled_products_have_declared_pack_inputs() -> None:
     assert {product: manifest["products"][product]["pack_id"] for product in expected} == expected
 
 
-def test_default_prepare_cli_resolves_legacy_manifest_and_tracked_product_metadata(
+def test_default_prepare_cli_resolves_product_manifest_and_tracked_product_metadata(
     workspace: tuple[Path, Path], capsys: pytest.CaptureFixture[str],
 ) -> None:
     repo, root = workspace
-    # No products[596], --pack or --source-dir: the original manifest declares
-    # its own product at the top level, and planCode identifies the source folder.
+    # No --pack or --source-dir: products[596] declares the pack and planCode
+    # identifies the source folder.
     assert annotate.main([
         "prepare", "--repo", str(repo), "--product", "596", "--run-root", str(root),
     ]) == 0
@@ -432,3 +434,25 @@ def test_default_prepare_cli_resolves_legacy_manifest_and_tracked_product_metada
     assert run["source_directory"] == "dataset/shouxian_product/Product"
     assert run["field_keys"] == ["duration"]
     assert len(run["request_sha256"]) == 1
+
+
+def test_prepare_rejects_removed_top_level_pack_fallback(
+    workspace: tuple[Path, Path],
+) -> None:
+    repo, root = workspace
+    write_json(repo / "dataset/golden/v1/manifest.json", {
+        "product_id": "596", "pack_id": "pack", "files": {},
+    })
+    with pytest.raises(ValueError, match="pack is not declared"):
+        annotate.prepare(repo, "596", root)
+
+
+def test_manifest_separates_calibration_reference_from_dataset_metadata() -> None:
+    repo = Path(__file__).resolve().parents[3]
+    manifest = json.loads((repo / "dataset/golden/v1/manifest.json").read_text())
+    assert all(key in {"dataset_version", "files", "products"} or key.startswith("catalog_")
+               for key in manifest)
+    calibration = manifest["products"]["596"]
+    assert calibration["role"] == "calibration_reference"
+    assert calibration["product_id"] == "596"
+    assert calibration["items"] == 40

@@ -87,7 +87,9 @@ class EquivalenceReport(BaseModel):
         return self.equivalent / self.compared >= 0.8 and not self.contradicted
 
 
-class _Verdict(BaseModel):
+class EquivalenceVerdict(BaseModel):
+    """A validated per-field decision, including reasons for equivalent answers."""
+
     model_config = ConfigDict(strict=True, extra="forbid")
     field_key: NonBlank
     verdict: Literal["equivalent", "contradicted", "insufficient"]
@@ -96,7 +98,7 @@ class _Verdict(BaseModel):
 
 class _Response(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
-    fields: list[_Verdict]
+    fields: list[EquivalenceVerdict]
 
 
 def build_equivalence_requests(
@@ -121,15 +123,16 @@ def build_equivalence_requests(
     )) for start in range(0, len(questions), batch_size)]
 
 
-def compare_equivalence(
+def read_equivalence_verdicts(
     client: JudgeClient, questions: Sequence[EquivalenceQuestion], *, max_calls: int,
     batch_size: int = 25,
     prompt_version: str = EQUIVALENCE_PROMPT_VERSION,
-) -> EquivalenceReport:
+) -> list[EquivalenceVerdict]:
+    """Read the strict exchange once, preserving all reasons before aggregation."""
     requests = build_equivalence_requests(
         questions, product_id="", batch_size=batch_size, prompt_version=prompt_version,
     )
-    report = EquivalenceReport()
+    verdicts: list[EquivalenceVerdict] = []
     for index, request in enumerate(requests):
         if index >= max_calls:
             raise JudgeBudgetExceeded("equivalence call budget exhausted")
@@ -143,20 +146,35 @@ def compare_equivalence(
         received = [v.field_key for v in response.fields]
         if len(received) != len(set(received)) or set(received) != set(expected):
             missing = sorted(set(expected) - set(received))
+            extra = sorted(set(received) - set(expected))
+            duplicates = sorted(key for key in set(received) if received.count(key) > 1)
             raise JudgeProtocolError(
-                f"duplicate/unrequested verdicts or missing fields: {missing}",
+                f"duplicate verdicts: {duplicates}; unrequested: {extra}; "
+                f"missing fields: {missing}",
             )
         by_key = {v.field_key: v for v in response.fields}
-        for key in expected:
-            verdict = by_key[key]
-            report.compared += 1
-            if verdict.verdict == "equivalent":
-                report.equivalent += 1
-            elif verdict.verdict == "contradicted":
-                report.contradicted[key] = verdict.reason
-            else:
-                report.insufficient.append(key)
-                report.insufficient_reasons[key] = verdict.reason
+        verdicts.extend(by_key[key] for key in expected)
+    return verdicts
+
+
+def compare_equivalence(
+    client: JudgeClient, questions: Sequence[EquivalenceQuestion], *, max_calls: int,
+    batch_size: int = 25,
+    prompt_version: str = EQUIVALENCE_PROMPT_VERSION,
+) -> EquivalenceReport:
+    report = EquivalenceReport()
+    for verdict in read_equivalence_verdicts(
+        client, questions, max_calls=max_calls, batch_size=batch_size,
+        prompt_version=prompt_version,
+    ):
+        report.compared += 1
+        if verdict.verdict == "equivalent":
+            report.equivalent += 1
+        elif verdict.verdict == "contradicted":
+            report.contradicted[verdict.field_key] = verdict.reason
+        else:
+            report.insufficient.append(verdict.field_key)
+            report.insufficient_reasons[verdict.field_key] = verdict.reason
     if report.compared:
         report.rate = report.equivalent / report.compared
     return apply_adjudications(report, [])
