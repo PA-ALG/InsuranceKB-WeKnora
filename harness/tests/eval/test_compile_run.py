@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from insurance_harness.compilers.schema_fields.engine import CompileError, CompletionPort
-from insurance_harness.eval import product_sources
+from insurance_harness.eval import compile_run, product_sources
 from insurance_harness.eval.compile_run import (
     ProductRun,
     RunRootBusy,
@@ -123,6 +123,10 @@ def lines(root: Path, name: str = "ledger.jsonl") -> list[dict[str, object]]:
     return [json.loads(line) for line in (root / name).read_text().splitlines()]
 
 
+def reservations(root: Path) -> int:
+    return sum("reserved" in line for line in lines(root, "budget.jsonl"))
+
+
 def run(
     repo: Path, root: Path, products: list[str], build: Factory, **options: int,
 ) -> list[ProductRun]:
@@ -142,14 +146,14 @@ def test_compiles_in_order_and_writes_a_scoreable_candidate(repo: Path, tmp_path
     asked = json.loads(json.loads(sent[0].content)["messages"][1]["content"])["schema_fields"]
     assert [field["field_key"] for field in asked] == list(QUOTES)
     assert [line["served_model"] for line in lines(root)] == ["example-flash-2026"] * 2
-    assert len(lines(root, "budget.jsonl")) == 2
+    assert reservations(root) == 2
     write_candidate(root, runs)
     candidate = json.loads((root / "candidate.json").read_text())
     mapping = json.loads((root / "product-map.json").read_text())
     assert mapping == {"产品二": "p2", "产品一": "p1"}
     predictions = predictions_from_candidate(candidate, mapping)
-    assert {(p.product_id, p.field_key) for p in predictions} == {
-        (product, key) for product in ("p1", "p2") for key in QUOTES
+    assert {(p.product_id, p.field_key, p.value) for p in predictions} == {
+        (product, key, value) for product in ("p1", "p2") for key, (value, _) in QUOTES.items()
     }
     with pytest.raises(FileExistsError):
         write_candidate(root, runs)
@@ -170,7 +174,7 @@ def test_reservation_is_durable_before_the_request_leaves(repo: Path, tmp_path: 
     seen: list[int] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(len(lines(root, "budget.jsonl")))
+        seen.append(reservations(root))
         return extraction(request, "m")
 
     run(repo, root, ["p1"], factory([], handler=handler)[0])
@@ -280,3 +284,60 @@ def test_cli_never_prints_stored_content(
                  "--stage-config", str(stages), "--run-root", str(root)])
     out = capsys.readouterr().out
     assert code == 2 and "invalid_record_shape" in out and "SECRET" not in out
+
+
+def legacy_record(n: int) -> str:
+    return json.dumps({"stage": "schema_fields", "model": "m", "policy_version": "old",
+                       "request_sha256": f"{n:064x}", "attempt": 1, "outcome": "ok",
+                       "served_model": "m"})
+
+
+def test_legacy_root_adopts_its_ledger_as_budget_baseline(repo: Path, tmp_path: Path) -> None:
+    """Old ledger + a reservation whose record never landed + restart: nothing is lost."""
+    root = tmp_path / "run"
+    root.mkdir()
+    (root / "ledger.jsonl").write_text(legacy_record(1) + "\n" + legacy_record(2) + "\n")
+    run(repo, root, ["p1"], factory(["m"])[0], max_sent=3)
+    assert prior_sends(root) == 3
+    # Simulate a crash between reservation and record: drop the newest record.
+    kept = (root / "ledger.jsonl").read_text().splitlines()[:-1]
+    (root / "ledger.jsonl").write_text("\n".join(kept) + "\n")
+    assert prior_sends(root) == 3
+    build, sent = factory(["m"])
+    with pytest.raises(ModelBudgetExceeded):
+        run(repo, root, ["p2"], build, max_sent=3)
+    assert sent == []
+
+
+def test_cli_holds_the_lock_while_writing_the_candidate(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "run"
+    real_client, real_write = OpenAICompatibleCompletion, compile_run.write_candidate
+    observed: list[bool] = []
+
+    def client(config: StageModelConfig, *, ledger: CallLedger) -> OpenAICompatibleCompletion:
+        def respond(request: httpx.Request) -> httpx.Response:
+            return extraction(request, "m")
+
+        return real_client(config, ledger=ledger, environ={config.api_key_env: "k"},
+                           transport=httpx.MockTransport(respond))
+
+    def write(run_root: Path, runs: list[ProductRun]) -> None:
+        descriptor = os.open(run_root / ".lock", os.O_RDWR)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            observed.append(False)
+        except BlockingIOError:
+            observed.append(True)
+        finally:
+            os.close(descriptor)
+        real_write(run_root, runs)
+
+    monkeypatch.setattr(compile_run, "OpenAICompatibleCompletion", client)
+    monkeypatch.setattr(compile_run, "write_candidate", write)
+    stages = Path(__file__).resolve().parents[2] / "src/insurance_harness/models/stages.json"
+    code = main(["--repo", str(repo), "--products", "p1", "--stage", "schema_fields",
+                 "--stage-config", str(stages), "--run-root", str(root)])
+    assert code == 0 and observed == [True]
+    assert (root / "candidate.json").exists()

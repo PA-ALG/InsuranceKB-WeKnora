@@ -99,12 +99,34 @@ def stored_records(run_root: Path) -> list[CallRecord]:
     return [CallRecord.model_validate_json(line) for line in _lines(run_root / "ledger.jsonl")]
 
 
+def _recorded_sends(run_root: Path) -> int:
+    return sum(record.outcome not in ("input_too_large", "budget_exceeded")
+               for record in stored_records(run_root))
+
+
 def prior_sends(run_root: Path) -> int:
-    """Sends already spent in this root, counting reservations whose outcome never landed."""
-    recorded = sum(record.outcome not in ("input_too_large", "budget_exceeded")
-                   for record in stored_records(run_root))
-    # Roots written before budget.jsonl existed only have the ledger to go on.
-    return max(len(_lines(run_root / "budget.jsonl")), recorded)
+    """Sends already spent in this root, counting reservations whose outcome never landed.
+
+    budget.jsonl is authoritative once it exists: a baseline line carried over
+    from an older ledger plus one line per reservation. Roots that predate it
+    only have the ledger's recorded sends.
+    """
+    budget = run_root / "budget.jsonl"
+    if not budget.exists():
+        return _recorded_sends(run_root)
+    total = 0
+    for line in _lines(budget):
+        entry = json.loads(line)
+        total += entry.get("baseline", 0) + entry.get("reserved", 0)
+    return total
+
+
+def _adopt_legacy_budget(run_root: Path) -> None:
+    """Persist an older root's recorded sends as the budget baseline, under the lock."""
+    if not (run_root / "budget.jsonl").exists():
+        _append_durably(
+            run_root / "budget.jsonl", json.dumps({"baseline": _recorded_sends(run_root)}),
+        )
 
 
 class _DurableLedger(CallLedger):
@@ -165,15 +187,33 @@ def _next_attempt(directory: Path) -> str:
     return f"attempt-{len(existing) + 1:02d}"
 
 
+_HELD: set[Path] = set()
+
+
 @contextmanager
-def _exclusive(run_root: Path) -> Iterator[None]:
+def run_lock(run_root: Path) -> Iterator[None]:
+    """Exclusive across processes, reentrant within this one.
+
+    The CLI holds it from the budget read until the candidate is written, and
+    compile_products takes it again so direct callers are protected as well.
+    """
+    check_run_directory(run_root)
+    run_root.mkdir(parents=True, exist_ok=True)
+    key = run_root.resolve()
+    if key in _HELD:
+        yield
+        return
     descriptor = os.open(run_root / ".lock", os.O_CREAT | os.O_RDWR, 0o600)
     try:
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise RunRootBusy("run root is in use by another process") from None
-        yield
+        _HELD.add(key)
+        try:
+            yield
+        finally:
+            _HELD.discard(key)
     finally:
         os.close(descriptor)
 
@@ -187,9 +227,8 @@ def compile_products(
 
     max_sent is cumulative for the run root: earlier runs' sends count against it.
     """
-    check_run_directory(run_root)
-    run_root.mkdir(parents=True, exist_ok=True)
-    with _exclusive(run_root):
+    with run_lock(run_root):
+        _adopt_legacy_budget(run_root)
         served = {record.served_model for record in stored_records(run_root)
                   if record.served_model}
         if len(served) > 1:
@@ -304,22 +343,29 @@ def main(argv: list[str] | None = None) -> int:
             clients.append(OpenAICompatibleCompletion(config, ledger=ledger))
             return clients[-1]
 
-        try:
-            runs = compile_products(
-                args.repo, args.products, completion_factory=factory, run_root=args.run_root,
-                max_sent=args.max_sent, batch_size=args.batch_size,
-            )
-        finally:
-            for client in clients:
-                client.close()
-        write_candidate(args.run_root, runs)
-    except (ModelCallError, CompileError, ServedModelChanged, RunRootBusy, ValueError,
-            OSError) as exc:
-        print(json.dumps({"stopped": _stop_reason(exc), **_summary(args.run_root, runs)},
-                         ensure_ascii=False))
+        # One lock spans the budget read, every send, the candidate and the summary.
+        with run_lock(args.run_root):
+            try:
+                try:
+                    runs = compile_products(
+                        args.repo, args.products, completion_factory=factory,
+                        run_root=args.run_root, max_sent=args.max_sent,
+                        batch_size=args.batch_size,
+                    )
+                finally:
+                    for client in clients:
+                        client.close()
+                write_candidate(args.run_root, runs)
+            except (ModelCallError, CompileError, ServedModelChanged, ValueError,
+                    OSError) as exc:
+                print(json.dumps({"stopped": _stop_reason(exc),
+                                  **_summary(args.run_root, runs)}, ensure_ascii=False))
+                return 2
+            print(json.dumps(_summary(args.run_root, runs), ensure_ascii=False))
+            return 0
+    except (ModelCallError, RunRootBusy, ValueError, OSError) as exc:
+        print(json.dumps({"stopped": _stop_reason(exc), "products": []}, ensure_ascii=False))
         return 2
-    print(json.dumps(_summary(args.run_root, runs), ensure_ascii=False))
-    return 0
 
 
 if __name__ == "__main__":
