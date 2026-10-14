@@ -34,6 +34,7 @@ S4b 丢掉的 30 个字段里，**27 个至少有一条引文能逐字回验**�
   零页或多页命中返回 `None`（多页即歧义，不猜）。
 - `VerifiedQuote` 新增可选字段 `cited_document: str | None = None`、`cited_page: int | None = None`，只在重定位时填写。
 - 不放宽 EXACT / NORMALIZED 判定；不跨产品（verifier 只持有本产品的页）。
+- **有意改变 S4a 的"标错页即拒绝"**：S4a 的三条测试（受保护的 `test_engine_contract.py` 一条、实现方 `test_engine_boundaries.py` 两条）在单独提交 `214dbf45f` 中改为新规则下仍成立的不变量：任何页都找不到的引文仍被拒；文件、指纹或页码错且原文出现在多页时因歧义仍被拒；跨页拼接永不接受。由审核方逐条确认。
 
 ### 3.2 写全与引文保真（`compilers/schema_fields/prompt.py`）
 
