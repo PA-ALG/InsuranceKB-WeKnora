@@ -1,4 +1,8 @@
-"""Adversarial completions and two distinct source structures through the public engine."""
+"""Adversarial completions and distinct source structures through the public engine.
+
+S4d: the engine speaks the two-step pointer protocol; quotes are cut from page text by
+code, so the adversarial cases target refs, row shapes and evidence provenance.
+"""
 
 import json
 from dataclasses import dataclass
@@ -19,7 +23,7 @@ class Page:
     document: str = "条款.pdf"
     document_sha256: str = "a" * 64
     page: int = 1
-    text: str = "等待期为90日。未提供贷款。"
+    text: str = "等待期为90日。\n未提供贷款。"  # D1P1S1, D1P1S2
 
 
 class Replay:
@@ -40,25 +44,18 @@ def definition(key: str = "term", ordinal: int = 0) -> FieldDefinition:
     )
 
 
-def evidence(**changes: object) -> dict[str, object]:
-    return {
-        "document": "条款.pdf",
-        "document_sha256": "a" * 64,
-        "page": 1,
-        "quote": "等待期为90日",
-        **changes,
-    }
-
-
 def row(**changes: object) -> dict[str, object]:
     return {
         "ordinal": 0,
         "field_key": "term",
         "state": "present",
-        "value": "90日",
-        "evidence": [evidence()],
+        "segments": ["D1P1S1"],
         **changes,
     }
+
+
+def value(**changes: object) -> dict[str, object]:
+    return {"ordinal": 0, "field_key": "term", "value": "90日", **changes}
 
 
 def response(*rows: dict[str, object]) -> str:
@@ -68,30 +65,41 @@ def response(*rows: dict[str, object]) -> str:
 @pytest.mark.parametrize(
     "changes",
     [
-        {"state": "absent_explicitly", "value": "没有"},
-        {"state": "absent_explicitly", "value": None, "evidence": []},
-        {"state": "unknown", "value": None},
-        {"state": "unknown", "evidence": []},
         {"state": "invented"},
-        {"value": "  "},
-        {"value": 90},
-        {"value": ["90日"]},
+        {"state": "unknown"},
+        {"state": "absent_explicitly", "segments": []},
+        {"segments": []},
+        {"segments": "D1P1S1"},
         {"ordinal": False},
         {"ordinal": "0"},
         {"ordinal": 0.0},
         {"extra": "ignored?"},
-        {"evidence": "not a list"},
+        {"value": "90日"},
         {"evidence": []},
-        {"evidence": [evidence(page=True)]},
-        {"evidence": [evidence(page=0)]},
-        {"evidence": [evidence(document_sha256="bad")]},
-        {"evidence": [evidence(quote="")]},
-        {"evidence": [evidence(extra=1)]},
     ],
 )
-def test_malformed_rows_fail_the_entire_batch(changes: dict[str, object]) -> None:
+def test_malformed_selection_rows_fail_the_entire_batch(changes: dict[str, object]) -> None:
     with pytest.raises(CompileError):
         SchemaFieldsCompiler(Replay(response(row(**changes)))).compile(
+            "entity", [definition()], [Page()]
+        )
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [value(value="  ")],
+        [value(value=90)],
+        [value(value=["90日"])],
+        [value(ordinal=1)],
+        [value(extra=1)],
+        [value(), value()],
+        [value(), value(field_key="other")],
+    ],
+)
+def test_malformed_value_rows_fail_the_batch(rows: list[dict[str, object]]) -> None:
+    with pytest.raises(CompileError):
+        SchemaFieldsCompiler(Replay(response(row()), response(*rows))).compile(
             "entity", [definition()], [Page()]
         )
 
@@ -113,61 +121,45 @@ def test_json_envelope_is_closed(raw: str) -> None:
         SchemaFieldsCompiler(Replay(raw)).compile("entity", [definition()], [Page()])
 
 
-@pytest.mark.parametrize(
-    "bad_evidence",
-    [
-        evidence(document="别的条款.pdf"),
-        evidence(document_sha256="b" * 64),
-        evidence(page=2),
-        evidence(quote="等待期为180日"),
-    ],
-)
-def test_any_unverified_reference_rejects_the_field(bad_evidence: dict[str, object]) -> None:
+@pytest.mark.parametrize("bad_ref", ["D2P1S1", "D1P2S1", "D1P1S9", "D1P1S2-D1P1S1", 3])
+def test_refs_that_name_no_segment_are_dropped_not_guessed(bad_ref: object) -> None:
+    kept = SchemaFieldsCompiler(
+        Replay(response(row(segments=["D1P1S1", bad_ref])), response(value()))
+    ).compile("entity", [definition()], [Page()])
+    assert [q.quote for q in kept.fields[0].evidence] == ["等待期为90日。"]
+    assert kept.dropped_refs == 1
+    lost = SchemaFieldsCompiler(Replay(response(row(segments=[bad_ref])))).compile(
+        "entity", [definition()], [Page()]
+    )
+    assert lost.fields == [] and lost.dropped_fields == ["term"]
+
+
+def test_evidence_is_never_joined_across_pages() -> None:
+    pages = [Page(text="等待期为"), Page(page=2, text="90日")]
     output = SchemaFieldsCompiler(
-        Replay(response(row(evidence=[evidence(), bad_evidence])))
-    ).compile(
-        "entity",
-        [definition()],
-        [Page()],
+        Replay(response(row(segments=["D1P1S1", "D1P2S1"])), response(value()))
+    ).compile("entity", [definition()], pages)
+    assert [(q.page, q.quote) for q in output.fields[0].evidence] == [(1, "等待期为"), (2, "90日")]
+
+
+def test_absent_and_table_evidence_are_exact_slices_with_provenance() -> None:
+    absent = SchemaFieldsCompiler(
+        Replay(response(row(state="absent_explicitly", segments=["D1P1S2"])))
+    ).compile("one", [definition()], [Page()])
+    assert absent.fields[0].state == "absent_explicitly" and absent.fields[0].value is None
+    quote = absent.fields[0].evidence[0]
+    assert (quote.document, quote.document_sha256, quote.page, quote.quote) == (
+        "条款.pdf",
+        "a" * 64,
+        1,
+        "未提供贷款。",
     )
-    assert output.fields == []
-
-
-def test_no_cross_page_join_or_search_for_a_replacement_page() -> None:
-    pages = [Page(text="等待期为"), Page(page=2, text="90日"), Page(page=3)]
-    output = SchemaFieldsCompiler(Replay(response(row()))).compile("entity", [definition()], pages)
-    assert output.fields == []
-
-
-def test_absent_and_normalized_table_evidence_keep_their_provenance() -> None:
-    completion = Replay(
-        response(
-            row(
-                state="absent_explicitly",
-                value=None,
-                evidence=[evidence(quote="未提供贷款")],
-            )
-        ),
-        response(row(value="50000元", evidence=[evidence(quote="限额50000元")])),
+    table_page = Page(text="项目\t限额\n５０,０００元")
+    table = SchemaFieldsCompiler(Replay(response(row()), response(value(value="50000元")))).compile(
+        "two", [definition()], [table_page]
     )
-    compiler = SchemaFieldsCompiler(completion)
-    absent = compiler.compile("one", [definition()], [Page()])
-    table = compiler.compile("two", [definition()], [Page(text="项目\t限额\n５０,０００元")])
-    assert absent.fields[0].state == "absent_explicitly"
-    # Punctuation is not erased: the comma in the source cannot be invented away.
-    assert table.fields == []
-    table = SchemaFieldsCompiler(
-        Replay(
-            response(
-                row(
-                    value="50000元",
-                    evidence=[evidence(quote="限额50,000元")],
-                )
-            )
-        )
-    ).compile("two", [definition()], [Page(text="项目\t限额\n５０,０００元")])
-    assert table.fields[0].evidence[0].match == "NORMALIZED"
-    assert table.fields[0].evidence[0].quote == "限额50,000元"
+    assert table.fields[0].evidence[0].quote == "项目\t限额\n５０,０００元"
+    assert table.fields[0].evidence[0].match == "EXACT"
 
 
 def test_each_call_checks_budget_and_building_does_not_spend_it() -> None:
@@ -218,7 +210,9 @@ def test_duplicate_or_unordered_targets_fail_before_calling(fields: list[FieldDe
 
 def test_pack_identity_is_carried_and_cannot_be_relabelled() -> None:
     field = definition().model_copy(update={"pack_id": "test-pack"})
-    output = SchemaFieldsCompiler(Replay(response(row()))).compile("entity", [field], [Page()])
+    output = SchemaFieldsCompiler(Replay(response(row()), response(value()))).compile(
+        "entity", [field], [Page()]
+    )
     assert output.pack_id == "test-pack"
     with pytest.raises(CompileError):
         to_candidate(output, display_name="展示名", schema_pack_id="other-pack")

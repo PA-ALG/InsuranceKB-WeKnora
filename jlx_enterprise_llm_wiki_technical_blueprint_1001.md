@@ -235,9 +235,12 @@ ExpertRevision  revision_record_id, actor, role, recorded_at, target, before, af
 SchemaSnapshot  本 Release 使用的 SchemaPack 与 PresentationProfile 标识与内容 digest
 ```
 
-- **三态**：`present` 必须有值与已回验 Evidence；`absent_explicitly` 表示材料明确声明不存在或不适用，value 为空，
-  必须有否定原文；有内容的禁止或限制规则（如"不接受增加基本保额"）属于 `present`；`unknown` 无值无证据，带
-  typed reason。
+- **三态**：`present` 必须有值与已回验 Evidence；`absent_explicitly` 表示材料能确定该项不存在或不适用，value 为空，
+  必须引用据以判定的原文：明确的否定或不适用声明，或按字段定义必然排除该项的条款——材料含完整的保险责任
+  条款（完整列举全部责任）而其中没有该项责任，或条款写明的产品类型排除了该项（如分红型无万能账户）；
+  信息来源包含条款、说明书以外文件（投保/核保/保全规则、销售与培训材料等）的字段，本批材料未提及时只能是
+  `unknown`；有内容的禁止或限制规则（如"不接受增加基本保额"）属于 `present`；`unknown` 无值无证据，带 typed
+  reason。字段的具体判定规则写在字段卡（数据）中。
 - **来源分类**：`SOURCE_SUPPORTED`、`MIXED`、`MODEL_GENERATED`、`EXPERT_REVISION`、`STRUCTURED_IMPORT`。具体产品
   事实只能来自原文、专家修订或权威结构化导入；`MODEL_GENERATED` 只允许通用概念解释，显示为"模型补充"。
 - **Locator.kind**：`PDF_TEXT_SPAN`、`OCR_REGION`、`DOCX_BLOCK`、`DOCX_TABLE_CELL`、`PPTX_SHAPE`、
@@ -386,7 +389,9 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 - **接口**：输入同一产品版本的全部 PageText、目标 FieldDefinition 与 FieldExtractionConfig；输出逐字段 Claim、
   准入决定、缺失组成要素、执行完整性状态（`REPAIR_REQUIRED` / `REVIEW_REQUIRED` / `EXECUTION_CHECKS_PASSED`）。
 - **内部**（调用方不可见）：全页召回与打分 → 上下文与预算 → 字段微批与长字段分片 → Schema 引导调用 → JSON 合同
-  校验 → Evidence 原文回验 → 组成要素与值约束检查 → 保守替换 → 定向补抽。
+  校验 → Evidence 原文回验 → 组成要素与值约束检查 → 保守替换 → 定向补抽。2026-10-15 起（S4d）调用方式为两步
+  指针抽取：页文本确定性分段 → 选段调用只返回段落编号 → 代码按编号从页文本切取 Evidence（按构造可回验）→ 只把选中
+  段落交给模型写 value；字段卡（边界、三态规则、留出产品示例）作为数据随请求发送。
 - **FieldExtractionConfig**：键为 `schema_pack_id + field_key + field semantic_sha256`，内容含关键词、语义词、值形态、
   文档角色要求、邻页范围、分片、组成要素、省略禁用词、字段指令、`audit_kind`。与 FieldDefinition 分开存放，改规则不
   改变 pack hash。首批由 V5 现有规则（约 55 个字段）转换，其余字段使用通用默认配置。
@@ -655,6 +660,8 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-07 | 质量评分按语义等价：L1 确定性 → L2 独立评委判等价 → L3 回原文裁定；逐字口径只作对照（用户 2026-10-05 裁决，S2c 扩到候选评分） | §7.7 |
 | 2026-10-14 | Codex 额度有限：Claude 任总控并默认实现，Codex 默认审核；Go/前端为主或需独立视角的切片由 Codex 实现、Claude 审核；实现方与审核方不得相同，合并须审核方批准当前 head；Claude 实现的简单改动可自审后合并，复杂改动交 Codex 审 | §9、`AGENTS.md` |
 | 2026-10-14 | 生产编译模型改为 DeepSeek 官方 `deepseek-flash`（原 `deepseek-v4-flash` 已退役，请求由 V4.1-Flash 服务）；别名浮动，调用记录实际服务版本，版本变化须重测 | §7.6 |
+| 2026-10-15 | `absent_explicitly` 的依据扩展到"按字段定义必然排除"的条款：完整保险责任列举未列的责任、条款写明的产品类型排除的项；来源含条款与说明书以外文件的字段未提及一律 `unknown`；疾病清单只列名称，医学定义统一存于"疾病定义与认定标准"（用户 2026-10-15 两次裁定：完整责任列举；产品类型单独确认，S4d） | §5.1 |
+| 2026-10-15 | 字段编译改为两步指针抽取：模型返回段落编号、代码按编号从页文本切取 Evidence，value 只依据选中段落写；页文本用 pdfium；字段边界与三态判定写成字段卡数据（消融 A2–A7 验证，S4d，Issue #157） | §7.1 |
 
 ## 附录 A · 术语
 

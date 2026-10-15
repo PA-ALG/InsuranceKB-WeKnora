@@ -1,5 +1,5 @@
 {
-  "provenance": "Offline-authored response, independently transcribed from repository PDF pages 3 and 20. No model request was made. The waiting-period value deliberately omits exceptions, so this is an engineering replay, not a quality result.",
+  "provenance": "Offline-authored response, independently transcribed from repository PDF pages 3 and 20. No model request was made. The waiting-period value deliberately omits exceptions, so this is an engineering replay, not a quality result. S4d: converted to the two-step pointer protocol by mapping each original quote onto its segment ids; values unchanged.",
   "entity_id": "596-1",
   "display_name": "平安e生保（尊享版）医疗保险",
   "product_id": "596",
@@ -24,6 +24,7 @@
     }
   ],
   "responses": [
-    "{\"fields\": [{\"ordinal\": 13, \"field_key\": \"waiting_period\", \"state\": \"present\", \"value\": \"30日\", \"evidence\": [{\"document\": \"保险条款.pdf\", \"document_sha256\": \"88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc\", \"page\": 3, \"quote\": \"上述30日的时间为等待期。\"}]}, {\"ordinal\": 15, \"field_key\": \"coverage_period\", \"state\": \"present\", \"value\": \"一年\", \"evidence\": [{\"document\": \"保险条款.pdf\", \"document_sha256\": \"88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc\", \"page\": 20, \"quote\": \"本产品保险期间为一年，自本合同生效时起算。\"}]}]}"
+    "{\"fields\": [{\"ordinal\": 13, \"field_key\": \"waiting_period\", \"state\": \"present\", \"segments\": [\"D1P3S16\"]}, {\"ordinal\": 15, \"field_key\": \"coverage_period\", \"state\": \"present\", \"segments\": [\"D1P20S9\"]}]}",
+    "{\"fields\": [{\"ordinal\": 13, \"field_key\": \"waiting_period\", \"value\": \"30日\"}, {\"ordinal\": 15, \"field_key\": \"coverage_period\", \"value\": \"一年\"}]}"
   ]
 }
