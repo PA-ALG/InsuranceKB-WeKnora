@@ -15,6 +15,7 @@ from insurance_harness.compilers.schema_fields.definitions import FieldDefinitio
 from insurance_harness.compilers.schema_fields.engine import (
     CompileBudgetExceeded,
     CompileError,
+    CompileOutput,
     SchemaFieldsCompiler,
 )
 
@@ -91,7 +92,7 @@ SELECT = selection(
 VALUES = values((0, "waiting_period", "90日；意外伤害无等待期"), (1, "coverage_period", "一年"))
 
 
-def compile_with(*payloads: str, **options: int) -> tuple[Completion, object]:
+def compile_with(*payloads: str, **options: int) -> tuple[Completion, CompileOutput]:
     completion = Completion(payloads)
     output = SchemaFieldsCompiler(completion, **options).compile("1818", fields(), PAGES)
     return completion, output

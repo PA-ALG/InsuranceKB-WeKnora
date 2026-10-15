@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
 from insurance_harness.compilers.schema_fields.engine import FieldResult
-from insurance_harness.eval.segment_score import load_golden_v2, score_selection
+from insurance_harness.eval.segment_score import GoldenV2, load_golden_v2, score_selection
 from insurance_harness.evidence.quote_verification import QuoteMatch, VerifiedQuote
 from insurance_harness.evidence.segments import SegmentedSource
 
@@ -87,23 +88,26 @@ GOLDEN = {
 }
 
 
-def result(key: str, state: str, ids: list[str]) -> FieldResult:
+State = Literal["present", "absent_explicitly", "unknown"]
+
+
+def result(key: str, state: State, ids: list[str]) -> FieldResult:
     return FieldResult(
         field_key=key,
         state=state,
-        value="x" if state == "present" else None,  # type: ignore[arg-type]
+        value="x" if state == "present" else None,
         evidence=SOURCE.evidence(ids),
     )
 
 
 @pytest.fixture()
-def golden(tmp_path: Path):
+def golden(tmp_path: Path) -> GoldenV2:
     path = tmp_path / "1818.json"
     path.write_text(json.dumps(GOLDEN, ensure_ascii=False), encoding="utf-8")
     return load_golden_v2(path)
 
 
-def test_recall_precision_and_completeness_per_present_field(golden) -> None:
+def test_recall_precision_and_completeness_per_present_field(golden: GoldenV2) -> None:
     predicted = [
         result("waiting_period", "present", ["D1P1S1"]),  # recall 1/2, precision 1
         result("coverage_period", "present", ["D1P2S1", "D1P2S2"]),  # recall 1, precision 1/2
@@ -122,7 +126,7 @@ def test_recall_precision_and_completeness_per_present_field(golden) -> None:
     assert report.unmapped_golden_quotes == 0
 
 
-def test_a_missing_or_non_present_prediction_scores_zero_recall(golden) -> None:
+def test_a_missing_or_non_present_prediction_scores_zero_recall(golden: GoldenV2) -> None:
     report = score_selection(SOURCE, golden, [result("coverage_period", "unknown", [])])
     scores = {f.field_key: f for f in report.fields}
     assert scores["waiting_period"].recall == 0.0 and scores["waiting_period"].precision is None

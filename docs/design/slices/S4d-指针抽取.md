@@ -40,7 +40,8 @@ S4b（`deepseek-flash`）召回只有 6%–36%，两类问题反复出现：
 
 ### 3.1 页文本与分段（`eval/pdf_text.py`；新增 `evidence/segments.py`）
 
-- `read_pdf` 改用 pypdfium2（已在锁文件中，改为直接依赖，移除 pdfplumber 直接依赖）：每页 `get_text_range()`，`\r\n`、`\r` 统一为 `\n`。
+- `read_pdf` 改用 pypdfium2（已在锁文件中，改为直接依赖）：每页 `get_text_range()`，`\r\n`、`\r` 统一为 `\n`。pdfplumber 直接依赖保留：
+  S7 前的旧模块（`compiler/`、`goldenset/`、`knowledge_compiler/` 等）仍在使用，随 S7 一并删除。
 - `SegmentedSource(pages)` 是本模块唯一入口：
   - 构造时校验页身份唯一（`document`+`page`），按页切段：文件编号按 `pages` 中首次出现的顺序 `D1`、`D2`……；段落编号
     `D<文件>P<页>S<序号>`，序号每页从 1 起；
