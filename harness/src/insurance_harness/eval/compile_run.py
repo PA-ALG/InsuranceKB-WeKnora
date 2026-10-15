@@ -39,6 +39,7 @@ from insurance_harness.compilers.schema_fields.engine import (
     to_candidate,
 )
 from insurance_harness.eval.judge_files import check_run_directory
+from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.eval.product_sources import (
     check_product_id,
     declared_pack,
@@ -201,6 +202,17 @@ class _RawResponses:
         return raw
 
 
+def _replay_context(product: str, pack: str, pages: list[PageText]) -> str:
+    """What a saved answer was produced for beyond the request text: product, pack, sources."""
+    sources: dict[tuple[str, str], int] = {}
+    for page in pages:
+        key = (page.document, page.document_sha256)
+        sources[key] = sources.get(key, 0) + 1
+    documents = [{"document": d, "document_sha256": s, "pages": n} for (d, s), n in sources.items()]
+    return json.dumps({"product": product, "pack_id": pack, "sources": documents},
+                      ensure_ascii=False, sort_keys=True) + "\n"
+
+
 def _request_sha256(system: str, user: str) -> str:
     encoded = json.dumps([system, user], ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -225,10 +237,14 @@ class _Replay:
 
     model = "replay"
 
-    def __init__(self, source: Path, product: str) -> None:
+    def __init__(self, source: Path, product: str, context: str) -> None:
         attempts = _attempts(source / product / "responses")
         if not attempts:
             raise ValueError(f"{product}: replay source has no saved responses")
+        saved = attempts[-1] / "context.json"
+        if not saved.exists() or saved.read_text(encoding="utf-8") != context:
+            # Same visible text is not enough: the answers belong to one source snapshot and pack.
+            raise ValueError(f"{product}: replay source was produced for another source or pack")
         self._saved = iter(sorted(attempts[-1].glob("[0-9][0-9][0-9].txt")))
 
     def complete(self, *, system: str, user: str) -> str:
@@ -321,19 +337,24 @@ def compile_products(
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / _CATALOG, pack)
+            pages = source_pages(directory)
+            context = _replay_context(product, pack, pages)
             port: CompletionPort
             if replay_from is not None:
-                port = _Replay(replay_from, product)
+                port = _Replay(replay_from, product, context)
             else:
                 assert completion is not None
-                attempt = _next_attempt(run_root / product / "responses")
-                port = _RawResponses(completion, run_root / product / "responses" / attempt)
+                responses = run_root / product / "responses"
+                attempt = responses / _next_attempt(responses)
+                attempt.mkdir(parents=True)
+                _write_new(attempt / "context.json", context)
+                port = _RawResponses(completion, attempt)
             # Step one sends one call per batch; step two at most one call per field.
             compiler = SchemaFieldsCompiler(
                 port, batch_size=batch_size,
                 max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
             )
-            output = compiler.compile(product, definitions, source_pages(directory))
+            output = compiler.compile(product, definitions, pages)
             if len(ledger.served) > 1:
                 # The last batch itself came from a new version: nothing is written.
                 raise ServedModelChanged(f"{product}: served model changed within the run")
