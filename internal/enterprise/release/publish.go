@@ -1,0 +1,273 @@
+package release
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"math"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// Publishing failures, in addition to the receive and preview codes.
+const (
+	ErrorDecisionInvalid      = "DECISION_INVALID"
+	ErrorDecisionNotFound     = "DECISION_NOT_FOUND"
+	ErrorCandidateNotApproved = "CANDIDATE_NOT_APPROVED"
+	ErrorNeedsRebase          = "NEEDS_REBASE"
+	ErrorReleaseConflict      = "RELEASE_CONFLICT"
+	ErrorReleaseNotFound      = "RELEASE_NOT_FOUND"
+	ErrorServiceUnavailable   = "SERVICE_UNAVAILABLE"
+)
+
+// DecisionInput is a review outcome reported for one candidate. Quality scoring and
+// thresholds belong to the compiler: the platform records which versioned policy decided.
+type DecisionInput struct {
+	Outcome   string `json:"outcome"`
+	Mode      string `json:"mode"`
+	PolicyRef string `json:"policy_ref"`
+	Score     string `json:"score,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// Decision is a stored review outcome bound to the candidate's bundle digest.
+type Decision struct {
+	ID           string `json:"id"`
+	TenantID     uint64 `json:"tenant_id"`
+	SpaceID      string `json:"space_id"`
+	CandidateID  string `json:"candidate_id"`
+	BundleDigest string `json:"bundle_digest"`
+	Outcome      string `json:"outcome"`
+	Mode         string `json:"mode"`
+	PolicyRef    string `json:"policy_ref"`
+	Score        string `json:"score,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	Subject      string `json:"subject"`
+	Digest       string `json:"digest"`
+}
+
+// Release is an activated, complete set of members of one Space.
+type Release struct {
+	ID             string   `json:"id"`
+	Epoch          uint64   `json:"epoch"`
+	BaseReleaseID  string   `json:"base_release_id"`
+	CandidateID    string   `json:"candidate_id"`
+	DecisionDigest string   `json:"decision_digest"`
+	Members        []Member `json:"members"`
+}
+
+// ActivationWrite is everything the platform needs to publish atomically: the
+// complete member set and the Head the service based it on.
+type ActivationWrite struct {
+	TenantID       uint64
+	SpaceID        string
+	Subject        string
+	CandidateID    string
+	BundleDigest   string
+	DecisionID     string
+	DecisionDigest string
+	Nonce          string
+	Expected       Head
+	Members        []Member
+}
+
+// Publisher writes and reads releases through the platform's single Head of a
+// Space. SaveDecision is idempotent by (tenant, Space, Digest). Activate is a
+// compare-and-swap on Expected (a moved Head is ErrorReleaseConflict) and returns
+// the same release when the Nonce was already activated. ReleaseByID with an
+// empty ID reads the active release; a missing one is ErrorReleaseNotFound.
+type Publisher interface {
+	SaveDecision(ctx context.Context, d Decision) (Decision, error)
+	DecisionByID(ctx context.Context, tenantID uint64, spaceID, id string) (Decision, error)
+	ReleaseByID(ctx context.Context, tenantID uint64, spaceID, releaseID string) (Release, error)
+	Activate(ctx context.Context, w ActivationWrite) (Release, error)
+}
+
+// Option configures optional collaborators of the Service.
+type Option func(*Service)
+
+// WithPublisher enables decisions, activation and release reads.
+func WithPublisher(p Publisher) Option { return func(s *Service) { s.publisher = p } }
+
+// Decide records a review outcome for a stored candidate of the caller's Space.
+func (s *Service) Decide(ctx context.Context, p Principal, spaceID, candidateID string, in DecisionInput) (Decision, error) {
+	if err := s.canPublish(p, spaceID); err != nil {
+		return Decision{}, err
+	}
+	if err := validateDecision(in); err != nil {
+		return Decision{}, err
+	}
+	c, err := s.store.CandidateByID(ctx, p.TenantID, spaceID, candidateID)
+	if err != nil {
+		return Decision{}, err
+	}
+	if err := checkCandidateAccess(c, p, spaceID); err != nil {
+		return Decision{}, err
+	}
+	d := Decision{
+		TenantID: p.TenantID, SpaceID: spaceID, CandidateID: c.ID, BundleDigest: c.BundleDigest,
+		Outcome: in.Outcome, Mode: in.Mode, PolicyRef: in.PolicyRef, Score: in.Score,
+		Reason: in.Reason, Subject: p.Subject,
+	}
+	d.Digest = decisionDigest(d)
+	saved, err := s.publisher.SaveDecision(ctx, d)
+	if err != nil {
+		return Decision{}, err
+	}
+	if saved.ID == "" || saved.Digest != d.Digest || saved.CandidateID != c.ID ||
+		saved.TenantID != p.TenantID || saved.SpaceID != spaceID {
+		return Decision{}, errors.New("decision store returned an inconsistent record")
+	}
+	return saved, nil
+}
+
+// Activate publishes an approved candidate on top of the current Head of its Space.
+func (s *Service) Activate(ctx context.Context, p Principal, spaceID, candidateID, decisionID string) (Release, error) {
+	if err := s.canPublish(p, spaceID); err != nil {
+		return Release{}, err
+	}
+	c, err := s.store.CandidateByID(ctx, p.TenantID, spaceID, candidateID)
+	if err != nil {
+		return Release{}, err
+	}
+	if err := checkCandidateAccess(c, p, spaceID); err != nil {
+		return Release{}, err
+	}
+	d, err := s.publisher.DecisionByID(ctx, p.TenantID, spaceID, decisionID)
+	if err != nil {
+		return Release{}, err
+	}
+	if d.CandidateID != c.ID || d.BundleDigest != c.BundleDigest || d.TenantID != p.TenantID || d.SpaceID != spaceID {
+		return Release{}, &Error{Code: ErrorDecisionNotFound, Detail: "decision does not belong to this candidate"}
+	}
+	if d.Outcome != "approve" {
+		return Release{}, &Error{Code: ErrorCandidateNotApproved, Detail: "decision outcome is " + d.Outcome}
+	}
+	head, err := s.store.Head(ctx, p.TenantID, spaceID)
+	if err != nil {
+		return Release{}, err
+	}
+	var base Release
+	if head.ReleaseID != "" {
+		if base, err = s.publisher.ReleaseByID(ctx, p.TenantID, spaceID, head.ReleaseID); err != nil {
+			return Release{}, err
+		}
+		// A retried activation whose first attempt committed: the Head is that release.
+		if base.CandidateID == c.ID && base.DecisionDigest == d.Digest {
+			return base, nil
+		}
+	}
+	b, err := s.store.BundleOf(ctx, p.TenantID, spaceID, c.ID)
+	if err != nil {
+		return Release{}, err
+	}
+	if err := checkBase(b, head); err != nil {
+		return Release{}, err
+	}
+	members, err := materialize(base.Members, b)
+	if err != nil {
+		return Release{}, err
+	}
+	return s.publisher.Activate(ctx, ActivationWrite{
+		TenantID: p.TenantID, SpaceID: spaceID, Subject: p.Subject, CandidateID: c.ID,
+		BundleDigest: c.BundleDigest, DecisionID: d.ID, DecisionDigest: d.Digest,
+		Nonce: sha256Hex(c.ID + ":" + d.Digest), Expected: head, Members: members,
+	})
+}
+
+// Release reads the active release (empty ID) or a named release of the Space.
+func (s *Service) Release(ctx context.Context, p Principal, spaceID, releaseID string) (Release, error) {
+	if err := s.canPublish(p, spaceID); err != nil {
+		return Release{}, err
+	}
+	return s.publisher.ReleaseByID(ctx, p.TenantID, spaceID, releaseID)
+}
+
+func (s *Service) canPublish(p Principal, spaceID string) error {
+	if err := checkAccess(p, spaceID); err != nil {
+		return err
+	}
+	if s.publisher == nil || s.store == nil {
+		return &Error{Code: ErrorServiceUnavailable, Detail: "publishing is not configured"}
+	}
+	return nil
+}
+
+func validateDecision(in DecisionInput) error {
+	switch {
+	case in.Outcome != "approve" && in.Outcome != "reject" && in.Outcome != "manual":
+		return &Error{Code: ErrorDecisionInvalid, Detail: "outcome must be approve, reject or manual"}
+	case in.Mode != "machine" && in.Mode != "human":
+		return &Error{Code: ErrorDecisionInvalid, Detail: "mode must be machine or human"}
+	case in.Mode == "machine" && strings.TrimSpace(in.PolicyRef) == "":
+		return &Error{Code: ErrorDecisionInvalid, Detail: "a machine decision must name its versioned policy"}
+	}
+	if in.Score != "" {
+		score, err := strconv.ParseFloat(in.Score, 64)
+		if err != nil || math.IsNaN(score) || math.IsInf(score, 0) {
+			return &Error{Code: ErrorDecisionInvalid, Detail: "score must be a finite number"}
+		}
+	}
+	return nil
+}
+
+// checkBase requires the candidate to be built on exactly the current Head.
+func checkBase(b Bundle, head Head) error {
+	if b.BaseReleaseID != head.ReleaseID {
+		return &Error{Code: ErrorNeedsRebase, Detail: "candidate is based on another release than the active one"}
+	}
+	if b.BaseEpoch != nil {
+		epoch, err := strconv.ParseUint(b.BaseEpoch.String(), 10, 64)
+		if err != nil || epoch != head.Epoch {
+			return &Error{Code: ErrorNeedsRebase, Detail: "candidate base epoch is not the active epoch"}
+		}
+	}
+	return nil
+}
+
+// materialize applies a delta bundle to the base members: removals, then
+// replacements and additions; the result is sorted by logical slug.
+func materialize(base []Member, b Bundle) ([]Member, error) {
+	bySlug := make(map[string]Member, len(base)+len(b.Members))
+	for _, m := range base {
+		bySlug[m.LogicalSlug] = m
+	}
+	for _, slug := range b.Removals {
+		if _, ok := bySlug[slug]; !ok {
+			return nil, invalid("removal names a member the active release does not have: " + slug)
+		}
+		delete(bySlug, slug)
+	}
+	for _, m := range b.Members {
+		bySlug[m.LogicalSlug] = m
+	}
+	out := make([]Member, 0, len(bySlug))
+	for _, m := range bySlug {
+		out = append(out, m)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].LogicalSlug < out[j].LogicalSlug })
+	return out, nil
+}
+
+func decisionDigest(d Decision) string {
+	// Field order is fixed by the struct; the stored ID is not part of the content.
+	raw, _ := json.Marshal(struct {
+		CandidateID  string `json:"candidate_id"`
+		BundleDigest string `json:"bundle_digest"`
+		Outcome      string `json:"outcome"`
+		Mode         string `json:"mode"`
+		PolicyRef    string `json:"policy_ref"`
+		Score        string `json:"score"`
+		Reason       string `json:"reason"`
+		Subject      string `json:"subject"`
+	}{d.CandidateID, d.BundleDigest, d.Outcome, d.Mode, d.PolicyRef, d.Score, d.Reason, d.Subject})
+	return sha256Hex(string(raw))
+}
+
+func sha256Hex(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
+}
