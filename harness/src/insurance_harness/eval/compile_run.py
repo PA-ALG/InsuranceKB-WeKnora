@@ -16,6 +16,7 @@ value batches, in call order): no client, no sends, no budget reservation.
 
 import argparse
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -193,7 +194,16 @@ class _RawResponses:
         self._count += 1
         self._directory.mkdir(parents=True, exist_ok=True)
         _write_new(self._directory / f"{self._count:03d}.txt", raw)
+        # The answer is only meaningful for this exact request (segment ids name this source
+        # text); replay refuses any other request.
+        _write_new(self._directory / f"{self._count:03d}.request.sha256",
+                   _request_sha256(system, user))
         return raw
+
+
+def _request_sha256(system: str, user: str) -> str:
+    encoded = json.dumps([system, user], ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _attempts(directory: Path) -> list[Path]:
@@ -225,6 +235,12 @@ class _Replay:
         path = next(self._saved, None)
         if path is None:
             raise ValueError("replay source has fewer saved responses than calls")
+        fingerprint = path.with_name(f"{path.stem}.request.sha256")
+        if not fingerprint.exists():
+            raise ValueError("replay source lacks the request fingerprint of a saved response")
+        if fingerprint.read_text(encoding="utf-8").strip() != _request_sha256(system, user):
+            # Source text, cards, definitions or prompt differ from the run that produced it.
+            raise ValueError("replay request differs from the request that produced the response")
         return path.read_text(encoding="utf-8")
 
 
@@ -294,6 +310,10 @@ def compile_products(
             directory = source_directory(repo, product)
             name, pack = display_name(directory), declared_pack(repo, product)
             path = run_root / product / "output.json"
+            if replay_from is not None and path.exists():
+                # Reuse would skip the replay the caller asked for.
+                raise ValueError(f"{product}: replay target already has an output; "
+                                 "use a new run root")
             if path.exists():
                 output = CompileOutput.model_validate_json(path.read_text(encoding="utf-8"))
                 if output.entity_id != product or output.pack_id != pack:

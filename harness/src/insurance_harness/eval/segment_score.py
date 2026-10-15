@@ -113,7 +113,8 @@ def score_selection(
     for field in golden.fields:
         guess = by_key.get(field.field_key)
         state: State | Literal["missing"] = guess.state if guess is not None else "missing"
-        agree += (field.state == "unknown") == (state in ("unknown", "missing"))
+        # Three-state agreement; a missing prediction counts as unknown, nothing else is merged.
+        agree += field.state == state or (field.state == "unknown" and state == "missing")
         located = [segments(quote) for quote in field.evidence]
         unmapped += sum(1 for ids in located if not ids)
         if field.state != "present":
