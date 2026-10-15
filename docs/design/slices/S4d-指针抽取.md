@@ -70,7 +70,8 @@ S4b（`deepseek-flash`）召回只有 6%–36%，两类问题反复出现：
 - 结构：`{version, state_rules, cards: {field_key: {title, sources, source_scope, definition, includes, excludes[[内容, 归入]], absent_rule, unknown_rule, bad, examples[]}}}`；
   `examples` 每条为 `{insurance_type, product, state, value, reason}`，只取自不参与评测的产品，由独立评委复核；请求中只附与当前 pack 险种相同的示例。
 - 覆盖 1814/1816/1824/1826 四个 pack 的全部 82 个字段，守卫测试列出缺卡字段。修改卡片只改数据与 `version`。
-- 状态口径（用户 2026-10-15 裁定）：材料含完整保险责任条款时，其中未列的责任判 `absent_explicitly` 并引用该列举条款；`sources` 含条款、说明书
+- 状态口径（用户 2026-10-15 裁定）：材料含完整保险责任条款时，其中未列的责任判 `absent_explicitly` 并引用该列举条款；条款写明产品类型（如"本合同为分红保险合同"，或普通型产品的完整条款未创设账户、红利）时，只属于其他产品类型的字段
+  （万能账户、分红、投资账户等规则）判 `absent_explicitly` 并引用写明类型的条款（用户 2026-10-15 单独确认）；`sources` 含条款、说明书
   以外文件（投保/核保/保全规则、销售与培训材料等）的字段，本批材料未提及一律 `unknown`；疾病清单只列名称、分组、适用责任与限制，医学定义
   统一存于 `disease_definitions_and_criteria`。
 - 字段的险种差异由 pack 的 FieldDefinition（与《11类保险产品知识Schema》v5 逐字一致）承载，卡片不复述。
