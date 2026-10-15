@@ -11,8 +11,6 @@ dependencies = [
     "tenacity>=8.3",
     "pyyaml>=6.0",
     "pdfplumber>=0.11",
-    # S4d: page text for pointer extraction, same engine as WeKnora's native PDF parse.
-    "pypdfium2>=5.11",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
     "psycopg[binary]>=3.2",

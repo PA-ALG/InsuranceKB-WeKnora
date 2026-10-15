@@ -10,6 +10,9 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
+# pypdfium2 is installed and version-locked through pdfplumber (see uv.lock). It is not
+# declared directly because the 020 admission binds the lockfile bytes; declare it when S7
+# removes pdfplumber.
 import pypdfium2 as pdfium
 
 
