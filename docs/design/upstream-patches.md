@@ -49,3 +49,7 @@ Codex 未修改守卫基线，也未为抵消新增补丁扩大退役范围。
 | `frontend/src/api/wiki/index.ts` | S1b | 增加按 scope/release/logical_slug 读取发布页调用，供 enterprise 引用解析使用 | 否（发布协议） | S3 通用发布读取 API 接替时迁入 enterprise 并移除接缝 |
 
 S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断言保持不变；基线更新由 Claude 审查后执行。
+
+| 文件 | 切片 | 原因 | 可否上游化 | 退出条件 |
+|---|---|---|---|---|
+| `internal/router/router.go` | S4c-1 | 通过既有 DI 和 API-key authorizer 挂载 enterprise source 只读服务；暂用已配置的隔离捕获 scope 核对 tenant/Space/RAW，原路由无企业扩展挂载点 | 部分（通用模块挂载） | 上游提供企业模块注册扩展点后移除路由接缝；S4c-2 引入受管 Space/source 绑定与产物必存后替换捕获范围映射 |

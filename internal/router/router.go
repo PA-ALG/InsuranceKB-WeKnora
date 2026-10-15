@@ -15,13 +15,16 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
+	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/mcpserver"
 	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/tracing/langfuse"
+	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 
 	_ "github.com/Tencent/WeKnora/docs" // swagger docs
@@ -36,6 +39,8 @@ type RouterParams struct {
 	UserService                    interfaces.UserService
 	KBService                      interfaces.KnowledgeBaseService
 	KnowledgeService               interfaces.KnowledgeService
+	KnowledgeRepository            interfaces.KnowledgeRepository
+	FirstParseStore                *service.G3FirstParseStore
 	ChunkService                   interfaces.ChunkService
 	SessionService                 interfaces.SessionService
 	MessageService                 interfaces.MessageService
@@ -359,6 +364,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 			rbacGuards,
 		)
 		registerConfiguredG3PlatformRoutes(v1, params, rbacGuards)
+		registerEnterpriseRoutes(v1, params, rbacGuards)
 		RegisterMemoryRoutes(v1, params.MemoryHandler, rbacGuards)
 		RegisterChunkerDebugRoutes(v1, rbacGuards)
 
@@ -404,4 +410,27 @@ func registerConfiguredG3PlatformRoutes(v1 *gin.RouterGroup, params RouterParams
 	}
 	RegisterG3PlatformSnapshotRoutes(v1, params.G3PlatformSnapshotsHandler, params.SchemaWikiHandler, params.WikiReleaseHandler, guards)
 	RegisterG3PlatformReleaseRoutes(v1, params.G3PlatformReleaseHandler, params.SchemaWikiHandler, params.WikiReleaseHandler, guards)
+}
+
+func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *rbacGuards) {
+	var captured types.WikiReleaseScope
+	if params.Config != nil && params.Config.G3PlatformProcessing != nil {
+		cfg := params.Config.G3PlatformProcessing
+		if cfg.Enabled && cfg.Mode == "ISOLATED_NOT_FOR_PRODUCTION" {
+			captured = types.WikiReleaseScope{TenantID: cfg.TenantID, SpaceID: cfg.SpaceID, RawKBID: cfg.RawKBID, WikiKBID: cfg.WikiKBID}
+		}
+	}
+	// Captures currently exist only in this configured isolated scope. Replace
+	// this mapping when S4c-2 provides managed Space/source bindings and capture
+	// persistence; never infer Space membership from a caller-supplied source ID.
+	store := source.ArtifactStoreFunc(func(ctx context.Context, scope source.Scope, id string, attempt int64) (*source.Artifact, error) {
+		if captured.TenantID == 0 || captured.RawKBID == "" || captured.WikiKBID == "" ||
+			scope.TenantID != captured.TenantID || scope.SpaceID != captured.SpaceID {
+			return nil, source.ErrNotFound
+		}
+		return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, captured, id, attempt)
+	})
+	enterprise.Mount(v1.Group("/enterprise/spaces/:space_id"), enterprise.Deps{
+		Sources: source.NewService(store), Authorizer: guards.ensureAPIKeyAuthorizer(),
+	})
 }

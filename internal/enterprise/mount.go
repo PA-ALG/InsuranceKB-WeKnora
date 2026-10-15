@@ -5,11 +5,13 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
+	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -17,11 +19,12 @@ import (
 // Deps contains the explicitly supplied service and shared API authorization.
 type Deps struct {
 	Candidates *release.Service
+	Sources    *source.Service
 	// Authorizer is the SAME registry attached to the authenticated API group.
 	Authorizer *middleware.APIKeyRouteAuthorizer
 }
 
-// Mount registers relative candidate routes on a group carrying :space_id.
+// Mount registers relative platform routes on a group carrying :space_id.
 // The parent must run middleware.Auth; this package only consumes its trusted
 // identity and reuses its API-key authorizer, never authenticates raw headers.
 func Mount(r gin.IRouter, deps Deps) {
@@ -31,7 +34,7 @@ func Mount(r gin.IRouter, deps Deps) {
 			writeError(c, err)
 			return
 		}
-		if deps.Authorizer == nil || deps.Candidates == nil {
+		if deps.Authorizer == nil {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
 				"success": false, "code": "SERVICE_UNAVAILABLE", "error": "candidate service is unavailable",
 			})
@@ -46,10 +49,12 @@ func Mount(r gin.IRouter, deps Deps) {
 		prefix := strings.TrimSuffix(group.BasePath(), "/")
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/candidates/:candidate_id/preview", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/sources/:knowledge_id/attempts/:attempt/pages", policy)
 		group.Use(deps.Authorizer.Middleware())
 	}
 	group.POST("/candidates", func(c *gin.Context) { receive(c, deps.Candidates) })
 	group.GET("/candidates/:candidate_id/preview", func(c *gin.Context) { preview(c, deps.Candidates) })
+	group.GET("/sources/:knowledge_id/attempts/:attempt/pages", func(c *gin.Context) { pages(c, deps.Sources) })
 }
 
 func requestPrincipal(c *gin.Context) (release.Principal, error) {
@@ -71,6 +76,10 @@ func requestPrincipal(c *gin.Context) (release.Principal, error) {
 }
 
 func receive(c *gin.Context, service *release.Service) {
+	if service == nil {
+		candidateUnavailable(c)
+		return
+	}
 	p, err := requestPrincipal(c)
 	if err != nil {
 		writeError(c, err)
@@ -96,6 +105,10 @@ func receive(c *gin.Context, service *release.Service) {
 }
 
 func preview(c *gin.Context, service *release.Service) {
+	if service == nil {
+		candidateUnavailable(c)
+		return
+	}
 	p, err := requestPrincipal(c)
 	if err != nil {
 		writeError(c, err)
@@ -107,6 +120,50 @@ func preview(c *gin.Context, service *release.Service) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
+
+func candidateUnavailable(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+		"success": false, "code": "SERVICE_UNAVAILABLE", "error": "candidate service is unavailable",
+	})
+}
+
+func pages(c *gin.Context, service *source.Service) {
+	p, err := requestPrincipal(c)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	attempt, err := strconv.ParseInt(c.Param("attempt"), 10, 64)
+	if err != nil {
+		writeSourceError(c, &source.Error{Code: source.ErrorInvalidRequest, Detail: "a positive attempt is required"})
+		return
+	}
+	result, err := service.Pages(c.Request.Context(), source.Scope{TenantID: p.TenantID, SpaceID: c.Param("space_id")}, c.Param("knowledge_id"), attempt)
+	if err != nil {
+		writeSourceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func writeSourceError(c *gin.Context, err error) {
+	var failure *source.Error
+	if !errors.As(err, &failure) {
+		failure = &source.Error{Code: source.ErrorUnavailable, Detail: "source artifact is unavailable"}
+	}
+	status := http.StatusServiceUnavailable
+	switch failure.Code {
+	case source.ErrorInvalidRequest:
+		status = http.StatusBadRequest
+	case source.ErrorSourceNotFound:
+		status = http.StatusNotFound
+	case source.ErrorNotCaptured:
+		status = http.StatusConflict
+	case source.ErrorIntegrity:
+		status = http.StatusInternalServerError
+	}
+	c.AbortWithStatusJSON(status, gin.H{"success": false, "code": failure.Code, "error": failure.Detail})
 }
 
 func writeError(c *gin.Context, err error) {
