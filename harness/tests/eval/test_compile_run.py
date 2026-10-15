@@ -78,16 +78,22 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def extraction(request: httpx.Request, served: str, finish: str = "stop") -> httpx.Response:
-    """Answer every requested field from the page the request actually carries."""
+    """Answer every requested field from what the request actually carries (S4d two steps).
+
+    Step one lists numbered segments: point each field at the segment holding its quote.
+    Step two carries each field's selected segments: write the value.
+    """
     user = json.loads(json.loads(request.content)["messages"][1]["content"])
-    page = user["pages"][0]
-    rows = [{
-        "ordinal": field["ordinal"], "field_key": field["field_key"], "state": "present",
-        "value": QUOTES[field["field_key"]][0], "evidence": [{
-            "document": page["document"], "document_sha256": page["document_sha256"],
-            "page": page["page"], "quote": QUOTES[field["field_key"]][1],
-        }],
-    } for field in user["schema_fields"]]
+    if "segments" in user:
+        listing = dict(line.split(" ", 1) for line in user["segments"].split("\n"))
+        rows = [{
+            "ordinal": field["ordinal"], "field_key": field["field_key"], "state": "present",
+            "segments": [sid for sid, text in listing.items()
+                         if QUOTES[field["field_key"]][1] in text],
+        } for field in user["schema_fields"]]
+    else:
+        rows = [{"ordinal": field["ordinal"], "field_key": field["field_key"],
+                 "value": QUOTES[field["field_key"]][0]} for field in user["schema_fields"]]
     return httpx.Response(200, json={
         "model": served, "choices": [{
             "message": {"content": json.dumps({"fields": rows}, ensure_ascii=False)},
@@ -139,15 +145,16 @@ def run(
 
 def test_compiles_in_order_and_writes_a_scoreable_candidate(repo: Path, tmp_path: Path) -> None:
     root = tmp_path / "run"
-    build, sent = factory(["example-flash-2026", "example-flash-2026"])
+    # S4d: each product is one selection call plus one value call.
+    build, sent = factory(["example-flash-2026"] * 4)
     runs = run(repo, root, ["p2", "p1"], build)
     assert [(r.product_id, r.reused, r.calls, r.fields) for r in runs] == [
-        ("p2", False, 1, 3), ("p1", False, 1, 3),
+        ("p2", False, 2, 3), ("p1", False, 2, 3),
     ]
     asked = json.loads(json.loads(sent[0].content)["messages"][1]["content"])["schema_fields"]
     assert [field["field_key"] for field in asked] == list(QUOTES)
-    assert [line["served_model"] for line in lines(root)] == ["example-flash-2026"] * 2
-    assert reservations(root) == 2
+    assert [line["served_model"] for line in lines(root)] == ["example-flash-2026"] * 4
+    assert reservations(root) == 4
     write_candidate(root, runs)
     candidate = json.loads((root / "candidate.json").read_text())
     mapping = json.loads((root / "product-map.json").read_text())
@@ -162,11 +169,11 @@ def test_compiles_in_order_and_writes_a_scoreable_candidate(repo: Path, tmp_path
 
 def test_rerun_reuses_completed_products_without_sending(repo: Path, tmp_path: Path) -> None:
     root = tmp_path / "run"
-    run(repo, root, ["p1"], factory(["m"])[0])
+    run(repo, root, ["p1"], factory(["m", "m"])[0])
     build, sent = factory([])
     runs = run(repo, root, ["p1"], build)
     assert (runs[0].reused, runs[0].calls, sent) == (True, 0, [])
-    assert len(lines(root)) == 1
+    assert len(lines(root)) == 2
 
 
 def test_reservation_is_durable_before_the_request_leaves(repo: Path, tmp_path: Path) -> None:
@@ -179,16 +186,16 @@ def test_reservation_is_durable_before_the_request_leaves(repo: Path, tmp_path: 
         return extraction(request, "m")
 
     run(repo, root, ["p1"], factory([], handler=handler)[0])
-    assert seen == [1]
+    assert seen == [1, 2]
 
 
 def test_budget_is_cumulative_across_runs(repo: Path, tmp_path: Path) -> None:
     root = tmp_path / "run"
-    run(repo, root, ["p1"], factory(["m"])[0], max_sent=2)
+    run(repo, root, ["p1"], factory(["m", "m"])[0], max_sent=2)
     build, sent = factory(["m", "m"])
     with pytest.raises(ModelBudgetExceeded):
-        run(repo, root, ["p2"], build, max_sent=1)
-    assert sent == [] and prior_sends(root) == 1
+        run(repo, root, ["p2"], build, max_sent=2)
+    assert sent == [] and prior_sends(root) == 2
 
 
 def test_a_second_run_on_the_same_root_is_refused(repo: Path, tmp_path: Path) -> None:
@@ -216,7 +223,7 @@ def test_served_model_change_stops_the_next_batch(repo: Path, tmp_path: Path) ->
 
 def test_served_model_recorded_by_an_earlier_run_also_counts(repo: Path, tmp_path: Path) -> None:
     root = tmp_path / "run"
-    run(repo, root, ["p1"], factory(["v1"])[0])
+    run(repo, root, ["p1"], factory(["v1", "v1"])[0])
     build, sent = factory(["v2", "v2"])
     with pytest.raises(ServedModelChanged):
         run(repo, root, ["p1", "p2"], build)
@@ -234,9 +241,11 @@ def test_truncation_stops_later_products_and_keeps_the_attempt(repo: Path, tmp_p
 
 def test_raw_completions_are_kept_per_attempt(repo: Path, tmp_path: Path) -> None:
     root = tmp_path / "run"
-    run(repo, root, ["p1"], factory(["m"])[0])
+    run(repo, root, ["p1"], factory(["m", "m"])[0])
     raw = (root / "p1/responses/attempt-01/001.txt").read_text(encoding="utf-8")
     assert json.loads(raw)["fields"][0]["field_key"] == "waiting_period"
+    values = (root / "p1/responses/attempt-01/002.txt").read_text(encoding="utf-8")
+    assert json.loads(values)["fields"][0]["value"] == "90日"
 
 
 def test_rejected_output_keeps_raw_text_in_its_own_attempt(repo: Path, tmp_path: Path) -> None:
@@ -298,15 +307,15 @@ def test_legacy_root_adopts_its_ledger_as_budget_baseline(repo: Path, tmp_path: 
     root = tmp_path / "run"
     root.mkdir()
     (root / "ledger.jsonl").write_text(legacy_record(1) + "\n" + legacy_record(2) + "\n")
-    run(repo, root, ["p1"], factory(["m"])[0], max_sent=3)
-    assert prior_sends(root) == 3
+    run(repo, root, ["p1"], factory(["m", "m"])[0], max_sent=4)
+    assert prior_sends(root) == 4
     # Simulate a crash between reservation and record: drop the newest record.
     kept = (root / "ledger.jsonl").read_text().splitlines()[:-1]
     (root / "ledger.jsonl").write_text("\n".join(kept) + "\n")
-    assert prior_sends(root) == 3
+    assert prior_sends(root) == 4
     build, sent = factory(["m"])
     with pytest.raises(ModelBudgetExceeded):
-        run(repo, root, ["p2"], build, max_sent=3)
+        run(repo, root, ["p2"], build, max_sent=4)
     assert sent == []
 
 

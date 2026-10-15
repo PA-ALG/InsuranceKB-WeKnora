@@ -67,8 +67,9 @@ def test_prompts_use_all_pages_and_hash_the_actual_request() -> None:
     pages.append(PageText(document="乙.pdf", document_sha256="b" * 64, page=1, text="末尾补充"))
     engine = SchemaFieldsCompiler(NeverCall())
     request = engine.build_requests("entity", [field], pages)[0]
-    assert "[page 39]" in request.user and "末尾补充" in request.user
-    assert "a" * 64 in request.user and "b" * 64 in request.user
+    # S4d: pages reach the model as numbered segments; fingerprints stay with the code that
+    # cuts evidence, so they no longer need to be in the request.
+    assert "D1P39S1 第39页原文" in request.user and "D2P1S1 末尾补充" in request.user
     assert request == engine.build_requests("entity", [field], pages)[0]
     assert request.sha256 != engine.build_requests("other", [field], pages)[0].sha256
     assert request.sha256 != engine.build_requests("entity", [field], pages[:-1])[0].sha256
