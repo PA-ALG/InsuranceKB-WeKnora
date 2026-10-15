@@ -54,9 +54,6 @@ class QuoteMatch(StrEnum):
 
 class VerifiedQuote(QuoteReference):
     match: Literal[QuoteMatch.EXACT, QuoteMatch.NORMALIZED]
-    # Set only when the quote was relocated: what the extractor cited, kept for audit.
-    cited_document: str | None = None
-    cited_page: int | None = Field(default=None, ge=1)
 
 
 def _normalized(value: str, source: str) -> str:
@@ -99,12 +96,6 @@ class QuoteVerifier:
             self._index[key] = page
 
     def verify(self, reference: QuoteReference) -> VerifiedQuote | None:
-        """Check the cited page, else accept only a unique match among this verifier's pages.
-
-        Extractors cite the wrong page or file for text that exists verbatim
-        elsewhere in the same product; the unique location keeps the Evidence
-        exact. Several locations are ambiguous and stay rejected.
-        """
         page = self._index.get(
             (
                 reference.document,
@@ -112,21 +103,9 @@ class QuoteVerifier:
                 reference.page,
             )
         )
-        if page is not None:
-            match = verify_quote(page.text, reference.quote)
-            if match is not QuoteMatch.NOT_FOUND:
-                return VerifiedQuote(**reference.model_dump(), match=match)
-        located = [
-            (candidate, match)
-            for candidate in self.pages
-            if candidate is not page
-            and (match := verify_quote(candidate.text, reference.quote)) is not QuoteMatch.NOT_FOUND
-        ]
-        if len(located) != 1:
+        if page is None:
             return None
-        found, match = located[0]
-        return VerifiedQuote(
-            document=found.document, document_sha256=found.document_sha256, page=found.page,
-            quote=reference.quote, match=match,
-            cited_document=reference.document, cited_page=reference.page,
-        )
+        match = verify_quote(page.text, reference.quote)
+        if match is QuoteMatch.NOT_FOUND:
+            return None
+        return VerifiedQuote(**reference.model_dump(), match=match)

@@ -72,10 +72,3 @@ def test_prompts_use_all_pages_and_hash_the_actual_request() -> None:
     assert request == engine.build_requests("entity", [field], pages)[0]
     assert request.sha256 != engine.build_requests("other", [field], pages)[0].sha256
     assert request.sha256 != engine.build_requests("entity", [field], pages[:-1])[0].sha256
-
-
-def test_prompt_keeps_multi_item_values_inside_one_string() -> None:
-    # A list-valued answer fails the strict parser and drops the whole batch.
-    from insurance_harness.compilers.schema_fields.prompt import SYSTEM_PROMPT
-
-    assert "不得输出数组" in SYSTEM_PROMPT

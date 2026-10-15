@@ -203,12 +203,9 @@ def test_compile_returns_verified_values() -> None:
     assert output.calls == 1
 
 
-def test_a_quote_found_on_no_page_is_rejected() -> None:
-    # S4d: a quote cited to the wrong page but found verbatim on exactly one page
-    # of the product is relocated (pinned in tests/evidence/test_quote_relocation.py);
-    # a quote that exists on no page is still rejected with its whole field.
+def test_a_quote_that_is_not_on_the_page_it_claims_is_rejected() -> None:
     wrong = payload(
-        row("waiting_period", 0, "90日", page=3, quote="本合同等待期为60日"),
+        row("waiting_period", 0, "90日", page=3, quote="本合同等待期为90日"),
         row(
             "coverage_period", 1, "一年", document="产品说明书.pdf", page=3, quote="保险期间为一年"
         ),

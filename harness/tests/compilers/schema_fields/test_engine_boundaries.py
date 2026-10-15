@@ -123,23 +123,18 @@ def test_json_envelope_is_closed(raw: str) -> None:
     ],
 )
 def test_any_unverified_reference_rejects_the_field(bad_evidence: dict[str, object]) -> None:
-    # The quote appears on two pages, so a reference with a wrong document, digest
-    # or page cannot be relocated (ambiguous) and a changed quote is found nowhere:
-    # every bad reference stays unverified and still rejects the whole field (S4d).
     output = SchemaFieldsCompiler(
         Replay(response(row(evidence=[evidence(), bad_evidence])))
     ).compile(
         "entity",
         [definition()],
-        [Page(), Page(page=3)],
+        [Page()],
     )
     assert output.fields == []
 
 
-def test_no_cross_page_join() -> None:
-    # S4d relocates a quote only to one page that contains it verbatim; text split
-    # across pages is never joined.
-    pages = [Page(text="等待期为"), Page(page=2, text="90日")]
+def test_no_cross_page_join_or_search_for_a_replacement_page() -> None:
+    pages = [Page(text="等待期为"), Page(page=2, text="90日"), Page(page=3)]
     output = SchemaFieldsCompiler(Replay(response(row()))).compile("entity", [definition()], pages)
     assert output.fields == []
 
