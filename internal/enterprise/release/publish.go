@@ -271,3 +271,13 @@ func sha256Hex(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:])
 }
+
+// MemberDigest recomputes a member digest with the receive-time contract, so adapters
+// can verify payload bytes read back from storage.
+func MemberDigest(payload json.RawMessage) (string, error) {
+	var value any
+	if err := json.Unmarshal(payload, &value); err != nil {
+		return "", err
+	}
+	return canonicalDigest(value), nil
+}
