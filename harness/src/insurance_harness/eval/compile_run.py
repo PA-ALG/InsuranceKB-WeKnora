@@ -9,7 +9,9 @@ candidate was written; exit 2: the run stopped or the input was invalid.
 Run-root files: budget.jsonl gains one line before every send (so a send that
 was in flight when the process died still counts), ledger.jsonl gains every
 attempt record as it lands, <product>/responses/attempt-NN/ keeps raw
-completions, and .lock serializes runs that share the root.
+completions, and .lock serializes runs that share the root. With --replay-from, an
+earlier run root's saved completions stand in for the model (selection batches, then
+value batches, in call order): no client, no sends, no budget reservation.
 """
 
 import argparse
@@ -194,10 +196,36 @@ class _RawResponses:
         return raw
 
 
+def _attempts(directory: Path) -> list[Path]:
+    """Attempt folders in numeric order; zero padding is only a minimum width."""
+    found = [(int(path.name[len("attempt-"):]), path) for path in directory.glob("attempt-*")
+             if path.is_dir() and path.name[len("attempt-"):].isdigit()]
+    return [path for _, path in sorted(found)]
+
+
 def _next_attempt(directory: Path) -> str:
     """Each compile attempt of a product keeps its own raw-response folder."""
-    existing = [path.name for path in directory.glob("attempt-*") if path.is_dir()]
-    return f"attempt-{len(existing) + 1:02d}"
+    attempts = _attempts(directory)
+    latest = int(attempts[-1].name[len("attempt-"):]) if attempts else 0
+    return f"attempt-{latest + 1:02d}"
+
+
+class _Replay:
+    """Serve one product's saved completions in call order instead of calling a model."""
+
+    model = "replay"
+
+    def __init__(self, source: Path, product: str) -> None:
+        attempts = _attempts(source / product / "responses")
+        if not attempts:
+            raise ValueError(f"{product}: replay source has no saved responses")
+        self._saved = iter(sorted(attempts[-1].glob("[0-9][0-9][0-9].txt")))
+
+    def complete(self, *, system: str, user: str) -> str:
+        path = next(self._saved, None)
+        if path is None:
+            raise ValueError("replay source has fewer saved responses than calls")
+        return path.read_text(encoding="utf-8")
 
 
 _HELD: dict[Path, int] = {}
@@ -234,13 +262,20 @@ def run_lock(run_root: Path) -> Iterator[None]:
 
 def compile_products(
     repo: Path, products: list[str], *,
-    completion_factory: Callable[[CallLedger], CompletionPort],
-    run_root: Path, max_sent: int, batch_size: int = 25,
+    completion_factory: Callable[[CallLedger], CompletionPort] | None,
+    run_root: Path, max_sent: int, batch_size: int = 25, replay_from: Path | None = None,
 ) -> list[ProductRun]:
     """Compile or reuse each product in order; raise on the first stopping condition.
 
     max_sent is cumulative for the run root: earlier runs' sends count against it.
+    With replay_from, saved completions stand in for the model and nothing is sent.
     """
+    if replay_from is None and completion_factory is None:
+        raise ValueError("a completion factory is required unless replaying")
+    if replay_from is not None:
+        # A source whose last batch a served-model change rejected would be accepted here.
+        if len({r.served_model for r in stored_records(replay_from) if r.served_model}) > 1:
+            raise ServedModelChanged("replay source records more than one served model")
     with run_lock(run_root):
         _adopt_legacy_budget(run_root)
         served = {record.served_model for record in stored_records(run_root)
@@ -250,7 +285,9 @@ def compile_products(
         ledger = _DurableLedger(
             run_root, max_sent=max(0, max_sent - prior_sends(run_root)), served=served,
         )
-        completion = completion_factory(ledger)
+        completion = (
+            completion_factory(ledger) if completion_factory and replay_from is None else None
+        )
         runs: list[ProductRun] = []
         for product in products:
             check_product_id(product)
@@ -264,10 +301,17 @@ def compile_products(
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / _CATALOG, pack)
-            attempt = _next_attempt(run_root / product / "responses")
+            port: CompletionPort
+            if replay_from is not None:
+                port = _Replay(replay_from, product)
+            else:
+                assert completion is not None
+                attempt = _next_attempt(run_root / product / "responses")
+                port = _RawResponses(completion, run_root / product / "responses" / attempt)
+            # Step one sends one call per batch; step two at most one call per field.
             compiler = SchemaFieldsCompiler(
-                _RawResponses(completion, run_root / product / "responses" / attempt),
-                batch_size=batch_size, max_calls=math.ceil(len(definitions) / batch_size),
+                port, batch_size=batch_size,
+                max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
             )
             output = compiler.compile(product, definitions, source_pages(directory))
             if len(ledger.served) > 1:
@@ -347,6 +391,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=25)
     parser.add_argument("--max-sent", type=int, default=30)
+    parser.add_argument("--replay-from", type=Path,
+                        help="recompile saved completions of an earlier run root; sends nothing")
     args = parser.parse_args(argv)
     runs: list[ProductRun] = []
     clients: list[OpenAICompatibleCompletion] = []
@@ -362,9 +408,10 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 try:
                     runs = compile_products(
-                        args.repo, args.products, completion_factory=factory,
+                        args.repo, args.products,
+                        completion_factory=None if args.replay_from else factory,
                         run_root=args.run_root, max_sent=args.max_sent,
-                        batch_size=args.batch_size,
+                        batch_size=args.batch_size, replay_from=args.replay_from,
                     )
                 finally:
                     for client in clients:

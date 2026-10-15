@@ -7,7 +7,6 @@ source is authoritative: there is no search for a substitute page or revision.
 
 import re
 import unicodedata
-from collections.abc import Sequence
 from enum import StrEnum
 from typing import Annotated, Literal, Protocol
 
@@ -81,31 +80,3 @@ def verify_quote(page_text: str, quote: str) -> QuoteMatch:
     if normalized and normalized in _normalized(page_text, page_text):
         return QuoteMatch.NORMALIZED
     return QuoteMatch.NOT_FOUND
-
-
-class QuoteVerifier:
-    """Snapshot source pages once; reject ambiguous identities before extraction."""
-
-    def __init__(self, pages: Sequence[PageTextLike]) -> None:
-        self.pages = tuple(PageText.model_validate(page) for page in pages)
-        self._index: dict[tuple[str, str, int], PageText] = {}
-        for page in self.pages:
-            key = (page.document, page.document_sha256.lower(), page.page)
-            if key in self._index:
-                raise ValueError("duplicate source page identity")
-            self._index[key] = page
-
-    def verify(self, reference: QuoteReference) -> VerifiedQuote | None:
-        page = self._index.get(
-            (
-                reference.document,
-                reference.document_sha256.lower(),
-                reference.page,
-            )
-        )
-        if page is None:
-            return None
-        match = verify_quote(page.text, reference.quote)
-        if match is QuoteMatch.NOT_FOUND:
-            return None
-        return VerifiedQuote(**reference.model_dump(), match=match)
