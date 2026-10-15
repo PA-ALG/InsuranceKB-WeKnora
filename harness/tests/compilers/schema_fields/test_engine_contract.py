@@ -1,10 +1,12 @@
 """S4a acceptance: the offline field-compiler engine contract (blueprint §7.1).
 
-Protected file: written by Claude. Pins §3.2 of the S4a spec.
+Protected file: written by Claude. Pins §3.2 of the S4a spec, rewritten for the S4d pointer
+protocol (S4d Spec §1, §3.2–§3.3): the model returns segment ids and then values; quotes are
+cut from page text by code instead of being copied by the model.
 
 The engine must be reproducible without any network: it talks to a completion
 port, strict-parses what comes back, derives values from the field's
-value_spec, and verifies every quote against the page it claims. Anything
+value_spec, and builds every quote from the page it names. Anything
 malformed fails closed rather than degrading into unknown.
 """
 
@@ -90,38 +92,28 @@ def payload(*rows: dict[str, object]) -> str:
 
 
 def row(
-    field_key: str,
-    ordinal: int,
-    value: str | None,
-    *,
-    state: str = "present",
-    document: str = "保险条款.pdf",
-    page: int = 1,
-    quote: str | None = None,
+    field_key: str, ordinal: int, *, state: str = "present", segments: list[str] | None = None
 ) -> dict[str, object]:
-    evidence = []
-    if state != "unknown":
-        evidence = [
-            {
-                "document": document,
-                "document_sha256": SHA,
-                "page": page,
-                "quote": quote or (value or ""),
-            }
-        ]
+    """Step one (S4d): the model points at segment ids; it never copies quotes."""
     return {
         "ordinal": ordinal,
         "field_key": field_key,
         "state": state,
-        "value": value,
-        "evidence": evidence,
+        "segments": [] if state == "unknown" else (segments or []),
     }
 
 
-GOOD = payload(
-    row("waiting_period", 0, "90日", quote="本合同等待期为90日"),
-    row("coverage_period", 1, "一年", document="产品说明书.pdf", page=3, quote="保险期间为一年"),
+def value(field_key: str, ordinal: int, text: str) -> dict[str, object]:
+    """Step two (S4d): the value written from the selected segments only."""
+    return {"ordinal": ordinal, "field_key": field_key, "value": text}
+
+
+# Segments: D1P1S1 = 等待期 clause on page 1, D2P3S1 = 保险期间 on page 3.
+SELECT = payload(
+    row("waiting_period", 0, segments=["D1P1S1"]), row("coverage_period", 1, segments=["D2P3S1"])
 )
+VALUES = payload(value("waiting_period", 0, "90日"), value("coverage_period", 1, "一年"))
+GOOD = [SELECT, VALUES]
 
 
 def compiler(
@@ -162,12 +154,12 @@ def test_pack_definitions_come_from_the_catalog_in_a_stable_order() -> None:
 # ---- prompt building ----------------------------------------------------------------------------
 
 
-def test_build_requests_carries_definitions_and_page_markers_but_no_expected_values() -> None:
-    completion = RecordingCompletion([GOOD])
+def test_build_requests_carries_definitions_and_segment_ids_but_no_expected_values() -> None:
+    completion = RecordingCompletion(GOOD)
     requests = compiler(completion).build_requests("596-1", definitions(), PAGES)
     assert len(requests) == 1
     request = requests[0]
-    for token in ("waiting_period", "等待期", "[page 1]", "[page 3]", "本合同等待期为90日"):
+    for token in ("waiting_period", "等待期", "D1P1S1", "D2P3S1", "本合同等待期为90日"):
         assert token in request.user, token
     for forbidden in ("90日", "一年"):
         # The answer must not be pre-seeded: only the field definition may name it.
@@ -178,13 +170,13 @@ def test_build_requests_carries_definitions_and_page_markers_but_no_expected_val
 
 
 def test_the_same_input_builds_the_same_request() -> None:
-    one = compiler(RecordingCompletion([GOOD])).build_requests("596-1", definitions(), PAGES)
-    two = compiler(RecordingCompletion([GOOD])).build_requests("596-1", definitions(), PAGES)
+    one = compiler(RecordingCompletion(GOOD)).build_requests("596-1", definitions(), PAGES)
+    two = compiler(RecordingCompletion(GOOD)).build_requests("596-1", definitions(), PAGES)
     assert [r.sha256 for r in one] == [r.sha256 for r in two]
 
 
 def test_batching_splits_fields_in_order() -> None:
-    completion = RecordingCompletion([GOOD])
+    completion = RecordingCompletion(GOOD)
     requests = compiler(completion, batch_size=1).build_requests("596-1", definitions(), PAGES)
     assert len(requests) == 2
     assert "waiting_period" in requests[0].user and "coverage_period" not in requests[0].user
@@ -194,34 +186,36 @@ def test_batching_splits_fields_in_order() -> None:
 # ---- compile and verify -------------------------------------------------------------------------
 
 
-def test_compile_returns_verified_values() -> None:
-    output = compiler(RecordingCompletion([GOOD])).compile("596-1", definitions(), PAGES)
+def test_compile_returns_values_with_quotes_cut_from_the_named_page() -> None:
+    output = compiler(RecordingCompletion(GOOD)).compile("596-1", definitions(), PAGES)
     assert isinstance(output, CompileOutput)
     assert output.model == "recorded-offline"
     assert [f.field_key for f in output.fields] == ["waiting_period", "coverage_period"]
     assert output.fields[0].state == "present" and output.fields[0].value == "90日"
-    assert output.calls == 1
+    quote = output.fields[0].evidence[0]
+    assert (quote.document, quote.page, quote.quote) == ("保险条款.pdf", 1, PAGES[0].text)
+    assert verify_quote(PAGES[0].text, quote.quote) is QuoteMatch.EXACT
+    assert output.calls == 2
 
 
-def test_a_quote_that_is_not_on_the_page_it_claims_is_rejected() -> None:
+def test_a_pointer_to_a_segment_that_does_not_exist_cannot_produce_evidence() -> None:
     wrong = payload(
-        row("waiting_period", 0, "90日", page=3, quote="本合同等待期为90日"),
-        row(
-            "coverage_period", 1, "一年", document="产品说明书.pdf", page=3, quote="保险期间为一年"
-        ),
+        row("waiting_period", 0, segments=["D1P3S1"]),
+        row("coverage_period", 1, segments=["D2P3S1"]),
     )
-    output = compiler(RecordingCompletion([wrong])).compile("596-1", definitions(), PAGES)
+    output = compiler(
+        RecordingCompletion([wrong, payload(value("coverage_period", 1, "一年"))])
+    ).compile("596-1", definitions(), PAGES)
     assert [f.field_key for f in output.fields] == ["coverage_period"]
 
 
 def test_unknown_keeps_its_place_and_carries_no_evidence() -> None:
     unknown = payload(
-        row("waiting_period", 0, None, state="unknown"),
-        row(
-            "coverage_period", 1, "一年", document="产品说明书.pdf", page=3, quote="保险期间为一年"
-        ),
+        row("waiting_period", 0, state="unknown"), row("coverage_period", 1, segments=["D2P3S1"])
     )
-    output = compiler(RecordingCompletion([unknown])).compile("596-1", definitions(), PAGES)
+    output = compiler(
+        RecordingCompletion([unknown, payload(value("coverage_period", 1, "一年"))])
+    ).compile("596-1", definitions(), PAGES)
     assert output.fields[0].state == "unknown" and output.fields[0].evidence == []
 
 
@@ -229,18 +223,16 @@ def test_unknown_keeps_its_place_and_carries_no_evidence() -> None:
 
 
 def test_a_missing_field_is_an_error() -> None:
-    only_one = payload(row("waiting_period", 0, "90日", quote="本合同等待期为90日"))
+    only_one = payload(row("waiting_period", 0, segments=["D1P1S1"]))
     with pytest.raises(CompileError, match="coverage_period"):
         compiler(RecordingCompletion([only_one])).compile("596-1", definitions(), PAGES)
 
 
 def test_an_unrequested_field_is_an_error() -> None:
     extra = payload(
-        row("waiting_period", 0, "90日", quote="本合同等待期为90日"),
-        row(
-            "coverage_period", 1, "一年", document="产品说明书.pdf", page=3, quote="保险期间为一年"
-        ),
-        row("invented_field", 2, "x", quote="本合同等待期为90日"),
+        row("waiting_period", 0, segments=["D1P1S1"]),
+        row("coverage_period", 1, segments=["D2P3S1"]),
+        row("invented_field", 2, segments=["D1P1S1"]),
     )
     with pytest.raises(CompileError):
         compiler(RecordingCompletion([extra])).compile("596-1", definitions(), PAGES)
@@ -248,8 +240,7 @@ def test_an_unrequested_field_is_an_error() -> None:
 
 def test_a_duplicate_field_is_an_error() -> None:
     twice = payload(
-        row("waiting_period", 0, "90日", quote="本合同等待期为90日"),
-        row("waiting_period", 1, "90日", quote="本合同等待期为90日"),
+        row("waiting_period", 0, segments=["D1P1S1"]), row("waiting_period", 1, segments=["D1P1S1"])
     )
     with pytest.raises(CompileError):
         compiler(RecordingCompletion([twice])).compile("596-1", definitions(), PAGES)
@@ -257,24 +248,22 @@ def test_a_duplicate_field_is_an_error() -> None:
 
 def test_a_wrong_ordinal_is_an_error() -> None:
     swapped = payload(
-        row("waiting_period", 1, "90日", quote="本合同等待期为90日"),
-        row(
-            "coverage_period", 0, "一年", document="产品说明书.pdf", page=3, quote="保险期间为一年"
-        ),
+        row("waiting_period", 1, segments=["D1P1S1"]),
+        row("coverage_period", 0, segments=["D2P3S1"]),
     )
     with pytest.raises(CompileError):
         compiler(RecordingCompletion([swapped])).compile("596-1", definitions(), PAGES)
 
 
-def test_present_without_a_value_or_evidence_is_an_error() -> None:
-    no_value = payload(
-        row("waiting_period", 0, None, quote="本合同等待期为90日"),
-        row(
-            "coverage_period", 1, "一年", document="产品说明书.pdf", page=3, quote="保险期间为一年"
-        ),
+def test_present_without_segments_or_with_a_blank_value_is_an_error() -> None:
+    no_segments = payload(
+        row("waiting_period", 0, segments=[]), row("coverage_period", 1, segments=["D2P3S1"])
     )
     with pytest.raises(CompileError):
-        compiler(RecordingCompletion([no_value])).compile("596-1", definitions(), PAGES)
+        compiler(RecordingCompletion([no_segments])).compile("596-1", definitions(), PAGES)
+    blank = payload(value("waiting_period", 0, " "), value("coverage_period", 1, "一年"))
+    with pytest.raises(CompileError):
+        compiler(RecordingCompletion([SELECT, blank])).compile("596-1", definitions(), PAGES)
 
 
 def test_unparseable_output_is_an_error() -> None:
@@ -285,7 +274,7 @@ def test_unparseable_output_is_an_error() -> None:
 def test_budget_is_checked_before_each_call() -> None:
     # batch_size=1 puts waiting_period alone in the first batch, so the canned
     # answer must be legal for that batch rather than the two-field GOOD.
-    first_batch = payload(row("waiting_period", 0, "90日", quote="本合同等待期为90日"))
+    first_batch = payload(row("waiting_period", 0, segments=["D1P1S1"]))
     completion = RecordingCompletion([first_batch])
     with pytest.raises(CompileBudgetExceeded):
         SchemaFieldsCompiler(completion, batch_size=1, max_calls=1).compile(
@@ -298,7 +287,7 @@ def test_budget_is_checked_before_each_call() -> None:
 
 
 def test_output_converts_into_the_shape_the_evaluator_already_scores() -> None:
-    output = compiler(RecordingCompletion([GOOD])).compile("596-1", definitions(), PAGES)
+    output = compiler(RecordingCompletion(GOOD)).compile("596-1", definitions(), PAGES)
     candidate = to_candidate(
         output, display_name="平安e生保（尊享版）医疗保险", schema_pack_id=PACK
     )

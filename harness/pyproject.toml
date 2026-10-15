@@ -77,7 +77,7 @@ module = "langfuse.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["pdfplumber.*", "litellm.*"]
+module = ["pdfplumber.*", "litellm.*", "pypdfium2.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -1,0 +1,93 @@
+{
+ "basis": "S4d Spec §3.5: pointer labels on pdfium segments, field cards as the annotation standard, one independent judge session per product, audited by Claude (Issue #157)",
+ "cards_version": "draft-2026-10-15f",
+ "catalog_file": "internal/handler/schema_pack_catalog_830_g3.generated.json",
+ "catalog_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
+ "catalog_version": "2026-08-12-v5",
+ "dataset_version": "v2",
+ "files": {
+  "1814.json": "399933b4964a3a390125dccb6668ed7510ca431e541284542293ac7959a8ca80",
+  "1816.json": "279da4e03bc3dc9abc50b8144f5c3e259ef27b74787992e8cc1edf5add1deb29",
+  "1824.json": "e765136a505c0bd9873a34e6cb857698404c3ef6108b927272308fb7e09fa756",
+  "1826.json": "41b07f803b5e80f74b19e26022a976cd23e84a5b0288012c7c91bd75aa0f928d"
+ },
+ "products": {
+  "1814": {
+   "fields": 42,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_accident_insurance",
+   "product_id": "1814",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a13f1a-58a2-7d71-bd4e-15bb280c0747",
+   "source_sha256": {
+    "产品说明书.pdf": "68105656802ea7ad267d9d1def1f78c1fb706a807bc75fc93ba8ef1aeae83abf",
+    "保险条款.pdf": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+    "费率表.pdf": "72224c36ed2455365fcbcd361444d3f26b50ee88d62aba7673d41525c27b99c7"
+   },
+   "states": {
+    "absent_explicitly": 2,
+    "present": 23,
+    "unknown": 17
+   }
+  },
+  "1816": {
+   "fields": 56,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_disability_income_insurance",
+   "product_id": "1816",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a13f1a-569b-75d1-a404-ff719d92d40e",
+   "source_sha256": {
+    "产品说明书.pdf": "c156596bb234188ec324a5a9e56efb905e91804ee5bc29fd4ece1bc62dbc7db7",
+    "保险条款.pdf": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+    "费率表.pdf": "b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a"
+   },
+   "states": {
+    "absent_explicitly": 6,
+    "present": 32,
+    "unknown": 18
+   }
+  },
+  "1824": {
+   "fields": 53,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_whole_life_insurance",
+   "product_id": "1824",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a13f1a-523e-7d61-ab0b-d7bf0828955c",
+   "source_sha256": {
+    "产品说明书.pdf": "a484e0757d1989ef2fd3f3700273a081b30f026547b4f965a77854c028a713f6",
+    "保险条款.pdf": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+    "费率表.pdf": "9811367acd0d3875260e926fe64901e3423c07569ae06bf1438926769860c66f"
+   },
+   "states": {
+    "absent_explicitly": 11,
+    "present": 25,
+    "unknown": 17
+   }
+  },
+  "1826": {
+   "fields": 56,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_endowment_insurance",
+   "product_id": "1826",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a13f1a-5404-74b2-9d78-8ed6e1b532f9",
+   "source_sha256": {
+    "产品说明书.pdf": "d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a",
+    "保险条款.pdf": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+    "费率表.pdf": "9ea421ad68d443e5e6572b7c2c91fcd2302ab18103a7b85f733c0ea29439ea19"
+   },
+   "states": {
+    "absent_explicitly": 15,
+    "present": 22,
+    "unknown": 19
+   }
+  }
+ },
+ "segmentation": "insurance_harness.evidence.segments (pdfium page text)"
+}

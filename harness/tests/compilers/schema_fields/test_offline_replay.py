@@ -71,9 +71,12 @@ def test_repository_golden_replay_without_network(monkeypatch: pytest.MonkeyPatc
     compiler = SchemaFieldsCompiler(port)
     requests = compiler.build_requests(recording.entity_id, definitions, recording.pages)
     output = compiler.compile(recording.entity_id, definitions, recording.pages)
-    assert port.requests == [(request.system, request.user) for request in requests]
+    # S4d two-step protocol: build_requests covers step one; the value request follows it.
+    assert port.requests[: len(requests)] == [
+        (request.system, request.user) for request in requests
+    ]
     assert (
-        output.calls == 1 and [field.field_key for field in output.fields] == recording.field_keys
+        output.calls == 2 and [field.field_key for field in output.fields] == recording.field_keys
     )
     candidate = to_candidate(
         output,

@@ -1,8 +1,11 @@
-"""Field compilation orchestration, ported from V5 llm_plugin.py / ingest.py.
+"""Field compilation orchestration for the two-step pointer protocol (S4d Spec §3).
 
-Legacy originals retire in S7. The caller owns transport and retries; this
-engine invokes the completion port once per batch, with a per-compile budget.
-The port must reject interrupted/truncated completions before returning text.
+Ported from V5 llm_plugin.py / ingest.py; legacy originals retire in S7. Step one asks
+each batch of fields for segment ids; step two asks for values from only the selected
+segments. Evidence is cut from page text by SegmentedSource, never copied by the model.
+The caller owns transport and retries; this engine invokes the completion port once
+per request, within a per-compile budget that covers both steps. The port must reject
+interrupted/truncated completions before returning text.
 """
 
 from collections.abc import Sequence
@@ -12,10 +15,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition, NonBlank
 from insurance_harness.compilers.schema_fields.parse import CompileError as CompileError
-from insurance_harness.compilers.schema_fields.parse import parse_response
-from insurance_harness.compilers.schema_fields.prompt import JudgeLikeRequest, build_request
+from insurance_harness.compilers.schema_fields.parse import parse_selection, parse_values
+from insurance_harness.compilers.schema_fields.prompt import (
+    JudgeLikeRequest,
+    build_selection_request,
+    build_value_request,
+)
 from insurance_harness.compilers.schema_fields.values import normalize_field_value
-from insurance_harness.evidence.quote_verification import PageTextLike, QuoteVerifier, VerifiedQuote
+from insurance_harness.evidence.quote_verification import PageTextLike, VerifiedQuote
+from insurance_harness.evidence.segments import Segment, SegmentedSource
 
 
 class CompletionPort(Protocol):
@@ -44,26 +52,57 @@ class CompileOutput(BaseModel):
     model: NonBlank
     fields: list[FieldResult] = Field(default_factory=list)
     calls: int = Field(default=0, ge=0)
+    # Refs that named no segment, and fields lost because no valid segment or no value remained.
+    dropped_refs: int = Field(default=0, ge=0)
+    dropped_fields: list[str] = Field(default_factory=list)
+
+
+def _value_batches(
+    items: list[tuple[FieldDefinition, list[Segment]]],
+    limit: int,
+) -> list[list[tuple[FieldDefinition, list[Segment]]]]:
+    """Consecutive fields while their selected text fits; an oversized field goes alone."""
+    batches: list[list[tuple[FieldDefinition, list[Segment]]]] = []
+    size = 0
+    for item in items:
+        chars = sum(len(segment.text) for segment in item[1])
+        if batches and batches[-1] and size + chars <= limit:
+            batches[-1].append(item)
+            size += chars
+        else:
+            batches.append([item])
+            size = chars
+    return batches
 
 
 class SchemaFieldsCompiler:
-    def __init__(self, completion: CompletionPort, *, batch_size: int = 25, max_calls: int = 10):
+    def __init__(
+        self,
+        completion: CompletionPort,
+        *,
+        batch_size: int = 25,
+        max_calls: int = 10,
+        value_batch_chars: int = 60000,
+    ):
         if type(batch_size) is not int or batch_size < 1:
             raise CompileError("batch_size must be a positive integer")
         if type(max_calls) is not int or max_calls < 0:
             raise CompileError("max_calls must be a nonnegative integer")
+        if type(value_batch_chars) is not int or value_batch_chars < 1:
+            raise CompileError("value_batch_chars must be a positive integer")
         if not isinstance(completion.model, str) or not completion.model.strip():
             raise CompileError("completion must declare its model")
         self._completion = completion
         self._batch_size = batch_size
         self._max_calls = max_calls
+        self._value_batch_chars = value_batch_chars
 
     def _prepare(
         self,
         entity_id: str,
         definitions: Sequence[FieldDefinition],
         pages: Sequence[PageTextLike],
-    ) -> tuple[tuple[FieldDefinition, ...], QuoteVerifier]:
+    ) -> tuple[tuple[FieldDefinition, ...], SegmentedSource]:
         if not isinstance(entity_id, str) or not entity_id.strip():
             raise CompileError("entity_id must not be blank")
         fields = tuple(definitions)
@@ -76,12 +115,18 @@ class SchemaFieldsCompiler:
         if len({field.pack_id for field in fields}) > 1:
             raise CompileError("definitions must belong to one pack")
         try:
-            verifier = QuoteVerifier(pages)
+            source = SegmentedSource(pages)
         except ValueError as exc:
             raise CompileError("invalid or ambiguous source pages") from exc
-        if fields and not any(page.text.strip() for page in verifier.pages):
+        if fields and not source.segments:
             raise CompileError("source text is required")
-        return fields, verifier
+        return fields, source
+
+    def _batches(self, fields: tuple[FieldDefinition, ...]) -> list[tuple[FieldDefinition, ...]]:
+        return [
+            fields[offset : offset + self._batch_size]
+            for offset in range(0, len(fields), self._batch_size)
+        ]
 
     def build_requests(
         self,
@@ -89,10 +134,11 @@ class SchemaFieldsCompiler:
         definitions: Sequence[FieldDefinition],
         pages: Sequence[PageTextLike],
     ) -> list[JudgeLikeRequest]:
-        fields, verifier = self._prepare(entity_id, definitions, pages)
+        """Step-one requests; step two depends on the answers and is built during compile."""
+        fields, source = self._prepare(entity_id, definitions, pages)
+        listing = source.listing()
         return [
-            build_request(entity_id, fields[offset : offset + self._batch_size], verifier.pages)
-            for offset in range(0, len(fields), self._batch_size)
+            build_selection_request(entity_id, batch, listing) for batch in self._batches(fields)
         ]
 
     def compile(
@@ -101,35 +147,71 @@ class SchemaFieldsCompiler:
         definitions: Sequence[FieldDefinition],
         pages: Sequence[PageTextLike],
     ) -> CompileOutput:
-        fields, verifier = self._prepare(entity_id, definitions, pages)
-        results: list[FieldResult] = []
+        fields, source = self._prepare(entity_id, definitions, pages)
         calls = 0
-        for offset in range(0, len(fields), self._batch_size):
-            batch = fields[offset : offset + self._batch_size]
-            request = build_request(entity_id, batch, verifier.pages)
+
+        def send(request: JudgeLikeRequest) -> str:
+            nonlocal calls
             if calls >= self._max_calls:
                 raise CompileBudgetExceeded(f"compile call budget exhausted after {calls} calls")
             calls += 1
-            raw = self._completion.complete(system=request.system, user=request.user)
-            parsed = parse_response(raw, batch)
-            for definition, row in zip(batch, parsed, strict=True):
-                verified = [verifier.verify(reference) for reference in row.evidence]
-                if any(reference is None for reference in verified):
+            return self._completion.complete(system=request.system, user=request.user)
+
+        listing = source.listing()
+        selected: dict[str, tuple[str, list[str]]] = {}
+        dropped_refs = 0
+        dropped_fields: list[str] = []
+        for batch in self._batches(fields):
+            for row in parse_selection(
+                send(build_selection_request(entity_id, batch, listing)), batch
+            ):
+                ids, dropped = source.resolve(row.segments)
+                dropped_refs += len(dropped)
+                if row.state != "unknown" and not ids:
+                    dropped_fields.append(row.field_key)
                     continue
-                results.append(
-                    FieldResult(
-                        field_key=row.field_key,
-                        state=row.state,
-                        value=normalize_field_value(definition, row.value),
-                        evidence=[reference for reference in verified if reference is not None],
-                    )
+                selected[row.field_key] = (row.state, ids)
+
+        present = [
+            (d, source.ordered(selected[d.field_key][1]))
+            for d in fields
+            if selected.get(d.field_key, ("", []))[0] == "present"
+        ]
+        values: dict[str, str] = {}
+        for items in _value_batches(present, self._value_batch_chars):
+            answer = send(build_value_request(entity_id, items))
+            values.update(parse_values(answer, [definition for definition, _ in items]))
+
+        results: list[FieldResult] = []
+        for definition in fields:
+            if definition.field_key not in selected:
+                continue
+            state, ids = selected[definition.field_key]
+            if state == "unknown":
+                results.append(FieldResult(field_key=definition.field_key, state="unknown"))
+                continue
+            value = None
+            if state == "present":
+                if definition.field_key not in values:
+                    dropped_fields.append(definition.field_key)
+                    continue
+                value = normalize_field_value(definition, values[definition.field_key])
+            results.append(
+                FieldResult(
+                    field_key=definition.field_key,
+                    state=state,  # type: ignore[arg-type]
+                    value=value,
+                    evidence=source.evidence(ids),
                 )
+            )
         return CompileOutput(
             pack_id=fields[0].pack_id if fields else "",
             entity_id=entity_id,
             model=self._completion.model,
             fields=results,
             calls=calls,
+            dropped_refs=dropped_refs,
+            dropped_fields=dropped_fields,
         )
 
 
