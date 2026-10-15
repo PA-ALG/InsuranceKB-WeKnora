@@ -31,7 +31,8 @@ unknown：原文没有相关内容，也没有条款能确定不适用；segment
 只输出段落编号，不复述、不改写原文；不得编造不存在的编号。
 字段卡：includes 的内容要选；excludes 的内容不选，它们归入括号里的其他字段；
 按 absent_rule 与 unknown_rule 区分 absent_explicitly 和 unknown；
-examples 是同类产品经复核的正确结果，pitfalls 是该字段实测出现过的错误。
+examples 是同类产品经复核的正确结果（value 可能截断），只用来理解选段边界，不是本产品的事实；
+pitfalls 是该字段实测出现过的错误。
 返回 {"fields":[{"ordinal":0,"field_key":"…","state":"present|absent_explicitly|unknown",
 "segments":["D1P2S3"]}]}，每个目标字段恰好一行，按给定顺序与 ordinal。
 """
@@ -61,7 +62,7 @@ class JudgeLikeRequest:
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _field(definition: FieldDefinition) -> dict[str, Any]:
+def _field(definition: FieldDefinition, *, examples: bool = True) -> dict[str, Any]:
     entry: dict[str, Any] = {
         "ordinal": definition.ordinal,
         "field_key": definition.field_key,
@@ -71,7 +72,7 @@ def _field(definition: FieldDefinition) -> dict[str, Any]:
         "value_spec": definition.value_spec,
         "instruction": field_extraction_profile(definition).instruction,
     }
-    card = card_payload(definition)
+    card = card_payload(definition, examples=examples)
     if card is not None:
         entry["card"] = card
     return entry
@@ -105,7 +106,10 @@ def build_value_request(
 ) -> JudgeLikeRequest:
     """Each field with only the segments step one selected for it."""
     fields = [
-        {**_field(definition), "segments": "\n".join(f"{s.id} {s.text}" for s in segments)}
+        {
+            **_field(definition, examples=False),
+            "segments": "\n".join(f"{s.id} {s.text}" for s in segments),
+        }
         for definition, segments in items
     ]
     return JudgeLikeRequest(
