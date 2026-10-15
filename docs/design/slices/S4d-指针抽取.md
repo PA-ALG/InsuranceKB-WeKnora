@@ -81,7 +81,9 @@ S4b（`deepseek-flash`）召回只有 6%–36%，两类问题反复出现：
   由独立 GPT-6 Astra xhigh 会话按字段卡标注、Claude 审计；评分时把 quote 映射到当前段落，分段规则变化也能复用。
 - 新增段落评分（`eval/segment_score.py`）：每字段召回 = |选中 ∩ Golden| / |Golden|，精确率 = |选中 ∩ Golden| / |选中|；报告均值、召回≥0.8 字段数、
   状态一致数；value 仍走 S2c 语义评分。
-- `compile_run`：两步的每次调用都记账并保存原始回答（按调用顺序 `NNN.txt`）；`--replay-from <run_root>` 按同一顺序读回，不构造客户端、不占预算。
+- `compile_run`：两步的每次调用都记账并保存原始回答（按调用顺序 `NNN.txt`）与该次请求的指纹（`NNN.request.sha256`）；
+  `--replay-from <run_root>` 按同一顺序读回，不构造客户端、不占预算；当前请求与保存的指纹不一致（原文、卡片、定义或提示词变了）、
+  缺指纹或目标已有输出时拒绝回放（Codex 审核 PR #159 第 2、3 项）。
 
 ### 3.6 删除
 
