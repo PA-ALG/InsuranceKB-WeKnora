@@ -38,7 +38,7 @@ S4e 用新卡片做的真实验证把召回从 0.861 提到 0.905，同时暴露
 ### 2.3 编译结果带段落编号（`compilers/schema_fields/engine.py`、`eval/segment_score.py`）
 
 - `FieldResult` 增加 `segment_ids`：第一步选中并解析后的段落编号，按阅读顺序排列；unknown 为空。旧的 `output.json` 没有这个键，读取时视为空。
-- 计分时，`segment_ids` 非空、全部存在于当前分段，且 `source.evidence(segment_ids)` 与保存的 `evidence` 完全相同（文件、指纹、页码、原文），才直接用这些编号；否则按引文定位，定位不到的仍计入 `unmapped_predicted_quotes`。
+- 计分时，`segment_ids` 非空、全部存在于当前分段，且 `source.evidence(segment_ids)` 与保存的 `evidence` 逐条对应：文件、指纹、页码相同，原文忽略空白与宽度后相同（与 Golden 段落编号同一规则；S4c-1 起页文本保留 `\r\n`，换行符差异不是内容差异），才直接用这些编号；否则按引文定位，定位不到的仍计入 `unmapped_predicted_quotes`。
 - 候选包读取端忽略未知键，`to_candidate` 不受影响。
 
 ## 3. 验收
