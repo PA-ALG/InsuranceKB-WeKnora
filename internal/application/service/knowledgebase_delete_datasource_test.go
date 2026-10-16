@@ -162,6 +162,7 @@ func TestDeleteKnowledgeBaseCleansUpDataSources(t *testing.T) {
 
 	svc := &knowledgeBaseService{
 		repo:        kbRepo,
+		kgRepo:      kbDeletionKnowledgeRepo{kb: kbRepo},
 		shareRepo:   nil,
 		asynqClient: kbDeleteTaskEnqueuer{},
 		dsRepo:      dsRepo,
@@ -207,6 +208,7 @@ func TestDeleteKnowledgeBaseContinuesWhenDataSourceCleanupFails(t *testing.T) {
 
 	svc := &knowledgeBaseService{
 		repo:        kbRepo,
+		kgRepo:      kbDeletionKnowledgeRepo{kb: kbRepo},
 		asynqClient: kbDeleteTaskEnqueuer{},
 		dsRepo:      dsRepo,
 		syncLogRepo: &kbDeleteSyncLogRepo{},

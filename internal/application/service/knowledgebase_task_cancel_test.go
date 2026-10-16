@@ -113,6 +113,7 @@ func TestDeleteKnowledgeBaseForwardsDataSourceTaskScope(t *testing.T) {
 	dsRepo := newKBDeleteDSRepo(kbID, &types.DataSource{ID: "datasource-1", KnowledgeBaseID: kbID})
 	svc := &knowledgeBaseService{
 		repo:          kbRepo,
+		kgRepo:        kbDeletionKnowledgeRepo{kb: kbRepo},
 		asynqClient:   enqueuer,
 		taskInspector: inspector,
 		dsRepo:        dsRepo,
@@ -151,6 +152,7 @@ func TestDeleteKnowledgeBaseCancelsQueuedTasksBestEffort(t *testing.T) {
 			enqueuer := &recordingKBDeleteEnqueuer{}
 			svc := &knowledgeBaseService{
 				repo:            kbRepo,
+				kgRepo:          kbDeletionKnowledgeRepo{kb: kbRepo},
 				asynqClient:     enqueuer,
 				taskInspector:   inspector,
 				taskPendingRepo: pendingRepo,

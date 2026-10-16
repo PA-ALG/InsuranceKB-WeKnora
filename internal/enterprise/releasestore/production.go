@@ -94,7 +94,8 @@ func Production(
 		return nil, fmt.Errorf("enterprise publishing: %s does not compile: %w", bundleSchemaFile, err)
 	}
 	store := New(db, spaces)
-	return release.NewService(store, NewEvidence(spaces, revisions), schemas, release.WithPublisher(store)), nil
+	return release.NewService(store, NewEvidence(spaces, revisions), schemas,
+		release.WithPublisher(store), release.WithRetirer(store)), nil
 }
 
 // reservedScopes are the scopes enterprise Spaces may not reuse: the G3 path keeps

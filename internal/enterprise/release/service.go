@@ -14,6 +14,7 @@ type Service struct {
 	store     Store
 	evidence  EvidenceResolver
 	publisher Publisher
+	retirer   Retirer
 	schema    *jsonschema.Schema
 	schemaErr error
 }

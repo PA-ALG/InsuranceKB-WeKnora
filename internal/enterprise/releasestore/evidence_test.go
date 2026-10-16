@@ -103,7 +103,7 @@ func receive(t *testing.T, e *Evidence, tenant uint64, space, ref string) (bool,
 	t.Helper()
 	s := release.NewService(memoryStore{}, e, map[string][]byte{"candidate_bundle": []byte(testSchema)})
 	raw := rawBundle(t, "", "a", `{"v":1}`)
-	raw = []byte(strings.Replace(string(raw), "source:v1:k-1:1:abc", ref, 1))
+	raw = []byte(strings.Replace(string(raw), postgresSourceRef, ref, 1))
 	_, err := s.Receive(context.Background(), release.Principal{TenantID: tenant, Subject: "svc"}, space, raw)
 	var failure *release.Error
 	if errors.As(err, &failure) && failure.Code == release.ErrorCandidateInvalid {

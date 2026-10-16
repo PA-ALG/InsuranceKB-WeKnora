@@ -111,9 +111,50 @@ func (r *resourceRepository) CreateBinding(ctx context.Context, binding *types.R
 // was never recorded is not an error: callers release optimistically, from a
 // content scan that cannot know which references were bound.
 func (r *resourceRepository) DeleteBinding(ctx context.Context, resourceID, ownerType, ownerID string) error {
-	return r.db.WithContext(ctx).
-		Where("resource_id = ? AND owner_type = ? AND owner_id = ?", resourceID, ownerType, ownerID).
-		Delete(&types.ResourceBinding{}).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var sourceFiles int64
+		if ownerType == types.ResourceOwnerKnowledge {
+			if err := tx.Model(&types.ResourceBinding{}).Where(
+				"resource_id = ? AND owner_type = ? AND owner_id = ? AND relation = ?",
+				resourceID, ownerType, ownerID, types.ResourceRelationSourceFile,
+			).Count(&sourceFiles).Error; err != nil {
+				return err
+			}
+			if sourceFiles == 0 {
+				// An optimistic image/attachment release must not erase a source
+				// claim rebound after this lookup. Only the knowledge-locked path
+				// below can remove source_file claims.
+				return tx.Where(
+					"resource_id = ? AND owner_type = ? AND owner_id = ? AND relation <> ?",
+					resourceID, ownerType, ownerID, types.ResourceRelationSourceFile,
+				).Delete(&types.ResourceBinding{}).Error
+			}
+		}
+		if sourceFiles > 0 {
+			// Match activation's knowledge-first locking, then re-read the claim.
+			// Images and other relations keep their existing release behavior.
+			var knowledge types.Knowledge
+			err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("id = ?", ownerID).Take(&knowledge).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			var sources int64
+			if err := tx.Model(&types.ResourceBinding{}).Where(
+				"resource_id = ? AND owner_type = ? AND owner_id = ? AND relation = ?",
+				resourceID, ownerType, ownerID, types.ResourceRelationSourceFile,
+			).Count(&sources).Error; err != nil {
+				return err
+			}
+			if sources > 0 {
+				if err := rejectPinnedRevisionSourceLocked(tx, knowledge.TenantID, ownerID); err != nil {
+					return err
+				}
+			}
+		}
+		return tx.Where("resource_id = ? AND owner_type = ? AND owner_id = ?", resourceID, ownerType, ownerID).
+			Delete(&types.ResourceBinding{}).Error
+	})
 }
 
 func (r *resourceRepository) CountBindings(ctx context.Context, resourceID string) (int64, error) {

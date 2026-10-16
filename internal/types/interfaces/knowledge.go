@@ -249,6 +249,8 @@ type KnowledgeService interface {
 
 // KnowledgeRepository defines the interface for knowledge repositories.
 type KnowledgeRepository interface {
+	HasPinnedRevisionSourceInKnowledgeBase(context.Context, uint64, string) (bool, error)
+	DeleteKnowledgeBaseUnlessPinned(context.Context, uint64, string) error
 	CreateKnowledge(ctx context.Context, knowledge *types.Knowledge) error
 	GetKnowledgeByID(ctx context.Context, tenantID uint64, id string) (*types.Knowledge, error)
 	// GetKnowledgeByIDOnly returns knowledge by ID without tenant filter (for permission resolution).

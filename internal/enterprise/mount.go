@@ -56,6 +56,8 @@ func Mount(r gin.IRouter, deps Deps) {
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/activations", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/active", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id", policy)
+		deps.Authorizer.Register(http.MethodPost, prefix+"/releases/:release_id/retirement", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/sources/:knowledge_id/pins", policy)
 		group.Use(deps.Authorizer.Middleware())
 	}
 	group.POST("/candidates", func(c *gin.Context) { receive(c, deps.Candidates) })
@@ -65,6 +67,8 @@ func Mount(r gin.IRouter, deps Deps) {
 	group.GET("/releases/active", func(c *gin.Context) { readRelease(c, deps.Candidates, "") })
 	group.GET("/releases/:release_id", func(c *gin.Context) { readRelease(c, deps.Candidates, c.Param("release_id")) })
 	group.GET("/sources/:knowledge_id/attempts/:attempt/pages", func(c *gin.Context) { pages(c, deps.Sources) })
+	group.POST("/releases/:release_id/retirement", func(c *gin.Context) { retire(c, deps.Candidates) })
+	group.GET("/sources/:knowledge_id/pins", func(c *gin.Context) { sourcePins(c, deps.Candidates) })
 }
 
 func requestPrincipal(c *gin.Context) (release.Principal, error) {
@@ -280,6 +284,10 @@ func writeError(c *gin.Context, err error) {
 			status = http.StatusConflict
 		case release.ErrorServiceUnavailable:
 			status = http.StatusServiceUnavailable
+		case release.ErrorReleaseActive, release.ErrorSourceUnavailable:
+			status = http.StatusConflict
+		case release.ErrorRetirementInvalid, release.ErrorInvalidRequest:
+			status = http.StatusBadRequest
 		}
 		c.AbortWithStatusJSON(status, gin.H{"success": false, "code": failure.Code, "error": failure.Detail})
 		return
@@ -288,4 +296,37 @@ func writeError(c *gin.Context, err error) {
 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 		"success": false, "code": "INTERNAL_ERROR", "error": "candidate operation failed",
 	})
+}
+
+func retire(c *gin.Context, service *release.Service) {
+	p, ok := publishingRequest(c, service)
+	if !ok {
+		return
+	}
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if err := decodeControlBody(c, &in); err != nil {
+		writeError(c, &release.Error{Code: release.ErrorRetirementInvalid, Detail: "invalid retirement request"})
+		return
+	}
+	result, err := service.Retire(c.Request.Context(), p, c.Param("space_id"), c.Param("release_id"), in.Reason)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
+
+func sourcePins(c *gin.Context, service *release.Service) {
+	p, ok := publishingRequest(c, service)
+	if !ok {
+		return
+	}
+	pins, err := service.SourcePins(c.Request.Context(), p, c.Param("space_id"), c.Param("knowledge_id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"pins": pins}})
 }
