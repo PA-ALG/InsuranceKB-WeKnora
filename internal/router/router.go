@@ -438,5 +438,8 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	enterprise.Mount(v1.Group("/enterprise/spaces/:space_id"), enterprise.Deps{
 		Candidates: params.EnterpriseCandidates, Sources: source.NewService(store),
 		Authorizer: guards.ensureAPIKeyAuthorizer(),
+		Files: releasestore.SourceFiles(
+			params.EnterpriseSpaces, params.KnowledgeRepository, params.KnowledgeService,
+		),
 	})
 }

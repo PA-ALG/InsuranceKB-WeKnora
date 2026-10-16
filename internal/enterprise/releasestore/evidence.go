@@ -3,9 +3,7 @@ package releasestore
 import (
 	"context"
 	"errors"
-	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
@@ -36,10 +34,7 @@ func NewEvidence(spaces Spaces, sources SourceRevisions) *Evidence {
 	return &Evidence{spaces: spaces, sources: sources}
 }
 
-var (
-	sourceRef  = regexp.MustCompile(`^source:v1:([A-Za-z0-9][A-Za-z0-9_-]{0,63}):([1-9][0-9]{0,18}):([0-9a-f]{64})$`)
-	errNoScope = errors.New("evidence resolution needs the authenticated request scope")
-)
+var errNoScope = errors.New("evidence resolution needs the authenticated request scope")
 
 // Resolve checks one reference within the authenticated scope of the request.
 func (e *Evidence) Resolve(ctx context.Context, ref string) (bool, error) {
@@ -51,19 +46,15 @@ func (e *Evidence) Resolve(ctx context.Context, ref string) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
-	parts := sourceRef.FindStringSubmatch(strings.TrimSpace(ref))
-	if parts == nil || parts[0] != ref {
+	parsed, ok := release.ParseSourceRef(ref)
+	if !ok {
 		return false, nil
 	}
-	attempt, err := strconv.ParseInt(parts[2], 10, 64)
-	if err != nil {
-		return false, nil
-	}
-	found, err := e.revision(ctx, scope, parts[1], attempt)
+	found, err := e.revision(ctx, scope, parsed.KnowledgeID, parsed.ParseAttempt)
 	if err != nil {
 		return false, err
 	}
-	return found.exists && found.rawKBID == space.RawKBID && found.fileSHA256 == parts[3], nil
+	return found.exists && found.rawKBID == space.RawKBID && found.fileSHA256 == parsed.FileSHA256, nil
 }
 
 // sourceRevision is what one (knowledge, attempt) lookup establishes.
