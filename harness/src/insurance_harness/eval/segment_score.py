@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.eval.product_sources import check_product_id, source_directory, source_pages
 from insurance_harness.evidence.quote_verification import Digest, NonBlank, VerifiedQuote
-from insurance_harness.evidence.segments import SegmentedSource
+from insurance_harness.evidence.segments import SegmentedSource, same_text
 
 State = Literal["present", "absent_explicitly", "unknown"]
 COMPLETE_RECALL = 0.8
@@ -162,13 +162,27 @@ def score_selection(
 
 
 def _recorded_selection(source: SegmentedSource, result: FieldResult) -> set[str] | None:
-    """The run's own segment ids, trusted only while they cut exactly the saved evidence (S4f)."""
+    """The run's own segment ids, trusted only while they cut the saved evidence (S4f).
+
+    Document, fingerprint and page must match exactly; the text may differ only in whitespace
+    and width, the same rule Golden segment ids follow (page text keeps CRLF since S4c-1).
+    """
     if not result.segment_ids:
         return None
     ids, dropped = source.resolve(result.segment_ids)
-    if dropped or ids != result.segment_ids or source.evidence(ids) != result.evidence:
+    if dropped or ids != result.segment_ids:
+        return None
+    cut = source.evidence(ids)
+    if len(cut) != len(result.evidence) or not all(
+        _place(a) == _place(b) and same_text(a.quote, b.quote)
+        for a, b in zip(cut, result.evidence, strict=True)
+    ):
         return None
     return set(ids)
+
+
+def _place(quote: VerifiedQuote) -> tuple[str, str, int]:
+    return quote.document, quote.document_sha256.lower(), quote.page
 
 
 def pool(reports: Sequence[SelectionReport]) -> SelectionReport:
