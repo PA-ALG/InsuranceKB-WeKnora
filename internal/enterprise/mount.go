@@ -24,6 +24,8 @@ type Deps struct {
 	Sources    *source.Service
 	// Authorizer is the SAME registry attached to the authenticated API group.
 	Authorizer *middleware.APIKeyRouteAuthorizer
+	// Files opens cited original files; nil leaves the file route unavailable.
+	Files SourceFiles
 }
 
 // Mount registers relative platform routes on a group carrying :space_id.
@@ -58,6 +60,10 @@ func Mount(r gin.IRouter, deps Deps) {
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/releases/:release_id/retirement", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/sources/:knowledge_id/pins", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id/citation", policy)
+		deps.Authorizer.Register(
+			http.MethodGet, prefix+"/releases/:release_id/sources/:knowledge_id/attempts/:attempt/file", policy,
+		)
 		group.Use(deps.Authorizer.Middleware())
 	}
 	group.POST("/candidates", func(c *gin.Context) { receive(c, deps.Candidates) })
@@ -69,6 +75,13 @@ func Mount(r gin.IRouter, deps Deps) {
 	group.GET("/sources/:knowledge_id/attempts/:attempt/pages", func(c *gin.Context) { pages(c, deps.Sources) })
 	group.POST("/releases/:release_id/retirement", func(c *gin.Context) { retire(c, deps.Candidates) })
 	group.GET("/sources/:knowledge_id/pins", func(c *gin.Context) { sourcePins(c, deps.Candidates) })
+	spacesPath := strings.TrimSuffix(group.BasePath(), "/")
+	group.GET("/releases/:release_id/citation", func(c *gin.Context) {
+		citation(c, deps.Candidates, deps.Sources, spacesPath)
+	})
+	group.GET("/releases/:release_id/sources/:knowledge_id/attempts/:attempt/file", func(c *gin.Context) {
+		citedFile(c, deps.Candidates, deps.Files)
+	})
 }
 
 func requestPrincipal(c *gin.Context) (release.Principal, error) {
@@ -263,7 +276,7 @@ func writeSourceError(c *gin.Context, err error) {
 		status = http.StatusBadRequest
 	case source.ErrorSourceNotFound:
 		status = http.StatusNotFound
-	case source.ErrorNotCaptured:
+	case source.ErrorNotCaptured, source.ErrorSpanOutOfRange:
 		status = http.StatusConflict
 	case source.ErrorIntegrity:
 		status = http.StatusInternalServerError
@@ -276,8 +289,13 @@ func writeError(c *gin.Context, err error) {
 	if errors.As(err, &failure) {
 		status := http.StatusBadRequest
 		switch failure.Code {
-		case release.ErrorCandidateNotFound, release.ErrorDecisionNotFound, release.ErrorReleaseNotFound:
+		case release.ErrorCandidateNotFound, release.ErrorDecisionNotFound, release.ErrorReleaseNotFound,
+			release.ErrorMemberNotFound, release.ErrorEvidenceNotFound:
 			status = http.StatusNotFound
+		case release.ErrorEvidenceMismatch:
+			status = http.StatusConflict
+		case release.ErrorEvidenceUnsupported, release.ErrorEvidenceUnverifiable:
+			status = http.StatusUnprocessableEntity
 		case release.ErrorReleaseAccessDenied:
 			status = http.StatusForbidden
 		case release.ErrorCandidateNotApproved, release.ErrorNeedsRebase, release.ErrorReleaseConflict:

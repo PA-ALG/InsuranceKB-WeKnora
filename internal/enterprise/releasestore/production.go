@@ -1,6 +1,7 @@
 package releasestore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"go.uber.org/dig"
 	"gorm.io/gorm"
 
+	appservice "github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
@@ -27,6 +29,7 @@ const (
 
 	defaultContractsDir = "contracts"
 	bundleSchemaFile    = "candidate_bundle.schema.json"
+	evidenceSchemaFile  = "evidence.schema.json"
 )
 
 // Register provides the candidate and publish service to the application container.
@@ -43,14 +46,34 @@ func Register(container *dig.Container) error {
 	}
 	return container.Provide(func(
 		cfg *config.Config, db *gorm.DB, knowledge interfaces.KnowledgeRepository,
-		_ Spaces,
+		spaces Spaces, firstParse *appservice.G3FirstParseStore,
 	) (*release.Service, error) {
 		dir := strings.TrimSpace(os.Getenv(ContractsDirEnv))
 		if dir == "" {
 			dir = defaultContractsDir
 		}
-		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, reservedScopes(cfg)...)
+		pages := enterprisePages(spaces, knowledge, firstParse)
+		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, pages, reservedScopes(cfg)...)
 	})
+}
+
+// enterprisePages reads captured artifacts of configured enterprise Spaces only; unlike the
+// page route it never falls back to the G3 scope, so evidence can only cite enterprise sources.
+func enterprisePages(
+	spaces Spaces, knowledge interfaces.KnowledgeRepository, firstParse *appservice.G3FirstParseStore,
+) PageReader {
+	if firstParse == nil {
+		return nil
+	}
+	return source.NewService(source.ArtifactStoreFunc(func(
+		ctx context.Context, scope source.Scope, id string, attempt int64,
+	) (*source.Artifact, error) {
+		binding, err := spaces.Scope(scope.TenantID, scope.SpaceID)
+		if err != nil {
+			return nil, source.ErrNotFound
+		}
+		return firstParse.ReadSourceArtifact(ctx, knowledge, binding, id, attempt)
+	}))
 }
 
 // LoadSpaces requires an active artifact signing key whenever capture is configured.
@@ -72,7 +95,8 @@ func LoadSpaces(cfg *config.Config, raw string) (Spaces, error) {
 // Production builds the service for the configured Spaces. An empty configuration
 // disables publishing (nil service); every other problem is an error.
 func Production(
-	db *gorm.DB, knowledge any, rawSpaces, contractsDir string, reserved ...types.WikiReleaseScope,
+	db *gorm.DB, knowledge any, rawSpaces, contractsDir string, pages PageReader,
+	reserved ...types.WikiReleaseScope,
 ) (*release.Service, error) {
 	spaces, err := ParseSpaces(rawSpaces, reserved...)
 	if err != nil {
@@ -82,20 +106,24 @@ func Production(
 		return nil, nil
 	}
 	revisions, ok := knowledge.(SourceRevisions)
-	if db == nil || !ok {
-		return nil, errors.New("enterprise publishing needs the database and knowledge revisions")
+	if db == nil || !ok || pages == nil {
+		return nil, errors.New("enterprise publishing needs the database, knowledge revisions and captured pages")
 	}
-	schema, err := os.ReadFile(filepath.Join(contractsDir, bundleSchemaFile))
-	if err != nil {
-		return nil, fmt.Errorf("enterprise publishing needs %s: %w", bundleSchemaFile, err)
+	schemas := map[string][]byte{}
+	for name, file := range map[string]string{"candidate_bundle": bundleSchemaFile, "evidence": evidenceSchemaFile} {
+		raw, err := os.ReadFile(filepath.Join(contractsDir, file))
+		if err != nil {
+			return nil, fmt.Errorf("enterprise publishing needs %s: %w", file, err)
+		}
+		schemas[name] = raw
 	}
-	schemas := map[string][]byte{"candidate_bundle": schema}
 	if err := release.CheckSchemas(schemas); err != nil {
-		return nil, fmt.Errorf("enterprise publishing: %s does not compile: %w", bundleSchemaFile, err)
+		return nil, fmt.Errorf("enterprise publishing: contract schemas do not compile: %w", err)
 	}
 	store := New(db, spaces)
 	return release.NewService(store, NewEvidence(spaces, revisions), schemas,
-		release.WithPublisher(store), release.WithRetirer(store)), nil
+		release.WithPublisher(store), release.WithEvidenceVerifier(NewEvidenceVerifier(spaces, pages)),
+		release.WithRetirer(store)), nil
 }
 
 // reservedScopes are the scopes enterprise Spaces may not reuse: the G3 path keeps

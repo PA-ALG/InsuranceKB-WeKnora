@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -44,15 +43,11 @@ func sourceRefs(members []release.Member) ([]repository.RevisionRef, error) {
 			if !strings.HasPrefix(raw, "source:v1:") {
 				continue
 			}
-			parts := sourceRef.FindStringSubmatch(raw)
-			if parts == nil {
+			ref, ok := release.ParseSourceRef(raw)
+			if !ok {
 				return nil, repository.ErrRevisionSourceUnavailable
 			}
-			attempt, err := strconv.ParseInt(parts[2], 10, 64)
-			if err != nil {
-				return nil, repository.ErrRevisionSourceUnavailable
-			}
-			seen[repository.RevisionRef{KnowledgeID: parts[1], ParseAttempt: attempt}] = true
+			seen[repository.RevisionRef{KnowledgeID: ref.KnowledgeID, ParseAttempt: ref.ParseAttempt}] = true
 		}
 	}
 	refs := make([]repository.RevisionRef, 0, len(seen))
