@@ -43,7 +43,7 @@ def definition(key: str, ordinal: int) -> FieldDefinition:
 class Completion:
     model = "recorded-offline"
 
-    def __init__(self, *answers: dict[str, object]) -> None:
+    def __init__(self, *answers: object) -> None:
         self._answers = [json.dumps(a, ensure_ascii=False) for a in answers]
 
     def complete(self, *, system: str, user: str) -> str:
