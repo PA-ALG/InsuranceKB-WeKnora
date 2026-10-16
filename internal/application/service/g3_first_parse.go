@@ -14,6 +14,7 @@ import (
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -50,6 +51,77 @@ type G3FirstParseStore struct{ reuse *conceptSourceReuseStore830G3 }
 func NewG3FirstParseStore(codec *SchemaWikiCitationTokenCodec) *G3FirstParseStore {
 	return &G3FirstParseStore{reuse: newConceptSourceReuseStore830G3(codec)}
 }
+
+// ReadSourceArtifact reads an exact historical capture. The caller must resolve
+// an authorized Space/RAW scope; this method independently checks Knowledge's
+// tenant and RAW ownership before opening any signed artifact. It never parses.
+func (s *G3FirstParseStore) ReadSourceArtifact(
+	ctx context.Context, repo interfaces.KnowledgeRepository, scope types.WikiReleaseScope,
+	knowledgeID string, attempt int64,
+) (*source.Artifact, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if scope.TenantID == 0 || scope.SpaceID == "" || scope.RawKBID == "" ||
+		strings.TrimSpace(knowledgeID) == "" || attempt <= 0 {
+		return nil, &source.Error{
+			Code: source.ErrorInvalidRequest, Detail: "an exact source scope and attempt are required",
+		}
+	}
+	revisions, ok := repo.(interface {
+		GetRevision(context.Context, string, int64) (*types.KnowledgeRevision, error)
+	})
+	if s == nil || s.reuse == nil || repo == nil || !ok {
+		return nil, &source.Error{Code: source.ErrorUnavailable, Detail: "source artifact is unavailable"}
+	}
+	knowledge, err := repo.GetKnowledgeByID(ctx, scope.TenantID, knowledgeID)
+	if errors.Is(err, wikirepository.ErrKnowledgeNotFound) {
+		return nil, source.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if knowledge == nil || knowledge.ID != knowledgeID || knowledge.TenantID != scope.TenantID ||
+		knowledge.KnowledgeBaseID != scope.RawKBID || knowledge.DeletedAt.Valid {
+		return nil, source.ErrNotFound
+	}
+	revision, err := revisions.GetRevision(ctx, knowledgeID, attempt)
+	if errors.Is(err, wikirepository.ErrKnowledgeNotFound) {
+		return nil, source.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if revision == nil || revision.KnowledgeID != knowledgeID || revision.ParseAttempt != attempt {
+		return nil, source.ErrNotFound
+	}
+	if !validServiceSHA256(revision.FileSHA256) {
+		return nil, &source.Error{Code: source.ErrorIntegrity, Detail: "source revision failed integrity verification"}
+	}
+	id := g3FirstParseIdentity{
+		TenantID: scope.TenantID, RawKBID: scope.RawKBID, KnowledgeID: knowledgeID,
+		ParseAttempt: attempt, SourceSHA256: revision.FileSHA256,
+	}
+	record, err := s.reuse.readFirstParse(id)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, source.ErrNotCaptured
+	}
+	if errors.Is(err, ErrConceptSourceAuthorityUnavailable830G2) {
+		return nil, &source.Error{Code: source.ErrorIntegrity, Detail: "parse artifact failed integrity verification"}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return &source.Artifact{
+		KnowledgeID: knowledgeID, ParseAttempt: attempt, FileName: knowledge.FileName,
+		FileSHA256: revision.FileSHA256, ParserIdentitySHA256: record.ParserIdentitySHA256,
+		Markdown: record.Markdown, NativeJSON: append([]byte(nil), record.Native.SanitizedJSON...),
+	}, nil
+}
+
 func NewConceptSourceAuthorityService830G2WithFirstParse(fixed *KnowledgeRevisionSourceService, knowledge interfaces.KnowledgeRepository, chunks interfaces.ChunkRepository, reader interfaces.DocumentReader, codec *SchemaWikiCitationTokenCodec, releases *wikirepository.WikiReleaseRepository, legacy SchemaWikiCitationContentPort, preview *wikirepository.SchemaWikiFormalCandidatePreviewRegistry, first *G3FirstParseStore) *ConceptSourceAuthorityService830G2 {
 	s := NewConceptSourceAuthorityService830G2(fixed, knowledge, chunks, reader, codec, releases, legacy, preview)
 	if first != nil {

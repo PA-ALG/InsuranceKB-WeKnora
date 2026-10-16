@@ -15,7 +15,10 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
+	"github.com/Tencent/WeKnora/internal/enterprise/release"
+	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -36,6 +39,9 @@ type RouterParams struct {
 	UserService                    interfaces.UserService
 	KBService                      interfaces.KnowledgeBaseService
 	KnowledgeService               interfaces.KnowledgeService
+	KnowledgeRepository            interfaces.KnowledgeRepository
+	FirstParseStore                *service.G3FirstParseStore
+	EnterpriseCandidates           *release.Service
 	ChunkService                   interfaces.ChunkService
 	SessionService                 interfaces.SessionService
 	MessageService                 interfaces.MessageService
@@ -359,6 +365,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 			rbacGuards,
 		)
 		registerConfiguredG3PlatformRoutes(v1, params, rbacGuards)
+		registerEnterpriseRoutes(v1, params, rbacGuards)
 		RegisterMemoryRoutes(v1, params.MemoryHandler, rbacGuards)
 		RegisterChunkerDebugRoutes(v1, rbacGuards)
 
@@ -404,4 +411,28 @@ func registerConfiguredG3PlatformRoutes(v1 *gin.RouterGroup, params RouterParams
 	}
 	RegisterG3PlatformSnapshotRoutes(v1, params.G3PlatformSnapshotsHandler, params.SchemaWikiHandler, params.WikiReleaseHandler, guards)
 	RegisterG3PlatformReleaseRoutes(v1, params.G3PlatformReleaseHandler, params.SchemaWikiHandler, params.WikiReleaseHandler, guards)
+}
+
+func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *rbacGuards) {
+	// Captures currently exist only in this configured isolated scope. Replace
+	// this mapping when S4c-2 provides managed Space/source bindings and capture
+	// persistence; never infer Space membership from a caller-supplied source ID.
+	store := source.ArtifactStoreFunc(func(
+		ctx context.Context, scope source.Scope, id string, attempt int64,
+	) (*source.Artifact, error) {
+		runtime, err := config.DecodeG3PlatformProcessing(params.Config, time.Now())
+		if err != nil {
+			return nil, &source.Error{
+				Code: source.ErrorInvalidRequest, Detail: "source request authorization is invalid",
+			}
+		}
+		if runtime == nil || scope.TenantID != runtime.Scope.TenantID || scope.SpaceID != runtime.Scope.SpaceID {
+			return nil, source.ErrNotFound
+		}
+		return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, runtime.Scope, id, attempt)
+	})
+	enterprise.Mount(v1.Group("/enterprise/spaces/:space_id"), enterprise.Deps{
+		Candidates: params.EnterpriseCandidates, Sources: source.NewService(store),
+		Authorizer: guards.ensureAPIKeyAuthorizer(),
+	})
 }

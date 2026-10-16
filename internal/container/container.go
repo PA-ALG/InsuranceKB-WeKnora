@@ -70,6 +70,7 @@ import (
 	rssConnector "github.com/Tencent/WeKnora/internal/datasource/connector/rss"
 	yuqueConnector "github.com/Tencent/WeKnora/internal/datasource/connector/yuque"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
+	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
@@ -307,6 +308,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewSchemaWikiCitationPorts))
 	must(container.Provide(service.NewKnowledgeRevisionSourceService))
 	must(container.Provide(service.NewG3FirstParseStore))
+	must(releasestore.Register(container))
 	must(container.Provide(service.NewConceptSourceAuthorityService830G2WithFirstParse))
 	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseAuthorizationVerifier, error) {
 		verifier, _, err := schemaWikiReleaseVerifierProviders(cfg)

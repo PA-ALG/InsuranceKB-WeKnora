@@ -33,7 +33,7 @@ def read_pdf(path: Path) -> list[PageText]:
         pages = []
         for number in range(len(document)):
             textpage = document[number].get_textpage()
-            text = textpage.get_text_range().replace("\r\n", "\n").replace("\r", "\n")
+            text = textpage.get_text_range()
             pages.append(PageText(path.name, digest, number + 1, text))
         return pages
     finally:

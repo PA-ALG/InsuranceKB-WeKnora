@@ -22,6 +22,13 @@ func (suppliedSchemasOnly) Load(string) (any, error) {
 	return nil, errors.New("schema reference was not supplied")
 }
 
+// CheckSchemas compiles the supplied contract schemas the way NewService does, so wiring can
+// refuse to start on a schema that is valid JSON but not a usable or complete schema.
+func CheckSchemas(schemas map[string][]byte) error {
+	_, err := compileSchema(schemas)
+	return err
+}
+
 func compileSchema(schemas map[string][]byte) (*jsonschema.Schema, error) {
 	compiler := jsonschema.NewCompiler()
 	compiler.UseLoader(suppliedSchemasOnly{})

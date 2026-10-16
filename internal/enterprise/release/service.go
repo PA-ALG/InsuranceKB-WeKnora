@@ -13,15 +13,21 @@ import (
 type Service struct {
 	store     Store
 	evidence  EvidenceResolver
+	publisher Publisher
 	schema    *jsonschema.Schema
 	schemaErr error
 }
 
 // NewService compiles the supplied schema once. Invalid or absent schema
 // configuration fails closed on Receive, without filesystem or network access.
-func NewService(store Store, evidence EvidenceResolver, schemas map[string][]byte) *Service {
+// Publishing (decisions, activation, release reads) needs WithPublisher.
+func NewService(store Store, evidence EvidenceResolver, schemas map[string][]byte, options ...Option) *Service {
 	schema, err := compileSchema(schemas)
-	return &Service{store: store, evidence: evidence, schema: schema, schemaErr: err}
+	s := &Service{store: store, evidence: evidence, schema: schema, schemaErr: err}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 // Receive validates the complete submission before asking the Store to persist it.
@@ -32,7 +38,7 @@ func (s *Service) Receive(ctx context.Context, p Principal, spaceID string, raw 
 	if err := ctx.Err(); err != nil {
 		return Candidate{}, err
 	}
-	ctx = context.WithValue(ctx, scopeKey{}, Scope{Principal: p, SpaceID: spaceID})
+	ctx = context.WithValue(ctx, scopeKey{}, newScope(p, spaceID))
 	b, digest, err := s.validate(ctx, raw)
 	if err != nil {
 		return Candidate{}, err
