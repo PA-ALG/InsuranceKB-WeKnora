@@ -46,11 +46,15 @@ def all_cards() -> dict[str, dict[str, Any]]:
 EXAMPLE_VALUE_CHARS = 300
 
 
-def card_payload(definition: FieldDefinition, *, examples: bool = True) -> dict[str, Any] | None:
+def card_payload(
+    definition: FieldDefinition, *, examples: bool = True, entity_id: str | None = None
+) -> dict[str, Any] | None:
     """What a request carries for one field: the rules, plus same-pack examples for step one.
 
     With examples=False (the value step) only the rules are sent: no examples and no generic
-    illustration, so the value can only come from the segments in the request.
+    illustration, so the value can only come from the segments in the request. Examples taken
+    from the product being compiled (entity_id) are never sent: they would hand it the answers
+    (S4h). The example's product_id only drives that exclusion and is not sent.
     """
     card = _data()["cards"].get(definition.field_key)
     if card is None:
@@ -67,7 +71,7 @@ def card_payload(definition: FieldDefinition, *, examples: bool = True) -> dict[
             if example.get(key)
         }
         for example in card.get("examples", [])
-        if example["schema_pack_id"] == definition.pack_id
+        if example["schema_pack_id"] == definition.pack_id and example["product_id"] != entity_id
     ]
     if same_pack:
         payload["examples"] = same_pack

@@ -12,7 +12,8 @@ from typing import Any
 from insurance_harness.eval.pdf_text import PageText, read_pdf
 
 _PRODUCTS = "dataset/shouxian_product"
-_MANIFEST = "dataset/golden/v1/manifest.json"
+# Golden v2 declares the evaluated products first; v1 still declares the older ones (S4h).
+_MANIFESTS = ("dataset/golden/v2/manifest.json", "dataset/golden/v1/manifest.json")
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -55,11 +56,14 @@ def source_pages(directory: Path) -> list[PageText]:
 def declared_pack(repo: Path, product_id: str, pack_id: str | None = None) -> str:
     if pack_id is not None:
         return pack_id
-    metadata = _json(repo / _MANIFEST).get("products", {}).get(product_id, {})
-    value = metadata.get("pack_id") if isinstance(metadata, dict) else None
-    if not isinstance(value, str):
-        raise ValueError("pack is not declared; supply --pack")
-    return value
+    for manifest in _MANIFESTS:
+        if not (repo / manifest).is_file():
+            continue
+        metadata = _json(repo / manifest).get("products", {}).get(product_id, {})
+        value = metadata.get("pack_id") if isinstance(metadata, dict) else None
+        if isinstance(value, str):
+            return value
+    raise ValueError("pack is not declared; supply --pack")
 
 
 def display_name(directory: Path) -> str:
