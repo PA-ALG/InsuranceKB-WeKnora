@@ -15,11 +15,13 @@ from typing import Any, Literal
 import jsonschema  # type: ignore[import-untyped]
 import pytest
 
+from insurance_harness.bundle.assemble import BundleError
+from insurance_harness.bundle.canonical import member_digest
+from insurance_harness.bundle.client import Head
+from insurance_harness.compilers.schema_fields.claims import candidate_bundle
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.evidence.segments import SegmentedSource
-from insurance_harness.publish.bundle import BundleError, SourceRevision, candidate_bundle
-from insurance_harness.publish.canonical import member_digest
-from insurance_harness.publish.client import Head
+from insurance_harness.evidence.source_ref import SourceRevision
 
 REPO = Path(__file__).resolve().parents[3]
 SCHEMA = json.loads((REPO / "contracts/candidate_bundle.schema.json").read_text(encoding="utf-8"))

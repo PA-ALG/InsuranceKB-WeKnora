@@ -14,9 +14,9 @@ from typing import Any
 import httpx
 import pytest
 
+from insurance_harness.bundle.canonical import member_digest
+from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
 from insurance_harness.contracts.bundle import BundleMember, CandidateBundle
-from insurance_harness.publish.canonical import member_digest
-from insurance_harness.publish.client import DecisionInput, PlatformClient, PlatformError, publish
 
 BASE = "https://weknora.test"
 SPACE = "space-1"

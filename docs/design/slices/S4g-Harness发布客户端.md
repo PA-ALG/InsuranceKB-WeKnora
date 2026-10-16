@@ -19,7 +19,7 @@
 
 ## 2. 设计
 
-### 2.1 规范化与摘要（新增 `publish/canonical.py`）
+### 2.1 规范化与摘要（新增 `bundle/canonical.py`）
 
 - `canonical_json(value) -> bytes` 等于 Go 的 `json.Marshal(json.Unmarshal(x))`（S3b 冻结的 digest 口径）：
   - 对象键按 UTF-8 字节序排序，紧凑输出；
@@ -33,7 +33,7 @@
 - 共用样例：`internal/enterprise/release/testdata/canonical_vectors.json`（`name`、`payload`、`canonical`、`digest`），
   由 Go 的 `encoding/json` 生成。Go 测试断言 `canonicalDigest` 与样例一致，Python 测试断言 `canonical_json`、`member_digest` 与样例一致。
 
-### 2.2 候选包（新增 `publish/bundle.py`；`evidence/segments.py` 增加 `spans`）
+### 2.2 候选包（新增 `compilers/schema_fields/claims.py`、`bundle/assemble.py`、`evidence/source_ref.py`；`evidence/segments.py` 增加 `spans`）
 
 - `SegmentedSource.spans(ids) -> list[EvidenceSpan]`：与 `evidence(ids)` 相同的合并规则（同页相邻段落合并），另带页内码点
   起止 `start`、`end`；`evidence` 改为由 `spans` 生成。
@@ -50,7 +50,7 @@
     `removals` 为空（整版替换在 S5）；
   - 序列化结果须通过 `contracts/candidate_bundle.schema.json` 校验，且不超过 2 MiB，否则报错。
 
-### 2.3 平台客户端（新增 `publish/client.py`）
+### 2.3 平台客户端（新增 `bundle/client.py`）
 
 - `PlatformClient(base_url, api_key, transport=None)`：`submit(space, bundle) -> Candidate`、`decide(space, candidate_id, decision) -> Decision`、
   `activate(space, candidate_id, decision_id) -> Release`、`release(space, release_id="") -> Release`。
@@ -61,28 +61,30 @@
 - `publish(...)`：读当前 Head → 生成候选包 → 提交 →（显式给出时）决定 →（显式要求时）激活 → 读回该 Release，逐成员核对
   `member_digest` 与提交时一致，不一致报错。**不自动批准**：决定必须由调用方显式给出（"先发布后抽检"的自动门槛在 S12）。
 
-### 2.4 从 WeKnora 读页（`publish/sources.py`；`eval/compile_run.py` 增加 `--source-map`）
+### 2.4 从 WeKnora 读页（新增 `ingest/source_map.py`；`eval/compile_run.py` 增加 `--source-map`）
 
 - source map 文件：`{"space_id": "...", "products": {"<产品>": [{"knowledge_id": "...", "parse_attempt": 2}, ...]}}`。
 - `load_pages(reader, space_id, entries) -> (pages, sources)`：经 S4c-1 读取端逐个文档读页，返回页文本与"文件名 → 修订"映射；
   同名文件重复、读取失败一律报错。
 - `compile_run --source-map <file>`：页文本改为从 WeKnora 读取（地址与密钥来自环境变量 `HARNESS_WEKNORA_BASE_URL`、
   `HARNESS_WEKNORA_API_KEY`），其余流程不变。
-- 发布命令：`python -m insurance_harness.publish --run-root <dir> --product <id> --source-map <file>
+- 发布命令：`python -m insurance_harness.compilers.schema_fields.publish --run-root <dir> --product <id> --source-map <file>
   [--decide human --reason <文本> | --decide machine --policy-ref <标识>] [--activate]`。
 
 ## 3. 验收（受保护，RED 单独提交）
 
+> 模块按蓝图 §4.2 的目标目录放置（RED 后修正，见 PR）：`bundle/` 负责 CandidateBundle 组装与提交，只依赖合同（核心目录不得依赖 `compilers`，守卫 G1）；把编译结果转成 Claim 属于编译器自己的职责；读 SourceRevision 并重建页文本属于 `ingest/`。
+
 - `internal/enterprise/release/canonical_vectors_test.go`、`internal/enterprise/release/testdata/canonical_vectors.json`。
-- `harness/tests/publish/test_canonical.py`：共用样例逐条一致；NaN、无穷、超界整数、孤立代理字符被拒。
-- `harness/tests/publish/test_bundle.py`：每个字段一条成员；证据偏移切出原文；引用格式；unknown 无证据；包通过合同 schema 校验；
+- `harness/tests/bundle/test_canonical.py`：共用样例逐条一致；NaN、无穷、超界整数、孤立代理字符被拒。
+- `harness/tests/bundle/test_bundle.py`：每个字段一条成员；证据偏移切出原文；引用格式；unknown 无证据；包通过合同 schema 校验；
   `member_digest` 与规范化结果一致；编号与证据对不上、文件不在 source map 中时报错。
-- `harness/tests/publish/test_client.py`：提交、决定、激活、读回的正常路径；平台错误码映射；拒绝重定向与重复键 JSON；
+- `harness/tests/bundle/test_client.py`：提交、决定、激活、读回的正常路径；平台错误码映射；拒绝重定向与重复键 JSON；
   读回摘要不一致时报错；未显式给出决定时不决定、不激活。
 
 ## 4. 改动范围
 
-- 允许：`harness/src/insurance_harness/publish/`（新）、`evidence/segments.py`、`eval/compile_run.py`、`eval/product_sources.py`、
+- 允许：`harness/src/insurance_harness/bundle/`（新）、`ingest/`（新）、`evidence/source_ref.py`（新）、`evidence/segments.py`、`compilers/schema_fields/claims.py` 与 `publish.py`（新）、`eval/compile_run.py`、`eval/product_sources.py`、
   对应实现方测试；Go 只加本片验收测试与 testdata，不改运行时代码。
 - 受保护：本片验收文件、既有受保护验收、`docs/design/`、蓝图、`contracts/`。
 

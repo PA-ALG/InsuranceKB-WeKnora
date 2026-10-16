@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from insurance_harness.publish.canonical import canonical_json, member_digest
+from insurance_harness.bundle.canonical import canonical_json, member_digest
 
 VECTORS = Path(__file__).resolve().parents[3] / (
     "internal/enterprise/release/testdata/canonical_vectors.json"
