@@ -8,11 +8,13 @@ recorded per field.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import unicodedata
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -53,16 +55,31 @@ def test_golden_file_matches_the_manifest_and_the_current_segments(product: str)
             assert quote.document_sha256 == fingerprints[quote.document], where
 
 
-def test_the_s4e_revision_is_recorded_for_every_product() -> None:
-    revisions = [r for r in MANIFEST.get("revisions", []) if r["cards_version"] == S4E_CARDS]
+# The products the S4e revision applied to, frozen when it was made. Products added later (S4h:
+# 1828) are annotated directly under newer cards and do not belong to this revision.
+S4E_PRODUCTS = {"1814", "1816", "1824", "1826"}
+
+
+def check_s4e_revision(manifest: dict[str, Any]) -> None:
+    revisions = [r for r in manifest.get("revisions", []) if r["cards_version"] == S4E_CARDS]
     assert len(revisions) == 1
     revision = revisions[0]
-    assert set(revision["products"]) <= set(MANIFEST["products"])
-    for product in set(MANIFEST["products"]) - set(revision["products"]):
-        # Added after the revision (S4h: 1828), annotated directly under newer cards.
-        later = load_golden_v2(GOLDEN / f"{product}.json").cards_version
-        assert later > S4E_CARDS, product
+    assert set(revision["products"]) == S4E_PRODUCTS
+    assert S4E_PRODUCTS <= set(manifest["products"])
     for product, entry in revision["products"].items():
         keys = {field.field_key for field in load_golden_v2(GOLDEN / f"{product}.json").fields}
         assert entry["fields"] and set(entry["fields"]) <= keys
         assert entry["model_id"] and entry["reasoning_effort"] and entry["session_id"]
+
+
+def test_the_s4e_revision_is_recorded_for_every_product() -> None:
+    check_s4e_revision(MANIFEST)
+
+
+def test_dropping_a_product_from_the_s4e_revision_is_caught() -> None:
+    for product in S4E_PRODUCTS:
+        tampered = copy.deepcopy(MANIFEST)
+        revision = next(r for r in tampered["revisions"] if r["cards_version"] == S4E_CARDS)
+        del revision["products"][product]
+        with pytest.raises(AssertionError):
+            check_s4e_revision(tampered)
