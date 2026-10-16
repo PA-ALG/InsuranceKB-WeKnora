@@ -1,4 +1,4 @@
-"""Compile output as a candidate bundle of claim members (S4g Spec §2.2).
+"""Schema-field compile output as contract Claims and a candidate bundle (S4g Spec §2.2).
 
 Each field becomes one Claim. Evidence is cut from the page text by the field's selected segment
 ids, so every quote equals its page slice by construction; it carries the fixed source revision
@@ -8,41 +8,22 @@ no longer cut its saved evidence, or a document the source map does not name, st
 the bundle never guesses where a quote came from.
 """
 
-import json
 from collections.abc import Mapping
-from dataclasses import dataclass
 
+from insurance_harness.bundle.assemble import ACCESS_SCOPE, BundleError, assemble
+from insurance_harness.bundle.client import Head
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
-from insurance_harness.contracts.bundle import BundleMember, CandidateBundle
+from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.contracts.enums import (
     ClaimState,
     EvidenceMatch,
     LocatorKind,
-    Origin,
     SourceClass,
     UnknownReason,
 )
 from insurance_harness.contracts.knowledge import Claim, Evidence, Locator, Provenance
 from insurance_harness.evidence.segments import SegmentedSource, same_text
-from insurance_harness.publish.canonical import member_digest
-from insurance_harness.publish.client import MAX_BUNDLE_BYTES, Head
-
-ACCESS_SCOPE = "space"
-
-
-class BundleError(ValueError):
-    """The compile output cannot be published as it stands."""
-
-
-@dataclass(frozen=True)
-class SourceRevision:
-    """The platform's fixed source revision a document's pages were read from."""
-
-    knowledge_id: str
-    parse_attempt: int
-
-    def ref(self, file_sha256: str) -> str:
-        return f"source:v1:{self.knowledge_id}:{self.parse_attempt}:{file_sha256}"
+from insurance_harness.evidence.source_ref import SourceRevision
 
 
 def candidate_bundle(
@@ -54,52 +35,31 @@ def candidate_bundle(
     base: Head | None = None,
 ) -> CandidateBundle:
     """One claim member per field, based on the given Head (None before the first release)."""
-    members = [_member(output, field, source, sources) for field in output.fields]
-    bundle = CandidateBundle(
-        contract_version="1",
-        base_release_id=base.release_id if base else None,
-        base_epoch=base.epoch if base else None,
-        origin=Origin.COMPILE,
-        members=members,
-        compiler_identity=compiler_identity,
-    )
-    # Constructed through the contract model itself, so the structure already satisfies
-    # contracts/candidate_bundle.schema.json (generated from it); the size limit is the platform's.
-    document = bundle.model_dump(mode="json")
-    if len(json.dumps(document, ensure_ascii=False).encode("utf-8")) > MAX_BUNDLE_BYTES:
-        raise BundleError("bundle exceeds the platform's size limit")
-    return bundle
+    claims = claims_from(output, source, sources)
+    return assemble(claims, compiler_identity=compiler_identity, base=base)
 
 
-def _member(
-    output: CompileOutput,
-    field: FieldResult,
-    source: SegmentedSource,
-    sources: Mapping[str, SourceRevision],
-) -> BundleMember:
-    logical_key = f"{output.entity_id}/{field.field_key}"
-    evidence = _evidence(field, source, sources)
-    claim = Claim(
-        claim_id=logical_key,
-        logical_key=logical_key,
-        subject_ref=output.entity_id,
-        predicate=field.field_key,
-        state=ClaimState(field.state),
-        value=field.value if field.state == "present" else None,
-        evidence=evidence,
-        provenance=Provenance(compiler="schema_fields", model=output.model),
-        origin=SourceClass.SOURCE_SUPPORTED,
-        unknown_reason=UnknownReason.NOT_IN_MATERIAL if field.state == "unknown" else None,
-    )
-    payload = claim.model_dump(mode="json")
-    return BundleMember(
-        kind="claim",
-        logical_slug=logical_key,
-        payload=payload,
-        member_digest=member_digest(payload),
-        evidence_refs=sorted({item.source_ref for item in evidence}),
-        access_scope=ACCESS_SCOPE,
-    )
+def claims_from(
+    output: CompileOutput, source: SegmentedSource, sources: Mapping[str, SourceRevision]
+) -> list[Claim]:
+    claims = []
+    for field in output.fields:
+        logical_key = f"{output.entity_id}/{field.field_key}"
+        claims.append(
+            Claim(
+                claim_id=logical_key,
+                logical_key=logical_key,
+                subject_ref=output.entity_id,
+                predicate=field.field_key,
+                state=ClaimState(field.state),
+                value=field.value if field.state == "present" else None,
+                evidence=_evidence(field, source, sources),
+                provenance=Provenance(compiler="schema_fields", model=output.model),
+                origin=SourceClass.SOURCE_SUPPORTED,
+                unknown_reason=UnknownReason.NOT_IN_MATERIAL if field.state == "unknown" else None,
+            )
+        )
+    return claims
 
 
 def _evidence(

@@ -47,6 +47,7 @@ from insurance_harness.eval.product_sources import (
     source_directory,
     source_pages,
 )
+from insurance_harness.ingest.source_map import load_source_map, page_source, reader_from_env
 from insurance_harness.models import (
     CallLedger,
     CallRecord,
@@ -296,6 +297,7 @@ def compile_products(
     repo: Path, products: list[str], *,
     completion_factory: Callable[[CallLedger], CompletionPort] | None,
     run_root: Path, max_sent: int, batch_size: int = 25, replay_from: Path | None = None,
+    page_source: Callable[[str], list[PageText]] | None = None,
 ) -> list[ProductRun]:
     """Compile or reuse each product in order; raise on the first stopping condition.
 
@@ -337,7 +339,7 @@ def compile_products(
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / _CATALOG, pack)
-            pages = source_pages(directory)
+            pages = page_source(product) if page_source else source_pages(directory)
             context = _replay_context(product, pack, pages)
             port: CompletionPort
             if replay_from is not None:
@@ -434,11 +436,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-sent", type=int, default=30)
     parser.add_argument("--replay-from", type=Path,
                         help="recompile saved completions of an earlier run root; sends nothing")
+    parser.add_argument("--source-map", type=Path,
+                        help="read pages from the WeKnora revisions this map names (S4g)")
     args = parser.parse_args(argv)
     runs: list[ProductRun] = []
     clients: list[OpenAICompatibleCompletion] = []
     try:
         config = load_stage_config(args.stage_config, args.stage)
+        pages = (page_source(load_source_map(args.source_map), reader_from_env())
+                 if args.source_map else None)
 
         def factory(ledger: CallLedger) -> CompletionPort:
             clients.append(OpenAICompatibleCompletion(config, ledger=ledger))
@@ -453,6 +459,7 @@ def main(argv: list[str] | None = None) -> int:
                         completion_factory=None if args.replay_from else factory,
                         run_root=args.run_root, max_sent=args.max_sent,
                         batch_size=args.batch_size, replay_from=args.replay_from,
+                        page_source=pages,
                     )
                 finally:
                     for client in clients:
