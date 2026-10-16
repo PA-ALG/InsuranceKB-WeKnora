@@ -29,6 +29,14 @@ API_KEY_ENV = "HARNESS_WEKNORA_API_KEY"
 _Identifier = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")]
 
 
+class SourceMapError(ValueError):
+    """A caller-safe code; never the file path or its content."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
 class SourceEntry(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     knowledge_id: _Identifier
@@ -43,21 +51,21 @@ class SourceMap(BaseModel):
     def entries(self, product: str) -> list[SourceEntry]:
         entries = self.products.get(product)
         if not entries:
-            raise ValueError(f"source map names no documents for {product}")
+            raise SourceMapError("SOURCE_MAP_INVALID")
         return entries
 
 
 def load_source_map(path: Path) -> SourceMap:
     try:
         return SourceMap.model_validate(json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, ValueError, ValidationError) as error:
-        raise ValueError(f"invalid source map {path.name}: {error}") from None
+    except (OSError, ValueError, ValidationError):
+        raise SourceMapError("SOURCE_MAP_INVALID") from None
 
 
 def reader_from_env() -> WeKnoraSourcePages:
     base_url, api_key = os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, "")
     if not base_url or not api_key:
-        raise ValueError(f"{BASE_URL_ENV} and {API_KEY_ENV} must be set")
+        raise SourceMapError("CONFIGURATION_MISSING")
     return WeKnoraSourcePages(base_url, api_key)
 
 
@@ -71,7 +79,7 @@ def load_pages(
         read = reader.pages(space_id, entry.knowledge_id, entry.parse_attempt)
         document = read[0].document
         if document in sources:
-            raise ValueError(f"two source revisions are named {document}")
+            raise SourceMapError("SOURCE_DOCUMENTS_AMBIGUOUS")
         sources[document] = SourceRevision(entry.knowledge_id, entry.parse_attempt)
         pages.extend(read)
     return pages, sources

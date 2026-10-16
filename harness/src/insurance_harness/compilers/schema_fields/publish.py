@@ -22,7 +22,6 @@ from pydantic import ValidationError
 
 from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
-from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.claims import candidate_bundle
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.eval.product_sources import check_product_id
@@ -31,6 +30,7 @@ from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
     BASE_URL_ENV,
+    SourceMapError,
     load_pages,
     load_source_map,
     reader_from_env,
@@ -47,16 +47,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--policy-ref")
     parser.add_argument("--activate", action="store_true")
     args = parser.parse_args(argv)
+    # Every failure prints a stable code (and at most a field key): never exception text,
+    # local paths or input content, which may carry material.
     try:
         check_product_id(args.product)
         decision = _decision(args.decide, args.reason, args.policy_ref)
-        if args.activate and decision is None:
-            raise PlatformError("INVALID_REQUEST")  # activation needs an approving decision
+    except ValueError:
+        return _stop("INVALID_ARGUMENTS")
+    if args.activate and decision is None:
+        return _stop("INVALID_REQUEST")  # activation needs an approving decision
+    try:
         output = CompileOutput.model_validate_json(
             (args.run_root / args.product / "output.json").read_text(encoding="utf-8")
         )
-        if output.entity_id != args.product:
-            raise ValueError("stored output belongs to another product")
+    except (OSError, ValueError, ValidationError):
+        return _stop("OUTPUT_UNREADABLE")
+    if output.entity_id != args.product:
+        return _stop("OUTPUT_MISMATCH")
+    if not output.cards_version:
+        # Written before outputs recorded their card version: publishing it under today's
+        # cards would misstate how it was compiled.
+        return _stop("CARDS_VERSION_UNKNOWN")
+    try:
         source_map = load_source_map(args.source_map)
         pages, sources = load_pages(
             reader_from_env(), source_map.space_id, source_map.entries(args.product)
@@ -67,23 +79,22 @@ def main(argv: list[str] | None = None) -> int:
             output,
             SegmentedSource(pages),
             sources,
-            compiler_identity=f"harness/schema_fields@{cards_version()}",
+            compiler_identity=f"harness/schema_fields@{output.cards_version}",
             base=active.head if active else None,
         )
         result = publish(
             client, source_map.space_id, bundle, decision=decision, activate=args.activate
         )
-    except (PlatformError, SourcePagesError) as error:
-        print(json.dumps({"stopped": error.code}))
-        return 2
-    except (BundleError, ValidationError, ValueError, KeyError, OSError) as error:
-        print(json.dumps({"stopped": "INVALID_INPUT", "detail": str(error)}, ensure_ascii=False))
-        return 2
+    except (PlatformError, SourcePagesError, SourceMapError) as error:
+        return _stop(error.code)
+    except BundleError as error:
+        return _stop("BUNDLE_INVALID", reason=error.reason, field=error.field)
     print(
         json.dumps(
             {
                 "product": args.product,
                 "space_id": source_map.space_id,
+                "cards_version": output.cards_version,
                 "members": len(bundle.members),
                 "candidate_id": result.candidate.id,
                 "candidate_status": result.candidate.status,
@@ -95,6 +106,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     return 0
+
+
+def _stop(code: str, **detail: str | None) -> int:
+    print(json.dumps({"stopped": code, **detail}, ensure_ascii=False))
+    return 2
 
 
 def _decision(mode: str | None, reason: str | None, policy_ref: str | None) -> DecisionInput | None:

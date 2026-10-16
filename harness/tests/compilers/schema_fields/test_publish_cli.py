@@ -17,6 +17,8 @@ from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.ingest import source_map as source_map_module
 
 SHA = "ab" * 32
+COMPILED_WITH = "draft-compiled"
+SECRET = "SECRET-MARKER-保险条款原文"
 PAGES = [
     PageText(
         "保险条款.pdf",
@@ -83,7 +85,13 @@ def platform(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Platform:
             segment_ids=["D1P1S2"],
         ),
     ]
-    output = CompileOutput(pack_id="pack", entity_id="1828", model="deepseek-flash", fields=fields)
+    output = CompileOutput(
+        pack_id="pack",
+        entity_id="1828",
+        model="deepseek-flash",
+        fields=fields,
+        cards_version=COMPILED_WITH,
+    )
     (tmp_path / "1828").mkdir()
     (tmp_path / "1828" / "output.json").write_text(output.model_dump_json(), encoding="utf-8")
     (tmp_path / "map.json").write_text(
@@ -130,6 +138,7 @@ def test_publish_submits_decides_and_activates(
     assert summary == {
         "product": "1828",
         "space_id": "space-1",
+        "cards_version": COMPILED_WITH,
         "members": 2,
         "candidate_id": "cand_1",
         "candidate_status": "created",
@@ -175,8 +184,8 @@ def test_without_a_decision_only_the_candidate_is_submitted(
     ("extra", "stopped"),
     [
         (["--activate"], "INVALID_REQUEST"),
-        (["--decide", "human"], "INVALID_INPUT"),
-        (["--decide", "machine", "--reason", "x"], "INVALID_INPUT"),
+        (["--decide", "human"], "INVALID_ARGUMENTS"),
+        (["--decide", "machine", "--reason", "x"], "INVALID_ARGUMENTS"),
     ],
 )
 def test_invalid_decisions_stop_before_anything_is_sent(
@@ -198,3 +207,68 @@ def test_invalid_decisions_stop_before_anything_is_sent(
     assert command.main(argv) == 2
     assert json.loads(capsys.readouterr().out)["stopped"] == stopped
     assert platform.seen == []
+
+
+def argv(tmp_path: Path, *extra: str) -> list[str]:
+    return [
+        "--run-root",
+        str(tmp_path),
+        "--product",
+        "1828",
+        "--source-map",
+        str(tmp_path / "map.json"),
+        *extra,
+    ]
+
+
+def test_the_card_version_is_the_one_the_output_was_compiled_with(
+    tmp_path: Path,
+    platform: Platform,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cards updated after compiling must not relabel the old output (PR #169 review item 1)."""
+    from insurance_harness.compilers.schema_fields import cards
+
+    monkeypatch.setattr(cards, "cards_version", lambda: "draft-updated-since")
+    assert command.main(argv(tmp_path)) == 0
+    submitted = platform.seen[1][2]
+    assert submitted["compiler_identity"] == f"harness/schema_fields@{COMPILED_WITH}"
+    assert {m["payload"]["provenance"]["compiler_version"] for m in submitted["members"]} == {
+        COMPILED_WITH
+    }
+    assert json.loads(capsys.readouterr().out)["cards_version"] == COMPILED_WITH
+
+
+def test_an_output_without_a_card_version_is_not_published(
+    tmp_path: Path, platform: Platform, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "1828" / "output.json"
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    del stored["cards_version"]
+    path.write_text(json.dumps(stored, ensure_ascii=False), encoding="utf-8")
+    assert command.main(argv(tmp_path)) == 2
+    assert json.loads(capsys.readouterr().out) == {"stopped": "CARDS_VERSION_UNKNOWN"}
+    assert platform.seen == []
+
+
+@pytest.mark.parametrize("broken", ["missing output", "invalid output", "invalid map"])
+def test_failures_print_codes_without_paths_or_input(
+    tmp_path: Path, platform: Platform, capsys: pytest.CaptureFixture[str], broken: str
+) -> None:
+    """PR #169 review item 2: no local path, exception text or input content leaves the command."""
+    output = tmp_path / "1828" / "output.json"
+    if broken == "missing output":
+        output.unlink()
+    elif broken == "invalid output":
+        output.write_text(json.dumps({"entity_id": "1828", "model": SECRET}), encoding="utf-8")
+    else:
+        (tmp_path / "map.json").write_text(
+            json.dumps({"space_id": SECRET, "products": {}}), encoding="utf-8"
+        )
+    assert command.main(argv(tmp_path)) == 2
+    captured = capsys.readouterr()
+    expected = "SOURCE_MAP_INVALID" if broken == "invalid map" else "OUTPUT_UNREADABLE"
+    assert json.loads(captured.out) == {"stopped": expected}
+    for text in (captured.out, captured.err):
+        assert str(tmp_path) not in text and "SECRET-MARKER" not in text

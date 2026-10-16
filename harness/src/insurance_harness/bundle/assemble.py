@@ -19,7 +19,11 @@ ACCESS_SCOPE = "space"
 
 
 class BundleError(ValueError):
-    """The claims cannot be published as they stand."""
+    """The claims cannot be published as they stand: a stable reason code, the field if any."""
+
+    def __init__(self, reason: str, field: str | None = None) -> None:
+        self.reason, self.field = reason, field
+        super().__init__(reason if field is None else f"{field}: {reason}")
 
 
 def assemble(
@@ -28,7 +32,7 @@ def assemble(
     """One claim member per claim, based on the given Head (None before the first release)."""
     slugs = [claim.logical_key for claim in claims]
     if len(set(slugs)) != len(slugs):
-        raise BundleError("two claims share a logical key")
+        raise BundleError("DUPLICATE_LOGICAL_KEY")
     members = []
     for claim in claims:
         payload = claim.model_dump(mode="json")
@@ -52,5 +56,5 @@ def assemble(
     )
     raw = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False).encode("utf-8")
     if len(raw) > MAX_BUNDLE_BYTES:
-        raise BundleError("bundle exceeds the platform's size limit")
+        raise BundleError("SIZE_LIMIT")
     return bundle

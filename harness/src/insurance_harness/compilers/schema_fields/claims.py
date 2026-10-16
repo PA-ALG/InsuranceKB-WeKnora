@@ -54,7 +54,11 @@ def claims_from(
                 state=ClaimState(field.state),
                 value=field.value if field.state == "present" else None,
                 evidence=_evidence(field, source, sources),
-                provenance=Provenance(compiler="schema_fields", model=output.model),
+                provenance=Provenance(
+                    compiler="schema_fields",
+                    compiler_version=output.cards_version or "",
+                    model=output.model,
+                ),
                 origin=SourceClass.SOURCE_SUPPORTED,
                 unknown_reason=UnknownReason.NOT_IN_MATERIAL if field.state == "unknown" else None,
             )
@@ -79,12 +83,12 @@ def _evidence(
             for span, saved in zip(spans, field.evidence, strict=True)
         )
     ):
-        raise BundleError(f"{field.field_key}: segment ids do not cut the saved evidence")
+        raise BundleError("EVIDENCE_MISMATCH", field.field_key)
     evidence = []
     for span in spans:
         revision = sources.get(span.document)
         if revision is None:
-            raise BundleError(f"{field.field_key}: {span.document} has no source revision")
+            raise BundleError("SOURCE_REVISION_MISSING", field.field_key)
         evidence.append(
             Evidence(
                 source_ref=revision.ref(span.document_sha256.lower()),
