@@ -24,7 +24,11 @@ def test_the_rate_table_revision_covers_every_product() -> None:
     revisions = [r for r in MANIFEST.get("revisions", []) if r["cards_version"] == RATE_TABLE_CARDS]
     assert len(revisions) == 1
     revision = revisions[0]
-    assert set(revision["products"]) == set(MANIFEST["products"])
+    assert set(revision["products"]) <= set(MANIFEST["products"])
+    for product in set(MANIFEST["products"]) - set(revision["products"]):
+        # Added after the revision (S4h: 1828), annotated directly under newer cards.
+        later = load_golden_v2(GOLDEN / f"{product}.json").cards_version
+        assert later > RATE_TABLE_CARDS, product
     for product, entry in revision["products"].items():
         keys = {field.field_key for field in load_golden_v2(GOLDEN / f"{product}.json").fields}
         assert set(entry["fields"]) == REVISED & keys
