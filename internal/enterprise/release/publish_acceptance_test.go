@@ -42,7 +42,9 @@ func newPlatform() *platform {
 	}
 }
 
-func (p *platform) CreateCandidate(_ context.Context, c release.Candidate, b release.Bundle) (release.Candidate, error) {
+func (p *platform) CreateCandidate(
+	_ context.Context, c release.Candidate, b release.Bundle,
+) (release.Candidate, error) {
 	if id, ok := p.byDigest[c.BundleDigest]; ok {
 		existing := p.candidates[id]
 		existing.Status = "existing"
@@ -284,7 +286,9 @@ func TestOnlyAnApprovedDecisionOfThisCandidateCanActivate(t *testing.T) {
 		_, err = s.Activate(ctx, principal(), spaceID, c.ID, d.ID)
 		require.Equal(t, release.ErrorCandidateNotApproved, codeOf(t, err))
 	}
-	other, err := s.Receive(ctx, principal(), spaceID, candidateBundle(t, "", nil, member(t, "z", map[string]any{"v": 9})))
+	other, err := s.Receive(
+		ctx, principal(), spaceID, candidateBundle(t, "", nil, member(t, "z", map[string]any{"v": 9})),
+	)
 	require.NoError(t, err)
 	approved, err := s.Decide(ctx, principal(), spaceID, other.ID, approve)
 	require.NoError(t, err)
