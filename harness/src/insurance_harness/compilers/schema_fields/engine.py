@@ -43,6 +43,8 @@ class FieldResult(BaseModel):
     state: Literal["present", "absent_explicitly", "unknown"]
     value: str | None = None
     evidence: list[VerifiedQuote] = Field(default_factory=list)
+    # Step-one selection in reading order (S4f); outputs written before S4f load as [].
+    segment_ids: list[str] = Field(default_factory=list)
 
 
 class CompileOutput(BaseModel):
@@ -202,6 +204,7 @@ class SchemaFieldsCompiler:
                     state=state,  # type: ignore[arg-type]
                     value=value,
                     evidence=source.evidence(ids),
+                    segment_ids=[segment.id for segment in source.ordered(ids)],
                 )
             )
         return CompileOutput(

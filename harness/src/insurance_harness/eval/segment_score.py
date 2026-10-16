@@ -136,10 +136,14 @@ def score_selection(
         gold = {sid for ids in located for sid in ids}
         chosen: set[str] = set()
         if guess is not None and guess.state == "present":
-            for quote in guess.evidence:
-                ids = segments(quote)
-                unmapped_predicted += not ids
-                chosen |= ids
+            recorded = _recorded_selection(source, guess)
+            if recorded is not None:
+                chosen = recorded
+            else:
+                for quote in guess.evidence:
+                    ids = segments(quote)
+                    unmapped_predicted += not ids
+                    chosen |= ids
         found = {sid for sid in gold if sid in chosen or source.copies(sid) & chosen}
         right = {sid for sid in chosen if sid in gold or source.copies(sid) & gold}
         copied_gold += len(found - chosen)
@@ -155,6 +159,16 @@ def score_selection(
         unmapped_predicted_quotes=unmapped_predicted,
         copy_credits=(copied_gold, copied_chosen),
     )
+
+
+def _recorded_selection(source: SegmentedSource, result: FieldResult) -> set[str] | None:
+    """The run's own segment ids, trusted only while they cut exactly the saved evidence (S4f)."""
+    if not result.segment_ids:
+        return None
+    ids, dropped = source.resolve(result.segment_ids)
+    if dropped or ids != result.segment_ids or source.evidence(ids) != result.evidence:
+        return None
+    return set(ids)
 
 
 def pool(reports: Sequence[SelectionReport]) -> SelectionReport:
