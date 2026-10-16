@@ -157,14 +157,18 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 			return committed, lookupErr
 		}
 		if errors.Is(err, repository.ErrWikiReleaseConflict) {
-			return release.Release{}, &release.Error{Code: release.ErrorReleaseConflict, Detail: "the active release changed"}
+			return release.Release{}, &release.Error{
+				Code: release.ErrorReleaseConflict, Detail: "the active release changed",
+			}
 		}
 		return release.Release{}, err
 	}
 	return s.ReleaseByID(ctx, w.TenantID, w.SpaceID, rel.ID)
 }
 
-func (s *Store) committed(ctx context.Context, scope types.WikiReleaseScope, w release.ActivationWrite) (release.Release, bool, error) {
+func (s *Store) committed(
+	ctx context.Context, scope types.WikiReleaseScope, w release.ActivationWrite,
+) (release.Release, bool, error) {
 	receipt, err := s.releases.GetReceipt(ctx, scope, w.Nonce)
 	if errors.Is(err, repository.ErrWikiReleaseNotFound) {
 		return release.Release{}, false, nil
@@ -178,8 +182,10 @@ func (s *Store) committed(ctx context.Context, scope types.WikiReleaseScope, w r
 
 func snapshotsOf(w release.ActivationWrite) ([]types.WikiReleaseMemberSnapshot, json.RawMessage, error) {
 	snapshots := make([]types.WikiReleaseMemberSnapshot, 0, len(w.Members))
-	manifest := releaseManifest{CandidateID: w.CandidateID, DecisionID: w.DecisionID,
-		DecisionDigest: w.DecisionDigest, BundleDigest: w.BundleDigest}
+	manifest := releaseManifest{
+		CandidateID: w.CandidateID, DecisionID: w.DecisionID,
+		DecisionDigest: w.DecisionDigest, BundleDigest: w.BundleDigest,
+	}
 	for _, m := range w.Members {
 		envelope, err := json.Marshal(memberEnvelope{
 			Version: 1, Payload: string(m.Payload), EvidenceRefs: m.EvidenceRefs, AccessScope: m.AccessScope,

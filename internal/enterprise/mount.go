@@ -2,6 +2,8 @@
 package enterprise
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -50,10 +52,18 @@ func Mount(r gin.IRouter, deps Deps) {
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/candidates/:candidate_id/preview", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/sources/:knowledge_id/attempts/:attempt/pages", policy)
+		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/decisions", policy)
+		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/activations", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/active", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id", policy)
 		group.Use(deps.Authorizer.Middleware())
 	}
 	group.POST("/candidates", func(c *gin.Context) { receive(c, deps.Candidates) })
 	group.GET("/candidates/:candidate_id/preview", func(c *gin.Context) { preview(c, deps.Candidates) })
+	group.POST("/candidates/:candidate_id/decisions", func(c *gin.Context) { decide(c, deps.Candidates) })
+	group.POST("/candidates/:candidate_id/activations", func(c *gin.Context) { activate(c, deps.Candidates) })
+	group.GET("/releases/active", func(c *gin.Context) { readRelease(c, deps.Candidates, "") })
+	group.GET("/releases/:release_id", func(c *gin.Context) { readRelease(c, deps.Candidates, c.Param("release_id")) })
 	group.GET("/sources/:knowledge_id/attempts/:attempt/pages", func(c *gin.Context) { pages(c, deps.Sources) })
 }
 
@@ -122,6 +132,94 @@ func preview(c *gin.Context, service *release.Service) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
 }
 
+// maxControlBody bounds decision and activation requests, which carry a few short fields.
+const maxControlBody = 64 << 10
+
+func decide(c *gin.Context, service *release.Service) {
+	p, ok := publishingRequest(c, service)
+	if !ok {
+		return
+	}
+	var in release.DecisionInput
+	if err := decodeControlBody(c, &in); err != nil {
+		writeError(c, err)
+		return
+	}
+	decision, err := service.Decide(c.Request.Context(), p, c.Param("space_id"), c.Param("candidate_id"), in)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": decision})
+}
+
+func activate(c *gin.Context, service *release.Service) {
+	p, ok := publishingRequest(c, service)
+	if !ok {
+		return
+	}
+	var in struct {
+		DecisionID string `json:"decision_id"`
+	}
+	if err := decodeControlBody(c, &in); err != nil {
+		writeError(c, err)
+		return
+	}
+	if strings.TrimSpace(in.DecisionID) == "" {
+		writeError(c, &release.Error{Code: release.ErrorDecisionInvalid, Detail: "decision_id is required"})
+		return
+	}
+	result, err := service.Activate(
+		c.Request.Context(), p, c.Param("space_id"), c.Param("candidate_id"), in.DecisionID,
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
+
+func readRelease(c *gin.Context, service *release.Service, releaseID string) {
+	p, ok := publishingRequest(c, service)
+	if !ok {
+		return
+	}
+	result, err := service.Release(c.Request.Context(), p, c.Param("space_id"), releaseID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
+
+func publishingRequest(c *gin.Context, service *release.Service) (release.Principal, bool) {
+	if service == nil {
+		candidateUnavailable(c)
+		return release.Principal{}, false
+	}
+	p, err := requestPrincipal(c)
+	if err != nil {
+		writeError(c, err)
+		return release.Principal{}, false
+	}
+	return p, true
+}
+
+// decodeControlBody reads one strict JSON object: bounded, no unknown fields, nothing after it.
+func decodeControlBody(c *gin.Context, into any) error {
+	invalid := &release.Error{Code: release.ErrorDecisionInvalid, Detail: "request body is not a valid JSON object"}
+	raw, err := io.ReadAll(io.LimitReader(c.Request.Body, maxControlBody+1))
+	if err != nil || len(raw) > maxControlBody {
+		return invalid
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(into) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		return invalid
+	}
+	return nil
+}
+
 func candidateUnavailable(c *gin.Context) {
 	c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
 		"success": false, "code": "SERVICE_UNAVAILABLE", "error": "candidate service is unavailable",
@@ -174,10 +272,14 @@ func writeError(c *gin.Context, err error) {
 	if errors.As(err, &failure) {
 		status := http.StatusBadRequest
 		switch failure.Code {
-		case release.ErrorCandidateNotFound:
+		case release.ErrorCandidateNotFound, release.ErrorDecisionNotFound, release.ErrorReleaseNotFound:
 			status = http.StatusNotFound
 		case release.ErrorReleaseAccessDenied:
 			status = http.StatusForbidden
+		case release.ErrorCandidateNotApproved, release.ErrorNeedsRebase, release.ErrorReleaseConflict:
+			status = http.StatusConflict
+		case release.ErrorServiceUnavailable:
+			status = http.StatusServiceUnavailable
 		}
 		c.AbortWithStatusJSON(status, gin.H{"success": false, "code": failure.Code, "error": failure.Detail})
 		return

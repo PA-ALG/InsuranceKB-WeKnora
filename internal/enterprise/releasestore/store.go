@@ -27,8 +27,10 @@ type Store struct {
 
 // New wires the adapter to the platform database and the configured Spaces.
 func New(db *gorm.DB, spaces Spaces) *Store {
-	return &Store{db: db, releases: repository.NewWikiReleaseRepository(db), spaces: spaces,
-		now: func() time.Time { return time.Now().UTC() }}
+	return &Store{
+		db: db, releases: repository.NewWikiReleaseRepository(db), spaces: spaces,
+		now: func() time.Time { return time.Now().UTC() },
+	}
 }
 
 type candidateRow struct {
@@ -125,7 +127,9 @@ func (s *Store) candidate(ctx context.Context, tenantID uint64, spaceID, id stri
 	err := s.db.WithContext(ctx).Where("tenant_id = ? AND space_id = ? AND id = ?", tenantID, spaceID, id).
 		Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return candidateRow{}, &release.Error{Code: release.ErrorCandidateNotFound, Detail: "no such candidate in this Space"}
+		return candidateRow{}, &release.Error{
+			Code: release.ErrorCandidateNotFound, Detail: "no such candidate in this Space",
+		}
 	}
 	return row, err
 }
@@ -153,7 +157,9 @@ func (s *Store) DecisionByID(ctx context.Context, tenantID uint64, spaceID, id s
 	err := s.db.WithContext(ctx).Where("tenant_id = ? AND space_id = ? AND id = ?", tenantID, spaceID, id).
 		Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return release.Decision{}, &release.Error{Code: release.ErrorDecisionNotFound, Detail: "no such decision in this Space"}
+		return release.Decision{}, &release.Error{
+			Code: release.ErrorDecisionNotFound, Detail: "no such decision in this Space",
+		}
 	}
 	if err != nil {
 		return release.Decision{}, err

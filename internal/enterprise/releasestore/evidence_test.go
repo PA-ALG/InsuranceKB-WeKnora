@@ -61,19 +61,25 @@ func resolver(t *testing.T, err error) *Evidence {
 // Service.Receive, which is what attaches the authenticated scope to the context.
 type memoryStore struct{}
 
-func (memoryStore) CreateCandidate(_ context.Context, c release.Candidate, _ release.Bundle) (release.Candidate, error) {
+func (memoryStore) CreateCandidate(
+	_ context.Context, c release.Candidate, _ release.Bundle,
+) (release.Candidate, error) {
 	c.ID, c.Status = "candidate-1", "created"
 	return c, nil
 }
+
 func (memoryStore) CandidateByID(context.Context, uint64, string, string) (release.Candidate, error) {
 	return release.Candidate{}, nil
 }
+
 func (memoryStore) BundleOf(context.Context, uint64, string, string) (release.Bundle, error) {
 	return release.Bundle{}, nil
 }
+
 func (memoryStore) Head(context.Context, uint64, string) (release.Head, error) {
 	return release.Head{}, nil
 }
+
 func (memoryStore) MembersOf(context.Context, uint64, string, string) (map[string]string, error) {
 	return nil, nil
 }

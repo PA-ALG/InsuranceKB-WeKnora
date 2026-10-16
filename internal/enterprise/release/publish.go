@@ -93,7 +93,9 @@ type Option func(*Service)
 func WithPublisher(p Publisher) Option { return func(s *Service) { s.publisher = p } }
 
 // Decide records a review outcome for a stored candidate of the caller's Space.
-func (s *Service) Decide(ctx context.Context, p Principal, spaceID, candidateID string, in DecisionInput) (Decision, error) {
+func (s *Service) Decide(
+	ctx context.Context, p Principal, spaceID, candidateID string, in DecisionInput,
+) (Decision, error) {
 	if err := s.canPublish(p, spaceID); err != nil {
 		return Decision{}, err
 	}

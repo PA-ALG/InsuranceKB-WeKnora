@@ -30,14 +30,16 @@ func TestSpacesResolveConfiguredScopesOnly(t *testing.T) {
 func TestSpacesRejectIncompleteDuplicateAndReservedEntries(t *testing.T) {
 	g3 := types.WikiReleaseScope{TenantID: 7, SpaceID: "g3", RawKBID: "g3raw", WikiKBID: "g3wiki"}
 	for name, raw := range map[string]string{
-		"not a list":     `{"tenant_id":7}`,
-		"unknown field":  `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r","wiki_kb_id":"w","x":1}]`,
-		"missing kb":     `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r"}]`,
-		"same kb twice":  `[{"tenant_id":7,"space_id":"s","raw_kb_id":"k","wiki_kb_id":"k"}]`,
-		"repeated space": `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r","wiki_kb_id":"w"},{"tenant_id":7,"space_id":"s","raw_kb_id":"r2","wiki_kb_id":"w2"}]`,
-		"shared wiki kb": `[{"tenant_id":7,"space_id":"a","raw_kb_id":"r","wiki_kb_id":"w"},{"tenant_id":7,"space_id":"b","raw_kb_id":"r2","wiki_kb_id":"w"}]`,
-		"g3 space":       `[{"tenant_id":7,"space_id":"g3","raw_kb_id":"r","wiki_kb_id":"w"}]`,
-		"g3 wiki kb":     `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r","wiki_kb_id":"g3wiki"}]`,
+		"not a list":    `{"tenant_id":7}`,
+		"unknown field": `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r","wiki_kb_id":"w","x":1}]`,
+		"missing kb":    `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r"}]`,
+		"same kb twice": `[{"tenant_id":7,"space_id":"s","raw_kb_id":"k","wiki_kb_id":"k"}]`,
+		"repeated space": `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r","wiki_kb_id":"w"},
+		                    {"tenant_id":7,"space_id":"s","raw_kb_id":"r2","wiki_kb_id":"w2"}]`,
+		"shared wiki kb": `[{"tenant_id":7,"space_id":"a","raw_kb_id":"r","wiki_kb_id":"w"},
+		                    {"tenant_id":7,"space_id":"b","raw_kb_id":"r2","wiki_kb_id":"w"}]`,
+		"g3 space":   `[{"tenant_id":7,"space_id":"g3","raw_kb_id":"r","wiki_kb_id":"w"}]`,
+		"g3 wiki kb": `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r","wiki_kb_id":"g3wiki"}]`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := ParseSpaces(raw, g3)
