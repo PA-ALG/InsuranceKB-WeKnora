@@ -741,6 +741,16 @@ func (s *knowledgeBaseService) DeleteKnowledgeBase(ctx context.Context, id strin
 	// Get tenant ID from context
 	tenantID := types.MustTenantIDFromContext(ctx)
 	tenantInfo, _ := types.TenantInfoFromContext(ctx)
+	if s.kgRepo == nil {
+		return errors.New("knowledge revision source guard is unavailable")
+	}
+	pinned, err := s.kgRepo.HasPinnedRevisionSourceInKnowledgeBase(ctx, tenantID, id)
+	if err != nil {
+		return err
+	}
+	if pinned {
+		return ErrKnowledgeRevisionSourcePinned
+	}
 
 	// Load the KB before soft-delete so we can snapshot its VectorStoreID
 	// into the async cleanup payload. GORM's soft-delete filter hides the
@@ -759,7 +769,10 @@ func (s *knowledgeBaseService) DeleteKnowledgeBase(ctx context.Context, id strin
 
 	// Step 1: Delete the knowledge base record first (mark as deleted)
 	logger.Infof(ctx, "Deleting knowledge base from database")
-	err = s.repo.DeleteKnowledgeBase(ctx, id)
+	err = s.kgRepo.DeleteKnowledgeBaseUnlessPinned(ctx, tenantID, id)
+	if errors.Is(err, repository.ErrResourcePinned) {
+		return ErrKnowledgeRevisionSourcePinned
+	}
 	if err != nil {
 		logger.ErrorWithFields(ctx, err, map[string]interface{}{
 			"knowledge_base_id": id,
@@ -851,6 +864,19 @@ func (s *knowledgeBaseService) ProcessKBDelete(ctx context.Context, t *asynq.Tas
 
 	// Set tenant context for downstream services
 	ctx = context.WithValue(ctx, types.TenantIDContextKey, tenantID)
+	// This must precede the cleanup defers: a refused delete has no side
+	// effects, and no deferred cleanup may turn SkipRetry into a retry.
+	if s.kgRepo == nil {
+		return errors.New("knowledge revision source guard is unavailable")
+	}
+	pinned, guardErr := s.kgRepo.HasPinnedRevisionSourceInKnowledgeBase(ctx, tenantID, kbID)
+	if guardErr != nil {
+		return guardErr
+	}
+	if pinned {
+		logger.Warnf(ctx, "KB delete refused: published sources are pinned (tenant=%d, kb=%s)", tenantID, kbID)
+		return fmt.Errorf("%w: %w", asynq.SkipRetry, ErrKnowledgeRevisionSourcePinned)
+	}
 	defer func() {
 		// Wiki rows are independent of the vector engine. Run this on every
 		// return path — including SkipRetry — with its own timeout so a slow

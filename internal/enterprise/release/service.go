@@ -14,6 +14,7 @@ type Service struct {
 	store     Store
 	evidence  EvidenceResolver
 	publisher Publisher
+	retirer   Retirer
 	verifier  EvidenceVerifier
 	schema    *jsonschema.Schema
 	// evidenceSchema is optional: without it, payload evidence fails closed as unverifiable.

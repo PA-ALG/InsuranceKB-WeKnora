@@ -53,7 +53,12 @@ func openSchema(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	schema := fmt.Sprintf("s4c2a_%d", time.Now().UnixNano())
 	require.NoError(t, admin.Exec("CREATE SCHEMA "+schema).Error)
-	t.Cleanup(func() { admin.Exec("DROP SCHEMA " + schema + " CASCADE") })
+	adminSQL, err := admin.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = admin.Exec("DROP SCHEMA " + schema + " CASCADE").Error
+		_ = adminSQL.Close()
+	})
 	separator := "?"
 	if strings.Contains(dsn, "?") {
 		separator = "&"
@@ -67,6 +72,7 @@ func openSchema(t *testing.T) *gorm.DB {
 	for _, name := range []string{"000002_release_falsification.up.sql", "000006_enterprise_candidates.up.sql"} {
 		require.NoError(t, db.Exec(migrationSQL(t, name)).Error, name)
 	}
+	setupRevisionSourceTables(t, db)
 	return db
 }
 
@@ -96,10 +102,11 @@ func rawBundle(t *testing.T, base string, slug, payload string) []byte {
 	if base != "" {
 		baseField = fmt.Sprintf(`"base_release_id": %q, `, base)
 	}
-	return []byte(fmt.Sprintf(`{"contract_version": "1", %s"origin": "compile", "compiler_identity": "harness/test",
+	raw := []byte(fmt.Sprintf(`{"contract_version": "1", %s"origin": "compile", "compiler_identity": "harness/test",
   "members": [{"kind": "claim", "logical_slug": %q, "payload": %s, "member_digest": %q,
                "evidence_refs": ["source:v1:k-1:1:abc"], "access_scope": "space"}]}`,
 		baseField, slug, payload, memberDigest(t, payload)))
+	return []byte(strings.ReplaceAll(string(raw), "source:v1:k-1:1:abc", postgresSourceRef))
 }
 
 var principal = release.Principal{TenantID: 7, Subject: "svc-harness"}
@@ -130,7 +137,7 @@ func TestPostgresPublishesAndReadsBackExactBytes(t *testing.T) {
 	require.Equal(t, r.ID, active.ID)
 	require.Len(t, active.Members, 1)
 	require.Equal(t, payload, string(active.Members[0].Payload), "payload bytes survive storage")
-	require.Equal(t, []string{"source:v1:k-1:1:abc"}, active.Members[0].EvidenceRefs)
+	require.Equal(t, []string{postgresSourceRef}, active.Members[0].EvidenceRefs)
 	require.Equal(t, "space", active.Members[0].AccessScope)
 
 	bundle, err := store.BundleOf(ctx, 7, "space-1", c.ID)

@@ -122,7 +122,8 @@ func Production(
 	}
 	store := New(db, spaces)
 	return release.NewService(store, NewEvidence(spaces, revisions), schemas,
-		release.WithPublisher(store), release.WithEvidenceVerifier(NewEvidenceVerifier(spaces, pages))), nil
+		release.WithPublisher(store), release.WithEvidenceVerifier(NewEvidenceVerifier(spaces, pages)),
+		release.WithRetirer(store)), nil
 }
 
 // reservedScopes are the scopes enterprise Spaces may not reuse: the G3 path keeps

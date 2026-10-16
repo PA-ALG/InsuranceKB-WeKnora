@@ -58,3 +58,11 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `internal/application/service/knowledge_process.go` | S4c-2c | 企业 RAW PDF 复用首次解析捕获；捕获全文保留原始换行与 HTML；精确扫描页信号以零 chunk 完成，跳过模型 | 部分（解析产物扩展点） | 上游提供按 scope 保存原始解析产物的扩展点后移除；S10 typed OCR 产物替代扫描消息判定 |
 | `internal/application/service/knowledge.go` | S4c-2c | 构造函数接收企业 CaptureScope，经既有 DI 注入 RAW KB 捕获范围；原服务无范围策略扩展点 | 部分（服务策略注入） | 上游提供解析捕获策略注入后移除构造接缝 |
 | `internal/router/router.go` | S4c-2c | 页接口先按 EnterpriseSpaces 核对 tenant/Space/RAW，再沿用 G3 映射，按精确 attempt 只读产物 | 部分（企业路由装配） | 上游提供企业模块注册与来源范围解析扩展点后移除路由接缝 |
+| `internal/application/repository/knowledge.go` | S4c-2b-1 | 提交登记 released、封存固定；发布事务复用升序知识/资源锁的固定与释放原语，KB 查询及批量删除锁序沿用同一来源权威 | 部分（通用修订保留策略） | 上游提供修订保留策略与事务内来源锁扩展点后移除接缝 |
+| `internal/application/repository/resource.go` | S4c-2b-1 | source_file 解绑在事务内按知识行锁检查已发布来源，保持其他关系的解除语义 | 部分（资源解绑策略） | 上游提供资源解除前的事务内策略扩展点后移除接缝 |
+| `internal/application/service/knowledgebase.go` | S4c-2b-1 | KB 软删及异步清理的所有副作用前检查固定来源，异步拒绝在清理 defer 之前以 SkipRetry 终止 | 部分（删除准入策略） | 上游提供 KB 删除与任务清理前的统一准入扩展点后移除接缝 |
+| `internal/types/interfaces/knowledge.go` | S4c-2b-1 | 知识仓库增加按 tenant/KB 查询固定来源的方法，供同步与异步删除共用 | 部分（修订保留查询） | 上游提供来源保留查询端口后移除接缝 |
+| `internal/application/service/knowledgebase_task_cancel_test.go` | S4c-2b-1 | 既有任务清理夹具显式注入无固定来源的知识仓库，保留原取消任务与 payload 断言 | 否（测试装配） | 上游提供删除准入测试装配后恢复 |
+| `internal/handler/knowledgebase.go` | S4c-2b-1 | KB 删除分支把来源固定拒绝映射为 409，沿用原有其他错误处理 | 部分（通用删除错误映射） | 上游提供删除准入冲突映射后移除接缝 |
+| `internal/application/service/knowledgebase_delete_datasource_test.go` | S4c-2b-1 | 两个既有同步删除夹具注入知识仓库并委托原 KB 删除，保留数据源清理断言 | 否（测试装配） | 上游提供原子删除准入测试装配后恢复 |
+| `internal/application/service/datasource_delete_sqlite_test.go` | S4c-2b-1 | SQLite 同步删除夹具注入委托原 KB 删除的知识仓库，保留真实数据源清理断言 | 否（测试装配） | 上游提供原子删除准入测试装配后恢复 |

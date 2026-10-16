@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -509,20 +510,20 @@ func insertRevisionLocked(
 	if err := tx.Create(revision).Error; err != nil {
 		return nil, err
 	}
-	if err := pinRevisionSourceLocked(tx, knowledge, revision); err != nil {
+	if err := recordRevisionSourceLocked(tx, knowledge, revision); err != nil {
 		return nil, err
 	}
 	return revision, nil
 }
 
-func pinRevisionSourceLocked(
+func recordRevisionSourceLocked(
 	tx *gorm.DB,
 	knowledge *types.Knowledge,
 	revision *types.KnowledgeRevision,
 ) error {
 	handle, ok := types.ParseResourcePath(knowledge.FilePath)
 	if !ok {
-		return fmt.Errorf("%w: source file is not a registered resource", ErrRevisionCommitFailed)
+		return nil
 	}
 	var resource types.StoredResource
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
@@ -531,8 +532,10 @@ func pinRevisionSourceLocked(
 	).First(&resource).Error; err != nil {
 		return fmt.Errorf("%w: source resource unavailable", ErrRevisionCommitFailed)
 	}
-	if resource.Lifecycle != types.ResourceLifecyclePersistent || resource.Size <= 0 ||
-		!strings.EqualFold(strings.TrimSpace(resource.MimeType), "application/pdf") {
+	if !strings.EqualFold(strings.TrimSpace(resource.MimeType), "application/pdf") {
+		return nil
+	}
+	if resource.Lifecycle != types.ResourceLifecyclePersistent || resource.Size <= 0 {
 		return fmt.Errorf("%w: source resource metadata is incomplete", ErrRevisionCommitFailed)
 	}
 	var bindingCount int64
@@ -564,8 +567,8 @@ func pinRevisionSourceLocked(
 		Size: resource.Size, MimeType: strings.ToLower(strings.TrimSpace(resource.MimeType)),
 		ManifestAlgorithm: revision.ManifestAlgorithm, ManifestDigest: revision.ManifestDigest,
 		ChunkCount: revision.ChunkCount, ImmutableLocator: types.BuildResourcePath(resource.Handle),
-		RetentionState: types.KnowledgeRevisionSourcePinned,
-		CreatedAt:      now, UpdatedAt: now,
+		RetentionState: types.KnowledgeRevisionSourceReleased, ReleasedAt: &now,
+		CreatedAt: now, UpdatedAt: now,
 	}
 	revisionSourceID, err := types.ComputeKnowledgeRevisionSourceID(*source)
 	if err != nil {
@@ -573,7 +576,7 @@ func pinRevisionSourceLocked(
 	}
 	source.RevisionSourceID = revisionSourceID
 	if err := tx.Create(source).Error; err != nil {
-		return fmt.Errorf("%w: persist immutable source pin: %v", ErrRevisionCommitFailed, err)
+		return fmt.Errorf("%w: persist immutable source record: %v", ErrRevisionCommitFailed, err)
 	}
 	return nil
 }
@@ -798,7 +801,13 @@ func (r *knowledgeRepository) SealRevisionSourcePageCount(
 	}
 	var source types.KnowledgeRevisionSource
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var knowledge types.Knowledge
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"tenant_id = ? AND id = ?", tenantID, knowledgeID,
+		).First(&knowledge).Error; err != nil {
+			return err
+		}
+		if err := tx.Where(
 			"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?",
 			tenantID, knowledgeID, attempt,
 		).First(&source).Error; err != nil {
@@ -809,6 +818,17 @@ func (r *knowledgeRepository) SealRevisionSourcePageCount(
 			source.RevisionSourceID != expectedRevisionSourceID {
 			return ErrRevisionCommitFailed
 		}
+		// Released sources may have lost their file or claim since commit.
+		// Reuse activation's knowledge/resource/source locks before sealing.
+		refs := []RevisionRef{{KnowledgeID: knowledgeID, ParseAttempt: attempt}}
+		if err := PinRevisionSources(tx, tenantID, refs); err != nil {
+			if errors.Is(err, ErrRevisionSourceUnavailable) {
+				return ErrRevisionCommitFailed
+			}
+			return err
+		}
+		source.RetentionState = types.KnowledgeRevisionSourcePinned
+		source.ReleasedAt = nil
 		if source.PageCount != nil {
 			if *source.PageCount != pageCount {
 				return ErrRevisionCommitFailed
@@ -817,6 +837,8 @@ func (r *knowledgeRepository) SealRevisionSourcePageCount(
 		}
 		candidate := source
 		candidate.PageCount = &pageCount
+		candidate.RetentionState = types.KnowledgeRevisionSourcePinned
+		candidate.ReleasedAt = nil
 		bindingDigest, digestErr := types.ComputeKnowledgeRevisionSourceBindingDigest(candidate)
 		if digestErr != nil {
 			return ErrRevisionCommitFailed
@@ -826,6 +848,7 @@ func (r *knowledgeRepository) SealRevisionSourcePageCount(
 			tenantID, knowledgeID, attempt, expectedRevisionSourceID,
 		).Updates(map[string]interface{}{
 			"page_count": pageCount, "binding_digest": bindingDigest, "updated_at": time.Now().UTC(),
+			"retention_state": types.KnowledgeRevisionSourcePinned, "released_at": nil,
 		})
 		if result.Error != nil {
 			return result.Error
@@ -835,6 +858,8 @@ func (r *knowledgeRepository) SealRevisionSourcePageCount(
 		}
 		source.PageCount = &pageCount
 		source.BindingDigest = bindingDigest
+		source.RetentionState = types.KnowledgeRevisionSourcePinned
+		source.ReleasedAt = nil
 		return nil
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -868,6 +893,12 @@ func (r *knowledgeRepository) SealRevisionSourceBinding(
 			knowledge.FileSHA256 != candidate.FileSHA256 ||
 			knowledge.FilePath != candidate.ImmutableLocator {
 			return ErrRevisionCommitFailed
+		}
+		if err := lockLiveKnowledgeBases(tx, candidate.TenantID, []string{knowledge.KnowledgeBaseID}); err != nil {
+			if errors.Is(err, ErrRevisionSourceUnavailable) {
+				return ErrRevisionCommitFailed
+			}
+			return err
 		}
 		var revision types.KnowledgeRevision
 		if err := tx.Where(
@@ -919,6 +950,7 @@ func (r *knowledgeRepository) SealRevisionSourceBinding(
 		).First(&sealed).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			now := time.Now().UTC()
+			candidate.ReleasedAt = nil
 			candidate.CreatedAt = now
 			candidate.UpdatedAt = now
 			if err := tx.Create(&candidate).Error; err != nil {
@@ -955,11 +987,13 @@ func (r *knowledgeRepository) SealRevisionSourceBinding(
 			"immutable_locator":  candidate.ImmutableLocator,
 			"binding_digest":     candidate.BindingDigest,
 			"retention_state":    candidate.RetentionState,
+			"released_at":        nil,
 			"updated_at":         time.Now().UTC(),
 		})
 		if result.Error != nil || result.RowsAffected != 1 {
 			return ErrRevisionCommitFailed
 		}
+		candidate.ReleasedAt = nil
 		sealed = candidate
 		return nil
 	})
@@ -986,6 +1020,239 @@ func (r *knowledgeRepository) HasPinnedRevisionSource(
 		tenantID, knowledgeID, types.KnowledgeRevisionSourcePinned,
 	).Count(&count).Error
 	return count > 0, err
+}
+
+// RevisionRef names one committed parse attempt of a knowledge.
+type RevisionRef struct {
+	KnowledgeID  string
+	ParseAttempt int64
+}
+
+// ErrRevisionSourceUnavailable means a cited source cannot be safely retained.
+var ErrRevisionSourceUnavailable = errors.New("revision source unavailable")
+
+// lockLiveKnowledgeBases follows knowledge locks and precedes resource/source
+// locks in every path that can pin a source. KB deletion takes the exclusive lock.
+func lockLiveKnowledgeBases(tx *gorm.DB, tenantID uint64, kbIDs []string) error {
+	unique := make(map[string]bool, len(kbIDs))
+	for _, id := range kbIDs {
+		unique[id] = true
+	}
+	ordered := make([]string, 0, len(unique))
+	for id := range unique {
+		ordered = append(ordered, id)
+	}
+	sort.Strings(ordered)
+	for _, id := range ordered {
+		var kb types.KnowledgeBase
+		err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where(
+			"tenant_id = ? AND id = ?", tenantID, id,
+		).First(&kb).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrRevisionSourceUnavailable
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func orderedRevisionRefs(refs []RevisionRef) []RevisionRef {
+	unique := make(map[RevisionRef]bool, len(refs))
+	for _, ref := range refs {
+		unique[ref] = true
+	}
+	ordered := make([]RevisionRef, 0, len(unique))
+	for ref := range unique {
+		ordered = append(ordered, ref)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].KnowledgeID != ordered[j].KnowledgeID {
+			return ordered[i].KnowledgeID < ordered[j].KnowledgeID
+		}
+		return ordered[i].ParseAttempt < ordered[j].ParseAttempt
+	})
+	return ordered
+}
+
+// PinRevisionSources participates in the caller's transaction. Knowledge locks
+// serialize with delete/reparse/unbind; shared KB locks exclude KB soft-deletion,
+// and resource locks serialize with file removal.
+// No retention update happens until the whole set has been validated.
+func PinRevisionSources(tx *gorm.DB, tenantID uint64, refs []RevisionRef) error {
+	refs = orderedRevisionRefs(refs)
+	lastID := ""
+	knowledgeBases := map[string]bool{}
+	for _, ref := range refs {
+		if tenantID == 0 || ref.KnowledgeID == "" || ref.ParseAttempt <= 0 {
+			return ErrRevisionSourceUnavailable
+		}
+		if ref.KnowledgeID == lastID {
+			continue
+		}
+		var knowledge types.Knowledge
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"tenant_id = ? AND id = ?", tenantID, ref.KnowledgeID,
+		).First(&knowledge).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) || knowledge.ParseStatus == types.ParseStatusDeleting {
+			return ErrRevisionSourceUnavailable
+		}
+		if err != nil {
+			return err
+		}
+		knowledgeBases[knowledge.KnowledgeBaseID] = true
+		lastID = ref.KnowledgeID
+	}
+	kbIDs := make([]string, 0, len(knowledgeBases))
+	for id := range knowledgeBases {
+		kbIDs = append(kbIDs, id)
+	}
+	if err := lockLiveKnowledgeBases(tx, tenantID, kbIDs); err != nil {
+		return err
+	}
+	resources := make(map[string]types.StoredResource)
+	resourceIDs := make([]string, 0)
+	sources := make([]types.KnowledgeRevisionSource, 0, len(refs))
+	for _, ref := range refs {
+		var source types.KnowledgeRevisionSource
+		err := tx.Where("tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?",
+			tenantID, ref.KnowledgeID, ref.ParseAttempt).Take(&source).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrRevisionSourceUnavailable
+		}
+		if err != nil {
+			return err
+		}
+		sources = append(sources, source)
+		if _, exists := resources[source.ResourceID]; !exists {
+			resources[source.ResourceID] = types.StoredResource{}
+			resourceIDs = append(resourceIDs, source.ResourceID)
+		}
+	}
+	sort.Strings(resourceIDs)
+	for _, id := range resourceIDs {
+		var resource types.StoredResource
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"id = ? AND tenant_id = ? AND state = ?", id, tenantID, types.ResourceStateActive,
+		).First(&resource).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrRevisionSourceUnavailable
+		}
+		if err != nil {
+			return err
+		}
+		resources[id] = resource
+	}
+	for _, source := range sources {
+		resource := resources[source.ResourceID]
+		if resource.Lifecycle != types.ResourceLifecyclePersistent || resource.Size != source.Size ||
+			resource.ContentHash != source.FileSHA256 || resource.Handle != source.ResourceHandle {
+			return ErrRevisionSourceUnavailable
+		}
+		var bindings int64
+		if err := tx.Model(&types.ResourceBinding{}).Where(
+			"tenant_id = ? AND resource_id = ? AND owner_type = ? AND owner_id = ? AND relation = ?",
+			tenantID, resource.ID, "knowledge", source.KnowledgeID, "source_file",
+		).Count(&bindings).Error; err != nil {
+			return err
+		}
+		if bindings != 1 {
+			return ErrRevisionSourceUnavailable
+		}
+		var locked types.KnowledgeRevisionSource
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?",
+			tenantID, source.KnowledgeID, source.ParseAttempt,
+		).Take(&locked).Error; err != nil {
+			return err
+		}
+	}
+	for _, ref := range refs {
+		if err := tx.Model(&types.KnowledgeRevisionSource{}).Where(
+			"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?",
+			tenantID, ref.KnowledgeID, ref.ParseAttempt,
+		).Updates(map[string]any{
+			"retention_state": types.KnowledgeRevisionSourcePinned, "released_at": nil, "updated_at": time.Now().UTC(),
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ReleaseRevisionSources uses the caller's transaction and never unseals G3 rows.
+func ReleaseRevisionSources(tx *gorm.DB, tenantID uint64, refs []RevisionRef) error {
+	refs = orderedRevisionRefs(refs)
+	lastID := ""
+	for _, ref := range refs {
+		if ref.KnowledgeID == lastID {
+			continue
+		}
+		var knowledge types.Knowledge
+		err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"tenant_id = ? AND id = ?", tenantID, ref.KnowledgeID,
+		).Take(&knowledge).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		lastID = ref.KnowledgeID
+	}
+	now := time.Now().UTC()
+	for _, ref := range refs {
+		if err := tx.Model(&types.KnowledgeRevisionSource{}).Where(
+			"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ? AND binding_digest = ''",
+			tenantID, ref.KnowledgeID, ref.ParseAttempt,
+		).Updates(map[string]any{
+			"retention_state": types.KnowledgeRevisionSourceReleased, "released_at": now, "updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *knowledgeRepository) HasPinnedRevisionSourceInKnowledgeBase(
+	ctx context.Context, tenantID uint64, knowledgeBaseID string,
+) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("knowledge_revision_sources AS s").
+		Joins("JOIN knowledges AS k ON k.id = s.knowledge_id AND k.tenant_id = s.tenant_id").
+		Where("s.tenant_id = ? AND k.knowledge_base_id = ? AND s.retention_state = ?",
+			tenantID, knowledgeBaseID, types.KnowledgeRevisionSourcePinned).Count(&count).Error
+	return count > 0, err
+}
+
+// DeleteKnowledgeBaseUnlessPinned makes the no-pins check and ordinary KB
+// soft-delete one transaction. Pinning holds this row FOR SHARE until commit,
+// so either activation wins and deletion refuses, or deletion makes later pins
+// unavailable before any asynchronous cleanup can run.
+func (r *knowledgeRepository) DeleteKnowledgeBaseUnlessPinned(
+	ctx context.Context, tenantID uint64, knowledgeBaseID string,
+) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var kb types.KnowledgeBase
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"tenant_id = ? AND id = ?", tenantID, knowledgeBaseID,
+		).First(&kb).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrKnowledgeBaseNotFound
+		}
+		if err != nil {
+			return err
+		}
+		pinned, err := (&knowledgeRepository{db: tx}).HasPinnedRevisionSourceInKnowledgeBase(
+			ctx, tenantID, knowledgeBaseID,
+		)
+		if err != nil {
+			return err
+		}
+		if pinned {
+			return ErrResourcePinned
+		}
+		return tx.Where("tenant_id = ? AND id = ?", tenantID, knowledgeBaseID).
+			Delete(&types.KnowledgeBase{}).Error
+	})
 }
 
 func typesDigestSHA256(value string) bool {
@@ -1402,6 +1669,7 @@ func (r *knowledgeRepository) deleteKnowledgeRowsUnlessRevisionPinned(
 		if err := tx.Model(&types.Knowledge{}).
 			Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("tenant_id = ? AND id IN ? AND deleted_at IS NULL", tenantID, ids).
+			Order("id ASC").
 			Pluck("id", &lockedIDs).Error; err != nil {
 			return err
 		}

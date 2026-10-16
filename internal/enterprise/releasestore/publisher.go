@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 
+	"gorm.io/gorm"
+
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -121,8 +123,13 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 		}
 		members = append(members, m)
 	}
+	retiredAt, err := s.retiredAt(ctx, scope, rel.ID)
+	if err != nil {
+		return release.Release{}, err
+	}
 	return release.Release{
-		ID: rel.ID, Epoch: rel.BaseActivationEpoch + 1, BaseReleaseID: rel.BaseReleaseID,
+		RetiredAt: retiredAt,
+		ID:        rel.ID, Epoch: rel.BaseActivationEpoch + 1, BaseReleaseID: rel.BaseReleaseID,
 		CandidateID: manifest.CandidateID, DecisionDigest: manifest.DecisionDigest, Members: members,
 	}, nil
 }
@@ -158,19 +165,51 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		ManifestDigest: preparation.ManifestDigest, BaseReleaseID: w.Expected.ReleaseID,
 		BaseActivationEpoch: w.Expected.Epoch, PreparationID: preparation.ID, CreatedAt: now, ActivatedAt: now,
 	}
-	_, err = s.releases.Activate(ctx, repository.WikiReleaseActivationWrite{
-		Preparation: &preparation, Release: &rel, Members: snapshots,
-		ExpectedReleaseID: w.Expected.ReleaseID, ExpectedActivationEpoch: w.Expected.Epoch,
-		Nonce: w.Nonce, AuthorizationDigest: w.DecisionDigest, ActivatedBy: w.Subject, ActivatedAt: now,
-		ActivationReceiptID: "rcpt_" + key, ExpectedPreparationID: preparation.ID,
-		ExpectedPreparationDigest: preparation.PreparationDigest,
-		// A first release must not take over a wiki KB that another Head already serves.
-		RequireInitialWikiKBUnbound: w.Expected.ReleaseID == "",
+	refs, err := sourceRefs(w.Members)
+	if err != nil {
+		return release.Release{}, &release.Error{
+			Code: release.ErrorSourceUnavailable, Detail: "a cited source is unavailable",
+		}
+	}
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockSourceKnowledges(tx, w.TenantID, refs); err != nil {
+			return err
+		}
+		releases := repository.NewWikiReleaseRepository(tx)
+		if _, err := releases.GetReceipt(ctx, scope, w.Nonce); err == nil {
+			return repository.ErrWikiReleaseConflict
+		} else if !errors.Is(err, repository.ErrWikiReleaseNotFound) {
+			return err
+		}
+		if err := repository.PinRevisionSources(tx, w.TenantID, refs); err != nil {
+			return err
+		}
+		if _, err := lockHead(tx, scope); err != nil {
+			return err
+		}
+		_, err := releases.Activate(ctx, repository.WikiReleaseActivationWrite{
+			Preparation: &preparation, Release: &rel, Members: snapshots,
+			ExpectedReleaseID: w.Expected.ReleaseID, ExpectedActivationEpoch: w.Expected.Epoch,
+			Nonce: w.Nonce, AuthorizationDigest: w.DecisionDigest, ActivatedBy: w.Subject, ActivatedAt: now,
+			ActivationReceiptID: "rcpt_" + key, ExpectedPreparationID: preparation.ID,
+			ExpectedPreparationDigest: preparation.PreparationDigest,
+			// A first release must not take over a wiki KB that another Head already serves.
+			RequireInitialWikiKBUnbound: w.Expected.ReleaseID == "",
+		})
+		if err != nil {
+			return err
+		}
+		return storeSourceLinks(tx, w, rel.ID, refs)
 	})
 	if err != nil {
 		// A concurrent retry of the same activation may have committed first.
 		if committed, ok, lookupErr := s.committed(ctx, scope, w); ok || lookupErr != nil {
 			return committed, lookupErr
+		}
+		if errors.Is(err, repository.ErrRevisionSourceUnavailable) {
+			return release.Release{}, &release.Error{
+				Code: release.ErrorSourceUnavailable, Detail: "a cited source is unavailable",
+			}
 		}
 		if errors.Is(err, repository.ErrWikiReleaseConflict) {
 			return release.Release{}, &release.Error{

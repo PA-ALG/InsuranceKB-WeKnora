@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Publishing failures, in addition to the receive and preview codes.
@@ -21,6 +22,10 @@ const (
 	ErrorReleaseConflict      = "RELEASE_CONFLICT"
 	ErrorReleaseNotFound      = "RELEASE_NOT_FOUND"
 	ErrorServiceUnavailable   = "SERVICE_UNAVAILABLE"
+	ErrorReleaseActive        = "RELEASE_ACTIVE"
+	ErrorRetirementInvalid    = "RETIREMENT_INVALID"
+	ErrorSourceUnavailable    = "SOURCE_UNAVAILABLE"
+	ErrorInvalidRequest       = "INVALID_REQUEST"
 )
 
 // DecisionInput is a review outcome reported for one candidate. Quality scoring and
@@ -57,6 +62,8 @@ type Release struct {
 	CandidateID    string   `json:"candidate_id"`
 	DecisionDigest string   `json:"decision_digest"`
 	Members        []Member `json:"members"`
+
+	RetiredAt *time.Time `json:"retired_at,omitempty"`
 }
 
 // ActivationWrite is everything the platform needs to publish atomically: the
