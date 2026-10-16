@@ -97,6 +97,11 @@ def _squeeze(text: str) -> tuple[str, list[int]]:
     return "".join(kept), offsets
 
 
+def same_text(a: str, b: str) -> bool:
+    """Equal once whitespace and width are ignored: line endings and spacing are not content."""
+    return _squeeze(a)[0] == _squeeze(b)[0]
+
+
 class SegmentedSource:
     """One product's pages, split once; the only place segment ids are resolved."""
 

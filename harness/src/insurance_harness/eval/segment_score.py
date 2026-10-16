@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.eval.product_sources import check_product_id, source_directory, source_pages
 from insurance_harness.evidence.quote_verification import Digest, NonBlank, VerifiedQuote
-from insurance_harness.evidence.segments import SegmentedSource
+from insurance_harness.evidence.segments import SegmentedSource, same_text
 
 State = Literal["present", "absent_explicitly", "unknown"]
 COMPLETE_RECALL = 0.8
@@ -136,10 +136,14 @@ def score_selection(
         gold = {sid for ids in located for sid in ids}
         chosen: set[str] = set()
         if guess is not None and guess.state == "present":
-            for quote in guess.evidence:
-                ids = segments(quote)
-                unmapped_predicted += not ids
-                chosen |= ids
+            recorded = _recorded_selection(source, guess)
+            if recorded is not None:
+                chosen = recorded
+            else:
+                for quote in guess.evidence:
+                    ids = segments(quote)
+                    unmapped_predicted += not ids
+                    chosen |= ids
         found = {sid for sid in gold if sid in chosen or source.copies(sid) & chosen}
         right = {sid for sid in chosen if sid in gold or source.copies(sid) & gold}
         copied_gold += len(found - chosen)
@@ -155,6 +159,30 @@ def score_selection(
         unmapped_predicted_quotes=unmapped_predicted,
         copy_credits=(copied_gold, copied_chosen),
     )
+
+
+def _recorded_selection(source: SegmentedSource, result: FieldResult) -> set[str] | None:
+    """The run's own segment ids, trusted only while they cut the saved evidence (S4f).
+
+    Document, fingerprint and page must match exactly; the text may differ only in whitespace
+    and width, the same rule Golden segment ids follow (page text keeps CRLF since S4c-1).
+    """
+    if not result.segment_ids:
+        return None
+    ids, dropped = source.resolve(result.segment_ids)
+    if dropped or ids != result.segment_ids:
+        return None
+    cut = source.evidence(ids)
+    if len(cut) != len(result.evidence) or not all(
+        _place(a) == _place(b) and same_text(a.quote, b.quote)
+        for a, b in zip(cut, result.evidence, strict=True)
+    ):
+        return None
+    return set(ids)
+
+
+def _place(quote: VerifiedQuote) -> tuple[str, str, int]:
+    return quote.document, quote.document_sha256.lower(), quote.page
 
 
 def pool(reports: Sequence[SelectionReport]) -> SelectionReport:
