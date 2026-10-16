@@ -24,7 +24,6 @@ import (
 	"github.com/Tencent/WeKnora/internal/mcpserver"
 	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/tracing/langfuse"
-	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 
 	_ "github.com/Tencent/WeKnora/docs" // swagger docs
@@ -413,26 +412,22 @@ func registerConfiguredG3PlatformRoutes(v1 *gin.RouterGroup, params RouterParams
 }
 
 func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *rbacGuards) {
-	var captured types.WikiReleaseScope
-	if params.Config != nil && params.Config.G3PlatformProcessing != nil {
-		cfg := params.Config.G3PlatformProcessing
-		if cfg.Enabled && cfg.Mode == "ISOLATED_NOT_FOR_PRODUCTION" {
-			captured = types.WikiReleaseScope{
-				TenantID: cfg.TenantID, SpaceID: cfg.SpaceID, RawKBID: cfg.RawKBID, WikiKBID: cfg.WikiKBID,
-			}
-		}
-	}
 	// Captures currently exist only in this configured isolated scope. Replace
 	// this mapping when S4c-2 provides managed Space/source bindings and capture
 	// persistence; never infer Space membership from a caller-supplied source ID.
 	store := source.ArtifactStoreFunc(func(
 		ctx context.Context, scope source.Scope, id string, attempt int64,
 	) (*source.Artifact, error) {
-		if captured.TenantID == 0 || captured.RawKBID == "" || captured.WikiKBID == "" ||
-			scope.TenantID != captured.TenantID || scope.SpaceID != captured.SpaceID {
+		runtime, err := config.DecodeG3PlatformProcessing(params.Config, time.Now())
+		if err != nil {
+			return nil, &source.Error{
+				Code: source.ErrorInvalidRequest, Detail: "source request authorization is invalid",
+			}
+		}
+		if runtime == nil || scope.TenantID != runtime.Scope.TenantID || scope.SpaceID != runtime.Scope.SpaceID {
 			return nil, source.ErrNotFound
 		}
-		return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, captured, id, attempt)
+		return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, runtime.Scope, id, attempt)
 	})
 	enterprise.Mount(v1.Group("/enterprise/spaces/:space_id"), enterprise.Deps{
 		Sources: source.NewService(store), Authorizer: guards.ensureAPIKeyAuthorizer(),

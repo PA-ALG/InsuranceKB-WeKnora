@@ -34,6 +34,8 @@ func (s *Service) Pages(ctx context.Context, scope Scope, knowledgeID string, at
 			return nil, &Error{Code: ErrorSourceNotFound, Detail: "source revision was not found"}
 		case errors.Is(err, ErrNotCaptured):
 			return nil, &Error{Code: ErrorNotCaptured, Detail: "parse artifact was not captured"}
+		case errors.As(err, &failure) && failure.Code == ErrorInvalidRequest:
+			return nil, &Error{Code: ErrorInvalidRequest, Detail: "source request authorization is invalid"}
 		case errors.As(err, &failure) && failure.Code == ErrorIntegrity:
 			return nil, integrity()
 		default:

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -153,4 +154,19 @@ func TestMountMissingCandidatesDoesNotDisableSources(t *testing.T) {
 		require.Equal(t, http.StatusServiceUnavailable, w.Code)
 		require.Contains(t, w.Body.String(), "SERVICE_UNAVAILABLE")
 	}
+}
+
+func TestMountMissingAuthorizerDescribesTheEnterpriseService(t *testing.T) {
+	r := gin.New()
+	r.Use(middleware.Auth(tenantService{}, userService{}, nil, keyService{key: machineKey()}, nil))
+	enterprise.Mount(r.Group("/api/v1/enterprise/spaces/:space_id"), enterprise.Deps{
+		Sources: source.NewService(&pageStore{artifact: mountArtifact(t)}),
+	})
+	req := httptest.NewRequest(http.MethodGet, sourcePagesPath, nil)
+	req.Header.Set("X-API-Key", "test-key")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Contains(t, w.Body.String(), "enterprise service is unavailable")
+	require.NotContains(t, w.Body.String(), "candidate")
 }

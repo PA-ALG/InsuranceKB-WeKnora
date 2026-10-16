@@ -64,3 +64,11 @@ func TestPagesRequireScopeAndHonorCancellationBeforeLoading(t *testing.T) {
 	require.Equal(t, "SOURCE_UNAVAILABLE", code(t, err))
 	require.Zero(t, s.calls)
 }
+
+func TestPagesSanitizeInvalidAuthorizationFromThePlatformAdapter(t *testing.T) {
+	_, err := source.NewService(&store{err: &source.Error{
+		Code: source.ErrorInvalidRequest, Detail: "private policy diagnostic",
+	}}).Pages(context.Background(), scope, "k-1", 2)
+	require.Equal(t, "INVALID_REQUEST", code(t, err))
+	require.NotContains(t, err.Error(), "private policy diagnostic")
+}

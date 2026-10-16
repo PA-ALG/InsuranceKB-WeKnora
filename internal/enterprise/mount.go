@@ -36,7 +36,7 @@ func Mount(r gin.IRouter, deps Deps) {
 		}
 		if deps.Authorizer == nil {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
-				"success": false, "code": "SERVICE_UNAVAILABLE", "error": "candidate service is unavailable",
+				"success": false, "code": "SERVICE_UNAVAILABLE", "error": "enterprise service is unavailable",
 			})
 			return
 		}
