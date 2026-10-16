@@ -2,12 +2,16 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
@@ -27,6 +31,7 @@ func TestEnterpriseScannedSignalRequiresOriginalCompleteError(t *testing.T) {
 		"page 0 is scanned", "page 01 is scanned", "page -1 is scanned",
 		"page 1 is scanned\n", " page 1 is scanned", "page 1 is scanned ",
 		"page 1 is scanned\xff", "page \xff1 is scanned", "Page 1 is scanned",
+		"page 1 is scanned\x00", "page \x001 is scanned", "\x00", "\xff",
 	} {
 		t.Run(parserError, func(t *testing.T) {
 			u := uploadToEnterpriseRawKB(t, &types.ReadResult{Error: parserError})
@@ -34,6 +39,8 @@ func TestEnterpriseScannedSignalRequiresOriginalCompleteError(t *testing.T) {
 			require.Equal(t, types.ParseStatusFailed, u.knowledge.ParseStatus)
 			require.Zero(t, u.chunks.writes)
 			require.Len(t, u.reader.requests, 1)
+			require.NotContains(t, u.reader.result.Error, "\x00")
+			require.True(t, utf8.ValidString(u.reader.result.Error))
 		})
 	}
 }
@@ -135,12 +142,69 @@ func TestEnterpriseScannedPDFDoesNotResolveAnEmbeddingModel(t *testing.T) {
 }
 
 func TestEnterpriseCaptureRejectsTextThatWouldChangeDuringSanitization(t *testing.T) {
-	parsed := firstParseNative(t, "条款")
-	parsed.MarkdownContent += "\xff"
-	u := uploadToEnterpriseRawKB(t, parsed)
-	require.Error(t, u.service.ProcessDocument(context.Background(), u.task))
-	require.Equal(t, types.ParseStatusFailed, u.knowledge.ParseStatus)
-	require.Zero(t, u.chunks.writes)
+	for _, invalid := range []struct{ name, text string }{
+		{"NUL", "条款\x00责任"}, {"invalid UTF-8", "条款\xff责任"},
+	} {
+		for _, entry := range []string{"convert", "ProcessDocument"} {
+			t.Run(invalid.name+"/"+entry, func(t *testing.T) {
+				parsed := firstParseNative(t, invalid.text)
+				u := uploadToEnterpriseRawKB(t, parsed)
+				var err error
+				if entry == "convert" {
+					_, err = convertEnterpriseUpload(t, u)
+				} else {
+					err = u.service.ProcessDocument(context.Background(), u.task)
+				}
+				require.ErrorContains(t, err, "G3_FIRST_PARSE_ARTIFACT_UNAVAILABLE")
+				require.Equal(t, types.ParseStatusFailed, u.knowledge.ParseStatus)
+				require.Equal(t, invalid.text, parsed.MarkdownContent, "invalid source text must not be rewritten")
+				require.Len(t, u.reader.requests, 1)
+				require.Zero(t, u.chunks.writes)
+				_, err = u.artifact(enterpriseScope, 3)
+				require.ErrorIs(t, err, source.ErrNotCaptured)
+				entries, err := os.ReadDir(u.store.reuse.root)
+				if err == nil {
+					require.Empty(t, entries, "no record or temporary capture file may survive")
+				} else {
+					require.ErrorIs(t, err, os.ErrNotExist)
+				}
+			})
+		}
+	}
+}
+
+func convertEnterpriseUpload(t *testing.T, u *enterpriseUpload) (*types.ReadResult, error) {
+	t.Helper()
+	var payload types.DocumentProcessPayload
+	require.NoError(t, json.Unmarshal(u.task.Payload(), &payload))
+	kb := u.service.kbService.(*createKnowledgeFileKBServiceStub).kb
+	return u.service.convert(context.Background(), payload, kb, u.knowledge, ResolveProcessConfig(kb, nil), true)
+}
+
+func TestCaptureSanitizesNonBodyFieldsWithoutChangingMarkdown(t *testing.T) {
+	original := "条款😀\r\n<table><tr><td>责任</td></tr></table>\r\n附录"
+	for _, entry := range []string{"convert", "ProcessDocument"} {
+		t.Run(entry, func(t *testing.T) {
+			parsed := firstParseNative(t, original)
+			parsed.ImageDirPath = "images\x00\xff"
+			parsed.Metadata = map[string]string{"pages": "2\x00\xff", "description": "页\x00码\xff"}
+			u := uploadToEnterpriseRawKB(t, parsed)
+			if entry == "convert" {
+				got, err := convertEnterpriseUpload(t, u)
+				require.NoError(t, err)
+				require.Same(t, parsed, got)
+			} else {
+				require.NoError(t, u.service.ProcessDocument(context.Background(), u.task))
+				a, err := u.artifact(enterpriseScope, 3)
+				require.NoError(t, err)
+				require.Equal(t, original, a.Markdown)
+			}
+			require.Equal(t, original, parsed.MarkdownContent)
+			require.Equal(t, "images", parsed.ImageDirPath)
+			require.Equal(t, map[string]string{"pages": "2", "description": "页码"}, parsed.Metadata)
+			require.Len(t, u.reader.requests, 1)
+		})
+	}
 }
 
 func TestCaptureScopeExcludesURLImports(t *testing.T) {

@@ -4229,9 +4229,7 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 	// <img> tags to `![...](...)` and then escaping them in a later
 	// HTML→GFM pass. Line endings are normalized first so injected row
 	// breaks are plain LF.
-	if !firstParse {
-		sanitizeReadResult(convertResult)
-	}
+	sanitizeReadResult(convertResult, firstParse)
 	if convertResult != nil && !firstParse {
 		convertResult.MarkdownContent = chunker.NormalizeLineEndings(convertResult.MarkdownContent)
 		if convertResult.MarkdownContent != "" {
@@ -4409,16 +4407,17 @@ func (s *knowledgeService) enterpriseScannedPDF(
 }
 
 // sanitizeReadResult protects every text field that can cross from a parser
-// into the embedding, storage, or tracing layers. A parser may return a Go
-// string containing arbitrary bytes even though the string type itself does
-// not enforce UTF-8 validity.
-func sanitizeReadResult(result *types.ReadResult) {
+// into the embedding, storage, or tracing layers. Capture text is validated
+// without rewriting; capture errors are cleaned after their raw classification.
+func sanitizeReadResult(result *types.ReadResult, capture bool) {
 	if result == nil {
 		return
 	}
-	result.MarkdownContent = common.CleanInvalidUTF8(result.MarkdownContent)
+	if !capture {
+		result.MarkdownContent = common.CleanInvalidUTF8(result.MarkdownContent)
+		result.Error = common.CleanInvalidUTF8(result.Error)
+	}
 	result.ImageDirPath = common.CleanInvalidUTF8(result.ImageDirPath)
-	result.Error = common.CleanInvalidUTF8(result.Error)
 	for key, value := range result.Metadata {
 		result.Metadata[key] = common.CleanInvalidUTF8(value)
 	}
@@ -4583,9 +4582,7 @@ func (s *knowledgeService) convert(
 		})
 		return &types.ReadResult{Error: result.Error}, nil
 	}
-	if !firstParse {
-		sanitizeReadResult(result)
-	}
+	sanitizeReadResult(result, firstParse)
 	if result.Error != "" {
 		result.Error = common.CleanInvalidUTF8(result.Error)
 		logger.Errorf(ctx, "[convert] parser returned error kb=%s knowledge=%s file=%q type=%s engine=%q: %s",
@@ -4603,7 +4600,7 @@ func (s *knowledgeService) convert(
 	if firstParse {
 		var projection conceptNativeHeader830G2
 		if payload.Revision == nil || result.NativeStructure == nil || len(result.ImageRefs) != 0 || result.IsAudio ||
-			!utf8.ValidString(result.MarkdownContent) ||
+			!utf8.ValidString(result.MarkdownContent) || strings.ContainsRune(result.MarkdownContent, '\x00') ||
 			json.Unmarshal(result.NativeStructure.SanitizedJSON, &projection) != nil {
 			err = ErrConceptSourceAuthorityUnavailable830G2
 		} else {
