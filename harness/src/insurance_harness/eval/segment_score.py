@@ -1,12 +1,17 @@
-"""Segment selection scoring against Golden v2 (S4d Spec §3.5).
+"""Segment selection scoring against Golden v2 (S4d Spec §3.5, S4e Spec §3.2).
 
-Golden v2 stores evidence as page quotes, not segment ids, so it survives changes to the
-segmentation rules: Golden quotes and predicted evidence are both mapped onto the current
-segments, ignoring whitespace and width. A Golden quote that maps to no segment (missing,
-ambiguous, or cited against another document fingerprint) is counted, never guessed.
-Values are scored separately by the S2c semantic path.
+Golden v2 stores evidence as page quotes with the segment id they were labelled on. A Golden
+quote is taken by that id while the segment still holds exactly the quoted text, and otherwise
+mapped onto the current segments like predicted evidence, ignoring whitespace and width. A quote
+that maps to no segment (missing, ambiguous, or cited against another document fingerprint) is
+counted, never guessed. A passage repeated word for word in another document is the same evidence
+(user ruling 2026-10-15), so a segment and its copies credit each other. Values are scored
+separately by the S2c semantic path.
+
+usage: python -m insurance_harness.eval.segment_score --run-root <dir> --products <id>...
 """
 
+import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,12 +20,14 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from insurance_harness.compilers.schema_fields.engine import FieldResult
+from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
+from insurance_harness.eval.product_sources import check_product_id, source_directory, source_pages
 from insurance_harness.evidence.quote_verification import Digest, NonBlank, VerifiedQuote
 from insurance_harness.evidence.segments import SegmentedSource
 
 State = Literal["present", "absent_explicitly", "unknown"]
 COMPLETE_RECALL = 0.8
+GOLDEN_DIR = Path("dataset/golden/v2")
 
 
 class GoldenV2Evidence(BaseModel):
@@ -29,7 +36,7 @@ class GoldenV2Evidence(BaseModel):
     document_sha256: Digest
     page: int = Field(ge=1)
     quote: NonBlank
-    segment_id: NonBlank | None  # the id at annotation time; scoring re-maps the quote
+    segment_id: NonBlank | None  # the id at annotation time; used while it still holds the quote
 
 
 class GoldenV2Field(BaseModel):
@@ -91,12 +98,18 @@ class SelectionReport:
     complete_at_08: int
     state_agreement: tuple[int, int]
     unmapped_golden_quotes: int
+    unmapped_predicted_quotes: int  # evidence of scored predictions that maps to no segment
+    copy_credits: tuple[int, int]  # (Golden segments, selected segments) credited via a copy
 
 
 def score_selection(
     source: SegmentedSource, golden: GoldenV2, predicted: Sequence[FieldResult]
 ) -> SelectionReport:
-    """Per present Golden field: recall |E∩G|/|G| and precision |E∩G|/|E| over segment ids."""
+    """Per present Golden field: recall over Golden segments and precision over selected ones.
+
+    A Golden segment counts as found when it or one of its copies is selected; a selected
+    segment counts as right when it or one of its copies is in Golden.
+    """
     by_key: dict[str, FieldResult] = {}
     for result in predicted:
         if by_key.setdefault(result.field_key, result) is not result:
@@ -106,10 +119,11 @@ def score_selection(
     def segments(quote: GoldenV2Evidence | VerifiedQuote) -> set[str]:
         if fingerprints.get((quote.document, quote.page)) != quote.document_sha256.lower():
             return set()
-        return source.locate(quote.document, quote.page, quote.quote)
+        recorded = quote.segment_id if isinstance(quote, GoldenV2Evidence) else None
+        return source.locate(quote.document, quote.page, quote.quote, recorded)
 
     scored: list[FieldSelection] = []
-    agree = unmapped = 0
+    agree = unmapped = unmapped_predicted = copied_gold = copied_chosen = 0
     for field in golden.fields:
         guess = by_key.get(field.field_key)
         state: State | Literal["missing"] = guess.state if guess is not None else "missing"
@@ -120,16 +134,54 @@ def score_selection(
         if field.state != "present":
             continue
         gold = {sid for ids in located for sid in ids}
-        chosen = (
-            {sid for quote in guess.evidence for sid in segments(quote)}
-            if guess is not None and guess.state == "present"
-            else set()
-        )
-        hit = len(gold & chosen)
-        recall = hit / len(gold) if gold else None
-        precision = hit / len(chosen) if gold and chosen else None
+        chosen: set[str] = set()
+        if guess is not None and guess.state == "present":
+            for quote in guess.evidence:
+                ids = segments(quote)
+                unmapped_predicted += not ids
+                chosen |= ids
+        found = {sid for sid in gold if sid in chosen or source.copies(sid) & chosen}
+        right = {sid for sid in chosen if sid in gold or source.copies(sid) & gold}
+        copied_gold += len(found - chosen)
+        copied_chosen += len(right - gold)
+        recall = len(found) / len(gold) if gold else None
+        precision = len(right) / len(chosen) if gold and chosen else None
         scored.append(FieldSelection(field.field_key, field.state, state, recall, precision))
 
+    return _summary(
+        scored,
+        state_agreement=(agree, len(golden.fields)),
+        unmapped_golden_quotes=unmapped,
+        unmapped_predicted_quotes=unmapped_predicted,
+        copy_credits=(copied_gold, copied_chosen),
+    )
+
+
+def pool(reports: Sequence[SelectionReport]) -> SelectionReport:
+    """Several products as one report: means over all their present fields, counts summed."""
+    return _summary(
+        [field for report in reports for field in report.fields],
+        state_agreement=(
+            sum(r.state_agreement[0] for r in reports),
+            sum(r.state_agreement[1] for r in reports),
+        ),
+        unmapped_golden_quotes=sum(r.unmapped_golden_quotes for r in reports),
+        unmapped_predicted_quotes=sum(r.unmapped_predicted_quotes for r in reports),
+        copy_credits=(
+            sum(r.copy_credits[0] for r in reports),
+            sum(r.copy_credits[1] for r in reports),
+        ),
+    )
+
+
+def _summary(
+    scored: Sequence[FieldSelection],
+    *,
+    state_agreement: tuple[int, int],
+    unmapped_golden_quotes: int,
+    unmapped_predicted_quotes: int,
+    copy_credits: tuple[int, int],
+) -> SelectionReport:
     recalls = [f.recall for f in scored if f.recall is not None]
     precisions = [f.precision for f in scored if f.precision is not None]
     return SelectionReport(
@@ -137,6 +189,47 @@ def score_selection(
         recall_mean=fmean(recalls) if recalls else None,
         precision_mean=fmean(precisions) if precisions else None,
         complete_at_08=sum(1 for value in recalls if value >= COMPLETE_RECALL),
-        state_agreement=(agree, len(golden.fields)),
-        unmapped_golden_quotes=unmapped,
+        state_agreement=state_agreement,
+        unmapped_golden_quotes=unmapped_golden_quotes,
+        unmapped_predicted_quotes=unmapped_predicted_quotes,
+        copy_credits=copy_credits,
     )
+
+
+def _line(label: str, report: SelectionReport) -> str:
+    def mean(value: float | None) -> str:
+        return "-" if value is None else f"{value:.3f}"
+
+    scored = sum(1 for f in report.fields if f.recall is not None)
+    agree, total = report.state_agreement
+    return (
+        f"{label}: recall {mean(report.recall_mean)} precision {mean(report.precision_mean)} "
+        f"recall>=0.8 {report.complete_at_08}/{scored} states {agree}/{total} "
+        f"unmapped golden {report.unmapped_golden_quotes} predicted "
+        f"{report.unmapped_predicted_quotes} copy credits {report.copy_credits[0]}/"
+        f"{report.copy_credits[1]}"
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[4])
+    parser.add_argument("--run-root", type=Path, required=True)
+    parser.add_argument("--products", nargs="+", required=True)
+    args = parser.parse_args(argv)
+    reports = []
+    for product in args.products:
+        check_product_id(product)
+        output = CompileOutput.model_validate_json(
+            (args.run_root / product / "output.json").read_text(encoding="utf-8")
+        )
+        source = SegmentedSource(source_pages(source_directory(args.repo, product)))
+        golden = load_golden_v2(args.repo / GOLDEN_DIR / f"{product}.json")
+        reports.append(score_selection(source, golden, output.fields))
+        print(_line(product, reports[-1]))
+    print(_line("pooled", pool(reports)))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

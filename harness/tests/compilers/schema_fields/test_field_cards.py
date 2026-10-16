@@ -75,7 +75,10 @@ def test_payload_sends_only_examples_of_the_same_insurance_type() -> None:
     assert {e["schema_pack_id"] for e in same.get("examples", [])} == {
         "schemapack_endowment_insurance"
     }
-    assert other.get("examples", []) == []
+    # S4e: accident insurance now has its own held-out examples, so only the type is checked.
+    assert {e["schema_pack_id"] for e in other.get("examples", [])} <= {
+        "schemapack_accident_insurance"
+    }
     assert same["absent_rule"] == card["absent_rule"]
 
 
