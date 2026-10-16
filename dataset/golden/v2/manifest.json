@@ -91,7 +91,7 @@
  },
  "revisions": [
   {
-   "audit": "2026-10-16 PR #163 审核第 1 项：draft-2026-10-15k 只把 claim_application_deadline_and_documents 的 excludes 收窄为给付期间的后续核验与复评及配合义务，并写明申请时提交的失能鉴定、诊断证明属于申请材料。Golden 1816 该字段证据含申请材料第 5 项 D2P8S18、不含 1.3 后续核验条文，value 无核验内容，与 k 一致，未重标。",
+   "audit": "2026-10-16 PR #163 审核第 1 项：draft-2026-10-15k/l 只把 claim_application_deadline_and_documents 的 excludes 收窄为给付期间的后续核验与复评及配合义务，并写明申请时提交的失能鉴定、诊断证明属于申请材料。Golden 1816 该字段证据含申请材料第 5 项 D2P8S18、不含 1.3 后续核验条文，value 无核验内容，与 k 一致，未重标。",
    "basis": "S4e Spec §3.4: fields whose card rules changed, re-annotated by one independent judge session per product on the repo segmentation; the Golden v2b prompt with rate tables selected when they list the field's content (user ruling 2026-10-15); audited by Claude (Issue #161)",
    "cards_version": "draft-2026-10-15j",
    "products": {
