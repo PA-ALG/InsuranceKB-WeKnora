@@ -1,0 +1,57 @@
+[
+  {
+    "name": "plain_chinese",
+    "quote": "\u88ab\u4fdd\u9669\u4eba\u5728\u7b49\u5f85\u671f\u5185\u786e\u8bca\u7684\uff0c\u672c\u516c\u53f8\u4e0d\u627f\u62c5\u4fdd\u9669\u8d23\u4efb\u3002",
+    "digest": "de29d55af73a869c133123a1e89df70117bd26b2f0abfc1d79c4e2fd975b7961"
+  },
+  {
+    "name": "fullwidth_digits_letters",
+    "quote": "\u7b49\u5f85\u671f\u4e3a\uff19\uff10\u65e5\uff0c\uff21\uff22\uff23\u6761\u6b3e",
+    "digest": "06e15359edf4db5c139a7b290522d43755d05e855dbf57325cf1118abb4482df"
+  },
+  {
+    "name": "crlf_and_tabs",
+    "quote": "\u7b2c\u4e00\u6761\r\n\t\u4fdd\u9669\u8d23\u4efb\r\n",
+    "digest": "157fae55a2ca584f9d31869ea444e169881730562edc5bda32bf647e274ca7f5"
+  },
+  {
+    "name": "nbsp_and_ideographic_space",
+    "quote": "\u4fdd\u9669\u00a0\u671f\u95f4\u3000\u4e8c\u5341\u5e74",
+    "digest": "2dc161b78c06e13547b22efe37e194914cf572832a9b0732d2a958358f833bd7"
+  },
+  {
+    "name": "ascii_separators_1c_1f",
+    "quote": "\u7532\u001c\u4e59\u001d\u4e19\u001e\u4e01\u001f\u620a",
+    "digest": "0c13815c7173254c8993dc9b1701530761061c85b21d2fb731b02ae16b3dcff9"
+  },
+  {
+    "name": "zero_width_space_kept",
+    "quote": "\u4fdd\u200b\u9669",
+    "digest": "e0d45f8cadc440c42bf20248816df8918164444a07f50db47918ec9afea01c6f"
+  },
+  {
+    "name": "nel_and_line_separator",
+    "quote": "\u4e00\u0085\u4e8c\u2028\u4e09\u2029\u56db",
+    "digest": "bb6ea9081a413a6159880e466e20c4ca162881adf2e2f588c0e0e6b730c8dcf6"
+  },
+  {
+    "name": "mongolian_vowel_separator_kept",
+    "quote": "a\u180eb",
+    "digest": "bf2f5dd9f20acb42d8cd5a4658d0daf5a0d328a395c0e5669ca433586c4be0f4"
+  },
+  {
+    "name": "compatibility_forms",
+    "quote": "\ufb01 \u2460 \u00b2 \u338f \uff76\uff9e",
+    "digest": "e67dff97c6947467bd265019cddc1adf804ff11c3c775bb1cfb70fdfd045499d"
+  },
+  {
+    "name": "combining_sequence",
+    "quote": "e\u0301 cafe\u0301",
+    "digest": "8f54a1a2d9350481ee353cbbef7f7959ff753972c7bb717f9d1b5df6f9af1cfe"
+  },
+  {
+    "name": "only_internal_whitespace_differs",
+    "quote": "  \u4fdd\u9669  \u8d23\u4efb  ",
+    "digest": "497f4b9181c74e6959ba7baceccef827fe24608be22fd23642023157b93ece15"
+  }
+]
