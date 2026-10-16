@@ -6,10 +6,10 @@
  "catalog_version": "2026-08-12-v5",
  "dataset_version": "v2",
  "files": {
-  "1814.json": "1025d6415ec8512c0a187ce2367c0ef4f53d1d64d5ea97e13b1f12eb4d3678db",
-  "1816.json": "6ee005388cd5bdeda3b5cdb5a601f9c3b16c889f3237cb6464b1adf031e6b472",
-  "1824.json": "a99a255771a23acdc7b86d3b5c6c6e7267b15781d161b229f1d836f91c6d0fb3",
-  "1826.json": "50de0392f7302ead64c1882affeb90598a790cbd6ab26584ddc9549033fe2141"
+  "1814.json": "21418a32d47f3b4c9ce3d2afe7be2ff396ee9597b1873f300ffc3c4f1c6b4369",
+  "1816.json": "a4dafd4044b71045881300aba4ea8dd278d525e9f712d63c07090dbf3399b9aa",
+  "1824.json": "6ddf8ef57e368dcccd51965c17b9590e306c9eac26fd2b92177c902bc8f05381",
+  "1826.json": "003f3836b689a5e7fc4151276b558598cebc9f53e73d6abba23521c0964ea222"
  },
  "products": {
   "1814": {
@@ -156,6 +156,49 @@
      "model_id": "gpt-6-astra",
      "reasoning_effort": "xhigh",
      "session_id": "01a1425d-db61-7923-8905-b5a5d962df6e"
+    }
+   }
+  },
+  {
+   "audit": "2026-10-16 Claude：其余受 draft-2026-10-16a 影响的字段已符合新口径，未重标——四款的缴费期限、缴费方式只含费率表表头段落（无表内数值行），保额范围与产品搭配不含费率表，投保年龄含整张费率表。重标的保险期间另选入了投保举例段落，按评委原样保留。",
+   "basis": "S4f Spec §2.2: coverage_period re-annotated by one independent judge session per product on the repo segmentation (draft-2026-10-16a: rate-table titles and headers are evidence for the options they list); the S4e prompt; audited by Claude (Issue #165)",
+   "cards_version": "draft-2026-10-16a",
+   "products": {
+    "1814": {
+     "fields": [
+      "coverage_period"
+     ],
+     "judging_method": "codex-exec-file-exchange",
+     "model_id": "gpt-6-astra",
+     "reasoning_effort": "xhigh",
+     "session_id": "01a1431d-43cb-7dc0-a178-e9310bc8c0b0"
+    },
+    "1816": {
+     "fields": [
+      "coverage_period"
+     ],
+     "judging_method": "codex-exec-file-exchange",
+     "model_id": "gpt-6-astra",
+     "reasoning_effort": "xhigh",
+     "session_id": "01a1431d-47e4-7e03-8843-ea15e3b91946"
+    },
+    "1824": {
+     "fields": [
+      "coverage_period"
+     ],
+     "judging_method": "codex-exec-file-exchange",
+     "model_id": "gpt-6-astra",
+     "reasoning_effort": "xhigh",
+     "session_id": "01a1431d-42f6-7710-a86c-2cb3584c05ef"
+    },
+    "1826": {
+     "fields": [
+      "coverage_period"
+     ],
+     "judging_method": "codex-exec-file-exchange",
+     "model_id": "gpt-6-astra",
+     "reasoning_effort": "xhigh",
+     "session_id": "01a1431d-42c5-73e1-9e48-6fe3d6ccd334"
     }
    }
   }
