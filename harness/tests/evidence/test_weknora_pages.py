@@ -48,7 +48,9 @@ def reader(handler: httpx.MockTransport) -> WeKnoraSourcePages:
     return WeKnoraSourcePages(BASE, "key-123", transport=handler)
 
 
-def serve(status: int, body: object, seen: list[httpx.Request] | None = None) -> httpx.MockTransport:
+def serve(
+    status: int, body: object, seen: list[httpx.Request] | None = None
+) -> httpx.MockTransport:
     def respond(request: httpx.Request) -> httpx.Response:
         if seen is not None:
             seen.append(request)
@@ -126,7 +128,9 @@ def test_identifiers_are_validated_before_any_request(knowledge_id: str) -> None
 
 
 def test_the_body_is_parsed_as_strict_json() -> None:
-    raw = json.dumps(page_set()).replace('"parse_attempt": 2', '"parse_attempt": 2, "parse_attempt": 2')
+    raw = json.dumps(page_set()).replace(
+        '"parse_attempt": 2', '"parse_attempt": 2, "parse_attempt": 2'
+    )
     transport = httpx.MockTransport(lambda request: httpx.Response(200, text=raw))
     with pytest.raises(SourcePagesError):
         reader(transport).pages("space-1", "k-1", 2)
