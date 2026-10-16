@@ -136,13 +136,13 @@ func TestPinningIsAllOrNothingAndRefusesUnavailableSources(t *testing.T) {
 			require.NoError(t, db.Exec(`UPDATE knowledges SET deleted_at = ? WHERE id = ?`, time.Now().UTC(), id).Error)
 			return 1, RevisionRef{KnowledgeID: id, ParseAttempt: 1}
 		},
-		"other tenant": func(t *testing.T, db *gorm.DB, id string) (uint64, RevisionRef) {
+		"other tenant": func(_ *testing.T, _ *gorm.DB, id string) (uint64, RevisionRef) {
 			return 2, RevisionRef{KnowledgeID: id, ParseAttempt: 1}
 		},
-		"attempt without a source row": func(t *testing.T, db *gorm.DB, id string) (uint64, RevisionRef) {
+		"attempt without a source row": func(_ *testing.T, _ *gorm.DB, id string) (uint64, RevisionRef) {
 			return 1, RevisionRef{KnowledgeID: id, ParseAttempt: 2}
 		},
-		"unknown knowledge": func(t *testing.T, db *gorm.DB, id string) (uint64, RevisionRef) {
+		"unknown knowledge": func(_ *testing.T, _ *gorm.DB, _ string) (uint64, RevisionRef) {
 			return 1, RevisionRef{KnowledgeID: strings.Repeat("0", 36), ParseAttempt: 1}
 		},
 	}
