@@ -71,7 +71,7 @@ S4d 的验证运行（四款产品，`deepseek-flash` 两步法）对 Golden v2 
 
 ## 4. 验收
 
-- 受保护验收（RED 单独提交）：`tests/evidence/test_segment_copies.py`、`tests/eval/test_segment_score_copies.py`、`tests/eval/test_golden_v2_data.py`，
+- 受保护验收（RED 单独提交）：`tests/evidence/test_segment_copies.py`、`tests/eval/test_segment_score_copies.py`、`tests/eval/test_golden_data.py`，
   以及 §3.3 所述 `test_field_cards.py` 的一处断言修正。
 - `harness/` 下 `pytest`、`ruff check .`、`mypy src tests` 通过；守卫全部通过；CI 全绿。
 - 重新计分：S4d v1 运行原样，对修正后的 Golden 报告新口径的召回、精确率、召回≥0.8 与状态一致，并与 §2 现行口径对照。
