@@ -11,7 +11,11 @@ from pathlib import Path
 import httpx
 import pytest
 
-from insurance_harness.compilers.schema_fields.engine import CompileError, CompletionPort
+from insurance_harness.compilers.schema_fields.engine import (
+    CompileError,
+    CompileOutput,
+    CompletionPort,
+)
 from insurance_harness.eval import compile_run, product_sources
 from insurance_harness.eval.compile_run import (
     ProductRun,
@@ -398,3 +402,24 @@ def test_another_thread_cannot_share_a_held_run_root(repo: Path, tmp_path: Path)
     finally:
         release.set()
         thread.join(5)
+
+
+def test_a_page_source_replaces_local_files(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S4g: with --source-map the compiler reads WeKnora's pages, never the local PDFs."""
+
+    def refuse(path: Path) -> list[PageText]:
+        raise AssertionError("local PDFs must not be read")
+
+    monkeypatch.setattr(product_sources, "read_pdf", refuse)
+    pages = [PageText("weknora.pdf", "c" * 64, 1, TEXT)]
+    build, _ = factory(["example-flash-2026"] * 2)
+    root = tmp_path / "run"
+    compile_products(
+        repo, ["p1"], completion_factory=build, run_root=root, max_sent=30,
+        page_source=lambda product: pages,
+    )
+    output = CompileOutput.model_validate_json((root / "p1" / "output.json").read_text())
+    documents = {quote.document for field in output.fields for quote in field.evidence}
+    assert documents == {"weknora.pdf"}
