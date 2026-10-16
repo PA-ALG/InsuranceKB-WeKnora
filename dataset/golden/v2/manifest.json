@@ -9,7 +9,8 @@
   "1814.json": "21418a32d47f3b4c9ce3d2afe7be2ff396ee9597b1873f300ffc3c4f1c6b4369",
   "1816.json": "3d07a433cc5d6fbfc8bcd4d913bf9814c70222c80b8cb6ae4e66a7fd11e0fe30",
   "1824.json": "6ddf8ef57e368dcccd51965c17b9590e306c9eac26fd2b92177c902bc8f05381",
-  "1826.json": "003f3836b689a5e7fc4151276b558598cebc9f53e73d6abba23521c0964ea222"
+  "1826.json": "003f3836b689a5e7fc4151276b558598cebc9f53e73d6abba23521c0964ea222",
+  "1828.json": "496d449718a506a0a29c3b9cefa1f97a35be957027c743642be22213d4e9dc02"
  },
  "products": {
   "1814": {
@@ -86,6 +87,26 @@
     "absent_explicitly": 15,
     "present": 23,
     "unknown": 18
+   }
+  },
+  "1828": {
+   "basis": "S4h Spec §2.3: all fields of the pack, one independent judge session on the repo segmentation, draft-2026-10-16b card rules without examples, the S4e prompt; audited by Claude (Issue #170)",
+   "fields": 47,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_critical_illness_insurance",
+   "product_id": "1828",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a143e2-daa2-7a12-8727-335e0b1c8122",
+   "source_sha256": {
+    "产品说明书.pdf": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
+    "保险条款.pdf": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+    "费率表.pdf": "600e95faf04a8268c90a2a0d08448c140b8a323f6e24bccfce186d96e0c9aa52"
+   },
+   "states": {
+    "absent_explicitly": 2,
+    "present": 31,
+    "unknown": 14
    }
   }
  },
