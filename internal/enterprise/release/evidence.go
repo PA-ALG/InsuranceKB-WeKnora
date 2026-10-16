@@ -3,17 +3,13 @@ package release
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
-	"golang.org/x/text/unicode/norm"
 )
 
 // Evidence failures of a submission or a citation (S4c-2b-2 Spec §3.1, §3.4).
@@ -75,21 +71,6 @@ type EvidenceAt struct {
 // may be published without a source; its origin travels with the member so it stays labelled.
 var citedOrigins = map[string]bool{
 	"SOURCE_SUPPORTED": true, "MIXED": true, "EXPERT_REVISION": true, "STRUCTURED_IMPORT": true,
-}
-
-// QuoteDigest is Evidence.quote_sha256 as the Harness defines it: sha256 of the NFKC quote
-// with every character Python's str.split() treats as whitespace removed. Go's unicode.IsSpace
-// lacks U+001C..U+001F, which Python counts as separators.
-func QuoteDigest(quote string) string {
-	var kept strings.Builder
-	for _, r := range norm.NFKC.String(quote) {
-		if unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f) {
-			continue
-		}
-		kept.WriteRune(r)
-	}
-	sum := sha256.Sum256([]byte(kept.String()))
-	return hex.EncodeToString(sum[:])
 }
 
 // memberPayload is the generic part of a payload this slice reads: origin, state and evidence.
