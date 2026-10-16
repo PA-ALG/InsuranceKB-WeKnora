@@ -19,6 +19,43 @@ func NewService(store ArtifactStore) *Service { return &Service{store: store} }
 // Pages verifies every page before returning any text. Offsets are Unicode code
 // points; no whitespace or line-ending normalization is applied.
 func (s *Service) Pages(ctx context.Context, scope Scope, knowledgeID string, attempt int64) (*PageSet, error) {
+	v, err := s.load(ctx, scope, knowledgeID, attempt)
+	if err != nil {
+		return nil, err
+	}
+	return v.set, nil
+}
+
+// nativePage is the geometry part of one captured page; text is verified separately.
+type nativePage struct {
+	Number      int         `json:"page_number"`
+	Start       *int        `json:"global_codepoint_start"`
+	End         *int        `json:"global_codepoint_end"`
+	SHA256      string      `json:"page_text_sha256"`
+	Width       string      `json:"width_points"`
+	Height      string      `json:"height_points"`
+	Boxes       []charBox   `json:"bboxes"`
+	Unavailable []codeRange `json:"unavailable_ranges"`
+}
+
+type charBox struct {
+	BBox  []int `json:"bbox"`
+	Start int   `json:"global_codepoint_start"`
+	End   int   `json:"global_codepoint_end"`
+}
+
+type codeRange struct {
+	Start int `json:"global_codepoint_start"`
+	End   int `json:"global_codepoint_end"`
+}
+
+// verified is one loaded artifact whose every page passed integrity checks.
+type verified struct {
+	set    *PageSet
+	native []nativePage
+}
+
+func (s *Service) load(ctx context.Context, scope Scope, knowledgeID string, attempt int64) (*verified, error) {
 	if scope.TenantID == 0 || strings.TrimSpace(scope.SpaceID) == "" ||
 		strings.TrimSpace(knowledgeID) == "" || attempt <= 0 {
 		return nil, &Error{Code: ErrorInvalidRequest, Detail: "scope, knowledge and a positive attempt are required"}
@@ -52,12 +89,7 @@ func (s *Service) Pages(ctx context.Context, scope Scope, knowledgeID string, at
 		return nil, integrity()
 	}
 	var native struct {
-		Pages []struct {
-			Number int    `json:"page_number"`
-			Start  *int   `json:"global_codepoint_start"`
-			End    *int   `json:"global_codepoint_end"`
-			SHA256 string `json:"page_text_sha256"`
-		} `json:"pages"`
+		Pages []nativePage `json:"pages"`
 	}
 	if json.Unmarshal(a.NativeJSON, &native) != nil || len(native.Pages) == 0 {
 		return nil, integrity()
@@ -77,10 +109,13 @@ func (s *Service) Pages(ctx context.Context, scope Scope, knowledgeID string, at
 		pages = append(pages, Page{Number: p.Number, Text: text, TextSHA256: p.SHA256})
 		previousEnd = *p.End
 	}
-	return &PageSet{
-		KnowledgeID: a.KnowledgeID, ParseAttempt: a.ParseAttempt, Document: a.FileName,
-		DocumentSHA256: a.FileSHA256, ParserIdentitySHA256: a.ParserIdentitySHA256,
-		NativeSHA256: digest(a.NativeJSON), Pages: pages,
+	return &verified{
+		set: &PageSet{
+			KnowledgeID: a.KnowledgeID, ParseAttempt: a.ParseAttempt, Document: a.FileName,
+			DocumentSHA256: a.FileSHA256, ParserIdentitySHA256: a.ParserIdentitySHA256,
+			NativeSHA256: digest(a.NativeJSON), Pages: pages,
+		},
+		native: native.Pages,
 	}, nil
 }
 

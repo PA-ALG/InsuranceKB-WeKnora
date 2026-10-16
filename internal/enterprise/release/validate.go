@@ -25,11 +25,12 @@ func (suppliedSchemasOnly) Load(string) (any, error) {
 // CheckSchemas compiles the supplied contract schemas the way NewService does, so wiring can
 // refuse to start on a schema that is valid JSON but not a usable or complete schema.
 func CheckSchemas(schemas map[string][]byte) error {
-	_, err := compileSchema(schemas)
+	_, _, err := compileSchemas(schemas)
 	return err
 }
 
-func compileSchema(schemas map[string][]byte) (*jsonschema.Schema, error) {
+// compileSchemas compiles the candidate bundle schema and, when supplied, the evidence schema.
+func compileSchemas(schemas map[string][]byte) (*jsonschema.Schema, *jsonschema.Schema, error) {
 	compiler := jsonschema.NewCompiler()
 	compiler.UseLoader(suppliedSchemasOnly{})
 	compiler.AssertFormat()
@@ -38,11 +39,11 @@ func compileSchema(schemas map[string][]byte) (*jsonschema.Schema, error) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	root := ""
+	root, evidenceRoot := "", ""
 	for _, name := range names {
 		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemas[name]))
 		if err != nil {
-			return nil, fmt.Errorf("decode schema: %w", err)
+			return nil, nil, fmt.Errorf("decode schema: %w", err)
 		}
 		name = strings.TrimSuffix(name, ".schema.json")
 		uri := "https://schemas.enterprise.invalid/" + name + ".schema.json"
@@ -52,16 +53,27 @@ func compileSchema(schemas map[string][]byte) (*jsonschema.Schema, error) {
 			}
 		}
 		if err := compiler.AddResource(uri, doc); err != nil {
-			return nil, fmt.Errorf("load schema: %w", err)
+			return nil, nil, fmt.Errorf("load schema: %w", err)
 		}
-		if name == "candidate_bundle" {
+		switch name {
+		case "candidate_bundle":
 			root = uri
+		case "evidence":
+			evidenceRoot = uri
 		}
 	}
 	if root == "" {
-		return nil, errors.New("candidate bundle schema is required")
+		return nil, nil, errors.New("candidate bundle schema is required")
 	}
-	return compiler.Compile(root)
+	bundle, err := compiler.Compile(root)
+	if err != nil || evidenceRoot == "" {
+		return bundle, nil, err
+	}
+	evidence, err := compiler.Compile(evidenceRoot)
+	if err != nil {
+		return nil, nil, fmt.Errorf("evidence schema: %w", err)
+	}
+	return bundle, evidence, nil
 }
 
 func (s *Service) validate(ctx context.Context, raw []byte) (Bundle, string, error) {
@@ -111,6 +123,9 @@ func (s *Service) validate(ctx context.Context, raw []byte) (Bundle, string, err
 				return Bundle{}, "", invalid("evidence reference cannot be verified")
 			}
 		}
+	}
+	if err := s.checkEvidence(ctx, b); err != nil {
+		return Bundle{}, "", err
 	}
 	return b, canonicalDigest(doc), nil
 }

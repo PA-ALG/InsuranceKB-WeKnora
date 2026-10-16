@@ -14,16 +14,21 @@ type Service struct {
 	store     Store
 	evidence  EvidenceResolver
 	publisher Publisher
+	verifier  EvidenceVerifier
 	schema    *jsonschema.Schema
-	schemaErr error
+	// evidenceSchema is optional: without it, payload evidence fails closed as unverifiable.
+	evidenceSchema *jsonschema.Schema
+	schemaErr      error
 }
 
 // NewService compiles the supplied schema once. Invalid or absent schema
 // configuration fails closed on Receive, without filesystem or network access.
 // Publishing (decisions, activation, release reads) needs WithPublisher.
 func NewService(store Store, evidence EvidenceResolver, schemas map[string][]byte, options ...Option) *Service {
-	schema, err := compileSchema(schemas)
-	s := &Service{store: store, evidence: evidence, schema: schema, schemaErr: err}
+	schema, evidenceSchema, err := compileSchemas(schemas)
+	s := &Service{
+		store: store, evidence: evidence, schema: schema, evidenceSchema: evidenceSchema, schemaErr: err,
+	}
 	for _, option := range options {
 		option(s)
 	}
