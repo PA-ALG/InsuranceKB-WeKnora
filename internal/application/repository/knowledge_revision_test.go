@@ -93,6 +93,14 @@ CREATE TABLE resource_bindings (
 	relation TEXT NOT NULL,
 	created_at DATETIME
 );
+CREATE TABLE knowledge_bases (
+	id TEXT PRIMARY KEY,
+	tenant_id INTEGER NOT NULL,
+	name TEXT NOT NULL DEFAULT '',
+	created_at DATETIME,
+	updated_at DATETIME,
+	deleted_at DATETIME
+);
 CREATE TABLE knowledge_revision_sources (
 	tenant_id INTEGER NOT NULL,
 	knowledge_id TEXT NOT NULL,
@@ -117,6 +125,9 @@ CREATE TABLE knowledge_revision_sources (
 	PRIMARY KEY (knowledge_id, parse_attempt)
 );
 `).Error)
+	// S4c-2b-1: pinning and sealing check the knowledge base is live; the seeded knowledge
+	// belongs to tenant 1 / kb-1.
+	require.NoError(t, db.Exec(`INSERT INTO knowledge_bases (id, tenant_id, name) VALUES ('kb-1', 1, 'kb-1')`).Error)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	return db
 }
