@@ -24,6 +24,7 @@ from insurance_harness.evidence.quote_verification import (
 )
 
 MAX_CHARS = 300
+COPY_MIN_CHARS = 20  # shorter passages ("本合同终止。") repeat everywhere and prove nothing
 _TERMINATOR = re.compile(r"[。；;！!？?]\s*$")
 _CLAUSE_START = re.compile(
     r"^\s*(?:第[一二三四五六七八九十百零\d]+[条章节]|\d+(?:\.\d+)+|\d+[、.．]|[（(][一二三四五六七八九十\d]+[）)])"
@@ -118,6 +119,8 @@ class SegmentedSource:
         self.segments = tuple(segments)
         self._position = {segment.id: index for index, segment in enumerate(self.segments)}
         self._pages = {(page.document, page.page): page for page in self.pages}
+        self._content: dict[str, str] = {}
+        self._copies: dict[str, frozenset[str]] = {}
 
     def listing(self) -> str:
         """One line per segment: the id, a space, and the text with line breaks folded."""
@@ -177,16 +180,24 @@ class SegmentedSource:
                 run.append(segment)
         return quotes
 
-    def locate(self, document: str, page: int, quote: str) -> set[str]:
+    def locate(
+        self, document: str, page: int, quote: str, segment_id: str | None = None
+    ) -> set[str]:
         """Segments overlapping a quote found on that page, ignoring whitespace and width.
 
-        Used to score references written against an earlier segmentation; returns an
-        empty set when the quote is absent or occurs more than once on the page.
+        Used to score references written against an earlier segmentation. A segment_id
+        recorded with the quote is taken when that segment, on that page, still holds
+        exactly the quoted text; otherwise the quote is searched, and an empty set is
+        returned when it is absent or occurs more than once on the page.
         """
         source = self._pages.get((document, page))
         needle, _ = _squeeze(quote)
         if source is None or not needle:
             return set()
+        held = self.segments[self._position[segment_id]] if segment_id in self._position else None
+        if held is not None and (held.document, held.page) == (document, page):
+            if _squeeze(held.text)[0] == needle:
+                return {held.id}
         haystack, offsets = _squeeze(source.text)
         at = haystack.find(needle)
         if at < 0 or haystack.find(needle, at + 1) >= 0:
@@ -197,3 +208,35 @@ class SegmentedSource:
             for s in self.segments
             if (s.document, s.page) == (document, page) and s.start < last and first < s.end
         }
+
+    def copies(self, segment_id: str) -> frozenset[str]:
+        """Segments of other documents that repeat this one word for word (S4e Spec §3.1).
+
+        Text is compared without whitespace, width differences or one leading clause
+        number; two segments are copies when the shorter text, at least COPY_MIN_CHARS
+        long, occurs inside the other. Repeats within one document are not copies: they
+        are separate provisions that happen to share wording.
+        """
+        if segment_id not in self._position:
+            raise ValueError(f"unknown segment id {segment_id}")
+        found = self._copies.get(segment_id)
+        if found is None:
+            segment = self.segments[self._position[segment_id]]
+            mine = self._content_of(segment)
+            matches = set()
+            for other in self.segments:
+                if other.document == segment.document:
+                    continue
+                short, long = sorted((mine, self._content_of(other)), key=len)
+                if len(short) >= COPY_MIN_CHARS and short in long:
+                    matches.add(other.id)
+            found = self._copies[segment_id] = frozenset(matches)
+        return found
+
+    def _content_of(self, segment: Segment) -> str:
+        content = self._content.get(segment.id)
+        if content is None:
+            squeezed, _ = _squeeze(segment.text)
+            label = _CLAUSE_START.match(squeezed)
+            content = self._content[segment.id] = squeezed[label.end() :] if label else squeezed
+        return content
