@@ -1,0 +1,128 @@
+[
+ {
+  "name": "sorted keys and nesting",
+  "payload": {
+   "b": 1,
+   "a": [
+    3,
+    2,
+    1
+   ],
+   "c": {
+    "z": null,
+    "y": true,
+    "x": false
+   }
+  },
+  "canonical": "{\"a\":[3,2,1],\"b\":1,\"c\":{\"x\":false,\"y\":true,\"z\":null}}",
+  "digest": "81475b462aaad67ce1a9c832e9672bf44e439e459a3e811b5d736627e696b040"
+ },
+ {
+  "name": "chinese text kept as utf-8",
+  "payload": {
+   "value": "保险期间为一年。",
+   "state": "present"
+  },
+  "canonical": "{\"state\":\"present\",\"value\":\"保险期间为一年。\"}",
+  "digest": "5d19cdeb2e860cf3287b40bdc8fdcfde2b30225d79290bcc6d5fe00b0a23dcb8"
+ },
+ {
+  "name": "escapes and html characters",
+  "payload": {
+   "quote": "<b>&\"\\\n\t\r\b\f\u0001\u001f/"
+  },
+  "canonical": "{\"quote\":\"\\u003cb\\u003e\\u0026\\\"\\\\\\n\\t\\r\\b\\f\\u0001\\u001f/\"}",
+  "digest": "a11716ead71ceb21b6e461755aecf1862221940466dd5f530445e7ae41a50bf9"
+ },
+ {
+  "name": "line and paragraph separators",
+  "payload": {
+   "line": "a b c"
+  },
+  "canonical": "{\"line\":\"a\\u2028b\\u2029c\"}",
+  "digest": "ca6cb91f9a62ca482a1cbabcf547b22ea4a7d7f7b7662b2dd6fbd7995dc240d4"
+ },
+ {
+  "name": "astral characters",
+  "payload": {
+   "e": "😀𠀋"
+  },
+  "canonical": "{\"e\":\"😀𠀋\"}",
+  "digest": "30c1c9ca74dab2c1a6fd9d6ffd55d8ab3fa852a1fc5336e8afd1bc9dd1cf593d"
+ },
+ {
+  "name": "non-ascii key order",
+  "payload": {
+   "保": 1,
+   "a": 2,
+   "Z": 3,
+   "é": 4,
+   "aa": 5
+  },
+  "canonical": "{\"Z\":3,\"a\":2,\"aa\":5,\"é\":4,\"保\":1}",
+  "digest": "80842eb0b275613de242f44869ca757c51b26b24508ef8c6f73264575d956713"
+ },
+ {
+  "name": "empty containers",
+  "payload": {
+   "o": {},
+   "a": [],
+   "s": ""
+  },
+  "canonical": "{\"a\":[],\"o\":{},\"s\":\"\"}",
+  "digest": "c127f9b3c6f4233b3976f8e2d54486ab15f9a46cfa50fc14ae6d0787d1ac2917"
+ },
+ {
+  "name": "numbers",
+  "payload": {
+   "n": [
+    0,
+    1,
+    -1,
+    1.5,
+    0.1,
+    1e-7,
+    1e21,
+    123456789012345,
+    1.0,
+    -0.0,
+    2.5e-6,
+    0.000001,
+    100,
+    1e20,
+    9007199254740992,
+    3.141592653589793
+   ]
+  },
+  "canonical": "{\"n\":[0,1,-1,1.5,0.1,1e-7,1e+21,123456789012345,1,-0,0.0000025,0.000001,100,100000000000000000000,9007199254740992,3.141592653589793]}",
+  "digest": "6ae4d40455ba290a2a332b3d0d95968463c38805bbd4759d02065886ff308576"
+ },
+ {
+  "name": "claim-like payload",
+  "payload": {
+   "claim_id": "1828/waiting_period",
+   "state": "present",
+   "value": "90日",
+   "evidence": [
+    {
+     "source_ref": "source:v1:k-1:2:abababababababababababababababababababababababababababababababab",
+     "locator": {
+      "kind": "PDF_TEXT_SPAN",
+      "page": 3,
+      "start": 12,
+      "end": 40
+     },
+     "quote": "自本合同生效之日起90日内为等待期。",
+     "match": "EXACT",
+     "access_scope": "space"
+    }
+   ],
+   "review": {
+    "mode": "machine",
+    "score": null
+   }
+  },
+  "canonical": "{\"claim_id\":\"1828/waiting_period\",\"evidence\":[{\"access_scope\":\"space\",\"locator\":{\"end\":40,\"kind\":\"PDF_TEXT_SPAN\",\"page\":3,\"start\":12},\"match\":\"EXACT\",\"quote\":\"自本合同生效之日起90日内为等待期。\",\"source_ref\":\"source:v1:k-1:2:abababababababababababababababababababababababababababababababab\"}],\"review\":{\"mode\":\"machine\",\"score\":null},\"state\":\"present\",\"value\":\"90日\"}",
+  "digest": "fc5e71cd0408c404551ee0df6f6d5ec6fbf6ff15937be672b0e40b332e41bc87"
+ }
+]

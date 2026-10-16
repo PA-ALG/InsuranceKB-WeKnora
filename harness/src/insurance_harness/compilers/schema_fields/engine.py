@@ -13,6 +13,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition, NonBlank
 from insurance_harness.compilers.schema_fields.parse import CompileError as CompileError
 from insurance_harness.compilers.schema_fields.parse import parse_selection, parse_values
@@ -57,6 +58,8 @@ class CompileOutput(BaseModel):
     # Refs that named no segment, and fields lost because no valid segment or no value remained.
     dropped_refs: int = Field(default=0, ge=0)
     dropped_fields: list[str] = Field(default_factory=list)
+    # The field card version the requests were built from (S4g); None in outputs written earlier.
+    cards_version: str | None = None
 
 
 def _value_batches(
@@ -215,6 +218,7 @@ class SchemaFieldsCompiler:
             calls=calls,
             dropped_refs=dropped_refs,
             dropped_fields=dropped_fields,
+            cards_version=cards_version(),
         )
 
 

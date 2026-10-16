@@ -32,6 +32,18 @@ _CLAUSE_START = re.compile(
 _LINE_BREAK = re.compile(r"\s*\n\s*")
 
 
+class EvidenceSpan(BaseModel):
+    """One evidence slice: quote == page text[start:end] of that page."""
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    document: NonBlank
+    document_sha256: Digest
+    page: int = Field(ge=1)
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    quote: NonBlank
+
+
 class Segment(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     id: NonBlank
@@ -162,7 +174,20 @@ class SegmentedSource:
 
     def evidence(self, ids: Sequence[str]) -> list[VerifiedQuote]:
         """Adjacent segments on one page merge into one exact slice of that page."""
-        quotes: list[VerifiedQuote] = []
+        return [
+            VerifiedQuote(
+                document=span.document,
+                document_sha256=span.document_sha256,
+                page=span.page,
+                quote=span.quote,
+                match=QuoteMatch.EXACT,
+            )
+            for span in self.spans(ids)
+        ]
+
+    def spans(self, ids: Sequence[str]) -> list[EvidenceSpan]:
+        """The evidence slices with their page-text offsets (code points, half-open)."""
+        out: list[EvidenceSpan] = []
         run: list[Segment] = []
         for segment in [*self.ordered(ids), None]:
             if run and (
@@ -171,19 +196,20 @@ class SegmentedSource:
                 or self._position[segment.id] != self._position[run[-1].id] + 1
             ):
                 page = self._pages[(run[0].document, run[0].page)]
-                quotes.append(
-                    VerifiedQuote(
+                out.append(
+                    EvidenceSpan(
                         document=page.document,
                         document_sha256=page.document_sha256,
                         page=page.page,
+                        start=run[0].start,
+                        end=run[-1].end,
                         quote=page.text[run[0].start : run[-1].end],
-                        match=QuoteMatch.EXACT,
                     )
                 )
                 run = []
             if segment is not None:
                 run.append(segment)
-        return quotes
+        return out
 
     def locate(
         self, document: str, page: int, quote: str, segment_id: str | None = None

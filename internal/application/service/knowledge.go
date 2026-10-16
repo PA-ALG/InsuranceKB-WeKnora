@@ -15,6 +15,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/application/service/retriever"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	werrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/infrastructure/docparser"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -80,9 +81,10 @@ type knowledgeService struct {
 	// pipeline. Best-effort: a nil tracker (test harness) is safely
 	// handled because the public surface is the SpanTracker interface,
 	// which has a no-op fallback. See knowledge_span_tracker.go.
-	spanTracker SpanTracker
-	audit       interfaces.AuditLogService
-	firstParse  *G3FirstParseStore
+	spanTracker  SpanTracker
+	audit        interfaces.AuditLogService
+	firstParse   *G3FirstParseStore
+	captureScope source.CaptureScope
 }
 
 const (
@@ -121,9 +123,11 @@ func NewKnowledgeService(
 	spanTracker SpanTracker,
 	audit interfaces.AuditLogService,
 	firstParse *G3FirstParseStore,
+	captureScope source.CaptureScope,
 ) (interfaces.KnowledgeService, error) {
 	return &knowledgeService{
 		firstParse:      firstParse,
+		captureScope:    captureScope,
 		config:          config,
 		repo:            repo,
 		kbService:       kbService,
