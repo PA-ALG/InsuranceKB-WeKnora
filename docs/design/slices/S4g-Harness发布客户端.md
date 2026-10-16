@@ -44,6 +44,7 @@
     present 与 absent_explicitly 每个证据片段一条 Evidence（`source_ref = source:v1:<knowledge_id>:<attempt>:<file_sha256>`、
     `file_sha256`、`locator = PDF_TEXT_SPAN{page, start, end}`、`quote = 页文本[start:end]`、`match = EXACT`、`access_scope = "space"`）；
     unknown 不带证据，`unknown_reason = NOT_IN_MATERIAL`；`origin = SOURCE_SUPPORTED`；`provenance` 记录编译器、卡片版本与模型；
+    卡片版本取编译时写入 `CompileOutput.cards_version` 的值（审核 PR #169 第 1 项），不取发布时安装的版本；没有该值的旧产物拒绝发布；
   - 成员：`kind = "claim"`、`logical_slug = logical_key`、`payload = Claim 的 JSON`、`member_digest`、`evidence_refs`（去重排序）、
     `access_scope = "space"`；
   - 包：`contract_version = "1"`、`origin = compile`、`compiler_identity`、`base_release_id`/`base_epoch` 取调用方给的当前 Head；
@@ -69,7 +70,8 @@
 - `compile_run --source-map <file>`：页文本改为从 WeKnora 读取（地址与密钥来自环境变量 `HARNESS_WEKNORA_BASE_URL`、
   `HARNESS_WEKNORA_API_KEY`），其余流程不变。
 - 发布命令：`python -m insurance_harness.compilers.schema_fields.publish --run-root <dir> --product <id> --source-map <file>
-  [--decide human --reason <文本> | --decide machine --policy-ref <标识>] [--activate]`。
+  [--decide human --reason <文本> | --decide machine --policy-ref <标识>] [--activate]`。失败只输出稳定错误码与可公开的字段位置，
+  不输出异常正文、本机路径或输入内容（审核 PR #169 第 2 项）。
 
 ## 3. 验收（受保护，RED 单独提交）
 
@@ -84,7 +86,7 @@
 
 ## 4. 改动范围
 
-- 允许：`harness/src/insurance_harness/bundle/`（新）、`ingest/`（新）、`evidence/source_ref.py`（新）、`evidence/segments.py`、`compilers/schema_fields/claims.py` 与 `publish.py`（新）、`eval/compile_run.py`、`eval/product_sources.py`、
+- 允许：`harness/src/insurance_harness/bundle/`（新）、`ingest/`（新）、`evidence/source_ref.py`（新）、`evidence/segments.py`、`compilers/schema_fields/claims.py` 与 `publish.py`（新）、`compilers/schema_fields/engine.py`（`CompileOutput.cards_version`）、`eval/compile_run.py`、`eval/product_sources.py`、
   对应实现方测试；Go 只加本片验收测试与 testdata，不改运行时代码。
 - 受保护：本片验收文件、既有受保护验收、`docs/design/`、蓝图、`contracts/`。
 
