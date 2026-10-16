@@ -1,0 +1,86 @@
+name: Enterprise PostgreSQL
+
+# Go adapter tests that need a real PostgreSQL read WEKNORA_TEST_POSTGRES_URL and skip
+# without it, so before this job they never ran in CI. Tests named TestPostgres* in the
+# packages below run here, and the job fails if any of them skips.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/enterprise/**"
+      - "internal/application/repository/**"
+      - "internal/database/**"
+      - "migrations/enterprise/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/enterprise-postgres.yml"
+  pull_request:
+    paths:
+      - "internal/enterprise/**"
+      - "internal/application/repository/**"
+      - "internal/database/**"
+      - "migrations/enterprise/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/enterprise-postgres.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.26"
+  GOPROXY: https://proxy.golang.org,direct
+  LOG_FORMAT: ""
+
+jobs:
+  postgres:
+    name: Go PostgreSQL adapter tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: weknora
+          POSTGRES_PASSWORD: weknora
+          POSTGRES_DB: weknora
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U weknora -d weknora"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Disposable CI service credentials, like the Harness integration job.
+      WEKNORA_TEST_POSTGRES_URL: postgres://weknora:weknora@127.0.0.1:5432/weknora?sslmode=disable
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Preflight PostgreSQL
+        run: pg_isready -h 127.0.0.1 -p 5432 -U weknora -d weknora
+
+      - name: Tests (PostgreSQL)
+        run: |
+          set -o pipefail
+          go test -count=1 -v -run '^TestPostgres' \
+            ./internal/enterprise/... ./internal/application/repository/... 2>&1 | tee postgres.log
+
+      - name: Require executed zero-skip PostgreSQL tests
+        run: |
+          if grep -q -- '--- SKIP' postgres.log; then
+            echo "A PostgreSQL test skipped; WEKNORA_TEST_POSTGRES_URL must reach the service." >&2
+            exit 1
+          fi
+          grep -q -- '--- PASS: TestPostgres' postgres.log
