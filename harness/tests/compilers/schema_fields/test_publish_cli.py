@@ -272,3 +272,49 @@ def test_failures_print_codes_without_paths_or_input(
     assert json.loads(captured.out) == {"stopped": expected}
     for text in (captured.out, captured.err):
         assert str(tmp_path) not in text and "SECRET-MARKER" not in text
+
+
+def rewrite_output(
+    tmp_path: Path, change: dict[str, Any] | None = None, field: dict[str, Any] | None = None
+) -> None:
+    path = tmp_path / "1828" / "output.json"
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    stored.update(change or {})
+    if field is not None:
+        stored["fields"][0].update(field)
+    path.write_text(json.dumps(stored, ensure_ascii=False), encoding="utf-8")
+
+
+def test_a_blank_card_version_is_refused_before_any_request(
+    tmp_path: Path, platform: Platform, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rewrite_output(tmp_path, {"cards_version": "   "})
+    assert command.main(argv(tmp_path)) == 2
+    assert json.loads(capsys.readouterr().out) == {"stopped": "CARDS_VERSION_UNKNOWN"}
+    assert platform.seen == []
+
+
+@pytest.mark.parametrize(
+    ("field", "reason"),
+    [
+        ({"field_key": SECRET, "value": None}, "CLAIM_INVALID"),
+        ({"field_key": SECRET, "segment_ids": ["D9P9S9"]}, "EVIDENCE_MISMATCH"),
+    ],
+)
+def test_conversion_failures_print_a_position_not_the_input(
+    tmp_path: Path,
+    platform: Platform,
+    capsys: pytest.CaptureFixture[str],
+    field: dict[str, Any],
+    reason: str,
+) -> None:
+    rewrite_output(tmp_path, field=field)
+    assert command.main(argv(tmp_path)) == 2
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {
+        "stopped": "BUNDLE_INVALID",
+        "reason": reason,
+        "field_index": 0,
+    }
+    for text in (captured.out, captured.err):
+        assert "SECRET-MARKER" not in text and str(tmp_path) not in text and "Traceback" not in text

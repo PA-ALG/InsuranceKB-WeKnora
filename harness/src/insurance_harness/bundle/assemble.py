@@ -19,11 +19,15 @@ ACCESS_SCOPE = "space"
 
 
 class BundleError(ValueError):
-    """The claims cannot be published as they stand: a stable reason code, the field if any."""
+    """The claims cannot be published as they stand.
 
-    def __init__(self, reason: str, field: str | None = None) -> None:
-        self.reason, self.field = reason, field
-        super().__init__(reason if field is None else f"{field}: {reason}")
+    Carries a stable reason code and, when one field is at fault, its position in the compile
+    output: never the field key or any other input text, which may be arbitrary.
+    """
+
+    def __init__(self, reason: str, field_index: int | None = None) -> None:
+        self.reason, self.field_index = reason, field_index
+        super().__init__(reason)
 
 
 def assemble(

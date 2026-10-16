@@ -22,7 +22,7 @@ from pydantic import ValidationError
 
 from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
-from insurance_harness.compilers.schema_fields.claims import candidate_bundle
+from insurance_harness.compilers.schema_fields.claims import candidate_bundle, require_cards_version
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.eval.product_sources import check_product_id
 from insurance_harness.evidence.segments import SegmentedSource
@@ -64,10 +64,12 @@ def main(argv: list[str] | None = None) -> int:
         return _stop("OUTPUT_UNREADABLE")
     if output.entity_id != args.product:
         return _stop("OUTPUT_MISMATCH")
-    if not output.cards_version:
-        # Written before outputs recorded their card version: publishing it under today's
-        # cards would misstate how it was compiled.
-        return _stop("CARDS_VERSION_UNKNOWN")
+    try:
+        # Written before outputs recorded their card version (or blank): publishing it under
+        # today's cards would misstate how it was compiled. Same rule as candidate_bundle.
+        version = require_cards_version(output)
+    except BundleError as error:
+        return _stop(error.reason)
     try:
         source_map = load_source_map(args.source_map)
         pages, sources = load_pages(
@@ -79,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
             output,
             SegmentedSource(pages),
             sources,
-            compiler_identity=f"harness/schema_fields@{output.cards_version}",
+            compiler_identity=f"harness/schema_fields@{version}",
             base=active.head if active else None,
         )
         result = publish(
@@ -88,13 +90,16 @@ def main(argv: list[str] | None = None) -> int:
     except (PlatformError, SourcePagesError, SourceMapError) as error:
         return _stop(error.code)
     except BundleError as error:
-        return _stop("BUNDLE_INVALID", reason=error.reason, field=error.field)
+        return _stop("BUNDLE_INVALID", reason=error.reason, field_index=error.field_index)
+    except (ValidationError, ValueError):
+        # Anything else the conversion rejects: still a code, never the exception text.
+        return _stop("BUNDLE_INVALID", reason="CONVERSION_FAILED")
     print(
         json.dumps(
             {
                 "product": args.product,
                 "space_id": source_map.space_id,
-                "cards_version": output.cards_version,
+                "cards_version": version,
                 "members": len(bundle.members),
                 "candidate_id": result.candidate.id,
                 "candidate_status": result.candidate.status,
@@ -108,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _stop(code: str, **detail: str | None) -> int:
+def _stop(code: str, **detail: str | int | None) -> int:
     print(json.dumps({"stopped": code, **detail}, ensure_ascii=False))
     return 2
 
