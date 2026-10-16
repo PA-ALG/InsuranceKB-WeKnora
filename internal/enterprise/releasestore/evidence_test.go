@@ -3,6 +3,7 @@ package releasestore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -19,9 +20,13 @@ type revisions struct {
 	knowledge map[string]*types.Knowledge
 	revisions map[string]*types.KnowledgeRevision
 	err       error
+	lookups   *int // counts storage reads when set
 }
 
 func (r revisions) GetKnowledgeByID(_ context.Context, tenantID uint64, id string) (*types.Knowledge, error) {
+	if r.lookups != nil {
+		*r.lookups++
+	}
 	if r.err != nil {
 		return nil, r.err
 	}
@@ -33,6 +38,9 @@ func (r revisions) GetKnowledgeByID(_ context.Context, tenantID uint64, id strin
 }
 
 func (r revisions) GetRevision(_ context.Context, knowledgeID string, attempt int64) (*types.KnowledgeRevision, error) {
+	if r.lookups != nil {
+		*r.lookups++
+	}
 	rev, ok := r.revisions[knowledgeID]
 	if !ok || rev.ParseAttempt != attempt {
 		return nil, repository.ErrKnowledgeNotFound
@@ -41,6 +49,11 @@ func (r revisions) GetRevision(_ context.Context, knowledgeID string, attempt in
 }
 
 func resolver(t *testing.T, err error) *Evidence {
+	t.Helper()
+	return countingResolver(t, err, nil)
+}
+
+func countingResolver(t *testing.T, err error, lookups *int) *Evidence {
 	t.Helper()
 	spaces, parseErr := ParseSpaces(`[{"tenant_id":7,"space_id":"space-1","raw_kb_id":"raw-1","wiki_kb_id":"wiki-1"}]`)
 	require.NoError(t, parseErr)
@@ -53,7 +66,8 @@ func resolver(t *testing.T, err error) *Evidence {
 			"k-1":     {KnowledgeID: "k-1", ParseAttempt: 2, FileSHA256: fileSHA},
 			"k-other": {KnowledgeID: "k-other", ParseAttempt: 1, FileSHA256: fileSHA},
 		},
-		err: err,
+		err:     err,
+		lookups: lookups,
 	})
 }
 
@@ -132,4 +146,35 @@ func TestEvidenceFailsClosedWithoutScopeOrOnStorageErrors(t *testing.T) {
 	ok, err := receive(t, resolver(t, errors.New("database down")), 7, "space-1", "source:v1:k-1:2:"+fileSHA)
 	require.NoError(t, err)
 	require.False(t, ok)
+}
+
+// bundleCiting submits one member per reference, so a bundle can cite one document many times.
+func bundleCiting(t *testing.T, refs ...string) []byte {
+	t.Helper()
+	members := make([]string, 0, len(refs))
+	for i, ref := range refs {
+		payload := fmt.Sprintf(`{"v":%d}`, i)
+		members = append(members, fmt.Sprintf(`{"kind":"claim","logical_slug":"m-%d","payload":%s,`+
+			`"member_digest":%q,"evidence_refs":[%q],"access_scope":"space"}`,
+			i, payload, memberDigest(t, payload), ref))
+	}
+	return []byte(`{"contract_version":"1","origin":"compile","compiler_identity":"harness/test","members":[` +
+		strings.Join(members, ",") + `]}`)
+}
+
+func TestEvidenceLooksEachRevisionUpOncePerRequest(t *testing.T) {
+	lookups := 0
+	e := countingResolver(t, nil, &lookups)
+	s := release.NewService(memoryStore{}, e, map[string][]byte{"candidate_bundle": []byte(testSchema)})
+	good := "source:v1:k-1:2:" + fileSHA
+	_, err := s.Receive(context.Background(), principal, "space-1", bundleCiting(t, good, good, good))
+	require.NoError(t, err)
+	require.Equal(t, 2, lookups, "one knowledge and one revision read for three citations")
+
+	other := "source:v1:k-1:2:" + strings.Repeat("cd", 32)
+	_, err = s.Receive(context.Background(), principal, "space-1", bundleCiting(t, good, other))
+	var failure *release.Error
+	require.ErrorAs(t, err, &failure, "a second fingerprint of the same attempt is still checked")
+	require.Equal(t, release.ErrorCandidateInvalid, failure.Code)
+	require.Equal(t, 4, lookups, "a new request reads again; nothing is shared across requests")
 }

@@ -167,17 +167,61 @@ func (s *Service) Activate(ctx context.Context, p Principal, spaceID, candidateI
 		return Release{}, err
 	}
 	if err := checkBase(b, head); err != nil {
+		if b.BaseReleaseID != head.ReleaseID {
+			if replayed, ok, replayErr := s.replay(ctx, p, spaceID, c, d, b); ok || replayErr != nil {
+				return replayed, replayErr
+			}
+		}
 		return Release{}, err
 	}
 	members, err := materialize(base.Members, b)
 	if err != nil {
 		return Release{}, err
 	}
-	return s.publisher.Activate(ctx, ActivationWrite{
+	return s.publisher.Activate(ctx, s.write(p, spaceID, c, d, head, members))
+}
+
+// replay answers a retried activation whose first attempt committed before the Head moved on.
+// The port answers a committed nonce before its Head CAS (Spec §3.1), so the committed release
+// comes back. A candidate that never committed expects its own, older base, so the CAS fails
+// against the moved Head and nothing is written; the caller then reports NEEDS_REBASE.
+func (s *Service) replay(
+	ctx context.Context, p Principal, spaceID string, c Candidate, d Decision, b Bundle,
+) (Release, bool, error) {
+	expected := Head{}
+	if b.BaseReleaseID != "" {
+		base, err := s.publisher.ReleaseByID(ctx, p.TenantID, spaceID, b.BaseReleaseID)
+		var failure *Error
+		if errors.As(err, &failure) && failure.Code == ErrorReleaseNotFound {
+			return Release{}, false, nil
+		}
+		if err != nil {
+			return Release{}, false, err
+		}
+		expected = Head{ReleaseID: base.ID, Epoch: base.Epoch}
+	}
+	r, err := s.publisher.Activate(ctx, s.write(p, spaceID, c, d, expected, b.Members))
+	var failure *Error
+	if errors.As(err, &failure) && failure.Code == ErrorReleaseConflict {
+		return Release{}, false, nil
+	}
+	if err != nil {
+		return Release{}, false, err
+	}
+	if r.CandidateID != c.ID || r.DecisionDigest != d.Digest {
+		return Release{}, false, errors.New("publisher replayed a different activation")
+	}
+	return r, true, nil
+}
+
+func (s *Service) write(
+	p Principal, spaceID string, c Candidate, d Decision, expected Head, members []Member,
+) ActivationWrite {
+	return ActivationWrite{
 		TenantID: p.TenantID, SpaceID: spaceID, Subject: p.Subject, CandidateID: c.ID,
 		BundleDigest: c.BundleDigest, DecisionID: d.ID, DecisionDigest: d.Digest,
-		Nonce: sha256Hex(c.ID + ":" + d.Digest), Expected: head, Members: members,
-	})
+		Nonce: sha256Hex(c.ID + ":" + d.Digest), Expected: expected, Members: members,
+	}
 }
 
 // Release reads the active release (empty ID) or a named release of the Space.

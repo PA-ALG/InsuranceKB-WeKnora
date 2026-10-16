@@ -275,3 +275,65 @@ func hexSHA(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:])
 }
+
+func TestPostgresRefusesAHeadBoundToOtherKnowledgeBases(t *testing.T) {
+	db := openSchema(t)
+	s, ctx := service(New(db, testSpaces(t))), context.Background()
+	c, err := s.Receive(ctx, principal, "space-1", rawBundle(t, "", "a", `{"v":1}`))
+	require.NoError(t, err)
+	d, err := s.Decide(ctx, principal, "space-1", c.ID, approve)
+	require.NoError(t, err)
+	_, err = s.Activate(ctx, principal, "space-1", c.ID, d.ID)
+	require.NoError(t, err)
+
+	for name, raw := range map[string]string{
+		"other wiki KB": `[{"tenant_id":7,"space_id":"space-1","raw_kb_id":"raw-1","wiki_kb_id":"wiki-9"}]`,
+		"other raw KB":  `[{"tenant_id":7,"space_id":"space-1","raw_kb_id":"raw-9","wiki_kb_id":"wiki-1"}]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			spaces, err := ParseSpaces(raw)
+			require.NoError(t, err)
+			moved := New(db, spaces)
+			_, err = moved.Head(ctx, 7, "space-1")
+			requireCode(t, err, release.ErrorServiceUnavailable)
+			_, err = moved.ReleaseByID(ctx, 7, "space-1", "")
+			requireCode(t, err, release.ErrorServiceUnavailable)
+		})
+	}
+}
+
+func TestPostgresRetryAfterTheHeadMovedReturnsTheCommittedRelease(t *testing.T) {
+	db := openSchema(t)
+	s, ctx := service(New(db, testSpaces(t))), context.Background()
+	a, err := s.Receive(ctx, principal, "space-1", rawBundle(t, "", "a", `{"v":1}`))
+	require.NoError(t, err)
+	da, err := s.Decide(ctx, principal, "space-1", a.ID, approve)
+	require.NoError(t, err)
+	stale, err := s.Receive(ctx, principal, "space-1", rawBundle(t, "", "c", `{"v":3}`))
+	require.NoError(t, err)
+	ds, err := s.Decide(ctx, principal, "space-1", stale.ID, approve)
+	require.NoError(t, err)
+	r1, err := s.Activate(ctx, principal, "space-1", a.ID, da.ID)
+	require.NoError(t, err)
+	b, err := s.Receive(ctx, principal, "space-1", rawBundle(t, r1.ID, "b", `{"v":2}`))
+	require.NoError(t, err)
+	db2, err := s.Decide(ctx, principal, "space-1", b.ID, approve)
+	require.NoError(t, err)
+	r2, err := s.Activate(ctx, principal, "space-1", b.ID, db2.ID)
+	require.NoError(t, err)
+
+	again, err := s.Activate(ctx, principal, "space-1", a.ID, da.ID)
+	require.NoError(t, err)
+	require.Equal(t, r1.ID, again.ID)
+	_, err = s.Activate(ctx, principal, "space-1", stale.ID, ds.ID)
+	requireCode(t, err, release.ErrorNeedsRebase)
+
+	var releases, receipts int64
+	require.NoError(t, db.Table("wiki_releases").Count(&releases).Error)
+	require.NoError(t, db.Table("wiki_release_receipts").Count(&receipts).Error)
+	require.Equal(t, int64(2), releases, "neither the replay nor the stale candidate wrote a release")
+	require.Equal(t, int64(2), receipts)
+	head, err := s.Release(ctx, principal, "space-1", "")
+	require.NoError(t, err)
+	require.Equal(t, r2.ID, head.ID)
+}

@@ -39,7 +39,7 @@ func (s *Store) Head(ctx context.Context, tenantID uint64, spaceID string) (rele
 	if err != nil {
 		return release.Head{}, err
 	}
-	head, err := s.releases.GetHead(ctx, scope)
+	head, err := s.activeHead(ctx, scope)
 	if errors.Is(err, repository.ErrWikiReleaseNotFound) {
 		return release.Head{}, nil
 	}
@@ -47,6 +47,22 @@ func (s *Store) Head(ctx context.Context, tenantID uint64, spaceID string) (rele
 		return release.Head{}, err
 	}
 	return release.Head{ReleaseID: head.ActiveReleaseID, Epoch: head.ActivationEpoch}, nil
+}
+
+// activeHead reads the Head of the (tenant, Space) and checks it serves the configured knowledge
+// bases (S4c-2a Spec §3.2). A Head bound to other KBs is a configuration error, never "no release yet".
+func (s *Store) activeHead(ctx context.Context, scope types.WikiReleaseScope) (*types.WikiReleaseHead, error) {
+	head, err := s.releases.GetHeadForSpace(ctx, scope.TenantID, scope.SpaceID)
+	if err != nil {
+		return nil, err
+	}
+	if head.WikiReleaseScope != scope {
+		return nil, &release.Error{
+			Code:   release.ErrorServiceUnavailable,
+			Detail: "the Space's published releases belong to other knowledge bases than its configuration",
+		}
+	}
+	return head, nil
 }
 
 // MembersOf returns slug -> member digest of one release of the Space.
@@ -74,7 +90,7 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 		return release.Release{}, err
 	}
 	if releaseID == "" {
-		head, err := s.releases.GetHead(ctx, scope)
+		head, err := s.activeHead(ctx, scope)
 		if err != nil {
 			return release.Release{}, notFound(err)
 		}

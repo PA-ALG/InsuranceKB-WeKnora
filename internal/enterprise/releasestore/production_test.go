@@ -52,6 +52,10 @@ func TestProductionRejectsEveryIncompleteConfiguration(t *testing.T) {
 		"no knowledge revisions":   {&gorm.DB{}, struct{}{}, oneSpace, good, nil},
 		"missing contract schema":  {&gorm.DB{}, revisions{}, oneSpace, t.TempDir(), nil},
 		"contract schema not JSON": {&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{`), nil},
+		"JSON but not a schema":    {&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{"type":7}`), nil},
+		"unsupplied reference": {
+			&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{"$ref":"bundle_member.schema.json"}`), nil,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			service, err := Production(probe.db, probe.knowledge, probe.spaces, probe.dir, probe.reserved...)

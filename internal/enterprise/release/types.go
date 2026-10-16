@@ -5,6 +5,7 @@ package release
 import (
 	"context"
 	"encoding/json"
+	"sync"
 )
 
 // SupportedContractVersion is the contract version supported by this package, as declared in contracts/README.md.
@@ -27,6 +28,37 @@ type Principal struct {
 type Scope struct {
 	Principal Principal
 	SpaceID   string
+	memo      *requestMemo
+}
+
+// requestMemo lives for one Receive or Preview call, so remembered values never
+// outlive the request or cross tenants and Spaces.
+type requestMemo struct {
+	mu     sync.Mutex
+	values map[string]any
+}
+
+func newScope(p Principal, spaceID string) Scope {
+	return Scope{Principal: p, SpaceID: spaceID, memo: &requestMemo{values: map[string]any{}}}
+}
+
+// Remember returns the value loaded for key during this request, loading it once.
+// Load errors are returned and not remembered.
+func (s Scope) Remember(key string, load func() (any, error)) (any, error) {
+	if s.memo == nil {
+		return load()
+	}
+	s.memo.mu.Lock()
+	defer s.memo.mu.Unlock()
+	if value, ok := s.memo.values[key]; ok {
+		return value, nil
+	}
+	value, err := load()
+	if err != nil {
+		return nil, err
+	}
+	s.memo.values[key] = value
+	return value, nil
 }
 
 type scopeKey struct{}

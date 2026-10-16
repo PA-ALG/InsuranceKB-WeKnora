@@ -1,7 +1,6 @@
 package releasestore
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -64,14 +63,12 @@ func Production(
 	if err != nil {
 		return nil, fmt.Errorf("enterprise publishing needs %s: %w", bundleSchemaFile, err)
 	}
-	if !json.Valid(schema) {
-		return nil, fmt.Errorf("enterprise publishing: %s is not valid JSON", bundleSchemaFile)
+	schemas := map[string][]byte{"candidate_bundle": schema}
+	if err := release.CheckSchemas(schemas); err != nil {
+		return nil, fmt.Errorf("enterprise publishing: %s does not compile: %w", bundleSchemaFile, err)
 	}
 	store := New(db, spaces)
-	return release.NewService(
-		store, NewEvidence(spaces, revisions), map[string][]byte{"candidate_bundle": schema},
-		release.WithPublisher(store),
-	), nil
+	return release.NewService(store, NewEvidence(spaces, revisions), schemas, release.WithPublisher(store)), nil
 }
 
 // reservedScopes are the scopes enterprise Spaces may not reuse: the G3 path keeps

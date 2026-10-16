@@ -59,22 +59,44 @@ func (e *Evidence) Resolve(ctx context.Context, ref string) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
-	knowledge, err := e.sources.GetKnowledgeByID(ctx, scope.Principal.TenantID, parts[1])
-	if errors.Is(err, repository.ErrKnowledgeNotFound) {
-		return false, nil
-	}
+	found, err := e.revision(ctx, scope, parts[1], attempt)
 	if err != nil {
 		return false, err
 	}
-	if knowledge.KnowledgeBaseID != space.RawKBID {
-		return false, nil
-	}
-	revision, err := e.sources.GetRevision(ctx, parts[1], attempt)
-	if errors.Is(err, repository.ErrKnowledgeNotFound) {
-		return false, nil
-	}
+	return found.exists && found.rawKBID == space.RawKBID && found.fileSHA256 == parts[3], nil
+}
+
+// sourceRevision is what one (knowledge, attempt) lookup establishes.
+type sourceRevision struct {
+	exists     bool
+	rawKBID    string
+	fileSHA256 string
+}
+
+// revision looks a (knowledge, attempt) up once per request (S4c-2a Spec §3.2): bundles often
+// cite the same document many times. Each reference still compares its own fingerprint.
+func (e *Evidence) revision(
+	ctx context.Context, scope release.Scope, knowledgeID string, attempt int64,
+) (sourceRevision, error) {
+	value, err := scope.Remember(knowledgeID+"\x00"+strconv.FormatInt(attempt, 10), func() (any, error) {
+		knowledge, err := e.sources.GetKnowledgeByID(ctx, scope.Principal.TenantID, knowledgeID)
+		if errors.Is(err, repository.ErrKnowledgeNotFound) {
+			return sourceRevision{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		revision, err := e.sources.GetRevision(ctx, knowledgeID, attempt)
+		if errors.Is(err, repository.ErrKnowledgeNotFound) {
+			return sourceRevision{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return sourceRevision{exists: true, rawKBID: knowledge.KnowledgeBaseID, fileSHA256: revision.FileSHA256}, nil
+	})
 	if err != nil {
-		return false, err
+		return sourceRevision{}, err
 	}
-	return revision.FileSHA256 == parts[3], nil
+	return value.(sourceRevision), nil
 }

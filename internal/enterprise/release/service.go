@@ -38,7 +38,7 @@ func (s *Service) Receive(ctx context.Context, p Principal, spaceID string, raw 
 	if err := ctx.Err(); err != nil {
 		return Candidate{}, err
 	}
-	ctx = context.WithValue(ctx, scopeKey{}, Scope{Principal: p, SpaceID: spaceID})
+	ctx = context.WithValue(ctx, scopeKey{}, newScope(p, spaceID))
 	b, digest, err := s.validate(ctx, raw)
 	if err != nil {
 		return Candidate{}, err
