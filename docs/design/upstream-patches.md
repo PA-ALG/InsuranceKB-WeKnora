@@ -53,3 +53,5 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | 文件 | 切片 | 原因 | 可否上游化 | 退出条件 |
 |---|---|---|---|---|
 | `internal/router/router.go` | S4c-1 | 通过既有 DI 和 API-key authorizer 挂载 enterprise source 只读服务；暂用已配置的隔离捕获 scope 核对 tenant/Space/RAW，原路由无企业扩展挂载点 | 部分（通用模块挂载） | 上游提供企业模块注册扩展点后移除路由接缝；S4c-2 引入受管 Space/source 绑定与产物必存后替换捕获范围映射 |
+| `internal/router/router.go` | S4c-2a | `RouterParams` 增加 `EnterpriseCandidates`，把候选与发布服务交给既有 enterprise 挂载点；未配置时为 nil，候选路由返回 503 | 部分（通用模块挂载） | 上游提供企业模块注册扩展点后移除路由接缝 |
+| `internal/container/container.go` | S4c-2a | 一行 `releasestore.Register(container)`，由项目包自行提供候选与发布服务（读取 `ENTERPRISE_SPACES` 与合同 schema），沿用 `managed.Register` 的装配方式 | 部分（模块装配） | 上游提供企业模块装配扩展点后移除接缝 |

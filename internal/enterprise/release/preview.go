@@ -15,7 +15,7 @@ func (s *Service) Preview(ctx context.Context, p Principal, spaceID, candidateID
 	if err := ctx.Err(); err != nil {
 		return Preview{}, err
 	}
-	ctx = context.WithValue(ctx, scopeKey{}, Scope{Principal: p, SpaceID: spaceID})
+	ctx = context.WithValue(ctx, scopeKey{}, newScope(p, spaceID))
 	if s.store == nil {
 		return Preview{}, errors.New("candidate store unavailable")
 	}

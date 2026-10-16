@@ -17,6 +17,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
+	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
@@ -40,6 +41,7 @@ type RouterParams struct {
 	KnowledgeService               interfaces.KnowledgeService
 	KnowledgeRepository            interfaces.KnowledgeRepository
 	FirstParseStore                *service.G3FirstParseStore
+	EnterpriseCandidates           *release.Service
 	ChunkService                   interfaces.ChunkService
 	SessionService                 interfaces.SessionService
 	MessageService                 interfaces.MessageService
@@ -430,6 +432,7 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 		return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, runtime.Scope, id, attempt)
 	})
 	enterprise.Mount(v1.Group("/enterprise/spaces/:space_id"), enterprise.Deps{
-		Sources: source.NewService(store), Authorizer: guards.ensureAPIKeyAuthorizer(),
+		Candidates: params.EnterpriseCandidates, Sources: source.NewService(store),
+		Authorizer: guards.ensureAPIKeyAuthorizer(),
 	})
 }
