@@ -290,7 +290,8 @@ func TestCommitDirectRevisionIsAtomicAndFenced(t *testing.T) {
 	require.Equal(t, revision.ManifestDigest, source.ManifestDigest)
 	require.Equal(t, revision.ChunkCount, source.ChunkCount)
 	require.Empty(t, source.BindingDigest)
-	require.Equal(t, types.KnowledgeRevisionSourcePinned, source.RetentionState)
+	// S4c-2b-1: a commit records the source revision; only published releases pin it.
+	require.Equal(t, types.KnowledgeRevisionSourceReleased, source.RetentionState)
 	var resource types.StoredResource
 	require.NoError(t, db.Where("id = ?", source.ResourceID).First(&resource).Error)
 	require.Equal(t, resource.Handle, source.ResourceHandle)
@@ -399,6 +400,9 @@ func TestSealRevisionSourceBindingReplaysExactSQLiteAuthoritiesAndIsWriteOnce(t 
 	).First(&candidate).Error)
 	pageCount := 2
 	candidate.PageCount = &pageCount
+	// S4c-2b-1: the committed row is released; sealing pins it.
+	candidate.RetentionState = types.KnowledgeRevisionSourcePinned
+	candidate.ReleasedAt = nil
 	candidate.BindingDigest, err = types.ComputeKnowledgeRevisionSourceBindingDigest(candidate)
 	require.NoError(t, err)
 
@@ -442,6 +446,8 @@ func TestKnowledgeDeletePathsAtomicallyRejectPinnedRevisionSources(t *testing.T)
 			seedRevisionChunk(t, db, id, 1, 0, "first")
 			_, err := repo.CommitDirectRevision(context.Background(), id, testRevisionBinding(1))
 			require.NoError(t, err)
+			// S4c-2b-1: commits no longer pin; a published release does.
+			require.NoError(t, pinSources(db, 1, RevisionRef{KnowledgeID: id, ParseAttempt: 1}))
 
 			err = deleteRows(repo, id)
 			require.ErrorIs(t, err, ErrResourcePinned)
