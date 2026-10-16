@@ -191,7 +191,10 @@ func TestCitationFailuresAreTyped(t *testing.T) {
 			http.StatusNotFound, release.ErrorReleaseNotFound,
 		},
 		{"unknown member", citation("1828/unknown", "0"), http.StatusNotFound, release.ErrorMemberNotFound},
-		{"evidence index beyond", citation("1828/waiting_period", "3"), http.StatusNotFound, release.ErrorEvidenceNotFound},
+		{
+			"evidence index beyond", citation("1828/waiting_period", "3"), http.StatusNotFound,
+			release.ErrorEvidenceNotFound,
+		},
 		{
 			"model-generated member", citation("concept/waiting_period", "0"), http.StatusNotFound,
 			release.ErrorEvidenceNotFound,

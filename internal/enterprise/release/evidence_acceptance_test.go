@@ -110,7 +110,9 @@ func TestEveryEvidenceObjectIsVerifiedInOneCallWithItsPointer(t *testing.T) {
 }
 
 func TestVerifierRefusalsRejectTheWholeBundleWithTheirCode(t *testing.T) {
-	codes := []string{release.ErrorEvidenceMismatch, release.ErrorEvidenceUnsupported, release.ErrorEvidenceUnverifiable}
+	codes := []string{
+		release.ErrorEvidenceMismatch, release.ErrorEvidenceUnsupported, release.ErrorEvidenceUnverifiable,
+	}
 	for _, code := range codes {
 		p := newPlatform()
 		v := &recordingVerifier{fail: &release.Error{Code: code, Detail: "/members/0/payload/evidence/0: quote"}}
