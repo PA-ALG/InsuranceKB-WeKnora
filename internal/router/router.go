@@ -18,6 +18,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
+	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
@@ -107,6 +108,7 @@ type RouterParams struct {
 	KnowledgeRevisionSourceHandler *handler.KnowledgeRevisionSourceHandler
 	WikiReleaseHandler             *handler.WikiReleaseHandler
 	ManagedClassifier              managed.Classifier
+	EnterpriseSpaces               releasestore.Spaces
 	SchemaWikiHandler              *handler.SchemaWikiHandler
 }
 
@@ -414,12 +416,14 @@ func registerConfiguredG3PlatformRoutes(v1 *gin.RouterGroup, params RouterParams
 }
 
 func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *rbacGuards) {
-	// Captures currently exist only in this configured isolated scope. Replace
-	// this mapping when S4c-2 provides managed Space/source bindings and capture
-	// persistence; never infer Space membership from a caller-supplied source ID.
+	// Resolve configured enterprise bindings before the isolated G3 fallback;
+	// never infer Space membership from a caller-supplied source ID.
 	store := source.ArtifactStoreFunc(func(
 		ctx context.Context, scope source.Scope, id string, attempt int64,
 	) (*source.Artifact, error) {
+		if binding, err := params.EnterpriseSpaces.Scope(scope.TenantID, scope.SpaceID); err == nil {
+			return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, binding, id, attempt)
+		}
 		runtime, err := config.DecodeG3PlatformProcessing(params.Config, time.Now())
 		if err != nil {
 			return nil, &source.Error{

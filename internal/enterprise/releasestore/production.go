@@ -12,6 +12,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
+	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -32,8 +33,17 @@ const (
 // Without ENTERPRISE_SPACES the service is nil and the candidate routes answer 503;
 // an invalid configuration fails startup instead of serving a partial scope.
 func Register(container *dig.Container) error {
+	if err := container.Provide(func(cfg *config.Config) (Spaces, error) {
+		return LoadSpaces(cfg, os.Getenv(SpacesEnv))
+	}); err != nil {
+		return err
+	}
+	if err := container.Provide(func(spaces Spaces) source.CaptureScope { return spaces }); err != nil {
+		return err
+	}
 	return container.Provide(func(
 		cfg *config.Config, db *gorm.DB, knowledge interfaces.KnowledgeRepository,
+		_ Spaces,
 	) (*release.Service, error) {
 		dir := strings.TrimSpace(os.Getenv(ContractsDirEnv))
 		if dir == "" {
@@ -41,6 +51,22 @@ func Register(container *dig.Container) error {
 		}
 		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, reservedScopes(cfg)...)
 	})
+}
+
+// LoadSpaces requires an active artifact signing key whenever capture is configured.
+func LoadSpaces(cfg *config.Config, raw string) (Spaces, error) {
+	spaces, err := ParseSpaces(raw, reservedScopes(cfg)...)
+	if err != nil || len(spaces.byKey) == 0 {
+		return spaces, err
+	}
+	ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
+	if err != nil {
+		return Spaces{}, fmt.Errorf("enterprise capture signing ring: %w", err)
+	}
+	if ring.ActiveKeyID() == "" {
+		return Spaces{}, errors.New("enterprise capture needs an active artifact signing key")
+	}
+	return spaces, nil
 }
 
 // Production builds the service for the configured Spaces. An empty configuration

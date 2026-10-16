@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/application/repository"
@@ -196,6 +198,7 @@ func (s *knowledgeService) processDocumentFromPassage(ctx context.Context,
 
 // ProcessChunksOptions contains options for processing chunks
 type ProcessChunksOptions struct {
+	skipEmbedding            bool // A scanned capture has no text to send to a model.
 	EnableQuestionGeneration bool
 	QuestionCount            int
 	EnableMultimodel         bool
@@ -390,7 +393,7 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 
 	// Get embedding model for vectorization — only needed when vector/keyword indexing is enabled
 	var embeddingModel embedding.Embedder
-	if kb.NeedsEmbeddingModel() {
+	if kb.NeedsEmbeddingModel() && !options.skipEmbedding {
 		var err error
 		embeddingModel, err = s.modelService.GetEmbeddingModel(ctx, kb.EmbeddingModelID)
 		if err != nil {
@@ -3935,7 +3938,7 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 
 	processOverrides, _ := knowledge.ProcessOverrides()
 	eff := ResolveProcessConfig(kb, processOverrides)
-	firstParse := g3FirstParseScope(s.config, knowledge, payload.FileType)
+	firstParse := s.captureFirstParse(knowledge, payload)
 	if firstParse {
 		eff = g3FirstParseConfig(eff)
 	}
@@ -4156,6 +4159,12 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 		}
 	}
 
+	if s.enterpriseScannedPDF(knowledge, payload, convertResult) {
+		return s.processChunks(ctx, kb, knowledge, nil, ProcessChunksOptions{
+			Revision: payload.Revision, ParseAttempt: payload.ParseAttempt, skipEmbedding: true,
+		})
+	}
+
 	// Step 1.5: ASR transcription for audio files
 	if convertResult != nil && convertResult.IsAudio && len(convertResult.AudioData) > 0 {
 		if !eff.ASRConfig.IsASREnabled() {
@@ -4220,8 +4229,10 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 	// <img> tags to `![...](...)` and then escaping them in a later
 	// HTML→GFM pass. Line endings are normalized first so injected row
 	// breaks are plain LF.
-	sanitizeReadResult(convertResult)
-	if convertResult != nil {
+	if !firstParse {
+		sanitizeReadResult(convertResult)
+	}
+	if convertResult != nil && !firstParse {
 		convertResult.MarkdownContent = chunker.NormalizeLineEndings(convertResult.MarkdownContent)
 		if convertResult.MarkdownContent != "" {
 			convertResult.MarkdownContent = docparser.NormalizeHTMLTables(convertResult.MarkdownContent)
@@ -4382,6 +4393,21 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 	return s.processChunks(ctx, kb, knowledge, chunks, processOpts)
 }
 
+func (s *knowledgeService) captureFirstParse(k *types.Knowledge, p types.DocumentProcessPayload) bool {
+	return k != nil && p.URL == "" && p.FileURL == "" && strings.EqualFold(p.FileType, "pdf") &&
+		(g3FirstParseScope(s.config, k, p.FileType) ||
+			(s.captureScope != nil && s.captureScope.RawKB(k.TenantID, k.KnowledgeBaseID)))
+}
+
+var scannedPDFError = regexp.MustCompile(`^page [1-9][0-9]* is scanned$`)
+
+func (s *knowledgeService) enterpriseScannedPDF(
+	k *types.Knowledge, p types.DocumentProcessPayload, result *types.ReadResult,
+) bool {
+	return result != nil && s.captureFirstParse(k, p) && !g3FirstParseScope(s.config, k, p.FileType) &&
+		scannedPDFError.MatchString(result.Error)
+}
+
 // sanitizeReadResult protects every text field that can cross from a parser
 // into the embedding, storage, or tracing layers. A parser may return a Go
 // string containing arbitrary bytes even though the string type itself does
@@ -4441,6 +4467,11 @@ func (s *knowledgeService) convert(
 	}
 	mergedOverrides := MergeParserEngineOverrides(tenantOverrides, uploadOverrides)
 	applyParserRuleOverrides(mergedOverrides, eff.ChunkingConfig, fileType)
+	firstParse := s.captureFirstParse(knowledge, payload)
+	if firstParse {
+		eff = g3FirstParseConfig(eff)
+		mergedOverrides = map[string]string{"pdf_native_structure_capture": conceptNativeCapture830G2}
+	}
 	if err := validateParserEngineOverrideURLs(mergedOverrides); err != nil {
 		logger.Errorf(ctx, "Parser endpoint rejected for SSRF protection: %v", err)
 		knowledge.ParseStatus = "failed"
@@ -4467,11 +4498,6 @@ func (s *knowledgeService) convert(
 		}
 	}
 
-	firstParse := !isURL && g3FirstParseScope(s.config, knowledge, fileType)
-	if firstParse {
-		eff = g3FirstParseConfig(eff)
-		mergedOverrides = map[string]string{"pdf_native_structure_capture": conceptNativeCapture830G2}
-	}
 	parserEngine := eff.ChunkingConfig.ResolveParserEngine(fileType)
 	if isURL {
 		parserEngine = eff.ChunkingConfig.ResolveParserEngine("url")
@@ -4550,8 +4576,18 @@ func (s *knowledgeService) convert(
 			code, "document read failed", err)
 		return s.failKnowledge(ctx, knowledge, isLastRetry, "document read failed: %v", err)
 	}
-	sanitizeReadResult(result)
+	// Classify the original error before sanitization can remove malformed bytes.
+	if s.enterpriseScannedPDF(knowledge, payload, result) {
+		s.endStage(ctx, knowledge.ID, types.StageDocReader, types.JSONMap{
+			"first_parse_saved": false, "not_captured_reason": "scanned_page",
+		})
+		return &types.ReadResult{Error: result.Error}, nil
+	}
+	if !firstParse {
+		sanitizeReadResult(result)
+	}
 	if result.Error != "" {
+		result.Error = common.CleanInvalidUTF8(result.Error)
 		logger.Errorf(ctx, "[convert] parser returned error kb=%s knowledge=%s file=%q type=%s engine=%q: %s",
 			kb.ID, knowledge.ID, req.FileName, fileType, parserEngine, result.Error)
 		knowledge.ParseStatus = "failed"
@@ -4567,6 +4603,7 @@ func (s *knowledgeService) convert(
 	if firstParse {
 		var projection conceptNativeHeader830G2
 		if payload.Revision == nil || result.NativeStructure == nil || len(result.ImageRefs) != 0 || result.IsAudio ||
+			!utf8.ValidString(result.MarkdownContent) ||
 			json.Unmarshal(result.NativeStructure.SanitizedJSON, &projection) != nil {
 			err = ErrConceptSourceAuthorityUnavailable830G2
 		} else {

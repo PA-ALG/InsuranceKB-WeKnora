@@ -32,6 +32,11 @@ type Scope struct {
 	SpaceID  string
 }
 
+// CaptureScope identifies configured enterprise RAW knowledge bases.
+type CaptureScope interface {
+	RawKB(tenantID uint64, knowledgeBaseID string) bool
+}
+
 // Artifact retains the exact captured text and sanitized native JSON bytes.
 type Artifact struct {
 	KnowledgeID          string

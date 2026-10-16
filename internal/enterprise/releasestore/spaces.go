@@ -26,7 +26,7 @@ type Spaces struct {
 }
 
 // ParseSpaces decodes the ENTERPRISE_SPACES JSON list. Every Space must be
-// complete and unique, and must not reuse the Space or wiki KB of any scope in
+// complete and unique, and must not reuse the Space, RAW or wiki KB of any scope in
 // reserved (the G3 path keeps its own Head; S4c-2a user decision 2026-10-15).
 func ParseSpaces(raw string, reserved ...types.WikiReleaseScope) (Spaces, error) {
 	spaces := Spaces{byKey: map[string]types.WikiReleaseScope{}}
@@ -50,8 +50,9 @@ func ParseSpaces(raw string, reserved ...types.WikiReleaseScope) (Spaces, error)
 			return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] repeats a Space or wiki KB", i)
 		}
 		for _, r := range reserved {
-			if r.TenantID == e.TenantID && (r.SpaceID == e.SpaceID || r.WikiKBID == e.WikiKBID) {
-				return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] reuses a reserved Space or wiki KB", i)
+			if r.TenantID == e.TenantID &&
+				(r.SpaceID == e.SpaceID || r.RawKBID == e.RawKBID || r.WikiKBID == e.WikiKBID) {
+				return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] reuses a reserved Space, RAW or wiki KB", i)
 			}
 		}
 		wikiKBs[e.WikiKBID] = true
@@ -60,6 +61,19 @@ func ParseSpaces(raw string, reserved ...types.WikiReleaseScope) (Spaces, error)
 		}
 	}
 	return spaces, nil
+}
+
+// RawKB reports whether the tenant owns a configured enterprise RAW knowledge base.
+func (s Spaces) RawKB(tenantID uint64, knowledgeBaseID string) bool {
+	if tenantID == 0 || knowledgeBaseID == "" {
+		return false
+	}
+	for _, scope := range s.byKey {
+		if scope.TenantID == tenantID && scope.RawKBID == knowledgeBaseID {
+			return true
+		}
+	}
+	return false
 }
 
 // Scope resolves the four-part release scope of a configured Space.
