@@ -1,4 +1,7 @@
-"""The scoring command reads a run root and the in-repo Golden v2; Golden scored as a run is perfect."""
+"""The scoring command reads a run root and the in-repo Golden v2.
+
+Golden scored as if it were a run must come out perfect (metric self-check).
+"""
 
 from __future__ import annotations
 
