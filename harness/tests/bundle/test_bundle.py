@@ -63,6 +63,7 @@ OUTPUT = CompileOutput(
     pack_id="schemapack_critical_illness_insurance",
     entity_id="1828",
     model="deepseek-flash",
+    cards_version="harness-test-cards",
     fields=[
         field("waiting_period", "present", ["D1P1S1", "D1P1S2"], "90日；意外无等待期"),
         field("premium_grace_period", "absent_explicitly", ["D1P2S2"]),
