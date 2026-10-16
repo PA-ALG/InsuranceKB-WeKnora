@@ -107,7 +107,7 @@ def test_cli_register_and_classify_real_sample(
     space_id: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """真实样本端到端：注册 13 产品，对单产品目录分类+路由并出报告（P2.1/P4.5）。"""
+    """真实样本端到端：注册样本目录中的全部产品，对单产品目录分类+路由并出报告（P2.1/P4.5）。"""
     assert (
         main(
             [
@@ -121,7 +121,11 @@ def test_cli_register_and_classify_real_sample(
         )
         == 0
     )
-    assert "created=13" in capsys.readouterr().out
+    # Every product folder with a product_meta.* file (the loader's rule) registers once. The
+    # count follows the dataset (S4h added 1828), so adding a product keeps this test valid.
+    products = sum(1 for d in DATASET_DIR.iterdir() if d.is_dir() and any(d.glob("product_meta.*")))
+    assert products >= 13
+    assert f"created={products}" in capsys.readouterr().out
 
     report = tmp_path / "report.md"
     unassigned = tmp_path / "unassigned.jsonl"

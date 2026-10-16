@@ -62,7 +62,9 @@ class JudgeLikeRequest:
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _field(definition: FieldDefinition, *, examples: bool = True) -> dict[str, Any]:
+def _field(
+    definition: FieldDefinition, *, examples: bool = True, entity_id: str | None = None
+) -> dict[str, Any]:
     entry: dict[str, Any] = {
         "ordinal": definition.ordinal,
         "field_key": definition.field_key,
@@ -72,7 +74,7 @@ def _field(definition: FieldDefinition, *, examples: bool = True) -> dict[str, A
         "value_spec": definition.value_spec,
         "instruction": field_extraction_profile(definition).instruction,
     }
-    card = card_payload(definition, examples=examples)
+    card = card_payload(definition, examples=examples, entity_id=entity_id)
     if card is not None:
         entry["card"] = card
     return entry
@@ -93,7 +95,7 @@ def build_selection_request(
     user = _encode(
         {
             "entity_id": entity_id,
-            "schema_fields": [_field(d) for d in definitions],
+            "schema_fields": [_field(d, entity_id=entity_id) for d in definitions],
             "segments": listing,
         }
     )
