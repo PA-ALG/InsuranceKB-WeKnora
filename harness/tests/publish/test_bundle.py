@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
-import jsonschema
+import jsonschema  # type: ignore[import-untyped]
 import pytest
 
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
