@@ -53,5 +53,45 @@
     "name": "only_internal_whitespace_differs",
     "quote": "  \u4fdd\u9669  \u8d23\u4efb  ",
     "digest": "497f4b9181c74e6959ba7baceccef827fe24608be22fd23642023157b93ece15"
+  },
+  {
+    "name": "combining_run_30",
+    "quote": "e\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301",
+    "digest": "836f7a75fbbd5fc1178366d654736429f16526e87c863f7628d848550336f2e4"
+  },
+  {
+    "name": "combining_run_31",
+    "quote": "e\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301\u0301",
+    "digest": "e5be42e4c39df366b0c95f5672eb15be0bcc1f37b620d57c9e176753855306d1"
+  },
+  {
+    "name": "combining_run_64_mixed_classes",
+    "quote": "a\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316\u0301\u0316",
+    "digest": "5697391018f08748aaa753f545f1c67871fc0b1143074dfa2a0b10efe129e2a3"
+  },
+  {
+    "name": "original_cgj_kept",
+    "quote": "a\u034fb e\u034f\u0301",
+    "digest": "031f8e9250d1583575695693326668091fc629d475ed0b0ab4b69d6f1b33c9ed"
+  },
+  {
+    "name": "hangul_jamo_compose",
+    "quote": "\u1100\u1161\u11a8\uac00\u11a8",
+    "digest": "364a9ead20c1ccaa0adaf00f73b9aecba42d9d2564ec0e55095148324395e39f"
+  },
+  {
+    "name": "indic_starter_composition",
+    "quote": "\u0b47\u0b3e\u0b47\u0b57",
+    "digest": "b6b83a0e1f12d449401951149ad6bcaaf419d6ca17bd5bbb84d8518606609865"
+  },
+  {
+    "name": "devanagari_composition_exclusion",
+    "quote": "\u0915\u093c\u0958",
+    "digest": "45c614c4780176c3174374937314c4af9afca5b1e1fb7e46c7b712afd778bcf1"
+  },
+  {
+    "name": "singletons_and_reordering",
+    "quote": "\u2126\u212b\u1e0a\u0323",
+    "digest": "0d48af2ae725a34890af2bef368ebfc5a3a523b12ea496c6bcae8d00650e58f6"
   }
 ]
