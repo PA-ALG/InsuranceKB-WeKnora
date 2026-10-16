@@ -417,13 +417,17 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	if params.Config != nil && params.Config.G3PlatformProcessing != nil {
 		cfg := params.Config.G3PlatformProcessing
 		if cfg.Enabled && cfg.Mode == "ISOLATED_NOT_FOR_PRODUCTION" {
-			captured = types.WikiReleaseScope{TenantID: cfg.TenantID, SpaceID: cfg.SpaceID, RawKBID: cfg.RawKBID, WikiKBID: cfg.WikiKBID}
+			captured = types.WikiReleaseScope{
+				TenantID: cfg.TenantID, SpaceID: cfg.SpaceID, RawKBID: cfg.RawKBID, WikiKBID: cfg.WikiKBID,
+			}
 		}
 	}
 	// Captures currently exist only in this configured isolated scope. Replace
 	// this mapping when S4c-2 provides managed Space/source bindings and capture
 	// persistence; never infer Space membership from a caller-supplied source ID.
-	store := source.ArtifactStoreFunc(func(ctx context.Context, scope source.Scope, id string, attempt int64) (*source.Artifact, error) {
+	store := source.ArtifactStoreFunc(func(
+		ctx context.Context, scope source.Scope, id string, attempt int64,
+	) (*source.Artifact, error) {
 		if captured.TenantID == 0 || captured.RawKBID == "" || captured.WikiKBID == "" ||
 			scope.TenantID != captured.TenantID || scope.SpaceID != captured.SpaceID {
 			return nil, source.ErrNotFound

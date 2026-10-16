@@ -24,31 +24,41 @@ type sourcePagesRepository struct {
 	attempt                       int64
 }
 
-func (r *sourcePagesRepository) GetKnowledgeByID(_ context.Context, tenant uint64, id string) (*types.Knowledge, error) {
+func (r *sourcePagesRepository) GetKnowledgeByID(_ context.Context, tenant uint64, _ string) (*types.Knowledge, error) {
 	r.knowledgeCalls++
 	r.tenant = tenant
 	return r.knowledge, r.knowledgeErr
 }
 
-func (r *sourcePagesRepository) GetRevision(_ context.Context, id string, attempt int64) (*types.KnowledgeRevision, error) {
+func (r *sourcePagesRepository) GetRevision(
+	_ context.Context, _ string, attempt int64,
+) (*types.KnowledgeRevision, error) {
 	r.revisionCalls++
 	r.attempt = attempt
 	return r.revision, r.revisionErr
 }
 
-func sourcePagesFixture(t *testing.T) (*G3FirstParseStore, *sourcePagesRepository, types.WikiReleaseScope, g3FirstParseIdentity) {
+func sourcePagesFixture(
+	t *testing.T,
+) (*G3FirstParseStore, *sourcePagesRepository, types.WikiReleaseScope, g3FirstParseIdentity) {
 	t.Helper()
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
 	store := NewG3FirstParseStore(sourceReuseTestCodec830G3(t))
 	result := firstParseNative(t, "First\r\n𠮷", "Second\n")
 	scope := types.WikiReleaseScope{TenantID: 7, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki"}
-	id := g3FirstParseIdentity{TenantID: 7, RawKBID: "raw", KnowledgeID: "source", ParseAttempt: 2, SourceSHA256: result.NativeStructure.SourceSHA256}
+	id := g3FirstParseIdentity{
+		TenantID: 7, RawKBID: "raw", KnowledgeID: "source", ParseAttempt: 2,
+		SourceSHA256: result.NativeStructure.SourceSHA256,
+	}
 	require.NoError(t, store.save(id, result, []types.ParsedChunk{
 		{Content: result.MarkdownContent, Start: 0, End: len([]rune(result.MarkdownContent))},
 	}))
 	repo := &sourcePagesRepository{
-		knowledge: &types.Knowledge{ID: "source", TenantID: 7, KnowledgeBaseID: "raw", FileName: "source.pdf", CurrentParseAttempt: 9, FileSHA256: testSHA256830G2("new revision")},
-		revision:  &types.KnowledgeRevision{KnowledgeID: "source", ParseAttempt: 2, FileSHA256: id.SourceSHA256},
+		knowledge: &types.Knowledge{
+			ID: "source", TenantID: 7, KnowledgeBaseID: "raw", FileName: "source.pdf",
+			CurrentParseAttempt: 9, FileSHA256: testSHA256830G2("new revision"),
+		},
+		revision: &types.KnowledgeRevision{KnowledgeID: "source", ParseAttempt: 2, FileSHA256: id.SourceSHA256},
 	}
 	return store, repo, scope, id
 }
@@ -64,15 +74,18 @@ func TestReadSourceArtifactUsesExactHistoricalAttemptAfterRestart(t *testing.T) 
 	require.NotEqual(t, repo.knowledge.FileSHA256, a.FileSHA256)
 	require.Equal(t, "source.pdf", a.FileName)
 	require.Equal(t, "First\r\n𠮷\n\nSecond\n", a.Markdown)
-	set, err := source.NewService(sourcePagesStoreFunc(func(context.Context, source.Scope, string, int64) (*source.Artifact, error) { return a, nil })).
-		Pages(context.Background(), source.Scope{TenantID: 7, SpaceID: "space"}, "source", 2)
+	set, err := source.NewService(sourcePagesStoreFunc(
+		func(context.Context, source.Scope, string, int64) (*source.Artifact, error) { return a, nil },
+	)).Pages(context.Background(), source.Scope{TenantID: 7, SpaceID: "space"}, "source", 2)
 	require.NoError(t, err)
 	require.Equal(t, "First\r\n𠮷", set.Pages[0].Text)
 }
 
 type sourcePagesStoreFunc func(context.Context, source.Scope, string, int64) (*source.Artifact, error)
 
-func (f sourcePagesStoreFunc) Load(ctx context.Context, scope source.Scope, id string, attempt int64) (*source.Artifact, error) {
+func (f sourcePagesStoreFunc) Load(
+	ctx context.Context, scope source.Scope, id string, attempt int64,
+) (*source.Artifact, error) {
 	return f(ctx, scope, id, attempt)
 }
 

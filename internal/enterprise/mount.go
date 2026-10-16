@@ -139,7 +139,10 @@ func pages(c *gin.Context, service *source.Service) {
 		writeSourceError(c, &source.Error{Code: source.ErrorInvalidRequest, Detail: "a positive attempt is required"})
 		return
 	}
-	result, err := service.Pages(c.Request.Context(), source.Scope{TenantID: p.TenantID, SpaceID: c.Param("space_id")}, c.Param("knowledge_id"), attempt)
+	result, err := service.Pages(
+		c.Request.Context(), source.Scope{TenantID: p.TenantID, SpaceID: c.Param("space_id")},
+		c.Param("knowledge_id"), attempt,
+	)
 	if err != nil {
 		writeSourceError(c, err)
 		return

@@ -63,7 +63,8 @@ func enterpriseRouter(t *testing.T, cfg *config.Config, repo *enterpriseSourceRe
 
 func enterpriseSourceConfig() *config.Config {
 	return &config.Config{G3PlatformProcessing: &config.G3PlatformProcessingConfig{
-		Enabled: true, TenantID: 7, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki", Mode: "ISOLATED_NOT_FOR_PRODUCTION",
+		Enabled: true, TenantID: 7, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki",
+		Mode: "ISOLATED_NOT_FOR_PRODUCTION",
 	}}
 }
 
@@ -106,7 +107,8 @@ func TestEnterpriseProductionSourcesRejectOtherTenantAndDisabledCaptureScope(t *
 		repo := &enterpriseSourceRepo{}
 		r := enterpriseRouter(t, cfg, repo)
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/enterprise/spaces/space/sources/source/attempts/2/pages", nil))
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet,
+			"/api/v1/enterprise/spaces/space/sources/source/attempts/2/pages", nil))
 		require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 		require.Zero(t, repo.calls)
 	}

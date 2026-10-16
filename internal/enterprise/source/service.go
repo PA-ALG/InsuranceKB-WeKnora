@@ -10,8 +10,10 @@ import (
 	"unicode/utf8"
 )
 
+// Service verifies and reads the pages of captured source revisions.
 type Service struct{ store ArtifactStore }
 
+// NewService constructs a read-only page service backed by store.
 func NewService(store ArtifactStore) *Service { return &Service{store: store} }
 
 // Pages verifies every page before returning any text. Offsets are Unicode code

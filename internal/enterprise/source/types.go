@@ -7,15 +7,22 @@ import (
 )
 
 const (
+	// ErrorInvalidRequest identifies an invalid scope, knowledge ID, or attempt.
 	ErrorInvalidRequest = "INVALID_REQUEST"
+	// ErrorSourceNotFound identifies an absent or inaccessible source revision.
 	ErrorSourceNotFound = "SOURCE_NOT_FOUND"
-	ErrorNotCaptured    = "PARSE_ARTIFACT_NOT_CAPTURED"
-	ErrorIntegrity      = "PARSE_ARTIFACT_INTEGRITY"
-	ErrorUnavailable    = "SOURCE_UNAVAILABLE"
+	// ErrorNotCaptured identifies a revision without a saved parse artifact.
+	ErrorNotCaptured = "PARSE_ARTIFACT_NOT_CAPTURED"
+	// ErrorIntegrity identifies an invalid or inconsistent parse artifact.
+	ErrorIntegrity = "PARSE_ARTIFACT_INTEGRITY"
+	// ErrorUnavailable identifies a storage or service availability failure.
+	ErrorUnavailable = "SOURCE_UNAVAILABLE"
 )
 
 var (
-	ErrNotFound    = errors.New("source not found")
+	// ErrNotFound means the source revision is absent or outside the scope.
+	ErrNotFound = errors.New("source not found")
+	// ErrNotCaptured means the source revision has no saved parse artifact.
 	ErrNotCaptured = errors.New("parse artifact not captured")
 )
 
@@ -45,16 +52,19 @@ type ArtifactStore interface {
 // ArtifactStoreFunc adapts the platform's read-only capture seam.
 type ArtifactStoreFunc func(context.Context, Scope, string, int64) (*Artifact, error)
 
+// Load calls the adapted reader with the authenticated request scope.
 func (f ArtifactStoreFunc) Load(ctx context.Context, scope Scope, id string, attempt int64) (*Artifact, error) {
 	return f(ctx, scope, id, attempt)
 }
 
+// Page is the verbatim text and recorded digest of one physical page.
 type Page struct {
 	Number     int    `json:"page_number"`
 	Text       string `json:"text"`
 	TextSHA256 string `json:"page_text_sha256"`
 }
 
+// PageSet identifies a source revision and its verified physical pages.
 type PageSet struct {
 	KnowledgeID          string `json:"knowledge_id"`
 	ParseAttempt         int64  `json:"parse_attempt"`

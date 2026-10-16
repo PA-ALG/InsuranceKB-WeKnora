@@ -25,7 +25,7 @@ type pageStore struct {
 	scope    source.Scope
 }
 
-func (s *pageStore) Load(_ context.Context, scope source.Scope, knowledge string, attempt int64) (*source.Artifact, error) {
+func (s *pageStore) Load(_ context.Context, scope source.Scope, _ string, _ int64) (*source.Artifact, error) {
 	s.calls++
 	s.scope = scope
 	return s.artifact, s.err
@@ -51,16 +51,20 @@ func mountArtifact(t *testing.T) *source.Artifact {
 	sum := sha256.Sum256([]byte(text))
 	digest := hex.EncodeToString(sum[:])
 	raw, err := json.Marshal(map[string]any{"pages": []any{map[string]any{
-		"page_number": 1, "global_codepoint_start": 0, "global_codepoint_end": len([]rune(text)), "page_text_sha256": digest,
+		"page_number": 1, "global_codepoint_start": 0,
+		"global_codepoint_end": len([]rune(text)), "page_text_sha256": digest,
 	}}})
 	require.NoError(t, err)
-	return &source.Artifact{KnowledgeID: "document", ParseAttempt: 2, FileName: "document.pdf", FileSHA256: digest,
-		ParserIdentitySHA256: digest, Markdown: text, NativeJSON: raw}
+	return &source.Artifact{
+		KnowledgeID: "document", ParseAttempt: 2, FileName: "document.pdf", FileSHA256: digest,
+		ParserIdentitySHA256: digest, Markdown: text, NativeJSON: raw,
+	}
 }
 
 func TestMountSourcePagesReturnsPageSetAndTrustedScope(t *testing.T) {
 	store := &pageStore{artifact: mountArtifact(t)}
-	w := request(mountSourceRouter(t, source.NewService(store), machineKey()), http.MethodGet, sourcePagesPath, "test-key", nil)
+	w := request(mountSourceRouter(t, source.NewService(store), machineKey()),
+		http.MethodGet, sourcePagesPath, "test-key", nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	var result source.PageSet
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
@@ -74,7 +78,8 @@ func TestMountSourcePagesReturnsPageSetAndTrustedScope(t *testing.T) {
 func TestMountSourcePagesRequiresFullUnrestrictedServiceKey(t *testing.T) {
 	for _, raw := range []string{"", "invalid"} {
 		store := &pageStore{artifact: mountArtifact(t)}
-		w := request(mountSourceRouter(t, source.NewService(store), machineKey()), http.MethodGet, sourcePagesPath, raw, nil)
+		w := request(mountSourceRouter(t, source.NewService(store), machineKey()),
+			http.MethodGet, sourcePagesPath, raw, nil)
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		require.Zero(t, store.calls)
 	}
@@ -83,7 +88,8 @@ func TestMountSourcePagesRequiresFullUnrestrictedServiceKey(t *testing.T) {
 		{ID: 1, TenantID: machineKey().TenantID, FullAccess: true, KnowledgeBaseIDs: types.StringArray{"raw"}},
 	} {
 		store := &pageStore{artifact: mountArtifact(t)}
-		w := request(mountSourceRouter(t, source.NewService(store), key), http.MethodGet, sourcePagesPath, "test-key", nil)
+		w := request(mountSourceRouter(t, source.NewService(store), key),
+			http.MethodGet, sourcePagesPath, "test-key", nil)
 		require.Equal(t, http.StatusForbidden, w.Code)
 		require.Zero(t, store.calls)
 	}
@@ -102,7 +108,8 @@ func TestMountSourcePagesMapsErrorsAndNeverExposesStorageDiagnostics(t *testing.
 	} {
 		t.Run(tc.code, func(t *testing.T) {
 			store := &pageStore{err: tc.err}
-			w := request(mountSourceRouter(t, source.NewService(store), machineKey()), http.MethodGet, sourcePagesPath, "test-key", nil)
+			w := request(mountSourceRouter(t, source.NewService(store), machineKey()),
+				http.MethodGet, sourcePagesPath, "test-key", nil)
 			require.Equal(t, tc.status, w.Code, w.Body.String())
 			require.Contains(t, w.Body.String(), `"success":false`)
 			require.Contains(t, w.Body.String(), tc.code)
@@ -112,7 +119,8 @@ func TestMountSourcePagesMapsErrorsAndNeverExposesStorageDiagnostics(t *testing.
 	for _, attempt := range []string{"0", "-1", "invalid", "9223372036854775808"} {
 		store := &pageStore{}
 		path := "/api/v1/enterprise/spaces/demo/sources/document/attempts/" + attempt + "/pages"
-		w := request(mountSourceRouter(t, source.NewService(store), machineKey()), http.MethodGet, path, "test-key", nil)
+		w := request(mountSourceRouter(t, source.NewService(store), machineKey()),
+			http.MethodGet, path, "test-key", nil)
 		require.Equal(t, http.StatusBadRequest, w.Code)
 		require.Contains(t, w.Body.String(), source.ErrorInvalidRequest)
 		require.Zero(t, store.calls)

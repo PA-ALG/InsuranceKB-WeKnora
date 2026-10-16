@@ -55,12 +55,18 @@ func NewG3FirstParseStore(codec *SchemaWikiCitationTokenCodec) *G3FirstParseStor
 // ReadSourceArtifact reads an exact historical capture. The caller must resolve
 // an authorized Space/RAW scope; this method independently checks Knowledge's
 // tenant and RAW ownership before opening any signed artifact. It never parses.
-func (s *G3FirstParseStore) ReadSourceArtifact(ctx context.Context, repo interfaces.KnowledgeRepository, scope types.WikiReleaseScope, knowledgeID string, attempt int64) (*source.Artifact, error) {
+func (s *G3FirstParseStore) ReadSourceArtifact(
+	ctx context.Context, repo interfaces.KnowledgeRepository, scope types.WikiReleaseScope,
+	knowledgeID string, attempt int64,
+) (*source.Artifact, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if scope.TenantID == 0 || scope.SpaceID == "" || scope.RawKBID == "" || strings.TrimSpace(knowledgeID) == "" || attempt <= 0 {
-		return nil, &source.Error{Code: source.ErrorInvalidRequest, Detail: "an exact source scope and attempt are required"}
+	if scope.TenantID == 0 || scope.SpaceID == "" || scope.RawKBID == "" ||
+		strings.TrimSpace(knowledgeID) == "" || attempt <= 0 {
+		return nil, &source.Error{
+			Code: source.ErrorInvalidRequest, Detail: "an exact source scope and attempt are required",
+		}
 	}
 	revisions, ok := repo.(interface {
 		GetRevision(context.Context, string, int64) (*types.KnowledgeRevision, error)
@@ -75,7 +81,8 @@ func (s *G3FirstParseStore) ReadSourceArtifact(ctx context.Context, repo interfa
 	if err != nil {
 		return nil, err
 	}
-	if knowledge == nil || knowledge.ID != knowledgeID || knowledge.TenantID != scope.TenantID || knowledge.KnowledgeBaseID != scope.RawKBID || knowledge.DeletedAt.Valid {
+	if knowledge == nil || knowledge.ID != knowledgeID || knowledge.TenantID != scope.TenantID ||
+		knowledge.KnowledgeBaseID != scope.RawKBID || knowledge.DeletedAt.Valid {
 		return nil, source.ErrNotFound
 	}
 	revision, err := revisions.GetRevision(ctx, knowledgeID, attempt)
@@ -91,7 +98,10 @@ func (s *G3FirstParseStore) ReadSourceArtifact(ctx context.Context, repo interfa
 	if !validServiceSHA256(revision.FileSHA256) {
 		return nil, &source.Error{Code: source.ErrorIntegrity, Detail: "source revision failed integrity verification"}
 	}
-	id := g3FirstParseIdentity{TenantID: scope.TenantID, RawKBID: scope.RawKBID, KnowledgeID: knowledgeID, ParseAttempt: attempt, SourceSHA256: revision.FileSHA256}
+	id := g3FirstParseIdentity{
+		TenantID: scope.TenantID, RawKBID: scope.RawKBID, KnowledgeID: knowledgeID,
+		ParseAttempt: attempt, SourceSHA256: revision.FileSHA256,
+	}
 	record, err := s.reuse.readFirstParse(id)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, source.ErrNotCaptured
@@ -111,6 +121,7 @@ func (s *G3FirstParseStore) ReadSourceArtifact(ctx context.Context, repo interfa
 		Markdown: record.Markdown, NativeJSON: append([]byte(nil), record.Native.SanitizedJSON...),
 	}, nil
 }
+
 func NewConceptSourceAuthorityService830G2WithFirstParse(fixed *KnowledgeRevisionSourceService, knowledge interfaces.KnowledgeRepository, chunks interfaces.ChunkRepository, reader interfaces.DocumentReader, codec *SchemaWikiCitationTokenCodec, releases *wikirepository.WikiReleaseRepository, legacy SchemaWikiCitationContentPort, preview *wikirepository.SchemaWikiFormalCandidatePreviewRegistry, first *G3FirstParseStore) *ConceptSourceAuthorityService830G2 {
 	s := NewConceptSourceAuthorityService830G2(fixed, knowledge, chunks, reader, codec, releases, legacy, preview)
 	if first != nil {
