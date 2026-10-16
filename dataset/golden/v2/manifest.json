@@ -6,10 +6,10 @@
  "catalog_version": "2026-08-12-v5",
  "dataset_version": "v2",
  "files": {
-  "1814.json": "399933b4964a3a390125dccb6668ed7510ca431e541284542293ac7959a8ca80",
-  "1816.json": "279da4e03bc3dc9abc50b8144f5c3e259ef27b74787992e8cc1edf5add1deb29",
-  "1824.json": "e765136a505c0bd9873a34e6cb857698404c3ef6108b927272308fb7e09fa756",
-  "1826.json": "41b07f803b5e80f74b19e26022a976cd23e84a5b0288012c7c91bd75aa0f928d"
+  "1814.json": "1025d6415ec8512c0a187ce2367c0ef4f53d1d64d5ea97e13b1f12eb4d3678db",
+  "1816.json": "6ee005388cd5bdeda3b5cdb5a601f9c3b16c889f3237cb6464b1adf031e6b472",
+  "1824.json": "a99a255771a23acdc7b86d3b5c6c6e7267b15781d161b229f1d836f91c6d0fb3",
+  "1826.json": "50de0392f7302ead64c1882affeb90598a790cbd6ab26584ddc9549033fe2141"
  },
  "products": {
   "1814": {
@@ -27,8 +27,8 @@
    },
    "states": {
     "absent_explicitly": 2,
-    "present": 23,
-    "unknown": 17
+    "present": 24,
+    "unknown": 16
    }
   },
   "1816": {
@@ -46,8 +46,8 @@
    },
    "states": {
     "absent_explicitly": 6,
-    "present": 32,
-    "unknown": 18
+    "present": 33,
+    "unknown": 17
    }
   },
   "1824": {
@@ -65,8 +65,8 @@
    },
    "states": {
     "absent_explicitly": 11,
-    "present": 25,
-    "unknown": 17
+    "present": 26,
+    "unknown": 16
    }
   },
   "1826": {
@@ -84,10 +84,80 @@
    },
    "states": {
     "absent_explicitly": 15,
-    "present": 22,
-    "unknown": 19
+    "present": 23,
+    "unknown": 18
    }
   }
  },
+ "revisions": [
+  {
+   "basis": "S4e Spec §3.4: fields whose card rules changed, re-annotated by one independent judge session per product on the repo segmentation; the Golden v2b prompt with rate tables selected when they list the field's content (user ruling 2026-10-15); audited by Claude (Issue #161)",
+   "cards_version": "draft-2026-10-15j",
+   "products": {
+    "1814": {
+     "fields": [
+      "entry_age_range",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "covered_accident_scenarios",
+      "exclusions",
+      "maturity_benefit_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights"
+     ],
+     "judging_method": "codex-exec-file-exchange",
+     "model_id": "gpt-6-astra",
+     "reasoning_effort": "xhigh",
+     "session_id": "01a1425d-db62-7911-9a95-fa2dac9f95a5"
+    },
+    "1816": {
+     "fields": [
+      "entry_age_range",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "exclusions",
+      "maturity_benefit_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights"
+     ],
+     "judging_method": "codex-exec-file-exchange",
+     "model_id": "gpt-6-astra",
+     "reasoning_effort": "xhigh",
+     "session_id": "01a1425d-dbad-7f62-bc5d-52d745e3579a"
+    },
+    "1824": {
+     "fields": [
+      "entry_age_range",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "exclusions",
+      "death_benefit_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights"
+     ],
+     "judging_method": "codex-exec-file-exchange",
+     "model_id": "gpt-6-astra",
+     "reasoning_effort": "xhigh",
+     "session_id": "01a1425d-db61-7173-be85-8eb11c7402be"
+    },
+    "1826": {
+     "fields": [
+      "entry_age_range",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "exclusions",
+      "death_benefit_rules",
+      "maturity_benefit_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights"
+     ],
+     "judging_method": "codex-exec-file-exchange",
+     "model_id": "gpt-6-astra",
+     "reasoning_effort": "xhigh",
+     "session_id": "01a1425d-db61-7923-8905-b5a5d962df6e"
+    }
+   }
+  }
+ ],
  "segmentation": "insurance_harness.evidence.segments (pdfium page text)"
 }
