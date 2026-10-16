@@ -183,7 +183,8 @@ func TestReleasingLeavesSealedAndForeignRowsPinned(t *testing.T) {
 	require.NoError(t, releaseSources(db, 1, refs...))
 	require.Equal(t, types.KnowledgeRevisionSourcePinned, sourceRow(t, db, sealed, 1).RetentionState)
 	require.Equal(t, types.KnowledgeRevisionSourceReleased, sourceRow(t, db, plain, 1).RetentionState)
-	require.NoError(t, releaseSources(db, 1, RevisionRef{KnowledgeID: plain, ParseAttempt: 9}), "missing rows are ignored")
+	missing := RevisionRef{KnowledgeID: plain, ParseAttempt: 9}
+	require.NoError(t, releaseSources(db, 1, missing), "missing rows are ignored")
 }
 
 func TestKnowledgeBaseReportsWhetherAnyOfItsSourcesIsPinned(t *testing.T) {
