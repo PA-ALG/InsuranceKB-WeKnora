@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
@@ -133,9 +134,15 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 		writeSourceError(c, nil)
 		return
 	}
-	defer func() { _ = reader.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(reader, maxSourceFile+1))
-	if err != nil {
+	ctx := c.Request.Context()
+	closeReader := sync.OnceFunc(func() { _ = reader.Close() })
+	defer closeReader()
+	// A cancelled request closes the file at once, which also ends a Read blocked on a slow
+	// source; contextReader stops further reads. Nothing is written for a cancelled request.
+	stop := context.AfterFunc(ctx, closeReader)
+	defer stop()
+	raw, err := io.ReadAll(io.LimitReader(contextReader{ctx: ctx, r: reader}, maxSourceFile+1))
+	if err != nil || ctx.Err() != nil {
 		writeSourceError(c, nil)
 		return
 	}
@@ -163,6 +170,19 @@ func citedFingerprint(r release.Release, knowledgeID string, attempt int64) stri
 		}
 	}
 	return ""
+}
+
+// contextReader refuses to read once the request context is done.
+type contextReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c contextReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
 }
 
 func invalidRequest(detail string) *source.Error {
