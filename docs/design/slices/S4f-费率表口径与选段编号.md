@@ -49,7 +49,7 @@ S4e 用新卡片做的真实验证把召回从 0.861 提到 0.905，同时暴露
 
 ## 4. 改动范围
 
-- 允许：`compilers/schema_fields/engine.py`、`compilers/schema_fields/field_cards.json`、`eval/segment_score.py`、`dataset/golden/v2/`、对应实现方测试。
+- 允许：`compilers/schema_fields/engine.py`、`compilers/schema_fields/field_cards.json`、`eval/segment_score.py`、`evidence/segments.py`（§2.3 修正后新增公共函数 `same_text`，复用分段模块已有的空白与宽度规范化，供计分器比较原文）、`dataset/golden/v2/`、对应实现方测试。
 - 受保护：本片验收文件、既有受保护验收、`docs/design/`、蓝图。
 
 ## 5. 真实调用预算
