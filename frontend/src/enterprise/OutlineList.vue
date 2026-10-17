@@ -16,6 +16,12 @@ function short(item: OutlineItem): boolean {
   return item.children.length === 0 && (item.lead + item.body).length <= SHORT_CHARS
 }
 
+// An item with neither name nor text only groups its sub-items: folding it would leave an empty
+// entry, so its sub-items are shown in its place and fold one by one.
+function container(item: OutlineItem): boolean {
+  return !item.lead && !item.body && item.children.length > 0
+}
+
 const flowing = computed(
   () =>
     props.items.length >= FLOW_MIN &&
@@ -24,7 +30,7 @@ const flowing = computed(
 )
 
 function folded(item: OutlineItem): boolean {
-  return props.collapsible && !flowing.value && !short(item)
+  return props.collapsible && !flowing.value && !short(item) && !container(item)
 }
 </script>
 
@@ -33,7 +39,13 @@ function folded(item: OutlineItem): boolean {
     <li
       v-for="(item, index) in items"
       :key="index"
-      :class="['ek-outline__item', { 'ek-outline__item--plain': collapsible && !flowing && !folded(item) }]"
+      :class="[
+        'ek-outline__item',
+        {
+          'ek-outline__item--plain': collapsible && !flowing && !folded(item),
+          'ek-outline__item--group': container(item),
+        },
+      ]"
       :data-item="folded(item) ? undefined : ''"
     >
       <details v-if="folded(item)" data-item class="ek-outline__details" :open="open">
@@ -51,7 +63,7 @@ function folded(item: OutlineItem): boolean {
         <span v-if="item.marker" class="ek-outline__marker">{{ item.marker }}</span>
         <strong v-if="item.lead" class="ek-outline__lead">{{ item.lead }}</strong>
         <span v-if="item.body" class="ek-outline__body">{{ item.body }}</span>
-        <OutlineList v-if="item.children.length" :items="item.children" :collapsible="false" :open="open" />
+        <OutlineList v-if="item.children.length" :items="item.children" :collapsible="collapsible" :open="open" />
       </template>
     </li>
   </ol>

@@ -28,6 +28,8 @@ interface Family {
   // Markers of one family written differently ("1. " / "1." / "1、", "（1）" / "(1)") are different
   // styles: one level of a list uses one style, and a nested level may use another of the family.
   style: (match: RegExpExecArray) => string
+  // The marker only counts when a short name ending in a colon outside quotes follows it.
+  named?: boolean
 }
 
 const MAX_DEPTH = 3
@@ -64,9 +66,10 @@ const FAMILIES: Family[] = [
   },
   // A number, a space and a short named term ending in a colon: "1 恶性肿瘤——轻度：".
   {
-    pattern: /(\d{1,3})[ \t\u00a0\u3000]+(?=[^\n\r：:。；;，,！!？?]{1,32}[：:])/g,
+    pattern: /(\d{1,3})[ \t\u00a0\u3000]+/g,
     number: match => Number(match[1]),
     style: () => '',
+    named: true,
   },
 ]
 
@@ -97,10 +100,12 @@ function markersByStyle(text: string): Map<string, Marker[]> {
     let match: RegExpExecArray | null
     while ((match = pattern.exec(text)) !== null) {
       if (quoted[match.index] || !atBoundary(text, match.index)) continue
+      const end = match.index + match[0].length
+      if (family.named && nameColon(text, quoted, end) <= end) continue
       const style = `${rank}${family.style(match)}`
       const marker = {
         start: match.index,
-        end: match.index + match[0].length,
+        end,
         number: family.number(match),
         text: match[0].trim(),
         style,
@@ -123,17 +128,19 @@ function chainOf(markers: Marker[]): Marker[] {
   return chain
 }
 
-function splitLead(text: string): { lead: string; rest: string } {
-  const quoted = quotedPositions(text)
-  let colon = -1
-  for (let index = 0; index < text.length && index <= MAX_LEAD; index++) {
-    if ((text[index] === '：' || text[index] === ':') && !quoted[index]) {
-      colon = index
-      break
-    }
+// Where a short name starting at `from` ends: at its first colon outside quotes, or -1 when a
+// sentence mark comes first or the name would run past MAX_LEAD characters.
+function nameColon(text: string, quoted: boolean[], from: number): number {
+  for (let index = from; index < text.length && index - from <= MAX_LEAD; index++) {
+    if (LEAD_STOP.test(text[index])) return -1
+    if ((text[index] === '：' || text[index] === ':') && !quoted[index]) return index
   }
-  const name = text.slice(0, Math.max(colon, 0))
-  if (colon <= 0 || LEAD_STOP.test(name) || LEAD_START_STOP.test(name)) return { lead: '', rest: text }
+  return -1
+}
+
+function splitLead(text: string): { lead: string; rest: string } {
+  const colon = nameColon(text, quotedPositions(text), 0)
+  if (colon <= 0 || LEAD_START_STOP.test(text.slice(0, colon))) return { lead: '', rest: text }
   return { lead: text.slice(0, colon + 1).trim(), rest: text.slice(colon + 1) }
 }
 
