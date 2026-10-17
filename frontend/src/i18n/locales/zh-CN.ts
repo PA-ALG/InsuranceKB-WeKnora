@@ -7465,6 +7465,7 @@ export default {
     }
   },
   menu: {
+    enterpriseKnowledge: '企业知识',
     sessionInProgress: '会话进行中',
     knowledgeBase: '知识库',
     agents: '智能体',
@@ -7492,5 +7493,52 @@ export default {
     myChats: '我的对话',
     apiChats: 'API 会话',
     noSessions: '暂无对话'
+  },
+  enterpriseKnowledge: {
+    title: '企业知识',
+    loading: '正在加载…',
+    retry: '重试',
+    spaces: {
+      empty: '暂无可查看的企业知识空间',
+      failed: '企业知识空间加载失败'
+    },
+    space: {
+      version: '发布版本 {epoch}',
+      noRelease: '该空间还没有发布版本',
+      empty: '该版本中还没有条目',
+      failed: '发布版本加载失败',
+      fieldCount: '{count} 项'
+    },
+    entity: {
+      notFound: '该版本中没有这个条目',
+      failed: '条目加载失败',
+      other: '其他',
+      generated: '模型补充',
+      source: '出处 {n}'
+    },
+    state: {
+      absent: '材料明确没有',
+      unknown: '材料未提及'
+    },
+    origin: {
+      source: '原文依据',
+      mixed: '原文与整理',
+      generated: '模型补充',
+      expert: '专家修订',
+      imported: '结构化导入'
+    },
+    citation: {
+      page: '第 {page} 页',
+      mismatch: '原文已变化，无法回跳',
+      notFound: '找不到被引用的原文',
+      unsupported: '这类出处暂不支持打开',
+      failed: '出处无法打开'
+    },
+    viewer: {
+      loading: '正在打开原文…',
+      failed: '原文页无法显示',
+      incomplete: '高亮可能不完整',
+      region: '{document} 第 {page} 页'
+    }
   }
 }
