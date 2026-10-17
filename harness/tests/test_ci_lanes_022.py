@@ -112,6 +112,10 @@ POSTGRES_NODES = (
             "tests/test_release_publisher_postgres_018.py::"
             "test_r3_6_postgresql_release_never_commits_caller_transaction"
         ),
+        (
+            "tests/test_workbench_concurrency_008.py::"
+            "test_w1_4_live_postgresql_two_sessions_single_apply"
+        ),
     }
     | SOURCE_LIFECYCLE_POSTGRES_NODES
     | SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES
