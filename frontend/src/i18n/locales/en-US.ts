@@ -7512,7 +7512,13 @@ export default {
       failed: 'Failed to load the entry',
       other: 'Other',
       generated: 'Model supplement',
-      source: 'Source {n}'
+      source: 'Source {n}',
+      sourceNote: 'Content without a source label is backed by the source documents; open a source to see the original'
+    },
+    field: {
+      full: 'Show full text',
+      compact: 'Show less',
+      items: '{count} items'
     },
     state: {
       absent: 'Explicitly absent from the material',
