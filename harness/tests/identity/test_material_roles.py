@@ -185,7 +185,8 @@ def test_dataset_pages_no_longer_include_the_rate_table() -> None:
 
 
 def test_every_dataset_material_is_recognised_and_each_product_drops_one_rate_table() -> None:
-    directories = sorted(path.parent for path in PRODUCTS.glob("*/product_meta.json"))
+    # Every material folder, including one that ships no product_meta.json.
+    directories = sorted(path for path in PRODUCTS.iterdir() if path.is_dir())
     assert len(directories) >= 14
     for directory in directories:
         roles: dict[str, str | None] = {}
