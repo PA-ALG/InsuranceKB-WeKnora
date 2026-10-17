@@ -18,16 +18,7 @@
 
 ## 入口
 
-```bash
-# 归纳（零模型）
-uv run python -m insurance_harness.compiler.cli induce-template --doc 费率表.pdf \
-  --products "产品A,产品B" --golden-root dataset/goldenset/wip-gs-v0.1 \
-  --dataset-root dataset/shouxian_product --out-dir out/templates
-
-# 启用 fast path 抽取
-uv run python -m insurance_harness.compiler.cli extract <product_dir> \
-  --run-dir out/run --templates-dir dataset/templates
-```
+`compiler.cli` 的 `induce-template` 与 `extract` 命令已在 S7a 随 CLI 删除（不可达）；归纳器与 fast path 仍由管道调用。
 
 ## 与其他包的关系
 

@@ -13,7 +13,6 @@ from pathlib import Path
 import httpx
 import pytest
 
-from insurance_harness.compiler import cli as compiler_cli
 from insurance_harness.compiler.llm import ModelClient, ReplayClient, request_key
 from insurance_harness.compiler.models import DocManifestEntry, RunManifest
 from insurance_harness.compiler.pipeline import (
@@ -803,37 +802,6 @@ async def test_e1_2_transport_failure_becomes_dead_letter_not_abort(tmp_path: Pa
     # 死信清单落盘可重放
     dead_path = result.pred_path.parent / "dead-letters.jsonl"
     assert dead_path.exists() and dead_path.read_text(encoding="utf-8").strip()
-
-
-# --- 裁决回写 CLI ---
-
-
-async def test_apply_judgements_cli_updates_pred(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    result = await _run_ok(tmp_path, ScriptedClient())
-    run_dir = result.pred_path.parent
-    judgements = tmp_path / "judgements.jsonl"
-    judgements.write_text(
-        json.dumps(
-            {
-                "product_id": "TEST01", "field_id": "premium_waiver",
-                "value": "投保人身故或全残豁免保费", "tri_state": "present",
-                "evidence": [{"page": 2, "quote": "免交保险费，本合同继续有效"}],
-                "confidence": "medium", "reasoning": "三候选中与原文一致的表述",
-            },
-            ensure_ascii=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("HARNESS_MODEL_PROFILE", "manual")
-    rc = compiler_cli.main(["apply-judgements", str(run_dir), str(judgements)])
-    assert rc == 0
-    updated = {r.field_id: r for r in read_jsonl(result.pred_path)}
-    waiver = updated["premium_waiver"]
-    assert waiver.value == "投保人身故或全残豁免保费"
 
 
 def test_e6_1_prompt_version_constant() -> None:
