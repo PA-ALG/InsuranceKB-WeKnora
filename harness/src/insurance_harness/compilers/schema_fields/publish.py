@@ -2,9 +2,11 @@
 
 usage: python -m insurance_harness.compilers.schema_fields.publish --run-root <dir> --product <id>
        --source-map <file> [--decide human --reason <text> | --decide machine --policy-ref <id>]
-       [--activate]
+       [--activate] [--repo <dir>]
 
-Reads <run-root>/<product>/output.json, re-reads the same page text from the WeKnora revisions the
+Reads <run-root>/<product>/output.json and, from --repo (default: this checkout), the catalog and
+the product's metadata for its page (S3d-2): an entity named by the filed clause name, with its
+pack's presentation profile. Then re-reads the same page text from the WeKnora revisions the
 source map names (HARNESS_WEKNORA_BASE_URL / HARNESS_WEKNORA_API_KEY), builds the candidate bundle
 on the Space's active release and submits it. A decision is recorded only when given explicitly,
 and activation needs an approving one: nothing is approved automatically. Prints one JSON line;
@@ -24,7 +26,8 @@ from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
 from insurance_harness.compilers.schema_fields.claims import candidate_bundle, require_cards_version
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
-from insurance_harness.eval.product_sources import check_product_id
+from insurance_harness.compilers.schema_fields.page import product_page
+from insurance_harness.eval.product_sources import check_product_id, display_name, source_directory
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.ingest.source_map import (
@@ -36,6 +39,9 @@ from insurance_harness.ingest.source_map import (
     reader_from_env,
 )
 
+REPO = Path(__file__).resolve().parents[5]
+CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -46,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--reason")
     parser.add_argument("--policy-ref")
     parser.add_argument("--activate", action="store_true")
+    parser.add_argument("--repo", type=Path, default=REPO)
     args = parser.parse_args(argv)
     # Every failure prints a stable code (and at most a field key): never exception text,
     # local paths or input content, which may carry material.
@@ -70,6 +77,17 @@ def main(argv: list[str] | None = None) -> int:
         version = require_cards_version(output)
     except BundleError as error:
         return _stop(error.reason)
+    # The page is local data: read it before anything is sent, with the compile's own rule.
+    try:
+        name = display_name(source_directory(args.repo, args.product))
+    except (OSError, ValueError):
+        return _stop("PRODUCT_META_MISSING")
+    try:
+        page = product_page(
+            args.repo / CATALOG, output.pack_id, entity_id=output.entity_id, name=name
+        )
+    except BundleError as error:
+        return _stop("BUNDLE_INVALID", reason=error.reason)
     try:
         source_map = load_source_map(args.source_map)
         pages, sources = load_pages(
@@ -83,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
             sources,
             compiler_identity=f"harness/schema_fields@{version}",
             base=active.head if active else None,
+            page=page,
         )
         result = publish(
             client, source_map.space_id, bundle, decision=decision, activate=args.activate

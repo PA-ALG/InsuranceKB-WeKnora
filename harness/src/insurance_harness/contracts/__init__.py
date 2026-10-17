@@ -52,6 +52,9 @@ from insurance_harness.contracts.knowledge import (
     Maintenance as Maintenance,
 )
 from insurance_harness.contracts.knowledge import (
+    PresentationProfile as PresentationProfile,
+)
+from insurance_harness.contracts.knowledge import (
     Provenance as Provenance,
 )
 from insurance_harness.contracts.knowledge import (
