@@ -36,7 +36,7 @@ from insurance_harness.models import (
     TruncatedCompletion,
 )
 
-TEXT = "等待期为90日。犹豫期为20日。宽限期为60日。"
+TEXT = "等待期为90日。犹豫期为20日。宽限期为60日。\n阅读指引"
 QUOTES = {
     "waiting_period": ("90日", "等待期为90日"),
     "cooling_off_period": ("20日", "犹豫期为20日"),
@@ -60,7 +60,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     for product, name in (("p1", "产品一"), ("p2", "产品二")):
         folder = root / "dataset/shouxian_product" / name
         write_json(folder / "product_meta.json", {"planCode": product, "clauseName": name})
-        (folder / "terms.pdf").write_bytes(f"synthetic {product}".encode())
+        (folder / "保险条款.pdf").write_bytes(f"synthetic {product}".encode())
     write_json(root / "dataset/golden/v1/manifest.json", {"products": {
         "p1": {"pack_id": "pack-a"}, "p2": {"pack_id": "pack-a"},
     }})

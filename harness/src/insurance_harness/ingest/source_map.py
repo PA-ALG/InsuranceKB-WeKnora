@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, Validation
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.evidence.weknora_pages import WeKnoraSourcePages
+from insurance_harness.identity.material_roles import MaterialRoleError, evidence_pages
 
 
 class PageReader(Protocol):
@@ -72,7 +73,12 @@ def reader_from_env() -> WeKnoraSourcePages:
 def load_pages(
     reader: PageReader, space_id: str, entries: list[SourceEntry]
 ) -> tuple[list[PageText], dict[str, SourceRevision]]:
-    """Every page of the named revisions, plus each document's revision for the bundle."""
+    """Pages of the named revisions that may be evidence, plus each kept document's revision.
+
+    One document name twice is refused first; then materials are judged by role (S4i): a
+    non-evidence material is dropped with its revision, and an unresolved one stops the read.
+    The documents kept keep their revisions, fingerprints, pages and text unchanged.
+    """
     pages: list[PageText] = []
     sources: dict[str, SourceRevision] = {}
     for entry in entries:
@@ -82,7 +88,12 @@ def load_pages(
             raise SourceMapError("SOURCE_DOCUMENTS_AMBIGUOUS")
         sources[document] = SourceRevision(entry.knowledge_id, entry.parse_attempt)
         pages.extend(read)
-    return pages, sources
+    try:
+        kept = evidence_pages(pages)
+    except MaterialRoleError as error:
+        raise SourceMapError(error.code) from None
+    documents = {page.document for page in kept}
+    return kept, {name: revision for name, revision in sources.items() if name in documents}
 
 
 def page_source(source_map: SourceMap, reader: PageReader) -> Callable[[str], list[PageText]]:

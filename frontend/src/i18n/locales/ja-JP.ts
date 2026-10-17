@@ -7512,7 +7512,13 @@ export default {
       failed: '項目の読み込みに失敗しました',
       other: 'その他',
       generated: 'モデル補足',
-      source: '出典 {n}'
+      source: '出典 {n}',
+      sourceNote: '出典ラベルのない内容はすべて原文に基づいています。「出典」から原文を確認できます'
+    },
+    field: {
+      full: '全文を表示',
+      compact: '折りたたむ',
+      items: '全 {count} 項目'
     },
     state: {
       absent: '資料に明示的に記載なし',

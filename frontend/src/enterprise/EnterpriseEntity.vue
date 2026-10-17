@@ -51,6 +51,7 @@ watch(() => props.entityId, () => { selected.value = null })
     <template v-else-if="release">
       <h1 class="ek-page__title">{{ view.name }}</h1>
       <p class="ek-page__meta">{{ t('enterpriseKnowledge.space.version', { epoch: release.epoch }) }}</p>
+      <p class="ek-page__note" data-source-note>{{ t('enterpriseKnowledge.entity.sourceNote') }}</p>
       <section v-for="section in view.sections" :key="section.key" class="ek-section" :data-section="section.key">
         <h2 class="ek-section__title">{{ section.title }}</h2>
         <EnterpriseField
