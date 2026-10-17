@@ -8,10 +8,12 @@ Golden quotes carry the segment id they were labelled on. When the segmentation 
 quote is taken by that id in a table exported with the previous rules (one `<product>.json` per
 product: the baseline commit, every page's text sha256 and every segment's range) and replaced by
 the current segments that overlap its range by a positive length, in reading order, once per field.
-Evidence on materials that may no longer be evidence is removed; a field left without evidence
+Every quote, including those on materials that may no longer be evidence, is first checked against
+the current snapshot of all the product's pages: the file fingerprint, the page text, and the old
+range's exact slice. Evidence on excluded materials is then removed; a field left without evidence
 becomes unknown with the given reason; values and other states are not touched. Any mismatch stops
-the run before anything is written: the page text changed, the id is not in the table, or the table
-holds other text than the quote. Prints one JSON line, never paths or Golden text.
+the run before anything is written, and the output is all or nothing: a failed write restores every
+file it replaced. Prints one JSON line, never paths or Golden text.
 """
 
 import argparse
@@ -19,10 +21,12 @@ import hashlib
 import json
 import os
 from collections import Counter
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from insurance_harness.eval.product_sources import (
     check_product_id,
@@ -36,6 +40,7 @@ from insurance_harness.eval.segment_score import (
     GoldenV2Field,
     load_golden_v2,
 )
+from insurance_harness.evidence.quote_verification import PageTextLike
 from insurance_harness.evidence.segments import Segment, SegmentedSource, same_text
 from insurance_harness.identity.material_roles import (
     MaterialRoleError,
@@ -48,14 +53,14 @@ REPO = Path(__file__).resolve().parents[4]
 METHOD = "deterministic-remap"
 
 
-@dataclass(frozen=True)
-class PreviousSegment:
+class PreviousSegment(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     id: str
     document: str
     document_sha256: str
-    page: int
-    start: int
-    end: int
+    page: int = Field(ge=1)
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
     text: str
 
 
@@ -86,15 +91,43 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _check(
+    quote: GoldenV2Evidence,
+    previous: PreviousSegmentation,
+    snapshot: Mapping[tuple[str, int], PageTextLike],
+) -> PreviousSegment:
+    """The previous segment a Golden quote was labelled on, proven against the current snapshot."""
+    old = previous.segments.get(quote.segment_id or "")
+    if old is None:
+        raise RemapError("SEGMENT_ID_UNKNOWN")
+    place = (old.document, old.document_sha256.lower(), old.page)
+    if place != (quote.document, quote.document_sha256.lower(), quote.page) or not (
+        same_text(old.text, quote.quote)
+    ):
+        raise RemapError("QUOTE_MISMATCH")
+    page = snapshot.get((old.document, old.page))
+    if page is None or page.document_sha256.lower() != old.document_sha256.lower():
+        raise RemapError("SOURCE_FINGERPRINT_CHANGED")
+    if previous.pages.get((old.document, old.page)) != _sha(page.text):
+        raise RemapError("PAGE_TEXT_CHANGED")
+    if not old.start < old.end <= len(page.text) or page.text[old.start : old.end] != old.text:
+        raise RemapError("SEGMENT_RANGE_INVALID")
+    return old
+
+
 def remap_golden(
     golden: GoldenV2,
     previous: PreviousSegmentation,
-    current: SegmentedSource,
+    materials: Sequence[PageTextLike],
     *,
     excluded: Collection[str],
     emptied_reason: str,
 ) -> tuple[GoldenV2, ProductRemap]:
-    pages = {(page.document, page.page): _sha(page.text) for page in current.pages}
+    """Remap one product's Golden; materials are all its pages, excluded ones included."""
+    snapshot = {(page.document, page.page): page for page in materials}
+    if len(snapshot) != len(materials):
+        raise RemapError("SOURCE_PAGES_AMBIGUOUS")
+    current = SegmentedSource([page for page in materials if page.document not in excluded])
     order = {segment.id: index for index, segment in enumerate(current.segments)}
     on_page: dict[tuple[str, int], list[Segment]] = {}
     for segment in current.segments:
@@ -109,22 +142,13 @@ def remap_golden(
     for field in golden.fields:
         evidence: dict[str, GoldenV2Evidence] = {}
         for quote in field.evidence:
-            old = previous.segments.get(quote.segment_id or "")
-            if old is None:
-                raise RemapError("SEGMENT_ID_UNKNOWN")
-            place = (old.document, old.document_sha256.lower(), old.page)
-            if place != (quote.document, quote.document_sha256.lower(), quote.page) or not (
-                same_text(old.text, quote.quote)
-            ):
-                raise RemapError("QUOTE_MISMATCH")
+            old = _check(quote, previous, snapshot)
             if quote.document in excluded:
                 removed += 1
                 if field.field_key not in cited:
                     cited.append(field.field_key)
                 continue
             key = (old.document, old.page)
-            if key not in pages or previous.pages.get(key) != pages[key]:
-                raise RemapError("PAGE_TEXT_CHANGED")
             hits = [s for s in on_page.get(key, []) if s.start < old.end and old.start < s.end]
             if not hits:
                 raise RemapError("UNMAPPED")
@@ -203,13 +227,11 @@ class _Converted:
 
 def _product(repo: Path, product: str, previous: PreviousSegmentation, reason: str) -> _Converted:
     raw = material_pages(source_directory(repo, product))
+    evidence_pages(raw)  # an unresolved material stops the remap, as it stops a compile
     evidence = {role.role: role.evidence for role in load_material_roles().roles}
     excluded = {doc for doc, role in document_roles(raw).items() if role and not evidence[role]}
-    current = SegmentedSource(evidence_pages(raw))
     golden = load_golden_v2(repo / GOLDEN_DIR / f"{product}.json")
-    remapped, report = remap_golden(
-        golden, previous, current, excluded=excluded, emptied_reason=reason
-    )
+    remapped, report = remap_golden(golden, previous, raw, excluded=excluded, emptied_reason=reason)
     fingerprints = {page.document: page.document_sha256 for page in raw}
     return _Converted(
         remapped,
@@ -219,10 +241,40 @@ def _product(repo: Path, product: str, previous: PreviousSegmentation, reason: s
     )
 
 
-def _write(path: Path, text: str) -> None:
-    temporary = path.with_name(path.name + ".remap-tmp")
-    temporary.write_text(text, encoding="utf-8")
-    os.replace(temporary, path)
+def _manifest_ok(manifest: Any, products: Sequence[str]) -> bool:
+    """The parts of the manifest the remap writes into, present before anything is converted."""
+    return (
+        isinstance(manifest, dict)
+        and isinstance(manifest.get("files"), dict)
+        and isinstance(manifest.get("products"), dict)
+        and all(isinstance(manifest["products"].get(p), dict) for p in products)
+        and isinstance(manifest.get("revisions", []), list)
+        and isinstance(manifest.get("pending_semantic_review", {}), dict)
+    )
+
+
+def _commit(texts: Mapping[Path, str]) -> None:
+    """Write every file or none: temporaries first, then replace; a failure restores originals."""
+    originals = {path: path.read_bytes() if path.exists() else None for path in texts}
+    temporaries = {path: path.with_name(path.name + ".remap-tmp") for path in texts}
+    replaced: list[Path] = []
+    try:
+        for path, text in texts.items():
+            temporaries[path].write_text(text, encoding="utf-8")
+        for path in texts:
+            os.replace(temporaries[path], path)
+            replaced.append(path)
+    except OSError:
+        for path in replaced:
+            original = originals[path]
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(original)
+        raise
+    finally:
+        for temporary in temporaries.values():
+            temporary.unlink(missing_ok=True)
 
 
 def _dump(data: Any) -> str:
@@ -245,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
     product = None
     try:
         manifest = json.loads((gold / "manifest.json").read_text(encoding="utf-8"))
+        if not _manifest_ok(manifest, args.products):
+            raise RemapError("MANIFEST_INVALID")
         for product in args.products:
             check_product_id(product)
             baseline, previous = _previous(args.previous / f"{product}.json")
@@ -297,8 +351,11 @@ def main(argv: list[str] | None = None) -> int:
         manifest["segmentation"] = args.segmentation
     manifest.setdefault("revisions", []).append(revision)
     texts[gold / "manifest.json"] = _dump(manifest)
-    for path, text in texts.items():
-        _write(path, text)
+    try:
+        _commit(texts)
+    except OSError:
+        print(json.dumps({"stopped": "OUTPUT_FAILED"}))
+        return 2
     print(json.dumps({"products": {name: len(c.report.fields) for name, c in results.items()}}))
     return 0
 
