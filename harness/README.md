@@ -22,8 +22,6 @@ harness/
 │   ├── adapters/weknora/     # WeKnora REST 适配层（全仓库唯一 API 感知点）
 │   ├── compiler/             # 抽取/校验/合并/发布管道（docs 04）——占位
 │   ├── goldenset/            # 金标注 Agent 与 eval runner（docs 05）——占位
-│   ├── workbench/            # 审核/缺口/完整度工作台（docs 03/master plan P1-1）——占位
-│   ├── mcp/                  # insurance MCP server（docs 02 §2）——占位
 │   └── schemas/              # schema 注册表加载（docs 07）——占位
 └── tests/                    # spec 编号 ↔ 测试一一对应（docs 10 §2）
 ```
