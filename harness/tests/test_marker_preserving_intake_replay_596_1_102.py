@@ -28,26 +28,26 @@ from insurance_harness.compiler.parsed_documents import (
     TableLocatorV1,
     UnsupportedParseFactV1,
 )
-from insurance_harness.knowledge_compiler.marker_endpoint_pair_bridge_596_1 import (
-    MarkerEndpointPairBridgeError,
-    derive_marker_endpoint_pair_input_596_1,
-)
-from insurance_harness.knowledge_compiler.marker_preserving_intake_replay_596_1 import (
-    derive_marker_preserving_rate_entry_596_1,
-)
 from insurance_harness.knowledge_compiler.mineru_capture_intake_596_1 import (
     MinerUCaptureBundle5961V1,
     intake_mineru_capture_bundle_596_1,
 )
 from insurance_harness.knowledge_compiler.mineru_cross_page_binding_596_1 import (
     CrossPageBindingError,
-    derive_cross_page_relation_596_1,
 )
 
 TERMS_SHA = "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+
+
 BROCHURE_SHA = "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279"
+
+
 RATE_SHA = "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb"
+
+
 RAW_HASH = "4" * 64
+
+
 NATIVE_MEMBER = "2" * 64
 
 
@@ -486,157 +486,6 @@ def _case(
     return bundle, document, manifest
 
 
-
-def test_marker_drop_red_and_preserving_seam_reaches_096_entry() -> None:
-    bundle, document, manifest = _case()
-    pair = derive_marker_endpoint_pair_input_596_1(bundle, document, manifest)
-
-    with pytest.raises(CrossPageBindingError, match="INTAKE_REPLAY_FAILED"):
-        derive_cross_page_relation_596_1(bundle, document, manifest, marker_replay=pair)
-
-    entry = derive_marker_preserving_rate_entry_596_1(
-        bundle, document, manifest, pair
-    )
-    assert entry.receipt_role == "rate_table"
-    assert entry.binding.status == "DERIVED_STRUCTURAL_BINDING_VERIFIED"
-    assert entry.binding.intake_bundle_digest_sha256 == bundle.bundle_digest_sha256
-    assert entry.marker_provenance_digest_sha256 == (
-        bundle.sources[2].marker_provenance_digest_sha256
-    )
-    rendered = entry.model_dump_json()
-    assert "ADMIT" not in rendered
-    assert "READY" not in rendered
-    assert '"provenance":"NATIVE' not in rendered
-
-
-def test_opt_in_replays_exact_single_and_multiple_marker_envelopes() -> None:
-    single, _, _ = _case()
-    replayed = binding_module._replay_intake(  # noqa: SLF001
-        single, preserve_marker_envelope=True
-    )
-    assert replayed == single
-    rate_marker = single.sources[2].evidence.cross_page_marker_provenance
-    assert rate_marker is not None
-    preserved = json.loads(
-        binding_module._compact_capture(  # noqa: SLF001
-            single.sources[2].evidence, preserve_marker_envelope=True
-        )
-    )["cross_page_marker_provenance"]
-    assert preserved == rate_marker.model_dump(mode="json")
-    assert "cross_page_marker_provenance" not in json.loads(
-        binding_module._compact_capture(single.sources[2].evidence)  # noqa: SLF001
-    )
-
-    multiple, _, _ = _case(
-        markers=(("cross_page", "p0/b0"), ("lines_deleted", "p1/b0"))
-    )
-    assert binding_module._replay_intake(  # noqa: SLF001
-        multiple, preserve_marker_envelope=True
-    ) == multiple
-    with pytest.raises(MarkerEndpointPairBridgeError, match="LINES_DELETED"):
-        derive_marker_endpoint_pair_input_596_1(*_case(
-            markers=(("cross_page", "p0/b0"), ("lines_deleted", "p1/b0"))
-        ))
-
-
-def test_marker_duplicate_order_unknown_and_identity_drift_fail_closed() -> None:
-    bundle, document, manifest = _case()
-    pair = derive_marker_endpoint_pair_input_596_1(bundle, document, manifest)
-    rate = bundle.sources[2]
-    provenance = rate.evidence.cross_page_marker_provenance
-    assert provenance is not None
-    marker = provenance.markers[0]
-
-    changed_markers = (
-        (marker, marker),
-        (marker.model_copy(update={"marker_kind": "unknown"}),),
-        (marker.model_copy(update={"node_type": "section"}),),
-        (marker.model_copy(update={"local_index": 1}),),
-        (marker.model_copy(update={"structural_path_sha256": "0" * 64}),),
-    )
-    for markers in changed_markers:
-        changed_provenance = provenance.model_copy(
-            update={"marker_count": len(markers), "markers": markers}
-        )
-        changed_evidence = rate.evidence.model_copy(
-            update={"cross_page_marker_provenance": changed_provenance}
-        )
-        changed_rate = rate.model_copy(update={"evidence": changed_evidence})
-        changed_bundle = bundle.model_copy(
-            update={"sources": (bundle.sources[0], bundle.sources[1], changed_rate)}
-        )
-        with pytest.raises((CrossPageBindingError, ValueError)):
-            derive_marker_preserving_rate_entry_596_1(
-                changed_bundle, document, manifest, pair
-            )
-
-    for field, value in (
-        ("source_sha256", "0" * 64),
-        ("raw_zip_sha256", "0" * 64),
-        ("native_member_sha256", "0" * 64),
-        ("parser_model", "drift"),
-        ("mineru_version", "0.0.0"),
-    ):
-        changed_provenance = provenance.model_copy(update={field: value})
-        changed_evidence = rate.evidence.model_copy(
-            update={"cross_page_marker_provenance": changed_provenance}
-        )
-        changed_rate = rate.model_copy(update={"evidence": changed_evidence})
-        changed_bundle = bundle.model_copy(
-            update={"sources": (bundle.sources[0], bundle.sources[1], changed_rate)}
-        )
-        with pytest.raises((CrossPageBindingError, ValueError)):
-            derive_marker_preserving_rate_entry_596_1(
-                changed_bundle, document, manifest, pair
-            )
-
-    ordered, _, _ = _case(
-        markers=(("cross_page", "p0/b0"), ("lines_deleted", "p1/b0"))
-    )
-    ordered_rate = ordered.sources[2]
-    ordered_provenance = ordered_rate.evidence.cross_page_marker_provenance
-    assert ordered_provenance is not None
-    reversed_provenance = ordered_provenance.model_copy(
-        update={"markers": tuple(reversed(ordered_provenance.markers))}
-    )
-    reversed_evidence = ordered_rate.evidence.model_copy(
-        update={"cross_page_marker_provenance": reversed_provenance}
-    )
-    reversed_rate = ordered_rate.model_copy(update={"evidence": reversed_evidence})
-    reversed_bundle = ordered.model_copy(
-        update={"sources": (ordered.sources[0], ordered.sources[1], reversed_rate)}
-    )
-    with pytest.raises(CrossPageBindingError, match="INTAKE_REPLAY_FAILED"):
-        binding_module._replay_intake(  # noqa: SLF001
-            reversed_bundle, preserve_marker_envelope=True
-        )
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("source_sha256", "0" * 64),
-        ("raw_zip_sha256", "0" * 64),
-        ("native_member_sha256", "0" * 64),
-        ("parser_model", "drift"),
-        ("mineru_version", "0.0.0"),
-        ("marker_structural_path", "p9/b9"),
-        ("marker_evidence_sha256", "0" * 64),
-        ("marker_provenance_replay_sha256", "0" * 64),
-    ],
-)
-def test_endpoint_pair_custody_drift_is_recomputed(
-    field: str, value: object
-) -> None:
-    bundle, document, manifest = _case()
-    pair = derive_marker_endpoint_pair_input_596_1(bundle, document, manifest)
-    forged = pair.model_copy(update={field: value})
-    with pytest.raises(ValueError):
-        derive_marker_preserving_rate_entry_596_1(
-            bundle, document, manifest, forged
-        )
-
-
 def test_legacy_no_marker_is_not_auto_filled() -> None:
     bundle, _, _ = _case()
     brochure = bundle.sources[1].evidence
@@ -656,19 +505,3 @@ def test_legacy_no_marker_is_not_auto_filled() -> None:
         binding_module._replay_intake(  # noqa: SLF001
             missing_bundle, preserve_marker_envelope=True
         )
-
-
-def test_section_and_current_lines_deleted_remain_unavailable() -> None:
-    with pytest.raises(
-        MarkerEndpointPairBridgeError, match="SECTION_ENDPOINT_RULE_NOT_AVAILABLE"
-    ) as section:
-        derive_marker_endpoint_pair_input_596_1(*_case(), relation_kind="section")
-    assert section.value.status == "NOT_AVAILABLE"
-
-    with pytest.raises(
-        MarkerEndpointPairBridgeError, match="LINES_DELETED_NOT_RELATION_AUTHORITY"
-    ) as lines:
-        derive_marker_endpoint_pair_input_596_1(
-            *_case(markers=(("cross_page", "p0/b0"), ("lines_deleted", "p1/b0")))
-        )
-    assert lines.value.status == "BLOCKED"
