@@ -15,6 +15,22 @@
       "reasoning_effort": "high",
       "response_format": "json_object",
       "policy_version": "2026-10-14.1"
+    },
+    {
+      "stage": "review",
+      "provider": "deepseek",
+      "base_url": "https://api.deepseek.com",
+      "model": "deepseek-flash",
+      "api_key_env": "HARNESS_SCHEMA_FIELDS_API_KEY",
+      "max_tokens": 65536,
+      "temperature": 0.0,
+      "timeout_s": 600.0,
+      "max_attempts": 3,
+      "max_input_chars": 800000,
+      "thinking": "enabled",
+      "reasoning_effort": "high",
+      "response_format": "json_object",
+      "policy_version": "review-2026-10-17.1"
     }
   ]
 }

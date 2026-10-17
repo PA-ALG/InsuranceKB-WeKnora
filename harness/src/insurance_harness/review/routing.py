@@ -1,10 +1,12 @@
 """Route one publish to machine review or the human queue, and label its claims (RV1 Spec §3.2).
 
 One publish (one product with its claims) is the unit: it goes live as machine review only when its
-pack is admitted and every claim has an independent score at or above its field's threshold;
-otherwise the whole product waits for people, with every applicable reason code. Splitting a product
-into machine and human parts needs the platform to rebase activations (S5) and is not done here.
-Reason codes never carry field keys or other input text.
+pack is admitted and every claim with content (present or absent_explicitly) has an independent
+score at or above its field's threshold; otherwise the whole product waits for people, with every
+applicable reason code. Unknown claims publish no fact, so they are neither scored nor blocking
+(RV2a Spec §3.4, user ruling 2026-10-17): a wrong unknown only costs recall, which sampling after
+release covers. Splitting a product into machine and human parts needs the platform to rebase
+activations (S5) and is not done here. Reason codes never carry field keys or other input text.
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from insurance_harness.contracts.enums import ReviewMode
+from insurance_harness.contracts.enums import ClaimState, ReviewMode
 from insurance_harness.contracts.knowledge import Claim, Review
 
 
@@ -36,6 +38,11 @@ class Route:
 HUMAN_DECISION = Route(mode=ReviewMode.HUMAN, policy_ref=None, reasons=())
 
 
+def _reviewed(claim: Claim) -> bool:
+    """Only claims with content are scored and gate machine review."""
+    return claim.state != ClaimState.UNKNOWN
+
+
 def route(
     claims: Sequence[Claim],
     *,
@@ -44,14 +51,15 @@ def route(
     scores: Scores | None,
     policy_ref: str,
 ) -> Route:
+    reviewed = [claim for claim in claims if _reviewed(claim)]
     reasons: set[str] = set()
-    if not claims:
+    if not reviewed:
         reasons.add("NO_CLAIMS")
     if not admitted:
         reasons.add("PACK_NOT_ADMITTED")
     if scores is None:
         reasons.add("SCORES_MISSING")
-    for claim in claims:
+    for claim in reviewed:
         limit = threshold(claim.predicate)
         if limit is None:
             reasons.add("THRESHOLD_MISSING")
@@ -71,14 +79,17 @@ def labelled(claims: Sequence[Claim], route: Route, scores: Scores | None) -> li
     """New claims whose review says who reviewed them; the input claims are not changed."""
     by_key = scores.by_key if scores is not None else {}
     if route.mode == ReviewMode.MACHINE:
-        if scores is None or any(claim.logical_key not in by_key for claim in claims):
-            raise ValueError("machine review needs a score for every claim")
+        if scores is None or any(
+            claim.logical_key not in by_key for claim in claims if _reviewed(claim)
+        ):
+            raise ValueError("machine review needs a score for every claim with content")
+        # The same review released the unknown claims too; they carry no score.
         return [
             claim.model_copy(
                 update={
                     "review": Review(
                         mode=ReviewMode.MACHINE,
-                        score=by_key[claim.logical_key],
+                        score=by_key[claim.logical_key] if _reviewed(claim) else None,
                         reviewer=scores.reviewer,
                         reviewed_at=scores.reviewed_at,
                     )
