@@ -50,6 +50,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Test enterprise components
+        run: npx vitest run --config vitest.config.ts src/enterprise
+
       - name: Type-check
         run: npm run type-check
 
