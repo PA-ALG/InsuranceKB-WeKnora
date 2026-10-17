@@ -7463,6 +7463,7 @@ export default {
     }
   },
   menu: {
+    enterpriseKnowledge: '기업 지식',
     sessionInProgress: '대화 진행 중',
     knowledgeBase: '지식베이스',
     agents: '에이전트',
@@ -7490,5 +7491,52 @@ export default {
     myChats: '내 대화',
     apiChats: 'API 세션',
     noSessions: '대화가 없습니다'
+  },
+  enterpriseKnowledge: {
+    title: '기업 지식',
+    loading: '불러오는 중…',
+    retry: '다시 시도',
+    spaces: {
+      empty: '볼 수 있는 기업 지식 공간이 없습니다',
+      failed: '기업 지식 공간을 불러오지 못했습니다'
+    },
+    space: {
+      version: '릴리스 {epoch}',
+      noRelease: '이 공간에는 아직 게시된 릴리스가 없습니다',
+      empty: '이 릴리스에는 아직 항목이 없습니다',
+      failed: '릴리스를 불러오지 못했습니다',
+      fieldCount: '{count}개 항목'
+    },
+    entity: {
+      notFound: '이 릴리스에는 해당 항목이 없습니다',
+      failed: '항목을 불러오지 못했습니다',
+      other: '기타',
+      generated: '모델 보충',
+      source: '출처 {n}'
+    },
+    state: {
+      absent: '자료에 명시적으로 없음',
+      unknown: '자료에 언급 없음'
+    },
+    origin: {
+      source: '원문 근거',
+      mixed: '원문 및 정리',
+      generated: '모델 보충',
+      expert: '전문가 수정',
+      imported: '구조화 가져오기'
+    },
+    citation: {
+      page: '{page}쪽',
+      mismatch: '원문이 변경되어 열 수 없습니다',
+      notFound: '인용된 원문을 찾을 수 없습니다',
+      unsupported: '이 유형의 출처는 아직 열 수 없습니다',
+      failed: '출처를 열 수 없습니다'
+    },
+    viewer: {
+      loading: '원문을 여는 중…',
+      failed: '원문 페이지를 표시할 수 없습니다',
+      incomplete: '강조 표시가 불완전할 수 있습니다',
+      region: '{document} {page}쪽'
+    }
   }
 }

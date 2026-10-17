@@ -243,6 +243,31 @@ const router = createRouter({
           component: () => import("../views/organization/OrganizationList.vue"),
           meta: { requiresInit: true, requiresAuth: true, requiredCapability: 'organizations' }
         },
+        // Enterprise knowledge (S3d-3a): published releases of the caller's Spaces, read-only.
+        {
+          path: "enterprise",
+          name: "enterpriseSpaces",
+          component: () => import("../enterprise/EnterpriseSpaces.vue"),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
+          path: "enterprise/:spaceId",
+          name: "enterpriseSpace",
+          component: () => import("../enterprise/EnterpriseSpace.vue"),
+          props: true,
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
+          path: "enterprise/:spaceId/entities/:entityId",
+          name: "enterpriseEntity",
+          component: () => import("../enterprise/EnterpriseEntity.vue"),
+          props: route => ({
+            spaceId: String(route.params.spaceId),
+            entityId: String(route.params.entityId),
+            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
+          }),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
         // Compatibility redirects for /platform/system/* URLs. System
         // administration surfaces live as dedicated sections inside the
         // standard Settings modal; keep stable URLs for bookmarks and

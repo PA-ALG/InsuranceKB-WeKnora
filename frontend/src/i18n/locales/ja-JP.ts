@@ -198,6 +198,7 @@ export default {
     }
   },
   menu: {
+    enterpriseKnowledge: '企業ナレッジ',
     sessionInProgress: '会話中',
     knowledgeBase: 'ナレッジベース',
     agents: 'エージェント',
@@ -7490,5 +7491,52 @@ export default {
     capabilityRequired: '権限を1つ以上選択してください',
     loadFailed: 'プラットフォームAPIキーの読み込みに失敗しました',
     createFailed: 'プラットフォームAPIキーの作成に失敗しました'
+  },
+  enterpriseKnowledge: {
+    title: '企業ナレッジ',
+    loading: '読み込み中…',
+    retry: '再試行',
+    spaces: {
+      empty: '表示できる企業ナレッジスペースはありません',
+      failed: '企業ナレッジスペースの読み込みに失敗しました'
+    },
+    space: {
+      version: 'リリース {epoch}',
+      noRelease: 'このスペースにはまだ公開リリースがありません',
+      empty: 'このリリースにはまだ項目がありません',
+      failed: 'リリースの読み込みに失敗しました',
+      fieldCount: '{count} 項目'
+    },
+    entity: {
+      notFound: 'このリリースにはこの項目がありません',
+      failed: '項目の読み込みに失敗しました',
+      other: 'その他',
+      generated: 'モデル補足',
+      source: '出典 {n}'
+    },
+    state: {
+      absent: '資料に明示的に記載なし',
+      unknown: '資料に記載なし'
+    },
+    origin: {
+      source: '原文根拠',
+      mixed: '原文と整理',
+      generated: 'モデル補足',
+      expert: '専門家修正',
+      imported: '構造化インポート'
+    },
+    citation: {
+      page: '{page} ページ',
+      mismatch: '原文が変更されたため開けません',
+      notFound: '引用元の原文が見つかりません',
+      unsupported: 'この種類の出典はまだ開けません',
+      failed: '出典を開けません'
+    },
+    viewer: {
+      loading: '原文を開いています…',
+      failed: '原文ページを表示できません',
+      incomplete: 'ハイライトが不完全な可能性があります',
+      region: '{document} {page} ページ'
+    }
   }
 }
