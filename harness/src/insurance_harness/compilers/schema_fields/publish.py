@@ -19,10 +19,18 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, NoReturn
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    field_validator,
+)
 
 from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
@@ -60,7 +68,8 @@ class _Parser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
-Score = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
+# Strict: a JSON boolean is not a score (true would silently become 1.0).
+Score = Annotated[float, Field(strict=True, ge=0.0, le=1.0, allow_inf_nan=False)]
 NonBlank = Annotated[str, StringConstraints(min_length=1, pattern=r"\S")]
 
 
@@ -69,6 +78,14 @@ class _ScoresFile(BaseModel):
     reviewer: NonBlank
     reviewed_at: NonBlank
     scores: dict[NonBlank, Score]
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def iso_8601_with_offset(cls, value: str) -> str:
+        # The label records when the review happened: a full date-time with its offset.
+        if "T" not in value or datetime.fromisoformat(value).tzinfo is None:
+            raise ValueError("reviewed_at must be an ISO 8601 date-time with an offset")
+        return value
 
 
 def main(argv: list[str] | None = None) -> int:

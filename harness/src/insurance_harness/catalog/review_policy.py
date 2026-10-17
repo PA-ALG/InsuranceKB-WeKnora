@@ -22,7 +22,8 @@ from pydantic import (
 )
 
 NonBlank = Annotated[str, StringConstraints(min_length=1, pattern=r"\S")]
-Score = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
+# Strict: a JSON boolean is not a threshold (true would silently become 1.0).
+Score = Annotated[float, Field(strict=True, ge=0.0, le=1.0, allow_inf_nan=False)]
 
 
 class PackThresholds(BaseModel):
