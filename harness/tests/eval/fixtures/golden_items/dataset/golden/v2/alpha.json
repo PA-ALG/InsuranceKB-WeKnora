@@ -1,0 +1,32 @@
+{
+ "product_id": "alpha",
+ "cards_version": "synthetic-1",
+ "fields": [
+  {
+   "field_key": "field_c",
+   "state": "present",
+   "value": "合成取值丙",
+   "reason": "合成理由丙",
+   "evidence": [
+    {"document": "doc-one.pdf", "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "page": 2, "quote": "合成引文一", "segment_id": "D1P2S3"},
+    {"document": "doc-two.pdf", "document_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "page": 1, "quote": "合成引文二", "segment_id": null}
+   ]
+  },
+  {
+   "field_key": "field_a",
+   "state": "absent_explicitly",
+   "value": null,
+   "reason": "合成理由甲",
+   "evidence": [
+    {"document": "doc-one.pdf", "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "page": 5, "quote": "合成引文三", "segment_id": "D1P5S1"}
+   ]
+  },
+  {
+   "field_key": "field_b",
+   "state": "unknown",
+   "value": null,
+   "reason": "合成理由乙",
+   "evidence": []
+  }
+ ]
+}
