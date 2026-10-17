@@ -98,12 +98,14 @@ python -m insurance_harness.eval.review_run --products P... --compile-root DIR [
 - **持久化与恢复**：
   - 每批请求的 sha256 与原始响应存 `<run-root>/<product>/responses/NNN.{request.sha256,txt}`；
   - 重跑时请求 sha 相同的批直接复用已存响应，不再发送；已有 `scores.json` 的产品跳过。
+  - 只复用打分器接受过的响应：原始响应到达即存 `NNN.txt`，接受后才写 `NNN.request.sha256`。被拒的响应只留作诊断，重跑时该批在预算内重发；请求指纹含审核模型与 `policy_version`，换策略版本不复用旧响应。
 - **预算**：
   - `--max-sent` 按运行目录累计（`budget.jsonl` 预留、`ledger.jsonl` 记录）；
   - 服务模型在一个运行目录内变化即停；运行目录加锁，不能并发。
 - **失败**：任何一步失败打印一行 `{"stopped": <code>, ...}` 并以 2 退出。原因码有：
   - `OUTPUT_MISSING`、`DEFINITION_MISSING`、`REVIEW_OUTPUT_INVALID`；
-  - `BUDGET_EXCEEDED`、`SERVED_MODEL_CHANGED`、`RUN_ROOT_BUSY`、`MODEL_ERROR`。
+  - `BUDGET_EXCEEDED`、`SERVED_MODEL_CHANGED`、`RUN_ROOT_BUSY`、`MODEL_ERROR`；
+  - `INVALID_ARGUMENTS`（参数不合法）、`OUTPUT_INVALID`（编译输出读不了、结构不对或不属于该产品）、`RUN_ROOT_INVALID`（运行目录在 git 仓库内，或其预算、账本文件损坏，或写入失败）。
 
   输出不含路径、密钥或材料文本。
 - **共用账本**：`eval/compile_run.py` 的 `_DurableLedger`、运行目录锁与 `prior_sends` 移到 `models/durable.py`（公开名），compile_run 与 review_run 共用，行为不变。
