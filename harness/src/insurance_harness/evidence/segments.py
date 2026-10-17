@@ -3,9 +3,13 @@
 The extractor only names segment ids. Every quote the platform shows is cut from
 page text here, so it matches the page it names by construction; there is nothing
 for a model to copy wrongly. The split rules are the ones validated in the S4d
-ablations (Issue #157): a segment ends at a line-final sentence terminator, a line
-that starts with a clause number opens a new segment, and runs without terminators
-(tables) are cut once they reach MAX_CHARS.
+ablations (Issue #157): a segment ends at a line-final sentence terminator, and a line
+that starts with a clause number opens a new segment. S4i Spec §3.1 adds: a line that
+starts with a bullet opens a new segment too; a terminator followed by white space and
+more text ends the segment inside the line (PDF extraction glues the next heading onto
+the line); and a run that reaches MAX_CHARS is cut after its last terminator, the rest
+carrying into the next segment, so only runs without any terminator (tables) are cut at
+a line end.
 """
 
 import re
@@ -25,11 +29,50 @@ from insurance_harness.evidence.quote_verification import (
 
 MAX_CHARS = 300
 COPY_MIN_CHARS = 20  # shorter passages ("本合同终止。") repeat everywhere and prove nothing
-_TERMINATOR = re.compile(r"[。；;！!？?]\s*$")
+_TERMINATORS = "。；;！!？?"
+_TERMINATOR = re.compile(rf"[{_TERMINATORS}]\s*$")
+_ANY_TERMINATOR = re.compile(rf"[{_TERMINATORS}]")
+# A terminator, then spaces, tabs or ideographic spaces, then more text on the same line.
+_INLINE_BREAK = re.compile(rf"(?<=[{_TERMINATORS}])[ \t\u3000]+(?=\S)")
 _CLAUSE_START = re.compile(
     r"^\s*(?:第[一二三四五六七八九十百零\d]+[条章节]|\d+(?:\.\d+)+|\d+[、.．]|[（(][一二三四五六七八九十\d]+[）)])"
 )
+# A list marker opens a segment like a clause number: one marker character at the start of a
+# line (or of a piece of one), then white space, then text. Marker characters are the private use
+# area (symbol fonts such as Wingdings extract their bullets there), a few unambiguous bullet
+# symbols and circled numbers. Symbols that also occur as content (√, □, ※ ...) are not markers,
+# and a marker glued to its text does not count: only the separated form is a label.
+_MARKER_CHARS = "●○■◆▪•◦►▶➢➤"
+_MARKER_RANGES = ((0xE000, 0xF8FF), (0x2460, 0x2473), (0x2776, 0x277F), (0x24EB, 0x24F4))
+_MARKER = re.compile(r"^[ \t\u3000]*(?P<mark>\S)[ \t\u3000]+\S")
 _LINE_BREAK = re.compile(r"\s*\n\s*")
+
+
+def _marker_end(text: str) -> int | None:
+    """Where a leading list marker ends in text, or None when text does not start with one."""
+    match = _MARKER.match(text)
+    if match is None:
+        return None
+    mark = match["mark"]
+    if mark in _MARKER_CHARS or any(low <= ord(mark) <= high for low, high in _MARKER_RANGES):
+        return match.end("mark")
+    return None
+
+
+def _opens_segment(content: str) -> bool:
+    """A clause number or a list marker at the start of a line (or of a piece of one)."""
+    return bool(_CLAUSE_START.match(content)) or _marker_end(content) is not None
+
+
+def _pieces(line: str) -> list[tuple[int, str]]:
+    """A line split after each terminator that white space separates from more text."""
+    cuts = [0, *(match.end() for match in _INLINE_BREAK.finditer(line)), len(line)]
+    return [(a, line[a:b]) for a, b in zip(cuts[:-1], cuts[1:], strict=True)]
+
+
+def _size(text: str) -> int:
+    """Characters counted towards MAX_CHARS: each line without its surrounding white space."""
+    return sum(len(line.strip()) for line in text.splitlines())
 
 
 class EvidenceSpan(BaseModel):
@@ -59,41 +102,53 @@ def _split(page: PageText, document_number: int) -> list[Segment]:
     out: list[Segment] = []
     start: int | None = None
     end = 0
-    size = 0
 
-    def flush() -> None:
-        nonlocal start, size
+    def flush(stop: int) -> None:
+        nonlocal start
         if start is not None:
-            raw = page.text[start:end]
+            raw = page.text[start:stop]
             first = start + len(raw) - len(raw.lstrip())
-            last = end - (len(raw) - len(raw.rstrip()))
-            out.append(
-                Segment(
-                    id=f"D{document_number}P{page.page}S{len(out) + 1}",
-                    document=page.document,
-                    document_sha256=page.document_sha256,
-                    page=page.page,
-                    start=first,
-                    end=last,
-                    text=page.text[first:last],
+            last = stop - (len(raw) - len(raw.rstrip()))
+            if first < last:
+                out.append(
+                    Segment(
+                        id=f"D{document_number}P{page.page}S{len(out) + 1}",
+                        document=page.document,
+                        document_sha256=page.document_sha256,
+                        page=page.page,
+                        start=first,
+                        end=last,
+                        text=page.text[first:last],
+                    )
                 )
-            )
-        start, size = None, 0
+        start = None
 
     position = 0
     for line in page.text.splitlines(keepends=True):
-        content = line.rstrip("\r\n")
-        if start is not None and _CLAUSE_START.match(content):
-            flush()
-        if content.strip():
+        for offset, content in _pieces(line.rstrip("\r\n")):
+            at = position + offset
+            if start is not None and _opens_segment(content):
+                flush(end)
+            if content.strip():
+                if start is None:
+                    start = at
+                end = at + len(content)
             if start is None:
-                start = position
-            end = position + len(content)
-            size += len(content.strip())
+                continue
+            if _TERMINATOR.search(content):
+                flush(end)
+            elif _size(page.text[start:end]) >= MAX_CHARS:
+                # A soft limit, checked where a piece ends: cut after the last terminator and
+                # carry the rest into the next segment; a rest that still reaches the limit has
+                # no terminator left and is cut at this piece's end, as a run without any is.
+                cut = [m.end() for m in _ANY_TERMINATOR.finditer(page.text, start, end)]
+                if cut and page.text[cut[-1] : end].strip():
+                    flush(cut[-1])
+                    start = cut[-1]
+                if _size(page.text[start:end]) >= MAX_CHARS:
+                    flush(end)
         position += len(line)
-        if start is not None and (_TERMINATOR.search(content) or size >= MAX_CHARS):
-            flush()
-    flush()
+    flush(end)
     return out
 
 
@@ -244,9 +299,9 @@ class SegmentedSource:
         """Segments of other documents that repeat this one word for word (S4e Spec §3.1).
 
         Text is compared without whitespace, width differences or one leading clause
-        number; two segments are copies when the shorter text, at least COPY_MIN_CHARS
-        long, occurs inside the other. Repeats within one document are not copies: they
-        are separate provisions that happen to share wording.
+        number or list marker; two segments are copies when the shorter text, at least
+        COPY_MIN_CHARS long, occurs inside the other. Repeats within one document are not
+        copies: they are separate provisions that happen to share wording.
         """
         if segment_id not in self._position:
             raise ValueError(f"unknown segment id {segment_id}")
@@ -267,7 +322,8 @@ class SegmentedSource:
     def _content_of(self, segment: Segment) -> str:
         content = self._content.get(segment.id)
         if content is None:
-            squeezed, _ = _squeeze(segment.text)
-            label = _CLAUSE_START.match(squeezed)
+            marker = _marker_end(segment.text)  # a list marker is a label too (S4i)
+            squeezed, _ = _squeeze(segment.text if marker is None else segment.text[marker:])
+            label = _CLAUSE_START.match(squeezed) if marker is None else None
             content = self._content[segment.id] = squeezed[label.end() :] if label else squeezed
         return content

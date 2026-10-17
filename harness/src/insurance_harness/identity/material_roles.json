@@ -1,0 +1,13 @@
+{
+  "version": "2026-10-17.1",
+  "roles": [
+    {"role": "terms", "evidence": true, "name_keywords": ["条款"], "head_keywords": ["阅读指引"]},
+    {"role": "brochure", "evidence": true, "name_keywords": ["说明书"], "head_keywords": ["说明书"]},
+    {
+      "role": "rate_table",
+      "evidence": false,
+      "name_keywords": ["费率表", "金额表"],
+      "head_keywords": ["费率表", "金额表"]
+    }
+  ]
+}
