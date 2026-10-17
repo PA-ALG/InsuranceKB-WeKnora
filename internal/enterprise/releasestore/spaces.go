@@ -5,6 +5,7 @@ package releasestore
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
@@ -85,6 +86,27 @@ func (s Spaces) Scope(tenantID uint64, spaceID string) (types.WikiReleaseScope, 
 		}
 	}
 	return scope, nil
+}
+
+// SpaceIDs lists the configured Spaces of one tenant in stable order.
+func (s Spaces) SpaceIDs(tenantID uint64) []string {
+	ids := make([]string, 0)
+	for _, scope := range s.byKey {
+		if scope.TenantID == tenantID {
+			ids = append(ids, scope.SpaceID)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// KnowledgeBases resolves both configured KBs without crossing tenant boundaries.
+func (s Spaces) KnowledgeBases(tenantID uint64, spaceID string) (string, string, bool) {
+	scope, err := s.Scope(tenantID, spaceID)
+	if err != nil {
+		return "", "", false
+	}
+	return scope.RawKBID, scope.WikiKBID, true
 }
 
 func spaceKey(tenantID uint64, spaceID string) string {
