@@ -10,10 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import cast
 
-from fastapi.testclient import TestClient
-from httpx import Response
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope, load_scope
@@ -38,40 +35,11 @@ from insurance_harness.knowledge import (
 )
 from insurance_harness.knowledge.quality_gate import QualityGate
 from insurance_harness.knowledge.tables import (
-    ChangeItem,
-    ChangeSet,
-    Claim,
-    ClaimEvidence,
     ReviewItem,
-)
-from insurance_harness.schemas.models import (
-    FieldSpec,
-    ProductLineSchema,
-    SchemaRegistry,
 )
 from tests.kbhelpers import seed_bound_scope, seed_product
 
 _HEX = "a" * 64
-
-
-def wb_registry() -> SchemaRegistry:
-    """内联 schema 注册表：与 kbhelpers.seed_product 的 category=endowment 对齐。
-
-    含一个**从未被抽取**的字段（never_extracted）——矩阵全字段底图断言用。
-    """
-    fields = (
-        FieldSpec(name="等待期", field_id="waiting_period", risk_level="low"),
-        FieldSpec(name="宽限期", field_id="grace_period", risk_level="low"),
-        FieldSpec(name="保障范围", field_id="coverage_scope", risk_level="low"),
-        FieldSpec(name="费率表", field_id="premium_rate", risk_level="high"),
-        FieldSpec(name="从未抽取字段", field_id="never_extracted", risk_level="low"),
-    )
-    line = ProductLineSchema(
-        line_key="endowment", sheet_name="两全保险", fields=fields
-    )
-    return SchemaRegistry(
-        version="v1.1+wbtest", lines={"endowment": line}, glossary=()
-    )
 
 
 def bound_space(session: Session, sfx: str) -> str:
@@ -94,32 +62,6 @@ def seed_wb_product(
     return str(version.id)
 
 
-def make_client(
-    factory: Callable[[], Session],
-    space_a: str,
-    *,
-    extra: dict[str, object] | None = None,
-    raise_server_exceptions: bool = True,
-    session_secret: str | None = "wb-test-secret",
-) -> TestClient:
-    from insurance_harness.workbench.app import create_app
-
-    tokens: dict[str, object] = {
-        "tok-alice": {"principal": "alice", "space_ids": [space_a]},
-    }
-    if extra:
-        tokens = {**tokens, **extra}
-    return TestClient(
-        create_app(
-            session_factory=factory,
-            tokens_config=tokens,
-            schema_registry=wb_registry(),
-            session_secret=session_secret,
-        ),
-        raise_server_exceptions=raise_server_exceptions,
-    )
-
-
 def current_version(session: Session, space_id: str, review_key: str) -> str:
     """读取审核项当前乐观并发版本（与页面 hidden expected_version 同源）。"""
     from sqlalchemy import select as _select
@@ -132,52 +74,6 @@ def current_version(session: Session, space_id: str, review_key: str) -> str:
         )
     ).scalar_one()
     return item.updated_at.isoformat()
-
-
-def post_action(
-    client: TestClient,
-    session: Session,
-    space_id: str,
-    review_key: str,
-    action: str,
-    *,
-    reason: str | None = None,
-    headers: dict[str, str] | None = None,
-    csrf: str | None = None,
-    expected_version: str | None = None,
-    request_id: str | None = None,
-    extra: dict[str, str] | None = None,
-    follow_redirects: bool = False,
-) -> Response:
-    """W1 强制并发合同（codex R2-P1）下的动作提交：默认取**最新真实版本**再提交。
-
-    正向用例不得再走"省略版本也成功"的路径；stale/缺失场景用
-    ``expected_version``/``request_id`` 显式覆盖。
-    """
-    from uuid import uuid4
-
-    if expected_version is None:
-        expected_version = current_version(session, space_id, review_key)
-    data: dict[str, str] = {
-        "action": action,
-        "expected_version": expected_version,
-        "request_id": request_id or uuid4().hex,
-    }
-    if reason is not None:
-        data["reason"] = reason
-    if csrf is not None:
-        data["csrf_token"] = csrf
-    if extra:
-        data = {**data, **extra}
-    return cast(
-        Response,
-        client.post(
-            f"/spaces/{space_id}/queue/{review_key}/action",
-            headers=headers,
-            data=data,
-            follow_redirects=follow_redirects,
-        ),
-    )
 
 
 def prop(
@@ -272,95 +168,6 @@ def open_review_key(
     )
     assert report.review_keys, "保守策略下 add 必产生审核项"
     return report.review_keys[0]
-
-
-def seed_parallel_open_review(
-    session: Session,
-    space_id: str,
-    version_id: str,
-    predicate: str,
-    *,
-    key: str,
-    value: str = "90天",
-    with_evidence: bool = True,
-    risk: str = "low",
-) -> str:
-    """并行摄入竞态种子（仅供边缘场景）：真实嵌套 ``proposed={"claim": …}`` 形态，
-    Claim 行与提案逐字段一致（能通过 ``_require_claim_matches_proposal``）。
-
-    模拟两条并行会话各自都看不见对方 candidate 的场景——顺序 MergeEngine 会把
-    第二条同谓词提案并入裁决路径，无法造出"同字段两条独立 open add"。
-    """
-    scope = load_scope(session, space_id)
-    proposal = prop(
-        scope, version_id, predicate, value=value, with_evidence=with_evidence
-    )
-    claim = Claim(
-        space_id=proposal.space_id,
-        subject_type="product_version",
-        product_version_id=proposal.product_version_id,
-        predicate=proposal.predicate,
-        value_state=proposal.value_state,
-        value=None if proposal.value is None else {"text": proposal.value},
-        effective_from=proposal.effective_from,
-        status="candidate",
-        confidence=proposal.confidence,
-        extraction_method=proposal.extraction_method,
-        schema_version=proposal.schema_version,
-        pending_judge=proposal.pending_judge,
-    )
-    session.add(claim)
-    session.flush()
-    for e in proposal.evidence:
-        session.add(
-            ClaimEvidence(
-                claim_id=claim.id,
-                knowledge_id=e.knowledge_id,
-                quote=e.quote,
-                page=e.page,
-                doc_role=e.doc_role,
-                authority_level=e.authority_level,
-                extraction_method=e.extraction_method,
-            )
-        )
-    session.flush()
-    change_set = ChangeSet(
-        space_id=scope.space_id,
-        source_kind="document",
-        external_record_id=f"parallel-{key}",
-        status="pending",
-        created_by="parallel-ingest",
-    )
-    session.add(change_set)
-    session.flush()
-    item = ChangeItem(
-        change_set_id=change_set.id,
-        action="add",
-        claim_id=claim.id,
-        proposed={"claim": proposal.model_dump(mode="json")},  # 真实嵌套形态
-        decision="needs_review",
-    )
-    session.add(item)
-    session.flush()
-    review = ReviewItem(
-        space_id=scope.space_id,
-        review_key=key,
-        type="low_confidence",
-        subject={
-            "change_item_id": item.id,
-            "new_claim_id": claim.id,
-            "predicate": predicate,
-        },
-        allowed_actions=["approve", "reject", "defer"],
-        status="open",
-        risk_level=risk,
-    )
-    session.add(review)
-    session.commit()
-    return key
-
-
-# ------------------------------------------------------------------ 真实 gate 变体
 
 
 def _fingerprint(**overrides: str) -> RunFingerprint:

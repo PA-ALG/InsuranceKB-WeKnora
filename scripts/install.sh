@@ -73,7 +73,6 @@ cat <<'EOF'
 ✅ 安装完成。下一步：
   1. 填 harness/.env（WeKnora API Key、模型网关 Key）
   2. 启动 WeKnora 平台并初始化双知识库：docs/insurance-kb/14-deployment-runbook.md §2
-  3. 注册样本产品：cd harness && uv run python -m insurance_harness.product.cli register-products ../dataset/shouxian_product
-  4. 联调验收 L1~L6：14 号文档 §4
+  3. 联调验收 L1~L6：14 号文档 §4
 接手开发请读：HANDOFF.md（AI 会话会自动加载根目录 CLAUDE.md 的项目约定）
 EOF

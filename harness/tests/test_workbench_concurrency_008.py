@@ -36,12 +36,9 @@ from tests.wbhelpers import (
 )
 
 TEST_POSTGRES_URL = os.getenv("HARNESS_TEST_POSTGRES_URL")
+
+
 FUTURE_TIMEOUT_S = 30
-
-
-# ---------------------------------------------------------------------------
-# deterministic：服务层版本/幂等状态机（sqlite；锁语义在 PG 用例验证）
-# ---------------------------------------------------------------------------
 
 
 def test_w1_4_service_stale_version_raises(
@@ -119,11 +116,6 @@ def test_w1_4_defer_then_actions_full_event_history(
     assert events[0]["request_id"] == "r1" and events[1]["request_id"] == "r2"
     assert events[1]["expected_version"] == fresh
     assert item.resolution is not None and item.resolution["action"] == "approve"
-
-
-# ---------------------------------------------------------------------------
-# integration_postgres：真实两会话并发（FOR UPDATE 序列化）
-# ---------------------------------------------------------------------------
 
 
 def _pg_connect_args(schema: str | None = None) -> dict[str, object]:

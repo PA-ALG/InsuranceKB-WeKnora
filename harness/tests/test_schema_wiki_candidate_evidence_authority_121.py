@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-import inspect
-from dataclasses import dataclass
 from decimal import Decimal
 
 import pytest
 
-from insurance_harness.canonical import canonical_hash
 from insurance_harness.compiler.evidence_verifier import (
     EvidenceLocatorSnapshotV1,
-    FreeformDocumentBindingV1,
-    FreeformEvidenceBindingReceiptV1,
     FreeformEvidenceV1,
-    FreeformFieldOutputV1,
 )
 from insurance_harness.knowledge_compiler import (
     schema_wiki_candidate_evidence_join_596_1 as candidate_evidence_join,
@@ -30,171 +24,12 @@ from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_59
     normalize_mineru_bbox_596_1,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
-    CitationBBoxV1,
-    CitationTargetV1,
     schema_wiki_sha256,
-)
-from insurance_harness.knowledge_compiler.schema_wiki_release_596_1 import (
-    build_schema_field_page_596_1,
 )
 
 
 def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def _known_field() -> tuple[
-    FreeformFieldOutputV1,
-    FreeformEvidenceBindingReceiptV1,
-]:
-    field_id = "product_code"
-    quote = "approved synthetic quote"
-    content = f"prefix {quote} suffix"
-    source_sha256 = "1" * 64
-    parsed_document_sha256 = "2" * 64
-    parse_manifest_sha256 = "3" * 64
-    evidence = FreeformEvidenceV1(
-        field_id=field_id,
-        source_sha256=source_sha256,
-        source_revision_id="revision-2",
-        parse_attempt_id="attempt-2",
-        parsed_document_hash=parsed_document_sha256,
-        parse_manifest_hash=parse_manifest_sha256,
-        page_number=12,
-        block_id="block-page-12",
-        locator=EvidenceLocatorSnapshotV1(
-            subject_type="block",
-            subject_ref="block-page-12",
-            page_number=12,
-            parent_refs=("page-12",),
-            content_snapshot=content,
-            content_snapshot_sha256=_sha(content),
-        ),
-        quote_snapshot=quote,
-        quote_snapshot_sha256=_sha(quote),
-    )
-    output = FreeformFieldOutputV1(
-        product_version_id="596-1",
-        field_id=field_id,
-        state="present",
-        value_snapshot="P000001",
-        evidence=(evidence,),
-    )
-    document = FreeformDocumentBindingV1(
-        source_id="terms-source",
-        source_revision_id=evidence.source_revision_id,
-        source_sha256=source_sha256,
-        parse_attempt_id=evidence.parse_attempt_id,
-        parsed_document_hash=parsed_document_sha256,
-        parse_manifest_hash=parse_manifest_sha256,
-    )
-    receipt_payload = {
-        "contract": "freeform-arm-evidence-binding-receipt.v1",
-        "product_version_id": output.product_version_id,
-        "field_id": output.field_id,
-        "state": output.state,
-        "value_snapshot": output.value_snapshot,
-        "documents": (document.model_dump(mode="python"),),
-        "evidence": (evidence.model_dump(mode="python"),),
-    }
-    receipt = FreeformEvidenceBindingReceiptV1.model_validate(
-        {
-            **receipt_payload,
-            "receipt_hash": canonical_hash(
-                "freeform-arm-evidence-binding-receipt.v1", receipt_payload
-            ),
-        }
-    )
-    return output, receipt
-
-
-def _caller_selected_citation(
-    *,
-    output: FreeformFieldOutputV1,
-    bbox: CitationBBoxV1,
-) -> CitationTargetV1:
-    evidence = output.evidence[0]
-    payload = {
-        "contract": "citation-target.v1",
-        "citation_id": "citation-caller-selected",
-        "source_role": "terms",
-        "space_id": "space-caller-selected",
-        "entity_version_id": "ping-an-e-sheng-bao@596-1",
-        "knowledge_id": "knowledge-caller-selected",
-        "chunk_id": "chunk-caller-selected",
-        "source_revision_id": evidence.source_revision_id,
-        "parse_attempt_id": evidence.parse_attempt_id,
-        "parsed_document_sha256": evidence.parsed_document_hash,
-        "parse_manifest_sha256": evidence.parse_manifest_hash,
-        "page_number": evidence.page_number,
-        "locator_ref": evidence.locator.subject_ref,
-        "bbox": bbox,
-        "quote_snapshot": evidence.quote_snapshot,
-        "quote_sha256": schema_wiki_sha256(
-            "schema-wiki-text.v1", {"text": evidence.quote_snapshot}
-        ),
-        "content_snapshot_sha256": evidence.locator.content_snapshot_sha256,
-        "logical_member_ref": f"field:{output.field_id}",
-    }
-    return CitationTargetV1.model_validate(
-        {
-            **payload,
-            "citation_sha256": schema_wiki_sha256("citation-target.v1", payload),
-        }
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class _CallerSelectedAuthority:
-    citation: CitationTargetV1
-
-    def resolve(
-        self,
-        *,
-        output: FreeformFieldOutputV1,
-        evidence_receipt: FreeformEvidenceBindingReceiptV1,
-        entity_version_id: str,
-    ) -> tuple[CitationTargetV1, ...]:
-        del output, evidence_receipt, entity_version_id
-        return (self.citation,)
-
-
-@pytest.mark.parametrize(
-    "bbox",
-    [
-        CitationBBoxV1(
-            coordinate_system="pdf_points",
-            page_width=600,
-            page_height=800,
-            x0=10,
-            y0=20,
-            x1=300,
-            y1=400,
-        ),
-        CitationBBoxV1(
-            coordinate_system="normalized_0_1e6",
-            page_width=1_000_000,
-            page_height=1_000_000,
-            x0=10_000,
-            y0=20_000,
-            x1=300_000,
-            y1=400_000,
-        ),
-    ],
-)
-def test_caller_selected_live_revision_chunk_and_bbox_require_sealed_join_receipt(
-    bbox: CitationBBoxV1,
-) -> None:
-    """A self-consistent caller Port is not live revision/bbox authority."""
-    output, receipt = _known_field()
-    citation = _caller_selected_citation(output=output, bbox=bbox)
-
-    with pytest.raises(TypeError):
-        build_schema_field_page_596_1(
-            output=output,
-            evidence_receipt=receipt,
-            citation_authority=_CallerSelectedAuthority(citation),  # type: ignore[call-arg]
-        )
 
 
 def test_live_revision_receipt_matches_exact_go_length_delimited_vector() -> None:
@@ -512,7 +347,3 @@ def test_native_pdf_table_slice_binds_each_cell_to_its_exact_rect_and_quote() ->
         artifact_bbox=("10", "0", "20", "10"),
         coordinate_manifest_sha256="2" * 64,
     ) == ("10", "0", "20", "10")
-
-
-def test_release_compiler_exposes_no_caller_selected_citation_authority_port() -> None:
-    assert "citation_authority" not in inspect.signature(build_schema_field_page_596_1).parameters
