@@ -1,0 +1,22 @@
+{
+ "product_id": "beta",
+ "cards_version": "synthetic-1",
+ "fields": [
+  {
+   "field_key": "field_y",
+   "state": "unknown",
+   "value": null,
+   "reason": "合成理由戊",
+   "evidence": []
+  },
+  {
+   "field_key": "field_x",
+   "state": "present",
+   "value": "合成取值丁",
+   "reason": "合成理由丁",
+   "evidence": [
+    {"document": "doc-three.pdf", "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "page": 3, "quote": "合成引文四", "segment_id": "D1P3S2"}
+   ]
+  }
+ ]
+}
