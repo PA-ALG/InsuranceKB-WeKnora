@@ -3,7 +3,7 @@
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "insurance_harness"
-SUBPACKAGES = ["adapters", "compiler", "goldenset", "workbench", "mcp", "schemas"]
+SUBPACKAGES = ["adapters", "compiler", "goldenset", "schemas"]
 
 
 def test_s1_3_every_subpackage_has_readme_and_init() -> None:

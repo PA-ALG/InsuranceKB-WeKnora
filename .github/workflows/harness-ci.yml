@@ -84,8 +84,7 @@ jobs:
           path: harness/reports/postgres.xml
           if-no-files-found: ignore
 
-  # 008 W5（PR#15 阻断 7）：wheel 装进空 venv 后工作台必须可启动——
-  # 证明 templates 与 vendored HTMX 静态资源真随包分发，PackageLoader 可用。
+  # wheel 能构建并装进空 venv（S7a 删除审核工作台后不再做工作台冒烟）。
   wheel-smoke:
     runs-on: ubuntu-latest
     defaults:
@@ -99,8 +98,7 @@ jobs:
           version: "0.9.26"
       - name: Build wheel
         run: uv build
-      - name: Install wheel into clean venv and smoke the workbench
+      - name: Install wheel into clean venv
         run: |
           uv venv /tmp/wheel-venv
           uv pip install --python /tmp/wheel-venv/bin/python dist/*.whl
-          /tmp/wheel-venv/bin/python scripts/wheel_smoke_workbench.py
