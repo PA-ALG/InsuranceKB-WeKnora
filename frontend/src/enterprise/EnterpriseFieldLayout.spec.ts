@@ -117,6 +117,34 @@ describe('short items', () => {
   })
 })
 
+describe('items that only group their sub-items (review R3 on PR #202)', () => {
+  const p = '条件说明。'.repeat(60)
+
+  it.each([
+    ['a list element', [`（1）豁免：${p}；（2）给付：${p}。`, '其他']],
+    ['a numbered item', `1. （1）豁免：${p}；（2）给付：${p}。2. 其他：${p}`],
+  ])('show the sub-items of %s in its place, each folding on its own', async (_, value) => {
+    const view = field(fieldView(value as FieldView['value']))
+    const summaries = () => view.findAll('details[data-item]').map(item => item.get('summary').text().trim())
+    expect(summaries().every(text => text.length > 0 && !/^\d+[.．、]$/.test(text))).toBe(true)
+    const named = view.findAll('details[data-item]').filter(item => /（[12]）/.test(item.get('summary').text()))
+    expect(named.map(item => item.get('summary').text())).toEqual([
+      expect.stringContaining('豁免：'),
+      expect.stringContaining('给付：'),
+    ])
+    for (const item of named) expect(item.element.parentElement?.closest('details')).toBeNull()
+
+    const toggle = view.get('[data-toggle]')
+    await toggle.trigger('click')
+    expect(view.findAll('details[data-item]').every(item => (item.element as HTMLDetailsElement).open)).toBe(true)
+    const text = Array.isArray(value) ? value.join('') : value
+    expect(squash(view.text())).toContain(squash(text))
+    expect(squash(view.text()).split(squash(p)).length - 1).toBe(Array.isArray(value) ? 2 : 3)
+    await toggle.trigger('click')
+    expect(view.findAll('details[data-item]').some(item => (item.element as HTMLDetailsElement).open)).toBe(false)
+  })
+})
+
 describe('long plain values', () => {
   it('are cut to a few lines until the full version is asked for', async () => {
     const view = field(fieldView(LONG_PLAIN))

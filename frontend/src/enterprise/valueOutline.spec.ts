@@ -162,6 +162,22 @@ describe('review R1–R3 on PR #202: the hierarchy, not only the text, must be r
     expectLossless(value)
   })
 
+  it('never takes a colon inside quotes as the end of a spaced number\'s name', () => {
+    const value = '1 甲：必须提交：2 份《签收：确认书》原件。2 乙：另有约定。'
+    const outline = valueOutline(value)
+    expect(outline.items.map(item => item.lead)).toEqual(['甲：', '乙：'])
+    expect(outline.items[0].body).toBe('必须提交：2 份《签收：确认书》原件。')
+    expect(valueOutline('1 《甲：条款》；2 《乙：条款》。').items).toEqual([])
+    expectLossless(value)
+  })
+
+  it('keeps markers written in different ways at one level as plain text', () => {
+    const value = '现金价值规则如下。\n1．定义：指保险单所具有的价值。\n2、查询：可向我们咨询。\n3. 退还：30日内退还。'
+    const outline = valueOutline(value)
+    expect(outline.items).toEqual([])
+    expect(outline.intro).toBe(value)
+  })
+
   it('keeps the first sub-item when an item starts with its sub-items', () => {
     const value = '1. （1）豁免：甲；（2）给付：乙。2. 其他：丙。'
     const outline = valueOutline(value)
