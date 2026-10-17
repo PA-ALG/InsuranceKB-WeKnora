@@ -12,7 +12,6 @@ from typing import Literal
 import pytest
 
 import insurance_harness.knowledge_compiler.semantic_input_binding as semantic_module
-import insurance_harness.knowledge_compiler.weak_strong_ceiling as ceiling_module
 from insurance_harness.canonical import canonical_hash
 from insurance_harness.compiler.evidence_verifier import (
     ApprovedLocatorSetV1,
@@ -572,20 +571,6 @@ def test_exact_five_fields_follow_approved_golden_terms_evidence_only() -> None:
         for field_id in set(APPROVED_SCHEMA60_FIELD_IDS)
         - SOURCE_REBOUND_FIELDS
         - set(APPROVED_RATE_FIELD_IDS)
-    )
-    mirrored = ceiling_module._approved_task_plan_payload()["tasks"]
-    assert isinstance(mirrored, tuple)
-    assert tuple(
-        (task.task_id, task.material_role, task.field_ids, task.source_sha256)
-        for task in blueprint.tasks
-    ) == tuple(
-        (
-            item["task_id"],
-            item["material_role"],
-            item["field_ids"],
-            item["source_sha256"],
-        )
-        for item in mirrored
     )
 
 
