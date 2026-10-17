@@ -21,7 +21,8 @@ from insurance_harness.eval.compile_run import ProductRun, compile_products, mai
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.models import CallLedger
 
-FILES = {"条款.pdf": "第一页。等待期为90日。", "说明书.pdf": "犹豫期为20日。"}  # D1 = 条款.pdf
+# D1 = 条款.pdf; each text ends with its material's role signal (S4i)
+FILES = {"条款.pdf": "第一页。等待期为90日。\n阅读指引", "说明书.pdf": "犹豫期为20日。\n说明书"}
 
 
 def write_json(path: Path, data: object) -> None:
@@ -123,7 +124,8 @@ def test_replay_refuses_answers_produced_for_different_source_text(
     repo: Path, tmp_path: Path, texts: dict[str, str]
 ) -> None:
     source = recorded_source(repo, tmp_path)
-    texts["条款.pdf"] = "第一页。等待期为180日。"  # same ids, new text: old answers must not apply
+    # Same ids, new text: old answers must not apply.
+    texts["条款.pdf"] = "第一页。等待期为180日。\n阅读指引"
     with pytest.raises(ValueError):
         replay(repo, source, tmp_path / "out")
     assert not (tmp_path / "out/p1/output.json").exists()

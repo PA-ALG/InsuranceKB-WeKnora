@@ -22,7 +22,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Pa
     repo = tmp_path / "repo"
     source = repo / "dataset/shouxian_product/Product"
     write_json(source / "product_meta.json", {"planCode": "596"})
-    (source / "terms.pdf").write_bytes(b"synthetic terms")
+    (source / "保险条款.pdf").write_bytes(b"synthetic terms")
     write_json(repo / "internal/handler/schema_pack_catalog_830_g3.generated.json", {
         "entries": [{"pack": {"display_name": "Test", "schema_pack_id": "pack", "fields": [{
             "short_title": "期限", "field_key": "duration", "description": "Duration",
@@ -36,13 +36,13 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Pa
     write_json(golden / "596.jsonl", {
         "pack_id": "pack", "product_id": "596", "field_key": "duration", "state": "present",
         "value": "90日", "judged_by": "human:reference", "evidence": [{
-            "document": "terms.pdf", "document_sha256": "b" * 64, "page": 1, "quote": "90日",
+            "document": "保险条款.pdf", "document_sha256": "b" * 64, "page": 1, "quote": "90日",
         }],
     })
 
     def pages(path: Path) -> list[PageText]:
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        return [PageText(path.name, digest, 1, "期限为90日。")]
+        return [PageText(path.name, digest, 1, "期限为90日。\n阅读指引")]
 
     monkeypatch.setattr(product_sources, "read_pdf", pages)
     return repo, tmp_path / "runs"
@@ -51,7 +51,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Pa
 def answer(run: Path, quote: str = "期限为90日", value: str = "90日") -> None:
     write_json(run / "responses/001.json", {"fields": [{
         "field_key": "duration", "state": "present", "value": value,
-        "components": [], "evidence": [{"document": "terms.pdf", "page": 1, "quote": quote}],
+        "components": [], "evidence": [{"document": "保险条款.pdf", "page": 1, "quote": quote}],
     }]})
 
 
@@ -74,7 +74,7 @@ def test_calibration_preserves_reference_and_unlocks_second_product(
     assert (repo / "dataset/golden/v1/596.jsonl").read_bytes() == original
     other = repo / "dataset/shouxian_product/Other"
     write_json(other / "product_meta.json", {"planCode": "other"})
-    (other / "terms.pdf").write_bytes(b"other terms")
+    (other / "保险条款.pdf").write_bytes(b"other terms")
     prepare(repo, root, "other")
     answer(root / "other")
     annotate.ingest(repo, "other", root, judge_model="fake")
@@ -107,7 +107,7 @@ def test_unknown_reason_is_preserved_in_golden_note_without_changing_requests(
     annotate.ingest(repo, "596", root, judge_model="fake", calibrate_only=True)
     other = repo / "dataset/shouxian_product/Other"
     write_json(other / "product_meta.json", {"planCode": "other"})
-    (other / "terms.pdf").write_bytes(b"other terms")
+    (other / "保险条款.pdf").write_bytes(b"other terms")
     prepare(repo, root, "other")
     request_path = root / "other/requests/001.json"
     before = request_path.read_bytes()
@@ -342,7 +342,7 @@ def test_ingest_rejects_changed_inputs(workspace: tuple[Path, Path], mutation: s
     path = root / "596/run.json"
     data = json.loads(path.read_text())
     if mutation == "pdf":
-        (repo / "dataset/shouxian_product/Product/terms.pdf").write_bytes(b"changed")
+        (repo / "dataset/shouxian_product/Product/保险条款.pdf").write_bytes(b"changed")
     elif mutation == "extra":
         (root / "596/requests/002.json").write_text("{}")
     else:

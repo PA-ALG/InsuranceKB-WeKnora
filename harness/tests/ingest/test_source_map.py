@@ -12,6 +12,7 @@ from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.ingest.source_map import load_pages, load_source_map, page_source
 
 SHA = "ab" * 32
+HEADS = {"保险条款.pdf": "阅读指引", "产品说明书.pdf": "产品说明书"}
 
 
 class Reader:
@@ -22,7 +23,8 @@ class Reader:
     def pages(self, space_id: str, knowledge_id: str, attempt: int) -> list[PageText]:
         self.calls.append((space_id, knowledge_id, attempt))
         name = self.documents[(knowledge_id, attempt)]
-        return [PageText(name, SHA, 1, "第一页"), PageText(name, SHA, 2, "第二页")]
+        head = HEADS[name]  # each material carries its role signal (S4i)
+        return [PageText(name, SHA, 1, f"{head}第一页"), PageText(name, SHA, 2, "第二页")]
 
 
 def write(tmp_path: Path, document: object) -> Path:

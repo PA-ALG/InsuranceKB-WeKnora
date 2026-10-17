@@ -16,7 +16,7 @@ from insurance_harness.eval.compile_run import compile_products
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.models import CallLedger
 
-TEXT = "等待期为90日。"
+TEXT = "等待期为90日。\n阅读指引"
 
 
 def write_json(path: Path, data: object) -> None:
@@ -83,9 +83,9 @@ def pages_with(digest_salt: str):  # type: ignore[no-untyped-def]
 @pytest.mark.parametrize(
     ("file_name", "pack", "salt"),
     [
-        ("terms.pdf", "pack-a", "reissued"),  # same text, new file fingerprint
-        ("new-terms.pdf", "pack-a", "same"),  # same text, renamed file
-        ("terms.pdf", "pack-b", "same"),  # same text and fields, another pack
+        ("保险条款.pdf", "pack-a", "reissued"),  # same text, new file fingerprint
+        ("新保险条款.pdf", "pack-a", "same"),  # same text, renamed file
+        ("保险条款.pdf", "pack-b", "same"),  # same text and fields, another pack
     ],
 )
 def test_replay_refuses_a_different_source_or_pack_with_identical_text(
@@ -96,7 +96,7 @@ def test_replay_refuses_a_different_source_or_pack_with_identical_text(
     salt: str,
 ) -> None:
     monkeypatch.setattr(product_sources, "read_pdf", pages_with("same"))
-    recorded = build_repo(tmp_path / "recorded-repo", file_name="terms.pdf", pack="pack-a")
+    recorded = build_repo(tmp_path / "recorded-repo", file_name="保险条款.pdf", pack="pack-a")
     source = tmp_path / "earlier"
     compile_products(
         recorded, ["p1"], completion_factory=lambda ledger: Recorded(), run_root=source, max_sent=2
@@ -120,7 +120,7 @@ def test_replay_of_the_same_source_and_pack_still_works(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(product_sources, "read_pdf", pages_with("same"))
-    repo = build_repo(tmp_path / "repo", file_name="terms.pdf", pack="pack-a")
+    repo = build_repo(tmp_path / "repo", file_name="保险条款.pdf", pack="pack-a")
     source = tmp_path / "earlier"
     compile_products(
         repo, ["p1"], completion_factory=lambda ledger: Recorded(), run_root=source, max_sent=2
