@@ -1,25 +1,28 @@
-"""Claims as a candidate bundle of claim members (S4g Spec §2.2).
+"""Claims and their product page as a candidate bundle (S4g Spec §2.2, S3d-2 Spec §3.3).
 
-Generic over the claim content: each claim becomes one ``kind=claim`` member keyed by its logical
-key, with the platform's member digest and the source references its evidence cites. Built through
-the contract model itself, so the structure satisfies contracts/candidate_bundle.schema.json; the
-size limit is the platform's.
+Generic over the content: each claim becomes one ``kind=claim`` member keyed by its logical key,
+with the source references its evidence cites; each entity and presentation profile becomes one
+member keyed by its id under ``entity/`` and ``presentation/``, citing nothing. Every member
+carries the platform's member digest, and a slug names one member across all kinds. Built
+through the contract model itself, so the structure satisfies
+contracts/candidate_bundle.schema.json; the size limit is the platform's.
 """
 
 import json
 from collections.abc import Sequence
+from typing import Any
 
 from insurance_harness.bundle.canonical import member_digest
 from insurance_harness.bundle.client import MAX_BUNDLE_BYTES, Head
 from insurance_harness.contracts.bundle import BundleMember, CandidateBundle
 from insurance_harness.contracts.enums import Origin
-from insurance_harness.contracts.knowledge import Claim
+from insurance_harness.contracts.knowledge import Claim, Entity, PresentationProfile
 
 ACCESS_SCOPE = "space"
 
 
 class BundleError(ValueError):
-    """The claims cannot be published as they stand.
+    """The bundle cannot be published as it stands.
 
     Carries a stable reason code and, when one field is at fault, its position in the compile
     output: never the field key or any other input text, which may be arbitrary.
@@ -31,25 +34,33 @@ class BundleError(ValueError):
 
 
 def assemble(
-    claims: Sequence[Claim], *, compiler_identity: str, base: Head | None = None
+    claims: Sequence[Claim],
+    *,
+    compiler_identity: str,
+    base: Head | None = None,
+    entities: Sequence[Entity] = (),
+    profiles: Sequence[PresentationProfile] = (),
 ) -> CandidateBundle:
-    """One claim member per claim, based on the given Head (None before the first release)."""
-    slugs = [claim.logical_key for claim in claims]
+    """Entity, profile and claim members on the given Head (None before the first release)."""
+    members = [
+        *(_member("entity", f"entity/{entity.entity_id}", entity) for entity in entities),
+        *(
+            _member("presentation_profile", f"presentation/{profile.profile_id}", profile)
+            for profile in profiles
+        ),
+        *(
+            _member(
+                "claim",
+                claim.logical_key,
+                claim,
+                sorted({item.source_ref for item in claim.evidence}),
+            )
+            for claim in claims
+        ),
+    ]
+    slugs = [member.logical_slug for member in members]
     if len(set(slugs)) != len(slugs):
         raise BundleError("DUPLICATE_LOGICAL_KEY")
-    members = []
-    for claim in claims:
-        payload = claim.model_dump(mode="json")
-        members.append(
-            BundleMember(
-                kind="claim",
-                logical_slug=claim.logical_key,
-                payload=payload,
-                member_digest=member_digest(payload),
-                evidence_refs=sorted({item.source_ref for item in claim.evidence}),
-                access_scope=ACCESS_SCOPE,
-            )
-        )
     bundle = CandidateBundle(
         contract_version="1",
         base_release_id=base.release_id if base else None,
@@ -62,3 +73,20 @@ def assemble(
     if len(raw) > MAX_BUNDLE_BYTES:
         raise BundleError("SIZE_LIMIT")
     return bundle
+
+
+def _member(
+    kind: str,
+    slug: str,
+    content: Entity | PresentationProfile | Claim,
+    refs: list[str] | None = None,
+) -> BundleMember:
+    payload: dict[str, Any] = content.model_dump(mode="json")
+    return BundleMember(
+        kind=kind,
+        logical_slug=slug,
+        payload=payload,
+        member_digest=member_digest(payload),
+        evidence_refs=refs or [],
+        access_scope=ACCESS_SCOPE,
+    )

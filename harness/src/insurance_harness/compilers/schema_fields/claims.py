@@ -5,7 +5,9 @@ ids, so every quote equals its page slice by construction; it carries the fixed 
 (``source:v1:<knowledge_id>:<parse_attempt>:<file_sha256>``) and a PDF_TEXT_SPAN locator with
 code-point offsets the platform can verify against its captured parse artifact. A field whose ids
 no longer cut its saved evidence, or a document the source map does not name, stops the build:
-the bundle never guesses where a quote came from.
+the bundle never guesses where a quote came from. With the product page (S3d-2), the bundle
+also carries the product's entity and its pack's presentation profile, which must be for the
+same product and pack as the output.
 """
 
 from collections.abc import Mapping
@@ -15,6 +17,7 @@ from pydantic import ValidationError
 from insurance_harness.bundle.assemble import ACCESS_SCOPE, BundleError, assemble
 from insurance_harness.bundle.client import Head
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
+from insurance_harness.compilers.schema_fields.page import ProductPage
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.contracts.enums import (
     ClaimState,
@@ -35,10 +38,21 @@ def candidate_bundle(
     *,
     compiler_identity: str,
     base: Head | None = None,
+    page: ProductPage | None = None,
 ) -> CandidateBundle:
-    """One claim member per field, based on the given Head (None before the first release)."""
+    """One claim member per field, plus the product page when given, based on the given Head."""
+    if page is not None and (
+        page.entity.entity_id != output.entity_id or page.profile.schema_pack_id != output.pack_id
+    ):
+        raise BundleError("PAGE_MISMATCH")
     claims = claims_from(output, source, sources)
-    return assemble(claims, compiler_identity=compiler_identity, base=base)
+    return assemble(
+        claims,
+        compiler_identity=compiler_identity,
+        base=base,
+        entities=[page.entity] if page else [],
+        profiles=[page.profile] if page else [],
+    )
 
 
 def require_cards_version(output: CompileOutput) -> str:
