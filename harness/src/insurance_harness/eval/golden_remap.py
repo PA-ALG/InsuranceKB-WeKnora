@@ -70,6 +70,7 @@ class ProductRemap:
     fields: tuple[str, ...]  # fields whose evidence, state, value or reason changed
     excluded_quotes_removed: int
     quotes_split: int  # Golden quotes now spread over more than one segment
+    fields_split: tuple[str, ...]  # their fields: labels coarser than the segments until re-judged
     quotes_widened: tuple[tuple[str, str], ...]  # (field, segment) reaching past the old range
     to_unknown: tuple[str, ...]
     cited_excluded: tuple[str, ...]  # fields that cited an excluded material
@@ -104,6 +105,7 @@ def remap_golden(
     widened: list[tuple[str, str]] = []
     to_unknown: list[str] = []
     cited: list[str] = []
+    split_fields: list[str] = []
     for field in golden.fields:
         evidence: dict[str, GoldenV2Evidence] = {}
         for quote in field.evidence:
@@ -126,7 +128,10 @@ def remap_golden(
             hits = [s for s in on_page.get(key, []) if s.start < old.end and old.start < s.end]
             if not hits:
                 raise RemapError("UNMAPPED")
-            split += len(hits) > 1
+            if len(hits) > 1:
+                split += 1
+                if field.field_key not in split_fields:
+                    split_fields.append(field.field_key)
             for segment in hits:
                 if (segment.start < old.start or segment.end > old.end) and (
                     (field.field_key, segment.id) not in widened
@@ -141,7 +146,7 @@ def remap_golden(
                         document=segment.document,
                         document_sha256=segment.document_sha256.lower(),
                         page=segment.page,
-                        quote=segment.text.replace("\r\n", "\n"),  # Golden quotes use LF
+                        quote=segment.text,
                         segment_id=segment.id,
                     ),
                 )
@@ -173,6 +178,7 @@ def remap_golden(
         fields=tuple(changed),
         excluded_quotes_removed=removed,
         quotes_split=split,
+        fields_split=tuple(split_fields),
         quotes_widened=tuple(widened),
         to_unknown=tuple(to_unknown),
         cited_excluded=tuple(cited),
@@ -281,6 +287,7 @@ def main(argv: list[str] | None = None) -> int:
             "fields": list(report.fields),
             "rate_table_quotes_removed": report.excluded_quotes_removed,
             "quotes_split": report.quotes_split,
+            "fields_split": list(report.fields_split),
             "quotes_widened": [list(pair) for pair in report.quotes_widened],
             "to_unknown": list(report.to_unknown),
         }
