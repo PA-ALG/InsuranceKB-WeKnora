@@ -100,6 +100,7 @@ python -m insurance_harness.eval.review_run --products P... --compile-root DIR [
   - 每批请求的 sha256 与原始响应存 `<run-root>/<product>/responses/NNN.{request.sha256,txt}`；
   - 重跑时请求 sha 相同的批直接复用已存响应，不再发送。
   - 只复用打分器接受过的响应：原始响应到达即存 `NNN.txt`，接受后才写 `NNN.request.sha256`。被拒的响应只留作诊断，重跑时该批在预算内重发；请求指纹含条目全部字段（key、名称、规则、状态、取值、引文）、审核模型与 `policy_version`，换策略版本不复用旧响应。
+  - 命令一取得运行目录锁、在读取预算与账本之前，先把全部请求产品的已有 `scores.json` 原子移到 `scores.json.previous`；共用的预算或账本损坏会在评审任何产品之前停下，旧分数此时也不能留作可发布状态（审核 R1，PR #195）。
   - 产品一开始，旧分数即不可信。每个产品依次：
     1. 在任何校验、缓存解析或发送之前，把已有 `scores.json` 原子移到 `scores.json.previous`（发布命令不读）；
     2. 校验接受标记：`NNN.request.sha256` 须为数字编号、64 位小写十六进制、不重复，且有同号 `NNN.txt`；
