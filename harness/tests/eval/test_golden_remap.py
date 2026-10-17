@@ -1,9 +1,12 @@
 """S4i acceptance: Golden evidence follows a segmentation change by page position (Spec §3.4).
 
-Protected file: written by Claude after review R5 on #200. A Golden quote is taken by the segment
-it was labelled on under the previous rules; the current segments that overlap that range by a
-positive length replace it. Evidence on non-evidence materials is removed, a field left without
-evidence becomes unknown, and any mismatch stops the remap before anything is written.
+Protected file: written by Claude after review R5 on #200, extended after review R1/R2 on #203. A
+Golden quote is taken by the segment it was labelled on under the previous rules; the current
+segments that overlap that range by a positive length replace it. Every quote, including those on
+excluded materials, is first checked against the current snapshot of the product's pages: file
+fingerprint, page text and the old range's exact slice. Evidence on non-evidence materials is
+removed, a field left without evidence becomes unknown, any mismatch stops the remap before anything
+is written, and a failed write leaves the previous files in place.
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ from typing import Literal
 
 import pytest
 
-from insurance_harness.eval import product_sources
+from insurance_harness.eval import golden_remap, product_sources
 from insurance_harness.eval.golden_remap import (
     PreviousSegment,
     PreviousSegmentation,
@@ -71,7 +74,8 @@ PREVIOUS = PreviousSegmentation(
         ]
     },
 )
-CURRENT = SegmentedSource([PageText(TERMS, SHA_T, 1, TEXT)])
+MATERIALS = [PageText(TERMS, SHA_T, 1, TEXT), PageText(RATES, SHA_R, 1, RATE_TEXT)]
+CURRENT = SegmentedSource(MATERIALS[:1])  # what the snapshot leaves once rate tables are out
 
 
 def quote(sid: str) -> GoldenV2Evidence:
@@ -108,7 +112,9 @@ def ids(result: GoldenV2, key: str) -> list[str | None]:
 
 
 def remap(*fields: GoldenV2Field) -> tuple[GoldenV2, ProductRemap]:
-    return remap_golden(golden(*fields), PREVIOUS, CURRENT, excluded={RATES}, emptied_reason=REASON)
+    return remap_golden(
+        golden(*fields), PREVIOUS, MATERIALS, excluded={RATES}, emptied_reason=REASON
+    )
 
 
 def test_an_old_segment_maps_to_every_current_segment_it_overlaps_in_reading_order() -> None:
@@ -155,16 +161,35 @@ def test_a_field_keeps_everything_but_its_new_segment_ids() -> None:
     assert report.fields == ("g",)  # a new id is a change
 
 
+def moved(sid: str, start: int, end: int) -> PreviousSegmentation:
+    """The same id and text, at another range of the page."""
+    segment = PREVIOUS.segments[sid].model_copy(update={"start": start, "end": end})
+    return PreviousSegmentation(pages=PREVIOUS.pages, segments={**PREVIOUS.segments, sid: segment})
+
+
+def refingerprinted(document: str) -> list[PageText]:
+    """The same page text under another file fingerprint."""
+    return [
+        PageText(p.document, "c" * 64, p.page, p.text) if p.document == document else p
+        for p in MATERIALS
+    ]
+
+
 @pytest.mark.parametrize(
     ("change", "code"),
     [
         ("page", "PAGE_TEXT_CHANGED"),
         ("id", "SEGMENT_ID_UNKNOWN"),
         ("quote", "QUOTE_MISMATCH"),
+        ("moved", "SEGMENT_RANGE_INVALID"),
+        ("past_end", "SEGMENT_RANGE_INVALID"),
+        ("file", "SOURCE_FINGERPRINT_CHANGED"),
+        ("excluded_file", "SOURCE_FINGERPRINT_CHANGED"),
+        ("excluded_moved", "SEGMENT_RANGE_INVALID"),
     ],
 )
 def test_any_mismatch_stops_the_remap(change: str, code: str) -> None:
-    previous, item = PREVIOUS, field("h", "O4")
+    previous, materials, item = PREVIOUS, MATERIALS, field("h", "O4")
     if change == "page":
         previous = PreviousSegmentation(
             pages={**PREVIOUS.pages, (TERMS, 1): "0" * 64}, segments=PREVIOUS.segments
@@ -177,8 +202,18 @@ def test_any_mismatch_stops_the_remap(change: str, code: str) -> None:
         item = item.model_copy(
             update={"evidence": (item.evidence[0].model_copy(update={"quote": "别的文字"}),)}
         )
+    if change == "moved":  # coordinates point at other text while the recorded text is unchanged
+        previous = moved("O4", *span(TEXT, "第一句。"))
+    if change == "past_end":
+        previous = moved("O4", span(TEXT, "第三句在这里")[0], len(TEXT) + 5)
+    if change == "file":  # same page text, another file
+        materials = refingerprinted(TERMS)
+    if change == "excluded_file":  # evidence on a rate table is checked before it is removed
+        item, materials = field("h", "R1"), refingerprinted(RATES)
+    if change == "excluded_moved":
+        item, previous = field("h", "R1"), moved("R1", 0, 2)
     with pytest.raises(RemapError) as stopped:
-        remap_golden(golden(item), previous, CURRENT, excluded={RATES}, emptied_reason=REASON)
+        remap_golden(golden(item), previous, materials, excluded={RATES}, emptied_reason=REASON)
     assert stopped.value.code == code
 
 
@@ -272,4 +307,38 @@ def test_a_stop_writes_nothing(repo: Path, capsys: pytest.CaptureFixture[str]) -
         "stopped": "PAGE_TEXT_CHANGED",
         "product": "p1",
     }
+    assert snapshot(repo) == before
+
+
+def test_a_manifest_without_the_product_stops_before_writing(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = repo / "dataset/golden/v2/manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    del manifest["products"]["p1"]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    before = snapshot(repo)
+    assert run(repo) == 2
+    assert json.loads(capsys.readouterr().out.strip())["stopped"] == "MANIFEST_INVALID"
+    assert snapshot(repo) == before
+
+
+@pytest.mark.parametrize("failing", ["p1.json", "manifest.json"])  # the middle and the last write
+def test_a_failed_write_restores_every_file_and_leaves_no_temporary_file(
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    failing: str,
+) -> None:
+    replace = golden_remap.os.replace
+
+    def flaky(source: object, target: object) -> None:
+        if Path(str(target)).name == failing:
+            raise OSError("disk full")
+        replace(source, target)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(golden_remap.os, "replace", flaky)
+    before = snapshot(repo)
+    assert run(repo) == 2
+    assert json.loads(capsys.readouterr().out.strip()) == {"stopped": "OUTPUT_FAILED"}
     assert snapshot(repo) == before
