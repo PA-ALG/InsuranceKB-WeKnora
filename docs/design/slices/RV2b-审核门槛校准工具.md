@@ -51,7 +51,8 @@ python -m insurance_harness.eval.review_calibration --report REPORT.json --score
 - **被审核的 Claim**：`predicted_state` 为 `present` 或 `absent_explicitly` 的结果。其余（编译为 unknown，含 missed）不参与。
 - **标签**：
   - 对：`correct`、`incomplete`、`correct_non_present`；
-  - 错：`wrong_value`、`hallucination`、`contradiction`、`misfiled`、`state_mismatch`；
+  - 错：`wrong_value`、`hallucination`、`contradiction`、`misfiled`、`state_mismatch`，以及 `missed`：在被审核的 Claim 上，它只出现在编译为 `absent_explicitly` 而 Golden 为 `present` 时，即 Claim 断言"没有"而 Golden 有；
+  - 排除（不计入门槛、在输出中按结果计数）：`golden_defect`（L3 裁定 Golden 本身有误，无法判对错）、`unscored`（该字段不在 Golden 中）；
   - 其他结果值 → 报错停止（`LABEL_UNKNOWN`），不猜。
 - **分数**：
   - 从 `<scores>/<product>/scores.json`（RV1 分数文件格式）按 `<product>/<field_key>` 取；

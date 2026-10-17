@@ -212,7 +212,8 @@ def test_unknown_predictions_take_no_part_and_need_no_score(tmp_path: Path) -> N
     assert data["all"]["claims"] == 1
 
 
-@pytest.mark.parametrize("result", ["golden_defect", "mismatch", "unscored", "bogus"])
+# golden_defect and unscored are excluded, not unknown (RV2b 验收修正; see the exclusions test).
+@pytest.mark.parametrize("result", ["mismatch", "bogus"])
 def test_an_unmapped_result_on_a_reviewed_claim_stops(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], result: str
 ) -> None:
