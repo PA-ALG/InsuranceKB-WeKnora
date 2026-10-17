@@ -13,8 +13,11 @@ existing output is never replaced.
 
 Fields the manifest lists under `pending_semantic_review` rest on a rule that has since changed
 (S4i: rate tables are not evidence) and await an independent review; they may not reach semantic
-scoring or threshold calibration. A product with any stops the run (GOLDEN_PENDING_REVIEW) unless
---exclude-pending leaves them out, and then the summary counts them per product.
+scoring or threshold calibration. A requested product's list is checked first, in both modes: a
+non-empty list of distinct, non-blank field keys of that product's Golden, else the run stops
+(MANIFEST_PENDING_INVALID), so a renamed field or a typo never reads as "nothing pending". A product
+with pending fields stops the run (GOLDEN_PENDING_REVIEW) unless --exclude-pending leaves them out,
+and then the summary counts them per product.
 
 Prints one JSON line: a summary of items per product, or {"stopped": <code>} with exit 2. Neither
 carries paths or Golden text.
@@ -57,8 +60,8 @@ def _convert(
     excluded: dict[str, int] = {}
     for product in sorted(products):
         found = _product_items(repo, product, manifest.get(product), judged_by)
-        waiting = pending.get(product, set())
-        if waiting & {item.field_key for item in found} and not exclude_pending:
+        waiting = _pending(pending, product, {item.field_key for item in found})
+        if waiting and not exclude_pending:
             raise _Stopped("GOLDEN_PENDING_REVIEW", product)
         kept = [item for item in found if item.field_key not in waiting]
         excluded[product] = len(found) - len(kept)
@@ -77,8 +80,23 @@ def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return members
 
 
-def _manifest(repo: Path) -> tuple[dict[str, Any], dict[str, set[str]]]:
-    """The manifest's products, and its fields pending semantic review per product."""
+def _pending(pending: dict[str, Any], product: str, keys: set[str]) -> set[str]:
+    """The product's pending fields; a list that does not match its Golden stops the run."""
+    if product not in pending:
+        return set()
+    listed = pending[product]
+    if (
+        not isinstance(listed, list)
+        or not listed
+        or not all(isinstance(key, str) and key.strip() and key in keys for key in listed)
+        or len(set(listed)) != len(listed)
+    ):
+        raise _Stopped("MANIFEST_PENDING_INVALID", product)
+    return set(listed)
+
+
+def _manifest(repo: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The manifest's products, and its lists of fields pending semantic review (checked later)."""
     try:
         raw = (repo / GOLDEN_DIR / "manifest.json").read_bytes()
         data = json.loads(raw, object_pairs_hook=_unique_members)
@@ -88,12 +106,9 @@ def _manifest(repo: Path) -> tuple[dict[str, Any], dict[str, set[str]]]:
     if not isinstance(products, dict):
         raise _Stopped("MANIFEST_UNREADABLE")
     pending = data.get("pending_semantic_review", {})
-    if not isinstance(pending, dict) or not all(
-        isinstance(keys, list) and all(isinstance(key, str) for key in keys)
-        for keys in pending.values()
-    ):
+    if not isinstance(pending, dict):
         raise _Stopped("MANIFEST_UNREADABLE")
-    return products, {product: set(keys) for product, keys in pending.items()}
+    return products, pending
 
 
 def _product_items(
