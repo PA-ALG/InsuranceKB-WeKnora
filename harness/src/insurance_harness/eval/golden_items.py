@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 from insurance_harness.eval.golden import GoldenEvidence, GoldenItem
 from insurance_harness.eval.product_sources import check_product_id
-from insurance_harness.eval.segment_score import GOLDEN_DIR, load_golden_v2
+from insurance_harness.eval.segment_score import GOLDEN_DIR, GoldenV2
 
 REPO = Path(__file__).resolve().parents[4]
 
@@ -52,9 +52,21 @@ def _convert(repo: Path, products: list[str], judged_by: str | None = None) -> l
     return sorted(items, key=lambda item: (item.product_id, item.field_key))
 
 
+def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """A repeated member name at any depth is an error: last-one-wins could flip a pack or a
+    value unseen (review R1). Inputs are decoded with this hook before shape validation."""
+    members: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in members:
+            raise ValueError("duplicate JSON object member")
+        members[key] = value
+    return members
+
+
 def _manifest(repo: Path) -> dict[str, Any]:
     try:
-        data = json.loads((repo / GOLDEN_DIR / "manifest.json").read_text(encoding="utf-8"))
+        raw = (repo / GOLDEN_DIR / "manifest.json").read_bytes()
+        data = json.loads(raw, object_pairs_hook=_unique_members)
     except (OSError, ValueError) as error:  # UnicodeDecodeError and JSONDecodeError included
         raise _Stopped("MANIFEST_UNREADABLE") from error
     products = data.get("products") if isinstance(data, dict) else None
@@ -74,8 +86,10 @@ def _product_items(
             raise _Stopped("JUDGE_NOT_RECORDED", product)
         judged_by = f"model:{model}"
     try:
-        golden = load_golden_v2(repo / GOLDEN_DIR / f"{product}.json")
-    except ValueError as error:  # unreadable file, bad JSON or a Golden v2 shape violation
+        raw = (repo / GOLDEN_DIR / f"{product}.json").read_bytes()
+        json.loads(raw, object_pairs_hook=_unique_members)
+        golden = GoldenV2.model_validate_json(raw)  # strict JSON mode, as load_golden_v2
+    except (OSError, ValueError) as error:  # unreadable, bad JSON, duplicates or bad shape
         raise _Stopped("GOLDEN_INVALID", product) from error
     if golden.product_id != product:
         raise _Stopped("GOLDEN_INVALID", product)

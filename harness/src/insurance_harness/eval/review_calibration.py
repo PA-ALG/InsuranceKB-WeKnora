@@ -152,10 +152,26 @@ def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """A repeated member name at any depth is an error: last-one-wins could flip a label, a
+    score or a pack unseen (review R1). Inputs are decoded with this hook before validation."""
+    members: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in members:
+            raise ValueError("duplicate JSON object member")
+        members[key] = value
+    return members
+
+
+def _validated[T: BaseModel](model: type[T], raw: bytes) -> T:
+    json.loads(raw, object_pairs_hook=_unique_members)
+    return model.model_validate_json(raw)  # strict models keep their JSON-mode rules
+
+
 def _read_report(path: Path) -> tuple[_Report, str]:
     try:
         raw = path.read_bytes()
-        report = _ReportFile.model_validate_json(raw).report
+        report = _validated(_ReportFile, raw).report
         for row in report.outcomes:
             check_product_id(row.product_id)
     except (OSError, ValueError) as error:  # ValidationError is a ValueError
@@ -180,7 +196,7 @@ def _read_scores(root: Path, products: set[str]) -> tuple[dict[str, _ScoresFile]
     for product in sorted(products):
         try:
             raw = (root / product / "scores.json").read_bytes()
-            files[product] = _ScoresFile.model_validate_json(raw)
+            files[product] = _validated(_ScoresFile, raw)
         except (OSError, ValueError) as error:
             raise _Stopped("SCORES_UNREADABLE") from error
         digests[product] = _sha(raw)
