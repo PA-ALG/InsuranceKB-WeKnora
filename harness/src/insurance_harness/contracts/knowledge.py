@@ -248,3 +248,37 @@ class SchemaSnapshot(ContractModel):
     schema_pack_sha256: Sha256
     presentation_profile_ref: NonBlank
     catalog_version: NonBlank
+
+
+class ProfileField(ContractModel):
+    field_key: NonBlank
+    short_title: NonBlank
+
+
+class ProfileSection(ContractModel):
+    section_key: NonBlank
+    display_name: NonBlank
+    fields: list[ProfileField] = Field(min_length=1)
+
+
+class PresentationProfile(ContractModel):
+    """A pack's display groups and field order, published with the release it renders.
+
+    Readers show an entity with the profile whose classification_labels meet the entity's,
+    so each field and section appears once and the labels say which entities it serves.
+    """
+
+    profile_id: NonBlank
+    profile_version: NonBlank
+    profile_sha256: Sha256
+    schema_pack_id: NonBlank
+    classification_labels: list[NonBlank] = Field(min_length=1)
+    sections: list[ProfileSection] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def keys_are_unique(self) -> Self:
+        sections = [section.section_key for section in self.sections]
+        fields = [field.field_key for section in self.sections for field in section.fields]
+        if len(set(sections)) != len(sections) or len(set(fields)) != len(fields):
+            raise ValueError("section and field keys must be unique within a profile")
+        return self

@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "ProfileField": {
+      "additionalProperties": false,
+      "properties": {
+        "field_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Field Key",
+          "type": "string"
+        },
+        "short_title": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Short Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field_key",
+        "short_title"
+      ],
+      "title": "ProfileField",
+      "type": "object"
+    },
+    "ProfileSection": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Display Name",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/ProfileField"
+          },
+          "minItems": 1,
+          "title": "Fields",
+          "type": "array"
+        },
+        "section_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Section Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "section_key",
+        "display_name",
+        "fields"
+      ],
+      "title": "ProfileSection",
+      "type": "object"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/presentation_profile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A pack's display groups and field order, published with the release it renders.\n\nReaders show an entity with the profile whose classification_labels meet the entity's,\nso each field and section appears once and the labels say which entities it serves.",
+  "properties": {
+    "classification_labels": {
+      "items": {
+        "minLength": 1,
+        "pattern": "\\S",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Classification Labels",
+      "type": "array"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "profile_sha256": {
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "title": "Profile Sha256",
+      "type": "string"
+    },
+    "profile_version": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Profile Version",
+      "type": "string"
+    },
+    "schema_pack_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Schema Pack Id",
+      "type": "string"
+    },
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/ProfileSection"
+      },
+      "minItems": 1,
+      "title": "Sections",
+      "type": "array"
+    }
+  },
+  "required": [
+    "profile_id",
+    "profile_version",
+    "profile_sha256",
+    "schema_pack_id",
+    "classification_labels",
+    "sections"
+  ],
+  "title": "PresentationProfile",
+  "type": "object"
+}

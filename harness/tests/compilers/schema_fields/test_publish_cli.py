@@ -1,4 +1,9 @@
-"""The publish command: compile output + the same WeKnora pages -> submitted, decided, activated."""
+"""The publish command: compile output + the same WeKnora pages -> submitted, decided, activated.
+
+S3d-2 (Spec §3.4, §4) updates this S4g acceptance: every publish also carries the product page,
+an entity member named from the product metadata and the pack's presentation profile member,
+read from --repo before anything is sent.
+"""
 
 from __future__ import annotations
 
@@ -28,6 +33,37 @@ PAGES = [
     )
 ]
 SOURCE = SegmentedSource(PAGES)
+NAME = "演示重大疾病保险"
+CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG_ENTRY = {
+    "pack": {
+        "schema_pack_id": "pack",
+        "display_name": "演示险",
+        "entity_type": "insurance_product",
+        "applicable_classifications": ["demo_class"],
+        "presentation_profile_ref": {"profile_id": "profile_pack", "profile_version": "1"},
+        "fields": [
+            {"field_key": "waiting_period", "short_title": "等待期", "description": "d"},
+            {"field_key": "premium_grace_period", "short_title": "宽限期", "description": "d"},
+        ],
+    },
+    "profile": {
+        "profile_id": "profile_pack",
+        "profile_version": "1",
+        "profile_sha256": "cd" * 32,
+        "schema_pack_id": "pack",
+        "sections": [
+            {
+                "section_key": "contract",
+                "display_name": "投保与合同",
+                "fields": [
+                    {"field_key": "waiting_period", "short_title": "等待期"},
+                    {"field_key": "premium_grace_period", "short_title": "宽限期"},
+                ],
+            }
+        ],
+    },
+}
 
 
 class Reader:
@@ -103,6 +139,16 @@ def platform(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Platform:
         ),
         encoding="utf-8",
     )
+    catalog = tmp_path / "repo" / CATALOG
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(
+        json.dumps({"entries": [CATALOG_ENTRY]}, ensure_ascii=False), encoding="utf-8"
+    )
+    product = tmp_path / "repo" / "dataset" / "shouxian_product" / "演示重疾"
+    product.mkdir(parents=True)
+    (product / "product_meta.json").write_text(
+        json.dumps({"planCode": "1828", "clauseName": NAME}, ensure_ascii=False), encoding="utf-8"
+    )
     monkeypatch.setenv(source_map_module.BASE_URL_ENV, "https://weknora.test")
     monkeypatch.setenv(source_map_module.API_KEY_ENV, "key-123")
     monkeypatch.setattr(source_map_module, "WeKnoraSourcePages", Reader)
@@ -126,6 +172,8 @@ def test_publish_submits_decides_and_activates(
             "1828",
             "--source-map",
             str(tmp_path / "map.json"),
+            "--repo",
+            str(tmp_path / "repo"),
             "--decide",
             "human",
             "--reason",
@@ -139,7 +187,7 @@ def test_publish_submits_decides_and_activates(
         "product": "1828",
         "space_id": "space-1",
         "cards_version": COMPILED_WITH,
-        "members": 2,
+        "members": 4,
         "candidate_id": "cand_1",
         "candidate_status": "created",
         "decision_id": "dec_1",
@@ -156,10 +204,17 @@ def test_publish_submits_decides_and_activates(
     submitted = platform.seen[1][2]
     assert submitted["base_release_id"] is None
     assert {m["logical_slug"] for m in submitted["members"]} == {
+        "entity/1828",
+        "presentation/profile_pack",
         "1828/waiting_period",
         "1828/premium_grace_period",
     }
-    assert all(m["evidence_refs"] == [f"source:v1:k-1:2:{SHA}"] for m in submitted["members"])
+    claims = [m for m in submitted["members"] if m["kind"] == "claim"]
+    assert len(claims) == 2
+    assert all(m["evidence_refs"] == [f"source:v1:k-1:2:{SHA}"] for m in claims)
+    [entity] = [m for m in submitted["members"] if m["kind"] == "entity"]
+    assert entity["payload"]["names"] == [NAME] and entity["evidence_refs"] == []
+    assert entity["payload"]["classification_labels"] == ["demo_class"]
     assert platform.seen[2][2] == {"outcome": "approve", "mode": "human", "reason": "spot-checked"}
 
 
@@ -174,6 +229,8 @@ def test_without_a_decision_only_the_candidate_is_submitted(
             "1828",
             "--source-map",
             str(tmp_path / "map.json"),
+            "--repo",
+            str(tmp_path / "repo"),
         ]
     )
     assert code == 0 and json.loads(capsys.readouterr().out)["release_id"] is None
@@ -217,6 +274,8 @@ def argv(tmp_path: Path, *extra: str) -> list[str]:
         "1828",
         "--source-map",
         str(tmp_path / "map.json"),
+        "--repo",
+        str(tmp_path / "repo"),
         *extra,
     ]
 
@@ -234,9 +293,11 @@ def test_the_card_version_is_the_one_the_output_was_compiled_with(
     assert command.main(argv(tmp_path)) == 0
     submitted = platform.seen[1][2]
     assert submitted["compiler_identity"] == f"harness/schema_fields@{COMPILED_WITH}"
-    assert {m["payload"]["provenance"]["compiler_version"] for m in submitted["members"]} == {
-        COMPILED_WITH
-    }
+    assert {
+        m["payload"]["provenance"]["compiler_version"]
+        for m in submitted["members"]
+        if m["kind"] == "claim"
+    } == {COMPILED_WITH}
     assert json.loads(capsys.readouterr().out)["cards_version"] == COMPILED_WITH
 
 
@@ -318,3 +379,28 @@ def test_conversion_failures_print_a_position_not_the_input(
     }
     for text in (captured.out, captured.err):
         assert "SECRET-MARKER" not in text and str(tmp_path) not in text and "Traceback" not in text
+
+
+def test_a_product_without_metadata_is_not_published(
+    tmp_path: Path, platform: Platform, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for meta in (tmp_path / "repo" / "dataset").rglob("product_meta.json"):
+        meta.unlink()
+    assert command.main(argv(tmp_path)) == 2
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"stopped": "PRODUCT_META_MISSING"}
+    assert platform.seen == []
+    for text in (captured.out, captured.err):
+        assert str(tmp_path) not in text and "Traceback" not in text
+
+
+def test_a_pack_missing_from_the_catalog_is_not_published(
+    tmp_path: Path, platform: Platform, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rewrite_output(tmp_path, {"pack_id": "pack_unlisted"})
+    assert command.main(argv(tmp_path)) == 2
+    assert json.loads(capsys.readouterr().out) == {
+        "stopped": "BUNDLE_INVALID",
+        "reason": "PACK_UNKNOWN",
+    }
+    assert platform.seen == []
