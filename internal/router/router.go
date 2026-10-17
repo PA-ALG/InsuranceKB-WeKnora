@@ -20,12 +20,14 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
+	apperrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/mcpserver"
 	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/tracing/langfuse"
+	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 
 	_ "github.com/Tencent/WeKnora/docs" // swagger docs
@@ -435,11 +437,26 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 		}
 		return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, runtime.Scope, id, attempt)
 	})
+	sources := source.NewService(store)
+	files := releasestore.SourceFiles(params.EnterpriseSpaces, params.KnowledgeRepository, params.KnowledgeService)
 	enterprise.Mount(v1.Group("/enterprise/spaces/:space_id"), enterprise.Deps{
-		Candidates: params.EnterpriseCandidates, Sources: source.NewService(store),
-		Authorizer: guards.ensureAPIKeyAuthorizer(),
-		Files: releasestore.SourceFiles(
-			params.EnterpriseSpaces, params.KnowledgeRepository, params.KnowledgeService,
-		),
+		Candidates: params.EnterpriseCandidates, Sources: sources,
+		Authorizer: guards.ensureAPIKeyAuthorizer(), Files: files,
 	})
+	kbRead := func(raw bool) gin.HandlerFunc {
+		return middleware.RequireKBAccess(func(c *gin.Context) (string, error) {
+			tenant, authenticated := enterprise.SessionTenantID(c)
+			rawKB, wikiKB, found := params.EnterpriseSpaces.KnowledgeBases(tenant, c.Param("space_id"))
+			if !authenticated || !found {
+				return "", apperrors.NewNotFoundError("Space was not found")
+			}
+			if raw {
+				return rawKB, nil
+			}
+			return wikiKB, nil
+		}, types.OrgRoleViewer, guards.kbService, guards.kbShareService, guards.agentShareService, guards.cfg)
+	}
+	enterprise.MountSessionReads(v1.Group("/enterprise"), enterprise.SessionDeps{
+		Candidates: params.EnterpriseCandidates, Sources: sources, Files: files, Spaces: params.EnterpriseSpaces,
+	}, guards.Viewer(), kbRead(true), kbRead(false))
 }

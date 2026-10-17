@@ -78,7 +78,7 @@ Candidate。
 ## 分工与协作
 
 - **分工（2026-10-14 用户调整：Codex 额度有限）**：用户决定方向、批准预算、提供只有用户才有的材料。
-  **Claude 是总控**：进度与排期、切片拆分、调研与架构、Spec、验收测试、架构守卫、开 Issue、合并、交接记录与巡检。
+  **Claude 是总控**：进度与排期、切片拆分、调研与架构、Spec、验收测试、架构守卫、开 Issue、向 Codex 派工、合并、交接记录。
   **实现与审核交叉进行**：每个 Issue 写明"实现方"与"审核方"，两者不能是同一方（下面"简单改动"例外）。
   - 默认 **Claude 实现**。审核按复杂度分两档（Claude 在 Issue 或 PR 里写明归哪一档和理由，用户可随时改档）：
     - **简单改动，Claude 自审后直接合并**：只改文档、模板、注释或配置取值；只改测试或让守卫基线下降；
@@ -115,6 +115,18 @@ Candidate。
 - **Codex 节省额度**：只看指派给自己的 Issue/PR；审核一次给全结论，不分多轮零散评论；不重复跑 CI 已覆盖的全量测试。
 - **Codex 的职责边界**：架构、方案、Spec、验收标准、任务拆分与排期归 Claude；Codex 遇到这类问题在 Issue 或 PR 中提出，
   由 Claude 与用户决定。
+- **派工与回报（2026-10-17 起，两边都不轮询）**：GitHub 仍是唯一的工作记录（任务是 Issue，交付是 PR，结论是评审）；
+  派工与回报靠事件通知。
+  - Claude 只向 Codex App 的总控会话（"InsuranceKB 总控｜GitHub 任务与开发调度"）派工，用 `codex queue` 写入一条
+    以 `[来自 Claude Code]` 开头的消息，写明 Issue/PR 号、要审的 head、上一轮意见在哪里；只指路，不复述 GitHub 上已有的内容。
+    派实现任务时同时在 Issue 里发"做 issue #N"，留下开工记录。总控按需分发给各条线并汇总。
+  - Codex 做完需要 Claude 处理的事（计划已发、PR 已开、评审已发、被阻塞需要决定），在最终回复里单独写一行
+    `@Claude: #<号> head <提交> <结论>`，例如 `@Claude: #183 head fa5dc6d 批准`、`@Claude: #182 需改 R1，见 review`；
+    没有需要 Claude 处理的事（包括定时检查一类的回复）不写这个标记。结论本身照旧发在 GitHub。
+  - 本机的 Codex Stop 钩子把带 `@Claude` 的行写进本机收件文件，唤醒 Claude 的后台监听；Claude 被唤醒后去 GitHub 读结论，
+    **同时读 `reviews` 与 `comments`**（共用账号的结论可能在任一处）。收件文件只是门铃，不存结论。
+  - 派工后过了合理时间仍没有门铃，Claude 去 GitHub 对账一次，必要时重派。`codex queue` 没有送达回执，消息要等会话空闲才执行，
+    Codex App 重启可能丢失排队消息。
 - 收到"做 issue #N"（Codex 是实现方）或"审 PR #N"（Codex 是审核方）时：
   1. `gh issue view N --repo PA-ALG/InsuranceKB-WeKnora`（或 `gh pr view N --repo ...`）读取任务；
   2. 读 Issue 指定的 Spec，以及蓝图、调研结论中与本切片相关的章节；
@@ -129,7 +141,8 @@ Candidate。
   - 门禁用本目录自己的环境（`harness/.venv`、`frontend/node_modules`），不借用其他目录的：
     Harness 的 editable 安装会让测试实际导入那个目录的源码；
   - 主目录 `insurancekb-weknora/` 只用来查看 `main`，不在上面开发；PR 合并后由 Claude 删除对应工作目录。
-- **何时停下**：GitHub 上首行为 `**[by Claude Code]**` 的明确指示等同于确认，不需要再找用户转述。
+- **何时停下**：GitHub 上首行为 `**[by Claude Code]**` 的明确指示，以及总控会话里以 `[来自 Claude Code]` 开头的派工消息，
+  等同于确认，不需要再找用户转述。
   Spec 范围内的步骤直接做，只有以下情况停下并在 Issue/PR 中说明：要改"改动范围"以外或受保护的路径；
   Spec、蓝图与代码事实冲突；超出 Issue 的真实调用预算；部署、迁移、环境或仓库设置变更；需要只有用户
   才有的材料。停下时如果还有其他已批准、未阻塞的 Issue，先去做它，不空等。
