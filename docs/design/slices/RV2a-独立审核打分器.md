@@ -66,6 +66,7 @@ def score_items(items: Sequence[ReviewItem], completion: Completion, *, max_char
 - **解析**：
   - 只接受 `{"scores": [{"key": <str>, "score": <0..1 数字>}]}`；
   - 每个 key 恰好出现一次，不能多也不能少；分数为严格数字（布尔与字符串拒绝）；
+  - JSON 对象成员不得重复；任何超出 `[0, 1]` 或无法表示的数字（如数百位整数、溢出成无穷的浮点）都按不符处理；
   - 任何不符 → `ReviewOutputError("REVIEW_OUTPUT_INVALID")`，不重试（重试归 `models/` 的唯一重试 Owner）。
 - **结果**：`{logical_key: score}`；空输入返回 `{}`，不发调用。
 
@@ -97,8 +98,15 @@ python -m insurance_harness.eval.review_run --products P... --compile-root DIR [
   - 写 `<run-root>/<product>/scores.json`：`{"reviewer": "<served_model>@<policy_version>", "reviewed_at": <带时区的 ISO 8601>, "scores": {...}}`，即 RV1 分数文件。
 - **持久化与恢复**：
   - 每批请求的 sha256 与原始响应存 `<run-root>/<product>/responses/NNN.{request.sha256,txt}`；
-  - 重跑时请求 sha 相同的批直接复用已存响应，不再发送；已有 `scores.json` 的产品跳过。
-  - 只复用打分器接受过的响应：原始响应到达即存 `NNN.txt`，接受后才写 `NNN.request.sha256`。被拒的响应只留作诊断，重跑时该批在预算内重发；请求指纹含审核模型与 `policy_version`，换策略版本不复用旧响应。
+  - 重跑时请求 sha 相同的批直接复用已存响应，不再发送。
+  - 只复用打分器接受过的响应：原始响应到达即存 `NNN.txt`，接受后才写 `NNN.request.sha256`。被拒的响应只留作诊断，重跑时该批在预算内重发；请求指纹含条目全部字段（key、名称、规则、状态、取值、引文）、审核模型与 `policy_version`，换策略版本不复用旧响应。
+  - 分数文件由已接受的响应推出，不单凭存在就跳过。重跑时按当前编译输出、字段规则、审核模型与 `policy_version` 重建全部请求：
+    - 全部命中且结果与已有 `scores.json` 相同：保留原文件，不发送；
+    - 不发送就得出不同结果：原子替换 `scores.json`；
+    - 需要发送（输入、模型或策略变了）：第一次发送前撤下旧 `scores.json`，在 `--max-sent` 内重审，完成后原子写入新文件。中途停下时发布命令拿不到旧分数，得 `SCORES_MISSING`，整款进人工队列。
+  - 运行开始、任何发送之前检查已存状态，损坏即 `RUN_ROOT_INVALID`：
+    - `NNN.request.sha256` 须为数字编号、64 位小写十六进制、不重复，且有同号 `NNN.txt`；
+    - 已有 `scores.json` 须符合发布命令的分数文件格式。
 - **预算**：
   - `--max-sent` 按运行目录累计（`budget.jsonl` 预留、`ledger.jsonl` 记录）；
   - 服务模型在一个运行目录内变化即停；运行目录加锁，不能并发。
