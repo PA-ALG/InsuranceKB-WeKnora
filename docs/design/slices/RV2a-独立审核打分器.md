@@ -100,13 +100,13 @@ python -m insurance_harness.eval.review_run --products P... --compile-root DIR [
   - 每批请求的 sha256 与原始响应存 `<run-root>/<product>/responses/NNN.{request.sha256,txt}`；
   - 重跑时请求 sha 相同的批直接复用已存响应，不再发送。
   - 只复用打分器接受过的响应：原始响应到达即存 `NNN.txt`，接受后才写 `NNN.request.sha256`。被拒的响应只留作诊断，重跑时该批在预算内重发；请求指纹含条目全部字段（key、名称、规则、状态、取值、引文）、审核模型与 `policy_version`，换策略版本不复用旧响应。
-  - 分数文件由已接受的响应推出，不单凭存在就跳过。重跑时按当前编译输出、字段规则、审核模型与 `policy_version` 重建全部请求：
-    - 全部命中且结果与已有 `scores.json` 相同：保留原文件，不发送；
-    - 不发送就得出不同结果：原子替换 `scores.json`；
-    - 需要发送（输入、模型或策略变了）：第一次发送前撤下旧 `scores.json`，在 `--max-sent` 内重审，完成后原子写入新文件。中途停下时发布命令拿不到旧分数，得 `SCORES_MISSING`，整款进人工队列。
-  - 运行开始、任何发送之前检查已存状态，损坏即 `RUN_ROOT_INVALID`：
-    - `NNN.request.sha256` 须为数字编号、64 位小写十六进制、不重复，且有同号 `NNN.txt`；
-    - 已有 `scores.json` 须符合发布命令的分数文件格式。
+  - 产品一开始，旧分数即不可信。每个产品依次：
+    1. 在任何校验、缓存解析或发送之前，把已有 `scores.json` 原子移到 `scores.json.previous`（发布命令不读）；
+    2. 校验接受标记：`NNN.request.sha256` 须为数字编号、64 位小写十六进制、不重复，且有同号 `NNN.txt`；
+    3. 按当前编译输出、字段规则、审核模型与 `policy_version` 重建全部批次；凡有接受响应的批，用打分器自己的解析与 key 检查逐一核对；
+    4. 第 2、3 步任何不符都是运行目录状态损坏 → `RUN_ROOT_INVALID`，该产品零发送；全部通过后才在 `--max-sent` 内发送其余批；
+    5. 所有批次都通过后才写 `scores.json`：没有发送且结果与 `previous` 完全相同则原样恢复 `previous`，否则写入新文件。
+  - 任何失败都不留 `scores.json`：发布命令得 `SCORES_MISSING`，整款进人工队列。结构不对的旧分数文件从不被读取，只是不能原样恢复，不算错误。
 - **预算**：
   - `--max-sent` 按运行目录累计（`budget.jsonl` 预留、`ledger.jsonl` 记录）；
   - 服务模型在一个运行目录内变化即停；运行目录加锁，不能并发。
