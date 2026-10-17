@@ -233,6 +233,9 @@ Evidence        source_ref, file_sha256, locator{kind, ...}, quote, quote_sha256
 ExpertRevision  revision_record_id, actor, role, recorded_at, target, before, after,
                 reason?, attachments?（不可变，WeKnora 保存）
 SchemaSnapshot  本 Release 使用的 SchemaPack 与 PresentationProfile 标识与内容 digest
+PresentationProfile  profile_id, profile_version, profile_sha256, schema_pack_id, classification_labels[],
+                sections[{section_key, display_name, fields[{field_key, short_title}]}]（pack 的展示分组，随 Release
+                发布；读者按分类标签与 Entity 匹配）
 ```
 
 - **三态**：`present` 必须有值与已回验 Evidence；`absent_explicitly` 表示材料能确定该项不存在或不适用，value 为空，
@@ -665,6 +668,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-15 | 字段编译改为两步指针抽取：模型返回段落编号、代码按编号从页文本切取 Evidence，value 只依据选中段落写；页文本用 pdfium；字段边界与三态判定写成字段卡数据（消融 A2–A7 验证，S4d，Issue #157） | §7.1 |
 | 2026-10-15 | 段落评分口径：Golden 证据按标注的段落编号计分；说明书与条款逐字相同（去掉段首条号、较短一段不少于 20 字且逐字包含在另一段内）的段落互相计分，不用相似度；费率表算证据；口径变化涉及的字段由独立评委按新字段卡重标（用户 2026-10-15 裁定，S4e，Issue #161） | §7.7 |
 | 2026-10-17 | Claude 与 Codex 直接沟通：Claude 用 `codex queue` 向 Codex 总控会话派工，Codex 以最终回复中的 `@Claude:` 行经本机钩子回报；两边都不轮询，GitHub 仍是唯一记录（用户 2026-10-17） | §9、`AGENTS.md` |
+| 2026-10-17 | 企业知识页面（S3d）：登录用户经会话只读接口读取本租户 Space 的 Release，首期只返回 `access_scope="space"` 的成员；Harness 发布时在同一候选包里带上产品 Entity（名称取产品元数据的备案名称）与 pack 的 PresentationProfile，读者按分类标签匹配两者 | §5.1、§7.5 |
 
 ## 附录 A · 术语
 
