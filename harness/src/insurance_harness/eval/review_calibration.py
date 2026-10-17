@@ -46,7 +46,12 @@ from insurance_harness.eval.product_sources import check_product_id
 Z = 1.96  # two-sided 95%
 OUTPUTS = ("calibration.json", "calibration.md", "thresholds.json")
 _RIGHT = frozenset({"correct", "incomplete", "correct_non_present"})
-_WRONG = frozenset({"wrong_value", "hallucination", "contradiction", "misfiled", "state_mismatch"})
+# missed on a reviewed claim: it says "explicitly absent" while Golden has the fact.
+_WRONG = frozenset(
+    {"wrong_value", "hallucination", "contradiction", "misfiled", "state_mismatch", "missed"}
+)
+# Neither right nor wrong: the Golden itself was ruled defective, or the field is not in Golden.
+_EXCLUDED = frozenset({"golden_defect", "unscored"})
 _REVIEWED = frozenset({"present", "absent_explicitly"})
 _ALL = "全体"
 
@@ -182,9 +187,13 @@ def _read_scores(root: Path, products: set[str]) -> tuple[dict[str, _ScoresFile]
     return files, digests
 
 
-def _claims(report: _Report, scores: dict[str, _ScoresFile]) -> tuple[list[_Claim], int]:
-    """Reviewed claims with label and score, and the number of scores no claim used."""
-    reviewed = [row for row in report.outcomes if row.predicted_state in _REVIEWED]
+def _claims(
+    report: _Report, scores: dict[str, _ScoresFile]
+) -> tuple[list[_Claim], int, dict[str, int]]:
+    """Reviewed claims with label and score, unused scores, and excluded results by kind."""
+    candidates = [row for row in report.outcomes if row.predicted_state in _REVIEWED]
+    excluded = {kind: sum(row.result == kind for row in candidates) for kind in sorted(_EXCLUDED)}
+    reviewed = [row for row in candidates if row.result not in _EXCLUDED]
     unlabelled = sum(row.result not in _RIGHT | _WRONG for row in reviewed)
     if unlabelled:
         raise _Stopped("LABEL_UNKNOWN", claims=unlabelled)
@@ -206,7 +215,8 @@ def _claims(report: _Report, scores: dict[str, _ScoresFile]) -> tuple[list[_Clai
         for row in reviewed
     ]
     unused = sum(len(document.scores) for document in scores.values()) - len(claims)
-    return sorted(claims, key=lambda c: (c.pack_id, c.product_id, c.field_key)), unused
+    ordered = sorted(claims, key=lambda c: (c.pack_id, c.product_id, c.field_key))
+    return ordered, unused, excluded
 
 
 def _group(claims: Sequence[_Claim], precision: Fraction, min_support: int) -> dict[str, Any]:
@@ -266,7 +276,8 @@ def _markdown(data: dict[str, Any]) -> str:
         f"- 精确率目标 {parameters['precision']}，最少样本 {parameters['min_support']}，"
         f"置信下界 Wilson 95%（z = {parameters['z']}）",
         f"- 被审核的 Claim {len(claims)} 条：对 {right}，错 {len(claims) - right}；"
-        f"未用到的分数 {data['unused_scores']} 条",
+        f"未用到的分数 {data['unused_scores']} 条；排除 "
+        + "、".join(f"{kind} {count}" for kind, count in data["excluded"].items()),
         f"- 报告 sha256 `{data['sources']['report_sha256']}`",
         *(
             f"- 分数 {_cell(product)} sha256 `{digest}`"
@@ -352,7 +363,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
     precision, min_support = _options(args)
     report, report_sha = _read_report(args.report)
     scores, scores_sha = _read_scores(args.scores, {row.product_id for row in report.outcomes})
-    claims, unused = _claims(report, scores)
+    claims, unused, excluded = _claims(report, scores)
     per_pack, pooled = _calibrate(report, claims, precision, min_support)
     parameters = {"precision": float(precision), "min_support": min_support, "z": Z}
     sources = {"report_sha256": report_sha, "scores_sha256": scores_sha}
@@ -372,6 +383,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
             for claim in claims
         ],
         "unused_scores": unused,
+        "excluded": excluded,
         "packs": per_pack,
         "all": pooled,
     }
