@@ -115,10 +115,12 @@
   font-weight: 600;
 }
 
+/* Title | value on one row; the origin label and evidence buttons wrap on their own row
+   under the value, so a field with many sources never squeezes its value column. */
 .ek-field {
   display: grid;
-  grid-template-columns: minmax(120px, 200px) 1fr auto;
-  gap: 12px;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
+  gap: 6px 12px;
   padding: 10px 0;
   border-top: 1px solid var(--td-border-level-1-color);
 }
@@ -146,11 +148,22 @@
 }
 
 .ek-field__meta {
+  grid-column: 2;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: flex-start;
   gap: 4px;
+}
+
+@media (max-width: 640px) {
+  .ek-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ek-field__meta {
+    grid-column: 1;
+  }
 }
 
 .ek-origin {
