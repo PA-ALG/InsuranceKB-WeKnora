@@ -38,7 +38,7 @@ python -m insurance_harness.eval.golden_items --products P... --out FILE [--repo
 
 - 每款产品的每个 Golden 字段一条 GoldenItem：
   - `pack_id` 来自 manifest；`state`、`value` 照搬；
-  - `evidence` 由 Golden 证据转换（文档、页码、引文与段落编号，按 GoldenEvidence 的合同）；
+  - `evidence` 由 Golden 证据按 GoldenEvidence 的合同转换（文档、文档 sha256、页码、引文，保持 Golden 中的顺序）；段落编号不在该合同内（`extra="forbid"`），语义评委只比值、不按段落定位，转换时丢弃；
   - `judged_by` 默认取 manifest 记录的评委；`note` 放 `reason`。
 - 转换失败（manifest 没有该产品、证据缺字段、违反 GoldenItem 校验）→ 一行 `{"stopped": <code>}` 并退出 2，不写半截文件；输出 JSONL 按产品与字段键排序，可复现。
 
@@ -64,7 +64,7 @@ python -m insurance_harness.eval.review_calibration --report REPORT.json --score
 - **输出**：
   - `calibration.json`：逐条表（pack、product、field_key、state、score、label、result）、各 pack 与全体的候选门槛表与选定门槛；
   - `calibration.md`：人读摘要；
-  - `thresholds.json`：`{"<pack_id>": {"default": t}}`，只含选定了门槛的 pack，附上用于生成它的报告与分数文件的 sha256。
+  - `thresholds.json`：`{"thresholds": {"<pack_id>": {"default": t}}, "parameters": {"precision", "min_support", "z"}, "sources": {"report_sha256", "scores_sha256": {"<product>": …}}}`。`thresholds` 只含选定了门槛的 pack，形状同审核策略的 `thresholds`，可原样放入；参数与 sha256 放在旁边一层，不与 pack 键混排。
 - **一致性检查**：报告与分数涉及的产品集合必须一致，否则停止（`PRODUCT_MISMATCH`）。
 
 ### 3.3 不在本片
