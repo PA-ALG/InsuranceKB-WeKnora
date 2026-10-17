@@ -7514,7 +7514,13 @@ export default {
       failed: '条目加载失败',
       other: '其他',
       generated: '模型补充',
-      source: '出处 {n}'
+      source: '出处 {n}',
+      sourceNote: '未标注来源的内容均有原文依据，点“出处”可查看原文'
+    },
+    field: {
+      full: '查看完整版',
+      compact: '收起',
+      items: '共 {count} 项'
     },
     state: {
       absent: '材料明确没有',

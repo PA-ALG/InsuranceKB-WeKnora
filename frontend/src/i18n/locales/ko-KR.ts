@@ -7512,7 +7512,13 @@ export default {
       failed: '항목을 불러오지 못했습니다',
       other: '기타',
       generated: '모델 보충',
-      source: '출처 {n}'
+      source: '출처 {n}',
+      sourceNote: '출처 표시가 없는 내용은 모두 원문에 근거합니다. ‘출처’를 눌러 원문을 확인하세요'
+    },
+    field: {
+      full: '전체 보기',
+      compact: '접기',
+      items: '총 {count}개 항목'
     },
     state: {
       absent: '자료에 명시적으로 없음',
