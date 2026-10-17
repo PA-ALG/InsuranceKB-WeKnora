@@ -1,7 +1,7 @@
 """Golden v2 files as the GoldenItem JSONL that `eval.semantic_run` reads (RV2b Spec §3.1).
 
 usage: python -m insurance_harness.eval.golden_items --products <id>... --out <file>
-       [--repo <dir>] [--judged-by <human|legacy|model>:<who>]
+       [--repo <dir>] [--judged-by <human|legacy|model>:<who>] [--exclude-pending]
 
 One item per Golden field of each product. The pack and, unless --judged-by is given, the judge
 (`model:<model_id>`) come from dataset/golden/v2/manifest.json; state, value and evidence come
@@ -10,6 +10,14 @@ the segment id it was labelled on; GoldenEvidence has no such field (the semanti
 values, not segments), so the id is dropped. Items are sorted by product and field key, so the
 same inputs always give the same bytes. Nothing is written unless every product converts, and an
 existing output is never replaced.
+
+Fields the manifest lists under `pending_semantic_review` rest on a rule that has since changed
+(S4i: rate tables are not evidence) and await an independent review; they may not reach semantic
+scoring or threshold calibration. A requested product's list is checked first, in both modes: a
+non-empty list of distinct, non-blank field keys of that product's Golden, else the run stops
+(MANIFEST_PENDING_INVALID), so a renamed field or a typo never reads as "nothing pending". A product
+with pending fields stops the run (GOLDEN_PENDING_REVIEW) unless --exclude-pending leaves them out,
+and then the summary counts them per product.
 
 Prints one JSON line: a summary of items per product, or {"stopped": <code>} with exit 2. Neither
 carries paths or Golden text.
@@ -43,13 +51,22 @@ class _Parser(argparse.ArgumentParser):
         raise _Stopped("INVALID_ARGUMENTS")
 
 
-def _convert(repo: Path, products: list[str], judged_by: str | None = None) -> list[GoldenItem]:
-    """Every Golden field of the products, in product then field-key order."""
-    manifest = _manifest(repo)
+def _convert(
+    repo: Path, products: list[str], judged_by: str | None = None, exclude_pending: bool = False
+) -> tuple[list[GoldenItem], dict[str, int]]:
+    """Golden fields of the products in product then field-key order, and pending ones left out."""
+    manifest, pending = _manifest(repo)
     items: list[GoldenItem] = []
+    excluded: dict[str, int] = {}
     for product in sorted(products):
-        items.extend(_product_items(repo, product, manifest.get(product), judged_by))
-    return sorted(items, key=lambda item: (item.product_id, item.field_key))
+        found = _product_items(repo, product, manifest.get(product), judged_by)
+        waiting = _pending(pending, product, {item.field_key for item in found})
+        if waiting and not exclude_pending:
+            raise _Stopped("GOLDEN_PENDING_REVIEW", product)
+        kept = [item for item in found if item.field_key not in waiting]
+        excluded[product] = len(found) - len(kept)
+        items.extend(kept)
+    return sorted(items, key=lambda item: (item.product_id, item.field_key)), excluded
 
 
 def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -63,7 +80,23 @@ def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return members
 
 
-def _manifest(repo: Path) -> dict[str, Any]:
+def _pending(pending: dict[str, Any], product: str, keys: set[str]) -> set[str]:
+    """The product's pending fields; a list that does not match its Golden stops the run."""
+    if product not in pending:
+        return set()
+    listed = pending[product]
+    if (
+        not isinstance(listed, list)
+        or not listed
+        or not all(isinstance(key, str) and key.strip() and key in keys for key in listed)
+        or len(set(listed)) != len(listed)
+    ):
+        raise _Stopped("MANIFEST_PENDING_INVALID", product)
+    return set(listed)
+
+
+def _manifest(repo: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The manifest's products, and its lists of fields pending semantic review (checked later)."""
     try:
         raw = (repo / GOLDEN_DIR / "manifest.json").read_bytes()
         data = json.loads(raw, object_pairs_hook=_unique_members)
@@ -72,7 +105,10 @@ def _manifest(repo: Path) -> dict[str, Any]:
     products = data.get("products") if isinstance(data, dict) else None
     if not isinstance(products, dict):
         raise _Stopped("MANIFEST_UNREADABLE")
-    return products
+    pending = data.get("pending_semantic_review", {})
+    if not isinstance(pending, dict):
+        raise _Stopped("MANIFEST_UNREADABLE")
+    return products, pending
 
 
 def _product_items(
@@ -142,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--repo", type=Path, default=REPO)
     parser.add_argument("--judged-by")
+    parser.add_argument("--exclude-pending", action="store_true")
     try:
         args = parser.parse_args(argv)
         if len(set(args.products)) != len(args.products):
@@ -151,7 +188,9 @@ def main(argv: list[str] | None = None) -> int:
                 check_product_id(product)
             except ValueError as error:
                 raise _Stopped("INVALID_ARGUMENTS") from error
-        items = _convert(args.repo, args.products, args.judged_by)
+        items, excluded = _convert(
+            args.repo, args.products, args.judged_by, exclude_pending=args.exclude_pending
+        )
         _write(
             args.out,
             "".join(
@@ -166,7 +205,10 @@ def main(argv: list[str] | None = None) -> int:
     counts: dict[str, int] = {}
     for item in items:
         counts[item.product_id] = counts.get(item.product_id, 0) + 1
-    print(json.dumps({"items": len(items), "products": counts}, sort_keys=True))
+    summary: dict[str, Any] = {"items": len(items), "products": counts}
+    if args.exclude_pending:
+        summary["excluded_pending"] = excluded
+    print(json.dumps(summary, sort_keys=True))
     return 0
 
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from insurance_harness.eval.pdf_text import PageText, read_pdf
+from insurance_harness.identity.material_roles import evidence_pages
 
 _PRODUCTS = "dataset/shouxian_product"
 # Golden v2 declares the evaluated products first; v1 still declares the older ones (S4h).
@@ -43,11 +44,18 @@ def source_directory(repo: Path, product_id: str, directory: Path | None = None)
     return directory
 
 
-def source_pages(directory: Path) -> list[PageText]:
+def material_pages(directory: Path) -> list[PageText]:
+    """Every page of every PDF material, before roles are judged."""
     paths = sorted(directory.glob("*.pdf"))
     if not paths:
         raise ValueError("no source PDFs")
-    pages = [page for path in paths for page in read_pdf(path)]
+    return [page for path in paths for page in read_pdf(path)]
+
+
+def source_pages(directory: Path) -> list[PageText]:
+    """Pages of the materials that may be evidence (S4i: rate tables are not; any unresolved
+    material raises MaterialRoleError, a ValueError, so the product stops)."""
+    pages = evidence_pages(material_pages(directory))
     if not any(page.text.strip() for page in pages):
         raise ValueError("no source page text")
     return pages

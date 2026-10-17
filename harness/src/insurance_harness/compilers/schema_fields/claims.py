@@ -3,11 +3,11 @@
 Each field becomes one Claim. Evidence is cut from the page text by the field's selected segment
 ids, so every quote equals its page slice by construction; it carries the fixed source revision
 (``source:v1:<knowledge_id>:<parse_attempt>:<file_sha256>``) and a PDF_TEXT_SPAN locator with
-code-point offsets the platform can verify against its captured parse artifact. A field whose ids
-no longer cut its saved evidence, or a document the source map does not name, stops the build:
-the bundle never guesses where a quote came from. With the product page (S3d-2), the bundle
-also carries the product's entity and its pack's presentation profile, which must be for the
-same product and pack as the output.
+code-point offsets the platform can verify against its captured parse artifact. Evidence on a
+document not read as evidence (S4i), a field whose ids no longer cut its saved evidence, or a
+document the source map does not name, stops the build: the bundle never guesses where a quote
+came from. With the product page (S3d-2), the bundle also carries the product's entity and its
+pack's presentation profile, which must be for the same product and pack as the output.
 """
 
 from collections.abc import Mapping
@@ -116,6 +116,11 @@ def _evidence(
 ) -> list[Evidence]:
     if field.state == "unknown":
         return []
+    # Evidence on a document that was not read as evidence (a material excluded by role since
+    # S4i, or one the source map does not name) is refused before any id is checked.
+    read = {page.document for page in source.pages}
+    if any(saved.document not in read for saved in field.evidence):
+        raise BundleError("EVIDENCE_DOCUMENT_NOT_READ", index)
     ids, dropped = source.resolve(field.segment_ids)
     spans = source.spans(ids) if ids and not dropped and ids == field.segment_ids else []
     if (
