@@ -225,6 +225,19 @@ def _output(compile_roots: Sequence[Path], product: str) -> CompileOutput:
     raise _Stop("OUTPUT_MISSING")
 
 
+def _withdraw_scores(run_root: Path, products: Sequence[str]) -> None:
+    """Hide every requested product's earlier scores before any shared check can stop the run.
+
+    Called with the run root locked. A corrupt budget or ledger stops the whole command before
+    any product is reviewed; the earlier scores must not stay publishable in that case either,
+    since the inputs they were given for may have changed (review R1 on PR #195).
+    """
+    for product in products:
+        target = run_root / product / "scores.json"
+        if target.exists():
+            os.replace(target, run_root / product / "scores.json.previous")
+
+
 def _review_product(
     product: str,
     *,
@@ -343,6 +356,7 @@ def main(argv: list[str] | None = None) -> int:
         config = load_stage_config(args.stage_config, args.stage)
         # One lock spans the budget read, every send and every scores file.
         with run_lock(args.run_root):
+            _withdraw_scores(args.run_root, args.products)
             ledger = DurableLedger.open(args.run_root, max_sent=args.max_sent)
             client = OpenAICompatibleCompletion(config, ledger=ledger)
             reviews: list[ProductReview] = []

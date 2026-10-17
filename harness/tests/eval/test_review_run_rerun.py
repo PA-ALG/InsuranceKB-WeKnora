@@ -391,6 +391,28 @@ def test_a_corrupt_marker_after_an_input_change_leaves_nothing_to_publish(
     assert publish_route(tmp_path) == NOTHING_TO_PUBLISH
 
 
+SHARED: dict[str, Callable[[Path], object]] = {
+    "budget emptied": lambda root: (root / "budget.jsonl").write_text("", encoding="utf-8"),
+    "ledger cut short": lambda root: (root / "ledger.jsonl").write_text('{"sent', encoding="utf-8"),
+}
+
+
+@pytest.mark.parametrize("corrupt", SHARED.values(), ids=SHARED.keys())
+def test_a_corrupt_shared_budget_after_an_input_change_leaves_nothing_to_publish(
+    tmp_path: Path, model: Install, run: Run, corrupt: Callable[[Path], object]
+) -> None:
+    """Review R1 on PR #195: the shared budget and ledger are read before any product."""
+    complete(model, run)
+    assert publish_route(tmp_path).mode == ReviewMode.MACHINE  # what is at stake
+    write_output(tmp_path, "四十日")
+    corrupt(tmp_path / "run")
+    again = model()
+    code, report = run(*ONE_PER_BATCH, "--max-sent", "5")
+    assert (code, report["stopped"]) == (2, "RUN_ROOT_INVALID")
+    assert again.keys == [] and not scores_file(tmp_path).exists()
+    assert publish_route(tmp_path) == NOTHING_TO_PUBLISH
+
+
 CACHED = {
     "not json": "{",
     "another batch's key": '{"scores": [{"key": "p1/f1", "score": 0.7}]}',
