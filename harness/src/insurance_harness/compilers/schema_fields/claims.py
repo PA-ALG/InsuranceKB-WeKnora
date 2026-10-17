@@ -18,7 +18,7 @@ from insurance_harness.bundle.assemble import ACCESS_SCOPE, BundleError, assembl
 from insurance_harness.bundle.client import Head
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.compilers.schema_fields.page import ProductPage
-from insurance_harness.contracts.bundle import CandidateBundle
+from insurance_harness.contracts.bundle import CandidateBundle, ReviewPlan
 from insurance_harness.contracts.enums import (
     ClaimState,
     EvidenceMatch,
@@ -29,6 +29,7 @@ from insurance_harness.contracts.enums import (
 from insurance_harness.contracts.knowledge import Claim, Evidence, Locator, Provenance
 from insurance_harness.evidence.segments import SegmentedSource, same_text
 from insurance_harness.evidence.source_ref import SourceRevision
+from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, labelled
 
 
 def candidate_bundle(
@@ -39,19 +40,25 @@ def candidate_bundle(
     compiler_identity: str,
     base: Head | None = None,
     page: ProductPage | None = None,
+    review: tuple[Route, Scores | None] | None = None,
 ) -> CandidateBundle:
-    """One claim member per field, plus the product page when given, based on the given Head."""
+    """One claim member per field, plus the product page when given, based on the given Head.
+
+    Claims are labelled by the review route (RV1): without one, a person decides.
+    """
     if page is not None and (
         page.entity.entity_id != output.entity_id or page.profile.schema_pack_id != output.pack_id
     ):
         raise BundleError("PAGE_MISMATCH")
-    claims = claims_from(output, source, sources)
+    route, scores = review if review is not None else (HUMAN_DECISION, None)
+    claims = labelled(claims_from(output, source, sources), route, scores)
     return assemble(
         claims,
         compiler_identity=compiler_identity,
         base=base,
         entities=[page.entity] if page else [],
         profiles=[page.profile] if page else [],
+        review_plan=[ReviewPlan(mode=route.mode, policy_ref=route.policy_ref)],
     )
 
 
