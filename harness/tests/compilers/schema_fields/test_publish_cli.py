@@ -3,6 +3,10 @@
 S3d-2 (Spec §3.4, §4) updates this S4g acceptance: every publish also carries the product page,
 an entity member named from the product metadata and the pack's presentation profile member,
 read from --repo before anything is sent.
+
+RV1 (Spec §3.4, §4) updates it again: claims of a human decision are labelled human, a machine
+decision only comes from --route (versioned review policy plus scores), and a product that does
+not pass is only submitted, left in the human queue with its reason codes.
 """
 
 from __future__ import annotations
@@ -193,6 +197,7 @@ def test_publish_submits_decides_and_activates(
         "decision_id": "dec_1",
         "release_id": "rel_1",
         "epoch": 1,
+        "review": "human",
     }
     assert [(method, path) for method, path, _ in platform.seen] == [
         ("GET", "releases/active"),
@@ -216,6 +221,9 @@ def test_publish_submits_decides_and_activates(
     assert entity["payload"]["names"] == [NAME] and entity["evidence_refs"] == []
     assert entity["payload"]["classification_labels"] == ["demo_class"]
     assert platform.seen[2][2] == {"outcome": "approve", "mode": "human", "reason": "spot-checked"}
+    assert all(m["payload"]["review"]["mode"] == "human" for m in claims)
+    assert all(m["payload"]["review"]["reviewer"] is None for m in claims)
+    assert submitted["review_plan"] == [{"mode": "human", "policy_ref": None, "sample_size": None}]
 
 
 def test_without_a_decision_only_the_candidate_is_submitted(
@@ -242,7 +250,13 @@ def test_without_a_decision_only_the_candidate_is_submitted(
     [
         (["--activate"], "INVALID_REQUEST"),
         (["--decide", "human"], "INVALID_ARGUMENTS"),
-        (["--decide", "machine", "--reason", "x"], "INVALID_ARGUMENTS"),
+        (["--decide", "machine", "--policy-ref", "p"], "INVALID_ARGUMENTS"),
+        (["--route", "--decide", "human", "--reason", "x"], "INVALID_ARGUMENTS"),
+        (["--route", "--activate"], "INVALID_ARGUMENTS"),
+        (["--scores", "scores.json"], "INVALID_ARGUMENTS"),
+        (["--review-policy", "policy.json"], "INVALID_ARGUMENTS"),
+        (["--route", "--scores", "missing-scores.json"], "INVALID_ARGUMENTS"),
+        (["--route", "--review-policy", "missing-policy.json"], "INVALID_ARGUMENTS"),
     ],
 )
 def test_invalid_decisions_stop_before_anything_is_sent(

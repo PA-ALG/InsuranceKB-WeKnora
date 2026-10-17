@@ -14,7 +14,7 @@ from typing import Any
 
 from insurance_harness.bundle.canonical import member_digest
 from insurance_harness.bundle.client import MAX_BUNDLE_BYTES, Head
-from insurance_harness.contracts.bundle import BundleMember, CandidateBundle
+from insurance_harness.contracts.bundle import BundleMember, CandidateBundle, ReviewPlan
 from insurance_harness.contracts.enums import Origin
 from insurance_harness.contracts.knowledge import Claim, Entity, PresentationProfile
 
@@ -40,6 +40,7 @@ def assemble(
     base: Head | None = None,
     entities: Sequence[Entity] = (),
     profiles: Sequence[PresentationProfile] = (),
+    review_plan: Sequence[ReviewPlan] = (),
 ) -> CandidateBundle:
     """Entity, profile and claim members on the given Head (None before the first release)."""
     members = [
@@ -67,6 +68,7 @@ def assemble(
         base_epoch=base.epoch if base else None,
         origin=Origin.COMPILE,
         members=members,
+        review_plan=list(review_plan),
         compiler_identity=compiler_identity,
     )
     raw = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False).encode("utf-8")

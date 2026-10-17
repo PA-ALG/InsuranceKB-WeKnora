@@ -9,7 +9,7 @@
   "G5_hardcoded": 76,
   "G6_private_access": 275,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 459,
+  "G10_upstream_patches": 461,
   "G11_new_file_location": 668
  },
  "guards": {
@@ -674,12 +674,14 @@
    "frontend/public/config.js": 1,
    "frontend/src/api/wiki/index.ts": 1,
    "frontend/src/assets/theme/theme.css": 1,
+   "frontend/src/components/menu.vue": 1,
    "frontend/src/i18n/locales/en-US.ts": 1,
    "frontend/src/i18n/locales/ja-JP.ts": 1,
    "frontend/src/i18n/locales/ko-KR.ts": 1,
    "frontend/src/i18n/locales/ru-RU.ts": 1,
    "frontend/src/i18n/locales/zh-CN.ts": 1,
    "frontend/src/router/index.ts": 1,
+   "frontend/src/stores/menu.ts": 1,
    "frontend/src/utils/index.ts": 1,
    "frontend/src/views/chat/components/AgentStreamDisplay.vue": 1,
    "frontend/src/views/dev/MarkdownTestPage.vue": 1,

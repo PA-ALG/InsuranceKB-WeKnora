@@ -198,6 +198,7 @@ export default {
     nameDescending: 'Z–A',
   },
   menu: {
+    enterpriseKnowledge: 'Enterprise knowledge',
     sessionInProgress: 'Conversation in progress',
     knowledgeBase: 'Knowledge Base',
     agents: 'Agents',
@@ -7490,5 +7491,52 @@ export default {
     capabilityRequired: 'Select at least one capability',
     loadFailed: 'Failed to load platform API keys',
     createFailed: 'Failed to create platform API key'
+  },
+  enterpriseKnowledge: {
+    title: 'Enterprise knowledge',
+    loading: 'Loading…',
+    retry: 'Retry',
+    spaces: {
+      empty: 'No enterprise knowledge spaces to show',
+      failed: 'Failed to load enterprise knowledge spaces'
+    },
+    space: {
+      version: 'Release {epoch}',
+      noRelease: 'This space has no published release yet',
+      empty: 'This release has no entries yet',
+      failed: 'Failed to load the release',
+      fieldCount: '{count} fields'
+    },
+    entity: {
+      notFound: 'This release does not contain this entry',
+      failed: 'Failed to load the entry',
+      other: 'Other',
+      generated: 'Model supplement',
+      source: 'Source {n}'
+    },
+    state: {
+      absent: 'Explicitly absent from the material',
+      unknown: 'Not mentioned in the material'
+    },
+    origin: {
+      source: 'From source',
+      mixed: 'Source and curation',
+      generated: 'Model supplement',
+      expert: 'Expert revision',
+      imported: 'Structured import'
+    },
+    citation: {
+      page: 'Page {page}',
+      mismatch: 'The source has changed and cannot be opened',
+      notFound: 'The cited source was not found',
+      unsupported: 'This kind of source cannot be opened yet',
+      failed: 'The source could not be opened'
+    },
+    viewer: {
+      loading: 'Opening the source…',
+      failed: 'The source page cannot be shown',
+      incomplete: 'The highlight may be incomplete',
+      region: '{document}, page {page}'
+    }
   }
 }
