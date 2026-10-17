@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Literal
 
 import pytest
 
-from insurance_harness.eval import golden_remap, product_sources
+from insurance_harness.eval import product_sources
 from insurance_harness.eval.golden_remap import (
     PreviousSegment,
     PreviousSegmentation,
@@ -330,14 +331,14 @@ def test_a_failed_write_restores_every_file_and_leaves_no_temporary_file(
     monkeypatch: pytest.MonkeyPatch,
     failing: str,
 ) -> None:
-    replace = golden_remap.os.replace
+    replace = os.replace
 
-    def flaky(source: object, target: object) -> None:
+    def flaky(source: str | os.PathLike[str], target: str | os.PathLike[str]) -> None:
         if Path(str(target)).name == failing:
             raise OSError("disk full")
-        replace(source, target)  # type: ignore[arg-type]
+        replace(source, target)
 
-    monkeypatch.setattr(golden_remap.os, "replace", flaky)
+    monkeypatch.setattr(os, "replace", flaky)  # the command replaces files through os.replace
     before = snapshot(repo)
     assert run(repo) == 2
     assert json.loads(capsys.readouterr().out.strip()) == {"stopped": "OUTPUT_FAILED"}
