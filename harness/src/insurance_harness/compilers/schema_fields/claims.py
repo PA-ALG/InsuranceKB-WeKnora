@@ -18,6 +18,7 @@ from insurance_harness.bundle.assemble import ACCESS_SCOPE, BundleError, assembl
 from insurance_harness.bundle.client import Head
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.compilers.schema_fields.page import ProductPage
+from insurance_harness.compilers.schema_fields.review_items import logical_key
 from insurance_harness.contracts.bundle import CandidateBundle, ReviewPlan
 from insurance_harness.contracts.enums import (
     ClaimState,
@@ -88,12 +89,12 @@ def _claim(
     source: SegmentedSource,
     sources: Mapping[str, SourceRevision],
 ) -> Claim:
-    logical_key = f"{output.entity_id}/{field.field_key}"
+    key = logical_key(output.entity_id, field.field_key)
     evidence = _evidence(index, field, source, sources)
     try:
         return Claim(
-            claim_id=logical_key,
-            logical_key=logical_key,
+            claim_id=key,
+            logical_key=key,
             subject_ref=output.entity_id,
             predicate=field.field_key,
             state=ClaimState(field.state),
