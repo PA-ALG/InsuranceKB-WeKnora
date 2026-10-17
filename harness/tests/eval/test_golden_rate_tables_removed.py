@@ -27,13 +27,18 @@ GOLDEN = REPO / "dataset/golden/v2"
 MANIFEST = json.loads((GOLDEN / "manifest.json").read_text(encoding="utf-8"))
 S4I_CARDS = "draft-2026-10-17a"
 METHOD = "deterministic-remap"
-# Frozen when the remap was made: every Golden v2 product, and the fields rate tables supported.
+# Frozen when the remap was made: every Golden v2 product, and the fields that cited rate tables
+# (1828's rate table lists no coverage period, so its coverage_period never cited it).
 S4I_PRODUCTS = {"1814", "1816", "1824", "1826", "1828"}
 RATE_FIELDS = {
     "entry_age_range",
     "premium_payment_term",
     "premium_payment_frequency",
     "coverage_period",
+}
+CITED_RATE_TABLES = {
+    **{product: RATE_FIELDS for product in ("1814", "1816", "1824", "1826")},
+    "1828": RATE_FIELDS - {"coverage_period"},
 }
 
 
@@ -97,8 +102,7 @@ def test_every_field_rate_tables_supported_awaits_semantic_review() -> None:
     pending = MANIFEST["pending_semantic_review"]
     assert set(pending) == S4I_PRODUCTS
     for product in S4I_PRODUCTS:
-        keys = {f.field_key for f in load_golden_v2(GOLDEN / f"{product}.json").fields}
-        assert set(pending[product]) == RATE_FIELDS & keys, product
+        assert set(pending[product]) == CITED_RATE_TABLES[product], product
 
 
 def test_golden_items_refuses_pending_fields(
