@@ -74,7 +74,8 @@ def test_the_hand_written_report_is_valid_without_duplicates(tmp_path: Path) -> 
         # A second outcomes array would hide the first one's unmapped label.
         '{"report": {"outcomes": [' + outcome("f0", '"result": "bogus"') + "], "
         '"outcomes": [' + ", ".join(TEN) + "]}}",
-        report_text(TEN)[:-1] + ', "report": {"outcomes": []}}',
+        # Both copies are the valid report: only the duplicate check can reject it.
+        '{"report": {"outcomes": [' + ", ".join(TEN) + "]}, " + report_text(TEN)[1:],
         report_text([outcome("f0", '"result": "correct", "pack_id": "pack_two"'), *TEN[1:]]),
     ],
     ids=["result", "outcomes", "report", "pack_id"],
@@ -138,7 +139,8 @@ def test_a_product_named_twice_in_the_manifest_stops(
     ("old", "new"),
     [
         ('"value": "合成取值丙",', '"value": "合成取值丙", "value": "合成取值戊",'),
-        ('"state": "absent_explicitly",', '"state": "absent_explicitly", "state": "unknown",'),
+        # The last value is the original, valid state: only the duplicate check can reject it.
+        ('"state": "absent_explicitly",', '"state": "unknown", "state": "absent_explicitly",'),
         ('"page": 2,', '"page": 2, "page": 3,'),  # nested inside an evidence entry
         (
             '"cards_version": "synthetic-1",',
