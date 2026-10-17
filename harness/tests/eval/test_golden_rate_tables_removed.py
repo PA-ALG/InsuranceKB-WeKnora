@@ -1,8 +1,10 @@
-"""S4i acceptance: Golden v2 cites no rate table, and the remap is recorded per product.
+"""S4i acceptance: Golden v2 cites no rate table, the remap is recorded, pending fields are gated.
 
-Protected file: written by Claude (Spec §3.4). The remap is deterministic: rate-table evidence is
-removed, the rest is mapped by page position onto the S4i segments (test_golden_data.py checks the
-ids hold the quotes), and a field left without evidence becomes unknown. Values are not edited.
+Protected file: written by Claude (Spec §3.4, revised after review R5 on #200). The remap is
+mechanical: it moves evidence onto the S4i segments and empties what only rate tables supported.
+Fields whose value or state rested on rate tables stay usable for segment diagnostics only until an
+independent judge reviews them under the new rule; golden_items, the entry to semantic scoring and
+threshold calibration, refuses them unless they are excluded explicitly and counted.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from insurance_harness.eval import golden_items
 from insurance_harness.eval.pdf_text import read_pdf
 from insurance_harness.eval.product_sources import source_directory
 from insurance_harness.eval.segment_score import load_golden_v2
@@ -24,8 +27,14 @@ GOLDEN = REPO / "dataset/golden/v2"
 MANIFEST = json.loads((GOLDEN / "manifest.json").read_text(encoding="utf-8"))
 S4I_CARDS = "draft-2026-10-17a"
 METHOD = "deterministic-remap"
-# Frozen when the remap was made: every Golden v2 product at that time.
+# Frozen when the remap was made: every Golden v2 product, and the fields rate tables supported.
 S4I_PRODUCTS = {"1814", "1816", "1824", "1826", "1828"}
+RATE_FIELDS = {
+    "entry_age_range",
+    "premium_payment_term",
+    "premium_payment_frequency",
+    "coverage_period",
+}
 
 
 def non_evidence_documents(product: str) -> set[str]:
@@ -63,6 +72,8 @@ def check_s4i_revision(manifest: dict[str, Any]) -> None:
         assert set(entry["to_unknown"]) <= set(entry["fields"])
         assert entry["rate_table_quotes_removed"] > 0
         assert entry["quotes_split"] >= 0
+        for key, segment_id in entry["quotes_widened"]:
+            assert segment_id in {q.segment_id for q in golden[key].evidence}
         for key in entry["to_unknown"]:
             field = golden[key]
             assert field.state == "unknown" and field.value is None and not field.evidence
@@ -80,3 +91,39 @@ def test_dropping_a_product_from_the_s4i_remap_is_caught() -> None:
         del revision["products"][product]
         with pytest.raises(AssertionError):
             check_s4i_revision(tampered)
+
+
+def test_every_field_rate_tables_supported_awaits_semantic_review() -> None:
+    pending = MANIFEST["pending_semantic_review"]
+    assert set(pending) == S4I_PRODUCTS
+    for product in S4I_PRODUCTS:
+        keys = {f.field_key for f in load_golden_v2(GOLDEN / f"{product}.json").fields}
+        assert set(pending[product]) == RATE_FIELDS & keys, product
+
+
+def test_golden_items_refuses_pending_fields(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "items.jsonl"
+    assert golden_items.main(["--products", "1824", "--out", str(out)]) == 2
+    assert json.loads(capsys.readouterr().out.strip()) == {
+        "stopped": "GOLDEN_PENDING_REVIEW",
+        "product": "1824",
+    }
+    assert not out.exists()
+
+
+def test_golden_items_excludes_pending_fields_only_when_asked_and_counts_them(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "items.jsonl"
+    argv = ["--products", "1824", "1828", "--out", str(out), "--exclude-pending"]
+    assert golden_items.main(argv) == 0
+    summary = json.loads(capsys.readouterr().out.strip())
+    pending = MANIFEST["pending_semantic_review"]
+    assert summary["excluded_pending"] == {p: len(pending[p]) for p in ("1824", "1828")}
+    written = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+    assert not any(item["field_key"] in pending[item["product_id"]] for item in written)
+    for product in ("1824", "1828"):
+        total = len(load_golden_v2(GOLDEN / f"{product}.json").fields)
+        assert summary["products"][product] == total - len(pending[product])
