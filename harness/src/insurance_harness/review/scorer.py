@@ -14,10 +14,9 @@ never retried here: the completion adapter is the only retry owner of a call cha
 from __future__ import annotations
 
 import json
-import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import Any, Protocol
 
 # Appended where an oversized item's quotes are cut: a low score beats a field nobody reviewed.
 TRUNCATION_MARK = "……（引文截断）"
@@ -131,32 +130,52 @@ def _reject_constant(name: str) -> float:
     raise ValueError("non-finite number")
 
 
+def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    # A repeated member would silently keep only its last value.
+    document: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError("duplicate member")
+        document[key] = value
+    return document
+
+
 def _parse(answer: str, keys: Sequence[str]) -> dict[str, float]:
+    """Every key of the batch exactly once, or the fixed reason code without the answer text."""
     try:
-        document = json.loads(answer, parse_constant=_reject_constant)
-    except ValueError:
+        scores = _scores(answer)
+    except (ValueError, TypeError, OverflowError, RecursionError):
         raise ReviewOutputError("REVIEW_OUTPUT_INVALID") from None
+    if set(scores) != set(keys):
+        raise ReviewOutputError("REVIEW_OUTPUT_INVALID")
+    return scores
+
+
+def _scores(answer: str) -> dict[str, float]:
+    """The one accepted shape; anything else raises ValueError."""
+    document = json.loads(
+        answer, object_pairs_hook=_unique_members, parse_constant=_reject_constant
+    )
     if (
         not isinstance(document, dict)
         or set(document) != {"scores"}
         or not isinstance(document["scores"], list)
     ):
-        raise ReviewOutputError("REVIEW_OUTPUT_INVALID")
+        raise ValueError("unexpected answer shape")
     scores: dict[str, float] = {}
     for row in document["scores"]:
         if not isinstance(row, dict) or set(row) != {"key", "score"}:
-            raise ReviewOutputError("REVIEW_OUTPUT_INVALID")
+            raise ValueError("unexpected row shape")
         key, score = row["key"], row["score"]
-        # bool is an int subclass: a JSON true must not become a score of 1.
+        # bool is an int subclass: a JSON true must not become a score of 1. The range check
+        # runs before any float conversion: it holds for integers of any size, and NaN or an
+        # overflowing float (parsed as infinity) never passes it.
         if (
             not isinstance(key, str)
             or key in scores
             or type(score) not in (int, float)
-            or not math.isfinite(score)
             or not 0 <= score <= 1
         ):
-            raise ReviewOutputError("REVIEW_OUTPUT_INVALID")
+            raise ValueError("unexpected key or score")
         scores[key] = float(score)
-    if set(scores) != set(keys):
-        raise ReviewOutputError("REVIEW_OUTPUT_INVALID")
     return scores
