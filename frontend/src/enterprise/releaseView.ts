@@ -118,8 +118,14 @@ function profileFor(release: Release, labels: string[]): ProfileSection[] {
   }))
 }
 
-function byPredicate(left: [string, ReleaseMember], right: [string, ReleaseMember]): number {
-  return left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0
+// Claims are ordered by predicate, then slug: a predicate is not unique (applicability and
+// product version are part of a claim's identity), so every claim of a predicate is kept.
+function compare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+function byPredicateThenSlug(left: [string, ReleaseMember], right: [string, ReleaseMember]): number {
+  return compare(left[0], right[0]) || compare(left[1].logical_slug, right[1].logical_slug)
 }
 
 export function entityView(release: Release, entityId: string): EntityView | null {
@@ -130,26 +136,27 @@ export function entityView(release: Release, entityId: string): EntityView | nul
 
   const profile = profileFor(release, labels)
   const titles = new Map(profile.flatMap(section => section.fields.map(field => [field.key, field.title] as const)))
-  const sourced = new Map<string, ReleaseMember>()
+  const sourced = new Map<string, [string, ReleaseMember][]>()
   const generated: [string, ReleaseMember][] = []
   for (const claim of claims) {
     const predicate = text(claim.payload?.predicate)
     if (text(claim.payload?.origin) === MODEL_GENERATED) generated.push([predicate, claim])
-    else sourced.set(predicate, claim)
+    else sourced.set(predicate, [...(sourced.get(predicate) ?? []), [predicate, claim]])
   }
 
   const sections: SectionView[] = []
   for (const section of profile) {
     const fields = section.fields.flatMap(field => {
-      const claim = sourced.get(field.key)
-      if (!claim) return []
+      const matching = sourced.get(field.key)
+      if (!matching) return []
       sourced.delete(field.key)
-      return [fieldView(claim, field.title)]
+      return matching.sort(byPredicateThenSlug).map(([, claim]) => fieldView(claim, field.title))
     })
     if (fields.length) sections.push({ key: section.key, title: section.title, fields })
   }
-  const other = [...sourced.entries()].sort(byPredicate).map(([predicate, claim]) => fieldView(claim, predicate))
-  const apart = generated.sort(byPredicate)
+  const other = [...sourced.values()].flat().sort(byPredicateThenSlug)
+    .map(([predicate, claim]) => fieldView(claim, predicate))
+  const apart = generated.sort(byPredicateThenSlug)
     .map(([predicate, claim]) => fieldView(claim, titles.get(predicate) || predicate))
   return { entityId, name, labels, sections, other, generated: apart }
 }

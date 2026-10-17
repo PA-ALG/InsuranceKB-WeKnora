@@ -34,6 +34,9 @@ function open(member: string, evidence: number) {
 }
 
 watch(() => [props.spaceId, props.releaseId], load, { immediate: true })
+// The page is reused across entries of one release: a citation opened for the previous entry
+// must not stay open for the next one.
+watch(() => props.entityId, () => { selected.value = null })
 </script>
 
 <template>
