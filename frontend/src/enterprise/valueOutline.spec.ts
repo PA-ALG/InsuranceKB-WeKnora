@@ -1,6 +1,6 @@
 // S3d-4 acceptance (protected, written by Claude): a field value is split into numbered items by
-// generic rules — four marker families, a boundary before each marker, consecutive numbering from
-// 1 — and never loses a character (Spec docs/design/slices/S3d-4-字段取值排版.md §3.1).
+// generic rules — four marker families, a boundary before each marker outside quotes, consecutive
+// numbering from 1 — and never loses a character (Spec docs/design/slices/S3d-4-字段取值排版.md §3.1).
 import { describe, expect, it } from 'vitest'
 import { outlineText, valueOutline, type OutlineItem } from './valueOutline'
 
@@ -28,10 +28,10 @@ describe('numbered items', () => {
   })
 
   it('splits items on separate lines and keeps the text before the first item', () => {
-    const value = '现金价值规则如下。\n1．定义：指保险单所具有的价值。\n2、查询：可向我们咨询。\n3. 退还：30日内退还。'
+    const value = '现金价值规则如下。\n1．定义：指保险单所具有的价值。\n2．查询：可向我们咨询。\n3．退还：30日内退还。'
     const outline = valueOutline(value)
     expect(outline.intro).toBe('现金价值规则如下。')
-    expect(outline.items.map(item => item.marker)).toEqual(['1．', '2、', '3.'])
+    expect(outline.items.map(item => item.marker)).toEqual(['1．', '2．', '3．'])
     expect(outline.items.map(item => item.lead)).toEqual(['定义：', '查询：', '退还：'])
     expectLossless(value)
   })
@@ -120,6 +120,80 @@ describe('text that is not a list', () => {
     const outline = valueOutline(`1. ${long}：给付。2. 若满足条件，则给付：x。3. 乙：y。`)
     expect(outline.items.map(item => item.lead)).toEqual(['', '', '乙：'])
     expect(outline.items[0].body).toBe(`${long}：给付。`)
+  })
+})
+
+describe('review R1–R3 on PR #202: the hierarchy, not only the text, must be right', () => {
+  it.each([
+    ['a skipped number', '1. 甲：给付。3. 乙：不赔。2. 丙：另有约定。'],
+    ['a repeated start', '1. 甲：给付。1. 乙：不赔。2. 丙：另有约定。'],
+  ])('does not continue a list across %s', (_, value) => {
+    expect(valueOutline(value).items).toEqual([])
+    expectLossless(value)
+  })
+
+  it('ends a list where the numbering goes wrong instead of skipping over it', () => {
+    const value = '1. 甲：a。2. 乙：b。4. 丁：d。3. 丙：c。'
+    const outline = valueOutline(value)
+    expect(outline.items.map(item => item.marker)).toEqual(['1.', '2.'])
+    expect(outline.items[1].body).toBe('b。4. 丁：d。3. 丙：c。')
+    expectLossless(value)
+  })
+
+  it.each([
+    ['curly quotes', '1. 甲：按“1. 甲例；2. 乙例。”办理。2. 乙：另有约定。', '按“1. 甲例；2. 乙例。”办理。'],
+    ['corner brackets', '1. 甲：按「1. 甲例；2. 乙例。」办理。2. 乙：另有约定。', '按「1. 甲例；2. 乙例。」办理。'],
+    ['title marks', '1. 甲：依据《规则；2. 细则》执行。2. 乙：另有约定。', '依据《规则；2. 细则》执行。'],
+  ])('never lifts a number inside %s to the outer list', (_, value, body) => {
+    const outline = valueOutline(value)
+    expect(outline.items.map(item => item.lead)).toEqual(['甲：', '乙：'])
+    expect(outline.items[0].body).toBe(body)
+    expect(outline.items[0].children).toEqual([])
+    expectLossless(value)
+  })
+
+  it.each([
+    ['another punctuation', '1. 疾病保障：保障的疾病如下：1、甲病；2、乙病。2. 其他：丙。', ['1、', '2、']],
+    ['no space after the number', '1. 退保：需提供：1.保险合同；2.身份证件。2. 现金价值：丁。', ['1.', '2.']],
+  ])('takes markers written with %s for a nested level, not for the outer one', (_, value, nested) => {
+    const outline = valueOutline(value)
+    expect(outline.items.map(item => item.marker)).toEqual(['1.', '2.'])
+    expect(outline.items[0].children.map(item => item.marker)).toEqual(nested)
+    expectLossless(value)
+  })
+
+  it('keeps the first sub-item when an item starts with its sub-items', () => {
+    const value = '1. （1）豁免：甲；（2）给付：乙。2. 其他：丙。'
+    const outline = valueOutline(value)
+    expect(shape(outline.items)).toEqual([
+      {
+        marker: '1.', lead: '', body: '', children: [
+          { marker: '（1）', lead: '豁免：', body: '甲；', children: [] },
+          { marker: '（2）', lead: '给付：', body: '乙。', children: [] },
+        ],
+      },
+      { marker: '2.', lead: '其他：', body: '丙。', children: [] },
+    ])
+    expectLossless(value)
+  })
+
+  it('keeps the first sub-item of a list element that starts with its sub-items', () => {
+    const value = ['（1）疾病甲：定义甲；（2）疾病乙：定义乙。', '其他']
+    const outline = valueOutline(value)
+    expect(outline.items[0].lead).toBe('')
+    expect(outline.items[0].children.map(item => item.lead)).toEqual(['疾病甲：', '疾病乙：'])
+    expectLossless(value)
+  })
+
+  it('never names an item by a parenthesised or circled number', () => {
+    const outline = valueOutline('1. （1）豁免：甲。2. ①给付：乙。')
+    expect(outline.items.map(item => item.lead)).toEqual(['', ''])
+    expect(outline.items.map(item => item.body)).toEqual(['（1）豁免：甲。', '①给付：乙。'])
+  })
+
+  it('still names an item that starts with a number of years', () => {
+    const outline = valueOutline('1. 18 周岁之前身故：给付保费。2. 18 周岁之后身故：给付保额。')
+    expect(outline.items.map(item => item.lead)).toEqual(['18 周岁之前身故：', '18 周岁之后身故：'])
   })
 })
 
