@@ -18,11 +18,16 @@ interface Marker {
   end: number
   number: number
   text: string
+  style: string
+  rank: number
 }
 
 interface Family {
   pattern: RegExp
   number: (match: RegExpExecArray) => number
+  // Markers of one family written differently ("1. " / "1." / "1、", "（1）" / "(1)") are different
+  // styles: one level of a list uses one style, and a nested level may use another of the family.
+  style: (match: RegExpExecArray) => string
 }
 
 const MAX_DEPTH = 3
@@ -32,16 +37,36 @@ const MAX_LEAD = 32
 const BOUNDARY = new Set(['。', '；', ';', '！', '!', '？', '?', '：', ':', '\n', '\r'])
 const SPACE = /[ \t\u00a0\u3000]/
 const LEAD_STOP = /[。；;，,！!？?\n\r]/
+// A name never starts with a sub-item number: that number opens the next level instead.
+const LEAD_START_STOP = /^(?:[（(]\d{1,3}[）)]|[\u2460-\u2473])/
+// Nothing inside quotes or title marks is a marker or a name's colon, whatever precedes it.
+const OPENING_QUOTES = new Set(['“', '「', '『', '《'])
+const CLOSING_QUOTES = new Set(['”', '」', '』', '》'])
+
+const spaced = (match: RegExpExecArray) => (SPACE.test(match[0].slice(-1)) ? ' ' : '')
 
 // Earlier families win a tie at the same position.
 const FAMILIES: Family[] = [
-  { pattern: /(\d{1,3})[.．、](?!\d)[ \t\u00a0\u3000]*/g, number: match => Number(match[1]) },
-  { pattern: /[（(](\d{1,3})[）)][ \t\u00a0\u3000]*/g, number: match => Number(match[1]) },
-  { pattern: /[①-⑳][ \t\u00a0\u3000]*/g, number: match => match[0].charCodeAt(0) - 0x2460 + 1 },
+  {
+    pattern: /(\d{1,3})([.．、])(?!\d)[ \t\u00a0\u3000]*/g,
+    number: match => Number(match[1]),
+    style: match => match[2] + spaced(match),
+  },
+  {
+    pattern: /([（(])(\d{1,3})[）)][ \t\u00a0\u3000]*/g,
+    number: match => Number(match[2]),
+    style: match => match[1],
+  },
+  {
+    pattern: /[\u2460-\u2473][ \t\u00a0\u3000]*/g,
+    number: match => match[0].charCodeAt(0) - 0x2460 + 1,
+    style: () => '',
+  },
   // A number, a space and a short named term ending in a colon: "1 恶性肿瘤——轻度：".
   {
     pattern: /(\d{1,3})[ \t\u00a0\u3000]+(?=[^\n\r：:。；;，,！!？?]{1,32}[：:])/g,
     number: match => Number(match[1]),
+    style: () => '',
   },
 ]
 
@@ -51,53 +76,107 @@ function atBoundary(text: string, index: number): boolean {
   return at < 0 || BOUNDARY.has(text[at])
 }
 
-// Markers numbered 1, 2, 3 … in order; the first missing number ends the list.
-function chainOf(text: string, family: Family): Marker[] {
+function quotedPositions(text: string): boolean[] {
+  const quoted: boolean[] = []
+  let depth = 0
+  for (const char of text) {
+    if (CLOSING_QUOTES.has(char) && depth > 0) depth--
+    // One flag per UTF-16 unit, so indexes match the string's.
+    for (let unit = 0; unit < char.length; unit++) quoted.push(depth > 0)
+    if (OPENING_QUOTES.has(char)) depth++
+  }
+  return quoted
+}
+
+// Every marker that may open an item, grouped by style in text order.
+function markersByStyle(text: string): Map<string, Marker[]> {
+  const quoted = quotedPositions(text)
+  const styles = new Map<string, Marker[]>()
+  FAMILIES.forEach((family, rank) => {
+    const pattern = new RegExp(family.pattern.source, 'g')
+    let match: RegExpExecArray | null
+    while ((match = pattern.exec(text)) !== null) {
+      if (quoted[match.index] || !atBoundary(text, match.index)) continue
+      const style = `${rank}${family.style(match)}`
+      const marker = {
+        start: match.index,
+        end: match.index + match[0].length,
+        number: family.number(match),
+        text: match[0].trim(),
+        style,
+        rank,
+      }
+      styles.set(style, [...(styles.get(style) ?? []), marker])
+    }
+  })
+  return styles
+}
+
+// Markers numbered 1, 2, 3 … in order. Once the list has begun, a marker of the same style with
+// any other number ends it there: a list never skips a wrong number to find the next one.
+function chainOf(markers: Marker[]): Marker[] {
   const chain: Marker[] = []
-  const pattern = new RegExp(family.pattern.source, 'g')
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(text)) !== null) {
-    if (family.number(match) !== chain.length + 1 || !atBoundary(text, match.index)) continue
-    chain.push({ start: match.index, end: match.index + match[0].length, number: chain.length + 1, text: match[0].trim() })
+  for (const marker of markers) {
+    if (marker.number === chain.length + 1) chain.push(marker)
+    else if (chain.length > 0) break
   }
   return chain
 }
 
 function splitLead(text: string): { lead: string; rest: string } {
-  const trimmed = text.trimStart()
-  const colon = trimmed.search(/[：:]/)
-  if (colon <= 0 || colon > MAX_LEAD || LEAD_STOP.test(trimmed.slice(0, colon))) return { lead: '', rest: trimmed }
-  return { lead: trimmed.slice(0, colon + 1).trim(), rest: trimmed.slice(colon + 1) }
+  const quoted = quotedPositions(text)
+  let colon = -1
+  for (let index = 0; index < text.length && index <= MAX_LEAD; index++) {
+    if ((text[index] === '：' || text[index] === ':') && !quoted[index]) {
+      colon = index
+      break
+    }
+  }
+  const name = text.slice(0, Math.max(colon, 0))
+  if (colon <= 0 || LEAD_STOP.test(name) || LEAD_START_STOP.test(name)) return { lead: '', rest: text }
+  return { lead: text.slice(0, colon + 1).trim(), rest: text.slice(colon + 1) }
 }
 
-function item(marker: string, text: string, families: Family[], depth: number): OutlineItem {
-  const { lead, rest } = splitLead(text)
-  const inner = parse(rest, families, depth)
+function item(marker: string, text: string, used: Set<string>, depth: number): OutlineItem {
+  const trimmed = text.trimStart()
+  const whole = parse(trimmed, used, depth)
+  // An item that opens straight with its sub-items has no name of its own; the first sub-item is
+  // kept as the first child, never taken for the item's name.
+  if (whole.items.length > 0 && whole.intro === '') return { marker, lead: '', body: '', children: whole.items }
+  const { lead, rest } = splitLead(trimmed)
+  const inner = lead ? parse(rest, used, depth) : whole
   return { marker, lead, body: inner.intro, children: inner.items }
 }
 
-function parse(text: string, families: Family[], depth: number): ValueOutline {
-  let best: { family: Family; chain: Marker[] } | null = null
+function earlier(chain: Marker[], best: Marker[] | null): boolean {
+  if (best === null) return true
+  return chain[0].start < best[0].start || (chain[0].start === best[0].start && chain[0].rank < best[0].rank)
+}
+
+// `used` holds the styles of the enclosing levels, which a nested level never reuses.
+function parse(text: string, used: Set<string>, depth: number): ValueOutline {
+  let best: Marker[] | null = null
   if (depth < MAX_DEPTH) {
-    for (const family of families) {
-      const chain = chainOf(text, family)
-      if (chain.length >= 2 && (best === null || chain[0].start < best.chain[0].start)) best = { family, chain }
+    for (const [style, markers] of markersByStyle(text)) {
+      if (used.has(style)) continue
+      const chain = chainOf(markers)
+      if (chain.length >= 2 && earlier(chain, best)) best = chain
     }
   }
   if (best === null) return { intro: text.trim(), items: [] }
-  const { family, chain } = best
-  const rest = families.filter(other => other !== family)
+  const chain = best
+  const nested = new Set([...used, chain[0].style])
   const items = chain.map((marker, index) => {
     const end = index + 1 < chain.length ? chain[index + 1].start : text.length
-    return item(marker.text, text.slice(marker.end, end), rest, depth + 1)
+    return item(marker.text, text.slice(marker.end, end), nested, depth + 1)
   })
   return { intro: text.slice(0, chain[0].start).trim(), items }
 }
 
 export function valueOutline(value: string | string[]): ValueOutline {
-  if (typeof value === 'string') return parse(value, FAMILIES, 0)
-  if (value.length === 1) return parse(value[0], FAMILIES, 0)
-  return { intro: '', items: value.map(text => item('', text, FAMILIES, 1)) }
+  if (typeof value === 'string') return parse(value, new Set(), 0)
+  if (value.length === 1) return parse(value[0], new Set(), 0)
+  return { intro: '', items: value.map(text => item('', text, new Set(), 1)) }
 }
 
 function itemText(item: OutlineItem): string {
