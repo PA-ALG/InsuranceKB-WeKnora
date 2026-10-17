@@ -1,11 +1,13 @@
 """Regression (PR #195 review R1–R3): reruns never trust saved state they cannot check.
 
-R1: a scores file is bound to the review that produced it. Changing a value, a rule, the model or
-the policy after completion re-reviews within the budget; the stale file is withdrawn before the
-first send, so a stopped re-review leaves no scores to publish. A malformed scores file stops the
-run before any send; a well-formed but altered one is rebuilt from the accepted answers.
-R2: corrupt accepted-answer markers stop the run before any send, and leftover files never make
-a new answer collide with an old name.
+R1: once a product's run starts its earlier scores file is set aside where publishing never
+reads it, and scores.json comes back only after every batch passed for the current input.
+Changing a value, a rule, the model or the policy re-reviews within the budget; any failure,
+before or after a send, leaves nothing to publish, so routing cannot reach machine review. An
+unchanged review sends nothing and restores the earlier file as it was.
+R2: corrupt accepted-answer markers, and accepted answers that no longer pass the scorer for
+their batch, stop the product before any send (RUN_ROOT_INVALID); leftover files never make a
+new answer collide with an old name.
 R3: malformed answers reach the command as one JSON stop line.
 """
 
@@ -19,10 +21,15 @@ from typing import Any
 import httpx
 import pytest
 
+from insurance_harness.compilers.schema_fields import publish
+from insurance_harness.compilers.schema_fields.claims import claims_from
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
+from insurance_harness.contracts.enums import ReviewMode
 from insurance_harness.eval import review_run
 from insurance_harness.evidence.segments import SegmentedSource
+from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.models import CallLedger, OpenAICompatibleCompletion, StageModelConfig
+from insurance_harness.review.routing import Route, Scores, route
 
 CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 SERVED = "example-flash-0917"
@@ -54,7 +61,9 @@ def write_output(tmp_path: Path, first_value: str = "三十日") -> None:
         )
         for key, value, segment in (("f1", first_value, "D1P1S1"), ("f2", "按年度", "D1P1S2"))
     ]
-    output = CompileOutput(pack_id="pk", entity_id="p1", model="m", fields=fields)
+    output = CompileOutput(
+        pack_id="pk", entity_id="p1", model="m", fields=fields, cards_version="cards-test"
+    )
     path = tmp_path / "compiled" / "p1" / "output.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(output.model_dump_json(), encoding="utf-8")
@@ -167,6 +176,23 @@ def complete(model: Install, run: Run) -> None:
     assert run(*ONE_PER_BATCH)[0] == 0
 
 
+def publish_route(tmp_path: Path) -> Route:
+    """What publishing p1 with --route decides now: admitted pack, every threshold 0.5."""
+    path = tmp_path / "compiled" / "p1" / "output.json"
+    output = CompileOutput.model_validate_json(path.read_text(encoding="utf-8"))
+    claims = claims_from(output, SOURCE, {"条款.pdf": SourceRevision("k-1", 2)})
+    loaded = None
+    if scores_file(tmp_path).exists():
+        document = publish._ScoresFile.model_validate_json(scores_file(tmp_path).read_text())
+        loaded = Scores(document.reviewer, document.reviewed_at, dict(document.scores))
+    return route(
+        claims, admitted=True, threshold=lambda key: 0.5, scores=loaded, policy_ref="policy@t"
+    )
+
+
+NOTHING_TO_PUBLISH = Route(mode=ReviewMode.HUMAN, policy_ref=None, reasons=("SCORES_MISSING",))
+
+
 # --- R1: a scores file is bound to the review that produced it ------------------------------
 
 CHANGES: dict[str, tuple[Callable[[Path], None], list[list[str]], str]] = {
@@ -246,23 +272,21 @@ MALFORMED = {
     "score above one": json.dumps(
         {"reviewer": "r", "reviewed_at": "2026-10-17T12:00:00+00:00", "scores": {"p1/f1": 1.5}}
     ),
-    "time without offset": json.dumps(
-        {"reviewer": "r", "reviewed_at": "2026-10-17T12:00:00", "scores": {}}
-    ),
 }
 
 
 @pytest.mark.parametrize("text", MALFORMED.values(), ids=MALFORMED.keys())
-def test_a_malformed_scores_file_stops_before_sending(
+def test_a_malformed_earlier_scores_file_is_never_consumed_and_is_rebuilt(
     tmp_path: Path, model: Install, run: Run, text: str
 ) -> None:
     complete(model, run)
-    write_output(tmp_path, "四十日")  # would need a send if the run went on
     scores_file(tmp_path).write_text(text, encoding="utf-8")
     again = model()
     code, report = run(*ONE_PER_BATCH)
-    assert (code, report["stopped"]) == (2, "RUN_ROOT_INVALID")
-    assert again.keys == [] and scores_file(tmp_path).read_text(encoding="utf-8") == text
+    assert code == 0 and report["products"][0]["reused"] is False
+    assert again.keys == []
+    assert scores(tmp_path)["scores"] == {"p1/f1": 0.7, "p1/f2": 0.7}
+    assert not (tmp_path / "run" / "p1" / "scores.json.previous").exists()
 
 
 # --- R2: accepted-answer markers are checked before any send -----------------------------
@@ -347,3 +371,68 @@ def test_a_malformed_answer_stops_the_command_with_one_line(
     code, report = run()  # run() itself asserts exactly one JSON line
     assert (code, report) == (2, {"stopped": "REVIEW_OUTPUT_INVALID", "product": "p1"})
     assert not scores_file(tmp_path).exists()
+
+
+# --- R1/R2 (continued): failures before any send leave nothing to publish -----------------
+
+
+@pytest.mark.parametrize("corrupt", CORRUPT.values(), ids=CORRUPT.keys())
+def test_a_corrupt_marker_after_an_input_change_leaves_nothing_to_publish(
+    tmp_path: Path, model: Install, run: Run, corrupt: Callable[[Path], None]
+) -> None:
+    complete(model, run)
+    assert publish_route(tmp_path).mode == ReviewMode.MACHINE  # what is at stake
+    write_output(tmp_path, "四十日")
+    corrupt(responses(tmp_path))
+    again = model()
+    code, report = run(*ONE_PER_BATCH, "--max-sent", "5")
+    assert (code, report["stopped"]) == (2, "RUN_ROOT_INVALID")
+    assert again.keys == [] and not scores_file(tmp_path).exists()
+    assert publish_route(tmp_path) == NOTHING_TO_PUBLISH
+
+
+CACHED = {
+    "not json": "{",
+    "another batch's key": '{"scores": [{"key": "p1/f1", "score": 0.7}]}',
+    "score out of range": '{"scores": [{"key": "p1/f2", "score": 2}]}',
+    "key twice": '{"scores": [{"key": "p1/f2", "score": 0.7}, {"key": "p1/f2", "score": 0.7}]}',
+}
+
+
+@pytest.mark.parametrize("text", CACHED.values(), ids=CACHED.keys())
+def test_a_corrupt_cached_answer_stops_before_the_changed_batch_is_sent(
+    tmp_path: Path, model: Install, run: Run, text: str
+) -> None:
+    complete(model, run)
+    write_output(tmp_path, "四十日")  # the first batch must be sent again
+    (responses(tmp_path) / "002.txt").write_text(text, encoding="utf-8")  # the second's answer
+    again = model()
+    code, report = run(*ONE_PER_BATCH, "--max-sent", "5")
+    assert (code, report["stopped"]) == (2, "RUN_ROOT_INVALID")
+    assert again.keys == [] and not scores_file(tmp_path).exists()
+    assert publish_route(tmp_path) == NOTHING_TO_PUBLISH
+
+
+def test_an_invalid_new_answer_after_an_input_change_leaves_nothing_to_publish(
+    tmp_path: Path, model: Install, run: Run
+) -> None:
+    complete(model, run)
+    write_output(tmp_path, "四十日")
+    model(content="{")
+    code, report = run(*ONE_PER_BATCH)
+    assert (code, report["stopped"]) == (2, "REVIEW_OUTPUT_INVALID")
+    assert not scores_file(tmp_path).exists()
+    assert publish_route(tmp_path) == NOTHING_TO_PUBLISH
+
+
+def test_an_unchanged_review_restores_the_same_scores_file_without_sending(
+    tmp_path: Path, model: Install, run: Run
+) -> None:
+    complete(model, run)
+    before = scores_file(tmp_path).read_bytes()
+    again = model()
+    code, report = run(*ONE_PER_BATCH)
+    assert code == 0 and report["products"][0]["reused"] is True
+    assert again.keys == [] and scores_file(tmp_path).read_bytes() == before
+    assert not (tmp_path / "run" / "p1" / "scores.json.previous").exists()
+    assert publish_route(tmp_path).mode == ReviewMode.MACHINE

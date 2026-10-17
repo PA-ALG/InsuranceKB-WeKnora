@@ -19,13 +19,18 @@ sending. A rejected answer stays for diagnosis only, so a rerun sends its batch 
 the budget). The request fingerprint covers the items (keys, titles, rules, states, values,
 quotes), the configured model and the policy version.
 
-A scores file is derived from accepted answers, never trusted on its own. A rerun rebuilds every
-request from the current output, rules, model and policy: when all are answered and the result
-equals the scores file, the file is kept and nothing is sent; when the result differs without a
-send, the file is replaced atomically; when a request must be sent (its inputs, model or policy
-changed), the stale file is withdrawn before the first send, so publishing finds no scores and
-queues the product for people until the new review completes. Corrupt accepted-answer markers or
-a malformed scores file stop the run before any send (RUN_ROOT_INVALID).
+A scores file is never trusted once its product's run starts. Each product, in order:
+1. its scores.json moves to scores.json.previous, which the publish command never reads;
+2. its accepted-answer markers are checked;
+3. every batch is rebuilt from the current output, rules, model and policy, and each batch with
+   an accepted answer is answered from it through the scorer's own parser and key check; any
+   marker or cached answer that fails is corrupt run-root state (RUN_ROOT_INVALID), and the
+   product sends nothing;
+4. only then are the remaining batches sent, within the budget;
+5. once every batch passed, scores.json is written again: the previous file is restored as it
+   was when nothing was sent and the result is unchanged, otherwise a new file is written.
+Any failure leaves the product without scores.json, so publishing finds no scores and queues it
+for people.
 
 Exit 0: every product scored; exit 2: one line {"stopped": <code>, ...} with a fixed code (and at
 most the product id and an exception type name), never a path, key or material.
@@ -37,7 +42,7 @@ import json
 import os
 import re
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -95,10 +100,11 @@ class _Parser(argparse.ArgumentParser):
 class ProductReview:
     product: str
     scored: int
-    reused: bool  # the scores file an earlier run wrote still holds and was kept
+    reused: bool  # nothing was sent and the earlier scores file was restored unchanged
 
 
-# The publish command's scores file (RV1 Spec §3.4), read back to bind it to the current review.
+# The publish command's scores file (RV1 Spec §3.4): the earlier file is restored only if it is
+# one, and only when the current review gives exactly its scores.
 Score = Annotated[float, Field(strict=True, ge=0.0, le=1.0, allow_inf_nan=False)]
 NonBlank = Annotated[str, StringConstraints(min_length=1, pattern=r"\S")]
 
@@ -117,17 +123,14 @@ class _ScoresDocument(BaseModel):
         return value
 
 
-@dataclass(frozen=True)
-class _Saved:
-    """What earlier runs left for one product, checked before anything is sent."""
-
-    accepted: dict[str, str]  # request fingerprint -> accepted answer text
-    scores: _ScoresDocument | None
+def _fingerprint(identity: str, system: str, user: str) -> str:
+    """One request under one reviewer identity (configured model and policy version)."""
+    encoded = json.dumps([identity, system, user], ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _saved(run_root: Path, product: str) -> _Saved:
-    """Accepted answers and the scores file; any corruption raises ValueError or OSError."""
-    directory = run_root / product / "responses"
+def _accepted_answers(directory: Path) -> dict[str, str]:
+    """Fingerprint -> accepted answer text; a corrupt marker raises ValueError (or OSError)."""
     accepted: dict[str, str] = {}
     for marker in sorted(directory.glob("*.request.sha256")):
         stem = marker.name.removesuffix(".request.sha256")
@@ -141,44 +144,38 @@ def _saved(run_root: Path, product: str) -> _Saved:
         ):
             raise ValueError("accepted answer marker is corrupt")
         accepted[digest] = answer.read_text(encoding="utf-8")
-    path = run_root / product / "scores.json"
-    if not path.exists():
-        return _Saved(accepted, None)
-    return _Saved(accepted, _ScoresDocument.model_validate_json(path.read_text(encoding="utf-8")))
+    return accepted
+
+
+class _Uncached(Exception):
+    """The batch has no accepted answer: it must be sent."""
+
+
+class _Cached:
+    """Answers a request only from accepted answers, never sending."""
+
+    def __init__(self, accepted: dict[str, str], identity: str) -> None:
+        self._accepted, self._identity = accepted, identity
+
+    def complete(self, *, system: str, user: str) -> str:
+        answer = self._accepted.get(_fingerprint(self._identity, system, user))
+        if answer is None:
+            raise _Uncached
+        return answer
 
 
 class _Answers:
-    """One product's answers: every raw answer is kept, accepted ones answer reruns.
-
-    The fingerprint covers the reviewer identity (model and policy version) with the request,
-    so an answer is reused only for the request and policy that produced it. before_send runs
-    once, before the first request of this product that has to be sent.
-    """
+    """Sends a product's remaining batches; every raw answer is kept, accepted ones mark reuse."""
 
     def __init__(
-        self,
-        inner: Completion,
-        directory: Path,
-        ledger: DurableLedger,
-        identity: str,
-        accepted: dict[str, str],
-        before_send: Callable[[], None],
+        self, inner: Completion, directory: Path, ledger: DurableLedger, identity: str
     ) -> None:
         self._inner, self._directory, self._ledger = inner, directory, ledger
-        self._identity, self._accepted = identity, dict(accepted)
-        self._before_send = before_send
-        self._pending: list[tuple[str, str, str]] = []
-        self.fresh = False
+        self._identity = identity
+        self._pending: list[tuple[str, str]] = []
 
     def complete(self, *, system: str, user: str) -> str:
-        encoded = json.dumps([self._identity, system, user], ensure_ascii=False)
-        digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-        saved = self._accepted.get(digest)
-        if saved is not None:
-            return saved
-        if not self.fresh:
-            self._before_send()
-            self.fresh = True
+        digest = _fingerprint(self._identity, system, user)
         raw = self._inner.complete(system=system, user=user)
         if len(self._ledger.served) > 1:
             # This answer came from another served version: it is neither scored nor kept.
@@ -186,14 +183,13 @@ class _Answers:
         self._directory.mkdir(parents=True, exist_ok=True)
         stem = f"{self._next_number():03d}"
         write_new(self._directory / f"{stem}.txt", raw)
-        self._pending.append((stem, digest, raw))
+        self._pending.append((stem, digest))
         return raw
 
     def accept(self) -> None:
         """The answers since the last call were accepted: reruns may now reuse them."""
-        for stem, digest, raw in self._pending:
+        for stem, digest in self._pending:
             write_new(self._directory / f"{stem}.request.sha256", digest + "\n")
-            self._accepted[digest] = raw
         self._pending.clear()
 
     def _next_number(self) -> int:
@@ -231,7 +227,6 @@ def _output(compile_roots: Sequence[Path], product: str) -> CompileOutput:
 
 def _review_product(
     product: str,
-    saved: _Saved,
     *,
     repo: Path,
     compile_roots: Sequence[Path],
@@ -242,6 +237,12 @@ def _review_product(
     max_chars: int,
 ) -> ProductReview:
     target = run_root / product / "scores.json"
+    previous = run_root / product / "scores.json.previous"
+    # From here on the earlier scores are unverified: publishing must not find them.
+    if target.exists():
+        os.replace(target, previous)
+    directory = run_root / product / "responses"
+    accepted = _accepted_answers(directory)
     output = _output(compile_roots, product)
     try:
         definitions = pack_definitions(
@@ -250,31 +251,29 @@ def _review_product(
         items = review_items(output, {d.field_key: d for d in definitions})
     except (OSError, ValueError):
         raise _Stop("DEFINITION_MISSING") from None
-    answers = _Answers(
-        completion,
-        run_root / product / "responses",
-        ledger,
-        f"{config.model}@{config.policy_version}",
-        saved.accepted,
-        # A request that must be sent means the scores file no longer matches the review input.
-        before_send=lambda: target.unlink(missing_ok=True),
-    )
+    identity = f"{config.model}@{config.policy_version}"
+    # Each batch is scored on its own (batching a batch again returns it unchanged). Every
+    # accepted answer this review reuses is checked before anything is sent.
     scores: dict[str, float] = {}
-    # One batch at a time (batching a batch again returns it unchanged), so an answer becomes
-    # reusable only after the scorer accepted it.
+    unanswered = []
+    cached = _Cached(accepted, identity)
     for batch in review_batches(items, max_chars=max_chars):
+        try:
+            scores.update(score_items(batch, cached, max_chars=max_chars))
+        except _Uncached:
+            unanswered.append(batch)
+        except ReviewOutputError:
+            # It was accepted for exactly this request once: it has been altered since.
+            raise _Stop("RUN_ROOT_INVALID") from None
+    answers = _Answers(completion, directory, ledger, identity)
+    for batch in unanswered:
         scores.update(score_items(batch, answers, max_chars=max_chars))
         answers.accept()
     # One served model per root (DurableLedger); a provider that names none leaves the alias.
     served = sorted(ledger.served) or [config.model]
     reviewer = f"{served[0]}@{config.policy_version}"
-    stored = saved.scores
-    if (
-        stored is not None
-        and not answers.fresh
-        and stored.scores == scores
-        and stored.reviewer == reviewer
-    ):
+    if not unanswered and _same_scores(previous, reviewer, scores):
+        os.replace(previous, target)
         return ProductReview(product, len(scores), True)
     document = {
         "reviewer": reviewer,
@@ -283,7 +282,17 @@ def _review_product(
     }
     target.parent.mkdir(parents=True, exist_ok=True)
     _replace(target, json.dumps(document, ensure_ascii=False, indent=2) + "\n")
+    previous.unlink(missing_ok=True)
     return ProductReview(product, len(scores), False)
+
+
+def _same_scores(path: Path, reviewer: str, scores: dict[str, float]) -> bool:
+    """Whether an earlier scores file holds exactly this review; a malformed one never does."""
+    try:
+        document = _ScoresDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return document.reviewer == reviewer and document.scores == scores
 
 
 def _arguments(argv: list[str] | None) -> argparse.Namespace:
@@ -335,11 +344,6 @@ def main(argv: list[str] | None = None) -> int:
         # One lock spans the budget read, every send and every scores file.
         with run_lock(args.run_root):
             ledger = DurableLedger.open(args.run_root, max_sent=args.max_sent)
-            # Everything earlier runs left is checked before the first send of this run.
-            saved: dict[str, _Saved] = {}
-            for current in args.products:
-                saved[current] = _saved(args.run_root, current)
-            current = None
             client = OpenAICompatibleCompletion(config, ledger=ledger)
             reviews: list[ProductReview] = []
             try:
@@ -347,7 +351,6 @@ def main(argv: list[str] | None = None) -> int:
                     reviews.append(
                         _review_product(
                             current,
-                            saved[current],
                             repo=args.repo,
                             compile_roots=args.compile_root,
                             run_root=args.run_root,
