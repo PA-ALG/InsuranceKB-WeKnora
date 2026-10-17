@@ -18,27 +18,13 @@
 | `gapfill.py` | 定向补漏：aliases 检索候选章节 + 判断题式三态提问 |
 | `voting.py` | 高风险字段 3 采样（3 prompt 变体）多数票 |
 | `judge.py` | 可插拔裁决：claude-session（judge-queue.jsonl）/ gateway |
-| `recall_attribution.py` | 漏抽归因（005 V5，纯确定性零模型）：routing_miss / extract_empty / cleaning_kill；`scripts/eval_005.py report` 出统计 |
+| `recall_attribution.py` | 漏抽归因（005 V5，纯确定性零模型）：routing_miss / extract_empty / cleaning_kill |
 | `pipeline.py` | LangGraph 状态图 + SourceDocument boundary + AsyncSqliteSaver checkpoint + source-aware run manifest/pred Evidence |
 | `prompts/` | 全部 prompt + `PROMPT_VERSION`（E6.1） |
-| `cli.py` | `extract --source weknora` / `extract-replay` / `apply-judgements` |
 
 ## 运行
 
-```bash
-# 生产：只接受数据库绑定 Space 下的 WeKnora knowledge IDs
-uv run python -m insurance_harness.compiler.cli extract --source weknora \
-  --space-id <space_id> --knowledge-id <knowledge_id> \
-  --parser-fingerprint <parser_version> --product-id <product_id> \
-  --product-name <product_name> --run-dir out/<产品>
-
-# 离线/Golden：显式 Directory replay；不会成为生产 fallback
-uv run python -m insurance_harness.compiler.cli extract-replay ../dataset/shouxian_product/<产品> \
-  --replay-identity <fixture_identity> --parser-fingerprint <parser_version> \
-  --run-dir out/replay/<产品>
-# 3 产品基线 + 报告
-uv run python scripts/baseline_004.py run && uv run python scripts/baseline_004.py report
-```
+命令行入口（`cli.py`）从任何入口均不可达，已在 S7a 删除；管道只经 `product_ingestion` 调用，随 S5 退役。
 
 产物：`pred.jsonl`（与 goldenset eval 对齐 + confidence/pending_judge 扩展）、`manifest.json`、
 `judge-queue.jsonl`（主会话 Claude 批处理后 `apply-judgements` 回写）、`dead-letters.jsonl`、
