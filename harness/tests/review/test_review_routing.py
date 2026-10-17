@@ -4,6 +4,11 @@ Protected file: written by Claude. A pack not yet quality-admitted, missing scor
 a score or threshold, a score below its threshold, or nothing to review sends the whole product to
 the human queue with every applicable reason code. Labels record who reviewed and never rewrite the
 input claims.
+
+Updated by RV2a (Spec §3.4, §4; user ruling 2026-10-17): unknown claims publish no fact, so they are
+neither scored nor blocking. The cases use evidence-bearing present/absent_explicitly claims, and
+three cases pin unknown: it needs no score or threshold, a publish of only unknown claims has
+nothing to review, and under machine review it is labelled machine without a score.
 """
 
 from __future__ import annotations
@@ -13,27 +18,47 @@ from collections.abc import Callable
 import pytest
 
 from insurance_harness.contracts import Claim
-from insurance_harness.contracts.enums import ClaimState, ReviewMode, SourceClass, UnknownReason
+from insurance_harness.contracts.enums import (
+    ClaimState,
+    LocatorKind,
+    ReviewMode,
+    SourceClass,
+    UnknownReason,
+)
+from insurance_harness.contracts.knowledge import Evidence, Locator
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, labelled, route
 
 REVIEWER = "deepseek-flash@review-v1"
 AT = "2026-10-17T12:00:00Z"
 
 
-def claim(predicate: str) -> Claim:
+EVIDENCE = Evidence(
+    source_ref="source:v1:k-1:2:" + "ab" * 32,
+    file_sha256="ab" * 32,
+    locator=Locator(kind=LocatorKind.PDF_TEXT_SPAN, page=1, start=0, end=6),
+    quote="本合同所述内容",
+    access_scope="space",
+)
+
+
+def claim(predicate: str, state: ClaimState = ClaimState.PRESENT) -> Claim:
     key = f"P1/{predicate}"
+    known = state != ClaimState.UNKNOWN
     return Claim(
         claim_id=key,
         logical_key=key,
         subject_ref="P1",
         predicate=predicate,
-        state=ClaimState.UNKNOWN,
+        state=state,
+        value="90日" if state == ClaimState.PRESENT else None,
+        evidence=[EVIDENCE] if known else [],
         origin=SourceClass.SOURCE_SUPPORTED,
-        unknown_reason=UnknownReason.NOT_IN_MATERIAL,
+        unknown_reason=None if known else UnknownReason.NOT_IN_MATERIAL,
     )
 
 
-CLAIMS = [claim("term_a"), claim("term_b")]
+CLAIMS = [claim("term_a"), claim("term_b", ClaimState.ABSENT_EXPLICITLY)]
+UNKNOWN = claim("term_c", ClaimState.UNKNOWN)
 SCORES = Scores(reviewer=REVIEWER, reviewed_at=AT, by_key={"P1/term_a": 0.97, "P1/term_b": 0.91})
 
 
@@ -133,3 +158,37 @@ def test_a_machine_route_without_a_score_for_every_claim_is_refused() -> None:
         labelled(CLAIMS, Route(ReviewMode.MACHINE, "review-policy@3", ()), PARTIAL)
     with pytest.raises(ValueError):
         labelled(CLAIMS, Route(ReviewMode.MACHINE, "review-policy@3", ()), None)
+
+
+# --- unknown claims (RV2a Spec §3.4; user ruling 2026-10-17) -------------------------------
+
+
+def test_unknown_claims_need_no_score_or_threshold() -> None:
+    result = route(
+        [*CLAIMS, UNKNOWN],
+        admitted=True,
+        threshold=limits(term_a=0.9, term_b=0.9),  # none for term_c
+        scores=SCORES,  # no score for term_c
+        policy_ref="review-policy@3",
+    )
+    assert result == Route(mode=ReviewMode.MACHINE, policy_ref="review-policy@3", reasons=())
+
+
+def test_a_publish_of_only_unknown_claims_has_nothing_to_review() -> None:
+    result = route(
+        [UNKNOWN, claim("term_d", ClaimState.UNKNOWN)],
+        admitted=True,
+        threshold=limits(term_c=0.9, term_d=0.9),
+        scores=SCORES,
+        policy_ref="review-policy@3",
+    )
+    assert result == Route(mode=ReviewMode.HUMAN, policy_ref=None, reasons=("NO_CLAIMS",))
+
+
+def test_unknown_claims_under_machine_review_are_labelled_without_a_score() -> None:
+    out = labelled([*CLAIMS, UNKNOWN], Route(ReviewMode.MACHINE, "review-policy@3", ()), SCORES)
+    assert [c.review.model_dump(mode="json") for c in out] == [
+        {"mode": "machine", "score": 0.97, "reviewer": REVIEWER, "reviewed_at": AT},
+        {"mode": "machine", "score": 0.91, "reviewer": REVIEWER, "reviewed_at": AT},
+        {"mode": "machine", "score": None, "reviewer": REVIEWER, "reviewed_at": AT},
+    ]
