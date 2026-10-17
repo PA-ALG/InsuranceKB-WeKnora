@@ -196,11 +196,19 @@
   1. Golden v2 与 manifest；
   2. 旧分段表：用基线提交（`main@b73340480`）的 `segments.py` 对原始页（含费率表）导出的 JSON，
      每段带 `id`、`document`、`document_sha256`、`page`、`start`、`end`，每页带页文本 sha256；
-  3. 当前读页结果。导出脚本只有几行，放在运行目录，PR 写明基线、脚本 sha256 与输入页指纹。
+  3. 当前原始页快照：该产品全部材料（含被排除的）逐页的文件 sha256 与页文本。当前分段由快照经 §3.2 过滤后切出，
+     被排除材料的旧身份也对这份快照核对。
+
+  导出脚本只有几行，放在运行目录，PR 写明基线、脚本 sha256 与输入页指纹。
 - **规则**（任何一步不符即停，不写出任何文件）：
-  1. **核对**：
-     - 旧分段表里每页的页文本 sha256 必须等于当前同一文档同一页的页文本 sha256，否则停；
-     - 每条 Golden 证据的 `segment_id` 必须在旧分段表中，文件、指纹、页码相同，旧段原文（忽略空白与宽度）等于引文，否则停。
+  1. **核对**（每条 Golden 证据，含被排除材料上的，都在求交集之前核对完）：
+     - `segment_id` 必须在旧分段表中，否则 `SEGMENT_ID_UNKNOWN`；
+     - 旧段的文件、指纹、页码须与证据相同，旧段原文（忽略空白与宽度）须等于引文，否则 `QUOTE_MISMATCH`；
+     - 快照里须有该文件该页，且快照的文件 sha256 须等于旧段与证据记录的指纹，否则 `SOURCE_FINGERPRINT_CHANGED`。
+       页文本相同但文件指纹变了，也不接受；
+     - 旧分段表里该页的页文本 sha256 须等于快照页文本的 sha256，否则 `PAGE_TEXT_CHANGED`；
+     - 旧段区间须满足 `0 ≤ start < end ≤ 页长`，且快照页文本 `[start:end)` 逐字等于旧段原文，否则 `SEGMENT_RANGE_INVALID`。
+       这样可以防止坐标被挪到别处、而原文字段没改的情况。
   2. **删除非证据材料的证据**：判定用当前材料角色（§3.2）。
   3. **映射**：
      - 取旧段在页内的区间，找出与之有正长度交集的全部新段（端点相接不算），每个新段成一条证据（引文 = 新段原文，编号 = 新编号）；
@@ -221,11 +229,20 @@
     - 它们的取值或状态建立在旧口径上：14 个取值仍含费率表推出的条目，5 个是机械转成的 `unknown`；
     - 只可用于段落选择诊断（`segment_score`）；
     - 不得进入语义取值评分、审核门槛校准与 pack 准入，直到按新口径由原授权链路（独立评委）复核，并从该列表移除。
-  - **可执行检查**：`eval/golden_items`（RV2b，语义评分与校准的 Golden 入口）读到所请求产品有待复核字段时：
-    - 默认以 `GOLDEN_PENDING_REVIEW`（带产品）停下，不写任何文件；
-    - 只有显式传 `--exclude-pending` 才去掉这些字段，并在输出的摘要行里逐产品报告去掉的字段数，分母变化可见。
+  - **可执行检查**：`eval/golden_items`（RV2b，语义评分与校准的 Golden 入口）：
+    - **先校验所请求产品的清单**，两种模式都校验：必须是非空列表，元素是非空白、不重复的字符串，且每个都是该产品 Golden 中的字段。
+      否则以 `MANIFEST_PENDING_INVALID`（带产品）停下，不写文件。
+      理由：字段改名、Golden 换版本或清单笔误，不能被当成"没有待复核项"。
+    - 清单合法且有待复核字段时：
+      - 默认以 `GOLDEN_PENDING_REVIEW`（带产品）停下，不写任何文件；
+      - 只有显式传 `--exclude-pending` 才去掉这些字段，并在输出的摘要行里逐产品报告去掉的字段数，分母变化可见。
     - 其余字段照常输出。
   - 扩入新文本的证据只影响段落计分，取值本来就不随分段变化，所在字段不列入待复核；它们在修订记录里逐对列出。
+- **输出**：
+  - 全部产品转换完成，且 manifest 结构校验通过（`files`、`products` 下有每个产品）之后才开始写；
+  - 先把所有新内容写成临时文件，再逐个替换，内存中保留原文件快照；
+  - 任何一步写失败，都把已替换的文件恢复成原快照，删除临时文件，以 `OUTPUT_FAILED` 停下。
+    不会留下 Golden 与 manifest 不一致的半成品。
 - **manifest**：
   - 更新文件哈希与状态计数；
   - `source_sha256` 只列证据材料的指纹（Golden 由它们标注），被排除材料的指纹移到 `non_evidence_sha256` 留档；
@@ -301,7 +318,17 @@
   - 端点相接不算重叠；
   - 去重与阅读顺序；
   - 删除非证据材料与删空转 `unknown`；
-  - 页文本指纹不符、旧编号不在旧表、旧段原文与引文不符时停下且不写文件。
+  - 停下且不写文件的情况：
+    - 页文本指纹不符、旧编号不在旧表、旧段原文与引文不符；
+    - 坐标被改但原文字段未改；
+    - 页文本相同但文件指纹改变；
+    - 被排除材料上的旧证据与快照不符；
+  - 命令的输出阶段：
+    - 中途（第一个文件）写失败、末尾（manifest）写失败，都恢复原快照、不留临时文件，并输出 `OUTPUT_FAILED`；
+    - manifest 缺少产品条目时，在写之前停下。
+- `harness/tests/eval/test_golden_items_pending.py`（合成 Golden）：
+  - 合法清单默认停下，`--exclude-pending` 只去掉清单字段并报告数量；
+  - 失配清单在两种模式下都以 `MANIFEST_PENDING_INVALID` 停下、不写文件：字段不存在、空白、重复、空列表、非列表。
 - `harness/tests/eval/test_golden_rate_tables_removed.py`：
   - Golden v2 不引用非证据角色的材料；
   - S4i 修订记录完整（基线、逐产品计数、`to_unknown` 字段为 `unknown`）；
@@ -315,8 +342,13 @@
   - 精确版本与删除集合；
   - 四条 includes、缴费期限 unknown_rule 与 excludes 的精确新文字；
   - 其余内容摘要与 `draft-2026-10-16b` 相同。
-- **已有受保护测试的夹具**：`test_source_map.py`、`test_publish_cli.py`、`test_publish_routing.py`、`test_compile_run.py` 用的合成材料没有角色信号，
-  失败关闭后会被拒绝。夹具改成带角色信号的合成文本或文件名，断言不改；单独提交并写明原因，由审核方确认。
+- **已有受保护测试的夹具**：七个测试文件用的合成材料没有角色信号，失败关闭后会被拒绝：
+  - `harness/tests/ingest/test_source_map.py`；
+  - `harness/tests/compilers/schema_fields/test_publish_cli.py`、`test_publish_routing.py`；
+  - `harness/tests/eval/test_compile_run.py`、`test_annotation_workflow.py`、`test_compile_replay.py`、`test_compile_replay_identity.py`。
+
+  只改夹具：文件名带上角色关键词，页文本末尾追加角色信号，读页桩按文档名给出首页信号；断言不改。
+  单独提交（`5839df002`）并写明原因，由审核方确认。
 
 **门禁**：
 
