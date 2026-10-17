@@ -214,6 +214,9 @@ func publishingRequest(c *gin.Context, service *release.Service) (release.Princi
 		candidateUnavailable(c)
 		return release.Principal{}, false
 	}
+	if p, ok := sessionReadPrincipal(c); ok {
+		return p, true
+	}
 	p, err := requestPrincipal(c)
 	if err != nil {
 		writeError(c, err)

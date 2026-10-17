@@ -66,3 +66,4 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `internal/handler/knowledgebase.go` | S4c-2b-1 | KB 删除分支把来源固定拒绝映射为 409，沿用原有其他错误处理 | 部分（通用删除错误映射） | 上游提供删除准入冲突映射后移除接缝 |
 | `internal/application/service/knowledgebase_delete_datasource_test.go` | S4c-2b-1 | 两个既有同步删除夹具注入知识仓库并委托原 KB 删除，保留数据源清理断言 | 否（测试装配） | 上游提供原子删除准入测试装配后恢复 |
 | `internal/application/service/datasource_delete_sqlite_test.go` | S4c-2b-1 | SQLite 同步删除夹具注入委托原 KB 删除的知识仓库，保留真实数据源清理断言 | 否（测试装配） | 上游提供原子删除准入测试装配后恢复 |
+| `internal/router/router.go` | S3d-1 | 复用企业来源读取装配会话只读路由，按保存的调用租户解析 Space 并对 RAW/wiki KB 分别执行读权限守卫 | 部分（企业路由装配） | 上游提供企业会话读取模块与双 KB 权限装配扩展点后移除接缝 |
