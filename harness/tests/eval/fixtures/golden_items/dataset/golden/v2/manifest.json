@@ -1,0 +1,7 @@
+{
+ "dataset_version": "synthetic",
+ "products": {
+  "alpha": {"pack_id": "pack_one", "model_id": "judge-one", "product_id": "alpha"},
+  "beta": {"pack_id": "pack_two", "model_id": "judge-two", "product_id": "beta"}
+ }
+}
