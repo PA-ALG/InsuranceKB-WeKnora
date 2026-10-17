@@ -9,7 +9,7 @@
   "G5_hardcoded": 79,
   "G6_private_access": 339,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 459,
+  "G10_upstream_patches": 461,
   "G11_new_file_location": 847
  },
  "guards": {
@@ -1290,7 +1290,9 @@
    "internal/mcpserver/tools_retrieve.go": 1,
    "internal/application/service/datasource_delete_sqlite_test.go": 1,
    "internal/application/service/knowledgebase_delete_datasource_test.go": 1,
-   "internal/handler/knowledgebase.go": 1
+   "internal/handler/knowledgebase.go": 1,
+   "frontend/src/components/menu.vue": 1,
+   "frontend/src/stores/menu.ts": 1
   },
   "G11_new_file_location": {
    "cmd/mineru-capture-596-1/main.go": 1,

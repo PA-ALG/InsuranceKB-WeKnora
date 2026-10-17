@@ -67,3 +67,5 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `internal/application/service/knowledgebase_delete_datasource_test.go` | S4c-2b-1 | 两个既有同步删除夹具注入知识仓库并委托原 KB 删除，保留数据源清理断言 | 否（测试装配） | 上游提供原子删除准入测试装配后恢复 |
 | `internal/application/service/datasource_delete_sqlite_test.go` | S4c-2b-1 | SQLite 同步删除夹具注入委托原 KB 删除的知识仓库，保留真实数据源清理断言 | 否（测试装配） | 上游提供原子删除准入测试装配后恢复 |
 | `internal/router/router.go` | S3d-1 | 复用企业来源读取装配会话只读路由，按保存的调用租户解析 Space 并对 RAW/wiki KB 分别执行读权限守卫 | 部分（企业路由装配） | 上游提供企业会话读取模块与双 KB 权限装配扩展点后移除接缝 |
+| `frontend/src/stores/menu.ts` | S3d-3a | 侧栏增加"企业知识"入口（与知识库并列），文案走 `menu.enterpriseKnowledge`；侧栏菜单是固定数组，没有注册扩展点 | 部分（侧栏注册扩展点） | 上游提供侧栏菜单注册扩展点后改为在 enterprise 模块内注册并移除此行 |
+| `frontend/src/components/menu.vue` | S3d-3a | 企业知识入口的图标（复用知识库图标，所在页面高亮）、激活态与顶部分组；图标与分组在组件内写死 | 部分（侧栏注册扩展点） | 同上：上游侧栏支持注册图标、激活态与分组后移除 |
