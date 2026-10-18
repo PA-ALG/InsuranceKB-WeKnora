@@ -126,7 +126,7 @@ describe('Space page', () => {
       { name: 'enterpriseEntity', params: { spaceId: 'demo', entityId: 'P3' }, query: { release: 'rel-9' } },
     ])
     expect(links[0].text()).toContain('乙产品')
-    expect(links[0].text()).toContain('5 项')
+    // S3f-2: the navigation shows one line per entry; the field count is no longer listed.
   })
 
   it('treats a Space without a release as empty, not as an error', async () => {
