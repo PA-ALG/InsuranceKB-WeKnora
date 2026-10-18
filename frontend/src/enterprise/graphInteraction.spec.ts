@@ -83,6 +83,7 @@ describe('graph interactions and release isolation', () => {
     await view.get('[data-graph-zoom-in]').trigger('click')
     expect(transform()).not.toBe(before)
     await view.get('[data-graph-fit]').trigger('click')
+    await view.get('[data-graph-all-concepts] input').setValue(true) // full graph: products and concepts together
     await view.get('[data-graph-node="entity:M1"]').trigger('mouseenter')
     expect(view.get('[data-graph-node="entity:X1"]').classes()).toContain('ek-graph-node--muted')
     expect(view.get('[data-graph-node="concept:cooling_off_period"]').classes()).not.toContain('ek-graph-node--muted')
@@ -113,6 +114,7 @@ describe('graph interactions and release isolation', () => {
     vi.mocked(readRelease).mockResolvedValue(release())
     const view = page()
     await flushPromises()
+    await view.get('[data-graph-all-concepts] input').setValue(true) // full graph: products and concepts together
     await view.get('[data-graph-node="concept:cooling_off_period"]').trigger('click')
     for (let i = 0; i < 6; i++) await view.get('[data-graph-zoom-out]').trigger('click')
     expect(view.get('[data-graph-node="entity:M2"] text').attributes('opacity')).toBe('0')

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // S3g acceptance (protected, written by Claude): the relation graph page reads one release and keeps
-// every link on it (Spec docs/design/slices/S3g-知识图谱复用.md §2.2).
+// every link on it (Spec docs/design/slices/S3g-知识图谱复用.md §2.2; R2 exploratory default view).
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
@@ -29,15 +29,17 @@ const linksOf = (view: ReturnType<typeof page>) => view.findAllComponents(Router
 afterEach(() => { vi.resetAllMocks() })
 
 describe('relation graph page', () => {
-  it('draws the products and concepts of the release it was given', async () => {
+  it('draws the products of the release it was given, and a product\'s concepts once it is selected', async () => {
     vi.mocked(readRelease).mockResolvedValue(release())
     const view = page()
     await flushPromises()
     expect(vi.mocked(readRelease).mock.calls).toEqual([['demo', 'rel-9']])
-    const ids = view.findAll('[data-graph-node]').map(node => node.attributes('data-graph-node'))
-    expect(ids).toContain('entity:M1')
-    expect(ids).toContain('concept:cooling_off_period')
+    const ids = () => view.findAll('[data-graph-node]').map(node => node.attributes('data-graph-node'))
+    expect(ids()).toContain('entity:M1')
+    expect(ids().some(id => id?.startsWith('concept:'))).toBe(false) // the overview draws groups and products only
     expect(view.findAll('[data-graph-edge]').length).toBeGreaterThan(0)
+    await view.get('[data-graph-node="entity:M1"]').trigger('click')
+    expect(ids()).toContain('concept:cooling_off_period')
   })
 
   it('opens a product and a concept with links pinned to the same release', async () => {
@@ -72,6 +74,7 @@ describe('relation graph page', () => {
     await view.get('[data-graph-search] input').trigger('keydown', { key: 'Enter' })
     expect(view.get('[data-graph-detail]').text()).toContain('丙重疾')
 
+    await view.get('[data-graph-overview]').trigger('click') // group filtering is checked on the overview
     const before = view.findAll('[data-graph-node^="entity:"]').length
     await view.get('[data-graph-group="pack_medical"] input').setValue(false)
     const after = view.findAll('[data-graph-node^="entity:"]').map(node => node.attributes('data-graph-node'))
