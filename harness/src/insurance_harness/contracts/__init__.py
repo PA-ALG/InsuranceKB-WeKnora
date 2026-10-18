@@ -37,6 +37,12 @@ from insurance_harness.contracts.knowledge import (
     Claim as Claim,
 )
 from insurance_harness.contracts.knowledge import (
+    ConceptStatement as ConceptStatement,
+)
+from insurance_harness.contracts.knowledge import (
+    ConceptSummary as ConceptSummary,
+)
+from insurance_harness.contracts.knowledge import (
     Entity as Entity,
 )
 from insurance_harness.contracts.knowledge import (

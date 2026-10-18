@@ -18,6 +18,7 @@ from insurance_harness.contracts.bundle import BundleMember, CandidateBundle, Re
 from insurance_harness.contracts.enums import Origin
 from insurance_harness.contracts.knowledge import (
     Claim,
+    ConceptSummary,
     Entity,
     NavigationProfile,
     PresentationProfile,
@@ -48,11 +49,13 @@ def assemble(
     review_plan: Sequence[ReviewPlan] = (),
     removals: Sequence[str] = (),
     navigations: Sequence[NavigationProfile] = (),
+    concepts: Sequence[ConceptSummary] = (),
 ) -> CandidateBundle:
     """Entity, profile and claim members on the given Head (None before the first release).
 
     `removals` names base members the activation drops (S5a): a candidate is a delta, so a claim
-    the new compile no longer yields stays unless it is removed explicitly.
+    the new compile no longer yields stays unless it is removed explicitly. Concept summaries
+    (S3e-3) become ``concept/<key>`` members; they cite claims, not sources.
     """
     members = [
         *(_member("entity", f"entity/{entity.entity_id}", entity) for entity in entities),
@@ -64,6 +67,7 @@ def assemble(
             _member("navigation", f"navigation/{navigation.navigation_id}", navigation)
             for navigation in navigations
         ),
+        *(_member("concept", f"concept/{item.concept_key}", item) for item in concepts),
         *(
             _member(
                 "claim",
@@ -103,7 +107,7 @@ def assemble(
 def _member(
     kind: str,
     slug: str,
-    content: Entity | PresentationProfile | NavigationProfile | Claim,
+    content: Entity | PresentationProfile | NavigationProfile | ConceptSummary | Claim,
     refs: list[str] | None = None,
 ) -> BundleMember:
     payload: dict[str, Any] = content.model_dump(mode="json")

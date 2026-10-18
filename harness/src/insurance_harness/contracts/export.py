@@ -25,6 +25,7 @@ from insurance_harness.contracts.compile import (
 )
 from insurance_harness.contracts.knowledge import (
     Claim,
+    ConceptSummary,
     Entity,
     Evidence,
     ExpertRevision,
@@ -43,6 +44,7 @@ MODELS: tuple[type[BaseModel], ...] = (
     Evidence, Locator, Entity, Claim, Relation, QAItem, ExpertRevision, SchemaSnapshot,
     PageText, CompileTask, CompileResult, GapTask, ReviewItem,
     CandidateBundle, BundleMember, ReviewPlan, PresentationProfile, NavigationProfile,
+    ConceptSummary,
 )  # fmt: skip
 README = f'''# Generated contracts
 
