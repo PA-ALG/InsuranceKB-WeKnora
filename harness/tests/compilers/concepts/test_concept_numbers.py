@@ -46,6 +46,7 @@ from insurance_harness.compilers.concepts.synthesis import (
         ("1. 20年长期保障", {"20年"}),  # a list number is not a decimal point
         ("计划三5000元；计划一2万元", {"5000元", "20000元"}),  # a label digit is not the number
         ("保险期间 20 年，10 万元", {"20年", "100000元"}),
+        ("一万零5元，1万零5千元", {"10005元", "15000元"}),
         ("18周岁 -65周岁", {"18周岁", "65周岁"}),
         ("每年 -3.5%", {"-3.5%"}),
         ("缴费期满", set()),
@@ -71,6 +72,13 @@ def problems(statement: str, value: str) -> list[str]:
         ("甲产品为十十日。", "为10日。"),
         ("甲产品收益为负三点五%。", "收益3.5%。"),
         ("甲产品差额为-15000元。", "差额一万五千元。"),
+        ("甲产品收益为负 三点五%。", "收益为3.5%。"),  # review R2 on PR #227
+        ("甲产品给付5 千元。", "给付1000元。"),
+        ("甲产品保障3 个 月。", "保障20年。"),
+        ("甲产品为1 5日。", "为5日。"),
+        ("甲产品保障三点 5年。", "保障5年。"),
+        ("甲产品给付一万零5元。", "给付5元。"),  # review R3 on PR #227
+        ("甲产品给付1万零5千元。", "给付5000元。"),
         ("两款产品每年-3.5%。", "每年3.5%"),
         ("两款产品每年负三点五%。", "每年3.5%"),
     ],
@@ -81,6 +89,13 @@ def problems(statement: str, value: str) -> list[str]:
         "unreadable",
         "opposite sign in words",
         "opposite sign",
+        "sign across a space",
+        "power across a space",
+        "unit across spaces",
+        "digits across a space",
+        "fraction across a space",
+        "mixed numeral with powers",
+        "arabic numeral with powers",
         "sign after a word ending in a unit",
         "sign in words after such a word",
     ],
