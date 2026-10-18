@@ -34,8 +34,12 @@ NonNegativeInt = Annotated[int, Field(ge=0, strict=True)]
 PositiveInt = Annotated[int, Field(ge=1, strict=True)]
 Coordinate = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 ClaimValue = (
-    StrictStr | StrictInt | Annotated[StrictFloat, Field(allow_inf_nan=False)]
-    | StrictBool | list[StrictStr] | None
+    StrictStr
+    | StrictInt
+    | Annotated[StrictFloat, Field(allow_inf_nan=False)]
+    | StrictBool
+    | list[StrictStr]
+    | None
 )
 
 
@@ -86,9 +90,12 @@ class Locator(ContractModel):
     slide: PositiveInt | None = None
     shape_id: NonBlank | None = None
     sheet: NonBlank | None = None
-    cell_range: Annotated[
-        str, StringConstraints(pattern=r"^\$?[A-Z]+\$?[1-9][0-9]*(:\$?[A-Z]+\$?[1-9][0-9]*)?$")
-    ] | None = None
+    cell_range: (
+        Annotated[
+            str, StringConstraints(pattern=r"^\$?[A-Z]+\$?[1-9][0-9]*(:\$?[A-Z]+\$?[1-9][0-9]*)?$")
+        ]
+        | None
+    ) = None
     chunk_id: NonBlank | None = None
     path: Annotated[list[NonBlank], Field(min_length=1)] | None = None
     revision_record_id: NonBlank | None = None
@@ -253,6 +260,9 @@ class SchemaSnapshot(ContractModel):
 class ProfileField(ContractModel):
     field_key: NonBlank
     short_title: NonBlank
+    # S3e: the schema's definition and category, shown on concept pages; absent in older releases.
+    description: str | None = None
+    schema_category: str | None = None
 
 
 class ProfileSection(ContractModel):
@@ -272,6 +282,7 @@ class PresentationProfile(ContractModel):
     profile_version: NonBlank
     profile_sha256: Sha256
     schema_pack_id: NonBlank
+    display_name: str | None = None  # S3e: the pack's display name
     classification_labels: list[NonBlank] = Field(min_length=1)
     sections: list[ProfileSection] = Field(min_length=1)
 
@@ -281,4 +292,41 @@ class PresentationProfile(ContractModel):
         fields = [field.field_key for section in self.sections for field in section.fields]
         if len(set(sections)) != len(sections) or len(set(fields)) != len(fields):
             raise ValueError("section and field keys must be unique within a profile")
+        return self
+
+
+class NavigationGroup(ContractModel):
+    group_key: NonBlank
+    display_name: NonBlank
+    classification_labels: list[NonBlank] = Field(default_factory=list)
+
+
+class NavigationDomain(ContractModel):
+    domain_key: NonBlank
+    display_name: NonBlank
+    entity_types: list[NonBlank] = Field(min_length=1)
+    groups: list[NavigationGroup] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def group_keys_are_unique(self) -> Self:
+        keys = [group.group_key for group in self.groups]
+        if len(set(keys)) != len(keys):
+            raise ValueError("group keys must be unique within a domain")
+        return self
+
+
+class NavigationProfile(ContractModel):
+    """How readers organise a release's entries (S3e): domains by entity type, then groups by
+    classification label. Versioned data published with the release, replaced whole each time.
+    """
+
+    navigation_id: NonBlank
+    navigation_version: NonBlank
+    domains: list[NavigationDomain] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def domain_keys_are_unique(self) -> Self:
+        keys = [domain.domain_key for domain in self.domains]
+        if len(set(keys)) != len(keys):
+            raise ValueError("domain keys must be unique")
         return self

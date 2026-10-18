@@ -34,6 +34,7 @@ from pydantic import (
 
 from insurance_harness.bundle.assemble import BundleError, retired_claims
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
+from insurance_harness.catalog.navigation import NavigationError, load_navigation
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
 from insurance_harness.compilers.schema_fields.claims import (
     candidate_bundle,
@@ -138,6 +139,10 @@ def main(argv: list[str] | None = None) -> int:
     except BundleError as error:
         return _stop("BUNDLE_INVALID", reason=error.reason)
     try:
+        navigation = load_navigation()  # local data too
+    except NavigationError as error:
+        return _stop(error.code)
+    try:
         source_map = load_source_map(args.source_map)
         pages, sources = load_trusted_pages(
             reader_from_env(), source_map.space_id, source_map.entries(args.product)
@@ -168,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
             page=page,
             review=(review, scores),
             removals=retired,
+            navigation=navigation,
         )
         result = publish(client, source_map.space_id, bundle, decision=decision, activate=activate)
     except (PlatformError, SourcePagesError, SourceMapError) as error:

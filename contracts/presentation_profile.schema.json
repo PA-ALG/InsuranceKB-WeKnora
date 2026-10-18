@@ -3,11 +3,35 @@
     "ProfileField": {
       "additionalProperties": false,
       "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "field_key": {
           "minLength": 1,
           "pattern": "\\S",
           "title": "Field Key",
           "type": "string"
+        },
+        "schema_category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema Category"
         },
         "short_title": {
           "minLength": 1,
@@ -70,6 +94,18 @@
       "minItems": 1,
       "title": "Classification Labels",
       "type": "array"
+    },
+    "display_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Name"
     },
     "profile_id": {
       "minLength": 1,

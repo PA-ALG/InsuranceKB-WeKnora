@@ -191,7 +191,7 @@ def test_publish_submits_decides_and_activates(
         "product": "1828",
         "space_id": "space-1",
         "cards_version": COMPILED_WITH,
-        "members": 4,
+        "members": 5,  # S3e: the navigation member travels with every publish
         "candidate_id": "cand_1",
         "candidate_status": "created",
         "decision_id": "dec_1",
@@ -211,6 +211,7 @@ def test_publish_submits_decides_and_activates(
     assert {m["logical_slug"] for m in submitted["members"]} == {
         "entity/1828",
         "presentation/profile_pack",
+        "navigation/enterprise",
         "1828/waiting_period",
         "1828/premium_grace_period",
     }
