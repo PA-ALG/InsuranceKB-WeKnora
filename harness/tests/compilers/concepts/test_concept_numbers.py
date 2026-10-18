@@ -43,9 +43,8 @@ from insurance_harness.compilers.concepts.synthesis import (
         ("5000元-1万元", {"5000元", "10000元"}),
         ("每年-3.5%", {"-3.5%"}),
         ("每月 − 15000元", {"-15000元"}),
-        ("1. 20年长期保障；2. 3次给付", {"20年", "3次"}),  # numbered items, not decimals
-        ("特色：1. 20年保障；2. 3次给付\n1. 5年；2. 6年", {"20年", "3次", "5年", "6年"}),
-        ("1. 20年长期保障", {"1.2年"}),  # a single item proves no list: the point is decimal
+        ("1. 20年长期保障", {"1.2年"}),  # a point is a decimal point, list or not: fails closed
+        ("1. 20年长期保障；2. 3次给付", {"1.2年", "2.3次"}),
         ("期限如下：\n12. 50年", {"12.5年"}),
         ("给付12. 50元", {"12.5元"}),
         ("计划三5000元；计划一2万元", {"5000元", "20000元"}),  # a label digit is not the number
@@ -89,6 +88,9 @@ def problems(statement: str, value: str) -> list[str]:
         ("甲产品收益率：3. 5%。", "收益率为5%。"),
         ("甲产品给付金额为50元。", "给付金额：12. 50元。"),
         ("甲产品期限为50年。", "期限如下：\n12. 50年"),
+        ("首年收益率：1. 5%；次年收益率：2. 5%。", "收益率均为5%。"),  # fourth round on PR #227
+        ("收益率均为5%。", "首年收益率：1. 5%；次年收益率：2. 5%。"),
+        ("甲项金额：1. 50元。\n\n乙项金额：2. 50元。", "各项金额均为50元。"),
         ("两款产品每年-3.5%。", "每年3.5%"),
         ("两款产品每年负三点五%。", "每年3.5%"),
     ],
@@ -112,6 +114,9 @@ def problems(statement: str, value: str) -> list[str]:
         "percentage after a colon",
         "decimal in the claim",
         "decimal on its own line in the claim",
+        "two field decimals in the statement",
+        "two field decimals in the claim",
+        "decimals in two paragraphs",
         "sign after a word ending in a unit",
         "sign in words after such a word",
     ],
