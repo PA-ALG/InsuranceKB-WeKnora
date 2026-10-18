@@ -41,7 +41,12 @@ def test_both_fields_are_optional_and_checked() -> None:
         {"navigation_id": "n", "navigation_version": "1", "domains": [DOMAIN]}
     )
     assert plain.display_name is None and plain.overview_fields == []
-    for bad in ({"display_name": " "}, {"overview_fields": ["a", "a"]}, {"overview_fields": [" "]}):
+    for bad in (
+        {"display_name": " "},
+        {"overview_fields": ["a", "a"]},
+        {"overview_fields": [" "]},
+        {"overview_fields": None},  # may be left out, never null (review R1 on PR #233)
+    ):
         with pytest.raises(ValidationError):
             NavigationProfile.model_validate(
                 {"navigation_id": "n", "navigation_version": "1", "domains": [DOMAIN], **bad}
