@@ -2393,8 +2393,12 @@ func (s *wikiIngestService) deduplicateExtractedBatch(
 		return entities, concepts, slugMapping
 	}
 	if s.wikiService == nil {
-		entities = s.stabilizeExtractedIdentities(ctx, kbID, types.WikiPageTypeEntity, entities, nil, nil, batchCtx, slugMapping)
-		concepts = s.stabilizeExtractedIdentities(ctx, kbID, types.WikiPageTypeConcept, concepts, nil, nil, batchCtx, slugMapping)
+		entities = s.stabilizeExtractedIdentities(
+			ctx, kbID, types.WikiPageTypeEntity, entities, nil, nil, batchCtx, slugMapping,
+		)
+		concepts = s.stabilizeExtractedIdentities(
+			ctx, kbID, types.WikiPageTypeConcept, concepts, nil, nil, batchCtx, slugMapping,
+		)
 		return entities, concepts, slugMapping
 	}
 
@@ -2729,7 +2733,8 @@ func (s *wikiIngestService) generateWithTemplateResult(
 			if err != nil || response == nil {
 				return nil, &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeUnknown, Cause: err}
 			}
-			if response.FinishReason == "length" && (purpose == "wiki_candidate_slug" || purpose == "wiki_chunk_citation") {
+			if response.FinishReason == "length" &&
+				(purpose == "wiki_candidate_slug" || purpose == "wiki_chunk_citation") {
 				logger.Warnf(ctx, "wiki ingest: candidate/citation output truncated at completion budget")
 				return nil, &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeFailed, Cause: errWikiOutputTruncated}
 			}
@@ -3109,7 +3114,12 @@ type wikiDocumentWindow struct {
 	candidates string
 }
 
-func prepareWikiDocumentWindows(ctx context.Context, repo interfaces.ChunkRepository, tenantID uint64, chunks []*types.Chunk) ([]wikiDocumentWindow, string) {
+func prepareWikiDocumentWindows(
+	ctx context.Context,
+	repo interfaces.ChunkRepository,
+	tenantID uint64,
+	chunks []*types.Chunk,
+) ([]wikiDocumentWindow, string) {
 	var textChunks []*types.Chunk
 	var ids []string
 	for _, c := range chunks {
@@ -3154,7 +3164,10 @@ func prepareWikiDocumentWindows(ctx context.Context, repo interfaces.ChunkReposi
 		if utf8.RuneCountInString(single) > maxContentForWiki {
 			flush()
 			windows = append(windows, wikiDocumentWindow{chunks: []*types.Chunk{c}, content: single})
-			logger.Warnf(ctx, "wiki ingest: oversized single-chunk window=%d content_runes=%d", len(windows)-1, utf8.RuneCountInString(single))
+			logger.Warnf(
+				ctx, "wiki ingest: oversized single-chunk window=%d content_runes=%d",
+				len(windows)-1, utf8.RuneCountInString(single),
+			)
 			continue
 		}
 		members := append(append([]*types.Chunk(nil), current.chunks...), c)

@@ -83,7 +83,9 @@ func (s *wikiIngestService) extractCandidateSlugs(
 				failures[i] = &wikiStageFailure{Stage: "wiki_candidate_slug", Outcome: wikiOutcomeNotRun, Cause: err}
 				return nil
 			}
-			results[i], failures[i] = s.extractRawCandidateSlugs(ectx, chatModel, window.content, lang, oldPageSlugs, batchCtx)
+			results[i], failures[i] = s.extractRawCandidateSlugs(
+				ectx, chatModel, window.content, lang, oldPageSlugs, batchCtx,
+			)
 			return nil // A failed window does not cancel already-sent peers.
 		})
 	}
@@ -92,7 +94,9 @@ func (s *wikiIngestService) extractCandidateSlugs(
 		return nil, nil, nil, err
 	}
 	merged := mergeWindowCandidates(results)
-	entities, concepts, canonical := s.deduplicateExtractedBatch(ctx, chatModel, kbID, merged.Entities, merged.Concepts, batchCtx)
+	entities, concepts, canonical := s.deduplicateExtractedBatch(
+		ctx, chatModel, kbID, merged.Entities, merged.Concepts, batchCtx,
+	)
 	items := make(map[string]extractedItem, len(entities)+len(concepts))
 	for _, group := range [][]extractedItem{entities, concepts} {
 		for _, item := range group {
@@ -202,7 +206,11 @@ func (s *wikiIngestService) extractRawCandidateSlugs(
 	var result combinedExtraction
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		logger.Warnf(ctx, "wiki ingest: failed to parse candidate slug JSON: %v\nRaw: %s", err, raw)
-		return combinedExtraction{}, &wikiStageFailure{Stage: "wiki_candidate_slug", Outcome: wikiOutcomeFailed, Cause: err}
+		return combinedExtraction{}, &wikiStageFailure{
+			Stage:   "wiki_candidate_slug",
+			Outcome: wikiOutcomeFailed,
+			Cause:   err,
+		}
 	}
 
 	return result, nil
@@ -400,7 +408,11 @@ func (s *wikiIngestService) classifyChunkCitations(
 		batchIdx := bi
 		eg.Go(func() error {
 			if err := ectx.Err(); err != nil {
-				batchErrors[batchIdx] = &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: wikiOutcomeNotRun, Cause: err}
+				batchErrors[batchIdx] = &wikiStageFailure{
+					Stage:   "wiki_chunk_citation",
+					Outcome: wikiOutcomeNotRun,
+					Cause:   err,
+				}
 				return nil
 			}
 			batchSpan := s.tracker().BeginSubSpan(ectx, parent, fmt.Sprintf("postprocess.wiki.classify.batch[%d]", batchIdx), types.SpanKindSubSpan, types.JSONMap{"batch": batchIdx, "chunks": len(batch.chunks)})

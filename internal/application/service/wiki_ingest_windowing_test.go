@@ -23,10 +23,12 @@ type windowChunks struct {
 func (r *windowChunks) ListChunksByKnowledgeID(context.Context, uint64, string) ([]*types.Chunk, error) {
 	return r.chunks, nil
 }
+
 func (r *windowChunks) ListChunksByParentIDs(ctx context.Context, tenant uint64, ids []string) ([]*types.Chunk, error) {
 	r.reads++
 	return r.citedChunkRepo.ListChunksByParentIDs(ctx, tenant, ids)
 }
+
 func windowChunk(id string, index int, text string) *types.Chunk {
 	return &types.Chunk{ID: id, KnowledgeID: "source", ChunkIndex: index, ChunkType: types.ChunkTypeText, Content: text}
 }
@@ -63,9 +65,27 @@ func TestWikiWindowsRebuiltRuneBudget(t *testing.T) {
 		chunks  []*types.Chunk
 		lengths []int
 	}{
-		{"exact", []*types.Chunk{windowChunk("a", 0, strings.Repeat("中", 16383)), windowChunk("b", 1, strings.Repeat("文", 16384))}, []int{32768}},
-		{"separator exceeds", []*types.Chunk{windowChunk("a", 0, strings.Repeat("中", 16384)), windowChunk("b", 1, strings.Repeat("文", 16384))}, []int{16384, 16384}},
-		{"oversize then tiny", []*types.Chunk{windowChunk("a", 0, strings.Repeat("中", 32769)), windowChunk("b", 1, "尾")}, []int{32769, 1}},
+		{
+			"exact",
+			[]*types.Chunk{
+				windowChunk("a", 0, strings.Repeat("中", 16383)),
+				windowChunk("b", 1, strings.Repeat("文", 16384)),
+			},
+			[]int{32768},
+		},
+		{
+			"separator exceeds",
+			[]*types.Chunk{
+				windowChunk("a", 0, strings.Repeat("中", 16384)),
+				windowChunk("b", 1, strings.Repeat("文", 16384)),
+			},
+			[]int{16384, 16384},
+		},
+		{
+			"oversize then tiny",
+			[]*types.Chunk{windowChunk("a", 0, strings.Repeat("中", 32769)), windowChunk("b", 1, "尾")},
+			[]int{32769, 1},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			windows, _ := prepareWikiDocumentWindows(context.Background(), nil, 1, tc.chunks)
@@ -141,24 +161,33 @@ func TestWikiWindowsMarkupFirstAndShortTailModelCalls(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var mu sync.Mutex
 			var candidates, summaries []string
-			model := &windowChat{answer: func(ctx context.Context, messages []chat.Message) (*types.ChatResponse, error) {
-				purpose, _ := types.LLMCallMetadataFromContext(ctx)
-				mu.Lock()
-				defer mu.Unlock()
-				switch purpose {
-				case wikiPromptPurpose(agent.WikiCandidateSlugPrompt):
-					candidates = append(candidates, promptText(messages))
-					return &types.ChatResponse{Content: `{"entities":[],"concepts":[]}`}, nil
-				case wikiPromptPurpose(agent.WikiSummaryPrompt):
-					summaries = append(summaries, promptText(messages))
-					return &types.ChatResponse{Content: "SUMMARY: text\nsummary"}, nil
-				default:
-					return nil, fmt.Errorf("unexpected purpose %s", purpose)
-				}
-			}}
+			model := &windowChat{
+				answer: func(ctx context.Context, messages []chat.Message) (*types.ChatResponse, error) {
+					purpose, _ := types.LLMCallMetadataFromContext(ctx)
+					mu.Lock()
+					defer mu.Unlock()
+					switch purpose {
+					case wikiPromptPurpose(agent.WikiCandidateSlugPrompt):
+						candidates = append(candidates, promptText(messages))
+						return &types.ChatResponse{Content: `{"entities":[],"concepts":[]}`}, nil
+					case wikiPromptPurpose(agent.WikiSummaryPrompt):
+						summaries = append(summaries, promptText(messages))
+						return &types.ChatResponse{Content: "SUMMARY: text\nsummary"}, nil
+					default:
+						return nil, fmt.Errorf("unexpected purpose %s", purpose)
+					}
+				},
+			}
 			repo := &windowChunks{chunks: []*types.Chunk{windowChunk("a", 0, tc.first), windowChunk("b", 1, tc.tail)}}
-			svc := &wikiIngestService{chunkRepo: repo, knowledgeSvc: wikiOutcomeKnowledge{}, wikiService: &wikiOutcomePages{}}
-			_, _, err := svc.mapOneDocument(context.Background(), model, WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"}, WikiPendingOp{KnowledgeID: "source"}, wikiOutcomeBatchContext())
+			svc := &wikiIngestService{
+				chunkRepo:    repo,
+				knowledgeSvc: wikiOutcomeKnowledge{},
+				wikiService:  &wikiOutcomePages{},
+			}
+			_, _, err := svc.mapOneDocument(
+				context.Background(), model, WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"},
+				WikiPendingOp{KnowledgeID: "source"}, wikiOutcomeBatchContext(),
+			)
 			if err != nil || len(candidates) != tc.wantCandidates {
 				t.Fatalf("candidates=%d err=%v", len(candidates), err)
 			}
@@ -209,7 +238,7 @@ func TestWikiWindowsRetractionsKeepActualFirstWindowAndPriorContribution(t *test
 	first := "![scan](" + strings.Repeat("x", 32768) + ")"
 	tail := "Current real source text is sufficiently substantial."
 	repo := &windowChunks{chunks: []*types.Chunk{windowChunk("first", 0, first), windowChunk("tail", 1, tail)}}
-	model := &windowChat{answer: func(ctx context.Context, messages []chat.Message) (*types.ChatResponse, error) {
+	model := &windowChat{answer: func(ctx context.Context, _ []chat.Message) (*types.ChatResponse, error) {
 		purpose, _ := types.LLMCallMetadataFromContext(ctx)
 		switch purpose {
 		case wikiPromptPurpose(agent.WikiCandidateSlugPrompt):
@@ -222,8 +251,15 @@ func TestWikiWindowsRetractionsKeepActualFirstWindowAndPriorContribution(t *test
 	}}
 	batch := wikiOutcomeBatchContext()
 	batch.SummaryContentByKnowledgeID = func(context.Context, string) string { return "PRIOR_CONTRIBUTION" }
-	svc := &wikiIngestService{chunkRepo: repo, knowledgeSvc: wikiOutcomeKnowledge{}, wikiService: &windowRetractionPages{}}
-	_, updates, err := svc.mapOneDocument(context.Background(), model, WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"}, WikiPendingOp{KnowledgeID: "source"}, batch)
+	svc := &wikiIngestService{
+		chunkRepo:    repo,
+		knowledgeSvc: wikiOutcomeKnowledge{},
+		wikiService:  &windowRetractionPages{},
+	}
+	_, updates, err := svc.mapOneDocument(
+		context.Background(), model, WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"},
+		WikiPendingOp{KnowledgeID: "source"}, batch,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +270,10 @@ func TestWikiWindowsRetractionsKeepActualFirstWindowAndPriorContribution(t *test
 		}
 	}
 	if seen["retract"] != "PRIOR_CONTRIBUTION" || seen["retractStale"] != first {
-		t.Fatalf("retraction context changed: prior=%q stale_runes=%d", seen["retract"], utf8.RuneCountInString(seen["retractStale"]))
+		t.Fatalf(
+			"retraction context changed: prior=%q stale_runes=%d", seen["retract"],
+			utf8.RuneCountInString(seen["retractStale"]),
+		)
 	}
 }
 
@@ -243,6 +282,7 @@ type windowUntitledKnowledge struct{ wikiOutcomeKnowledge }
 func (windowUntitledKnowledge) GetKnowledgeByIDOnly(context.Context, string) (*types.Knowledge, error) {
 	return &types.Knowledge{ID: "source", ParseStatus: types.ParseStatusFinalizing}, nil
 }
+
 func TestWikiWindowsIgnoreNilChunkDuringTitleFallback(t *testing.T) {
 	model := &windowChat{answer: func(ctx context.Context, _ []chat.Message) (*types.ChatResponse, error) {
 		purpose, _ := types.LLMCallMetadataFromContext(ctx)
@@ -251,8 +291,17 @@ func TestWikiWindowsIgnoreNilChunkDuringTitleFallback(t *testing.T) {
 		}
 		return &types.ChatResponse{Content: "SUMMARY: Body\nSummary"}, nil
 	}}
-	svc := &wikiIngestService{chunkRepo: &windowChunks{chunks: []*types.Chunk{nil, windowChunk("body", 0, "This is substantial body text.")}}, knowledgeSvc: windowUntitledKnowledge{}, wikiService: &wikiOutcomePages{}}
-	_, _, err := svc.mapOneDocument(context.Background(), model, WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"}, WikiPendingOp{KnowledgeID: "source"}, wikiOutcomeBatchContext())
+	svc := &wikiIngestService{
+		chunkRepo: &windowChunks{
+			chunks: []*types.Chunk{nil, windowChunk("body", 0, "This is substantial body text.")},
+		},
+		knowledgeSvc: windowUntitledKnowledge{},
+		wikiService:  &wikiOutcomePages{},
+	}
+	_, _, err := svc.mapOneDocument(
+		context.Background(), model, WikiIngestPayload{TenantID: 1, KnowledgeBaseID: "kb"},
+		WikiPendingOp{KnowledgeID: "source"}, wikiOutcomeBatchContext(),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

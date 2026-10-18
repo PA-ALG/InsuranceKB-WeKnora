@@ -51,11 +51,19 @@ func TestWindowTenantCancellationTracksUnsentCalls(t *testing.T) {
 				svc := &wikiIngestService{}
 				go func() {
 					if stage == "citation" {
-						outcome := svc.classifyChunkCitations(ctx, model, "entity/shared", chunks, "en", wikiOutcomeBatchContext(), nil, windows)
-						done <- cancellationResult{err: outcome.Err(), failures: outcome.BatchErrors, partial: len(outcome.Citations)+len(outcome.NewSlugs) > 0}
+						outcome := svc.classifyChunkCitations(
+							ctx, model, "entity/shared", chunks, "en", wikiOutcomeBatchContext(), nil, windows,
+						)
+						done <- cancellationResult{
+							err:      outcome.Err(),
+							failures: outcome.BatchErrors,
+							partial:  len(outcome.Citations)+len(outcome.NewSlugs) > 0,
+						}
 						return
 					}
-					entities, concepts, items, err := svc.extractCandidateSlugs(ctx, model, "kb", windows, "en", nil, wikiOutcomeBatchContext())
+					entities, concepts, items, err := svc.extractCandidateSlugs(
+						ctx, model, "kb", windows, "en", nil, wikiOutcomeBatchContext(),
+					)
 					var failure *wikiStageFailure
 					var failures []error
 					if errors.As(err, &failure) {
@@ -63,7 +71,11 @@ func TestWindowTenantCancellationTracksUnsentCalls(t *testing.T) {
 							failures = joined.Unwrap()
 						}
 					}
-					done <- cancellationResult{err: err, failures: failures, partial: len(entities)+len(concepts)+len(items) > 0}
+					done <- cancellationResult{
+						err:      err,
+						failures: failures,
+						partial:  len(entities)+len(concepts)+len(items) > 0,
+					}
 				}()
 				timer := time.NewTimer(10 * time.Second)
 				defer timer.Stop()
@@ -89,8 +101,12 @@ func TestWindowTenantCancellationTracksUnsentCalls(t *testing.T) {
 					wantCalls = 0
 					wantOutcome = wikiOutcomeNotRun
 				}
-				if calls.Load() != wantCalls || result.partial || wikiFailureOutcome(result.err) != wantOutcome || len(result.failures) != n {
-					t.Fatalf("calls=%d want=%d partial=%v failures=%d outcome=%v want=%s", calls.Load(), wantCalls, result.partial, len(result.failures), result.err, wantOutcome)
+				if calls.Load() != wantCalls || result.partial || wikiFailureOutcome(result.err) != wantOutcome ||
+					len(result.failures) != n {
+					t.Fatalf(
+						"calls=%d want=%d partial=%v failures=%d outcome=%v want=%s", calls.Load(), wantCalls,
+						result.partial, len(result.failures), result.err, wantOutcome,
+					)
 				}
 				for i, err := range result.failures {
 					want := wikiOutcomeNotRun

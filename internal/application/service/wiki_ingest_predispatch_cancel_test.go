@@ -30,13 +30,18 @@ func TestWikiCancellationDuringRequestPreparationIsNotRun(t *testing.T) {
 			ctx, cancel := context.WithCancel(tenantCtx)
 			defer cancel()
 			var calls atomic.Int32
-			model := &cancelDuringWikiRequestIdentity{cancel: cancel, windowChat: windowChat{answer: func(context.Context, []chat.Message) (*types.ChatResponse, error) {
-				calls.Add(1)
-				return &types.ChatResponse{Content: "{}"}, nil
-			}}}
+			model := &cancelDuringWikiRequestIdentity{
+				cancel: cancel,
+				windowChat: windowChat{answer: func(context.Context, []chat.Message) (*types.ChatResponse, error) {
+					calls.Add(1)
+					return &types.ChatResponse{Content: "{}"}, nil
+				}},
+			}
 			_, err := (&wikiIngestService{}).generateWithTemplateResult(ctx, model, prompt, nil)
 			var failure *wikiStageFailure
-			if calls.Load() != 0 || !errors.As(err, &failure) || failure.Stage != wikiPromptPurpose(prompt) || failure.Outcome != wikiOutcomeNotRun || !errors.Is(err, context.Canceled) {
+			if calls.Load() != 0 || !errors.As(err, &failure) || failure.Stage != wikiPromptPurpose(prompt) ||
+				failure.Outcome != wikiOutcomeNotRun ||
+				!errors.Is(err, context.Canceled) {
 				t.Fatalf("pre-dispatch cancellation: calls=%d failure=%+v err=%v", calls.Load(), failure, err)
 			}
 		})

@@ -1254,7 +1254,11 @@ func (s *wikiIngestService) mapOneDocument(
 	// Retain the whole-document anti-hallucination threshold. Individual
 	// text-bearing tail windows may be shorter than this minimum.
 	if !hasSufficientTextContent(fullContent) {
-		logger.Warnf(ctx, "wiki ingest: doc %s has insufficient text content (raw_len=%d), skipping LLM extraction", knowledgeID, utf8.RuneCountInString(fullContent))
+		logger.Warnf(
+			ctx,
+			"wiki ingest: doc %s has insufficient text content (raw_len=%d), skipping LLM extraction",
+			knowledgeID, utf8.RuneCountInString(fullContent),
+		)
 		s.tracker().SkipSpan(ctx, wikiSpan, "insufficient_text_content")
 		return nil, nil, nil
 	}
@@ -1302,7 +1306,9 @@ func (s *wikiIngestService) mapOneDocument(
 		"content_chars": utf8.RuneCountInString(content),
 		"old_pages":     len(oldPageSlugs),
 	})
-	extractedEntities, extractedConcepts, slugItems, err = s.extractCandidateSlugs(ctx, chatModel, payload.KnowledgeBaseID, windows, lang, oldPageSlugs, batchCtx)
+	extractedEntities, extractedConcepts, slugItems, err = s.extractCandidateSlugs(
+		ctx, chatModel, payload.KnowledgeBaseID, windows, lang, oldPageSlugs, batchCtx,
+	)
 	if err != nil {
 		s.tracker().FailSpan(ctx, extractSpan, wikiFailureOutcome(err), err.Error(), nil)
 		s.tracker().FailSpan(ctx, wikiSpan, wikiFailureOutcome(err), err.Error(), nil)
@@ -1389,7 +1395,9 @@ func (s *wikiIngestService) mapOneDocument(
 	go func() {
 		defer wg.Done()
 		candidatesXML := renderCandidateSlugsXML(extractedEntities, extractedConcepts)
-		outcome := s.classifyChunkCitations(ctx, chatModel, candidatesXML, chunks, lang, batchCtx, classifySpan, windows)
+		outcome := s.classifyChunkCitations(
+			ctx, chatModel, candidatesXML, chunks, lang, batchCtx, classifySpan, windows,
+		)
 		citations, newSlugs, batchCount = outcome.Citations, outcome.NewSlugs, len(outcome.BatchErrors)
 		citationErr = outcome.Err()
 		if citationErr != nil {
