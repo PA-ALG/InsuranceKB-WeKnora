@@ -191,6 +191,7 @@ def test_an_admitted_and_fully_scored_product_goes_live_as_machine_review(
         ("POST", "candidates/cand_1/decisions"),
         ("POST", "candidates/cand_1/activations"),
         ("GET", "releases/rel_1"),
+        ("POST", "releases/rel_1/samples"),  # RV4c: a machine publish submits its sample
     ]
     assert platform.seen[2][2] == {
         "outcome": "approve",
