@@ -34,6 +34,12 @@ class _Field(_Record):
     short_title: str
 
 
+class _PackField(_Field):
+    # The schema's definition and category travel to readers for concept pages (S3e).
+    description: str | None = None
+    schema_category: str | None = None
+
+
 class _Section(_Record):
     section_key: str
     display_name: str
@@ -55,10 +61,11 @@ class _ProfileRef(_Record):
 
 class _Pack(_Record):
     schema_pack_id: str
+    display_name: str | None = None
     entity_type: str
     applicable_classifications: list[str]
     presentation_profile_ref: _ProfileRef
-    fields: list[_Field]
+    fields: list[_PackField]
 
 
 class _Entry(_Record):
@@ -99,10 +106,19 @@ def product_page(
         if other is not entry
     ):
         raise BundleError("PROFILE_INVALID")  # a reader could not tell which profile applies
+    definitions = {field.field_key: field for field in pack.fields}
+    data = profile.model_dump()
+    for section in data["sections"]:
+        for field in section["fields"]:
+            defined = definitions.get(field["field_key"])
+            if defined is not None:
+                field["description"] = defined.description
+                field["schema_category"] = defined.schema_category
     try:
         presentation = PresentationProfile.model_validate(
             {
-                **profile.model_dump(),
+                **data,
+                "display_name": pack.display_name,
                 "classification_labels": pack.applicable_classifications,
             }
         )

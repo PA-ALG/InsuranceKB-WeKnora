@@ -28,7 +28,13 @@ from insurance_harness.contracts.enums import (
     SourceClass,
     UnknownReason,
 )
-from insurance_harness.contracts.knowledge import Claim, Evidence, Locator, Provenance
+from insurance_harness.contracts.knowledge import (
+    Claim,
+    Evidence,
+    Locator,
+    NavigationProfile,
+    Provenance,
+)
 from insurance_harness.evidence.segments import SegmentedSource, same_text
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, labelled
@@ -44,6 +50,7 @@ def candidate_bundle(
     page: ProductPage | None = None,
     review: tuple[Route, Scores | None] | None = None,
     removals: Sequence[str] = (),
+    navigation: NavigationProfile | None = None,
 ) -> CandidateBundle:
     """One claim member per field, plus the product page when given, based on the given Head.
 
@@ -63,6 +70,7 @@ def candidate_bundle(
         profiles=[page.profile] if page else [],
         review_plan=[ReviewPlan(mode=route.mode, policy_ref=route.policy_ref)],
         removals=removals,
+        navigations=[navigation] if navigation else [],
     )
 
 

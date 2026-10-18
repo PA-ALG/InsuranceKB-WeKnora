@@ -1,0 +1,101 @@
+{
+ "navigation_id": "enterprise",
+ "navigation_version": "2026-10-18.1",
+ "basis": "S3e: the product domain lists the schema pack catalog's packs in catalog order (display name and labels as filed); service domains are declared for entities published later (user 2026-10-18).",
+ "domains": [
+  {
+   "domain_key": "product",
+   "display_name": "产品库",
+   "entity_types": [
+    "insurance_product"
+   ],
+   "groups": [
+    {
+     "group_key": "schemapack_medical_insurance",
+     "display_name": "医疗险",
+     "classification_labels": [
+      "medical_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_accident_medical_insurance",
+     "display_name": "意外医疗保险",
+     "classification_labels": [
+      "accident_medical_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_accident_insurance",
+     "display_name": "意外险",
+     "classification_labels": [
+      "accident_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_critical_illness_insurance",
+     "display_name": "重疾险",
+     "classification_labels": [
+      "critical_illness_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_term_life_insurance",
+     "display_name": "定期寿险",
+     "classification_labels": [
+      "term_life_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_whole_life_insurance",
+     "display_name": "终身寿险",
+     "classification_labels": [
+      "whole_life_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_endowment_insurance",
+     "display_name": "两全保险",
+     "classification_labels": [
+      "endowment_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_annuity_insurance",
+     "display_name": "年金险",
+     "classification_labels": [
+      "annuity_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_nursing_care_insurance",
+     "display_name": "护理保险",
+     "classification_labels": [
+      "nursing_care_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_supplementary_pension_insurance",
+     "display_name": "补充养老保险",
+     "classification_labels": [
+      "supplementary_pension_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_disability_income_insurance",
+     "display_name": "失能收入损失保险",
+     "classification_labels": [
+      "disability_income_insurance"
+     ]
+    }
+   ]
+  },
+  {
+   "domain_key": "service_benefit",
+   "display_name": "服务权益",
+   "entity_types": [
+    "service_benefit"
+   ],
+   "groups": []
+  }
+ ]
+}

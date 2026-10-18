@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "NavigationDomain": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Display Name",
+          "type": "string"
+        },
+        "domain_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Domain Key",
+          "type": "string"
+        },
+        "entity_types": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Entity Types",
+          "type": "array"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/NavigationGroup"
+          },
+          "title": "Groups",
+          "type": "array"
+        }
+      },
+      "required": [
+        "domain_key",
+        "display_name",
+        "entity_types"
+      ],
+      "title": "NavigationDomain",
+      "type": "object"
+    },
+    "NavigationGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "classification_labels": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "title": "Classification Labels",
+          "type": "array"
+        },
+        "display_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Display Name",
+          "type": "string"
+        },
+        "group_key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Group Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_key",
+        "display_name"
+      ],
+      "title": "NavigationGroup",
+      "type": "object"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/navigation_profile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "How readers organise a release's entries (S3e): domains by entity type, then groups by\nclassification label. Versioned data published with the release, replaced whole each time.",
+  "properties": {
+    "domains": {
+      "items": {
+        "$ref": "#/$defs/NavigationDomain"
+      },
+      "minItems": 1,
+      "title": "Domains",
+      "type": "array"
+    },
+    "navigation_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Navigation Id",
+      "type": "string"
+    },
+    "navigation_version": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Navigation Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "navigation_id",
+    "navigation_version",
+    "domains"
+  ],
+  "title": "NavigationProfile",
+  "type": "object"
+}

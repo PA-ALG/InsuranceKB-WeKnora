@@ -16,7 +16,12 @@ from insurance_harness.bundle.canonical import member_digest
 from insurance_harness.bundle.client import MAX_BUNDLE_BYTES, Head, Release
 from insurance_harness.contracts.bundle import BundleMember, CandidateBundle, ReviewPlan
 from insurance_harness.contracts.enums import Origin
-from insurance_harness.contracts.knowledge import Claim, Entity, PresentationProfile
+from insurance_harness.contracts.knowledge import (
+    Claim,
+    Entity,
+    NavigationProfile,
+    PresentationProfile,
+)
 
 ACCESS_SCOPE = "space"
 
@@ -42,6 +47,7 @@ def assemble(
     profiles: Sequence[PresentationProfile] = (),
     review_plan: Sequence[ReviewPlan] = (),
     removals: Sequence[str] = (),
+    navigations: Sequence[NavigationProfile] = (),
 ) -> CandidateBundle:
     """Entity, profile and claim members on the given Head (None before the first release).
 
@@ -53,6 +59,10 @@ def assemble(
         *(
             _member("presentation_profile", f"presentation/{profile.profile_id}", profile)
             for profile in profiles
+        ),
+        *(
+            _member("navigation", f"navigation/{navigation.navigation_id}", navigation)
+            for navigation in navigations
         ),
         *(
             _member(
@@ -93,7 +103,7 @@ def assemble(
 def _member(
     kind: str,
     slug: str,
-    content: Entity | PresentationProfile | Claim,
+    content: Entity | PresentationProfile | NavigationProfile | Claim,
     refs: list[str] | None = None,
 ) -> BundleMember:
     payload: dict[str, Any] = content.model_dump(mode="json")

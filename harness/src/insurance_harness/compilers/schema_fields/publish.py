@@ -34,6 +34,7 @@ from pydantic import (
 
 from insurance_harness.bundle.assemble import BundleError, retired_claims
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
+from insurance_harness.catalog.navigation import load_navigation
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
 from insurance_harness.compilers.schema_fields.claims import (
     candidate_bundle,
@@ -168,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             page=page,
             review=(review, scores),
             removals=retired,
+            navigation=load_navigation(),
         )
         result = publish(client, source_map.space_id, bundle, decision=decision, activate=activate)
     except (PlatformError, SourcePagesError, SourceMapError) as error:
