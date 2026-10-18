@@ -62,7 +62,7 @@ class Platform:
         self.samples_fail = samples_fail
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
-        body = json.loads(request.content) if request.content else None
+        body: Any = json.loads(request.content) if request.content else None
         path = request.url.path.removeprefix("/api/v1/enterprise/spaces/space-1/")
         self.seen.append((request.method, path, body))
         if path == "releases/active":

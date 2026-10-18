@@ -114,7 +114,7 @@ class Platform:
         self.seen: list[tuple[str, str, Any]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
-        body = json.loads(request.content) if request.content else None
+        body: Any = json.loads(request.content) if request.content else None
         path = request.url.path.removeprefix("/api/v1/enterprise/spaces/demo/")
         self.seen.append(
             (
