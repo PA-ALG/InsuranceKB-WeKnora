@@ -20,6 +20,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
+	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
 	apperrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
@@ -45,6 +46,7 @@ type RouterParams struct {
 	KnowledgeRepository            interfaces.KnowledgeRepository
 	FirstParseStore                *service.G3FirstParseStore
 	EnterpriseCandidates           *release.Service
+	EnterpriseSpotChecks           *spotcheck.Service
 	ChunkService                   interfaces.ChunkService
 	SessionService                 interfaces.SessionService
 	MessageService                 interfaces.MessageService
@@ -441,9 +443,10 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	files := releasestore.SourceFiles(params.EnterpriseSpaces, params.KnowledgeRepository, params.KnowledgeService)
 	enterprise.Mount(v1.Group("/enterprise/spaces/:space_id"), enterprise.Deps{
 		Candidates: params.EnterpriseCandidates, Sources: sources,
+		SpotChecks: params.EnterpriseSpotChecks,
 		Authorizer: guards.ensureAPIKeyAuthorizer(), Files: files,
 	})
-	kbRead := func(raw bool) gin.HandlerFunc {
+	kbAccess := func(raw bool, required types.OrgMemberRole) gin.HandlerFunc {
 		return middleware.RequireKBAccess(func(c *gin.Context) (string, error) {
 			tenant, authenticated := enterprise.SessionTenantID(c)
 			rawKB, wikiKB, found := params.EnterpriseSpaces.KnowledgeBases(tenant, c.Param("space_id"))
@@ -454,9 +457,13 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 				return rawKB, nil
 			}
 			return wikiKB, nil
-		}, types.OrgRoleViewer, guards.kbService, guards.kbShareService, guards.agentShareService, guards.cfg)
+		}, required, guards.kbService, guards.kbShareService, guards.agentShareService, guards.cfg)
 	}
 	enterprise.MountSessionReads(v1.Group("/enterprise"), enterprise.SessionDeps{
 		Candidates: params.EnterpriseCandidates, Sources: sources, Files: files, Spaces: params.EnterpriseSpaces,
-	}, guards.Viewer(), kbRead(true), kbRead(false))
+		SpotChecks: params.EnterpriseSpotChecks,
+	}, guards.Viewer(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleViewer))
+	enterprise.MountSessionSpotChecks(v1.Group("/enterprise"), enterprise.SessionDeps{
+		SpotChecks: params.EnterpriseSpotChecks, Spaces: params.EnterpriseSpaces,
+	}, guards.Viewer(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleEditor))
 }
