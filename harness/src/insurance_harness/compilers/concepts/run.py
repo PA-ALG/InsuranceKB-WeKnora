@@ -322,6 +322,8 @@ def _stop_detail(exc: BaseException) -> dict[str, str]:
     """Fixed codes; an exception type name at most, never its text (it may hold a path)."""
     if isinstance(exc, _Stop):
         return {"stopped": exc.code}
+    if isinstance(exc, KeyboardInterrupt):
+        return {"stopped": "INTERRUPTED"}
     if isinstance(exc, PlatformError):
         return {"stopped": exc.code}
     if isinstance(exc, BundleError):
@@ -404,8 +406,10 @@ def main(argv: list[str] | None = None) -> int:
                 summary.update(release_id=published.id, epoch=published.epoch)
     except (
         _Stop, PlatformError, BundleError, RunRootBusy, ServedModelChanged, ModelCallError,
-        ValueError, OSError,
+        ValueError, OSError, KeyboardInterrupt,
     ) as exc:  # fmt: skip
+        # A cancelled send was reserved and stays counted; the client closed and the lock was
+        # released on the way out, so a rerun resumes from the accepted answers.
         print(json.dumps(_stop_detail(exc), ensure_ascii=False))
         return 2
     print(json.dumps(summary, ensure_ascii=False))

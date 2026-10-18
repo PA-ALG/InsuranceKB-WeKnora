@@ -1,8 +1,9 @@
 """Concept run recovery and refusals beyond the acceptance cases (S3e-3 Spec §4.1).
 
 A refused answer stays for diagnosis but is sent again on rerun; a retry is sent only while budget
-remains; an altered accepted answer is corrupt run-root state; and malformed arguments or a missing
-platform configuration stop with fixed codes before anything is sent.
+remains; an altered accepted answer is corrupt run-root state; a cancelled send stays counted and
+ends with a fixed code (review R2 on PR #220); and malformed arguments or a missing platform
+configuration stop with fixed codes before anything is sent.
 """
 
 from __future__ import annotations
@@ -34,6 +35,8 @@ class Model:
     def __call__(self, request: httpx.Request) -> httpx.Response:
         user = json.loads(json.loads(request.content)["messages"][1]["content"])
         self.requests.append(user)
+        if isinstance(self.answer, BaseException):
+            raise self.answer
         if isinstance(self.answer, str):
             content = self.answer
         else:
@@ -155,6 +158,14 @@ def test_an_altered_accepted_answer_is_corrupt_state(tmp_path: Path, run: Any) -
 def test_malformed_arguments_stop_before_anything_is_sent(run: Any, extra: tuple[str, ...]) -> None:
     code, summary, server = run(GOOD, *extra)
     assert (code, summary, server.requests) == (2, {"stopped": "INVALID_ARGUMENTS"}, [])
+
+
+def test_a_cancelled_send_stays_counted_and_the_rerun_resumes(tmp_path: Path, run: Any) -> None:
+    code, summary, server = run(KeyboardInterrupt())
+    assert (code, summary, len(server.requests)) == (2, {"stopped": "INTERRUPTED"}, 1)
+    assert not (tmp_path / "run" / "concepts.json").exists()
+    code, summary, again = run(GOOD, "--max-sent", "2")  # the lock was released
+    assert (code, summary["sent"], summary["sent_total"], summary["written"]) == (0, 1, 2, 2)
 
 
 def test_a_missing_platform_configuration_stops_first(
