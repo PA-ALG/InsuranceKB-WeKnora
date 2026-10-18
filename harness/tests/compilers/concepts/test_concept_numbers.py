@@ -43,6 +43,15 @@ from insurance_harness.compilers.concepts.synthesis import (
         ("5000元-1万元", {"5000元", "10000元"}),
         ("每年-3.5%", {"-3.5%"}),
         ("每月 − 15000元", {"-15000元"}),
+        ("1. 20年长期保障", {"1.2年"}),  # a point is a decimal point, list or not: fails closed
+        ("1. 20年长期保障；2. 3次给付", {"1.2年", "2.3次"}),
+        ("期限如下：\n12. 50年", {"12.5年"}),
+        ("给付12. 50元", {"12.5元"}),
+        ("计划三5000元；计划一2万元", {"5000元", "20000元"}),  # a label digit is not the number
+        ("保险期间 20 年，10 万元", {"20年", "100000元"}),
+        ("一万零5元，1万零5千元", {"10005元", "15000元"}),
+        ("18周岁 -65周岁", {"18周岁", "65周岁"}),
+        ("每年 -3.5%", {"-3.5%"}),
         ("缴费期满", set()),
     ],
 )
@@ -66,6 +75,22 @@ def problems(statement: str, value: str) -> list[str]:
         ("甲产品为十十日。", "为10日。"),
         ("甲产品收益为负三点五%。", "收益3.5%。"),
         ("甲产品差额为-15000元。", "差额一万五千元。"),
+        ("甲产品收益为负 三点五%。", "收益为3.5%。"),  # review R2 on PR #227
+        ("甲产品给付5 千元。", "给付1000元。"),
+        ("甲产品保障3 个 月。", "保障20年。"),
+        ("甲产品为1 5日。", "为5日。"),
+        ("甲产品保障三点 5年。", "保障5年。"),
+        ("甲产品给付一万零5元。", "给付5元。"),  # review R3 on PR #227
+        ("甲产品给付1万零5千元。", "给付5000元。"),
+        ("甲产品给付12. 50元。", "给付50元。"),  # review R2 (second round) on PR #227
+        ("甲产品收益为-3. 5%。", "收益为5%。"),
+        ("甲产品给付金额：12. 50元。", "给付金额为50元。"),  # third round on PR #227
+        ("甲产品收益率：3. 5%。", "收益率为5%。"),
+        ("甲产品给付金额为50元。", "给付金额：12. 50元。"),
+        ("甲产品期限为50年。", "期限如下：\n12. 50年"),
+        ("首年收益率：1. 5%；次年收益率：2. 5%。", "收益率均为5%。"),  # fourth round on PR #227
+        ("收益率均为5%。", "首年收益率：1. 5%；次年收益率：2. 5%。"),
+        ("甲项金额：1. 50元。\n\n乙项金额：2. 50元。", "各项金额均为50元。"),
         ("两款产品每年-3.5%。", "每年3.5%"),
         ("两款产品每年负三点五%。", "每年3.5%"),
     ],
@@ -76,6 +101,22 @@ def problems(statement: str, value: str) -> list[str]:
         "unreadable",
         "opposite sign in words",
         "opposite sign",
+        "sign across a space",
+        "power across a space",
+        "unit across spaces",
+        "digits across a space",
+        "fraction across a space",
+        "mixed numeral with powers",
+        "arabic numeral with powers",
+        "decimal point before a space",
+        "signed decimal before a space",
+        "decimal after a colon",
+        "percentage after a colon",
+        "decimal in the claim",
+        "decimal on its own line in the claim",
+        "two field decimals in the statement",
+        "two field decimals in the claim",
+        "decimals in two paragraphs",
         "sign after a word ending in a unit",
         "sign in words after such a word",
     ],
@@ -104,3 +145,14 @@ def test_the_same_value_written_differently_passes(statement: str, value: str) -
 def test_an_overlong_number_is_refused_by_length_without_failing_the_check() -> None:
     found = problems("万" * 1500 + "元", "1万元")
     assert "STATEMENT_LENGTH" in found and "NUMBER_UNSUPPORTED" in found
+
+
+@pytest.mark.parametrize(
+    "general",
+    ["示例产品2. 0的专属保障。", "示例产品２． ０的专属保障。", "示例产品2.0的专属保障。"],
+)
+def test_a_product_named_with_a_point_is_still_named(general: str) -> None:
+    fact = Fact("P1", "示例产品2.0", "医疗险", "present", "15日", "P1/f", "a" * 64)
+    concept = ConceptInput("f", "字段", "", (fact,))
+    draft = ConceptDraft("f", general, "解释。", (StatementDraft("为15日。", ("P1/f",)),))
+    assert "PRODUCT_NAMED" in check_concept(draft, concept, {"示例产品2.0", "P1"})

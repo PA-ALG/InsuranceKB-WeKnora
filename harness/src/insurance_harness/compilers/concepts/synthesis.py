@@ -6,7 +6,9 @@ profiles' field order, then the rest by key (the frontend's conceptKeys). For ea
 model writes a reader-facing definition, a general explanation naming no product, and
 cross-product statements that each cite the claims they rest on. Only the published values go
 out: evidence quotes and compile details are not review input. The answer is accepted only in the
-exact shape asked for; anything else refuses the whole batch.
+shape asked for: one {"concepts": [...]} object, each concept and statement with its fields of the
+right types; a field the model adds to a concept or statement is ignored (never read or published).
+Anything else refuses the whole batch.
 """
 
 from __future__ import annotations
@@ -217,6 +219,14 @@ def _exact(value: object, keys: set[str]) -> dict[str, object]:
     return value
 
 
+def _having(value: object, keys: set[str]) -> dict[str, object]:
+    """An object with at least these keys. The model sometimes adds a field of its own (a title, a
+    note); nothing but the named keys is ever read, so an addition is dropped, not published."""
+    if not isinstance(value, dict) or not keys <= set(value):
+        raise ConceptOutputError("unexpected object shape")
+    return value
+
+
 def _string(value: object) -> str:
     if not isinstance(value, str):
         raise ConceptOutputError("expected a string")
@@ -224,7 +234,7 @@ def _string(value: object) -> str:
 
 
 def _statement(value: object) -> StatementDraft:
-    item = _exact(value, {"text", "refs"})
+    item = _having(value, {"text", "refs"})
     refs = item["refs"]
     if not isinstance(refs, list):
         raise ConceptOutputError("refs must be a list")
@@ -244,7 +254,7 @@ def parse_concepts(text: str, batch: Sequence[ConceptInput]) -> dict[str, Concep
         raise ConceptOutputError("concepts must be a list")
     drafts: dict[str, ConceptDraft] = {}
     for value in items:
-        item = _exact(value, {"key", "definition", "explanation", "statements"})
+        item = _having(value, {"key", "definition", "explanation", "statements"})
         key = _string(item["key"])
         statements = item["statements"]
         if key in drafts or not isinstance(statements, list):

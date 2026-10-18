@@ -173,14 +173,20 @@
   - user 是 JSON，内容为各概念的输入。
   - 每次调用 `--per-call` 个概念，默认 2（质量优先）。
 - **解析**：
-  - 只接受 `{"concepts": [{"key", "definition", "explanation", "statements": [{"text", "refs"}]}]}`；
+  - 只接受 `{"concepts": [{"key", "definition", "explanation", "statements": [{"text", "refs"}]}]}`。
+    - 修订（2026-10-18 真实运行后）：模型给概念或句子对象多加的字段（如 `title`、`explanation_note`）直接忽略，不读取也不发布。
+    - 必需字段缺失或类型错误仍整批拒绝；顶层对象仍只能有 `concepts`。
   - 键与本批概念一一对应；
   - 不符时整批记为 `CONCEPT_OUTPUT_INVALID`，不重试解析。
 - **确定性检查** `check_concept(draft, concept, release_names)`，返回问题码列表，空表示通过：
   - `DEFINITION_LENGTH`（不超过 120 字）、`EXPLANATION_LENGTH`（不超过 400 字）、`STATEMENT_LENGTH`（每句不超过 200 字）；
   - `PRODUCT_NAMED`：`definition` 或 `explanation` 中出现 Release 中任一条目的名称或编号；
   - `REF_UNKNOWN`：引用了不属于该概念输入的 slug；
-  - `NUMBER_UNSUPPORTED`：statement 中"数字 + 单位"（日、天、个月、月、年、周岁、岁、%、％、元、万元、次、倍）在被引用的 Claim 取值中都找不到；比较前先做 NFKC 并去掉空白；
+  - `NUMBER_UNSUPPORTED`：statement 中"数字 + 单位"（日、天、个月、月、年、周岁、岁、%、％、元、万元、次、倍）在被引用的 Claim 取值中都找不到；比较前先做 NFKC 并去掉空白。
+    - 修订（2026-10-18 真实运行后）：以下写法在两边按同一规则处理。
+      - 点一律当作小数点。列表序号与写了空格的小数无法可靠区分（#227 四轮审核），所以列表里的"1. 20年"也读作 1.2年：宁可拒收，也不截取尾数；
+      - 以不含"十、百、千、万"等进位字的中文数字开头（"零"除外）、紧接阿拉伯数字的写法（如"计划三5000元"），前面的中文数字是标签，数从阿拉伯数字开始。含进位字的混写（如"一万零5元"）仍按整数读取；
+      - 这两条只用于读数字。`PRODUCT_NAMED` 的名称比对仍是 NFKC 后去空白，不做这些改写。
   - `NUMBER_UNMATCHED_REF`：statement 含数字记号，而某个被引用 Claim 的取值里一个都不包含，防止"均为 15 日"挂上一条 20 日的产品；
   - `STATEMENT_COUNT`：statement 少于 1 条或多于 6 条。
   - 修订：原 §4 中"被引用产品须在句中点名"一条不再检查。前端在每句后列出被引用产品的链接，点名与否不影响可回验性；数字核对已经保证事实一致。

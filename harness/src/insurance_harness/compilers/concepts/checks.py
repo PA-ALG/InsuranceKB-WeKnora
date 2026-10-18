@@ -43,8 +43,22 @@ _POWERS = {"十": 10, "百": 100, "千": 1000}
 _LARGE = (("亿", 10**8), ("万", 10**4))
 
 
+# One or more Chinese digits without any power, directly followed by Arabic digits, are a label
+# (计划三5000元, 第一2万元): the number starts at the Arabic digits. A numeral with powers keeps
+# them (一万零5元, 1万零5千元), and 零 is never a label.
+_LABEL = re.compile(r"^[一二两三四五六七八九]+(?=[0-9])")
+
+
 def _normalized(text: str) -> str:
+    # A point is always a decimal point. "1. 20年" in a numbered list therefore reads 1.2年 and
+    # fails closed: no rule tells a list number from a decimal written with a space reliably
+    # (review of PR #227), and a refusal only costs a retry, while a wrong reading could pass.
     return _THOUSANDS.sub("", "".join(unicodedata.normalize("NFKC", text).split()))
+
+
+def _compact(text: str) -> str:
+    """NFKC without whitespace and nothing else: names are compared as written."""
+    return "".join(unicodedata.normalize("NFKC", text).split())
 
 
 def _below_ten_thousand(run: str) -> Decimal | None:
@@ -113,10 +127,11 @@ def number_tokens(text: str) -> set[str]:
             and hyphen != previous_end
             and not (hyphen >= 1 and _NUMERAL_CHAR.fullmatch(normalized[hyphen - 1]))
         )
-        if match["percent"] is not None:
-            tokens.add(_token(sign, match["percent"], "%"))
-        else:
-            tokens.add(_token(sign, match["number"], match["unit"]))
+        run = match["percent"] if match["percent"] is not None else match["number"]
+        label = _LABEL.match(run)
+        if label and match["percent"] is None:
+            run, sign = run[label.end() :], False  # a label stands between any sign and the number
+        tokens.add(_token(sign, run, "%" if match["percent"] is not None else match["unit"]))
         previous_end = match.end()
     return tokens
 
@@ -142,8 +157,8 @@ def check_concept(draft: ConceptDraft, concept: ConceptInput, names: Collection[
         problems.append("EXPLANATION_LENGTH")
     if any(not _within(statement.text, STATEMENT_MAX) for statement in draft.statements):
         problems.append("STATEMENT_LENGTH")
-    general = _normalized(draft.definition + "\n" + draft.explanation)
-    if any(name and name in general for name in map(_normalized, names)):
+    general = _compact(draft.definition + "\n" + draft.explanation)
+    if any(name and name in general for name in map(_compact, names)):
         problems.append("PRODUCT_NAMED")
     values = {fact.slug: number_tokens(_value_text(fact.value)) for fact in concept.facts}
     if any(ref not in values for statement in draft.statements for ref in statement.refs):
