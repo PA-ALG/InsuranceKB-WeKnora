@@ -41,12 +41,16 @@ describe('one model block on the concept page', () => {
     const blocks = view.findAll('.ek-section--generated')
     expect(blocks).toHaveLength(1)
     const block = blocks[0]!
-    const definition = view.get('[data-concept-definition]')
-    expect(view.findAll('[data-concept-definition]')).toHaveLength(1)
-    expect(block.element.contains(definition.element)).toBe(options.generated)
-    expect(definition.text()).toContain(options.generated ? '面向读者的定义。' : '投保人收到合同后可解除合同并退还保费的期间。')
-    expect(definition.text().includes('模型补充')).toBe(options.generated)
-    expect(definition.find('.ek-concept-definition').exists()).toBe(true)
+    // S3e-4: only a published reader definition is shown; the profile description is written for extraction.
+    expect(view.findAll('[data-concept-definition]')).toHaveLength(options.generated ? 1 : 0)
+    if (options.generated) {
+      const definition = view.get('[data-concept-definition]')
+      expect(block.element.contains(definition.element)).toBe(true)
+      expect(definition.text()).toContain('面向读者的定义。')
+      expect(definition.text()).toContain('模型补充')
+      expect(definition.find('.ek-concept-definition').exists()).toBe(true)
+    }
+    expect(view.text()).not.toContain('投保人收到合同后可解除合同并退还保费的期间。')
     expect(block.text()).toContain('模型补充')
     expect(view.find('[data-concept-explanation]').exists()).toBe(options.explanation)
     if (options.explanation) {
@@ -68,7 +72,7 @@ describe('one model block on the concept page', () => {
     view.unmount()
   })
 
-  it.each([true, false])('has no model block without published model content (schema definition: %s)', async hasDefinition => {
+  it.each([true, false])('has no model block and no definition without published model content (profile description: %s)', async hasDefinition => {
     const data = structuredClone(release({ concept: false }))
     if (!hasDefinition) {
       for (const member of data.members.filter(member => member.kind === 'presentation_profile')) {
@@ -78,7 +82,7 @@ describe('one model block on the concept page', () => {
     }
     const view = await page(data)
     expect(view.find('.ek-section--generated').exists()).toBe(false)
-    expect(view.find('[data-concept-definition]').exists()).toBe(hasDefinition)
+    expect(view.find('[data-concept-definition]').exists()).toBe(false) // S3e-4: never the profile description
     expect(view.find('[data-concept-summary]').exists()).toBe(false)
     expect(view.find('[data-concept-explanation]').exists()).toBe(false)
     expect(view.find('[data-concept-stale]').exists()).toBe(false)

@@ -58,8 +58,8 @@ describe('concept definition provenance', () => {
     expect(conceptView(result, key)!.definition).toBe(readerDefinition)
   })
 
-  it.each(['', '   '])('falls back to the profile when the published definition is blank (%j)', value => {
-    expect(conceptView(publishedDefinition(value), key)!.definition).toBe(profileDefinition)
+  it.each(['', '   '])('shows no definition when the published definition is blank (%j), never the profile description', value => {
+    expect(conceptView(publishedDefinition(value), key)!.definition).toBe('')
   })
 
   it('labels the reader definition as model-generated even without an explanation', async () => {
@@ -75,12 +75,13 @@ describe('concept definition provenance', () => {
     view.unmount()
   })
 
-  it('keeps the profile definition without a model label when no concept was published', async () => {
+  it('shows no definition when no concept was published (S3e-4)', async () => {
     const result = release({ concept: false })
-    expect(conceptView(result, key)!.definition).toBe(profileDefinition)
+    expect(conceptView(result, key)!.definition).toBe('')
     const view = await page(result)
-    expect(view.get('[data-concept-definition]').text()).toContain(profileDefinition)
-    expect(view.get('[data-concept-definition]').text()).not.toContain('模型补充')
+    expect(view.find('[data-concept-definition]').exists()).toBe(false)
+    expect(view.text()).not.toContain(profileDefinition)
+    expect(view.findAll('[data-concept-row]')).toHaveLength(4)
     view.unmount()
   })
 })
