@@ -43,9 +43,11 @@ _POWERS = {"十": 10, "百": 100, "千": 1000}
 _LARGE = (("亿", 10**8), ("万", 10**4))
 
 
-# A digit, a point and then whitespace is a list number ("1. 20年"), not a decimal point: the
-# point becomes a boundary before whitespace is removed, so 1.20年 is never read.
-_LIST_POINT = re.compile(r"(?<=[0-9])\.(?=\s)")
+# A list number is a one- or two-digit integer opening a line or following a sentence or list
+# separator, then a point and whitespace ("1. 20年", "保障：2. 续保"). Its point becomes a boundary
+# before whitespace is removed, so 1.20年 is never read; any other point stays a decimal point
+# (给付12. 50元 is 12.5元, -3. 5% is -3.5%).
+_LIST_POINT = re.compile(r"(^|[\n；;。：:])(\s*[0-9]{1,2})\.(?=\s)", re.MULTILINE)
 # One or more Chinese digits without any power, directly followed by Arabic digits, are a label
 # (计划三5000元, 第一2万元): the number starts at the Arabic digits. A numeral with powers keeps
 # them (一万零5元, 1万零5千元), and 零 is never a label.
@@ -53,8 +55,13 @@ _LABEL = re.compile(r"^[一二两三四五六七八九]+(?=[0-9])")
 
 
 def _normalized(text: str) -> str:
-    text = _LIST_POINT.sub("|", unicodedata.normalize("NFKC", text))
+    text = _LIST_POINT.sub(r"\1\2|", unicodedata.normalize("NFKC", text))
     return _THOUSANDS.sub("", "".join(text.split()))
+
+
+def _compact(text: str) -> str:
+    """NFKC without whitespace and nothing else: names are compared as written."""
+    return "".join(unicodedata.normalize("NFKC", text).split())
 
 
 def _below_ten_thousand(run: str) -> Decimal | None:
@@ -153,8 +160,8 @@ def check_concept(draft: ConceptDraft, concept: ConceptInput, names: Collection[
         problems.append("EXPLANATION_LENGTH")
     if any(not _within(statement.text, STATEMENT_MAX) for statement in draft.statements):
         problems.append("STATEMENT_LENGTH")
-    general = _normalized(draft.definition + "\n" + draft.explanation)
-    if any(name and name in general for name in map(_normalized, names)):
+    general = _compact(draft.definition + "\n" + draft.explanation)
+    if any(name and name in general for name in map(_compact, names)):
         problems.append("PRODUCT_NAMED")
     values = {fact.slug: number_tokens(_value_text(fact.value)) for fact in concept.facts}
     if any(ref not in values for statement in draft.statements for ref in statement.refs):
