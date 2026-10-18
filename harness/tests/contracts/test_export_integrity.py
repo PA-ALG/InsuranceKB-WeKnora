@@ -19,7 +19,7 @@ def test_exports_all_blueprint_contracts_in_name_order(tmp_path: Path) -> None:
             "evidence", "locator", "entity", "claim", "relation", "qa_item",
             "expert_revision", "schema_snapshot", "page_text", "compile_task",
             "compile_result", "gap_task", "review_item", "candidate_bundle",
-            "bundle_member", "review_plan", "presentation_profile",
+            "bundle_member", "review_plan", "presentation_profile", "navigation_profile",
         )
     )
 
