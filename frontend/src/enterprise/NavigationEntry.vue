@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Release } from './enterpriseApi'
 import { entityView, type EntitySummary, type FieldView } from './releaseView'
@@ -7,6 +7,7 @@ import { entityView, type EntitySummary, type FieldView } from './releaseView'
 const props = defineProps<{ entry: EntitySummary; release: Release; spaceId: string; selected?: boolean }>()
 const { t } = useI18n()
 const expanded = ref(false)
+watch(() => props.selected, selected => { expanded.value = !!selected }, { immediate: true })
 const contentId = useId()
 const view = computed(() => expanded.value ? entityView(props.release, props.entry.entityId) : null)
 const sections = computed(() => view.value ? [
@@ -28,16 +29,15 @@ function fieldTarget(field: FieldView) {
       <button type="button" class="ek-nav-entry__toggle" :aria-expanded="expanded" :aria-controls="contentId"
         :aria-label="t(expanded ? 'enterpriseKnowledge.nav.collapseEntry' : 'enterpriseKnowledge.nav.expandEntry', { name: entry.name })"
         @click="expanded = !expanded"><span aria-hidden="true">{{ expanded ? '▾' : '▸' }}</span></button>
-      <RouterLink :to="target" :aria-current="selected ? 'page' : undefined">
+      <RouterLink :to="target" :title="entry.name" :aria-current="selected ? 'page' : undefined">
         <span>{{ entry.name }}</span>
-        <small>{{ t('enterpriseKnowledge.space.fieldCount', { count: entry.fieldCount }) }}</small>
       </RouterLink>
     </div>
     <div v-if="expanded" :id="contentId" class="ek-nav-fields">
       <details v-for="section in sections" :key="section.key" open>
         <summary>{{ section.title }}</summary>
         <ul>
-          <li v-for="field in section.fields" :key="field.slug"><RouterLink :to="fieldTarget(field)">{{ field.title }}</RouterLink></li>
+          <li v-for="field in section.fields" :key="field.slug"><RouterLink :to="fieldTarget(field)" :title="field.title">{{ field.title }}</RouterLink></li>
         </ul>
       </details>
       <p v-if="!sections.length" class="ek-page__note">{{ t('enterpriseKnowledge.nav.noFields') }}</p>

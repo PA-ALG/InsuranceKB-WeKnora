@@ -7493,6 +7493,18 @@ export default {
     noSessions: 'Пока нет диалогов'
   },
   enterpriseKnowledge: {
+    home: {
+      "version": "Версия {epoch}",
+      "counts": "Продуктов: {products} · Общих понятий: {concepts} · Для каждого элемента указан источник",
+      "search": "Поиск продуктов и понятий",
+      "common": "Частые понятия",
+      "overview": "Обзор продуктов",
+      "absent": "Нет",
+      "noProducts": "Подходящих продуктов нет",
+      "noConcepts": "Подходящих понятий нет",
+      "allConcepts": "Все {count}",
+      "filter": "Фильтр текущего каталога"
+    },
     nav: {
       "other": "Другое",
       "concepts": "Понятия",

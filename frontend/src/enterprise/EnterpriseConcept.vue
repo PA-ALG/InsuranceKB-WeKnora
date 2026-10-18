@@ -47,21 +47,30 @@ onUnmounted(() => { generation++ })
         <template v-else>
           <h1 class="ek-page__title">{{ view.title }}</h1>
           <p class="ek-page__meta">{{ t('enterpriseKnowledge.space.version', { epoch: release.epoch }) }}</p>
-          <section v-if="view.definition" :class="['ek-section', { 'ek-section--generated': view.definitionGenerated }]" data-concept-definition>
-            <h2 class="ek-section__title">{{ t('enterpriseKnowledge.concept.definition') }}</h2>
-            <p v-if="view.definitionGenerated" class="ek-page__note">{{ t('enterpriseKnowledge.origin.generated') }}</p>
-            <p>{{ view.definition }}</p>
+          <section v-if="view.definition && !view.definitionGenerated" class="ek-concept-intro" data-concept-definition>
+            <h2 class="ek-sr-only">{{ t('enterpriseKnowledge.concept.definition') }}</h2>
+            <p class="ek-concept-definition">{{ view.definition }}</p>
           </section>
-          <section v-if="view.summary?.explanation" class="ek-section ek-section--generated" data-concept-explanation>
-            <h2 class="ek-section__title">{{ t('enterpriseKnowledge.origin.generated') }}</h2><p>{{ view.summary.explanation }}</p>
-          </section>
-          <section v-if="view.summary" class="ek-section ek-section--generated" data-concept-summary>
-            <h2 class="ek-section__title">{{ t('enterpriseKnowledge.concept.summary') }}</h2>
-            <p v-if="view.summary.stale" class="ek-stale" data-concept-stale>{{ t('enterpriseKnowledge.concept.stale') }}</p>
-            <p v-for="(statement, index) in view.summary.statements" :key="index" data-concept-statement>
-              {{ statement.text }}
-              <RouterLink v-for="reference in statement.refs" :key="reference.slug" class="ek-concept-ref" :to="entryTarget(reference.entityId)">{{ reference.name }}</RouterLink>
-            </p>
+          <section v-if="view.definitionGenerated || view.summary" class="ek-section ek-section--generated ek-concept-model">
+            <p v-if="view.summary?.stale" class="ek-stale" data-concept-stale>{{ t('enterpriseKnowledge.concept.stale') }}</p>
+            <div :data-concept-explanation="view.summary?.explanation ? '' : undefined">
+              <div v-if="view.definitionGenerated" data-concept-definition>
+                <h2 class="ek-sr-only">{{ t('enterpriseKnowledge.concept.definition') }}</h2>
+                <p class="ek-concept-definition">
+                  <span class="ek-origin ek-origin--generated ek-concept-model__label">{{ t('enterpriseKnowledge.origin.generated') }}</span>
+                  {{ view.definition }}
+                </p>
+              </div>
+              <span v-else class="ek-origin ek-origin--generated">{{ t('enterpriseKnowledge.origin.generated') }}</span>
+              <p v-if="view.summary?.explanation">{{ view.summary.explanation }}</p>
+            </div>
+            <div v-if="view.summary" data-concept-summary>
+              <h2 class="ek-concept-model__title">{{ t('enterpriseKnowledge.concept.summary') }}</h2>
+              <p v-for="(statement, index) in view.summary.statements" :key="index" data-concept-statement>
+                {{ statement.text }}
+                <RouterLink v-for="reference in statement.refs" :key="reference.slug" class="ek-concept-ref" :to="entryTarget(reference.entityId)">{{ reference.name }}</RouterLink>
+              </p>
+            </div>
           </section>
           <div class="ek-comparison" tabindex="0" role="region" :aria-label="t('enterpriseKnowledge.concept.comparison')">
             <table>
