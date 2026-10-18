@@ -2369,7 +2369,9 @@ func xmlEscape(s string) string {
 	return s
 }
 
-// deduplicateExtractedBatch deduplicates both entities and concepts against
+// deduplicateExtractedBatch returns canonical items and an explicit mapping from
+// every input slug to its final slug, including inputs coalesced into another item.
+// It deduplicates both entities and concepts against
 // existing wiki pages in a single LLM call. Pre-filters candidates via the
 // pg_trgm trigram index on lower(title) — every new item issues a
 // FindSimilarPages probe and the union of top-K hits across all items is
@@ -2385,13 +2387,19 @@ func (s *wikiIngestService) deduplicateExtractedBatch(
 	kbID string,
 	entities, concepts []extractedItem,
 	batchCtx *WikiBatchContext,
-) ([]extractedItem, []extractedItem) {
+) ([]extractedItem, []extractedItem, map[string]string) {
+	slugMapping := make(map[string]string)
 	if len(entities) == 0 && len(concepts) == 0 {
-		return entities, concepts
+		return entities, concepts, slugMapping
 	}
 	if s.wikiService == nil {
-		return s.stabilizeExtractedIdentities(ctx, kbID, types.WikiPageTypeEntity, entities, nil, nil, batchCtx),
-			s.stabilizeExtractedIdentities(ctx, kbID, types.WikiPageTypeConcept, concepts, nil, nil, batchCtx)
+		entities = s.stabilizeExtractedIdentities(
+			ctx, kbID, types.WikiPageTypeEntity, entities, nil, nil, batchCtx, slugMapping,
+		)
+		concepts = s.stabilizeExtractedIdentities(
+			ctx, kbID, types.WikiPageTypeConcept, concepts, nil, nil, batchCtx, slugMapping,
+		)
+		return entities, concepts, slugMapping
 	}
 
 	// Build the candidate set: for each new item, ask the repo for
@@ -2459,12 +2467,12 @@ func (s *wikiIngestService) deduplicateExtractedBatch(
 	collectExactIdentityTargets(entities, types.WikiPageTypeEntity, itemCandidates, candidatePages, exactTargets)
 	collectExactIdentityTargets(concepts, types.WikiPageTypeConcept, itemCandidates, candidatePages, exactTargets)
 
-	stabilize := func() ([]extractedItem, []extractedItem) {
+	stabilize := func() ([]extractedItem, []extractedItem, map[string]string) {
 		return s.stabilizeExtractedIdentities(
-				ctx, kbID, types.WikiPageTypeEntity, entities, mergeTargets, exactTargets, batchCtx,
+				ctx, kbID, types.WikiPageTypeEntity, entities, mergeTargets, exactTargets, batchCtx, slugMapping,
 			), s.stabilizeExtractedIdentities(
-				ctx, kbID, types.WikiPageTypeConcept, concepts, mergeTargets, exactTargets, batchCtx,
-			)
+				ctx, kbID, types.WikiPageTypeConcept, concepts, mergeTargets, exactTargets, batchCtx, slugMapping,
+			), slugMapping
 	}
 
 	if len(candidatePages) == 0 {
@@ -2601,6 +2609,9 @@ type wikiTemplateResult struct {
 	FinishReason string
 }
 
+// errWikiOutputTruncated rejects incomplete candidate/citation responses before parsing.
+var errWikiOutputTruncated = errors.New("wiki output truncated at the completion budget")
+
 // errWikiPageRewriteTruncated is returned when the editor model stopped at the
 // completion budget and every continuation round did too. The caller treats it
 // like any other reduce failure: it logs, keeps the existing page, and flags the
@@ -2722,6 +2733,11 @@ func (s *wikiIngestService) generateWithTemplateResult(
 			if err != nil || response == nil {
 				return nil, &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeUnknown, Cause: err}
 			}
+			if response.FinishReason == "length" &&
+				(purpose == "wiki_candidate_slug" || purpose == "wiki_chunk_citation") {
+				logger.Warnf(ctx, "wiki ingest: candidate/citation output truncated at completion budget")
+				return nil, &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeFailed, Cause: errWikiOutputTruncated}
+			}
 			if strings.TrimSpace(response.Content) == "" {
 				return nil, &wikiStageFailure{
 					Stage:   purpose,
@@ -2735,7 +2751,7 @@ func (s *wikiIngestService) generateWithTemplateResult(
 		// fragment is a broken page, not a shorter answer. So when the provider
 		// stops at the completion budget, replay the fragment as an assistant
 		// turn and ask for the tail. Everything else keeps the single-call
-		// behaviour (a truncated JSON extraction already fails its parse).
+		// behaviour; candidate/citation truncation is rejected before parsing.
 		canContinue := promptTpl == agent.WikiPageModifyUserPrompt
 
 		var (
@@ -2803,6 +2819,11 @@ func (s *wikiIngestService) generateWithTemplateResult(
 		result, _ := value.(wikiTemplateResult)
 		result.Content = unmaskImageURLs(result.Content, urlMap)
 		return result, nil
+	}
+	// Before joining coalescing, cancellation still proves this invocation
+	// has not been dispatched. Once queued, keep the existing UNKNOWN rule.
+	if err := ctx.Err(); err != nil && (purpose == "wiki_candidate_slug" || purpose == "wiki_chunk_citation") {
+		return wikiTemplateResult{}, &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeNotRun, Cause: err}
 	}
 	resultCh := s.llmRequests.DoChan(requestKey, execute)
 
@@ -3084,6 +3105,89 @@ func reconstructEnrichedContent(
 		return content
 	}
 	return searchutil.EnrichContentWithImageInfo(content, mergedImageInfo)
+}
+
+// wikiDocumentWindow keeps source membership separate from reconstructed text.
+type wikiDocumentWindow struct {
+	chunks     []*types.Chunk
+	content    string
+	candidates string
+}
+
+func prepareWikiDocumentWindows(
+	ctx context.Context,
+	repo interfaces.ChunkRepository,
+	tenantID uint64,
+	chunks []*types.Chunk,
+) ([]wikiDocumentWindow, string) {
+	var textChunks []*types.Chunk
+	var ids []string
+	for _, c := range chunks {
+		if c != nil && c.Content != "" && (c.ChunkType == types.ChunkTypeText || c.ChunkType == "") {
+			textChunks = append(textChunks, c)
+			if c.ID != "" {
+				ids = append(ids, c.ID)
+			}
+		}
+	}
+	sort.SliceStable(textChunks, func(i, j int) bool {
+		if textChunks[i].ChunkIndex == textChunks[j].ChunkIndex {
+			return textChunks[i].StartAt < textChunks[j].StartAt
+		}
+		return textChunks[i].ChunkIndex < textChunks[j].ChunkIndex
+	})
+	// Fetch once for the document. Each trial uses only its members' image
+	// metadata, so a shared image URL in another window cannot enrich it.
+	var imageInfo map[string]string
+	if repo != nil && len(ids) > 0 {
+		imageInfo = searchutil.CollectImageInfoByChunkIDs(ctx, repo, tenantID, ids)
+	}
+	rebuild := func(members []*types.Chunk) string {
+		local := make(map[string]string, len(members))
+		for _, c := range members {
+			if info := imageInfo[c.ID]; info != "" {
+				local[c.ID] = info
+			}
+		}
+		return searchutil.EnrichContentWithImageInfo(reconstructContent(members), searchutil.MergeImageInfoJSON(local))
+	}
+	var windows []wikiDocumentWindow
+	current := wikiDocumentWindow{}
+	flush := func() {
+		if len(current.chunks) > 0 {
+			windows = append(windows, current)
+			current = wikiDocumentWindow{}
+		}
+	}
+	for _, c := range textChunks {
+		single := rebuild([]*types.Chunk{c})
+		if utf8.RuneCountInString(single) > maxContentForWiki {
+			flush()
+			windows = append(windows, wikiDocumentWindow{chunks: []*types.Chunk{c}, content: single})
+			logger.Warnf(
+				ctx, "wiki ingest: oversized single-chunk window=%d content_runes=%d",
+				len(windows)-1, utf8.RuneCountInString(single),
+			)
+			continue
+		}
+		members := append(append([]*types.Chunk(nil), current.chunks...), c)
+		content := single
+		if len(current.chunks) > 0 {
+			content = rebuild(members)
+		}
+		if utf8.RuneCountInString(content) > maxContentForWiki {
+			flush()
+			members, content = []*types.Chunk{c}, single
+		}
+		current = wikiDocumentWindow{chunks: members, content: content}
+	}
+	flush()
+	lengths := make([]int, len(windows))
+	for i, w := range windows {
+		lengths[i] = utf8.RuneCountInString(w.content)
+	}
+	logger.Infof(ctx, "wiki ingest: document windows=%d content_runes=%v", len(windows), lengths)
+	return windows, rebuild(textChunks)
 }
 
 // slugify creates a URL-friendly slug from a string

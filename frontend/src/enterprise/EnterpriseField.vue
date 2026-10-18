@@ -29,7 +29,7 @@ watch(() => props.field.slug, () => { full.value = false })
 </script>
 
 <template>
-  <div :id="anchorId || field.slug.slice(field.slug.lastIndexOf('/') + 1)" class="ek-field" :data-field="field.slug" tabindex="-1">
+  <div :id="anchorId || field.slug.slice(field.slug.lastIndexOf('/') + 1)" :class="['ek-field', { 'ek-field--generated': field.origin === 'MODEL_GENERATED' }]" :data-field="field.slug" tabindex="-1">
     <div class="ek-field__head">
       <span class="ek-field__title"><RouterLink v-if="conceptRoute" :to="conceptRoute">{{ field.title }}</RouterLink><template v-else>{{ field.title }}</template></span>
     </div>
@@ -67,7 +67,7 @@ watch(() => props.field.slug, () => { full.value = false })
           v-for="index in field.evidenceCount"
           :key="index"
           type="button"
-          class="ek-link-button ek-source"
+          class="ek-link-button ek-source ek-source-chip"
           @click="emit('open', index - 1)"
         >{{ t('enterpriseKnowledge.entity.source', { n: index }) }}</button>
       </span>

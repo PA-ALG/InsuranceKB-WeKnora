@@ -1,7 +1,14 @@
 {
  "navigation_id": "enterprise",
- "navigation_version": "2026-10-18.1",
+ "navigation_version": "2026-10-18.2",
  "basis": "S3e: the product domain lists the schema pack catalog's packs in catalog order (display name and labels as filed); service domains are declared for entities published later (user 2026-10-18).",
+ "display_name": "保险产品知识库",
+ "overview_fields": [
+  "entry_age_range",
+  "coverage_period",
+  "waiting_period",
+  "cooling_off_period"
+ ],
  "domains": [
   {
    "domain_key": "product",
