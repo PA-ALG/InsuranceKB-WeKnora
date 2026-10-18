@@ -43,11 +43,34 @@ _POWERS = {"十": 10, "百": 100, "千": 1000}
 _LARGE = (("亿", 10**8), ("万", 10**4))
 
 
-# A list number is a one- or two-digit integer opening a line or following a sentence or list
-# separator, then a point and whitespace ("1. 20年", "保障：2. 续保"). Its point becomes a boundary
-# before whitespace is removed, so 1.20年 is never read; any other point stays a decimal point
-# (给付12. 50元 is 12.5元, -3. 5% is -3.5%).
-_LIST_POINT = re.compile(r"(^|[\n；;。：:])(\s*[0-9]{1,2})\.(?=\s)", re.MULTILINE)
+# A list point: a one- or two-digit integer opening a line or following a sentence or list
+# separator, then a point and whitespace. Such a point is ambiguous on its own (给付金额：12. 50元
+# may be 12.5元), so it counts as a list number only when the text numbers its items 1, 2, ...
+# in order (a run may restart at 1, every run has at least two items). Then each of those points
+# becomes a boundary before whitespace is removed ("1. 20年…；2. …" reads 20年, not 1.2年); in any
+# other text every point stays a decimal point.
+_LIST_POINT = re.compile(r"(^|[\n；;。：:])(\s*)([0-9]{1,2})\.(?=\s)", re.MULTILINE)
+
+
+def _numbered_list(numbers: list[int]) -> bool:
+    expected = 1
+    for number in numbers:
+        if number == expected:
+            expected += 1
+        elif number == 1 and expected > 2:
+            expected = 2  # a new list starts once the previous one had two items
+        else:
+            return False
+    return expected > 2
+
+
+def _without_list_points(text: str) -> str:
+    markers = list(_LIST_POINT.finditer(text))
+    if not _numbered_list([int(marker[3]) for marker in markers]):
+        return text
+    return _LIST_POINT.sub(lambda marker: f"{marker[1]}{marker[2]}{marker[3]}|", text)
+
+
 # One or more Chinese digits without any power, directly followed by Arabic digits, are a label
 # (计划三5000元, 第一2万元): the number starts at the Arabic digits. A numeral with powers keeps
 # them (一万零5元, 1万零5千元), and 零 is never a label.
@@ -55,7 +78,7 @@ _LABEL = re.compile(r"^[一二两三四五六七八九]+(?=[0-9])")
 
 
 def _normalized(text: str) -> str:
-    text = _LIST_POINT.sub(r"\1\2|", unicodedata.normalize("NFKC", text))
+    text = _without_list_points(unicodedata.normalize("NFKC", text))
     return _THOUSANDS.sub("", "".join(text.split()))
 
 
