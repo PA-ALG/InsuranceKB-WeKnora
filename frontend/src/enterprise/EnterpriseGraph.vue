@@ -173,7 +173,7 @@ onUnmounted(() => { generation++ })
           </template>
           <template v-else>
             <h3>{{ t('enterpriseKnowledge.concept.definition') }}</h3>
-            <span v-if="concept?.definitionGenerated" class="ek-origin ek-origin--generated">{{ t('enterpriseKnowledge.origin.generated') }}</span>
+            <span v-if="concept?.definition" class="ek-origin ek-origin--generated">{{ t('enterpriseKnowledge.origin.generated') }}</span>
             <p class="ek-graph-definition">{{ concept?.definition || t('enterpriseKnowledge.graph.noDefinition') }}</p>
             <p class="ek-graph-detail__count">{{ t('enterpriseKnowledge.graph.relatedProducts', { count: selected.degree }) }}</p>
           </template>

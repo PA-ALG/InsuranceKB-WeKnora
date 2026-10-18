@@ -13,8 +13,8 @@ export interface ConceptSummary {
   stale: boolean
 }
 export interface ConceptView {
+  // Only a published model-written definition; the profile description is written for extraction.
   key: string; title: string; definition: string; category: string; related: ConceptLink[]
-  definitionGenerated: boolean
   rows: ConceptRow[]; summary: ConceptSummary | null
 }
 
@@ -25,8 +25,8 @@ const records = (value: unknown): RecordValue[] => Array.isArray(value)
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 const profiles = (release: Release) => release.members.filter(member => member.kind === 'presentation_profile')
 
-function fieldDefinitions(release: Release) {
-  const fields = new Map<string, { title: string; definition: string; category: string }>()
+function fieldLabels(release: Release) {
+  const fields = new Map<string, { title: string; category: string }>()
   for (const profile of profiles(release)) {
     for (const section of records(profile.payload?.sections)) {
       for (const field of records(section.fields)) {
@@ -35,7 +35,6 @@ function fieldDefinitions(release: Release) {
         const previous = fields.get(key)
         fields.set(key, {
           title: previous?.title || text(field.short_title),
-          definition: previous?.definition || text(field.description),
           category: previous?.category || text(field.schema_category),
         })
       }
@@ -56,7 +55,7 @@ export function conceptKeys(release: Release): string[] {
     subjects.get(key)!.add(subject)
   }
   const eligible = new Set([...subjects].filter(([, ids]) => ids.size >= 2).map(([key]) => key))
-  const ordered = [...fieldDefinitions(release).keys()].filter(key => eligible.delete(key))
+  const ordered = [...fieldLabels(release).keys()].filter(key => eligible.delete(key))
   return [...ordered, ...[...eligible].sort()]
 }
 
@@ -104,8 +103,8 @@ function summaryView(release: Release, key: string, names: Map<string, string>):
 export function conceptView(release: Release, key: string): ConceptView | null {
   const keys = conceptKeys(release)
   if (!keys.includes(key)) return null
-  const definitions = fieldDefinitions(release)
-  const definition = definitions.get(key)
+  const labels = fieldLabels(release)
+  const field = labels.get(key)
   const published = release.members.find(member => member.kind === 'concept' && text(member.payload?.concept_key) === key)
   const readerDefinition = text(published?.payload?.definition).trim()
   const entities = entitySummaries(release)
@@ -134,10 +133,9 @@ export function conceptView(release: Release, key: string): ConceptView | null {
     })
   })
   return {
-    key, title: definition?.title || key, category: definition?.category || '', rows,
-    definition: readerDefinition || definition?.definition || '', definitionGenerated: Boolean(readerDefinition),
-    related: definition?.category ? keys.filter(other => other !== key && definitions.get(other)?.category === definition.category)
-      .map(other => ({ key: other, title: definitions.get(other)?.title || other })) : [],
+    key, title: field?.title || key, category: field?.category || '', rows, definition: readerDefinition,
+    related: field?.category ? keys.filter(other => other !== key && labels.get(other)?.category === field.category)
+      .map(other => ({ key: other, title: labels.get(other)?.title || other })) : [],
     summary: summaryView(release, key, names),
   }
 }
