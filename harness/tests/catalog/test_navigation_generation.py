@@ -1,8 +1,9 @@
 """Navigation generation and loading beyond the acceptance cases (S3e Spec §2.1; review of PR #217).
 
 Groups come from the catalog's packs (display name and labels as filed), keep the order already in
-the file and need a new version when they change; a malformed navigation file, whatever its root,
-stops publishing with a stable code before anything is read or sent.
+the file and need a new version when they change; a pack id names one pack across the catalog; a
+malformed navigation file, whatever its root, stops publishing with a stable code before anything
+is read or sent; the command fails with one stable line, a failed write included (R3-R5).
 """
 
 from __future__ import annotations
@@ -83,6 +84,53 @@ def test_the_command_writes_checks_and_the_shipped_file_is_current(
     lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert lines[1:] == [{"stopped": "NAVIGATION_STALE"}, {"written": True}, {"written": False}]
     assert parse_navigation(target.read_text("utf-8")).domains[0].groups[1].group_key == "b"
+
+
+def test_a_domain_that_omits_its_groups_takes_its_first_pack(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    current = navigation([group("a", "甲")])
+    del current["domains"][1]["groups"]  # valid: the contract defaults it to []
+    parse_navigation(json.dumps(current))
+    catalog = {"entries": [pack("a", "甲"), pack("s", "家医", "service_benefit")]}
+    assert generate(catalog, current, "v2")["domains"][1]["groups"] == [group("s", "家医")]
+    target, source = tmp_path / "navigation.json", tmp_path / "catalog.json"
+    target.write_text(json.dumps(current), encoding="utf-8")
+    source.write_text(json.dumps(catalog), encoding="utf-8")
+    assert module.main(["--catalog", str(source), "--version", "v2"], navigation=target) == 0
+    assert capsys.readouterr().out.splitlines() == ['{"written": true}']
+    assert parse_navigation(target.read_text("utf-8")).domains[1].groups[0].group_key == "s"
+
+
+def test_a_pack_id_repeated_across_domains_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    catalog = {"entries": [pack("same", "甲"), pack("same", "乙", "service_benefit")]}
+    with pytest.raises(NavigationError) as refused:
+        generate(catalog, navigation([]), "v2")
+    assert refused.value.code == "CATALOG_INVALID"
+    target, source = tmp_path / "navigation.json", tmp_path / "catalog.json"
+    target.write_text(module.render(navigation([])), encoding="utf-8")
+    source.write_text(json.dumps(catalog), encoding="utf-8")
+    assert module.main(["--catalog", str(source), "--version", "v2"], navigation=target) == 2
+    assert capsys.readouterr().out.splitlines() == ['{"stopped": "CATALOG_INVALID"}']
+
+
+def test_a_failed_write_is_one_stable_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target, source = tmp_path / "navigation.json", tmp_path / "catalog.json"
+    target.write_text(module.render(navigation([])), encoding="utf-8")
+    source.write_text(json.dumps({"entries": [pack("a", "甲")]}), encoding="utf-8")
+
+    def refuse(self: Path, *args: object, **kwargs: object) -> int:
+        raise PermissionError(13, "denied", str(self))
+
+    monkeypatch.setattr(Path, "write_text", refuse)
+    assert module.main(["--catalog", str(source), "--version", "v2"], navigation=target) == 2
+    out = capsys.readouterr().out
+    assert out.splitlines() == ['{"stopped": "NAVIGATION_WRITE_FAILED"}']
+    assert str(tmp_path) not in out
 
 
 @pytest.mark.parametrize("text", ["[]", "null", '"x"', "3", "{}", "{", '{"basis": 1}'])

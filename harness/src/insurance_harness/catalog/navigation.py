@@ -94,16 +94,21 @@ def generate(catalog: object, current: object, version: str | None = None) -> di
     """The navigation file regenerated from the catalog (rules in the module docstring).
 
     Raises NavigationError: NAVIGATION_INVALID for a malformed file, CATALOG_INVALID for a
-    malformed catalog or a pack no declared domain takes, NAVIGATION_VERSION_UNCHANGED when the
-    groups change under the same version.
+    malformed catalog, a repeated pack id or a pack no declared domain takes,
+    NAVIGATION_VERSION_UNCHANGED when the groups change under the same version.
     """
-    _profile(current)
+    profile = _profile(current)
     assert isinstance(current, dict)  # checked by _profile
     try:
         packs = [entry.pack for entry in _Catalog.model_validate(catalog).entries]
     except ValidationError:
         raise NavigationError("CATALOG_INVALID") from None
-    domains = [dict(domain) for domain in current["domains"]]
+    # A pack id names one pack across the whole catalog, whichever domain takes it.
+    if len({pack.schema_pack_id for pack in packs}) != len(packs):
+        raise NavigationError("CATALOG_INVALID")
+    # The contract's view of the file, defaults included: a domain may omit its groups.
+    declared = [domain.model_dump(mode="json") for domain in profile.domains]
+    domains = [domain.model_dump(mode="json") for domain in profile.domains]
     if any(not any(pack.entity_type in d["entity_types"] for d in domains) for pack in packs):
         raise NavigationError("CATALOG_INVALID")
     for domain in domains:
@@ -111,8 +116,6 @@ def generate(catalog: object, current: object, version: str | None = None) -> di
         if not mine:
             continue  # no pack serves it: its groups stay as written
         by_key = {pack.schema_pack_id: pack for pack in mine}
-        if len(by_key) != len(mine):
-            raise NavigationError("CATALOG_INVALID")
         kept = [group["group_key"] for group in domain["groups"] if group["group_key"] in by_key]
         order = kept + [pack.schema_pack_id for pack in mine if pack.schema_pack_id not in kept]
         domain["groups"] = [
@@ -126,7 +129,7 @@ def generate(catalog: object, current: object, version: str | None = None) -> di
     generated = {**current, "domains": domains}
     if version is not None:
         generated["navigation_version"] = version
-    changed = generated["domains"] != current["domains"]
+    changed = domains != declared
     if changed and generated["navigation_version"] == current["navigation_version"]:
         raise NavigationError("NAVIGATION_VERSION_UNCHANGED")
     _profile(generated)
@@ -169,7 +172,10 @@ def main(argv: list[str] | None = None, *, navigation: Path = NAVIGATION) -> int
             if text != current_text:
                 raise NavigationError("NAVIGATION_STALE")
         elif text != current_text:
-            navigation.write_text(text, encoding="utf-8")
+            try:
+                navigation.write_text(text, encoding="utf-8")
+            except OSError:
+                raise NavigationError("NAVIGATION_WRITE_FAILED") from None
     except NavigationError as error:
         print(json.dumps({"stopped": error.code}))
         return 2
