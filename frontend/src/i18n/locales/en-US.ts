@@ -7494,11 +7494,11 @@ export default {
   },
   enterpriseKnowledge: {
     graph: {
+      "neighbors": "Exploring: {name}",
+      "returnOverview": "Back to overview",
+      "overview": "Product groups and products",
       "showAll": "Show all concepts",
-      "allMode": "Show all concepts: on",
-      "defaultMode": "Show all concepts: off",
-      "hiddenCommon": "Hidden: {count} concepts stated by every visible product",
-      "located": "Revealed by location: {count} concepts",
+      "allMode": "All relationships",
       "title": "Relationship graph",
       "back": "Space home",
       "description": "Explore connections between products and shared concepts.",
@@ -7506,7 +7506,7 @@ export default {
       "search": "Search product or concept names",
       "find": "Locate",
       "noMatch": "No matching nodes in the current filter",
-      "counts": "Visible: {products} products · {concepts} concepts · {edges} relationships",
+      "counts": "{groups} groups · {products} products · {concepts} concepts · {edges} relationships",
       "filter": "Product groups",
       "concept": "Concept",
       "noGroups": "Select at least one product group",
@@ -7522,7 +7522,7 @@ export default {
       "pinned": "Links stay on this published version.",
       "choose": "Select a node",
       "chooseHint": "View product information or a concept definition, then open its full page.",
-      "help": "Circles are products; squares are concepts. Links indicate explicit content or explicit absence, not coverage. Drag nodes or the background; scroll to zoom. Tab to a node and press Enter for details."
+      "help": "Double rings are groups, circles are products, and squares are concepts. Select a product or concept to explore its neighbors; return to overview to start again. Product–concept edges mean explicit content or explicit absence, not that coverage exists. Drag nodes or the canvas; scroll to zoom. Tab focuses nodes; Enter opens details."
     },
     home: {
       "version": "Version {epoch}",

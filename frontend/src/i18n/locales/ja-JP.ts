@@ -7494,11 +7494,11 @@ export default {
   },
   enterpriseKnowledge: {
     graph: {
+      "neighbors": "探索中：{name}",
+      "returnOverview": "概要に戻る",
+      "overview": "保険種別と商品の概要",
       "showAll": "すべての概念を表示",
-      "allMode": "すべての概念を表示：オン",
-      "defaultMode": "すべての概念を表示：オフ",
-      "hiddenCommon": "表示中の全商品に記述がある概念を {count} 件非表示",
-      "located": "検索・指定した概念を {count} 件表示",
+      "allMode": "すべての関係",
       "title": "関係図",
       "back": "スペースのホーム",
       "description": "商品と共通概念のつながりを確認できます。",
@@ -7506,7 +7506,7 @@ export default {
       "search": "商品名または概念名を検索",
       "find": "表示",
       "noMatch": "現在の絞り込み条件に一致するノードがありません",
-      "counts": "表示中：商品 {products} 件 · 概念 {concepts} 件 · 関係 {edges} 件",
+      "counts": "{groups} 保険種別 · {products} 商品 · {concepts} 概念 · {edges} 関係",
       "filter": "商品グループ",
       "concept": "概念",
       "noGroups": "商品グループを1つ以上選択してください",
@@ -7522,7 +7522,7 @@ export default {
       "pinned": "リンク先も現在の公開版を表示します。",
       "choose": "ノードを選択",
       "chooseHint": "商品情報や概念の定義を確認し、詳細ページを開けます。",
-      "help": "円は商品、四角は概念です。線は資料の明示的な記述または不存在を示し、保障の有無を示すものではありません。ノードや背景をドラッグ、ホイールで拡大・縮小。Tab で選択し Enter で詳細を表示します。"
+      "help": "二重丸は保険種別、丸は商品、四角は概念です。商品や概念を選択すると関連ノードを表示します。概要に戻って選び直せます。商品と概念の線は資料内の明示的な記述または不存在を示し、保障の存在を意味しません。ドラッグで移動、スクロールで拡大縮小。Tab で選択、Enter で詳細を開きます。"
     },
     home: {
       "version": "バージョン {epoch}",

@@ -1,11 +1,11 @@
 // Force equations adapted from WeKnora's views/knowledge/wiki/WikiBrowser.vue (MIT).
 // This layout consumes only enterprise graph data; it has no native Wiki reads or state.
-import type { GraphNode, RelationGraph } from './graphView'
+import type { DisplayNode, DisplayGraph } from './graphDisplay'
 
-export interface PositionedNode extends GraphNode { x: number; y: number; vx: number; vy: number; pinned: boolean }
-export const nodeRadius = (node: GraphNode) => 9 + Math.min(10, Math.sqrt(node.degree) * 3)
+export interface PositionedNode extends DisplayNode { x: number; y: number; vx: number; vy: number; pinned: boolean }
+export const nodeRadius = (node: DisplayNode) => 9 + Math.min(10, Math.sqrt(node.degree) * 3)
 
-export function seedLayout(graph: RelationGraph): PositionedNode[] {
+export function seedLayout(graph: DisplayGraph): PositionedNode[] {
   return graph.nodes.map((node, index) => {
     const angle = index * Math.PI * (3 - Math.sqrt(5))
     const distance = 75 * Math.sqrt(index + 1)
@@ -13,7 +13,7 @@ export function seedLayout(graph: RelationGraph): PositionedNode[] {
   })
 }
 
-export function stepLayout(nodes: PositionedNode[], graph: RelationGraph, alpha: number): void {
+export function stepLayout(nodes: PositionedNode[], graph: DisplayGraph, alpha: number): void {
   const sorted = [...nodes].sort((a, b) => a.x - b.x)
   // Bounded repulsion, as in the upstream canvas. Sorting skips distant pairs.
   for (let i = 0; i < sorted.length; i++) {

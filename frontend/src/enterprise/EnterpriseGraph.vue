@@ -19,15 +19,17 @@ const groups = computed(() => [...new Map(products.value.map(node => [node.group
   .map(([key, title], index) => ({ key, title: title || t('enterpriseKnowledge.nav.other'), color: palette[index % palette.length]! })))
 const colors = computed(() => new Map(groups.value.map(group => [group.key, group.color])))
 const enabled = ref<string[]>([])
-const showAll = ref(false), locatedId = ref('')
-const display = computed(() => graphDisplay(graph.value, enabled.value, showAll.value, locatedId.value))
+const showAll = ref(false), centerId = ref('')
+const display = computed(() => graphDisplay(graph.value, enabled.value, showAll.value, centerId.value))
 const visible = computed(() => display.value.visible)
 const selectedId = ref('')
-const selected = computed(() => visible.value.nodes.find(node => node.id === selectedId.value))
+const selected = computed(() => display.value.available.nodes.find(node => node.id === selectedId.value))
+const center = computed(() => display.value.available.nodes.find(node => node.id === centerId.value))
 const concept = computed(() => selected.value?.kind === 'concept' && release.value
   ? conceptView(release.value, selected.value.id.slice('concept:'.length)) : null)
 const canvas = ref<InstanceType<typeof RelationGraphCanvas>>()
 const closeButton = ref<HTMLButtonElement>()
+const searchInput = ref<HTMLInputElement>()
 const query = ref(''), searched = ref(false)
 const searchId = useId(), detailTitleId = useId()
 const matches = computed(() => {
@@ -41,12 +43,12 @@ const detailTarget = computed(() => selected.value?.kind === 'product'
   : { name: 'enterpriseConcept', params: { spaceId: props.spaceId, conceptKey: selected.value?.id.slice('concept:'.length) }, query: pin.value })
 
 async function select(node: GraphNode, locate = false) {
-  if (locate) locatedId.value = node.kind === 'concept' ? node.id : ''
+  centerId.value = node.id
   selectedId.value = node.id
   searched.value = false
-  // Hidden concepts must enter the canvas before its centering method can find them.
+  // The exploration layout centers and fits its entire neighborhood. Full mode only pans on explicit location.
   await nextTick()
-  if (locate) canvas.value?.locateNode(node.id)
+  if (locate && showAll.value) canvas.value?.locateNode(node.id)
   closeButton.value?.focus()
 }
 async function locateNode(id: string): Promise<boolean> {
@@ -67,15 +69,21 @@ async function close() {
   await nextTick()
   canvas.value?.focusNode(id)
 }
-watch(visible, () => { if (!selected.value) selectedId.value = '' })
-// A location exception survives closing details so focus can return to that node. Explicit
-// filter changes reset the exception and recompute against the newly visible products.
-watch([enabled, showAll], () => { locatedId.value = '' }, { flush: 'sync' })
+async function overview() {
+  const id = centerId.value
+  showAll.value = false; centerId.value = ''; selectedId.value = ''; searched.value = false
+  await nextTick()
+  if (!canvas.value?.focusNode(id)) searchInput.value?.focus()
+}
+watch(showAll, () => { centerId.value = ''; selectedId.value = '' }, { flush: 'sync' })
+watch(() => display.value.available, available => {
+  if (!available.nodes.some(node => node.id === centerId.value)) { centerId.value = ''; selectedId.value = '' }
+})
 let generation = 0
 async function load() {
   const current = ++generation
   state.value = 'loading'; release.value = null; selectedId.value = ''; query.value = ''; searched.value = false
-  showAll.value = false; locatedId.value = ''
+  showAll.value = false; centerId.value = ''
   try {
     const loaded = props.releaseId ? await readRelease(props.spaceId, props.releaseId) : await readRelease(props.spaceId)
     if (current !== generation) return
@@ -112,7 +120,7 @@ onUnmounted(() => { generation++ })
       <div class="ek-graph-toolbar">
         <form class="ek-graph-search" data-graph-search @submit.prevent="search">
           <label :for="searchId" class="ek-sr-only">{{ t('enterpriseKnowledge.graph.search') }}</label>
-          <input :id="searchId" v-model="query" type="search" :placeholder="t('enterpriseKnowledge.graph.search')"
+          <input ref="searchInput" :id="searchId" v-model="query" type="search" :placeholder="t('enterpriseKnowledge.graph.search')"
             @input="searched = true" @keydown.enter.prevent="search" @keydown.esc="searched = false" />
           <button type="submit" class="ek-button">{{ t('enterpriseKnowledge.graph.find') }}</button>
           <ul v-if="searched && query.trim()" class="ek-graph-results">
@@ -120,16 +128,15 @@ onUnmounted(() => { generation++ })
             <li v-if="!matches.length" role="status">{{ t('enterpriseKnowledge.graph.noMatch') }}</li>
           </ul>
         </form>
+        <button type="button" class="ek-button" data-graph-overview :disabled="display.mode === 'overview'" @click="overview">{{ t('enterpriseKnowledge.graph.returnOverview') }}</button>
         <label class="ek-graph-all-concepts" data-graph-all-concepts>
           <input v-model="showAll" type="checkbox" role="switch" :aria-checked="showAll" />{{ t('enterpriseKnowledge.graph.showAll') }}
         </label>
       </div>
       <div class="ek-page__meta ek-graph-counts" data-graph-counts aria-live="polite">
-        <span>{{ showAll ? t('enterpriseKnowledge.graph.allMode') : t('enterpriseKnowledge.graph.defaultMode') }}</span>
-        <span>{{ t('enterpriseKnowledge.graph.counts', { products: visible.nodes.filter(node => node.kind === 'product').length,
+        <span>{{ showAll ? t('enterpriseKnowledge.graph.allMode') : center ? t('enterpriseKnowledge.graph.neighbors', { name: center.title }) : t('enterpriseKnowledge.graph.overview') }}</span>
+        <span>{{ t('enterpriseKnowledge.graph.counts', { groups: visible.nodes.filter(node => node.kind === 'group').length, products: visible.nodes.filter(node => node.kind === 'product').length,
           concepts: visible.nodes.filter(node => node.kind === 'concept').length, edges: visible.edges.length }) }}</span>
-        <span>{{ t('enterpriseKnowledge.graph.hiddenCommon', { count: display.hiddenConceptCount }) }}</span>
-        <span v-if="display.revealedConceptCount">{{ t('enterpriseKnowledge.graph.located', { count: display.revealedConceptCount }) }}</span>
       </div>
       <fieldset class="ek-graph-filters">
         <legend>{{ t('enterpriseKnowledge.graph.filter') }}</legend>
@@ -138,9 +145,9 @@ onUnmounted(() => { generation++ })
         </label>
         <span class="ek-graph-legend"><span class="ek-graph-concept-swatch" />{{ t('enterpriseKnowledge.graph.concept') }}</span>
       </fieldset>
-      <div class="ek-graph-workspace">
+      <div class="ek-graph-workspace" :class="{ 'ek-graph-workspace--overview': display.mode === 'overview' }">
         <div class="ek-graph-stage">
-          <RelationGraphCanvas ref="canvas" :graph="visible" :colors="colors" :selected="selectedId" @select="select" />
+          <RelationGraphCanvas ref="canvas" :graph="visible" :mode="display.mode" :center-id="centerId" :colors="colors" :selected="selectedId" @select="select" />
           <p v-if="!visible.nodes.length" class="ek-graph-filter-empty" role="status">{{ t('enterpriseKnowledge.graph.noGroups') }}</p>
         </div>
         <aside v-if="selected" class="ek-graph-detail" data-graph-detail :aria-labelledby="detailTitleId" @keydown.esc.prevent="close">
@@ -162,7 +169,7 @@ onUnmounted(() => { generation++ })
           <RouterLink class="ek-graph-open" :to="detailTarget">{{ selected.kind === 'product' ? t('enterpriseKnowledge.graph.openProduct') : t('enterpriseKnowledge.graph.openConcept') }} →</RouterLink>
           <p class="ek-page__meta">{{ t('enterpriseKnowledge.graph.pinned') }}</p>
         </aside>
-        <aside v-else class="ek-graph-detail ek-graph-detail--empty">
+        <aside v-else-if="display.mode !== 'overview'" class="ek-graph-detail ek-graph-detail--empty">
           <span class="ek-graph-detail__icon" aria-hidden="true">◎</span>
           <h2>{{ t('enterpriseKnowledge.graph.choose') }}</h2>
           <p>{{ t('enterpriseKnowledge.graph.chooseHint') }}</p>

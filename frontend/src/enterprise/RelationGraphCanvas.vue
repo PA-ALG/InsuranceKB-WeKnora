@@ -3,15 +3,18 @@
 // Rendering and lifecycle are owned here; all graph data comes from one enterprise Release.
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { GraphNode, RelationGraph } from './graphView'
-import { nodeRadius, seedLayout, stepLayout, type PositionedNode } from './graphLayout'
+import type { GraphNode } from './graphView'
+import type { DisplayNode, DisplayGraph, GraphMode } from './graphDisplay'
+import { explorationLayout } from './explorationLayout'
+import { nodeRadius, stepLayout, type PositionedNode } from './graphLayout'
 
-const props = defineProps<{ graph: RelationGraph; colors: Map<string, string>; selected?: string }>()
+const props = defineProps<{ graph: DisplayGraph; colors: Map<string, string>; selected?: string; mode?: GraphMode; centerId?: string }>()
 const emit = defineEmits<{ select: [node: GraphNode] }>()
 const { t } = useI18n()
 const svg = ref<SVGSVGElement>()
 const nodes = ref<PositionedNode[]>([])
 const width = ref(1000), height = ref(620)
+const fittedScale = ref(1)
 const scale = ref(1), pan = ref({ x: 500, y: 310 })
 const hovered = ref(''), focused = ref('')
 const active = computed(() => hovered.value || focused.value || props.selected || '')
@@ -23,20 +26,41 @@ const edges = computed(() => props.graph.edges.flatMap(edge => {
   return source && target ? [{ source, target }] : []
 }))
 const maxDegree = computed(() => Math.max(1, ...nodes.value.map(node => node.degree)))
-const color = (node: GraphNode) => node.kind === 'concept' ? 'var(--td-text-color-secondary)' : props.colors.get(node.group)
+const color = (node: DisplayNode) => node.kind === 'concept' ? 'var(--td-text-color-secondary)' : props.colors.get(node.group)
 const labelScale = computed(() => Math.min(1, scale.value))
-const labelVisible = (node: GraphNode) => node.id === active.value || node.id === props.selected || scale.value >= 0.75
+const labelVisible = (node: DisplayNode) => (props.mode && props.mode !== 'all' && scale.value >= fittedScale.value * 0.75) || node.id === active.value || node.id === props.selected || scale.value >= 0.75
   || (node.degree > 0 && node.degree >= maxDegree.value * (scale.value < 0.45 ? 0.8 : 0.5))
-const shortTitle = (title: string) => Array.from(title).length > 18 ? Array.from(title).slice(0, 18).join('') + '…' : title
+const title = (node: DisplayNode) => node.title || t('enterpriseKnowledge.nav.other')
+const shortTitle = (node: DisplayNode) => {
+  const characters = Array.from(title(node)), limit = node.kind === 'product' ? 10 : 18
+  return characters.length > limit ? characters.slice(0, limit).join('') + '…' : title(node)
+}
+const outsideLabel = (node: PositionedNode) => props.mode === 'neighbors' && node.id !== props.centerId
+const labelX = (node: PositionedNode) => node.kind === 'group' ? -nodeRadius(node) - 12 / labelScale.value
+  : outsideLabel(node) ? (node.x < 0 ? -1 : 1) * (nodeRadius(node) + 10 / labelScale.value) : 0
+const labelY = (node: PositionedNode) => outsideLabel(node) || node.kind === 'group' ? 4 / labelScale.value : nodeRadius(node) + 23 / labelScale.value
+const labelAnchor = (node: PositionedNode) => node.kind === 'group' || (outsideLabel(node) && node.x < 0) ? 'end'
+  : outsideLabel(node) ? 'start' : 'middle'
 const interacted = ref(false)
 let animation = 0, observer: ResizeObserver | undefined
 
 function fit() {
   if (!nodes.value.length) return
   const xs = nodes.value.map(node => node.x), ys = nodes.value.map(node => node.y)
-  const left = Math.min(...xs) - 120, right = Math.max(...xs) + 120
+  if (props.mode === 'neighbors' && nodes.value.length > 1) {
+    const spanX = Math.max(...xs) - Math.min(...xs), spanY = Math.max(...ys) - Math.min(...ys)
+    // Reserve screen space for outside labels, whose text remains readable when zoomed out.
+    const labelMargin = Math.min(250, width.value * 0.3)
+    scale.value = Math.max(0.08, Math.min(1.5, (width.value - 2 * labelMargin) / Math.max(1, spanX), (height.value - 100) / Math.max(1, spanY)))
+    fittedScale.value = scale.value
+    pan.value = { x: width.value / 2 - (Math.min(...xs) + Math.max(...xs)) / 2 * scale.value,
+      y: height.value / 2 - 15 - (Math.min(...ys) + Math.max(...ys)) / 2 * scale.value }
+    return
+  }
+  const left = Math.min(...xs) - 180, right = Math.max(...xs) + 120
   const top = Math.min(...ys) - 55, bottom = Math.max(...ys) + 70
   scale.value = Math.max(0.08, Math.min(1.5, width.value / (right - left), height.value / (bottom - top)))
+  fittedScale.value = scale.value
   pan.value = { x: width.value / 2 - (left + right) / 2 * scale.value, y: height.value / 2 - (top + bottom) / 2 * scale.value }
 }
 function zoom(factor: number, x = width.value / 2, y = height.value / 2) {
@@ -49,6 +73,7 @@ function focusNode(id: string) {
   const element = [...(svg.value?.querySelectorAll<SVGGElement>('[data-graph-node]') ?? [])]
     .find(element => element.dataset.graphNode === id)
   element?.focus()
+  return !!element
 }
 function locateNode(id: string) {
   const node = byId.value.get(id)
@@ -92,11 +117,14 @@ function endDrag(event: PointerEvent) {
   const clicked = !drag.moved && event.type === 'pointerup' ? drag.node : undefined
   drag = null
   if (svg.value?.hasPointerCapture?.(event.pointerId)) svg.value.releasePointerCapture(event.pointerId)
-  if (clicked) { suppressClick = true; emit('select', clicked) }
+  if (clicked) { activate(clicked); suppressClick = true }
 }
-function select(node: GraphNode) {
+function select(node: DisplayNode) {
   if (suppressClick) { suppressClick = false; return }
-  emit('select', node)
+  activate(node)
+}
+function activate(node: DisplayNode) {
+  if (node.kind !== 'group') emit('select', { ...node, kind: node.kind })
 }
 function wheel(event: WheelEvent) {
   const cursor = point(event)
@@ -106,7 +134,8 @@ watch(() => props.graph, graph => {
   cancelAnimationFrame(animation)
   drag = null
   hovered.value = ''; focused.value = ''; interacted.value = false
-  nodes.value = seedLayout(graph)
+  nodes.value = explorationLayout(graph, props.mode ?? 'all', props.centerId ?? '')
+  if (props.mode && props.mode !== 'all') { fit(); return }
   for (let tick = 0; tick < 40; tick++) stepLayout(nodes.value, graph, 1 - tick / 80)
   fit()
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
@@ -144,18 +173,19 @@ onUnmounted(() => { cancelAnimationFrame(animation); observer?.disconnect(); dra
         </g>
         <g v-for="node in nodes" :key="node.id" :data-graph-node="node.id" class="ek-graph-node"
           :class="{ 'ek-graph-node--muted': active && !neighbors.has(node.id), 'ek-graph-node--selected': selected === node.id }"
-          :style="{ '--node-color': color(node) }" :transform="`translate(${node.x},${node.y})`" tabindex="0" role="button"
-          :aria-label="`${node.title} · ${node.kind === 'product' ? t('enterpriseKnowledge.concept.columns.product') : t('enterpriseKnowledge.graph.concept')}`"
-          :aria-pressed="selected === node.id" @click.stop="select(node)" @keydown.enter.prevent="emit('select', node)"
-          @keydown.space.prevent="emit('select', node)" @focus="focused = node.id" @blur="focused = ''"
+          :style="{ '--node-color': color(node) }" :transform="`translate(${node.x},${node.y})`" :tabindex="node.kind === 'group' ? undefined : 0" :role="node.kind === 'group' ? 'img' : 'button'"
+          :aria-label="`${title(node)} · ${node.kind === 'product' ? t('enterpriseKnowledge.concept.columns.product') : node.kind === 'group' ? t('enterpriseKnowledge.concept.columns.group') : t('enterpriseKnowledge.graph.concept')}`"
+          :aria-pressed="node.kind === 'group' ? undefined : selected === node.id" @click.stop="select(node)" @keydown.enter.prevent="activate(node)"
+          @keydown.space.prevent="activate(node)" @focus="focused = node.id" @blur="focused = ''"
           @mouseenter="hovered = node.id" @mouseleave="hovered = ''" @pointerdown="startDrag($event, node)">
-          <title>{{ node.title }}</title>
+          <title>{{ title(node) }}</title>
           <circle class="ek-graph-node__ring" :r="nodeRadius(node) + 6" />
-          <circle v-if="node.kind === 'product'" class="ek-graph-node__shape" :r="nodeRadius(node)" />
-          <rect v-else class="ek-graph-node__shape ek-graph-node__concept" :x="-nodeRadius(node)" :y="-nodeRadius(node)"
+          <circle v-if="node.kind !== 'concept'" class="ek-graph-node__shape" :r="nodeRadius(node)" />
+          <circle v-if="node.kind === 'group'" class="ek-graph-group-ring" :r="nodeRadius(node) + 5" />
+          <rect v-if="node.kind === 'concept'" class="ek-graph-node__shape ek-graph-node__concept" :x="-nodeRadius(node)" :y="-nodeRadius(node)"
             :width="nodeRadius(node) * 2" :height="nodeRadius(node) * 2" rx="5" />
-          <text :y="nodeRadius(node) + 23 / labelScale" :style="{ fontSize: `${13 / labelScale}px` }" text-anchor="middle"
-            :opacity="labelVisible(node) ? 1 : 0" aria-hidden="true">{{ shortTitle(node.title) }}</text>
+          <text :x="labelX(node)" :y="labelY(node)" :style="{ fontSize: `${13 / labelScale}px` }" :text-anchor="labelAnchor(node)"
+            :opacity="labelVisible(node) ? 1 : 0" aria-hidden="true">{{ shortTitle(node) }}</text>
         </g>
       </g>
     </svg>

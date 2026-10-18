@@ -7496,11 +7496,11 @@ export default {
   },
   enterpriseKnowledge: {
     graph: {
+      "neighbors": "正在探索：{name}",
+      "returnOverview": "返回总览",
+      "overview": "险种与产品总览",
       "showAll": "显示全部概念",
-      "allMode": "显示全部概念：开",
-      "defaultMode": "显示全部概念：关",
-      "hiddenCommon": "已隐藏 {count} 个所有可见产品都陈述的概念",
-      "located": "已显示 {count} 个定位概念",
+      "allMode": "全部关系",
       "title": "关系图",
       "back": "空间首页",
       "description": "探索产品与跨产品概念之间的联系。",
@@ -7508,7 +7508,7 @@ export default {
       "search": "搜索产品或概念名称",
       "find": "定位",
       "noMatch": "当前筛选下没有匹配的节点",
-      "counts": "当前可见 {products} 款产品 · {concepts} 个概念 · {edges} 条关系",
+      "counts": "{groups} 个险种 · {products} 款产品 · {concepts} 个概念 · {edges} 条关系",
       "filter": "险种筛选",
       "concept": "概念",
       "noGroups": "请选择至少一个险种分组",
@@ -7524,7 +7524,7 @@ export default {
       "pinned": "链接保持在当前发布版本。",
       "choose": "选择一个节点",
       "chooseHint": "查看产品信息或概念定义，再打开完整页面。",
-      "help": "圆形为产品，方形为概念。连线表示材料有明确内容或明确不存在；不表示产品具备该项保障。拖动节点或空白处，滚轮缩放；Tab 聚焦节点，Enter 查看详情。"
+      "help": "双圈为险种，圆形为产品，方形为概念。点击产品或概念展开其邻居；返回总览可重新选择。产品与概念之间的连线表示材料有明确内容或明确不存在，不表示产品具备该项保障。拖动节点或空白处，滚轮缩放；Tab 聚焦节点，Enter 查看详情。"
     },
     home: {
       "version": "版本 {epoch}",

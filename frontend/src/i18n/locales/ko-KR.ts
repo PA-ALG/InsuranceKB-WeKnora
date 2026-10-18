@@ -7494,11 +7494,11 @@ export default {
   },
   enterpriseKnowledge: {
     graph: {
+      "neighbors": "탐색 중: {name}",
+      "returnOverview": "개요로 돌아가기",
+      "overview": "보험 종류 및 상품 개요",
       "showAll": "모든 개념 표시",
-      "allMode": "모든 개념 표시: 켜짐",
-      "defaultMode": "모든 개념 표시: 꺼짐",
-      "hiddenCommon": "표시 중인 모든 상품에 명시된 개념 {count}개 숨김",
-      "located": "검색·지정한 개념 {count}개 표시",
+      "allMode": "모든 관계",
       "title": "관계도",
       "back": "스페이스 홈",
       "description": "상품과 공통 개념 사이의 관계를 살펴보세요.",
@@ -7506,7 +7506,7 @@ export default {
       "search": "상품 또는 개념 이름 검색",
       "find": "찾기",
       "noMatch": "현재 필터에 일치하는 노드가 없습니다",
-      "counts": "표시 중: 상품 {products}개 · 개념 {concepts}개 · 관계 {edges}개",
+      "counts": "보험 종류 {groups}개 · 상품 {products}개 · 개념 {concepts}개 · 관계 {edges}개",
       "filter": "상품 그룹",
       "concept": "개념",
       "noGroups": "상품 그룹을 하나 이상 선택하세요",
@@ -7522,7 +7522,7 @@ export default {
       "pinned": "링크는 현재 게시 버전을 유지합니다.",
       "choose": "노드를 선택하세요",
       "chooseHint": "상품 정보나 개념 정의를 확인한 다음 전체 페이지를 여세요.",
-      "help": "원은 상품, 사각형은 개념입니다. 연결선은 자료의 명시적 내용 또는 부재를 나타내며 보장 여부를 뜻하지 않습니다. 노드나 배경을 드래그하고 휠로 확대·축소하세요. Tab으로 노드를 선택하고 Enter로 상세 정보를 여세요."
+      "help": "이중 원은 보험 종류, 원은 상품, 사각형은 개념입니다. 상품이나 개념을 선택하면 연결된 노드가 표시됩니다. 개요로 돌아가 다시 선택할 수 있습니다. 상품과 개념 사이의 선은 자료의 명시적 내용 또는 명시적 부재를 나타내며 보장 유무를 의미하지 않습니다. 드래그로 이동하고 스크롤로 확대/축소합니다. Tab으로 노드를 선택하고 Enter로 상세 정보를 엽니다."
     },
     home: {
       "version": "버전 {epoch}",
