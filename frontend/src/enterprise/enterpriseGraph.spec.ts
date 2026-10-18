@@ -20,7 +20,7 @@ function i18n() {
   return createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } })
 }
 
-function page(props: Record<string, unknown> = { spaceId: 'demo', releaseId: 'rel-9' }) {
+function page(props: { spaceId: string; releaseId?: string } = { spaceId: 'demo', releaseId: 'rel-9' }) {
   return mount(EnterpriseGraph, { props, global: { plugins: [i18n()], stubs: { RouterLink: RouterLinkStub } } })
 }
 
