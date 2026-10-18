@@ -20,7 +20,6 @@
 .ek-spot-limit--invalid, .ek-spot-error { color: var(--td-error-color); }
 .ek-spot-actions { display: flex; gap: 8px; }
 .ek-spot-actions .ek-button { flex: 1; white-space: nowrap; padding: 7px 9px; }
-.ek-spot-actions [data-verdict="correct"] { color: var(--td-brand-color); border-color: var(--td-brand-color); }
 .ek-spot-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .ek-spot-page button:focus-visible, .ek-spot-page textarea:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 3px; }
 .ek-spot-error, .ek-spot-changed { font-size: 13px; margin: 12px 0 0; }

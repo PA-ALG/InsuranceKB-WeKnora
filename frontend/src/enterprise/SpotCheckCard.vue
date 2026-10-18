@@ -41,7 +41,7 @@ const decidedAt = computed(() => {
       </template>
       <template v-else>
         <label :for="noteId">{{ t('enterpriseKnowledge.spot.note') }}</label>
-        <textarea :id="noteId" :value="draft.note" :disabled="draft.busy" :aria-invalid="length > 1000"
+        <textarea :id="noteId" :value="draft.note" :disabled="!field || draft.busy" :aria-invalid="length > 1000"
           :aria-describedby="`${noteId}-hint`" rows="3" :placeholder="t('enterpriseKnowledge.spot.notePlaceholder')"
           @input="emit('note', ($event.target as HTMLTextAreaElement).value)" />
         <span :id="`${noteId}-hint`" class="ek-spot-limit" :class="{ 'ek-spot-limit--invalid': length > 1000 }">{{ t('enterpriseKnowledge.spot.noteLimit', { count: length }) }}</span>

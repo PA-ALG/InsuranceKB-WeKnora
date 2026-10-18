@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -10,6 +11,8 @@ import { EnterpriseError, listSamples, readRelease, submitVerdict } from './ente
 import EnterpriseSpotChecks from './EnterpriseSpotChecks.vue'
 import CitationPanel from './CitationPanel.vue'
 import { spotRelease, spotSample, spotVerdict } from './__tests__/spotCheckFixtures'
+const styles = ['enterprisePage.css', 'spotChecks.css']
+  .map(name => readFileSync(new URL(name, import.meta.url), 'utf8')).join('\n')
 const views: ReturnType<typeof mount>[] = []
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done }); return { promise, resolve } }
 async function page() {
@@ -20,6 +23,26 @@ async function page() {
   views.push(view); await flushPromises(); return view
 }
 afterEach(() => { views.forEach(view => view.unmount()); views.length = 0; vi.resetAllMocks() })
+
+it('gives all three verdict choices the same visual weight', async () => {
+  vi.mocked(listSamples).mockResolvedValue([spotSample()])
+  vi.mocked(readRelease).mockResolvedValue(spotRelease())
+  const style = document.createElement('style')
+  style.textContent = `:root { --td-brand-color: #0052d9; --td-text-color-primary: #222222; --td-border-level-2-color: #dddddd; --td-bg-color-container: #ffffff; }\n${styles}`
+  document.head.append(style)
+  try {
+    const view = await page()
+    const buttons = view.findAll('[data-verdict]')
+    expect(buttons).toHaveLength(3)
+    const appearances = buttons.map(button => {
+      const css = getComputedStyle(button.element)
+      return [css.color, css.borderTopColor, css.backgroundColor, css.fontWeight, css.opacity]
+    })
+    expect(appearances[0]![0]).toBeTruthy()
+    expect(appearances[0]).toEqual(appearances[1])
+    expect(appearances[1]).toEqual(appearances[2])
+  } finally { style.remove() }
+})
 
 it('deduplicates sample IDs, shares a pinned release across tabs, and returns source focus on close', async () => {
   vi.mocked(listSamples).mockImplementation((_space, status) => Promise.resolve(status === 'pending'
@@ -51,6 +74,7 @@ it('blocks mismatched, inaccessible and ambiguous members and never reads Active
   for (const id of ['changed', 'private', 'ambiguous']) {
     const card = view.get(`[data-spot-sample="${id}"]`)
     expect(card.text()).toContain('该条目已变化')
+    expect(card.get('textarea').attributes('disabled')).toBeDefined()
     expect(card.findAll('[data-verdict]').every(button => button.attributes('disabled') !== undefined)).toBe(true)
   }
   expect(view.get('[data-spot-sample="invalid"]').findAll('[data-verdict]').every(button => button.attributes('disabled') !== undefined)).toBe(true)
@@ -100,11 +124,15 @@ it('keeps a failed draft, validates Unicode length, prevents duplicate sends, an
   const pending = deferred<ReturnType<typeof spotVerdict>>()
   vi.mocked(submitVerdict).mockRejectedValueOnce(new EnterpriseError('REQUEST_FAILED')).mockReturnValueOnce(pending.promise)
   const view = await page(), note = () => view.get('textarea'), button = () => view.get('[data-verdict="incomplete"]')
+  expect(note().attributes('disabled')).toBeUndefined()
   await note().setValue('字'.repeat(1001)); expect(button().attributes('disabled')).toBeDefined()
   await note().setValue('😀'.repeat(1000)); expect(button().attributes('disabled')).toBeUndefined()
   await note().setValue('请补充适用条件'); await button().trigger('click'); await flushPromises()
+  expect(note().attributes('disabled')).toBeUndefined()
   expect((note().element as HTMLTextAreaElement).value).toBe('请补充适用条件')
   await button().trigger('click'); await button().trigger('click')
+  expect(note().attributes('disabled')).toBeDefined()
+  expect(view.findAll('[data-verdict]').every(choice => choice.attributes('disabled') !== undefined)).toBe(true)
   expect(submitVerdict).toHaveBeenCalledTimes(2)
   pending.resolve(spotVerdict()); await flushPromises()
   expect(view.find('[data-spot-sample="sample-1"]').exists()).toBe(false)
