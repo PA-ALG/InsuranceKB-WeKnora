@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from insurance_harness.bundle.assemble import ACCESS_SCOPE, BundleError, assemble
 from insurance_harness.bundle.client import Head
+from insurance_harness.catalog.trust_policy import load_trust_policy
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.compilers.schema_fields.page import ProductPage
 from insurance_harness.compilers.schema_fields.review_items import logical_key
@@ -122,6 +123,13 @@ def _evidence(
     read = {page.document for page in source.pages}
     if any(saved.document not in read for saved in field.evidence):
         raise BundleError("EVIDENCE_DOCUMENT_NOT_READ", index)
+    policy = load_trust_policy()
+    if any(
+        (role := source.header_role(saved.document)) is not None
+        and field.field_key not in policy.header_fields(role)
+        for saved in field.evidence
+    ):
+        raise BundleError("EVIDENCE_ROLE_NOT_TRUSTED", index)
     ids, dropped = source.resolve(field.segment_ids)
     spans = source.spans(ids) if ids and not dropped and ids == field.segment_ids else []
     if (

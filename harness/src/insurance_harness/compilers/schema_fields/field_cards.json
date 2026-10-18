@@ -1,5 +1,5 @@
 {
- "version": "draft-2026-10-17a",
+ "version": "draft-2026-10-18a",
  "source": "Claude 起草、用户审定中；示例来自留出产品并经独立评委复核（Issue #157）",
  "state_rules": {
   "present": "原文给出该字段的内容。",
@@ -582,7 +582,7 @@
     ]
    ],
    "absent_rule": "原文明确写明本产品没有该项时；引用该句。",
-   "unknown_rule": "说明书与条款都没有列出缴费年期时为 unknown（原因：材料未提及）。本字段的信息还可能在产品投保规则PDF中；本批材料未提及时为 unknown，不得因条款未写而判 absent_explicitly。",
+   "unknown_rule": "说明书、条款与费率表表头都没有列出缴费年期时为 unknown（原因：材料未提及）。本字段的信息还可能在产品投保规则PDF中；本批材料未提及时为 unknown，不得因条款未写而判 absent_explicitly。",
    "bad": "只写“由双方约定并载明”而不列出年期",
    "examples": [
     {

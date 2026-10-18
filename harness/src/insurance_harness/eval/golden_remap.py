@@ -2,7 +2,7 @@
 
 usage: python -m insurance_harness.eval.golden_remap --previous <dir> --products <id>...
        --cards-version <v> --basis <text> --emptied-reason <text> [--segmentation <text>]
-       [--repo <dir>]
+       [--repo <dir>] [--golden-from <dir>]
 
 Golden quotes carry the segment id they were labelled on. When the segmentation rules change, each
 quote is taken by that id in a table exported with the previous rules (one `<product>.json` per
@@ -28,6 +28,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from insurance_harness.catalog.trust_policy import load_trust_policy, trusted_pages
 from insurance_harness.eval.product_sources import (
     check_product_id,
     material_pages,
@@ -41,11 +42,10 @@ from insurance_harness.eval.segment_score import (
     load_golden_v2,
 )
 from insurance_harness.evidence.quote_verification import PageTextLike
-from insurance_harness.evidence.segments import Segment, SegmentedSource, same_text
+from insurance_harness.evidence.segments import Segment, SegmentedSource, header_block, same_text
 from insurance_harness.identity.material_roles import (
     MaterialRoleError,
     document_roles,
-    evidence_pages,
     load_material_roles,
 )
 
@@ -79,6 +79,7 @@ class ProductRemap:
     quotes_widened: tuple[tuple[str, str], ...]  # (field, segment) reaching past the old range
     to_unknown: tuple[str, ...]
     cited_excluded: tuple[str, ...]  # fields that cited an excluded material
+    restored: tuple[str, ...]  # fields adopting policy-authorized header evidence
 
 
 class RemapError(ValueError):
@@ -122,12 +123,22 @@ def remap_golden(
     *,
     excluded: Collection[str],
     emptied_reason: str,
+    table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
 ) -> tuple[GoldenV2, ProductRemap]:
     """Remap one product's Golden; materials are all its pages, excluded ones included."""
     snapshot = {(page.document, page.page): page for page in materials}
     if len(snapshot) != len(materials):
         raise RemapError("SOURCE_PAGES_AMBIGUOUS")
-    current = SegmentedSource([page for page in materials if page.document not in excluded])
+    current = SegmentedSource(
+        [page for page in materials if page.document not in excluded], table_headers=table_headers
+    )
+    for page in current.pages:
+        original = snapshot.get((page.document, page.page))
+        if original is None or original.document_sha256.lower() != page.document_sha256.lower():
+            raise RemapError("SOURCE_FINGERPRINT_CHANGED")
+        if original.text != page.text:
+            raise RemapError("PAGE_TEXT_CHANGED")
+    policy = load_trust_policy()
     order = {segment.id: index for index, segment in enumerate(current.segments)}
     on_page: dict[tuple[str, int], list[Segment]] = {}
     for segment in current.segments:
@@ -139,19 +150,30 @@ def remap_golden(
     to_unknown: list[str] = []
     cited: list[str] = []
     split_fields: list[str] = []
+    restored: list[str] = []
     for field in golden.fields:
         evidence: dict[str, GoldenV2Evidence] = {}
         for quote in field.evidence:
             old = _check(quote, previous, snapshot)
-            if quote.document in excluded:
+            role = current.header_role(old.document)
+            header = role is not None and field.field_key in policy.header_fields(role)
+            key = (old.document, old.page)
+            block = header_block(snapshot[key].text) if header else None
+            if quote.document in excluded and not (
+                block is not None and old.start < block[1] and block[0] < old.end
+            ):
                 removed += 1
                 if field.field_key not in cited:
                     cited.append(field.field_key)
                 continue
-            key = (old.document, old.page)
-            hits = [s for s in on_page.get(key, []) if s.start < old.end and old.start < s.end]
+            hits = [
+                s for s in on_page.get(key, [])
+                if header or (s.start < old.end and old.start < s.end)
+            ]
             if not hits:
                 raise RemapError("UNMAPPED")
+            if header and field.field_key not in restored:
+                restored.append(field.field_key)
             if len(hits) > 1:
                 split += 1
                 if field.field_key not in split_fields:
@@ -165,7 +187,7 @@ def remap_golden(
                 evidence.setdefault(
                     segment.id,
                     quote.model_copy(update={"segment_id": segment.id})
-                    if same
+                    if same and not header
                     else GoldenV2Evidence(
                         document=segment.document,
                         document_sha256=segment.document_sha256.lower(),
@@ -206,6 +228,7 @@ def remap_golden(
         quotes_widened=tuple(widened),
         to_unknown=tuple(to_unknown),
         cited_excluded=tuple(cited),
+        restored=tuple(restored),
     )
     return remapped, report
 
@@ -225,13 +248,22 @@ class _Converted:
     excluded: dict[str, str]  # fingerprints of the materials that may not be evidence
 
 
-def _product(repo: Path, product: str, previous: PreviousSegmentation, reason: str) -> _Converted:
+def _product(
+    repo: Path, product: str, previous: PreviousSegmentation, reason: str,
+    cards_version: str, golden_from: Path | None,
+) -> _Converted:
     raw = material_pages(source_directory(repo, product))
-    evidence_pages(raw)  # an unresolved material stops the remap, as it stops a compile
+    trusted = trusted_pages(raw)  # an unresolved material stops the remap, as it stops a compile
     evidence = {role.role: role.evidence for role in load_material_roles().roles}
     excluded = {doc for doc, role in document_roles(raw).items() if role and not evidence[role]}
-    golden = load_golden_v2(repo / GOLDEN_DIR / f"{product}.json")
-    remapped, report = remap_golden(golden, previous, raw, excluded=excluded, emptied_reason=reason)
+    golden = load_golden_v2((golden_from or repo / GOLDEN_DIR) / f"{product}.json")
+    remapped, report = remap_golden(
+        golden, previous, raw, excluded=excluded, emptied_reason=reason,
+        table_headers=trusted.table_headers,
+    )
+    remapped = GoldenV2(
+        product_id=remapped.product_id, cards_version=cards_version, fields=remapped.fields
+    )
     fingerprints = {page.document: page.document_sha256 for page in raw}
     return _Converted(
         remapped,
@@ -285,6 +317,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=REPO)
     parser.add_argument("--previous", type=Path, required=True)
+    parser.add_argument("--golden-from", type=Path,
+                        help="Read original labels here; keep the destination manifest's history")
     parser.add_argument("--products", nargs="+", required=True)
     parser.add_argument("--cards-version", required=True)
     parser.add_argument("--basis", required=True)
@@ -303,7 +337,10 @@ def main(argv: list[str] | None = None) -> int:
             check_product_id(product)
             baseline, previous = _previous(args.previous / f"{product}.json")
             baselines.add(baseline)
-            results[product] = _product(args.repo, product, previous, args.emptied_reason)
+            results[product] = _product(
+                args.repo, product, previous, args.emptied_reason, args.cards_version,
+                args.golden_from,
+            )
         product = None
         if len(baselines) != 1 or len(next(iter(baselines))) != 40:
             raise RemapError("BASELINE_INVALID")
@@ -335,8 +372,10 @@ def main(argv: list[str] | None = None) -> int:
         entry["source_sha256"] = converted.sources
         if converted.excluded:
             entry["non_evidence_sha256"] = converted.excluded
-        if report.cited_excluded:
-            pending[name] = sorted(set(pending.get(name, [])) | set(report.cited_excluded))
+        if report.cited_excluded or report.restored:
+            pending[name] = sorted(
+                (set(pending.get(name, [])) | set(report.cited_excluded)) - set(report.restored)
+            )
         revision["products"][name] = {
             "fields": list(report.fields),
             "rate_table_quotes_removed": report.excluded_quotes_removed,
@@ -344,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
             "fields_split": list(report.fields_split),
             "quotes_widened": [list(pair) for pair in report.quotes_widened],
             "to_unknown": list(report.to_unknown),
+            "restored": list(report.restored),
         }
     if not pending:
         del manifest["pending_semantic_review"]

@@ -1,6 +1,6 @@
 {
  "product_id": "1816",
- "cards_version": "draft-2026-10-16a",
+ "cards_version": "draft-2026-10-18a",
  "fields": [
   {
    "field_key": "official_product_features",
@@ -204,10 +204,25 @@
   },
   {
    "field_key": "premium_payment_term",
-   "state": "unknown",
-   "value": null,
-   "reason": "仅费率表列示，费率表不作证据（用户 2026-10-17，S4i）；按新口径待独立评委复核",
-   "evidence": []
+   "state": "present",
+   "value": "1. 男性及女性，保险期间20年：可选交费期间为10年交、15年交、20年交；2. 男性及女性，保险期间30年：可选交费期间为10年交、15年交、20年交、30年交。",
+   "reason": "男性和女性费率表表头列明两种保险期间对应的全部交费年期。",
+   "evidence": [
+    {
+     "document": "费率表.pdf",
+     "document_sha256": "b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a",
+     "page": 1,
+     "quote": "《平安附加（2026）失能收入损失保险》年交费率表\r\n（每万元基本保险金额）\r\n男性\r\n单位：人民币元\r\n保险期间 20年 30年\r\n交费期间\r\n投保年龄\r\n10年交 15年交 20年交 10年交 15年交 20年交 30年交",
+     "segment_id": "D3P1S1"
+    },
+    {
+     "document": "费率表.pdf",
+     "document_sha256": "b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a",
+     "page": 2,
+     "quote": "《平安附加（2026）失能收入损失保险》年交费率表\r\n（每万元基本保险金额）\r\n女性\r\n单位：人民币元\r\n保险期间 20年 30年\r\n交费期间\r\n投保年龄\r\n10年交 15年交 20年交 10年交 15年交 20年交 30年交",
+     "segment_id": "D3P2S1"
+    }
+   ]
   },
   {
    "field_key": "premium_payment_frequency",

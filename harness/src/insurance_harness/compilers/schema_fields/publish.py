@@ -51,8 +51,8 @@ from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
     BASE_URL_ENV,
     SourceMapError,
-    load_pages,
     load_source_map,
+    load_trusted_pages,
     reader_from_env,
 )
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, route
@@ -138,12 +138,12 @@ def main(argv: list[str] | None = None) -> int:
         return _stop("BUNDLE_INVALID", reason=error.reason)
     try:
         source_map = load_source_map(args.source_map)
-        pages, sources = load_pages(
+        pages, sources = load_trusted_pages(
             reader_from_env(), source_map.space_id, source_map.entries(args.product)
         )
         client = PlatformClient(os.environ[BASE_URL_ENV], os.environ[API_KEY_ENV])
         active = client.active(source_map.space_id)
-        segmented = SegmentedSource(pages)
+        segmented = SegmentedSource(pages.evidence, table_headers=pages.table_headers)
         review = _route(policy, output.pack_id, claims_from(output, segmented, sources), scores)
         activate = args.activate
         if review.mode == ReviewMode.MACHINE:

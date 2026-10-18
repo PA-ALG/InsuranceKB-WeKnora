@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from insurance_harness.catalog.trust_policy import TrustedPages, trusted_pages
 from insurance_harness.eval.pdf_text import PageText, read_pdf
 from insurance_harness.identity.material_roles import evidence_pages
 
@@ -57,6 +58,18 @@ def source_pages(directory: Path) -> list[PageText]:
     material raises MaterialRoleError, a ValueError, so the product stops)."""
     pages = evidence_pages(material_pages(directory))
     if not any(page.text.strip() for page in pages):
+        raise ValueError("no source page text")
+    return pages
+
+
+def trusted_source_pages(directory: Path) -> TrustedPages[PageText]:
+    """The same frozen PDFs, with whole evidence and restricted headers kept separate."""
+    pages = trusted_pages(material_pages(directory))
+    if not any(
+        page.text.strip()
+        for group in [pages.evidence, *pages.table_headers.values()]
+        for page in group
+    ):
         raise ValueError("no source page text")
     return pages
 
