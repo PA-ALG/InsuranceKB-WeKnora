@@ -1,4 +1,5 @@
 import type { Release, ReleaseMember } from './enterpriseApi'
+import { navigationTree } from './navigationView'
 import { entitySummaries } from './releaseView'
 import { valueOutline } from './valueOutline'
 
@@ -13,6 +14,7 @@ export interface ConceptSummary {
 }
 export interface ConceptView {
   key: string; title: string; definition: string; category: string; related: ConceptLink[]
+  definitionGenerated: boolean
   rows: ConceptRow[]; summary: ConceptSummary | null
 }
 
@@ -104,7 +106,14 @@ export function conceptView(release: Release, key: string): ConceptView | null {
   if (!keys.includes(key)) return null
   const definitions = fieldDefinitions(release)
   const definition = definitions.get(key)
+  const published = release.members.find(member => member.kind === 'concept' && text(member.payload?.concept_key) === key)
+  const readerDefinition = text(published?.payload?.definition).trim()
   const entities = entitySummaries(release)
+  const grouped = navigationTree(release).flatMap(domain => domain.groups
+    .filter(group => group.key !== '__other__').flatMap(group => group.entries))
+  const groupedIds = new Set(grouped.map(entity => entity.entityId))
+  // Keep all unmatched entries last, including "other" groups from earlier domains.
+  const orderedEntities = [...grouped, ...entities.filter(entity => !groupedIds.has(entity.entityId))]
   const names = new Map(entities.map(entity => [entity.entityId, entity.name]))
   const claims = new Map<string, ReleaseMember[]>()
   for (const member of release.members) {
@@ -113,7 +122,7 @@ export function conceptView(release: Release, key: string): ConceptView | null {
     if (!claims.has(id)) claims.set(id, [])
     claims.get(id)!.push(member)
   }
-  const rows = entities.flatMap(entity => {
+  const rows = orderedEntities.flatMap(entity => {
     const profile = profiles(release).find(member => strings(member.payload?.classification_labels).some(label => entity.labels.includes(label)))
     return (claims.get(entity.entityId) ?? []).map(claim => {
       const payload = claim.payload
@@ -125,7 +134,8 @@ export function conceptView(release: Release, key: string): ConceptView | null {
     })
   })
   return {
-    key, title: definition?.title || key, definition: definition?.definition || '', category: definition?.category || '', rows,
+    key, title: definition?.title || key, category: definition?.category || '', rows,
+    definition: readerDefinition || definition?.definition || '', definitionGenerated: Boolean(readerDefinition),
     related: definition?.category ? keys.filter(other => other !== key && definitions.get(other)?.category === definition.category)
       .map(other => ({ key: other, title: definitions.get(other)?.title || other })) : [],
     summary: summaryView(release, key, names),

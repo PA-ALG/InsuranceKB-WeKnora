@@ -47,8 +47,10 @@ onUnmounted(() => { generation++ })
         <template v-else>
           <h1 class="ek-page__title">{{ view.title }}</h1>
           <p class="ek-page__meta">{{ t('enterpriseKnowledge.space.version', { epoch: release.epoch }) }}</p>
-          <section v-if="view.definition" class="ek-section" data-concept-definition>
-            <h2 class="ek-section__title">{{ t('enterpriseKnowledge.concept.definition') }}</h2><p>{{ view.definition }}</p>
+          <section v-if="view.definition" :class="['ek-section', { 'ek-section--generated': view.definitionGenerated }]" data-concept-definition>
+            <h2 class="ek-section__title">{{ t('enterpriseKnowledge.concept.definition') }}</h2>
+            <p v-if="view.definitionGenerated" class="ek-page__note">{{ t('enterpriseKnowledge.origin.generated') }}</p>
+            <p>{{ view.definition }}</p>
           </section>
           <section v-if="view.summary?.explanation" class="ek-section ek-section--generated" data-concept-explanation>
             <h2 class="ek-section__title">{{ t('enterpriseKnowledge.origin.generated') }}</h2><p>{{ view.summary.explanation }}</p>
