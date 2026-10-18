@@ -32,7 +32,7 @@ from pydantic import (
     field_validator,
 )
 
-from insurance_harness.bundle.assemble import BundleError
+from insurance_harness.bundle.assemble import BundleError, retired_claims
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
 from insurance_harness.compilers.schema_fields.claims import (
@@ -42,6 +42,7 @@ from insurance_harness.compilers.schema_fields.claims import (
 )
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.compilers.schema_fields.page import product_page
+from insurance_harness.compilers.schema_fields.review_items import logical_key
 from insurance_harness.contracts.enums import ReviewMode
 from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.eval.product_sources import check_product_id, display_name, source_directory
@@ -151,6 +152,13 @@ def main(argv: list[str] | None = None) -> int:
                 outcome="approve", mode="machine", policy_ref=review.policy_ref
             )
             activate = True
+        # A candidate is a delta: claims of this product the new output no longer has are
+        # removed explicitly, or the previous release's values would stay on the page (S5a).
+        retired = retired_claims(
+            active,
+            output.entity_id,
+            {logical_key(output.entity_id, f.field_key) for f in output.fields},
+        )
         bundle = candidate_bundle(
             output,
             segmented,
@@ -159,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
             base=active.head if active else None,
             page=page,
             review=(review, scores),
+            removals=retired,
         )
         result = publish(client, source_map.space_id, bundle, decision=decision, activate=activate)
     except (PlatformError, SourcePagesError, SourceMapError) as error:
@@ -182,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
                 "epoch": result.release.epoch if result.release else None,
                 "review": review.mode.value,
                 **({"reasons": list(review.reasons)} if review.reasons else {}),
+                **({"retired": len(retired)} if retired else {}),
             },
             ensure_ascii=False,
         )
