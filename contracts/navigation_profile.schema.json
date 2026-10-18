@@ -79,6 +79,20 @@
   "additionalProperties": false,
   "description": "How readers organise a release's entries (S3e): domains by entity type, then groups by\nclassification label. Versioned data published with the release, replaced whole each time.",
   "properties": {
+    "display_name": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Name"
+    },
     "domains": {
       "items": {
         "$ref": "#/$defs/NavigationDomain"
@@ -98,6 +112,15 @@
       "pattern": "\\S",
       "title": "Navigation Version",
       "type": "string"
+    },
+    "overview_fields": {
+      "items": {
+        "minLength": 1,
+        "pattern": "\\S",
+        "type": "string"
+      },
+      "title": "Overview Fields",
+      "type": "array"
     }
   },
   "required": [

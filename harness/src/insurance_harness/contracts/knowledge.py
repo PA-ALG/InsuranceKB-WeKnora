@@ -322,13 +322,18 @@ class NavigationProfile(ContractModel):
 
     navigation_id: NonBlank
     navigation_version: NonBlank
+    # S3f-2: the Space's display name and the fields of its product overview, in column order.
+    display_name: NonBlank | None = None
+    overview_fields: list[NonBlank] = Field(default_factory=list)
     domains: list[NavigationDomain] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def domain_keys_are_unique(self) -> Self:
+    def keys_are_unique(self) -> Self:
         keys = [domain.domain_key for domain in self.domains]
         if len(set(keys)) != len(keys):
             raise ValueError("domain keys must be unique")
+        if len(set(self.overview_fields)) != len(self.overview_fields):
+            raise ValueError("overview fields must be unique")
         return self
 
 
