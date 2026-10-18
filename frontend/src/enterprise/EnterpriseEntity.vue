@@ -98,7 +98,10 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
         <EnterpriseNavigation :release="release" :space-id="spaceId" :entity-id="entityId" />
         <article class="ek-layout__content">
           <h1 class="ek-page__title">{{ view.name }}</h1>
-          <p class="ek-page__meta">{{ t('enterpriseKnowledge.space.version', { epoch: release.epoch }) }}</p>
+          <p class="ek-page__meta ek-entity-meta" data-entity-meta>
+            <span v-if="view.profileName" class="ek-meta-tag">{{ view.profileName }}</span>
+            <span class="ek-meta-tag">{{ t('enterpriseKnowledge.space.version', { epoch: release.epoch }) }}</span>
+          </p>
           <p class="ek-page__note" data-source-note>{{ t('enterpriseKnowledge.entity.sourceNote') }}</p>
           <section v-for="section in view.sections" :key="section.key" class="ek-section" :data-section="section.key">
             <h2 class="ek-section__title">{{ section.title }}</h2>
@@ -122,7 +125,7 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               @open="evidence => open(field.slug, evidence)"
             />
           </section>
-          <section v-if="view.generated.length" class="ek-section ek-section--generated" data-generated>
+          <section v-if="view.generated.length" class="ek-section" data-generated>
             <h2 class="ek-section__title">{{ t('enterpriseKnowledge.entity.generated') }}</h2>
             <EnterpriseField
               v-for="field in view.generated"
