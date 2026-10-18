@@ -100,6 +100,7 @@ def header_role(self, document: str) -> str | None   # 只读表头的文档 →
 - **Golden**：用 `eval/golden_remap` 从 S4i 之前的 Golden（`d73a58f18`）按新规则确定性重新生成：
   - 受信表头字段在费率表页上的旧证据，若与该页表头块有重叠，映射到同页的全部表头段；与表头块没有重叠（只在数据行上）则丢弃该条；
   - 该字段恢复 S4i 之前的值与状态，并从 `pending_semantic_review` 移除；
+  - manifest 保留已有修订记录（含 S4i 那条，作为历史不改），追加一条 S4j 修订：`cards_version` 为 `draft-2026-10-18a`，`method` 为 `deterministic-remap`，写明 `basis`，每款的 `restored` 列出恢复的字段（本片为 `["premium_payment_term"]`）；
   - 与当前 `main` 相比，只有 5 款的 `premium_payment_term`、manifest 的待复核清单与修订记录、以及随卡片版本变化的 `cards_version` 有变化，其余逐字节不变；
   - 另外 3 个待复核字段（`coverage_period`、`entry_age_range`、`premium_payment_frequency`）保持现状。
 
@@ -128,7 +129,11 @@ def header_role(self, document: str) -> str | None   # 只读表头的文档 →
 - `harness/tests/eval/test_golden_payment_term.py`：
   - 5 款的 `premium_payment_term` 为 present，证据都在费率表上、每条引文落在该页表头块内、不含数据行；
   - manifest 的待复核清单不再含该字段，其他 3 个字段仍在。
-- S4i 验收修正（单独提交）：`test_field_cards_rate_tables.py` 中"缴费期限"的 `unknown_rule` 断言改为新句子。
+- S4i 验收修正（单独提交）：
+  - `test_field_cards_rate_tables.py`："缴费期限"的 `unknown_rule` 断言与卡片版本改为新值；
+  - `test_golden_rate_tables_removed.py`：Golden 只在 TrustPolicy 信任的字段上引用费率表；S4i 修订作为历史保留，其 `to_unknown` 中被后续修订 `restored` 的字段不再要求为 unknown；待复核清单去掉受信表头字段；
+  - `test_golden_data.py`、`test_segment_score_cli.py`：Golden 段号校验与"Golden 当作一次运行"的来源改用 `trusted_source_pages`，表头材料指纹对照 manifest 的 `non_evidence_sha256`。
+  （Codex 开工核对时在 #206 指出前四处冲突，第五处由 Claude 复核时补出。）
 - 门禁：Harness `pytest -m "not live and not integration_postgres"`、`ruff`、`mypy src tests`；架构守卫；CI 全绿。
 
 ## 5. 改动范围
