@@ -13,6 +13,7 @@ from typing import Annotated, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
+from insurance_harness.catalog.trust_policy import TrustedPages, trusted_pages
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.evidence.weknora_pages import WeKnoraSourcePages
@@ -79,6 +80,18 @@ def load_pages(
     non-evidence material is dropped with its revision, and an unresolved one stops the read.
     The documents kept keep their revisions, fingerprints, pages and text unchanged.
     """
+    pages, sources = _read_sources(reader, space_id, entries)
+    try:
+        kept = evidence_pages(pages)
+    except MaterialRoleError as error:
+        raise SourceMapError(error.code) from None
+    documents = {page.document for page in kept}
+    return kept, {name: revision for name, revision in sources.items() if name in documents}
+
+
+def _read_sources(
+    reader: PageReader, space_id: str, entries: list[SourceEntry]
+) -> tuple[list[PageText], dict[str, SourceRevision]]:
     pages: list[PageText] = []
     sources: dict[str, SourceRevision] = {}
     for entry in entries:
@@ -88,12 +101,33 @@ def load_pages(
             raise SourceMapError("SOURCE_DOCUMENTS_AMBIGUOUS")
         sources[document] = SourceRevision(entry.knowledge_id, entry.parse_attempt)
         pages.extend(read)
+    return pages, sources
+
+
+def load_trusted_pages(
+    reader: PageReader, space_id: str, entries: list[SourceEntry]
+) -> tuple[TrustedPages[PageText], dict[str, SourceRevision]]:
+    """Whole evidence and header inputs, with fixed revisions for every included document."""
+    pages, sources = _read_sources(reader, space_id, entries)
     try:
-        kept = evidence_pages(pages)
+        trusted = trusted_pages(pages)
     except MaterialRoleError as error:
         raise SourceMapError(error.code) from None
-    documents = {page.document for page in kept}
-    return kept, {name: revision for name, revision in sources.items() if name in documents}
+    documents = {
+        page.document
+        for group in [trusted.evidence, *trusted.table_headers.values()]
+        for page in group
+    }
+    return trusted, {name: revision for name, revision in sources.items() if name in documents}
+
+
+def trusted_page_source(
+    source_map: SourceMap, reader: PageReader
+) -> Callable[[str], TrustedPages[PageText]]:
+    def pages_of(product: str) -> TrustedPages[PageText]:
+        return load_trusted_pages(reader, source_map.space_id, source_map.entries(product))[0]
+
+    return pages_of
 
 
 def page_source(source_map: SourceMap, reader: PageReader) -> Callable[[str], list[PageText]]:

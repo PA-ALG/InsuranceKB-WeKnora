@@ -19,13 +19,14 @@ import hashlib
 import json
 import math
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
+from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
     CompileError,
@@ -40,9 +41,13 @@ from insurance_harness.eval.product_sources import (
     declared_pack,
     display_name,
     source_directory,
-    source_pages,
+    trusted_source_pages,
 )
-from insurance_harness.ingest.source_map import load_source_map, page_source, reader_from_env
+from insurance_harness.ingest.source_map import (
+    load_source_map,
+    reader_from_env,
+    trusted_page_source,
+)
 from insurance_harness.models import (
     CallLedger,
     ModelCallError,
@@ -111,15 +116,28 @@ class _RawResponses:
         return raw
 
 
-def _replay_context(product: str, pack: str, pages: list[PageText]) -> str:
+def _replay_context(
+    product: str,
+    pack: str,
+    pages: Sequence[PageText],
+    table_headers: Mapping[str, Sequence[PageText]] | None = None,
+) -> str:
     """What a saved answer was produced for beyond the request text: product, pack, sources."""
-    sources: dict[tuple[str, str], int] = {}
-    for page in pages:
-        key = (page.document, page.document_sha256)
-        sources[key] = sources.get(key, 0) + 1
-    documents = [{"document": d, "document_sha256": s, "pages": n} for (d, s), n in sources.items()]
-    return json.dumps({"product": product, "pack_id": pack, "sources": documents},
-                      ensure_ascii=False, sort_keys=True) + "\n"
+    def documents(group: Sequence[PageText]) -> list[dict[str, object]]:
+        sources: dict[tuple[str, str], int] = {}
+        for page in group:
+            key = (page.document, page.document_sha256)
+            sources[key] = sources.get(key, 0) + 1
+        return [{"document": d, "document_sha256": s, "pages": n}
+                for (d, s), n in sources.items()]
+
+    context: dict[str, object] = {"product": product, "pack_id": pack, "sources": documents(pages)}
+    if table_headers is not None:
+        context["trust_policy"] = load_trust_policy().model_dump(mode="json")
+        context["table_headers"] = [
+            {"role": role, "sources": documents(group)} for role, group in table_headers.items()
+        ]
+    return json.dumps(context, ensure_ascii=False, sort_keys=True) + "\n"
 
 
 def _request_sha256(system: str, user: str) -> str:
@@ -173,7 +191,7 @@ def compile_products(
     repo: Path, products: list[str], *,
     completion_factory: Callable[[CallLedger], CompletionPort] | None,
     run_root: Path, max_sent: int, batch_size: int = 25, replay_from: Path | None = None,
-    page_source: Callable[[str], list[PageText]] | None = None,
+    page_source: Callable[[str], list[PageText] | TrustedPages[PageText]] | None = None,
 ) -> list[ProductRun]:
     """Compile or reuse each product in order; raise on the first stopping condition.
 
@@ -208,8 +226,10 @@ def compile_products(
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / _CATALOG, pack)
-            pages = page_source(product) if page_source else source_pages(directory)
-            context = _replay_context(product, pack, pages)
+            read = page_source(product) if page_source else trusted_source_pages(directory)
+            pages = read.evidence if isinstance(read, TrustedPages) else read
+            headers = read.table_headers if isinstance(read, TrustedPages) else None
+            context = _replay_context(product, pack, pages, headers)
             port: CompletionPort
             if replay_from is not None:
                 port = _Replay(replay_from, product, context)
@@ -225,7 +245,7 @@ def compile_products(
                 port, batch_size=batch_size,
                 max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
             )
-            output = compiler.compile(product, definitions, pages)
+            output = compiler.compile(product, definitions, pages, table_headers=headers)
             if len(ledger.served) > 1:
                 # The last batch itself came from a new version: nothing is written.
                 raise ServedModelChanged(f"{product}: served model changed within the run")
@@ -312,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     clients: list[OpenAICompatibleCompletion] = []
     try:
         config = load_stage_config(args.stage_config, args.stage)
-        pages = (page_source(load_source_map(args.source_map), reader_from_env())
+        pages = (trusted_page_source(load_source_map(args.source_map), reader_from_env())
                  if args.source_map else None)
 
         def factory(ledger: CallLedger) -> CompletionPort:

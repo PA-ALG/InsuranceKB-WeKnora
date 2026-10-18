@@ -23,11 +23,11 @@ def write(tmp_path: Path, content: Any) -> Path:
     return path
 
 
-def test_the_shipped_policy_admits_no_pack_yet() -> None:
+def test_the_shipped_policy_reference_follows_its_version() -> None:
+    # RV3 (2026-10-18) admits the first pack, so "admits no pack yet" no longer holds; which
+    # packs the shipped policy admits is RV3's acceptance (test_review_policy_pilot.py).
     policy = load_review_policy()
-    assert policy.admitted_packs == []
     assert policy.policy_ref == f"review-policy@{policy.version}"
-    assert not policy.admitted("schemapack_critical_illness_insurance")
 
 
 def test_field_thresholds_override_the_pack_default(tmp_path: Path) -> None:

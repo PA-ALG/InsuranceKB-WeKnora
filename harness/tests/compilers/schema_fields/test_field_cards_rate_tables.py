@@ -28,7 +28,7 @@ INCLUDES = {
     "按计划或投保年龄分组的差异",
 }
 TERM_UNKNOWN_RULE = (
-    "说明书与条款都没有列出缴费年期时为 unknown（原因：材料未提及）。"
+    "说明书、条款与费率表表头都没有列出缴费年期时为 unknown（原因：材料未提及）。"
     "本字段的信息还可能在产品投保规则PDF中；"
     "本批材料未提及时为 unknown，不得因条款未写而判 absent_explicitly。"
 )
@@ -68,7 +68,9 @@ def untouched(cards: dict[str, Any]) -> str:
 
 
 def test_the_cards_carry_the_s4i_version() -> None:
-    assert cards_version() == "draft-2026-10-17a"
+    assert (
+        cards_version() == "draft-2026-10-18a"
+    )  # S4j: the payment term may cite rate-table headers
 
 
 def test_the_changed_rules_read_exactly_as_specified() -> None:
