@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { EnterpriseError, readRelease, type Release } from './enterpriseApi'
 import { entitySummaries } from './releaseView'
+import EnterpriseNavigation from './EnterpriseNavigation.vue'
 
-const props = defineProps<{ spaceId: string }>()
+const props = defineProps<{ spaceId: string; releaseId?: string }>()
 const { t } = useI18n()
 const state = ref<'loading' | 'failed' | 'unpublished' | 'ready'>('loading')
 const release = ref<Release | null>(null)
@@ -14,8 +15,9 @@ let generation = 0
 async function load() {
   const current = ++generation
   state.value = 'loading'
+  release.value = null
   try {
-    const active = await readRelease(props.spaceId)
+    const active = props.releaseId ? await readRelease(props.spaceId, props.releaseId) : await readRelease(props.spaceId)
     if (current !== generation) return
     release.value = active
     state.value = 'ready'
@@ -26,7 +28,8 @@ async function load() {
   }
 }
 
-watch(() => props.spaceId, load, { immediate: true })
+watch(() => [props.spaceId, props.releaseId], load, { immediate: true })
+onUnmounted(() => { generation++ })
 </script>
 
 <template>
@@ -41,17 +44,13 @@ watch(() => props.spaceId, load, { immediate: true })
     <template v-else-if="release">
       <p class="ek-page__meta">{{ t('enterpriseKnowledge.space.version', { epoch: release.epoch }) }}</p>
       <p v-if="summaries.length === 0" class="ek-empty">{{ t('enterpriseKnowledge.space.empty') }}</p>
-      <ul v-else class="ek-cards">
-        <li v-for="entry in summaries" :key="entry.entityId" class="ek-card">
-          <RouterLink
-            class="ek-card__link"
-            :to="{ name: 'enterpriseEntity', params: { spaceId, entityId: entry.entityId }, query: { release: release.id } }"
-          >
-            <span class="ek-card__name">{{ entry.name }}</span>
-            <span class="ek-card__meta">{{ t('enterpriseKnowledge.space.fieldCount', { count: entry.fieldCount }) }}</span>
-          </RouterLink>
-        </li>
-      </ul>
+      <div v-else class="ek-layout">
+        <EnterpriseNavigation :release="release" :space-id="spaceId" />
+        <section class="ek-layout__content ek-overview">
+          <h2>{{ t('enterpriseKnowledge.title') }}</h2>
+          <p>{{ t('enterpriseKnowledge.nav.chooseEntry') }}</p>
+        </section>
+      </div>
     </template>
   </main>
 </template>

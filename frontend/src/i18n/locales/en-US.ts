@@ -7493,6 +7493,31 @@ export default {
     createFailed: 'Failed to create platform API key'
   },
   enterpriseKnowledge: {
+    nav: {
+      "other": "Other",
+      "concepts": "Concepts",
+      "navigation": "Knowledge navigation",
+      "chooseEntry": "Choose an entry from navigation, or browse concepts to compare products.",
+      "expandEntry": "Expand fields for {name}",
+      "collapseEntry": "Collapse fields for {name}",
+      "noFields": "No fields yet",
+      "noConcepts": "No shared concepts in this release"
+    },
+    concept: {
+      "definition": "Field definition",
+      "summary": "Model summary (based on product sources)",
+      "stale": "Summary based on an earlier version",
+      "related": "Related concepts",
+      "notFound": "This concept is not in this release",
+      "failed": "Could not load concept",
+      "comparison": "Product comparison",
+      "columns": {
+        "group": "Category",
+        "product": "Product",
+        "summary": "Summary",
+        "sources": "Sources"
+      }
+    },
     title: 'Enterprise knowledge',
     loading: 'Loading…',
     retry: 'Retry',
