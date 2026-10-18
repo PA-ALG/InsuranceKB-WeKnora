@@ -11,7 +11,7 @@ import hashlib
 import importlib
 import typing
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -1120,9 +1120,12 @@ def test_run_timestamps_are_database_values_not_caller_values(
     factory: SessionFactory,
 ) -> None:
     store, _jobs = _make_store(api, factory)
-    before = datetime.now(UTC)
+    # The database keeps milliseconds, so a run created within the same millisecond as `before`
+    # or `after` may be stored just outside them: widen both to whole milliseconds.
+    now = datetime.now(UTC)
+    before = now.replace(microsecond=now.microsecond // 1000 * 1000)
     run = store.create_run(scope=_scope(api), idempotency_key="db-clock")
-    after = datetime.now(UTC)
+    after = datetime.now(UTC) + timedelta(milliseconds=1)
     assert before <= run.created_at <= after
     assert run.started_at is None
     assert run.finished_at is None
