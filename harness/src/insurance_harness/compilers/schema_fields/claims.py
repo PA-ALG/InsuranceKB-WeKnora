@@ -10,7 +10,7 @@ came from. With the product page (S3d-2), the bundle also carries the product's 
 pack's presentation profile, which must be for the same product and pack as the output.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from pydantic import ValidationError
 
@@ -43,6 +43,7 @@ def candidate_bundle(
     base: Head | None = None,
     page: ProductPage | None = None,
     review: tuple[Route, Scores | None] | None = None,
+    removals: Sequence[str] = (),
 ) -> CandidateBundle:
     """One claim member per field, plus the product page when given, based on the given Head.
 
@@ -61,6 +62,7 @@ def candidate_bundle(
         entities=[page.entity] if page else [],
         profiles=[page.profile] if page else [],
         review_plan=[ReviewPlan(mode=route.mode, policy_ref=route.policy_ref)],
+        removals=removals,
     )
 
 
