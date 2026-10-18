@@ -389,7 +389,9 @@ def main(argv: list[str] | None = None) -> int:
         del manifest["pending_semantic_review"]
     if args.segmentation:
         manifest["segmentation"] = args.segmentation
-    manifest.setdefault("revisions", []).append(revision)
+    revisions = manifest.setdefault("revisions", [])
+    if revision not in revisions:
+        revisions.append(revision)
     texts[gold / "manifest.json"] = _dump(manifest)
     try:
         _commit(texts)

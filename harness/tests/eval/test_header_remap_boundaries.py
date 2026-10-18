@@ -159,29 +159,28 @@ def test_command_reads_original_labels_separately_and_preserves_history(
             }
         )
     )
-    assert (
-        main(
-            [
-                "--repo",
-                str(root),
-                "--golden-from",
-                str(old),
-                "--previous",
-                str(exports),
-                "--products",
-                "p",
-                "--cards-version",
-                "new",
-                "--basis",
-                "表头恢复",
-                "--emptied-reason",
-                "费率表不作证据",
-            ]
-        )
-        == 0
-    )
+    argv = [
+        "--repo",
+        str(root),
+        "--golden-from",
+        str(old),
+        "--previous",
+        str(exports),
+        "--products",
+        "p",
+        "--cards-version",
+        "new",
+        "--basis",
+        "表头恢复",
+        "--emptied-reason",
+        "费率表不作证据",
+    ]
+    assert main(argv) == 0
     after = json.loads((gold / "manifest.json").read_text())
     assert after["revisions"][0] == history
     assert after["revisions"][-1]["products"]["p"]["restored"] == [TERM]
     assert after["pending_semantic_review"] == {"p": ["entry_age_range"]}
     assert json.loads((gold / "p.json").read_text())["cards_version"] == "new"
+    first = {p.name: p.read_bytes() for p in gold.iterdir()}
+    assert main(argv) == 0
+    assert {p.name: p.read_bytes() for p in gold.iterdir()} == first
