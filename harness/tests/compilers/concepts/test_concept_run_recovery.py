@@ -160,6 +160,13 @@ def test_malformed_arguments_stop_before_anything_is_sent(run: Any, extra: tuple
     assert (code, summary, server.requests) == (2, {"stopped": "INVALID_ARGUMENTS"}, [])
 
 
+def test_an_overlong_statement_fails_its_concept_not_the_run(tmp_path: Path, run: Any) -> None:
+    overlong = {**GOOD, "cooling_off_period": [{"text": "万" * 1500 + "元", "refs": [A]}]}
+    code, summary, _ = run(overlong)
+    assert (code, summary["written"], summary["failed"]) == (0, 1, ["cooling_off_period"])
+    assert "STATEMENT_LENGTH" in report(tmp_path)["failed"]["cooling_off_period"]
+
+
 def test_a_cancelled_send_stays_counted_and_the_rerun_resumes(tmp_path: Path, run: Any) -> None:
     code, summary, server = run(KeyboardInterrupt())
     assert (code, summary, len(server.requests)) == (2, {"stopped": "INTERRUPTED"}, 1)

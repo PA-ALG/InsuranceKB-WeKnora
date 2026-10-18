@@ -6,9 +6,10 @@ holding none of them, so "both are 15 days" cannot cite a 20-day product. Text i
 NFKC with whitespace and thousands separators removed.
 
 A number is read whole, never by a suffix: Arabic or Chinese numerals with 万, 亿 and 点 as one
-run (so 一万五千元 is 15000元, not 5000元), and 百分之 as a percentage. Both sides are read to
-their value, so 十五日 and 15日, or 10万元 and 100000元, are the same fact. A run that cannot
-be read stays as written and so matches only the same writing: it fails closed.
+run (so 一万五千元 is 15000元, not 5000元), with its minus sign (负 or -), and 百分之 as a
+percentage. Both sides are read to their value, so 十五日 and 15日, or 10万元 and 100000元, are
+the same fact. A run that cannot be read, or is longer than any amount, stays as written and so
+matches only the same writing: it fails closed.
 """
 
 from __future__ import annotations
@@ -24,11 +25,14 @@ DEFINITION_MAX, EXPLANATION_MAX, STATEMENT_MAX = 120, 400, 200
 STATEMENTS = range(1, 7)
 
 _NUMERAL = "0-9.零〇一二两三四五六七八九十百千万亿点"
+# A minus sign belongs to the number it opens; after a numeral a hyphen is a range (18-65周岁).
+_SIGN = "(?P<sign>负|-|−)?"
 # Longer units first, so 个月 and 周岁 are not read as 月 and 岁; a run starts at its first numeral.
 _TOKEN = re.compile(
-    rf"百分之(?P<percent>[{_NUMERAL}]+)"
-    rf"|(?<![{_NUMERAL}])(?P<number>[{_NUMERAL}]+)(?P<unit>个月|周岁|日|天|月|年|岁|%|元|次|倍)"
+    rf"(?<![{_NUMERAL}]){_SIGN}(?:百分之(?P<percent>[{_NUMERAL}]+)"
+    rf"|(?P<number>[{_NUMERAL}]+)(?P<unit>个月|周岁|日|天|月|年|岁|%|元|次|倍))"
 )
+_LONGEST_RUN = 32  # longer runs are not read (they stay as written), which also bounds recursion
 _THOUSANDS = re.compile(r"(?<=[0-9]),(?=[0-9]{3})")
 _ARABIC = re.compile(r"[0-9]+(?:\.[0-9]+)?")
 _DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7,
@@ -83,19 +87,20 @@ def _number(run: str) -> Decimal | None:
     return _below_ten_thousand(run)
 
 
-def _token(run: str, unit: str) -> str:
-    value = _number(run)
-    return (run if value is None else format(value.normalize(), "f")) + unit
+def _token(sign: str | None, run: str, unit: str) -> str:
+    value = _number(run) if len(run) <= _LONGEST_RUN else None
+    written = run if value is None else format(value.normalize(), "f")
+    return ("-" if sign else "") + written + unit
 
 
 def number_tokens(text: str) -> set[str]:
-    """Every "number + unit" in text, with each number written as its plain decimal value."""
+    """Every "number + unit" in text, with each number written as its signed decimal value."""
     tokens = set()
     for match in _TOKEN.finditer(_normalized(text)):
         if match["percent"] is not None:
-            tokens.add(_token(match["percent"], "%"))
+            tokens.add(_token(match["sign"], match["percent"], "%"))
         else:
-            tokens.add(_token(match["number"], match["unit"]))
+            tokens.add(_token(match["sign"], match["number"], match["unit"]))
     return tokens
 
 
