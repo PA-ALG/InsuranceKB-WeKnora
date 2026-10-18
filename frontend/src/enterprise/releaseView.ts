@@ -29,6 +29,7 @@ export interface SectionView {
 export interface EntityView {
   entityId: string
   name: string
+  profileName: string
   labels: string[]
   sections: SectionView[]
   other: FieldView[]
@@ -106,16 +107,19 @@ function fieldView(member: ReleaseMember, title: string): FieldView {
 
 interface ProfileSection { key: string; title: string; fields: { key: string; title: string }[] }
 
-function profileFor(release: Release, labels: string[]): ProfileSection[] {
+function profileFor(release: Release, labels: string[]): { name: string; sections: ProfileSection[] } {
   const profile = membersOf(release, 'presentation_profile')
     .find(candidate => strings(candidate.classification_labels).some(label => labels.includes(label)))
   const sections = Array.isArray(profile?.sections) ? (profile!.sections as Payload[]) : []
-  return sections.map(section => ({
-    key: text(section.section_key),
-    title: text(section.display_name),
-    fields: (Array.isArray(section.fields) ? (section.fields as Payload[]) : [])
-      .map(field => ({ key: text(field.field_key), title: text(field.short_title) })),
-  }))
+  return {
+    name: text(profile?.display_name),
+    sections: sections.map(section => ({
+      key: text(section.section_key),
+      title: text(section.display_name),
+      fields: (Array.isArray(section.fields) ? (section.fields as Payload[]) : [])
+        .map(field => ({ key: text(field.field_key), title: text(field.short_title) })),
+    })),
+  }
 }
 
 // Claims are ordered by predicate, then slug: a predicate is not unique (applicability and
@@ -135,7 +139,7 @@ export function entityView(release: Release, entityId: string): EntityView | nul
   const { name, labels } = entity ? identity(entity) : { name: entityId, labels: [] as string[] }
 
   const profile = profileFor(release, labels)
-  const titles = new Map(profile.flatMap(section => section.fields.map(field => [field.key, field.title] as const)))
+  const titles = new Map(profile.sections.flatMap(section => section.fields.map(field => [field.key, field.title] as const)))
   const sourced = new Map<string, [string, ReleaseMember][]>()
   const generated: [string, ReleaseMember][] = []
   for (const claim of claims) {
@@ -145,7 +149,7 @@ export function entityView(release: Release, entityId: string): EntityView | nul
   }
 
   const sections: SectionView[] = []
-  for (const section of profile) {
+  for (const section of profile.sections) {
     const fields = section.fields.flatMap(field => {
       const matching = sourced.get(field.key)
       if (!matching) return []
@@ -158,5 +162,5 @@ export function entityView(release: Release, entityId: string): EntityView | nul
     .map(([predicate, claim]) => fieldView(claim, predicate))
   const apart = generated.sort(byPredicateThenSlug)
     .map(([predicate, claim]) => fieldView(claim, titles.get(predicate) || predicate))
-  return { entityId, name, labels, sections, other, generated: apart }
+  return { entityId, name, profileName: profile.name, labels, sections, other, generated: apart }
 }

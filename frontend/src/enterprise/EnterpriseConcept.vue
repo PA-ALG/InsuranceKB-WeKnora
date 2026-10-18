@@ -50,7 +50,7 @@ onUnmounted(() => { generation++ })
           <section v-if="view.definition" :class="['ek-section', { 'ek-section--generated': view.definitionGenerated }]" data-concept-definition>
             <h2 class="ek-section__title">{{ t('enterpriseKnowledge.concept.definition') }}</h2>
             <p v-if="view.definitionGenerated" class="ek-page__note">{{ t('enterpriseKnowledge.origin.generated') }}</p>
-            <p>{{ view.definition }}</p>
+            <p class="ek-concept-definition">{{ view.definition }}</p>
           </section>
           <section v-if="view.summary?.explanation" class="ek-section ek-section--generated" data-concept-explanation>
             <h2 class="ek-section__title">{{ t('enterpriseKnowledge.origin.generated') }}</h2><p>{{ view.summary.explanation }}</p>
