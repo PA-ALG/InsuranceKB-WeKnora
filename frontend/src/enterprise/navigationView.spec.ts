@@ -4,7 +4,7 @@
 // (Spec docs/design/slices/S3e-企业知识导航与概念页.md §2.1).
 import { describe, expect, it } from 'vitest'
 import { navigationTree } from './navigationView'
-import { member, release } from './s3eFixtures'
+import { member, release } from './__tests__/s3eFixtures'
 
 const ids = (entries: { entityId: string }[]) => entries.map(entry => entry.entityId)
 

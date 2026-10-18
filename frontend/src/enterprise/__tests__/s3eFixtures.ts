@@ -1,7 +1,7 @@
 // S3e acceptance fixtures (protected, written by Claude): a release with a navigation member, two
 // packs' presentation profiles, five products in three packs and one concept member. Synthetic
 // data only; shapes follow docs/design/slices/S3e-企业知识导航与概念页.md §2–§4.
-import type { Release, ReleaseMember } from './enterpriseApi'
+import type { Release, ReleaseMember } from '../enterpriseApi'
 
 export function member(kind: string, slug: string, payload: Record<string, unknown>, digest = 'd'.repeat(64)): ReleaseMember {
   return { kind, logical_slug: slug, payload, member_digest: digest, access_scope: 'space' }

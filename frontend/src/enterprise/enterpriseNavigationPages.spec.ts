@@ -18,7 +18,7 @@ import EnterpriseConcept from './EnterpriseConcept.vue'
 import EnterpriseEntity from './EnterpriseEntity.vue'
 import EnterpriseSpace from './EnterpriseSpace.vue'
 import { EnterpriseError, readRelease } from './enterpriseApi'
-import { release } from './s3eFixtures'
+import { release } from './__tests__/s3eFixtures'
 
 function page(component: any, props: Record<string, unknown>) {
   return mount(component, {
@@ -76,7 +76,7 @@ describe('concept page', () => {
     expect(view.get('[data-concept-summary]').text()).toContain('模型汇总（依据各产品原文）')
     const statements = view.findAll('[data-concept-statement]')
     expect(statements).toHaveLength(2)
-    expect(statements[0].findAllComponents(RouterLinkStub).map(link => link.props('to'))).toEqual(
+    expect(statements[0].findAllComponents(RouterLinkStub).map((link: { props: (key: 'to') => unknown }) => link.props('to'))).toEqual(
       ['M1', 'M2'].map(entityId => ({
         name: 'enterpriseEntity', params: { spaceId: 'demo', entityId }, query: { release: 'rel-9' }, hash: '#cooling_off_period',
       })),

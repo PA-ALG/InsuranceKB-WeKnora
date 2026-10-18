@@ -4,7 +4,7 @@
 // model summary with its references and a stale flag (Spec §3, §4).
 import { describe, expect, it } from 'vitest'
 import { conceptKeys, conceptView, liveSummary } from './conceptView'
-import { release } from './s3eFixtures'
+import { release } from './__tests__/s3eFixtures'
 
 describe('conceptKeys', () => {
   it('lists fields stated by two or more entries, in profile order', () => {
