@@ -73,6 +73,50 @@
 - **"概念"页签**：按 schema 分类列出所有概念。
 - **体验**：覆盖加载、空状态、失败重试与键盘可达；窄屏下导航可折叠。
 
+### 3.1 S3e-2 细则（验收依据）
+
+- **视图模型**：
+  - `navigationView.ts`：`navigationTree(release): NavigationDomain[]`，其中 `NavigationDomain {key, title, groups}`，`NavigationGroup {key, title, entries: EntitySummary[]}`。
+    - 归不进分组的条目放进 `{key: '__other__', title: ''}`；`entity_type` 不属于任何领域的条目放进末尾的 `{key: '__other__'}` 领域。
+    - 没有导航成员时，返回唯一领域 `{key: '', title: ''}`，其中唯一分组 `{key: '', title: ''}` 按成员顺序列出全部条目。
+  - `conceptView.ts`：
+    - `conceptKeys(release)`：按 profile 中字段出现的顺序，余下的按键名排序；
+    - `conceptView(release, key)`：返回 `{key, title, definition, category, related[{key,title}], rows[{entityId, name, group, state, summary, evidenceCount, slug}], summary | null}`。非概念返回 `null`。行按条目成员顺序排列，包含该字段的全部 Claim（含 unknown）。
+    - `summary` 为 `{explanation, statements[{text, refs[{slug, entityId, name}]}], stale}`；`stale` 在 `based_on` 中任一摘要与当前成员摘要不同或成员缺失时为真。
+  - `liveSummary(state, value)`：
+    - 非 present 返回空串；
+    - 数组：取前 3 个元素的名称（有"名称："时去掉冒号），否则取元素原文，以"；"连接，多于 3 个加"…"；
+    - 字符串且顶层各条都有名称：取前 3 个名称，规则同上；
+    - 其余情况取第一句（到第一个 `。；;！？!?` 为止，含该符号）；
+    - 超过 60 字的截到 60 字并加"…"。
+- **页面与 data 属性**：
+  - Space 页：
+    - 领域页签 `[data-nav-domain]`；分组标题 `[data-nav-group]`，含条目数；条目链接 `[data-nav-entry]`，显示名称与"n 项"；
+    - 概念链接 `[data-nav-concept]`，路由为 `{name: 'enterpriseConcept', params: {spaceId, conceptKey}, query: {release}}`。
+  - 概念页 `EnterpriseConcept.vue`（props：`spaceId`、`conceptKey`、`releaseId?`）：
+    - `[data-concept-definition]`；
+    - `[data-concept-explanation]`（含"模型补充"）；
+    - `[data-concept-summary]`（含"模型汇总（依据各产品原文）"）；
+    - `[data-concept-statement]`，每个引用一个条目链接，带 `hash: '#<conceptKey>'`；
+    - `[data-concept-stale]`；
+    - `[data-concept-row]`，每行一个条目链接，带同样的 hash；非 present 行显示状态文案；
+    - `[data-concept-related]`；
+    - 加载失败用 `[role="alert"]` 加重试，非概念显示"该版本中没有这个概念"。
+  - 条目页：
+    - 字段根元素 `id` 为字段键；
+    - 是概念的字段，标题 `.ek-field__title` 内为概念链接；不是概念的保持纯文本。
+- **文案**（zh-CN，其余 4 种语言同步）：
+  - 导航：`nav.other`"其他"、`nav.concepts`"概念"；
+  - 概念页：`concept.definition`"字段定义"、`concept.summary`"模型汇总（依据各产品原文）"、`concept.stale`"汇总基于较早版本"、`concept.related`"同类概念"、`concept.notFound`"该版本中没有这个概念"、`concept.failed`"概念加载失败"；
+  - 表头：`concept.columns.group`"险种"、`concept.columns.product`"产品"、`concept.columns.summary`"摘要"、`concept.columns.sources`"出处"；
+  - 模型说明的标签沿用 `origin.generated`"模型补充"。
+- **审核补充（PR #218，2026-10-18，Claude 用真实数据渲染后提出）**：
+  - **字段定义的来源**：154 个 Schema 字段说明中有 28 个混有抽取指令（如"只允许从正式条款中抽取"），不宜原样展示。
+    - 概念页的"字段定义"优先取 `concept` 成员的 `definition`，由 S3e-3 生成：依据 Schema 说明改写成面向读者的一句定义，去掉抽取指令，并归在"模型补充"的标注之下；
+    - 没有 `concept` 成员时，才显示 profile 中的字段说明。
+  - **对照表的行序**：先按导航分组顺序，同组内再按条目成员顺序，让同一险种的产品排在一起；不在任何分组的条目排在最后。
+- **S3d-3a 验收修正**：Space 页也会列出概念链接，所以 `enterprisePages.spec.ts` 中 Space 页那条用例只核对条目链接，其余断言不变。
+
 ## 4. 概念说明生成（S3e-3，Harness，真实调用）
 
 - **范围**：Active Release 中被 ≥ 2 个条目使用的谓词。按 13 款产品估计约 70 个概念。
