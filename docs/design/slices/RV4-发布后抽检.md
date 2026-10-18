@@ -127,16 +127,24 @@ type Store interface {
   - `rate` 是 0–1 的抽样比例；`minimum` 是每个 pack 每次至少抽几条（不足时全抽）；`target` 是机器审核内容的目标精确率，回流时与 Wilson 下界比较；`must_check` 是必抽字段（字段键）。
   - 没有单独配置的 pack 用 `default`。
   - 加载时校验：版本非空，`rate` 与 `target` 在 0–1，`minimum` ≥ 0，字段键非空且不重复；不合法时返回固定错误码 `SPOT_CHECK_POLICY_INVALID`。
-- **`review/spot_check.py`**（核心、通用）：`sample(release, policy, pack_of) -> list[Pick]`，`Pick(slug, stratum)`。
-  - 只看 Release 中 `review.mode == "machine"` 的 Claim；按条目所属 pack 分组（`pack_of(entity_id)` 由调用方给出）。
-  - 每个 pack 分两层：必抽字段一层全抽（`stratum = "<pack>/must"`）；其余一层按 `max(minimum - 必抽数, ceil(rate × 数量))` 抽取（`stratum = "<pack>/rest"`）。
-  - 用 Release ID 作随机种子，同一 Release 同一策略结果不变；返回顺序固定（按 slug）。
-- **发布接线**：`publish.py` 在机器审核激活了 Release 之后，按策略抽样并提交样本；只有人工审核 Claim 的 Release 不抽。提交失败不回滚发布，命令输出 `"samples": {"stopped": <code>}`，可以用回流命令补交。
+- **`catalog/spot_check.py`**：`load_spot_check_policy(path=None) -> SpotCheckPolicy`，`None` 读包内 `spot_check_policy.json`；`SpotCheckPolicy.for_pack(pack_id) -> PackRule`（没有单独配置时用 `default`）；不合法时抛 `SpotCheckPolicyError`，`code == "SPOT_CHECK_POLICY_INVALID"`。
+- **`review/spot_check.py`**（核心、通用）：`sample(release, base, policy) -> list[Pick]`，`Pick(slug, stratum)`。
+  - **抽样范围**：本次新上线的机器审核 Claim，即 `review.mode == "machine"`，并且在 `base` Release 中不存在或成员摘要不同；`base` 为 `None` 时取全部机器审核 Claim。没有变化的 Claim 已经在之前的 Release 中抽过，不重复抽。
+  - **pack 归属**：由 Release 自身决定。条目（entity 成员）的 `classification_labels` 与哪个 profile 相交，就属于该 profile 的 `schema_pack_id`。归不到 pack 的 Claim 记入 `stratum = "unassigned/rest"`，按 `default` 规则抽。
+  - **分层**：每个 pack 分两层。
+    - 必抽字段一层全抽，`stratum = "<pack>/must"`；
+    - 其余一层抽 `min(数量, max(minimum - 必抽数, ceil(rate × 数量)))` 条，`stratum = "<pack>/rest"`。
+  - **可复现**：其余层用 `random.Random(f"{release.id}/{pack}")` 抽取，同一 Release、同一策略结果不变；返回结果按 slug 排序。
+- **平台客户端**（`bundle/client.py`）新增：
+  - `PlatformClient.submit_samples(space_id, release_id, picks) -> list[Sample]`；
+  - `PlatformClient.samples(space_id, *, status=None, release_id=None) -> list[Sample]`。
+  - `Sample` 与 `Verdict` 是响应模型，字段同 §2.1。
+- **发布接线**：`publish.py` 在机器审核激活 Release 之后，以发布前读到的 Active 为 `base` 抽样并提交样本；人工决定的发布不抽。提交失败不回滚发布，命令输出 `"samples": {"stopped": <code>}`，可以用回流命令补交；成功时输出 `"samples": <条数>`。
 - **回流命令** `python -m insurance_harness.eval.spot_check_report --space S [--release R] [--submit]`：
   - 读取样本与结论，按 pack 统计：样本数、已确认数、正确、不完整、错误，精确率与 Wilson 下界（95%）。"不完整"按 S2c 口径不算错。
   - Wilson 下界低于该 pack 的 `target` 且已确认数不少于 `minimum` 时，输出"提高门槛或撤销准入"建议，不自动改审核策略；已确认数不足时输出"样本不足"。
   - 判为错误的条目列入修正清单（slug、Release、确认人、说明）。
-  - `--submit` 对指定 Release 补交样本（幂等）。
+  - `--submit --release R` 对指定 Release 补交样本，以它的 `base_release_id` 为 `base`，幂等。
   - 输出一行 JSON 摘要，详细报告写到 `--out` 指定的文件；失败时输出一行 `{"stopped": <code>}` 并以 2 退出，不含路径或密钥。
 
 ## 3. 拆分与顺序
