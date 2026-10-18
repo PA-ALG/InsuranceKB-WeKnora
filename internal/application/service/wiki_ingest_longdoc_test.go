@@ -65,7 +65,9 @@ func promptText(messages []chat.Message) string {
 	return sb.String()
 }
 
-func (m *longDocModel) Chat(ctx context.Context, messages []chat.Message, _ *chat.ChatOptions) (*types.ChatResponse, error) {
+func (m *longDocModel) Chat(
+	ctx context.Context, messages []chat.Message, _ *chat.ChatOptions,
+) (*types.ChatResponse, error) {
 	purpose, _ := types.LLMCallMetadataFromContext(ctx)
 	text := promptText(messages)
 	m.mu.Lock()
