@@ -118,7 +118,8 @@ describe('Space page', () => {
     await flushPromises()
     expect(vi.mocked(readRelease).mock.calls).toEqual([['demo']])
     expect(view.text()).toContain('发布版本 3')
-    const links = view.findAllComponents(RouterLinkStub)
+    // S3e: the Space page also lists concept links; this case checks the entry links only.
+    const links = view.findAllComponents(RouterLinkStub).filter(link => link.props('to').name === 'enterpriseEntity')
     expect(links.map(link => link.props('to'))).toEqual([
       { name: 'enterpriseEntity', params: { spaceId: 'demo', entityId: 'P1' }, query: { release: 'rel-9' } },
       { name: 'enterpriseEntity', params: { spaceId: 'demo', entityId: 'P3' }, query: { release: 'rel-9' } },
