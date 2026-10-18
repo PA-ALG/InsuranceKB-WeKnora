@@ -53,3 +53,13 @@ def test_only_the_payment_term_left_the_pending_list() -> None:
         assert {"entry_age_range", "premium_payment_frequency"} <= set(pending[product]), product
     for product in ("1814", "1816", "1824", "1826"):
         assert "coverage_period" in pending[product], product
+
+
+def test_the_restoration_is_recorded_after_the_s4i_revision() -> None:
+    manifest = json.loads((GOLDEN / "manifest.json").read_text(encoding="utf-8"))
+    revisions = manifest["revisions"]
+    s4i = next(i for i, r in enumerate(revisions) if r["cards_version"] == "draft-2026-10-17a")
+    later = [r for r in revisions[s4i + 1 :] if r["cards_version"] == "draft-2026-10-18a"]
+    assert len(later) == 1 and later[0]["basis"]
+    for product in PRODUCTS:
+        assert later[0]["products"][product]["restored"] == ["premium_payment_term"], product

@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from insurance_harness.eval.product_sources import source_directory, source_pages
+from insurance_harness.eval.product_sources import source_directory, trusted_source_pages
 from insurance_harness.eval.segment_score import load_golden_v2
 from insurance_harness.evidence.segments import SegmentedSource
 
@@ -41,9 +41,14 @@ def test_golden_file_matches_the_manifest_and_the_current_segments(product: str)
     assert golden.product_id == product and len(golden.fields) == entry["fields"]
     assert dict(Counter(field.state for field in golden.fields)) == entry["states"]
 
-    source = SegmentedSource(source_pages(source_directory(REPO, product)))
-    fingerprints = {page.document: page.document_sha256 for page in source.pages}
-    assert fingerprints == entry["source_sha256"]
+    # S4j: rate tables are read for their header only; their fingerprints are recorded apart.
+    trusted = trusted_source_pages(source_directory(REPO, product))
+    source = SegmentedSource(trusted.evidence, table_headers=trusted.table_headers)
+    evidence = {page.document: page.document_sha256 for page in trusted.evidence}
+    assert evidence == entry["source_sha256"]
+    headers = {p.document: p.document_sha256 for g in trusted.table_headers.values() for p in g}
+    assert headers == entry.get("non_evidence_sha256", {})
+    fingerprints = {**evidence, **headers}
     segments = {segment.id: segment for segment in source.segments}
     for field in golden.fields:
         for quote in field.evidence:

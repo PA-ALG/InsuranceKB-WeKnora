@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
-from insurance_harness.eval.product_sources import source_directory, source_pages
+from insurance_harness.eval.product_sources import source_directory, trusted_source_pages
 from insurance_harness.eval.segment_score import (
     GOLDEN_DIR,
     GoldenV2,
@@ -27,7 +27,8 @@ PRODUCT = "1824"
 
 def golden_as_run(run_root: Path) -> None:
     golden = load_golden_v2(REPO / GOLDEN_DIR / f"{PRODUCT}.json")
-    source = SegmentedSource(source_pages(source_directory(REPO, PRODUCT)))
+    trusted = trusted_source_pages(source_directory(REPO, PRODUCT))  # S4j: headers too
+    source = SegmentedSource(trusted.evidence, table_headers=trusted.table_headers)
     fields = [
         FieldResult(
             field_key=field.field_key,
