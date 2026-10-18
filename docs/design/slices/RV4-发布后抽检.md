@@ -70,7 +70,7 @@ type Store interface {
 **服务** `spotcheck.Service`（`NewService(store Store, releases ReleaseReader, opts ...Option)`；选项 `WithClock(func() time.Time)` 与 `WithIDs(func() string)`，默认用系统时钟与随机 ID）：
 
 - `Submit(ctx, p release.Principal, spaceID, releaseID string, items []SampleInput) ([]Sample, error)`
-  - 通过 `ReleaseReader.ReleaseByID(ctx, tenantID, spaceID, releaseID)` 读该 Release，不接受空 ID 或 `active`；读不到返回 `RELEASE_NOT_FOUND`。
+  - 通过 `ReleaseReader.Release(ctx, p, spaceID, releaseID)` 读该 Release；服务入口先拒绝空 ID 与 `active`（返回 `RELEASE_NOT_FOUND`），读不到也返回 `RELEASE_NOT_FOUND`。
   - 每条 `Slug` 必须是该 Release 的成员，否则整批拒绝，返回 `MEMBER_NOT_FOUND`。成员摘要由平台从 Release 取，不信任调用方。
   - 1 ≤ 条数 ≤ 500；`Slug`、`Stratum` 去掉首尾空白后非空，`Stratum` 不超过 64 个字符，同一批内 `Slug` 不重复，否则返回 `SAMPLE_INVALID`。
   - 按 `(tenant, space, release, slug)` 幂等：已存在的样本原样返回，不新建、不改 `Stratum`。返回顺序与输入顺序一致。
@@ -80,7 +80,7 @@ type Store interface {
 - `Decide(ctx, p, spaceID, sampleID string, outcome, note string) (Verdict, error)`
   - 样本必须属于本租户、本 Space，否则返回 `SAMPLE_NOT_FOUND`（不区分"不存在"与"属于别人"）。
   - `outcome` 只能是 `correct`、`incomplete`、`wrong`；`note` 去掉首尾空白，不超过 1000 个字符；否则返回 `VERDICT_INVALID`。
-  - 结论只追加：同一样本可以有多条，`Reviewer` 取 `p.Subject`，`DecidedAt` 取服务时钟。
+  - 结论只追加：同一样本可以有多条，`Reviewer` 取 `p.Subject`，`DecidedAt` 取服务时钟。"最新结论"严格按追加先后：持久化用自增序号（见迁移），不按时间或 ID 排序，时钟回拨或同一时刻也不改变结果。
 - 任何方法遇到 `p.TenantID == 0`、`p.Subject` 为空或 `spaceID` 为空，返回 `RELEASE_ACCESS_DENIED`；`Store` 返回的未知错误原样上抛，由路由层统一转成 `INTERNAL_ERROR`。
 - 错误类型沿用 `*release.Error`。新增错误码定义在 `spotcheck` 包：`ErrorSampleInvalid = "SAMPLE_INVALID"`（400）、`ErrorSampleNotFound = "SAMPLE_NOT_FOUND"`（404）、`ErrorVerdictInvalid = "VERDICT_INVALID"`（400），在 `writeError` 中映射状态码；`RELEASE_NOT_FOUND`、`MEMBER_NOT_FOUND`、`RELEASE_ACCESS_DENIED` 沿用 `release` 包的常量。
 
@@ -88,7 +88,8 @@ type Store interface {
 
 - 迁移 `migrations/enterprise/versioned/000008_enterprise_spot_checks.{up,down}.sql`：
   - `enterprise_samples`：`id TEXT PK`、`tenant_id BIGINT`、`space_id`、`release_id`、`logical_slug`、`member_digest`、`stratum`、`created_by`、`created_at TIMESTAMPTZ`；唯一索引 `(tenant_id, space_id, release_id, logical_slug)`。
-  - `enterprise_sample_verdicts`：`id TEXT PK`、`tenant_id`、`space_id`、`sample_id TEXT REFERENCES enterprise_samples(id)`、`outcome TEXT CHECK (outcome IN ('correct','incomplete','wrong'))`、`note`、`reviewer`、`decided_at`；索引 `(sample_id, decided_at, id)`。
+  - `enterprise_sample_verdicts`：`id TEXT PK`、`seq BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE`（追加顺序）、`tenant_id`、`space_id`、`sample_id TEXT REFERENCES enterprise_samples(id)`、`outcome TEXT CHECK (outcome IN ('correct','incomplete','wrong'))`、`note`、`reviewer`、`decided_at`；索引 `(sample_id, seq)`。最新结论取每个样本 `seq` 最大的一条。
+  - `internal/database/enterprise_migration.go` 中打包的迁移 head 从 7 升到 8，并补对应校验测试。
   - down 迁移依次删除两张表。
 - 幂等插入用唯一索引加 `ON CONFLICT DO NOTHING` 后回读，并发提交同一样本只留一条。
 
@@ -101,7 +102,11 @@ type Store interface {
 | `GET /spaces/:space_id/view/samples?status=&release=` | 浏览器会话，Space 可见，原 view 守卫（Viewer） | 同上，供抽检台列表 |
 | `POST /spaces/:space_id/view/samples/:sample_id/verdicts` | 浏览器会话，并要求对该 Space 的 Wiki KB 至少有编辑权限 | 请求 `{"outcome","note"}`，响应 201 `{"verdict":Verdict}`；`reviewer` 取会话主体，不接受请求中的确认人 |
 
+- **响应包装**：四个接口成功时都返回 `{"success":true,"data":{...}}`：提交与两个列表的 `data` 是 `{"samples":[...]}`（空列表为 `[]`），写结论的 `data` 是 `{"verdict":{...}}`。状态码：提交 201、列表 200、写结论 201。
+- **请求体**：提交样本上限 256 KiB，写结论上限 64 KiB；两者都要求 UTF-8、单个顶层 JSON 对象、无尾随内容、无重复键与未知字段（写结论时传 `reviewer` 也算未知字段），违反时分别返回 `SAMPLE_INVALID` 与 `VERDICT_INVALID`（400）。
+- **会话可见性**：浏览器会话只能看到、也只能确认它在样本所属 Release 上可读的成员（与 `SpaceReadView` 相同，`access_scope == "space"`）。会话列表过滤掉不可见的样本；对不可见样本写结论返回 `SAMPLE_NOT_FOUND`。判断时固定读样本自己的 Release，不改读 Active。API Key 仍可列出本租户、本 Space 的全部样本，供统计使用。
 - API Key 路由加在 `enterprise.Mount`，会话读路由加在 `MountSessionReads`，都在本项目包内。
+- **生产装配**：在项目自有的 `releasestore/production.go` 注册 spotcheck 服务，复用现有数据库、Spaces 与 Release 服务，未配置时为 nil，路由返回 503。`router.go` 只在已有的 enterprise 挂载处做最小改动：`RouterParams` 增加该依赖字段，传给 `Mount`、`MountSessionReads`，并调用一次 `MountSessionSpotChecks`（带 Wiki KB 的 `OrgRoleEditor` 守卫）。不修改 container 等其他上游文件。
 - 会话写路由需要编辑权限守卫：新增 `enterprise.MountSessionSpotChecks(r, deps, guards...)`，在 `internal/router/router.go` 中调用，传入 `RequireKBAccess(..., types.OrgRoleEditor, ...)` 守卫。`router.go` 已在上游补丁登记中，本片只在同一处增加一次调用，在 `docs/design/upstream-patches.md` 追加一行登记，不新增被修改的上游文件。
 
 ### 2.2 RV4b 抽检台（`frontend/src/enterprise/`）
