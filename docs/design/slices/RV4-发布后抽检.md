@@ -48,7 +48,26 @@ type SampleInput struct{ Slug, Stratum string }
 type Filter struct{ Status, ReleaseID string } // Status: "" | "pending" | "decided"
 ```
 
-**服务** `spotcheck.Service`（`NewService(store Store, releases ReleaseReader, opts ...Option)`；`Option` 至少提供注入时钟与 ID 生成器）：
+**协作接口**（由服务定义；`*release.Service` 直接满足 `ReleaseReader`）：
+
+```go
+type ReleaseReader interface {
+    Release(ctx context.Context, p release.Principal, spaceID, releaseID string) (release.Release, error)
+}
+
+// Store isolates every record by tenant and Space.
+type Store interface {
+    // InsertSamples keeps an existing (tenant, space, release, slug) sample unchanged and
+    // returns the stored sample for every input, in input order (concurrency-safe).
+    InsertSamples(ctx context.Context, tenantID uint64, samples []Sample) ([]Sample, error)
+    // ListSamples returns a Space's samples with their latest verdicts, by CreatedAt then ID.
+    ListSamples(ctx context.Context, tenantID uint64, spaceID string, f Filter) ([]Sample, error)
+    SampleByID(ctx context.Context, tenantID uint64, spaceID, id string) (Sample, bool, error)
+    AppendVerdict(ctx context.Context, tenantID uint64, spaceID string, v Verdict) error
+}
+```
+
+**服务** `spotcheck.Service`（`NewService(store Store, releases ReleaseReader, opts ...Option)`；选项 `WithClock(func() time.Time)` 与 `WithIDs(func() string)`，默认用系统时钟与随机 ID）：
 
 - `Submit(ctx, p release.Principal, spaceID, releaseID string, items []SampleInput) ([]Sample, error)`
   - 通过 `ReleaseReader.ReleaseByID(ctx, tenantID, spaceID, releaseID)` 读该 Release，不接受空 ID 或 `active`；读不到返回 `RELEASE_NOT_FOUND`。
@@ -63,7 +82,7 @@ type Filter struct{ Status, ReleaseID string } // Status: "" | "pending" | "deci
   - `outcome` 只能是 `correct`、`incomplete`、`wrong`；`note` 去掉首尾空白，不超过 1000 个字符；否则返回 `VERDICT_INVALID`。
   - 结论只追加：同一样本可以有多条，`Reviewer` 取 `p.Subject`，`DecidedAt` 取服务时钟。
 - 任何方法遇到 `p.TenantID == 0`、`p.Subject` 为空或 `spaceID` 为空，返回 `RELEASE_ACCESS_DENIED`；`Store` 返回的未知错误原样上抛，由路由层统一转成 `INTERNAL_ERROR`。
-- 错误类型沿用 `*release.Error`，新增错误码 `SAMPLE_INVALID`（400）、`SAMPLE_NOT_FOUND`（404）、`VERDICT_INVALID`（400），在 `writeError` 中映射状态码。
+- 错误类型沿用 `*release.Error`。新增错误码定义在 `spotcheck` 包：`ErrorSampleInvalid = "SAMPLE_INVALID"`（400）、`ErrorSampleNotFound = "SAMPLE_NOT_FOUND"`（404）、`ErrorVerdictInvalid = "VERDICT_INVALID"`（400），在 `writeError` 中映射状态码；`RELEASE_NOT_FOUND`、`MEMBER_NOT_FOUND`、`RELEASE_ACCESS_DENIED` 沿用 `release` 包的常量。
 
 **存储**：`Store` 接口由服务定义，PostgreSQL 实现放在 `internal/enterprise/releasestore`（或同级新文件）。
 
