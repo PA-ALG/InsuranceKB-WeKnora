@@ -46,7 +46,9 @@ type tenantVerdict struct {
 	spotcheck.Verdict
 }
 
-func (m *memStore) InsertSamples(_ context.Context, tenantID uint64, in []spotcheck.Sample) ([]spotcheck.Sample, error) {
+func (m *memStore) InsertSamples(
+	_ context.Context, tenantID uint64, in []spotcheck.Sample,
+) ([]spotcheck.Sample, error) {
 	if m.fail != nil {
 		return nil, m.fail
 	}
@@ -79,7 +81,9 @@ func (m *memStore) latest(tenant uint64, sampleID string) *spotcheck.Verdict {
 	return last
 }
 
-func (m *memStore) ListSamples(_ context.Context, tenantID uint64, spaceID string, f spotcheck.Filter) ([]spotcheck.Sample, error) {
+func (m *memStore) ListSamples(
+	_ context.Context, tenantID uint64, spaceID string, f spotcheck.Filter,
+) ([]spotcheck.Sample, error) {
 	if m.fail != nil {
 		return nil, m.fail
 	}
@@ -192,10 +196,12 @@ func TestSubmitRefusesAWholeBatchThatIsNotOfTheRelease(t *testing.T) {
 	})
 	require.Equal(t, release.ErrorMemberNotFound, codeOf(t, err))
 	for _, id := range []string{"", "active", "rel-404"} {
-		_, err = s.Submit(context.Background(), alice(), space, id, []spotcheck.SampleInput{{Slug: "P1/a", Stratum: "s"}})
+		one := []spotcheck.SampleInput{{Slug: "P1/a", Stratum: "s"}}
+		_, err = s.Submit(context.Background(), alice(), space, id, one)
 		require.Equal(t, release.ErrorReleaseNotFound, codeOf(t, err), id)
 	}
-	_, err = s.Submit(context.Background(), alice(), "space-2", "rel-1", []spotcheck.SampleInput{{Slug: "P1/a", Stratum: "s"}})
+	one := []spotcheck.SampleInput{{Slug: "P1/a", Stratum: "s"}}
+	_, err = s.Submit(context.Background(), alice(), "space-2", "rel-1", one)
 	require.Equal(t, release.ErrorReleaseNotFound, codeOf(t, err))
 	require.Empty(t, store.samples)
 }
