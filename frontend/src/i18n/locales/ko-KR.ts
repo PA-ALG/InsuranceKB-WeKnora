@@ -7493,6 +7493,18 @@ export default {
     noSessions: '대화가 없습니다'
   },
   enterpriseKnowledge: {
+    home: {
+      "version": "버전 {epoch}",
+      "counts": "상품 {products}개 · 공통 개념 {concepts}개 · 각 항목에 원문 출처 제공",
+      "search": "상품 또는 개념 검색",
+      "common": "자주 쓰는 개념",
+      "overview": "상품 개요",
+      "absent": "없음",
+      "noProducts": "일치하는 상품이 없습니다",
+      "noConcepts": "일치하는 개념이 없습니다",
+      "allConcepts": "전체 {count}개",
+      "filter": "현재 목록 필터링"
+    },
     nav: {
       "other": "기타",
       "concepts": "개념",

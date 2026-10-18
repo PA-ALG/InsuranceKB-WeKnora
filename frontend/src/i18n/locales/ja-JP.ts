@@ -7493,6 +7493,18 @@ export default {
     createFailed: 'プラットフォームAPIキーの作成に失敗しました'
   },
   enterpriseKnowledge: {
+    home: {
+      "version": "バージョン {epoch}",
+      "counts": "商品 {products} 件 · 共通概念 {concepts} 件 · 各項目に原文の出典を記載",
+      "search": "商品または概念を検索",
+      "common": "よく使う概念",
+      "overview": "商品一覧",
+      "absent": "なし",
+      "noProducts": "一致する商品はありません",
+      "noConcepts": "一致する概念はありません",
+      "allConcepts": "全 {count} 件",
+      "filter": "現在の一覧を絞り込む"
+    },
     nav: {
       "other": "その他",
       "concepts": "概念",

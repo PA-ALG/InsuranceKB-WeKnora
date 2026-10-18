@@ -117,16 +117,18 @@ describe('Space page', () => {
     const view = page(EnterpriseSpace, { spaceId: 'demo' })
     await flushPromises()
     expect(vi.mocked(readRelease).mock.calls).toEqual([['demo']])
-    expect(view.text()).toContain('发布版本 3')
-    // S3e: the Space page also lists concept links; this case checks the entry links only.
-    const links = view.findAllComponents(RouterLinkStub)
+    // S3f-2: the version is a quiet tag beside the title.
+    expect(view.get('[data-space-version]').text()).toBe('版本 3')
+    // S3e: the Space page also lists concept links; S3f-2 adds an overview table with its own entry
+    // links. This case checks the navigation's entry links only.
+    const links = view.findAll('[data-nav-entry]').flatMap(entry => entry.findAllComponents(RouterLinkStub))
       .filter(link => (link.props('to') as { name?: string }).name === 'enterpriseEntity')
     expect(links.map(link => link.props('to'))).toEqual([
       { name: 'enterpriseEntity', params: { spaceId: 'demo', entityId: 'P1' }, query: { release: 'rel-9' } },
       { name: 'enterpriseEntity', params: { spaceId: 'demo', entityId: 'P3' }, query: { release: 'rel-9' } },
     ])
     expect(links[0].text()).toContain('乙产品')
-    expect(links[0].text()).toContain('5 项')
+    // S3f-2: the navigation shows one line per entry; the field count is no longer listed.
   })
 
   it('treats a Space without a release as empty, not as an error', async () => {

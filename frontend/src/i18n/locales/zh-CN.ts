@@ -7495,6 +7495,18 @@ export default {
     noSessions: '暂无对话'
   },
   enterpriseKnowledge: {
+    home: {
+      "version": "版本 {epoch}",
+      "counts": "{products} 款产品 · {concepts} 个跨产品概念 · 每项内容附原文出处",
+      "search": "搜索产品或概念",
+      "common": "常用概念",
+      "overview": "产品速览",
+      "absent": "无",
+      "noProducts": "没有匹配的产品",
+      "noConcepts": "没有匹配的概念",
+      "allConcepts": "全部 {count} 个",
+      "filter": "筛选当前目录"
+    },
     nav: {
       "other": "其他",
       "concepts": "概念",

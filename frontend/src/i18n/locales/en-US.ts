@@ -7493,6 +7493,18 @@ export default {
     createFailed: 'Failed to create platform API key'
   },
   enterpriseKnowledge: {
+    home: {
+      "version": "Version {epoch}",
+      "counts": "{products} products · {concepts} shared concepts · Source references for each item",
+      "search": "Search products or concepts",
+      "common": "Common concepts",
+      "overview": "Product overview",
+      "absent": "None",
+      "noProducts": "No matching products",
+      "noConcepts": "No matching concepts",
+      "allConcepts": "All {count}",
+      "filter": "Filter this directory"
+    },
     nav: {
       "other": "Other",
       "concepts": "Concepts",
