@@ -7493,6 +7493,32 @@ export default {
     createFailed: 'プラットフォームAPIキーの作成に失敗しました'
   },
   enterpriseKnowledge: {
+    graph: {
+      "title": "関係図",
+      "back": "スペースのホーム",
+      "description": "商品と共通概念のつながりを確認できます。",
+      "canvas": "商品と概念の関係図",
+      "search": "商品名または概念名を検索",
+      "find": "表示",
+      "noMatch": "現在の絞り込み条件に一致するノードがありません",
+      "counts": "商品 {products} 件 · 概念 {concepts} 件 · 関係 {edges} 件",
+      "filter": "商品グループ",
+      "concept": "概念",
+      "noGroups": "商品グループを1つ以上選択してください",
+      "zoomIn": "拡大",
+      "zoomOut": "縮小",
+      "fit": "全体を表示",
+      "close": "詳細を閉じる",
+      "relatedConcepts": "関連概念 {count} 件",
+      "relatedProducts": "関連商品 {count} 件",
+      "noDefinition": "この公開版には概念の定義がありません",
+      "openProduct": "商品ページを開く",
+      "openConcept": "概念ページを開く",
+      "pinned": "リンク先も現在の公開版を表示します。",
+      "choose": "ノードを選択",
+      "chooseHint": "商品情報や概念の定義を確認し、詳細ページを開けます。",
+      "help": "円は商品、四角は概念です。線は資料の明示的な記述または不存在を示し、保障の有無を示すものではありません。ノードや背景をドラッグ、ホイールで拡大・縮小。Tab で選択し Enter で詳細を表示します。"
+    },
     home: {
       "version": "バージョン {epoch}",
       "counts": "商品 {products} 件 · 共通概念 {concepts} 件 · 各項目に原文の出典を記載",

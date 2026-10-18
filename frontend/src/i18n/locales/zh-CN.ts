@@ -7495,6 +7495,32 @@ export default {
     noSessions: '暂无对话'
   },
   enterpriseKnowledge: {
+    graph: {
+      "title": "关系图",
+      "back": "空间首页",
+      "description": "探索产品与跨产品概念之间的联系。",
+      "canvas": "产品与概念关系图",
+      "search": "搜索产品或概念名称",
+      "find": "定位",
+      "noMatch": "当前筛选下没有匹配的节点",
+      "counts": "{products} 款产品 · {concepts} 个概念 · {edges} 条关系",
+      "filter": "险种筛选",
+      "concept": "概念",
+      "noGroups": "请选择至少一个险种分组",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "fit": "适应画布",
+      "close": "关闭详情",
+      "relatedConcepts": "关联 {count} 个概念",
+      "relatedProducts": "涉及 {count} 款产品",
+      "noDefinition": "该版本暂无概念定义",
+      "openProduct": "打开产品页",
+      "openConcept": "打开概念页",
+      "pinned": "链接保持在当前发布版本。",
+      "choose": "选择一个节点",
+      "chooseHint": "查看产品信息或概念定义，再打开完整页面。",
+      "help": "圆形为产品，方形为概念。连线表示材料有明确内容或明确不存在；不表示产品具备该项保障。拖动节点或空白处，滚轮缩放；Tab 聚焦节点，Enter 查看详情。"
+    },
     home: {
       "version": "版本 {epoch}",
       "counts": "{products} 款产品 · {concepts} 个跨产品概念 · 每项内容附原文出处",

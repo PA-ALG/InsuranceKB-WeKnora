@@ -7493,6 +7493,32 @@ export default {
     createFailed: 'Failed to create platform API key'
   },
   enterpriseKnowledge: {
+    graph: {
+      "title": "Relationship graph",
+      "back": "Space home",
+      "description": "Explore connections between products and shared concepts.",
+      "canvas": "Product and concept relationship graph",
+      "search": "Search product or concept names",
+      "find": "Locate",
+      "noMatch": "No matching nodes in the current filter",
+      "counts": "{products} products · {concepts} concepts · {edges} relationships",
+      "filter": "Product groups",
+      "concept": "Concept",
+      "noGroups": "Select at least one product group",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit to canvas",
+      "close": "Close details",
+      "relatedConcepts": "{count} related concepts",
+      "relatedProducts": "{count} related products",
+      "noDefinition": "No concept definition in this release",
+      "openProduct": "Open product page",
+      "openConcept": "Open concept page",
+      "pinned": "Links stay on this published version.",
+      "choose": "Select a node",
+      "chooseHint": "View product information or a concept definition, then open its full page.",
+      "help": "Circles are products; squares are concepts. Links indicate explicit content or explicit absence, not coverage. Drag nodes or the background; scroll to zoom. Tab to a node and press Enter for details."
+    },
     home: {
       "version": "Version {epoch}",
       "counts": "{products} products · {concepts} shared concepts · Source references for each item",

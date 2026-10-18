@@ -7493,6 +7493,32 @@ export default {
     noSessions: '대화가 없습니다'
   },
   enterpriseKnowledge: {
+    graph: {
+      "title": "관계도",
+      "back": "스페이스 홈",
+      "description": "상품과 공통 개념 사이의 관계를 살펴보세요.",
+      "canvas": "상품 및 개념 관계도",
+      "search": "상품 또는 개념 이름 검색",
+      "find": "찾기",
+      "noMatch": "현재 필터에 일치하는 노드가 없습니다",
+      "counts": "상품 {products}개 · 개념 {concepts}개 · 관계 {edges}개",
+      "filter": "상품 그룹",
+      "concept": "개념",
+      "noGroups": "상품 그룹을 하나 이상 선택하세요",
+      "zoomIn": "확대",
+      "zoomOut": "축소",
+      "fit": "전체 보기",
+      "close": "상세 정보 닫기",
+      "relatedConcepts": "관련 개념 {count}개",
+      "relatedProducts": "관련 상품 {count}개",
+      "noDefinition": "이 버전에는 개념 정의가 없습니다",
+      "openProduct": "상품 페이지 열기",
+      "openConcept": "개념 페이지 열기",
+      "pinned": "링크는 현재 게시 버전을 유지합니다.",
+      "choose": "노드를 선택하세요",
+      "chooseHint": "상품 정보나 개념 정의를 확인한 다음 전체 페이지를 여세요.",
+      "help": "원은 상품, 사각형은 개념입니다. 연결선은 자료의 명시적 내용 또는 부재를 나타내며 보장 여부를 뜻하지 않습니다. 노드나 배경을 드래그하고 휠로 확대·축소하세요. Tab으로 노드를 선택하고 Enter로 상세 정보를 여세요."
+    },
     home: {
       "version": "버전 {epoch}",
       "counts": "상품 {products}개 · 공통 개념 {concepts}개 · 각 항목에 원문 출처 제공",
