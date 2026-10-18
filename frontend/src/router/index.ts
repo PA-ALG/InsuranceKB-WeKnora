@@ -254,7 +254,21 @@ const router = createRouter({
           path: "enterprise/:spaceId",
           name: "enterpriseSpace",
           component: () => import("../enterprise/EnterpriseSpace.vue"),
-          props: true,
+          props: route => ({
+            spaceId: String(route.params.spaceId),
+            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
+          }),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
+          path: "enterprise/:spaceId/concepts/:conceptKey",
+          name: "enterpriseConcept",
+          component: () => import("../enterprise/EnterpriseConcept.vue"),
+          props: route => ({
+            spaceId: String(route.params.spaceId),
+            conceptKey: String(route.params.conceptKey),
+            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
+          }),
           meta: { requiresInit: true, requiresAuth: true }
         },
         {

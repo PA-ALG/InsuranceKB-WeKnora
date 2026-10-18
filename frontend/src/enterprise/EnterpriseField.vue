@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { RouteLocationRaw } from 'vue-router'
 import { originLabel, stateLabel } from './fieldLabels'
 import OutlineList from './OutlineList.vue'
 import type { FieldView } from './releaseView'
@@ -11,7 +12,7 @@ const LONG_CHARS = 240
 // Nearly every field is sourced, so that label is kept for screen readers only; the page says so.
 const SOURCE_SUPPORTED = 'SOURCE_SUPPORTED'
 
-const props = defineProps<{ field: FieldView }>()
+const props = defineProps<{ field: FieldView; conceptRoute?: RouteLocationRaw; anchorId?: string }>()
 const emit = defineEmits<{ open: [evidence: number] }>()
 const { t } = useI18n()
 const full = ref(false)
@@ -28,9 +29,9 @@ watch(() => props.field.slug, () => { full.value = false })
 </script>
 
 <template>
-  <div class="ek-field" :data-field="field.slug">
+  <div :id="anchorId || field.slug.slice(field.slug.lastIndexOf('/') + 1)" class="ek-field" :data-field="field.slug" tabindex="-1">
     <div class="ek-field__head">
-      <span class="ek-field__title">{{ field.title }}</span>
+      <span class="ek-field__title"><RouterLink v-if="conceptRoute" :to="conceptRoute">{{ field.title }}</RouterLink><template v-else>{{ field.title }}</template></span>
     </div>
     <div :class="['ek-field__value', { 'ek-field__value--clamped': long && !full && !listed }]">
       <template v-if="field.state === 'present'">

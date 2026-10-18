@@ -7493,6 +7493,31 @@ export default {
     createFailed: 'プラットフォームAPIキーの作成に失敗しました'
   },
   enterpriseKnowledge: {
+    nav: {
+      "other": "その他",
+      "concepts": "概念",
+      "navigation": "ナレッジナビゲーション",
+      "chooseEntry": "ナビゲーションから項目を選択するか、概念を開いて商品を比較してください。",
+      "expandEntry": "{name}のフィールドを展開",
+      "collapseEntry": "{name}のフィールドを折りたたむ",
+      "noFields": "フィールドはありません",
+      "noConcepts": "このリリースに共通の概念はありません"
+    },
+    concept: {
+      "definition": "フィールドの定義",
+      "summary": "モデルによる要約（各商品の原文に基づく）",
+      "stale": "以前のバージョンに基づく要約",
+      "related": "同じ分類の概念",
+      "notFound": "このリリースに該当する概念はありません",
+      "failed": "概念を読み込めませんでした",
+      "comparison": "商品比較",
+      "columns": {
+        "group": "分類",
+        "product": "商品",
+        "summary": "要約",
+        "sources": "出典"
+      }
+    },
     title: '企業ナレッジ',
     loading: '読み込み中…',
     retry: '再試行',
