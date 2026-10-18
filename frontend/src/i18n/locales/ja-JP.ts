@@ -7493,6 +7493,33 @@ export default {
     createFailed: 'プラットフォームAPIキーの作成に失敗しました'
   },
   enterpriseKnowledge: {
+    spot: {
+      "entry": "抜き取り確認",
+      "title": "抜き取り確認",
+      "description": "公開済みの項目と原文を照合し、確認結果を記録します。",
+      "pending": "未確認",
+      "decided": "確認済み",
+      "count": "{count} 件のサンプル",
+      "unavailable": "項目を表示できません",
+      "changed": "この項目は変更されています",
+      "note": "説明（任意）",
+      "noNote": "説明なし",
+      "notePlaceholder": "修正や確認が必要な内容を入力",
+      "noteLimit": "{count} / 1000 文字",
+      "submitting": "結果を送信中…",
+      "denied": "確認する権限がありません",
+      "submitFailed": "結果を送信できませんでした",
+      "reviewer": "確認者：",
+      "emptyPending": "確認待ちのサンプルはありません",
+      "emptyDecided": "確認済みのサンプルはありません",
+      "loadFailed": "確認サンプルを読み込めませんでした",
+      "historicalRelease": "過去の公開バージョン",
+      "releaseLoading": "サンプルの公開バージョンを読み込み中…",
+      "releaseFailed": "この公開バージョンを読み込めませんでした。再試行してください。",
+      "correct": "正しい",
+      "incomplete": "不完全",
+      "wrong": "誤り"
+    },
     graph: {
       "neighbors": "探索中：{name}",
       "returnOverview": "概要に戻る",

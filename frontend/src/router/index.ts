@@ -261,6 +261,13 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
+          path: "enterprise/:spaceId/spot-checks",
+          name: "enterpriseSpotChecks",
+          component: () => import("../enterprise/EnterpriseSpotChecks.vue"),
+          props: route => ({ spaceId: String(route.params.spaceId) }),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
           path: "enterprise/:spaceId/graph",
           name: "enterpriseGraph",
           component: () => import("../enterprise/EnterpriseGraph.vue"),

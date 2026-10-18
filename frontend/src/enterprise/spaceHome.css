@@ -3,6 +3,7 @@
 .ek-home__heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .ek-home__heading .ek-page__title { margin: 0; }
 .ek-home__graph-link { margin-left: auto; color: var(--td-brand-color); font-size: 14px; text-decoration: none; }
+.ek-home__spot-link { color: var(--td-brand-color); font-size: 14px; text-decoration: none; }
 .ek-home__heading .ek-meta-tag { border-radius: 4px; padding: 2px 8px; }
 .ek-home header > p { margin: 8px 0 0; }
 .ek-home__search { margin-top: 32px; }
