@@ -41,6 +41,8 @@ from insurance_harness.compilers.concepts.synthesis import (
         ("18周岁-65周岁", {"18周岁", "65周岁"}),
         ("18周岁 - 65周岁", {"18周岁", "65周岁"}),
         ("5000元-1万元", {"5000元", "10000元"}),
+        ("每年-3.5%", {"-3.5%"}),
+        ("每月 − 15000元", {"-15000元"}),
         ("缴费期满", set()),
     ],
 )
@@ -64,6 +66,8 @@ def problems(statement: str, value: str) -> list[str]:
         ("甲产品为十十日。", "为10日。"),
         ("甲产品收益为负三点五%。", "收益3.5%。"),
         ("甲产品差额为-15000元。", "差额一万五千元。"),
+        ("两款产品每年-3.5%。", "每年3.5%"),
+        ("两款产品每年负三点五%。", "每年3.5%"),
     ],
     ids=[
         "suffix of a larger amount",
@@ -72,6 +76,8 @@ def problems(statement: str, value: str) -> list[str]:
         "unreadable",
         "opposite sign in words",
         "opposite sign",
+        "sign after a word ending in a unit",
+        "sign in words after such a word",
     ],
 )
 def test_a_number_the_value_does_not_hold_is_refused(statement: str, value: str) -> None:
@@ -88,6 +94,7 @@ def test_a_number_the_value_does_not_hold_is_refused(statement: str, value: str)
         ("甲产品适用年龄为18周岁至65周岁。", "18周岁-65周岁"),
         ("甲产品适用年龄为18周岁 - 65周岁。", "18周岁至65周岁"),
         ("甲产品金额范围5000元-1万元。", "5000元至1万元"),
+        ("两款产品每年负三点五%。", "每年-3.5%"),
     ],
 )
 def test_the_same_value_written_differently_passes(statement: str, value: str) -> None:
