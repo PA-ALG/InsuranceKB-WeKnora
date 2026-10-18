@@ -494,6 +494,16 @@ func (s *wikiIngestService) classifyChunkCitations(
 				citationSet[slug][id] = true
 			}
 		}
+		// A window may rediscover a document-wide candidate before another
+		// window cites it normally. Union both evidence paths before sorting.
+		for _, ns := range result.NewSlugs {
+			if citationSet[ns.Slug] == nil {
+				citationSet[ns.Slug] = make(map[string]bool)
+			}
+			for _, id := range ns.SourceChunks {
+				citationSet[ns.Slug][id] = true
+			}
+		}
 		newSlugsAll = append(newSlugsAll, result.NewSlugs...)
 	}
 

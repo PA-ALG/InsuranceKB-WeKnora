@@ -215,3 +215,31 @@ func TestWindowCitationTruncationProducesNoDocumentUpdates(t *testing.T) {
 		t.Fatalf("result=%v updates=%d cites=%d err=%v", result, len(updates), cites.Load(), err)
 	}
 }
+
+func TestWindowCitationRediscoveredEarlierEvidenceKeepsDocumentOrder(t *testing.T) {
+	early := windowChunk("early", 0, "EARLY source paragraph")
+	late := windowChunk("late", 1, "LATE source paragraph")
+	chunks := []*types.Chunk{early, late}
+	windows := []wikiDocumentWindow{
+		{content: early.Content, chunks: []*types.Chunk{early}},
+		{content: late.Content, candidates: "entity/a", chunks: []*types.Chunk{late}},
+	}
+	model := &windowChat{answer: func(_ context.Context, messages []chat.Message) (*types.ChatResponse, error) {
+		if strings.Contains(promptText(messages), early.Content) {
+			return &types.ChatResponse{Content: `{"citations":{},"new_slugs":[{"type":"entity","slug":"entity/a","name":"A","source_chunks":["c000","c000"]}]}`}, nil
+		}
+		return &types.ChatResponse{Content: `{"citations":{"entity/a":["c000","c000"]},"new_slugs":[]}`}, nil
+	}}
+	outcome := (&wikiIngestService{}).classifyChunkCitations(context.Background(), model, "entity/a", chunks, "en", wikiOutcomeBatchContext(), nil, windows)
+	if err := outcome.Err(); err != nil {
+		t.Fatal(err)
+	}
+	entities, _, uncited := mergeCitationsIntoItems([]extractedItem{{Slug: "entity/a", Name: "A"}}, nil, outcome.Citations, outcome.NewSlugs)
+	if len(entities) != 1 || uncited != 0 || !equalStrings(entities[0].SourceChunks, []string{"early", "late"}) {
+		t.Fatalf("rediscovered references must be unique and in document order: items=%+v uncited=%d", entities, uncited)
+	}
+	content := collectCitedChunkContent(entities[0].SourceChunks, map[string]string{"early": early.Content, "late": late.Content})
+	if want := early.Content + "\n\n" + late.Content; content != want {
+		t.Fatalf("materialized evidence order changed: got=%q want=%q", content, want)
+	}
+}
