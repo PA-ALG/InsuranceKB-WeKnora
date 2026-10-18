@@ -62,6 +62,7 @@ class Platform:
     def __init__(self, release: Release) -> None:
         self.release = release.model_dump(mode="json")
         self.seen: list[tuple[str, str, Any]] = []
+        self.members: list[Any] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content) if request.content else None
@@ -70,12 +71,14 @@ class Platform:
         if path == "releases/active":
             return ok(self.release)
         if path == "candidates":
+            self.members = body["members"] if body else []
             return ok({"id": "cand_1", "status": "created"}, 201)
         if path == "candidates/cand_1/decisions":
             return ok(
                 {"id": "dec_1", "candidate_id": "cand_1", "outcome": "approve", "digest": "e" * 64}
             )
-        return ok({"id": "rel-10", "epoch": 16, "candidate_id": "cand_1", "members": []})
+        # The activated release, read back by the client, holds what was submitted.
+        return ok({"id": "rel-10", "epoch": 16, "candidate_id": "cand_1", "members": self.members})
 
 
 def ok(data: object, status: int = 200) -> httpx.Response:
