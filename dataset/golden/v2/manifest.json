@@ -6,11 +6,11 @@
  "catalog_version": "2026-08-12-v5",
  "dataset_version": "v2",
  "files": {
-  "1814.json": "6cdd39feda2958b76d9e7cb0c481332d2724adc7d0172867e2411b076310001a",
-  "1816.json": "fd9847f2c3e764c108dbcc45118bc544892f1e4f6efae588514015be4d138097",
-  "1824.json": "8288d489fc3c1362c123cc9fe2a775c3ea0f1f32667758786403c2f5bb0fad84",
-  "1826.json": "4a63b701362110cec54e5734f5b9a3e42f81ccf0c7523382c88f9e9bcca45873",
-  "1828.json": "9bc02bdb44c66887e12f6855dd7f28d79804ec824537471a96472508c2560f8b"
+  "1814.json": "eeb96c7aeea0589bc643ad7eb17fc98d843c38706d69ccee1585ca142611321b",
+  "1816.json": "bf7c0bef286f785efc059084e9057ff9665ffbaae147bb0e5272a28e81df1b88",
+  "1824.json": "9a26cacba8a7e7315ec51f434057fdf5f17c89f2a795f3d17565845090770b8b",
+  "1826.json": "d21b69f05da89a5e61c59e3bdc9d5118a86381636f9a4d3bed8f7702e7148b4a",
+  "1828.json": "c4f7ba720de7db5193991d761136b5610886eae37dc4b0b3a390555b26fcfbaf"
  },
  "products": {
   "1814": {
@@ -27,8 +27,8 @@
    },
    "states": {
     "absent_explicitly": 2,
-    "present": 23,
-    "unknown": 17
+    "present": 24,
+    "unknown": 16
    },
    "non_evidence_sha256": {
     "费率表.pdf": "72224c36ed2455365fcbcd361444d3f26b50ee88d62aba7673d41525c27b99c7"
@@ -48,8 +48,8 @@
    },
    "states": {
     "absent_explicitly": 6,
-    "present": 32,
-    "unknown": 18
+    "present": 33,
+    "unknown": 17
    },
    "non_evidence_sha256": {
     "费率表.pdf": "b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a"
@@ -69,8 +69,8 @@
    },
    "states": {
     "absent_explicitly": 11,
-    "present": 25,
-    "unknown": 17
+    "present": 26,
+    "unknown": 16
    },
    "non_evidence_sha256": {
     "费率表.pdf": "9811367acd0d3875260e926fe64901e3423c07569ae06bf1438926769860c66f"
@@ -90,8 +90,8 @@
    },
    "states": {
     "absent_explicitly": 15,
-    "present": 22,
-    "unknown": 19
+    "present": 23,
+    "unknown": 18
    },
    "non_evidence_sha256": {
     "费率表.pdf": "9ea421ad68d443e5e6572b7c2c91fcd2302ab18103a7b85f733c0ea29439ea19"
@@ -112,8 +112,8 @@
    },
    "states": {
     "absent_explicitly": 2,
-    "present": 30,
-    "unknown": 15
+    "present": 31,
+    "unknown": 14
    },
    "non_evidence_sha256": {
     "费率表.pdf": "600e95faf04a8268c90a2a0d08448c140b8a323f6e24bccfce186d96e0c9aa52"
@@ -602,6 +602,381 @@
      ]
     }
    }
+  },
+  {
+   "basis": "S4j Spec §3.5: original Golden labels from d73a58f18, verified against their b73340480 segmentation and unchanged source snapshots; policy-trusted header fields map positive old-range overlap to all header segments on that page; numerical rows and untrusted fields remain excluded; prior S4i history retained; only header-supported fields leave pending review (Issue #206)",
+   "baseline": "b73340480e786d7abb5d6325c330a6ad60ac94d8",
+   "cards_version": "draft-2026-10-18a",
+   "method": "deterministic-remap",
+   "emptied_reason": "仅费率表列示，费率表不作证据（用户 2026-10-17，S4i）；按新口径待独立评委复核",
+   "products": {
+    "1814": {
+     "fields": [
+      "official_product_features",
+      "target_customer_profile",
+      "entry_age_range",
+      "insured_eligibility",
+      "purchase_limitations",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "cooling_off_period",
+      "waiting_period",
+      "premium_grace_period",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_effective_time",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "accident_definition_and_criteria",
+      "covered_accident_scenarios",
+      "exclusions",
+      "accidental_death_benefit_rules",
+      "disability_benefit_rules",
+      "maturity_benefit_rules",
+      "additional_benefit_rules",
+      "disability_definition_and_assessment_criteria",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights"
+     ],
+     "rate_table_quotes_removed": 272,
+     "quotes_split": 41,
+     "fields_split": [
+      "official_product_features",
+      "target_customer_profile",
+      "purchase_limitations",
+      "premium_payment_frequency",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_effective_time",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "covered_accident_scenarios",
+      "exclusions",
+      "accidental_death_benefit_rules",
+      "additional_benefit_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights"
+     ],
+     "quotes_widened": [],
+     "to_unknown": [],
+     "restored": [
+      "premium_payment_term"
+     ]
+    },
+    "1816": {
+     "fields": [
+      "official_product_features",
+      "target_customer_profile",
+      "entry_age_range",
+      "insured_eligibility",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "cooling_off_period",
+      "waiting_period",
+      "premium_grace_period",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "sum_assured_growth_rules",
+      "sum_assured_growth_rate",
+      "premium_waiver_rules",
+      "premium_waiver_critical_illnesses",
+      "covered_specified_diseases",
+      "covered_mild_specified_diseases",
+      "covered_moderate_specified_diseases",
+      "covered_critical_specified_diseases",
+      "disease_definitions_and_criteria",
+      "exclusions",
+      "maturity_benefit_rules",
+      "benefit_interaction_rules",
+      "claim_application_deadline_and_documents",
+      "disability_state_definition_and_criteria",
+      "disability_state_duration_requirement",
+      "disability_status_verification_and_reassessment_rules",
+      "disability_recovery_and_benefit_termination_rules",
+      "income_loss_benefit_eligibility_conditions",
+      "income_loss_benefit_payment_rules",
+      "income_loss_care_benefit_conditions",
+      "income_loss_care_benefit_payment_rules",
+      "income_loss_care_benefit_payment_period",
+      "income_loss_verification_rules",
+      "income_loss_benefit_limit_rules",
+      "policyholder_rights"
+     ],
+     "rate_table_quotes_removed": 12,
+     "quotes_split": 40,
+     "fields_split": [
+      "official_product_features",
+      "target_customer_profile",
+      "premium_payment_frequency",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "premium_waiver_rules",
+      "disease_definitions_and_criteria",
+      "exclusions",
+      "benefit_interaction_rules",
+      "claim_application_deadline_and_documents",
+      "disability_state_definition_and_criteria",
+      "income_loss_benefit_limit_rules",
+      "policyholder_rights"
+     ],
+     "quotes_widened": [
+      [
+       "official_product_features",
+       "D1P1S4"
+      ],
+      [
+       "target_customer_profile",
+       "D1P1S4"
+      ],
+      [
+       "coverage_responsibilities",
+       "D1P1S4"
+      ],
+      [
+       "coverage_summary",
+       "D1P1S4"
+      ],
+      [
+       "benefit_interaction_rules",
+       "D1P1S4"
+      ],
+      [
+       "income_loss_benefit_limit_rules",
+       "D1P1S4"
+      ]
+     ],
+     "to_unknown": [],
+     "restored": [
+      "premium_payment_term"
+     ]
+    },
+    "1824": {
+     "fields": [
+      "official_product_features",
+      "target_customer_profile",
+      "entry_age_range",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "cooling_off_period",
+      "premium_grace_period",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "sum_assured_growth_rules",
+      "exclusions",
+      "death_benefit_rules",
+      "disability_benefit_rules",
+      "additional_benefit_rules",
+      "disability_definition_and_assessment_criteria",
+      "benefit_interaction_rules",
+      "beneficiary_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights",
+      "coverage_increase_rules",
+      "cash_value_rules",
+      "sum_assured_reduction_rules",
+      "partial_withdrawal_rules",
+      "policy_loan_rules",
+      "universal_account_guaranteed_interest_rate",
+      "universal_account_settlement_rules",
+      "initial_charge_rules",
+      "dividend_rules",
+      "non_guaranteed_benefit_rules",
+      "investment_account_rules"
+     ],
+     "rate_table_quotes_removed": 20,
+     "quotes_split": 36,
+     "fields_split": [
+      "official_product_features",
+      "target_customer_profile",
+      "premium_payment_frequency",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "exclusions",
+      "death_benefit_rules",
+      "benefit_interaction_rules",
+      "policyholder_rights",
+      "cash_value_rules",
+      "partial_withdrawal_rules",
+      "policy_loan_rules",
+      "universal_account_guaranteed_interest_rate",
+      "universal_account_settlement_rules",
+      "initial_charge_rules",
+      "dividend_rules",
+      "non_guaranteed_benefit_rules",
+      "investment_account_rules"
+     ],
+     "quotes_widened": [],
+     "to_unknown": [],
+     "restored": [
+      "premium_payment_term"
+     ]
+    },
+    "1826": {
+     "fields": [
+      "entry_age_range",
+      "insured_eligibility",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "cooling_off_period",
+      "waiting_period",
+      "premium_grace_period",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "sum_assured_range",
+      "sum_assured_growth_rules",
+      "sum_assured_growth_rate",
+      "premium_waiver_rules",
+      "exclusions",
+      "death_benefit_rules",
+      "disability_benefit_rules",
+      "disability_definition_and_assessment_criteria",
+      "additional_benefit_rules",
+      "maturity_benefit_rules",
+      "survival_benefit_rules",
+      "benefit_interaction_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights",
+      "product_bundle_rules",
+      "cash_value_rules",
+      "partial_withdrawal_rules",
+      "policy_loan_rules",
+      "universal_account_guaranteed_interest_rate",
+      "universal_account_settlement_rules",
+      "initial_charge_rules",
+      "dividend_rules",
+      "non_guaranteed_benefit_rules",
+      "investment_account_rules"
+     ],
+     "rate_table_quotes_removed": 74,
+     "quotes_split": 32,
+     "fields_split": [
+      "coverage_period",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "sum_assured_growth_rules",
+      "sum_assured_growth_rate",
+      "premium_waiver_rules",
+      "exclusions",
+      "death_benefit_rules",
+      "disability_benefit_rules",
+      "disability_definition_and_assessment_criteria",
+      "additional_benefit_rules",
+      "maturity_benefit_rules",
+      "survival_benefit_rules",
+      "benefit_interaction_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights",
+      "product_bundle_rules",
+      "cash_value_rules",
+      "partial_withdrawal_rules",
+      "universal_account_guaranteed_interest_rate",
+      "universal_account_settlement_rules",
+      "initial_charge_rules",
+      "dividend_rules",
+      "non_guaranteed_benefit_rules",
+      "investment_account_rules"
+     ],
+     "quotes_widened": [],
+     "to_unknown": [],
+     "restored": [
+      "premium_payment_term"
+     ]
+    },
+    "1828": {
+     "fields": [
+      "official_product_features",
+      "target_customer_profile",
+      "entry_age_range",
+      "insured_eligibility",
+      "premium_payment_term",
+      "premium_payment_frequency",
+      "cooling_off_period",
+      "waiting_period",
+      "premium_grace_period",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "sum_assured_range",
+      "premium_waiver_rules",
+      "covered_mild_specified_diseases",
+      "covered_moderate_specified_diseases",
+      "covered_critical_specified_diseases",
+      "covered_specified_diseases",
+      "disease_definitions_and_criteria",
+      "exclusions",
+      "disease_benefit_rules",
+      "maturity_benefit_rules",
+      "additional_benefit_rules",
+      "multiple_benefit_payment_rules",
+      "benefit_interaction_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights",
+      "medical_service_benefits",
+      "cash_value_rules",
+      "policy_loan_rules"
+     ],
+     "rate_table_quotes_removed": 11,
+     "quotes_split": 50,
+     "fields_split": [
+      "official_product_features",
+      "target_customer_profile",
+      "premium_payment_frequency",
+      "coverage_period",
+      "surrender_and_cancellation_terms",
+      "coverage_responsibilities",
+      "coverage_summary",
+      "covered_specified_diseases",
+      "disease_definitions_and_criteria",
+      "exclusions",
+      "disease_benefit_rules",
+      "maturity_benefit_rules",
+      "additional_benefit_rules",
+      "benefit_interaction_rules",
+      "claim_application_deadline_and_documents",
+      "policyholder_rights",
+      "medical_service_benefits",
+      "cash_value_rules",
+      "policy_loan_rules"
+     ],
+     "quotes_widened": [
+      [
+       "official_product_features",
+       "D1P1S6"
+      ],
+      [
+       "target_customer_profile",
+       "D1P1S6"
+      ],
+      [
+       "coverage_summary",
+       "D1P1S6"
+      ],
+      [
+       "disease_benefit_rules",
+       "D1P1S6"
+      ],
+      [
+       "additional_benefit_rules",
+       "D1P1S6"
+      ]
+     ],
+     "to_unknown": [],
+     "restored": [
+      "premium_payment_term"
+     ]
+    }
+   }
   }
  ],
  "segmentation": "insurance_harness.evidence.segments (pdfium page text; S4i rules: list markers, inline breaks, soft cap at the last terminator)",
@@ -609,31 +984,26 @@
   "1814": [
    "coverage_period",
    "entry_age_range",
-   "premium_payment_frequency",
-   "premium_payment_term"
+   "premium_payment_frequency"
   ],
   "1816": [
    "coverage_period",
    "entry_age_range",
-   "premium_payment_frequency",
-   "premium_payment_term"
+   "premium_payment_frequency"
   ],
   "1824": [
    "coverage_period",
    "entry_age_range",
-   "premium_payment_frequency",
-   "premium_payment_term"
+   "premium_payment_frequency"
   ],
   "1826": [
    "coverage_period",
    "entry_age_range",
-   "premium_payment_frequency",
-   "premium_payment_term"
+   "premium_payment_frequency"
   ],
   "1828": [
    "entry_age_range",
-   "premium_payment_frequency",
-   "premium_payment_term"
+   "premium_payment_frequency"
   ]
  }
 }

@@ -1,6 +1,6 @@
 {
  "product_id": "1828",
- "cards_version": "draft-2026-10-16b",
+ "cards_version": "draft-2026-10-18a",
  "fields": [
   {
    "field_key": "official_product_features",
@@ -232,10 +232,25 @@
   },
   {
    "field_key": "premium_payment_term",
-   "state": "unknown",
-   "value": null,
-   "reason": "仅费率表列示，费率表不作证据（用户 2026-10-17，S4i）；按新口径待独立评委复核",
-   "evidence": []
+   "state": "present",
+   "value": "男性、女性均列有四种交费期间：1. 10年交；2. 15年交；3. 20年交；4. 30年交。",
+   "reason": "男性及女性费率表表头均列明四种交费期间。",
+   "evidence": [
+    {
+     "document": "费率表.pdf",
+     "document_sha256": "600e95faf04a8268c90a2a0d08448c140b8a323f6e24bccfce186d96e0c9aa52",
+     "page": 1,
+     "quote": "《平安安佑福（全能版）重大疾病保险》年交费率表\r\n（每万元基本保险金额）\r\n男性\r\n单位：人民币元\r\n　交费期间\r\n投保年龄\r\n10年交 15年交 20年交 30年交",
+     "segment_id": "D3P1S1"
+    },
+    {
+     "document": "费率表.pdf",
+     "document_sha256": "600e95faf04a8268c90a2a0d08448c140b8a323f6e24bccfce186d96e0c9aa52",
+     "page": 2,
+     "quote": "《平安安佑福（全能版）重大疾病保险》年交费率表\r\n（每万元基本保险金额）\r\n女性\r\n单位：人民币元\r\n　　　　交费期间\r\n投保年龄\r\n10年交 15年交 20年交 30年交",
+     "segment_id": "D3P2S1"
+    }
+   ]
   },
   {
    "field_key": "premium_payment_frequency",

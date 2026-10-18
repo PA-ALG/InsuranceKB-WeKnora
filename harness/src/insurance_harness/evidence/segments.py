@@ -14,7 +14,7 @@ a line end.
 
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -46,6 +46,21 @@ _MARKER_CHARS = "●○■◆▪•◦►▶➢➤"
 _MARKER_RANGES = ((0xE000, 0xF8FF), (0x2460, 0x2473), (0x2776, 0x277F), (0x24EB, 0x24F4))
 _MARKER = re.compile(r"^[ \t\u3000]*(?P<mark>\S)[ \t\u3000]+\S")
 _LINE_BREAK = re.compile(r"\s*\n\s*")
+_NUMBER = re.compile(r"^[+-]?\d+(?:[.,]\d+)*%?$")
+
+
+def header_block(text: str) -> tuple[int, int] | None:
+    """The exact nonempty block before the first all-numeric table row, if any."""
+    start = len(text) - len(text.lstrip())
+    position = end = 0
+    for line in text.splitlines(keepends=True):
+        tokens = line.split()
+        if len(tokens) >= 2 and all(_NUMBER.fullmatch(token) for token in tokens):
+            return (start, end) if start < end else None
+        if tokens:
+            end = position + len(line.rstrip())
+        position += len(line)
+    return None
 
 
 def _marker_end(text: str) -> int | None:
@@ -172,8 +187,30 @@ def same_text(a: str, b: str) -> bool:
 class SegmentedSource:
     """One product's pages, split once; the only place segment ids are resolved."""
 
-    def __init__(self, pages: Sequence[PageTextLike]) -> None:
-        self.pages = tuple(PageText.model_validate(page) for page in pages)
+    def __init__(
+        self,
+        pages: Sequence[PageTextLike],
+        *,
+        table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
+    ) -> None:
+        ordinary = tuple(PageText.model_validate(page) for page in pages)
+        documents = {page.document for page in ordinary}
+        headers: list[PageText] = []
+        self._header_roles: dict[str, str] = {}
+        for role, group in (table_headers or {}).items():
+            if not isinstance(role, str) or not role.strip():
+                raise ValueError("a header role must be a nonblank string")
+            for raw in group:
+                page = PageText.model_validate(raw)
+                if (
+                    page.document in documents
+                    or self._header_roles.get(page.document, role) != role
+                ):
+                    raise ValueError("one document with conflicting evidence roles")
+                self._header_roles[page.document] = role
+                headers.append(page)
+        # Keep original pages for quote verification and offsets; only segmentation is clipped.
+        self.pages = (*ordinary, *headers)
         numbers: dict[str, int] = {}
         digests: dict[str, str] = {}
         seen: set[tuple[str, int]] = set()
@@ -187,12 +224,25 @@ class SegmentedSource:
             ):
                 raise ValueError("one document name with two fingerprints")
             seen.add((page.document, page.page))
-            segments.extend(_split(page, numbers.setdefault(page.document, len(numbers) + 1)))
+            number = numbers.setdefault(page.document, len(numbers) + 1)
+            if self.header_role(page.document) is None:
+                segments.extend(_split(page, number))
+            elif (block := header_block(page.text)) is not None:
+                start, end = block
+                clipped = page.model_copy(update={"text": page.text[start:end]})
+                segments.extend(
+                    s.model_copy(update={"start": s.start + start, "end": s.end + start})
+                    for s in _split(clipped, number)
+                )
         self.segments = tuple(segments)
         self._position = {segment.id: index for index, segment in enumerate(self.segments)}
         self._pages = {(page.document, page.page): page for page in self.pages}
         self._content: dict[str, str] = {}
         self._copies: dict[str, frozenset[str]] = {}
+
+    def header_role(self, document: str) -> str | None:
+        """The restricted header role of a document, or None for ordinary/unknown documents."""
+        return self._header_roles.get(document)
 
     def listing(self) -> str:
         """One line per segment: the id, a space, and the text with line breaks folded."""
