@@ -173,7 +173,9 @@
   - user 是 JSON，内容为各概念的输入。
   - 每次调用 `--per-call` 个概念，默认 2（质量优先）。
 - **解析**：
-  - 只接受 `{"concepts": [{"key", "definition", "explanation", "statements": [{"text", "refs"}]}]}`；
+  - 只接受 `{"concepts": [{"key", "definition", "explanation", "statements": [{"text", "refs"}]}]}`。
+    - 修订（2026-10-18 真实运行后）：模型给概念或句子对象多加的字段（如 `title`、`explanation_note`）直接忽略，不读取也不发布。
+    - 必需字段缺失或类型错误仍整批拒绝；顶层对象仍只能有 `concepts`。
   - 键与本批概念一一对应；
   - 不符时整批记为 `CONCEPT_OUTPUT_INVALID`，不重试解析。
 - **确定性检查** `check_concept(draft, concept, release_names)`，返回问题码列表，空表示通过：
