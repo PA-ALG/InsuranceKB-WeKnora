@@ -1,0 +1,114 @@
+{
+  "$defs": {
+    "ConceptStatement": {
+      "additionalProperties": false,
+      "properties": {
+        "refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Refs",
+          "type": "array"
+        },
+        "text": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "refs"
+      ],
+      "title": "ConceptStatement",
+      "type": "object"
+    }
+  },
+  "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/concept_summary.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Model-written reading aid for a field two or more entries state (S3e-3).\n\n`based_on` holds the member digest of every claim the summary was written from, so a reader\ncan tell when one has changed since; each statement cites claims among them.",
+  "properties": {
+    "based_on": {
+      "minProperties": 1,
+      "patternProperties": {
+        "\\S": {
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "type": "string"
+        }
+      },
+      "propertyNames": {
+        "minLength": 1
+      },
+      "title": "Based On",
+      "type": "object"
+    },
+    "concept_key": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Concept Key",
+      "type": "string"
+    },
+    "definition": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Definition",
+      "type": "string"
+    },
+    "explanation": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Explanation",
+      "type": "string"
+    },
+    "model": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Model",
+      "type": "string"
+    },
+    "origin": {
+      "const": "MODEL_GENERATED",
+      "title": "Origin",
+      "type": "string"
+    },
+    "prompt_version": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Prompt Version",
+      "type": "string"
+    },
+    "statements": {
+      "items": {
+        "$ref": "#/$defs/ConceptStatement"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Statements",
+      "type": "array"
+    },
+    "title": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "concept_key",
+    "title",
+    "definition",
+    "explanation",
+    "statements",
+    "based_on",
+    "origin",
+    "model",
+    "prompt_version"
+  ],
+  "title": "ConceptSummary",
+  "type": "object"
+}
