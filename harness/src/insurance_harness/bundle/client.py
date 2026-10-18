@@ -99,6 +99,30 @@ class Release(_Response):
         return Head(release_id=self.id, epoch=self.epoch)
 
 
+class Verdict(_Response):
+    id: str = Field(min_length=1)
+    sample_id: str
+    outcome: Literal["correct", "incomplete", "wrong"]
+    note: str = ""
+    reviewer: str
+    decided_at: str
+
+
+class Sample(_Response):
+    """A spot-check sample of one release member (RV4), with its latest verdict if any."""
+
+    id: str = Field(min_length=1)
+    release_id: str = Field(min_length=1)
+    logical_slug: str = Field(min_length=1)
+    member_digest: str
+    stratum: str
+    verdict: Verdict | None = None
+
+
+class _Samples(_Response):
+    samples: list[Sample]
+
+
 class PlatformClient:
     def __init__(
         self, base_url: str, api_key: str, transport: httpx.BaseTransport | None = None
@@ -146,14 +170,45 @@ class PlatformClient:
         path = ["candidates", candidate_id, "activations"]
         return _parse(Release, self._send("POST", space_id, path, raw))
 
+    def submit_samples(
+        self, space_id: str, release_id: str, picks: list[tuple[str, str]]
+    ) -> list[Sample]:
+        """Submit (slug, stratum) samples of one release; the platform keeps existing ones."""
+        _identifier(release_id)
+        body = {"samples": [{"slug": slug, "stratum": stratum} for slug, stratum in picks]}
+        raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        path = ["releases", release_id, "samples"]
+        return _parse(_Samples, self._send("POST", space_id, path, raw)).samples
+
+    def samples(
+        self, space_id: str, *, status: str | None = None, release_id: str | None = None
+    ) -> list[Sample]:
+        query = {
+            key: value
+            for key, value in (("status", status), ("release", release_id))
+            if value is not None
+        }
+        for value in query.values():
+            _identifier(value)
+        return _parse(_Samples, self._send("GET", space_id, ["samples"], None, query)).samples
+
     def release(self, space_id: str, release_id: str) -> Release:
         path = ["releases", release_id] if release_id else ["releases", "active"]
         return _parse(Release, self._send("GET", space_id, path, None))
 
-    def _send(self, method: str, space_id: str, path: list[str], body: bytes | None) -> object:
+    def _send(
+        self,
+        method: str,
+        space_id: str,
+        path: list[str],
+        body: bytes | None,
+        query: dict[str, str] | None = None,
+    ) -> object:
         for part in [space_id, *path]:
             _identifier(part)
         url = f"{self._base_url}/api/v1/enterprise/spaces/{'/'.join([space_id, *path])}"
+        if query:
+            url = str(httpx.URL(url, params=query))
         headers = {"X-API-Key": self._api_key}
         if body is not None:
             headers["Content-Type"] = "application/json"
