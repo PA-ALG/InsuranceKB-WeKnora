@@ -7495,6 +7495,33 @@ export default {
     noSessions: '暂无对话'
   },
   enterpriseKnowledge: {
+    spot: {
+      "entry": "抽检",
+      "title": "抽检台",
+      "description": "核对已发布的字段与原文出处，记录你的确认结论。",
+      "pending": "待确认",
+      "decided": "已确认",
+      "count": "{count} 条样本",
+      "unavailable": "条目不可用",
+      "changed": "该条目已变化",
+      "note": "说明（选填）",
+      "noNote": "未填写说明",
+      "notePlaceholder": "补充需要修正或核对的内容",
+      "noteLimit": "{count} / 1000 字",
+      "submitting": "正在提交结论…",
+      "denied": "没有确认权限",
+      "submitFailed": "结论提交失败",
+      "reviewer": "确认人：",
+      "emptyPending": "没有待确认的样本",
+      "emptyDecided": "没有已确认的样本",
+      "loadFailed": "抽检样本加载失败",
+      "historicalRelease": "历史发布版本",
+      "releaseLoading": "正在读取样本所属发布版本…",
+      "releaseFailed": "该发布版本加载失败，请重试",
+      "correct": "正确",
+      "incomplete": "不完整",
+      "wrong": "错误"
+    },
     graph: {
       "neighbors": "正在探索：{name}",
       "returnOverview": "返回总览",

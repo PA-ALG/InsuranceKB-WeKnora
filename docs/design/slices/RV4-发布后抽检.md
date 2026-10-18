@@ -120,6 +120,25 @@ type Store interface {
   - 已确认的样本显示结论、说明、确认人与时间。
 - 覆盖加载、空状态（"没有待确认的样本"）、失败重试、键盘可达；无编辑权限时提交返回 403，显示"没有确认权限"。
 - 文案 zh-CN，其余 4 种语言同步。
+- **接口与钩子**（RV4b 验收依据，`frontend/src/enterprise/spotCheckPage.spec.ts`）：
+  - `enterpriseApi.ts`：
+    - 类型 `SpotSample`（字段同 §2.1 `Sample`，`verdict?: SpotVerdict`）与 `SpotVerdict`；
+    - `listSamples(spaceId, status: 'pending' | 'decided'): Promise<SpotSample[]>`，请求 `GET /api/v1/enterprise/spaces/:sid/view/samples?status=`；
+    - `submitVerdict(spaceId, sampleId, outcome, note): Promise<SpotVerdict>`，请求 `POST .../view/samples/:id/verdicts`；
+    - 两者沿用 `EnterpriseError` 的错误约定。
+  - 组件 `EnterpriseSpotChecks.vue`（props：`spaceId`），路由名 `enterpriseSpotChecks`；Space 页有一个 `RouterLink` 指向 `{ name: 'enterpriseSpotChecks', params: { spaceId } }`。
+  - data 属性：
+    - 页签 `[data-spot-tab="pending"|"decided"]`；
+    - 按 Release 分组 `[data-spot-release=<release_id>]`，组标题含"发布版本 N"；
+    - 样本 `[data-spot-sample=<id>]`；
+    - 结论按钮 `[data-verdict="correct"|"incomplete"|"wrong"]`；说明用 `textarea`。
+  - 每个 Release 只读一次，并且按样本自己的 `release_id` 读，不读 Active。
+  - 样本成员不在该 Release 中，或摘要与样本不一致时，显示"该条目已变化"，并禁用结论按钮。
+  - 文案：
+    - "没有待确认的样本"；
+    - "抽检样本加载失败"（带重试按钮）；
+    - "结论提交失败"；403 时显示"没有确认权限"；
+    - 结论标签为"正确 / 不完整 / 错误"。
 
 ### 2.3 RV4c 抽样与回流（Harness）
 

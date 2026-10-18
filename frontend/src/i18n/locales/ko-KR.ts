@@ -7493,6 +7493,33 @@ export default {
     noSessions: '대화가 없습니다'
   },
   enterpriseKnowledge: {
+    spot: {
+      "entry": "표본 검토",
+      "title": "표본 검토",
+      "description": "게시된 필드와 원문을 대조하고 검토 결과를 기록합니다.",
+      "pending": "대기 중",
+      "decided": "확인 완료",
+      "count": "표본 {count}개",
+      "unavailable": "항목을 표시할 수 없음",
+      "changed": "이 항목이 변경되었습니다",
+      "note": "설명 (선택)",
+      "noNote": "설명 없음",
+      "notePlaceholder": "수정 또는 확인이 필요한 내용을 입력하세요",
+      "noteLimit": "{count} / 1000자",
+      "submitting": "결과 제출 중…",
+      "denied": "확인 권한이 없습니다",
+      "submitFailed": "결과를 제출하지 못했습니다",
+      "reviewer": "확인자:",
+      "emptyPending": "확인 대기 중인 표본이 없습니다",
+      "emptyDecided": "확인된 표본이 없습니다",
+      "loadFailed": "표본을 불러오지 못했습니다",
+      "historicalRelease": "이전 게시 버전",
+      "releaseLoading": "표본의 게시 버전을 불러오는 중…",
+      "releaseFailed": "이 게시 버전을 불러오지 못했습니다. 다시 시도하세요.",
+      "correct": "정확함",
+      "incomplete": "불완전",
+      "wrong": "오류"
+    },
     graph: {
       "neighbors": "탐색 중: {name}",
       "returnOverview": "개요로 돌아가기",

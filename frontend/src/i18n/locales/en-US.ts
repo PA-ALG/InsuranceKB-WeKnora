@@ -7493,6 +7493,33 @@ export default {
     createFailed: 'Failed to create platform API key'
   },
   enterpriseKnowledge: {
+    spot: {
+      "entry": "Spot checks",
+      "title": "Spot-check desk",
+      "description": "Compare published fields with their sources and record your verdict.",
+      "pending": "Pending",
+      "decided": "Decided",
+      "count": "{count} samples",
+      "unavailable": "Item unavailable",
+      "changed": "This item has changed",
+      "note": "Note (optional)",
+      "noNote": "No note provided",
+      "notePlaceholder": "Describe what needs correction or verification",
+      "noteLimit": "{count} / 1000 characters",
+      "submitting": "Submitting verdict…",
+      "denied": "You do not have permission to confirm",
+      "submitFailed": "Could not submit verdict",
+      "reviewer": "Reviewer:",
+      "emptyPending": "No samples awaiting confirmation",
+      "emptyDecided": "No confirmed samples",
+      "loadFailed": "Could not load spot-check samples",
+      "historicalRelease": "Historical release",
+      "releaseLoading": "Loading the sample’s published release…",
+      "releaseFailed": "Could not load this release. Please retry.",
+      "correct": "Correct",
+      "incomplete": "Incomplete",
+      "wrong": "Wrong"
+    },
     graph: {
       "neighbors": "Exploring: {name}",
       "returnOverview": "Back to overview",
