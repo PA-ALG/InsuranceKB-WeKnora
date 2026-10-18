@@ -31,6 +31,11 @@ _PLATFORM_CODES = frozenset(
         "RELEASE_NOT_FOUND",
         "SERVICE_UNAVAILABLE",
         "INTERNAL_ERROR",
+        # RV4 spot checks
+        "MEMBER_NOT_FOUND",
+        "SAMPLE_INVALID",
+        "SAMPLE_NOT_FOUND",
+        "VERDICT_INVALID",
     }
 )
 _CLIENT_CODES = frozenset(
@@ -112,10 +117,13 @@ class Sample(_Response):
     """A spot-check sample of one release member (RV4), with its latest verdict if any."""
 
     id: str = Field(min_length=1)
+    space_id: str = Field(min_length=1)
     release_id: str = Field(min_length=1)
     logical_slug: str = Field(min_length=1)
     member_digest: str
     stratum: str
+    created_by: str
+    created_at: str
     verdict: Verdict | None = None
 
 

@@ -3,7 +3,8 @@
 The sample covers the machine-reviewed claims a release brought live: new since its base release,
 or with a different member digest. An unchanged claim was sampled with the release that introduced
 it, so it is not drawn again. The release itself says which pack an entry belongs to: the profile
-whose classification labels meet the entry's. Each pack has a must-check layer, taken whole, and a
+whose classification labels meet the entry's; a claim of no pack is drawn by the default rule as
+"unassigned/rest". Each pack has a must-check layer, taken whole, and a
 rest layer drawn by rate with a minimum; the release id and pack seed the draw, so the same release
 under the same policy always gives the same sample. Generic over packs and fields: they are data.
 """
@@ -73,7 +74,9 @@ def sample(release: Release, base: Release | None, policy: SpotCheckPolicy) -> l
     claims = {m.logical_slug: _payload(m) for m in release.members if m.kind == "claim"}
     for pack, slugs in layers.items():
         rule = policy.for_pack(pack) if pack != UNASSIGNED else policy.default
-        must = sorted(s for s in slugs if claims[s].get("predicate") in rule.must_check)
+        # Without a pack no field list applies: an unassigned claim is always "unassigned/rest".
+        must_check = set(rule.must_check) if pack != UNASSIGNED else set()
+        must = sorted(s for s in slugs if claims[s].get("predicate") in must_check)
         rest = sorted(set(slugs) - set(must))
         wanted = max(rule.minimum - len(must), math.ceil(rule.rate * len(rest)))
         drawn = random.Random(f"{release.id}/{pack}").sample(rest, min(len(rest), wanted))

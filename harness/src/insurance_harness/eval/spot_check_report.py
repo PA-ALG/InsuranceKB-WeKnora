@@ -109,6 +109,10 @@ def _corrections(samples: list[Sample]) -> list[dict[str, str]]:
 def _submit(client: PlatformClient, space: str, release_id: str, policy: SpotCheckPolicy) -> int:
     released = client.release(space, release_id)
     base = client.release(space, released.base_release_id) if released.base_release_id else None
+    # Sample only the releases asked for: a sample drawn from another version would be bound to
+    # this one, and a wrong base would hide what this release changed.
+    if released.id != release_id or (base is not None and base.id != released.base_release_id):
+        raise _Stop("RELEASE_MISMATCH")
     picks = [(pick.slug, pick.stratum) for pick in sample(released, base, policy)]
     submitted = 0
     for start in range(0, len(picks), SAMPLES_PER_CALL):
