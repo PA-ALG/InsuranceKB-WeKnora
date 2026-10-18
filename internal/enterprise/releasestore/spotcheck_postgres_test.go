@@ -36,8 +36,10 @@ func spotSample(id, slug string) spotcheck.Sample {
 }
 
 func spotVerdict(id, sampleID string) spotcheck.Verdict {
-	return spotcheck.Verdict{ID: id, SampleID: sampleID, Outcome: "correct", Note: "checked",
-		Reviewer: "user:reviewer", DecidedAt: spotSample("", "").CreatedAt}
+	return spotcheck.Verdict{
+		ID: id, SampleID: sampleID, Outcome: "correct", Note: "checked",
+		Reviewer: "user:reviewer", DecidedAt: spotSample("", "").CreatedAt,
+	}
 }
 
 func spotIDs(samples []spotcheck.Sample) []string {

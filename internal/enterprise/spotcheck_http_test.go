@@ -44,7 +44,7 @@ func (s *httpSpotStore) observe(ctx context.Context, tenant uint64) {
 }
 
 func (s *httpSpotStore) InsertSamples(
-	ctx context.Context, tenant uint64, in []spotcheck.Sample,
+	_ context.Context, tenant uint64, in []spotcheck.Sample,
 ) ([]spotcheck.Sample, error) {
 	if s.fail != nil {
 		return nil, s.fail
