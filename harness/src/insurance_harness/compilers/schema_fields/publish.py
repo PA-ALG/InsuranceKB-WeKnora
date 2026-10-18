@@ -2,7 +2,8 @@
 
 usage: python -m insurance_harness.compilers.schema_fields.publish --run-root <dir> --product <id>
        --source-map <file> [--decide human --reason <text> [--activate]
-       | --route [--review-policy <file>] [--scores <file>]] [--repo <dir>]
+       | --route [--review-policy <file>] [--scores <file>] [--spot-check-policy <file>]]
+       [--repo <dir>]
 
 Reads <run-root>/<product>/output.json and, from --repo (default: this checkout), the catalog and
 the product's metadata for its page (S3d-2): an entity named by the filed clause name, with its
@@ -12,6 +13,10 @@ on the Space's active release and submits it. A person decides with --decide hum
 --activate); --route applies the versioned review policy and independent scores instead (RV1):
 an admitted, fully passing product goes live as machine review, anything else is only submitted
 and waits in the human queue with reason codes. Claims are labelled with who reviewed them.
+A machine publish then submits its spot-check sample (RV4): the claims it brought live, drawn by
+the versioned spot-check policy against the active release it read before. A failed submission
+never undoes the publish; it is reported as "samples": {"stopped": <code>} so the report command
+can submit later.
 Prints one JSON line; exit 2 means stopped, with a caller-safe code.
 """
 
@@ -33,9 +38,20 @@ from pydantic import (
 )
 
 from insurance_harness.bundle.assemble import BundleError, retired_claims
-from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
+from insurance_harness.bundle.client import (
+    DecisionInput,
+    PlatformClient,
+    PlatformError,
+    Release,
+    publish,
+)
 from insurance_harness.catalog.navigation import NavigationError, load_navigation
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
+from insurance_harness.catalog.spot_check import (
+    SpotCheckPolicy,
+    SpotCheckPolicyError,
+    load_spot_check_policy,
+)
 from insurance_harness.compilers.schema_fields.claims import (
     candidate_bundle,
     claims_from,
@@ -58,6 +74,7 @@ from insurance_harness.ingest.source_map import (
     reader_from_env,
 )
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, route
+from insurance_harness.review.spot_check import sample
 
 REPO = Path(__file__).resolve().parents[5]
 CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
@@ -101,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--route", action="store_true")
     parser.add_argument("--review-policy", type=Path)
     parser.add_argument("--scores", type=Path)
+    parser.add_argument("--spot-check-policy", type=Path)
     parser.add_argument("--repo", type=Path, default=REPO)
     # Every failure prints a stable code (and at most a field key): never exception text,
     # local paths or input content, which may carry material.
@@ -113,6 +131,12 @@ def main(argv: list[str] | None = None) -> int:
         return _stop("INVALID_ARGUMENTS")
     if args.activate and decision is None:
         return _stop("INVALID_REQUEST")  # activation needs an approving decision
+    spot_check: SpotCheckPolicy | None = None
+    if args.route:
+        try:
+            spot_check = load_spot_check_policy(args.spot_check_policy)
+        except SpotCheckPolicyError as error:
+            return _stop(error.code)
     try:
         output = CompileOutput.model_validate_json(
             (args.run_root / args.product / "output.json").read_text(encoding="utf-8")
@@ -176,6 +200,11 @@ def main(argv: list[str] | None = None) -> int:
             navigation=navigation,
         )
         result = publish(client, source_map.space_id, bundle, decision=decision, activate=activate)
+        samples: int | dict[str, str] | None = None
+        if review.mode == ReviewMode.MACHINE and result.release and spot_check is not None:
+            samples = _submit_sample(
+                client, source_map.space_id, result.release, active, spot_check
+            )
     except (PlatformError, SourcePagesError, SourceMapError) as error:
         return _stop(error.code)
     except BundleError as error:
@@ -198,11 +227,34 @@ def main(argv: list[str] | None = None) -> int:
                 "review": review.mode.value,
                 **({"reasons": list(review.reasons)} if review.reasons else {}),
                 **({"retired": len(retired)} if retired else {}),
+                **({"samples": samples} if samples is not None else {}),
             },
             ensure_ascii=False,
         )
     )
     return 0
+
+
+SAMPLES_PER_CALL = 500  # the platform's batch limit
+
+
+def _submit_sample(
+    client: PlatformClient,
+    space_id: str,
+    released: Release,
+    base: Release | None,
+    policy: SpotCheckPolicy,
+) -> int | dict[str, str]:
+    """Sample what this publish brought live and submit it; a failure is reported, not raised."""
+    picks = [(pick.slug, pick.stratum) for pick in sample(released, base, policy)]
+    submitted = 0
+    try:
+        for start in range(0, len(picks), SAMPLES_PER_CALL):
+            batch = picks[start : start + SAMPLES_PER_CALL]
+            submitted += len(client.submit_samples(space_id, released.id, batch))
+    except PlatformError as error:
+        return {"stopped": error.code}
+    return submitted
 
 
 def _stop(code: str, **detail: str | int | None) -> int:

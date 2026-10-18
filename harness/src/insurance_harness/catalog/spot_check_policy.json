@@ -1,0 +1,13 @@
+{
+  "version": "1",
+  "basis": "RV4 (user 2026-10-18): while the critical illness pilot runs, every machine-reviewed claim is spot-checked; must-check fields are the pack's highest-risk ones.",
+  "default": {"rate": 1.0, "minimum": 5, "target": 0.9, "must_check": []},
+  "packs": {
+    "schemapack_critical_illness_insurance": {
+      "rate": 1.0,
+      "minimum": 5,
+      "target": 0.9,
+      "must_check": ["coverage_responsibilities", "disease_benefit_rules", "exclusions", "waiting_period"]
+    }
+  }
+}
