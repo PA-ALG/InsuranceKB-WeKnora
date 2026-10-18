@@ -1,0 +1,4 @@
+{
+ "version": "2026-10-18.1",
+ "header_rules": [{"role": "rate_table", "fields": ["premium_payment_term"]}]
+}

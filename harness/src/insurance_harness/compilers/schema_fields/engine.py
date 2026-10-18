@@ -8,11 +8,12 @@ per request, within a per-compile budget that covers both steps. The port must r
 interrupted/truncated completions before returning text.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from insurance_harness.catalog.trust_policy import load_trust_policy
 from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition, NonBlank
 from insurance_harness.compilers.schema_fields.parse import CompileError as CompileError
@@ -107,6 +108,8 @@ class SchemaFieldsCompiler:
         entity_id: str,
         definitions: Sequence[FieldDefinition],
         pages: Sequence[PageTextLike],
+        *,
+        table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
     ) -> tuple[tuple[FieldDefinition, ...], SegmentedSource]:
         if not isinstance(entity_id, str) or not entity_id.strip():
             raise CompileError("entity_id must not be blank")
@@ -120,7 +123,7 @@ class SchemaFieldsCompiler:
         if len({field.pack_id for field in fields}) > 1:
             raise CompileError("definitions must belong to one pack")
         try:
-            source = SegmentedSource(pages)
+            source = SegmentedSource(pages, table_headers=table_headers)
         except ValueError as exc:
             raise CompileError("invalid or ambiguous source pages") from exc
         if fields and not source.segments:
@@ -138,9 +141,11 @@ class SchemaFieldsCompiler:
         entity_id: str,
         definitions: Sequence[FieldDefinition],
         pages: Sequence[PageTextLike],
+        *,
+        table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
     ) -> list[JudgeLikeRequest]:
         """Step-one requests; step two depends on the answers and is built during compile."""
-        fields, source = self._prepare(entity_id, definitions, pages)
+        fields, source = self._prepare(entity_id, definitions, pages, table_headers=table_headers)
         listing = source.listing()
         return [
             build_selection_request(entity_id, batch, listing) for batch in self._batches(fields)
@@ -151,8 +156,11 @@ class SchemaFieldsCompiler:
         entity_id: str,
         definitions: Sequence[FieldDefinition],
         pages: Sequence[PageTextLike],
+        *,
+        table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
     ) -> CompileOutput:
-        fields, source = self._prepare(entity_id, definitions, pages)
+        fields, source = self._prepare(entity_id, definitions, pages, table_headers=table_headers)
+        policy = load_trust_policy()
         calls = 0
 
         def send(request: JudgeLikeRequest) -> str:
@@ -172,6 +180,13 @@ class SchemaFieldsCompiler:
             ):
                 ids, dropped = source.resolve(row.segments)
                 dropped_refs += len(dropped)
+                forbidden = {
+                    segment.id for segment in source.ordered(ids)
+                    if (role := source.header_role(segment.document)) is not None
+                    and row.field_key not in policy.header_fields(role)
+                }
+                dropped_refs += len(forbidden)
+                ids = [sid for sid in ids if sid not in forbidden]
                 if row.state != "unknown" and not ids:
                     dropped_fields.append(row.field_key)
                     continue

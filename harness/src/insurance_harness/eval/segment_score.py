@@ -20,8 +20,13 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from insurance_harness.catalog.trust_policy import load_trust_policy
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
-from insurance_harness.eval.product_sources import check_product_id, source_directory, source_pages
+from insurance_harness.eval.product_sources import (
+    check_product_id,
+    source_directory,
+    trusted_source_pages,
+)
 from insurance_harness.evidence.quote_verification import Digest, NonBlank, VerifiedQuote
 from insurance_harness.evidence.segments import SegmentedSource, same_text
 
@@ -116,7 +121,9 @@ def score_selection(
             raise ValueError(f"duplicate prediction for {result.field_key}")
     fingerprints = {(p.document, p.page): p.document_sha256.lower() for p in source.pages}
 
-    def segments(quote: GoldenV2Evidence | VerifiedQuote) -> set[str]:
+    def segments(quote: GoldenV2Evidence | VerifiedQuote, field_key: str) -> set[str]:
+        if not _trusted_document(source, field_key, quote.document):
+            return set()
         if fingerprints.get((quote.document, quote.page)) != quote.document_sha256.lower():
             return set()
         recorded = quote.segment_id if isinstance(quote, GoldenV2Evidence) else None
@@ -129,7 +136,7 @@ def score_selection(
         state: State | Literal["missing"] = guess.state if guess is not None else "missing"
         # Three-state agreement; a missing prediction counts as unknown, nothing else is merged.
         agree += field.state == state or (field.state == "unknown" and state == "missing")
-        located = [segments(quote) for quote in field.evidence]
+        located = [segments(quote, field.field_key) for quote in field.evidence]
         unmapped += sum(1 for ids in located if not ids)
         if field.state != "present":
             continue
@@ -141,7 +148,7 @@ def score_selection(
                 chosen = recorded
             else:
                 for quote in guess.evidence:
-                    ids = segments(quote)
+                    ids = segments(quote, field.field_key)
                     unmapped_predicted += not ids
                     chosen |= ids
         found = {sid for sid in gold if sid in chosen or source.copies(sid) & chosen}
@@ -161,6 +168,11 @@ def score_selection(
     )
 
 
+def _trusted_document(source: SegmentedSource, field_key: str, document: str) -> bool:
+    role = source.header_role(document)
+    return role is None or field_key in load_trust_policy().header_fields(role)
+
+
 def _recorded_selection(source: SegmentedSource, result: FieldResult) -> set[str] | None:
     """The run's own segment ids, trusted only while they cut the saved evidence (S4f).
 
@@ -168,6 +180,8 @@ def _recorded_selection(source: SegmentedSource, result: FieldResult) -> set[str
     and width, the same rule Golden segment ids follow (page text keeps CRLF since S4c-1).
     """
     if not result.segment_ids:
+        return None
+    if any(not _trusted_document(source, result.field_key, q.document) for q in result.evidence):
         return None
     ids, dropped = source.resolve(result.segment_ids)
     if dropped or ids != result.segment_ids:
@@ -251,7 +265,8 @@ def main(argv: list[str] | None = None) -> int:
         output = CompileOutput.model_validate_json(
             (args.run_root / product / "output.json").read_text(encoding="utf-8")
         )
-        source = SegmentedSource(source_pages(source_directory(args.repo, product)))
+        pages = trusted_source_pages(source_directory(args.repo, product))
+        source = SegmentedSource(pages.evidence, table_headers=pages.table_headers)
         golden = load_golden_v2(args.repo / GOLDEN_DIR / f"{product}.json")
         reports.append(score_selection(source, golden, output.fields))
         print(_line(product, reports[-1]))

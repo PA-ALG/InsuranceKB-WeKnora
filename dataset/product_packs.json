@@ -1,0 +1,13 @@
+{
+  "version": "2026-10-18.1",
+  "basis": "S5a: packs of dataset products outside Golden, ruled by the filed product type in the clause name (两全 → endowment, 终身寿险 → whole life, 年金/养老年金 → annuity, 医疗 → medical); 养老年金 is an annuity (user 2026-10-18). Golden manifests stay authoritative for their products and must agree.",
+  "packs": {
+    "1818": "schemapack_endowment_insurance",
+    "1837": "schemapack_whole_life_insurance",
+    "5003": "schemapack_whole_life_insurance",
+    "1830": "schemapack_annuity_insurance",
+    "1847H": "schemapack_annuity_insurance",
+    "2650": "schemapack_medical_insurance",
+    "594": "schemapack_medical_insurance"
+  }
+}

@@ -29,6 +29,7 @@ from insurance_harness.contracts.knowledge import (
     Evidence,
     ExpertRevision,
     Locator,
+    NavigationProfile,
     PresentationProfile,
     QAItem,
     Relation,
@@ -41,8 +42,8 @@ DEFAULT_DESTINATION = Path(__file__).resolve().parents[4] / "contracts"
 MODELS: tuple[type[BaseModel], ...] = (
     Evidence, Locator, Entity, Claim, Relation, QAItem, ExpertRevision, SchemaSnapshot,
     PageText, CompileTask, CompileResult, GapTask, ReviewItem,
-    CandidateBundle, BundleMember, ReviewPlan, PresentationProfile,
-)
+    CandidateBundle, BundleMember, ReviewPlan, PresentationProfile, NavigationProfile,
+)  # fmt: skip
 README = f'''# Generated contracts
 
 contract_version: "{CONTRACT_VERSION}"

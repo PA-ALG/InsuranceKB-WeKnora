@@ -52,7 +52,19 @@ from insurance_harness.contracts.knowledge import (
     Maintenance as Maintenance,
 )
 from insurance_harness.contracts.knowledge import (
+    NavigationDomain as NavigationDomain,
+)
+from insurance_harness.contracts.knowledge import (
+    NavigationGroup as NavigationGroup,
+)
+from insurance_harness.contracts.knowledge import (
+    NavigationProfile as NavigationProfile,
+)
+from insurance_harness.contracts.knowledge import (
     PresentationProfile as PresentationProfile,
+)
+from insurance_harness.contracts.knowledge import (
+    ProfileField as ProfileField,
 )
 from insurance_harness.contracts.knowledge import (
     Provenance as Provenance,

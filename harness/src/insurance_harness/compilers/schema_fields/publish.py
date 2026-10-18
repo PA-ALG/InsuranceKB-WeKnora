@@ -32,8 +32,9 @@ from pydantic import (
     field_validator,
 )
 
-from insurance_harness.bundle.assemble import BundleError
+from insurance_harness.bundle.assemble import BundleError, retired_claims
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
+from insurance_harness.catalog.navigation import NavigationError, load_navigation
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
 from insurance_harness.compilers.schema_fields.claims import (
     candidate_bundle,
@@ -42,6 +43,7 @@ from insurance_harness.compilers.schema_fields.claims import (
 )
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.compilers.schema_fields.page import product_page
+from insurance_harness.compilers.schema_fields.review_items import logical_key
 from insurance_harness.contracts.enums import ReviewMode
 from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.eval.product_sources import check_product_id, display_name, source_directory
@@ -51,8 +53,8 @@ from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
     BASE_URL_ENV,
     SourceMapError,
-    load_pages,
     load_source_map,
+    load_trusted_pages,
     reader_from_env,
 )
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, route
@@ -137,13 +139,17 @@ def main(argv: list[str] | None = None) -> int:
     except BundleError as error:
         return _stop("BUNDLE_INVALID", reason=error.reason)
     try:
+        navigation = load_navigation()  # local data too
+    except NavigationError as error:
+        return _stop(error.code)
+    try:
         source_map = load_source_map(args.source_map)
-        pages, sources = load_pages(
+        pages, sources = load_trusted_pages(
             reader_from_env(), source_map.space_id, source_map.entries(args.product)
         )
         client = PlatformClient(os.environ[BASE_URL_ENV], os.environ[API_KEY_ENV])
         active = client.active(source_map.space_id)
-        segmented = SegmentedSource(pages)
+        segmented = SegmentedSource(pages.evidence, table_headers=pages.table_headers)
         review = _route(policy, output.pack_id, claims_from(output, segmented, sources), scores)
         activate = args.activate
         if review.mode == ReviewMode.MACHINE:
@@ -151,6 +157,13 @@ def main(argv: list[str] | None = None) -> int:
                 outcome="approve", mode="machine", policy_ref=review.policy_ref
             )
             activate = True
+        # A candidate is a delta: claims of this product the new output no longer has are
+        # removed explicitly, or the previous release's values would stay on the page (S5a).
+        retired = retired_claims(
+            active,
+            output.entity_id,
+            {logical_key(output.entity_id, f.field_key) for f in output.fields},
+        )
         bundle = candidate_bundle(
             output,
             segmented,
@@ -159,6 +172,8 @@ def main(argv: list[str] | None = None) -> int:
             base=active.head if active else None,
             page=page,
             review=(review, scores),
+            removals=retired,
+            navigation=navigation,
         )
         result = publish(client, source_map.space_id, bundle, decision=decision, activate=activate)
     except (PlatformError, SourcePagesError, SourceMapError) as error:
@@ -182,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
                 "epoch": result.release.epoch if result.release else None,
                 "review": review.mode.value,
                 **({"reasons": list(review.reasons)} if review.reasons else {}),
+                **({"retired": len(retired)} if retired else {}),
             },
             ensure_ascii=False,
         )

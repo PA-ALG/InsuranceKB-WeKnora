@@ -1,6 +1,6 @@
 {
  "product_id": "1824",
- "cards_version": "draft-2026-10-16a",
+ "cards_version": "draft-2026-10-18a",
  "fields": [
   {
    "field_key": "official_product_features",
@@ -211,10 +211,25 @@
   },
   {
    "field_key": "premium_payment_term",
-   "state": "unknown",
-   "value": null,
-   "reason": "仅费率表列示，费率表不作证据（用户 2026-10-17，S4i）；按新口径待独立评委复核",
-   "evidence": []
+   "state": "present",
+   "value": "男性、女性费率表均列示以下交费期间：1. 趸交；2. 3年；3. 6年；4. 10年；5. 15年；6. 20年。",
+   "reason": "男性、女性费率表的交费期间表头均列明六种可选交费期限。",
+   "evidence": [
+    {
+     "document": "费率表.pdf",
+     "document_sha256": "9811367acd0d3875260e926fe64901e3423c07569ae06bf1438926769860c66f",
+     "page": 1,
+     "quote": "《平安盛世金越（尊享版26）终身寿险》年交费率表\r\n（每万元基本保险金额）\r\n男性\r\n单位：人民币元\r\n 交费期间 投保年龄\r\n趸交 3年 6年 10年 15年 20年",
+     "segment_id": "D3P1S1"
+    },
+    {
+     "document": "费率表.pdf",
+     "document_sha256": "9811367acd0d3875260e926fe64901e3423c07569ae06bf1438926769860c66f",
+     "page": 2,
+     "quote": "《平安盛世金越（尊享版26）终身寿险》年交费率表\r\n（每万元基本保险金额）\r\n女性\r\n单位：人民币元\r\n 交费期间 投保年龄\r\n趸交 3年 6年 10年 15年 20年",
+     "segment_id": "D3P2S1"
+    }
+   ]
   },
   {
    "field_key": "premium_payment_frequency",

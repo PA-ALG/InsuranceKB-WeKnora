@@ -10,12 +10,13 @@ came from. With the product page (S3d-2), the bundle also carries the product's 
 pack's presentation profile, which must be for the same product and pack as the output.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from pydantic import ValidationError
 
 from insurance_harness.bundle.assemble import ACCESS_SCOPE, BundleError, assemble
 from insurance_harness.bundle.client import Head
+from insurance_harness.catalog.trust_policy import load_trust_policy
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.compilers.schema_fields.page import ProductPage
 from insurance_harness.compilers.schema_fields.review_items import logical_key
@@ -27,7 +28,13 @@ from insurance_harness.contracts.enums import (
     SourceClass,
     UnknownReason,
 )
-from insurance_harness.contracts.knowledge import Claim, Evidence, Locator, Provenance
+from insurance_harness.contracts.knowledge import (
+    Claim,
+    Evidence,
+    Locator,
+    NavigationProfile,
+    Provenance,
+)
 from insurance_harness.evidence.segments import SegmentedSource, same_text
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, labelled
@@ -42,6 +49,8 @@ def candidate_bundle(
     base: Head | None = None,
     page: ProductPage | None = None,
     review: tuple[Route, Scores | None] | None = None,
+    removals: Sequence[str] = (),
+    navigation: NavigationProfile | None = None,
 ) -> CandidateBundle:
     """One claim member per field, plus the product page when given, based on the given Head.
 
@@ -60,6 +69,8 @@ def candidate_bundle(
         entities=[page.entity] if page else [],
         profiles=[page.profile] if page else [],
         review_plan=[ReviewPlan(mode=route.mode, policy_ref=route.policy_ref)],
+        removals=removals,
+        navigations=[navigation] if navigation else [],
     )
 
 
@@ -122,6 +133,13 @@ def _evidence(
     read = {page.document for page in source.pages}
     if any(saved.document not in read for saved in field.evidence):
         raise BundleError("EVIDENCE_DOCUMENT_NOT_READ", index)
+    policy = load_trust_policy()
+    if any(
+        (role := source.header_role(saved.document)) is not None
+        and field.field_key not in policy.header_fields(role)
+        for saved in field.evidence
+    ):
+        raise BundleError("EVIDENCE_ROLE_NOT_TRUSTED", index)
     ids, dropped = source.resolve(field.segment_ids)
     spans = source.spans(ids) if ids and not dropped and ids == field.segment_ids else []
     if (
