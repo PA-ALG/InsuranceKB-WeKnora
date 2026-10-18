@@ -31,6 +31,25 @@ watch(() => props.field.slug, () => { full.value = false })
   <div class="ek-field" :data-field="field.slug">
     <div class="ek-field__head">
       <span class="ek-field__title">{{ field.title }}</span>
+    </div>
+    <div :class="['ek-field__value', { 'ek-field__value--clamped': long && !full && !listed }]">
+      <template v-if="field.state === 'present'">
+        <template v-if="outline && listed">
+          <p v-if="outline.intro" :class="['ek-outline__intro', { 'ek-outline__intro--clamped': long && !full }]">{{ outline.intro }}</p>
+          <OutlineList :items="outline.items" :collapsible="long" :open="full" />
+        </template>
+        <span v-else class="ek-field__text">{{ outline?.intro || '—' }}</span>
+      </template>
+      <span v-else class="ek-field__state">{{ stateLabel(t, field.state) }}</span>
+    </div>
+    <!-- S3d-5: the switch on the left, origin and sources at the bottom right (user 2026-10-18). -->
+    <div v-if="long || field.origin || field.evidenceCount" class="ek-field__foot">
+      <span v-if="long" class="ek-field__toggle">
+        <span v-if="listed && !full">{{ t('enterpriseKnowledge.field.items', { count: outline?.items.length }) }}</span>
+        <button type="button" data-toggle class="ek-link-button" :aria-expanded="full" @click="full = !full">
+          {{ full ? t('enterpriseKnowledge.field.compact') : t('enterpriseKnowledge.field.full') }}
+        </button>
+      </span>
       <span class="ek-field__meta">
         <span
           v-if="field.origin"
@@ -51,22 +70,6 @@ watch(() => props.field.slug, () => { full.value = false })
           @click="emit('open', index - 1)"
         >{{ t('enterpriseKnowledge.entity.source', { n: index }) }}</button>
       </span>
-    </div>
-    <div :class="['ek-field__value', { 'ek-field__value--clamped': long && !full && !listed }]">
-      <template v-if="field.state === 'present'">
-        <template v-if="outline && listed">
-          <p v-if="outline.intro" :class="['ek-outline__intro', { 'ek-outline__intro--clamped': long && !full }]">{{ outline.intro }}</p>
-          <OutlineList :items="outline.items" :collapsible="long" :open="full" />
-        </template>
-        <span v-else class="ek-field__text">{{ outline?.intro || '—' }}</span>
-      </template>
-      <span v-else class="ek-field__state">{{ stateLabel(t, field.state) }}</span>
-    </div>
-    <div v-if="long" class="ek-field__toggle">
-      <span v-if="listed && !full">{{ t('enterpriseKnowledge.field.items', { count: outline?.items.length }) }}</span>
-      <button type="button" data-toggle class="ek-link-button" :aria-expanded="full" @click="full = !full">
-        {{ full ? t('enterpriseKnowledge.field.compact') : t('enterpriseKnowledge.field.full') }}
-      </button>
     </div>
   </div>
 </template>

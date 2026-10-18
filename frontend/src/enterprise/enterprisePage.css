@@ -144,11 +144,21 @@
   font-weight: 600;
 }
 
+.ek-field__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 6px;
+}
+
 .ek-field__meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 2px;
+  margin-left: auto;
   font-size: 12px;
 }
 
@@ -300,7 +310,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
   color: var(--td-text-color-secondary);
   font-size: 13px;
 }
