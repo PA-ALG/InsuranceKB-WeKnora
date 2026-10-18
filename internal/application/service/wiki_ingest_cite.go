@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/Tencent/WeKnora/internal/agent"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -63,22 +62,112 @@ type citationPipelineOutcome struct {
 	NewSlugCount   int
 }
 
-// extractCandidateSlugs runs Pass 0 of the chunk-cited pipeline: it scans the
-// full (reconstructed) document text and returns a lightweight skeleton of
-// every significant entity/concept. Unlike the legacy single-shot extraction,
-// this pass explicitly does NOT ask the LLM to paraphrase full facts per item;
-// those will come from the chunk-citation pass instead.
-//
-// Returns (entities, concepts, slugItems, error). On LLM or parse failure it
-// returns an error; incomplete discovery must not enter citation or page writes.
+// extractCandidateSlugs discovers every text window before deduplicating once.
+// Indexed results make model completion order irrelevant to first-item policy.
 func (s *wikiIngestService) extractCandidateSlugs(
+	ctx context.Context, chatModel chat.Chat, kbID string, windows []wikiDocumentWindow,
+	lang string, oldPageSlugs map[string]bool, batchCtx *WikiBatchContext,
+) ([]extractedItem, []extractedItem, map[string]extractedItem, error) {
+	results := make([]combinedExtraction, len(windows))
+	failures := make([]error, len(windows))
+	eg, ectx := errgroup.WithContext(ctx)
+	eg.SetLimit(maxCitationBatchConcurrency)
+	for i, window := range windows {
+		if realTextRuneCount(window.content) == 0 {
+			continue
+		}
+		eg.Go(func() error {
+			// An unsent cancelled window must not enter tenant-scoped coalescing,
+			// whose cancelled response wait correctly reports an unknown send.
+			if err := ectx.Err(); err != nil {
+				failures[i] = &wikiStageFailure{Stage: "wiki_candidate_slug", Outcome: wikiOutcomeNotRun, Cause: err}
+				return nil
+			}
+			results[i], failures[i] = s.extractRawCandidateSlugs(ectx, chatModel, window.content, lang, oldPageSlugs, batchCtx)
+			return nil // A failed window does not cancel already-sent peers.
+		})
+	}
+	_ = eg.Wait()
+	if err := aggregateWikiStageErrors("wiki_candidate_slug", failures); err != nil {
+		return nil, nil, nil, err
+	}
+	merged := mergeWindowCandidates(results)
+	entities, concepts, canonical := s.deduplicateExtractedBatch(ctx, chatModel, kbID, merged.Entities, merged.Concepts, batchCtx)
+	items := make(map[string]extractedItem, len(entities)+len(concepts))
+	for _, group := range [][]extractedItem{entities, concepts} {
+		for _, item := range group {
+			if item.Slug != "" && item.Name != "" {
+				items[item.Slug] = item
+			}
+		}
+	}
+	for i, result := range results {
+		local := make(map[string]bool)
+		for _, group := range [][]extractedItem{result.Entities, result.Concepts} {
+			for _, raw := range group {
+				local[canonical[raw.Slug]] = true
+			}
+		}
+		selectLocal := func(items []extractedItem) []extractedItem {
+			var out []extractedItem
+			for _, item := range items {
+				if local[item.Slug] {
+					out = append(out, item)
+				}
+			}
+			return out
+		}
+		windows[i].candidates = renderCandidateSlugsXML(selectLocal(entities), selectLocal(concepts))
+	}
+
+	return entities, concepts, items, nil
+}
+
+func mergeWindowCandidates(results []combinedExtraction) combinedExtraction {
+	var merged combinedExtraction
+	type location struct {
+		concept bool
+		index   int
+	}
+	bySlug := make(map[string]location)
+	for _, result := range results {
+		for groupIndex, group := range [][]extractedItem{result.Entities, result.Concepts} {
+			for _, item := range group {
+				where, exists := bySlug[item.Slug]
+				if !exists {
+					where = location{concept: groupIndex == 1, index: len(merged.Entities)}
+					if where.concept {
+						where.index = len(merged.Concepts)
+					}
+					first := item
+					first.Aliases = nil
+					if where.concept {
+						merged.Concepts = append(merged.Concepts, first)
+					} else {
+						merged.Entities = append(merged.Entities, first)
+					}
+					bySlug[item.Slug] = where
+				}
+				dst := &merged.Entities
+				if where.concept {
+					dst = &merged.Concepts
+				}
+				for _, alias := range item.Aliases {
+					(*dst)[where.index].Aliases = appendUniqueString((*dst)[where.index].Aliases, alias)
+				}
+			}
+		}
+	}
+	return merged
+}
+
+func (s *wikiIngestService) extractRawCandidateSlugs(
 	ctx context.Context,
 	chatModel chat.Chat,
-	kbID string,
 	content, lang string,
 	oldPageSlugs map[string]bool,
 	batchCtx *WikiBatchContext,
-) ([]extractedItem, []extractedItem, map[string]extractedItem, error) {
+) (combinedExtraction, error) {
 	var prevSlugsText string
 	if len(oldPageSlugs) > 0 {
 		var sb strings.Builder
@@ -105,7 +194,7 @@ func (s *wikiIngestService) extractCandidateSlugs(
 		"InstructionScope":    "wiki_extraction",
 	})
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("candidate slug extraction failed: %w", err)
+		return combinedExtraction{}, fmt.Errorf("candidate slug extraction failed: %w", err)
 	}
 
 	raw = cleanLLMJSON(raw)
@@ -113,26 +202,10 @@ func (s *wikiIngestService) extractCandidateSlugs(
 	var result combinedExtraction
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		logger.Warnf(ctx, "wiki ingest: failed to parse candidate slug JSON: %v\nRaw: %s", err, raw)
-		return nil, nil, nil, &wikiStageFailure{Stage: "wiki_candidate_slug", Outcome: wikiOutcomeFailed, Cause: err}
+		return combinedExtraction{}, &wikiStageFailure{Stage: "wiki_candidate_slug", Outcome: wikiOutcomeFailed, Cause: err}
 	}
 
-	result.Entities, result.Concepts = s.deduplicateExtractedBatch(
-		ctx, chatModel, kbID, result.Entities, result.Concepts, batchCtx,
-	)
-
-	slugItems := make(map[string]extractedItem, len(result.Entities)+len(result.Concepts))
-	for _, item := range result.Entities {
-		if item.Slug != "" && item.Name != "" {
-			slugItems[item.Slug] = item
-		}
-	}
-	for _, item := range result.Concepts {
-		if item.Slug != "" && item.Name != "" {
-			slugItems[item.Slug] = item
-		}
-	}
-
-	return result.Entities, result.Concepts, slugItems, nil
+	return result, nil
 }
 
 // chunkBatch groups chunks that will be sent in a single WikiChunkCitationPrompt call.
@@ -253,9 +326,13 @@ type citationClassificationOutcome struct {
 }
 
 func (r citationClassificationOutcome) Err() error {
+	return aggregateWikiStageErrors("wiki_chunk_citation", r.BatchErrors)
+}
+
+func aggregateWikiStageErrors(stage string, batchErrors []error) error {
 	var failures []error
 	outcome := wikiOutcomeNotRun
-	for i, err := range r.BatchErrors {
+	for i, err := range batchErrors {
 		if err == nil {
 			continue
 		}
@@ -268,7 +345,7 @@ func (r citationClassificationOutcome) Err() error {
 	if len(failures) == 0 {
 		return nil
 	}
-	return &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: outcome, Cause: errors.Join(failures...)}
+	return &wikiStageFailure{Stage: stage, Outcome: outcome, Cause: errors.Join(failures...)}
 }
 
 // classifyChunkCitations runs Pass 1..N of the chunk-cited pipeline: given a
@@ -287,30 +364,49 @@ func (s *wikiIngestService) classifyChunkCitations(
 	lang string,
 	batchCtx *WikiBatchContext,
 	parent *Span,
+	windows ...[]wikiDocumentWindow,
 ) citationClassificationOutcome {
-	batches := splitChunksIntoCitationBatches(chunks)
-	if len(batches) == 0 || strings.TrimSpace(candidatesXML) == "" {
+	if strings.TrimSpace(candidatesXML) == "" {
 		return citationClassificationOutcome{Citations: map[string][]string{}}
 	}
-
-	// Merge state. Using sets keyed by (slug, chunkID) to dedup across
-	// batches; order is re-imposed from chunk ChunkIndex at the end.
-	var mu sync.Mutex
-	citationSet := make(map[string]map[string]bool) // slug → set of real chunk IDs
-	var newSlugsAll []newSlugFromCitation
-	batchErrors := make([]error, len(batches))
+	// Flatten every window's batches into one document-wide pool. An empty
+	// local candidate block is intentional: new_slugs can discover omissions.
+	type citationJob struct {
+		batch      chunkBatch
+		candidates string
+	}
+	var jobs []citationJob
+	scopes := []wikiDocumentWindow{{chunks: chunks, candidates: candidatesXML}}
+	if len(windows) > 0 {
+		scopes = windows[0]
+	}
+	for _, window := range scopes {
+		if len(windows) > 0 && realTextRuneCount(window.content) == 0 {
+			continue
+		}
+		for _, batch := range splitChunksIntoCitationBatches(window.chunks) {
+			jobs = append(jobs, citationJob{batch: batch, candidates: window.candidates})
+		}
+	}
+	batchErrors := make([]error, len(jobs))
+	results := make([]citationBatchResult, len(jobs))
 
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.SetLimit(maxCitationBatchConcurrency)
 
-	for bi := range batches {
-		batch := batches[bi]
+	for bi := range jobs {
+		batch := jobs[bi].batch
+		candidates := jobs[bi].candidates
 		batchIdx := bi
 		eg.Go(func() error {
+			if err := ectx.Err(); err != nil {
+				batchErrors[batchIdx] = &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: wikiOutcomeNotRun, Cause: err}
+				return nil
+			}
 			batchSpan := s.tracker().BeginSubSpan(ectx, parent, fmt.Sprintf("postprocess.wiki.classify.batch[%d]", batchIdx), types.SpanKindSubSpan, types.JSONMap{"batch": batchIdx, "chunks": len(batch.chunks)})
 			chunksXML := renderChunksXML(batch)
 			raw, err := s.generateWithTemplate(ectx, chatModel, agent.WikiChunkCitationPrompt, map[string]string{
-				"CandidateSlugs": candidatesXML,
+				"CandidateSlugs": candidates,
 				"ChunksXML":      chunksXML,
 				"Language":       lang,
 			})
@@ -354,22 +450,12 @@ func (s *wikiIngestService) classifyChunkCitations(
 				return nil
 			}
 
-			// Translate only validated handles into durable chunk identities.
-			mu.Lock()
-
+			// Translate only validated batch-local handles. Store by job index;
+			// completion order must not pick a new slug's first metadata.
 			for slug, handleList := range parsed.Citations {
-				if slug == "" {
-					continue
-				}
-				set, ok := citationSet[slug]
-				if !ok {
-					set = make(map[string]bool)
-					citationSet[slug] = set
-				}
 				ids := make([]string, 0, len(handleList))
 				for _, handle := range handleList {
 					realID, _ := batch.handles.Resolve(handle)
-					set[realID] = true
 					ids = append(ids, realID)
 				}
 				parsed.Citations[slug] = ids
@@ -380,21 +466,35 @@ func (s *wikiIngestService) classifyChunkCitations(
 					id, _ := batch.handles.Resolve(handle)
 					real = append(real, id)
 				}
-				ns.SourceChunks = real
-				parsed.NewSlugs[i] = ns
-				newSlugsAll = append(newSlugsAll, ns)
+				parsed.NewSlugs[i].SourceChunks = real
 			}
-			mu.Unlock()
+			results[batchIdx] = parsed
+
 			s.tracker().EndSpan(ectx, batchSpan, types.JSONMap{"citations": parsed.Citations, "new_slugs": parsed.NewSlugs})
 			return nil
 		})
 	}
 	_ = eg.Wait()
 
-	// Build a stable chunk-order so the final citations come out in document order.
+	citationSet := make(map[string]map[string]bool)
+	var newSlugsAll []newSlugFromCitation
 	chunkOrder := make(map[string]int, len(chunks))
-	for _, c := range chunks {
-		chunkOrder[c.ID] = c.ChunkIndex
+	for i, result := range results {
+		for _, c := range jobs[i].batch.chunks {
+			chunkOrder[c.ID] = len(chunkOrder)
+		}
+		for slug, ids := range result.Citations {
+			if slug == "" {
+				continue
+			}
+			if citationSet[slug] == nil {
+				citationSet[slug] = make(map[string]bool)
+			}
+			for _, id := range ids {
+				citationSet[slug][id] = true
+			}
+		}
+		newSlugsAll = append(newSlugsAll, result.NewSlugs...)
 	}
 
 	out := make(map[string][]string, len(citationSet))
@@ -517,6 +617,18 @@ func mergeCitationsIntoItems(
 	citations map[string][]string,
 	newSlugs []newSlugFromCitation,
 ) ([]extractedItem, []extractedItem, int) {
+	// new_slugs can rediscover a candidate from another window. Preserve that
+	// batch's validated evidence before backfilling candidates below.
+	if citations == nil {
+		citations = make(map[string][]string)
+	}
+	for _, ns := range newSlugs {
+		if ns.Slug != "" && ns.Name != "" {
+			for _, id := range ns.SourceChunks {
+				citations[ns.Slug] = appendUniqueString(citations[ns.Slug], id)
+			}
+		}
+	}
 	uncited := 0
 
 	for i := range entities {

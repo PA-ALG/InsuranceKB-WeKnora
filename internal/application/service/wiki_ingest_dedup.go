@@ -397,13 +397,15 @@ func appendUniqueString(values []string, value string) []string {
 // cross-batch identity claims, and same-result coalescing. mergeTargets maps
 // an extracted slug to a semantic/LLM merge destination and is not
 // authoritative. exactTargets maps an extracted slug to an existing same-title
-// page and may overwrite a provisional Redis claim.
+// page and may overwrite a provisional Redis claim. When supplied, slugMapping
+// records each original slug before same-result items are coalesced.
 func (s *wikiIngestService) stabilizeExtractedIdentities(
 	ctx context.Context,
 	kbID, pageType string,
 	items []extractedItem,
 	mergeTargets, exactTargets map[string]string,
 	batchCtx *WikiBatchContext,
+	slugMapping ...map[string]string,
 ) []extractedItem {
 	out := make([]extractedItem, 0, len(items))
 	bySlug := make(map[string]int, len(items))
@@ -436,6 +438,9 @@ func (s *wikiIngestService) stabilizeExtractedIdentities(
 			if identity != "" {
 				claimedByIdentity[identity] = item.Slug
 			}
+		}
+		if len(slugMapping) > 0 && slugMapping[0] != nil {
+			slugMapping[0][originalSlug] = item.Slug
 		}
 		if idx, ok := bySlug[item.Slug]; ok {
 			out[idx] = mergeExtractedIdentity(out[idx], item)

@@ -1250,24 +1250,21 @@ func (s *wikiIngestService) mapOneDocument(
 		return nil, nil, nil
 	}
 
-	content := reconstructEnrichedContent(ctx, s.chunkRepo, payload.TenantID, chunks)
-	rawRuneCount := len([]rune(content))
-	if len([]rune(content)) > maxContentForWiki {
-		content = string([]rune(content)[:maxContentForWiki])
-	}
-	logger.Infof(ctx, "wiki ingest: doc %s chunks=%d content_len(raw=%d,truncated=%d)", knowledgeID, len(chunks), rawRuneCount, len([]rune(content)))
-
-	// Refuse to run LLM-based extraction when the document carries no real
-	// text — e.g. a scanned PDF whose pages were converted to images but where
-	// VLM OCR produced nothing usable. Without this guard the LLM would have
-	// only image markup left and would happily fabricate entities/concepts.
-	if !hasSufficientTextContent(content) {
-		logger.Warnf(ctx,
-			"wiki ingest: doc %s has insufficient text content after stripping image markup (raw_len=%d), skipping LLM extraction",
-			knowledgeID, rawRuneCount,
-		)
+	windows, fullContent := prepareWikiDocumentWindows(ctx, s.chunkRepo, payload.TenantID, chunks)
+	// Retain the whole-document anti-hallucination threshold. Individual
+	// text-bearing tail windows may be shorter than this minimum.
+	if !hasSufficientTextContent(fullContent) {
+		logger.Warnf(ctx, "wiki ingest: doc %s has insufficient text content (raw_len=%d), skipping LLM extraction", knowledgeID, utf8.RuneCountInString(fullContent))
 		s.tracker().SkipSpan(ctx, wikiSpan, "insufficient_text_content")
 		return nil, nil, nil
+	}
+	content := windows[0].content // Stale retraction uses the actual first window.
+	summaryInput := content
+	for _, window := range windows {
+		if realTextRuneCount(window.content) > 0 {
+			summaryInput = window.content
+			break
+		}
 	}
 
 	docTitle := knowledgeID
@@ -1275,7 +1272,7 @@ func (s *wikiIngestService) mapOneDocument(
 		docTitle = kn.Title
 	} else {
 		for _, ch := range chunks {
-			if ch.Content != "" {
+			if ch != nil && ch.Content != "" {
 				lines := strings.SplitN(ch.Content, "\n", 2)
 				if len(lines) > 0 && len(lines[0]) > 0 && len(lines[0]) < 200 {
 					docTitle = strings.TrimPrefix(strings.TrimSpace(lines[0]), "# ")
@@ -1305,7 +1302,7 @@ func (s *wikiIngestService) mapOneDocument(
 		"content_chars": utf8.RuneCountInString(content),
 		"old_pages":     len(oldPageSlugs),
 	})
-	extractedEntities, extractedConcepts, slugItems, err = s.extractCandidateSlugs(ctx, chatModel, payload.KnowledgeBaseID, content, lang, oldPageSlugs, batchCtx)
+	extractedEntities, extractedConcepts, slugItems, err = s.extractCandidateSlugs(ctx, chatModel, payload.KnowledgeBaseID, windows, lang, oldPageSlugs, batchCtx)
 	if err != nil {
 		s.tracker().FailSpan(ctx, extractSpan, wikiFailureOutcome(err), err.Error(), nil)
 		s.tracker().FailSpan(ctx, wikiSpan, wikiFailureOutcome(err), err.Error(), nil)
@@ -1359,7 +1356,7 @@ func (s *wikiIngestService) mapOneDocument(
 	// parent — their subspans will visually overlap in the trace view,
 	// which correctly reflects their wall-clock concurrency.
 	summarySpan := s.tracker().BeginSubSpan(ctx, wikiSpan, "postprocess.wiki.summary", types.SpanKindSubSpan, types.JSONMap{
-		"content_chars":   utf8.RuneCountInString(content),
+		"content_chars":   utf8.RuneCountInString(summaryInput),
 		"extracted_slugs": len(summaryExtractedPages),
 	})
 	classifySpan := s.tracker().BeginSubSpan(ctx, wikiSpan, "postprocess.wiki.classify", types.SpanKindSubSpan, types.JSONMap{
@@ -1372,7 +1369,7 @@ func (s *wikiIngestService) mapOneDocument(
 	go func() {
 		defer wg.Done()
 		summaryContent, summaryErr = s.generateWithTemplate(ctx, chatModel, agent.WikiSummaryPrompt, map[string]string{
-			"Content":            content,
+			"Content":            summaryInput,
 			"Language":           lang,
 			"ExtractedSlugs":     slugListing,
 			"CustomInstructions": batchCtx.ContentInstructions,
@@ -1392,7 +1389,7 @@ func (s *wikiIngestService) mapOneDocument(
 	go func() {
 		defer wg.Done()
 		candidatesXML := renderCandidateSlugsXML(extractedEntities, extractedConcepts)
-		outcome := s.classifyChunkCitations(ctx, chatModel, candidatesXML, chunks, lang, batchCtx, classifySpan)
+		outcome := s.classifyChunkCitations(ctx, chatModel, candidatesXML, chunks, lang, batchCtx, classifySpan, windows)
 		citations, newSlugs, batchCount = outcome.Citations, outcome.NewSlugs, len(outcome.BatchErrors)
 		citationErr = outcome.Err()
 		if citationErr != nil {
@@ -1687,7 +1684,7 @@ func (s *wikiIngestService) extractEntitiesAndConceptsNoUpsert(
 	// lands the dedup pre-filter degrades to "no dedup" which is the
 	// safe default — the LLM merge call simply doesn't get a candidate
 	// list and the items pass through unchanged.
-	result.Entities, result.Concepts = s.deduplicateExtractedBatch(
+	result.Entities, result.Concepts, _ = s.deduplicateExtractedBatch(
 		ctx, chatModel, kbID, result.Entities, result.Concepts, batchCtx,
 	)
 
