@@ -43,8 +43,28 @@ _POWERS = {"十": 10, "百": 100, "千": 1000}
 _LARGE = (("亿", 10**8), ("万", 10**4))
 
 
+# Whitespace is dropped only where it splits a number from its unit (15 日, 3 个月, 10 万元);
+# elsewhere it stays a boundary, so a list number "1. 20年" is not read as 1.20年.
+_NUMBER_THEN_UNIT_SPACE = re.compile(
+    r"(?<=[0-9零〇一二两三四五六七八九十百千万亿])\s+(?=个月|周岁|日|天|月|年|岁|%|元|次|倍|万|亿)"
+)
+_SPACE = re.compile(r"\s+")
+# A Chinese digit next to an Arabic one belongs to a label (计划三5000元, 第一2万元): no number
+# mixes the two, so the run is split there. 5千 and 1.5万 keep their powers.
+_MIXED_DIGITS = re.compile(
+    r"(?<=[零〇一二两三四五六七八九])(?=[0-9])|(?<=[0-9])(?=[零〇一二两三四五六七八九])"
+)
+
+
 def _normalized(text: str) -> str:
-    return _THOUSANDS.sub("", "".join(unicodedata.normalize("NFKC", text).split()))
+    text = _THOUSANDS.sub("", unicodedata.normalize("NFKC", text))
+    text = _SPACE.sub(" ", _NUMBER_THEN_UNIT_SPACE.sub("", text))
+    return _MIXED_DIGITS.sub("|", text)
+
+
+def _compact(text: str) -> str:
+    """NFKC without any whitespace, for comparing names."""
+    return "".join(unicodedata.normalize("NFKC", text).split())
 
 
 def _below_ten_thousand(run: str) -> Decimal | None:
@@ -105,13 +125,17 @@ def number_tokens(text: str) -> set[str]:
     normalized = _normalized(text)
     tokens, previous_end = set(), -1
     for match in _TOKEN.finditer(normalized):
-        start = match.start()
-        hyphen = start - 1
+        hyphen = match.start() - 1
+        while hyphen >= 0 and normalized[hyphen] == " ":
+            hyphen -= 1
+        left = hyphen - 1  # the range's left end, spaces skipped
+        while left >= 0 and normalized[left] == " ":
+            left -= 1
         sign = match["sign"] is not None or (
             hyphen >= 0
             and normalized[hyphen] in _HYPHENS
-            and hyphen != previous_end
-            and not (hyphen >= 1 and _NUMERAL_CHAR.fullmatch(normalized[hyphen - 1]))
+            and left + 1 != previous_end
+            and not (left >= 0 and _NUMERAL_CHAR.fullmatch(normalized[left]))
         )
         if match["percent"] is not None:
             tokens.add(_token(sign, match["percent"], "%"))
@@ -142,8 +166,8 @@ def check_concept(draft: ConceptDraft, concept: ConceptInput, names: Collection[
         problems.append("EXPLANATION_LENGTH")
     if any(not _within(statement.text, STATEMENT_MAX) for statement in draft.statements):
         problems.append("STATEMENT_LENGTH")
-    general = _normalized(draft.definition + "\n" + draft.explanation)
-    if any(name and name in general for name in map(_normalized, names)):
+    general = _compact(draft.definition + "\n" + draft.explanation)
+    if any(name and name in general for name in map(_compact, names)):
         problems.append("PRODUCT_NAMED")
     values = {fact.slug: number_tokens(_value_text(fact.value)) for fact in concept.facts}
     if any(ref not in values for statement in draft.statements for ref in statement.refs):
