@@ -15,6 +15,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
+	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -44,7 +45,7 @@ func Register(container *dig.Container) error {
 	if err := container.Provide(func(spaces Spaces) source.CaptureScope { return spaces }); err != nil {
 		return err
 	}
-	return container.Provide(func(
+	if err := container.Provide(func(
 		cfg *config.Config, db *gorm.DB, knowledge interfaces.KnowledgeRepository,
 		spaces Spaces, firstParse *appservice.G3FirstParseStore,
 	) (*release.Service, error) {
@@ -54,6 +55,14 @@ func Register(container *dig.Container) error {
 		}
 		pages := enterprisePages(spaces, knowledge, firstParse)
 		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, pages, reservedScopes(cfg)...)
+	}); err != nil {
+		return err
+	}
+	return container.Provide(func(db *gorm.DB, spaces Spaces, releases *release.Service) *spotcheck.Service {
+		if releases == nil {
+			return nil
+		}
+		return spotcheck.NewService(New(db, spaces), releases)
 	})
 }
 
