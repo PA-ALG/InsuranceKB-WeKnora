@@ -7494,6 +7494,11 @@ export default {
   },
   enterpriseKnowledge: {
     graph: {
+      "showAll": "모든 개념 표시",
+      "allMode": "모든 개념 표시: 켜짐",
+      "defaultMode": "모든 개념 표시: 꺼짐",
+      "hiddenCommon": "표시 중인 모든 상품에 명시된 개념 {count}개 숨김",
+      "located": "검색·지정한 개념 {count}개 표시",
       "title": "관계도",
       "back": "스페이스 홈",
       "description": "상품과 공통 개념 사이의 관계를 살펴보세요.",
@@ -7501,7 +7506,7 @@ export default {
       "search": "상품 또는 개념 이름 검색",
       "find": "찾기",
       "noMatch": "현재 필터에 일치하는 노드가 없습니다",
-      "counts": "상품 {products}개 · 개념 {concepts}개 · 관계 {edges}개",
+      "counts": "표시 중: 상품 {products}개 · 개념 {concepts}개 · 관계 {edges}개",
       "filter": "상품 그룹",
       "concept": "개념",
       "noGroups": "상품 그룹을 하나 이상 선택하세요",

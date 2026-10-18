@@ -7494,6 +7494,11 @@ export default {
   },
   enterpriseKnowledge: {
     graph: {
+      "showAll": "すべての概念を表示",
+      "allMode": "すべての概念を表示：オン",
+      "defaultMode": "すべての概念を表示：オフ",
+      "hiddenCommon": "表示中の全商品に記述がある概念を {count} 件非表示",
+      "located": "検索・指定した概念を {count} 件表示",
       "title": "関係図",
       "back": "スペースのホーム",
       "description": "商品と共通概念のつながりを確認できます。",
@@ -7501,7 +7506,7 @@ export default {
       "search": "商品名または概念名を検索",
       "find": "表示",
       "noMatch": "現在の絞り込み条件に一致するノードがありません",
-      "counts": "商品 {products} 件 · 概念 {concepts} 件 · 関係 {edges} 件",
+      "counts": "表示中：商品 {products} 件 · 概念 {concepts} 件 · 関係 {edges} 件",
       "filter": "商品グループ",
       "concept": "概念",
       "noGroups": "商品グループを1つ以上選択してください",

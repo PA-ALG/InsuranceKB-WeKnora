@@ -4,6 +4,10 @@
 .ek-graph-heading p { margin: 0; }
 .ek-graph-heading > .ek-meta-tag { flex-shrink: 0; }
 .ek-graph-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.ek-graph-all-concepts { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.ek-graph-all-concepts input { accent-color: var(--td-brand-color); }
+.ek-graph-all-concepts input:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 2px; }
+.ek-graph-counts { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 12px; }
 .ek-graph-search { display: flex; position: relative; gap: 8px; width: min(100%, 430px); }
 .ek-graph-search input { min-width: 0; flex: 1; border: 1px solid var(--td-border-level-2-color); border-radius: 6px; padding: 9px 12px; background: var(--td-bg-color-container); color: var(--td-text-color-primary); font: inherit; }
 .ek-graph-search input:focus-visible, .ek-graph-filters input:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 2px; }

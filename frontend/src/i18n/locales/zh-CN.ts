@@ -7496,6 +7496,11 @@ export default {
   },
   enterpriseKnowledge: {
     graph: {
+      "showAll": "显示全部概念",
+      "allMode": "显示全部概念：开",
+      "defaultMode": "显示全部概念：关",
+      "hiddenCommon": "已隐藏 {count} 个所有可见产品都陈述的概念",
+      "located": "已显示 {count} 个定位概念",
       "title": "关系图",
       "back": "空间首页",
       "description": "探索产品与跨产品概念之间的联系。",
@@ -7503,7 +7508,7 @@ export default {
       "search": "搜索产品或概念名称",
       "find": "定位",
       "noMatch": "当前筛选下没有匹配的节点",
-      "counts": "{products} 款产品 · {concepts} 个概念 · {edges} 条关系",
+      "counts": "当前可见 {products} 款产品 · {concepts} 个概念 · {edges} 条关系",
       "filter": "险种筛选",
       "concept": "概念",
       "noGroups": "请选择至少一个险种分组",

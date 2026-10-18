@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { EnterpriseError, readRelease, type Release } from './enterpriseApi'
 import { conceptView } from './conceptView'
 import { relationGraph, type GraphNode } from './graphView'
+import { graphDisplay } from './graphDisplay'
 import RelationGraphCanvas from './RelationGraphCanvas.vue'
 
 const props = defineProps<{ spaceId: string; releaseId?: string }>()
@@ -18,12 +19,9 @@ const groups = computed(() => [...new Map(products.value.map(node => [node.group
   .map(([key, title], index) => ({ key, title: title || t('enterpriseKnowledge.nav.other'), color: palette[index % palette.length]! })))
 const colors = computed(() => new Map(groups.value.map(group => [group.key, group.color])))
 const enabled = ref<string[]>([])
-const visible = computed(() => {
-  const ids = new Set(products.value.filter(node => enabled.value.includes(node.group)).map(node => node.id))
-  const edges = graph.value.edges.filter(edge => ids.has(edge.source))
-  edges.forEach(edge => ids.add(edge.target))
-  return { nodes: graph.value.nodes.filter(node => ids.has(node.id)), edges }
-})
+const showAll = ref(false), locatedId = ref('')
+const display = computed(() => graphDisplay(graph.value, enabled.value, showAll.value, locatedId.value))
+const visible = computed(() => display.value.visible)
 const selectedId = ref('')
 const selected = computed(() => visible.value.nodes.find(node => node.id === selectedId.value))
 const concept = computed(() => selected.value?.kind === 'concept' && release.value
@@ -34,7 +32,7 @@ const query = ref(''), searched = ref(false)
 const searchId = useId(), detailTitleId = useId()
 const matches = computed(() => {
   const term = query.value.trim().toLocaleLowerCase()
-  return term ? visible.value.nodes.filter(node => node.title.toLocaleLowerCase().includes(term)) : []
+  return term ? display.value.available.nodes.filter(node => node.title.toLocaleLowerCase().includes(term)) : []
 })
 const matchingResults = computed(() => matches.value.slice(0, 8))
 const pin = computed(() => ({ release: release.value!.id }))
@@ -43,12 +41,21 @@ const detailTarget = computed(() => selected.value?.kind === 'product'
   : { name: 'enterpriseConcept', params: { spaceId: props.spaceId, conceptKey: selected.value?.id.slice('concept:'.length) }, query: pin.value })
 
 async function select(node: GraphNode, locate = false) {
+  if (locate) locatedId.value = node.kind === 'concept' ? node.id : ''
   selectedId.value = node.id
   searched.value = false
-  if (locate) canvas.value?.locateNode(node.id)
+  // Hidden concepts must enter the canvas before its centering method can find them.
   await nextTick()
+  if (locate) canvas.value?.locateNode(node.id)
   closeButton.value?.focus()
 }
+async function locateNode(id: string): Promise<boolean> {
+  const node = display.value.available.nodes.find(node => node.id === id)
+  if (!node) return false
+  await select(node, true)
+  return true
+}
+defineExpose({ locateNode })
 function search() {
   searched.value = true
   const match = matches.value[0]
@@ -61,10 +68,14 @@ async function close() {
   canvas.value?.focusNode(id)
 }
 watch(visible, () => { if (!selected.value) selectedId.value = '' })
+// A location exception survives closing details so focus can return to that node. Explicit
+// filter changes reset the exception and recompute against the newly visible products.
+watch([enabled, showAll], () => { locatedId.value = '' }, { flush: 'sync' })
 let generation = 0
 async function load() {
   const current = ++generation
   state.value = 'loading'; release.value = null; selectedId.value = ''; query.value = ''; searched.value = false
+  showAll.value = false; locatedId.value = ''
   try {
     const loaded = props.releaseId ? await readRelease(props.spaceId, props.releaseId) : await readRelease(props.spaceId)
     if (current !== generation) return
@@ -109,9 +120,16 @@ onUnmounted(() => { generation++ })
             <li v-if="!matches.length" role="status">{{ t('enterpriseKnowledge.graph.noMatch') }}</li>
           </ul>
         </form>
-        <span class="ek-page__meta" aria-live="polite">{{ t('enterpriseKnowledge.graph.counts', {
-          products: visible.nodes.filter(node => node.kind === 'product').length,
+        <label class="ek-graph-all-concepts" data-graph-all-concepts>
+          <input v-model="showAll" type="checkbox" role="switch" :aria-checked="showAll" />{{ t('enterpriseKnowledge.graph.showAll') }}
+        </label>
+      </div>
+      <div class="ek-page__meta ek-graph-counts" data-graph-counts aria-live="polite">
+        <span>{{ showAll ? t('enterpriseKnowledge.graph.allMode') : t('enterpriseKnowledge.graph.defaultMode') }}</span>
+        <span>{{ t('enterpriseKnowledge.graph.counts', { products: visible.nodes.filter(node => node.kind === 'product').length,
           concepts: visible.nodes.filter(node => node.kind === 'concept').length, edges: visible.edges.length }) }}</span>
+        <span>{{ t('enterpriseKnowledge.graph.hiddenCommon', { count: display.hiddenConceptCount }) }}</span>
+        <span v-if="display.revealedConceptCount">{{ t('enterpriseKnowledge.graph.located', { count: display.revealedConceptCount }) }}</span>
       </div>
       <fieldset class="ek-graph-filters">
         <legend>{{ t('enterpriseKnowledge.graph.filter') }}</legend>

@@ -7494,6 +7494,11 @@ export default {
   },
   enterpriseKnowledge: {
     graph: {
+      "showAll": "Show all concepts",
+      "allMode": "Show all concepts: on",
+      "defaultMode": "Show all concepts: off",
+      "hiddenCommon": "Hidden: {count} concepts stated by every visible product",
+      "located": "Revealed by location: {count} concepts",
       "title": "Relationship graph",
       "back": "Space home",
       "description": "Explore connections between products and shared concepts.",
@@ -7501,7 +7506,7 @@ export default {
       "search": "Search product or concept names",
       "find": "Locate",
       "noMatch": "No matching nodes in the current filter",
-      "counts": "{products} products · {concepts} concepts · {edges} relationships",
+      "counts": "Visible: {products} products · {concepts} concepts · {edges} relationships",
       "filter": "Product groups",
       "concept": "Concept",
       "noGroups": "Select at least one product group",
