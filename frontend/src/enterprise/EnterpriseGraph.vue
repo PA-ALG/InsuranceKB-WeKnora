@@ -22,6 +22,18 @@ const enabled = ref<string[]>([])
 const showAll = ref(false), centerId = ref('')
 const display = computed(() => graphDisplay(graph.value, enabled.value, showAll.value, centerId.value))
 const visible = computed(() => display.value.visible)
+const countSummary = computed(() => {
+  const groups = visible.value.nodes.filter(node => node.kind === 'group').length
+  const products = visible.value.nodes.filter(node => node.kind === 'product').length
+  const concepts = visible.value.nodes.filter(node => node.kind === 'concept').length
+  const edges = visible.value.edges.length
+  return [
+    groups && t('enterpriseKnowledge.graph.groupCount', { count: groups }),
+    products && t('enterpriseKnowledge.graph.productCount', { count: products }),
+    concepts && t('enterpriseKnowledge.graph.conceptCount', { count: concepts }),
+    edges && t('enterpriseKnowledge.graph.edgeCount', { count: edges }),
+  ].filter(Boolean).join(' · ')
+})
 const selectedId = ref('')
 const selected = computed(() => display.value.available.nodes.find(node => node.id === selectedId.value))
 const center = computed(() => display.value.available.nodes.find(node => node.id === centerId.value))
@@ -135,8 +147,7 @@ onUnmounted(() => { generation++ })
       </div>
       <div class="ek-page__meta ek-graph-counts" data-graph-counts aria-live="polite">
         <span>{{ showAll ? t('enterpriseKnowledge.graph.allMode') : center ? t('enterpriseKnowledge.graph.neighbors', { name: center.title }) : t('enterpriseKnowledge.graph.overview') }}</span>
-        <span>{{ t('enterpriseKnowledge.graph.counts', { groups: visible.nodes.filter(node => node.kind === 'group').length, products: visible.nodes.filter(node => node.kind === 'product').length,
-          concepts: visible.nodes.filter(node => node.kind === 'concept').length, edges: visible.edges.length }) }}</span>
+        <span>{{ countSummary }}</span>
       </div>
       <fieldset class="ek-graph-filters">
         <legend>{{ t('enterpriseKnowledge.graph.filter') }}</legend>

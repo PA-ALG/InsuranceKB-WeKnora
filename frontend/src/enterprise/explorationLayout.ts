@@ -9,7 +9,7 @@ export function explorationLayout(graph: DisplayGraph, mode: GraphMode, centerId
       const products = nodes.filter(node => node.kind === 'product' && node.group === group.group)
       const rows = Math.ceil(products.length / 3)
       group.x = -360; group.y = top + (rows - 1) * 48
-      products.forEach((node, index) => { node.x = -100 + (index % 3) * 220; node.y = top + Math.floor(index / 3) * 96 })
+      products.forEach((node, index) => { node.x = -100 + (index % 3) * 280; node.y = top + Math.floor(index / 3) * 96 })
       top += rows * 96 + 32
     }
   } else if (mode === 'neighbors') {

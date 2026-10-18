@@ -100,6 +100,27 @@ describe('exploration page', () => {
     expect(ids(view)).toEqual(['group:__other__', 'entity:X1'])
     expect(view.find('[data-graph-detail]').exists()).toBe(false)
   })
+  it('omits zero statistics in overview, both neighbor directions, full mode, an isolated product and empty filtering', async () => {
+    const view = await page(), counts = () => view.get('[data-graph-counts]').text()
+    expect(counts()).toContain('3 个险种 · 4 款产品 · 4 条关系')
+    expect(counts()).not.toContain('概念')
+    await view.vm.locateNode('entity:M1')
+    expect(counts()).toContain('1 款产品 · 2 个概念 · 2 条关系')
+    expect(counts()).not.toContain('险种')
+    await view.vm.locateNode('concept:cooling_off_period')
+    expect(counts()).toContain('3 款产品 · 1 个概念 · 3 条关系')
+    expect(counts()).not.toContain('险种')
+    await view.get('[data-graph-all-concepts] input').setValue(true)
+    expect(counts()).toContain('4 款产品 · 2 个概念 · 5 条关系')
+    expect(counts()).not.toContain('险种')
+    await view.get('[data-graph-all-concepts] input').setValue(false)
+    await view.vm.locateNode('entity:X1')
+    expect(counts()).toContain('1 款产品')
+    expect(counts()).not.toMatch(/险种|个概念|条关系/)
+    for (const input of view.findAll('[data-graph-group] input')) await input.setValue(false)
+    expect(view.get('[data-graph-counts]').findAll('span').at(-1)!.text()).toBe('')
+    expect(counts()).not.toMatch(/0\s*(个|款|条)/)
+  })
   it('discards pending old releases and resets the exploration state on navigation', async () => {
     const view = await page()
     await view.vm.locateNode('entity:M1')
@@ -118,16 +139,16 @@ describe('exploration page', () => {
 
 
 describe('exploration canvas', () => {
-  it('truncates product labels by Unicode character, preserves full titles, and thins labels only after zooming out', async () => {
+  it('wraps product labels by Unicode character, preserves full titles, and thins labels only after zooming out', async () => {
     const full = relationGraph(release())
     const product = full.nodes.find(node => node.id === 'entity:M1')!
-    product.title = '😀甲乙丙丁戊己庚辛壬癸子'
+    product.title = '😀甲乙丙丁戊己庚辛壬癸子丑'
     product.degree = 20
     const display = graphDisplay(full, ['pack_medical'], false, product.id)
     const view = mount(RelationGraphCanvas, { props: { graph: display.visible, mode: display.mode, centerId: product.id,
       selected: product.id, colors: new Map() }, global: { plugins: [createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } })] } })
     views.push(view)
-    expect(view.get('[data-graph-node="entity:M1"] text').text()).toBe('😀甲乙丙丁戊己庚辛壬…')
+    expect(view.findAll('[data-graph-node="entity:M1"] text tspan').map(line => line.text())).toEqual(['😀甲乙丙丁戊己庚辛壬癸子', '丑'])
     expect(view.get('[data-graph-node="entity:M1"] title').text()).toBe(product.title)
     expect(view.get('[data-graph-node="entity:M1"]').attributes('transform')).toBe('translate(0,0)')
     expect(view.findAll('[data-graph-node] text').every(node => node.attributes('opacity') === '1')).toBe(true)
@@ -136,6 +157,28 @@ describe('exploration canvas', () => {
     expect(view.get('[data-graph-node="entity:M1"] text').attributes('opacity')).toBe('1')
     await view.get('[data-graph-fit]').trigger('click')
     expect(view.findAll('[data-graph-node] text').every(node => node.attributes('opacity') === '1')).toBe(true)
+  })
+  it.each([
+    ['😀' + '甲'.repeat(11), ['😀' + '甲'.repeat(11)]],
+    ['甲'.repeat(12) + '乙', ['甲'.repeat(12), '乙']],
+    ['甲'.repeat(12) + '乙'.repeat(12), ['甲'.repeat(12), '乙'.repeat(12)]],
+    ['甲'.repeat(12) + '乙'.repeat(13), ['甲'.repeat(12), '乙'.repeat(11) + '…']],
+  ])('limits product %s to two lines of at most twelve characters in overview and outside the neighbor ring', (title, expected) => {
+    const full = relationGraph(release())
+    const product = full.nodes.find(node => node.id === 'entity:M1')!
+    product.title = title as string
+    for (const centerId of ['', 'concept:cooling_off_period']) {
+      const display = graphDisplay(full, ['pack_medical'], false, centerId)
+      const view = mount(RelationGraphCanvas, { props: { graph: display.visible, mode: display.mode, centerId,
+        colors: new Map() }, global: { plugins: [createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } })] } })
+      views.push(view)
+      const lines = view.findAll('[data-graph-node="entity:M1"] text tspan')
+      expect(lines.map(line => line.text())).toEqual(expected)
+      expect(lines.every(line => Array.from(line.text()).length <= 12)).toBe(true)
+      expect(view.get('[data-graph-node="entity:M1"] title').text()).toBe(title)
+      expect(new Set(lines.map(line => line.attributes('x'))).size).toBe(1)
+      if (lines.length === 2) expect(Number(lines[1]!.attributes('dy'))).toBeGreaterThan(0)
+    }
   })
   it('highlights product-to-group neighbors in overview without opening a detail for a group', async () => {
     const view = await page()

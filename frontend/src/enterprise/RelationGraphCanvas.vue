@@ -31,14 +31,19 @@ const labelScale = computed(() => Math.min(1, scale.value))
 const labelVisible = (node: DisplayNode) => (props.mode && props.mode !== 'all' && scale.value >= fittedScale.value * 0.75) || node.id === active.value || node.id === props.selected || scale.value >= 0.75
   || (node.degree > 0 && node.degree >= maxDegree.value * (scale.value < 0.45 ? 0.8 : 0.5))
 const title = (node: DisplayNode) => node.title || t('enterpriseKnowledge.nav.other')
-const shortTitle = (node: DisplayNode) => {
-  const characters = Array.from(title(node)), limit = node.kind === 'product' ? 10 : 18
-  return characters.length > limit ? characters.slice(0, limit).join('') + '…' : title(node)
+const labelLines = (node: DisplayNode) => {
+  const characters = Array.from(title(node))
+  if (node.kind !== 'product') return [characters.length > 18 ? characters.slice(0, 18).join('') + '…' : title(node)]
+  const first = characters.slice(0, 12).join('')
+  if (characters.length <= 12) return [first]
+  // The ellipsis occupies the last character slot only when the title exceeds two full lines.
+  return [first, characters.length > 24 ? characters.slice(12, 23).join('') + '…' : characters.slice(12).join('')]
 }
 const outsideLabel = (node: PositionedNode) => props.mode === 'neighbors' && node.id !== props.centerId
 const labelX = (node: PositionedNode) => node.kind === 'group' ? -nodeRadius(node) - 12 / labelScale.value
   : outsideLabel(node) ? (node.x < 0 ? -1 : 1) * (nodeRadius(node) + 10 / labelScale.value) : 0
-const labelY = (node: PositionedNode) => outsideLabel(node) || node.kind === 'group' ? 4 / labelScale.value : nodeRadius(node) + 23 / labelScale.value
+const labelY = (node: PositionedNode) => outsideLabel(node) || node.kind === 'group'
+  ? (4 - (labelLines(node).length - 1) * 9) / labelScale.value : nodeRadius(node) + 23 / labelScale.value
 const labelAnchor = (node: PositionedNode) => node.kind === 'group' || (outsideLabel(node) && node.x < 0) ? 'end'
   : outsideLabel(node) ? 'start' : 'middle'
 const interacted = ref(false)
@@ -58,7 +63,8 @@ function fit() {
     return
   }
   const left = Math.min(...xs) - 180, right = Math.max(...xs) + 120
-  const top = Math.min(...ys) - 55, bottom = Math.max(...ys) + 70
+  // Overview products carry two lines below the node, including after fit shrinks the graph.
+  const top = Math.min(...ys) - 55, bottom = Math.max(...ys) + (props.mode === 'overview' ? 110 : 70)
   scale.value = Math.max(0.08, Math.min(1.5, width.value / (right - left), height.value / (bottom - top)))
   fittedScale.value = scale.value
   pan.value = { x: width.value / 2 - (left + right) / 2 * scale.value, y: height.value / 2 - (top + bottom) / 2 * scale.value }
@@ -185,7 +191,9 @@ onUnmounted(() => { cancelAnimationFrame(animation); observer?.disconnect(); dra
           <rect v-if="node.kind === 'concept'" class="ek-graph-node__shape ek-graph-node__concept" :x="-nodeRadius(node)" :y="-nodeRadius(node)"
             :width="nodeRadius(node) * 2" :height="nodeRadius(node) * 2" rx="5" />
           <text :x="labelX(node)" :y="labelY(node)" :style="{ fontSize: `${13 / labelScale}px` }" :text-anchor="labelAnchor(node)"
-            :opacity="labelVisible(node) ? 1 : 0" aria-hidden="true">{{ shortTitle(node) }}</text>
+            :opacity="labelVisible(node) ? 1 : 0" aria-hidden="true">
+            <tspan v-for="(line, index) in labelLines(node)" :key="index" :x="labelX(node)" :dy="index ? 18 / labelScale : 0">{{ line }}</tspan>
+          </text>
         </g>
       </g>
     </svg>
