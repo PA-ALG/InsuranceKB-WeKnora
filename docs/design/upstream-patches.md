@@ -69,3 +69,4 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `internal/router/router.go` | S3d-1 | 复用企业来源读取装配会话只读路由，按保存的调用租户解析 Space 并对 RAW/wiki KB 分别执行读权限守卫 | 部分（企业路由装配） | 上游提供企业会话读取模块与双 KB 权限装配扩展点后移除接缝 |
 | `frontend/src/stores/menu.ts` | S3d-3a | 侧栏增加"企业知识"入口（与知识库并列），文案走 `menu.enterpriseKnowledge`；侧栏菜单是固定数组，没有注册扩展点 | 部分（侧栏注册扩展点） | 上游提供侧栏菜单注册扩展点后改为在 enterprise 模块内注册并移除此行 |
 | `frontend/src/components/menu.vue` | S3d-3a | 企业知识入口的图标（复用知识库图标，所在页面高亮）、激活态与顶部分组；图标与分组在组件内写死 | 部分（侧栏注册扩展点） | 同上：上游侧栏支持注册图标、激活态与分组后移除 |
+| `internal/router/router.go` | RV4a | 在既有 enterprise 挂载处注入抽检服务，将 API Key / 会话读依赖传入项目包，并挂载要求 Wiki KB 编辑权限的会话结论路由；原路由无企业模块注册扩展点 | 部分（企业路由装配） | 上游提供企业模块与按 Space 的读写权限装配扩展点后移除此接缝 |

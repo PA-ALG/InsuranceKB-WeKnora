@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import unicodedata
-from typing import TYPE_CHECKING, Annotated, Any, Self
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -329,4 +329,33 @@ class NavigationProfile(ContractModel):
         keys = [domain.domain_key for domain in self.domains]
         if len(set(keys)) != len(keys):
             raise ValueError("domain keys must be unique")
+        return self
+
+
+class ConceptStatement(ContractModel):
+    text: NonBlank
+    refs: list[NonBlank] = Field(min_length=1)
+
+
+class ConceptSummary(ContractModel):
+    """Model-written reading aid for a field two or more entries state (S3e-3).
+
+    `based_on` holds the member digest of every claim the summary was written from, so a reader
+    can tell when one has changed since; each statement cites claims among them.
+    """
+
+    concept_key: NonBlank
+    title: NonBlank
+    definition: NonBlank
+    explanation: NonBlank
+    statements: list[ConceptStatement] = Field(min_length=1, max_length=6)
+    based_on: dict[NonBlank, Sha256] = Field(min_length=1)
+    origin: Literal["MODEL_GENERATED"]
+    model: NonBlank
+    prompt_version: NonBlank
+
+    @model_validator(mode="after")
+    def refs_are_in_the_basis(self) -> Self:
+        if any(ref not in self.based_on for item in self.statements for ref in item.refs):
+            raise ValueError("every statement reference must be among based_on")
         return self

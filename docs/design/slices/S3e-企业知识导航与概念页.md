@@ -149,6 +149,55 @@
   - 人工决定，理由写明是模型汇总；不撤下 Claim。
 - **预算**：deepseek-flash ≤ 40 次，可续跑，预算与账本同 compile_run。
 
+### 4.1 S3e-3 细则（验收依据）
+
+- **合同 `ConceptSummary`**（`contracts/knowledge.py`，导出为 `concept_summary.schema.json`）：
+  - 字段：
+    - `concept_key`、`title`、`definition`、`explanation`：均非空；
+    - `statements[{text, refs[≥1]}]`：1–6 条；
+    - `based_on{slug: sha256}`：非空；
+    - `origin` 固定为 `MODEL_GENERATED`；
+    - `model`、`prompt_version`。
+  - 每条 statement 的 `refs` 都必须在 `based_on` 中。
+- **概念输入 `concept_inputs(release)`**（`compilers/concepts/synthesis.py`）：
+  - 取被 ≥ 2 个条目陈述（present 或 absent_explicitly）的谓词，顺序同前端 `conceptKeys`。
+  - 每个概念：
+    - 来自 profile：标题、Schema 说明；
+    - 每个陈述了它的条目：条目名、险种（profile `display_name`）、状态、取值、Claim slug 与成员摘要。
+  - unknown 的 Claim 不进入输入。
+- **请求**：
+  - system 提示词说明任务与 JSON 格式：
+    - `definition` 用一句话给出面向读者的定义，不含抽取指令；
+    - `explanation` 写通用解释，不点名任何产品；
+    - `statements` 写跨产品汇总，每句列出所依据的 slug。
+  - user 是 JSON，内容为各概念的输入。
+  - 每次调用 `--per-call` 个概念，默认 2（质量优先）。
+- **解析**：
+  - 只接受 `{"concepts": [{"key", "definition", "explanation", "statements": [{"text", "refs"}]}]}`；
+  - 键与本批概念一一对应；
+  - 不符时整批记为 `CONCEPT_OUTPUT_INVALID`，不重试解析。
+- **确定性检查** `check_concept(draft, concept, release_names)`，返回问题码列表，空表示通过：
+  - `DEFINITION_LENGTH`（不超过 120 字）、`EXPLANATION_LENGTH`（不超过 400 字）、`STATEMENT_LENGTH`（每句不超过 200 字）；
+  - `PRODUCT_NAMED`：`definition` 或 `explanation` 中出现 Release 中任一条目的名称或编号；
+  - `REF_UNKNOWN`：引用了不属于该概念输入的 slug；
+  - `NUMBER_UNSUPPORTED`：statement 中"数字 + 单位"（日、天、个月、月、年、周岁、岁、%、％、元、万元、次、倍）在被引用的 Claim 取值中都找不到；比较前先做 NFKC 并去掉空白；
+  - `NUMBER_UNMATCHED_REF`：statement 含数字记号，而某个被引用 Claim 的取值里一个都不包含，防止"均为 15 日"挂上一条 20 日的产品；
+  - `STATEMENT_COUNT`：statement 少于 1 条或多于 6 条。
+  - 修订：原 §4 中"被引用产品须在句中点名"一条不再检查。前端在每句后列出被引用产品的链接，点名与否不影响可回验性；数字核对已经保证事实一致。
+- **重试**：未通过检查的概念单独再请求 1 次，把问题码作为提示附上，消耗预算。仍不通过的概念不发布，记入报告。
+- **运行与发布**（`compilers/concepts/run.py`）：
+
+  ```text
+  python -m insurance_harness.compilers.concepts.run --space S --stage concepts --stage-config F --run-root D [--max-sent N] [--per-call K] [--publish --reason TEXT]
+  ```
+
+  - 用 API Key 读取 Active Release。
+  - 断点续跑：已接受的响应按请求 sha256 保存，同一请求不重发。预算与账本沿用 `models/durable.py`（`--max-sent` 累计计数，运行目录加锁）。
+  - 写出：`concepts.json`，含通过检查的 `ConceptSummary`，`based_on` 取输入时的成员摘要；以及 `report.json`，含每个概念的问题码、发送次数与重试情况。
+  - 加 `--publish`：以 Active 为 base 提交只含 concept 成员的候选包（slug 为 `concept/<key>`，不带 removals），人工决定并激活，理由取自 `--reason`。
+  - 任何一步失败都打印一行 `{"stopped": <code>}` 并以 2 退出，输出中不含路径或密钥。
+- **新阶段**：`models/stages.json` 增加 `concepts`，模型与供应商同 `schema_fields`，`policy_version` 为 `concept-2026-10-18.1`。
+
 ## 5. 蓝图修订（§7.2，用户 2026-10-18 同意）
 
 原规则："模型补充的通用概念解释……出现具体产品事实即被确定性检查拦下"。修订为：

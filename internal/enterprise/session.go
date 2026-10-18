@@ -1,7 +1,6 @@
 package enterprise
 
 import (
-	"context"
 	"net/http"
 	"sort"
 	"strings"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
+	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
@@ -19,10 +19,11 @@ type SpaceDirectory interface {
 	KnowledgeBases(tenantID uint64, spaceID string) (rawKB, wikiKB string, ok bool)
 }
 
-// SessionDeps are the read-only collaborators of the browser routes.
+// SessionDeps supplies collaborators for browser reads and attributed spot-check verdicts.
 type SessionDeps struct {
 	Candidates *release.Service
 	Sources    *source.Service
+	SpotChecks *spotcheck.Service
 	Files      SourceFiles
 	Spaces     SpaceDirectory
 }
@@ -87,31 +88,10 @@ func MountSessionReads(r gin.IRouter, deps SessionDeps, viewGuards ...gin.Handle
 		}
 		c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"spaces": spaces}})
 	})
-	view := group.Group("/spaces/:space_id/view", func(c *gin.Context) {
-		if deps.Spaces == nil {
-			candidateUnavailable(c)
-			return
-		}
-		tenant, _ := SessionTenantID(c)
-		for _, id := range deps.Spaces.SpaceIDs(tenant) {
-			if id == c.Param("space_id") {
-				c.Next()
-				return
-			}
-		}
-		writeError(c, &release.Error{Code: release.ErrorReleaseNotFound, Detail: "Space was not found"})
-	})
-	view.Use(viewGuards...)
-	view.Use(func(c *gin.Context) {
-		v, _ := c.Get(sessionReadIdentityKey)
-		identity := v.(sessionReadIdentity)
-		// Keep grants and cancellation added by the guards; restore only the
-		// original authorization caller and the execution scope for these reads.
-		ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, identity.principal.TenantID)
-		c.Request = c.Request.WithContext(types.WithCaller(ctx, identity.caller))
-		c.Next()
-	})
+	view := sessionSpaceRoutes(group, deps.Spaces, viewGuards...)
 	view.GET("/releases/active", func(c *gin.Context) { readRelease(c, service, "") })
+	samples := sessionSpotCheckRoutes(group, deps, viewGuards...)
+	samples.GET("/samples", func(c *gin.Context) { listSamples(c, deps.SpotChecks.SpaceReadView(), true) })
 	view.GET("/releases/:release_id", func(c *gin.Context) { readRelease(c, service, c.Param("release_id")) })
 	spacesPath := strings.TrimSuffix(view.BasePath(), "/")
 	view.GET("/releases/:release_id/citation", func(c *gin.Context) {

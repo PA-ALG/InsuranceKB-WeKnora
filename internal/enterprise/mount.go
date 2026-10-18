@@ -14,6 +14,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
+	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
 	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -22,6 +23,7 @@ import (
 type Deps struct {
 	Candidates *release.Service
 	Sources    *source.Service
+	SpotChecks *spotcheck.Service
 	// Authorizer is the SAME registry attached to the authenticated API group.
 	Authorizer *middleware.APIKeyRouteAuthorizer
 	// Files opens cited original files; nil leaves the file route unavailable.
@@ -58,6 +60,8 @@ func Mount(r gin.IRouter, deps Deps) {
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/activations", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/active", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id", policy)
+		deps.Authorizer.Register(http.MethodPost, prefix+"/releases/:release_id/samples", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/samples", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/releases/:release_id/retirement", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/sources/:knowledge_id/pins", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id/citation", policy)
@@ -72,6 +76,8 @@ func Mount(r gin.IRouter, deps Deps) {
 	group.POST("/candidates/:candidate_id/activations", func(c *gin.Context) { activate(c, deps.Candidates) })
 	group.GET("/releases/active", func(c *gin.Context) { readRelease(c, deps.Candidates, "") })
 	group.GET("/releases/:release_id", func(c *gin.Context) { readRelease(c, deps.Candidates, c.Param("release_id")) })
+	group.POST("/releases/:release_id/samples", func(c *gin.Context) { submitSamples(c, deps.SpotChecks) })
+	group.GET("/samples", func(c *gin.Context) { listSamples(c, deps.SpotChecks, false) })
 	group.GET("/sources/:knowledge_id/attempts/:attempt/pages", func(c *gin.Context) { pages(c, deps.Sources) })
 	group.POST("/releases/:release_id/retirement", func(c *gin.Context) { retire(c, deps.Candidates) })
 	group.GET("/sources/:knowledge_id/pins", func(c *gin.Context) { sourcePins(c, deps.Candidates) })
@@ -293,7 +299,7 @@ func writeError(c *gin.Context, err error) {
 		status := http.StatusBadRequest
 		switch failure.Code {
 		case release.ErrorCandidateNotFound, release.ErrorDecisionNotFound, release.ErrorReleaseNotFound,
-			release.ErrorMemberNotFound, release.ErrorEvidenceNotFound:
+			release.ErrorMemberNotFound, release.ErrorEvidenceNotFound, spotcheck.ErrorSampleNotFound:
 			status = http.StatusNotFound
 		case release.ErrorEvidenceMismatch:
 			status = http.StatusConflict
@@ -307,7 +313,8 @@ func writeError(c *gin.Context, err error) {
 			status = http.StatusServiceUnavailable
 		case release.ErrorReleaseActive, release.ErrorSourceUnavailable:
 			status = http.StatusConflict
-		case release.ErrorRetirementInvalid, release.ErrorInvalidRequest:
+		case release.ErrorRetirementInvalid, release.ErrorInvalidRequest,
+			spotcheck.ErrorSampleInvalid, spotcheck.ErrorVerdictInvalid:
 			status = http.StatusBadRequest
 		}
 		c.AbortWithStatusJSON(status, gin.H{"success": false, "code": failure.Code, "error": failure.Detail})
