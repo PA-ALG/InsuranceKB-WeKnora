@@ -74,12 +74,12 @@ def sample(release: Release, base: Release | None, policy: SpotCheckPolicy) -> l
     claims = {m.logical_slug: _payload(m) for m in release.members if m.kind == "claim"}
     for pack, slugs in layers.items():
         rule = policy.for_pack(pack) if pack != UNASSIGNED else policy.default
-        # Without a pack no field list applies: an unassigned claim is always "unassigned/rest".
-        must_check = set(rule.must_check) if pack != UNASSIGNED else set()
-        must = sorted(s for s in slugs if claims[s].get("predicate") in must_check)
+        must = sorted(s for s in slugs if claims[s].get("predicate") in rule.must_check)
         rest = sorted(set(slugs) - set(must))
         wanted = max(rule.minimum - len(must), math.ceil(rule.rate * len(rest)))
         drawn = random.Random(f"{release.id}/{pack}").sample(rest, min(len(rest), wanted))
-        picks += [Pick(slug, f"{pack}/must") for slug in must]
+        # A claim of no pack keeps the default rule's selection but is always "unassigned/rest".
+        must_layer = f"{pack}/must" if pack != UNASSIGNED else f"{pack}/rest"
+        picks += [Pick(slug, must_layer) for slug in must]
         picks += [Pick(slug, f"{pack}/rest") for slug in drawn]
     return sorted(picks, key=lambda pick: pick.slug)

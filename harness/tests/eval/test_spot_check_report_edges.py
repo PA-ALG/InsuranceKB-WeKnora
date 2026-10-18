@@ -194,17 +194,24 @@ def test_a_resubmission_checks_the_release_and_base_it_read(
     assert posted == []
 
 
-def test_an_unassigned_claim_is_always_the_rest_layer() -> None:
+@pytest.mark.parametrize(("rate", "minimum"), [(0.0, 0), (0.0, 1), (0.5, 0), (1.0, 0)])
+def test_an_unassigned_claim_keeps_the_default_selection_as_the_rest_layer(
+    rate: float, minimum: int
+) -> None:
     from insurance_harness.catalog.spot_check import PackRule, SpotCheckPolicy
     from insurance_harness.review.spot_check import sample
 
-    rule = PackRule(rate=1.0, minimum=0, target=0.9, must_check=["risk"])
+    rule = PackRule(rate=rate, minimum=minimum, target=0.9, must_check=["risk"])
     policy = SpotCheckPolicy(version="t", default=rule, packs={})
-    claim = ReleaseMember(
-        kind="claim",
-        logical_slug="P9/risk",
-        member_digest="d" * 64,
-        payload={"subject_ref": "P9", "predicate": "risk", "review": {"mode": "machine"}},
-    )
-    picks = sample(Release(id="rel-1", epoch=1, members=[claim]), None, policy)
-    assert [(pick.slug, pick.stratum) for pick in picks] == [("P9/risk", "unassigned/rest")]
+    claims = [
+        ReleaseMember(
+            kind="claim",
+            logical_slug=f"P9/{field}",
+            member_digest="d" * 64,
+            payload={"subject_ref": "P9", "predicate": field, "review": {"mode": "machine"}},
+        )
+        for field in ("ordinary", "risk")
+    ]
+    picks = sample(Release(id="rel-1", epoch=1, members=claims), None, policy)
+    assert ("P9/risk", "unassigned/rest") in [(pick.slug, pick.stratum) for pick in picks]
+    assert {pick.stratum for pick in picks} == {"unassigned/rest"}
