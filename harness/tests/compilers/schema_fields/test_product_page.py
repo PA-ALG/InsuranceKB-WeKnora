@@ -89,12 +89,28 @@ def test_the_page_names_the_product_and_carries_its_packs_display_groups(tmp_pat
         "classification_labels": ["demo_class"],
         "owner_module": "harness/schema_fields",
     }
-    sections = entry()["profile"]["sections"]
+    # S3e: the profile also names its pack and carries each field's schema definition and category.
+    definitions = {field["field_key"]: field for field in entry()["pack"]["fields"]}
+    sections = [
+        {
+            **section,
+            "fields": [
+                {
+                    **field,
+                    "description": definitions[field["field_key"]].get("description"),
+                    "schema_category": definitions[field["field_key"]].get("schema_category"),
+                }
+                for field in section["fields"]
+            ],
+        }
+        for section in entry()["profile"]["sections"]
+    ]
     assert profile == {
         "profile_id": "profile_pack_demo",
         "profile_version": "1.0.0",
         "profile_sha256": "cd" * 32,
         "schema_pack_id": "pack_demo",
+        "display_name": "演示险",
         "classification_labels": ["demo_class"],
         "sections": sections,
     }
