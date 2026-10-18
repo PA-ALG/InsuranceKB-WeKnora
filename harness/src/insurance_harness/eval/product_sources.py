@@ -61,16 +61,43 @@ def source_pages(directory: Path) -> list[PageText]:
     return pages
 
 
+# Packs of products outside Golden, ruled by the filed product type (S5a); versioned data.
+_PRODUCT_PACKS = "dataset/product_packs.json"
+
+
+def _data_file_pack(repo: Path, product_id: str) -> str | None:
+    path = repo / _PRODUCT_PACKS
+    if not path.is_file():
+        return None
+    data = _json(path)
+    packs = data.get("packs")
+    version = data.get("version")
+    if (
+        not isinstance(version, str)
+        or not version.strip()
+        or not isinstance(packs, dict)
+        or not all(isinstance(k, str) and isinstance(v, str) and v for k, v in packs.items())
+    ):
+        raise ValueError("product pack declarations are malformed")
+    value = packs.get(product_id)
+    return value if isinstance(value, str) else None
+
+
 def declared_pack(repo: Path, product_id: str, pack_id: str | None = None) -> str:
     if pack_id is not None:
         return pack_id
+    declared = _data_file_pack(repo, product_id)
     for manifest in _MANIFESTS:
         if not (repo / manifest).is_file():
             continue
         metadata = _json(repo / manifest).get("products", {}).get(product_id, {})
         value = metadata.get("pack_id") if isinstance(metadata, dict) else None
         if isinstance(value, str):
+            if declared is not None and declared != value:
+                raise ValueError("pack declarations disagree")
             return value
+    if declared is not None:
+        return declared
     raise ValueError("pack is not declared; supply --pack")
 
 
