@@ -110,6 +110,11 @@
   - 概念页：`concept.definition`"字段定义"、`concept.summary`"模型汇总（依据各产品原文）"、`concept.stale`"汇总基于较早版本"、`concept.related`"同类概念"、`concept.notFound`"该版本中没有这个概念"、`concept.failed`"概念加载失败"；
   - 表头：`concept.columns.group`"险种"、`concept.columns.product`"产品"、`concept.columns.summary`"摘要"、`concept.columns.sources`"出处"；
   - 模型说明的标签沿用 `origin.generated`"模型补充"。
+- **审核补充（PR #218，2026-10-18，Claude 用真实数据渲染后提出）**：
+  - **字段定义的来源**：154 个 Schema 字段说明中有 28 个混有抽取指令（如"只允许从正式条款中抽取"），不宜原样展示。
+    - 概念页的"字段定义"优先取 `concept` 成员的 `definition`，由 S3e-3 生成：依据 Schema 说明改写成面向读者的一句定义，去掉抽取指令，并归在"模型补充"的标注之下；
+    - 没有 `concept` 成员时，才显示 profile 中的字段说明。
+  - **对照表的行序**：先按导航分组顺序，同组内再按条目成员顺序，让同一险种的产品排在一起；不在任何分组的条目排在最后。
 - **S3d-3a 验收修正**：Space 页也会列出概念链接，所以 `enterprisePages.spec.ts` 中 Space 页那条用例只核对条目链接，其余断言不变。
 
 ## 4. 概念说明生成（S3e-3，Harness，真实调用）
