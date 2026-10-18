@@ -7493,6 +7493,31 @@ export default {
     noSessions: '대화가 없습니다'
   },
   enterpriseKnowledge: {
+    nav: {
+      "other": "기타",
+      "concepts": "개념",
+      "navigation": "지식 탐색",
+      "chooseEntry": "탐색에서 항목을 선택하거나 개념을 열어 상품을 비교하세요.",
+      "expandEntry": "{name} 필드 펼치기",
+      "collapseEntry": "{name} 필드 접기",
+      "noFields": "필드가 없습니다",
+      "noConcepts": "이 릴리스에 공통 개념이 없습니다"
+    },
+    concept: {
+      "definition": "필드 정의",
+      "summary": "모델 요약 (각 상품 원문 기준)",
+      "stale": "이전 버전에 기반한 요약",
+      "related": "같은 분류의 개념",
+      "notFound": "이 릴리스에 해당 개념이 없습니다",
+      "failed": "개념을 불러오지 못했습니다",
+      "comparison": "상품 비교",
+      "columns": {
+        "group": "분류",
+        "product": "상품",
+        "summary": "요약",
+        "sources": "출처"
+      }
+    },
     title: '기업 지식',
     loading: '불러오는 중…',
     retry: '다시 시도',

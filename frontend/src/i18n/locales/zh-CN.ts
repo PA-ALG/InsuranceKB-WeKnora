@@ -7495,6 +7495,31 @@ export default {
     noSessions: '暂无对话'
   },
   enterpriseKnowledge: {
+    nav: {
+      "other": "其他",
+      "concepts": "概念",
+      "navigation": "知识导航",
+      "chooseEntry": "从左侧导航选择条目，或切换到概念查看跨产品对照。",
+      "expandEntry": "展开{name}的字段",
+      "collapseEntry": "收起{name}的字段",
+      "noFields": "暂无字段",
+      "noConcepts": "该版本中暂无跨条目概念"
+    },
+    concept: {
+      "definition": "字段定义",
+      "summary": "模型汇总（依据各产品原文）",
+      "stale": "汇总基于较早版本",
+      "related": "同类概念",
+      "notFound": "该版本中没有这个概念",
+      "failed": "概念加载失败",
+      "comparison": "产品对照",
+      "columns": {
+        "group": "险种",
+        "product": "产品",
+        "summary": "摘要",
+        "sources": "出处"
+      }
+    },
     title: '企业知识',
     loading: '正在加载…',
     retry: '重试',
