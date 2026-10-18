@@ -71,3 +71,5 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/components/menu.vue` | S3d-3a | 企业知识入口的图标（复用知识库图标，所在页面高亮）、激活态与顶部分组；图标与分组在组件内写死 | 部分（侧栏注册扩展点） | 同上：上游侧栏支持注册图标、激活态与分组后移除 |
 | `internal/router/router.go` | RV4a | 在既有 enterprise 挂载处注入抽检服务，将 API Key / 会话读依赖传入项目包，并挂载要求 Wiki KB 编辑权限的会话结论路由；原路由无企业模块注册扩展点 | 部分（企业路由装配） | 上游提供企业模块与按 Space 的读写权限装配扩展点后移除此接缝 |
 | `internal/application/service/wiki_ingest.go`、`internal/application/service/wiki_ingest_batch.go`、`internal/application/service/wiki_ingest_cite.go`、`internal/application/service/wiki_ingest_dedup.go` | S6a | 长文档候选概念只读前 32k、输出截断被当作解析失败；原生窗口、引用与身份稳定化在这些文件内，无可替代扩展点 | 是 | 上游对长文档分段处理候选概念并检查 finish_reason 后撤回 |
+| `frontend/src/router/index.ts` | S3g | 注册企业知识关系图路由与 pinned Release 参数；路由表无企业页面注册扩展点，图数据及交互留在 enterprise 自有目录 | 部分（页面注册扩展点） | 上游支持自有页面路由注册后移除接缝 |
+| `frontend/src/i18n/locales/zh-CN.ts`、`frontend/src/i18n/locales/en-US.ts`、`frontend/src/i18n/locales/ja-JP.ts`、`frontend/src/i18n/locales/ko-KR.ts`、`frontend/src/i18n/locales/ru-RU.ts` | S3g | 添加企业关系图五语言文案；沿用已登记的集中式语言包加载，无独立模块语言包扩展点 | 部分（语言包注册） | 上游提供模块语言包注册后迁入 enterprise 并移除接缝 |

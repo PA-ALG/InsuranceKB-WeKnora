@@ -69,6 +69,7 @@ onUnmounted(() => { generation++ })
           <div class="ek-home__heading">
             <h1 class="ek-page__title" data-space-title>{{ home.title || t('enterpriseKnowledge.title') }}</h1>
             <span class="ek-meta-tag" data-space-version :title="spaceId">{{ t('enterpriseKnowledge.home.version', { epoch: release.epoch }) }}</span>
+            <RouterLink class="ek-home__graph-link" :to="{ name: 'enterpriseGraph', params: { spaceId }, query: { release: release.id } }">{{ t('enterpriseKnowledge.graph.title') }} →</RouterLink>
           </div>
           <p class="ek-page__meta" data-space-counts>{{ t('enterpriseKnowledge.home.counts', { products: home.productCount, concepts: home.concepts.length }) }}</p>
         </header>
