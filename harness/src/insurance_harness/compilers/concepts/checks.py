@@ -6,10 +6,10 @@ holding none of them, so "both are 15 days" cannot cite a 20-day product. Text i
 NFKC with whitespace and thousands separators removed.
 
 A number is read whole, never by a suffix: Arabic or Chinese numerals with 万, 亿 and 点 as one
-run (so 一万五千元 is 15000元, not 5000元), with its minus sign (负 or -), and 百分之 as a
-percentage. Both sides are read to their value, so 十五日 and 15日, or 10万元 and 100000元, are
-the same fact. A run that cannot be read, or is longer than any amount, stays as written and so
-matches only the same writing: it fails closed.
+run (so 一万五千元 is 15000元, not 5000元), with its minus sign (负, or a hyphen that does not
+join a range), and 百分之 as a percentage. Both sides are read to their value, so 十五日 and
+15日, or 10万元 and 100000元, are the same fact. A run that cannot be read, or is longer than
+any amount, stays as written and so matches only the same writing: it fails closed.
 """
 
 from __future__ import annotations
@@ -25,12 +25,14 @@ DEFINITION_MAX, EXPLANATION_MAX, STATEMENT_MAX = 120, 400, 200
 STATEMENTS = range(1, 7)
 
 _NUMERAL = "0-9.零〇一二两三四五六七八九十百千万亿点"
-# A minus sign belongs to the number it opens; after a numeral a hyphen is a range (18-65周岁).
-_SIGN = "(?P<sign>负|-|−)?"
-# Longer units first, so 个月 and 周岁 are not read as 月 and 岁; a run starts at its first numeral.
+_UNITS = "个月|周岁|日|天|月|年|岁|%|元|次|倍"  # longer first: 个月 and 周岁 are not 月 and 岁
+# A minus sign belongs to the number it opens. A hyphen right after a numeral or a unit joins a
+# range instead (18-65周岁, 18周岁-65周岁, 5000元-1万元); 负 is always a sign.
+_SIGN = r"(?P<sign>负|(?<![0-9.零〇一二两三四五六七八九十百千万亿点日天月年岁%元次倍])[-−])?"
+# A run starts at its first numeral, so no number is read by a suffix.
 _TOKEN = re.compile(
     rf"(?<![{_NUMERAL}]){_SIGN}(?:百分之(?P<percent>[{_NUMERAL}]+)"
-    rf"|(?P<number>[{_NUMERAL}]+)(?P<unit>个月|周岁|日|天|月|年|岁|%|元|次|倍))"
+    rf"|(?P<number>[{_NUMERAL}]+)(?P<unit>{_UNITS}))"
 )
 _LONGEST_RUN = 32  # longer runs are not read (they stay as written), which also bounds recursion
 _THOUSANDS = re.compile(r"(?<=[0-9]),(?=[0-9]{3})")

@@ -2,7 +2,8 @@
 
 A number is read whole with its sign, never by a suffix, so a statement cannot pass on the tail of
 a larger or fractional number or on the opposite sign; equal values written differently still
-match; an unreadable or overlong run fails closed without failing the check (R1, R3).
+match, ranges included; an unreadable or overlong run fails closed without failing the
+check (R1, R3, R4).
 """
 
 from __future__ import annotations
@@ -37,6 +38,9 @@ from insurance_harness.compilers.concepts.synthesis import (
         ("负三点五%", {"-3.5%"}),
         ("为-15000元", {"-15000元"}),
         ("18-65周岁", {"65周岁"}),
+        ("18周岁-65周岁", {"18周岁", "65周岁"}),
+        ("18周岁 - 65周岁", {"18周岁", "65周岁"}),
+        ("5000元-1万元", {"5000元", "10000元"}),
         ("缴费期满", set()),
     ],
 )
@@ -81,6 +85,9 @@ def test_a_number_the_value_does_not_hold_is_refused(statement: str, value: str)
         ("甲产品报销百分之二十。", "按20%报销。"),
         ("甲产品最高10万元。", "最高十万元。"),
         ("甲产品差额为-15000元。", "差额为负一万五千元。"),
+        ("甲产品适用年龄为18周岁至65周岁。", "18周岁-65周岁"),
+        ("甲产品适用年龄为18周岁 - 65周岁。", "18周岁至65周岁"),
+        ("甲产品金额范围5000元-1万元。", "5000元至1万元"),
     ],
 )
 def test_the_same_value_written_differently_passes(statement: str, value: str) -> None:
