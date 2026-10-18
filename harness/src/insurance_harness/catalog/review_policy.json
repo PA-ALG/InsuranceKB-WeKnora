@@ -1,5 +1,7 @@
 {
-  "version": "1",
-  "admitted_packs": [],
-  "thresholds": {}
+  "version": "2",
+  "admitted_packs": ["schemapack_critical_illness_insurance"],
+  "thresholds": {
+    "schemapack_critical_illness_insurance": {"default": 0.9}
+  }
 }
