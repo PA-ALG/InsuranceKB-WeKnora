@@ -430,7 +430,14 @@
 .ek-layout__content a { color: var(--td-brand-color); }
 .ek-field__title a { color: inherit; text-decoration: none; }
 .ek-field__title a:hover { color: var(--td-brand-color); text-decoration: underline; }
-.ek-concept-definition { font-size: 17px; line-height: 1.8; }
+.ek-concept-intro { margin: 24px 0; }
+.ek-concept-definition { margin: 0; font-size: 17px; line-height: 1.8; }
+.ek-concept-model p { margin: 12px 0; }
+.ek-concept-model .ek-concept-definition { margin: 0; }
+.ek-concept-model__label { margin-right: 8px; vertical-align: 1px; }
+.ek-concept-model__title { margin: 20px 0 6px; font-size: 13px; font-weight: 600; }
+.ek-concept-model > .ek-stale { margin: 0 0 12px; font-size: 13px; }
+.ek-concept-model > :last-child > :last-child { margin-bottom: 0; }
 .ek-comparison { overflow-x: auto; margin: 32px 0; }
 .ek-comparison table { width: 100%; border-collapse: collapse; min-width: 480px; text-align: left; font-size: 14px; line-height: 1.8; }
 .ek-comparison caption { text-align: left; padding: 0 0 12px; font-size: 20px; font-weight: 600; }
