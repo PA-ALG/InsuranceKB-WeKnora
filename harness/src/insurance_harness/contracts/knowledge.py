@@ -282,7 +282,7 @@ class PresentationProfile(ContractModel):
     profile_version: NonBlank
     profile_sha256: Sha256
     schema_pack_id: NonBlank
-    display_name: str | None = None  # S3e: the pack's display name, e.g. 重疾险
+    display_name: str | None = None  # S3e: the pack's display name
     classification_labels: list[NonBlank] = Field(min_length=1)
     sections: list[ProfileSection] = Field(min_length=1)
 
