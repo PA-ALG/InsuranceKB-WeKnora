@@ -32,8 +32,7 @@ def candidate_bundle(..., removals: Sequence[str] = ()) -> CandidateBundle
   - 与成员 slug 重叠、重复或为空白时抛 `BundleError("REMOVAL_OVERLAP")`，与平台校验一致，避免提交后才被拒。
 - `publish.py`：
   - 读到 Active 后，以本次全部 Claim 的 logical key 为 `keep` 计算 `retired_claims`，传给 `candidate_bundle`；
-  - 成功输出增加 `"retired": <条数>`；
-  - 没有 Active（首次发布）时为 0。
+  - 有撤下的 Claim 时，成功输出增加 `"retired": <条数>`；没有撤下时不输出该键（同 `reasons` 的做法，既有输出形状不变，S4g/RV1 的发布验收无需改动）。
 
 ### 2.2 产品 pack 声明（`dataset/product_packs.json`、`eval/product_sources.py`）
 
@@ -66,7 +65,7 @@ def candidate_bundle(..., removals: Sequence[str] = ()) -> CandidateBundle
   - 声明的 pack 都在目录中；
   - 与 manifest 冲突、文件结构不对都报 `ValueError`；
   - 文件缺失时行为与现在相同。
-- 发布接线（S4j 合并后单独补一个 RED 提交）：Active 中有本产品的旧 Claim 而本次没有时，提交的候选包 `removals` 恰好列出它，输出 `retired` 计数正确；首次发布 `retired == 0`。
+- `harness/tests/compilers/schema_fields/test_publish_retires.py`（S4j 合并后单独 RED 提交）：Active 中有本产品的旧 Claim 而本次没有时，候选包 `removals` 恰好列出它、不动其他产品，输出 `retired` 计数正确；首次发布 `removals` 为空且输出没有 `retired` 键。
 - 门禁：Harness `pytest`、`ruff`、`mypy src tests`；架构守卫；CI 全绿。
 
 ## 4. 改动范围
