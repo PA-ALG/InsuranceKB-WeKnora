@@ -763,13 +763,17 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 		// emitted after the pipeline returned — by then the `complete` event had
 		// already closed the stream, so the frontend only saw citations on refresh.
 		if eventType == types.CHAT_COMPLETION_STREAM {
-			if err := chatsource.FilterPipeline(ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage); err != nil {
+			if err := chatsource.FilterPipeline(
+				ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage,
+			); err != nil {
 				return err
 			}
 			emitKnowledgeReferencesEvent(ctx, chatManage)
 		}
 		if eventType == types.INTO_CHAT_MESSAGE {
-			if err := chatsource.FilterPipeline(ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage); err != nil {
+			if err := chatsource.FilterPipeline(
+				ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage,
+			); err != nil {
 				return err
 			}
 		}
@@ -983,7 +987,9 @@ func (s *sessionService) SearchKnowledge(ctx context.Context,
 	}
 
 	logger.Infof(ctx, "Knowledge base search completed, found %d results", len(chatManage.MergeResult))
-	if err := chatsource.FilterPipeline(ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage); err != nil {
+	if err := chatsource.FilterPipeline(
+		ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage,
+	); err != nil {
 		return nil, err
 	}
 	return chatManage.MergeResult, nil

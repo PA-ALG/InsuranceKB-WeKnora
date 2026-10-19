@@ -17,13 +17,21 @@ func TestQ1aAgentRawOnlyOffersSearchAndReusesTurnForEveryCall(t *testing.T) {
 	ctx, quick, source, kbs := q1aFixture()
 	kbs.rawWiki = true
 	quick.cfg.Conversation.KeywordThreshold = 0.15
-	svc := &agentService{cfg: quick.cfg, knowledgeBaseService: quick.knowledgeBaseService,
-		knowledgeService: quick.knowledgeService, chunkService: quick.chunkService, chatSources: quick.chatSources}
+	svc := &agentService{
+		cfg: quick.cfg, knowledgeBaseService: quick.knowledgeBaseService,
+		knowledgeService: quick.knowledgeService, chunkService: quick.chunkService, chatSources: quick.chatSources,
+	}
 	config := &types.AgentConfig{SearchTargets: types.SearchTargets{
 		{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-wiki", TenantID: 7},
-		{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7, TagIDs: []string{"physical-tag"}, ScopeTagIDs: []string{"logical-tag"}},
-	}, AllowedTools: []string{tools.ToolSearchKnowledge, tools.ToolReadDocument, tools.ToolListDocuments,
-		tools.ToolDatabaseQuery, tools.ToolDataAnalysis, tools.ToolDataSchema, tools.ToolWikiReadPage, tools.ToolWikiSearch}}
+		{
+			Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7,
+			TagIDs: []string{"physical-tag"}, ScopeTagIDs: []string{"logical-tag"},
+		},
+	}, AllowedTools: []string{
+		tools.ToolSearchKnowledge, tools.ToolReadDocument, tools.ToolListDocuments,
+		tools.ToolDatabaseQuery, tools.ToolDataAnalysis, tools.ToolDataSchema,
+		tools.ToolWikiReadPage, tools.ToolWikiSearch,
+	}}
 	registry := tools.NewToolRegistry()
 	require.NoError(t, svc.registerTools(ctx, registry, config, nil, nil, "session"))
 	require.Equal(t, []string{tools.ToolSearchKnowledge}, registry.ListTools())
@@ -54,15 +62,19 @@ func TestQ1aAgentRawOnlyOffersSearchAndReusesTurnForEveryCall(t *testing.T) {
 
 type q1aLegacyTurn struct{}
 
-func (q1aLegacyTurn) PinConceptAgentTurn830G2(context.Context, []interfaces.ConceptAgentKnowledgeScope830G2) (*interfaces.ConceptAgentTurn830G2, error) {
+func (q1aLegacyTurn) PinConceptAgentTurn830G2(
+	context.Context, []interfaces.ConceptAgentKnowledgeScope830G2,
+) (*interfaces.ConceptAgentTurn830G2, error) {
 	return &interfaces.ConceptAgentTurn830G2{}, nil
 }
 
 func TestQ1aAgentMixedScopeDoesNotExposeEnterpriseToDocumentTools(t *testing.T) {
 	ctx, quick, _, _ := q1aFixture()
-	svc := &agentService{cfg: quick.cfg, knowledgeBaseService: quick.knowledgeBaseService,
+	svc := &agentService{
+		cfg: quick.cfg, knowledgeBaseService: quick.knowledgeBaseService,
 		knowledgeService: quick.knowledgeService, chunkService: quick.chunkService,
-		chatSources: quick.chatSources, conceptAgentTurnProvider830G2: q1aLegacyTurn{}}
+		chatSources: quick.chatSources, conceptAgentTurnProvider830G2: q1aLegacyTurn{},
+	}
 	registry := tools.NewToolRegistry()
 	require.NoError(t, svc.registerTools(ctx, registry, &types.AgentConfig{SearchTargets: types.SearchTargets{
 		{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7},
@@ -76,12 +88,18 @@ func TestQ1aAgentMixedScopeDoesNotExposeEnterpriseToDocumentTools(t *testing.T) 
 
 func TestQ1aAgentWikiOnlyRegistersNoRetrievalTools(t *testing.T) {
 	ctx, quick, source, _ := q1aFixture()
-	svc := &agentService{cfg: quick.cfg, knowledgeBaseService: quick.knowledgeBaseService, chatSources: quick.chatSources}
+	svc := &agentService{
+		cfg: quick.cfg, knowledgeBaseService: quick.knowledgeBaseService, chatSources: quick.chatSources,
+	}
 	registry := tools.NewToolRegistry()
 	require.NoError(t, svc.registerTools(ctx, registry, &types.AgentConfig{
 		KnowledgeBases: []string{"q-wiki"},
-		SearchTargets:  types.SearchTargets{{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-wiki", TenantID: 7}},
-		AllowedTools:   []string{tools.ToolSearchKnowledge, tools.ToolReadDocument, tools.ToolWikiReadPage, tools.ToolWikiSearch},
+		SearchTargets: types.SearchTargets{
+			{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-wiki", TenantID: 7},
+		},
+		AllowedTools: []string{
+			tools.ToolSearchKnowledge, tools.ToolReadDocument, tools.ToolWikiReadPage, tools.ToolWikiSearch,
+		},
 	}, nil, nil, "session"))
 	require.Empty(t, registry.ListTools())
 	require.Equal(t, 1, source.reads)
@@ -100,8 +118,10 @@ func TestQ1aAgentEnterpriseMetadataFailureStopsTurn(t *testing.T) {
 func TestQ1aAgentReusesResolvedKBMetadataForCapabilities(t *testing.T) {
 	ctx, quick, _, kbs := q1aFixture()
 	kbs.singleErr, kbs.failAfter = errors.New("later metadata unavailable"), 2
-	svc := &agentService{cfg: quick.cfg, knowledgeBaseService: kbs, knowledgeService: quick.knowledgeService,
-		chunkService: quick.chunkService, chatSources: quick.chatSources}
+	svc := &agentService{
+		cfg: quick.cfg, knowledgeBaseService: kbs, knowledgeService: quick.knowledgeService,
+		chunkService: quick.chunkService, chatSources: quick.chatSources,
+	}
 	registry := tools.NewToolRegistry()
 	err := svc.registerTools(ctx, registry, &types.AgentConfig{SearchTargets: types.SearchTargets{
 		{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7},
@@ -114,15 +134,19 @@ func TestQ1aAgentReusesResolvedKBMetadataForCapabilities(t *testing.T) {
 func TestQ1aAgentPromptDoesNotReadUnfixedMetadata(t *testing.T) {
 	ctx, quick, source, kbs := q1aFixture()
 	kbs.profile = &types.KnowledgeBaseProfile{Gist: "unreleased secret profile"}
-	svc := &agentService{cfg: quick.cfg, knowledgeBaseService: kbs, knowledgeService: &q1aDocs{},
-		chunkService: quick.chunkService, chatSources: quick.chatSources}
+	svc := &agentService{
+		cfg: quick.cfg, knowledgeBaseService: kbs, knowledgeService: &q1aDocs{},
+		chunkService: quick.chunkService, chatSources: quick.chatSources,
+	}
 	model := &q1aCaptureChat{}
-	engine, err := svc.CreateAgentEngine(ctx, &types.AgentConfig{KnowledgeBases: []string{"q-raw", "q-wiki"},
+	engine, err := svc.CreateAgentEngine(ctx, &types.AgentConfig{
+		KnowledgeBases: []string{"q-raw", "q-wiki"},
 		SearchTargets: types.SearchTargets{
 			{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7},
 			{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-wiki", TenantID: 7},
 		}, QuestionOrigin: &types.QuestionOrigin{KnowledgeBaseID: "q-raw", KnowledgeID: "unreleased-doc"},
-		AllowedTools: []string{tools.ToolSearchKnowledge}}, model, nil, nil, "session", "message")
+		AllowedTools: []string{tools.ToolSearchKnowledge},
+	}, model, nil, nil, "session", "message")
 	require.NoError(t, err)
 	_, err = engine.Execute(ctx, "session", "message", "question", nil)
 	require.NoError(t, err)
@@ -139,18 +163,23 @@ type q1aCaptureChat struct {
 	messages []chat.Message
 }
 
-func (m *q1aCaptureChat) ChatStream(ctx context.Context, messages []chat.Message, opts *chat.ChatOptions) (<-chan types.StreamResponse, error) {
+func (m *q1aCaptureChat) ChatStream(
+	ctx context.Context, messages []chat.Message, opts *chat.ChatOptions,
+) (<-chan types.StreamResponse, error) {
 	m.messages = messages
 	return m.fakeAgentChatModel.ChatStream(ctx, messages, opts)
 }
 
-func (*q1aDocs) ListPagedKnowledgeByKnowledgeBaseID(_ context.Context, _ string, p *types.Pagination, _ types.KnowledgeListFilter) (*types.PageResult, error) {
+func (*q1aDocs) ListPagedKnowledgeByKnowledgeBaseID(
+	_ context.Context, _ string, p *types.Pagination, _ types.KnowledgeListFilter,
+) (*types.PageResult, error) {
 	return types.NewPageResult(1, p, []*types.Knowledge{{ID: "unreleased-doc", Title: "unreleased secret title"}}), nil
 }
 
 func (s *q1aDocs) GetKnowledgeByID(_ context.Context, id string) (*types.Knowledge, error) {
 	return &types.Knowledge{ID: id, TenantID: 7, KnowledgeBaseID: "q-raw"}, nil
 }
+
 func (s *q1aDocs) GetKnowledgeByIDOnly(ctx context.Context, id string) (*types.Knowledge, error) {
 	return s.GetKnowledgeByID(ctx, id)
 }

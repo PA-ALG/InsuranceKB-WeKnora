@@ -35,6 +35,7 @@ type admissionKBs struct {
 func (k *admissionKBs) GetKnowledgeBaseByIDOnly(_ context.Context, id string) (*types.KnowledgeBase, error) {
 	return k.rows[id], nil
 }
+
 func (k *admissionKBs) CheckNativeRead(_ context.Context, id string) error {
 	k.checked = append(k.checked, id)
 	return k.deny
@@ -42,7 +43,9 @@ func (k *admissionKBs) CheckNativeRead(_ context.Context, id string) error {
 
 type admissionDocs []*types.Knowledge
 
-func (d admissionDocs) GetKnowledgeBatchWithSharedAccess(context.Context, uint64, []string) ([]*types.Knowledge, error) {
+func (d admissionDocs) GetKnowledgeBatchWithSharedAccess(
+	context.Context, uint64, []string,
+) ([]*types.Knowledge, error) {
 	return d, nil
 }
 
@@ -64,9 +67,12 @@ type admissionDocumentLookup struct {
 	err      error
 }
 
-func (d admissionDocumentLookup) GetKnowledgeBatchWithSharedAccess(context.Context, uint64, []string) ([]*types.Knowledge, error) {
+func (d admissionDocumentLookup) GetKnowledgeBatchWithSharedAccess(
+	context.Context, uint64, []string,
+) ([]*types.Knowledge, error) {
 	return d.rows, d.err
 }
+
 func (d admissionDocumentLookup) GetKnowledgeByIDOnly(_ context.Context, id string) (*types.Knowledge, error) {
 	return d.metadata[id], nil
 }
@@ -93,7 +99,8 @@ func TestAdmissionRejectsForeignEnterpriseAndIncompleteDocuments(t *testing.T) {
 	require.ErrorAs(t, err, &failure)
 	require.Equal(t, "RELEASE_ACCESS_DENIED", failure.Code)
 	kbs.rows["raw"].TenantID = 7
-	_, err = PrepareSelection(context.Background(), r, kbs, admissionDocs{{ID: "one", KnowledgeBaseID: "raw", TenantID: 7}},
+	_, err = PrepareSelection(context.Background(), r, kbs,
+		admissionDocs{{ID: "one", KnowledgeBaseID: "raw", TenantID: 7}},
 		7, nil, []string{"one", "missing"}, nil, false)
 	require.Error(t, err)
 }
@@ -101,7 +108,8 @@ func TestAdmissionRejectsForeignEnterpriseAndIncompleteDocuments(t *testing.T) {
 func TestAdmissionBatchesAndResolvedScopeCannotSilentlyLoseEnterprise(t *testing.T) {
 	r := NewResolver(admissionSpaces{}, nil, nil, nil)
 	kbs := &admissionKBs{rows: map[string]*types.KnowledgeBase{"raw": {ID: "raw", TenantID: 7}}}
-	sel, err := PrepareSelection(context.Background(), r, kbs, admissionDocs{{ID: "one", KnowledgeBaseID: "raw", TenantID: 7}},
+	sel, err := PrepareSelection(context.Background(), r, kbs,
+		admissionDocs{{ID: "one", KnowledgeBaseID: "raw", TenantID: 7}},
 		7, []string{"raw"}, []string{"one"}, nil, false)
 	require.NoError(t, err)
 	require.Error(t, sel.CheckKBs([]string{"raw"}, nil, nil))
@@ -114,8 +122,12 @@ func TestAdmissionBatchesAndResolvedScopeCannotSilentlyLoseEnterprise(t *testing
 
 func TestAdmissionRawOnlyNeedsNoWikiAPIKeyGrant(t *testing.T) {
 	r := NewResolver(admissionSpaces{}, nil, nil, nil)
-	kbs := &admissionKBs{rows: map[string]*types.KnowledgeBase{"raw": {ID: "raw", TenantID: 7}, "wiki": {ID: "wiki", TenantID: 7}}}
-	ctx := types.WithTenantAPIKeyScope(context.Background(), types.TenantAPIKeyScope{KnowledgeBaseIDs: types.StringArray{"raw"}})
+	kbs := &admissionKBs{rows: map[string]*types.KnowledgeBase{
+		"raw": {ID: "raw", TenantID: 7}, "wiki": {ID: "wiki", TenantID: 7},
+	}}
+	ctx := types.WithTenantAPIKeyScope(context.Background(), types.TenantAPIKeyScope{
+		KnowledgeBaseIDs: types.StringArray{"raw"},
+	})
 	_, err := PrepareSelection(ctx, r, kbs, nil, 7, []string{"raw"}, nil, nil, false)
 	require.NoError(t, err)
 	_, err = PrepareSelection(ctx, r, kbs, nil, 7, []string{"wiki"}, nil, nil, false)

@@ -33,7 +33,9 @@ func (s *Store) ActiveRelease(ctx context.Context, tenantID uint64, spaceID stri
 
 // ReleaseSources reads the exact historical release scope and its live RAW
 // materials. Retired releases yield no sources; nonexistent releases are errors.
-func (s *Store) ReleaseSources(ctx context.Context, tenantID uint64, spaceID, releaseID string) ([]chatsource.Pin, error) {
+func (s *Store) ReleaseSources(
+	ctx context.Context, tenantID uint64, spaceID, releaseID string,
+) ([]chatsource.Pin, error) {
 	if s == nil || s.db == nil {
 		return nil, errors.New("chat source store is unavailable")
 	}
@@ -47,9 +49,12 @@ func (s *Store) ReleaseSources(ctx context.Context, tenantID uint64, spaceID, re
 	var pins []chatsource.Pin
 	err = s.db.WithContext(ctx).Table("enterprise_release_sources AS s").
 		Select("s.knowledge_id, s.parse_attempt").
-		Joins("JOIN knowledges AS k ON k.id = s.knowledge_id AND k.tenant_id = s.tenant_id AND k.knowledge_base_id = ? AND k.deleted_at IS NULL", scope.RawKBID).
-		Joins("LEFT JOIN enterprise_release_retirements AS r ON r.release_id = s.release_id AND r.tenant_id = s.tenant_id AND r.space_id = s.space_id").
-		Where("s.tenant_id = ? AND s.space_id = ? AND s.release_id = ? AND r.release_id IS NULL", tenantID, spaceID, releaseID).
+		Joins("JOIN knowledges AS k ON k.id = s.knowledge_id AND k.tenant_id = s.tenant_id "+
+			"AND k.knowledge_base_id = ? AND k.deleted_at IS NULL", scope.RawKBID).
+		Joins("LEFT JOIN enterprise_release_retirements AS r ON r.release_id = s.release_id "+
+			"AND r.tenant_id = s.tenant_id AND r.space_id = s.space_id").
+		Where("s.tenant_id = ? AND s.space_id = ? AND s.release_id = ? AND r.release_id IS NULL",
+			tenantID, spaceID, releaseID).
 		Order("s.knowledge_id, s.parse_attempt").Scan(&pins).Error
 	return pins, err
 }

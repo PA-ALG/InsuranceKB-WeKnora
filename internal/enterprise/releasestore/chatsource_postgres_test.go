@@ -45,7 +45,9 @@ func TestPostgresChatSourceInheritedPinsAndScopeIsolation(t *testing.T) {
 	require.Equal(t, second.ID, id)
 	pins, err := store.ReleaseSources(ctx, 7, "space-1", second.ID)
 	require.NoError(t, err)
-	require.Equal(t, []chatsource.Pin{{KnowledgeID: "k-1", ParseAttempt: 1}, {KnowledgeID: "k-2", ParseAttempt: 2}}, pins)
+	require.Equal(t, []chatsource.Pin{
+		{KnowledgeID: "k-1", ParseAttempt: 1}, {KnowledgeID: "k-2", ParseAttempt: 2},
+	}, pins)
 	_, err = store.ReleaseSources(ctx, 7, "space-2", second.ID)
 	var failure *release.Error
 	require.ErrorAs(t, err, &failure)
@@ -69,7 +71,9 @@ func TestPostgresChatSourceRawKBTenantSoftDeleteAndAttempt(t *testing.T) {
 	require.NoError(t, err)
 	seedSource(t, db, "foreign", 8, "raw-8", 4)
 	seedSource(t, db, "wrong-kb", 7, "raw-2", 1)
-	require.NoError(t, db.Create(&releaseSourceRow{TenantID: 7, SpaceID: "space-1", ReleaseID: first.ID, KnowledgeID: "wrong-kb", ParseAttempt: 1}).Error)
+	require.NoError(t, db.Create(&releaseSourceRow{
+		TenantID: 7, SpaceID: "space-1", ReleaseID: first.ID, KnowledgeID: "wrong-kb", ParseAttempt: 1,
+	}).Error)
 	pins, err := store.ReleaseSources(ctx, 7, "space-1", first.ID)
 	require.NoError(t, err)
 	require.Equal(t, []chatsource.Pin{{KnowledgeID: "k-1", ParseAttempt: 1}}, pins)
@@ -111,7 +115,9 @@ func TestPostgresChatSourceFixedTurnHeadAdvanceRetirementAndReparseGuard(t *test
 	pins, err := store.ReleaseSources(ctx, 7, "space-1", turn.Releases["space-1"])
 	require.NoError(t, err)
 	require.Len(t, pins, 1)
-	_, err = store.Retire(ctx, release.RetirementWrite{TenantID: 7, SpaceID: "space-1", ReleaseID: first.ID, Reason: "retired", Subject: "admin"})
+	_, err = store.Retire(ctx, release.RetirementWrite{
+		TenantID: 7, SpaceID: "space-1", ReleaseID: first.ID, Reason: "retired", Subject: "admin",
+	})
 	require.NoError(t, err)
 	pins, err = store.ReleaseSources(ctx, 7, "space-1", first.ID)
 	require.NoError(t, err)
@@ -131,7 +137,8 @@ func TestPostgresChatSourceQueriesPropagateCancellationAndFailure(t *testing.T) 
 	require.True(t, errors.Is(err, context.Canceled))
 	_, err = store.CurrentAttempts(cancelled, 7, []string{"k-1"})
 	require.True(t, errors.Is(err, context.Canceled))
-	require.NoError(t, db.Exec("ALTER TABLE knowledges RENAME COLUMN current_parse_attempt TO unavailable_attempt").Error)
+	require.NoError(t, db.Exec(
+		"ALTER TABLE knowledges RENAME COLUMN current_parse_attempt TO unavailable_attempt").Error)
 	_, err = store.CurrentAttempts(context.Background(), 7, []string{"k-1"})
 	require.Error(t, err)
 	require.NoError(t, db.Exec("DROP TABLE enterprise_release_sources").Error)

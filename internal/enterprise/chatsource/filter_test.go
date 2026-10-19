@@ -60,7 +60,9 @@ func TestFilterRechecksCurrentAttemptsAndPropagatesDependencyFailure(t *testing.
 	turn, err := r.Resolve(context.Background(), tenant, types.SearchTargets{kb("raw-1")})
 	require.NoError(t, err)
 	results := []*types.SearchResult{{ID: "good", KnowledgeID: "k1", KnowledgeBaseID: "raw-1"}}
-	chunks := chunkRows{rows: []*types.Chunk{{ID: "good", TenantID: tenant, KnowledgeID: "k1", KnowledgeBaseID: "raw-1", ParseAttempt: 2}}}
+	chunks := chunkRows{rows: []*types.Chunk{
+		{ID: "good", TenantID: tenant, KnowledgeID: "k1", KnowledgeBaseID: "raw-1", ParseAttempt: 2},
+	}}
 	a.current["k1"] = 3
 	got, err := r.Filter(context.Background(), tenant, turn, chunks, results)
 	require.NoError(t, err)

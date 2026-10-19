@@ -48,8 +48,10 @@ func (t *searchTool) Execute(ctx context.Context, args json.RawMessage) (*types.
 		if id == "" {
 			id = stringField(row, "faq_id")
 		}
-		search = append(search, &types.SearchResult{ID: id, Seq: index,
-			KnowledgeID: stringField(row, "knowledge_id"), KnowledgeBaseID: stringField(row, "knowledge_base_id")})
+		search = append(search, &types.SearchResult{
+			ID: id, Seq: index,
+			KnowledgeID: stringField(row, "knowledge_id"), KnowledgeBaseID: stringField(row, "knowledge_base_id"),
+		})
 	}
 	filtered, err := t.resolver.Filter(ctx, t.tenantID, t.turn, t.chunks, search)
 	if err != nil {
@@ -59,29 +61,29 @@ func (t *searchTool) Execute(ctx context.Context, args json.RawMessage) (*types.
 	for _, item := range filtered {
 		row := rows[item.Seq]
 		if item.Metadata["source_tier"] == "raw_text" {
-			copy := make(map[string]interface{}, len(row)+1)
+			cloned := make(map[string]interface{}, len(row)+1)
 			for key, value := range row {
-				copy[key] = value
+				cloned[key] = value
 			}
 			metadata := copyRowMetadata(row["metadata"])
 			metadata["source_tier"], metadata["release_id"] = "raw_text", item.Metadata["release_id"]
-			copy["metadata"] = metadata
-			row = copy
+			cloned["metadata"] = metadata
+			row = cloned
 		}
 		kept = append(kept, row)
 		counts[stringField(row, "knowledge_base_id")]++
 	}
-	copy := *result
-	copy.Data = make(map[string]interface{}, len(result.Data))
+	cloned := *result
+	cloned.Data = make(map[string]interface{}, len(result.Data))
 	for key, value := range result.Data {
-		copy.Data[key] = value
+		cloned.Data[key] = value
 	}
-	copy.Data["results"], copy.Data["count"], copy.Data["kb_counts"] = kept, len(kept), counts
-	copy.Output, err = renderSearch(kept, copy.Data)
+	cloned.Data["results"], cloned.Data["count"], cloned.Data["kb_counts"] = kept, len(kept), counts
+	cloned.Output, err = renderSearch(kept, cloned.Data)
 	if err != nil {
 		return nil, err
 	}
-	return &copy, nil
+	return &cloned, nil
 }
 
 // Cleanup keeps the native tool's optional resource lifecycle intact.
@@ -134,14 +136,16 @@ func stringField(row map[string]interface{}, field string) string {
 // document metadata or snippets as well as in its main content elements.
 func renderSearch(rows []map[string]interface{}, data map[string]interface{}) (string, error) {
 	var output strings.Builder
-	fmt.Fprintf(&output, "<search_results count=\"%d\" mode=\"%s\">\n<query>%s</query>\n", len(rows), escaped(stringField(data, "mode")), escaped(stringField(data, "query")))
+	fmt.Fprintf(&output, "<search_results count=\"%d\" mode=\"%s\">\n<query>%s</query>\n",
+		len(rows), escaped(stringField(data, "mode")), escaped(stringField(data, "query")))
 	for index, row := range rows {
 		tag, key := "chunk", "chunk_id"
 		if stringField(row, key) == "" {
 			tag, key = "faq", "faq_id"
 		}
-		fmt.Fprintf(&output, "<%s rank=\"%d\" %s=\"%s\" knowledge_id=\"%s\" knowledge_base_id=\"%s\">\n", tag, index+1, key,
-			escaped(stringField(row, key)), escaped(stringField(row, "knowledge_id")), escaped(stringField(row, "knowledge_base_id")))
+		fmt.Fprintf(&output, "<%s rank=\"%d\" %s=\"%s\" knowledge_id=\"%s\" knowledge_base_id=\"%s\">\n",
+			tag, index+1, key, escaped(stringField(row, key)),
+			escaped(stringField(row, "knowledge_id")), escaped(stringField(row, "knowledge_base_id")))
 		attributes := make(map[string]interface{}, len(row))
 		for key, value := range row {
 			if key != "content" {
@@ -152,7 +156,8 @@ func renderSearch(rows []map[string]interface{}, data map[string]interface{}) (s
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&output, "<attributes>%s</attributes>\n<content>%s</content>\n</%s>\n", escaped(string(raw)), escaped(stringField(row, "content")), tag)
+		fmt.Fprintf(&output, "<attributes>%s</attributes>\n<content>%s</content>\n</%s>\n",
+			escaped(string(raw)), escaped(stringField(row, "content")), tag)
 	}
 	output.WriteString("</search_results>")
 	return output.String(), nil

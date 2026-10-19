@@ -9,12 +9,15 @@ import (
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
 
-type turnKey struct{}
-type turnContext struct {
-	turn   Turn
-	tenant uint64
-}
+type (
+	turnKey     struct{}
+	turnContext struct {
+		turn   Turn
+		tenant uint64
+	}
+)
 
+// ChunkReaderOf reuses the native repository, preserving a missing service as nil.
 func ChunkReaderOf(service interfaces.ChunkService) ChunkReader {
 	if service == nil {
 		return nil
@@ -47,12 +50,16 @@ func WithTurn(ctx context.Context, turn Turn, tenant ...uint64) context.Context 
 	return context.WithValue(ctx, turnKey{}, turnContext{turn: turn, tenant: id})
 }
 
+// TurnFromContext returns the scope already fixed for this request, if any.
 func TurnFromContext(ctx context.Context) (Turn, bool) {
 	v, ok := ctx.Value(turnKey{}).(turnContext)
 	return v.turn, ok
 }
 
-func ResolveQuick(ctx context.Context, resolver *Resolver, tenant uint64, targets types.SearchTargets) (context.Context, types.SearchTargets, error) {
+// ResolveQuick fixes a quick-QA scope and rejects unsupported Wiki-only retrieval.
+func ResolveQuick(
+	ctx context.Context, resolver *Resolver, tenant uint64, targets types.SearchTargets,
+) (context.Context, types.SearchTargets, error) {
 	if resolver == nil {
 		return ctx, targets, nil
 	}
@@ -116,26 +123,27 @@ func PromptConfig(resolver *Resolver, config *types.AgentConfig, turn Turn) *typ
 	if len(turn.Releases) == 0 {
 		return config
 	}
-	copy := *config
-	copy.KnowledgeIDs = nil
+	cloned := *config
+	cloned.KnowledgeIDs = nil
 	for _, id := range config.KnowledgeIDs {
 		if _, raw := turn.RawKnowledge[id]; !raw {
-			copy.KnowledgeIDs = append(copy.KnowledgeIDs, id)
+			cloned.KnowledgeIDs = append(cloned.KnowledgeIDs, id)
 		}
 	}
-	if copy.QuestionOrigin != nil {
+	if cloned.QuestionOrigin != nil {
 		for _, target := range config.SearchTargets {
-			if target != nil && target.KnowledgeBaseID == copy.QuestionOrigin.KnowledgeBaseID {
+			if target != nil && target.KnowledgeBaseID == cloned.QuestionOrigin.KnowledgeBaseID {
 				if _, _, enterprise := resolver.SpaceOf(target.TenantID, target.KnowledgeBaseID); enterprise {
-					copy.QuestionOrigin = nil
+					cloned.QuestionOrigin = nil
 					break
 				}
 			}
 		}
 	}
-	return &copy
+	return &cloned
 }
 
+// WikiUnavailableNotice describes the unavailable enterprise Wiki capability.
 func WikiUnavailableNotice(turn Turn) string {
 	if len(turn.WikiSpaces) == 0 {
 		return ""
@@ -145,7 +153,9 @@ func WikiUnavailableNotice(turn Turn) string {
 
 // AgentTurn resolves once even when engine creation and tool registration both
 // need the scope. The saved agent config and subsequent turns remain untouched.
-func AgentTurn(ctx context.Context, resolver *Resolver, config *types.AgentConfig) (context.Context, *types.AgentConfig, Turn, error) {
+func AgentTurn(
+	ctx context.Context, resolver *Resolver, config *types.AgentConfig,
+) (context.Context, *types.AgentConfig, Turn, error) {
 	if turn, ok := TurnFromContext(ctx); ok {
 		return ctx, config, turn, nil
 	}
@@ -160,16 +170,16 @@ func AgentTurn(ctx context.Context, resolver *Resolver, config *types.AgentConfi
 	if len(turn.Releases) == 0 {
 		return ctx, config, turn, nil
 	}
-	copy := *config
-	copy.SearchTargets = turn.Targets
-	copy.KnowledgeBases = turn.Targets.GetAllKnowledgeBaseIDs()
-	copy.KnowledgeIDs = nil
+	cloned := *config
+	cloned.SearchTargets = turn.Targets
+	cloned.KnowledgeBases = turn.Targets.GetAllKnowledgeBaseIDs()
+	cloned.KnowledgeIDs = nil
 	for _, target := range turn.Targets {
 		if target != nil {
-			copy.KnowledgeIDs = append(copy.KnowledgeIDs, target.KnowledgeIDs...)
+			cloned.KnowledgeIDs = append(cloned.KnowledgeIDs, target.KnowledgeIDs...)
 		}
 	}
-	return WithTurn(ctx, turn, tenant), &copy, turn, nil
+	return WithTurn(ctx, turn, tenant), &cloned, turn, nil
 }
 
 // OtherToolTargets removes enterprise sources from document, graph and data

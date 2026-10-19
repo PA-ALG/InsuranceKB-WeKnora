@@ -67,7 +67,9 @@ func TestFilterDropsUnselectedMaterialFromKnownEnterpriseKB(t *testing.T) {
 	turn, err := r.Resolve(context.Background(), tenant, types.SearchTargets{selected})
 	require.NoError(t, err)
 	results := []*types.SearchResult{{ID: "unselected", KnowledgeID: "k1", KnowledgeBaseID: "raw-1"}}
-	chunks := chunkRows{rows: []*types.Chunk{{ID: "unselected", TenantID: tenant, KnowledgeID: "k1", KnowledgeBaseID: "raw-1", ParseAttempt: 2}}}
+	chunks := chunkRows{rows: []*types.Chunk{
+		{ID: "unselected", TenantID: tenant, KnowledgeID: "k1", KnowledgeBaseID: "raw-1", ParseAttempt: 2},
+	}}
 	got, err := r.Filter(context.Background(), tenant, turn, chunks, results)
 	require.NoError(t, err)
 	require.Empty(t, got)

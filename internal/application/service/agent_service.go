@@ -266,7 +266,9 @@ func (s *agentService) CreateAgentEngine(
 		pinnedMCP,
 		s.resolvePinnedSkillInfos(config),
 	)
-	engine.SetQuestionOrigin(s.resolveQuestionOriginInfo(ctx, promptConfig.QuestionOrigin, promptConfig.SearchTargets, kbInfos))
+	engine.SetQuestionOrigin(s.resolveQuestionOriginInfo(
+		ctx, promptConfig.QuestionOrigin, promptConfig.SearchTargets, kbInfos,
+	))
 
 	// Non-vision chat models use the configured VLM to describe tool images.
 	// Vision chat models receive the original images after the tool replies.
@@ -1079,7 +1081,10 @@ func (s *agentService) registerTools(
 	}
 	otherToolTargets := chatsource.OtherToolTargets(s.chatSources, unmanagedSearchTargets830G2)
 	if len(otherToolTargets) == 0 {
-		for _, name := range []string{tools.ToolReadDocument, tools.ToolListDocuments, tools.ToolQueryKnowledgeGraph, tools.ToolDatabaseQuery, tools.ToolDataAnalysis, tools.ToolDataSchema} {
+		for _, name := range []string{
+			tools.ToolReadDocument, tools.ToolListDocuments, tools.ToolQueryKnowledgeGraph,
+			tools.ToolDatabaseQuery, tools.ToolDataAnalysis, tools.ToolDataSchema,
+		} {
 			allowedTools = withoutString(allowedTools, name)
 		}
 	}
@@ -1257,7 +1262,10 @@ func (s *agentService) registerTools(
 				s.cfg,
 			)
 			if len(sourceTurn.RawKnowledge) > 0 {
-				toolToRegister = chatsource.WrapTool(toolToRegister, s.chatSources, sourceTurn, types.MustTenantIDFromContext(ctx), chatsource.ChunkReaderOf(s.chunkService))
+				toolToRegister = chatsource.WrapTool(
+					toolToRegister, s.chatSources, sourceTurn,
+					types.MustTenantIDFromContext(ctx), chatsource.ChunkReaderOf(s.chunkService),
+				)
 			}
 		case tools.ToolReadDocument:
 			toolToRegister = tools.NewReadDocumentTool(s.knowledgeService, s.chunkService, otherToolTargets)

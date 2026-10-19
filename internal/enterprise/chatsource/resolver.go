@@ -11,14 +11,19 @@ import (
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
+// Role identifies a knowledge base's configured purpose in a Space.
 type Role string
 
 const (
-	RoleRaw                 Role = "raw"
-	RoleWiki                Role = "wiki"
-	ErrorSourcesUnavailable      = "RELEASE_SOURCES_UNAVAILABLE"
+	// RoleRaw identifies the Space's original materials.
+	RoleRaw Role = "raw"
+	// RoleWiki identifies the Space's compiled knowledge base.
+	RoleWiki Role = "wiki"
+	// ErrorSourcesUnavailable reports an empty fixed-material selection.
+	ErrorSourcesUnavailable = "RELEASE_SOURCES_UNAVAILABLE"
 )
 
+// Spaces identifies configured enterprise knowledge bases without granting access.
 type Spaces interface {
 	SpaceOf(uint64, string) (string, Role, bool)
 }
@@ -28,20 +33,29 @@ type Spaces interface {
 type spaceOwnerDirectory interface {
 	SpaceOwner(string) (uint64, string, Role, bool)
 }
+
+// Heads reads the authoritative active release of a Space.
 type Heads interface {
 	ActiveRelease(context.Context, uint64, string) (string, error)
 }
+
+// Pin binds one source material to its released parse attempt.
 type Pin struct {
 	KnowledgeID  string
 	ParseAttempt int64
 }
+
+// Pins lists live sources of an exact release without selecting a newer release.
 type Pins interface {
 	ReleaseSources(context.Context, uint64, string, string) ([]Pin, error)
 }
+
+// Attempts reads the current parse attempts of tenant-owned source materials.
 type Attempts interface {
 	CurrentAttempts(context.Context, uint64, []string) (map[string]int64, error)
 }
 
+// Resolver holds stateless dependencies for resolving and checking chat sources.
 type Resolver struct {
 	spaces   Spaces
 	heads    Heads
@@ -49,10 +63,12 @@ type Resolver struct {
 	attempts Attempts
 }
 
+// NewResolver constructs a resolver whose resolved state remains local to each turn.
 func NewResolver(spaces Spaces, heads Heads, pins Pins, attempts Attempts) *Resolver {
 	return &Resolver{spaces: spaces, heads: heads, pins: pins, attempts: attempts}
 }
 
+// Turn carries a request's fixed retrieval scope and source provenance.
 type Turn struct {
 	Targets      types.SearchTargets
 	Releases     map[string]string
@@ -84,7 +100,8 @@ func (r *Resolver) Resolve(ctx context.Context, tenantID uint64, targets types.S
 		}
 		space, role, ok := r.SpaceOf(target.TenantID, target.KnowledgeBaseID)
 		if directory, complete := r.spaces.(spaceOwnerDirectory); complete {
-			if owner, configuredSpace, configuredRole, enterprise := directory.SpaceOwner(target.KnowledgeBaseID); enterprise {
+			owner, configuredSpace, configuredRole, enterprise := directory.SpaceOwner(target.KnowledgeBaseID)
+			if enterprise {
 				if owner != tenantID || target.TenantID != owner {
 					return Turn{}, &release.Error{Code: release.ErrorReleaseAccessDenied}
 				}
@@ -99,7 +116,9 @@ func (r *Resolver) Resolve(ctx context.Context, tenantID uint64, targets types.S
 			continue
 		}
 		if target.TenantID != tenantID {
-			return Turn{}, &release.Error{Code: release.ErrorReleaseAccessDenied, Detail: "enterprise chat sources require the executing tenant"}
+			return Turn{}, &release.Error{
+				Code: release.ErrorReleaseAccessDenied, Detail: "enterprise chat sources require the executing tenant",
+			}
 		}
 		if missing(r.heads) || missing(r.pins) || missing(r.attempts) {
 			return Turn{}, errors.New("enterprise chat source dependencies are unavailable")
@@ -110,7 +129,9 @@ func (r *Resolver) Resolve(ctx context.Context, tenantID uint64, targets types.S
 				return Turn{}, err
 			}
 			if id == "" {
-				return Turn{}, &release.Error{Code: release.ErrorReleaseNotFound, Detail: "the Space has no active release"}
+				return Turn{}, &release.Error{
+					Code: release.ErrorReleaseNotFound, Detail: "the Space has no active release",
+				}
 			}
 			turn.Releases[space] = id
 		}
@@ -212,7 +233,9 @@ func sortedIDs(attempts map[string]int64) []string {
 }
 
 func sourcesUnavailable() error {
-	return &release.Error{Code: ErrorSourcesUnavailable, Detail: "no selected material is available at the fixed release parse attempt"}
+	return &release.Error{
+		Code: ErrorSourcesUnavailable, Detail: "no selected material is available at the fixed release parse attempt",
+	}
 }
 
 func missing(value any) bool {

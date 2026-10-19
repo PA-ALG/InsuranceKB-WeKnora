@@ -32,13 +32,16 @@ func (*q1aSources) SpaceOf(tenant uint64, kb string) (string, chatsource.Role, b
 	}
 	return "", "", false
 }
+
 func (s *q1aSources) ActiveRelease(context.Context, uint64, string) (string, error) {
 	s.reads++
 	return "q-release", s.err
 }
+
 func (s *q1aSources) ReleaseSources(context.Context, uint64, string, string) ([]chatsource.Pin, error) {
 	return []chatsource.Pin{{KnowledgeID: "q-doc", ParseAttempt: 2}}, s.err
 }
+
 func (s *q1aSources) CurrentAttempts(context.Context, uint64, []string) (map[string]int64, error) {
 	if s.current != 0 {
 		return map[string]int64{"q-doc": s.current}, nil
@@ -66,13 +69,17 @@ func (s *q1aKBs) GetKnowledgeBaseByIDOnly(_ context.Context, id string) (*types.
 	if s.singleErr != nil && id == "q-raw" && (s.failAfter == 0 || s.singleCalls >= s.failAfter) {
 		return nil, s.singleErr
 	}
-	return &types.KnowledgeBase{ID: id, TenantID: 7, Type: types.KnowledgeBaseTypeDocument,
+	return &types.KnowledgeBase{
+		ID: id, TenantID: 7, Type: types.KnowledgeBaseTypeDocument,
 		GeneratedProfile: s.profile,
-		IndexingStrategy: types.IndexingStrategy{KeywordEnabled: true, WikiEnabled: id == "q-wiki" || s.rawWiki}}, nil
+		IndexingStrategy: types.IndexingStrategy{KeywordEnabled: true, WikiEnabled: id == "q-wiki" || s.rawWiki},
+	}, nil
 }
+
 func (s *q1aKBs) GetKnowledgeBaseByID(ctx context.Context, id string) (*types.KnowledgeBase, error) {
 	return s.GetKnowledgeBaseByIDOnly(ctx, id)
 }
+
 func (s *q1aKBs) GetKnowledgeBasesByIDsOnly(ctx context.Context, ids []string) ([]*types.KnowledgeBase, error) {
 	if s.missing {
 		return nil, nil
@@ -84,15 +91,18 @@ func (s *q1aKBs) GetKnowledgeBasesByIDsOnly(ctx context.Context, ids []string) (
 	}
 	return rows, nil
 }
+
 func (*q1aKBs) ResolveEmbeddingModelKeys(context.Context, []*types.KnowledgeBase) map[string]string {
 	return nil
 }
+
 func (s *q1aKBs) HybridSearch(_ context.Context, _ string, p types.SearchParams) ([]*types.SearchResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.seen = append(s.seen, p)
 	return s.rows, nil
 }
+
 func (*q1aKBs) CheckNativeRead(_ context.Context, id string) error {
 	if id == "q-raw" || id == "q-wiki" {
 		return &managed.ReadError{Code: managed.ErrorCodeReleaseManaged}
@@ -142,7 +152,9 @@ type q1aPipeline struct {
 }
 
 func (p q1aPipeline) ActivationEvents() []types.EventType { return p.events }
-func (p q1aPipeline) OnEvent(_ context.Context, kind types.EventType, cm *types.ChatManage, next func() *chatpipeline.PluginError) *chatpipeline.PluginError {
+func (p q1aPipeline) OnEvent(
+	_ context.Context, kind types.EventType, cm *types.ChatManage, next func() *chatpipeline.PluginError,
+) *chatpipeline.PluginError {
 	p.on(kind, cm)
 	return next()
 }
@@ -163,12 +175,17 @@ func q1aFixture() (context.Context, *sessionService, *q1aSources, *q1aKBs) {
 		{ID: "q-current", TenantID: 7, KnowledgeID: "q-doc", KnowledgeBaseID: "q-raw", ParseAttempt: 2},
 		{ID: "q-new", TenantID: 7, KnowledgeID: "q-doc", KnowledgeBaseID: "q-raw", ParseAttempt: 3},
 	}}}
-	models := &stubModelService{modelsByID: map[string]*types.Model{"q-chat": {ID: "q-chat", Type: types.ModelTypeKnowledgeQA}}}
+	models := &stubModelService{modelsByID: map[string]*types.Model{
+		"q-chat": {ID: "q-chat", Type: types.ModelTypeKnowledgeQA},
+	}}
 	svc := NewSessionService(cfg, nil, nil, kbs, &q1aDocs{}, chunks, models, &q1aTenants{}, events,
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, HostSandboxManager{}, nil, nil, nil, nil,
 		chatsource.NewResolver(source, source, source, source)).(*sessionService)
 	chatpipeline.NewPluginSearch(events, kbs, svc.knowledgeService, chunks, cfg, nil, svc.tenantService, nil, nil, nil)
-	events.Register(q1aPipeline{events: []types.EventType{types.CHUNK_MERGE}, on: func(_ types.EventType, cm *types.ChatManage) { cm.MergeResult = cm.SearchResult }})
+	events.Register(q1aPipeline{
+		events: []types.EventType{types.CHUNK_MERGE},
+		on:     func(_ types.EventType, cm *types.ChatManage) { cm.MergeResult = cm.SearchResult },
+	})
 	return ctx, svc, source, kbs
 }
 
@@ -225,11 +242,19 @@ func TestQ1aKnowledgeQAReferencesAreFilteredBeforePromptAndStream(t *testing.T) 
 		refs = evt.Data.(event.AgentReferencesData).References.([]*types.SearchResult)
 		return nil
 	})
-	svc.eventManager.Register(q1aPipeline{events: []types.EventType{types.CHUNK_SEARCH_PARALLEL}, on: func(_ types.EventType, cm *types.ChatManage) { cm.SearchResult = kbs.rows }})
+	svc.eventManager.Register(q1aPipeline{
+		events: []types.EventType{types.CHUNK_SEARCH_PARALLEL},
+		on:     func(_ types.EventType, cm *types.ChatManage) { cm.SearchResult = kbs.rows },
+	})
 	var prompted []*types.SearchResult
-	svc.eventManager.Register(q1aPipeline{events: []types.EventType{types.INTO_CHAT_MESSAGE}, on: func(_ types.EventType, cm *types.ChatManage) { prompted = cm.MergeResult }})
-	err := svc.KnowledgeQA(ctx, &types.QARequest{Session: &types.Session{ID: "q-session", TenantID: 7}, SummaryModelID: "q-chat", TurnLeaseHeld: true,
-		KnowledgeBaseIDs: []string{"q-raw", "q-wiki"}, Query: "question"}, bus)
+	svc.eventManager.Register(q1aPipeline{
+		events: []types.EventType{types.INTO_CHAT_MESSAGE},
+		on:     func(_ types.EventType, cm *types.ChatManage) { prompted = cm.MergeResult },
+	})
+	err := svc.KnowledgeQA(ctx, &types.QARequest{
+		Session: &types.Session{ID: "q-session", TenantID: 7}, SummaryModelID: "q-chat", TurnLeaseHeld: true,
+		KnowledgeBaseIDs: []string{"q-raw", "q-wiki"}, Query: "question",
+	}, bus)
 	require.NoError(t, err)
 	require.Equal(t, 1, source.reads)
 	require.Len(t, prompted, 1)
@@ -243,12 +268,16 @@ func TestQ1aFallbackDoesNotListEnterpriseWholeLibrary(t *testing.T) {
 	cm := &types.ChatManage{}
 	cm.Query = "question"
 	cm.FallbackPrompt = "question: {{query}}; documents: {{kb_documents}}"
-	cm.SearchTargets = types.SearchTargets{{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7}}
+	cm.SearchTargets = types.SearchTargets{
+		{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7},
+	}
 	cm.KnowledgeBaseIDs = []string{"q-raw"}
 	prompt, err := svc.renderFallbackPrompt(ctx, cm)
 	require.NoError(t, err)
 	require.NotContains(t, prompt, "unreleased secret")
-	cm.SearchTargets = types.SearchTargets{{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "plain", TenantID: 7}}
+	cm.SearchTargets = types.SearchTargets{
+		{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "plain", TenantID: 7},
+	}
 	cm.KnowledgeBaseIDs = []string{"plain"}
 	prompt, err = svc.renderFallbackPrompt(ctx, cm)
 	require.NoError(t, err)
@@ -256,12 +285,17 @@ func TestQ1aFallbackDoesNotListEnterpriseWholeLibrary(t *testing.T) {
 }
 
 func (*q1aDocs) ListKnowledgeByKnowledgeBaseID(context.Context, string) ([]*types.Knowledge, error) {
-	return []*types.Knowledge{{ID: "unreleased-doc", Title: "unreleased secret title", Description: "unreleased secret description", EnableStatus: "enabled"}}, nil
+	return []*types.Knowledge{{
+		ID: "unreleased-doc", Title: "unreleased secret title",
+		Description: "unreleased secret description", EnableStatus: "enabled",
+	}}, nil
 }
 
 func TestQ1aQuickReparseAfterPromptAssemblyRemovesOldText(t *testing.T) {
 	ctx, svc, source, kbs := q1aFixture()
-	turn, err := svc.chatSources.Resolve(ctx, 7, types.SearchTargets{{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7}})
+	turn, err := svc.chatSources.Resolve(ctx, 7, types.SearchTargets{
+		{Type: types.SearchTargetTypeKnowledgeBase, KnowledgeBaseID: "q-raw", TenantID: 7},
+	})
 	require.NoError(t, err)
 	ctx = chatsource.WithTurn(ctx, turn, 7)
 	cm := &types.ChatManage{}
@@ -275,19 +309,27 @@ func TestQ1aQuickReparseAfterPromptAssemblyRemovesOldText(t *testing.T) {
 	svc.modelService = &stubModelService{chatModel: model}
 	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
 	chatpipeline.NewPluginChatCompletionStream(svc.eventManager, svc.modelService)
-	svc.eventManager.Register(q1aPipeline{events: []types.EventType{types.INTO_CHAT_MESSAGE}, on: func(_ types.EventType, cm *types.ChatManage) {
-		require.Contains(t, cm.UserContent, "fixed material")
-		source.current = 3
-	}})
-	svc.eventManager.Register(q1aPipeline{events: []types.EventType{types.CHAT_COMPLETION_STREAM}, on: func(_ types.EventType, cm *types.ChatManage) {
-		require.Empty(t, cm.MergeResult)
-		require.NotContains(t, cm.UserContent, "fixed material")
-		require.Empty(t, cm.RenderedContexts)
-		require.Contains(t, cm.UserContent, "question")
-		require.Contains(t, cm.UserContent, "image detail")
-		require.Contains(t, cm.UserContent, "quoted text")
-	}})
-	require.NoError(t, svc.KnowledgeQAByEvent(ctx, cm, []types.EventType{types.INTO_CHAT_MESSAGE, types.CHAT_COMPLETION_STREAM}))
+	svc.eventManager.Register(q1aPipeline{
+		events: []types.EventType{types.INTO_CHAT_MESSAGE},
+		on: func(_ types.EventType, cm *types.ChatManage) {
+			require.Contains(t, cm.UserContent, "fixed material")
+			source.current = 3
+		},
+	})
+	svc.eventManager.Register(q1aPipeline{
+		events: []types.EventType{types.CHAT_COMPLETION_STREAM},
+		on: func(_ types.EventType, cm *types.ChatManage) {
+			require.Empty(t, cm.MergeResult)
+			require.NotContains(t, cm.UserContent, "fixed material")
+			require.Empty(t, cm.RenderedContexts)
+			require.Contains(t, cm.UserContent, "question")
+			require.Contains(t, cm.UserContent, "image detail")
+			require.Contains(t, cm.UserContent, "quoted text")
+		},
+	})
+	require.NoError(t, svc.KnowledgeQAByEvent(ctx, cm, []types.EventType{
+		types.INTO_CHAT_MESSAGE, types.CHAT_COMPLETION_STREAM,
+	}))
 	require.NotEmpty(t, model.messages)
 	for _, message := range model.messages {
 		require.NotContains(t, message.Content, "fixed material")
@@ -313,16 +355,28 @@ func TestQ1aQuickAnalysisExcludesEnterpriseAndPreservesRawContext(t *testing.T) 
 			kbs.rows = kbs.rows[:1]
 			kbs.rows[0].KnowledgeFilename, kbs.rows[0].ChunkType = file, string(types.ChunkTypeTableSummary)
 			if file == "material.xlsx" {
-				kbs.rows = append(kbs.rows, &types.SearchResult{ID: "plain-chunk", KnowledgeID: "plain-doc", KnowledgeBaseID: "plain",
-					KnowledgeFilename: "ordinary.csv", Content: "ordinary context"})
+				kbs.rows = append(kbs.rows, &types.SearchResult{
+					ID: "plain-chunk", KnowledgeID: "plain-doc", KnowledgeBaseID: "plain",
+					KnowledgeFilename: "ordinary.csv", Content: "ordinary context",
+				})
 			}
-			svc.eventManager.Register(q1aPipeline{events: []types.EventType{types.CHUNK_SEARCH_PARALLEL}, on: func(_ types.EventType, cm *types.ChatManage) { cm.SearchResult = kbs.rows }})
+			svc.eventManager.Register(q1aPipeline{
+				events: []types.EventType{types.CHUNK_SEARCH_PARALLEL},
+				on:     func(_ types.EventType, cm *types.ChatManage) { cm.SearchResult = kbs.rows },
+			})
 			chatpipeline.NewPluginDataAnalysis(svc.eventManager, nil, nil, docs, nil, nil, nil, nil)
 			var delivered []*types.SearchResult
-			svc.eventManager.Register(q1aPipeline{events: []types.EventType{types.INTO_CHAT_MESSAGE}, on: func(_ types.EventType, cm *types.ChatManage) { delivered = cm.MergeResult }})
-			err := svc.KnowledgeQA(ctx, &types.QARequest{Session: &types.Session{ID: "q-session", TenantID: 7}, SummaryModelID: "q-chat", TurnLeaseHeld: true,
+			svc.eventManager.Register(q1aPipeline{
+				events: []types.EventType{types.INTO_CHAT_MESSAGE},
+				on:     func(_ types.EventType, cm *types.ChatManage) { delivered = cm.MergeResult },
+			})
+			err := svc.KnowledgeQA(ctx, &types.QARequest{
+				Session: &types.Session{ID: "q-session", TenantID: 7}, SummaryModelID: "q-chat", TurnLeaseHeld: true,
 				KnowledgeBaseIDs: []string{"q-raw", "plain"}, Query: "question",
-				CustomAgent: &types.CustomAgent{TenantID: 7, Config: types.CustomAgentConfig{ModelID: "q-chat", DataAnalysisEnabled: true}}}, event.NewEventBus())
+				CustomAgent: &types.CustomAgent{
+					TenantID: 7, Config: types.CustomAgentConfig{ModelID: "q-chat", DataAnalysisEnabled: true},
+				},
+			}, event.NewEventBus())
 			require.NoError(t, err)
 			require.NotContains(t, docs.reads, "q-doc", "native data analysis must not open enterprise files")
 			require.NotEmpty(t, delivered)

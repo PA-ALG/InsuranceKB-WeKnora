@@ -1117,20 +1117,6 @@ const artifactRefLabels = computed(() => ({
   deletedHint: t('agent.artifactDrawer.inlineDeleted'),
 }));
 
-const {
-  float: citationFloat,
-  rebind: rebindCitations,
-  cancelClose: cancelCitationClose,
-  scheduleClose: scheduleCitationClose,
-} = useChatCitationPopover(rootElement, {
-  getKnowledgeReferences: () => getReferencesForDrawer(),
-  embedChannelId: () => (props.embeddedMode ? props.embedChannelId : undefined),
-  embedToken: () => (props.embeddedMode ? props.embedToken : undefined),
-  sessionId: () => props.sessionId,
-});
-
-const referencesDrawer = useChatReferencesDrawer();
-
 const getReferencesForDrawer = (
   refsOverride?: KnowledgeReferenceLike[] | null,
 ): KnowledgeReferenceLike[] => {
@@ -1148,6 +1134,20 @@ const getReferencesForDrawer = (
     getToolReferenceItems(event),
   );
 };
+
+const {
+  float: citationFloat,
+  rebind: rebindCitations,
+  cancelClose: cancelCitationClose,
+  scheduleClose: scheduleCitationClose,
+} = useChatCitationPopover(rootElement, {
+  getKnowledgeReferences: getReferencesForDrawer,
+  embedChannelId: () => (props.embeddedMode ? props.embedChannelId : undefined),
+  embedToken: () => (props.embeddedMode ? props.embedToken : undefined),
+  sessionId: () => props.sessionId,
+});
+
+const referencesDrawer = useChatReferencesDrawer();
 
 const openReferencesDrawer = (
   highlight?: ReferenceHighlightTarget,

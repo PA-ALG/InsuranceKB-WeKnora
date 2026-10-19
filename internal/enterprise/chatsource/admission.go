@@ -192,6 +192,7 @@ func (s *Selection) CheckKBs(ids []string, rows []*types.KnowledgeBase, err erro
 	return nil
 }
 
+// CheckDocuments rejects a batch that omits an explicitly selected enterprise document.
 func (s *Selection) CheckDocuments(ids []string, rows []*types.Knowledge, err error) error {
 	if s == nil {
 		return nil
@@ -213,6 +214,7 @@ func (s *Selection) CheckDocuments(ids []string, rows []*types.Knowledge, err er
 	return nil
 }
 
+// CheckTargets prevents native scope building from silently losing an enterprise choice.
 func (s *Selection) CheckTargets(targets types.SearchTargets) error {
 	if s == nil {
 		return nil

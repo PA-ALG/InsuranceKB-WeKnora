@@ -14,7 +14,9 @@ type ChunkReader interface {
 
 // Filter checks delivery-time revision state without reading Active again. Returned
 // enterprise results are copies; Label never changes the caller's shared objects.
-func (r *Resolver) Filter(ctx context.Context, tenantID uint64, turn Turn, chunks ChunkReader, results []*types.SearchResult) ([]*types.SearchResult, error) {
+func (r *Resolver) Filter(
+	ctx context.Context, tenantID uint64, turn Turn, chunks ChunkReader, results []*types.SearchResult,
+) ([]*types.SearchResult, error) {
 	if r == nil || missing(r.spaces) {
 		return nil, errors.New("chat source configuration is unavailable")
 	}
@@ -75,27 +77,29 @@ func (r *Resolver) Filter(ctx context.Context, tenantID uint64, turn Turn, chunk
 		}
 		attempt, selected := turn.RawAttempts[result.KnowledgeID]
 		row := byID[result.ID]
-		if !selected || row == nil || row.DeletedAt.Valid || row.TenantID != tenantID || row.KnowledgeID != result.KnowledgeID ||
-			row.ParseAttempt != attempt || current[result.KnowledgeID] != attempt || pins[space][result.KnowledgeID] != attempt {
+		if !selected || row == nil || row.DeletedAt.Valid || row.TenantID != tenantID ||
+			row.KnowledgeID != result.KnowledgeID || row.ParseAttempt != attempt ||
+			current[result.KnowledgeID] != attempt || pins[space][result.KnowledgeID] != attempt {
 			continue
 		}
 		chunkSpace, role, ok := r.SpaceOf(tenantID, row.KnowledgeBaseID)
-		if !ok || role != RoleRaw || chunkSpace != space || (result.KnowledgeBaseID != "" && result.KnowledgeBaseID != row.KnowledgeBaseID) {
+		if !ok || role != RoleRaw || chunkSpace != space ||
+			(result.KnowledgeBaseID != "" && result.KnowledgeBaseID != row.KnowledgeBaseID) {
 			continue
 		}
-		copy := *result
-		if copy.ContentRewritten || len(copy.SubChunkID) > 0 {
+		cloned := *result
+		if cloned.ContentRewritten || len(cloned.SubChunkID) > 0 {
 			// Native merging does not retain a complete contributor chain for
 			// parent/neighbor expansions. Deliver the verified primary chunk
 			// rather than trusting any unverified merged text or image payload.
-			copy.Content, copy.ImageInfo = row.Content, row.ImageInfo
-			copy.StartAt, copy.EndAt, copy.ChunkIndex = row.StartAt, row.EndAt, row.ChunkIndex
-			copy.ChunkType, copy.ParentChunkID = string(row.ChunkType), row.ParentChunkID
-			copy.ContentRevision = row.ContentRevision
-			copy.SubChunkID, copy.ContentRewritten = nil, false
+			cloned.Content, cloned.ImageInfo = row.Content, row.ImageInfo
+			cloned.StartAt, cloned.EndAt, cloned.ChunkIndex = row.StartAt, row.EndAt, row.ChunkIndex
+			cloned.ChunkType, cloned.ParentChunkID = string(row.ChunkType), row.ParentChunkID
+			cloned.ContentRevision = row.ContentRevision
+			cloned.SubChunkID, cloned.ContentRewritten = nil, false
 		}
-		turn.Label([]*types.SearchResult{&copy})
-		out = append(out, &copy)
+		turn.Label([]*types.SearchResult{&cloned})
+		out = append(out, &cloned)
 	}
 	return out, nil
 }

@@ -26,6 +26,7 @@ type ConceptAgentService830G2 struct {
 	classifier           managed.Classifier
 }
 
+// WithChatSourceResolver keeps configured enterprise sources out of the legacy projection.
 func (s *ConceptAgentService830G2) WithChatSourceResolver(resolver *chatsource.Resolver) *ConceptAgentService830G2 {
 	s.chatSources = resolver
 	return s
