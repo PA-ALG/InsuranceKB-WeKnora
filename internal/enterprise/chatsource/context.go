@@ -143,14 +143,6 @@ func PromptConfig(resolver *Resolver, config *types.AgentConfig, turn Turn) *typ
 	return &cloned
 }
 
-// WikiUnavailableNotice describes the unavailable enterprise Wiki capability.
-func WikiUnavailableNotice(turn Turn) string {
-	if len(turn.WikiSpaces) == 0 {
-		return ""
-	}
-	return "已发布知识尚不可用：当前选择的企业 Wiki 库在 Q1b 提供查询前没有检索工具。不要声称已检索或审核这些知识；如已选择原始材料库，仅可检索本轮固定材料，来源为原文检索（未经编译审核）。"
-}
-
 // AgentTurn resolves once even when engine creation and tool registration both
 // need the scope. The saved agent config and subsequent turns remain untouched.
 func AgentTurn(

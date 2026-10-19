@@ -24,6 +24,7 @@ type CitationPopoverOptions = {
   mode: 'chat' | 'embed'
   getKnowledgeReferences?: () => CitationKnowledgeRef[] | null | undefined
   getSourceTier?: (chunkId: string) => SourceTier | null
+  getReferencePreview?: (chunkId: string) => { title: string; content: string; error?: string } | null
   getCacheScope: () => string
   fetchChunk: (chunkId: string) => Promise<{ data?: { content?: unknown } } | undefined>
   notFoundError?: () => string
@@ -110,6 +111,15 @@ export function useCitationPopover(rootRef: Ref<HTMLElement | null>, options: Ci
     float.value.url = ''
     float.value.visible = true
     positionFor(el, 4)
+
+    const preview = options.getReferencePreview?.(chunkId)
+    if (preview) {
+      float.value.title = preview.title || title
+      float.value.content = preview.content
+      float.value.error = preview.error || ''
+      float.value.loading = false
+      return
+    }
 
     const scope = options.getCacheScope()
     const cached = getCitationChunkCache(scope, chunkId)

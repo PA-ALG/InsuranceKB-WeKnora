@@ -96,3 +96,17 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/i18n/locales/ko-KR.ts` | Q1a | 韩文同步两种来源文案 | 部分（语言包注册） | 同上 |
 | `frontend/src/i18n/locales/ru-RU.ts` | Q1a | 俄文同步两种来源文案 | 部分（语言包注册） | 同上 |
 | `frontend/src/router/index.ts` | S3h-2 | 注册企业本版变化页与固定 Release 参数；沿用已登记的路由表接缝，比较和展示留在 enterprise 自有模块 | 部分（页面注册扩展点） | 上游支持自有页面路由注册后移除接缝 |
+| `internal/application/service/agent_service.go` | Q1b | 按轮装配已发布知识查询工具与来源提示，保持其他工具白名单和原文范围 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `internal/container/container.go` | Q1b | 将只读知识服务连接到现有 Release SpaceReadView，避免旁路 Store | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `internal/modelcontext/tool_policy.go` | Q1b | 四个已发布知识工具经既有来源短句柄协议提供可引用结果 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/views/chat/components/AgentStreamDisplay.vue` | Q1b | 恢复四知识工具的历史来源元数据与引用操作，阻止 release 引用回落原生知识库 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/components/ChatReferencesDrawer.vue` | Q1b | 已发布字段经可信版本身份打开 CitationPanel，保留嵌入权限边界 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/composables/useChatCitationPopover.ts` | Q1b | 从可信工具引用预览已发布字段，禁止按合成 chunk 身份读取 chunk | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/composables/useCitationPopover.ts` | Q1b | 提供同步引用预览接缝，在访问 chunk 缓存前处理已发布来源与无效身份 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/utils/citationMarkdown.ts` | Q1b | 通过既有引用模块导出企业发布引用预览接缝 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/zh-CN.ts` | Q1b | 同步已发布知识工具与准确出处失败/授权边界文案 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/en-US.ts` | Q1b | 同步已发布知识工具与准确出处失败/授权边界文案 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/ja-JP.ts` | Q1b | 同步已发布知识工具与准确出处失败/授权边界文案 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/ko-KR.ts` | Q1b | 同步已发布知识工具与准确出处失败/授权边界文案 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/ru-RU.ts` | Q1b | 同步已发布知识工具与准确出处失败/授权边界文案 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/utils/referenceSources.ts` | Q1b | Release 引用按完整来源身份高亮，跨 Space 同名合成身份歧义不猜测 | 部分（来源身份扩展） | 上游支持注入精确来源解析器后移除接缝 |

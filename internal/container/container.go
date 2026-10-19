@@ -70,7 +70,9 @@ import (
 	rssConnector "github.com/Tencent/WeKnora/internal/datasource/connector/rss"
 	yuqueConnector "github.com/Tencent/WeKnora/internal/datasource/connector/yuque"
 	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
+	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
+	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/handler"
@@ -412,6 +414,9 @@ func BuildContainer(container *dig.Container) *dig.Container {
 		}
 		cleaner.RegisterWithName("BrowserSkill", func() error { manager.Close(); return nil })
 		return manager, nil
+	}))
+	must(container.Provide(func(releases *release.Service) *knowledge.Service {
+		return knowledge.NewService(knowledge.NewReleaseReader(releases))
 	}))
 	must(container.Provide(service.NewAgentService))
 
