@@ -7497,6 +7497,21 @@ export default {
     noSessions: '暂无对话'
   },
   enterpriseKnowledge: {
+    changes: {
+      "pageTitle": "本版变化",
+      "title": "版本 {current} 相对版本 {base} 的变化",
+      "summary": "本版更新：新增 {added} · 修改 {changed} · 删除 {removed}",
+      "added": "新增",
+      "changed": "修改",
+      "removed": "删除",
+      "before": "上一版",
+      "after": "本版",
+      "updated": "本版更新",
+      "notPreviouslyPresent": "上一版没有这一项",
+      "firstRelease": "这是第一个发布版本",
+      "noFields": "本版没有字段内容变化（更新了 {count} 项导航、展示设置或概念说明）",
+      "failed": "版本变化加载失败"
+    },
     spot: {
       "entry": "抽检",
       "title": "抽检台",
