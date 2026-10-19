@@ -161,7 +161,7 @@ func TestQ1aAgentPromptDoesNotReadUnfixedMetadata(t *testing.T) {
 	for _, message := range model.messages {
 		require.NotContains(t, message.Content, "unreleased secret")
 	}
-	require.Contains(t, model.lastSystemPrompt, "已发布知识尚不可用")
+	require.Contains(t, model.lastSystemPrompt, "已发布知识优先") // Q1b replaced the Q1a "not yet available" notice
 	require.Equal(t, 1, source.reads)
 }
 
