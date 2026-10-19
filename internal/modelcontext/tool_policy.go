@@ -70,9 +70,9 @@ var toolHandlePolicies = map[string]toolHandlePolicy{
 	"knowledge_get_fields":    {sourceOutput: true},
 	"knowledge_search_fields": {sourceOutput: true},
 	"knowledge_get_concept":   {sourceOutput: true},
-	"discover_mcp_tools": {opaqueOutput: true, mcpRoutingKey: "server_id", mcpDirectoryOutput: true},
-	"call_mcp_tool":      {opaqueOutput: true, mcpRoutingKey: "tool_ref"},
-	"read_file":          {},
+	"discover_mcp_tools":      {opaqueOutput: true, mcpRoutingKey: "server_id", mcpDirectoryOutput: true},
+	"call_mcp_tool":           {opaqueOutput: true, mcpRoutingKey: "tool_ref"},
+	"read_file":               {},
 	"search_knowledge": {
 		sourceIDKeys: map[string]struct{}{"knowledge_base_ids": {}},
 		sourceOutput: true,
