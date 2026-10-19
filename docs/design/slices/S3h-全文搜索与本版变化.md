@@ -79,6 +79,18 @@
     - `otherChanged` 是非 Claim 成员的变化数。
   - 名称与标题：删除项取自 `base`，其余取自 `current`。
 - 上一版就是 `base_release_id` 指向的版本。没有 `base_release_id`（第一版）时，没有变化可显示。
+- 补充口径（2026-10-19，写 S3h-2 验收时确定）：
+  - `base` 为 null 时，`releaseChanges` 返回 null；
+  - `otherChanged`：新增、删除或摘要改变的非 Claim 成员总数；
+  - 三个列表都按产品顺序排列，产品顺序同 S3h-1；同一产品内按 profile 字段顺序，profile 中没有的字段排在后面；删除项的产品顺序按上一版计算；
+  - `before` / `after` 用产品页的 `FieldView`（标题取自 profile）。
+- **数据钩子**（验收依据）：
+  - 首页：`[data-space-changes]`；
+  - 变化页：
+    - 产品分组 `[data-change-entity=<entityId>]`；
+    - 变化行 `[data-change=<logical_slug>]`，其中类型标签为"新增 / 修改 / 删除"；
+    - 修改项的两侧 `[data-change-before]` 与 `[data-change-after]`；
+  - 产品页：标签 `[data-field-updated]`，展开后 `[data-field-previous]`。
 
 ### 3.2 页面
 
