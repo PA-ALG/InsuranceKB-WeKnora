@@ -158,8 +158,10 @@ func TestRawKBIsNarrowedToSearchablePinnedMaterials(t *testing.T) {
 
 func TestKnowledgeLevelRawTargetIsIntersectedWithPins(t *testing.T) {
 	s, h, p, a := fixture()
-	chosen := &types.SearchTarget{Type: types.SearchTargetTypeKnowledge, KnowledgeBaseID: "raw-1", TenantID: tenant,
-		KnowledgeIDs: []string{"k2", "k3", "k-unpinned"}, DisableRecallThresholds: true}
+	chosen := &types.SearchTarget{
+		Type: types.SearchTargetTypeKnowledge, KnowledgeBaseID: "raw-1", TenantID: tenant,
+		KnowledgeIDs: []string{"k2", "k3", "k-unpinned"}, DisableRecallThresholds: true,
+	}
 	turn, err := resolver(s, h, p, a).Resolve(context.Background(), tenant, types.SearchTargets{chosen})
 	require.NoError(t, err)
 	require.Len(t, turn.Targets, 1)
@@ -167,8 +169,10 @@ func TestKnowledgeLevelRawTargetIsIntersectedWithPins(t *testing.T) {
 	require.True(t, turn.Targets[0].DisableRecallThresholds)
 	require.Equal(t, map[string]string{"k2": "s1"}, turn.RawKnowledge)
 
-	none := &types.SearchTarget{Type: types.SearchTargetTypeKnowledge, KnowledgeBaseID: "raw-1", TenantID: tenant,
-		KnowledgeIDs: []string{"k3", "k-unpinned"}}
+	none := &types.SearchTarget{
+		Type: types.SearchTargetTypeKnowledge, KnowledgeBaseID: "raw-1", TenantID: tenant,
+		KnowledgeIDs: []string{"k3", "k-unpinned"},
+	}
 	_, err = resolver(s, h, p, a).Resolve(context.Background(), tenant, types.SearchTargets{none})
 	require.Equal(t, "RELEASE_SOURCES_UNAVAILABLE", code(t, err))
 }
@@ -210,7 +214,8 @@ func TestDependencyFailuresAreReturnedNotWidened(t *testing.T) {
 
 func TestWikiKBIsRecordedNotSearched(t *testing.T) {
 	s, h, p, a := fixture()
-	turn, err := resolver(s, h, p, a).Resolve(context.Background(), tenant, types.SearchTargets{kb("wiki-1"), kb("plain")})
+	turn, err := resolver(s, h, p, a).Resolve(context.Background(), tenant,
+		types.SearchTargets{kb("wiki-1"), kb("plain")})
 	require.NoError(t, err)
 	require.Len(t, turn.Targets, 1)
 	require.Equal(t, "plain", turn.Targets[0].KnowledgeBaseID)
@@ -233,13 +238,15 @@ func TestBothKBsOfOneSpaceShareOneReleaseReadOnce(t *testing.T) {
 
 func TestLabelMarksOnlySearchablePinnedMaterials(t *testing.T) {
 	s, h, p, a := fixture()
-	turn, err := resolver(s, h, p, a).Resolve(context.Background(), tenant, types.SearchTargets{kb("raw-1"), kb("plain")})
+	turn, err := resolver(s, h, p, a).Resolve(context.Background(), tenant,
+		types.SearchTargets{kb("raw-1"), kb("plain")})
 	require.NoError(t, err)
 	pinned := &types.SearchResult{ID: "c1", KnowledgeID: "k1"}
 	withMeta := &types.SearchResult{ID: "c2", KnowledgeID: "k2", Metadata: map[string]string{"keep": "yes"}}
 	other := &types.SearchResult{ID: "c3", KnowledgeID: "k-plain"}
 	turn.Label([]*types.SearchResult{pinned, withMeta, other})
 	require.Equal(t, map[string]string{"source_tier": "raw_text", "release_id": "rel-1"}, pinned.Metadata)
-	require.Equal(t, map[string]string{"keep": "yes", "source_tier": "raw_text", "release_id": "rel-1"}, withMeta.Metadata)
+	require.Equal(t, map[string]string{"keep": "yes", "source_tier": "raw_text", "release_id": "rel-1"},
+		withMeta.Metadata)
 	require.Nil(t, other.Metadata)
 }
