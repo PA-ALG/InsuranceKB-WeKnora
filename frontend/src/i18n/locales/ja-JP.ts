@@ -7557,7 +7557,11 @@ export default {
     home: {
       "version": "バージョン {epoch}",
       "counts": "商品 {products} 件 · 共通概念 {concepts} 件 · 各項目に原文の出典を記載",
-      "search": "商品または概念を検索",
+      "search": "商品・概念・フィールド内容を検索",
+      "fieldContent": "フィールド内容",
+      "fieldLimit": "全 {total} 件のうち先頭 50 件を表示",
+      "noFields": "一致するフィールド内容はありません",
+      "noResults": "「{query}」を含む内容は見つかりませんでした",
       "common": "よく使う概念",
       "overview": "商品一覧",
       "absent": "なし",

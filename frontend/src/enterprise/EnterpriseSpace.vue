@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { EnterpriseError, readRelease, type Release } from './enterpriseApi'
 import { spaceHomeView } from './spaceHomeView'
+import { searchFields } from './releaseSearch'
 import EnterpriseNavigation from './EnterpriseNavigation.vue'
 
 const props = defineProps<{ spaceId: string; releaseId?: string }>()
@@ -19,6 +20,9 @@ const groups = computed(() => (home.value?.groups ?? []).map(group => ({ ...grou
   .filter(group => group.rows.length))
 const concepts = computed(() => (home.value?.concepts ?? []).filter(concept => matches(concept.title)))
 const common = computed(() => search.value ? concepts.value : concepts.value.slice(0, 10))
+const fieldSearch = computed(() => release.value ? searchFields(release.value, query.value) : { hits: [], total: 0 })
+const generated = computed(() => new Set((release.value?.members ?? [])
+  .filter(member => member.kind === 'claim' && member.payload?.origin === 'MODEL_GENERATED').map(member => member.logical_slug)))
 function entityTarget(entityId: string) {
   return { name: 'enterpriseEntity', params: { spaceId: props.spaceId, entityId }, query: { release: release.value!.id } }
 }
@@ -117,6 +121,21 @@ onUnmounted(() => { generation++ })
             <span v-if="!common.length" class="ek-page__meta">{{ t('enterpriseKnowledge.home.noConcepts') }}</span>
             <button type="button" class="ek-link-button" data-all-concepts @click="navigation?.showConcepts()">{{ t('enterpriseKnowledge.home.allConcepts', { count: home.concepts.length }) }} →</button>
           </div>
+        </section>
+        <section v-if="search" class="ek-home__section ek-home__fields" data-search-fields>
+          <h2>{{ t('enterpriseKnowledge.home.fieldContent') }}</h2>
+          <p v-if="fieldSearch.total > 50" class="ek-page__meta" role="status">{{ t('enterpriseKnowledge.home.fieldLimit', { total: fieldSearch.total }) }}</p>
+          <ul v-if="fieldSearch.hits.length" class="ek-home__hits">
+            <li v-for="hit in fieldSearch.hits" :key="hit.slug" data-search-hit>
+              <RouterLink :to="{ ...entityTarget(hit.entityId), hash: `#${hit.fieldKey}` }">
+                <span class="ek-home__hit-title">{{ hit.name }} <span aria-hidden="true">·</span> {{ hit.fieldTitle }}</span>
+                <span v-if="generated.has(hit.slug)" class="ek-origin ek-origin--generated">{{ t('enterpriseKnowledge.origin.generated') }}</span>
+                <span class="ek-home__snippet"><template v-for="(part, index) in hit.parts" :key="index"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
+              </RouterLink>
+            </li>
+          </ul>
+          <p v-else-if="groups.length || concepts.length" class="ek-page__meta">{{ t('enterpriseKnowledge.home.noFields') }}</p>
+          <p v-else class="ek-empty" role="status">{{ t('enterpriseKnowledge.home.noResults', { query: query.trim() }) }}</p>
         </section>
       </article>
     </div>
