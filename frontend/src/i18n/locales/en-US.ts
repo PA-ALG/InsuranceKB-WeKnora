@@ -7557,7 +7557,11 @@ export default {
     home: {
       "version": "Version {epoch}",
       "counts": "{products} products · {concepts} shared concepts · Source references for each item",
-      "search": "Search products or concepts",
+      "search": "Search products, concepts or field content",
+      "fieldContent": "Field content",
+      "fieldLimit": "{total} results; showing the first 50",
+      "noFields": "No matching field content",
+      "noResults": "No content found containing “{query}”",
       "common": "Common concepts",
       "overview": "Product overview",
       "absent": "None",

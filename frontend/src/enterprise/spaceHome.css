@@ -33,3 +33,12 @@
 .ek-home__concepts a { text-decoration: none; }
 .ek-home__concepts a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .ek-home__concepts .ek-link-button { color: var(--td-text-color-secondary); }
+.ek-home__hits { list-style: none; padding: 0; margin: 0; }
+.ek-home__hits li { border-bottom: 1px solid var(--td-border-level-1-color); }
+.ek-home__hits a { display: block; padding: 18px 8px; color: var(--td-text-color-primary); text-decoration: none; border-radius: 4px; overflow-wrap: anywhere; }
+.ek-home__hits a:hover { background: var(--td-bg-color-container-hover); }
+.ek-home__hits a:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 2px; }
+.ek-home__hit-title { font-size: 14px; font-weight: 600; color: var(--td-brand-color); }
+.ek-home__snippet { display: block; margin-top: 7px; font-size: 14px; line-height: 1.8; }
+.ek-home__snippet mark { color: inherit; background: var(--td-warning-color-2); border-radius: 2px; }
+.ek-home__fields .ek-origin { margin-left: 10px; }
