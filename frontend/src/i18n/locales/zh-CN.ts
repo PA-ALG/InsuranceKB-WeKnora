@@ -7559,7 +7559,11 @@ export default {
     home: {
       "version": "版本 {epoch}",
       "counts": "{products} 款产品 · {concepts} 个跨产品概念 · 每项内容附原文出处",
-      "search": "搜索产品或概念",
+      "search": "搜索产品、概念或字段内容",
+      "fieldContent": "字段内容",
+      "fieldLimit": "共 {total} 条，显示前 50 条",
+      "noFields": "没有匹配的字段内容",
+      "noResults": "没有找到包含“{query}”的内容",
       "common": "常用概念",
       "overview": "产品速览",
       "absent": "无",

@@ -7557,7 +7557,11 @@ export default {
     home: {
       "version": "버전 {epoch}",
       "counts": "상품 {products}개 · 공통 개념 {concepts}개 · 각 항목에 원문 출처 제공",
-      "search": "상품 또는 개념 검색",
+      "search": "상품, 개념 또는 필드 내용 검색",
+      "fieldContent": "필드 내용",
+      "fieldLimit": "총 {total}건 중 처음 50건 표시",
+      "noFields": "일치하는 필드 내용이 없습니다",
+      "noResults": "“{query}”이(가) 포함된 내용을 찾을 수 없습니다",
       "common": "자주 쓰는 개념",
       "overview": "상품 개요",
       "absent": "없음",
