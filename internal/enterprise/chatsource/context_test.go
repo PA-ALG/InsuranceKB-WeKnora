@@ -18,8 +18,8 @@ func TestTurnContextIsRequestLocalAndWikiOnlyQuickQAIsExplicit(t *testing.T) {
 	require.Equal(t, "release", got.Releases["space"])
 	_, ok = TurnFromContext(base)
 	require.False(t, ok)
-	require.NotEmpty(t, WikiUnavailableNotice(Turn{WikiSpaces: []string{"space"}}))
-	require.Empty(t, WikiUnavailableNotice(Turn{}))
+	require.Contains(t, KnowledgeNotice(Turn{WikiSpaces: []string{"space"}}), "已发布知识优先")
+	require.Empty(t, KnowledgeNotice(Turn{}))
 }
 
 func TestAgentTurnWithNoResolverKeepsOrdinaryScope(t *testing.T) {

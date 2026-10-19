@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Tencent/WeKnora/internal/agent/tools"
+	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/models/chat"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -34,7 +35,10 @@ func TestQ1aAgentRawOnlyOffersSearchAndReusesTurnForEveryCall(t *testing.T) {
 	}}
 	registry := tools.NewToolRegistry()
 	require.NoError(t, svc.registerTools(ctx, registry, config, nil, nil, "session"))
-	require.Equal(t, []string{tools.ToolSearchKnowledge}, registry.ListTools())
+	require.ElementsMatch(t, []string{
+		tools.ToolSearchKnowledge, "knowledge_find_entity", "knowledge_get_fields",
+		"knowledge_search_fields", "knowledge_get_concept",
+	}, registry.ListTools())
 	search, err := registry.GetTool(tools.ToolSearchKnowledge)
 	require.NoError(t, err)
 	for range 2 {
@@ -86,10 +90,11 @@ func TestQ1aAgentMixedScopeDoesNotExposeEnterpriseToDocumentTools(t *testing.T) 
 	require.Error(t, err, "the document tool must not reach the enterprise target")
 }
 
-func TestQ1aAgentWikiOnlyRegistersNoRetrievalTools(t *testing.T) {
+func TestQ1bAgentWikiOnlyRegistersPublishedKnowledgeTools(t *testing.T) {
 	ctx, quick, source, _ := q1aFixture()
 	svc := &agentService{
-		cfg: quick.cfg, knowledgeBaseService: quick.knowledgeBaseService, chatSources: quick.chatSources,
+		publishedKnowledge: knowledge.NewService(nil),
+		cfg:                quick.cfg, knowledgeBaseService: quick.knowledgeBaseService, chatSources: quick.chatSources,
 	}
 	registry := tools.NewToolRegistry()
 	require.NoError(t, svc.registerTools(ctx, registry, &types.AgentConfig{
@@ -101,7 +106,9 @@ func TestQ1aAgentWikiOnlyRegistersNoRetrievalTools(t *testing.T) {
 			tools.ToolSearchKnowledge, tools.ToolReadDocument, tools.ToolWikiReadPage, tools.ToolWikiSearch,
 		},
 	}, nil, nil, "session"))
-	require.Empty(t, registry.ListTools())
+	require.ElementsMatch(t, []string{
+		"knowledge_find_entity", "knowledge_get_fields", "knowledge_search_fields", "knowledge_get_concept",
+	}, registry.ListTools())
 	require.Equal(t, 1, source.reads)
 }
 
