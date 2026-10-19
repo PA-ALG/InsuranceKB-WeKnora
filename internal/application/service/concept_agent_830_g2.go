@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -19,9 +20,15 @@ import (
 // Agent turn registers any retrieval tool. It deliberately returns immutable
 // member projections rather than the opaque release pin itself.
 type ConceptAgentService830G2 struct {
+	chatSources          *chatsource.Resolver
 	releaseAuthority     *WikiReleaseService
 	knowledgeBaseService interfaces.KnowledgeBaseService
 	classifier           managed.Classifier
+}
+
+func (s *ConceptAgentService830G2) WithChatSourceResolver(resolver *chatsource.Resolver) *ConceptAgentService830G2 {
+	s.chatSources = resolver
+	return s
 }
 
 func NewConceptAgentService830G2(
@@ -79,6 +86,9 @@ func (s *ConceptAgentService830G2) PinConceptAgentTurn830G2(
 			continue
 		}
 		seen[wikiKBID] = tenantID
+		if _, _, enterprise := s.chatSources.SpaceOf(tenantID, wikiKBID); enterprise {
+			continue
+		}
 		role, err := s.classifier.Classify(ctx, tenantID, wikiKBID)
 		if err != nil {
 			return nil, ErrWikiReleaseAccessDenied

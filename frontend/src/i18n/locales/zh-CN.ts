@@ -3740,6 +3740,8 @@ export default {
     modelStillResponding: '模型响应较慢，仍在等待…',
     deepThoughtCompleted: '已深度思考',
     deepThoughtAlt: '深度思考完成',
+    sourceTierRawText: '原文检索（未经编译审核）',
+    sourceTierRelease: '已发布知识（审核过）',
     referencesTitle: '参考了{count}个相关内容',
     referencesDocCount: '引用了{count}篇文档',
     referencesWebCount: '参考了{count}条网页',

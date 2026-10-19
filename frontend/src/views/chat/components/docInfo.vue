@@ -41,6 +41,7 @@
                         </t-tooltip>
                     </div>
                 </div>
+                <div v-if="group.sourceTier" class="doc-group-source">{{ sourceTierLabel(group.sourceTier, t) }}</div>
                 <div class="doc-group-chunks" v-show="expandedGroups[group.key]">
                     <div v-for="(chunk, cIdx) in group.chunks" :key="'chunk-' + cIdx" class="doc-chunk-item">
                         <t-popup overlayClassName="refer-to-layer" placement="bottom-left" width="400"
@@ -66,6 +67,7 @@ import { useI18n } from 'vue-i18n';
 import { sanitizeHTML } from '@/utils/security';
 import ContentPopup from './tool-results/ContentPopup.vue';
 import { useChatReferencesDrawer } from '@/composables/useChatReferencesDrawer';
+import { referenceSourceKey, sourceTier, sourceTierLabel } from '@/enterprise/sourceTier';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -126,13 +128,14 @@ const groupedKnowledgeRefs = computed(() => {
 
     const groupMap = new Map();
     for (const item of refs) {
-        const key = item.knowledge_id || item.knowledge_title || item.id;
+        const key = (item.knowledge_id || item.knowledge_title || item.id) + referenceSourceKey(item);
         if (!groupMap.has(key)) {
             groupMap.set(key, {
                 key,
                 title: item.knowledge_title || item.knowledge_filename || key,
                 knowledgeId: item.knowledge_id,
                 knowledgeBaseId: item.knowledge_base_id,
+                sourceTier: sourceTier(item),
                 chunks: [],
             });
         }
@@ -212,6 +215,12 @@ const getWebSearchDisplayText = (item) => {
 };
 </script>
 <style lang="less" scoped>
+.doc-group-source {
+    color: var(--td-text-color-secondary);
+    padding: 0 12px 6px;
+    white-space: normal;
+}
+
 .refer {
     --refer-brand-4: color-mix(in srgb, var(--td-brand-color) 4%, transparent);
     --refer-brand-8: color-mix(in srgb, var(--td-brand-color) 8%, transparent);

@@ -2,7 +2,7 @@ import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getChunkByIdOnly } from '@/api/knowledge-base'
 import { getEmbedChunkById } from '@/api/embed'
-import type { CitationKnowledgeRef } from '@/utils/citationMarkdown'
+import { citationSourceTier, type CitationKnowledgeRef } from '@/utils/citationMarkdown'
 import { useCitationPopover } from './useCitationPopover'
 
 export { clearCitationChunkCache } from '@/utils/citationChunkCache'
@@ -20,6 +20,7 @@ export function useChatCitationPopover(rootRef: Ref<HTMLElement | null>, options
   return useCitationPopover(rootRef, {
     mode: 'chat',
     getKnowledgeReferences: options?.getKnowledgeReferences,
+    getSourceTier: (chunkId) => citationSourceTier(chunkId, options?.getKnowledgeReferences?.()),
     getCacheScope: () => {
       const channel = options?.embedChannelId?.()
       const token = options?.embedToken?.()

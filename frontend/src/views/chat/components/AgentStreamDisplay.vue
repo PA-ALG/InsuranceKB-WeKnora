@@ -659,6 +659,7 @@ import { getAttachmentParsingSummaryHtml } from '@/utils/attachmentParsingDispla
 import { useChatCitationPopover } from '@/composables/useChatCitationPopover';
 import { useChatReferencesDrawer } from '@/composables/useChatReferencesDrawer';
 import type { KnowledgeReferenceLike, ReferenceHighlightTarget } from '@/utils/referenceSources';
+import { referenceSourceKey } from '@/enterprise/sourceTier';
 import { resolveCitationChunkId } from '@/utils/citationMarkdown';
 import { resolveReleaseCitationKb, resolveWikiReleaseAuthority, useReleaseWikiDrawer } from '@/enterprise/useReleaseWikiDrawer';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -1122,7 +1123,7 @@ const {
   cancelClose: cancelCitationClose,
   scheduleClose: scheduleCitationClose,
 } = useChatCitationPopover(rootElement, {
-  getKnowledgeReferences: () => props.session?.knowledge_references,
+  getKnowledgeReferences: () => getReferencesForDrawer(),
   embedChannelId: () => (props.embeddedMode ? props.embedChannelId : undefined),
   embedToken: () => (props.embeddedMode ? props.embedToken : undefined),
   sessionId: () => props.sessionId,
@@ -1167,21 +1168,24 @@ const mergeDocumentReferences = (refs: KnowledgeReferenceLike[]): KnowledgeRefer
 
   for (const ref of refs) {
     if (ref.chunk_type === 'web_search') continue;
-    const key = ref.knowledge_id || ref.knowledge_title || ref.id;
-    if (!key) continue;
+    const documentId = ref.knowledge_id || ref.knowledge_title || ref.id;
+    if (!documentId) continue;
+    const key = documentId + referenceSourceKey(ref);
 
     const existing = merged.get(key);
     const content = String(ref.content || '').trim();
     if (!existing) {
       merged.set(key, {
         ...ref,
-        id: ref.knowledge_id || ref.id || key,
+        id: ref.id || ref.knowledge_id || key,
+        chunk_ids: Array.from(new Set([...(ref.chunk_ids || []), ...(ref.id ? [ref.id] : [])])),
         content,
         contentParts: content ? [content] : [],
       });
       continue;
     }
 
+    existing.chunk_ids = Array.from(new Set([...(existing.chunk_ids || []), ...(ref.chunk_ids || []), ...(ref.id ? [ref.id] : [])]));
     if (content && !existing.contentParts?.includes(content)) {
       existing.contentParts = [...(existing.contentParts || []), content];
       existing.content = existing.contentParts.slice(0, 3).join('\n\n');
@@ -1402,15 +1406,16 @@ function getToolReferenceItems(event: any): KnowledgeReferenceLike[] {
     const results = Array.isArray(toolData.results) ? toolData.results : [];
     const fallbackKnowledgeBaseId = getToolKnowledgeBaseId(toolData);
     return mergeDocumentReferences(results
-      .filter((item: any) => item?.chunk_id || item?.knowledge_id)
+      .filter((item: any) => item?.chunk_id || item?.faq_id || item?.knowledge_id)
       .map((item: any, index: number) => ({
-        id: item.chunk_id || `${item.knowledge_id}-${item.result_index ?? index + 1}`,
+        id: item.chunk_id || item.faq_id || `${item.knowledge_id}-${item.result_index ?? index + 1}`,
         knowledge_id: item.knowledge_id,
         knowledge_title: item.faq_standard_question || item.knowledge_title,
         knowledge_base_id: item.knowledge_base_id || fallbackKnowledgeBaseId,
         chunk_index: item.result_index ?? index + 1,
-        chunk_type: item.chunk_type,
+        chunk_type: item.chunk_type || (item.faq_id ? 'faq' : undefined),
         content: item.content || '',
+        metadata: item.metadata,
       })));
   }
 

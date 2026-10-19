@@ -1,3 +1,5 @@
+import { referenceSourceKey } from '../enterprise/sourceTier'
+
 export type ReferenceItemKind = 'web' | 'document' | 'tool'
 
 export type KnowledgeReferenceLike = {
@@ -10,7 +12,7 @@ export type KnowledgeReferenceLike = {
   chunk_index?: number
   chunk_type?: string
   content?: string
-  metadata?: Record<string, string>
+  metadata?: Record<string, string> | null
 }
 
 export type ReferenceListItem = {
@@ -28,6 +30,7 @@ export type ReferenceListItem = {
   knowledgeId?: string
   knowledgeBaseId?: string
   content?: string
+  metadata?: Record<string, string> | null
 }
 
 export type ReferenceDrawerSection = {
@@ -167,7 +170,7 @@ function buildDocumentItem(item: KnowledgeReferenceLike, index: number): Referen
     [item.knowledge_base_id, item.knowledge_title || item.knowledge_filename].filter(Boolean).join(':') ||
     chunkId
   return {
-    key: `doc:${documentKey}`,
+    key: `doc:${documentKey}${referenceSourceKey(item)}`,
     kind: 'document',
     fileName: item.knowledge_filename,
     index,
@@ -178,6 +181,7 @@ function buildDocumentItem(item: KnowledgeReferenceLike, index: number): Referen
     knowledgeBaseId: item.knowledge_base_id,
     snippet: truncateText(item.content || '', 220) || undefined,
     content: item.content,
+    metadata: item.metadata,
   }
 }
 
@@ -209,7 +213,7 @@ function mergeDocumentReferences(refs: KnowledgeReferenceLike[]): KnowledgeRefer
   const groups = new Map<string, KnowledgeReferenceLike & { content_parts?: string[] }>()
 
   refs.forEach((item, index) => {
-    const key = getDocumentGroupKey(item, index)
+    const key = getDocumentGroupKey(item, index) + referenceSourceKey(item)
     const content = String(item.content || '').trim()
     const chunkIds = Array.from(new Set([...(item.chunk_ids || []), ...(item.id ? [item.id] : [])]))
     const existing = groups.get(key)
@@ -363,9 +367,9 @@ export function resolveReferenceHighlightKey(
       (item) => item.kind === 'document' && item.title.trim().toLowerCase() === title,
     )
     const scoped = target.knowledgeBaseId
-      ? candidates.find((item) => item.knowledgeBaseId === target.knowledgeBaseId)
-      : undefined
-    if (scoped) return scoped.key
+      ? candidates.filter((item) => item.knowledgeBaseId === target.knowledgeBaseId)
+      : []
+    if (scoped.length === 1) return scoped[0].key
     if (candidates.length === 1) return candidates[0].key
   }
 

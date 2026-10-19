@@ -83,6 +83,7 @@
                           <t-icon name="jump" size="14px" />
                         </a>
                       </div>
+                      <p v-if="sourceTier(item)" class="reference-item__source-tier">{{ sourceTierLabel(sourceTier(item), t) }}</p>
                       <p v-if="item.snippet && !expandedKeys.has(item.key)" class="reference-item__snippet">
                         {{ formatReferenceSnippet(item.snippet) }}
                       </p>
@@ -141,6 +142,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useChatReferencesDrawer } from '@/composables/useChatReferencesDrawer'
 import ArtifactFileIcon from '@/views/chat/components/ArtifactFileIcon.vue'
+import { sourceTier, sourceTierLabel } from '@/enterprise/sourceTier'
 import {
   buildReferenceSections,
   formatReferenceSnippet,
@@ -521,6 +523,14 @@ watch(visible, (open) => {
 .reference-item__document-main {
   flex: 1;
   min-width: 0;
+}
+
+.reference-item__source-tier {
+  margin: 2px 0 0;
+  color: var(--td-text-color-secondary);
+  font-size: var(--app-text-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .reference-item__source {
