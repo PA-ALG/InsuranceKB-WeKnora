@@ -7495,6 +7495,21 @@ export default {
     createFailed: 'プラットフォームAPIキーの作成に失敗しました'
   },
   enterpriseKnowledge: {
+    changes: {
+      "pageTitle": "この版の変更",
+      "title": "バージョン {base} から {current} への変更",
+      "summary": "この版の更新：追加 {added} · 変更 {changed} · 削除 {removed}",
+      "added": "追加",
+      "changed": "変更",
+      "removed": "削除",
+      "before": "前の版",
+      "after": "この版",
+      "updated": "この版で更新",
+      "notPreviouslyPresent": "前の版にはこの項目がありません",
+      "firstRelease": "最初の公開バージョンです",
+      "noFields": "この版にフィールド内容の変更はありません（ナビゲーション・表示設定・概念説明を {count} 件更新）",
+      "failed": "バージョンの変更を読み込めませんでした"
+    },
     spot: {
       "entry": "抜き取り確認",
       "title": "抜き取り確認",

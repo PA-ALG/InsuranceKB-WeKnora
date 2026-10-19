@@ -8,14 +8,20 @@ import EnterpriseNavigation from './EnterpriseNavigation.vue'
 import { conceptKeys } from './conceptView'
 import { readRelease, type Release } from './enterpriseApi'
 import { entityView } from './releaseView'
+import { previousReleaseId, releaseChanges } from './releaseChanges'
 
 const props = defineProps<{ spaceId: string; entityId: string; releaseId?: string }>()
 const { t } = useI18n()
 const state = ref<'loading' | 'failed' | 'ready'>('loading')
 // Every citation of this page is read from this release, never from whatever is active later.
 const release = ref<Release | null>(null)
+const base = ref<Release | null>(null)
+const updated = computed(() => {
+  const changes = release.value ? releaseChanges(release.value, base.value) : null
+  return new Map([...(changes?.added ?? []), ...(changes?.changed ?? [])].map(row => [row.slug, row.before]))
+})
 const view = computed(() => (release.value ? entityView(release.value, props.entityId) : null))
-const selected = ref<{ member: string; evidence: number } | null>(null)
+const selected = ref<{ member: string; evidence: number; releaseId: string } | null>(null)
 const root = ref<HTMLElement | null>(null)
 const route = inject(routeLocationKey, undefined)
 const router = inject(routerKey, undefined)
@@ -44,23 +50,37 @@ function conceptRoute(slug: string) {
 }
 let generation = 0
 
+async function loadBase(current: Release, request: number) {
+  try {
+    const id = previousReleaseId(current)
+    if (!id) return
+    const previous = await readRelease(props.spaceId, id)
+    if (request === generation && previous.id === id) base.value = previous
+  } catch { /* Current fields remain readable when the comparison is unavailable. */ }
+}
+
 async function load() {
   const current = ++generation
   state.value = 'loading'
   selected.value = null
   release.value = null
+  base.value = null
   try {
     const read = props.releaseId ? await readRelease(props.spaceId, props.releaseId) : await readRelease(props.spaceId)
     if (current !== generation) return
     release.value = read
     state.value = 'ready'
+    void loadBase(read, current)
   } catch {
     if (current === generation) state.value = 'failed'
   }
 }
 
 function open(member: string, evidence: number) {
-  selected.value = { member, evidence }
+  if (release.value) selected.value = { member, evidence, releaseId: release.value.id }
+}
+function openPrevious(member: string, evidence: number) {
+  if (base.value) selected.value = { member, evidence, releaseId: base.value.id }
 }
 
 watch(() => [props.spaceId, props.releaseId], load, { immediate: true })
@@ -111,6 +131,8 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               :field="field"
               :anchor-id="anchors.get(field.slug)"
               :concept-route="conceptRoute(field.slug)"
+              :previous="updated.get(field.slug)"
+              @open-previous="evidence => openPrevious(field.slug, evidence)"
               @open="evidence => open(field.slug, evidence)"
             />
           </section>
@@ -122,6 +144,8 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               :field="field"
               :anchor-id="anchors.get(field.slug)"
               :concept-route="conceptRoute(field.slug)"
+              :previous="updated.get(field.slug)"
+              @open-previous="evidence => openPrevious(field.slug, evidence)"
               @open="evidence => open(field.slug, evidence)"
             />
           </section>
@@ -133,6 +157,8 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               :field="field"
               :anchor-id="anchors.get(field.slug)"
               :concept-route="conceptRoute(field.slug)"
+              :previous="updated.get(field.slug)"
+              @open-previous="evidence => openPrevious(field.slug, evidence)"
               @open="evidence => open(field.slug, evidence)"
             />
           </section>
@@ -147,7 +173,7 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
             <CitationPanel
               v-if="selected"
               :space-id="spaceId"
-              :release-id="release.id"
+              :release-id="selected.releaseId"
               :member="selected.member"
               :evidence="selected.evidence"
             />
@@ -159,3 +185,4 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
 </template>
 
 <style src="./enterprisePage.css"></style>
+<style src="./releaseChanges.css"></style>

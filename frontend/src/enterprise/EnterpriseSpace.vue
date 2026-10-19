@@ -4,12 +4,15 @@ import { useI18n } from 'vue-i18n'
 import { EnterpriseError, readRelease, type Release } from './enterpriseApi'
 import { spaceHomeView } from './spaceHomeView'
 import { searchFields } from './releaseSearch'
+import { previousReleaseId, releaseChanges } from './releaseChanges'
 import EnterpriseNavigation from './EnterpriseNavigation.vue'
 
 const props = defineProps<{ spaceId: string; releaseId?: string }>()
 const { t } = useI18n()
 const state = ref<'loading' | 'failed' | 'unpublished' | 'ready'>('loading')
 const release = ref<Release | null>(null)
+const base = ref<Release | null>(null)
+const changes = computed(() => release.value ? releaseChanges(release.value, base.value) : null)
 const home = computed(() => release.value ? spaceHomeView(release.value) : null)
 const query = ref('')
 const searchId = useId()
@@ -36,16 +39,27 @@ function openRow(event: Event) {
 }
 let generation = 0
 
+async function loadBase(current: Release, request: number) {
+  try {
+    const id = previousReleaseId(current)
+    if (!id) return
+    const previous = await readRelease(props.spaceId, id)
+    if (request === generation && previous.id === id) base.value = previous
+  } catch { /* Optional comparison must not prevent reading the current release. */ }
+}
+
 async function load() {
   const current = ++generation
   state.value = 'loading'
   release.value = null
+  base.value = null
   query.value = ''
   try {
     const active = props.releaseId ? await readRelease(props.spaceId, props.releaseId) : await readRelease(props.spaceId)
     if (current !== generation) return
     release.value = active
     state.value = 'ready'
+    void loadBase(active, current)
   } catch (error) {
     if (current !== generation) return
     // A Space that has never published is empty, not broken.
@@ -73,6 +87,9 @@ onUnmounted(() => { generation++ })
           <div class="ek-home__heading">
             <h1 class="ek-page__title" data-space-title>{{ home.title || t('enterpriseKnowledge.title') }}</h1>
             <span class="ek-meta-tag" data-space-version :title="spaceId">{{ t('enterpriseKnowledge.home.version', { epoch: release.epoch }) }}</span>
+            <span v-if="changes && (changes.added.length || changes.changed.length || changes.removed.length)" data-space-changes class="ek-home__changes">
+              <RouterLink :to="{ name: 'enterpriseChanges', params: { spaceId }, query: { release: release.id } }">{{ t('enterpriseKnowledge.changes.summary', { added: changes.added.length, changed: changes.changed.length, removed: changes.removed.length }) }} →</RouterLink>
+            </span>
             <RouterLink class="ek-home__graph-link" :to="{ name: 'enterpriseGraph', params: { spaceId }, query: { release: release.id } }">{{ t('enterpriseKnowledge.graph.title') }} →</RouterLink>
             <RouterLink class="ek-home__spot-link" :to="{ name: 'enterpriseSpotChecks', params: { spaceId } }">{{ t('enterpriseKnowledge.spot.entry') }} →</RouterLink>
           </div>

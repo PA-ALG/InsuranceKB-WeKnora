@@ -7495,6 +7495,21 @@ export default {
     noSessions: '대화가 없습니다'
   },
   enterpriseKnowledge: {
+    changes: {
+      "pageTitle": "이번 버전 변경 사항",
+      "title": "버전 {base}에서 {current}(으)로 변경된 내용",
+      "summary": "이번 버전: 추가 {added} · 수정 {changed} · 삭제 {removed}",
+      "added": "추가",
+      "changed": "수정",
+      "removed": "삭제",
+      "before": "이전 버전",
+      "after": "이번 버전",
+      "updated": "이번 버전에서 업데이트",
+      "notPreviouslyPresent": "이전 버전에는 이 항목이 없습니다",
+      "firstRelease": "첫 번째 게시 버전입니다",
+      "noFields": "이번 버전에는 필드 내용 변경이 없습니다 (탐색, 표시 설정 또는 개념 설명 {count}개 업데이트)",
+      "failed": "버전 변경 사항을 불러오지 못했습니다"
+    },
     spot: {
       "entry": "표본 검토",
       "title": "표본 검토",

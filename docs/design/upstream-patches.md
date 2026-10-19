@@ -95,3 +95,4 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/i18n/locales/ja-JP.ts` | Q1a | 日文同步两种来源文案 | 部分（语言包注册） | 同上 |
 | `frontend/src/i18n/locales/ko-KR.ts` | Q1a | 韩文同步两种来源文案 | 部分（语言包注册） | 同上 |
 | `frontend/src/i18n/locales/ru-RU.ts` | Q1a | 俄文同步两种来源文案 | 部分（语言包注册） | 同上 |
+| `frontend/src/router/index.ts` | S3h-2 | 注册企业本版变化页与固定 Release 参数；沿用已登记的路由表接缝，比较和展示留在 enterprise 自有模块 | 部分（页面注册扩展点） | 上游支持自有页面路由注册后移除接缝 |

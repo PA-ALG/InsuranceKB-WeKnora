@@ -7495,6 +7495,21 @@ export default {
     createFailed: 'Failed to create platform API key'
   },
   enterpriseKnowledge: {
+    changes: {
+      "pageTitle": "Changes in this release",
+      "title": "Changes from version {base} to version {current}",
+      "summary": "This release: {added} added · {changed} changed · {removed} removed",
+      "added": "Added",
+      "changed": "Changed",
+      "removed": "Removed",
+      "before": "Previous version",
+      "after": "This version",
+      "updated": "Updated in this release",
+      "notPreviouslyPresent": "Not present in the previous version",
+      "firstRelease": "This is the first published release",
+      "noFields": "No field changes in this release ({count} navigation, presentation or concept items updated)",
+      "failed": "Could not load release changes"
+    },
     spot: {
       "entry": "Spot checks",
       "title": "Spot-check desk",

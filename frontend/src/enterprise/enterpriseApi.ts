@@ -15,6 +15,7 @@ export interface ReleaseMember {
 export interface Release {
   id: string
   epoch: number
+  base_release_id?: string
   members: ReleaseMember[]
 }
 

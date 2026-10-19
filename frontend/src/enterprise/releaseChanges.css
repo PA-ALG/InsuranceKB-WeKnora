@@ -1,0 +1,24 @@
+.ek-changes-shell { max-width: 1180px; margin: 0 auto; }
+.ek-changes-group { margin-top: 32px; }
+.ek-changes-group > h2 { font-size: 18px; margin-bottom: 16px; }
+.ek-change { border: 1px solid var(--td-border-level-1-color); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.ek-change__heading { display: flex; align-items: baseline; gap: 12px; padding: 14px 20px; background: var(--td-bg-color-secondarycontainer); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ek-change__heading a { color: var(--td-brand-color); text-decoration: none; }
+.ek-change__kind { flex-shrink: 0; font-size: 12px; padding: 2px 8px; border-radius: 4px; background: var(--td-bg-color-container); color: var(--td-text-color-secondary); }
+.ek-change__kind--added { color: var(--td-success-color); }
+.ek-change__kind--changed { color: var(--td-brand-color); }
+.ek-change__kind--removed { color: var(--td-error-color); }
+.ek-change__values { display: grid; grid-template-columns: minmax(0, 1fr); }
+.ek-change__values--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ek-change__side { min-width: 0; padding: 16px 20px; }
+.ek-change__side + .ek-change__side { border-left: 1px solid var(--td-border-level-1-color); }
+.ek-change__version { margin: 0 0 14px; color: var(--td-text-color-secondary); font-size: 12px; }
+.ek-change .ek-field, .ek-field__previous .ek-field { margin: 0; padding: 0; border: 0; }
+.ek-field__updated { margin-left: 12px; color: var(--td-brand-color); font-size: 12px; }
+.ek-field__previous { padding: 16px 20px; margin-top: 16px; border-left: 3px solid var(--td-border-level-2-color); background: var(--td-bg-color-secondarycontainer); }
+.ek-field__previous > p { margin: 0 0 12px; }
+.ek-changes-page a:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 3px; }
+@media (max-width: 800px) {
+  .ek-change__values--pair { grid-template-columns: minmax(0, 1fr); }
+  .ek-change__side + .ek-change__side { border-left: 0; border-top: 1px solid var(--td-border-level-1-color); }
+}
