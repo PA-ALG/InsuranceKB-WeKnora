@@ -104,6 +104,31 @@ func (s *Service) Concept(ctx context.Context, tenantID uint64, spaceID, release
 - **工具策略**：在 `modelcontext/tool_policy.go` 中为这 4 个工具登记可引用结果（上游文件，登记补丁）。
 - **不变**：原文检索、普通知识库、其他工具的行为不变；Q1a 的轮次过滤只作用于原文结果。
 
+### 3.1 实现口径（2026-10-19 按 #250 计划 1–6 确认）
+
+1. **工具提供方式**：这 4 个工具是"选了 Wiki 库后派生出的只读来源能力"，按本 Spec 动态提供，不要求用户在 Agent 的工具白名单里勾选；其他工具的白名单规则不变。
+2. **Q1a 的旧测试**：
+   - `agent_chatsource_test.go` 中的 `TestQ1aAgentWikiOnlyRegistersNoRetrievalTools`，与 `chatsource/context_test.go` 中依赖"已发布知识尚不可用"提示的用例，描述的是 Q1b 之前的行为；
+   - 允许实现方在**单独一个提交**里改为 Q1b 的新行为（只选 Wiki 库时注册 4 个知识工具；提示改为本 Spec §3），提交说明写明"Q1b 取代 Q1a 的 Wiki 不可用行为"；
+   - 快问快答对只选 Wiki 库的提示保持不变（Q1b-2 才开放）。
+3. **没有原文出处的字段**：
+   - 照常返回三态、`Origin` 与 `Review`；
+   - 只有带 Evidence 的行才给可引用的句柄（`evidence_index` 取 0，即第一条出处）；
+   - 没有 Evidence 的行（如 `unknown`、模型补充）只在文本里说明状态，不给句柄，不标"审核过"；
+   - 不制造第 0 条出处。
+4. **概念**：
+   - 定义、说明与陈述在工具文本中标"模型补充（概念说明）"，不标"审核过"；
+   - 陈述引用的产品事实，只按精确 slug 指向本轮同一版本中可见的 Claim；
+   - 陈述的 refs 不存在或不可见，或 `based_on` 的摘要与当前 Claim 的摘要不一致时，这条陈述不返回。可以给 `Concept` 增加只读字段（如 `OmittedStatements int`），在工具文本中说明有几条因过时或不可见被略去；
+   - 没有 `based_on` 时不做摘要校验（RED 夹具即此情形）。
+5. **规范化的优先级**：
+   - `SearchFields` 严格沿用 S3h-1 的语义：空白压缩成一个空格，按空白分词；
+   - 找产品、按名称选字段、找概念时，用去掉空白的规范化。
+6. **出处的渠道**：
+   - 本片验收登录态 Web 聊天中的精确回跳；
+   - 嵌入、API、IM 渠道沿用现有的授权失败显示，不回落到 chunk，不借用浏览器凭据，不扩大路由权限。这些渠道的出处授权另行设计。
+7. **整合顺序**：#248（S3h-2）已合并（`0cbd7bcbf`）。开工前先 merge 最新 main。
+
 ## 4. 前端（Q1b-1）
 
 - `metadata.source_tier = "release"` 的引用（Q1a 已能显示标签）：
