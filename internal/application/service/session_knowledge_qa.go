@@ -9,7 +9,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/agent/tools"
 	chatpipeline "github.com/Tencent/WeKnora/internal/application/service/chat_pipeline"
 	"github.com/Tencent/WeKnora/internal/common"
-	"github.com/Tencent/WeKnora/internal/enterprise/managed"
+	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/modelcontext"
@@ -70,10 +70,20 @@ func (s *sessionService) KnowledgeQA(
 		return err
 	}
 
-	if err := managed.CheckSearchRead(ctx, s.knowledgeBaseService, s.knowledgeService,
-		s.resolveRetrievalTenantID(ctx, req), knowledgeBaseIDs, knowledgeIDs, req.TagScopes); err != nil {
+	retrievalTenantID := s.resolveRetrievalTenantID(ctx, req)
+	if _, err := chatsource.PrepareSelection(ctx, s.chatSources, s.knowledgeBaseService, s.knowledgeService,
+		retrievalTenantID, knowledgeBaseIDs, knowledgeIDs, req.TagScopes, true); err != nil {
 		return err
 	}
+	searchTargets, err := s.buildSearchTargets(ctx, retrievalTenantID, knowledgeBaseIDs, knowledgeIDs, req.TagScopes)
+	if err != nil {
+		return err
+	}
+	ctx, searchTargets, err = chatsource.ResolveQuick(ctx, s.chatSources, retrievalTenantID, searchTargets)
+	if err != nil {
+		return err
+	}
+	knowledgeBaseIDs, knowledgeIDs = chatsource.LegacyScope(ctx, searchTargets, knowledgeBaseIDs, knowledgeIDs)
 
 	// Resolve chat model ID using shared helper
 	chatModelID, err := s.resolveChatModelID(ctx, req, knowledgeBaseIDs, knowledgeIDs)
@@ -106,15 +116,6 @@ func (s *sessionService) KnowledgeQA(
 	}
 	if req.CustomAgent != nil {
 		vlmModelID = req.CustomAgent.Config.VLMModelID
-	}
-
-	// Resolve retrieval tenant scope using shared helper
-	retrievalTenantID := s.resolveRetrievalTenantID(ctx, req)
-
-	// Build unified search targets (computed once, used throughout pipeline)
-	searchTargets, err := s.buildSearchTargets(ctx, retrievalTenantID, knowledgeBaseIDs, knowledgeIDs, req.TagScopes)
-	if err != nil {
-		return fmt.Errorf("build search targets: %w", err)
 	}
 
 	// Create chat management object with session settings
@@ -473,6 +474,11 @@ func (s *sessionService) buildSearchTargets(
 	knowledgeIDs []string,
 	tagScopes []types.TagScope,
 ) (types.SearchTargets, error) {
+	selection, err := chatsource.PrepareSelection(ctx, s.chatSources, s.knowledgeBaseService, s.knowledgeService,
+		tenantID, knowledgeBaseIDs, knowledgeIDs, tagScopes, false)
+	if err != nil {
+		return nil, err
+	}
 	caller := types.CallerFromContext(ctx)
 	var targets types.SearchTargets
 	tagIDsByKB := mergeTagScopesByKB(tagScopes)
@@ -494,6 +500,9 @@ func (s *sessionService) buildSearchTargets(
 	kbByID := make(map[string]*types.KnowledgeBase)
 	if len(kbIDsToFetch) > 0 {
 		kbs, kbFetchErr := s.knowledgeBaseService.GetKnowledgeBasesByIDsOnly(ctx, kbIDsToFetch)
+		if err := selection.CheckKBs(kbIDsToFetch, kbs, kbFetchErr); err != nil {
+			return nil, err
+		}
 		if kbFetchErr != nil {
 			logger.Warnf(ctx, "Failed to fetch knowledge bases for search targets: %v", kbFetchErr)
 		}
@@ -541,6 +550,9 @@ func (s *sessionService) buildSearchTargets(
 	// Process individual knowledge IDs (include shared KB files the user has access to)
 	if len(knowledgeIDs) > 0 {
 		knowledgeList, err := s.knowledgeService.GetKnowledgeBatchWithSharedAccess(ctx, tenantID, knowledgeIDs)
+		if err := selection.CheckDocuments(knowledgeIDs, knowledgeList, err); err != nil {
+			return nil, err
+		}
 		if err != nil {
 			logger.Warnf(ctx, "Failed to get knowledge batch for search targets: %v", err)
 			return targets, nil // Return what we have, don't fail
@@ -639,7 +651,7 @@ func (s *sessionService) buildSearchTargets(
 	logger.Infof(ctx, "Built %d search targets: %d full KB, %d partial/tag KB, kbTenantMap=%v",
 		len(targets), len(knowledgeBaseIDs), len(targets)-len(knowledgeBaseIDs), kbTenantMap)
 
-	return targets, nil
+	return targets, selection.CheckTargets(targets)
 }
 
 func mergeTagScopesByKB(scopes []types.TagScope) map[string][]string {
@@ -751,9 +763,23 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 		// emitted after the pipeline returned — by then the `complete` event had
 		// already closed the stream, so the frontend only saw citations on refresh.
 		if eventType == types.CHAT_COMPLETION_STREAM {
+			if err := chatsource.FilterPipeline(
+				ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage,
+			); err != nil {
+				return err
+			}
 			emitKnowledgeReferencesEvent(ctx, chatManage)
 		}
+		if eventType == types.INTO_CHAT_MESSAGE {
+			if err := chatsource.FilterPipeline(
+				ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage,
+			); err != nil {
+				return err
+			}
+		}
+		restoreAnalysis := chatsource.AnalysisScope(ctx, s.chatSources, eventType, chatManage)
 		err := s.eventManager.Trigger(stageCtx, eventType, chatManage)
+		restoreAnalysis()
 		if understandProgress != nil && eventType == types.QUERY_UNDERSTAND {
 			chatpipeline.EndQueryUnderstandProgress(stageCtx, chatManage, understandProgress, understandStart, err)
 			understandProgress = nil
@@ -850,8 +876,8 @@ func (s *sessionService) SearchKnowledge(ctx context.Context,
 		return nil, fmt.Errorf("workspace ID not found in context")
 	}
 
-	if err := managed.CheckSearchRead(ctx, s.knowledgeBaseService, s.knowledgeService,
-		tenantID, knowledgeBaseIDs, knowledgeIDs, tagScopes); err != nil {
+	if _, err := chatsource.PrepareSelection(ctx, s.chatSources, s.knowledgeBaseService, s.knowledgeService,
+		tenantID, knowledgeBaseIDs, knowledgeIDs, tagScopes, true); err != nil {
 		return nil, err
 	}
 
@@ -860,6 +886,11 @@ func (s *sessionService) SearchKnowledge(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("build search targets: %w", err)
 	}
+	ctx, searchTargets, err = chatsource.ResolveQuick(ctx, s.chatSources, tenantID, searchTargets)
+	if err != nil {
+		return nil, err
+	}
+	knowledgeBaseIDs, knowledgeIDs = chatsource.LegacyScope(ctx, searchTargets, knowledgeBaseIDs, knowledgeIDs)
 
 	if len(searchTargets) == 0 {
 		logger.Warn(ctx, "No search targets available, returning empty results")
@@ -956,6 +987,11 @@ func (s *sessionService) SearchKnowledge(ctx context.Context,
 	}
 
 	logger.Infof(ctx, "Knowledge base search completed, found %d results", len(chatManage.MergeResult))
+	if err := chatsource.FilterPipeline(
+		ctx, s.chatSources, chatsource.ChunkReaderOf(s.chunkService), chatManage,
+	); err != nil {
+		return nil, err
+	}
 	return chatManage.MergeResult, nil
 }
 
@@ -1131,8 +1167,12 @@ func (s *sessionService) buildKBDocumentListing(ctx context.Context, chatManage 
 	const maxDocuments = 50
 	var b strings.Builder
 	total := 0
+	tenantID, _ := types.TenantIDFromContext(ctx)
 
 	for kbID := range kbIDs {
+		if _, _, enterprise := s.chatSources.SpaceOf(tenantID, kbID); enterprise {
+			continue
+		}
 		if total >= maxDocuments {
 			break
 		}

@@ -3740,6 +3740,8 @@ export default {
     modelStillResponding: 'The model is taking longer than usual, still waiting…',
     deepThoughtCompleted: 'Deep thinking completed',
     deepThoughtAlt: 'Deep thinking finished',
+    sourceTierRawText: 'Original text search (not compiled or reviewed)',
+    sourceTierRelease: 'Published knowledge (reviewed)',
     referencesTitle: 'Referenced {count} related item(s)',
     referencesDocCount: 'Referenced {count} document(s)',
     referencesWebCount: 'Referenced {count} web result(s)',

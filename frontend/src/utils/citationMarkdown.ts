@@ -1,4 +1,5 @@
 /** Shared citation tag preprocessing for chat markdown (QA + agent). */
+export { sourceTierForChunk as citationSourceTier } from '../enterprise/sourceTier'
 
 /** Self-closing or unclosed `<kb/>` / `<web/>` tags from model output. */
 export const KB_WEB_TAG_RE = /<(?:kb|web)\b[^>]*?\s*\/?>/g
@@ -33,6 +34,8 @@ export function stripIncompleteCitationTag(content: string): string {
 
 export type CitationKnowledgeRef = {
   id?: string
+  chunk_ids?: string[]
+  metadata?: Record<string, string> | null
   knowledge_id?: string
   knowledge_title?: string
   knowledge_filename?: string
@@ -91,6 +94,7 @@ export function resolveCitationChunkId(
 
   const list = (refs || []).filter((r) => r && r.chunk_type !== 'web_search')
   if (!list.length) return raw
+  if (list.some((reference) => reference.id === raw || reference.chunk_ids?.includes(raw))) return raw
 
   const doc = (attrs.doc || '').trim()
   const kbId = (attrs.kbId || '').trim()

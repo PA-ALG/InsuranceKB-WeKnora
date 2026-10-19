@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -40,28 +41,48 @@ func ParseSpaces(raw string, reserved ...types.WikiReleaseScope) (Spaces, error)
 	if err := decoder.Decode(&entries); err != nil {
 		return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES is not a JSON list of spaces: %w", err)
 	}
-	wikiKBs := map[string]bool{}
+	knowledgeBases := map[string]bool{}
 	for i, e := range entries {
 		if e.TenantID == 0 || strings.TrimSpace(e.SpaceID) == "" || strings.TrimSpace(e.RawKBID) == "" ||
 			strings.TrimSpace(e.WikiKBID) == "" || e.RawKBID == e.WikiKBID {
 			return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] is incomplete", i)
 		}
 		key := spaceKey(e.TenantID, e.SpaceID)
-		if _, dup := spaces.byKey[key]; dup || wikiKBs[e.WikiKBID] {
-			return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] repeats a Space or wiki KB", i)
+		if _, dup := spaces.byKey[key]; dup || knowledgeBases[e.RawKBID] || knowledgeBases[e.WikiKBID] {
+			return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] repeats a Space or knowledge base role", i)
 		}
 		for _, r := range reserved {
-			if r.TenantID == e.TenantID &&
-				(r.SpaceID == e.SpaceID || r.RawKBID == e.RawKBID || r.WikiKBID == e.WikiKBID) {
+			if (r.TenantID == e.TenantID && r.SpaceID == e.SpaceID) ||
+				r.RawKBID == e.RawKBID || r.WikiKBID == e.RawKBID ||
+				r.RawKBID == e.WikiKBID || r.WikiKBID == e.WikiKBID {
 				return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] reuses a reserved Space, RAW or wiki KB", i)
 			}
 		}
-		wikiKBs[e.WikiKBID] = true
+		knowledgeBases[e.RawKBID], knowledgeBases[e.WikiKBID] = true, true
 		spaces.byKey[key] = types.WikiReleaseScope{
 			TenantID: e.TenantID, SpaceID: e.SpaceID, RawKBID: e.RawKBID, WikiKBID: e.WikiKBID,
 		}
 	}
 	return spaces, nil
+}
+
+// SpaceOf identifies configured enterprise KBs inside their owning tenant only.
+func (s Spaces) SpaceOf(tenantID uint64, kbID string) (string, chatsource.Role, bool) {
+	if tenantID == 0 || kbID == "" {
+		return "", "", false
+	}
+	for _, scope := range s.byKey {
+		if scope.TenantID != tenantID {
+			continue
+		}
+		if scope.RawKBID == kbID {
+			return scope.SpaceID, chatsource.RoleRaw, true
+		}
+		if scope.WikiKBID == kbID {
+			return scope.SpaceID, chatsource.RoleWiki, true
+		}
+	}
+	return "", "", false
 }
 
 // RawKB reports whether the tenant owns a configured enterprise RAW knowledge base.

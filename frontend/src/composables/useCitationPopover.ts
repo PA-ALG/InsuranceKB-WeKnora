@@ -5,6 +5,7 @@ import {
   setCitationChunkCache,
 } from '@/utils/citationChunkCache'
 import { useChatReferencesDrawer } from '@/composables/useChatReferencesDrawer'
+import type { SourceTier } from '@/enterprise/sourceTier'
 
 export type CitationFloatState = {
   visible: boolean
@@ -16,11 +17,13 @@ export type CitationFloatState = {
   url: string
   loading: boolean
   error: string
+  sourceTier?: SourceTier | null
 }
 
 type CitationPopoverOptions = {
   mode: 'chat' | 'embed'
   getKnowledgeReferences?: () => CitationKnowledgeRef[] | null | undefined
+  getSourceTier?: (chunkId: string) => SourceTier | null
   getCacheScope: () => string
   fetchChunk: (chunkId: string) => Promise<{ data?: { content?: unknown } } | undefined>
   notFoundError?: () => string
@@ -64,6 +67,7 @@ export function useCitationPopover(rootRef: Ref<HTMLElement | null>, options: Ci
     float.value.loading = false
     float.value.content = ''
     float.value.error = ''
+    float.value.sourceTier = null
   }
 
   const resolveChunkId = (el: HTMLElement) => {
@@ -84,6 +88,7 @@ export function useCitationPopover(rootRef: Ref<HTMLElement | null>, options: Ci
     requestVersion++
     const url = el.getAttribute('data-url') || ''
     float.value.type = 'web'
+    float.value.sourceTier = null
     float.value.url = url
     float.value.title = el.querySelector('.tip-title')?.textContent || ''
     float.value.content = ''
@@ -100,6 +105,7 @@ export function useCitationPopover(rootRef: Ref<HTMLElement | null>, options: Ci
     if (!chunkId) return
     const version = ++requestVersion
     float.value.type = 'kb'
+    float.value.sourceTier = options.getSourceTier?.(chunkId) ?? null
     float.value.title = title
     float.value.url = ''
     float.value.visible = true

@@ -74,3 +74,24 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/router/index.ts` | S3g | 注册企业知识关系图路由与 pinned Release 参数；路由表无企业页面注册扩展点，图数据及交互留在 enterprise 自有目录 | 部分（页面注册扩展点） | 上游支持自有页面路由注册后移除接缝 |
 | `frontend/src/i18n/locales/zh-CN.ts`、`frontend/src/i18n/locales/en-US.ts`、`frontend/src/i18n/locales/ja-JP.ts`、`frontend/src/i18n/locales/ko-KR.ts`、`frontend/src/i18n/locales/ru-RU.ts` | S3g | 添加企业关系图五语言文案；沿用已登记的集中式语言包加载，无独立模块语言包扩展点 | 部分（语言包注册） | 上游提供模块语言包注册后迁入 enterprise 并移除接缝 |
 | `frontend/src/router/index.ts` | RV4b | 注册企业抽检台会话页面路由；沿用固定路由表，列表、版本绑定、确认交互均放在 enterprise 自有模块 | 部分（页面注册扩展点） | 上游支持自有页面路由注册后移除接缝 |
+
+| 文件 | 切片 | 原因 | 可否上游化 | 退出条件 |
+|---|---|---|---|---|
+| `internal/container/container.go` | Q1a | 既有 Concept Agent 装配注入企业来源解析器，企业 Space 跳过旧 830 投影 | 部分（模块装配） | 上游提供请求级来源策略装配扩展后移除接缝 |
+| `internal/application/service/session.go` | Q1a | 构造器注入无状态企业来源解析器，供快问快答与纯检索共用 | 部分（检索策略注入） | 上游提供检索策略扩展点后迁回项目装配 |
+| `internal/application/service/session_knowledge_qa.go` | Q1a | 授权后收窄固定材料范围，交付前过滤轮次并标注；兜底提示排除企业全库清单 | 部分（请求级检索策略） | 上游支持检索准入、结果过滤与提示元数据策略后移除接缝 |
+| `internal/application/service/agent_service.go` | Q1a | 按轮装配固定来源与搜索结果包装器，企业目标隔离原生 Wiki/文档/图谱/数据工具及全库提示元数据 | 部分（按轮来源与工具策略） | 上游支持按轮来源解析、工具装饰与提示元数据策略后迁回项目包 |
+| `internal/application/service/concept_agent_830_g2.go`（项目旧文件） | Q1a | 配置中的企业 Space 不交给旧 830 投影，其他受管来源保持原策略 | 否（项目历史路径） | 旧 830 路径迁出或退役后删除此分支 |
+| `frontend/src/views/chat/components/docInfo.vue` | Q1a | 引用按来源与版本分组并显示本地化标签 | 部分（引用展示扩展） | 上游提供引用来源分组和标签扩展后移除接缝 |
+| `frontend/src/components/ChatReferencesDrawer.vue` | Q1a | 抽屉显示来源标签并容纳完整文案 | 部分（引用展示扩展） | 上游提供引用 metadata 标签位后移除接缝 |
+| `frontend/src/utils/referenceSources.ts` | Q1a | 引用视图保留 metadata，按来源与版本分组并防止标题歧义高亮 | 部分（引用身份扩展） | 上游支持来源身份分组与完整 metadata 投影后移除接缝 |
+| `frontend/src/utils/citationMarkdown.ts` | Q1a | 引用类型保留 metadata，明确真实 chunk 身份优先于标题别名 | 部分（引用解析扩展） | 上游引用解析支持 metadata 与完整 chunk 身份后移除接缝 |
+| `frontend/src/composables/useChatCitationPopover.ts` | Q1a | 从服务端引用为浮层逐次解析来源文案 | 部分（浮层策略扩展） | 上游支持逐引用 metadata 回调后移除接缝 |
+| `frontend/src/composables/useCitationPopover.ts` | Q1a | 浮层生命周期携带来源状态，切换或 web 来源时清理 | 部分（浮层状态扩展） | 上游浮层生命周期支持来源状态后移除接缝 |
+| `frontend/src/components/ChatCitationFloat.vue` | Q1a | 渲染引用来源独立标签位 | 部分（浮层展示扩展） | 上游提供 metadata 标签位后移除接缝 |
+| `frontend/src/views/chat/components/AgentStreamDisplay.vue` | Q1a | 工具结果及历史恢复保留 metadata 与真实 chunk 身份，分组与浮层复用可信来源 | 部分（引用恢复扩展） | 上游恢复引用完整保留 metadata 并提供映射扩展后移除接缝 |
+| `frontend/src/i18n/locales/zh-CN.ts` | Q1a | 中文区分原文检索与已发布知识 | 部分（语言包注册） | 上游提供等义来源文案或模块语言包注入后移除接缝 |
+| `frontend/src/i18n/locales/en-US.ts` | Q1a | 英文同步两种来源文案 | 部分（语言包注册） | 同上 |
+| `frontend/src/i18n/locales/ja-JP.ts` | Q1a | 日文同步两种来源文案 | 部分（语言包注册） | 同上 |
+| `frontend/src/i18n/locales/ko-KR.ts` | Q1a | 韩文同步两种来源文案 | 部分（语言包注册） | 同上 |
+| `frontend/src/i18n/locales/ru-RU.ts` | Q1a | 俄文同步两种来源文案 | 部分（语言包注册） | 同上 |

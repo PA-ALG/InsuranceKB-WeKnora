@@ -15,6 +15,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/browserskill"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/mcp"
@@ -93,6 +94,7 @@ func knowledgeBaseScopesForPrompt(config *types.AgentConfig) ([]string, map[stri
 
 // agentService implements agent-related business logic
 type agentService struct {
+	chatSources                   *chatsource.Resolver
 	browserSkill                  *browserskill.Manager
 	userRepo                      interfaces.UserRepository
 	cfg                           *config.Config
@@ -149,8 +151,10 @@ func NewAgentService(
 	hostSandbox HostSandboxManager,
 	browserSkill *browserskill.Manager,
 	userRepo interfaces.UserRepository,
+	chatSources *chatsource.Resolver,
 ) interfaces.AgentService {
 	return &agentService{
+		chatSources:                   chatSources,
 		browserSkill:                  browserSkill,
 		userRepo:                      userRepo,
 		cfg:                           cfg,
@@ -197,6 +201,10 @@ func (s *agentService) CreateAgentEngine(
 	if err := s.ValidateConfig(config); err != nil {
 		return nil, fmt.Errorf("invalid agent config: %w", err)
 	}
+	ctx, config, sourceTurn, err := chatsource.AgentTurn(ctx, s.chatSources, config)
+	if err != nil {
+		return nil, err
+	}
 	if chatModel == nil {
 		return nil, fmt.Errorf("chat model is nil after initialization")
 	}
@@ -227,12 +235,22 @@ func (s *agentService) CreateAgentEngine(
 	toolRegistry.PrepareMCPTools(ctx)
 
 	// 3. Resolve knowledge base and selected document metadata
-	kbInfos, selectedDocs := s.resolveKBAndDocInfos(ctx, config)
+	promptConfig := chatsource.PromptConfig(s.chatSources, config, sourceTurn)
+	kbInfos, selectedDocs := s.resolveKBAndDocInfos(ctx, promptConfig)
 
 	// 4. Resolve system prompt template
 	systemPromptTemplate := ""
 	if config.UseCustomSystemPrompt || config.SystemPrompt != "" {
 		systemPromptTemplate = config.ResolveSystemPrompt(config.WebSearchEnabled)
+	}
+	if notice := chatsource.WikiUnavailableNotice(sourceTurn); notice != "" {
+		if systemPromptTemplate == "" {
+			systemPromptTemplate = agent.GetProgressiveRAGSystemPrompt(s.cfg)
+			if len(kbInfos) == 0 {
+				systemPromptTemplate = agent.GetPureAgentSystemPrompt(s.cfg)
+			}
+		}
+		systemPromptTemplate += "\n\n" + notice
 	}
 
 	// 5. Create engine
@@ -248,7 +266,9 @@ func (s *agentService) CreateAgentEngine(
 		pinnedMCP,
 		s.resolvePinnedSkillInfos(config),
 	)
-	engine.SetQuestionOrigin(s.resolveQuestionOriginInfo(ctx, config.QuestionOrigin, config.SearchTargets, kbInfos))
+	engine.SetQuestionOrigin(s.resolveQuestionOriginInfo(
+		ctx, promptConfig.QuestionOrigin, promptConfig.SearchTargets, kbInfos,
+	))
 
 	// Non-vision chat models use the configured VLM to describe tool images.
 	// Vision chat models receive the original images after the tool replies.
@@ -944,6 +964,10 @@ func (s *agentService) registerTools(
 	chatModel chat.Chat,
 	sessionID string,
 ) error {
+	ctx, config, sourceTurn, err := chatsource.AgentTurn(ctx, s.chatSources, config)
+	if err != nil {
+		return err
+	}
 	// Source of truth policy:
 	//   - `config.AllowedTools` is the explicit, user-editable whitelist —
 	//     populated by the agent-type preset on create and freely editable
@@ -972,7 +996,7 @@ func (s *agentService) registerTools(
 	var hasGraphKB bool
 	var wikiKBIDs []string
 	resolvedKnowledgeScopes830G2 := make([]interfaces.ConceptAgentKnowledgeScope830G2, 0, len(config.SearchTargets))
-	resolvedTargets830G2 := make(map[string]bool)
+	resolvedTargets830G2 := make(map[string]*types.KnowledgeBase)
 	wikiRoutes := tools.NewWikiRouteResolver()
 	for _, target := range config.SearchTargets {
 		if target == nil || target.KnowledgeBaseID == "" {
@@ -980,20 +1004,23 @@ func (s *agentService) registerTools(
 		}
 		kb, err := s.knowledgeBaseService.GetKnowledgeBaseByIDOnly(ctx, target.KnowledgeBaseID)
 		if err != nil {
+			if _, _, enterprise := s.chatSources.SpaceOf(target.TenantID, target.KnowledgeBaseID); enterprise {
+				return err
+			}
 			continue
 		}
 		if kb == nil || kb.ID != target.KnowledgeBaseID || kb.TenantID == 0 ||
 			(target.TenantID != 0 && target.TenantID != kb.TenantID) {
 			return fmt.Errorf("search target tenant does not match current KB owner")
 		}
-		resolvedKnowledgeScopes830G2 = append(
-			resolvedKnowledgeScopes830G2,
-			interfaces.ConceptAgentKnowledgeScope830G2{KnowledgeBaseID: kb.ID, TenantID: kb.TenantID},
-		)
-		resolvedTargets830G2[kb.ID] = true
-		if kb.IsWikiEnabled() {
-			wikiKBIDs = append(wikiKBIDs, kb.ID)
+		if _, _, enterprise := s.chatSources.SpaceOf(kb.TenantID, kb.ID); !enterprise {
+			resolvedKnowledgeScopes830G2 = append(resolvedKnowledgeScopes830G2,
+				interfaces.ConceptAgentKnowledgeScope830G2{KnowledgeBaseID: kb.ID, TenantID: kb.TenantID})
+			if kb.IsWikiEnabled() {
+				wikiKBIDs = append(wikiKBIDs, kb.ID)
+			}
 		}
+		resolvedTargets830G2[kb.ID] = kb
 	}
 	wikiKBIDs = dedupStrings(wikiKBIDs)
 	wikiScopes := tools.NewWikiScopesFromSearchTargets(config.SearchTargets, wikiKBIDs)
@@ -1038,17 +1065,27 @@ func (s *agentService) registerTools(
 	}
 	unmanagedSearchTargets830G2 := make(types.SearchTargets, 0, len(config.SearchTargets))
 	for _, target := range config.SearchTargets {
-		if target == nil || !resolvedTargets830G2[target.KnowledgeBaseID] {
+		if target == nil || resolvedTargets830G2[target.KnowledgeBaseID] == nil {
 			continue
 		}
 		if _, managed := managedRetrievalKBs830G2[target.KnowledgeBaseID]; managed {
 			continue
 		}
 		unmanagedSearchTargets830G2 = append(unmanagedSearchTargets830G2, target)
-		kb, err := s.knowledgeBaseService.GetKnowledgeBaseByIDOnly(ctx, target.KnowledgeBaseID)
-		if err == nil && kb != nil {
+		if kb := resolvedTargets830G2[target.KnowledgeBaseID]; kb != nil {
 			hasVectorKB = hasVectorKB || kb.IsVectorEnabled() || kb.IsKeywordEnabled()
-			hasGraphKB = hasGraphKB || kb.IsGraphEnabled()
+			if _, _, enterprise := s.chatSources.SpaceOf(kb.TenantID, kb.ID); !enterprise {
+				hasGraphKB = hasGraphKB || kb.IsGraphEnabled()
+			}
+		}
+	}
+	otherToolTargets := chatsource.OtherToolTargets(s.chatSources, unmanagedSearchTargets830G2)
+	if len(otherToolTargets) == 0 {
+		for _, name := range []string{
+			tools.ToolReadDocument, tools.ToolListDocuments, tools.ToolQueryKnowledgeGraph,
+			tools.ToolDatabaseQuery, tools.ToolDataAnalysis, tools.ToolDataSchema,
+		} {
+			allowedTools = withoutString(allowedTools, name)
 		}
 	}
 	unmanagedWikiKBIDs830G2 := make([]string, 0, len(wikiKBIDs))
@@ -1224,12 +1261,18 @@ func (s *agentService) registerTools(
 				rerankModel,
 				s.cfg,
 			)
+			if len(sourceTurn.RawKnowledge) > 0 {
+				toolToRegister = chatsource.WrapTool(
+					toolToRegister, s.chatSources, sourceTurn,
+					types.MustTenantIDFromContext(ctx), chatsource.ChunkReaderOf(s.chunkService),
+				)
+			}
 		case tools.ToolReadDocument:
-			toolToRegister = tools.NewReadDocumentTool(s.knowledgeService, s.chunkService, unmanagedSearchTargets830G2)
+			toolToRegister = tools.NewReadDocumentTool(s.knowledgeService, s.chunkService, otherToolTargets)
 		case tools.ToolListDocuments:
-			toolToRegister = tools.NewListDocumentsTool(s.knowledgeService, unmanagedSearchTargets830G2)
+			toolToRegister = tools.NewListDocumentsTool(s.knowledgeService, otherToolTargets)
 		case tools.ToolQueryKnowledgeGraph:
-			toolToRegister = tools.NewQueryKnowledgeGraphTool(s.knowledgeBaseService, unmanagedSearchTargets830G2).
+			toolToRegister = tools.NewQueryKnowledgeGraphTool(s.knowledgeBaseService, otherToolTargets).
 				WithKnowledgeScope(s.knowledgeService)
 		case tools.ToolSearchConversations:
 			// The owner is captured from the caller's identity here, not read
@@ -1244,7 +1287,7 @@ func (s *agentService) registerTools(
 			// this tool needs no owner argument and none can be supplied.
 			toolToRegister = tools.NewSearchMemoryTool(s.memoryService)
 		case tools.ToolDatabaseQuery:
-			toolToRegister = tools.NewDatabaseQueryTool(s.db, unmanagedSearchTargets830G2)
+			toolToRegister = tools.NewDatabaseQueryTool(s.db, otherToolTargets)
 		case tools.ToolWebSearch:
 			toolToRegister = tools.NewWebSearchTool(
 				s.webSearchService,
@@ -1264,22 +1307,22 @@ func (s *agentService) registerTools(
 			logger.Infof(ctx, "Registered web_fetch tool for session: %s", sessionID)
 
 		case tools.ToolDataAnalysis:
-			if len(unmanagedSearchTargets830G2) == 0 {
+			if len(otherToolTargets) == 0 {
 				break
 			}
 			toolToRegister = tools.NewDataAnalysisTool(
 				s.knowledgeBaseService, s.knowledgeService, s.tenantService,
 				s.fileService, s.duckdb, sessionID, s.storageResolver,
 			).
-				WithSearchTargets(unmanagedSearchTargets830G2)
+				WithSearchTargets(otherToolTargets)
 			logger.Infof(ctx, "Registered data_analysis tool for session: %s", sessionID)
 
 		case tools.ToolDataSchema:
-			if len(unmanagedSearchTargets830G2) == 0 {
+			if len(otherToolTargets) == 0 {
 				break
 			}
 			toolToRegister = tools.NewDataSchemaTool(s.knowledgeService, s.chunkService.GetRepository()).
-				WithSearchTargets(unmanagedSearchTargets830G2)
+				WithSearchTargets(otherToolTargets)
 			logger.Infof(ctx, "Registered data_schema tool")
 
 		// Wiki tools — only registered when wiki KBs are detected
@@ -1410,6 +1453,12 @@ func (s *agentService) getKnowledgeBaseInfos(
 		// Skip hidden/system-managed knowledge bases (e.g., __chat_history__)
 		if kb.IsTemporary {
 			logger.Debugf(ctx, "Skipping temporary knowledge base %s (%s) from prompt", kb.ID, kb.Name)
+			continue
+		}
+		if _, _, enterprise := s.chatSources.SpaceOf(kb.TenantID, kb.ID); enterprise {
+			kbInfos = append(kbInfos, &agent.KnowledgeBaseInfo{
+				ID: kb.ID, Name: kb.Name, Type: kb.Type, Capabilities: []string{"chunks"},
+			})
 			continue
 		}
 

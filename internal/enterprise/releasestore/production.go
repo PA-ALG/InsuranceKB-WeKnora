@@ -13,6 +13,7 @@ import (
 
 	appservice "github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
@@ -43,6 +44,18 @@ func Register(container *dig.Container) error {
 		return err
 	}
 	if err := container.Provide(func(spaces Spaces) source.CaptureScope { return spaces }); err != nil {
+		return err
+	}
+	if err := container.Provide(func(db *gorm.DB, spaces Spaces) (*chatsource.Resolver, error) {
+		if len(spaces.byKey) == 0 {
+			return nil, nil
+		}
+		if db == nil {
+			return nil, errors.New("enterprise chat sources need the database")
+		}
+		store := New(db, spaces)
+		return chatsource.NewResolver(spaces, store, store, store), nil
+	}); err != nil {
 		return err
 	}
 	if err := container.Provide(func(

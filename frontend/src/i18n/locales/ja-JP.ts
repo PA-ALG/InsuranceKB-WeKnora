@@ -3740,6 +3740,8 @@ export default {
     modelStillResponding: 'モデルの応答に通常より時間がかかっています。お待ちください…',
     deepThoughtCompleted: '深い思考が完了しました',
     deepThoughtAlt: '深い思考が完了',
+    sourceTierRawText: '原文検索（未コンパイル・未審査）',
+    sourceTierRelease: '公開済みナレッジ（審査済み）',
     referencesTitle: '関連する内容を{count}件参照',
     referencesDocCount: '{count}件のドキュメントを参照',
     referencesWebCount: '{count}件のWebページを参照',

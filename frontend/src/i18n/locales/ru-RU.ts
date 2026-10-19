@@ -3738,6 +3738,8 @@ export default {
     modelStillResponding: 'Модель отвечает дольше обычного, продолжаем ждать…',
     deepThoughtCompleted: 'Глубокий анализ завершён',
     deepThoughtAlt: 'Глубокий анализ',
+    sourceTierRawText: 'Поиск по исходному тексту (без компиляции и проверки)',
+    sourceTierRelease: 'Опубликованные знания (проверено)',
     referencesTitle: 'Использовано {count} связанного материала',
     referencesDocCount: 'Использовано {count} документ(ов)',
     referencesWebCount: 'Использовано {count} веб-результат(ов)',

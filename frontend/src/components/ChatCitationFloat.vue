@@ -10,6 +10,7 @@
       </template>
       <template v-else>
         <div class="chat-citation-float__title">{{ float.title }}</div>
+        <div v-if="float.sourceTier" class="chat-citation-float__muted">{{ sourceTierLabel(float.sourceTier, t) }}</div>
         <div v-if="float.loading" class="chat-citation-float__muted">{{ loadingText }}</div>
         <div v-else-if="float.error" class="chat-citation-float__error">{{ float.error }}</div>
         <div v-else class="chat-citation-float__body">{{ float.content }}</div>
@@ -21,6 +22,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { CitationFloatState } from '@/composables/useChatCitationPopover'
+import { sourceTierLabel } from '@/enterprise/sourceTier'
 
 defineProps<{
   float: CitationFloatState

@@ -3738,6 +3738,8 @@ export default {
     modelStillResponding: '모델 응답이 평소보다 오래 걸리고 있습니다. 계속 기다리는 중…',
     deepThoughtCompleted: '심층 분석 완료',
     deepThoughtAlt: '심층 분석 완료',
+    sourceTierRawText: '원문 검색 (편집 및 검토되지 않음)',
+    sourceTierRelease: '게시된 지식 (검토 완료)',
     referencesTitle: '{count}개의 관련 내용 참조',
     referencesDocCount: '{count}개 문서 참조',
     referencesWebCount: '{count}개 웹 결과 참조',
