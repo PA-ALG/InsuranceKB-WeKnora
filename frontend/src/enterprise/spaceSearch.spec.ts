@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // S3h-1 acceptance (protected, written by Claude): the Space home search also lists field-content
 // hits, pinned to the release it read (Spec docs/design/slices/S3h-全文搜索与本版变化.md §2.2).
-import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
+import { flushPromises, mount, RouterLinkStub, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
 import zhCN from '@/i18n/locales/zh-CN'
@@ -46,7 +46,8 @@ describe('Space home field search', () => {
     expect(hits[0]!.text()).toContain('丙重疾')
     expect(hits[0]!.text()).toContain('犹豫期')
     expect(hits[0]!.findAll('mark').map(mark => mark.text())).toEqual(['20日'])
-    expect(hits[0]!.findAllComponents(RouterLinkStub).map(link => link.props('to'))).toContainEqual({
+    expect(hits[0]!.findAllComponents(RouterLinkStub).map((link: VueWrapper<InstanceType<typeof RouterLinkStub>>) => link.props('to')))
+      .toContainEqual({
       name: 'enterpriseEntity', params: { spaceId: 'demo', entityId: 'C1' }, query: { release: 'rel-9' }, hash: '#cooling_off_period',
     })
   })
