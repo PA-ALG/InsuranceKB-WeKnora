@@ -56,8 +56,10 @@ func (r *releases) ReleaseByID(_ context.Context, tenantID uint64, spaceID, rele
 		return release.Release{}, &release.Error{Code: release.ErrorReleaseNotFound}
 	}
 	return release.Release{ID: releaseID, Members: []release.Member{
-		{Kind: "entity", LogicalSlug: "entity/E", AccessScope: "space",
-			Payload: json.RawMessage(`{"entity_id":"E","names":["Product"]}`)},
+		{
+			Kind: "entity", LogicalSlug: "entity/E", AccessScope: "space",
+			Payload: json.RawMessage(`{"entity_id":"E","names":["Product"]}`),
+		},
 		{Kind: "claim", LogicalSlug: "E/field", AccessScope: "space", Payload: json.RawMessage(
 			`{"subject_ref":"E","predicate":"field","state":"present","value":"20 days",` +
 				`"origin":"SOURCE_SUPPORTED","evidence":[{"quote":"20 days","locator":{"page":3}}]}`)},
@@ -114,7 +116,7 @@ func endpoint() context.Context {
 	})
 }
 
-func (f fixture) call(t *testing.T, ctx context.Context, name string, args map[string]any) *mcp.CallToolResult {
+func (f fixture) call(ctx context.Context, t *testing.T, name string, args map[string]any) *mcp.CallToolResult {
 	t.Helper()
 	tool, ok := f.tools[name]
 	require.True(t, ok, "missing tool %s", name)
@@ -167,13 +169,13 @@ func TestToolsAreThePublishedKnowledgeSet(t *testing.T) {
 
 func TestListSpacesShowsReadableSpacesWithTheirActiveRelease(t *testing.T) {
 	f := setup()
-	data := structured(t, f.call(t, endpoint(), "knowledge_list_spaces", map[string]any{}))
+	data := structured(t, f.call(endpoint(), t, "knowledge_list_spaces", map[string]any{}))
 	require.Equal(t, []any{map[string]any{"space_id": "s1", "release_id": "rel-2"}}, data["spaces"])
 }
 
 func TestACallWithoutReleaseReadsActiveOnceAndSaysWhichRelease(t *testing.T) {
 	f := setup()
-	data := structured(t, f.call(t, endpoint(), "knowledge_get_fields", map[string]any{
+	data := structured(t, f.call(endpoint(), t, "knowledge_get_fields", map[string]any{
 		"space_id": "s1", "entity_id": "E",
 	}))
 	require.Equal(t, 1, f.heads.reads["s1"])
@@ -185,7 +187,7 @@ func TestACallWithoutReleaseReadsActiveOnceAndSaysWhichRelease(t *testing.T) {
 
 func TestACallWithAReleaseReadsExactlyThatRelease(t *testing.T) {
 	f := setup()
-	data := structured(t, f.call(t, endpoint(), "knowledge_get_fields", map[string]any{
+	data := structured(t, f.call(endpoint(), t, "knowledge_get_fields", map[string]any{
 		"space_id": "s1", "entity_id": "E", "release_id": "rel-1",
 	}))
 	require.Equal(t, "rel-1", data["release_id"])
@@ -193,13 +195,13 @@ func TestACallWithAReleaseReadsExactlyThatRelease(t *testing.T) {
 	require.Zero(t, f.heads.reads["s1"], "a named release does not read Active")
 
 	for _, alias := range []string{"active", "Active", ""} {
-		refused(t, f.call(t, endpoint(), "knowledge_get_fields", map[string]any{
+		refused(t, f.call(endpoint(), t, "knowledge_get_fields", map[string]any{
 			"space_id": "s1", "entity_id": "E", "release_id": alias,
 		}), "INVALID_REQUEST")
 	}
 	require.Equal(t, []string{"s1/rel-1"}, f.releases.reads, "a refused release is never read")
 
-	result := f.call(t, endpoint(), "knowledge_get_fields", map[string]any{
+	result := f.call(endpoint(), t, "knowledge_get_fields", map[string]any{
 		"space_id": "s1", "entity_id": "E", "release_id": "rel-other",
 	})
 	require.True(t, result.IsError, "a release outside the Space is not readable")
@@ -208,13 +210,13 @@ func TestACallWithAReleaseReadsExactlyThatRelease(t *testing.T) {
 func TestUnreadableSpacesAndAnonymousCallsAreRefusedBeforeAnyRead(t *testing.T) {
 	f := setup()
 	for _, space := range []string{"s2", "s9"} {
-		refused(t, f.call(t, endpoint(), "knowledge_search_fields", map[string]any{
+		refused(t, f.call(endpoint(), t, "knowledge_search_fields", map[string]any{
 			"space_id": space, "query": "20",
 		}), "RELEASE_ACCESS_DENIED")
 	}
 	anonymous := context.WithValue(context.Background(), types.TenantIDContextKey, tenant)
-	require.True(t, f.call(t, anonymous, "knowledge_list_spaces", map[string]any{}).IsError)
-	require.True(t, f.call(t, anonymous, "knowledge_get_fields", map[string]any{
+	require.True(t, f.call(anonymous, t, "knowledge_list_spaces", map[string]any{}).IsError)
+	require.True(t, f.call(anonymous, t, "knowledge_get_fields", map[string]any{
 		"space_id": "s1", "entity_id": "E",
 	}).IsError)
 	require.Empty(t, f.heads.reads)
@@ -223,14 +225,14 @@ func TestUnreadableSpacesAndAnonymousCallsAreRefusedBeforeAnyRead(t *testing.T) 
 
 func TestCitationsNeedAnExplicitReleaseAndAReadableSpace(t *testing.T) {
 	f := setup()
-	refused(t, f.call(t, endpoint(), "knowledge_read_citation", map[string]any{
+	refused(t, f.call(endpoint(), t, "knowledge_read_citation", map[string]any{
 		"space_id": "s1", "member": "E/field", "evidence": 0,
 	}), "INVALID_REQUEST")
-	data := structured(t, f.call(t, endpoint(), "knowledge_read_citation", map[string]any{
+	data := structured(t, f.call(endpoint(), t, "knowledge_read_citation", map[string]any{
 		"space_id": "s1", "release_id": "rel-1", "member": "E/field", "evidence": 0,
 	}))
 	require.Equal(t, map[string]any{"document": "条款.pdf", "page": float64(3), "quote": "20 days"}, data)
-	refused(t, f.call(t, endpoint(), "knowledge_read_citation", map[string]any{
+	refused(t, f.call(endpoint(), t, "knowledge_read_citation", map[string]any{
 		"space_id": "s2", "release_id": "rel-9", "member": "E/field", "evidence": 0,
 	}), "RELEASE_ACCESS_DENIED")
 	require.Equal(t, 1, f.citations.calls)
