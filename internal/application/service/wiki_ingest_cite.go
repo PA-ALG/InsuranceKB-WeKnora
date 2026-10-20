@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Tencent/WeKnora/internal/agent"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -31,6 +32,9 @@ const (
 
 	// A root can make at most 1 + 2 + 4 candidate calls after known overflow.
 	maxCandidateSplitDepth = 2
+
+	// Citation overflow has its own bounded tree: at most seven calls per root.
+	maxCitationSplitDepth = 2
 )
 
 // citationBatchResult is the JSON shape we expect back from one invocation of
@@ -392,6 +396,125 @@ func aggregateWikiStageErrors(stage string, batchErrors []error) error {
 	return &wikiStageFailure{Stage: stage, Outcome: outcome, Cause: errors.Join(failures...)}
 }
 
+// splitCitationBatch keeps source order and minimizes the rune imbalance at a
+// chunk boundary. Each child starts a fresh invocation-local handle table.
+func splitCitationBatch(batch chunkBatch) []chunkBatch {
+	boundary, leftRunes, bestDifference := 1, 0, batch.totalRuneLen
+	for i := 1; i < len(batch.chunks); i++ {
+		leftRunes += utf8.RuneCountInString(batch.chunks[i-1].Content)
+		difference := 2*leftRunes - batch.totalRuneLen
+		if difference < 0 {
+			difference = -difference
+		}
+		if difference < bestDifference {
+			boundary, bestDifference = i, difference
+		}
+	}
+	children := []chunkBatch{{chunks: batch.chunks[:boundary]}, {chunks: batch.chunks[boundary:]}}
+	for i := range children {
+		children[i].handles = modelcontext.NewHandleTable("c", 3, 0)
+		for _, chunk := range children[i].chunks {
+			children[i].handles.Register(chunk.ID)
+			children[i].totalRuneLen += utf8.RuneCountInString(chunk.Content)
+		}
+	}
+	return children
+}
+
+// Only known output truncation permits another call. Children run sequentially
+// within their root's pool slot, even when a sibling fails; cancellation is
+// checked before every attempt and successful leaves retain source order.
+func (s *wikiIngestService) classifyCitationBatch(
+	ctx context.Context, chatModel chat.Chat, candidates string, batch chunkBatch,
+	lang string, rootIndex, depth int, parent *Span,
+) (results []citationBatchResult, err error) {
+	if cause := ctx.Err(); cause != nil {
+		return nil, &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: wikiOutcomeNotRun, Cause: cause}
+	}
+	span := s.tracker().BeginSubSpan(ctx, parent, fmt.Sprintf("postprocess.wiki.classify.batch[%d]", rootIndex),
+		types.SpanKindSubSpan, types.JSONMap{"batch": rootIndex, "depth": depth, "chunks": len(batch.chunks)})
+	defer func() {
+		if err != nil {
+			s.tracker().FailSpan(ctx, span, wikiFailureOutcome(err), err.Error(), nil)
+		} else {
+			s.tracker().EndSpan(ctx, span, types.JSONMap{"leaves": len(results)})
+		}
+	}()
+	raw, err := s.generateWithTemplate(ctx, chatModel, agent.WikiChunkCitationPrompt, map[string]string{
+		"CandidateSlugs": candidates, "ChunksXML": renderChunksXML(batch), "Language": lang,
+	})
+	if err != nil {
+		if !errors.Is(err, errWikiOutputTruncated) || wikiFailureOutcome(err) != wikiOutcomeFailed ||
+			len(batch.chunks) < 2 || depth >= maxCitationSplitDepth {
+			return nil, err
+		}
+		children := splitCitationBatch(batch)
+		logger.Infof(ctx, "wiki ingest: citation overflow batch=%d split_depth=%d left_chunks=%d right_chunks=%d",
+			rootIndex, depth+1, len(children[0].chunks), len(children[1].chunks))
+		failures := make([]error, len(children))
+		for i, child := range children {
+			var leaves []citationBatchResult
+			leaves, failures[i] = s.classifyCitationBatch(
+				ctx, chatModel, candidates, child, lang, rootIndex, depth+1, span,
+			)
+			results = append(results, leaves...)
+		}
+		return results, aggregateWikiStageErrors("wiki_chunk_citation", failures)
+	}
+	raw = cleanLLMJSON(raw)
+
+	var parsed citationBatchResult
+	if jerr := json.Unmarshal([]byte(raw), &parsed); jerr != nil {
+		return nil, &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: wikiOutcomeFailed, Cause: jerr}
+	}
+
+	// Any invalid reference makes this batch incomplete. Never silently
+	// discard it and then generate from the short candidate outline.
+	valid := parsed.Citations != nil
+	for _, handles := range parsed.Citations {
+		for _, handle := range handles {
+			if _, ok := batch.handles.Resolve(handle); !ok {
+				valid = false
+			}
+		}
+	}
+	for _, ns := range parsed.NewSlugs {
+		if ns.Slug == "" || ns.Name == "" || len(ns.SourceChunks) == 0 {
+			valid = false
+		}
+		for _, handle := range ns.SourceChunks {
+			if _, ok := batch.handles.Resolve(handle); !ok {
+				valid = false
+			}
+		}
+	}
+	if !valid {
+		return nil, &wikiStageFailure{
+			Stage: "wiki_chunk_citation", Outcome: wikiOutcomeFailed, Cause: errors.New("invalid citation references"),
+		}
+	}
+
+	// Translate only validated batch-local handles. Store by job index;
+	// completion order must not pick a new slug's first metadata.
+	for slug, handleList := range parsed.Citations {
+		ids := make([]string, 0, len(handleList))
+		for _, handle := range handleList {
+			realID, _ := batch.handles.Resolve(handle)
+			ids = append(ids, realID)
+		}
+		parsed.Citations[slug] = ids
+	}
+	for i, ns := range parsed.NewSlugs {
+		ids := make([]string, 0, len(ns.SourceChunks))
+		for _, handle := range ns.SourceChunks {
+			id, _ := batch.handles.Resolve(handle)
+			ids = append(ids, id)
+		}
+		parsed.NewSlugs[i].SourceChunks = ids
+	}
+	return []citationBatchResult{parsed}, nil
+}
+
 // classifyChunkCitations runs Pass 1..N of the chunk-cited pipeline: given a
 // set of candidate slugs (from Pass 0) and the document's chunks, it asks the
 // LLM which chunks substantively discuss each candidate. Results across
@@ -433,126 +556,63 @@ func (s *wikiIngestService) classifyChunkCitations(
 		}
 	}
 	batchErrors := make([]error, len(jobs))
-	results := make([]citationBatchResult, len(jobs))
+	results := make([][]citationBatchResult, len(jobs))
 
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.SetLimit(maxCitationBatchConcurrency)
 
 	for bi := range jobs {
-		batch := jobs[bi].batch
-		candidates := jobs[bi].candidates
-		batchIdx := bi
 		eg.Go(func() error {
-			if err := ectx.Err(); err != nil {
-				batchErrors[batchIdx] = &wikiStageFailure{
-					Stage:   "wiki_chunk_citation",
-					Outcome: wikiOutcomeNotRun,
-					Cause:   err,
-				}
-				return nil
-			}
-			batchSpan := s.tracker().BeginSubSpan(ectx, parent, fmt.Sprintf("postprocess.wiki.classify.batch[%d]", batchIdx), types.SpanKindSubSpan, types.JSONMap{"batch": batchIdx, "chunks": len(batch.chunks)})
-			chunksXML := renderChunksXML(batch)
-			raw, err := s.generateWithTemplate(ectx, chatModel, agent.WikiChunkCitationPrompt, map[string]string{
-				"CandidateSlugs": candidates,
-				"ChunksXML":      chunksXML,
-				"Language":       lang,
-			})
-			if err != nil {
-				batchErrors[batchIdx] = err
-				s.tracker().FailSpan(ectx, batchSpan, wikiFailureOutcome(err), err.Error(), nil)
-				return nil // Preserve successful peer batches.
-			}
-			raw = cleanLLMJSON(raw)
-
-			var parsed citationBatchResult
-			if jerr := json.Unmarshal([]byte(raw), &parsed); jerr != nil {
-				batchErrors[batchIdx] = &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: wikiOutcomeFailed, Cause: jerr}
-				s.tracker().FailSpan(ectx, batchSpan, wikiOutcomeFailed, "Invalid citation response", nil)
-				return nil
-			}
-
-			// Any invalid reference makes this batch incomplete. Never silently
-			// discard it and then generate from the short candidate outline.
-			valid := parsed.Citations != nil
-			for _, handles := range parsed.Citations {
-				for _, handle := range handles {
-					if _, ok := batch.handles.Resolve(handle); !ok {
-						valid = false
-					}
-				}
-			}
-			for _, ns := range parsed.NewSlugs {
-				if ns.Slug == "" || ns.Name == "" || len(ns.SourceChunks) == 0 {
-					valid = false
-				}
-				for _, handle := range ns.SourceChunks {
-					if _, ok := batch.handles.Resolve(handle); !ok {
-						valid = false
-					}
-				}
-			}
-			if !valid {
-				batchErrors[batchIdx] = &wikiStageFailure{Stage: "wiki_chunk_citation", Outcome: wikiOutcomeFailed, Cause: errors.New("invalid citation references")}
-				s.tracker().FailSpan(ectx, batchSpan, wikiOutcomeFailed, "Invalid citation references", nil)
-				return nil
-			}
-
-			// Translate only validated batch-local handles. Store by job index;
-			// completion order must not pick a new slug's first metadata.
-			for slug, handleList := range parsed.Citations {
-				ids := make([]string, 0, len(handleList))
-				for _, handle := range handleList {
-					realID, _ := batch.handles.Resolve(handle)
-					ids = append(ids, realID)
-				}
-				parsed.Citations[slug] = ids
-			}
-			for i, ns := range parsed.NewSlugs {
-				real := make([]string, 0, len(ns.SourceChunks))
-				for _, handle := range ns.SourceChunks {
-					id, _ := batch.handles.Resolve(handle)
-					real = append(real, id)
-				}
-				parsed.NewSlugs[i].SourceChunks = real
-			}
-			results[batchIdx] = parsed
-
-			s.tracker().EndSpan(ectx, batchSpan, types.JSONMap{"citations": parsed.Citations, "new_slugs": parsed.NewSlugs})
-			return nil
+			results[bi], batchErrors[bi] = s.classifyCitationBatch(
+				ectx, chatModel, jobs[bi].candidates, jobs[bi].batch, lang, bi, 0, parent,
+			)
+			return nil // Preserve successful peers; children stay inside this worker.
 		})
 	}
 	_ = eg.Wait()
 
 	citationSet := make(map[string]map[string]bool)
 	var newSlugsAll []newSlugFromCitation
+	newSlugIndex := make(map[string]int)
 	chunkOrder := make(map[string]int, len(chunks))
-	for i, result := range results {
+	for i, leaves := range results {
 		for _, c := range jobs[i].batch.chunks {
 			chunkOrder[c.ID] = len(chunkOrder)
 		}
-		for slug, ids := range result.Citations {
-			if slug == "" {
-				continue
+		for _, result := range leaves {
+			for slug, ids := range result.Citations {
+				if slug == "" {
+					continue
+				}
+				if citationSet[slug] == nil {
+					citationSet[slug] = make(map[string]bool)
+				}
+				for _, id := range ids {
+					citationSet[slug][id] = true
+				}
 			}
-			if citationSet[slug] == nil {
-				citationSet[slug] = make(map[string]bool)
-			}
-			for _, id := range ids {
-				citationSet[slug][id] = true
+			// A window may rediscover a document-wide candidate before another
+			// window cites it normally. Union both evidence paths before sorting.
+			for _, ns := range result.NewSlugs {
+				if citationSet[ns.Slug] == nil {
+					citationSet[ns.Slug] = make(map[string]bool)
+				}
+				for _, id := range ns.SourceChunks {
+					citationSet[ns.Slug][id] = true
+				}
+				index, exists := newSlugIndex[ns.Slug]
+				if !exists {
+					index = len(newSlugsAll)
+					newSlugIndex[ns.Slug] = index
+					first := ns
+					first.SourceChunks = nil
+					newSlugsAll = append(newSlugsAll, first)
+				}
+				for _, id := range ns.SourceChunks {
+					newSlugsAll[index].SourceChunks = appendUniqueString(newSlugsAll[index].SourceChunks, id)
+				}
 			}
 		}
-		// A window may rediscover a document-wide candidate before another
-		// window cites it normally. Union both evidence paths before sorting.
-		for _, ns := range result.NewSlugs {
-			if citationSet[ns.Slug] == nil {
-				citationSet[ns.Slug] = make(map[string]bool)
-			}
-			for _, id := range ns.SourceChunks {
-				citationSet[ns.Slug][id] = true
-			}
-		}
-		newSlugsAll = append(newSlugsAll, result.NewSlugs...)
 	}
 
 	out := make(map[string][]string, len(citationSet))
