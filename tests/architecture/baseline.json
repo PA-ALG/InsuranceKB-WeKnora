@@ -9,7 +9,7 @@
   "G5_hardcoded": 76,
   "G6_private_access": 275,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 472,
+  "G10_upstream_patches": 474,
   "G11_new_file_location": 679
  },
  "guards": {
@@ -677,6 +677,7 @@
    "frontend/package-lock.json": 1,
    "frontend/package.json": 1,
    "frontend/public/config.js": 1,
+   "frontend/src/api/mcp-endpoint.ts": 1,
    "frontend/src/api/wiki/index.ts": 1,
    "frontend/src/assets/theme/theme.css": 1,
    "frontend/src/components/ChatCitationFloat.vue": 1,
@@ -1090,6 +1091,7 @@
    "internal/types/interfaces/wiki_page.go": 1,
    "internal/types/knowledge.go": 1,
    "internal/types/mcp.go": 1,
+   "internal/types/mcp_endpoint_tools.go": 1,
    "internal/types/memory.go": 1,
    "internal/types/memory_extraction.go": 1,
    "internal/types/message.go": 1,

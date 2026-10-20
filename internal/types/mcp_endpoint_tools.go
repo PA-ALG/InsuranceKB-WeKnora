@@ -9,28 +9,36 @@ type MCPEndpointToolGroup string
 
 // Tool groups in display order.
 const (
-	MCPEndpointToolGroupRetrieve MCPEndpointToolGroup = "retrieve"
-	MCPEndpointToolGroupChat     MCPEndpointToolGroup = "chat"
-	MCPEndpointToolGroupWiki     MCPEndpointToolGroup = "wiki"
-	MCPEndpointToolGroupIngest   MCPEndpointToolGroup = "ingest"
+	MCPEndpointToolGroupRetrieve  MCPEndpointToolGroup = "retrieve"
+	MCPEndpointToolGroupChat      MCPEndpointToolGroup = "chat"
+	MCPEndpointToolGroupWiki      MCPEndpointToolGroup = "wiki"
+	MCPEndpointToolGroupIngest    MCPEndpointToolGroup = "ingest"
+	MCPEndpointToolGroupKnowledge MCPEndpointToolGroup = "knowledge"
 )
 
 // MCP endpoint tool names. These are the names external MCP clients see.
 // They intentionally differ from the agent-internal tool names where the
 // external contract is simpler (one query, server-side session handling).
 const (
-	MCPEndpointToolListKnowledgeBases = "list_knowledge_bases"
-	MCPEndpointToolSearchKnowledge    = "search_knowledge"
-	MCPEndpointToolGrepChunks         = "grep_chunks"
-	MCPEndpointToolListDocuments      = "list_documents"
-	MCPEndpointToolReadDocument       = "read_document"
-	MCPEndpointToolAsk                = "ask"
-	MCPEndpointToolWikiSearch         = "wiki_search"
-	MCPEndpointToolWikiReadPage       = "wiki_read_page"
-	MCPEndpointToolWikiIndex          = "wiki_index"
-	MCPEndpointToolAddDocument        = "add_document"
-	MCPEndpointToolUpdateDocument     = "update_document"
-	MCPEndpointToolDeleteDocument     = "delete_document"
+	MCPEndpointToolListKnowledgeBases    = "list_knowledge_bases"
+	MCPEndpointToolSearchKnowledge       = "search_knowledge"
+	MCPEndpointToolGrepChunks            = "grep_chunks"
+	MCPEndpointToolListDocuments         = "list_documents"
+	MCPEndpointToolReadDocument          = "read_document"
+	MCPEndpointToolAsk                   = "ask"
+	MCPEndpointToolWikiSearch            = "wiki_search"
+	MCPEndpointToolWikiReadPage          = "wiki_read_page"
+	MCPEndpointToolWikiIndex             = "wiki_index"
+	MCPEndpointToolAddDocument           = "add_document"
+	MCPEndpointToolUpdateDocument        = "update_document"
+	MCPEndpointToolDeleteDocument        = "delete_document"
+	MCPEndpointToolKnowledgeListSpaces   = "knowledge_list_spaces"
+	MCPEndpointToolKnowledgeFindEntity   = "knowledge_find_entity"
+	MCPEndpointToolKnowledgeGetFields    = "knowledge_get_fields"
+	MCPEndpointToolKnowledgeSearchFields = "knowledge_search_fields"
+	MCPEndpointToolKnowledgeGetConcept   = "knowledge_get_concept"
+	MCPEndpointToolKnowledgeSearchPages  = "knowledge_search_pages"
+	MCPEndpointToolKnowledgeReadCitation = "knowledge_read_citation"
 )
 
 // MCPEndpointToolDefinition is the settings-facing description of one tool.
@@ -58,6 +66,13 @@ var mcpEndpointToolCatalog = []MCPEndpointToolDefinition{
 	{Name: MCPEndpointToolAddDocument, Group: MCPEndpointToolGroupIngest, Destructive: true},
 	{Name: MCPEndpointToolUpdateDocument, Group: MCPEndpointToolGroupIngest, Destructive: true},
 	{Name: MCPEndpointToolDeleteDocument, Group: MCPEndpointToolGroupIngest, Destructive: true},
+	{Name: MCPEndpointToolKnowledgeListSpaces, Group: MCPEndpointToolGroupKnowledge},
+	{Name: MCPEndpointToolKnowledgeFindEntity, Group: MCPEndpointToolGroupKnowledge},
+	{Name: MCPEndpointToolKnowledgeGetFields, Group: MCPEndpointToolGroupKnowledge},
+	{Name: MCPEndpointToolKnowledgeSearchFields, Group: MCPEndpointToolGroupKnowledge},
+	{Name: MCPEndpointToolKnowledgeGetConcept, Group: MCPEndpointToolGroupKnowledge},
+	{Name: MCPEndpointToolKnowledgeSearchPages, Group: MCPEndpointToolGroupKnowledge},
+	{Name: MCPEndpointToolKnowledgeReadCitation, Group: MCPEndpointToolGroupKnowledge},
 }
 
 // MCPEndpointToolCatalog returns a copy of the ordered tool catalog.
@@ -74,6 +89,7 @@ func MCPEndpointToolGroups() []MCPEndpointToolGroup {
 		MCPEndpointToolGroupChat,
 		MCPEndpointToolGroupWiki,
 		MCPEndpointToolGroupIngest,
+		MCPEndpointToolGroupKnowledge,
 	}
 }
 
@@ -130,7 +146,8 @@ func MCPEndpointCapabilitiesForTools(tools []string) []string {
 		}
 	}
 	caps := []string{}
-	if groups[MCPEndpointToolGroupRetrieve] || groups[MCPEndpointToolGroupWiki] || groups[MCPEndpointToolGroupChat] {
+	if groups[MCPEndpointToolGroupRetrieve] || groups[MCPEndpointToolGroupWiki] ||
+		groups[MCPEndpointToolGroupChat] || groups[MCPEndpointToolGroupKnowledge] {
 		caps = append(caps, string(APIKeyCapabilityRetrieve))
 	}
 	if groups[MCPEndpointToolGroupChat] {

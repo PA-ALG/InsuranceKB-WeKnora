@@ -76,7 +76,10 @@ func Register(container *dig.Container) error {
 		if dir == "" {
 			dir = defaultContractsDir
 		}
-		pages := enterprisePages(spaces, knowledge, firstParse)
+		var pages PageReader
+		if captured := enterprisePages(spaces, knowledge, firstParse); captured != nil {
+			pages = captured
+		}
 		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, pages, reservedScopes(cfg)...)
 	}); err != nil {
 		return err
@@ -93,7 +96,7 @@ func Register(container *dig.Container) error {
 // page route it never falls back to the G3 scope, so evidence can only cite enterprise sources.
 func enterprisePages(
 	spaces Spaces, knowledge interfaces.KnowledgeRepository, firstParse *appservice.G3FirstParseStore,
-) PageReader {
+) *source.Service {
 	if firstParse == nil {
 		return nil
 	}

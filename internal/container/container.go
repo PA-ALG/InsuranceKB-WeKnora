@@ -72,6 +72,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
+	"github.com/Tencent/WeKnora/internal/enterprise/mcptools"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"github.com/Tencent/WeKnora/internal/event"
@@ -363,8 +364,11 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewEmbedChannelService))
 	must(container.Provide(service.NewMCPEndpointService))
 	must(container.Provide(mcpserver.NewServer))
-	must(container.Decorate(func(server *mcpserver.Server, classifier managed.Classifier) *mcpserver.Server {
-		return server.WithManagedClassifier(classifier)
+	must(container.Provide(releasestore.NewMCPDeps))
+	must(container.Decorate(func(
+		server *mcpserver.Server, classifier managed.Classifier, deps mcptools.Deps,
+	) *mcpserver.Server {
+		return server.WithManagedClassifier(classifier).WithExtraTools(mcptools.Tools(deps))
 	}))
 
 	// Web search service (needed by AgentService)

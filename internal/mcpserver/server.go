@@ -20,6 +20,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
+	"github.com/Tencent/WeKnora/internal/enterprise/mcptools"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/ratelimit"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -118,10 +119,20 @@ func NewServer(
 		server.WithInstructions(serverInstructions),
 	)
 	s.mcp.AddTools(s.toolCatalog()...)
+	// Keep the settings catalog available even when enterprise publishing is
+	// disabled. The same tools fail closed until production injects dependencies.
+	s.WithExtraTools(mcptools.Tools(mcptools.Deps{}))
 	s.handler = server.NewStreamableHTTPServer(
 		s.mcp,
 		server.WithStateLess(true),
 	)
+	return s
+}
+
+// WithExtraTools registers extension tools before serving. They use the same
+// endpoint tool filter, allowlist guard, and rate limiter as the built-in tools.
+func (s *Server) WithExtraTools(tools []server.ServerTool) *Server {
+	s.mcp.AddTools(tools...)
 	return s
 }
 
@@ -187,6 +198,12 @@ func (s *Server) guardTool(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		result, err := next(ctx, req)
 		if err != nil {
 			return result, err
+		}
+		// Published strings are immutable source content. Resource rewriting
+		// would change verified quotes and provenance and mint unrelated grants.
+		if def, ok := types.LookupMCPEndpointTool(req.Params.Name); ok &&
+			def.Group == types.MCPEndpointToolGroupKnowledge {
+			return result, nil
 		}
 		return s.rewriteResourceURLs(ctx, ep, result), nil
 	}
