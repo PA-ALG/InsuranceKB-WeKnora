@@ -13,6 +13,10 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestTaskPendingOps_ReleaseOperationRoundTrip(t *testing.T) {
+	testPendingRetryPayloadAndOwnership(t, setupTaskQueueTestDB(t))
+}
+
 func TestPostgresTaskPendingOpsReleaseOperationPreservesPayloadAndOwnership(t *testing.T) {
 	dsn := strings.TrimSpace(os.Getenv("WEKNORA_TEST_POSTGRES_URL"))
 	if dsn == "" {
@@ -83,8 +87,10 @@ func testPendingRetryPayloadAndOwnership(t *testing.T, db *gorm.DB) {
 	released, err = retry.ReleaseOperation(ctx, secondClaim, "second")
 	require.NoError(t, err)
 	require.True(t, released, "the current owner must still be able to release")
-	require.NoError(t, db.First(&after, op.ID).Error)
-	require.Nil(t, after.ClaimedAt)
-	require.JSONEq(t, payload, string(after.Payload))
-	require.Equal(t, 2, after.FailCount)
+	// Read into a fresh row: GORM does not clear a populated *time.Time on NULL.
+	var finalRow types.TaskPendingOp
+	require.NoError(t, db.First(&finalRow, op.ID).Error)
+	require.Nil(t, finalRow.ClaimedAt)
+	require.JSONEq(t, payload, string(finalRow.Payload))
+	require.Equal(t, 2, finalRow.FailCount)
 }
