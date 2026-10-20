@@ -3,6 +3,7 @@ import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Release } from './enterpriseApi'
 import { entityView, type EntitySummary, type FieldView } from './releaseView'
+import { wikiPages, type WikiPageEntry } from './wikiPagesView'
 
 const props = defineProps<{ entry: EntitySummary; release: Release; spaceId: string; selected?: boolean }>()
 const { t } = useI18n()
@@ -10,6 +11,7 @@ const expanded = ref(false)
 watch(() => props.selected, selected => { expanded.value = !!selected }, { immediate: true })
 const contentId = useId()
 const view = computed(() => expanded.value ? entityView(props.release, props.entry.entityId) : null)
+const pages = computed(() => expanded.value ? wikiPages(props.release, props.entry.entityId) : [])
 const sections = computed(() => view.value ? [
   ...view.value.sections,
   ...(view.value.other.length ? [{ key: '__other__', title: t('enterpriseKnowledge.entity.other'), fields: view.value.other }] : []),
@@ -20,6 +22,10 @@ function fieldTarget(field: FieldView) {
   const claim = props.release.members.find(member => member.kind === 'claim' && member.logical_slug === field.slug)
   const key = typeof claim?.payload?.predicate === 'string' ? claim.payload.predicate : field.slug
   return { ...target.value, hash: `#${key}` }
+}
+function pageTarget(page: WikiPageEntry) {
+  return { name: 'enterpriseWikiPage', params: { spaceId: props.spaceId, entityId: props.entry.entityId,
+    pageType: page.pageType, pageSlug: page.key.slice(page.pageType.length + 1) }, query: { release: props.release.id } }
 }
 </script>
 
@@ -41,6 +47,10 @@ function fieldTarget(field: FieldView) {
         </ul>
       </details>
       <p v-if="!sections.length" class="ek-page__note">{{ t('enterpriseKnowledge.nav.noFields') }}</p>
+      <details v-if="pages.length" :key="`${spaceId}/${release.id}/${entry.entityId}`" data-nav-wiki class="ek-nav-wiki">
+        <summary>{{ t('enterpriseKnowledge.wiki.navigation') }} <span class="ek-nav-wiki__count">{{ pages.length }}</span></summary>
+        <ul><li v-for="page in pages" :key="page.slug"><RouterLink :to="pageTarget(page)" :title="page.title">{{ page.title }}</RouterLink></li></ul>
+      </details>
     </div>
   </li>
 </template>

@@ -7502,6 +7502,15 @@ export default {
     noSessions: '대화가 없습니다'
   },
   enterpriseKnowledge: {
+    wiki: {
+      navigation: "추가 읽기 (모델 정리)",
+      generated: "모델 정리 · 항목별 검토 미완료",
+      notFound: "이 버전에 해당 페이지가 없습니다",
+      source: "출처 {n}",
+      sources: "출처",
+      back: "상품 페이지로 돌아가기",
+      failed: "추가 읽기 페이지를 불러오지 못했습니다"
+    },
     changes: {
       "pageTitle": "이번 버전 변경 사항",
       "title": "버전 {base}에서 {current}(으)로 변경된 내용",

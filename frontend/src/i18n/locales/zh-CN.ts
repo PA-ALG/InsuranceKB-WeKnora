@@ -7504,6 +7504,15 @@ export default {
     noSessions: '暂无对话'
   },
   enterpriseKnowledge: {
+    wiki: {
+      navigation: "延伸阅读（模型整理）",
+      generated: "模型整理，未逐条审核",
+      notFound: "该版本中没有这个页面",
+      source: "出处 {n}",
+      sources: "出处",
+      back: "返回产品页",
+      failed: "延伸阅读页面加载失败"
+    },
     changes: {
       "pageTitle": "本版变化",
       "title": "版本 {current} 相对版本 {base} 的变化",
