@@ -213,6 +213,7 @@ import { useSettingsStore } from '@/stores/settings';
 import { useBrowserConnectionStore } from '@/stores/browserConnection';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useI18n } from 'vue-i18n';
+import { enterpriseChatError } from '@/enterprise/chatErrors';
 import { useUIStore } from '@/stores/ui';
 import KnowledgeBaseEditorModal from '@/views/knowledge/KnowledgeBaseEditorModal.vue';
 import { useKnowledgeBaseCreationNavigation } from '@/hooks/useKnowledgeBaseCreationNavigation';
@@ -928,7 +929,7 @@ const {
     fullContent,
     isAgentStreamSession,
     scrollToBottom,
-    onError: (msg) => MessagePlugin.error(msg),
+    onError: (msg) => MessagePlugin.error(enterpriseChatError(msg, t) ?? msg),
     preserveIncompleteStreamReactive: true,
     isFirstEnter,
     scrollContainer,
@@ -1614,7 +1615,8 @@ watch(error, (newError) => {
         recoverIncompleteMessage();
         return;
     }
-    MessagePlugin.error(newError);
+    console.error('[Chat Error]', newError);
+    MessagePlugin.error(enterpriseChatError(newError, t) ?? newError);
     isReplying.value = false;
     loading.value = false;
     // 清空当前 assistant message ID

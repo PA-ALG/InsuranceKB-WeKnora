@@ -86,7 +86,7 @@ onUnmounted(() => { generation++ })
     <template v-else-if="release">
       <RouterLink class="ek-back" :to="{ name: 'enterpriseSpace', params: { spaceId }, query: { release: release.id } }">← {{ spaceId }}</RouterLink>
       <div class="ek-layout">
-        <EnterpriseNavigation :release="release" :space-id="spaceId" :entity-id="entityId" />
+        <EnterpriseNavigation :release="release" :space-id="spaceId" :entity-id="entityId" :wiki-page-key="`${pageType}/${pageSlug}`" />
         <article class="ek-layout__content">
           <div v-if="view" data-wiki-page>
             <h1 class="ek-page__title">{{ view.title }}</h1>

@@ -7504,6 +7504,12 @@ export default {
     createFailed: 'Failed to create platform API key'
   },
   enterpriseKnowledge: {
+    chatErrors: {
+      managedKb: "This knowledge base is managed by published releases and cannot be searched directly. In Enterprise Knowledge, select the original source library or Wiki library for the corresponding Space to ask a question, or switch to intelligent reasoning mode.",
+      classificationUnavailable: "We cannot currently determine whether this knowledge base is managed by published releases. Answering has stopped. Please try again later.",
+      sourcesUnavailable: "The original sources pinned to the current release are temporarily unavailable for search. Please try again later or select the Wiki library.",
+      releaseNotFound: "This Enterprise Knowledge Space has no published release yet, so question answering is not available.",
+    },
     wiki: {
       navigation: "Further reading (model compiled)",
       generated: "Model compiled; not reviewed item by item",

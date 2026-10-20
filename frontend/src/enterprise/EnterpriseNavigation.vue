@@ -6,7 +6,7 @@ import { navigationTree } from './navigationView'
 import { conceptKeys, conceptView } from './conceptView'
 import NavigationEntry from './NavigationEntry.vue'
 
-const props = defineProps<{ release: Release; spaceId: string; entityId?: string; conceptKey?: string }>()
+const props = defineProps<{ release: Release; spaceId: string; entityId?: string; conceptKey?: string; wikiPageKey?: string }>()
 const { t } = useI18n()
 const tree = computed(() => navigationTree(props.release))
 const concepts = computed(() => conceptKeys(props.release).map(key => conceptView(props.release, key)!))
@@ -99,7 +99,8 @@ function keydown(event: KeyboardEvent, index: number) {
             <small>{{ group.entries.length }}</small>
           </button></h2>
           <ul v-show="isOpen(groupId(domain.key, group.key))" :id="`${id}-group-${index}-${groupIndex}`">
-            <NavigationEntry v-for="entry in group.entries" :key="entry.entityId" :entry="entry" :release="release" :space-id="spaceId" :selected="entry.entityId === entityId" />
+            <NavigationEntry v-for="entry in group.entries" :key="entry.entityId" :entry="entry" :release="release" :space-id="spaceId"
+              :selected="entry.entityId === entityId" :wiki-page-key="entry.entityId === entityId ? wikiPageKey : undefined" />
           </ul>
         </section>
         <p v-if="!domain.groups.length" class="ek-empty">{{ t('enterpriseKnowledge.home.noProducts') }}</p>

@@ -7504,6 +7504,12 @@ export default {
     createFailed: 'プラットフォームAPIキーの作成に失敗しました'
   },
   enterpriseKnowledge: {
+    chatErrors: {
+      managedKb: "このナレッジベースは公開バージョンで管理されているため、直接検索できません。企業ナレッジで該当する Space の原資料ライブラリまたは Wiki ライブラリを選択して質問するか、インテリジェント推論モードに切り替えてください。",
+      classificationUnavailable: "このナレッジベースが公開バージョンで管理されているか確認できないため、回答を停止しました。しばらくしてから再試行してください。",
+      sourcesUnavailable: "現在の公開バージョンに固定された原資料を一時的に検索できません。しばらくしてから再試行するか、Wiki ライブラリを選択してください。",
+      releaseNotFound: "この企業ナレッジ Space にはまだ公開バージョンがないため、質問に回答できません。",
+    },
     wiki: {
       navigation: "関連資料（モデルによる整理）",
       generated: "モデルによる整理・項目ごとのレビュー未実施",
