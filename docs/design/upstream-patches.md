@@ -118,4 +118,5 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/i18n/locales/ja-JP.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
 | `frontend/src/i18n/locales/ko-KR.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
 | `frontend/src/i18n/locales/ru-RU.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `internal/application/service/wiki_ingest.go`、`internal/application/service/wiki_ingest_cite.go` | S6a-2 | 密集材料的候选列表超出输出上限，窗口只按输入装箱 | 是 | 上游按输出量自适应分段候选抽取后撤回 |
 | `internal/application/service/session_knowledge_qa.go` | Q1b-2 | 快问快答读取已发布字段：只选 Wiki 库时跳过原文检索阶段，原文检索为空时交给已发布字段，二者都为空才兜底 | 部分（问答检索扩展） | 上游提供可注入的检索来源插件与兜底判定扩展点后移回 |
