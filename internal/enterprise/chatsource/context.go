@@ -86,7 +86,11 @@ func FilterPipeline(ctx context.Context, resolver *Resolver, chunks ChunkReader,
 		if err != nil {
 			return err
 		}
+		*rows = v.turn.pinnedOnly(*rows)
 		v.turn.Label(*rows)
+	}
+	if err := injectPublished(ctx, resolver, v, cm); err != nil {
+		return err
 	}
 	if !samePromptResults(before, cm.MergeResult) && cm.RenderedContexts != "" {
 		// A later delivery check may invalidate text already rendered by the

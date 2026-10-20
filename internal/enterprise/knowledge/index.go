@@ -47,7 +47,8 @@ type profilePayload struct {
 }
 
 type navigationPayload struct {
-	Domains []struct {
+	OverviewFields []string `json:"overview_fields"`
+	Domains        []struct {
 		Types  []string `json:"entity_types"`
 		Groups []struct {
 			Key    string   `json:"group_key"`
