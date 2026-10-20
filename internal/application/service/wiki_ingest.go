@@ -24,7 +24,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 )
 
@@ -395,7 +394,7 @@ type wikiIngestService struct {
 	liteFinalizeLocks sync.Map
 	// llmRequests coalesces byte-identical concurrent prompts within this
 	// process. Keys include tenant and model to preserve isolation.
-	llmRequests singleflight.Group
+	llmRequests sync.Map // exact request key -> *wikiLLMRequest
 	// promptWarmups serializes only the first request for a reusable Wiki page
 	// prefix. Other prefixes and already-warmed cohorts stay parallel.
 	promptWarmups sync.Map
@@ -2707,7 +2706,7 @@ func (s *wikiIngestService) generateWithTemplateResult(
 		chat.FingerprintPromptPrefix(string(requestJSON)),
 	)
 
-	execute := func() (interface{}, error) {
+	execute := func(ctx context.Context, request *wikiLLMRequest) (wikiTemplateResult, error) {
 		releaseWarmup := func() {}
 		if tenantScoped && promptTpl == agent.WikiPageModifyUserPrompt &&
 			strings.TrimSpace(maskedData["SharedSourceContexts"]) != "" {
@@ -2726,8 +2725,8 @@ func (s *wikiIngestService) generateWithTemplateResult(
 		// This workflow owns the continuation budget; transport never retries
 		// an unknown send. Successful truncated responses alone may continue.
 		call := func(msgs []chat.Message) (*types.ChatResponse, error) {
-			if err := ctx.Err(); err != nil {
-				return nil, &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeNotRun, Cause: err}
+			if err := request.beginDispatch(purpose); err != nil {
+				return nil, err
 			}
 			response, err := chatModel.Chat(ctx, msgs, opts)
 			if err != nil || response == nil {
@@ -2811,33 +2810,12 @@ func (s *wikiIngestService) generateWithTemplateResult(
 	// Missing tenant context is unexpected for production Wiki work. Fail safe
 	// by skipping cross-call coalescing instead of putting unrelated requests
 	// into a synthetic tenant-0 bucket.
-	if !tenantScoped {
-		value, executeErr := execute()
-		if executeErr != nil {
-			return wikiTemplateResult{}, executeErr
-		}
-		result, _ := value.(wikiTemplateResult)
-		result.Content = unmaskImageURLs(result.Content, urlMap)
-		return result, nil
+	result, err := s.runWikiRequest(ctx, requestKey, tenantScoped, purpose, execute)
+	if err != nil {
+		return wikiTemplateResult{}, err
 	}
-	// Before joining coalescing, cancellation still proves this invocation
-	// has not been dispatched. Once queued, keep the existing UNKNOWN rule.
-	if err := ctx.Err(); err != nil && (purpose == "wiki_candidate_slug" || purpose == "wiki_chunk_citation") {
-		return wikiTemplateResult{}, &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeNotRun, Cause: err}
-	}
-	resultCh := s.llmRequests.DoChan(requestKey, execute)
-
-	select {
-	case <-ctx.Done():
-		return wikiTemplateResult{}, &wikiStageFailure{Stage: purpose, Outcome: wikiOutcomeUnknown, Cause: ctx.Err()}
-	case result := <-resultCh:
-		if result.Err != nil {
-			return wikiTemplateResult{}, result.Err
-		}
-		rewritten, _ := result.Val.(wikiTemplateResult)
-		rewritten.Content = unmaskImageURLs(rewritten.Content, urlMap)
-		return rewritten, nil
-	}
+	result.Content = unmaskImageURLs(result.Content, urlMap)
+	return result, nil
 }
 
 func wikiPromptPurpose(promptTpl string) string {

@@ -684,6 +684,25 @@ func (r *taskPendingOpsRepository) BeginOperation(
 	return result.Error == nil && result.RowsAffected == 1, result.Error
 }
 
+func (r *taskPendingOpsRepository) ReleaseOperation(
+	ctx context.Context,
+	claim *types.TaskPendingOp,
+	executionID string,
+) (bool, error) {
+	if claim == nil || claim.ID == 0 || executionID == "" {
+		return false, errors.New("task execution: claim and execution id required")
+	}
+	q := pendingExecutionQuery(pendingClaimQuery(r.db.WithContext(ctx), claim), executionID)
+	// Edit the stored payload so revision bindings and unknown fields survive;
+	// SQLite must retain the byte representation used by json.RawMessage.
+	value := gorm.Expr("CAST(json_remove(payload, '$.execution_id') AS BLOB)")
+	if r.db.Name() == "postgres" {
+		value = gorm.Expr("payload - 'execution_id'")
+	}
+	result := q.Updates(map[string]interface{}{"claimed_at": nil, "payload": value})
+	return result.Error == nil && result.RowsAffected == 1, result.Error
+}
+
 func (r *taskPendingOpsRepository) CompleteOperation(
 	ctx context.Context,
 	claim *types.TaskPendingOp,
