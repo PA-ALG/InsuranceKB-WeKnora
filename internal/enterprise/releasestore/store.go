@@ -23,6 +23,7 @@ type Store struct {
 	releases *repository.WikiReleaseRepository
 	spaces   Spaces
 	now      func() time.Time
+	members  memberCache
 }
 
 // New wires the adapter to the platform database and the configured Spaces.

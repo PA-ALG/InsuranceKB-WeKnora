@@ -1,3 +1,4 @@
+import { markRaw } from 'vue'
 import { get, post } from '@/utils/request'
 
 // Session routes of the enterprise platform. Bodies are `{success, data}`;
@@ -74,9 +75,22 @@ export async function listSpaces(): Promise<string[]> {
   return (data?.spaces ?? []).map(space => space.space_id)
 }
 
+const releaseReads = new Map<string, Promise<Release>>()
+
 export function readRelease(spaceId: string, releaseId?: string): Promise<Release> {
   const target = releaseId === undefined ? 'active' : encodeURIComponent(releaseId)
-  return read<Release>(`${releasesPath(spaceId)}/${target}`)
+  const url = `${releasesPath(spaceId)}/${target}`
+  // A login or tenant change while a request is pending starts a distinct read.
+  // Keep only pending work: every later read must revalidate server authorization.
+  const session = typeof localStorage === 'undefined' ? [] : [
+    localStorage.getItem('weknora_token'), localStorage.getItem('weknora_selected_tenant_id'),
+  ]
+  const key = JSON.stringify([url, ...session])
+  const pending = releaseReads.get(key)
+  if (pending) return pending
+  const request = read<Release>(url).then(markRaw).finally(() => { releaseReads.delete(key) })
+  releaseReads.set(key, request)
+  return request
 }
 
 export function readCitation(spaceId: string, releaseId: string, member: string, evidence: number): Promise<Citation> {
