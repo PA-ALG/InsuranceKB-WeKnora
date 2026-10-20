@@ -37,7 +37,7 @@ func TestQ1aAgentRawOnlyOffersSearchAndReusesTurnForEveryCall(t *testing.T) {
 	require.NoError(t, svc.registerTools(ctx, registry, config, nil, nil, "session"))
 	require.ElementsMatch(t, []string{
 		tools.ToolSearchKnowledge, "knowledge_find_entity", "knowledge_get_fields",
-		"knowledge_search_fields", "knowledge_get_concept",
+		"knowledge_search_fields", "knowledge_get_concept", "knowledge_search_pages",
 	}, registry.ListTools())
 	search, err := registry.GetTool(tools.ToolSearchKnowledge)
 	require.NoError(t, err)
@@ -108,6 +108,7 @@ func TestQ1bAgentWikiOnlyRegistersPublishedKnowledgeTools(t *testing.T) {
 	}, nil, nil, "session"))
 	require.ElementsMatch(t, []string{
 		"knowledge_find_entity", "knowledge_get_fields", "knowledge_search_fields", "knowledge_get_concept",
+		"knowledge_search_pages",
 	}, registry.ListTools())
 	require.Equal(t, 1, source.reads)
 }
