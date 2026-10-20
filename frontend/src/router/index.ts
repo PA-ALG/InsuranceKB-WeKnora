@@ -299,6 +299,19 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
+          path: "enterprise/:spaceId/wiki/:entityId/:pageType/:pageSlug",
+          name: "enterpriseWikiPage",
+          component: () => import("../enterprise/EnterpriseWikiPage.vue"),
+          props: route => ({
+            spaceId: String(route.params.spaceId),
+            entityId: String(route.params.entityId),
+            pageType: String(route.params.pageType),
+            pageSlug: String(route.params.pageSlug),
+            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
+          }),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
           path: "enterprise/:spaceId/entities/:entityId",
           name: "enterpriseEntity",
           component: () => import("../enterprise/EnterpriseEntity.vue"),

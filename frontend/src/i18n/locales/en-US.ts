@@ -7502,6 +7502,15 @@ export default {
     createFailed: 'Failed to create platform API key'
   },
   enterpriseKnowledge: {
+    wiki: {
+      navigation: "Further reading (model compiled)",
+      generated: "Model compiled; not reviewed item by item",
+      notFound: "This page is not in this release",
+      source: "Source {n}",
+      sources: "Sources",
+      back: "Back to product",
+      failed: "Failed to load further reading"
+    },
     changes: {
       "pageTitle": "Changes in this release",
       "title": "Changes from version {base} to version {current}",
