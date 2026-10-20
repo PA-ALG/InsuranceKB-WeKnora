@@ -43,7 +43,9 @@ func KnowledgeNotice(turn Turn) string {
 		"knowledge_search_fields、knowledge_get_concept 查询本轮固定发布版本。" +
 		"回答产品事实时引用当前工具返回的字段句柄；查不到或 unknown 时如实说明，不将未知说成明确没有。" +
 		"absent_explicitly 表示材料明确没有。没有 Evidence 的内容不标审核过、不制造出处。" +
-		"概念定义、说明和概括是模型补充（概念说明），与已举证的产品字段分开，不把模型补充当审核事实。"
+		"概念定义、说明和概括是模型补充（概念说明），与已举证的产品字段分开，不把模型补充当审核事实。" +
+		"字段查不到时，可用 knowledge_search_pages 查延伸阅读页面；页面是模型整理（未逐条审核），" +
+		"回答中如实标注，不当作审核过的事实；与字段冲突时以字段为准。"
 	if len(turn.RawKnowledge) > 0 {
 		notice += "已发布知识查不到时可用原文检索补充；原文仅限本轮固定材料，明确标注原文检索（未经编译审核），不能混淆两种来源。"
 	}

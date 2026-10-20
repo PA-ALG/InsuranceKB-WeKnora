@@ -740,6 +740,7 @@ const TOOL_NAME_KEYS: Record<string, string> = {
   knowledge_get_fields: 'chat.knowledgeGetFields',
   knowledge_search_fields: 'chat.knowledgeSearchFields',
   knowledge_get_concept: 'chat.knowledgeGetConcept',
+  knowledge_search_pages: 'chat.knowledgeSearchPages',
   search_knowledge: 'agentStream.tools.searchKnowledge',
   read_document: 'agentStream.tools.readDocument',
   list_documents: 'agentStream.tools.listDocuments',

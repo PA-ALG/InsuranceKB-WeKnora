@@ -19,8 +19,11 @@ afterEach(() => { wrappers.splice(0).forEach(w => w.unmount()); vi.useRealTimers
 it.each(publishedKnowledgeTools)('restores %s metadata into the list, hover and keyboard citation drawer', async toolName => {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div />' } }] })
   await router.push('/')
-  const id = 'release:historic:product/field'
-  const metadata = { source_tier: 'release', space_id: 'space-a', release_id: 'historic', logical_slug: 'product/field', evidence_index: '0' }
+  // The page tool cites model-written page members under their own tier (S6e).
+  const page = toolName === 'knowledge_search_pages'
+  const member = page ? 'wiki/product/concept/field' : 'product/field'
+  const id = `release:historic:${member}`
+  const metadata = { source_tier: page ? 'wiki_page' : 'release', space_id: 'space-a', release_id: 'historic', logical_slug: member, evidence_index: '0' }
   let drawer!: ChatReferencesDrawerContext
   const host = defineComponent({ setup() {
     drawer = provideChatReferencesDrawer()
@@ -40,6 +43,7 @@ it.each(publishedKnowledgeTools)('restores %s metadata into the list, hover and 
   const labelKeys: Record<string, keyof typeof zhCN.chat> = {
     knowledge_find_entity: 'knowledgeFindEntity', knowledge_get_fields: 'knowledgeGetFields',
     knowledge_search_fields: 'knowledgeSearchFields', knowledge_get_concept: 'knowledgeGetConcept',
+    knowledge_search_pages: 'knowledgeSearchPages',
   }
   expect(wrapper.get('.tree-children .tool-event .action-name').text()).toBe(zhCN.chat[labelKeys[toolName]!])
   await wrapper.get('.reference-trigger').trigger('click')
