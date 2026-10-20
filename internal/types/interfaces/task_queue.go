@@ -177,3 +177,12 @@ type TaskPendingOpsExecutionStore interface {
 	ArchiveOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string, failure *types.TaskDeadLetter) (bool, error)
 	FailedOperationCount(ctx context.Context, tenantID uint64, taskType, scope, scopeID string) (int64, error)
 }
+
+// TaskPendingOpsRetryStore is an optional extension for operations whose
+// requests never ran. ReleaseOperation clears the claim and execution marker
+// atomically only for the matching owner, preserving the payload and fail count.
+// A missing row or changed owner returns false; callers must establish that
+// retrying is safe before releasing an operation.
+type TaskPendingOpsRetryStore interface {
+	ReleaseOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error)
+}

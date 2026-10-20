@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
+
+	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/google/uuid"
-	"sync"
 )
 
 const (
@@ -53,6 +55,114 @@ func wikiFailureOutcome(err error) string {
 		return wikiFailureOutcome(wrapped.Unwrap())
 	}
 	return wikiOutcomeFailed
+}
+
+// wikiLLMRequest shares dispatch state as well as the result. Cancellation and
+// the dispatch boundary use the same lock: a NOT_RUN answer must prevent a
+// delayed worker from sending afterwards. The entry is never a result cache.
+type wikiLLMRequest struct {
+	mu     sync.Mutex
+	sent   bool
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+	done   chan struct{}
+	result wikiTemplateResult
+	err    error
+}
+
+func (r *wikiLLMRequest) beginDispatch(stage string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.ctx.Err(); err != nil {
+		return r.cancellationFailure(stage, err)
+	}
+	r.sent = true
+	return nil
+}
+
+func (r *wikiLLMRequest) cancellationFailure(stage string, cause error) error {
+	outcome := wikiOutcomeNotRun
+	if r.sent {
+		outcome = wikiOutcomeUnknown
+	}
+	return &wikiStageFailure{Stage: stage, Outcome: outcome, Cause: cause}
+}
+
+func (r *wikiLLMRequest) cancelled(stage string, cause error) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.sent {
+		r.cancel(cause)
+	}
+	return r.cancellationFailure(stage, cause)
+}
+
+func wikiFailureCauseCategory(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline exceeded"
+	case errors.Is(err, context.Canceled):
+		return "context canceled"
+	case wikiFailureOutcome(err) == wikiOutcomeUnknown:
+		return "transport error"
+	default:
+		return "generation failure"
+	}
+}
+
+func (s *wikiIngestService) runWikiRequest(
+	ctx context.Context, key string, shared bool, stage string,
+	execute func(context.Context, *wikiLLMRequest) (wikiTemplateResult, error),
+) (result wikiTemplateResult, err error) {
+	defer func() {
+		if err != nil {
+			logger.Warnf(ctx, "wiki ingest: call failed stage=%s outcome=%s cause=%s",
+				stage, wikiFailureOutcome(err), wikiFailureCauseCategory(err))
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return result, &wikiStageFailure{Stage: stage, Outcome: wikiOutcomeNotRun, Cause: err}
+	}
+	if !shared {
+		// Preserve synchronous result ownership for independent calls, including
+		// known truncated responses returned while the parent is being cancelled.
+		runCtx, cancel := context.WithCancelCause(ctx)
+		defer cancel(nil)
+		return execute(runCtx, &wikiLLMRequest{ctx: runCtx, cancel: cancel})
+	}
+	var request *wikiLLMRequest
+	if existing, ok := s.llmRequests.Load(key); ok {
+		request = existing.(*wikiLLMRequest)
+	}
+	if request == nil {
+		runCtx, cancel := context.WithCancelCause(ctx)
+		request = &wikiLLMRequest{ctx: runCtx, cancel: cancel, done: make(chan struct{})}
+		actual, loaded := s.llmRequests.LoadOrStore(key, request)
+		if loaded {
+			cancel(nil)
+			request = actual.(*wikiLLMRequest)
+		}
+		if !loaded {
+			go func() {
+				request.result, request.err = execute(request.ctx, request)
+				request.cancel(nil)
+				s.llmRequests.CompareAndDelete(key, request)
+				close(request.done)
+			}()
+		}
+	}
+	select {
+	case <-request.done:
+		return request.result, request.err
+	case <-ctx.Done():
+		// Prefer a known, completed result over an uncertain cancellation.
+		select {
+		case <-request.done:
+			return request.result, request.err
+		default:
+			return result, request.cancelled(stage, ctx.Err())
+		}
+	}
 }
 
 // beginWikiOperations marks the whole selected cohort before any model work.
@@ -122,6 +232,11 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 	if !ok {
 		return errors.New("wiki execution guard unavailable")
 	}
+	releaseForRetry := op.failure != nil && wikiFailureOutcome(op.failure) == wikiOutcomeNotRun
+	retryStore, canRelease := s.pendingRepo.(interfaces.TaskPendingOpsRetryStore)
+	if releaseForRetry && !canRelease {
+		return errors.New("wiki retry release unavailable")
+	}
 	allSettled := true
 	for _, row := range op.queueRows {
 		var marker struct {
@@ -134,6 +249,8 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 		var err error
 		if op.failure == nil {
 			settled, err = store.CompleteOperation(ctx, row, marker.ExecutionID)
+		} else if releaseForRetry {
+			settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
 		} else {
 			settled, err = store.ArchiveOperation(ctx, row, marker.ExecutionID, &types.TaskDeadLetter{
 				TenantID: payload.TenantID, TaskType: wikiTaskType, Scope: wikiTaskScope, ScopeID: payload.KnowledgeBaseID,
@@ -148,8 +265,29 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 	if !allSettled || len(op.queueRows) == 0 {
 		return errors.New("wiki settlement unconfirmed")
 	}
-	if op.Op == WikiOpIngest {
+	if op.Op == WikiOpIngest && !releaseForRetry {
 		s.finalizeWikiSubtask(ctx, op.KnowledgeID, op.Revision)
+	}
+	return nil
+}
+
+func wikiUnsentPageCancellation(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return &wikiStageFailure{Stage: "wiki_page_modify", Outcome: wikiOutcomeNotRun, Cause: err}
+	}
+	return nil
+}
+
+// A fresh follow-up trigger would reset the bounded asynq retry budget.
+// Shared unsent work can be cancelled even while this batch remains live.
+func wikiBatchRetryError(ctx context.Context, failedOps []WikiPendingOp) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for _, op := range failedOps {
+		if op.failure != nil && wikiFailureOutcome(op.failure) == wikiOutcomeNotRun {
+			return errors.New("wiki ingest: unsent operation released for task retry")
+		}
 	}
 	return nil
 }
