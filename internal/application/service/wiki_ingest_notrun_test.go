@@ -22,7 +22,9 @@ type blockingWikiModel struct {
 	started chan struct{}
 }
 
-func (m *blockingWikiModel) Chat(ctx context.Context, _ []chat.Message, _ *chat.ChatOptions) (*types.ChatResponse, error) {
+func (m *blockingWikiModel) Chat(
+	ctx context.Context, _ []chat.Message, _ *chat.ChatOptions,
+) (*types.ChatResponse, error) {
 	if m.calls.Add(1) == 1 {
 		close(m.started)
 	}
@@ -37,13 +39,16 @@ var everyWikiPurpose = []string{
 }
 
 func pageModifyData() map[string]string {
-	return map[string]string{"HasAdditions": "true", "SharedSourceContexts": "<chunk>x</chunk>", "PageSlug": "concept/x"}
+	return map[string]string{
+		"HasAdditions": "true", "SharedSourceContexts": "<chunk>x</chunk>", "PageSlug": "concept/x",
+	}
 }
 
 func TestEveryWikiCallCancelledBeforeSendingIsNotRun(t *testing.T) {
 	for _, prompt := range everyWikiPurpose {
 		t.Run(wikiPromptPurpose(prompt), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), types.TenantIDContextKey, uint64(7)))
+			tenant := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(7))
+			ctx, cancel := context.WithCancel(tenant)
 			cancel()
 			model := &failingWikiModel{}
 			_, err := (&wikiIngestService{}).generateWithTemplate(ctx, model, prompt, pageModifyData())
@@ -58,7 +63,8 @@ func TestEveryWikiCallCancelledBeforeSendingIsNotRun(t *testing.T) {
 func TestACallCancelledAfterSendingStaysUnknown(t *testing.T) {
 	for _, prompt := range []string{agent.WikiPageModifyUserPrompt, agent.WikiTaxonomyPlanPrompt} {
 		t.Run(wikiPromptPurpose(prompt), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), types.TenantIDContextKey, uint64(7)))
+			tenant := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(7))
+			ctx, cancel := context.WithCancel(tenant)
 			model := &blockingWikiModel{started: make(chan struct{})}
 			done := make(chan error, 1)
 			go func() {
