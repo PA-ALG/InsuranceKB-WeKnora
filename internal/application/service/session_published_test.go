@@ -183,3 +183,85 @@ func TestQ1b2PublishedReadFailureStopsBeforePrompt(t *testing.T) {
 	}, event.NewEventBus())
 	require.EqualError(t, err, "published read failed")
 }
+
+// R2 (#263): the model fallback uses only knowledge bases that passed the ACL checks.
+type q1b2ScopeKBs struct{ *q1aKBs }
+
+func (s q1b2ScopeKBs) GetKnowledgeBaseByIDOnly(ctx context.Context, id string) (*types.KnowledgeBase, error) {
+	kb, err := s.q1aKBs.GetKnowledgeBaseByIDOnly(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	switch id {
+	case "q-wiki":
+		kb.SummaryModelID = "wiki-chat"
+	case "q-raw":
+		kb.SummaryModelID = "raw-chat"
+	case "plain":
+		kb.SummaryModelID = "plain-chat"
+	case "foreign":
+		kb.TenantID, kb.SummaryModelID = 8, "foreign-chat"
+	}
+	return kb, nil
+}
+
+func (s q1b2ScopeKBs) GetKnowledgeBaseByID(ctx context.Context, id string) (*types.KnowledgeBase, error) {
+	return s.GetKnowledgeBaseByIDOnly(ctx, id)
+}
+
+func (s q1b2ScopeKBs) GetKnowledgeBasesByIDsOnly(ctx context.Context, ids []string) ([]*types.KnowledgeBase, error) {
+	var out []*types.KnowledgeBase
+	for _, id := range ids {
+		kb, err := s.GetKnowledgeBaseByIDOnly(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, kb)
+	}
+	return out, nil
+}
+
+func TestQ1b2ModelFollowsTheAuthorizedScope(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		ids       []string
+		want      string
+		targetIDs []string
+	}{
+		{"wiki-only", []string{"q-wiki"}, "wiki-chat", nil},
+		{"raw-only", []string{"q-raw"}, "raw-chat", []string{"q-raw"}},
+		{"mixed-wiki-first", []string{"q-wiki", "q-raw"}, "raw-chat", []string{"q-raw"}},
+		{"ordinary", []string{"plain"}, "plain-chat", []string{"plain"}},
+		{"wiki-and-ordinary", []string{"q-wiki", "plain"}, "plain-chat", []string{"plain"}},
+		{"wiki-and-denied-ordinary", []string{"foreign", "q-wiki"}, "wiki-chat", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, svc, _, kbs := q1aFixture()
+			svc.knowledgeBaseService = q1b2ScopeKBs{kbs}
+			svc.chatSources = svc.chatSources.WithPublished(knowledge.NewService(&publishedReader{}))
+			local := func(id string) *types.Model {
+				return &types.Model{ID: id, Type: types.ModelTypeKnowledgeQA, Source: types.ModelSourceLocal}
+			}
+			svc.modelService = &stubModelService{
+				modelsByID: map[string]*types.Model{
+					"wiki-chat": local("wiki-chat"), "raw-chat": local("raw-chat"), "plain-chat": local("plain-chat"),
+				},
+				availableModels: []*types.Model{{ID: "wiki-chat", Type: types.ModelTypeKnowledgeQA}},
+			}
+			actual := ""
+			svc.eventManager.Register(q1aPipeline{
+				events: []types.EventType{types.QUERY_UNDERSTAND},
+				on: func(_ types.EventType, cm *types.ChatManage) {
+					actual = cm.ChatModelID
+					require.Equal(t, tc.targetIDs, cm.SearchTargets.GetAllKnowledgeBaseIDs())
+				},
+			})
+			err := svc.KnowledgeQA(ctx, &types.QARequest{
+				Session: &types.Session{ID: "q-session", TenantID: 7}, TurnLeaseHeld: true,
+				KnowledgeBaseIDs: tc.ids, Query: "Product field",
+			}, event.NewEventBus())
+			require.NoError(t, err)
+			require.Equal(t, tc.want, actual)
+		})
+	}
+}

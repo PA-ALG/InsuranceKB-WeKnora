@@ -79,17 +79,17 @@ func (s *sessionService) KnowledgeQA(
 	if err != nil {
 		return err
 	}
+	authorized := searchTargets // ACL-filtered, before enterprise narrowing
 	ctx, searchTargets, err = chatsource.ResolveAnswer(ctx, s.chatSources, retrievalTenantID, searchTargets)
 	if err != nil {
 		return err
 	}
-	selectedKBs, selectedKnowledge := knowledgeBaseIDs, knowledgeIDs
 	knowledgeBaseIDs, knowledgeIDs = chatsource.LegacyScope(ctx, searchTargets, knowledgeBaseIDs, knowledgeIDs)
 	// Enterprise (Q1b-2): a Wiki-only answer narrows retrieval to nothing, but its chat model still
-	// follows the admitted selection's knowledge-base configuration.
+	// follows the knowledge bases that passed the ACL checks.
 	modelKBs, modelKnowledge := knowledgeBaseIDs, knowledgeIDs
 	if len(modelKBs) == 0 && len(modelKnowledge) == 0 {
-		modelKBs, modelKnowledge = selectedKBs, selectedKnowledge
+		modelKBs, modelKnowledge = chatsource.TargetScope(authorized)
 	}
 
 	// Resolve chat model ID using shared helper

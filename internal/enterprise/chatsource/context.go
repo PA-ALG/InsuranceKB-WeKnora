@@ -32,6 +32,11 @@ func LegacyScope(ctx context.Context, targets types.SearchTargets, kbIDs, ids []
 	if !ok || len(turn.Releases) == 0 {
 		return kbIDs, ids
 	}
+	return TargetScope(targets)
+}
+
+// TargetScope lists the knowledge bases and documents of already authorized search targets.
+func TargetScope(targets types.SearchTargets) ([]string, []string) {
 	var knowledgeIDs []string
 	for _, target := range targets {
 		if target != nil {
