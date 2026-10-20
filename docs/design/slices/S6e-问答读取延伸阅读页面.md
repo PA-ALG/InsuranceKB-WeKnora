@@ -119,7 +119,7 @@ func (s *Service) SearchPages(
 - `frontend/src/enterprise/sourceTier.ts`、`releaseReferences.ts`；
 - 语言包 5 种：已登记的上游文件，各加 2 行（来源标签、工具名）；
 - `frontend/src/views/chat/components/AgentStreamDisplay.vue`：已登记的上游文件，工具名映射加 1 行（实现时补列）；
-- `internal/application/service/agent_chatsource_test.go`：两处断言列出全部已注册工具，加入新工具（实现时补列，不放宽断言）；
+- `internal/application/service/agent_chatsource_test.go` 两处、`agent_knowledge_test.go` 一处：断言列出或计数全部已注册工具，加入新工具（实现时补列，不放宽断言）；
 - 实现方的单元测试。
 
 ## 6. 上线与验证
