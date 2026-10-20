@@ -79,14 +79,21 @@ func (s *sessionService) KnowledgeQA(
 	if err != nil {
 		return err
 	}
-	ctx, searchTargets, err = chatsource.ResolveQuick(ctx, s.chatSources, retrievalTenantID, searchTargets)
+	authorized := searchTargets // ACL-filtered, before enterprise narrowing
+	ctx, searchTargets, err = chatsource.ResolveAnswer(ctx, s.chatSources, retrievalTenantID, searchTargets)
 	if err != nil {
 		return err
 	}
 	knowledgeBaseIDs, knowledgeIDs = chatsource.LegacyScope(ctx, searchTargets, knowledgeBaseIDs, knowledgeIDs)
+	// Enterprise (Q1b-2): a Wiki-only answer narrows retrieval to nothing, but its chat model still
+	// follows the knowledge bases that passed the ACL checks.
+	modelKBs, modelKnowledge := knowledgeBaseIDs, knowledgeIDs
+	if len(modelKBs) == 0 && len(modelKnowledge) == 0 {
+		modelKBs, modelKnowledge = chatsource.TargetScope(authorized)
+	}
 
 	// Resolve chat model ID using shared helper
-	chatModelID, err := s.resolveChatModelID(ctx, req, knowledgeBaseIDs, knowledgeIDs)
+	chatModelID, err := s.resolveChatModelID(ctx, req, modelKBs, modelKnowledge)
 	if err != nil {
 		return err
 	}
@@ -194,7 +201,10 @@ func (s *sessionService) KnowledgeQA(
 	// empty but produce SearchTargets, so the unified targets must participate in
 	// this decision or the request is incorrectly downgraded to pure chat.
 	hasKB := types.HasKnowledgeRetrievalScope(searchTargets, knowledgeBaseIDs, knowledgeIDs)
-	needsRAG := hasKB || webSearchEnabled
+	// Enterprise (Q1b-2): published fields are injected before INTO_CHAT_MESSAGE, so a
+	// Wiki-only answer needs the RAG prompt but none of the raw retrieval stages.
+	retrieves := hasKB || webSearchEnabled
+	needsRAG := retrieves || chatsource.HasPublished(ctx)
 	hasHistory := chatManage.MaxRounds > 0
 
 	var pipeline []types.EventType
@@ -224,11 +234,11 @@ func (s *sessionService) KnowledgeQA(
 			AddIf(hasHistory, types.LOAD_HISTORY).
 			Add(types.MemoryRecall).
 			Add(types.QUERY_UNDERSTAND).
-			Add(types.CHUNK_SEARCH_PARALLEL).
-			Add(types.CHUNK_RERANK).
+			AddIf(retrieves, types.CHUNK_SEARCH_PARALLEL).
+			AddIf(retrieves, types.CHUNK_RERANK).
 			AddIf(webSearchEnabled, types.WEB_FETCH).
-			Add(types.CHUNK_MERGE).
-			Add(types.FILTER_TOP_K).
+			AddIf(retrieves, types.CHUNK_MERGE).
+			AddIf(retrieves, types.FILTER_TOP_K).
 			AddIf(chatManage.DataAnalysisEnabled, types.DATA_ANALYSIS).
 			Add(types.INTO_CHAT_MESSAGE).
 			Add(types.CHAT_COMPLETION_STREAM).
@@ -725,7 +735,11 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 	var retrievalStart time.Time
 	var understandProgress *chatpipeline.StageProgress
 	var understandStart time.Time
+	publishedOnly := false // Q1b-2: raw search found nothing; published fields decide.
 	for _, eventType := range eventList {
+		if publishedOnly && chatsource.SkippedWithoutRawResults(eventType) {
+			continue
+		}
 		stageStart := time.Now()
 		// Wrap each pipeline stage in a Langfuse span so the trace timeline
 		// shows the gaps between LLM/embedding/rerank generations (the work
@@ -776,6 +790,10 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 			); err != nil {
 				return err
 			}
+			if chatsource.HasPublished(ctx) && chatManage.NeedsRetrieval() && len(chatManage.MergeResult) == 0 {
+				s.handleFallbackResponse(ctx, chatManage)
+				return nil
+			}
 		}
 		restoreAnalysis := chatsource.AnalysisScope(ctx, s.chatSources, eventType, chatManage)
 		err := s.eventManager.Trigger(stageCtx, eventType, chatManage)
@@ -824,6 +842,10 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 			return ctxErr
 		}
 
+		if err == chatpipeline.ErrSearchNothing && chatsource.HasPublished(ctx) {
+			chatManage.SearchResult, publishedOnly = nil, true
+			continue
+		}
 		if err == chatpipeline.ErrSearchNothing {
 			common.PipelineWarn(ctx, "Pipeline", "stage_fallback", map[string]interface{}{
 				"event":       string(eventType),

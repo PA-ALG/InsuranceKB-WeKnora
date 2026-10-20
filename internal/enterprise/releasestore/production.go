@@ -14,6 +14,7 @@ import (
 	appservice "github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
+	publishedknowledge "github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
@@ -34,6 +35,13 @@ const (
 	evidenceSchemaFile  = "evidence.schema.json"
 )
 
+type resolverDeps struct {
+	dig.In
+	DB        *gorm.DB
+	Spaces    Spaces
+	Published *publishedknowledge.Service `optional:"true"`
+}
+
 // Register provides the candidate and publish service to the application container.
 // Without ENTERPRISE_SPACES the service is nil and the candidate routes answer 503;
 // an invalid configuration fails startup instead of serving a partial scope.
@@ -46,15 +54,17 @@ func Register(container *dig.Container) error {
 	if err := container.Provide(func(spaces Spaces) source.CaptureScope { return spaces }); err != nil {
 		return err
 	}
-	if err := container.Provide(func(db *gorm.DB, spaces Spaces) (*chatsource.Resolver, error) {
-		if len(spaces.byKey) == 0 {
+	if err := container.Provide(func(deps resolverDeps) (*chatsource.Resolver, error) {
+		if len(deps.Spaces.byKey) == 0 {
 			return nil, nil
 		}
-		if db == nil {
+		if deps.DB == nil {
 			return nil, errors.New("enterprise chat sources need the database")
 		}
-		store := New(db, spaces)
-		return chatsource.NewResolver(spaces, store, store, store), nil
+		store := New(deps.DB, deps.Spaces)
+		// Quick answers read published fields of the turn's pinned release (Q1b-2); without the
+		// service they keep the Q1a behaviour.
+		return chatsource.NewResolver(deps.Spaces, store, store, store).WithPublished(deps.Published), nil
 	}); err != nil {
 		return err
 	}
