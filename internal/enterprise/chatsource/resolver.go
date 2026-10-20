@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -57,10 +58,11 @@ type Attempts interface {
 
 // Resolver holds stateless dependencies for resolving and checking chat sources.
 type Resolver struct {
-	spaces   Spaces
-	heads    Heads
-	pins     Pins
-	attempts Attempts
+	spaces    Spaces
+	heads     Heads
+	pins      Pins
+	attempts  Attempts
+	published *knowledge.Service // optional: quick answers read published fields (Q1b-2)
 }
 
 // NewResolver constructs a resolver whose resolved state remains local to each turn.

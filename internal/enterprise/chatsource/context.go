@@ -32,6 +32,11 @@ func LegacyScope(ctx context.Context, targets types.SearchTargets, kbIDs, ids []
 	if !ok || len(turn.Releases) == 0 {
 		return kbIDs, ids
 	}
+	return TargetScope(targets)
+}
+
+// TargetScope lists the knowledge bases and documents of already authorized search targets.
+func TargetScope(targets types.SearchTargets) ([]string, []string) {
 	var knowledgeIDs []string
 	for _, target := range targets {
 		if target != nil {
@@ -86,7 +91,11 @@ func FilterPipeline(ctx context.Context, resolver *Resolver, chunks ChunkReader,
 		if err != nil {
 			return err
 		}
+		*rows = v.turn.pinnedOnly(*rows)
 		v.turn.Label(*rows)
+	}
+	if err := injectPublished(ctx, resolver, v, cm); err != nil {
+		return err
 	}
 	if !samePromptResults(before, cm.MergeResult) && cm.RenderedContexts != "" {
 		// A later delivery check may invalidate text already rendered by the
