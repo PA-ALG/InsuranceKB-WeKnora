@@ -9,7 +9,7 @@
   "G5_hardcoded": 76,
   "G6_private_access": 275,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 469,
+  "G10_upstream_patches": 472,
   "G11_new_file_location": 679
  },
  "guards": {
@@ -683,6 +683,8 @@
    "frontend/src/components/ChatReferencesDrawer.vue": 1,
    "frontend/src/components/menu.vue": 1,
    "frontend/src/composables/useChatCitationPopover.ts": 1,
+   "frontend/src/composables/useChatStreamHandler.integration.test.ts": 1,
+   "frontend/src/composables/useChatStreamHandler.ts": 1,
    "frontend/src/composables/useCitationPopover.ts": 1,
    "frontend/src/i18n/locales/en-US.ts": 1,
    "frontend/src/i18n/locales/ja-JP.ts": 1,
@@ -696,6 +698,7 @@
    "frontend/src/utils/referenceSources.ts": 1,
    "frontend/src/views/chat/components/AgentStreamDisplay.vue": 1,
    "frontend/src/views/chat/components/docInfo.vue": 1,
+   "frontend/src/views/chat/index.vue": 1,
    "frontend/src/views/dev/MarkdownTestPage.vue": 1,
    "frontend/src/views/knowledge/KnowledgeBase.vue": 1,
    "frontend/src/views/knowledge/wiki/WikiBrowser.vue": 1,
