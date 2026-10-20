@@ -28,6 +28,9 @@ const (
 	// maxCitationBatchConcurrency limits parallelism across chunk-citation
 	// batches so a single long document can't saturate the synthesis model.
 	maxCitationBatchConcurrency = 4
+
+	// A root can make at most 1 + 2 + 4 candidate calls after known overflow.
+	maxCandidateSplitDepth = 2
 )
 
 // citationBatchResult is the JSON shape we expect back from one invocation of
@@ -68,23 +71,14 @@ func (s *wikiIngestService) extractCandidateSlugs(
 	ctx context.Context, chatModel chat.Chat, kbID string, windows []wikiDocumentWindow,
 	lang string, oldPageSlugs map[string]bool, batchCtx *WikiBatchContext,
 ) ([]extractedItem, []extractedItem, map[string]extractedItem, error) {
-	results := make([]combinedExtraction, len(windows))
+	rootResults := make([][]combinedExtraction, len(windows))
 	failures := make([]error, len(windows))
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.SetLimit(maxCitationBatchConcurrency)
-	for i, window := range windows {
-		if realTextRuneCount(window.content) == 0 {
-			continue
-		}
+	for i := range windows {
 		eg.Go(func() error {
-			// An unsent cancelled window must not enter tenant-scoped coalescing,
-			// whose cancelled response wait correctly reports an unknown send.
-			if err := ectx.Err(); err != nil {
-				failures[i] = &wikiStageFailure{Stage: "wiki_candidate_slug", Outcome: wikiOutcomeNotRun, Cause: err}
-				return nil
-			}
-			results[i], failures[i] = s.extractRawCandidateSlugs(
-				ectx, chatModel, window.content, lang, oldPageSlugs, batchCtx,
+			rootResults[i], failures[i] = s.extractWindowCandidates(
+				ectx, chatModel, &windows[i], i, 0, lang, oldPageSlugs, batchCtx,
 			)
 			return nil // A failed window does not cancel already-sent peers.
 		})
@@ -92,6 +86,10 @@ func (s *wikiIngestService) extractCandidateSlugs(
 	_ = eg.Wait()
 	if err := aggregateWikiStageErrors("wiki_candidate_slug", failures); err != nil {
 		return nil, nil, nil, err
+	}
+	var results []combinedExtraction
+	for _, root := range rootResults {
+		results = append(results, root...)
 	}
 	merged := mergeWindowCandidates(results)
 	entities, concepts, canonical := s.deduplicateExtractedBatch(
@@ -105,6 +103,7 @@ func (s *wikiIngestService) extractCandidateSlugs(
 			}
 		}
 	}
+	leaves := wikiDocumentLeaves(windows)
 	for i, result := range results {
 		local := make(map[string]bool)
 		for _, group := range [][]extractedItem{result.Entities, result.Concepts} {
@@ -121,10 +120,47 @@ func (s *wikiIngestService) extractCandidateSlugs(
 			}
 			return out
 		}
-		windows[i].candidates = renderCandidateSlugsXML(selectLocal(entities), selectLocal(concepts))
+		leaves[i].candidates = renderCandidateSlugsXML(selectLocal(entities), selectLocal(concepts))
 	}
 
 	return entities, concepts, items, nil
+}
+
+// Children stay sequential inside the root's worker: splitting never grows the
+// document-wide pool, and a failed child must not suppress its sibling.
+func (s *wikiIngestService) extractWindowCandidates(
+	ctx context.Context, chatModel chat.Chat, window *wikiDocumentWindow, rootIndex, depth int,
+	lang string, oldPageSlugs map[string]bool, batchCtx *WikiBatchContext,
+) ([]combinedExtraction, error) {
+	if realTextRuneCount(window.content) == 0 {
+		return []combinedExtraction{{}}, nil
+	}
+	// Check before tenant-scoped coalescing, which treats a cancelled wait as
+	// unknown even if this particular window has not sent a request.
+	if err := ctx.Err(); err != nil {
+		return nil, &wikiStageFailure{Stage: "wiki_candidate_slug", Outcome: wikiOutcomeNotRun, Cause: err}
+	}
+	result, err := s.extractRawCandidateSlugs(ctx, chatModel, window.content, lang, oldPageSlugs, batchCtx)
+	if err == nil {
+		return []combinedExtraction{result}, nil
+	}
+	if !errors.Is(err, errWikiOutputTruncated) || wikiFailureOutcome(err) != wikiOutcomeFailed ||
+		len(window.chunks) < 2 || depth >= maxCandidateSplitDepth {
+		return nil, err
+	}
+	window.split()
+	logger.Infof(ctx, "wiki ingest: candidate overflow window=%d split_depth=%d left_chunks=%d right_chunks=%d",
+		rootIndex, depth+1, len(window.children[0].chunks), len(window.children[1].chunks))
+	var results []combinedExtraction
+	failures := make([]error, len(window.children))
+	for i := range window.children {
+		var childResults []combinedExtraction
+		childResults, failures[i] = s.extractWindowCandidates(
+			ctx, chatModel, &window.children[i], rootIndex, depth+1, lang, oldPageSlugs, batchCtx,
+		)
+		results = append(results, childResults...)
+	}
+	return results, aggregateWikiStageErrors("wiki_candidate_slug", failures)
 }
 
 func mergeWindowCandidates(results []combinedExtraction) combinedExtraction {
@@ -388,7 +424,7 @@ func (s *wikiIngestService) classifyChunkCitations(
 	if len(windows) > 0 {
 		scopes = windows[0]
 	}
-	for _, window := range scopes {
+	for _, window := range wikiDocumentLeaves(scopes) {
 		if len(windows) > 0 && realTextRuneCount(window.content) == 0 {
 			continue
 		}
