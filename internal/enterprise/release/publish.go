@@ -97,7 +97,12 @@ type Publisher interface {
 type Option func(*Service)
 
 // WithPublisher enables decisions, activation and release reads.
-func WithPublisher(p Publisher) Option { return func(s *Service) { s.publisher = p } }
+func WithPublisher(p Publisher) Option {
+	return func(s *Service) {
+		s.publisher = p
+		s.references, _ = p.(ReferenceReader)
+	}
+}
 
 // Decide records a review outcome for a stored candidate of the caller's Space.
 func (s *Service) Decide(

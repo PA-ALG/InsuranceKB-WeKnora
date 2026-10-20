@@ -11,12 +11,13 @@ import (
 
 // Service validates and stores candidates without interpreting member payloads.
 type Service struct {
-	store     Store
-	evidence  EvidenceResolver
-	publisher Publisher
-	retirer   Retirer
-	verifier  EvidenceVerifier
-	schema    *jsonschema.Schema
+	store      Store
+	evidence   EvidenceResolver
+	publisher  Publisher
+	references ReferenceReader
+	retirer    Retirer
+	verifier   EvidenceVerifier
+	schema     *jsonschema.Schema
 	// evidenceSchema is optional: without it, payload evidence fails closed as unverifiable.
 	evidenceSchema *jsonschema.Schema
 	schemaErr      error

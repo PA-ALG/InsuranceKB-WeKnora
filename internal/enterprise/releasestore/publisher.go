@@ -91,47 +91,30 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 	if err != nil {
 		return release.Release{}, err
 	}
-	if releaseID == "" {
-		head, err := s.activeHead(ctx, scope)
-		if err != nil {
-			return release.Release{}, notFound(err)
-		}
-		releaseID = head.ActiveReleaseID
-	}
-	rel, err := s.releases.GetRelease(ctx, scope, releaseID)
-	if err != nil {
-		return release.Release{}, notFound(err)
-	}
-	var preparation types.WikiReleasePreparation
-	if err := s.db.WithContext(ctx).Where("preparation_id = ? AND tenant_id = ? AND space_id = ?",
-		rel.PreparationID, scope.TenantID, scope.SpaceID).Take(&preparation).Error; err != nil {
-		return release.Release{}, fmt.Errorf("release %s has no readable preparation: %w", rel.ID, err)
-	}
-	var manifest releaseManifest
-	if err := json.Unmarshal(preparation.Manifest, &manifest); err != nil {
-		return release.Release{}, fmt.Errorf("release %s was not published by this adapter: %w", rel.ID, err)
-	}
-	snapshots, err := s.releases.GetReleaseMembers(ctx, scope, rel.ID)
+	header, err := s.releaseHeader(ctx, scope, releaseID)
 	if err != nil {
 		return release.Release{}, err
 	}
-	members := make([]release.Member, 0, len(snapshots))
-	for _, snapshot := range snapshots {
-		m, err := decodeMember(snapshot)
+	key := memberKey{Tenant: tenantID, Space: spaceID, Release: header.ID}
+	header.Members, err = s.members.load(ctx, key, func(ctx context.Context) ([]release.Member, error) {
+		snapshots, err := s.releases.GetReleaseMembers(ctx, scope, header.ID)
 		if err != nil {
-			return release.Release{}, fmt.Errorf("release %s member %s: %w", rel.ID, snapshot.LogicalSlug, err)
+			return nil, err
 		}
-		members = append(members, m)
-	}
-	retiredAt, err := s.retiredAt(ctx, scope, rel.ID)
+		members := make([]release.Member, 0, len(snapshots))
+		for _, snapshot := range snapshots {
+			m, err := decodeMember(snapshot)
+			if err != nil {
+				return nil, fmt.Errorf("release %s member %s: %w", header.ID, snapshot.LogicalSlug, err)
+			}
+			members = append(members, m)
+		}
+		return members, nil
+	})
 	if err != nil {
 		return release.Release{}, err
 	}
-	return release.Release{
-		RetiredAt: retiredAt,
-		ID:        rel.ID, Epoch: rel.BaseActivationEpoch + 1, BaseReleaseID: rel.BaseReleaseID,
-		CandidateID: manifest.CandidateID, DecisionDigest: manifest.DecisionDigest, Members: members,
-	}, nil
+	return header, nil
 }
 
 // Activate publishes the complete member set in one repository transaction:

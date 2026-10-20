@@ -202,19 +202,6 @@ func activate(c *gin.Context, service *release.Service) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
 }
 
-func readRelease(c *gin.Context, service *release.Service, releaseID string) {
-	p, ok := publishingRequest(c, service)
-	if !ok {
-		return
-	}
-	result, err := service.Release(c.Request.Context(), p, c.Param("space_id"), releaseID)
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
-}
-
 func publishingRequest(c *gin.Context, service *release.Service) (release.Principal, bool) {
 	if service == nil {
 		candidateUnavailable(c)
