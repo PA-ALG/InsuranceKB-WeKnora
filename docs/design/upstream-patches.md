@@ -118,3 +118,4 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/i18n/locales/ja-JP.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
 | `frontend/src/i18n/locales/ko-KR.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
 | `frontend/src/i18n/locales/ru-RU.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `internal/application/service/wiki_ingest.go`、`internal/application/service/wiki_ingest_cite.go` | S6a-2 | 密集材料的候选列表超出输出上限，窗口只按输入装箱 | 是 | 上游按输出量自适应分段候选抽取后撤回 |

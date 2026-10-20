@@ -3112,6 +3112,50 @@ type wikiDocumentWindow struct {
 	chunks     []*types.Chunk
 	content    string
 	candidates string
+	imageInfo  map[string]string // Shared read-only document metadata; rebuild selects members only.
+	children   []wikiDocumentWindow
+}
+
+func (w wikiDocumentWindow) rebuild(members []*types.Chunk) string {
+	local := make(map[string]string, len(members))
+	for _, c := range members {
+		if info := w.imageInfo[c.ID]; info != "" {
+			local[c.ID] = info
+		}
+	}
+	return searchutil.EnrichContentWithImageInfo(reconstructContent(members), searchutil.MergeImageInfoJSON(local))
+}
+
+// split balances actual reconstructed, enriched runes at a contiguous chunk
+// boundary. The original window remains available for summary and retraction.
+func (w *wikiDocumentWindow) split() {
+	bestDifference := -1
+	for i := 1; i < len(w.chunks); i++ {
+		left := wikiDocumentWindow{chunks: w.chunks[:i], imageInfo: w.imageInfo}
+		right := wikiDocumentWindow{chunks: w.chunks[i:], imageInfo: w.imageInfo}
+		left.content, right.content = left.rebuild(left.chunks), right.rebuild(right.chunks)
+		difference := utf8.RuneCountInString(left.content) - utf8.RuneCountInString(right.content)
+		if difference < 0 {
+			difference = -difference
+		}
+		if bestDifference < 0 || difference < bestDifference {
+			bestDifference = difference
+			w.children = []wikiDocumentWindow{left, right}
+		}
+	}
+}
+
+// Leaf pointers preserve candidate ownership when roots have split in place.
+func wikiDocumentLeaves(windows []wikiDocumentWindow) []*wikiDocumentWindow {
+	var leaves []*wikiDocumentWindow
+	for i := range windows {
+		if len(windows[i].children) == 0 {
+			leaves = append(leaves, &windows[i])
+		} else {
+			leaves = append(leaves, wikiDocumentLeaves(windows[i].children)...)
+		}
+	}
+	return leaves
 }
 
 func prepareWikiDocumentWindows(
@@ -3142,28 +3186,22 @@ func prepareWikiDocumentWindows(
 	if repo != nil && len(ids) > 0 {
 		imageInfo = searchutil.CollectImageInfoByChunkIDs(ctx, repo, tenantID, ids)
 	}
-	rebuild := func(members []*types.Chunk) string {
-		local := make(map[string]string, len(members))
-		for _, c := range members {
-			if info := imageInfo[c.ID]; info != "" {
-				local[c.ID] = info
-			}
-		}
-		return searchutil.EnrichContentWithImageInfo(reconstructContent(members), searchutil.MergeImageInfoJSON(local))
-	}
+	document := wikiDocumentWindow{imageInfo: imageInfo}
 	var windows []wikiDocumentWindow
-	current := wikiDocumentWindow{}
+	current := document
 	flush := func() {
 		if len(current.chunks) > 0 {
 			windows = append(windows, current)
-			current = wikiDocumentWindow{}
+			current = document
 		}
 	}
 	for _, c := range textChunks {
-		single := rebuild([]*types.Chunk{c})
+		single := document.rebuild([]*types.Chunk{c})
 		if utf8.RuneCountInString(single) > maxContentForWiki {
 			flush()
-			windows = append(windows, wikiDocumentWindow{chunks: []*types.Chunk{c}, content: single})
+			windows = append(windows, wikiDocumentWindow{
+				chunks: []*types.Chunk{c}, content: single, imageInfo: imageInfo,
+			})
 			logger.Warnf(
 				ctx, "wiki ingest: oversized single-chunk window=%d content_runes=%d",
 				len(windows)-1, utf8.RuneCountInString(single),
@@ -3173,13 +3211,13 @@ func prepareWikiDocumentWindows(
 		members := append(append([]*types.Chunk(nil), current.chunks...), c)
 		content := single
 		if len(current.chunks) > 0 {
-			content = rebuild(members)
+			content = document.rebuild(members)
 		}
 		if utf8.RuneCountInString(content) > maxContentForWiki {
 			flush()
 			members, content = []*types.Chunk{c}, single
 		}
-		current = wikiDocumentWindow{chunks: members, content: content}
+		current = wikiDocumentWindow{chunks: members, content: content, imageInfo: imageInfo}
 	}
 	flush()
 	lengths := make([]int, len(windows))
@@ -3187,7 +3225,7 @@ func prepareWikiDocumentWindows(
 		lengths[i] = utf8.RuneCountInString(w.content)
 	}
 	logger.Infof(ctx, "wiki ingest: document windows=%d content_runes=%v", len(windows), lengths)
-	return windows, rebuild(textChunks)
+	return windows, document.rebuild(textChunks)
 }
 
 // slugify creates a URL-friendly slug from a string
