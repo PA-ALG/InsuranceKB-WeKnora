@@ -217,6 +217,12 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 	loggedMaxInflight := 0
 
 	defer func() {
+		if ctx.Err() != nil {
+			if exitStatus == "success" {
+				exitStatus = "cancelled"
+			}
+			logger.Warnf(ctx, "wiki ingest: batch context ended cause=%v", context.Cause(ctx))
+		}
 		logger.Infof(
 			ctx,
 			"wiki ingest stats: kb=%s tenant=%d retry=%d/%d status=%s elapsed=%s mode=%s pending_ops=%d ops(ingest=%d,retract=%d) ingest(success=%d,failed=%d) retract_handled=%d pages(total=%d) followup=%v tunables(batch=%d,map_par=%d,reduce_par=%d,max_inflight=%d) preview=%s",
@@ -662,7 +668,15 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 	for slug, updates := range slugUpdates {
 		slug := slug
 		updates := updates
+		if err := wikiUnsentPageCancellation(reduceCtx); err != nil {
+			collectUnapplied(slug, updates, err)
+			continue
+		}
 		egReduce.Go(func() error {
+			if err := wikiUnsentPageCancellation(reduceCtx); err != nil {
+				collectUnapplied(slug, updates, err)
+				return nil
+			}
 			var (
 				changed      bool
 				affectedType string
@@ -671,11 +685,17 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 			// Serialize same-slug read-modify-write across concurrent batches
 			// (standard mode). runs fn directly in Lite mode.
 			acquired, lockErr := s.withSlugLock(reduceCtx, payload.KnowledgeBaseID, slug, func() error {
+				if reduceErr = wikiUnsentPageCancellation(reduceCtx); reduceErr != nil {
+					return reduceErr
+				}
 				changed, affectedType, _, reduceErr = s.reduceSlugUpdates(
 					reduceCtx, chatModel, payload.KnowledgeBaseID, slug, updates, payload.TenantID, batchCtx, kidToWikiSpan)
 				return reduceErr
 			})
 			if lockErr != nil && !acquired {
+				if err := wikiUnsentPageCancellation(reduceCtx); err != nil {
+					lockErr = err
+				}
 				collectUnapplied(slug, updates, lockErr)
 				// ctx cancelled (batch timeout / shutdown) — stop quietly.
 				return nil
@@ -691,7 +711,8 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 			}
 			if reduceErr != nil {
 				// Record the failed page separately from successful siblings.
-				logger.Warnf(reduceCtx, "wiki ingest: reduce failed for slug %s: %v", slug, reduceErr)
+				logger.Warnf(reduceCtx, "wiki ingest: reduce failed for slug %s: %v cause=%s",
+					slug, reduceErr, wikiFailureCauseCategory(reduceErr))
 				collectUnapplied(slug, updates, reduceErr)
 				if isLikelyRateLimitError(reduceErr) {
 					reduceMu.Lock()
@@ -887,6 +908,12 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 		}
 	}
 
+	if len(failedPageSlugs) > 0 {
+		exitStatus = "reduce_failed"
+	} else if len(failedOps) > 0 {
+		exitStatus = "map_failed"
+	}
+
 	// Guarded selected cohorts settle through claim+execution CAS. Only rows
 	// never selected (for example malformed legacy payloads) use old cleanup.
 	guardedIDs := make(map[int64]bool)
@@ -914,7 +941,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 		trimErr = errors.Join(trimErr, s.settleWikiOperation(settleCtx, payload, op))
 	}
 
-	// Archive failed guarded ops after successful cohorts settle.
+	// Release only wholly unsent failures; quarantine all other failed ops.
 	var requeueErr error
 	if len(failedOps) > 0 {
 		requeueErr = s.settleFailedWikiOperations(settleCtx, payload, failedOps)
@@ -928,6 +955,9 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 	// released for retry, or dead-lettered), so disarm the abnormal-exit
 	// release net.
 	claimsSettled = true
+	if err := wikiBatchRetryError(ctx, failedOps); err != nil {
+		return err
+	}
 
 	logger.Infof(ctx, "wiki ingest: batch completed for KB %s, %d ops, %d pages affected", payload.KnowledgeBaseID, len(pendingOps), len(allPagesAffected))
 
@@ -1413,9 +1443,11 @@ func (s *wikiIngestService) mapOneDocument(
 		})
 	}()
 	wg.Wait()
-	if citationErr != nil {
-		s.tracker().FailSpan(ctx, wikiSpan, wikiFailureOutcome(citationErr), citationErr.Error(), nil)
-		return nil, nil, citationErr
+	// Both parallel outcomes decide replay safety. A NOT_RUN citation must
+	// never hide an already-sent summary's UNKNOWN or FAILED outcome.
+	if mapErr := errors.Join(citationErr, summaryErr); mapErr != nil {
+		s.tracker().FailSpan(ctx, wikiSpan, wikiFailureOutcome(mapErr), mapErr.Error(), nil)
+		return nil, nil, mapErr
 	}
 
 	// Merge citations back into the item structs (non-failing; items without
@@ -1470,11 +1502,6 @@ func (s *wikiIngestService) mapOneDocument(
 	var docSummaryLine string
 	var docSummary string
 
-	if summaryErr != nil {
-		// The batch owner records this failure without replaying successful work.
-		s.tracker().FailSpan(ctx, wikiSpan, wikiFailureOutcome(summaryErr), summaryErr.Error(), nil)
-		return nil, nil, fmt.Errorf("generate summary: %w", summaryErr)
-	}
 	sumLine, sumBody := splitSummaryLine(summaryContent)
 	if sumBody == "" {
 		sumBody = summaryContent
