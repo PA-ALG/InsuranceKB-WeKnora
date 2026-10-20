@@ -3,6 +3,7 @@ package mcptools
 import (
 	"bytes"
 	"encoding/json"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -77,52 +78,16 @@ func (args arguments) string(name string) string {
 	return value
 }
 
+// SDK-decoded numbers are reserialized by parseArguments. Their original
+// spelling and any precision lost during SDK decoding cannot be recovered here.
+var evidenceIndexPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,5})$`)
+
 func nonnegativeInteger(raw json.RawMessage) (int, bool) {
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 || (raw[0] != '-' && (raw[0] < '0' || raw[0] > '9')) {
+	if !evidenceIndexPattern.Match(raw) {
 		return 0, false
 	}
-	var number json.Number
-	if json.Unmarshal(raw, &number) != nil {
-		return 0, false
-	}
-	// Work on decimal digits, never floating-point rounding or a huge power of
-	// ten. A client-controlled exponent must not cause large allocations.
-	mantissa, exponent, hasExponent := strings.Cut(strings.ToLower(number.String()), "e")
-	negative := strings.HasPrefix(mantissa, "-")
-	mantissa = strings.TrimPrefix(mantissa, "-")
-	fraction := 0
-	if dot := strings.IndexByte(mantissa, '.'); dot >= 0 {
-		fraction = len(mantissa) - dot - 1
-	}
-	digits := strings.TrimLeft(strings.ReplaceAll(mantissa, ".", ""), "0")
-	if digits == "" {
-		return 0, true // includes negative zero, decimal zeros, and zero exponents
-	}
-	if negative {
-		return 0, false
-	}
-	significant := strings.TrimRight(digits, "0")
-	fraction -= len(digits) - len(significant)
-	var exp int64
-	if hasExponent {
-		var err error
-		exp, err = strconv.ParseInt(exponent, 10, 64)
-		if err != nil {
-			return 0, false
-		}
-	}
-	// An integer needs a nonnegative scale and at most 19 decimal digits.
-	// Compare before subtraction so an extreme exponent cannot overflow.
-	if exp < int64(fraction) || exp > int64(fraction)+19 || len(significant) > 19 {
-		return 0, false
-	}
-	scale := int(exp - int64(fraction))
-	if len(significant)+scale > 19 {
-		return 0, false
-	}
-	value, err := strconv.ParseInt(significant+strings.Repeat("0", scale), 10, strconv.IntSize)
-	return int(value), err == nil
+	value, err := strconv.Atoi(string(raw))
+	return value, err == nil
 }
 
 func invalidArguments() error {

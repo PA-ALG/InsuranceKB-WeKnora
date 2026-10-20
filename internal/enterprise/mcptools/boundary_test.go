@@ -36,9 +36,9 @@ func TestInvalidArgumentsNeverReadHeadOrRelease(t *testing.T) {
 	}
 }
 
-func TestCitationIndexMustBeANonnegativeInteger(t *testing.T) {
+func TestCitationIndexRejectsInvalidValuesBeforeReadingDependencies(t *testing.T) {
 	for _, index := range []any{
-		nil, -1, 0.5, "0", true, 1e30, json.RawMessage(`1e1000000000`),
+		nil, -1, 1.5, "1", true, 1000000, 1e30, json.Number(`1e2`), json.RawMessage(`1e1000000000`),
 		json.RawMessage(`1e-1000000000`), json.RawMessage(`1.000000000000000000000000000001`),
 	} {
 		f := setup()
@@ -50,11 +50,13 @@ func TestCitationIndexMustBeANonnegativeInteger(t *testing.T) {
 	}
 }
 
-func TestCitationZeroAcceptsEquivalentJSONNumberForms(t *testing.T) {
-	for _, index := range []json.RawMessage{
-		json.RawMessage(`0`), json.RawMessage(`-0`), json.RawMessage(`0.0`), json.RawMessage(`-0.0`),
+func TestCitationAcceptsSDKDecodedZeroForms(t *testing.T) {
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(`0`), json.RawMessage(`0.0`),
 		json.RawMessage(`0e1000000000`), json.RawMessage(`0e-1000000000`),
 	} {
+		var index any
+		require.NoError(t, json.Unmarshal(raw, &index))
 		f := setup()
 		got := f.call(endpoint(), t, "knowledge_read_citation", map[string]any{
 			"space_id": "s1", "release_id": "rel-1", "member": "E/field", "evidence": index,

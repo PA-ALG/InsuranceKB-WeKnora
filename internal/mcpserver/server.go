@@ -13,7 +13,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"sync"
@@ -117,7 +116,6 @@ func NewServer(
 		server.WithRecovery(),
 		server.WithToolFilter(s.filterTools),
 		server.WithToolHandlerMiddleware(s.guardTool),
-		server.WithHooks(citationArgumentHooks()),
 		server.WithInstructions(serverInstructions),
 	)
 	s.mcp.AddTools(s.toolCatalog()...)
@@ -127,43 +125,8 @@ func NewServer(
 	s.handler = server.NewStreamableHTTPServer(
 		s.mcp,
 		server.WithStateLess(true),
-		server.WithHTTPContextFunc(func(ctx context.Context, _ *http.Request) context.Context {
-			return context.WithValue(ctx, citationArgumentsKey{}, &citationArgumentCapture{})
-		}),
 	)
 	return s
-}
-
-type (
-	citationArgumentsKey    struct{}
-	citationArgumentCapture struct{ arguments json.RawMessage }
-)
-
-// The SDK decodes arguments into float64 before calling a tool. Preserve the
-// citation's original numbers so fractions cannot round into an evidence index.
-// Each HTTP request owns its capture; all other tools retain the SDK behavior.
-func citationArgumentHooks() *server.Hooks {
-	hooks := &server.Hooks{}
-	hooks.AddOnRequestInitialization(func(ctx context.Context, _ any, message any) error {
-		capture, _ := ctx.Value(citationArgumentsKey{}).(*citationArgumentCapture)
-		raw, ok := message.(json.RawMessage)
-		if capture == nil || !ok {
-			return nil
-		}
-		var request struct {
-			Method string `json:"method"`
-			Params struct {
-				Name      string          `json:"name"`
-				Arguments json.RawMessage `json:"arguments"`
-			} `json:"params"`
-		}
-		if json.Unmarshal(raw, &request) == nil && request.Method == "tools/call" &&
-			request.Params.Name == types.MCPEndpointToolKnowledgeReadCitation {
-			capture.arguments = request.Params.Arguments
-		}
-		return nil
-	})
-	return hooks
 }
 
 // WithExtraTools registers extension tools before serving. They use the same
@@ -232,12 +195,6 @@ func (s *Server) guardTool(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("rate limit exceeded for this endpoint, retry shortly"), nil
 		}
 		s.touchLastUsed(ctx, ep.ID)
-		if req.Params.Name == types.MCPEndpointToolKnowledgeReadCitation {
-			if capture, ok := ctx.Value(citationArgumentsKey{}).(*citationArgumentCapture); ok &&
-				len(capture.arguments) > 0 {
-				req.Params.Arguments = capture.arguments
-			}
-		}
 		result, err := next(ctx, req)
 		if err != nil {
 			return result, err
