@@ -1,9 +1,12 @@
 package knowledge
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -33,13 +36,33 @@ type wikiPagePayload struct {
 	Content  string   `json:"content"`
 	Aliases  []string `json:"aliases"`
 	Origin   string   `json:"origin"`
-	Evidence []struct {
-		Quote     string `json:"quote"`
-		SourceRef string `json:"source_ref"`
-		Locator   struct {
-			Page int `json:"page"`
-		} `json:"locator"`
-	} `json:"evidence"`
+	// Entries are read one by one: an invalid entry is skipped, never the page or the release.
+	Evidence []json.RawMessage `json:"evidence"`
+}
+
+type pageEvidence struct {
+	Quote     string `json:"quote"`
+	SourceRef string `json:"source_ref"`
+	Locator   struct {
+		Page json.RawMessage `json:"page"`
+	} `json:"locator"`
+}
+
+var positiveInteger = regexp.MustCompile(`^[1-9][0-9]{0,8}$`)
+
+// validEvidence accepts an entry with a quote and a page that is a positive JSON integer; a
+// fraction, string or out-of-range page is not truncated into a page number.
+func validEvidence(raw json.RawMessage) (pageEvidence, int, bool) {
+	var entry pageEvidence
+	if json.Unmarshal(raw, &entry) != nil || strings.TrimSpace(entry.Quote) == "" {
+		return entry, 0, false
+	}
+	text := string(bytes.TrimSpace(entry.Locator.Page))
+	if !positiveInteger.MatchString(text) {
+		return entry, 0, false
+	}
+	page, err := strconv.Atoi(text)
+	return entry, page, err == nil
 }
 
 type indexedPage struct {
@@ -48,9 +71,9 @@ type indexedPage struct {
 }
 
 // indexedWikiPage keeps a page only when its slug, type and provenance agree with the S6c
-// contract; anything else is never searchable, so it can never be cited.
+// contract (page_key is opaque); anything else is never searchable, so it can never be cited.
 func indexedWikiPage(slug string, payload wikiPagePayload) (indexedPage, bool) {
-	if (payload.Type != "concept" && payload.Type != "entity") || !strings.HasPrefix(payload.Key, payload.Type+"/") ||
+	if (payload.Type != "concept" && payload.Type != "entity") || strings.TrimSpace(payload.Key) == "" ||
 		payload.Origin != "MODEL_GENERATED" || strings.TrimSpace(payload.Title) == "" {
 		return indexedPage{}, false
 	}
@@ -159,11 +182,11 @@ func (index *releaseIndex) page(page indexedPage, terms []string) Page {
 		Title: page.payload.Title, Summary: page.payload.Summary, Excerpt: excerpt(page.content, terms),
 		Evidence: []Evidence{},
 	}
-	for i, evidence := range page.payload.Evidence {
+	for i, raw := range page.payload.Evidence {
 		// Invalid entries are skipped without renumbering: the index names the stored evidence.
-		if strings.TrimSpace(evidence.Quote) != "" && evidence.Locator.Page > 0 {
+		if evidence, pageNumber, ok := validEvidence(raw); ok {
 			out.Evidence = append(out.Evidence, Evidence{
-				Index: i, Quote: evidence.Quote, Page: evidence.Locator.Page, SourceRef: evidence.SourceRef,
+				Index: i, Quote: evidence.Quote, Page: pageNumber, SourceRef: evidence.SourceRef,
 			})
 		}
 	}

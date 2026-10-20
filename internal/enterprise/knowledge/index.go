@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -165,7 +166,11 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 		case "wiki_page":
 			var payload wikiPagePayload
 			if err := decodeMember(member, &payload); err != nil {
-				return nil, err
+				var typed *release.Error
+				if errors.As(err, &typed) {
+					return nil, err
+				}
+				return nil, malformed(member, "payload is not a valid page object")
 			}
 			if page, ok := indexedWikiPage(member.LogicalSlug, payload); ok {
 				index.pages = append(index.pages, page)
