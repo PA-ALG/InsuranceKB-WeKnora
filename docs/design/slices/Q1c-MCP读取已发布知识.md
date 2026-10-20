@@ -73,7 +73,7 @@ func Tools(deps Deps) []server.ServerTool
 ### 2.3 接入（实现方）
 
 - **`internal/mcpserver/server.go`**（已登记的上游文件）：增加注入额外工具的选项（如 `WithExtraTools([]server.ServerTool)`），额外工具同样经过端点工具白名单与限流（`guardTool`、`filterTools`）。
-- **`internal/types/mcp_endpoint_tools.go`**（上游）：工具目录增加一组"已发布知识"，包含以上 7 个工具名。
+- **`internal/types/mcp_endpoint_tools.go`**（上游）：工具目录增加分组 `knowledge`（"已发布知识"），包含以上 7 个工具名；该分组只带检索能力，不带对话或写入能力。
 - **`container.go`**（已登记）：生产环境注入 `Spaces`（releasestore）、`Heads`（releasestore 的 Active 读取）、`knowledge.Service`、出处读取。
 - **出处读取**：把 `/api/v1/enterprise/.../citation` 处理函数的核心（按指定版本取 Evidence、核对 PDF 片段与文件哈希）提到项目包中的可复用函数，HTTP 处理与 MCP 工具共用，行为不变。
 - **`Caller`**：用 MCP 端点认证写入的 tenant 与端点配置：
@@ -104,7 +104,8 @@ func Tools(deps Deps) []server.ServerTool
 - 新增 `internal/enterprise/mcptools/`；
 - `internal/enterprise/`：出处函数提取，只做移动，行为不变；
 - `internal/mcpserver/server.go`、`internal/types/mcp_endpoint_tools.go`、`internal/container/container.go`；
-- 前端语言包 5 种（MCP 工具名）；
+- 前端语言包 5 种（MCP 分组名与工具名）；
+- `frontend/src/api/mcp-endpoint.ts`（上游）：只在 `McpEndpointToolGroup` 联合类型中加入新分组键 `knowledge`，不改请求、页面或业务逻辑（Codex 计划 R1 指出，2026-10-20 补列）；
 - `docs/design/upstream-patches.md` 只追加；
 - 实现方测试。
 
