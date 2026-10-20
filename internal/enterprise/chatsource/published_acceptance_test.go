@@ -99,10 +99,12 @@ func TestFilterPipelinePutsCitedPublishedFieldsFirstOncePerTurn(t *testing.T) {
 	r, reader := published()
 	ctx, _, err := chatsource.ResolveAnswer(context.Background(), r, tenant, types.SearchTargets{kb("wiki-1")})
 	require.NoError(t, err)
-	stale := &types.SearchResult{ID: "release:rel-0:1828/cooling_off_period", Content: "old", Metadata: map[string]string{
-		"source_tier": "release", "space_id": "s1", "release_id": "rel-0",
-		"logical_slug": "1828/cooling_off_period", "evidence_index": "0",
-	}}
+	stale := &types.SearchResult{
+		ID: "release:rel-0:1828/cooling_off_period", Content: "old", Metadata: map[string]string{
+			"source_tier": "release", "space_id": "s1", "release_id": "rel-0",
+			"logical_slug": "1828/cooling_off_period", "evidence_index": "0",
+		},
+	}
 	plain := &types.SearchResult{ID: "p1", KnowledgeBaseID: "plain", Content: "plain text"}
 	cm := &types.ChatManage{}
 	cm.Query = "那它的犹豫期和等待期呢"
