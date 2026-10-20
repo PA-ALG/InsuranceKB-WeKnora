@@ -20,8 +20,19 @@ from typing import NoReturn
 from pydantic import ValidationError
 
 from insurance_harness.bundle.assemble import BundleError, assemble
-from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, publish
-from insurance_harness.compilers.wiki_pages.members import GENERATOR, member_slug, wiki_page
+from insurance_harness.bundle.client import (
+    DecisionInput,
+    PlatformClient,
+    PlatformError,
+    ReleaseMember,
+    publish,
+)
+from insurance_harness.compilers.wiki_pages.members import (
+    GENERATOR,
+    link_titles,
+    member_slug,
+    wiki_page,
+)
 from insurance_harness.compilers.wiki_pages.native import NativeWikiError, NativeWikiReader
 from insurance_harness.eval.product_sources import check_product_id
 from insurance_harness.evidence.segments import SegmentedSource
@@ -44,6 +55,20 @@ class _Parser(argparse.ArgumentParser):
 def _stop(code: str) -> int:
     print(json.dumps({"stopped": code}, ensure_ascii=False))
     return 2
+
+
+def _owned(member: ReleaseMember, entity_id: str) -> bool:
+    """A page this product's export replaces, by its own identity: never by slug prefix, since an
+    entity id may itself contain "/"."""
+    payload = member.payload if isinstance(member.payload, dict) else {}
+    key, refs = payload.get("page_key"), payload.get("entity_refs")
+    return (
+        member.kind == "wiki_page"
+        and isinstance(key, str)
+        and isinstance(refs, list)
+        and entity_id in refs
+        and member.logical_slug == member_slug(entity_id, key)
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,7 +101,9 @@ def main(argv: list[str] | None = None) -> int:
         native = NativeWikiReader(os.environ[BASE_URL_ENV], os.environ[API_KEY_ENV]).pages(
             args.discovery_kb
         )
-        titles = {page.slug: page.title for page in native}
+        titles = link_titles(native)
+        if not titles:  # a wrong or unfinished discovery base is never a reason to remove pages
+            return _stop("NATIVE_WIKI_EMPTY")
         converted = [
             member
             for page in native
@@ -95,13 +122,10 @@ def main(argv: list[str] | None = None) -> int:
         client = PlatformClient(os.environ[BASE_URL_ENV], os.environ[API_KEY_ENV])
         active = client.active(source_map.space_id)
         keep = {member_slug(args.entity_id, page.page_key) for page in converted}
-        prefix = member_slug(args.entity_id, "")
         removals = sorted(
             member.logical_slug
             for member in (active.members if active else [])
-            if member.kind == "wiki_page"
-            and member.logical_slug.startswith(prefix)
-            and member.logical_slug not in keep
+            if _owned(member, args.entity_id) and member.logical_slug not in keep
         )
         bundle = assemble(
             [],

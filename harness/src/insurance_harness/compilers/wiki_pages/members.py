@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -48,6 +48,11 @@ class NativePage(BaseModel):
 
 def member_slug(entity_id: str, page_key: str) -> str:
     return f"wiki/{entity_id}/{page_key}"
+
+
+def link_titles(pages: Iterable[NativePage]) -> dict[str, str]:
+    """Titles of the pages that become members: the only targets a rewritten link may name."""
+    return {page.slug: page.title for page in pages if page.page_type in _KEPT_TYPES}
 
 
 def wiki_page(

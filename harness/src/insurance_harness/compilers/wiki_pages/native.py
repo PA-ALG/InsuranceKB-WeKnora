@@ -48,21 +48,25 @@ class NativeWikiReader:
             raise NativeWikiError("INVALID_REQUEST")
         rows: list[dict[str, Any]] = []
         with self._client() as client:
-            page = 1
+            page, total = 1, None
             while True:
                 body = self._get(
                     client,
                     f"/api/v1/knowledgebase/{kb_id}/wiki/pages",
                     {"page": page, "page_size": PAGE_SIZE},
                 )
-                batch = body.get("pages") if isinstance(body, dict) else None
-                total_pages = body.get("total_pages") if isinstance(body, dict) else None
-                if not isinstance(batch, list) or not isinstance(total_pages, int):
+                batch, listed, total_pages = _listing(body, page)
+                if total is not None and listed != total:  # the export changed while being read
                     raise NativeWikiError("NATIVE_WIKI_UNREADABLE")
-                rows.extend(row for row in batch if isinstance(row, dict))
+                total = listed
+                rows.extend(batch)
                 if page >= total_pages:
                     break
                 page += 1
+            # Removals are computed from this export, so it must be whole: every page once.
+            slugs = [row.get("slug") for row in rows]
+            if len(rows) != total or len(set(map(str, slugs))) != len(slugs):
+                raise NativeWikiError("NATIVE_WIKI_UNREADABLE")
             return [self._page(client, row) for row in rows]
 
     def _page(self, client: httpx.Client, row: dict[str, Any]) -> NativePage:
@@ -106,3 +110,28 @@ class NativeWikiReader:
             return response.json()
         except ValueError:
             raise NativeWikiError("NATIVE_WIKI_UNREADABLE") from None
+
+
+def _count(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _listing(body: Any, page: int) -> tuple[list[dict[str, Any]], int, int]:
+    """One page of the listing, refused unless every row is a page and the counts agree."""
+    if not isinstance(body, dict):
+        raise NativeWikiError("NATIVE_WIKI_UNREADABLE")
+    batch = body.get("pages")
+    total, size, total_pages = (
+        _count(body.get(key)) for key in ("total", "page_size", "total_pages")
+    )
+    if (
+        not isinstance(batch, list)
+        or not all(isinstance(row, dict) for row in batch)
+        or total is None
+        or not size
+        or total_pages != -(-total // size)
+        or body.get("page") != page
+        or len(batch) != min(size, max(total - (page - 1) * size, 0))
+    ):
+        raise NativeWikiError("NATIVE_WIKI_UNREADABLE")
+    return batch, total, total_pages

@@ -17,22 +17,31 @@ from insurance_harness.ingest.source_map import API_KEY_ENV, BASE_URL_ENV
 SHA = "a" * 64
 PAGES: list[dict[str, Any]] = [
     {"slug": "concept/deng-dai-qi", "title": "等待期", "page_type": "concept", "summary": None,
-     "content": "见 [[concept/kuan-xian-qi]]。", "aliases": None, "chunk_refs": ["c1"]},
+     "content": "见 [[concept/kuan-xian-qi]]，另见 [[summary/x|摘要页]]。", "aliases": None,
+     "chunk_refs": ["c1"]},
     {"slug": "concept/kuan-xian-qi", "title": "宽限期", "page_type": "concept",
      "content": "宽限期。", "aliases": ["缓交期"], "chunk_refs": []},
     {"slug": "summary/x", "title": "摘要", "page_type": "summary", "content": "摘要。"},
 ]  # fmt: skip
 
 
-def transport(pages: list[dict[str, Any]], status: int = 200) -> httpx.MockTransport:
+def listing(pages: list[Any], number: int, changes: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The native list response, one page per request to exercise paging."""
+    body = {"pages": pages[(number - 1) : number], "total": len(pages), "page": number,
+            "page_size": 1, "total_pages": len(pages)}  # fmt: skip
+    return {**body, **(changes or {})}
+
+
+def transport(
+    pages: list[Any], status: int = 200, changes: dict[str, Any] | None = None
+) -> httpx.MockTransport:
     def handle(request: httpx.Request) -> httpx.Response:
         assert request.headers["X-API-Key"] == "key"
         if status != 200:
             return httpx.Response(status, json={})
         if request.url.path.endswith("/wiki/pages"):
             page = int(request.url.params["page"])
-            batch = pages[(page - 1) : page]  # one page per request: exercise paging
-            return httpx.Response(200, json={"pages": batch, "total_pages": len(pages)})
+            return httpx.Response(200, json=listing(pages, page, changes))
         if request.url.path == "/api/v1/chunks/by-id/c1":
             return httpx.Response(200, json={"data": {"content": "等待期为90日。被保险人"}})
         return httpx.Response(404, json={})
@@ -59,6 +68,39 @@ def test_reader_refuses_bad_identifiers(kb: str) -> None:
     assert caught.value.code == "INVALID_REQUEST"
 
 
+@pytest.mark.parametrize(
+    ("pages", "changes"),
+    [
+        ([None], {}),
+        (PAGES[:1], {"total": 2}),
+        (PAGES, {"total_pages": 2}),
+        (PAGES, {"page": 1}),
+        (PAGES, {"page_size": 0}),
+        (PAGES, {"total": True}),
+        ([PAGES[0], PAGES[0]], {}),
+    ],
+    ids=["not a page", "short export", "page count", "page echo", "page size", "bool count",
+         "duplicate slug"],
+)  # fmt: skip
+def test_reader_refuses_an_incomplete_or_inconsistent_export(
+    pages: list[Any], changes: dict[str, Any]
+) -> None:
+    with pytest.raises(NativeWikiError) as caught:
+        NativeWikiReader("http://wiki.test", "key", transport(pages, changes=changes)).pages("kb-1")
+    assert caught.value.code == "NATIVE_WIKI_UNREADABLE"
+
+
+def test_reader_refuses_an_export_that_changed_while_read() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params["page"])
+        grown = PAGES + [{**PAGES[0], "slug": "concept/new"}] if page > 1 else PAGES
+        return httpx.Response(200, json=listing(grown, page))
+
+    with pytest.raises(NativeWikiError) as caught:
+        NativeWikiReader("http://wiki.test", "key", httpx.MockTransport(handle)).pages("kb-1")
+    assert caught.value.code == "NATIVE_WIKI_UNREADABLE"
+
+
 def test_reader_failure_is_a_stable_code() -> None:
     with pytest.raises(NativeWikiError) as caught:
         NativeWikiReader("http://wiki.test", "key", transport(PAGES, 503)).pages("kb-1")
@@ -71,7 +113,10 @@ class Page:
 
 
 def run(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], active: Any
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    active: Any,
+    native: Any = None,
 ) -> tuple[int, Any, Any]:
     seen: dict[str, Any] = {}
     monkeypatch.setenv(BASE_URL_ENV, "http://wiki.test")
@@ -94,7 +139,8 @@ def run(
         cli,
         "NativeWikiReader",
         lambda base, key: SimpleNamespace(
-            pages=lambda kb: NativeWikiReader("http://wiki.test", "key", transport(PAGES)).pages(kb)
+            pages=native
+            or (lambda kb: NativeWikiReader("http://wiki.test", "key", transport(PAGES)).pages(kb))
         ),
     )
     monkeypatch.setattr(
@@ -117,8 +163,10 @@ def run(
     return code, json.loads(capsys.readouterr().out), seen
 
 
-def member(kind: str, slug: str) -> SimpleNamespace:
-    return SimpleNamespace(kind=kind, logical_slug=slug)
+def member(kind: str, entity: str, key: str) -> SimpleNamespace:
+    payload = {"page_key": key, "entity_refs": [entity]}
+    slug = f"wiki/{entity}/{key}" if kind == "wiki_page" else f"{entity}/{key}"
+    return SimpleNamespace(kind=kind, logical_slug=slug, payload=payload)
 
 
 def test_publish_builds_a_wiki_only_candidate_and_removes_stale_pages(
@@ -127,10 +175,13 @@ def test_publish_builds_a_wiki_only_candidate_and_removes_stale_pages(
     active = SimpleNamespace(
         head=None,
         members=[
-            member("wiki_page", "wiki/1828/concept/old"),
-            member("wiki_page", "wiki/1828/concept/kuan-xian-qi"),
-            member("wiki_page", "wiki/9999/concept/old"),
-            member("claim", "1828/waiting_period"),
+            member("wiki_page", "1828", "concept/old"),
+            member("wiki_page", "1828", "concept/kuan-xian-qi"),
+            member("wiki_page", "9999", "concept/old"),
+            # Another entity whose id extends this one's: its pages share the slug prefix only.
+            member("wiki_page", "1828/variant", "concept/old"),
+            SimpleNamespace(kind="wiki_page", logical_slug="wiki/1828/concept/bare", payload=None),
+            member("claim", "1828", "waiting_period"),
         ],
     )
     code, out, seen = run(monkeypatch, capsys, active)
@@ -150,10 +201,29 @@ def test_publish_builds_a_wiki_only_candidate_and_removes_stale_pages(
         True,
     )
     first = bundle.members[0].payload
-    assert first["content"] == "见 [[wiki/1828/concept/kuan-xian-qi|宽限期]]。"
+    # The summary page is not exported, so a link to it keeps only its text.
+    assert first["content"] == "见 [[wiki/1828/concept/kuan-xian-qi|宽限期]]，另见 摘要页。"
     assert first["evidence"][0]["quote"] == "等待期为90日。"
 
 
 def test_publish_stops_with_a_code_on_bad_arguments(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["--product", "../x"]) == 2
     assert json.loads(capsys.readouterr().out) == {"stopped": "INVALID_ARGUMENTS"}
+
+
+@pytest.mark.parametrize(
+    ("native", "code"),
+    [
+        (lambda kb: (_ for _ in ()).throw(NativeWikiError("NATIVE_WIKI_UNREADABLE")),
+         "NATIVE_WIKI_UNREADABLE"),
+        (lambda kb: NativeWikiReader("http://wiki.test", "key", transport(PAGES[2:])).pages(kb),
+         "NATIVE_WIKI_EMPTY"),
+    ],
+    ids=["unreadable export", "no page to publish"],
+)  # fmt: skip
+def test_a_failed_or_empty_export_submits_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], native: Any, code: str
+) -> None:
+    active = SimpleNamespace(head=None, members=[member("wiki_page", "1828", "concept/old")])
+    code_, out, seen = run(monkeypatch, capsys, active, native)
+    assert (code_, out, seen) == (2, {"stopped": code}, {})
