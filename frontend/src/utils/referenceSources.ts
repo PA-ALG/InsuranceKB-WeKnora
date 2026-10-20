@@ -347,14 +347,12 @@ export function resolveReferenceHighlightKey(
 
   if (target.chunkId) {
     const raw = String(target.chunkId).trim()
-    const hit = items.find(
-      (item) =>
-        item.chunkId === raw ||
-        item.chunkIds?.includes(raw) ||
-        item.key === `doc:${raw}` ||
-        (item.kind === 'web' && (item.chunkId === raw || item.url === raw)),
-    )
-    if (hit) return hit.key
+    const hits = items.filter(item => item.chunkId === raw || item.chunkIds?.includes(raw)
+      || item.key === `doc:${raw}` || (item.kind === 'web' && (item.chunkId === raw || item.url === raw)))
+    if (raw.startsWith('release:') || hits.some(item => item.metadata?.source_tier === 'release')) {
+      return hits.length === 1 ? hits[0]!.key : null
+    }
+    if (hits[0]) return hits[0].key
   }
 
   // Defensive fallback for historical/partially streamed Agent messages whose

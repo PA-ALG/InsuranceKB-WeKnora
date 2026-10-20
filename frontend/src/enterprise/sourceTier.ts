@@ -25,7 +25,10 @@ export function referenceSourceKey(reference: unknown): string {
   const metadata = referenceMetadata(reference)
   const tier = typeof metadata?.source_tier === 'string' ? metadata.source_tier : ''
   const release = typeof metadata?.release_id === 'string' ? metadata.release_id : ''
-  return tier || release ? `:source:${JSON.stringify([tier, release])}` : ''
+  const provenance = tier === 'release'
+    ? [tier, release, metadata?.space_id, metadata?.logical_slug, metadata?.evidence_index]
+    : [tier, release]
+  return tier || release ? `:source:${JSON.stringify(provenance)}` : ''
 }
 
 type SourceReference = {

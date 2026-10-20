@@ -9,7 +9,7 @@
   "G5_hardcoded": 76,
   "G6_private_access": 275,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 468,
+  "G10_upstream_patches": 469,
   "G11_new_file_location": 679
  },
  "guards": {
@@ -1007,6 +1007,7 @@
    "internal/middleware/ws_auth.go": 1,
    "internal/modelcontext/model_output.go": 1,
    "internal/modelcontext/registry_test.go": 1,
+   "internal/modelcontext/tool_policy.go": 1,
    "internal/models/api/anthropicmessages/client.go": 1,
    "internal/models/api/endpoint.go": 1,
    "internal/models/api/googlegenai/client.go": 1,

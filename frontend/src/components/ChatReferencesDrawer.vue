@@ -29,6 +29,9 @@
             {{ t('chat.referencesDrawerEmpty') }}
           </div>
 
+          <p v-if="highlight?.chunkId?.startsWith('release:') && !activeHighlightKey" role="alert">
+            {{ t('chat.releaseCitationUnavailable') }}
+          </p>
           <section
             v-for="section in sections"
             :key="section.id"
@@ -72,7 +75,7 @@
                       <div class="reference-item__title-row">
                         <h5 class="reference-item__title" :title="item.title">{{ item.title }}</h5>
                         <a
-                          v-if="item.knowledgeBaseId && !embeddedMode"
+                          v-if="item.knowledgeBaseId && !embeddedMode && !isReleaseReference(item)"
                           class="reference-item__open"
                           :href="getDocumentHref(item)"
                           target="_blank"
@@ -120,6 +123,10 @@
                   </div>
                 </template>
               </component>
+              <ReleaseCitation
+                v-if="isReleaseReference(item) && (expandedKeys.has(item.key) || activeHighlightKey === item.key)"
+                :reference="item" :denied="embeddedMode"
+              />
             </article>
           </section>
         </div>
@@ -142,6 +149,8 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useChatReferencesDrawer } from '@/composables/useChatReferencesDrawer'
 import ArtifactFileIcon from '@/views/chat/components/ArtifactFileIcon.vue'
+import ReleaseCitation from '@/enterprise/ReleaseCitation.vue'
+import { isReleaseReference } from '@/enterprise/releaseReferences'
 import { sourceTier, sourceTierLabel } from '@/enterprise/sourceTier'
 import {
   buildReferenceSections,
@@ -225,6 +234,7 @@ function onFaviconError(event: Event) {
 }
 
 function hasMoreContent(item: ReferenceListItem) {
+  if (isReleaseReference(item)) return true
   const content = String(item.content || '').trim()
   const snippet = String(item.snippet || '').replace(/…$/, '').trim()
   if (!content) return false

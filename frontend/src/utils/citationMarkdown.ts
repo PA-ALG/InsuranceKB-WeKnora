@@ -1,5 +1,6 @@
 /** Shared citation tag preprocessing for chat markdown (QA + agent). */
 export { sourceTierForChunk as citationSourceTier } from '../enterprise/sourceTier'
+export { releaseCitationPreview } from '../enterprise/releaseReferences'
 
 /** Self-closing or unclosed `<kb/>` / `<web/>` tags from model output. */
 export const KB_WEB_TAG_RE = /<(?:kb|web)\b[^>]*?\s*\/?>/g
@@ -90,11 +91,13 @@ export function resolveCitationChunkId(
   refs?: CitationKnowledgeRef[] | null,
 ): string {
   const raw = String(rawChunkId || '').trim()
-  if (!raw || UUID_RE.test(raw)) return raw
+  if (!raw || UUID_RE.test(raw) || raw.startsWith('release:')) return raw
 
-  const list = (refs || []).filter((r) => r && r.chunk_type !== 'web_search')
+  const references = (refs || []).filter((r) => r && r.chunk_type !== 'web_search')
+  if (references.some((reference) => reference.id === raw || reference.chunk_ids?.includes(raw))) return raw
+  const list = references.filter(reference => reference.metadata?.source_tier !== 'release'
+    && !reference.id?.startsWith('release:'))
   if (!list.length) return raw
-  if (list.some((reference) => reference.id === raw || reference.chunk_ids?.includes(raw))) return raw
 
   const doc = (attrs.doc || '').trim()
   const kbId = (attrs.kbId || '').trim()

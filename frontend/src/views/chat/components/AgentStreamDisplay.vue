@@ -182,7 +182,7 @@
                   </div>
 
                   <div
-                    v-if="!event.pending && (event.tool_name === 'search_knowledge' || event.tool_name === 'knowledge_search') && event.tool_data"
+                    v-if="!event.pending && (isPublishedKnowledgeTool(event.tool_name) || event.tool_name === 'search_knowledge' || event.tool_name === 'knowledge_search') && event.tool_data"
                     class="search-results-summary-fixed">
                     <div class="results-summary-text" v-html="getSearchResultsSummary(event)"></div>
                   </div>
@@ -504,7 +504,7 @@
                 </div>
 
                 <div
-                  v-if="!event.pending && (event.tool_name === 'search_knowledge' || event.tool_name === 'knowledge_search') && event.tool_data"
+                  v-if="!event.pending && (isPublishedKnowledgeTool(event.tool_name) || event.tool_name === 'search_knowledge' || event.tool_name === 'knowledge_search') && event.tool_data"
                   class="search-results-summary-fixed">
                   <div class="results-summary-text" v-html="getSearchResultsSummary(event)"></div>
                 </div>
@@ -660,6 +660,7 @@ import { useChatCitationPopover } from '@/composables/useChatCitationPopover';
 import { useChatReferencesDrawer } from '@/composables/useChatReferencesDrawer';
 import type { KnowledgeReferenceLike, ReferenceHighlightTarget } from '@/utils/referenceSources';
 import { referenceSourceKey } from '@/enterprise/sourceTier';
+import { isPublishedKnowledgeTool, publishedKnowledgeReferences } from '@/enterprise/releaseReferences';
 import { resolveCitationChunkId } from '@/utils/citationMarkdown';
 import { resolveReleaseCitationKb, resolveWikiReleaseAuthority, useReleaseWikiDrawer } from '@/enterprise/useReleaseWikiDrawer';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -735,6 +736,10 @@ ensureMermaidInitialized();
 const TOOL_NAME_KEYS: Record<string, string> = {
   discover_mcp_tools: 'agentStream.mcp.discoverTools',
   call_mcp_tool: 'agentStream.mcp.callTool',
+  knowledge_find_entity: 'chat.knowledgeFindEntity',
+  knowledge_get_fields: 'chat.knowledgeGetFields',
+  knowledge_search_fields: 'chat.knowledgeSearchFields',
+  knowledge_get_concept: 'chat.knowledgeGetConcept',
   search_knowledge: 'agentStream.tools.searchKnowledge',
   read_document: 'agentStream.tools.readDocument',
   list_documents: 'agentStream.tools.listDocuments',
@@ -1341,6 +1346,10 @@ function getToolReferenceItems(event: any): KnowledgeReferenceLike[] {
   }
 
   if (!toolData) return [];
+  if (isPublishedKnowledgeTool(toolName)) {
+    const notes = Array.isArray(toolData.notes) ? toolData.notes.filter((note: unknown) => typeof note === 'string').join('\n') : '';
+    return [...publishedKnowledgeReferences(toolData), ...buildToolResultReference(event, notes)];
+  }
 
   if (toolName === 'wiki_search' || toolName === 'wiki_read_page') {
     return parseWikiToolReferences(toolName, event.output, event.tool_call_id || toolName)
@@ -1402,7 +1411,7 @@ function getToolReferenceItems(event: any): KnowledgeReferenceLike[] {
       }));
   }
 
-  if (toolName === 'search_knowledge' || toolName === 'knowledge_search') {
+  if (isPublishedKnowledgeTool(toolName) || toolName === 'search_knowledge' || toolName === 'knowledge_search') {
     const results = Array.isArray(toolData.results) ? toolData.results : [];
     const fallbackKnowledgeBaseId = getToolKnowledgeBaseId(toolData);
     return mergeDocumentReferences(results
@@ -2234,6 +2243,7 @@ const isReferenceDrawerTool = (toolName?: string | null): boolean =>
   isMcpTool(toolName) ||
   WIKI_EDIT_TOOL_NAMES.has(String(toolName || '')) ||
   WIKI_ISSUE_TOOL_NAMES.has(String(toolName || '')) ||
+  isPublishedKnowledgeTool(toolName) ||
   toolName === 'search_knowledge' ||
   toolName === 'knowledge_search' ||
   toolName === 'web_search' ||
@@ -2259,7 +2269,7 @@ const hasResults = (event: any): boolean => {
   const toolName = event.tool_name;
 
   // For knowledge search tools
-  if (toolName === 'search_knowledge' || toolName === 'knowledge_search') {
+  if (isPublishedKnowledgeTool(toolName) || toolName === 'search_knowledge' || toolName === 'knowledge_search') {
     const count = event.tool_data.results?.length || event.tool_data.count || 0;
     return count > 0;
   }
@@ -2416,6 +2426,10 @@ const onRootClick = (e: Event) => {
     })) {
       return;
     }
+    if (chunkId.startsWith('release:')) {
+      MessagePlugin.warning(t('chat.releaseCitationUnavailable'));
+      return;
+    }
     if (kbId) {
       try {
         openRouteInNewTab(`/platform/knowledge-bases/${kbId}`);
@@ -2499,6 +2513,10 @@ const onRootKeydown = (e: KeyboardEvent) => {
         documentTitle: title,
         knowledgeBaseId: kbId,
       })) {
+        return;
+      }
+      if (chunkId.startsWith('release:')) {
+        MessagePlugin.warning(t('chat.releaseCitationUnavailable'));
         return;
       }
       if (kbId) {
@@ -2667,7 +2685,7 @@ const getToolSummary = (event: any): string => {
   const toolData = event.tool_data;
 
   // For search tools, don't return summary here - it will be displayed in SearchResults component
-  if (toolName === 'search_knowledge' || toolName === 'knowledge_search') {
+  if (isPublishedKnowledgeTool(toolName) || toolName === 'search_knowledge' || toolName === 'knowledge_search') {
     return '';
   } else if (toolName === 'get_document_info' || toolName === 'list_documents') {
     if (toolData?.title) {
@@ -2805,7 +2823,11 @@ const getSearchResultsSummary = (event: any): string => {
   if (!event || !event.tool_data) return '';
 
   const toolData = event.tool_data;
-  const count = Number(toolData.results?.length ?? toolData.count ?? 0) || 0;
+  const published = isPublishedKnowledgeTool(event.tool_name);
+  const count = Number((published ? toolData.total : undefined) ?? toolData.results?.length ?? toolData.count ?? 0) || 0;
+  if (published && count === 0 && toolData.notes?.some((note: unknown) => typeof note === 'string' && note.trim())) {
+    return t('chat.knowledgeTextResult');
+  }
   if (count === 0) return t('agentStream.search.noResults');
 
   // Build summary text
@@ -2895,7 +2917,7 @@ const getToolTitle = (event: any): string => {
   }
 
   const toolName = event.tool_name;
-  const isSearchTool = toolName === 'search_knowledge' || toolName === 'knowledge_search' || toolName === 'wiki_search';
+  const isSearchTool = isPublishedKnowledgeTool(toolName) || toolName === 'search_knowledge' || toolName === 'knowledge_search' || toolName === 'wiki_search';
   const isWebSearchTool = toolName === 'web_search';
   const isGrepTool = toolName === 'grep_chunks';
 
@@ -3059,7 +3081,10 @@ const getToolDescription = (event: any): string => {
   const success = event.success === true;
   const toolName = event.tool_name;
 
-  if (toolName === 'search_knowledge' || toolName === 'knowledge_search') {
+  if (isPublishedKnowledgeTool(toolName)) {
+    const name = getLocalizedToolName(toolName);
+    return success ? name : t('agentStream.toolStatus.calledFailed', { name });
+  } else if (toolName === 'search_knowledge' || toolName === 'knowledge_search') {
     return success ? t('agentStream.toolStatus.searchKb') : t('agentStream.toolStatus.searchKbFailed');
   } else if (toolName === 'wiki_search' || toolName === 'wiki_read_page') {
     const localizedName = getLocalizedToolName(toolName);

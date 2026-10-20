@@ -16,6 +16,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/browserskill"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
+	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/mcp"
@@ -94,6 +95,7 @@ func knowledgeBaseScopesForPrompt(config *types.AgentConfig) ([]string, map[stri
 
 // agentService implements agent-related business logic
 type agentService struct {
+	publishedKnowledge            *knowledge.Service
 	chatSources                   *chatsource.Resolver
 	browserSkill                  *browserskill.Manager
 	userRepo                      interfaces.UserRepository
@@ -152,8 +154,10 @@ func NewAgentService(
 	browserSkill *browserskill.Manager,
 	userRepo interfaces.UserRepository,
 	chatSources *chatsource.Resolver,
+	publishedKnowledge *knowledge.Service,
 ) interfaces.AgentService {
 	return &agentService{
+		publishedKnowledge:            publishedKnowledge,
 		chatSources:                   chatSources,
 		browserSkill:                  browserSkill,
 		userRepo:                      userRepo,
@@ -243,7 +247,7 @@ func (s *agentService) CreateAgentEngine(
 	if config.UseCustomSystemPrompt || config.SystemPrompt != "" {
 		systemPromptTemplate = config.ResolveSystemPrompt(config.WebSearchEnabled)
 	}
-	if notice := chatsource.WikiUnavailableNotice(sourceTurn); notice != "" {
+	if notice := chatsource.KnowledgeNotice(sourceTurn); notice != "" {
 		if systemPromptTemplate == "" {
 			systemPromptTemplate = agent.GetProgressiveRAGSystemPrompt(s.cfg)
 			if len(kbInfos) == 0 {
@@ -966,6 +970,9 @@ func (s *agentService) registerTools(
 ) error {
 	ctx, config, sourceTurn, err := chatsource.AgentTurn(ctx, s.chatSources, config)
 	if err != nil {
+		return err
+	}
+	if err := chatsource.RegisterKnowledgeTools(ctx, registry, s.publishedKnowledge, sourceTurn); err != nil {
 		return err
 	}
 	// Source of truth policy:
