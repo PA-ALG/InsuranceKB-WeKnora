@@ -16,14 +16,12 @@
 
 ### 2.1 前端（`frontend/src/enterprise/enterpriseApi.ts`）
 
-- `readRelease(spaceId, releaseId)` 按 `(spaceId, releaseId)` 缓存成功结果：
-  - 同一键的并发读取共用一个请求；
-  - 失败不缓存；
-  - 不同 Space 不共用。
-- 不带 `releaseId`（读 Active）时每次都发请求，因为 Active 会变；但把结果按它的 ID 存入缓存，此后按 ID 读取不再发请求。
-- 最多保留 4 个版本，按最近读取淘汰。
-- 返回的版本对象用 `markRaw` 标记，不进入 Vue 深度响应式。版本内容不可变，页面只替换整个对象。
-- 页面代码不改读取方式。当前版与上一版都经过同一缓存，切换产品时不再重复下载。
+2026-10-20 修订（Codex 在 #276 指出）：浏览器不能在本地直接返回发布版本，否则权限撤销后、或在同一页面登出后换账号登录，仍会读到旧内容，绕过服务端的实时授权。修订后：
+
+- 每次 `readRelease` 都向服务端发请求，经过现有的 Viewer 与 RAW/Wiki 读权限守卫。浏览器 HTTP 缓存按 §2.4 做条件请求，服务端未变时返回 304，不再下载整版。
+- 同一时刻的相同请求（同一 Space、同一 releaseId 或同为 Active）共用一个进行中的请求；请求结束后不保留，下一次读取重新发请求。
+- 返回的版本对象用 `markRaw` 标记，不进入 Vue 深度响应式。
+- 不建模块级的版本缓存，也就不需要处理登出时的清理。
 
 ### 2.2 后端（`internal/enterprise/releasestore`）
 
@@ -32,30 +30,42 @@
 - 缓存只存成员列表，按 tenant 与 Space 隔离；读取失败不缓存。
 - 出处与原文接口经 `Store` 读取，自然受益，接口本身不变。
 
+### 2.4 发布版本读取的条件请求（`internal/enterprise` 读取处理与 `release` 服务）
+
+- `GET .../releases/:release_id`（含 `active` 与 `/view/` 会话路由）的成功响应：
+  - 带 `ETag: "<release_id>"`，已退役的版本为 `"<release_id>;retired"`；
+  - 带 `Cache-Control: private, no-cache`，浏览器每次都要回服务端确认。
+- 请求带 `If-None-Match` 时：
+  - 先完成现有授权；
+  - 再用轻量查询解析出本次要读的版本 ID 与退役状态：`active` 读 Head，指定 ID 时确认该版本属于此 Space，都不加载成员；
+  - 与请求中的 ETag 一致时返回 304，不加载、不编码成员；不一致时返回完整内容。
+- 为此在 `release.Service` 与发布存储上增加一个只读的版本引用查询，返回版本 ID 与是否退役，不读成员。
+- 错误响应不带 ETag。
+
 ### 2.3 原文文件的浏览器缓存
 
 `/releases/:release_id/sources/:knowledge_id/attempts/:attempt/file` 的内容由 knowledge ID 与解析轮次唯一确定，并经哈希核对。成功响应加 `Cache-Control: private, max-age=86400, immutable`；错误响应不加。
 
 ## 3. 验收
 
-- **RED**：`frontend/src/enterprise/releaseCache.spec.ts`（Claude 编写，受保护）：
-  - 按 ID 只读一次，并发共用；
-  - 不进入深度响应式；
-  - Active 每次都读，读到的 ID 进入缓存；
-  - 失败不缓存，Space 之间不共用；
-  - 最多 4 个，最近读取的保留。
-- **实现方另补**（Go 测试名以 `TestPostgres` 开头，在 PostgreSQL CI 中运行）：
-  - 第一次读取后直接删除该版本的成员行，第二次读取仍返回原成员（证明命中缓存）；
-  - 在两次读取之间把版本标记为退役，第二次读取能看到 `RetiredAt`（版本头是新读的）；
-  - 不同 tenant 或 Space 的相同 release ID 不会互相命中；
-  - 同一版本的并发读取只加载一次成员；
-  - 原文文件成功响应带上述 `Cache-Control`，错误响应不带。
-- **门禁**：现有的前端和企业包测试不新增失败。若有已有测试依赖"每次都发请求"，请停下说明，不要修改已有断言。
+- **RED**：`frontend/src/enterprise/releaseCache.spec.ts`（Claude 编写，受保护，2026-10-20 按 §2.1 修订重写）：
+  - 同一时刻的相同读取只发一次请求；
+  - 先后两次读取各发一次请求（授权每次都经过服务端）；
+  - 失败不会让后续读取共用；
+  - 不同 Space 不共用；
+  - 不进入深度响应式。
+- **实现方另补（Go）**：
+  - 指定版本：200 带 `ETag` 与 `Cache-Control`；`If-None-Match` 一致时 304 且不加载成员（用计数的假存储证明）；版本退役后 ETag 改变，旧 ETag 得到 200；
+  - Active：Head 未变时 304，Head 前进后 200 并带新的 ETag；
+  - 未授权时 403，不受 `If-None-Match` 影响；
+  - 服务端成员缓存的测试（名称以 `TestPostgres` 开头）同原 §3：删成员行后仍命中缓存、退役状态是新读的、tenant 与 Space 隔离、并发只加载一次；
+  - 原文文件的 `Cache-Control` 同原 §3。
+- **门禁**：现有前端与企业包测试不新增失败。
 
 ## 4. 改动范围
 
 - `frontend/src/enterprise/enterpriseApi.ts`；
-- `internal/enterprise/releasestore/`（`publisher.go` 或新文件）、`internal/enterprise/` 中原文文件处理；
+- `internal/enterprise/releasestore/`（`publisher.go` 或新文件）、`internal/enterprise/`（版本读取与原文文件处理）、`internal/enterprise/release/`（版本引用查询）；
 - 实现方测试。
 
 ## 5. 上线与核对
