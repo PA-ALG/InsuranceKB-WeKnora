@@ -29,6 +29,71 @@ const maxSourceFile = 256 << 20
 
 const errorSourceIntegrity = "SOURCE_INTEGRITY"
 
+// CitationView is the same verified evidence used by HTTP and MCP readers.
+type CitationView struct {
+	Evidence release.EvidenceAt
+	Source   release.SourceRef
+	Span     *source.SpanView
+}
+
+type citationSourceFailure struct{ failure *source.Error }
+
+func (e *citationSourceFailure) Error() string { return e.failure.Error() }
+func (e *citationSourceFailure) Unwrap() error { return e.failure }
+
+func citationSourceError(err error) error {
+	var failure *source.Error
+	if !errors.As(err, &failure) {
+		failure = &source.Error{Code: source.ErrorUnavailable, Detail: "source artifact is unavailable"}
+	}
+	return &citationSourceFailure{failure: failure}
+}
+
+// ReadCitation follows an explicit release to its captured source and verifies
+// both fingerprints and the exact quote. Source failures retain their own type
+// so HTTP keeps its existing 503 mapping, distinct from release storage errors.
+func ReadCitation(
+	ctx context.Context, service *release.Service, pages *source.Service,
+	p release.Principal, space, releaseID, slug string, index int,
+) (*CitationView, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if service == nil {
+		return nil, &release.Error{Code: release.ErrorServiceUnavailable, Detail: "release service is unavailable"}
+	}
+	at, err := service.Evidence(ctx, p, space, releaseID, slug, index)
+	if err != nil {
+		return nil, err
+	}
+	ev := at.Evidence
+	ref, isSource := release.ParseSourceRef(ev.SourceRef)
+	loc := ev.Locator
+	if !isSource || loc.Kind != "PDF_TEXT_SPAN" || loc.Page == nil || loc.Start == nil || loc.End == nil {
+		return nil, &release.Error{
+			Code: release.ErrorEvidenceUnsupported, Detail: "only PDF text spans can be opened",
+		}
+	}
+	if pages == nil {
+		return nil, citationSourceError(nil)
+	}
+	view, err := pages.Span(ctx, source.Scope{TenantID: p.TenantID, SpaceID: space},
+		ref.KnowledgeID, ref.ParseAttempt, *loc.Page, *loc.Start, *loc.End)
+	if err != nil {
+		return nil, citationSourceError(err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, citationSourceError(err)
+	}
+	if view.DocumentSHA256 != ref.FileSHA256 || strings.ToLower(ev.FileSHA256) != ref.FileSHA256 ||
+		view.Quote != ev.Quote {
+		return nil, &release.Error{
+			Code: release.ErrorEvidenceMismatch, Detail: "the captured source no longer matches this evidence",
+		}
+	}
+	return &CitationView{Evidence: at, Source: ref, Span: view}, nil
+}
+
 // citation opens one evidence object of an explicit release and re-verifies it against the
 // captured page before returning the quote and its highlight (S4c-2b-2 Spec §3.4).
 func citation(c *gin.Context, service *release.Service, pages *source.Service, spacesPath string) {
@@ -43,37 +108,17 @@ func citation(c *gin.Context, service *release.Service, pages *source.Service, s
 		return
 	}
 	space := c.Param("space_id")
-	at, err := service.Evidence(c.Request.Context(), p, space, c.Param("release_id"), slug, index)
+	verified, err := ReadCitation(c.Request.Context(), service, pages, p, space, c.Param("release_id"), slug, index)
 	if err != nil {
-		writeError(c, err)
+		var failure *citationSourceFailure
+		if errors.As(err, &failure) {
+			writeSourceError(c, err)
+		} else {
+			writeError(c, err)
+		}
 		return
 	}
-	ev := at.Evidence
-	ref, isSource := release.ParseSourceRef(ev.SourceRef)
-	loc := ev.Locator
-	if !isSource || loc.Kind != "PDF_TEXT_SPAN" || loc.Page == nil || loc.Start == nil || loc.End == nil {
-		writeError(c, &release.Error{
-			Code: release.ErrorEvidenceUnsupported, Detail: "only PDF text spans can be opened",
-		})
-		return
-	}
-	if pages == nil {
-		writeSourceError(c, nil)
-		return
-	}
-	view, err := pages.Span(c.Request.Context(), source.Scope{TenantID: p.TenantID, SpaceID: space},
-		ref.KnowledgeID, ref.ParseAttempt, *loc.Page, *loc.Start, *loc.End)
-	if err != nil {
-		writeSourceError(c, err)
-		return
-	}
-	if view.DocumentSHA256 != ref.FileSHA256 || strings.ToLower(ev.FileSHA256) != ref.FileSHA256 ||
-		view.Quote != ev.Quote {
-		writeError(c, &release.Error{
-			Code: release.ErrorEvidenceMismatch, Detail: "the captured source no longer matches this evidence",
-		})
-		return
-	}
+	at, ref, view := verified.Evidence, verified.Source, verified.Span
 	rects := make([][4]int, 0, len(view.Rects))
 	for _, r := range view.Rects {
 		rects = append(rects, [4]int{r.X0, r.Y0, r.X1, r.Y1})

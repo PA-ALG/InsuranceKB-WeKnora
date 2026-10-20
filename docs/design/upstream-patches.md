@@ -123,3 +123,12 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/composables/useChatStreamHandler.ts` | S6d-2 | 对话错误消息与提示接入企业知识错误文案，原始错误保留日志；上游无错误展示转换扩展点 | 部分（错误展示扩展） | 上游提供错误文案转换回调后迁出接缝 |
 | `frontend/src/views/chat/index.vue` | S6d-2 | 对话回调与连接错误提示接入同一企业知识映射，保留诊断及非目标错误；上游无统一错误展示扩展点 | 部分（错误展示扩展） | 上游提供可注入的错误展示转换后迁出接缝 |
 | `frontend/src/composables/useChatStreamHandler.integration.test.ts` | S6d-2 | 原有完整流处理器测试的模块加载表补入真实企业错误模块，不改已有断言 | 是（测试依赖注册） | 上游测试加载器支持新增模块依赖后删除显式登记 |
+| `internal/mcpserver/server.go` | Q1c | 注册自有已发布知识工具并提供额外工具注入；上游没有工具注入扩展点，所有扩展仍经原白名单、过滤与限流 | 是（通用工具注入） | 上游提供等义 MCP 工具注册扩展后删除本地接缝 |
+| `internal/types/mcp_endpoint_tools.go` | Q1c | 中央工具目录增加 knowledge 组与七个只读工具，仅映射 retrieve 能力；上游目录无动态扩展接口 | 部分（工具目录扩展） | 上游提供可注入的工具目录及能力映射后迁回项目包 |
+| `internal/container/container.go` | Q1c | 将 Space、Head、共用知识与引用校验服务、MCP 身份及 Viewer ACL 注入额外工具；沿用唯一生产 DI 装配点 | 部分（模块装配） | 上游提供企业模块装配扩展后删除接缝 |
+| `frontend/src/api/mcp-endpoint.ts` | Q1c | 现有 MCP 分组联合类型追加 knowledge，与服务端目录一致；上游无模块化分组类型扩展点 | 部分（工具目录类型扩展） | 上游支持可扩展分组或包含同义分组后撤回 |
+| `frontend/src/i18n/locales/zh-CN.ts` | Q1c | 增加已发布知识组与七个 MCP 工具名称、说明；沿用集中式语言包，无模块语言包扩展点 | 部分（语言包注册） | 上游提供模块语言包注入后迁入 enterprise 并删除接缝 |
+| `frontend/src/i18n/locales/en-US.ts` | Q1c | 同步已发布知识组与七个 MCP 工具的英文名称、说明 | 部分（语言包注册） | 上游提供模块语言包注入后迁入 enterprise 并删除接缝 |
+| `frontend/src/i18n/locales/ja-JP.ts` | Q1c | 同步已发布知识组与七个 MCP 工具的日文名称、说明 | 部分（语言包注册） | 上游提供模块语言包注入后迁入 enterprise 并删除接缝 |
+| `frontend/src/i18n/locales/ko-KR.ts` | Q1c | 同步已发布知识组与七个 MCP 工具的韩文名称、说明 | 部分（语言包注册） | 上游提供模块语言包注入后迁入 enterprise 并删除接缝 |
+| `frontend/src/i18n/locales/ru-RU.ts` | Q1c | 同步已发布知识组与七个 MCP 工具的俄文名称、说明 | 部分（语言包注册） | 上游提供模块语言包注入后迁入 enterprise 并删除接缝 |
