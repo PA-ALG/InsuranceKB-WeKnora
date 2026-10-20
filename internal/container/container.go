@@ -75,7 +75,6 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise/mcptools"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
-	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
@@ -365,25 +364,11 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewEmbedChannelService))
 	must(container.Provide(service.NewMCPEndpointService))
 	must(container.Provide(mcpserver.NewServer))
+	must(container.Provide(releasestore.NewMCPDeps))
 	must(container.Decorate(func(
-		server *mcpserver.Server, classifier managed.Classifier, db *gorm.DB, spaces releasestore.Spaces,
-		published *knowledge.Service, releases *release.Service, firstParse *service.G3FirstParseStore,
-		repo interfaces.KnowledgeRepository, kbs interfaces.KnowledgeBaseService,
-		shares interfaces.KBShareService, agents interfaces.AgentShareService,
+		server *mcpserver.Server, classifier managed.Classifier, deps mcptools.Deps,
 	) *mcpserver.Server {
-		pages := source.NewService(source.ArtifactStoreFunc(func(
-			ctx context.Context, scope source.Scope, id string, attempt int64,
-		) (*source.Artifact, error) {
-			binding, err := spaces.Scope(scope.TenantID, scope.SpaceID)
-			if err != nil {
-				return nil, source.ErrNotFound
-			}
-			return firstParse.ReadSourceArtifact(ctx, repo, binding, id, attempt)
-		}))
-		return server.WithManagedClassifier(classifier).WithExtraTools(mcptools.Tools(mcptools.Deps{
-			Spaces: spaces, Heads: releasestore.New(db, spaces), Knowledge: published,
-			Citations: mcptools.NewCitations(releases, pages), Caller: mcptools.EndpointCaller(kbs, shares, agents),
-		}))
+		return server.WithManagedClassifier(classifier).WithExtraTools(mcptools.Tools(deps))
 	}))
 
 	// Web search service (needed by AgentService)

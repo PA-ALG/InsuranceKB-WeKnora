@@ -10,6 +10,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise"
 	"github.com/Tencent/WeKnora/internal/enterprise/mcptools"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
+	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/stretchr/testify/require"
@@ -114,6 +115,21 @@ func TestSharedCitationPreservesSourceFailureClassification(t *testing.T) {
 		require.ErrorAs(t, err, &unavailable)
 		require.Equal(t, source.ErrorUnavailable, unavailable.Code)
 	}
+}
+
+func TestProductionMCPCitationWithoutCaptureServiceFailsClosed(t *testing.T) {
+	world := newCitationWorld(t)
+	service := release.NewService(world.store, nil, nil, release.WithPublisher(world.store))
+	spaces, err := releasestore.ParseSpaces(
+		`[{"tenant_id":7,"space_id":"demo","raw_kb_id":"raw","wiki_kb_id":"wiki"}]`)
+	require.NoError(t, err)
+	deps := releasestore.NewMCPDeps(nil, spaces, nil, service, nil, nil, nil, nil, nil)
+	_, err = deps.Citations.Citation(citationEndpointContext(), 7, "demo",
+		"release-1", "1828/waiting_period", 0)
+	var unavailable *source.Error
+	require.ErrorAs(t, err, &unavailable)
+	require.Equal(t, source.ErrorUnavailable, unavailable.Code)
+	require.Zero(t, world.pages.calls, "missing capture service must not fall back to another page source")
 }
 
 type citationFailurePublisher struct {
