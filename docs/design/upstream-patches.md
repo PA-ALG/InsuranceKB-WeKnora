@@ -111,4 +111,11 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/i18n/locales/ru-RU.ts` | Q1b | 同步已发布知识工具与准确出处失败/授权边界文案 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
 | `frontend/src/utils/referenceSources.ts` | Q1b | Release 引用按完整来源身份高亮，跨 Space 同名合成身份歧义不猜测 | 部分（来源身份扩展） | 上游支持注入精确来源解析器后移除接缝 |
 | `frontend/src/router/index.ts` | S6d | 新增固定 Release 的延伸阅读页面路由，复用企业知识导航与出处 | 部分（企业页面自有模块） | 上游提供可注册的页面路由扩展点后迁出 |
+| `internal/modelcontext/tool_policy.go` | S6e | 第五个已发布知识工具 knowledge_search_pages 经既有来源短句柄协议提供可引用结果 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/views/chat/components/AgentStreamDisplay.vue` | S6e | 延伸阅读页面工具的步骤名称映射 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/zh-CN.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/en-US.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/ja-JP.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/ko-KR.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
+| `frontend/src/i18n/locales/ru-RU.ts` | S6e | 模型整理来源标签与延伸阅读页面工具名 | 部分（来源工具与引用扩展） | 上游提供可注入的按版本知识工具与引用解析器后移回扩展点 |
 | `internal/application/service/wiki_ingest.go`、`internal/application/service/wiki_ingest_cite.go` | S6a-2 | 密集材料的候选列表超出输出上限，窗口只按输入装箱 | 是 | 上游按输出量自适应分段候选抽取后撤回 |

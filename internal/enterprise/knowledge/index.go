@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -84,6 +85,7 @@ type releaseIndex struct {
 	profiles    []profilePayload
 	navigation  *navigationPayload
 	concepts    []conceptPayload
+	pages       []indexedPage
 }
 
 func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error) {
@@ -161,6 +163,18 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 				}
 			}
 			index.concepts = append(index.concepts, payload)
+		case "wiki_page":
+			var payload wikiPagePayload
+			if err := decodeMember(member, &payload); err != nil {
+				var typed *release.Error
+				if errors.As(err, &typed) {
+					return nil, err
+				}
+				return nil, malformed(member, "payload is not a valid page object")
+			}
+			if page, ok := indexedWikiPage(member.LogicalSlug, payload); ok {
+				index.pages = append(index.pages, page)
+			}
 		}
 	}
 	// The published UI also retains Claims whose Entity member is unavailable. Their
