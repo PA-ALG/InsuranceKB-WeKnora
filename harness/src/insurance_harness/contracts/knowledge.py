@@ -364,3 +364,23 @@ class ConceptSummary(ContractModel):
         if any(ref not in self.based_on for item in self.statements for ref in item.refs):
             raise ValueError("every statement reference must be among based_on")
         return self
+
+
+class WikiPage(ContractModel):
+    """Model-written reading page from the native Wiki, attached to products (S6c).
+
+    It never states a reviewed product fact: products' facts are claims. Evidence is at most three
+    quotes located word for word in the product's own source pages; a page may have none.
+    """
+
+    page_key: NonBlank
+    entity_refs: list[NonBlank] = Field(min_length=1)
+    title: NonBlank
+    page_type: Literal["concept", "entity"]
+    summary: str = ""
+    content: NonBlank
+    aliases: list[NonBlank] = Field(default_factory=list)
+    evidence: list[Evidence] = Field(default_factory=list, max_length=3)
+    origin: Literal["MODEL_GENERATED"]
+    generator: NonBlank
+    model: NonBlank

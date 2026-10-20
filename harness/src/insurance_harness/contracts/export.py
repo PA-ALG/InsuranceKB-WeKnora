@@ -35,6 +35,7 @@ from insurance_harness.contracts.knowledge import (
     QAItem,
     Relation,
     SchemaSnapshot,
+    WikiPage,
 )
 
 SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
@@ -44,7 +45,7 @@ MODELS: tuple[type[BaseModel], ...] = (
     Evidence, Locator, Entity, Claim, Relation, QAItem, ExpertRevision, SchemaSnapshot,
     PageText, CompileTask, CompileResult, GapTask, ReviewItem,
     CandidateBundle, BundleMember, ReviewPlan, PresentationProfile, NavigationProfile,
-    ConceptSummary,
+    ConceptSummary, WikiPage,
 )  # fmt: skip
 README = f'''# Generated contracts
 
