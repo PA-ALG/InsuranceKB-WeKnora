@@ -199,7 +199,7 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 		return
 	}
 	c.Header("ETag", `"`+cited+`"`)
-	c.Header("Cache-Control", "private, max-age=3600")
+	c.Header("Cache-Control", "private, max-age=86400, immutable")
 	c.Header("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(name))
 	c.Data(http.StatusOK, "application/pdf", raw)
 }
