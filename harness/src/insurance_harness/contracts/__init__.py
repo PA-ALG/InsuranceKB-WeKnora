@@ -87,3 +87,6 @@ from insurance_harness.contracts.knowledge import (
 from insurance_harness.contracts.knowledge import (
     SchemaSnapshot as SchemaSnapshot,
 )
+from insurance_harness.contracts.knowledge import (
+    WikiPage as WikiPage,
+)

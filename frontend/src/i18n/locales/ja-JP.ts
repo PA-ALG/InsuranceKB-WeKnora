@@ -7502,6 +7502,15 @@ export default {
     createFailed: 'プラットフォームAPIキーの作成に失敗しました'
   },
   enterpriseKnowledge: {
+    wiki: {
+      navigation: "関連資料（モデルによる整理）",
+      generated: "モデルによる整理・項目ごとのレビュー未実施",
+      notFound: "このバージョンにはこのページがありません",
+      source: "出典 {n}",
+      sources: "出典",
+      back: "商品ページに戻る",
+      failed: "関連資料ページを読み込めませんでした"
+    },
     changes: {
       "pageTitle": "この版の変更",
       "title": "バージョン {base} から {current} への変更",

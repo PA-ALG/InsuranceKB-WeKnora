@@ -25,6 +25,9 @@
 .ek-nav-fields summary { cursor: pointer; padding: 4px 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ek-nav-fields ul { padding-left: 8px; }
 .ek-nav-fields a { display: block; padding: 4px 0; }
+.ek-nav-wiki { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--td-border-level-1-color); }
+.ek-nav-wiki__count { margin-left: 4px; color: var(--td-text-color-placeholder); font-variant-numeric: tabular-nums; }
+.ek-nav-wiki summary:focus-visible, .ek-nav-wiki a:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 2px; }
 @media (max-width: 760px) {
   .ek-navigation { position: static; }
   .ek-navigation__toggle { display: block; width: 100%; padding: 8px; text-align: left; }

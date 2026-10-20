@@ -16,11 +16,26 @@ def test_exports_all_blueprint_contracts_in_name_order(tmp_path: Path) -> None:
     assert [path.name for path in paths] == sorted(
         f"{name}.schema.json"
         for name in (
-            "evidence", "locator", "entity", "claim", "relation", "qa_item",
-            "expert_revision", "schema_snapshot", "page_text", "compile_task",
-            "compile_result", "gap_task", "review_item", "candidate_bundle",
-            "bundle_member", "review_plan", "presentation_profile", "navigation_profile",
+            "evidence",
+            "locator",
+            "entity",
+            "claim",
+            "relation",
+            "qa_item",
+            "expert_revision",
+            "schema_snapshot",
+            "page_text",
+            "compile_task",
+            "compile_result",
+            "gap_task",
+            "review_item",
+            "candidate_bundle",
+            "bundle_member",
+            "review_plan",
+            "presentation_profile",
+            "navigation_profile",
             "concept_summary",
+            "wiki_page",
         )
     )
 
@@ -85,8 +100,11 @@ def test_check_aggregates_drift_and_ignores_other_documents(tmp_path: Path) -> N
 
 def test_cli_reports_drift_without_writing(tmp_path: Path) -> None:
     command = [
-        sys.executable, "-m", "insurance_harness.contracts.export",
-        "--destination", str(tmp_path),
+        sys.executable,
+        "-m",
+        "insurance_harness.contracts.export",
+        "--destination",
+        str(tmp_path),
     ]
     written = subprocess.run(command, capture_output=True, text=True, check=False)
     assert written.returncode == 0, written.stderr
