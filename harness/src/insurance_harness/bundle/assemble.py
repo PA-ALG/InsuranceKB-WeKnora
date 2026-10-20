@@ -22,6 +22,7 @@ from insurance_harness.contracts.knowledge import (
     Entity,
     NavigationProfile,
     PresentationProfile,
+    WikiPage,
 )
 
 ACCESS_SCOPE = "space"
@@ -50,6 +51,7 @@ def assemble(
     removals: Sequence[str] = (),
     navigations: Sequence[NavigationProfile] = (),
     concepts: Sequence[ConceptSummary] = (),
+    wiki_pages: Sequence[WikiPage] = (),
 ) -> CandidateBundle:
     """Entity, profile and claim members on the given Head (None before the first release).
 
@@ -68,6 +70,16 @@ def assemble(
             for navigation in navigations
         ),
         *(_member("concept", f"concept/{item.concept_key}", item) for item in concepts),
+        *(
+            _member(
+                "wiki_page",
+                f"wiki/{entity}/{page.page_key}",
+                page,
+                sorted({item.source_ref for item in page.evidence}),
+            )
+            for page in wiki_pages
+            for entity in page.entity_refs
+        ),
         *(
             _member(
                 "claim",
@@ -107,7 +119,7 @@ def assemble(
 def _member(
     kind: str,
     slug: str,
-    content: Entity | PresentationProfile | NavigationProfile | ConceptSummary | Claim,
+    content: Entity | PresentationProfile | NavigationProfile | ConceptSummary | Claim | WikiPage,
     refs: list[str] | None = None,
 ) -> BundleMember:
     payload: dict[str, Any] = content.model_dump(mode="json")
