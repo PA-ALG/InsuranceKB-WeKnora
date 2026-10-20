@@ -48,7 +48,13 @@ describe('further reading in the navigation on a page of it', () => {
 describe('a further-reading page', () => {
   it('tells the navigation which page is being read', async () => {
     vi.mocked(readRelease).mockResolvedValue(wikiRelease())
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div />' } }] })
+    const blank = { template: '<div />' }
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/', component: blank },
+      { name: 'enterpriseWikiPage', path: '/spaces/:spaceId/wiki/:entityId/:pageType/:pageSlug', component: blank },
+      { name: 'enterpriseEntity', path: '/spaces/:spaceId/entities/:entityId', component: blank },
+      { name: 'enterpriseSpace', path: '/spaces/:spaceId', component: blank },
+    ] })
     await router.push('/')
     const view = mount(EnterpriseWikiPage, {
       props: { spaceId: 'demo', entityId: 'M1', pageType: 'concept', pageSlug: 'deng-dai-qi', releaseId: 'rel-9' },
