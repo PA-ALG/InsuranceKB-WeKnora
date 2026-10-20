@@ -7511,7 +7511,7 @@ export default {
       releaseNotFound: "이 기업 지식 Space에는 아직 게시 버전이 없어 질문에 답변할 수 없습니다.",
     },
     wiki: {
-      navigation: "추가 읽기 (모델 정리)",
+      navigation: "자유 지식 wiki",
       generated: "모델 정리 · 항목별 검토 미완료",
       notFound: "이 버전에 해당 페이지가 없습니다",
       source: "출처 {n}",
@@ -7612,6 +7612,7 @@ export default {
       "filter": "현재 목록 필터링"
     },
     nav: {
+      schemaWiki: "schema_wiki",
       "other": "기타",
       "concepts": "개념",
       "navigation": "지식 탐색",

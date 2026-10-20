@@ -7513,7 +7513,7 @@ export default {
       releaseNotFound: "这个企业知识 Space 还没有发布版本，暂时不能问答。",
     },
     wiki: {
-      navigation: "延伸阅读（模型整理）",
+      navigation: "自由知识wiki",
       generated: "模型整理，未逐条审核",
       notFound: "该版本中没有这个页面",
       source: "出处 {n}",
@@ -7614,6 +7614,7 @@ export default {
       "filter": "筛选当前目录"
     },
     nav: {
+      schemaWiki: "schema_wiki",
       "other": "其他",
       "concepts": "概念",
       "navigation": "知识导航",

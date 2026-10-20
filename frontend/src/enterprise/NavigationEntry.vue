@@ -12,6 +12,12 @@ watch(() => props.selected, selected => { expanded.value = !!selected }, { immed
 const contentId = useId()
 const view = computed(() => expanded.value ? entityView(props.release, props.entry.entityId) : null)
 const pages = computed(() => expanded.value ? wikiPages(props.release, props.entry.entityId) : [])
+const schemaExpanded = ref(true)
+const schemaDetails = ref<HTMLDetailsElement>()
+// Selecting another product resets the schema; manually toggling this product does not.
+watch([() => props.spaceId, () => props.release.id, () => props.entry.entityId, () => props.selected], () => {
+  schemaExpanded.value = true
+})
 const wikiExpanded = ref(false)
 const wikiDetails = ref<HTMLDetailsElement>()
 // Reset only on navigation; unrelated renders and product toggles preserve the reader's choice.
@@ -20,11 +26,15 @@ watch([() => props.spaceId, () => props.release.id, () => props.entry.entityId, 
 }, { immediate: true })
 function toggleEntry() {
   // Native toggle events are queued; save the DOM state before the group is unmounted.
+  if (schemaDetails.value) schemaExpanded.value = schemaDetails.value.open
   if (wikiDetails.value) wikiExpanded.value = wikiDetails.value.open
   expanded.value = !expanded.value
 }
 function rememberWikiExpansion(event: Event) {
   if (wikiDetails.value && event.currentTarget === wikiDetails.value) wikiExpanded.value = wikiDetails.value.open
+}
+function rememberSchemaExpansion(event: Event) {
+  if (schemaDetails.value && event.currentTarget === schemaDetails.value) schemaExpanded.value = schemaDetails.value.open
 }
 const sections = computed(() => view.value ? [
   ...view.value.sections,
@@ -54,13 +64,17 @@ function pageTarget(page: WikiPageEntry) {
       </RouterLink>
     </div>
     <div v-if="expanded" :id="contentId" class="ek-nav-fields">
-      <details v-for="section in sections" :key="section.key" open>
-        <summary>{{ section.title }}</summary>
-        <ul>
-          <li v-for="field in section.fields" :key="field.slug"><RouterLink :to="fieldTarget(field)" :title="field.title">{{ field.title }}</RouterLink></li>
-        </ul>
+      <details :key="`${spaceId}/${release.id}/${entry.entityId}/schema`" ref="schemaDetails"
+        data-nav-schema class="ek-nav-schema" :open="schemaExpanded" @toggle="rememberSchemaExpansion">
+        <summary>{{ t('enterpriseKnowledge.nav.schemaWiki') }}</summary>
+        <details v-for="section in sections" :key="section.key" open>
+          <summary>{{ section.title }}</summary>
+          <ul>
+            <li v-for="field in section.fields" :key="field.slug"><RouterLink :to="fieldTarget(field)" :title="field.title">{{ field.title }}</RouterLink></li>
+          </ul>
+        </details>
+        <p v-if="!sections.length" class="ek-page__note">{{ t('enterpriseKnowledge.nav.noFields') }}</p>
       </details>
-      <p v-if="!sections.length" class="ek-page__note">{{ t('enterpriseKnowledge.nav.noFields') }}</p>
       <details v-if="pages.length" :key="`${spaceId}/${release.id}/${entry.entityId}/${wikiPageKey ?? ''}`"
         ref="wikiDetails" data-nav-wiki class="ek-nav-wiki" :open="wikiExpanded" @toggle="rememberWikiExpansion">
         <summary>{{ t('enterpriseKnowledge.wiki.navigation') }} <span class="ek-nav-wiki__count">{{ pages.length }}</span></summary>

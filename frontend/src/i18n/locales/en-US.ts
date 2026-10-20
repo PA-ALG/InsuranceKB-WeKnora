@@ -7511,7 +7511,7 @@ export default {
       releaseNotFound: "This Enterprise Knowledge Space has no published release yet, so question answering is not available.",
     },
     wiki: {
-      navigation: "Further reading (model compiled)",
+      navigation: "Free knowledge wiki",
       generated: "Model compiled; not reviewed item by item",
       notFound: "This page is not in this release",
       source: "Source {n}",
@@ -7612,6 +7612,7 @@ export default {
       "filter": "Filter this directory"
     },
     nav: {
+      schemaWiki: "schema_wiki",
       "other": "Other",
       "concepts": "Concepts",
       "navigation": "Knowledge navigation",
