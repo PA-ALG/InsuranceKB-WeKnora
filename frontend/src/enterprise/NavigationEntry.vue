@@ -5,13 +5,27 @@ import type { Release } from './enterpriseApi'
 import { entityView, type EntitySummary, type FieldView } from './releaseView'
 import { wikiPages, type WikiPageEntry } from './wikiPagesView'
 
-const props = defineProps<{ entry: EntitySummary; release: Release; spaceId: string; selected?: boolean }>()
+const props = defineProps<{ entry: EntitySummary; release: Release; spaceId: string; selected?: boolean; wikiPageKey?: string }>()
 const { t } = useI18n()
 const expanded = ref(false)
 watch(() => props.selected, selected => { expanded.value = !!selected }, { immediate: true })
 const contentId = useId()
 const view = computed(() => expanded.value ? entityView(props.release, props.entry.entityId) : null)
 const pages = computed(() => expanded.value ? wikiPages(props.release, props.entry.entityId) : [])
+const wikiExpanded = ref(false)
+const wikiDetails = ref<HTMLDetailsElement>()
+// Reset only on navigation; unrelated renders and product toggles preserve the reader's choice.
+watch([() => props.spaceId, () => props.release.id, () => props.entry.entityId, () => props.wikiPageKey], () => {
+  wikiExpanded.value = !!props.wikiPageKey && wikiPages(props.release, props.entry.entityId).some(page => page.key === props.wikiPageKey)
+}, { immediate: true })
+function toggleEntry() {
+  // Native toggle events are queued; save the DOM state before the group is unmounted.
+  if (wikiDetails.value) wikiExpanded.value = wikiDetails.value.open
+  expanded.value = !expanded.value
+}
+function rememberWikiExpansion(event: Event) {
+  if (wikiDetails.value && event.currentTarget === wikiDetails.value) wikiExpanded.value = wikiDetails.value.open
+}
 const sections = computed(() => view.value ? [
   ...view.value.sections,
   ...(view.value.other.length ? [{ key: '__other__', title: t('enterpriseKnowledge.entity.other'), fields: view.value.other }] : []),
@@ -34,8 +48,8 @@ function pageTarget(page: WikiPageEntry) {
     <div class="ek-nav-entry__head">
       <button type="button" class="ek-nav-entry__toggle" :aria-expanded="expanded" :aria-controls="contentId"
         :aria-label="t(expanded ? 'enterpriseKnowledge.nav.collapseEntry' : 'enterpriseKnowledge.nav.expandEntry', { name: entry.name })"
-        @click="expanded = !expanded"><span aria-hidden="true">{{ expanded ? '▾' : '▸' }}</span></button>
-      <RouterLink :to="target" :title="entry.name" :aria-current="selected ? 'page' : undefined">
+        @click="toggleEntry"><span aria-hidden="true">{{ expanded ? '▾' : '▸' }}</span></button>
+      <RouterLink :to="target" :title="entry.name" :aria-current="selected && !wikiPageKey ? 'page' : undefined">
         <span>{{ entry.name }}</span>
       </RouterLink>
     </div>
@@ -47,9 +61,11 @@ function pageTarget(page: WikiPageEntry) {
         </ul>
       </details>
       <p v-if="!sections.length" class="ek-page__note">{{ t('enterpriseKnowledge.nav.noFields') }}</p>
-      <details v-if="pages.length" :key="`${spaceId}/${release.id}/${entry.entityId}`" data-nav-wiki class="ek-nav-wiki">
+      <details v-if="pages.length" :key="`${spaceId}/${release.id}/${entry.entityId}/${wikiPageKey ?? ''}`"
+        ref="wikiDetails" data-nav-wiki class="ek-nav-wiki" :open="wikiExpanded" @toggle="rememberWikiExpansion">
         <summary>{{ t('enterpriseKnowledge.wiki.navigation') }} <span class="ek-nav-wiki__count">{{ pages.length }}</span></summary>
-        <ul><li v-for="page in pages" :key="page.slug"><RouterLink :to="pageTarget(page)" :title="page.title">{{ page.title }}</RouterLink></li></ul>
+        <ul><li v-for="page in pages" :key="page.slug"><RouterLink :to="pageTarget(page)" :title="page.title"
+          :aria-current="page.key === wikiPageKey ? 'page' : undefined">{{ page.title }}</RouterLink></li></ul>
       </details>
     </div>
   </li>

@@ -7504,6 +7504,12 @@ export default {
     noSessions: '대화가 없습니다'
   },
   enterpriseKnowledge: {
+    chatErrors: {
+      managedKb: "이 지식 베이스는 게시 버전으로 관리되므로 직접 검색할 수 없습니다. 기업 지식에서 해당 Space의 원본 자료 라이브러리 또는 Wiki 라이브러리를 선택하여 질문하거나 지능형 추론 모드로 전환하세요.",
+      classificationUnavailable: "이 지식 베이스가 게시 버전으로 관리되는지 확인할 수 없어 답변을 중단했습니다. 잠시 후 다시 시도하세요.",
+      sourcesUnavailable: "현재 게시 버전에 고정된 원본 자료를 일시적으로 검색할 수 없습니다. 잠시 후 다시 시도하거나 Wiki 라이브러리를 선택하세요.",
+      releaseNotFound: "이 기업 지식 Space에는 아직 게시 버전이 없어 질문에 답변할 수 없습니다.",
+    },
     wiki: {
       navigation: "추가 읽기 (모델 정리)",
       generated: "모델 정리 · 항목별 검토 미완료",

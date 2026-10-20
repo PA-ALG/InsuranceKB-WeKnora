@@ -1,6 +1,7 @@
 import { applyFinalArtifactContent } from '@/utils/finalArtifactContent'
 import { markRaw, nextTick, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { enterpriseChatError } from '@/enterprise/chatErrors'
 import { ensureRagPipelineHistoryStream } from '@/utils/rag-pipeline-history'
 import { applyMessageCreatedAt, bindServerTurnTimestamps, ensureMessageCreatedAt } from '@/utils/messageTimestamp'
 import { expandSteerForksInHistory, forkAfterInjectedUser, steerStepEvents, resetSteerTurnForReplay } from '@/utils/steerStreamFork'
@@ -879,7 +880,8 @@ export function useChatStreamHandler(options: UseChatStreamHandlerOptions) {
             console.warn('[Tool Result] No pending tool call found for', toolCallId || toolName)
           }
           if (responseType === 'error' && !toolName) {
-            const errorMsg = String(data.content || t('chat.processError'))
+            const rawError = String(data.content || t('chat.processError'))
+            const errorMsg = enterpriseChatError(rawError, t) ?? rawError
             message.content = errorMsg
             message.is_completed = true
             isReplying.value = false
@@ -887,10 +889,11 @@ export function useChatStreamHandler(options: UseChatStreamHandlerOptions) {
             fullContent.value = ''
             currentAssistantMessageId.value = ''
             reportError(errorMsg)
-            console.error('[Chat Error]', errorMsg)
+            console.error('[Chat Error]', rawError)
           }
         } else if (responseType === 'error') {
-          const errorMsg = String(data.content || t('chat.processError'))
+          const rawError = String(data.content || t('chat.processError'))
+          const errorMsg = enterpriseChatError(rawError, t) ?? rawError
           message.content = errorMsg
           message.is_completed = true
           isReplying.value = false
@@ -898,7 +901,7 @@ export function useChatStreamHandler(options: UseChatStreamHandlerOptions) {
           fullContent.value = ''
           currentAssistantMessageId.value = ''
           reportError(errorMsg)
-          console.error('[Chat Error]', errorMsg)
+          console.error('[Chat Error]', rawError)
         }
         break
       }

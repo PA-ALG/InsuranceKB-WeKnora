@@ -7506,6 +7506,12 @@ export default {
     noSessions: '暂无对话'
   },
   enterpriseKnowledge: {
+    chatErrors: {
+      managedKb: "这个知识库由发布版本管理，不能直接检索。请在企业知识中选择对应 Space 的原始材料库或 Wiki 库提问，或改用智能推理模式。",
+      classificationUnavailable: "暂时无法确认这个知识库是否由发布版本管理，已停止回答，请稍后重试。",
+      sourcesUnavailable: "当前发布版本固定的原始材料暂时不可检索，请稍后重试或改选 Wiki 库。",
+      releaseNotFound: "这个企业知识 Space 还没有发布版本，暂时不能问答。",
+    },
     wiki: {
       navigation: "延伸阅读（模型整理）",
       generated: "模型整理，未逐条审核",
