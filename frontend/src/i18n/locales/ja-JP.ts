@@ -7511,7 +7511,7 @@ export default {
       releaseNotFound: "この企業ナレッジ Space にはまだ公開バージョンがないため、質問に回答できません。",
     },
     wiki: {
-      navigation: "関連資料（モデルによる整理）",
+      navigation: "自由知識wiki",
       generated: "モデルによる整理・項目ごとのレビュー未実施",
       notFound: "このバージョンにはこのページがありません",
       source: "出典 {n}",
@@ -7612,6 +7612,7 @@ export default {
       "filter": "現在の一覧を絞り込む"
     },
     nav: {
+      schemaWiki: "schema_wiki",
       "other": "その他",
       "concepts": "概念",
       "navigation": "ナレッジナビゲーション",
