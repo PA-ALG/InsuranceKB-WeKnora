@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // S6d acceptance (protected, written by Claude): an expanded product in the knowledge navigation
-// lists its native Wiki pages under "延伸阅读（模型整理）", pinned to the release
+// lists its native Wiki pages under "自由知识wiki" (S6d-3 rename), pinned to the release
 // (Spec docs/design/slices/S6d-延伸阅读页面.md §1).
 import { flushPromises, mount, RouterLinkStub, type VueWrapper } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -23,7 +23,7 @@ describe('further reading in the product navigation', () => {
     const view = await nav('M1')
     const group = view.get('[data-nav-wiki]')
     expect([group.element.tagName, group.attributes('open')]).toEqual(['DETAILS', undefined]) // collapsed by default
-    expect(group.text()).toContain('延伸阅读（模型整理）')
+    expect(group.text()).toContain('自由知识wiki')
     expect(group.text()).toContain('3')
     const links = group.findAllComponents(RouterLinkStub).map((link: VueWrapper<InstanceType<typeof RouterLinkStub>>) => link.props('to'))
     expect(links).toEqual([
