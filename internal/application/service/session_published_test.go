@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	chatpipeline "github.com/Tencent/WeKnora/internal/application/service/chat_pipeline"
 	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
+	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -93,4 +96,90 @@ func TestQ1b2NoPublishedMatchFallsBack(t *testing.T) {
 	run := runQ1b2(t, []string{"q-wiki"}, "unrelated question", nil)
 	require.Nil(t, run.prompted, "nothing to answer from: the prompt stage does not run")
 	require.True(t, run.fallback)
+}
+
+// The three regressions below come from Codex's review of #263.
+
+type q1b2ModelKBs struct{ *q1aKBs }
+
+func (s q1b2ModelKBs) GetKnowledgeBaseByID(ctx context.Context, id string) (*types.KnowledgeBase, error) {
+	kb, err := s.q1aKBs.GetKnowledgeBaseByID(ctx, id)
+	if kb != nil {
+		kb.SummaryModelID = "q-chat"
+	}
+	return kb, err
+}
+
+func TestQ1b2WikiOnlyKeepsTheSelectedKnowledgeBaseModel(t *testing.T) {
+	ctx, svc, _, kbs := q1aFixture()
+	svc.knowledgeBaseService = q1b2ModelKBs{kbs}
+	svc.chatSources = svc.chatSources.WithPublished(knowledge.NewService(&publishedReader{}))
+	svc.modelService = &stubModelService{
+		modelsByID: map[string]*types.Model{
+			"q-chat": {ID: "q-chat", Type: types.ModelTypeKnowledgeQA, Source: types.ModelSourceRemote},
+		},
+		availableModels: []*types.Model{{ID: "other-chat", Type: types.ModelTypeKnowledgeQA}},
+	}
+	req := &types.QARequest{
+		Session: &types.Session{ID: "q-session", TenantID: 7}, TurnLeaseHeld: true,
+		KnowledgeBaseIDs: []string{"q-wiki"}, Query: "Product field",
+	}
+	expected, err := svc.resolveChatModelID(ctx, req, []string{"q-wiki"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, "q-chat", expected)
+	actual := ""
+	svc.eventManager.Register(q1aPipeline{
+		events: []types.EventType{types.INTO_CHAT_MESSAGE},
+		on:     func(_ types.EventType, cm *types.ChatManage) { actual = cm.ChatModelID },
+	})
+	require.NoError(t, svc.KnowledgeQA(ctx, req, event.NewEventBus()))
+	require.Equal(t, expected, actual, "a Wiki-only answer keeps the selected knowledge base's model")
+}
+
+func TestQ1b2RenderedPublishedPromptSurvivesTheSecondFilter(t *testing.T) {
+	ctx, svc, _, _ := q1aFixture()
+	reader := &publishedReader{}
+	svc.chatSources = svc.chatSources.WithPublished(knowledge.NewService(reader))
+	svc.cfg.Conversation.Summary.ContextTemplate = "context={{contexts}} query={{query}}"
+	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+	rendered := ""
+	svc.eventManager.Register(q1aPipeline{
+		events: []types.EventType{types.INTO_CHAT_MESSAGE},
+		on: func(_ types.EventType, cm *types.ChatManage) {
+			rendered = cm.UserContent
+			require.NotEmpty(t, cm.RenderedContexts)
+		},
+	})
+	svc.eventManager.Register(q1aPipeline{
+		events: []types.EventType{types.CHAT_COMPLETION_STREAM},
+		on: func(_ types.EventType, cm *types.ChatManage) {
+			require.Equal(t, rendered, cm.UserContent)
+			require.NotEmpty(t, cm.RenderedContexts)
+			require.Equal(t, 1, reader.reads)
+		},
+	})
+	require.NoError(t, svc.KnowledgeQA(ctx, &types.QARequest{
+		Session: &types.Session{ID: "q-session", TenantID: 7}, SummaryModelID: "q-chat", TurnLeaseHeld: true,
+		KnowledgeBaseIDs: []string{"q-wiki"}, Query: "Product field",
+	}, event.NewEventBus()))
+}
+
+type q1b2FailedReader struct{}
+
+func (q1b2FailedReader) ReleaseByID(context.Context, uint64, string, string) (release.Release, error) {
+	return release.Release{}, errors.New("published read failed")
+}
+
+func TestQ1b2PublishedReadFailureStopsBeforePrompt(t *testing.T) {
+	ctx, svc, _, _ := q1aFixture()
+	svc.chatSources = svc.chatSources.WithPublished(knowledge.NewService(q1b2FailedReader{}))
+	svc.eventManager.Register(q1aPipeline{
+		events: []types.EventType{types.INTO_CHAT_MESSAGE, types.CHAT_COMPLETION_STREAM},
+		on:     func(_ types.EventType, _ *types.ChatManage) { t.Fatal("must stop before prompt or stream") },
+	})
+	err := svc.KnowledgeQA(ctx, &types.QARequest{
+		Session: &types.Session{ID: "q-session", TenantID: 7}, SummaryModelID: "q-chat", TurnLeaseHeld: true,
+		KnowledgeBaseIDs: []string{"q-wiki"}, Query: "Product field",
+	}, event.NewEventBus())
+	require.EqualError(t, err, "published read failed")
 }

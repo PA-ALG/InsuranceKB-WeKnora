@@ -83,10 +83,17 @@ func (s *sessionService) KnowledgeQA(
 	if err != nil {
 		return err
 	}
+	selectedKBs, selectedKnowledge := knowledgeBaseIDs, knowledgeIDs
 	knowledgeBaseIDs, knowledgeIDs = chatsource.LegacyScope(ctx, searchTargets, knowledgeBaseIDs, knowledgeIDs)
+	// Enterprise (Q1b-2): a Wiki-only answer narrows retrieval to nothing, but its chat model still
+	// follows the admitted selection's knowledge-base configuration.
+	modelKBs, modelKnowledge := knowledgeBaseIDs, knowledgeIDs
+	if len(modelKBs) == 0 && len(modelKnowledge) == 0 {
+		modelKBs, modelKnowledge = selectedKBs, selectedKnowledge
+	}
 
 	// Resolve chat model ID using shared helper
-	chatModelID, err := s.resolveChatModelID(ctx, req, knowledgeBaseIDs, knowledgeIDs)
+	chatModelID, err := s.resolveChatModelID(ctx, req, modelKBs, modelKnowledge)
 	if err != nil {
 		return err
 	}
