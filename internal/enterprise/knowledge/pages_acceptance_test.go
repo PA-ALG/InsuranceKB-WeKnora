@@ -24,7 +24,9 @@ import (
 
 type pageReader struct{ reads []read }
 
-func (r *pageReader) ReleaseByID(_ context.Context, tenantID uint64, spaceID, releaseID string) (release.Release, error) {
+func (r *pageReader) ReleaseByID(
+	_ context.Context, tenantID uint64, spaceID, releaseID string,
+) (release.Release, error) {
 	r.reads = append(r.reads, read{tenantID, spaceID, releaseID})
 	if tenantID != tenant || spaceID != space || releaseID != pinned {
 		return release.Release{}, &release.Error{Code: release.ErrorReleaseNotFound}
