@@ -70,6 +70,7 @@ var toolHandlePolicies = map[string]toolHandlePolicy{
 	"knowledge_get_fields":    {sourceOutput: true},
 	"knowledge_search_fields": {sourceOutput: true},
 	"knowledge_get_concept":   {sourceOutput: true},
+	"knowledge_search_pages":  {sourceOutput: true},
 	"discover_mcp_tools":      {opaqueOutput: true, mcpRoutingKey: "server_id", mcpDirectoryOutput: true},
 	"call_mcp_tool":           {opaqueOutput: true, mcpRoutingKey: "tool_ref"},
 	"read_file":               {},

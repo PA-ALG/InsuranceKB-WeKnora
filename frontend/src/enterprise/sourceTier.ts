@@ -1,4 +1,4 @@
-export type SourceTier = 'raw_text' | 'release'
+export type SourceTier = 'raw_text' | 'release' | 'wiki_page'
 
 function referenceMetadata(reference: unknown): Record<string, unknown> | null {
   if (!reference || typeof reference !== 'object') return null
@@ -11,12 +11,13 @@ function referenceMetadata(reference: unknown): Record<string, unknown> | null {
 /** Only the platform's reference metadata can identify a reviewed source. */
 export function sourceTier(reference: unknown): SourceTier | null {
   const tier = referenceMetadata(reference)?.source_tier
-  return tier === 'raw_text' || tier === 'release' ? tier : null
+  return tier === 'raw_text' || tier === 'release' || tier === 'wiki_page' ? tier : null
 }
 
 export function sourceTierLabel(tier: SourceTier | null | undefined, t: (key: string) => string): string {
   if (tier === 'raw_text') return t('chat.sourceTierRawText')
   if (tier === 'release') return t('chat.sourceTierRelease')
+  if (tier === 'wiki_page') return t('chat.sourceTierWikiPage')
   return ''
 }
 
@@ -25,7 +26,7 @@ export function referenceSourceKey(reference: unknown): string {
   const metadata = referenceMetadata(reference)
   const tier = typeof metadata?.source_tier === 'string' ? metadata.source_tier : ''
   const release = typeof metadata?.release_id === 'string' ? metadata.release_id : ''
-  const provenance = tier === 'release'
+  const provenance = tier === 'release' || tier === 'wiki_page'
     ? [tier, release, metadata?.space_id, metadata?.logical_slug, metadata?.evidence_index]
     : [tier, release]
   return tier || release ? `:source:${JSON.stringify(provenance)}` : ''

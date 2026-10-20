@@ -39,7 +39,7 @@ func TestQ1bNoWikiKeepsOrdinaryWhitelistWithoutRequiringRetrievalIdentity(t *tes
 	require.Equal(t, []string{"thinking"}, registry.ListTools())
 }
 
-func TestQ1bSelectedWikiDerivesFourToolsAlongsideFixedRawSearch(t *testing.T) {
+func TestQ1bSelectedWikiDerivesKnowledgeToolsAlongsideFixedRawSearch(t *testing.T) {
 	ctx, quick, source, _ := q1aFixture()
 	reader := &publishedReader{}
 	svc := &agentService{
@@ -55,7 +55,7 @@ func TestQ1bSelectedWikiDerivesFourToolsAlongsideFixedRawSearch(t *testing.T) {
 		},
 	}, nil, nil, "session")
 	require.NoError(t, err)
-	require.Len(t, registry.ListTools(), 5)
+	require.Len(t, registry.ListTools(), 6) // five published-knowledge tools (S6e adds pages) and raw search
 	query, err := registry.GetTool("knowledge_get_fields")
 	require.NoError(t, err)
 	result, err := query.Execute(ctx, json.RawMessage(`{"entity_id":"E"}`))
