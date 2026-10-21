@@ -67,7 +67,9 @@ func q2aFixture() (context.Context, *sessionService, *q1aKBs) {
 	svc := NewSessionService(cfg, nil, nil, kbs, &q1aDocs{}, chunks, models, &q1aTenants{}, events,
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, HostSandboxManager{}, nil, nil, nil, nil,
 		chatsource.NewResolver(source, source, source, source)).(*sessionService)
-	chatpipeline.NewPluginSearch(events, kbs, svc.knowledgeService, chunks, cfg, nil, svc.tenantService, nil, nil, nil)
+	// KnowledgeQA runs CHUNK_SEARCH_PARALLEL, as the production container registers it.
+	chatpipeline.NewPluginSearchParallel(events, kbs, svc.knowledgeService, chunks, cfg, nil, svc.tenantService,
+		nil, nil, nil, nil, chunks.repo, nil)
 	events.Register(q1aPipeline{
 		events: []types.EventType{types.CHUNK_MERGE},
 		on:     func(_ types.EventType, cm *types.ChatManage) { cm.MergeResult = cm.SearchResult },
