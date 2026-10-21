@@ -74,7 +74,7 @@ def member(kind: str, slug: str, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-ACTIVE = {
+ACTIVE: dict[str, Any] = {
     "id": "rel_0",
     "epoch": 2,
     "members": [
