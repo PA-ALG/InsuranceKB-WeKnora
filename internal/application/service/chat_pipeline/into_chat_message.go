@@ -6,6 +6,7 @@ import (
 	"html"
 	"strings"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/searchutil"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -46,7 +47,7 @@ func (p *PluginIntoChatMessage) OnEvent(ctx context.Context,
 	var faqResults, docResults []*types.SearchResult
 	var hasHighConfidenceFAQ bool
 
-	if chatManage.FAQPriorityEnabled {
+	if chatManage.FAQPriorityEnabled && !chatsource.IsEnterpriseAnswer(ctx) {
 		for _, result := range chatManage.MergeResult {
 			if result.ChunkType == string(types.ChunkTypeFAQ) {
 				faqResults = append(faqResults, result)
@@ -308,11 +309,11 @@ func getEnrichedPassageForChat(ctx context.Context, result *types.SearchResult) 
 
 	// 如果只有内容，没有图片信息
 	if result.ImageInfo == "" {
-		return result.Content
+		return chatsource.AnswerPassage(ctx, result, result.Content)
 	}
 
 	// 处理图片信息并与内容合并
-	return enrichContentWithImageInfo(ctx, result.Content, result.ImageInfo)
+	return chatsource.AnswerPassage(ctx, result, enrichContentWithImageInfo(ctx, result.Content, result.ImageInfo))
 }
 
 // enrichContentWithImageInfo delegates to the shared searchutil implementation.
