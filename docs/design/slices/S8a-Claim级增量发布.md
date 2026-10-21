@@ -83,7 +83,9 @@ decide_changes(
 
 ### 2.3 增量发布命令
 
-`python -m insurance_harness.changes.publish`：参数与 `compilers.schema_fields.publish` 相同，另加 `--dry-run`。
+`python -m insurance_harness.compilers.schema_fields.publish_changes`：参数与 `compilers.schema_fields.publish` 相同，另加 `--dry-run`。
+
+命令放在 `compilers/schema_fields/` 下，因为它编排的是字段编译器的输出。`changes/` 属于核心目录，守卫 G1 规定核心不依赖 compilers；判定与 ChangeSet 留在 `changes/`，由这个命令调用（compilers → changes 是允许的方向）。（2026-10-21 按 #285 实现方提出的 G1 缺口调整。）
 
 1. 按现有方式读取材料页并生成 incoming Claim（复用 `claims_from`），`current_knowledge` 取 source map 中该产品的条目。
 2. 读取 Active 并调用 `decide_changes`。
@@ -100,7 +102,7 @@ decide_changes(
    - candidate、decision 与 release 的标识。
 7. `--dry-run` 只做第 1–4 步并输出报告，不提交。
 
-现有的 `compilers.schema_fields.publish` 保留，用于产品首次发布。产品在 Active 中已有 Claim 时，该命令输出 `{"stopped": "ALREADY_PUBLISHED"}`、退出码 2、不提交，由操作者改用 `changes.publish`，避免整产品重发让无关 digest 变化。S5a 的受保护验收 `test_publish_retires.py` 已在单独提交中按此规则修订（保留首次发布与跨产品边界）。
+现有的 `compilers.schema_fields.publish` 保留，用于产品首次发布。产品在 Active 中已有 Claim 时，该命令输出 `{"stopped": "ALREADY_PUBLISHED"}`、退出码 2、不提交，由操作者改用 `compilers.schema_fields.publish_changes`，避免整产品重发让无关 digest 变化。S5a 的受保护验收 `test_publish_retires.py` 已在单独提交中按此规则修订（保留首次发布与跨产品边界）。
 
 ### 2.4 编译结果按材料复用
 
@@ -170,14 +172,14 @@ decide_changes(
 
 实现方另补：
 
-- `changes.publish` 的报告与"无变化不提交"；
+- `publish_changes` 的报告与"无变化不提交"；
 - `schema_fields.publish` 遇到已发布产品时拒绝；
 - `compile_run` 按材料复用；
 - `values_equal` 迁移后 eval 测试保持通过。
 
 ## 5. 改动范围
 
-- 新增 `harness/src/insurance_harness/changes/`（判定、ChangeSet、发布命令、共享的值比较）；
+- 新增 `harness/src/insurance_harness/changes/`（判定、ChangeSet、共享的值比较），以及 `harness/src/insurance_harness/compilers/schema_fields/publish_changes.py`（增量发布命令）；
 - `harness/src/insurance_harness/eval/normalize.py`（`values_equal` 迁出后改为导入）及其调用方；
 - `harness/src/insurance_harness/eval/compile_run.py`（按材料复用），以及 `harness/src/insurance_harness/compilers/schema_fields/engine.py`（`CompileOutput.materials` 可选字段，见 §2.4）；
 - `harness/src/insurance_harness/compilers/schema_fields/publish.py`（已发布产品拒绝整产品重发）；

@@ -39,6 +39,7 @@ ROOT_GLOBS = ("harness/migrations/versions/*.py",)
 CLI_ROOTS = (
     "insurance_harness.contracts.export",
     "insurance_harness.compilers.schema_fields.publish",
+    "insurance_harness.compilers.schema_fields.publish_changes",
     "insurance_harness.db.scope_cli",
 )
 _KC = "insurance_harness.knowledge_compiler"
