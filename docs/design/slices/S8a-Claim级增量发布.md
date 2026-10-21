@@ -104,12 +104,15 @@ decide_changes(
 
 ### 2.4 编译结果按材料复用
 
-`eval.compile_run` 写出的 `output.json` 记录本次材料集：
+`eval.compile_run` 写出的 `output.json` 记录本次材料集与字段卡版本，复用前逐项比对。任一项不同就重新编译该产品；没有材料记录的旧 `output.json` 视为不可复用。
 
-- 每个文档的 `knowledge_id:parse_attempt:file_sha256`，排序后保存；
-- 字段卡版本。
+- **记录位置**：`compilers/schema_fields/engine.py` 的 `CompileOutput` 新增可选字段 `materials: list[str] | None = None`。这不是 `contracts/` 合同，不改变编译语义。其他读取 `output.json` 的地方（`eval/review_run.py`、`eval/segment_score.py`、发布命令）有没有这个字段都能读。
+- **材料身份**：每个实际读到的文档一项，排序后保存。
+  - 来自 source map 的文档：`<knowledge_id>:<parse_attempt>:<file_sha256>`。knowledge_id 与 parse_attempt 取自 source map 条目（`load_trusted_pages` 返回的 SourceRevision），file_sha256 取实际读到的页。不能用文件名或猜测的解析次数代替。
+  - 本地文件输入（没有 SourceRevision 身份）：`file:<file_sha256>`。同样的本地文件可以复用；文件一变就重新编译。
+- **字段卡版本**：沿用 `cards_version`，比对时必须相同。
 
-复用前比对这两项，任一项不同就重新编译该产品。没有记录的旧 `output.json` 视为不可复用。
+（2026-10-21 按 #285 实现方提出的范围缺口补充：原文只写"记录在 output.json"，没有说明模型字段与本地输入的身份。）
 
 ### 2.5 不在本切片
 
@@ -176,7 +179,7 @@ decide_changes(
 
 - 新增 `harness/src/insurance_harness/changes/`（判定、ChangeSet、发布命令、共享的值比较）；
 - `harness/src/insurance_harness/eval/normalize.py`（`values_equal` 迁出后改为导入）及其调用方；
-- `harness/src/insurance_harness/eval/compile_run.py`（按材料复用）；
+- `harness/src/insurance_harness/eval/compile_run.py`（按材料复用），以及 `harness/src/insurance_harness/compilers/schema_fields/engine.py`（`CompileOutput.materials` 可选字段，见 §2.4）；
 - `harness/src/insurance_harness/compilers/schema_fields/publish.py`（已发布产品拒绝整产品重发）；
 - 实现方测试；
 - 守卫基线只在数字下降时用脚本更新。
