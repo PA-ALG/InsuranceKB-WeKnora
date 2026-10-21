@@ -80,14 +80,18 @@ func (s *sessionService) KnowledgeQA(
 		return err
 	}
 	authorized := searchTargets // ACL-filtered, before enterprise narrowing
-	ctx, searchTargets, err = chatsource.ResolveAnswer(ctx, s.chatSources, retrievalTenantID, searchTargets)
+	ctx, searchTargets, err = chatsource.ResolveAnswer(ctx, s.chatSources, retrievalTenantID, searchTargets,
+		func(ctx context.Context, raw string) bool {
+			targets, err := s.buildSearchTargets(ctx, retrievalTenantID, []string{raw}, nil, nil)
+			return err == nil && len(targets) == 1 && targets[0] != nil &&
+				targets[0].KnowledgeBaseID == raw && targets[0].TenantID == retrievalTenantID
+		})
 	if err != nil {
 		return err
 	}
 	knowledgeBaseIDs, knowledgeIDs = chatsource.LegacyScope(ctx, searchTargets, knowledgeBaseIDs, knowledgeIDs)
-	// Enterprise (Q1b-2): a Wiki-only answer narrows retrieval to nothing, but its chat model still
-	// follows the knowledge bases that passed the ACL checks.
-	modelKBs, modelKnowledge := knowledgeBaseIDs, knowledgeIDs
+	// Enterprise auto-added retrieval targets do not change the user-selected model scope.
+	modelKBs, modelKnowledge := chatsource.AnswerModelScope(ctx, knowledgeBaseIDs, knowledgeIDs)
 	if len(modelKBs) == 0 && len(modelKnowledge) == 0 {
 		modelKBs, modelKnowledge = chatsource.TargetScope(authorized)
 	}
@@ -782,6 +786,10 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 			); err != nil {
 				return err
 			}
+			if chatsource.IsEnterpriseAnswer(ctx) && chatManage.NeedsRetrieval() && len(chatManage.MergeResult) == 0 {
+				s.handleFallbackResponse(ctx, chatManage)
+				return nil
+			}
 			emitKnowledgeReferencesEvent(ctx, chatManage)
 		}
 		if eventType == types.INTO_CHAT_MESSAGE {
@@ -790,7 +798,8 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 			); err != nil {
 				return err
 			}
-			if chatsource.HasPublished(ctx) && chatManage.NeedsRetrieval() && len(chatManage.MergeResult) == 0 {
+			if (chatsource.HasPublished(ctx) || chatsource.IsEnterpriseAnswer(ctx)) &&
+				chatManage.NeedsRetrieval() && len(chatManage.MergeResult) == 0 {
 				s.handleFallbackResponse(ctx, chatManage)
 				return nil
 			}
@@ -1019,7 +1028,10 @@ func (s *sessionService) SearchKnowledge(ctx context.Context,
 
 // handleFallbackResponse handles fallback response based on strategy
 func (s *sessionService) handleFallbackResponse(ctx context.Context, chatManage *types.ChatManage) {
-	if chatManage.FallbackStrategy == types.FallbackStrategyModel {
+	if chatsource.IsEnterpriseAnswer(ctx) {
+		chatManage.FallbackResponse = chatsource.NotFoundAnswer
+		s.handleFixedFallback(ctx, chatManage)
+	} else if chatManage.FallbackStrategy == types.FallbackStrategyModel {
 		s.handleModelFallback(ctx, chatManage)
 	} else {
 		s.handleFixedFallback(ctx, chatManage)

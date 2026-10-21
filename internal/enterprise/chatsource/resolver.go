@@ -146,19 +146,10 @@ func (r *Resolver) Resolve(ctx context.Context, tenantID uint64, targets types.S
 		case RoleRaw:
 			available, loaded := searchable[space]
 			if !loaded {
-				pins, err := r.pins.ReleaseSources(ctx, tenantID, space, turn.Releases[space])
+				var err error
+				available, err = r.availablePins(ctx, tenantID, space, turn.Releases[space])
 				if err != nil {
 					return Turn{}, err
-				}
-				available = uniqueAttempts(pins)
-				current, err := r.attempts.CurrentAttempts(ctx, tenantID, sortedIDs(available))
-				if err != nil {
-					return Turn{}, err
-				}
-				for id, attempt := range available {
-					if now, ok := current[id]; !ok || now != attempt {
-						delete(available, id)
-					}
 				}
 				searchable[space] = available
 			}

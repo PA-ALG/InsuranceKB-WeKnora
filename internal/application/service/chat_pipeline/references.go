@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/modelcontext"
 	"github.com/Tencent/WeKnora/internal/models/chat"
@@ -24,13 +25,17 @@ func prepareMessagesWithModelContext(
 	}
 	messages := prepareMessagesWithHistory(chatManage)
 	if len(messages) > 0 {
-		messages[0].Content = strings.TrimRight(messages[0].Content, " \t\r\n") + registry.ProtocolPrompt()
+		messages[0].Content = strings.TrimRight(messages[0].Content, " \t\r\n") +
+			registry.ProtocolPrompt() + chatsource.AnswerRules(ctx)
 	}
 	if len(chatManage.MergeResult) == 0 || len(messages) == 0 {
 		return messages, registry
 	}
 
-	ordered := orderedPipelineReferences(chatManage)
+	ordered := chatManage.MergeResult
+	if !chatsource.IsEnterpriseAnswer(ctx) {
+		ordered = orderedPipelineReferences(chatManage)
+	}
 	knowledgeResults := make([]*types.SearchResult, 0, len(ordered))
 	knowledgeRows := make([]map[string]interface{}, 0, len(ordered))
 	webRows := make([]map[string]interface{}, 0)
