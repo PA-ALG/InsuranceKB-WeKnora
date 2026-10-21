@@ -7628,6 +7628,7 @@ export default {
     },
     nav: {
       schemaWiki: "schema_wiki",
+      missingField: ' (В материалах не упоминается)',
       "other": "Другое",
       "concepts": "Понятия",
       "navigation": "Навигация по знаниям",

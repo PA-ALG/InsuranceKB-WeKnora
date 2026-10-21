@@ -46,14 +46,15 @@ it('preserves manual state on the same page and across closing and reopening the
   expect(schema(wrapper).element.open).toBe(true)
 })
 
-it('restores the schema when selecting a different product and returning to the first', async () => {
+// S3j (user 2026-10-21): each product keeps the reader's choice; another product starts open.
+it('opens the schema of a different product and keeps the first product closed on return', async () => {
   const wrapper = nav()
   await collapse(wrapper)
   await wrapper.setProps({ entityId: 'C1' })
   expect(schema(wrapper).element.open).toBe(true)
   await collapse(wrapper)
   await wrapper.setProps({ entityId: 'M1' })
-  expect(schema(wrapper).element.open).toBe(true)
+  expect(schema(wrapper).element.open).toBe(false)
 })
 
 it('restores on a new release and ignores a queued event from the old schema node', async () => {

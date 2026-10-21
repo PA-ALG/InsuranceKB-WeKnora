@@ -61,13 +61,17 @@ async function closeSource() {
   await nextTick()
   if (sourceButton?.isConnected) sourceButton.focus()
 }
+let loadedSpace: string | undefined
 async function load() {
+  // Pinning the release already on screen must preserve its DOM and navigation.
+  if (state.value === 'ready' && loadedSpace === props.spaceId && props.releaseId === release.value?.id) return
   const request = ++generation, space = props.spaceId, id = props.releaseId
   state.value = 'loading'; release.value = null
   try {
     const result = await (id ? readRelease(space, id) : readRelease(space))
     if (request !== generation) return
     if (!result.id || result.id === 'active' || (id && id !== 'active' && result.id !== id)) throw new Error('INVALID_RELEASE')
+    loadedSpace = space
     release.value = result; state.value = 'ready'
   } catch { if (request === generation) state.value = 'failed' }
 }

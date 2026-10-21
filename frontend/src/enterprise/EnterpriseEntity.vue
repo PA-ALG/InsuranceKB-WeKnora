@@ -59,16 +59,20 @@ async function loadBase(current: Release, request: number) {
   } catch { /* Current fields remain readable when the comparison is unavailable. */ }
 }
 
+let loadedSpace: string | undefined
 async function load() {
-  const current = ++generation
+  // Pinning the release already on screen must preserve its DOM and navigation.
+  if (state.value === 'ready' && loadedSpace === props.spaceId && props.releaseId === release.value?.id) return
+  const current = ++generation, space = props.spaceId
   state.value = 'loading'
   selected.value = null
   release.value = null
   base.value = null
   try {
-    const read = props.releaseId ? await readRelease(props.spaceId, props.releaseId) : await readRelease(props.spaceId)
+    const read = props.releaseId ? await readRelease(space, props.releaseId) : await readRelease(space)
     if (current !== generation) return
     release.value = read
+    loadedSpace = space
     state.value = 'ready'
     void loadBase(read, current)
   } catch {
