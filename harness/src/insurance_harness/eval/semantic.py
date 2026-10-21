@@ -5,11 +5,11 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from insurance_harness.changes.normalize import values_equal
 from insurance_harness.eval.compare import compare_value
 from insurance_harness.eval.equivalence import EquivalenceQuestion
 from insurance_harness.eval.evaluator import ItemOutcome, Report, evaluate, report_from_outcomes
 from insurance_harness.eval.golden import GoldenItem, NonBlank, Prediction
-from insurance_harness.eval.normalize import values_equal
 
 
 class SemanticVerdict(BaseModel):

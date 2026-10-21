@@ -6,8 +6,8 @@ originals when goldenset/ retires in S7. No legacy module is imported here.
 
 from pydantic import BaseModel, Field
 
+from insurance_harness.changes.normalize import normalize_text, values_equal
 from insurance_harness.eval.golden import GoldenItem
-from insurance_harness.eval.normalize import normalize_text, values_equal
 
 
 class ValueComparison(BaseModel):
