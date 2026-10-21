@@ -10,6 +10,7 @@ from typing import Literal, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from insurance_harness.changes.normalize import values_equal
 from insurance_harness.eval.catalog import Catalog
 from insurance_harness.eval.compare import compare_value
 from insurance_harness.eval.golden import (
@@ -19,7 +20,6 @@ from insurance_harness.eval.golden import (
     State,
     ValueComponent,
 )
-from insurance_harness.eval.normalize import values_equal
 from insurance_harness.eval.pdf_text import PageText
 
 PROMPT_VERSION = "3"

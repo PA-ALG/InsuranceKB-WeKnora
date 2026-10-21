@@ -1,10 +1,8 @@
 """Compile products with a stage-configured model and write a scoreable candidate.
 
-Products compile in argument order. The first truncation, oversize input,
-non-retryable HTTP error, exhausted retries, budget refusal, compiler contract
-violation or served-model change stops the run; later sends do not happen.
-Completed products are reused on rerun. Exit 0: all products compiled and the
-candidate was written; exit 2: the run stopped or the input was invalid.
+Products compile in argument order; transport, budget, compiler or served-model failures stop
+the run before later sends. Completed products are reused while materials and cards match.
+Exit 0: every product and the candidate completed; exit 2: invalid input or a stopped run.
 
 Run-root files: budget.jsonl gains one line before every send (so a send that
 was in flight when the process died still counts), ledger.jsonl gains every
@@ -18,7 +16,10 @@ import argparse
 import hashlib
 import json
 import math
+import os
+import re
 import sys
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -27,6 +28,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
+from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
     CompileError,
@@ -35,6 +37,7 @@ from insurance_harness.compilers.schema_fields.engine import (
     SchemaFieldsCompiler,
     to_candidate,
 )
+from insurance_harness.eval.convert import predictions_from_candidate
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.eval.product_sources import (
     check_product_id,
@@ -43,10 +46,13 @@ from insurance_harness.eval.product_sources import (
     source_directory,
     trusted_source_pages,
 )
+from insurance_harness.evidence.segments import SegmentedSource
+from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.ingest.source_map import (
+    SourceEntry,
     load_source_map,
+    load_trusted_pages,
     reader_from_env,
-    trusted_page_source,
 )
 from insurance_harness.models import (
     CallLedger,
@@ -78,6 +84,67 @@ __all__ = [
 ]
 
 _CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+_MATERIAL = re.compile(r"(?:file|[A-Za-z0-9][A-Za-z0-9_-]{0,127}:[1-9][0-9]*):[0-9a-f]{64}")
+RevisionPageSource = Callable[[str], tuple[TrustedPages[PageText], Mapping[str, SourceRevision]]]
+
+
+def _validate_materials(materials: list[str] | None) -> None:
+    if materials is None:
+        return
+    revisions = [tuple(m.split(":")[:2]) for m in materials if m.count(":") == 2]
+    if (
+        materials != sorted(materials) or any(not _MATERIAL.fullmatch(m) for m in materials)
+        or (revisions and (len(revisions) != len(materials)
+                           or len(set(revisions)) != len(revisions)))
+    ):
+        raise ValueError("invalid stored material identities")
+
+
+def _materials(
+    pages: Sequence[PageText], headers: Mapping[str, Sequence[PageText]] | None,
+    revisions: Mapping[str, SourceRevision] | None,
+) -> list[str]:
+    # Validate before reuse too: duplicate pages, fingerprints or evidence roles are ambiguous.
+    source = SegmentedSource(pages, table_headers=headers)
+    documents = {page.document: page.document_sha256.lower() for page in source.pages}
+    if not documents or (revisions is not None and set(revisions) != set(documents)):
+        raise ValueError("missing or ambiguous source identities")
+    materials = []
+    identities = set()
+    for document, digest in documents.items():
+        if revisions is None:
+            materials.append(f"file:{digest}")
+            continue
+        revision = revisions[document]
+        entry = SourceEntry(
+            knowledge_id=revision.knowledge_id, parse_attempt=revision.parse_attempt,
+        )
+        identity = (entry.knowledge_id, entry.parse_attempt)
+        if identity in identities:
+            raise ValueError("ambiguous source identities")
+        identities.add(identity)
+        materials.append(f"{entry.knowledge_id}:{entry.parse_attempt}:{digest}")
+    return sorted(materials)
+
+
+def _replace_completed(path: Path, text: str) -> None:
+    """Replace a stale result only after its complete successor is flushed beside it."""
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def _revision_order(
+    pages: Sequence[PageText], revisions: Mapping[str, SourceRevision],
+) -> list[PageText]:
+    return sorted(pages, key=lambda p: (revisions[p.document].knowledge_id,
+                                       revisions[p.document].parse_attempt, p.page))
 
 
 @dataclass(frozen=True)
@@ -121,6 +188,7 @@ def _replay_context(
     pack: str,
     pages: Sequence[PageText],
     table_headers: Mapping[str, Sequence[PageText]] | None = None,
+    materials: list[str] | None = None,
 ) -> str:
     """What a saved answer was produced for beyond the request text: product, pack, sources."""
     def documents(group: Sequence[PageText]) -> list[dict[str, object]]:
@@ -132,6 +200,8 @@ def _replay_context(
                 for (d, s), n in sources.items()]
 
     context: dict[str, object] = {"product": product, "pack_id": pack, "sources": documents(pages)}
+    if materials is not None:
+        context["materials"] = materials
     if table_headers is not None:
         context["trust_policy"] = load_trust_policy().model_dump(mode="json")
         context["table_headers"] = [
@@ -192,12 +262,18 @@ def compile_products(
     completion_factory: Callable[[CallLedger], CompletionPort] | None,
     run_root: Path, max_sent: int, batch_size: int = 25, replay_from: Path | None = None,
     page_source: Callable[[str], list[PageText] | TrustedPages[PageText]] | None = None,
+    revision_page_source: RevisionPageSource | None = None,
 ) -> list[ProductRun]:
     """Compile or reuse each product in order; raise on the first stopping condition.
 
     max_sent is cumulative for the run root: earlier runs' sends count against it.
     With replay_from, saved completions stand in for the model and nothing is sent.
+    revision_page_source supplies pages and their fixed revisions from one read; it is
+    mutually exclusive with page_source, whose unlabelled inputs use file identities.
+    Revision inputs use the same document and header-role order as publication.
     """
+    if page_source is not None and revision_page_source is not None:
+        raise ValueError("supply only one page source")
     if replay_from is None and completion_factory is None:
         raise ValueError("a completion factory is required unless replaying")
     if replay_from is not None:
@@ -219,17 +295,34 @@ def compile_products(
                 # Reuse would skip the replay the caller asked for.
                 raise ValueError(f"{product}: replay target already has an output; "
                                  "use a new run root")
+            output = None
             if path.exists():
                 output = CompileOutput.model_validate_json(path.read_text(encoding="utf-8"))
                 if output.entity_id != product or output.pack_id != pack:
                     raise ValueError(f"{product}: stored output does not match the product")
+                _validate_materials(output.materials)
+            revisions = None
+            read: list[PageText] | TrustedPages[PageText]
+            if revision_page_source is not None:
+                read, revisions = revision_page_source(product)
+            else:
+                read = page_source(product) if page_source else trusted_source_pages(directory)
+            pages = read.evidence if isinstance(read, TrustedPages) else read
+            headers = read.table_headers if isinstance(read, TrustedPages) else None
+            materials = _materials(pages, headers, revisions)
+            if revisions is not None:
+                pages = _revision_order(pages, revisions)
+                if headers is not None:
+                    roles = [rule.role for rule in load_trust_policy().header_rules]
+                    headers = {role: _revision_order(headers[role], revisions)
+                               for role in sorted(headers, key=roles.index)}
+            if (output is not None and output.materials == materials
+                    and output.cards_version == cards_version()):
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / _CATALOG, pack)
-            read = page_source(product) if page_source else trusted_source_pages(directory)
-            pages = read.evidence if isinstance(read, TrustedPages) else read
-            headers = read.table_headers if isinstance(read, TrustedPages) else None
-            context = _replay_context(product, pack, pages, headers)
+            context = _replay_context(product, pack, pages, headers,
+                                      materials if revisions is not None else None)
             port: CompletionPort
             if replay_from is not None:
                 port = _Replay(replay_from, product, context)
@@ -246,16 +339,21 @@ def compile_products(
                 max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
             )
             output = compiler.compile(product, definitions, pages, table_headers=headers)
+            output = output.model_copy(update={"materials": materials})
             if len(ledger.served) > 1:
                 # The last batch itself came from a new version: nothing is written.
                 raise ServedModelChanged(f"{product}: served model changed within the run")
             path.parent.mkdir(exist_ok=True)
-            write_new(path, output.model_dump_json(indent=2) + "\n")
+            text = output.model_dump_json(indent=2) + "\n"
+            if path.exists():
+                _replace_completed(path, text)
+            else:
+                write_new(path, text)
             runs.append(ProductRun(product, name, pack, False, output.calls, len(output.fields)))
         return runs
 
 
-def write_candidate(run_root: Path, runs: list[ProductRun]) -> None:
+def write_candidate(run_root: Path, runs: list[ProductRun], *, replace: bool = False) -> None:
     """Merge per-product candidates into the shape predictions_from_candidate reads."""
     bindings: list[Any] = []
     fields: list[Any] = []
@@ -271,9 +369,25 @@ def write_candidate(run_root: Path, runs: list[ProductRun]) -> None:
     merged = {"request": {"entity_bindings": bindings},
               "compile_result": {"output": {"fields": fields}}}
     product_map = {run.display_name: run.product_id for run in runs}
-    write_new(run_root / "candidate.json", json.dumps(merged, ensure_ascii=False, indent=2) + "\n")
-    write_new(run_root / "product-map.json",
-               json.dumps(product_map, ensure_ascii=False, indent=2) + "\n")
+    artifacts = [("candidate.json", merged), ("product-map.json", product_map)]
+    if replace:
+        previous = json.loads((run_root / "product-map.json").read_text(encoding="utf-8"))
+        if not isinstance(previous, dict) or any(
+            name in previous and previous[name] != product for name, product in product_map.items()
+        ):
+            raise ValueError("conflicting or invalid product registration")
+        predictions_from_candidate(json.loads((run_root / "candidate.json").read_text()), previous)
+        bridge = previous | product_map
+        predictions_from_candidate(merged, bridge)
+        # Each intermediate pair remains readable; a retry safely converges a leftover bridge.
+        artifacts.insert(0, ("product-map.json", bridge))
+    for name, data in artifacts:
+        path = run_root / name
+        text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+        if replace and path.exists():
+            _replace_completed(path, text)
+        else:
+            write_new(path, text)
 
 
 def _summary(run_root: Path, runs: list[ProductRun]) -> dict[str, Any]:
@@ -332,8 +446,18 @@ def main(argv: list[str] | None = None) -> int:
     clients: list[OpenAICompatibleCompletion] = []
     try:
         config = load_stage_config(args.stage_config, args.stage)
-        pages = (trusted_page_source(load_source_map(args.source_map), reader_from_env())
-                 if args.source_map else None)
+        revision_pages = None
+        if args.source_map:
+            source_map, reader = load_source_map(args.source_map), reader_from_env()
+
+            def fixed_pages(
+                product: str,
+            ) -> tuple[TrustedPages[PageText], dict[str, SourceRevision]]:
+                entries = sorted(source_map.entries(product),
+                                 key=lambda entry: (entry.knowledge_id, entry.parse_attempt))
+                return load_trusted_pages(reader, source_map.space_id, entries)
+
+            revision_pages = fixed_pages
 
         def factory(ledger: CallLedger) -> CompletionPort:
             clients.append(OpenAICompatibleCompletion(config, ledger=ledger))
@@ -348,12 +472,16 @@ def main(argv: list[str] | None = None) -> int:
                         completion_factory=None if args.replay_from else factory,
                         run_root=args.run_root, max_sent=args.max_sent,
                         batch_size=args.batch_size, replay_from=args.replay_from,
-                        page_source=pages,
+                        revision_page_source=revision_pages,
                     )
                 finally:
                     for client in clients:
                         client.close()
-                write_candidate(args.run_root, runs)
+                if any((args.run_root / name).exists()
+                       for name in ("candidate.json", "product-map.json")):
+                    write_candidate(args.run_root, runs, replace=True)
+                else:
+                    write_candidate(args.run_root, runs)
             except (ModelCallError, CompileError, ServedModelChanged, ValueError,
                     OSError) as exc:
                 print(json.dumps({"stopped": _stop_reason(exc),
