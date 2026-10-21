@@ -33,20 +33,31 @@ func (r *Resolver) WithPublished(service *knowledge.Service) *Resolver {
 	return &copied
 }
 
-// ResolveAnswer fixes a quick answer's scope. With published knowledge configured, a Wiki-only
-// selection is answered from published fields; otherwise it behaves as ResolveQuick, which the
-// search endpoint keeps using.
+// ResolveAnswer fixes a quick answer's scope and optionally adds authorized raw
+// targets. The optional authorizer must apply the native explicit-selection ACL;
+// without it no raw target is added. Search and Agent keep their original scope.
 func ResolveAnswer(
 	ctx context.Context, resolver *Resolver, tenant uint64, targets types.SearchTargets,
+	authorizeRaw ...func(context.Context, string) bool,
 ) (context.Context, types.SearchTargets, error) {
 	if resolver == nil || resolver.published == nil {
-		return ResolveQuick(ctx, resolver, tenant, targets)
+		ctx, targets, err := ResolveQuick(ctx, resolver, tenant, targets)
+		return markAnswer(ctx, targets), targets, err
 	}
 	turn, err := resolver.Resolve(ctx, tenant, targets)
 	if err != nil {
 		return ctx, nil, err
 	}
-	ctx = WithTurn(ctx, turn, tenant)
+	modelTargets := turn.Targets
+	if len(modelTargets) == 0 {
+		modelTargets = targets
+	}
+	if answerSurface(ctx) && len(authorizeRaw) > 0 {
+		if err := resolver.addAnswerRaw(ctx, tenant, targets, &turn, authorizeRaw[0]); err != nil {
+			return ctx, nil, err
+		}
+	}
+	ctx = markAnswer(WithTurn(ctx, turn, tenant), modelTargets)
 	if len(turn.WikiSpaces) > 0 {
 		ctx = context.WithValue(ctx, publishedKey{}, &publishedTurn{})
 	}
@@ -149,8 +160,12 @@ func publishedHits(
 			if len(field.Evidence) == 0 {
 				continue // only evidence makes a reviewed reference
 			}
+			content := knowledge.FieldText(field)
+			if IsEnterpriseAnswer(ctx) {
+				content = answerFieldText(field)
+			}
 			hits = append(hits, &types.SearchResult{
-				ID: "release:" + id + ":" + field.Slug, Content: knowledge.FieldText(field),
+				ID: "release:" + id + ":" + field.Slug, Content: content,
 				KnowledgeTitle: field.EntityName + " · " + field.FieldTitle,
 				Score:          1, ChunkType: types.ChunkTypeText, MatchType: types.MatchTypeKeywords,
 				Metadata: map[string]string{

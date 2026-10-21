@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from insurance_harness.changes.normalize import values_equal
 from insurance_harness.eval.catalog import load_catalog
 from insurance_harness.eval.equivalence import (
     EQUIVALENCE_PROMPT_VERSION,
@@ -28,7 +29,6 @@ from insurance_harness.eval.equivalence import (
 from insurance_harness.eval.golden import GoldenItem
 from insurance_harness.eval.judge import PROMPT_VERSION, JudgeAnnotator, JudgeRequest, calibrate
 from insurance_harness.eval.judge_files import FileJudgeClient, check_run_directory, write_requests
-from insurance_harness.eval.normalize import values_equal
 from insurance_harness.eval.product_sources import (
     check_product_id,
     declared_pack,

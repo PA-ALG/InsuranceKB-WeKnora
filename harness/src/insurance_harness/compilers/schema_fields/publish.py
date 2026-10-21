@@ -1,4 +1,7 @@
-"""Publish one product's schema-field compile output to the platform (S4g Spec §2.4).
+"""First publish of a product's schema fields (S4g, S8a).
+
+Products already having Claims in Active must use
+insurance_harness.compilers.schema_fields.publish_changes.
 
 usage: python -m insurance_harness.compilers.schema_fields.publish --run-root <dir> --product <id>
        --source-map <file> [--decide human --reason <text> [--activate]
@@ -20,24 +23,14 @@ can submit later.
 Prints one JSON line; exit 2 means stopped, with a caller-safe code.
 """
 
-import argparse
 import json
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Annotated, NoReturn
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    StringConstraints,
-    ValidationError,
-    field_validator,
-)
+from pydantic import ValidationError
 
-from insurance_harness.bundle.assemble import BundleError, retired_claims
+from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.client import (
     DecisionInput,
     PlatformClient,
@@ -46,12 +39,19 @@ from insurance_harness.bundle.client import (
     publish,
 )
 from insurance_harness.catalog.navigation import NavigationError, load_navigation
-from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
 from insurance_harness.catalog.spot_check import (
     SpotCheckPolicy,
     SpotCheckPolicyError,
     load_spot_check_policy,
 )
+from insurance_harness.changes.options import (
+    PublishParser,
+    decision_input,
+    review_claims,
+    review_inputs,
+)
+from insurance_harness.changes.options import ScoresFile as _ScoresFile  # noqa: F401
+from insurance_harness.changes.sources import publication_entries
 from insurance_harness.compilers.schema_fields.claims import (
     candidate_bundle,
     claims_from,
@@ -59,9 +59,7 @@ from insurance_harness.compilers.schema_fields.claims import (
 )
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.compilers.schema_fields.page import product_page
-from insurance_harness.compilers.schema_fields.review_items import logical_key
 from insurance_harness.contracts.enums import ReviewMode
-from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.eval.product_sources import check_product_id, display_name, source_directory
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.weknora_pages import SourcePagesError
@@ -73,42 +71,17 @@ from insurance_harness.ingest.source_map import (
     load_trusted_pages,
     reader_from_env,
 )
-from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, route
 from insurance_harness.review.spot_check import sample
+
+# Existing review-artifact readers use this same score-file type.
+__all__ = ["main", "_ScoresFile"]
 
 REPO = Path(__file__).resolve().parents[5]
 CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 
 
-class _Parser(argparse.ArgumentParser):
-    """Malformed arguments become the stable INVALID_ARGUMENTS code, not usage text."""
-
-    def error(self, message: str) -> NoReturn:
-        raise ValueError(message)
-
-
-# Strict: a JSON boolean is not a score (true would silently become 1.0).
-Score = Annotated[float, Field(strict=True, ge=0.0, le=1.0, allow_inf_nan=False)]
-NonBlank = Annotated[str, StringConstraints(min_length=1, pattern=r"\S")]
-
-
-class _ScoresFile(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    reviewer: NonBlank
-    reviewed_at: NonBlank
-    scores: dict[NonBlank, Score]
-
-    @field_validator("reviewed_at")
-    @classmethod
-    def iso_8601_with_offset(cls, value: str) -> str:
-        # The label records when the review happened: a full date-time with its offset.
-        if "T" not in value or datetime.fromisoformat(value).tzinfo is None:
-            raise ValueError("reviewed_at must be an ISO 8601 date-time with an offset")
-        return value
-
-
 def main(argv: list[str] | None = None) -> int:
-    parser = _Parser(description=__doc__)
+    parser = PublishParser(description=__doc__)
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--product", required=True)
     parser.add_argument("--source-map", type=Path, required=True)
@@ -125,8 +98,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parser.parse_args(argv)
         check_product_id(args.product)
-        decision = _decision(args.decide, args.reason)
-        policy, scores = _routing(args, decision)
+        decision = decision_input(args.decide, args.reason)
+        policy, scores = review_inputs(args, decision)
     except ValueError:
         return _stop("INVALID_ARGUMENTS")
     if args.activate and decision is None:
@@ -168,26 +141,30 @@ def main(argv: list[str] | None = None) -> int:
         return _stop(error.code)
     try:
         source_map = load_source_map(args.source_map)
-        pages, sources = load_trusted_pages(
-            reader_from_env(), source_map.space_id, source_map.entries(args.product)
-        )
+        reader = reader_from_env()
         client = PlatformClient(os.environ[BASE_URL_ENV], os.environ[API_KEY_ENV])
         active = client.active(source_map.space_id)
+        if active is not None and any(
+            member.kind == "claim"
+            and isinstance(member.payload, dict)
+            and member.payload.get("subject_ref") == args.product
+            for member in active.members
+        ):
+            return _stop("ALREADY_PUBLISHED")
+        pages, sources = load_trusted_pages(
+            reader, source_map.space_id,
+            publication_entries(source_map.entries(args.product), output.materials),
+        )
         segmented = SegmentedSource(pages.evidence, table_headers=pages.table_headers)
-        review = _route(policy, output.pack_id, claims_from(output, segmented, sources), scores)
+        review = review_claims(
+            policy, output.pack_id, claims_from(output, segmented, sources), scores
+        )
         activate = args.activate
         if review.mode == ReviewMode.MACHINE:
             decision = DecisionInput(
                 outcome="approve", mode="machine", policy_ref=review.policy_ref
             )
             activate = True
-        # A candidate is a delta: claims of this product the new output no longer has are
-        # removed explicitly, or the previous release's values would stay on the page (S5a).
-        retired = retired_claims(
-            active,
-            output.entity_id,
-            {logical_key(output.entity_id, f.field_key) for f in output.fields},
-        )
         bundle = candidate_bundle(
             output,
             segmented,
@@ -196,7 +173,6 @@ def main(argv: list[str] | None = None) -> int:
             base=active.head if active else None,
             page=page,
             review=(review, scores),
-            removals=retired,
             navigation=navigation,
         )
         result = publish(client, source_map.space_id, bundle, decision=decision, activate=activate)
@@ -226,7 +202,6 @@ def main(argv: list[str] | None = None) -> int:
                 "epoch": result.release.epoch if result.release else None,
                 "review": review.mode.value,
                 **({"reasons": list(review.reasons)} if review.reasons else {}),
-                **({"retired": len(retired)} if retired else {}),
                 **({"samples": samples} if samples is not None else {}),
             },
             ensure_ascii=False,
@@ -260,51 +235,6 @@ def _submit_sample(
 def _stop(code: str, **detail: str | int | None) -> int:
     print(json.dumps({"stopped": code, **detail}, ensure_ascii=False))
     return 2
-
-
-def _decision(mode: str | None, reason: str | None) -> DecisionInput | None:
-    """Only a person decides explicitly; a machine decision comes from --route alone (RV1)."""
-    if mode is None:
-        if reason:
-            raise ValueError("--reason needs --decide")
-        return None
-    if mode != "human" or not (reason and reason.strip()):
-        raise ValueError("an explicit decision is a human one with a reason")
-    return DecisionInput(outcome="approve", mode="human", reason=reason)
-
-
-def _routing(
-    args: argparse.Namespace, decision: DecisionInput | None
-) -> tuple[ReviewPolicy | None, Scores | None]:
-    """The policy and scores --route reads, before anything is sent."""
-    if not args.route:
-        if args.review_policy is not None or args.scores is not None:
-            raise ValueError("--review-policy and --scores need --route")
-        return None, None
-    if decision is not None or args.activate:
-        raise ValueError("--route decides and activates by itself")
-    policy = load_review_policy(args.review_policy)
-    if args.scores is None:
-        return policy, None
-    try:
-        document = _ScoresFile.model_validate_json(args.scores.read_text(encoding="utf-8"))
-    except (OSError, ValidationError) as error:
-        raise ValueError("scores unreadable or malformed") from error
-    return policy, Scores(document.reviewer, document.reviewed_at, dict(document.scores))
-
-
-def _route(
-    policy: ReviewPolicy | None, pack_id: str, claims: list[Claim], scores: Scores | None
-) -> Route:
-    if policy is None:
-        return HUMAN_DECISION
-    return route(
-        claims,
-        admitted=policy.admitted(pack_id),
-        threshold=lambda predicate: policy.threshold(pack_id, predicate),
-        scores=scores,
-        policy_ref=policy.policy_ref,
-    )
 
 
 if __name__ == "__main__":

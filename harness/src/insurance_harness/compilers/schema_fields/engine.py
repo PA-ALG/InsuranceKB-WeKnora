@@ -61,6 +61,8 @@ class CompileOutput(BaseModel):
     dropped_fields: list[str] = Field(default_factory=list)
     # The field card version the requests were built from (S4g); None in outputs written earlier.
     cards_version: str | None = None
+    # Actual input document identities; earlier outputs cannot be reused without them (S8a).
+    materials: list[str] | None = None
 
 
 def _value_batches(
