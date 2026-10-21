@@ -100,7 +100,7 @@ decide_changes(
    - candidate、decision 与 release 的标识。
 7. `--dry-run` 只做第 1–4 步并输出报告，不提交。
 
-现有的 `compilers.schema_fields.publish` 保留，用于产品首次发布。产品在 Active 中已有 Claim 时，该命令拒绝执行并提示改用 `changes.publish`，避免整产品重发让无关 digest 变化。
+现有的 `compilers.schema_fields.publish` 保留，用于产品首次发布。产品在 Active 中已有 Claim 时，该命令输出 `{"stopped": "ALREADY_PUBLISHED"}`、退出码 2、不提交，由操作者改用 `changes.publish`，避免整产品重发让无关 digest 变化。S5a 的受保护验收 `test_publish_retires.py` 已在单独提交中按此规则修订（保留首次发布与跨产品边界）。
 
 ### 2.4 编译结果按材料复用
 

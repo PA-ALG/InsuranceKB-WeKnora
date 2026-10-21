@@ -1,9 +1,10 @@
-"""S5a acceptance: publishing a product again retires its claims the new compile no longer has.
+"""S5a acceptance, revised by S8a: the whole-product publish is for a product's first publish only.
 
-Protected file: written by Claude (Spec §2.1). The platform keeps every base member a candidate
-does not remove, so the publish command lists this product's stale claims under removals, never
-another product's, and reports how many it retired. A first publish has nothing to retire and its
-output keeps its shape.
+Protected file: written by Claude (S5a Spec §2.1; S8a Spec §2.3). Since S8a a product that already
+has claims in the Active release is published incrementally (``changes.publish``): the whole-product
+command refuses it and submits nothing, because re-sending every field would change unrelated
+digests. A first publish still never removes another product's claims, and its output keeps its
+shape.
 """
 
 from __future__ import annotations
@@ -161,15 +162,32 @@ def publish(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, active: dict[str, A
     return code, server
 
 
-def test_a_republish_removes_only_this_products_stale_claims(
+def test_a_product_already_in_the_active_release_is_refused_and_nothing_is_submitted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     code, server = publish(tmp_path, monkeypatch, ACTIVE)
+    assert code == 2
+    assert json.loads(capsys.readouterr().out) == {"stopped": "ALREADY_PUBLISHED"}
+    assert not [path for method, path, body in server.seen if path == "candidates"]
+
+
+def test_a_first_publish_beside_another_product_never_removes_its_claims(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other_only = {
+        **ACTIVE,
+        "members": [
+            m
+            for m in ACTIVE["members"]
+            if not m["logical_slug"].startswith(("1828/", "entity/1828"))
+        ],
+    }
+    code, server = publish(tmp_path, monkeypatch, other_only)
     summary = json.loads(capsys.readouterr().out)
-    assert code == 0 and summary["retired"] == 1
+    assert code == 0 and "retired" not in summary
     submitted = next(body for method, path, body in server.seen if path == "candidates")
     assert submitted["base_release_id"] == "rel_0"
-    assert submitted["removals"] == ["1828/old_field"]
+    assert submitted["removals"] == []
     assert "1828/waiting_period" in {m["logical_slug"] for m in submitted["members"]}
 
 
