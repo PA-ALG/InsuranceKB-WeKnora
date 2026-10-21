@@ -16,7 +16,7 @@
 .ek-nav-group li { margin: 0; }
 .ek-nav-group a { color: var(--td-text-color-secondary); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ek-nav-group a:hover { color: var(--td-brand-color); background: var(--td-bg-color-container-hover); }
-.ek-nav-group [aria-current="page"] { color: var(--td-brand-color); background: var(--td-brand-color-light); }
+.ek-nav-group [aria-current="page"], .ek-nav-group [aria-current="location"] { color: var(--td-brand-color); background: var(--td-brand-color-light); }
 .ek-nav-group [data-nav-concept] a { display: block; box-sizing: border-box; height: 32px; padding: 0 8px 0 24px; border-radius: 4px; line-height: 32px; }
 .ek-nav-entry__head { display: flex; align-items: center; height: 32px; }
 .ek-nav-entry__head a { flex: 1; min-width: 0; box-sizing: border-box; height: 32px; padding: 0 8px; border-radius: 4px; line-height: 32px; }
@@ -25,6 +25,7 @@
 .ek-nav-fields summary { cursor: pointer; padding: 4px 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ek-nav-fields ul { padding-left: 8px; }
 .ek-nav-fields a { display: block; padding: 4px 0; }
+.ek-nav-fields [data-field-missing] { color: var(--td-text-color-placeholder); }
 .ek-nav-fields > details > summary { font-weight: 600; }
 .ek-nav-schema > details, .ek-nav-schema > .ek-page__note { margin-left: 8px; }
 .ek-nav-wiki { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--td-border-level-1-color); }

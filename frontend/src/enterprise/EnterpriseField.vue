@@ -33,7 +33,7 @@ watch(() => [props.field.slug, props.previous], () => { expanded.value = false }
 <template>
   <div :id="anchorId || field.slug.slice(field.slug.lastIndexOf('/') + 1)" :class="['ek-field', { 'ek-field--generated': field.origin === 'MODEL_GENERATED' }]" :data-field="field.slug" tabindex="-1">
     <div class="ek-field__head">
-      <span class="ek-field__title"><RouterLink v-if="conceptRoute" :to="conceptRoute">{{ field.title }}</RouterLink><template v-else>{{ field.title }}</template></span>
+      <h3 class="ek-field__title"><RouterLink v-if="conceptRoute" :to="conceptRoute">{{ field.title }}</RouterLink><template v-else>{{ field.title }}</template></h3>
       <button v-if="previous !== undefined" type="button" data-field-updated class="ek-link-button ek-field__updated" :aria-expanded="expanded" :aria-controls="previousId" @click="expanded = !expanded">{{ t('enterpriseKnowledge.changes.updated') }}</button>
     </div>
     <div :class="['ek-field__value', { 'ek-field__value--clamped': long && !full && !listed }]">
