@@ -30,11 +30,11 @@ const (
 	// batches so a single long document can't saturate the synthesis model.
 	maxCitationBatchConcurrency = 4
 
-	// A root can make at most 1 + 2 + 4 candidate calls after known overflow.
-	maxCandidateSplitDepth = 2
+	// A root can make at most 1 + 2 + 4 + 8 candidate calls after known overflow.
+	maxCandidateSplitDepth = 3
 
-	// Citation overflow has its own bounded tree: at most seven calls per root.
-	maxCitationSplitDepth = 2
+	// Citation overflow has its own bounded tree: at most fifteen calls per root.
+	maxCitationSplitDepth = 3
 )
 
 // citationBatchResult is the JSON shape we expect back from one invocation of

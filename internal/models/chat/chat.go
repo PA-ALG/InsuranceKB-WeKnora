@@ -73,6 +73,36 @@ type Chat interface {
 	GetModelID() string
 }
 
+// OutputLimited optionally reports a model's known maximum output capacity.
+// A zero value means the capacity is unknown.
+type OutputLimited interface {
+	MaxOutputTokens() int
+}
+
+// MaxOutputTokens returns the known output capacity, or zero when unavailable.
+func MaxOutputTokens(c Chat) int {
+	if limited, ok := c.(OutputLimited); ok {
+		return limited.MaxOutputTokens()
+	}
+	return 0
+}
+
+// remoteChatClient preserves the protocol clients' existing request inspection
+// interface alongside the standard Chat operations.
+type remoteChatClient interface {
+	Chat
+	BuildRequestBody(messages []api.Message, opts *api.Options, stream bool) (map[string]any, error)
+}
+
+// outputLimitedChat carries resolved catalog metadata without changing the
+// protocol client's requests or its provider-specific thinking settings.
+type outputLimitedChat struct {
+	remoteChatClient
+	maxOutputTokens int
+}
+
+func (c *outputLimitedChat) MaxOutputTokens() int { return c.maxOutputTokens }
+
 // ChatConfig is the operator-facing configuration of one chat model.
 type ChatConfig struct {
 	Source    types.ModelSource
@@ -189,36 +219,38 @@ func NewRemoteChat(config *ChatConfig) (Chat, error) {
 		return nil, err
 	}
 
+	var c remoteChatClient
 	switch resolved.API {
 	case api.APIOpenAICompletions:
-		return openaicompletions.New(openaicompletions.Config{
+		c = openaicompletions.New(openaicompletions.Config{
 			Endpoint:       endpoint,
 			Settings:       resolved.OpenAICompletions,
 			ThinkingLevels: resolved.ThinkingLevels,
 			Reasoning:      resolved.Spec.Reasoning,
-		}), nil
+		})
 	case api.APIOpenAIResponses:
-		return openairesponses.New(openairesponses.Config{
+		c = openairesponses.New(openairesponses.Config{
 			Endpoint:       endpoint,
 			Settings:       resolved.OpenAIResponses,
 			ThinkingLevels: resolved.ThinkingLevels,
 			Reasoning:      resolved.Spec.Reasoning,
-		}), nil
+		})
 	case api.APIAnthropicMessages:
-		return anthropicmessages.New(anthropicmessages.Config{
+		c = anthropicmessages.New(anthropicmessages.Config{
 			Endpoint:       endpoint,
 			Settings:       resolved.AnthropicMessages,
 			ThinkingLevels: resolved.ThinkingLevels,
 			Reasoning:      resolved.Spec.Reasoning,
-		}), nil
+		})
 	case api.APIGoogleGenerativeAI:
-		return googlegenai.New(googlegenai.Config{
+		c = googlegenai.New(googlegenai.Config{
 			Endpoint:       endpoint,
 			Settings:       resolved.GoogleGenerativeAI,
 			ThinkingLevels: resolved.ThinkingLevels,
 			Reasoning:      resolved.Spec.Reasoning,
-		}), nil
+		})
 	default:
 		return nil, fmt.Errorf("unsupported chat api %q for provider %s", resolved.API, vendor.ID)
 	}
+	return &outputLimitedChat{remoteChatClient: c, maxOutputTokens: resolved.Spec.MaxOutputTokens}, nil
 }

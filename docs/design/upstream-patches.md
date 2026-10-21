@@ -134,3 +134,4 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/i18n/locales/ru-RU.ts` | Q1c | 同步已发布知识组与七个 MCP 工具的俄文名称、说明 | 部分（语言包注册） | 上游提供模块语言包注入后迁入 enterprise 并删除接缝 |
 | `internal/application/service/wiki_ingest.go`、`internal/application/service/wiki_ingest_batch.go`、`internal/application/repository/task_queue.go`、`internal/types/interfaces/task_queue.go` | S6a-3 | 原生 Wiki 共享请求按实际发送边界归类取消，未发送操作以认领与执行标记 CAS 原子释放，保留既有任务重试预算及知识处理位 | 是（通用取消与队列重试） | 上游提供共享发送状态及等义的安全释放接口后撤回 |
 | `internal/application/service/wiki_ingest_cite.go` | S6a-4 | 引用输出明确截断时在原批次任务内有界拆分，重建句柄并合并证据；原生引用调度没有扩展点 | 是（通用输出溢出处理） | 上游引用批次支持同等有界拆分、证据合并及取消归类后撤回 |
+| `internal/application/service/wiki_ingest.go`、`wiki_ingest_cite.go`、`wiki_ingest_outcome.go`、`internal/models/chat/chat.go`、`llm_debug_wrapper.go`、`langfuse_wrapper.go`、`concurrency_wrapper.go` | S6a-5 | 远程 Chat 及包装层传递目录输出能力，仅候选和引用提高输出预算；确定截断最多拆至深度 3，传输失败仅记录固定错误类别；现有入口无扩展点 | 是（通用能力传递、输出预算及脱敏诊断） | 上游提供同等模型能力转发、按用途预算、有界拆分及安全传输分类后撤回 |

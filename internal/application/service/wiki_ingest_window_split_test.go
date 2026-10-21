@@ -174,9 +174,9 @@ func TestASplitStopsAtItsDepthAndFailsAsTruncation(t *testing.T) {
 	if failure == nil || failure.Outcome != wikiOutcomeFailed || !errors.Is(err, errWikiOutputTruncated) {
 		t.Fatalf("a window still overflowing at the depth bound must fail as truncation, got %v", err)
 	}
-	// Two windows, each at most 1 + 2 + 4 calls under a split depth of 2.
-	if model.sent < 2 || model.sent > 14 {
-		t.Fatalf("candidate calls must stay within the split depth: got %d, want 2..14", model.sent)
+	// Two windows, each at most 1 + 2 + 4 + 8 calls under a split depth of 3 (S6a-5).
+	if model.sent < 2 || model.sent > 30 {
+		t.Fatalf("candidate calls must stay within the split depth: got %d, want 2..30", model.sent)
 	}
 	if len(model.citations) != 0 {
 		t.Fatalf("no citation call may follow a failed candidate stage, got %d", len(model.citations))

@@ -9,7 +9,7 @@
   "G5_hardcoded": 76,
   "G6_private_access": 275,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 474,
+  "G10_upstream_patches": 478,
   "G11_new_file_location": 679
  },
  "guards": {
@@ -1018,6 +1018,10 @@
    "internal/models/api/openaicompletions/client.go": 1,
    "internal/models/api/openairesponses/client.go": 1,
    "internal/models/api/retry.go": 1,
+   "internal/models/chat/chat.go": 1,
+   "internal/models/chat/concurrency_wrapper.go": 1,
+   "internal/models/chat/langfuse_wrapper.go": 1,
+   "internal/models/chat/llm_debug_wrapper.go": 1,
    "internal/models/embedding/batch.go": 1,
    "internal/models/embedding/protocol_test.go": 1,
    "internal/models/runtime/connection.go": 1,

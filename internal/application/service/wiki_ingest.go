@@ -165,7 +165,7 @@ return proposed
 	// exceed the longest plausible ingest run (LLM extraction + reduce).
 	wikiDeletedTTL = 1 * time.Hour
 
-	// wikiLLMMaxTokens is the completion-token budget for every LLM call
+	// wikiLLMMaxTokens is the default completion-token budget for LLM calls
 	// routed through generateWithTemplate. Combined wiki extraction emits a
 	// single large JSON document (entities + concepts + details). When
 	// MaxTokens is left at 0, OpenAI-compatible clients omit max_tokens and
@@ -175,6 +175,10 @@ return proposed
 	// 32768 matches verified complete outputs for large Chinese policy docs;
 	// shorter replies still stop early via finish_reason=stop. See #2604.
 	wikiLLMMaxTokens = 32768
+
+	// Structured extraction may spend output tokens on reasoning as well as
+	// JSON. Use this larger budget only when the model reports enough capacity.
+	wikiStructuredMaxTokens = 65536
 
 	// wikiPageModifyMaxContinuations bounds how many extra LLM rounds a page
 	// rewrite may take when the provider stopped at the completion budget
@@ -2678,6 +2682,10 @@ func (s *wikiIngestService) generateWithTemplateResult(
 	}
 	thinking := false
 	opts := &chat.ChatOptions{Temperature: 0.3, Thinking: &thinking, MaxTokens: wikiLLMMaxTokens}
+	if (purpose == "wiki_candidate_slug" || purpose == "wiki_chunk_citation") &&
+		chat.MaxOutputTokens(chatModel) >= wikiStructuredMaxTokens {
+		opts.MaxTokens = wikiStructuredMaxTokens
+	}
 	prefixFingerprint := chat.PromptPrefixFingerprint(messages, opts)
 	warmupKey := ""
 	if promptTpl == agent.WikiPageModifyUserPrompt {
