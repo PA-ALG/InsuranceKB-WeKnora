@@ -7630,6 +7630,7 @@ export default {
     },
     nav: {
       schemaWiki: "schema_wiki",
+      missingField: '（材料未提及）',
       "other": "其他",
       "concepts": "概念",
       "navigation": "知识导航",

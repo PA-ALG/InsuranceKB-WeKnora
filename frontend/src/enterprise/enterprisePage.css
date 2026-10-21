@@ -137,7 +137,7 @@
   line-height: 1.4;
 }
 
-/* Field values carry the emphasis; whitespace separates them without adding boxes. */
+/* Whitespace separates fields without adding boxes. */
 .ek-field {
   padding: 0;
   margin: 20px 0;
@@ -161,9 +161,10 @@
 }
 
 .ek-field__title {
-  color: var(--td-text-color-secondary);
-  font-size: 13px;
-  font-weight: 400;
+  margin: 0;
+  color: var(--td-text-color-primary);
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .ek-field__foot {

@@ -7628,6 +7628,7 @@ export default {
     },
     nav: {
       schemaWiki: "schema_wiki",
+      missingField: '（資料に記載なし）',
       "other": "その他",
       "concepts": "概念",
       "navigation": "ナレッジナビゲーション",

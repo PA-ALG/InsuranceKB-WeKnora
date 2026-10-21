@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, inject, ref, useId, watch } from 'vue'
+import { routeLocationKey } from 'vue-router'
+import { useNavigationMemory } from './navigationMemory'
 import { useI18n } from 'vue-i18n'
 import type { Release } from './enterpriseApi'
 import { entityView, type EntitySummary, type FieldView } from './releaseView'
@@ -12,30 +14,47 @@ watch(() => props.selected, selected => { expanded.value = !!selected }, { immed
 const contentId = useId()
 const view = computed(() => expanded.value ? entityView(props.release, props.entry.entityId) : null)
 const pages = computed(() => expanded.value ? wikiPages(props.release, props.entry.entityId) : [])
-const schemaExpanded = ref(true)
-const schemaDetails = ref<HTMLDetailsElement>()
-// Selecting another product resets the schema; manually toggling this product does not.
-watch([() => props.spaceId, () => props.release.id, () => props.entry.entityId, () => props.selected], () => {
-  schemaExpanded.value = true
-})
-const wikiExpanded = ref(false)
-const wikiDetails = ref<HTMLDetailsElement>()
-// Reset only on navigation; unrelated renders and product toggles preserve the reader's choice.
-watch([() => props.spaceId, () => props.release.id, () => props.entry.entityId, () => props.wikiPageKey], () => {
+const memory = useNavigationMemory()
+const memoryKey = computed(() => JSON.stringify([props.spaceId, props.release.id, props.entry.entityId]))
+const schemaExpanded = ref(true), wikiExpanded = ref(false)
+const schemaDetails = ref<HTMLDetailsElement>(), wikiDetails = ref<HTMLDetailsElement>()
+watch([memoryKey, () => props.wikiPageKey], () => {
+  const saved = memory.read(memoryKey.value)
+  schemaExpanded.value = saved.schema ?? true
   wikiExpanded.value = !!props.wikiPageKey && wikiPages(props.release, props.entry.entityId).some(page => page.key === props.wikiPageKey)
+    ? true : saved.wiki ?? false
 }, { immediate: true })
+function rememberExpansion(group: 'schema' | 'wiki') {
+  const details = group === 'schema' ? schemaDetails.value : wikiDetails.value
+  const expanded = group === 'schema' ? schemaExpanded : wikiExpanded
+  // Setting :open also queues a native toggle. Only a DOM change from our rendered state
+  // is a reader choice; forcing a wiki group open must not overwrite the saved choice.
+  if (details && details.open !== expanded.value) {
+    expanded.value = details.open
+    memory.write(memoryKey.value, group, details.open)
+  }
+}
 function toggleEntry() {
   // Native toggle events are queued; save the DOM state before the group is unmounted.
-  if (schemaDetails.value) schemaExpanded.value = schemaDetails.value.open
-  if (wikiDetails.value) wikiExpanded.value = wikiDetails.value.open
+  rememberExpansion('schema')
+  rememberExpansion('wiki')
   expanded.value = !expanded.value
 }
 function rememberWikiExpansion(event: Event) {
-  if (wikiDetails.value && event.currentTarget === wikiDetails.value) wikiExpanded.value = wikiDetails.value.open
+  if (event.currentTarget === wikiDetails.value) rememberExpansion('wiki')
 }
 function rememberSchemaExpansion(event: Event) {
-  if (schemaDetails.value && event.currentTarget === schemaDetails.value) schemaExpanded.value = schemaDetails.value.open
+  if (event.currentTarget === schemaDetails.value) rememberExpansion('schema')
 }
+const route = inject(routeLocationKey, undefined)
+function decodedHash(hash: string) {
+  try { return decodeURIComponent(hash) } catch { return hash }
+}
+function isCurrentField(field: FieldView) {
+  return route?.name === 'enterpriseEntity' && route.params.spaceId === props.spaceId
+    && route.params.entityId === props.entry.entityId && decodedHash(route.hash) === fieldTarget(field).hash
+}
+const missingLabel = computed(() => t('enterpriseKnowledge.nav.missingField'))
 const sections = computed(() => view.value ? [
   ...view.value.sections,
   ...(view.value.other.length ? [{ key: '__other__', title: t('enterpriseKnowledge.entity.other'), fields: view.value.other }] : []),
@@ -70,7 +89,10 @@ function pageTarget(page: WikiPageEntry) {
         <details v-for="section in sections" :key="section.key" open>
           <summary>{{ section.title }}</summary>
           <ul>
-            <li v-for="field in section.fields" :key="field.slug"><RouterLink :to="fieldTarget(field)" :title="field.title">{{ field.title }}</RouterLink></li>
+            <li v-for="field in section.fields" :key="field.slug"><RouterLink :to="fieldTarget(field)"
+              :title="field.title + (field.state === 'unknown' ? missingLabel : '')"
+              :data-field-missing="field.state === 'unknown' ? '' : undefined"
+              :aria-current="isCurrentField(field) ? 'location' : null">{{ field.title }}<span v-if="field.state === 'unknown'" class="ek-sr-only">{{ missingLabel }}</span></RouterLink></li>
           </ul>
         </details>
         <p v-if="!sections.length" class="ek-page__note">{{ t('enterpriseKnowledge.nav.noFields') }}</p>
