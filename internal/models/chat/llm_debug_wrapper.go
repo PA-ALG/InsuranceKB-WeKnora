@@ -18,6 +18,7 @@ type debugChat struct {
 
 func (d *debugChat) GetModelName() string { return d.inner.GetModelName() }
 func (d *debugChat) GetModelID() string   { return d.inner.GetModelID() }
+func (d *debugChat) MaxOutputTokens() int { return MaxOutputTokens(d.inner) }
 
 func (d *debugChat) Chat(ctx context.Context, messages []Message, opts *ChatOptions) (*types.ChatResponse, error) {
 	callStart := time.Now()

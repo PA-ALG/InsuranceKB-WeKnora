@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"sync"
+	"syscall"
 
 	"github.com/Tencent/WeKnora/internal/logger"
+	"github.com/Tencent/WeKnora/internal/models/api"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/google/uuid"
@@ -110,14 +114,57 @@ func wikiFailureCauseCategory(err error) string {
 	}
 }
 
+// wikiTransportDetail exposes only a category: provider error bodies and
+// wrapper messages can contain credentials or echoed request material.
+func wikiTransportDetail(err error) string {
+	var httpErr *api.HTTPError
+	if errors.As(err, &httpErr) {
+		return fmt.Sprintf("http %d", httpErr.StatusCode)
+	}
+	if wikiTransportTimeout(err) {
+		return "timeout"
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+		return "connection closed"
+	}
+	return "other"
+}
+
+func wikiTransportTimeout(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	// A non-timeout net.Error can precede a timeout in a joined chain, or
+	// wrap it without forwarding Timeout. Inspect the remaining causes too.
+	switch wrapped := err.(type) {
+	case interface{ Unwrap() []error }:
+		for _, child := range wrapped.Unwrap() {
+			if wikiTransportTimeout(child) {
+				return true
+			}
+		}
+	case interface{ Unwrap() error }:
+		return wikiTransportTimeout(wrapped.Unwrap())
+	}
+	return false
+}
+
 func (s *wikiIngestService) runWikiRequest(
 	ctx context.Context, key string, shared bool, stage string,
 	execute func(context.Context, *wikiLLMRequest) (wikiTemplateResult, error),
 ) (result wikiTemplateResult, err error) {
 	defer func() {
 		if err != nil {
+			cause := wikiFailureCauseCategory(err)
+			if cause == "transport error" {
+				logger.Warnf(ctx, "wiki ingest: call failed stage=%s outcome=%s cause=%s detail=%s",
+					stage, wikiFailureOutcome(err), cause, wikiTransportDetail(err))
+				return
+			}
 			logger.Warnf(ctx, "wiki ingest: call failed stage=%s outcome=%s cause=%s",
-				stage, wikiFailureOutcome(err), wikiFailureCauseCategory(err))
+				stage, wikiFailureOutcome(err), cause)
 		}
 	}()
 	if err := ctx.Err(); err != nil {
