@@ -13,13 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The production pipeline dispatches CHUNK_SEARCH_PARALLEL. Keep this own
-// fixture explicit; the frozen RED's missing registration is reported in #287.
+// The shared acceptance fixture owns the production parallel search registration.
 func q2aProductionFixture() (context.Context, *sessionService, *q1aKBs) {
-	ctx, svc, kbs := q2aFixture()
-	chatpipeline.NewPluginSearchParallel(svc.eventManager, kbs, svc.knowledgeService,
-		svc.chunkService, svc.cfg, nil, svc.tenantService, nil, nil, nil, nil, nil, nil)
-	return ctx, svc, kbs
+	return q2aFixture()
 }
 
 func TestQ2aDeniedRawIsSilentAndPublishedStillAnswers(t *testing.T) {
