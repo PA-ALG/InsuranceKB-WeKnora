@@ -245,6 +245,7 @@ func (r *sourceRegistry) modelChunksFromRows(mode string, rows []map[string]inte
 			DocumentTitle:   title,
 			ChunkIndex:      chunkIndex,
 			ChunkType:       chunkType,
+			Metadata:        sourceProvenance(row["metadata"]),
 		})
 		chunks = append(chunks, modelChunk{
 			handle:     chunkHandle,
