@@ -163,7 +163,24 @@ func TestCandidateOverflowDepthBudgetAndSafeLogs(t *testing.T) {
 	e, c, items, err := (&wikiIngestService{}).extractCandidateSlugs(
 		ctx, model, "kb", windows, "en", nil, wikiOutcomeBatchContext(),
 	)
-	want := [][]int{{0, 1, 2, 3, 4, 5, 6, 7}, {0, 1, 2, 3}, {0, 1}, {2, 3}, {4, 5, 6, 7}, {4, 5}, {6, 7}}
+	// S6a-5: a split depth of 3 reaches single chunks.
+	want := [][]int{
+		{0, 1, 2, 3, 4, 5, 6, 7},
+		{0, 1, 2, 3},
+		{0, 1},
+		{0},
+		{1},
+		{2, 3},
+		{2},
+		{3},
+		{4, 5, 6, 7},
+		{4, 5},
+		{4},
+		{5},
+		{6, 7},
+		{6},
+		{7},
+	}
 	if !reflect.DeepEqual(sent, want) || wikiFailureOutcome(err) != wikiOutcomeFailed ||
 		!errors.Is(err, errWikiOutputTruncated) || len(e)+len(c)+len(items) != 0 {
 		t.Fatalf("bounded sequential tree: sent=%v err=%v partial=%d", sent, err, len(e)+len(c)+len(items))
@@ -172,6 +189,7 @@ func TestCandidateOverflowDepthBudgetAndSafeLogs(t *testing.T) {
 	for _, fields := range []string{
 		"window=0 split_depth=1 left_chunks=4 right_chunks=4",
 		"window=0 split_depth=2 left_chunks=2 right_chunks=2",
+		"window=0 split_depth=3 left_chunks=1 right_chunks=1",
 	} {
 		if !strings.Contains(logs, fields) {
 			t.Fatalf("missing diagnostic %q in %s", fields, logs)

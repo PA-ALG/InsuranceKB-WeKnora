@@ -106,7 +106,8 @@ func TestCitationOverflowBoundsAndNonRetryableResults(t *testing.T) {
 		outcome   string
 		truncated bool
 	}{
-		{"depth limit", 8, citationOverflowAnswer(), nil, 7, wikiOutcomeFailed, true},
+		// S6a-5: a split depth of 3 turns 8 chunks into 1 + 2 + 4 + 8 calls.
+		{"depth limit", 8, citationOverflowAnswer(), nil, 15, wikiOutcomeFailed, true},
 		{"single chunk", 1, citationOverflowAnswer(), nil, 1, wikiOutcomeFailed, true},
 		{"invalid json", 8, &types.ChatResponse{Content: "{"}, nil, 1, wikiOutcomeFailed, false},
 		{
