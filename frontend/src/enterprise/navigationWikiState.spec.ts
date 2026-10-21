@@ -37,7 +37,8 @@ it('preserves a manual collapse on the same page, including closing and reopenin
   expect(wrapper.findAll('[aria-current="page"]').map(link => link.text())).toEqual(['等待期'])
 })
 
-it('preserves a manual expansion, then resets for a missing page or a different release', async () => {
+// S3j (user 2026-10-21): the reader's choice survives page changes, including a missing page.
+it('preserves a manual expansion across pages, then leaves a release without pages', async () => {
   const wrapper = nav()
   const details = wrapper.get<HTMLDetailsElement>('[data-nav-wiki]')
   details.element.open = true
@@ -45,7 +46,7 @@ it('preserves a manual expansion, then resets for a missing page or a different 
   await wrapper.setProps({ release: { ...wrapper.props('release') } })
   expect(details.element.open).toBe(true)
   await wrapper.setProps({ wikiPageKey: 'concept/missing' })
-  expect(wrapper.get<HTMLDetailsElement>('[data-nav-wiki]').element.open).toBe(false)
+  expect(wrapper.get<HTMLDetailsElement>('[data-nav-wiki]').element.open).toBe(true)
   await wrapper.setProps({ wikiPageKey: 'concept/kuan-xian-qi' })
   expect(wrapper.get<HTMLDetailsElement>('[data-nav-wiki]').element.open).toBe(true)
   await wrapper.setProps({ release: { ...wrapper.props('release'), id: 'next', members: [] } })
