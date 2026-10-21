@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
             base_release_id=active.id if active else None,
         )
         # No-op is about Claim changes, even when page metadata is missing from Active.
-        write_reviews(args.run_root, changes)
+        write_reviews(args.run_root, args.product, changes)
         if summary["no_changes"]:
             return _emit(summary)
         review = review_claims(policy, output.pack_id, list(changes.members), scores)

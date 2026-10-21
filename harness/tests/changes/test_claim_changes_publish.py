@@ -201,10 +201,62 @@ def test_conflict_only_writes_safe_hashes(
     result = json.loads(capsys.readouterr().out)
     assert result["counts"]["conflict"] == 1 and result["no_changes"] is True
     assert result["conflicts"] == [incoming[0].logical_key]
-    lines = (tmp_path / "review_items.jsonl").read_text()
+    lines = (tmp_path / "1828/review_items.jsonl").read_text()
     item = json.loads(lines)
     assert item["slug"] == incoming[0].logical_key and item["verdict"] == "conflict"
     assert item["hashes"] and "SECRET-OLD" not in lines and "原材料不同说法" not in lines
+    assert all(method == "GET" for method, _, _ in server.seen)
+
+
+def test_review_reports_for_two_products_do_not_overwrite(
+    setup: Any, tmp_path: Path, capsys: Any,
+) -> None:
+    argv, server, incoming = setup
+    other = "annuity"
+    output = CompileOutput.model_validate_json((tmp_path / "1828/output.json").read_text())
+    other_output = output.model_copy(update={"entity_id": other})
+    (tmp_path / other).mkdir()
+    (tmp_path / other / "output.json").write_text(other_output.model_dump_json())
+    metadata = tmp_path / "repo/dataset/shouxian_product" / other
+    metadata.mkdir()
+    (metadata / "product_meta.json").write_text(json.dumps({
+        "planCode": other, "clauseName": "另一款演示保险",
+    }))
+    mapping = json.loads((tmp_path / "map.json").read_text())
+    mapping["products"][other] = mapping["products"]["1828"]
+    (tmp_path / "map.json").write_text(json.dumps(mapping))
+    second = claims_from(other_output, SOURCE, {"保险条款.pdf": SourceRevision("k-1", 2)})
+    base_by_product: dict[str, list[Claim]] = {}
+    for product, claims in (("1828", incoming), (other, second)):
+        proof = claims[0].evidence[0].model_copy(update={
+            "quote": "不要写入报告的原文",
+            "quote_sha256": hashlib.sha256("不要写入报告的原文".encode()).hexdigest(),
+        })
+        locked = claims[0].model_copy(update={
+            "value": f"DO-NOT-LOG-{product}", "expert_lock": True, "evidence": [proof],
+        })
+        base_by_product[product] = [locked, *claims[1:]]
+    server.active = active([*base_by_product["1828"], *base_by_product[other]])
+    for product in ("1828", other):
+        product_args = argv.copy()
+        product_args[product_args.index("--product") + 1] = product
+        assert command.main(product_args) == 0
+        result = json.loads(capsys.readouterr().out)
+        assert result["counts"]["conflict"] == 1 and result["no_changes"]
+    reports = {product: tmp_path / product / "review_items.jsonl" for product in ("1828", other)}
+    for product, claims in (("1828", incoming), (other, second)):
+        report = reports[product].read_text()
+        item = json.loads(report)
+        assert set(item) == {"slug", "verdict", "hashes"}
+        assert item["slug"] == claims[0].logical_key and item["verdict"] == "conflict"
+        assert item["hashes"] and "DO-NOT-LOG" not in report and "不要写入报告的原文" not in report
+    assert not (tmp_path / "review_items.jsonl").exists()
+    other_report = reports[other].read_bytes()
+    server.active = active([*incoming, *base_by_product[other]])
+    assert command.main(argv) == 0
+    capsys.readouterr()
+    assert reports["1828"].read_text() == ""
+    assert reports[other].read_bytes() == other_report
     assert all(method == "GET" for method, _, _ in server.seen)
 
 

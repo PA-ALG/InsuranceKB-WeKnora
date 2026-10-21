@@ -35,8 +35,9 @@ def summarize(changes: ChangeSet, active: Release | None) -> dict[str, Any]:
     }
 
 
-def write_reviews(directory: Path, changes: ChangeSet) -> None:
-    """This artifact is a report, never another authority for the review queue."""
+def write_reviews(run_root: Path, product: str, changes: ChangeSet) -> None:
+    """Report beside this product's output, never another authority for the review queue."""
+    directory = run_root / product
     rows = [
         json.dumps(
             {"slug": item.target, "verdict": "conflict", "hashes": sorted(set(item.evidence))},
