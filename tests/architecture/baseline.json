@@ -9,7 +9,7 @@
   "G5_hardcoded": 76,
   "G6_private_access": 275,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 479,
+  "G10_upstream_patches": 481,
   "G11_new_file_location": 679
  },
  "guards": {
@@ -707,6 +707,7 @@
    "go.sum": 1,
    "internal/agent/act_order_test.go": 1,
    "internal/agent/approval/gate_test.go": 1,
+   "internal/agent/finalize.go": 1,
    "internal/agent/grounding_prompt_test.go": 1,
    "internal/agent/observe.go": 1,
    "internal/agent/prompts.go": 1,
@@ -1012,6 +1013,7 @@
    "internal/middleware/ws_auth.go": 1,
    "internal/modelcontext/model_output.go": 1,
    "internal/modelcontext/registry_test.go": 1,
+   "internal/modelcontext/sources.go": 1,
    "internal/modelcontext/tool_policy.go": 1,
    "internal/models/api/anthropicmessages/client.go": 1,
    "internal/models/api/endpoint.go": 1,

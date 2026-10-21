@@ -24,6 +24,63 @@ type ChunkReference struct {
 	DocumentTitle   string
 	ChunkIndex      int
 	ChunkType       string
+	Metadata        map[string]string // Immutable tool provenance snapshot, including citation locators.
+}
+
+// sourceProvenance copies only the source labels supplied by a retrieval tool.
+// Keep the whole locator with its version; never infer provenance from IDs.
+func sourceProvenance(metadata any) map[string]string {
+	snapshot := make(map[string]string)
+	switch fields := metadata.(type) {
+	case map[string]string:
+		for key, value := range fields {
+			snapshot[key] = value
+		}
+	case map[string]interface{}:
+		for key, value := range fields {
+			if text, ok := value.(string); ok {
+				snapshot[key] = text
+			}
+		}
+	}
+	switch snapshot["source_tier"] {
+	case "release", "wiki_page", "raw_text":
+		return snapshot
+	default:
+		return nil
+	}
+}
+
+// CitedKnowledgeReferences records only current evidence present in an already
+// decoded final answer. It does not register sources or infer their provenance.
+func (r *Registry) CitedKnowledgeReferences(answer string) []*types.SearchResult {
+	if r == nil || r.sources == nil || !r.sources.citationsEnabled {
+		return nil
+	}
+	var refs []*types.SearchResult
+	seen := make(map[string]bool)
+	for _, tag := range publicKBTagRE.FindAllString(answer, -1) {
+		id := publicAttr(chunkAttrRE, tag)
+		handle, ok := r.sources.chunks.handleForKey(id)
+		if !ok || seen[id] {
+			continue
+		}
+		if _, citable := r.sources.citable.Load(handle); !citable {
+			continue
+		}
+		_, source, ok := r.sources.chunks.resolve(handle)
+		if !ok {
+			continue
+		}
+		ref := &types.SearchResult{
+			ID: id, KnowledgeID: source.KnowledgeID, KnowledgeBaseID: source.KnowledgeBaseID,
+			KnowledgeTitle: source.DocumentTitle, ChunkIndex: source.ChunkIndex, ChunkType: source.ChunkType,
+			Metadata: sourceProvenance(source.Metadata),
+		}
+		refs = append(refs, ref)
+		seen[id] = true
+	}
+	return refs
 }
 
 // webMeta is the per-web-page metadata stored next to the raw URL.
@@ -92,6 +149,11 @@ func (r *sourceRegistry) registerChunk(ref ChunkReference, evidence bool) string
 	if shortSourceHandleRE.MatchString(ref.ChunkID) {
 		return knownHandle(r.chunks, ref.ChunkID)
 	}
+	if evidence {
+		ref.Metadata = sourceProvenance(ref.Metadata)
+	} else {
+		ref.Metadata = nil // History and directory entries cannot supply current provenance.
+	}
 	handle := r.chunks.register(ref.ChunkID, ref.ChunkID, ref, mergeChunkReference)
 	if evidence {
 		r.citable.Store(handle, true)
@@ -114,6 +176,9 @@ func mergeChunkReference(dst *ChunkReference, src ChunkReference) {
 	}
 	if dst.ChunkType == "" {
 		dst.ChunkType = src.ChunkType
+	}
+	if len(dst.Metadata) == 0 && len(src.Metadata) > 0 {
+		dst.Metadata = src.Metadata
 	}
 }
 
@@ -187,6 +252,7 @@ func (r *sourceRegistry) RegisterSearchResults(results []*types.SearchResult) {
 			DocumentTitle:   firstNonEmpty(result.KnowledgeTitle, result.KnowledgeFilename),
 			ChunkIndex:      result.ChunkIndex,
 			ChunkType:       result.ChunkType,
+			Metadata:        result.Metadata,
 		})
 	}
 }

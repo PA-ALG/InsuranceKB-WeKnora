@@ -49,5 +49,7 @@ func KnowledgeNotice(turn Turn) string {
 	if len(turn.RawKnowledge) > 0 {
 		notice += "已发布知识查不到时可用原文检索补充；原文仅限本轮固定材料，明确标注原文检索（未经编译审核），不能混淆两种来源。"
 	}
+	notice += `回答中的每一条产品事实都必须在同一行带上支撑它的来源句柄（如 <ref id="c1"/>）；` +
+		"找不到可引用来源的产品事实不要写，改为说明未找到。"
 	return notice
 }
