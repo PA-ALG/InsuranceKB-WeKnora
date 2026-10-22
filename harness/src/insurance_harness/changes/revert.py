@@ -42,24 +42,45 @@ def _entity_members(members: Iterable[ReleaseMember], entity_id: str) -> dict[st
     return owned
 
 
+class RevertError(ValueError):
+    """A precondition that stops a revert before any write; ``code`` is caller-safe."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
 def revert_bundle(
     active: Release, target: Release, entity_id: str, *, compiler_identity: str
 ) -> CandidateBundle | None:
-    """The delta that makes the entity look as it did in ``target``; None when it already does."""
+    """The delta that makes the entity look as it did in ``target``; None when it already does.
+
+    Refuses (RevertError) a retired target, and an older member whose slug the active release
+    now uses for another entity or kind: applying it would overwrite that member.
+    """
+    if target.retired_at:
+        raise RevertError("RELEASE_RETIRED")
     now = _entity_members(active.members, entity_id)
     then = _entity_members(target.members, entity_id)
-    members = [
-        BundleMember(
-            kind=old.kind,
-            logical_slug=slug,
-            payload=old.payload,
-            member_digest=old.member_digest,
-            evidence_refs=list(old.evidence_refs),
-            access_scope=old.access_scope,
+    occupied = {member.logical_slug for member in active.members}
+    members: list[BundleMember] = []
+    for slug, old in sorted(then.items()):
+        if slug in now and now[slug].member_digest == old.member_digest:
+            continue
+        if slug not in now and slug in occupied:
+            raise RevertError("SLUG_COLLISION")
+        if slug in now and now[slug].kind != old.kind:
+            raise RevertError("SLUG_COLLISION")
+        members.append(
+            BundleMember(
+                kind=old.kind,
+                logical_slug=slug,
+                payload=old.payload,
+                member_digest=old.member_digest,
+                evidence_refs=list(old.evidence_refs),
+                access_scope=old.access_scope,
+            )
         )
-        for slug, old in sorted(then.items())
-        if slug not in now or now[slug].member_digest != old.member_digest
-    ]
     removals = sorted(slug for slug in now if slug not in then)
     if not members and not removals:
         return None
@@ -74,15 +95,16 @@ def revert_bundle(
     )
 
 
-def _stale_concepts(active: Release, entity_id: str) -> list[str]:
-    prefix = entity_id + "/"
+def stale_concepts(active: Release, slugs: Iterable[str]) -> list[str]:
+    """Active concepts whose ``based_on`` names one of these member slugs."""
+    touched = set(slugs)
     return sorted(
         member.logical_slug
         for member in active.members
         if member.kind == "concept"
         and isinstance(member.payload, dict)
         and isinstance(member.payload.get("based_on"), dict)
-        and any(str(key).startswith(prefix) for key in member.payload["based_on"])
+        and touched.intersection(member.payload["based_on"])
     )
 
 
@@ -119,15 +141,15 @@ def main(argv: list[str] | None = None) -> int:
             return _emit({**report, "stopped": "NO_ACTIVE_RELEASE"}, 2)
         target = client.release(args.space, args.to_release)
         bundle = revert_bundle(active, target, args.entity, compiler_identity=IDENTITY)
-        report.update(
-            base_release_id=active.id, stale_concepts=_stale_concepts(active, args.entity)
-        )
+        report["base_release_id"] = active.id
         if bundle is None:
-            return _emit({**report, "no_changes": True})
+            return _emit({**report, "no_changes": True, "stale_concepts": []})
+        changed = [m.logical_slug for m in bundle.members] + list(bundle.removals)
         report.update(
             no_changes=False,
             members=[m.logical_slug for m in bundle.members],
             removals=list(bundle.removals),
+            stale_concepts=stale_concepts(active, changed),
         )
         if args.dry_run:
             return _emit(report)
@@ -141,13 +163,16 @@ def main(argv: list[str] | None = None) -> int:
         report["decision_id"] = decision.id
         if args.activate:
             released = client.activate(args.space, candidate.id, decision.id)
+            # The revert is live from here: keep its identity even if the read-back fails.
+            report.update(release_id=released.id, epoch=released.epoch)
             check = client.release(args.space, released.id)
             digests = {m.logical_slug: m.member_digest for m in check.members}
             if any(digests.get(m.logical_slug) != m.member_digest for m in bundle.members) or any(
                 slug in digests for slug in bundle.removals
             ):
                 raise PlatformError("RELEASE_MISMATCH")
-            report.update(release_id=released.id, epoch=released.epoch)
+    except RevertError as error:
+        return _emit({**report, "stopped": error.code}, 2)
     except PlatformError as error:
         return _emit({**report, "stopped": error.code}, 2)
     return _emit(report)
