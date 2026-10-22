@@ -12,7 +12,6 @@
     "type-check": "vue-tsc --build",
     "test": "tsx --test",
     "test:component": "vitest run --config vitest.config.ts",
-    "test:schema-wiki-component": "npm run test:component",
     "check-i18n": "tsx --test src/i18n/localeKeyAudit.test.ts",
     "scan-i18n-gaps": "tsx src/i18n/localeGapScan.ts",
     "regenerate-i18n-locales": "tsx src/i18n/regeneratePrunedLocales.ts"

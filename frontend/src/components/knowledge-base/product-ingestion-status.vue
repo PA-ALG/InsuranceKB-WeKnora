@@ -63,7 +63,8 @@ function publishedLink(run: ProductIngestionRun): string | undefined {
     if (!url.startsWith(`${prefix}/`) && !url.startsWith(`${prefix}?`) && !url.startsWith(`${prefix}#`) && url !== prefix) return
     if (parsed.origin !== 'https://platform.invalid' || parsed.pathname !== url.split(/[?#]/)[0]) return
     const suffix = parsed.pathname.slice(prefix.length)
-    if (!/^(?:\/schema-wiki(?:\/concept-pages\/[^/%]+|\/entities\/[^/%]+\/(?:overview|free-wiki|sections\/[^/%]+|fields\/[^/%]+))?)?$/.test(suffix)) return
+    // Only the knowledge base page: the 830-era Schema Wiki pages were removed in S7b.
+    if (suffix !== '') return
     return url
   } catch { return }
 }

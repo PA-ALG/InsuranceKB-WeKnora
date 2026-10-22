@@ -15,19 +15,19 @@ function deferred<T>() {
 const authority = { wiki_kb_id: 'wiki', space_id: 'space', raw_kb_id: 'raw', release_id: 'release-one' }
 afterEach(() => { scopes.splice(0).forEach(scope => scope.stop()); vi.resetAllMocks() })
 describe('release custody', () => {
-  it('hides native tabs while loading, then redirects managed graph entry to Schema Wiki', async () => {
+  it('hides native tabs while loading, then redirects managed graph entry to documents', async () => {
     const response = deferred<any>(); vi.mocked(get).mockReturnValue(response.promise)
     const tab = ref('graph'); const state = scoped(() => useReleaseCustody(ref('wiki'), tab))
     expect(state.nativeWikiAllowed.value).toBe(false)
     response.resolve({ managed: true, kind: 'wiki', state: 'active' }); await nextTick()
     expect(state.isManaged.value).toBe(true); expect(state.nativeWikiAllowed.value).toBe(false)
-    expect(tab.value).toBe('schema')
+    expect(tab.value).toBe('documents')
     expect(get).toHaveBeenCalledWith('/api/v1/knowledgebase/wiki/release-custody')
   })
-  it('keeps managed knowledge bases on Schema Wiki if a native tab is selected later', async () => {
+  it('keeps managed knowledge bases on documents if a native tab is selected later', async () => {
     vi.mocked(get).mockResolvedValue({ managed: true, kind: 'wiki', state: 'active' } as any)
-    const tab = ref('schema'); scoped(() => useReleaseCustody(ref('wiki'), tab)); await nextTick()
-    tab.value = 'materials'; await nextTick(); expect(tab.value).toBe('schema')
+    const tab = ref('documents'); scoped(() => useReleaseCustody(ref('wiki'), tab)); await nextTick()
+    tab.value = 'materials'; await nextTick(); expect(tab.value).toBe('documents')
     tab.value = 'documents'; await nextTick(); expect(tab.value).toBe('documents')
   })
   it('preserves unmanaged native tabs and rejects stale classifications after navigation', async () => {
@@ -42,7 +42,7 @@ describe('release custody', () => {
   it('fails closed on errors and malformed classifications and supports retry', async () => {
     vi.mocked(get).mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce({ managed: 'false' } as any)
       .mockResolvedValueOnce({ managed: false, kind: '', state: '' } as any)
-    const state = scoped(() => useReleaseCustody(ref('wiki'), ref('schema'))); await nextTick()
+    const state = scoped(() => useReleaseCustody(ref('wiki'), ref('documents'))); await nextTick()
     expect(state.error.value).toBeTruthy(); expect(state.nativeWikiAllowed.value).toBe(false)
     await state.retry(); expect(state.error.value).toBeTruthy(); expect(state.nativeWikiAllowed.value).toBe(false)
     await state.retry(); expect(state.error.value).toBe(''); expect(state.nativeWikiAllowed.value).toBe(true)

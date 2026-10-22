@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { get } from '@/utils/request'
-import { createPdfJsPort, type OpenedPdfDocument } from '@/components/schema-wiki/pdfJsPort'
+import { createPdfJsPort, type OpenedPdfDocument } from './pdfJsPort'
 import { highlightBoxes, type NormalizedRect } from './sourcePage'
 
 const props = defineProps<{
