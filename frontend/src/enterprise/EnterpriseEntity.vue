@@ -107,6 +107,12 @@ function showPublished(result: { releaseId: string; epoch: number }) {
 function showActive() {
   editing.value = null
   published.value = null
+  // Already on the Active route: dropping the pin would be a duplicate navigation that reads
+  // nothing, so read the Active release again here.
+  if (props.releaseId === undefined) {
+    void load()
+    return
+  }
   const { release: _pinned, ...query } = route?.query ?? {}
   void router?.replace({ query, hash: route?.hash })
 }
