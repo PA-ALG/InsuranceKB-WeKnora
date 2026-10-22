@@ -21,7 +21,7 @@
 1. **清空再导出**：`knowledge/__init__.py` 只留文档字符串，说明包内只剩 Alembic 需要的表与 DDL。`from insurance_harness.knowledge import tables` 照常可用。
 2. **删除 18 个模块**及包内 `README.md`，即 007 主链说明。
 3. **删除 3 个 `knowledge_compiler` 模块**，并从守卫保留清单中移除对应 3 项。保留清单只减不增。
-4. **删除 31 个测试文件**。它们只测试被删模块：
+4. **删除只测试被删模块的测试文件**：
    - `test_incremental_changes_058.py`；
    - `test_knowledge_{e2e,importer,merge,pages,publisher,review}.py`；
    - `test_publish_state_machine_018.py`、`test_quality_gate_019.py`、`test_reconcile_018.py`、`test_release_plan_018.py`；
@@ -34,6 +34,13 @@
    - `test_source_retract_017.py`、`test_source_revision_{import,notify,postgres}_017.py`。
 
    `test_source_lifecycle_migration_021.py` 只用 `tables`，保留。
+
+   还要删除只服务于上述测试的辅助文件，它们导入被删模块：
+   - `tests/kbhelpers.py`、`tests/wbhelpers.py`；
+   - `tests/support/{legacy_publisher_007,release_018,source_revision,source_bridge}.py`；
+   - 以及只测试 `source_bridge` 辅助函数的 `test_source_bridge_contract_017.py`，它对应的 live 测试已在上表删除。
+
+   > 2026-10-22 修正（Claude 实现时发现）：原清单只按直接导入列出测试，漏了导入被删模块的辅助文件及其唯一使用者，补列于此。
 5. **其余配置**：若 `harness/pyproject.toml` 的 mypy、ruff 或覆盖率配置点名了被删模块或测试，一并删除这些条目。
 
 不做：`db/`、`adapters/`、`product/` 等其余 RETIRE 目录，以及 `product_ingestion` 链，留给 S7d。
@@ -54,7 +61,7 @@
 
 - `harness/src/insurance_harness/knowledge/`（清空 `__init__`，删 18 个模块与 README）；
 - `harness/src/insurance_harness/knowledge_compiler/{incremental_changes,source_authority,retractions}.py`（删除）；
-- `harness/tests/`（删除 §2 列出的 31 个文件）；
+- `harness/tests/`（删除 §2 列出的 32 个测试文件与 6 个辅助文件）；
 - `harness/pyproject.toml`（只删指向被删内容的条目，如有）；
 - `tests/architecture/baseline.json`（脚本下调）。
 
