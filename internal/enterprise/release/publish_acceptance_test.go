@@ -236,8 +236,9 @@ func TestAStaleBaseNeedsRebaseAndWritesNothing(t *testing.T) {
 	first := publish(t, s, candidateBundle(t, "", nil, member(t, "a", map[string]any{"v": 1})))
 	ctx := context.Background()
 
+	// S8b: a candidate prepared before the first release is now rebased when the Head did not
+	// touch its slugs (rebase_acceptance_test.go); an unknown base still needs a rebase.
 	for _, raw := range [][]byte{
-		candidateBundle(t, "", nil, member(t, "b", map[string]any{"v": 2})),            // still based on "no release"
 		candidateBundle(t, "release-old", nil, member(t, "b", map[string]any{"v": 2})), // another base
 	} {
 		c, err := s.Receive(ctx, principal(), spaceID, raw)
