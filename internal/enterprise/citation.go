@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 )
@@ -66,6 +67,13 @@ func ReadCitation(
 	if err != nil {
 		return nil, err
 	}
+	return verifySourceCitation(ctx, pages, p, space, at)
+}
+
+// verifySourceCitation opens the captured page of a PDF text span and checks the quote.
+func verifySourceCitation(
+	ctx context.Context, pages *source.Service, p release.Principal, space string, at release.EvidenceAt,
+) (*CitationView, error) {
 	ev := at.Evidence
 	ref, isSource := release.ParseSourceRef(ev.SourceRef)
 	loc := ev.Locator
@@ -96,7 +104,10 @@ func ReadCitation(
 
 // citation opens one evidence object of an explicit release and re-verifies it against the
 // captured page before returning the quote and its highlight (S4c-2b-2 Spec §3.4).
-func citation(c *gin.Context, service *release.Service, pages *source.Service, spacesPath string) {
+// An expert revision citation answers with its record when experts is configured (S9a).
+func citation(
+	c *gin.Context, service *release.Service, pages *source.Service, experts *expert.Service, spacesPath string,
+) {
 	p, ok := publishingRequest(c, service)
 	if !ok {
 		return
@@ -108,7 +119,17 @@ func citation(c *gin.Context, service *release.Service, pages *source.Service, s
 		return
 	}
 	space := c.Param("space_id")
-	verified, err := ReadCitation(c.Request.Context(), service, pages, p, space, c.Param("release_id"), slug, index)
+	ctx := c.Request.Context()
+	at, err := service.Evidence(ctx, p, space, c.Param("release_id"), slug, index)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if experts != nil && at.Evidence.Locator.Kind == expert.LocatorKind {
+		expertCitation(c, experts, p, at)
+		return
+	}
+	verified, err := verifySourceCitation(ctx, pages, p, space, at)
 	if err != nil {
 		var failure *citationSourceFailure
 		if errors.As(err, &failure) {

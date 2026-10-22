@@ -14,6 +14,7 @@ import (
 	appservice "github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
+	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	publishedknowledge "github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
@@ -84,11 +85,19 @@ func Register(container *dig.Container) error {
 	}); err != nil {
 		return err
 	}
-	return container.Provide(func(db *gorm.DB, spaces Spaces, releases *release.Service) *spotcheck.Service {
+	if err := container.Provide(func(db *gorm.DB, spaces Spaces, releases *release.Service) *spotcheck.Service {
 		if releases == nil {
 			return nil
 		}
 		return spotcheck.NewService(New(db, spaces), releases)
+	}); err != nil {
+		return err
+	}
+	return container.Provide(func(db *gorm.DB, spaces Spaces, releases *release.Service) *expert.Service {
+		if releases == nil {
+			return nil
+		}
+		return expert.NewService(releases, New(db, spaces))
 	})
 }
 
@@ -156,8 +165,12 @@ func Production(
 		return nil, fmt.Errorf("enterprise publishing: contract schemas do not compile: %w", err)
 	}
 	store := New(db, spaces)
-	return release.NewService(store, NewEvidence(spaces, revisions), schemas,
-		release.WithPublisher(store), release.WithEvidenceVerifier(NewEvidenceVerifier(spaces, pages)),
+	// Expert revision citations (S9a) resolve from the revision records; every other reference
+	// keeps the captured-source path.
+	resolver := expert.NewResolver(store, NewEvidence(spaces, revisions))
+	verifier := expert.NewVerifier(store, NewEvidenceVerifier(spaces, pages))
+	return release.NewService(store, resolver, schemas,
+		release.WithPublisher(store), release.WithEvidenceVerifier(verifier),
 		release.WithRetirer(store)), nil
 }
 

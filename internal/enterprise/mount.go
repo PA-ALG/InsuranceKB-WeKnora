@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
@@ -83,7 +84,7 @@ func Mount(r gin.IRouter, deps Deps) {
 	group.GET("/sources/:knowledge_id/pins", func(c *gin.Context) { sourcePins(c, deps.Candidates) })
 	spacesPath := strings.TrimSuffix(group.BasePath(), "/")
 	group.GET("/releases/:release_id/citation", func(c *gin.Context) {
-		citation(c, deps.Candidates, deps.Sources, spacesPath)
+		citation(c, deps.Candidates, deps.Sources, nil, spacesPath)
 	})
 	group.GET("/releases/:release_id/sources/:knowledge_id/attempts/:attempt/file", func(c *gin.Context) {
 		citedFile(c, deps.Candidates, deps.Files)
@@ -301,8 +302,10 @@ func writeError(c *gin.Context, err error) {
 		case release.ErrorReleaseActive, release.ErrorSourceUnavailable:
 			status = http.StatusConflict
 		case release.ErrorRetirementInvalid, release.ErrorInvalidRequest,
-			spotcheck.ErrorSampleInvalid, spotcheck.ErrorVerdictInvalid:
+			spotcheck.ErrorSampleInvalid, spotcheck.ErrorVerdictInvalid, expert.ErrorInvalid:
 			status = http.StatusBadRequest
+		case expert.ErrorStale:
+			status = http.StatusConflict
 		}
 		c.AbortWithStatusJSON(status, gin.H{"success": false, "code": failure.Code, "error": failure.Detail})
 		return

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
@@ -19,11 +20,12 @@ type SpaceDirectory interface {
 	KnowledgeBases(tenantID uint64, spaceID string) (rawKB, wikiKB string, ok bool)
 }
 
-// SessionDeps supplies collaborators for browser reads and attributed spot-check verdicts.
+// SessionDeps supplies collaborators for browser reads, attributed spot-check verdicts and expert edits.
 type SessionDeps struct {
 	Candidates *release.Service
 	Sources    *source.Service
 	SpotChecks *spotcheck.Service
+	Experts    *expert.Service
 	Files      SourceFiles
 	Spaces     SpaceDirectory
 }
@@ -95,7 +97,7 @@ func MountSessionReads(r gin.IRouter, deps SessionDeps, viewGuards ...gin.Handle
 	view.GET("/releases/:release_id", func(c *gin.Context) { readRelease(c, service, c.Param("release_id")) })
 	spacesPath := strings.TrimSuffix(view.BasePath(), "/")
 	view.GET("/releases/:release_id/citation", func(c *gin.Context) {
-		citation(c, service, deps.Sources, spacesPath)
+		citation(c, service, deps.Sources, deps.Experts, spacesPath)
 	})
 	view.GET("/releases/:release_id/sources/:knowledge_id/attempts/:attempt/file", func(c *gin.Context) {
 		if id := strings.TrimSpace(c.Param("release_id")); id == "" || id == "active" {
