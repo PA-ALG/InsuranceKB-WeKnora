@@ -15,17 +15,10 @@ LIVE_GATE = HARNESS_ROOT / "scripts" / "run_live_gate.py"
 JUNIT_GUARD = HARNESS_ROOT / "scripts" / "check_junit.py"
 
 FROZEN_NODES = (
-    "tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip",
+    # S7c retired the legacy knowledge chain and with it three live nodes (knowledge
+    # publisher, release snapshot 018, source bridge 017).
     "tests/test_live.py::test_live_knowledge_endpoint_shape",
     "tests/test_live.py::test_live_wiki_page_crud_roundtrip",
-    (
-        "tests/test_release_snapshot_live_018.py::"
-        "test_r6_4_live_release_v1_v2_rollback_roundtrip"
-    ),
-    (
-        "tests/test_source_bridge_live_017.py::"
-        "test_live_source_bridge_compiler_import_evidence_backlink"
-    ),
 )
 
 
@@ -59,7 +52,7 @@ def _junit_report(
     )
 
 
-def test_r4_2_manifest_is_the_frozen_five_node_identity_set() -> None:
+def test_r4_2_manifest_is_the_frozen_node_identity_set() -> None:
     module = _live_gate_module()
 
     assert module.load_frozen_nodes(LIVE_MANIFEST) == FROZEN_NODES
@@ -98,7 +91,7 @@ def test_r4_2_collection_requires_exact_set_equality(mutation: str) -> None:
         _live_gate_module().require_exact_node_set("collection", nodes, FROZEN_NODES)
 
 
-def test_r4_2_junit_accepts_exact_five_identities(tmp_path: Path) -> None:
+def test_r4_2_junit_accepts_exact_frozen_identities(tmp_path: Path) -> None:
     report = tmp_path / "live.xml"
     _junit_report(report, FROZEN_NODES)
 
@@ -110,7 +103,7 @@ def test_r4_2_junit_accepts_exact_five_identities(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "junit counts: tests=5 skipped=0 failures=0 errors=0\n"
+    assert result.stdout == "junit counts: tests=2 skipped=0 failures=0 errors=0\n"
 
 
 def test_r4_2_sanitized_junit_contains_only_counts_and_exact_identities(
@@ -145,7 +138,7 @@ def test_r4_2_sanitized_junit_contains_only_counts_and_exact_identities(
     suite = next(element for element in root.iter() if element.tag == "testsuite")
     assert suite.attrib == {
         "name": "pytest-sanitized",
-        "tests": "5",
+        "tests": "2",
         "skipped": "0",
         "failures": "1",
         "errors": "0",
@@ -269,4 +262,4 @@ def test_r4_2_junit_rejects_nonzero_outcome_count(
     )
 
     assert result.returncode == 1
-    assert "tests=5" in result.stderr
+    assert "tests=2" in result.stderr

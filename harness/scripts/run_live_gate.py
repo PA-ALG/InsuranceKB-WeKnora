@@ -10,17 +10,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 FROZEN_LIVE_NODES = (
-    "tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip",
+    # S7c retired the legacy knowledge chain and with it three live nodes (knowledge
+    # publisher, release snapshot 018, source bridge 017).
     "tests/test_live.py::test_live_knowledge_endpoint_shape",
     "tests/test_live.py::test_live_wiki_page_crud_roundtrip",
-    (
-        "tests/test_release_snapshot_live_018.py::"
-        "test_r6_4_live_release_v1_v2_rollback_roundtrip"
-    ),
-    (
-        "tests/test_source_bridge_live_017.py::"
-        "test_live_source_bridge_compiler_import_evidence_backlink"
-    ),
 )
 JunitDetails = tuple[int, int, int, int, tuple[tuple[str, str], ...]]
 
@@ -160,7 +153,7 @@ def require_exact_junit_details(
     require_exact_node_set("JUnit", nodes, expected_nodes)
     if (
         tests != len(expected_nodes)
-        or len(expected_nodes) != 5
+        or len(expected_nodes) != len(FROZEN_LIVE_NODES)
         or skipped != 0
         or failures != 0
         or errors != 0
