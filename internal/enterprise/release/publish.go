@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -179,12 +180,15 @@ func (s *Service) Activate(ctx context.Context, p Principal, spaceID, candidateI
 		return Release{}, err
 	}
 	if err := checkBase(b, head); err != nil {
-		if b.BaseReleaseID != head.ReleaseID {
-			if replayed, ok, replayErr := s.replay(ctx, p, spaceID, c, d, b); ok || replayErr != nil {
-				return replayed, replayErr
-			}
+		if b.BaseReleaseID == head.ReleaseID {
+			return Release{}, err // same base, different epoch: the reference contradicts itself
 		}
-		return Release{}, err
+		if replayed, ok, replayErr := s.replay(ctx, p, spaceID, c, d, b); ok || replayErr != nil {
+			return replayed, replayErr
+		}
+		if rebaseErr := s.checkRebase(ctx, p, spaceID, b, base); rebaseErr != nil {
+			return Release{}, rebaseErr
+		}
 	}
 	members, err := materialize(base.Members, b)
 	if err != nil {
@@ -270,6 +274,50 @@ func validateDecision(in DecisionInput) error {
 		}
 	}
 	return nil
+}
+
+// checkRebase allows a candidate built on an older release onto the current Head only when
+// the Head has not touched any slug the candidate touches (S8b): each touched slug has the
+// same digest in the candidate's base and in the Head, or is absent from both. The delta
+// is then applied to the Head's members under the usual CAS. Anything else needs a rebase.
+func (s *Service) checkRebase(ctx context.Context, p Principal, spaceID string, b Bundle, head Release) error {
+	var baseMembers []Member
+	if b.BaseReleaseID != "" {
+		older, err := s.publisher.ReleaseByID(ctx, p.TenantID, spaceID, b.BaseReleaseID)
+		var failure *Error
+		if errors.As(err, &failure) && failure.Code == ErrorReleaseNotFound {
+			return &Error{Code: ErrorNeedsRebase, Detail: "candidate base release is unknown"}
+		}
+		if err != nil {
+			return err
+		}
+		baseMembers = older.Members
+	}
+	before, now := digestsBySlug(baseMembers), digestsBySlug(head.Members)
+	touched := make([]string, 0, len(b.Members)+len(b.Removals))
+	for _, m := range b.Members {
+		touched = append(touched, m.LogicalSlug)
+	}
+	touched = append(touched, b.Removals...)
+	conflicts := 0
+	for _, slug := range touched {
+		if before[slug] != now[slug] {
+			conflicts++
+		}
+	}
+	if conflicts > 0 {
+		return &Error{Code: ErrorNeedsRebase, Detail: fmt.Sprintf(
+			"the active release changed %d member(s) this candidate touches", conflicts)}
+	}
+	return nil
+}
+
+func digestsBySlug(members []Member) map[string]string {
+	out := make(map[string]string, len(members))
+	for _, m := range members {
+		out[m.LogicalSlug] = m.MemberDigest
+	}
+	return out
 }
 
 // checkBase requires the candidate to be built on exactly the current Head.
