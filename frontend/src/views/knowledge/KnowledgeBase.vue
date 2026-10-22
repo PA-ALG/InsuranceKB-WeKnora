@@ -56,7 +56,6 @@ import { useUploadTasksStore } from '@/stores/uploadTasks';
 import WikiBrowser from './wiki/WikiBrowser.vue';
 import { useReleaseCustody } from '@/enterprise/useReleaseCustody';
 import ReleaseCustodyGate from '@/enterprise/ReleaseCustodyGate.vue';
-import SchemaWikiCatalogEntry830G2 from './schema-wiki/SchemaWikiCatalogEntry830G2.vue';
 import ProductIngestionStatus from '@/components/knowledge-base/product-ingestion-status.vue';
 import { getProductIngestionEnabled, uploadProductBatchIfEnabled } from '@/api/product-ingestion';
 import { getWikiStats } from '@/api/wiki';
@@ -112,9 +111,9 @@ const kbLoading = ref(false);
 const docListLoading = ref(true);
 const isFAQ = computed(() => (kbInfo.value?.type || '') === 'faq');
 const isWiki = computed(() => isReleaseManaged.value || !!kbInfo.value?.indexing_strategy?.wiki_enabled);
-const validTabs = ['schema', 'materials', 'documents', 'graph'] as const
+const validTabs = ['materials', 'documents', 'graph'] as const
 type KbTab = typeof validTabs[number]
-const initTab = validTabs.includes(route.query.tab as any) ? (route.query.tab as KbTab) : 'schema'
+const initTab = validTabs.includes(route.query.tab as any) ? (route.query.tab as KbTab) : 'documents'
 const activeKbTab = ref<KbTab>(initTab);
 const { isManaged: isReleaseManaged, nativeWikiAllowed, loading: custodyLoading,
   error: custodyError, retry: retryCustody } = useReleaseCustody(kbId, activeKbTab);
@@ -2325,9 +2324,6 @@ const handleKBEditorSuccess = (kbIdValue: string) => {
               </button>
               <t-icon name="chevron-right" class="breadcrumb-separator" />
               <template v-if="isWiki">
-                <span :class="['breadcrumb-tab', { active: activeKbTab === 'schema' }]"
-                  @click="activeKbTab = 'schema'">{{ $t('knowledgeEditor.wikiBrowser.tabSchemaWiki') }}</span>
-                <span class="breadcrumb-tab-sep">/</span>
                 <span :class="['breadcrumb-tab', { active: activeKbTab === 'documents' }]"
                   @click="activeKbTab = 'documents'">{{ $t('knowledgeEditor.wikiBrowser.tabDocuments') }}</span>
                 <ReleaseCustodyGate :managed="isReleaseManaged" :native-allowed="nativeWikiAllowed"
@@ -2387,10 +2383,6 @@ const handleKBEditorSuccess = (kbIdValue: string) => {
       </div>
 
       <ProductIngestionStatus v-if="kbId && productIngestionEnabled" :knowledge-base-id="kbId" :refresh-token="productIngestionRefresh" />
-
-      <div v-if="isWiki && activeKbTab === 'schema'" class="wiki-main-area">
-        <SchemaWikiCatalogEntry830G2 v-if="kbId" :knowledge-base-id="kbId" />
-      </div>
 
       <!-- Materials Wiki Browser / Graph -->
       <div v-if="isWiki && nativeWikiAllowed && (activeKbTab === 'materials' || activeKbTab === 'graph')" class="wiki-main-area">
