@@ -114,6 +114,7 @@ Result{Release release.Release; Revision Revision}
 `POST /api/v1/enterprise/spaces/:space_id/view/expert-edits`
 
 - **授权**：租户角色 Admin 及以上，并且对该 Space 的 wiki 库有编辑权限。沿用 `MountSessionSpotChecks` 的守卫组合，Viewer 守卫换成 Admin 守卫。
+  租户 RBAC 未开启时路由守卫只记日志不拦截，所以处理函数再按调用者的租户角色检查一次 Admin，未达到返回 403。
 - **请求体**：同 `EditInput`。
 - **成功时**：返回新 Release 的 id、epoch 与修订记录 id。
 - **失败时**：错误按现有 `writeError` 输出代码。
@@ -152,11 +153,18 @@ Result{Release release.Release; Revision Revision}
 ## 5. 改动范围
 
 - `migrations/enterprise/versioned/000009_*.sql`；
+- `internal/database/enterprise_migration.go`：打包的企业迁移头从 8 改为 9（否则启动时拒绝 000009）；
+  原 `spotcheck_migration_test.go` 断言"000008 是迁移头"，随之改名为 `enterprise_migration_head_test.go` 并改为 9；
 - `internal/enterprise/expert/`（新包）；
-- `internal/enterprise/releasestore/`（修订存储、证据解析与回验的扩展）；
+- `internal/enterprise/release/evidence.go`：`Locator` 增加 `revision_record_id`，回验才能读到修订记录 id；
+- `internal/enterprise/releasestore/`（修订存储、证据解析与回验的扩展、容器注册）；
 - `internal/enterprise/session*.go`（出处与浏览器入口）；
-- `internal/router/router.go`（挂载一行）；
+- `internal/enterprise/citation.go`、`internal/enterprise/mount.go`：出处接口按定位器种类分流到修订记录；
+  `EXPERT_EDIT_STALE` 映射为 409、`EXPERT_EDIT_INVALID` 为 400；服务密钥的出处接口不变（遇到修订证据仍返回 `EVIDENCE_UNSUPPORTED`）；
+- `internal/router/router.go`（`RouterParams` 增加一个字段，挂载一处）；
 - 实现方测试。
+
+> 2026-10-22 修正（Claude 实现时发现）：原清单漏了迁移头、`Locator` 字段与出处分流三处，实现必须改动，补列于上。
 
 ## 6. 上线与验证
 
