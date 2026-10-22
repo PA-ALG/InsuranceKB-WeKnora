@@ -26,7 +26,9 @@ func expertEdit(c *gin.Context, service *expert.Service) {
 	}
 	role := types.CallerFromContext(c.Request.Context()).Role
 	if !role.HasPermission(types.TenantRoleAdmin) {
-		writeError(c, &release.Error{Code: release.ErrorReleaseAccessDenied, Detail: "expert edits need an administrator"})
+		writeError(c, &release.Error{
+			Code: release.ErrorReleaseAccessDenied, Detail: "expert edits need an administrator",
+		})
 		return
 	}
 	if service == nil {

@@ -227,7 +227,9 @@ func canonicalDigest(value any) (string, error) {
 // Citation opens the revision record an EXPERT_REVISION evidence object of the caller's Space
 // cites, after checking the evidence still quotes exactly that record. The caller has already
 // read the evidence from an explicit release the principal may see.
-func (s *Service) Citation(ctx context.Context, p release.Principal, spaceID string, ev release.Evidence) (Revision, error) {
+func (s *Service) Citation(
+	ctx context.Context, p release.Principal, spaceID string, ev release.Evidence,
+) (Revision, error) {
 	if s == nil || s.store == nil {
 		return Revision{}, failure(release.ErrorServiceUnavailable, "expert revisions are not configured")
 	}

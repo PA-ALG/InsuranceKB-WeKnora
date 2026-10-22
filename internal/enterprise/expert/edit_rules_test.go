@@ -121,7 +121,9 @@ func TestARecordWhoseContentNoLongerMatchesItsDigestIsRefused(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := setup(t)
-			result, err := edit(f, expert.EditInput{MemberSlug: "P/waiting", State: "present", Value: "180日", Reason: "r"})
+			result, err := edit(f, expert.EditInput{
+				MemberSlug: "P/waiting", State: "present", Value: "180日", Reason: "r",
+			})
 			require.NoError(t, err)
 			member := memberOf(result.Release, "P/waiting")
 			var ev release.Evidence

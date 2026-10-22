@@ -39,7 +39,9 @@ type expertPlatform struct {
 	head       release.Head
 }
 
-func (p *expertPlatform) CreateCandidate(_ context.Context, c release.Candidate, b release.Bundle) (release.Candidate, error) {
+func (p *expertPlatform) CreateCandidate(
+	_ context.Context, c release.Candidate, b release.Bundle,
+) (release.Candidate, error) {
 	c.ID, c.Status = fmt.Sprintf("candidate-%d", len(p.candidates)+1), "created"
 	p.candidates[c.ID], p.bundles[c.ID] = c, b
 	return c, nil
@@ -169,7 +171,8 @@ func newExpertWorld(t *testing.T) *expertWorld {
 		"state": "present", "value": "90日", "origin": "SOURCE_SUPPORTED", "expert_lock": false,
 		"evidence": []any{map[string]any{
 			"source_ref": expertSourceRef, "file_sha256": strings.Repeat("ab", 32), "quote": "90日",
-			"access_scope": "space", "locator": map[string]any{"kind": "PDF_TEXT_SPAN", "page": 1, "start": 0, "end": 3},
+			"access_scope": "space",
+			"locator":      map[string]any{"kind": "PDF_TEXT_SPAN", "page": 1, "start": 0, "end": 3},
 		}},
 		"maintenance": map[string]any{"revision_no": 0, "changed_by": "compile", "first_release_id": "release-0"},
 	}
@@ -287,21 +290,25 @@ func TestAnAdministratorEditPublishesAndItsCitationShowsTheRecord(t *testing.T) 
 
 func TestExpertEditsNeedAnAdministratorBrowserSessionInTheirSpace(t *testing.T) {
 	w := newExpertWorld(t)
+	denied, missing := release.ErrorReleaseAccessDenied, release.ErrorReleaseNotFound
+	serviceKey := identity{tenant: 7, principal: browser.principal, apiKey: true}
+	otherTenant := identity{tenant: 8, principal: browser.principal}
 	for name, probe := range map[string]struct {
 		who    identity
 		role   types.TenantRole
-		path   string
+		space  string
 		status int
 		code   string
 	}{
-		"contributor role": {browser, types.TenantRoleContributor, expertEditsPath, http.StatusForbidden, release.ErrorReleaseAccessDenied},
-		"service key":      {identity{tenant: 7, principal: browser.principal, apiKey: true}, types.TenantRoleOwner, expertEditsPath, http.StatusForbidden, release.ErrorReleaseAccessDenied},
-		"unknown Space":    {browser, types.TenantRoleAdmin, strings.Replace(expertEditsPath, "demo", "nope", 1), http.StatusNotFound, release.ErrorReleaseNotFound},
-		"another tenant":   {browser, types.TenantRoleAdmin, strings.Replace(expertEditsPath, "demo", "other", 1), http.StatusNotFound, release.ErrorReleaseNotFound},
-		"tenant 8 caller":  {identity{tenant: 8, principal: browser.principal}, types.TenantRoleOwner, expertEditsPath, http.StatusNotFound, release.ErrorReleaseNotFound},
+		"contributor role": {browser, types.TenantRoleContributor, "demo", http.StatusForbidden, denied},
+		"service key":      {serviceKey, types.TenantRoleOwner, "demo", http.StatusForbidden, denied},
+		"unknown Space":    {browser, types.TenantRoleAdmin, "nope", http.StatusNotFound, missing},
+		"another tenant":   {browser, types.TenantRoleAdmin, "other", http.StatusNotFound, missing},
+		"tenant 8 caller":  {otherTenant, types.TenantRoleOwner, "demo", http.StatusNotFound, missing},
 	} {
 		t.Run(name, func(t *testing.T) {
-			resp := post(w.router(probe.who, probe.role, w.experts), probe.path, w.body(t, nil))
+			path := strings.Replace(expertEditsPath, "demo", probe.space, 1)
+			resp := post(w.router(probe.who, probe.role, w.experts), path, w.body(t, nil))
 			require.Equal(t, probe.status, resp.Code, resp.Body.String())
 			require.Equal(t, probe.code, code(t, resp.Body.Bytes()))
 			w.requireNothingWritten(t)
@@ -317,13 +324,22 @@ func TestExpertEditFailuresAreTypedAndWriteNothing(t *testing.T) {
 		status int
 		code   string
 	}{
-		"moved release":   {w.body(t, map[string]any{"base_release_id": "release-0"}), http.StatusConflict, expert.ErrorStale},
-		"changed claim":   {w.body(t, map[string]any{"base_member_digest": strings.Repeat("0", 64)}), http.StatusConflict, expert.ErrorStale},
-		"no reason":       {w.body(t, map[string]any{"reason": "  "}), http.StatusBadRequest, expert.ErrorInvalid},
-		"unknown state":   {w.body(t, map[string]any{"state": "maybe"}), http.StatusBadRequest, expert.ErrorInvalid},
-		"no change":       {w.body(t, map[string]any{"value": "90日"}), http.StatusBadRequest, expert.ErrorInvalid},
-		"unknown member":  {w.body(t, map[string]any{"member_slug": "P/none"}), http.StatusNotFound, release.ErrorMemberNotFound},
-		"unknown field":   {w.body(t, map[string]any{"origin": "SOURCE_SUPPORTED"}), http.StatusBadRequest, expert.ErrorInvalid},
+		"moved release": {
+			w.body(t, map[string]any{"base_release_id": "release-0"}), http.StatusConflict, expert.ErrorStale,
+		},
+		"changed claim": {
+			w.body(t, map[string]any{"base_member_digest": strings.Repeat("0", 64)}),
+			http.StatusConflict, expert.ErrorStale,
+		},
+		"no reason":     {w.body(t, map[string]any{"reason": "  "}), http.StatusBadRequest, expert.ErrorInvalid},
+		"unknown state": {w.body(t, map[string]any{"state": "maybe"}), http.StatusBadRequest, expert.ErrorInvalid},
+		"no change":     {w.body(t, map[string]any{"value": "90日"}), http.StatusBadRequest, expert.ErrorInvalid},
+		"unknown member": {
+			w.body(t, map[string]any{"member_slug": "P/none"}), http.StatusNotFound, release.ErrorMemberNotFound,
+		},
+		"unknown field": {
+			w.body(t, map[string]any{"origin": "SOURCE_SUPPORTED"}), http.StatusBadRequest, expert.ErrorInvalid,
+		},
 		"case alias":      {w.body(t, map[string]any{"Reason": "x"}), http.StatusBadRequest, expert.ErrorInvalid},
 		"not JSON object": {[]byte(`["edit"]`), http.StatusBadRequest, expert.ErrorInvalid},
 	} {

@@ -54,6 +54,7 @@ func newRouterExpertEdits(
 }
 
 func TestEnterpriseExpertEditsNeedATenantAdminWithWikiEditorRights(t *testing.T) {
+	admin, contributor, editor := types.TenantRoleAdmin, types.TenantRoleContributor, types.OrgRoleEditor
 	for _, tc := range []struct {
 		name     string
 		rbac     bool
@@ -63,13 +64,13 @@ func TestEnterpriseExpertEditsNeedATenantAdminWithWikiEditorRights(t *testing.T)
 		space    string
 		status   int
 	}{
-		{"admin with Wiki editor reaches the handler", true, types.TenantRoleAdmin, false, types.OrgRoleEditor, "space-a", 503},
-		{"owner with Wiki editor reaches the handler", true, types.TenantRoleOwner, false, types.OrgRoleEditor, "space-a", 503},
-		{"contributor is refused", true, types.TenantRoleContributor, false, types.OrgRoleEditor, "space-a", 403},
-		{"admin with Wiki viewer is refused", true, types.TenantRoleAdmin, false, types.OrgRoleViewer, "space-a", 403},
-		{"disabled RBAC still refuses a contributor", false, types.TenantRoleContributor, false, types.OrgRoleEditor, "space-a", 403},
-		{"service keys have no session route", true, types.TenantRoleOwner, true, types.OrgRoleEditor, "space-a", 403},
-		{"unknown Space", true, types.TenantRoleAdmin, false, types.OrgRoleEditor, "space-z", 404},
+		{"admin with Wiki editor reaches the handler", true, admin, false, editor, "space-a", 503},
+		{"owner with Wiki editor reaches the handler", true, types.TenantRoleOwner, false, editor, "space-a", 503},
+		{"contributor is refused", true, contributor, false, editor, "space-a", 403},
+		{"admin with Wiki viewer is refused", true, admin, false, types.OrgRoleViewer, "space-a", 403},
+		{"disabled RBAC still refuses a contributor", false, contributor, false, editor, "space-a", 403},
+		{"service keys have no session route", true, types.TenantRoleOwner, true, editor, "space-a", 403},
+		{"unknown Space", true, admin, false, editor, "space-z", 404},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lookup := &sessionRouteKBLookup{kbs: map[string]*types.KnowledgeBase{
