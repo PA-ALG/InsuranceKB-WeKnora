@@ -1,0 +1,96 @@
+/* S9b: the expert edit form and the revision record a revised field cites. */
+.ek-expert-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ek-expert-form__current {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.ek-expert-form__states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.ek-expert-form__states legend {
+  margin-bottom: 6px;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+}
+
+.ek-expert-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+}
+
+.ek-expert-form__field textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--td-border-level-2-color);
+  border-radius: 4px;
+  background: var(--td-bg-color-container);
+  color: var(--td-text-color-primary);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.ek-expert-form__over {
+  color: var(--td-error-color);
+}
+
+.ek-expert-form__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ek-button--primary {
+  border-color: var(--td-brand-color);
+  background: var(--td-brand-color);
+  color: var(--td-text-color-anti);
+}
+
+.ek-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ek-field__edit {
+  margin-left: 8px;
+  font-size: 13px;
+}
+
+.ek-expert-record__title {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.ek-expert-record__rows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.ek-expert-record__rows dt {
+  color: var(--td-text-color-secondary);
+}
+
+.ek-expert-record__rows dd {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}

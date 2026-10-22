@@ -46,3 +46,34 @@ export function citationFailure(t: Translate, code: string): string {
       return t('enterpriseKnowledge.citation.failed')
   }
 }
+
+// Why an expert edit was refused (S9b Spec §2.3). A stale edit offers the latest version.
+export function expertEditFailure(t: Translate, code: string, status?: number): { text: string; reload: boolean } {
+  switch (code) {
+    case 'EXPERT_EDIT_STALE':
+    case 'MEMBER_NOT_FOUND':
+    case 'RELEASE_CONFLICT':
+    case 'NEEDS_REBASE':
+      return { text: t('enterpriseKnowledge.expert.stale'), reload: true }
+    case 'EXPERT_EDIT_INVALID':
+      return { text: t('enterpriseKnowledge.expert.invalid'), reload: false }
+    case 'RELEASE_ACCESS_DENIED':
+      return { text: t('enterpriseKnowledge.expert.denied'), reload: false }
+    case 'SERVICE_UNAVAILABLE':
+      return { text: t('enterpriseKnowledge.expert.unavailable'), reload: false }
+  }
+  if (status === 403) return { text: t('enterpriseKnowledge.expert.denied'), reload: false }
+  if (status === 503) return { text: t('enterpriseKnowledge.expert.unavailable'), reload: false }
+  return { text: t('enterpriseKnowledge.expert.failed'), reload: false }
+}
+
+export function expertRoleLabel(t: Translate, role: string): string {
+  switch (role) {
+    case 'owner':
+      return t('enterpriseKnowledge.expert.roleOwner')
+    case 'admin':
+      return t('enterpriseKnowledge.expert.roleAdmin')
+    default:
+      return role
+  }
+}
