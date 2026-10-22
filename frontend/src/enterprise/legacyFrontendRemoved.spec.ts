@@ -12,7 +12,8 @@ const legacy = {
   ...import.meta.glob('/src/api/schema-wiki/**/*.{ts,vue}'),
   ...import.meta.glob('/src/components/schema-wiki/**/*.{ts,vue}'),
 }
-const port = import.meta.glob<{ createPdfJsPort?: unknown }>('./pdfJsPort.ts', { eager: true })
+// Read as text: loading pdf.js needs browser globals that this check does not need.
+const port = import.meta.glob<string>('./pdfJsPort.ts', { query: '?raw', import: 'default', eager: true })
 
 describe('the 830-era Schema Wiki frontend', () => {
   it('leaves no source file in the three legacy directories', () => {
@@ -33,7 +34,7 @@ describe('the 830-era Schema Wiki frontend', () => {
 
 describe('the pdf.js port of the enterprise source viewer', () => {
   it('lives in the enterprise package', () => {
-    expect(typeof port['./pdfJsPort.ts']?.createPdfJsPort).toBe('function')
+    expect(port['./pdfJsPort.ts']).toMatch(/export (async )?function createPdfJsPort\b/)
     expect(sourcePageViewerSource).toContain("from './pdfJsPort'")
     expect(sourcePageViewerSource).not.toContain('schema-wiki')
   })
