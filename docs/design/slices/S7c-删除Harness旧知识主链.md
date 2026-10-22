@@ -42,6 +42,14 @@
 
    > 2026-10-22 修正（Claude 实现时发现）：原清单只按直接导入列出测试，漏了导入被删模块的辅助文件及其唯一使用者，补列于此。
 5. **其余配置**：若 `harness/pyproject.toml` 的 mypy、ruff 或覆盖率配置点名了被删模块或测试，一并删除这些条目。
+6. **测试执行合同随之迁移**（2026-10-22 修正，审核 R1 指出）：被删测试中有 3 个 live 节点（knowledge publisher、release snapshot 018、source bridge 017）和 16 个 PostgreSQL 节点，以下几处需同步改为只剩现存节点：
+   - `harness/live-nodes.txt`（受信 live 清单）；
+   - `harness/scripts/run_live_gate.py` 的 `FROZEN_LIVE_NODES`，以及 JUnit 结果核对中写死的个数 5，改为与冻结集合个数一致；
+   - `harness/scripts/check_junit.py` 中写死的个数 5，改为与清单个数一致；
+   - `harness/tests/test_live_gate_023.py`、`test_ci_lanes_022.py` 的节点清单与计数。
+
+   精确身份、重复/替换/遗漏拒绝、零 skip、JUnit 脱敏这些门禁规则都不变。
+   **切换顺序**：`harness-live.yml` 从受信的 main（`workflow-sha`）取门禁脚本与清单。本片合并前，main 上的清单仍是 5 个节点，与 main 上的测试一致；合并后清单与测试同时变为 2 个节点。所以 live 验收在合并后运行，不在 PR 分支上运行。
 
 不做：`db/`、`adapters/`、`product/` 等其余 RETIRE 目录，以及 `product_ingestion` 链，留给 S7d。
 
@@ -63,6 +71,7 @@
 - `harness/src/insurance_harness/knowledge_compiler/{incremental_changes,source_authority,retractions}.py`（删除）；
 - `harness/tests/`（删除 §2 列出的 32 个测试文件与 6 个辅助文件）；
 - `harness/pyproject.toml`（只删指向被删内容的条目，如有）；
+- `harness/live-nodes.txt`、`harness/scripts/run_live_gate.py`、`harness/scripts/check_junit.py`、`harness/tests/test_live_gate_023.py`、`harness/tests/test_ci_lanes_022.py`（§2 第 6 条）；
 - `tests/architecture/baseline.json`（脚本下调）。
 
 ## 6. 上线与验证
