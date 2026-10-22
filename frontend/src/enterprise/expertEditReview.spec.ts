@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-// S9b implementer regressions from review (#298 R1, R2): a stale edit on the Active route reads
-// the Active release again; the form shows a present value of any type as the current value.
+// S9b implementer regressions from review (#298 R1–R4): a stale edit on the Active route reads the
+// Active release again (only with a router); the form shows a present value of any type as the
+// current value and leaves comparing typed text with a non-text value to the server.
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -62,6 +63,26 @@ describe('a stale edit on the Active route', () => {
   })
 })
 
+describe('a stale edit without a router', () => {
+  it('only closes the form and keeps the page (#298 R3)', async () => {
+    vi.mocked(readRelease).mockResolvedValueOnce(release('rel-1', 1)).mockRejectedValue(new Error('offline'))
+    const view = mount(EnterpriseEntity, {
+      props: { spaceId: 'demo', entityId: 'P1' },
+      global: {
+        plugins: [createPinia(), i18n()],
+        stubs: { RouterLink: RouterLinkStub, CitationPanel: true, ExpertEditForm: true, EnterpriseNavigation: true },
+      },
+    })
+    await flushPromises()
+    await view.get('[data-expert-edit]').trigger('click')
+    view.getComponent(ExpertEditForm).vm.$emit('reload')
+    await flushPromises()
+    expect(vi.mocked(readRelease)).toHaveBeenCalledTimes(1)
+    expect(view.findComponent(ExpertEditForm).exists()).toBe(false)
+    expect(view.get('[data-entity-meta]').text()).toContain('发布版本 1')
+  })
+})
+
 describe('the current value in the form', () => {
   it.each([
     [42, '42'],
@@ -76,15 +97,17 @@ describe('the current value in the form', () => {
     expect((form.get('[data-value]').element as HTMLTextAreaElement).value).toBe('')
   })
 
-  it('treats a number typed back unchanged as no change', async () => {
+  // The platform compares a typed text with a non-text value in its own way (#298 R4): the form
+  // never guesses, so any typed text may be sent and an unchanged one is refused by the server.
+  it.each([42, 1000000, 0.00001, false])('lets the server decide whether text typed for %j is a change', async value => {
     const form = mount(ExpertEditForm, {
-      props: { spaceId: 'demo', release: release('rel-1', 1, 42), slug: 'P1/f_wait', title: '等待期' },
+      props: { spaceId: 'demo', release: release('rel-1', 1, value), slug: 'P1/f_wait', title: '等待期' },
       global: { plugins: [i18n()] },
     })
     await form.get('[data-reason]').setValue('核对')
-    await form.get('[data-value]').setValue(' 42 ')
-    expect(form.get('[data-submit]').attributes('disabled')).toBeDefined()
-    await form.get('[data-value]').setValue('43')
-    expect(form.get('[data-submit]').attributes('disabled')).toBeUndefined()
+    for (const typed of [String(value), '1e+06', '1e-05']) {
+      await form.get('[data-value]').setValue(typed)
+      expect(form.get('[data-submit]').attributes('disabled')).toBeUndefined()
+    }
   })
 })

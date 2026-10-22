@@ -107,6 +107,8 @@ function showPublished(result: { releaseId: string; epoch: number }) {
 function showActive() {
   editing.value = null
   published.value = null
+  // Without a router (embedded) the drawer only closes (S9b Spec §2.4).
+  if (!router) return
   // Already on the Active route: dropping the pin would be a duplicate navigation that reads
   // nothing, so read the Active release again here.
   if (props.releaseId === undefined) {
@@ -114,7 +116,7 @@ function showActive() {
     return
   }
   const { release: _pinned, ...query } = route?.query ?? {}
-  void router?.replace({ query, hash: route?.hash })
+  void router.replace({ query, hash: route?.hash })
 }
 function openPrevious(member: string, evidence: number) {
   if (base.value) selected.value = { member, evidence, releaseId: base.value.id }

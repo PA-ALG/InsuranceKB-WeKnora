@@ -31,12 +31,6 @@ const currentShown = computed(() => {
   if (Array.isArray(value)) return value.map(item => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n')
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
 })
-// A scalar typed back unchanged is no change; the server would refuse it (S9a).
-const currentComparable = computed(() => {
-  const value = currentValue.value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return currentText.value
-})
 
 const state = ref<State>('present')
 const value = ref('')
@@ -54,8 +48,10 @@ function reset() {
 watch(() => [props.release.id, props.slug], reset, { immediate: true })
 
 const reasonLength = computed(() => [...reason.value].length)
+// Only text values are compared here; whether typed text equals a non-text value is the server's
+// call (S9a compares its own way and answers EXPERT_EDIT_INVALID).
 const changed = computed(() => state.value !== currentState.value
-  || (state.value === 'present' && value.value.trim() !== currentComparable.value.trim()))
+  || (state.value === 'present' && value.value.trim() !== currentText.value.trim()))
 const ready = computed(() => !busy.value && member.value !== undefined && reason.value.trim() !== ''
   && reasonLength.value <= MAX_REASON && (state.value !== 'present' || value.value.trim() !== '') && changed.value)
 
