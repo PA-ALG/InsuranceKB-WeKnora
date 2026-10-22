@@ -11,7 +11,8 @@ import (
 
 // A commits as R1 but its response is lost; B commits on R1 as R2; A is retried. The retry
 // must return R1 by nonce without a new write, while a candidate that never committed on the
-// old base still needs a rebase (PR #164 review item 1, Spec §3.1).
+// old base and touches a member the Head has since changed still needs a rebase (PR #164
+// review item 1, Spec §3.1; since S8b an untouched Head advance is rebased automatically).
 func TestRetryAfterTheHeadMovedReturnsTheCommittedRelease(t *testing.T) {
 	p := newPlatform()
 	s := publishing(p)
@@ -22,7 +23,7 @@ func TestRetryAfterTheHeadMovedReturnsTheCommittedRelease(t *testing.T) {
 	approved, err := s.Decide(ctx, principal(), spaceID, a.ID, approve)
 	require.NoError(t, err)
 	stale, err := s.Receive(ctx, principal(), spaceID,
-		candidateBundle(t, "", nil, member(t, "c", map[string]any{"v": 3})))
+		candidateBundle(t, "", nil, member(t, "b", map[string]any{"v": 3})))
 	require.NoError(t, err)
 	staleDecision, err := s.Decide(ctx, principal(), spaceID, stale.ID, approve)
 	require.NoError(t, err)

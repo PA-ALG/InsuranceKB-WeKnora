@@ -31,6 +31,14 @@ _PLATFORM_CODES = frozenset(
         "RELEASE_NOT_FOUND",
         "SERVICE_UNAVAILABLE",
         "INTERNAL_ERROR",
+        # Evidence and source checks a candidate or activation can fail on
+        "EVIDENCE_MISMATCH",
+        "EVIDENCE_NOT_FOUND",
+        "EVIDENCE_UNSUPPORTED",
+        "EVIDENCE_UNVERIFIABLE",
+        "SOURCE_UNAVAILABLE",
+        "RELEASE_ACTIVE",
+        "RETIREMENT_INVALID",
         # RV4 spot checks
         "MEMBER_NOT_FOUND",
         "SAMPLE_INVALID",
@@ -39,7 +47,15 @@ _PLATFORM_CODES = frozenset(
     }
 )
 _CLIENT_CODES = frozenset(
-    {"INVALID_REQUEST", "INVALID_RESPONSE", "RELEASE_MISMATCH", "UNAUTHENTICATED"}
+    {
+        "INVALID_REQUEST",
+        "INVALID_RESPONSE",
+        "RELEASE_MISMATCH",
+        "UNAUTHENTICATED",
+        # S8b revert preconditions, checked before any write
+        "RELEASE_RETIRED",
+        "SLUG_COLLISION",
+    }
 )
 
 
@@ -97,6 +113,7 @@ class Release(_Response):
     base_release_id: str = ""
     candidate_id: str = ""
     decision_digest: str = ""
+    retired_at: str | None = None
     members: list[ReleaseMember] = Field(default_factory=list)
 
     @property
