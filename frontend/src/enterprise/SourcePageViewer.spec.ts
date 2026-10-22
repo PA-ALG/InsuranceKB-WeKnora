@@ -6,9 +6,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/utils/request', () => ({ get: vi.fn() }))
-vi.mock('@/components/schema-wiki/pdfJsPort', () => ({ createPdfJsPort: vi.fn() }))
+vi.mock('./pdfJsPort', () => ({ createPdfJsPort: vi.fn() }))
 
-import { createPdfJsPort } from '@/components/schema-wiki/pdfJsPort'
+import { createPdfJsPort } from './pdfJsPort'
 import { get } from '@/utils/request'
 import SourcePageViewer from './SourcePageViewer.vue'
 

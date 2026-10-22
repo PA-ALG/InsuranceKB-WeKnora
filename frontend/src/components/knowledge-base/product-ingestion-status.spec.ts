@@ -168,18 +168,26 @@ describe('persistent product processing status', () => {
     api.listProductIngestions.mockResolvedValue([run({ published_url: url })])
     expect((await render()).find('a').exists()).toBe(false)
   })
-  it('links the published platform product', async () => {
-    const url = '/platform/knowledge-bases/kb/schema-wiki/entities/e/overview'
+  // S7b: the 830-era Schema Wiki pages are gone, so a publication links to the knowledge base page.
+  it('links the published platform knowledge base', async () => {
+    const url = '/platform/knowledge-bases/kb'
     api.listProductIngestions.mockResolvedValue([run({ published_url: url })])
     expect((await render()).get('a').attributes('href')).toBe(url)
   })
+  it.each([
+    '/platform/knowledge-bases/kb/schema-wiki',
+    '/platform/knowledge-bases/kb/schema-wiki/entities/e/overview',
+  ])('does not link a removed Schema Wiki page %s', async url => {
+    api.listProductIngestions.mockResolvedValue([run({ published_url: url })])
+    expect((await render()).find('a').exists()).toBe(false)
+  })
   it('links the configured serving Wiki when its ID differs from the uploaded Raw KB', async () => {
-    const url = '/platform/knowledge-bases/wiki-serving/schema-wiki/entities/e/overview'
+    const url = '/platform/knowledge-bases/wiki-serving'
     api.listProductIngestions.mockResolvedValue([run({ wiki_knowledge_base_id: 'wiki-serving', published_url: url })])
     expect((await render()).get('a').attributes('href')).toBe(url)
   })
   it.each([undefined, 'other-wiki'])('does not infer a published target when serving identity is %s', async wikiId => {
-    api.listProductIngestions.mockResolvedValue([run({ wiki_knowledge_base_id: wikiId, published_url: '/platform/knowledge-bases/kb/schema-wiki' })])
+    api.listProductIngestions.mockResolvedValue([run({ wiki_knowledge_base_id: wikiId, published_url: '/platform/knowledge-bases/kb' })])
     expect((await render()).find('a').exists()).toBe(false)
   })
   it('labels the actual extract stage', async () => {

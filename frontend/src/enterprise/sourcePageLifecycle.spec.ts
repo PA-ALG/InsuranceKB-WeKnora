@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { OpenedPdfDocument, RenderedPdfPage } from '@/components/schema-wiki/pdfJsPort'
+import type { OpenedPdfDocument, RenderedPdfPage } from './pdfJsPort'
 
 vi.mock('@/utils/request', () => ({ get: vi.fn() }))
-vi.mock('@/components/schema-wiki/pdfJsPort', () => ({ createPdfJsPort: vi.fn() }))
+vi.mock('./pdfJsPort', () => ({ createPdfJsPort: vi.fn() }))
 
 import { get, type WithStatus } from '@/utils/request'
-import { createPdfJsPort } from '@/components/schema-wiki/pdfJsPort'
+import { createPdfJsPort } from './pdfJsPort'
 import SourcePageViewer from './SourcePageViewer.vue'
 
 const labels = { loading: 'Loading', failed: 'Failed', retry: 'Retry', incomplete: 'Incomplete', region: 'Cited page' }
