@@ -66,9 +66,9 @@ func TestRecordTimesKeepOnlyWhatTheStoreKeeps(t *testing.T) {
 	editor := expert.NewService(f.releases, f.revisions,
 		expert.WithClock(func() time.Time { return fixedAt.Add(123456789 * time.Nanosecond) }),
 		expert.WithIDs(func() string { return "rev-nanos" }))
+	base := memberOf(f.first, "P/waiting").MemberDigest
 	result, err := editor.Edit(context.Background(), admin, "admin", spaceID, expert.EditInput{
-		BaseReleaseID: f.first.ID, MemberSlug: "P/waiting",
-		BaseMemberDigest: memberOf(f.first, "P/waiting").MemberDigest,
+		BaseReleaseID: f.first.ID, MemberSlug: "P/waiting", BaseMemberDigest: base,
 		State: "present", Value: "180日", Reason: "r",
 	})
 	require.NoError(t, err)
@@ -106,4 +106,46 @@ func TestACitationReadsTheRecordItQuotes(t *testing.T) {
 	altered.FileSHA256 = strings.Repeat("0", 64)
 	_, err = f.editor.Citation(ctx, admin, spaceID, altered)
 	require.Equal(t, release.ErrorEvidenceMismatch, codeOf(t, err))
+}
+
+// The cited digest fixes the whole record: changing any recorded field behind an unchanged
+// digest field must stop the record from serving as the source, both when read and when cited.
+func TestARecordWhoseContentNoLongerMatchesItsDigestIsRefused(t *testing.T) {
+	for name, change := range map[string]func(*expert.Revision){
+		"actor":       func(r *expert.Revision) { r.Actor = "web_user:someone-else" },
+		"role":        func(r *expert.Revision) { r.Role = "owner" },
+		"recorded_at": func(r *expert.Revision) { r.RecordedAt = r.RecordedAt.Add(time.Hour) },
+		"before":      func(r *expert.Revision) { r.Before = expert.Value{State: "present", Value: "30日"} },
+		"reason":      func(r *expert.Revision) { r.Reason = "another reason" },
+		"target":      func(r *expert.Revision) { r.MemberSlug = "P/grace" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := setup(t)
+			result, err := edit(f, expert.EditInput{MemberSlug: "P/waiting", State: "present", Value: "180日", Reason: "r"})
+			require.NoError(t, err)
+			member := memberOf(result.Release, "P/waiting")
+			var ev release.Evidence
+			raw, err := json.Marshal(payloadOf(t, member)["evidence"].([]any)[0])
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(raw, &ev))
+			record := f.revisions.rows[result.Revision.ID]
+			require.Equal(t, record.RecordSHA256, record.ContentDigest())
+			change(&record)
+			f.revisions.rows[record.ID] = record
+
+			_, err = f.editor.Citation(context.Background(), admin, spaceID, ev)
+			require.Equal(t, release.ErrorEvidenceMismatch, codeOf(t, err))
+			bundle, err := json.Marshal(map[string]any{
+				"contract_version": "1", "origin": "compile", "compiler_identity": "harness/test",
+				"base_release_id": result.Release.ID,
+				"members": []any{map[string]any{
+					"kind": "claim", "logical_slug": "P/waiting", "payload": payloadOf(t, member),
+					"member_digest": member.MemberDigest, "evidence_refs": member.EvidenceRefs, "access_scope": "space",
+				}},
+			})
+			require.NoError(t, err)
+			_, err = f.releases.Receive(context.Background(), harness, spaceID, bundle)
+			require.Error(t, err, "a record that no longer matches its digest cannot be cited again")
+		})
+	}
 }

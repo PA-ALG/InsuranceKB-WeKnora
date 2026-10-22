@@ -12,15 +12,21 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 )
 
+// expertRevision's before value mixes JSON types and HTML-escaped characters: the record must
+// still hash to its digest after a PostgreSQL round trip, since citations recompute it.
 func expertRevision(id string) expert.Revision {
-	return expert.Revision{
+	r := expert.Revision{
 		ID: id, TenantID: 7, SpaceID: "space-1", BaseReleaseID: "rel-1", MemberSlug: "claim",
-		BaseMemberDigest: "digest-claim", Actor: "user:expert", Role: "admin",
+		BaseMemberDigest: "digest-claim", Actor: "web_user:expert", Role: "admin",
 		RecordedAt: time.Date(2026, 10, 22, 9, 30, 0, 123456000, time.UTC),
-		Before:     expert.Value{State: "unknown", Value: nil},
-		After:      expert.Value{State: "present", Value: "new value"},
-		Reason:     "checked against the filed terms", RecordSHA256: fileSHA,
+		Before: expert.Value{State: "present", Value: map[string]any{
+			"days": 90.0, "note": "<a & b>", "list": []any{"x", 1.5, nil, true},
+		}},
+		After:  expert.Value{State: "present", Value: "new value"},
+		Reason: "checked against the filed terms",
 	}
+	r.RecordSHA256 = r.ContentDigest()
+	return r
 }
 
 func requireExpertCode(t *testing.T, err error, code string) {
@@ -41,6 +47,7 @@ func TestPostgresExpertRevisionRoundTripAndIsolation(t *testing.T) {
 	got, err := store.RevisionByID(ctx, 7, "space-1", "rev-1")
 	require.NoError(t, err)
 	require.Equal(t, record, got)
+	require.Equal(t, got.RecordSHA256, got.ContentDigest(), "the stored record still hashes to its digest")
 
 	_, err = store.RevisionByID(ctx, 7, "space-2", "rev-1")
 	requireExpertCode(t, err, release.ErrorEvidenceNotFound)

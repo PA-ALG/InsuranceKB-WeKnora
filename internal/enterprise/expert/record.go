@@ -38,8 +38,11 @@ func ParseSourceRef(ref string) (id, sha string, ok bool) {
 	return id, strings.ToLower(sha), true
 }
 
-// recordDigest is the SHA-256 of the contract ExpertRevision object of a record, encoded the
-// way the release package digests JSON (decode into any, encode with sorted keys).
+// ContentDigest is the SHA-256 of the contract ExpertRevision object of a record, encoded the
+// way the release package digests JSON (decode into any, encode with sorted keys). A stored
+// record cites as its source only while this equals its RecordSHA256.
+func (r Revision) ContentDigest() string { return recordDigest(r) }
+
 func recordDigest(r Revision) string {
 	before, _ := json.Marshal(r.Before)
 	after, _ := json.Marshal(r.After)

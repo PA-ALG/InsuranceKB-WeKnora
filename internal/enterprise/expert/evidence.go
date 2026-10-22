@@ -31,7 +31,7 @@ func (r resolver) Resolve(ctx context.Context, ref string) (bool, error) {
 	if err != nil || record == nil {
 		return false, err
 	}
-	return record.RecordSHA256 == sha, nil
+	return record.RecordSHA256 == sha && recordDigest(*record) == sha, nil
 }
 
 // NewVerifier checks EXPERT_REVISION evidence against its revision record and delegates every
@@ -90,7 +90,8 @@ func citedRecordID(path string, ev release.Evidence) (string, error) {
 	return id, nil
 }
 
-// matchRecord checks that the evidence quotes exactly the record it names, by its digest.
+// matchRecord checks that the evidence quotes exactly the record it names and that the record
+// content still hashes to the cited digest.
 func matchRecord(path string, ev release.Evidence, record *Revision) error {
 	_, sha, _ := ParseSourceRef(ev.SourceRef)
 	switch {
@@ -98,6 +99,9 @@ func matchRecord(path string, ev release.Evidence, record *Revision) error {
 		return failure(release.ErrorEvidenceNotFound, path+": expert revision record")
 	case record.RecordSHA256 != sha || strings.ToLower(ev.FileSHA256) != sha:
 		return failure(release.ErrorEvidenceMismatch, path+": record fingerprint")
+	case recordDigest(*record) != sha:
+		// The stored digest field alone proves nothing: the whole record must still hash to it.
+		return failure(release.ErrorEvidenceMismatch, path+": record content")
 	case record.After.State == "unknown" || ev.Quote != citedQuote(*record):
 		return failure(release.ErrorEvidenceMismatch, path+": quote")
 	case ev.QuoteSHA256 != "" && strings.ToLower(ev.QuoteSHA256) != release.QuoteDigest(ev.Quote):
