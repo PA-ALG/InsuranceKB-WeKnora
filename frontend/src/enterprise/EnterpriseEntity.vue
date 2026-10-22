@@ -5,8 +5,10 @@ import { isNavigationFailure, NavigationFailureType, routeLocationKey, routerKey
 import CitationPanel from './CitationPanel.vue'
 import EnterpriseField from './EnterpriseField.vue'
 import EnterpriseNavigation from './EnterpriseNavigation.vue'
+import ExpertEditForm from './ExpertEditForm.vue'
 import { conceptKeys } from './conceptView'
 import { readRelease, type Release } from './enterpriseApi'
+import { canOfferExpertEdit } from './expertEditAccess'
 import { entityView } from './releaseView'
 import { previousReleaseId, releaseChanges } from './releaseChanges'
 
@@ -22,6 +24,13 @@ const updated = computed(() => {
 })
 const view = computed(() => (release.value ? entityView(release.value, props.entityId) : null))
 const selected = ref<{ member: string; evidence: number; releaseId: string } | null>(null)
+// S9b: administrators edit a field of the shown release; a published edit switches the page to
+// the release it produced and says so until another entry or release is shown.
+const canEdit = computed(() => canOfferExpertEdit())
+const editing = ref<{ slug: string; title: string } | null>(null)
+const published = ref<{ releaseId: string; epoch: number } | null>(null)
+const publishedEpoch = computed(() =>
+  published.value && release.value?.id === published.value.releaseId ? published.value.epoch : null)
 const root = ref<HTMLElement | null>(null)
 const route = inject(routeLocationKey, undefined)
 const router = inject(routerKey, undefined)
@@ -66,6 +75,8 @@ async function load() {
   const current = ++generation, space = props.spaceId
   state.value = 'loading'
   selected.value = null
+  editing.value = null
+  if (published.value && published.value.releaseId !== props.releaseId) published.value = null
   release.value = null
   base.value = null
   try {
@@ -81,7 +92,23 @@ async function load() {
 }
 
 function open(member: string, evidence: number) {
+  editing.value = null
   if (release.value) selected.value = { member, evidence, releaseId: release.value.id }
+}
+function startEdit(slug: string, title: string) {
+  selected.value = null
+  editing.value = { slug, title }
+}
+function showPublished(result: { releaseId: string; epoch: number }) {
+  editing.value = null
+  published.value = result
+  void router?.replace({ query: { ...route?.query, release: result.releaseId }, hash: route?.hash })
+}
+function showActive() {
+  editing.value = null
+  published.value = null
+  const { release: _pinned, ...query } = route?.query ?? {}
+  void router?.replace({ query, hash: route?.hash })
 }
 function openPrevious(member: string, evidence: number) {
   if (base.value) selected.value = { member, evidence, releaseId: base.value.id }
@@ -90,7 +117,7 @@ function openPrevious(member: string, evidence: number) {
 watch(() => [props.spaceId, props.releaseId], load, { immediate: true })
 // The page is reused across entries of one release: a citation opened for the previous entry
 // must not stay open for the next one.
-watch(() => props.entityId, () => { selected.value = null })
+watch(() => props.entityId, () => { selected.value = null; editing.value = null; published.value = null })
 async function scrollToField() {
   await nextTick()
   if (state.value !== 'ready' || !route?.hash) return
@@ -126,6 +153,9 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
             <span v-if="view.profileName" class="ek-meta-tag">{{ view.profileName }}</span>
             <span class="ek-meta-tag">{{ t('enterpriseKnowledge.space.version', { epoch: release.epoch }) }}</span>
           </p>
+          <p v-if="publishedEpoch !== null" role="status" data-expert-notice class="ek-status">
+            {{ t('enterpriseKnowledge.expert.published', { epoch: publishedEpoch }) }}
+          </p>
           <p class="ek-page__note" data-source-note>{{ t('enterpriseKnowledge.entity.sourceNote') }}</p>
           <section v-for="section in view.sections" :key="section.key" class="ek-section" :data-section="section.key">
             <h2 class="ek-section__title">{{ section.title }}</h2>
@@ -137,6 +167,8 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               :concept-route="conceptRoute(field.slug)"
               :previous="updated.get(field.slug)"
               @open-previous="evidence => openPrevious(field.slug, evidence)"
+              :editable="canEdit"
+              @edit="startEdit(field.slug, field.title)"
               @open="evidence => open(field.slug, evidence)"
             />
           </section>
@@ -150,6 +182,8 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               :concept-route="conceptRoute(field.slug)"
               :previous="updated.get(field.slug)"
               @open-previous="evidence => openPrevious(field.slug, evidence)"
+              :editable="canEdit"
+              @edit="startEdit(field.slug, field.title)"
               @open="evidence => open(field.slug, evidence)"
             />
           </section>
@@ -163,6 +197,8 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               :concept-route="conceptRoute(field.slug)"
               :previous="updated.get(field.slug)"
               @open-previous="evidence => openPrevious(field.slug, evidence)"
+              :editable="canEdit"
+              @edit="startEdit(field.slug, field.title)"
               @open="evidence => open(field.slug, evidence)"
             />
           </section>
@@ -180,6 +216,25 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               :release-id="selected.releaseId"
               :member="selected.member"
               :evidence="selected.evidence"
+            />
+          </t-drawer>
+          <t-drawer
+            :visible="editing !== null"
+            size="640px"
+            :footer="false"
+            :header="t('enterpriseKnowledge.expert.editTitle', { title: editing?.title ?? '' })"
+            destroy-on-close
+            @close="editing = null"
+          >
+            <ExpertEditForm
+              v-if="editing"
+              :space-id="spaceId"
+              :release="release"
+              :slug="editing.slug"
+              :title="editing.title"
+              @published="showPublished"
+              @reload="showActive"
+              @cancel="editing = null"
             />
           </t-drawer>
         </article>

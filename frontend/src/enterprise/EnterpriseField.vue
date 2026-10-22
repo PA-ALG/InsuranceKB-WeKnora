@@ -12,8 +12,11 @@ const LONG_CHARS = 240
 // Nearly every field is sourced, so that label is kept for screen readers only; the page says so.
 const SOURCE_SUPPORTED = 'SOURCE_SUPPORTED'
 
-const props = defineProps<{ field: FieldView; conceptRoute?: RouteLocationRaw; anchorId?: string; previous?: FieldView | null }>()
-const emit = defineEmits<{ open: [evidence: number]; openPrevious: [evidence: number] }>()
+// editable offers the expert edit (S9b); only the entity page sets it, for administrators.
+const props = defineProps<{
+  field: FieldView; conceptRoute?: RouteLocationRaw; anchorId?: string; previous?: FieldView | null; editable?: boolean
+}>()
+const emit = defineEmits<{ open: [evidence: number]; openPrevious: [evidence: number]; edit: [] }>()
 const { t } = useI18n()
 const full = ref(false)
 const expanded = ref(false), previousId = `previous-${useId()}`
@@ -34,6 +37,7 @@ watch(() => [props.field.slug, props.previous], () => { expanded.value = false }
   <div :id="anchorId || field.slug.slice(field.slug.lastIndexOf('/') + 1)" :class="['ek-field', { 'ek-field--generated': field.origin === 'MODEL_GENERATED' }]" :data-field="field.slug" tabindex="-1">
     <div class="ek-field__head">
       <h3 class="ek-field__title"><RouterLink v-if="conceptRoute" :to="conceptRoute">{{ field.title }}</RouterLink><template v-else>{{ field.title }}</template></h3>
+      <button v-if="editable" type="button" data-expert-edit class="ek-link-button ek-field__edit" :aria-label="`${t('enterpriseKnowledge.expert.edit')} ${field.title}`" @click="emit('edit')">{{ t('enterpriseKnowledge.expert.edit') }}</button>
       <button v-if="previous !== undefined" type="button" data-field-updated class="ek-link-button ek-field__updated" :aria-expanded="expanded" :aria-controls="previousId" @click="expanded = !expanded">{{ t('enterpriseKnowledge.changes.updated') }}</button>
     </div>
     <div :class="['ek-field__value', { 'ek-field__value--clamped': long && !full && !listed }]">

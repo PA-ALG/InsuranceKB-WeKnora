@@ -34,6 +34,28 @@ export interface Citation {
   file: string
 }
 
+// A source that is an expert revision record (S9a): who changed the field, when, from what to
+// what and why. It opens no file.
+export interface ExpertCitation {
+  kind: 'expert_revision'
+  release_id: string
+  member: string
+  evidence_index: number
+  origin: string
+  quote: string
+  revision_record_id: string
+  actor: string
+  role: string
+  recorded_at: string
+  before: { state: string; value: unknown }
+  after: { state: string; value: unknown }
+  reason: string
+}
+
+export function isExpertCitation(citation: Citation | ExpertCitation): citation is ExpertCitation {
+  return (citation as ExpertCitation).kind === 'expert_revision'
+}
+
 export class EnterpriseError extends Error {
   readonly code: string
   readonly status?: number
@@ -93,9 +115,35 @@ export function readRelease(spaceId: string, releaseId?: string): Promise<Releas
   return request
 }
 
-export function readCitation(spaceId: string, releaseId: string, member: string, evidence: number): Promise<Citation> {
+export function readCitation(
+  spaceId: string, releaseId: string, member: string, evidence: number,
+): Promise<Citation | ExpertCitation> {
   const query = new URLSearchParams({ member, evidence: String(evidence) })
-  return read<Citation>(`${releasesPath(spaceId)}/${encodeURIComponent(releaseId)}/citation?${query}`)
+  return read<Citation | ExpertCitation>(`${releasesPath(spaceId)}/${encodeURIComponent(releaseId)}/citation?${query}`)
+}
+
+export interface ExpertEditInput {
+  base_release_id: string
+  member_slug: string
+  base_member_digest: string
+  state: 'present' | 'absent_explicitly' | 'unknown'
+  value: string
+  reason: string
+}
+
+export interface ExpertEditResult {
+  release_id: string
+  epoch: number
+  revision_record_id: string
+}
+
+// Saving publishes at once (S9a): the result names the release the edit produced.
+export function submitExpertEdit(spaceId: string, input: ExpertEditInput): Promise<ExpertEditResult> {
+  const body: ExpertEditInput = {
+    base_release_id: input.base_release_id, member_slug: input.member_slug,
+    base_member_digest: input.base_member_digest, state: input.state, value: input.value, reason: input.reason,
+  }
+  return response<ExpertEditResult>(() => post(`${SPACES}/${encodeURIComponent(spaceId)}/view/expert-edits`, body))
 }
 
 
