@@ -316,7 +316,9 @@ func TestPostgresRetryAfterTheHeadMovedReturnsTheCommittedRelease(t *testing.T) 
 	require.NoError(t, err)
 	da, err := s.Decide(ctx, principal, "space-1", a.ID, approve)
 	require.NoError(t, err)
-	stale, err := s.Receive(ctx, principal, "space-1", rawBundle(t, "", "c", `{"v":3}`))
+	// Since S8b an untouched Head advance is rebased; this stale candidate adds the slug B
+	// commits below, a real conflict that still needs a rebase.
+	stale, err := s.Receive(ctx, principal, "space-1", rawBundle(t, "", "b", `{"v":3}`))
 	require.NoError(t, err)
 	ds, err := s.Decide(ctx, principal, "space-1", stale.ID, approve)
 	require.NoError(t, err)
