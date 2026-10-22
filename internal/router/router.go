@@ -16,6 +16,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise"
+	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
@@ -47,6 +48,7 @@ type RouterParams struct {
 	FirstParseStore                *service.G3FirstParseStore
 	EnterpriseCandidates           *release.Service
 	EnterpriseSpotChecks           *spotcheck.Service
+	EnterpriseExperts              *expert.Service
 	ChunkService                   interfaces.ChunkService
 	SessionService                 interfaces.SessionService
 	MessageService                 interfaces.MessageService
@@ -461,8 +463,11 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	}
 	enterprise.MountSessionReads(v1.Group("/enterprise"), enterprise.SessionDeps{
 		Candidates: params.EnterpriseCandidates, Sources: sources, Files: files, Spaces: params.EnterpriseSpaces,
-		SpotChecks: params.EnterpriseSpotChecks,
+		SpotChecks: params.EnterpriseSpotChecks, Experts: params.EnterpriseExperts,
 	}, guards.Viewer(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleViewer))
+	enterprise.MountSessionExpertEdits(v1.Group("/enterprise"), enterprise.SessionDeps{
+		Experts: params.EnterpriseExperts, Spaces: params.EnterpriseSpaces,
+	}, guards.Admin(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleEditor))
 	enterprise.MountSessionSpotChecks(v1.Group("/enterprise"), enterprise.SessionDeps{
 		SpotChecks: params.EnterpriseSpotChecks, Spaces: params.EnterpriseSpaces,
 	}, guards.Viewer(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleEditor))

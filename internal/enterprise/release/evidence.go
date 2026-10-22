@@ -32,12 +32,14 @@ type Evidence struct {
 	AccessScope string  `json:"access_scope"`
 }
 
-// Locator holds the PDF_TEXT_SPAN coordinates: one-based page, page-local code points [start, end).
+// Locator holds the PDF_TEXT_SPAN coordinates: one-based page, page-local code points [start, end),
+// or for an EXPERT_REVISION citation the revision record it names (S9a).
 type Locator struct {
-	Kind  string `json:"kind"`
-	Page  *int   `json:"page,omitempty"`
-	Start *int   `json:"start,omitempty"`
-	End   *int   `json:"end,omitempty"`
+	Kind             string `json:"kind"`
+	Page             *int   `json:"page,omitempty"`
+	Start            *int   `json:"start,omitempty"`
+	End              *int   `json:"end,omitempty"`
+	RevisionRecordID string `json:"revision_record_id,omitempty"`
 }
 
 // EvidenceCheck is one evidence object with its JSON pointer inside the bundle.
