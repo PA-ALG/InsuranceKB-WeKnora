@@ -53,7 +53,9 @@ func newPlatform() *platform {
 	}
 }
 
-func (p *platform) CreateCandidate(_ context.Context, c release.Candidate, b release.Bundle) (release.Candidate, error) {
+func (p *platform) CreateCandidate(
+	_ context.Context, c release.Candidate, b release.Bundle,
+) (release.Candidate, error) {
 	if id, ok := p.byDigest[c.BundleDigest]; ok {
 		return p.candidates[id], nil
 	}
@@ -370,11 +372,25 @@ func TestInvalidEditsWriteNothing(t *testing.T) {
 		in   expert.EditInput
 		code string
 	}{
-		"present without a value": {expert.EditInput{MemberSlug: "P/waiting", State: "present", Reason: "r"}, expert.ErrorInvalid},
-		"blank reason":            {expert.EditInput{MemberSlug: "P/waiting", State: "present", Value: "1日", Reason: " "}, expert.ErrorInvalid},
-		"unknown state":           {expert.EditInput{MemberSlug: "P/waiting", State: "maybe", Value: "1日", Reason: "r"}, expert.ErrorInvalid},
-		"no change":               {expert.EditInput{MemberSlug: "P/waiting", State: "present", Value: "90日", Reason: "r"}, expert.ErrorInvalid},
-		"missing member":          {expert.EditInput{MemberSlug: "P/none", State: "present", Value: "1日", Reason: "r", BaseMemberDigest: strings.Repeat("1", 64)}, release.ErrorMemberNotFound},
+		"present without a value": {
+			expert.EditInput{MemberSlug: "P/waiting", State: "present", Reason: "r"}, expert.ErrorInvalid,
+		},
+		"blank reason": {
+			expert.EditInput{MemberSlug: "P/waiting", State: "present", Value: "1日", Reason: " "}, expert.ErrorInvalid,
+		},
+		"unknown state": {
+			expert.EditInput{MemberSlug: "P/waiting", State: "maybe", Value: "1日", Reason: "r"}, expert.ErrorInvalid,
+		},
+		"no change": {
+			expert.EditInput{MemberSlug: "P/waiting", State: "present", Value: "90日", Reason: "r"}, expert.ErrorInvalid,
+		},
+		"missing member": {
+			expert.EditInput{
+				MemberSlug: "P/none", State: "present", Value: "1日", Reason: "r",
+				BaseMemberDigest: strings.Repeat("1", 64),
+			},
+			release.ErrorMemberNotFound,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := setup(t)
