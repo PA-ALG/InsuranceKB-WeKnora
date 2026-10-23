@@ -92,23 +92,6 @@ func withActiveKey(signing *config.SchemaWikiSigningConfig, keyID string) *confi
 	return signing
 }
 
-func TestLoadSpacesKeepsTheG3Reservation(t *testing.T) {
-	cfg := &config.Config{
-		SchemaWikiSigning: artifactSigning(t),
-		G3PlatformProcessing: &config.G3PlatformProcessingConfig{
-			TenantID: 7, SpaceID: "space-1", RawKBID: "g3-raw", WikiKBID: "g3-wiki",
-		},
-	}
-	_, err := LoadSpaces(cfg, oneSpace)
-	require.Error(t, err, "an enterprise Space may not take over the configured G3 Space")
-
-	// An enterprise Space owns its RAW KB as well (user decision 2026-10-15): sharing the G3 RAW KB
-	// would put one upload under two capture regimes, so it is refused at startup.
-	sharedRaw := `[{"tenant_id":7,"space_id":"space-x","raw_kb_id":"g3-raw","wiki_kb_id":"wiki-x"}]`
-	_, err = LoadSpaces(cfg, sharedRaw)
-	require.Error(t, err, "an enterprise Space may not reuse the G3 RAW KB")
-}
-
 func registeredContainer(t *testing.T, cfg *config.Config, spaces string) *dig.Container {
 	t.Helper()
 	t.Setenv(SpacesEnv, spaces)

@@ -10,10 +10,8 @@ import (
 	"github.com/Tencent/WeKnora/internal/infrastructure/chunker"
 	"os"
 	"path/filepath"
-	"strings"
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
-	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -57,18 +55,6 @@ func NewConceptSourceAuthorityService830G2WithFirstParse(fixed *KnowledgeRevisio
 		s.sourceReuse = first.reuse
 	}
 	return s
-}
-func g3FirstParseScope(cfg *config.Config, knowledge *types.Knowledge, fileType string) bool {
-	if cfg == nil || cfg.G3PlatformProcessing == nil || knowledge == nil {
-		return false
-	}
-	c := cfg.G3PlatformProcessing
-	return c.Enabled && c.TenantID > 0 && c.RawKBID != "" && knowledge.TenantID == c.TenantID && knowledge.KnowledgeBaseID == c.RawKBID && strings.EqualFold(fileType, "pdf")
-}
-func g3FirstParseConfig(eff types.EffectiveProcessConfig) types.EffectiveProcessConfig {
-	rules := []types.ParserEngineRule{{FileTypes: []string{"pdf"}, Engine: "builtin"}}
-	eff.ChunkingConfig.ParserEngineRules = append(rules, eff.ChunkingConfig.ParserEngineRules...)
-	return eff
 }
 func g3FirstParseKey(id g3FirstParseIdentity) (string, error) { return capture.Key(id) }
 func g3FirstParseResult(record *g3FirstParseRecord) *types.ReadResult {

@@ -30,7 +30,6 @@ import (
 const (
 	enterpriseTenant = uint64(7)
 	enterpriseRawKB  = "enterprise-raw"
-	g3RawKB          = "g3-raw"
 	// docreader's native capture rejects a page without a usable text layer with
 	// exactly this message (docreader/parser/pdf_parser.py, pinned by
 	// docreader/tests/test_pdf_router.py::test_scanned_page_is_rejected_without_image_fallback).
@@ -49,12 +48,6 @@ var _ source.CaptureScope = rawKBs{}
 
 var enterpriseScope = types.WikiReleaseScope{
 	TenantID: enterpriseTenant, SpaceID: "enterprise-space", RawKBID: enterpriseRawKB, WikiKBID: "enterprise-wiki",
-}
-
-func g3CaptureConfig() *config.Config {
-	return &config.Config{G3PlatformProcessing: &config.G3PlatformProcessingConfig{
-		Enabled: true, TenantID: enterpriseTenant, RawKBID: g3RawKB,
-	}}
 }
 
 // captureRequested reports whether the parser was asked for builtin pdfium
@@ -104,8 +97,6 @@ func convertOnce(t *testing.T, c convertCase) (*types.Knowledge, *firstParseRead
 
 func TestEnterpriseRawKBPDFsAreAlwaysParsedForCapture(t *testing.T) {
 	enterprise := rawKBs{enterpriseRawKB: enterpriseTenant}
-	idleG3 := g3CaptureConfig()
-	idleG3.G3PlatformProcessing.Enabled = false
 	for _, tc := range []struct {
 		name string
 		convertCase
@@ -116,10 +107,6 @@ func TestEnterpriseRawKBPDFsAreAlwaysParsedForCapture(t *testing.T) {
 		{"other KB of the tenant", convertCase{&config.Config{}, enterprise, 7, "other-kb", "pdf", nil}, false},
 		{"non-pdf in the RAW KB", convertCase{&config.Config{}, enterprise, 7, enterpriseRawKB, "docx", nil}, false},
 		{"no enterprise Space", convertCase{&config.Config{}, nil, 7, enterpriseRawKB, "pdf", nil}, false},
-		{"G3 RAW KB beside Spaces", convertCase{g3CaptureConfig(), enterprise, 7, g3RawKB, "pdf", nil}, true},
-		{"Space RAW KB beside G3", convertCase{g3CaptureConfig(), enterprise, 7, enterpriseRawKB, "pdf", nil}, true},
-		{"unrelated KB beside both", convertCase{g3CaptureConfig(), enterprise, 7, "other-kb", "pdf", nil}, false},
-		{"disabled G3 policy", convertCase{idleG3, enterprise, 7, g3RawKB, "pdf", nil}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.result = firstParseNative(t, "平安测试两全保险\r\n保险条款", "附录")
@@ -148,17 +135,13 @@ func TestCaptureParserFailuresOtherThanScannedPagesStillFailClosed(t *testing.T)
 			"enterprise near-miss signal", scannedPageError + "; rendered as image",
 			convertCase{&config.Config{}, enterprise, 7, enterpriseRawKB, "pdf", nil},
 		},
-		{
-			"G3 scanned page", scannedPageError,
-			convertCase{g3CaptureConfig(), enterprise, 7, g3RawKB, "pdf", nil},
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.result = &types.ReadResult{Error: tc.parserError}
 			k, reader, _ := convertOnce(t, tc.convertCase)
 			require.True(t, captureRequested(reader.requests[0]))
 			require.Equal(t, types.ParseStatusFailed, k.ParseStatus,
-				"only the exact scanned-page signal in an enterprise RAW KB is tolerated; G3 keeps failing it")
+				"only the exact scanned-page signal in an enterprise RAW KB is tolerated")
 		})
 	}
 }

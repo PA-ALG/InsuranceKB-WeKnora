@@ -409,24 +409,16 @@ func trustedProxies() []string {
 }
 
 func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *rbacGuards) {
-	// Resolve configured enterprise bindings before the isolated G3 fallback;
-	// never infer Space membership from a caller-supplied source ID.
+	// Only configured enterprise Spaces have source pages; never infer Space membership from a
+	// caller-supplied source ID.
 	store := source.ArtifactStoreFunc(func(
 		ctx context.Context, scope source.Scope, id string, attempt int64,
 	) (*source.Artifact, error) {
-		if binding, err := params.EnterpriseSpaces.Scope(scope.TenantID, scope.SpaceID); err == nil {
-			return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, binding, id, attempt)
-		}
-		runtime, err := config.DecodeG3PlatformProcessing(params.Config, time.Now())
+		binding, err := params.EnterpriseSpaces.Scope(scope.TenantID, scope.SpaceID)
 		if err != nil {
-			return nil, &source.Error{
-				Code: source.ErrorInvalidRequest, Detail: "source request authorization is invalid",
-			}
-		}
-		if runtime == nil || scope.TenantID != runtime.Scope.TenantID || scope.SpaceID != runtime.Scope.SpaceID {
 			return nil, source.ErrNotFound
 		}
-		return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, runtime.Scope, id, attempt)
+		return params.FirstParseStore.ReadSourceArtifact(ctx, params.KnowledgeRepository, binding, id, attempt)
 	})
 	sources := source.NewService(store)
 	files := releasestore.SourceFiles(params.EnterpriseSpaces, params.KnowledgeRepository, params.KnowledgeService)
