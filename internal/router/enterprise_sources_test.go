@@ -87,7 +87,7 @@ func enterpriseSourceConfig(t *testing.T) *config.Config {
 			Enabled: true, TenantID: 7, SpaceID: enterpriseSourceSpaceID,
 			RawKBID: "10000000-0000-0000-0000-000000000002", WikiKBID: "10000000-0000-0000-0000-000000000003",
 			MachinePrincipalID: "api_tenant:7", APIKeyID: 1, PolicyID: "test-policy", PolicyVersion: "1",
-			Mode: service.SystemPolicyIsolatedMode, NotBefore: now.Add(-time.Hour).Unix(),
+			Mode: "ISOLATED_NOT_FOR_PRODUCTION", NotBefore: now.Add(-time.Hour).Unix(),
 			ExpiresAt: now.Add(time.Hour).Unix(), Capabilities: []string{"activate", "create-draft", "review"},
 			SystemDecisionKeyID: "system", SystemDecisionPublicKeys: []config.SchemaWikiEd25519PublicKeyConfig{
 				publicKey("system"),

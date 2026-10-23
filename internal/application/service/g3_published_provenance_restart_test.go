@@ -53,9 +53,9 @@ func TestPublishedGeneratedContentSurvivesColdRead(t *testing.T) {
 	for i, definition := range hot.CompileResult.Output.Definitions {
 		require.Equal(t, definition.ContentProvenance, cold.CompileResult.Output.Definitions[i].ContentProvenance)
 	}
-	projection, err := g3PlatformPublishedProjectionFromBundle(p.WikiReleaseScope, cold)
-	require.NoError(t, err)
-	wire, err := json.Marshal(projection)
+	// S7d-2b: the platform projection API is retired; the cold read itself must keep the
+	// restored generated collections as empty lists, never null.
+	wire, err := json.Marshal(cold.CompileResult.Output)
 	require.NoError(t, err)
 	require.NotContains(t, string(wire), `"evidence_indexes":null`)
 	after, err := os.ReadFile(path)
@@ -126,48 +126,4 @@ func TestPublishedGeneratedCollectionsRequireSignedEmptyWitness(t *testing.T) {
 			require.Equal(t, definition.Evidence, bundle.CompileResult.Output.Definitions[0].Evidence)
 		})
 	}
-}
-
-func TestGeneratedPublishedBaseSnapshotAfterRestart(t *testing.T) {
-	fixture, schema, _ := batchConceptReleaseFixture830G3(t)
-	compressed, err := os.ReadFile("testdata/generated-restart-candidate.json.gz")
-	require.NoError(t, err)
-	reader, err := gzip.NewReader(bytes.NewReader(compressed))
-	require.NoError(t, err)
-	raw, err := io.ReadAll(reader)
-	require.NoError(t, err)
-	require.NoError(t, reader.Close())
-	_, _, err = types.CanonicalBatchConceptCandidateBundle830G3(raw)
-	require.NoError(t, err)
-	draft, err := schema.CreateBatchConceptDraft830G3(fixture.ctx, fixture.principal1, fixture.scope, "generated-restart-base", raw)
-	require.NoError(t, err)
-	rawDecision, decision := conceptDecision830G2(t, fixture, draft, "generated-restart-base")
-	ready, err := schema.ReviewSchemaDraft(fixture.ctx, fixture.principal1, fixture.scope, draft.ID, rawDecision)
-	require.NoError(t, err)
-	published, err := fixture.service.ActivateReviewed(fixture.ctx, fixture.principal1, rawDecision, conceptAuthorization830G2(t, fixture, ready, decision))
-	require.NoError(t, err)
-	store := fixture.service.publishedBatchReuse830G3()
-	fixture.service.publishedReadReuse = newPublishedBatchReadReuse830G3(store.codec)
-	service := NewG3PlatformBaseSnapshotService(fixture.service, &g3PlatformBaseAuthorizerStub{}, &g3PlatformSnapshotSignerStub{keyID: "base-key", signature: []byte("signed-base")})
-	snapshot, err := service.Read(fixture.ctx, fixture.scope, published.ReleaseID, published.ActivationEpoch)
-	require.NoError(t, err)
-	generated := 0
-	for _, definition := range snapshot.Snapshot.PublishedProjection.Definitions {
-		if definition.ContentProvenance != nil && definition.ContentProvenance.Segments[0].Origin == "MODEL_GENERATED" {
-			generated++
-			require.NotNil(t, definition.Evidence)
-			require.Empty(t, definition.Evidence)
-			require.NotNil(t, definition.ContentProvenance.Segments[0].EvidenceIndexes)
-		}
-	}
-	require.Positive(t, generated, "real base API must retain a pure generated definition")
-	for _, page := range snapshot.Snapshot.PublishedProjection.Pages {
-		if page.ContentProvenance != nil && page.ContentProvenance.Segments[0].Origin == "MODEL_GENERATED" {
-			require.NotNil(t, page.Evidence)
-			require.NotNil(t, page.ContentProvenance.Segments[0].EvidenceIndexes)
-		}
-	}
-	second, err := service.Read(fixture.ctx, fixture.scope, published.ReleaseID, published.ActivationEpoch)
-	require.NoError(t, err)
-	require.Equal(t, snapshot.Snapshot.SnapshotSHA256, second.Snapshot.SnapshotSHA256)
 }
