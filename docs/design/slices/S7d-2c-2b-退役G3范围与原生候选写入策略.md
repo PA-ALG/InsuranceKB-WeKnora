@@ -58,10 +58,12 @@ S7d-2c-2a 之后，G3 只剩"范围"本身：两段配置，以及读它们的�
 | `config/g3_platform_processing_test.go`、`config/product_ingestion_native_test.go`、`service/native_wiki_policy_test.go` | 删除 |
 | `router/enterprise_sources_test.go` | 删除只测 G3 配置校验与回退的 `…RejectOtherTenantAndDisabledCaptureScope`、`…RejectsInvalidPolicyLifetimeAfterMount`；`…MountScopesSourcesAndLeavesCandidatesUnavailable` 去掉 G3 配置，改为断言未配置的 Space 一律 404 且不读知识库，候选接口仍 503 |
 | `router/enterprise_space_sources_test.go` | 删除 `TestEnterpriseSpacesKeepTheG3SourceFallback` |
-| `releasestore/production_test.go`、`capture_scope_test.go` | 删除 `TestReservedScopesAlwaysIncludeTheConfiguredG3Scope`、`TestLoadSpacesKeepsTheG3Reservation` |
+| `releasestore/production_test.go`、`capture_scope_test.go` | 删除 `TestReservedScopesAlwaysIncludeTheConfiguredG3Scope`、`TestLoadSpacesKeepsTheG3Reservation`；`TestProductionRejectsEveryIncompleteConfiguration` 删除"reuses the G3 Space"一行与保留范围参数 |
+| `releasestore/spaces_test.go` | `TestSpacesRejectIncompleteDuplicateAndReservedEntries` 删除两行 G3 用例与保留范围参数，改名为 `TestSpacesRejectIncompleteAndDuplicateEntries`（实现时发现，2026-10-23 补入） |
+| `container/reset_pending_tasks_test.go` | 删除 `ProductIngestion` 子用例；`recoverPendingWikiTasks` 回到上游签名（去掉 `cfg` 参数），这两个 container 文件回到上游原样 |
 | `service/enterprise_capture_test.go` | 删除含 G3 配置的用例行（"G3 RAW KB beside Spaces""Space RAW KB beside G3""unrelated KB beside both""disabled G3 policy""G3 scanned page"）与 `g3CaptureConfig` |
 | `service/enterprise_capture_boundaries_test.go` | `TestFirstParseKeepsHTMLAndLineEndingsInBothCaptureScopes` 去掉 G3 分支；`TestCaptureScopeExcludesURLImports` 的配置改为空配置 |
-| `service/g3_first_parse_test.go` | `…ScopeConfigAndExactChunkContent` 删除 `g3FirstParseScope` 断言，解析器设置断言改测 `capture.ParserConfig`；`…ActualConvertScopesParserAndReusesResult`、`…ProcessDocumentWriteFailureClosesDocreader` 改用 `captureScope` |
+| `service/g3_first_parse_test.go` | `…ScopeConfigAndExactChunkContent` 删除 `g3FirstParseScope` 断言，解析器设置断言改测 `capture.ParserConfig`，改名为 `…ParserConfigAndExactChunkContent`；`…ActualConvertScopesParserAndReusesResult`、`…ProcessDocumentWriteFailureClosesDocreader` 改用 `captureScope` |
 
 ## 3. 上游补丁
 
@@ -81,6 +83,8 @@ S7d-2c-2a 之后，G3 只剩"范围"本身：两段配置，以及读它们的�
    - `container/recover_pending_wiki_tasks.go`、`router/router.go`；
    - `releasestore/production.go`、`releasestore/spaces.go`；
 3. `knowledge_process.go` 不再引用 `conceptNativeCapture830G2`；采集只由 `captureScope` 决定；`capture.ParserConfig` 存在。
+
+**S7d-2a 守卫随之调整**：`test_product_ingestion_bridge_retired.py::test_the_config_keeps_no_bridge_fields` 原来读取 `product_ingestion.go`，检查其中没有桥接字段。本片删除了这个文件，改为检查 `internal/config` 下不再声明 `ProductIngestionConfig`。整个结构体已不存在，桥接字段也就不可能回来，约束只会更强。实现时发现，2026-10-23 补入。
 
 **行为回归**：以下测试照常通过（G3 用例按 §2.4 调整后）。
 
