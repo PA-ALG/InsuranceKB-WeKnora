@@ -27,10 +27,13 @@ RETIRED = (
     f"{SERVICE}/knowledge_process_g3_bound_reparse_test.go",
     f"{REPOSITORY}/g3_bound_reparse_test.go",
     "internal/types/g3_bound_reparse.go",
+    f"{SERVICE}/g3_platform_source_snapshot_test.go",
 )
 TOUCHED = (
     f"{SERVICE}/knowledge_process.go",
     f"{SERVICE}/g3_first_parse.go",
+    f"{SERVICE}/g3_platform_source_snapshot.go",
+    f"{SERVICE}/knowledge_revision_source.go",
     f"{REPOSITORY}/knowledge.go",
     f"{REPOSITORY}/knowledge_concurrency_upgrade_test.go",
     "internal/types/task.go",
@@ -51,6 +54,8 @@ GONE = (
     "RecoveryKey",
     "DocReaderReuse ",
     "writeFirstParseArtifact",
+    "G3PlatformSourceSnapshotService",
+    "ensureCurrentCompletedForScope",
 )
 
 
