@@ -18,28 +18,6 @@ CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "harness-ci.yml"
 LIVE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "harness-live.yml"
 JUNIT_GUARD = HARNESS_ROOT / "scripts" / "check_junit.py"
 
-POSTGRES_NODE = (
-    "tests/test_source_revision_postgres_017.py::"
-    "test_t7_live_postgresql_concurrent_notifications_create_one_recompile"
-)
-SOURCE_LIFECYCLE_POSTGRES_NODES = {
-    f"tests/test_source_lifecycle_postgres_021.py::{node}"
-    for node in (
-        "test_l6_postgresql_same_first_identity_creates_one_business_aggregate",
-        "test_l6_postgresql_b_c_lock_orders_redecide_to_c[b]",
-        "test_l6_postgresql_b_c_lock_orders_redecide_to_c[c]",
-        "test_l6_postgresql_resolver_and_normal_event_share_one_source_lock",
-        "test_l6_postgresql_first_event_delete_creates_durable_empty_tombstone",
-        "test_l6_postgresql_newer_delete_advances_active_or_deleted_head[active]",
-        "test_l6_postgresql_newer_delete_advances_active_or_deleted_head[deleted]",
-        "test_l6_postgresql_same_revision_delete_beats_concurrent_notify",
-        "test_l6_postgresql_same_revision_delete_beats_concurrent_import",
-        "test_l6_postgresql_strictly_newer_notify_reactivates_deleted_head",
-        "test_l6_postgresql_c_then_late_b_stays_on_c_without_business_write",
-        "test_l6_postgresql_controlled_cas_loser_rereads_before_business",
-        "test_l6_postgresql_event_failure_rolls_back_unit_and_keeps_caller_session",
-    )
-}
 SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES = {
     f"tests/test_source_lifecycle_migration_postgres_021.py::{node}"
     for node in (
@@ -105,36 +83,17 @@ SERVICE_SHELL_POSTGRES_NODES = {
         "test_t6_postgres_drain_reclaims_with_higher_generation_and_one_result",
     )
 }
+# S7c removed the legacy knowledge chain and its PostgreSQL tests (source revision 017,
+# release publisher 018, workbench 008, source lifecycle 021).
 POSTGRES_NODES = (
-    {
-        POSTGRES_NODE,
-        (
-            "tests/test_release_publisher_postgres_018.py::"
-            "test_r3_6_postgresql_release_never_commits_caller_transaction"
-        ),
-        (
-            "tests/test_workbench_concurrency_008.py::"
-            "test_w1_4_live_postgresql_two_sessions_single_apply"
-        ),
-    }
-    | SOURCE_LIFECYCLE_POSTGRES_NODES
-    | SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES
+    SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES
     | JOB_STORE_POSTGRES_NODES
     | JOB_MIGRATION_POSTGRES_NODES
     | SERVICE_SHELL_POSTGRES_NODES
 )
 WEKNORA_NODES = {
-    "tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip",
     "tests/test_live.py::test_live_knowledge_endpoint_shape",
     "tests/test_live.py::test_live_wiki_page_crud_roundtrip",
-    (
-        "tests/test_release_snapshot_live_018.py::"
-        "test_r6_4_live_release_v1_v2_rollback_roundtrip"
-    ),
-    (
-        "tests/test_source_bridge_live_017.py::"
-        "test_live_source_bridge_compiler_import_evidence_backlink"
-    ),
 }
 LIVE_VARIABLES = {
     "HARNESS_LIVE_BASE_URL",

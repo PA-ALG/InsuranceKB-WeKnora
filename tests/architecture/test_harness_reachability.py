@@ -43,7 +43,6 @@ CLI_ROOTS = (
     "insurance_harness.changes.revert",
     "insurance_harness.db.scope_cli",
 )
-_KC = "insurance_harness.knowledge_compiler"
 _SI = "insurance_harness.structured_import"
 _LE = "insurance_harness.live_env"
 # The trusted local-live image workflow and the digest-pinned plugin contract
@@ -56,9 +55,6 @@ KEEP_UNREACHABLE = {
         for name in ("compose", "local_gate", "local_provisioning", "model_probe", "provision", "space")
     },
     "insurance_harness.adapters.weknora.admin_client": _LOCAL_LIVE,
-    f"{_KC}.incremental_changes": "S7 删除：已被 S8a 的 changes/ 取代（输入为已退役的 VerifiedFactV1）",
-    f"{_KC}.source_authority": "S7 删除：随 incremental_changes 退役；仍被其他不可达模块引用",
-    f"{_KC}.retractions": "S7 删除：已被 S8a 的 changes/ 取代",
     **{
         f"{_SI}{name}": "第二期前 REWIRE → ingest/：结构化导入"
         for name in ("", ".cli", ".errors", ".mapping", ".registry", ".service", ".transformers")

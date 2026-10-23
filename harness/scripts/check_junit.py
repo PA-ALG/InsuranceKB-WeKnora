@@ -83,7 +83,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     )
     exact_identities = len(identities) == len(expected) and set(identities) == set(expected)
     exact_counts = (
-        tests == len(expected) == 5
+        tests == len(expected) > 0
         and skipped == 0
         and failures == 0
         and errors == 0
