@@ -621,23 +621,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewKnowledgeBaseHandler))
 	must(container.Provide(handler.NewKnowledgeHandler))
 	must(container.Provide(func(
-		cfg *config.Config,
-		knowledge interfaces.KnowledgeRepository,
-		knowledgeService interfaces.KnowledgeService,
-		revisions *service.KnowledgeRevisionSourceService,
-		sources *service.ConceptSourceAuthorityService830G2,
-		spans repository.KnowledgeSpanRepository,
-		access *handler.WikiReleaseHandler,
-		schemas *service.SchemaWikiService,
-		releases *service.WikiReleaseService,
-	) (*handler.G3PlatformSnapshotsHandler, *handler.G3PlatformReleaseHandler, error) {
-		bound, ok := knowledgeService.(handler.G3PlatformBoundReparser)
-		if !ok {
-			return nil, nil, service.ErrG3PlatformSnapshotUnavailable
-		}
-		return handler.NewConfiguredG3PlatformHandlers(cfg, knowledge, revisions, sources, spans, access, schemas, releases, bound)
-	}))
-	must(container.Provide(func(
 		revisionSourceService *service.KnowledgeRevisionSourceService,
 	) *handler.KnowledgeRevisionSourceHandler {
 		return handler.NewKnowledgeRevisionSourceHandler(revisionSourceService)
@@ -745,15 +728,9 @@ func schemaWikiReleaseVerifierProviders(
 	if err != nil {
 		return nil, service.WikiReleaseServiceOptions{}, err
 	}
-	systemOptions, err := handler.ConfiguredG3PlatformSystemOptions(cfg, time.Now)
-	if err != nil {
-		return nil, service.WikiReleaseServiceOptions{}, err
-	}
 	return service.NewEd25519WikiReleaseAuthorizationVerifier(publishKeys),
 		service.WikiReleaseServiceOptions{
-			SystemPolicyProvider:   systemOptions.SystemPolicyProvider,
-			SystemDecisionVerifier: systemOptions.SystemDecisionVerifier,
-			HumanDecisionVerifier:  service.NewEd25519HumanBatchDecisionVerifier(humanKeys),
+			HumanDecisionVerifier: service.NewEd25519HumanBatchDecisionVerifier(humanKeys),
 			QualityGateReceiptVerifier: service.NewEd25519Schema67GoldenQualityGateReceiptVerifier(
 				qualityGateKeys,
 			),
