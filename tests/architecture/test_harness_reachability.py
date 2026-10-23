@@ -8,9 +8,8 @@ Importing a module also loads its parent packages.
 Roots:
 1. the console scripts in harness/pyproject.toml (wiki-api / wiki-worker);
 2. modules Alembic loads (harness/migrations/env.py and versions/);
-3. modules deploy/product-ingestion/configure.py imports;
-4. the current command-line tools in CLI_ROOTS;
-5. every module in the blueprint §4.2 target directories (common.HARNESS_TARGET_DIRS).
+3. the current command-line tools in CLI_ROOTS;
+4. every module in the blueprint §4.2 target directories (common.HARNESS_TARGET_DIRS).
 
 An unreachable module must be listed in KEEP_UNREACHABLE with the slice that rewires it.
 The list only shrinks: stale entries fail too. Standard library only; the package is never
@@ -34,7 +33,7 @@ from common import HARNESS_PKG, HARNESS_TARGET_DIRS, REPO_ROOT, worktree_files  
 
 MODULE_STRING = re.compile(r"\binsurance_harness(?:\.[A-Za-z_]\w*)+")
 PYPROJECT = "harness/pyproject.toml"
-ROOT_FILES = ("harness/migrations/env.py", "deploy/product-ingestion/configure.py")
+ROOT_FILES = ("harness/migrations/env.py",)
 ROOT_GLOBS = ("harness/migrations/versions/*.py",)
 CLI_ROOTS = (
     "insurance_harness.contracts.export",
@@ -62,6 +61,25 @@ KEEP_UNREACHABLE = {
     "insurance_harness.product.register": "structured_import.service 依赖，随结构化导入 REWIRE",
     "insurance_harness.product.aliases": "product.register 依赖",
     "insurance_harness.product.meta": "product.register 依赖",
+    # S7d-1: reachable only through the G3 product-ingestion chain until it was retired; now
+    # loaded only by the kept modules above, so they stay with them and leave with them.
+    **{
+        f"insurance_harness.{name}": _LOCAL_LIVE
+        for name in (
+            "adapters", "adapters.weknora", "adapters.weknora.client", "adapters.weknora.errors",
+            "adapters.weknora.models", "adapters.weknora.scope", "adapters.weknora.tracing",
+            "live_env", "live_env.config",
+        )
+    },
+    **{
+        f"insurance_harness.{name}": "结构化导入依赖，随结构化导入 REWIRE"
+        for name in (
+            "canonical", "canonical.encoder", "canonical.errors", "canonical.hashing",
+            "canonical.values", "product", "product.classify", "product.version_resolver",
+            "schemas", "schemas.loader", "schemas.models",
+        )
+    },
+    "insurance_harness.config": "本地 live 与结构化导入共同依赖，随二者退役",
 }
 
 Modules = dict[str, Path]

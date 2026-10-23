@@ -55,16 +55,14 @@ def test_t1_principal_enums_are_closed() -> None:
         "space_admin",
         "super_admin",
     }
+    # The product-ingestion service identity was retired with its service in S7d-1.
     assert {kind.value for kind in ServiceKind} == {
         "source_reader",
         "wiki_projector",
-        "product_ingestion",
     }
     assert {capability.value for capability in ServiceCapability} == {
         "read_raw_knowledge",
         "project_managed_page",
-        "manage_product_ingestion",
-        "read_product_ingestion",
     }
     with pytest.raises(ValueError):
         HumanRole("owner")

@@ -4,13 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from insurance_harness.goldenset.annotator import ReplayClient, request_key
-from insurance_harness.goldenset.pdf import PageText
 from insurance_harness.product.classify import (
     _LLM_SYSTEM,
     Classification,
     ClassificationModelBoundaryError,
     DocumentType,
+    PageText,
     classify_document,
     detect_product_line,
 )
@@ -59,15 +58,22 @@ async def test_p3_llm_fallback_requires_explicit_nonproduction_profile(
     tmp_path: Path,
     model_profile: str,
 ) -> None:
+    # S7d-1: the golden-set replay client is retired; a scripted client gives the same answer.
     user = PLAIN_PAGE.text[:3000]
-    fixture = tmp_path / f"{request_key(_LLM_SYSTEM, user)}.txt"
-    fixture.write_text('{"doc_type": "宣传材料", "reason": "营销口吻"}', encoding="utf-8")
+    calls: list[tuple[str, str]] = []
+
+    class _ScriptedClient:
+        async def complete(self, system: str, user: str) -> str:
+            calls.append((system, user))
+            return '{"doc_type": "宣传材料", "reason": "营销口吻"}'
+
     cls: Classification = await classify_document(
         "某文件.pdf",
         [PLAIN_PAGE],
-        model_client=ReplayClient(tmp_path),
+        model_client=_ScriptedClient(),
         model_profile=model_profile,
     )
+    assert calls == [(_LLM_SYSTEM, user)]
     assert cls.doc_type is DocumentType.MARKETING
     assert cls.used_llm and cls.confidence == "low"
 
