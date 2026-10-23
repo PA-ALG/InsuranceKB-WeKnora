@@ -56,8 +56,6 @@ import { useUploadTasksStore } from '@/stores/uploadTasks';
 import WikiBrowser from './wiki/WikiBrowser.vue';
 import { useReleaseCustody } from '@/enterprise/useReleaseCustody';
 import ReleaseCustodyGate from '@/enterprise/ReleaseCustodyGate.vue';
-import ProductIngestionStatus from '@/components/knowledge-base/product-ingestion-status.vue';
-import { getProductIngestionEnabled, uploadProductBatchIfEnabled } from '@/api/product-ingestion';
 import { getWikiStats } from '@/api/wiki';
 import {
   isKnowledgeParseInFlight,
@@ -89,22 +87,6 @@ import type { ParserEngineInfo } from '@/api/system';
 const route = useRoute();
 const { t } = useI18n();
 const kbId = computed(() => (route.params as any).kbId as string || '');
-const productIngestionEnabled = ref(false);
-const productIngestionRefresh = ref(0);
-const productUploadChecking = ref(false);
-let productCapabilityGeneration = 0;
-watch(kbId, async (id) => {
-  const generation = ++productCapabilityGeneration;
-  productIngestionEnabled.value = false;
-  if (!id) return;
-  try {
-    const enabled = await getProductIngestionEnabled(id);
-    if (generation === productCapabilityGeneration) productIngestionEnabled.value = enabled;
-  } catch {
-    // Upload checks capability again and reports errors before sending any file.
-  }
-}, { immediate: true });
-onUnmounted(() => { productCapabilityGeneration++; });
 const kbInfo = ref<any>(null);
 const uploadSourceRef = ref<InstanceType<typeof KbUploadSourceDropdown> | null>(null);
 const kbLoading = ref(false);
@@ -1644,33 +1626,6 @@ const uploadConfirmStore = useUploadConfirmStore();
 
 const uploadTasksStore = useUploadTasksStore();
 
-const executeProductUploadBatch = async (files: File[]) => {
-  const targetKbId = kbId.value;
-  if (!targetKbId || files.length === 0) {
-    return { successCount: 0, failCount: files.length };
-  }
-
-  try {
-    const receipt = await uploadProductBatchIfEnabled(targetKbId, files);
-    if (!receipt) return null;
-    if (kbId.value === targetKbId) {
-      productIngestionEnabled.value = true;
-      productIngestionRefresh.value++;
-    }
-    window.dispatchEvent(new CustomEvent('knowledgeFileUploaded', { detail: { kbId: targetKbId } }));
-    const message = `平台已接收 ${receipt.accepted_file_count} 个文件，未接收 ${receipt.rejected_file_count} 个。请在产品处理任务中查看后续进度。`;
-    if (receipt.rejected_file_count > 0) MessagePlugin.warning(message);
-    else MessagePlugin.success(message);
-    return { successCount: receipt.accepted_file_count, failCount: receipt.rejected_file_count };
-  } catch {
-    // The request may have reached the platform. Never repeat it through the
-    // native upload queue when the result is uncertain.
-    if (kbId.value === targetKbId) productIngestionRefresh.value++;
-    MessagePlugin.error('未能确认平台接收结果，请刷新产品任务列表后检查。');
-    return { successCount: 0, failCount: files.length };
-  }
-};
-
 // Hands the batch to the global upload queue, which runs the transfers,
 // reports progress in its floating panel and refreshes this page as files land.
 const enqueueUploads = (
@@ -1786,26 +1741,9 @@ const openUploadConfirmDialog = async (files: File[], urls: string[] = []) => {
   }
 };
 
-const handleUploadSourceFiles = async (files: File[]) => {
-  if (files.length === 0) return;
-  const targetKbId = kbId.value;
-  if (!targetKbId) return;
-  if (productUploadChecking.value) {
-    MessagePlugin.warning('上一批文件正在提交，请等待完成后重新选择。');
-    return;
-  }
-  productUploadChecking.value = true;
-  try {
-    // The helper owns the capability decision and the single batch send.
-    // Only an explicit disabled result permits the native upload dialog.
-    const receipt = await executeProductUploadBatch(files);
-    if (kbId.value !== targetKbId || receipt !== null) return;
-    productIngestionEnabled.value = false;
-  } catch {
-    MessagePlugin.error('暂时无法确认平台上传方式，请稍后重试。');
-    return;
-  } finally { productUploadChecking.value = false; }
+const handleUploadSourceFiles = (files: File[]) => {
   if (!ensureDocumentKbReady()) return;
+  if (files.length === 0) return;
   openUploadConfirmDialog(files);
 };
 
@@ -2382,7 +2320,6 @@ const handleKBEditorSuccess = (kbIdValue: string) => {
         </div>
       </div>
 
-      <ProductIngestionStatus v-if="kbId && productIngestionEnabled" :knowledge-base-id="kbId" :refresh-token="productIngestionRefresh" />
 
       <!-- Materials Wiki Browser / Graph -->
       <div v-if="isWiki && nativeWikiAllowed && (activeKbTab === 'materials' || activeKbTab === 'graph')" class="wiki-main-area">

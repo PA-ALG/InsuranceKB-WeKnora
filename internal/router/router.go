@@ -108,7 +108,6 @@ type RouterParams struct {
 	WikiPageHandler                *handler.WikiPageHandler
 	MemoryHandler                  *handler.MemoryHandler
 	HostSandbox                    service.HostSandboxManager
-	ProductIngestionHandler        *handler.ProductIngestionHandler
 	G3PlatformSnapshotsHandler     *handler.G3PlatformSnapshotsHandler
 	G3PlatformReleaseHandler       *handler.G3PlatformReleaseHandler
 	KnowledgeRevisionSourceHandler *handler.KnowledgeRevisionSourceHandler
@@ -315,7 +314,6 @@ func NewRouter(params RouterParams) *gin.Engine {
 		)
 		RegisterKnowledgeTagRoutes(v1, params.TagHandler, rbacGuards)
 		RegisterKnowledgeRoutes(v1, params.KnowledgeHandler, rbacGuards)
-		RegisterProductIngestionRoutes(v1, params.ProductIngestionHandler, rbacGuards)
 		RegisterKnowledgeRevisionSourceRoutes(
 			v1,
 			params.KnowledgeRevisionSourceHandler,
