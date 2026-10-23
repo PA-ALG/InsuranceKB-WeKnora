@@ -167,8 +167,12 @@ func TestReadSourceArtifactChecksOwnershipBeforeTheCapture(t *testing.T) {
 	id := in.Identity
 	scope := types.WikiReleaseScope{TenantID: id.TenantID, SpaceID: "space-1", RawKBID: id.RawKBID, WikiKBID: "wiki-1"}
 	repo := knowledgeRepo{
-		knowledge: &types.Knowledge{ID: id.KnowledgeID, TenantID: id.TenantID, KnowledgeBaseID: id.RawKBID, FileName: "条款.pdf"},
-		revision:  &types.KnowledgeRevision{KnowledgeID: id.KnowledgeID, ParseAttempt: id.ParseAttempt, FileSHA256: id.SourceSHA256},
+		knowledge: &types.Knowledge{
+			ID: id.KnowledgeID, TenantID: id.TenantID, KnowledgeBaseID: id.RawKBID, FileName: "条款.pdf",
+		},
+		revision: &types.KnowledgeRevision{
+			KnowledgeID: id.KnowledgeID, ParseAttempt: id.ParseAttempt, FileSHA256: id.SourceSHA256,
+		},
 	}
 	ctx := context.Background()
 
