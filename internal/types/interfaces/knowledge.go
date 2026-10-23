@@ -4,17 +4,10 @@ import (
 	"context"
 	"io"
 	"mime/multipart"
-	"time"
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/hibiken/asynq"
 )
-
-// G3BoundReparseRepository is a narrow optional capability of KnowledgeRepository.
-type G3BoundReparseRepository interface {
-	AllocateG3BoundReparse(context.Context, uint64, string, string, string, int, int64, string, time.Time, string, string) (types.G3BoundReparseReceipt, *types.Knowledge, bool, error)
-	AdvanceG3BoundReparse(context.Context, uint64, string, string, int64, string, string, *string) (types.G3BoundReparseReceipt, error)
-}
 
 // KnowledgeService defines the interface for knowledge services.
 type KnowledgeService interface {

@@ -754,21 +754,7 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 			return abortRetryErr(ctx, knowledge.ID, status)
 		}
 
-		embeddingSpan := s.tracker().LookupStage(
-			ctx, knowledge.ID, attemptFromCtx(ctx), types.StageEmbedding,
-		)
-		dispatchCtx, dispatchErr := s.withG3ModelDispatchParent(ctx, knowledge, embeddingSpan)
-		if dispatchErr != nil {
-			knowledge.ParseStatus = types.ParseStatusFailed
-			knowledge.ErrorMessage = "model dispatch journal unavailable"
-			knowledge.UpdatedAt = time.Now()
-			_ = s.repo.UpdateKnowledge(ctx, knowledge)
-			s.failStage(ctx, knowledge.ID, types.StageEmbedding,
-				werrors.ErrCodeVectorStoreWriteFailed, "model dispatch journal unavailable", dispatchErr)
-			return dispatchErr
-		}
-		dispatchCtx = types.WithLLMCallMetadata(dispatchCtx, "document_embedding", "")
-		err = retrieveEngine.BatchIndex(dispatchCtx, embeddingModel, indexInfoList)
+		err = retrieveEngine.BatchIndex(ctx, embeddingModel, indexInfoList)
 		if err != nil {
 			batchErr := err
 			knowledge.ParseStatus = types.ParseStatusFailed
@@ -1326,8 +1312,6 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 
 	// Set tenant and language context
 	ctx = context.WithValue(ctx, types.TenantIDContextKey, payload.TenantID)
-	retryCount, _ := asynq.GetRetryCount(ctx)
-	ctx = withModelDispatchWorkerRetry(ctx, retryCount)
 	if payload.Language != "" {
 		ctx = context.WithValue(ctx, types.LanguageContextKey, payload.Language)
 	}
@@ -1547,12 +1531,6 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 	if err != nil {
 		logger.Errorf(ctx, "Failed to get chat model: %v", err)
 		return handleRetryableSummaryFailure(fmt.Errorf("get chat model: %w", err))
-	}
-	ctx, err = s.withG3ModelDispatchParent(ctx, knowledge, span)
-	if err != nil {
-		markSummaryFailed()
-		summaryErr = err
-		return err
 	}
 
 	// Generate summary
@@ -2788,15 +2766,6 @@ func (s *knowledgeService) ReparseKnowledge(
 	knowledgeID string,
 	processOverrides *types.KnowledgeProcessOverrides,
 ) (*types.Knowledge, error) {
-	return s.reparseKnowledge(ctx, knowledgeID, processOverrides, nil)
-}
-
-func (s *knowledgeService) reparseKnowledge(
-	ctx context.Context,
-	knowledgeID string,
-	processOverrides *types.KnowledgeProcessOverrides,
-	bound *G3BoundReparseRequest,
-) (*types.Knowledge, error) {
 	logger.Info(ctx, "Start re-parsing knowledge")
 
 	tenantID, err := writeExecutionTenant(ctx)
@@ -2809,11 +2778,6 @@ func (s *knowledgeService) reparseKnowledge(
 	existing, kb, err := loadKnowledgeWrite(ctx, s.repo, s.kbService, knowledgeID)
 	if err != nil {
 		logger.Errorf(ctx, "Failed to load knowledge: %v", err)
-		return nil, err
-	}
-
-	docReaderReuse, err := s.selectG3DocReaderRecovery(ctx, existing, processOverrides)
-	if err != nil {
 		return nil, err
 	}
 
@@ -2859,39 +2823,7 @@ func (s *knowledgeService) reparseKnowledge(
 	if err != nil {
 		return nil, err
 	}
-	parseAttempt := int64(0)
-	var boundReceipt types.G3BoundReparseReceipt
-	var boundRepo interfaces.G3BoundReparseRepository
-	if bound != nil {
-		var ok bool
-		boundRepo, ok = s.repo.(interfaces.G3BoundReparseRepository)
-		if !ok || existing.FilePath == "" || existing.Type != "file" || processOverrides != nil {
-			return nil, fmt.Errorf("bound reparse unavailable")
-		}
-		var fresh bool
-		boundReceipt, existing, fresh, err = boundRepo.AllocateG3BoundReparse(
-			ctx,
-			tenantID,
-			bound.RawKBID,
-			knowledgeID,
-			bound.RunID,
-			bound.Ordinal,
-			bound.ExpectedParseAttempt,
-			bound.RecoveryKey,
-			bound.DeadlineAt,
-			kb.EmbeddingModelID,
-			fileSHA256,
-		)
-		if err != nil {
-			return nil, err
-		}
-		if !fresh {
-			return existing, nil
-		}
-		parseAttempt = boundReceipt.ParseAttempt
-	} else {
-		parseAttempt, err = revisionRepo.AllocateParseAttempt(ctx, existing.ID, kb.EmbeddingModelID, fileSHA256)
-	}
+	parseAttempt, err := revisionRepo.AllocateParseAttempt(ctx, existing.ID, kb.EmbeddingModelID, fileSHA256)
 	if err != nil {
 		if errors.Is(err, repository.ErrResourcePinned) {
 			return nil, ErrKnowledgeRevisionSourcePinned
@@ -2968,18 +2900,6 @@ func (s *knowledgeService) reparseKnowledge(
 		logger.ErrorWithFields(ctx, err, map[string]interface{}{
 			"knowledge_id": knowledgeID,
 		})
-		if bound != nil {
-			_, _ = boundRepo.AdvanceG3BoundReparse(
-				ctx,
-				tenantID,
-				existing.ID,
-				bound.RecoveryKey,
-				parseAttempt,
-				"allocated",
-				"failed",
-				nil,
-			)
-		}
 		return nil, err
 	}
 
@@ -2988,34 +2908,10 @@ func (s *knowledgeService) reparseKnowledge(
 
 	if err := s.repo.UpdateKnowledge(ctx, existing); err != nil {
 		logger.Errorf(ctx, "Failed to update knowledge status before reparse: %v", err)
-		if bound != nil {
-			_, _ = boundRepo.AdvanceG3BoundReparse(
-				ctx,
-				tenantID,
-				existing.ID,
-				bound.RecoveryKey,
-				parseAttempt,
-				"allocated",
-				"failed",
-				nil,
-			)
-		}
 		return nil, err
 	}
 	if err := s.repo.UpdateKnowledgeColumn(ctx, existing.ID, "pending_subtasks_count", 0); err != nil {
 		logger.Errorf(ctx, "Failed to reset pending_subtasks_count before reparse: %v", err)
-		if bound != nil {
-			_, _ = boundRepo.AdvanceG3BoundReparse(
-				ctx,
-				tenantID,
-				existing.ID,
-				bound.RecoveryKey,
-				parseAttempt,
-				"allocated",
-				"failed",
-				nil,
-			)
-		}
 		return nil, err
 	}
 
@@ -3053,89 +2949,25 @@ func (s *knowledgeService) reparseKnowledge(
 			Attempt:                  reparseAttempt,
 			ParseAttempt:             parseAttempt,
 			Revision:                 revisionBinding,
-			DocReaderReuse:           docReaderReuse,
-		}
-		if bound != nil {
-			taskPayload.RecoveryKey = bound.RecoveryKey
 		}
 
 		langfuse.InjectTracing(ctx, &taskPayload)
 		payloadBytes, err := json.Marshal(taskPayload)
 		if err != nil {
 			logger.Errorf(ctx, "Failed to marshal reparse task payload: %v", err)
-			if bound != nil {
-				_, _ = boundRepo.AdvanceG3BoundReparse(
-					ctx,
-					tenantID,
-					existing.ID,
-					bound.RecoveryKey,
-					parseAttempt,
-					"allocated",
-					"failed",
-					nil,
-				)
-				return nil, err
-			}
 			s.markKnowledgeEnqueueFailed(ctx, existing)
 			return existing, werrors.NewInternalServerError("Failed to submit processing task")
-		}
-		if bound != nil {
-			if _, err := boundRepo.AdvanceG3BoundReparse(
-				ctx,
-				tenantID,
-				existing.ID,
-				bound.RecoveryKey,
-				parseAttempt,
-				"allocated",
-				"dispatching",
-				nil,
-			); err != nil {
-				return nil, err
-			}
-		}
-
-		options := documentProcessTaskOptions(s.config, asynq.MaxRetry(3))
-		if bound != nil {
-			options = append(options, asynq.TaskID("g3-reparse-"+bound.RecoveryKey))
 		}
 		task := asynq.NewTask(
 			types.TypeDocumentProcess,
 			payloadBytes,
-			options...,
+			documentProcessTaskOptions(s.config, asynq.MaxRetry(3))...,
 		)
 		info, err := s.task.Enqueue(task)
 		if err != nil {
 			logger.Errorf(ctx, "Failed to enqueue reparse task: %v", err)
-			if bound != nil {
-				_, _ = boundRepo.AdvanceG3BoundReparse(
-					ctx,
-					tenantID,
-					existing.ID,
-					bound.RecoveryKey,
-					parseAttempt,
-					"dispatching",
-					"unknown",
-					nil,
-				)
-				return nil, err
-			}
 			s.markKnowledgeEnqueueFailed(ctx, existing)
 			return existing, werrors.NewInternalServerError("Failed to submit processing task")
-		}
-		if bound != nil {
-			queueID := info.ID
-			if _, err := boundRepo.AdvanceG3BoundReparse(
-				ctx,
-				tenantID,
-				existing.ID,
-				bound.RecoveryKey,
-				parseAttempt,
-				"dispatching",
-				"enqueued",
-				&queueID,
-			); err != nil {
-				return nil, err
-			}
 		}
 		logger.Infof(ctx, "Enqueued reparse task: id=%s queue=%s knowledge_id=%s", info.ID, info.Queue, existing.ID)
 		recordReparseStarted()
@@ -3700,7 +3532,6 @@ func (s *knowledgeService) ProcessManualUpdate(ctx context.Context, t *asynq.Tas
 	ctx = logger.WithRequestID(ctx, payload.RequestId)
 	ctx = logger.WithField(ctx, "manual_process", payload.KnowledgeID)
 	ctx = types.WithExecutionTenant(ctx, payload.TenantID)
-	retryCount, _ := asynq.GetRetryCount(ctx)
 
 	tenantInfo, err := s.tenantRepo.GetTenantByID(ctx, payload.TenantID)
 	if err != nil {
@@ -3786,18 +3617,6 @@ func (s *knowledgeService) ProcessManualUpdate(ctx context.Context, t *asynq.Tas
 		logger.Warnf(ctx, "ProcessManualUpdate: OpenAttempt failed for %s: %v", knowledge.ID, err)
 	}
 	ctx = withAttempt(ctx, attempt)
-	ctx = withModelDispatchWorkerRetry(ctx, retryCount)
-	parseAttempt := payload.ParseAttempt
-	if parseAttempt <= 0 {
-		parseAttempt = knowledge.CurrentParseAttempt
-	}
-	if err := s.ensureG3ModelDispatchJournal(ctx, knowledge, attempt, parseAttempt); err != nil {
-		knowledge.ParseStatus = types.ParseStatusFailed
-		knowledge.ErrorMessage = "model dispatch journal unavailable"
-		knowledge.UpdatedAt = time.Now()
-		_ = s.repo.UpdateKnowledge(ctx, knowledge)
-		return err
-	}
 
 	// Cleanup old resources (indexes, chunks, graph) for update operations
 	if payload.NeedCleanup {
@@ -3855,15 +3674,6 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 	}
 
 	if knowledge == nil {
-		return nil
-	}
-	if !g3BoundReparseTaskAllowed(knowledge, payload, time.Now()) {
-		logger.Warnf(
-			ctx,
-			"Document bound recovery is stale or expired: knowledge=%s attempt=%d",
-			payload.KnowledgeID,
-			payload.ParseAttempt,
-		)
 		return nil
 	}
 	if !revisionPayloadMatchesKnowledge(knowledge, payload.Revision, payload.ParseAttempt) {
@@ -3985,18 +3795,6 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 		}
 	}
 	ctx = withAttempt(ctx, attempt)
-	ctx = withModelDispatchWorkerRetry(ctx, retryCount)
-	parseAttempt := payload.ParseAttempt
-	if parseAttempt <= 0 {
-		parseAttempt = knowledge.CurrentParseAttempt
-	}
-	if err := s.ensureG3ModelDispatchJournal(ctx, knowledge, attempt, parseAttempt); err != nil {
-		knowledge.ParseStatus = types.ParseStatusFailed
-		knowledge.ErrorMessage = "model dispatch journal unavailable"
-		knowledge.UpdatedAt = time.Now()
-		_ = s.repo.UpdateKnowledge(ctx, knowledge)
-		return err
-	}
 
 	// 检查多模态配置（仅对文件导入）
 	if payload.FilePath != "" && !payload.EnableMultimodel && IsImageType(payload.FileType) {
@@ -4368,7 +4166,7 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 						ParseAttempt: payload.Revision.ParseAttempt,
 						SourceSHA256: payload.Revision.FileSHA256,
 					}
-					err = s.firstParse.save(id, convertResult, all, payload.DocReaderReuse)
+					err = s.firstParse.save(id, convertResult, all)
 				}
 			}
 		}
@@ -4451,11 +4249,6 @@ func (s *knowledgeService) convert(
 	if payload.URL != "" {
 		docInput["url"] = payload.URL
 	}
-	if payload.DocReaderReuse != nil {
-		docInput["origin_docreader"] = payload.DocReaderReuse
-		docInput["mode"] = "REUSE_VERIFIED_DOCREADER"
-		docInput["chunking"] = "RECOMPUTE_CURRENT_CONFIG"
-	}
 	s.beginStage(ctx, knowledge.ID, types.StageDocReader, docInput)
 	isURL := payload.URL != ""
 	fileType := payload.FileType
@@ -4504,22 +4297,6 @@ func (s *knowledgeService) convert(
 
 	logger.Infof(ctx, "[convert] kb=%s fileType=%s isURL=%v engine=%q rules=%+v",
 		kb.ID, fileType, isURL, parserEngine, eff.ChunkingConfig.ParserEngineRules)
-
-	if payload.DocReaderReuse != nil {
-		result, reuseErr := s.loadG3DocReaderRecovery(ctx, payload, kb, knowledge)
-		if reuseErr != nil {
-			s.failStage(
-				ctx,
-				knowledge.ID,
-				types.StageDocReader,
-				werrors.ErrCodeDocReaderParseFailed,
-				"G3 DocReader reuse invalid",
-				reuseErr,
-			)
-			return s.failKnowledge(ctx, knowledge, true, "G3_DOCREADER_REUSE_INVALID: %v", reuseErr)
-		}
-		return result, nil
-	}
 
 	var reader interfaces.DocReader = s.resolveDocReader(ctx, parserEngine, fileType, isURL, mergedOverrides)
 	if reader == nil {

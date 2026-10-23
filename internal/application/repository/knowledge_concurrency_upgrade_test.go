@@ -91,32 +91,6 @@ func TestAttemptAndTransferMutationsRejectPinInsertedAfterKnowledgeLock(t *testi
 		require.Equal(t, types.ParseStatusCompleted, stored.ParseStatus)
 	})
 
-	t.Run("allocate G3 bound reparse", func(t *testing.T) {
-		db := setupAtomicPinTestDB(t)
-		fileSHA := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		row := &types.Knowledge{
-			ID: "g3", TenantID: 7, KnowledgeBaseID: "raw", Type: "file",
-			ParseStatus: types.ParseStatusFailed, CurrentParseAttempt: 3,
-			FileSHA256: fileSHA, FileSize: 12,
-			Metadata: types.JSON(`{"product_ingestion_upload":"run:0"}`),
-		}
-		require.NoError(t, db.Create(row).Error)
-		injected := injectPinnedSourceAfterKnowledgeLock(t, db, 7, row.ID)
-
-		_, _, _, err := (&knowledgeRepository{db: db}).AllocateG3BoundReparse(
-			context.Background(), 7, "raw", row.ID, "run", 0, 3,
-			"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-			time.Now().Add(time.Hour), "embed", fileSHA,
-		)
-
-		require.True(t, injected.Load(), "test barrier must insert the pin after the locked read")
-		require.ErrorIs(t, err, ErrResourcePinned)
-		var stored types.Knowledge
-		require.NoError(t, db.First(&stored, "id = ?", row.ID).Error)
-		require.Equal(t, int64(3), stored.CurrentParseAttempt)
-		require.Equal(t, types.ParseStatusFailed, stored.ParseStatus)
-	})
-
 	t.Run("transfer checkpoint", func(t *testing.T) {
 		db := setupAtomicPinTestDB(t)
 		row := &types.Knowledge{

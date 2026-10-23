@@ -219,46 +219,6 @@ func g3CachedFirstParseMatches(first *g3FirstParseRecord, record *conceptSourceR
 	return nil
 }
 
-// Link publishes an immutable artifact without a cross-process overwrite race. Captures are now
-// written by capture.Store.Save; only the legacy DocReader recovery test still writes a hand-made
-// record through here, and both go with the G3 reparse path in S7d-2c-2.
-func (s *conceptSourceReuseStore830G3) writeFirstParseArtifact(path, key string, data []byte) error {
-	encoded, err := sealConceptDerivedArtifact830G3(s.codec, "weknora.concept-source-reuse.830.g3.v1", key, data)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(s.root, 0700); err != nil {
-		return err
-	}
-	temp, err := os.CreateTemp(s.root, ".first-parse-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(temp.Name())
-	_, err = temp.Write(encoded)
-	if err == nil {
-		err = temp.Sync()
-	}
-	closeErr := temp.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if err = os.Link(temp.Name(), path); errors.Is(err, os.ErrExist) {
-		old, readErr := s.readArtifact(path, key)
-		if readErr != nil {
-			return readErr
-		}
-		if !bytes.Equal(old, data) {
-			return ErrConceptSourceAuthorityUnavailable830G2
-		}
-		return nil
-	}
-	return err
-}
-
 func (s *knowledgeService) failG3FirstParse(ctx context.Context, knowledge *types.Knowledge, cause error) error {
 	s.failStage(ctx, knowledge.ID, types.StageDocReader, werrors.ErrCodeDocReaderParseFailed, "G3 first parse artifact unavailable", cause)
 	_, err := s.failKnowledge(ctx, knowledge, true, "G3_FIRST_PARSE_ARTIFACT_UNAVAILABLE: %v", cause)
