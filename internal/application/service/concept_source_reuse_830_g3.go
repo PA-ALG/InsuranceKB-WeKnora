@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/types"
 	"golang.org/x/sync/singleflight"
 )
@@ -96,11 +96,9 @@ func (s *conceptSourceReuseStore830G3) remember(key string, value *conceptSource
 }
 
 func newConceptSourceReuseStore830G3(codec *SchemaWikiCitationTokenCodec) *conceptSourceReuseStore830G3 {
-	base := strings.TrimSpace(os.Getenv("LOCAL_STORAGE_BASE_DIR"))
-	if base == "" {
-		base = "/data/files"
+	return &conceptSourceReuseStore830G3{
+		codec: codec, root: capture.DefaultRoot(), entries: map[string]*conceptSourceReusePrepared830G3{},
 	}
-	return &conceptSourceReuseStore830G3{codec: codec, root: filepath.Join(base, ".concept-source-reuse-v1"), entries: map[string]*conceptSourceReusePrepared830G3{}}
 }
 
 // PrepareConceptSourceReuse830G3 is called by source preparation, not serving
