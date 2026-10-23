@@ -297,9 +297,9 @@ type ExtractChunkPayload struct {
 	Revision   *RevisionCommitBinding `json:"revision,omitempty"`
 }
 
-// DocumentProcessPayload represents the document process task payload
-// DocumentDocReaderReuseReference is selected by the server, never a browser path.
-// Outer payload identity supplies the tenant, RAW KB and knowledge binding.
+// DocumentDocReaderReuseReference names the earlier parse a capture reused. Nothing produces it since
+// the G3 DocReader recovery was retired (S7d-2c-2a); it stays because captures already on disk may
+// carry it as origin_docreader and the capture format is frozen (internal/enterprise/capture).
 type DocumentDocReaderReuseReference struct {
 	OriginParseAttempt      int64  `json:"origin_parse_attempt"`
 	OriginProcessingAttempt int    `json:"origin_processing_attempt"`
@@ -307,6 +307,7 @@ type DocumentDocReaderReuseReference struct {
 	ArtifactSHA256          string `json:"artifact_sha256"`
 }
 
+// DocumentProcessPayload represents the document process task payload
 type DocumentProcessPayload struct {
 	TracingContext
 	RequestId                string   `json:"request_id"`
@@ -334,13 +335,9 @@ type DocumentProcessPayload struct {
 	// separate from Attempt (tracing) and remains useful when a file-less
 	// source cannot carry a RevisionCommitBinding.
 	ParseAttempt int64 `json:"parse_attempt,omitempty"`
-	// RecoveryKey fences a platform-bound source reparse against its durable
-	// receipt. Ordinary native parses leave this empty.
-	RecoveryKey string `json:"recovery_key,omitempty"`
 	// Revision is the database parse-attempt binding. It is intentionally
 	// independent of Attempt, which remains tracing-only.
-	Revision       *RevisionCommitBinding           `json:"revision,omitempty"`
-	DocReaderReuse *DocumentDocReaderReuseReference `json:"docreader_reuse,omitempty"`
+	Revision *RevisionCommitBinding `json:"revision,omitempty"`
 }
 
 // FAQImportPayload represents the FAQ import task payload (including dry run mode)

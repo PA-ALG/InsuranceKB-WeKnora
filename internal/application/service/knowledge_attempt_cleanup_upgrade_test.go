@@ -7,18 +7,36 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/application/access"
 	"github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/stretchr/testify/require"
 )
 
 type pinRaceReparseRepo struct {
-	*docreaderAllocationProbe
+	*firstParseKnowledgeRepo
+	allocations int
+}
+
+func (r *pinRaceReparseRepo) HasPinnedRevisionSource(context.Context, uint64, string) (bool, error) {
+	return false, nil
 }
 
 func (r *pinRaceReparseRepo) AllocateParseAttempt(context.Context, string, string, string) (int64, error) {
 	r.allocations++
 	return 0, repository.ErrResourcePinned
+}
+
+func (r *pinRaceReparseRepo) CommitDirectRevision(
+	context.Context, string, types.RevisionCommitBinding,
+) (*types.KnowledgeRevision, error) {
+	panic("not reached")
+}
+
+func (r *pinRaceReparseRepo) FinalizeSubtaskRevision(
+	context.Context, string, types.RevisionCommitBinding,
+) (int, bool, error) {
+	panic("not reached")
 }
 
 type openAttemptProbe struct {
@@ -159,17 +177,18 @@ func TestCleanupChunkIDsForAttemptExcludesNewerGeneration(t *testing.T) {
 }
 
 func TestReparsePinRaceDoesNotOpenAttemptBeforeAtomicAllocation(t *testing.T) {
-	svc, knowledge, kb, _, _, _, _ := docreaderRecoveryFixture(t)
-	knowledge.CurrentParseAttempt = 1
-	knowledge.ParseStatus = types.ParseStatusFailed
-	base := &docreaderAllocationProbe{
-		firstParseKnowledgeRepo: &firstParseKnowledgeRepo{knowledge: knowledge},
+	knowledge := &types.Knowledge{
+		ID: "knowledge", TenantID: 17, KnowledgeBaseID: "raw", FileType: "pdf", FileName: "source.pdf",
+		FilePath: "fixture.pdf", FileSHA256: testSHA256830G2("pdf"), CurrentParseAttempt: 1,
+		ParseStatus: types.ParseStatusFailed,
 	}
-	repo := &pinRaceReparseRepo{docreaderAllocationProbe: base}
+	kb := &types.KnowledgeBase{ID: "raw", TenantID: 17, ChunkingConfig: types.ChunkingConfig{ChunkSize: 40}}
+	repo := &pinRaceReparseRepo{firstParseKnowledgeRepo: &firstParseKnowledgeRepo{knowledge: knowledge}}
 	tracker := &openAttemptProbe{}
-	svc.repo = repo
-	svc.kbService = &createKnowledgeFileKBServiceStub{kb: kb}
-	svc.spanTracker = tracker
+	svc := &knowledgeService{
+		config: &config.Config{}, repo: repo, spanTracker: tracker,
+		kbService: &createKnowledgeFileKBServiceStub{kb: kb},
+	}
 	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(17))
 	ctx, err := access.WithKBTaskWrite(ctx, kb, 17)
 	require.NoError(t, err)

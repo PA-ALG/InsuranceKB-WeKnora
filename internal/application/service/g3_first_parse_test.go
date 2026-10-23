@@ -11,6 +11,7 @@ import (
 	"testing"
 	"unicode"
 
+	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/infrastructure/chunker"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -18,6 +19,8 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestG3FirstParseSnapshotMissingArtifactNeverReparses(t *testing.T) {
@@ -412,12 +415,24 @@ func TestG3FirstParseActualConvertScopesParserAndReusesResult(t *testing.T) {
 	require.NotContains(t, reader.requests[1].ParserEngineOverrides, "pdf_native_structure_capture")
 }
 
+// seededSpanRepository is a span table shared by every connection of one test (the pipeline may
+// query from more than one), holding the given rows.
+func seededSpanRepository(t *testing.T, rows ...types.KnowledgeProcessingSpan) wikirepository.KnowledgeSpanRepository {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.Exec(spanTrackerTestDDL).Error)
+	repo := wikirepository.NewKnowledgeSpanRepository(db)
+	for i := range rows {
+		require.NoError(t, repo.Upsert(context.Background(), &rows[i]))
+	}
+	return repo
+}
+
 func TestG3FirstParseProcessDocumentWriteFailureClosesDocreader(t *testing.T) {
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
-	_, spans := newKnowledgeDispatchJournalTest(t)
-	seedDispatchSpan(
+	spans := seededSpanRepository(
 		t,
-		spans,
 		types.KnowledgeProcessingSpan{
 			KnowledgeID: "knowledge",
 			Attempt:     4,
@@ -426,10 +441,6 @@ func TestG3FirstParseProcessDocumentWriteFailureClosesDocreader(t *testing.T) {
 			Kind:        types.SpanKindRoot,
 			Status:      types.SpanStatusRunning,
 		},
-	)
-	seedDispatchSpan(
-		t,
-		spans,
 		types.KnowledgeProcessingSpan{
 			KnowledgeID:  "knowledge",
 			Attempt:      4,
