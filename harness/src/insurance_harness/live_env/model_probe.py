@@ -48,10 +48,12 @@ async def _post(
     profile: ModelProfile,
     url: str,
     payload: dict[str, Any],
+    *,
+    timeout: float = 30.0,
 ) -> dict[str, Any]:
     async with httpx.AsyncClient(
         headers={"Authorization": f"Bearer {profile.api_key.get_secret_value()}"},
-        timeout=30.0,
+        timeout=timeout,
         trust_env=False,
     ) as client:
         response = await client.post(url, json=payload)
@@ -220,9 +222,14 @@ async def _probe_vllm(profile: ModelProfile) -> ProbeResult:
     return _result("weknora_vllm", profile, started)
 
 
+# The retired compiler client's per-request budget, which the extraction role was probed with.
+_EXTRACTION_TIMEOUT_SECONDS = 180.0
+
+
 async def _probe_extraction(profile: ModelProfile) -> ProbeResult:
-    # Same request the retired compiler client sent (S7d-1): a reasoning model may spend the
-    # whole budget thinking, so a length stop is retried once before it counts as a failure.
+    # Same request and outcome rules as the retired compiler client (S7d-1): a reasoning model
+    # may spend the whole budget thinking, so a length stop or an empty answer is retried once
+    # and fails the probe the second time.
     started = monotonic()
     for attempt in range(2):
         document = await _post(
@@ -237,9 +244,10 @@ async def _probe_extraction(profile: ModelProfile) -> ProbeResult:
                     {"role": "user", "content": _EXTRACTION_USER},
                 ],
             },
+            timeout=_EXTRACTION_TIMEOUT_SECONDS,
         )
-        _, finish_reason = _completion(document)
-        if finish_reason != "length":
+        content, finish_reason = _completion(document)
+        if finish_reason != "length" and content.strip():
             return _result("extraction", profile, started)
         if attempt == 1:
             raise ValueError("extraction probe output was truncated")

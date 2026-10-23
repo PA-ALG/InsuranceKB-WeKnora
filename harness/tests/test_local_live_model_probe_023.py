@@ -549,3 +549,70 @@ async def test_r1_2_extraction_probe_retries_reasoning_length_once() -> None:
     await probe_all_models(_config())
 
     assert routes["extraction"].call_count == 2
+
+
+def _answer(content: object, finish_reason: str = "stop") -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={"choices": [{"message": {"content": content}, "finish_reason": finish_reason}]},
+    )
+
+
+# S7d-1 (#305 R1): the retired compiler client treated an empty answer like a length stop.
+@respx.mock
+@pytest.mark.parametrize("empty", ["", " \n", None])
+async def test_s7d1_extraction_probe_retries_an_empty_answer_once(empty: object) -> None:
+    routes = _healthy_routes()
+    routes["extraction"].mock(side_effect=[_answer(empty), _answer("probe-ok")])
+
+    await probe_all_models(_config())
+
+    assert routes["extraction"].call_count == 2
+
+
+@respx.mock
+@pytest.mark.parametrize("empty", ["", " \n", None])
+async def test_s7d1_extraction_probe_fails_after_two_empty_answers(empty: object) -> None:
+    routes = _healthy_routes()
+    routes["extraction"].mock(side_effect=[_answer(empty), _answer(empty)])
+
+    with pytest.raises(ModelProbeError, match="extraction probe failed"):
+        await probe_all_models(_config())
+
+    assert routes["extraction"].call_count == 2
+
+
+# S7d-1 (#305 R2): the extraction role keeps the retired client's 180 s budget; others keep 30 s.
+async def test_s7d1_extraction_probe_keeps_its_request_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    timeouts: list[object] = []
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"choices": [{"message": {"content": "probe-ok"}, "finish_reason": "stop"}]}
+
+    class Client:
+        def __init__(self, **kwargs: object) -> None:
+            timeouts.append(kwargs["timeout"])
+
+        async def __aenter__(self) -> "Client":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            del args
+
+        async def post(self, url: str, *, json: dict[str, object]) -> Response:
+            del url, json
+            return Response()
+
+    monkeypatch.setattr(httpx, "AsyncClient", Client)
+    profile = _profile("https://bailian.example/v1", "deepseek-v4-flash", "bailian-secret")
+
+    await model_probe._probe_extraction(profile)
+    await model_probe._post(profile, "https://bailian.example/v1/chat/completions", {})
+
+    assert timeouts == [180.0, 30.0]
