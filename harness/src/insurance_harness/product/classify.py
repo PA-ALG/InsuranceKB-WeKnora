@@ -8,11 +8,24 @@
 import json
 import re
 from enum import StrEnum
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
 
-from insurance_harness.goldenset.annotator import ModelClient
-from insurance_harness.goldenset.pdf import PageText
+
+class ModelClient(Protocol):
+    """The one call the fallback classifier makes (the retired golden-set client's shape)."""
+
+    async def complete(self, system: str, user: str) -> str: ...
+
+
+class PageText(BaseModel):
+    """One extracted page of a document; only its text is read here."""
+
+    model_config = ConfigDict(frozen=True)
+
+    page_no: int  # 1-based
+    text: str
 
 
 class DocumentType(StrEnum):

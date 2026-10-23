@@ -9,12 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .jobs.models import JobRuntimeConfig, JobTypePolicy
-from .model_policy import ModelIdentity, ModelPolicyDenied
-from .model_policy.policy import _validate_production_identity_declaration
 
 
 class HarnessSettings(BaseSettings):
@@ -183,67 +181,3 @@ class HarnessSettings(BaseSettings):
     # 默认关闭自动通过=全部走审核（保守）；开启后仅 risk=low 且 confidence≥阈值 的 enrich 自动应用
     merge_auto_apply_enrich: bool = False
     merge_enrich_auto_min_confidence: float = 0.8
-
-    @model_validator(mode="after")
-    def require_frozen_production_model_policy(self) -> HarnessSettings:
-        if self.model_profile != "production":
-            return self
-        required = (
-            "production_model_provider",
-            "production_model_deployment_id",
-            "production_model_family",
-            "production_model_policy_version",
-            "production_expected_purpose",
-            "production_expected_run_schema_version",
-            "production_expected_run_id",
-            "production_expected_run_revision",
-            "production_expected_space_id",
-            "production_expected_admission_artifact_ref",
-            "production_expected_admission_artifact_digest",
-            "production_expected_manifest_hash",
-            "production_expected_eligibility_hash",
-            "production_expected_golden_slice_hash",
-            "production_expected_routing_policy_hash",
-            "production_expected_schema_hash",
-            "production_expected_template_lock_hash",
-            "production_expected_structured_dispatch_hash",
-            "production_expected_model_plan_hash",
-            "production_expected_deployment_roles_hash",
-            "production_expected_resource_caps_hash",
-            "production_expected_rights_hash",
-            "production_expected_provenance_hash",
-            "production_expected_clean_integration_sha",
-            "llm_base_url",
-            "llm_api_key",
-        )
-        missing = [name for name in required if not _nonblank(getattr(self, name))]
-        if missing:
-            raise ValueError("production model policy configuration is incomplete")
-        if self.judge_mode != "guarded" or self.llm_model_judge_fallback is not None:
-            raise ValueError("legacy model judge routes are forbidden in production")
-
-        assert self.production_model_provider is not None
-        assert self.production_model_deployment_id is not None
-        assert self.production_model_family is not None
-        assert self.production_model_policy_version is not None
-        if (
-            self.production_model_provider.casefold() == "unknown"
-            or self.production_model_deployment_id.casefold() == "unknown"
-        ):
-            raise ValueError("production model identity must be immutable and known")
-        identity = ModelIdentity(
-            provider=self.production_model_provider,
-            deployment_id=self.production_model_deployment_id,
-            family=self.production_model_family,
-            role="extract",
-            policy_version=self.production_model_policy_version,
-        )
-        try:
-            _validate_production_identity_declaration(identity)
-        except ModelPolicyDenied:
-            raise ValueError("production model identity is not approved") from None
-        return self
-
-
-def _nonblank(value: object) -> bool:
-    return isinstance(value, str) and bool(value.strip())

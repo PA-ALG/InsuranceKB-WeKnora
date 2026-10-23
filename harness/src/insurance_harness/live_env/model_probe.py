@@ -10,7 +10,6 @@ from typing import Any, cast
 
 import httpx
 
-from insurance_harness.compiler.llm import OpenAICompatClient, TruncatedOutputError
 from insurance_harness.live_env.config import (
     DASHSCOPE_RERANK_ENDPOINT,
     LocalLiveConfig,
@@ -222,24 +221,29 @@ async def _probe_vllm(profile: ModelProfile) -> ProbeResult:
 
 
 async def _probe_extraction(profile: ModelProfile) -> ProbeResult:
+    # Same request the retired compiler client sent (S7d-1): a reasoning model may spend the
+    # whole budget thinking, so a length stop is retried once before it counts as a failure.
     started = monotonic()
-    client = OpenAICompatClient(
-        base_url=profile.base_url,
-        api_key=profile.api_key.get_secret_value(),
-        model=profile.model,
-        max_tokens=4096,
-    )
-    try:
-        for attempt in range(2):
-            try:
-                await client.complete(_EXTRACTION_SYSTEM, _EXTRACTION_USER)
-                break
-            except TruncatedOutputError:
-                if attempt == 1:
-                    raise
-    finally:
-        await client.aclose()
-    return _result("extraction", profile, started)
+    for attempt in range(2):
+        document = await _post(
+            profile,
+            _compatible_url(profile, "/chat/completions"),
+            {
+                "model": profile.model,
+                "temperature": 0.1,
+                "max_tokens": 4096,
+                "messages": [
+                    {"role": "system", "content": _EXTRACTION_SYSTEM},
+                    {"role": "user", "content": _EXTRACTION_USER},
+                ],
+            },
+        )
+        _, finish_reason = _completion(document)
+        if finish_reason != "length":
+            return _result("extraction", profile, started)
+        if attempt == 1:
+            raise ValueError("extraction probe output was truncated")
+    raise AssertionError("unreachable")
 
 
 async def _validate_profile(

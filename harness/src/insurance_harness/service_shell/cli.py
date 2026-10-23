@@ -8,7 +8,6 @@ import sys
 from collections.abc import Callable
 from math import ceil
 from types import FrameType
-from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI
@@ -38,12 +37,6 @@ from insurance_harness.service_shell.health import (
 )
 from insurance_harness.service_shell.principal import StaticPrincipalProvider
 from insurance_harness.service_shell.worker import HandlerRegistry, WorkerLoop
-
-if TYPE_CHECKING:
-    from insurance_harness.product_ingestion.composition import (
-        ProductPipelineFactory,
-        ProductWorkerRuntime,
-    )
 
 SessionFactory = Callable[[], Session]
 
@@ -112,35 +105,6 @@ def build_api_app(
             read_global=read_global,
         ),
     )
-    if settings.product_ingestion_enabled:
-        import json
-
-        from insurance_harness.product_ingestion.api import install_product_api
-        from insurance_harness.product_ingestion.artifacts import ProductArtifactStore
-        from insurance_harness.product_ingestion.models import ProductScope
-        from insurance_harness.product_ingestion.store import ProductIngestionStore
-
-        try:
-            raw_scopes = json.loads(settings.product_ingestion_scopes_json.get_secret_value())
-            if not isinstance(raw_scopes, list) or not raw_scopes:
-                raise ValueError("empty scopes")
-            scopes = [ProductScope.model_validate(row) for row in raw_scopes]
-            if len({row.space_id for row in scopes}) != len(scopes) or not {
-                row.space_id for row in scopes
-            } <= set(settings.principal_space_ids):
-                raise ValueError("scope binding mismatch")
-        except (ValueError, TypeError) as error:
-            raise ShellConfigError(("product_ingestion_scopes_json",)) from error
-        product_store = ProductIngestionStore(
-            session_factory, JobStore(session_factory, settings.job_runtime_config())
-        )
-        install_product_api(
-            app,
-            store=product_store,
-            artifacts=ProductArtifactStore(session_factory, product_store),
-            scopes={row.space_id: row for row in scopes},
-            max_upload_files=settings.product_ingestion_max_upload_files,
-        )
     return app
 
 
@@ -149,8 +113,7 @@ def build_worker_loop(
     settings: ShellSettings,
     lifecycle: Lifecycle,
     session_factory: SessionFactory,
-    product_pipeline_factory: ProductPipelineFactory | None = None,
-) -> WorkerLoop | ProductWorkerRuntime:
+) -> WorkerLoop:
     """Compose the production Worker with P1 as its only durable write surface."""
     missing = tuple(
         key
@@ -163,27 +126,6 @@ def build_worker_loop(
     if missing:
         raise ShellConfigError(missing)
     assert settings.worker_id is not None
-    if settings.product_ingestion_enabled:
-        if product_pipeline_factory is None:
-            try:
-                from insurance_harness.product_ingestion.pipeline import (
-                    build_product_pipeline,
-                )
-            except ModuleNotFoundError as error:
-                if error.name != "insurance_harness.product_ingestion.pipeline":
-                    raise
-                raise ShellConfigError(("product_ingestion_pipeline",)) from error
-            product_pipeline_factory = build_product_pipeline
-        from insurance_harness.product_ingestion.composition import (
-            compose_product_worker,
-        )
-
-        return compose_product_worker(
-            settings=settings,
-            lifecycle=lifecycle,
-            session_factory=session_factory,
-            pipeline_factory=product_pipeline_factory,
-        )
     store = JobStore(session_factory, settings.job_runtime_config())
     return WorkerLoop(
         store=store,

@@ -3,7 +3,8 @@
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "insurance_harness"
-SUBPACKAGES = ["adapters", "compiler", "goldenset", "schemas"]
+# compiler and goldenset were retired in S7d-1.
+SUBPACKAGES = ["adapters", "schemas"]
 
 
 def test_s1_3_every_subpackage_has_readme_and_init() -> None:
