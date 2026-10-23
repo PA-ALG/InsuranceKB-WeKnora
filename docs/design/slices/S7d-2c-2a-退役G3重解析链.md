@@ -14,6 +14,7 @@ G3 产品导入（S7d-1/2a/2b 已删）在解析链上还留着三套只为它�
 | 模型派发日志 | `service/knowledge_model_dispatch.go` | G3 范围内每次模型请求先在 span 树里记账，结果未知时禁止重发 | `knowledge_process.go` 的 `withG3ModelDispatchParent`（2 处）、`ensureG3ModelDispatchJournal`（2 处）、`withModelDispatchWorkerRetry`（3 处）；非 G3 知识直接返回原 ctx |
 | DocReader 恢复 | `service/g3_docreader_recovery.go` | G3 重解析时复用上一次解析的签封采集，不再调用 DocReader | `reparseKnowledge` 的 `selectG3DocReaderRecovery`、`convert` 的 `loadG3DocReaderRecovery`；`DocumentProcessPayload.DocReaderReuse` |
 | 绑定重解析 | `service/g3_bound_reparse{,_gate}.go`、`types/g3_bound_reparse.go` | 平台路由发起、带回执与租约的重解析 | 发起方 `BoundReparseKnowledge` 已无调用方（平台路由 S7d-2b 已删）；剩下 `reparseKnowledge` 的 `bound` 参数、任务闸门 `g3BoundReparseTaskAllowed`、`RecoveryKey`、`interfaces.G3BoundReparseRepository` 与仓库方法 |
+| 平台源快照服务 | `service/g3_platform_source_snapshot.go` 的 `G3PlatformSourceSnapshotService`，`knowledge_revision_source.go` 的 `ensureCurrentCompletedForScope` | 把采集、分块页码映射与模型派发回执签成快照交给平台路由 | S7d-2b 删除平台路由后没有生产调用方；它依赖模型派发日志的回执类型（实现时发现，2026-10-23 补入本片） |
 
 ## 2. 设计
 
@@ -33,10 +34,17 @@ G3 产品导入（S7d-1/2a/2b 已删）在解析链上还留着三套只为它�
    - 删除 `DocumentProcessPayload.RecoveryKey`；
    - 删除仓库中的 `AllocateG3BoundReparse`、`AdvanceG3BoundReparse`、`parseG3BoundReparseMetadata`、`mergeG3BoundRecoveryMetadata`、`g3BoundReparseMetadataKey`，以及 `UpdateKnowledge` 里按 `product_ingestion_upload` 分支的两处；
    - `reparseKnowledge` 去掉 `bound` 参数及其分支（含 `g3-reparse-` 任务 ID），并入 `ReparseKnowledge`，尽量回到上游形状。
-4. **测试**：删除只测上述机制的测试：
-   - `knowledge_model_dispatch_test.go`、`g3_docreader_recovery_test.go`、`knowledge_process_g3_bound_reparse_test.go`；
+4. **平台源快照服务**：
+   - 删除 `G3PlatformSourceSnapshotService` 及其构造、签名、快照类型与摘要函数，以及 `ensureCurrentCompletedForScope`；
+   - `g3_platform_source_snapshot.go` 只保留 830 引用家族仍在用的 `captureG3PlatformSource830G3`、`g3PlatformChunkPageMapping` 及其类型，随 S7d-2c-3 删除。守卫 `test_the_helpers_enterprise_capture_shares_stay` 对该文件存在性的断言因此不变。
+5. **测试**：删除只测上述机制的测试：
+   - `knowledge_model_dispatch_test.go`、`g3_docreader_recovery_test.go`、`knowledge_process_g3_bound_reparse_test.go`、`g3_platform_source_snapshot_test.go`；
    - `repository/g3_bound_reparse_test.go`；
    - `repository/knowledge_concurrency_upgrade_test.go` 中的子用例"allocate G3 bound reparse"。
+
+   两个保留测试借用了被删测试里的夹具，只换夹具，断言不变：
+   - `knowledge_attempt_cleanup_upgrade_test.go` 的 `TestReparsePinRaceDoesNotOpenAttemptBeforeAtomicAllocation`：测通用重解析，改用自带的知识、知识库与分配探针；
+   - `g3_first_parse_test.go` 的 `TestG3FirstParseProcessDocumentWriteFailureClosesDocreader`：只借用了 span 表，改用本文件内的 span 表夹具。
 
 ### 2.2 保留
 
@@ -65,13 +73,14 @@ G3 产品导入（S7d-1/2a/2b 已删）在解析链上还留着三套只为它�
 
 **`tests/architecture/test_legacy_reparse_chain_retired.py`** 检查：
 
-1. 上述服务、类型与测试文件不存在；
+1. 上述服务、类型与测试文件不存在，包括 `g3_platform_source_snapshot_test.go`；
 2. `knowledge_process.go`、`repository/knowledge.go`、`types/task.go`、`types/interfaces/knowledge.go`、`g3_first_parse.go` 中不再出现以下符号：
    - `withG3ModelDispatchParent`、`ensureG3ModelDispatchJournal`、`withModelDispatchWorkerRetry`；
    - `selectG3DocReaderRecovery`、`loadG3DocReaderRecovery`；
    - `g3BoundReparseTaskAllowed`、`G3BoundReparseRequest`、`G3BoundReparseRepository`、`AllocateG3BoundReparse`、`AdvanceG3BoundReparse`、`product_ingestion_recoveries`；
    - `RecoveryKey`、`DocReaderReuse `；
    - `writeFirstParseArtifact`；
+   - 快照服务：`G3PlatformSourceSnapshotService`、`ensureCurrentCompletedForScope`（也检查 `g3_platform_source_snapshot.go` 与 `knowledge_revision_source.go`）；
 3. 保留项仍在：
    - `types.DocumentDocReaderReuseReference`；
    - `capture.Record` 的 `origin_docreader` 标签；
@@ -88,8 +97,9 @@ G3 产品导入（S7d-1/2a/2b 已删）在解析链上还留着三套只为它�
 ## 5. 改动范围
 
 - `internal/application/service/`：
-  - 删除 `knowledge_model_dispatch.go`、`g3_docreader_recovery.go`、`g3_bound_reparse.go`、`g3_bound_reparse_gate.go` 及其测试；
-  - 修改 `knowledge_process.go`、`g3_first_parse.go`；
+  - 删除 `knowledge_model_dispatch.go`、`g3_docreader_recovery.go`、`g3_bound_reparse.go`、`g3_bound_reparse_gate.go` 及其测试，以及 `g3_platform_source_snapshot_test.go`；
+  - 修改 `knowledge_process.go`、`g3_first_parse.go`、`g3_platform_source_snapshot.go`、`knowledge_revision_source.go`；
+  - 测试夹具：`knowledge_attempt_cleanup_upgrade_test.go`、`g3_first_parse_test.go`；
 - `internal/application/repository/knowledge.go`，以及第 2.1 节第 4 条列出的仓库测试；
 - `internal/types/task.go`、`internal/types/interfaces/knowledge.go`，删除 `internal/types/g3_bound_reparse.go`；
 - `docs/design/upstream-patches.md`（只追加一行）；
