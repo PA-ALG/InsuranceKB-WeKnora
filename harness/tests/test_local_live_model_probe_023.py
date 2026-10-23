@@ -577,14 +577,22 @@ async def test_s7d1_extraction_retries_an_empty_answer_once(empty: object, recov
 @respx.mock
 async def test_s7d1_extraction_keeps_its_request_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     _healthy_routes()
-    timeouts: list[object] = []
+    calls: list[tuple[str, object]] = []  # (host the request went to, its client's timeout)
     client = httpx.AsyncClient
 
     def recording(**kwargs: Any) -> httpx.AsyncClient:
-        timeouts.append(kwargs["timeout"])
-        return client(**kwargs)
+        real = client(**kwargs)
+        send = real.post
+
+        async def post(url: str, **rest: Any) -> httpx.Response:
+            calls.append((httpx.URL(url).host, kwargs["timeout"]))
+            return await send(url, **rest)
+
+        real.post = post  # type: ignore[method-assign, assignment]
+        return real
 
     monkeypatch.setattr(httpx, "AsyncClient", recording)
     await probe_all_models(_config())
-    assert timeouts.count(180.0) == 1
-    assert set(timeouts) == {30.0, 180.0}
+    hosts = ["chat.example", "embedding.example", "dashscope.aliyuncs.com", "vlm.example"]
+    expected = [(host, 30.0) for host in hosts] + [("bailian.example", 180.0)]
+    assert sorted(calls) == sorted(expected)  # each role exactly once, with its own budget
