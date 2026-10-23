@@ -52,7 +52,7 @@
 
 ## 4. 验收（RED，Claude 编写，受保护）
 
-`tests/architecture/test_g3_platform_routes_retired.py` 检查：
+`tests/architecture/test_legacy_platform_routes_retired.py` 检查：
 
 - 上述路由、处理器、服务与类型文件不存在；
 - `router.go`、`container.go` 不再出现 `G3PlatformSnapshotsHandler`、`G3PlatformReleaseHandler`、`registerConfiguredG3PlatformRoutes`、`ConfiguredG3PlatformSystemOptions`、`NewConfiguredG3PlatformHandlers`；
