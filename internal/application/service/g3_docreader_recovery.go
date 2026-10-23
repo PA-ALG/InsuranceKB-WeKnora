@@ -13,23 +13,6 @@ func validG3DocReaderOrigin(ref *types.DocumentDocReaderReuseReference, id g3Fir
 		ref.OriginProcessingAttempt > 0 && ref.SourceSHA256 == id.SourceSHA256 && validServiceSHA256(ref.ArtifactSHA256))
 }
 
-// The reference is part of the new authenticated artifact. Reopen the old
-// authenticated object too; a hash-shaped string is not sufficient provenance.
-func (s *conceptSourceReuseStore830G3) validateDocReaderOrigin(record *g3FirstParseRecord) error {
-	if record.OriginDocReader == nil {
-		return nil
-	}
-	id := record.Identity
-	id.ParseAttempt = record.OriginDocReader.OriginParseAttempt
-	old, err := s.readFirstParse(id)
-	if err != nil || g3FirstParseRecordSHA(old) != record.OriginDocReader.ArtifactSHA256 ||
-		old.ParserIdentitySHA256 != record.ParserIdentitySHA256 || old.Markdown != record.Markdown ||
-		old.Native.SanitizedSHA256 != record.Native.SanitizedSHA256 {
-		return ErrConceptSourceAuthorityUnavailable830G2
-	}
-	return nil
-}
-
 // A closed old generation proves why this is a parser reuse, not an arbitrary
 // cache read. Read the specified attempt: LatestAttempt changes on reparse.
 func (s *knowledgeService) g3DocReaderRecoveryOrigin(ctx context.Context, k *types.Knowledge, parse int64, processing int) error {

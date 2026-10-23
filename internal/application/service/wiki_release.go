@@ -17,6 +17,7 @@ import (
 	"time"
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/google/uuid"
 	"golang.org/x/text/unicode/norm"
@@ -29,7 +30,7 @@ var (
 	ErrWikiReleaseAccessDenied                = errors.New("wiki release access denied")
 	ErrWikiReleaseConflict                    = errors.New("wiki release conflict")
 	ErrWikiReleaseNotFound                    = errors.New("wiki release not found")
-	ErrConceptSourceAuthorityUnavailable830G2 = errors.New("concept source authority unavailable 830 g2")
+	ErrConceptSourceAuthorityUnavailable830G2 = capture.ErrUnavailable
 )
 
 var publishAuthorizationV0Fields = map[string]struct{}{

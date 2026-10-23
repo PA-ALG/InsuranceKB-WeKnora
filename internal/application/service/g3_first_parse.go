@@ -14,35 +14,19 @@ import (
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
 
-const g3FirstParseContract = "g3-first-parse.830.v1"
-
-type g3FirstParseIdentity struct {
-	TenantID     uint64 `json:"tenant_id"`
-	RawKBID      string `json:"raw_kb_id"`
-	KnowledgeID  string `json:"knowledge_id"`
-	ParseAttempt int64  `json:"parse_attempt"`
-	SourceSHA256 string `json:"source_sha256"`
-}
-type g3FirstParseRange struct {
-	Index         int    `json:"index"`
-	Start         int    `json:"start"`
-	End           int    `json:"end"`
-	ContentSHA256 string `json:"content_sha256"`
-}
-type g3FirstParseRecord struct {
-	OriginDocReader      *types.DocumentDocReaderReuseReference `json:"origin_docreader,omitempty"`
-	Contract             string                                 `json:"contract"`
-	Identity             g3FirstParseIdentity                   `json:"identity"`
-	ParserIdentitySHA256 string                                 `json:"parser_identity_sha256"`
-	Markdown             string                                 `json:"markdown"`
-	Native               *types.NativeStructureArtifact         `json:"native"`
-	Chunks               []g3FirstParseRange                    `json:"chunks"`
-}
+// The capture kernel lives in internal/enterprise/capture (S7d-2c-1). These aliases and the thin
+// delegates below keep the legacy 830/G3 callers compiling until they are deleted in S7d-2c-3.
+type (
+	g3FirstParseIdentity = capture.Identity
+	g3FirstParseRange    = capture.Range
+	g3FirstParseRecord   = capture.Record
+)
 
 // G3FirstParseStore shares only file storage and signing primitives with citation
 // reuse. It has no KnowledgeService dependency and never calls a parser.
@@ -59,67 +43,12 @@ func (s *G3FirstParseStore) ReadSourceArtifact(
 	ctx context.Context, repo interfaces.KnowledgeRepository, scope types.WikiReleaseScope,
 	knowledgeID string, attempt int64,
 ) (*source.Artifact, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	var store *capture.Store
+	if s != nil && s.reuse != nil {
+		store = s.reuse.firstParseStore()
 	}
-	if scope.TenantID == 0 || scope.SpaceID == "" || scope.RawKBID == "" ||
-		strings.TrimSpace(knowledgeID) == "" || attempt <= 0 {
-		return nil, &source.Error{
-			Code: source.ErrorInvalidRequest, Detail: "an exact source scope and attempt are required",
-		}
-	}
-	revisions, ok := repo.(interface {
-		GetRevision(context.Context, string, int64) (*types.KnowledgeRevision, error)
-	})
-	if s == nil || s.reuse == nil || repo == nil || !ok {
-		return nil, &source.Error{Code: source.ErrorUnavailable, Detail: "source artifact is unavailable"}
-	}
-	knowledge, err := repo.GetKnowledgeByID(ctx, scope.TenantID, knowledgeID)
-	if errors.Is(err, wikirepository.ErrKnowledgeNotFound) {
-		return nil, source.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	if knowledge == nil || knowledge.ID != knowledgeID || knowledge.TenantID != scope.TenantID ||
-		knowledge.KnowledgeBaseID != scope.RawKBID || knowledge.DeletedAt.Valid {
-		return nil, source.ErrNotFound
-	}
-	revision, err := revisions.GetRevision(ctx, knowledgeID, attempt)
-	if errors.Is(err, wikirepository.ErrKnowledgeNotFound) {
-		return nil, source.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	if revision == nil || revision.KnowledgeID != knowledgeID || revision.ParseAttempt != attempt {
-		return nil, source.ErrNotFound
-	}
-	if !validServiceSHA256(revision.FileSHA256) {
-		return nil, &source.Error{Code: source.ErrorIntegrity, Detail: "source revision failed integrity verification"}
-	}
-	id := g3FirstParseIdentity{
-		TenantID: scope.TenantID, RawKBID: scope.RawKBID, KnowledgeID: knowledgeID,
-		ParseAttempt: attempt, SourceSHA256: revision.FileSHA256,
-	}
-	record, err := s.reuse.readFirstParse(id)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, source.ErrNotCaptured
-	}
-	if errors.Is(err, ErrConceptSourceAuthorityUnavailable830G2) {
-		return nil, &source.Error{Code: source.ErrorIntegrity, Detail: "parse artifact failed integrity verification"}
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return &source.Artifact{
-		KnowledgeID: knowledgeID, ParseAttempt: attempt, FileName: knowledge.FileName,
-		FileSHA256: revision.FileSHA256, ParserIdentitySHA256: record.ParserIdentitySHA256,
-		Markdown: record.Markdown, NativeJSON: append([]byte(nil), record.Native.SanitizedJSON...),
-	}, nil
+	reader, _ := repo.(capture.KnowledgeReader)
+	return capture.ReadSourceArtifact(ctx, store, reader, scope, knowledgeID, attempt)
 }
 
 func NewConceptSourceAuthorityService830G2WithFirstParse(fixed *KnowledgeRevisionSourceService, knowledge interfaces.KnowledgeRepository, chunks interfaces.ChunkRepository, reader interfaces.DocumentReader, codec *SchemaWikiCitationTokenCodec, releases *wikirepository.WikiReleaseRepository, legacy SchemaWikiCitationContentPort, preview *wikirepository.SchemaWikiFormalCandidatePreviewRegistry, first *G3FirstParseStore) *ConceptSourceAuthorityService830G2 {
@@ -141,124 +70,38 @@ func g3FirstParseConfig(eff types.EffectiveProcessConfig) types.EffectiveProcess
 	eff.ChunkingConfig.ParserEngineRules = append(rules, eff.ChunkingConfig.ParserEngineRules...)
 	return eff
 }
-func g3FirstParseKey(id g3FirstParseIdentity) (string, error) {
-	if id.TenantID == 0 || id.RawKBID == "" || id.KnowledgeID == "" || id.ParseAttempt <= 0 || !validServiceSHA256(id.SourceSHA256) {
-		return "", ErrConceptSourceAuthorityUnavailable830G2
-	}
-	data, err := canonicalJSON830G2(id)
-	if err != nil {
-		return "", err
-	}
-	return "first-" + testSHA256Bytes830G2(append([]byte(g3FirstParseContract+"\x00"), data...)), nil
-}
+func g3FirstParseKey(id g3FirstParseIdentity) (string, error) { return capture.Key(id) }
 func g3FirstParseResult(record *g3FirstParseRecord) *types.ReadResult {
-	return &types.ReadResult{MarkdownContent: record.Markdown, NativeStructure: record.Native}
+	return capture.ReadResult(record)
 }
 func validateG3FirstParse(record *g3FirstParseRecord, id g3FirstParseIdentity) error {
-	if record == nil || record.Contract != g3FirstParseContract || record.Identity != id || len(record.Chunks) == 0 || !validG3DocReaderOrigin(record.OriginDocReader, id) {
-		return ErrConceptSourceAuthorityUnavailable830G2
+	return capture.Validate(record, id)
+}
+
+// firstParseStore opens captures under this store's root with the citation signing ring. It is
+// built per call because tests and wiring may replace root or codec after construction.
+func (s *conceptSourceReuseStore830G3) firstParseStore() *capture.Store {
+	var keys *capture.Keys
+	if s.codec != nil {
+		keys = capture.NewKeys(s.codec.activeKeyID, s.codec.privateKeys)
 	}
-	if _, err := prepareConceptNativeQuoteIndex830G2(g3FirstParseResult(record), id.SourceSHA256, record.ParserIdentitySHA256); err != nil {
-		return err
-	}
-	runes := []rune(record.Markdown)
-	seen := map[string]bool{}
-	for _, r := range record.Chunks {
-		key := fmt.Sprintf("%d:%s", r.Index, r.ContentSHA256)
-		if r.Index < 0 || r.Start < 0 || r.End <= r.Start || r.End > len(runes) || testSHA256830G2(string(runes[r.Start:r.End])) != r.ContentSHA256 || seen[key] {
-			return ErrConceptSourceAuthorityUnavailable830G2
-		}
-		seen[key] = true
-	}
-	return nil
+	return capture.NewStore(s.root, keys)
 }
 func (s *conceptSourceReuseStore830G3) readFirstParse(id g3FirstParseIdentity) (*g3FirstParseRecord, error) {
 	if s == nil {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	key, err := g3FirstParseKey(id)
-	if err != nil {
-		return nil, err
-	}
-	data, err := s.readArtifact(filepath.Join(s.root, key+".json"), key)
-	if err != nil {
-		return nil, err
-	}
-	var record g3FirstParseRecord
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&record) != nil || !jsonEOF830G2(decoder) {
-		return nil, ErrConceptSourceAuthorityUnavailable830G2
-	}
-	if err := validateG3FirstParse(&record, id); err != nil {
-		return nil, err
-	}
-	if err := s.validateDocReaderOrigin(&record); err != nil {
-		return nil, err
-	}
-	return &record, nil
+	return s.firstParseStore().Read(id)
 }
 func (s *G3FirstParseStore) save(id g3FirstParseIdentity, result *types.ReadResult, chunks []types.ParsedChunk, origin ...*types.DocumentDocReaderReuseReference) error {
-	if s == nil || s.reuse == nil || result == nil || result.Error != "" || result.NativeStructure == nil || len(result.ImageRefs) > 0 || result.IsAudio {
+	if s == nil || s.reuse == nil || len(origin) > 1 {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
-	key, err := g3FirstParseKey(id)
-	if err != nil {
-		return err
+	var reference *types.DocumentDocReaderReuseReference
+	if len(origin) == 1 {
+		reference = origin[0]
 	}
-	var projection conceptNativeHeader830G2
-	if json.Unmarshal(result.NativeStructure.SanitizedJSON, &projection) != nil {
-		return ErrConceptSourceAuthorityUnavailable830G2
-	}
-	record := g3FirstParseRecord{Contract: g3FirstParseContract, Identity: id, ParserIdentitySHA256: projection.ParserIdentitySHA256, Markdown: result.MarkdownContent, Native: result.NativeStructure, Chunks: []g3FirstParseRange{}}
-	if len(origin) > 1 {
-		return ErrConceptSourceAuthorityUnavailable830G2
-	}
-	if len(origin) == 1 && origin[0] != nil {
-		copy := *origin[0]
-		record.OriginDocReader = &copy
-	}
-	seen := map[string]g3FirstParseRange{}
-	for _, chunk := range chunks {
-		if strings.TrimSpace(chunk.Content) == "" {
-			continue
-		}
-		r := g3FirstParseRange{Index: chunk.Seq, Start: chunk.Start, End: chunk.End, ContentSHA256: testSHA256830G2(chunk.Content)}
-		k := fmt.Sprintf("%d:%s", r.Index, r.ContentSHA256)
-		if old, ok := seen[k]; ok {
-			if old != r {
-				return ErrConceptSourceAuthorityUnavailable830G2
-			}
-			continue
-		}
-		seen[k] = r
-		record.Chunks = append(record.Chunks, r)
-	}
-	if err := validateG3FirstParse(&record, id); err != nil {
-		return err
-	}
-	if err := s.reuse.validateDocReaderOrigin(&record); err != nil {
-		return err
-	}
-	data, err := json.Marshal(record)
-	if err != nil {
-		return err
-	}
-	// The same attempt cannot silently acquire another parse or chunk plan.
-	s.reuse.mu.Lock()
-	defer s.reuse.mu.Unlock()
-	path := filepath.Join(s.reuse.root, key+".json")
-	old, err := s.reuse.readArtifact(path, key)
-	if err == nil {
-		if !bytes.Equal(old, data) {
-			return ErrConceptSourceAuthorityUnavailable830G2
-		}
-		return nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return s.reuse.writeFirstParseArtifact(path, key, data)
+	return s.reuse.firstParseStore().Save(id, result, chunks, reference)
 }
 func g3FirstParseBindings(record *g3FirstParseRecord, manifest []types.RevisionManifestChunk) (map[string]g3FirstParseRange, error) {
 	if record == nil || len(manifest) == 0 {
@@ -292,37 +135,13 @@ func g3FirstParseBindings(record *g3FirstParseRecord, manifest []types.RevisionM
 	// without promoting unused capture ranges into the revision or its output.
 	return result, nil
 }
-func g3FirstParseRecordSHA(record *g3FirstParseRecord) string {
-	data, _ := json.Marshal(record)
-	return testSHA256Bytes830G2(data)
-}
+func g3FirstParseRecordSHA(record *g3FirstParseRecord) string { return capture.RecordSHA256(record) }
 func g3FirstParseIdentityForSource(scope types.WikiReleaseScope, source *types.KnowledgeRevisionSource) g3FirstParseIdentity {
 	return g3FirstParseIdentity{TenantID: scope.TenantID, RawKBID: scope.RawKBID, KnowledgeID: source.KnowledgeID, ParseAttempt: source.ParseAttempt, SourceSHA256: source.FileSHA256}
 }
 
-// Existing chunkers may prepend a table header. It is context, never source.
 func g3ExactSourceChunks(markdown string, chunks []types.ParsedChunk) ([]types.ParsedChunk, error) {
-	result := append([]types.ParsedChunk(nil), chunks...)
-	runes := []rune(markdown)
-	for i := range result {
-		c := &result[i]
-		if c.Start < 0 || c.End <= c.Start || c.End > len(runes) {
-			return nil, ErrConceptSourceAuthorityUnavailable830G2
-		}
-		exact := string(runes[c.Start:c.End])
-		if c.Content != exact {
-			if !strings.HasSuffix(c.Content, exact) {
-				return nil, ErrConceptSourceAuthorityUnavailable830G2
-			}
-			header := strings.TrimSuffix(c.Content, exact)
-			if c.ContextHeader != "" {
-				c.ContextHeader += "\n\n"
-			}
-			c.ContextHeader += header
-			c.Content = exact
-		}
-	}
-	return result, nil
+	return capture.ExactChunks(markdown, chunks)
 }
 func g3FirstParseRangeMatches(markdown, content string, r g3FirstParseRange) bool {
 	return g3FirstParseRangeMatchesRunes([]rune(markdown), content, r)
@@ -373,7 +192,8 @@ func (s *conceptSourceReuseStore830G3) validateFirstParseCacheProof(record *conc
 	var first g3FirstParseRecord
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&first) != nil || !jsonEOF830G2(decoder) || first.Contract != g3FirstParseContract || first.Identity != id {
+	if decoder.Decode(&first) != nil || !jsonEOF830G2(decoder) || first.Contract != capture.Contract ||
+		first.Identity != id {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	// The native index is already owned/validated by the cached record. Only the
@@ -399,7 +219,9 @@ func g3CachedFirstParseMatches(first *g3FirstParseRecord, record *conceptSourceR
 	return nil
 }
 
-// Link publishes an immutable artifact without a cross-process overwrite race.
+// Link publishes an immutable artifact without a cross-process overwrite race. Captures are now
+// written by capture.Store.Save; only the legacy DocReader recovery test still writes a hand-made
+// record through here, and both go with the G3 reparse path in S7d-2c-2.
 func (s *conceptSourceReuseStore830G3) writeFirstParseArtifact(path, key string, data []byte) error {
 	encoded, err := sealConceptDerivedArtifact830G3(s.codec, "weknora.concept-source-reuse.830.g3.v1", key, data)
 	if err != nil {
@@ -443,52 +265,6 @@ func (s *knowledgeService) failG3FirstParse(ctx context.Context, knowledge *type
 	return err
 }
 
-// Normalize the parent content before splitting children. The generic chunker
-// can add a contextual table header; splitting that synthetic prefix first
-// would shift every child coordinate relative to the original document.
 func g3FirstParseSplitParentChild(text string, parentCfg, childCfg chunker.SplitterConfig) (chunker.ParentChildResult, error) {
-	result := chunker.ParentChildResult{}
-	parents := chunker.Split(text, parentCfg)
-	seq := 0
-	for _, p := range parents {
-		exact, err := g3ExactSourceChunks(text, []types.ParsedChunk{{Content: p.Content, ContextHeader: p.ContextHeader, Start: p.Start, End: p.End, Seq: p.Seq}})
-		if err != nil {
-			return result, err
-		}
-		p.Content = exact[0].Content
-		p.ContextHeader = exact[0].ContextHeader
-		children := chunker.Split(p.Content, childCfg)
-		parentIndex := -1
-		if len(children) > 1 || (len(children) == 1 && children[0].Content != p.Content) {
-			parentIndex = len(result.Parents)
-			result.Parents = append(result.Parents, p)
-		}
-		for _, c := range children {
-			exact, err := g3ExactSourceChunks(p.Content, []types.ParsedChunk{{Content: c.Content, ContextHeader: c.ContextHeader, Start: c.Start, End: c.End, Seq: c.Seq}})
-			if err != nil {
-				return result, err
-			}
-			c.Content = exact[0].Content
-			c.ContextHeader = exact[0].ContextHeader
-			if p.ContextHeader != "" {
-				if c.ContextHeader != "" {
-					c.ContextHeader = p.ContextHeader + "\n\n" + c.ContextHeader
-				} else {
-					c.ContextHeader = p.ContextHeader
-				}
-			}
-			c.Start += p.Start
-			c.End += p.Start
-			c.Seq = seq
-			seq++
-			result.Children = append(result.Children, chunker.ChildChunk{Chunk: c, ParentIndex: parentIndex})
-		}
-	}
-	for i := range result.Parents {
-		result.Parents[i].Seq = i
-	}
-	for i := range result.Children {
-		result.Children[i].Seq = len(result.Parents) + i
-	}
-	return result, nil
+	return capture.SplitParentChild(text, parentCfg, childCfg)
 }
