@@ -13,6 +13,7 @@ import (
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/infrastructure/chunker"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -229,29 +230,13 @@ func TestG3FirstParseRepeatedBlockUsesSignedLocation(t *testing.T) {
 	require.Zero(t, doc.calls)
 }
 
-func TestG3FirstParseScopeConfigAndExactChunkContent(t *testing.T) {
-	cfg := &config.Config{
-		G3PlatformProcessing: &config.G3PlatformProcessingConfig{Enabled: true, TenantID: 1, RawKBID: "raw"},
-	}
-	k := &types.Knowledge{TenantID: 1, KnowledgeBaseID: "raw"}
-	require.True(t, g3FirstParseScope(cfg, k, "pdf"))
-	for _, tc := range []struct {
-		tenant   uint64
-		kb, kind string
-	}{{2, "raw", "pdf"}, {1, "other", "pdf"}, {1, "raw", "docx"}} {
-		other := *k
-		other.TenantID = tc.tenant
-		other.KnowledgeBaseID = tc.kb
-		require.False(t, g3FirstParseScope(cfg, &other, tc.kind))
-	}
-	cfg.G3PlatformProcessing.Enabled = false
-	require.False(t, g3FirstParseScope(cfg, k, "pdf"))
+func TestG3FirstParseParserConfigAndExactChunkContent(t *testing.T) {
 	old := types.EffectiveProcessConfig{
 		ChunkingConfig: types.ChunkingConfig{
 			ParserEngineRules: []types.ParserEngineRule{{FileTypes: []string{"pdf"}, Engine: "auto"}},
 		},
 	}
-	updated := g3FirstParseConfig(old)
+	updated := capture.ParserConfig(old)
 	require.Equal(t, "auto", old.ChunkingConfig.ResolveParserEngine("pdf"))
 	require.Equal(t, "builtin", updated.ChunkingConfig.ResolveParserEngine("pdf"))
 	markdown := "标题\r\n| 项目 | 数值 |\r\n| --- | --- |\r\n| A | 10 |\r\n"
@@ -360,15 +345,9 @@ func TestG3FirstParseActualConvertScopesParserAndReusesResult(t *testing.T) {
 			ParserEngineRules: []types.ParserEngineRule{{FileTypes: []string{"pdf"}, Engine: "auto"}},
 		},
 	}
-	cfg := &config.Config{
-		G3PlatformProcessing: &config.G3PlatformProcessingConfig{
-			Enabled:  true,
-			TenantID: scope.TenantID,
-			RawKBID:  scope.RawKBID,
-		},
-	}
 	s := &knowledgeService{
-		config:         cfg,
+		config:         &config.Config{},
+		captureScope:   rawKBs{scope.RawKBID: scope.TenantID},
 		tenantService:  &firstParseTenantService{},
 		documentReader: reader,
 		fileSvc:        &revisionSourceFileServiceStub{data: []byte("pdf")},
@@ -476,15 +455,8 @@ func TestG3FirstParseProcessDocumentWriteFailureClosesDocreader(t *testing.T) {
 	require.NoError(t, os.WriteFile(store.reuse.root, []byte("occupied"), 0o600))
 	reader := &firstParseReader{result: firstParseNative(t, "平安测试两全保险\r\n保险条款\r\n")}
 	s := &knowledgeService{
-		config: &config.Config{
-			G3PlatformProcessing: &config.G3PlatformProcessingConfig{
-				Enabled:  true,
-				TenantID: 1,
-				SpaceID:  "space",
-				RawKBID:  "raw",
-				WikiKBID: "wiki",
-			},
-		},
+		config:         &config.Config{},
+		captureScope:   rawKBs{"raw": 1},
 		repo:           repo,
 		tenantRepo:     &firstParseTenantRepo{},
 		tenantService:  &firstParseTenantService{},

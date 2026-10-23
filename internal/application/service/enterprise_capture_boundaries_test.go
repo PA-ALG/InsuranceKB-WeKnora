@@ -45,38 +45,20 @@ func TestEnterpriseScannedSignalRequiresOriginalCompleteError(t *testing.T) {
 	}
 }
 
-func TestFirstParseKeepsHTMLAndLineEndingsInBothCaptureScopes(t *testing.T) {
-	for _, enterprise := range []bool{true, false} {
-		name := "G3"
-		if enterprise {
-			name = "enterprise"
-		}
-		t.Run(name, func(t *testing.T) {
-			original := "条款😀\r\n<table><tr><td>保险责任</td><td>金额</td></tr></table>\r\n附录"
-			u := uploadToEnterpriseRawKB(t, firstParseNative(t, original))
-			if !enterprise {
-				u.service.captureScope = nil
-				u.service.config = g3CaptureConfig()
-				u.service.config.G3PlatformProcessing.RawKBID = enterpriseRawKB
-				u.service.config.G3PlatformProcessing.SpaceID = enterpriseScope.SpaceID
-				u.service.config.G3PlatformProcessing.WikiKBID = enterpriseScope.WikiKBID
-				u.service.spanTracker = NewSpanTracker(&captureSpans{rows: []types.KnowledgeProcessingSpan{{
-					KnowledgeID: u.knowledge.ID, Attempt: 4, SpanID: "root", Kind: types.SpanKindRoot,
-				}}}, nil)
-			}
-			require.NoError(t, u.service.ProcessDocument(context.Background(), u.task))
-			require.NotEqual(t, types.ParseStatusFailed, u.knowledge.ParseStatus, u.knowledge.ErrorMessage)
-			a, err := u.artifact(enterpriseScope, 3)
-			require.NoError(t, err)
-			require.Equal(t, original, a.Markdown)
-			for _, c := range u.chunks.written {
-				require.Equal(t, string([]rune(original)[c.StartAt:c.EndAt]), c.Content)
-			}
-		})
+func TestFirstParseKeepsHTMLAndLineEndings(t *testing.T) {
+	original := "条款😀\r\n<table><tr><td>保险责任</td><td>金额</td></tr></table>\r\n附录"
+	u := uploadToEnterpriseRawKB(t, firstParseNative(t, original))
+	require.NoError(t, u.service.ProcessDocument(context.Background(), u.task))
+	require.NotEqual(t, types.ParseStatusFailed, u.knowledge.ParseStatus, u.knowledge.ErrorMessage)
+	a, err := u.artifact(enterpriseScope, 3)
+	require.NoError(t, err)
+	require.Equal(t, original, a.Markdown)
+	for _, c := range u.chunks.written {
+		require.Equal(t, string([]rune(original)[c.StartAt:c.EndAt]), c.Content)
 	}
 }
 
-// captureSpans records stages and the G3 journal without a database connection.
+// captureSpans records stages without a database connection.
 type captureSpans struct {
 	repository.KnowledgeSpanRepository
 	rows []types.KnowledgeProcessingSpan
@@ -208,8 +190,8 @@ func TestCaptureSanitizesNonBodyFieldsWithoutChangingMarkdown(t *testing.T) {
 }
 
 func TestCaptureScopeExcludesURLImports(t *testing.T) {
-	s := &knowledgeService{config: g3CaptureConfig(), captureScope: rawKBs{enterpriseRawKB: enterpriseTenant}}
-	for _, kb := range []string{enterpriseRawKB, g3RawKB} {
+	s := &knowledgeService{config: &config.Config{}, captureScope: rawKBs{enterpriseRawKB: enterpriseTenant}}
+	for _, kb := range []string{enterpriseRawKB, "other-kb"} {
 		k := &types.Knowledge{TenantID: enterpriseTenant, KnowledgeBaseID: kb}
 		for _, p := range []types.DocumentProcessPayload{
 			{FileType: "pdf", URL: "https://example.com/source.pdf"},

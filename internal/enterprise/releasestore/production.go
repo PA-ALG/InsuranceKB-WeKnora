@@ -19,7 +19,6 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/enterprise/spotcheck"
-	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
 
@@ -81,7 +80,7 @@ func Register(container *dig.Container) error {
 		if captured := enterprisePages(spaces, knowledge, firstParse); captured != nil {
 			pages = captured
 		}
-		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, pages, reservedScopes(cfg)...)
+		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, pages)
 	}); err != nil {
 		return err
 	}
@@ -101,8 +100,8 @@ func Register(container *dig.Container) error {
 	})
 }
 
-// enterprisePages reads captured artifacts of configured enterprise Spaces only; unlike the
-// page route it never falls back to the G3 scope, so evidence can only cite enterprise sources.
+// enterprisePages reads captured artifacts of configured enterprise Spaces only, so evidence can
+// only cite enterprise sources.
 func enterprisePages(
 	spaces Spaces, knowledge interfaces.KnowledgeRepository, firstParse *appservice.G3FirstParseStore,
 ) *source.Service {
@@ -122,7 +121,7 @@ func enterprisePages(
 
 // LoadSpaces requires an active artifact signing key whenever capture is configured.
 func LoadSpaces(cfg *config.Config, raw string) (Spaces, error) {
-	spaces, err := ParseSpaces(raw, reservedScopes(cfg)...)
+	spaces, err := ParseSpaces(raw)
 	if err != nil || len(spaces.byKey) == 0 {
 		return spaces, err
 	}
@@ -140,9 +139,8 @@ func LoadSpaces(cfg *config.Config, raw string) (Spaces, error) {
 // disables publishing (nil service); every other problem is an error.
 func Production(
 	db *gorm.DB, knowledge any, rawSpaces, contractsDir string, pages PageReader,
-	reserved ...types.WikiReleaseScope,
 ) (*release.Service, error) {
-	spaces, err := ParseSpaces(rawSpaces, reserved...)
+	spaces, err := ParseSpaces(rawSpaces)
 	if err != nil {
 		return nil, err
 	}
@@ -172,17 +170,4 @@ func Production(
 	return release.NewService(store, resolver, schemas,
 		release.WithPublisher(store), release.WithEvidenceVerifier(verifier),
 		release.WithRetirer(store)), nil
-}
-
-// reservedScopes are the scopes enterprise Spaces may not reuse: the G3 path keeps
-// its own Head. The configured fields are reserved even while the G3 policy is
-// outside its validity window, so a Space can never take over a G3 wiki KB.
-func reservedScopes(cfg *config.Config) []types.WikiReleaseScope {
-	if cfg == nil || cfg.G3PlatformProcessing == nil {
-		return nil
-	}
-	g3 := cfg.G3PlatformProcessing
-	return []types.WikiReleaseScope{{
-		TenantID: g3.TenantID, SpaceID: g3.SpaceID, RawKBID: g3.RawKBID, WikiKBID: g3.WikiKBID,
-	}}
 }

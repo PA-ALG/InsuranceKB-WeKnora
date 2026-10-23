@@ -27,8 +27,7 @@ func TestSpacesResolveConfiguredScopesOnly(t *testing.T) {
 	}
 }
 
-func TestSpacesRejectIncompleteDuplicateAndReservedEntries(t *testing.T) {
-	g3 := types.WikiReleaseScope{TenantID: 7, SpaceID: "g3", RawKBID: "g3raw", WikiKBID: "g3wiki"}
+func TestSpacesRejectIncompleteAndDuplicateEntries(t *testing.T) {
 	for name, raw := range map[string]string{
 		"not a list":    `{"tenant_id":7}`,
 		"unknown field": `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r","wiki_kb_id":"w","x":1}]`,
@@ -38,15 +37,13 @@ func TestSpacesRejectIncompleteDuplicateAndReservedEntries(t *testing.T) {
 		                    {"tenant_id":7,"space_id":"s","raw_kb_id":"r2","wiki_kb_id":"w2"}]`,
 		"shared wiki kb": `[{"tenant_id":7,"space_id":"a","raw_kb_id":"r","wiki_kb_id":"w"},
 		                    {"tenant_id":7,"space_id":"b","raw_kb_id":"r2","wiki_kb_id":"w"}]`,
-		"g3 space":   `[{"tenant_id":7,"space_id":"g3","raw_kb_id":"r","wiki_kb_id":"w"}]`,
-		"g3 wiki kb": `[{"tenant_id":7,"space_id":"s","raw_kb_id":"r","wiki_kb_id":"g3wiki"}]`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseSpaces(raw, g3)
+			_, err := ParseSpaces(raw)
 			require.Error(t, err)
 		})
 	}
-	empty, err := ParseSpaces("  ", g3)
+	empty, err := ParseSpaces("  ")
 	require.NoError(t, err)
 	_, err = empty.Scope(7, "s")
 	require.Error(t, err, "no configured Space means no enterprise publishing")

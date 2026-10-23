@@ -14,7 +14,6 @@ import (
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
-	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
 
@@ -50,43 +49,29 @@ func TestProductionBuildsThePublishingServiceForConfiguredSpaces(t *testing.T) {
 }
 
 func TestProductionRejectsEveryIncompleteConfiguration(t *testing.T) {
-	g3 := types.WikiReleaseScope{TenantID: 7, SpaceID: "space-1", RawKBID: "g3raw", WikiKBID: "g3wiki"}
 	good := contractsDir(t, testSchema)
 	for name, probe := range map[string]struct {
 		db        *gorm.DB
 		knowledge any
 		spaces    string
 		dir       string
-		reserved  []types.WikiReleaseScope
 	}{
-		"malformed spaces":         {&gorm.DB{}, revisions{}, `{`, good, nil},
-		"reuses the G3 Space":      {&gorm.DB{}, revisions{}, oneSpace, good, []types.WikiReleaseScope{g3}},
-		"no database":              {nil, revisions{}, oneSpace, good, nil},
-		"no knowledge revisions":   {&gorm.DB{}, struct{}{}, oneSpace, good, nil},
-		"missing contract schema":  {&gorm.DB{}, revisions{}, oneSpace, t.TempDir(), nil},
-		"contract schema not JSON": {&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{`), nil},
-		"JSON but not a schema":    {&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{"type":7}`), nil},
+		"malformed spaces":         {&gorm.DB{}, revisions{}, `{`, good},
+		"no database":              {nil, revisions{}, oneSpace, good},
+		"no knowledge revisions":   {&gorm.DB{}, struct{}{}, oneSpace, good},
+		"missing contract schema":  {&gorm.DB{}, revisions{}, oneSpace, t.TempDir()},
+		"contract schema not JSON": {&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{`)},
+		"JSON but not a schema":    {&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{"type":7}`)},
 		"unsupplied reference": {
-			&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{"$ref":"bundle_member.schema.json"}`), nil,
+			&gorm.DB{}, revisions{}, oneSpace, contractsDir(t, `{"$ref":"bundle_member.schema.json"}`),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			service, err := Production(
-				probe.db, probe.knowledge, probe.spaces, probe.dir, stubPages{}, probe.reserved...,
-			)
+			service, err := Production(probe.db, probe.knowledge, probe.spaces, probe.dir, stubPages{})
 			require.Error(t, err)
 			require.Nil(t, service)
 		})
 	}
-}
-
-func TestReservedScopesAlwaysIncludeTheConfiguredG3Scope(t *testing.T) {
-	require.Empty(t, reservedScopes(nil))
-	cfg := &config.Config{G3PlatformProcessing: &config.G3PlatformProcessingConfig{
-		Enabled: false, TenantID: 7, SpaceID: "g3", RawKBID: "r", WikiKBID: "w",
-	}}
-	require.Equal(t, []types.WikiReleaseScope{{TenantID: 7, SpaceID: "g3", RawKBID: "r", WikiKBID: "w"}},
-		reservedScopes(cfg), "a disabled or expired G3 policy still reserves its Space and wiki KB")
 }
 
 func TestRegisterProvidesANilServiceWhenPublishingIsNotConfigured(t *testing.T) {

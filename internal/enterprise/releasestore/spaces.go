@@ -27,10 +27,9 @@ type Spaces struct {
 	byKey map[string]types.WikiReleaseScope
 }
 
-// ParseSpaces decodes the ENTERPRISE_SPACES JSON list. Every Space must be
-// complete and unique, and must not reuse the Space, RAW or wiki KB of any scope in
-// reserved (the G3 path keeps its own Head; S4c-2a user decision 2026-10-15).
-func ParseSpaces(raw string, reserved ...types.WikiReleaseScope) (Spaces, error) {
+// ParseSpaces decodes the ENTERPRISE_SPACES JSON list. Every Space must be complete and
+// unique, and no knowledge base may serve two roles.
+func ParseSpaces(raw string) (Spaces, error) {
 	spaces := Spaces{byKey: map[string]types.WikiReleaseScope{}}
 	if strings.TrimSpace(raw) == "" {
 		return spaces, nil
@@ -50,13 +49,6 @@ func ParseSpaces(raw string, reserved ...types.WikiReleaseScope) (Spaces, error)
 		key := spaceKey(e.TenantID, e.SpaceID)
 		if _, dup := spaces.byKey[key]; dup || knowledgeBases[e.RawKBID] || knowledgeBases[e.WikiKBID] {
 			return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] repeats a Space or knowledge base role", i)
-		}
-		for _, r := range reserved {
-			if (r.TenantID == e.TenantID && r.SpaceID == e.SpaceID) ||
-				r.RawKBID == e.RawKBID || r.WikiKBID == e.RawKBID ||
-				r.RawKBID == e.WikiKBID || r.WikiKBID == e.WikiKBID {
-				return Spaces{}, fmt.Errorf("ENTERPRISE_SPACES[%d] reuses a reserved Space, RAW or wiki KB", i)
-			}
 		}
 		knowledgeBases[e.RawKBID], knowledgeBases[e.WikiKBID] = true, true
 		spaces.byKey[key] = types.WikiReleaseScope{

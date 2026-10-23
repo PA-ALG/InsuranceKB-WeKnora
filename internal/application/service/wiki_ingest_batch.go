@@ -254,10 +254,6 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 		return fmt.Errorf("wiki ingest: unmarshal payload: %w", err)
 	}
 
-	if s.config.NativeWikiWritesDisabled(payload.TenantID, payload.KnowledgeBaseID) {
-		return fmt.Errorf("native wiki writes disabled by product candidate policy: %w", asynq.SkipRetry)
-	}
-
 	// Inject context
 	ctx = context.WithValue(ctx, types.TenantIDContextKey, payload.TenantID)
 	if payload.Language != "" {
@@ -311,9 +307,6 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 	if err != nil {
 		exitStatus = "get_kb_failed"
 		return fmt.Errorf("wiki ingest: get KB: %w", err)
-	}
-	if s.config.NativeWikiWritesDisabled(kb.TenantID, kb.ID) {
-		return fmt.Errorf("native wiki writes disabled by product candidate policy: %w", asynq.SkipRetry)
 	}
 
 	if !kb.IsWikiEnabled() {
@@ -985,9 +978,6 @@ func (s *wikiIngestService) ProcessWikiFinalize(ctx context.Context, t *asynq.Ta
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return fmt.Errorf("wiki finalize: unmarshal payload: %w", err)
 	}
-	if s.config.NativeWikiWritesDisabled(payload.TenantID, payload.KnowledgeBaseID) {
-		return fmt.Errorf("native wiki writes disabled by product candidate policy: %w", asynq.SkipRetry)
-	}
 
 	ctx = context.WithValue(ctx, types.TenantIDContextKey, payload.TenantID)
 	if payload.Language != "" {
@@ -1068,10 +1058,6 @@ func (s *wikiIngestService) ProcessWikiFinalize(ctx context.Context, t *asynq.Ta
 	}
 	if err != nil {
 		return fmt.Errorf("wiki finalize: get KB: %w", err)
-	}
-
-	if s.config.NativeWikiWritesDisabled(kb.TenantID, kb.ID) {
-		return fmt.Errorf("native wiki writes disabled by product candidate policy: %w", asynq.SkipRetry)
 	}
 
 	// Aggregate the drained rows into: affected slugs (dedup), fresh cross-link

@@ -18,6 +18,15 @@ const (
 	coordinateSpace = "normalized_0_1e6_top_left"
 )
 
+// ParserConfig is the parse configuration for a captured PDF: the builtin parser is put first for
+// PDFs, ahead of whatever engine the knowledge base or upload chose, because only it produces the
+// native character boxes (requested with NativeCaptureMode) that sources and citations point into.
+func ParserConfig(eff types.EffectiveProcessConfig) types.EffectiveProcessConfig {
+	rules := []types.ParserEngineRule{{FileTypes: []string{"pdf"}, Engine: "builtin"}}
+	eff.ChunkingConfig.ParserEngineRules = append(rules, eff.ChunkingConfig.ParserEngineRules...)
+	return eff
+}
+
 // The native wire structures declare their fields in canonical JSON key order: encoding them
 // reproduces the sanitized bytes exactly, which is how a capture proves it was not rewritten.
 type nativeParserIdentity struct {

@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -148,34 +147,4 @@ func TestEnterpriseSpaceSourcePagesFailClosed(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestEnterpriseSpacesKeepTheG3SourceFallback(t *testing.T) {
-	g3Raw := "10000000-0000-0000-0000-000000000002"
-	for _, tc := range []struct {
-		name, kb, space string
-		status          int
-	}{
-		{"G3 Space reads the G3 RAW KB", g3Raw, enterpriseSourceSpaceID, http.StatusConflict},
-		{"G3 Space never reads a Space RAW KB", "raw-a", enterpriseSourceSpaceID, http.StatusNotFound},
-		{"Space never reads the G3 RAW KB", g3Raw, "space-a", http.StatusNotFound},
-		{"Space reads its RAW KB beside G3", "raw-a", "space-a", http.StatusConflict},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			w := sourcePages(spaceSourceRouter(t, enterpriseSourceConfig(t), knowledgeIn(tc.kb), fullServiceKey),
-				tc.space, "2")
-			require.Equal(t, tc.status, w.Code, w.Body.String())
-		})
-	}
-
-	cfg := enterpriseSourceConfig(t)
-	cfg.G3PlatformProcessing.ExpiresAt = time.Now().Add(-time.Minute).Unix()
-	repo := knowledgeIn("raw-a")
-	r := spaceSourceRouter(t, cfg, repo, fullServiceKey)
-	w := sourcePages(r, "space-a", "2")
-	require.Equal(t, http.StatusConflict, w.Code, "an expired G3 policy does not block enterprise Spaces: %s",
-		w.Body.String())
-	w = sourcePages(r, enterpriseSourceSpaceID, "2")
-	require.Equal(t, http.StatusBadRequest, w.Code, "and still blocks its own Space: %s", w.Body.String())
-	require.Contains(t, w.Body.String(), source.ErrorInvalidRequest)
 }

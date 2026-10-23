@@ -16,6 +16,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/application/service/retriever"
 	"github.com/Tencent/WeKnora/internal/common"
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	werrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/infrastructure/chunker"
 	"github.com/Tencent/WeKnora/internal/infrastructure/docparser"
@@ -3750,7 +3751,7 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 	eff := ResolveProcessConfig(kb, processOverrides)
 	firstParse := s.captureFirstParse(knowledge, payload)
 	if firstParse {
-		eff = g3FirstParseConfig(eff)
+		eff = capture.ParserConfig(eff)
 	}
 	payload.Revision = refreshRevisionBinding(payload.Revision, kb, eff, knowledge.FileType)
 
@@ -4191,8 +4192,7 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 
 func (s *knowledgeService) captureFirstParse(k *types.Knowledge, p types.DocumentProcessPayload) bool {
 	return k != nil && p.URL == "" && p.FileURL == "" && strings.EqualFold(p.FileType, "pdf") &&
-		(g3FirstParseScope(s.config, k, p.FileType) ||
-			(s.captureScope != nil && s.captureScope.RawKB(k.TenantID, k.KnowledgeBaseID)))
+		s.captureScope != nil && s.captureScope.RawKB(k.TenantID, k.KnowledgeBaseID)
 }
 
 var scannedPDFError = regexp.MustCompile(`^page [1-9][0-9]* is scanned$`)
@@ -4200,8 +4200,7 @@ var scannedPDFError = regexp.MustCompile(`^page [1-9][0-9]* is scanned$`)
 func (s *knowledgeService) enterpriseScannedPDF(
 	k *types.Knowledge, p types.DocumentProcessPayload, result *types.ReadResult,
 ) bool {
-	return result != nil && s.captureFirstParse(k, p) && !g3FirstParseScope(s.config, k, p.FileType) &&
-		scannedPDFError.MatchString(result.Error)
+	return result != nil && s.captureFirstParse(k, p) && scannedPDFError.MatchString(result.Error)
 }
 
 // sanitizeReadResult protects every text field that can cross from a parser
@@ -4261,8 +4260,8 @@ func (s *knowledgeService) convert(
 	applyParserRuleOverrides(mergedOverrides, eff.ChunkingConfig, fileType)
 	firstParse := s.captureFirstParse(knowledge, payload)
 	if firstParse {
-		eff = g3FirstParseConfig(eff)
-		mergedOverrides = map[string]string{"pdf_native_structure_capture": conceptNativeCapture830G2}
+		eff = capture.ParserConfig(eff)
+		mergedOverrides = map[string]string{"pdf_native_structure_capture": capture.NativeCaptureMode}
 	}
 	if err := validateParserEngineOverrideURLs(mergedOverrides); err != nil {
 		logger.Errorf(ctx, "Parser endpoint rejected for SSRF protection: %v", err)

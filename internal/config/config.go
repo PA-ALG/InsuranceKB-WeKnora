@@ -22,8 +22,6 @@ import (
 
 // Config 应用程序总配置
 type Config struct {
-	G3PlatformProcessing            *G3PlatformProcessingConfig            `yaml:"g3_platform_processing" json:"-"`
-	ProductIngestion                *ProductIngestionConfig                `yaml:"product_ingestion" json:"-"`
 	Conversation                    *ConversationConfig                    `yaml:"conversation"     json:"conversation"`
 	Server                          *ServerConfig                          `yaml:"server"           json:"server"`
 	KnowledgeBase                   *KnowledgeBaseConfig                   `yaml:"knowledge_base"   json:"knowledge_base"`
@@ -989,9 +987,6 @@ func LoadConfig() (*Config, error) {
 // It checks for obviously invalid or missing values that would cause runtime failures.
 func ValidateConfig(cfg *Config) error {
 	var errs []string
-	if err := validateProductWikiProducerPolicy(cfg); err != nil {
-		errs = append(errs, err.Error())
-	}
 	if cfg != nil && cfg.KnowledgeRevisionSource != nil &&
 		cfg.KnowledgeRevisionSource.MaxObjectBytes < 0 {
 		errs = append(errs, "knowledge_revision_source.max_object_bytes cannot be negative")
