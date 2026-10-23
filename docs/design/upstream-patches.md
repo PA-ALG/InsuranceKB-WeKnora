@@ -139,3 +139,4 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `internal/application/service/chat_pipeline/into_chat_message.go`、`internal/application/service/chat_pipeline/references.go` | Q2a | 初次与最终模型上下文渲染共用来源层级文字，企业回合保持已发布字段优先并追加专属回答规则；原生渲染没有来源层级扩展接口 | 是（来源上下文渲染扩展） | 上游提供可注入的来源层级、排序与系统规则后迁回企业包并撤回接缝 |
 | `internal/agent/finalize.go`、`internal/modelcontext/sources.go`、`internal/modelcontext/model_output.go` | Q2b | 请求内引用注册保留工具显式来源层级与固定版本，统一完成出口按最终回答实际引用顺序记录来源；原生链路没有引用记录扩展点 | 是（来源引用记录） | 上游完成事件记录同等实际引用及工具来源层级和固定版本后撤回 |
 | `frontend/src/views/knowledge/KnowledgeBase.vue`、`frontend/src/router/index.ts` | S7b | 回退：删除 830 时期 Schema Wiki 标签、内容区与 6 条 `schema-wiki` 路由，知识库页默认打开"文档"；补丁只减少（S1b、S3g 等登记的接入不变） | 不适用（回退） | 随所在登记行一并移除 |
+| `internal/router/router.go`、`internal/container/container.go`、`frontend/src/views/knowledge/KnowledgeBase.vue` | S7d-2a | 回退：删除 G3 产品导入桥的路由参数、注册与 Provide；知识库页删除产品导入能力查询、状态面板与上传分支，上传恢复为上游原样直接打开原生对话框 | 不适用（回退） | 随所在登记行一并移除 |

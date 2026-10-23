@@ -620,7 +620,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewAuditLogHandler))
 	must(container.Provide(handler.NewKnowledgeBaseHandler))
 	must(container.Provide(handler.NewKnowledgeHandler))
-	must(container.Provide(handler.NewConfiguredProductIngestionHandler))
 	must(container.Provide(func(
 		cfg *config.Config,
 		knowledge interfaces.KnowledgeRepository,

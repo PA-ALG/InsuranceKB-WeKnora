@@ -7,21 +7,15 @@ import (
 
 const NativeCandidatesPolicy = "native-candidates.830.v1"
 
-// ProductIngestionConfig connects browser uploads to one deployed Harness scope.
-// Explicit capacities apply to uploads generally; no product-specific file count is encoded.
+// ProductIngestionConfig is the scope of the retired G3 product ingestion. Its upload bridge
+// was removed in S7d-2a; only the native-write policy below still reads it, until S7d-2b.
 type ProductIngestionConfig struct {
 	WikiProducerPolicy string `yaml:"wiki_producer_policy"`
 	Enabled            bool   `yaml:"enabled"`
-	BaseURL            string `yaml:"base_url"`
-	Credential         string `yaml:"credential" json:"-"`
 	TenantID           uint64 `yaml:"tenant_id"`
 	SpaceID            string `yaml:"space_id"`
 	RawKBID            string `yaml:"raw_kb_id"`
 	WikiKBID           string `yaml:"wiki_kb_id"`
-	TimeoutSeconds     int    `yaml:"timeout_seconds"`
-	MaxResponseBytes   int64  `yaml:"max_response_bytes"`
-	MaxUploadFiles     int    `yaml:"max_upload_files"`
-	MaxUploadBytes     int64  `yaml:"max_upload_bytes"`
 }
 
 // NativeWikiWritesDisabled is the single native-write policy gate for the
