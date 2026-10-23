@@ -38,7 +38,6 @@ class ServiceKind(StrEnum):
 
     SOURCE_READER = "source_reader"
     WIKI_PROJECTOR = "wiki_projector"
-    PRODUCT_INGESTION = "product_ingestion"
 
 
 class ServiceCapability(StrEnum):
@@ -46,17 +45,9 @@ class ServiceCapability(StrEnum):
 
     READ_RAW_KNOWLEDGE = "read_raw_knowledge"
     PROJECT_MANAGED_PAGE = "project_managed_page"
-    MANAGE_PRODUCT_INGESTION = "manage_product_ingestion"
-    READ_PRODUCT_INGESTION = "read_product_ingestion"
 
 
 _CAPABILITIES_BY_SERVICE: Mapping[ServiceKind, frozenset[ServiceCapability]] = {
-    ServiceKind.PRODUCT_INGESTION: frozenset(
-        {
-            ServiceCapability.MANAGE_PRODUCT_INGESTION,
-            ServiceCapability.READ_PRODUCT_INGESTION,
-        }
-    ),
     ServiceKind.SOURCE_READER: frozenset({ServiceCapability.READ_RAW_KNOWLEDGE}),
     ServiceKind.WIKI_PROJECTOR: frozenset({ServiceCapability.PROJECT_MANAGED_PAGE}),
 }
