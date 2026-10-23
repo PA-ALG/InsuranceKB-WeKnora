@@ -10,7 +10,7 @@
   "G6_private_access": 6,
   "G9_contract_drift": 0,
   "G10_upstream_patches": 481,
-  "G11_new_file_location": 213
+  "G11_new_file_location": 207
  },
  "guards": {
   "G1_dependency_direction": {
@@ -832,8 +832,6 @@
   "G11_new_file_location": {
    "cmd/mineru-capture-596-1/main.go": 1,
    "cmd/release-proof-596-1/main.go": 1,
-   "frontend/src/api/product-ingestion.ts": 1,
-   "frontend/src/components/knowledge-base/product-ingestion-status.vue": 1,
    "harness/src/insurance_harness/__init__.py": 1,
    "harness/src/insurance_harness/adapters/__init__.py": 1,
    "harness/src/insurance_harness/adapters/weknora/__init__.py": 1,
@@ -986,7 +984,6 @@
    "internal/application/service/knowledge_model_dispatch.go": 1,
    "internal/application/service/knowledge_revision.go": 1,
    "internal/application/service/knowledge_revision_source.go": 1,
-   "internal/application/service/product_ingestion_bridge.go": 1,
    "internal/application/service/schema_wiki.go": 1,
    "internal/application/service/schema_wiki_citation_content.go": 1,
    "internal/application/service/schema_wiki_citation_revision.go": 1,
@@ -1010,8 +1007,6 @@
    "internal/handler/g3_platform_snapshots.go": 1,
    "internal/handler/g3_product_bindings.go": 1,
    "internal/handler/knowledge_revision_source.go": 1,
-   "internal/handler/product_ingestion.go": 1,
-   "internal/handler/product_ingestion_composition.go": 1,
    "internal/handler/schema_pack_catalog_830_g3.go": 1,
    "internal/handler/schema_wiki.go": 1,
    "internal/handler/wiki_release.go": 1,
@@ -1022,7 +1017,6 @@
    "internal/router/routes_g3_platform_release.go": 1,
    "internal/router/routes_g3_platform_snapshots.go": 1,
    "internal/router/routes_knowledge_revision_source.go": 1,
-   "internal/router/routes_product_ingestion.go": 1,
    "internal/router/routes_schema_wiki.go": 1,
    "internal/types/concept_free_wiki_830_g2.go": 1,
    "internal/types/concept_free_wiki_830_g3.go": 1,
