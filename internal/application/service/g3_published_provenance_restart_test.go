@@ -2,13 +2,74 @@ package service
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/gob"
 	"encoding/json"
+	"io"
+	"os"
 	"testing"
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPublishedGeneratedContentSurvivesColdRead(t *testing.T) {
+	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
+	compressed, err := os.ReadFile("../../../harness/tests/fixtures/batch_concept_compile_830_g3/content-provenance-candidate.json.gz")
+	require.NoError(t, err)
+	reader, err := gzip.NewReader(bytes.NewReader(compressed))
+	require.NoError(t, err)
+	raw, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.NoError(t, reader.Close())
+	bundle, canonical, err := types.CanonicalBatchConceptCandidateBundle830G3(raw)
+	require.NoError(t, err)
+	members, err := bundle.SnapshotMembers()
+	require.NoError(t, err)
+	base := bundle.Request.BaseRequest
+	p := &types.WikiReleasePreparation{ID: "generated-cold-read", WikiReleaseScope: batchConceptScope830G3(bundle), Status: types.WikiReleasePreparationReady, Manifest: canonical, Members: members, CandidateDigest: bundle.CandidateHash, ManifestDigest: digestWikiReleaseBytes(canonical), ReadyReceiptDigest: bundle.ReviewResult.Execution.RawOutputHash, ReviewDecisionDigest: "reviewed", ReviewPolicyID: conceptReviewPolicyHash830G2(base.PolicyIdentity), ExpectedReleaseID: base.BaseReleaseID, ExpectedActivationEpoch: base.BaseActivationEpoch}
+	p.PreparationDigest = digestWikiReleasePreparation(p)
+	store := newPublishedBatchReadReuse830G3(sourceReuseTestCodec830G3(t))
+	require.NoError(t, store.rememberValidated(p, p.WikiReleaseScope))
+	path, err := store.artifactPath(p, p.WikiReleaseScope)
+	require.NoError(t, err)
+	frozen, err := os.ReadFile(path)
+	require.NoError(t, err)
+	metadata := *p
+	metadata.Manifest = nil
+	metadata.Members = nil
+	hot, _, err := store.read(&metadata, p.WikiReleaseScope)
+	require.NoError(t, err)
+	validations := batchPreparationValidations830G3.Load()
+	cold, gotMembers, err := newPublishedBatchReadReuse830G3(store.codec).read(&metadata, p.WikiReleaseScope)
+	require.NoError(t, err)
+	require.Equal(t, validations, batchPreparationValidations830G3.Load())
+	require.True(t, publishedBatchMemberIdentitiesEqual830G3(members, gotMembers))
+	require.Equal(t, hot.CandidateHash, cold.CandidateHash)
+	for i, page := range hot.CompileResult.Output.Pages {
+		require.Equal(t, page.ContentProvenance, cold.CompileResult.Output.Pages[i].ContentProvenance)
+		require.Equal(t, page.Evidence, cold.CompileResult.Output.Pages[i].Evidence)
+	}
+	for i, definition := range hot.CompileResult.Output.Definitions {
+		require.Equal(t, definition.ContentProvenance, cold.CompileResult.Output.Definitions[i].ContentProvenance)
+	}
+	// S7d-2b: the platform projection API is retired; the cold read itself must keep the
+	// restored generated collections as empty lists, never null.
+	wire, err := json.Marshal(cold.CompileResult.Output)
+	require.NoError(t, err)
+	require.NotContains(t, string(wire), `"evidence_indexes":null`)
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, frozen, after, "read repair must not rewrite signed artifacts")
+	var seal publishedBatchReadProjectionSeal830G3
+	require.NoError(t, json.Unmarshal(frozen, &seal))
+	seal.Signature[0] ^= 1
+	broken, err := json.Marshal(seal)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, broken, 0600))
+	_, _, err = newPublishedBatchReadReuse830G3(store.codec).read(&metadata, p.WikiReleaseScope)
+	require.Error(t, err)
+}
 
 func TestPublishedGeneratedCollectionsRequireSignedEmptyWitness(t *testing.T) {
 	generated := types.KnowledgeContentSegment{Text: "model explanation", Origin: "MODEL_GENERATED", EvidenceIndexes: []int{}}
