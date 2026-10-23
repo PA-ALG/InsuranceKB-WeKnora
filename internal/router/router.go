@@ -108,8 +108,6 @@ type RouterParams struct {
 	WikiPageHandler                *handler.WikiPageHandler
 	MemoryHandler                  *handler.MemoryHandler
 	HostSandbox                    service.HostSandboxManager
-	G3PlatformSnapshotsHandler     *handler.G3PlatformSnapshotsHandler
-	G3PlatformReleaseHandler       *handler.G3PlatformReleaseHandler
 	KnowledgeRevisionSourceHandler *handler.KnowledgeRevisionSourceHandler
 	WikiReleaseHandler             *handler.WikiReleaseHandler
 	ManagedClassifier              managed.Classifier
@@ -370,7 +368,6 @@ func NewRouter(params RouterParams) *gin.Engine {
 			params.WikiReleaseHandler,
 			rbacGuards,
 		)
-		registerConfiguredG3PlatformRoutes(v1, params, rbacGuards)
 		registerEnterpriseRoutes(v1, params, rbacGuards)
 		RegisterMemoryRoutes(v1, params.MemoryHandler, rbacGuards)
 		RegisterChunkerDebugRoutes(v1, rbacGuards)
@@ -409,14 +406,6 @@ func trustedProxies() []string {
 		}
 	}
 	return proxies
-}
-
-func registerConfiguredG3PlatformRoutes(v1 *gin.RouterGroup, params RouterParams, guards *rbacGuards) {
-	if params.SchemaWikiHandler == nil || params.WikiReleaseHandler == nil {
-		return
-	}
-	RegisterG3PlatformSnapshotRoutes(v1, params.G3PlatformSnapshotsHandler, params.SchemaWikiHandler, params.WikiReleaseHandler, guards)
-	RegisterG3PlatformReleaseRoutes(v1, params.G3PlatformReleaseHandler, params.SchemaWikiHandler, params.WikiReleaseHandler, guards)
 }
 
 func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *rbacGuards) {
