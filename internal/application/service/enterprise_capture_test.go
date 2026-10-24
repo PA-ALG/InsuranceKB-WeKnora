@@ -82,7 +82,7 @@ func convertOnce(t *testing.T, c convertCase) (*types.Knowledge, *firstParseRead
 		config: c.cfg, captureScope: c.scope, repo: &firstParseKnowledgeRepo{knowledge: k},
 		tenantService: &firstParseTenantService{}, documentReader: reader,
 		fileSvc:    &revisionSourceFileServiceStub{data: []byte("pdf")},
-		firstParse: NewG3FirstParseStore(sourceReuseTestCodec830G3(t)),
+		firstParse: NewG3FirstParseStore(captureTestKeys(t)),
 	}
 	eff := ResolveProcessConfig(kb, nil)
 	payload := types.DocumentProcessPayload{
@@ -198,7 +198,7 @@ func uploadToEnterpriseRawKB(t *testing.T, parsed *types.ReadResult) *enterprise
 	}}
 	u := &enterpriseUpload{
 		knowledge: k, repo: &firstParseKnowledgeRepo{knowledge: k}, reader: &firstParseReader{result: parsed},
-		chunks: &fencedChunks{}, store: NewG3FirstParseStore(sourceReuseTestCodec830G3(t)),
+		chunks: &fencedChunks{}, store: NewG3FirstParseStore(captureTestKeys(t)),
 	}
 	u.service = &knowledgeService{
 		config: &config.Config{}, captureScope: rawKBs{enterpriseRawKB: enterpriseTenant},
@@ -224,7 +224,7 @@ func (u *enterpriseUpload) artifact(scope types.WikiReleaseScope, attempt int64)
 	repo := &sourcePagesRepository{knowledge: &committed, revision: &types.KnowledgeRevision{
 		KnowledgeID: committed.ID, ParseAttempt: 3, FileSHA256: committed.FileSHA256,
 	}}
-	restarted := NewG3FirstParseStore(u.store.reuse.codec)
+	restarted := NewG3FirstParseStore(u.store.keys)
 	return restarted.ReadSourceArtifact(context.Background(), repo, scope, committed.ID, attempt)
 }
 
@@ -288,7 +288,7 @@ func TestEnterpriseScannedPDFCompletesWithoutCaptureOrFailure(t *testing.T) {
 	var failure *source.Error
 	require.ErrorAs(t, err, &failure)
 	require.Equal(t, source.ErrorNotCaptured, failure.Code)
-	entries, err := os.ReadDir(u.store.reuse.root)
+	entries, err := os.ReadDir(u.store.root)
 	if err == nil {
 		require.Empty(t, entries, "no first-parse record or partial file is written")
 	} else {
@@ -298,8 +298,8 @@ func TestEnterpriseScannedPDFCompletesWithoutCaptureOrFailure(t *testing.T) {
 
 func TestEnterpriseCaptureWriteFailureFailsTheDocumentBeforeChunks(t *testing.T) {
 	u := uploadToEnterpriseRawKB(t, firstParseNative(t, "平安测试两全保险\r\n保险条款"))
-	u.store.reuse.root = filepath.Join(t.TempDir(), "occupied")
-	require.NoError(t, os.WriteFile(u.store.reuse.root, []byte("not a directory"), 0o600))
+	u.store.root = filepath.Join(t.TempDir(), "occupied")
+	require.NoError(t, os.WriteFile(u.store.root, []byte("not a directory"), 0o600))
 	require.Error(t, u.service.ProcessDocument(context.Background(), u.task))
 
 	require.Len(t, u.reader.requests, 1)

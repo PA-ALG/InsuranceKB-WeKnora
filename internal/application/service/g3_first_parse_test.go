@@ -131,7 +131,7 @@ func seedFirstParseSnapshot(
 	}
 	require.NoError(
 		t,
-		(&G3FirstParseStore{reuse: authority.sourceReuse}).save(
+		firstParseStoreFor(authority).save(
 			g3FirstParseIdentityForSource(scope, repo.source),
 			result,
 			stored,
@@ -255,7 +255,7 @@ func TestG3FirstParseParserConfigAndExactChunkContent(t *testing.T) {
 
 func TestG3FirstParseStoreRejectsDriftAndWriteFailure(t *testing.T) {
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
-	store := NewG3FirstParseStore(sourceReuseTestCodec830G3(t))
+	store := NewG3FirstParseStore(captureTestKeys(t))
 	result := firstParseNative(t, "原文\r\n")
 	id := g3FirstParseIdentity{
 		TenantID:     1,
@@ -276,14 +276,14 @@ func TestG3FirstParseStoreRejectsDriftAndWriteFailure(t *testing.T) {
 	} {
 		wrong := id
 		change(&wrong)
-		_, err := store.reuse.readFirstParse(wrong)
+		_, err := store.captures().Read(wrong)
 		require.Error(t, err)
 	}
 	chunks[0].Start = 1
 	require.Error(t, store.save(id, result, chunks))
-	bad := NewG3FirstParseStore(sourceReuseTestCodec830G3(t))
-	bad.reuse.root = filepath.Join(t.TempDir(), "file")
-	require.NoError(t, os.WriteFile(bad.reuse.root, []byte("not a directory"), 0o600))
+	bad := NewG3FirstParseStore(captureTestKeys(t))
+	bad.root = filepath.Join(t.TempDir(), "file")
+	require.NoError(t, os.WriteFile(bad.root, []byte("not a directory"), 0o600))
 	chunks[0].Start = 0
 	require.Error(t, bad.save(id, result, chunks))
 }
@@ -351,7 +351,7 @@ func TestG3FirstParseActualConvertScopesParserAndReusesResult(t *testing.T) {
 		tenantService:  &firstParseTenantService{},
 		documentReader: reader,
 		fileSvc:        &revisionSourceFileServiceStub{data: []byte("pdf")},
-		firstParse:     &G3FirstParseStore{reuse: authority.sourceReuse},
+		firstParse:     firstParseStoreFor(authority),
 	}
 	eff := ResolveProcessConfig(kb, nil)
 	payload := types.DocumentProcessPayload{
@@ -392,6 +392,15 @@ func TestG3FirstParseActualConvertScopesParserAndReusesResult(t *testing.T) {
 	require.Len(t, reader.requests, 2)
 	require.Equal(t, "auto", reader.requests[1].ParserEngine)
 	require.NotContains(t, reader.requests[1].ParserEngineOverrides, "pdf_native_structure_capture")
+}
+
+// firstParseStoreFor shares a citation service's capture directory and signing keys, so captures the
+// first-parse store writes are the ones that service reads (S7d-2c-3b).
+func firstParseStoreFor(authority *ConceptSourceAuthorityService830G2) *G3FirstParseStore {
+	return &G3FirstParseStore{
+		root: authority.sourceReuse.root,
+		keys: capture.NewKeys(authority.codec.activeKeyID, authority.codec.privateKeys),
+	}
 }
 
 // seededSpanRepository is a span table shared by every connection of one test (the pipeline may
@@ -450,9 +459,9 @@ func TestG3FirstParseProcessDocumentWriteFailureClosesDocreader(t *testing.T) {
 		},
 	}
 	repo := &firstParseKnowledgeRepo{knowledge: k}
-	store := NewG3FirstParseStore(sourceReuseTestCodec830G3(t))
-	store.reuse.root = filepath.Join(t.TempDir(), "file")
-	require.NoError(t, os.WriteFile(store.reuse.root, []byte("occupied"), 0o600))
+	store := NewG3FirstParseStore(captureTestKeys(t))
+	store.root = filepath.Join(t.TempDir(), "file")
+	require.NoError(t, os.WriteFile(store.root, []byte("occupied"), 0o600))
 	reader := &firstParseReader{result: firstParseNative(t, "平安测试两全保险\r\n保险条款\r\n")}
 	s := &knowledgeService{
 		config:         &config.Config{},

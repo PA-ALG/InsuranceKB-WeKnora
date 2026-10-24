@@ -164,6 +164,7 @@ func (s *conceptSourceReuseStore830G3) firstParseStore() *capture.Store {
 	}
 	return capture.NewStore(s.root, keys)
 }
+
 func (s *conceptSourceReuseStore830G3) readFirstParse(id g3FirstParseIdentity) (*g3FirstParseRecord, error) {
 	if s == nil {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
@@ -181,12 +182,18 @@ func conceptSourceReuseKey830G3(identity types.ConceptSourceIdentity830G2, bindi
 	}
 	return testSHA256Bytes830G2(data), nil
 }
+
 func (s *conceptSourceReuseStore830G3) validateFirstParseCache(record *conceptSourceReuseRecord830G3) error {
 	return s.validateFirstParseCacheProof(record, nil)
 }
 
-func (s *conceptSourceReuseStore830G3) validateFirstParseCacheProof(record *conceptSourceReuseRecord830G3, proof *conceptSourceBindingProof830G3) error {
-	id := g3FirstParseIdentity{TenantID: record.Identity.TenantID, RawKBID: record.Identity.RawKBID, KnowledgeID: record.Identity.KnowledgeID, ParseAttempt: record.Identity.ParseAttempt, SourceSHA256: record.Identity.SourceHash}
+func (s *conceptSourceReuseStore830G3) validateFirstParseCacheProof(
+	record *conceptSourceReuseRecord830G3, proof *conceptSourceBindingProof830G3,
+) error {
+	id := g3FirstParseIdentity{
+		TenantID: record.Identity.TenantID, RawKBID: record.Identity.RawKBID, KnowledgeID: record.Identity.KnowledgeID,
+		ParseAttempt: record.Identity.ParseAttempt, SourceSHA256: record.Identity.SourceHash,
+	}
 	key, err := g3FirstParseKey(id)
 	if err != nil {
 		return err
@@ -219,8 +226,12 @@ func (s *conceptSourceReuseStore830G3) validateFirstParseCacheProof(record *conc
 	// signed first capture and its complete binding are reopened on a cache hit.
 	return g3CachedFirstParseMatches(&first, record)
 }
+
 func g3CachedFirstParseMatches(first *g3FirstParseRecord, record *conceptSourceReuseRecord830G3) error {
-	if first == nil || record == nil || record.FirstParseSHA256 != g3FirstParseRecordSHA(first) || first.ParserIdentitySHA256 != record.Identity.ParserIdentity || first.Markdown != record.Markdown || first.Native == nil || record.Native == nil || first.Native.SanitizedSHA256 != record.Native.SanitizedSHA256 || first.Native.SourceSHA256 != record.Native.SourceSHA256 {
+	if first == nil || record == nil || record.FirstParseSHA256 != g3FirstParseRecordSHA(first) ||
+		first.ParserIdentitySHA256 != record.Identity.ParserIdentity || first.Markdown != record.Markdown ||
+		first.Native == nil || record.Native == nil || first.Native.SanitizedSHA256 != record.Native.SanitizedSHA256 ||
+		first.Native.SourceSHA256 != record.Native.SourceSHA256 {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	ranges, err := g3FirstParseBindings(first, record.Chunks)

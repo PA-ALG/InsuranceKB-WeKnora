@@ -43,7 +43,7 @@ func sourcePagesFixture(
 ) (*G3FirstParseStore, *sourcePagesRepository, types.WikiReleaseScope, g3FirstParseIdentity) {
 	t.Helper()
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
-	store := NewG3FirstParseStore(sourceReuseTestCodec830G3(t))
+	store := NewG3FirstParseStore(captureTestKeys(t))
 	result := firstParseNative(t, "First\r\n𠮷", "Second\n")
 	scope := types.WikiReleaseScope{TenantID: 7, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki"}
 	id := g3FirstParseIdentity{
@@ -65,7 +65,7 @@ func sourcePagesFixture(
 
 func TestReadSourceArtifactUsesExactHistoricalAttemptAfterRestart(t *testing.T) {
 	store, repo, scope, _ := sourcePagesFixture(t)
-	restarted := NewG3FirstParseStore(store.reuse.codec)
+	restarted := NewG3FirstParseStore(store.keys)
 	a, err := restarted.ReadSourceArtifact(context.Background(), repo, scope, "source", 2)
 	require.NoError(t, err)
 	require.Equal(t, uint64(7), repo.tenant)
@@ -111,7 +111,7 @@ func TestReadSourceArtifactNeverCreatesMissingCaptureAndRejectsTampering(t *test
 	store, repo, scope, id := sourcePagesFixture(t)
 	key, err := g3FirstParseKey(id)
 	require.NoError(t, err)
-	path := filepath.Join(store.reuse.root, key+".json")
+	path := filepath.Join(store.root, key+".json")
 	require.NoError(t, os.Remove(path))
 	_, err = store.ReadSourceArtifact(context.Background(), repo, scope, "source", 2)
 	require.ErrorIs(t, err, source.ErrNotCaptured)
