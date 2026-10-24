@@ -13,10 +13,18 @@ from insurance_harness.bundle.client import Release
 from insurance_harness.changes.normalize import values_equal
 from insurance_harness.changes.types import ChangeItem, ChangeSet, Verdict
 from insurance_harness.contracts.compile import ReviewItem
-from insurance_harness.contracts.enums import ChangedBy, ClaimState, ReviewKind, ReviewStatus
+from insurance_harness.contracts.enums import (
+    ChangedBy,
+    ClaimState,
+    LocatorKind,
+    ReviewKind,
+    ReviewStatus,
+)
 from insurance_harness.contracts.knowledge import Claim, Maintenance
 
 _SOURCE_REF = re.compile(r"source:v1:([^:\s]+):[1-9][0-9]*:([a-fA-F0-9]{64})")
+# What the platform writes for an expert revision (internal/enterprise/expert, S9a §2).
+_EXPERT_REF = re.compile(r"expert:v1:[^:\s]+:([a-fA-F0-9]{64})")
 _DOCUMENT_ID = re.compile(r"[^:\s]+")
 _PUBLISH = {Verdict.ADD, Verdict.FILL, Verdict.SUPERSEDE, Verdict.REFRESH}
 
@@ -29,8 +37,15 @@ class _Base:
 
 
 def _documents(claim: Claim) -> frozenset[str]:
+    """The source documents a Claim rests on. An expert revision cites its revision record, not a
+    material, so it adds none: withdrawing materials never retracts it (S9d)."""
     documents = set()
     for evidence in claim.evidence:
+        if evidence.locator.kind == LocatorKind.EXPERT_REVISION:
+            expert = _EXPERT_REF.fullmatch(evidence.source_ref)
+            if expert is None or expert[1].lower() != evidence.file_sha256.lower():
+                raise ValueError("invalid source_ref")
+            continue
         match = _SOURCE_REF.fullmatch(evidence.source_ref)
         if match is None or match[2].lower() != evidence.file_sha256.lower():
             raise ValueError("invalid source_ref")
