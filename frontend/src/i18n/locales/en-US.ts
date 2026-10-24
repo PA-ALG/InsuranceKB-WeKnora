@@ -3218,17 +3218,7 @@ export default {
       rebuildSkip: 'You can manually trigger a rebuild later from Data Sources'
     },
     wikiBrowser: {
-      tabSchemaWiki: 'Product Schema Wiki',
       tabMaterialsWiki: 'Materials Wiki',
-      schemaLoading: 'Loading Product Schema Wiki…',
-      schemaNotCompiled: 'Not compiled yet',
-      schemaLoadFailed: 'Product Schema Wiki is temporarily unavailable',
-      schemaUnknown: 'Not provided by current materials; awaiting more sources',
-      schemaUndetermined: 'Undetermined',
-      schemaPresent: 'Confirmed',
-      schemaAbsent: 'Explicitly absent or not applicable in the source',
-      schemaCitation: 'View citation',
-      schemaCitationUnavailable: 'Citation preview is temporarily unavailable',
       failedGenerationCount: '{count} Wiki generation failures recorded. See document processing details.',
       editBtn: 'Edit',
       historyBtn: 'History',
