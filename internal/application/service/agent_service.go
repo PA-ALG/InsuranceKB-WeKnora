@@ -17,6 +17,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/mcp"
@@ -95,34 +96,34 @@ func knowledgeBaseScopesForPrompt(config *types.AgentConfig) ([]string, map[stri
 
 // agentService implements agent-related business logic
 type agentService struct {
-	publishedKnowledge            *knowledge.Service
-	chatSources                   *chatsource.Resolver
-	browserSkill                  *browserskill.Manager
-	userRepo                      interfaces.UserRepository
-	cfg                           *config.Config
-	modelService                  interfaces.ModelService
-	mcpServiceService             interfaces.MCPServiceService
-	mcpManager                    *mcp.MCPManager
-	eventBus                      *event.EventBus
-	db                            *gorm.DB
-	webSearchService              interfaces.WebSearchService
-	knowledgeBaseService          interfaces.KnowledgeBaseService
-	knowledgeService              interfaces.KnowledgeService
-	fileService                   interfaces.FileService
-	chunkService                  interfaces.ChunkService
-	duckdb                        *sql.DB
-	wikiPageService               interfaces.WikiPageService
-	tenantService                 interfaces.TenantService
-	messageService                interfaces.MessageService
-	memoryService                 interfaces.MemoryService
-	storageResolver               interfaces.StorageBackendResolver
-	toolApprovalGate              approval.MCPApproval
-	sandboxMgr                    sandbox.Manager
-	sandboxResolver               sandbox.TenantSandboxResolver
-	sandboxPinner                 *SessionSandboxPinner
-	sandboxPolicy                 WorkspaceSandboxPolicy
-	hostSandbox                   sandbox.Manager
-	conceptAgentTurnProvider830G2 interfaces.ConceptAgentTurnProvider830G2
+	publishedKnowledge   *knowledge.Service
+	chatSources          *chatsource.Resolver
+	browserSkill         *browserskill.Manager
+	userRepo             interfaces.UserRepository
+	cfg                  *config.Config
+	modelService         interfaces.ModelService
+	mcpServiceService    interfaces.MCPServiceService
+	mcpManager           *mcp.MCPManager
+	eventBus             *event.EventBus
+	db                   *gorm.DB
+	webSearchService     interfaces.WebSearchService
+	knowledgeBaseService interfaces.KnowledgeBaseService
+	knowledgeService     interfaces.KnowledgeService
+	fileService          interfaces.FileService
+	chunkService         interfaces.ChunkService
+	duckdb               *sql.DB
+	wikiPageService      interfaces.WikiPageService
+	tenantService        interfaces.TenantService
+	messageService       interfaces.MessageService
+	memoryService        interfaces.MemoryService
+	storageResolver      interfaces.StorageBackendResolver
+	toolApprovalGate     approval.MCPApproval
+	sandboxMgr           sandbox.Manager
+	sandboxResolver      sandbox.TenantSandboxResolver
+	sandboxPinner        *SessionSandboxPinner
+	sandboxPolicy        WorkspaceSandboxPolicy
+	hostSandbox          sandbox.Manager
+	managedKBs           managed.Classifier
 }
 
 // NewAgentService creates a new agent service
@@ -140,7 +141,7 @@ func NewAgentService(
 	webSearchService interfaces.WebSearchService,
 	duckdb *sql.DB,
 	wikiPageService interfaces.WikiPageService,
-	conceptAgentTurnProvider830G2 *ConceptAgentService830G2,
+	managedKBs managed.Classifier,
 	tenantService interfaces.TenantService,
 	messageService interfaces.MessageService,
 	memoryService interfaces.MemoryService,
@@ -157,34 +158,34 @@ func NewAgentService(
 	publishedKnowledge *knowledge.Service,
 ) interfaces.AgentService {
 	return &agentService{
-		publishedKnowledge:            publishedKnowledge,
-		chatSources:                   chatSources,
-		browserSkill:                  browserSkill,
-		userRepo:                      userRepo,
-		cfg:                           cfg,
-		modelService:                  modelService,
-		knowledgeBaseService:          knowledgeBaseService,
-		knowledgeService:              knowledgeService,
-		fileService:                   fileService,
-		chunkService:                  chunkService,
-		mcpServiceService:             mcpServiceService,
-		mcpManager:                    mcpManager,
-		eventBus:                      eventBus,
-		db:                            db,
-		webSearchService:              webSearchService,
-		duckdb:                        duckdb,
-		wikiPageService:               wikiPageService,
-		tenantService:                 tenantService,
-		messageService:                messageService,
-		memoryService:                 memoryService,
-		storageResolver:               storageResolver,
-		toolApprovalGate:              toolApprovalGate,
-		sandboxMgr:                    sandboxMgr,
-		sandboxResolver:               sandboxResolver,
-		sandboxPinner:                 sandboxPinner,
-		sandboxPolicy:                 sandboxPolicy,
-		hostSandbox:                   hostSandbox.Manager,
-		conceptAgentTurnProvider830G2: conceptAgentTurnProvider830G2,
+		publishedKnowledge:   publishedKnowledge,
+		chatSources:          chatSources,
+		browserSkill:         browserSkill,
+		userRepo:             userRepo,
+		cfg:                  cfg,
+		modelService:         modelService,
+		knowledgeBaseService: knowledgeBaseService,
+		knowledgeService:     knowledgeService,
+		fileService:          fileService,
+		chunkService:         chunkService,
+		mcpServiceService:    mcpServiceService,
+		mcpManager:           mcpManager,
+		eventBus:             eventBus,
+		db:                   db,
+		webSearchService:     webSearchService,
+		duckdb:               duckdb,
+		wikiPageService:      wikiPageService,
+		tenantService:        tenantService,
+		messageService:       messageService,
+		memoryService:        memoryService,
+		storageResolver:      storageResolver,
+		toolApprovalGate:     toolApprovalGate,
+		sandboxMgr:           sandboxMgr,
+		sandboxResolver:      sandboxResolver,
+		sandboxPinner:        sandboxPinner,
+		sandboxPolicy:        sandboxPolicy,
+		hostSandbox:          hostSandbox.Manager,
+		managedKBs:           managedKBs,
 	}
 }
 
@@ -999,94 +1000,30 @@ func (s *agentService) registerTools(
 	}
 
 	// ---- Capability detection from SearchTargets ----
-	var hasVectorKB bool
-	var hasGraphKB bool
-	var wikiKBIDs []string
-	resolvedKnowledgeScopes830G2 := make([]interfaces.ConceptAgentKnowledgeScope830G2, 0, len(config.SearchTargets))
-	resolvedTargets830G2 := make(map[string]*types.KnowledgeBase)
-	wikiRoutes := tools.NewWikiRouteResolver()
-	for _, target := range config.SearchTargets {
-		if target == nil || target.KnowledgeBaseID == "" {
-			continue
-		}
-		kb, err := s.knowledgeBaseService.GetKnowledgeBaseByIDOnly(ctx, target.KnowledgeBaseID)
-		if err != nil {
-			if _, _, enterprise := s.chatSources.SpaceOf(target.TenantID, target.KnowledgeBaseID); enterprise {
-				return err
-			}
-			continue
-		}
-		if kb == nil || kb.ID != target.KnowledgeBaseID || kb.TenantID == 0 ||
-			(target.TenantID != 0 && target.TenantID != kb.TenantID) {
-			return fmt.Errorf("search target tenant does not match current KB owner")
-		}
-		if _, _, enterprise := s.chatSources.SpaceOf(kb.TenantID, kb.ID); !enterprise {
-			resolvedKnowledgeScopes830G2 = append(resolvedKnowledgeScopes830G2,
-				interfaces.ConceptAgentKnowledgeScope830G2{KnowledgeBaseID: kb.ID, TenantID: kb.TenantID})
-			if kb.IsWikiEnabled() {
-				wikiKBIDs = append(wikiKBIDs, kb.ID)
-			}
-		}
-		resolvedTargets830G2[kb.ID] = kb
+	knowledgeScope, err := s.resolveAgentKnowledgeScope(ctx, config)
+	if err != nil {
+		return err
 	}
-	wikiKBIDs = dedupStrings(wikiKBIDs)
-	wikiScopes := tools.NewWikiScopesFromSearchTargets(config.SearchTargets, wikiKBIDs)
+	searchTargets := knowledgeScope.searchTargets
+	wikiRoutes := tools.NewWikiRouteResolver()
+	wikiScopes := tools.NewWikiScopesFromSearchTargets(config.SearchTargets, knowledgeScope.wikiKBIDs)
 	// Narrow to the KBs that survived scope resolution. Build a fresh slice
 	// rather than truncating in place, so the argument passed above can never
 	// be overwritten through a shared backing array.
-	scopedWikiKBIDs := make([]string, 0, len(wikiScopes))
+	wikiKBIDs := make([]string, 0, len(wikiScopes))
 	for _, scope := range wikiScopes {
-		scopedWikiKBIDs = append(scopedWikiKBIDs, scope.KnowledgeBaseID)
+		wikiKBIDs = append(wikiKBIDs, scope.KnowledgeBaseID)
 	}
-	wikiKBIDs = scopedWikiKBIDs
 	hasWikiKB := len(wikiKBIDs) > 0
-	conceptTurn830G2 := &interfaces.ConceptAgentTurn830G2{}
-	if len(resolvedKnowledgeScopes830G2) > 0 && s.conceptAgentTurnProvider830G2 == nil {
-		return fmt.Errorf("managed Wiki release service unavailable")
-	}
-	if len(resolvedKnowledgeScopes830G2) > 0 {
-		var err error
-		conceptTurn830G2, err = s.conceptAgentTurnProvider830G2.PinConceptAgentTurn830G2(
-			ctx, resolvedKnowledgeScopes830G2,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to pin managed Wiki release for Agent turn: %w", err)
-		}
-		if conceptTurn830G2 == nil {
-			return fmt.Errorf("failed to pin managed Wiki release for Agent turn: empty result")
+	var hasVectorKB, hasGraphKB bool
+	for _, target := range searchTargets {
+		kb := knowledgeScope.kbs[target.KnowledgeBaseID]
+		hasVectorKB = hasVectorKB || kb.IsVectorEnabled() || kb.IsKeywordEnabled()
+		if _, _, enterprise := s.chatSources.SpaceOf(kb.TenantID, kb.ID); !enterprise {
+			hasGraphKB = hasGraphKB || kb.IsGraphEnabled()
 		}
 	}
-	managedWikiKBs830G2 := make(map[string]struct{}, len(conceptTurn830G2.Releases))
-	managedRetrievalKBs830G2 := make(map[string]struct{}, len(conceptTurn830G2.Releases)*2)
-	for _, kbID := range conceptTurn830G2.ManagedSourceKBIDs {
-		managedRetrievalKBs830G2[kbID] = struct{}{}
-	}
-	for kbID, release := range conceptTurn830G2.Releases {
-		if kbID == "" || release.WikiKBID != kbID || release.SpaceID == "" || release.RawKBID == "" ||
-			release.ReleaseID == "" || release.ActivationEpoch == 0 {
-			return fmt.Errorf("failed to pin managed Wiki release for Agent turn: invalid release authority")
-		}
-		managedWikiKBs830G2[kbID] = struct{}{}
-		managedRetrievalKBs830G2[kbID] = struct{}{}
-		managedRetrievalKBs830G2[release.RawKBID] = struct{}{}
-	}
-	unmanagedSearchTargets830G2 := make(types.SearchTargets, 0, len(config.SearchTargets))
-	for _, target := range config.SearchTargets {
-		if target == nil || resolvedTargets830G2[target.KnowledgeBaseID] == nil {
-			continue
-		}
-		if _, managed := managedRetrievalKBs830G2[target.KnowledgeBaseID]; managed {
-			continue
-		}
-		unmanagedSearchTargets830G2 = append(unmanagedSearchTargets830G2, target)
-		if kb := resolvedTargets830G2[target.KnowledgeBaseID]; kb != nil {
-			hasVectorKB = hasVectorKB || kb.IsVectorEnabled() || kb.IsKeywordEnabled()
-			if _, _, enterprise := s.chatSources.SpaceOf(kb.TenantID, kb.ID); !enterprise {
-				hasGraphKB = hasGraphKB || kb.IsGraphEnabled()
-			}
-		}
-	}
-	otherToolTargets := chatsource.OtherToolTargets(s.chatSources, unmanagedSearchTargets830G2)
+	otherToolTargets := chatsource.OtherToolTargets(s.chatSources, searchTargets)
 	if len(otherToolTargets) == 0 {
 		for _, name := range []string{
 			tools.ToolReadDocument, tools.ToolListDocuments, tools.ToolQueryKnowledgeGraph,
@@ -1095,16 +1032,10 @@ func (s *agentService) registerTools(
 			allowedTools = withoutString(allowedTools, name)
 		}
 	}
-	unmanagedWikiKBIDs830G2 := make([]string, 0, len(wikiKBIDs))
-	for _, kbID := range wikiKBIDs {
-		if _, managed := managedWikiKBs830G2[kbID]; !managed {
-			unmanagedWikiKBIDs830G2 = append(unmanagedWikiKBIDs830G2, kbID)
-		}
-	}
 	// Search targets only need read access. Wiki mutations stay on the KBs the
 	// caller may edit, so a viewer share (or the caller's own agent pointed at
 	// one) cannot become a write path into another workspace's wiki.
-	writableWikiKBIDs := intersectStrings(unmanagedWikiKBIDs830G2, config.WritableKBIDs)
+	writableWikiKBIDs := intersectStrings(wikiKBIDs, config.WritableKBIDs)
 	if len(writableWikiKBIDs) == 0 {
 		allowedTools = withoutWikiWriteTools(allowedTools)
 	}
@@ -1225,7 +1156,7 @@ func (s *agentService) registerTools(
 		filtered := make([]string, 0, len(allowedTools))
 		dropped := make([]string, 0)
 		for _, t := range allowedTools {
-			if ragToolSet[t] || (documentToolSet[t] && len(unmanagedWikiKBIDs830G2) == 0) {
+			if ragToolSet[t] || (documentToolSet[t] && len(wikiKBIDs) == 0) {
 				dropped = append(dropped, t)
 				continue
 			}
@@ -1264,7 +1195,7 @@ func (s *agentService) registerTools(
 				s.knowledgeBaseService,
 				s.knowledgeService,
 				s.chunkService,
-				unmanagedSearchTargets830G2,
+				searchTargets,
 				rerankModel,
 				s.cfg,
 			)
@@ -1334,30 +1265,26 @@ func (s *agentService) registerTools(
 
 		// Wiki tools — only registered when wiki KBs are detected
 		case tools.ToolWikiReadPage:
-			toolToRegister = tools.NewWikiReleaseReadPageTool830G2(
-				s.wikiPageService, s.knowledgeService, wikiScopes, wikiRoutes, conceptTurn830G2,
-			)
+			toolToRegister = tools.NewWikiReadPageTool(s.wikiPageService, s.knowledgeService, wikiScopes, wikiRoutes)
 		case tools.ToolWikiSearch:
-			toolToRegister = tools.NewWikiReleaseSearchTool830G2(
-				s.wikiPageService, s.knowledgeService, wikiScopes, wikiRoutes, conceptTurn830G2,
-			)
+			toolToRegister = tools.NewWikiSearchTool(s.wikiPageService, s.knowledgeService, wikiScopes, wikiRoutes)
 		case tools.ToolWikiFlagIssue:
 			toolToRegister = tools.NewWikiFlagIssueTool(s.wikiPageService, writableWikiKBIDs, wikiRoutes).
-				WithKnowledgeScope(s.knowledgeService, unmanagedSearchTargets830G2)
+				WithKnowledgeScope(s.knowledgeService, searchTargets)
 		case tools.ToolWikiReadIssue:
-			if len(unmanagedWikiKBIDs830G2) > 0 {
-				toolToRegister = tools.NewWikiReadIssueTool(s.wikiPageService, unmanagedWikiKBIDs830G2)
+			if len(wikiKBIDs) > 0 {
+				toolToRegister = tools.NewWikiReadIssueTool(s.wikiPageService, wikiKBIDs)
 			}
 		case tools.ToolWikiUpdateIssue:
 			toolToRegister = tools.NewWikiUpdateIssueTool(s.wikiPageService, writableWikiKBIDs)
 		case tools.ToolWikiWritePage:
 			toolToRegister = tools.NewWikiWritePageTool(
 				s.wikiPageService, writableWikiKBIDs, s.knowledgeService, wikiRoutes,
-			).WithSearchTargets(unmanagedSearchTargets830G2)
+			).WithSearchTargets(searchTargets)
 		case tools.ToolWikiReplaceText:
 			toolToRegister = tools.NewWikiReplaceTextTool(
 				s.wikiPageService, writableWikiKBIDs, s.knowledgeService, wikiRoutes,
-			).WithSearchTargets(unmanagedSearchTargets830G2)
+			).WithSearchTargets(searchTargets)
 		case tools.ToolWikiRenamePage:
 			toolToRegister = tools.NewWikiRenamePageTool(s.wikiPageService, writableWikiKBIDs, wikiRoutes)
 		case tools.ToolWikiDeletePage:
@@ -1788,4 +1715,67 @@ func (s *agentService) resolvePinnedSkillInfos(config *types.AgentConfig) []*age
 		})
 	}
 	return result
+}
+
+// agentKnowledgeScope is what one Agent turn may search (S7d-2c-3a).
+type agentKnowledgeScope struct {
+	// searchTargets are the configured targets of unmanaged knowledge bases and of enterprise
+	// Spaces; chatsource narrows the enterprise ones to the materials of their pinned release.
+	searchTargets types.SearchTargets
+	// wikiKBIDs are the unmanaged, non-enterprise knowledge bases with the native wiki on.
+	wikiKBIDs []string
+	// excluded are the managed non-enterprise knowledge bases left out of the turn.
+	excluded []string
+	kbs      map[string]*types.KnowledgeBase
+}
+
+// resolveAgentKnowledgeScope resolves the configured targets of one turn. Enterprise Spaces keep
+// their own path. Any other knowledge base under release custody (an old release Head or its RAW
+// KB) is left out rather than read natively, and a custody that cannot be confirmed fails the turn.
+func (s *agentService) resolveAgentKnowledgeScope(
+	ctx context.Context, config *types.AgentConfig,
+) (agentKnowledgeScope, error) {
+	scope := agentKnowledgeScope{kbs: map[string]*types.KnowledgeBase{}}
+	excluded := map[string]bool{}
+	var wikiKBIDs []string
+	for _, target := range config.SearchTargets {
+		if target == nil || target.KnowledgeBaseID == "" {
+			continue
+		}
+		kb, err := s.knowledgeBaseService.GetKnowledgeBaseByIDOnly(ctx, target.KnowledgeBaseID)
+		if err != nil {
+			if _, _, enterprise := s.chatSources.SpaceOf(target.TenantID, target.KnowledgeBaseID); enterprise {
+				return scope, err
+			}
+			continue
+		}
+		if kb == nil || kb.ID != target.KnowledgeBaseID || kb.TenantID == 0 ||
+			(target.TenantID != 0 && target.TenantID != kb.TenantID) {
+			return scope, fmt.Errorf("search target tenant does not match current KB owner")
+		}
+		if _, known := scope.kbs[kb.ID]; !known && !excluded[kb.ID] {
+			if _, _, enterprise := s.chatSources.SpaceOf(kb.TenantID, kb.ID); !enterprise {
+				custody, err := managed.LookupCustody(ctx, s.managedKBs, kb.TenantID, kb.ID)
+				if err != nil {
+					return scope, fmt.Errorf("knowledge base custody unavailable for Agent turn: %w", err)
+				}
+				if custody.Managed {
+					excluded[kb.ID] = true
+					scope.excluded = append(scope.excluded, kb.ID)
+					logger.Infof(ctx, "Agent turn leaves out release-managed knowledge base %s", kb.ID)
+					continue
+				}
+				if kb.IsWikiEnabled() {
+					wikiKBIDs = append(wikiKBIDs, kb.ID)
+				}
+			}
+			scope.kbs[kb.ID] = kb
+		}
+		if excluded[kb.ID] {
+			continue
+		}
+		scope.searchTargets = append(scope.searchTargets, target)
+	}
+	scope.wikiKBIDs = dedupStrings(wikiKBIDs)
+	return scope, nil
 }

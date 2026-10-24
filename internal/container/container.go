@@ -69,7 +69,6 @@ import (
 	notionConnector "github.com/Tencent/WeKnora/internal/datasource/connector/notion"
 	rssConnector "github.com/Tencent/WeKnora/internal/datasource/connector/rss"
 	yuqueConnector "github.com/Tencent/WeKnora/internal/datasource/connector/yuque"
-	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
 	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/enterprise/mcptools"
@@ -324,12 +323,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 		return options, err
 	}))
 	must(container.Provide(service.NewWikiReleaseService))
-	must(container.Provide(service.NewConceptAgentService830G2))
-	must(container.Decorate(func(
-		s *service.ConceptAgentService830G2, classifier managed.Classifier, sources *chatsource.Resolver,
-	) *service.ConceptAgentService830G2 {
-		return s.WithManagedClassifier(classifier).WithChatSourceResolver(sources)
-	}))
 	must(container.Provide(func() (*repository.SchemaWikiFormalCandidatePreviewRegistry, error) {
 		return repository.NewSchemaWikiFormalCandidatePreviewRegistry(
 			os.Getenv("WEKNORA_SCHEMA_WIKI_C5_INPUT_MANIFEST"),

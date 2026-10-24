@@ -10,7 +10,6 @@ import (
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/sandbox"
 	"github.com/Tencent/WeKnora/internal/types"
-	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,10 +26,10 @@ func TestBrowserSourceKeepsOtherConfiguredTools(t *testing.T) {
 	kb := &types.KnowledgeBase{ID: "kb", TenantID: 7}
 	kb.IndexingStrategy.VectorEnabled = true
 	svc := &agentService{
-		conceptAgentTurnProvider830G2: &conceptAgentTurnProviderStub830G2{turn: &interfaces.ConceptAgentTurn830G2{}},
-		browserSkill:                  browserskill.NewManager(),
-		knowledgeBaseService:          &browserSourceKBService{fakeAgentKnowledgeBaseService{kb: kb}},
-		knowledgeService:              &fakeAgentKnowledgeService{},
+		managedKBs:           unmanagedKBs{},
+		browserSkill:         browserskill.NewManager(),
+		knowledgeBaseService: &browserSourceKBService{fakeAgentKnowledgeBaseService{kb: kb}},
+		knowledgeService:     &fakeAgentKnowledgeService{},
 		sandboxResolver: stubSandboxResolver{mgr: &capableManager{
 			typ: sandbox.SandboxTypeCube, shell: &stubShellExecutor{}, files: stubSessionFileStore{},
 		}},
