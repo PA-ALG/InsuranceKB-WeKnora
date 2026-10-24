@@ -69,8 +69,9 @@ func TestManagedKnowledgeBasesAreLeftOutOfTheTurn(t *testing.T) {
 
 	scope, err := svc.resolveAgentKnowledgeScope(ctx, scopeTargets("legacy-wiki", "legacy-raw", "plain", "q-wiki"))
 	require.NoError(t, err)
-	require.Equal(t, []string{"plain"}, targetIDs(scope.searchTargets))
-	require.Equal(t, []string{"plain"}, scope.wikiKBIDs)
+	require.Equal(t, []string{"plain", "q-wiki"}, targetIDs(scope.searchTargets),
+		"enterprise targets stay for the enterprise path, which pins its own release")
+	require.Equal(t, []string{"plain"}, scope.wikiKBIDs, "native wiki tools never reach an enterprise Space")
 	require.ElementsMatch(t, []string{"legacy-wiki", "legacy-raw"}, scope.excluded)
 	require.NotContains(t, classifier.asked, "q-wiki", "an enterprise Space is never classified here")
 }
@@ -89,7 +90,7 @@ func TestEnterpriseOnlyTurnsNeedNoClassifier(t *testing.T) {
 	ctx, svc := scopeService(nil)
 	scope, err := svc.resolveAgentKnowledgeScope(ctx, scopeTargets("q-wiki", "q-raw"))
 	require.NoError(t, err)
-	require.Empty(t, scope.searchTargets)
+	require.Equal(t, []string{"q-wiki", "q-raw"}, targetIDs(scope.searchTargets))
 	require.Empty(t, scope.wikiKBIDs)
 	require.Empty(t, scope.excluded)
 }
