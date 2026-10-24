@@ -87,6 +87,9 @@ GONE = (
     "EntityPageGraph",
     "release-scopes",
 )
+# The citation-token signing ring outlives the family: enterprise capture keys (S7d-2c-3b) and
+# releasestore decode it. Its name is the one SchemaWiki token the wiring may still carry.
+KEPT_NAMES = ("DecodeSchemaWikiCitationTokenSigningRing",)
 KEPT = (
     "internal/application/repository/wiki_release.go",
     "internal/types/wiki_release.go",
@@ -105,6 +108,8 @@ def test_the_family_files_are_gone() -> None:
 def test_routing_and_wiring_no_longer_name_the_family() -> None:
     for rel in WIRED:
         source = _read(rel)
+        for kept in KEPT_NAMES:
+            source = source.replace(kept, "")
         assert [name for name in GONE if name in source] == [], rel
 
 

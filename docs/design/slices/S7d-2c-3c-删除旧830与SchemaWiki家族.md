@@ -57,7 +57,7 @@
 **`tests/architecture/test_legacy_schema_wiki_family_retired.py`**：
 
 1. §2 列出的非测试文件都不存在；
-2. `router.go`、`routes_knowledge.go`、`container.go` 不再出现 `SchemaWiki`、`WikiReleaseService`、`ConceptSourceAuthority`、`ConceptFreeWiki`、`EntityPageGraph`、`release-scopes`；
+2. `router.go`、`routes_knowledge.go`、`container.go` 不再出现 `SchemaWiki`、`WikiReleaseService`、`ConceptSourceAuthority`、`ConceptFreeWiki`、`EntityPageGraph`、`release-scopes`；保留的签名密钥环解码函数 `DecodeSchemaWikiCitationTokenSigningRing` 除外（采集密钥与 `releasestore` 在用）；
 3. `g3_first_parse.go` 不再出现 `830`；
 4. 保留项仍在：`repository/wiki_release.go`、`types/wiki_release.go`、字段目录 JSON。
 
