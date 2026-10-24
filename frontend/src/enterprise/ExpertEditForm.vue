@@ -55,6 +55,20 @@ const changed = computed(() => state.value !== currentState.value
 const ready = computed(() => !busy.value && member.value !== undefined && reason.value.trim() !== ''
   && reasonLength.value <= MAX_REASON && (state.value !== 'present' || value.value.trim() !== '') && changed.value)
 
+// The first condition that keeps saving unavailable, in the order the form is filled (S9c). The
+// button stays the authority; this only says what it is waiting for.
+const missing = computed(() => {
+  if (busy.value || member.value === undefined) return ''
+  if (state.value !== 'present' && state.value === currentState.value) {
+    return t('enterpriseKnowledge.expert.missing.sameState', { present: t('enterpriseKnowledge.expert.statePresent') })
+  }
+  if (state.value === 'present' && value.value.trim() === '') return t('enterpriseKnowledge.expert.missing.valueEmpty')
+  if (!changed.value) return t('enterpriseKnowledge.expert.missing.valueSame')
+  if (reason.value.trim() === '') return t('enterpriseKnowledge.expert.missing.reasonEmpty')
+  if (reasonLength.value > MAX_REASON) return t('enterpriseKnowledge.expert.missing.reasonTooLong', { max: MAX_REASON })
+  return ''
+})
+
 const states = computed(() => [
   { value: 'present' as const, label: t('enterpriseKnowledge.expert.statePresent') },
   { value: 'absent_explicitly' as const, label: stateLabel(t, 'absent_explicitly') },
@@ -120,6 +134,7 @@ async function save() {
         {{ t('enterpriseKnowledge.expert.cancel') }}
       </button>
     </div>
+    <p v-if="missing" data-missing class="ek-page__meta" aria-live="polite">{{ missing }}</p>
   </form>
 </template>
 
