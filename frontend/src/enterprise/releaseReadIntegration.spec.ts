@@ -30,33 +30,33 @@ describe('release read integration', () => {
     })()
     expect(getWikiStats).not.toHaveBeenCalled()
   })
-  it('passes the event authority to the drawer from citation clicks', async () => {
-    const pin = { wiki_kb_id: 'wiki', release_id: 'release', space_id: 'space', raw_kb_id: 'raw' }
-    const events = [{ tool_data: { release_authorities: [pin] } }]
-    const open = vi.fn(); const resolve = vi.fn().mockReturnValue(pin)
-    await action(agentStream, 'openWikiDrawer', {
-      props: { session: { agentEventStream: events } }, resolveWikiReleaseAuthority: resolve,
-      wikiDrawer: { open }, MessagePlugin: { warning: vi.fn() },
-    })('wiki', 'slug')
-    expect(resolve).toHaveBeenCalledWith(events, 'wiki', 'slug'); expect(open).toHaveBeenCalledWith('wiki', 'slug', pin)
-  })
-  it('clears a previous drawer when a release authority cannot be resolved', async () => {
+  it('refuses a pinned citation without a request and clears a previous drawer', async () => {
+    const events = [{ tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: [] } }]
     const drawer = { open: vi.fn(), visible: { value: true } }; const warning = vi.fn()
+    const pinned = vi.fn().mockReturnValue(true)
     await action(agentStream, 'openWikiDrawer', {
-      props: { session: { agentEventStream: [] } }, resolveWikiReleaseAuthority: () => { throw new Error('invalid') },
+      props: { session: { agentEventStream: events } }, citesPinnedRelease: pinned,
       wikiDrawer: drawer, MessagePlugin: { warning },
     })('wiki', 'slug')
+    expect(pinned).toHaveBeenCalledWith(events, 'slug')
     expect(drawer.open).not.toHaveBeenCalled(); expect(drawer.visible.value).toBe(false)
     expect(warning).toHaveBeenCalledWith('该引用来自旧版本，请重新提问')
   })
-  it('prefers the release citation KB to a surrounding KB route', () => {
-    const events = [{ tool_data: {} }]
-    expect(action(agentStream, 'getKbIdForWiki', {
-      props: { session: { agentEventStream: events } }, route: { params: { kbId: 'unrelated' } },
-      resolveReleaseCitationKb: vi.fn().mockReturnValue('release-wiki'),
-    })('slug')).toBe('release-wiki')
+  it('opens a current citation in the cited KB', async () => {
+    const open = vi.fn(); const warning = vi.fn()
+    await action(agentStream, 'openWikiDrawer', {
+      props: { session: { agentEventStream: [] } }, citesPinnedRelease: () => false,
+      wikiDrawer: { open, visible: { value: false } }, MessagePlugin: { warning },
+    })('wiki', 'slug')
+    expect(open).toHaveBeenCalledWith('wiki', 'slug'); expect(warning).not.toHaveBeenCalled()
   })
-  it('retains the existing pin when clicking an internal wiki link', () => {
+  it('resolves the wiki KB from the route first, as upstream does', () => {
+    const events = [{ tool_data: { found_kbs: { slug: ['found'] } } }]
+    expect(action(agentStream, 'getKbIdForWiki', {
+      props: { session: { agentEventStream: events } }, route: { params: { kbId: 'route' } },
+    })('slug')).toBe('route')
+  })
+  it('follows internal wiki links inside the drawer', () => {
     const follow = vi.fn(); const link = document.createElement('a')
     link.className = 'citation-wiki'; link.dataset.slug = 'next'
     action(agentStream, 'handleWikiDrawerClick', { wikiDrawer: { follow } })({

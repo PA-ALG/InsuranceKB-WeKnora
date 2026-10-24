@@ -4,8 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/utils/request', () => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn() }))
 import { get } from '@/utils/request'
 import { useReleaseCustody } from './useReleaseCustody'
-import { getReleaseWikiPage } from '@/api/wiki'
-import { resolveReleaseCitationKb, resolveWikiReleaseAuthority, useReleaseWikiDrawer } from './useReleaseWikiDrawer'
+import { citesPinnedRelease, useReleaseWikiDrawer } from './useReleaseWikiDrawer'
 const scopes: ReturnType<typeof effectScope>[] = []
 function scoped<T>(fn: () => T): T { const scope = effectScope(); scopes.push(scope); return scope.run(fn)! }
 function deferred<T>() {
@@ -13,6 +12,7 @@ function deferred<T>() {
   const promise = new Promise<T>(yes => { resolve = yes }); return { promise, resolve }
 }
 const authority = { wiki_kb_id: 'wiki', space_id: 'space', raw_kb_id: 'raw', release_id: 'release-one' }
+const requested = () => vi.mocked(get).mock.calls.map(call => String(call[0]))
 afterEach(() => { scopes.splice(0).forEach(scope => scope.stop()); vi.resetAllMocks() })
 describe('release custody', () => {
   it('hides native tabs while loading, then redirects managed graph entry to documents', async () => {
@@ -49,75 +49,48 @@ describe('release custody', () => {
   })
 })
 describe('release wiki citations', () => {
-  it('encodes scope and logical slug in the release read URL', async () => {
-    vi.mocked(get).mockResolvedValue({} as any)
-    await getReleaseWikiPage({ ...authority, space_id: 'space ?' }, 'concept:保障')
-    expect(get).toHaveBeenCalledWith('/api/v1/knowledgebase/wiki/wiki/release-scopes/space%20%3F/raw/raw/releases/release-one/pages/concept%3A%E4%BF%9D%E9%9A%9C')
+  it('treats a citation found by an old pinned tool result as pinned, whatever the authorities hold', () => {
+    for (const authorities of [[authority], [], {}, null]) {
+      const events = [{ tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: authorities } }]
+      expect(citesPinnedRelease(events, 'slug')).toBe(true)
+    }
   })
-  it('uses the KB from the release citation even when the surrounding route names another KB', () => {
-    const events = [{ tool_data: { found_kbs: { slug: ['managed', 'native'] },
-      release_authorities: [{ ...authority, wiki_kb_id: 'managed' }] } }]
-    expect(resolveReleaseCitationKb(events, 'slug')).toBe('managed')
-    expect(resolveReleaseCitationKb(events, 'unrelated')).toBe('')
+  it('lets the latest event that found the slug decide', () => {
+    const pinned = { tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: [authority] } }
+    const native = { tool_data: { found_kbs: { slug: 'wiki' } } }
+    expect(citesPinnedRelease([pinned, native], 'slug')).toBe(false)
+    expect(citesPinnedRelease([native, pinned], 'slug')).toBe(true)
   })
-  it('does not relabel a native result when a managed KB shares the same slug', () => {
-    const events = [{ tool_data: { found_kbs: { slug: ['native', 'wiki'] }, release_authorities: [authority] } }]
-    expect(resolveReleaseCitationKb(events, 'slug')).toBe('')
+  it('refuses a citation no event found when the session holds pinned results', () => {
+    const pinned = { tool_data: { found_kbs: { other: ['wiki'] }, release_authorities: [authority] } }
+    expect(citesPinnedRelease([pinned], 'slug')).toBe(true)
+    expect(citesPinnedRelease([{ tool_data: { found_kbs: { other: ['wiki'] } } }], 'slug')).toBe(false)
+    expect(citesPinnedRelease([], 'slug')).toBe(false)
   })
-  it('does not substitute an older release result for the latest native result', () => {
-    const events = [
-      { tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: [authority] } },
-      { tool_data: { found_kbs: { slug: ['native'] } } },
-    ]
-    expect(resolveReleaseCitationKb(events, 'slug')).toBe('')
-  })
-  it('resolves no pin when the latest citation-producing event is native', () => {
-    const events = [
-      { tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: [authority] } },
-      { tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: [] } },
-    ]
-    expect(resolveWikiReleaseAuthority(events, 'wiki', 'slug')).toBeNull()
-  })
-  it('selects the authority for the cited KB from tool results' , () => {
-    const events = [{ type: 'tool_call', tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: [authority] } }]
-    expect(resolveWikiReleaseAuthority(events, 'wiki', 'slug')).toEqual(authority)
-    expect(resolveWikiReleaseAuthority(events, 'native', 'slug')).toBeNull()
-    expect(() => resolveWikiReleaseAuthority([{ tool_data: { release_authorities: [{ wiki_kb_id: 'wiki' }] } }], 'wiki', 'slug')).toThrow()
-  })
-  it('fails closed when a citation-producing result carries malformed authorities', () => {
-    const events = [{ tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: {} } }]
-    expect(() => resolveWikiReleaseAuthority(events, 'wiki', 'slug')).toThrow()
-  })
-  it('reads published snapshot content and preserves the pin through internal links', async () => {
-    vi.mocked(get).mockResolvedValue({ data: { logical_slug: 'slug', kind: 'concept', title: 'Published', content: '[[next]]' } } as any)
-    const drawer = scoped(() => useReleaseWikiDrawer()); await drawer.open('wiki', 'slug', authority)
-    expect(drawer.page.value).toMatchObject({ slug: 'slug', page_type: 'concept', title: 'Published' })
+  it('reads native pages and keeps the KB through internal links', async () => {
+    vi.mocked(get).mockResolvedValue({ data: { slug: 'slug', page_type: 'concept', title: 'Native', content: '[[next]]' } } as any)
+    const drawer = scoped(() => useReleaseWikiDrawer()); await drawer.open('wiki', 'slug')
+    expect(drawer.page.value).toMatchObject({ slug: 'slug', page_type: 'concept', title: 'Native' })
     await drawer.follow('next')
-    expect(get).toHaveBeenLastCalledWith('/api/v1/knowledgebase/wiki/wiki/release-scopes/space/raw/raw/releases/release-one/pages/next')
-    expect(drawer.authority.value).toEqual(authority)
+    expect(requested()).toEqual(['/api/v1/knowledgebase/wiki/wiki/pages/slug', '/api/v1/knowledgebase/wiki/wiki/pages/next'])
   })
-  it.each([404, 409])('shows old-version message for %s without native fallback', async (status) => {
-    vi.mocked(get).mockRejectedValue({ status })
-    const drawer = scoped(() => useReleaseWikiDrawer()); await drawer.open('wiki', 'slug', authority)
-    expect(drawer.error.value).toBe('该引用来自旧版本，请重新提问')
-    expect(drawer.page.value).toBeNull(); expect(get).toHaveBeenCalledTimes(1); expect(drawer.visible.value).toBe(true)
-  })
-  it('preserves native reads and prevents older responses overwriting a later citation', async () => {
+  it('prevents older responses overwriting a later citation', async () => {
     const first = deferred<any>(); const second = deferred<any>()
     vi.mocked(get).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
     const drawer = scoped(() => useReleaseWikiDrawer())
-    const pending = drawer.open('wiki', 'old', authority); const latest = drawer.open('native', 'new')
+    const pending = drawer.open('wiki', 'old'); const latest = drawer.open('native', 'new')
     second.resolve({ data: { slug: 'new', title: 'New', content: '' } }); await latest
-    first.resolve({ data: { logical_slug: 'old', title: 'Old', content: '' } }); await pending
-    expect(drawer.page.value?.title).toBe('New'); expect(drawer.authority.value).toBeNull()
+    first.resolve({ data: { slug: 'old', title: 'Old', content: '' } }); await pending
+    expect(drawer.page.value?.title).toBe('New')
     expect(get).toHaveBeenLastCalledWith('/api/v1/knowledgebase/native/wiki/pages/new')
   })
-  it('clears previous content on failure and allows retry with the same pin', async () => {
-    vi.mocked(get).mockResolvedValueOnce({ data: { logical_slug: 'first', kind: 'concept', title: 'First', content: '' } } as any)
-      .mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce({ data: { logical_slug: 'next', kind: 'concept', title: 'Next', content: '' } } as any)
-    const drawer = scoped(() => useReleaseWikiDrawer()); await drawer.open('wiki', 'first', authority)
-    await drawer.follow('next'); expect(drawer.page.value).toBeNull(); expect(drawer.error.value).toBeTruthy()
+  it.each([404, 409, 503])('clears previous content on a %s failure and allows retry', async (status) => {
+    vi.mocked(get).mockResolvedValueOnce({ data: { slug: 'first', title: 'First', content: '' } } as any)
+      .mockRejectedValueOnce({ status }).mockResolvedValueOnce({ data: { slug: 'next', title: 'Next', content: '' } } as any)
+    const drawer = scoped(() => useReleaseWikiDrawer()); await drawer.open('wiki', 'first')
+    await drawer.follow('next'); expect(drawer.page.value).toBeNull()
+    expect(drawer.error.value).toBe('引用内容加载失败，请重试'); expect(drawer.visible.value).toBe(true)
     await drawer.retry(); expect(drawer.page.value?.title).toBe('Next')
-    expect(get).toHaveBeenLastCalledWith('/api/v1/knowledgebase/wiki/wiki/release-scopes/space/raw/raw/releases/release-one/pages/next')
+    expect(requested().filter(url => url.includes('release-scopes'))).toEqual([])
   })
 })
