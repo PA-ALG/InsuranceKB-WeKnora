@@ -27,10 +27,10 @@ from typing import Any, NoReturn
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.contracts import NavigationProfile
 
 _REPO = Path(__file__).resolve().parents[4]
-CATALOG = _REPO / "internal/handler/schema_pack_catalog_830_g3.generated.json"
 NAVIGATION = Path(__file__).with_name("navigation.json")
 
 
@@ -148,7 +148,7 @@ class _Parser(argparse.ArgumentParser):
 def main(argv: list[str] | None = None, *, navigation: Path = NAVIGATION) -> int:
     try:
         parser = _Parser(description=__doc__)
-        parser.add_argument("--catalog", type=Path, default=CATALOG)
+        parser.add_argument("--catalog", type=Path, default=_REPO / SCHEMA_PACK_CATALOG)
         parser.add_argument("--version")
         parser.add_argument("--check", action="store_true")
         args = parser.parse_args(argv)

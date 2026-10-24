@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from insurance_harness.bundle.assemble import BundleError, assemble
 from insurance_harness.bundle.client import DecisionInput, PlatformClient, PlatformError, Release
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.navigation import NavigationError, load_navigation
 from insurance_harness.catalog.spot_check import SpotCheckPolicyError, load_spot_check_policy
 from insurance_harness.changes import decide_changes
@@ -47,7 +48,6 @@ from insurance_harness.review.routing import Route, Scores, labelled
 from insurance_harness.review.spot_check import sample
 
 REPO = Path(__file__).resolve().parents[5]
-CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 
 
 def delta_bundle(
@@ -118,7 +118,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         version = require_cards_version(output)
         name = display_name(source_directory(args.repo, args.product))
-        page = product_page(args.repo / CATALOG, output.pack_id, entity_id=args.product, name=name)
+        page = product_page(
+            args.repo / SCHEMA_PACK_CATALOG, output.pack_id, entity_id=args.product, name=name
+        )
         navigation = load_navigation()
         source_map = load_source_map(args.source_map)
         # An explicit empty current material set withdraws sourced Claims. A missing product

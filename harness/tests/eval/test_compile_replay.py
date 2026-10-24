@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
 from insurance_harness.eval import product_sources
 from insurance_harness.eval.compile_run import ProductRun, compile_products, main, prior_sends
@@ -51,7 +52,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, texts: dict[str, str])
         for key in ("waiting_period", "cooling_off_period")
     ]
     write_json(
-        root / "internal/handler/schema_pack_catalog_830_g3.generated.json",
+        root / SCHEMA_PACK_CATALOG,
         {"entries": [{"pack": {"schema_pack_id": "pack-a", "fields": fields}}]},
     )
 

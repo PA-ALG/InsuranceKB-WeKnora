@@ -11,6 +11,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.engine import (
     CompileError,
     CompileOutput,
@@ -69,7 +70,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         for key in QUOTES
     ] + [{"field_key": "marketing_tagline", "short_title": "宣传语", "description": "宣传语",
           "formation_method": "LLM生成"}]
-    write_json(root / "internal/handler/schema_pack_catalog_830_g3.generated.json", {
+    write_json(root / SCHEMA_PACK_CATALOG, {
         "entries": [{"pack": {"schema_pack_id": "pack-a", "fields": fields}}],
     })
 

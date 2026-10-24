@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import SchemaFieldsCompiler, to_candidate
 from insurance_harness.eval.convert import predictions_from_candidate
@@ -61,7 +62,7 @@ def test_repository_golden_replay_without_network(monkeypatch: pytest.MonkeyPatc
     definitions = [
         field
         for field in pack_definitions(
-            ROOT / "internal/handler/schema_pack_catalog_830_g3.generated.json",
+            ROOT / SCHEMA_PACK_CATALOG,
             recording.pack_id,
         )
         if field.field_key in recording.field_keys

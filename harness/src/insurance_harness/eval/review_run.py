@@ -50,6 +50,7 @@ from typing import Annotated, Any, NoReturn
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.compilers.schema_fields.review_items import review_items
@@ -76,7 +77,6 @@ from insurance_harness.review.scorer import (
     score_items,
 )
 
-_CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _NUMBER = re.compile(r"[0-9]+")
 
@@ -259,7 +259,7 @@ def _review_product(
     output = _output(compile_roots, product)
     try:
         definitions = pack_definitions(
-            repo / _CATALOG, output.pack_id, only_source_extractable=False
+            repo / SCHEMA_PACK_CATALOG, output.pack_id, only_source_extractable=False
         )
         items = review_items(output, {d.field_key: d for d in definitions})
     except (OSError, ValueError):

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.eval.catalog import load_catalog
 from insurance_harness.eval.judge import (
     AnnotationResult,
@@ -25,7 +26,7 @@ from insurance_harness.eval.judge_files import FileJudgeClient, write_requests
 from insurance_harness.eval.pdf_text import PageText
 
 REPO = Path(__file__).resolve().parents[3]
-CATALOG = REPO / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = REPO / SCHEMA_PACK_CATALOG
 PACK = "schemapack_medical_insurance"
 SHA = "c" * 64
 PAGES = [PageText(document="保险条款.pdf", document_sha256=SHA, page=3, text="等待期为90日。")]

@@ -1,7 +1,7 @@
 {
  "basis": "S4d Spec §3.5: pointer labels on pdfium segments, field cards as the annotation standard, one independent judge session per product, audited by Claude (Issue #157)",
  "cards_version": "draft-2026-10-15f",
- "catalog_file": "internal/handler/schema_pack_catalog_830_g3.generated.json",
+ "catalog_file": "harness/src/insurance_harness/catalog/schema_packs.json",
  "catalog_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
  "catalog_version": "2026-08-12-v5",
  "dataset_version": "v2",

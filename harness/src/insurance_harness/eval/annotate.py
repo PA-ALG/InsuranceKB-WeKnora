@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.changes.normalize import values_equal
 from insurance_harness.eval.catalog import load_catalog
 from insurance_harness.eval.equivalence import (
@@ -45,7 +46,6 @@ _RULES = '''# 保险条款离线评委
 4. 引文必须从所在页原文逐字复制，核对它确实在你声明的 [page N] 之下；没有依据就答 unknown。
 5. 不修改 requests/、run.json 与本文件。
 '''
-_CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 _EQUIVALENCE_RULES = '''# 语义等价独立评委
 
 只读本等价题根目录及其各产品子目录，不打开标注目录、PDF 或其他路径，不联网。
@@ -120,7 +120,7 @@ def prepare(
     # The approved calibration reference is intentionally fixed by the slice protocol.
     if product_id != "596":
         _calibration(run_root)
-    catalog = load_catalog(repo / _CATALOG)
+    catalog = load_catalog(repo / SCHEMA_PACK_CATALOG)
     pack_id = declared_pack(repo, product_id, pack_id)
     fields = list(catalog.source_extractable_fields(pack_id))
     directory = source_directory(repo, product_id, source_dir)
@@ -267,7 +267,7 @@ def ingest(
         raise ValueError("run identity or prompt version changed")
     if not calibrate_only:
         _calibration(run_root, judge_model)
-    catalog = load_catalog(repo / _CATALOG)
+    catalog = load_catalog(repo / SCHEMA_PACK_CATALOG)
     if run.field_keys != list(catalog.source_extractable_fields(run.pack_id)):
         raise ValueError("run fields changed")
     directory = source_directory(repo, product_id, repo / run.source_directory)

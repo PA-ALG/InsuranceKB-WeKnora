@@ -16,6 +16,7 @@ import pytest
 
 from insurance_harness.bundle.canonical import member_digest
 from insurance_harness.bundle.client import PlatformClient
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields import publish as command
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.eval.pdf_text import PageText
@@ -27,7 +28,7 @@ PAGES = [
     PageText("保险条款.pdf", SHA, 1, "1.4 等待期\n自本合同生效之日起90日内为等待期。\n阅读指引\n")
 ]
 SOURCE = SegmentedSource(PAGES)
-CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = SCHEMA_PACK_CATALOG
 CATALOG_ENTRY = {
     "pack": {
         "schema_pack_id": "pack",

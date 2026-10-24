@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields import publish
 from insurance_harness.compilers.schema_fields.claims import claims_from
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
@@ -31,7 +32,7 @@ from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.models import CallLedger, OpenAICompatibleCompletion, StageModelConfig
 from insurance_harness.review.routing import Route, Scores, route
 
-CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = SCHEMA_PACK_CATALOG
 SERVED = "example-flash-0917"
 
 

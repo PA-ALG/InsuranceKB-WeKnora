@@ -12,12 +12,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.navigation import load_navigation
 from insurance_harness.contracts import NavigationProfile
 from insurance_harness.contracts.export import export
 
 REPO = Path(__file__).resolve().parents[3]
-CATALOG = REPO / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = REPO / SCHEMA_PACK_CATALOG
 
 DOMAIN = {"domain_key": "product", "display_name": "产品库", "entity_types": ["insurance_product"]}
 

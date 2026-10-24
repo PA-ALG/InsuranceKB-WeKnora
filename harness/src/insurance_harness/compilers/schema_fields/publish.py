@@ -38,6 +38,7 @@ from insurance_harness.bundle.client import (
     Release,
     publish,
 )
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.navigation import NavigationError, load_navigation
 from insurance_harness.catalog.spot_check import (
     SpotCheckPolicy,
@@ -77,7 +78,6 @@ from insurance_harness.review.spot_check import sample
 __all__ = ["main", "_ScoresFile"]
 
 REPO = Path(__file__).resolve().parents[5]
-CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         return _stop("PRODUCT_META_MISSING")
     try:
         page = product_page(
-            args.repo / CATALOG, output.pack_id, entity_id=output.entity_id, name=name
+            args.repo / SCHEMA_PACK_CATALOG, output.pack_id, entity_id=output.entity_id, name=name
         )
     except BundleError as error:
         return _stop("BUNDLE_INVALID", reason=error.reason)

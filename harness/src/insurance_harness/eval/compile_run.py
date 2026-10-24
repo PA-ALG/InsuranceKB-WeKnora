@@ -27,6 +27,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
 from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
@@ -83,7 +84,6 @@ __all__ = [
     "write_candidate",
 ]
 
-_CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
 _MATERIAL = re.compile(r"(?:file|[A-Za-z0-9][A-Za-z0-9_-]{0,127}:[1-9][0-9]*):[0-9a-f]{64}")
 RevisionPageSource = Callable[[str], tuple[TrustedPages[PageText], Mapping[str, SourceRevision]]]
 
@@ -320,7 +320,7 @@ def compile_products(
                     and output.cards_version == cards_version()):
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
-            definitions = pack_definitions(repo / _CATALOG, pack)
+            definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
             context = _replay_context(product, pack, pages, headers,
                                       materials if revisions is not None else None)
             port: CompletionPort

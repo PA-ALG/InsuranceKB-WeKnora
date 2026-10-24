@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.eval import annotate, product_sources
 from insurance_harness.eval.judge import JudgeProtocolError
 from insurance_harness.eval.pdf_text import PageText, read_pdf
@@ -23,7 +24,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Pa
     source = repo / "dataset/shouxian_product/Product"
     write_json(source / "product_meta.json", {"planCode": "596"})
     (source / "保险条款.pdf").write_bytes(b"synthetic terms")
-    write_json(repo / "internal/handler/schema_pack_catalog_830_g3.generated.json", {
+    write_json(repo / SCHEMA_PACK_CATALOG, {
         "entries": [{"pack": {"display_name": "Test", "schema_pack_id": "pack", "fields": [{
             "short_title": "期限", "field_key": "duration", "description": "Duration",
             "source_guidance": "terms", "formation_method": "原文抽取", "value_spec": None,
@@ -230,7 +231,7 @@ def test_combined_l1_l2_rate_keeps_insufficient_in_denominator_and_contradiction
     workspace: tuple[Path, Path], last_verdict: str, passed: bool,
 ) -> None:
     repo, root = workspace
-    catalog_path = repo / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+    catalog_path = repo / SCHEMA_PACK_CATALOG
     catalog = json.loads(catalog_path.read_text())
     template = catalog["entries"][0]["pack"]["fields"][0]
     keys = ["duration", "second", "third", "fourth", "fifth"]
