@@ -210,6 +210,12 @@ func (s *agentService) CreateAgentEngine(
 	if err != nil {
 		return nil, err
 	}
+	// Resolved once: the tools and the prompt leave out the same release-managed knowledge bases.
+	knowledgeScope, err := s.resolveAgentKnowledgeScope(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	ctx = context.WithValue(ctx, agentKnowledgeScopeKey{}, cachedKnowledgeScope{config, knowledgeScope})
 	if chatModel == nil {
 		return nil, fmt.Errorf("chat model is nil after initialization")
 	}
@@ -240,8 +246,11 @@ func (s *agentService) CreateAgentEngine(
 	toolRegistry.PrepareMCPTools(ctx)
 
 	// 3. Resolve knowledge base and selected document metadata
-	promptConfig := chatsource.PromptConfig(s.chatSources, config, sourceTurn)
+	promptConfig := chatsource.PromptConfig(
+		s.chatSources, withoutKnowledgeBases(config, knowledgeScope.excluded), sourceTurn,
+	)
 	kbInfos, selectedDocs := s.resolveKBAndDocInfos(ctx, promptConfig)
+	selectedDocs = withoutDocumentsOf(selectedDocs, knowledgeScope.excluded)
 
 	// 4. Resolve system prompt template
 	systemPromptTemplate := ""
@@ -1717,6 +1726,15 @@ func (s *agentService) resolvePinnedSkillInfos(config *types.AgentConfig) []*age
 	return result
 }
 
+// agentKnowledgeScopeKey caches the scope of one turn, so engine creation and tool registration
+// decide on the same classification. The cache is tied to the config it was resolved for.
+type agentKnowledgeScopeKey struct{}
+
+type cachedKnowledgeScope struct {
+	config *types.AgentConfig
+	scope  agentKnowledgeScope
+}
+
 // agentKnowledgeScope is what one Agent turn may search (S7d-2c-3a).
 type agentKnowledgeScope struct {
 	// searchTargets are the configured targets of unmanaged knowledge bases and of enterprise
@@ -1735,6 +1753,9 @@ type agentKnowledgeScope struct {
 func (s *agentService) resolveAgentKnowledgeScope(
 	ctx context.Context, config *types.AgentConfig,
 ) (agentKnowledgeScope, error) {
+	if cached, ok := ctx.Value(agentKnowledgeScopeKey{}).(cachedKnowledgeScope); ok && cached.config == config {
+		return cached.scope, nil
+	}
 	scope := agentKnowledgeScope{kbs: map[string]*types.KnowledgeBase{}}
 	excluded := map[string]bool{}
 	var wikiKBIDs []string
@@ -1778,4 +1799,51 @@ func (s *agentService) resolveAgentKnowledgeScope(
 	}
 	scope.wikiKBIDs = dedupStrings(wikiKBIDs)
 	return scope, nil
+}
+
+// withoutKnowledgeBases is the turn's view of config without the excluded knowledge bases, for
+// everything the model is shown about the turn's sources. The saved config is not modified.
+func withoutKnowledgeBases(config *types.AgentConfig, excluded []string) *types.AgentConfig {
+	if len(excluded) == 0 {
+		return config
+	}
+	drop := make(map[string]bool, len(excluded))
+	for _, id := range excluded {
+		drop[id] = true
+	}
+	scoped := *config
+	scoped.KnowledgeBases = nil
+	for _, id := range config.KnowledgeBases {
+		if !drop[id] {
+			scoped.KnowledgeBases = append(scoped.KnowledgeBases, id)
+		}
+	}
+	scoped.SearchTargets = nil
+	for _, target := range config.SearchTargets {
+		if target != nil && !drop[target.KnowledgeBaseID] {
+			scoped.SearchTargets = append(scoped.SearchTargets, target)
+		}
+	}
+	if scoped.QuestionOrigin != nil && drop[scoped.QuestionOrigin.KnowledgeBaseID] {
+		scoped.QuestionOrigin = nil
+	}
+	return &scoped
+}
+
+// withoutDocumentsOf drops selected documents that belong to an excluded knowledge base.
+func withoutDocumentsOf(docs []*agent.SelectedDocumentInfo, excluded []string) []*agent.SelectedDocumentInfo {
+	if len(excluded) == 0 {
+		return docs
+	}
+	drop := make(map[string]bool, len(excluded))
+	for _, id := range excluded {
+		drop[id] = true
+	}
+	kept := make([]*agent.SelectedDocumentInfo, 0, len(docs))
+	for _, doc := range docs {
+		if doc != nil && !drop[doc.KnowledgeBaseID] {
+			kept = append(kept, doc)
+		}
+	}
+	return kept
 }
