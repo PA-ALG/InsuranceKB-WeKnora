@@ -91,7 +91,7 @@ func (h *KnowledgeRevisionSourceHandler) BackfillExact3(c *gin.Context) {
 	var request service.KnowledgeRevisionSourceExact3RequestV1
 	decoder := json.NewDecoder(io.LimitReader(c.Request.Body, 32<<10))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil || ensureWikiReleaseJSONEOF(decoder) != nil {
+	if err := decoder.Decode(&request); err != nil || !decodedToEOF(decoder) {
 		writeKnowledgeRevisionSourceError(c, service.ErrRevisionSourceMismatch)
 		return
 	}
@@ -128,4 +128,10 @@ func writeKnowledgeRevisionSourceError(c *gin.Context, err error) {
 		}
 	}
 	c.JSON(status, gin.H{"success": false, "error": errorBody})
+}
+
+// decodedToEOF reports whether nothing follows the decoded request value.
+func decodedToEOF(decoder *json.Decoder) bool {
+	var trailing any
+	return decoder.Decode(&trailing) == io.EOF
 }

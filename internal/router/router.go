@@ -109,10 +109,8 @@ type RouterParams struct {
 	MemoryHandler                  *handler.MemoryHandler
 	HostSandbox                    service.HostSandboxManager
 	KnowledgeRevisionSourceHandler *handler.KnowledgeRevisionSourceHandler
-	WikiReleaseHandler             *handler.WikiReleaseHandler
 	ManagedClassifier              managed.Classifier
 	EnterpriseSpaces               releasestore.Spaces
-	SchemaWikiHandler              *handler.SchemaWikiHandler
 }
 
 // NewRouter 创建新的路由
@@ -355,19 +353,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterMCPEndpointRoutes(v1, params.MCPEndpointHandler, rbacGuards)
 		RegisterDataSourceRoutes(v1, params.DataSourceHandler, params.DataSourceCredentialsHandler, rbacGuards)
 		RegisterWeKnoraCloudRoutes(v1, params.WeKnoraCloudHandler, rbacGuards)
-		RegisterWikiPageRoutesWithRelease(
-			v1,
-			params.WikiPageHandler,
-			params.WikiReleaseHandler,
-			rbacGuards,
-			params.ManagedClassifier,
-		)
-		RegisterSchemaWikiRoutes(
-			v1,
-			params.SchemaWikiHandler,
-			params.WikiReleaseHandler,
-			rbacGuards,
-		)
+		RegisterWikiPageRoutes(v1, params.WikiPageHandler, rbacGuards, params.ManagedClassifier)
 		registerEnterpriseRoutes(v1, params, rbacGuards)
 		RegisterMemoryRoutes(v1, params.MemoryHandler, rbacGuards)
 		RegisterChunkerDebugRoutes(v1, rbacGuards)

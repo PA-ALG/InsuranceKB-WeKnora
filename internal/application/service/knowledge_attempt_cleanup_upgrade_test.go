@@ -179,7 +179,7 @@ func TestCleanupChunkIDsForAttemptExcludesNewerGeneration(t *testing.T) {
 func TestReparsePinRaceDoesNotOpenAttemptBeforeAtomicAllocation(t *testing.T) {
 	knowledge := &types.Knowledge{
 		ID: "knowledge", TenantID: 17, KnowledgeBaseID: "raw", FileType: "pdf", FileName: "source.pdf",
-		FilePath: "fixture.pdf", FileSHA256: testSHA256830G2("pdf"), CurrentParseAttempt: 1,
+		FilePath: "fixture.pdf", FileSHA256: captureTestSHA256("pdf"), CurrentParseAttempt: 1,
 		ParseStatus: types.ParseStatusFailed,
 	}
 	kb := &types.KnowledgeBase{ID: "raw", TenantID: 17, ChunkingConfig: types.ChunkingConfig{ChunkSize: 40}}

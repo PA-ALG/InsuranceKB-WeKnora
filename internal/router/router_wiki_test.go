@@ -33,7 +33,7 @@ func (s *stubWikiKBLookup) GetKnowledgeBaseByIDOnly(ctx context.Context, id stri
 
 func newWikiRouteTestEngine(t *testing.T, callerTenantID uint64, kbLookup *stubWikiKBLookup) *gin.Engine {
 	return newKBRouteTestEngine(t, callerTenantID, kbLookup, nil, func(r *gin.RouterGroup, guards *rbacGuards) {
-		RegisterWikiPageRoutesWithRelease(r, &handler.WikiPageHandler{}, nil, guards, &stubClassifier{})
+		RegisterWikiPageRoutes(r, &handler.WikiPageHandler{}, guards, &stubClassifier{})
 	})
 }
 
@@ -187,7 +187,7 @@ func TestWikiWriteRoutesDenyOutOfScopeAPIKeyKB(t *testing.T) {
 		Capabilities:     types.StringArray{string(types.APIKeyCapabilityIngest)},
 	}
 	engine := newKBRouteTestEngine(t, 1, kbLookup, scope, func(r *gin.RouterGroup, guards *rbacGuards) {
-		RegisterWikiPageRoutesWithRelease(r, &handler.WikiPageHandler{}, nil, guards, &stubClassifier{})
+		RegisterWikiPageRoutes(r, &handler.WikiPageHandler{}, guards, &stubClassifier{})
 	})
 
 	cases := []struct {

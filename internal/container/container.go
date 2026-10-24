@@ -111,17 +111,6 @@ import (
 	wgrpc "github.com/weaviate/weaviate-go-client/v5/weaviate/grpc"
 )
 
-func schemaWikiFormalCandidateScopeArgs(cfg *config.Config) ([]types.WikiReleaseScope, error) {
-	scope, err := config.DecodeSchemaWikiFrozenReleaseScope(cfg)
-	if err != nil {
-		return nil, err
-	}
-	if scope == nil {
-		return nil, nil
-	}
-	return []types.WikiReleaseScope{*scope}, nil
-}
-
 // BuildContainer constructs the dependency injection container
 // Registers all components, services, repositories and handlers needed by the application
 // Creates a fully configured application container with proper dependency resolution
@@ -301,15 +290,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Decorate(managed.DecorateKnowledgeBaseService))
 	must(container.Provide(service.NewWikiIngestService, dig.Name("wikiIngest")))
 	must(container.Provide(service.NewWikiLintService))
-	must(container.Provide(service.NewContextWikiReleaseAccessVerifier))
-	must(container.Provide(func(cfg *config.Config) (*service.SchemaWikiCitationTokenCodec, error) {
-		ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
-		if err != nil {
-			return nil, err
-		}
-		return service.NewSchemaWikiCitationTokenCodec(ring.ActiveKeyID(), ring.SigningKeys(), time.Now)
-	}))
-	must(container.Provide(service.NewSchemaWikiCitationPorts))
 	must(container.Provide(service.NewKnowledgeRevisionSourceService))
 	must(container.Provide(func(cfg *config.Config) (*capture.Keys, error) {
 		ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
@@ -320,48 +300,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	}))
 	must(container.Provide(service.NewG3FirstParseStore))
 	must(releasestore.Register(container))
-	must(container.Provide(service.NewConceptSourceAuthorityService830G2))
-	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseAuthorizationVerifier, error) {
-		verifier, _, err := schemaWikiReleaseVerifierProviders(cfg)
-		return verifier, err
-	}))
-	must(container.Provide(func(cfg *config.Config, conceptSource *service.ConceptSourceAuthorityService830G2) (service.WikiReleaseServiceOptions, error) {
-		_, options, err := schemaWikiReleaseVerifierProviders(cfg)
-		options.ConceptSourceAuthorityVerifier830G2 = conceptSource
-		return options, err
-	}))
-	must(container.Provide(service.NewWikiReleaseService))
-	must(container.Provide(func() (*repository.SchemaWikiFormalCandidatePreviewRegistry, error) {
-		return repository.NewSchemaWikiFormalCandidatePreviewRegistry(
-			os.Getenv("WEKNORA_SCHEMA_WIKI_C5_INPUT_MANIFEST"),
-		)
-	}))
-	must(container.Provide(func(
-		releaseAuthority *service.WikiReleaseService,
-		citationPort service.CitationRevisionReadPort,
-		content service.SchemaWikiCitationContentPort,
-		formalCandidatePreview *repository.SchemaWikiFormalCandidatePreviewRegistry,
-		cfg *config.Config,
-	) (*service.SchemaWikiService, error) {
-		statusRaw, err := config.DecodeSchemaWikiGoldenSuccessorStatus(cfg)
-		if err != nil {
-			return nil, err
-		}
-		statusProvider, err := service.NewCanonicalSchemaWikiGoldenSuccessorStatusProvider(
-			statusRaw,
-		)
-		if err != nil {
-			return nil, err
-		}
-		formalCandidateScope, err := schemaWikiFormalCandidateScopeArgs(cfg)
-		if err != nil {
-			return nil, err
-		}
-		return service.NewSchemaWikiServiceWithGoldenSuccessorStatusAndFormalCandidatePreview(
-			releaseAuthority, citationPort, content, statusProvider, formalCandidatePreview,
-			formalCandidateScope...,
-		), nil
-	}))
 	must(container.Provide(service.NewEmbedChannelService))
 	must(container.Provide(service.NewMCPEndpointService))
 	must(container.Provide(mcpserver.NewServer))
@@ -678,13 +616,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewDataSourceHandler))
 	// Wiki page handler
 	must(container.Provide(handler.NewWikiPageHandler))
-	must(container.Provide(handler.NewWikiReleaseHandler))
-	must(container.Provide(func(
-		repository *repository.WikiReleaseRepository,
-		schemaService *service.SchemaWikiService,
-	) *handler.SchemaWikiHandler {
-		return handler.NewSchemaWikiHandler(repository, schemaService)
-	}))
 	// IM integration
 	logger.Debugf(ctx, "[Container] Registering IM integration...")
 	must(container.Provide(imPkg.NewService))
@@ -716,26 +647,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 
 	logger.Infof(ctx, "[Container] Container initialization completed successfully")
 	return container
-}
-
-func schemaWikiReleaseVerifierProviders(
-	cfg *config.Config,
-) (service.WikiReleaseAuthorizationVerifier, service.WikiReleaseServiceOptions, error) {
-	humanKeys, publishKeys, err := config.DecodeSchemaWikiSigningPublicKeys(cfg)
-	if err != nil {
-		return nil, service.WikiReleaseServiceOptions{}, err
-	}
-	qualityGateKeys, err := config.DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(cfg)
-	if err != nil {
-		return nil, service.WikiReleaseServiceOptions{}, err
-	}
-	return service.NewEd25519WikiReleaseAuthorizationVerifier(publishKeys),
-		service.WikiReleaseServiceOptions{
-			HumanDecisionVerifier: service.NewEd25519HumanBatchDecisionVerifier(humanKeys),
-			QualityGateReceiptVerifier: service.NewEd25519Schema67GoldenQualityGateReceiptVerifier(
-				qualityGateKeys,
-			),
-		}, nil
 }
 
 // registerChatLocalImageResolver wires the chat package's LocalImageResolver

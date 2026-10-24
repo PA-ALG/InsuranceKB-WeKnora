@@ -297,7 +297,7 @@ func TestKnowledgeReadRoutesDeclareRetrieveCapability(t *testing.T) {
 	RegisterKnowledgeTagRoutes(v1, &handler.TagHandler{}, g)
 	RegisterChatRoutes(v1, &sessionhandler.Handler{}, g)
 	RegisterInitializationRoutes(v1, &handler.InitializationHandler{}, g)
-	RegisterWikiPageRoutesWithRelease(v1, &handler.WikiPageHandler{}, nil, g, &stubClassifier{})
+	RegisterWikiPageRoutes(v1, &handler.WikiPageHandler{}, g, &stubClassifier{})
 
 	cases := []struct {
 		method string
