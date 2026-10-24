@@ -11,10 +11,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.navigation import load_navigation
 
 REPO = Path(__file__).resolve().parents[3]
-CATALOG = REPO / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = REPO / SCHEMA_PACK_CATALOG
 
 
 def test_the_product_domain_has_one_group_per_catalog_pack_in_catalog_order() -> None:

@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import TrustedPages
 from insurance_harness.compilers.schema_fields import engine
 from insurance_harness.compilers.schema_fields.claims import claims_from
@@ -50,7 +51,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     save(directory / "product_meta.json", {"planCode": "p", "clauseName": "产品"})
     (directory / "保险条款.pdf").write_bytes(b"terms")
     save(root / "dataset/golden/v2/manifest.json", {"products": {"p": {"pack_id": "pack"}}})
-    save(root / "internal/handler/schema_pack_catalog_830_g3.generated.json", {
+    save(root / SCHEMA_PACK_CATALOG, {
         "entries": [{"pack": {"schema_pack_id": "pack", "fields": [{
             "field_key": "waiting_period", "short_title": "等待期", "description": "等待期",
             "formation_method": "原文抽取",
@@ -421,7 +422,7 @@ def test_cli_recompile_failure_keeps_candidate_and_sanitizes_source_content(
 def test_direct_revision_callback_canonicalizes_evidence_headers_and_reuses_reordering(
     repo: Path, tmp_path: Path,
 ) -> None:
-    catalog = repo / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+    catalog = repo / SCHEMA_PACK_CATALOG
     data = json.loads(catalog.read_text())
     data["entries"][0]["pack"]["fields"].append({
         "field_key": "premium_payment_term", "short_title": "交费期间",

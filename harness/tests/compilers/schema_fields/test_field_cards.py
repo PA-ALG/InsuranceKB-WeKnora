@@ -10,12 +10,13 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.cards import all_cards, card_payload, cards_version
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition, pack_definitions
 from insurance_harness.compilers.schema_fields.engine import SchemaFieldsCompiler
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-CATALOG = REPO_ROOT / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = REPO_ROOT / SCHEMA_PACK_CATALOG
 EVAL_PACKS = (
     "schemapack_accident_insurance",
     "schemapack_disability_income_insurance",

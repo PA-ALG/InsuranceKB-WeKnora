@@ -17,10 +17,11 @@ import jsonschema  # type: ignore[import-untyped]
 import pytest
 
 from insurance_harness.bundle.assemble import BundleError
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.page import product_page
 
 REPO = Path(__file__).resolve().parents[4]
-CATALOG = REPO / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = REPO / SCHEMA_PACK_CATALOG
 NAME = "演示重大疾病保险"
 
 

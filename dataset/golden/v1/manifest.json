@@ -1,6 +1,6 @@
 {
   "catalog_declared_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
-  "catalog_file": "internal/handler/schema_pack_catalog_830_g3.generated.json",
+  "catalog_file": "harness/src/insurance_harness/catalog/schema_packs.json",
   "catalog_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
   "catalog_version": "2026-08-12-v5",
   "dataset_version": "v1",

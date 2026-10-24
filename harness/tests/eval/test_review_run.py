@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields import publish
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.eval import review_run
@@ -31,7 +32,7 @@ from insurance_harness.models import (
 
 SECRET = "SECRET-条款原文"
 PACK = "pack-r"
-CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = SCHEMA_PACK_CATALOG
 STAGES = Path(__file__).resolve().parents[2] / "src/insurance_harness/models/stages.json"
 
 

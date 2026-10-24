@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
 from insurance_harness.eval import product_sources
 from insurance_harness.eval.compile_run import compile_products
@@ -38,7 +39,7 @@ def build_repo(root: Path, *, file_name: str, pack: str) -> Path:
         }
     ]
     write_json(
-        root / "internal/handler/schema_pack_catalog_830_g3.generated.json",
+        root / SCHEMA_PACK_CATALOG,
         {"entries": [{"pack": {"schema_pack_id": pack, "fields": fields}}]},
     )
     return root

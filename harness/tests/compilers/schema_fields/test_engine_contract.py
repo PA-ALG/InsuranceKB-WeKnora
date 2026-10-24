@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition
 from insurance_harness.compilers.schema_fields.engine import (
     CompileBudgetExceeded,
@@ -31,7 +32,7 @@ from insurance_harness.evidence.quote_verification import QuoteMatch, verify_quo
 
 # Resolve from this file so the suite runs from harness/ or the repo root alike.
 REPO_ROOT = Path(__file__).resolve().parents[4]
-REPO_CATALOG = REPO_ROOT / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+REPO_CATALOG = REPO_ROOT / SCHEMA_PACK_CATALOG
 PACK = "schemapack_medical_insurance"
 SHA = "c" * 64
 

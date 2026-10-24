@@ -5,13 +5,14 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition, pack_definitions
 from insurance_harness.compilers.schema_fields.engine import SchemaFieldsCompiler
 from insurance_harness.compilers.schema_fields.profiles import field_extraction_profile
 from insurance_harness.evidence.quote_verification import PageText
 
 ROOT = Path(__file__).resolve().parents[4]
-CATALOG = ROOT / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = ROOT / SCHEMA_PACK_CATALOG
 
 
 class NeverCall:

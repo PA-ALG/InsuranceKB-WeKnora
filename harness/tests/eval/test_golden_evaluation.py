@@ -15,6 +15,7 @@ from typing import Literal
 import pytest
 from pydantic import ValidationError
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.eval.catalog import load_catalog
 from insurance_harness.eval.convert import golden_from_legacy, predictions_from_candidate
 from insurance_harness.eval.evaluator import evaluate, gate
@@ -26,7 +27,7 @@ from insurance_harness.eval.golden import (
 )
 
 REPO = Path(__file__).resolve().parents[3]
-CATALOG = REPO / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = REPO / SCHEMA_PACK_CATALOG
 LEGACY_596 = REPO / "dataset/goldenset/gs-s0q-596-v1/596.jsonl"
 DATASET_ROOT = REPO / "dataset/shouxian_product"
 PACK = "schemapack_medical_insurance"

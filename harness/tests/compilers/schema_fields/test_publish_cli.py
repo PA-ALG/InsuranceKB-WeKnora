@@ -19,6 +19,7 @@ import httpx
 import pytest
 
 from insurance_harness.bundle.client import PlatformClient
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields import publish as command
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.eval.pdf_text import PageText
@@ -38,7 +39,7 @@ PAGES = [
 ]
 SOURCE = SegmentedSource(PAGES)
 NAME = "演示重大疾病保险"
-CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = SCHEMA_PACK_CATALOG
 CATALOG_ENTRY = {
     "pack": {
         "schema_pack_id": "pack",
