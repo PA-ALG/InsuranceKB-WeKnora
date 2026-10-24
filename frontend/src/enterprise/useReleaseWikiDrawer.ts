@@ -1,80 +1,65 @@
 import { onScopeDispose, ref, watch } from 'vue'
-import { getReleaseWikiPage, getWikiPage, type WikiReleaseAuthority } from '@/api/wiki'
+import { getWikiPage, type WikiPage } from '@/api/wiki'
 
-type ToolEvent = { tool_data?: { found_kbs?: Record<string, unknown>; release_authorities?: unknown } }
-const OLD_RELEASE_MESSAGE = '该引用来自旧版本，请重新提问'
+type ToolData = Record<string, unknown>
 
-/** Release results carry their own KB identity, independent of the current UI route. */
-export function resolveReleaseCitationKb(events: readonly ToolEvent[], slug: string): string {
-  for (const event of [...events].reverse()) {
-    const data = event.tool_data
-    const found = data?.found_kbs?.[slug]
-    const ids = typeof found === 'string' ? [found] : Array.isArray(found) ? found : []
-    const id = ids.find(id => typeof id === 'string' && id)
-    if (!id) continue
-    if (!Array.isArray(data?.release_authorities)) return data?.release_authorities === undefined ? '' : id
-    return data.release_authorities.some(pin => pin?.wiki_kb_id === id) ? id : ''
-  }
-  return ''
+const has = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key)
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+/** The tool data of an event, or null when the event cannot be interpreted. */
+function toolData(event: unknown): ToolData | null {
+  return isObject(event) && isObject(event.tool_data) ? event.tool_data : null
 }
 
-/** Use the citation-producing event first; never replace its pin with a newer Head. */
-export function resolveWikiReleaseAuthority(events: readonly ToolEvent[], kbId: string, slug: string): WikiReleaseAuthority | null {
-  const recent = [...events].reverse()
-  const relevant = recent.filter(event => {
-    const found = event.tool_data?.found_kbs?.[slug]
-    return found === kbId || (Array.isArray(found) && found.includes(kbId))
-  })
-  for (const event of relevant.length ? relevant.slice(0, 1) : recent) {
-    const authorities = event.tool_data?.release_authorities
-    if (!Array.isArray(authorities)) {
-      if (authorities !== undefined && relevant.includes(event)) throw new Error(OLD_RELEASE_MESSAGE)
-      continue
-    }
-    const authority = authorities.find(value => value?.wiki_kb_id === kbId)
-    if (!authority) continue
-    for (const key of ['wiki_kb_id', 'space_id', 'raw_kb_id', 'release_id']) {
-      if (typeof authority[key] !== 'string' || !authority[key].trim()) throw new Error(OLD_RELEASE_MESSAGE)
-    }
-    return { wiki_kb_id: authority.wiki_kb_id, space_id: authority.space_id,
-      raw_kb_id: authority.raw_kb_id, release_id: authority.release_id }
-  }
-  return null
+function foundIn(data: ToolData, kbId: string, slug: string): boolean {
+  const kbs = data.found_kbs
+  const found = isObject(kbs) && has(kbs, slug) ? kbs[slug] : undefined
+  return found === kbId || (Array.isArray(found) && found.includes(kbId))
 }
 
-type DrawerPage = { slug: string; title: string; content: string; page_type: string; version: string | number }
+/**
+ * Citations from the retired 830 wiki tools carry the release they were read from
+ * (`release_authorities`). That release read path is gone (S7d-2c-3c) and the current page is not
+ * the cited one, so such a citation must not open at all (blueprint boundary 7).
+ *
+ * The decision is made for the KB the drawer is about to request: the latest event that found the
+ * slug in `kbId` decides, by whether it has `release_authorities` at all. With no such event, any
+ * pinned result in the session refuses the citation. Events that cannot be interpreted are skipped.
+ */
+export function citesPinnedRelease(events: readonly unknown[], kbId: string, slug: string): boolean {
+  const data = [...events].reverse().map(toolData).filter((value): value is ToolData => value !== null)
+  const pinned = (value: ToolData) => has(value, 'release_authorities')
+  const producer = data.find(value => foundIn(value, kbId, slug))
+  return producer ? pinned(producer) : data.some(pinned)
+}
+
 export function useReleaseWikiDrawer() {
   const visible = ref(false)
-  const page = ref<DrawerPage | null>(null)
-  const authority = ref<WikiReleaseAuthority | null>(null)
+  const page = ref<WikiPage | null>(null)
   const kbId = ref('')
   const slug = ref('')
   const loading = ref(false)
   const error = ref('')
   let generation = 0
-  async function open(id: string, logicalSlug: string, pin: WikiReleaseAuthority | null = null) {
+  async function open(id: string, logicalSlug: string) {
     if (!id || !logicalSlug) return
     const request = ++generation
-    kbId.value = id; slug.value = logicalSlug; authority.value = pin ? { ...pin } : null
+    kbId.value = id; slug.value = logicalSlug
     page.value = null; error.value = ''; loading.value = true; visible.value = true
     try {
-      const res = pin ? await getReleaseWikiPage(pin, logicalSlug) : await getWikiPage(id, logicalSlug)
+      const res: any = await getWikiPage(id, logicalSlug)
       if (request !== generation) return
-      const data = res.data || res
-      page.value = pin
-        ? { slug: data.logical_slug, title: data.title, content: data.content, page_type: data.kind, version: pin.release_id }
-        : data
-    } catch (cause: any) {
+      page.value = res.data || res
+    } catch {
       if (request !== generation) return
-      const status = cause?.$httpStatus ?? cause?.status ?? cause?.response?.status
-      error.value = pin && (status === 404 || status === 409) ? OLD_RELEASE_MESSAGE : '引用内容加载失败，请重试'
+      error.value = '引用内容加载失败，请重试'
     } finally {
       if (request === generation) loading.value = false
     }
   }
-  function follow(logicalSlug: string) { return open(kbId.value, logicalSlug, authority.value) }
+  function follow(logicalSlug: string) { return open(kbId.value, logicalSlug) }
   function retry() { return follow(slug.value) }
   watch(visible, value => { if (!value) { generation++; loading.value = false; page.value = null } }, { flush: 'sync' })
   onScopeDispose(() => { generation++ })
-  return { visible, page, authority, kbId, loading, error, open, follow, retry }
+  return { visible, page, kbId, loading, error, open, follow, retry }
 }

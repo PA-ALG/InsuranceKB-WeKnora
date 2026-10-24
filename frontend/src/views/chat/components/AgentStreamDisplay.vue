@@ -608,7 +608,6 @@
           }) }}</span>
         </div>
         <t-link
-          v-if="!wikiDrawerAuthority"
           theme="primary"
           hover="color"
           :href="wikiGraphHref"
@@ -662,7 +661,7 @@ import type { KnowledgeReferenceLike, ReferenceHighlightTarget } from '@/utils/r
 import { referenceSourceKey } from '@/enterprise/sourceTier';
 import { isPublishedKnowledgeTool, publishedKnowledgeReferences } from '@/enterprise/releaseReferences';
 import { resolveCitationChunkId } from '@/utils/citationMarkdown';
-import { resolveReleaseCitationKb, resolveWikiReleaseAuthority, useReleaseWikiDrawer } from '@/enterprise/useReleaseWikiDrawer';
+import { citesPinnedRelease, useReleaseWikiDrawer } from '@/enterprise/useReleaseWikiDrawer';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useUIStore } from '@/stores/ui';
 import { useSettingsStore } from '@/stores/settings';
@@ -874,7 +873,7 @@ const closeImagePreview = () => {
 // Wiki Drawer 状态
 const wikiDrawer = useReleaseWikiDrawer();
 const { visible: wikiDrawerVisible, page: wikiDrawerPage, kbId: currentWikiKbId,
-  authority: wikiDrawerAuthority, loading: wikiDrawerLoading, error: wikiDrawerError } = wikiDrawer;
+  loading: wikiDrawerLoading, error: wikiDrawerError } = wikiDrawer;
 const wikiDrawerBodyRef = ref<HTMLElement | null>(null);
 
 function getTypeTheme(type: string): string {
@@ -928,8 +927,8 @@ watch(wikiDrawerContent, async () => {
 
 const openWikiDrawer = async (kbId: string, slug: string) => {
   try {
-    const pin = resolveWikiReleaseAuthority(props.session?.agentEventStream || [], kbId, slug);
-    await wikiDrawer.open(kbId, slug, pin);
+    if (citesPinnedRelease(props.session?.agentEventStream || [], kbId, slug)) throw new Error('old pinned citation');
+    await wikiDrawer.open(kbId, slug);
   } catch {
     wikiDrawer.visible.value = false;
     MessagePlugin.warning('该引用来自旧版本，请重新提问');
@@ -2327,8 +2326,6 @@ const handleCitationActivate = (el: HTMLElement) => {
 };
 
 const getKbIdForWiki = (slug: string): string => {
-  const releaseKbId = resolveReleaseCitationKb(props.session?.agentEventStream || [], slug);
-  if (releaseKbId) return releaseKbId;
   if (route.params.kbId) return route.params.kbId as string;
 
   // The backend ships `found_kbs` as a map<slug, string[]> — a single slug can
@@ -2353,7 +2350,7 @@ const getKbIdForWiki = (slug: string): string => {
     for (let i = props.session.agentEventStream.length - 1; i >= 0; i--) {
       const event = props.session.agentEventStream[i];
       const foundKbs = event?.tool_data?.found_kbs;
-      if (event.type === 'tool_call' && foundKbs) {
+      if (event?.type === 'tool_call' && foundKbs) {
         const hit = pickKbId(foundKbs[slug]);
         if (hit) return hit;
       }

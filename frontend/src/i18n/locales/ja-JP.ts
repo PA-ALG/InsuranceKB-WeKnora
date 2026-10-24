@@ -3218,17 +3218,7 @@ export default {
       rebuildSkip: '再構築は後からデータソース画面で手動で実行できます'
     },
     wikiBrowser: {
-      tabSchemaWiki: '製品スキーマ Wiki',
       tabMaterialsWiki: '資料 Wiki',
-      schemaLoading: '製品スキーマ Wiki を読み込み中…',
-      schemaNotCompiled: 'まだコンパイルされていません',
-      schemaLoadFailed: '製品スキーマ Wiki は一時的に利用できません',
-      schemaUnknown: '現在の資料にはなく、追加資料を待っています',
-      schemaUndetermined: '未確定',
-      schemaPresent: '確認済み',
-      schemaAbsent: '原文にない、または該当しないことが明記されています',
-      schemaCitation: '引用を表示',
-      schemaCitationUnavailable: '引用プレビューは一時的に利用できません',
       failedGenerationCount: 'Wiki 生成の失敗が {count} 件記録されています。ドキュメント処理の詳細を確認してください。',
       editBtn: '編集',
       historyBtn: '履歴',
