@@ -15,13 +15,14 @@ from typing import Any
 import httpx
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.eval import review_run
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.models import CallLedger, OpenAICompatibleCompletion, StageModelConfig
 from insurance_harness.review.scorer import TRUNCATION_MARK
 
-CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = SCHEMA_PACK_CATALOG
 
 
 class Page:

@@ -2,7 +2,7 @@
 
 After S7d-2c-3a/3b no enterprise path calls it. What stays is what the enterprise path uses: the
 wiki_release repository and types (enterprise Heads and Releases) and the field catalog data file,
-which the Harness reads until S7d-2c-3d moves it. Standard library only.
+which S7d-2c-3d-1 moved into the Harness. Standard library only.
 Run from the repository root:  python -m pytest -q tests/architecture
 """
 
@@ -93,7 +93,7 @@ KEPT_NAMES = ("DecodeSchemaWikiCitationTokenSigningRing",)
 KEPT = (
     "internal/application/repository/wiki_release.go",
     "internal/types/wiki_release.go",
-    f"{HANDLER}/schema_pack_catalog_830_g3.generated.json",
+    "harness/src/insurance_harness/catalog/schema_packs.json",
 )
 
 

@@ -15,6 +15,7 @@ import httpx
 import pytest
 
 from insurance_harness.bundle.client import PlatformClient
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields import publish as command
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.eval.pdf_text import PageText
@@ -31,7 +32,7 @@ PAGES = [
     )
 ]
 SOURCE = SegmentedSource(PAGES)
-CATALOG = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+CATALOG = SCHEMA_PACK_CATALOG
 FIELDS = [("term_a", "期限甲", ["D1P1S1"], "90日"), ("term_b", "期限乙", ["D1P1S2"], None)]
 REVIEWER, AT = "deepseek-flash@review-v1", "2026-10-17T12:00:00Z"
 

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import load_trust_policy
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.eval import compile_run, product_sources
@@ -53,7 +54,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     )
     for name in ("保险条款.pdf", "费率表.pdf"):
         (directory / name).write_bytes(name.encode())
-    catalog = root / "internal/handler/schema_pack_catalog_830_g3.generated.json"
+    catalog = root / SCHEMA_PACK_CATALOG
     catalog.parent.mkdir(parents=True)
     catalog.write_text(
         json.dumps(
