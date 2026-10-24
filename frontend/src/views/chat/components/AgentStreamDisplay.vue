@@ -2350,7 +2350,7 @@ const getKbIdForWiki = (slug: string): string => {
     for (let i = props.session.agentEventStream.length - 1; i >= 0; i--) {
       const event = props.session.agentEventStream[i];
       const foundKbs = event?.tool_data?.found_kbs;
-      if (event.type === 'tool_call' && foundKbs) {
+      if (event?.type === 'tool_call' && foundKbs) {
         const hit = pickKbId(foundKbs[slug]);
         if (hit) return hit;
       }
