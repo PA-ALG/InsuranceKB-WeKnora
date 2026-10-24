@@ -926,12 +926,13 @@ watch(wikiDrawerContent, async () => {
 });
 
 const openWikiDrawer = async (kbId: string, slug: string) => {
-  if (citesPinnedRelease(props.session?.agentEventStream || [], slug)) {
+  try {
+    if (citesPinnedRelease(props.session?.agentEventStream || [], kbId, slug)) throw new Error('old pinned citation');
+    await wikiDrawer.open(kbId, slug);
+  } catch {
     wikiDrawer.visible.value = false;
     MessagePlugin.warning('该引用来自旧版本，请重新提问');
-    return;
   }
-  await wikiDrawer.open(kbId, slug);
 };
 
 const wikiGraphHref = computed(() => {

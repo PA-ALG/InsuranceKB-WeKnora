@@ -1,22 +1,36 @@
 import { onScopeDispose, ref, watch } from 'vue'
 import { getWikiPage, type WikiPage } from '@/api/wiki'
 
-type ToolEvent = { tool_data?: { found_kbs?: Record<string, unknown>; release_authorities?: unknown } }
+type ToolData = Record<string, unknown>
+
+const has = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key)
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+/** The tool data of an event, or null when the event cannot be interpreted. */
+function toolData(event: unknown): ToolData | null {
+  return isObject(event) && isObject(event.tool_data) ? event.tool_data : null
+}
+
+function foundIn(data: ToolData, kbId: string, slug: string): boolean {
+  const kbs = data.found_kbs
+  const found = isObject(kbs) && has(kbs, slug) ? kbs[slug] : undefined
+  return found === kbId || (Array.isArray(found) && found.includes(kbId))
+}
 
 /**
  * Citations from the retired 830 wiki tools carry the release they were read from
  * (`release_authorities`). That release read path is gone (S7d-2c-3c) and the current page is not
- * the cited one, so such a citation must not open at all (blueprint boundary 7). The latest event
- * that found the slug decides; with none, any pinned result in the session refuses the citation.
+ * the cited one, so such a citation must not open at all (blueprint boundary 7).
+ *
+ * The decision is made for the KB the drawer is about to request: the latest event that found the
+ * slug in `kbId` decides, by whether it has `release_authorities` at all. With no such event, any
+ * pinned result in the session refuses the citation. Events that cannot be interpreted are skipped.
  */
-export function citesPinnedRelease(events: readonly ToolEvent[], slug: string): boolean {
-  const recent = [...events].reverse()
-  const found = recent.find(event => {
-    const kbs = event.tool_data?.found_kbs
-    return !!kbs && Object.prototype.hasOwnProperty.call(kbs, slug)
-  })
-  const pinned = (event: ToolEvent) => event.tool_data?.release_authorities !== undefined
-  return found ? pinned(found) : recent.some(pinned)
+export function citesPinnedRelease(events: readonly unknown[], kbId: string, slug: string): boolean {
+  const data = [...events].reverse().map(toolData).filter((value): value is ToolData => value !== null)
+  const pinned = (value: ToolData) => has(value, 'release_authorities')
+  const producer = data.find(value => foundIn(value, kbId, slug))
+  return producer ? pinned(producer) : data.some(pinned)
 }
 
 export function useReleaseWikiDrawer() {
