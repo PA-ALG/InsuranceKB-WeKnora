@@ -4,6 +4,7 @@ import ts from 'typescript'
 import { describe, expect, it, vi } from 'vitest'
 import knowledgeBase from '@/views/knowledge/KnowledgeBase.vue?raw'
 import agentStream from '@/views/chat/components/AgentStreamDisplay.vue?raw'
+import { citesPinnedRelease } from './useReleaseWikiDrawer'
 
 // Run the existing SFC event handlers with ports; unrelated editors do not need mounting.
 function action(source: string, name: string, ports: Record<string, unknown>): (...args: any[]) => any {
@@ -38,7 +39,34 @@ describe('release read integration', () => {
       props: { session: { agentEventStream: events } }, citesPinnedRelease: pinned,
       wikiDrawer: drawer, MessagePlugin: { warning },
     })('wiki', 'slug')
-    expect(pinned).toHaveBeenCalledWith(events, 'slug')
+    expect(pinned).toHaveBeenCalledWith(events, 'wiki', 'slug')
+    expect(drawer.open).not.toHaveBeenCalled(); expect(drawer.visible.value).toBe(false)
+    expect(warning).toHaveBeenCalledWith('该引用来自旧版本，请重新提问')
+  })
+  it('refuses and clears the drawer when the pinned check itself fails (review R2)', async () => {
+    const drawer = { open: vi.fn(), visible: { value: true } }; const warning = vi.fn()
+    await action(agentStream, 'openWikiDrawer', {
+      props: { session: { agentEventStream: [] } }, citesPinnedRelease: () => { throw new TypeError('malformed') },
+      wikiDrawer: drawer, MessagePlugin: { warning },
+    })('wiki', 'slug')
+    expect(drawer.open).not.toHaveBeenCalled(); expect(drawer.visible.value).toBe(false)
+    expect(warning).toHaveBeenCalledWith('该引用来自旧版本，请重新提问')
+  })
+  it.each([
+    ['a route that names the pinned KB while a newer result belongs to another KB', { kbId: 'legacy-kb' },
+      { type: 'tool_call', tool_data: { found_kbs: { slug: ['native-kb'] } } }],
+    ['no route and a newer result whose hit is null', {},
+      { type: 'tool_call', tool_data: { found_kbs: { slug: null } } }],
+  ])('sends no request for an old pinned citation with %s (review R1)', async (_, params, newer) => {
+    const pinned = { type: 'tool_call', tool_data: { found_kbs: { slug: ['legacy-kb'] },
+      release_authorities: [{ wiki_kb_id: 'legacy-kb', space_id: 'space', raw_kb_id: 'raw', release_id: 'historic' }] } }
+    const props = { session: { agentEventStream: [pinned, newer] } }
+    const kbId = action(agentStream, 'getKbIdForWiki', { props, route: { params } })('slug')
+    expect(kbId).toBe('legacy-kb')
+    const drawer = { open: vi.fn(), visible: { value: true } }; const warning = vi.fn()
+    await action(agentStream, 'openWikiDrawer', {
+      props, citesPinnedRelease, wikiDrawer: drawer, MessagePlugin: { warning },
+    })(kbId, 'slug')
     expect(drawer.open).not.toHaveBeenCalled(); expect(drawer.visible.value).toBe(false)
     expect(warning).toHaveBeenCalledWith('该引用来自旧版本，请重新提问')
   })

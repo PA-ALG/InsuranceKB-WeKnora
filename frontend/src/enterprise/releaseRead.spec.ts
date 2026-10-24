@@ -49,23 +49,40 @@ describe('release custody', () => {
   })
 })
 describe('release wiki citations', () => {
-  it('treats a citation found by an old pinned tool result as pinned, whatever the authorities hold', () => {
-    for (const authorities of [[authority], [], {}, null]) {
+  it('treats a citation the target KB found in an old pinned result as pinned, whatever the authorities hold', () => {
+    for (const authorities of [[authority], [], {}, null, undefined]) {
       const events = [{ tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: authorities } }]
-      expect(citesPinnedRelease(events, 'slug')).toBe(true)
+      expect(citesPinnedRelease(events, 'wiki', 'slug')).toBe(true)
     }
+    const named = [{ tool_data: { found_kbs: { slug: 'wiki' }, release_authorities: [] } }]
+    expect(citesPinnedRelease(named, 'wiki', 'slug')).toBe(true)
   })
-  it('lets the latest event that found the slug decide', () => {
+  it('lets the latest event that found the slug for the target KB decide', () => {
     const pinned = { tool_data: { found_kbs: { slug: ['wiki'] }, release_authorities: [authority] } }
     const native = { tool_data: { found_kbs: { slug: 'wiki' } } }
-    expect(citesPinnedRelease([pinned, native], 'slug')).toBe(false)
-    expect(citesPinnedRelease([native, pinned], 'slug')).toBe(true)
+    expect(citesPinnedRelease([pinned, native], 'wiki', 'slug')).toBe(false)
+    expect(citesPinnedRelease([native, pinned], 'wiki', 'slug')).toBe(true)
   })
-  it('refuses a citation no event found when the session holds pinned results', () => {
+  it('does not let a newer result for another KB clear an old pin (review R1)', () => {
+    const pinned = { type: 'tool_call', tool_data: { found_kbs: { slug: ['legacy-kb'] },
+      release_authorities: [{ ...authority, wiki_kb_id: 'legacy-kb', release_id: 'historic' }] } }
+    const other = { type: 'tool_call', tool_data: { found_kbs: { slug: ['native-kb'] } } }
+    expect(citesPinnedRelease([pinned, other], 'legacy-kb', 'slug')).toBe(true)
+    expect(citesPinnedRelease([pinned, other], 'native-kb', 'slug')).toBe(false)
+    const empty = { type: 'tool_call', tool_data: { found_kbs: { slug: null } } }
+    expect(citesPinnedRelease([pinned, empty], 'legacy-kb', 'slug')).toBe(true)
+  })
+  it('skips uninterpretable events instead of throwing (review R2)', () => {
+    const pinned = { tool_data: { found_kbs: { slug: ['legacy-kb'] }, release_authorities: [] } }
+    const noise: any[] = [null, 'event', 7, { tool_data: null }, { tool_data: { found_kbs: null } }, { tool_data: 'x' }]
+    expect(citesPinnedRelease([pinned, ...noise] as any, 'legacy-kb', 'slug')).toBe(true)
+    expect(citesPinnedRelease(noise as any, 'legacy-kb', 'slug')).toBe(false)
+  })
+  it('refuses a citation no event found for the target KB when the session holds pinned results', () => {
     const pinned = { tool_data: { found_kbs: { other: ['wiki'] }, release_authorities: [authority] } }
-    expect(citesPinnedRelease([pinned], 'slug')).toBe(true)
-    expect(citesPinnedRelease([{ tool_data: { found_kbs: { other: ['wiki'] } } }], 'slug')).toBe(false)
-    expect(citesPinnedRelease([], 'slug')).toBe(false)
+    expect(citesPinnedRelease([pinned], 'wiki', 'slug')).toBe(true)
+    expect(citesPinnedRelease([{ tool_data: { found_kbs: { other: ['wiki'] } } }], 'wiki', 'slug')).toBe(false)
+    expect(citesPinnedRelease([], 'wiki', 'slug')).toBe(false)
   })
   it('reads native pages and keeps the KB through internal links', async () => {
     vi.mocked(get).mockResolvedValue({ data: { slug: 'slug', page_type: 'concept', title: 'Native', content: '[[next]]' } } as any)
