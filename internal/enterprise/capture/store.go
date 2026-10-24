@@ -106,7 +106,7 @@ func (s *Store) Save(
 	if err != nil {
 		return err
 	}
-	parserIdentity, err := parserIdentityOf(result)
+	parserIdentity, err := ParserIdentitySHA256(result)
 	if err != nil {
 		return err
 	}

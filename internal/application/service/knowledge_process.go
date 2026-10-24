@@ -4097,7 +4097,7 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 		parentCfg, childCfg := buildParentChildConfigs(eff.ChunkingConfig, chunkCfg)
 		pcResult := chunker.ParentChildResult{}
 		if firstParse {
-			pcResult, err = g3FirstParseSplitParentChild(convertResult.MarkdownContent, parentCfg, childCfg)
+			pcResult, err = capture.SplitParentChild(convertResult.MarkdownContent, parentCfg, childCfg)
 			if err != nil {
 				return s.failG3FirstParse(ctx, knowledge, err)
 			}
@@ -4139,13 +4139,13 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 
 	// First-parse source coordinates are immutable before any indexing/model work.
 	if firstParse {
-		chunks, err = g3ExactSourceChunks(convertResult.MarkdownContent, chunks)
+		chunks, err = capture.ExactChunks(convertResult.MarkdownContent, chunks)
 		if err == nil {
 			all := append([]types.ParsedChunk(nil), chunks...)
 			for i := range processOpts.ParentChunks {
 				p := &processOpts.ParentChunks[i]
 				var exact []types.ParsedChunk
-				exact, err = g3ExactSourceChunks(
+				exact, err = capture.ExactChunks(
 					convertResult.MarkdownContent,
 					[]types.ParsedChunk{{Content: p.Content, Seq: p.Seq, Start: p.Start, End: p.End}},
 				)
@@ -4158,9 +4158,9 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 			if err == nil {
 				if payload.Revision == nil || payload.Revision.ParseAttempt != knowledge.CurrentParseAttempt ||
 					(payload.ParseAttempt > 0 && payload.Revision.ParseAttempt != payload.ParseAttempt) {
-					err = ErrConceptSourceAuthorityUnavailable830G2
+					err = capture.ErrUnavailable
 				} else {
-					id := g3FirstParseIdentity{
+					id := capture.Identity{
 						TenantID:     knowledge.TenantID,
 						RawKBID:      knowledge.KnowledgeBaseID,
 						KnowledgeID:  knowledge.ID,
@@ -4374,17 +4374,12 @@ func (s *knowledgeService) convert(
 		return nil, nil
 	}
 	if firstParse {
-		var projection conceptNativeHeader830G2
+		var parserIdentity string
 		if payload.Revision == nil || result.NativeStructure == nil || len(result.ImageRefs) != 0 || result.IsAudio ||
-			!utf8.ValidString(result.MarkdownContent) || strings.ContainsRune(result.MarkdownContent, '\x00') ||
-			json.Unmarshal(result.NativeStructure.SanitizedJSON, &projection) != nil {
-			err = ErrConceptSourceAuthorityUnavailable830G2
-		} else {
-			_, err = prepareConceptNativeQuoteIndex830G2(
-				result,
-				payload.Revision.FileSHA256,
-				projection.ParserIdentitySHA256,
-			)
+			!utf8.ValidString(result.MarkdownContent) || strings.ContainsRune(result.MarkdownContent, '\x00') {
+			err = capture.ErrUnavailable
+		} else if parserIdentity, err = capture.ParserIdentitySHA256(result); err == nil {
+			err = capture.ValidateNative(result, payload.Revision.FileSHA256, parserIdentity)
 		}
 		if err != nil {
 			s.failStage(
@@ -4397,7 +4392,7 @@ func (s *knowledgeService) convert(
 			)
 			return s.failKnowledge(ctx, knowledge, true, "G3_FIRST_PARSE_ARTIFACT_UNAVAILABLE: %v", err)
 		}
-		payload.Revision.ParserIdentity.DocReader = projection.ParserIdentitySHA256
+		payload.Revision.ParserIdentity.DocReader = parserIdentity
 	}
 	docOutput := types.JSONMap{
 		"text_length":  len(result.MarkdownContent),

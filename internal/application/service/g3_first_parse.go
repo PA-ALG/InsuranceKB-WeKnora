@@ -1,17 +1,11 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	werrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/infrastructure/chunker"
-	"os"
-	"path/filepath"
 
-	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -26,13 +20,21 @@ type (
 	g3FirstParseRecord   = capture.Record
 )
 
-// G3FirstParseStore shares only file storage and signing primitives with citation
-// reuse. It has no KnowledgeService dependency and never calls a parser.
-type G3FirstParseStore struct{ reuse *conceptSourceReuseStore830G3 }
-
-func NewG3FirstParseStore(codec *SchemaWikiCitationTokenCodec) *G3FirstParseStore {
-	return &G3FirstParseStore{reuse: newConceptSourceReuseStore830G3(codec)}
+// G3FirstParseStore keeps the first-parse captures of enterprise Space PDFs (internal/enterprise/capture).
+// It never calls a parser. Each call opens the captures under root with keys, so a test may point
+// root elsewhere.
+type G3FirstParseStore struct {
+	root string
+	keys *capture.Keys
 }
+
+// NewG3FirstParseStore keeps captures in the deployment's capture directory, sealed with keys from
+// the citation token signing ring.
+func NewG3FirstParseStore(keys *capture.Keys) *G3FirstParseStore {
+	return &G3FirstParseStore{root: capture.DefaultRoot(), keys: keys}
+}
+
+func (s *G3FirstParseStore) captures() *capture.Store { return capture.NewStore(s.root, s.keys) }
 
 // ReadSourceArtifact reads an exact historical capture. The caller must resolve
 // an authorized Space/RAW scope; this method independently checks Knowledge's
@@ -42,20 +44,13 @@ func (s *G3FirstParseStore) ReadSourceArtifact(
 	knowledgeID string, attempt int64,
 ) (*source.Artifact, error) {
 	var store *capture.Store
-	if s != nil && s.reuse != nil {
-		store = s.reuse.firstParseStore()
+	if s != nil {
+		store = s.captures()
 	}
 	reader, _ := repo.(capture.KnowledgeReader)
 	return capture.ReadSourceArtifact(ctx, store, reader, scope, knowledgeID, attempt)
 }
 
-func NewConceptSourceAuthorityService830G2WithFirstParse(fixed *KnowledgeRevisionSourceService, knowledge interfaces.KnowledgeRepository, chunks interfaces.ChunkRepository, reader interfaces.DocumentReader, codec *SchemaWikiCitationTokenCodec, releases *wikirepository.WikiReleaseRepository, legacy SchemaWikiCitationContentPort, preview *wikirepository.SchemaWikiFormalCandidatePreviewRegistry, first *G3FirstParseStore) *ConceptSourceAuthorityService830G2 {
-	s := NewConceptSourceAuthorityService830G2(fixed, knowledge, chunks, reader, codec, releases, legacy, preview)
-	if first != nil {
-		s.sourceReuse = first.reuse
-	}
-	return s
-}
 func g3FirstParseKey(id g3FirstParseIdentity) (string, error) { return capture.Key(id) }
 func g3FirstParseResult(record *g3FirstParseRecord) *types.ReadResult {
 	return capture.ReadResult(record)
@@ -66,28 +61,15 @@ func validateG3FirstParse(record *g3FirstParseRecord, id g3FirstParseIdentity) e
 
 // firstParseStore opens captures under this store's root with the citation signing ring. It is
 // built per call because tests and wiring may replace root or codec after construction.
-func (s *conceptSourceReuseStore830G3) firstParseStore() *capture.Store {
-	var keys *capture.Keys
-	if s.codec != nil {
-		keys = capture.NewKeys(s.codec.activeKeyID, s.codec.privateKeys)
-	}
-	return capture.NewStore(s.root, keys)
-}
-func (s *conceptSourceReuseStore830G3) readFirstParse(id g3FirstParseIdentity) (*g3FirstParseRecord, error) {
-	if s == nil {
-		return nil, ErrConceptSourceAuthorityUnavailable830G2
-	}
-	return s.firstParseStore().Read(id)
-}
 func (s *G3FirstParseStore) save(id g3FirstParseIdentity, result *types.ReadResult, chunks []types.ParsedChunk, origin ...*types.DocumentDocReaderReuseReference) error {
-	if s == nil || s.reuse == nil || len(origin) > 1 {
-		return ErrConceptSourceAuthorityUnavailable830G2
+	if s == nil || len(origin) > 1 {
+		return capture.ErrUnavailable
 	}
 	var reference *types.DocumentDocReaderReuseReference
 	if len(origin) == 1 {
 		reference = origin[0]
 	}
-	return s.reuse.firstParseStore().Save(id, result, chunks, reference)
+	return s.captures().Save(id, result, chunks, reference)
 }
 func g3FirstParseBindings(record *g3FirstParseRecord, manifest []types.RevisionManifestChunk) (map[string]g3FirstParseRange, error) {
 	if record == nil || len(manifest) == 0 {
@@ -138,73 +120,6 @@ func g3FirstParseRangeMatches(markdown, content string, r g3FirstParseRange) boo
 func g3FirstParseRangeMatchesRunes(runes []rune, content string, r g3FirstParseRange) bool {
 	return r.Start >= 0 && r.End > r.Start && r.End <= len(runes) && string(runes[r.Start:r.End]) == content && testSHA256830G2(content) == r.ContentSHA256
 }
-func conceptSourceReuseKey830G3(identity types.ConceptSourceIdentity830G2, binding string) (string, error) {
-	data, err := canonicalJSON830G2(struct {
-		Source  types.ConceptSourceIdentity830G2
-		Binding string
-	}{identity, binding})
-	if err != nil {
-		return "", err
-	}
-	return testSHA256Bytes830G2(data), nil
-}
-func (s *conceptSourceReuseStore830G3) validateFirstParseCache(record *conceptSourceReuseRecord830G3) error {
-	return s.validateFirstParseCacheProof(record, nil)
-}
-
-func (s *conceptSourceReuseStore830G3) validateFirstParseCacheProof(record *conceptSourceReuseRecord830G3, proof *conceptSourceBindingProof830G3) error {
-	id := g3FirstParseIdentity{TenantID: record.Identity.TenantID, RawKBID: record.Identity.RawKBID, KnowledgeID: record.Identity.KnowledgeID, ParseAttempt: record.Identity.ParseAttempt, SourceSHA256: record.Identity.SourceHash}
-	key, err := g3FirstParseKey(id)
-	if err != nil {
-		return err
-	}
-	data, err := s.readArtifact(filepath.Join(s.root, key+".json"), key)
-	if errors.Is(err, os.ErrNotExist) && record.FirstParseSHA256 == "" {
-		return nil
-	} // frozen legacy sources only
-	if err != nil {
-		return err
-	}
-	// A first artifact that exists makes legacy same-key caches ineligible.
-	if record.FirstParseSHA256 == "" || testSHA256Bytes830G2(data) != record.FirstParseSHA256 {
-		return ErrConceptSourceAuthorityUnavailable830G2
-	}
-	// The current signature and complete payload digest still passed above.
-	// Identical authenticated bytes have the same already-proved bindings to
-	// this exact immutable owned record; avoid reconstructing them per quote.
-	if proof.matches(record) {
-		return nil
-	}
-	var first g3FirstParseRecord
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&first) != nil || !jsonEOF830G2(decoder) || first.Contract != capture.Contract ||
-		first.Identity != id {
-		return ErrConceptSourceAuthorityUnavailable830G2
-	}
-	// The native index is already owned/validated by the cached record. Only the
-	// signed first capture and its complete binding are reopened on a cache hit.
-	return g3CachedFirstParseMatches(&first, record)
-}
-func g3CachedFirstParseMatches(first *g3FirstParseRecord, record *conceptSourceReuseRecord830G3) error {
-	if first == nil || record == nil || record.FirstParseSHA256 != g3FirstParseRecordSHA(first) || first.ParserIdentitySHA256 != record.Identity.ParserIdentity || first.Markdown != record.Markdown || first.Native == nil || record.Native == nil || first.Native.SanitizedSHA256 != record.Native.SanitizedSHA256 || first.Native.SourceSHA256 != record.Native.SourceSHA256 {
-		return ErrConceptSourceAuthorityUnavailable830G2
-	}
-	ranges, err := g3FirstParseBindings(first, record.Chunks)
-	if err != nil {
-		return err
-	}
-	if len(ranges) != len(record.ChunkRanges) {
-		return ErrConceptSourceAuthorityUnavailable830G2
-	}
-	for id, r := range ranges {
-		if stored, ok := record.ChunkRanges[id]; !ok || stored != r {
-			return ErrConceptSourceAuthorityUnavailable830G2
-		}
-	}
-	return nil
-}
-
 func (s *knowledgeService) failG3FirstParse(ctx context.Context, knowledge *types.Knowledge, cause error) error {
 	s.failStage(ctx, knowledge.ID, types.StageDocReader, werrors.ErrCodeDocReaderParseFailed, "G3 first parse artifact unavailable", cause)
 	_, err := s.failKnowledge(ctx, knowledge, true, "G3_FIRST_PARSE_ARTIFACT_UNAVAILABLE: %v", cause)

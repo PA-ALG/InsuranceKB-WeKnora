@@ -69,6 +69,7 @@ import (
 	notionConnector "github.com/Tencent/WeKnora/internal/datasource/connector/notion"
 	rssConnector "github.com/Tencent/WeKnora/internal/datasource/connector/rss"
 	yuqueConnector "github.com/Tencent/WeKnora/internal/datasource/connector/yuque"
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/enterprise/mcptools"
@@ -310,9 +311,16 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	}))
 	must(container.Provide(service.NewSchemaWikiCitationPorts))
 	must(container.Provide(service.NewKnowledgeRevisionSourceService))
+	must(container.Provide(func(cfg *config.Config) (*capture.Keys, error) {
+		ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return capture.NewKeys(ring.ActiveKeyID(), ring.SigningKeys()), nil
+	}))
 	must(container.Provide(service.NewG3FirstParseStore))
 	must(releasestore.Register(container))
-	must(container.Provide(service.NewConceptSourceAuthorityService830G2WithFirstParse))
+	must(container.Provide(service.NewConceptSourceAuthorityService830G2))
 	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseAuthorizationVerifier, error) {
 		verifier, _, err := schemaWikiReleaseVerifierProviders(cfg)
 		return verifier, err

@@ -1,12 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
@@ -152,4 +154,86 @@ func (s *ConceptSourceAuthorityService830G2) reusableLegacySourceCurrent830G3(ct
 	return source.TenantID == request.Scope.TenantID && source.KnowledgeID == request.Evidence.KnowledgeID && source.ParseAttempt == request.Evidence.ParseAttempt &&
 		source.RetentionState == types.KnowledgeRevisionSourcePinned && resource.Handle == source.ResourceHandle && resource.ContentHash == source.ObjectSHA256 && resource.State == types.ResourceStateActive && resource.Lifecycle == types.ResourceLifecyclePersistent &&
 		receipt.TenantID == source.TenantID && receipt.KnowledgeID == source.KnowledgeID && receipt.WeKnoraParseAttempt == source.ParseAttempt && receipt.FileSHA256 == source.FileSHA256 && receipt.ResourceID == source.ResourceID && receipt.PageCount == *source.PageCount && receipt.WeKnoraManifestAlgorithm == source.ManifestAlgorithm && manifestDigest == source.ManifestDigest && receipt.WeKnoraChunkCount == source.ChunkCount
+}
+
+// First-parse reads of the 830 citation family, kept here until the family is deleted (S7d-2c-3c).
+func (s *conceptSourceReuseStore830G3) firstParseStore() *capture.Store {
+	var keys *capture.Keys
+	if s.codec != nil {
+		keys = capture.NewKeys(s.codec.activeKeyID, s.codec.privateKeys)
+	}
+	return capture.NewStore(s.root, keys)
+}
+func (s *conceptSourceReuseStore830G3) readFirstParse(id g3FirstParseIdentity) (*g3FirstParseRecord, error) {
+	if s == nil {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	return s.firstParseStore().Read(id)
+}
+
+func conceptSourceReuseKey830G3(identity types.ConceptSourceIdentity830G2, binding string) (string, error) {
+	data, err := canonicalJSON830G2(struct {
+		Source  types.ConceptSourceIdentity830G2
+		Binding string
+	}{identity, binding})
+	if err != nil {
+		return "", err
+	}
+	return testSHA256Bytes830G2(data), nil
+}
+func (s *conceptSourceReuseStore830G3) validateFirstParseCache(record *conceptSourceReuseRecord830G3) error {
+	return s.validateFirstParseCacheProof(record, nil)
+}
+
+func (s *conceptSourceReuseStore830G3) validateFirstParseCacheProof(record *conceptSourceReuseRecord830G3, proof *conceptSourceBindingProof830G3) error {
+	id := g3FirstParseIdentity{TenantID: record.Identity.TenantID, RawKBID: record.Identity.RawKBID, KnowledgeID: record.Identity.KnowledgeID, ParseAttempt: record.Identity.ParseAttempt, SourceSHA256: record.Identity.SourceHash}
+	key, err := g3FirstParseKey(id)
+	if err != nil {
+		return err
+	}
+	data, err := s.readArtifact(filepath.Join(s.root, key+".json"), key)
+	if errors.Is(err, os.ErrNotExist) && record.FirstParseSHA256 == "" {
+		return nil
+	} // frozen legacy sources only
+	if err != nil {
+		return err
+	}
+	// A first artifact that exists makes legacy same-key caches ineligible.
+	if record.FirstParseSHA256 == "" || testSHA256Bytes830G2(data) != record.FirstParseSHA256 {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	// The current signature and complete payload digest still passed above.
+	// Identical authenticated bytes have the same already-proved bindings to
+	// this exact immutable owned record; avoid reconstructing them per quote.
+	if proof.matches(record) {
+		return nil
+	}
+	var first g3FirstParseRecord
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&first) != nil || !jsonEOF830G2(decoder) || first.Contract != capture.Contract ||
+		first.Identity != id {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	// The native index is already owned/validated by the cached record. Only the
+	// signed first capture and its complete binding are reopened on a cache hit.
+	return g3CachedFirstParseMatches(&first, record)
+}
+func g3CachedFirstParseMatches(first *g3FirstParseRecord, record *conceptSourceReuseRecord830G3) error {
+	if first == nil || record == nil || record.FirstParseSHA256 != g3FirstParseRecordSHA(first) || first.ParserIdentitySHA256 != record.Identity.ParserIdentity || first.Markdown != record.Markdown || first.Native == nil || record.Native == nil || first.Native.SanitizedSHA256 != record.Native.SanitizedSHA256 || first.Native.SourceSHA256 != record.Native.SourceSHA256 {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	ranges, err := g3FirstParseBindings(first, record.Chunks)
+	if err != nil {
+		return err
+	}
+	if len(ranges) != len(record.ChunkRanges) {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	for id, r := range ranges {
+		if stored, ok := record.ChunkRanges[id]; !ok || stored != r {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+	}
+	return nil
 }
