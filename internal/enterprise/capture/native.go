@@ -63,9 +63,9 @@ type nativeProjection struct {
 	SourceSHA256         string               `json:"source_sha256"`
 }
 
-// parserIdentityOf reads the parser identity digest from a native structure. It does not
+// ParserIdentitySHA256 reads the parser identity digest from a native structure. It does not
 // authorize anything: ValidateNative must still pass before the result is used or sealed.
-func parserIdentityOf(result *types.ReadResult) (string, error) {
+func ParserIdentitySHA256(result *types.ReadResult) (string, error) {
 	var header struct {
 		ParserIdentitySHA256 string `json:"parser_identity_sha256"`
 	}

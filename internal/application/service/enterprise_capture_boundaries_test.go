@@ -144,7 +144,7 @@ func TestEnterpriseCaptureRejectsTextThatWouldChangeDuringSanitization(t *testin
 				require.Zero(t, u.chunks.writes)
 				_, err = u.artifact(enterpriseScope, 3)
 				require.ErrorIs(t, err, source.ErrNotCaptured)
-				entries, err := os.ReadDir(u.store.reuse.root)
+				entries, err := os.ReadDir(u.store.root)
 				if err == nil {
 					require.Empty(t, entries, "no record or temporary capture file may survive")
 				} else {
