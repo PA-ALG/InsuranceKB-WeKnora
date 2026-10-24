@@ -22,6 +22,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -54,7 +55,7 @@ var enterpriseScope = types.WikiReleaseScope{
 // native capture and nothing else (user overrides never reach the parser).
 func captureRequested(req *types.ReadRequest) bool {
 	return req.ParserEngine == "builtin" && maps.Equal(req.ParserEngineOverrides,
-		map[string]string{"pdf_native_structure_capture": conceptNativeCapture830G2})
+		map[string]string{"pdf_native_structure_capture": capture.NativeCaptureMode})
 }
 
 type convertCase struct {
@@ -73,7 +74,7 @@ func convertOnce(t *testing.T, c convertCase) (*types.Knowledge, *firstParseRead
 	reader := &firstParseReader{result: c.result}
 	k := &types.Knowledge{
 		ID: "knowledge", TenantID: c.tenant, KnowledgeBaseID: c.kb, FileType: c.file,
-		FileSHA256: testSHA256830G2("pdf"), CurrentParseAttempt: 1, ParseStatus: types.ParseStatusProcessing,
+		FileSHA256: captureTestSHA256("pdf"), CurrentParseAttempt: 1, ParseStatus: types.ParseStatusProcessing,
 	}
 	kb := &types.KnowledgeBase{ID: c.kb, TenantID: c.tenant, ChunkingConfig: types.ChunkingConfig{
 		ParserEngineRules: []types.ParserEngineRule{{FileTypes: []string{"pdf", "docx"}, Engine: "auto"}},
@@ -190,7 +191,7 @@ func uploadToEnterpriseRawKB(t *testing.T, parsed *types.ReadResult) *enterprise
 	t.Setenv("RETRIEVE_DRIVER", "")
 	k := &types.Knowledge{
 		ID: "knowledge", TenantID: enterpriseTenant, KnowledgeBaseID: enterpriseRawKB, FileType: "pdf",
-		FileName: "source.pdf", FileSHA256: testSHA256830G2("pdf"), CurrentParseAttempt: 3,
+		FileName: "source.pdf", FileSHA256: captureTestSHA256("pdf"), CurrentParseAttempt: 3,
 		ParseStatus: types.ParseStatusPending,
 	}
 	kb := &types.KnowledgeBase{ID: enterpriseRawKB, TenantID: enterpriseTenant, ChunkingConfig: types.ChunkingConfig{

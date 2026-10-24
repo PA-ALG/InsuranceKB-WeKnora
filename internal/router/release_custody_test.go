@@ -22,7 +22,7 @@ func (scopedOnlyKBLookup) GetKnowledgeBaseByID(context.Context, string) (*types.
 
 func TestNativeWikiRegistrationRequiresOwnerLookup(t *testing.T) {
 	require.Panics(t, func() {
-		RegisterWikiPageRoutesWithRelease(gin.New().Group("/api/v1"), &handler.WikiPageHandler{}, nil,
+		RegisterWikiPageRoutes(gin.New().Group("/api/v1"), &handler.WikiPageHandler{},
 			&rbacGuards{kbService: scopedOnlyKBLookup{}}, &stubClassifier{})
 	})
 }

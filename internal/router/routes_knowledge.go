@@ -389,23 +389,12 @@ func RegisterKnowledgeTagRoutes(r *gin.RouterGroup, tagHandler *handler.TagHandl
 	}
 }
 
-// RegisterWikiPageRoutesWithRelease is the single native Wiki entry point.
+// RegisterWikiPageRoutes is the single native Wiki entry point.
 // Separate method groups put every native read and write
 // behind the same managed guard before the existing ownership/RBAC handlers.
-func RegisterWikiPageRoutesWithRelease(
+func RegisterWikiPageRoutes(
 	r *gin.RouterGroup,
 	wikiHandler *handler.WikiPageHandler,
-	releaseHandler *handler.WikiReleaseHandler,
-	g *rbacGuards,
-	classifier managed.Classifier,
-) {
-	registerWikiPageRoutes(r, wikiHandler, releaseHandler, g, classifier)
-}
-
-func registerWikiPageRoutes(
-	r *gin.RouterGroup,
-	wikiHandler *handler.WikiPageHandler,
-	releaseHandler *handler.WikiReleaseHandler,
 	g *rbacGuards,
 	classifier managed.Classifier,
 ) {
@@ -445,53 +434,4 @@ func registerWikiPageRoutes(
 	wikiRead.GET("/issues", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListIssues)
 	wiki.PUT("/issues/:issue_id/status", g.OwnedWikiKBOrAdmin(),
 		g.KBAccessWrite("kb_id"), wikiHandler.UpdateIssueStatus)
-
-	if releaseHandler == nil {
-		return
-	}
-	release := g.apiKeyGroup(
-		r.Group("/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id"),
-		apiKeyIngest(apiKeyFullAccess()),
-	)
-	releaseRead := release.With(apiKeyRetrieve(apiKeyFullAccess()))
-	releaseWriteGuards := []gin.HandlerFunc{
-		g.OwnedWikiKBOrAdmin(),
-		g.KBAccessWrite("kb_id"),
-		releaseHandler.RecordWikiAccessEvidence(),
-		g.KBAccessRead("raw_kb_id"),
-		releaseHandler.RecordRawAccessEvidence(),
-		releaseHandler.SealAccess(),
-	}
-	releaseReadGuards := []gin.HandlerFunc{
-		g.Viewer(),
-		g.KBAccessRead("kb_id"),
-		releaseHandler.RecordWikiAccessEvidence(),
-		g.KBAccessRead("raw_kb_id"),
-		releaseHandler.RecordRawAccessEvidence(),
-		releaseHandler.SealAccess(),
-	}
-	release.POST(
-		"/preparations",
-		append(append([]gin.HandlerFunc(nil), releaseWriteGuards...), releaseHandler.Prepare)...,
-	)
-	release.POST(
-		"/activations",
-		append(append([]gin.HandlerFunc(nil), releaseWriteGuards...), releaseHandler.Activate)...,
-	)
-	releaseRead.GET(
-		"/current",
-		append(append([]gin.HandlerFunc(nil), releaseReadGuards...), releaseHandler.Current)...,
-	)
-	releaseRead.GET(
-		"/releases/:release_id/pages/:logical_slug",
-		append(append([]gin.HandlerFunc(nil), releaseReadGuards...), releaseHandler.PinnedPage)...,
-	)
-	releaseRead.GET(
-		"/releases/:release_id/payloads/:logical_slug",
-		append(append([]gin.HandlerFunc(nil), releaseReadGuards...), releaseHandler.PinnedPayload)...,
-	)
-	releaseRead.GET(
-		"/releases/:release_id/search",
-		append(append([]gin.HandlerFunc(nil), releaseReadGuards...), releaseHandler.MinimalSearch)...,
-	)
 }

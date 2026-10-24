@@ -1,4 +1,6 @@
-"""The G3 reparse chain is gone: model-dispatch journal, DocReader recovery, bound reparse (S7d-2c-2a).
+"""The G3 reparse chain is gone (S7d-2c-2a).
+
+Model-dispatch journal, DocReader recovery and bound reparse are all retired.
 
 All three were switched on only by the G3 scope or by a bound-reparse receipt from the platform
 routes deleted in S7d-2b; enterprise Spaces never used them. The capture format they wrote stays
@@ -68,7 +70,8 @@ def test_the_reparse_chain_files_are_gone() -> None:
 
 
 def test_the_pipeline_no_longer_references_them() -> None:
-    for rel in TOUCHED:
+    # A file deleted later (S7d-2c-3c) references nothing.
+    for rel in (rel for rel in TOUCHED if (REPO_ROOT / rel).exists()):
         source = _read(rel)
         assert [name for name in GONE if name in source] == [], rel
 

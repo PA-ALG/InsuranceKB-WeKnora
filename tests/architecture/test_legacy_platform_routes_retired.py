@@ -54,10 +54,10 @@ def test_router_and_container_no_longer_wire_them() -> None:
 
 
 def test_the_release_service_drops_the_automation_policy() -> None:
-    source = _read(f"{SERVICE}/wiki_release.go")
-    assert "SystemPolicyProvider" not in source
-    assert "SystemDecisionVerifier" not in source
+    # S7d-2c-3c deleted the old release service altogether.
+    assert not (REPO_ROOT / SERVICE / "wiki_release.go").exists()
 
 
-def test_the_helpers_enterprise_capture_shares_stay() -> None:
-    assert (REPO_ROOT / SERVICE / "g3_platform_source_snapshot.go").is_file()
+def test_the_snapshot_helpers_went_with_the_830_family() -> None:
+    # Enterprise capture stopped using them in S7d-2c-3b; S7d-2c-3c deleted them.
+    assert not (REPO_ROOT / SERVICE / "g3_platform_source_snapshot.go").exists()

@@ -34,7 +34,7 @@ func TestNativeWikiWritesClassifySharedKnowledgeBaseOwner(t *testing.T) {
 					"shared": {ID: "shared", TenantID: 42, Type: types.KnowledgeBaseTypeWiki},
 				}}
 				engine := newKBRouteTestEngine(t, 7, lookup, nil, func(r *gin.RouterGroup, g *rbacGuards) {
-					RegisterWikiPageRoutesWithRelease(r, &handler.WikiPageHandler{}, nil, g, classifier)
+					RegisterWikiPageRoutes(r, &handler.WikiPageHandler{}, g, classifier)
 				})
 				routes := nativeWikiWriteRoutes(engine)
 				require.Len(t, routes, 11)

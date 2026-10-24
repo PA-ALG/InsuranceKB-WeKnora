@@ -2,9 +2,7 @@ package config
 
 import (
 	"crypto/ed25519"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,33 +13,31 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
 
 // Config 应用程序总配置
 type Config struct {
-	Conversation                    *ConversationConfig                    `yaml:"conversation"     json:"conversation"`
-	Server                          *ServerConfig                          `yaml:"server"           json:"server"`
-	KnowledgeBase                   *KnowledgeBaseConfig                   `yaml:"knowledge_base"   json:"knowledge_base"`
-	Tenant                          *TenantConfig                          `yaml:"tenant"           json:"tenant"`
-	Auth                            *AuthConfig                            `yaml:"auth"             json:"auth"`
-	Audit                           *AuditConfig                           `yaml:"audit"            json:"audit"`
-	OIDCAuth                        *OIDCAuthConfig                        `yaml:"oidc_auth"        json:"oidc_auth"`
-	Models                          []ModelConfig                          `yaml:"models"           json:"models"`
-	VectorDatabase                  *VectorDatabaseConfig                  `yaml:"vector_database"  json:"vector_database"`
-	DocReader                       *DocReaderConfig                       `yaml:"docreader"        json:"docreader"`
-	StreamManager                   *StreamManagerConfig                   `yaml:"stream_manager"   json:"stream_manager"`
-	ExtractManager                  *ExtractManagerConfig                  `yaml:"extract"          json:"extract"`
-	WebSearch                       *WebSearchConfig                       `yaml:"web_search"       json:"web_search"`
-	PromptTemplates                 *PromptTemplatesConfig                 `yaml:"prompt_templates" json:"prompt_templates"`
-	IM                              *IMConfig                              `yaml:"im"               json:"im"`
-	Agent                           *AgentConfig                           `yaml:"agent"            json:"agent"`
-	SchemaWikiSigning               *SchemaWikiSigningConfig               `yaml:"schema_wiki_signing" json:"-"`
-	SchemaWikiFrozenReleaseScope    *SchemaWikiFrozenReleaseScopeConfig    `yaml:"schema_wiki_frozen_release_scope" json:"-"`
-	KnowledgeRevisionSource         *KnowledgeRevisionSourceConfig         `yaml:"knowledge_revision_source" json:"knowledge_revision_source"`
-	SchemaWikiGoldenSuccessorStatus *SchemaWikiGoldenSuccessorStatusConfig `yaml:"schema_wiki_golden_successor_status" json:"-"`
+	Conversation    *ConversationConfig    `yaml:"conversation"     json:"conversation"`
+	Server          *ServerConfig          `yaml:"server"           json:"server"`
+	KnowledgeBase   *KnowledgeBaseConfig   `yaml:"knowledge_base"   json:"knowledge_base"`
+	Tenant          *TenantConfig          `yaml:"tenant"           json:"tenant"`
+	Auth            *AuthConfig            `yaml:"auth"             json:"auth"`
+	Audit           *AuditConfig           `yaml:"audit"            json:"audit"`
+	OIDCAuth        *OIDCAuthConfig        `yaml:"oidc_auth"        json:"oidc_auth"`
+	Models          []ModelConfig          `yaml:"models"           json:"models"`
+	VectorDatabase  *VectorDatabaseConfig  `yaml:"vector_database"  json:"vector_database"`
+	DocReader       *DocReaderConfig       `yaml:"docreader"        json:"docreader"`
+	StreamManager   *StreamManagerConfig   `yaml:"stream_manager"   json:"stream_manager"`
+	ExtractManager  *ExtractManagerConfig  `yaml:"extract"          json:"extract"`
+	WebSearch       *WebSearchConfig       `yaml:"web_search"       json:"web_search"`
+	PromptTemplates *PromptTemplatesConfig `yaml:"prompt_templates" json:"prompt_templates"`
+	IM              *IMConfig              `yaml:"im"               json:"im"`
+	Agent           *AgentConfig           `yaml:"agent"            json:"agent"`
+
+	SchemaWikiSigning       *SchemaWikiSigningConfig       `yaml:"schema_wiki_signing" json:"-"`
+	KnowledgeRevisionSource *KnowledgeRevisionSourceConfig `yaml:"knowledge_revision_source" json:"knowledge_revision_source"` //nolint:lll // Preserve the deployment config key
 	// FrontendBaseURL is the externally-visible origin of the SPA, used
 	// to compose absolute share-link URLs. Empty falls back to a host-
 	// relative URL ("/register?token=…") which the SPA then resolves
@@ -50,107 +46,12 @@ type Config struct {
 	FrontendBaseURL string `yaml:"frontend_base_url" json:"frontend_base_url"`
 }
 
-// SchemaWikiFrozenReleaseScopeConfig enables one deployment-owned immutable
-// release boundary for formal Candidate decisions. It is disabled by default;
-// identities must be supplied by deployment configuration, never source code.
-type SchemaWikiFrozenReleaseScopeConfig struct {
-	Enabled  bool   `yaml:"enabled" json:"enabled"`
-	TenantID uint64 `yaml:"tenant_id" json:"tenant_id"`
-	SpaceID  string `yaml:"space_id" json:"space_id"`
-	RawKBID  string `yaml:"raw_kb_id" json:"raw_kb_id"`
-	WikiKBID string `yaml:"wiki_kb_id" json:"wiki_kb_id"`
-}
-
-// DecodeSchemaWikiFrozenReleaseScope validates the deployment-owned boundary.
-// Missing configuration keeps formal Candidate decisions disabled. Partial,
-// stale, or non-canonical identities fail startup rather than changing scope.
-func DecodeSchemaWikiFrozenReleaseScope(cfg *Config) (*types.WikiReleaseScope, error) {
-	var configured *SchemaWikiFrozenReleaseScopeConfig
-	if cfg != nil {
-		configured = cfg.SchemaWikiFrozenReleaseScope
-	}
-	if configured == nil {
-		return nil, nil
-	}
-	ids := []string{configured.SpaceID, configured.RawKBID, configured.WikiKBID}
-	if !configured.Enabled {
-		if configured.TenantID != 0 || slicesContainNonEmpty(ids) {
-			return nil, fmt.Errorf("schema wiki frozen release scope configuration invalid")
-		}
-		return nil, nil
-	}
-	if configured.TenantID == 0 {
-		return nil, fmt.Errorf("schema wiki frozen release scope configuration invalid")
-	}
-	seen := make(map[string]struct{}, len(ids))
-	for _, id := range ids {
-		parsed, err := uuid.Parse(id)
-		if err != nil || parsed.String() != id {
-			return nil, fmt.Errorf("schema wiki frozen release scope configuration invalid")
-		}
-		if _, exists := seen[id]; exists {
-			return nil, fmt.Errorf("schema wiki frozen release scope configuration invalid")
-		}
-		seen[id] = struct{}{}
-	}
-	return &types.WikiReleaseScope{
-		TenantID: configured.TenantID,
-		SpaceID:  configured.SpaceID,
-		RawKBID:  configured.RawKBID,
-		WikiKBID: configured.WikiKBID,
-	}, nil
-}
-
-func slicesContainNonEmpty(values []string) bool {
-	for _, value := range values {
-		if value != "" {
-			return true
-		}
-	}
-	return false
-}
-
 // KnowledgeRevisionSourceConfig gates the one-shot immutable source backfill.
 // Reads remain fail-closed when a source has not been sealed. MaxObjectBytes
 // bounds every hash/page-count pass before any repository mutation.
 type KnowledgeRevisionSourceConfig struct {
 	BackfillEnabled bool  `yaml:"backfill_enabled" json:"backfill_enabled"`
 	MaxObjectBytes  int64 `yaml:"max_object_bytes" json:"max_object_bytes"`
-}
-
-// SchemaWikiGoldenSuccessorStatusConfig accepts one deployment-owned canonical
-// status artifact inline. There is deliberately no caller filesystem path.
-type SchemaWikiGoldenSuccessorStatusConfig struct {
-	CanonicalJSON   string `yaml:"canonical_json" json:"-"`
-	CanonicalSHA256 string `yaml:"canonical_sha256" json:"-"`
-}
-
-// DecodeSchemaWikiGoldenSuccessorStatus freezes the exact configured bytes.
-// Empty configuration is valid and keeps the private route typed unavailable.
-func DecodeSchemaWikiGoldenSuccessorStatus(cfg *Config) ([]byte, error) {
-	var configured *SchemaWikiGoldenSuccessorStatusConfig
-	if cfg != nil {
-		configured = cfg.SchemaWikiGoldenSuccessorStatus
-	}
-	if configured == nil {
-		return nil, nil
-	}
-	if configured.CanonicalJSON == "" || len(configured.CanonicalSHA256) != 64 ||
-		configured.CanonicalSHA256 != strings.ToLower(configured.CanonicalSHA256) {
-		return nil, fmt.Errorf("schema wiki golden successor status configuration invalid")
-	}
-	if _, err := hex.DecodeString(configured.CanonicalSHA256); err != nil {
-		return nil, fmt.Errorf("schema wiki golden successor status configuration invalid")
-	}
-	raw := []byte(configured.CanonicalJSON)
-	digest := sha256.Sum256(raw)
-	if hex.EncodeToString(digest[:]) != configured.CanonicalSHA256 {
-		return nil, fmt.Errorf("schema wiki golden successor status configuration invalid")
-	}
-	if _, err := types.ParseSchemaWikiGoldenSuccessorStatusV1(raw); err != nil {
-		return nil, fmt.Errorf("schema wiki golden successor status configuration invalid")
-	}
-	return append([]byte(nil), raw...), nil
 }
 
 // SchemaWikiEd25519PublicKeyConfig is a deployment-owned verification key.
@@ -998,9 +899,6 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, err.Error())
 	}
 	if _, err := DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(cfg); err != nil {
-		errs = append(errs, err.Error())
-	}
-	if _, err := DecodeSchemaWikiGoldenSuccessorStatus(cfg); err != nil {
 		errs = append(errs, err.Error())
 	}
 

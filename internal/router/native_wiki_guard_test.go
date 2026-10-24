@@ -46,7 +46,7 @@ func (s *stubClassifier) Classify(_ context.Context, tenantID uint64, kbID strin
 func newGuardedWikiEngine(t *testing.T, classifier managed.Classifier) *gin.Engine {
 	t.Helper()
 	return newKBRouteTestEngine(t, 1, tenantKBLookupFixture(), nil, func(r *gin.RouterGroup, guards *rbacGuards) {
-		RegisterWikiPageRoutesWithRelease(r, &handler.WikiPageHandler{}, nil, guards, classifier)
+		RegisterWikiPageRoutes(r, &handler.WikiPageHandler{}, guards, classifier)
 	})
 }
 
@@ -72,10 +72,9 @@ func newRecoveringGuardedWikiEngine(t *testing.T, classifier managed.Classifier)
 		c.Set(types.TenantIDContextKey.String(), uint64(1))
 		c.Next()
 	})
-	RegisterWikiPageRoutesWithRelease(
+	RegisterWikiPageRoutes(
 		engine.Group("/api/v1"),
 		&handler.WikiPageHandler{},
-		nil,
 		guards,
 		classifier,
 	)
@@ -214,7 +213,7 @@ func TestNativeWikiGuardPassesUnmanagedKBToNormalGuards(t *testing.T) {
 	}}
 	classifier := &stubClassifier{roles: map[string]managed.Role{}}
 	engine := newKBRouteTestEngine(t, 1, lookup, nil, func(r *gin.RouterGroup, guards *rbacGuards) {
-		RegisterWikiPageRoutesWithRelease(r, &handler.WikiPageHandler{}, nil, guards, classifier)
+		RegisterWikiPageRoutes(r, &handler.WikiPageHandler{}, guards, classifier)
 	})
 	for _, tc := range []struct{ method, path string }{
 		{http.MethodGet, "/api/v1/knowledgebase/kb-victim/wiki/pages"},

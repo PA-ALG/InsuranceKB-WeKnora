@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -40,13 +41,13 @@ func (r *sourcePagesRepository) GetRevision(
 
 func sourcePagesFixture(
 	t *testing.T,
-) (*G3FirstParseStore, *sourcePagesRepository, types.WikiReleaseScope, g3FirstParseIdentity) {
+) (*G3FirstParseStore, *sourcePagesRepository, types.WikiReleaseScope, capture.Identity) {
 	t.Helper()
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
 	store := NewG3FirstParseStore(captureTestKeys(t))
 	result := firstParseNative(t, "First\r\n𠮷", "Second\n")
 	scope := types.WikiReleaseScope{TenantID: 7, SpaceID: "space", RawKBID: "raw", WikiKBID: "wiki"}
-	id := g3FirstParseIdentity{
+	id := capture.Identity{
 		TenantID: 7, RawKBID: "raw", KnowledgeID: "source", ParseAttempt: 2,
 		SourceSHA256: result.NativeStructure.SourceSHA256,
 	}
@@ -56,7 +57,7 @@ func sourcePagesFixture(
 	repo := &sourcePagesRepository{
 		knowledge: &types.Knowledge{
 			ID: "source", TenantID: 7, KnowledgeBaseID: "raw", FileName: "source.pdf",
-			CurrentParseAttempt: 9, FileSHA256: testSHA256830G2("new revision"),
+			CurrentParseAttempt: 9, FileSHA256: captureTestSHA256("new revision"),
 		},
 		revision: &types.KnowledgeRevision{KnowledgeID: "source", ParseAttempt: 2, FileSHA256: id.SourceSHA256},
 	}
@@ -109,7 +110,7 @@ func TestReadSourceArtifactRejectsWrongTenantKBAndRevision(t *testing.T) {
 
 func TestReadSourceArtifactNeverCreatesMissingCaptureAndRejectsTampering(t *testing.T) {
 	store, repo, scope, id := sourcePagesFixture(t)
-	key, err := g3FirstParseKey(id)
+	key, err := capture.Key(id)
 	require.NoError(t, err)
 	path := filepath.Join(store.root, key+".json")
 	require.NoError(t, os.Remove(path))
