@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/Tencent/WeKnora/internal/agent/tools"
+	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/types"
-	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,10 +21,17 @@ func (s *toolSurfaceKBService) GetKnowledgeBaseByIDOnly(context.Context, string)
 func newToolSurfaceService(kb *types.KnowledgeBase) *agentService {
 	kb.TenantID = 7
 	return &agentService{
-		knowledgeBaseService:          &toolSurfaceKBService{fakeAgentKnowledgeBaseService{kb: kb}},
-		knowledgeService:              &fakeAgentKnowledgeService{},
-		conceptAgentTurnProvider830G2: &conceptAgentTurnProviderStub830G2{turn: &interfaces.ConceptAgentTurn830G2{}},
+		knowledgeBaseService: &toolSurfaceKBService{fakeAgentKnowledgeBaseService{kb: kb}},
+		knowledgeService:     &fakeAgentKnowledgeService{},
+		managedKBs:           unmanagedKBs{},
 	}
+}
+
+// unmanagedKBs classifies every knowledge base as outside release custody.
+type unmanagedKBs struct{}
+
+func (unmanagedKBs) Classify(context.Context, uint64, string) (managed.Role, error) {
+	return managed.Role{Kind: managed.KindNone, State: managed.StateUnmanaged}, nil
 }
 
 func toolSurfaceConfig(allowed ...string) *types.AgentConfig {

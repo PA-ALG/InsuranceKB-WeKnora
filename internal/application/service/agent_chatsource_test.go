@@ -10,7 +10,6 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/models/chat"
 	"github.com/Tencent/WeKnora/internal/types"
-	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,20 +63,12 @@ func TestQ1aAgentRawOnlyOffersSearchAndReusesTurnForEveryCall(t *testing.T) {
 	require.Len(t, config.SearchTargets, 2, "stored configuration was not rewritten")
 }
 
-type q1aLegacyTurn struct{}
-
-func (q1aLegacyTurn) PinConceptAgentTurn830G2(
-	context.Context, []interfaces.ConceptAgentKnowledgeScope830G2,
-) (*interfaces.ConceptAgentTurn830G2, error) {
-	return &interfaces.ConceptAgentTurn830G2{}, nil
-}
-
 func TestQ1aAgentMixedScopeDoesNotExposeEnterpriseToDocumentTools(t *testing.T) {
 	ctx, quick, _, _ := q1aFixture()
 	svc := &agentService{
 		cfg: quick.cfg, knowledgeBaseService: quick.knowledgeBaseService,
 		knowledgeService: quick.knowledgeService, chunkService: quick.chunkService,
-		chatSources: quick.chatSources, conceptAgentTurnProvider830G2: q1aLegacyTurn{},
+		chatSources: quick.chatSources, managedKBs: unmanagedKBs{},
 	}
 	registry := tools.NewToolRegistry()
 	require.NoError(t, svc.registerTools(ctx, registry, &types.AgentConfig{SearchTargets: types.SearchTargets{
