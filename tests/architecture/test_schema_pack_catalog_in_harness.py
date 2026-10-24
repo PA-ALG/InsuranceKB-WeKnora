@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import REPO_ROOT  # noqa: E402
 
 OLD = "internal/handler/schema_pack_catalog_830_g3.generated.json"
+OLD_DIR = "internal/handler/schema_pack_catalog"
 NEW = "harness/src/insurance_harness/catalog/schema_packs.json"
 SHA256 = "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9"
 READERS = ("harness/src", "harness/tests", "tests/acceptance", "dataset")
@@ -48,7 +49,7 @@ def test_the_harness_copy_is_byte_identical() -> None:
 
 
 def test_nothing_reads_the_old_location() -> None:
-    stale = [rel for root in READERS for rel in _mentions(root, "internal/handler/schema_pack_catalog")]
+    stale = [rel for root in READERS for rel in _mentions(root, OLD_DIR)]
     assert stale == []
 
 
