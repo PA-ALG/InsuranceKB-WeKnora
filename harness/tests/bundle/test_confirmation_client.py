@@ -267,3 +267,19 @@ def test_a_submission_over_the_body_limit_is_refused_before_any_request() -> Non
         client(lambda _: ok({"items": []}), seen).submit_confirmations(SPACE, [long] * 100)
     assert failure.value.code == "INVALID_REQUEST"
     assert seen == []
+
+
+@pytest.mark.parametrize(
+    "returned",
+    [
+        ITEM | {"closure": CLOSURE, "answer": ANSWER | {"id": "answer-2"}},
+        ITEM | {"closure": CLOSURE},
+        ITEM | {"closure": CLOSURE | {"reason": "obsolete"}, "answer": ANSWER},
+    ],
+    ids=["applied_other_answer", "applied_without_answer", "obsolete_with_answer_id"],
+)
+def test_a_closed_item_whose_closure_contradicts_its_answer_is_refused(returned: object) -> None:
+    """Review R5: a closed item cannot hold one latest answer and apply another."""
+    with pytest.raises(PlatformError) as failure:
+        client(lambda _: ok({"items": [returned]}), []).confirmations(SPACE, "closed")
+    assert failure.value.code == "INVALID_RESPONSE"

@@ -10,7 +10,7 @@ import pytest
 
 from insurance_harness.bundle.client import PlatformClient, PlatformError
 from insurance_harness.ingest.confirmations import sync
-from insurance_harness.ingest.registry import ProductRegistry
+from insurance_harness.ingest.registry import ProductRegistry, Settlement
 from insurance_harness.ingest.uploads import attribute_uploads
 from tests.ingest.confirmation_platform import PREFIX, FakePlatform
 from tests.ingest.confirmation_scenarios import (
@@ -194,3 +194,73 @@ def test_a_closing_receipt_that_does_not_match_is_not_taken_as_the_close() -> No
     recovered, _ = run(saves[-1], platform)  # the platform did close it: reconcile from its state
     assert platform.closed == [(item_id, "applied", answer_id)]
     assert recovered.registry.decisions[-1].attribution.outcome == "SUPPLEMENT"
+
+
+# Review R10, R9, R5 remainder ---------------------------------------------------------------------
+
+
+def test_an_open_settlement_whose_conclusion_no_longer_applies_is_not_closed() -> None:
+    reissued = raw("1818", "terms", knowledge_id="k-reissued", sha256="e" * 64)
+    head = material("1818", "terms")["head"]
+    reader = Pages(heads={"k-reissued": head}, sources=[reissued])
+    first, _ = run(
+        attribute_uploads(products(), [reissued], reader).registry,
+        platform := FakePlatform(),
+        reader=reader,
+    )
+    platform.answer(only_item(platform, "k-reissued"), "replace")
+    platform.fail_closures_after = 0
+    saves = Saves()
+    with pytest.raises(PlatformError):
+        run(first.registry, platform, reader=reader, save=saves)
+    assert settled_reasons(saves[-1]) == ["applied"]
+    newer = raw("1818", "terms", knowledge_id="k-newer", sha256="9" * 64)
+    newer_head = head.replace(PRODUCTS["1818"]["clause_code"], NEW_CODE, 1)
+    both = Pages(heads={"k-reissued": head, "k-newer": newer_head}, sources=[reissued, newer])
+    moved = attribute_uploads(saves[-1], [newer], both)
+    assert moved.report.counts == {"NEW_VERSION": 1}
+    platform.fail_closures_after = None
+
+    result, later = run(moved.registry, platform, reader=both)
+    assert platform.closed == []  # the item stays open: a person can still answer again
+    assert result.report.skipped == {"CONFIRMATION_CONFLICT": 1}
+    assert (result.registry, later) == (moved.registry, [])
+
+
+def test_a_closed_item_whose_answer_differs_from_the_settlement_is_not_executed() -> None:
+    first, _ = run(asked(products(), "k-new"), platform := FakePlatform())
+    item_id = only_item(platform, "k-new")
+    platform.answer(item_id, "supplement")
+    crash = Crash(on_call=2)
+    with pytest.raises(OSError):
+        run(first.registry, platform, save=crash)
+    [persisted] = crash.saved
+    platform.answers[item_id][-1]["option_key"] = "ignore"  # the same answer id, another choice
+    result, saves = run(persisted, platform)
+    assert result.report.skipped == {"SETTLEMENT_MISMATCH": 1}
+    assert (result.registry, saves) == (persisted, [])
+
+
+def test_a_settlement_naming_another_submitters_item_is_not_executed() -> None:
+    current = asked(products(), "k-new")
+    platform = FakePlatform()
+    foreign = platform.add("other:item-1", "r1", "别的提交方", [{"key": "ignore", "label": "忽略"}])
+    PlatformClient(BASE, "key", transport=platform.transport()).close_confirmation(
+        "space-1", foreign, "obsolete"
+    )
+    [entry] = current.pending
+    settlement = Settlement(
+        item_id=foreign,
+        knowledge_id=entry.knowledge_id,
+        parse_attempt=entry.parse_attempt,
+        sha256=entry.sha256,
+        revision="r1",
+        reason="obsolete",
+        confirmation=None,
+        conclusion=None,
+    )
+    current.pending[0] = entry.model_copy(update={"settlement": settlement})
+    result, saves = run(current, platform)
+    assert result.report.skipped == {"SETTLEMENT_MISMATCH": 1}
+    assert result.report.reopened == []
+    assert ([p.knowledge_id for p in result.registry.pending], saves) == (["k-new"], [])
