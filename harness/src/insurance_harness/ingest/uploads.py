@@ -10,6 +10,8 @@ person are not judged again; quarantined ones are, every run.
         --source-map PATH [--source-map PATH ...] [--dry-run]
     python -m insurance_harness.ingest.uploads run --registry PATH [--dry-run]
     python -m insurance_harness.ingest.uploads confirm --registry PATH [--dry-run]
+    python -m insurance_harness.ingest.uploads publish --registry PATH --run-root DIR \\
+        --stage-config PATH [--dry-run]
 
 `confirm` pushes the materials waiting for a person to the platform and applies their answers
 (S5b-3c-2); it shares the registry lock with the other commands.
@@ -37,6 +39,7 @@ from insurance_harness.identity.attribution import (
     attribute,
 )
 from insurance_harness.ingest.confirmations import ConfirmationsError, sync
+from insurance_harness.ingest.publication import PublicationError, run_publication
 from insurance_harness.ingest.raw_sources import RawSource, RawSources, RawSourcesError
 from insurance_harness.ingest.registry import (
     FINAL,
@@ -222,6 +225,15 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     confirm = commands.add_parser("confirm")
     confirm.add_argument("--registry", type=Path, required=True)
     confirm.add_argument("--dry-run", action="store_true")
+    publication = commands.add_parser("publish")
+    publication.add_argument("--registry", type=Path, required=True)
+    publication.add_argument("--run-root", type=Path, required=True)
+    publication.add_argument("--stage-config", type=Path, required=True)
+    publication.add_argument("--compile-max-sent", type=int, default=30)
+    publication.add_argument("--review-max-sent", type=int, default=10)
+    publication.add_argument("--products", nargs="+")
+    publication.add_argument("--seed-from", type=Path, action="append", default=[])
+    publication.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     base_url, api_key = os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, "")
     if not base_url or not api_key:
@@ -229,6 +241,17 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         return 2
     try:
         with _Lock(args.registry):
+            if args.command == "publish":
+                report = run_publication(
+                    args.registry, args.run_root,
+                    client=PlatformClient(base_url, api_key, transport=transport),
+                    stage_config=args.stage_config, compile_max_sent=args.compile_max_sent,
+                    review_max_sent=args.review_max_sent, products=args.products,
+                    seed_from=args.seed_from, dry_run=args.dry_run,
+                )
+                print(report.model_dump_json())
+                return 1 if any((report.stopped, report.review_stopped, report.failed,
+                                 report.samples_failed)) else 0
             listing = RawSources(base_url, api_key, transport=transport)
             pages = WeKnoraSourcePages(base_url, api_key, transport=transport)
             if args.command == "seed":
@@ -279,6 +302,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         AttributionInputError,
         PlatformError,
         ConfirmationsError,
+        PublicationError,
     ) as error:
         print(error.code, file=sys.stderr)
         return 1
