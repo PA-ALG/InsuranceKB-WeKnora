@@ -156,7 +156,7 @@ func NewService(store Store, opts ...Option) *Service      // WithClock、WithID
 | 方法与路径 | 权限 | 请求与响应 |
 |---|---|---|
 | `GET /confirmations?status=` | Viewer，RAW 与 Wiki 库均可读（同会话读取） | 同上 |
-| `POST /confirmations/:id/answers` | **Admin**（与专家编辑相同：选择会改变发布内容，用户 2026-10-22 规则"管理员及以上"），RAW 与 Wiki 库可读 | `{"option_key","note"}` → 201 `{"data":{"answer":…}}` |
+| `POST /confirmations/:id/answers` | 与专家编辑完全相同：**Admin**、RAW 库可读、**Wiki 库可编辑**（选择会改变发布内容，用户 2026-10-22 规则"管理员及以上"）。租户关闭 RBAC 时上游的 Admin 守卫只记日志不拦截，Wiki 库编辑权限仍然拦截（2026-10-25 修正） | `{"option_key","note"}` → 201 `{"data":{"answer":…}}` |
 
 - 请求体用抽检同一套严格 JSON 解析：拒绝重复键、未知键、大小写别名键、尾随数据、非法 UTF-8，嵌套超过 64 层同样拒绝。
 - 体积上限：提交 512 KiB，其余 64 KiB。
@@ -214,7 +214,7 @@ func NewService(store Store, opts ...Option) *Service      // WithClock、WithID
    - 会话路由不接受 API Key；
    - 响应格式与状态码。
 5. **路由**：
-   - 经真实 `registerEnterpriseRoutes`：页面选择要求 Admin（Viewer、Editor 得 403），读取要求 Viewer；
+   - 经真实 `registerEnterpriseRoutes`：页面选择要求 Admin 与 Wiki 库编辑权限（Contributor、Viewer、只有 Wiki 库读权限的 Admin 得 403；关闭 RBAC 时只有 Wiki 库读权限的 Contributor 也得 403），读取要求 Viewer；
    - 未配置 Space 时 404。
 6. **守卫**：`tests/architecture` 照常通过；新增 Go 文件都在 `internal/enterprise/` 下；不出现领域词汇（G2）。
 
