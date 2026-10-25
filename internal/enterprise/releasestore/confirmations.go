@@ -23,7 +23,7 @@ func (s *Store) InsertItems(ctx context.Context, tenantID uint64, items []confir
 		return out, nil
 	}
 	for _, item := range items {
-		if _, err := s.spaces.Scope(tenantID, item.SpaceID); err != nil {
+		if err := s.confirmationScope(tenantID, item.SpaceID); err != nil {
 			return nil, err
 		}
 	}
@@ -66,6 +66,15 @@ AND c.subject = ? AND c.revision = ? AND c.content_digest = ?`,
 	return out, nil
 }
 
+// confirmationScope keeps every entry point inside the configured Spaces: once a Space leaves the
+// configuration its items can no longer be read, answered or closed, and nothing is queried.
+func (s *Store) confirmationScope(tenantID uint64, spaceID string) error {
+	if _, err := s.spaces.Scope(tenantID, spaceID); err != nil {
+		return &release.Error{Code: confirm.ErrorConfirmationNotFound, Detail: "the Space is not configured"}
+	}
+	return nil
+}
+
 func identity(item confirm.Item) string {
 	return item.SpaceID + "\x00" + item.Subject + "\x00" + item.Revision + "\x00" + item.ContentDigest
 }
@@ -74,6 +83,9 @@ func identity(item confirm.Item) string {
 func (s *Store) ListItems(
 	ctx context.Context, tenantID uint64, spaceID string, f confirm.Filter,
 ) ([]confirm.Item, error) {
+	if err := s.confirmationScope(tenantID, spaceID); err != nil {
+		return nil, err
+	}
 	where := `c.tenant_id = ? AND c.space_id = ?`
 	switch f.Status {
 	case "open":
@@ -89,6 +101,9 @@ func (s *Store) ListItems(
 
 // ItemByID does not reveal whether a missing ID belongs to another scope.
 func (s *Store) ItemByID(ctx context.Context, tenantID uint64, spaceID, id string) (confirm.Item, bool, error) {
+	if err := s.confirmationScope(tenantID, spaceID); err != nil {
+		return confirm.Item{}, false, err
+	}
 	items, err := readConfirmations(s.db.WithContext(ctx),
 		`c.tenant_id = ? AND c.space_id = ? AND c.id = ?`, tenantID, spaceID, id)
 	if err != nil || len(items) == 0 {
@@ -100,6 +115,9 @@ func (s *Store) ItemByID(ctx context.Context, tenantID uint64, spaceID, id strin
 // AppendAnswer and CloseItem both lock the item row first, so an answer and a closure racing on
 // one item are serialised: whichever comes second sees the other.
 func (s *Store) AppendAnswer(ctx context.Context, tenantID uint64, spaceID string, a confirm.Answer) error {
+	if err := s.confirmationScope(tenantID, spaceID); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockOpenItem(tx, tenantID, spaceID, a.ItemID); err != nil {
 			return err
@@ -113,6 +131,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 
 // CloseItem closes once; an applied closure must name the latest answer, judged under the lock.
 func (s *Store) CloseItem(ctx context.Context, tenantID uint64, spaceID, itemID string, c confirm.Closure) error {
+	if err := s.confirmationScope(tenantID, spaceID); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockOpenItem(tx, tenantID, spaceID, itemID); err != nil {
 			return err

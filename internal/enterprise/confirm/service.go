@@ -121,7 +121,7 @@ func (s *Service) Answer(
 		return Answer{}, err
 	}
 	note = strings.TrimSpace(note)
-	if utf8.RuneCountInString(note) > maxNote || !printable(note, true) {
+	if utf8.RuneCountInString(note) > maxNote || !printable(note) {
 		return Answer{}, failure(ErrorAnswerInvalid, "note is invalid")
 	}
 	item, err := s.item(ctx, p, spaceID, itemID)
@@ -215,8 +215,8 @@ func validItems(in []ItemInput) ([]Item, error) {
 func validItem(raw ItemInput) (Item, bool) {
 	title, detail := strings.TrimSpace(raw.Title), strings.TrimSpace(raw.Detail)
 	if !subjectPattern.MatchString(raw.Subject) || !subjectPattern.MatchString(raw.Revision) ||
-		title == "" || utf8.RuneCountInString(title) > maxTitle || !printable(title, false) ||
-		utf8.RuneCountInString(detail) > maxDetail || !printable(detail, true) ||
+		title == "" || utf8.RuneCountInString(title) > maxTitle || !printable(title) ||
+		utf8.RuneCountInString(detail) > maxDetail || !printable(detail) ||
 		len(raw.Options) == 0 || len(raw.Options) > maxOptions {
 		return Item{}, false
 	}
@@ -225,7 +225,7 @@ func validItem(raw ItemInput) (Item, bool) {
 	for _, o := range raw.Options {
 		label := strings.TrimSpace(o.Label)
 		if !optionPattern.MatchString(o.Key) || keys[o.Key] || label == "" ||
-			utf8.RuneCountInString(label) > maxLabel || !printable(label, false) {
+			utf8.RuneCountInString(label) > maxLabel || !printable(label) {
 			return Item{}, false
 		}
 		keys[o.Key] = true
@@ -249,12 +249,13 @@ func contentDigest(item Item) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func printable(text string, newlines bool) bool {
+// printable rejects invalid UTF-8 and control characters other than the newline (Spec §2.2).
+func printable(text string) bool {
 	if !utf8.ValidString(text) {
 		return false
 	}
 	for _, r := range text {
-		if unicode.IsControl(r) && (!newlines || r != '\n') {
+		if unicode.IsControl(r) && r != '\n' {
 			return false
 		}
 	}

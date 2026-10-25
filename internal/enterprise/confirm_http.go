@@ -7,6 +7,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/enterprise/confirm"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
+	"github.com/Tencent/WeKnora/internal/types"
 )
 
 const maxConfirmationsBody = 512 << 10
@@ -108,6 +109,14 @@ func closeConfirmation(c *gin.Context, service *confirm.Service) {
 func answerConfirmation(c *gin.Context, service *confirm.Service) {
 	p, ok := confirmationPrincipal(c, service, true)
 	if !ok {
+		return
+	}
+	// The route's admin guard only logs when tenant RBAC is off; answers, like expert edits, check
+	// the trusted caller role here too, before any store access.
+	if !types.CallerFromContext(c.Request.Context()).Role.HasPermission(types.TenantRoleAdmin) {
+		writeError(c, &release.Error{
+			Code: release.ErrorReleaseAccessDenied, Detail: "answers need an administrator",
+		})
 		return
 	}
 	var in struct {

@@ -212,3 +212,117 @@ WHERE table_schema = current_schema() AND table_name LIKE 'enterprise_confirmati
 	require.Zero(t, tables)
 	require.NoError(t, db.Exec(migrationSQL(t, "000010_enterprise_confirmations.up.sql")).Error)
 }
+
+func TestPostgresConfirmationRefusesSpacesOutsideTheConfiguration(t *testing.T) {
+	db, store := confirmationSchema(t)
+	ctx := context.Background()
+	// An item left behind by a Space that has since been removed from the configuration.
+	require.NoError(t, db.Exec(`INSERT INTO enterprise_confirmations
+(id, tenant_id, space_id, subject, revision, content_digest, title, detail, options, created_by, created_at)
+VALUES ('old', 7, 'space-9', 'k', '1', 'd', 't', '', '[{"key":"ignore","label":"x"}]', 'svc', now())`).Error)
+	_, err := store.ListItems(ctx, 7, "space-9", confirm.Filter{})
+	require.Equal(t, "CONFIRMATION_NOT_FOUND", confirmationCode(t, err))
+	_, found, err := store.ItemByID(ctx, 7, "space-9", "old")
+	require.False(t, found)
+	require.Equal(t, "CONFIRMATION_NOT_FOUND", confirmationCode(t, err))
+	err = store.AppendAnswer(ctx, 7, "space-9", confirmationAnswer("a", "old", "ignore"))
+	require.Equal(t, "CONFIRMATION_NOT_FOUND", confirmationCode(t, err))
+	err = store.CloseItem(ctx, 7, "space-9", "old",
+		confirm.Closure{Reason: "obsolete", ClosedBy: "svc", ClosedAt: confirmationTime})
+	require.Equal(t, "CONFIRMATION_NOT_FOUND", confirmationCode(t, err))
+	outside := confirmationItem("new", "k-new")
+	outside.SpaceID = "space-9"
+	_, err = store.InsertItems(ctx, 7, []confirm.Item{outside})
+	require.Equal(t, "CONFIRMATION_NOT_FOUND", confirmationCode(t, err))
+	var rows int64
+	require.NoError(t, db.Raw(`SELECT (SELECT count(*) FROM enterprise_confirmation_answers)
+ + (SELECT count(*) FROM enterprise_confirmation_closures)
+ + (SELECT count(*) FROM enterprise_confirmations WHERE id <> 'old')`).Scan(&rows).Error)
+	require.Zero(t, rows, "nothing was written for a Space outside the configuration")
+}
+
+// holdItemLock begins another transaction holding the item's row lock, as an answer or a closure
+// in progress does; the caller writes inside it and commits to release the operation under test.
+func holdItemLock(t *testing.T, db *gorm.DB, itemID string) *gorm.DB {
+	t.Helper()
+	tx := db.Begin()
+	require.NoError(t, tx.Error)
+	// A failing test must not leave the lock held, or dropping the schema would wait forever.
+	t.Cleanup(func() { _ = tx.Rollback().Error })
+	require.NoError(t, tx.Exec(`SELECT id FROM enterprise_confirmations WHERE id = ? FOR UPDATE`, itemID).Error)
+	return tx
+}
+
+// waitForLockWaiter returns once another backend waits on a lock while touching the confirmation
+// tables, proving the operation under test is blocked by the holder before the holder commits.
+func waitForLockWaiter(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+		var waiting int64
+		require.NoError(t, db.Raw(`SELECT count(*) FROM pg_stat_activity
+WHERE datname = current_database() AND pid <> pg_backend_pid() AND wait_event_type = 'Lock'
+AND query LIKE '%enterprise_confirmation%'`).Scan(&waiting).Error)
+		if waiting > 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the operation under test never waited for the item lock")
+}
+
+func TestPostgresConfirmationAppliedClosureLosesToANewerAnswerCommittedFirst(t *testing.T) {
+	db, store := confirmationSchema(t)
+	ctx := context.Background()
+	_, err := store.InsertItems(ctx, 7, []confirm.Item{confirmationItem("i-1", "k-1")})
+	require.NoError(t, err)
+	require.NoError(t, store.AppendAnswer(ctx, 7, "space-1", confirmationAnswer("a-old", "i-1", "assign:p-1")))
+	hold := holdItemLock(t, db, "i-1")
+	require.NoError(t, hold.Exec(`INSERT INTO enterprise_confirmation_answers
+(id, tenant_id, space_id, confirmation_id, option_key, note, answerer, answered_at)
+VALUES ('a-new', 7, 'space-1', 'i-1', 'ignore', '', 'user:b', now())`).Error)
+	done := make(chan error, 1)
+	go func() {
+		done <- store.CloseItem(ctx, 7, "space-1", "i-1",
+			confirm.Closure{Reason: "applied", AnswerID: "a-old", ClosedBy: "svc", ClosedAt: confirmationTime})
+	}()
+	waitForLockWaiter(t, db)
+	require.NoError(t, hold.Commit().Error)
+	err = <-done
+	require.Equal(t, "ANSWER_STALE", confirmationCode(t, err), "the closure re-reads the latest answer under the lock")
+	item, _, err := store.ItemByID(ctx, 7, "space-1", "i-1")
+	require.NoError(t, err)
+	require.Nil(t, item.Closure)
+	require.Equal(t, "a-new", item.Answer.ID)
+}
+
+func TestPostgresConfirmationAnAnswerLosesToAClosureCommittedFirst(t *testing.T) {
+	for _, reason := range []string{"applied", "obsolete"} {
+		t.Run(reason, func(t *testing.T) {
+			db, store := confirmationSchema(t)
+			ctx := context.Background()
+			_, err := store.InsertItems(ctx, 7, []confirm.Item{confirmationItem("i-1", "k-1")})
+			require.NoError(t, err)
+			require.NoError(t, store.AppendAnswer(ctx, 7, "space-1", confirmationAnswer("a-1", "i-1", "ignore")))
+			answerID := "NULL"
+			if reason == "applied" {
+				answerID = "'a-1'"
+			}
+			hold := holdItemLock(t, db, "i-1")
+			require.NoError(t, hold.Exec(`INSERT INTO enterprise_confirmation_closures
+(confirmation_id, tenant_id, space_id, reason, answer_id, closed_by, closed_at)
+VALUES ('i-1', 7, 'space-1', ?, `+answerID+`, 'svc', now())`, reason).Error)
+			done := make(chan error, 1)
+			go func() {
+				done <- store.AppendAnswer(ctx, 7, "space-1", confirmationAnswer("a-late", "i-1", "assign:p-1"))
+			}()
+			waitForLockWaiter(t, db)
+			require.NoError(t, hold.Commit().Error)
+			err = <-done
+			require.Equal(t, "CONFIRMATION_CLOSED", confirmationCode(t, err), "re-read closure under the lock")
+			item, _, err := store.ItemByID(ctx, 7, "space-1", "i-1")
+			require.NoError(t, err)
+			require.Equal(t, reason, item.Closure.Reason)
+			require.Equal(t, "a-1", item.Answer.ID, "the late answer was not appended")
+		})
+	}
+}

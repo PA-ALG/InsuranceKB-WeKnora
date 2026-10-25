@@ -116,6 +116,12 @@ func TestEnterpriseConfirmationAnswersNeedAnAdminWithWikiEditRights(t *testing.T
 		{"viewer is refused", true, types.TenantRoleViewer, false, true, editor, "space-a", 403},
 		{"admin with only Wiki read is refused", true, admin, false, true, viewer, "space-a", 403},
 		{"disabled RBAC still needs Wiki edit rights", false, contributor, false, true, viewer, "space-a", 403},
+		{"disabled RBAC still needs an admin: contributor", false, contributor, false, true, editor, "space-a", 403},
+		{
+			"disabled RBAC still needs an admin: viewer", false, types.TenantRoleViewer, false, true, editor,
+			"space-a", 403,
+		},
+		{"disabled RBAC admin with Wiki editor answers", false, admin, false, true, editor, "space-a", 201},
 		{"service keys have no session route", true, types.TenantRoleOwner, true, true, editor, "space-a", 403},
 		{"RAW denial stops the answer", true, admin, false, false, editor, "space-a", 403},
 		{"unknown Space", true, admin, false, true, editor, "space-z", 404},
@@ -136,6 +142,7 @@ func TestEnterpriseConfirmationAnswersNeedAnAdminWithWikiEditRights(t *testing.T
 			}
 			if tc.status != 201 {
 				require.Zero(t, store.answers)
+				require.Zero(t, store.calls, "a refused answer never reaches the store")
 				return
 			}
 			require.Equal(t, 1, store.answers)
