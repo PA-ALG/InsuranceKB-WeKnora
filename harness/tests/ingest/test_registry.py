@@ -201,8 +201,12 @@ def test_an_automatic_conclusion_cannot_sit_in_pending(tmp_path: Path) -> None:
 
 def test_a_repeated_json_key_is_refused_rather_than_overwritten(tmp_path: Path) -> None:
     text = registry(p1828=entry("1828", "terms")).model_dump_json()
-    product = json.dumps(json.loads(text)["products"]["1828"], ensure_ascii=False)
-    emptied = json.dumps(json.loads(product) | {"materials": []}, ensure_ascii=False)
+    product = json.dumps(
+        json.loads(text)["products"]["1828"], ensure_ascii=False, separators=(",", ":")
+    )
+    emptied = json.dumps(
+        json.loads(product) | {"materials": []}, ensure_ascii=False, separators=(",", ":")
+    )
     doubled = text.replace(f'"1828":{product}', f'"1828":{product},"1828":{emptied}', 1)
     assert doubled != text
     path = tmp_path / "registry.json"
