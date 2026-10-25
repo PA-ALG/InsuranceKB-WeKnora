@@ -1,0 +1,24 @@
+{
+  "version": "2026-10-25.1",
+  "basis": "S5b-1: a material's product is decided from the clause filing code its terms print and the full product name its title carries (checked on 39 materials of 13 products, 2026-10-24). Product types follow the filed name suffix after trailing qualifiers such as (分红型) are removed; 养老年金 is an annuity (user 2026-10-18). New products get an id generated from the clause filing code (user 2026-10-24). 2026-10-24.2 (review R3): a clause code starts with a listed issuer, so a label printed before it is never taken into the code. 2026-10-25.1 (review R3 remainder): only the material's own code — at the very start, followed by the title — may create a product or make a new version; a code elsewhere (after a label, or cited in the body) only confirms a registered product whose name the title carries.",
+  "anchor_chars": 300,
+  "clause_code_pattern": "(?:平安人寿)〔\\d{4}〕[^\\d〔〕]{0,12}\\d{1,4}号",
+  "title_brackets": ["《", "》"],
+  "title_end_markers": ["阅读指引", "条款", "产品说明书", "说明书", "费率表", "金额表"],
+  "max_title_chars": 60,
+  "created_id_prefix": "sc-",
+  "created_id_hex": 10,
+  "classifications": [
+    {"suffix": "重大疾病保险", "classification": "critical_illness_insurance", "schema_pack_id": "schemapack_critical_illness_insurance"},
+    {"suffix": "两全保险", "classification": "endowment_insurance", "schema_pack_id": "schemapack_endowment_insurance"},
+    {"suffix": "终身寿险", "classification": "whole_life_insurance", "schema_pack_id": "schemapack_whole_life_insurance"},
+    {"suffix": "定期寿险", "classification": "term_life_insurance", "schema_pack_id": "schemapack_term_life_insurance"},
+    {"suffix": "年金保险", "classification": "annuity_insurance", "schema_pack_id": "schemapack_annuity_insurance"},
+    {"suffix": "意外医疗保险", "classification": "accident_medical_insurance", "schema_pack_id": "schemapack_accident_medical_insurance"},
+    {"suffix": "医疗保险", "classification": "medical_insurance", "schema_pack_id": "schemapack_medical_insurance"},
+    {"suffix": "意外伤害保险", "classification": "accident_insurance", "schema_pack_id": "schemapack_accident_insurance"},
+    {"suffix": "护理保险", "classification": "nursing_care_insurance", "schema_pack_id": "schemapack_nursing_care_insurance"},
+    {"suffix": "失能收入损失保险", "classification": "disability_income_insurance", "schema_pack_id": "schemapack_disability_income_insurance"},
+    {"suffix": "补充养老保险", "classification": "supplementary_pension_insurance", "schema_pack_id": "schemapack_supplementary_pension_insurance"}
+  ]
+}
