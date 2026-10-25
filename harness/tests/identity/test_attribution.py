@@ -16,6 +16,7 @@ import pytest
 
 from insurance_harness.identity.attribution import (
     Attribution,
+    AttributionInputError,
     RegisteredMaterial,
     RegisteredProduct,
     Upload,
@@ -91,7 +92,7 @@ def expect(result: Attribution, outcome: str, reason: str, product_id: str | Non
 
 def test_the_policy_loads_with_its_version_and_points_at_real_packs() -> None:
     policy = load_attribution_policy()
-    assert policy.version == "2026-10-24.1"
+    assert policy.version == "2026-10-24.2"
     catalog = json.loads(
         files("insurance_harness.catalog").joinpath("schema_packs.json").read_text(encoding="utf-8")
     )
@@ -103,7 +104,7 @@ def test_the_policy_loads_with_its_version_and_points_at_real_packs() -> None:
     for entry in policy.classifications:
         assert entry.classification in classes.get(entry.schema_pack_id, []), entry
     assert attribute(upload("1828", "brochure"), [registered("1828", "terms")]).policy_ref == (
-        "attribution-policy@2026-10-24.1"
+        "attribution-policy@2026-10-24.2"
     )
 
 
@@ -291,3 +292,76 @@ def test_the_created_id_depends_only_on_the_clause_code() -> None:
         [registered("594")],
     )
     assert first.product_id == other.product_id
+
+
+# 12. Review R1–R4 counterexamples (2026-10-24) -------------------------------------------------
+
+CODE = fold(PRODUCTS["1828"]["clause_code"])
+NAME = fold(PRODUCTS["1828"]["name"])
+
+
+@pytest.mark.parametrize(
+    "title",
+    ["平安新宁终身寿险", "", "长" * 61],
+    ids=["another-name", "no-title", "too-long"],
+)
+def test_a_clause_code_alone_never_files_a_material(title: str) -> None:
+    head = CODE + title + "阅读指引请扫描以查询验证条款"
+    result = attribute(
+        upload("1828", "terms", sha256="9" * 64, head=head), [registered("1828", "brochure")]
+    )
+    expect(result, "QUARANTINE", "anchor_conflict")
+
+
+def test_an_end_marker_right_after_the_code_leaves_no_title_to_create_from() -> None:
+    head = CODE + "阅读指引" + NAME + "条款"
+    result = attribute(upload("1828", "terms", head=head), everything_but("1828"))
+    expect(result, "QUARANTINE", "no_product_anchor")
+
+
+@pytest.mark.parametrize("label", ["条款编号:", "条款编号"])
+def test_a_label_before_the_code_does_not_make_a_new_version(label: str) -> None:
+    head = label + material("1828", "terms")["head"]
+    registry = [registered("1828", "terms", "brochure")]
+    result = attribute(upload("1828", "terms", sha256="8" * 64, head=head), registry)
+    expect(result, "QUARANTINE", "anchor_conflict")
+    assert result.clause_code == CODE
+    created = attribute(upload("1828", "terms", head=head), everything_but("1828"))
+    expect(created, "QUARANTINE", "no_product_anchor")
+
+
+def test_an_unknown_issuer_is_not_a_clause_code() -> None:
+    head = "远山人寿〔2025〕终身寿险301号远山恒泰终身寿险阅读指引请扫描以查询验证条款"
+    result = attribute(upload("1828", "terms", head=head), [])
+    expect(result, "QUARANTINE", "no_product_anchor")
+    assert result.clause_code is None
+
+
+def test_a_brochure_citing_its_clause_code_still_supplements_its_product() -> None:
+    code = fold(PRODUCTS["1830"]["clause_code"])
+    head = fold(PRODUCTS["1830"]["name"]) + "产品说明书本产品条款编号为" + code + "在本说明书中"
+    result = attribute(
+        upload("1830", "brochure", sha256="7" * 64, head=head), [registered("1830", "terms")]
+    )
+    expect(result, "SUPPLEMENT", "matched_by_clause_code", "1830")
+
+
+def test_a_registry_with_a_repeated_product_id_is_refused_in_any_order() -> None:
+    one = RegisteredProduct(
+        product_id="same",
+        names=("甲保险",),
+        clause_codes=(CODE,),
+        schema_pack_id="schemapack_whole_life_insurance",
+    )
+    two = RegisteredProduct(
+        product_id="same",
+        names=("乙保险",),
+        clause_codes=(),
+        schema_pack_id="schemapack_whole_life_insurance",
+    )
+    other = registered("1826")
+    head = CODE + "甲保险、乙保险产品说明书"
+    for registry in ([one, two, other], [two, one, other], [other, one, one]):
+        with pytest.raises(AttributionInputError) as caught:
+            attribute(upload("1828", "brochure", sha256="6" * 64, head=head), registry)
+        assert caught.value.code == "REGISTRY_DUPLICATE_PRODUCT"
