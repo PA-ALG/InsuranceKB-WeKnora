@@ -35,7 +35,7 @@ def fold(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKC", text) if not c.isspace())
 
 
-def material(product_id: str, role: str) -> dict:
+def material(product_id: str, role: str) -> dict[str, str]:
     keyword = next(k for k, r in ROLES.items() if r == role)
     return next(m for m in PRODUCTS[product_id]["materials"] if keyword in m["file_name"])
 
