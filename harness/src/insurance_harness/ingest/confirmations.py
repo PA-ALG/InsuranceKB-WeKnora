@@ -274,6 +274,10 @@ class _Sync:
                 if error.code != "CONFIRMATION_CLOSED":
                     raise  # the settlement stays: the next run reconciles it
                 closed = self.find(settlement.item_id, "closed")
+                # As in reconcile: the item's identity first, then how it was closed.
+                if closed is not None and not _same_question(closed, marked, settlement):
+                    self.skipped["SETTLEMENT_MISMATCH"] += 1  # kept: never cleared by another item
+                    return
                 if (
                     closed is None
                     or closed.closure is None
@@ -282,10 +286,8 @@ class _Sync:
                     self.mark(marked, None)
                     self.skipped[error.code] += 1
                     return
-                if not _same_question(closed, marked, settlement) or not _same_answer(
-                    closed, settlement
-                ):
-                    self.skipped["SETTLEMENT_MISMATCH"] += 1  # kept, as in reconcile
+                if not _same_answer(closed, settlement):
+                    self.skipped["SETTLEMENT_MISMATCH"] += 1
                     return
         self.execute(marked, settlement)
 
