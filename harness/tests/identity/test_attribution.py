@@ -365,3 +365,50 @@ def test_a_registry_with_a_repeated_product_id_is_refused_in_any_order() -> None
         with pytest.raises(AttributionInputError) as caught:
             attribute(upload("1828", "brochure", sha256="6" * 64, head=head), registry)
         assert caught.value.code == "REGISTRY_DUPLICATE_PRODUCT"
+
+
+# 13. Review R3 remainder (2026-10-25): only the material's own, leading code creates or versions --
+
+OWN = "平安人寿〔2025〕终身寿险301号"
+PLAIN = "远山恒泰终身寿险"
+
+
+def fictitious(**fields: object) -> RegisteredProduct:
+    return RegisteredProduct(
+        product_id="P",
+        names=(PLAIN,),
+        clause_codes=(OWN,),
+        schema_pack_id="schemapack_whole_life_insurance",
+        materials=(RegisteredMaterial(knowledge_id="old-terms", sha256="c" * 64, role="terms"),),
+        **fields,
+    )
+
+
+def terms(head: str) -> Upload:
+    return Upload(knowledge_id="new", file_name="材料条款.pdf", sha256="a" * 64, head=head)
+
+
+@pytest.mark.parametrize("label", ["备案编号:", "编号", "条款编号:"])
+def test_a_labelled_code_is_a_citation_that_never_creates_a_product(label: str) -> None:
+    head = label + OWN + PLAIN + "阅读指引"
+    expect(attribute(terms(head), []), "QUARANTINE", "no_product_anchor")
+    expect(attribute(terms(head), [fictitious()]), "QUARANTINE", "anchor_conflict")
+
+
+def test_a_cited_other_code_is_not_a_new_version() -> None:
+    head = PLAIN + "阅读指引请参见其他条款编号平安人寿〔2026〕终身寿险302号"
+    result = attribute(terms(head), [fictitious()])
+    expect(result, "NEEDS_CONFIRM", "same_role_differs", "P")
+    assert result.replaces == ()
+    expect(attribute(terms(head), []), "QUARANTINE", "no_product_anchor")
+
+
+def test_the_leading_code_still_creates_and_versions() -> None:
+    created = attribute(terms(OWN + PLAIN + "阅读指引"), [])
+    expect(created, "CREATE", "new_product")
+    assert created.display_name == PLAIN
+    versioned = attribute(
+        terms("平安人寿〔2026〕终身寿险302号" + PLAIN + "阅读指引"), [fictitious()]
+    )
+    expect(versioned, "NEW_VERSION", "new_clause_code", "P")
+    assert versioned.replaces == ("old-terms",)
