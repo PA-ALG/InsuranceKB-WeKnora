@@ -264,3 +264,42 @@ def test_a_settlement_naming_another_submitters_item_is_not_executed() -> None:
     assert result.report.skipped == {"SETTLEMENT_MISMATCH": 1}
     assert result.report.reopened == []
     assert ([p.knowledge_id for p in result.registry.pending], saves) == (["k-new"], [])
+
+
+def closed_by_someone_else(platform: FakePlatform, option: str | None) -> None:
+    """Before our close lands, another submitter closes the item with its latest answer; the
+    answer is then reported with another choice when `option` is given (review R5)."""
+
+    def close_first(item_id: str) -> None:
+        platform.before_close = None
+        answer = platform.answers[item_id][-1]
+        platform.closures[item_id] = {
+            "reason": "applied",
+            "answer_id": answer["id"],
+            "closed_by": "service:other",
+            "closed_at": "2026-10-25T11:00:00Z",
+        }
+        if option is not None:
+            answer["option_key"] = option
+
+    platform.before_close = close_first
+
+
+def test_a_close_someone_else_made_with_the_same_answer_completes_once() -> None:
+    first, _ = run(asked(products(), "k-new"), platform := FakePlatform())
+    platform.answer(only_item(platform, "k-new"), "supplement")
+    closed_by_someone_else(platform, None)
+    result, _ = run(first.registry, platform)
+    assert result.report.applied == ["k-new"]
+    assert result.registry.decisions[-1].attribution.outcome == "SUPPLEMENT"
+
+
+def test_a_close_someone_else_made_with_another_answer_is_not_executed() -> None:
+    first, _ = run(asked(products(), "k-new"), platform := FakePlatform())
+    platform.answer(only_item(platform, "k-new"), "supplement")
+    closed_by_someone_else(platform, "ignore")
+    result, saves = run(first.registry, platform)
+    assert result.report.skipped == {"SETTLEMENT_MISMATCH": 1}
+    assert result.registry.decisions == first.registry.decisions
+    assert settled_reasons(result.registry) == ["applied"]
+    assert saves and settled_reasons(saves[-1]) == ["applied"]

@@ -144,3 +144,16 @@ def test_recording_the_settled_conclusion_removes_the_settlement_with_its_entry(
     record(current, UPLOADS["k-new"][0], settlement.conclusion, settlement.confirmation)
     assert [p.knowledge_id for p in current.pending] == ["k-orphan", "k-scan"]
     assert current.decisions[-1].confirmation == REF
+
+
+@pytest.mark.parametrize("reason", ["applied", "obsolete"])
+def test_a_settlement_for_an_item_already_recorded_is_refused(tmp_path: Path, reason: str) -> None:
+    """Review R9: an item closes once, so a recorded item cannot be settled again."""
+    document: dict[str, Any] = json.loads(waiting_with(replace_conclusion()).model_dump_json())
+    new = next(p for p in document["pending"] if p["knowledge_id"] == "k-new")
+    if reason == "obsolete":
+        new["settlement"] |= {"reason": "obsolete", "confirmation": None, "conclusion": None}
+    document["decisions"][0]["confirmation"] = REF.model_dump() | {"answer_id": "answer-9"}
+    with pytest.raises(RegistryError) as failure:
+        load_registry(written(tmp_path, document))
+    assert failure.value.code == "REGISTRY_INVALID"
