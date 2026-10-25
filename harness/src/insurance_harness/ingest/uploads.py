@@ -250,7 +250,8 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                     seed_from=args.seed_from, dry_run=args.dry_run,
                 )
                 print(report.model_dump_json())
-                return 1 if report.stopped or report.review_stopped or report.failed else 0
+                return 1 if any((report.stopped, report.review_stopped, report.failed,
+                                 report.samples_failed)) else 0
             listing = RawSources(base_url, api_key, transport=transport)
             pages = WeKnoraSourcePages(base_url, api_key, transport=transport)
             if args.command == "seed":

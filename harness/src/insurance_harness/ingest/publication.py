@@ -14,7 +14,7 @@ import os
 import re
 import tempfile
 from collections.abc import Callable, Sequence
-from contextlib import redirect_stdout
+from contextlib import ExitStack, redirect_stdout
 from pathlib import Path
 from typing import Any, Literal
 
@@ -26,7 +26,7 @@ from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.eval import compile_run, review_run
 from insurance_harness.ingest.registry import ProductEntry, ProductRegistry, load_registry
-from insurance_harness.models.durable import prior_sends
+from insurance_harness.models.durable import RunRootBusy, prior_sends, run_lock
 
 
 class PublicationError(ValueError):
@@ -43,6 +43,12 @@ class PublicationPlan(BaseModel):
     publish: list[str]
 
 
+class SampleFailure(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    release_id: str
+    stopped: str
+
+
 class PublicationReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
     planned_compile: list[str] = Field(default_factory=list)
@@ -52,6 +58,7 @@ class PublicationReport(BaseModel):
     reviewed: list[str] = Field(default_factory=list)
     routes: dict[str, Literal["machine", "human", "unchanged"]] = Field(default_factory=dict)
     failed: dict[str, str] = Field(default_factory=dict)
+    samples_failed: dict[str, SampleFailure] = Field(default_factory=dict)
     stopped: str | None = None
     review_stopped: str | None = None
     compile_sent: int = 0
@@ -313,7 +320,28 @@ def run_publication(
     compile_max_sent: int = 30, review_max_sent: int = 10, dry_run: bool = False,
     products: Sequence[str] | None = None, seed_from: Sequence[Path] = (),
 ) -> PublicationReport:
-    """Run once under the caller's registry lock, with per-round durable send allowances."""
+    """Hold the run root through the report; callers separately hold the registry lock."""
+    with ExitStack() as locks:
+        if not dry_run:
+            # Convert only acquisition errors, never registry or execution ValueErrors.
+            try:
+                locks.enter_context(run_lock(run_root))
+            except RunRootBusy:
+                raise PublicationError("RUN_ROOT_BUSY") from None
+            except (ValueError, OSError):
+                raise PublicationError("RUN_ROOT_INVALID") from None
+        return _run_publication(
+            registry_path, run_root, client=client, stage_config=stage_config,
+            compile_max_sent=compile_max_sent, review_max_sent=review_max_sent,
+            dry_run=dry_run, products=products, seed_from=seed_from,
+        )
+
+
+def _run_publication(
+    registry_path: Path, run_root: Path, *, client: PlatformClient, stage_config: Path,
+    compile_max_sent: int, review_max_sent: int, dry_run: bool,
+    products: Sequence[str] | None, seed_from: Sequence[Path],
+) -> PublicationReport:
     if compile_max_sent < 0 or review_max_sent < 0:
         raise PublicationError("INVALID_ARGUMENTS")
     registry = load_registry(registry_path)
@@ -385,6 +413,11 @@ def run_publication(
             route = _route(summary)
             _record(run_root, receipts, product, digest)
             report.routes[product] = route
+            samples = summary.get("samples")
+            if route == "machine" and isinstance(samples, dict) and "stopped" in samples:
+                report.samples_failed[product] = SampleFailure(
+                    release_id=summary["release_id"], stopped=samples["stopped"],
+                )
         except PublicationError as error:
             report.failed[product] = error.code
     return report
