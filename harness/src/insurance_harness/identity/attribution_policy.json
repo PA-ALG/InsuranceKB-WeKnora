@@ -1,6 +1,6 @@
 {
-  "version": "2026-10-24.2",
-  "basis": "S5b-1: a material's product is decided from the clause filing code its terms print and the full product name its title carries (checked on 39 materials of 13 products, 2026-10-24). Product types follow the filed name suffix after trailing qualifiers such as (分红型) are removed; 养老年金 is an annuity (user 2026-10-18). New products get an id generated from the clause filing code (user 2026-10-24). 2026-10-24.2 (review R3): a clause code starts with a listed issuer, so a label printed before it is never taken into the code.",
+  "version": "2026-10-25.1",
+  "basis": "S5b-1: a material's product is decided from the clause filing code its terms print and the full product name its title carries (checked on 39 materials of 13 products, 2026-10-24). Product types follow the filed name suffix after trailing qualifiers such as (分红型) are removed; 养老年金 is an annuity (user 2026-10-18). New products get an id generated from the clause filing code (user 2026-10-24). 2026-10-24.2 (review R3): a clause code starts with a listed issuer, so a label printed before it is never taken into the code. 2026-10-25.1 (review R3 remainder): only the material's own code — at the very start, followed by the title — may create a product or make a new version; a code elsewhere (after a label, or cited in the body) only confirms a registered product whose name the title carries.",
   "anchor_chars": 300,
   "clause_code_pattern": "(?:平安人寿)〔\\d{4}〕[^\\d〔〕]{0,12}\\d{1,4}号",
   "title_brackets": ["《", "》"],
