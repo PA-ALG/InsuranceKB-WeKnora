@@ -7576,6 +7576,7 @@ export default {
       "note": "메모(선택)",
       "notePlaceholder": "판단 근거를 보충해 주세요",
       "noteLimit": "{count} / 1000자",
+      "noteInvalid": "메모에는 탭 같은 제어 문자를 넣을 수 없습니다",
       "noNote": "메모 없음",
       "submit": "선택 제출",
       "change": "선택 변경",

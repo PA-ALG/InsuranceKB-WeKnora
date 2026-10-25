@@ -31,6 +31,7 @@
 .ek-confirm-card__result .ek-page__meta { display: block; overflow-wrap: anywhere; margin: 8px 0 0; }
 .ek-confirm-note { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; margin: 8px 0 0; }
 .ek-confirm-error { font-size: 13px; margin: 12px 0 0; }
+.ek-confirm-note-invalid { margin: -6px 0 12px; }
 .ek-confirm-page button:focus-visible, .ek-confirm-page textarea:focus-visible, .ek-confirm-option:has(input:focus-visible),
 .ek-confirm-state:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 3px; }
 @media (max-width: 800px) {

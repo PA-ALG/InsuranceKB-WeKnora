@@ -7576,6 +7576,7 @@ export default {
       "note": "Note (optional)",
       "notePlaceholder": "Explain your decision",
       "noteLimit": "{count} / 1000 characters",
+      "noteInvalid": "The note cannot contain control characters such as tabs.",
       "noNote": "No note",
       "submit": "Submit choice",
       "change": "Change choice",

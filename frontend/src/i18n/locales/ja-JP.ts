@@ -7576,6 +7576,7 @@ export default {
       "note": "メモ（任意）",
       "notePlaceholder": "判断の根拠を補足してください",
       "noteLimit": "{count} / 1000 文字",
+      "noteInvalid": "メモにはタブなどの制御文字を使えません",
       "noNote": "メモなし",
       "submit": "選択を送信",
       "change": "選択を変更",

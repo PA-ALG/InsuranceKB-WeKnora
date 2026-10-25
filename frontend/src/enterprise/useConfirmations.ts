@@ -13,8 +13,15 @@ export interface ConfirmationDraft {
 export type AnswerResult = 'answered' | 'closed' | 'failed' | 'stale'
 
 export const maxNote = 1000
-// The server trims the note and counts code points.
-export const noteLength = (note: string) => Array.from(note.trim()).length
+// The server trims with Go's strings.TrimSpace, where U+0085 is a space and U+FEFF is not
+// (String.prototype.trim says the opposite), then counts code points.
+const SPACE = '[\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]'
+const EDGES = new RegExp(`^${SPACE}+|${SPACE}+$`, 'gu')
+export const trimNote = (note: string) => note.replace(EDGES, '')
+export const noteLength = (note: string) => Array.from(trimNote(note)).length
+// The server then refuses control characters other than a newline (Go unicode.IsControl).
+const CONTROL = new RegExp('[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f]', 'u')
+export const noteHasControl = (note: string) => CONTROL.test(trimNote(note))
 
 function startDraft(item: ConfirmationItem): ConfirmationDraft {
   return { base: item.answer?.id ?? '', option: item.answer?.option_key ?? '', note: item.answer?.note ?? '', busy: false, error: '' }
@@ -22,9 +29,9 @@ function startDraft(item: ConfirmationItem): ConfirmationDraft {
 
 // Submitting again is pointless unless it records a different choice or note.
 export function canAnswer(item: ConfirmationItem, draft: ConfirmationDraft): boolean {
-  if (item.closure || draft.busy || noteLength(draft.note) > maxNote) return false
+  if (item.closure || draft.busy || noteLength(draft.note) > maxNote || noteHasControl(draft.note)) return false
   if (!item.options.some(option => option.key === draft.option)) return false
-  return !item.answer || draft.option !== item.answer.option_key || draft.note.trim() !== item.answer.note.trim()
+  return !item.answer || draft.option !== item.answer.option_key || trimNote(draft.note) !== trimNote(item.answer.note)
 }
 
 export function useConfirmations(spaceId: Readonly<Ref<string>>) {
@@ -34,6 +41,8 @@ export function useConfirmations(spaceId: Readonly<Ref<string>>) {
   const drafts = reactive(new Map<string, ConfirmationDraft>())
   // The title of an item someone else closed while this page offered it.
   const notice = ref('')
+  // `scope` changes with the Space, `request` with every list read. A submission answers only the
+  // list it was made from: once the list was read again it shows the server's state instead.
   let scope = 0, request = 0
 
   async function load() {
@@ -62,18 +71,19 @@ export function useConfirmations(spaceId: Readonly<Ref<string>>) {
   async function answer(item: ConfirmationItem): Promise<AnswerResult> {
     const entry = drafts.get(item.id)
     if (!entry || item.space_id !== spaceId.value || !canAnswer(item, entry)) return 'failed'
-    const current = scope, space = spaceId.value, option = entry.option
+    const current = scope, listed = request, space = spaceId.value, option = entry.option
+    const left = () => current !== scope || listed !== request
     entry.busy = true; entry.error = ''
     try {
       const recorded = await answerConfirmation(space, item.id, option, entry.note)
-      if (current !== scope) return 'stale'
+      if (left()) return 'stale'
       if (recorded.item_id !== item.id || recorded.option_key !== option) throw new EnterpriseError('INVALID_RESPONSE')
       const answered = { ...item, answer: recorded }
       items.value = items.value.map(existing => existing.id === item.id ? answered : existing)
       drafts.set(item.id, startDraft(answered))
       return 'answered'
     } catch (error) {
-      if (current !== scope) return 'stale'
+      if (left()) return 'stale'
       const code = error instanceof EnterpriseError ? error.code : ''
       if (code === 'CONFIRMATION_CLOSED') {
         drafts.delete(item.id)

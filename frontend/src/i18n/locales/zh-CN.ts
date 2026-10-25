@@ -7578,6 +7578,7 @@ export default {
       "note": "备注（选填）",
       "notePlaceholder": "补充你的判断依据",
       "noteLimit": "{count} / 1000 字",
+      "noteInvalid": "备注不能包含控制字符（如制表符）",
       "noNote": "未填写备注",
       "submit": "提交选择",
       "change": "修改选择",

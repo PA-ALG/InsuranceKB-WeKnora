@@ -2,7 +2,7 @@
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ConfirmationItem } from './enterpriseApi'
-import { canAnswer, maxNote, noteLength, type ConfirmationDraft } from './useConfirmations'
+import { canAnswer, maxNote, noteHasControl, noteLength, type ConfirmationDraft } from './useConfirmations'
 
 const props = defineProps<{ item: ConfirmationItem; draft?: ConfirmationDraft }>()
 const emit = defineEmits<{ option: [key: string]; note: [value: string]; submit: [] }>()
@@ -10,6 +10,7 @@ const { t, locale } = useI18n()
 const groupId = useId(), noteId = useId()
 const label = (key?: string) => props.item.options.find(option => option.key === key)?.label
 const length = computed(() => noteLength(props.draft?.note ?? ''))
+const controlled = computed(() => noteHasControl(props.draft?.note ?? ''))
 const ready = computed(() => !!props.draft && canAnswer(props.item, props.draft))
 const waiting = computed(() => {
   const chosen = label(props.item.answer?.option_key)
@@ -50,10 +51,11 @@ const failure = computed(() => ({
         </label>
       </div>
       <label class="ek-confirm-card__label" :for="noteId">{{ t('enterpriseKnowledge.confirm.note') }}</label>
-      <textarea :id="noteId" :value="draft.note" :disabled="draft.busy" :aria-invalid="length > maxNote"
-        :aria-describedby="`${noteId}-hint`" rows="2" :placeholder="t('enterpriseKnowledge.confirm.notePlaceholder')"
-        @input="emit('note', ($event.target as HTMLTextAreaElement).value)" />
+      <textarea :id="noteId" :value="draft.note" :disabled="draft.busy" :aria-invalid="length > maxNote || controlled"
+        :aria-describedby="controlled ? `${noteId}-hint ${noteId}-invalid` : `${noteId}-hint`" rows="2"
+        :placeholder="t('enterpriseKnowledge.confirm.notePlaceholder')" @input="emit('note', ($event.target as HTMLTextAreaElement).value)" />
       <span :id="`${noteId}-hint`" class="ek-confirm-limit" :class="{ 'ek-confirm-limit--invalid': length > maxNote }">{{ t('enterpriseKnowledge.confirm.noteLimit', { count: length }) }}</span>
+      <p v-if="controlled" :id="`${noteId}-invalid`" class="ek-confirm-error ek-confirm-note-invalid">{{ t('enterpriseKnowledge.confirm.noteInvalid') }}</p>
       <div class="ek-confirm-card__actions">
         <p v-if="item.answer" class="ek-confirm-state" data-confirm-state tabindex="-1">{{ waiting }}</p>
         <button type="button" class="ek-button ek-confirm-submit" data-confirm-submit :disabled="!ready" @click="emit('submit')">
