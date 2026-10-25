@@ -212,7 +212,8 @@ func TestSubmitRejectsAnyInvalidItemAndWritesNothing(t *testing.T) {
 			bad := input("k-2")
 			bad.Options = append([]confirm.Option(nil), bad.Options...)
 			breakIt(&bad)
-			_, err := service(store).Submit(context.Background(), alice(), space, []confirm.ItemInput{input("k-1"), bad})
+			batch := []confirm.ItemInput{input("k-1"), bad}
+			_, err := service(store).Submit(context.Background(), alice(), space, batch)
 			require.Equal(t, "CONFIRMATION_INVALID", codeOf(t, err))
 			require.Empty(t, store.items)
 		})
@@ -220,7 +221,8 @@ func TestSubmitRejectsAnyInvalidItemAndWritesNothing(t *testing.T) {
 	store := newStore()
 	_, err := service(store).Submit(context.Background(), alice(), space, nil)
 	require.Equal(t, "CONFIRMATION_INVALID", codeOf(t, err), "an empty batch")
-	_, err = service(store).Submit(context.Background(), alice(), space, []confirm.ItemInput{input("k-1"), input("k-1")})
+	twice := []confirm.ItemInput{input("k-1"), input("k-1")}
+	_, err = service(store).Submit(context.Background(), alice(), space, twice)
 	require.Equal(t, "CONFIRMATION_INVALID", codeOf(t, err), "the same item twice in one batch")
 	batch := make([]confirm.ItemInput, 201)
 	for n := range batch {
