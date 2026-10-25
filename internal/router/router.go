@@ -16,6 +16,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise"
+	"github.com/Tencent/WeKnora/internal/enterprise/confirm"
 	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
@@ -48,6 +49,7 @@ type RouterParams struct {
 	FirstParseStore                *service.G3FirstParseStore
 	EnterpriseCandidates           *release.Service
 	EnterpriseSpotChecks           *spotcheck.Service
+	EnterpriseConfirmations        *confirm.Service
 	EnterpriseExperts              *expert.Service
 	ChunkService                   interfaces.ChunkService
 	SessionService                 interfaces.SessionService
@@ -410,7 +412,7 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	files := releasestore.SourceFiles(params.EnterpriseSpaces, params.KnowledgeRepository, params.KnowledgeService)
 	enterprise.Mount(v1.Group("/enterprise/spaces/:space_id"), enterprise.Deps{
 		Candidates: params.EnterpriseCandidates, Sources: sources,
-		SpotChecks: params.EnterpriseSpotChecks,
+		SpotChecks: params.EnterpriseSpotChecks, Confirmations: params.EnterpriseConfirmations,
 		Authorizer: guards.ensureAPIKeyAuthorizer(), Files: files,
 	})
 	kbAccess := func(raw bool, required types.OrgMemberRole) gin.HandlerFunc {
@@ -429,6 +431,7 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	enterprise.MountSessionReads(v1.Group("/enterprise"), enterprise.SessionDeps{
 		Candidates: params.EnterpriseCandidates, Sources: sources, Files: files, Spaces: params.EnterpriseSpaces,
 		SpotChecks: params.EnterpriseSpotChecks, Experts: params.EnterpriseExperts,
+		Confirmations: params.EnterpriseConfirmations,
 	}, guards.Viewer(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleViewer))
 	enterprise.MountSessionExpertEdits(v1.Group("/enterprise"), enterprise.SessionDeps{
 		Experts: params.EnterpriseExperts, Spaces: params.EnterpriseSpaces,
@@ -436,4 +439,9 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	enterprise.MountSessionSpotChecks(v1.Group("/enterprise"), enterprise.SessionDeps{
 		SpotChecks: params.EnterpriseSpotChecks, Spaces: params.EnterpriseSpaces,
 	}, guards.Viewer(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleEditor))
+	// Answers change what is compiled and published, so they take the expert-edit guards: an admin
+	// with Wiki edit rights (the Wiki guard still applies where tenant RBAC is off) (S5b-3a).
+	enterprise.MountSessionConfirmations(v1.Group("/enterprise"), enterprise.SessionDeps{
+		Confirmations: params.EnterpriseConfirmations, Spaces: params.EnterpriseSpaces,
+	}, guards.Admin(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleEditor))
 }

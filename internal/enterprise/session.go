@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/confirm"
 	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
@@ -26,8 +27,10 @@ type SessionDeps struct {
 	Sources    *source.Service
 	SpotChecks *spotcheck.Service
 	Experts    *expert.Service
-	Files      SourceFiles
-	Spaces     SpaceDirectory
+	// Confirmations backs the "to confirm" list and answers (S5b-3a).
+	Confirmations *confirm.Service
+	Files         SourceFiles
+	Spaces        SpaceDirectory
 }
 
 const sessionReadIdentityKey = "enterprise.session_read_identity"
@@ -94,6 +97,8 @@ func MountSessionReads(r gin.IRouter, deps SessionDeps, viewGuards ...gin.Handle
 	view.GET("/releases/active", func(c *gin.Context) { readRelease(c, service, "") })
 	samples := sessionSpotCheckRoutes(group, deps, viewGuards...)
 	samples.GET("/samples", func(c *gin.Context) { listSamples(c, deps.SpotChecks.SpaceReadView(), true) })
+	confirmations := sessionConfirmationRoutes(group, deps, viewGuards...)
+	confirmations.GET("/confirmations", func(c *gin.Context) { listConfirmations(c, deps.Confirmations, true) })
 	view.GET("/releases/:release_id", func(c *gin.Context) { readRelease(c, service, c.Param("release_id")) })
 	spacesPath := strings.TrimSuffix(view.BasePath(), "/")
 	view.GET("/releases/:release_id/citation", func(c *gin.Context) {

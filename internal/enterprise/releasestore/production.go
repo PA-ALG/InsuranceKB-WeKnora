@@ -14,6 +14,7 @@ import (
 	appservice "github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/chatsource"
+	"github.com/Tencent/WeKnora/internal/enterprise/confirm"
 	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	publishedknowledge "github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
@@ -92,11 +93,21 @@ func Register(container *dig.Container) error {
 	}); err != nil {
 		return err
 	}
-	return container.Provide(func(db *gorm.DB, spaces Spaces, releases *release.Service) *expert.Service {
+	if err := container.Provide(func(db *gorm.DB, spaces Spaces, releases *release.Service) *expert.Service {
 		if releases == nil {
 			return nil
 		}
 		return expert.NewService(releases, New(db, spaces))
+	}); err != nil {
+		return err
+	}
+	// Confirmation items share the enterprise configuration: without Spaces the service is nil
+	// and its routes answer 503 (S5b-3a).
+	return container.Provide(func(db *gorm.DB, spaces Spaces, releases *release.Service) *confirm.Service {
+		if releases == nil {
+			return nil
+		}
+		return confirm.NewService(New(db, spaces))
 	})
 }
 

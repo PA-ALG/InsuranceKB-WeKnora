@@ -1,0 +1,3 @@
+DROP TABLE enterprise_confirmation_closures;
+DROP TABLE enterprise_confirmation_answers;
+DROP TABLE enterprise_confirmations;

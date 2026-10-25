@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/confirm"
 	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
@@ -25,6 +26,8 @@ type Deps struct {
 	Candidates *release.Service
 	Sources    *source.Service
 	SpotChecks *spotcheck.Service
+	// Confirmations records items a person decides; nil answers 503 (S5b-3a).
+	Confirmations *confirm.Service
 	// Authorizer is the SAME registry attached to the authenticated API group.
 	Authorizer *middleware.APIKeyRouteAuthorizer
 	// Files opens cited original files; nil leaves the file route unavailable.
@@ -55,6 +58,9 @@ func Mount(r gin.IRouter, deps Deps) {
 		policy := middleware.APIKeyRoutePolicy{RequireFullAccess: true}
 		prefix := strings.TrimSuffix(group.BasePath(), "/")
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates", policy)
+		deps.Authorizer.Register(http.MethodPost, prefix+"/confirmations", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/confirmations", policy)
+		deps.Authorizer.Register(http.MethodPost, prefix+"/confirmations/:confirmation_id/closure", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/candidates/:candidate_id/preview", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/sources/:knowledge_id/attempts/:attempt/pages", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/decisions", policy)
@@ -72,6 +78,11 @@ func Mount(r gin.IRouter, deps Deps) {
 		group.Use(deps.Authorizer.Middleware())
 	}
 	group.POST("/candidates", func(c *gin.Context) { receive(c, deps.Candidates) })
+	group.POST("/confirmations", func(c *gin.Context) { submitConfirmations(c, deps.Confirmations) })
+	group.GET("/confirmations", func(c *gin.Context) { listConfirmations(c, deps.Confirmations, false) })
+	group.POST("/confirmations/:confirmation_id/closure", func(c *gin.Context) {
+		closeConfirmation(c, deps.Confirmations)
+	})
 	group.GET("/candidates/:candidate_id/preview", func(c *gin.Context) { preview(c, deps.Candidates) })
 	group.POST("/candidates/:candidate_id/decisions", func(c *gin.Context) { decide(c, deps.Candidates) })
 	group.POST("/candidates/:candidate_id/activations", func(c *gin.Context) { activate(c, deps.Candidates) })
@@ -287,7 +298,8 @@ func writeError(c *gin.Context, err error) {
 		status := http.StatusBadRequest
 		switch failure.Code {
 		case release.ErrorCandidateNotFound, release.ErrorDecisionNotFound, release.ErrorReleaseNotFound,
-			release.ErrorMemberNotFound, release.ErrorEvidenceNotFound, spotcheck.ErrorSampleNotFound:
+			release.ErrorMemberNotFound, release.ErrorEvidenceNotFound, spotcheck.ErrorSampleNotFound,
+			confirm.ErrorConfirmationNotFound:
 			status = http.StatusNotFound
 		case release.ErrorEvidenceMismatch:
 			status = http.StatusConflict
@@ -302,9 +314,10 @@ func writeError(c *gin.Context, err error) {
 		case release.ErrorReleaseActive, release.ErrorSourceUnavailable:
 			status = http.StatusConflict
 		case release.ErrorRetirementInvalid, release.ErrorInvalidRequest,
-			spotcheck.ErrorSampleInvalid, spotcheck.ErrorVerdictInvalid, expert.ErrorInvalid:
+			spotcheck.ErrorSampleInvalid, spotcheck.ErrorVerdictInvalid, expert.ErrorInvalid,
+			confirm.ErrorConfirmationInvalid, confirm.ErrorAnswerInvalid:
 			status = http.StatusBadRequest
-		case expert.ErrorStale:
+		case expert.ErrorStale, confirm.ErrorConfirmationClosed, confirm.ErrorAnswerStale:
 			status = http.StatusConflict
 		}
 		c.AbortWithStatusJSON(status, gin.H{"success": false, "code": failure.Code, "error": failure.Detail})
