@@ -87,10 +87,11 @@ export function useConfirmations(spaceId: Readonly<Ref<string>>) {
       const code = error instanceof EnterpriseError ? error.code : ''
       if (code === 'CONFIRMATION_CLOSED') {
         drafts.delete(item.id)
-        const reload = load()
+        const reload = load(), reloaded = request
         notice.value = item.title
         await reload
-        return current === scope ? 'closed' : 'stale'
+        // A refresh replaced by a later list read is not this page's any more: leave its focus alone.
+        return current === scope && reloaded === request ? 'closed' : 'stale'
       }
       const denied = error instanceof EnterpriseError && (error.status === 403 || code === 'RELEASE_ACCESS_DENIED')
       entry.error = denied ? 'denied' : code === 'ANSWER_INVALID' ? 'invalid' : 'failed'
