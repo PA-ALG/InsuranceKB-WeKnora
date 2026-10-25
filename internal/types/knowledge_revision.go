@@ -179,32 +179,6 @@ type KnowledgeRevisionSource struct {
 
 func (KnowledgeRevisionSource) TableName() string { return "knowledge_revision_sources" }
 
-// LiveRevisionSourceReceiptV1 is the language-neutral source half of the
-// Candidate evidence companion. Evidence/ParsedDocument and live WeKnora
-// identities remain distinct; no digest can stand in for another authority.
-type LiveRevisionSourceReceiptV1 struct {
-	Contract                 string `json:"contract"`
-	RevisionSourceID         string `json:"revision_source_id"`
-	TenantID                 uint64 `json:"tenant_id"`
-	SpaceID                  string `json:"space_id"`
-	RawKBID                  string `json:"raw_kb_id"`
-	WikiKBID                 string `json:"wiki_kb_id"`
-	KnowledgeID              string `json:"knowledge_id"`
-	EvidenceParseAttemptID   string `json:"evidence_parse_attempt_id"`
-	WeKnoraParseAttempt      int64  `json:"weknora_parse_attempt"`
-	ResourceID               string `json:"resource_id"`
-	FileSHA256               string `json:"file_sha256"`
-	Size                     int64  `json:"size"`
-	MimeType                 string `json:"mime_type"`
-	PageCount                int    `json:"page_count"`
-	ParsedDocumentSHA256     string `json:"parsed_document_sha256"`
-	ParseManifestSHA256      string `json:"parse_manifest_sha256"`
-	WeKnoraManifestAlgorithm string `json:"weknora_manifest_algorithm"`
-	WeKnoraManifestDigest    string `json:"weknora_manifest_digest"`
-	WeKnoraChunkCount        int    `json:"weknora_chunk_count"`
-	SourceReceiptSHA256      string `json:"source_receipt_sha256"`
-}
-
 // ComputeKnowledgeRevisionSourceID freezes the server-owned source-row key.
 func ComputeKnowledgeRevisionSourceID(source KnowledgeRevisionSource) (string, error) {
 	if source.TenantID == 0 || source.KnowledgeID == "" || source.ParseAttempt <= 0 ||
@@ -259,49 +233,6 @@ func ComputeKnowledgeRevisionSourceBindingDigest(source KnowledgeRevisionSource)
 func ValidateKnowledgeRevisionSourceBinding(source KnowledgeRevisionSource) error {
 	digest, err := ComputeKnowledgeRevisionSourceBindingDigest(source)
 	if err != nil || source.BindingDigest != digest {
-		return ErrInvalidRevisionManifest
-	}
-	return nil
-}
-
-// ComputeLiveRevisionSourceReceiptSHA256 is the cross-language exact equation.
-// SourceReceiptSHA256 itself is excluded from the preimage.
-func ComputeLiveRevisionSourceReceiptSHA256(receipt LiveRevisionSourceReceiptV1) (string, error) {
-	if receipt.Contract != "live-revision-source-receipt.v1" ||
-		receipt.TenantID == 0 || receipt.SpaceID == "" || receipt.RawKBID == "" ||
-		receipt.WikiKBID == "" || receipt.KnowledgeID == "" ||
-		receipt.EvidenceParseAttemptID == "" || receipt.WeKnoraParseAttempt <= 0 ||
-		receipt.ResourceID == "" || receipt.Size <= 0 || receipt.PageCount <= 0 ||
-		receipt.WeKnoraManifestAlgorithm != RevisionManifestAlgorithm ||
-		receipt.WeKnoraChunkCount <= 0 {
-		return "", ErrInvalidRevisionManifest
-	}
-	for _, digest := range []string{
-		receipt.RevisionSourceID, receipt.FileSHA256,
-		receipt.ParsedDocumentSHA256, receipt.ParseManifestSHA256,
-		receipt.WeKnoraManifestDigest,
-	} {
-		if !validRevisionSHA256(digest) {
-			return "", ErrInvalidRevisionManifest
-		}
-	}
-	return revisionAuthorityDigest(receipt.Contract, []string{
-		receipt.RevisionSourceID, strconv.FormatUint(receipt.TenantID, 10),
-		receipt.SpaceID, receipt.RawKBID, receipt.WikiKBID, receipt.KnowledgeID,
-		receipt.EvidenceParseAttemptID, strconv.FormatInt(receipt.WeKnoraParseAttempt, 10),
-		receipt.ResourceID, receipt.FileSHA256, strconv.FormatInt(receipt.Size, 10),
-		receipt.MimeType, strconv.Itoa(receipt.PageCount), receipt.ParsedDocumentSHA256,
-		receipt.ParseManifestSHA256, receipt.WeKnoraManifestAlgorithm,
-		receipt.WeKnoraManifestDigest, strconv.Itoa(receipt.WeKnoraChunkCount),
-	}), nil
-}
-
-// ValidateLiveRevisionSourceReceiptV1 validates the closed receipt equation.
-// Callers must additionally replay its fields against server-owned source and
-// revision rows; a self-consistent digest alone is never sufficient authority.
-func ValidateLiveRevisionSourceReceiptV1(receipt LiveRevisionSourceReceiptV1) error {
-	digest, err := ComputeLiveRevisionSourceReceiptSHA256(receipt)
-	if err != nil || receipt.SourceReceiptSHA256 != digest {
 		return ErrInvalidRevisionManifest
 	}
 	return nil

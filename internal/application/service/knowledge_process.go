@@ -1545,11 +1545,6 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 		// (deadline exceeded vs unexpected EOF vs 5xx, etc.).
 		summaryOut["error"] = previewText(err.Error(), 500)
 		summaryOut["error_type"] = fmt.Sprintf("%T", err)
-		if errors.Is(err, types.ErrModelDispatchJournalUnavailable) {
-			markSummaryFailed()
-			summaryErr = err
-			return err
-		}
 		// For the insufficient-content case (scanned PDF without OCR, etc.)
 		// we deliberately do NOT fall back to the first chunk's raw content,
 		// since that chunk is typically just a bare markdown image reference

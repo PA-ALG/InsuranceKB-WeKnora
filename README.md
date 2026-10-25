@@ -48,9 +48,7 @@ Schema Wiki 暂不可用”是 fail-closed 状态，不表示功能代码不存�
 以及 Wiki + RAW 双 ACL；若只有引文正文不可用，再检查 native revision/source custody
 与 citation-token 运行时签名环。
 
-`schema_wiki_frozen_release_scope`、named-human decision ring 和
-publish-authorization ring 只服务 Candidate 决策/发布，不是只读体验前置条件；只读
-演示应保持这些写链路禁用或为空。Golden quality evaluator ring 属于未来 C4 质量
+Golden quality evaluator ring 属于未来 C4 质量
 评估，同样不属于 C7 只读体验。
 
 端口不是版本号。C7 时 `18085` 是 UI、`18094` 是隔离后端，旧生产 `8081` 明确
