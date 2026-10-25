@@ -158,7 +158,8 @@ def test_a_newer_answer_before_closing_is_taken_on_the_next_run() -> None:
     platform.before_close = change_of_mind
     second, saves = run(first.registry, platform)
     assert platform.closed == []
-    assert (second.registry, saves) == (first.registry, [])
+    # The settlement is saved before closing and cleared on ANSWER_STALE (Spec §2.2).
+    assert second.registry == saves[-1] == first.registry
     assert second.report.skipped == {"ANSWER_STALE": 1}
     third, _ = run(second.registry, platform)
     [(_, reason, answer_id)] = platform.closed
