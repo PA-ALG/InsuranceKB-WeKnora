@@ -180,3 +180,51 @@ export async function submitVerdict(spaceId: string, sampleId: string, outcome: 
   ))
   return data.verdict
 }
+
+// Confirmation items (S5b-3a): titles, details and option labels are the submitter's opaque text.
+export interface ConfirmationOption { key: string; label: string }
+
+export interface ConfirmationAnswer {
+  id: string
+  item_id: string
+  option_key: string
+  note: string
+  answerer: string
+  answered_at: string
+}
+
+export interface ConfirmationClosure {
+  reason: 'applied' | 'obsolete'
+  answer_id?: string
+  closed_by: string
+  closed_at: string
+}
+
+export interface ConfirmationItem {
+  id: string
+  space_id: string
+  subject: string
+  revision: string
+  content_digest: string
+  title: string
+  detail: string
+  options: ConfirmationOption[]
+  created_by: string
+  created_at: string
+  answer?: ConfirmationAnswer
+  closure?: ConfirmationClosure
+}
+
+export async function listConfirmations(spaceId: string, status: 'open' | 'closed'): Promise<ConfirmationItem[]> {
+  const query = new URLSearchParams({ status })
+  const data = await read<{ items: ConfirmationItem[] }>(`${SPACES}/${encodeURIComponent(spaceId)}/view/confirmations?${query}`)
+  return data.items
+}
+
+export async function answerConfirmation(spaceId: string, itemId: string, optionKey: string, note: string): Promise<ConfirmationAnswer> {
+  const data = await response<{ answer: ConfirmationAnswer }>(() => post(
+    `${SPACES}/${encodeURIComponent(spaceId)}/view/confirmations/${encodeURIComponent(itemId)}/answers`,
+    { option_key: optionKey, note },
+  ))
+  return data.answer
+}

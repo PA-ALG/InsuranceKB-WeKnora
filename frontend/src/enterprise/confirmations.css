@@ -1,0 +1,42 @@
+.ek-confirm-shell { max-width: 960px; margin: 0 auto; }
+.ek-confirm-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 8px 0 28px; }
+.ek-confirm-heading .ek-page__title { margin-bottom: 8px; }
+.ek-confirm-heading p { margin: 0; }
+.ek-confirm-heading .ek-meta-tag { flex-shrink: 0; }
+.ek-confirm-notice { margin: 0 0 16px; padding: 10px 14px; border-radius: 6px; background: var(--td-warning-color-1); color: var(--td-text-color-primary); font-size: 14px; overflow-wrap: anywhere; }
+.ek-confirm-tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--td-border-level-1-color); margin-bottom: 18px; }
+.ek-confirm-tabs button { color: var(--td-text-color-secondary); background: transparent; border: 0; border-bottom: 3px solid transparent; padding: 12px 2px; font: inherit; cursor: pointer; }
+.ek-confirm-tabs [aria-selected="true"] { color: var(--td-brand-color); border-bottom-color: var(--td-brand-color); font-weight: 600; }
+.ek-confirm-card { border: 1px solid var(--td-border-level-1-color); border-radius: 10px; margin: 12px 0; padding: 22px 26px; min-width: 0; }
+.ek-confirm-card__choice { border: 0; margin: 0; padding: 0; min-width: 0; }
+.ek-confirm-card__choice legend { padding: 0; }
+.ek-confirm-card__title { margin: 0 0 10px; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.ek-confirm-card__detail { margin: 0 0 16px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; color: var(--td-text-color-secondary); }
+.ek-confirm-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.ek-confirm-option { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border: 1px solid var(--td-border-level-2-color); border-radius: 6px; cursor: pointer; font-size: 14px; overflow-wrap: anywhere; }
+.ek-confirm-option:has(input:checked) { border-color: var(--td-brand-color); background: var(--td-brand-color-light); }
+.ek-confirm-option input { margin: 3px 0 0; flex-shrink: 0; }
+.ek-confirm-card__label { display: block; font-size: 12px; color: var(--td-text-color-secondary); margin-bottom: 6px; }
+.ek-confirm-card textarea { display: block; resize: vertical; width: 100%; box-sizing: border-box; min-height: 58px; padding: 9px 10px; font: inherit; font-size: 13px; line-height: 1.5; border: 1px solid var(--td-border-level-2-color); border-radius: 6px; background: var(--td-bg-color-container); color: var(--td-text-color-primary); }
+.ek-confirm-limit { display: block; margin: 5px 0 12px; text-align: right; color: var(--td-text-color-placeholder); font-size: 11px; }
+.ek-confirm-limit--invalid, .ek-confirm-error { color: var(--td-error-color); }
+.ek-confirm-card__actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+.ek-confirm-card__actions .ek-confirm-state { margin-right: auto; }
+.ek-confirm-submit { padding: 7px 18px; white-space: nowrap; }
+.ek-confirm-submit:disabled { opacity: .45; cursor: not-allowed; }
+.ek-confirm-state { margin: 0; font-size: 14px; color: var(--td-text-color-primary); overflow-wrap: anywhere; }
+.ek-confirm-state[data-reason="applied"] { color: var(--td-success-color); }
+.ek-confirm-state[data-reason="obsolete"] { color: var(--td-text-color-secondary); }
+.ek-confirm-card__result { padding-top: 14px; border-top: 1px solid var(--td-border-level-1-color); }
+.ek-confirm-card__result .ek-page__meta { display: block; overflow-wrap: anywhere; margin: 8px 0 0; }
+.ek-confirm-note { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; margin: 8px 0 0; }
+.ek-confirm-error { font-size: 13px; margin: 12px 0 0; }
+.ek-confirm-note-invalid { margin: -6px 0 12px; }
+.ek-confirm-page button:focus-visible, .ek-confirm-page textarea:focus-visible, .ek-confirm-option:has(input:focus-visible),
+.ek-confirm-state:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 3px; }
+@media (max-width: 800px) {
+  .ek-confirm-page { padding: 20px 16px 40px; }
+  .ek-confirm-card { padding: 18px; }
+  .ek-confirm-heading { align-items: flex-start; }
+  .ek-confirm-card__actions { flex-direction: column; align-items: stretch; }
+}
