@@ -9,6 +9,10 @@ person are not judged again; quarantined ones are, every run.
     python -m insurance_harness.ingest.uploads seed --registry PATH --space ID --raw-kb ID \\
         --source-map PATH [--source-map PATH ...] [--dry-run]
     python -m insurance_harness.ingest.uploads run --registry PATH [--dry-run]
+    python -m insurance_harness.ingest.uploads confirm --registry PATH [--dry-run]
+
+`confirm` pushes the materials waiting for a person to the platform and applies their answers
+(S5b-3c-2); it shares the registry lock with the other commands.
 """
 
 import argparse
@@ -22,6 +26,7 @@ from pathlib import Path
 import httpx
 from pydantic import BaseModel, ConfigDict
 
+from insurance_harness.bundle.client import PlatformClient, PlatformError
 from insurance_harness.eval.product_sources import declared_pack, display_name, source_directory
 from insurance_harness.evidence.weknora_pages import SourcePagesError, WeKnoraSourcePages
 from insurance_harness.identity.attribution import (
@@ -31,6 +36,7 @@ from insurance_harness.identity.attribution import (
     Upload,
     attribute,
 )
+from insurance_harness.ingest.confirmations import ConfirmationsError, sync
 from insurance_harness.ingest.raw_sources import RawSource, RawSources, RawSourcesError
 from insurance_harness.ingest.registry import (
     FINAL,
@@ -213,6 +219,9 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     run = commands.add_parser("run")
     run.add_argument("--registry", type=Path, required=True)
     run.add_argument("--dry-run", action="store_true")
+    confirm = commands.add_parser("confirm")
+    confirm.add_argument("--registry", type=Path, required=True)
+    confirm.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     base_url, api_key = os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, "")
     if not base_url or not api_key:
@@ -244,6 +253,16 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 print(json.dumps(summary))
                 return 0
             registry = load_registry(args.registry)
+            if args.command == "confirm":
+                confirmed = sync(
+                    registry,
+                    PlatformClient(base_url, api_key, transport=transport),
+                    pages,
+                    write=not args.dry_run,
+                    save=lambda current: save_registry(current, args.registry),
+                )
+                print(confirmed.report.model_dump_json())
+                return 0
             result = attribute_uploads(registry, listing.completed(registry.raw_kb_id), pages)
             if not args.dry_run and result.registry != registry:
                 save_registry(result.registry, args.registry)
@@ -258,6 +277,8 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         SourcePagesError,
         SourceMapError,
         AttributionInputError,
+        PlatformError,
+        ConfirmationsError,
     ) as error:
         print(error.code, file=sys.stderr)
         return 1

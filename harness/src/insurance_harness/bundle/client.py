@@ -7,16 +7,24 @@ never reach the exception. The client never approves anything on its own.
 
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+# Re-exported: callers use the confirmation models through the client.
+from insurance_harness.bundle.confirmation_items import ConfirmationAnswer as ConfirmationAnswer
+from insurance_harness.bundle.confirmation_items import ConfirmationClosure as ConfirmationClosure
+from insurance_harness.bundle.confirmation_items import ConfirmationInput as ConfirmationInput
+from insurance_harness.bundle.confirmation_items import ConfirmationItem as ConfirmationItem
+from insurance_harness.bundle.confirmation_items import ConfirmationOption as ConfirmationOption
 from insurance_harness.contracts.bundle import CandidateBundle
 
 MAX_BUNDLE_BYTES = 2 << 20  # the platform's limit (release.MaxBundleBytes)
 MAX_RESPONSE_BYTES = 32 << 20
+MAX_CONFIRMATIONS = 200  # the platform's limit on items per submission (S5b-3a)
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 _PLATFORM_CODES = frozenset(
     {
@@ -44,6 +52,12 @@ _PLATFORM_CODES = frozenset(
         "SAMPLE_INVALID",
         "SAMPLE_NOT_FOUND",
         "VERDICT_INVALID",
+        # S5b-3a confirmation items
+        "CONFIRMATION_INVALID",
+        "CONFIRMATION_NOT_FOUND",
+        "ANSWER_INVALID",
+        "CONFIRMATION_CLOSED",
+        "ANSWER_STALE",
     }
 )
 _CLIENT_CODES = frozenset(
@@ -148,6 +162,14 @@ class _Samples(_Response):
     samples: list[Sample]
 
 
+class _Confirmations(_Response):
+    items: list[ConfirmationItem]
+
+
+class _Closure(_Response):
+    closure: ConfirmationClosure
+
+
 class PlatformClient:
     def __init__(
         self, base_url: str, api_key: str, transport: httpx.BaseTransport | None = None
@@ -216,6 +238,45 @@ class PlatformClient:
         for value in query.values():
             _identifier(value)
         return _parse(_Samples, self._send("GET", space_id, ["samples"], None, query)).samples
+
+    def submit_confirmations(
+        self, space_id: str, items: Sequence[ConfirmationInput]
+    ) -> list[ConfirmationItem]:
+        """Submit items; the platform keeps existing ones and returns them all in input order."""
+        if not 1 <= len(items) <= MAX_CONFIRMATIONS:
+            raise PlatformError("INVALID_REQUEST")
+        body = {"items": [item.model_dump() for item in items]}
+        raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        return _parse(_Confirmations, self._send("POST", space_id, ["confirmations"], raw)).items
+
+    def confirmations(
+        self, space_id: str, status: Literal["open", "closed"]
+    ) -> list[ConfirmationItem]:
+        if status not in {"open", "closed"}:
+            raise PlatformError("INVALID_REQUEST")
+        data = self._send("GET", space_id, ["confirmations"], None, {"status": status})
+        return _parse(_Confirmations, data).items
+
+    def close_confirmation(
+        self,
+        space_id: str,
+        item_id: str,
+        reason: Literal["applied", "obsolete"],
+        answer_id: str | None = None,
+    ) -> ConfirmationClosure:
+        """Close once: applied names the latest answer, obsolete names none."""
+        if reason not in {"applied", "obsolete"} or (reason == "applied") != (
+            answer_id is not None
+        ):
+            raise PlatformError("INVALID_REQUEST")
+        body: dict[str, str] = {"reason": reason}
+        if answer_id is not None:
+            _identifier(answer_id)
+            body["answer_id"] = answer_id
+        path = ["confirmations", item_id, "closure"]
+        return _parse(
+            _Closure, self._send("POST", space_id, path, json.dumps(body).encode())
+        ).closure
 
     def release(self, space_id: str, release_id: str) -> Release:
         path = ["releases", release_id] if release_id else ["releases", "active"]
