@@ -31,6 +31,7 @@
 | `DIR/compile/` | 编译运行目录（`compile_run` 的 `--run-root`），每个产品一个 `output.json` |
 | `DIR/review/` | 打分运行目录（`review_run` 的 `--run-root`），每个产品一个 `scores.json` |
 | `DIR/published.json` | 各产品最近一次发布成功时 `output.json` 的 SHA-256，原子写入 |
+| `DIR/scored.json` | 各产品最近一次打分成功时 `output.json` 的 SHA-256，原子写入；分数只对这份输出有效 |
 
 ## 3. 一轮的步骤
 
@@ -44,21 +45,28 @@
    - 参数为 `--registry`、`--products <要编译的产品>`、`--stage schema_fields`、`--stage-config`、`--run-root DIR/compile`；
    - `--max-sent` 取该目录已发送数加 `--compile-max-sent`（默认 30），已发送数用 `models.durable.prior_sends` 计算；
    - 停下（退出码非 0）时，本轮按它输出的错误码结束：已完成的产品已经落盘，下一轮复用；本轮不打分、不发布。
-3. **打分**：对本轮实际重新编译的产品（`reused` 为 false），调用 `review_run.main`：
-   - 参数为 `--products …`、`--compile-root DIR/compile`、`--stage review`、`--stage-config`、`--run-root DIR/review`；
-   - `--max-sent` 取已发送数加 `--review-max-sent`（默认 10）；
-   - 打分停下时**不结束本轮**，报告其错误码，继续发布：没有分数的产品，按现有路由进入人工队列。
-4. **发布**：按 id 顺序，对每个要发布的产品：
-   - 读一次 Active，判断其中有没有该产品的 Claim：
-     - 没有：用首次发布命令（`publish.main`）；
-     - 有：用变化发布命令（`publish_changes.main`）；
+3. **判断有无变化**：
+   - 读一次 Active；
+   - 对要发布、且 Active 中已有该产品 Claim 的产品，先用变化发布命令演练（`publish_changes.main`，加 `--dry-run`，参数同第 5 步，不带 `--scores`）。它只读平台：
+     - 输出 `no_changes: true`：记为 `unchanged`，写入 `published.json`，本轮不再打分、发布；
+     - 失败：记入 `failed`，本轮跳过这个产品。
+4. **打分**（审核 R1）：
+   - 分数只对它打分时的那份输出有效，`scored.json` 记录这种绑定；
+   - 要打分的产品：还要发布、`output.json` 存在、且 `scored.json` 中的摘要不等于当前输出摘要的产品。不只是本轮重新编译的产品，这样编译中途停下、跨轮续跑时也能补上打分；
+   - 调用 `review_run.main`：
+     - 参数为 `--products …`、`--compile-root DIR/compile`、`--stage review`、`--stage-config`、`--run-root DIR/review`；
+     - `--max-sent` 取已发送数加 `--review-max-sent`（默认 10）；
+   - 调用前先记下各产品当前输出的摘要。成功后，只给打分命令摘要中列出的产品写入 `scored.json`（真实摘要的 `products` 是 `{product, scored, reused}` 对象列表），绑定的是调用前记下的摘要；
+   - 打分停下时：`scored.json` 不变，报告其错误码，**不结束本轮**，继续发布。
+5. **发布**：按 id 顺序，对还要发布的每个产品：
+   - Active 中没有该产品的 Claim：用首次发布命令（`publish.main`）；有：用变化发布命令（`publish_changes.main`）；
    - 两者参数都是：
      - `--run-root DIR/compile`、`--product`、`--registry`、`--route`；
-     - `--scores DIR/review/<p>/scores.json`，只在该文件存在时给；
+     - `--scores DIR/review/<p>/scores.json`：**只在** `scored.json` 中该产品的摘要等于当前输出摘要、且文件存在时才给。否则不给，按现有路由进入人工队列；旧分数不会用于新内容；
      - 默认的审核策略与抽检策略；
    - 成功（退出码 0）后，把该产品 `output.json` 的 SHA-256 写入 `published.json`；
    - 失败时报告错误码，不写 `published.json`，继续下一个产品；下一轮还会再发布它。
-5. **报告**：输出一行 JSON：
+6. **报告**：输出一行 JSON：
    - `compiled`、`reused`、`reviewed`、`published`（每个产品的路由结果：`machine` / `human` / `unchanged`）、`failed`（产品与错误码）、`stopped`（如有）；
    - 本轮编译与打分的发送数；
    - 只含产品 id、计数与错误码，不含路径或材料内容。
@@ -135,19 +143,23 @@
    - `--max-sent` 等于目录已发送数加每轮上限；
    - 参数含 `--registry`；
    - 编译停下时，本轮以其错误码结束，不打分、不发布。
-3. **打分**：
-   - 只对实际重新编译的产品打分，上限计算同上；
-   - 打分停下时仍然发布，没有分数的产品不带 `--scores`。
-4. **发布**：
+3. **有无变化**：Active 中已有 Claim 的产品先演练变化发布，没有变化时记为 `unchanged`、写入 `published.json`，不打分也不发布。
+4. **打分**（审核 R1）：
+   - 还要发布、却没有当前有效分数的产品都要打分，包括本轮没有重编的产品；上限计算同上；
+   - 成功后按调用前的输出摘要写 `scored.json`；
+   - 打分停下时仍然发布，没有当前有效分数的产品不带 `--scores`；
+   - 旧分数（绑定的摘要不是当前输出）不传给发布命令；
+   - 编译中途停下的产品，下一轮虽然不再编译，仍会打分，并带着新分数发布。
+5. **发布**：
    - Active 中没有该产品的 Claim 用首次发布，有则用变化发布；
    - 参数含 `--registry`、`--route`，有分数时带 `--scores`；
    - 成功后写 `published.json`；
    - 某个产品失败不影响其他产品，下一轮重发失败的那个。
-5. **演练**：不调用任何命令，不读平台；报告与随后正式运行的计划一致。
-6. **起步复用**：
+6. **演练**：不调用任何命令，不读平台；报告与随后正式运行的计划一致。
+7. **起步复用**：
    - 符合条件的输出被复制并计划为不编译；
    - 产品、险种包、材料、卡片版本任一不符时不复制。
-7. **报告与命令**：
+8. **报告与命令**：
    - 报告不含路径或材料内容；
    - 子命令遵守登记表锁与退出码；
    - 缺少配置返回 2。
