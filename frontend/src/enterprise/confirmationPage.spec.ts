@@ -339,6 +339,36 @@ describe('confirmation desk', () => {
     expect(disabled(submit)).toBe(false)
   })
 
+  it.each(['returns', 'fails'])('leaves the focus alone when a 409 refresh the page has left %s', async outcome => {
+    let finish!: () => void
+    const refresh = new Promise<ConfirmationItem[]>((resolve, reject) => {
+      finish = () => outcome === 'returns' ? resolve([]) : reject(new EnterpriseError('SERVICE_UNAVAILABLE', 500))
+    })
+    vi.mocked(listConfirmations)
+      .mockResolvedValueOnce([confirmationItem('c1')])
+      .mockReturnValueOnce(refresh)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([confirmationItem('c2')])
+    vi.mocked(answerConfirmation).mockRejectedValueOnce(new EnterpriseError('CONFIRMATION_CLOSED', 409))
+    const view = page()
+    await flushPromises()
+    await view.get('[data-confirm-option="replace"]').setValue(true)
+    await view.get('[data-confirm-submit]').trigger('click')
+    await flushPromises()
+    await view.get('[data-confirm-tab="closed"]').trigger('click')
+    await flushPromises()
+    await view.get('[data-confirm-tab="open"]').trigger('click')
+    await flushPromises()
+    const note = view.get('[data-confirm-item="c2"] textarea')
+    ;(note.element as HTMLTextAreaElement).focus()
+    await note.setValue('继续填写')
+    finish()
+    await flushPromises()
+    expect(document.activeElement).toBe(note.element)
+    expect(ids(view)).toEqual(['c2'])
+    expect((view.get('[data-confirm-item="c2"] textarea').element as HTMLTextAreaElement).value).toBe('继续填写')
+  })
+
   // Review R2: the note is trimmed, counted and checked as the server does (Go strings.TrimSpace).
   it('counts, compares and checks the note the way the server does', async () => {
     vi.mocked(listConfirmations).mockResolvedValue([confirmationItem('c1', { answer: confirmationAnswer('c1') })])
