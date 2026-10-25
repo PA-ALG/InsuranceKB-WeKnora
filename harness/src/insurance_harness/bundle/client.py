@@ -25,6 +25,7 @@ from insurance_harness.contracts.bundle import CandidateBundle
 MAX_BUNDLE_BYTES = 2 << 20  # the platform's limit (release.MaxBundleBytes)
 MAX_RESPONSE_BYTES = 32 << 20
 MAX_CONFIRMATIONS = 200  # the platform's limit on items per submission (S5b-3a)
+MAX_CONFIRMATION_BYTES = 512 << 10  # its limit on a submission body (maxConfirmationsBody)
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 _PLATFORM_CODES = frozenset(
     {
@@ -242,12 +243,21 @@ class PlatformClient:
     def submit_confirmations(
         self, space_id: str, items: Sequence[ConfirmationInput]
     ) -> list[ConfirmationItem]:
-        """Submit items; the platform keeps existing ones and returns them all in input order."""
-        if not 1 <= len(items) <= MAX_CONFIRMATIONS:
+        """Submit items; the platform keeps existing ones and returns them all in input order.
+
+        Each returned item must be the one asked for at its position (review R5); the caller splits
+        batches by count and by the encoded body size (`confirmation_body`).
+        """
+        raw = confirmation_body(items)
+        if not 1 <= len(items) <= MAX_CONFIRMATIONS or len(raw) > MAX_CONFIRMATION_BYTES:
             raise PlatformError("INVALID_REQUEST")
-        body = {"items": [item.model_dump() for item in items]}
-        raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
-        return _parse(_Confirmations, self._send("POST", space_id, ["confirmations"], raw)).items
+        stored = _parse(_Confirmations, self._send("POST", space_id, ["confirmations"], raw)).items
+        if len(stored) != len(items) or any(
+            not _owns(item, space_id) or _asked(item) != _asked(question)
+            for item, question in zip(stored, items, strict=False)
+        ):
+            raise PlatformError("INVALID_RESPONSE")
+        return stored
 
     def confirmations(
         self, space_id: str, status: Literal["open", "closed"]
@@ -255,7 +265,10 @@ class PlatformClient:
         if status not in {"open", "closed"}:
             raise PlatformError("INVALID_REQUEST")
         data = self._send("GET", space_id, ["confirmations"], None, {"status": status})
-        return _parse(_Confirmations, data).items
+        listed = _parse(_Confirmations, data).items
+        if any(not _owns(i, space_id) or (i.closure is None) != (status == "open") for i in listed):
+            raise PlatformError("INVALID_RESPONSE")
+        return listed
 
     def close_confirmation(
         self,
@@ -264,7 +277,10 @@ class PlatformClient:
         reason: Literal["applied", "obsolete"],
         answer_id: str | None = None,
     ) -> ConfirmationClosure:
-        """Close once: applied names the latest answer, obsolete names none."""
+        """Close once: applied names the latest answer, obsolete names none.
+
+        The receipt must confirm exactly this closure: it is the commit point of a decision.
+        """
         if reason not in {"applied", "obsolete"} or (reason == "applied") != (
             answer_id is not None
         ):
@@ -274,9 +290,11 @@ class PlatformClient:
             _identifier(answer_id)
             body["answer_id"] = answer_id
         path = ["confirmations", item_id, "closure"]
-        return _parse(
-            _Closure, self._send("POST", space_id, path, json.dumps(body).encode())
-        ).closure
+        data = self._send("POST", space_id, path, json.dumps(body).encode())
+        closure = _parse(_Closure, data).closure
+        if (closure.reason, closure.answer_id or None) != (reason, answer_id):
+            raise PlatformError("INVALID_RESPONSE")
+        return closure
 
     def release(self, space_id: str, release_id: str) -> Release:
         path = ["releases", release_id] if release_id else ["releases", "active"]
@@ -360,6 +378,22 @@ def publish(
     ):
         raise PlatformError("RELEASE_MISMATCH")
     return PublishResult(candidate, recorded, published)
+
+
+def confirmation_body(items: Sequence[ConfirmationInput]) -> bytes:
+    """The request body submitting these items, as sent."""
+    body = {"items": [item.model_dump() for item in items]}
+    return json.dumps(body, ensure_ascii=False).encode("utf-8")
+
+
+def _asked(item: ConfirmationInput | ConfirmationItem) -> tuple[object, ...]:
+    options = tuple((o.key, o.label) for o in item.options)
+    return (item.subject, item.revision, item.title, item.detail, options)
+
+
+def _owns(item: ConfirmationItem, space_id: str) -> bool:
+    """The item is in the Space asked about and its answer is its own."""
+    return item.space_id == space_id and (item.answer is None or item.answer.item_id == item.id)
 
 
 def _identifier(part: str) -> None:
