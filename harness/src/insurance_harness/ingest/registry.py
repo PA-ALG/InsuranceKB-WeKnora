@@ -181,6 +181,8 @@ class ProductRegistry(_Strict):
             raise ValueError("two settlements name one item or answer")
         if set(settled_answers) & set(answers):
             raise ValueError("a settlement for an answer already recorded")
+        if set(items) & {d.confirmation.item_id for d in self.decisions if d.confirmation}:
+            raise ValueError("a settlement for an item already recorded")
         return self
 
     def registered(self) -> list[RegisteredProduct]:

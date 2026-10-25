@@ -282,6 +282,11 @@ class _Sync:
                     self.mark(marked, None)
                     self.skipped[error.code] += 1
                     return
+                if not _same_question(closed, marked, settlement) or not _same_answer(
+                    closed, settlement
+                ):
+                    self.skipped["SETTLEMENT_MISMATCH"] += 1  # kept, as in reconcile
+                    return
         self.execute(marked, settlement)
 
     def execute(self, entry: PendingEntry, settlement: Settlement) -> None:
