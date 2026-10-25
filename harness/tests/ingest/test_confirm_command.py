@@ -8,6 +8,7 @@ applied kept when the platform fails.
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from insurance_harness.ingest.registry import load_registry, save_registry
@@ -92,3 +93,22 @@ def test_a_platform_failure_keeps_what_was_applied(
     kept = load_registry(path)
     assert [d.knowledge_id for d in kept.decisions if d.confirmation] == ["k-new"]
     assert not path.with_name(path.name + ".lock").exists()
+
+
+def test_a_short_submission_response_ends_the_command_with_a_code(
+    tmp_path: Path, environment: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path, platform = stored(tmp_path, "k-new", "k-scan"), platform_for_command()
+    before = path.read_bytes()
+
+    def drop_last(request: httpx.Request) -> httpx.Response:
+        response = platform.handle(request)
+        if request.method == "POST" and response.status_code < 300 and "items" in response.text:
+            body = json.loads(response.content)
+            body["data"]["items"] = body["data"]["items"][:-1]
+            return httpx.Response(response.status_code, json=body)
+        return response
+
+    assert main(["confirm", "--registry", str(path)], transport=httpx.MockTransport(drop_last)) == 1
+    assert "INVALID_RESPONSE" in capsys.readouterr().err
+    assert path.read_bytes() == before

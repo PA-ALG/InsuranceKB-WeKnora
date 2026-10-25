@@ -6,51 +6,29 @@ S5b-2 raises them, from real openings of endowment, accident, critical illness a
 products; the platform is a fake that keeps the S5b-3a rules.
 """
 
-from collections.abc import Callable
-
 import pytest
 
 from insurance_harness.bundle.client import ConfirmationInput, PlatformClient, PlatformError
 from insurance_harness.identity.attribution import load_attribution_policy
 from insurance_harness.identity.confirmation import choices
-from insurance_harness.ingest.confirmations import ConfirmationRun, load_wording, question_of, sync
-from insurance_harness.ingest.registry import ConfirmationRef, DecisionEntry, ProductRegistry
+from insurance_harness.ingest.confirmations import load_wording, question_of, sync
+from insurance_harness.ingest.registry import ConfirmationRef, DecisionEntry
 from insurance_harness.ingest.uploads import attribute_uploads
-from tests.ingest.confirmation_platform import FakePlatform
+from tests.ingest.confirmation_platform import PREFIX, FakePlatform
 from tests.ingest.confirmation_scenarios import (
     BASE,
     UNNAMED,
     UPLOADS,
+    Saves,
     asked,
     only_item,
     pages,
     product_key,
     products,
+    run,
     waiting,
 )
-from tests.ingest.upload_helpers import PRODUCTS, SPACE, Pages
-
-
-class Saves(list[ProductRegistry]):
-    def __call__(self, current: ProductRegistry) -> None:
-        self.append(current.model_copy(deep=True))
-
-
-def run(
-    current: ProductRegistry,
-    platform: FakePlatform,
-    *,
-    write: bool = True,
-    reader: Pages | None = None,
-    save: Callable[[ProductRegistry], None] | None = None,
-) -> tuple[ConfirmationRun, Saves]:
-    saves = Saves()
-    client = PlatformClient(BASE, "key", transport=platform.transport())
-    result = sync(
-        current, client, reader or pages(), write=write, save=save if save is not None else saves
-    )
-    return result, saves
-
+from tests.ingest.upload_helpers import PRODUCTS, SPACE, Pages, raw
 
 # 1. Pushing ---------------------------------------------------------------------------------------
 
@@ -186,43 +164,6 @@ def test_a_newer_answer_before_closing_is_taken_on_the_next_run() -> None:
     [(_, reason, answer_id)] = platform.closed
     assert (reason, answer_id) == ("applied", platform.answers[item_id][-1]["id"])
     assert third.registry.decisions[-1].attribution.outcome == "SUPPLEMENT"
-
-
-# 6. Recovery --------------------------------------------------------------------------------------
-
-
-def test_a_run_interrupted_after_closing_is_completed_without_closing_again() -> None:
-    first, _ = run(asked(products(), "k-new"), platform := FakePlatform())
-    item_id = only_item(platform, "k-new")
-    answer_id = platform.answer(item_id, "replace")
-
-    def crash(_: ProductRegistry) -> None:
-        raise OSError("interrupted")
-
-    with pytest.raises(OSError):
-        run(first.registry, platform, save=crash)
-    assert platform.closed == [(item_id, "applied", answer_id)]
-    recovered, saves = run(first.registry, platform)
-    assert platform.closed == [(item_id, "applied", answer_id)]
-    assert recovered.registry.decisions[-1].confirmation is not None
-    assert recovered.registry.decisions[-1].confirmation.answer_id == answer_id
-    assert recovered.report.applied == ["k-new"]
-    assert saves[-1] == recovered.registry
-
-
-def test_two_recoverable_items_for_one_question_are_not_guessed() -> None:
-    current = asked(products(), "k-new")
-    question = question_of(current.pending[0], current)
-    platform = FakePlatform()
-    client = PlatformClient(BASE, "key", transport=platform.transport())
-    for title in ("一份材料需要确认", "另一份写法的同一问题"):
-        [item] = client.submit_confirmations(SPACE, [question.model_copy(update={"title": title})])
-        client.close_confirmation(SPACE, item.id, "applied", platform.answer(item.id, "replace"))
-    result, saves = run(current, platform)
-    assert result.report.skipped.get("CONFIRMATION_AMBIGUOUS") == 1
-    assert result.registry.decisions == current.decisions
-    assert saves == []
-    assert len(platform.closed) == 2
 
 
 # 7. Cleaning up -----------------------------------------------------------------------------------
@@ -381,3 +322,65 @@ def test_a_conclusion_the_registry_refuses_is_not_closed() -> None:
     assert (platform.closed, saves) == ([], [])
     assert second.registry == first.registry
     assert second.report.skipped == {"CONFIRMATION_RECORDED": 1}
+
+
+# Review R4, R6–R8 ---------------------------------------------------------------------------------
+
+
+def test_a_question_that_cannot_be_worded_keeps_its_item() -> None:
+    first, _ = run(asked(products(), "k-new", "k-scan"), platform := FakePlatform())
+    kept = only_item(platform, "k-new")
+    renamed = first.registry.model_copy(deep=True)
+    renamed.products["1818"].names = ["很长的产品名称" * 300]  # the detail exceeds the limit
+    platform.answer(only_item(platform, "k-scan"), "role:brochure")
+    second, _ = run(renamed, platform)
+    assert second.report.skipped == {"WORDING_INVALID": 1}
+    assert second.report.applied == ["k-scan"]
+    assert kept not in platform.closures
+    assert waiting(second.registry) == ["k-new"]
+
+
+def test_a_dry_run_counts_a_closed_item_the_run_would_meet() -> None:
+    first, _ = run(asked(products(), "k-new"), platform := FakePlatform())
+    client = PlatformClient(BASE, "key", transport=platform.transport())
+    client.close_confirmation(SPACE, only_item(platform, "k-new"), "obsolete")
+    dry, _ = run(first.registry, platform, write=False)
+    real, _ = run(first.registry, platform)
+    assert dry.report == real.report
+    assert real.report.skipped == {"CONFIRMATION_CLOSED": 1}
+
+
+def test_text_the_platform_trims_does_not_make_a_fresh_item_obsolete() -> None:
+    reworded = load_wording().model_copy(update={"title": " 请确认「{file}」 \n"})
+    platform = FakePlatform()
+    client = PlatformClient(BASE, "key", transport=platform.transport())
+    result = sync(
+        asked(products(), "k-new"), client, pages(), write=True, save=Saves(), wording=reworded
+    )
+    [item] = platform.find("material:k-new")
+    assert platform.closed == []
+    assert item["title"].startswith("请确认「") and item["title"].endswith("」")
+    assert result.report.obsoleted == []
+
+
+def test_long_wording_is_pushed_in_batches_the_platform_accepts() -> None:
+    long_name = "很长的材料名称" * 250 + "产品说明书.pdf"
+    head = UPLOADS["k-new"][1]
+    sources = [
+        raw(
+            "1818",
+            "brochure",
+            knowledge_id=f"k-long-{n:03d}",
+            sha256=f"{n:064x}",
+            file_name=long_name,
+        )
+        for n in range(1, 101)
+    ]
+    reader = Pages(heads={s.knowledge_id: head for s in sources}, sources=sources)
+    current = attribute_uploads(products(), sources, reader).registry
+    assert len(waiting(current)) == 100
+    platform = FakePlatform()
+    result, _ = run(current, platform, reader=reader)
+    assert len(platform.items) == 100
+    assert platform.writes.count(PREFIX) >= 2
+    assert result.report.pushed == sorted(s.knowledge_id for s in sources)

@@ -192,3 +192,78 @@ def test_an_item_id_that_is_not_an_identifier_is_refused(item_id: str) -> None:
         )
     assert failure.value.code == "INVALID_REQUEST"
     assert seen == []
+
+
+# Review R5, R8: responses must match their requests; the body stays within the platform limit.
+
+
+@pytest.mark.parametrize(
+    "returned",
+    [
+        [ITEM, ITEM],
+        [ITEM | {"space_id": "space-2"}],
+        [ITEM | {"revision": "b" * 32}],
+        [ITEM | {"title": "另一个问题"}],
+        [ITEM | {"options": [{"key": "ignore", "label": "忽略"}]}],
+        [ITEM | {"answer": ANSWER | {"item_id": "item-2"}}],
+        [],
+    ],
+    ids=["count", "space", "revision", "title", "options", "answer_owner", "empty"],
+)
+def test_a_submission_response_that_does_not_match_the_request_is_refused(
+    returned: list[object],
+) -> None:
+    with pytest.raises(PlatformError) as failure:
+        client(lambda _: ok({"items": returned}, 201), []).submit_confirmations(SPACE, [QUESTION])
+    assert failure.value.code == "INVALID_RESPONSE"
+
+
+@pytest.mark.parametrize(
+    "status, returned",
+    [
+        ("open", ITEM | {"closure": CLOSURE}),
+        ("closed", ITEM),
+        ("open", ITEM | {"space_id": "space-2"}),
+        ("closed", ITEM | {"closure": CLOSURE, "answer": ANSWER | {"item_id": "item-2"}}),
+    ],
+    ids=["open_but_closed", "closed_but_open", "other_space", "answer_owner"],
+)
+def test_a_listing_that_does_not_match_its_status_or_space_is_refused(
+    status: str, returned: object
+) -> None:
+    with pytest.raises(PlatformError) as failure:
+        client(lambda _: ok({"items": [returned]}), []).confirmations(SPACE, status)  # type: ignore[arg-type]
+    assert failure.value.code == "INVALID_RESPONSE"
+
+
+@pytest.mark.parametrize(
+    "reason, answer_id, receipt",
+    [
+        ("applied", "answer-1", CLOSURE | {"reason": "obsolete"}),
+        ("applied", "answer-1", CLOSURE | {"answer_id": "answer-2"}),
+        ("applied", "answer-1", {k: v for k, v in CLOSURE.items() if k != "answer_id"}),
+        ("obsolete", None, CLOSURE | {"reason": "obsolete"}),
+        ("obsolete", None, CLOSURE),
+    ],
+    ids=["reason", "other_answer", "no_answer", "obsolete_with_answer", "obsolete_got_applied"],
+)
+def test_a_closing_receipt_that_does_not_match_the_request_is_refused(
+    reason: str, answer_id: str | None, receipt: dict[str, object]
+) -> None:
+    with pytest.raises(PlatformError) as failure:
+        client(lambda _: ok({"closure": receipt}, 201), []).close_confirmation(
+            SPACE,
+            "item-1",
+            reason,  # type: ignore[arg-type]
+            answer_id,
+        )
+    assert failure.value.code == "INVALID_RESPONSE"
+
+
+def test_a_submission_over_the_body_limit_is_refused_before_any_request() -> None:
+    seen: list[httpx.Request] = []
+    long = QUESTION.model_copy(update={"detail": "很长的说明" * 400})
+    with pytest.raises(PlatformError) as failure:
+        client(lambda _: ok({"items": []}), seen).submit_confirmations(SPACE, [long] * 100)
+    assert failure.value.code == "INVALID_REQUEST"
+    assert seen == []

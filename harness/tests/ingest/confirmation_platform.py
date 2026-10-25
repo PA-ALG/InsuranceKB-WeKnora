@@ -2,7 +2,9 @@
 
 It keeps the rules the real one enforces: one item per (subject, revision, content), answers only
 appended, an item closed once, an applied closure only for the latest answer, and the S5b-3a limits
-on identifiers, text and options. Pages of the S5b-1 fixture are served for the command tests.
+on identifiers, text, options and the 512 KiB request body. Like the real one it stores title,
+detail and labels trimmed as Go's strings.TrimSpace trims them, and refuses a batch naming one
+item twice. Pages of the S5b-1 fixture are served for the command tests.
 """
 
 import hashlib
@@ -18,6 +20,16 @@ from tests.ingest.upload_helpers import SPACE, material
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9:._-]{0,127}$")
 _CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
+_SPACE = "[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]"
+_EDGES = re.compile(f"^{_SPACE}+|{_SPACE}+$")
+MAX_BODY = 512 << 10
+
+
+def trim(text: str) -> str:
+    """Go's strings.TrimSpace (unicode.IsSpace)."""
+    return _EDGES.sub("", text)
+
+
 PREFIX = f"/api/v1/enterprise/spaces/{SPACE}/confirmations"
 
 
@@ -30,12 +42,11 @@ def _ok(data: object, status: int = 200) -> httpx.Response:
 
 
 def _text(value: object, limit: int, required: bool) -> bool:
-    return (
-        isinstance(value, str)
-        and (bool(value.strip()) or not required)
-        and len(value.strip()) <= limit
-        and not _CONTROL.search(value)
-    )
+    """The platform checks the trimmed text: present if required, within the limit, printable."""
+    if not isinstance(value, str):
+        return False
+    text = trim(value)
+    return (bool(text) or not required) and len(text) <= limit and not _CONTROL.search(text)
 
 
 class FakePlatform:
@@ -47,6 +58,7 @@ class FakePlatform:
         self.closed: list[tuple[str, str, str | None]] = []  # (item id, reason, answer id)
         self.before_close: Callable[[str], None] | None = None
         self.fail_closures_after: int | None = None  # closures that succeed before a 503
+        self.lose_closure_responses = 0  # closures performed whose 201 is replaced by a 503
         # Opening text and document SHA of uploads outside the fixture, by knowledge id.
         self.uploads = uploads or {}
         self._next = 0
@@ -106,6 +118,8 @@ class FakePlatform:
         if request.method == "POST":
             self.writes.append(path)
         if path == PREFIX and request.method == "POST":
+            if len(request.content) > MAX_BODY:
+                return _refuse(400, "CONFIRMATION_INVALID")
             return self._submit(json.loads(request.content))
         if path == PREFIX and request.method == "GET":
             status = request.url.params.get("status")
@@ -127,7 +141,30 @@ class FakePlatform:
             or not all(self._valid(i) for i in items)
         ):
             return _refuse(400, "CONFIRMATION_INVALID")
-        return _ok({"items": [self.view(self._store(item)) for item in items]}, 201)
+        normal = [self._normal(item) for item in items]
+        identities = [(i["subject"], i["revision"], self._digest(i)) for i in normal]
+        if len(set(identities)) != len(identities):
+            return _refuse(400, "CONFIRMATION_INVALID")
+        return _ok({"items": [self.view(self._store(item)) for item in normal]}, 201)
+
+    @staticmethod
+    def _normal(item: dict[str, Any]) -> dict[str, Any]:
+        options = [{"key": o["key"], "label": trim(o["label"])} for o in item["options"]]
+        return item | {
+            "title": trim(item["title"]),
+            "detail": trim(item["detail"]),
+            "options": options,
+        }
+
+    @staticmethod
+    def _digest(item: dict[str, Any]) -> str:
+        canonical = json.dumps(
+            {"detail": item["detail"], "options": item["options"], "title": item["title"]},
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        return hashlib.sha256(canonical.encode()).hexdigest()
 
     def _valid(self, item: dict[str, Any]) -> bool:
         options = item.get("options")
@@ -139,7 +176,7 @@ class FakePlatform:
                 for k in ("subject", "revision")
             )
             and _text(item["title"], 200, True)
-            and _text(item["detail"].replace("\n", " "), 2000, False)
+            and _text(item["detail"], 2000, False)
             and isinstance(options, list)
             and 1 <= len(options) <= 50
             and len(set(keys)) == len(keys)
@@ -153,13 +190,8 @@ class FakePlatform:
         )
 
     def _store(self, item: dict[str, Any]) -> str:
-        canonical = json.dumps(
-            {"detail": item["detail"], "options": item["options"], "title": item["title"]},
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        )
-        digest = hashlib.sha256(canonical.encode()).hexdigest()
+        item = self._normal(item)
+        digest = self._digest(item)
         for item_id, stored in self.items.items():
             if (stored["subject"], stored["revision"], stored["content_digest"]) == (
                 item["subject"],
@@ -208,6 +240,9 @@ class FakePlatform:
             closure["answer_id"] = answer_id
         self.closures[item_id] = closure
         self.closed.append((item_id, reason, answer_id))
+        if self.lose_closure_responses:
+            self.lose_closure_responses -= 1
+            return _refuse(503, "SERVICE_UNAVAILABLE")
         return _ok({"closure": closure}, 201)
 
     def _pages(self, request: httpx.Request) -> httpx.Response:

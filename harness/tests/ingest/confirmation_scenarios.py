@@ -3,7 +3,10 @@ them, from real openings of endowment, accident, critical illness and annuity pr
 
 import hashlib
 import unicodedata
+from collections.abc import Callable
 
+from insurance_harness.bundle.client import PlatformClient
+from insurance_harness.ingest.confirmations import ConfirmationRun, sync
 from insurance_harness.ingest.raw_sources import RawSource
 from insurance_harness.ingest.registry import ProductRegistry
 from insurance_harness.ingest.uploads import attribute_uploads
@@ -83,3 +86,38 @@ def only_item(platform: FakePlatform, kid: str) -> str:
 def platform_for_command() -> FakePlatform:
     """A platform that also serves the pages of the uploads outside the fixture."""
     return FakePlatform(uploads={k: (head, source.sha256) for k, (source, head) in UPLOADS.items()})
+
+
+class Saves(list[ProductRegistry]):
+    def __call__(self, current: ProductRegistry) -> None:
+        self.append(current.model_copy(deep=True))
+
+
+def run(
+    current: ProductRegistry,
+    platform: FakePlatform,
+    *,
+    write: bool = True,
+    reader: Pages | None = None,
+    save: Callable[[ProductRegistry], None] | None = None,
+) -> tuple[ConfirmationRun, Saves]:
+    saves = Saves()
+    client = PlatformClient(BASE, "key", transport=platform.transport())
+    result = sync(
+        current, client, reader or pages(), write=write, save=save if save is not None else saves
+    )
+    return result, saves
+
+
+class Crash:
+    """A save that fails on its nth call, as an interrupted run would."""
+
+    def __init__(self, on_call: int) -> None:
+        self.on_call, self.calls = on_call, 0
+        self.saved: list[ProductRegistry] = []
+
+    def __call__(self, current: ProductRegistry) -> None:
+        self.calls += 1
+        if self.calls == self.on_call:
+            raise OSError("interrupted")
+        self.saved.append(current.model_copy(deep=True))
