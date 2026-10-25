@@ -14,5 +14,6 @@ func TestConfirmationMigrationIsThePackagedEnterpriseHead(t *testing.T) {
 	require.Error(t, validatePostgresMigrationSetVersion(enterprisePostgresMigrationSource, false, 9))
 	require.True(t, enterpriseVersionKnownAtOfficialCheckpoint(releasedOfficial75Checkpoint, 8))
 	require.True(t, enterpriseVersionKnownAtOfficialCheckpoint(releasedOfficial75Checkpoint, 9))
-	require.False(t, enterpriseVersionKnownAtOfficialCheckpoint(releasedOfficial75Checkpoint, 10))
+	require.True(t, enterpriseVersionKnownAtOfficialCheckpoint(releasedOfficial75Checkpoint, 10))
+	require.False(t, enterpriseVersionKnownAtOfficialCheckpoint(releasedOfficial75Checkpoint, 11))
 }
