@@ -467,3 +467,24 @@ def test_a_listing_with_wrong_types_or_ranges_fails_as_a_whole(field: str, value
             RAW_KB
         )
     assert caught.value.code == "RAW_LISTING_INVALID"
+
+
+@pytest.mark.parametrize("where", ["missing-file", "directory"])
+def test_a_registry_that_cannot_be_read_gives_the_io_code_before_any_request(
+    tmp_path: Path, environment: None, capsys: pytest.CaptureFixture[str], where: str
+) -> None:
+    path = tmp_path / "registry.json"
+    if where == "directory":
+        path.mkdir()
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(500)
+
+    assert main(["run", "--registry", str(path)], transport=httpx.MockTransport(handler)) != 0
+    error = capsys.readouterr().err
+    assert error.strip() == "REGISTRY_IO_ERROR"
+    assert str(tmp_path) not in error
+    assert calls == []
+    assert not (tmp_path / "registry.json.lock").exists()
