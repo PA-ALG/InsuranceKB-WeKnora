@@ -33,15 +33,13 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.ingest.raw_sources import RawSource, RawSources, RawSourcesError
 from insurance_harness.ingest.registry import (
-    DecisionEntry,
-    MaterialEntry,
-    PendingEntry,
-    ProductEntry,
+    FINAL,
     ProductRegistry,
     RegistryError,
     SeedProduct,
     head_of,
     load_registry,
+    record,
     save_registry,
     seed_registry,
 )
@@ -52,9 +50,6 @@ from insurance_harness.ingest.source_map import (
     SourceMapError,
     load_source_map,
 )
-
-_APPLIED = {"SUPPLEMENT", "NEW_VERSION", "CREATE"}
-_WAITING = {"NEEDS_CONFIRM", "QUARANTINE"}
 
 
 class UploadReport(BaseModel):
@@ -73,9 +68,6 @@ class UploadRun(BaseModel):
     report: UploadReport
 
 
-_DECIDED = {"DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE"}
-
-
 def _candidates(registry: ProductRegistry, sources: Sequence[RawSource]) -> list[RawSource]:
     """New materials, plus quarantined ones.
 
@@ -88,7 +80,7 @@ def _candidates(registry: ProductRegistry, sources: Sequence[RawSource]) -> list
     settled |= {
         p.knowledge_id for p in registry.pending if p.attribution.outcome == "NEEDS_CONFIRM"
     }
-    settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome in _DECIDED}
+    settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome in FINAL}
     return sorted(
         (s for s in sources if s.knowledge_id not in settled), key=lambda s: s.knowledge_id
     )
@@ -114,66 +106,6 @@ def _changes(
     )
     owned = {m.knowledge_id for p in registry.products.values() for m in p.materials}
     return changed, sorted(owned - set(listed))
-
-
-def _apply(registry: ProductRegistry, source: RawSource, attribution: Attribution) -> bool:
-    """Record one decision; True when the products changed."""
-    previous = next((p for p in registry.pending if p.knowledge_id == source.knowledge_id), None)
-    registry.pending = [p for p in registry.pending if p.knowledge_id != source.knowledge_id]
-    if attribution.outcome in _WAITING:
-        registry.pending.append(
-            PendingEntry(
-                knowledge_id=source.knowledge_id,
-                parse_attempt=source.parse_attempt,
-                sha256=source.sha256,
-                file_name=source.file_name,
-                attribution=attribution,
-            )
-        )
-        registry.pending.sort(key=lambda p: p.knowledge_id)
-        if previous is not None and previous.attribution == attribution:
-            return False  # judged again, same conclusion: nothing new to record
-    registry.decisions.append(
-        DecisionEntry(
-            knowledge_id=source.knowledge_id,
-            parse_attempt=source.parse_attempt,
-            sha256=source.sha256,
-            attribution=attribution,
-        )
-    )
-    if attribution.outcome not in _APPLIED:
-        return False
-    if attribution.product_id is None or attribution.role is None:
-        raise RegistryError("ATTRIBUTION_INCOMPLETE")
-    material = MaterialEntry(
-        knowledge_id=source.knowledge_id,
-        parse_attempt=source.parse_attempt,
-        sha256=source.sha256,
-        role=attribution.role,
-        file_name=source.file_name,
-    )
-    if attribution.outcome == "CREATE":
-        if not (
-            attribution.display_name and attribution.clause_code and attribution.schema_pack_id
-        ):
-            raise RegistryError("ATTRIBUTION_INCOMPLETE")
-        registry.products[attribution.product_id] = ProductEntry(
-            names=[attribution.display_name],
-            clause_codes=[attribution.clause_code],
-            schema_pack_id=attribution.schema_pack_id,
-            origin="created",
-            materials=[material],
-        )
-        return True
-    product = registry.products[attribution.product_id]
-    kept = [m for m in product.materials if m.knowledge_id not in attribution.replaces]
-    replaced = [m for m in product.materials if m.knowledge_id in attribution.replaces]
-    product.materials = sorted([*kept, material], key=lambda m: m.knowledge_id)
-    product.retired = sorted([*product.retired, *replaced], key=lambda m: m.knowledge_id)
-    code = attribution.clause_code
-    if attribution.outcome == "NEW_VERSION" and code and code not in product.clause_codes:
-        product.clause_codes.append(code)
-    return True
 
 
 def attribute_uploads(
@@ -209,13 +141,13 @@ def attribute_uploads(
                 deferred.append((source, attribution))  # its terms may arrive in this run
                 continue
             counts[attribution.outcome] += 1
-            if _apply(current, source, attribution):
+            if record(current, source, attribution):
                 changed = True
                 affected.add(attribution.product_id or "")
         if not changed:
             for source, attribution in deferred:
                 counts[attribution.outcome] += 1
-                _apply(current, source, attribution)
+                record(current, source, attribution)
             break
         remaining = [source for source, _ in deferred]
     revision_changes, not_listed = _changes(current, sources)

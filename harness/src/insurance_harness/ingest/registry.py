@@ -4,7 +4,8 @@ The registry replaces the hand-written source maps as the single record of which
 fixed source revision. The existing compile and publish commands still read a source map; the
 registry exports one on demand instead of a second copy being kept. It also keeps the materials
 waiting for a person or for their terms (`pending`) and an append-only record of every decision,
-each with the attribution policy version it was made under.
+each with the attribution policy version it was made under and, when a person made it, the answer it
+came from (S5b-3c-1).
 """
 
 import json
@@ -37,6 +38,13 @@ CONTRACT: Literal["product-registry.v1"] = "product-registry.v1"
 _Identifier = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")]
 _Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 _Name = Annotated[str, StringConstraints(pattern=r"\S")]
+_OptionKey = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9:._-]{0,127}$")]
+_Principal = Annotated[str, StringConstraints(pattern=r"^[^\x00-\x1f\x7f-\x9f]{1,256}$")]
+# Applied outcomes change the products; waiting ones stay in pending; final ones end judging.
+APPLIED = frozenset({"SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE"})
+WAITING = frozenset({"NEEDS_CONFIRM", "QUARANTINE"})
+FINAL = frozenset({"DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE", "IGNORED"})
+_PERSON_ONLY = frozenset({"REPLACE", "IGNORED"})
 
 
 class RegistryError(ValueError):
@@ -76,11 +84,21 @@ class PendingEntry(_Strict):
     attribution: Attribution
 
 
+class ConfirmationRef(_Strict):
+    """The platform confirmation answer a person's decision came from (S5b-3a)."""
+
+    item_id: _Identifier
+    answer_id: _Identifier
+    option_key: _OptionKey
+    answerer: _Principal
+
+
 class DecisionEntry(_Strict):
     knowledge_id: _Identifier
     parse_attempt: int = Field(ge=1)
     sha256: _Digest
     attribution: Attribution
+    confirmation: ConfirmationRef | None = None  # absent in files written before S5b-3c-1
 
 
 class ProductFacts(_Strict):
@@ -111,8 +129,15 @@ class ProductRegistry(_Strict):
         roles = {role.role for role in load_material_roles().roles}
         if any(m.role not in roles for m in recorded):
             raise ValueError("unknown material role")
-        if any(p.attribution.outcome not in {"NEEDS_CONFIRM", "QUARANTINE"} for p in self.pending):
+        if any(p.attribution.outcome not in WAITING for p in self.pending):
             raise ValueError("an automatic conclusion cannot wait in pending")
+        if any(
+            d.attribution.outcome in _PERSON_ONLY and not d.confirmation for d in self.decisions
+        ):
+            raise ValueError("a person-only conclusion without its confirmation")
+        answers = [d.confirmation.answer_id for d in self.decisions if d.confirmation]
+        if len(set(answers)) != len(answers):
+            raise ValueError("an answer is recorded twice")
         return self
 
     def registered(self) -> list[RegisteredProduct]:
@@ -191,6 +216,111 @@ def save_registry(registry: ProductRegistry, path: Path) -> None:
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
         raise
+
+
+def record(
+    registry: ProductRegistry,
+    source: RawSource,
+    attribution: Attribution,
+    confirmation: ConfirmationRef | None = None,
+) -> bool:
+    """Record one decision in place; True when the products changed.
+
+    A person's decision names the answer it came from and must settle a material waiting for a
+    person at this exact revision. All or nothing: the changes are made on a copy and kept only when
+    every step succeeds, so a refusal leaves the registry as it was.
+    """
+    if attribution.outcome in _PERSON_ONLY and confirmation is None:
+        raise RegistryError("CONFIRMATION_REQUIRED")
+    if confirmation is not None:
+        waiting = [
+            p
+            for p in registry.pending
+            if (p.knowledge_id, p.parse_attempt, p.sha256)
+            == (source.knowledge_id, source.parse_attempt, source.sha256)
+            and p.attribution.outcome == "NEEDS_CONFIRM"
+        ]
+        if not waiting:
+            raise RegistryError("CONFIRMATION_UNEXPECTED")
+        recorded = {d.confirmation.answer_id for d in registry.decisions if d.confirmation}
+        if confirmation.answer_id in recorded:
+            raise RegistryError("CONFIRMATION_RECORDED")
+    staged = registry.model_copy(deep=True)
+    try:
+        changed = _apply(staged, source, attribution, confirmation)
+    except ValidationError:  # an entry the registry format refuses, such as a blank file name
+        raise RegistryError("RECORD_INVALID") from None
+    registry.products, registry.pending = staged.products, staged.pending
+    registry.decisions = staged.decisions
+    return changed
+
+
+def _apply(
+    registry: ProductRegistry,
+    source: RawSource,
+    attribution: Attribution,
+    confirmation: ConfirmationRef | None,
+) -> bool:
+    previous = next((p for p in registry.pending if p.knowledge_id == source.knowledge_id), None)
+    registry.pending = [p for p in registry.pending if p.knowledge_id != source.knowledge_id]
+    if attribution.outcome in WAITING:
+        registry.pending.append(
+            PendingEntry(
+                knowledge_id=source.knowledge_id,
+                parse_attempt=source.parse_attempt,
+                sha256=source.sha256,
+                file_name=source.file_name,
+                attribution=attribution,
+            )
+        )
+        registry.pending.sort(key=lambda p: p.knowledge_id)
+        if previous is not None and previous.attribution == attribution:
+            return False  # judged again, same conclusion: nothing new to record
+    registry.decisions.append(
+        DecisionEntry(
+            knowledge_id=source.knowledge_id,
+            parse_attempt=source.parse_attempt,
+            sha256=source.sha256,
+            attribution=attribution,
+            confirmation=confirmation,
+        )
+    )
+    if attribution.outcome not in APPLIED:
+        return False
+    if attribution.product_id is None or attribution.role is None:
+        raise RegistryError("ATTRIBUTION_INCOMPLETE")
+    material = MaterialEntry(
+        knowledge_id=source.knowledge_id,
+        parse_attempt=source.parse_attempt,
+        sha256=source.sha256,
+        role=attribution.role,
+        file_name=source.file_name,
+    )
+    if attribution.outcome == "CREATE":
+        if not (
+            attribution.display_name and attribution.clause_code and attribution.schema_pack_id
+        ):
+            raise RegistryError("ATTRIBUTION_INCOMPLETE")
+        registry.products[attribution.product_id] = ProductEntry(
+            names=[attribution.display_name],
+            clause_codes=[attribution.clause_code],
+            schema_pack_id=attribution.schema_pack_id,
+            origin="created",
+            materials=[material],
+        )
+        return True
+    product = registry.products.get(attribution.product_id)
+    if product is None:
+        raise RegistryError("PRODUCT_UNKNOWN")
+    kept = [m for m in product.materials if m.knowledge_id not in attribution.replaces]
+    replaced = [m for m in product.materials if m.knowledge_id in attribution.replaces]
+    product.materials = sorted([*kept, material], key=lambda m: m.knowledge_id)
+    product.retired = sorted([*product.retired, *replaced], key=lambda m: m.knowledge_id)
+    # Only a new terms version adds its own code; a replaced material may merely cite one.
+    code = attribution.clause_code
+    if attribution.outcome == "NEW_VERSION" and code and code not in product.clause_codes:
+        product.clause_codes.append(code)
+    return True
 
 
 def head_of(pages: PageReader, space_id: str, source: RawSource) -> str:
