@@ -22,13 +22,23 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from insurance_harness.identity.material_roles import role_of
+from insurance_harness.identity.material_roles import load_material_roles, role_of
 
 TERMS = "terms"  # the material role that prints the clause filing code and may create a product
 _SHA256 = r"^[0-9a-f]{64}$"
 _TRAILING_QUALIFIER = re.compile(r"\([^()]*\)$")  # after NFKC, as in 年金保险(分红型)
 
-Outcome = Literal["DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE", "NEEDS_CONFIRM", "QUARANTINE"]
+# REPLACE and IGNORED only follow a person's choice (S5b-3c-1); attribute() never returns them.
+Outcome = Literal[
+    "DUPLICATE",
+    "SUPPLEMENT",
+    "NEW_VERSION",
+    "CREATE",
+    "NEEDS_CONFIRM",
+    "QUARANTINE",
+    "REPLACE",
+    "IGNORED",
+]
 
 
 class AttributionPolicyError(ValueError):
@@ -175,9 +185,20 @@ def _pack(name: str, policy: AttributionPolicy) -> str | None:
 
 
 def attribute(
-    upload: Upload, registry: Sequence[RegisteredProduct], policy: AttributionPolicy | None = None
+    upload: Upload,
+    registry: Sequence[RegisteredProduct],
+    policy: AttributionPolicy | None = None,
+    *,
+    product: str | None = None,
+    role: str | None = None,
+    pack: str | None = None,
 ) -> Attribution:
-    """The attribution of one uploaded material against the registered products (Spec §2.3)."""
+    """The attribution of one uploaded material against the registered products (Spec §2.3).
+
+    The keyword arguments carry what a person confirmed (S5b-3c-1 Spec §2.1): the product the
+    material belongs to, which skips identifying it by code or title; its role, in place of the
+    recognised one; and the pack for terms whose title no classification suffix matches.
+    """
     policy = policy or load_attribution_policy()
 
     def decided(outcome: Outcome, reason: str, **fields: object) -> Attribution:
@@ -185,21 +206,33 @@ def attribute(
             {"outcome": outcome, "reason": reason, "policy_ref": policy.policy_ref, **fields}
         )
 
-    if len({product.product_id for product in registry}) != len(registry):
+    if len({p.product_id for p in registry}) != len(registry):
         raise AttributionInputError("REGISTRY_DUPLICATE_PRODUCT")
-    products = sorted(registry, key=lambda product: product.product_id)
+    products = sorted(registry, key=lambda p: p.product_id)
+    chosen = next((p for p in products if p.product_id == product), None)
+    if (
+        (product is not None and chosen is None)
+        or (role is not None and role not in {r.role for r in load_material_roles().roles})
+        or (pack is not None and pack not in {c.schema_pack_id for c in policy.classifications})
+    ):
+        raise AttributionInputError("CHOICE_INVALID")
     owners = sorted(
         {p.product_id for p in products for m in p.materials if m.sha256 == upload.sha256}
     )
-    if len(owners) == 1:
-        return decided("DUPLICATE", "duplicate_file", product_id=owners[0])
-    if owners:
-        return decided("NEEDS_CONFIRM", "multiple_products", candidates=tuple(owners))
+    if chosen is None:
+        if len(owners) == 1:
+            return decided("DUPLICATE", "duplicate_file", product_id=owners[0])
+        if owners:
+            return decided("NEEDS_CONFIRM", "multiple_products", candidates=tuple(owners))
+    elif owners and chosen.product_id not in owners:
+        return decided("QUARANTINE", "anchor_conflict")
 
     window = _fold(upload.head)[: policy.anchor_chars]
     if not window:
+        if chosen is not None and owners:  # no text, so no code to contradict the file
+            return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return decided("QUARANTINE", "text_unavailable")
-    role = role_of(upload.file_name, upload.head)
+    role = role or role_of(upload.file_name, upload.head)
     match = re.search(policy.clause_code_pattern, window)
     code = match.group(0) if match else None
     # Terms open with their own code and then the title. A code met later only cites one (after a
@@ -212,6 +245,14 @@ def attribute(
     by_code = [
         p for p in products if code is not None and code in {_fold(c) for c in p.clause_codes}
     ]
+    if chosen is not None:
+        # A person named the product; its code may confirm it, never point elsewhere, also when
+        # the file is one this product already holds.
+        if by_code and by_code != [chosen]:
+            return decided("QUARANTINE", "anchor_conflict", **anchors)
+        if owners:
+            return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
+        return _existing(chosen, "confirmed_by_person", decided, role, code, own_code)
     named = [p for p in products if title and title in {_fold(n) for n in p.names}]
     named = named or _named_inside(title, products)
     # Both anchors must agree: a code whose product the title does not name is a conflict, also
@@ -232,7 +273,7 @@ def attribute(
     if role != TERMS or own_code is None or not title:
         return decided("QUARANTINE", "no_product_anchor", **anchors)
 
-    pack = _pack(title, policy)
+    pack = _pack(title, policy) or pack
     if pack is None:
         return decided("NEEDS_CONFIRM", "pack_unresolved", display_name=title, **anchors)
     product_id = (
