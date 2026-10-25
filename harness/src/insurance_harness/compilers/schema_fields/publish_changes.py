@@ -1,8 +1,8 @@
 """Publish only changed Claims of one product; --dry-run sends no remote writes.
 
-Uses the current source map and the Active release read for this invocation. Conflicts remain
-local review reports, unchanged members retain their base digest, and NEEDS_REBASE stops without
-retrying. The first-publish command remains available for products without published Claims.
+Uses the current source map (or registry) and the Active release read for this invocation. Conflicts
+remain local review reports, unchanged members retain their base digest, and NEEDS_REBASE stops
+without retrying. The first-publish command remains available for products without published Claims.
 """
 
 import json
@@ -22,8 +22,10 @@ from insurance_harness.changes import decide_changes
 from insurance_harness.changes.options import (
     PublishParser,
     decision_input,
+    registry_inputs,
     review_claims,
     review_inputs,
+    source_options,
 )
 from insurance_harness.changes.reporting import summarize, write_reviews
 from insurance_harness.changes.sources import publication_entries
@@ -36,6 +38,7 @@ from insurance_harness.contracts.knowledge import Claim, NavigationProfile
 from insurance_harness.eval.product_sources import check_product_id, display_name, source_directory
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.weknora_pages import SourcePagesError
+from insurance_harness.ingest.registry import RegistryError
 from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
     BASE_URL_ENV,
@@ -77,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = PublishParser(description=__doc__)
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--product", required=True)
-    parser.add_argument("--source-map", type=Path, required=True)
+    source_options(parser, required=True)
     parser.add_argument("--decide")
     parser.add_argument("--reason")
     parser.add_argument("--activate", action="store_true")
@@ -108,6 +111,15 @@ def main(argv: list[str] | None = None) -> int:
         return _emit({"stopped": "OUTPUT_UNREADABLE"}, 2)
     if output.entity_id != args.product:
         return _emit({"stopped": "OUTPUT_MISMATCH"}, 2)
+    registry_map, registered = None, None
+    if args.registry:
+        try:
+            registry_map, facts = registry_inputs(args.registry, [args.product])
+            registered = facts[args.product]
+        except RegistryError as error:
+            return _emit({"stopped": error.code}, 2)
+        if output.pack_id != registered[1]:
+            return _emit({"stopped": "OUTPUT_MISMATCH"}, 2)
     summary: dict[str, Any] = {
         "product": args.product,
         "dry_run": args.dry_run,
@@ -117,12 +129,13 @@ def main(argv: list[str] | None = None) -> int:
     }
     try:
         version = require_cards_version(output)
-        name = display_name(source_directory(args.repo, args.product))
+        name = (registered[0] if registered else
+                display_name(source_directory(args.repo, args.product)))
         page = product_page(
             args.repo / SCHEMA_PACK_CATALOG, output.pack_id, entity_id=args.product, name=name
         )
         navigation = load_navigation()
-        source_map = load_source_map(args.source_map)
+        source_map = registry_map if registry_map is not None else load_source_map(args.source_map)
         # An explicit empty current material set withdraws sourced Claims. A missing product
         # remains an invalid selection; do not confuse omission with withdrawal.
         if args.product not in source_map.products:

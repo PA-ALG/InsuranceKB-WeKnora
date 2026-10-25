@@ -4,7 +4,7 @@ Products already having Claims in Active must use
 insurance_harness.compilers.schema_fields.publish_changes.
 
 usage: python -m insurance_harness.compilers.schema_fields.publish --run-root <dir> --product <id>
-       --source-map <file> [--decide human --reason <text> [--activate]
+       (--source-map <file> | --registry <file>) [--decide human --reason <text> [--activate]
        | --route [--review-policy <file>] [--scores <file>] [--spot-check-policy <file>]]
        [--repo <dir>]
 
@@ -48,8 +48,10 @@ from insurance_harness.catalog.spot_check import (
 from insurance_harness.changes.options import (
     PublishParser,
     decision_input,
+    registry_inputs,
     review_claims,
     review_inputs,
+    source_options,
 )
 from insurance_harness.changes.options import ScoresFile as _ScoresFile  # noqa: F401
 from insurance_harness.changes.sources import publication_entries
@@ -64,6 +66,7 @@ from insurance_harness.contracts.enums import ReviewMode
 from insurance_harness.eval.product_sources import check_product_id, display_name, source_directory
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.weknora_pages import SourcePagesError
+from insurance_harness.ingest.registry import RegistryError
 from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
     BASE_URL_ENV,
@@ -84,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = PublishParser(description=__doc__)
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--product", required=True)
-    parser.add_argument("--source-map", type=Path, required=True)
+    source_options(parser, required=True)
     parser.add_argument("--decide")
     parser.add_argument("--reason")
     parser.add_argument("--activate", action="store_true")
@@ -118,6 +121,15 @@ def main(argv: list[str] | None = None) -> int:
         return _stop("OUTPUT_UNREADABLE")
     if output.entity_id != args.product:
         return _stop("OUTPUT_MISMATCH")
+    registry_map, registered = None, None
+    if args.registry:
+        try:
+            registry_map, facts = registry_inputs(args.registry, [args.product])
+            registered = facts[args.product]
+        except RegistryError as error:
+            return _stop(error.code)
+        if output.pack_id != registered[1]:
+            return _stop("OUTPUT_MISMATCH")
     try:
         # Written before outputs recorded their card version (or blank): publishing it under
         # today's cards would misstate how it was compiled. Same rule as candidate_bundle.
@@ -126,7 +138,8 @@ def main(argv: list[str] | None = None) -> int:
         return _stop(error.reason)
     # The page is local data: read it before anything is sent, with the compile's own rule.
     try:
-        name = display_name(source_directory(args.repo, args.product))
+        name = (registered[0] if registered else
+                display_name(source_directory(args.repo, args.product)))
     except (OSError, ValueError):
         return _stop("PRODUCT_META_MISSING")
     try:
@@ -140,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     except NavigationError as error:
         return _stop(error.code)
     try:
-        source_map = load_source_map(args.source_map)
+        source_map = registry_map if registry_map is not None else load_source_map(args.source_map)
         reader = reader_from_env()
         client = PlatformClient(os.environ[BASE_URL_ENV], os.environ[API_KEY_ENV])
         active = client.active(source_map.space_id)

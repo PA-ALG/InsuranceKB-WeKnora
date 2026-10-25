@@ -1,7 +1,9 @@
 """Argument validation and review routing shared by first and incremental publishing."""
 
 import argparse
+from collections.abc import Callable, Sequence
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, NoReturn
 
 from pydantic import (
@@ -15,7 +17,12 @@ from pydantic import (
 
 from insurance_harness.bundle.client import DecisionInput
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
+from insurance_harness.catalog.trust_policy import TrustedPages
 from insurance_harness.contracts.knowledge import Claim
+from insurance_harness.eval.pdf_text import PageText
+from insurance_harness.evidence.source_ref import SourceRevision
+from insurance_harness.ingest.registry import load_registry
+from insurance_harness.ingest.source_map import PageReader, SourceMap, load_trusted_pages
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, route
 
 Score = Annotated[float, Field(strict=True, ge=0.0, le=1.0, allow_inf_nan=False)]
@@ -27,6 +34,36 @@ class PublishParser(argparse.ArgumentParser):
 
     def error(self, message: str) -> NoReturn:
         raise ValueError(message)
+
+
+def source_options(parser: argparse.ArgumentParser, *, required: bool) -> None:
+    """Choose one fixed source authority; compilation also allows local dataset inputs."""
+    sources = parser.add_mutually_exclusive_group(required=required)
+    sources.add_argument("--source-map", type=Path, help="read the map's fixed WeKnora revisions")
+    sources.add_argument("--registry", type=Path, help="read registered facts and fixed revisions")
+
+
+def registry_inputs(
+    path: Path, products: Sequence[str],
+) -> tuple[SourceMap, dict[str, tuple[str, str]]]:
+    """Snapshot selected facts and sources, rejecting unknown products before remote reads."""
+    registry = load_registry(path)
+    facts = {product: registry.facts(product) for product in products}
+    return registry.source_map(), {
+        product: (fact.name, fact.schema_pack_id) for product, fact in facts.items()
+    }
+
+
+def fixed_revision_pages(
+    source_map: SourceMap, reader: PageReader,
+) -> Callable[[str], tuple[TrustedPages[PageText], dict[str, SourceRevision]]]:
+    """Read pages and their revision labels in the same canonical order as compilation."""
+    def read(product: str) -> tuple[TrustedPages[PageText], dict[str, SourceRevision]]:
+        entries = sorted(source_map.entries(product),
+                         key=lambda entry: (entry.knowledge_id, entry.parse_attempt))
+        return load_trusted_pages(reader, source_map.space_id, entries)
+
+    return read
 
 
 class ScoresFile(BaseModel):
