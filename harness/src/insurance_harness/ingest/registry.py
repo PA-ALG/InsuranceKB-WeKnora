@@ -7,6 +7,7 @@ waiting for a person or for their terms (`pending`) and an append-only record of
 each with the attribution policy version it was made under.
 """
 
+import json
 import os
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -22,6 +23,7 @@ from pydantic import (
     model_validator,
 )
 
+from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.identity.attribution import (
     Attribution,
     RegisteredMaterial,
@@ -63,6 +65,7 @@ class ProductEntry(_Strict):
     schema_pack_id: _Name
     origin: Literal["seeded", "created"]
     materials: list[MaterialEntry]
+    retired: list[MaterialEntry] = Field(default_factory=list)  # replaced by a new version
 
 
 class PendingEntry(_Strict):
@@ -101,13 +104,15 @@ class ProductRegistry(_Strict):
 
     @model_validator(mode="after")
     def _consistent(self) -> "ProductRegistry":
-        owned = [m.knowledge_id for p in self.products.values() for m in p.materials]
-        waiting = [p.knowledge_id for p in self.pending]
-        if len(set(owned + waiting)) != len(owned) + len(waiting):
+        recorded = [m for p in self.products.values() for m in (*p.materials, *p.retired)]
+        ids = [m.knowledge_id for m in recorded] + [p.knowledge_id for p in self.pending]
+        if len(set(ids)) != len(ids):
             raise ValueError("a knowledge id is registered twice")
         roles = {role.role for role in load_material_roles().roles}
-        if any(m.role not in roles for p in self.products.values() for m in p.materials):
+        if any(m.role not in roles for m in recorded):
             raise ValueError("unknown material role")
+        if any(p.attribution.outcome not in {"NEEDS_CONFIRM", "QUARANTINE"} for p in self.pending):
+            raise ValueError("an automatic conclusion cannot wait in pending")
         return self
 
     def registered(self) -> list[RegisteredProduct]:
@@ -147,10 +152,22 @@ class ProductRegistry(_Strict):
         return ProductFacts(name=product.names[0], schema_pack_id=product.schema_pack_id)
 
 
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
 def load_registry(path: Path) -> ProductRegistry:
+    """A repeated JSON key is refused first: parsing would otherwise keep only the last one."""
     try:
-        return ProductRegistry.model_validate_json(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, ValidationError):
+        text = path.read_text(encoding="utf-8")
+        json.loads(text, object_pairs_hook=_unique_object)
+        return ProductRegistry.model_validate_json(text)
+    except (OSError, ValueError, ValidationError, RecursionError):
         raise RegistryError("REGISTRY_INVALID") from None
 
 
@@ -172,10 +189,16 @@ def save_registry(registry: ProductRegistry, path: Path) -> None:
 
 
 def head_of(pages: PageReader, space_id: str, source: RawSource) -> str:
-    """The text attribution reads: the first two pages, in page order."""
+    """The text attribution reads: the first two pages, in page order.
+
+    Every page must belong to the file the listing names: the page reader checks the revision and
+    its own page hashes, not that the captured document is the listed one.
+    """
     read = sorted(
         pages.pages(space_id, source.knowledge_id, source.parse_attempt), key=lambda p: p.page
     )
+    if not read or any(page.document_sha256 != source.sha256 for page in read):
+        raise SourcePagesError("PARSE_ARTIFACT_INTEGRITY")
     return "\n".join(page.text for page in read[:2])
 
 

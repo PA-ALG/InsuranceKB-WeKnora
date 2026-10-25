@@ -30,13 +30,13 @@ class RawSource(BaseModel):
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     knowledge_id: _Identifier
-    parse_attempt: int = Field(ge=1)
+    parse_attempt: int = Field(ge=1, lt=2**63)  # the range the fixed page reader accepts
     file_name: str = Field(min_length=1)
     sha256: _Digest
 
 
 class _Item(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(strict=True, extra="ignore")  # true is not 1, "1" is not a number
     id: str
     parse_status: str
     current_parse_attempt: int = 0
@@ -45,7 +45,7 @@ class _Item(BaseModel):
 
 
 class _Page(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(strict=True, extra="ignore")
     success: bool
     data: list[_Item]
     total: int = Field(ge=0)
@@ -88,8 +88,6 @@ class RawSources:
         if not isinstance(raw_kb_id, str) or not _IDENTIFIER.fullmatch(raw_kb_id):
             raise RawSourcesError("INVALID_REQUEST")
         items = self._all(f"{self._base_url}/api/v1/knowledge-bases/{raw_kb_id}/knowledge")
-        if len({item.id for item in items}) != len(items):
-            raise RawSourcesError("RAW_LISTING_INVALID")
         try:
             return [
                 RawSource(
@@ -106,6 +104,7 @@ class RawSources:
 
     def _all(self, url: str) -> list[_Item]:
         items: list[_Item] = []
+        seen: set[str] = set()
         total: int | None = None
         page = 1
         with httpx.Client(
@@ -137,6 +136,15 @@ class RawSources:
                 total = body.total
                 if not body.data:
                     break
+                # A repeated id or more pages than the total needs is a broken listing: stop now
+                # rather than spend requests (and the registry lock) reading it to the end.
+                if page > max(1, -(-total // PAGE_SIZE)) or any(
+                    item.id in seen for item in body.data
+                ):
+                    raise RawSourcesError("RAW_LISTING_INVALID")
+                seen.update(item.id for item in body.data)
+                if len(seen) != len(items) + len(body.data):
+                    raise RawSourcesError("RAW_LISTING_INVALID")
                 items.extend(body.data)
                 page += 1
         if len(items) != total:

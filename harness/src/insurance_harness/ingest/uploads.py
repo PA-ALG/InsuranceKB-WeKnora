@@ -63,6 +63,8 @@ class UploadReport(BaseModel):
     affected_products: list[str]
     pending: int
     unreadable: list[str]
+    revision_changes: list[str]  # recorded materials listed with another attempt or SHA (S8)
+    not_listed: list[str]  # registered materials missing from the completed listing (S8)
 
 
 class UploadRun(BaseModel):
@@ -71,25 +73,47 @@ class UploadRun(BaseModel):
     report: UploadReport
 
 
+_DECIDED = {"DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE"}
+
+
 def _candidates(registry: ProductRegistry, sources: Sequence[RawSource]) -> list[RawSource]:
-    """New materials, plus quarantined ones; never those a person has to decide."""
-    owned = {m.knowledge_id for p in registry.products.values() for m in p.materials}
-    waiting = {(p.knowledge_id, p.parse_attempt): p.attribution.outcome for p in registry.pending}
-    duplicates = {
-        (d.knowledge_id, d.parse_attempt)
-        for d in registry.decisions
-        if d.attribution.outcome == "DUPLICATE"
+    """New materials, plus quarantined ones.
+
+    Never one a person has to decide (by knowledge id, whatever its parse attempt), one already
+    registered or replaced by a new version, or one with a final decision on record.
+    """
+    settled = {
+        m.knowledge_id for p in registry.products.values() for m in (*p.materials, *p.retired)
     }
+    settled |= {
+        p.knowledge_id for p in registry.pending if p.attribution.outcome == "NEEDS_CONFIRM"
+    }
+    settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome in _DECIDED}
     return sorted(
-        (
-            s
-            for s in sources
-            if s.knowledge_id not in owned
-            and waiting.get((s.knowledge_id, s.parse_attempt)) != "NEEDS_CONFIRM"
-            and (s.knowledge_id, s.parse_attempt) not in duplicates
-        ),
-        key=lambda s: s.knowledge_id,
+        (s for s in sources if s.knowledge_id not in settled), key=lambda s: s.knowledge_id
     )
+
+
+def _changes(
+    registry: ProductRegistry, sources: Sequence[RawSource]
+) -> tuple[list[str], list[str]]:
+    """Recorded materials whose listed revision differs, and registered ones not listed."""
+    recorded = {
+        m.knowledge_id: (m.parse_attempt, m.sha256)
+        for p in registry.products.values()
+        for m in (*p.materials, *p.retired)
+    }
+    recorded |= {
+        p.knowledge_id: (p.parse_attempt, p.sha256)
+        for p in registry.pending
+        if p.attribution.outcome == "NEEDS_CONFIRM"
+    }
+    listed = {s.knowledge_id: (s.parse_attempt, s.sha256) for s in sources}
+    changed = sorted(
+        k for k, revision in listed.items() if k in recorded and recorded[k] != revision
+    )
+    owned = {m.knowledge_id for p in registry.products.values() for m in p.materials}
+    return changed, sorted(owned - set(listed))
 
 
 def _apply(registry: ProductRegistry, source: RawSource, attribution: Attribution) -> bool:
@@ -143,7 +167,9 @@ def _apply(registry: ProductRegistry, source: RawSource, attribution: Attributio
         return True
     product = registry.products[attribution.product_id]
     kept = [m for m in product.materials if m.knowledge_id not in attribution.replaces]
+    replaced = [m for m in product.materials if m.knowledge_id in attribution.replaces]
     product.materials = sorted([*kept, material], key=lambda m: m.knowledge_id)
+    product.retired = sorted([*product.retired, *replaced], key=lambda m: m.knowledge_id)
     code = attribution.clause_code
     if attribution.outcome == "NEW_VERSION" and code and code not in product.clause_codes:
         product.clause_codes.append(code)
@@ -192,11 +218,14 @@ def attribute_uploads(
                 _apply(current, source, attribution)
             break
         remaining = [source for source, _ in deferred]
+    revision_changes, not_listed = _changes(current, sources)
     report = UploadReport(
         counts=dict(sorted(counts.items())),
         affected_products=sorted(affected),
         pending=len(current.pending),
         unreadable=sorted(unreadable),
+        revision_changes=revision_changes,
+        not_listed=not_listed,
     )
     return UploadRun(registry=current, report=report)
 
@@ -299,6 +328,9 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         AttributionInputError,
     ) as error:
         print(error.code, file=sys.stderr)
+        return 1
+    except OSError:  # lock or registry file; the message would carry the path
+        print("REGISTRY_IO_ERROR", file=sys.stderr)
         return 1
 
 
