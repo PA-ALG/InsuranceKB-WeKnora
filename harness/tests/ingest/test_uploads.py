@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from insurance_harness.ingest.raw_sources import RawSources, RawSourcesError
+from insurance_harness.ingest.raw_sources import RawSource, RawSources, RawSourcesError
 from insurance_harness.ingest.registry import ProductRegistry, load_registry, save_registry
 from insurance_harness.ingest.uploads import attribute_uploads, main
 from tests.ingest.upload_helpers import (
@@ -94,7 +94,9 @@ def test_new_terms_replace_the_old_ones() -> None:
     head = material("1828", "terms")["head"].replace("174号", "999号", 1)
     new = raw("1828", "terms", knowledge_id="k-1828-terms2", sha256="e" * 64)
     run = attribute_uploads(
-        registry(p1828=entry("1828", *ROLES)), [new], Pages(heads={"k-1828-terms2": head})
+        registry(p1828=entry("1828", *ROLES)),
+        [new],
+        Pages(heads={"k-1828-terms2": head}, sources=[new]),
     )
     product = run.registry.products["1828"]
     terms = [m.knowledge_id for m in product.materials if m.role == "terms"]
@@ -110,9 +112,11 @@ def test_new_terms_replace_the_old_ones() -> None:
 def test_items_for_a_person_are_not_judged_again() -> None:
     second = raw("1828", "brochure", knowledge_id="k-1828-brochure2", sha256="f" * 64)
     heads = {"k-1828-brochure2": material("1828", "brochure")["head"]}
-    first = attribute_uploads(registry(p1828=entry("1828", *ROLES)), [second], Pages(heads=heads))
+    first = attribute_uploads(
+        registry(p1828=entry("1828", *ROLES)), [second], Pages(heads=heads, sources=[second])
+    )
     assert kinds(first.registry) == {"NEEDS_CONFIRM:k-1828-brochure2": "same_role_differs"}
-    pages = Pages(heads=heads)
+    pages = Pages(heads=heads, sources=[second])
     again = attribute_uploads(first.registry, [second], pages)
     assert pages.calls == []
     assert again.registry == first.registry
@@ -126,7 +130,7 @@ def test_a_duplicate_is_recorded_but_not_added() -> None:
     run = attribute_uploads(
         registry(p1828=entry("1828", *ROLES)),
         [copy],
-        Pages(heads={"k-copy": material("1828", "brochure")["head"]}),
+        Pages(heads={"k-copy": material("1828", "brochure")["head"]}, sources=[copy]),
     )
     assert "k-copy" not in {m.knowledge_id for m in run.registry.products["1828"].materials}
     assert run.registry.decisions[-1].attribution.outcome == "DUPLICATE"
@@ -229,7 +233,7 @@ def test_an_inconsistent_listing_fails_as_a_whole(breakage: str) -> None:
 # 12–13. Command -------------------------------------------------------------------------------
 
 
-def wiki_transport(items: list[dict[str, object]]) -> httpx.MockTransport:
+def wiki_transport(items: list[dict[str, object]], wrong: bool = False) -> httpx.MockTransport:
     listing = listing_transport(items)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -243,7 +247,7 @@ def wiki_transport(items: list[dict[str, object]]) -> httpx.MockTransport:
             "knowledge_id": kid,
             "parse_attempt": attempt,
             "document": material(product_id, role)["file_name"],
-            "document_sha256": material(product_id, role)["sha256"],
+            "document_sha256": "b" * 64 if wrong else material(product_id, role)["sha256"],
             "parser_identity_sha256": "1" * 64,
             "native_sha256": "2" * 64,
             "pages": [
@@ -305,3 +309,161 @@ def test_the_space_of_the_listing_comes_from_the_registry() -> None:
     pages = Pages()
     attribute_uploads(registry(p1828=entry("1828", "terms")), [raw("1828", "brochure")], pages)
     assert pages.calls == [(SPACE, knowledge_id("1828", "brochure"), 1)]
+
+
+# 14. Review R1–R7 counterexamples (2026-10-25) -------------------------------------------------
+
+
+def new_terms() -> tuple[RawSource, Pages]:
+    head = material("1828", "terms")["head"].replace("174号", "999号", 1)
+    new = raw("1828", "terms", knowledge_id="k-1828-terms2", sha256="e" * 64)
+    return new, Pages(heads={"k-1828-terms2": head}, sources=[new])
+
+
+def test_a_replaced_terms_document_is_never_sent_back_for_review() -> None:
+    new, pages = new_terms()
+    listing = [raw("1828", role) for role in ROLES] + [new]
+    first = attribute_uploads(registry(p1828=entry("1828", *ROLES)), listing, pages)
+    second = attribute_uploads(first.registry, listing, Pages(sources=listing))
+    assert second.registry == first.registry
+    assert second.registry.pending == []
+    assert second.report.counts == {}
+
+
+def test_a_reparse_does_not_release_an_item_waiting_for_a_person() -> None:
+    odd = raw(
+        "1828",
+        "brochure",
+        knowledge_id="k-1828-brochure2",
+        sha256="f" * 64,
+        file_name="scan-0001.pdf",
+    )
+    heads = {"k-1828-brochure2": material("1828", "brochure")["head"]}
+    first = attribute_uploads(
+        registry(p1828=entry("1828", "terms")), [odd], Pages(heads=heads, sources=[odd])
+    )
+    assert kinds(first.registry) == {"NEEDS_CONFIRM:k-1828-brochure2": "role_unresolved"}
+    reparsed = raw("1828", "brochure", knowledge_id="k-1828-brochure2", sha256="f" * 64, attempt=2)
+    pages = Pages(heads=heads, sources=[reparsed])
+    again = attribute_uploads(first.registry, [reparsed], pages)
+    assert pages.calls == []
+    assert again.registry == first.registry
+    assert again.report.affected_products == []
+    assert again.report.revision_changes == ["k-1828-brochure2"]
+
+
+def test_pages_of_another_file_are_not_used_and_nothing_is_registered() -> None:
+    sources = [raw("1830", role) for role in ROLES]
+    wrong = knowledge_id("1830", "terms")
+    run = attribute_uploads(registry(p1828=entry("1828", *ROLES)), sources, Pages(wrong=(wrong,)))
+    assert run.report.unreadable == [wrong]
+    assert [p for p in run.registry.products.values() if p.origin == "created"] == []
+    assert wrong not in {p.knowledge_id for p in run.registry.pending}
+
+
+def test_registered_materials_that_change_or_vanish_are_reported_not_changed() -> None:
+    value = registry(p1828=entry("1828", *ROLES))
+    listing = [raw("1828", "terms", attempt=2), raw("1828", "brochure", sha256="d" * 64)]
+    run = attribute_uploads(value, listing, Pages(sources=listing))
+    assert run.registry == value
+    assert run.report.not_listed == [knowledge_id("1828", "rate_table")]
+    assert run.report.revision_changes == [
+        knowledge_id("1828", "brochure"),
+        knowledge_id("1828", "terms"),
+    ]
+
+
+def test_the_command_reports_a_page_file_mismatch_through_the_real_readers(
+    tmp_path: Path, environment: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "registry.json"
+    save_registry(registry(p1828=entry("1828", *ROLES)), path)
+    before = path.read_bytes()
+    items = [listing_item("1830", role) for role in ROLES]
+    assert main(["run", "--registry", str(path)], transport=wiki_transport(items, wrong=True)) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["unreadable"] == sorted(knowledge_id("1830", role) for role in ROLES)
+    assert report["affected_products"] == []
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("where", ["missing-folder", "failed-save"])
+def test_file_errors_give_a_fixed_code_without_paths(
+    tmp_path: Path,
+    environment: None,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    where: str,
+) -> None:
+    if where == "missing-folder":
+        path = tmp_path / "absent" / "registry.json"
+    else:
+        path = tmp_path / "registry.json"
+        save_registry(registry(p1828=entry("1828", "terms")), path)
+
+        def broken(source: object, target: object) -> None:
+            raise OSError(f"cannot replace {target}")
+
+        monkeypatch.setattr("os.replace", broken)
+    items = [listing_item("1828", "terms"), listing_item("1828", "brochure")]
+    assert main(["run", "--registry", str(path)], transport=wiki_transport(items)) != 0
+    error = capsys.readouterr().err
+    assert error.strip() == "REGISTRY_IO_ERROR"
+    assert str(tmp_path) not in error
+
+
+def test_a_listing_that_repeats_ids_stops_at_once() -> None:
+    items = [listing_item("1828", role) for role in ROLES]
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(int(request.url.params["page"]))
+        body = {
+            "success": True,
+            "data": items,
+            "total": 1_000_000,
+            "page": calls[-1],
+            "page_size": 100,
+        }
+        return httpx.Response(200, json=body)
+
+    with pytest.raises(RawSourcesError) as caught:
+        RawSources("http://weknora.test", "key", transport=httpx.MockTransport(handler)).completed(
+            RAW_KB
+        )
+    assert caught.value.code == "RAW_LISTING_INVALID"
+    assert calls == [1, 2]
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("current_parse_attempt", True),
+        ("current_parse_attempt", "1"),
+        ("current_parse_attempt", 2**63),
+        ("success", "true"),
+        ("total", "3"),
+    ],
+)
+def test_a_listing_with_wrong_types_or_ranges_fails_as_a_whole(field: str, value: object) -> None:
+    items = [listing_item("1828", role) for role in ROLES]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body: dict[str, object] = {
+            "success": True,
+            "data": items,
+            "total": 3,
+            "page": 1,
+            "page_size": 100,
+        }
+        if field in body:
+            body[field] = value
+        else:
+            items[0][field] = value
+        return httpx.Response(200, json=body)
+
+    with pytest.raises(RawSourcesError) as caught:
+        RawSources("http://weknora.test", "key", transport=httpx.MockTransport(handler)).completed(
+            RAW_KB
+        )
+    assert caught.value.code == "RAW_LISTING_INVALID"

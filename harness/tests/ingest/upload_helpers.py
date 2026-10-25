@@ -1,6 +1,7 @@
 """Shared S5b-2 test data: real material openings (S5b-1 fixture), a fake RAW listing and pages."""
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 from insurance_harness.eval.pdf_text import PageText
@@ -76,11 +77,20 @@ def registry(**products: ProductEntry) -> ProductRegistry:
 
 
 class Pages:
-    """A fake page reader: each knowledge's first page is its fixture opening."""
+    """A fake page reader. Each knowledge's first page is its fixture opening, unless overridden;
+    pages carry the document SHA the listing gives (or a deliberately different one in `wrong`)."""
 
-    def __init__(self, heads: dict[str, str] | None = None, failing: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        heads: dict[str, str] | None = None,
+        failing: tuple[str, ...] = (),
+        sources: Sequence[RawSource] = (),
+        wrong: tuple[str, ...] = (),
+    ) -> None:
         self.heads = heads or {}
         self.failing = failing
+        self.shas = {source.knowledge_id: source.sha256 for source in sources}
+        self.wrong = wrong
         self.calls: list[tuple[str, str, int]] = []
 
     def pages(self, space_id: str, knowledge_id: str, attempt: int) -> list[PageText]:
@@ -92,4 +102,10 @@ class Pages:
         else:
             _, product_id, role = knowledge_id.split("-", 2)
             head = material(product_id, role)["head"]
-        return [PageText(knowledge_id, "0" * 64, 1, head), PageText(knowledge_id, "0" * 64, 2, "")]
+        sha = self.shas.get(knowledge_id)
+        if sha is None:
+            _, product_id, role = knowledge_id.split("-", 2)
+            sha = material(product_id, role)["sha256"]
+        if knowledge_id in self.wrong:
+            sha = "b" * 64 if sha != "b" * 64 else "c" * 64
+        return [PageText(knowledge_id, sha, 1, head), PageText(knowledge_id, sha, 2, "")]

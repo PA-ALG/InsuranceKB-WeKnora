@@ -172,3 +172,54 @@ def test_seeding_fails_when_a_mapped_material_is_not_in_the_listing() -> None:
     with pytest.raises(RegistryError) as caught:
         seed_registry(SPACE, RAW_KB, maps, sources, Pages(), facts)
     assert caught.value.code == "SEED_INVALID"
+
+
+# 14. Review R1, R5 (2026-10-25) ---------------------------------------------------------------
+
+
+def test_an_automatic_conclusion_cannot_sit_in_pending(tmp_path: Path) -> None:
+    document = json.loads(registry(p1828=entry("1828", "terms")).model_dump_json())
+    document["pending"] = [
+        {
+            "knowledge_id": "k-x",
+            "parse_attempt": 1,
+            "sha256": "a" * 64,
+            "file_name": "x.pdf",
+            "attribution": {
+                "outcome": "CREATE",
+                "reason": "new_product",
+                "policy_ref": "attribution-policy@2026-10-25.1",
+            },
+        }
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(RegistryError) as caught:
+        load_registry(path)
+    assert caught.value.code == "REGISTRY_INVALID"
+
+
+def test_a_repeated_json_key_is_refused_rather_than_overwritten(tmp_path: Path) -> None:
+    text = registry(p1828=entry("1828", "terms")).model_dump_json()
+    product = json.dumps(json.loads(text)["products"]["1828"], ensure_ascii=False)
+    emptied = json.dumps(json.loads(product) | {"materials": []}, ensure_ascii=False)
+    doubled = text.replace(f'"1828":{product}', f'"1828":{product},"1828":{emptied}', 1)
+    assert doubled != text
+    path = tmp_path / "registry.json"
+    path.write_text(doubled, encoding="utf-8")
+    with pytest.raises(RegistryError) as caught:
+        load_registry(path)
+    assert caught.value.code == "REGISTRY_INVALID"
+
+
+def test_retired_materials_stay_out_of_the_source_map_and_stay_unique() -> None:
+    product = entry("1828", "brochure")
+    product.retired = entry("1828", "terms").materials
+    value = registry(p1828=product)
+    assert value.source_map().products["1828"] == [
+        SourceEntry(knowledge_id=knowledge_id("1828", "brochure"), parse_attempt=1)
+    ]
+    document = json.loads(value.model_dump_json())
+    document["products"]["1828"]["materials"].append(document["products"]["1828"]["retired"][0])
+    with pytest.raises(ValueError):
+        ProductRegistry.model_validate_json(json.dumps(document, ensure_ascii=False))
