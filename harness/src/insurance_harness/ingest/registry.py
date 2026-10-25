@@ -87,9 +87,14 @@ class ConfirmationRef(_Strict):
 
 class Settlement(_Strict):
     """What a run decided to do with a material's confirmation item, saved before closing it
-    (S5b-3c-2 Spec §2.2): an interrupted run completes exactly this, never a re-derived one."""
+    (S5b-3c-2 Spec §2.2, §3.5): an interrupted run completes exactly this, never a re-derived one.
+    It names the material version and the question it was made for."""
 
     item_id: _Identifier
+    knowledge_id: _Identifier
+    parse_attempt: int = Field(ge=1)
+    sha256: _Digest
+    revision: _Identifier
     reason: Literal["applied", "obsolete"]
     confirmation: ConfirmationRef | None
     conclusion: Attribution | None
@@ -101,6 +106,8 @@ class Settlement(_Strict):
             raise ValueError(
                 "an applied settlement names its answer and conclusion, an obsolete one neither"
             )
+        if self.confirmation is not None and self.confirmation.item_id != self.item_id:
+            raise ValueError("a settlement's answer belongs to another item")
         return self
 
 
@@ -158,14 +165,22 @@ class ProductRegistry(_Strict):
         answers = [d.confirmation.answer_id for d in self.decisions if d.confirmation]
         if len(set(answers)) != len(answers):
             raise ValueError("an answer is recorded twice")
-        for entry in self.pending:
-            settlement = entry.settlement
-            if settlement is None:
-                continue
+        settled = [(entry, entry.settlement) for entry in self.pending if entry.settlement]
+        for entry, settlement in settled:
             if entry.attribution.outcome != "NEEDS_CONFIRM":
                 raise ValueError("only a material waiting for a person has a settlement")
-            if settlement.confirmation and settlement.confirmation.answer_id in answers:
-                raise ValueError("a settlement for an answer already recorded")
+            if (settlement.knowledge_id, settlement.parse_attempt, settlement.sha256) != (
+                entry.knowledge_id,
+                entry.parse_attempt,
+                entry.sha256,
+            ):
+                raise ValueError("a settlement made for another material version")
+        items = [settlement.item_id for _, settlement in settled]
+        settled_answers = [s.confirmation.answer_id for _, s in settled if s.confirmation]
+        if len(set(items)) != len(items) or len(set(settled_answers)) != len(settled_answers):
+            raise ValueError("two settlements name one item or answer")
+        if set(settled_answers) & set(answers):
+            raise ValueError("a settlement for an answer already recorded")
         return self
 
     def registered(self) -> list[RegisteredProduct]:

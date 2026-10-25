@@ -392,8 +392,16 @@ def _asked(item: ConfirmationInput | ConfirmationItem) -> tuple[object, ...]:
 
 
 def _owns(item: ConfirmationItem, space_id: str) -> bool:
-    """The item is in the Space asked about and its answer is its own."""
-    return item.space_id == space_id and (item.answer is None or item.answer.item_id == item.id)
+    """The item is in the Space asked about, its answer is its own, and its closure agrees with
+    that answer: applied names it, obsolete names none (review R5)."""
+    if item.space_id != space_id or (item.answer is not None and item.answer.item_id != item.id):
+        return False
+    closure = item.closure
+    if closure is None:
+        return True
+    if closure.reason == "applied":
+        return item.answer is not None and closure.answer_id == item.answer.id
+    return not closure.answer_id
 
 
 def _identifier(part: str) -> None:

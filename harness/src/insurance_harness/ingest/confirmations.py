@@ -92,6 +92,45 @@ def _matches(closure: ConfirmationClosure, settlement: Settlement) -> bool:
     return (closure.reason, closure.answer_id or None) == (settlement.reason, answer)
 
 
+def _settlement(
+    entry: PendingEntry,
+    item: ConfirmationItem,
+    ref: ConfirmationRef | None = None,
+    conclusion: Attribution | None = None,
+) -> Settlement:
+    """A settlement for this material version and this item's question (Spec §3.5)."""
+    return Settlement(
+        item_id=item.id,
+        knowledge_id=entry.knowledge_id,
+        parse_attempt=entry.parse_attempt,
+        sha256=entry.sha256,
+        revision=item.revision,
+        reason="applied" if ref is not None else "obsolete",
+        confirmation=ref,
+        conclusion=conclusion,
+    )
+
+
+def _same_question(item: ConfirmationItem, entry: PendingEntry, settlement: Settlement) -> bool:
+    return (item.subject, item.revision) == (
+        SUBJECT_PREFIX + entry.knowledge_id,
+        settlement.revision,
+    )
+
+
+def _same_answer(item: ConfirmationItem, settlement: Settlement) -> bool:
+    """The item's answer is the settlement's in full: id, choice and answerer (review R5)."""
+    ref = settlement.confirmation
+    if ref is None:
+        return True
+    answer = item.answer
+    return answer is not None and (answer.id, answer.option_key, answer.answerer) == (
+        ref.answer_id,
+        ref.option_key,
+        ref.answerer,
+    )
+
+
 def _applies(registry: ProductRegistry, conclusion: Attribution) -> bool:
     """The saved conclusion can still be recorded as it stands (Spec §2.2, review R2)."""
     product = registry.products.get(conclusion.product_id or "")
@@ -201,10 +240,7 @@ class _Sync:
                 entry.attribution, answer.option_key, upload, self.current.registered()
             )
         except ConfirmationError:  # the registry has changed since the question (Spec §2.3)
-            self.commit(
-                entry,
-                Settlement(item_id=item.id, reason="obsolete", confirmation=None, conclusion=None),
-            )
+            self.commit(entry, _settlement(entry, item))
             return
         try:
             ref = ConfirmationRef(
@@ -220,10 +256,7 @@ class _Sync:
         except RegistryError as error:
             self.skipped[error.code] += 1
             return
-        settlement = Settlement(
-            item_id=item.id, reason="applied", confirmation=ref, conclusion=conclusion
-        )
-        self.commit(entry, settlement)
+        self.commit(entry, _settlement(entry, item, ref, conclusion))
 
     def commit(self, entry: PendingEntry, settlement: Settlement) -> None:
         marked = self.mark(entry, settlement)
@@ -274,6 +307,19 @@ class _Sync:
         self.applied.add(entry.knowledge_id)
         self.persist()
 
+    def recordable(self, entry: PendingEntry, settlement: Settlement) -> bool:
+        """An applied settlement's conclusion can still be recorded as it stands (review R10)."""
+        conclusion, ref = settlement.conclusion, settlement.confirmation
+        if conclusion is None or ref is None:
+            return True
+        if not _applies(self.current, conclusion):
+            return False
+        try:
+            record(self.current.model_copy(deep=True), _source(entry), conclusion, ref)
+        except RegistryError:
+            return False
+        return True
+
     def find(self, item_id: str, status: str) -> ConfirmationItem | None:
         listed = self.client.confirmations(self.space, "closed" if status == "closed" else "open")
         return next((item for item in listed if item.id == item_id), None)
@@ -291,16 +337,24 @@ class _Sync:
             if item is None:
                 self.mark(entry, None)
                 self.skipped["CONFIRMATION_NOT_FOUND"] += 1
+            elif not _same_question(item, entry, settlement):
+                self.skipped["SETTLEMENT_MISMATCH"] += 1  # kept: never executed on another item
             elif item.closure is not None:
-                if _matches(item.closure, settlement):
-                    self.execute(entry, settlement)
-                else:
+                if not _matches(item.closure, settlement):
                     self.mark(entry, None)
                     self.skipped["CONFIRMATION_CLOSED"] += 1
+                elif not _same_answer(item, settlement):
+                    self.skipped["SETTLEMENT_MISMATCH"] += 1
+                else:
+                    self.execute(entry, settlement)
             elif settlement.confirmation is not None and (
                 item.answer is None or item.answer.id != settlement.confirmation.answer_id
             ):
                 self.mark(entry, None)  # a newer answer: settled afresh below
+            elif not _same_answer(item, settlement):
+                self.skipped["SETTLEMENT_MISMATCH"] += 1
+            elif not self.recordable(entry, settlement):
+                self.skipped["CONFIRMATION_CONFLICT"] += 1  # still open: a person can answer again
             else:
                 self.commit(entry, settlement)
 
