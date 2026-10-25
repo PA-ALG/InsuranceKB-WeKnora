@@ -219,17 +219,18 @@ def attribute(
     owners = sorted(
         {p.product_id for p in products for m in p.materials if m.sha256 == upload.sha256}
     )
-    if chosen is not None and owners:
-        if chosen.product_id in owners:
-            return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
+    if chosen is None:
+        if len(owners) == 1:
+            return decided("DUPLICATE", "duplicate_file", product_id=owners[0])
+        if owners:
+            return decided("NEEDS_CONFIRM", "multiple_products", candidates=tuple(owners))
+    elif owners and chosen.product_id not in owners:
         return decided("QUARANTINE", "anchor_conflict")
-    if len(owners) == 1:
-        return decided("DUPLICATE", "duplicate_file", product_id=owners[0])
-    if owners:
-        return decided("NEEDS_CONFIRM", "multiple_products", candidates=tuple(owners))
 
     window = _fold(upload.head)[: policy.anchor_chars]
     if not window:
+        if chosen is not None and owners:  # no text, so no code to contradict the file
+            return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return decided("QUARANTINE", "text_unavailable")
     role = role or role_of(upload.file_name, upload.head)
     match = re.search(policy.clause_code_pattern, window)
@@ -245,9 +246,12 @@ def attribute(
         p for p in products if code is not None and code in {_fold(c) for c in p.clause_codes}
     ]
     if chosen is not None:
-        # A person named the product; its code may confirm it, never point elsewhere.
+        # A person named the product; its code may confirm it, never point elsewhere, also when
+        # the file is one this product already holds.
         if by_code and by_code != [chosen]:
             return decided("QUARANTINE", "anchor_conflict", **anchors)
+        if owners:
+            return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return _existing(chosen, "confirmed_by_person", decided, role, code, own_code)
     named = [p for p in products if title and title in {_fold(n) for n in p.names}]
     named = named or _named_inside(title, products)

@@ -227,7 +227,8 @@ def record(
     """Record one decision in place; True when the products changed.
 
     A person's decision names the answer it came from and must settle a material waiting for a
-    person at this exact revision; on refusal the registry is left as it was.
+    person at this exact revision. All or nothing: the changes are made on a copy and kept only when
+    every step succeeds, so a refusal leaves the registry as it was.
     """
     if attribution.outcome in _PERSON_ONLY and confirmation is None:
         raise RegistryError("CONFIRMATION_REQUIRED")
@@ -244,6 +245,22 @@ def record(
         recorded = {d.confirmation.answer_id for d in registry.decisions if d.confirmation}
         if confirmation.answer_id in recorded:
             raise RegistryError("CONFIRMATION_RECORDED")
+    staged = registry.model_copy(deep=True)
+    try:
+        changed = _apply(staged, source, attribution, confirmation)
+    except ValidationError:  # an entry the registry format refuses, such as a blank file name
+        raise RegistryError("RECORD_INVALID") from None
+    registry.products, registry.pending = staged.products, staged.pending
+    registry.decisions = staged.decisions
+    return changed
+
+
+def _apply(
+    registry: ProductRegistry,
+    source: RawSource,
+    attribution: Attribution,
+    confirmation: ConfirmationRef | None,
+) -> bool:
     previous = next((p for p in registry.pending if p.knowledge_id == source.knowledge_id), None)
     registry.pending = [p for p in registry.pending if p.knowledge_id != source.knowledge_id]
     if attribution.outcome in WAITING:
@@ -292,7 +309,9 @@ def record(
             materials=[material],
         )
         return True
-    product = registry.products[attribution.product_id]
+    product = registry.products.get(attribution.product_id)
+    if product is None:
+        raise RegistryError("PRODUCT_UNKNOWN")
     kept = [m for m in product.materials if m.knowledge_id not in attribution.replaces]
     replaced = [m for m in product.materials if m.knowledge_id in attribution.replaces]
     product.materials = sorted([*kept, material], key=lambda m: m.knowledge_id)

@@ -10,7 +10,7 @@ import hashlib
 from collections.abc import Sequence
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from insurance_harness.identity.attribution import (
     Attribution,
@@ -24,6 +24,7 @@ from insurance_harness.identity.attribution import (
 from insurance_harness.identity.material_roles import load_material_roles
 
 MAX_CHOICES = 50  # the platform's limit on options per confirmation item (S5b-3a)
+OPTION_KEY = r"^[a-z0-9][a-z0-9:._-]{0,127}$"  # the platform's option key format (S5b-3a)
 
 
 class ConfirmationError(ValueError):
@@ -36,7 +37,7 @@ class ConfirmationError(ValueError):
 
 class Choice(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
-    key: str
+    key: str = Field(pattern=OPTION_KEY)
     kind: Literal["product", "pack", "role", "replace", "supplement", "ignore"]
     value: str | None = None  # the product id, schema pack id or role
 
@@ -55,34 +56,37 @@ def choices(
     policy = policy or load_attribution_policy()
     if pending.outcome != "NEEDS_CONFIRM":
         raise ConfirmationError("NOT_CONFIRMABLE")
-    registered = {product.product_id for product in registry}
-    offered: list[Choice]
-    if pending.reason == "multiple_products":
-        offered = [
-            Choice(key=_product_key(product_id), kind="product", value=product_id)
-            for product_id in pending.candidates
-            if product_id in registered
-        ]
-    elif pending.reason == "pack_unresolved":
-        packs = dict.fromkeys(entry.schema_pack_id for entry in policy.classifications)
-        offered = [Choice(key=f"pack:{pack}", kind="pack", value=pack) for pack in packs]
-    elif pending.reason in {"role_unresolved", "same_role_differs"}:
-        offered = []
-        if pending.product_id in registered and pending.reason == "role_unresolved":
-            roles = load_material_roles().roles
-            offered = [Choice(key=f"role:{r.role}", kind="role", value=r.role) for r in roles]
-        elif pending.product_id in registered:
-            offered = [
-                Choice(key="replace", kind="replace"),
-                Choice(key="supplement", kind="supplement"),
-            ]
-    else:
-        raise ConfirmationError("NOT_CONFIRMABLE")
-    offered.append(Choice(key="ignore", kind="ignore"))
+    ids = [product.product_id for product in registry]
+    if len(set(ids)) != len(ids):  # as attribute() refuses it: never pick one definition
+        raise AttributionInputError("REGISTRY_DUPLICATE_PRODUCT")
+    try:
+        offered = [*_offered(pending, set(ids), policy), Choice(key="ignore", kind="ignore")]
+    except ValidationError:  # a policy pack or role that cannot be an option key
+        raise ConfirmationError("NOT_CONFIRMABLE") from None
     keys = [choice.key for choice in offered]
     if len(set(keys)) != len(keys) or len(keys) > MAX_CHOICES:
         raise ConfirmationError("NOT_CONFIRMABLE")
     return tuple(offered)
+
+
+def _offered(pending: Attribution, registered: set[str], policy: AttributionPolicy) -> list[Choice]:
+    if pending.reason == "multiple_products":
+        return [
+            Choice(key=_product_key(product_id), kind="product", value=product_id)
+            for product_id in pending.candidates
+            if product_id in registered
+        ]
+    if pending.reason == "pack_unresolved":
+        packs = dict.fromkeys(entry.schema_pack_id for entry in policy.classifications)
+        return [Choice(key=f"pack:{pack}", kind="pack", value=pack) for pack in packs]
+    if pending.reason not in {"role_unresolved", "same_role_differs"}:
+        raise ConfirmationError("NOT_CONFIRMABLE")
+    if pending.product_id not in registered:
+        return []
+    if pending.reason == "role_unresolved":
+        roles = load_material_roles().roles
+        return [Choice(key=f"role:{r.role}", kind="role", value=r.role) for r in roles]
+    return [Choice(key="replace", kind="replace"), Choice(key="supplement", kind="supplement")]
 
 
 def conclude(
@@ -128,7 +132,9 @@ def conclude(
         else:
             result = attribute(upload, registry, policy, pack=choice.value)
             fits = result.outcome == "CREATE" and result.schema_pack_id == choice.value
-    except AttributionInputError:
+    except AttributionInputError as error:
+        if error.code != "CHOICE_INVALID":
+            raise
         raise ConfirmationError("CHOICE_STALE") from None
     if not fits:
         raise ConfirmationError("CHOICE_STALE")
