@@ -45,6 +45,7 @@ export function answerConfirmation(spaceId: string, itemId: string, optionKey: s
   - 键盘左右、Home、End 键可切换；
   - 切换或换 Space 时，丢弃之前还没返回的响应，提交也一样：提交之后列表重新加载过（切换标签、重试、409 刷新），
     提交结果就不再写回页面，以重新加载的列表为准，即使列表里还没有这次提交（审核 R1）。
+    409 之后的自动刷新也一样：刷新期间又重新加载过，这次刷新结束时不再移动焦点。
 - **状态**：
   - 加载中显示 `role="status"`；
   - 失败显示 `role="alert"` 并带"重试"；
@@ -127,6 +128,7 @@ export function answerConfirmation(spaceId: string, itemId: string, optionKey: s
    - 键盘切换标签；
    - 切换标签与换 Space 时，旧响应不覆盖新结果；换 Space 后，旧 Space 的提交结果不写回页面；
    - 提交后切换过标签时，迟到的提交结果不覆盖关闭记录、不覆盖更新的答案，列表晚于提交返回时以列表为准。
+   - 409 自动刷新期间切换过标签，旧刷新结束（成功或失败）时不抢走当前输入框的焦点。
 7. **入口**：
    - Space 页有指向 `enterpriseConfirmations` 的链接；
    - 路由表登记了该路径、名称与页面组件。
