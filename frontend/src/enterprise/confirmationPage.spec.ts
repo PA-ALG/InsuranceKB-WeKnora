@@ -65,7 +65,7 @@ describe('confirmation desk', () => {
     document.head.append(style)
     try {
       const view = page()
-      expect(view.get('[role="status"]').exists()).toBe(true)
+      expect(view.find('[role="status"]').exists()).toBe(true)
       await flushPromises()
       expect(vi.mocked(listConfirmations).mock.calls).toEqual([['demo', 'open']])
       expect(ids(view)).toEqual(['c1', 'c2'])

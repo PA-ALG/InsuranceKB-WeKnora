@@ -35,7 +35,8 @@ describe('confirmation session API', () => {
     const closed = answerConfirmation('demo', 'id', 'ignore', '')
     await expect(closed).rejects.toBeInstanceOf(EnterpriseError)
     await expect(closed).rejects.toMatchObject({ status: 409, code: 'CONFIRMATION_CLOSED' })
-    vi.mocked(post).mockResolvedValueOnce({ success: false, code: 'ANSWER_INVALID', $httpStatus: 400 })
+    const refusal = { success: false, code: 'ANSWER_INVALID', $httpStatus: 400 }
+    vi.mocked(post).mockResolvedValueOnce(refusal)
     await expect(answerConfirmation('demo', 'id', 'unknown', '')).rejects.toMatchObject({ code: 'ANSWER_INVALID' })
   })
 })
