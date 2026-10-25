@@ -117,6 +117,7 @@ def test_a_new_answer_replaces_a_settlement_not_yet_closed() -> None:
     platform.fail_closures_after = None
     newer = platform.answer(item_id, "supplement")
     recovered, _ = run(saves[-1], platform)
+    assert recovered.report.skipped == {}  # dropped before closing, not refused by the platform
     assert platform.closed == [(item_id, "applied", newer)]
     assert recovered.registry.decisions[-1].attribution.outcome == "SUPPLEMENT"
     assert recovered.registry.pending == []
