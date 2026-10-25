@@ -137,6 +137,10 @@ export function answerConfirmation(spaceId: string, itemId: string, optionKey: s
 - `frontend/src/router/index.ts`（一条路由）；
 - `frontend/src/i18n/locales/{zh-CN,en-US,ja-JP,ko-KR,ru-RU}.ts`（`enterpriseKnowledge.confirm`）；
 - §3 的测试；
+- `frontend/src/enterprise/spaceHomeInteraction.spec.ts`、`spaceSearchRegression.spec.ts`：
+  - 这两个测试用真实路由挂载 Space 页，只登记了已有的命名路由；
+  - 新入口链接的路由名不在其中，渲染会报"No match"；
+  - 两个测试路由表各登记一条 `enterpriseConfirmations`，不改断言（RV4b 加抽检入口时同样处理）；
 - `docs/design/upstream-patches.md`（只追加一行）；
 - `tests/architecture/`（基线）。
 
