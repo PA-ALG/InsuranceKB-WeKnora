@@ -84,6 +84,7 @@ class Commands:
         self.current = current
         self.calls: list[tuple[str, list[str]]] = []
         self.compile_stop: str | None = None
+        self.stop_after: int = 0  # products a stopping compile still writes first
         self.review_stop: str | None = None
         self.publish_failures: dict[str, str] = {}
         self.routes: dict[str, str] = {}
@@ -100,6 +101,8 @@ class Commands:
         self.calls.append(("compile", argv))
         root, products = Path(option(argv, "--run-root")), values(argv, "--products")
         if self.compile_stop:
+            for product in products[: self.stop_after]:
+                write_output(root, self.current, product)
             print(json.dumps({"stopped": self.compile_stop, "products": []}))
             return 2
         spend(root, 3 * len(products))
@@ -130,7 +133,9 @@ class Commands:
             (root / product).mkdir(parents=True, exist_ok=True)
             scores = {"reviewer": "flash@test", "reviewed_at": "2026-10-25T10:00:00Z", "scores": {}}
             (root / product / "scores.json").write_text(json.dumps(scores), encoding="utf-8")
-        print(json.dumps({"products": products}))
+        # The real summary lists {product, scored, reused} objects (review R1).
+        scored = [{"product": p, "scored": 1, "reused": False} for p in products]
+        print(json.dumps({"products": scored}))
         return 0
 
     def publish(self, kind: str, argv: list[str]) -> int:
@@ -139,6 +144,10 @@ class Commands:
         if product in self.publish_failures:
             print(json.dumps({"stopped": self.publish_failures[product]}))
             return 2
+        if kind == "changes" and "--dry-run" in argv:
+            outcome = {"product": product, "dry_run": True, "no_changes": product in self.unchanged}
+            print(json.dumps(outcome))
+            return 0
         if kind == "changes" and product in self.unchanged:
             print(json.dumps({"product": product, "no_changes": True}))
             return 0
@@ -190,8 +199,8 @@ def stored(tmp_path: Path, current: ProductRegistry) -> Path:
     return path
 
 
-def published(run: Path) -> dict[str, str]:
-    path = run / "published.json"
+def published(run: Path, name: str = "published.json") -> dict[str, str]:
+    path = run / name
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
@@ -286,17 +295,17 @@ def test_a_stopped_compile_ends_the_run_before_scoring_or_publishing(
 # 3. Scoring -------------------------------------------------------------------------------------
 
 
-def test_only_recompiled_products_are_scored_and_a_failed_scoring_still_publishes(
+def test_products_without_current_scores_are_scored_and_a_failed_scoring_still_publishes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     current = two_products()
     run = tmp_path / "run"
-    write_output(run / "compile", current, "1828")  # current, never published: publish, don't score
+    write_output(run / "compile", current, "1828")  # current but never scored: score it too (R1)
     commands = Commands(monkeypatch, current)
     commands.review_stop = "BUDGET_EXCEEDED"
     report = publish_run(tmp_path, current, Active(set()), review_max_sent=10)
     [argv] = commands.named("review")
-    assert values(argv, "--products") == ["1818"]
+    assert values(argv, "--products") == ["1818", "1828"]
     assert (option(argv, "--compile-root"), option(argv, "--run-root")) == (
         str(run / "compile"),
         str(run / "review"),
@@ -319,7 +328,10 @@ def test_first_or_change_publishing_follows_active_and_success_is_recorded(
     commands = Commands(monkeypatch, current)
     commands.routes = {"1818": "machine"}
     report = publish_run(tmp_path, current, Active({"1828"}))
-    [first], [changes] = commands.named("first"), commands.named("changes")
+    [dry] = [a for a in commands.named("changes") if "--dry-run" in a]
+    assert option(dry, "--product") == "1828" and "--scores" not in dry
+    [first] = commands.named("first")
+    [changes] = [a for a in commands.named("changes") if "--dry-run" not in a]
     assert (option(first, "--product"), option(changes, "--product")) == ("1818", "1828")
     for argv, product in ((first, "1818"), (changes, "1828")):
         assert "--route" in argv
@@ -328,6 +340,7 @@ def test_first_or_change_publishing_follows_active_and_success_is_recorded(
         assert option(argv, "--scores") == str(run / "review" / product / "scores.json")
     assert report.routes == {"1818": "machine", "1828": "human"}
     assert published(run) == {p: digest(run / "compile", p) for p in ("1818", "1828")}
+    assert published(run, "scored.json") == published(run)
 
 
 def test_a_failed_publish_does_not_stop_the_others_and_is_retried_next_run(
@@ -359,6 +372,8 @@ def test_unchanged_content_is_recorded_as_published(
     commands.unchanged = {"1818", "1828"}
     report = publish_run(tmp_path, current, Active({"1818", "1828"}))
     assert commands.named("compile") == [] and commands.named("review") == []
+    assert commands.named("first") == [] and len(commands.named("changes")) == 2
+    assert all("--dry-run" in argv for argv in commands.named("changes"))
     assert report.routes == {"1818": "unchanged", "1828": "unchanged"}
     assert sorted(published(run)) == ["1818", "1828"]
 
