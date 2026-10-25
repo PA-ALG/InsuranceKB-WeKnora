@@ -55,14 +55,6 @@ func (r *Resolved) Endpoint(kind types.ModelType, c Connection) (api.Endpoint, e
 		BaseURL: r.BaseURL, Model: r.RemoteModel, ModelID: c.ModelID,
 		Auth: v.AuthFunc(protocol, creds), Headers: headers, Client: c.Client,
 	}
-	switch kind {
-	case types.ModelTypeEmbedding:
-		ep.DispatchOperation = "embedding"
-	case types.ModelTypeKnowledgeQA, types.ModelTypeVLLM:
-		ep.DispatchOperation = "document_summary"
-	default:
-		ep.DispatchOperation = string(kind)
-	}
 	if v.Endpoint != nil {
 		req := providers.EndpointRequest{
 			BaseURL:   r.BaseURL,

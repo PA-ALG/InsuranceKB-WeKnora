@@ -58,11 +58,8 @@ func (p RetryPolicy) delay(attempt int) time.Duration {
 func (e Endpoint) PostJSONWithRetry(
 	ctx context.Context, url string, body, out any, policy RetryPolicy, label string,
 ) error {
-	attempt := 0
 	return withRetry(ctx, policy, label, func() error {
-		sendCtx := WithDispatchAttempt(ctx, attempt)
-		attempt++
-		return e.PostJSON(sendCtx, url, body, out)
+		return e.PostJSON(ctx, url, body, out)
 	})
 }
 

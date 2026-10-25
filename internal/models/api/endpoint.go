@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/logger"
+	"github.com/Tencent/WeKnora/internal/types"
 	secutils "github.com/Tencent/WeKnora/internal/utils"
 )
 
@@ -52,8 +53,6 @@ type Endpoint struct {
 	// Model is the name sent on the wire; ModelID is WeKnora's own identifier.
 	Model   string
 	ModelID string
-	// DispatchOperation identifies the platform capability in the optional durable journal.
-	DispatchOperation string
 	// Auth stamps credentials; Headers are static extra headers (vendor
 	// betas, user-configured custom headers). User headers never override
 	// the protocol's own reserved headers.
@@ -134,9 +133,16 @@ func (e Endpoint) newPost(ctx context.Context, url string, data []byte, contentT
 // Do sends the request and returns the response. Non-2xx responses are
 // turned into an error carrying the body so callers surface vendor messages.
 func (e Endpoint) Do(req *http.Request) (*http.Response, error) {
-	resp, err := e.dispatch(req)
+	client := e.httpClient()
+	if types.ModelAutomaticRetryDisabled(req.Context()) {
+		// A 307/308 otherwise silently replays the body beyond the workflow's retry budget.
+		copyOfClient := *client
+		copyOfClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		client = &copyOfClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &TransportError{Op: "send request", Err: err}
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))

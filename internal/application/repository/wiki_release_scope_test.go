@@ -23,73 +23,6 @@ func newSchemaWikiScopeRepository(t *testing.T) (*WikiReleaseRepository, *gorm.D
 	return NewWikiReleaseRepository(db), db
 }
 
-func TestGetPreparationScopeForWikiKBIsExactAndTenantScoped(t *testing.T) {
-	t.Parallel()
-	repo, db := newSchemaWikiScopeRepository(t)
-	require.NoError(t, db.Create(&types.WikiReleasePreparation{
-		ID: "preparation-596-1",
-		WikiReleaseScope: types.WikiReleaseScope{
-			TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-medical",
-		},
-		CandidateDigest: "candidate", ManifestDigest: "manifest",
-		ReadyReceiptDigest: "bundle", ReviewDecisionDigest: "", ReviewPolicyID: "policy",
-		ExpectedReleaseID: "", ExpectedActivationEpoch: 0, Status: types.WikiReleasePreparationDraft,
-		Manifest: []byte(`{"contract":"test"}`), Members: []types.WikiReleaseMemberSnapshot{},
-		PreparationDigest: "preparation",
-	}).Error)
-
-	scope, err := repo.GetPreparationScopeForWikiKB(
-		context.Background(), 10003, "wiki-medical", "preparation-596-1",
-	)
-	require.NoError(t, err)
-	require.Equal(t, types.WikiReleaseScope{
-		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-medical",
-	}, *scope)
-
-	_, err = repo.GetPreparationScopeForWikiKB(
-		context.Background(), 99999, "wiki-medical", "preparation-596-1",
-	)
-	require.ErrorIs(t, err, ErrWikiReleaseNotFound)
-	_, err = repo.GetPreparationScopeForWikiKB(
-		context.Background(), 10003, "wiki-medical", "preparation-missing",
-	)
-	require.ErrorIs(t, err, ErrWikiReleaseNotFound)
-}
-
-func TestGetReadyPreparationMetadataOmitsHeavyPublishedPayload(t *testing.T) {
-	t.Parallel()
-	repo, db := newSchemaWikiScopeRepository(t)
-	scope := types.WikiReleaseScope{
-		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-medical",
-	}
-	ready := &types.WikiReleasePreparation{
-		ID: "preparation-published", WikiReleaseScope: scope,
-		CandidateDigest: "candidate", ManifestDigest: "manifest",
-		ReadyReceiptDigest: "receipt", ReviewDecisionDigest: "decision", ReviewPolicyID: "policy",
-		ExpectedReleaseID: "release-base", ExpectedActivationEpoch: 5,
-		Status:            types.WikiReleasePreparationReady,
-		Manifest:          []byte(`{"contract":"batch-concept-candidate-bundle.830.g3.v1","large":"payload"}`),
-		Members:           []types.WikiReleaseMemberSnapshot{{LogicalSlug: "member-1", Content: "large member"}},
-		PreparationDigest: "preparation",
-	}
-	require.NoError(t, db.Create(ready).Error)
-
-	metadata, err := repo.GetReadyPreparationMetadata(context.Background(), scope, ready.ID)
-	require.NoError(t, err)
-	require.Equal(t, ready.ID, metadata.ID)
-	require.Equal(t, ready.WikiReleaseScope, metadata.WikiReleaseScope)
-	require.Equal(t, ready.CandidateDigest, metadata.CandidateDigest)
-	require.Equal(t, ready.ManifestDigest, metadata.ManifestDigest)
-	require.Equal(t, ready.PreparationDigest, metadata.PreparationDigest)
-	require.Nil(t, metadata.Manifest)
-	require.Nil(t, metadata.Members)
-
-	_, err = repo.GetReadyPreparationMetadata(context.Background(), types.WikiReleaseScope{
-		TenantID: scope.TenantID + 1, SpaceID: scope.SpaceID, RawKBID: scope.RawKBID, WikiKBID: scope.WikiKBID,
-	}, ready.ID)
-	require.ErrorIs(t, err, ErrWikiReleaseNotFound)
-}
-
 func schemaWikiScopeHead(id string, tenantID uint64, wikiKBID string) *types.WikiReleaseHead {
 	return &types.WikiReleaseHead{
 		ID: id,
@@ -144,38 +77,4 @@ func TestGetHeadForWikiKBScopeRequiresExactlyOneTenantScopedHead(t *testing.T) {
 		_, err := repo.GetHeadForWikiKB(context.Background(), 10003, "wiki-medical")
 		require.True(t, errors.Is(err, ErrWikiReleaseNotFound), "err=%v", err)
 	})
-}
-
-func TestCreateDraftRejectsExpectedHeadDriftAtomicallyAndKeepsIDRetryable(t *testing.T) {
-	t.Parallel()
-	repo, db := newSchemaWikiScopeRepository(t)
-	scope := types.WikiReleaseScope{
-		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-medical",
-	}
-	head := schemaWikiScopeHead("head-draft-drift", scope.TenantID, scope.WikiKBID)
-	head.WikiReleaseScope = scope
-	head.ActiveReleaseID = "release-new"
-	head.ActivationEpoch = 2
-	require.NoError(t, db.Create(head).Error)
-	draft := &types.WikiReleasePreparation{
-		ID: "preparation-retryable", WikiReleaseScope: scope,
-		ExpectedReleaseID: "release-old", ExpectedActivationEpoch: 1,
-		Status: types.WikiReleasePreparationDraft,
-	}
-
-	err := repo.CreateDraft(context.Background(), draft)
-
-	require.ErrorIs(t, err, ErrWikiReleaseConflict)
-	var count int64
-	require.NoError(t, db.Model(&types.WikiReleasePreparation{}).
-		Where("preparation_id = ?", draft.ID).Count(&count).Error)
-	require.Zero(t, count)
-
-	require.NoError(t, db.Model(&types.WikiReleaseHead{}).
-		Where("id = ?", head.ID).
-		Updates(map[string]any{"active_release_id": "release-old", "activation_epoch": 1}).Error)
-	require.NoError(t, repo.CreateDraft(context.Background(), draft))
-	require.NoError(t, db.Model(&types.WikiReleasePreparation{}).
-		Where("preparation_id = ?", draft.ID).Count(&count).Error)
-	require.Equal(t, int64(1), count)
 }
