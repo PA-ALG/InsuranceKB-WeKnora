@@ -202,9 +202,11 @@ def attribute(
     role = role_of(upload.file_name, upload.head)
     match = re.search(policy.clause_code_pattern, window)
     code = match.group(0) if match else None
-    # Terms open with the code and then the title; a code met later (a label before it, or a
-    # brochure citing its terms) leaves the title at the start of the text.
-    title = _title(window[match.end() :] if match and match.start() == 0 else window, policy)
+    # Terms open with their own code and then the title. A code met later only cites one (after a
+    # label, or in a brochure's body): it may confirm a registered product whose name the title
+    # carries, but never creates a product or a new version, and the title stays at the start.
+    own_code = code if match and match.start() == 0 else None
+    title = _title(window[len(own_code) :] if own_code else window, policy)
     anchors = {"role": role, "clause_code": code}
 
     by_code = [
@@ -217,9 +219,9 @@ def attribute(
     if len(by_code) > 1 or (by_code and by_code[0] not in named):
         return decided("QUARANTINE", "anchor_conflict", **anchors)
     if by_code:
-        return _existing(by_code[0], "matched_by_clause_code", decided, role, code)
+        return _existing(by_code[0], "matched_by_clause_code", decided, role, code, own_code)
     if len(named) == 1:
-        return _existing(named[0], "matched_by_name", decided, role, code)
+        return _existing(named[0], "matched_by_name", decided, role, code, own_code)
     if named:
         return decided(
             "NEEDS_CONFIRM",
@@ -227,7 +229,7 @@ def attribute(
             candidates=tuple(p.product_id for p in named),
             **anchors,
         )
-    if role != TERMS or code is None or not title:
+    if role != TERMS or own_code is None or not title:
         return decided("QUARANTINE", "no_product_anchor", **anchors)
 
     pack = _pack(title, policy)
@@ -235,7 +237,7 @@ def attribute(
         return decided("NEEDS_CONFIRM", "pack_unresolved", display_name=title, **anchors)
     product_id = (
         policy.created_id_prefix
-        + hashlib.sha256(code.encode()).hexdigest()[: policy.created_id_hex]
+        + hashlib.sha256(own_code.encode()).hexdigest()[: policy.created_id_hex]
     )
     if any(p.product_id == product_id for p in products):
         return decided("QUARANTINE", "anchor_conflict", **anchors)
@@ -255,6 +257,7 @@ def _existing(
     decided: Callable[..., Attribution],
     role: str | None,
     code: str | None,
+    own_code: str | None,
 ) -> Attribution:
     """A registered product's material: a supplement, a new version or a question (§2.3 step 5)."""
     anchors = {"product_id": product.product_id, "role": role, "clause_code": code}
@@ -262,7 +265,8 @@ def _existing(
         return decided(
             "NEEDS_CONFIRM", "role_unresolved", candidates=(product.product_id,), **anchors
         )
-    if role == TERMS and code is not None and code not in {_fold(c) for c in product.clause_codes}:
+    known = {_fold(c) for c in product.clause_codes}
+    if role == TERMS and own_code is not None and own_code not in known:
         replaced = tuple(sorted(m.knowledge_id for m in product.materials if m.role == TERMS))
         return decided("NEW_VERSION", "new_clause_code", replaces=replaced, **anchors)
     if any(m.role == role for m in product.materials):
