@@ -4,13 +4,13 @@
   "G1_dependency_direction": 3,
   "G2_core_purity": 0,
   "G2_go_legacy_terms": 3,
-  "G3_file_size": 56270,
+  "G3_file_size": 55580,
   "G4_naming": 64,
   "G5_hardcoded": 69,
   "G6_private_access": 6,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 479,
-  "G11_new_file_location": 145
+  "G10_upstream_patches": 477,
+  "G11_new_file_location": 144
  },
  "guards": {
   "G1_dependency_direction": {
@@ -62,7 +62,6 @@
    "harness/tests/test_structured_import_010.py": 668,
    "harness/tests/test_weknora_source_contract_017.py": 657,
    "internal/application/repository/knowledge_revision_test.go": 639,
-   "internal/application/repository/wiki_release.go": 690,
    "internal/application/service/knowledge_revision_source.go": 712,
    "internal/application/service/knowledge_revision_source_test.go": 681,
    "internal/database/legacy_w1_bridge.go": 1041,
@@ -214,7 +213,6 @@
    "client/knowledge.go": 1,
    "client/session.go": 1,
    "cmd/download/duckdb/duckdb.go": 1,
-   "config/config.yaml": 1,
    "docker/Dockerfile.app": 1,
    "docker/Dockerfile.docreader": 1,
    "docreader/client/client_test.go": 1,
@@ -574,7 +572,6 @@
    "internal/models/chat/llm_debug_wrapper.go": 1,
    "internal/models/embedding/batch.go": 1,
    "internal/models/embedding/protocol_test.go": 1,
-   "internal/models/runtime/connection.go": 1,
    "internal/router/deployment_capabilities.go": 1,
    "internal/router/files.go": 1,
    "internal/router/router.go": 1,
@@ -810,7 +807,6 @@
    "internal/infrastructure/docparser/mineru_artifact_capture.go": 1,
    "internal/infrastructure/docparser/mineru_cross_page_projection.go": 1,
    "internal/logger/gorm_logger.go": 1,
-   "internal/models/api/model_dispatch.go": 1,
    "internal/router/routes_knowledge_revision_source.go": 1,
    "internal/types/interfaces/knowledge_revision_source.go": 1,
    "internal/types/knowledge_revision.go": 1,
