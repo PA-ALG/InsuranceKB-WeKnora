@@ -39,6 +39,14 @@ class AttributionPolicyError(ValueError):
         super().__init__(code)
 
 
+class AttributionInputError(ValueError):
+    """The registry cannot be judged against (a caller-safe code)."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
 class _Frozen(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
 
@@ -132,7 +140,8 @@ def _title(text: str, policy: AttributionPolicy) -> str:
         end = text.find(right, len(left))
         name = text[len(left) : end] if end > 0 else ""
     else:
-        ends = [i for i in (text.find(_fold(mark)) for mark in policy.title_end_markers) if i > 0]
+        # A marker at the very start counts: then there is no title, and the body is never one.
+        ends = [i for i in (text.find(_fold(mark)) for mark in policy.title_end_markers) if i >= 0]
         name = text[: min(ends)] if ends else ""
     return name if len(name) <= policy.max_title_chars else ""
 
@@ -176,6 +185,8 @@ def attribute(
             {"outcome": outcome, "reason": reason, "policy_ref": policy.policy_ref, **fields}
         )
 
+    if len({product.product_id for product in registry}) != len(registry):
+        raise AttributionInputError("REGISTRY_DUPLICATE_PRODUCT")
     products = sorted(registry, key=lambda product: product.product_id)
     owners = sorted(
         {p.product_id for p in products for m in p.materials if m.sha256 == upload.sha256}
@@ -191,7 +202,9 @@ def attribute(
     role = role_of(upload.file_name, upload.head)
     match = re.search(policy.clause_code_pattern, window)
     code = match.group(0) if match else None
-    title = _title(window[match.end() :] if match else window, policy)
+    # Terms open with the code and then the title; a code met later (a label before it, or a
+    # brochure citing its terms) leaves the title at the start of the text.
+    title = _title(window[match.end() :] if match and match.start() == 0 else window, policy)
     anchors = {"role": role, "clause_code": code}
 
     by_code = [
@@ -199,7 +212,9 @@ def attribute(
     ]
     named = [p for p in products if title and title in {_fold(n) for n in p.names}]
     named = named or _named_inside(title, products)
-    if len(by_code) > 1 or (by_code and named and by_code[0] not in named):
+    # Both anchors must agree: a code whose product the title does not name is a conflict, also
+    # when the title is missing, too long or names nothing registered.
+    if len(by_code) > 1 or (by_code and by_code[0] not in named):
         return decided("QUARANTINE", "anchor_conflict", **anchors)
     if by_code:
         return _existing(by_code[0], "matched_by_clause_code", decided, role, code)
