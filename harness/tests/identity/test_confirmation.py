@@ -17,6 +17,7 @@ import pytest
 from insurance_harness.identity.attribution import (
     Attribution,
     AttributionInputError,
+    AttributionPolicy,
     RegisteredMaterial,
     RegisteredProduct,
     Upload,
@@ -402,3 +403,45 @@ def test_a_choice_the_registry_has_since_overtaken_is_stale() -> None:
     pending, item, registry = unrecognised_pack("1830")
     renamed = registered("1828", "terms", names=(UNNAMED,))
     stale(pending, "pack:schemapack_annuity_insurance", item, [*registry, renamed])
+
+
+# Review R2–R4 ------------------------------------------------------------------------------------
+
+
+def test_a_chosen_product_must_agree_with_the_code_even_for_a_shared_file() -> None:
+    shared = RegisteredMaterial(
+        knowledge_id="k-1818-shared", sha256=material("1826", "terms")["sha256"], role="terms"
+    )
+    registry = [registered("1818", "terms", extra=(shared,)), registered("1826", "terms")]
+    item = upload("1826", "terms", knowledge_id="k-again")
+    pending = pending_of(item, registry, "multiple_products")
+    conflict = attribute(item, registry, product="1818")
+    assert (conflict.outcome, conflict.reason) == ("QUARANTINE", "anchor_conflict")
+    stale(pending, product_key("1818"), item, registry)
+    agreed = concluded(pending, product_key("1826"), item, registry)
+    assert (agreed.outcome, agreed.product_id) == ("DUPLICATE", "1826")
+
+
+@pytest.mark.parametrize("pack", ["UpperPack", "a" * 124], ids=["capitals", "too_long"])
+def test_a_pack_that_cannot_be_an_option_key_is_refused(pack: str) -> None:
+    pending, _, registry = unrecognised_pack("1830")
+    document = POLICY.model_dump(mode="json")
+    document["classifications"][0]["schema_pack_id"] = pack
+    policy = AttributionPolicy.model_validate_json(json.dumps(document))
+    with pytest.raises(ConfirmationError) as failure:
+        choices(pending, registry, policy)
+    assert failure.value.code == "NOT_CONFIRMABLE"
+
+
+def test_a_registry_naming_one_product_twice_is_refused_in_any_order() -> None:
+    pending, item, _ = same_role()
+    one = RegisteredMaterial(knowledge_id="k-old-one", sha256="1" * 64, role="brochure")
+    two = RegisteredMaterial(knowledge_id="k-old-two", sha256="2" * 64, role="brochure")
+    twins = [registered("1818", "terms", extra=(one,)), registered("1818", "terms", extra=(two,))]
+    for ordered in (twins, twins[::-1]):
+        with pytest.raises(AttributionInputError) as listed:
+            choices(pending, ordered)
+        assert listed.value.code == "REGISTRY_DUPLICATE_PRODUCT"
+        with pytest.raises(AttributionInputError) as replaced:
+            conclude(pending, "replace", item, ordered)
+        assert replaced.value.code == "REGISTRY_DUPLICATE_PRODUCT"

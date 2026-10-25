@@ -251,6 +251,21 @@ def test_a_person_only_conclusion_needs_its_confirmation() -> None:
         unchanged_on("CONFIRMATION_REQUIRED", asked, partial(record, asked, source, conclusion))
 
 
+def test_a_failing_application_leaves_the_registry_as_it_was() -> None:
+    """Review R1: errors found while applying leave nothing half-recorded."""
+    current, source, head = second_brochure()
+    asked, pending, item = ask(current, source, head)
+    supplement = conclude(pending, "supplement", item, asked.registered())
+    gone = asked.model_copy(deep=True)
+    del gone.products["1818"]
+    unchanged_on("PRODUCT_UNKNOWN", gone, partial(record, gone, source, supplement, ref()))
+    unchanged_on("PRODUCT_UNKNOWN", gone, partial(record, gone, source, supplement))
+    blank = source.model_copy(update={"file_name": " "})
+    unchanged_on("RECORD_INVALID", asked, partial(record, asked, blank, supplement, ref()))
+    roleless = supplement.model_copy(update={"role": None})
+    unchanged_on("ATTRIBUTION_INCOMPLETE", asked, partial(record, asked, source, roleless, ref()))
+
+
 # The registry file ------------------------------------------------------------------------------
 
 
