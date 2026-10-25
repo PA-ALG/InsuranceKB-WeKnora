@@ -92,6 +92,7 @@ onUnmounted(() => { generation++ })
             </span>
             <RouterLink class="ek-home__graph-link" :to="{ name: 'enterpriseGraph', params: { spaceId }, query: { release: release.id } }">{{ t('enterpriseKnowledge.graph.title') }} →</RouterLink>
             <RouterLink class="ek-home__spot-link" :to="{ name: 'enterpriseSpotChecks', params: { spaceId } }">{{ t('enterpriseKnowledge.spot.entry') }} →</RouterLink>
+            <RouterLink class="ek-home__spot-link" :to="{ name: 'enterpriseConfirmations', params: { spaceId } }">{{ t('enterpriseKnowledge.confirm.entry') }} →</RouterLink>
           </div>
           <p class="ek-page__meta" data-space-counts>{{ t('enterpriseKnowledge.home.counts', { products: home.productCount, concepts: home.concepts.length }) }}</p>
         </header>
