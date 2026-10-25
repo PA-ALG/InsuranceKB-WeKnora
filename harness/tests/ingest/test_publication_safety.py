@@ -1,6 +1,6 @@
 """S5b-4b acceptance (protected, written by Claude): the run root is held and kept outside git, and
 a machine publish whose spot-check sample was not submitted is reported with its release (Spec
-docs/design/slices/S5b-4b-登记表产品的编译发布编排.md §3 step 5, §4, §6 item 9; review R1, R2).
+docs/design/slices/S5b-4b-登记表产品的编译发布编排.md §3 step 5, §4, §6 item 9; review R2, R3).
 Reuses the fakes of test_publication.
 """
 
