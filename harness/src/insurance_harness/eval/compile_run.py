@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
+from insurance_harness.changes.options import fixed_revision_pages, registry_inputs, source_options
 from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
@@ -49,12 +50,8 @@ from insurance_harness.eval.product_sources import (
 )
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.source_ref import SourceRevision
-from insurance_harness.ingest.source_map import (
-    SourceEntry,
-    load_source_map,
-    load_trusted_pages,
-    reader_from_env,
-)
+from insurance_harness.ingest.registry import RegistryError
+from insurance_harness.ingest.source_map import SourceEntry, load_source_map, reader_from_env
 from insurance_harness.models import (
     CallLedger,
     ModelCallError,
@@ -263,6 +260,7 @@ def compile_products(
     run_root: Path, max_sent: int, batch_size: int = 25, replay_from: Path | None = None,
     page_source: Callable[[str], list[PageText] | TrustedPages[PageText]] | None = None,
     revision_page_source: RevisionPageSource | None = None,
+    facts: Callable[[str], tuple[str, str]] | None = None,
 ) -> list[ProductRun]:
     """Compile or reuse each product in order; raise on the first stopping condition.
 
@@ -271,9 +269,12 @@ def compile_products(
     revision_page_source supplies pages and their fixed revisions from one read; it is
     mutually exclusive with page_source, whose unlabelled inputs use file identities.
     Revision inputs use the same document and header-role order as publication.
+    facts supplies (name, pack) without a dataset; it requires an explicit page source.
     """
     if page_source is not None and revision_page_source is not None:
         raise ValueError("supply only one page source")
+    if facts is not None and page_source is None and revision_page_source is None:
+        raise ValueError("facts requires a page source")
     if replay_from is None and completion_factory is None:
         raise ValueError("a completion factory is required unless replaying")
     if replay_from is not None:
@@ -288,8 +289,9 @@ def compile_products(
         runs: list[ProductRun] = []
         for product in products:
             check_product_id(product)
-            directory = source_directory(repo, product)
-            name, pack = display_name(directory), declared_pack(repo, product)
+            name, pack = (facts(product) if facts is not None else (
+                display_name(source_directory(repo, product)), declared_pack(repo, product),
+            ))
             path = run_root / product / "output.json"
             if replay_from is not None and path.exists():
                 # Reuse would skip the replay the caller asked for.
@@ -306,7 +308,8 @@ def compile_products(
             if revision_page_source is not None:
                 read, revisions = revision_page_source(product)
             else:
-                read = page_source(product) if page_source else trusted_source_pages(directory)
+                read = (page_source(product) if page_source else
+                        trusted_source_pages(source_directory(repo, product)))
             pages = read.evidence if isinstance(read, TrustedPages) else read
             headers = read.table_headers if isinstance(read, TrustedPages) else None
             materials = _materials(pages, headers, revisions)
@@ -417,6 +420,8 @@ def _summary(run_root: Path, runs: list[ProductRun]) -> dict[str, Any]:
 
 def _stop_reason(exc: BaseException) -> str:
     """Fixed, content-free diagnostics: stored files and model output may hold source text."""
+    if isinstance(exc, RegistryError):
+        return exc.code
     if isinstance(exc, ValidationError):
         return "invalid_record_shape"
     if isinstance(exc, json.JSONDecodeError):
@@ -439,25 +444,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-sent", type=int, default=30)
     parser.add_argument("--replay-from", type=Path,
                         help="recompile saved completions of an earlier run root; sends nothing")
-    parser.add_argument("--source-map", type=Path,
-                        help="read pages from the WeKnora revisions this map names (S4g)")
+    source_options(parser, required=False)
     args = parser.parse_args(argv)
     runs: list[ProductRun] = []
     clients: list[OpenAICompatibleCompletion] = []
     try:
         config = load_stage_config(args.stage_config, args.stage)
         revision_pages = None
-        if args.source_map:
-            source_map, reader = load_source_map(args.source_map), reader_from_env()
-
-            def fixed_pages(
-                product: str,
-            ) -> tuple[TrustedPages[PageText], dict[str, SourceRevision]]:
-                entries = sorted(source_map.entries(product),
-                                 key=lambda entry: (entry.knowledge_id, entry.parse_attempt))
-                return load_trusted_pages(reader, source_map.space_id, entries)
-
-            revision_pages = fixed_pages
+        facts = None
+        if args.registry:
+            source_map, registered = registry_inputs(args.registry, args.products)
+            facts = registered.__getitem__
+        elif args.source_map:
+            source_map = load_source_map(args.source_map)
+        if args.registry or args.source_map:
+            revision_pages = fixed_revision_pages(source_map, reader_from_env())
 
         def factory(ledger: CallLedger) -> CompletionPort:
             clients.append(OpenAICompatibleCompletion(config, ledger=ledger))
@@ -472,7 +473,7 @@ def main(argv: list[str] | None = None) -> int:
                         completion_factory=None if args.replay_from else factory,
                         run_root=args.run_root, max_sent=args.max_sent,
                         batch_size=args.batch_size, replay_from=args.replay_from,
-                        revision_page_source=revision_pages,
+                        revision_page_source=revision_pages, facts=facts,
                     )
                 finally:
                     for client in clients:
