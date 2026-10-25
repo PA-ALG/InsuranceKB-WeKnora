@@ -66,7 +66,7 @@
      - 默认的审核策略与抽检策略；
    - 成功（退出码 0）后，把该产品 `output.json` 的 SHA-256 写入 `published.json`；
    - 失败时报告错误码，不写 `published.json`，继续下一个产品；下一轮还会再发布它。
-   - **抽检样本提交失败**（审核 R2）：机器审核上线后，发布命令照常退出 0，但输出 `samples: {"stopped": <错误码>}`。
+   - **抽检样本提交失败**（审核 R3）：机器审核上线后，发布命令照常退出 0，但输出 `samples: {"stopped": <错误码>}`。
      - 发布已经成功：照常写 `published.json`，路由记为 `machine`；
      - 同时记入 `samples_failed`：产品 → `{release_id, stopped}`，`release_id` 取发布命令输出中的 `release_id`；
      - 本轮退出码为 1。补交用 `eval.spot_check_report --space S --release R --submit`（平台保留已有样本，可以重复提交）。下一轮不会替它补交：内容已上线，变化发布只会报告"无变化"。
@@ -78,7 +78,7 @@
 ## 4. 其他规则
 
 - **锁**：在登记表锁内运行，与 `seed`、`run`、`confirm` 互斥，避免运行中归属又发生变化。
-- **运行目录锁**（审核 R1）：正式运行从第 1 步之前（复制起步输出之前）到报告，一直持有 `DIR` 的运行锁 `models.durable.run_lock(DIR)`。理由：
+- **运行目录锁**（审核 R2）：正式运行从第 1 步之前（复制起步输出之前）到报告，一直持有 `DIR` 的运行锁 `models.durable.run_lock(DIR)`。理由：
   - `DIR` 中会复制和写入含原文摘录的编译输出。模型命令都要求运行目录在 git 仓库之外，本命令在不调用模型时（全部复用）也必须守住这一条；
   - 不同登记表的运行共用同一个 `DIR` 时，`published.json` 与 `scored.json` 只能有一个写入者。
 
@@ -109,7 +109,7 @@
       compile: list[str]
       publish: list[str]
 
-  class SampleFailure(BaseModel):  # 审核 R2
+  class SampleFailure(BaseModel):  # 审核 R3
       release_id: str
       stopped: str
 
@@ -181,7 +181,7 @@
    - 报告不含路径或材料内容；
    - 子命令遵守登记表锁与退出码；
    - 缺少配置返回 2。
-9. **运行目录与抽检**（审核 R1、R2，`harness/tests/ingest/test_publication_safety.py`）：
+9. **运行目录与抽检**（审核 R2、R3，`harness/tests/ingest/test_publication_safety.py`）：
    - 运行目录在 git 仓库内，或正被另一进程使用时，正式运行在复制、命令与平台读取之前停下；演练不取锁、不写文件；
    - 抽检样本提交失败的机器发布：写入 `published.json`，记入 `samples_failed`（带 Release id 与错误码），命令退出 1；
    - 样本提交成功的机器发布：不记入 `samples_failed`，命令退出 0。
