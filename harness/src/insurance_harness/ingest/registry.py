@@ -165,9 +165,14 @@ def load_registry(path: Path) -> ProductRegistry:
     """A repeated JSON key is refused first: parsing would otherwise keep only the last one."""
     try:
         text = path.read_text(encoding="utf-8")
+    except OSError:  # missing, a directory, unreadable: a file problem, not bad content
+        raise RegistryError("REGISTRY_IO_ERROR") from None
+    except UnicodeDecodeError:
+        raise RegistryError("REGISTRY_INVALID") from None
+    try:
         json.loads(text, object_pairs_hook=_unique_object)
         return ProductRegistry.model_validate_json(text)
-    except (OSError, ValueError, ValidationError, RecursionError):
+    except (ValueError, ValidationError, RecursionError):
         raise RegistryError("REGISTRY_INVALID") from None
 
 
