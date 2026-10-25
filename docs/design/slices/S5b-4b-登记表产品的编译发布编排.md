@@ -66,14 +66,27 @@
      - 默认的审核策略与抽检策略；
    - 成功（退出码 0）后，把该产品 `output.json` 的 SHA-256 写入 `published.json`；
    - 失败时报告错误码，不写 `published.json`，继续下一个产品；下一轮还会再发布它。
+   - **抽检样本提交失败**（审核 R2）：机器审核上线后，发布命令照常退出 0，但输出 `samples: {"stopped": <错误码>}`。
+     - 发布已经成功：照常写 `published.json`，路由记为 `machine`；
+     - 同时记入 `samples_failed`：产品 → `{release_id, stopped}`，`release_id` 取发布命令输出中的 `release_id`；
+     - 本轮退出码为 1。补交用 `eval.spot_check_report --space S --release R --submit`（平台保留已有样本，可以重复提交）。下一轮不会替它补交：内容已上线，变化发布只会报告"无变化"。
 6. **报告**：输出一行 JSON：
-   - `compiled`、`reused`、`reviewed`、`published`（每个产品的路由结果：`machine` / `human` / `unchanged`）、`failed`（产品与错误码）、`stopped`（如有）；
+   - `compiled`、`reused`、`reviewed`、`published`（每个产品的路由结果：`machine` / `human` / `unchanged`）、`failed`（产品与错误码）、`samples_failed`、`stopped`（如有）；
    - 本轮编译与打分的发送数；
-   - 只含产品 id、计数与错误码，不含路径或材料内容。
+   - 只含产品 id、Release id、计数与错误码，不含路径或材料内容。
 
 ## 4. 其他规则
 
 - **锁**：在登记表锁内运行，与 `seed`、`run`、`confirm` 互斥，避免运行中归属又发生变化。
+- **运行目录锁**（审核 R1）：正式运行从第 1 步之前（复制起步输出之前）到报告，一直持有 `DIR` 的运行锁 `models.durable.run_lock(DIR)`。理由：
+  - `DIR` 中会复制和写入含原文摘录的编译输出。模型命令都要求运行目录在 git 仓库之外，本命令在不调用模型时（全部复用）也必须守住这一条；
+  - 不同登记表的运行共用同一个 `DIR` 时，`published.json` 与 `scored.json` 只能有一个写入者。
+
+  具体规则：
+  - `DIR` 在任何 git 仓库之内：以 `RUN_ROOT_INVALID` 停下；
+  - 另一进程正在使用 `DIR`：以 `RUN_ROOT_BUSY` 停下。
+
+  两种情况都发生在任何复制、命令调用与平台读取之前。演练不取这个锁，也不写文件。
 - **演练**（`--dry-run`）：只做第 1 步，报告要编译、要发布的产品；不调用任何命令，不读平台。
 - **起步复用**（`--seed-from DIR`，可多次给）：第 1 步之前，对 `compile/<p>/output.json` 还不存在的产品，在给出的目录中找 `<p>/output.json`，满足以下条件就复制进来：
   - `entity_id` 是这个产品，`pack_id` 是登记表中的险种包；
@@ -96,6 +109,10 @@
       compile: list[str]
       publish: list[str]
 
+  class SampleFailure(BaseModel):  # 审核 R2
+      release_id: str
+      stopped: str
+
   class PublicationReport(BaseModel):
       planned_compile: list[str]
       planned_publish: list[str]
@@ -104,6 +121,7 @@
       reviewed: list[str]
       routes: dict[str, Literal["machine", "human", "unchanged"]]
       failed: dict[str, str]   # 产品 -> 发布命令的错误码
+      samples_failed: dict[str, SampleFailure]  # 已上线、抽检样本未提交的产品
       stopped: str | None      # 编译停下时的错误码
       review_stopped: str | None
       compile_sent: int        # 本轮的发送数：运行前后 prior_sends 之差
@@ -126,7 +144,7 @@
   - `--compile-max-sent`、`--review-max-sent`；
   - `--products`、`--seed-from`、`--dry-run`。
 
-  它与其他子命令共用锁、退出码（0 成功；1 错误码，包括编译停下；2 缺配置；3 `REGISTRY_BUSY`）和环境变量。
+  它与其他子命令共用锁、退出码（0 成功；1 错误码，包括编译停下、打分停下、发布失败与抽检样本提交失败；2 缺配置；3 `REGISTRY_BUSY`）和环境变量。
 - **不改** `compile_run.py`（已 499 行）、`review_run.py`、两个发布命令。
 
 ## 6. 验收（RED，Claude 编写，受保护）
@@ -163,6 +181,10 @@
    - 报告不含路径或材料内容；
    - 子命令遵守登记表锁与退出码；
    - 缺少配置返回 2。
+9. **运行目录与抽检**（审核 R1、R2，`harness/tests/ingest/test_publication_safety.py`）：
+   - 运行目录在 git 仓库内，或正被另一进程使用时，正式运行在复制、命令与平台读取之前停下；演练不取锁、不写文件；
+   - 抽检样本提交失败的机器发布：写入 `published.json`，记入 `samples_failed`（带 Release id 与错误码），命令退出 1；
+   - 样本提交成功的机器发布：不记入 `samples_failed`，命令退出 0。
 
 **门禁**：
 - 在 `harness/` 下运行 `uv run pytest`（相对 main 不新增失败）、`uv run ruff check .`、`uv run mypy src tests`；
