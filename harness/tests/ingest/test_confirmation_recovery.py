@@ -303,3 +303,26 @@ def test_a_close_someone_else_made_with_another_answer_is_not_executed() -> None
     assert result.registry.decisions == first.registry.decisions
     assert settled_reasons(result.registry) == ["applied"]
     assert saves and settled_reasons(saves[-1]) == ["applied"]
+
+
+def test_a_reread_item_of_another_question_keeps_the_settlement_whatever_its_closure() -> None:
+    """Review R5: identity is checked before a differing closure may clear the settlement."""
+    first, _ = run(asked(products(), "k-new"), platform := FakePlatform())
+    item_id = only_item(platform, "k-new")
+    platform.answer(item_id, "supplement")
+
+    def close_as_another_question(target: str) -> None:
+        platform.before_close = None
+        platform.items[target]["subject"] = "material:k-other"
+        platform.closures[target] = {
+            "reason": "obsolete",
+            "closed_by": "service:other",
+            "closed_at": "2026-10-25T11:00:00Z",
+        }
+
+    platform.before_close = close_as_another_question
+    result, saves = run(first.registry, platform)
+    assert result.report.skipped == {"SETTLEMENT_MISMATCH": 1}
+    assert settled_reasons(result.registry) == ["applied"]
+    assert saves and settled_reasons(saves[-1]) == ["applied"]
+    assert result.registry.decisions == first.registry.decisions
