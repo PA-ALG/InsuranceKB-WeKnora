@@ -133,26 +133,20 @@ func (e *quotaBatchEmbedder) BatchEmbedWithPool(_ context.Context, _ embedding.E
 	return e.result, e.err
 }
 
-type outerRetryRecorder struct{ types.ModelDispatchRecorder }
-
 func TestBatchEmbedNoAutomaticReplayPolicy(t *testing.T) {
 	quota := errors.New(`EmbedBatch API error: Http Status 429 Too Many Requests, Response: {"error":{"code":"insufficient_quota"}}`)
 	for _, tc := range []struct {
-		name                        string
-		disabled, recorded, success bool
-		calls                       int
+		name              string
+		disabled, success bool
+		calls             int
 	}{
 		{name: "g3_quota", disabled: true, calls: 1},
 		{name: "legacy_quota", calls: 5},
-		{name: "recorder_does_not_change_policy", recorded: true, calls: 5},
 		{name: "g3_success", disabled: true, success: true, calls: 1},
 		{name: "legacy_success", success: true, calls: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			if tc.recorded {
-				ctx = types.WithModelDispatchRecorder(ctx, &outerRetryRecorder{})
-			}
 			if tc.disabled {
 				ctx = types.WithModelAutomaticRetryDisabled(ctx)
 			}

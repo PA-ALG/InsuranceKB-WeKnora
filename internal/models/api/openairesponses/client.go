@@ -3,7 +3,6 @@ package openairesponses
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -76,11 +75,10 @@ func (c *Client) Chat(ctx context.Context, messages []api.Message, opts *api.Opt
 	resp, _, err := c.send(ctx, messages, opts, false)
 	if err != nil {
 		if !types.ModelAutomaticRetryDisabled(ctx) &&
-			!errors.Is(err, types.ErrModelDispatchJournalUnavailable) &&
 			api.IsMultimodalNotSupportedError(err) {
 			logger.Warnf(ctx, "[LLM Request] Model %s does not support multimodal, retrying without images",
 				c.cfg.Endpoint.Model)
-			resp, _, err = c.send(api.WithDispatchAttempt(ctx, 1), api.StripImagesFromMessages(messages), opts, false)
+			resp, _, err = c.send(ctx, api.StripImagesFromMessages(messages), opts, false)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("create response: %w", err)
@@ -108,11 +106,10 @@ func (c *Client) ChatStream(
 	resp, data, err := c.send(ctx, messages, opts, true)
 	if err != nil {
 		if !types.ModelAutomaticRetryDisabled(ctx) &&
-			!errors.Is(err, types.ErrModelDispatchJournalUnavailable) &&
 			api.IsMultimodalNotSupportedError(err) {
 			logger.Warnf(ctx, "[LLM Stream] Model %s does not support multimodal, retrying without images",
 				c.cfg.Endpoint.Model)
-			resp, data, err = c.send(api.WithDispatchAttempt(ctx, 1), api.StripImagesFromMessages(messages), opts, true)
+			resp, data, err = c.send(ctx, api.StripImagesFromMessages(messages), opts, true)
 		}
 		if err != nil {
 			cancel()

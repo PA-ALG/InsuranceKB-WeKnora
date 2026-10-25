@@ -12,7 +12,6 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 var (
@@ -41,22 +40,6 @@ type WikiReleaseActivationWrite struct {
 	ReceiptFault                func() error
 }
 
-// WikiReleaseRevertWrite moves Head to an existing immutable release without
-// creating a replacement release or members.
-type WikiReleaseRevertWrite struct {
-	Scope                   types.WikiReleaseScope
-	TargetReleaseID         string
-	ExpectedReleaseID       string
-	ExpectedActivationEpoch uint64
-	Nonce                   string
-	AuthorizationDigest     string
-	ActivatedBy             string
-	ActivatedAt             time.Time
-	ActivationReceiptID     string
-	CASFault                func() error
-	ReceiptFault            func() error
-}
-
 // WikiReleaseRepository owns the five experimental release tables.
 type WikiReleaseRepository struct {
 	db *gorm.DB
@@ -65,178 +48,6 @@ type WikiReleaseRepository struct {
 // NewWikiReleaseRepository creates the bounded S0-R repository.
 func NewWikiReleaseRepository(db *gorm.DB) *WikiReleaseRepository {
 	return &WikiReleaseRepository{db: db}
-}
-
-// CreateDraft stores one complete immutable preparation for reviewer-only reads.
-func (r *WikiReleaseRepository) CreateDraft(
-	ctx context.Context,
-	preparation *types.WikiReleasePreparation,
-) error {
-	if preparation == nil || preparation.Status != types.WikiReleasePreparationDraft ||
-		(preparation.ExpectedReleaseID == "") != (preparation.ExpectedActivationEpoch == 0) {
-		return ErrWikiReleaseConflict
-	}
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireDraftExpectedHead(tx, preparation); err != nil {
-			return err
-		}
-		if err := tx.Create(preparation).Error; err != nil {
-			return err
-		}
-		return requireDraftExpectedHead(tx, preparation)
-	})
-}
-
-func requireDraftExpectedHead(
-	tx *gorm.DB,
-	preparation *types.WikiReleasePreparation,
-) error {
-	headDB := tx
-	if tx.Dialector.Name() == "postgres" {
-		headDB = tx.Clauses(clause.Locking{Strength: "UPDATE"})
-	}
-	head, err := getHead(headDB, preparation.WikiReleaseScope)
-	switch {
-	case err == nil:
-		if head.ActiveReleaseID != preparation.ExpectedReleaseID ||
-			head.ActivationEpoch != preparation.ExpectedActivationEpoch {
-			return ErrWikiReleaseConflict
-		}
-		return nil
-	case errors.Is(err, ErrWikiReleaseNotFound):
-		if preparation.ExpectedReleaseID != "" || preparation.ExpectedActivationEpoch != 0 {
-			return ErrWikiReleaseConflict
-		}
-		return nil
-	default:
-		return err
-	}
-}
-
-// CreateReadyPreparation stores the complete frozen preparation.
-func (r *WikiReleaseRepository) CreateReadyPreparation(
-	ctx context.Context,
-	preparation *types.WikiReleasePreparation,
-) error {
-	return r.db.WithContext(ctx).Create(preparation).Error
-}
-
-// GetReadyPreparation returns the exact scope preparation.
-func (r *WikiReleaseRepository) GetReadyPreparation(
-	ctx context.Context,
-	scope types.WikiReleaseScope,
-	preparationID string,
-) (*types.WikiReleasePreparation, error) {
-	var preparation types.WikiReleasePreparation
-	err := scopeQuery(r.db.WithContext(ctx), scope).
-		Where("preparation_id = ? AND status = ?", preparationID, types.WikiReleasePreparationReady).
-		Take(&preparation).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrWikiReleaseNotFound
-	}
-	return &preparation, err
-}
-
-// GetReadyPreparationMetadata returns the immutable authorization identity
-// without hydrating the potentially large manifest and member JSON columns.
-func (r *WikiReleaseRepository) GetReadyPreparationMetadata(
-	ctx context.Context,
-	scope types.WikiReleaseScope,
-	preparationID string,
-) (*types.WikiReleasePreparation, error) {
-	var preparation types.WikiReleasePreparation
-	err := scopeQuery(r.db.WithContext(ctx), scope).
-		Select(
-			"preparation_id", "tenant_id", "space_id", "raw_kb_id", "wiki_kb_id",
-			"candidate_digest", "manifest_digest", "ready_receipt_digest",
-			"review_decision_digest", "review_policy_id", "expected_release_id",
-			"expected_activation_epoch", "status", "preparation_digest", "created_at",
-		).
-		Where("preparation_id = ? AND status = ?", preparationID, types.WikiReleasePreparationReady).
-		Take(&preparation).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrWikiReleaseNotFound
-	}
-	return &preparation, err
-}
-
-// GetDraftPreparation returns only an immutable reviewer-visible Draft.
-func (r *WikiReleaseRepository) GetDraftPreparation(
-	ctx context.Context,
-	scope types.WikiReleaseScope,
-	preparationID string,
-) (*types.WikiReleasePreparation, error) {
-	var preparation types.WikiReleasePreparation
-	err := scopeQuery(r.db.WithContext(ctx), scope).
-		Where("preparation_id = ? AND status = ?", preparationID, types.WikiReleasePreparationDraft).
-		Take(&preparation).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrWikiReleaseNotFound
-	}
-	return &preparation, err
-}
-
-// ReviewDraft atomically moves the exact Draft to Ready after the service has
-// verified the named-human receipt. No release, member, Head, or receipt row is
-// created by this transition.
-func (r *WikiReleaseRepository) ReviewDraft(
-	ctx context.Context,
-	scope types.WikiReleaseScope,
-	preparationID string,
-	expected *types.WikiReleasePreparation,
-	reviewDecisionDigest string,
-	preparationDigest string,
-) (*types.WikiReleasePreparation, error) {
-	if expected == nil {
-		return nil, ErrWikiReleaseConflict
-	}
-	expectedMembers, err := json.Marshal(expected.Members)
-	if err != nil {
-		return nil, ErrWikiReleaseConflict
-	}
-	query := scopeQuery(r.db.WithContext(ctx).Model(&types.WikiReleasePreparation{}), scope).
-		Where(
-			"preparation_id = ? AND status = ? AND preparation_digest = ? AND "+
-				"candidate_digest = ? AND manifest_digest = ? AND ready_receipt_digest = ? AND "+
-				"review_policy_id = ? AND expected_release_id = ? AND expected_activation_epoch = ? AND "+
-				"review_decision_digest = ?",
-			preparationID,
-			types.WikiReleasePreparationDraft,
-			expected.PreparationDigest,
-			expected.CandidateDigest,
-			expected.ManifestDigest,
-			expected.ReadyReceiptDigest,
-			expected.ReviewPolicyID,
-			expected.ExpectedReleaseID,
-			expected.ExpectedActivationEpoch,
-			expected.ReviewDecisionDigest,
-		)
-	if r.db.Dialector.Name() == "postgres" {
-		query = query.Where(
-			"manifest = CAST(? AS jsonb) AND members = CAST(? AS jsonb)",
-			string(expected.Manifest), string(expectedMembers),
-		)
-	} else {
-		current, currentErr := r.GetDraftPreparation(ctx, scope, preparationID)
-		if currentErr != nil ||
-			!wikiReleaseJSONLogicalEqual(current.Manifest, expected.Manifest) ||
-			!wikiReleaseJSONLogicalEqualValue(current.Members, expected.Members) {
-			return nil, ErrWikiReleaseConflict
-		}
-	}
-	result := query.
-		Updates(map[string]any{
-			"review_decision_digest": reviewDecisionDigest,
-			"preparation_digest":     preparationDigest,
-			"status":                 types.WikiReleasePreparationReady,
-		})
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.RowsAffected != 1 {
-		return nil, ErrWikiReleaseConflict
-	}
-	return r.GetReadyPreparation(ctx, scope, preparationID)
 }
 
 func wikiReleaseJSONLogicalEqual(left []byte, right []byte) bool {
@@ -387,68 +198,6 @@ func (r *WikiReleaseRepository) Activate(
 	return receipt, err
 }
 
-// Revert atomically CASes Head to one existing immutable historical Release
-// and records the same idempotency receipt shape used by activation.
-func (r *WikiReleaseRepository) Revert(
-	ctx context.Context,
-	write WikiReleaseRevertWrite,
-) (*types.WikiReleaseReceipt, error) {
-	if write.TargetReleaseID == "" || write.ExpectedReleaseID == "" ||
-		write.ExpectedActivationEpoch == 0 {
-		return nil, ErrWikiReleaseConflict
-	}
-	var receipt *types.WikiReleaseReceipt
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var target types.WikiRelease
-		if err := scopeQuery(tx, write.Scope).
-			Where("release_id = ?", write.TargetReleaseID).
-			Take(&target).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrWikiReleaseNotFound
-			}
-			return err
-		}
-		if write.CASFault != nil {
-			if err := write.CASFault(); err != nil {
-				return err
-			}
-		}
-		newEpoch := write.ExpectedActivationEpoch + 1
-		result := scopeQuery(tx.Model(&types.WikiReleaseHead{}), write.Scope).
-			Where("active_release_id = ? AND activation_epoch = ?",
-				write.ExpectedReleaseID, write.ExpectedActivationEpoch).
-			Updates(map[string]any{
-				"active_release_id": write.TargetReleaseID,
-				"activation_epoch":  newEpoch,
-				"updated_at":        write.ActivatedAt,
-			})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return ErrWikiReleaseConflict
-		}
-		if write.ReceiptFault != nil {
-			if err := write.ReceiptFault(); err != nil {
-				return err
-			}
-		}
-		receipt = &types.WikiReleaseReceipt{
-			ID:                  write.ActivationReceiptID,
-			WikiReleaseScope:    write.Scope,
-			Nonce:               write.Nonce,
-			AuthorizationDigest: write.AuthorizationDigest,
-			PreviousReleaseID:   write.ExpectedReleaseID,
-			ReleaseID:           write.TargetReleaseID,
-			ActivationEpoch:     newEpoch,
-			ActivatedBy:         write.ActivatedBy,
-			CreatedAt:           write.ActivatedAt,
-		}
-		return tx.Create(receipt).Error
-	})
-	return receipt, err
-}
-
 func materializeMembers(
 	releaseID string,
 	snapshots []types.WikiReleaseMemberSnapshot,
@@ -495,38 +244,6 @@ func getHead(db *gorm.DB, scope types.WikiReleaseScope) (*types.WikiReleaseHead,
 		return nil, ErrWikiReleaseNotFound
 	}
 	return &head, err
-}
-
-// GetHead returns the sole current head.
-func (r *WikiReleaseRepository) GetHead(
-	ctx context.Context,
-	scope types.WikiReleaseScope,
-) (*types.WikiReleaseHead, error) {
-	return getHead(r.db.WithContext(ctx), scope)
-}
-
-// GetReleaseByPreparation resolves one immutable historical target under the
-// exact four-part scope.
-func (r *WikiReleaseRepository) GetReleaseByPreparation(
-	ctx context.Context,
-	scope types.WikiReleaseScope,
-	preparationID string,
-) (*types.WikiRelease, error) {
-	var releases []types.WikiRelease
-	err := scopeQuery(r.db.WithContext(ctx), scope).
-		Where("preparation_id = ?", preparationID).
-		Limit(2).
-		Find(&releases).Error
-	if err != nil {
-		return nil, err
-	}
-	if len(releases) == 0 {
-		return nil, ErrWikiReleaseNotFound
-	}
-	if len(releases) != 1 {
-		return nil, ErrWikiReleaseConflict
-	}
-	return &releases[0], nil
 }
 
 // GetRelease returns one immutable release under the exact four-part scope.
@@ -587,37 +304,6 @@ func (r *WikiReleaseRepository) GetHeadForWikiKB(
 	return &heads[0], nil
 }
 
-// GetPreparationScopeForWikiKB resolves one immutable Draft/Ready scope
-// without loading member or manifest custody. Callers must already have passed
-// the human Admin and Wiki-KB authorization gates before invoking this seam.
-func (r *WikiReleaseRepository) GetPreparationScopeForWikiKB(
-	ctx context.Context,
-	tenantID uint64,
-	wikiKBID string,
-	preparationID string,
-) (*types.WikiReleaseScope, error) {
-	var scopes []types.WikiReleaseScope
-	err := r.db.WithContext(ctx).
-		Table(types.WikiReleasePreparation{}.TableName()).
-		Select("tenant_id", "space_id", "raw_kb_id", "wiki_kb_id").
-		Where(
-			"tenant_id = ? AND wiki_kb_id = ? AND preparation_id = ?",
-			tenantID, wikiKBID, preparationID,
-		).
-		Limit(2).
-		Scan(&scopes).Error
-	if err != nil {
-		return nil, err
-	}
-	if len(scopes) == 0 {
-		return nil, ErrWikiReleaseNotFound
-	}
-	if len(scopes) != 1 {
-		return nil, ErrWikiReleaseConflict
-	}
-	return &scopes[0], nil
-}
-
 // GetReceipt returns the frozen idempotency identity for one Space, Wiki KB,
 // and nonce. Tenant/RAW drift is detected by the full authorization digest.
 func (r *WikiReleaseRepository) GetReceipt(
@@ -663,27 +349,4 @@ func (r *WikiReleaseRepository) GetReleaseMembers(
 		members = append(members, row.Snapshot())
 	}
 	return members, nil
-}
-
-// CountState returns bounded per-table row counts for falsification tests.
-func (r *WikiReleaseRepository) CountState(
-	ctx context.Context,
-) (types.WikiReleaseStateCount, error) {
-	var state types.WikiReleaseStateCount
-	counts := []struct {
-		model any
-		out   *int64
-	}{
-		{&types.WikiReleasePreparation{}, &state.Preparations},
-		{&types.WikiRelease{}, &state.Releases},
-		{&types.WikiReleaseMember{}, &state.Members},
-		{&types.WikiReleaseHead{}, &state.Heads},
-		{&types.WikiReleaseReceipt{}, &state.Receipts},
-	}
-	for _, count := range counts {
-		if err := r.db.WithContext(ctx).Model(count.model).Count(count.out).Error; err != nil {
-			return types.WikiReleaseStateCount{}, err
-		}
-	}
-	return state, nil
 }

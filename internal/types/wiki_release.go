@@ -5,62 +5,12 @@ import (
 	"time"
 )
 
-// PublishAuthorizationV0 is the frozen, experimental S0-R authorization
-// envelope. It is not a production protocol.
-type PublishAuthorizationV0 struct {
-	Version                 string `json:"version"`
-	Action                  string `json:"action"`
-	PreparationID           string `json:"preparation_id"`
-	CandidateDigest         string `json:"candidate_digest"`
-	ManifestDigest          string `json:"manifest_digest"`
-	ReadyReceiptDigest      string `json:"ready_receipt_digest"`
-	ReviewDecisionDigest    string `json:"review_decision_digest"`
-	ReviewPolicyID          string `json:"review_policy_id"`
-	TenantID                uint64 `json:"tenant_id"`
-	SpaceID                 string `json:"space_id"`
-	RawKBID                 string `json:"raw_kb_id"`
-	WikiKBID                string `json:"wiki_kb_id"`
-	ExpectedReleaseID       string `json:"expected_release_id"`
-	ExpectedActivationEpoch uint64 `json:"expected_activation_epoch"`
-	ExpiresAt               int64  `json:"expires_at"`
-	Nonce                   string `json:"nonce"`
-	SignerKeyID             string `json:"signer_key_id"`
-	Signature               string `json:"signature"`
-}
-
-// HumanBatchDecisionReceiptV1 is the named-human whole-batch decision bound
-// to one exact Candidate and review policy. It is deliberately separate from
-// the release authorization so neither envelope can mint the other.
-type HumanBatchDecisionReceiptV1 struct {
-	Version     string `json:"version"`
-	Decision    string `json:"decision"`
-	PrincipalID string `json:"principal_id"`
-	WikiReleaseScope
-	CandidateHash    string `json:"candidate_hash"`
-	HumanBatchHash   string `json:"human_batch_hash"`
-	ReviewPolicyHash string `json:"review_policy_hash"`
-	IssuedAt         int64  `json:"issued_at"`
-	ExpiresAt        int64  `json:"expires_at"`
-	Nonce            string `json:"nonce"`
-	SignerKeyID      string `json:"signer_key_id"`
-	Signature        string `json:"signature"`
-}
-
 // WikiReleaseScope is the exact experimental release boundary.
 type WikiReleaseScope struct {
 	TenantID uint64 `json:"tenant_id" gorm:"column:tenant_id;not null"`
 	SpaceID  string `json:"space_id" gorm:"column:space_id;not null"`
 	RawKBID  string `json:"raw_kb_id" gorm:"column:raw_kb_id;not null"`
 	WikiKBID string `json:"wiki_kb_id" gorm:"column:wiki_kb_id;not null"`
-}
-
-// WikiReleasePrincipal is the fail-closed identity presented to the
-// experimental release service.
-type WikiReleasePrincipal struct {
-	ID                     string   `json:"id"`
-	TenantID               uint64   `json:"tenant_id"`
-	SpaceID                string   `json:"space_id"`
-	APIKeyKnowledgeBaseIDs []string `json:"api_key_knowledge_base_ids,omitempty"`
 }
 
 // WikiReleaseMemberSnapshot is the canonical immutable member captured by a
@@ -76,8 +26,6 @@ type WikiReleaseMemberSnapshot struct {
 }
 
 const (
-	// WikiReleasePreparationDraft is immutable review-only state and is never activatable.
-	WikiReleasePreparationDraft = "draft"
 	// WikiReleasePreparationReady is the only activatable preparation state.
 	WikiReleasePreparationReady = "ready"
 )
@@ -176,18 +124,3 @@ type WikiReleaseReceipt struct {
 
 // TableName freezes the experimental migration identity.
 func (WikiReleaseReceipt) TableName() string { return "wiki_release_receipts" }
-
-// WikiReleaseCurrent pins one request to one immutable release.
-type WikiReleaseCurrent struct {
-	ReleaseID       string `json:"release_id"`
-	ActivationEpoch uint64 `json:"activation_epoch"`
-}
-
-// WikiReleaseStateCount supports bounded zero-half-write falsification.
-type WikiReleaseStateCount struct {
-	Preparations int64
-	Releases     int64
-	Members      int64
-	Heads        int64
-	Receipts     int64
-}
