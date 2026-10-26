@@ -134,13 +134,16 @@ def both(
     return _pick(ruled), _pick(legacy)
 
 
-def test_near_copies_differing_by_ben_or_a_footnote_mark_credit_each_other(tmp_path: Path) -> None:
+def test_near_copies_differing_by_ben_credit_each_other_but_numbers_never_fold(
+    tmp_path: Path,
+) -> None:
+    # Review R1: a footnote mark cannot be told from a real number by text, so "合同1后" stays.
     ruled, legacy = both(
         tmp_path,
         {"waiting_period": ["D2P1S2"], "cooling_off_period": ["D2P1S3"]},
         {"waiting_period": ["D1P1S3"], "cooling_off_period": ["D1P1S4"]},
     )
-    assert ruled == {"waiting_period": (1.0, 1.0), "cooling_off_period": (1.0, 1.0)}
+    assert ruled == {"waiting_period": (1.0, 1.0), "cooling_off_period": (0.0, 0.0)}
     assert legacy == {"waiting_period": (0.0, 0.0), "cooling_off_period": (0.0, 0.0)}
 
 
@@ -200,7 +203,7 @@ def test_a_field_left_with_only_neutral_segments_has_no_score(tmp_path: Path) ->
 
 def test_the_rules_are_versioned_and_never_fall_back_silently(tmp_path: Path) -> None:
     rules = load_scoring_rules()
-    assert rules.version == "2026-10-26.2"
+    assert rules.version == "2026-10-26.3"
     broken = tmp_path / "rules.json"
     broken.write_text("{}", encoding="utf-8")
     with pytest.raises(ScoringRulesError):
@@ -348,3 +351,50 @@ def test_a_clause_number_cancels_a_footnote_block(number: str) -> None:
     assert source.segments[1].text.startswith(number)
     neutral = neutral_segments(source, "coverage_summary", set(), load_scoring_rules())
     assert "D1P1S2" not in neutral
+
+
+@pytest.mark.parametrize(
+    ("terms", "brochure"),
+    [
+        (
+            "保险期间可选择10或20年，保险期间内发生事故我们按合同约定给付保险金。",
+            "保险期间可选择15或20年，保险期间内发生事故我们按合同约定给付保险金。",
+        ),
+        (
+            "被保险人投保年龄仅限18或60周岁，承保后我们按合同约定承担保险责任。",
+            "被保险人投保年龄仅限20或60周岁，承保后我们按合同约定承担保险责任。",
+        ),
+    ],
+)
+def test_numeric_options_never_fold_into_a_copy(tmp_path: Path, terms: str, brochure: str) -> None:
+    # Review R1 remainder: a number before a connective is an option, not a footnote mark.
+    source = SegmentedSource(
+        [Page(TERMS, "b" * 64, 1, terms + "\n"), Page(BROCHURE, "a" * 64, 1, brochure + "\n")]
+    )
+    scores = ruled_scores(tmp_path, source, {"term": ["D2P1S1"]}, {"term": ["D1P1S1"]})
+    assert scores == {"term": (0.0, 0.0)}
+
+
+def test_a_long_chapter_heading_opens_the_definitions_section() -> None:
+    # Review R3 remainder: the entry accepts a chapter heading of any length, as the exit does.
+    source = SegmentedSource(
+        [
+            Page(
+                TERMS,
+                "b" * 64,
+                1,
+                "第八章保险合同常见名词释义与疾病诊断标准\n"
+                "8.1 疾病是指本合同约定并且经指定医院专科医生确诊的疾病。\n",
+            ),
+            Page(
+                TERMS,
+                "b" * 64,
+                2,
+                "第九章保险责任\n9.1 在本合同保险期间内，我们按照本合同约定承担保险责任。\n",
+            ),
+        ]
+    )
+    assert source.segments[1].text.startswith("8.1")
+    neutral = neutral_segments(source, "coverage_summary", set(), load_scoring_rules())
+    assert {"D1P1S1", "D1P1S2"} <= neutral
+    assert "D1P2S2" not in neutral
