@@ -94,7 +94,7 @@ type QueueStore interface {
 - `head_release_id`：当前 Head，没有时为 `null`；
 - `blocker`：
   - `""`：现在批准可以上线；
-  - `"NEEDS_REBASE"`：当前 Head 改过了候选涉及的成员（按 S8b 的规则判断），批准也无法上线；
+  - 预检（见 4.3）失败时的错误码，例如 `"NEEDS_REBASE"`（当前 Head 改过了候选涉及的成员，按 S8b 的规则判断）、`"CANDIDATE_INVALID"`（候选移除的成员当前不存在等，成员合成失败）：批准也无法上线（审核 R2）；
   - `"CANDIDATE_DECIDED"`：状态是 `rejected` 或 `released`；
 - `bundle_members`：候选中的成员，原样返回 `kind`、`logical_slug`、`payload`、`member_digest`、`evidence_refs`、`access_scope`；
 - `bundle_removals`：移除的 slug 列表。
@@ -112,22 +112,28 @@ type QueueStore interface {
 
 | 当前状态 | `approve` | `reject` |
 |---|---|---|
-| `pending` | 记录 `{approve, human, reason}`，再激活 → 201 | 记录 `{reject, human, reason}` → 201 |
-| `approved` | 用最新的那条 approve 决定再激活一次 → 201（已激活过时，激活本身的幂等重放返回同一版本） | 409 `CANDIDATE_DECIDED` |
+| `pending` | 预检通过后记录 `{approve, human, reason}`，再激活 → 201 | 记录 `{reject, human, reason}` → 201 |
+| `approved` | 预检通过后用最新的那条 approve 决定再激活一次 → 201 | 409 `CANDIDATE_DECIDED` |
 | `rejected`、`released` | 409 `CANDIDATE_DECIDED` | 409 `CANDIDATE_DECIDED` |
 
 - 决定的 `subject` 是会话用户（`Principal.Subject`），`mode` 一律为 `human`；
 - 201 返回 `{"decision_id", "status", "release_id", "epoch"}`。拒绝时 `release_id`、`epoch` 为 `null`，`status` 为 `rejected`；批准成功时 `status` 为 `released`；
-- 激活被拒（`NEEDS_REBASE`、`RELEASE_CONFLICT` 等）：返回该错误码和原有的状态码（409），已记录的决定保留，状态变成 `approved`。页面提示"内容已过期，需要重新编译"；
-- 两个管理员同时批准同一候选：两条决定都会记录，但第二次激活会因 S8b 规则失败（Head 已改过同一批成员），同一个候选不会发布两次；
-- 失败时（400、403、404、`CANDIDATE_DECIDED`）不写任何决定。
+- **预检**（审核 R2）：批准前按当前 Head 做一次激活前的全部检查，包括 S8b 变基检查和成员合成（移除项、成员冲突等），但不写入。
+  - 预检失败：返回该错误码与原有的状态码（`NEEDS_REBASE` 409、`CANDIDATE_INVALID` 400 等），**不写决定**，状态保持不变。页面提示"内容已过期或无法合并，需要重新编译"，此时只能拒绝；
+  - 预检通过后才记录决定并激活。之后的激活失败只可能来自并发（例如预检后 Head 又被移动），这时返回该错误码，已记录的决定保留，状态为 `approved`，可以再次批准重试；
+- **同一候选最多生成一个发布版本**（审核 R1）：`Publisher.Activate` 在写入 Head 的同一事务里检查本 Space 是否已有由这个候选（同一 `bundle_digest`）生成的版本。有则不再生成，返回已有的那个版本，与 nonce 重放相同。
+  - 这条规则在变基检查之前生效，对 API Key 的激活同样适用；
+  - 内存实现也要遵守；
+  - 两个管理员同时批准时，两条决定都会保留，只有一个版本。内容与当前版本相同的"空变化"候选也不会因为第二条决定再发布一次；
+- 失败时（400 请求错误、403、404、`CANDIDATE_DECIDED`、预检失败）不写任何决定。
 
 `writeError` 增加 `CANDIDATE_DECIDED` → 409。
 
 ## 5. 改动范围
 
 - `internal/enterprise/release/`：`QueueEntry`、`QueueStore`，`Decision.CreatedAt`，`Service` 中列出、详情与决定的方法（名称由实现方定）；
-- `internal/enterprise/releasestore/`：`Store.Queue`；
+- `internal/enterprise/releasestore/`：`Store.Queue`；`Activate` 在同一事务里检查同一候选是否已发布（审核 R1）；
+- `internal/enterprise/release/publish.go`：`Publisher` 接口说明补上"同一候选最多一个版本"；批准前预检复用激活的检查（审核 R2）；
 - `internal/enterprise/session_reviews.go`（新）：`MountSessionReviews` 与三个处理函数；`mount.go` 的 `writeError` 增加映射；
 - `internal/router/router.go`：挂载 `MountSessionReviews`，守卫与待确认材料的回答相同。该文件已登记为上游补丁，不新增补丁文件；
 - 实现方自己的测试。
@@ -145,13 +151,14 @@ type QueueStore interface {
 1. `internal/enterprise/releasestore/review_queue_postgres_test.go`（需要 `WEKNORA_TEST_POSTGRES_URL`，CI 的 enterprise-postgres 任务运行）：
    - 四种状态各自推导正确；有多条决定时取最新一条；
    - `pending` 升序全返回，`decided` 降序且受 `limit` 限制；
-   - 其他租户、其他 Space 的候选不出现。
+   - 其他租户、其他 Space 的候选不出现；
+   - 同一候选用两条不同的批准决定激活两次，只有一个版本，第二次返回同一个版本（审核 R1）。
 2. `internal/enterprise/session_reviews_test.go`（内存平台）：
    - 列表与详情的字段（含 `subjects`、`blocker`、`bundle_members`）；
    - 批准：生成新版本，待审列表变空，已处理列表中为 `released`；
    - 拒绝：不生成版本，状态 `rejected`；
    - 再次决定返回 409 `CANDIDATE_DECIDED`；
-   - Head 改过同一成员：详情 `blocker` 为 `NEEDS_REBASE`；批准返回 409 `NEEDS_REBASE`，决定保留、状态为 `approved`；
+   - Head 改过同一成员：详情 `blocker` 为 `NEEDS_REBASE`；批准返回 409 `NEEDS_REBASE`，不写决定、状态仍为 `pending`，之后可以拒绝（审核 R2）；
    - API Key、非管理员、其他租户、未配置的 Space、不存在的候选、错误请求体：各自的状态码与错误码，且不写决定。
 
 **门禁**：
