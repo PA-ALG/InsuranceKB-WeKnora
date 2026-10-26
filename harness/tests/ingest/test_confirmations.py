@@ -45,7 +45,10 @@ def test_each_question_for_a_person_is_pushed_once_and_quarantine_is_not() -> No
         {k: platform.view(i)[k] for k in ("subject", "revision", "title", "detail", "options")}
         for i in platform.items
     ]
-    assert pushed == [question_of(e, current).model_dump() for e in entries]
+    # S5b-3d-1: the pushed detail ends with the opening the fake reader gives for the material.
+    assert pushed == [
+        question_of(e, current, head=UPLOADS[e.knowledge_id][1]).model_dump() for e in entries
+    ]
     for e in entries:
         [item] = platform.find(f"material:{e.knowledge_id}")
         assert [o["key"] for o in item["options"]] == [
