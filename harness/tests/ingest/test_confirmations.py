@@ -245,7 +245,7 @@ def test_the_wording_states_the_facts_within_the_platform_limits() -> None:
     for kid, e in [*entries.items(), ("long", long_entry)]:
         if e.attribution.outcome != "NEEDS_CONFIRM":
             continue
-        question = question_of(e, current)
+        question = question_of(e, current, head=UPLOADS[e.knowledge_id][1])
         assert 0 < len(question.title) <= 200 and len(question.detail) <= 2000
         assert all(0 < len(label) <= 200 for label in labels(question))
         visible = "\n".join([question.title, question.detail, *labels(question)])
@@ -256,25 +256,29 @@ def test_the_wording_states_the_facts_within_the_platform_limits() -> None:
             *(o.key for o in question.options),
         ):
             assert internal not in visible, (kid, internal)
-    long_title = question_of(long_entry, current).title
+    long_title = question_of(long_entry, current, head=UPLOADS[long_entry.knowledge_id][1]).title
     assert "…" in long_title
     assert len(long_title) <= 200
 
-    same_role = question_of(entries["k-new"], current)
+    same_role = question_of(
+        entries["k-new"], current, head=UPLOADS[entries["k-new"].knowledge_id][1]
+    )
     assert (
         PRODUCTS["1818"]["name"] in same_role.detail
         and wording.roles["brochure"] in same_role.detail
     )
     assert entries["k-new"].file_name in same_role.title
-    two = question_of(entries["k-two"], current)
+    two = question_of(entries["k-two"], current, head=UPLOADS[entries["k-two"].knowledge_id][1])
     for pid in ("1814", "1828"):
         assert PRODUCTS[pid]["name"] in two.detail
         assert any(PRODUCTS[pid]["name"] in label for label in labels(two))
-    scan = question_of(entries["k-scan"], current)
+    scan = question_of(entries["k-scan"], current, head=UPLOADS[entries["k-scan"].knowledge_id][1])
     assert PRODUCTS["1830"]["name"] in scan.detail
     roles = ("terms", "brochure", "rate_table")
     assert all(wording.roles[r] in label for r, label in zip(roles, labels(scan)[:3], strict=True))
-    unnamed = question_of(entries["k-unnamed"], current)
+    unnamed = question_of(
+        entries["k-unnamed"], current, head=UPLOADS[entries["k-unnamed"].knowledge_id][1]
+    )
     assert UNNAMED in unnamed.detail and PRODUCTS["1826"]["clause_code"] in unnamed.detail
     suffixes = {c.schema_pack_id: c.suffix for c in reversed(policy.classifications)}
     for option in unnamed.options[:-1]:
