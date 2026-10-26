@@ -18,6 +18,7 @@ async function page() {
     { name: 'enterpriseGraph', path: '/spaces/:spaceId/graph', component: {} },
     { name: 'enterpriseSpotChecks', path: '/spaces/:spaceId/spot-checks', component: {} },
     { name: 'enterpriseConfirmations', path: '/spaces/:spaceId/confirmations', component: {} },
+    { name: 'enterpriseReviews', path: '/spaces/:spaceId/reviews', component: {} },
   ] })
   await router.push('/spaces/demo')
   const view = mount(EnterpriseSpace, { attachTo: document.body, props: { spaceId: 'demo' }, global: {

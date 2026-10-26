@@ -24,6 +24,7 @@ async function setup(navigation = false) {
     { name: 'enterpriseGraph', path: '/spaces/:spaceId/graph', component: { template: '<div />' } },
     { name: 'enterpriseSpotChecks', path: '/spaces/:spaceId/spot-checks', component: { template: '<div />' } },
     { name: 'enterpriseConfirmations', path: '/spaces/:spaceId/confirmations', component: { template: '<div />' } },
+    { name: 'enterpriseReviews', path: '/spaces/:spaceId/reviews', component: { template: '<div />' } },
   ] })
   await router.push('/spaces/demo')
   await router.isReady()
