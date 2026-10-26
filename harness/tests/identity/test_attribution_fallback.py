@@ -111,3 +111,14 @@ def test_an_overlong_reader_guide_beside_a_good_one_gives_no_title(long_first: b
     )
     versioned = attribute(terms(guides + FILLER + MARKED, sha="d"), [registered_yuanshan(), haiyue])
     assert versioned.outcome not in {"NEW_VERSION", "SUPPLEMENT", "CREATE"}
+
+
+@pytest.mark.parametrize("empty_first", [False, True])
+def test_a_reader_guide_with_no_name_beside_a_good_one_gives_no_title(empty_first: bool) -> None:
+    # Review R2 remainder: a complete guide that names nothing is a failed guide, not a skipped one.
+    empty = "阅读指引产品提供保障"
+    guides = empty + GUIDE_A if empty_first else GUIDE_A + empty
+    attribution = attribute(terms(guides + FILLER + MARKED), [])
+    assert outcome(attribution) == ("QUARANTINE", "no_product_anchor")
+    versioned = attribute(terms(guides + FILLER + MARKED, sha="e"), [registered_yuanshan()])
+    assert versioned.outcome not in {"NEW_VERSION", "SUPPLEMENT", "CREATE"}
