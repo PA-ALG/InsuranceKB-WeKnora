@@ -307,7 +307,8 @@ func writeError(c *gin.Context, err error) {
 			status = http.StatusUnprocessableEntity
 		case release.ErrorReleaseAccessDenied:
 			status = http.StatusForbidden
-		case release.ErrorCandidateNotApproved, release.ErrorNeedsRebase, release.ErrorReleaseConflict:
+		case release.ErrorCandidateNotApproved, release.ErrorNeedsRebase, release.ErrorReleaseConflict,
+			release.ErrorCandidateDecided:
 			status = http.StatusConflict
 		case release.ErrorServiceUnavailable:
 			status = http.StatusServiceUnavailable

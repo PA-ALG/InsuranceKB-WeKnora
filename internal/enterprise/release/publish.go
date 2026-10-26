@@ -41,18 +41,19 @@ type DecisionInput struct {
 
 // Decision is a stored review outcome bound to the candidate's bundle digest.
 type Decision struct {
-	ID           string `json:"id"`
-	TenantID     uint64 `json:"tenant_id"`
-	SpaceID      string `json:"space_id"`
-	CandidateID  string `json:"candidate_id"`
-	BundleDigest string `json:"bundle_digest"`
-	Outcome      string `json:"outcome"`
-	Mode         string `json:"mode"`
-	PolicyRef    string `json:"policy_ref"`
-	Score        string `json:"score,omitempty"`
-	Reason       string `json:"reason,omitempty"`
-	Subject      string `json:"subject"`
-	Digest       string `json:"digest"`
+	ID           string    `json:"id"`
+	TenantID     uint64    `json:"tenant_id"`
+	SpaceID      string    `json:"space_id"`
+	CandidateID  string    `json:"candidate_id"`
+	BundleDigest string    `json:"bundle_digest"`
+	Outcome      string    `json:"outcome"`
+	Mode         string    `json:"mode"`
+	PolicyRef    string    `json:"policy_ref"`
+	Score        string    `json:"score,omitempty"`
+	Reason       string    `json:"reason,omitempty"`
+	Subject      string    `json:"subject"`
+	Digest       string    `json:"digest"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Release is an activated, complete set of members of one Space.

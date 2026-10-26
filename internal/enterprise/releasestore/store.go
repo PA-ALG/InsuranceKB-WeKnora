@@ -168,7 +168,7 @@ func (s *Store) DecisionByID(ctx context.Context, tenantID uint64, spaceID, id s
 	return release.Decision{
 		ID: row.ID, TenantID: row.TenantID, SpaceID: row.SpaceID, CandidateID: row.CandidateID,
 		BundleDigest: row.BundleDigest, Outcome: row.Outcome, Mode: row.Mode, PolicyRef: row.PolicyRef,
-		Score: row.Score, Reason: row.Reason, Subject: row.Subject, Digest: row.Digest,
+		Score: row.Score, Reason: row.Reason, Subject: row.Subject, Digest: row.Digest, CreatedAt: row.CreatedAt,
 	}, nil
 }
 
