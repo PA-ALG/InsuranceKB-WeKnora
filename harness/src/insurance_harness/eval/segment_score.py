@@ -173,7 +173,7 @@ def score_selection(
         copied_gold += len(found - chosen)
         copied_chosen += len(right - gold)
         recall = len(found) / len(required) if required else None
-        precision = len(right) / len(counted) if required and counted else None
+        precision = len(right) / len(counted) if gold and counted else None  # own denominator
         scored.append(FieldSelection(field.field_key, field.state, state, recall, precision))
 
     return _summary(

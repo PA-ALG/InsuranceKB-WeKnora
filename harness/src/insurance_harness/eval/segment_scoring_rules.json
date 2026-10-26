@@ -1,9 +1,13 @@
 {
-  "version": "2026-10-26.1",
-  "basis": "S12a: user rulings 2026-10-26 after the S12 error analysis found about 28% of segment errors were Golden or scoring artifacts. (1) Near-identical passages across documents credit each other once 本合同/本条款/本附加合同 and footnote marks are folded, still by exact containment of at least copy_min_chars; numbers with a unit or after 第 never fold. (2) Headings and reader-guide lines of terms and brochures are neutral; rate-table cells are not headings. (3) Brochure restatements are neutral for a field whose Golden cites the terms; footnote blocks and the definitions section are neutral unless the field's card asks for definitions or footnotes.",
+  "version": "2026-10-26.2",
+  "basis": "S12a (2026-10-26.2 after review R1-R4 on PR #361): user rulings 2026-10-26 after the S12 error analysis found about 28% of segment errors were Golden or scoring artifacts. (1) Near-identical passages across documents credit each other once 本合同/本条款/本附加合同 and footnote marks are folded, still by exact containment of at least copy_min_chars; a footnote mark is a 1-2 digit number right after a Han character and right before a connective (的后或及和与并等之者), so measured numbers (15日, 24小时, 24分钟) and 第N never fold. (2) Headings and reader-guide lines of terms and brochures are neutral; rate-table cells are not headings. (3) Brochure restatements are neutral for a field whose Golden cites the terms; footnote blocks and the definitions section are neutral unless the field's card asks for definitions or footnotes.",
   "copy_min_chars": 20,
-  "copy_replacements": [["本附加合同", "合同"], ["本合同", "合同"], ["本条款", "条款"]],
-  "copy_footnote_pattern": "(?<=[一-鿿])(?<!第)(?<!\\d)\\d{1,2}(?!\\d)(?![日天年月周岁元万千百亿倍种次个项级类期份条章节款号%])(?=[一-鿿])",
+  "copy_replacements": [
+    ["本附加合同", "合同"],
+    ["本合同", "合同"],
+    ["本条款", "条款"]
+  ],
+  "copy_footnote_pattern": "(?<=[一-鿿])(?<!第)(?<!\\d)\\d{1,2}(?!\\d)(?=[的后或及和与并等之者])",
   "heading_max_chars": 14,
   "sentence_terminators": "。；;！!？?",
   "guide_markers": ["阅读指引", "这部分讲的是"],
@@ -11,9 +15,13 @@
   "footnote_start_pattern": "^\\s*\\d{1,2}\\s+(?![\\d级%])\\S",
   "footnote_body_pattern": "(?:是指|是由|指|：|:)",
   "footnote_body_chars": 40,
-  "clause_number_pattern": "^\\s*(?:第[一二三四五六七八九十百零\\d]+[条章节]|\\d+(?:\\.\\d+)+)",
+  "clause_number_pattern": "^\\s*(?:第[一二三四五六七八九十百零\\d]+[条章节]|\\d+(?:\\.\\d+)+|\\d+[、.．]|[（(][一二三四五六七八九十\\d]+[）)])",
   "definition_heading_word": "释义",
   "chapter_heading_pattern": "^(?:第[一二三四五六七八九十百零\\d]+章|\\d+[.．、](?!\\d))",
   "definition_card_markers": ["释义", "脚注"],
-  "document_roles": [["条款", "terms"], ["说明书", "brochure"], ["费率表", "rate_table"]]
+  "document_roles": [
+    ["条款", "terms"],
+    ["说明书", "brochure"],
+    ["费率表", "rate_table"]
+  ]
 }

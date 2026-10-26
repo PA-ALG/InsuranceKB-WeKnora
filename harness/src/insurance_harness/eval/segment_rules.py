@@ -171,18 +171,20 @@ class RuledSource:
         for s in self.source.segments:
             if inside is not None and s.document != inside:
                 inside = None
-            heading = self._is_heading(s.id)
-            if heading and self.rules.definition_heading_word in self.source.content(s.id):
+            word = self.rules.definition_heading_word
+            if self._is_heading(s.id) and word in self.source.content(s.id):
                 inside = s.document
-            elif (
-                inside is not None
-                and heading
-                and re.match(self.rules.chapter_heading_pattern, self._squeezed(s.id))
-            ):
+            elif inside is not None and self._is_chapter(s.id):
                 inside = None
             if inside is not None:
                 section.add(s.id)
         return section
+
+    def _is_chapter(self, segment_id: str) -> bool:
+        """A chapter heading of any length (review R3): chapter pattern, no sentence terminator."""
+        if re.match(self.rules.chapter_heading_pattern, self._squeezed(segment_id)) is None:
+            return False
+        return not any(mark in self._text(segment_id) for mark in self.rules.sentence_terminators)
 
     def _text(self, segment_id: str) -> str:
         return self._segment(segment_id).text
