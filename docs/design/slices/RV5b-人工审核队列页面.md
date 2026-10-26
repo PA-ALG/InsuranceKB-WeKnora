@@ -96,6 +96,8 @@ decideReview(spaceId: string, candidateId: string, outcome: 'approve' | 'reject'
   - 这些文件都已在 G10 基线中，补丁文件数不变；
 - 实现方自己的测试。
 
+Claude 在单独的 RED 修正提交中，给两个既有的 Space 页面测试（`spaceHomeInteraction.spec.ts`、`spaceSearchRegression.spec.ts`）补上 `enterpriseReviews` 命名路由：Space 页面多了一个入口链接，这两个测试用的是只注册了已有命名路由的真实路由器。
+
 不改 Go 平台、Harness 与 `contracts/`。
 
 ## 5. 验收（RED，Claude 编写，受保护）
