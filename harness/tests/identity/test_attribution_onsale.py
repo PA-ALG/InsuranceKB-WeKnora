@@ -131,13 +131,17 @@ def test_materials_without_a_reliable_anchor_wait_for_a_person_or_quarantine(
     assert attribution.outcome != "SUPPLEMENT"
 
 
-def test_a_reader_guide_naming_another_product_is_a_conflict() -> None:
+def test_the_start_title_wins_and_the_reader_guide_only_stands_in() -> None:
+    # Extraction may garble the reader guide (S5b-5 Spec §2.2): it never overrides the start.
     head = material("1836", TERMS)["head"]
-    guide = "阅读指引平安安佑福重大疾病保险产品提供"
-    assert guide in head
-    changed = head.replace(guide, "阅读指引平安安康福重大疾病保险产品提供", 1)
+    guide = "平安安佑福重大疾病保险产品提供"  # the extracted guide also holds a font bullet
+    assert head.count(guide) == 1
+    changed = head.replace(guide, "平安安康福重大疾病保险产品提供")
     attribution = attribute(onsale("1836", TERMS, head=changed), current())
-    assert outcome(attribution) == ("QUARANTINE", "anchor_conflict")
+    assert outcome(attribution) == ("CREATE", "new_product")
+    assert attribution.display_name == EXPECTED["1836"][0]
+    # 2613 opens with labels and no title, so its name comes from the reader guide.
+    assert attribute(onsale("2613", TERMS), current()).display_name == EXPECTED["2613"][0]
 
 
 def test_two_different_own_codes_are_a_conflict() -> None:
