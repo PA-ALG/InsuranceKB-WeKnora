@@ -19,7 +19,12 @@ from insurance_harness.eval.segment_rules import (
     load_scoring_rules,
     neutral_segments,
 )
-from insurance_harness.eval.segment_score import GoldenV2, load_golden_v2, score_selection
+from insurance_harness.eval.segment_score import (
+    GoldenV2,
+    SelectionReport,
+    load_golden_v2,
+    score_selection,
+)
 from insurance_harness.evidence.segments import SegmentedSource
 
 
@@ -113,6 +118,10 @@ def chose(key: str, ids: list[str]) -> FieldResult:
     return FieldResult(field_key=key, state="present", value="x", evidence=SOURCE.evidence(ids))
 
 
+def _pick(report: SelectionReport) -> dict[str, tuple[float | None, float | None]]:
+    return {f.field_key: (f.recall, f.precision) for f in report.fields}
+
+
 def both(
     tmp_path: Path, fields: dict[str, list[str]], chosen: dict[str, list[str]]
 ) -> tuple[
@@ -122,8 +131,7 @@ def both(
     predicted = [chose(k, v) for k, v in chosen.items()]
     ruled = score_selection(SOURCE, gold, predicted, rules=load_scoring_rules())
     legacy = score_selection(SOURCE, gold, predicted)
-    pick = lambda report: {f.field_key: (f.recall, f.precision) for f in report.fields}  # noqa: E731
-    return pick(ruled), pick(legacy)
+    return _pick(ruled), _pick(legacy)
 
 
 def test_near_copies_differing_by_ben_or_a_footnote_mark_credit_each_other(tmp_path: Path) -> None:
@@ -168,7 +176,9 @@ def test_footnotes_and_definitions_count_only_where_the_card_asks_for_them(tmp_p
         },
     )
     assert ruled["waiting_period"] == (1.0, 1.0)
-    assert legacy["waiting_period"] == (0.5, pytest.approx(1 / 3))
+    recall, precision = legacy["waiting_period"]
+    assert recall == 0.5
+    assert precision == pytest.approx(1 / 3)
     assert ruled["disease_definitions_and_criteria"] == (0.5, 0.5)
     assert legacy["disease_definitions_and_criteria"] == (0.5, 0.5)
 
