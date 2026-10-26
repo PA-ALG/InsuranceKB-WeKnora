@@ -128,6 +128,9 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 	if committed, ok, err := s.committed(ctx, scope, w); ok || err != nil {
 		return committed, err
 	}
+	if committed, ok, err := s.PublishedCandidate(ctx, w.TenantID, w.SpaceID, w.BundleDigest); ok || err != nil {
+		return committed, err
+	}
 	snapshots, manifest, err := snapshotsOf(w)
 	if err != nil {
 		return release.Release{}, err
@@ -148,13 +151,23 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		ManifestDigest: preparation.ManifestDigest, BaseReleaseID: w.Expected.ReleaseID,
 		BaseActivationEpoch: w.Expected.Epoch, PreparationID: preparation.ID, CreatedAt: now, ActivatedAt: now,
 	}
-	refs, err := sourceRefs(w.Members)
-	if err != nil {
-		return release.Release{}, &release.Error{
-			Code: release.ErrorSourceUnavailable, Detail: "a cited source is unavailable",
-		}
-	}
+	publishedID := rel.ID
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockCandidate(tx, w); err != nil {
+			return err
+		}
+		id, err := candidateReleaseID(tx, w.TenantID, w.SpaceID, w.BundleDigest)
+		if err != nil {
+			return err
+		}
+		if id != "" {
+			publishedID = id
+			return nil
+		}
+		refs, err := sourceRefs(w.Members)
+		if err != nil {
+			return err
+		}
 		if err := lockSourceKnowledges(tx, w.TenantID, refs); err != nil {
 			return err
 		}
@@ -170,7 +183,7 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		if _, err := lockHead(tx, scope); err != nil {
 			return err
 		}
-		_, err := releases.Activate(ctx, repository.WikiReleaseActivationWrite{
+		_, err = releases.Activate(ctx, repository.WikiReleaseActivationWrite{
 			Preparation: &preparation, Release: &rel, Members: snapshots,
 			ExpectedReleaseID: w.Expected.ReleaseID, ExpectedActivationEpoch: w.Expected.Epoch,
 			Nonce: w.Nonce, AuthorizationDigest: w.DecisionDigest, ActivatedBy: w.Subject, ActivatedAt: now,
@@ -189,6 +202,10 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		if committed, ok, lookupErr := s.committed(ctx, scope, w); ok || lookupErr != nil {
 			return committed, lookupErr
 		}
+		committed, ok, lookupErr := s.PublishedCandidate(ctx, w.TenantID, w.SpaceID, w.BundleDigest)
+		if ok || lookupErr != nil {
+			return committed, lookupErr
+		}
 		if errors.Is(err, repository.ErrRevisionSourceUnavailable) {
 			return release.Release{}, &release.Error{
 				Code: release.ErrorSourceUnavailable, Detail: "a cited source is unavailable",
@@ -201,7 +218,7 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		}
 		return release.Release{}, err
 	}
-	return s.ReleaseByID(ctx, w.TenantID, w.SpaceID, rel.ID)
+	return s.ReleaseByID(ctx, w.TenantID, w.SpaceID, publishedID)
 }
 
 func (s *Store) committed(

@@ -3,6 +3,7 @@ package enterprise_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -97,11 +98,46 @@ func (p *concurrentReviews) ReleaseByID(ctx context.Context, tenant uint64, spac
 func (p *concurrentReviews) Activate(ctx context.Context, write release.ActivationWrite) (release.Release, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if r, found := p.published(write.TenantID, write.SpaceID, write.BundleDigest); found {
+		return r, nil
+	}
 	return p.reviewPlatform.Activate(ctx, write)
 }
 
-func TestReviewConcurrentChangedCandidateHasOneActivation(t *testing.T) {
+func (p *concurrentReviews) published(tenant uint64, space, digest string) (release.Release, bool) {
+	for _, r := range p.releases {
+		c := p.candidates[r.CandidateID]
+		if c.TenantID == tenant && c.SpaceID == space && c.BundleDigest == digest {
+			return r, true
+		}
+	}
+	return release.Release{}, false
+}
+
+func (p *concurrentReviews) PublishedCandidate(
+	_ context.Context, tenant uint64, space, digest string,
+) (release.Release, bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	r, found := p.published(tenant, space, digest)
+	return r, found, nil
+}
+
+func TestReviewConcurrentCandidateHasOneActivation(t *testing.T) {
+	for _, noOp := range []bool{false, true} {
+		t.Run(map[bool]string{false: "changed", true: "no-op"}[noOp], func(t *testing.T) {
+			concurrentReview(t, noOp)
+		})
+	}
+}
+
+func concurrentReview(t *testing.T, noOp bool) {
+	t.Helper()
 	w := newReviewWorld(t)
+	if noOp {
+		w.waiting = w.submit(t, w.first.ID, claimMember(t, "P", "waiting", "90日"))
+		require.Equal(t, w.first.Members[0].MemberDigest, w.platform.bundles[w.waiting.ID].Members[0].MemberDigest)
+	}
 	store := &concurrentReviews{
 		reviewPlatform: w.platform,
 		queueReady:     make(chan struct{}), decidedReady: make(chan struct{}),
@@ -128,19 +164,26 @@ func TestReviewConcurrentChangedCandidateHasOneActivation(t *testing.T) {
 		}(handler)
 	}
 	statuses := []int{}
+	releaseIDs := []string{}
 	for range handlers {
 		select {
 		case res := <-responses:
 			statuses = append(statuses, res.Code)
-			if res.Code == http.StatusConflict {
-				require.Contains(t, []string{release.ErrorNeedsRebase, release.ErrorReleaseConflict},
-					code(t, res.Body.Bytes()), res.Body.String())
+			require.Equal(t, http.StatusCreated, res.Code, res.Body.String())
+			var body struct {
+				Data struct {
+					ReleaseID string `json:"release_id"`
+				} `json:"data"`
 			}
+			require.NoError(t, json.Unmarshal(res.Body.Bytes(), &body))
+			releaseIDs = append(releaseIDs, body.Data.ReleaseID)
 		case <-ctx.Done():
 			t.Fatal("concurrent approval did not finish before its deadline")
 		}
 	}
-	require.ElementsMatch(t, []int{http.StatusCreated, http.StatusConflict}, statuses)
+	require.ElementsMatch(t, []int{http.StatusCreated, http.StatusCreated}, statuses)
+	require.NotEmpty(t, releaseIDs[0])
+	require.Equal(t, releaseIDs[0], releaseIDs[1])
 	require.Equal(t, 2, store.saved, "both independently attributed decisions remain")
 	require.Len(t, store.releases, 2, "the seed and exactly one activation of the changed candidate")
 	require.Equal(t, uint64(2), store.head.Epoch)

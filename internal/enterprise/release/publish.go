@@ -86,13 +86,21 @@ type ActivationWrite struct {
 // Publisher writes and reads releases through the platform's single Head of a
 // Space. SaveDecision is idempotent by (tenant, Space, Digest). Activate is a
 // compare-and-swap on Expected (a moved Head is ErrorReleaseConflict) and returns
-// the same release when the Nonce was already activated. ReleaseByID with an
+// the same release when the Nonce or (tenant, Space, BundleDigest) was already
+// activated, even under another decision. Candidate lookup and Head publication
+// must share one atomic transaction. ReleaseByID with an
 // empty ID reads the active release; a missing one is ErrorReleaseNotFound.
 type Publisher interface {
 	SaveDecision(ctx context.Context, d Decision) (Decision, error)
 	DecisionByID(ctx context.Context, tenantID uint64, spaceID, id string) (Decision, error)
 	ReleaseByID(ctx context.Context, tenantID uint64, spaceID, releaseID string) (Release, error)
 	Activate(ctx context.Context, w ActivationWrite) (Release, error)
+}
+
+// CandidateReleaseReader finds a candidate's committed release before rebase checks.
+// Publishers without this read optimization still enforce candidate idempotency in Activate.
+type CandidateReleaseReader interface {
+	PublishedCandidate(ctx context.Context, tenantID uint64, spaceID, bundleDigest string) (Release, bool, error)
 }
 
 // Option configures optional collaborators of the Service.
@@ -162,19 +170,15 @@ func (s *Service) Activate(ctx context.Context, p Principal, spaceID, candidateI
 	if d.Outcome != "approve" {
 		return Release{}, &Error{Code: ErrorCandidateNotApproved, Detail: "decision outcome is " + d.Outcome}
 	}
-	head, err := s.store.Head(ctx, p.TenantID, spaceID)
+	if committed, ok, err := s.publishedCandidate(ctx, p, spaceID, c); ok || err != nil {
+		return committed, err
+	}
+	head, base, err := s.activationHead(ctx, p, spaceID)
 	if err != nil {
 		return Release{}, err
 	}
-	var base Release
-	if head.ReleaseID != "" {
-		if base, err = s.publisher.ReleaseByID(ctx, p.TenantID, spaceID, head.ReleaseID); err != nil {
-			return Release{}, err
-		}
-		// A retried activation whose first attempt committed: the Head is that release.
-		if base.CandidateID == c.ID && base.DecisionDigest == d.Digest {
-			return base, nil
-		}
+	if head.ReleaseID != "" && base.CandidateID == c.ID {
+		return base, nil
 	}
 	b, err := s.store.BundleOf(ctx, p.TenantID, spaceID, c.ID)
 	if err != nil {
@@ -187,11 +191,8 @@ func (s *Service) Activate(ctx context.Context, p Principal, spaceID, candidateI
 		if replayed, ok, replayErr := s.replay(ctx, p, spaceID, c, d, b); ok || replayErr != nil {
 			return replayed, replayErr
 		}
-		if rebaseErr := s.checkRebase(ctx, p, spaceID, b, base); rebaseErr != nil {
-			return Release{}, rebaseErr
-		}
 	}
-	members, err := materialize(base.Members, b)
+	members, err := s.activationMembers(ctx, p, spaceID, b, head, base)
 	if err != nil {
 		return Release{}, err
 	}
@@ -225,7 +226,7 @@ func (s *Service) replay(
 	if err != nil {
 		return Release{}, false, err
 	}
-	if r.CandidateID != c.ID || r.DecisionDigest != d.Digest {
+	if r.CandidateID != c.ID {
 		return Release{}, false, errors.New("publisher replayed a different activation")
 	}
 	return r, true, nil

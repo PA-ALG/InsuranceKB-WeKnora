@@ -31,5 +31,7 @@ func TestReviewNoOpApprovalInterleavingDoesNotPublishCandidateTwice(t *testing.T
 	require.NoError(t, err)
 	again, secondErr := s.Activate(ctx, second, spaceID, c.ID, b.ID)
 	t.Logf("first=%s second=%s second_error=%v activations=%d", activated.ID, again.ID, secondErr, p.activations)
+	require.NoError(t, secondErr)
+	require.Equal(t, activated, again)
 	require.Equal(t, 2, p.activations, "one seed release plus at most one release of this candidate")
 }

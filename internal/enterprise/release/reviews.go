@@ -114,7 +114,7 @@ func (s *Service) ReviewCandidate(ctx context.Context, p Principal, spaceID, id 
 	if err != nil {
 		return ReviewDetail{}, err
 	}
-	head, err := s.store.Head(ctx, p.TenantID, spaceID)
+	head, active, err := s.activationHead(ctx, p, spaceID)
 	if err != nil {
 		return ReviewDetail{}, err
 	}
@@ -126,21 +126,11 @@ func (s *Service) ReviewCandidate(ctx context.Context, p Principal, spaceID, id 
 		detail.Blocker = ErrorCandidateDecided
 		return detail, nil
 	}
-	if err := checkBase(bundle, head); err != nil {
-		if bundle.BaseReleaseID != head.ReleaseID {
-			var active Release
-			if head.ReleaseID != "" {
-				active, err = s.publisher.ReleaseByID(ctx, p.TenantID, spaceID, head.ReleaseID)
-				if err != nil {
-					return ReviewDetail{}, err
-				}
-			}
-			err = s.checkRebase(ctx, p, spaceID, bundle, active)
-		}
+	if err := s.precheckMembers(ctx, p, spaceID, entry.Candidate, bundle, head, active); err != nil {
 		var failure *Error
-		if errors.As(err, &failure) && failure.Code == ErrorNeedsRebase {
-			detail.Blocker = ErrorNeedsRebase
-		} else if err != nil {
+		if errors.As(err, &failure) {
+			detail.Blocker = failure.Code
+		} else {
 			return ReviewDetail{}, err
 		}
 	}
@@ -168,6 +158,11 @@ func (s *Service) Review(
 	var decided Decision
 	switch entry.Candidate.Status {
 	case "pending":
+		if outcome == "approve" {
+			if err := s.precheckActivation(ctx, p, spaceID, entry.Candidate); err != nil {
+				return ReviewResult{}, err
+			}
+		}
 		decided, err = s.Decide(ctx, p, spaceID, id, DecisionInput{Outcome: outcome, Mode: "human", Reason: reason})
 		if err != nil {
 			return ReviewResult{}, err
@@ -175,6 +170,9 @@ func (s *Service) Review(
 	case "approved":
 		if outcome != "approve" {
 			return ReviewResult{}, &Error{Code: ErrorCandidateDecided, Detail: "candidate already has a decision"}
+		}
+		if err := s.precheckActivation(ctx, p, spaceID, entry.Candidate); err != nil {
+			return ReviewResult{}, err
 		}
 		decided = *entry.Decision
 	default:

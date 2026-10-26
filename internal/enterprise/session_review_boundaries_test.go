@@ -155,13 +155,20 @@ type reviewFaultPublisher struct {
 	decisionErr error
 	activateErr error
 	activations int
+	afterSave   func()
 }
 
 func (p *reviewFaultPublisher) SaveDecision(ctx context.Context, d release.Decision) (release.Decision, error) {
 	if p.decisionErr != nil {
 		return release.Decision{}, p.decisionErr
 	}
-	return p.reviewPlatform.SaveDecision(ctx, d)
+	saved, err := p.reviewPlatform.SaveDecision(ctx, d)
+	if err == nil && p.afterSave != nil {
+		callback := p.afterSave
+		p.afterSave = nil
+		callback()
+	}
+	return saved, err
 }
 
 func (p *reviewFaultPublisher) Activate(ctx context.Context, write release.ActivationWrite) (release.Release, error) {
@@ -267,10 +274,17 @@ func TestReviewActivationInvalidDoesNotRecordDecision(t *testing.T) {
 	c, err := w.releases.Receive(context.Background(),
 		release.Principal{TenantID: 7, Subject: "svc-harness"}, "demo", raw)
 	require.NoError(t, err)
+	detail := call(w.admin(), http.MethodGet, reviewsPath+"/"+c.ID, nil)
+	require.Equal(t, release.ErrorCandidateInvalid, dataOf(t, detail)["blocker"])
 	before := len(w.platform.decisions)
 	res := w.decide(w.admin(), c.ID, decision("approve", "checked"))
 	require.Equal(t, http.StatusBadRequest, res.Code, res.Body.String())
 	require.Equal(t, release.ErrorCandidateInvalid, code(t, res.Body.Bytes()))
 	t.Logf("response=%d decisions_before=%d decisions_after=%d", res.Code, before, len(w.platform.decisions))
 	require.Len(t, w.platform.decisions, before, "a 400 response must not record a new decision")
+	detail = call(w.admin(), http.MethodGet, reviewsPath+"/"+c.ID, nil)
+	require.Equal(t, "pending", dataOf(t, detail)["status"])
+	res = w.decide(w.admin(), c.ID, decision("reject", "invalid removal"))
+	require.Equal(t, http.StatusCreated, res.Code, res.Body.String())
+	require.Len(t, w.platform.decisions, before+1)
 }
