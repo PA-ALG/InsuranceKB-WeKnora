@@ -204,7 +204,7 @@ def _guide_title(head: str, policy: AttributionPolicy) -> str:
         or _fold(policy.own_code_marker) in name
         or any(_fold(marker) in name for marker in policy.title_end_markers)
     )
-    return "" if polluted or len(name) > policy.max_title_chars else name
+    return "" if polluted or not name or len(name) > policy.max_title_chars else name
 
 
 def _own_codes(head: str, policy: AttributionPolicy) -> set[str]:
