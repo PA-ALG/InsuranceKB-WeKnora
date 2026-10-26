@@ -1,0 +1,21 @@
+.ek-review-shell { max-width: 1080px; margin: 0 auto; }
+.ek-review-tabs { display: flex; gap: 8px; margin: 24px 0; border-bottom: 1px solid var(--td-component-border); }
+.ek-review-tabs button { padding: 12px 18px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--td-text-color-secondary); font: inherit; cursor: pointer; }
+.ek-review-tabs [aria-selected="true"] { color: var(--td-brand-color); border-bottom-color: var(--td-brand-color); font-weight: 600; }
+.ek-review-card { margin: 0 0 20px; padding: 24px; border: 1px solid var(--td-component-border); border-radius: 12px; background: var(--td-bg-color-container); }
+.ek-review-card__heading h2 { margin: 0 0 8px; font-size: 20px; }
+.ek-review-card__heading time { color: var(--td-text-color-secondary); font-size: 13px; }
+.ek-review-change { margin: 20px 0; padding: 18px 0; border-bottom: 1px solid var(--td-component-border); }
+.ek-review-change > h3 { font-size: 16px; margin: 0 0 14px; }
+.ek-review-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
+.ek-review-values > div { min-width: 0; }
+.ek-review-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.ek-review-card blockquote { margin: 16px 0 0; padding: 8px 16px; border-left: 3px solid var(--td-component-border); color: var(--td-text-color-secondary); }
+.ek-review-label { display: block; margin: 24px 0 8px; font-weight: 600; }
+.ek-review-card textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--td-component-border); border-radius: 6px; background: var(--td-bg-color-container); color: var(--td-text-color-primary); font: inherit; resize: vertical; }
+.ek-review-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.ek-review-approve { color: var(--td-brand-color); }
+.ek-review-page button:disabled { opacity: .5; cursor: not-allowed; }
+.ek-review-result { font-weight: 600; padding: 12px 0; }
+.ek-review-page button:focus-visible, .ek-review-page textarea:focus-visible, .ek-review-page [tabindex="-1"]:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 3px; }
+@media (max-width: 640px) { .ek-review-card { padding: 16px; } }
