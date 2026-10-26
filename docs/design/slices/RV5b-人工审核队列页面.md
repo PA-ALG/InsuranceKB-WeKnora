@@ -90,6 +90,10 @@ decideReview(spaceId: string, candidateId: string, outcome: 'approve' | 'reject'
   - `EnterpriseSpace.vue`：加入口链接；
 - `frontend/src/router/index.ts`：注册路由；
 - `frontend/src/i18n/locales/*.ts`：5 种语言的 `enterpriseKnowledge.review`；
+- `docs/design/upstream-patches.md`：实现方按 AGENTS 的例外**追加**登记行（不改已有行）：
+  - `frontend/src/router/index.ts`：注册审核队列会话页面路由，理由同 RV4b，退出条件"上游支持自有页面路由注册后移除接缝"；
+  - 5 个语言文件：审核队列文案，理由与退出条件同 S3g 的语言包登记；
+  - 这些文件都已在 G10 基线中，补丁文件数不变；
 - 实现方自己的测试。
 
 不改 Go 平台、Harness 与 `contracts/`。
