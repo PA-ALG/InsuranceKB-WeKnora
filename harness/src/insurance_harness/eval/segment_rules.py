@@ -1,7 +1,7 @@
 """The ruled segment scoring of 2026-10-26 (S12a Spec §2).
 
 The user's rulings after the S12 error analysis, as versioned data (segment_scoring_rules.json):
-near copies that differ only by 本合同/本条款 or a footnote mark credit each other; headings and
+near copies that differ only by 本合同/本条款 credit each other (numbers never fold); headings and
 reader-guide lines, footnote blocks and the definitions section, and brochure restatements of cited
 terms are neutral where the rules say so. Neutral segments leave both the recall and the precision
 denominator of a field; they can still credit a Golden segment through a copy. Scoring only: the
@@ -33,7 +33,6 @@ class ScoringRules(BaseModel):
     basis: str = Field(min_length=1)
     copy_min_chars: int = Field(gt=0)
     copy_replacements: tuple[tuple[str, str], ...]
-    copy_footnote_pattern: str
     heading_max_chars: int = Field(gt=0)
     sentence_terminators: str = Field(min_length=1)
     guide_markers: tuple[str, ...]
@@ -50,7 +49,6 @@ class ScoringRules(BaseModel):
     @model_validator(mode="after")
     def _patterns_compile(self) -> ScoringRules:
         for pattern in (
-            self.copy_footnote_pattern,
             self.footnote_start_pattern,
             self.footnote_body_pattern,
             self.clause_number_pattern,
@@ -99,7 +97,7 @@ class RuledSource:
             text = self.source.content(segment_id)
             for old, new in self.rules.copy_replacements:
                 text = text.replace(old, new)
-            text = self._folded[segment_id] = re.sub(self.rules.copy_footnote_pattern, "", text)
+            self._folded[segment_id] = text  # numbers never fold (review R1)
         return text
 
     def copies(self, segment_id: str) -> frozenset[str]:
@@ -172,7 +170,8 @@ class RuledSource:
             if inside is not None and s.document != inside:
                 inside = None
             word = self.rules.definition_heading_word
-            if self._is_heading(s.id) and word in self.source.content(s.id):
+            opens = self._is_heading(s.id) or self._is_chapter(s.id)  # any length (review R3)
+            if opens and word in self.source.content(s.id):
                 inside = s.document
             elif inside is not None and self._is_chapter(s.id):
                 inside = None

@@ -1,13 +1,12 @@
 {
-  "version": "2026-10-26.2",
-  "basis": "S12a (2026-10-26.2 after review R1-R4 on PR #361): user rulings 2026-10-26 after the S12 error analysis found about 28% of segment errors were Golden or scoring artifacts. (1) Near-identical passages across documents credit each other once 本合同/本条款/本附加合同 and footnote marks are folded, still by exact containment of at least copy_min_chars; a footnote mark is a 1-2 digit number right after a Han character and right before a connective (的后或及和与并等之者), so measured numbers (15日, 24小时, 24分钟) and 第N never fold. (2) Headings and reader-guide lines of terms and brochures are neutral; rate-table cells are not headings. (3) Brochure restatements are neutral for a field whose Golden cites the terms; footnote blocks and the definitions section are neutral unless the field's card asks for definitions or footnotes.",
+  "version": "2026-10-26.3",
+  "basis": "S12a (2026-10-26.3 after review R1-R4 and their remainders on PR #361): user rulings 2026-10-26 after the S12 error analysis found about 28% of segment errors were Golden or scoring artifacts. (1) Near-identical passages across documents credit each other once 本合同/本条款/本附加合同 are folded, still by exact containment of at least copy_min_chars. Numbers never fold: a footnote mark cannot be told from a real number by text (a unit blacklist missed 小时; a connective whitelist folded 10或20年), so the footnote half of ruling 1 is not applied. (2) Headings and reader-guide lines of terms and brochures are neutral; rate-table cells are not headings. (3) Brochure restatements are neutral for a field whose Golden cites the terms; footnote blocks and the definitions section (opened by a heading or a chapter heading of any length naming 释义) are neutral unless the field's card asks for definitions or footnotes.",
   "copy_min_chars": 20,
   "copy_replacements": [
     ["本附加合同", "合同"],
     ["本合同", "合同"],
     ["本条款", "条款"]
   ],
-  "copy_footnote_pattern": "(?<=[一-鿿])(?<!第)(?<!\\d)\\d{1,2}(?!\\d)(?=[的后或及和与并等之者])",
   "heading_max_chars": 14,
   "sentence_terminators": "。；;！!？?",
   "guide_markers": ["阅读指引", "这部分讲的是"],
