@@ -93,3 +93,21 @@ def test_a_reader_guide_deep_in_the_text_gives_no_title() -> None:
     )
     attribution = attribute(brochure, [registered_yuanshan()])
     assert outcome(attribution) == ("QUARANTINE", "no_product_anchor")
+
+
+@pytest.mark.parametrize("long_first", [False, True])
+def test_an_overlong_reader_guide_beside_a_good_one_gives_no_title(long_first: bool) -> None:
+    # Review R2 remainder: every guide is checked whole; one that is too long is not dropped.
+    overlong = "阅读指引" + "海" * 61 + "终身护理保险产品提供保障"
+    guides = overlong + GUIDE_A if long_first else GUIDE_A + overlong
+    attribution = attribute(terms(guides + FILLER + MARKED), [])
+    assert outcome(attribution) == ("QUARANTINE", "no_product_anchor")
+    haiyue = RegisteredProduct(
+        product_id="p-b",
+        names=("海" * 61 + "终身护理保险",),
+        clause_codes=("平安人寿〔2026〕护理保险900号",),
+        schema_pack_id="schemapack_nursing_care_insurance",
+        materials=(RegisteredMaterial(knowledge_id="k-old-b", sha256="8" * 64, role="terms"),),
+    )
+    versioned = attribute(terms(guides + FILLER + MARKED, sha="d"), [registered_yuanshan(), haiyue])
+    assert versioned.outcome not in {"NEW_VERSION", "SUPPLEMENT", "CREATE"}
