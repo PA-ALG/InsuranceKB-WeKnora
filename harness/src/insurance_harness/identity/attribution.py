@@ -176,7 +176,9 @@ def _title(text: str, policy: AttributionPolicy) -> str:
 
 def _head_title(window: str, own_code: str | None, policy: AttributionPolicy) -> str:
     """The title at the start, after page numbers, labels and the terms' own code line."""
-    text = re.sub(policy.title_prefix_pattern, "", window, count=1)
+    text = window
+    while (stripped := re.sub(policy.title_prefix_pattern, "", text, count=1)) != text:
+        text = stripped  # page numbers and labels may come together, in any order
     if own_code is not None and text.startswith(own_code):
         text = text[len(own_code) :]
         text = text.removeprefix(_fold(policy.own_code_marker))
@@ -186,12 +188,23 @@ def _head_title(window: str, own_code: str | None, policy: AttributionPolicy) ->
 def _guide_title(head: str, policy: AttributionPolicy) -> str:
     """The product the reader guide introduces ("阅读指引<name>产品提供…"), or "".
 
-    Only a fallback for terms whose start carries no title: text extraction may interleave the
-    verification line or drop part of the name there, so it never overrides the start title.
+    Only a fallback for terms whose start carries no title, and it fails closed (S5b-5 §2.2): one
+    guide must start near the start, every guide must name the same product, and the name must
+    carry no code, verification line or end word, which extraction mixes in when it garbles.
     """
-    match = re.search(policy.guide_title_pattern, head.replace(_fold(policy.own_code_marker), ""))
-    name = match.group(1) if match else ""
-    return name if len(name) <= policy.max_title_chars else ""
+    matches = list(re.finditer(policy.guide_title_pattern, head))
+    if not any(match.start() < policy.anchor_chars for match in matches):
+        return ""
+    names = {match.group(1) for match in matches}
+    if len(names) != 1:
+        return ""
+    name = names.pop()
+    polluted = (
+        re.search(policy.clause_code_pattern, name)
+        or _fold(policy.own_code_marker) in name
+        or any(_fold(marker) in name for marker in policy.title_end_markers)
+    )
+    return "" if polluted or len(name) > policy.max_title_chars else name
 
 
 def _own_codes(head: str, policy: AttributionPolicy) -> set[str]:
@@ -304,7 +317,9 @@ def attribute(
             return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return _existing(chosen, "confirmed_by_person", decided, role, code, own_code)
     # The start names the product; the reader guide only stands in when the start has no title.
-    title = _head_title(window, own_code, policy) or _guide_title(head, policy)
+    title = _head_title(window, own_code, policy) or (
+        _guide_title(head, policy) if role == TERMS else ""
+    )
     named = [p for p in products if title and title in {_fold(n) for n in p.names}]
     named = named or _named_inside(title, products)
     # Both anchors must agree: a code whose product the title does not name is a conflict, also
