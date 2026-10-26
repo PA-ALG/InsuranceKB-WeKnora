@@ -184,6 +184,8 @@ class _Sync:
         self.skipped: Counter[str] = Counter()
         self.unaskable: dict[str, str] = {}  # knowledge id -> why its question cannot be built
         self.handled: set[str] = set()  # items closed (in a dry run: taken as closed) in this run
+        # One page read per material per run: its opening, or the code of the failed read.
+        self.heads: dict[tuple[str, int], tuple[str | None, str]] = {}
 
     # The registry ---------------------------------------------------------------------------
 
@@ -212,10 +214,30 @@ class _Sync:
         asked = []
         for entry in entries:
             try:
-                asked.append((entry, question_of(entry, self.current, self.wording)))
+                head = self.head(entry)
+                if head is None:
+                    continue  # not asked this run; an item already asked stays open
+                asked.append((entry, question_of(entry, self.current, self.wording, head=head)))
             except ConfirmationsError as error:
                 self.unaskable[entry.knowledge_id] = error.code
         return asked
+
+    def head(self, entry: PendingEntry) -> str | None:
+        """The text of the material's first pages, read once per run (S5b-3d-1).
+
+        A failed read makes the material unaskable for this run: nothing is pushed for it and its
+        open item is kept, since a question worded differently would close an answered item.
+        """
+        key = (entry.knowledge_id, entry.parse_attempt)
+        if key not in self.heads:
+            try:
+                self.heads[key] = (head_of(self.pages, self.space, _source(entry)), "")
+            except SourcePagesError as error:
+                self.heads[key] = (None, error.code)
+        head, code = self.heads[key]
+        if head is None:
+            self.unaskable[entry.knowledge_id] = code
+        return head
 
     # Settling one answered item ---------------------------------------------------------------
 
@@ -224,11 +246,9 @@ class _Sync:
         answer = item.answer
         assert answer is not None
         source = _source(entry)
-        try:
-            head = head_of(self.pages, self.space, source)
-        except SourcePagesError as error:
-            self.skipped[error.code] += 1
-            return
+        head = self.head(entry)
+        if head is None:
+            return  # counted once for the material, retried next run
         upload = Upload(
             knowledge_id=source.knowledge_id,
             file_name=source.file_name,

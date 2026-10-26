@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-25.1",
+  "version": "2026-10-26.1",
   "title": "「{file}」需要确认",
   "details": {
     "multiple_products": "文件：{file}\n这份材料可能属于以下产品：{products}。请选择它属于哪一个；都不是时选择忽略。",
@@ -7,6 +7,8 @@
     "role_unresolved": "文件：{file}\n这份材料属于「{product}」，系统认不出它是哪一种材料，请选择；不需要时选择忽略。",
     "same_role_differs": "文件：{file}\n「{product}」已有{role}，这份{role}的内容与已有的不同。请选择替换原有{role}、作为补充材料保留两份，或忽略这份文件。"
   },
+  "excerpt": "文件开头：{excerpt}",
+  "excerpt_chars": 300,
   "options": {
     "product": "归入「{product}」",
     "pack": "新建产品，险种为{pack}",
