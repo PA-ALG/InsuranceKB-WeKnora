@@ -200,7 +200,7 @@ def test_a_field_left_with_only_neutral_segments_has_no_score(tmp_path: Path) ->
 
 def test_the_rules_are_versioned_and_never_fall_back_silently(tmp_path: Path) -> None:
     rules = load_scoring_rules()
-    assert rules.version == "2026-10-26.1"
+    assert rules.version == "2026-10-26.2"
     broken = tmp_path / "rules.json"
     broken.write_text("{}", encoding="utf-8")
     with pytest.raises(ScoringRulesError):
@@ -221,3 +221,130 @@ def test_rate_table_cells_are_never_headings() -> None:
     neutral = neutral_segments(source, "premium_payment_period", set(), load_scoring_rules())
     assert "D1P1S1" in neutral
     assert "D2P1S1" not in neutral
+
+
+def golden_on(tmp_path: Path, source: SegmentedSource, fields: dict[str, list[str]]) -> GoldenV2:
+    by_id = {s.id: s for s in source.segments}
+    path = tmp_path / "9998.json"
+    document = {
+        "product_id": "9998",
+        "cards_version": "test",
+        "fields": [
+            {
+                "field_key": key,
+                "state": "present",
+                "value": "x",
+                "reason": "r",
+                "evidence": [
+                    {
+                        "document": by_id[i].document,
+                        "document_sha256": by_id[i].document_sha256,
+                        "page": by_id[i].page,
+                        "quote": by_id[i].text,
+                        "segment_id": i,
+                    }
+                    for i in ids
+                ],
+            }
+            for key, ids in fields.items()
+        ],
+    }
+    path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+    return load_golden_v2(path)
+
+
+def ruled_scores(
+    tmp_path: Path,
+    source: SegmentedSource,
+    fields: dict[str, list[str]],
+    chosen: dict[str, list[str]],
+) -> dict[str, tuple[float | None, float | None]]:
+    predicted = [
+        FieldResult(field_key=k, state="present", value="x", evidence=source.evidence(v))
+        for k, v in chosen.items()
+    ]
+    report = score_selection(
+        source, golden_on(tmp_path, source, fields), predicted, rules=load_scoring_rules()
+    )
+    return _pick(report)
+
+
+def test_measured_numbers_never_fold_into_a_copy(tmp_path: Path) -> None:
+    # Review R1: 24小时/48小时 and 24分钟/48分钟 are different conditions, not footnote marks.
+    source = SegmentedSource(
+        [
+            Page(
+                TERMS,
+                "b" * 64,
+                1,
+                "被保险人因疾病持续24小时无法完成日常生活活动时，我们按照合同约定给付护理保险金。\n"
+                "接受治疗后持续24分钟未恢复意识的，我们按照合同约定给付意识障碍保险金。\n",
+            ),
+            Page(
+                BROCHURE,
+                "a" * 64,
+                1,
+                "被保险人因疾病持续48小时无法完成日常生活活动时，我们按照合同约定给付护理保险金。\n"
+                "接受治疗后持续48分钟未恢复意识的，我们按照合同约定给付意识障碍保险金。\n",
+            ),
+        ]
+    )
+    scores = ruled_scores(
+        tmp_path,
+        source,
+        {"care_benefit": ["D2P1S1"], "coma_benefit": ["D2P1S2"]},
+        {"care_benefit": ["D1P1S1"], "coma_benefit": ["D1P1S2"]},
+    )
+    assert scores == {"care_benefit": (0.0, 0.0), "coma_benefit": (0.0, 0.0)}
+
+
+def test_precision_has_its_own_denominator(tmp_path: Path) -> None:
+    # Review R2: Golden holds only a neutral heading, the run picks an unrelated clause.
+    ruled, legacy = both(tmp_path, {"waiting_period": ["D1P1S2"]}, {"waiting_period": ["D1P1S5"]})
+    assert ruled == {"waiting_period": (None, 0.0)}
+    assert legacy == {"waiting_period": (0.0, 0.0)}
+
+
+def test_a_long_chapter_heading_ends_the_definitions_section(tmp_path: Path) -> None:
+    # Review R3: the chapter boundary is not the 14-character heading test.
+    source = SegmentedSource(
+        [
+            Page(
+                TERMS, "b" * 64, 1, "8. 释义\n8.1 疾病 是指符合本合同约定并经专科医生确诊的疾病。\n"
+            ),
+            Page(
+                TERMS,
+                "b" * 64,
+                2,
+                "第九章保险合同成立生效和保险责任终止的约定\n"
+                "9.1 合同责任终止后我们不再承担任何保险责任，另有约定的除外。\n",
+            ),
+        ]
+    )
+    assert source.segments[3].text.startswith("9.1")
+    neutral = neutral_segments(source, "contract_termination", {"D1P2S2"}, load_scoring_rules())
+    assert {"D1P1S1", "D1P1S2"} <= neutral
+    assert "D1P2S2" not in neutral
+    scores = ruled_scores(
+        tmp_path, source, {"contract_termination": ["D1P2S2"]}, {"contract_termination": ["D1P1S2"]}
+    )
+    assert scores == {"contract_termination": (0.0, None)}
+
+
+@pytest.mark.parametrize("number", ["2、", "2.", "第二条", "2.1"])
+def test_a_clause_number_cancels_a_footnote_block(number: str) -> None:
+    # Review R4: the clause numbers the segmenter knows, "2、" and "2." included.
+    source = SegmentedSource(
+        [
+            Page(
+                TERMS,
+                "b" * 64,
+                1,
+                "1 疾病 是指本合同约定并符合相关诊断标准的疾病。\n"
+                f"{number} 保险责任\n在本合同保险期间内，我们承担下列保险责任。\n",
+            )
+        ]
+    )
+    assert source.segments[1].text.startswith(number)
+    neutral = neutral_segments(source, "coverage_summary", set(), load_scoring_rules())
+    assert "D1P1S2" not in neutral
