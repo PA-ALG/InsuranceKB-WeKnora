@@ -8,6 +8,7 @@ being set aside, or reworded, is a new platform item rather than a closed one.
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Callable
 from functools import lru_cache
 from importlib.resources import files
@@ -45,6 +46,8 @@ class ConfirmationWording(BaseModel):
     version: str = Field(min_length=1)
     title: str
     details: dict[str, str]
+    excerpt: str  # the opening of the file, appended to every detail (S5b-3d-1)
+    excerpt_chars: int = Field(gt=0)
     options: dict[str, str]
     roles: dict[str, str]
 
@@ -84,10 +87,29 @@ def _fill(template: str, limit: int, values: dict[str, str]) -> str:
     return text
 
 
+def excerpt_of(head: str, chars: int) -> str:
+    """The opening a person reads: whitespace runs become one space, other control characters
+    and private-use glyphs go, and the text is cut at chars with "…" (S5b-3d-1 Spec §2.1)."""
+    kept = (
+        " " if c.isspace() else c
+        for c in head
+        if c.isspace() or unicodedata.category(c) not in {"Cc", "Co"}
+    )
+    text = " ".join("".join(kept).split())
+    return text if len(text) <= chars else text[:chars] + "…"
+
+
 def question_of(
-    entry: PendingEntry, registry: ProductRegistry, wording: ConfirmationWording | None = None
+    entry: PendingEntry,
+    registry: ProductRegistry,
+    wording: ConfirmationWording | None = None,
+    *,
+    head: str,
 ) -> ConfirmationInput:
-    """The confirmation item for one material waiting for a person (Spec §2.1, §3.2)."""
+    """The confirmation item for one material waiting for a person (Spec §2.1, §3.2).
+
+    head is the text of the material's first pages; its opening ends the detail (S5b-3d-1).
+    """
     wording = wording or load_wording()
     attribution = entry.attribution
     subject = SUBJECT_PREFIX + entry.knowledge_id
@@ -118,6 +140,9 @@ def question_of(
         "name": attribution.display_name or "",
         "code": attribution.clause_code or "",
     }
+    excerpt = excerpt_of(head, wording.excerpt_chars)
+    if not excerpt:
+        raise ConfirmationsError("QUESTION_INVALID")  # first pages without any text
     try:
         offered = choices(attribution, registry.registered())
     except ConfirmationError:
@@ -135,7 +160,11 @@ def question_of(
         subject=subject,
         revision=revision,
         title=_fill(wording.title, _LIMITS["title"], {"file": entry.file_name}),
-        detail=_fill(wording.details[attribution.reason], _LIMITS["detail"], facts),
+        detail=_fill(
+            wording.details[attribution.reason] + "\n" + wording.excerpt,
+            _LIMITS["detail"],
+            facts | {"excerpt": excerpt},
+        ),
         options=options,
     )
 
