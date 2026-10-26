@@ -14,7 +14,11 @@ from pathlib import Path
 import pytest
 
 from insurance_harness.compilers.schema_fields.engine import FieldResult
-from insurance_harness.eval.segment_rules import ScoringRulesError, load_scoring_rules
+from insurance_harness.eval.segment_rules import (
+    ScoringRulesError,
+    load_scoring_rules,
+    neutral_segments,
+)
 from insurance_harness.eval.segment_score import GoldenV2, load_golden_v2, score_selection
 from insurance_harness.evidence.segments import SegmentedSource
 
@@ -37,8 +41,9 @@ SOURCE = SegmentedSource(
             "1.1 等待期 本合同的等待期为90日，自合同生效之日起计算。\n"  # D1P1S3
             "1.2 犹豫期 投保人收到本合同后有15日的犹豫期，可以解除合同并退还保费。\n"  # D1P1S4
             "1.3 宽限期 自应交日起有60日的宽限期，期间发生保险事故我们仍承担保险责任。\n"  # D1P1S5
-            "2 疾病 指被保险人在等待期后初次确诊的疾病。\n"  # D1P1S6 footnote block starts
-            "3 意外伤害 是指外来的、突发的、非本意的、非疾病的客观事件。\n",  # D1P1S7
+            "本合同终止。\n"  # D1P1S6, too short to be a copy
+            "2 疾病 指被保险人在等待期后初次确诊的疾病。\n"  # D1P1S7 footnote block starts
+            "3 意外伤害 是指外来的、突发的、非本意的、非疾病的客观事件。\n",  # D1P1S8
         ),
         Page(
             TERMS,
@@ -48,7 +53,6 @@ SOURCE = SegmentedSource(
             "8.1 重大疾病 指符合本合同约定的疾病，且须由专科医生确诊。\n"  # D1P2S2
             "8.2 专科医生 是指取得执业资格并在二级以上医院工作的医生。\n",  # D1P2S3
         ),
-        Page(TERMS, "b" * 64, 3, "本合同终止。\n"),  # D1P3S1, too short to be a copy
         Page(
             BROCHURE,
             "a" * 64,
@@ -70,6 +74,8 @@ def test_the_synthetic_pages_segment_as_the_rules_expect() -> None:
     assert TEXT["D1P1S2"].text.startswith("第一条 保险责任")
     assert TEXT["D1P2S1"].text == "8. 释义"
     assert TEXT["D2P1S6"].text == "合同终止。"
+    assert TEXT["D1P1S6"].text == "本合同终止。"
+    assert TEXT["D1P1S7"].text.startswith("2 疾病")
 
 
 def cite(segment_id: str) -> dict[str, object]:
@@ -134,7 +140,7 @@ def test_numbers_and_short_passages_never_fold_into_a_copy(tmp_path: Path) -> No
     ruled, _ = both(
         tmp_path,
         {"premium_grace_period": ["D2P1S4"], "contract_termination": ["D2P1S6"]},
-        {"premium_grace_period": ["D1P1S5"], "contract_termination": ["D1P3S1"]},
+        {"premium_grace_period": ["D1P1S5"], "contract_termination": ["D1P1S6"]},
     )
     assert ruled == {"premium_grace_period": (0.0, 0.0), "contract_termination": (0.0, 0.0)}
 
@@ -153,12 +159,12 @@ def test_footnotes_and_definitions_count_only_where_the_card_asks_for_them(tmp_p
     ruled, legacy = both(
         tmp_path,
         {
-            "waiting_period": ["D1P1S3", "D1P1S6"],
+            "waiting_period": ["D1P1S3", "D1P1S7"],
             "disease_definitions_and_criteria": ["D1P2S2", "D1P2S3"],
         },
         {
-            "waiting_period": ["D1P1S3", "D1P1S7", "D1P2S2"],
-            "disease_definitions_and_criteria": ["D1P2S2", "D1P1S6"],
+            "waiting_period": ["D1P1S3", "D1P1S8", "D1P2S2"],
+            "disease_definitions_and_criteria": ["D1P2S2", "D1P1S7"],
         },
     )
     assert ruled["waiting_period"] == (1.0, 1.0)
@@ -191,3 +197,17 @@ def test_the_rules_are_versioned_and_never_fall_back_silently(tmp_path: Path) ->
         load_scoring_rules(broken)
     with pytest.raises(ScoringRulesError):
         load_scoring_rules(tmp_path / "missing.json")
+
+
+def test_rate_table_cells_are_never_headings() -> None:
+    # A short unpunctuated rate-table cell is evidence for payment fields (S4j), not a heading.
+    source = SegmentedSource(
+        [
+            Page(TERMS, "b" * 64, 1, "第一条 保险责任\n1.1 等待期 本合同的等待期为90日。\n"),
+            Page("费率表.pdf", "c" * 64, 1, "10年交\n"),
+        ]
+    )
+    assert source.segments[2].text == "10年交"
+    neutral = neutral_segments(source, "premium_payment_period", set(), load_scoring_rules())
+    assert "D1P1S1" in neutral
+    assert "D2P1S1" not in neutral
