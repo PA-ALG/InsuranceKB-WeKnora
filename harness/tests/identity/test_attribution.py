@@ -324,9 +324,9 @@ def test_a_label_before_the_code_does_not_make_a_new_version(label: str) -> None
     head = label + material("1828", "terms")["head"]
     registry = [registered("1828", "terms", "brochure")]
     result = attribute(upload("1828", "terms", sha256="8" * 64, head=head), registry)
-    # S5b-5: the start holds only the label, so the reader guide names the product and the cited
-    # code confirms it; a person decides, but the cited code is never a new version.
-    expect(result, "NEEDS_CONFIRM", "same_role_differs")
+    # S5b-5: the start holds only the label and this extraction's reader guide carries the
+    # verification line, so no title is read and the cited code stays a conflict.
+    expect(result, "QUARANTINE", "anchor_conflict")
     assert result.clause_code == CODE
     created = attribute(upload("1828", "terms", head=head), everything_but("1828"))
     expect(created, "QUARANTINE", "no_product_anchor")
