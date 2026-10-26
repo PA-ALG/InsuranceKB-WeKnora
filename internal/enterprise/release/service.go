@@ -15,6 +15,7 @@ type Service struct {
 	evidence   EvidenceResolver
 	publisher  Publisher
 	references ReferenceReader
+	queue      QueueStore
 	retirer    Retirer
 	verifier   EvidenceVerifier
 	schema     *jsonschema.Schema
@@ -31,6 +32,7 @@ func NewService(store Store, evidence EvidenceResolver, schemas map[string][]byt
 	s := &Service{
 		store: store, evidence: evidence, schema: schema, evidenceSchema: evidenceSchema, schemaErr: err,
 	}
+	s.queue, _ = store.(QueueStore)
 	for _, option := range options {
 		option(s)
 	}

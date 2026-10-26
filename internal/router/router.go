@@ -444,4 +444,7 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	enterprise.MountSessionConfirmations(v1.Group("/enterprise"), enterprise.SessionDeps{
 		Confirmations: params.EnterpriseConfirmations, Spaces: params.EnterpriseSpaces,
 	}, guards.Admin(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleEditor))
+	enterprise.MountSessionReviews(v1.Group("/enterprise"), enterprise.SessionDeps{
+		Candidates: params.EnterpriseCandidates, Spaces: params.EnterpriseSpaces,
+	}, guards.Admin(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleEditor))
 }

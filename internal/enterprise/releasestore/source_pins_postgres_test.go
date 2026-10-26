@@ -18,14 +18,24 @@ func activation(t *testing.T, store *Store, nonce string, refs ...string) releas
 	head, err := store.Head(context.Background(), 7, "space-1")
 	require.NoError(t, err)
 	payload := json.RawMessage(`{"value":1}`)
-	return release.ActivationWrite{
+	write := release.ActivationWrite{
 		TenantID: 7, SpaceID: "space-1", Subject: "svc-test", CandidateID: "candidate-" + nonce,
-		BundleDigest: fileSHA, DecisionID: "decision-" + nonce, DecisionDigest: fileSHA, Nonce: nonce,
+		DecisionID: "decision-" + nonce, DecisionDigest: fileSHA, Nonce: nonce,
 		Expected: head, Members: []release.Member{{
 			Kind: "claim", LogicalSlug: "claim", Payload: payload, MemberDigest: memberDigest(t, string(payload)),
 			EvidenceRefs: refs, AccessScope: "space",
 		}},
 	}
+	// Distinct fixture candidates have distinct compiler identities, like real bundles.
+	// Retry tests copy this write, keeping the digest while varying nonce/decision.
+	bundle, err := json.Marshal(struct {
+		Base     release.Head
+		Compiler string
+		Members  []release.Member
+	}{head, "fixture/" + nonce, write.Members})
+	require.NoError(t, err)
+	write.BundleDigest = digestOf(bundle)
+	return write
 }
 
 func retention(t *testing.T, db *gorm.DB, id string) string {
@@ -227,6 +237,12 @@ func TestPostgresNonceReplayAfterRetirementDoesNotRepinDeletedSource(t *testing.
 	require.Equal(t, first.ID, again.ID)
 	require.Equal(t, before, rowCounts(t, db))
 	require.Equal(t, "released", retention(t, db, "k-1"))
+	// A new decision/nonce still replays the retired release without repinning.
+	write.Nonce, write.DecisionID, write.DecisionDigest = "historical-new-nonce", "new-decision", "new-digest"
+	replay, err := store.Activate(ctx, write)
+	require.NoError(t, err)
+	require.Equal(t, again, replay)
+	require.Equal(t, before, rowCounts(t, db))
 }
 
 func TestPostgresSourcePinMigrationRoundTrip(t *testing.T) {
