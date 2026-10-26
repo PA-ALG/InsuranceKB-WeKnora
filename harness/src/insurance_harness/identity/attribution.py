@@ -26,7 +26,7 @@ from insurance_harness.identity.material_roles import load_material_roles, role_
 
 TERMS = "terms"  # the material role that prints the clause filing code and may create a product
 _SHA256 = r"^[0-9a-f]{64}$"
-_TRAILING_QUALIFIER = re.compile(r"\([^()]*\)$")  # after NFKC, as in 年金保险(分红型)
+_QUALIFIER = re.compile(r"\([^()]*\)")  # after NFKC, as in 年金保险(分红型) or 意外(A款)医疗保险
 
 # REPLACE and IGNORED only follow a person's choice (S5b-3c-1); attribute() never returns them.
 Outcome = Literal[
@@ -72,9 +72,12 @@ class AttributionPolicy(_Frozen):
     basis: str = Field(min_length=1)
     anchor_chars: int = Field(gt=0)
     clause_code_pattern: str = Field(min_length=1)
+    own_code_marker: str = Field(min_length=1)  # printed right after a terms' own code (S5b-5)
     title_brackets: tuple[str, str]
     title_end_markers: tuple[str, ...] = Field(min_length=1)
     max_title_chars: int = Field(gt=0)
+    title_prefix_pattern: str = Field(min_length=1)  # page numbers and labels before a title
+    guide_title_pattern: str = Field(min_length=1)  # the name in the reader guide, one group
     created_id_prefix: str = Field(min_length=1)
     created_id_hex: int = Field(ge=8, le=64)
     classifications: tuple[Classification, ...] = Field(min_length=1)
@@ -82,9 +85,18 @@ class AttributionPolicy(_Frozen):
     @model_validator(mode="after")
     def _consistent(self) -> "AttributionPolicy":
         try:
-            re.compile(self.clause_code_pattern)
+            patterns = [
+                re.compile(text)
+                for text in (
+                    self.clause_code_pattern,
+                    self.title_prefix_pattern,
+                    self.guide_title_pattern,
+                )
+            ]
         except re.error as error:
-            raise ValueError("invalid clause code pattern") from error
+            raise ValueError("invalid attribution pattern") from error
+        if patterns[2].groups != 1 or not self.title_prefix_pattern.startswith("^"):
+            raise ValueError("the guide pattern needs one group and the prefix an anchor")
         suffixes = [_fold(entry.suffix) for entry in self.classifications]
         if len(set(suffixes)) != len(suffixes):
             raise ValueError("duplicate classification suffix")
@@ -140,7 +152,13 @@ def load_attribution_policy() -> AttributionPolicy:
 
 
 def _fold(text: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFKC", text) if not c.isspace())
+    """NFKC without whitespace or private-use code points (font bullets such as U+F043 carry no
+    text, and extraction puts them in front of titles)."""
+    return "".join(
+        c
+        for c in unicodedata.normalize("NFKC", text)
+        if not c.isspace() and unicodedata.category(c) != "Co"
+    )
 
 
 def _title(text: str, policy: AttributionPolicy) -> str:
@@ -154,6 +172,32 @@ def _title(text: str, policy: AttributionPolicy) -> str:
         ends = [i for i in (text.find(_fold(mark)) for mark in policy.title_end_markers) if i >= 0]
         name = text[: min(ends)] if ends else ""
     return name if len(name) <= policy.max_title_chars else ""
+
+
+def _head_title(window: str, own_code: str | None, policy: AttributionPolicy) -> str:
+    """The title at the start, after page numbers, labels and the terms' own code line."""
+    text = re.sub(policy.title_prefix_pattern, "", window, count=1)
+    if own_code is not None and text.startswith(own_code):
+        text = text[len(own_code) :]
+        text = text.removeprefix(_fold(policy.own_code_marker))
+    return _title(text, policy)
+
+
+def _guide_title(head: str, policy: AttributionPolicy) -> str:
+    """The product the reader guide introduces ("阅读指引<name>产品提供…"), or "".
+
+    Only a fallback for terms whose start carries no title: text extraction may interleave the
+    verification line or drop part of the name there, so it never overrides the start title.
+    """
+    match = re.search(policy.guide_title_pattern, head.replace(_fold(policy.own_code_marker), ""))
+    name = match.group(1) if match else ""
+    return name if len(name) <= policy.max_title_chars else ""
+
+
+def _own_codes(head: str, policy: AttributionPolicy) -> set[str]:
+    """Codes printed with the verification line that follows a terms' own code (S5b-5)."""
+    marked = f"({policy.clause_code_pattern}){re.escape(_fold(policy.own_code_marker))}"
+    return {match.group(1) for match in re.finditer(marked, head)}
 
 
 def _named_inside(title: str, products: Sequence[RegisteredProduct]) -> list[RegisteredProduct]:
@@ -178,7 +222,7 @@ def _named_inside(title: str, products: Sequence[RegisteredProduct]) -> list[Reg
 
 def _pack(name: str, policy: AttributionPolicy) -> str | None:
     base = name
-    while (stripped := _TRAILING_QUALIFIER.sub("", base)) != base:
+    while (stripped := _QUALIFIER.sub("", base)) != base:
         base = stripped
     hits = [entry for entry in policy.classifications if base.endswith(_fold(entry.suffix))]
     return max(hits, key=lambda entry: len(_fold(entry.suffix))).schema_pack_id if hits else None
@@ -227,20 +271,26 @@ def attribute(
     elif owners and chosen.product_id not in owners:
         return decided("QUARANTINE", "anchor_conflict")
 
-    window = _fold(upload.head)[: policy.anchor_chars]
+    head = _fold(upload.head)
+    window = head[: policy.anchor_chars]
     if not window:
         if chosen is not None and owners:  # no text, so no code to contradict the file
             return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return decided("QUARANTINE", "text_unavailable")
     role = role or role_of(upload.file_name, upload.head)
+    # A terms' own code is the one printed with the verification line (S5b-5), wherever it sits
+    # in the first pages; older terms that open with their code keep the S5b-1 rule. Any other
+    # code only cites one (after a label, or in a brochure's body): it may confirm a registered
+    # product whose name the title carries, but never creates a product or a new version.
+    marked = _own_codes(head, policy)
     match = re.search(policy.clause_code_pattern, window)
-    code = match.group(0) if match else None
-    # Terms open with their own code and then the title. A code met later only cites one (after a
-    # label, or in a brochure's body): it may confirm a registered product whose name the title
-    # carries, but never creates a product or a new version, and the title stays at the start.
-    own_code = code if match and match.start() == 0 else None
-    title = _title(window[len(own_code) :] if own_code else window, policy)
+    own_code = next(iter(marked)) if len(marked) == 1 else None
+    if own_code is None and not marked and match and match.start() == 0:
+        own_code = match.group(0)  # S5b-1: older terms open with their own code
+    code = own_code or (match.group(0) if match else None)
     anchors = {"role": role, "clause_code": code}
+    if len(marked) > 1:
+        return decided("QUARANTINE", "anchor_conflict", **anchors)
 
     by_code = [
         p for p in products if code is not None and code in {_fold(c) for c in p.clause_codes}
@@ -253,6 +303,8 @@ def attribute(
         if owners:
             return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return _existing(chosen, "confirmed_by_person", decided, role, code, own_code)
+    # The start names the product; the reader guide only stands in when the start has no title.
+    title = _head_title(window, own_code, policy) or _guide_title(head, policy)
     named = [p for p in products if title and title in {_fold(n) for n in p.names}]
     named = named or _named_inside(title, products)
     # Both anchors must agree: a code whose product the title does not name is a conflict, also

@@ -59,6 +59,7 @@ class PublicationReport(BaseModel):
     routes: dict[str, Literal["machine", "human", "unchanged"]] = Field(default_factory=dict)
     failed: dict[str, str] = Field(default_factory=dict)
     samples_failed: dict[str, SampleFailure] = Field(default_factory=dict)
+    candidates: dict[str, str] = Field(default_factory=dict)  # human-routed product -> candidate
     stopped: str | None = None
     review_stopped: str | None = None
     compile_sent: int = 0
@@ -413,6 +414,9 @@ def _run_publication(
             route = _route(summary)
             _record(run_root, receipts, product, digest)
             report.routes[product] = route
+            candidate = summary.get("candidate_id")
+            if route == "human" and isinstance(candidate, str) and candidate:
+                report.candidates[product] = candidate  # what the review queue (RV5) shows
             samples = summary.get("samples")
             if route == "machine" and isinstance(samples, dict) and "stopped" in samples:
                 report.samples_failed[product] = SampleFailure(
