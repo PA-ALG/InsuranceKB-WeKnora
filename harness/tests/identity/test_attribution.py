@@ -92,7 +92,7 @@ def expect(result: Attribution, outcome: str, reason: str, product_id: str | Non
 
 def test_the_policy_loads_with_its_version_and_points_at_real_packs() -> None:
     policy = load_attribution_policy()
-    assert policy.version == "2026-10-25.1"
+    assert policy.version == "2026-10-26.4"
     catalog = json.loads(
         files("insurance_harness.catalog").joinpath("schema_packs.json").read_text(encoding="utf-8")
     )
@@ -104,7 +104,7 @@ def test_the_policy_loads_with_its_version_and_points_at_real_packs() -> None:
     for entry in policy.classifications:
         assert entry.classification in classes.get(entry.schema_pack_id, []), entry
     assert attribute(upload("1828", "brochure"), [registered("1828", "terms")]).policy_ref == (
-        "attribution-policy@2026-10-25.1"
+        "attribution-policy@2026-10-26.4"
     )
 
 
@@ -324,6 +324,8 @@ def test_a_label_before_the_code_does_not_make_a_new_version(label: str) -> None
     head = label + material("1828", "terms")["head"]
     registry = [registered("1828", "terms", "brochure")]
     result = attribute(upload("1828", "terms", sha256="8" * 64, head=head), registry)
+    # S5b-5: the start holds only the label and this extraction's reader guide carries the
+    # verification line, so no title is read and the cited code stays a conflict.
     expect(result, "QUARANTINE", "anchor_conflict")
     assert result.clause_code == CODE
     created = attribute(upload("1828", "terms", head=head), everything_but("1828"))

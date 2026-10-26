@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 import { get, post } from '@/utils/request'
+import { trimReviewReason } from './reviewReason'
 
 // Session routes of the enterprise platform. Bodies are `{success, data}`;
 // refusals carry a platform `code`, which callers branch on through EnterpriseError.
@@ -83,9 +84,10 @@ async function response<T>(send: () => Promise<unknown>): Promise<T> {
     const code = typeof failure.code === 'string' && failure.code ? failure.code : 'REQUEST_FAILED'
     throw new EnterpriseError(code, typeof failure.status === 'number' ? failure.status : undefined)
   }
-  const envelope = (body ?? {}) as { success?: unknown; data?: unknown; code?: unknown }
+  const envelope = (body ?? {}) as { success?: unknown; data?: unknown; code?: unknown; $httpStatus?: unknown }
   if (typeof body !== 'object' || envelope.success !== true) {
-    throw new EnterpriseError(typeof envelope.code === 'string' && envelope.code ? envelope.code : 'INVALID_RESPONSE')
+    throw new EnterpriseError(typeof envelope.code === 'string' && envelope.code ? envelope.code : 'INVALID_RESPONSE',
+      typeof envelope.$httpStatus === 'number' ? envelope.$httpStatus : undefined)
   }
   return envelope.data as T
 }
@@ -227,4 +229,36 @@ export async function answerConfirmation(spaceId: string, itemId: string, option
     { option_key: optionKey, note },
   ))
   return data.answer
+}
+
+// RV5a administrator-only session review routes; no candidate data is cached.
+export interface ReviewDecision {
+  decision_id: string; outcome: string; mode: string; reason: string; subject: string; created_at: string
+}
+export interface ReviewItem {
+  candidate_id: string; created_at: string; created_by: string; base_release_id: string
+  status: 'pending' | 'approved' | 'rejected' | 'released'
+  subjects: string[]; members: number; removals: number
+  decision: ReviewDecision | null; release_id: string | null
+}
+export interface ReviewDetail extends ReviewItem {
+  head_release_id: string | null; blocker: string
+  bundle_members: ReleaseMember[]; bundle_removals: string[]
+}
+export interface ReviewResult {
+  decision_id: string; status: 'released' | 'rejected' | 'approved'
+  release_id: string | null; epoch: number | null
+}
+const reviewsPath = (spaceId: string) => `${SPACES}/${encodeURIComponent(spaceId)}/view/candidates`
+export async function listReviews(spaceId: string, status: 'pending' | 'decided'): Promise<ReviewItem[]> {
+  const data = await read<{ items: ReviewItem[] }>(`${reviewsPath(spaceId)}?${new URLSearchParams({ status })}`)
+  return data.items
+}
+export function readReview(spaceId: string, candidateId: string): Promise<ReviewDetail> {
+  return read<ReviewDetail>(`${reviewsPath(spaceId)}/${encodeURIComponent(candidateId)}`)
+}
+export function decideReview(spaceId: string, candidateId: string, outcome: 'approve' | 'reject', reason: string): Promise<ReviewResult> {
+  return response<ReviewResult>(() => post(`${reviewsPath(spaceId)}/${encodeURIComponent(candidateId)}/decisions`, {
+    outcome, reason: trimReviewReason(reason),
+  }))
 }
