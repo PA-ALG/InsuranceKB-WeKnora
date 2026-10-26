@@ -44,7 +44,8 @@ describe('review session API', () => {
     const stale = decideReview('demo', 'cand-1', 'approve', 'ok')
     await expect(stale).rejects.toBeInstanceOf(EnterpriseError)
     await expect(stale).rejects.toMatchObject({ status: 409, code: 'NEEDS_REBASE' })
-    vi.mocked(post).mockResolvedValueOnce({ success: false, code: 'DECISION_INVALID', $httpStatus: 400 })
+    const refusal = { success: false, code: 'DECISION_INVALID', $httpStatus: 400 }
+    vi.mocked(post).mockResolvedValueOnce(refusal)
     await expect(decideReview('demo', 'cand-1', 'reject', 'x')).rejects.toMatchObject({ code: 'DECISION_INVALID' })
   })
 })
