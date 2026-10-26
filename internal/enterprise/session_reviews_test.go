@@ -137,7 +137,8 @@ func (w *reviewWorld) submit(t *testing.T, base string, members ...map[string]an
 	}
 	raw, err := json.Marshal(doc)
 	require.NoError(t, err)
-	c, err := w.releases.Receive(context.Background(), release.Principal{TenantID: 7, Subject: "svc-harness"}, "demo", raw)
+	harness := release.Principal{TenantID: 7, Subject: "svc-harness"}
+	c, err := w.releases.Receive(context.Background(), harness, "demo", raw)
 	require.NoError(t, err)
 	return c
 }
@@ -328,7 +329,7 @@ func TestRejectingRecordsOnlyADecisionAndADecidedCandidateStaysDecided(t *testin
 	require.Equal(t, "CANDIDATE_DECIDED", detail["blocker"])
 }
 
-func TestAStaleCandidateIsBlockedAndKeepsItsApproval(t *testing.T) {
+func TestAStaleCandidateIsBlockedAndRecordsNoApproval(t *testing.T) {
 	w := newReviewWorld(t)
 	stale := w.submit(t, w.first.ID, claimMember(t, "P", "waiting", "365日"))
 	require.Equal(t, http.StatusCreated, w.decide(w.admin(), w.waiting.ID, decision("approve", "ok")).Code)
@@ -336,21 +337,21 @@ func TestAStaleCandidateIsBlockedAndKeepsItsApproval(t *testing.T) {
 	detail := dataOf(t, call(w.admin(), http.MethodGet, reviewsPath+"/"+stale.ID, nil))
 	require.Equal(t, "NEEDS_REBASE", detail["blocker"], "the Head changed the member this candidate changes")
 
+	// The approval is prechecked against the current Head (review R2): a candidate that cannot
+	// go live records no approval and stays pending, so it can still be rejected.
 	before := len(w.platform.decisions)
 	res := w.decide(w.admin(), stale.ID, decision("approve", "ok"))
 	require.Equal(t, http.StatusConflict, res.Code, res.Body.String())
 	require.Equal(t, release.ErrorNeedsRebase, code(t, res.Body.Bytes()))
-	require.Len(t, w.platform.decisions, before+1, "the approval is kept for a later retry")
-	var status string
-	for _, item := range w.items(t, "decided") {
-		if item["candidate_id"] == stale.ID {
-			status = item["status"].(string)
-		}
+	require.Len(t, w.platform.decisions, before, "a failed precheck records nothing")
+	var pending []any
+	for _, item := range w.items(t, "pending") {
+		pending = append(pending, item["candidate_id"])
 	}
-	require.Equal(t, "approved", status)
-	refused := w.decide(w.admin(), stale.ID, decision("reject", "no"))
-	require.Equal(t, http.StatusConflict, refused.Code)
-	require.Equal(t, "CANDIDATE_DECIDED", code(t, refused.Body.Bytes()))
+	require.Contains(t, pending, stale.ID)
+	rejected := w.decide(w.admin(), stale.ID, decision("reject", "内容已过期"))
+	require.Equal(t, http.StatusCreated, rejected.Code, rejected.Body.String())
+	require.Equal(t, "rejected", dataOf(t, rejected)["status"])
 
 	// Unrelated to the Head's change, the other candidate still goes live.
 	require.Equal(t, http.StatusCreated, w.decide(w.admin(), w.grace.ID, decision("approve", "ok")).Code)

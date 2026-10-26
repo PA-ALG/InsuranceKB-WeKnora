@@ -132,3 +132,36 @@ func TestPostgresReviewQueueKeepsTenantsAndSpacesApart(t *testing.T) {
 	require.Empty(t, queueOf(t, store, 8, "space-1", "pending", 100), "another tenant sees nothing")
 	require.Empty(t, queueOf(t, store, 7, "space-unconfigured", "pending", 100))
 }
+
+// A candidate becomes at most one release (review R1): a second approval of the same candidate,
+// here a no-op whose members already equal the Head, returns the release it already produced.
+func TestPostgresACandidateBecomesAtMostOneRelease(t *testing.T) {
+	store := New(openSchema(t), testSpaces(t))
+	s := service(store)
+	ctx := context.Background()
+	seed := submitCandidate(t, s, "space-1", "a")
+	first, err := s.Activate(ctx, principal, "space-1", seed.ID, decideCandidate(t, s, seed, humanApprove).ID)
+	require.NoError(t, err)
+
+	noop, err := s.Receive(ctx, principal, "space-1", rawBundle(t, first.ID, "a", `{"v":1}`))
+	require.NoError(t, err)
+	one := decideCandidate(t, s, noop, humanApprove)
+	two := decideCandidate(t, s, noop, release.DecisionInput{Outcome: "approve", Mode: "human", Reason: "again"})
+	require.NotEqual(t, one.ID, two.ID)
+	r1, err := s.Activate(ctx, principal, "space-1", noop.ID, one.ID)
+	require.NoError(t, err)
+	r2, err := s.Activate(ctx, principal, "space-1", noop.ID, two.ID)
+	require.NoError(t, err)
+	require.Equal(t, r1.ID, r2.ID, "the second approval returns the release the candidate already produced")
+	again, err := s.Activate(ctx, principal, "space-1", seed.ID, decideCandidate(t, s, seed, humanApprove).ID)
+	require.NoError(t, err, "also once the Head has moved past the candidate's own release")
+	require.Equal(t, first.ID, again.ID)
+
+	var count int64
+	require.NoError(t, store.db.Raw(`SELECT count(*) FROM wiki_releases WHERE tenant_id = 7 AND space_id = 'space-1'
+ AND candidate_digest = ?`, noop.BundleDigest).Scan(&count).Error)
+	require.EqualValues(t, 1, count)
+	head, err := store.Head(ctx, 7, "space-1")
+	require.NoError(t, err)
+	require.Equal(t, r1.ID, head.ReleaseID)
+}
