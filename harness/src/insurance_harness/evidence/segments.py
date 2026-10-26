@@ -369,6 +369,13 @@ class SegmentedSource:
             found = self._copies[segment_id] = frozenset(matches)
         return found
 
+    def content(self, segment_id: str) -> str:
+        """The text copies are compared on: no whitespace or width differences, and no leading
+        clause number or list marker (S4e). Scoring rules fold it further (S12a)."""
+        if segment_id not in self._position:
+            raise ValueError(f"unknown segment id {segment_id}")
+        return self._content_of(self.segments[self._position[segment_id]])
+
     def _content_of(self, segment: Segment) -> str:
         content = self._content.get(segment.id)
         if content is None:

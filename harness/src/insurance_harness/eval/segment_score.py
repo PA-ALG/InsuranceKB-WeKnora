@@ -27,6 +27,12 @@ from insurance_harness.eval.product_sources import (
     source_directory,
     trusted_source_pages,
 )
+from insurance_harness.eval.segment_rules import (
+    RuledSource,
+    ScoringRules,
+    load_scoring_rules,
+    neutral_segments,
+)
 from insurance_harness.evidence.quote_verification import Digest, NonBlank, VerifiedQuote
 from insurance_harness.evidence.segments import SegmentedSource, same_text
 
@@ -108,13 +114,20 @@ class SelectionReport:
 
 
 def score_selection(
-    source: SegmentedSource, golden: GoldenV2, predicted: Sequence[FieldResult]
+    source: SegmentedSource,
+    golden: GoldenV2,
+    predicted: Sequence[FieldResult],
+    *,
+    rules: ScoringRules | None = None,
 ) -> SelectionReport:
     """Per present Golden field: recall over Golden segments and precision over selected ones.
 
     A Golden segment counts as found when it or one of its copies is selected; a selected
-    segment counts as right when it or one of its copies is in Golden.
+    segment counts as right when it or one of its copies is in Golden. Without rules this is the
+    S4e scoring; with rules (S12a) copies fold further and neutral segments leave both sides.
     """
+    ruled = RuledSource(source, rules) if rules is not None else None
+    copies = ruled.copies if ruled is not None else source.copies
     by_key: dict[str, FieldResult] = {}
     for result in predicted:
         if by_key.setdefault(result.field_key, result) is not result:
@@ -151,12 +164,16 @@ def score_selection(
                     ids = segments(quote, field.field_key)
                     unmapped_predicted += not ids
                     chosen |= ids
-        found = {sid for sid in gold if sid in chosen or source.copies(sid) & chosen}
-        right = {sid for sid in chosen if sid in gold or source.copies(sid) & gold}
+        neutral = set()
+        if ruled is not None:
+            neutral = neutral_segments(ruled, field.field_key, gold, ruled.rules)
+        required, counted = gold - neutral, chosen - neutral
+        found = {sid for sid in required if sid in chosen or copies(sid) & chosen}
+        right = {sid for sid in counted if sid in gold or copies(sid) & gold}
         copied_gold += len(found - chosen)
         copied_chosen += len(right - gold)
-        recall = len(found) / len(gold) if gold else None
-        precision = len(right) / len(chosen) if gold and chosen else None
+        recall = len(found) / len(required) if required else None
+        precision = len(right) / len(counted) if gold and counted else None  # own denominator
         scored.append(FieldSelection(field.field_key, field.state, state, recall, precision))
 
     return _summary(
@@ -238,14 +255,15 @@ def _summary(
     )
 
 
-def _line(label: str, report: SelectionReport) -> str:
+def _line(label: str, report: SelectionReport, tag: str = "legacy") -> str:
     def mean(value: float | None) -> str:
         return "-" if value is None else f"{value:.3f}"
 
     scored = sum(1 for f in report.fields if f.recall is not None)
     agree, total = report.state_agreement
     return (
-        f"{label}: recall {mean(report.recall_mean)} precision {mean(report.precision_mean)} "
+        f"{label}: [{tag}] recall {mean(report.recall_mean)} "
+        f"precision {mean(report.precision_mean)} "
         f"recall>=0.8 {report.complete_at_08}/{scored} states {agree}/{total} "
         f"unmapped golden {report.unmapped_golden_quotes} predicted "
         f"{report.unmapped_predicted_quotes} copy credits {report.copy_credits[0]}/"
@@ -258,7 +276,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[4])
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--products", nargs="+", required=True)
+    parser.add_argument("--legacy", action="store_true", help="score without the S12a rules")
     args = parser.parse_args(argv)
+    rules = None if args.legacy else load_scoring_rules()
+    tag = "legacy" if rules is None else f"rules {rules.version}"
     reports = []
     for product in args.products:
         check_product_id(product)
@@ -268,9 +289,9 @@ def main(argv: list[str] | None = None) -> int:
         pages = trusted_source_pages(source_directory(args.repo, product))
         source = SegmentedSource(pages.evidence, table_headers=pages.table_headers)
         golden = load_golden_v2(args.repo / GOLDEN_DIR / f"{product}.json")
-        reports.append(score_selection(source, golden, output.fields))
-        print(_line(product, reports[-1]))
-    print(_line("pooled", pool(reports)))
+        reports.append(score_selection(source, golden, output.fields, rules=rules))
+        print(_line(product, reports[-1], tag))
+    print(_line("pooled", pool(reports), tag))
     return 0
 
 
