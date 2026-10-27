@@ -231,23 +231,29 @@ export async function answerConfirmation(spaceId: string, itemId: string, option
   return data.answer
 }
 
-// RV5a administrator-only session review routes; no candidate data is cached.
+// Administrator-only session review routes; no candidate data is cached.
 export interface ReviewDecision {
   decision_id: string; outcome: string; mode: string; reason: string; subject: string; created_at: string
 }
 export interface ReviewItem {
   candidate_id: string; created_at: string; created_by: string; base_release_id: string
   status: 'pending' | 'approved' | 'rejected' | 'released'
-  subjects: string[]; members: number; removals: number
+  subjects: string[]; members: number; removals: number; point_count: number; pending_points: number
   decision: ReviewDecision | null; release_id: string | null
 }
 export interface ReviewDetail extends ReviewItem {
   head_release_id: string | null; blocker: string
-  bundle_members: ReleaseMember[]; bundle_removals: string[]
+  bundle_members: ReleaseMember[]; bundle_removals: string[]; points: ReviewPoint[]
 }
-export interface ReviewResult {
-  decision_id: string; status: 'released' | 'rejected' | 'approved'
+export interface ReviewPoint {
+  slug: string; kind: 'claim' | 'member' | 'removal'; status: ReviewItem['status']
+  decision: { outcome: string; reason: string; subject: string; created_at: string } | null
+  release_id: string | null; blocker: string
+}
+export interface PointResult {
+  status: ReviewItem['status']
   release_id: string | null; epoch: number | null
+  points: { slug: string; status: 'released' | 'rejected' }[]
 }
 const reviewsPath = (spaceId: string) => `${SPACES}/${encodeURIComponent(spaceId)}/view/candidates`
 export async function listReviews(spaceId: string, status: 'pending' | 'decided'): Promise<ReviewItem[]> {
@@ -257,8 +263,8 @@ export async function listReviews(spaceId: string, status: 'pending' | 'decided'
 export function readReview(spaceId: string, candidateId: string): Promise<ReviewDetail> {
   return read<ReviewDetail>(`${reviewsPath(spaceId)}/${encodeURIComponent(candidateId)}`)
 }
-export function decideReview(spaceId: string, candidateId: string, outcome: 'approve' | 'reject', reason: string): Promise<ReviewResult> {
-  return response<ReviewResult>(() => post(`${reviewsPath(spaceId)}/${encodeURIComponent(candidateId)}/decisions`, {
-    outcome, reason: trimReviewReason(reason),
+export function decidePoints(spaceId: string, candidateId: string, slugs: string[], outcome: 'approve' | 'reject', reason: string): Promise<PointResult> {
+  return response<PointResult>(() => post(`${reviewsPath(spaceId)}/${encodeURIComponent(candidateId)}/points/decisions`, {
+    slugs, outcome, reason: trimReviewReason(reason),
   }))
 }

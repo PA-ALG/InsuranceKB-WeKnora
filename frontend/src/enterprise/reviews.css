@@ -19,3 +19,13 @@
 .ek-review-result { font-weight: 600; padding: 12px 0; }
 .ek-review-page button:focus-visible, .ek-review-page textarea:focus-visible, .ek-review-page [tabindex="-1"]:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 3px; }
 @media (max-width: 640px) { .ek-review-card { padding: 16px; } }
+.ek-review-reason { margin: 16px 0; }
+.ek-review-reason label { display: block; margin-bottom: 8px; }
+.ek-point-actions > .ek-link-button { margin: 8px 0 12px; }
+.ek-unknown-group { margin: 24px 0; padding: 20px; border: 1px solid var(--td-component-border); border-radius: 8px; background: var(--td-bg-color-secondarycontainer); }
+.ek-unknown-group > h3 { margin: 0 0 12px; }
+.ek-review-card summary { padding: 12px 0; cursor: pointer; overflow-wrap: anywhere; }
+.ek-review-card summary:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 3px; }
+.ek-decided-points { margin: 24px 0; border-top: 1px solid var(--td-component-border); }
+.ek-review-batch { margin-top: 24px; }
+.ek-review-card__heading, .ek-review-change h3, .ek-review-result { overflow-wrap: anywhere; }
