@@ -3,7 +3,8 @@
 The value step must write a non-empty value, so a field selected as present whose segments do
 not state it comes back as "材料未提及……". Such a value is no fact: the compiler records the
 field as unknown. The rule errs towards keeping a value: one sentence with material content, or
-a sentence without a material subject, keeps the whole value present.
+a sentence without a material subject, keeps the whole value present. A leading "xxx：" is never
+taken off, because what precedes the colon may itself be a fact (review R1).
 """
 
 import re
@@ -27,9 +28,11 @@ Phrases = tuple[NonBlank, ...]
 
 # Sentence breaks after NFKC, which turns full-width ；：， into ; : ,.
 _SENTENCES = re.compile(r"[。;\n]")
-_ITEM_NUMBER = re.compile(r"^(?:\d+(?:\.\d+)*[.、)]|\(\d+\))\s*")
-# Text after the verb is what was not stated; a comma or colon starts something else.
-_CLAUSE_MARKS = (",", ":")
+# A whole item number such as 2.1 ends in a delimiter or a space; a number glued to text is not one.
+_ITEM_NUMBER = re.compile(r"^(?:(?>\d+(?:\.\d+)*)(?:[.、)]|\s)|\(\d+\))\s*")
+# Text after the verb is what was not stated; a comma or colon starts something else, and a
+# digit is a value of some rule.
+_MORE_CONTENT = re.compile(r"[,:\d]")
 
 
 class NonMentionPolicyError(ValueError):
@@ -47,14 +50,20 @@ class NonMentionPolicy(BaseModel):
     connectors: Phrases = Field(min_length=1)
     negations: Phrases = Field(min_length=1)
     verbs: Phrases = Field(min_length=1)
-    continuations: Phrases = Field(min_length=1)
-    label_max_chars: int = Field(ge=1, le=40)
+    relative_particles: Phrases = Field(min_length=1)
+    content_markers: Phrases = Field(min_length=1)
     _sentence: re.Pattern[str] = PrivateAttr()
-    _label: re.Pattern[str] = PrivateAttr()
 
     @model_validator(mode="after")
     def _compile(self) -> "NonMentionPolicy":
-        groups = (self.subjects, self.connectors, self.negations, self.verbs, self.continuations)
+        groups = (
+            self.subjects,
+            self.connectors,
+            self.negations,
+            self.verbs,
+            self.relative_particles,
+            self.content_markers,
+        )
         for phrases in groups:
             if len(set(phrases)) != len(phrases):
                 raise ValueError("duplicate phrase")
@@ -67,7 +76,6 @@ class NonMentionPolicy(BaseModel):
             f"(?:{_any(self.negations)})(?:{_any(self.verbs)})(?P<rest>.*)",
             re.DOTALL,
         )
-        self._label = re.compile(f"^[^,:]{{1,{self.label_max_chars}}}:\\s*")
         return self
 
     def only_non_mention(self, value: str) -> bool:
@@ -77,12 +85,14 @@ class NonMentionPolicy(BaseModel):
         return bool(sentences) and all(self._non_mention(s) for s in sentences)
 
     def _non_mention(self, sentence: str) -> bool:
-        sentence = self._label.sub("", _ITEM_NUMBER.sub("", sentence), count=1).strip()
-        match = self._sentence.fullmatch(sentence)
+        match = self._sentence.fullmatch(_ITEM_NUMBER.sub("", sentence, count=1).strip())
         if match is None:
             return False
         rest = match.group("rest")
-        return not any(mark in rest for mark in (*_CLAUSE_MARKS, *self.continuations))
+        # "条款未约定的事项按……执行": the negated verb qualifies a noun that a rule follows.
+        if rest.startswith(self.relative_particles) or _MORE_CONTENT.search(rest):
+            return False
+        return not any(marker in rest for marker in self.content_markers)
 
 
 def _any(phrases: Phrases) -> str:
@@ -103,5 +113,5 @@ def load_non_mention_policy() -> NonMentionPolicy:
         return parse_non_mention_policy(
             files(__package__).joinpath("non_mention_policy.json").read_text(encoding="utf-8")
         )
-    except OSError as error:
+    except (OSError, UnicodeDecodeError) as error:
         raise NonMentionPolicyError() from error
