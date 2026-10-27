@@ -36,8 +36,13 @@ func (s *Service) SourceEntities(ctx context.Context, tenantID uint64, spaceID, 
 ```
 
 - 位置：`internal/enterprise/knowledge`；
-- 认哪些成员：Claim 按 `subject_ref`，wiki 页面按 `entity_refs`；
-- 显示名取实体的第一个名称，与字段标题中的名称一致。
+- 认哪些成员：
+  - Claim 按 `subject_ref`；
+  - wiki 页面按它的**全部** `entity_refs`，只算发布版本中存在的实体，不只算页面 slug 里的那一个。这只影响来源对应，页面搜索的单产品过滤规则不变；
+- 显示名取实体的第一个名称，与字段标题中的名称一致；
+- 先按导航顺序排列，再按**显示名**去重：两个实体同名时，名称只出现一次。
+
+> 2026-10-27 修订（#371 审核 R2、R5）：补上页面的全部 `entity_refs`，以及按显示名去重。
 
 ### 2.2 本轮的标注表
 
@@ -54,17 +59,27 @@ func (s *Service) SourceEntities(ctx context.Context, tenantID uint64, spaceID, 
 
 `RawEntities` 非 nil 时，下面三处都要标注。名称用"、"连接；没有名称时写"所属产品未识别"。
 
+**外部元数据不可信**：原生检索会把文档自带的 metadata 带进结果，其中可能已经有 `entity_names`，值可能是错的名字或空串。标注只以本轮的标注表为准，不读取、不信任结果自带的 `entity_names`。
+
 1. **`Turn.Label`**（快问快答与检索管线）：
-   - 原文结果的 `Metadata["entity_names"]` 设为名称串，未识别时为空串；
-   - `KnowledgeTitle` 改为"名称串 · 原标题"或"所属产品未识别 · 原标题"；
-   - **幂等**：同一个结果指针可能出现在 SearchResult、RerankResult、MergeResult 三个列表中，管线也会跑两遍；已有 `entity_names` 的结果不再加前缀。
+   - **元数据**：每一遍都按本轮标注表重写原文结果的 `Metadata["entity_names"]`，即名称串，未识别时为空串。外部预置的值一律替换，包括空串。未配置时（`RawEntities` 为 nil），删除外部带来的 `entity_names`。
+   - **标题**：`KnowledgeTitle` 设为"名称串 · 原标题"或"所属产品未识别 · 原标题"。
+   - **幂等靠本轮自己的记录**：
+     - 同一个结果可能出现在 SearchResult、RerankResult、MergeResult 三个列表中，管线也会跑两遍；
+     - 检索管线会复制结果，所以不能靠指针判断，更不能靠元数据键判断；
+     - 做法：本轮第一次见到某个原文结果（按材料 ID 加片段 ID 识别）时，记下它当时的标题；之后每一遍都用记下的原标题重新计算，所以前缀只出现一次；
+     - 这份记录随本轮的 `Turn` 一起存在（由解析器在填写标注表时建立），不进入结果本身。
 2. **`WrapTool`**（D 方式 Agent 的原生检索工具）：
    - 保留下来的原文行，`metadata.entity_names` 与 `knowledge_title` 按同样规则改写；
+   - 每次执行都从原生行的标题重新计算；
+   - 外部的 `entity_names` 同样被替换，未配置时删除；
    - 重新渲染的输出带上这些属性。
-3. **`AnswerPassage`**：原文段落的第一行改为：
+3. **`AnswerPassage`**：原文段落第一行的产品名，**取自本轮标注表**（按结果的材料 ID 查），不读结果的元数据：
    - 有名称时："原文检索（未经编译审核）｜所属产品：名称串"；
    - 没有名称时："原文检索（未经编译审核）｜所属产品未识别"；
-   - 没有 `entity_names` 键（即未配置）时保持原样。
+   - 本轮未配置，或结果不是本轮的原文材料时，保持原样："原文检索（未经编译审核）"。
+
+> 2026-10-27 修订（#371 审核 R1，Owner 裁定）：原文本用"已有 `entity_names` 键就不再加前缀"判断幂等，相当于信任了外部元数据，已删除。
 
 ## 3. 修复 2：搜索结果写明范围
 
@@ -76,9 +91,12 @@ func (s *Service) SourceEntities(ctx context.Context, tenantID uint64, spaceID, 
      - 实现方同步修改 `service_test.go` 中的调用。
 2. **范围说明**：查询至少有一个词时，结果的 notes 第一条是范围说明（冻结的模板）：
    - **字段搜索**：`检索范围：{范围}已发布字段中明确存在的值，按字面匹配；命中 {total} 条，显示 {shown} 条。没有命中或没有显示的，不代表材料没有；判断某产品有没有某项，用 knowledge_get_fields 读取该产品。`
-     - `{范围}`：限定产品时为"该产品显示名的"，否则为空；
+     - `{范围}`：限定产品时，为按 `EntityFields` 规则（归一化 ID）匹配到的产品显示名加"的"；不限定时为空；
      - `{shown}`：本次返回的字段数。
    - **页面搜索**：`检索范围：{范围}延伸阅读页面，每个词都须字面出现；命中 {total} 页，显示 {shown} 页。没有命中不代表材料没有。`
+     - 页面按产品 ID **精确**过滤，规则不变。`{范围}` 必须如实对应这个过滤：请求的 ID 与某个产品 ID 完全相同时，用该产品显示名加"的"；否则用请求的 ID 本身加"的"（如"b的"）。不能用归一化后匹配到的另一个产品的名字。
+
+> 2026-10-27 修订（#371 审核 R3）：页面范围说明与页面的精确 ID 过滤保持一致。
    - **送达方式**：notes 已有的渲染路径会把说明送到模型。有结果时写在第一行的 `knowledge_metadata` 里，没有结果时写在输出文本里。所以命中为 0 时，模型也能看到这条说明。查询为空时行为不变。
 3. 页面搜索的匹配规则不变。按产品限定检索属于第 4 项，要先做消融。
 
@@ -155,6 +173,12 @@ func (s *Service) SourceEntities(ctx context.Context, tenantID uint64, spaceID, 
    - `chatsource/answer_context_test.go`：工具文本不再保留英文状态，改为断言 `FieldText` 用中文；`answerFieldText` 被删除；
    - `knowledge/tools_test.go`：渲染结果从 `absent_explicitly` 改为"材料明确没有"。
    - `knowledge/acceptance_test.go`（Q1b）：`SearchFields` 的调用补上空的 `entityID` 参数，只改签名，不改断言。
+4. **#371 审核后补充的 RED**（2026-10-27）：
+   - **R1**：外部 `entity_names` 为错的名字或空串时，管线跑两遍、三个列表共用同一结果，元数据、标题与 `AnswerPassage` 都以本轮标注为准，前缀只出现一次；
+   - **R2**：页面的全部 `entity_refs` 都算来源；
+   - **R3**：页面按归一化后才能对上的 ID（如 `b`）筛选时，说明写请求的 ID；
+   - **R5**：同名实体只出现一次。
+   - 另有一个只调格式的提交，修正 RED 文件的 lint（gofumpt、行长、未使用的赋值），断言不变。
 
 **门禁**：
 - `go build ./...`；
