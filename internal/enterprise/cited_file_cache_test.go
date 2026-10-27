@@ -1,11 +1,12 @@
 package enterprise_test
 
 // Issue #375 acceptance (protected, written by Claude): a cited original file is revalidated on
-// every request. Authorization and the "this release cites it" check come first; a matching
-// If-None-Match then answers 304 without opening the file. Nothing lets the browser reuse the
-// file without asking the server (ETag + private, no-cache).
+// every request. Authorization, the "this release cites it" check and (R1) the same live source
+// check come first; a matching If-None-Match then answers 304 without reading the file. Nothing
+// lets the browser reuse the file without asking the server (ETag + private, no-cache).
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -57,7 +58,9 @@ func TestAMatchingValidatorAnswers304WithoutOpeningTheFile(t *testing.T) {
 			require.Equal(t, http.StatusNotModified, w.Code, w.Body.String())
 			require.Empty(t, w.Body.Bytes())
 			requireRevalidatedEveryTime(t, w)
-			require.Empty(t, world.opens, "a 304 neither opens, reads nor hashes the file")
+			// R1: the 304 passes the same live source check (one open), but never reads the file.
+			require.Equal(t, []source.Scope{{TenantID: 7, SpaceID: "demo"}}, world.opens)
+			require.Equal(t, len(pdfBytes), world.files["k-1"].(*bytes.Reader).Len(), "a 304 never reads or hashes the file")
 		})
 	}
 }
@@ -101,11 +104,11 @@ func TestTheSessionFileRouteFollowsTheSameRule(t *testing.T) {
 	requireRevalidatedEveryTime(t, w)
 	w = conditionalRead(r, path, `"`+pdfSHA+`"`)
 	require.Equal(t, http.StatusNotModified, w.Code, w.Body.String())
-	require.Equal(t, []source.Scope{{TenantID: 7, SpaceID: "demo"}}, world.opens, "only the full read opened it")
+	require.Len(t, world.opens, 2, "the 304 runs the same live source check as the full read")
 
 	// k-9 is cited only by a member outside the Space scope: a validator cannot reveal it.
 	w = conditionalRead(r, viewPath+"/release-1/sources/k-9/attempts/1/file", "*")
 	require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 	require.Empty(t, w.Header().Get("ETag"))
-	require.Len(t, world.opens, 1)
+	require.Len(t, world.opens, 2)
 }
