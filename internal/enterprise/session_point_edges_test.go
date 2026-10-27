@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/stretchr/testify/require"
@@ -47,11 +46,12 @@ func TestPointApprovalPreservesUnchangedAndUnselectedHeadMembers(t *testing.T) {
 
 type pointReadCounter struct {
 	*pointPlatform
-	heads        int
-	releasesRead map[string]int
-	membersRead  map[string]int
-	bundlesRead  map[string]int
-	membersError error
+	heads         int
+	releasesRead  map[string]int
+	membersRead   map[string]int
+	bundlesRead   map[string]int
+	membersError  error
+	releaseErrors map[string]error
 }
 
 func (p *pointReadCounter) MembersOf(ctx context.Context, tenant uint64, space, id string) (map[string]string, error) {
@@ -80,33 +80,37 @@ func (p *pointReadCounter) Head(ctx context.Context, tenant uint64, space string
 
 func (p *pointReadCounter) ReleaseByID(ctx context.Context, tenant uint64, space, id string) (release.Release, error) {
 	p.releasesRead[id]++
+	if err := p.releaseErrors[id]; err != nil {
+		return release.Release{}, err
+	}
 	return p.pointPlatform.ReleaseByID(ctx, tenant, space, id)
 }
 
-func TestPointReadCachesVersionsAndLatestReleaseUsesEpoch(t *testing.T) {
+func TestPointReadCachesVersionsAndLatestReleaseUsesDecisionOrder(t *testing.T) {
 	w := newPointWorld(t)
 	for _, slug := range []string{"Q/waiting", "Q/grace"} {
 		res := w.decidePoints(w.admin(), w.cand.ID, pointsBody("approve", "ok", slug))
 		require.Equal(t, http.StatusCreated, res.Code, res.Body.String())
 	}
-	// Audit clocks can tie or skew; publication order is the immutable release epoch.
+	// Equal decision timestamps use ID, independent of release contents/epoch.
 	older := w.points.points[pointKey(w.cand.ID, "Q/waiting")]
-	older.CreatedAt = older.CreatedAt.Add(24 * time.Hour)
+	newer := w.points.points[pointKey(w.cand.ID, "Q/grace")]
+	older.CreatedAt, older.ID = newer.CreatedAt, "point-z"
+	newer.ID = "point-a"
 	w.points.points[pointKey(w.cand.ID, "Q/waiting")] = older
+	w.points.points[pointKey(w.cand.ID, "Q/grace")] = newer
 	counter := &pointReadCounter{pointPlatform: w.points, releasesRead: map[string]int{}}
 	w.releases = release.NewService(counter, nil, nil, release.WithPublisher(counter))
 	detail := w.detail(t, w.cand.ID)
-	require.Equal(t, w.points.head.ReleaseID, detail["release_id"])
+	require.Equal(t, older.ReleaseID, detail["release_id"])
 	require.Equal(t, 1, counter.heads)
-	for id, count := range counter.releasesRead {
-		require.Equal(t, 1, count, id)
-	}
+	require.Equal(t, map[string]int{w.points.head.ReleaseID: 1}, counter.releasesRead)
 	counter.releasesRead = map[string]int{}
 	counter.membersRead = map[string]int{}
 	item := w.listed(t, "pending", w.cand.ID)
-	require.Equal(t, w.points.head.ReleaseID, item["release_id"])
+	require.Equal(t, older.ReleaseID, item["release_id"])
 	require.Equal(t, 1, counter.membersRead[w.first.ID], "one shared base digest read per list")
-	require.Zero(t, counter.releasesRead[w.first.ID], "base payload is not needed")
+	require.Empty(t, counter.releasesRead, "neither base nor point version payload is needed")
 }
 
 func TestPointQueueIncludesOldCandidateDecidedAfterTheHundredNewest(t *testing.T) {

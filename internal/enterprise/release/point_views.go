@@ -26,12 +26,11 @@ type ReviewPoint struct {
 }
 
 type reviewPoints struct {
-	latestRelease string
-	base          map[string]string
-	kinds         map[string]string
-	changed       map[string]Member
-	accompanying  []Member
-	decisions     map[string]PointDecision
+	base         map[string]string
+	kinds        map[string]string
+	changed      map[string]Member
+	accompanying []Member
+	decisions    map[string]PointDecision
 }
 
 type pointReads struct {
@@ -118,20 +117,6 @@ func (r *pointReads) load(ctx context.Context, e QueueEntry, b Bundle) (*reviewP
 	if err := out.setDecisions(e.Candidate, decisions); err != nil {
 		return nil, err
 	}
-	var latest Release
-	for _, d := range decisions {
-		if d.ReleaseID == "" {
-			continue
-		}
-		published, err := r.release(ctx, d.ReleaseID)
-		if err != nil {
-			return nil, err
-		}
-		if published.Epoch > latest.Epoch {
-			latest = published
-		}
-	}
-	out.latestRelease = latest.ID
 	return out, nil
 }
 
@@ -222,6 +207,9 @@ func (p *reviewPoints) state(e QueueEntry) (string, int, string, time.Time) {
 		return e.Candidate.Status, pending, e.ReleaseID, last
 	}
 	pending := len(p.kinds) - len(p.decisions)
+	// Approvals are timestamped after the Head lock and committed with their
+	// release. Decision order identifies the latest publication without reading
+	// historical member payloads; equal timestamps use the decision ID.
 	latest := PointDecision{}
 	for _, d := range p.decisions {
 		if d.CreatedAt.After(last) {
@@ -239,11 +227,7 @@ func (p *reviewPoints) state(e QueueEntry) (string, int, string, time.Time) {
 			status = "released"
 		}
 	}
-	id := latest.ReleaseID
-	if p.latestRelease != "" {
-		id = p.latestRelease
-	}
-	return status, pending, id, last
+	return status, pending, latest.ReleaseID, last
 }
 
 func (p *reviewPoints) summary(e QueueEntry, b Bundle) (ReviewSummary, time.Time, error) {
