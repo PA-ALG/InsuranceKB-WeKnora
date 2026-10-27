@@ -44,10 +44,32 @@ func materialRef(raw []byte) string { return "source:v1:k-raw-1:2:" + sha(raw) }
 
 // rawFiles stands in for the Space's RAW KB and records every file it opens.
 type rawFiles struct {
-	mu    sync.Mutex
-	files map[string][]byte
-	err   error
-	opens []string
+	mu     sync.Mutex
+	files  map[string][]byte
+	err    error
+	opens  []string
+	reads  int
+	closes int
+}
+
+// countedFile records reads and closes, so a revalidation can prove it read no bytes.
+type countedFile struct {
+	r     io.Reader
+	files *rawFiles
+}
+
+func (c *countedFile) Read(p []byte) (int, error) {
+	c.files.mu.Lock()
+	c.files.reads++
+	c.files.mu.Unlock()
+	return c.r.Read(p)
+}
+
+func (c *countedFile) Close() error {
+	c.files.mu.Lock()
+	c.files.closes++
+	c.files.mu.Unlock()
+	return nil
 }
 
 func (f *rawFiles) open(_ context.Context, scope source.Scope, knowledgeID string) (io.ReadCloser, string, error) {
@@ -61,7 +83,7 @@ func (f *rawFiles) open(_ context.Context, scope source.Scope, knowledgeID strin
 	if !ok {
 		return nil, "", source.ErrNotFound
 	}
-	return io.NopCloser(bytes.NewReader(raw)), materialName, nil
+	return &countedFile{r: bytes.NewReader(raw), files: f}, materialName, nil
 }
 
 type fileWorld struct {
@@ -211,17 +233,49 @@ func TestAnAdministratorOpensTheExactOriginalFile(t *testing.T) {
 	require.Equal(t, []string{"7/demo/k-raw-1"}, w.raw.opens, "only the item's file, in the request Space")
 }
 
-func TestAConfirmationFileRevalidatesWithoutOpeningIt(t *testing.T) {
+// A current copy is confirmed only after the same live source check as a full read (#373
+// review, as for cited files in #376): the source is opened, never read, and closed.
+func TestAConfirmationFileRevalidatesTheSourceWithoutReadingIt(t *testing.T) {
 	w := newFileWorld()
 	item := w.submit(t, "demo", itemJSON("k-1", materialRef(materialPDF)))[0]
 	path := confirmFilePath("demo", item["id"].(string))
-	res := fetch(w.admin(), path, "If-None-Match", `"`+sha(materialPDF)+`"`)
+	current := `"` + sha(materialPDF) + `"`
+	res := fetch(w.admin(), path, "If-None-Match", current)
 	require.Equal(t, http.StatusNotModified, res.Code)
 	require.Empty(t, res.Body.Bytes())
-	require.Empty(t, w.raw.opens, "a current copy needs no file read")
+	require.Equal(t, []string{"7/demo/k-raw-1"}, w.raw.opens, "the source is still checked")
+	require.Zero(t, w.raw.reads, "a current copy reads no bytes")
+	require.Equal(t, 1, w.raw.closes)
 	other := fetch(w.admin(), path, "If-None-Match", `"`+strings.Repeat("0", 64)+`"`)
 	require.Equal(t, http.StatusOK, other.Code)
-	require.Len(t, w.raw.opens, 1)
+	require.Len(t, w.raw.opens, 2)
+}
+
+func TestAWithdrawnSourceIsRefusedEvenWithACurrentCopy(t *testing.T) {
+	for name, tc := range map[string]struct {
+		withdraw func(w *fileWorld)
+		status   int
+		code     string
+	}{
+		"file gone": {
+			func(w *fileWorld) { delete(w.raw.files, "k-raw-1") }, http.StatusNotFound, source.ErrorSourceNotFound,
+		},
+		"storage failure": {
+			func(w *fileWorld) { w.raw.err = errors.New("object store down") },
+			http.StatusServiceUnavailable, source.ErrorUnavailable,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newFileWorld()
+			item := w.submit(t, "demo", itemJSON("k-1", materialRef(materialPDF)))[0]
+			tc.withdraw(w)
+			path := confirmFilePath("demo", item["id"].(string))
+			res := fetch(w.admin(), path, "If-None-Match", `"`+sha(materialPDF)+`"`)
+			require.Equal(t, tc.status, res.Code, res.Body.String())
+			require.Equal(t, tc.code, code(t, res.Body.Bytes()))
+			require.Empty(t, res.Header().Get("ETag"), "a refusal confirms no cached copy")
+		})
+	}
 }
 
 func TestANonPDFFileDownloadsAsAnAttachment(t *testing.T) {
