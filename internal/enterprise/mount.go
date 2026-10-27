@@ -58,6 +58,8 @@ func Mount(r gin.IRouter, deps Deps) {
 		policy := middleware.APIKeyRoutePolicy{RequireFullAccess: true}
 		prefix := strings.TrimSuffix(group.BasePath(), "/")
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/candidates", policy)
+		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/points/decisions", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/confirmations", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/confirmations", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/confirmations/:confirmation_id/closure", policy)
@@ -78,6 +80,10 @@ func Mount(r gin.IRouter, deps Deps) {
 		group.Use(deps.Authorizer.Middleware())
 	}
 	group.POST("/candidates", func(c *gin.Context) { receive(c, deps.Candidates) })
+	group.GET("/candidates", func(c *gin.Context) { machineReviewQueue(c, deps.Candidates) })
+	group.POST("/candidates/:candidate_id/points/decisions", func(c *gin.Context) {
+		machinePointRejection(c, deps.Candidates)
+	})
 	group.POST("/confirmations", func(c *gin.Context) { submitConfirmations(c, deps.Confirmations) })
 	group.GET("/confirmations", func(c *gin.Context) { listConfirmations(c, deps.Confirmations, false) })
 	group.POST("/confirmations/:confirmation_id/closure", func(c *gin.Context) {
