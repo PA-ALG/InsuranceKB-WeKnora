@@ -60,10 +60,30 @@ func RetrievalScope(ctx context.Context, resolver *Resolver, event types.EventTy
 		cm.RerankTopK = max(original, len(cm.SearchResult))
 		return func() { cm.RerankTopK = original }
 	case types.FILTER_TOP_K:
-		cm.MergeResult = productOrder(cm.MergeResult, products)
-		cm.RerankResult = productOrder(cm.RerankResult, products)
+		original := cm.RerankTopK
+		cm.MergeResult = selectProductResults(cm.MergeResult, products, original)
+		cm.RerankResult = selectProductResults(cm.RerankResult, products, original)
+		// The native stage sorts by score again. Select the bounded set first so that
+		// sorting cannot displace a named product with an unselected global passage.
+		// Match its result-list precedence; an empty pair must not uncap SearchResult.
+		switch {
+		case len(cm.MergeResult) > 0:
+			cm.RerankTopK = len(cm.MergeResult)
+		case len(cm.RerankResult) > 0:
+			cm.RerankTopK = len(cm.RerankResult)
+		}
+		return func() { cm.RerankTopK = original }
 	}
 	return noop
+}
+
+func selectProductResults(rows []*types.SearchResult, products []productMaterials, topK int) []*types.SearchResult {
+	selected := productOrder(rows, products)
+	// Nonpositive TopK retains the native "no cut" behavior.
+	if topK > 0 && len(selected) > topK {
+		selected = selected[:topK]
+	}
+	return selected
 }
 
 func namedMaterials(

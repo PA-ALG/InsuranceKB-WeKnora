@@ -97,6 +97,7 @@ func TestProductRetrievalUsesPinnedSpaceAndRewriteWithoutChangingTheTurn(t *test
 
 func TestProductRoundRobinKeepsSharedChunksOnceAndGlobalTailStable(t *testing.T) {
 	ctx, resolver, cm := answerTurn(t, retrievalReader{}, "A0 B1")
+	cm.RerankTopK = 10 // Keep the complete selected set visible to check global-tail ordering.
 	resolver = resolver.WithPublished(knowledge.NewService(materialReader(
 		func(_ context.Context, _ uint64, _, id string) (release.Release, error) {
 			return materialRelease(id, []string{"A0", "B1"}, []string{"k1", "k1"}), nil
@@ -114,6 +115,26 @@ func TestProductRoundRobinKeepsSharedChunksOnceAndGlobalTailStable(t *testing.T)
 		order(cm.MergeResult[:5]))
 	require.Nil(t, cm.MergeResult[5])
 	require.Equal(t, "tail-b", original[0].ID, "reordering must not mutate a shared result slice")
+	require.Equal(t, 10, cm.RerankTopK)
+}
+
+func TestProductSelectionCountsSharedChunksOnceWithinTheOriginalLimit(t *testing.T) {
+	ctx, resolver, cm := answerTurn(t, retrievalReader{}, "A0 B1")
+	resolver = resolver.WithPublished(knowledge.NewService(materialReader(
+		func(_ context.Context, _ uint64, _, id string) (release.Release, error) {
+			return materialRelease(id, []string{"A0", "B1"}, []string{"k1", "k1"}), nil
+		})))
+	cm.RerankTopK = 3
+	cm.MergeResult = []*types.SearchResult{
+		passage("global-first", "other"), passage("shared-one", "k1"), passage("shared-one", "k1"),
+		passage("shared-two", "k1"), passage("global-second", "other"),
+	}
+	restore := chatsource.RetrievalScope(ctx, resolver, types.FILTER_TOP_K, cm)
+	require.Equal(t, []string{"shared-one", "shared-two", "global-first"}, order(cm.MergeResult))
+	require.Equal(t, 3, cm.RerankTopK)
+	restore()
+	require.Len(t, cm.MergeResult, 3, "restoration cannot reintroduce discarded passages")
+	require.Equal(t, 3, cm.RerankTopK)
 }
 
 func TestProductScopeNoOpsWithoutRawOrOnFailedIdentification(t *testing.T) {

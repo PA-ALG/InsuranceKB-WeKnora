@@ -69,7 +69,7 @@ func (p productStageFailure) OnEvent(
 }
 
 func TestQA2StageFailureRestoresRetrievalInputs(t *testing.T) {
-	for _, event := range []types.EventType{types.CHUNK_SEARCH, types.CHUNK_RERANK} {
+	for _, event := range []types.EventType{types.CHUNK_SEARCH, types.CHUNK_RERANK, types.FILTER_TOP_K} {
 		t.Run(string(event), func(t *testing.T) {
 			ctx, svc, _ := q2aFixture()
 			svc.chatSources = svc.chatSources.WithPublished(knowledge.NewService(productSourceReader{}))
@@ -81,21 +81,32 @@ func TestQA2StageFailureRestoresRetrievalInputs(t *testing.T) {
 			cm.Query, cm.RewriteQuery = "other", "Product field"
 			cm.SearchTargets, cm.RerankTopK = targets, 1
 			cm.SearchResult = []*types.SearchResult{{ID: "a"}, {ID: "b"}, {ID: "c"}}
+			if event == types.FILTER_TOP_K {
+				cm.RerankTopK = 5
+				cm.MergeResult = []*types.SearchResult{
+					{ID: "a", KnowledgeID: "q-doc", KnowledgeBaseID: "q-raw"},
+					{ID: "b", KnowledgeID: "q-doc", KnowledgeBaseID: "q-raw"},
+				}
+			}
+			originalTopK := cm.RerankTopK
 			boom := errors.New("offline stage failure")
 			observed := false
 			svc.eventManager = chatpipeline.NewEventManager()
 			svc.eventManager.Register(productStageFailure{event: event, err: boom, see: func(cm *types.ChatManage) {
 				observed = true
-				if event == types.CHUNK_SEARCH {
+				switch event {
+				case types.CHUNK_SEARCH:
 					require.Len(t, cm.SearchTargets, 2)
-				} else {
+				case types.CHUNK_RERANK:
 					require.Equal(t, 3, cm.RerankTopK)
+				case types.FILTER_TOP_K:
+					require.Equal(t, 2, cm.RerankTopK)
 				}
 			}})
 			require.ErrorIs(t, svc.KnowledgeQAByEvent(ctx, cm, []types.EventType{event}), boom)
 			require.True(t, observed)
 			require.Equal(t, targets, cm.SearchTargets)
-			require.Equal(t, 1, cm.RerankTopK)
+			require.Equal(t, originalTopK, cm.RerankTopK)
 		})
 	}
 }
