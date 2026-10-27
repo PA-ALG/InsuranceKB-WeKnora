@@ -46,7 +46,7 @@ func TestKnowledgeToolOnlyEvidenceGetsHandlesAndModelKeepsUncitedStates(t *testi
 	require.Contains(t, registry.DecodeOutputText(`<ref id="c1"/>`), `chunk_id="release:rel-3:1828/cooling_off_period"`)
 	require.Contains(t, rendered, "自签收之日起20日内")
 	require.Contains(t, rendered, "90日；意外无等待期")
-	require.Contains(t, rendered, "absent_explicitly")
+	require.Contains(t, rendered, "材料明确没有") // QA1 §4.1: Chinese states (updated in the QA1 RED commit)
 	require.NotContains(t, rendered, "source:v1:")
 	require.NotContains(t, rendered, "release:rel-3:")
 	_, err = query.Execute(toolContext(), json.RawMessage(`{"entity_id":"1828"}`))

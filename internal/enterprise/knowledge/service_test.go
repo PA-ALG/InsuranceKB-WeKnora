@@ -141,15 +141,15 @@ func TestQuerySearchUsesSpaceTokensAndNavigationFirstGroups(t *testing.T) {
 		queryClaim("first/empty", "first", "Title", "present", "  "),
 		queryClaim("first/unknown", "first", "Title", "unknown", "a b"),
 		queryClaim("first/field", "first", "Title", "present", "a b"))
-	got, total, err := s.SearchFields(context.Background(), 7, "space", "pinned", "ＴＩＴＬＥ　a\n b", 1)
+	got, total, err := s.SearchFields(context.Background(), 7, "space", "pinned", "ＴＩＴＬＥ　a\n b", "", 1)
 	require.NoError(t, err)
 	require.Equal(t, []string{"first/field"}, fieldSlugs(got))
 	require.Equal(t, 3, total)
-	got, total, err = s.SearchFields(context.Background(), 7, "space", "pinned", "ab", 0)
+	got, total, err = s.SearchFields(context.Background(), 7, "space", "pinned", "ab", "", 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
 	require.Zero(t, total)
-	got, total, err = s.SearchFields(context.Background(), 7, "space", "pinned", "a b", 0)
+	got, total, err = s.SearchFields(context.Background(), 7, "space", "pinned", "a b", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, []string{"first/field", "second/field", "other/field"}, fieldSlugs(got))
 	require.Equal(t, 3, total)
@@ -176,7 +176,7 @@ func TestQueryMalformedPayloadFailsClosedAndReaderErrorsAreUnwrapped(t *testing.
 		`{"subject_ref":"E","predicate":"a","state":"invalid"}`,
 	} {
 		s := queryService(release.Member{Kind: "claim", LogicalSlug: "bad", Payload: []byte(raw)})
-		_, _, err := s.SearchFields(context.Background(), 7, "space", "pinned", "anything", 0)
+		_, _, err := s.SearchFields(context.Background(), 7, "space", "pinned", "anything", "", 0)
 		require.Error(t, err, raw)
 	}
 	boom := errors.New("reader failure")
@@ -186,10 +186,10 @@ func TestQueryMalformedPayloadFailsClosedAndReaderErrorsAreUnwrapped(t *testing.
 
 func TestQuerySearchMatchesBrowserWhitespaceAndUnicodeLowercase(t *testing.T) {
 	s := queryService(queryEntity("E", "产品"), queryClaim("field", "E", "ΟΣ", "present", "alpha beta"))
-	got, _, err := s.SearchFields(context.Background(), 7, "space", "pinned", "ος\uFEFFalpha", 0)
+	got, _, err := s.SearchFields(context.Background(), 7, "space", "pinned", "ος\uFEFFalpha", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, []string{"field"}, fieldSlugs(got), "a BOM is browser whitespace; lowercase is contextual Unicode")
-	got, total, err := s.SearchFields(context.Background(), 7, "space", "pinned", "alpha\u0085beta", 0)
+	got, total, err := s.SearchFields(context.Background(), 7, "space", "pinned", "alpha\u0085beta", "", 0)
 	require.NoError(t, err)
 	require.Empty(t, got, "the browser does not split on NEL")
 	require.Zero(t, total)
@@ -206,7 +206,7 @@ func TestQueryNavigationOtherGroupCannotReclaimEntries(t *testing.T) {
 		queryEntity("other", "其他", "other", "shared"), queryEntity("main", "主组", "main"),
 		queryClaim("other/field", "other", "field", "present", "value"),
 		queryClaim("main/field", "main", "field", "present", "value"))
-	got, _, err := s.SearchFields(context.Background(), 7, "space", "pinned", "value", 0)
+	got, _, err := s.SearchFields(context.Background(), 7, "space", "pinned", "value", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, []string{"main/field", "other/field"}, fieldSlugs(got))
 }
@@ -227,7 +227,7 @@ func TestQueryEvidenceKeepsOrderAndDefaultSearchLimitCountsAll(t *testing.T) {
 			},
 		}))
 	}
-	got, total, err := queryService(members...).SearchFields(context.Background(), 7, "space", "pinned", "value", 0)
+	got, total, err := queryService(members...).SearchFields(context.Background(), 7, "space", "pinned", "value", "", 0)
 	require.NoError(t, err)
 	require.Len(t, got, 20)
 	require.Equal(t, 23, total)

@@ -241,7 +241,8 @@ func TestQ2aMCPQuickAnswerKeepsItsExistingScopeAndFallback(t *testing.T) {
 			}
 			if query == "Product field" {
 				require.Len(t, run.prompted, 1)
-				require.Contains(t, run.prompted[0].Content, "present")
+				// QA1 §4.1: every surface now renders the same Chinese field text (formerly "present").
+				require.Contains(t, run.prompted[0].Content, "Product · field：20 days")
 			} else {
 				require.Contains(t, capture.messages[0].Content, "existing MCP fallback")
 			}
