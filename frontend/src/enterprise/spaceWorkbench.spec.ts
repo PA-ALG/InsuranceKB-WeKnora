@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 // RV6c acceptance (protected, written by Claude): the Space home keeps knowledge reading apart from
 // a 工作台 that links to the review queue, the confirmations and the spot checks with their open
-// counts; counts never delay the home and an entry the user may not open is hidden
-// (Spec docs/design/slices/RV6c-逐字段审核页面与首页工作台.md §2).
+// counts; counts never delay the home, also show on a Space that has never published, and an entry
+// the user may not open is hidden (Spec docs/design/slices/RV6c-逐字段审核页面与首页工作台.md §2).
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
@@ -149,6 +149,20 @@ describe('Space workbench', () => {
     await flushPromises()
     expect(view.find('[data-space-workbench]').exists()).toBe(false)
     expect(view.find('[data-space-title]').exists()).toBe(true)
+  })
+
+  it('shows the workbench on a Space that has never published, beside its empty state', async () => {
+    vi.mocked(readRelease).mockRejectedValue(new EnterpriseError('RELEASE_NOT_FOUND', 404))
+    counts([pointItem('cand-1', { pending_points: 5 })], [confirmationItem('c1')], [])
+    const view = home()
+    await flushPromises()
+    expect(view.text()).toContain('该空间还没有发布版本')
+    expect(view.find('[data-space-search]').exists()).toBe(false)
+    expect(vi.mocked(listReviews).mock.calls).toEqual([['demo', 'pending']])
+    expect(view.get('[data-space-workbench]').text()).toContain('工作台')
+    expect(count(view, 'reviews').text()).toContain('5')
+    expect(count(view, 'confirmations').text()).toContain('1')
+    expect(count(view, 'spotchecks').text()).toContain('无待办')
   })
 
   it('reads no counts when the release cannot be read, and reads them again on every visit', async () => {
