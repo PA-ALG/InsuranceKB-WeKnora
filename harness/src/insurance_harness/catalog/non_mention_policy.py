@@ -2,9 +2,11 @@
 
 The value step must write a non-empty value, so a field selected as present whose segments do
 not state it comes back as "材料未提及……". Such a value is no fact: the compiler records the
-field as unknown. The rule errs towards keeping a value: one sentence with material content, or
-a sentence without a material subject, keeps the whole value present. A leading "xxx：" is never
-taken off, because what precedes the colon may itself be a fact (review R1).
+field as unknown. Only the model's statement about the given material is recognised, never
+contract text itself ("条款未约定的事项按……处理"): the subject must be the material and the verb one
+of mentioning. Any structure that cannot be settled keeps the value: one sentence with material
+content, a sentence without a material subject, or a leading "xxx：" (what precedes the colon may
+itself be a fact) keeps the whole value present.
 """
 
 import re
@@ -31,7 +33,7 @@ _SENTENCES = re.compile(r"[。;\n]")
 # A whole item number such as 2.1 ends in a delimiter or a space; a number glued to text is not one.
 _ITEM_NUMBER = re.compile(r"^(?:(?>\d+(?:\.\d+)*)(?:[.、)]|\s)|\(\d+\))\s*")
 # Text after the verb is what was not stated; a comma or colon starts something else, and a
-# digit is a value of some rule.
+# digit is a value of some rule (configured numerals add the Chinese ones).
 _MORE_CONTENT = re.compile(r"[,:\d]")
 
 
@@ -50,8 +52,8 @@ class NonMentionPolicy(BaseModel):
     connectors: Phrases = Field(min_length=1)
     negations: Phrases = Field(min_length=1)
     verbs: Phrases = Field(min_length=1)
-    relative_particles: Phrases = Field(min_length=1)
     content_markers: Phrases = Field(min_length=1)
+    numerals: Phrases = Field(min_length=1)
     _sentence: re.Pattern[str] = PrivateAttr()
 
     @model_validator(mode="after")
@@ -61,8 +63,8 @@ class NonMentionPolicy(BaseModel):
             self.connectors,
             self.negations,
             self.verbs,
-            self.relative_particles,
             self.content_markers,
+            self.numerals,
         )
         for phrases in groups:
             if len(set(phrases)) != len(phrases):
@@ -89,10 +91,9 @@ class NonMentionPolicy(BaseModel):
         if match is None:
             return False
         rest = match.group("rest")
-        # "条款未约定的事项按……执行": the negated verb qualifies a noun that a rule follows.
-        if rest.startswith(self.relative_particles) or _MORE_CONTENT.search(rest):
+        if _MORE_CONTENT.search(rest):
             return False
-        return not any(marker in rest for marker in self.content_markers)
+        return not any(word in rest for word in (*self.content_markers, *self.numerals))
 
 
 def _any(phrases: Phrases) -> str:
