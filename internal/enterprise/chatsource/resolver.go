@@ -80,6 +80,8 @@ type Turn struct {
 	RawKnowledge map[string]string
 	RawAttempts  map[string]int64
 	RawEntities  map[string][]string
+
+	titles *rawTitles // set with RawEntities: original titles of the labelled raw passages
 }
 
 // SpaceOf exposes configuration identification to admission checks; it grants no ACL.
@@ -184,9 +186,11 @@ func (r *Resolver) Resolve(ctx context.Context, tenantID uint64, targets types.S
 	return turn, nil
 }
 
-// Label copies metadata before adding provenance so shared metadata maps are safe. The same
-// result can sit in several result lists and the pipeline runs twice, so a passage that already
-// carries its product label keeps its title.
+// Label copies metadata before adding provenance so shared metadata maps are safe. Product
+// labels come only from the turn's mapping: an entity_names value a result arrives with is
+// replaced, or dropped when the turn labels nothing. The same result can sit in several lists
+// and the pipeline runs twice on copies, so the title is always rebuilt from the original title
+// the turn recorded, never prefixed twice.
 func (t Turn) Label(results []*types.SearchResult) {
 	for _, result := range results {
 		if result == nil {
@@ -196,15 +200,15 @@ func (t Turn) Label(results []*types.SearchResult) {
 		if !ok {
 			continue
 		}
-		_, labelled := result.Metadata[entityNamesKey]
 		metadata := make(map[string]string, len(result.Metadata)+3)
 		for key, value := range result.Metadata {
 			metadata[key] = value
 		}
 		metadata["source_tier"], metadata["release_id"] = "raw_text", t.Releases[space]
-		if names, ok := t.rawLabel(result.KnowledgeID); ok && !labelled {
+		delete(metadata, entityNamesKey)
+		if names, ok := t.rawLabel(result.KnowledgeID); ok {
 			metadata[entityNamesKey] = names
-			result.KnowledgeTitle = labelledTitle(names, result.KnowledgeTitle)
+			result.KnowledgeTitle = labelledTitle(names, t.titles.original(result))
 		}
 		result.Metadata = metadata
 	}

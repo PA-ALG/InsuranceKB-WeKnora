@@ -8,8 +8,9 @@ import (
 
 // SourceEntities maps each material cited by a claim or wiki page of the release (the knowledge
 // ID of a source:v1 reference) to the display names of the entities citing it, in navigation
-// order without duplicates. Raw passages are labelled with these names (QA1 §2.1), so a material
-// is attributed only through the release's own evidence. Malformed references are skipped.
+// order without duplicate names. A claim cites for its subject, a page for every entity it
+// refers to. Raw passages are labelled with these names (QA1 §2.1), so a material is attributed
+// only through the release's own evidence. Malformed references are skipped.
 func (s *Service) SourceEntities(
 	ctx context.Context, tenantID uint64, spaceID, releaseID string,
 ) (map[string][]string, error) {
@@ -37,17 +38,23 @@ func (s *Service) SourceEntities(
 	}
 	for _, page := range index.pages {
 		for _, raw := range page.payload.Evidence {
-			if evidence, _, ok := validEvidence(raw); ok {
-				cite(page.entity, evidence.SourceRef)
+			evidence, _, ok := validEvidence(raw)
+			if !ok {
+				continue
+			}
+			// The page's slug names one entity, but the page refers to all of them.
+			for _, entityID := range page.payload.Entities {
+				cite(entityID, evidence.SourceRef)
 			}
 		}
 	}
 	ordered := index.orderedEntities()
 	out := make(map[string][]string, len(citing))
 	for knowledgeID, entities := range citing {
-		names := []string{}
+		names, seen := []string{}, map[string]bool{}
 		for _, entity := range ordered {
-			if entities[entity.EntityID] {
+			if entities[entity.EntityID] && !seen[entity.Name] {
+				seen[entity.Name] = true
 				names = append(names, entity.Name)
 			}
 		}

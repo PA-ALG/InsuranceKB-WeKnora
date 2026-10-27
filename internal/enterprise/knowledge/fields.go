@@ -76,7 +76,9 @@ func (index *releaseIndex) searchFields(ctx context.Context, query, entityID str
 	if entityID != "" {
 		entity, ok := index.entity(entityID)
 		if !ok {
-			return nil, 0, &release.Error{Code: "ENTITY_NOT_FOUND", Detail: "entity is unavailable at the named release"}
+			return nil, 0, &release.Error{
+				Code: "ENTITY_NOT_FOUND", Detail: "entity is unavailable at the named release",
+			}
 		}
 		entities = []indexedEntity{entity}
 	}

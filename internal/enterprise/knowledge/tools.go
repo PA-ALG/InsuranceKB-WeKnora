@@ -133,7 +133,7 @@ func (t *knowledgeTool) Execute(ctx context.Context, raw json.RawMessage) (*type
 			return nil, err
 		}
 		if len(searchTerms(args.Query)) > 0 {
-			notes = append(notes, pageScopeNote(index.scopeOf(args.EntityID), total, len(pages)))
+			notes = append(notes, pageScopeNote(index.pageScope(args.EntityID), total, len(pages)))
 		}
 		return pageToolResult(args.SpaceID, id, pages, total, notes), nil
 	case "knowledge_find_entity":
@@ -162,7 +162,7 @@ func (t *knowledgeTool) Execute(ctx context.Context, raw json.RawMessage) (*type
 			return nil, err
 		}
 		if len(searchTerms(args.Query)) > 0 {
-			notes = append(notes, fieldScopeNote(index.scopeOf(args.EntityID), total, len(fields)))
+			notes = append(notes, fieldScopeNote(index.fieldScope(args.EntityID), total, len(fields)))
 		}
 	case "knowledge_get_concept":
 		concept, err := service.Concept(ctx, tenant, args.SpaceID, id, args.Name)

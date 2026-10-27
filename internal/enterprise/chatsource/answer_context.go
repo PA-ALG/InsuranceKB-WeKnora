@@ -67,7 +67,7 @@ func AnswerPassage(ctx context.Context, result *types.SearchResult, content stri
 	case "release":
 		tier = "已发布知识（审核过）"
 	case "raw_text":
-		tier = rawTier(result.Metadata)
+		tier = rawTier(ctx, result)
 	case "wiki_page":
 		tier = "模型整理（未逐条审核）"
 	}
