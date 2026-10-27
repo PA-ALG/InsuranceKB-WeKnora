@@ -23,12 +23,21 @@ from tests.ingest.upload_helpers import SPACE, material
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9:._-]{0,127}$")
 _SOURCE_REF = re.compile(
-    r"^source:v1:[A-Za-z0-9][A-Za-z0-9_-]{0,63}:[1-9][0-9]{0,18}:[0-9a-f]{64}$"
+    r"^source:v1:[A-Za-z0-9][A-Za-z0-9_-]{0,63}:([1-9][0-9]{0,18}):[0-9a-f]{64}$"
 )
+_INT64_MAX = (1 << 63) - 1
 _CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
 _SPACE = "[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]"
 _EDGES = re.compile(f"^{_SPACE}+|{_SPACE}+$")
 MAX_BODY = 512 << 10
+
+
+def source_ref_valid(value: object) -> bool:
+    """Go's release.ParseSourceRef: the pattern, then the attempt parsed as a signed int64."""
+    if not isinstance(value, str):
+        return False
+    match = _SOURCE_REF.fullmatch(value)
+    return match is not None and int(match.group(1)) <= _INT64_MAX
 
 
 def trim(text: str) -> str:
@@ -187,10 +196,7 @@ class FakePlatform:
             and (
                 "source_ref" not in item
                 or item["source_ref"] == ""
-                or (
-                    isinstance(item["source_ref"], str)
-                    and _SOURCE_REF.fullmatch(item["source_ref"]) is not None
-                )
+                or source_ref_valid(item["source_ref"])
             )
             and all(
                 isinstance(item[k], str) and _IDENTITY.fullmatch(item[k])
