@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
@@ -41,6 +42,10 @@ func SourceFiles(
 		if k == nil || k.TenantID != scope.TenantID || k.KnowledgeBaseID != binding.RawKBID || k.DeletedAt.Valid {
 			return nil, "", source.ErrNotFound
 		}
-		return files.GetKnowledgeFile(ctx, knowledgeID)
+		reader, name, err := files.GetKnowledgeFile(ctx, knowledgeID)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, "", source.ErrNotFound
+		}
+		return reader, name, err
 	}
 }

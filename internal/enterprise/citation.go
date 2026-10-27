@@ -187,51 +187,71 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 		})
 		return
 	}
-	if files == nil {
-		writeSourceError(c, nil)
-		return
-	}
-	reader, name, err := files(c.Request.Context(), source.Scope{TenantID: p.TenantID, SpaceID: space}, knowledgeID)
-	if err != nil {
-		if errors.Is(err, source.ErrNotFound) {
-			writeSourceError(c, &source.Error{Code: source.ErrorSourceNotFound, Detail: "source file was not found"})
-			return
-		}
-		writeSourceError(c, nil)
-		return
-	}
-	ctx := c.Request.Context()
-	closeReader := sync.OnceFunc(func() { _ = reader.Close() })
-	defer closeReader()
-	// Every request passes access, the citation and the same live source check (Issue #375);
-	// the browser only revalidates (no-cache). A matching validator then answers 304 and the
-	// opened file is closed unread: it is never read or hashed for a 304.
 	tag := `"` + cited + `"`
-	if condition := c.GetHeader("If-None-Match"); condition != "" && matchesReleaseETag(condition, tag) {
-		closeReader()
-		releaseCacheHeaders(c, tag)
-		c.Status(http.StatusNotModified)
-		return
-	}
-	// A cancelled request closes the file at once, which also ends a Read blocked on a slow
-	// source; contextReader stops further reads. Nothing is written for a cancelled request.
-	stop := context.AfterFunc(ctx, closeReader)
-	defer stop()
-	raw, err := io.ReadAll(io.LimitReader(contextReader{ctx: ctx, r: reader}, maxSourceFile+1))
-	if err != nil || ctx.Err() != nil {
-		writeSourceError(c, nil)
-		return
-	}
-	sum := sha256.Sum256(raw)
-	if len(raw) > maxSourceFile || hex.EncodeToString(sum[:]) != cited {
-		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
-			"success": false, "code": errorSourceIntegrity, "error": "the stored file is not the cited one",
-		})
+	condition := c.GetHeader("If-None-Match")
+	notModified := condition != "" && matchesReleaseETag(condition, tag)
+	raw, name, ok := readSourceFile(c, files,
+		source.Scope{TenantID: p.TenantID, SpaceID: space}, knowledgeID, cited, notModified)
+	if !ok {
 		return
 	}
 	releaseCacheHeaders(c, tag)
 	c.Header("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(name))
 	c.Data(http.StatusOK, "application/pdf", raw)
+}
+
+// readSourceFile checks the live source before confirming a cached copy or verifying all bytes.
+// Both callers authorize the reference first; the provider enforces the Space's RAW KB boundary.
+// Each caller preserves its endpoint's validator matching rule; a match never skips the check.
+// False means the response is already handled (304 or failure), with no file body to serve.
+func readSourceFile(
+	c *gin.Context, files SourceFiles, scope source.Scope, knowledgeID, fingerprint string,
+	notModified bool,
+) ([]byte, string, bool) {
+	if files == nil {
+		writeSourceError(c, nil)
+		return nil, "", false
+	}
+	reader, name, err := files(c.Request.Context(), scope, knowledgeID)
+	if err != nil {
+		if errors.Is(err, source.ErrNotFound) {
+			writeSourceError(c, &source.Error{Code: source.ErrorSourceNotFound, Detail: "source file was not found"})
+			return nil, "", false
+		}
+		writeSourceError(c, nil)
+		return nil, "", false
+	}
+	ctx := c.Request.Context()
+	closeReader := sync.OnceFunc(func() { _ = reader.Close() })
+	defer closeReader()
+	// A cancelled request closes the file at once, which also ends a Read blocked on a slow
+	// source; contextReader stops further reads. Nothing is written for a cancelled request.
+	stop := context.AfterFunc(ctx, closeReader)
+	defer stop()
+	if ctx.Err() != nil {
+		writeSourceError(c, nil)
+		return nil, "", false
+	}
+	etag := `"` + fingerprint + `"`
+	if notModified {
+		closeReader()
+		releaseCacheHeaders(c, etag)
+		c.Status(http.StatusNotModified)
+		return nil, "", false
+	}
+	raw, err := io.ReadAll(io.LimitReader(contextReader{ctx: ctx, r: reader}, maxSourceFile+1))
+	if err != nil || ctx.Err() != nil {
+		writeSourceError(c, nil)
+		return nil, "", false
+	}
+	sum := sha256.Sum256(raw)
+	if len(raw) > maxSourceFile || hex.EncodeToString(sum[:]) != fingerprint {
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
+			"success": false, "code": errorSourceIntegrity, "error": "the stored file is not the cited one",
+		})
+		return nil, "", false
+	}
+	return raw, name, true
 }
 
 // citedFingerprint is the file fingerprint a member of the release cites for (knowledge, attempt).

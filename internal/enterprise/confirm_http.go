@@ -1,6 +1,7 @@
 package enterprise
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -41,24 +42,31 @@ func submitConfirmations(c *gin.Context, service *confirm.Service) {
 	}
 	var in struct {
 		Items []struct {
-			Subject  string           `json:"subject"`
-			Revision string           `json:"revision"`
-			Title    string           `json:"title"`
-			Detail   string           `json:"detail"`
-			Options  []confirm.Option `json:"options"`
+			Subject   string           `json:"subject"`
+			Revision  string           `json:"revision"`
+			Title     string           `json:"title"`
+			Detail    string           `json:"detail"`
+			Options   []confirm.Option `json:"options"`
+			SourceRef json.RawMessage  `json:"source_ref"`
 		} `json:"items"`
 	}
 	err := decodeSpotCheckBody(c, &in, maxConfirmationsBody, confirm.ErrorConfirmationInvalid,
-		"items", "subject", "revision", "title", "detail", "options", "key", "label")
+		"items", "subject", "revision", "title", "detail", "options", "key", "label", "source_ref")
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 	items := make([]confirm.ItemInput, len(in.Items))
 	for i, item := range in.Items {
+		var ref string
+		if len(item.SourceRef) != 0 &&
+			(string(item.SourceRef) == "null" || json.Unmarshal(item.SourceRef, &ref) != nil) {
+			writeError(c, &release.Error{Code: confirm.ErrorConfirmationInvalid, Detail: "source_ref must be a string"})
+			return
+		}
 		items[i] = confirm.ItemInput{
 			Subject: item.Subject, Revision: item.Revision, Title: item.Title, Detail: item.Detail,
-			Options: item.Options,
+			Options: item.Options, SourceRef: ref,
 		}
 	}
 	stored, err := service.Submit(c.Request.Context(), p, c.Param("space_id"), items)

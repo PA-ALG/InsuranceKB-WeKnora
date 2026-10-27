@@ -20,6 +20,8 @@ func confirmationSchema(t *testing.T) (*gorm.DB, *Store) {
 	t.Helper()
 	db := openSchema(t)
 	require.NoError(t, db.Exec(migrationSQL(t, "000010_enterprise_confirmations.up.sql")).Error)
+	// S5b-3d-2: the store reads and writes the items' source references.
+	require.NoError(t, db.Exec(migrationSQL(t, "000012_enterprise_confirmation_sources.up.sql")).Error)
 	spaces, err := ParseSpaces(`[
  {"tenant_id":7,"space_id":"space-1","raw_kb_id":"raw-1","wiki_kb_id":"wiki-1"},
  {"tenant_id":7,"space_id":"space-2","raw_kb_id":"raw-2","wiki_kb_id":"wiki-2"},
