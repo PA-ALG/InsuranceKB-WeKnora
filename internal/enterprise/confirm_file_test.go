@@ -52,20 +52,20 @@ type rawFiles struct {
 	closes int
 }
 
-// countedFile records reads and closes, so a revalidation can prove it read no bytes.
-type countedFile struct {
+// confirmCountedFile records reads and closes, so a revalidation can prove it read no bytes.
+type confirmCountedFile struct {
 	r     io.Reader
 	files *rawFiles
 }
 
-func (c *countedFile) Read(p []byte) (int, error) {
+func (c *confirmCountedFile) Read(p []byte) (int, error) {
 	c.files.mu.Lock()
 	c.files.reads++
 	c.files.mu.Unlock()
 	return c.r.Read(p)
 }
 
-func (c *countedFile) Close() error {
+func (c *confirmCountedFile) Close() error {
 	c.files.mu.Lock()
 	c.files.closes++
 	c.files.mu.Unlock()
@@ -83,7 +83,7 @@ func (f *rawFiles) open(_ context.Context, scope source.Scope, knowledgeID strin
 	if !ok {
 		return nil, "", source.ErrNotFound
 	}
-	return &countedFile{r: bytes.NewReader(raw), files: f}, materialName, nil
+	return &confirmCountedFile{r: bytes.NewReader(raw), files: f}, materialName, nil
 }
 
 type fileWorld struct {
