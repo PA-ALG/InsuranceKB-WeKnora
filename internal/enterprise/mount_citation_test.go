@@ -234,7 +234,7 @@ func TestTheCitedFileIsServedOnlyWhenItIsTheExactFingerprint(t *testing.T) {
 	require.Equal(t, pdfBytes, w.Body.Bytes())
 	require.Equal(t, "application/pdf", w.Header().Get("Content-Type"))
 	require.Equal(t, `"`+pdfSHA+`"`, w.Header().Get("ETag"))
-	require.Equal(t, "private, max-age=86400, immutable", w.Header().Get("Cache-Control"))
+	require.Equal(t, "private, no-cache", w.Header().Get("Cache-Control"))
 	require.Contains(t, w.Header().Get("Content-Disposition"), "inline")
 	require.Contains(t, w.Header().Get("Content-Disposition"), "filename*=UTF-8''"+url.PathEscape("保险条款.pdf"))
 	require.Equal(t, []source.Scope{{TenantID: 7, SpaceID: "demo"}}, world.opens)

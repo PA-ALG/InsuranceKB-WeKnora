@@ -203,6 +203,16 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 	ctx := c.Request.Context()
 	closeReader := sync.OnceFunc(func() { _ = reader.Close() })
 	defer closeReader()
+	// Every request passes access, the citation and the same live source check (Issue #375);
+	// the browser only revalidates (no-cache). A matching validator then answers 304 and the
+	// opened file is closed unread: it is never read or hashed for a 304.
+	tag := `"` + cited + `"`
+	if condition := c.GetHeader("If-None-Match"); condition != "" && matchesReleaseETag(condition, tag) {
+		closeReader()
+		releaseCacheHeaders(c, tag)
+		c.Status(http.StatusNotModified)
+		return
+	}
 	// A cancelled request closes the file at once, which also ends a Read blocked on a slow
 	// source; contextReader stops further reads. Nothing is written for a cancelled request.
 	stop := context.AfterFunc(ctx, closeReader)
@@ -219,8 +229,7 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 		})
 		return
 	}
-	c.Header("ETag", `"`+cited+`"`)
-	c.Header("Cache-Control", "private, max-age=86400, immutable")
+	releaseCacheHeaders(c, tag)
 	c.Header("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(name))
 	c.Data(http.StatusOK, "application/pdf", raw)
 }
