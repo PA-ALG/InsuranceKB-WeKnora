@@ -134,6 +134,9 @@ func TestRerankKeepsEveryCandidateWhileProductsAreNamed(t *testing.T) {
 	require.Equal(t, 2, cm.RerankTopK)
 }
 
+// Spec §2 + addendum (#385 R1): the final k are chosen before FILTER_TOP_K, one passage per
+// named product per round, then filled from the global ranking; the native stage then only
+// orders them, and the eliminated passages never come back.
 func TestTopKTakesTheNamedProductsPassagesFirstInTurn(t *testing.T) {
 	ranked := func() []*types.SearchResult {
 		return []*types.SearchResult{
@@ -143,15 +146,23 @@ func TestTopKTakesTheNamedProductsPassagesFirstInTurn(t *testing.T) {
 	ctx, r, cm := answerTurn(t, retrievalReader{}, "乙保险悦享版的等待期多久")
 	cm.MergeResult, cm.RerankResult = ranked(), ranked()
 	restore := chatsource.RetrievalScope(ctx, r, types.FILTER_TOP_K, cm)
-	require.Equal(t, []string{"r4", "r5", "r1", "r2", "x"}, order(cm.MergeResult))
-	require.Equal(t, []string{"r4", "r5", "r1", "r2", "x"}, order(cm.RerankResult))
+	require.Equal(t, []string{"r4", "r5"}, order(cm.MergeResult), "k=2: the named product's passages")
+	require.Equal(t, []string{"r4", "r5"}, order(cm.RerankResult))
 	restore()
+	require.Equal(t, 2, cm.RerankTopK, "the stage limit is restored")
+	require.Equal(t, []string{"r4", "r5"}, order(cm.MergeResult), "eliminated passages do not come back")
 
 	ctx, r, cm = answerTurn(t, retrievalReader{}, "甲保险经典版和乙保险悦享版的等待期分别多久")
 	cm.MergeResult = ranked()
 	chatsource.RetrievalScope(ctx, r, types.FILTER_TOP_K, cm)()
-	require.Equal(t, []string{"r1", "r4", "r2", "r5", "x"}, order(cm.MergeResult),
-		"one passage per named product per round, then the rest in their ranked order")
+	require.Equal(t, []string{"r1", "r4"}, order(cm.MergeResult), "one passage per named product per round")
+
+	ctx, r, cm = answerTurn(t, retrievalReader{}, "乙保险悦享版的等待期多久")
+	cm.RerankTopK = 3
+	cm.MergeResult = ranked()
+	chatsource.RetrievalScope(ctx, r, types.FILTER_TOP_K, cm)()
+	require.Equal(t, []string{"r4", "r5", "r1"}, order(cm.MergeResult),
+		"after the named products, the rest is filled from the global ranking")
 }
 
 func TestRetrievalScopeChangesNothingWithoutANamedProduct(t *testing.T) {
