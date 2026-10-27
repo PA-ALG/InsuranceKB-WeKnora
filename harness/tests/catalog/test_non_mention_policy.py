@@ -5,6 +5,8 @@ to review. The rule is versioned data and errs towards keeping a value: any sent
 material content, or a sentence without a material subject, keeps the whole value present.
 Review R1–R4 (2026-10-27, Spec owner rulings): a leading "xxx：" may itself be a fact, so labelled
 sentences are kept; "未约定的……", digits and predicates after the verb mean more content follows.
+Review R2, second round: only the model's statement about the given material is recognised, never
+contract text itself ("条款未约定……"); any structure that cannot be settled keeps the value.
 """
 
 from __future__ import annotations
@@ -26,14 +28,15 @@ ONLY_NON_MENTION = {
     "one sentence": "材料未提及医疗费用直付、住院费用垫付或理赔款预付服务。",
     "verb without object": "材料未载明。",
     "longer subject": "本批材料未载明具体比例",
-    "connector": "原文中未写明领取方式。",
+    "connector": "材料中未写明领取方式。",
+    "provided material": "所提供材料未涉及续保安排。",
     "repeated connectors": "材料中均未列明",
     "negation word": "给定材料没有提及续保安排。",
     "every sentence": "材料未载明犹豫期。本批材料未载明诉讼时效。",
     "item numbers": "1. 材料未载明犹豫期。（2）本批材料未载明诉讼时效。",
     "multi-level item number": "2.1 材料未提及住院垫付服务。",
     "item numbers with other delimiters": "2.1、材料未载明退还金额。3） 材料未载明诉讼时效。",
-    "full-width punctuation": "材料未提及Ａ类服务；条款未约定Ｂ类服务",
+    "full-width punctuation": "材料未提及Ａ类服务；所给材料未说明Ｂ类服务",
     "line breaks": "1. 材料未载明通知时限\n2. 给定材料未载明诉讼时效\n",
 }
 
@@ -65,6 +68,21 @@ KEEPS_A_VALUE = {
     "segment ids are digits too": "材料未载明各类服务的次数（D1P1S13）。",
     # R3: a number glued to text is no item number.
     "number glued to text": "2材料未载明诉讼时效。",
+    # R2, second round: contract text and synonyms of the listed predicates.
+    "contract text applying a law": "条款未约定事项遵照保险法处理。",
+    "contract text referring to a law": "条款未约定事项参照保险法办理。",
+    "contract text excluding hospitals": "原文未列明或列示的医院全部排除在定点范围之外。",
+    "contract text on disputed matters": "条款未约定或约定存在争议的事项参照保险法处理。",
+    "contract text with a time limit": "条款未约定或约定存在争议的事项十日内提交保险公司处理。",
+    "contract subject and verb": "条款未约定解约金额。",
+    "original text is no material subject": "原文未载明续保安排。",
+    "paragraph is no material subject": "段落未提及续保安排。",
+    "agree is no mention verb": "材料未约定续保安排。",
+    "的 inside the object": "材料未载明期限内发生的费用。",
+    "Arabic digits only": "材料未载明30日期限。",
+    "Chinese numerals": "材料未载明十日期限。",
+    "a predicate with a material subject": "材料未提及事项遵照保险法处理。",
+    "another predicate with a material subject": "材料未载明事项适用保险法。",
     "blank": "  \n",
     "empty": "",
 }
@@ -81,7 +99,7 @@ def test_a_value_with_any_content_or_no_material_subject_is_kept(value: str) -> 
 
 
 def test_the_shipped_policy_is_the_reviewed_version() -> None:
-    assert load_non_mention_policy().version == "2026-10-27.2"
+    assert load_non_mention_policy().version == "2026-10-27.3"
 
 
 def policy(**overrides: Any) -> str:
@@ -91,8 +109,8 @@ def policy(**overrides: Any) -> str:
         "connectors": ["中"],
         "negations": ["未"],
         "verbs": ["载明"],
-        "relative_particles": ["的"],
-        "content_markers": ["仅"],
+        "content_markers": ["的", "仅"],
+        "numerals": ["十"],
     }
     data.update(overrides)
     return json.dumps({k: v for k, v in data.items() if v is not ...}, ensure_ascii=False)
@@ -103,8 +121,11 @@ def test_a_valid_policy_text_parses_and_applies() -> None:
     assert parsed.only_non_mention("材料中未载明。")
     assert not parsed.only_non_mention("材料未提及。"), "only the configured verbs count"
     assert parsed.only_non_mention("材料未载明事项按保险法执行。"), "only the configured markers"
-    assert not parsed.only_non_mention("材料未载明的事项。")
+    assert not parsed.only_non_mention("材料未载明事项的期限。")
     assert not parsed.only_non_mention("材料未载明仅限事项。")
+    assert not parsed.only_non_mention("材料未载明十日期限。")
+    assert parsed.only_non_mention("材料未载明三日期限。"), "only the configured numerals"
+    assert not parsed.only_non_mention("材料未载明3日期限。"), "digits always mean content"
 
 
 INVALID = {
@@ -116,7 +137,8 @@ INVALID = {
     "duplicate phrase": policy(verbs=["载明", "载明"]),
     "phrase not in NFKC form": policy(subjects=["材料："]),
     "phrase holding a sentence break": policy(verbs=["载明。"]),
-    "no relative particles": policy(relative_particles=[]),
+    "no numerals": policy(numerals=[]),
+    "the retired relative particles": policy(relative_particles=["的"]),
     "no content markers": policy(content_markers=[]),
     "content markers not a list": policy(content_markers="仅"),
     "the retired label length": policy(label_max_chars=20),
