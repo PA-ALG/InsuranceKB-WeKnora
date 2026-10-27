@@ -106,17 +106,20 @@ describe('confirmation desk', () => {
     expect(disabled(submit)).toBe(true)
     pending.resolve(confirmationAnswer('c1', { id: 'answer-2', option_key: 'replace', note: '以新版条款为准' }))
     await flushPromises()
-    const state = card.get('[data-confirm-state]')
-    expect(state.text()).toContain('已选择：替换原有文件，等待系统处理')
-    expect(submit.text()).toBe('修改选择')
-    expect(disabled(submit)).toBe(true)
-    expect(document.activeElement).toBe(state.element)
+    // S5b-3e: an answered item leaves 待处理 at once; the notice names the choice and takes the focus.
+    expect(view.find('[data-confirm-item="c1"]').exists()).toBe(false)
+    const moved = view.get('[data-confirm-moved]')
+    expect(moved.text()).toContain('替换原有文件')
+    expect(document.activeElement).toBe(moved.element)
     expect(vi.mocked(listConfirmations)).toHaveBeenCalledTimes(1)
   })
 
   it('starts from the latest answer and resubmits only a change within the note limit', async () => {
     vi.mocked(listConfirmations).mockResolvedValue([confirmationItem('c1', { answer: confirmationAnswer('c1') })])
     const view = page()
+    await flushPromises()
+    // S5b-3e: an answered open item waits under 已处理.
+    await view.get('[data-confirm-tab="closed"]').trigger('click')
     await flushPromises()
     const card = view.get('[data-confirm-item="c1"]')
     expect((card.get('[data-confirm-option="supplement"]').element as HTMLInputElement).checked).toBe(true)
@@ -193,7 +196,8 @@ describe('confirmation desk', () => {
     expect(view.text()).toContain('没有待确认的材料')
     await view.get('[data-confirm-tab="closed"]').trigger('click')
     await flushPromises()
-    expect(vi.mocked(listConfirmations).mock.calls).toEqual([['demo', 'open'], ['demo', 'closed']])
+    // S5b-3e: 已处理 also reads the open list for answered items.
+    expect(vi.mocked(listConfirmations).mock.calls).toEqual([['demo', 'open'], ['demo', 'open'], ['demo', 'closed']])
     expect(ids(view)).toEqual(['c1', 'c2', 'c3'])
     expect(view.get('[data-confirm-item="c1"] [data-confirm-state]').text()).toContain('已按「替换原有文件」处理')
     expect(view.get('[data-confirm-item="c1"]').text()).toContain('user:alice')
@@ -226,12 +230,15 @@ describe('confirmation desk', () => {
     await closed.trigger('keydown', { key: 'Home' })
     await flushPromises()
     expect(view.get('[data-confirm-tab="open"]').attributes('aria-selected')).toBe('true')
-    expect(vi.mocked(listConfirmations).mock.calls.map(call => call[1])).toEqual(['open', 'open', 'closed', 'open'])
+    // S5b-3e: 已处理 reads the open list (answered items) and the closed list.
+    expect(vi.mocked(listConfirmations).mock.calls.map(call => call[1])).toEqual(['open', 'open', 'open', 'closed', 'open'])
   })
 
   it('keeps a tab\'s own result when an earlier tab answers late', async () => {
     const openList = deferred<ConfirmationItem[]>(), closedList = deferred<ConfirmationItem[]>()
-    vi.mocked(listConfirmations).mockReturnValueOnce(openList.promise).mockReturnValueOnce(closedList.promise)
+    // S5b-3e: 已处理 reads the open list first, then the closed one.
+    vi.mocked(listConfirmations).mockReturnValueOnce(openList.promise)
+      .mockReturnValueOnce(Promise.resolve([])).mockReturnValueOnce(closedList.promise)
     const view = page()
     await view.get('[data-confirm-tab="closed"]').trigger('click')
     closedList.resolve([])
@@ -293,10 +300,11 @@ describe('confirmation desk', () => {
   it('keeps a newer answer a later list shows over a late submission', async () => {
     const post = deferred<ConfirmationAnswer>()
     const newer = confirmationAnswer('c1', { id: 'answer-b', option_key: 'supplement', note: '以新版为准' })
+    // S5b-3e: the later list shows the newer answer under 已处理 (open list first, then closed).
     vi.mocked(listConfirmations)
       .mockResolvedValueOnce([confirmationItem('c1')])
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([confirmationItem('c1', { answer: newer })])
+      .mockResolvedValueOnce([])
     vi.mocked(answerConfirmation).mockReturnValue(post.promise)
     const view = page()
     await flushPromises()
@@ -304,10 +312,9 @@ describe('confirmation desk', () => {
     await view.get('[data-confirm-submit]').trigger('click')
     await view.get('[data-confirm-tab="closed"]').trigger('click')
     await flushPromises()
-    await view.get('[data-confirm-tab="open"]').trigger('click')
-    await flushPromises()
     post.resolve(confirmationAnswer('c1', { id: 'answer-a', option_key: 'replace' }))
     await flushPromises()
+    expect(view.find('[data-confirm-moved]').exists()).toBe(false)
     const card = view.get('[data-confirm-item="c1"]')
     expect(card.get('[data-confirm-state]').text()).toContain('已选择：作为补充材料，等待系统处理')
     expect((card.get('[data-confirm-option="supplement"]').element as HTMLInputElement).checked).toBe(true)
@@ -316,8 +323,10 @@ describe('confirmation desk', () => {
 
   it('lets a list that returns after a late submission decide the card', async () => {
     const post = deferred<ConfirmationAnswer>(), reopened = deferred<ConfirmationItem[]>()
+    // S5b-3e: 已处理 reads the open and the closed list.
     vi.mocked(listConfirmations)
       .mockResolvedValueOnce([confirmationItem('c1')])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockReturnValueOnce(reopened.promise)
     vi.mocked(answerConfirmation).mockReturnValue(post.promise)
@@ -347,7 +356,8 @@ describe('confirmation desk', () => {
     vi.mocked(listConfirmations)
       .mockResolvedValueOnce([confirmationItem('c1')])
       .mockReturnValueOnce(refresh)
-      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]) // S5b-3e: 已处理 reads the open list…
+      .mockResolvedValueOnce([]) // …and the closed list
       .mockResolvedValueOnce([confirmationItem('c2')])
     vi.mocked(answerConfirmation).mockRejectedValueOnce(new EnterpriseError('CONFIRMATION_CLOSED', 409))
     const view = page()
@@ -373,6 +383,8 @@ describe('confirmation desk', () => {
   it('counts, compares and checks the note the way the server does', async () => {
     vi.mocked(listConfirmations).mockResolvedValue([confirmationItem('c1', { answer: confirmationAnswer('c1') })])
     const view = page()
+    await flushPromises()
+    await view.get('[data-confirm-tab="closed"]').trigger('click') // S5b-3e: answered items wait under 已处理
     await flushPromises()
     const card = view.get('[data-confirm-item="c1"]'), submit = card.get('[data-confirm-submit]')
     await card.get('textarea').setValue('\u0085保留两份\u0085')
