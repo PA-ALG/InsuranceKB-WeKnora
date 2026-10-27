@@ -22,8 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from insurance_harness.bundle.client import PlatformClient, PlatformError
 from insurance_harness.compilers.schema_fields import publish, publish_changes
-from insurance_harness.compilers.schema_fields.cards import cards_version
-from insurance_harness.compilers.schema_fields.engine import CompileOutput
+from insurance_harness.compilers.schema_fields.engine import CompileOutput, reusable
 from insurance_harness.eval import compile_run, review_run
 from insurance_harness.ingest.registry import ProductEntry, ProductRegistry, load_registry
 from insurance_harness.models.durable import RunRootBusy, prior_sends, run_lock
@@ -86,9 +85,9 @@ def _read_output(path: Path) -> tuple[bytes, CompileOutput] | None:
         raise PublicationError("OUTPUT_INVALID") from None
 
 
-def _current(output: CompileOutput, entry: ProductEntry, version: str) -> bool:
+def _current(output: CompileOutput, entry: ProductEntry) -> bool:
     materials = sorted(f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}" for m in entry.materials)
-    return output.materials == materials and output.cards_version == version
+    return reusable(output, materials)
 
 
 def _receipts(path: Path, invalid_code: str) -> dict[str, str]:
@@ -119,11 +118,11 @@ def _plan(
     registry: ProductRegistry, run_root: Path, products: Sequence[str],
     seeds: dict[str, tuple[bytes, CompileOutput]],
 ) -> PublicationPlan:
-    receipts, version = _published(run_root), cards_version()
+    receipts = _published(run_root)
     compile_products, publish_products = [], []
     for product in products:
         stored = seeds.get(product) or _read_output(run_root / "compile" / product / "output.json")
-        if stored is None or not _current(stored[1], registry.products[product], version):
+        if stored is None or not _current(stored[1], registry.products[product]):
             compile_products.append(product)
             publish_products.append(product)
         elif hashlib.sha256(stored[0]).hexdigest() != receipts.get(product):
@@ -142,7 +141,6 @@ def _seeds(
     registry: ProductRegistry, run_root: Path, products: Sequence[str], roots: Sequence[Path],
 ) -> dict[str, tuple[bytes, CompileOutput]]:
     seeds: dict[str, tuple[bytes, CompileOutput]] = {}
-    version = cards_version()
     for product in products:
         if (run_root / "compile" / product / "output.json").exists():
             continue
@@ -155,7 +153,7 @@ def _seeds(
                 continue
             output, entry = stored[1], registry.products[product]
             if (output.entity_id == product and output.pack_id == entry.schema_pack_id
-                    and _current(output, entry, version)):
+                    and _current(output, entry)):
                 seeds[product] = stored
                 break
     return seeds
