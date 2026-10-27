@@ -237,6 +237,9 @@ func TestANonPDFFileDownloadsAsAnAttachment(t *testing.T) {
 }
 
 func TestConfirmationFileFailuresAreTyped(t *testing.T) {
+	pdfItem := func(t *testing.T, w *fileWorld) string {
+		return w.submit(t, "demo", itemJSON("k-1", materialRef(materialPDF)))[0]["id"].(string)
+	}
 	type outcome struct {
 		status int
 		code   string
@@ -248,7 +251,7 @@ func TestConfirmationFileFailuresAreTyped(t *testing.T) {
 		"item without a source": {func(t *testing.T, w *fileWorld) (string, enterprise.SourceFiles) {
 			return confirmFilePath("demo", w.submit(t, "demo", itemJSON("k-1", ""))[0]["id"].(string)), w.raw.open
 		}, outcome{http.StatusNotFound, source.ErrorSourceNotFound}},
-		"unknown item": {func(t *testing.T, w *fileWorld) (string, enterprise.SourceFiles) {
+		"unknown item": {func(_ *testing.T, w *fileWorld) (string, enterprise.SourceFiles) {
 			return confirmFilePath("demo", "c-999"), w.raw.open
 		}, outcome{http.StatusNotFound, confirm.ErrorConfirmationNotFound}},
 		"item of another Space": {func(t *testing.T, w *fileWorld) (string, enterprise.SourceFiles) {
@@ -257,21 +260,18 @@ func TestConfirmationFileFailuresAreTyped(t *testing.T) {
 		}, outcome{http.StatusNotFound, confirm.ErrorConfirmationNotFound}},
 		"file gone from the RAW KB": {func(t *testing.T, w *fileWorld) (string, enterprise.SourceFiles) {
 			delete(w.raw.files, "k-raw-1")
-			return confirmFilePath("demo", w.submit(t, "demo", itemJSON("k-1", materialRef(materialPDF)))[0]["id"].(string)),
-				w.raw.open
+			return confirmFilePath("demo", pdfItem(t, w)), w.raw.open
 		}, outcome{http.StatusNotFound, source.ErrorSourceNotFound}},
 		"file changed since the question": {func(t *testing.T, w *fileWorld) (string, enterprise.SourceFiles) {
 			w.raw.files["k-raw-1"] = append([]byte(nil), append(materialPDF, ' ')...)
-			return confirmFilePath("demo", w.submit(t, "demo", itemJSON("k-1", materialRef(materialPDF)))[0]["id"].(string)),
-				w.raw.open
+			return confirmFilePath("demo", pdfItem(t, w)), w.raw.open
 		}, outcome{http.StatusConflict, "SOURCE_INTEGRITY"}},
 		"no file reader configured": {func(t *testing.T, w *fileWorld) (string, enterprise.SourceFiles) {
-			return confirmFilePath("demo", w.submit(t, "demo", itemJSON("k-1", materialRef(materialPDF)))[0]["id"].(string)), nil
+			return confirmFilePath("demo", pdfItem(t, w)), nil
 		}, outcome{http.StatusServiceUnavailable, source.ErrorUnavailable}},
 		"storage failure": {func(t *testing.T, w *fileWorld) (string, enterprise.SourceFiles) {
 			w.raw.err = errors.New("object store down")
-			return confirmFilePath("demo", w.submit(t, "demo", itemJSON("k-1", materialRef(materialPDF)))[0]["id"].(string)),
-				w.raw.open
+			return confirmFilePath("demo", pdfItem(t, w)), w.raw.open
 		}, outcome{http.StatusServiceUnavailable, source.ErrorUnavailable}},
 	}
 	for name, tc := range cases {
@@ -302,15 +302,16 @@ func TestTheFileNeedsAnAdministratorBrowserSession(t *testing.T) {
 	id := w.submit(t, "demo", itemJSON("k-1", materialRef(materialPDF)))[0]["id"].(string)
 	serviceKey := identity{tenant: 7, principal: browser.principal, apiKey: true}
 	otherTenant := identity{tenant: 8, principal: browser.principal}
+	denied := release.ErrorReleaseAccessDenied
 	for name, probe := range map[string]struct {
 		who    identity
 		role   types.TenantRole
 		status int
 		code   string
 	}{
-		"contributor":     {browser, types.TenantRoleContributor, http.StatusForbidden, release.ErrorReleaseAccessDenied},
-		"viewer":          {browser, types.TenantRoleViewer, http.StatusForbidden, release.ErrorReleaseAccessDenied},
-		"service key":     {serviceKey, types.TenantRoleOwner, http.StatusForbidden, release.ErrorReleaseAccessDenied},
+		"contributor":     {browser, types.TenantRoleContributor, http.StatusForbidden, denied},
+		"viewer":          {browser, types.TenantRoleViewer, http.StatusForbidden, denied},
+		"service key":     {serviceKey, types.TenantRoleOwner, http.StatusForbidden, denied},
 		"tenant 8 caller": {otherTenant, types.TenantRoleOwner, http.StatusNotFound, release.ErrorReleaseNotFound},
 	} {
 		t.Run(name, func(t *testing.T) {
