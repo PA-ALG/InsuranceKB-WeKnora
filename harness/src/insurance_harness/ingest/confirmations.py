@@ -160,7 +160,6 @@ class _Sync:
         self.skipped: Counter[str] = Counter()
         self.unaskable: dict[str, str] = {}  # knowledge id -> why its question cannot be built
         self.handled: set[str] = set()  # items closed (in a dry run: taken as closed) in this run
-        self.earlier: set[str] = set()  # materials answered on an item asked without its reference
         # One page read per material per run: its opening, or the code of the failed read.
         self.heads: dict[tuple[str, int], tuple[str | None, str]] = {}
 
@@ -362,38 +361,14 @@ class _Sync:
             else:
                 self.commit(entry, settlement)
 
-    def adopt(self, listed: list[ConfirmationItem]) -> None:
-        """Settle answers given on items asked before questions carried their source reference.
-
-        Such an item is the same question but a different platform item; asking anew would close
-        it, and its answer with it (S5b-3d-2b Spec §2.4). It is settled as any answered item is;
-        until it is, its material is not asked again and the item stays open.
-        """
-        answered = {
-            unsourced(item): item
-            for item in listed
-            if item.closure is None and item.answer is not None and not item.source_ref
-        }
-        if not answered:
-            return
-        for entry, question in self.questions(self.waiting()):
-            item = answered.get(unsourced(question))
-            if entry.settlement is not None or item is None or item.id in self.handled:
-                continue
-            self.earlier.add(entry.knowledge_id)
-            self.settle(entry, item)
-
     def ask(self, listed: list[ConfirmationItem]) -> None:
         """Push the questions, settle answered ones, and push the questions settling raises."""
-        self.adopt(listed)
         asked: set[tuple[object, ...]] = set()
         for _ in range(8):  # each round asks only new questions; a choice raises at most a few
             fresh = [
                 (entry, question)
                 for entry, question in self.questions(self.waiting())
-                if entry.settlement is None
-                and entry.knowledge_id not in self.earlier
-                and content_of(question) not in asked
+                if entry.settlement is None and content_of(question) not in asked
             ]
             if not fresh:
                 break
@@ -411,18 +386,27 @@ class _Sync:
     def stored(
         self, questions: list[ConfirmationInput], listed: list[ConfirmationItem]
     ) -> list[ConfirmationItem | None]:
+        """The platform item of each question. An open item asked before questions carried their
+        source reference is the same question: kept as it is, not asked again (Spec §2.4)."""
+        earlier = {unsourced(i): i for i in listed if i.closure is None and not i.source_ref}
+        kept = [earlier.get(unsourced(question)) for question in questions]
+        rest = [question for question, item in zip(questions, kept, strict=True) if item is None]
         if not self.write:  # a dry run finds what the platform would return, open or closed
             existing = {content_of(item): item for item in listed}
-            return [existing.get(content_of(question)) for question in questions]
-        found: list[ConfirmationItem | None] = []
-        for batch in _batches(questions):
-            found.extend(self.client.submit_confirmations(self.space, batch))
-        return found
+            found: list[ConfirmationItem | None] = [existing.get(content_of(q)) for q in rest]
+        else:
+            found = []
+            for batch in _batches(rest):
+                found.extend(self.client.submit_confirmations(self.space, batch))
+        sent = iter(found)
+        return [item if item is not None else next(sent) for item in kept]
 
     def clean(self, listed: list[ConfirmationItem]) -> None:
         """Close the material items no longer asked; keep those whose question cannot be built."""
         waiting = {entry.knowledge_id: entry for entry in self.waiting()}
-        wanted = {content_of(question) for _, question in self.questions(waiting.values())}
+        asked = [question for _, question in self.questions(waiting.values())]
+        wanted = {content_of(question) for question in asked}
+        same = {unsourced(question) for question in asked}  # asked before S5b-3d-2b (Spec §2.4)
         if self.write:
             open_items = self.client.confirmations(self.space, "open")
         else:
@@ -432,11 +416,9 @@ class _Sync:
                 continue
             kid = item.subject.removeprefix(SUBJECT_PREFIX)
             entry = waiting.get(kid)
-            if entry is not None and (
-                kid in self.unaskable or entry.settlement is not None or kid in self.earlier
-            ):
+            if entry is not None and (kid in self.unaskable or entry.settlement is not None):
                 continue
-            if content_of(item) in wanted:
+            if content_of(item) in wanted or (not item.source_ref and unsourced(item) in same):
                 continue
             if self.write:
                 try:
