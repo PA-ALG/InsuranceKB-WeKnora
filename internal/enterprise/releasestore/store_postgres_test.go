@@ -69,7 +69,10 @@ func openSchema(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(8)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	for _, name := range []string{"000002_release_falsification.up.sql", "000006_enterprise_candidates.up.sql"} {
+	for _, name := range []string{
+		"000002_release_falsification.up.sql", "000006_enterprise_candidates.up.sql",
+		"000011_enterprise_point_decisions.up.sql", // RV6b: Decide reads point decisions
+	} {
 		require.NoError(t, db.Exec(migrationSQL(t, name)).Error, name)
 	}
 	setupRevisionSourceTables(t, db)
@@ -264,6 +267,8 @@ func TestPostgresKeepsTenantsAndSpacesApart(t *testing.T) {
 
 func TestPostgresMigrationRollsBackAndReapplies(t *testing.T) {
 	db := openSchema(t)
+	// RV6b: the point decisions reference candidates, so they roll back first.
+	require.NoError(t, db.Exec(migrationSQL(t, "000011_enterprise_point_decisions.down.sql")).Error)
 	require.NoError(t, db.Exec(migrationSQL(t, "000006_enterprise_candidates.down.sql")).Error)
 	require.False(t, db.Migrator().HasTable("enterprise_candidates"))
 	require.True(t, db.Migrator().HasTable("wiki_releases"), "rollback keeps release history")

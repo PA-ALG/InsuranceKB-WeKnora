@@ -146,7 +146,16 @@ func (s *Store) SaveDecision(ctx context.Context, d release.Decision) (release.D
 		Digest: d.Digest, Outcome: d.Outcome, Mode: d.Mode, PolicyRef: d.PolicyRef, Score: d.Score,
 		Reason: d.Reason, Subject: d.Subject, CreatedAt: s.now(),
 	}
-	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockReviewCandidate(tx, d.TenantID, d.SpaceID, d.CandidateID); err != nil {
+			return err
+		}
+		if err := noStoredPoints(tx, d.TenantID, d.SpaceID, d.CandidateID); err != nil {
+			return err
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error
+	})
+	if err != nil {
 		return release.Decision{}, err
 	}
 	return s.DecisionByID(ctx, d.TenantID, d.SpaceID, row.ID)

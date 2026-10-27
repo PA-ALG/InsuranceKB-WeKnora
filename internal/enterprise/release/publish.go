@@ -71,6 +71,7 @@ type Release struct {
 // ActivationWrite is everything the platform needs to publish atomically: the
 // complete member set and the Head the service based it on.
 type ActivationWrite struct {
+	Points         []PointDecision
 	TenantID       uint64
 	SpaceID        string
 	Subject        string
@@ -131,6 +132,9 @@ func (s *Service) Decide(
 	if err := checkCandidateAccess(c, p, spaceID); err != nil {
 		return Decision{}, err
 	}
+	if err := s.noPointDecisions(ctx, p, spaceID, c.ID); err != nil {
+		return Decision{}, err
+	}
 	d := Decision{
 		TenantID: p.TenantID, SpaceID: spaceID, CandidateID: c.ID, BundleDigest: c.BundleDigest,
 		Outcome: in.Outcome, Mode: in.Mode, PolicyRef: in.PolicyRef, Score: in.Score,
@@ -158,6 +162,9 @@ func (s *Service) Activate(ctx context.Context, p Principal, spaceID, candidateI
 		return Release{}, err
 	}
 	if err := checkCandidateAccess(c, p, spaceID); err != nil {
+		return Release{}, err
+	}
+	if err := s.noPointDecisions(ctx, p, spaceID, c.ID); err != nil {
 		return Release{}, err
 	}
 	d, err := s.publisher.DecisionByID(ctx, p.TenantID, spaceID, decisionID)

@@ -26,6 +26,9 @@ func MountSessionReviews(r gin.IRouter, deps SessionDeps, guards ...gin.HandlerF
 	})
 	view.GET("/candidates", func(c *gin.Context) { reviewQueue(c, deps.Candidates) })
 	view.GET("/candidates/:candidate_id", func(c *gin.Context) { reviewCandidate(c, deps.Candidates) })
+	view.POST("/candidates/:candidate_id/points/decisions", func(c *gin.Context) {
+		reviewPointDecision(c, deps.Candidates)
+	})
 	view.POST("/candidates/:candidate_id/decisions", func(c *gin.Context) { reviewDecision(c, deps.Candidates) })
 }
 
@@ -85,6 +88,27 @@ func reviewDecision(c *gin.Context, service *release.Service) {
 	p, _ := sessionReadPrincipal(c)
 	result, err := service.Review(c.Request.Context(), p, c.Param("space_id"), c.Param("candidate_id"),
 		input.Outcome, input.Reason)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"success": true, "data": result})
+}
+
+func reviewPointDecision(c *gin.Context, service *release.Service) {
+	var input struct {
+		Slugs   []string `json:"slugs"`
+		Outcome string   `json:"outcome"`
+		Reason  string   `json:"reason"`
+	}
+	err := decodeSpotCheckBody(c, &input, maxControlBody, release.ErrorDecisionInvalid, "slugs", "outcome", "reason")
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	p, _ := sessionReadPrincipal(c)
+	result, err := service.ReviewPoints(c.Request.Context(), p, c.Param("space_id"), c.Param("candidate_id"),
+		input.Slugs, input.Outcome, input.Reason)
 	if err != nil {
 		writeError(c, err)
 		return
