@@ -183,7 +183,7 @@ func TestCitedFileCacheHeadersOnlyAfterSuccess(t *testing.T) {
 		w := get(newCitationWorld(t).router(t, machineKey()), path)
 		if path == filePath {
 			require.Equal(t, http.StatusOK, w.Code)
-			require.Equal(t, "private, max-age=86400, immutable", w.Header().Get("Cache-Control"))
+			require.Equal(t, "private, no-cache", w.Header().Get("Cache-Control"))
 		} else {
 			require.GreaterOrEqual(t, w.Code, 400)
 			require.Empty(t, w.Header().Get("Cache-Control"))
