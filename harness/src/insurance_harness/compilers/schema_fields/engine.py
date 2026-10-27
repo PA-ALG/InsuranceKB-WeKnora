@@ -13,6 +13,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from insurance_harness.catalog.non_mention_policy import load_non_mention_policy
 from insurance_harness.catalog.trust_policy import load_trust_policy
 from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition, NonBlank
@@ -61,6 +62,8 @@ class CompileOutput(BaseModel):
     dropped_fields: list[str] = Field(default_factory=list)
     # The field card version the requests were built from (S4g); None in outputs written earlier.
     cards_version: str | None = None
+    # The non-mention rule applied when the fields were assembled (RV6a); None in earlier outputs.
+    non_mention_version: str | None = None
     # Actual input document identities; earlier outputs cannot be reused without them (S8a).
     materials: list[str] | None = None
 
@@ -163,6 +166,7 @@ class SchemaFieldsCompiler:
     ) -> CompileOutput:
         fields, source = self._prepare(entity_id, definitions, pages, table_headers=table_headers)
         policy = load_trust_policy()
+        non_mention = load_non_mention_policy()
         calls = 0
 
         def send(request: JudgeLikeRequest) -> str:
@@ -217,6 +221,11 @@ class SchemaFieldsCompiler:
                 if definition.field_key not in values:
                     dropped_fields.append(definition.field_key)
                     continue
+                # The value step cannot answer unknown: a value that only says the material
+                # states nothing is recorded as if step one had chosen unknown (RV6a).
+                if non_mention.only_non_mention(values[definition.field_key]):
+                    results.append(FieldResult(field_key=definition.field_key, state="unknown"))
+                    continue
                 value = normalize_field_value(definition, values[definition.field_key])
             results.append(
                 FieldResult(
@@ -236,6 +245,7 @@ class SchemaFieldsCompiler:
             dropped_refs=dropped_refs,
             dropped_fields=dropped_fields,
             cards_version=cards_version(),
+            non_mention_version=non_mention.version,
         )
 
 
