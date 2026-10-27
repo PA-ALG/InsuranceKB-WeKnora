@@ -86,7 +86,7 @@
     - 待审核的修改：`listReviews(space, 'pending')` 中各项 `pending_points` 之和；
     - 待确认材料：`listConfirmations(space, 'open')` 的条数；
     - 抽检：`listSamples(space, 'pending')` 的条数。
-  - 三个计数在版本读取成功后并行读取，各自独立：
+  - 版本读取完成后，三个计数并行读取，各自独立。读取成功和返回 `RELEASE_NOT_FOUND`（从未发布，页面显示已有的"尚未发布"空状态）都算完成：从未发布的 Space 的第一批候选正需要在这里审核；只有版本读取真正失败（`failed`）时才不读计数。各计数的结果按下列规则显示：
     - 返回 403 或 `RELEASE_ACCESS_DENIED`：隐藏这个入口（不是管理员）；
     - 其他失败：显示入口，不显示计数；
     - 读取中：计数位置显示"…"；
