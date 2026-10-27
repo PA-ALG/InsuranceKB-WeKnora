@@ -805,7 +805,9 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 			}
 		}
 		restoreAnalysis := chatsource.AnalysisScope(ctx, s.chatSources, eventType, chatManage)
+		restoreRetrieval := chatsource.RetrievalScope(ctx, s.chatSources, eventType, chatManage)
 		err := s.eventManager.Trigger(stageCtx, eventType, chatManage)
+		restoreRetrieval()
 		restoreAnalysis()
 		if understandProgress != nil && eventType == types.QUERY_UNDERSTAND {
 			chatpipeline.EndQueryUnderstandProgress(stageCtx, chatManage, understandProgress, understandStart, err)
