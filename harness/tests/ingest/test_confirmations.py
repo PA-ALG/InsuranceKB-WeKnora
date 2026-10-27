@@ -42,7 +42,11 @@ def test_each_question_for_a_person_is_pushed_once_and_quarantine_is_not() -> No
         (p for p in current.pending if p.knowledge_id != "k-orphan"), key=lambda p: p.knowledge_id
     )
     pushed = [
-        {k: platform.view(i)[k] for k in ("subject", "revision", "title", "detail", "options")}
+        # S5b-3d-2b: every pushed question also carries its material's source reference.
+        {
+            k: platform.view(i)[k]
+            for k in ("subject", "revision", "title", "detail", "options", "source_ref")
+        }
         for i in platform.items
     ]
     # S5b-3d-1: the pushed detail ends with the opening the fake reader gives for the material.

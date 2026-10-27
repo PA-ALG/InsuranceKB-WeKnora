@@ -388,7 +388,7 @@ def confirmation_body(items: Sequence[ConfirmationInput]) -> bytes:
 
 def _asked(item: ConfirmationInput | ConfirmationItem) -> tuple[object, ...]:
     options = tuple((o.key, o.label) for o in item.options)
-    return (item.subject, item.revision, item.title, item.detail, options)
+    return (item.subject, item.revision, item.title, item.detail, options, item.source_ref or "")
 
 
 def _owns(item: ConfirmationItem, space_id: str) -> bool:

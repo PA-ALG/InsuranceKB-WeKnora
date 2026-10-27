@@ -15,7 +15,6 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from insurance_harness.bundle.client import (
     MAX_CONFIRMATION_BYTES,
     MAX_CONFIRMATIONS,
-    ConfirmationClosure,
     ConfirmationInput,
     ConfirmationItem,
     PlatformClient,
@@ -25,6 +24,13 @@ from insurance_harness.bundle.client import (
 from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.identity.attribution import Attribution, Upload
 from insurance_harness.identity.confirmation import ConfirmationError, conclude
+from insurance_harness.ingest.confirmation_matching import (
+    closed_as,
+    content_of,
+    same_answer,
+    same_question,
+    unsourced,
+)
 from insurance_harness.ingest.confirmation_questions import (
     SUBJECT_PREFIX,
     ConfirmationsError,
@@ -73,11 +79,6 @@ class ConfirmationRun(BaseModel):
     report: ConfirmationReport
 
 
-def _content(item: ConfirmationInput | ConfirmationItem) -> tuple[object, ...]:
-    options = tuple((o.key, o.label) for o in item.options)
-    return (item.subject, item.revision, item.title, item.detail, options)
-
-
 def _source(entry: PendingEntry) -> RawSource:
     return RawSource(
         knowledge_id=entry.knowledge_id,
@@ -85,11 +86,6 @@ def _source(entry: PendingEntry) -> RawSource:
         file_name=entry.file_name,
         sha256=entry.sha256,
     )
-
-
-def _matches(closure: ConfirmationClosure, settlement: Settlement) -> bool:
-    answer = settlement.confirmation.answer_id if settlement.confirmation else None
-    return (closure.reason, closure.answer_id or None) == (settlement.reason, answer)
 
 
 def _settlement(
@@ -108,26 +104,6 @@ def _settlement(
         reason="applied" if ref is not None else "obsolete",
         confirmation=ref,
         conclusion=conclusion,
-    )
-
-
-def _same_question(item: ConfirmationItem, entry: PendingEntry, settlement: Settlement) -> bool:
-    return (item.subject, item.revision) == (
-        SUBJECT_PREFIX + entry.knowledge_id,
-        settlement.revision,
-    )
-
-
-def _same_answer(item: ConfirmationItem, settlement: Settlement) -> bool:
-    """The item's answer is the settlement's in full: id, choice and answerer (review R5)."""
-    ref = settlement.confirmation
-    if ref is None:
-        return True
-    answer = item.answer
-    return answer is not None and (answer.id, answer.option_key, answer.answerer) == (
-        ref.answer_id,
-        ref.option_key,
-        ref.answerer,
     )
 
 
@@ -295,18 +271,18 @@ class _Sync:
                     raise  # the settlement stays: the next run reconciles it
                 closed = self.find(settlement.item_id, "closed")
                 # As in reconcile: the item's identity first, then how it was closed.
-                if closed is not None and not _same_question(closed, marked, settlement):
+                if closed is not None and not same_question(closed, marked, settlement):
                     self.skipped["SETTLEMENT_MISMATCH"] += 1  # kept: never cleared by another item
                     return
                 if (
                     closed is None
                     or closed.closure is None
-                    or not _matches(closed.closure, settlement)
+                    or not closed_as(closed.closure, settlement)
                 ):
                     self.mark(marked, None)
                     self.skipped[error.code] += 1
                     return
-                if not _same_answer(closed, settlement):
+                if not same_answer(closed, settlement):
                     self.skipped["SETTLEMENT_MISMATCH"] += 1
                     return
         self.execute(marked, settlement)
@@ -364,13 +340,13 @@ class _Sync:
             if item is None:
                 self.mark(entry, None)
                 self.skipped["CONFIRMATION_NOT_FOUND"] += 1
-            elif not _same_question(item, entry, settlement):
+            elif not same_question(item, entry, settlement):
                 self.skipped["SETTLEMENT_MISMATCH"] += 1  # kept: never executed on another item
             elif item.closure is not None:
-                if not _matches(item.closure, settlement):
+                if not closed_as(item.closure, settlement):
                     self.mark(entry, None)
                     self.skipped["CONFIRMATION_CLOSED"] += 1
-                elif not _same_answer(item, settlement):
+                elif not same_answer(item, settlement):
                     self.skipped["SETTLEMENT_MISMATCH"] += 1
                 else:
                     self.execute(entry, settlement)
@@ -378,7 +354,7 @@ class _Sync:
                 item.answer is None or item.answer.id != settlement.confirmation.answer_id
             ):
                 self.mark(entry, None)  # a newer answer: settled afresh below
-            elif not _same_answer(item, settlement):
+            elif not same_answer(item, settlement):
                 self.skipped["SETTLEMENT_MISMATCH"] += 1
             elif not self.recordable(entry, settlement):
                 self.skipped["CONFIRMATION_CONFLICT"] += 1  # still open: a person can answer again
@@ -392,11 +368,11 @@ class _Sync:
             fresh = [
                 (entry, question)
                 for entry, question in self.questions(self.waiting())
-                if entry.settlement is None and _content(question) not in asked
+                if entry.settlement is None and content_of(question) not in asked
             ]
             if not fresh:
                 break
-            asked.update(_content(question) for _, question in fresh)
+            asked.update(content_of(question) for _, question in fresh)
             self.pushed.update(entry.knowledge_id for entry, _ in fresh)
             stored = self.stored([question for _, question in fresh], listed)
             for (entry, _), item in zip(fresh, stored, strict=True):
@@ -410,18 +386,27 @@ class _Sync:
     def stored(
         self, questions: list[ConfirmationInput], listed: list[ConfirmationItem]
     ) -> list[ConfirmationItem | None]:
+        """The platform item of each question. An open item asked before questions carried their
+        source reference is the same question: kept as it is, not asked again (Spec §2.4)."""
+        earlier = {unsourced(i): i for i in listed if i.closure is None and not i.source_ref}
+        kept = [earlier.get(unsourced(question)) for question in questions]
+        rest = [question for question, item in zip(questions, kept, strict=True) if item is None]
         if not self.write:  # a dry run finds what the platform would return, open or closed
-            existing = {_content(item): item for item in listed}
-            return [existing.get(_content(question)) for question in questions]
-        found: list[ConfirmationItem | None] = []
-        for batch in _batches(questions):
-            found.extend(self.client.submit_confirmations(self.space, batch))
-        return found
+            existing = {content_of(item): item for item in listed}
+            found: list[ConfirmationItem | None] = [existing.get(content_of(q)) for q in rest]
+        else:
+            found = []
+            for batch in _batches(rest):
+                found.extend(self.client.submit_confirmations(self.space, batch))
+        sent = iter(found)
+        return [item if item is not None else next(sent) for item in kept]
 
     def clean(self, listed: list[ConfirmationItem]) -> None:
         """Close the material items no longer asked; keep those whose question cannot be built."""
         waiting = {entry.knowledge_id: entry for entry in self.waiting()}
-        wanted = {_content(question) for _, question in self.questions(waiting.values())}
+        asked = [question for _, question in self.questions(waiting.values())]
+        wanted = {content_of(question) for question in asked}
+        same = {unsourced(question) for question in asked}  # asked before S5b-3d-2b (Spec §2.4)
         if self.write:
             open_items = self.client.confirmations(self.space, "open")
         else:
@@ -433,7 +418,7 @@ class _Sync:
             entry = waiting.get(kid)
             if entry is not None and (kid in self.unaskable or entry.settlement is not None):
                 continue
-            if _content(item) in wanted:
+            if content_of(item) in wanted or (not item.source_ref and unsourced(item) in same):
                 continue
             if self.write:
                 try:
