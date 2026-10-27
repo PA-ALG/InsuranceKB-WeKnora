@@ -10,7 +10,8 @@ export interface ConfirmationDraft {
   busy: boolean
   error: '' | 'failed' | 'denied' | 'invalid'
 }
-export type AnswerResult = 'answered' | 'closed' | 'failed' | 'stale'
+// 'moved': an answer recorded on 待处理 moves the item to 已处理 (S5b-3e), the card leaves the list.
+export type AnswerResult = 'answered' | 'moved' | 'closed' | 'failed' | 'stale'
 
 export const maxNote = 1000
 // The server trims with Go's strings.TrimSpace, where U+0085 is a space and U+FEFF is not
@@ -41,20 +42,31 @@ export function useConfirmations(spaceId: Readonly<Ref<string>>) {
   const drafts = reactive(new Map<string, ConfirmationDraft>())
   // The title of an item someone else closed while this page offered it.
   const notice = ref('')
+  // The option label of the last answer that moved an item from 待处理 to 已处理.
+  const moved = ref('')
   // `scope` changes with the Space, `request` with every list read. A submission answers only the
   // list it was made from: once the list was read again it shows the server's state instead.
   let scope = 0, request = 0
 
   async function load() {
     const current = ++request, currentScope = scope, space = spaceId.value, status = tab.value
-    state.value = 'loading'; items.value = []; notice.value = ''
+    state.value = 'loading'; items.value = []; notice.value = ''; moved.value = ''
     try {
-      const listed = await listConfirmations(space, status)
+      // An answer decides the tab (S5b-3e): 待处理 holds open items nobody answered; 已处理 holds the
+      // answered open items, still waiting for the system, ahead of the closed ones.
+      const [open, closed] = await Promise.all([
+        listConfirmations(space, 'open'), status === 'closed' ? listConfirmations(space, 'closed') : [],
+      ])
       if (current !== request || currentScope !== scope) return
-      const unique = new Map(listed
-        .filter(item => item.space_id === space && (status === 'closed') === !!item.closure)
-        .map(item => [item.id, item]))
-      items.value = [...unique.values()]
+      const mine = (item: ConfirmationItem) => item.space_id === space
+      const shown = status === 'open'
+        ? open.filter(item => mine(item) && !item.closure && !item.answer)
+        : [...closed.filter(item => mine(item) && !!item.closure), ...open.filter(item => mine(item) && !item.closure && !!item.answer)]
+      // A closed copy wins over an open one the same item still had in the other list.
+      const unique = new Map<string, ConfirmationItem>()
+      for (const item of shown) if (!unique.get(item.id)?.closure) unique.set(item.id, item)
+      items.value = status === 'open' ? [...unique.values()]
+        : [...[...unique.values()].filter(item => !item.closure), ...[...unique.values()].filter(item => !!item.closure)]
       for (const item of items.value) {
         if (!item.closure && drafts.get(item.id)?.base !== (item.answer?.id ?? '')) drafts.set(item.id, startDraft(item))
       }
@@ -79,6 +91,12 @@ export function useConfirmations(spaceId: Readonly<Ref<string>>) {
       if (left()) return 'stale'
       if (recorded.item_id !== item.id || recorded.option_key !== option) throw new EnterpriseError('INVALID_RESPONSE')
       const answered = { ...item, answer: recorded }
+      if (!item.answer && tab.value === 'open') {
+        items.value = items.value.filter(existing => existing.id !== item.id)
+        drafts.delete(item.id)
+        moved.value = item.options.find(choice => choice.key === recorded.option_key)?.label ?? option
+        return 'moved'
+      }
       items.value = items.value.map(existing => existing.id === item.id ? answered : existing)
       drafts.set(item.id, startDraft(answered))
       return 'answered'
@@ -104,5 +122,5 @@ export function useConfirmations(spaceId: Readonly<Ref<string>>) {
     scope++; request++; drafts.clear(); items.value = []; tab.value = 'open'; void load()
   }, { immediate: true, flush: 'sync' })
   onScopeDispose(() => { scope++; request++ })
-  return { tab, state, items, drafts, notice, load, selectTab, answer }
+  return { tab, state, items, drafts, notice, moved, load, selectTab, answer }
 }

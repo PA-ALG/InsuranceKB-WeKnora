@@ -7643,6 +7643,7 @@ export default {
       "change": "Change choice",
       "submitting": "Submitting your choice…",
       "answered": "Chosen: {option}. Waiting for the system.",
+      "moved": "Recorded “{option}”. The item moved to Handled and waits for the system.",
       "waiting": "Choice submitted. Waiting for the system.",
       "denied": "Requires an administrator with Wiki edit permission",
       "invalid": "This option is no longer valid. Refresh and try again.",
