@@ -59,7 +59,12 @@ def test_the_restoration_is_recorded_after_the_s4i_revision() -> None:
     manifest = json.loads((GOLDEN / "manifest.json").read_text(encoding="utf-8"))
     revisions = manifest["revisions"]
     s4i = next(i for i, r in enumerate(revisions) if r["cards_version"] == "draft-2026-10-17a")
-    later = [r for r in revisions[s4i + 1 :] if r["cards_version"] == "draft-2026-10-18a"]
+    # S12b later judged split pieces under the same cards; only the S4j remap restores headers.
+    later = [
+        r
+        for r in revisions[s4i + 1 :]
+        if r["cards_version"] == "draft-2026-10-18a" and r.get("method") == "deterministic-remap"
+    ]
     assert len(later) == 1 and later[0]["basis"]
     for product in PRODUCTS:
         assert later[0]["products"][product]["restored"] == ["premium_payment_term"], product

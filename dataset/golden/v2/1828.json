@@ -12,20 +12,6 @@
      "document": "产品说明书.pdf",
      "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
      "page": 1,
-     "quote": "平安安佑福（全能版）重大疾病保险产品说明书\r\n在本说明书中，“您”指投保人，“我们”、“本公司”均指中国平安人寿保险股份有限公司，“合同”指\r\n平安安佑福（全能版）重大疾病保险产品合同，“条款”指平安安佑福（全能版）重大疾病保险条款。",
-     "segment_id": "D1P1S1"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "产品特色",
-     "segment_id": "D1P1S2"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
      "quote": " 120 种重大疾病保障\r\n提供 120 种重大疾病保障，重大疾病保险金给付以一次为限",
      "segment_id": "D1P1S3"
     },
@@ -56,13 +42,6 @@
      "page": 1,
      "quote": " 身故保障\r\n身故保险金，让爱延续\r\n本说明书中所称重大疾病、中症疾病和轻度疾病，指平安安佑福（全能版）重大疾病保\r\n险合同所定义的 120 种重大疾病、20 种中症疾病、40 种轻度疾病。",
      "segment_id": "D1P1S7"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "主要保单利益",
-     "segment_id": "D1P1S8"
     }
    ]
   },
@@ -76,20 +55,6 @@
      "document": "产品说明书.pdf",
      "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
      "page": 1,
-     "quote": "平安安佑福（全能版）重大疾病保险产品说明书\r\n在本说明书中，“您”指投保人，“我们”、“本公司”均指中国平安人寿保险股份有限公司，“合同”指\r\n平安安佑福（全能版）重大疾病保险产品合同，“条款”指平安安佑福（全能版）重大疾病保险条款。",
-     "segment_id": "D1P1S1"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "产品特色",
-     "segment_id": "D1P1S2"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
      "quote": " 120 种重大疾病保障\r\n提供 120 种重大疾病保障，重大疾病保险金给付以一次为限",
      "segment_id": "D1P1S3"
     },
@@ -120,20 +85,6 @@
      "page": 1,
      "quote": " 身故保障\r\n身故保险金，让爱延续\r\n本说明书中所称重大疾病、中症疾病和轻度疾病，指平安安佑福（全能版）重大疾病保\r\n险合同所定义的 120 种重大疾病、20 种中症疾病、40 种轻度疾病。",
      "segment_id": "D1P1S7"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "主要保单利益",
-     "segment_id": "D1P1S8"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 7,
-     "quote": "解除合同后，您不再享有原有的保障。",
-     "segment_id": "D1P7S9"
     },
     {
      "document": "产品说明书.pdf",
@@ -266,13 +217,6 @@
      "segment_id": "D1P8S1"
     },
     {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 8,
-     "quote": "宽限期\r\n除另有约定外，分期支付保险费的，您支付首期保险费后，如果您到期未支付保险费，\r\n自保险费约定支付日的次日零时起 60 日为宽限期。宽限期内发生的保险事故，我们仍会承担\r\n保险责任，但在给付保险金时会扣减您欠交的保险费。",
-     "segment_id": "D1P8S2"
-    },
-    {
      "document": "保险条款.pdf",
      "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
      "page": 9,
@@ -357,20 +301,6 @@
      "document": "产品说明书.pdf",
      "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
      "page": 7,
-     "quote": "解除合同后，您不再享有原有的保障。",
-     "segment_id": "D1P7S9"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 7,
-     "quote": "投保范围\r\n合同接受的被保险人的投保年龄范围为 0 周岁(须出生满 28 日)至 55 周岁，且须符合投\r\n保当时我们的规定。",
-     "segment_id": "D1P7S10"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 7,
      "quote": "保险期间\r\n合同的保险期间为被保险人终身，自合同生效时起至被保险人身故时止，保险期间在保\r\n险单上载明。",
      "segment_id": "D1P7S11"
     },
@@ -380,13 +310,6 @@
      "page": 7,
      "quote": "1.3 保险期间 本合同的保险期间为被保险人终身，自本合同生效时起至被保险人身故时止，保险\r\n期间在保险单上载明。",
      "segment_id": "D2P7S28"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 7,
-     "quote": " 我们不保什么\r\n这部分讲的是我们不承担保险责任的情况。",
-     "segment_id": "D2P7S29"
     }
    ]
   },
@@ -437,20 +360,6 @@
      "page": 7,
      "quote": "解除合同后，您不再享有原有的保障。",
      "segment_id": "D1P7S9"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 7,
-     "quote": "投保范围\r\n合同接受的被保险人的投保年龄范围为 0 周岁(须出生满 28 日)至 55 周岁，且须符合投\r\n保当时我们的规定。",
-     "segment_id": "D1P7S10"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 7,
-     "quote": "保险期间\r\n合同的保险期间为被保险人终身，自合同生效时起至被保险人身故时止，保险期间在保\r\n险单上载明。",
-     "segment_id": "D1P7S11"
     },
     {
      "document": "保险条款.pdf",
@@ -507,13 +416,6 @@
      "page": 11,
      "quote": "您在犹豫期后解除合同可能会遭受一定损失。",
      "segment_id": "D2P11S16"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 11,
-     "quote": " 其他权益\r\n这部分讲的是您所拥有的其他相关权益。",
-     "segment_id": "D2P11S17"
     },
     {
      "document": "保险条款.pdf",
@@ -941,20 +843,6 @@
      "document": "产品说明书.pdf",
      "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
      "page": 1,
-     "quote": "平安安佑福（全能版）重大疾病保险产品说明书\r\n在本说明书中，“您”指投保人，“我们”、“本公司”均指中国平安人寿保险股份有限公司，“合同”指\r\n平安安佑福（全能版）重大疾病保险产品合同，“条款”指平安安佑福（全能版）重大疾病保险条款。",
-     "segment_id": "D1P1S1"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "产品特色",
-     "segment_id": "D1P1S2"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
      "quote": " 120 种重大疾病保障\r\n提供 120 种重大疾病保障，重大疾病保险金给付以一次为限",
      "segment_id": "D1P1S3"
     },
@@ -985,13 +873,6 @@
      "page": 1,
      "quote": " 身故保障\r\n身故保险金，让爱延续\r\n本说明书中所称重大疾病、中症疾病和轻度疾病，指平安安佑福（全能版）重大疾病保\r\n险合同所定义的 120 种重大疾病、20 种中症疾病、40 种轻度疾病。",
      "segment_id": "D1P1S7"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "主要保单利益",
-     "segment_id": "D1P1S8"
     },
     {
      "document": "产品说明书.pdf",
@@ -4316,13 +4197,6 @@
      "document": "保险条款.pdf",
      "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
      "page": 19,
-     "quote": " 中症疾病释义\r\n这部分讲的是我们提供保障的 20 种中症疾病的定义，其中包含一些免责条款，请您特\r\n别留意。",
-     "segment_id": "D2P19S13"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 19,
      "quote": "本合同中所称“疾病”是指发生符合以下定义所述条件的疾病、疾病状态或手术，须\r\n由专科医生明确诊断。",
      "segment_id": "D2P19S14"
     },
@@ -4710,13 +4584,6 @@
      "page": 22,
      "quote": "20 意外导致的\r\n中度面部烧\r\n伤\r\n指面部Ⅲ度烧伤且烧伤面积达到面部表面积的 60%，或面部Ⅲ度烧伤且烧伤面积达\r\n到全身体表面积的 1.8%，且未达到本合同所指重大疾病“严重面部烧伤”的给付\r\n标准。",
      "segment_id": "D2P22S14"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 22,
-     "quote": " 重大疾病释义\r\n这部分讲的是我们提供保障的 120 种重大疾病的定义，其中包含一些免责条款，请您\r\n特别留意。",
-     "segment_id": "D2P22S15"
     },
     {
      "document": "保险条款.pdf",
@@ -7675,13 +7542,6 @@
     {
      "document": "保险条款.pdf",
      "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 40,
-     "quote": "⓫ 需关注的其他内容\r\n这部分讲的是您应当注意的其他事项。",
-     "segment_id": "D2P40S11"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
      "page": 42,
      "quote": "附表：\r\n甲状腺癌的 TNM 分期\r\n甲状腺乳头状癌、滤泡癌、低分化癌、Hürthle 细胞癌和未分化癌\r\npTX：原发肿瘤不能评估\r\npT0：无肿瘤证据\r\npT1：肿瘤局限在甲状腺内，最大径≤2cm\r\nT1a肿瘤最大径≤1cm\r\nT1b肿瘤最大径＞1cm，≤2cm\r\npT2：肿瘤 2～4cm\r\npT3：肿瘤>4cm，局限于甲状腺内或大体侵犯甲状腺外带状肌\r\npT3a：肿瘤>4cm，局限于甲状腺内\r\npT3b：大体侵犯甲状腺外带状肌，无论肿瘤大小\r\n带状肌包括：胸骨舌骨肌、胸骨甲状肌、甲状舌骨肌、肩胛舌骨肌\r\npT4：大体侵犯甲状腺外带状肌外\r\npT4a：侵犯喉、气管、食管、喉反神经及皮下软组织\r\npT4b：侵犯椎前筋膜，或包裹颈动脉、纵隔血管\r\n甲状腺髓样癌",
      "segment_id": "D2P42S1"
@@ -7756,13 +7616,6 @@
      "page": 3,
      "quote": "若被保险人在合同生效前已发生某重大疾病，合同生效后再次发生该重大疾病的，我们\r\n不承担重大疾病保险金的保险责任。",
      "segment_id": "D1P3S11"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 4,
-     "quote": "当未偿还贷款本金及利息之和加上其他未还款项达到保险合同现金价值时，保险合同的\r\n效力中止。",
-     "segment_id": "D1P4S10"
     },
     {
      "document": "产品说明书.pdf",
@@ -8147,20 +8000,6 @@
      "document": "产品说明书.pdf",
      "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
      "page": 1,
-     "quote": "平安安佑福（全能版）重大疾病保险产品说明书\r\n在本说明书中，“您”指投保人，“我们”、“本公司”均指中国平安人寿保险股份有限公司，“合同”指\r\n平安安佑福（全能版）重大疾病保险产品合同，“条款”指平安安佑福（全能版）重大疾病保险条款。",
-     "segment_id": "D1P1S1"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "产品特色",
-     "segment_id": "D1P1S2"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
      "quote": " 120 种重大疾病保障\r\n提供 120 种重大疾病保障，重大疾病保险金给付以一次为限",
      "segment_id": "D1P1S3"
     },
@@ -8191,13 +8030,6 @@
      "page": 1,
      "quote": " 身故保障\r\n身故保险金，让爱延续\r\n本说明书中所称重大疾病、中症疾病和轻度疾病，指平安安佑福（全能版）重大疾病保\r\n险合同所定义的 120 种重大疾病、20 种中症疾病、40 种轻度疾病。",
      "segment_id": "D1P1S7"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "主要保单利益",
-     "segment_id": "D1P1S8"
     },
     {
      "document": "产品说明书.pdf",
@@ -8807,41 +8639,6 @@
      "document": "产品说明书.pdf",
      "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
      "page": 1,
-     "quote": "平安安佑福（全能版）重大疾病保险产品说明书\r\n在本说明书中，“您”指投保人，“我们”、“本公司”均指中国平安人寿保险股份有限公司，“合同”指\r\n平安安佑福（全能版）重大疾病保险产品合同，“条款”指平安安佑福（全能版）重大疾病保险条款。",
-     "segment_id": "D1P1S1"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "产品特色",
-     "segment_id": "D1P1S2"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": " 120 种重大疾病保障\r\n提供 120 种重大疾病保障，重大疾病保险金给付以一次为限",
-     "segment_id": "D1P1S3"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": " 20 种中症疾病保障\r\n每种中症疾病限给付一次，每次 50%基本保额，中症疾病保险金累计给付以五次为限",
-     "segment_id": "D1P1S4"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": " 40 种轻度疾病保障\r\n每种轻度疾病限给付一次，每次 20%基本保额，轻度疾病保险金累计给付以五次为限",
-     "segment_id": "D1P1S5"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
      "quote": " 0-17 周岁投保享加护\r\n0-17 周岁投保，30 周岁保单周年日前确诊初次发生重大疾病/中症疾病/轻度疾病，享额\r\n外给付",
      "segment_id": "D1P1S6"
     },
@@ -8851,13 +8648,6 @@
      "page": 1,
      "quote": " 身故保障\r\n身故保险金，让爱延续\r\n本说明书中所称重大疾病、中症疾病和轻度疾病，指平安安佑福（全能版）重大疾病保\r\n险合同所定义的 120 种重大疾病、20 种中症疾病、40 种轻度疾病。",
      "segment_id": "D1P1S7"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 1,
-     "quote": "主要保单利益",
-     "segment_id": "D1P1S8"
     },
     {
      "document": "产品说明书.pdf",
@@ -9566,13 +9356,6 @@
      "document": "保险条款.pdf",
      "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
      "page": 10,
-     "quote": "身故保险金\r\n申请所需的\r\n证明和资料",
-     "segment_id": "D2P10S19"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 10,
      "quote": "1.保险合同；",
      "segment_id": "D2P10S20"
     },
@@ -9707,13 +9490,6 @@
      "document": "产品说明书.pdf",
      "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
      "page": 4,
-     "quote": "2.其他权益",
-     "segment_id": "D1P4S5"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 4,
      "quote": " 保单贷款\r\n经被保险人书面同意，您可申请使用保单贷款功能。",
      "segment_id": "D1P4S6"
     },
@@ -9744,13 +9520,6 @@
      "page": 4,
      "quote": "当未偿还贷款本金及利息之和加上其他未还款项达到保险合同现金价值时，保险合同的\r\n效力中止。",
      "segment_id": "D1P4S10"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 4,
-     "quote": "责任免除\r\n因下列情形之一导致被保险人发生“轻度疾病”、“中症疾病”或“重大疾病”的，我",
-     "segment_id": "D1P4S11"
     },
     {
      "document": "产品说明书.pdf",
@@ -9797,27 +9566,6 @@
     {
      "document": "产品说明书.pdf",
      "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 7,
-     "quote": "投保范围\r\n合同接受的被保险人的投保年龄范围为 0 周岁(须出生满 28 日)至 55 周岁，且须符合投\r\n保当时我们的规定。",
-     "segment_id": "D1P7S10"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 7,
-     "quote": "保险期间\r\n合同的保险期间为被保险人终身，自合同生效时起至被保险人身故时止，保险期间在保\r\n险单上载明。",
-     "segment_id": "D1P7S11"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 8,
-     "quote": "交费方式\r\n合同保险费的交费方式和交费期间由您与我们约定并在保险单上载明。",
-     "segment_id": "D1P8S1"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
      "page": 8,
      "quote": "宽限期\r\n除另有约定外，分期支付保险费的，您支付首期保险费后，如果您到期未支付保险费，\r\n自保险费约定支付日的次日零时起 60 日为宽限期。宽限期内发生的保险事故，我们仍会承担\r\n保险责任，但在给付保险金时会扣减您欠交的保险费。",
      "segment_id": "D1P8S2"
@@ -9828,13 +9576,6 @@
      "page": 8,
      "quote": "除另有约定外，如果您宽限期结束之时仍未支付保险费，则合同自宽限期满的次日零时\r\n起效力中止。",
      "segment_id": "D1P8S3"
-    },
-    {
-     "document": "产品说明书.pdf",
-     "document_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
-     "page": 8,
-     "quote": "明确说明与如实告知\r\n除订立合同时，我们应当向您说明合同的内容。对保险条款中免除我们责任的条款，我\r\n们在订立合同时应当在投保单、保险单或者其他保险凭证上作出足以引起您注意的提示，并\r\n对该条款的内容以书面或者口头形式向您作出明确说明，未作提示或者明确说明的，该条款\r\n不成为合同的内容。",
-     "segment_id": "D1P8S4"
     },
     {
      "document": "保险条款.pdf",
@@ -9895,13 +9636,6 @@
     {
      "document": "保险条款.pdf",
      "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 9,
-     "quote": " 如何领取保险金\r\n这部分讲的是发生保险事故后受益人如何领取保险金。",
-     "segment_id": "D2P9S15"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
      "page": 11,
      "quote": "6.2 您 解 除 合 同\r\n的 手 续 及 风\r\n险\r\n本合同成立后，您可以解除本合同，请填写解除合同通知书并向我们提供下列证明\r\n和资料：",
      "segment_id": "D2P11S12"
@@ -9933,13 +9667,6 @@
      "page": 11,
      "quote": "您在犹豫期后解除合同可能会遭受一定损失。",
      "segment_id": "D2P11S16"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 11,
-     "quote": " 其他权益\r\n这部分讲的是您所拥有的其他相关权益。",
-     "segment_id": "D2P11S17"
     },
     {
      "document": "保险条款.pdf",
@@ -10116,13 +9843,6 @@
      "page": 9,
      "quote": "随着我们健康管理服务体系的运营与完善以及外部因素等的影响，我们提供的健康\r\n管理服务内容可能发生变化，我们将及时调整健康管理服务手册并按调整后的服务\r\n手册提供健康管理服务。我们提供的健康管理服务项目发生变化的，会及时以投保\r\n书中约定的方式通知您、向您提供更新后的服务手册并在官方网站（https://life.pin\r\ngan.com/gongkaixinxipilu/healthServiceInfo.jsp）公示，说明调整的原因、调整后结\r\n果及决策流程。",
      "segment_id": "D2P9S2"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 9,
-     "quote": " 如何支付保险费\r\n这部分讲的是您应当按时交纳保险费，如果不及时交费可能会导致合同效力中止。",
-     "segment_id": "D2P9S3"
     }
    ]
   },
@@ -10340,20 +10060,6 @@
      "document": "保险条款.pdf",
      "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
      "page": 8,
-     "quote": "（2）若本合同附加了其他附加险合同，则满足以下全部条件时本合同终止：",
-     "segment_id": "D2P8S6"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 8,
-     "quote": "① 除豁免保险费合同以外的其他保险期间超过 1 年（不含）的附加险合同效力\r\n均终止；",
-     "segment_id": "D2P8S7"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 8,
      "quote": "② 保险期间不超过 1 年（含）的附加险合同效力均终止且未在保险期间届满 60\r\n日内完成重新投保或续保。",
      "segment_id": "D2P8S8"
     },
@@ -10437,30 +10143,9 @@
     {
      "document": "保险条款.pdf",
      "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 9,
-     "quote": " 如何领取保险金\r\n这部分讲的是发生保险事故后受益人如何领取保险金。",
-     "segment_id": "D2P9S15"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
      "page": 11,
      "quote": "自我们收到解除合同通知书时起，本合同终止。您在犹豫期后解除本合同的，我们\r\n自收到解除合同通知书之日起 30 日内向您退还本合同的现金价值。",
      "segment_id": "D2P11S15"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 11,
-     "quote": "您在犹豫期后解除合同可能会遭受一定损失。",
-     "segment_id": "D2P11S16"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 11,
-     "quote": " 其他权益\r\n这部分讲的是您所拥有的其他相关权益。",
-     "segment_id": "D2P11S17"
     },
     {
      "document": "保险条款.pdf",
@@ -10588,13 +10273,6 @@
      "page": 9,
      "quote": "自本合同效力中止之日起满 2 年您与我们未达成协议的，我们有权解除合同。我们\r\n解除本合同的，向您退还合同效力中止时本合同的现金价值。",
      "segment_id": "D2P9S14"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 9,
-     "quote": " 如何领取保险金\r\n这部分讲的是发生保险事故后受益人如何领取保险金。",
-     "segment_id": "D2P9S15"
     },
     {
      "document": "保险条款.pdf",
