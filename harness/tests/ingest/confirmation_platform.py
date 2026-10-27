@@ -5,6 +5,9 @@ appended, an item closed once, an applied closure only for the latest answer, an
 on identifiers, text, options and the 512 KiB request body. Like the real one it stores title,
 detail and labels trimmed as Go's strings.TrimSpace trims them, and refuses a batch naming one
 item twice. Pages of the S5b-1 fixture are served for the command tests.
+
+Since S5b-3d-2 (migration 000012) an item may carry a platform source reference: optional, in the
+release.ParseSourceRef format, part of the content digest when set and omitted when empty.
 """
 
 import hashlib
@@ -19,6 +22,9 @@ from tests.ingest.upload_helpers import SPACE, material
 
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9:._-]{0,127}$")
+_SOURCE_REF = re.compile(
+    r"^source:v1:[A-Za-z0-9][A-Za-z0-9_-]{0,63}:[1-9][0-9]{0,18}:[0-9a-f]{64}$"
+)
 _CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
 _SPACE = "[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]"
 _EDGES = re.compile(f"^{_SPACE}+|{_SPACE}+$")
@@ -95,6 +101,10 @@ class FakePlatform:
             }
         )
 
+    def put(self, item: dict[str, Any]) -> str:
+        """Store an item as another submitter (or an earlier Harness) sent it."""
+        return self._store(item)
+
     def find(self, subject: str) -> list[dict[str, Any]]:
         return [self.view(i) for i, item in self.items.items() if item["subject"] == subject]
 
@@ -158,8 +168,11 @@ class FakePlatform:
 
     @staticmethod
     def _digest(item: dict[str, Any]) -> str:
+        content = {"detail": item["detail"], "options": item["options"], "title": item["title"]}
+        if item.get("source_ref"):
+            content["source_ref"] = item["source_ref"]
         canonical = json.dumps(
-            {"detail": item["detail"], "options": item["options"], "title": item["title"]},
+            content,
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,
@@ -170,7 +183,15 @@ class FakePlatform:
         options = item.get("options")
         keys = [o.get("key") for o in options] if isinstance(options, list) else []
         return (
-            set(item) == {"subject", "revision", "title", "detail", "options"}
+            set(item) - {"source_ref"} == {"subject", "revision", "title", "detail", "options"}
+            and (
+                "source_ref" not in item
+                or item["source_ref"] == ""
+                or (
+                    isinstance(item["source_ref"], str)
+                    and _SOURCE_REF.fullmatch(item["source_ref"]) is not None
+                )
+            )
             and all(
                 isinstance(item[k], str) and _IDENTITY.fullmatch(item[k])
                 for k in ("subject", "revision")
@@ -209,6 +230,7 @@ class FakePlatform:
             "title": item["title"],
             "detail": item["detail"],
             "options": [dict(o) for o in item["options"]],
+            **({"source_ref": item["source_ref"]} if item.get("source_ref") else {}),
             "created_by": "service:harness",
             "created_at": f"2026-10-25T09:{self._next:02d}:00Z",
         }
