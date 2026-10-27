@@ -187,6 +187,14 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 		})
 		return
 	}
+	// Access and the citation are checked above on every request; the browser only
+	// revalidates (no-cache), and a matching validator never opens or hashes the file.
+	tag := `"` + cited + `"`
+	if condition := c.GetHeader("If-None-Match"); condition != "" && matchesReleaseETag(condition, tag) {
+		releaseCacheHeaders(c, tag)
+		c.Status(http.StatusNotModified)
+		return
+	}
 	if files == nil {
 		writeSourceError(c, nil)
 		return
@@ -219,8 +227,7 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 		})
 		return
 	}
-	c.Header("ETag", `"`+cited+`"`)
-	c.Header("Cache-Control", "private, max-age=86400, immutable")
+	releaseCacheHeaders(c, tag)
 	c.Header("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(name))
 	c.Data(http.StatusOK, "application/pdf", raw)
 }
