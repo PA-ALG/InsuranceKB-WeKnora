@@ -39,10 +39,25 @@ type pointReads struct {
 	principal Principal
 	space     string
 	releases  map[string]Release
+	bases     map[string]map[string]string
 }
 
 func newPointReads(s *Service, p Principal, space string) *pointReads {
-	return &pointReads{s, p, space, map[string]Release{}}
+	return &pointReads{s, p, space, map[string]Release{}, map[string]map[string]string{}}
+}
+
+func (r *pointReads) base(ctx context.Context, id string) (map[string]string, error) {
+	if id == "" {
+		return nil, nil
+	}
+	if value, ok := r.bases[id]; ok {
+		return value, nil
+	}
+	value, err := r.service.store.MembersOf(ctx, r.principal.TenantID, r.space, id)
+	if err == nil {
+		r.bases[id] = value
+	}
+	return value, err
 }
 
 func (r *pointReads) release(ctx context.Context, id string) (Release, error) {
@@ -69,12 +84,12 @@ func (r *pointReads) head(ctx context.Context) (Head, Release, error) {
 }
 
 func (r *pointReads) load(ctx context.Context, e QueueEntry, b Bundle) (*reviewPoints, error) {
-	base, err := r.release(ctx, b.BaseReleaseID)
+	base, err := r.base(ctx, b.BaseReleaseID)
 	if err != nil {
 		return nil, err
 	}
 	out := &reviewPoints{
-		base: digestsBySlug(base.Members), kinds: map[string]string{},
+		base: base, kinds: map[string]string{},
 		changed: map[string]Member{}, decisions: map[string]PointDecision{},
 	}
 	for _, m := range b.Members {

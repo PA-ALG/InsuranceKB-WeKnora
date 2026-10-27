@@ -9,20 +9,21 @@ import (
 )
 
 func (s *Service) pointQueue(ctx context.Context, p Principal, space, status string) ([]ReviewSummary, error) {
+	// Fully point-decided candidates remain SQL-pending under RV5a's frozen
+	// QueueStore semantics, so classification reads grow with that history. This
+	// is acceptable for dozens of manual candidates; once they reach hundreds,
+	// replace this scan with a storage-level point-completion marker and bounded
+	// ordering. Do not reinterpret QueueStore's whole-candidate state here.
 	entries, err := s.queue.Queue(ctx, p.TenantID, space, "pending", math.MaxInt)
 	if err != nil {
 		return nil, err
 	}
-	if status == "decided" {
-		decided, readErr := s.queue.Queue(ctx, p.TenantID, space, "decided", math.MaxInt)
-		if readErr != nil {
-			return nil, readErr
-		}
-		entries = append(entries, decided...)
-	}
 	type item struct {
-		summary ReviewSummary
-		last    time.Time
+		entry  QueueEntry
+		bundle Bundle
+		points *reviewPoints
+		status string
+		last   time.Time
 	}
 	byID := map[string]item{}
 	reads := newPointReads(s, p, space)
@@ -38,28 +39,45 @@ func (s *Service) pointQueue(ctx context.Context, p Principal, space, status str
 		if err != nil {
 			return nil, err
 		}
-		summary, last, err := points.summary(e, b)
+		state, _, _, last := points.state(e)
+		byID[e.Candidate.ID] = item{e, b, points, state, last}
+	}
+	if status == "decided" {
+		decided, err := s.queue.Queue(ctx, p.TenantID, space, "decided", math.MaxInt)
 		if err != nil {
 			return nil, err
 		}
-		byID[e.Candidate.ID] = item{summary, last}
+		for _, e := range decided {
+			if err := reviewEntryAccess(e, p, space); err != nil {
+				return nil, err
+			}
+			// Rank whole decisions from metadata before reading their bundles.
+			// If a decision landed between the queries, keep its newer metadata
+			// while reusing the pending query's immutable bundle/point reads.
+			value := byID[e.Candidate.ID]
+			value.entry, value.status, value.last = e, e.Candidate.Status, e.CreatedAt
+			if e.Decision != nil {
+				value.last = e.Decision.CreatedAt
+			}
+			byID[e.Candidate.ID] = value
+		}
 	}
 	items := make([]item, 0, len(byID))
 	for _, value := range byID {
-		if (status == "pending") == (value.summary.Status == "pending") {
+		if (status == "pending") == (value.status == "pending") {
 			items = append(items, value)
 		}
 	}
 	sort.Slice(items, func(i, j int) bool {
 		left, right := items[i], items[j]
 		if status == "pending" {
-			if left.summary.CreatedAt.Equal(right.summary.CreatedAt) {
-				return left.summary.CandidateID < right.summary.CandidateID
+			if left.entry.CreatedAt.Equal(right.entry.CreatedAt) {
+				return left.entry.Candidate.ID < right.entry.Candidate.ID
 			}
-			return left.summary.CreatedAt.Before(right.summary.CreatedAt)
+			return left.entry.CreatedAt.Before(right.entry.CreatedAt)
 		}
 		if left.last.Equal(right.last) {
-			return left.summary.CandidateID > right.summary.CandidateID
+			return left.entry.Candidate.ID > right.entry.Candidate.ID
 		}
 		return left.last.After(right.last)
 	})
@@ -68,7 +86,21 @@ func (s *Service) pointQueue(ctx context.Context, p Principal, space, status str
 	}
 	out := make([]ReviewSummary, 0, len(items))
 	for _, v := range items {
-		out = append(out, v.summary)
+		if v.points == nil {
+			v.bundle, err = s.store.BundleOf(ctx, p.TenantID, space, v.entry.Candidate.ID)
+			if err != nil {
+				return nil, err
+			}
+			v.points, err = reads.load(ctx, v.entry, v.bundle)
+			if err != nil {
+				return nil, err
+			}
+		}
+		summary, _, err := v.points.summary(v.entry, v.bundle)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, summary)
 	}
 	return out, nil
 }

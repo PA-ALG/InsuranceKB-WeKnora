@@ -73,12 +73,23 @@ func (s *Store) MembersOf(ctx context.Context, tenantID uint64, spaceID, release
 	if err != nil {
 		return nil, err
 	}
-	snapshots, err := s.releases.GetReleaseMembers(ctx, scope, releaseID)
+	// Keep the complete-reader identity and preparation checks without loading
+	// member content: review bases need only immutable slug/digest pairs.
+	header, err := s.releaseHeader(ctx, scope, releaseID)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]string, len(snapshots))
-	for _, m := range snapshots {
+	var members []struct {
+		LogicalSlug  string
+		MemberDigest string
+	}
+	if err := s.db.WithContext(ctx).Model(&types.WikiReleaseMember{}).
+		Select("logical_slug", "member_digest").Where("release_id = ?", header.ID).
+		Order("logical_slug ASC").Scan(&members).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(members))
+	for _, m := range members {
 		out[m.LogicalSlug] = m.MemberDigest
 	}
 	return out, nil

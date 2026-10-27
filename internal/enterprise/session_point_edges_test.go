@@ -49,6 +49,28 @@ type pointReadCounter struct {
 	*pointPlatform
 	heads        int
 	releasesRead map[string]int
+	membersRead  map[string]int
+	bundlesRead  map[string]int
+	membersError error
+}
+
+func (p *pointReadCounter) MembersOf(ctx context.Context, tenant uint64, space, id string) (map[string]string, error) {
+	if p.membersRead == nil {
+		p.membersRead = map[string]int{}
+	}
+	p.membersRead[id]++
+	if p.membersError != nil {
+		return nil, p.membersError
+	}
+	return p.pointPlatform.MembersOf(ctx, tenant, space, id)
+}
+
+func (p *pointReadCounter) BundleOf(ctx context.Context, tenant uint64, space, id string) (release.Bundle, error) {
+	if p.bundlesRead == nil {
+		p.bundlesRead = map[string]int{}
+	}
+	p.bundlesRead[id]++
+	return p.pointPlatform.BundleOf(ctx, tenant, space, id)
 }
 
 func (p *pointReadCounter) Head(ctx context.Context, tenant uint64, space string) (release.Head, error) {
@@ -80,9 +102,11 @@ func TestPointReadCachesVersionsAndLatestReleaseUsesEpoch(t *testing.T) {
 		require.Equal(t, 1, count, id)
 	}
 	counter.releasesRead = map[string]int{}
+	counter.membersRead = map[string]int{}
 	item := w.listed(t, "pending", w.cand.ID)
 	require.Equal(t, w.points.head.ReleaseID, item["release_id"])
-	require.Equal(t, 1, counter.releasesRead[w.first.ID], "one shared base read per list")
+	require.Equal(t, 1, counter.membersRead[w.first.ID], "one shared base digest read per list")
+	require.Zero(t, counter.releasesRead[w.first.ID], "base payload is not needed")
 }
 
 func TestPointQueueIncludesOldCandidateDecidedAfterTheHundredNewest(t *testing.T) {
