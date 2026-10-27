@@ -3,7 +3,6 @@
 .ek-home__heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .ek-home__heading .ek-page__title { margin: 0; }
 .ek-home__graph-link { margin-left: auto; color: var(--td-brand-color); font-size: 14px; text-decoration: none; }
-.ek-home__spot-link { color: var(--td-brand-color); font-size: 14px; text-decoration: none; }
 .ek-home__heading .ek-meta-tag { border-radius: 4px; padding: 2px 8px; }
 .ek-home__changes { font-size: 12px; }
 .ek-home__changes a { color: var(--td-brand-color); text-decoration: none; }
@@ -44,3 +43,18 @@
 .ek-home__snippet { display: block; margin-top: 7px; font-size: 14px; line-height: 1.8; }
 .ek-home__snippet mark { color: inherit; background: var(--td-warning-color-2); border-radius: 2px; }
 .ek-home__fields .ek-origin { margin-left: 10px; }
+.ek-home--workbench { display: grid; grid-template-columns: minmax(0, 1fr) 240px; column-gap: 28px; max-width: 1360px; }
+.ek-home--workbench > * { grid-column: 1; min-width: 0; }
+.ek-home--workbench > .ek-workbench { grid-column: 2; grid-row: 1 / span 8; align-self: start; }
+.ek-workbench { padding: 20px; border: 1px solid var(--td-component-border); border-radius: 12px; background: var(--td-bg-color-secondarycontainer); }
+.ek-workbench h2 { margin: 0 0 12px; font-size: 16px; }
+.ek-workbench a { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 0; color: var(--td-brand-color); text-decoration: none; overflow-wrap: anywhere; }
+.ek-workbench a + a { border-top: 1px solid var(--td-component-border); }
+.ek-workbench [data-workbench-count] { color: var(--td-text-color-secondary); font-size: 13px; flex-shrink: 0; }
+.ek-workbench a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ek-workbench a:focus-visible { outline: 2px solid var(--td-brand-color); outline-offset: 4px; }
+@media (max-width: 1200px) {
+  .ek-home--workbench { grid-template-columns: minmax(0, 1fr); }
+  .ek-home--workbench > .ek-workbench { grid-column: 1; grid-row: 2; margin-top: 24px; }
+}
+.ek-space-unpublished { grid-template-columns: minmax(0, 1fr); }

@@ -2,10 +2,10 @@
 import { computed, nextTick, ref, toRef, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ReviewCard from './ReviewCard.vue'
-import { useReviews, type ReviewFocus, type ReviewEntry } from './useReviews'
+import { useReviews, type ReviewFocus } from './useReviews'
 const props = defineProps<{ spaceId: string }>()
 const { t } = useI18n(), id = useId(), root = ref<HTMLElement>()
-const { tab, state, release, entries, notice, load, open, decide, selectTab } = useReviews(toRef(props, 'spaceId'))
+const { tab, state, release, entries, notice, load, open, reload, decide, selectTab } = useReviews(toRef(props, 'spaceId'))
 const tabs = computed(() => [
   { key: 'pending' as const, label: t('enterpriseKnowledge.review.pending') },
   { key: 'decided' as const, label: t('enterpriseKnowledge.review.decided') },
@@ -18,7 +18,12 @@ async function finish(action: Promise<ReviewFocus | null>) {
   if (!ticket?.valid()) return
   if (ticket.target === 'tab') { focusTab(); return }
   const card = [...root.value?.querySelectorAll<HTMLElement>('[data-review-item]') ?? []].find(el => el.dataset.reviewItem === ticket.id)
-  card?.querySelector<HTMLElement>(`[data-review-${ticket.target}]`)?.focus()
+  const point = [...card?.querySelectorAll<HTMLElement>('[data-point]') ?? []].find(el => el.dataset.point === ticket.slug)
+  const target = ticket.target === 'detail' ? card?.querySelector<HTMLElement>('[data-review-detail]')
+    : point?.querySelector<HTMLElement>(`[data-${ticket.target}]`)
+  const collapsed = target?.closest('details')
+  if (collapsed) collapsed.open = true
+  target?.focus()
 }
 async function keydown(event: KeyboardEvent) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
@@ -26,7 +31,6 @@ async function keydown(event: KeyboardEvent) {
   selectTab(event.key === 'Home' ? 'pending' : event.key === 'End' ? 'decided' : tab.value === 'pending' ? 'decided' : 'pending')
   await nextTick(); focusTab()
 }
-function reason(entry: ReviewEntry, value: string) { if (!entry.busy) { entry.reason = value; entry.error = '' } }
 </script>
 <template>
   <main ref="root" class="ek-page ek-review-page">
@@ -45,8 +49,8 @@ function reason(entry: ReviewEntry, value: string) { if (!entry.busy) { entry.re
         <div v-else-if="state === 'failed'" role="alert" class="ek-alert">{{ t('enterpriseKnowledge.review.loadFailed') }}
           <button type="button" class="ek-button" data-review-retry @click="finish(load())">{{ t('enterpriseKnowledge.retry') }}</button></div>
         <p v-else-if="!entries.length" class="ek-empty">{{ t(`enterpriseKnowledge.review.${tab === 'pending' ? 'emptyPending' : 'emptyDecided'}`) }}</p>
-        <ReviewCard v-for="entry in entries" v-else :key="entry.item.candidate_id" :entry="entry" :release="release"
-          @open="finish(open(entry))" @decide="finish(decide(entry, $event))" @reason="reason(entry, $event)" @reload="finish(load())" />
+        <ReviewCard v-for="entry in entries" v-else :key="entry.item.candidate_id" :entry="entry" :release="release" :readonly="tab === 'decided'"
+          @open="finish(open(entry))" @decide="finish(decide(entry, $event))" @reload="finish(reload(entry))" />
       </div>
     </div>
   </main>
