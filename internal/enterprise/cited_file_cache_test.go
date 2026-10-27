@@ -60,7 +60,8 @@ func TestAMatchingValidatorAnswers304WithoutOpeningTheFile(t *testing.T) {
 			requireRevalidatedEveryTime(t, w)
 			// R1: the 304 passes the same live source check (one open), but never reads the file.
 			require.Equal(t, []source.Scope{{TenantID: 7, SpaceID: "demo"}}, world.opens)
-			require.Equal(t, len(pdfBytes), world.files["k-1"].(*bytes.Reader).Len(), "a 304 never reads or hashes the file")
+			unread := world.files["k-1"].(*bytes.Reader).Len()
+			require.Equal(t, len(pdfBytes), unread, "a 304 never reads or hashes the file")
 		})
 	}
 }
