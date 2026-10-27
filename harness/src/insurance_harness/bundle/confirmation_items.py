@@ -4,9 +4,15 @@ Titles, details and option labels are the submitter's opaque text; the platform 
 (subject, revision, content), appends answers and closes an item once.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 
 class _Response(BaseModel):
@@ -27,6 +33,16 @@ class ConfirmationInput(BaseModel):
     title: str
     detail: str
     options: list[ConfirmationOption]
+    # The material's platform source reference (S5b-3d-2b). None is left out of the serialized
+    # item, which is the request body: a platform before migration 000012 refuses unknown keys.
+    source_ref: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _wire(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if data.get("source_ref") is None:
+            data.pop("source_ref", None)
+        return data
 
 
 class ConfirmationAnswer(_Response):
@@ -56,6 +72,7 @@ class ConfirmationItem(_Response):
     title: str
     detail: str
     options: list[ConfirmationOption]
+    source_ref: str = ""  # omitted by the platform when the item has none
     created_by: str
     created_at: str
     answer: ConfirmationAnswer | None = None

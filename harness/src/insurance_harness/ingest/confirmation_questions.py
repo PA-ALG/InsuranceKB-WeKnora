@@ -16,6 +16,7 @@ from importlib.resources import files
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from insurance_harness.bundle.client import ConfirmationInput, ConfirmationOption
+from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.identity.attribution import load_attribution_policy
 from insurance_harness.identity.confirmation import Choice, ConfirmationError, choices
 from insurance_harness.identity.material_roles import load_material_roles
@@ -166,6 +167,7 @@ def question_of(
             facts | {"excerpt": excerpt},
         ),
         options=options,
+        source_ref=SourceRevision(entry.knowledge_id, entry.parse_attempt).ref(entry.sha256),
     )
 
 
