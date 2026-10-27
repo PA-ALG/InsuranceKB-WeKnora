@@ -29,7 +29,9 @@ const (
 // product's claim and by a page of the classic product; k4 by nothing.
 type labelReader struct{ err error }
 
-func (r labelReader) ReleaseByID(_ context.Context, tenantID uint64, spaceID, releaseID string) (release.Release, error) {
+func (r labelReader) ReleaseByID(
+	_ context.Context, tenantID uint64, spaceID, releaseID string,
+) (release.Release, error) {
 	if r.err != nil {
 		return release.Release{}, r.err
 	}
@@ -51,7 +53,8 @@ func (r labelReader) ReleaseByID(_ context.Context, tenantID uint64, spaceID, re
 	}
 	entity := func(id, label, name string) release.Member {
 		return publishedMember("entity", "entity/"+id, map[string]any{
-			"entity_id": id, "entity_type": "product", "names": []string{name}, "classification_labels": []string{label},
+			"entity_id": id, "entity_type": "product", "names": []string{name},
+			"classification_labels": []string{label},
 		})
 	}
 	return release.Release{ID: "rel-1", Epoch: 1, Members: []release.Member{
@@ -86,8 +89,10 @@ func labelFixture(err error) (*chatsource.Resolver, spaces, *heads, pins, attemp
 }
 
 func rawResult(id, knowledgeID, title string) *types.SearchResult {
-	return &types.SearchResult{ID: id, KnowledgeID: knowledgeID, KnowledgeBaseID: "raw-1", KnowledgeTitle: title,
-		Metadata: map[string]string{"keep": "yes"}}
+	return &types.SearchResult{
+		ID: id, KnowledgeID: knowledgeID, KnowledgeBaseID: "raw-1", KnowledgeTitle: title,
+		Metadata: map[string]string{"keep": "yes"},
+	}
 }
 
 func keys(m map[string][]string) []string {
@@ -125,10 +130,11 @@ func TestRawMaterialsCarryTheProductsThatCiteThem(t *testing.T) {
 }
 
 func TestQuickAnswerAutoRawMaterialsAreLabelledToo(t *testing.T) {
-	r, s, h, p, a := labelFixture(nil)
+	_, s, h, p, a := labelFixture(nil)
 	d := answerDirectory{s, map[string][2]string{"s1": {"raw-1", "wiki-1"}}}
-	r = chatsource.NewResolver(d, h, p, a).WithPublished(knowledge.NewService(labelReader{}))
-	ctx, _, err := chatsource.ResolveAnswer(context.Background(), r, tenant, types.SearchTargets{kb("wiki-1")}, allowRaw)
+	r := chatsource.NewResolver(d, h, p, a).WithPublished(knowledge.NewService(labelReader{}))
+	ctx, _, err := chatsource.ResolveAnswer(
+		context.Background(), r, tenant, types.SearchTargets{kb("wiki-1")}, allowRaw)
 	require.NoError(t, err)
 	turn, _ := chatsource.TurnFromContext(ctx)
 	require.Equal(t, []string{"k1", "k2", "k4"}, keys(turn.RawEntities))
@@ -137,7 +143,8 @@ func TestQuickAnswerAutoRawMaterialsAreLabelledToo(t *testing.T) {
 
 func TestLabelsNeedThePublishedServiceAndSurviveALookupFailure(t *testing.T) {
 	s, h, p, a := fixture()
-	turn, err := chatsource.NewResolver(s, h, p, a).Resolve(context.Background(), tenant, types.SearchTargets{kb("raw-1")})
+	turn, err := chatsource.NewResolver(s, h, p, a).
+		Resolve(context.Background(), tenant, types.SearchTargets{kb("raw-1")})
 	require.NoError(t, err)
 	require.Nil(t, turn.RawEntities, "without published knowledge nothing is labelled")
 	plain := rawResult("c1", "k1", "保险条款.pdf")
@@ -207,7 +214,9 @@ func TestNoticeAllowsSayingAbsentOnlyOnAnExplicitField(t *testing.T) {
 	}
 	require.NotContains(t, notice, "unknown")
 	require.NotContains(t, notice, "所属产品", "the raw rule only comes with raw materials")
-	raw := chatsource.KnowledgeNotice(chatsource.Turn{WikiSpaces: []string{"s1"}, RawKnowledge: map[string]string{"k1": "s1"}})
+	raw := chatsource.KnowledgeNotice(chatsource.Turn{
+		WikiSpaces: []string{"s1"}, RawKnowledge: map[string]string{"k1": "s1"},
+	})
 	require.Contains(t, raw, "原文片段标题前标有所属产品，只能用于该产品")
 	require.Contains(t, raw, "所属产品未识别的片段，不能当作任何具体产品的规定")
 }

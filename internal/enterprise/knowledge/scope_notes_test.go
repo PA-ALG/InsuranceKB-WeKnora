@@ -34,7 +34,9 @@ func cites(knowledgeID, quote string) map[string]any {
 
 type scopeReader struct{ err error }
 
-func (r scopeReader) ReleaseByID(_ context.Context, tenantID uint64, spaceID, releaseID string) (release.Release, error) {
+func (r scopeReader) ReleaseByID(
+	_ context.Context, tenantID uint64, spaceID, releaseID string,
+) (release.Release, error) {
 	if r.err != nil {
 		return release.Release{}, r.err
 	}
@@ -180,7 +182,9 @@ func TestFieldToolsShowStatesInChinese(t *testing.T) {
 		{"unknown", "", "产品 · 犹豫期：已发布知识未收录（不代表材料没有）"},
 		{"disputed", "", "产品 · 犹豫期：disputed"},
 	} {
-		got := knowledge.FieldText(knowledge.Field{EntityName: "产品", FieldTitle: "犹豫期", State: tc.state, Value: tc.value})
+		got := knowledge.FieldText(knowledge.Field{
+			EntityName: "产品", FieldTitle: "犹豫期", State: tc.state, Value: tc.value,
+		})
 		require.True(t, strings.HasPrefix(got, tc.want), got)
 	}
 }
