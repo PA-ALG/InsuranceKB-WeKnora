@@ -49,12 +49,6 @@ func confirmationFile(c *gin.Context, deps SessionDeps) {
 		return
 	}
 	etag := `"` + ref.FileSHA256 + `"`
-	if c.GetHeader("If-None-Match") == etag {
-		c.Header("ETag", etag)
-		c.Header("Cache-Control", "private, no-cache")
-		c.Status(http.StatusNotModified)
-		return
-	}
 	raw, name, ok := readSourceFile(c, deps.Files,
 		source.Scope{TenantID: p.TenantID, SpaceID: space}, ref.KnowledgeID, ref.FileSHA256)
 	if !ok {

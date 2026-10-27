@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -58,8 +59,12 @@ func (*fileAssemblyReleases) ReleaseByID(context.Context, uint64, string, string
 
 type fileAssemblySource struct {
 	failure         error
+	lookupFailure   error
+	deleted         bool
+	foreignTenant   bool
 	kb              string
 	lookups, opens  int
+	reads, closes   int
 	lookupTenant    uint64
 	executionTenant uint64
 }
@@ -85,7 +90,15 @@ func (s fileAssemblyOpener) GetKnowledgeFile(ctx context.Context, id string) (io
 func (s *fileAssemblySource) GetKnowledgeByID(_ context.Context, tenant uint64, id string) (*types.Knowledge, error) {
 	s.lookups++
 	s.lookupTenant = tenant
-	return &types.Knowledge{ID: id, TenantID: tenant, KnowledgeBaseID: s.kb}, nil
+	if s.lookupFailure != nil {
+		return nil, s.lookupFailure
+	}
+	k := &types.Knowledge{ID: id, TenantID: tenant, KnowledgeBaseID: s.kb}
+	k.DeletedAt.Valid = s.deleted
+	if s.foreignTenant {
+		k.TenantID++
+	}
+	return k, nil
 }
 
 func (s *fileAssemblySource) GetKnowledgeFile(ctx context.Context, _ string) (io.ReadCloser, string, error) {
@@ -94,7 +107,22 @@ func (s *fileAssemblySource) GetKnowledgeFile(ctx context.Context, _ string) (io
 	if s.failure != nil {
 		return nil, "", s.failure
 	}
-	return io.NopCloser(bytes.NewReader(assembledFileBytes)), "original.pdf", nil
+	return &fileAssemblyReader{Reader: bytes.NewReader(assembledFileBytes), source: s}, "original.pdf", nil
+}
+
+type fileAssemblyReader struct {
+	*bytes.Reader
+	source *fileAssemblySource
+}
+
+func (r *fileAssemblyReader) Read(p []byte) (int, error) {
+	r.source.reads++
+	return r.Reader.Read(p)
+}
+
+func (r *fileAssemblyReader) Close() error {
+	r.source.closes++
+	return nil
 }
 
 // Call the production registration, not MountSessionConfirmations with hand-built SessionDeps.
@@ -205,5 +233,68 @@ func TestProductionConfirmationFileAssemblyPreservesAccessAndRawScope(t *testing
 				require.Zero(t, source.lookups)
 			}
 		})
+	}
+}
+
+func TestProductionFileConditionalRequestsUseTheFullReadSourceCheck(t *testing.T) {
+	etag := `"` + strings.TrimPrefix(assembledFileRef(), "source:v1:k-file:2:") + `"`
+	for _, path := range []string{
+		assembledConfirmPath,
+		"/api/v1/enterprise/spaces/space-a/view/releases/release-a/sources/k-file/attempts/2/file",
+	} {
+		for _, tc := range []struct {
+			name   string
+			change func(*fileAssemblySource)
+			status int
+			opened int
+		}{
+			{"live", func(*fileAssemblySource) {}, 304, 1},
+			{"RAW moved", func(s *fileAssemblySource) { s.kb = "other-raw" }, 404, 0},
+			{"tenant moved", func(s *fileAssemblySource) { s.foreignTenant = true }, 404, 0},
+			{"soft deleted", func(s *fileAssemblySource) { s.deleted = true }, 404, 0},
+			{"query error", func(s *fileAssemblySource) { s.lookupFailure = errors.New("query failed") }, 503, 0},
+			{
+				"file missing", func(s *fileAssemblySource) { s.failure = fmt.Errorf("open: %w", fs.ErrNotExist) },
+				404, 1,
+			},
+			{"storage error", func(s *fileAssemblySource) { s.failure = errors.New("read unavailable") }, 503, 1},
+		} {
+			t.Run(path+"/"+tc.name, func(t *testing.T) {
+				for _, conditional := range []bool{false, true} {
+					source := &fileAssemblySource{kb: "raw-a"}
+					tc.change(source)
+					router, _ := assembledFileRouter(t, types.TenantRoleAdmin, source)
+					req := httptest.NewRequest(http.MethodGet, path, nil)
+					if conditional {
+						req.Header.Set("If-None-Match", etag)
+					}
+					res := httptest.NewRecorder()
+					router.ServeHTTP(res, req)
+					want := tc.status
+					if want == 304 && !conditional {
+						want = 200
+					}
+					require.Equal(t, want, res.Code, res.Body.String())
+					require.Equal(t, 1, source.lookups)
+					require.Equal(t, tc.opened, source.opens)
+					if want == 200 {
+						require.Positive(t, source.reads)
+						require.Equal(t, 1, source.closes)
+					} else {
+						require.Zero(t, source.reads)
+						if want == 304 {
+							require.Equal(t, 1, source.closes)
+							require.Empty(t, res.Body.Bytes())
+							require.Equal(t, etag, res.Header().Get("ETag"))
+							require.Equal(t, "private, no-cache", res.Header().Get("Cache-Control"))
+						} else {
+							require.Zero(t, source.closes, "a failed open returned no reader")
+							require.Empty(t, res.Header().Get("ETag"))
+							require.NotContains(t, res.Body.String(), "%PDF")
+						}
+					}
+				}
+			})
+		}
 	}
 }

@@ -197,8 +197,9 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 	c.Data(http.StatusOK, "application/pdf", raw)
 }
 
-// readSourceFile verifies every byte before either file endpoint emits content. Both callers
-// authorize the reference first; the provider enforces the Space's RAW KB boundary.
+// readSourceFile checks the live source before confirming a cached copy or verifying all bytes.
+// Both callers authorize the reference first; the provider enforces the Space's RAW KB boundary.
+// False means the response is already handled (304 or failure), with no file body to serve.
 func readSourceFile(
 	c *gin.Context, files SourceFiles, scope source.Scope, knowledgeID, fingerprint string,
 ) ([]byte, string, bool) {
@@ -222,6 +223,18 @@ func readSourceFile(
 	// source; contextReader stops further reads. Nothing is written for a cancelled request.
 	stop := context.AfterFunc(ctx, closeReader)
 	defer stop()
+	if ctx.Err() != nil {
+		writeSourceError(c, nil)
+		return nil, "", false
+	}
+	etag := `"` + fingerprint + `"`
+	if c.GetHeader("If-None-Match") == etag {
+		closeReader()
+		c.Header("ETag", etag)
+		c.Header("Cache-Control", "private, no-cache")
+		c.Status(http.StatusNotModified)
+		return nil, "", false
+	}
 	raw, err := io.ReadAll(io.LimitReader(contextReader{ctx: ctx, r: reader}, maxSourceFile+1))
 	if err != nil || ctx.Err() != nil {
 		writeSourceError(c, nil)

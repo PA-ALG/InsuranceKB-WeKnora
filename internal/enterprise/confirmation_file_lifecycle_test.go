@@ -43,7 +43,9 @@ func TestConfirmationFileConditionalRequestsReauthorizeBeforeReading(t *testing.
 	require.Equal(t, etag, res.Header().Get("ETag"))
 	require.Equal(t, "private, no-cache", res.Header().Get("Cache-Control"))
 	require.Equal(t, 1, store.reads)
-	require.Empty(t, w.raw.opens)
+	require.Len(t, w.raw.opens, 1, "conditional requests still check the live source")
+	require.Zero(t, w.raw.reads)
+	require.Equal(t, 1, w.raw.closes)
 
 	for _, role := range []types.TenantRole{types.TenantRoleViewer, types.TenantRoleContributor, ""} {
 		res = fetch(w.browserRouter(browser, role, w.raw.open), path, "If-None-Match", etag)
@@ -56,7 +58,7 @@ func TestConfirmationFileConditionalRequestsReauthorizeBeforeReading(t *testing.
 	require.Equal(t, http.StatusNotFound, res.Code)
 	require.Equal(t, confirm.ErrorConfirmationNotFound, code(t, res.Body.Bytes()))
 	require.Equal(t, 2, store.reads)
-	require.Empty(t, w.raw.opens)
+	require.Len(t, w.raw.opens, 1, "refused requests never reach the source")
 }
 
 func TestConfirmationFileRequiresAnExactETagAndAStoredReference(t *testing.T) {
@@ -158,6 +160,40 @@ func TestConfirmationFileCancellationUnblocksReadAndClosesOnce(t *testing.T) {
 	require.NotContains(t, res.Body.String(), "%PDF")
 	// The same item remains readable on a fresh request after cancellation.
 	require.Equal(t, http.StatusOK, fetch(w.admin(), confirmFilePath("demo", id)).Code)
+}
+
+func TestConfirmationConditionalFileClosesIfCancelledDuringOpen(t *testing.T) {
+	w := newFileWorld()
+	id := w.submit(t, "demo", itemJSON("document", materialRef(materialPDF)))[0]["id"].(string)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	slow := newSlowFile(false)
+	file := &trackedConfirmationFile{ReadCloser: slow}
+	opens := 0
+	files := func(context.Context, source.Scope, string) (io.ReadCloser, string, error) {
+		opens++
+		cancel()
+		return file, "material.pdf", nil
+	}
+	req := httptest.NewRequest(http.MethodGet, confirmFilePath("demo", id), nil).WithContext(ctx)
+	req.Header.Set("If-None-Match", `"`+sha(materialPDF)+`"`)
+	res := httptest.NewRecorder()
+	w.browserRouter(browser, types.TenantRoleAdmin, files).ServeHTTP(res, req)
+	require.Equal(t, http.StatusServiceUnavailable, res.Code)
+	require.Equal(t, 1, opens)
+	require.Zero(t, slow.readCount())
+	require.EqualValues(t, 1, file.closes.Load())
+	require.Empty(t, res.Header().Get("ETag"))
+}
+
+func TestConfirmationConditionalFileRequiresAConfiguredReader(t *testing.T) {
+	w := newFileWorld()
+	id := w.submit(t, "demo", itemJSON("document", materialRef(materialPDF)))[0]["id"].(string)
+	res := fetch(w.browserRouter(browser, types.TenantRoleAdmin, nil),
+		confirmFilePath("demo", id), "If-None-Match", `"`+sha(materialPDF)+`"`)
+	require.Equal(t, http.StatusServiceUnavailable, res.Code)
+	require.Equal(t, source.ErrorUnavailable, code(t, res.Body.Bytes()))
+	require.Empty(t, res.Header().Get("ETag"))
 }
 
 func TestConfirmationSourceJSONRejectsNonStringsAndDuplicatesWithoutWrites(t *testing.T) {
