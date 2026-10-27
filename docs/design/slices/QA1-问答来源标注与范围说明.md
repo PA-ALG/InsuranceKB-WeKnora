@@ -38,11 +38,16 @@ func (s *Service) SourceEntities(ctx context.Context, tenantID uint64, spaceID, 
 - 位置：`internal/enterprise/knowledge`；
 - 认哪些成员：
   - Claim 按 `subject_ref`；
-  - wiki 页面按它的**全部** `entity_refs`，只算发布版本中存在的实体，不只算页面 slug 里的那一个。这只影响来源对应，页面搜索的单产品过滤规则不变；
+  - wiki 页面按它的**全部** `entity_refs`，不只算页面 slug 里的那一个，但只算本次读取可见的 **Entity 成员**：
+    - 没有 Entity 成员、或其 Entity 成员不可见（如 `restricted`）的引用不算；
+    - 索引为没有 Entity 成员的 Claim 主体合成的占位条目，也不能让页面材料归到它名下；
+    - 这只影响来源对应，页面搜索的单产品过滤规则不变；
+  - Claim 的兜底不变：Claim 主体没有可见 Entity 成员时，名称就是主体 ID，与字段标题的做法一致；
 - 显示名取实体的第一个名称，与字段标题中的名称一致；
 - 先按导航顺序排列，再按**显示名**去重：两个实体同名时，名称只出现一次。
 
 > 2026-10-27 修订（#371 审核 R2、R5）：补上页面的全部 `entity_refs`，以及按显示名去重。
+> 2026-10-27 再修订（#371 第三轮 R2 余项，Owner 裁定）：页面来源只认可见的 Entity 成员，Claim 合成的占位条目不算。
 
 ### 2.2 本轮的标注表
 
