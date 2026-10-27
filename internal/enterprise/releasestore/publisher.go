@@ -73,12 +73,23 @@ func (s *Store) MembersOf(ctx context.Context, tenantID uint64, spaceID, release
 	if err != nil {
 		return nil, err
 	}
-	snapshots, err := s.releases.GetReleaseMembers(ctx, scope, releaseID)
+	// Keep the complete-reader identity and preparation checks without loading
+	// member content: review bases need only immutable slug/digest pairs.
+	header, err := s.releaseHeader(ctx, scope, releaseID)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]string, len(snapshots))
-	for _, m := range snapshots {
+	var members []struct {
+		LogicalSlug  string
+		MemberDigest string
+	}
+	if err := s.db.WithContext(ctx).Model(&types.WikiReleaseMember{}).
+		Select("logical_slug", "member_digest").Where("release_id = ?", header.ID).
+		Order("logical_slug ASC").Scan(&members).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(members))
+	for _, m := range members {
 		out[m.LogicalSlug] = m.MemberDigest
 	}
 	return out, nil
@@ -121,6 +132,18 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 // Ready preparation, release, members, Head CAS and receipt. Identifiers derive from
 // the nonce, so a retry finds the committed receipt instead of activating twice.
 func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (release.Release, error) {
+	if len(w.Points) > 0 {
+		if err := validatePointRows(w.Points, "approve"); err != nil {
+			return release.Release{}, err
+		}
+		first := w.Points[0]
+		if first.TenantID != w.TenantID || first.SpaceID != w.SpaceID || first.CandidateID != w.CandidateID ||
+			first.Subject != w.Subject {
+			return release.Release{}, &release.Error{
+				Code: release.ErrorDecisionInvalid, Detail: "points do not belong to activation",
+			}
+		}
+	}
 	scope, err := s.spaces.Scope(w.TenantID, w.SpaceID)
 	if err != nil {
 		return release.Release{}, err
@@ -153,6 +176,9 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 	}
 	publishedID := rel.ID
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockReviewCandidate(tx, w.TenantID, w.SpaceID, w.CandidateID); err != nil {
+			return err
+		}
 		if err := lockCandidate(tx, w); err != nil {
 			return err
 		}
@@ -163,6 +189,13 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		if id != "" {
 			publishedID = id
 			return nil
+		}
+		if len(w.Points) > 0 {
+			if err := checkPointRows(tx, w.Points); err != nil {
+				return err
+			}
+		} else if err := noStoredPoints(tx, w.TenantID, w.SpaceID, w.CandidateID); err != nil {
+			return err
 		}
 		refs, err := sourceRefs(w.Members)
 		if err != nil {
@@ -194,6 +227,11 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		})
 		if err != nil {
 			return err
+		}
+		if len(w.Points) > 0 {
+			if err := s.insertPoints(tx, w.Points, rel.ID); err != nil {
+				return err
+			}
 		}
 		return storeSourceLinks(tx, w, rel.ID, refs)
 	})
