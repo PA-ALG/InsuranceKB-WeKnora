@@ -1,6 +1,7 @@
 """S5b-3d-2b acceptance (protected, written by Claude): every question carries its material's
-platform source reference, so an administrator can open the original file; the items asked before
-the reference existed are replaced once, and an answer given on one of them is not lost.
+platform source reference, so an administrator can open the original file. An open item asked
+before the reference existed is the same question: kept as it is and settled as usual, never
+closed or asked again just to add the reference (round 2 ruling).
 
 Spec docs/design/slices/S5b-3d-2b-Harness提交原文件引用.md §2, §4. The platform is the S5b-3a fake
 with the S5b-3d-2 (migration 000012) source reference rules.
@@ -21,7 +22,7 @@ from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.ingest.confirmations import question_of
 from insurance_harness.ingest.registry import PendingEntry, ProductRegistry
 from tests.ingest.confirmation_platform import FakePlatform
-from tests.ingest.confirmation_scenarios import BASE, UPLOADS, asked, pages, products, run
+from tests.ingest.confirmation_scenarios import BASE, UPLOADS, asked, products, run
 from tests.ingest.upload_helpers import SPACE
 
 
@@ -33,9 +34,9 @@ def _question(current: ProductRegistry, kid: str) -> ConfirmationInput:
     return question_of(_pending(current, kid), current, head=UPLOADS[kid][1])
 
 
-def _legacy(platform: FakePlatform, question: ConfirmationInput) -> str:
-    """The same question as a Harness before S5b-3d-2b pushed it: without a source reference."""
-    return platform.put(question.model_dump(exclude={"source_ref"}))
+def _legacy(platform: FakePlatform, question: ConfirmationInput, **changed: str) -> str:
+    """The question as a Harness before S5b-3d-2b pushed it: without a source reference."""
+    return platform.put(question.model_dump(exclude={"source_ref"}) | changed)
 
 
 def test_each_question_carries_its_materials_source_reference() -> None:
@@ -74,27 +75,25 @@ def test_the_client_refuses_a_stored_item_with_another_source_reference() -> Non
     assert refused.value.code == "INVALID_RESPONSE"
 
 
-def test_an_unanswered_item_from_before_is_replaced_once() -> None:
+def test_an_open_item_asked_without_the_reference_is_kept_as_the_same_question() -> None:
     current = asked(products(), "k-new")
     platform = FakePlatform()
     legacy = _legacy(platform, _question(current, "k-new"))
 
+    dry, saves = run(current, platform, write=False)
+    assert (platform.writes, saves, dry.registry) == ([], [], current)
+
     first, _ = run(current, platform)
-    items = platform.find("material:k-new")
-    assert [i["id"] for i in items][0] == legacy and len(items) == 2
-    new = items[1]
-    assert new["source_ref"] == "source:v1:k-new:1:" + "f" * 64
-    assert "closure" not in new
-    assert platform.closed == [(legacy, "obsolete", None)]
-    assert (first.report.pushed, first.report.obsoleted) == (["k-new"], ["k-new"])
+    assert platform.writes == [], "neither asked again nor closed to add the reference"
+    assert [i["id"] for i in platform.find("material:k-new")] == [legacy]
+    assert "source_ref" not in platform.view(legacy)
+    assert (first.registry, first.report.obsoleted) == (current, [])
 
     again, _ = run(first.registry, platform)
-    assert len(platform.find("material:k-new")) == 2
-    assert platform.closed == [(legacy, "obsolete", None)]
-    assert (again.report.pushed, again.report.obsoleted) == (["k-new"], [])
+    assert (platform.writes, again.report.obsoleted) == ([], [])
 
 
-def test_an_answer_given_before_the_reference_is_still_applied() -> None:
+def test_an_answer_on_an_item_asked_without_the_reference_is_applied_as_usual() -> None:
     current = asked(products(), "k-new")
     platform = FakePlatform()
     legacy = _legacy(platform, _question(current, "k-new"))
@@ -108,43 +107,40 @@ def test_an_answer_given_before_the_reference_is_still_applied() -> None:
     assert (decision.confirmation.item_id, decision.confirmation.answer_id) == (legacy, answer_id)
     assert result.registry.pending == []
     assert [i["id"] for i in platform.find("material:k-new")] == [legacy], "nothing asked again"
-    assert (result.report.applied, result.report.obsoleted) == (["k-new"], [])
+    assert all(path.endswith("/closure") for path in platform.writes)
 
 
-def test_an_answered_item_from_before_stays_open_while_its_opening_cannot_be_read() -> None:
+def test_a_question_that_really_changed_still_replaces_an_unsourced_item() -> None:
     current = asked(products(), "k-new")
     platform = FakePlatform()
-    legacy = _legacy(platform, _question(current, "k-new"))
-    platform.answer(legacy, "replace")
+    old = _legacy(platform, _question(current, "k-new"), title="「旧文案」需要确认")
 
-    result, _ = run(current, platform, reader=pages("k-new"))
-    assert platform.closed == []
-    assert [i["id"] for i in platform.find("material:k-new")] == [legacy]
-    assert result.registry.pending == current.pending
-
-    later, _ = run(result.registry, platform)
-    assert [c[:2] for c in platform.closed] == [(legacy, "applied")]
-    assert later.report.applied == ["k-new"]
-
-
-def test_an_old_item_answered_again_while_being_settled_keeps_its_newer_answer() -> None:
-    current = asked(products(), "k-new")
-    platform = FakePlatform()
-    legacy = _legacy(platform, _question(current, "k-new"))
-    platform.answer(legacy, "replace")
-    newer: list[str] = []
-
-    def answer_again(item_id: str) -> None:
-        if not newer:
-            newer.append(platform.answer(item_id, "supplement", answerer="user:bob"))
-
-    platform.before_close = answer_again
     result, _ = run(current, platform)
-    assert platform.closed == [], "the stale answer is refused; the item stays open"
-    assert result.report.skipped.get("ANSWER_STALE") == 1
-    assert [i["id"] for i in platform.find("material:k-new")] == [legacy], "nothing asked again"
+    items = platform.find("material:k-new")
+    assert [i["id"] for i in items][0] == old and len(items) == 2
+    assert items[1]["source_ref"] == "source:v1:k-new:1:" + "f" * 64
+    assert platform.closed == [(old, "obsolete", None)]
+    assert result.report.obsoleted == ["k-new"]
 
-    platform.before_close = None
-    later, _ = run(result.registry, platform)
-    assert platform.closed == [(legacy, "applied", newer[0])]
-    assert later.report.applied == ["k-new"]
+
+@pytest.mark.parametrize(
+    ("attempt", "accepted"),
+    [("9223372036854775807", True), ("9223372036854775808", False), ("0", False)],
+)
+def test_the_platform_parses_the_attempt_as_a_signed_64_bit_integer(
+    attempt: str, accepted: bool
+) -> None:
+    question = _question(asked(products(), "k-new"), "k-new")
+    ref = f"source:v1:k-new:{attempt}:" + "f" * 64
+    platform = FakePlatform()
+    client = PlatformClient(BASE, "key", transport=platform.transport())
+    if accepted:
+        [item] = client.submit_confirmations(
+            SPACE, [question.model_copy(update={"source_ref": ref})]
+        )
+        assert item.source_ref == ref
+        return
+    with pytest.raises(PlatformError) as refused:
+        client.submit_confirmations(SPACE, [question.model_copy(update={"source_ref": ref})])
+    assert refused.value.code == "CONFIRMATION_INVALID"
+    assert platform.items == {}
