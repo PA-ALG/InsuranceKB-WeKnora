@@ -52,6 +52,11 @@ func confirmationDB(t *testing.T) *gorm.DB {
 		"../../migrations/enterprise/versioned/000010_enterprise_confirmations.up.sql"))
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(string(up)).Error)
+	// S5b-3d-2: the store reads and writes the items' source references.
+	sources, err := os.ReadFile(filepath.Join(filepath.Dir(file),
+		"../../migrations/enterprise/versioned/000012_enterprise_confirmation_sources.up.sql"))
+	require.NoError(t, err)
+	require.NoError(t, db.Exec(string(sources)).Error)
 	return db
 }
 

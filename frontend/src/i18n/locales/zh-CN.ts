@@ -7624,6 +7624,12 @@ export default {
       "confirmRest": "确认批准其余 {count} 项"
     },
     confirm: {
+      "openFile": "打开原文件",
+      "openingFile": "正在打开…",
+      "fileMissing": "原文件已不存在",
+      "fileChanged": "原文件与提问时的版本不一致",
+      "fileFailed": "打开失败，请重试",
+      "fileBlocked": "浏览器拦截了新窗口，请允许弹出窗口后重试",
       "entry": "待确认材料",
       "title": "待确认材料",
       "description": "系统无法自动判断的材料在这里等你确认，系统会按你的选择处理。",

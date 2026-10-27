@@ -7622,6 +7622,12 @@ export default {
       "confirmRest": "나머지 {count}개 승인 확인"
     },
     confirm: {
+      "openFile": "원본 파일 열기",
+      "openingFile": "여는 중…",
+      "fileMissing": "원본 파일이 더 이상 존재하지 않습니다",
+      "fileChanged": "원본 파일이 질문 당시 버전과 다릅니다",
+      "fileFailed": "파일을 열지 못했습니다. 다시 시도해 주세요",
+      "fileBlocked": "브라우저가 새 창을 차단했습니다. 팝업을 허용한 후 다시 시도해 주세요",
       "entry": "확인 대기 자료",
       "title": "확인 대기 자료",
       "description": "시스템이 자동으로 판단하지 못한 자료입니다. 선택하신 대로 시스템이 처리합니다.",

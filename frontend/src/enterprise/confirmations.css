@@ -24,6 +24,10 @@
 .ek-confirm-card__actions .ek-confirm-state { margin-right: auto; }
 .ek-confirm-submit { padding: 7px 18px; white-space: nowrap; }
 .ek-confirm-submit:disabled { opacity: .45; cursor: not-allowed; }
+.ek-confirm-card__file { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--td-border-level-1-color); }
+.ek-confirm-file { padding: 7px 14px; }
+.ek-confirm-file:disabled { opacity: .45; cursor: not-allowed; }
+.ek-confirm-card__file .ek-page__meta { margin: 10px 0 0; }
 .ek-confirm-state { margin: 0; font-size: 14px; color: var(--td-text-color-primary); overflow-wrap: anywhere; }
 .ek-confirm-state[data-reason="applied"] { color: var(--td-success-color); }
 .ek-confirm-state[data-reason="obsolete"] { color: var(--td-text-color-secondary); }
