@@ -161,9 +161,6 @@ func publishedHits(
 				continue // only evidence makes a reviewed reference
 			}
 			content := knowledge.FieldText(field)
-			if IsEnterpriseAnswer(ctx) {
-				content = answerFieldText(field)
-			}
 			hits = append(hits, &types.SearchResult{
 				ID: "release:" + id + ":" + field.Slug, Content: content,
 				KnowledgeTitle: field.EntityName + " · " + field.FieldTitle,
