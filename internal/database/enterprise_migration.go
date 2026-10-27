@@ -16,7 +16,7 @@ const (
 	officialPostgresMigrationSource   = "file://migrations/versioned"
 	enterprisePostgresMigrationSource = "file://migrations/enterprise/versioned"
 	enterpriseMigrationLedgerTable    = "enterprise_schema_migrations"
-	packagedEnterpriseMigrationHead   = uint(10)
+	packagedEnterpriseMigrationHead   = uint(11)
 
 	embeddingsForwardRepairContractSQL = `
 WITH required_columns(name, data_type, not_null) AS (

@@ -308,7 +308,7 @@ func writeError(c *gin.Context, err error) {
 		case release.ErrorReleaseAccessDenied:
 			status = http.StatusForbidden
 		case release.ErrorCandidateNotApproved, release.ErrorNeedsRebase, release.ErrorReleaseConflict,
-			release.ErrorCandidateDecided:
+			release.ErrorCandidateDecided, release.ErrorMemberDecided:
 			status = http.StatusConflict
 		case release.ErrorServiceUnavailable:
 			status = http.StatusServiceUnavailable

@@ -41,6 +41,8 @@ type ReviewDecision struct {
 
 // ReviewSummary contains only the candidate metadata needed by the review list.
 type ReviewSummary struct {
+	PointCount    int             `json:"point_count"`
+	PendingPoints int             `json:"pending_points"`
 	CandidateID   string          `json:"candidate_id"`
 	CreatedAt     time.Time       `json:"created_at"`
 	CreatedBy     string          `json:"created_by"`
@@ -55,6 +57,7 @@ type ReviewSummary struct {
 
 // ReviewDetail adds the unchanged bundle and the current activation blocker.
 type ReviewDetail struct {
+	Points []ReviewPoint `json:"points"`
 	ReviewSummary
 	HeadReleaseID  *string  `json:"head_release_id"`
 	Blocker        string   `json:"blocker"`
@@ -77,6 +80,9 @@ func (s *Service) ReviewQueue(ctx context.Context, p Principal, spaceID, status 
 	}
 	if status != "pending" && status != "decided" {
 		return nil, &Error{Code: ErrorDecisionInvalid, Detail: "status must be pending or decided"}
+	}
+	if _, ok := s.publisher.(PointStore); ok {
+		return s.pointQueue(ctx, p, spaceID, status)
 	}
 	entries, err := s.queue.Queue(ctx, p.TenantID, spaceID, status, 100)
 	if err != nil {
@@ -109,6 +115,9 @@ func (s *Service) ReviewCandidate(ctx context.Context, p Principal, spaceID, id 
 	bundle, err := s.store.BundleOf(ctx, p.TenantID, spaceID, id)
 	if err != nil {
 		return ReviewDetail{}, err
+	}
+	if _, ok := s.publisher.(PointStore); ok {
+		return s.pointDetail(ctx, p, spaceID, entry, bundle)
 	}
 	summary, err := reviewSummary(entry, bundle)
 	if err != nil {
@@ -153,6 +162,9 @@ func (s *Service) Review(
 	}
 	entry, err := s.reviewEntry(ctx, p, spaceID, id)
 	if err != nil {
+		return ReviewResult{}, err
+	}
+	if err := s.noPointDecisions(ctx, p, spaceID, id); err != nil {
 		return ReviewResult{}, err
 	}
 	var decided Decision

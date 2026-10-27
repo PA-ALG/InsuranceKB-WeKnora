@@ -35,6 +35,8 @@ func TestReviewPublicationTransactionFindsConcurrentCommitBeforeSourceOrHeadWrit
 	expectNoNonce(mock)
 	expectCandidateLookup(mock, "bundle", "")
 	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WithArgs(`["review",7,"space-1","candidate"]`).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)`).
 		WithArgs(`[7,"space-1","bundle"]`).WillReturnResult(sqlmock.NewResult(0, 1))
 	expectCandidateLookup(mock, "bundle", "original")
@@ -70,6 +72,8 @@ func TestReviewPublicationFailureRollsBackCandidateLock(t *testing.T) {
 			expectNoNonce(mock)
 			expectCandidateLookup(mock, "bundle", "")
 			mock.ExpectBegin()
+			mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+				WithArgs(`["review",7,"space-1","candidate"]`).WillReturnResult(sqlmock.NewResult(0, 1))
 			lock := mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(`[7,"space-1","bundle"]`)
 			failure := errors.New("lock failed")
 			if lockFails {
@@ -77,12 +81,16 @@ func TestReviewPublicationFailureRollsBackCandidateLock(t *testing.T) {
 			} else {
 				lock.WillReturnResult(sqlmock.NewResult(0, 1))
 				expectCandidateLookup(mock, "bundle", "")
+				mock.ExpectQuery(`SELECT count\(\*\) FROM "enterprise_point_decisions"`).
+					WithArgs(uint64(7), "space-1", "candidate").
+					WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 			}
 			mock.ExpectRollback()
 			expectNoNonce(mock)
 			expectCandidateLookup(mock, "bundle", "")
 			_, err := store.Activate(context.Background(), release.ActivationWrite{
-				TenantID: 7, SpaceID: "space-1", BundleDigest: "bundle", Nonce: "second-decision",
+				TenantID: 7, SpaceID: "space-1", CandidateID: "candidate",
+				BundleDigest: "bundle", Nonce: "second-decision",
 				Members: []release.Member{{EvidenceRefs: []string{"source:v1:invalid"}}},
 			})
 			if lockFails {
