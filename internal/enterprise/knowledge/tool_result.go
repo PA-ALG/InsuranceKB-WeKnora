@@ -9,10 +9,23 @@ import (
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
+// fieldText renders a field for every chat surface (Agent, MCP and quick answers) in one wording:
+// a present value as itself, and the two absences so that "not compiled" never reads as "the
+// material has none" (QA1 §4.1). Any other state is shown as stored.
 func fieldText(field Field) string {
-	text := field.EntityName + " · " + field.FieldTitle + "：" + field.State
-	if field.Value != "" {
-		text += "；" + field.Value
+	text := field.EntityName + " · " + field.FieldTitle + "："
+	switch field.State {
+	case "present":
+		text += field.Value
+	case "absent_explicitly":
+		text += "材料明确没有"
+	case "unknown":
+		text += "已发布知识未收录（不代表材料没有）"
+	default:
+		text += field.State
+		if field.Value != "" {
+			text += "；" + field.Value
+		}
 	}
 	if field.Origin != "" {
 		text += "；来源性质：" + field.Origin
@@ -62,10 +75,24 @@ func pageText(page Page) string {
 	return text
 }
 
-// pageToolResult cites a page through its first valid evidence entry, by that entry's stored index.
-func pageToolResult(space, id string, pages []Page, total int) *types.ToolResult {
+// fieldScopeNote and pageScopeNote say what a literal search covered (QA1 §3.2), so that a miss
+// or a truncated list is not read as the product lacking the item. scope is "" or "<name>的".
+func fieldScopeNote(scope string, total, shown int) string {
+	return fmt.Sprintf("检索范围：%s已发布字段中明确存在的值，按字面匹配；命中 %d 条，显示 %d 条。"+
+		"没有命中或没有显示的，不代表材料没有；判断某产品有没有某项，用 knowledge_get_fields 读取该产品。",
+		scope, total, shown)
+}
+
+func pageScopeNote(scope string, total, shown int) string {
+	return fmt.Sprintf("检索范围：%s延伸阅读页面，每个词都须字面出现；命中 %d 页，显示 %d 页。没有命中不代表材料没有。",
+		scope, total, shown)
+}
+
+// pageToolResult cites a page through its first valid evidence entry, by that entry's stored index;
+// the given notes (a scope note) come before those of uncited pages.
+func pageToolResult(space, id string, pages []Page, total int, notes []string) *types.ToolResult {
 	rows := make([]map[string]interface{}, 0, len(pages))
-	var notes []string
+	notes = append([]string(nil), notes...)
 	for _, page := range pages {
 		content := pageText(page)
 		if len(page.Evidence) == 0 {

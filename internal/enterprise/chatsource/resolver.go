@@ -70,13 +70,18 @@ func NewResolver(spaces Spaces, heads Heads, pins Pins, attempts Attempts) *Reso
 	return &Resolver{spaces: spaces, heads: heads, pins: pins, attempts: attempts}
 }
 
-// Turn carries a request's fixed retrieval scope and source provenance.
+// Turn carries a request's fixed retrieval scope and source provenance. RawEntities maps every
+// raw material to the entities its release cites it for (an empty list when none); it is nil
+// when the resolver has no published knowledge, and then raw passages carry no product label.
 type Turn struct {
 	Targets      types.SearchTargets
 	Releases     map[string]string
 	WikiSpaces   []string
 	RawKnowledge map[string]string
 	RawAttempts  map[string]int64
+	RawEntities  map[string][]string
+
+	titles *rawTitles // set with RawEntities: original titles of the labelled raw passages
 }
 
 // SpaceOf exposes configuration identification to admission checks; it grants no ACL.
@@ -177,10 +182,15 @@ func (r *Resolver) Resolve(ctx context.Context, tenantID uint64, targets types.S
 			return Turn{}, errors.New("enterprise chat source role is invalid")
 		}
 	}
+	r.labelRaw(ctx, tenantID, &turn)
 	return turn, nil
 }
 
-// Label copies metadata before adding provenance so shared metadata maps are safe.
+// Label copies metadata before adding provenance so shared metadata maps are safe. Product
+// labels come only from the turn's mapping: an entity_names value a result arrives with is
+// replaced, or dropped when the turn labels nothing. The same result can sit in several lists
+// and the pipeline runs twice on copies, so the title is always rebuilt from the original title
+// the turn recorded, never prefixed twice.
 func (t Turn) Label(results []*types.SearchResult) {
 	for _, result := range results {
 		if result == nil {
@@ -190,11 +200,16 @@ func (t Turn) Label(results []*types.SearchResult) {
 		if !ok {
 			continue
 		}
-		metadata := make(map[string]string, len(result.Metadata)+2)
+		metadata := make(map[string]string, len(result.Metadata)+3)
 		for key, value := range result.Metadata {
 			metadata[key] = value
 		}
 		metadata["source_tier"], metadata["release_id"] = "raw_text", t.Releases[space]
+		delete(metadata, entityNamesKey)
+		if names, ok := t.rawLabel(result.KnowledgeID); ok {
+			metadata[entityNamesKey] = names
+			result.KnowledgeTitle = labelledTitle(names, t.titles.original(result))
+		}
 		result.Metadata = metadata
 	}
 }

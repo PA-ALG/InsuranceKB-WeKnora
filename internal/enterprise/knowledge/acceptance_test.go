@@ -5,7 +5,8 @@
 // names the release (never Active); entities by id, name or shared character bigrams; fields
 // with titles, states, values and evidence; S3h-1 field search; concepts by key or title; typed
 // not-found errors; reader failures returned unchanged. Tool wiring, prompts and the UI are the
-// implementer's tests. RED until Q1b implements the package.
+// implementer's tests. RED until Q1b implements the package. The QA1 RED commit only added the
+// empty entity filter argument to SearchFields (QA1 Spec §3.1).
 package knowledge_test
 
 import (
@@ -153,7 +154,7 @@ func TestEveryReadNamesThePinnedRelease(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.EntityFields(ctx, tenant, space, pinned, "1828", nil)
 	require.NoError(t, err)
-	_, _, err = s.SearchFields(ctx, tenant, space, pinned, "日", 0)
+	_, _, err = s.SearchFields(ctx, tenant, space, pinned, "日", "", 0)
 	require.NoError(t, err)
 	_, err = s.Concept(ctx, tenant, space, pinned, "犹豫期")
 	require.NoError(t, err)
@@ -232,23 +233,23 @@ func TestEntityFieldsCarryTitleStateValueAndEvidence(t *testing.T) {
 func TestSearchFieldsFollowsTheS3h1Rules(t *testing.T) {
 	s, _ := service()
 	ctx := context.Background()
-	got, total, err := s.SearchFields(ctx, tenant, space, pinned, "15日", 0)
+	got, total, err := s.SearchFields(ctx, tenant, space, pinned, "15日", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, []string{"M1/cooling_off_period", "M2/cooling_off_period"}, slugs(got))
 	require.Equal(t, 2, total)
 
-	got, _, err = s.SearchFields(ctx, tenant, space, pinned, "犹豫期 20日", 0)
+	got, _, err = s.SearchFields(ctx, tenant, space, pinned, "犹豫期 20日", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, []string{"1828/cooling_off_period"}, slugs(got), "every term, in title or value")
 
-	got, total, err = s.SearchFields(ctx, tenant, space, pinned, "日", 0)
+	got, total, err = s.SearchFields(ctx, tenant, space, pinned, "日", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, []string{
 		"M1/cooling_off_period", "M2/cooling_off_period", "1828/cooling_off_period", "1828/waiting_period",
 	}, slugs(got), "navigation order, then profile order; absent and unknown are not searched")
 	require.Equal(t, 4, total)
 
-	got, total, err = s.SearchFields(ctx, tenant, space, pinned, "日", 1)
+	got, total, err = s.SearchFields(ctx, tenant, space, pinned, "日", "", 1)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, 4, total)
@@ -280,7 +281,7 @@ func TestReaderFailuresAreReturnedUnchanged(t *testing.T) {
 	require.ErrorIs(t, err, boom)
 	_, err = s.EntityFields(ctx, tenant, space, pinned, "1828", nil)
 	require.ErrorIs(t, err, boom)
-	_, _, err = s.SearchFields(ctx, tenant, space, pinned, "日", 0)
+	_, _, err = s.SearchFields(ctx, tenant, space, pinned, "日", "", 0)
 	require.ErrorIs(t, err, boom)
 	_, err = s.Concept(ctx, tenant, space, pinned, "犹豫期")
 	require.ErrorIs(t, err, boom)

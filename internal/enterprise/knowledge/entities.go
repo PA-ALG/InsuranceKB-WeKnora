@@ -70,6 +70,32 @@ func (index *releaseIndex) entity(id string) (indexedEntity, bool) {
 	return indexedEntity{}, false
 }
 
+// fieldScope and pageScope name a search's entity filter for its scope note ("" for every
+// entity) exactly as the search applied it (QA1 §3.2): fields match IDs as EntityFields does,
+// pages by the exact ID, so a page filter that matched no entity is named by the requested ID.
+func (index *releaseIndex) fieldScope(entityID string) string {
+	if entity, ok := index.entity(entityID); ok && entityID != "" {
+		return entity.Name + "的"
+	}
+	return scopeID(entityID)
+}
+
+func (index *releaseIndex) pageScope(entityID string) string {
+	for _, entity := range index.entities {
+		if entityID != "" && entity.EntityID == entityID {
+			return entity.Name + "的"
+		}
+	}
+	return scopeID(entityID)
+}
+
+func scopeID(entityID string) string {
+	if entityID == "" {
+		return ""
+	}
+	return entityID + "的"
+}
+
 func (index *releaseIndex) orderedEntities() []indexedEntity {
 	if index.navigation == nil {
 		return index.entities

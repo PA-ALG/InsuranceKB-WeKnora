@@ -54,6 +54,8 @@ func (r *Resolver) addAnswerRaw(
 			turn.RawKnowledge[id], turn.RawAttempts[id] = space, attempt
 		}
 	}
+	// The materials added here need product labels as well (QA1 §2.2).
+	r.labelRaw(ctx, tenant, turn)
 	return nil
 }
 

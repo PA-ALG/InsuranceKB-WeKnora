@@ -70,6 +70,8 @@ type conceptPayload struct {
 type indexedEntity struct {
 	Entity
 	kind string
+	// placeholder marks an entry made for a claim subject without a visible Entity member.
+	placeholder bool
 }
 
 type indexedClaim struct {
@@ -189,7 +191,9 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 			continue
 		}
 		index.entityByID[subject] = len(index.entities)
-		index.entities = append(index.entities, indexedEntity{Entity: Entity{EntityID: subject, Name: subject}})
+		index.entities = append(index.entities, indexedEntity{
+			Entity: Entity{EntityID: subject, Name: subject}, placeholder: true,
+		})
 	}
 	return index, ctx.Err()
 }
