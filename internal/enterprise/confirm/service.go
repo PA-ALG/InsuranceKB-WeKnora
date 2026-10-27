@@ -177,6 +177,14 @@ func (s *Service) Close(
 	return c, nil
 }
 
+// Item reads an open or closed item within the caller's tenant and Space.
+func (s *Service) Item(ctx context.Context, p release.Principal, spaceID, itemID string) (Item, error) {
+	if err := checkAccess(p, spaceID); err != nil {
+		return Item{}, err
+	}
+	return s.item(ctx, p, spaceID, itemID)
+}
+
 func (s *Service) item(ctx context.Context, p release.Principal, spaceID, itemID string) (Item, error) {
 	if err := s.available(ctx); err != nil {
 		return Item{}, err
@@ -213,6 +221,11 @@ func validItems(in []ItemInput) ([]Item, error) {
 }
 
 func validItem(raw ItemInput) (Item, bool) {
+	if raw.SourceRef != "" {
+		if _, ok := release.ParseSourceRef(raw.SourceRef); !ok {
+			return Item{}, false
+		}
+	}
 	title, detail := strings.TrimSpace(raw.Title), strings.TrimSpace(raw.Detail)
 	if !subjectPattern.MatchString(raw.Subject) || !subjectPattern.MatchString(raw.Revision) ||
 		title == "" || utf8.RuneCountInString(title) > maxTitle || !printable(title) ||
@@ -231,20 +244,26 @@ func validItem(raw ItemInput) (Item, bool) {
 		keys[o.Key] = true
 		options = append(options, Option{Key: o.Key, Label: label})
 	}
-	item := Item{Subject: raw.Subject, Revision: raw.Revision, Title: title, Detail: detail, Options: options}
+	item := Item{
+		Subject: raw.Subject, Revision: raw.Revision, Title: title, Detail: detail,
+		Options: options, SourceRef: raw.SourceRef,
+	}
 	item.ContentDigest = contentDigest(item)
 	return item, true
 }
 
-// contentDigest is the SHA-256 of the canonical JSON of title, detail and options: struct fields
-// encode in declaration order, so the digest depends on the content and its option order only.
+// contentDigest hashes canonical content in declaration order. Omitting an empty SourceRef
+// preserves the exact pre-source JSON bytes, and therefore existing item identities.
 func contentDigest(item Item) string {
 	type canonical struct {
-		Detail  string   `json:"detail"`
-		Options []Option `json:"options"`
-		Title   string   `json:"title"`
+		Detail    string   `json:"detail"`
+		Options   []Option `json:"options"`
+		SourceRef string   `json:"source_ref,omitempty"`
+		Title     string   `json:"title"`
 	}
-	data, _ := json.Marshal(canonical{Detail: item.Detail, Options: item.Options, Title: item.Title})
+	data, _ := json.Marshal(canonical{
+		Detail: item.Detail, Options: item.Options, SourceRef: item.SourceRef, Title: item.Title,
+	})
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ConfirmationItem } from './enterpriseApi'
+import { EnterpriseError, readConfirmationFile, type ConfirmationItem } from './enterpriseApi'
 import { canAnswer, maxNote, noteHasControl, noteLength, type ConfirmationDraft } from './useConfirmations'
 
 const props = defineProps<{ item: ConfirmationItem; draft?: ConfirmationDraft }>()
@@ -36,6 +36,70 @@ const failure = computed(() => ({
   failed: t('enterpriseKnowledge.confirm.submitFailed'),
   '': '',
 })[props.draft?.error ?? ''])
+
+const fileBusy = ref(false), fileError = ref('')
+let activeFile: { controller: AbortController; tab: Window } | undefined
+const fileUrls = new Map<string, ReturnType<typeof setTimeout>>()
+
+function closeTab(tab: Window) {
+  try { tab.close() } catch { /* A tab navigated or closed by the user must not prevent cleanup. */ }
+}
+function releaseFileUrl(url: string) {
+  clearTimeout(fileUrls.get(url))
+  fileUrls.delete(url)
+  URL.revokeObjectURL(url)
+}
+function clearFile() {
+  const pending = activeFile
+  activeFile = undefined
+  pending?.controller.abort()
+  if (pending) closeTab(pending.tab)
+  for (const url of fileUrls.keys()) releaseFileUrl(url)
+  fileBusy.value = false
+  fileError.value = ''
+}
+// A reused card must not deliver a previous item's response to its new source.
+watch([() => props.item.space_id, () => props.item.id, () => props.item.source_ref], clearFile, { flush: 'sync' })
+onBeforeUnmount(clearFile)
+
+async function openFile() {
+  if (fileBusy.value || !props.item.source_ref) return
+  fileError.value = ''
+  let tab: Window | null
+  try { tab = window.open('', '_blank') } catch {
+    fileError.value = 'fileFailed'
+    return
+  }
+  if (!tab) {
+    fileError.value = 'fileBlocked'
+    return
+  }
+  const request = { controller: new AbortController(), tab }
+  activeFile = request
+  fileBusy.value = true
+  let url: string | undefined
+  try {
+    const blob = await readConfirmationFile(props.item.space_id, props.item.id, request.controller.signal)
+    if (activeFile !== request) return
+    if (tab.closed) throw new Error('File tab closed')
+    url = URL.createObjectURL(blob)
+    tab.location.href = url
+    const openedUrl = url
+    fileUrls.set(openedUrl, setTimeout(() => releaseFileUrl(openedUrl), 60_000))
+    url = undefined // The timer (or unmount) now owns this successfully opened URL.
+  } catch (error) {
+    if (url) URL.revokeObjectURL(url)
+    if (activeFile !== request) return
+    closeTab(tab)
+    const code = error instanceof EnterpriseError ? error.code : ''
+    fileError.value = code === 'SOURCE_NOT_FOUND' ? 'fileMissing' : code === 'SOURCE_INTEGRITY' ? 'fileChanged' : 'fileFailed'
+  } finally {
+    if (activeFile === request) {
+      activeFile = undefined
+      fileBusy.value = false
+    }
+  }
+}
 </script>
 
 <template>
@@ -77,5 +141,12 @@ const failure = computed(() => ({
         <time class="ek-page__meta" :datetime="item.closure?.closed_at">{{ t('enterpriseKnowledge.confirm.closedAt', { time: closedAt }) }}</time>
       </div>
     </template>
+    <div v-if="item.source_ref" class="ek-confirm-card__file">
+      <button type="button" class="ek-button ek-confirm-file" data-confirm-file :disabled="fileBusy" @click="openFile">
+        {{ t('enterpriseKnowledge.confirm.openFile') }}
+      </button>
+      <p v-if="fileBusy" role="status" class="ek-page__meta">{{ t('enterpriseKnowledge.confirm.openingFile') }}</p>
+      <p v-if="fileError" role="alert" class="ek-confirm-error" data-confirm-file-error>{{ t(`enterpriseKnowledge.confirm.${fileError}`) }}</p>
+    </div>
   </article>
 </template>

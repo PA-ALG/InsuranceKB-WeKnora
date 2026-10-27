@@ -38,11 +38,11 @@ func (s *Store) InsertItems(ctx context.Context, tenantID uint64, items []confir
 				return err
 			}
 			if err := tx.Exec(`INSERT INTO enterprise_confirmations
-(id, tenant_id, space_id, subject, revision, content_digest, title, detail, options, created_by, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+(id, tenant_id, space_id, subject, revision, content_digest, title, detail, options, created_by, created_at, source_ref)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (tenant_id, space_id, subject, revision, content_digest) DO NOTHING`,
 				item.ID, tenantID, item.SpaceID, item.Subject, item.Revision, item.ContentDigest,
-				item.Title, item.Detail, string(options), item.CreatedBy, item.CreatedAt).Error; err != nil {
+				item.Title, item.Detail, string(options), item.CreatedBy, item.CreatedAt, item.SourceRef).Error; err != nil {
 				return err
 			}
 		}
@@ -183,6 +183,7 @@ WHERE tenant_id = ? AND space_id = ? AND confirmation_id = ?`, tenantID, spaceID
 
 type confirmationRecord struct {
 	ID, SpaceID, Subject, Revision, ContentDigest, Title, Detail, Options, CreatedBy string
+	SourceRef                                                                        string
 	CreatedAt                                                                        time.Time
 	AnswerID, AnswerOptionKey, AnswerNote, AnswerAnswerer                            sql.NullString
 	AnswerAnsweredAt                                                                 sql.NullTime
@@ -193,7 +194,7 @@ type confirmationRecord struct {
 // The lateral query guards answers by tenant and Space as well, and seq, not timestamps or IDs,
 // defines the latest answer.
 const confirmationsSQL = `SELECT c.id, c.space_id, c.subject, c.revision, c.content_digest,
-c.title, c.detail, c.options::text AS options, c.created_by, c.created_at,
+c.title, c.detail, c.options::text AS options, c.created_by, c.created_at, c.source_ref,
 a.id AS answer_id, a.option_key AS answer_option_key, a.note AS answer_note,
 a.answerer AS answer_answerer, a.answered_at AS answer_answered_at,
 k.reason AS closure_reason, k.answer_id AS closure_answer_id, k.closed_by AS closure_closed_by,
@@ -219,7 +220,7 @@ func readConfirmations(db *gorm.DB, where string, args ...any) ([]confirm.Item, 
 		item := confirm.Item{
 			ID: row.ID, SpaceID: row.SpaceID, Subject: row.Subject, Revision: row.Revision,
 			ContentDigest: row.ContentDigest, Title: row.Title, Detail: row.Detail,
-			CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt.UTC(),
+			CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt.UTC(), SourceRef: row.SourceRef,
 		}
 		if err := json.Unmarshal([]byte(row.Options), &item.Options); err != nil {
 			return nil, fmt.Errorf("stored confirmation options are not valid JSON: %w", err)

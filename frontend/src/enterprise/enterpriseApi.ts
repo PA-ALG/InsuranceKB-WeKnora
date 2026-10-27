@@ -210,6 +210,7 @@ export interface ConfirmationItem {
   content_digest: string
   title: string
   detail: string
+  source_ref?: string
   options: ConfirmationOption[]
   created_by: string
   created_at: string
@@ -229,6 +230,20 @@ export async function answerConfirmation(spaceId: string, itemId: string, option
     { option_key: optionKey, note },
   ))
   return data.answer
+}
+
+export async function readConfirmationFile(spaceId: string, itemId: string, signal?: AbortSignal): Promise<Blob> {
+  let body: unknown
+  try {
+    body = await get(`${SPACES}/${encodeURIComponent(spaceId)}/view/confirmations/${encodeURIComponent(itemId)}/file`,
+      { responseType: 'blob', signal })
+  } catch (error) {
+    const failure = (error ?? {}) as { code?: unknown; status?: unknown }
+    const code = typeof failure.code === 'string' && failure.code ? failure.code : 'REQUEST_FAILED'
+    throw new EnterpriseError(code, typeof failure.status === 'number' ? failure.status : undefined)
+  }
+  if (!(body instanceof Blob)) throw new EnterpriseError('INVALID_RESPONSE')
+  return body
 }
 
 // RV5a administrator-only session review routes; no candidate data is cached.

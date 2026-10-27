@@ -7597,6 +7597,12 @@ export default {
       "submitting": "Submitting decision…"
     },
     confirm: {
+      "openFile": "Open original file",
+      "openingFile": "Opening…",
+      "fileMissing": "The original file is no longer available",
+      "fileChanged": "The original file differs from the version used for this question",
+      "fileFailed": "Could not open the file. Please try again",
+      "fileBlocked": "Your browser blocked the new window. Allow pop-ups and try again",
       "entry": "Materials to confirm",
       "title": "Materials to confirm",
       "description": "Materials the system could not place on its own wait here for you; the system then acts on your choice.",

@@ -187,18 +187,33 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 		})
 		return
 	}
-	if files == nil {
-		writeSourceError(c, nil)
+	raw, name, ok := readSourceFile(c, files, source.Scope{TenantID: p.TenantID, SpaceID: space}, knowledgeID, cited)
+	if !ok {
 		return
 	}
-	reader, name, err := files(c.Request.Context(), source.Scope{TenantID: p.TenantID, SpaceID: space}, knowledgeID)
+	c.Header("ETag", `"`+cited+`"`)
+	c.Header("Cache-Control", "private, max-age=86400, immutable")
+	c.Header("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(name))
+	c.Data(http.StatusOK, "application/pdf", raw)
+}
+
+// readSourceFile verifies every byte before either file endpoint emits content. Both callers
+// authorize the reference first; the provider enforces the Space's RAW KB boundary.
+func readSourceFile(
+	c *gin.Context, files SourceFiles, scope source.Scope, knowledgeID, fingerprint string,
+) ([]byte, string, bool) {
+	if files == nil {
+		writeSourceError(c, nil)
+		return nil, "", false
+	}
+	reader, name, err := files(c.Request.Context(), scope, knowledgeID)
 	if err != nil {
 		if errors.Is(err, source.ErrNotFound) {
 			writeSourceError(c, &source.Error{Code: source.ErrorSourceNotFound, Detail: "source file was not found"})
-			return
+			return nil, "", false
 		}
 		writeSourceError(c, nil)
-		return
+		return nil, "", false
 	}
 	ctx := c.Request.Context()
 	closeReader := sync.OnceFunc(func() { _ = reader.Close() })
@@ -210,19 +225,16 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 	raw, err := io.ReadAll(io.LimitReader(contextReader{ctx: ctx, r: reader}, maxSourceFile+1))
 	if err != nil || ctx.Err() != nil {
 		writeSourceError(c, nil)
-		return
+		return nil, "", false
 	}
 	sum := sha256.Sum256(raw)
-	if len(raw) > maxSourceFile || hex.EncodeToString(sum[:]) != cited {
+	if len(raw) > maxSourceFile || hex.EncodeToString(sum[:]) != fingerprint {
 		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
 			"success": false, "code": errorSourceIntegrity, "error": "the stored file is not the cited one",
 		})
-		return
+		return nil, "", false
 	}
-	c.Header("ETag", `"`+cited+`"`)
-	c.Header("Cache-Control", "private, max-age=86400, immutable")
-	c.Header("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(name))
-	c.Data(http.StatusOK, "application/pdf", raw)
+	return raw, name, true
 }
 
 // citedFingerprint is the file fingerprint a member of the release cites for (knowledge, attempt).

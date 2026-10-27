@@ -36,6 +36,7 @@ type Item struct {
 	ContentDigest string    `json:"content_digest"`
 	Title         string    `json:"title"`
 	Detail        string    `json:"detail"`
+	SourceRef     string    `json:"source_ref,omitempty"`
 	Options       []Option  `json:"options"`
 	CreatedBy     string    `json:"created_by"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -65,6 +66,7 @@ type Closure struct {
 type ItemInput struct {
 	Subject, Revision, Title, Detail string
 	Options                          []Option
+	SourceRef                        string `json:"source_ref,omitempty"`
 }
 
 // Filter restricts items to open or closed ones.
