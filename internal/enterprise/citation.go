@@ -187,21 +187,26 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 		})
 		return
 	}
-	raw, name, ok := readSourceFile(c, files, source.Scope{TenantID: p.TenantID, SpaceID: space}, knowledgeID, cited)
+	tag := `"` + cited + `"`
+	condition := c.GetHeader("If-None-Match")
+	notModified := condition != "" && matchesReleaseETag(condition, tag)
+	raw, name, ok := readSourceFile(c, files,
+		source.Scope{TenantID: p.TenantID, SpaceID: space}, knowledgeID, cited, notModified)
 	if !ok {
 		return
 	}
-	c.Header("ETag", `"`+cited+`"`)
-	c.Header("Cache-Control", "private, max-age=86400, immutable")
+	releaseCacheHeaders(c, tag)
 	c.Header("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(name))
 	c.Data(http.StatusOK, "application/pdf", raw)
 }
 
 // readSourceFile checks the live source before confirming a cached copy or verifying all bytes.
 // Both callers authorize the reference first; the provider enforces the Space's RAW KB boundary.
+// Each caller preserves its endpoint's validator matching rule; a match never skips the check.
 // False means the response is already handled (304 or failure), with no file body to serve.
 func readSourceFile(
 	c *gin.Context, files SourceFiles, scope source.Scope, knowledgeID, fingerprint string,
+	notModified bool,
 ) ([]byte, string, bool) {
 	if files == nil {
 		writeSourceError(c, nil)
@@ -228,10 +233,9 @@ func readSourceFile(
 		return nil, "", false
 	}
 	etag := `"` + fingerprint + `"`
-	if c.GetHeader("If-None-Match") == etag {
+	if notModified {
 		closeReader()
-		c.Header("ETag", etag)
-		c.Header("Cache-Control", "private, no-cache")
+		releaseCacheHeaders(c, etag)
 		c.Status(http.StatusNotModified)
 		return nil, "", false
 	}

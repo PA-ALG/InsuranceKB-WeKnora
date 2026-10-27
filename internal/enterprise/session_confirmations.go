@@ -50,7 +50,8 @@ func confirmationFile(c *gin.Context, deps SessionDeps) {
 	}
 	etag := `"` + ref.FileSHA256 + `"`
 	raw, name, ok := readSourceFile(c, deps.Files,
-		source.Scope{TenantID: p.TenantID, SpaceID: space}, ref.KnowledgeID, ref.FileSHA256)
+		source.Scope{TenantID: p.TenantID, SpaceID: space}, ref.KnowledgeID, ref.FileSHA256,
+		c.GetHeader("If-None-Match") == etag)
 	if !ok {
 		return
 	}
