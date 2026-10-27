@@ -9,6 +9,7 @@ import pytest
 
 from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
+from insurance_harness.compilers.schema_fields.prompt import VALUE_PROTOCOL_VERSION
 from insurance_harness.ingest import publication
 from insurance_harness.ingest.registry import (
     MaterialEntry,
@@ -38,6 +39,7 @@ def output(registry: ProductRegistry, product: str) -> CompileOutput:
         entity_id=product, pack_id=entry.schema_pack_id, model="fake",
         materials=sorted(f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}" for m in entry.materials),
         cards_version=cards_version(),
+        value_protocol=VALUE_PROTOCOL_VERSION,  # S12c-1: a current output carries the protocol
     )
 
 
