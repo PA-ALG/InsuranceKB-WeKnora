@@ -120,7 +120,9 @@ func TestPostgresRejectingPointsIsAllOrNoneAndOncePerPoint(t *testing.T) {
 	db, store, _, c := pointWorld(t)
 	ctx := context.Background()
 	releases := countReleases(t, db)
-	require.NoError(t, store.RejectPoints(ctx, []release.PointDecision{point(c, "b", "reject"), point(c, "c", "reject")}))
+	require.NoError(t, store.RejectPoints(ctx, []release.PointDecision{
+		point(c, "b", "reject"), point(c, "c", "reject"),
+	}))
 	decisions, err := store.PointDecisions(ctx, 7, "space-1", c.ID)
 	require.NoError(t, err)
 	require.Len(t, decisions, 2)
