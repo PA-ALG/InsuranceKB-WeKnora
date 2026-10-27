@@ -42,7 +42,8 @@ func (s *Store) InsertItems(ctx context.Context, tenantID uint64, items []confir
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (tenant_id, space_id, subject, revision, content_digest) DO NOTHING`,
 				item.ID, tenantID, item.SpaceID, item.Subject, item.Revision, item.ContentDigest,
-				item.Title, item.Detail, string(options), item.CreatedBy, item.CreatedAt, item.SourceRef).Error; err != nil {
+				item.Title, item.Detail, string(options), item.CreatedBy,
+				item.CreatedAt, item.SourceRef).Error; err != nil {
 				return err
 			}
 		}

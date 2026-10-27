@@ -442,7 +442,7 @@ func registerEnterpriseRoutes(v1 *gin.RouterGroup, params RouterParams, guards *
 	// Answers change what is compiled and published, so they take the expert-edit guards: an admin
 	// with Wiki edit rights (the Wiki guard still applies where tenant RBAC is off) (S5b-3a).
 	enterprise.MountSessionConfirmations(v1.Group("/enterprise"), enterprise.SessionDeps{
-		Confirmations: params.EnterpriseConfirmations, Spaces: params.EnterpriseSpaces,
+		Confirmations: params.EnterpriseConfirmations, Spaces: params.EnterpriseSpaces, Files: files,
 	}, guards.Admin(), kbAccess(true, types.OrgRoleViewer), kbAccess(false, types.OrgRoleEditor))
 	enterprise.MountSessionReviews(v1.Group("/enterprise"), enterprise.SessionDeps{
 		Candidates: params.EnterpriseCandidates, Spaces: params.EnterpriseSpaces,
