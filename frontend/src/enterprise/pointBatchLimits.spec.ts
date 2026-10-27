@@ -8,6 +8,10 @@ import { point, pointDetail, pointItem, pointResult } from './__tests__/reviewPo
 import { claim, member, release } from './__tests__/s3eFixtures'
 import { ok, page, pointCard, views } from './__tests__/pointLifecycleHarness'
 
+// Each case renders 500+ point cards in happy-dom (about 3 s alone); a loaded full run
+// must not trip vitest's 5 s default.
+const LARGE_RENDER_TIMEOUT = 30_000
+
 afterEach(() => { views.forEach(view => view.unmount()); views.length = 0; vi.resetAllMocks() })
 async function batch(count: number, unknown: boolean, blocked = 0) {
   const slugs = Array.from({ length: count }, (_, i) => `new/field-${i}`)
@@ -42,7 +46,7 @@ it.each([500, 501])('displays every one of %s points and never silently truncate
     expect(vi.mocked(post).mock.calls[0][1]).toEqual({ slugs, outcome: 'approve', reason: '核对无误' })
     expect(view.text()).toContain('本产品已全部处理')
   }
-})
+}, LARGE_RENDER_TIMEOUT)
 
 it('disables both unknown batch actions above 500, then enables them after one single decision', async () => {
   const { view, slugs } = await batch(501, true)
@@ -58,7 +62,7 @@ it('disables both unknown batch actions above 500, then enables them after one s
   await view.get('[data-unknown-approve]').trigger('click'); await flushPromises()
   expect(vi.mocked(post)).toHaveBeenCalledTimes(2)
   expect(vi.mocked(post).mock.calls[1][1]).toEqual({ slugs: slugs.slice(1), outcome: 'approve', reason: '核对无误' })
-})
+}, LARGE_RENDER_TIMEOUT)
 
 it('applies the limit to each action after excluding blockers only for approval', async () => {
   const { view, slugs } = await batch(501, true, 1)
@@ -76,4 +80,4 @@ it('applies the limit to each action after excluding blockers only for approval'
   await view.get('[data-point-unknown-group] textarea').setValue('冲突字段不采用')
   await view.get('[data-point-unknown-group] [data-point-confirm-reject]').trigger('click'); await flushPromises()
   expect(vi.mocked(post).mock.calls[1][1]).toEqual({ slugs: [slugs[0]], outcome: 'reject', reason: '冲突字段不采用' })
-})
+}, LARGE_RENDER_TIMEOUT)
