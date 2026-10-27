@@ -65,7 +65,12 @@ function loadWorkbench(request: number, space: string) {
           throw new EnterpriseError('INVALID_RESPONSE')
         }
         count = reviews.reduce((total, item) => total + item.pending_points, 0)
-      } else if (!items.every(item => 'id' in item && typeof item.id === 'string' && !!item.id)) throw new EnterpriseError('INVALID_RESPONSE')
+      } else if (!items.every(item => 'id' in item && typeof item.id === 'string' && !!item.id)) {
+        throw new EnterpriseError('INVALID_RESPONSE')
+      } else if (job.key === 'confirmations') {
+        // An answered item waits for the system under 已处理 (S5b-3e); only unanswered ones are work.
+        count = (items as Awaited<ReturnType<typeof listConfirmations>>).filter(item => !item.answer).length
+      }
       if (!Number.isSafeInteger(count)) throw new EnterpriseError('INVALID_RESPONSE')
       const entry = work.value.find(entry => entry.key === job.key)!
       entry.count = count; entry.phase = 'ready'

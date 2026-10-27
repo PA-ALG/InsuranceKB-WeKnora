@@ -7645,6 +7645,7 @@ export default {
       "change": "修改选择",
       "submitting": "正在提交选择…",
       "answered": "已选择：{option}，等待系统处理",
+      "moved": "已记录「{option}」，这一项已移到“已处理”，等待系统处理",
       "waiting": "已提交选择，等待系统处理",
       "denied": "需要管理员且有 Wiki 编辑权限",
       "invalid": "选项无效，请刷新后重试",

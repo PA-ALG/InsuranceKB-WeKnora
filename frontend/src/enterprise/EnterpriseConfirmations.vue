@@ -7,7 +7,7 @@ import { useConfirmations } from './useConfirmations'
 
 const props = defineProps<{ spaceId: string }>()
 const { t } = useI18n()
-const { tab, state, items, drafts, notice, load, selectTab, answer } = useConfirmations(toRef(props, 'spaceId'))
+const { tab, state, items, drafts, notice, moved, load, selectTab, answer } = useConfirmations(toRef(props, 'spaceId'))
 const root = ref<HTMLElement>(), regionId = useId()
 const tabs = computed(() => [
   { key: 'open' as const, title: t('enterpriseKnowledge.confirm.open') },
@@ -33,8 +33,13 @@ function update(item: ConfirmationItem, change: { option?: string; note?: string
 }
 async function submit(item: ConfirmationItem) {
   const result = await answer(item)
-  if (result !== 'answered' && result !== 'closed') return
+  if (result !== 'answered' && result !== 'moved' && result !== 'closed') return
   await nextTick()
+  if (result === 'moved') {
+    // The card left 待处理; the notice says where it went and takes the focus.
+    root.value?.querySelector<HTMLElement>('[data-confirm-moved]')?.focus()
+    return
+  }
   // The submit button is disabled once the recorded choice matches the draft, so the result line takes focus.
   const card = [...root.value?.querySelectorAll<HTMLElement>('[data-confirm-item]') ?? []]
     .find(element => element.dataset.confirmItem === item.id)
@@ -54,6 +59,7 @@ async function submit(item: ConfirmationItem) {
         <span v-if="state === 'ready'" class="ek-meta-tag">{{ t('enterpriseKnowledge.confirm.count', { count: items.length }) }}</span>
       </header>
       <p v-if="notice" class="ek-confirm-notice" role="status" data-confirm-notice>{{ t('enterpriseKnowledge.confirm.closedMeanwhile', { title: notice }) }}</p>
+      <p v-if="moved" class="ek-confirm-notice" role="status" tabindex="-1" data-confirm-moved>{{ t('enterpriseKnowledge.confirm.moved', { option: moved }) }}</p>
       <div class="ek-confirm-tabs" role="tablist" :aria-label="t('enterpriseKnowledge.confirm.title')">
         <button v-for="entry in tabs" :id="`${regionId}-${entry.key}`" :key="entry.key" type="button" role="tab" :data-confirm-tab="entry.key"
           :aria-selected="tab === entry.key" :aria-controls="regionId" :tabindex="tab === entry.key ? 0 : -1"
