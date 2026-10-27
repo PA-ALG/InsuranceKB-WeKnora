@@ -14,7 +14,7 @@ import (
 var knowledgeToolDescriptions = map[string]string{
 	"knowledge_find_entity":   "查找本轮固定发布版本中的产品，按名称、别名或编号查找。",
 	"knowledge_get_fields":    "读取产品字段、三态和出处。请先查产品；fields 可用字段名或谓词，省略时取全部。",
-	"knowledge_search_fields": "按关键词搜索本轮已发布字段，仅搜索明确存在的字段值。",
+	"knowledge_search_fields": "按关键词搜索本轮已发布字段（字面匹配，只搜明确存在的字段值），可用 entity_id 限定产品。",
 	"knowledge_get_concept":   "读取模型补充的概念说明，以及同一发布版本可回验的字段出处。",
 	"knowledge_search_pages": "搜索本轮固定发布版本中的延伸阅读页面（模型整理，未逐条审核），可用 entity_id 限定产品。" +
 		"字段查不到的条件、例外和流程说明可用它补充。",
@@ -62,7 +62,7 @@ func (t *knowledgeTool) Parameters() json.RawMessage {
 	case "knowledge_get_concept":
 		properties["name"] = map[string]any{"type": "string"}
 		required = append(required, "name")
-	case "knowledge_search_pages":
+	case "knowledge_search_fields", "knowledge_search_pages":
 		properties["query"] = map[string]any{"type": "string"}
 		properties["entity_id"] = map[string]any{"type": "string"}
 		required = append(required, "query")
@@ -124,11 +124,18 @@ func (t *knowledgeTool) Execute(ctx context.Context, raw json.RawMessage) (*type
 	total := 0
 	switch t.name {
 	case "knowledge_search_pages":
-		pages, total, err := service.SearchPages(ctx, tenant, args.SpaceID, id, args.Query, args.EntityID, 0)
+		index, err := service.read(ctx, tenant, args.SpaceID, id)
 		if err != nil {
 			return nil, err
 		}
-		return pageToolResult(args.SpaceID, id, pages, total), nil
+		pages, total, err := index.searchPages(ctx, args.Query, args.EntityID, 0)
+		if err != nil {
+			return nil, err
+		}
+		if len(searchTerms(args.Query)) > 0 {
+			notes = append(notes, pageScopeNote(index.scopeOf(args.EntityID), total, len(pages)))
+		}
+		return pageToolResult(args.SpaceID, id, pages, total, notes), nil
 	case "knowledge_find_entity":
 		entities, err := service.FindEntities(ctx, tenant, args.SpaceID, id, args.Query, 0)
 		if err != nil {
@@ -146,10 +153,16 @@ func (t *knowledgeTool) Execute(ctx context.Context, raw json.RawMessage) (*type
 		}
 		total = len(fields)
 	case "knowledge_search_fields":
-		var err error
-		fields, total, err = service.SearchFields(ctx, tenant, args.SpaceID, id, args.Query, 0)
+		index, err := service.read(ctx, tenant, args.SpaceID, id)
 		if err != nil {
 			return nil, err
+		}
+		fields, total, err = index.searchFields(ctx, args.Query, args.EntityID, 0)
+		if err != nil {
+			return nil, err
+		}
+		if len(searchTerms(args.Query)) > 0 {
+			notes = append(notes, fieldScopeNote(index.scopeOf(args.EntityID), total, len(fields)))
 		}
 	case "knowledge_get_concept":
 		concept, err := service.Concept(ctx, tenant, args.SpaceID, id, args.Name)

@@ -3,7 +3,6 @@ package chatsource
 import (
 	"context"
 
-	"github.com/Tencent/WeKnora/internal/enterprise/knowledge"
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
@@ -68,7 +67,7 @@ func AnswerPassage(ctx context.Context, result *types.SearchResult, content stri
 	case "release":
 		tier = "已发布知识（审核过）"
 	case "raw_text":
-		tier = "原文检索（未经编译审核）"
+		tier = rawTier(result.Metadata)
 	case "wiki_page":
 		tier = "模型整理（未逐条审核）"
 	}
@@ -76,17 +75,4 @@ func AnswerPassage(ctx context.Context, result *types.SearchResult, content stri
 		return content
 	}
 	return tier + "\n" + content
-}
-
-func answerFieldText(field knowledge.Field) string {
-	// Render a copy: Agent/MCP tools keep their existing field representation.
-	switch field.State {
-	case "present":
-		field.State, field.Value = field.Value, ""
-	case "absent_explicitly":
-		field.State = "材料明确没有"
-	case "unknown":
-		field.State = "已发布知识未收录（不代表材料没有）"
-	}
-	return knowledge.FieldText(field)
 }

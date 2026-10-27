@@ -58,15 +58,29 @@ func (s *Service) EntityFields(
 	return out, ctx.Err()
 }
 
-// SearchFields follows the published UI's whitespace-token and navigation ordering.
+// SearchFields follows the published UI's whitespace-token and navigation ordering. A non-empty
+// entityID limits the search to that entity before the limit applies; an unknown entity is
+// ENTITY_NOT_FOUND, as for EntityFields.
 func (s *Service) SearchFields(
-	ctx context.Context, tenantID uint64, spaceID, releaseID, query string, limit int,
+	ctx context.Context, tenantID uint64, spaceID, releaseID, query, entityID string, limit int,
 ) ([]Field, int, error) {
 	index, err := s.read(ctx, tenantID, spaceID, releaseID)
 	if err != nil {
 		return nil, 0, err
 	}
-	terms := strings.FieldsFunc(searchFold(query), browserWhitespace)
+	return index.searchFields(ctx, query, entityID, limit)
+}
+
+func (index *releaseIndex) searchFields(ctx context.Context, query, entityID string, limit int) ([]Field, int, error) {
+	entities := index.orderedEntities()
+	if entityID != "" {
+		entity, ok := index.entity(entityID)
+		if !ok {
+			return nil, 0, &release.Error{Code: "ENTITY_NOT_FOUND", Detail: "entity is unavailable at the named release"}
+		}
+		entities = []indexedEntity{entity}
+	}
+	terms := searchTerms(query)
 	if len(terms) == 0 {
 		return []Field{}, 0, nil
 	}
@@ -74,7 +88,7 @@ func (s *Service) SearchFields(
 		limit = 20
 	}
 	out, total := []Field{}, 0
-	for _, entity := range index.orderedEntities() {
+	for _, entity := range entities {
 		if err := ctx.Err(); err != nil {
 			return nil, 0, err
 		}
@@ -102,6 +116,11 @@ func (s *Service) SearchFields(
 		return nil, 0, err
 	}
 	return out, total, nil
+}
+
+// searchTerms splits a query into the folded, whitespace-separated terms every search matches.
+func searchTerms(query string) []string {
+	return strings.FieldsFunc(searchFold(query), browserWhitespace)
 }
 
 // fieldsForSlugs resolves complete opaque slugs within the same visible release.

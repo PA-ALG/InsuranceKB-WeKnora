@@ -70,6 +70,18 @@ func (index *releaseIndex) entity(id string) (indexedEntity, bool) {
 	return indexedEntity{}, false
 }
 
+// scopeOf names a search's entity filter for its scope note: "" for every entity, otherwise the
+// entity's display name, or the requested ID when the release has no such entity.
+func (index *releaseIndex) scopeOf(entityID string) string {
+	if entityID == "" {
+		return ""
+	}
+	if entity, ok := index.entity(entityID); ok {
+		return entity.Name + "的"
+	}
+	return entityID + "的"
+}
+
 func (index *releaseIndex) orderedEntities() []indexedEntity {
 	if index.navigation == nil {
 		return index.entities

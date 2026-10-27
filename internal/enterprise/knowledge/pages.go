@@ -106,7 +106,11 @@ func (s *Service) SearchPages(
 	if err != nil {
 		return nil, 0, err
 	}
-	terms := strings.FieldsFunc(searchFold(query), browserWhitespace)
+	return index.searchPages(ctx, query, entityID, limit)
+}
+
+func (index *releaseIndex) searchPages(ctx context.Context, query, entityID string, limit int) ([]Page, int, error) {
+	terms := searchTerms(query)
 	if len(terms) == 0 {
 		return []Page{}, 0, nil
 	}

@@ -67,6 +67,10 @@ func (t *searchTool) Execute(ctx context.Context, args json.RawMessage) (*types.
 			}
 			metadata := copyRowMetadata(row["metadata"])
 			metadata["source_tier"], metadata["release_id"] = "raw_text", item.Metadata["release_id"]
+			if names, ok := t.turn.rawLabel(stringField(row, "knowledge_id")); ok {
+				metadata[entityNamesKey] = names
+				cloned["knowledge_title"] = labelledTitle(names, stringField(row, "knowledge_title"))
+			}
 			cloned["metadata"] = metadata
 			row = cloned
 		}
