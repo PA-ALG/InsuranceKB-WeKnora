@@ -111,8 +111,9 @@ def test_parent_lock_covers_seed_commands_http_and_receipts_with_child_locks(
     report = run_publication(registry_path, root, client=active.client(),
                              stage_config=tmp_path / "stages.json", seed_from=[seed])
     assert report.failed == {} and len(report.routes) == 2
-    assert stages == ["output.json", "compile", "active", "changes", "review", "scored.json",
-                      "changes", "published.json", "first", "published.json"]
+    # Planning reads Active first to judge the seed's carry (S12c-4), still under the lock.
+    assert stages == ["active", "output.json", "compile", "active", "changes", "review",
+                      "scored.json", "changes", "published.json", "first", "published.json"]
     assert len(commands.calls) == 5
     assert_released(root)
 
@@ -193,7 +194,7 @@ def test_sample_failure_keeps_first_or_change_receipt_and_next_run_does_not_rese
     active.requests.clear()
     again = publish_run(tmp_path, current, active)
     assert again.routes == {} and again.model_dump()["samples_failed"] == {}
-    assert commands.calls == [] and active.requests == []
+    assert commands.calls == [] and len(active.requests) == 1  # planning's carry read (S12c-4)
 
 
 @pytest.mark.usefixtures("environment")

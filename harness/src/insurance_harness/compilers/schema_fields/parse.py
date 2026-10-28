@@ -104,6 +104,14 @@ def parse_selection(raw: str, definitions: Sequence[FieldDefinition]) -> list[Se
 def parse_values(raw: str, definitions: Sequence[FieldDefinition]) -> dict[str, str | None]:
     """Values by field_key, None for unknown; a requested field may be missing, nothing else
     may differ."""
+    return {key: value for key, (value, _) in parse_value_rows(raw, definitions).items()}
+
+
+def parse_value_rows(
+    raw: str, definitions: Sequence[FieldDefinition],
+) -> dict[str, tuple[str | None, list[str]]]:
+    """As parse_values, with each row's used_segments: the engine decides which carried
+    segments step two used (S12c-4 Spec §2.3); this step-one selection is never shrunk."""
     try:
         result = _Values.model_validate(_load(raw))
     except ValidationError as exc:
@@ -114,4 +122,4 @@ def parse_values(raw: str, definitions: Sequence[FieldDefinition]) -> dict[str, 
         expected.get(row.field_key) != row.ordinal for row in result.fields
     ):
         raise CompileError("value step has a duplicate, unrequested or misnumbered field")
-    return {row.field_key: row.value for row in result.fields}
+    return {row.field_key: (row.value, list(row.used_segments)) for row in result.fields}
