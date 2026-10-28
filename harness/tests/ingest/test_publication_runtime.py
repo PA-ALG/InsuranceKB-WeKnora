@@ -195,7 +195,7 @@ def test_active_failure_sends_no_review_or_publish_and_is_reported_for_each_prod
     assert [name for name, _ in commands.calls] == ["compile"] and len(requests) == 1
 
 
-def test_nothing_pending_calls_neither_commands_nor_active(
+def test_nothing_pending_calls_no_commands_and_reads_active_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     current, run = two_products(), tmp_path / "run"
@@ -204,7 +204,8 @@ def test_nothing_pending_calls_neither_commands_nor_active(
     record_published(run, {p: digest(run / "compile", p) for p in current.products})
     commands, active = Commands(monkeypatch, current), Active(set())
     report = publish_run(tmp_path, current, active)
-    assert commands.calls == [] and active.requests == []
+    # Whether the outputs still carry the current reviewed evidence needs Active (S12c-4).
+    assert commands.calls == [] and len(active.requests) == 1
     assert report.planned_compile == report.planned_publish == []
 
 

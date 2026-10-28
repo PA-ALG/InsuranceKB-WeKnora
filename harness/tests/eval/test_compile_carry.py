@@ -16,6 +16,7 @@ from insurance_harness.bundle.client import Release, ReleaseMember
 from insurance_harness.compilers.schema_fields.carry import CarryRequest, carry_for
 from insurance_harness.contracts.enums import ClaimState, LocatorKind, SourceClass
 from insurance_harness.contracts.knowledge import Claim, Evidence, Locator, Provenance
+from insurance_harness.eval.compile_materials import material_identities
 from tests.eval.test_compile_materials import compile_at, mapped, output_at, repo, save
 from tests.ingest.test_publication import Active, Commands, publish_run, two_products
 
@@ -43,7 +44,7 @@ def released(text: str, *, release_id: str = "rel-9") -> Release:
 
 def expected_digest(active: Release) -> str | None:
     pages, revisions = mapped()
-    found = carry_for(CarryRequest(active), "p", revisions, pages.evidence, None)
+    found = carry_for(active, "p", material_identities(pages.evidence, None, revisions))
     return found.digest if found is not None else None
 
 

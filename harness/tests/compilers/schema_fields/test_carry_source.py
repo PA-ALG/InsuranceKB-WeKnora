@@ -1,6 +1,7 @@
 """S12c-4 acceptance (protected, written by Claude): which published claims a recompile may carry
 (Spec docs/design/slices/S12c-4-复用已审证据段.md §2.1, §2.4). Only this product's present claims
-whose every quote cites a material of this compile with the same knowledge, attempt and sha.
+whose every quote cites a material of this compile with the same knowledge, attempt and sha; the
+claims of one field carry the union of their quotes (Codex R3 on #412).
 """
 
 from __future__ import annotations
@@ -9,7 +10,12 @@ import hashlib
 from typing import Any
 
 from insurance_harness.bundle.client import Release, ReleaseMember
-from insurance_harness.compilers.schema_fields.carry import CarriedQuote, CarryRequest, carry_for
+from insurance_harness.compilers.schema_fields.carry import (
+    CarriedQuote,
+    ReviewedQuote,
+    carry_for,
+    located,
+)
 from insurance_harness.contracts.enums import ClaimState, LocatorKind, SourceClass, UnknownReason
 from insurance_harness.contracts.knowledge import Claim, ClaimValue, Evidence, Locator, Provenance
 from insurance_harness.eval.pdf_text import PageText
@@ -22,6 +28,8 @@ PAGES = [
     PageText("brochure.pdf", BROCHURE, 1, "犹豫期为15日。\n"),
 ]
 REVISIONS = {"terms.pdf": SourceRevision("k-terms", 3), "brochure.pdf": SourceRevision("k-bro", 1)}
+TERMS_3, BROCHURE_1 = f"k-terms:3:{TERMS}", f"k-bro:1:{BROCHURE}"
+MATERIALS = sorted([TERMS_3, BROCHURE_1])  # as CompileOutput.materials and the registry name them
 
 
 def quote(text: str, *, page: int = 1, knowledge: str = "k-terms", attempt: int = 3,
@@ -43,10 +51,10 @@ def expert(text: str) -> Evidence:
 
 
 def claim(predicate: str, value: ClaimValue, *evidence: Evidence, subject: str = "p",
-          **attributes: Any) -> Claim:
+          key: str | None = None, **attributes: Any) -> Claim:
     state = ClaimState.UNKNOWN if value is None else ClaimState.PRESENT
     return Claim(
-        claim_id=f"{subject}/{predicate}", logical_key=f"{subject}/{predicate}",
+        claim_id=f"{subject}/{predicate}", logical_key=key or f"{subject}/{predicate}",
         subject_ref=subject, predicate=predicate, state=state, value=value,
         evidence=list(evidence),
         origin=attributes.pop("origin", SourceClass.SOURCE_SUPPORTED),
@@ -69,7 +77,7 @@ def release(*claims: Claim, extra: list[ReleaseMember] | None = None) -> Release
 
 
 def carry(active: Release | None) -> Any:
-    return carry_for(CarryRequest(active), "p", REVISIONS, PAGES, None)
+    return carry_for(active, "p", MATERIALS)
 
 
 def test_only_this_products_present_claims_on_unchanged_materials_are_carried() -> None:
@@ -90,11 +98,34 @@ def test_only_this_products_present_claims_on_unchanged_materials_are_carried() 
     assert result.release_id == "rel-9"
     assert dict(result.quotes) == {
         "waiting_period": (
+            ReviewedQuote(TERMS_3, 1, "等待期为90日。"),
+            ReviewedQuote(TERMS_3, 2, "宽限期为60日。"),
+        ),
+        "cooling_off_period": (ReviewedQuote(BROCHURE_1, 1, "犹豫期为15日。"),),
+    }
+    # The compile addresses the same quotes by its own document names to locate them.
+    assert located(result, REVISIONS, PAGES, None) == {
+        "waiting_period": (
             CarriedQuote("terms.pdf", 1, "等待期为90日。"),
             CarriedQuote("terms.pdf", 2, "宽限期为60日。"),
         ),
         "cooling_off_period": (CarriedQuote("brochure.pdf", 1, "犹豫期为15日。"),),
     }
+
+
+def test_claims_of_one_field_carry_the_union_of_their_quotes_whatever_the_member_order() -> None:
+    later = claim("waiting_period", "90日", quote("宽限期为60日。", page=2),
+                  quote("等待期为90日。"), key="p/waiting_period/b")
+    earlier = claim("waiting_period", "90日", quote("等待期为90日。"), key="p/waiting_period/a")
+    skipped = claim("waiting_period", "90日", quote("犹豫期为15日。", sha="c" * 64),
+                    key="p/waiting_period/c")
+    expected = (
+        ReviewedQuote(TERMS_3, 1, "等待期为90日。"), ReviewedQuote(TERMS_3, 2, "宽限期为60日。"),
+    )
+    found = [carry(release(*members)) for members in
+             ((later, skipped, earlier), (earlier, later, skipped), (skipped, later, earlier))]
+    assert all(dict(result.quotes) == {"waiting_period": expected} for result in found)
+    assert len({result.digest for result in found}) == 1
 
 
 def test_unreadable_payloads_and_non_claim_members_are_ignored() -> None:
@@ -117,11 +148,8 @@ def test_no_active_release_carries_nothing_and_an_empty_carry_has_no_digest() ->
 
 def test_the_digest_names_the_carried_quotes_not_the_release() -> None:
     first = carry(release(claim("waiting_period", "90日", quote("等待期为90日。"))))
-    again = carry_for(
-        CarryRequest(release(claim("waiting_period", "九十日", quote("等待期为90日。")))
-                     .model_copy(update={"id": "rel-10", "epoch": 10})),
-        "p", REVISIONS, PAGES, None,
-    )
+    again = carry(release(claim("waiting_period", "九十日", quote("等待期为90日。")))
+                  .model_copy(update={"id": "rel-10", "epoch": 10}))
     other = carry(release(claim("waiting_period", "60日", quote("宽限期为60日。", page=2))))
     assert first is not None and again is not None and other is not None
     assert first.digest is not None and len(first.digest) == 64
