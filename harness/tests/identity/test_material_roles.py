@@ -14,7 +14,11 @@ from pathlib import Path
 import pytest
 
 from insurance_harness.eval.pdf_text import PageText, read_pdf
-from insurance_harness.eval.product_sources import source_directory, source_pages
+from insurance_harness.eval.product_sources import (
+    source_directory,
+    source_pages,
+    trusted_source_pages,
+)
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.identity.material_roles import (
@@ -192,6 +196,22 @@ def test_every_dataset_material_is_recognised_and_each_product_drops_one_rate_ta
         roles: dict[str, str | None] = {}
         for path in sorted(directory.glob("*.pdf")):
             roles.update(document_roles(read_pdf(path)))
+        if (directory / "material_roles.json").exists():
+            check_recorded_folder(directory, roles)
+            continue
         assert None not in roles.values(), directory.name
         assert list(roles.values()).count("rate_table") == 1, directory.name
         assert {"terms", "brochure"} <= set(roles.values()), directory.name
+
+
+def check_recorded_folder(directory: Path, inferred: dict[str, str | None]) -> None:
+    """S12d §2.3: a folder with a complete, byte-bound role record. Its record decides roles the
+    reader cannot infer and may leave out the brochure; it still has exactly one terms document
+    and at most one rate table, and it never contradicts a role inference does resolve."""
+    effective = trusted_source_pages(directory).roles  # validates completeness and bytes
+    assert set(effective) == set(inferred), directory.name
+    for document, role in inferred.items():
+        assert role in (None, effective[document]), (directory.name, document)
+    values = list(effective.values())
+    assert values.count("terms") == 1, directory.name
+    assert values.count("rate_table") <= 1, directory.name
