@@ -14,7 +14,8 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-# Re-exported: callers use the confirmation models through the client.
+# Re-exported: callers use the review and confirmation models through the client.
+from insurance_harness.bundle.candidate_reviews import CandidateDetail as CandidateDetail
 from insurance_harness.bundle.confirmation_items import ConfirmationAnswer as ConfirmationAnswer
 from insurance_harness.bundle.confirmation_items import ConfirmationClosure as ConfirmationClosure
 from insurance_harness.bundle.confirmation_items import ConfirmationInput as ConfirmationInput
@@ -296,6 +297,14 @@ class PlatformClient:
             raise PlatformError("INVALID_RESPONSE")
         return closure
 
+    def review_detail(self, space_id: str, candidate_id: str) -> CandidateDetail:
+        """One candidate's members, removals and review points, as its review page shows them."""
+        data = self._send("GET", space_id, ["candidates", candidate_id], None)
+        detail = _parse(CandidateDetail, data)
+        if detail.candidate_id != candidate_id:
+            raise PlatformError("INVALID_RESPONSE")
+        return detail
+
     def release(self, space_id: str, release_id: str) -> Release:
         path = ["releases", release_id] if release_id else ["releases", "active"]
         return _parse(Release, self._send("GET", space_id, path, None))
@@ -447,7 +456,7 @@ def _strict_json(content: bytes) -> object:
         raise PlatformError("INVALID_RESPONSE") from None
 
 
-def _parse[T: _Response](model: type[T], data: object) -> T:
+def _parse[T: BaseModel](model: type[T], data: object) -> T:
     try:
         return model.model_validate(data)
     except ValidationError:
