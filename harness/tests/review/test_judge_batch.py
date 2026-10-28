@@ -127,7 +127,7 @@ def prepared(world: dict[str, Any]) -> dict[str, Any]:
 
 def answer(world: dict[str, Any], verdicts: dict[str, tuple[str, str]]) -> Path:
     """Write the judge's answer for the single request, in the request's slug order."""
-    session = world["run_root"] / "sessions" / "s01"
+    session: Path = world["run_root"] / "sessions" / "s01"
     question = json.loads("\n".join(stored_requests(session)[0].user.split("\n")))
     points = [
         {
