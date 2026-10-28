@@ -151,8 +151,10 @@ def _evidence(
         for saved in field.evidence
     ):
         raise BundleError("EVIDENCE_ROLE_NOT_TRUSTED", index)
-    ids, dropped = source.resolve(field.segment_ids)
-    spans = source.spans(ids) if ids and not dropped and ids == field.segment_ids else []
+    # Evidence is the step-one selection plus the carried segments step two used (S12c-4 §2.3).
+    wanted = [*field.segment_ids, *field.carried_segment_ids]
+    ids, dropped = source.resolve(wanted)
+    spans = source.spans(ids) if ids and not dropped and ids == wanted else []
     if (
         not spans
         or len(spans) != len(field.evidence)

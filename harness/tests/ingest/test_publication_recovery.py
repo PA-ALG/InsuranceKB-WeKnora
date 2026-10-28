@@ -101,7 +101,7 @@ def test_one_receipt_failure_does_not_mark_failed_product_when_next_succeeds(
 
 
 @pytest.mark.usefixtures("environment")
-def test_uploads_dry_run_has_zero_http_and_commands_and_releases_lock(
+def test_uploads_dry_run_sends_no_commands_reads_active_once_and_releases_lock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -114,7 +114,8 @@ def test_uploads_dry_run_has_zero_http_and_commands_and_releases_lock(
                 transport=httpx.MockTransport(active.handle)) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["planned_compile"] == ["1828"]
-    assert commands.calls == [] and active.requests == [] and not (tmp_path / "run").exists()
+    assert commands.calls == [] and not (tmp_path / "run").exists()
+    assert len(active.requests) == 1  # one read: is the seed current on carry? (S12c-4)
     assert not registry.with_name("registry.json.lock").exists()
 
 

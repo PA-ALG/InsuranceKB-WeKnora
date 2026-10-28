@@ -18,6 +18,9 @@ from insurance_harness.ingest.registry import (
     RegistryError,
 )
 
+# Planning without an Active release: nothing to carry, so no output is stale on carry (S12c-4).
+NO_ACTIVE = publication._released(None)
+
 
 @pytest.fixture
 def registry() -> ProductRegistry:
@@ -94,10 +97,10 @@ def test_seed_requires_all_four_conditions_and_tries_later_directories(
     if change == "invalid":
         (bad / "a/output.json").write_bytes(b"\xff")
     expected = save(good, "a", original)
-    dry = publication._prepare(registry, run, ["a"], [bad, good], dry_run=True)
+    dry = publication._prepare(registry, run, ["a"], [bad, good], carried=NO_ACTIVE, dry_run=True)
     assert dry.compile == [] and dry.publish == ["a"]
     assert not run.exists()
-    real = publication._prepare(registry, run, ["a"], [bad, good], dry_run=False)
+    real = publication._prepare(registry, run, ["a"], [bad, good], carried=NO_ACTIVE, dry_run=False)
     assert real == dry
     assert (run / "compile/a/output.json").read_bytes() == expected
     assert (good / "a/output.json").read_bytes() == expected
@@ -111,7 +114,7 @@ def test_existing_output_is_never_replaced_by_seed(
         update={"cards_version": "old"},
     ))
     save(seed, "a", output(registry, "a"))
-    result = publication._prepare(registry, run, ["a"], [seed], dry_run=False)
+    result = publication._prepare(registry, run, ["a"], [seed], carried=NO_ACTIVE, dry_run=False)
     assert result.compile == ["a"] and result.publish == ["a"]
     assert (run / "compile/a/output.json").read_bytes() == existing
 
@@ -122,7 +125,8 @@ def test_unknown_selection_precedes_any_seed_copy(
     run, seed = tmp_path / "run", tmp_path / "seed"
     save(seed, "a", output(registry, "a"))
     with pytest.raises(RegistryError, match="^PRODUCT_UNKNOWN$"):
-        publication._prepare(registry, run, ["a", "unknown"], [seed], dry_run=False)
+        publication._prepare(registry, run, ["a", "unknown"], [seed], carried=NO_ACTIVE,
+                             dry_run=False)
     assert not run.exists()
 
 
