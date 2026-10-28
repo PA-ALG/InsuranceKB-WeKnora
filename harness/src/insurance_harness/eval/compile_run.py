@@ -29,7 +29,12 @@ from pydantic import ValidationError
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
 from insurance_harness.changes.options import fixed_revision_pages, registry_inputs, source_options
-from insurance_harness.compilers.schema_fields.carry import CarryRequest, active_carry, carry_for
+from insurance_harness.compilers.schema_fields.carry import (
+    CarryRequest,
+    active_carry,
+    carry_for,
+    located,
+)
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
     CompileError,
@@ -238,6 +243,8 @@ def compile_products(
         raise ValueError("supply only one page source")
     if facts is not None and page_source is None and revision_page_source is None:
         raise ValueError("facts requires a page source")
+    if carry is not None and revision_page_source is None:
+        raise ValueError("carrying reviewed evidence needs fixed source revisions")
     if replay_from is None and completion_factory is None:
         raise ValueError("a completion factory is required unless replaying")
     if replay_from is not None:
@@ -282,7 +289,7 @@ def compile_products(
                     roles = [rule.role for rule in load_trust_policy().header_rules]
                     headers = {role: _revision_order(headers[role], revisions)
                                for role in sorted(headers, key=roles.index)}
-            carried = (carry_for(carry, product, revisions, pages, headers)
+            carried = (carry_for(carry.release, product, materials)
                        if carry is not None else None)
             digest = carried.digest if carried is not None else None
             if output is not None and reusable(output, materials) and (
@@ -308,8 +315,10 @@ def compile_products(
                 port, batch_size=batch_size,
                 max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
             )
+            quotes = (located(carried, revisions, pages, headers)
+                      if carried is not None and revisions is not None else None)
             output = compiler.compile(product, definitions, pages, table_headers=headers,
-                                      carry=carried.quotes if carried is not None else None)
+                                      carry=quotes)
             output = output.model_copy(update={
                 "materials": materials, "carry_digest": digest,
                 "carry_release": carried.release_id if digest is not None and carried else None,

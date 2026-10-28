@@ -5,6 +5,8 @@ successfully, never a serving Head. Callers hold the registry lock while prepari
 After publication but before its receipt is saved, interruption means retrying next round:
 Active content is reconciled through the change probe; a pending human candidate may be
 submitted again and must be reconciled against its release baseline in the human queue.
+Planning reads Active at most once to tell whether a stored output carries the current reviewed
+evidence (S12c-4); a run whose Active cannot be read stops as ACTIVE_UNAVAILABLE.
 """
 
 import hashlib
@@ -20,8 +22,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from insurance_harness.bundle.client import PlatformClient, PlatformError
+from insurance_harness.bundle.client import PlatformClient, PlatformError, Release
 from insurance_harness.compilers.schema_fields import publish, publish_changes
+from insurance_harness.compilers.schema_fields.carry import carry_for
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, reusable
 from insurance_harness.eval import compile_run, review_run
 from insurance_harness.ingest.registry import ProductEntry, ProductRegistry, load_registry
@@ -85,9 +88,40 @@ def _read_output(path: Path) -> tuple[bytes, CompileOutput] | None:
         raise PublicationError("OUTPUT_INVALID") from None
 
 
-def _current(output: CompileOutput, entry: ProductEntry) -> bool:
+# The carry digest a product's output must record, given its registered materials (S12c-4).
+CarryDigest = Callable[[str, list[str]], str | None]
+
+
+def _released(active: Release | None) -> CarryDigest:
+    def digest(product: str, materials: list[str]) -> str | None:
+        carry = carry_for(active, product, materials)
+        return carry.digest if carry is not None else None
+    return digest
+
+
+def _active_once(client: PlatformClient, space_id: str) -> CarryDigest:
+    """Read Active at most once, and only when some stored output could otherwise be reused.
+
+    An unreadable Active stops the run: no stored output can then be shown to carry the current
+    reviewed evidence, and the compile stage needs the same read (S12c-4 Spec §2.4).
+    """
+    read: list[CarryDigest] = []
+
+    def digest(product: str, materials: list[str]) -> str | None:
+        if not read:
+            try:
+                read.append(_released(client.active(space_id)))
+            except PlatformError:
+                raise PublicationError("ACTIVE_UNAVAILABLE") from None
+        return read[0](product, materials)
+    return digest
+
+
+def _current(output: CompileOutput, entry: ProductEntry, product: str,
+             carried: CarryDigest) -> bool:
     materials = sorted(f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}" for m in entry.materials)
-    return reusable(output, materials)
+    # The release id is provenance only: every publication makes a new Active release.
+    return reusable(output, materials) and output.carry_digest == carried(product, materials)
 
 
 def _receipts(path: Path, invalid_code: str) -> dict[str, str]:
@@ -116,13 +150,13 @@ def _published(run_root: Path) -> dict[str, str]:
 
 def _plan(
     registry: ProductRegistry, run_root: Path, products: Sequence[str],
-    seeds: dict[str, tuple[bytes, CompileOutput]],
+    seeds: dict[str, tuple[bytes, CompileOutput]], carried: CarryDigest,
 ) -> PublicationPlan:
     receipts = _published(run_root)
     compile_products, publish_products = [], []
     for product in products:
         stored = seeds.get(product) or _read_output(run_root / "compile" / product / "output.json")
-        if stored is None or not _current(stored[1], registry.products[product]):
+        if stored is None or not _current(stored[1], registry.products[product], product, carried):
             compile_products.append(product)
             publish_products.append(product)
         elif hashlib.sha256(stored[0]).hexdigest() != receipts.get(product):
@@ -132,13 +166,16 @@ def _plan(
 
 def plan(
     registry: ProductRegistry, run_root: Path, products: Sequence[str] | None = None,
+    *, active: Release | None = None,
 ) -> PublicationPlan:
-    """Plan from local output bytes and registry revisions; never write or contact a service."""
-    return _plan(registry, run_root, _selected(registry, products), {})
+    """Plan from local output bytes, registry revisions and the Active release the caller read
+    (None: no release yet); never write or contact a service."""
+    return _plan(registry, run_root, _selected(registry, products), {}, _released(active))
 
 
 def _seeds(
     registry: ProductRegistry, run_root: Path, products: Sequence[str], roots: Sequence[Path],
+    carried: CarryDigest,
 ) -> dict[str, tuple[bytes, CompileOutput]]:
     seeds: dict[str, tuple[bytes, CompileOutput]] = {}
     for product in products:
@@ -153,7 +190,7 @@ def _seeds(
                 continue
             output, entry = stored[1], registry.products[product]
             if (output.entity_id == product and output.pack_id == entry.schema_pack_id
-                    and _current(output, entry)):
+                    and _current(output, entry, product, carried)):
                 seeds[product] = stored
                 break
     return seeds
@@ -185,11 +222,11 @@ def _save_published(run_root: Path, receipts: dict[str, str]) -> None:
 
 def _prepare(
     registry: ProductRegistry, run_root: Path, products: Sequence[str] | None,
-    seed_from: Sequence[Path], *, dry_run: bool,
+    seed_from: Sequence[Path], *, carried: CarryDigest, dry_run: bool,
 ) -> PublicationPlan:
     selected = _selected(registry, products)
-    seeds = _seeds(registry, run_root, selected, seed_from)
-    planned = _plan(registry, run_root, selected, seeds)
+    seeds = _seeds(registry, run_root, selected, seed_from, carried)
+    planned = _plan(registry, run_root, selected, seeds, carried)
     if not dry_run:
         for product, (data, _) in seeds.items():
             _replace(run_root / "compile" / product / "output.json", data)
@@ -346,7 +383,8 @@ def _run_publication(
     if compile_max_sent < 0 or review_max_sent < 0:
         raise PublicationError("INVALID_ARGUMENTS")
     registry = load_registry(registry_path)
-    planned = _prepare(registry, run_root, products, seed_from, dry_run=dry_run)
+    planned = _prepare(registry, run_root, products, seed_from,
+                       carried=_active_once(client, registry.space_id), dry_run=dry_run)
     report = PublicationReport(planned_compile=planned.compile, planned_publish=planned.publish)
     if dry_run:
         return report
