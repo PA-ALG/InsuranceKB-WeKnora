@@ -6,11 +6,17 @@ exactly the navigation member on the current Head and is decided by the machine 
 navigation version as its policy: the navigation carries no product facts, so no field score
 applies. A navigation equal to the live one publishes nothing.
 
+The activated release is read back: only a release of this candidate holding the navigation with
+the target digest is "published". Past the activation the outcome may already be live, so an
+unreadable or mismatched read-back stops as "unknown" and sends nothing more; running the command
+again reads the Active first and reports "current" when the navigation did go live.
+
 usage: python -m insurance_harness.catalog.publish_navigation --space ID [--dry-run]
 
 Reads the platform from HARNESS_WEKNORA_BASE_URL / HARNESS_WEKNORA_API_KEY. Prints one JSON line:
 {"status": "published" | "current" | "dry_run", "navigation_version": ..., "release_id"?, "epoch"?}
-and exits 0, or {"stopped": <code>} and exits 2.
+and exits 0, or {"stopped": <code>} — with "status": "unknown" and the candidate id once the
+activation was sent — and exits 2.
 """
 
 from __future__ import annotations
@@ -33,8 +39,9 @@ REASON = "导航与问法词表更新，不含事实"
 
 
 class _Stopped(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, report: dict[str, object] | None = None) -> None:
         self.code = code
+        self.report = report or {}
         super().__init__(code)
 
 
@@ -50,6 +57,7 @@ def _publish(space: str, dry_run: bool) -> dict[str, object]:
         raise _Stopped(error.code) from None
     payload = navigation.model_dump(mode="json")
     slug = f"navigation/{navigation.navigation_id}"
+    digest = member_digest(payload)
     report: dict[str, object] = {"navigation_version": navigation.navigation_version}
     try:
         client = PlatformClient(os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, ""))
@@ -57,7 +65,7 @@ def _publish(space: str, dry_run: bool) -> dict[str, object]:
         if active is None:
             raise _Stopped("NO_ACTIVE_RELEASE")  # a navigation alone never makes a first release
         live = {member.logical_slug: member.member_digest for member in active.members}
-        if live.get(slug) == member_digest(payload):
+        if live.get(slug) == digest:
             return {"status": "current", **report}
         if dry_run:
             return {"status": "dry_run", **report}
@@ -75,11 +83,21 @@ def _publish(space: str, dry_run: bool) -> dict[str, object]:
             candidate.id,
             DecisionInput(outcome="approve", mode="machine", policy_ref=policy, reason=REASON),
         )
-        release = client.activate(space, candidate.id, decision.id)
+        receipt = client.activate(space, candidate.id, decision.id)
     except PlatformError as error:
         raise _Stopped(error.code) from None
     except BundleError as error:
         raise _Stopped(error.reason) from None
+    unknown = {"status": "unknown", **report, "candidate_id": candidate.id}
+    try:
+        if receipt.candidate_id != candidate.id:
+            raise PlatformError("RELEASE_MISMATCH")
+        release = client.release(space, receipt.id)
+    except PlatformError as error:
+        raise _Stopped(error.code, unknown) from None
+    held = {member.logical_slug: member.member_digest for member in release.members}
+    if (release.id, release.candidate_id, held.get(slug)) != (receipt.id, candidate.id, digest):
+        raise _Stopped("RELEASE_MISMATCH", unknown)
     return {"status": "published", **report, "release_id": release.id, "epoch": release.epoch}
 
 
@@ -91,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(argv)
         result = _publish(args.space, args.dry_run)
     except _Stopped as stopped:
-        print(json.dumps({"stopped": stopped.code}))
+        print(json.dumps({"stopped": stopped.code, **stopped.report}, ensure_ascii=False))
         return 2
     print(json.dumps(result, ensure_ascii=False))
     return 0

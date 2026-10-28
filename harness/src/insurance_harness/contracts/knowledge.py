@@ -316,10 +316,21 @@ class NavigationDomain(ContractModel):
 
 
 def question_term_text(term: str) -> str:
-    """A question term as the platform compares it: NFKC, lower case, without spaces,
-    punctuation or symbols (QA3 Spec §2). A term must keep at least two characters."""
+    """A question term exactly as the platform's Go normalizeQuestionTerm compares it (QA3
+    Spec §2): NFKC, lower case, without whitespace or punctuation; symbols stay. A term must
+    keep at least two characters."""
     folded = unicodedata.normalize("NFKC", term).lower()
-    return "".join(ch for ch in folded if not unicodedata.category(ch).startswith(("P", "S", "Z")))
+    return "".join(
+        ch
+        for ch in folded
+        if not _platform_space(ch) and not unicodedata.category(ch).startswith("P")
+    )
+
+
+def _platform_space(ch: str) -> bool:
+    # Go unicode.IsSpace, plus the BOM its normalize also drops. str.isspace differs from it only
+    # by the information separators U+001C-U+001F, which Go keeps (checked over every code point).
+    return (ch.isspace() and not "\x1c" <= ch <= "\x1f") or ch == "\ufeff"
 
 
 class NavigationProfile(ContractModel):
@@ -345,11 +356,14 @@ class NavigationProfile(ContractModel):
         if len(set(self.overview_fields)) != len(self.overview_fields):
             raise ValueError("overview fields must be unique")
         for groups in (self.question_terms or {}).values():
-            seen: set[tuple[str, ...]] = set()
+            # A group matches when every term occurs, so its order carries nothing: compare sets.
+            seen: set[frozenset[str]] = set()
             for group in groups:
-                texts = tuple(question_term_text(term) for term in group)
-                if not 1 <= len(texts) <= 3 or any(len(text) < 2 for text in texts):
+                texts = frozenset(question_term_text(term) for term in group)
+                if not 1 <= len(group) <= 3 or any(len(text) < 2 for text in texts):
                     raise ValueError("a question-term group has 1 to 3 terms of 2+ characters")
+                if len(texts) != len(group):
+                    raise ValueError("a question-term group repeats a term")
                 if texts in seen:
                     raise ValueError("question-term groups of a field must be distinct")
                 seen.add(texts)
