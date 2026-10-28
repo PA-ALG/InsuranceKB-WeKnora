@@ -40,12 +40,6 @@ func (r *Resolver) followNeighbours(
 	if missing(r.chunks) {
 		return rows
 	}
-	named := map[string]bool{}
-	for _, product := range scope.products {
-		for _, id := range product.ids {
-			named[materialKey(product.kbID, id)] = true
-		}
-	}
 	present := map[string]bool{}
 	starts, ids := []*types.SearchResult{}, []string{}
 	for _, row := range rows {
@@ -53,7 +47,8 @@ func (r *Resolver) followNeighbours(
 			continue
 		}
 		present[row.ID] = true
-		if named[materialKey(row.KnowledgeBaseID, row.KnowledgeID)] {
+		// Every named product counts, not only the three given extra searches (#417 R1).
+		if scope.named[materialKey(row.KnowledgeBaseID, row.KnowledgeID)] {
 			starts, ids = append(starts, row), append(ids, row.ID)
 		}
 	}

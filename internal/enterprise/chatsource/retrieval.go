@@ -125,6 +125,7 @@ func selectProductResults(rows []*types.SearchResult, scope productScope, topK i
 type productScope struct {
 	recognized bool               // the question names at least one product (QA2b §2a.1)
 	products   []productMaterials // named products with usable own material, at most MaxNamedProducts
+	named      map[string]bool    // materialKey of every named product's fixed material, uncapped (QA2c)
 	foreign    map[string]bool    // materialKey of materials owned only by products not named
 	closed     bool               // attribution unreadable: no fill at all (QA2b §2a.3)
 }
@@ -144,7 +145,7 @@ func namedScope(
 	if strings.TrimSpace(question) == "" {
 		question = cm.Query
 	}
-	scope := productScope{foreign: map[string]bool{}}
+	scope := productScope{named: map[string]bool{}, foreign: map[string]bool{}}
 	var spaces []namedSpace
 	seen := map[string]bool{}
 	// Target order defines the order of Spaces; QuestionProducts keeps each release's
@@ -166,16 +167,14 @@ func namedScope(
 		for _, product := range products {
 			scope.recognized = true
 			entry.named = append(entry.named, product.EntityID)
-			if len(scope.products) == MaxNamedProducts {
-				continue
-			}
 			ids := []string{}
 			for _, id := range product.Materials {
 				if owner, fixed := v.turn.RawKnowledge[id]; fixed && owner == space {
 					ids = append(ids, id)
+					scope.named[materialKey(target.KnowledgeBaseID, id)] = true
 				}
 			}
-			if len(ids) == 0 {
+			if len(ids) == 0 || len(scope.products) == MaxNamedProducts {
 				continue
 			}
 			sort.Strings(ids)
