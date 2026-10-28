@@ -70,17 +70,24 @@ class CompileOutput(BaseModel):
     materials: list[str] | None = None
     # The step-two protocol the values were written under (S12c-1); None before S12c-1.
     value_protocol: str | None = None
+    # Each `materials` identity's effective role (S5b-6); None in outputs written earlier.
+    material_roles: dict[str, str] | None = None
     # The Active release reviewed quotes were carried from, and their identity (S12c-4 §2.4);
     # None when nothing was carried, and in outputs written before S12c-4.
     carry_release: str | None = None
     carry_digest: str | None = None
 
 
-def reusable(output: CompileOutput, materials: list[str]) -> bool:
-    """An output may stand in for a compile only if materials, cards and value protocol match."""
+def reusable(
+    output: CompileOutput, materials: list[str], roles: Mapping[str, str] | None = None
+) -> bool:
+    """An output may stand in for a compile only if its materials, their effective roles (S5b-6),
+    the cards and the value protocol all match. Roles are part of the identity: an output written
+    without them matches only a caller that has none either, so role-aware callers recompile it."""
     return (
         output.materials is not None
         and output.materials == materials
+        and output.material_roles == (dict(roles) if roles is not None else None)
         and output.cards_version == cards_version()
         and output.value_protocol == VALUE_PROTOCOL_VERSION
     )

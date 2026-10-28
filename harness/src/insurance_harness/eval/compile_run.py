@@ -44,8 +44,12 @@ from insurance_harness.compilers.schema_fields.engine import (
     reusable,
     to_candidate,
 )
-from insurance_harness.eval.compile_materials import material_identities, validate_materials
 from insurance_harness.eval.convert import predictions_from_candidate
+from insurance_harness.eval.material_identity import (
+    effective_roles,
+    material_identities,
+    validate_materials,
+)
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.eval.product_sources import (
     check_product_id,
@@ -282,7 +286,9 @@ def compile_products(
                         trusted_source_pages(source_directory(repo, product)))
             pages = read.evidence if isinstance(read, TrustedPages) else read
             headers = read.table_headers if isinstance(read, TrustedPages) else None
-            materials = material_identities(pages, headers, revisions)
+            identified = material_identities(pages, headers, revisions)
+            materials = [identity for identity, _ in identified]
+            material_roles = effective_roles(identified, read)
             if revisions is not None:
                 pages = _revision_order(pages, revisions)
                 if headers is not None:
@@ -292,7 +298,7 @@ def compile_products(
             carried = (carry_for(carry.release, product, materials)
                        if carry is not None else None)
             digest = carried.digest if carried is not None else None
-            if output is not None and reusable(output, materials) and (
+            if output is not None and reusable(output, materials, material_roles) and (
                 carry is None or output.carry_digest == digest
             ):
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
@@ -320,7 +326,7 @@ def compile_products(
             output = compiler.compile(product, definitions, pages, table_headers=headers,
                                       carry=quotes)
             output = output.model_copy(update={
-                "materials": materials, "carry_digest": digest,
+                "materials": materials, "material_roles": material_roles, "carry_digest": digest,
                 "carry_release": carried.release_id if digest is not None and carried else None,
             })
             if len(ledger.served) > 1:

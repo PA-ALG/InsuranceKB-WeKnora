@@ -1,7 +1,7 @@
 {
  "navigation_id": "enterprise",
- "navigation_version": "2026-10-18.2",
- "basis": "S3e: the product domain lists the schema pack catalog's packs in catalog order (display name and labels as filed); service domains are declared for entities published later (user 2026-10-18).",
+ "navigation_version": "2026-10-28.1",
+ "basis": "S3e: the product domain lists the schema pack catalog's packs in catalog order (display name and labels as filed); service domains are declared for entities published later (user 2026-10-18). QA3 (2026-10-28): question_terms per field key, drafted by Claude from the field cards' titles, definitions and includes; offline check on the #286 r2 questions (the author knew those questions, so that check is optimistic).",
  "display_name": "保险产品知识库",
  "overview_fields": [
   "entry_age_range",
@@ -104,5 +104,358 @@
    ],
    "groups": []
   }
- ]
+ ],
+ "question_terms": {
+  "waiting_period": [
+   [
+    "观察期"
+   ]
+  ],
+  "cooling_off_period": [
+   [
+    "冷静期"
+   ]
+  ],
+  "premium_grace_period": [
+   [
+    "宽限"
+   ]
+  ],
+  "entry_age_range": [
+   [
+    "投保年龄"
+   ],
+   [
+    "多大",
+    "投保"
+   ],
+   [
+    "几岁",
+    "投保"
+   ],
+   [
+    "年龄上限"
+   ],
+   [
+    "年龄范围"
+   ],
+   [
+    "最高投保"
+   ]
+  ],
+  "premium_payment_term": [
+   [
+    "交费期"
+   ],
+   [
+    "缴费期"
+   ],
+   [
+    "交费年期"
+   ],
+   [
+    "缴费年期"
+   ],
+   [
+    "交几年"
+   ],
+   [
+    "交多少年"
+   ]
+  ],
+  "premium_payment_frequency": [
+   [
+    "年交"
+   ],
+   [
+    "月交"
+   ],
+   [
+    "趸交"
+   ],
+   [
+    "交费方式"
+   ]
+  ],
+  "sum_assured_growth_rate": [
+   [
+    "保额",
+    "增长"
+   ],
+   [
+    "保额",
+    "递增"
+   ],
+   [
+    "增长比例"
+   ]
+  ],
+  "sum_assured_growth_rules": [
+   [
+    "保额",
+    "增长"
+   ],
+   [
+    "保额",
+    "递增"
+   ]
+  ],
+  "death_benefit_rules": [
+   [
+    "身故"
+   ]
+  ],
+  "coverage_and_renewal_terms": [
+   [
+    "续保"
+   ],
+   [
+    "保险期间"
+   ]
+  ],
+  "guaranteed_renewal_status": [
+   [
+    "保证续保"
+   ]
+  ],
+  "deductible_rules": [
+   [
+    "免赔"
+   ]
+  ],
+  "reimbursement_rate_rules": [
+   [
+    "给付比例"
+   ],
+   [
+    "赔付比例"
+   ],
+   [
+    "报销比例"
+   ]
+  ],
+  "covered_critical_specified_diseases": [
+   [
+    "重大疾病",
+    "多少种"
+   ],
+   [
+    "重疾",
+    "多少种"
+   ],
+   [
+    "重大疾病",
+    "几种"
+   ]
+  ],
+  "covered_mild_specified_diseases": [
+   [
+    "轻度疾病",
+    "多少种"
+   ],
+   [
+    "轻症",
+    "多少种"
+   ],
+   [
+    "轻度疾病",
+    "几种"
+   ]
+  ],
+  "covered_moderate_specified_diseases": [
+   [
+    "中症",
+    "多少种"
+   ],
+   [
+    "中症",
+    "几种"
+   ]
+  ],
+  "exclusions": [
+   [
+    "免责"
+   ],
+   [
+    "除外责任"
+   ]
+  ],
+  "cash_value_rules": [
+   [
+    "现金价值"
+   ]
+  ],
+  "surrender_and_cancellation_terms": [
+   [
+    "退保"
+   ],
+   [
+    "解除合同"
+   ],
+   [
+    "合同解除"
+   ]
+  ],
+  "annuity_payment_period": [
+   [
+    "领取期间"
+   ],
+   [
+    "领多久"
+   ]
+  ],
+  "annuity_start_age": [
+   [
+    "起领"
+   ],
+   [
+    "开始领取",
+    "年龄"
+   ]
+  ],
+  "annuity_payment_frequency": [
+   [
+    "年领"
+   ],
+   [
+    "月领"
+   ],
+   [
+    "领取频率"
+   ]
+  ],
+  "dividend_rules": [
+   [
+    "分红"
+   ],
+   [
+    "红利"
+   ]
+  ],
+  "policy_loan_rules": [
+   [
+    "保单贷款"
+   ],
+   [
+    "借款"
+   ]
+  ],
+  "premium_waiver_rules": [
+   [
+    "豁免"
+   ]
+  ],
+  "beneficiary_rules": [
+   [
+    "受益人"
+   ]
+  ],
+  "health_declaration_requirements": [
+   [
+    "健康告知"
+   ],
+   [
+    "如实告知"
+   ]
+  ],
+  "pre_existing_condition_rules": [
+   [
+    "既往症"
+   ]
+  ],
+  "claim_application_deadline_and_documents": [
+   [
+    "理赔",
+    "材料"
+   ],
+   [
+    "申请",
+    "材料"
+   ],
+   [
+    "理赔",
+    "时效"
+   ]
+  ],
+  "coverage_period": [
+   [
+    "保多久"
+   ],
+   [
+    "保障期间"
+   ]
+  ],
+  "coverage_geography": [
+   [
+    "境外"
+   ],
+   [
+    "海外"
+   ]
+  ],
+  "eligible_hospital_scope": [
+   [
+    "哪些医院"
+   ],
+   [
+    "定点医院"
+   ]
+  ],
+  "direct_billing_and_advance_payment_rules": [
+   [
+    "垫付"
+   ],
+   [
+    "直付"
+   ]
+  ],
+  "out_of_hospital_special_drug_coverage": [
+   [
+    "特药"
+   ],
+   [
+    "外购药"
+   ]
+  ],
+  "multiple_benefit_payment_rules": [
+   [
+    "多次赔付"
+   ],
+   [
+    "赔几次"
+   ]
+  ],
+  "eligible_occupation_classes": [
+   [
+    "职业"
+   ]
+  ],
+  "sum_assured_range": [
+   [
+    "最高保额"
+   ],
+   [
+    "保额范围"
+   ]
+  ],
+  "maturity_benefit_rules": [
+   [
+    "满期"
+   ]
+  ],
+  "survival_benefit_rules": [
+   [
+    "生存金"
+   ],
+   [
+    "生存保险金"
+   ]
+  ],
+  "policyholder_rights": [
+   [
+    "合同",
+    "变更"
+   ]
+  ]
+ }
 }

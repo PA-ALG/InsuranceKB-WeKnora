@@ -119,9 +119,11 @@ def _active_once(client: PlatformClient, space_id: str) -> CarryDigest:
 
 def _current(output: CompileOutput, entry: ProductEntry, product: str,
              carried: CarryDigest) -> bool:
-    materials = sorted(f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}" for m in entry.materials)
+    identities = {f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}": m.role for m in entry.materials}
+    materials = sorted(identities)
     # The release id is provenance only: every publication makes a new Active release.
-    return reusable(output, materials) and output.carry_digest == carried(product, materials)
+    return (reusable(output, materials, identities)
+            and output.carry_digest == carried(product, materials))
 
 
 def _receipts(path: Path, invalid_code: str) -> dict[str, str]:

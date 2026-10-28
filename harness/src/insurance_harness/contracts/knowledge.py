@@ -315,6 +315,24 @@ class NavigationDomain(ContractModel):
         return self
 
 
+def question_term_text(term: str) -> str:
+    """A question term exactly as the platform's Go normalizeQuestionTerm compares it (QA3
+    Spec §2): NFKC, lower case, without whitespace or punctuation; symbols stay. A term must
+    keep at least two characters."""
+    folded = unicodedata.normalize("NFKC", term).lower()
+    return "".join(
+        ch
+        for ch in folded
+        if not _platform_space(ch) and not unicodedata.category(ch).startswith("P")
+    )
+
+
+def _platform_space(ch: str) -> bool:
+    # Go unicode.IsSpace, plus the BOM its normalize also drops. str.isspace differs from it only
+    # by the information separators U+001C-U+001F, which Go keeps (checked over every code point).
+    return (ch.isspace() and not "\x1c" <= ch <= "\x1f") or ch == "\ufeff"
+
+
 class NavigationProfile(ContractModel):
     """How readers organise a release's entries (S3e): domains by entity type, then groups by
     classification label. Versioned data published with the release, replaced whole each time.
@@ -326,6 +344,9 @@ class NavigationProfile(ContractModel):
     display_name: NonBlank | None = None
     overview_fields: list[NonBlank] = Field(default_factory=list)
     domains: list[NavigationDomain] = Field(min_length=1)
+    # QA3: per field key, groups of 1-3 terms; a question asks a field when it contains every
+    # term of one group. Absent in navigations published before QA3.
+    question_terms: dict[NonBlank, list[list[NonBlank]]] | None = None
 
     @model_validator(mode="after")
     def keys_are_unique(self) -> Self:
@@ -334,6 +355,18 @@ class NavigationProfile(ContractModel):
             raise ValueError("domain keys must be unique")
         if len(set(self.overview_fields)) != len(self.overview_fields):
             raise ValueError("overview fields must be unique")
+        for groups in (self.question_terms or {}).values():
+            # A group matches when every term occurs, so its order carries nothing: compare sets.
+            seen: set[frozenset[str]] = set()
+            for group in groups:
+                texts = frozenset(question_term_text(term) for term in group)
+                if not 1 <= len(group) <= 3 or any(len(text) < 2 for text in texts):
+                    raise ValueError("a question-term group has 1 to 3 terms of 2+ characters")
+                if len(texts) != len(group):
+                    raise ValueError("a question-term group repeats a term")
+                if texts in seen:
+                    raise ValueError("question-term groups of a field must be distinct")
+                seen.add(texts)
         return self
 
 

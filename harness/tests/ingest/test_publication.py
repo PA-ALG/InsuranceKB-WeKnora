@@ -26,11 +26,11 @@ from tests.ingest.upload_helpers import SPACE, entry, registry
 BASE = "http://weknora.test"
 
 
-def materials_of(current: ProductRegistry, product: str) -> list[str]:
-    return sorted(
-        f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}"
+def materials_of(current: ProductRegistry, product: str) -> dict[str, str]:
+    return {  # identity -> recorded role: a current output carries both (S5b-6)
+        f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}": m.role
         for m in current.products[product].materials
-    )
+    }
 
 
 def write_output(
@@ -47,8 +47,8 @@ def write_output(
         entity_id=product,
         model="deepseek-flash",
         cards_version=version or cards_version(), value_protocol=prompt.VALUE_PROTOCOL_VERSION,
-        materials=materials_of(current, product) if materials is None else materials,
-    )
+        materials=sorted(materials_of(current, product)) if materials is None else materials,
+        material_roles=materials_of(current, product) if materials is None else None)
     (root / product).mkdir(parents=True, exist_ok=True)
     (root / product / "output.json").write_text(output.model_dump_json(), encoding="utf-8")
 
