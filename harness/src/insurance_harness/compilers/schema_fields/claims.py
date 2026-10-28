@@ -82,10 +82,21 @@ def require_cards_version(output: CompileOutput) -> str:
     return version
 
 
+def compiler_version(output: CompileOutput) -> str:
+    """The compiler identity a Claim records: card version, plus the value protocol when known.
+
+    Change decisions compare it to tell a compiler upgrade from model churn (S12c-1b). Outputs
+    written before S12c-1 have no protocol and keep the plain card version they published with.
+    """
+    cards = require_cards_version(output)
+    protocol = (output.value_protocol or "").strip()
+    return f"{cards}+value:{protocol}" if protocol else cards
+
+
 def claims_from(
     output: CompileOutput, source: SegmentedSource, sources: Mapping[str, SourceRevision]
 ) -> list[Claim]:
-    version = require_cards_version(output)
+    version = compiler_version(output)
     return [
         _claim(output, index, field, version, source, sources)
         for index, field in enumerate(output.fields)

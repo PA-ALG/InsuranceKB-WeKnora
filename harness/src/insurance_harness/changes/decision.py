@@ -26,7 +26,7 @@ _SOURCE_REF = re.compile(r"source:v1:([^:\s]+):[1-9][0-9]*:([a-fA-F0-9]{64})")
 # What the platform writes for an expert revision (internal/enterprise/expert, S9a §2).
 _EXPERT_REF = re.compile(r"expert:v1:[^:\s]+:([a-fA-F0-9]{64})")
 _DOCUMENT_ID = re.compile(r"[^:\s]+")
-_PUBLISH = {Verdict.ADD, Verdict.FILL, Verdict.SUPERSEDE, Verdict.REFRESH}
+_PUBLISH = {Verdict.ADD, Verdict.FILL, Verdict.SUPERSEDE, Verdict.REFRESH, Verdict.UPGRADE}
 
 
 @dataclass(frozen=True)
@@ -99,6 +99,10 @@ def _equivalent(base: Claim, incoming: Claim) -> bool:
     return values_equal(base.value, incoming.value) or bool(old_hashes and old_hashes == new_hashes)
 
 
+def _identity(claim: Claim) -> tuple[str, str]:
+    return claim.provenance.compiler, claim.provenance.compiler_version
+
+
 def _verdict(base: _Base | None, incoming: Claim | None,
              incoming_documents: frozenset[str], current: set[str], new: set[str]) -> Verdict:
     if base is None:
@@ -115,16 +119,21 @@ def _verdict(base: _Base | None, incoming: Claim | None,
         return Verdict.FILL
     if withdrawn:
         return Verdict.SUPERSEDE
+    fresh = bool(incoming_documents & new)
+    # The KEEP rules below absorb model churn on unchanged materials (S8). A compiler upgrade is
+    # not churn: the new value is published for review instead of silently kept (S12c-1b).
+    if not fresh and _identity(base.claim) != _identity(incoming):
+        return Verdict.UPGRADE
     if incoming.state == ClaimState.UNKNOWN:
         return Verdict.KEEP
-    if not incoming_documents & new:
+    if not fresh:
         return Verdict.KEEP
     return Verdict.CONFLICT
 
 
 def _member(incoming: Claim, base: _Base | None, verdict: Verdict, changed_at: str) -> Claim:
     revision = 0 if base is None else base.claim.maintenance.revision_no
-    if verdict in {Verdict.FILL, Verdict.SUPERSEDE}:
+    if verdict in {Verdict.FILL, Verdict.SUPERSEDE, Verdict.UPGRADE}:
         revision += 1
     maintenance = Maintenance(
         revision_no=revision,
@@ -167,7 +176,7 @@ def decide_changes(
     incoming: Sequence[Claim],
     current_knowledge: Collection[str],
 ) -> ChangeSet:
-    """Apply the nine first-match rules to one product, failing closed on ambiguity.
+    """Apply the ten first-match rules to one product, failing closed on ambiguity.
 
     A missing active release has no base members. Documents are knowledge
     identities, independent of a source's parse attempt. A
