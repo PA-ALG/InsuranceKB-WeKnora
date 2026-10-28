@@ -298,7 +298,8 @@ func titledFragment(fragment string, titles []string) bool {
 }
 
 // seriesFragment holds when, without the prefix all products share, the fragment is at least 3
-// runes and begins a core name of every product that carries it.
+// runes and begins the core name — the first name without that prefix (QA2 §3) — of every
+// product that carries it. Aliases do not count (QA2b §2a.4).
 func seriesFragment(fragment, prefix string, matches []productMatch) bool {
 	series := strings.TrimPrefix(fragment, prefix)
 	if utf8.RuneCountInString(series) < 3 {
@@ -308,11 +309,7 @@ func seriesFragment(fragment, prefix string, matches []productMatch) bool {
 		if !carries(match, fragment) {
 			continue
 		}
-		begins := false
-		for _, name := range match.names {
-			begins = begins || strings.HasPrefix(strings.TrimPrefix(name, prefix), series)
-		}
-		if !begins {
+		if len(match.names) == 0 || !strings.HasPrefix(strings.TrimPrefix(match.names[0], prefix), series) {
 			return false
 		}
 	}
