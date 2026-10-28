@@ -4,12 +4,16 @@ Claims are rebuilt exactly as publishing builds them and compared with the Activ
 real change rules; only changes that would replace or add published content are judged. Each point
 carries the content fingerprints of the new and the live value the judge saw, and each product the
 identity of every input the judge relied on (its basis), so publishing can refuse anything that
-changed after judging (review R4, R5).
+changed after judging (review R4, R5). What a request shows about each field (its title,
+definition, source guidance and card) is bound too, by digest, since a changed definition changes
+the question the judge answered.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,12 +21,14 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from insurance_harness.bundle.client import Release
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.changes.decision import decide_changes
 from insurance_harness.changes.options import registry_inputs
 from insurance_harness.changes.sources import publication_entries
 from insurance_harness.changes.types import ChangeSet, Verdict
-from insurance_harness.compilers.schema_fields.cards import cards_version
+from insurance_harness.compilers.schema_fields.cards import card_payload, cards_version
 from insurance_harness.compilers.schema_fields.claims import claims_from, require_cards_version
+from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.eval.pdf_text import PageText
@@ -136,6 +142,49 @@ def basis_of(output: CompileOutput, pages: dict[tuple[str, int], list[PageText]]
         "value_protocol": output.value_protocol,
         "judge_cards": cards_version(),
     }
+
+
+def field_context(repo: Path, pack: str, field_keys: Iterable[str]) -> dict[str, dict[str, Any]]:
+    """What a request shows the judge about each field, read from the repo's pack catalog."""
+    keys = sorted(set(field_keys))
+    if not keys:
+        return {}
+    try:
+        catalog = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack, only_source_extractable=False)
+    except (OSError, KeyError, ValueError):
+        raise JudgeBatchError("PACK_UNKNOWN") from None
+    definitions = {item.field_key: item for item in catalog}
+    shown: dict[str, dict[str, Any]] = {}
+    for key in keys:
+        definition = definitions.get(key)
+        if definition is None:
+            raise JudgeBatchError("FIELD_UNKNOWN")
+        shown[key] = {
+            "title": definition.short_title,
+            "description": definition.description,
+            "source_guidance": definition.source_guidance,
+            "card": card_payload(definition, examples=False),
+        }
+    return shown
+
+
+def field_digests(contexts: dict[str, dict[str, Any]]) -> dict[str, str]:
+    return {
+        key: hashlib.sha256(
+            json.dumps(context, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        for key, context in contexts.items()
+    }
+
+
+def check_fields(repo: Path, pack: str, bound: dict[str, str], field_keys: Iterable[str]) -> None:
+    """Every field the approved points rely on is still shown as the judge saw it (review R4)."""
+    try:
+        now = field_digests(field_context(repo, pack, field_keys))
+    except JudgeBatchError:
+        raise JudgeBatchError("INPUTS_CHANGED") from None
+    if any(bound.get(key) != digest for key, digest in now.items()):
+        raise JudgeBatchError("INPUTS_CHANGED")
 
 
 def rebuild(

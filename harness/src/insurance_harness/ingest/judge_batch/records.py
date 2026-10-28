@@ -8,6 +8,12 @@ bundle digest is the same candidate, the same decision input the same decision, 
 activation the release it made, a repeated sample the one it kept). Activation refused with
 NEEDS_REBASE proves the attempt never went live; the next run starts a new one. A completed
 attempt is never written again.
+
+The frozen file is written before its record, and the record before anything is sent, so a frozen
+file without a record (an interruption between the two) was never sent. A rerun freezes its own
+candidate under the next free number and leaves that file untouched: a frozen identity is never
+overwritten or reused (review round 2, R1). A rebuilt candidate is not byte-identical anyway: its
+maintenance time is when it was built.
 """
 
 from __future__ import annotations
@@ -34,6 +40,7 @@ from insurance_harness.review.spot_check import sample
 
 Stage = Literal["built", "submitted", "decided", "activated", "verified", "sampled"]
 _ATTEMPT = re.compile(r"attempt-(\d+)\.json")
+_FROZEN = re.compile(r"attempt-(\d+)\.bundle\.json")
 _SAMPLE_BATCH = 500
 
 
@@ -74,14 +81,18 @@ def _bundle_path(run_root: Path, product: str, attempt: int) -> Path:
     return _folder(run_root, product) / f"attempt-{attempt}.bundle.json"
 
 
+def _numbers(folder: Path, pattern: re.Pattern[str]) -> list[int]:
+    return sorted(
+        int(found.group(1))
+        for path in (folder.iterdir() if folder.is_dir() else [])
+        if (found := pattern.fullmatch(path.name))
+    )
+
+
 def current(run_root: Path, product: str) -> Attempt | None:
     """The product's latest attempt, if any."""
     folder = _folder(run_root, product)
-    numbers = sorted(
-        int(found.group(1))
-        for path in (folder.iterdir() if folder.is_dir() else [])
-        if (found := _ATTEMPT.fullmatch(path.name))
-    )
+    numbers = _numbers(folder, _ATTEMPT)
     if not numbers:
         return None
     try:
@@ -104,6 +115,19 @@ def _save(run_root: Path, record: Attempt) -> None:
     write_json(path, record.model_dump(mode="json"))
 
 
+def _freeze(run_root: Path, product: str, after: int, raw: bytes) -> int:
+    """Freeze `raw` under a number above every recorded attempt and every frozen file."""
+    folder = _folder(run_root, product)
+    try:
+        number = max([after, *_numbers(folder, _FROZEN)]) + 1
+        folder.mkdir(parents=True, exist_ok=True)
+        with _bundle_path(run_root, product, number).open("xb") as stream:
+            stream.write(raw)
+    except OSError:
+        raise JudgeBatchError("RECORD_INVALID") from None
+    return number
+
+
 def start(
     run_root: Path,
     product: str,
@@ -113,12 +137,8 @@ def start(
 ) -> Attempt:
     """Freeze the candidate and the decision before anything is sent."""
     latest = current(run_root, product)
-    number = 1 if latest is None else latest.attempt + 1
     raw = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False).encode("utf-8")
-    target = _bundle_path(run_root, product, number)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("xb") as stream:
-        stream.write(raw)
+    number = _freeze(run_root, product, 0 if latest is None else latest.attempt, raw)
     record = Attempt(
         product=product,
         attempt=number,

@@ -5,25 +5,23 @@ root outside any Git repository, without overwriting a file. Products go whole i
 id order, so the same inputs always give the same sessions and requests; a product larger than a
 session is refused rather than split. Material files are named by their identity (knowledge id
 and parse attempt), never by their original names. Starting the judge sessions is the operator's
-step: this module only writes `run.sh`.
+step: this module only writes `run.sh` (launch.py), which keeps every judge out of the run root.
 """
 
 from __future__ import annotations
 
 import json
-import shlex
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 from insurance_harness.bundle.client import PlatformClient
-from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.changes.options import registry_inputs
-from insurance_harness.compilers.schema_fields.cards import card_payload, cards_version
-from insurance_harness.compilers.schema_fields.definitions import pack_definitions
+from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.publish import REPO
 from insurance_harness.eval.judge import JudgeRequest
 from insurance_harness.eval.pdf_text import PageText
+from insurance_harness.ingest.judge_batch.launch import run_script
 from insurance_harness.ingest.judge_batch.manifest import (
     MANIFEST,
     check_fresh,
@@ -35,6 +33,8 @@ from insurance_harness.ingest.judge_batch.points import (
     JudgeBatchError,
     ProductChanges,
     Rebuilt,
+    field_context,
+    field_digests,
     product_changes,
     rebuild,
 )
@@ -72,33 +72,22 @@ def _sessions(changes: list[ProductChanges], per_session: int) -> dict[str, list
 
 
 def _requests(
-    product: ProductChanges, per_request: int, system: str, repo: Path
+    product: ProductChanges,
+    fields: dict[str, dict[str, Any]],
+    per_request: int,
+    system: str,
 ) -> list[JudgeRequest]:
-    try:
-        catalog = pack_definitions(
-            repo / SCHEMA_PACK_CATALOG, product.pack, only_source_extractable=False
-        )
-    except (OSError, KeyError, ValueError):
-        raise JudgeBatchError("PACK_UNKNOWN") from None
-    definitions = {item.field_key: item for item in catalog}
-    shown = []
-    for point in product.points:
-        definition = definitions.get(point.field_key)
-        if definition is None:
-            raise JudgeBatchError("FIELD_UNKNOWN")
-        shown.append(
-            {
-                "slug": point.slug,
-                "field_key": point.field_key,
-                "title": definition.short_title,
-                "description": definition.description,
-                "source_guidance": definition.source_guidance,
-                "card": card_payload(definition, examples=False),
-                "change": point.change,
-                "live": None if point.live is None else point.live.model_dump(),
-                "new": point.new.model_dump(),
-            }
-        )
+    shown = [
+        {
+            "slug": point.slug,
+            "field_key": point.field_key,
+            **fields[point.field_key],
+            "change": point.change,
+            "live": None if point.live is None else point.live.model_dump(),
+            "new": point.new.model_dump(),
+        }
+        for point in product.points
+    ]
     materials = [{"document": m.document, "file": m.file} for m in product.materials]
     return [
         JudgeRequest(
@@ -117,27 +106,6 @@ def _requests(
         )
         for start in range(0, len(shown), per_request)
     ]
-
-
-def _run_script(run_root: Path, sessions: list[str], model: str, operator_prompt: str) -> str:
-    lines = [
-        "#!/bin/zsh",
-        "# Operator step (RV7 Spec §1): one independent judge session per directory, in parallel.",
-        "# Each session can write only its own directory; the run root stays the trusted record.",
-        f"run={shlex.quote(str(run_root))}",
-        'mkdir -p "$run/logs"',
-        f"prompt={shlex.quote(operator_prompt)}",
-    ]
-    for session in sessions:
-        lines.append(
-            f"(codex exec -m {shlex.quote(model)} -c model_reasoning_effort='\"xhigh\"' "
-            f'--skip-git-repo-check -s workspace-write -C "$run/sessions/{session}" '
-            f'-o "$run/logs/{session}.last.txt" "$prompt" < /dev/null '
-            f'> "$run/logs/{session}.codex.log" 2>&1; '
-            f'echo "{session} exit=$?" >> "$run/logs/status.txt") &'
-        )
-    lines.append("wait")
-    return "\n".join(lines) + "\n"
 
 
 def _session_texts(
@@ -185,13 +153,19 @@ def prepare(
         for product_id in first
     }
     collected = [product_changes(rebuilt[product_id], active) for product_id in first]
+    fields = {
+        changes.product: field_context(
+            repo, changes.pack, [point.field_key for point in changes.points]
+        )
+        for changes in collected
+    }
     system = "\n".join(rules["system"])
     planned: dict[str, tuple[list[JudgeRequest], dict[str, str], list[ProductChanges]]] = {}
     for session, members in _sessions(collected, points_per_session).items():
         requests = [
             request
             for changes in members
-            for request in _requests(changes, points_per_request, system, repo)
+            for request in _requests(changes, fields[changes.product], points_per_request, system)
         ]
         planned[session] = (requests, _session_texts(members, rebuilt, rules), members)
     targets = [
@@ -229,11 +203,12 @@ def prepare(
         "reviewer": reviewer,
         "model": model,
         "basis": {product_id: rebuilt[product_id].basis for product_id in first},
+        "fields": {product: field_digests(shown) for product, shown in fields.items()},
         "sessions": plan_sessions,
     }
     script = run_root / "run.sh"
     script.write_text(
-        _run_script(run_root, sorted(plan_sessions), model, rules["operator_prompt"]),
+        run_script(run_root, sorted(plan_sessions), model, rules["operator_prompt"]),
         encoding="utf-8",
     )
     script.chmod(0o755)

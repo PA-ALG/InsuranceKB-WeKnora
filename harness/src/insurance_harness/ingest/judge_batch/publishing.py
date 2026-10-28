@@ -2,11 +2,11 @@
 
 A product with an attempt on record continues it (records.py); otherwise the change set is
 recomputed against the current Active with the real rules, on exactly the inputs the judge relied
-on (review R4). A point counts as published only when Active holds exactly the judged content
-(review R5); every other approved point must still be a judged change with the content and the
-live value the judge saw. Claims carry the judge's reviewer as machine review and the policy goes
-on the machine decision, never a person's. A dry run sends nothing and records nothing; the first
-failure stops.
+on, field definitions included (review R4). A point counts as published only when Active holds
+exactly the judged content (review R5); every other approved point must still be a judged change
+with the content and the live value the judge saw. Claims carry the judge's reviewer as machine
+review and the policy goes on the machine decision, never a person's. A dry run sends nothing
+and records nothing; the first failure stops.
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ from insurance_harness.ingest.judge_batch.manifest import check_run_root, write_
 from insurance_harness.ingest.judge_batch.points import (
     JUDGED,
     JudgeBatchError,
+    check_fields,
     content_of,
     live_claim,
     rebuild,
@@ -81,8 +82,9 @@ def build(
     if not approved:
         return None, {"status": "nothing_approved", "claims": 0}
     summary = load_summary(run_root)
+    plan = load_plan(run_root)
     try:
-        basis = load_plan(run_root)["basis"][product]
+        basis, bound = plan["basis"][product], plan["fields"][product]
     except (KeyError, TypeError):
         raise JudgeBatchError("PLAN_MISSING") from None
     rebuilt = rebuild(
@@ -93,6 +95,7 @@ def build(
         active=active,
         basis=basis,
     )
+    check_fields(repo, rebuilt.pack, bound, [point["field_key"] for point in approved.values()])
     items = {item.logical_key: item for item in rebuilt.changes.items}
     members = {claim.logical_key: claim for claim in rebuilt.changes.members}
     live = live_contents(active, list(approved))
