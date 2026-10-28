@@ -114,7 +114,7 @@
    - 只因产品名称而命中的词组会补概览。
 2. **Harness**：
    - `tests/catalog/test_navigation_question_terms.py`：合同接受合法的 `question_terms`；拒绝空词组、超过 3 个词、不足 2 字的词、未知字段键和重复词组；`navigation.json` 的版本为 `2026-10-28.1`，并且含 `sum_assured_growth_rate` 的词组；
-   - `tests/catalog/test_publish_navigation.py`：离线 fake HTTP 下，Head 导航不同时只提交导航成员，并以 `navigation:<version>` 机器决定、激活；相同时不做任何事；dry-run 零写入。
+   - `tests/catalog/test_navigation_publication.py`：离线 fake HTTP 下，Head 导航不同时只提交导航成员，并以 `navigation:<version>` 机器决定、激活；相同时不做任何事；dry-run 零写入。
 
 **门禁**：
 - Go：`go test ./internal/enterprise/...`，以及 golangci-lint；
