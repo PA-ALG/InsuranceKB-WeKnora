@@ -44,7 +44,8 @@ PROTOCOL = "2026-10-27.1"
 
 class JudgePlatform(DeltaPlatform):
     """Activation makes the submitted claims Active, so a rerun sees them as published. Leftover
-    human-queue candidates are listed in the queue and previewed against the current Active."""
+    human-queue candidates are read back as the platform's review detail (RV6e), each changed
+    claim a review point; a point someone decided reads as rejected."""
 
     def __init__(self, active_release: dict[str, Any]) -> None:
         super().__init__(active_release)
@@ -54,13 +55,12 @@ class JudgePlatform(DeltaPlatform):
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path.removeprefix("/api/v1/enterprise/spaces/space-1/")
-        if request.method == "GET" and path == "candidates":
+        if request.method == "GET" and path.startswith("candidates/"):
             self.seen.append(("GET", path, None))
-            return httpx.Response(200, json={"success": True, "data": {"items": self.queue()}})
-        if request.method == "GET" and path.endswith("/preview"):
-            self.seen.append(("GET", path, None))
-            data = self.preview(path.split("/")[1])
-            return httpx.Response(200, json={"success": True, "data": data})
+            candidate = path.split("/")[1]
+            if candidate not in self.leftovers:
+                return httpx.Response(404, json={"success": False, "code": "CANDIDATE_NOT_FOUND"})
+            return httpx.Response(200, json={"success": True, "data": self.detail(candidate)})
         if path.endswith("/points/decisions"):
             body = json.loads(request.content)
             self.rejections.append(body)
@@ -77,40 +77,49 @@ class JudgePlatform(DeltaPlatform):
             self.active = {"id": "rel_1", "epoch": 4, "members": kept + list(submitted.values())}
         return response
 
-    def queue(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "candidate_id": candidate,
-                "subjects": ["1828"],
-                "point_count": len(bundle["members"]),
-                "pending_points": len(bundle["members"]),
-                "status": "pending",
-                "members": len(bundle["members"]),
-                "removals": len(bundle["removals"]),
-                "base_release_id": bundle["base_release_id"],
-            }
-            for candidate, bundle in self.leftovers.items()
-        ]
-
-    def preview(self, candidate: str) -> dict[str, Any]:
+    def detail(self, candidate: str) -> dict[str, Any]:
+        """The review detail as the platform writes it (release.ReviewDetail)."""
         bundle = self.leftovers[candidate]
-        head = {m["logical_slug"]: m["member_digest"] for m in self.active["members"]}
-        delta: dict[str, list[str]] = {"added": [], "changed": [], "removed": [], "unchanged": []}
-        for member in bundle["members"]:
-            slug, digest = member["logical_slug"], member["member_digest"]
-            if slug not in head:
-                delta["added"].append(slug)
-            else:
-                delta["unchanged" if head[slug] == digest else "changed"].append(slug)
-        delta["removed"] = [slug for slug in bundle["removals"] if slug in head]
-        touched = {m["logical_slug"] for m in bundle["members"]} | set(bundle["removals"])
-        delta["unchanged"] += [slug for slug in head if slug not in touched]  # as the platform
+        kinds = {m["logical_slug"]: m["kind"] for m in bundle["members"]}
+        kinds |= {slug: "removal" for slug in bundle["removals"]}
+        points = []
+        for slug, kind in sorted(kinds.items()):
+            decided = slug in self.decided
+            verdict = {
+                "outcome": "reject",
+                "reason": "已关闭",
+                "subject": "service:1",
+                "created_at": "2026-10-28T00:00:00Z",
+            }
+            points.append(
+                {
+                    "slug": slug,
+                    "kind": kind if kind in {"claim", "removal"} else "member",
+                    "status": "rejected" if decided else "pending",
+                    "decision": verdict if decided else None,
+                    "release_id": None,
+                    "blocker": "",
+                }
+            )
+        pending = sum(point["status"] == "pending" for point in points)
         return {
             "candidate_id": candidate,
+            "status": "pending",
+            "point_count": len(points),
+            "pending_points": pending,
+            "created_at": "2026-10-27T00:00:00Z",
+            "created_by": "service:1",
             "base_release_id": bundle["base_release_id"],
+            "subjects": ["1828"],
+            "members": len(bundle["members"]),
+            "removals": len(bundle["removals"]),
+            "decision": None,
+            "release_id": None,
             "head_release_id": self.active["id"],
-            "needs_rebase": bundle["base_release_id"] != self.active["id"],
-            "delta": {group: sorted(slugs) for group, slugs in delta.items()},
+            "blocker": "",
+            "bundle_members": bundle["members"],
+            "bundle_removals": bundle["removals"] or None,
+            "points": points,
         }
 
 
@@ -158,14 +167,10 @@ def world(tmp_path: Path, request: pytest.FixtureRequest) -> dict[str, Any]:
     }
 
 
-def leftover(world: dict[str, Any], claims: list[Claim], candidate: str = "cand_old") -> Path:
-    """A human-queue candidate of the product, submitted on the original Active, and its file."""
+def leftover(world: dict[str, Any], claims: list[Claim], candidate: str = "cand_old") -> None:
+    """A human-queue candidate of the product, submitted on the original Active."""
     bundle = assemble(claims, compiler_identity="test", base=Head(release_id="rel_base", epoch=3))
-    data = bundle.model_dump(mode="json")
-    world["server"].leftovers[candidate] = data
-    path: Path = world["compile_root"] / f"{candidate}.bundle.json"
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    return path
+    world["server"].leftovers[candidate] = bundle.model_dump(mode="json")
 
 
 def prepared(world: dict[str, Any]) -> dict[str, Any]:
@@ -398,13 +403,12 @@ def test_close_rejects_judge_rejected_and_superseded_points_one_by_one(
     answer(world, {first: ("approve", "通过"), second: ("reject", "值有误")})
     ingest(world["run_root"])
     publish(world, live=True)
-    submitted_file = leftover(world, world["claims"])
+    leftover(world, world["claims"])
     dry = close_points(
         world["run_root"],
         client=world["client"],
         product="1828",
         candidate="cand_old",
-        candidate_bundle=submitted_file,
         issue=384,
     )
     assert world["server"].rejections == []
@@ -415,7 +419,6 @@ def test_close_rejects_judge_rejected_and_superseded_points_one_by_one(
         client=world["client"],
         product="1828",
         candidate="cand_old",
-        candidate_bundle=submitted_file,
         issue=384,
         live=True,
     )
