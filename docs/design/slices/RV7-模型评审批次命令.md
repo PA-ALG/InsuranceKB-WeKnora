@@ -1,6 +1,6 @@
 # RV7 · 模型评审批次命令：编译变更 → 独立评委 → 机器发布
 
-> 状态：Claude 2026-10-28 提出；同日按 Codex 审核 R1–R8 修订（PR #413） ｜ 作者：Claude Code
+> 状态：Claude 2026-10-28 提出；同日按 Codex 审核 R1–R8 修订（PR #413），第 2 轮审核 R1、R2、R4 再修订 ｜ 作者：Claude Code
 > 依据：
 > - 用户 2026-10-27："需要审核的太多了，这版你借助 gpt6.0 或者 opus5.5 直接判断吧"，以及"你全部决定吧，不要我来批准了"。审核由独立模型评委（GPT-6 Astra xhigh）完成，结果按机器审核发布，并如实标注评审来源；
 > - 参考运行：运维 #384（人工队列候选的评审与发布，2026-10-27）、#403（编译器升级批次，2026-10-28）。两次都靠仓库外的一次性脚本（收集、建题、`codex exec`、导入、建候选、发布、关闭遗留审核点），本切片把这条链路固化为有测试的命令；
@@ -24,7 +24,10 @@ python -m insurance_harness.ingest.judge_batch close   --run-root J --product P 
 
 `--run-root` 必须在任何 Git 仓库之外（`judge_files.check_run_directory`）。
 
-**信任边界**：评委会话只能写自己的会话目录（`codex exec -C <会话目录>`，`workspace-write`）。运行目录根下的 `plan.json`、`manifest.json`、`data/`、`publish/` 由命令写、评委写不到，是可信记录；会话目录里的一切（题目、材料、答案）都按不可信输入处理。
+**信任边界**：运行目录根下的 `plan.json`、`manifest.json`、`data/`、`publish/` 由命令写，是可信记录；会话目录里的一切（题目、材料、答案）都按不可信输入处理。可信记录只在评委写不到时成立，这一点由沙箱设置保证并在启动前实测（第 2 轮 R2）：
+- 只给 `workspace-write` 不够：它同时放开 `$TMPDIR`、`/tmp` 和配置里的额外可写目录，运行目录放在这些目录下时，评委能连同题目一起改写清单和 plan。所以 `run.sh` 启动的每个沙箱都去掉这些目录：`-c sandbox_workspace_write.writable_roots=[]`、`-c sandbox_workspace_write.exclude_tmpdir_env_var=true`、`-c sandbox_workspace_write.exclude_slash_tmp=true`，评委只剩自己的会话目录可写；
+- 启动任何评委之前，`run.sh` 用完全相同的沙箱设置跑一次探针（`codex sandbox`，不调用模型）：必须能写本会话目录（否则探针不可信），且不能写运行目录根、`data/` 和 `sessions/`。任何一条不满足就以退出码 3 停止，不启动任何会话；
+- 这比按路径拒绝临时目录更直接：检查的是这台机器、这份配置下评委实际能写什么，配置里额外加的可写目录也包括在内。生成脚本的代码在 `judge_batch/launch.py`。
 
 ## 2. 各步骤
 
@@ -40,7 +43,8 @@ python -m insurance_harness.ingest.judge_batch close   --run-root J --product P 
 - **评审依据**（R4）：每个产品在 `plan.json` 记下评委据以判断的全部输入：
   - 登记表给出的每份材料的身份 `knowledge_id:attempt:document_sha256`（不论是否被引用）；
   - 编译输出的 `materials`、`cards_version`、`value_protocol`；
-  - 评委题目所用字段卡的版本。
+  - 评委题目所用字段卡的版本；
+  - **题目里实际给出的字段口径**（第 2 轮 R4）：每个评审点所属字段的标题、定义、来源指引和字段卡，按字段记 sha256，写在 `plan.json` 的 `fields`。题目和这份记录取自同一份数据，首次发布时对每个批准点重新计算，不一致返回 `INPUTS_CHANGED`。没有批准点依赖的字段可以改动。
 - **材料全文**（R6）：每份材料逐页读出，页首标记为 `[page N]`，写到 `sources/<产品>/<knowledge_id>-<attempt>.txt`。文件名来自唯一的材料身份，不用原文件名。题目里列出该产品的材料（文件名 → 原文件名），每条引文也带对应文件。
 - **会话划分**：
   - 产品按编号排序后依次装入会话，每个会话不超过 `--points-per-session` 个点（默认 40）；一个产品不拆到两个会话，单个产品超过上限时返回 `PRODUCT_TOO_LARGE`（R8）；
@@ -99,6 +103,7 @@ python -m insurance_harness.ingest.judge_batch close   --run-root J --product P 
   - 批准点及其内容指纹；
   - 当前阶段（`built` → `submitted` → `decided` → `activated` → `verified` → `sampled`）、正在进行的步骤，以及平台返回的 candidate、decision、release、epoch、样本数。
 - **每个外部步骤之前先写记录**。续跑时一律使用冻结的候选文件，不重新生成（`changed_at` 等不会变），文件哈希不符时返回 `RECORD_INVALID`。
+- **冻结与记录之间中断**（第 2 轮 R1）：先写冻结文件，再写记录，记录写完才会发送，所以只有冻结文件、没有记录的那次尝试一定没有发出。续跑时在所有已记录尝试和已冻结文件之上取下一个编号重新冻结，那个文件原样保留，不覆盖、不复用（重新构建的候选 `changed_at` 不同，本来也不会逐字节相同）。冻结文件写不进去时返回 `RECORD_INVALID`。
 - **结果未知时先对账**：
   - 先读 Active：其 `candidate_id` 是本记录的候选时，激活已经生效；
   - 否则按平台的幂等语义续做：
@@ -155,6 +160,7 @@ python -m insurance_harness.ingest.judge_batch close   --run-root J --product P 
   - `publishing.py`（重算、核对与构建）；
   - `records.py`（发布记录与续跑）；
   - `closing.py`；
+  - `launch.py`（`run.sh` 与沙箱边界，第 2 轮 R2）；
   - `prompt.json`。
 - `harness/src/insurance_harness/eval/judge_files.py`：新增公开的 `stored_requests(run_dir)`，供导入时重建题目。
 - `harness/src/insurance_harness/bundle/client.py`：
@@ -165,7 +171,7 @@ python -m insurance_harness.ingest.judge_batch close   --run-root J --product P 
 
 ## 5. 验收（RED，Claude 编写）
 
-`harness/tests/ingest/test_judge_batch.py`（主流程）与 `test_judge_batch_recovery.py`（R1、R5）、`test_judge_batch_inputs.py`（R2、R4、R6–R8）、`test_judge_batch_close.py`（R3）。全部离线，使用 fake HTTP 和假答案文件，复用 `test_publish_cli` 与 `test_claim_changes_publish` 的夹具。恢复类测试使用按平台幂等语义建模的 fake：按 digest 去重候选，同一输入返回同一决定，激活可重放，样本保留已有。
+`harness/tests/ingest/test_judge_batch.py`（主流程）与 `test_judge_batch_recovery.py`（R1、R5）、`test_judge_batch_inputs.py`（R2、R4、R6–R8）、`test_judge_batch_close.py`（R3）。第 2 轮的 R1、R2、R4 由实现方测试覆盖：`test_judge_batch_freeze.py`、`test_judge_batch_launch.py`、`test_judge_batch_fields.py`。全部离线，使用 fake HTTP 和假答案文件，复用 `test_publish_cli` 与 `test_claim_changes_publish` 的夹具。恢复类测试使用按平台幂等语义建模的 fake：按 digest 去重候选，同一输入返回同一决定，激活可重放，样本保留已有。
 
 1. **prepare**：
    - 只为 upgrade/add 等变更点建题；题目哈希可复核；
