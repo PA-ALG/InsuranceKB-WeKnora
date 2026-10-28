@@ -8450,13 +8450,6 @@
      "page": 3,
      "quote": "5 保单周年日指保险合同生效日在合同生效后每年的对应日，不含合同生效日当日。如果当月没有对应的同一日，则以该月最\r\n后一日为对应日。",
      "segment_id": "D2P3S14"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
-     "page": 3,
-     "quote": "30 周岁的保单周年日举例：假设保单生效日是 2025 年 11 月 1 日，则以后每年 11 月 1 日为保单周年日；被保险人出生日期\r\n是 2010 年 12 月 1 日，那么 2040 年 12 月 2 日被保险人年满 30 周岁，而 30 周岁的保单周年日为 2041 年 11 月 1 日（因 2040\r\n年 11 月 1 日时被保险人尚未满 30 周岁）。",
-     "segment_id": "D2P3S15"
     }
    ]
   },
@@ -9877,9 +9870,156 @@
     {
      "document": "保险条款.pdf",
      "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "2.1 责任免除 因下列情形之一导致被保险人发生“轻度疾病”、“中症疾病”或“重大疾病”的，\r\n我们不承担给付相应保险金的责任：",
+     "segment_id": "D2P7S30"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "1.投保人对被保险人的故意杀害、故意伤害；",
+     "segment_id": "D2P7S31"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "2.被保险人故意犯罪或抗拒依法采取的刑事强制措施；",
+     "segment_id": "D2P7S32"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "3.被保险人故意自伤、或自本合同成立或者本合同效力恢复之日起 2 年内自杀，但\r\n被保险人自杀时为无民事行为能力人的除外；",
+     "segment_id": "D2P7S33"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "4.被保险人服用、吸食或注射毒品\r\n6；",
+     "segment_id": "D2P7S34"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "5.被保险人酒后驾驶\r\n7机动车\r\n8；",
+     "segment_id": "D2P7S35"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "6.被保险人感染艾滋病病毒或患艾滋病\r\n9（不包括经输血、因职业关系、器官移植\r\n导致的艾滋病病毒感染或患艾滋病）；",
+     "segment_id": "D2P7S36"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "7.战争",
+     "segment_id": "D2P7S37"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "10、军事冲突",
+     "segment_id": "D2P7S38"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 7,
+     "quote": "11、暴乱\r\n12或武装叛乱；",
+     "segment_id": "D2P7S39"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "8.核爆炸、核辐射或核污染；",
+     "segment_id": "D2P8S1"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "9.遗传性疾病\r\n13，先天性畸形、变形或染色体异常\r\n14。",
+     "segment_id": "D2P8S2"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
      "page": 8,
      "quote": "发生上述第 1 项情形导致被保险人发生“重大疾病”的，本合同所有保险责任均终\r\n止，我们向被保险人退还本合同的现金价值；发生上述其他情形导致被保险人发生\r\n“重大疾病”的，本合同所有保险责任均终止，我们向您退还本合同的现金价值。",
      "segment_id": "D2P8S3"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "② 保险期间不超过 1 年（含）的附加险合同效力均终止且未在保险期间届满 60\r\n日内完成重新投保或续保。",
+     "segment_id": "D2P8S8"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "因下列情形之一导致被保险人身故的，我们不承担给付身故保险金的责任：",
+     "segment_id": "D2P8S9"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "1.投保人对被保险人的故意杀害、故意伤害；",
+     "segment_id": "D2P8S10"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "2.被保险人故意犯罪或者抗拒依法采取的刑事强制措施；",
+     "segment_id": "D2P8S11"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "3.被保险人自本合同成立或者本合同效力恢复之日起 2 年内自杀，但被保险人自杀\r\n时为无民事行为能力人的除外；",
+     "segment_id": "D2P8S12"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "4.被保险人服用、吸食或注射毒品；",
+     "segment_id": "D2P8S13"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "5.被保险人酒后驾驶机动车；",
+     "segment_id": "D2P8S14"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "6.战争、军事冲突、暴乱或武装叛乱；",
+     "segment_id": "D2P8S15"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+     "page": 8,
+     "quote": "7.核爆炸、核辐射或核污染。",
+     "segment_id": "D2P8S16"
     },
     {
      "document": "保险条款.pdf",

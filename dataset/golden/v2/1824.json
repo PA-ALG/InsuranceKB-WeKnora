@@ -2341,6 +2341,76 @@
     {
      "document": "保险条款.pdf",
      "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 3,
+     "quote": "2.1 责任免除 因下列情形之一导致被保险人身故的，我们不承担给付身故保险金的责任：",
+     "segment_id": "D2P3S10"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 3,
+     "quote": "1.投保人对被保险人的故意杀害、故意伤害；",
+     "segment_id": "D2P3S11"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 3,
+     "quote": "2.被保险人故意犯罪或者抗拒依法采取的刑事强制措施；",
+     "segment_id": "D2P3S12"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 3,
+     "quote": "3.被保险人自本合同成立或者本合同效力恢复之日起 2 年内自杀，但被保\n险人自杀时为无民事行为能力人的除外；",
+     "segment_id": "D2P3S13"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 4,
+     "quote": "4.被保险人服用、吸食或注射毒品\n8；",
+     "segment_id": "D2P4S1"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 4,
+     "quote": "5.被保险人酒后驾驶\n9机动车\n10；",
+     "segment_id": "D2P4S2"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 4,
+     "quote": "6.战争",
+     "segment_id": "D2P4S3"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 4,
+     "quote": "11、军事冲突",
+     "segment_id": "D2P4S4"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 4,
+     "quote": "12、暴乱\n13或武装叛乱；",
+     "segment_id": "D2P4S5"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+     "page": 4,
+     "quote": "7.核爆炸、核辐射或核污染。",
+     "segment_id": "D2P4S6"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
      "page": 4,
      "quote": "发生上述第 1 项情形导致被保险人身故的，本合同终止，我们向被保险人\n的继承人（除投保人本人外）退还本合同的现金价值。",
      "segment_id": "D2P4S7"

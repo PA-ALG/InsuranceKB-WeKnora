@@ -7,10 +7,10 @@
  "dataset_version": "v2",
  "files": {
   "1814.json": "e6215f77f7fc973da8bbfe30d87df4843448caa1018d30eae5dc89aaec57187f",
-  "1816.json": "f2df97564746c41fd5a1aafd2a153269765a5080aeade5109d7e8e7c8c1538a8",
-  "1824.json": "f06c5f58d5a0e48eabd0960b819601514c2b097940e70b446bdd05ea549c2be5",
-  "1826.json": "1bd2152a47674788f508d6a55540338e718daa03ba419b6c5ac31dfa83678860",
-  "1828.json": "1e80960c46d5b1ce8a7e83955c87538f84f4b50b2d0c8f5ca7dffed747cdf1d3"
+  "1816.json": "31edf99e55017c16920b0f629ab1fbffb997761b4adc137e8db2da302cb19359",
+  "1824.json": "ac34df7ee56dce1f5524a89187145fb96f3252df49afe5e66a1a223a777d773f",
+  "1826.json": "2dfd25c8a784b9d55b278b427278c904a337ad7fb57a242fa14bc447369b451f",
+  "1828.json": "2b2c11d2e43dc85985e9e63122d89e450388b92f3d14f32492e79aecf3518ccf"
  },
  "products": {
   "1814": {
@@ -1933,9 +1933,14 @@
    }
   },
   {
-   "basis": "S12c-2 Spec §2–§3: independent GPT-6 Astra xhigh audit of every Golden v2 evidence segment (keep/drop) and of the A0r compiler picks Golden lacked (add/skip), 9 codex-exec file-exchange sessions; draft-2026-10-18a cards without examples; values and states unchanged (Issue #390)",
+   "basis": "S12c-2 Spec §2–§3 and §6: independent GPT-6 Astra xhigh audit of every Golden v2 evidence segment (keep/drop) and of the A0r compiler picks Golden lacked (add/skip), 9 codex-exec file-exchange sessions, draft-2026-10-18a cards without examples, values and states unchanged; applied with the owner rulings of review round 1 on #392 (worked examples, referents, card excludes precedence) from the saved answers, no new sessions (Issue #390)",
    "cards_version": "draft-2026-10-18a",
    "method": "judge-golden-audit",
+   "owner_rulings": [
+    "1. 投保示例不是规则证据：投保举例、示例计算、保单周年日举例等具体示例段落不作字段规则证据，示例得出的新增撤回",
+    "2. 指代规则：保留或新增段落指代'上述/前款/前述/前项/其他情形'时，定义这些条件的同字段段落保留或恢复（向前连续收回被删段，只跨上一页末尾脚注块、最多一页，遇本字段仍保留的段落即止）",
+    "3. 字段卡 excludes 优先于 includes 的举例：被 excludes 明确排到另一字段的内容不作本字段证据；删除会使字段无证据时保留原证据并列入待裁决"
+   ],
    "products": {
     "1814": {
      "fields": [
@@ -2264,6 +2269,11 @@
      ],
      "pinned": 10,
      "held_for_adjudication": [],
+     "owner_overrides": {
+      "reverted_adds": [],
+      "restored": [],
+      "held": {}
+     },
      "value_notes": {
       "covered_accident_scenarios": [
        "第6项属于投保组合及可选责任适用条件，不属于意外场景分类。"
@@ -2289,7 +2299,6 @@
       "covered_specified_diseases",
       "covered_mild_specified_diseases",
       "covered_moderate_specified_diseases",
-      "covered_critical_specified_diseases",
       "disease_definitions_and_criteria",
       "exclusions",
       "benefit_interaction_rules",
@@ -2651,10 +2660,6 @@
        "D2P21S1"
       ],
       [
-       "disability_recovery_and_benefit_termination_rules",
-       "D2P3S4"
-      ],
-      [
        "income_loss_benefit_eligibility_conditions",
        "D2P2S6"
       ],
@@ -2813,22 +2818,6 @@
        "D2P2S12"
       ],
       [
-       "covered_critical_specified_diseases",
-       "D1P1S4"
-      ],
-      [
-       "covered_critical_specified_diseases",
-       "D1P5S2"
-      ],
-      [
-       "covered_critical_specified_diseases",
-       "D2P22S21"
-      ],
-      [
-       "covered_critical_specified_diseases",
-       "D2P22S22"
-      ],
-      [
        "disease_definitions_and_criteria",
        "D2P10S13"
       ],
@@ -2929,16 +2918,8 @@
        "D1P1S6"
       ],
       [
-       "income_loss_care_benefit_payment_rules",
-       "D1P6S7"
-      ],
-      [
        "income_loss_care_benefit_payment_period",
        "D1P1S6"
-      ],
-      [
-       "income_loss_care_benefit_payment_period",
-       "D1P6S7"
       ],
       [
        "income_loss_verification_rules",
@@ -2950,7 +2931,46 @@
       ]
      ],
      "pinned": 8,
-     "held_for_adjudication": [],
+     "held_for_adjudication": [
+      "covered_critical_specified_diseases"
+     ],
+     "owner_overrides": {
+      "reverted_adds": [
+       [
+        "income_loss_care_benefit_payment_rules",
+        "D1P6S7"
+       ],
+       [
+        "income_loss_care_benefit_payment_period",
+        "D1P6S7"
+       ],
+       [
+        "covered_critical_specified_diseases",
+        "D1P1S4"
+       ],
+       [
+        "covered_critical_specified_diseases",
+        "D1P5S2"
+       ],
+       [
+        "covered_critical_specified_diseases",
+        "D2P22S21"
+       ],
+       [
+        "covered_critical_specified_diseases",
+        "D2P22S22"
+       ]
+      ],
+      "restored": [
+       [
+        "disability_recovery_and_benefit_termination_rules",
+        "D2P3S4"
+       ]
+      ],
+      "held": {
+       "covered_critical_specified_diseases": "按字段卡 excludes 优先（Owner 裁定 3）：本产品 120 种重大疾病只用于保费豁免，归 premium_waiver_critical_illnesses；本字段原证据全为该豁免名单，删除会使字段无证据，state/value 本次不改，保留原证据待语义复核（本产品无豁免以外的重疾名单）"
+      }
+     },
      "value_notes": {},
      "judging_method": "codex-exec-file-exchange",
      "model_id": "gpt-6-astra",
@@ -2989,46 +3009,6 @@
       [
        "cash_value_rules",
        "D2P3S7"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S10"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S11"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S12"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S13"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S1"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S2"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S3"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S4"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S5"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S6"
       ],
       [
        "policy_loan_rules",
@@ -3071,6 +3051,52 @@
      ],
      "pinned": 2,
      "held_for_adjudication": [],
+     "owner_overrides": {
+      "reverted_adds": [],
+      "restored": [
+       [
+        "cash_value_rules",
+        "D2P3S10"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S11"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S12"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S13"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S1"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S2"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S3"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S4"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S5"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S6"
+       ]
+      ],
+      "held": {}
+     },
      "value_notes": {
       "policyholder_rights": [
        "值中不接受增加基本保险金额属于被否定的个别权益，按本字段卡不应列入。"
@@ -3092,7 +3118,6 @@
       "sum_assured_growth_rate",
       "death_benefit_rules",
       "maturity_benefit_rules",
-      "cash_value_rules",
       "policy_loan_rules"
      ],
      "segments_reviewed": 404,
@@ -3105,78 +3130,6 @@
       [
        "sum_assured_growth_rate",
        "D2P3S7"
-      ],
-      [
-       "cash_value_rules",
-       "D1P3S3"
-      ],
-      [
-       "cash_value_rules",
-       "D1P3S4"
-      ],
-      [
-       "cash_value_rules",
-       "D1P3S5"
-      ],
-      [
-       "cash_value_rules",
-       "D1P3S6"
-      ],
-      [
-       "cash_value_rules",
-       "D1P3S7"
-      ],
-      [
-       "cash_value_rules",
-       "D1P3S8"
-      ],
-      [
-       "cash_value_rules",
-       "D1P3S9"
-      ],
-      [
-       "cash_value_rules",
-       "D1P3S10"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S10"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S11"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S12"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S13"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S14"
-      ],
-      [
-       "cash_value_rules",
-       "D2P3S15"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S1"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S2"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S3"
-      ],
-      [
-       "cash_value_rules",
-       "D2P4S4"
       ]
      ],
      "added": [
@@ -3235,6 +3188,84 @@
      ],
      "pinned": 6,
      "held_for_adjudication": [],
+     "owner_overrides": {
+      "reverted_adds": [],
+      "restored": [
+       [
+        "cash_value_rules",
+        "D1P3S3"
+       ],
+       [
+        "cash_value_rules",
+        "D1P3S4"
+       ],
+       [
+        "cash_value_rules",
+        "D1P3S5"
+       ],
+       [
+        "cash_value_rules",
+        "D1P3S6"
+       ],
+       [
+        "cash_value_rules",
+        "D1P3S7"
+       ],
+       [
+        "cash_value_rules",
+        "D1P3S8"
+       ],
+       [
+        "cash_value_rules",
+        "D1P3S9"
+       ],
+       [
+        "cash_value_rules",
+        "D1P3S10"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S10"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S11"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S12"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S13"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S14"
+       ],
+       [
+        "cash_value_rules",
+        "D2P3S15"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S1"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S2"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S3"
+       ],
+       [
+        "cash_value_rules",
+        "D2P4S4"
+       ]
+      ],
+      "held": {}
+     },
      "value_notes": {},
      "judging_method": "codex-exec-file-exchange",
      "model_id": "gpt-6-astra",
@@ -3419,95 +3450,11 @@
       ],
       [
        "cash_value_rules",
-       "D2P7S30"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S31"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S32"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S33"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S34"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S35"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S36"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S37"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S38"
-      ],
-      [
-       "cash_value_rules",
-       "D2P7S39"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S1"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S2"
-      ],
-      [
-       "cash_value_rules",
        "D2P8S4"
       ],
       [
        "cash_value_rules",
        "D2P8S5"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S8"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S9"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S10"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S11"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S12"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S13"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S14"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S15"
-      ],
-      [
-       "cash_value_rules",
-       "D2P8S16"
       ]
      ],
      "added": [
@@ -3576,10 +3523,6 @@
        "D2P3S14"
       ],
       [
-       "disease_benefit_rules",
-       "D2P3S15"
-      ],
-      [
        "maturity_benefit_rules",
        "D1P7S11"
       ],
@@ -3642,6 +3585,101 @@
      ],
      "pinned": 7,
      "held_for_adjudication": [],
+     "owner_overrides": {
+      "reverted_adds": [
+       [
+        "disease_benefit_rules",
+        "D2P3S15"
+       ]
+      ],
+      "restored": [
+       [
+        "cash_value_rules",
+        "D2P7S30"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S31"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S32"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S33"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S34"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S35"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S36"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S37"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S38"
+       ],
+       [
+        "cash_value_rules",
+        "D2P7S39"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S1"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S2"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S8"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S9"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S10"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S11"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S12"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S13"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S14"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S15"
+       ],
+       [
+        "cash_value_rules",
+        "D2P8S16"
+       ]
+      ],
+      "held": {}
+     },
      "value_notes": {},
      "judging_method": "codex-exec-file-exchange",
      "model_id": "gpt-6-astra",
