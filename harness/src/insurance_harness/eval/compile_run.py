@@ -17,7 +17,6 @@ import hashlib
 import json
 import math
 import os
-import re
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -30,6 +29,7 @@ from pydantic import ValidationError
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
 from insurance_harness.changes.options import fixed_revision_pages, registry_inputs, source_options
+from insurance_harness.compilers.schema_fields.carry import CarryRequest, active_carry, carry_for
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
     CompileError,
@@ -39,6 +39,7 @@ from insurance_harness.compilers.schema_fields.engine import (
     reusable,
     to_candidate,
 )
+from insurance_harness.eval.compile_materials import material_identities, validate_materials
 from insurance_harness.eval.convert import predictions_from_candidate
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.eval.product_sources import (
@@ -48,10 +49,9 @@ from insurance_harness.eval.product_sources import (
     source_directory,
     trusted_source_pages,
 )
-from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.ingest.registry import RegistryError
-from insurance_harness.ingest.source_map import SourceEntry, load_source_map, reader_from_env
+from insurance_harness.ingest.source_map import load_source_map, reader_from_env
 from insurance_harness.models import (
     CallLedger,
     ModelCallError,
@@ -81,47 +81,7 @@ __all__ = [
     "write_candidate",
 ]
 
-_MATERIAL = re.compile(r"(?:file|[A-Za-z0-9][A-Za-z0-9_-]{0,127}:[1-9][0-9]*):[0-9a-f]{64}")
 RevisionPageSource = Callable[[str], tuple[TrustedPages[PageText], Mapping[str, SourceRevision]]]
-
-
-def _validate_materials(materials: list[str] | None) -> None:
-    if materials is None:
-        return
-    revisions = [tuple(m.split(":")[:2]) for m in materials if m.count(":") == 2]
-    if (
-        materials != sorted(materials) or any(not _MATERIAL.fullmatch(m) for m in materials)
-        or (revisions and (len(revisions) != len(materials)
-                           or len(set(revisions)) != len(revisions)))
-    ):
-        raise ValueError("invalid stored material identities")
-
-
-def _materials(
-    pages: Sequence[PageText], headers: Mapping[str, Sequence[PageText]] | None,
-    revisions: Mapping[str, SourceRevision] | None,
-) -> list[str]:
-    # Validate before reuse too: duplicate pages, fingerprints or evidence roles are ambiguous.
-    source = SegmentedSource(pages, table_headers=headers)
-    documents = {page.document: page.document_sha256.lower() for page in source.pages}
-    if not documents or (revisions is not None and set(revisions) != set(documents)):
-        raise ValueError("missing or ambiguous source identities")
-    materials = []
-    identities = set()
-    for document, digest in documents.items():
-        if revisions is None:
-            materials.append(f"file:{digest}")
-            continue
-        revision = revisions[document]
-        entry = SourceEntry(
-            knowledge_id=revision.knowledge_id, parse_attempt=revision.parse_attempt,
-        )
-        identity = (entry.knowledge_id, entry.parse_attempt)
-        if identity in identities:
-            raise ValueError("ambiguous source identities")
-        identities.add(identity)
-        materials.append(f"{entry.knowledge_id}:{entry.parse_attempt}:{digest}")
-    return sorted(materials)
 
 
 def _replace_completed(path: Path, text: str) -> None:
@@ -261,6 +221,7 @@ def compile_products(
     page_source: Callable[[str], list[PageText] | TrustedPages[PageText]] | None = None,
     revision_page_source: RevisionPageSource | None = None,
     facts: Callable[[str], tuple[str, str]] | None = None,
+    carry: CarryRequest | None = None,
 ) -> list[ProductRun]:
     """Compile or reuse each product in order; raise on the first stopping condition.
 
@@ -270,6 +231,8 @@ def compile_products(
     mutually exclusive with page_source, whose unlabelled inputs use file identities.
     Revision inputs use the same document and header-role order as publication.
     facts supplies (name, pack) without a dataset; it requires an explicit page source.
+    carry hands step two the reviewed quotes of the given Active release (S12c-4); under it an
+    output is reused only if it carried the same quotes. It needs revision_page_source.
     """
     if page_source is not None and revision_page_source is not None:
         raise ValueError("supply only one page source")
@@ -302,7 +265,7 @@ def compile_products(
                 output = CompileOutput.model_validate_json(path.read_text(encoding="utf-8"))
                 if output.entity_id != product or output.pack_id != pack:
                     raise ValueError(f"{product}: stored output does not match the product")
-                _validate_materials(output.materials)
+                validate_materials(output.materials)
             revisions = None
             read: list[PageText] | TrustedPages[PageText]
             if revision_page_source is not None:
@@ -312,14 +275,19 @@ def compile_products(
                         trusted_source_pages(source_directory(repo, product)))
             pages = read.evidence if isinstance(read, TrustedPages) else read
             headers = read.table_headers if isinstance(read, TrustedPages) else None
-            materials = _materials(pages, headers, revisions)
+            materials = material_identities(pages, headers, revisions)
             if revisions is not None:
                 pages = _revision_order(pages, revisions)
                 if headers is not None:
                     roles = [rule.role for rule in load_trust_policy().header_rules]
                     headers = {role: _revision_order(headers[role], revisions)
                                for role in sorted(headers, key=roles.index)}
-            if output is not None and reusable(output, materials):
+            carried = (carry_for(carry, product, revisions, pages, headers)
+                       if carry is not None else None)
+            digest = carried.digest if carried is not None else None
+            if output is not None and reusable(output, materials) and (
+                carry is None or output.carry_digest == digest
+            ):
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
@@ -340,8 +308,12 @@ def compile_products(
                 port, batch_size=batch_size,
                 max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
             )
-            output = compiler.compile(product, definitions, pages, table_headers=headers)
-            output = output.model_copy(update={"materials": materials})
+            output = compiler.compile(product, definitions, pages, table_headers=headers,
+                                      carry=carried.quotes if carried is not None else None)
+            output = output.model_copy(update={
+                "materials": materials, "carry_digest": digest,
+                "carry_release": carried.release_id if digest is not None and carried else None,
+            })
             if len(ledger.served) > 1:
                 # The last batch itself came from a new version: nothing is written.
                 raise ServedModelChanged(f"{product}: served model changed within the run")
@@ -443,6 +415,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-sent", type=int, default=30)
     parser.add_argument("--replay-from", type=Path,
                         help="recompile saved completions of an earlier run root; sends nothing")
+    parser.add_argument("--carry-active", action="store_true",
+                        help="hand step two the Active release's reviewed quotes (S12c-4)")
     source_options(parser, required=False)
     args = parser.parse_args(argv)
     runs: list[ProductRun] = []
@@ -458,6 +432,9 @@ def main(argv: list[str] | None = None) -> int:
             source_map = load_source_map(args.source_map)
         if args.registry or args.source_map:
             revision_pages = fixed_revision_pages(source_map, reader_from_env())
+        if args.carry_active and not args.registry:
+            raise ValueError("--carry-active needs --registry")
+        carry = active_carry(source_map.space_id) if args.carry_active else None
 
         def factory(ledger: CallLedger) -> CompletionPort:
             clients.append(OpenAICompatibleCompletion(config, ledger=ledger))
@@ -472,7 +449,7 @@ def main(argv: list[str] | None = None) -> int:
                         completion_factory=None if args.replay_from else factory,
                         run_root=args.run_root, max_sent=args.max_sent,
                         batch_size=args.batch_size, replay_from=args.replay_from,
-                        revision_page_source=revision_pages, facts=facts,
+                        revision_page_source=revision_pages, facts=facts, carry=carry,
                     )
                 finally:
                     for client in clients:

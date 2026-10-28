@@ -249,6 +249,8 @@ def _compile(
             "--registry", str(registry_path), "--products", *report.planned_compile,
             "--stage", "schema_fields", "--stage-config", str(stage_config),
             "--run-root", str(run_root / "compile"),
+            # Recompiles keep the reviewed evidence step one may miss this time (S12c-4).
+            "--carry-active",
         ], run_root / "compile", allowance)
         runs = TypeAdapter(list[compile_run.ProductRun]).validate_python(
             summary.get("products", []),

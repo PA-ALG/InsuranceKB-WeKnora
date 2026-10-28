@@ -13,11 +13,12 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from insurance_harness.catalog.trust_policy import load_trust_policy
+from insurance_harness.catalog.trust_policy import TrustPolicy, load_trust_policy
 from insurance_harness.compilers.schema_fields.cards import cards_version
+from insurance_harness.compilers.schema_fields.carry import CarriedQuote
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition, NonBlank
 from insurance_harness.compilers.schema_fields.parse import CompileError as CompileError
-from insurance_harness.compilers.schema_fields.parse import parse_selection, parse_values
+from insurance_harness.compilers.schema_fields.parse import parse_selection, parse_value_rows
 from insurance_harness.compilers.schema_fields.prompt import (
     VALUE_PROTOCOL_VERSION,
     JudgeLikeRequest,
@@ -48,6 +49,9 @@ class FieldResult(BaseModel):
     evidence: list[VerifiedQuote] = Field(default_factory=list)
     # Step-one selection in reading order (S4f); outputs written before S4f load as [].
     segment_ids: list[str] = Field(default_factory=list)
+    # Reviewed segments carried into this recompile that step two used (S12c-4 §2.3); evidence
+    # is cut from segment_ids plus these. Never overlaps segment_ids; [] before S12c-4.
+    carried_segment_ids: list[str] = Field(default_factory=list)
 
 
 class CompileOutput(BaseModel):
@@ -66,6 +70,10 @@ class CompileOutput(BaseModel):
     materials: list[str] | None = None
     # The step-two protocol the values were written under (S12c-1); None before S12c-1.
     value_protocol: str | None = None
+    # The Active release reviewed quotes were carried from, and their identity (S12c-4 §2.4);
+    # None when nothing was carried, and in outputs written before S12c-4.
+    carry_release: str | None = None
+    carry_digest: str | None = None
 
 
 def reusable(output: CompileOutput, materials: list[str]) -> bool:
@@ -76,6 +84,17 @@ def reusable(output: CompileOutput, materials: list[str]) -> bool:
         and output.cards_version == cards_version()
         and output.value_protocol == VALUE_PROTOCOL_VERSION
     )
+
+
+def _forbidden(
+    source: SegmentedSource, policy: TrustPolicy, ids: Sequence[str], field_key: str,
+) -> set[str]:
+    """Header segments the field may not use: a restricted header serves only its fields."""
+    return {
+        segment.id for segment in source.ordered(ids)
+        if (role := source.header_role(segment.document)) is not None
+        and field_key not in policy.header_fields(role)
+    }
 
 
 def _value_batches(
@@ -173,7 +192,9 @@ class SchemaFieldsCompiler:
         pages: Sequence[PageTextLike],
         *,
         table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
+        carry: Mapping[str, Sequence[CarriedQuote]] | None = None,
     ) -> CompileOutput:
+        """carry: reviewed quotes per field a recompile hands to step two (S12c-4 Spec §2.2)."""
         fields, source = self._prepare(entity_id, definitions, pages, table_headers=table_headers)
         policy = load_trust_policy()
         calls = 0
@@ -195,11 +216,7 @@ class SchemaFieldsCompiler:
             ):
                 ids, dropped = source.resolve(row.segments)
                 dropped_refs += len(dropped)
-                forbidden = {
-                    segment.id for segment in source.ordered(ids)
-                    if (role := source.header_role(segment.document)) is not None
-                    and row.field_key not in policy.header_fields(role)
-                }
+                forbidden = _forbidden(source, policy, ids, row.field_key)
                 dropped_refs += len(forbidden)
                 ids = [sid for sid in ids if sid not in forbidden]
                 if row.state != "unknown" and not ids:
@@ -207,15 +224,29 @@ class SchemaFieldsCompiler:
                     continue
                 selected[row.field_key] = (row.state, ids)
 
+        # Only a field step one found present takes carried quotes: step one's unknown or
+        # absent stands. A quote that is not found exactly once on its page carries nothing.
+        carried: dict[str, list[str]] = {}
+        for key, quotes in (carry or {}).items():
+            state, ids = selected.get(key, ("", []))
+            if state != "present":
+                continue
+            located = set().union(*(source.locate(q.document, q.page, q.quote) for q in quotes))
+            added = located - set(ids) - _forbidden(source, policy, list(located), key)
+            if added:
+                carried[key] = [segment.id for segment in source.ordered(list(added))]
         present = [
-            (d, source.ordered(selected[d.field_key][1]))
+            (d, source.ordered([*selected[d.field_key][1], *carried.get(d.field_key, [])]))
             for d in fields
             if selected.get(d.field_key, ("", []))[0] == "present"
         ]
         values: dict[str, str | None] = {}
+        used: dict[str, list[str]] = {}
         for items in _value_batches(present, self._value_batch_chars):
             answer = send(build_value_request(entity_id, items))
-            values.update(parse_values(answer, [definition for definition, _ in items]))
+            rows = parse_value_rows(answer, [definition for definition, _ in items])
+            for key, (written, cited) in rows.items():
+                values[key], used[key] = written, cited
 
         results: list[FieldResult] = []
         for definition in fields:
@@ -237,13 +268,16 @@ class SchemaFieldsCompiler:
                     results.append(FieldResult(field_key=definition.field_key, state="unknown"))
                     continue
                 value = normalize_field_value(definition, written)
+            extra = _used_carried(source, ids, carried.get(definition.field_key, []),
+                                  used.get(definition.field_key, []))
             results.append(
                 FieldResult(
                     field_key=definition.field_key,
                     state=state,  # type: ignore[arg-type]
                     value=value,
-                    evidence=source.evidence(ids),
+                    evidence=source.evidence([*ids, *extra]),
                     segment_ids=[segment.id for segment in source.ordered(ids)],
+                    carried_segment_ids=extra,
                 )
             )
         return CompileOutput(
@@ -257,6 +291,19 @@ class SchemaFieldsCompiler:
             cards_version=cards_version(),
             value_protocol=VALUE_PROTOCOL_VERSION,
         )
+
+
+def _used_carried(
+    source: SegmentedSource, selected: Sequence[str], carried: list[str], cited: Sequence[str],
+) -> list[str]:
+    """The carried segments that become evidence (S12c-4 Spec §2.3): those step two cited, or all
+    of them when it cited no segment it was given; the step-one selection is never shrunk."""
+    if not carried:
+        return []
+    offered = {*selected, *carried}
+    named, _ = source.resolve(list(cited))
+    named = [sid for sid in named if sid in offered]
+    return carried if not named else [sid for sid in carried if sid in named]
 
 
 def to_candidate(
