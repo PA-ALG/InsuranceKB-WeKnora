@@ -7,7 +7,8 @@ applicable reason code. Unknown claims publish no fact, so they are neither scor
 (RV2a Spec §3.4, user ruling 2026-10-17): a wrong unknown only costs recall, which sampling after
 release covers. The exception is a compiler upgrade to unknown, which removes a published fact:
 it always goes to people (S12c-1b). Splitting a product into machine and human parts needs the
-platform to rebase activations (S5) and is not done here. Reason codes never carry field keys or other input text.
+platform to rebase activations (S5) and is not done here. Reason codes never carry field keys
+or other input text.
 """
 
 from __future__ import annotations
