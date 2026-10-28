@@ -6,12 +6,15 @@ functions, so a quality number always compares outputs built from one snapshot.
 
 import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
 from insurance_harness.catalog.trust_policy import TrustedPages, trusted_pages
 from insurance_harness.eval.pdf_text import PageText, read_pdf
-from insurance_harness.identity.material_roles import evidence_pages
+from insurance_harness.identity.material_roles import MaterialRoleError, evidence_pages
 
 _PRODUCTS = "dataset/shouxian_product"
 # Golden v2 declares the evaluated products first; v1 still declares the older ones (S4h).
@@ -53,10 +56,49 @@ def material_pages(directory: Path) -> list[PageText]:
     return [page for path in paths for page in read_pdf(path)]
 
 
+# A folder's confirmed material roles (S12d), the dataset's counterpart of the registry's (S5b-6).
+_ROLE_RECORD = "material_roles.json"
+
+
+class _RecordedRole(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    role: str = Field(pattern=r"^[a-z][a-z_]*$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class _RoleRecord(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    basis: str
+    roles: dict[str, _RecordedRole]
+
+
+def recorded_roles(directory: Path, pages: Sequence[PageText]) -> dict[str, str]:
+    """The roles a folder records for the PDFs just read, or {} when it records none.
+
+    A record is all or nothing: it names every PDF in the folder, so leaving a brochure out is a
+    recorded decision rather than a missing file, and each role holds only for the bytes it was
+    confirmed for. Whether a role exists is judged where roles are applied (MATERIAL_ROLE_UNKNOWN).
+    """
+    path = directory / _ROLE_RECORD
+    if not path.exists():
+        return {}
+    try:
+        record = _RoleRecord.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValidationError) as error:
+        raise MaterialRoleError("RECORDED_ROLES_INVALID") from error
+    read = {page.document: page.document_sha256 for page in pages}
+    if not record.basis.strip() or set(record.roles) != set(read):
+        raise MaterialRoleError("RECORDED_ROLES_INVALID")
+    if any(entry.sha256 != read[name] for name, entry in record.roles.items()):
+        raise MaterialRoleError("MATERIAL_IDENTITY_MISMATCH")
+    return {name: entry.role for name, entry in record.roles.items()}
+
+
 def source_pages(directory: Path) -> list[PageText]:
     """Pages of the materials that may be evidence (S4i: rate tables are not; any unresolved
     material raises MaterialRoleError, a ValueError, so the product stops)."""
-    pages = evidence_pages(material_pages(directory))
+    raw = material_pages(directory)
+    pages = evidence_pages(raw, recorded_roles(directory, raw))
     if not any(page.text.strip() for page in pages):
         raise ValueError("no source page text")
     return pages
@@ -64,7 +106,8 @@ def source_pages(directory: Path) -> list[PageText]:
 
 def trusted_source_pages(directory: Path) -> TrustedPages[PageText]:
     """The same frozen PDFs, with whole evidence and restricted headers kept separate."""
-    pages = trusted_pages(material_pages(directory))
+    raw = material_pages(directory)
+    pages = trusted_pages(raw, recorded_roles(directory, raw))
     if not any(
         page.text.strip()
         for group in [pages.evidence, *pages.table_headers.values()]

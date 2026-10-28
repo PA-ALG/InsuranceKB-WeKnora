@@ -32,6 +32,7 @@ from insurance_harness.catalog.trust_policy import load_trust_policy, trusted_pa
 from insurance_harness.eval.product_sources import (
     check_product_id,
     material_pages,
+    recorded_roles,
     source_directory,
 )
 from insurance_harness.eval.segment_score import (
@@ -252,10 +253,14 @@ def _product(
     repo: Path, product: str, previous: PreviousSegmentation, reason: str,
     cards_version: str, golden_from: Path | None,
 ) -> _Converted:
-    raw = material_pages(source_directory(repo, product))
-    trusted = trusted_pages(raw)  # an unresolved material stops the remap, as it stops a compile
+    directory = source_directory(repo, product)
+    raw = material_pages(directory)
+    recorded = recorded_roles(directory, raw)  # S12d: the folder's confirmed roles, if any
+    trusted = trusted_pages(raw, recorded)  # an unresolved material stops the remap, as in compile
     evidence = {role.role: role.evidence for role in load_material_roles().roles}
-    excluded = {doc for doc, role in document_roles(raw).items() if role and not evidence[role]}
+    excluded = {
+        doc for doc, role in document_roles(raw, recorded).items() if role and not evidence[role]
+    }
     golden = load_golden_v2((golden_from or repo / GOLDEN_DIR) / f"{product}.json")
     remapped, report = remap_golden(
         golden, previous, raw, excluded=excluded, emptied_reason=reason,
