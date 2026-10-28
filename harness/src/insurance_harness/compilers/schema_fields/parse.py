@@ -54,8 +54,9 @@ class _ValueRow(BaseModel):
     @model_validator(mode="after")
     def check_state(self) -> Self:
         if self.state == "unknown":
-            if self.value is not None:
-                raise ValueError("unknown takes no value")
+            # Decided by key presence: an explicit "value": null is a format error too.
+            if "value" in self.model_fields_set:
+                raise ValueError("unknown takes no value key")
         elif self.value is None or not self.value.strip():
             raise ValueError("present requires a nonblank value")
         return self
