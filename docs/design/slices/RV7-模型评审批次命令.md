@@ -1,6 +1,6 @@
 # RV7 · 模型评审批次命令：编译变更 → 独立评委 → 机器发布
 
-> 状态：Claude 2026-10-28 提出；同日按 Codex 审核 R1–R8 修订（PR #413），第 2 轮审核 R1、R2、R4 再修订 ｜ 作者：Claude Code
+> 状态：Claude 2026-10-28 提出；同日按 Codex 审核 R1–R8 修订（PR #413），第 2 轮审核 R1–R4 再修订（R3 依赖 RV6e #420） ｜ 作者：Claude Code
 > 依据：
 > - 用户 2026-10-27："需要审核的太多了，这版你借助 gpt6.0 或者 opus5.5 直接判断吧"，以及"你全部决定吧，不要我来批准了"。审核由独立模型评委（GPT-6 Astra xhigh）完成，结果按机器审核发布，并如实标注评审来源；
 > - 参考运行：运维 #384（人工队列候选的评审与发布，2026-10-27）、#403（编译器升级批次，2026-10-28）。两次都靠仓库外的一次性脚本（收集、建题、`codex exec`、导入、建候选、发布、关闭遗留审核点），本切片把这条链路固化为有测试的命令；
@@ -19,7 +19,7 @@ python -m insurance_harness.ingest.judge_batch ingest  --run-root J
 python -m insurance_harness.ingest.judge_batch publish --registry R --compile-root C --run-root J \
         --issue N [--live]
 python -m insurance_harness.ingest.judge_batch close   --run-root J --product P --candidate ID \
-        --candidate-bundle FILE --issue N [--live]
+        --issue N [--live]
 ```
 
 `--run-root` 必须在任何 Git 仓库之外（`judge_files.check_run_directory`）。
@@ -120,34 +120,31 @@ python -m insurance_harness.ingest.judge_batch close   --run-root J --product P 
 
 用于清理同一产品在人工队列里遗留的候选（例如 #384）。评委只审过本批编译的内容，所以只有当遗留候选在该 slug 上提议的内容**正是**本批评委所见的内容时，才能沿用评委的结论（R3）。
 
-- **核对目标候选**：
-  - 服务密钥读不到待审候选的成员内容（`preview` 只给出按 slug 分组的变化），因此操作者用 `--candidate-bundle` 提供该候选提交时的 bundle 文件；
-  - 写之前，命令先从平台核对：
-    - 候选在待审队列中，且其 subjects 含本产品；
-    - 成员数、移除数与文件一致；
-    - `preview` 的 base release 与文件一致；
-    - 按当前 Head 计算出的 added/changed/removed/unchanged 分组与 `preview` 完全一致；
-  - 任一不符返回 `CANDIDATE_BUNDLE_MISMATCH`，不发任何写请求。
-- **逐 slug 比对**：候选在该 slug 上的 Claim 内容指纹必须等于本批评委所见的 `content`。不等的 slug 记为 `content_differs`，候选里没有的记为 `not_in_candidate`，这两类都不关闭。
+- **核对目标候选**（第 2 轮 R3）：候选的实际内容只以平台为准。第 1 轮由操作者提供 bundle 文件、再与队列和预览的数量和分组核对，审核方给出了反例：一份数量、base、分组都相同但内容不同的文件，能让 close 拒绝平台上从未评审过的内容。所以改为用 RV6e 的 `review_detail(space, candidate)` 直接读出候选的成员和 payload，不再接受 bundle 文件。写之前：
+  - 明细读取失败时返回平台的失败码，候选不存在或不在待审状态（`status` 不是 `pending`），或 subjects 不含本产品时，都返回 `CANDIDATE_NOT_PENDING`；
+  - 明细中 Claim 成员的 payload 不是合法 Claim，或某个待审的 Claim 审核点没有对应成员，返回 `CANDIDATE_CONTENT_INVALID`；
+  - 以上都不发任何写请求。
+- **逐 slug 比对**：候选在该 slug 上的 Claim 内容指纹（按平台返回的 payload 计算）必须等于本批评委所见的 `content`。不相等的 slug 记为 `content_differs`，候选里没有的记为 `not_in_candidate`，这两类都不关闭，留给人工。本批没有评审过的待审点列在 `unreviewed`，不关闭。这样评委的结论只会落在它看过的内容上；内容相同的点照常关闭，不因同一候选里有别的点而整体放弃。
 - **评委拒绝的点**：用 RV6d 的机器通道拒绝，理由为"模型评审（<reviewer>）拒绝，运维 Issue #N"。
 - **已发布的批准点**：以"已由模型评审候选 <id> 取代"为由拒绝，但只限同时满足以下三条的点：
-  - 该点在本批**已完成的发布记录**里；
-  - 读 Active 确认其内容正是评委批准的内容；
-  - 遗留候选在该点上的内容也一致。
+  - 该点在本批**已完成的发布记录**里，记录的内容就是评委批准的内容；
+  - Active 在该 slug 上的成员正是本批发布的那个成员：`member_digest` 等于冻结候选文件里的成员摘要（第 2 轮 R3）；
+  - 遗留候选在该点上的内容（按平台明细）也与评委所见一致。
   - 不满足的点记为 `not_live`，不关闭。
 
 每个 slug 单独发一次请求；返回 `MEMBER_DECIDED` 时视为已经关闭。可以续跑。
 
-客户端新增三个方法：
-- `review_queue(space, status)`；
-- `reject_points(space, candidate, slugs, reason, policy_ref)`；
-- `preview(space, candidate)`。
+客户端新增两个方法：
+- `review_queue(space, status)`：操作者用它找出遗留候选的编号；
+- `reject_points(space, candidate, slugs, reason, policy_ref)`。
+
+第 1 轮的 `preview(space, candidate)` 不再需要，已删除；读取候选明细用 RV6e 的 `review_detail`。`CandidateDetail` 增加平台已经返回的 `subjects`。
 
 ## 3. 不做什么
 
 - 命令不调用模型，也不启动 `codex exec`。评委会话是操作者的步骤；会话日志和模型身份按 #384 的做法保存在运行目录。
 - 不处理"直接评审人工队列候选"（#384 的第一阶段）。新的编译变更走本命令，不先进人工队列；已有的人工队列遗留只用 `close` 清理。
-- 不改平台接口、迁移、`contracts/`、评委规则以外的提示词，也不改审核路由策略（`review_policy.json`）。若以后平台为服务密钥提供待审候选的成员读取，`close` 可改为直接从平台比对内容，不再需要操作者提供 bundle 文件。这需要另开切片。
+- 不改平台接口、迁移、`contracts/`、评委规则以外的提示词，也不改审核路由策略（`review_policy.json`）。平台为服务密钥提供待审候选的成员读取由 RV6e（#420）完成，`close` 已改为直接从平台比对内容。
 
 ## 4. 改动范围
 
@@ -164,9 +161,9 @@ python -m insurance_harness.ingest.judge_batch close   --run-root J --product P 
   - `prompt.json`。
 - `harness/src/insurance_harness/eval/judge_files.py`：新增公开的 `stored_requests(run_dir)`，供导入时重建题目。
 - `harness/src/insurance_harness/bundle/client.py`：
-  - 新增 `review_queue`、`reject_points`、`preview`；
+  - 新增 `review_queue`、`reject_points`；
   - `Candidate` 增加平台返回的 `bundle_digest`。
-- 新增 `harness/src/insurance_harness/bundle/candidate_reviews.py`，放这些方法的响应模型，使 `client.py` 不超过 500 行。
+- `harness/src/insurance_harness/bundle/candidate_reviews.py`（RV6e 新建）：加入这些方法的响应模型和 `CandidateDetail.subjects`，使 `client.py` 不超过 500 行。
 - 实现方测试。
 
 ## 5. 验收（RED，Claude 编写）
@@ -203,8 +200,8 @@ python -m insurance_harness.ingest.judge_batch close   --run-root J --product P 
    - 演练不发请求；
    - `--live` 每个 slug 单独发一次；返回 `MEMBER_DECIDED` 时记为已关闭；
    - 请求体只含 slugs、outcome=reject、reason、policy_ref；
-   - 遗留候选在该 slug 上的内容与评委所见不同时不关闭；
-   - bundle 文件与平台上的候选不符时不发任何写请求；
+   - 遗留候选在该 slug 上的内容（按平台明细）与评委所见不同时不关闭；
+   - 明细读不到、不是本候选、不在待审状态时不发任何写请求；
    - 取代理由取自已完成的发布记录。
 
 **门禁**：`uv run pytest`（受影响模块 + 全量）、`uv run ruff check .`、`uv run mypy src tests`、架构守卫、`git diff --check`。手写文件不超过 500 行。
