@@ -3691,6 +3691,26 @@
      ]
     }
    }
+  },
+  {
+   "method": "owner-ruling",
+   "cards_version": "draft-2026-10-18a",
+   "basis": "S12c-2a（docs/design/slices/S12c-2a-1816重疾清单裁定.md）：解除 judge-golden-audit 留下的 1816 待裁决；Claude 依据字段卡样例裁定，模型调用 0",
+   "products": {
+    "1816": {
+     "fields": [
+      "covered_critical_specified_diseases"
+     ],
+     "decisions": {
+      "covered_critical_specified_diseases": {
+       "state": "present",
+       "evidence_changed": false,
+       "releases_hold_of": "judge-golden-audit",
+       "basis": "字段卡两字段的 1806 样例（同系列失能收入损失保险，120 种重大疾病只适用于重大疾病豁免保险费）均为 present 且取值相同；1816 豁免条款 1.2.5 引用合同第 9 部分「重大疾病释义」的名单，不属于 excludes 所指豁免条款单独约定的触发疾病；S12c-2 裁定 3 在本字段的适用据此修正。S12c-2 撤回的 D1P1S4、D1P5S2（说明书重复）、D2P22S21（释义引导语）不恢复（S12a 规则下均为中性段），D2P22S22 为疾病认定共同标准，按 1806 样例 pitfalls 不属于名单字段"
+      }
+     }
+    }
+   }
   }
  ],
  "segmentation": "insurance_harness.evidence.segments (pdfium page text; S4i rules: list markers, inline breaks, soft cap at the last terminator)",

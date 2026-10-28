@@ -34,6 +34,9 @@ def stored(root: Path, registry: ProductRegistry, protocol: str | None) -> bytes
         entity_id="a", pack_id=entry.schema_pack_id, model="fake",
         materials=sorted(f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}" for m in entry.materials),
         cards_version=cards_version(), value_protocol=protocol,
+        material_roles={  # S5b-6: a current output also carries each material's recorded role
+            f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}": m.role for m in entry.materials
+        },
     )
     path = root / "compile" / "a" / "output.json"
     path.parent.mkdir(parents=True, exist_ok=True)

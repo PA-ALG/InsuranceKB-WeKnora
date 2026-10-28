@@ -207,7 +207,12 @@ class ProductRegistry(_Strict):
             space_id=self.space_id,
             products={
                 product_id: [
-                    SourceEntry(knowledge_id=m.knowledge_id, parse_attempt=m.parse_attempt)
+                    SourceEntry(
+                        knowledge_id=m.knowledge_id,
+                        parse_attempt=m.parse_attempt,
+                        role=m.role,
+                        sha256=m.sha256.lower(),
+                    )
                     for m in sorted(product.materials, key=lambda m: m.knowledge_id)
                 ]
                 for product_id, product in sorted(self.products.items())
