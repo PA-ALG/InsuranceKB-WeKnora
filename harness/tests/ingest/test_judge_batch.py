@@ -23,7 +23,7 @@ from insurance_harness.compilers.schema_fields.claims import claims_from
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.eval.judge_files import stored_requests
 from insurance_harness.evidence.source_ref import SourceRevision
-from insurance_harness.review.judge_batch import (
+from insurance_harness.ingest.judge_batch import (
     JudgeBatchError,
     close_points,
     ingest,
