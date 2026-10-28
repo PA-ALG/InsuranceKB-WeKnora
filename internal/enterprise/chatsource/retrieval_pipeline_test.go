@@ -17,8 +17,10 @@ func TestNamedProductOrderSurvivesNativeTopK(t *testing.T) {
 		for _, topK := range []int{1, 2, 5, 0, -1} {
 			t.Run(fmt.Sprintf("%s/k%d", list, topK), func(t *testing.T) {
 				ctx, resolver, cm := answerTurn(t, retrievalReader{}, "乙保险悦享版的等待期多久")
+				// other-high is 甲's (k1) and never fills 乙's answer (QA2b); global-second has
+				// no owning product, so it may fill after 乙's own passage.
 				other, named := passage("other-high", "k1"), passage("named-low", "k2")
-				second := passage("global-second", "k1")
+				second := passage("global-second", "other")
 				other.Score, second.Score, named.Score = 0.95, 0.9, 0.8
 				cm.RerankTopK = topK
 				if list == "merged" {
@@ -27,7 +29,7 @@ func TestNamedProductOrderSurvivesNativeTopK(t *testing.T) {
 					cm.RerankResult = []*types.SearchResult{other, second, named}
 				}
 				restore := chatsource.RetrievalScope(ctx, resolver, types.FILTER_TOP_K, cm)
-				want := []string{"named-low", "other-high", "global-second"}
+				want := []string{"named-low", "global-second"}
 				if topK > 0 && topK < len(want) {
 					want = want[:topK]
 				}

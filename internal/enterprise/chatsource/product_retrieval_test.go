@@ -161,8 +161,8 @@ func TestTopKTakesTheNamedProductsPassagesFirstInTurn(t *testing.T) {
 	cm.RerankTopK = 3
 	cm.MergeResult = ranked()
 	chatsource.RetrievalScope(ctx, r, types.FILTER_TOP_K, cm)()
-	require.Equal(t, []string{"r4", "r5", "r1"}, order(cm.MergeResult),
-		"after the named products, the rest is filled from the global ranking")
+	require.Equal(t, []string{"r4", "r5", "x"}, order(cm.MergeResult),
+		"after the named products, the fill takes unattributed passages, never 甲's (QA2b)")
 }
 
 func TestRetrievalScopeChangesNothingWithoutANamedProduct(t *testing.T) {
