@@ -1,6 +1,6 @@
 """Versioned field adoption of material headers (blueprint §7.3, S4j Spec §3.2)."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
@@ -88,10 +88,15 @@ class TrustedPages[P]:
     table_headers: dict[str, list[P]]
 
 
-def trusted_pages[P: PageTextLike](pages: Sequence[P]) -> TrustedPages[P]:
-    """Whole evidence plus separately bounded header inputs, without rewriting pages."""
-    evidence = evidence_pages(pages)  # validates every material, including excluded ones
-    roles = document_roles(pages)
+def trusted_pages[P: PageTextLike](
+    pages: Sequence[P], recorded: Mapping[str, str] | None = None
+) -> TrustedPages[P]:
+    """Whole evidence plus separately bounded header inputs, without rewriting pages.
+
+    `recorded` maps a document to its registry-recorded role, which wins over inference (S5b-6).
+    """
+    evidence = evidence_pages(pages, recorded)  # validates every material, incl. excluded ones
+    roles = document_roles(pages, recorded)
     policy = load_trust_policy()
     headers = {
         rule.role: [p for p in pages if roles[p.document] == rule.role]

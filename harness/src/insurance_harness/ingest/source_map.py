@@ -43,6 +43,8 @@ class SourceEntry(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     knowledge_id: _Identifier
     parse_attempt: int = Field(ge=1)
+    # The registry-recorded material role (S5b-6); absent in hand-written maps, then inferred.
+    role: Annotated[str, StringConstraints(pattern=r"^[a-z][a-z_]*$")] | None = None
 
 
 class SourceMap(BaseModel):
@@ -80,9 +82,9 @@ def load_pages(
     non-evidence material is dropped with its revision, and an unresolved one stops the read.
     The documents kept keep their revisions, fingerprints, pages and text unchanged.
     """
-    pages, sources = _read_sources(reader, space_id, entries)
+    pages, sources, recorded = _read_sources(reader, space_id, entries)
     try:
-        kept = evidence_pages(pages)
+        kept = evidence_pages(pages, recorded)
     except MaterialRoleError as error:
         raise SourceMapError(error.code) from None
     documents = {page.document for page in kept}
@@ -91,26 +93,29 @@ def load_pages(
 
 def _read_sources(
     reader: PageReader, space_id: str, entries: list[SourceEntry]
-) -> tuple[list[PageText], dict[str, SourceRevision]]:
+) -> tuple[list[PageText], dict[str, SourceRevision], dict[str, str]]:
     pages: list[PageText] = []
     sources: dict[str, SourceRevision] = {}
+    recorded: dict[str, str] = {}
     for entry in entries:
         read = reader.pages(space_id, entry.knowledge_id, entry.parse_attempt)
         document = read[0].document
         if document in sources:
             raise SourceMapError("SOURCE_DOCUMENTS_AMBIGUOUS")
         sources[document] = SourceRevision(entry.knowledge_id, entry.parse_attempt)
+        if entry.role is not None:
+            recorded[document] = entry.role
         pages.extend(read)
-    return pages, sources
+    return pages, sources, recorded
 
 
 def load_trusted_pages(
     reader: PageReader, space_id: str, entries: list[SourceEntry]
 ) -> tuple[TrustedPages[PageText], dict[str, SourceRevision]]:
     """Whole evidence and header inputs, with fixed revisions for every included document."""
-    pages, sources = _read_sources(reader, space_id, entries)
+    pages, sources, recorded = _read_sources(reader, space_id, entries)
     try:
-        trusted = trusted_pages(pages)
+        trusted = trusted_pages(pages, recorded)
     except MaterialRoleError as error:
         raise SourceMapError(error.code) from None
     documents = {
