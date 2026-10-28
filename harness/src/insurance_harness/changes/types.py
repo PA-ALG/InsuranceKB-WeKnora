@@ -16,6 +16,8 @@ class Verdict(StrEnum):
     KEEP = "keep"
     CONFLICT = "conflict"
     RETRACT = "retract"
+    # A different compiler identity rewrote an unchanged material (S12c-1b): reviewed, not kept.
+    UPGRADE = "upgrade"
 
 
 @dataclass(frozen=True)
