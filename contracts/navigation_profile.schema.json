@@ -121,6 +121,34 @@
       },
       "title": "Overview Fields",
       "type": "array"
+    },
+    "question_terms": {
+      "anyOf": [
+        {
+          "patternProperties": {
+            "\\S": {
+              "items": {
+                "items": {
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            }
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Question Terms"
     }
   },
   "required": [
