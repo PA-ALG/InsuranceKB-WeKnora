@@ -121,6 +121,7 @@ def prepared(world: dict[str, Any]) -> dict[str, Any]:
         policy_ref=POLICY,
         reviewer=REVIEWER,
         model="judge-test",
+        repo=world["repo"],
     )
 
 
