@@ -12,7 +12,7 @@ vetoed. When the field x role TrustPolicy lands in catalog/, the veto becomes on
 """
 
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import PurePosixPath
@@ -90,22 +90,33 @@ class _Page(Protocol):
     def text(self) -> str: ...
 
 
-def document_roles(pages: Sequence[_Page]) -> dict[str, str | None]:
-    """Each document's role, from its name and its pages' text in page order."""
+def document_roles(
+    pages: Sequence[_Page], recorded: Mapping[str, str] | None = None
+) -> dict[str, str | None]:
+    """Each document's role: the recorded one when the registry has it (S5b-6), otherwise
+    inferred from its name and its pages' text in page order. A recorded role is a confirmed,
+    audited decision; inference never overrides it."""
+    recorded = recorded or {}
+    known = {role.role for role in load_material_roles().roles}
+    if any(role not in known for role in recorded.values()):
+        raise MaterialRoleError("MATERIAL_ROLE_UNKNOWN")
     texts: dict[str, list[tuple[int, str]]] = {}
     for page in pages:
         texts.setdefault(page.document, []).append((page.page, page.text))
     return {
-        document: role_of(document, "".join(text for _, text in sorted(numbered)))
+        document: recorded.get(document)
+        or role_of(document, "".join(text for _, text in sorted(numbered)))
         for document, numbered in texts.items()
     }
 
 
-def evidence_pages[P: _Page](pages: Sequence[P]) -> list[P]:
+def evidence_pages[P: _Page](
+    pages: Sequence[P], recorded: Mapping[str, str] | None = None
+) -> list[P]:
     """Pages of the materials that may be evidence, in their order; one unresolved stops all."""
     evidence = {role.role: role.evidence for role in load_material_roles().roles}
     kept: set[str] = set()
-    for document, role in document_roles(pages).items():
+    for document, role in document_roles(pages, recorded).items():
         if role is None:
             raise MaterialRoleError("MATERIAL_ROLE_UNRESOLVED")
         if evidence[role]:
