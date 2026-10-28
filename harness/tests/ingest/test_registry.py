@@ -22,6 +22,7 @@ from tests.ingest.upload_helpers import (
     Pages,
     entry,
     knowledge_id,
+    material,
     raw,
     registry,
 )
@@ -92,9 +93,17 @@ def test_the_source_map_is_the_existing_format_in_a_fixed_order() -> None:
     assert list(source_map.products) == ["1814", "1828"]
     assert source_map.products["1828"] == [
         SourceEntry(
-            knowledge_id=knowledge_id("1828", "rate_table"), parse_attempt=1, role="rate_table"
+            knowledge_id=knowledge_id("1828", "rate_table"),
+            parse_attempt=1,
+            role="rate_table",
+            sha256=material("1828", "rate_table")["sha256"],
         ),
-        SourceEntry(knowledge_id=knowledge_id("1828", "terms"), parse_attempt=1, role="terms"),
+        SourceEntry(
+            knowledge_id=knowledge_id("1828", "terms"),
+            parse_attempt=1,
+            role="terms",
+            sha256=material("1828", "terms")["sha256"],
+        ),
     ]
     SourceMap.model_validate(json.loads(source_map.model_dump_json()))
 
@@ -224,7 +233,12 @@ def test_retired_materials_stay_out_of_the_source_map_and_stay_unique() -> None:
     product.retired = entry("1828", "terms").materials
     value = registry(p1828=product)
     assert value.source_map().products["1828"] == [
-        SourceEntry(knowledge_id=knowledge_id("1828", "brochure"), parse_attempt=1, role="brochure")
+        SourceEntry(
+            knowledge_id=knowledge_id("1828", "brochure"),
+            parse_attempt=1,
+            role="brochure",
+            sha256=material("1828", "brochure")["sha256"],
+        )
     ]
     document = json.loads(value.model_dump_json())
     document["products"]["1828"]["materials"].append(document["products"]["1828"]["retired"][0])

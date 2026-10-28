@@ -102,11 +102,13 @@ def test_the_evidence_only_read_uses_recorded_roles_too() -> None:
 
 def test_the_registry_source_map_carries_the_recorded_roles() -> None:
     value: ProductRegistry = registry(p1828=entry("1828", "rate_table", "terms"))
-    assert value.source_map().products["1828"] == [
-        SourceEntry(
-            knowledge_id=knowledge_id("1828", "rate_table"), parse_attempt=1, role="rate_table"
-        ),
-        SourceEntry(knowledge_id=knowledge_id("1828", "terms"), parse_attempt=1, role="terms"),
+    # Round 2 also carries the registered SHA (test_material_identity_reuse.py); this case is
+    # about the role, so it compares (knowledge_id, parse_attempt, role).
+    assert [
+        (e.knowledge_id, e.parse_attempt, e.role) for e in value.source_map().products["1828"]
+    ] == [
+        (knowledge_id("1828", "rate_table"), 1, "rate_table"),
+        (knowledge_id("1828", "terms"), 1, "terms"),
     ]
 
 
