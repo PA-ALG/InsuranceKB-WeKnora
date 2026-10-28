@@ -48,7 +48,8 @@ type profilePayload struct {
 }
 
 type navigationPayload struct {
-	OverviewFields []string `json:"overview_fields"`
+	OverviewFields []string              `json:"overview_fields"`
+	QuestionTerms  map[string][][]string `json:"question_terms,omitempty"`
 	Domains        []struct {
 		Types  []string `json:"entity_types"`
 		Groups []struct {
