@@ -59,6 +59,9 @@ _PLATFORM_CODES = frozenset(
         "ANSWER_INVALID",
         "CONFIRMATION_CLOSED",
         "ANSWER_STALE",
+        # RV6 point review
+        "CANDIDATE_DECIDED",
+        "MEMBER_DECIDED",
     }
 )
 _CLIENT_CODES = frozenset(
@@ -161,6 +164,24 @@ class Sample(_Response):
 
 class _Samples(_Response):
     samples: list[Sample]
+
+
+class ReviewItem(_Response):
+    """One candidate of a Space's review queue (RV6d), as the service key sees it."""
+
+    candidate_id: str = Field(min_length=1)
+    subjects: list[str]
+    point_count: int = Field(ge=0)
+    pending_points: int = Field(ge=0)
+    status: str
+
+
+class _Queue(_Response):
+    items: list[ReviewItem]
+
+
+class _PointResult(_Response):
+    status: str
 
 
 class _Confirmations(_Response):
@@ -295,6 +316,25 @@ class PlatformClient:
         if (closure.reason, closure.answer_id or None) != (reason, answer_id):
             raise PlatformError("INVALID_RESPONSE")
         return closure
+
+    def review_queue(
+        self, space_id: str, status: Literal["pending", "decided"]
+    ) -> list[ReviewItem]:
+        if status not in {"pending", "decided"}:
+            raise PlatformError("INVALID_REQUEST")
+        data = self._send("GET", space_id, ["candidates"], None, {"status": status})
+        return _parse(_Queue, data).items
+
+    def reject_points(
+        self, space_id: str, candidate_id: str, slugs: list[str], reason: str, policy_ref: str
+    ) -> str:
+        """Machine rejection of review points (RV6d); returns the candidate status after it."""
+        if not slugs or not reason.strip() or not policy_ref.strip():
+            raise PlatformError("INVALID_REQUEST")
+        body = {"slugs": slugs, "outcome": "reject", "reason": reason, "policy_ref": policy_ref}
+        path = ["candidates", candidate_id, "points", "decisions"]
+        raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        return _parse(_PointResult, self._send("POST", space_id, path, raw)).status
 
     def release(self, space_id: str, release_id: str) -> Release:
         path = ["releases", release_id] if release_id else ["releases", "active"]

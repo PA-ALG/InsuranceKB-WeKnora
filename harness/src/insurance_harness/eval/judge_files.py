@@ -42,6 +42,22 @@ class _StoredRequest(BaseModel):
     user_lines: list[str]
 
 
+def stored_requests(run_dir: Path) -> list[JudgeRequest]:
+    """The prepared requests in order, each rebuilt and checked against its stored hash."""
+    check_run_directory(run_dir)
+    out = []
+    for path in sorted((run_dir / "requests").glob("*.json")):
+        try:
+            stored = _StoredRequest.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError) as exc:
+            raise JudgeProtocolError(f"request {path.stem} changed or malformed") from exc
+        rebuilt = JudgeRequest("\n".join(stored.system_lines), "\n".join(stored.user_lines))
+        if rebuilt.sha256 != stored.request_sha256:
+            raise JudgeProtocolError(f"request {path.stem} changed since prepare")
+        out.append(rebuilt)
+    return out
+
+
 class FileJudgeClient:
     def __init__(self, run_dir: Path, *, model_id: str) -> None:
         check_run_directory(run_dir)
