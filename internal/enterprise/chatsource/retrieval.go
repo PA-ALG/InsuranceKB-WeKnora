@@ -34,7 +34,7 @@ func RetrievalScope(ctx context.Context, resolver *Resolver, event types.EventTy
 	if !ok || len(v.turn.RawKnowledge) == 0 {
 		return noop
 	}
-	products, err := namedMaterials(ctx, resolver, v, cm)
+	products, foreign, err := namedMaterials(ctx, resolver, v, cm, event == types.FILTER_TOP_K)
 	if err != nil {
 		// Recognition is an optional recall aid. Do not log query text or a reader's payload.
 		logger.Warn(ctx, "enterprise product recognition unavailable; preserving original retrieval")
@@ -61,24 +61,33 @@ func RetrievalScope(ctx context.Context, resolver *Resolver, event types.EventTy
 		return func() { cm.RerankTopK = original }
 	case types.FILTER_TOP_K:
 		original := cm.RerankTopK
-		cm.MergeResult = selectProductResults(cm.MergeResult, products, original)
-		cm.RerankResult = selectProductResults(cm.RerankResult, products, original)
+		cm.MergeResult = selectProductResults(cm.MergeResult, products, foreign, original)
+		cm.RerankResult = selectProductResults(cm.RerankResult, products, foreign, original)
+		// The native stage falls back to the search list when both lists are empty; select it
+		// too then, or another product's passages would return through that path (QA2b).
+		if len(cm.MergeResult) == 0 && len(cm.RerankResult) == 0 {
+			cm.SearchResult = selectProductResults(cm.SearchResult, products, foreign, original)
+		}
 		// The native stage sorts by score again. Select the bounded set first so that
 		// sorting cannot displace a named product with an unselected global passage.
-		// Match its result-list precedence; an empty pair must not uncap SearchResult.
+		// Match its result-list precedence; an empty list never uncaps the next one.
 		switch {
 		case len(cm.MergeResult) > 0:
 			cm.RerankTopK = len(cm.MergeResult)
 		case len(cm.RerankResult) > 0:
 			cm.RerankTopK = len(cm.RerankResult)
+		case len(cm.SearchResult) > 0:
+			cm.RerankTopK = len(cm.SearchResult)
 		}
 		return func() { cm.RerankTopK = original }
 	}
 	return noop
 }
 
-func selectProductResults(rows []*types.SearchResult, products []productMaterials, topK int) []*types.SearchResult {
-	selected := productOrder(rows, products)
+func selectProductResults(
+	rows []*types.SearchResult, products []productMaterials, foreign map[string]bool, topK int,
+) []*types.SearchResult {
+	selected := productOrder(rows, products, foreign)
 	// Nonpositive TopK retains the native "no cut" behavior.
 	if topK > 0 && len(selected) > topK {
 		selected = selected[:topK]
@@ -86,15 +95,17 @@ func selectProductResults(rows []*types.SearchResult, products []productMaterial
 	return selected
 }
 
+// namedMaterials returns the named products' pinned materials and, when fill is requested, the
+// pinned materials owned only by other products, keyed by materialKey.
 func namedMaterials(
-	ctx context.Context, resolver *Resolver, v turnContext, cm *types.ChatManage,
-) ([]productMaterials, error) {
+	ctx context.Context, resolver *Resolver, v turnContext, cm *types.ChatManage, fill bool,
+) ([]productMaterials, map[string]bool, error) {
 	question := cm.RewriteQuery
 	if strings.TrimSpace(question) == "" {
 		question = cm.Query
 	}
 	var out []productMaterials
-	seen := map[string]bool{}
+	seen, foreign := map[string]bool{}, map[string]bool{}
 	// Target order defines the order of Spaces; QuestionProducts keeps each release's
 	// navigation order. Never iterate a map to decide which three products receive recall.
 	for _, target := range cm.SearchTargets {
@@ -108,7 +119,20 @@ func namedMaterials(
 		seen[space] = true
 		products, err := resolver.published.QuestionProducts(ctx, v.tenant, space, v.turn.Releases[space], question)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if fill && len(products) > 0 {
+			named := make([]string, 0, len(products))
+			for _, product := range products {
+				named = append(named, product.EntityID)
+			}
+			others, err := resolver.published.ForeignMaterials(ctx, v.tenant, space, v.turn.Releases[space], named)
+			if err != nil {
+				return nil, nil, err
+			}
+			for id := range others {
+				foreign[materialKey(target.KnowledgeBaseID, id)] = true
+			}
 		}
 		for _, product := range products {
 			ids := []string{}
@@ -123,16 +147,21 @@ func namedMaterials(
 			sort.Strings(ids)
 			out = append(out, productMaterials{kbID: target.KnowledgeBaseID, ids: ids})
 			if len(out) == MaxNamedProducts {
-				return out, nil
+				return out, foreign, nil
 			}
 		}
 	}
-	return out, nil
+	return out, foreign, nil
 }
+
+func materialKey(kbID, knowledgeID string) string { return kbID + "\x00" + knowledgeID }
 
 // productOrder deals each product its next highest-ranked passage, once per chunk ID.
 // A shared material can serve several products, but a shared passage consumes only one slot.
-func productOrder(rows []*types.SearchResult, products []productMaterials) []*types.SearchResult {
+// The global fill skips passages of materials owned only by other products (QA2b).
+func productOrder(
+	rows []*types.SearchResult, products []productMaterials, foreign map[string]bool,
+) []*types.SearchResult {
 	if len(rows) == 0 {
 		return rows
 	}
@@ -179,8 +208,10 @@ func productOrder(rows []*types.SearchResult, products []productMaterials) []*ty
 			break
 		}
 	}
-	for i := range rows {
-		add(i)
+	for i, row := range rows {
+		if row == nil || !foreign[materialKey(row.KnowledgeBaseID, row.KnowledgeID)] {
+			add(i)
+		}
 	}
 	return out
 }

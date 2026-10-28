@@ -39,6 +39,41 @@ func (s *Service) QuestionProducts(
 	return out, ctx.Err()
 }
 
+// ForeignMaterials returns the knowledge IDs the pinned release attributes to some product but to
+// none of the named entity IDs, so a quick answer about the named products does not fill its
+// context with another product's clauses (QA2b). Unattributed materials are not foreign.
+func (s *Service) ForeignMaterials(
+	ctx context.Context, tenantID uint64, spaceID, releaseID string, named []string,
+) (map[string]bool, error) {
+	index, err := s.read(ctx, tenantID, spaceID, releaseID)
+	if err != nil {
+		return nil, err
+	}
+	asked := map[string]bool{}
+	for _, id := range named {
+		asked[id] = true
+	}
+	owned, ownedByNamed := map[string]bool{}, map[string]bool{}
+	for _, entity := range index.entities {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		for _, id := range index.productMaterials(entity.EntityID) {
+			owned[id] = true
+			if asked[entity.EntityID] {
+				ownedByNamed[id] = true
+			}
+		}
+	}
+	foreign := map[string]bool{}
+	for id := range owned {
+		if !ownedByNamed[id] {
+			foreign[id] = true
+		}
+	}
+	return foreign, ctx.Err()
+}
+
 // productMaterials follows SourceEntities' ownership rule without mapping through display
 // names: different products may share a name, but must keep their own material attribution.
 func (index *releaseIndex) productMaterials(entityID string) []string {
@@ -86,7 +121,16 @@ type productMatch struct {
 	names    []string
 	direct   []string // longest full names or cores actually contained in the question
 	id       bool
-	fragment bool
+	fragment bool   // a fragment only this product's names carry
+	shared   string // a series name at the start of 2-3 products' cores (QA2b)
+}
+
+// maxSeriesProducts bounds how many products one shared series name may name; a name shared
+// more widely is too generic to point at products (QA2b Spec §1).
+const maxSeriesProducts = 3
+
+func (match productMatch) specific() bool {
+	return match.id || len(match.direct) > 0 || match.fragment
 }
 
 // addDirect retains equally long matches, but a short alias cannot overrule a more specific
@@ -141,16 +185,40 @@ func (index *releaseIndex) questionProducts(question string) []indexedEntity {
 			}
 		}
 		if !match.id && len(match.direct) == 0 {
-			match.fragment = uniqueProductFragment(i, matches, titles, question)
+			match.fragment, match.shared = productFragment(i, matches, titles, question, prefix)
 		}
 	}
 	out := []indexedEntity{}
 	for i, match := range matches {
-		if (match.id || len(match.direct) > 0 || match.fragment) && !dominatedProduct(i, matches) {
+		named := match.specific() && !dominatedProduct(i, matches)
+		if !match.specific() && match.shared != "" {
+			named = seriesNamed(match.shared, matches)
+		}
+		if named {
 			out = append(out, entities[i])
 		}
 	}
 	return out
+}
+
+// seriesNamed names every carrier of a shared series name unless the question already names one
+// of them more specifically, as "安佑福全能版" names only that product of the 安佑福 series.
+func seriesNamed(series string, matches []productMatch) bool {
+	for _, match := range matches {
+		if match.specific() && carries(match, series) {
+			return false
+		}
+	}
+	return true
+}
+
+func carries(match productMatch, fragment string) bool {
+	for _, name := range match.names {
+		if strings.Contains(name, fragment) {
+			return true
+		}
+	}
+	return false
 }
 
 func sharedNamePrefix(names []string) string {
@@ -180,7 +248,13 @@ func (index *releaseIndex) productExclusionTitles() []string {
 	return titles
 }
 
-func uniqueProductFragment(product int, matches []productMatch, titles []string, question string) bool {
+// productFragment reads the longest question fragment (at least 3 runes, in no field title) at
+// each start of the product's names. A fragment no other product carries names the product
+// alone; one carried by 2-3 products that begins each carrier's core name is a series name
+// (QA2b): category words such as 医疗保险 sit later in the names and name nothing.
+func productFragment(
+	product int, matches []productMatch, titles []string, question, prefix string,
+) (unique bool, shared string) {
 	for _, name := range matches[product].names {
 		runes := []rune(name)
 		for start := 0; start+3 <= len(runes); start++ {
@@ -189,32 +263,57 @@ func uniqueProductFragment(product int, matches []productMatch, titles []string,
 				if !strings.Contains(question, fragment) {
 					continue
 				}
-				if distinctiveProductFragment(fragment, product, matches, titles) {
-					return true
+				// Shorter prefixes of this fragment occur wherever it occurs, so only the
+				// longest question match at this start decides.
+				if titledFragment(fragment, titles) {
+					break
 				}
-				// A shorter prefix of this shared fragment also occurs in that other name
-				// or field title, so only the longest question match at this start matters.
+				carriers := 0
+				for _, match := range matches {
+					if carries(match, fragment) {
+						carriers++
+					}
+				}
+				if carriers == 1 {
+					return true, ""
+				}
+				if carriers <= maxSeriesProducts && seriesFragment(fragment, prefix, matches) &&
+					utf8.RuneCountInString(fragment) > utf8.RuneCountInString(shared) {
+					shared = fragment
+				}
 				break
 			}
+		}
+	}
+	return false, shared
+}
+
+func titledFragment(fragment string, titles []string) bool {
+	for _, title := range titles {
+		if strings.Contains(title, fragment) {
+			return true
 		}
 	}
 	return false
 }
 
-func distinctiveProductFragment(fragment string, product int, matches []productMatch, titles []string) bool {
-	for _, title := range titles {
-		if strings.Contains(title, fragment) {
-			return false
-		}
+// seriesFragment holds when, without the prefix all products share, the fragment is at least 3
+// runes and begins a core name of every product that carries it.
+func seriesFragment(fragment, prefix string, matches []productMatch) bool {
+	series := strings.TrimPrefix(fragment, prefix)
+	if utf8.RuneCountInString(series) < 3 {
+		return false
 	}
-	for i, match := range matches {
-		if i == product {
+	for _, match := range matches {
+		if !carries(match, fragment) {
 			continue
 		}
+		begins := false
 		for _, name := range match.names {
-			if strings.Contains(name, fragment) {
-				return false
-			}
+			begins = begins || strings.HasPrefix(strings.TrimPrefix(name, prefix), series)
+		}
+		if !begins {
+			return false
 		}
 	}
 	return true
