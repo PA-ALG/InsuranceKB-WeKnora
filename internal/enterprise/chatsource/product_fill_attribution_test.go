@@ -136,13 +136,14 @@ func TestANamedProductWithoutUsableMaterialStillExcludesOtherProducts(t *testing
 }
 
 func TestOtherProductsOfEverySelectedSpaceAreExcluded(t *testing.T) {
-	s2 := attributed("rel-2", map[string][]string{"C2": {"k9"}})
+	// Z9 shares no 3-rune fragment with A0–A3 ("C2保险" would share "2保险" with "A2保险").
+	s2 := attributed("rel-2", map[string][]string{"Z9": {"k9"}})
 	merged := func() []*types.SearchResult {
 		return []*types.SearchResult{
-			scored("c2", "raw-2", "k9", 0.99), scored("free", "raw-1", "k1", 0.5), scored("a0", "raw-1", "k2", 0.1),
+			scored("z9", "raw-2", "k9", 0.99), scored("free", "raw-1", "k1", 0.5), scored("a0", "raw-1", "k2", 0.1),
 		}
 	}
-	// s1 names only A0; s2 names nothing, but C2 owns k9 there.
+	// s1 names only A0; s2 names nothing, but Z9 owns k9 there.
 	s1 := attributed("rel-1", map[string][]string{"A0": {"k2"}})
 	ctx, r, cm, _, _ := attributionTurn(t, s1, s2, true, "A0保险的等待期多久")
 	cm.MergeResult = merged()
