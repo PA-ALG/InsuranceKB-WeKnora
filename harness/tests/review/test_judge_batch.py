@@ -295,7 +295,7 @@ def test_live_publishes_as_machine_review_and_a_rerun_skips_what_is_already_live
     assert {m["logical_slug"] for m in claims} == set(world["keys"])
     for member in claims:
         review = member["payload"]["review"]
-        assert review["mode"] == "machine" and review["policy_ref"] == POLICY
+        assert review["mode"] == "machine" and "policy_ref" not in review
         assert review["reviewer"] == REVIEWER
     decision = posts["candidates/cand_1/decisions"]
     assert decision["mode"] == "machine" and decision["policy_ref"] == POLICY
