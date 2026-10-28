@@ -26,7 +26,7 @@ func RetrievalScope(ctx context.Context, resolver *Resolver, event types.EventTy
 		return noop
 	}
 	switch event {
-	case types.CHUNK_SEARCH_PARALLEL, types.CHUNK_SEARCH, types.CHUNK_RERANK, types.FILTER_TOP_K:
+	case types.CHUNK_SEARCH_PARALLEL, types.CHUNK_SEARCH, types.CHUNK_RERANK, types.CHUNK_MERGE, types.FILTER_TOP_K:
 	default:
 		return noop
 	}
@@ -34,7 +34,7 @@ func RetrievalScope(ctx context.Context, resolver *Resolver, event types.EventTy
 	if !ok || len(v.turn.RawKnowledge) == 0 {
 		return noop
 	}
-	scope, err := namedScope(ctx, resolver, v, cm, event == types.FILTER_TOP_K)
+	scope, err := namedScope(ctx, resolver, v, cm, event == types.CHUNK_MERGE || event == types.FILTER_TOP_K)
 	if err != nil {
 		// Recognition is an optional recall aid. Do not log query text or a reader's payload.
 		logger.Warn(ctx, "enterprise product recognition unavailable; preserving original retrieval")
@@ -63,6 +63,24 @@ func RetrievalScope(ctx context.Context, resolver *Resolver, event types.EventTy
 		original := cm.RerankTopK
 		cm.RerankTopK = max(original, len(cm.SearchResult))
 		return func() { cm.RerankTopK = original }
+	case types.CHUNK_MERGE:
+		// The native merge drops the lower-scored of two near-identical passages, across materials,
+		// before FILTER_TOP_K selects by product. Another product's copy of a shared clause could
+		// then displace the named product's own and be excluded itself, leaving neither (QA2c §3,
+		// q22 of #398). Exclude it first; nothing is restored, as FILTER_TOP_K excludes it anyway.
+		before := len(cm.RerankResult)
+		cm.RerankResult = scope.ownOrUnattributed(cm.RerankResult)
+		excluded := before - len(cm.RerankResult)
+		if len(cm.RerankResult) == 0 {
+			// The native merge falls back to the search list when the rerank list is empty.
+			before = len(cm.SearchResult)
+			cm.SearchResult = scope.ownOrUnattributed(cm.SearchResult)
+			excluded += before - len(cm.SearchResult)
+		}
+		if excluded > 0 {
+			logger.Infof(ctx, "enterprise quick answer excluded %d passages before merging", excluded)
+		}
+		return noop
 	case types.FILTER_TOP_K:
 		original := cm.RerankTopK
 		cm.MergeResult = selectProductResults(cm.MergeResult, scope, original)
@@ -75,13 +93,19 @@ func RetrievalScope(ctx context.Context, resolver *Resolver, event types.EventTy
 		// The native stage sorts by score again. Select the bounded set first so that
 		// sorting cannot displace a named product with an unselected global passage.
 		// Match its result-list precedence; an empty list never uncaps the next one.
+		var chosen *[]*types.SearchResult
 		switch {
 		case len(cm.MergeResult) > 0:
-			cm.RerankTopK = len(cm.MergeResult)
+			chosen = &cm.MergeResult
 		case len(cm.RerankResult) > 0:
-			cm.RerankTopK = len(cm.RerankResult)
+			chosen = &cm.RerankResult
 		case len(cm.SearchResult) > 0:
-			cm.RerankTopK = len(cm.SearchResult)
+			chosen = &cm.SearchResult
+		}
+		if chosen != nil {
+			// Passages appended to finish a sentence come on top of the cut (QA2c §2).
+			*chosen = resolver.followNeighbours(ctx, v, scope, *chosen)
+			cm.RerankTopK = len(*chosen)
 		}
 		return func() { cm.RerankTopK = original }
 	}
@@ -179,6 +203,28 @@ func namedScope(
 }
 
 func materialKey(kbID, knowledgeID string) string { return kbID + "\x00" + knowledgeID }
+
+// ownOrUnattributed keeps the passages that may be selected: the named products' own, and while
+// attribution is readable also those of materials owned by no product (QA2b §2a).
+func (s productScope) ownOrUnattributed(rows []*types.SearchResult) []*types.SearchResult {
+	own := map[string]bool{}
+	for _, product := range s.products {
+		for _, id := range product.ids {
+			own[materialKey(product.kbID, id)] = true
+		}
+	}
+	out := make([]*types.SearchResult, 0, len(rows))
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		key := materialKey(row.KnowledgeBaseID, row.KnowledgeID)
+		if own[key] || (!s.closed && !s.foreign[key]) {
+			out = append(out, row)
+		}
+	}
+	return out
+}
 
 // productOrder deals each product its next highest-ranked passage, once per chunk ID.
 // A shared material can serve several products, but a shared passage consumes only one slot.
