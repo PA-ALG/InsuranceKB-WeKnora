@@ -10,7 +10,16 @@
   "1816.json": "31edf99e55017c16920b0f629ab1fbffb997761b4adc137e8db2da302cb19359",
   "1824.json": "ac34df7ee56dce1f5524a89187145fb96f3252df49afe5e66a1a223a777d773f",
   "1826.json": "2dfd25c8a784b9d55b278b427278c904a337ad7fb57a242fa14bc447369b451f",
-  "1828.json": "4acf07c579235b4b02943af0e117cc56f7102ab020881460d4762dea59fd60fa"
+  "1828.json": "4acf07c579235b4b02943af0e117cc56f7102ab020881460d4762dea59fd60fa",
+  "1830.json": "65991fcec362407b1e27e7185a763ab8f6cdfdd3e6082f0b96e1666c19065aee",
+  "594.json": "a16aca45d16b4e882ce1b77e493a308bc4d5c264ab40596a1fc91fbfe0afa534",
+  "596.json": "a21e175df5852669f1679dcc86eb644129d30530c0c655d03594612430e2d0b7",
+  "1847H.json": "d0790a5d1c89d3368d78c1a23fab8f06f04cc951a68f7536c90f1b4107f79d9e",
+  "L3223.json": "b9562cc733c44682474ea7cb7b1936167917ce4a5e80fdab3524abee2a1eff47",
+  "2648.json": "b9d8cf1cd7ddda35a9d9509c996c8392861686b0def07fe90bfbfa9ab9d3322d",
+  "527.json": "2805572e27dbf6dd77764b0840fe7cbf44be7a6f68b854a997c8c5b283db2d42",
+  "1815.json": "1a6b5da8065c301d1077091477e09dfff3fcc55c19156592c223bd6beb4c09c4",
+  "L0410.json": "8afdd27e794aea8e4329a9970d26492821d4a1aace0d596f2fc6fcf818e8358c"
  },
  "products": {
   "1814": {
@@ -117,6 +126,204 @@
    },
    "non_evidence_sha256": {
     "费率表.pdf": "600e95faf04a8268c90a2a0d08448c140b8a323f6e24bccfce186d96e0c9aa52"
+   }
+  },
+  "1830": {
+   "fields": 59,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_annuity_insurance",
+   "product_id": "1830",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18344-bd5c-71a1-90e1-b960cf5395ac",
+   "source_sha256": {
+    "产品说明书.pdf": "7025fd26e5c6e37c3f861a46036935bbc516b747a3f9074199599deed4afd5be",
+    "保险条款.pdf": "ad56b02e0c25599e26cd409f9d5e216af9582ea95967ec81a14a236043b59c8c"
+   },
+   "states": {
+    "absent_explicitly": 10,
+    "present": 31,
+    "unknown": 18
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "bf8951ca84880229cef503191ce78db14b16fdfa4313dfb4deccfd4ff96683e9"
+   }
+  },
+  "594": {
+   "fields": 44,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_medical_insurance",
+   "product_id": "594",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18344-bd5c-7103-a444-e2bed93c64e2",
+   "source_sha256": {
+    "产品说明书.pdf": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+    "保险条款.pdf": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5"
+   },
+   "states": {
+    "absent_explicitly": 1,
+    "present": 30,
+    "unknown": 13
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "fbc9adca68254427541afa594508f7b2e9c75d7c9b23b4804f9436a3a35a0f44"
+   }
+  },
+  "596": {
+   "fields": 44,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_medical_insurance",
+   "product_id": "596",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18344-bd5c-73c0-b3db-0f17299f561f",
+   "source_sha256": {
+    "产品说明书.pdf": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+    "保险条款.pdf": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+   },
+   "states": {
+    "absent_explicitly": 2,
+    "present": 28,
+    "unknown": 14
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb"
+   }
+  },
+  "1847H": {
+   "fields": 59,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_annuity_insurance",
+   "product_id": "1847H",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18355-e156-7091-b897-d1eec9261b3e",
+   "source_sha256": {
+    "产品说明书.pdf": "fb2e5cffee374f728fe8ea935292cff5c83091aba786fca9a8b1900d00b22007",
+    "保险条款.pdf": "b242772f134dfcd75b6033fb7ed19f654b41875d8dfff09e276ff6c05d93a92f"
+   },
+   "states": {
+    "absent_explicitly": 8,
+    "present": 32,
+    "unknown": 19
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "1456e4ba6c68d9d5cf64d5d513a44cc00069c7205eb9db718f111a617b5df6ae"
+   }
+  },
+  "L3223": {
+   "fields": 48,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_accident_medical_insurance",
+   "product_id": "L3223",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a1835b-4059-7282-8750-da81fcfd4bfa",
+   "source_sha256": {
+    "产品说明书.pdf": "db20fca9b277cc213d7b028c63afdee0b75c707def3b67307d3e8ac79b1318e2",
+    "保险条款.pdf": "18c8baee53c3c5fa380f5aca621a8e3bbd6c5cb1030e594d200e8602459f8d96"
+   },
+   "states": {
+    "absent_explicitly": 2,
+    "present": 26,
+    "unknown": 20
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "e43c6a7a0f9a1f713b5b629dad330e7234dd25956f093d34627011e756dce164"
+   }
+  },
+  "2648": {
+   "fields": 54,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_nursing_care_insurance",
+   "product_id": "2648",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18358-3896-7b91-ae98-1da0976a00ba",
+   "source_sha256": {
+    "产品说明书.pdf": "fe240644e794b642d51a2d0636b3d2e8a4fca2bae739d7305404ff8da43d535d",
+    "保险条款.pdf": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e"
+   },
+   "states": {
+    "absent_explicitly": 8,
+    "present": 30,
+    "unknown": 16
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "3f8b09d45ba85fe38523d0048b8c9adc6882a6539fae7af26a1d5e0d7d4b1f87"
+   }
+  },
+  "527": {
+   "fields": 48,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_accident_medical_insurance",
+   "product_id": "527",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18364-8a6c-7d91-941d-acfd5f26e84e",
+   "source_sha256": {
+    "产品说明书.pdf": "79d69b38f9fef0da154b8b686a0e353252c8a025b33d2b863ce5536b26629678",
+    "保险条款.pdf": "2e023eab46e66da9aa7a20a51bf7e9886529d694bbaffa5451d2ce64c158e559"
+   },
+   "states": {
+    "absent_explicitly": 1,
+    "present": 27,
+    "unknown": 20
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "819dc1f80fa5f688bc89774f5e6c5356a05cbe4f3ebd4f5ffb358bef9e26f430"
+   }
+  },
+  "1815": {
+   "fields": 44,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_term_life_insurance",
+   "product_id": "1815",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18366-c7ed-7fc3-9172-1f132551d9d1",
+   "source_sha256": {
+    "产品说明书.pdf": "0f17a04eb7512c325d50aa20c1198cb40689c8f87af49aa188393571bcc7567c",
+    "保险条款.pdf": "e85297ed8c3f19a27945e0f15364067164b343f551ae01ae3ac3beba0096b54f"
+   },
+   "states": {
+    "absent_explicitly": 5,
+    "present": 21,
+    "unknown": 18
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "1e37b3b2c4f0c41a172a2d5f5e27ed5a1c164e29ee65227dddc086405928cb1b"
+   }
+  },
+  "L0410": {
+   "fields": 44,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_term_life_insurance",
+   "product_id": "L0410",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18368-8aea-7c42-a028-4ddf675b747d",
+   "source_sha256": {
+    "产品说明书.pdf": "194ff6fb63f7a63c3ef3f8b1ec7b9ce68c655f9a99ecaeca4e0696f751d37c00",
+    "保险条款.pdf": "675da07a190cd18a45c4cf1c98ea89114e3e5cd6eb5388c94582e66fcaabe874"
+   },
+   "states": {
+    "absent_explicitly": 5,
+    "present": 20,
+    "unknown": 19
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "36900e35dd90afba2f5ee271cc6566ef789b4f058559e7b4e8e006a79f66ee9f"
    }
   }
  },
