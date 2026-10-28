@@ -35,6 +35,22 @@ func machineReviewQueue(c *gin.Context, service *release.Service) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"items": items}})
 }
 
+// machineReviewDetail reads one candidate for a full-access service key (RV6e): the same detail
+// as the administrator session route, so a machine caller can check a candidate's content before
+// it closes review points.
+func machineReviewDetail(c *gin.Context, service *release.Service) {
+	p, ok := publishingRequest(c, service)
+	if !ok {
+		return
+	}
+	item, err := service.ReviewCandidate(c.Request.Context(), p, c.Param("space_id"), c.Param("candidate_id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": item})
+}
+
 // machinePointRejection closes review points for a service key. The machine route never approves
 // a point: machine-approved content goes live as a relabelled machine candidate, so published
 // claims keep an honest review label. The versioned policy is kept in the stored reason because
