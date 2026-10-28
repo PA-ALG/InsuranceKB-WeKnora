@@ -149,7 +149,7 @@ def test_a_worked_example_is_not_rule_evidence() -> None:
         (
             "1828",
             {"D2P8S3", "D2P8S17", "D2P8S18"},
-            {"D2P8S1", "D2P8S2"} | {f"D2P8S{n}" for n in range(8, 17)},
+            {"D2P8S1", "D2P8S2"} | {f"D2P8S{n}" for n in range(9, 17)},
         ),
     ],
 )
@@ -174,3 +174,16 @@ def test_card_excludes_win_over_includes_examples() -> None:
         in entry["owner_overrides"]["held"]["covered_critical_specified_diseases"]
     )
     assert waiver_list <= evidence("1816", "premium_waiver_critical_illnesses")
+
+
+def test_a_referent_walk_stops_at_the_list_lead_in() -> None:
+    # 1828: S17/S18 point to the death-exclusion list S9–S16 (S9 is its lead-in); S8 closes the
+    # preceding rider-termination list and must not be restored (review round 3 on #392).
+    kept = evidence("1828", "cash_value_rules")
+    assert {f"D2P8S{n}" for n in range(9, 17)} <= kept
+    assert "D2P8S8" not in kept
+    restored = {
+        s for k, s in audit_entry("1828")["owner_overrides"]["restored"] if k == "cash_value_rules"
+    }
+    assert "D2P8S8" not in restored
+    assert ["cash_value_rules", "D2P8S8"] in audit_entry("1828")["dropped"]
