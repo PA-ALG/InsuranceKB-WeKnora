@@ -40,6 +40,9 @@ def output(registry: ProductRegistry, product: str) -> CompileOutput:
         materials=sorted(f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}" for m in entry.materials),
         cards_version=cards_version(),
         value_protocol=VALUE_PROTOCOL_VERSION,  # S12c-1: a current output carries the protocol
+        material_roles={  # S5b-6: and each material's recorded role
+            f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}": m.role for m in entry.materials
+        },
     )
 
 

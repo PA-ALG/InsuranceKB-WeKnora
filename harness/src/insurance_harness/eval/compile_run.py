@@ -17,7 +17,6 @@ import hashlib
 import json
 import math
 import os
-import re
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -40,6 +39,11 @@ from insurance_harness.compilers.schema_fields.engine import (
     to_candidate,
 )
 from insurance_harness.eval.convert import predictions_from_candidate
+from insurance_harness.eval.material_identity import (
+    effective_roles,
+    material_identities,
+    validate_materials,
+)
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.eval.product_sources import (
     check_product_id,
@@ -48,10 +52,9 @@ from insurance_harness.eval.product_sources import (
     source_directory,
     trusted_source_pages,
 )
-from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.ingest.registry import RegistryError
-from insurance_harness.ingest.source_map import SourceEntry, load_source_map, reader_from_env
+from insurance_harness.ingest.source_map import load_source_map, reader_from_env
 from insurance_harness.models import (
     CallLedger,
     ModelCallError,
@@ -81,47 +84,7 @@ __all__ = [
     "write_candidate",
 ]
 
-_MATERIAL = re.compile(r"(?:file|[A-Za-z0-9][A-Za-z0-9_-]{0,127}:[1-9][0-9]*):[0-9a-f]{64}")
 RevisionPageSource = Callable[[str], tuple[TrustedPages[PageText], Mapping[str, SourceRevision]]]
-
-
-def _validate_materials(materials: list[str] | None) -> None:
-    if materials is None:
-        return
-    revisions = [tuple(m.split(":")[:2]) for m in materials if m.count(":") == 2]
-    if (
-        materials != sorted(materials) or any(not _MATERIAL.fullmatch(m) for m in materials)
-        or (revisions and (len(revisions) != len(materials)
-                           or len(set(revisions)) != len(revisions)))
-    ):
-        raise ValueError("invalid stored material identities")
-
-
-def _materials(
-    pages: Sequence[PageText], headers: Mapping[str, Sequence[PageText]] | None,
-    revisions: Mapping[str, SourceRevision] | None,
-) -> list[str]:
-    # Validate before reuse too: duplicate pages, fingerprints or evidence roles are ambiguous.
-    source = SegmentedSource(pages, table_headers=headers)
-    documents = {page.document: page.document_sha256.lower() for page in source.pages}
-    if not documents or (revisions is not None and set(revisions) != set(documents)):
-        raise ValueError("missing or ambiguous source identities")
-    materials = []
-    identities = set()
-    for document, digest in documents.items():
-        if revisions is None:
-            materials.append(f"file:{digest}")
-            continue
-        revision = revisions[document]
-        entry = SourceEntry(
-            knowledge_id=revision.knowledge_id, parse_attempt=revision.parse_attempt,
-        )
-        identity = (entry.knowledge_id, entry.parse_attempt)
-        if identity in identities:
-            raise ValueError("ambiguous source identities")
-        identities.add(identity)
-        materials.append(f"{entry.knowledge_id}:{entry.parse_attempt}:{digest}")
-    return sorted(materials)
 
 
 def _replace_completed(path: Path, text: str) -> None:
@@ -302,7 +265,7 @@ def compile_products(
                 output = CompileOutput.model_validate_json(path.read_text(encoding="utf-8"))
                 if output.entity_id != product or output.pack_id != pack:
                     raise ValueError(f"{product}: stored output does not match the product")
-                _validate_materials(output.materials)
+                validate_materials(output.materials)
             revisions = None
             read: list[PageText] | TrustedPages[PageText]
             if revision_page_source is not None:
@@ -312,14 +275,16 @@ def compile_products(
                         trusted_source_pages(source_directory(repo, product)))
             pages = read.evidence if isinstance(read, TrustedPages) else read
             headers = read.table_headers if isinstance(read, TrustedPages) else None
-            materials = _materials(pages, headers, revisions)
+            identified = material_identities(pages, headers, revisions)
+            materials = [identity for identity, _ in identified]
+            material_roles = effective_roles(identified, read)
             if revisions is not None:
                 pages = _revision_order(pages, revisions)
                 if headers is not None:
                     roles = [rule.role for rule in load_trust_policy().header_rules]
                     headers = {role: _revision_order(headers[role], revisions)
                                for role in sorted(headers, key=roles.index)}
-            if output is not None and reusable(output, materials):
+            if output is not None and reusable(output, materials, material_roles):
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
@@ -341,7 +306,9 @@ def compile_products(
                 max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
             )
             output = compiler.compile(product, definitions, pages, table_headers=headers)
-            output = output.model_copy(update={"materials": materials})
+            output = output.model_copy(
+                update={"materials": materials, "material_roles": material_roles}
+            )
             if len(ledger.served) > 1:
                 # The last batch itself came from a new version: nothing is written.
                 raise ServedModelChanged(f"{product}: served model changed within the run")
