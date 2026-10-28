@@ -29,6 +29,12 @@ from pydantic import ValidationError
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
 from insurance_harness.changes.options import fixed_revision_pages, registry_inputs, source_options
+from insurance_harness.compilers.schema_fields.carry import (
+    CarryRequest,
+    active_carry,
+    carry_for,
+    located,
+)
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
     CompileError,
@@ -224,6 +230,7 @@ def compile_products(
     page_source: Callable[[str], list[PageText] | TrustedPages[PageText]] | None = None,
     revision_page_source: RevisionPageSource | None = None,
     facts: Callable[[str], tuple[str, str]] | None = None,
+    carry: CarryRequest | None = None,
 ) -> list[ProductRun]:
     """Compile or reuse each product in order; raise on the first stopping condition.
 
@@ -233,11 +240,15 @@ def compile_products(
     mutually exclusive with page_source, whose unlabelled inputs use file identities.
     Revision inputs use the same document and header-role order as publication.
     facts supplies (name, pack) without a dataset; it requires an explicit page source.
+    carry hands step two the reviewed quotes of the given Active release (S12c-4); under it an
+    output is reused only if it carried the same quotes. It needs revision_page_source.
     """
     if page_source is not None and revision_page_source is not None:
         raise ValueError("supply only one page source")
     if facts is not None and page_source is None and revision_page_source is None:
         raise ValueError("facts requires a page source")
+    if carry is not None and revision_page_source is None:
+        raise ValueError("carrying reviewed evidence needs fixed source revisions")
     if replay_from is None and completion_factory is None:
         raise ValueError("a completion factory is required unless replaying")
     if replay_from is not None:
@@ -284,7 +295,12 @@ def compile_products(
                     roles = [rule.role for rule in load_trust_policy().header_rules]
                     headers = {role: _revision_order(headers[role], revisions)
                                for role in sorted(headers, key=roles.index)}
-            if output is not None and reusable(output, materials, material_roles):
+            carried = (carry_for(carry.release, product, materials)
+                       if carry is not None else None)
+            digest = carried.digest if carried is not None else None
+            if output is not None and reusable(output, materials, material_roles) and (
+                carry is None or output.carry_digest == digest
+            ):
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
@@ -305,10 +321,14 @@ def compile_products(
                 port, batch_size=batch_size,
                 max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
             )
-            output = compiler.compile(product, definitions, pages, table_headers=headers)
-            output = output.model_copy(
-                update={"materials": materials, "material_roles": material_roles}
-            )
+            quotes = (located(carried, revisions, pages, headers)
+                      if carried is not None and revisions is not None else None)
+            output = compiler.compile(product, definitions, pages, table_headers=headers,
+                                      carry=quotes)
+            output = output.model_copy(update={
+                "materials": materials, "material_roles": material_roles, "carry_digest": digest,
+                "carry_release": carried.release_id if digest is not None and carried else None,
+            })
             if len(ledger.served) > 1:
                 # The last batch itself came from a new version: nothing is written.
                 raise ServedModelChanged(f"{product}: served model changed within the run")
@@ -410,6 +430,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-sent", type=int, default=30)
     parser.add_argument("--replay-from", type=Path,
                         help="recompile saved completions of an earlier run root; sends nothing")
+    parser.add_argument("--carry-active", action="store_true",
+                        help="hand step two the Active release's reviewed quotes (S12c-4)")
     source_options(parser, required=False)
     args = parser.parse_args(argv)
     runs: list[ProductRun] = []
@@ -425,6 +447,9 @@ def main(argv: list[str] | None = None) -> int:
             source_map = load_source_map(args.source_map)
         if args.registry or args.source_map:
             revision_pages = fixed_revision_pages(source_map, reader_from_env())
+        if args.carry_active and not args.registry:
+            raise ValueError("--carry-active needs --registry")
+        carry = active_carry(source_map.space_id) if args.carry_active else None
 
         def factory(ledger: CallLedger) -> CompletionPort:
             clients.append(OpenAICompatibleCompletion(config, ledger=ledger))
@@ -439,7 +464,7 @@ def main(argv: list[str] | None = None) -> int:
                         completion_factory=None if args.replay_from else factory,
                         run_root=args.run_root, max_sent=args.max_sent,
                         batch_size=args.batch_size, replay_from=args.replay_from,
-                        revision_page_source=revision_pages, facts=facts,
+                        revision_page_source=revision_pages, facts=facts, carry=carry,
                     )
                 finally:
                     for client in clients:

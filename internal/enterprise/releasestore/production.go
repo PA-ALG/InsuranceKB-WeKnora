@@ -41,6 +41,7 @@ type resolverDeps struct {
 	DB        *gorm.DB
 	Spaces    Spaces
 	Published *publishedknowledge.Service `optional:"true"`
+	Chunks    interfaces.ChunkRepository  `optional:"true"`
 }
 
 // Register provides the candidate and publish service to the application container.
@@ -64,8 +65,13 @@ func Register(container *dig.Container) error {
 		}
 		store := New(deps.DB, deps.Spaces)
 		// Quick answers read published fields of the turn's pinned release (Q1b-2); without the
-		// service they keep the Q1a behaviour.
-		return chatsource.NewResolver(deps.Spaces, store, store, store).WithPublished(deps.Published), nil
+		// service they keep the Q1a behaviour. With the chunk repository they also complete named
+		// products' mid-sentence passages (QA2c).
+		resolver := chatsource.NewResolver(deps.Spaces, store, store, store).WithPublished(deps.Published)
+		if deps.Chunks != nil {
+			resolver = resolver.WithChunks(deps.Chunks)
+		}
+		return resolver, nil
 	}); err != nil {
 		return err
 	}

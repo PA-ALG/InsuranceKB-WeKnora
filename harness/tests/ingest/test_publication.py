@@ -388,7 +388,7 @@ def test_a_dry_run_only_plans(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     commands = Commands(monkeypatch, current)
     active = Active(set())
     dry = publish_run(tmp_path, current, active, dry_run=True)
-    assert (commands.calls, active.requests, published(run)) == ([], [], {})
+    assert (commands.calls, len(active.requests), published(run)) == ([], 1, {})  # S12c-4
     assert (dry.planned_compile, dry.planned_publish) == (["1818"], ["1818", "1828"])
     assert (dry.compiled, dry.routes) == ([], {})
     real = publish_run(tmp_path, current, active)
