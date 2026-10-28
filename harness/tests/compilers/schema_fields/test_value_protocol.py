@@ -149,6 +149,35 @@ def test_value_rows_are_strict(bad: str) -> None:
         parse_values(bad, [WAITING])
 
 
+# PR #394 review R1: an unknown row that carries the value key, even as null, breaks the format
+# and rejects the batch; a legal unknown row still parses to None (above).
+UNKNOWN_WITH_NULL = rows(row(state="unknown", value=None), {"ordinal": 1, "field_key":
+                         "grace_period", "state": "present", "value": "60日"})
+
+
+def test_an_unknown_row_carrying_a_null_value_rejects_the_batch() -> None:
+    with pytest.raises(CompileError):
+        parse_values(UNKNOWN_WITH_NULL, [WAITING, GRACE])
+    compiler = SchemaFieldsCompiler(
+        Completion(
+            selected((0, "waiting_period", "present", ["D1P1S1"]),
+                     (1, "grace_period", "present", ["D1P1S2"])),
+            json.loads(UNKNOWN_WITH_NULL),
+        ),
+        batch_size=10, max_calls=5,
+    )
+    with pytest.raises(CompileError):
+        compiler.compile("product", [WAITING, GRACE], [Page()])
+
+
+# PR #394 review R2: used_segments members must be strings.
+@pytest.mark.parametrize("member", [{}, None, 1, True, []], ids=["object", "null", "int", "bool",
+                                                                   "list"])
+def test_used_segments_members_must_be_strings(member: object) -> None:
+    with pytest.raises(CompileError):
+        parse_values(rows(row(value="90日", used_segments=[member])), [WAITING])
+
+
 # PR #366 review counterexamples: sentences that state a fact next to a non-mention. The
 # protocol removes no text by rule; a value the model writes stays as written.
 MIXED = [
