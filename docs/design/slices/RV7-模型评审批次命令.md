@@ -13,12 +13,12 @@
 把一次编译的产出变成**经独立评委逐点判定**、再按**机器审核**发布的变更，全程可复现、可中断续跑：
 
 ```
-python -m insurance_harness.review.judge_batch prepare --registry R --compile-root C --run-root J [--products …]
+python -m insurance_harness.ingest.judge_batch prepare --registry R --compile-root C --run-root J [--products …]
 #   操作者：bash J/run.sh            （每个会话一次 codex exec，命令本身不调用 codex）
-python -m insurance_harness.review.judge_batch ingest  --run-root J
-python -m insurance_harness.review.judge_batch publish --registry R --compile-root C --run-root J \
+python -m insurance_harness.ingest.judge_batch ingest  --run-root J
+python -m insurance_harness.ingest.judge_batch publish --registry R --compile-root C --run-root J \
         --issue N [--live]
-python -m insurance_harness.review.judge_batch close   --run-root J --product P --candidate ID [--live]
+python -m insurance_harness.ingest.judge_batch close   --run-root J --product P --candidate ID [--live]
 ```
 
 `--run-root` 必须在任何 Git 仓库之外（`judge_files.check_run_directory`）。
@@ -45,7 +45,7 @@ python -m insurance_harness.review.judge_batch close   --run-root J --product P 
   - 每个会话包含的产品与 slug。
 - 同时写出 `run.sh`：每个会话启动一次 `codex exec -m <model> … -C <会话目录>`，并行执行，日志写到 `logs/`。**这一步由操作者执行。**
 - 运行目录里已有 `plan.json` 时拒绝运行，返回 `RUN_EXISTS`，不覆盖已有题目。
-- 评委提示词（系统规则、AGENTS 规则、操作提示、拒绝类别）是版本化的数据文件 `review/judge_batch/prompt.json`。
+- 评委提示词（系统规则、AGENTS 规则、操作提示、拒绝类别）是版本化的数据文件 `ingest/judge_batch/prompt.json`。
 
 ### 2.2 ingest（离线）
 
@@ -93,14 +93,14 @@ python -m insurance_harness.review.judge_batch close   --run-root J --product P 
 
 ## 4. 改动范围
 
-- 新增 `harness/src/insurance_harness/review/judge_batch/`：`__init__.py`、`__main__.py`、`cli.py`、`points.py`、`sessions.py`、`verdicts.py`、`publishing.py`、`closing.py`、`prompt.json`；
+- 新增 `harness/src/insurance_harness/ingest/judge_batch/`（放在 ingest 下：它要调用编译器的发布代码，而 review 是核心目录，按 G1 守卫不能依赖 compilers）：`__init__.py`、`__main__.py`、`cli.py`、`points.py`、`sessions.py`、`verdicts.py`、`publishing.py`、`closing.py`、`prompt.json`；
 - `harness/src/insurance_harness/eval/judge_files.py`：新增公开的 `stored_requests(run_dir)`，供导入时重建题目；
 - `harness/src/insurance_harness/bundle/client.py`：新增 `review_queue`、`reject_points`；
 - 实现方测试。
 
 ## 5. 验收（RED，Claude 编写）
 
-`harness/tests/review/test_judge_batch.py`，全部离线，使用 fake HTTP 和假答案文件，复用 `test_publish_cli` 与 `test_claim_changes_publish` 的夹具：
+`harness/tests/ingest/test_judge_batch.py`，全部离线，使用 fake HTTP 和假答案文件，复用 `test_publish_cli` 与 `test_claim_changes_publish` 的夹具：
 
 1. **prepare**：
    - 只为 upgrade/add 等变更点建题；题目哈希可复核；
