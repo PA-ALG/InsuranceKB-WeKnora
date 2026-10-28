@@ -1,8 +1,9 @@
-"""Responses of the platform's candidate review routes for a service key (RV6e).
+"""Responses of the platform's candidate review routes for a service key (RV6d, RV6e, RV7).
 
-The detail is what the review page shows for one candidate: its bundle members with their
-payloads, its removals and its review points. A machine caller checks this content before it
-closes review points, so the parse is strict and slugs must be unique.
+The queue lists pending candidates with their sizes. The detail is what the review page shows for
+one candidate: its bundle members with their payloads, its removals and its review points. A
+machine caller checks this content before it closes review points, so the parse is strict and
+slugs must be unique.
 """
 
 from typing import Any, Self
@@ -12,6 +13,29 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class _Response(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore", frozen=True)
+
+
+class ReviewItem(_Response):
+    """One candidate of a Space's review queue, as the service key sees it."""
+
+    candidate_id: str = Field(min_length=1)
+    subjects: list[str]
+    point_count: int = Field(ge=0)
+    pending_points: int = Field(ge=0)
+    status: str
+    members: int = Field(default=0, ge=0)
+    removals: int = Field(default=0, ge=0)
+    base_release_id: str = ""
+
+
+class ReviewQueue(_Response):
+    items: list[ReviewItem]
+
+
+class PointResult(_Response):
+    """The candidate's status after a machine point decision."""
+
+    status: str
 
 
 class BundleMember(_Response):
@@ -47,6 +71,7 @@ class CandidateDetail(_Response):
     base_release_id: str = ""
     head_release_id: str | None = None
     blocker: str = ""
+    subjects: list[str] = Field(default_factory=list)
     point_count: int = Field(ge=0)
     pending_points: int = Field(ge=0)
     bundle_members: list[BundleMember]

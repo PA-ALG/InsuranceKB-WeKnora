@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Re-exported: callers use the review and confirmation models through the client.
 from insurance_harness.bundle.candidate_reviews import CandidateDetail as CandidateDetail
+from insurance_harness.bundle.candidate_reviews import PointResult, ReviewQueue
+from insurance_harness.bundle.candidate_reviews import ReviewItem as ReviewItem
 from insurance_harness.bundle.confirmation_items import ConfirmationAnswer as ConfirmationAnswer
 from insurance_harness.bundle.confirmation_items import ConfirmationClosure as ConfirmationClosure
 from insurance_harness.bundle.confirmation_items import ConfirmationInput as ConfirmationInput
@@ -60,6 +62,9 @@ _PLATFORM_CODES = frozenset(
         "ANSWER_INVALID",
         "CONFIRMATION_CLOSED",
         "ANSWER_STALE",
+        # RV6 point review
+        "CANDIDATE_DECIDED",
+        "MEMBER_DECIDED",
     }
 )
 _CLIENT_CODES = frozenset(
@@ -105,6 +110,7 @@ class DecisionInput(BaseModel):
 class Candidate(_Response):
     id: str = Field(min_length=1)
     status: str
+    bundle_digest: str = ""
 
 
 class Decision(_Response):
@@ -296,6 +302,25 @@ class PlatformClient:
         if (closure.reason, closure.answer_id or None) != (reason, answer_id):
             raise PlatformError("INVALID_RESPONSE")
         return closure
+
+    def review_queue(
+        self, space_id: str, status: Literal["pending", "decided"]
+    ) -> list[ReviewItem]:
+        if status not in {"pending", "decided"}:
+            raise PlatformError("INVALID_REQUEST")
+        data = self._send("GET", space_id, ["candidates"], None, {"status": status})
+        return _parse(ReviewQueue, data).items
+
+    def reject_points(
+        self, space_id: str, candidate_id: str, slugs: list[str], reason: str, policy_ref: str
+    ) -> str:
+        """Machine rejection of review points (RV6d); returns the candidate status after it."""
+        if not slugs or not reason.strip() or not policy_ref.strip():
+            raise PlatformError("INVALID_REQUEST")
+        body = {"slugs": slugs, "outcome": "reject", "reason": reason, "policy_ref": policy_ref}
+        path = ["candidates", candidate_id, "points", "decisions"]
+        raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        return _parse(PointResult, self._send("POST", space_id, path, raw)).status
 
     def review_detail(self, space_id: str, candidate_id: str) -> CandidateDetail:
         """One candidate's members, removals and review points, as its review page shows them."""
