@@ -10,9 +10,9 @@ import (
 const defaultQuestionLimit = 12
 
 // QuestionFields finds the published fields a quick question asks about, without a model:
-// a field when its title is in the question; a product when the question holds its ID or one of
-// its names, or shares two distinctive name bigrams. Products and fields combine; fields alone
-// compare every product; a product alone yields its navigation overview fields.
+// a field when its title is in the question; a product using QuestionProducts' strict matching.
+// Fields alone compare every product. Named products supply overview fields when no title is
+// asked, or when an asked title is also part of a named product's name.
 func (s *Service) QuestionFields(
 	ctx context.Context, tenantID uint64, spaceID, releaseID, question string, limit int,
 ) ([]Field, error) {
@@ -28,24 +28,38 @@ func (s *Service) QuestionFields(
 		limit = defaultQuestionLimit
 	}
 	entities := index.orderedEntities()
-	products := questionProducts(entities, question)
+	products := index.questionProducts(question)
 	asked := func(field Field) bool {
 		title := normalize(field.FieldTitle)
 		return utf8.RuneCountInString(title) >= 2 && strings.Contains(question, title)
 	}
-	fieldsAsked := false
+	fieldsAsked, supplementOverview := false, false
 	for _, entity := range entities {
 		for _, field := range index.fields(entity) {
-			fieldsAsked = fieldsAsked || asked(field)
+			if !asked(field) {
+				continue
+			}
+			fieldsAsked = true
+			for _, product := range products {
+				for _, name := range product.Names {
+					title := normalizeProductText(field.FieldTitle)
+					if title != "" && strings.Contains(normalizeProductText(name), title) {
+						supplementOverview = true
+					}
+				}
+			}
 		}
 	}
 	out := []Field{}
+	seen := map[string]bool{}
 	add := func(field Field) bool {
-		out = append(out, field)
+		if !seen[field.Slug] {
+			seen[field.Slug] = true
+			out = append(out, field)
+		}
 		return len(out) < limit
 	}
-	switch {
-	case fieldsAsked:
+	if fieldsAsked {
 		scope := products
 		if len(scope) == 0 {
 			scope = entities
@@ -57,7 +71,8 @@ func (s *Service) QuestionFields(
 				}
 			}
 		}
-	case len(products) > 0 && index.navigation != nil:
+	}
+	if (!fieldsAsked || supplementOverview) && index.navigation != nil {
 		for _, entity := range products {
 			byKey := map[string][]Field{}
 			for _, field := range index.fields(entity) {
@@ -73,48 +88,6 @@ func (s *Service) QuestionFields(
 		}
 	}
 	return out, ctx.Err()
-}
-
-// questionProducts keeps product order. A name bigram is distinctive when at most a third of
-// the products (and at least one) carry it, so words most product names share select nothing.
-func questionProducts(entities []indexedEntity, question string) []indexedEntity {
-	pairs := bigrams(question)
-	carriers := map[string]int{}
-	names := make([]map[string]bool, len(entities))
-	for i, entity := range entities {
-		names[i] = map[string]bool{}
-		for _, name := range entity.Names {
-			for pair := range bigrams(normalize(name)) {
-				names[i][pair] = true
-			}
-		}
-		for pair := range names[i] {
-			carriers[pair]++
-		}
-	}
-	distinctive := max(1, len(entities)/3)
-	var out []indexedEntity
-	for i, entity := range entities {
-		direct := contained(question, entity.EntityID)
-		for _, name := range entity.Names {
-			direct = direct || contained(question, name)
-		}
-		shared := 0
-		for pair := range names[i] {
-			if pairs[pair] && carriers[pair] <= distinctive {
-				shared++
-			}
-		}
-		if direct || shared >= 2 {
-			out = append(out, entity)
-		}
-	}
-	return out
-}
-
-func contained(question, name string) bool {
-	name = normalize(name)
-	return utf8.RuneCountInString(name) >= 2 && strings.Contains(question, name)
 }
 
 // FieldText is the text a published field contributes to a prompt, shared by tools and answers.
