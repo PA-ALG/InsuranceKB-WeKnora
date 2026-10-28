@@ -10,7 +10,7 @@
   "1816.json": "31edf99e55017c16920b0f629ab1fbffb997761b4adc137e8db2da302cb19359",
   "1824.json": "ac34df7ee56dce1f5524a89187145fb96f3252df49afe5e66a1a223a777d773f",
   "1826.json": "2dfd25c8a784b9d55b278b427278c904a337ad7fb57a242fa14bc447369b451f",
-  "1828.json": "2b2c11d2e43dc85985e9e63122d89e450388b92f3d14f32492e79aecf3518ccf"
+  "1828.json": "4acf07c579235b4b02943af0e117cc56f7102ab020881460d4762dea59fd60fa"
  },
  "products": {
   "1814": {
@@ -1933,12 +1933,12 @@
    }
   },
   {
-   "basis": "S12c-2 Spec §2–§3 and §6: independent GPT-6 Astra xhigh audit of every Golden v2 evidence segment (keep/drop) and of the A0r compiler picks Golden lacked (add/skip), 9 codex-exec file-exchange sessions, draft-2026-10-18a cards without examples, values and states unchanged; applied with the owner rulings of review round 1 on #392 (worked examples, referents, card excludes precedence) from the saved answers, no new sessions (Issue #390)",
+   "basis": "S12c-2 Spec §2–§3 and §6: independent GPT-6 Astra xhigh audit of every Golden v2 evidence segment (keep/drop) and of the A0r compiler picks Golden lacked (add/skip), 9 codex-exec file-exchange sessions, draft-2026-10-18a cards without examples, values and states unchanged; applied with the owner rulings of review rounds 1 and 3 on #392 (worked examples, referents up to the list lead-in, card excludes precedence) from the saved answers, no new sessions (Issue #390)",
    "cards_version": "draft-2026-10-18a",
    "method": "judge-golden-audit",
    "owner_rulings": [
     "1. 投保示例不是规则证据：投保举例、示例计算、保单周年日举例等具体示例段落不作字段规则证据，示例得出的新增撤回",
-    "2. 指代规则：保留或新增段落指代'上述/前款/前述/前项/其他情形'时，定义这些条件的同字段段落保留或恢复（向前连续收回被删段，只跨上一页末尾脚注块、最多一页，遇本字段仍保留的段落即止）",
+    "2. 指代规则：保留或新增段落指代'上述/前款/前述/前项/其他情形'时，只恢复被指代的清单及其引导段（向前连续收回被删段，收到以'：'结尾的引导段为止且不越过它，只跨上一页末尾脚注块、最多一页，遇本字段仍保留的段落即止）",
     "3. 字段卡 excludes 优先于 includes 的举例：被 excludes 明确排到另一字段的内容不作本字段证据；删除会使字段无证据时保留原证据并列入待裁决"
    ],
    "products": {
@@ -3455,6 +3455,10 @@
       [
        "cash_value_rules",
        "D2P8S5"
+      ],
+      [
+       "cash_value_rules",
+       "D2P8S8"
       ]
      ],
      "added": [
@@ -3640,10 +3644,6 @@
        [
         "cash_value_rules",
         "D2P8S2"
-       ],
-       [
-        "cash_value_rules",
-        "D2P8S8"
        ],
        [
         "cash_value_rules",
