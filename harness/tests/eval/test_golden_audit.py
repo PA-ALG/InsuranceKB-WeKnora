@@ -97,3 +97,80 @@ def test_a_widened_pair_cannot_be_recorded_as_dropped() -> None:
     revision["products"][product]["fields"].append(pair[0])
     with pytest.raises(AssertionError):
         check_audit(tampered)
+
+
+# Owner rulings recorded after review round 1 on #392 (Spec §6).
+
+
+def evidence(product: str, field_key: str) -> set[str]:
+    golden = load_golden_v2(GOLDEN / f"{product}.json")
+    field = next(f for f in golden.fields if f.field_key == field_key)
+    return {q.segment_id for q in field.evidence if q.segment_id}
+
+
+def audit_entry(product: str) -> dict[str, Any]:
+    revision = next(r for r in MANIFEST["revisions"] if r.get("method") == METHOD)
+    entry: dict[str, Any] = revision["products"][product]
+    return entry
+
+
+def test_the_three_owner_rulings_are_recorded() -> None:
+    revision = next(r for r in MANIFEST["revisions"] if r.get("method") == METHOD)
+    assert len(revision["owner_rulings"]) == 3
+    for product in PRODUCTS:
+        overrides = audit_entry(product)["owner_overrides"]
+        assert set(overrides) == {"reverted_adds", "restored", "held"}
+        for key, segment_id in overrides["reverted_adds"]:
+            assert segment_id not in evidence(product, key), (product, key, segment_id)
+        for key, segment_id in overrides["restored"]:
+            assert segment_id in evidence(product, key), (product, key, segment_id)
+
+
+def test_a_worked_example_is_not_rule_evidence() -> None:
+    assert "D1P6S7" not in evidence("1816", "income_loss_care_benefit_payment_rules")
+    assert ["income_loss_care_benefit_payment_rules", "D1P6S7"] in audit_entry("1816")[
+        "owner_overrides"
+    ]["reverted_adds"]
+
+
+@pytest.mark.parametrize(
+    ("product", "referring", "conditions"),
+    [
+        (
+            "1824",
+            {"D2P4S7", "D2P4S8"},
+            {f"D2P3S{n}" for n in range(10, 14)} | {f"D2P4S{n}" for n in range(1, 7)},
+        ),
+        (
+            "1826",
+            {"D1P3S11", "D1P3S12", "D2P4S5", "D2P4S6"},
+            {f"D2P3S{n}" for n in range(10, 14)} | {f"D2P4S{n}" for n in range(1, 5)},
+        ),
+        (
+            "1828",
+            {"D2P8S3", "D2P8S17", "D2P8S18"},
+            {"D2P8S1", "D2P8S2"} | {f"D2P8S{n}" for n in range(8, 17)},
+        ),
+    ],
+)
+def test_kept_referents_keep_the_conditions_they_point_to(
+    product: str, referring: set[str], conditions: set[str]
+) -> None:
+    kept = evidence(product, "cash_value_rules")
+    assert referring <= kept
+    assert conditions <= kept
+    assert not conditions & {
+        s for k, s in audit_entry(product)["dropped"] if k == "cash_value_rules"
+    }
+
+
+def test_card_excludes_win_over_includes_examples() -> None:
+    waiver_list = {"D1P1S4", "D1P5S2", "D2P22S21", "D2P22S22"}
+    assert not waiver_list & evidence("1816", "covered_critical_specified_diseases")
+    entry = audit_entry("1816")
+    assert "covered_critical_specified_diseases" in entry["held_for_adjudication"]
+    assert (
+        "premium_waiver_critical_illnesses"
+        in entry["owner_overrides"]["held"]["covered_critical_specified_diseases"]
+    )
+    assert waiver_list <= evidence("1816", "premium_waiver_critical_illnesses")
