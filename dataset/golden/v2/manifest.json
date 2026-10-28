@@ -18,7 +18,10 @@
   "2648.json": "b9d8cf1cd7ddda35a9d9509c996c8392861686b0def07fe90bfbfa9ab9d3322d",
   "527.json": "2805572e27dbf6dd77764b0840fe7cbf44be7a6f68b854a997c8c5b283db2d42",
   "1815.json": "1a6b5da8065c301d1077091477e09dfff3fcc55c19156592c223bd6beb4c09c4",
-  "L0410.json": "8afdd27e794aea8e4329a9970d26492821d4a1aace0d596f2fc6fcf818e8358c"
+  "L0410.json": "8afdd27e794aea8e4329a9970d26492821d4a1aace0d596f2fc6fcf818e8358c",
+  "2647.json": "b4fd1d7953d9f98cbf0283a76b7335c2153d635e5312326c3cfaa22af293d541",
+  "1855.json": "64323120e7f70b59094666622d91621471c9f20bb2740bf3352cddc33d801129",
+  "L3223.json": "1636c431b26a2abaa0d695bc6b2dcbae96e7fa32e4a3992266c6ccc250724b08"
  },
  "products": {
   "1814": {
@@ -302,6 +305,89 @@
    "non_evidence_sha256": {
     "费率表.pdf": "36900e35dd90afba2f5ee271cc6566ef789b4f058559e7b4e8e006a79f66ee9f"
    }
+  },
+  "2647": {
+   "fields": 61,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_supplementary_pension_insurance",
+   "product_id": "2647",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18344-bd5c-76d1-8027-243c401c35cb",
+   "source_sha256": {
+    "产品说明书.pdf": "9002fb63680323c7ab38f38d36999ec14da361077aeae10b90c334731cc85a80",
+    "保险条款.pdf": "7e138c8f08dfadfedf7bf2a80c48755ba797a6e50c603dc85f69999f5549952b"
+   },
+   "states": {
+    "absent_explicitly": 8,
+    "present": 28,
+    "unknown": 25
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "c43cb554ec0c3031fbd6c9d2cedf14e8a57b8a8536c134456ff03fd52bdcb34c"
+   },
+   "material_roles": "dataset folder material_roles.json (S12d)"
+  },
+  "1855": {
+   "fields": 54,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_nursing_care_insurance",
+   "product_id": "1855",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a18359-21ba-7c21-a1b6-1eb0f5695fec",
+   "source_sha256": {
+    "产品说明书.pdf": "54380f8cbc33bc40be354899dce1270ea7013859d1224e1cd6fbf39918f84294",
+    "保险条款.pdf": "37c49fb676f0bfda734d5affd935fc9ebda799aa2385ba32303d566083346072"
+   },
+   "states": {
+    "absent_explicitly": 5,
+    "present": 34,
+    "unknown": 15
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "72715cadf78d6bb4aae965d80908da61f58099519b4162d41a5a00ef5327347d"
+   },
+   "material_roles": "dataset folder material_roles.json (S12d)",
+   "owner_edits": [
+    {
+     "field_key": "premium_payment_term",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "S12d Spec §3：记录费率表角色后，表头（交费期间：趸交、3/6/8/10/15/20 年交，男女各一页）成为该字段的表头输入；按 S4j（用户 2026-10-18）交费期间引用费率表表头。确定性修订，模型调用 0。",
+     "segments": "all rate-table header segments listing 交费期间"
+    }
+   ]
+  },
+  "L3223": {
+   "fields": 48,
+   "judging_method": "codex-exec-file-exchange",
+   "model_id": "gpt-6-astra",
+   "pack_id": "schemapack_accident_medical_insurance",
+   "product_id": "L3223",
+   "reasoning_effort": "xhigh",
+   "session_id": "01a1835b-4059-7282-8750-da81fcfd4bfa",
+   "source_sha256": {
+    "保险条款.pdf": "18c8baee53c3c5fa380f5aca621a8e3bbd6c5cb1030e594d200e8602459f8d96"
+   },
+   "states": {
+    "absent_explicitly": 2,
+    "present": 26,
+    "unknown": 20
+   },
+   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
+   "non_evidence_sha256": {
+    "费率表.pdf": "e43c6a7a0f9a1f713b5b629dad330e7234dd25956f093d34627011e756dce164"
+   },
+   "material_roles": "dataset folder material_roles.json (S12d)",
+   "owner_edits": [
+    {
+     "change": "brochure excluded; segment ids remapped by quote",
+     "basis": "S12d Spec §3：来源仓库中本目录的说明书是 L3233 的说明书（#422 Owner 裁定不发布）；评委只引用了条款，去掉说明书后条款由 D2 变为 D1，按（文件、页、引文）逐条重找段落。"
+    }
+   ]
   }
  },
  "revisions": [
