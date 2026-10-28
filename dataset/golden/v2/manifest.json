@@ -15,7 +15,6 @@
   "594.json": "a16aca45d16b4e882ce1b77e493a308bc4d5c264ab40596a1fc91fbfe0afa534",
   "596.json": "a21e175df5852669f1679dcc86eb644129d30530c0c655d03594612430e2d0b7",
   "1847H.json": "d0790a5d1c89d3368d78c1a23fab8f06f04cc951a68f7536c90f1b4107f79d9e",
-  "L3223.json": "b9562cc733c44682474ea7cb7b1936167917ce4a5e80fdab3524abee2a1eff47",
   "2648.json": "b9d8cf1cd7ddda35a9d9509c996c8392861686b0def07fe90bfbfa9ab9d3322d",
   "527.json": "2805572e27dbf6dd77764b0840fe7cbf44be7a6f68b854a997c8c5b283db2d42",
   "1815.json": "1a6b5da8065c301d1077091477e09dfff3fcc55c19156592c223bd6beb4c09c4",
@@ -214,28 +213,6 @@
    "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
    "non_evidence_sha256": {
     "费率表.pdf": "1456e4ba6c68d9d5cf64d5d513a44cc00069c7205eb9db718f111a617b5df6ae"
-   }
-  },
-  "L3223": {
-   "fields": 48,
-   "judging_method": "codex-exec-file-exchange",
-   "model_id": "gpt-6-astra",
-   "pack_id": "schemapack_accident_medical_insurance",
-   "product_id": "L3223",
-   "reasoning_effort": "xhigh",
-   "session_id": "01a1835b-4059-7282-8750-da81fcfd4bfa",
-   "source_sha256": {
-    "产品说明书.pdf": "db20fca9b277cc213d7b028c63afdee0b75c707def3b67307d3e8ac79b1318e2",
-    "保险条款.pdf": "18c8baee53c3c5fa380f5aca621a8e3bbd6c5cb1030e594d200e8602459f8d96"
-   },
-   "states": {
-    "absent_explicitly": 2,
-    "present": 26,
-    "unknown": 20
-   },
-   "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
-   "non_evidence_sha256": {
-    "费率表.pdf": "e43c6a7a0f9a1f713b5b629dad330e7234dd25956f093d34627011e756dce164"
    }
   },
   "2648": {
