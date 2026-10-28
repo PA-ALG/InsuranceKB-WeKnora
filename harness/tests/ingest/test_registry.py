@@ -91,8 +91,10 @@ def test_the_source_map_is_the_existing_format_in_a_fixed_order() -> None:
     assert source_map.space_id == SPACE
     assert list(source_map.products) == ["1814", "1828"]
     assert source_map.products["1828"] == [
-        SourceEntry(knowledge_id=knowledge_id("1828", "rate_table"), parse_attempt=1),
-        SourceEntry(knowledge_id=knowledge_id("1828", "terms"), parse_attempt=1),
+        SourceEntry(
+            knowledge_id=knowledge_id("1828", "rate_table"), parse_attempt=1, role="rate_table"
+        ),
+        SourceEntry(knowledge_id=knowledge_id("1828", "terms"), parse_attempt=1, role="terms"),
     ]
     SourceMap.model_validate(json.loads(source_map.model_dump_json()))
 
@@ -149,8 +151,9 @@ def test_seeding_reproduces_the_hand_written_source_maps() -> None:
     exported = seeded.source_map().products
     assert set(exported) == set(merged)
     for pid, entries in merged.items():
-        assert sorted(exported[pid], key=lambda e: e.knowledge_id) == sorted(
-            entries, key=lambda e: e.knowledge_id
+        # The hand-written maps carry no roles; the registry adds the recorded ones (S5b-6).
+        assert sorted((e.knowledge_id, e.parse_attempt) for e in exported[pid]) == sorted(
+            (e.knowledge_id, e.parse_attempt) for e in entries
         )
     assert {m.role for m in seeded.products["1828"].materials} == set(ROLES)
     assert seeded.products["594"].origin == "seeded"
@@ -221,7 +224,7 @@ def test_retired_materials_stay_out_of_the_source_map_and_stay_unique() -> None:
     product.retired = entry("1828", "terms").materials
     value = registry(p1828=product)
     assert value.source_map().products["1828"] == [
-        SourceEntry(knowledge_id=knowledge_id("1828", "brochure"), parse_attempt=1)
+        SourceEntry(knowledge_id=knowledge_id("1828", "brochure"), parse_attempt=1, role="brochure")
     ]
     document = json.loads(value.model_dump_json())
     document["products"]["1828"]["materials"].append(document["products"]["1828"]["retired"][0])
