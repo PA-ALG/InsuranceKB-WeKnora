@@ -63,6 +63,7 @@ type Resolver struct {
 	pins      Pins
 	attempts  Attempts
 	published *knowledge.Service // optional: quick answers read published fields (Q1b-2)
+	chunks    ChunkReader        // optional: quick answers complete mid-sentence passages (QA2c)
 }
 
 // NewResolver constructs a resolver whose resolved state remains local to each turn.
