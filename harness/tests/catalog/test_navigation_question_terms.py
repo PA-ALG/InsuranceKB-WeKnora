@@ -3,6 +3,10 @@
 Spec docs/design/slices/QA3-字段按问法匹配.md §2–§3. A field's term groups match a question when
 every term of one group occurs in it; the vocabulary is versioned Harness data, the platform only
 matches strings. RED until QA3.
+
+2026-10-28 (#414 review R2/R3, Owner rulings, Spec §2 amended): terms are normalized exactly as the
+platform's Go normalizeQuestionTerm does before the length and duplicate checks, and duplicate
+groups are compared as sets of terms.
 """
 
 from __future__ import annotations
@@ -40,9 +44,21 @@ BASE: dict[str, Any] = {
 }
 
 
+# Go unicode.IsSpace (Unicode White_Space) plus the BOM the platform's normalize also drops.
+PLATFORM_SPACE = frozenset(
+    "\t\n\v\f\r \x85\xa0\u1680" + "".join(map(chr, range(0x2000, 0x200B))) + "\u2028\u2029"
+    "\u202f\u205f\u3000\ufeff"
+)
+
+
 def _normal(text: str) -> str:
+    """The platform's normalizeQuestionTerm: NFKC, lower case, no whitespace, no punctuation."""
     folded = unicodedata.normalize("NFKC", text).lower()
-    return "".join(ch for ch in folded if not unicodedata.category(ch).startswith(("P", "S", "Z")))
+    return "".join(
+        ch
+        for ch in folded
+        if ch not in PLATFORM_SPACE and not unicodedata.category(ch).startswith("P")
+    )
 
 
 def test_the_contract_accepts_question_terms_and_old_navigations_stay_valid() -> None:
@@ -76,6 +92,58 @@ def test_the_contract_accepts_question_terms_and_old_navigations_stay_valid() ->
 def test_malformed_question_terms_are_refused(terms: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         NavigationProfile.model_validate({**BASE, "question_terms": terms})
+
+
+def _validate(terms: dict[str, Any]) -> NavigationProfile:
+    return NavigationProfile.model_validate({**BASE, "question_terms": terms})
+
+
+@pytest.mark.parametrize(
+    "space",
+    ["\t", "\n", "\r", "\x85", "\xa0", "\u3000", "\ufeff", " "],
+    ids=["TAB", "LF", "CR", "NEL", "NBSP", "ideographic space", "BOM", "space"],
+)
+def test_platform_whitespace_is_dropped_before_length_and_duplicates(space: str) -> None:
+    # The platform drops it, so 期 plus it is one character: refused.
+    with pytest.raises(ValidationError):
+        _validate({"waiting_period": [["期" + space]]})
+    # Inside a term it is dropped, not refused: still two characters.
+    assert _validate({"waiting_period": [["观" + space + "察"]]}).question_terms
+    # And it does not make a group different from the same group without it.
+    with pytest.raises(ValidationError):
+        _validate({"waiting_period": [["观察期"], ["观" + space + "察期"]]})
+
+
+def test_only_platform_whitespace_and_punctuation_are_dropped() -> None:
+    # Symbols stay (Go keeps them), so 期+ is two characters; % is punctuation and goes.
+    assert _validate({"waiting_period": [["期+"]]}).question_terms
+    with pytest.raises(ValidationError):
+        _validate({"waiting_period": [["期%"]]})
+    # U+001C is whitespace to Python's str.isspace but not to Go's unicode.IsSpace.
+    assert _normal("期\x1c") == "期\x1c"
+    assert _validate({"waiting_period": [["期\x1c"]]}).question_terms
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        [["保额", "增长"], ["增长", "保额"]],
+        [["观察期", "观察期"]],
+        [["观察期", "观察 期"]],
+        [["观察期"], ["观察期", "观察期"]],
+    ],
+    ids=["reordered group", "repeated term", "repeated after normalization", "repeat of a group"],
+)
+def test_groups_are_compared_as_sets_of_terms(groups: list[list[str]]) -> None:
+    with pytest.raises(ValidationError):
+        _validate({"sum_assured_growth_rate": groups})
+
+
+def test_genuinely_different_groups_stay_together() -> None:
+    groups = [["保额", "增长"], ["保额", "增长比例"], ["增长比例"], ["增长", "比例", "保额"]]
+    assert _validate({"sum_assured_growth_rate": groups}).question_terms == {
+        "sum_assured_growth_rate": groups
+    }
 
 
 def test_the_loader_refuses_terms_for_a_field_the_catalog_does_not_have() -> None:
