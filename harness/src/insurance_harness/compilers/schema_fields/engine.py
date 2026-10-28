@@ -19,6 +19,7 @@ from insurance_harness.compilers.schema_fields.definitions import FieldDefinitio
 from insurance_harness.compilers.schema_fields.parse import CompileError as CompileError
 from insurance_harness.compilers.schema_fields.parse import parse_selection, parse_values
 from insurance_harness.compilers.schema_fields.prompt import (
+    VALUE_PROTOCOL_VERSION,
     JudgeLikeRequest,
     build_selection_request,
     build_value_request,
@@ -63,6 +64,18 @@ class CompileOutput(BaseModel):
     cards_version: str | None = None
     # Actual input document identities; earlier outputs cannot be reused without them (S8a).
     materials: list[str] | None = None
+    # The step-two protocol the values were written under (S12c-1); None before S12c-1.
+    value_protocol: str | None = None
+
+
+def reusable(output: CompileOutput, materials: list[str]) -> bool:
+    """An output may stand in for a compile only if materials, cards and value protocol match."""
+    return (
+        output.materials is not None
+        and output.materials == materials
+        and output.cards_version == cards_version()
+        and output.value_protocol == VALUE_PROTOCOL_VERSION
+    )
 
 
 def _value_batches(
@@ -199,7 +212,7 @@ class SchemaFieldsCompiler:
             for d in fields
             if selected.get(d.field_key, ("", []))[0] == "present"
         ]
-        values: dict[str, str] = {}
+        values: dict[str, str | None] = {}
         for items in _value_batches(present, self._value_batch_chars):
             answer = send(build_value_request(entity_id, items))
             values.update(parse_values(answer, [definition for definition, _ in items]))
@@ -217,7 +230,13 @@ class SchemaFieldsCompiler:
                 if definition.field_key not in values:
                     dropped_fields.append(definition.field_key)
                     continue
-                value = normalize_field_value(definition, values[definition.field_key])
+                written = values[definition.field_key]
+                if written is None:
+                    # Step two found none of the field in its segments: the same result as a
+                    # step-one unknown, with no value and no evidence (S12c-1 §3).
+                    results.append(FieldResult(field_key=definition.field_key, state="unknown"))
+                    continue
+                value = normalize_field_value(definition, written)
             results.append(
                 FieldResult(
                     field_key=definition.field_key,
@@ -236,6 +255,7 @@ class SchemaFieldsCompiler:
             dropped_refs=dropped_refs,
             dropped_fields=dropped_fields,
             cards_version=cards_version(),
+            value_protocol=VALUE_PROTOCOL_VERSION,
         )
 
 

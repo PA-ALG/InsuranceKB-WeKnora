@@ -2,8 +2,8 @@
 
 Ported from V5 llm_plugin.py / contracts.py; legacy originals retire in S7. Step one
 answers segment ids per field and any malformed envelope, row or state rejects the
-whole batch. Step two answers one value per field: unknown, duplicate or malformed
-rows reject the batch, while a missing row only loses that field's value.
+whole batch. Step two answers one value or unknown per field (S12c-1): unrequested,
+duplicate or malformed rows reject the batch, while a missing row only loses that field's value.
 """
 
 import json
@@ -40,10 +40,26 @@ class _Selection(BaseModel):
 
 
 class _ValueRow(BaseModel):
+    """One step-two answer (S12c-1 §2): a value, or unknown when the segments hold none."""
+
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     ordinal: int = Field(ge=0)
     field_key: NonBlank
-    value: NonBlank
+    state: Literal["present", "unknown"] = "present"  # omitted in answers before S12c-1
+    value: str | None = None
+    # The model's own working list; never evidence: shrinking the evidence to it cost 0.14
+    # segment recall in the #390 ablation, so evidence stays the step-one selection.
+    used_segments: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_state(self) -> Self:
+        if self.state == "unknown":
+            # Decided by key presence: an explicit "value": null is a format error too.
+            if "value" in self.model_fields_set:
+                raise ValueError("unknown takes no value key")
+        elif self.value is None or not self.value.strip():
+            raise ValueError("present requires a nonblank value")
+        return self
 
 
 class _Values(BaseModel):
@@ -85,8 +101,9 @@ def parse_selection(raw: str, definitions: Sequence[FieldDefinition]) -> list[Se
     return result.fields
 
 
-def parse_values(raw: str, definitions: Sequence[FieldDefinition]) -> dict[str, str]:
-    """Values by field_key; a requested field may be missing, nothing else may differ."""
+def parse_values(raw: str, definitions: Sequence[FieldDefinition]) -> dict[str, str | None]:
+    """Values by field_key, None for unknown; a requested field may be missing, nothing else
+    may differ."""
     try:
         result = _Values.model_validate(_load(raw))
     except ValidationError as exc:

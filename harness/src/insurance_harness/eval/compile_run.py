@@ -30,13 +30,13 @@ from pydantic import ValidationError
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
 from insurance_harness.changes.options import fixed_revision_pages, registry_inputs, source_options
-from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
     CompileError,
     CompileOutput,
     CompletionPort,
     SchemaFieldsCompiler,
+    reusable,
     to_candidate,
 )
 from insurance_harness.eval.convert import predictions_from_candidate
@@ -319,8 +319,7 @@ def compile_products(
                     roles = [rule.role for rule in load_trust_policy().header_rules]
                     headers = {role: _revision_order(headers[role], revisions)
                                for role in sorted(headers, key=roles.index)}
-            if (output is not None and output.materials == materials
-                    and output.cards_version == cards_version()):
+            if output is not None and reusable(output, materials):
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
