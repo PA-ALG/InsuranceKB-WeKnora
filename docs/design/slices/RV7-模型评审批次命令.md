@@ -74,7 +74,7 @@ python -m insurance_harness.review.judge_batch close   --run-root J --product P 
    - 依次提交、做机器决定（`approve`，带 `policy_ref`，理由为"模型评审（<reviewer>）批准，运维 Issue #N"）、激活，再读回核对（`bundle.client.publish`）；
    - 按抽检策略提交抽检样本（先发布后抽检）。
 
-演练不发任何写请求。**评审来源如实记录**：Claim 的 review 为 `mode=machine`、`policy_ref`、`reviewer`，决定为 `mode=machine`，绝不记为人工。
+演练不发任何写请求。**评审来源如实记录**：Claim 的 review 为 `mode=machine`，并带 `reviewer`、`reviewed_at` 和评分（Claim 合同里的 review 没有 policy 字段）；`policy_ref` 记在平台的机器决定上（`mode=machine`）。任何一处都不记为人工。
 
 ### 2.4 close（默认演练；`--live` 才写线上）
 
@@ -111,10 +111,10 @@ python -m insurance_harness.review.judge_batch close   --run-root J --product P 
    - 正确答案能导入，写出 verdicts 和 summary；
    - 以下情况都返回 typed error，且不写文件：缺 slug、多 slug、重复 slug、类别不在列表内、approve 与类别不符、题目被改动、存在未读到的题目。
 3. **publish 演练**：
-   - 只含批准点，标签为 machine，带 policy_ref 和 reviewer；
+   - 只含批准点，标签为 machine，带 reviewer；
    - 不发写请求。
 4. **publish `--live`**：
-   - 依次提交、做机器决定、激活，并读回核对；决定为 `mode=machine` 且带 policy_ref；
+   - 依次提交、做机器决定、激活，并读回核对；Claim 的 review 为 machine 且带 reviewer，决定为 `mode=machine` 且带 policy_ref；
    - 再次运行时该产品记为 `already_published`，不再提交；
    - 编译输出在评审后被改动时返回 `CONTENT_CHANGED`；
    - 平台返回 `NEEDS_REBASE` 时立即停止，结果文件记下停止的产品。
