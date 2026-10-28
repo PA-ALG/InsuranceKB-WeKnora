@@ -144,13 +144,12 @@ def test_supersede_needs_this_batchs_completed_attempt(
     answer(world, {key: ("approve", "通过") for key in world["keys"]})
     ingest(world["run_root"])
     world["server"].active = active(world["claims"])  # live, but not published by this batch
-    path = leftover(world, world["claims"])
+    leftover(world, world["claims"])
     result = close_points(
         world["run_root"],
         client=world["client"],
         product="1828",
         candidate="cand_old",
-        candidate_bundle=path,
         issue=384,
     )
     assert result["supersede"] == [] and set(result["skipped"].values()) == {"not_live"}
@@ -194,53 +193,3 @@ def test_a_read_back_that_does_not_match_stops_and_the_rerun_reads_again(
     assert first["stopped"] == {"product": "1828", "code": "RELEASE_MISMATCH"}
     assert record(ledger)["stage"] == "activated"
     assert publish(ledger, live=True)["products"]["1828"]["status"] == "published"
-
-
-def _published_with_leftover(case: dict[str, Any]) -> Path:
-    prepared(case)
-    answer(case, {key: ("approve", "通过") for key in case["keys"]})
-    ingest(case["run_root"])
-    publish(case, live=True)
-    return leftover(case, case["claims"])
-
-
-def _close(case: dict[str, Any], path: Path) -> None:
-    close_points(
-        case["run_root"],
-        client=case["client"],
-        product="1828",
-        candidate="cand_old",
-        candidate_bundle=path,
-        issue=384,
-        live=True,
-    )
-
-
-def test_a_bundle_file_whose_slugs_group_differently_is_refused(
-    world: dict[str, Any],  # noqa: F811
-) -> None:
-    path = _published_with_leftover(world)
-    first = world["keys"][0]
-    live = next(m for m in world["server"].active["members"] if m["logical_slug"] == first)
-    on_platform = json.loads(path.read_text(encoding="utf-8"))
-    on_platform["members"] = [
-        live if m["logical_slug"] == first else m for m in on_platform["members"]
-    ]
-    world["server"].leftovers["cand_old"] = on_platform  # same sizes and base, one digest differs
-    with pytest.raises(JudgeBatchError) as refused:
-        _close(world, path)
-    assert refused.value.code == "CANDIDATE_BUNDLE_MISMATCH"
-    assert world["server"].rejections == []
-
-
-def test_a_bundle_file_with_other_removals_is_refused(
-    world: dict[str, Any],  # noqa: F811
-) -> None:
-    path = _published_with_leftover(world)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    data["removals"] = ["1828/gone"]  # not in Head, so only the sizes can tell
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    with pytest.raises(JudgeBatchError) as refused:
-        _close(world, path)
-    assert refused.value.code == "CANDIDATE_BUNDLE_MISMATCH"
-    assert world["server"].rejections == []

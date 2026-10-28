@@ -16,7 +16,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Re-exported: callers use the review and confirmation models through the client.
 from insurance_harness.bundle.candidate_reviews import CandidateDetail as CandidateDetail
-from insurance_harness.bundle.candidate_reviews import CandidatePreview as CandidatePreview
 from insurance_harness.bundle.candidate_reviews import PointResult, ReviewQueue
 from insurance_harness.bundle.candidate_reviews import ReviewItem as ReviewItem
 from insurance_harness.bundle.confirmation_items import ConfirmationAnswer as ConfirmationAnswer
@@ -322,13 +321,6 @@ class PlatformClient:
         path = ["candidates", candidate_id, "points", "decisions"]
         raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
         return _parse(PointResult, self._send("POST", space_id, path, raw)).status
-
-    def preview(self, space_id: str, candidate_id: str) -> CandidatePreview:
-        data = self._send("GET", space_id, ["candidates", candidate_id, "preview"], None)
-        preview = _parse(CandidatePreview, data)
-        if preview.candidate_id != candidate_id:
-            raise PlatformError("INVALID_RESPONSE")
-        return preview
 
     def review_detail(self, space_id: str, candidate_id: str) -> CandidateDetail:
         """One candidate's members, removals and review points, as its review page shows them."""

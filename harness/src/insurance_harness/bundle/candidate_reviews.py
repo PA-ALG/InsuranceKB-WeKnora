@@ -1,9 +1,9 @@
 """Responses of the platform's candidate review routes for a service key (RV6d, RV6e, RV7).
 
-The queue lists pending candidates with their sizes; the preview groups a candidate's slugs
-against the current Head. The detail is what the review page shows for one candidate: its bundle
-members with their payloads, its removals and its review points. A machine caller checks this
-content before it closes review points, so the parse is strict and slugs must be unique.
+The queue lists pending candidates with their sizes. The detail is what the review page shows for
+one candidate: its bundle members with their payloads, its removals and its review points. A
+machine caller checks this content before it closes review points, so the parse is strict and
+slugs must be unique.
 """
 
 from typing import Any, Self
@@ -36,23 +36,6 @@ class PointResult(_Response):
     """The candidate's status after a machine point decision."""
 
     status: str
-
-
-class PreviewDelta(_Response):
-    """Slugs of the resulting release, sorted; untouched Head members count as unchanged."""
-
-    added: list[str]
-    changed: list[str]
-    removed: list[str]
-    unchanged: list[str]
-
-
-class CandidatePreview(_Response):
-    candidate_id: str = Field(min_length=1)
-    base_release_id: str
-    head_release_id: str
-    needs_rebase: bool
-    delta: PreviewDelta
 
 
 class BundleMember(_Response):
@@ -88,6 +71,7 @@ class CandidateDetail(_Response):
     base_release_id: str = ""
     head_release_id: str | None = None
     blocker: str = ""
+    subjects: list[str] = Field(default_factory=list)
     point_count: int = Field(ge=0)
     pending_points: int = Field(ge=0)
     bundle_members: list[BundleMember]

@@ -162,6 +162,11 @@ def _frozen(run_root: Path, record: Attempt) -> CandidateBundle:
         raise JudgeBatchError("RECORD_INVALID") from None
 
 
+def published_members(run_root: Path, record: Attempt) -> dict[str, str]:
+    """Slug -> member digest of the candidate this attempt froze, read from its checked file."""
+    return {m.logical_slug: m.member_digest for m in _frozen(run_root, record).members}
+
+
 def _begin(run_root: Path, record: Attempt, step: str) -> None:
     record.pending = step
     _save(run_root, record)

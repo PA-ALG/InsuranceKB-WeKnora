@@ -1,14 +1,15 @@
 """Close a human-queue candidate's leftovers through the machine route (RV7 Spec §2.4, RV6d).
 
 The judge saw this batch's content, not the leftover's, so a verdict carries over only to a point
-whose proposed content is exactly what the judge saw (review R3). A service key cannot read a
-pending candidate's members, so the operator supplies the bundle as submitted; before anything is
-closed it must agree with the platform: the candidate is pending for this product, its sizes and
-base match, and its slugs group against the current Head exactly as the platform's preview does.
-Judge-rejected points are rejected; approved points are rejected as superseded only when this
-batch's completed attempt published them and Active still holds the judged content. One point per
-request, so a point someone already decided is reported as such; a run can resume. A dry run reads
-but sends nothing.
+whose proposed content is exactly what the judge saw (review R3). What the candidate proposes is
+read from the platform (RV6e `review_detail`), never from a file the operator supplies: a file of
+the same shape could stand for content the judge never saw (review round 2, R3). Before anything
+is closed, the candidate must be pending for this product and every claim it proposes must parse;
+a failed read sends nothing. Judge-rejected points are rejected; approved points are rejected as
+superseded only when this batch's completed attempt published them and Active still holds the
+very member it published. A point whose content differs, a judged point the candidate lacks and a
+pending point the batch never judged all stay open for people. One point per request, so a point
+someone already decided is reported as such; a run can resume. A dry run reads but sends nothing.
 """
 
 from __future__ import annotations
@@ -18,13 +19,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from insurance_harness.bundle.client import PlatformClient, PlatformError, Release
-from insurance_harness.contracts.bundle import CandidateBundle
+from insurance_harness.bundle.client import CandidateDetail, PlatformClient, PlatformError
 from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.ingest.judge_batch import records
 from insurance_harness.ingest.judge_batch.manifest import check_run_root, write_json
 from insurance_harness.ingest.judge_batch.points import JudgeBatchError, content_of
-from insurance_harness.ingest.judge_batch.publishing import live_contents
 from insurance_harness.ingest.judge_batch.verdicts import (
     judged_points,
     load_plan,
@@ -33,53 +32,34 @@ from insurance_harness.ingest.judge_batch.verdicts import (
 )
 
 
-def _submitted(path: Path) -> CandidateBundle:
+def _detail(client: PlatformClient, space_id: str, candidate: str) -> CandidateDetail:
     try:
-        return CandidateBundle.model_validate_json(path.read_bytes())
-    except (OSError, ValueError, ValidationError):
-        raise JudgeBatchError("CANDIDATE_BUNDLE_MISMATCH") from None
+        return client.review_detail(space_id, candidate)
+    except PlatformError as error:
+        if error.code == "CANDIDATE_NOT_FOUND":
+            raise JudgeBatchError("CANDIDATE_NOT_PENDING") from None
+        raise JudgeBatchError(error.code) from None
 
 
-def _delta(bundle: CandidateBundle, active: Release | None) -> dict[str, list[str]]:
-    """The platform's preview grouping (release.compareMembers) of this bundle against Head."""
-    head = {m.logical_slug: m.member_digest for m in active.members} if active else {}
-    delta: dict[str, list[str]] = {"added": [], "changed": [], "removed": [], "unchanged": []}
-    for member in bundle.members:
-        if member.logical_slug not in head:
-            delta["added"].append(member.logical_slug)
-        elif head[member.logical_slug] != member.member_digest:
-            delta["changed"].append(member.logical_slug)
-        else:
-            delta["unchanged"].append(member.logical_slug)
-    delta["removed"] = [slug for slug in bundle.removals if slug in head]
-    touched = {m.logical_slug for m in bundle.members} | set(bundle.removals)
-    delta["unchanged"] += [slug for slug in head if slug not in touched]
-    return {group: sorted(slugs) for group, slugs in delta.items()}
-
-
-def _proposed(
-    client: PlatformClient, space_id: str, product: str, candidate: str, bundle: CandidateBundle
-) -> tuple[dict[str, str], Release | None]:
-    """Slug -> content the target candidate proposes, once the file is shown to be its bundle."""
-    queued = [i for i in client.review_queue(space_id, "pending") if i.candidate_id == candidate]
-    if not queued or product not in queued[0].subjects:
+def _proposed(detail: CandidateDetail, product: str) -> tuple[dict[str, str], list[str]]:
+    """Slug -> content of each claim the pending candidate proposes, and its pending points."""
+    if detail.status != "pending" or product not in detail.subjects:
         raise JudgeBatchError("CANDIDATE_NOT_PENDING")
-    item, base = queued[0], bundle.base_release_id or ""
-    preview = client.preview(space_id, candidate)
-    active = client.active(space_id)
-    if (
-        (item.members, item.removals, item.base_release_id)
-        != (len(bundle.members), len(bundle.removals), base)
-        or preview.base_release_id != base
-        or preview.head_release_id != (active.id if active else "")
-        or preview.delta.model_dump() != _delta(bundle, active)
-    ):
-        raise JudgeBatchError("CANDIDATE_BUNDLE_MISMATCH")
-    try:
-        claims = [Claim.model_validate(m.payload) for m in bundle.members if m.kind == "claim"]
-    except ValidationError:
-        raise JudgeBatchError("CANDIDATE_BUNDLE_MISMATCH") from None
-    return {claim.logical_key: content_of(claim) for claim in claims}, active
+    proposed: dict[str, str] = {}
+    for member in detail.bundle_members:
+        if member.kind != "claim":
+            continue
+        try:
+            claim = Claim.model_validate(member.payload)
+        except ValidationError:
+            raise JudgeBatchError("CANDIDATE_CONTENT_INVALID") from None
+        if claim.logical_key != member.logical_slug:
+            raise JudgeBatchError("CANDIDATE_CONTENT_INVALID")
+        proposed[member.logical_slug] = content_of(claim)
+    open_points = [point for point in detail.points if point.status == "pending"]
+    if any(point.kind == "claim" and point.slug not in proposed for point in open_points):
+        raise JudgeBatchError("CANDIDATE_CONTENT_INVALID")  # a claim point with no claim to read
+    return proposed, sorted(point.slug for point in open_points)
 
 
 def close_points(
@@ -88,7 +68,6 @@ def close_points(
     client: PlatformClient,
     product: str,
     candidate: str,
-    candidate_bundle: Path,
     issue: int,
     live: bool = False,
 ) -> dict[str, Any]:
@@ -96,10 +75,15 @@ def close_points(
     summary, space_id = load_summary(run_root), load_plan(run_root)["space_id"]
     points = judged_points(run_root, product)
     verdicts = {row["slug"]: row["verdict"] for row in load_verdicts(run_root, product)}
-    proposed, active = _proposed(client, space_id, product, candidate, _submitted(candidate_bundle))
+    proposed, pending = _proposed(_detail(client, space_id, candidate), product)
     attempt = records.current(run_root, product)
     published = attempt if attempt is not None and attempt.status == "published" else None
-    now = live_contents(active, sorted(verdicts))
+    ours = {} if published is None else records.published_members(run_root, published)
+    try:
+        active = client.active(space_id)
+    except PlatformError as error:
+        raise JudgeBatchError(error.code) from None
+    live_now = {m.logical_slug: m.member_digest for m in active.members} if active else {}
     supersede, reject, skipped = [], [], {}
     for slug, verdict in sorted(verdicts.items()):
         judged = points[slug]["content"] if slug in points else None
@@ -109,7 +93,12 @@ def close_points(
             skipped[slug] = "content_differs"
         elif verdict == "reject":
             reject.append(slug)
-        elif published is not None and published.contents.get(slug) == judged == now[slug]:
+        elif (
+            published is not None
+            and published.contents.get(slug) == judged
+            and slug in ours
+            and live_now.get(slug) == ours[slug]
+        ):
             supersede.append(slug)
         else:
             skipped[slug] = "not_live"
@@ -119,6 +108,7 @@ def close_points(
         "supersede": supersede,
         "reject": reject,
         "skipped": skipped,
+        "unreviewed": [slug for slug in pending if slug not in verdicts],
         "closed": {},
         "live": live,
     }
