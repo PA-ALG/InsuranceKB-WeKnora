@@ -18,9 +18,11 @@ from typing import Any
 import httpx
 import pytest
 
-from insurance_harness.bundle.client import PlatformClient
+from insurance_harness.bundle.assemble import assemble
+from insurance_harness.bundle.client import Head, PlatformClient
 from insurance_harness.compilers.schema_fields.claims import claims_from
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
+from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.eval.judge_files import stored_requests
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.ingest.judge_batch import (
@@ -41,15 +43,24 @@ PROTOCOL = "2026-10-27.1"
 
 
 class JudgePlatform(DeltaPlatform):
-    """Activation makes the submitted claims Active, so a rerun sees them as published."""
+    """Activation makes the submitted claims Active, so a rerun sees them as published. Leftover
+    human-queue candidates are listed in the queue and previewed against the current Active."""
 
     def __init__(self, active_release: dict[str, Any]) -> None:
         super().__init__(active_release)
         self.rejections: list[dict[str, Any]] = []
         self.decided: set[str] = set()
+        self.leftovers: dict[str, dict[str, Any]] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path.removeprefix("/api/v1/enterprise/spaces/space-1/")
+        if request.method == "GET" and path == "candidates":
+            self.seen.append(("GET", path, None))
+            return httpx.Response(200, json={"success": True, "data": {"items": self.queue()}})
+        if request.method == "GET" and path.endswith("/preview"):
+            self.seen.append(("GET", path, None))
+            data = self.preview(path.split("/")[1])
+            return httpx.Response(200, json={"success": True, "data": data})
         if path.endswith("/points/decisions"):
             body = json.loads(request.content)
             self.rejections.append(body)
@@ -65,6 +76,42 @@ class JudgePlatform(DeltaPlatform):
             kept = [m for m in self.active["members"] if m["logical_slug"] not in submitted]
             self.active = {"id": "rel_1", "epoch": 4, "members": kept + list(submitted.values())}
         return response
+
+    def queue(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "candidate_id": candidate,
+                "subjects": ["1828"],
+                "point_count": len(bundle["members"]),
+                "pending_points": len(bundle["members"]),
+                "status": "pending",
+                "members": len(bundle["members"]),
+                "removals": len(bundle["removals"]),
+                "base_release_id": bundle["base_release_id"],
+            }
+            for candidate, bundle in self.leftovers.items()
+        ]
+
+    def preview(self, candidate: str) -> dict[str, Any]:
+        bundle = self.leftovers[candidate]
+        head = {m["logical_slug"]: m["member_digest"] for m in self.active["members"]}
+        delta: dict[str, list[str]] = {"added": [], "changed": [], "removed": [], "unchanged": []}
+        for member in bundle["members"]:
+            slug, digest = member["logical_slug"], member["member_digest"]
+            if slug not in head:
+                delta["added"].append(slug)
+            else:
+                delta["unchanged" if head[slug] == digest else "changed"].append(slug)
+        delta["removed"] = [slug for slug in bundle["removals"] if slug in head]
+        touched = {m["logical_slug"] for m in bundle["members"]} | set(bundle["removals"])
+        delta["unchanged"] += [slug for slug in head if slug not in touched]  # as the platform
+        return {
+            "candidate_id": candidate,
+            "base_release_id": bundle["base_release_id"],
+            "head_release_id": self.active["id"],
+            "needs_rebase": bundle["base_release_id"] != self.active["id"],
+            "delta": {group: sorted(slugs) for group, slugs in delta.items()},
+        }
 
 
 @pytest.fixture
@@ -107,7 +154,18 @@ def world(tmp_path: Path, request: pytest.FixtureRequest) -> dict[str, Any]:
         "repo": tmp_path / "repo",
         "spot": spot,
         "keys": [claim.logical_key for claim in old],
+        "claims": old,
     }
+
+
+def leftover(world: dict[str, Any], claims: list[Claim], candidate: str = "cand_old") -> Path:
+    """A human-queue candidate of the product, submitted on the original Active, and its file."""
+    bundle = assemble(claims, compiler_identity="test", base=Head(release_id="rel_base", epoch=3))
+    data = bundle.model_dump(mode="json")
+    world["server"].leftovers[candidate] = data
+    path: Path = world["compile_root"] / f"{candidate}.bundle.json"
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return path
 
 
 def prepared(world: dict[str, Any]) -> dict[str, Any]:
@@ -340,8 +398,14 @@ def test_close_rejects_judge_rejected_and_superseded_points_one_by_one(
     answer(world, {first: ("approve", "通过"), second: ("reject", "值有误")})
     ingest(world["run_root"])
     publish(world, live=True)
+    submitted_file = leftover(world, world["claims"])
     dry = close_points(
-        world["run_root"], client=world["client"], product="1828", candidate="cand_old", issue=384
+        world["run_root"],
+        client=world["client"],
+        product="1828",
+        candidate="cand_old",
+        candidate_bundle=submitted_file,
+        issue=384,
     )
     assert world["server"].rejections == []
     assert dry["reject"] == [second] and dry["supersede"] == [first]
@@ -351,6 +415,7 @@ def test_close_rejects_judge_rejected_and_superseded_points_one_by_one(
         client=world["client"],
         product="1828",
         candidate="cand_old",
+        candidate_bundle=submitted_file,
         issue=384,
         live=True,
     )
