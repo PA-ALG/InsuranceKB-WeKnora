@@ -86,8 +86,8 @@ def _read_output(path: Path) -> tuple[bytes, CompileOutput] | None:
 
 
 def _current(output: CompileOutput, entry: ProductEntry) -> bool:
-    materials = sorted(f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}" for m in entry.materials)
-    return reusable(output, materials)
+    identities = {f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}": m.role for m in entry.materials}
+    return reusable(output, sorted(identities), identities)
 
 
 def _receipts(path: Path, invalid_code: str) -> dict[str, str]:
