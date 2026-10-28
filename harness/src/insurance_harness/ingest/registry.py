@@ -208,7 +208,10 @@ class ProductRegistry(_Strict):
             products={
                 product_id: [
                     SourceEntry(
-                        knowledge_id=m.knowledge_id, parse_attempt=m.parse_attempt, role=m.role
+                        knowledge_id=m.knowledge_id,
+                        parse_attempt=m.parse_attempt,
+                        role=m.role,
+                        sha256=m.sha256.lower(),
                     )
                     for m in sorted(product.materials, key=lambda m: m.knowledge_id)
                 ]

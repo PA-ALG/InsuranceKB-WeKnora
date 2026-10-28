@@ -1,7 +1,7 @@
 """Versioned field adoption of material headers (blueprint §7.3, S4j Spec §3.2)."""
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from importlib.resources import files
 from typing import Annotated
@@ -86,6 +86,8 @@ def load_trust_policy() -> TrustPolicy:
 class TrustedPages[P]:
     evidence: list[P]
     table_headers: dict[str, list[P]]
+    # Each read document's effective role (recorded or inferred), for output identity (S5b-6).
+    roles: dict[str, str] = field(default_factory=dict)
 
 
 def trusted_pages[P: PageTextLike](
@@ -103,4 +105,5 @@ def trusted_pages[P: PageTextLike](
         for rule in policy.header_rules
         if rule.role in roles.values()
     }
-    return TrustedPages(evidence, headers)
+    resolved = {document: role for document, role in roles.items() if role is not None}
+    return TrustedPages(evidence, headers, resolved)

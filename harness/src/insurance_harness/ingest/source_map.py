@@ -45,6 +45,8 @@ class SourceEntry(BaseModel):
     parse_attempt: int = Field(ge=1)
     # The registry-recorded material role (S5b-6); absent in hand-written maps, then inferred.
     role: Annotated[str, StringConstraints(pattern=r"^[a-z][a-z_]*$")] | None = None
+    # The registered file the role was recorded for; the read must return exactly this file.
+    sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
 
 
 class SourceMap(BaseModel):
@@ -102,6 +104,10 @@ def _read_sources(
         document = read[0].document
         if document in sources:
             raise SourceMapError("SOURCE_DOCUMENTS_AMBIGUOUS")
+        if entry.sha256 is not None and any(
+            page.document_sha256.lower() != entry.sha256 for page in read
+        ):
+            raise SourceMapError("MATERIAL_IDENTITY_MISMATCH")
         sources[document] = SourceRevision(entry.knowledge_id, entry.parse_attempt)
         if entry.role is not None:
             recorded[document] = entry.role
