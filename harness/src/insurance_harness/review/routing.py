@@ -5,8 +5,9 @@ pack is admitted and every claim with content (present or absent_explicitly) has
 score at or above its field's threshold; otherwise the whole product waits for people, with every
 applicable reason code. Unknown claims publish no fact, so they are neither scored nor blocking
 (RV2a Spec §3.4, user ruling 2026-10-17): a wrong unknown only costs recall, which sampling after
-release covers. Splitting a product into machine and human parts needs the platform to rebase
-activations (S5) and is not done here. Reason codes never carry field keys or other input text.
+release covers. The exception is a compiler upgrade to unknown, which removes a published fact:
+it always goes to people (S12c-1b). Splitting a product into machine and human parts needs the
+platform to rebase activations (S5) and is not done here. Reason codes never carry field keys or other input text.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
+from insurance_harness.changes.types import Verdict
 from insurance_harness.contracts.enums import ClaimState, ReviewMode
 from insurance_harness.contracts.knowledge import Claim, Review
 
@@ -38,9 +40,14 @@ class Route:
 HUMAN_DECISION = Route(mode=ReviewMode.HUMAN, policy_ref=None, reasons=())
 
 
+def _upgrade(claim: Claim) -> bool:
+    return claim.maintenance.reason == Verdict.UPGRADE.value
+
+
 def _reviewed(claim: Claim) -> bool:
-    """Only claims with content are scored and gate machine review."""
-    return claim.state != ClaimState.UNKNOWN
+    """Claims with content are scored and gate machine review; so does a compiler upgrade, which
+    may replace a published fact (S12c-1b). Other unknowns publish no fact (RV2a)."""
+    return claim.state != ClaimState.UNKNOWN or _upgrade(claim)
 
 
 def route(
@@ -53,6 +60,10 @@ def route(
 ) -> Route:
     reviewed = [claim for claim in claims if _reviewed(claim)]
     reasons: set[str] = set()
+    # Replacing a published fact with unknown removes it, and the reviewer only judges
+    # present/absent values against quotes: people decide, whatever the scores (S12c-1b).
+    if any(claim.state == ClaimState.UNKNOWN and _upgrade(claim) for claim in claims):
+        reasons.add("UPGRADE_TO_UNKNOWN")
     if not reviewed:
         reasons.add("NO_CLAIMS")
     if not admitted:
@@ -83,7 +94,7 @@ def labelled(claims: Sequence[Claim], route: Route, scores: Scores | None) -> li
             claim.logical_key not in by_key for claim in claims if _reviewed(claim)
         ):
             raise ValueError("machine review needs a score for every claim with content")
-        # The same review released the unknown claims too; they carry no score.
+        # The same review released the ordinary unknown claims too; they carry no score.
         return [
             claim.model_copy(
                 update={
