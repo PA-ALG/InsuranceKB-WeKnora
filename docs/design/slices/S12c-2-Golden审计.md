@@ -50,3 +50,34 @@
 ## 5. 评分对比
 
 用 S12a 的评分规则，分别在 A0r 输出和当前线上编译输出（s5b4-first）上计算审计前后的段落召回与精度，结果写在 PR 中。
+
+## 6. Owner 裁定（Claude 2026-10-27，审核 #392 第 1 轮）
+
+以下三条作为规则写入本切片，用已保存的评委答卷加上这些规则重新写数据，不新开评委会话。
+
+1. **投保示例不是规则证据。** 投保举例、示例计算、保单周年日举例这类具体示例段落，不作为字段规则的证据。本次审计中由示例得出的新增全部撤回：
+   - 1816 `income_loss_care_benefit_payment_rules` 与 `income_loss_care_benefit_payment_period` 的 D1P6S7（"投保举例"中的具体金额）；
+   - 1828 `disease_benefit_rules` 的 D2P3S15（保单周年日举例）。
+
+   检查方法：逐条查看每个新增段落本身及同页前 6 段内是否有"举例/示例/例如/案例/假设/演示/比如/为例"，再逐条人工判断。说明书利益演示表下写明通用给付规则的注释（1814 D1P11S3/S4、1828 D1P10S6）不属于示例，保留。
+2. **指代规则。** 某个保留或新增的段落指代别处写明的条件（"上述……/前款/前述/前项/其他情形/以上……情形"）时，定义这些条件的段落也属于本字段，按以下方法恢复：
+   - 从该段向前按阅读顺序找出本次被删的同字段段落，连续收回；
+   - 只跨过上一页末尾的脚注块，最多跨一页；
+   - 遇到本字段仍保留的段落即停止。
+
+   按此规则在全部字段中扫描，恢复了以下 50 个段落，都是"发生上述第 1 项/其他情形……退还现金价值"所指的免责条件清单，以及 1816 失能恢复条款里"满 14 年"这一条件：
+
+   | 产品 | 字段 | 恢复段数 |
+   |---|---|---|
+   | 1816 | `disability_recovery_and_benefit_termination_rules` | 1 |
+   | 1824 | `cash_value_rules` | 10 |
+   | 1826 | `cash_value_rules` | 18 |
+   | 1828 | `cash_value_rules` | 21 |
+3. **字段卡 excludes 优先于 includes 的举例。** 1816 的 120 种重大疾病只用于保费豁免，字段卡 `covered_critical_specified_diseases` 的 excludes 写明"豁免条款单独约定的触发疾病"归入 `premium_waiver_critical_illnesses`。因此：
+   - 撤回这 4 个新增：`covered_critical_specified_diseases` 的 D1P1S4、D1P5S2、D2P22S21、D2P22S22；
+   - 该字段原有证据也全是这份豁免名单，按 excludes 本应全部删除，但删除后字段会没有证据，而 state 与 value 本次不改。因此该字段整体保留原证据，列入待裁决，等语义复核改 state 与 value（本产品没有豁免以外的重疾名单）；
+   - 同一产品中 `premium_waiver_critical_illnesses`、`premium_waiver_rules` 对这份名单的新增，以及 `covered_specified_diseases` 对 50 种特定疾病说明段的新增，都符合各自字段卡，保留。
+
+manifest 中 `judge-golden-audit` 修订另记 `owner_rulings`（上述三条规则）和每款产品的 `owner_overrides`（撤回的新增、恢复的删除、待裁决理由）；`dropped` 与 `added` 记录的是最终写入的结果。
+
+**评分的含义**：§5 的前后对比是同一批已保存的编译输出在两个 Golden 版本下的得分。它只说明 Golden 变化对评分的影响，不说明模型质量变化，也不能作为 pack 准入依据；A0r 同时用来产生补充候选，与 A0r 的对比偏乐观。
