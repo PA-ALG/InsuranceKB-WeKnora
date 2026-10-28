@@ -1,8 +1,11 @@
 """Prepare a judge run: change points, material text and hash-checked requests (RV7 Spec §2.1).
 
-Everything the judge reads is written under the run root, outside any Git repository. Products go
-whole into sessions in id order, so the same inputs always give the same sessions and requests.
-Starting the judge sessions is the operator's step: this module only writes `run.sh`.
+Everything is read and built in memory first; only then does prepare write, into a fresh run
+root outside any Git repository, without overwriting a file. Products go whole into sessions in
+id order, so the same inputs always give the same sessions and requests; a product larger than a
+session is refused rather than split. Material files are named by their identity (knowledge id
+and parse attempt), never by their original names. Starting the judge sessions is the operator's
+step: this module only writes `run.sh`.
 """
 
 from __future__ import annotations
@@ -20,12 +23,18 @@ from insurance_harness.compilers.schema_fields.cards import card_payload, cards_
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.publish import REPO
 from insurance_harness.eval.judge import JudgeRequest
-from insurance_harness.eval.judge_files import check_run_directory, write_requests
 from insurance_harness.eval.pdf_text import PageText
+from insurance_harness.ingest.judge_batch.manifest import (
+    MANIFEST,
+    check_fresh,
+    preflight,
+    write_json,
+    write_session,
+)
 from insurance_harness.ingest.judge_batch.points import (
     JudgeBatchError,
     ProductChanges,
-    material_pages,
+    Rebuilt,
     product_changes,
     rebuild,
 )
@@ -39,21 +48,6 @@ def prompt() -> dict[str, Any]:
     return data
 
 
-def write_json(path: Path, data: object) -> None:
-    """Write a whole file at once, so a reader never sees half of it."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    temporary.replace(path)
-
-
-def check_run_root(run_root: Path) -> None:
-    try:
-        check_run_directory(run_root)
-    except ValueError:
-        raise JudgeBatchError("RUN_ROOT_IN_GIT") from None
-
-
 def _source_text(pages: list[PageText]) -> str:
     return "\n".join(f"[page {page.page}]\n{page.text}" for page in pages)
 
@@ -65,6 +59,8 @@ def _sessions(changes: list[ProductChanges], per_session: int) -> dict[str, list
     for product in sorted(changes, key=lambda item: item.product):
         if not product.points:
             continue
+        if len(product.points) > per_session:
+            raise JudgeBatchError("PRODUCT_TOO_LARGE")
         if current and size + len(product.points) > per_session:
             sessions[f"s{len(sessions) + 1:02d}"] = current
             current, size = [], 0
@@ -103,6 +99,7 @@ def _requests(
                 "new": point.new.model_dump(),
             }
         )
+    materials = [{"document": m.document, "file": m.file} for m in product.materials]
     return [
         JudgeRequest(
             system,
@@ -111,6 +108,7 @@ def _requests(
                     "product": product.product,
                     "name": product.name,
                     "pack": product.pack,
+                    "materials": materials,
                     "points": shown[start : start + per_request],
                 },
                 ensure_ascii=False,
@@ -125,6 +123,7 @@ def _run_script(run_root: Path, sessions: list[str], model: str, operator_prompt
     lines = [
         "#!/bin/zsh",
         "# Operator step (RV7 Spec §1): one independent judge session per directory, in parallel.",
+        "# Each session can write only its own directory; the run root stays the trusted record.",
         f"run={shlex.quote(str(run_root))}",
         'mkdir -p "$run/logs"',
         f"prompt={shlex.quote(operator_prompt)}",
@@ -141,32 +140,15 @@ def _run_script(run_root: Path, sessions: list[str], model: str, operator_prompt
     return "\n".join(lines) + "\n"
 
 
-def _write_session(
-    session_dir: Path,
-    members: list[ProductChanges],
-    texts: dict[str, dict[str, list[PageText]]],
-    rules: dict[str, Any],
-    per_request: int,
-    repo: Path,
-) -> dict[str, list[str]]:
-    system = "\n".join(rules["system"])
-    requests: list[JudgeRequest] = []
+def _session_texts(
+    members: list[ProductChanges], rebuilt: dict[str, Rebuilt], rules: dict[str, Any]
+) -> dict[str, str]:
+    texts = {"AGENTS.md": "\n".join(rules["rules"]) + "\n"}
     for changes in members:
-        requests.extend(_requests(changes, per_request, system, repo))
-        for rows in texts[changes.product].values():
-            if rows:
-                target = (
-                    session_dir
-                    / "sources"
-                    / changes.product
-                    / (Path(rows[0].document).stem + ".txt")
-                )
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(_source_text(rows), encoding="utf-8")
-    write_requests(requests, session_dir)
-    (session_dir / "AGENTS.md").write_text("\n".join(rules["rules"]) + "\n", encoding="utf-8")
-    slugs = sorted(point.slug for changes in members for point in changes.points)
-    return {"products": [changes.product for changes in members], "slugs": slugs}
+        pages = rebuilt[changes.product].pages
+        for material in changes.materials:
+            texts[material.file] = _source_text(pages[(material.knowledge_id, material.attempt)])
+    return texts
 
 
 def prepare(
@@ -184,10 +166,8 @@ def prepare(
     points_per_request: int = 12,
     repo: Path = REPO,
 ) -> dict[str, Any]:
-    """Read-only on the platform; refuses a run root that was already prepared."""
-    check_run_root(run_root)
-    if (run_root / "plan.json").exists():
-        raise JudgeBatchError("RUN_EXISTS")
+    """Read-only on the platform; refuses a run root that holds anything."""
+    check_fresh(run_root)
     if (
         not (policy_ref.strip() and reviewer.strip() and model.strip() and products)
         or min(points_per_session, points_per_request) < 1
@@ -198,26 +178,47 @@ def prepare(
     # The registry rejects unknown products before any remote read.
     space_id = registry_inputs(registry, first)[0].space_id
     active = client.active(space_id)
-    collected: list[ProductChanges] = []
-    texts: dict[str, dict[str, list[PageText]]] = {}
-    for product_id in first:
-        rebuilt = rebuild(
+    rebuilt = {
+        product_id: rebuild(
             product_id, registry=registry, compile_root=compile_root, reader=reader, active=active
         )
-        material = material_pages(reader, rebuilt.space_id, rebuilt.entries)
-        collected.append(product_changes(rebuilt, active, material))
-        texts[product_id] = material
-    plan_sessions: dict[str, dict[str, list[str]]] = {}
+        for product_id in first
+    }
+    collected = [product_changes(rebuilt[product_id], active) for product_id in first]
+    system = "\n".join(rules["system"])
+    planned: dict[str, tuple[list[JudgeRequest], dict[str, str], list[ProductChanges]]] = {}
     for session, members in _sessions(collected, points_per_session).items():
-        plan_sessions[session] = _write_session(
-            run_root / "sessions" / session, members, texts, rules, points_per_request, repo
-        )
-        write_json(
-            run_root / "sessions" / session / "run.json",
-            {"session": session, **plan_sessions[session]},
-        )
+        requests = [
+            request
+            for changes in members
+            for request in _requests(changes, points_per_request, system, repo)
+        ]
+        planned[session] = (requests, _session_texts(members, rebuilt, rules), members)
+    targets = [
+        run_root / "sessions" / session / name
+        for session, (_, texts, _) in planned.items()
+        for name in texts
+    ]
+    preflight(run_root, targets)
+    listed: dict[str, Any] = {}
+    plan_sessions: dict[str, dict[str, list[str]]] = {}
+    for session, (requests, texts, members) in planned.items():
+        plan_sessions[session] = {
+            "products": [changes.product for changes in members],
+            "slugs": sorted(point.slug for changes in members for point in changes.points),
+        }
+        texts["run.json"] = json.dumps({"session": session, **plan_sessions[session]}) + "\n"
+        written = write_session(run_root / "sessions" / session, requests, texts)
+        listed[session] = {"files": written}
     for changes in collected:
         write_json(run_root / "data" / f"changes-{changes.product}.json", changes.model_dump())
+    write_json(
+        run_root / MANIFEST,
+        {
+            "sessions": listed,
+            "materials": {c.product: [m.model_dump() for m in c.materials] for c in collected},
+        },
+    )
     plan = {
         "products": first,
         "space_id": space_id,
@@ -227,6 +228,7 @@ def prepare(
         "policy_ref": policy_ref,
         "reviewer": reviewer,
         "model": model,
+        "basis": {product_id: rebuilt[product_id].basis for product_id in first},
         "sessions": plan_sessions,
     }
     script = run_root / "run.sh"

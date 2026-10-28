@@ -14,7 +14,9 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-# Re-exported: callers use the confirmation models through the client.
+# Re-exported: callers use the review and confirmation models through the client.
+from insurance_harness.bundle.candidate_reviews import CandidatePreview as CandidatePreview
+from insurance_harness.bundle.candidate_reviews import ReviewItem as ReviewItem
 from insurance_harness.bundle.confirmation_items import ConfirmationAnswer as ConfirmationAnswer
 from insurance_harness.bundle.confirmation_items import ConfirmationClosure as ConfirmationClosure
 from insurance_harness.bundle.confirmation_items import ConfirmationInput as ConfirmationInput
@@ -107,6 +109,7 @@ class DecisionInput(BaseModel):
 class Candidate(_Response):
     id: str = Field(min_length=1)
     status: str
+    bundle_digest: str = ""
 
 
 class Decision(_Response):
@@ -164,16 +167,6 @@ class Sample(_Response):
 
 class _Samples(_Response):
     samples: list[Sample]
-
-
-class ReviewItem(_Response):
-    """One candidate of a Space's review queue (RV6d), as the service key sees it."""
-
-    candidate_id: str = Field(min_length=1)
-    subjects: list[str]
-    point_count: int = Field(ge=0)
-    pending_points: int = Field(ge=0)
-    status: str
 
 
 class _Queue(_Response):
@@ -336,6 +329,13 @@ class PlatformClient:
         raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
         return _parse(_PointResult, self._send("POST", space_id, path, raw)).status
 
+    def preview(self, space_id: str, candidate_id: str) -> CandidatePreview:
+        data = self._send("GET", space_id, ["candidates", candidate_id, "preview"], None)
+        preview = _parse(CandidatePreview, data)
+        if preview.candidate_id != candidate_id:
+            raise PlatformError("INVALID_RESPONSE")
+        return preview
+
     def release(self, space_id: str, release_id: str) -> Release:
         path = ["releases", release_id] if release_id else ["releases", "active"]
         return _parse(Release, self._send("GET", space_id, path, None))
@@ -487,7 +487,7 @@ def _strict_json(content: bytes) -> object:
         raise PlatformError("INVALID_RESPONSE") from None
 
 
-def _parse[T: _Response](model: type[T], data: object) -> T:
+def _parse[T: BaseModel](model: type[T], data: object) -> T:
     try:
         return model.model_validate(data)
     except ValidationError:

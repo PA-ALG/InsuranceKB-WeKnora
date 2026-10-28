@@ -1,14 +1,16 @@
 """Publish judge-approved changes as machine review, one product at a time (RV7 Spec §2.3).
 
-The change set is recomputed against the current Active with the real rules; every approved point
-must still be a judged change with exactly the content the judge saw. Points already live (a
-previous run) are skipped, so a run can resume. Claims carry the judge's policy and reviewer as
-machine review, never a person's decision. A dry run sends nothing; the first failure stops.
+A product with an attempt on record continues it (records.py); otherwise the change set is
+recomputed against the current Active with the real rules, on exactly the inputs the judge relied
+on (review R4). A point counts as published only when Active holds exactly the judged content
+(review R5); every other approved point must still be a judged change with the content and the
+live value the judge saw. Claims carry the judge's reviewer as machine review and the policy goes
+on the machine decision, never a person's. A dry run sends nothing and records nothing; the first
+failure stops.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -17,11 +19,10 @@ from insurance_harness.bundle.client import (
     PlatformClient,
     PlatformError,
     Release,
-    publish,
 )
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.navigation import load_navigation
-from insurance_harness.catalog.spot_check import load_spot_check_policy
+from insurance_harness.catalog.spot_check import SpotCheckPolicy, load_spot_check_policy
 from insurance_harness.changes.options import registry_inputs
 from insurance_harness.changes.types import Verdict
 from insurance_harness.compilers.schema_fields.claims import require_cards_version
@@ -30,34 +31,40 @@ from insurance_harness.compilers.schema_fields.publish import REPO
 from insurance_harness.compilers.schema_fields.publish_changes import delta_bundle
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.contracts.enums import ReviewMode
+from insurance_harness.ingest.judge_batch import records
+from insurance_harness.ingest.judge_batch.manifest import check_run_root, write_json
 from insurance_harness.ingest.judge_batch.points import (
     JUDGED,
     JudgeBatchError,
     content_of,
+    live_claim,
     rebuild,
 )
-from insurance_harness.ingest.judge_batch.sessions import check_run_root, write_json
-from insurance_harness.ingest.judge_batch.verdicts import load_summary, load_verdicts
+from insurance_harness.ingest.judge_batch.verdicts import (
+    judged_points,
+    load_plan,
+    load_summary,
+    load_verdicts,
+)
 from insurance_harness.ingest.source_map import PageReader
 from insurance_harness.review.routing import Route, Scores
-from insurance_harness.review.spot_check import sample
 
 
-def _judged(run_root: Path, product: str) -> dict[str, str]:
-    """Approved slug -> the content fingerprint the judge saw."""
-    try:
-        changes = json.loads(
-            (run_root / "data" / f"changes-{product}.json").read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
-        raise JudgeBatchError("CHANGES_MISSING") from None
-    shown = {point["slug"]: point["content"] for point in changes["points"]}
+def _approved(run_root: Path, product: str) -> dict[str, dict[str, Any]]:
+    """Approved slug -> the point as the judge saw it."""
+    points = judged_points(run_root, product)
     approved = {
         row["slug"] for row in load_verdicts(run_root, product) if row["verdict"] == "approve"
     }
-    if not approved <= set(shown):
+    if not approved <= set(points):
         raise JudgeBatchError("VERDICTS_MISMATCH")
-    return {slug: shown[slug] for slug in sorted(approved)}
+    return {slug: points[slug] for slug in sorted(approved)}
+
+
+def live_contents(active: Release | None, slugs: list[str]) -> dict[str, str | None]:
+    """Each slug's content in Active, None when Active has no such claim."""
+    found = {slug: live_claim(active, slug) for slug in slugs}
+    return {slug: None if claim is None else content_of(claim) for slug, claim in found.items()}
 
 
 def build(
@@ -70,22 +77,40 @@ def build(
     active: Release | None,
     repo: Path = REPO,
 ) -> tuple[CandidateBundle | None, dict[str, Any]]:
-    judged = _judged(run_root, product)
-    if not judged:
+    approved = _approved(run_root, product)
+    if not approved:
         return None, {"status": "nothing_approved", "claims": 0}
     summary = load_summary(run_root)
+    try:
+        basis = load_plan(run_root)["basis"][product]
+    except (KeyError, TypeError):
+        raise JudgeBatchError("PLAN_MISSING") from None
     rebuilt = rebuild(
-        product, registry=registry, compile_root=compile_root, reader=reader, active=active
+        product,
+        registry=registry,
+        compile_root=compile_root,
+        reader=reader,
+        active=active,
+        basis=basis,
     )
-    verdicts = {item.logical_key: item.verdict for item in rebuilt.changes.items}
+    items = {item.logical_key: item for item in rebuilt.changes.items}
     members = {claim.logical_key: claim for claim in rebuilt.changes.members}
+    live = live_contents(active, list(approved))
     chosen = []
-    for slug, seen in judged.items():
-        verdict = verdicts.get(slug)
-        if verdict == Verdict.UNCHANGED:
-            continue  # already live from a previous run
-        if verdict not in JUDGED or slug not in members or content_of(members[slug]) != seen:
+    for slug, point in approved.items():
+        if live[slug] == point["content"]:
+            continue  # exactly the judged content is already live
+        item = items.get(slug)
+        if (
+            item is None
+            or item.verdict not in JUDGED
+            or slug not in members
+            or content_of(members[slug]) != point["content"]
+        ):
             raise JudgeBatchError("CONTENT_CHANGED")
+        base = live_claim(active, item.base_slug) if item.verdict != Verdict.ADD else None
+        if (None if base is None else content_of(base)) != point.get("live_content"):
+            raise JudgeBatchError("CONTENT_CHANGED")  # the judge compared against another value
         chosen.append(members[slug])
     if not chosen:
         return None, {"status": "already_published", "claims": 0}
@@ -120,17 +145,73 @@ def build(
         raise JudgeBatchError("LABEL_NOT_MACHINE")
     changes: dict[str, int] = {}
     for member in claims:
-        name = verdicts[member.logical_slug].value
+        name = items[member.logical_slug].verdict.value
         changes[name] = changes.get(name, 0) + 1
     info = {
         "status": "ready",
         "claims": len(claims),
         "slugs": sorted(m.logical_slug for m in claims),
+        "contents": {m.logical_slug: approved[m.logical_slug]["content"] for m in claims},
         "changes": changes,
         "others": sorted(m.logical_slug for m in bundle.members if m.kind != "claim"),
         "base_epoch": active.epoch if active else None,
     }
     return bundle, info
+
+
+def _decision(summary: dict[str, Any], issue: int) -> DecisionInput:
+    return DecisionInput(
+        outcome="approve",
+        mode="machine",
+        policy_ref=summary["policy_ref"],
+        reason=f"模型评审（{summary['reviewer']}）批准，运维 Issue #{issue}",
+    )
+
+
+def _product(
+    run_root: Path,
+    product: str,
+    *,
+    space_id: str,
+    registry: Path,
+    compile_root: Path,
+    reader: PageReader,
+    client: PlatformClient,
+    issue: int,
+    live: bool,
+    policy: SpotCheckPolicy | None,
+    repo: Path,
+) -> dict[str, Any]:
+    record = records.current(run_root, product)
+    if record is not None and record.status == "published":
+        now = live_contents(client.active(space_id), record.slugs)
+        if now != record.contents:
+            raise JudgeBatchError("CONTENT_CHANGED")
+        return {"status": "already_published", "claims": len(record.slugs), **record.summary()}
+    if record is not None and record.status == "in_progress":
+        if not live or policy is None:
+            return {"status": "in_progress", "pending": record.pending, **record.summary()}
+        done = records.advance(run_root, record, client=client, space_id=space_id, policy=policy)
+        return {"status": "published", "claims": len(done.slugs), **done.summary()}
+    active = client.active(space_id)
+    bundle, info = build(
+        run_root,
+        product,
+        registry=registry,
+        compile_root=compile_root,
+        reader=reader,
+        active=active,
+        repo=repo,
+    )
+    contents = info.pop("contents", {})
+    if bundle is None or not live or policy is None:
+        return info
+    summary = load_summary(run_root)
+    record = records.start(run_root, product, bundle, contents, _decision(summary, issue))
+    done = records.advance(
+        run_root, record, client=client, space_id=space_id, policy=policy, base=active
+    )
+    return {**info, **done.summary(), "status": "published"}
 
 
 def publish_batch(
@@ -155,18 +236,19 @@ def publish_batch(
     space_id = registry_inputs(registry, selected)[0].space_id
     for product in selected:
         try:
-            active = client.active(space_id)
-            bundle, info = build(
+            info = _product(
                 run_root,
                 product,
+                space_id=space_id,
                 registry=registry,
                 compile_root=compile_root,
                 reader=reader,
-                active=active,
+                client=client,
+                issue=issue,
+                live=live,
+                policy=policy,
                 repo=repo,
             )
-            if bundle is not None and live:
-                info.update(_go_live(client, space_id, bundle, active, summary, issue, policy))
         except (JudgeBatchError, PlatformError) as error:
             result["stopped"] = {"product": product, "code": error.code}
             write_json(out_path, result)
@@ -174,35 +256,3 @@ def publish_batch(
         result["products"][product] = info
         write_json(out_path, result)
     return result
-
-
-def _go_live(
-    client: PlatformClient,
-    space_id: str,
-    bundle: CandidateBundle,
-    active: Release | None,
-    summary: dict[str, Any],
-    issue: int,
-    policy: Any,
-) -> dict[str, Any]:
-    decision = DecisionInput(
-        outcome="approve",
-        mode="machine",
-        policy_ref=summary["policy_ref"],
-        reason=f"模型评审（{summary['reviewer']}）批准，运维 Issue #{issue}",
-    )
-    published = publish(client, space_id, bundle, decision=decision, activate=True)
-    release = published.release
-    if release is None:
-        raise PlatformError("RELEASE_MISMATCH")
-    picks = [(pick.slug, pick.stratum) for pick in sample(release, active, policy)]
-    submitted = 0
-    for start in range(0, len(picks), 500):
-        submitted += len(client.submit_samples(space_id, release.id, picks[start : start + 500]))
-    return {
-        "status": "published",
-        "candidate": published.candidate.id,
-        "release": release.id,
-        "epoch": release.epoch,
-        "samples": submitted,
-    }

@@ -1,9 +1,11 @@
 """Model-judge batches: compile changes → independent judge → machine publication (RV7 Spec).
 
-`prepare` writes hash-checked judge requests (read-only on the platform), `ingest` reads the
-answers back all-or-none, `publish_batch` publishes approved points as machine review (dry run by
-default), and `close_points` closes a human-queue candidate's leftovers through the RV6d route.
-Starting the judge sessions themselves is an operator step (`run.sh`).
+`prepare` writes the judge sessions and a trusted manifest outside them (read-only on the
+platform), `ingest` checks the sessions against it and reads the answers back all-or-none,
+`publish_batch` publishes approved points as machine review through a resumable per-product record
+(dry run by default), and `close_points` closes a human-queue candidate's leftovers through the
+RV6d route once its submitted bundle matches the platform. Starting the judge sessions themselves
+is an operator step (`run.sh`).
 """
 
 from insurance_harness.ingest.judge_batch.closing import close_points

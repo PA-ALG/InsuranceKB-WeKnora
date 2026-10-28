@@ -6,7 +6,7 @@
     python -m insurance_harness.ingest.judge_batch publish --registry R --compile-root C \\
         --run-root J --issue N [--live] [--products …]
     python -m insurance_harness.ingest.judge_batch close --run-root J --product P \\
-        --candidate ID --issue N [--live]
+        --candidate ID --candidate-bundle FILE --issue N [--live]
 
 Platform reads use HARNESS_WEKNORA_BASE_URL / HARNESS_WEKNORA_API_KEY. Failures print a stable code
 only, never paths or input text.
@@ -61,6 +61,7 @@ def _parser() -> argparse.ArgumentParser:
     close.add_argument("--run-root", type=Path, required=True)
     close.add_argument("--product", required=True)
     close.add_argument("--candidate", required=True)
+    close.add_argument("--candidate-bundle", type=Path, required=True)
     close.add_argument("--issue", type=int, required=True)
     close.add_argument("--live", action="store_true")
     return parser
@@ -83,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
                     client=client,
                     product=args.product,
                     candidate=args.candidate,
+                    candidate_bundle=args.candidate_bundle,
                     issue=args.issue,
                     live=args.live,
                 )

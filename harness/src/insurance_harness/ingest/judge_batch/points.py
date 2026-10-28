@@ -2,8 +2,9 @@
 
 Claims are rebuilt exactly as publishing builds them and compared with the Active release by the
 real change rules; only changes that would replace or add published content are judged. Each point
-carries the content fingerprint the judge saw, so publishing can refuse a compile that changed
-after judging.
+carries the content fingerprints of the new and the live value the judge saw, and each product the
+identity of every input the judge relied on (its basis), so publishing can refuse anything that
+changed after judging (review R4, R5).
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -19,6 +21,7 @@ from insurance_harness.changes.decision import decide_changes
 from insurance_harness.changes.options import registry_inputs
 from insurance_harness.changes.sources import publication_entries
 from insurance_harness.changes.types import ChangeSet, Verdict
+from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.claims import claims_from, require_cards_version
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.contracts.knowledge import Claim
@@ -43,6 +46,7 @@ class _Strict(BaseModel):
 
 class Quote(_Strict):
     document: str
+    file: str | None  # the session file holding the material's text
     page: int | None
     quote: str
 
@@ -62,6 +66,17 @@ class ChangePoint(_Strict):
     live: Shown | None
     new: Shown
     content: str  # fingerprint of state, value and cited quotes
+    live_content: str | None  # the same for the live value the judge compared against
+
+
+class Material(_Strict):
+    """One material of the product as the judge reads it; the file name is its identity."""
+
+    knowledge_id: str
+    attempt: int
+    document: str
+    sha256: str
+    file: str
 
 
 class ProductChanges(_Strict):
@@ -70,6 +85,7 @@ class ProductChanges(_Strict):
     pack: str
     space_id: str
     counts: dict[str, int]
+    materials: list[Material]
     points: list[ChangePoint]
 
 
@@ -83,12 +99,43 @@ class Rebuilt:
     space_id: str
     entries: list[SourceEntry]
     changes: ChangeSet
+    pages: dict[tuple[str, int], list[PageText]]
+    basis: dict[str, Any]
+
+
+class _Once:
+    """Reads each source revision once, so the basis and the claims see the same pages."""
+
+    def __init__(self, reader: PageReader) -> None:
+        self._reader = reader
+        self.read: dict[tuple[str, int], list[PageText]] = {}
+
+    def pages(self, space_id: str, knowledge_id: str, attempt: int) -> list[PageText]:
+        key = (knowledge_id, attempt)
+        if key not in self.read:
+            self.read[key] = self._reader.pages(space_id, knowledge_id, attempt)
+        return self.read[key]
 
 
 def content_of(claim: Claim) -> str:
     """What the judge decided on: never review labels, timestamps or revision numbers."""
     quotes = sorted((item.source_ref, item.quote_sha256.lower()) for item in claim.evidence)
     return json.dumps([claim.state.value, claim.value, quotes], ensure_ascii=False, sort_keys=True)
+
+
+def basis_of(output: CompileOutput, pages: dict[tuple[str, int], list[PageText]]) -> dict[str, Any]:
+    """Every input the judge relied on: all registered materials, cited or not, and the versions
+    of the compile and of the cards the judge was shown."""
+    return {
+        "materials": sorted(
+            f"{kid}:{attempt}:{rows[0].document_sha256.lower() if rows else ''}"
+            for (kid, attempt), rows in pages.items()
+        ),
+        "compiled_from": output.materials,
+        "cards_version": output.cards_version,
+        "value_protocol": output.value_protocol,
+        "judge_cards": cards_version(),
+    }
 
 
 def rebuild(
@@ -98,7 +145,9 @@ def rebuild(
     compile_root: Path,
     reader: PageReader,
     active: Release | None,
+    basis: dict[str, Any] | None = None,
 ) -> Rebuilt:
+    """Raises INPUTS_CHANGED before building claims when a given basis no longer holds."""
     try:
         output = CompileOutput.model_validate_json(
             (compile_root / product / "output.json").read_text(encoding="utf-8")
@@ -111,33 +160,53 @@ def rebuild(
         raise JudgeBatchError("OUTPUT_MISMATCH")
     require_cards_version(output)
     entries = publication_entries(source_map.products[product], output.materials)
-    pages, sources = load_trusted_pages(reader, source_map.space_id, entries)
+    once = _Once(reader)
+    for entry in entries:
+        once.pages(source_map.space_id, entry.knowledge_id, entry.parse_attempt)
+    found = basis_of(output, once.read)
+    if basis is not None and found != basis:
+        raise JudgeBatchError("INPUTS_CHANGED")
+    pages, sources = load_trusted_pages(once, source_map.space_id, entries)
     incoming = claims_from(
         output, SegmentedSource(pages.evidence, table_headers=pages.table_headers), sources
     )
     changes = decide_changes(active, product, incoming, {entry.knowledge_id for entry in entries})
-    return Rebuilt(output, name, pack, source_map.space_id, entries, changes)
+    return Rebuilt(output, name, pack, source_map.space_id, entries, changes, once.read, found)
 
 
-def material_pages(
-    reader: PageReader, space_id: str, entries: list[SourceEntry]
-) -> dict[str, list[PageText]]:
-    """Every page of every current material, keyed by knowledge id, for the judge to read."""
-    return {
-        entry.knowledge_id: reader.pages(space_id, entry.knowledge_id, entry.parse_attempt)
-        for entry in entries
-    }
-
-
-def _shown(claim: Claim, documents: dict[str, str]) -> Shown:
-    quotes = [
-        Quote(
-            document=documents.get(item.source_ref.split(":")[2], "unknown"),
-            page=item.locator.page,
-            quote=item.quote,
+def materials_of(product: str, pages: dict[tuple[str, int], list[PageText]]) -> list[Material]:
+    return [
+        Material(
+            knowledge_id=kid,
+            attempt=attempt,
+            document=rows[0].document if rows else "",
+            sha256=rows[0].document_sha256.lower() if rows else "",
+            file=f"sources/{product}/{kid}-{attempt}.txt",
         )
-        for item in claim.evidence
+        for (kid, attempt), rows in sorted(pages.items())
     ]
+
+
+def _material(source_ref: str, materials: list[Material]) -> Material | None:
+    parts = source_ref.split(":")
+    if len(parts) != 5 or not parts[3].isdigit():
+        return None
+    key = (parts[2], int(parts[3]))
+    return next((m for m in materials if (m.knowledge_id, m.attempt) == key), None)
+
+
+def _shown(claim: Claim, materials: list[Material]) -> Shown:
+    quotes = []
+    for item in claim.evidence:
+        material = _material(item.source_ref, materials)
+        quotes.append(
+            Quote(
+                document="unknown" if material is None else material.document,
+                file=None if material is None else material.file,
+                page=item.locator.page,
+                quote=item.quote,
+            )
+        )
     return Shown(state=claim.state.value, value=claim.value, evidence=quotes)
 
 
@@ -153,10 +222,8 @@ def live_claim(active: Release | None, slug: str | None) -> Claim | None:
     return None
 
 
-def product_changes(
-    rebuilt: Rebuilt, active: Release | None, pages: dict[str, list[PageText]]
-) -> ProductChanges:
-    documents = {kid: rows[0].document for kid, rows in pages.items() if rows}
+def product_changes(rebuilt: Rebuilt, active: Release | None) -> ProductChanges:
+    materials = materials_of(rebuilt.output.entity_id, rebuilt.pages)
     members = {claim.logical_key: claim for claim in rebuilt.changes.members}
     counts: dict[str, int] = {}
     points = []
@@ -171,9 +238,10 @@ def product_changes(
                 slug=item.logical_key,
                 field_key=new.predicate,
                 change=item.verdict.value,
-                live=None if old is None else _shown(old, documents),
-                new=_shown(new, documents),
+                live=None if old is None else _shown(old, materials),
+                new=_shown(new, materials),
                 content=content_of(new),
+                live_content=None if old is None else content_of(old),
             )
         )
     return ProductChanges(
@@ -182,5 +250,6 @@ def product_changes(
         pack=rebuilt.pack,
         space_id=rebuilt.space_id,
         counts=counts,
+        materials=materials,
         points=points,
     )
