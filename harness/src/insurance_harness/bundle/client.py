@@ -15,7 +15,9 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Re-exported: callers use the review and confirmation models through the client.
+from insurance_harness.bundle.candidate_reviews import CandidateDetail as CandidateDetail
 from insurance_harness.bundle.candidate_reviews import CandidatePreview as CandidatePreview
+from insurance_harness.bundle.candidate_reviews import PointResult, ReviewQueue
 from insurance_harness.bundle.candidate_reviews import ReviewItem as ReviewItem
 from insurance_harness.bundle.confirmation_items import ConfirmationAnswer as ConfirmationAnswer
 from insurance_harness.bundle.confirmation_items import ConfirmationClosure as ConfirmationClosure
@@ -169,14 +171,6 @@ class _Samples(_Response):
     samples: list[Sample]
 
 
-class _Queue(_Response):
-    items: list[ReviewItem]
-
-
-class _PointResult(_Response):
-    status: str
-
-
 class _Confirmations(_Response):
     items: list[ConfirmationItem]
 
@@ -316,7 +310,7 @@ class PlatformClient:
         if status not in {"pending", "decided"}:
             raise PlatformError("INVALID_REQUEST")
         data = self._send("GET", space_id, ["candidates"], None, {"status": status})
-        return _parse(_Queue, data).items
+        return _parse(ReviewQueue, data).items
 
     def reject_points(
         self, space_id: str, candidate_id: str, slugs: list[str], reason: str, policy_ref: str
@@ -327,7 +321,7 @@ class PlatformClient:
         body = {"slugs": slugs, "outcome": "reject", "reason": reason, "policy_ref": policy_ref}
         path = ["candidates", candidate_id, "points", "decisions"]
         raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
-        return _parse(_PointResult, self._send("POST", space_id, path, raw)).status
+        return _parse(PointResult, self._send("POST", space_id, path, raw)).status
 
     def preview(self, space_id: str, candidate_id: str) -> CandidatePreview:
         data = self._send("GET", space_id, ["candidates", candidate_id, "preview"], None)
@@ -335,6 +329,14 @@ class PlatformClient:
         if preview.candidate_id != candidate_id:
             raise PlatformError("INVALID_RESPONSE")
         return preview
+
+    def review_detail(self, space_id: str, candidate_id: str) -> CandidateDetail:
+        """One candidate's members, removals and review points, as its review page shows them."""
+        data = self._send("GET", space_id, ["candidates", candidate_id], None)
+        detail = _parse(CandidateDetail, data)
+        if detail.candidate_id != candidate_id:
+            raise PlatformError("INVALID_RESPONSE")
+        return detail
 
     def release(self, space_id: str, release_id: str) -> Release:
         path = ["releases", release_id] if release_id else ["releases", "active"]

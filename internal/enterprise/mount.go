@@ -59,6 +59,7 @@ func Mount(r gin.IRouter, deps Deps) {
 		prefix := strings.TrimSuffix(group.BasePath(), "/")
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/candidates", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/candidates/:candidate_id", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/points/decisions", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/confirmations", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/confirmations", policy)
@@ -81,6 +82,7 @@ func Mount(r gin.IRouter, deps Deps) {
 	}
 	group.POST("/candidates", func(c *gin.Context) { receive(c, deps.Candidates) })
 	group.GET("/candidates", func(c *gin.Context) { machineReviewQueue(c, deps.Candidates) })
+	group.GET("/candidates/:candidate_id", func(c *gin.Context) { machineReviewDetail(c, deps.Candidates) })
 	group.POST("/candidates/:candidate_id/points/decisions", func(c *gin.Context) {
 		machinePointRejection(c, deps.Candidates)
 	})
