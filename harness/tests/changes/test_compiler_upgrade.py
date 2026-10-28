@@ -218,3 +218,14 @@ def test_the_compiler_identity_joins_the_card_version_and_the_value_protocol() -
     with pytest.raises(BundleError) as error:
         compiler_version(output("  ", "2026-10-27.1"))
     assert error.value.reason == "CARDS_VERSION_UNKNOWN"
+
+
+def test_the_churn_guard_resumes_once_a_claim_is_published_under_the_new_identity() -> None:
+    """#397 R2: until first published under the new identity, a claim may upgrade again."""
+    first = claim("等待期90日", proof("terms", "等待期为90日"), identity=NEW)
+    assert verdict_of(live(), first, {"terms"}) == Verdict.UNCHANGED
+    later = claim("等待期180日", proof("terms", "等待期为180日"), identity=NEW)
+    assert verdict_of(live(), later, {"terms"}) == Verdict.UPGRADE
+    published = decide_changes(released(live()), ENTITY, [later], {"terms"}).members[0]
+    churn = claim("等待期一百八十日", proof("terms", "等待期为一百八十日"), identity=NEW)
+    assert verdict_of(published, churn, {"terms"}) == Verdict.KEEP
