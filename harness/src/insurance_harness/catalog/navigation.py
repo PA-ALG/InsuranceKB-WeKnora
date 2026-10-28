@@ -54,12 +54,29 @@ def _profile(raw: object) -> NavigationProfile:
 
 
 def parse_navigation(text: str) -> NavigationProfile:
-    """A navigation file's contract content; any other text is NAVIGATION_INVALID."""
+    """A navigation file's contract content; any other text is NAVIGATION_INVALID, as are
+    question terms for a field key the shipped schema pack catalog does not define (QA3)."""
     try:
         raw = json.loads(text)
     except (ValueError, RecursionError):
         raise NavigationError() from None
-    return _profile(raw)
+    profile = _profile(raw)
+    if set(profile.question_terms or {}) - _catalog_field_keys():
+        raise NavigationError()
+    return profile
+
+
+@lru_cache(maxsize=1)
+def _catalog_field_keys() -> frozenset[str]:
+    try:
+        # The catalog ships beside this module; only the catalog package names its file (guard).
+        name = Path(SCHEMA_PACK_CATALOG).name
+        catalog = json.loads(files(__package__).joinpath(name).read_text(encoding="utf-8"))
+        return frozenset(
+            field["field_key"] for entry in catalog["entries"] for field in entry["pack"]["fields"]
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        raise NavigationError("CATALOG_INVALID") from None
 
 
 @lru_cache(maxsize=1)
