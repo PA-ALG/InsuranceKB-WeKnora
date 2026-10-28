@@ -18,7 +18,9 @@ class BundleMember(_Response):
     kind: str
     logical_slug: str = Field(min_length=1)
     member_digest: str = Field(min_length=1)
-    payload: Any = None
+    # A bundle member's payload is a required JSON object (contracts/candidate_bundle.schema.json);
+    # its inner content stays generic because the platform does not know the domain.
+    payload: dict[str, Any]
     evidence_refs: list[str] = Field(default_factory=list)
     access_scope: str = ""
 
