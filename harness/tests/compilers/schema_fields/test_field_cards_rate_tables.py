@@ -60,21 +60,31 @@ S12C5_RULES = {
     "sum_assured_growth_rate": ("includes", "bad"),
     "non_guaranteed_benefit_rules": ("includes", "excludes", "bad"),
 }
-# S12c-9 rewrote these rules (plus a product-bundle example's pitfalls) and added
-# step-two-only writing rules; test_field_cards_writing_rules.py checks them, so they are
-# neutralised here too.
+# S12c-9 rewrote these selection rules, added a step-two-only writing rule to four cards and
+# corrected one product-bundle example's pitfalls (it contradicted the Golden ruling in #443);
+# test_field_cards_writing_rules.py checks them. Exactly these parts are neutralised here, so a
+# writing rule on any other card, or any other example change, still changes the digest
+# (test_field_cards_mask_controls.py proves it).
 S12C9_RULES = {
-    "product_bundle_rules": ("includes", "excludes", "bad", "examples"),
+    "product_bundle_rules": ("includes", "excludes", "bad"),
     "sum_assured_range": ("includes", "unknown_rule"),
     "accident_definition_and_criteria": ("includes", "excludes", "bad"),
     "exclusions": ("includes",),
 }
+S12C9_WRITING_RULES = (
+    "coverage_responsibilities",
+    "coverage_summary",
+    "benefit_interaction_rules",
+    "cash_value_rules",
+)
+S12C9_EXAMPLE_PITFALLS = {"product_bundle_rules": ("1806",)}
 # draft-2026-10-16b with the parts above neutralised; any other edit changes this digest.
 # S12c-5: the S12C5_RULES are neutralised too, which gives the same digest for the cards before
 # and after S12c-5 (was 5da2b4857e0bc38be6c503cc4a4633cd61df1af127c91644fcbc45b68b76a1ab).
-# S12c-9: the S12C9_RULES and writing rules are neutralised too; the cards before and after S12c-9
-# give the same digest (was f8cff3cd899f75410837024e27701a07f13ddbf0b00082a3cf0702da29c668f3).
-UNTOUCHED_DIGEST = "480f83d9bcf67d4bd2b1e7412d977e3433ab7483a21c26c4602b77c6c37058b9"
+# S12c-9: the S12C9_RULES, the four writing rules and the 1806 pitfalls are neutralised too; the
+# cards before and after S12c-9 give the same digest
+# (was f8cff3cd899f75410837024e27701a07f13ddbf0b00082a3cf0702da29c668f3).
+UNTOUCHED_DIGEST = "94ca4701b06a2c792b5171cb4ddbf87e66907d1bad8076b7d5abf91acef04dda"
 
 
 def untouched(cards: dict[str, Any]) -> str:
@@ -91,8 +101,12 @@ def untouched(cards: dict[str, Any]) -> str:
     for key, rules in (*S12C5_RULES.items(), *S12C9_RULES.items()):
         for rule in rules:
             data[key][rule] = [] if rule in ("excludes", "examples") else ""
-    for card in data.values():
-        card.pop("writing_rule", None)
+    for key in S12C9_WRITING_RULES:
+        data[key].pop("writing_rule", None)
+    for key, products in S12C9_EXAMPLE_PITFALLS.items():
+        for example in data[key].get("examples", []):
+            if example["product_id"] in products:
+                example["pitfalls"] = []
     text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
