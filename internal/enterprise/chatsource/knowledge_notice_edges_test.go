@@ -3,6 +3,8 @@ package chatsource
 // Updated by Claude in the QA1 RED commit (Spec docs/design/slices/QA1-问答来源标注与范围说明.md §4.2):
 // the absence rule replaces the old unknown/absent_explicitly sentence and raw passages name
 // their product. The Q2b requirement at the end is unchanged.
+// Updated by Claude for QA4 (Spec docs/design/slices/QA4-Agent本品口径.md §2): the three product-evidence
+// rules sit before the Q2b requirement; every other sentence, the order and the empty cases are unchanged.
 
 import (
 	"testing"
@@ -24,6 +26,9 @@ func TestQ2bKnowledgeNoticeOnlyAppendsEnterpriseRequirement(t *testing.T) {
 	const rawNotice = "已发布知识查不到时可用原文检索补充；原文仅限本轮固定材料，" +
 		"明确标注原文检索（未经编译审核），不能混淆两种来源。" +
 		"原文片段标题前标有所属产品，只能用于该产品；所属产品未识别的片段，不能当作任何具体产品的规定。"
+	const productRules = "不用常识、行业通行做法或其他产品的规定回答具体产品的事实。" +
+		"材料没有写的内容，说明材料未载明，不写进结论，也不给它挂来源句柄。" +
+		"来源句柄必须能支撑同一行的事实，不能借用相邻条款的句柄。"
 	const requirement = `回答中的每一条产品事实都必须在同一行带上支撑它的来源句柄（如 <ref id="c1"/>）；` +
 		"找不到可引用来源的产品事实不要写，改为说明未找到。"
 
@@ -34,10 +39,10 @@ func TestQ2bKnowledgeNoticeOnlyAppendsEnterpriseRequirement(t *testing.T) {
 	}{
 		{name: "ordinary", want: ""},
 		{name: "raw only", turn: Turn{RawKnowledge: map[string]string{"doc": "space"}}, want: ""},
-		{name: "wiki", turn: Turn{WikiSpaces: []string{"space"}}, want: original + requirement},
+		{name: "wiki", turn: Turn{WikiSpaces: []string{"space"}}, want: original + productRules + requirement},
 		{name: "wiki and raw", turn: Turn{
 			WikiSpaces: []string{"space"}, RawKnowledge: map[string]string{"doc": "space"},
-		}, want: original + rawNotice + requirement},
+		}, want: original + rawNotice + productRules + requirement},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, KnowledgeNotice(tc.turn))
