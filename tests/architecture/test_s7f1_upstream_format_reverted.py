@@ -52,10 +52,17 @@ def test_every_listed_file_is_byte_identical_to_upstream() -> None:
     assert diverged == []
 
 
+# Updated by Claude in a disclosed commit (Spec §2.2 correction, 2026-10-29): .golangci.yml is an
+# upstream file, and S7f-1 adds a registered, temporary lint exclusion to it; the S7f-1 follow-up
+# deletes that block and the file returns to the upstream bytes. It is the only file this bound
+# tolerates.
+TEMPORARY = ".golangci.yml"
+
+
 def test_the_g10_count_drops_by_the_restored_files() -> None:
     # A later slice may register and add a new upstream patch with Claude's approval; it must
     # then raise this bound in a disclosed commit, the same way it re-records the G10 baseline.
-    assert len(upstream_patched_files()) <= G10_BEFORE - len(listed())
+    assert len(upstream_patched_files() - {TEMPORARY}) <= G10_BEFORE - len(listed())
 
 
 def test_behaviour_bearing_comment_changes_stay_patched() -> None:
