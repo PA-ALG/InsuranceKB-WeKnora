@@ -194,28 +194,28 @@ func sandboxConnectionCheckConfig(cfg *types.TenantSandboxConfig) *types.TenantS
 	if cfg == nil {
 		return nil
 	}
-	configCopy := *cfg
-	switch sandbox.SandboxType(configCopy.SandboxType) {
+	copy := *cfg
+	switch sandbox.SandboxType(copy.SandboxType) {
 	case sandbox.SandboxTypeCube:
 		cube := types.CubeSandboxConfig{}
-		if configCopy.Cube != nil {
-			cube = *configCopy.Cube
+		if copy.Cube != nil {
+			cube = *copy.Cube
 		}
 		if strings.TrimSpace(cube.TemplateID) == "" {
 			cube.TemplateID = "__connection_check__"
 		}
-		configCopy.Cube = &cube
+		copy.Cube = &cube
 	case sandbox.SandboxTypeE2B:
 		e2b := types.E2BSandboxConfig{}
-		if configCopy.E2B != nil {
-			e2b = *configCopy.E2B
+		if copy.E2B != nil {
+			e2b = *copy.E2B
 		}
 		if strings.TrimSpace(e2b.TemplateID) == "" {
 			e2b.TemplateID = "__connection_check__"
 		}
-		configCopy.E2B = &e2b
+		copy.E2B = &e2b
 	}
-	return &configCopy
+	return &copy
 }
 
 // describeProbeMismatch reports why the probe script did not print its marker.
