@@ -39,6 +39,7 @@ from insurance_harness.compilers.schema_fields.definitions import pack_definitio
 from insurance_harness.compilers.schema_fields.engine import (
     CompileError,
     CompileOutput,
+    SELECTION_DRAWS,
     CompletionPort,
     SchemaFieldsCompiler,
     reusable,
@@ -316,10 +317,12 @@ def compile_products(
                 attempt.mkdir(parents=True)
                 write_new(attempt / "context.json", context)
                 port = _RawResponses(completion, attempt)
-            # Step one sends one call per batch; step two at most one call per field.
+            # Step one sends SELECTION_DRAWS calls per batch (S12c-6); step two at most one call
+            # per field.
             compiler = SchemaFieldsCompiler(
-                port, batch_size=batch_size,
-                max_calls=math.ceil(len(definitions) / batch_size) + len(definitions),
+                port, batch_size=batch_size, selection_draws=SELECTION_DRAWS,
+                max_calls=SELECTION_DRAWS * math.ceil(len(definitions) / batch_size)
+                + len(definitions),
             )
             quotes = (located(carried, revisions, pages, headers)
                       if carried is not None and revisions is not None else None)

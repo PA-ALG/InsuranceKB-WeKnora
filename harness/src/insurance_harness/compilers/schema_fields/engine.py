@@ -41,6 +41,12 @@ class CompileBudgetExceeded(CompileError):
     """No further completion can be sent within this compile's call budget."""
 
 
+# Step-one draws the production compile takes per batch (S12c-6 Spec §4): one sample misses
+# segments another finds, so the same request is sent twice and a field present in the first draw
+# also receives the segments a later draw adds. Direct engine use keeps one draw.
+SELECTION_DRAWS = 2
+
+
 class FieldResult(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     field_key: NonBlank
@@ -52,6 +58,9 @@ class FieldResult(BaseModel):
     # Reviewed segments carried into this recompile that step two used (S12c-4 §2.3); evidence
     # is cut from segment_ids plus these. Never overlaps segment_ids; [] before S12c-4.
     carried_segment_ids: list[str] = Field(default_factory=list)
+    # Segments a later step-one draw added that step two used (S12c-6 §4); evidence is cut from
+    # segment_ids, carried_segment_ids and these. Overlaps neither; [] before S12c-6.
+    recalled_segment_ids: list[str] = Field(default_factory=list)
 
 
 class CompileOutput(BaseModel):
@@ -130,6 +139,7 @@ class SchemaFieldsCompiler:
         batch_size: int = 25,
         max_calls: int = 10,
         value_batch_chars: int = 60000,
+        selection_draws: int = 1,
     ):
         if type(batch_size) is not int or batch_size < 1:
             raise CompileError("batch_size must be a positive integer")
@@ -137,12 +147,15 @@ class SchemaFieldsCompiler:
             raise CompileError("max_calls must be a nonnegative integer")
         if type(value_batch_chars) is not int or value_batch_chars < 1:
             raise CompileError("value_batch_chars must be a positive integer")
+        if type(selection_draws) is not int or selection_draws < 1:
+            raise CompileError("selection_draws must be a positive integer")
         if not isinstance(completion.model, str) or not completion.model.strip():
             raise CompileError("completion must declare its model")
         self._completion = completion
         self._batch_size = batch_size
         self._max_calls = max_calls
         self._value_batch_chars = value_batch_chars
+        self._selection_draws = selection_draws
 
     def _prepare(
         self,
@@ -215,21 +228,27 @@ class SchemaFieldsCompiler:
 
         listing = source.listing()
         selected: dict[str, tuple[str, list[str]]] = {}
+        later: dict[str, set[str]] = {}
         dropped_refs = 0
         dropped_fields: list[str] = []
         for batch in self._batches(fields):
-            for row in parse_selection(
-                send(build_selection_request(entity_id, batch, listing)), batch
-            ):
-                ids, dropped = source.resolve(row.segments)
-                dropped_refs += len(dropped)
-                forbidden = _forbidden(source, policy, ids, row.field_key)
-                dropped_refs += len(forbidden)
-                ids = [sid for sid in ids if sid not in forbidden]
-                if row.state != "unknown" and not ids:
-                    dropped_fields.append(row.field_key)
-                    continue
-                selected[row.field_key] = (row.state, ids)
+            request = build_selection_request(entity_id, batch, listing)
+            for draw in range(self._selection_draws):
+                for row in parse_selection(send(request), batch):
+                    ids, dropped = source.resolve(row.segments)
+                    forbidden = _forbidden(source, policy, ids, row.field_key)
+                    ids = [sid for sid in ids if sid not in forbidden]
+                    if draw:
+                        # A later draw only adds segments to a field it also finds present; the
+                        # first draw's states and selection stand (S12c-6 Spec §4.2).
+                        if row.state == "present":
+                            later.setdefault(row.field_key, set()).update(ids)
+                        continue
+                    dropped_refs += len(dropped) + len(forbidden)
+                    if row.state != "unknown" and not ids:
+                        dropped_fields.append(row.field_key)
+                        continue
+                    selected[row.field_key] = (row.state, ids)
 
         # Only a field step one found present takes carried quotes: step one's unknown or
         # absent stands. A quote that is not found exactly once on its page carries nothing.
@@ -242,8 +261,15 @@ class SchemaFieldsCompiler:
             added = located - set(ids) - _forbidden(source, policy, list(located), key)
             if added:
                 carried[key] = [segment.id for segment in source.ordered(list(added))]
+        recalled: dict[str, list[str]] = {}
+        for key, extra in later.items():
+            state, ids = selected.get(key, ("", []))
+            added = extra - set(ids) - set(carried.get(key, []))
+            if state == "present" and added:
+                recalled[key] = [segment.id for segment in source.ordered(list(added))]
         present = [
-            (d, source.ordered([*selected[d.field_key][1], *carried.get(d.field_key, [])]))
+            (d, source.ordered([*selected[d.field_key][1], *carried.get(d.field_key, []),
+                                *recalled.get(d.field_key, [])]))
             for d in fields
             if selected.get(d.field_key, ("", []))[0] == "present"
         ]
@@ -275,8 +301,12 @@ class SchemaFieldsCompiler:
                     results.append(FieldResult(field_key=definition.field_key, state="unknown"))
                     continue
                 value = normalize_field_value(definition, written)
-            extra = _used_carried(source, ids, carried.get(definition.field_key, []),
-                                  used.get(definition.field_key, []))
+            cited = used.get(definition.field_key, [])
+            offered = [*carried.get(definition.field_key, []),
+                       *recalled.get(definition.field_key, [])]
+            extra = _used_carried(source, ids, offered, cited)
+            kept_carried = [sid for sid in carried.get(definition.field_key, []) if sid in extra]
+            kept_recalled = [sid for sid in recalled.get(definition.field_key, []) if sid in extra]
             results.append(
                 FieldResult(
                     field_key=definition.field_key,
@@ -284,7 +314,8 @@ class SchemaFieldsCompiler:
                     value=value,
                     evidence=source.evidence([*ids, *extra]),
                     segment_ids=[segment.id for segment in source.ordered(ids)],
-                    carried_segment_ids=extra,
+                    carried_segment_ids=kept_carried,
+                    recalled_segment_ids=kept_recalled,
                 )
             )
         return CompileOutput(
