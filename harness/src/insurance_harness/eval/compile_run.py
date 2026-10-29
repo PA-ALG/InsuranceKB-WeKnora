@@ -37,9 +37,9 @@ from insurance_harness.compilers.schema_fields.carry import (
 )
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
+    SELECTION_DRAWS,
     CompileError,
     CompileOutput,
-    SELECTION_DRAWS,
     CompletionPort,
     SchemaFieldsCompiler,
     reusable,

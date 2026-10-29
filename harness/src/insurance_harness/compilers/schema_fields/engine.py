@@ -262,9 +262,9 @@ class SchemaFieldsCompiler:
             if added:
                 carried[key] = [segment.id for segment in source.ordered(list(added))]
         recalled: dict[str, list[str]] = {}
-        for key, extra in later.items():
+        for key, found in later.items():
             state, ids = selected.get(key, ("", []))
-            added = extra - set(ids) - set(carried.get(key, []))
+            added = found - set(ids) - set(carried.get(key, []))
             if state == "present" and added:
                 recalled[key] = [segment.id for segment in source.ordered(list(added))]
         present = [
