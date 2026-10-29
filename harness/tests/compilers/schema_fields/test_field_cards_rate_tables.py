@@ -48,23 +48,22 @@ KEPT_EXAMPLES = {
     "premium_payment_term": {"1837"},
     "product_bundle_rules": {"1837", "1803", "1806"},
 }
-# S12c-5 rewrote these rules of nine cards (and, per the #425 R1 ruling, the examples of the
-# customer-profile card); test_field_cards_boundaries.py pins them.
+# S12c-5 rewrote these rules of seven cards (and, per the #425 R1 ruling, the examples of the
+# customer-profile card); test_field_cards_boundaries.py pins them. The two coverage cards' edits
+# were withdrawn (Owner decision on #425 R2), so they are checked here like every other card.
 S12C5_RULES = {
     "target_customer_profile": ("includes", "excludes", "bad", "examples"),
     "premium_payment_frequency": ("excludes", "bad"),
     "income_loss_benefit_payment_rules": ("excludes", "bad"),
     "disability_recovery_and_benefit_termination_rules": ("excludes", "bad"),
     "disability_status_verification_and_reassessment_rules": ("includes", "excludes", "bad"),
-    "coverage_responsibilities": ("includes", "excludes", "bad"),
-    "coverage_summary": ("includes", "excludes", "bad"),
     "sum_assured_growth_rate": ("includes", "bad"),
     "non_guaranteed_benefit_rules": ("includes", "excludes", "bad"),
 }
 # draft-2026-10-16b with the parts above neutralised; any other edit changes this digest.
 # S12c-5: the S12C5_RULES are neutralised too, which gives the same digest for the cards before
 # and after S12c-5 (was 5da2b4857e0bc38be6c503cc4a4633cd61df1af127c91644fcbc45b68b76a1ab).
-UNTOUCHED_DIGEST = "8677a34409244654511609d9117e82d205bcb844fbd0679833fb29aa89c2bbac"
+UNTOUCHED_DIGEST = "f8cff3cd899f75410837024e27701a07f13ddbf0b00082a3cf0702da29c668f3"
 
 
 def untouched(cards: dict[str, Any]) -> str:

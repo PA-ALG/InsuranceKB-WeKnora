@@ -8,6 +8,8 @@ decides, not the section heading.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 
 from insurance_harness.compilers.schema_fields.cards import all_cards
@@ -16,6 +18,9 @@ VERIFICATION = "disability_status_verification_and_reassessment_rules"
 RECOVERY = "disability_recovery_and_benefit_termination_rules"
 # An entry-age bound copied into a value: "出生满28日", "0周岁", "18至55周岁", "55周岁".
 AGE_BOUND = re.compile(r"出生满|\d+\s*(?:至\s*\d+\s*)?周岁")
+# R2 closed by withdrawing the coverage-card edits (Owner decision): pre-S12c-5 rules stay.
+COVERAGE = ("coverage_responsibilities", "coverage_summary")
+COVERAGE_RULES_DIGEST = "f4be54ebe98d7a463ff0ae619e030e6c4428db8e19c549c9d9a4972ca6f84b61"
 
 
 def _targets(key: str) -> dict[str, str]:
@@ -41,15 +46,12 @@ def test_a_named_sales_case_stays_out_of_the_profile() -> None:
     assert any("具体人物" in content for content in _targets("target_customer_profile").values())
 
 
-def test_continuation_conditions_are_coverage_and_procedures_are_verification() -> None:
-    for key in ("coverage_responsibilities", "coverage_summary"):
-        card = all_cards()[key]
-        assert "能否继续给付的实质条件" in card["includes"], key
-        assert "不按所在小节标题" in card["includes"], key
-        targets = "".join(_targets(key))
-        assert VERIFICATION in targets and RECOVERY in targets, key
-        procedure = next(c for t, c in _targets(key).items() if VERIFICATION in t)
-        assert "纯手续" in procedure and "无法核验" in procedure, key
+def test_the_coverage_cards_keep_their_rules_from_before_s12c5() -> None:
+    cards = all_cards()
+    rules = ("includes", "excludes", "bad")
+    data = {key: {rule: cards[key][rule] for rule in rules} for key in COVERAGE}
+    text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    assert hashlib.sha256(text.encode("utf-8")).hexdigest() == COVERAGE_RULES_DIGEST
 
 
 def test_verification_keeps_procedural_consequences_and_leaves_recovery() -> None:

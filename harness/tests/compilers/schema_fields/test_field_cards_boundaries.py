@@ -20,14 +20,12 @@ S12C5_RULES = {
     "income_loss_benefit_payment_rules": ("excludes", "bad"),
     "disability_recovery_and_benefit_termination_rules": ("excludes", "bad"),
     "disability_status_verification_and_reassessment_rules": ("includes", "excludes", "bad"),
-    "coverage_responsibilities": ("includes", "excludes", "bad"),
-    "coverage_summary": ("includes", "excludes", "bad"),
     "sum_assured_growth_rate": ("includes", "bad"),
     "non_guaranteed_benefit_rules": ("includes", "excludes", "bad"),
 }
 # #425 R1: the customer-profile examples were rewritten to the ruling; they are pinned too.
 EXAMPLES_REWRITTEN = ("target_customer_profile",)
-RULES_DIGEST = "bc7bd0449b6eb8c468213769211de787fa97cdf27db815afa5c36f259e1ba487"
+RULES_DIGEST = "6dabf1d60660fbef55e56304b97d60289d131aad25433987333f9162abb69600"
 TARGET_KEY = re.compile(r"[a-z][a-z0-9_]+")
 
 
@@ -72,8 +70,6 @@ def test_the_segments_of_the_fields_own_facts_stay_selectable() -> None:
     def excludes(key: str) -> str:
         return "".join(content for content, _ in cards[key]["excludes"])
 
-    for key in ("coverage_responsibilities", "coverage_summary"):
-        assert "同一段落中的给付内容照常选入" in excludes(key), key
     assert "交费频率仍属本字段" in excludes("premium_payment_frequency")
     assert "第一步选入所有说明产品为谁而设的段落" in cards["target_customer_profile"]["includes"]
     assert "适用的增长比例都要写明" in cards["sum_assured_growth_rate"]["includes"]
