@@ -75,8 +75,6 @@ type ListSandboxFilesInput struct {
 	Path string `json:"path,omitempty" jsonschema:"Optional absolute or /workspace-relative sandbox path to list. Defaults to /workspace/output on remote sandboxes, or the working directory on host."` //nolint:lll // one-line struct tag
 	// MaxEntries caps the listing size to protect the LLM context.
 	// Zero uses defaultListSandboxMaxEntries.
-	// Keep the schema description byte-for-byte; Go struct tags require one literal.
-	//nolint:lll // A struct tag cannot be split by concatenation without changing reflection.
 	MaxEntries int `json:"max_entries,omitempty" jsonschema:"Optional cap on the number of entries returned. Defaults to 200, hard-capped at 500. Use a smaller value when you only need to check whether a specific file exists."`
 }
 
@@ -215,22 +213,18 @@ func (t *ListSandboxFilesTool) Execute(ctx context.Context, args json.RawMessage
 	// Build human-readable output for the LLM. Machine-consumable data
 	// goes into ToolResult.Data.
 	var b strings.Builder
-	// strings.Builder writes cannot fail.
-	_, _ = fmt.Fprintf(&b, "=== Sandbox listing: %s ===\n\n", targetDir)
+	b.WriteString(fmt.Sprintf("=== Sandbox listing: %s ===\n\n", targetDir))
 	if len(entries) == 0 {
-		b.WriteString(
-			"No files found under this path. Either nothing has been written here yet" +
-				", or the sandbox has been reaped.\n",
-		)
+		b.WriteString("No files found under this path. Either nothing has been written here yet, or the sandbox has been reaped.\n")
 	} else {
-		_, _ = fmt.Fprintf(&b, "Found %d file(s)", len(entries))
+		b.WriteString(fmt.Sprintf("Found %d file(s)", len(entries)))
 		if truncated {
-			_, _ = fmt.Fprintf(&b, " (truncated to %d; increase max_entries to see more)", maxEntries)
+			b.WriteString(fmt.Sprintf(" (truncated to %d; increase max_entries to see more)", maxEntries))
 		}
 		b.WriteString(":\n\n")
 		for _, e := range entries {
-			fmt.Fprintf(&b, "- %s (size=%d, modified=%s)\n",
-				e.Path, e.Size, formatSandboxModTime(e.ModTime))
+			b.WriteString(fmt.Sprintf("- %s (size=%d, modified=%s)\n",
+				e.Path, e.Size, formatSandboxModTime(e.ModTime)))
 		}
 	}
 
@@ -263,7 +257,7 @@ func (t *ListSandboxFilesTool) Execute(ctx context.Context, args json.RawMessage
 }
 
 // Cleanup releases any resources.
-func (t *ListSandboxFilesTool) Cleanup(_ context.Context) error {
+func (t *ListSandboxFilesTool) Cleanup(ctx context.Context) error {
 	return nil
 }
 
