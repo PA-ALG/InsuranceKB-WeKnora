@@ -1,8 +1,10 @@
 """RV4c acceptance: the versioned spot-check policy (Spec §2.3).
 
 Protected file: written by Claude. Sampling rates, minimums, target precision and must-check fields
-are data, versioned like the review policy; while the critical illness pilot runs, every machine
-reviewed claim is checked (rate 1.0), and the must-check fields are fields of that pack.
+are data, versioned like the review policy. The must-check fields are fields of that pack.
+Updated by Claude for spot-check policy v2 (2026-10-29): the critical illness pilot was revoked
+on 2026-10-28 (review policy v3) and machine-route content is now judge-approved, so the shipped
+rate is no longer pinned to 1.0; it must stay a real sample (0 < rate <= 1) with a minimum.
 """
 
 from __future__ import annotations
@@ -21,10 +23,10 @@ CATALOG = REPO / SCHEMA_PACK_CATALOG
 PILOT = "schemapack_critical_illness_insurance"
 
 
-def test_the_shipped_policy_checks_every_machine_claim_of_the_pilot() -> None:
+def test_the_shipped_policy_samples_the_pilot_pack_with_its_must_check_fields() -> None:
     policy = load_spot_check_policy()
     rule = policy.for_pack(PILOT)
-    assert rule.rate == 1.0 and rule.minimum >= 1 and 0 < rule.target <= 1
+    assert 0 < rule.rate <= 1 and rule.minimum >= 1 and 0 < rule.target <= 1
     catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
     [pack] = [e["pack"] for e in catalog["entries"] if e["pack"]["schema_pack_id"] == PILOT]
     assert rule.must_check and set(rule.must_check) <= {f["field_key"] for f in pack["fields"]}
