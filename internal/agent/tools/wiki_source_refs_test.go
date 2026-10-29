@@ -166,8 +166,6 @@ type flagIssueWikiService struct {
 	issue *types.WikiPageIssue
 }
 
-func (*flagIssueWikiService) CheckWikiWrite(context.Context, string) error { return nil }
-
 func (s *flagIssueWikiService) GetPageBySlug(context.Context, string, string) (*types.WikiPage, error) {
 	return s.page, nil
 }

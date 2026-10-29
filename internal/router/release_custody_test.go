@@ -89,3 +89,9 @@ func (*routeRegistrationKBService) GetKnowledgeBaseByIDOnly(
 ) (*types.KnowledgeBase, error) {
 	return tenantKBLookupFixture().GetKnowledgeBaseByIDOnly(ctx, id)
 }
+
+// The release-custody owner lookup reads by ID only; upstream's wiki route
+// fixture answers it from its tenant-scoped lookup.
+func (s *stubWikiKBLookup) GetKnowledgeBaseByIDOnly(ctx context.Context, id string) (*types.KnowledgeBase, error) {
+	return s.GetKnowledgeBaseByID(ctx, id)
+}

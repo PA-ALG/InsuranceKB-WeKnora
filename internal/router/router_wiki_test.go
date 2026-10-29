@@ -27,10 +27,6 @@ func (s *stubWikiKBLookup) GetKnowledgeBaseByID(_ context.Context, id string) (*
 	return nil, apprepo.ErrKnowledgeBaseNotFound
 }
 
-func (s *stubWikiKBLookup) GetKnowledgeBaseByIDOnly(ctx context.Context, id string) (*types.KnowledgeBase, error) {
-	return s.GetKnowledgeBaseByID(ctx, id)
-}
-
 func newWikiRouteTestEngine(t *testing.T, callerTenantID uint64, kbLookup *stubWikiKBLookup) *gin.Engine {
 	return newKBRouteTestEngine(t, callerTenantID, kbLookup, nil, func(r *gin.RouterGroup, guards *rbacGuards) {
 		RegisterWikiPageRoutes(r, &handler.WikiPageHandler{}, guards, &stubClassifier{})
