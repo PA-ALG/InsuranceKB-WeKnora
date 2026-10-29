@@ -335,8 +335,8 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 				return errors.New("wiki post-process requires atomic finalizing handoff")
 			}
 			pendingOp, buildErr := newWikiIngestPendingOp(
-				withAttempt(ctx, attempt), payload.TenantID, payload.KnowledgeBaseID,
-				payload.KnowledgeID, payload.Revision,
+				withRevisionBinding(withAttempt(ctx, attempt), payload.Revision),
+				payload.TenantID, payload.KnowledgeBaseID, payload.KnowledgeID,
 			)
 			if buildErr != nil {
 				return buildErr

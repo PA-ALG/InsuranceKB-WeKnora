@@ -1002,7 +1002,7 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 			"image_count": len(options.StoredImages),
 		})
 		if err := s.enqueueImageMultimodalTasks(
-			ctx, knowledge, kb, options.StoredImages, chunks, options.Metadata, options.Revision,
+			withRevisionBinding(ctx, options.Revision), knowledge, kb, options.StoredImages, chunks, options.Metadata,
 		); err != nil {
 			// Nothing else moves the row out of "processing"; let asynq
 			// run the (idempotent) parse again, or dead-letter it.
@@ -1011,7 +1011,7 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 	} else {
 		s.skipStage(ctx, knowledge.ID, types.StageMultimodal, "skipped")
 		// If there are no multimodal tasks, enqueue the post process task immediately
-		if err := s.enqueueKnowledgePostProcessTask(ctx, knowledge, options.Revision); err != nil {
+		if err := s.enqueueKnowledgePostProcessTask(withRevisionBinding(ctx, options.Revision), knowledge); err != nil {
 			return err
 		}
 	}
@@ -1594,8 +1594,8 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 		// summaryErr would skip them and leave the row stuck in
 		// "finalizing". When we DO return an error asynq will retry, so
 		// we only drain on the final attempt.
-		finalizeSubtaskDetached(ctx, s.repo, payload.KnowledgeID, "summary",
-			retErr, false, isFinalAsynqAttempt(ctx), payload.Revision)
+		finalizeSubtaskDetached(ctx, withRevisionSlot(s.repo, payload.Revision), payload.KnowledgeID, "summary",
+			retErr, false, isFinalAsynqAttempt(ctx))
 		// Every terminal exit changes what the knowledge-base aggregation
 		// sees (a new profile, a cleared one, or a document that will never
 		// get one), so the debounced refresh is requested regardless of
@@ -1990,8 +1990,8 @@ func (s *knowledgeService) processQuestionGenerationForKnowledge(
 	// final attempt. Runs AFTER the stats-log defer below — defers
 	// unwind LIFO, so this one declared first executes last.
 	defer func() {
-		finalizeSubtaskDetached(ctx, s.repo, payload.KnowledgeID, "question_legacy",
-			retErr, superseded, isFinalAsynqAttempt(ctx), payload.Revision)
+		finalizeSubtaskDetached(ctx, withRevisionSlot(s.repo, payload.Revision), payload.KnowledgeID,
+			"question_legacy", retErr, superseded, isFinalAsynqAttempt(ctx))
 	}()
 	defer func() {
 		logger.Infof(
@@ -2386,9 +2386,9 @@ func (s *knowledgeService) processQuestionGenerationForChunks(
 	// span failure yet `return nil` (terminal, must drain). Declared first
 	// so it runs LAST (after the stats/span defer below).
 	defer func() {
-		finalizeSubtaskDetached(ctx, s.repo, payload.KnowledgeID,
+		finalizeSubtaskDetached(ctx, withRevisionSlot(s.repo, payload.Revision), payload.KnowledgeID,
 			fmt.Sprintf("question_batch[%d]", payload.BatchIndex),
-			retErr, superseded, isFinalAsynqAttempt(ctx), payload.Revision)
+			retErr, superseded, isFinalAsynqAttempt(ctx))
 	}()
 	defer func() {
 		logger.Infof(ctx,
@@ -4920,11 +4920,11 @@ func (s *knowledgeService) enqueueImageMultimodalTasks(
 	images []docparser.StoredImage,
 	chunks []types.ParsedChunk,
 	metadata map[string]string,
-	revision *types.RevisionCommitBinding,
 ) error {
 	if s.task == nil || len(images) == 0 {
 		return nil
 	}
+	revision := revisionBindingFromContext(ctx)
 
 	attempt := attemptFromCtx(ctx)
 	lang := types.LanguageFromContextOrDefault(ctx)
@@ -4999,7 +4999,7 @@ func (s *knowledgeService) enqueueImageMultimodalTasks(
 	}
 
 	return s.releaseUnownedMultimodalSlots(
-		ctx, knowledge, redisKey, counterSeeded, len(images), enqueued, revision,
+		ctx, knowledge, redisKey, counterSeeded, len(images), enqueued,
 	)
 }
 
@@ -5020,7 +5020,6 @@ func (s *knowledgeService) releaseUnownedMultimodalSlots(
 	redisKey string,
 	counterSeeded bool,
 	planned, enqueued int,
-	revision *types.RevisionCommitBinding,
 ) error {
 	if enqueued == 0 {
 		// No task exists to finalize this knowledge, whatever the counter
@@ -5039,7 +5038,7 @@ func (s *knowledgeService) releaseUnownedMultimodalSlots(
 			s.delMultimodalCounter(dctx, redisKey)
 			cancel()
 		}
-		return s.enqueueKnowledgePostProcessTask(ctx, knowledge, revision)
+		return s.enqueueKnowledgePostProcessTask(ctx, knowledge)
 	}
 
 	shortfall := planned - enqueued
@@ -5078,7 +5077,7 @@ func (s *knowledgeService) releaseUnownedMultimodalSlots(
 		// Every enqueued sibling had already finished, so the release owns the
 		// finalize. Ordering is safe either way: the slots we just drained have
 		// no task behind them, so exactly one path reaches zero.
-		if err := s.enqueueKnowledgePostProcessTask(ctx, knowledge, revision); err != nil {
+		if err := s.enqueueKnowledgePostProcessTask(ctx, knowledge); err != nil {
 			return err
 		}
 		s.delMultimodalCounter(rctx, redisKey)
@@ -5153,8 +5152,9 @@ func (s *knowledgeService) decrMultimodalSlots(
 // this enqueue is the only thing that moves the row out of "processing", so
 // swallowing it acked the task with the row stranded until housekeeping.
 func (s *knowledgeService) enqueueKnowledgePostProcessTask(
-	ctx context.Context, knowledge *types.Knowledge, revision *types.RevisionCommitBinding,
+	ctx context.Context, knowledge *types.Knowledge,
 ) error {
+	revision := revisionBindingFromContext(ctx)
 	if s.task == nil {
 		return nil
 	}

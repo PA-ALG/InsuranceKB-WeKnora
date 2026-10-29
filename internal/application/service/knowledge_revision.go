@@ -241,3 +241,19 @@ func withRevisionSlot(
 	}
 	return revisionSlotRepository{KnowledgeRepository: repo, revision: revision}
 }
+
+type revisionBindingKey struct{}
+
+// withRevisionBinding carries the W1 revision binding down upstream's
+// multimodal / post-process enqueue chain without changing its signatures.
+func withRevisionBinding(ctx context.Context, revision *types.RevisionCommitBinding) context.Context {
+	if revision == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, revisionBindingKey{}, revision)
+}
+
+func revisionBindingFromContext(ctx context.Context) *types.RevisionCommitBinding {
+	revision, _ := ctx.Value(revisionBindingKey{}).(*types.RevisionCommitBinding)
+	return revision
+}

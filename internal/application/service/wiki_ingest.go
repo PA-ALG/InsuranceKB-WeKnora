@@ -149,6 +149,14 @@ return proposed
 	// task_pending_ops and are picked up by the follow-up task.
 	wikiMaxDocsPerBatch = 5
 
+	// wikiMaxFailRetries is the maximum number of times a single document op
+	// may be re-attempted via requeueFailedOps before it is permanently
+	// archived to task_dead_letters. 5 retries ≈ five full batch cycles
+	// (each with a ~30 s delay), giving transient LLM errors a fair chance
+	// to recover without letting a persistently-broken doc clog the queue
+	// indefinitely.
+	wikiMaxFailRetries = 5
+
 	// wikiIngestMaxRetry controls asynq retry budget for wiki:ingest tasks.
 	// Keep this moderate: lock conflicts already retry every 15s via
 	// asynqRetryDelayFunc, and follow-up/retract paths fire quickly.
@@ -553,7 +561,7 @@ func enqueueWikiIngest(
 	kbID, knowledgeID string,
 	revision *types.RevisionCommitBinding,
 ) (bool, error) {
-	pendingOp, err := newWikiIngestPendingOp(ctx, tenantID, kbID, knowledgeID, revision)
+	pendingOp, err := newWikiIngestPendingOp(withRevisionBinding(ctx, revision), tenantID, kbID, knowledgeID)
 	// Persist the pending op. A re-ingest of the same knowledge id while
 	// a previous op is still queued simply appends another row; the
 	// peekPendingList consumer collapses by dedup_key (== knowledge_id),
@@ -607,14 +615,13 @@ func newWikiIngestPendingOp(
 	ctx context.Context,
 	tenantID uint64,
 	kbID, knowledgeID string,
-	revision *types.RevisionCommitBinding,
 ) (*types.TaskPendingOp, error) {
 	lang := types.LanguageFromContextOrDefault(ctx)
 	op := WikiPendingOp{
 		Op:          WikiOpIngest,
 		KnowledgeID: knowledgeID,
 		Language:    lang,
-		Revision:    revision,
+		Revision:    revisionBindingFromContext(ctx),
 		Attempt:     attemptFromCtx(ctx),
 	}
 	payloadBytes, err := json.Marshal(op)

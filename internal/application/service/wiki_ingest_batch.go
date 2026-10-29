@@ -2302,7 +2302,7 @@ func (s *wikiIngestService) reduceSlugUpdates(
 			if len(additions) > 0 {
 				additionFailed = true
 			}
-			return false, "", additionFailed, err
+			return false, "", additionFailed, false, err
 		}
 	}
 

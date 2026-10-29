@@ -450,13 +450,17 @@ func RegisterWikiPageRoutes(
 	r *gin.RouterGroup,
 	wikiHandler *handler.WikiPageHandler,
 	g *rbacGuards,
-	classifier managed.Classifier,
+	classifiers ...managed.Classifier,
 ) {
 	prefix := "/knowledgebase/:kb_id/wiki"
-	ownerLookup, ok := g.kbService.(managed.KnowledgeBaseLookup)
-	if !ok {
-		panic("native Wiki routes require managed.KnowledgeBaseLookup")
+	// Variadic keeps upstream's three-argument call shape (its route-table
+	// tests register without a classifier). A missing classifier or KB lookup
+	// leaves every guarded route failing closed (classification unavailable).
+	var classifier managed.Classifier
+	if len(classifiers) > 0 {
+		classifier = classifiers[0]
 	}
+	ownerLookup, _ := g.kbService.(managed.KnowledgeBaseLookup)
 	ownerClassifier := managed.ForKnowledgeBaseOwner(classifier, ownerLookup)
 	wikiRead := g.apiKeyGroup(
 		r.Group(prefix, managed.GuardWikiWrite(ownerClassifier)), apiKeyRetrieve(apiKeyFullAccess()),

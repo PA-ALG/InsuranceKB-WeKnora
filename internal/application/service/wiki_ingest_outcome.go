@@ -284,6 +284,16 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 	if releaseForRetry && !canRelease {
 		return errors.New("wiki retry release unavailable")
 	}
+	// Upstream's retry budget (v0.9.0): an op that keeps failing before it runs
+	// must not be released forever. Past wikiMaxFailRetries it is archived like
+	// any other failure, which also releases its finalizing slot below.
+	failCount := 0
+	for _, row := range op.queueRows {
+		failCount = max(failCount, row.FailCount)
+	}
+	if releaseForRetry && failCount+1 > wikiMaxFailRetries {
+		releaseForRetry = false
+	}
 	allSettled := true
 	for _, row := range op.queueRows {
 		var marker struct {
@@ -297,11 +307,15 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 		if op.failure == nil {
 			settled, err = store.CompleteOperation(ctx, row, marker.ExecutionID)
 		} else if releaseForRetry {
+			if _, err = s.pendingRepo.IncrFailCount(ctx, row.ID); err != nil {
+				return err
+			}
 			settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
 		} else {
 			settled, err = store.ArchiveOperation(ctx, row, marker.ExecutionID, &types.TaskDeadLetter{
 				TenantID: payload.TenantID, TaskType: wikiTaskType, Scope: wikiTaskScope, ScopeID: payload.KnowledgeBaseID,
 				RelatedID: op.KnowledgeID, LastError: "Wiki generation needs attention: " + wikiFailureOutcome(op.failure),
+				FailCount: row.FailCount + 1,
 			})
 		}
 		if err != nil {
@@ -313,7 +327,10 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 		return errors.New("wiki settlement unconfirmed")
 	}
 	if op.Op == WikiOpIngest && !releaseForRetry {
-		s.finalizeWikiSubtask(ctx, op.KnowledgeID, op.Revision)
+		// Upstream's attempt guard plus our revision-bound slot release.
+		superseded := attemptSuperseded(ctx, s.tracker(), op.KnowledgeID, op.Attempt)
+		finalizeSubtaskDetached(ctx, withRevisionSlot(s.knowledgeRepo, op.Revision),
+			op.KnowledgeID, "wiki", nil, superseded, true)
 	}
 	return nil
 }

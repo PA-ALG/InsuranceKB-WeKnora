@@ -263,9 +263,9 @@ func (s *ChunkExtractService) Handle(ctx context.Context, t *asynq.Task) error {
 		// completed (or terminally-failed) per-chunk extract releases its
 		// slot in pending_subtasks_count. KnowledgeID is the new (post-#? )
 		// payload field; legacy in-flight tasks without it are skipped.
-		finalizeSubtaskDetached(ctx, s.knowledgeRepo, p.KnowledgeID,
+		finalizeSubtaskDetached(ctx, withRevisionSlot(s.knowledgeRepo, p.Revision), p.KnowledgeID,
 			fmt.Sprintf("graph_chunk[%d]", p.ChunkIndex),
-			handleErr, false, isFinalAsynqAttempt(ctx), p.Revision)
+			handleErr, false, isFinalAsynqAttempt(ctx))
 		if gSpan == nil {
 			return
 		}
