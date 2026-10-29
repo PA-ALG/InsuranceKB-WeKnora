@@ -14,6 +14,7 @@ import pytest
 
 from insurance_harness.bundle.client import Release, ReleaseMember
 from insurance_harness.compilers.schema_fields.carry import CarryRequest, carry_for
+from insurance_harness.compilers.schema_fields.engine import SELECTION_DRAWS
 from insurance_harness.contracts.enums import ClaimState, LocatorKind, SourceClass
 from insurance_harness.contracts.knowledge import Claim, Evidence, Locator, Provenance
 from insurance_harness.eval.material_identity import material_identities
@@ -72,7 +73,7 @@ def test_an_output_records_the_carry_and_is_reused_only_for_the_same_quotes(
     changed = released("阅读指引")
     assert not compile_carrying(repo, root, sent, changed), "other quotes: recompiled"
     assert output_at(root)["carry_digest"] == expected_digest(changed)
-    assert len(sent) == 2
+    assert len(sent) == 2 * SELECTION_DRAWS
 
 
 def test_without_a_carry_request_a_carried_output_stays_reusable(
@@ -82,7 +83,7 @@ def test_without_a_carry_request_a_carried_output_stays_reusable(
     compile_carrying(repo, root, sent, released("等待期为90日。"))
     runs = compile_at(repo, root, sent, revision_page_source=lambda product: mapped())
     assert runs[0].reused
-    assert len(sent) == 1
+    assert len(sent) == SELECTION_DRAWS
 
 
 def test_outputs_written_before_carry_load_and_recompile_only_when_carry_is_due(

@@ -195,13 +195,14 @@ def _recorded_selection(source: SegmentedSource, result: FieldResult) -> set[str
 
     Document, fingerprint and page must match exactly; the text may differ only in whitespace
     and width, the same rule Golden segment ids follow (page text keeps CRLF since S4c-1).
-    Carried segments (S12c-4) are part of that cut but never of the selection scored here.
+    Carried (S12c-4) and recalled (S12c-6) segments are part of that cut but never of the
+    selection scored here.
     """
     if not result.segment_ids:
         return None
     if any(not _trusted_document(source, result.field_key, q.document) for q in result.evidence):
         return None
-    wanted = [*result.segment_ids, *result.carried_segment_ids]
+    wanted = [*result.segment_ids, *result.carried_segment_ids, *result.recalled_segment_ids]
     ids, dropped = source.resolve(wanted)
     if dropped or ids != wanted:
         return None
