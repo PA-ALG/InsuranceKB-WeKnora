@@ -1434,10 +1434,59 @@
   },
   {
    "field_key": "covered_specified_diseases",
-   "state": "present",
-   "value": "1. 对应护理保险金：因意外伤害或等待期满后因其他原因，经医院确诊初次发生合同定义的特定疾病；合同生效前已发生某特定疾病、生效后再次发生该疾病的，不承担护理保险金责任；2. 共10种特定疾病，属于《重大疾病保险的疾病定义使用规范（2020年修订版）》规定的疾病，须由专科医生明确诊断，名称仅供阅读，须完全满足具体释义；3. 第1类心脏或心血管相关疾病：1严重特发性肺动脉高压；4. 第2类脑中风、神经系统相关疾病：2严重脑中风后遗症、3严重脑炎后遗症或严重脑膜炎后遗症、4瘫痪、5严重阿尔茨海默病、6严重脑损伤、7严重原发性帕金森病、8严重运动神经元病；5. 第3类器官功能严重受损相关疾病：9双目失明；6. 第4类其他重大疾病：10多个肢体缺失。",
-   "reason": "条款列明护理责任对应的十种特定疾病及分类、首次确诊和释义限制。",
+   "state": "absent_explicitly",
+   "value": null,
+   "reason": "完整保险责任仅含疾病身故及护理保险金；10 种规范内疾病是护理保险金的触发名单（归重症特定疾病），无另外针对特定疾病或特定人群的专项或额外责任。",
    "evidence": [
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 2,
+     "quote": "1.2 保险责任 在本合同保险期间内，我们承担以下保险责任：",
+     "segment_id": "D2P2S8"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 2,
+     "quote": "1.2.1 疾 病 身 故 保\r\n险金\r\n被保险人因疾病导致身故，我们按下列两者的较大值给付疾病身故保险金：",
+     "segment_id": "D2P2S9"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 2,
+     "quote": "（1）本合同的所交保险费；",
+     "segment_id": "D2P2S10"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 2,
+     "quote": "（2）被保险人身故时本合同的现金价值。",
+     "segment_id": "D2P2S11"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 2,
+     "quote": "我们给付疾病身故保险金后，本合同终止。",
+     "segment_id": "D2P2S12"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 2,
+     "quote": "上述“所交保险费”按照被保险人疾病身故当时本合同的基本保险金额确定的年\r\n交保险费×已交费年度数\r\n3计算。",
+     "segment_id": "D2P2S13"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 3,
+     "quote": "1.2.3 护理保险金 被保险人至少符合下列情形之一的，则达到本合同护理保险金的给付条件：",
+     "segment_id": "D2P3S1"
+    },
     {
      "document": "保险条款.pdf",
      "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
@@ -1449,113 +1498,15 @@
      "document": "保险条款.pdf",
      "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
      "page": 3,
-     "quote": "若被保险人在本合同生效前已发生某特定疾病，本合同生效后再次发生该特定疾\r\n病的，我们不承担护理保险金的保险责任。",
-     "segment_id": "D2P3S16"
+     "quote": "（2）被保险人因遭受意外伤害，并自该意外伤害发生之日起 180 日内因该意外\r\n伤害造成《人身保险伤残评定及代码》\r\n6中所列第 1 级至第 3 级伤残。如自\r\n意外伤害发生之日起 180 日内治疗仍未结束的，则按该意外伤害发生之日\r\n起第 180 日的身体情况进行伤残评定。",
+     "segment_id": "D2P3S3"
     },
     {
      "document": "保险条款.pdf",
      "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "1.2.4 我 们 所 保 障\r\n的特定疾病\r\n我们提供保障的特定疾病共有 10 种，名称如下，具体释义见“7.特定疾病释义”。",
-     "segment_id": "D2P4S3"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "1、严重特发性肺动脉高压\r\n第 2 类：脑中风、神经系统相关的疾病",
-     "segment_id": "D2P4S5"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "2、严重脑中风后遗症",
-     "segment_id": "D2P4S6"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "3、严重脑炎后遗症或严重脑膜炎后遗症",
-     "segment_id": "D2P4S7"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "4、瘫痪",
-     "segment_id": "D2P4S8"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "5、严重阿尔茨海默病",
-     "segment_id": "D2P4S9"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "6、严重脑损伤",
-     "segment_id": "D2P4S10"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "7、严重原发性帕金森病",
-     "segment_id": "D2P4S11"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "8、严重运动神经元病\r\n第 3 类：器官功能严重受损相关的疾病",
-     "segment_id": "D2P4S12"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "9、双目失明\r\n第 4 类：其他重大疾病",
-     "segment_id": "D2P4S13"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 4,
-     "quote": "10、多个肢体缺失",
-     "segment_id": "D2P4S14"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 9,
-     "quote": "本合同中所称“疾病”是指发生符合以下疾病定义所述条件的疾病、疾病状\r\n态或手术，须由专科医生27明确诊断。以下疾病名称仅为方便您阅读本合同而使用，名\r\n27 专科医生应当同时满足以下四项资格条件：",
-     "segment_id": "D2P9S18"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 10,
-     "quote": "称本身不是认定我们保障范围的依据，保障范围以每项疾病的具体释义为准，即当被\r\n保险人发生完全满足下文释义的疾病时，我们根据本合同约定承担保险责任。",
-     "segment_id": "D2P10S1"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 10,
-     "quote": "下列疾病为中国保险行业协会颁布的《重大疾病保险的疾病定义使用规范（2020 年修\r\n订版）》（以下简称“规范”）规定的疾病。",
-     "segment_id": "D2P10S2"
-    },
-    {
-     "document": "保险条款.pdf",
-     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
-     "page": 10,
-     "quote": "第 1 类： 心脏或心血管相关的疾病\r\n1 严 重 特 发 性\r\n肺动脉高压\r\n指不明原因的肺动脉压力持续性增高，进行性发展而导致的慢性疾病，已经造成\r\n永久不可逆\r\n28性的体力活动能力受限，达到美国纽约心脏病学会（New York Heart\r\nAssociation，NYHA）心功能状态分级\r\n29IV 级，且静息状态下肺动脉平均压在 36mmHg\r\n（含）以上。",
-     "segment_id": "D2P10S3"
+     "page": 3,
+     "quote": "本合同的疾病身故保险金、护理保险金，我们仅给付其中的一项且以一次为限。",
+     "segment_id": "D2P3S17"
     }
    ]
   },
@@ -1717,10 +1668,130 @@
   },
   {
    "field_key": "covered_critical_specified_diseases",
-   "state": "unknown",
-   "value": null,
-   "reason": "材料未提及独立的重症疾病名单；所列十种疾病为护理责任的特定疾病清单。",
-   "evidence": []
+   "state": "present",
+   "value": "1. 对应护理保险金：因意外伤害或等待期满后因其他原因，经医院确诊初次发生合同定义的特定疾病；合同生效前已发生某特定疾病、生效后再次发生该疾病的，不承担护理保险金责任；2. 共10种特定疾病，属于《重大疾病保险的疾病定义使用规范（2020年修订版）》规定的疾病，须由专科医生明确诊断，名称仅供阅读，须完全满足具体释义；3. 第1类心脏或心血管相关疾病：1严重特发性肺动脉高压；4. 第2类脑中风、神经系统相关疾病：2严重脑中风后遗症、3严重脑炎后遗症或严重脑膜炎后遗症、4瘫痪、5严重阿尔茨海默病、6严重脑损伤、7严重原发性帕金森病、8严重运动神经元病；5. 第3类器官功能严重受损相关疾病：9双目失明；6. 第4类其他重大疾病：10多个肢体缺失。",
+   "reason": "条款列明护理保险金对应的 10 种特定疾病，写明为《重大疾病保险的疾病定义使用规范（2020年修订版）》规定的疾病，释义第 4 类标为“其他重大疾病”，并有首次确诊与释义限制。",
+   "evidence": [
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 3,
+     "quote": "（1）被保险人因意外伤害原因或等待期满后因意外伤害之外的其他原因经医院\r\n确诊初次发生本合同“7.特定疾病释义”所定义的“特定疾病”；",
+     "segment_id": "D2P3S2"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 3,
+     "quote": "若被保险人在本合同生效前已发生某特定疾病，本合同生效后再次发生该特定疾\r\n病的，我们不承担护理保险金的保险责任。",
+     "segment_id": "D2P3S16"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "1.2.4 我 们 所 保 障\r\n的特定疾病\r\n我们提供保障的特定疾病共有 10 种，名称如下，具体释义见“7.特定疾病释义”。",
+     "segment_id": "D2P4S3"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "1、严重特发性肺动脉高压\r\n第 2 类：脑中风、神经系统相关的疾病",
+     "segment_id": "D2P4S5"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "2、严重脑中风后遗症",
+     "segment_id": "D2P4S6"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "3、严重脑炎后遗症或严重脑膜炎后遗症",
+     "segment_id": "D2P4S7"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "4、瘫痪",
+     "segment_id": "D2P4S8"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "5、严重阿尔茨海默病",
+     "segment_id": "D2P4S9"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "6、严重脑损伤",
+     "segment_id": "D2P4S10"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "7、严重原发性帕金森病",
+     "segment_id": "D2P4S11"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "8、严重运动神经元病\r\n第 3 类：器官功能严重受损相关的疾病",
+     "segment_id": "D2P4S12"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "9、双目失明\r\n第 4 类：其他重大疾病",
+     "segment_id": "D2P4S13"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 4,
+     "quote": "10、多个肢体缺失",
+     "segment_id": "D2P4S14"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 9,
+     "quote": "本合同中所称“疾病”是指发生符合以下疾病定义所述条件的疾病、疾病状\r\n态或手术，须由专科医生27明确诊断。以下疾病名称仅为方便您阅读本合同而使用，名\r\n27 专科医生应当同时满足以下四项资格条件：",
+     "segment_id": "D2P9S18"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 10,
+     "quote": "称本身不是认定我们保障范围的依据，保障范围以每项疾病的具体释义为准，即当被\r\n保险人发生完全满足下文释义的疾病时，我们根据本合同约定承担保险责任。",
+     "segment_id": "D2P10S1"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 10,
+     "quote": "下列疾病为中国保险行业协会颁布的《重大疾病保险的疾病定义使用规范（2020 年修\r\n订版）》（以下简称“规范”）规定的疾病。",
+     "segment_id": "D2P10S2"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 10,
+     "quote": "第 1 类： 心脏或心血管相关的疾病\r\n1 严 重 特 发 性\r\n肺动脉高压\r\n指不明原因的肺动脉压力持续性增高，进行性发展而导致的慢性疾病，已经造成\r\n永久不可逆\r\n28性的体力活动能力受限，达到美国纽约心脏病学会（New York Heart\r\nAssociation，NYHA）心功能状态分级\r\n29IV 级，且静息状态下肺动脉平均压在 36mmHg\r\n（含）以上。",
+     "segment_id": "D2P10S3"
+    }
+   ]
   },
   {
    "field_key": "disease_definitions_and_criteria",
@@ -4827,17 +4898,61 @@
   },
   {
    "field_key": "tax_qualified_status",
-   "state": "unknown",
-   "value": null,
-   "reason": "材料未提及限定来源产品销售规则中的税优资格认定。",
-   "evidence": []
+   "state": "present",
+   "value": "是：投保人为适用商业健康保险税收优惠政策的纳税人时，可按相关政策规定在计算缴纳个人所得税时享受一定的优惠。",
+   "reason": "说明书与条款明确写明本产品适用商业健康保险税收优惠政策。",
+   "evidence": [
+    {
+     "document": "产品说明书.pdf",
+     "document_sha256": "fe240644e794b642d51a2d0636b3d2e8a4fca2bae739d7305404ff8da43d535d",
+     "page": 7,
+     "quote": "投保人如为适用商业健康保险税收优惠政策的纳税人，可按相关政策规定在计算缴纳个人所\r\n得税时享受一定的优惠。",
+     "segment_id": "D1P7S9"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 12,
+     "quote": "投保人如为适用商业健康保险税收优惠政策的纳税人\r\n35，可按相关政策规定在计\r\n算缴纳个人所得税\r\n36时享受一定的优惠。",
+     "segment_id": "D2P12S12"
+    }
+   ]
   },
   {
    "field_key": "tax_benefit_rules",
-   "state": "unknown",
-   "value": null,
-   "reason": "材料未提及限定来源产品销售规则中的具体税优规则。",
-   "evidence": []
+   "state": "present",
+   "value": "1. 投保人为适用商业健康保险税收优惠政策的纳税人时，可按相关政策规定在计算缴纳个人所得税时享受一定的优惠；2. 适用对象：符合商业健康保险税收优惠政策适用范围规定的纳税人，如取得工资薪金所得、连续劳务报酬所得的个人，以及取得个体工商户生产经营所得、对企事业单位的承包承租经营所得的个体工商户业主、个人独资企业投资者、合伙企业合伙人和承包承租经营者等；3. 缴纳个人所得税指纳税人依据《中华人民共和国个人所得税法》按一定比率将个人收入的一部分缴纳给国家，缴纳金额须大于零。",
+   "reason": "条款写明税优适用对象及“缴纳个人所得税”的口径。",
+   "evidence": [
+    {
+     "document": "产品说明书.pdf",
+     "document_sha256": "fe240644e794b642d51a2d0636b3d2e8a4fca2bae739d7305404ff8da43d535d",
+     "page": 7,
+     "quote": "投保人如为适用商业健康保险税收优惠政策的纳税人，可按相关政策规定在计算缴纳个人所\r\n得税时享受一定的优惠。",
+     "segment_id": "D1P7S9"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 12,
+     "quote": "投保人如为适用商业健康保险税收优惠政策的纳税人\r\n35，可按相关政策规定在计\r\n算缴纳个人所得税\r\n36时享受一定的优惠。",
+     "segment_id": "D2P12S12"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 12,
+     "quote": "35 适用商业健康保险税收优惠政策的纳税人指符合商业健康保险税收优惠政策适用范围规定的纳税人，如取得工作薪金所得、连\r\n续劳务报酬所得的个人，以及取得个体工商户生产经营所得、对企事业单位的承包承租经营所得的个体工商户业主、个人独资\r\n企业投资者、合伙企业合伙人和承包承租经营者等。",
+     "segment_id": "D2P12S18"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e",
+     "page": 12,
+     "quote": "36 缴纳个人所得税是指纳税人根据《中华人民共和国个人所得税法》的规定，按照一定的比率，将个人收入的一部分缴纳给国家，\r\n缴纳的金额须大于零。",
+     "segment_id": "D2P12S19"
+    }
+   ]
   },
   {
    "field_key": "product_bundle_rules",
