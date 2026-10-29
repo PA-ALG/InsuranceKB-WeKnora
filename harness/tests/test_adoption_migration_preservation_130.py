@@ -10,7 +10,7 @@ import pytest
 from scripts import prepare_weknora_adoption as adoption
 
 ROOT = Path(__file__).resolve().parents[2]
-TARGET = "3e8b0bfc80b845b2d4b2ed683994748741450a97"
+TARGET = "f17ee8a8da901bd658a4cb25f40b5fd41adbfdd7"
 PAIR = tuple(f"migrations/versioned/000077_remove_wiki_log.{way}.sql" for way in ("up", "down"))
 
 
