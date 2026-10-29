@@ -17,6 +17,7 @@ import pytest
 
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
+from insurance_harness.compilers.schema_fields.prompt import SELECTION_PROMPT
 from insurance_harness.eval import product_sources
 from insurance_harness.eval.compile_run import ProductRun, compile_products, main, prior_sends
 from insurance_harness.eval.pdf_text import PageText
@@ -75,22 +76,21 @@ VALUES = [
 
 
 class Recorded:
-    """An offline model: the two answers an earlier run received."""
+    """An offline model: the answers an earlier run received, by request kind. Every step-one
+    draw gets the selection and step two the values (S12c-6: two step-one draws per batch)."""
 
     model = "recorded"
 
-    def __init__(self) -> None:
-        self._answers = iter([SELECT, VALUES])
-
     def complete(self, *, system: str, user: str) -> str:
-        return json.dumps({"fields": next(self._answers)}, ensure_ascii=False)
+        rows = SELECT if system == SELECTION_PROMPT else VALUES
+        return json.dumps({"fields": rows}, ensure_ascii=False)
 
 
 def recorded_source(repo: Path, tmp_path: Path) -> Path:
     """An earlier run root, compiled once offline: it saves each answer and its request."""
     source = tmp_path / "earlier"
     compile_products(
-        repo, ["p1"], completion_factory=lambda ledger: Recorded(), run_root=source, max_sent=2
+        repo, ["p1"], completion_factory=lambda ledger: Recorded(), run_root=source, max_sent=3
     )
     # An older attempt must be ignored in favour of the latest one.
     (source / "p1/responses/attempt-00").mkdir()

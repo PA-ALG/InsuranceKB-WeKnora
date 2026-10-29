@@ -16,6 +16,7 @@ from insurance_harness.catalog.trust_policy import TrustedPages
 from insurance_harness.compilers.schema_fields import engine
 from insurance_harness.compilers.schema_fields.claims import claims_from
 from insurance_harness.compilers.schema_fields.engine import (
+    SELECTION_DRAWS,
     CompileError,
     CompileOutput,
     CompletionPort,
@@ -119,7 +120,7 @@ def test_local_materials_record_actual_hash_and_recompile_changed_file(
     assert compile_at(repo, root, sent)[0].reused
     (product_sources.source_directory(repo, "p") / "保险条款.pdf").write_bytes(b"reissued")
     assert not compile_at(repo, root, sent)[0].reused
-    assert len(sent) == prior_sends(root) == 2
+    assert len(sent) == prior_sends(root) == 2 * SELECTION_DRAWS
     assert output_at(root)["materials"] == [f"file:{hashlib.sha256(b'reissued').hexdigest()}"]
 
 
@@ -157,7 +158,7 @@ def test_source_revision_identity_changes_force_new_compile(
     assert not compile_at(
         repo, root, sent, revision_page_source=lambda _: mapped(**changed),
     )[0].reused
-    assert len(sent) == prior_sends(root) == 2
+    assert len(sent) == prior_sends(root) == 2 * SELECTION_DRAWS
 
 
 def test_changed_cards_version_recompiles_and_records_current_version(
@@ -170,7 +171,7 @@ def test_changed_cards_version_recompiles_and_records_current_version(
     monkeypatch.setattr(compile_run, "cards_version", lambda: "next-cards", raising=False)
     assert not compile_at(repo, root, sent)[0].reused
     assert output_at(root)["cards_version"] == "next-cards"
-    assert len(sent) == 2
+    assert len(sent) == 2 * SELECTION_DRAWS
 
 
 @pytest.mark.parametrize("missing", [True, False])
@@ -188,7 +189,7 @@ def test_legacy_output_without_materials_recompiles(
     save(root / "p/output.json", previous)
     assert not compile_at(repo, root, sent)[0].reused
     assert output_at(root)["materials"]
-    assert len(sent) == 2
+    assert len(sent) == 2 * SELECTION_DRAWS
 
 
 def test_failed_recompile_preserves_old_output_and_raw_attempts(repo: Path, tmp_path: Path) -> None:
@@ -205,18 +206,19 @@ def test_failed_recompile_preserves_old_output_and_raw_attempts(repo: Path, tmp_
     assert (root / "p/output.json").read_bytes() == old
     assert (root / "p/responses/attempt-01/001.txt").exists()
     assert (root / "p/responses/attempt-02/001.txt").read_text() == "SOURCE-SECRET"
-    assert len(sent) == prior_sends(root) == 2
+    assert len(sent) == prior_sends(root) == SELECTION_DRAWS + 1
 
 
 def test_changed_material_does_not_bypass_cumulative_budget(repo: Path, tmp_path: Path) -> None:
     root = tmp_path / "run"
     sent: list[str] = []
-    compile_at(repo, root, sent, max_sent=1)
+    compile_at(repo, root, sent, max_sent=SELECTION_DRAWS)
     old = (root / "p/output.json").read_bytes()
     (product_sources.source_directory(repo, "p") / "保险条款.pdf").write_bytes(b"changed")
     with pytest.raises(ModelBudgetExceeded):
-        compile_at(repo, root, sent, max_sent=1)
-    assert (root / "p/output.json").read_bytes() == old and len(sent) == prior_sends(root) == 1
+        compile_at(repo, root, sent, max_sent=SELECTION_DRAWS)
+    assert (root / "p/output.json").read_bytes() == old
+    assert len(sent) == prior_sends(root) == SELECTION_DRAWS
 
 
 def test_atomic_replacement_failure_preserves_old_output(
@@ -255,7 +257,7 @@ def test_malformed_stored_material_metadata_fails_closed(
     save(root / "p/output.json", output)
     with pytest.raises(ValueError):
         compile_at(repo, root, sent)
-    assert len(sent) == 1
+    assert len(sent) == SELECTION_DRAWS
 
 
 @pytest.mark.parametrize("kind", ["hash", "duplicate_page", "missing_revision", "bad_revision"])
@@ -276,7 +278,7 @@ def test_ambiguous_or_invalid_current_identity_never_reuses(
         revisions["original.pdf"] = SourceRevision("bad:identity", 0)
     with pytest.raises(ValueError):
         compile_at(repo, root, sent, revision_page_source=lambda _: (read, revisions))
-    assert len(sent) == 1
+    assert len(sent) == SELECTION_DRAWS
 
 
 def test_replay_refuses_changed_revision_with_identical_pages(repo: Path, tmp_path: Path) -> None:
@@ -288,7 +290,7 @@ def test_replay_refuses_changed_revision_with_identical_pages(repo: Path, tmp_pa
             repo, ["p"], completion_factory=None, run_root=tmp_path / "replay",
             replay_from=source, max_sent=0, revision_page_source=lambda _: mapped(attempt=8),
         )
-    assert len(sent) == 1
+    assert len(sent) == SELECTION_DRAWS
 
 
 def test_cli_retains_fixed_revision_identity_and_canonical_order_on_rerun(
@@ -340,14 +342,14 @@ def test_cli_retains_fixed_revision_identity_and_canonical_order_on_rerun(
     assert reads == [("a-term", 7), ("z-rate", 3)]
     save(source_map, {"space_id": "s", "products": {"p": entries[::-1]}})
     assert compile_run.main(argv) == 0
-    assert len(sent) == 1
+    assert len(sent) == SELECTION_DRAWS
     assert reads[-2:] == [("a-term", 7), ("z-rate", 3)]
     entries[1]["parse_attempt"] = 8
     save(source_map, {"space_id": "s", "products": {"p": entries}})
     stale = json.loads((root / "candidate.json").read_text())
     save(root / "candidate.json", {**stale, "stale": True})
     assert compile_run.main(argv) == 0
-    assert len(sent) == prior_sends(root) == 2
+    assert len(sent) == prior_sends(root) == 2 * SELECTION_DRAWS
     assert output_at(root)["materials"] == ["a-term:8:" + "a" * 64, "z-rate:3:" + "b" * 64]
     assert "stale" not in json.loads((root / "candidate.json").read_text())
     assert writes == [False, True, True]
@@ -364,7 +366,7 @@ def test_file_hashes_are_case_insensitive_without_losing_document_multiplicity(
     assert output_at(root)["materials"] == ["file:" + "a" * 64] * 2
     lower = [PageText(p.document, p.document_sha256.lower(), p.page, p.text) for p in pages]
     assert compile_at(repo, root, sent, page_source=lambda _: lower)[0].reused
-    assert len(sent) == 1
+    assert len(sent) == SELECTION_DRAWS
 
 
 @pytest.mark.parametrize("field,value", [("entity_id", "another"), ("pack_id", "another-pack")])
@@ -380,7 +382,7 @@ def test_legacy_output_still_validates_product_and_pack_before_recompile(
     save(root / "p/output.json", output)
     with pytest.raises(ValueError, match="stored output does not match"):
         compile_at(repo, root, sent)
-    assert len(sent) == 1
+    assert len(sent) == SELECTION_DRAWS
 
 
 def test_missing_cards_version_never_reuses_material_match(repo: Path, tmp_path: Path) -> None:
@@ -390,7 +392,7 @@ def test_missing_cards_version_never_reuses_material_match(repo: Path, tmp_path:
     output = output_at(root)
     output.pop("cards_version")
     save(root / "p/output.json", output)
-    assert not compile_at(repo, root, sent)[0].reused and len(sent) == 2
+    assert not compile_at(repo, root, sent)[0].reused and len(sent) == 2 * SELECTION_DRAWS
 
 
 def test_cli_recompile_failure_keeps_candidate_and_sanitizes_source_content(

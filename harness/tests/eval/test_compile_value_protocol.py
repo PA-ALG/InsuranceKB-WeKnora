@@ -4,6 +4,7 @@ Offline; reuses the S8a compile fixtures."""
 
 from pathlib import Path
 
+from insurance_harness.compilers.schema_fields.engine import SELECTION_DRAWS
 from insurance_harness.compilers.schema_fields.prompt import VALUE_PROTOCOL_VERSION
 from tests.eval.test_compile_materials import compile_at, output_at, repo, save
 
@@ -22,4 +23,4 @@ def test_an_output_of_an_older_value_protocol_recompiles(repo: Path, tmp_path: P
         save(root / "p/output.json", previous)
         assert not compile_at(repo, root, sent)[0].reused
         assert output_at(root)["value_protocol"] == VALUE_PROTOCOL_VERSION
-    assert len(sent) == 3
+    assert len(sent) == 3 * SELECTION_DRAWS

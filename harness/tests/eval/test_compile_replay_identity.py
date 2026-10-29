@@ -12,6 +12,7 @@ import pytest
 
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
+from insurance_harness.compilers.schema_fields.prompt import SELECTION_PROMPT
 from insurance_harness.eval import product_sources
 from insurance_harness.eval.compile_run import compile_products
 from insurance_harness.eval.pdf_text import PageText
@@ -46,27 +47,17 @@ def build_repo(root: Path, *, file_name: str, pack: str) -> Path:
 
 
 class Recorded:
+    """By request kind: each step-one draw (S12c-6) gets the selection, step two the value."""
+
     model = "recorded"
 
-    def __init__(self) -> None:
-        self._answers = iter(
-            [
-                {
-                    "fields": [
-                        {
-                            "ordinal": 0,
-                            "field_key": "waiting_period",
-                            "state": "present",
-                            "segments": ["D1P1S1"],
-                        }
-                    ]
-                },
-                {"fields": [{"ordinal": 0, "field_key": "waiting_period", "value": "90日"}]},
-            ]
-        )
-
     def complete(self, *, system: str, user: str) -> str:
-        return json.dumps(next(self._answers), ensure_ascii=False)
+        if system == SELECTION_PROMPT:
+            row = {"ordinal": 0, "field_key": "waiting_period", "state": "present",
+                   "segments": ["D1P1S1"]}
+        else:
+            row = {"ordinal": 0, "field_key": "waiting_period", "value": "90日"}
+        return json.dumps({"fields": [row]}, ensure_ascii=False)
 
 
 def never(ledger: CallLedger) -> CompletionPort:
@@ -100,7 +91,7 @@ def test_replay_refuses_a_different_source_or_pack_with_identical_text(
     recorded = build_repo(tmp_path / "recorded-repo", file_name="保险条款.pdf", pack="pack-a")
     source = tmp_path / "earlier"
     compile_products(
-        recorded, ["p1"], completion_factory=lambda ledger: Recorded(), run_root=source, max_sent=2
+        recorded, ["p1"], completion_factory=lambda ledger: Recorded(), run_root=source, max_sent=3
     )
 
     monkeypatch.setattr(product_sources, "read_pdf", pages_with(salt))
@@ -124,7 +115,7 @@ def test_replay_of_the_same_source_and_pack_still_works(
     repo = build_repo(tmp_path / "repo", file_name="保险条款.pdf", pack="pack-a")
     source = tmp_path / "earlier"
     compile_products(
-        repo, ["p1"], completion_factory=lambda ledger: Recorded(), run_root=source, max_sent=2
+        repo, ["p1"], completion_factory=lambda ledger: Recorded(), run_root=source, max_sent=3
     )
     runs = compile_products(
         repo,
