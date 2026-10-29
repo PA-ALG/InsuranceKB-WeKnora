@@ -81,13 +81,17 @@ def _candidates(registry: ProductRegistry, sources: Sequence[RawSource]) -> list
     """New materials, plus quarantined ones.
 
     Never one a person has to decide (by knowledge id, whatever its parse attempt), one already
-    registered or replaced by a new version, or one with a final decision on record.
+    registered or replaced by a new version, or one with a final decision on record. A quarantined
+    material whose person decision is being carried out (it has a settlement) is not judged again:
+    judging would replace its pending entry and lose the settlement (S11a Spec §2.3).
     """
     settled = {
         m.knowledge_id for p in registry.products.values() for m in (*p.materials, *p.retired)
     }
     settled |= {
-        p.knowledge_id for p in registry.pending if p.attribution.outcome == "NEEDS_CONFIRM"
+        p.knowledge_id
+        for p in registry.pending
+        if p.attribution.outcome == "NEEDS_CONFIRM" or p.settlement is not None
     }
     settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome in FINAL}
     return sorted(
@@ -107,7 +111,7 @@ def _changes(
     recorded |= {
         p.knowledge_id: (p.parse_attempt, p.sha256)
         for p in registry.pending
-        if p.attribution.outcome == "NEEDS_CONFIRM"
+        if p.attribution.outcome == "NEEDS_CONFIRM" or p.settlement is not None
     }
     listed = {s.knowledge_id: (s.parse_attempt, s.sha256) for s in sources}
     changed = sorted(

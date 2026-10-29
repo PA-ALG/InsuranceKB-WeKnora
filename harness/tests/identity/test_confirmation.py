@@ -186,10 +186,10 @@ def test_a_candidate_no_longer_registered_is_not_offered() -> None:
             upload("1818", "brochure", knowledge_id="again"),
             [registered("1818", "terms", "brochure")],
         ),
-        attribute(upload("1830", "terms", head=" \n "), [registered("1818", "terms")]),
         attribute(upload("1830", "terms"), [registered("1818", "terms")]),
     ],
-    ids=["duplicate", "quarantine", "create"],
+    # S11a: a quarantined material now has choices (tests/ingest/test_quarantine_confirmation.py).
+    ids=["duplicate", "create"],
 )
 def test_only_a_question_for_a_person_has_choices(result: Attribution) -> None:
     assert result.outcome != "NEEDS_CONFIRM"

@@ -147,11 +147,16 @@ def test_no_active_release_carries_nothing_and_an_empty_carry_has_no_digest() ->
 
 
 def test_the_digest_names_the_carried_quotes_not_the_release() -> None:
+    # Updated by Claude for S12c-8 (Spec docs/design/slices/S12c-8-第二步保留已审事实.md §2.1): the
+    # reviewed value is carried input too, so the same quotes AND value from a newer release keep
+    # the digest, and a different value changes it; the release itself still does not count.
     first = carry(release(claim("waiting_period", "90日", quote("等待期为90日。"))))
-    again = carry(release(claim("waiting_period", "九十日", quote("等待期为90日。")))
+    again = carry(release(claim("waiting_period", "90日", quote("等待期为90日。")))
                   .model_copy(update={"id": "rel-10", "epoch": 10}))
     other = carry(release(claim("waiting_period", "60日", quote("宽限期为60日。", page=2))))
-    assert first is not None and again is not None and other is not None
+    revalued = carry(release(claim("waiting_period", "九十日", quote("等待期为90日。"))))
+    assert first is not None and again is not None and other is not None and revalued is not None
     assert first.digest is not None and len(first.digest) == 64
     assert first.digest == again.digest, "the same quotes from a newer release carry the same input"
     assert first.digest != other.digest
+    assert first.digest != revalued.digest, "another reviewed value is another carried input"

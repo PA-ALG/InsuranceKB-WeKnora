@@ -1,6 +1,7 @@
 """Questions for a person go to the platform as confirmation items; answers come back (S5b-3c-2).
 
-One run reconciles what an earlier run left half done, pushes every material waiting for a person,
+One run reconciles what an earlier run left half done, pushes every material waiting for a person
+(quarantined ones included, S11a),
 settles the items a person answered and closes the items no longer asked. Closing is the commit
 point: the platform checks under its lock that the answer is still the latest, and no answer can
 follow. So a run first saves what it is about to do (the settlement), then closes, then executes
@@ -166,10 +167,8 @@ class _Sync:
     # The registry ---------------------------------------------------------------------------
 
     def waiting(self) -> list[PendingEntry]:
-        return sorted(
-            (p for p in self.current.pending if p.attribution.outcome == "NEEDS_CONFIRM"),
-            key=lambda p: p.knowledge_id,
-        )
+        """Materials waiting for a person: NEEDS_CONFIRM, and quarantined ones (S11a Spec §2.1)."""
+        return sorted(self.current.pending, key=lambda p: p.knowledge_id)
 
     def mark(self, entry: PendingEntry, settlement: Settlement | None) -> PendingEntry:
         """Save the entry with this settlement (or without one) in place of the current one."""
