@@ -189,7 +189,8 @@ RATES = PageText(
     "费率表.pdf",
     "b" * 64,
     1,
-    "《某某重大疾病保险》年交费率表\n交费期间\n投保年龄\n10年交 15年交 20年交 30年交\n",
+    "《某某重大疾病保险》年交费率表\n交费期间\n投保年龄\n10年交 15年交 20年交 30年交\n"
+    "0 408 275 222 157\n",
 )
 TERM = FieldDefinition(
     field_key="premium_payment_term", short_title="交费期间", description="交费期间", ordinal=0
