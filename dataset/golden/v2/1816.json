@@ -10928,10 +10928,32 @@
   },
   {
    "field_key": "product_bundle_rules",
-   "state": "unknown",
-   "value": null,
-   "reason": "材料未提及组合销售的必选、可选、互斥或额度关系。",
-   "evidence": []
+   "state": "present",
+   "value": "除首期保险费外，本合同的保险费须随主险合同保险费一同支付，不能单独支付；主险合同交费期满，或主险合同保险费已豁免、或主险合同（效力）终止但本合同需要继续支付保险费的，本合同的保险费可以单独支付。",
+   "reason": "条款写明附加险保险费须随主险合同保险费一同支付及可单独支付的情形，属与主险组合销售的先后与支付关系。",
+   "evidence": [
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+     "page": 7,
+     "quote": "除首期保险费外，本合同的保险费必须随主险合同保险费一同支付，不能单独\r\n支付。存在如下情形之一的，本合同的保险费可以单独支付：",
+     "segment_id": "D2P7S14"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+     "page": 7,
+     "quote": "1. 主险合同交费期满；",
+     "segment_id": "D2P7S15"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+     "page": 7,
+     "quote": "2. 主险合同保险费已豁免或主险合同终止但本合同需要继续支付保险费的。",
+     "segment_id": "D2P7S16"
+    }
+   ]
   },
   {
    "field_key": "objection_handling_scripts",
