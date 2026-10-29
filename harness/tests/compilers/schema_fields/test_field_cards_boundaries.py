@@ -34,7 +34,8 @@ def _rules(card: dict[str, object], rules: tuple[str, ...]) -> str:
 
 
 def test_the_cards_carry_the_s12c5_version() -> None:
-    assert cards_version() == "draft-2026-10-28a"
+    # S12c-9 bumped the version again; the S12c-5 rules themselves stay pinned by the digest below.
+    assert cards_version() == "draft-2026-10-29a"
 
 
 def test_the_rewritten_rules_read_exactly_as_specified() -> None:
