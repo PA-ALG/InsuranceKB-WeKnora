@@ -321,7 +321,5 @@ func (b *ForkBootstrapper) deleteSnapshot(ctx context.Context, snapshotID string
 
 var _ sandbox.SessionBootstrapper = (*ForkBootstrapper)(nil)
 
-var (
-	_ sandbox.SessionBootstrapperWithClient = (*ForkBootstrapper)(nil)
-	_ sandbox.SessionCreateFailureHandler   = (*ForkBootstrapper)(nil)
-)
+var _ sandbox.SessionBootstrapperWithClient = (*ForkBootstrapper)(nil)
+var _ sandbox.SessionCreateFailureHandler = (*ForkBootstrapper)(nil)

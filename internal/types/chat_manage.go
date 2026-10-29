@@ -269,7 +269,7 @@ type EventType string
 
 const (
 	LOAD_HISTORY           EventType = "load_history"
-	MemoryRecall           EventType = "memory_recall"
+	MEMORY_RECALL          EventType = "memory_recall"
 	QUERY_UNDERSTAND       EventType = "query_understand"
 	CHUNK_SEARCH           EventType = "chunk_search"
 	CHUNK_SEARCH_PARALLEL  EventType = "chunk_search_parallel"

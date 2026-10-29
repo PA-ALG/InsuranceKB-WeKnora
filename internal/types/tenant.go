@@ -245,10 +245,7 @@ func (c *APIPrincipalConfig) Scan(value interface{}) error {
 	if plain, ok := utils.DecryptStoredSecretLenient(c.HMACSecret); ok {
 		c.HMACSecret = plain
 	} else {
-		log.Printf(
-			"[crypto] tenant api_principal_config.hmac_secret: decrypt failed" +
-				" (SYSTEM_AES_KEY missing/rotated?), treating as unconfigured",
-		)
+		log.Printf("[crypto] tenant api_principal_config.hmac_secret: decrypt failed (SYSTEM_AES_KEY missing/rotated?), treating as unconfigured")
 		c.HMACSecret = ""
 	}
 	return nil
@@ -297,10 +294,7 @@ func (c *CredentialsConfig) Scan(value interface{}) error {
 		if plain, ok := utils.DecryptStoredSecretLenient(c.WeKnoraCloud.AppSecret); ok {
 			c.WeKnoraCloud.AppSecret = plain
 		} else {
-			log.Printf(
-				"[crypto] tenant credentials we_knora_cloud.app_secret: decrypt failed" +
-					" (SYSTEM_AES_KEY missing/rotated?), treating as unconfigured",
-			)
+			log.Printf("[crypto] tenant credentials we_knora_cloud.app_secret: decrypt failed (SYSTEM_AES_KEY missing/rotated?), treating as unconfigured")
 			c.WeKnoraCloud.AppSecret = ""
 		}
 	}
@@ -354,11 +348,8 @@ type ParserEngineConfig struct {
 }
 
 const (
-	// MinerUParseMethodAuto selects automatic text or OCR parsing.
 	MinerUParseMethodAuto = "auto"
-	// MinerUParseMethodOCR selects OCR extraction for MinerU parsing.
-	MinerUParseMethodOCR = "ocr"
-	// MinerUParseMethodText selects text extraction for MinerU parsing.
+	MinerUParseMethodOCR  = "ocr"
 	MinerUParseMethodText = "txt"
 )
 
@@ -382,7 +373,6 @@ func ResolveMinerUParseMethod(method string, legacyOCREnabled *bool) string {
 	return MinerUParseMethodAuto
 }
 
-// ResolveChatParserEngine resolves the configured chat parser for the file type.
 func (c *ParserEngineConfig) ResolveChatParserEngine(fileType string) string {
 	if c != nil {
 		normalized := normalizeParserFileType(fileType)

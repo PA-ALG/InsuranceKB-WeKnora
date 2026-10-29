@@ -229,14 +229,14 @@ func (s *sessionService) KnowledgeQA(
 
 		pipeline = types.NewPipelineBuilder().
 			AddIf(hasHistory, types.LOAD_HISTORY).
-			Add(types.MemoryRecall).
+			Add(types.MEMORY_RECALL).
 			Add(types.CHAT_COMPLETION_STREAM).
 			Build()
 	} else {
 		// RAG — dynamically assemble based on feature flags.
 		pipeline = types.NewPipelineBuilder().
 			AddIf(hasHistory, types.LOAD_HISTORY).
-			Add(types.MemoryRecall).
+			Add(types.MEMORY_RECALL).
 			Add(types.QUERY_UNDERSTAND).
 			AddIf(retrieves, types.CHUNK_SEARCH_PARALLEL).
 			AddIf(retrieves, types.CHUNK_RERANK).

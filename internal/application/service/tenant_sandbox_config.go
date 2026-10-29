@@ -1,4 +1,4 @@
-// Package service provides sandbox backend config management.
+// Package service: sandbox backend config management.
 //
 // The load-bearing rule: some fields decide whether a config can still OPERATE
 // the sandboxes it already created. Overwriting them in place while sandboxes
@@ -285,7 +285,6 @@ type SandboxTemplateQueryInput struct {
 	ReplaceDesktop  bool
 }
 
-// SandboxTemplateCatalog lists templates available for a sandbox configuration.
 type SandboxTemplateCatalog struct {
 	Templates          []sandbox.RemoteTemplate `json:"templates"`
 	StandardTemplateID string                   `json:"standard_template_id,omitempty"`
@@ -994,7 +993,7 @@ func pickDesktopTemplate(items []sandbox.RemoteTemplate) *sandbox.RemoteTemplate
 // carries an API key, so it is hashed rather than formatted: this string is
 // only ever compared, and it should not be able to surface a credential in a
 // panic trace or a heap dump.
-func ensureTemplateKey(tenantID uint64, identity sandbox.Identity) string {
+func ensureTemplateKey(tenantID uint64, identity sandbox.SandboxIdentity) string {
 	sum := sha256.Sum256([]byte(fmt.Sprintf("%d|%#v", tenantID, identity)))
 	return hex.EncodeToString(sum[:])
 }
