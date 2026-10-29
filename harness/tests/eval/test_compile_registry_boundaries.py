@@ -59,7 +59,7 @@ def test_registry_cli_uses_canonical_facts_and_fixed_revisions_without_dataset(
             return [PageText(f"{knowledge}-保险条款.pdf", ("a" if knowledge == "a" else "b") * 64,
                              1, TEXT)]
 
-    build, sent = factory(["m"] * 6)
+    build, sent = factory(["m"] * 4)
 
     def client(config: StageModelConfig, *, ledger: CallLedger) -> CompletionPort:
         return build(ledger)
@@ -79,10 +79,10 @@ def test_registry_cli_uses_canonical_facts_and_fixed_revisions_without_dataset(
     assert output["materials"] == ["a:7:" + "a" * 64, "z:2:" + "b" * 64]
     assert reads == [("space", "a", 7), ("space", "z", 2)]
     assert json.loads((root / "product-map.json").read_text()) == {"登记名称": "created"}
-    assert len(sent) == 3
+    assert len(sent) == 2
     assert compile_run.main(args) == 0
     assert json.loads(capsys.readouterr().out)["products"][0]["reused"] is True
-    assert len(sent) == 3
+    assert len(sent) == 2
 
     # The same bytes under a new parse attempt must compile again, rather than reuse.
     document = json.loads(registry.read_text())
@@ -90,7 +90,7 @@ def test_registry_cli_uses_canonical_facts_and_fixed_revisions_without_dataset(
     write_json(registry, document)
     assert compile_run.main(args) == 0
     assert json.loads(capsys.readouterr().out)["products"][0]["reused"] is False
-    assert len(sent) == 6 and reads[-2:] == [("space", "a", 8), ("space", "z", 2)]
+    assert len(sent) == 4 and reads[-2:] == [("space", "a", 8), ("space", "z", 2)]
 
 
 @pytest.mark.parametrize("failure,code", [

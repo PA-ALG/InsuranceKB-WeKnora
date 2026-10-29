@@ -97,7 +97,8 @@ def value_payload(roles: dict[str, str | None] | None) -> dict[str, Any]:
 def test_step_two_states_that_the_terms_prevail() -> None:
     for line in RULE_LINES:
         assert line in prompt.VALUE_PROMPT
-    assert prompt.VALUE_PROTOCOL_VERSION == "2026-10-29.2"
+    # S12c-6b moved the protocol on to 2026-10-29.3 (production back to one step-one draw).
+    assert prompt.VALUE_PROTOCOL_VERSION == "2026-10-29.3"
 
 
 def test_step_two_names_each_documents_role_by_its_segment_prefix() -> None:

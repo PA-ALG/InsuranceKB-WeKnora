@@ -41,10 +41,11 @@ class CompileBudgetExceeded(CompileError):
     """No further completion can be sent within this compile's call budget."""
 
 
-# Step-one draws the production compile takes per batch (S12c-6 Spec §4): one sample misses
-# segments another finds, so the same request is sent twice and a field present in the first draw
-# also receives the segments a later draw adds. Direct engine use keeps one draw.
-SELECTION_DRAWS = 2
+# Step-one draws the production compile takes per batch. S12c-6 sent the same request twice so a
+# field present in the first draw also received the segments a later draw added; under production
+# conditions (with S12c-4 carry) that showed no gain while doubling step one, so production is back
+# to one draw (S12c-6b Spec §4). The engine still takes more draws when asked.
+SELECTION_DRAWS = 1
 
 
 class FieldResult(BaseModel):

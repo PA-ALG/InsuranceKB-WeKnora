@@ -40,8 +40,9 @@ pitfalls 是该字段实测出现过的错误。
 # The value protocol version (S12c-1): recorded in every output and part of the reuse check,
 # so outputs written under another protocol are compiled again. 2026-10-29.1 (S12c-6) marks the
 # production pipeline that also takes two step-one draws per batch; 2026-10-29.2 (S12c-7) adds each
-# document's role to step two and the rule that the terms prevail over the brochure.
-VALUE_PROTOCOL_VERSION = "2026-10-29.2"
+# document's role to step two and the rule that the terms prevail over the brochure; 2026-10-29.3
+# (S12c-6b) marks the production pipeline back to one step-one draw.
+VALUE_PROTOCOL_VERSION = "2026-10-29.3"
 
 # S12c-7: step two knows each document's role, and the terms prevail over the brochure.
 _TERMS_PREVAIL = (
