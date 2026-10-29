@@ -2,6 +2,10 @@
 field present in the first draw, the segments a later draw adds reach step two and become evidence
 only when step two used them (Spec docs/design/slices/S12c-6-第一步双次选段.md §4, §7).
 Offline: completions are fakes.
+Updated by Claude for S12c-6b (Spec docs/design/slices/S12c-6b-线上条件复核.md §4): under
+production conditions (with S12c-4 carry) two draws showed no gain, so the production compile is
+back to one draw and value protocol 2026-10-29.3; the engine's multi-draw behaviour is unchanged
+and still tested.
 """
 
 from __future__ import annotations
@@ -282,12 +286,13 @@ def test_claims_cite_the_recalled_segments() -> None:
 
 
 def test_the_protocol_version_and_production_draws() -> None:
-    # S12c-7 moved the value protocol to 2026-10-29.2 (document roles in step two).
-    assert prompt.VALUE_PROTOCOL_VERSION == "2026-10-29.2"
-    assert SELECTION_DRAWS == 2
+    # S12c-7 moved the value protocol to 2026-10-29.2 (document roles in step two); S12c-6b to
+    # 2026-10-29.3 when the production compile went back to one step-one draw.
+    assert prompt.VALUE_PROTOCOL_VERSION == "2026-10-29.3"
+    assert SELECTION_DRAWS == 1
 
 
-def test_compile_run_builds_the_compiler_with_two_draws_and_their_budget(
+def test_compile_run_builds_the_compiler_with_the_production_draws_and_their_budget(
     repo: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -304,4 +309,4 @@ def test_compile_run_builds_the_compiler_with_two_draws_and_their_budget(
     compile_at(repo, tmp_path / "run", sent)
     assert built[0]["selection_draws"] == SELECTION_DRAWS
     assert built[0]["max_calls"] == SELECTION_DRAWS * 1 + 1, "one batch of one field"
-    assert len(sent) == 2 and sent[0] == sent[1], "the fake answers unknown: two step-one draws"
+    assert len(sent) == SELECTION_DRAWS == 1, "the fake answers unknown: one step-one draw"
