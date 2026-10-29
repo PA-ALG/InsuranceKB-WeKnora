@@ -112,8 +112,11 @@ func TestProcessChunksRetriesBatchIndexFailureBeforeLastAttempt(t *testing.T) {
 		require.NotEqual(t, types.ParseStatusFailed, update.ParseStatus)
 	}
 	// Partial chunks and vectors are still removed; the retry rebuilds them.
-	require.Equal(t, 2, chunks.deletes)
-	require.Equal(t, 2, engine.indexDeletes)
+	// W1 cleanup is exact-ID (no earlier rows here): this attempt's chunk rows
+	// and vectors are removed, nothing else.
+	require.Len(t, chunks.deleted, 1)
+	require.Equal(t, chunks.created[0].ID, chunks.deleted[0])
+	require.Equal(t, chunks.deleted, engine.deleted)
 	require.Zero(t, chunks.purges, "a failed index must retain soft-deleted history for recovery")
 }
 
@@ -135,7 +138,10 @@ func TestProcessChunksFailsKnowledgeOnLastBatchIndexAttempt(t *testing.T) {
 	last := repo.updates[len(repo.updates)-1]
 	require.Equal(t, types.ParseStatusFailed, last.ParseStatus)
 	require.Equal(t, "embedding endpoint unavailable", last.ErrorMessage)
-	require.Equal(t, 2, chunks.deletes)
-	require.Equal(t, 2, engine.indexDeletes)
+	// W1 cleanup is exact-ID (no earlier rows here): this attempt's chunk rows
+	// and vectors are removed, nothing else.
+	require.Len(t, chunks.deleted, 1)
+	require.Equal(t, chunks.created[0].ID, chunks.deleted[0])
+	require.Equal(t, chunks.deleted, engine.deleted)
 	require.Zero(t, chunks.purges, "a terminal index failure must retain soft-deleted history for recovery")
 }

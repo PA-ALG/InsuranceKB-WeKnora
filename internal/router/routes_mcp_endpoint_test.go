@@ -100,7 +100,7 @@ func TestPublishedMCPRouteProtocolAndAuthorization(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
 	srv := mcpserver.NewServer(&protocolKBService{}, nil, nil, &protocolWikiService{}, nil, nil, nil, nil,
-		nil, nil, nil, nil, nil, nil, nil, nil)
+		nil, nil, nil, nil, nil, nil, nil, nil).WithManagedClassifier(&stubClassifier{})
 	r := NewRouter(RouterParams{
 		Config: &config.Config{Tenant: &config.TenantConfig{}}, SystemHandler: &handler.SystemHandler{},
 		MCPServer: srv, MCPEndpointService: &protocolEndpointService{}, TenantService: &protocolTenantService{},

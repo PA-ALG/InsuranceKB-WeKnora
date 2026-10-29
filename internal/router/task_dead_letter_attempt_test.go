@@ -49,7 +49,7 @@ func TestDeadLetterCallbackRespectsSupersededAttempt(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
-	require.NoError(t, db.AutoMigrate(&types.Knowledge{}))
+	require.NoError(t, db.AutoMigrate(&types.Knowledge{}, &types.KnowledgeRevisionSource{}))
 	repo := repository.NewKnowledgeRepository(db)
 
 	for _, tc := range []struct {

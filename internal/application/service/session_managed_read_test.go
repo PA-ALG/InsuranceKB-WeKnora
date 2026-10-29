@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	chatpipeline "github.com/Tencent/WeKnora/internal/application/service/chat_pipeline"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/managed"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -122,6 +123,7 @@ func TestSessionReadPreservesUnmanagedPath(t *testing.T) {
 				cfg:                  &config.Config{Conversation: &config.ConversationConfig{}},
 				knowledgeBaseService: managed.DecorateKnowledgeBaseService(original, c),
 				knowledgeService:     &selectionDocs{}, modelService: models, tenantService: &selectionTenants{},
+				eventManager:         chatpipeline.NewEventManager(),
 			}
 			ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))
 			ctx = types.WithCaller(ctx, types.Caller{TenantID: 1, UserID: "viewer", Role: types.TenantRoleViewer})
@@ -131,11 +133,14 @@ func TestSessionReadPreservesUnmanagedPath(t *testing.T) {
 					Session:       &types.Session{ID: "session", TenantID: 1},
 					TurnLeaseHeld: true, KnowledgeBaseIDs: []string{"library"},
 				}, nil)
+				require.ErrorIs(t, err, sentinel)
+				require.Equal(t, 1, models.calls)
 			} else {
+				// v0.9.0 search resolves models inside the retrieval pipeline;
+				// an unmanaged library gets past custody and runs it.
 				_, err = svc.SearchKnowledge(ctx, []string{"library"}, nil, nil, "query", nil)
+				require.NoError(t, err)
 			}
-			require.ErrorIs(t, err, sentinel)
-			require.Equal(t, 1, models.calls)
 			require.Equal(t, []uint64{1}, c.tenants)
 		})
 	}

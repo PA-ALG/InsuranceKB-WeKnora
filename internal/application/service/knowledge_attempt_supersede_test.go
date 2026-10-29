@@ -259,7 +259,7 @@ func TestProcessChunksSkipsCompletionWhenSupersededWhileIndexing(t *testing.T) {
 		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4, ParentIndex: -1}})
 
 	require.NoError(t, err)
-	assert.Equal(t, 1, svc.chunkRepo.(*chunkWriteCountingRepo).deletes, "the run passed the entry guard")
+	assert.Len(t, svc.chunkRepo.(*chunkWriteCountingRepo).created, 1, "the run passed the entry guard")
 	assert.Empty(t, repo.updates, "the superseded run must not save its final state")
 	assert.Zero(t, enqueuer.postProcess)
 }

@@ -21,9 +21,9 @@ GUARD_DIR = Path(__file__).resolve().parent
 BASELINE_PATH = GUARD_DIR / "baseline.json"
 DOMAIN_TERMS_PATH = GUARD_DIR / "domain_terms.txt"
 
-# WeKnora v0.8.2 fixed point adopted by PR #131. Upgrade slices move this pin
-# and re-record the G10 baseline in the same PR.
-UPSTREAM_BASE = "3e8b0bfc80b845b2d4b2ed683994748741450a97"
+# WeKnora v0.9.0 fixed point adopted by U-1 (#451; v0.8.2 was PR #131).
+# Upgrade slices move this pin and re-record the G10 baseline in the same PR.
+UPSTREAM_BASE = "f17ee8a8da901bd658a4cb25f40b5fd41adbfdd7"
 
 HARNESS_PKG = "harness/src/insurance_harness"
 HARNESS_TESTS = "harness/tests"

@@ -21,6 +21,13 @@ func (wikiOutcomeKnowledge) GetKnowledgeByIDOnly(context.Context, string) (*type
 
 type wikiOutcomeChunks struct{ interfaces.ChunkRepository }
 
+// v0.9.0 map reads scanned-page image chunks; this fixture has none.
+func (wikiOutcomeChunks) ListChunksByKnowledgeIDAndTypes(
+	context.Context, uint64, string, []types.ChunkType,
+) ([]*types.Chunk, error) {
+	return nil, nil
+}
+
 func (wikiOutcomeChunks) ListChunksByKnowledgeID(context.Context, uint64, string) ([]*types.Chunk, error) {
 	return []*types.Chunk{
 		{
