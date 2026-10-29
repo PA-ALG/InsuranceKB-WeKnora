@@ -1,7 +1,7 @@
 import { mount, RouterLinkStub } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { vi } from 'vitest'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 import { get } from '@/utils/request'
 import EnterpriseReviews from '../EnterpriseReviews.vue'
 import { pointDetail, pointItem } from './reviewPointFixtures'

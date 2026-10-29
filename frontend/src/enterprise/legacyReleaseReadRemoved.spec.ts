@@ -4,11 +4,11 @@
 import { describe, expect, it } from 'vitest'
 import wikiApiSource from '@/api/wiki/index.ts?raw'
 import agentStreamSource from '@/views/chat/components/AgentStreamDisplay.vue?raw'
-import zhCN from '@/i18n/locales/zh-CN.ts?raw'
-import enUS from '@/i18n/locales/en-US.ts?raw'
-import jaJP from '@/i18n/locales/ja-JP.ts?raw'
-import koKR from '@/i18n/locales/ko-KR.ts?raw'
-import ruRU from '@/i18n/locales/ru-RU.ts?raw'
+import zhCN from '@/enterprise/i18n/messages/zh-CN.ts?raw'
+import enUS from '@/enterprise/i18n/messages/en-US.ts?raw'
+import jaJP from '@/enterprise/i18n/messages/ja-JP.ts?raw'
+import koKR from '@/enterprise/i18n/messages/ko-KR.ts?raw'
+import ruRU from '@/enterprise/i18n/messages/ru-RU.ts?raw'
 
 const locales = { zhCN, enUS, jaJP, koKR, ruRU }
 const deadKeys = [

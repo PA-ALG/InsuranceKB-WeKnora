@@ -8,6 +8,7 @@ import { get } from '@/utils/request'
 import knowledgeBase from '@/views/knowledge/KnowledgeBase.vue?raw'
 import agentStream from '@/views/chat/components/AgentStreamDisplay.vue?raw'
 import { citesPinnedRelease, useReleaseWikiDrawer } from './useReleaseWikiDrawer'
+import { WEKNORA_ENTITY_LINK_CLASS } from '@/utils/weknoraEntityLinks'
 
 // Run the existing SFC event handlers with ports; unrelated editors do not need mounting.
 function action(source: string, name: string, ports: Record<string, unknown>): (...args: any[]) => any {
@@ -92,7 +93,7 @@ describe('release read integration', () => {
     })
     const link = document.createElement('a'); link.className = 'citation-wiki'; link.dataset.slug = 'slug'
     const ports = { getKbIdForWiki, openWikiDrawer, artifactIndexFromEventTarget: () => null,
-      MessagePlugin: { warning }, t: (key: string) => key }
+      WEKNORA_ENTITY_LINK_CLASS, openWeKnoraEntity: vi.fn(), MessagePlugin: { warning }, t: (key: string) => key }
     const event = { target: link, key: 'Enter', preventDefault: vi.fn(), stopPropagation: vi.fn() }
     action(agentStream, entry === 'click' ? 'onRootClick' : 'onRootKeydown', ports)(event)
     await Promise.resolve()

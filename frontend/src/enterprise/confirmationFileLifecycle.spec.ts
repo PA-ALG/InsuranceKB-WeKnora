@@ -2,7 +2,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 
 vi.mock('./enterpriseApi', async original => ({
   ...(await original<typeof import('./enterpriseApi')>()), readConfirmationFile: vi.fn(),

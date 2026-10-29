@@ -2,7 +2,7 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 vi.mock('./enterpriseApi', async original => ({ ...await original<typeof import('./enterpriseApi')>(), readRelease: vi.fn() }))
 import { readRelease, EnterpriseError } from './enterpriseApi'
 import EnterpriseGraph from './EnterpriseGraph.vue'

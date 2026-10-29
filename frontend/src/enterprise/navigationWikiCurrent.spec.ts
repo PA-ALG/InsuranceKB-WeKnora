@@ -6,7 +6,7 @@ import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 
 vi.mock('./enterpriseApi', async importOriginal => ({
   ...(await importOriginal<typeof import('./enterpriseApi')>()),

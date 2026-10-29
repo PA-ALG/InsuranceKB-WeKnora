@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 vi.mock('@/utils/request', () => ({ get: vi.fn(), post: vi.fn() }))
 import { get } from '@/utils/request'
 import EnterpriseReviews from './EnterpriseReviews.vue'

@@ -2,7 +2,7 @@
 // which kind of source it is (Spec docs/design/slices/Q1-问答接入发布版本.md §2.3).
 import { describe, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 import { sourceTier, sourceTierLabel } from './sourceTier'
 
 const { t } = createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }).global

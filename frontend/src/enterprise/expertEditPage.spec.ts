@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { reactive } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { routeLocationKey, routerKey } from 'vue-router'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 
 const access = vi.hoisted(() => ({ role: 'admin' }))
 vi.mock('@/stores/auth', () => {
