@@ -24,17 +24,6 @@ case "${DEFAULT_LOCALE:-}" in
   zh-CN|zh-TW|en-US|ru-RU|ko-KR|ja-JP) RUNTIME_DEFAULT_LOCALE="${DEFAULT_LOCALE}" ;;
 esac
 
-# Schema Wiki MVP IDs are route selectors. Invalid values become inert before
-# they are written into executable config.js.
-schema_wiki_mvp_entry_kb_id=${SCHEMA_WIKI_MVP_ENTRY_KB_ID:-}
-schema_wiki_mvp_serving_kb_id=${SCHEMA_WIKI_MVP_SERVING_KB_ID:-}
-case "$schema_wiki_mvp_entry_kb_id" in
-  *[!A-Za-z0-9._:-]*) schema_wiki_mvp_entry_kb_id= ;;
-esac
-case "$schema_wiki_mvp_serving_kb_id" in
-  *[!A-Za-z0-9._:-]*) schema_wiki_mvp_serving_kb_id= ;;
-esac
-
 # 生成运行时配置文件，注入环境变量到前端
 FILE_MB=${MAX_FILE_SIZE_MB:-50}
 SKILL_MB=${MAX_SKILL_BUNDLE_SIZE_MB:-256}
@@ -49,10 +38,7 @@ cat > /usr/share/nginx/html/config.js << EOF
 window.__RUNTIME_CONFIG__ = {
   MAX_FILE_SIZE_MB: ${FILE_MB},
   MAX_SKILL_BUNDLE_SIZE_MB: ${SKILL_MB},
-  DEFAULT_LOCALE: "${RUNTIME_DEFAULT_LOCALE}",
-  SCHEMA_WIKI_MVP_ENTRY_KB_ID: '${schema_wiki_mvp_entry_kb_id}',
-  SCHEMA_WIKI_MVP_SERVING_KB_ID: '${schema_wiki_mvp_serving_kb_id}',
-  SCHEMA_WIKI_MVP_LABEL: '当前 MVP · 只读'
+  DEFAULT_LOCALE: "${RUNTIME_DEFAULT_LOCALE}"
 };
 EOF
 

@@ -78,8 +78,8 @@ func (args arguments) string(name string) string {
 	return value
 }
 
-// SDK-decoded numbers are reserialized by parseArguments. Their original
-// spelling and any precision lost during SDK decoding cannot be recovered here.
+// parseArguments reserializes the SDK's arguments; mcp-go v1 keeps the
+// literal JSON number, so only plain non-negative integer spellings match.
 var evidenceIndexPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,5})$`)
 
 func nonnegativeInteger(raw json.RawMessage) (int, bool) {

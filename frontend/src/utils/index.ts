@@ -9,9 +9,6 @@ declare global {
       MAX_FILE_SIZE_MB?: number;
       MAX_SKILL_BUNDLE_SIZE_MB?: number;
       DEFAULT_LOCALE?: string;
-      SCHEMA_WIKI_MVP_ENTRY_KB_ID?: string;
-      SCHEMA_WIKI_MVP_SERVING_KB_ID?: string;
-      SCHEMA_WIKI_MVP_LABEL?: string;
     };
   }
 }

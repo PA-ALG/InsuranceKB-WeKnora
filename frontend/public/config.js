@@ -6,7 +6,4 @@ window.__RUNTIME_CONFIG__ = {
   EMBED_BASE_URL: '',
   // Optional: default UI locale for first-time visitors (zh-CN | zh-TW | en-US | ru-RU | ko-KR | ja-JP)
   DEFAULT_LOCALE: '',
-  SCHEMA_WIKI_MVP_ENTRY_KB_ID: '',
-  SCHEMA_WIKI_MVP_SERVING_KB_ID: '',
-  SCHEMA_WIKI_MVP_LABEL: '当前 MVP · 只读',
 };
