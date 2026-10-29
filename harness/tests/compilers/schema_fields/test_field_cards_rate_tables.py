@@ -60,10 +60,21 @@ S12C5_RULES = {
     "sum_assured_growth_rate": ("includes", "bad"),
     "non_guaranteed_benefit_rules": ("includes", "excludes", "bad"),
 }
+# S12c-9 rewrote these rules (plus a product-bundle example's pitfalls) and added
+# step-two-only writing rules; test_field_cards_writing_rules.py checks them, so they are
+# neutralised here too.
+S12C9_RULES = {
+    "product_bundle_rules": ("includes", "excludes", "bad", "examples"),
+    "sum_assured_range": ("includes", "unknown_rule"),
+    "accident_definition_and_criteria": ("includes", "excludes", "bad"),
+    "exclusions": ("includes",),
+}
 # draft-2026-10-16b with the parts above neutralised; any other edit changes this digest.
 # S12c-5: the S12C5_RULES are neutralised too, which gives the same digest for the cards before
 # and after S12c-5 (was 5da2b4857e0bc38be6c503cc4a4633cd61df1af127c91644fcbc45b68b76a1ab).
-UNTOUCHED_DIGEST = "f8cff3cd899f75410837024e27701a07f13ddbf0b00082a3cf0702da29c668f3"
+# S12c-9: the S12C9_RULES and writing rules are neutralised too; the cards before and after S12c-9
+# give the same digest (was f8cff3cd899f75410837024e27701a07f13ddbf0b00082a3cf0702da29c668f3).
+UNTOUCHED_DIGEST = "480f83d9bcf67d4bd2b1e7412d977e3433ab7483a21c26c4602b77c6c37058b9"
 
 
 def untouched(cards: dict[str, Any]) -> str:
@@ -77,17 +88,19 @@ def untouched(cards: dict[str, Any]) -> str:
         data[key]["examples"] = [
             e for e in data[key].get("examples", []) if e["product_id"] not in removed
         ]
-    for key, rules in S12C5_RULES.items():
+    for key, rules in (*S12C5_RULES.items(), *S12C9_RULES.items()):
         for rule in rules:
             data[key][rule] = [] if rule in ("excludes", "examples") else ""
+    for card in data.values():
+        card.pop("writing_rule", None)
     text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def test_the_cards_carry_the_s4i_version() -> None:
-    assert (
-        cards_version() == "draft-2026-10-28a"
-    )  # S4j: the payment term may cite rate-table headers; S12c-5: nine field boundaries
+    # S4j: the payment term may cite rate-table headers; S12c-5: nine field boundaries;
+    # S12c-9: contamination hot spots (writing rules and four selection boundaries)
+    assert cards_version() == "draft-2026-10-29a"
 
 
 def test_the_changed_rules_read_exactly_as_specified() -> None:
