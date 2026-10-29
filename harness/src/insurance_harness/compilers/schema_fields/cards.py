@@ -63,6 +63,11 @@ def card_payload(
     payload: dict[str, Any] = {key: card[key] for key in rules if card.get(key)}
     payload["excludes"] = [f"{content}（归入 {target}）" for content, target in card["excludes"]]
     if not examples:
+        # S12c-9: a writing rule says what the value leaves out of a passage it still uses. It
+        # reaches step two only, so step one keeps selecting the passage (S12c-5: tightening a
+        # card's selection rules on long mixed passages dropped the field's own evidence).
+        if card.get("writing_rule"):
+            payload["writing_rule"] = card["writing_rule"]
         return payload
     same_pack = [
         {
