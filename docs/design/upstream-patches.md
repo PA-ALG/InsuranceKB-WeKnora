@@ -28,7 +28,7 @@
 | `internal/mcpserver/tools_ingest.go` | S1a | 按目标 KB 属主分类，在权限授予与文档修改前拒绝受管写入 | 部分（通用策略扩展点） | 同上 |
 | `internal/router/router_wiki_test.go` | S1a | 同步必带分类器入口和属主查询装配，原断言不变 | 否（测试装配） | 上游提供原生 Wiki 写策略后恢复 |
 | `internal/router/router_api_key_capabilities_test.go` | S1a | 同步必带分类器入口，原能力断言不变 | 否（测试装配） | 同上 |
-| 其余约 430 个（含格式改动） | 831 之前 | 见 git 历史 | — | S7 回退格式改动 |
+| 其余约 430 个（含格式改动） | 831 之前 | 见 git 历史 | — | S7 回退格式改动。2026-10-29 盘点（`main@5c9e9ae5f`，G10 共 477 个）：只改格式 88、只改注释 45、只改标识符大小写 6、实质改动 338。S7f-1 回退其中 129 个到上游字节（清单 `tests/architecture/s7f1_format_only_files.txt`，方法见 S7f-1 Spec 附录 A），大小写重命名与实质补丁另立 S7f-1b、S7f-3 |
 
 S1a 实际修改 16 个上游文件，其中 11 个此前未偏离上游：Agent 五个写源文件与两个夹具、MCP 两个文件、
 路由两个夹具。`internal/mcpserver/scope.go` 未改。按 S1a Spec §6 登记，G10 基线由 Claude 审查后更新；
