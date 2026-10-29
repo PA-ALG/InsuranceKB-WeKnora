@@ -263,7 +263,7 @@ def test_one_draw_keeps_the_previous_request_sequence() -> None:
     SchemaFieldsCompiler(default, batch_size=10, max_calls=6).compile(
         "product",
         [WAITING],
-        [Page()],  # type: ignore[list-item]
+        [Page()],
     )
     explicit, completion = run(*answers, draws=1)
     assert completion.calls == default.calls
@@ -292,7 +292,7 @@ def test_compile_run_builds_the_compiler_with_two_draws_and_their_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     built: list[dict[str, Any]] = []
-    real = compile_run.SchemaFieldsCompiler
+    real = SchemaFieldsCompiler
 
     def spy(*args: Any, **kwargs: Any) -> SchemaFieldsCompiler:
         built.append(kwargs)
