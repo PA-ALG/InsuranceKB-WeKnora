@@ -1,11 +1,11 @@
 {
-  "version": "1",
-  "basis": "RV4 (user 2026-10-18): while the critical illness pilot runs, every machine-reviewed claim is spot-checked; must-check fields are the pack's highest-risk ones.",
-  "default": {"rate": 1.0, "minimum": 5, "target": 0.9, "must_check": []},
+  "version": "2",
+  "basis": "RV4 v2 (Claude, delegated, 2026-10-29): the critical illness pilot (v1, rate 1.0) was revoked on 2026-10-28 (review policy v3); machine-route claims are now GPT-6 judge-approved, so human spot-checks sample 10% with at least 2 per pack per publish to calibrate the judge route. Must-check fields stay the pack's highest-risk ones. Rollback: restore v1.",
+  "default": {"rate": 0.1, "minimum": 2, "target": 0.9, "must_check": []},
   "packs": {
     "schemapack_critical_illness_insurance": {
-      "rate": 1.0,
-      "minimum": 5,
+      "rate": 0.1,
+      "minimum": 2,
       "target": 0.9,
       "must_check": ["coverage_responsibilities", "disease_benefit_rules", "exclusions", "waiting_period"]
     }
