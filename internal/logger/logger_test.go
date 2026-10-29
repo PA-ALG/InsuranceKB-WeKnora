@@ -276,10 +276,7 @@ func TestCloneContextKeepsTheNonInteractiveOAuthMark(t *testing.T) {
 		t.Fatal("IsMCPOAuthNonInteractive(cloned) = false, want the mark to survive a detach")
 	}
 	if types.IsMCPOAuthNonInteractive(CloneContext(context.Background())) {
-		t.Fatal(
-			"IsMCPOAuthNonInteractive(cloned) = true for an unmarked context, want" +
-				" interactive prompts to stay possible",
-		)
+		t.Fatal("IsMCPOAuthNonInteractive(cloned) = true for an unmarked context, want interactive prompts to stay possible")
 	}
 }
 

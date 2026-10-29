@@ -69,11 +69,8 @@ func TestRemoteBindingDecision(t *testing.T) {
 			preserve: true,
 		},
 		{
-			name: "wrapped terminal",
-			err: fmt.Errorf(
-				"probe failed: %w",
-				NewRemoteError(SandboxTypeCube, "Get", RemoteErrorKindTerminal, "dead", nil),
-			),
+			name:     "wrapped terminal",
+			err:      fmt.Errorf("probe failed: %w", NewRemoteError(SandboxTypeCube, "Get", RemoteErrorKindTerminal, "dead", nil)),
 			replace:  true,
 			preserve: false,
 		},
@@ -137,8 +134,7 @@ func TestIsRemoteDirAlreadyExists(t *testing.T) {
 
 	cubeSeedErr := NewRemoteError(
 		SandboxTypeCube, "MakeDir", RemoteErrorKindInternal,
-		"failed to make dir /opt/weknora/tenant/skills/sk-1: directory already"+
-			" exists: /opt/weknora/tenant/skills/sk-1",
+		"failed to make dir /opt/weknora/tenant/skills/sk-1: directory already exists: /opt/weknora/tenant/skills/sk-1",
 		nil,
 	)
 	tests := []struct {
@@ -239,8 +235,7 @@ func TestSnapshotDeleteKindPromotesInUseToConflict(t *testing.T) {
 			op:   "DeleteSnapshot",
 			kind: RemoteErrorKindInternal,
 			msg: "unavailable: CubeMaster returned error code 130409: template attempt is already in progress: " +
-				"snapshot snap-6a6707d7b51246c68ad643ee still has 2 active runtime" +
-				" ref(s): a@host, b@host (HTTP 500)",
+				"snapshot snap-6a6707d7b51246c68ad643ee still has 2 active runtime ref(s): a@host, b@host (HTTP 500)",
 			want: RemoteErrorKindConflict,
 		},
 		{
