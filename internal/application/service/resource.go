@@ -347,8 +347,7 @@ func derivedGrantToken(resourceID string, ttl time.Duration) (string, time.Time,
 	}
 	windowStart := time.Now().UTC().Truncate(window)
 	mac := hmac.New(sha256.New, key)
-	// hash.Hash.Write never returns an error.
-	_, _ = fmt.Fprintf(mac, "resource_grant:v1:%s:%d", resourceID, windowStart.Unix())
+	fmt.Fprintf(mac, "resource_grant:v1:%s:%d", resourceID, windowStart.Unix())
 	token := base64.RawURLEncoding.EncodeToString(mac.Sum(nil)[:16])
 	return token, windowStart.Add(ttl), true
 }

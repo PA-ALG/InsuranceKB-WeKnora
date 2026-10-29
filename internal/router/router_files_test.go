@@ -111,26 +111,15 @@ func (s *stubResourceCatalog) ResolveAccessGrant(context.Context, string) (*type
 	return s.resource, nil
 }
 
-func (s *stubFileService) CheckConnectivity(_ context.Context) error {
+func (s *stubFileService) CheckConnectivity(ctx context.Context) error {
 	return nil
 }
 
-func (s *stubFileService) SaveFile(
-	_ context.Context,
-	_ *multipart.FileHeader,
-	_ uint64,
-	_ string,
-) (string, error) {
+func (s *stubFileService) SaveFile(ctx context.Context, file *multipart.FileHeader, tenantID uint64, knowledgeID string) (string, error) {
 	panic("unexpected call to SaveFile")
 }
 
-func (s *stubFileService) SaveBytes(
-	_ context.Context,
-	_ []byte,
-	_ uint64,
-	_ string,
-	_ bool,
-) (string, error) {
+func (s *stubFileService) SaveBytes(ctx context.Context, data []byte, tenantID uint64, fileName string, temp bool) (string, error) {
 	panic("unexpected call to SaveBytes")
 }
 
@@ -141,20 +130,15 @@ func (s *stubFileService) GetFile(ctx context.Context, filePath string) (io.Read
 	return s.getFile(ctx, filePath)
 }
 
-func (s *stubFileService) GetFileURL(_ context.Context, _ string) (string, error) {
+func (s *stubFileService) GetFileURL(ctx context.Context, filePath string) (string, error) {
 	panic("unexpected call to GetFileURL")
 }
 
-func (s *stubFileService) DeleteFile(_ context.Context, _ string) error {
+func (s *stubFileService) DeleteFile(ctx context.Context, filePath string) error {
 	panic("unexpected call to DeleteFile")
 }
 
-func (s *stubFileService) CopyFile(
-	_ context.Context,
-	_ string,
-	_ uint64,
-	_ string,
-) (string, error) {
+func (s *stubFileService) CopyFile(ctx context.Context, srcPath string, tenantID uint64, knowledgeID string) (string, error) {
 	panic("unexpected call to CopyFile")
 }
 
@@ -165,7 +149,7 @@ func TestServeFilesFallsBackToGlobalFileService(t *testing.T) {
 	engine := gin.New()
 	var requestedPath string
 	serveFiles(engine, &stubFileService{
-		getFile: func(_ context.Context, filePath string) (io.ReadCloser, error) {
+		getFile: func(ctx context.Context, filePath string) (io.ReadCloser, error) {
 			requestedPath = filePath
 			return io.NopCloser(strings.NewReader("fallback-body")), nil
 		},
@@ -197,15 +181,10 @@ func TestServeFilesResolvesShortResourceReference(t *testing.T) {
 
 	engine := gin.New()
 	var requestedPath string
-	serveFilesWithResources(
-		engine,
-		&stubFileService{getFile: func(_ context.Context, path string) (io.ReadCloser, error) {
-			requestedPath = path
-			return io.NopCloser(strings.NewReader("image")), nil
-		}},
-		nil,
-		&stubResourceCatalog{resource: &types.StoredResource{TenantID: 42, PhysicalPath: physical}},
-	)
+	serveFilesWithResources(engine, &stubFileService{getFile: func(_ context.Context, path string) (io.ReadCloser, error) {
+		requestedPath = path
+		return io.NopCloser(strings.NewReader("image")), nil
+	}}, nil, &stubResourceCatalog{resource: &types.StoredResource{TenantID: 42, PhysicalPath: physical}})
 
 	req := httptest.NewRequest(http.MethodGet, "/files?file_path="+url.QueryEscape(ref), nil)
 	req = req.WithContext(context.WithValue(req.Context(), types.TenantInfoContextKey, &types.Tenant{ID: 42}))
@@ -224,18 +203,10 @@ func TestServeFilesRejectsCrossTenantResourceReference(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	const ref = "resource://AbCdEfGhIjKlMnOpQrStUv"
 	engine := gin.New()
-	serveFilesWithResources(
-		engine,
-		&stubFileService{getFile: func(context.Context, string) (io.ReadCloser, error) {
-			t.Fatal("GetFile should not be called")
-			return nil, nil
-		}},
-		nil,
-		&stubResourceCatalog{resource: &types.StoredResource{
-			TenantID:     7,
-			PhysicalPath: "local://7/exports/a.png",
-		}},
-	)
+	serveFilesWithResources(engine, &stubFileService{getFile: func(context.Context, string) (io.ReadCloser, error) {
+		t.Fatal("GetFile should not be called")
+		return nil, nil
+	}}, nil, &stubResourceCatalog{resource: &types.StoredResource{TenantID: 7, PhysicalPath: "local://7/exports/a.png"}})
 
 	req := httptest.NewRequest(http.MethodGet, "/files?file_path="+url.QueryEscape(ref), nil)
 	req = req.WithContext(context.WithValue(req.Context(), types.TenantInfoContextKey, &types.Tenant{ID: 42}))
@@ -292,7 +263,7 @@ func TestServeFilesDoesNotFallbackWhenProviderDoesNotMatchGlobalStorage(t *testi
 
 	engine := gin.New()
 	serveFiles(engine, &stubFileService{
-		getFile: func(_ context.Context, filePath string) (io.ReadCloser, error) {
+		getFile: func(ctx context.Context, filePath string) (io.ReadCloser, error) {
 			t.Fatalf("GetFile should not be called for mismatched provider, got %q", filePath)
 			return nil, nil
 		},
@@ -315,17 +286,13 @@ func TestServeFilesRejectsCrossTenantPath(t *testing.T) {
 
 	engine := gin.New()
 	serveFiles(engine, &stubFileService{
-		getFile: func(_ context.Context, filePath string) (io.ReadCloser, error) {
+		getFile: func(ctx context.Context, filePath string) (io.ReadCloser, error) {
 			t.Fatalf("GetFile should not be called for cross-tenant path, got %q", filePath)
 			return nil, nil
 		},
 	})
 
-	req := httptest.NewRequest(
-		http.MethodGet,
-		"/files?file_path="+url.QueryEscape("local://7/knowledge/secret.pdf"),
-		nil,
-	)
+	req := httptest.NewRequest(http.MethodGet, "/files?file_path="+url.QueryEscape("local://7/knowledge/secret.pdf"), nil)
 	req = req.WithContext(context.WithValue(req.Context(), types.TenantInfoContextKey, &types.Tenant{ID: 42}))
 
 	recorder := httptest.NewRecorder()
@@ -342,7 +309,7 @@ func TestServeFilesRejectsPathWithoutTenantSegment(t *testing.T) {
 
 	engine := gin.New()
 	serveFiles(engine, &stubFileService{
-		getFile: func(_ context.Context, filePath string) (io.ReadCloser, error) {
+		getFile: func(ctx context.Context, filePath string) (io.ReadCloser, error) {
 			t.Fatalf("GetFile should not be called without tenant segment, got %q", filePath)
 			return nil, nil
 		},
@@ -651,14 +618,8 @@ func TestMessageScopedFilesServesSharedAgentResource(t *testing.T) {
 			agentID string,
 			sourceTenantID ...uint64,
 		) (*types.CustomAgent, error) {
-			if tenantID != callerTenantID || agentID != "agent-1" || len(sourceTenantID) != 1 ||
-				sourceTenantID[0] != ownerTenantID {
-				t.Fatalf(
-					"unexpected shared-agent lookup tenant=%d agent=%s source=%v",
-					tenantID,
-					agentID,
-					sourceTenantID,
-				)
+			if tenantID != callerTenantID || agentID != "agent-1" || len(sourceTenantID) != 1 || sourceTenantID[0] != ownerTenantID {
+				t.Fatalf("unexpected shared-agent lookup tenant=%d agent=%s source=%v", tenantID, agentID, sourceTenantID)
 			}
 			if revoked {
 				return nil, nil

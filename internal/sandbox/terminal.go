@@ -1,4 +1,3 @@
-// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: interactive terminal (PTY) capability.
 //
 // The terminal is an optional, provider-neutral capability alongside
@@ -174,11 +173,7 @@ func handleTrafficAccessToken(handle RemoteSandboxHandle) string {
 // (SupportsTerminals) and narrowed with TerminalManagerFrom.
 type RemoteTerminalManager interface {
 	// OpenTerminal opens a new PTY inside the sandbox behind handle.
-	OpenTerminal(
-		ctx context.Context,
-		handle RemoteSandboxHandle,
-		opts RemoteTerminalOptions,
-	) (RemoteTerminalSession, error)
+	OpenTerminal(ctx context.Context, handle RemoteSandboxHandle, opts RemoteTerminalOptions) (RemoteTerminalSession, error)
 }
 
 // TerminalManagerFrom narrows a client to its terminal capability. It
@@ -229,16 +224,16 @@ func EffectiveTerminalIdleDisconnect(d time.Duration) time.Duration {
 	return d
 }
 
-// terminalTTLRefreshMinimum is the floor for how often an open terminal
+// terminalTTLRefreshMin is the floor for how often an open terminal
 // refreshes the provider sandbox idle timeout. Tests lower it.
-var terminalTTLRefreshMinimum = 15 * time.Second
+var terminalTTLRefreshMin = 15 * time.Second
 
 const terminalTTLRefreshMax = 2 * time.Minute
 
 func terminalTTLRefreshInterval(ttl time.Duration) time.Duration {
 	interval := ttl / 3
-	if interval < terminalTTLRefreshMinimum {
-		return terminalTTLRefreshMinimum
+	if interval < terminalTTLRefreshMin {
+		return terminalTTLRefreshMin
 	}
 	if interval > terminalTTLRefreshMax {
 		return terminalTTLRefreshMax

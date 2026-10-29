@@ -280,14 +280,7 @@ func redactedDebugConfig(config map[string]string) map[string]string {
 	return out
 }
 
-func modelDebugRequestPreview(
-	model *types.Model,
-	input string,
-	documents []string,
-	opts ModelDebugOptions,
-	fileName string,
-	fileSize int64,
-) gin.H {
+func modelDebugRequestPreview(model *types.Model, input string, documents []string, opts ModelDebugOptions, fileName string, fileSize int64) gin.H {
 	preview := gin.H{
 		"model_id":   model.ID,
 		"model_name": model.Name,
@@ -316,14 +309,7 @@ func modelDebugRequestPreview(
 	return preview
 }
 
-func writeModelDebugResult(
-	c *gin.Context,
-	started time.Time,
-	request gin.H,
-	response any,
-	callErr error,
-	observations gin.H,
-) {
+func writeModelDebugResult(c *gin.Context, started time.Time, request gin.H, response any, callErr error, observations gin.H) {
 	data := gin.H{
 		"ok":           callErr == nil,
 		"elapsed_ms":   time.Since(started).Milliseconds(),
@@ -406,7 +392,7 @@ func (h *ModelHandler) DebugModel(c *gin.Context) {
 	// would otherwise report a rejected upload as one that was never sent.
 	limitUploadBody(c, secutils.GetMaxFileSize())
 	if _, formErr := c.MultipartForm(); formErr != nil && isRequestBodyTooLarge(formErr) {
-		_ = c.Error(errors.NewBadRequestError(
+		c.Error(errors.NewBadRequestError(
 			fmt.Sprintf("file cannot exceed %d MB", secutils.GetMaxFileSizeMB())))
 		return
 	}

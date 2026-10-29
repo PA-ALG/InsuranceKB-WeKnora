@@ -375,8 +375,7 @@ func (c *ArtifactCollector) collect(
 		// exactly this branch: either the sandbox was already reaped or
 		// the skill wrote to a different directory. Logging the exact
 		// (session, dir) pair makes it a 30-second grep to confirm.
-		logger.Infof(ctx, "[ArtifactCollector] no entries under %s (session=%s) — sandbox reaped or"+
-			" skill wrote elsewhere",
+		logger.Infof(ctx, "[ArtifactCollector] no entries under %s (session=%s) — sandbox reaped or skill wrote elsewhere",
 			outputDir, sessionID)
 		return nil, nil
 	}
@@ -573,8 +572,7 @@ func (c *ArtifactCollector) hashStoredArtifact(ctx context.Context, art types.Me
 	if err != nil || file == nil {
 		return ""
 	}
-	// Closing this read-only resource cannot change the completed result.
-	defer func() { _ = file.Close() }()
+	defer file.Close()
 	data, err := io.ReadAll(file)
 	if err != nil {
 		return ""

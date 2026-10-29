@@ -835,7 +835,7 @@ func (s *agentService) userEnvResolver(
 	if tenantID == 0 {
 		return nil
 	}
-	return newUserEnvResolver(
+	return NewUserEnvResolver(
 		rows,
 		repository.NewTenantSkillRepository(s.db),
 		sandboxCreateTimeEnvVars(ctx, s.db, tenantID, configID),

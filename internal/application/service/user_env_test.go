@@ -60,19 +60,15 @@ func (r *userEnvConfigRepo) ListByTenant(
 func (r *userEnvConfigRepo) ListAll(context.Context) ([]*types.TenantSandboxConfigEntity, error) {
 	panic("ListAll is outside the user env surface")
 }
-
 func (r *userEnvConfigRepo) Update(context.Context, *types.TenantSandboxConfigEntity) error {
 	panic("Update is outside the user env surface")
 }
-
 func (r *userEnvConfigRepo) SoftDelete(context.Context, uint64, string) error {
 	panic("SoftDelete is outside the user env surface")
 }
-
 func (r *userEnvConfigRepo) SetCordon(context.Context, uint64, string, time.Time) error {
 	panic("SetCordon is outside the user env surface")
 }
-
 func (r *userEnvConfigRepo) ClearCordon(context.Context, uint64, string) error {
 	panic("ClearCordon is outside the user env surface")
 }
@@ -404,6 +400,17 @@ func TestSetMineKeepsTheTwoScopesApart(t *testing.T) {
 	require.NoError(t, svc.SetMineSkill(ctx, "sk-ready", "API_TOKEN", "skill-scoped"))
 
 	require.Len(t, repo.userEnvs, 2)
+}
+
+func userEnvByName(t *testing.T, rows []*types.TenantUserEnvVar, name string) *types.TenantUserEnvVar {
+	t.Helper()
+	for _, row := range rows {
+		if row != nil && row.Name == name && row.SkillID == "sk-ready" {
+			return row
+		}
+	}
+	t.Fatalf("no skill-scoped row for %q (%+v)", name, rows)
+	return nil
 }
 
 func TestCaptureSkillEnvWritesDeclaredNamesForTheSpeaker(t *testing.T) {
