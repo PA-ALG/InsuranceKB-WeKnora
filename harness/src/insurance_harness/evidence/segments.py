@@ -235,6 +235,8 @@ class SegmentedSource:
                     for s in _split(clipped, number)
                 )
         self.segments = tuple(segments)
+        # The "D<n>" prefix of each document's segment ids, in reading order.
+        self.document_ids = {document: f"D{number}" for document, number in numbers.items()}
         self._position = {segment.id: index for index, segment in enumerate(self.segments)}
         self._pages = {(page.document, page.page): page for page in self.pages}
         self._content: dict[str, str] = {}

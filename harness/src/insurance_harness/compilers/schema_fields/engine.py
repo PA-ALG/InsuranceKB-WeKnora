@@ -213,9 +213,16 @@ class SchemaFieldsCompiler:
         *,
         table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
         carry: Mapping[str, Sequence[CarriedQuote]] | None = None,
+        roles: Mapping[str, str | None] | None = None,
     ) -> CompileOutput:
-        """carry: reviewed quotes per field a recompile hands to step two (S12c-4 Spec §2.2)."""
+        """carry: reviewed quotes per field a recompile hands to step two (S12c-4 Spec §2.2).
+        roles: each document's material role, shown to step two by segment-id prefix (S12c-7)."""
         fields, source = self._prepare(entity_id, definitions, pages, table_headers=table_headers)
+        documents = {
+            source.document_ids[document]: role
+            for document, role in (roles or {}).items()
+            if role is not None and document in source.document_ids
+        }
         policy = load_trust_policy()
         calls = 0
 
@@ -276,7 +283,7 @@ class SchemaFieldsCompiler:
         values: dict[str, str | None] = {}
         used: dict[str, list[str]] = {}
         for items in _value_batches(present, self._value_batch_chars):
-            answer = send(build_value_request(entity_id, items))
+            answer = send(build_value_request(entity_id, items, documents))
             rows = parse_value_rows(answer, [definition for definition, _ in items])
             for key, (written, cited) in rows.items():
                 values[key], used[key] = written, cited

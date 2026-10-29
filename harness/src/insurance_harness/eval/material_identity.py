@@ -60,6 +60,11 @@ def material_identities(
     return sorted(materials)
 
 
+def document_role_map(read: list[PageText] | TrustedPages[PageText]) -> Mapping[str, str | None]:
+    """Each read document's role: as the read decided it (recorded or inferred), else inferred."""
+    return read.roles if isinstance(read, TrustedPages) else document_roles(read)
+
+
 def effective_roles(
     materials: Sequence[tuple[str, str]],
     read: list[PageText] | TrustedPages[PageText],
@@ -67,9 +72,7 @@ def effective_roles(
     """Each material identity's effective role (S5b-6): as the read decided it, or as inferred for
     plain evidence pages. Pages a caller supplies without any role decision record none; local
     files with identical bytes share one identity, so their distinct roles are joined."""
-    known: Mapping[str, str | None] = (
-        read.roles if isinstance(read, TrustedPages) else document_roles(read)
-    )
+    known = document_role_map(read)
     roles: dict[str, set[str]] = {}
     for identity, document in materials:
         role = known.get(document)
