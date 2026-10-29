@@ -1,0 +1,17 @@
+{
+  "basis": "费率表.pdf 是《转换标准表》，开头没有“费率表/金额表”，离线认不出角色；线上用户在待确认页确认为费率表（S5b-6，2026-10-27），这里记录同一决定。",
+  "roles": {
+    "保险条款.pdf": {
+      "role": "terms",
+      "sha256": "7e138c8f08dfadfedf7bf2a80c48755ba797a6e50c603dc85f69999f5549952b"
+    },
+    "产品说明书.pdf": {
+      "role": "brochure",
+      "sha256": "9002fb63680323c7ab38f38d36999ec14da361077aeae10b90c334731cc85a80"
+    },
+    "费率表.pdf": {
+      "role": "rate_table",
+      "sha256": "c43cb554ec0c3031fbd6c9d2cedf14e8a57b8a8536c134456ff03fd52bdcb34c"
+    }
+  }
+}

@@ -24,17 +24,33 @@ class PageText:
     text: str
 
 
-def read_pdf(path: Path) -> list[PageText]:
-    """Hash and parse the same snapshot; preserve empty pages and physical numbering."""
-    content = path.read_bytes()
+class PdfReadError(ValueError):
+    """Bytes pdfium cannot read; caller-safe, never the bytes or the engine's message."""
+
+    def __init__(self) -> None:
+        super().__init__("PDF_UNREADABLE")
+
+
+def pdf_pages(document_name: str, content: bytes) -> list[PageText]:
+    """Hash and parse this one byte snapshot; preserve empty pages and physical numbering."""
     digest = hashlib.sha256(content).hexdigest()
-    document = pdfium.PdfDocument(content)
+    try:
+        document = pdfium.PdfDocument(content)
+    except pdfium.PdfiumError as error:
+        raise PdfReadError() from error
     try:
         pages = []
         for number in range(len(document)):
             textpage = document[number].get_textpage()
             text = textpage.get_text_range()
-            pages.append(PageText(path.name, digest, number + 1, text))
+            pages.append(PageText(document_name, digest, number + 1, text))
         return pages
+    except pdfium.PdfiumError as error:
+        raise PdfReadError() from error
     finally:
         document.close()
+
+
+def read_pdf(path: Path) -> list[PageText]:
+    """Read the file once and parse exactly those bytes."""
+    return pdf_pages(path.name, path.read_bytes())
