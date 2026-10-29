@@ -24,7 +24,6 @@ type MemoryHandler struct {
 	memoryService interfaces.MemoryService
 }
 
-// NewMemoryHandler creates handlers for memory operations.
 func NewMemoryHandler(memoryService interfaces.MemoryService) *MemoryHandler {
 	return &MemoryHandler{memoryService: memoryService}
 }
@@ -65,11 +64,11 @@ func (h *MemoryHandler) UpdateSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req updateMemorySettingsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		_ = c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
+		c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
 		return
 	}
 	if req.Enabled == nil {
-		_ = c.Error(apperrors.NewBadRequestError("enabled is required"))
+		c.Error(apperrors.NewBadRequestError("enabled is required"))
 		return
 	}
 	if err := h.memoryService.SetEnabled(ctx, *req.Enabled); err != nil {
@@ -102,7 +101,7 @@ func (h *MemoryHandler) ListItems(c *gin.Context) {
 	case "", types.MemoryStatusActive, types.MemoryStatusSuperseded,
 		types.MemoryStatusArchived, types.MemoryStatusPending:
 	default:
-		_ = c.Error(apperrors.NewBadRequestError("unsupported status"))
+		c.Error(apperrors.NewBadRequestError("unsupported status"))
 		return
 	}
 	limit, offset := memoryListPaging(c)
@@ -264,7 +263,7 @@ func (h *MemoryHandler) CreateItem(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req createMemoryItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		_ = c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
+		c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
 		return
 	}
 	item, err := h.memoryService.CreateItem(ctx, req.Kind, req.Content, req.Importance)
@@ -295,7 +294,7 @@ func (h *MemoryHandler) UpdateItem(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req updateMemoryItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		_ = c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
+		c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
 		return
 	}
 	item, err := h.memoryService.UpdateItem(ctx, c.Param("id"), req.Content, req.Importance)
@@ -450,17 +449,17 @@ func (h *MemoryHandler) Consolidate(c *gin.Context) {
 func (h *MemoryHandler) fail(c *gin.Context, err error, message string) {
 	switch {
 	case errors.Is(err, memory.ErrNoMemoryScope):
-		_ = c.Error(apperrors.NewUnauthorizedError("no principal in request"))
+		c.Error(apperrors.NewUnauthorizedError("no principal in request"))
 	case errors.Is(err, memory.ErrItemNotFound):
-		_ = c.Error(apperrors.NewNotFoundError("memory not found"))
+		c.Error(apperrors.NewNotFoundError("memory not found"))
 	case errors.Is(err, types.ErrMemoryConflict):
-		_ = c.Error(apperrors.NewConflictError(err.Error()))
+		c.Error(apperrors.NewConflictError(err.Error()))
 	case errors.Is(err, memory.ErrSensitiveContent):
-		_ = c.Error(apperrors.NewBadRequestError(err.Error()))
+		c.Error(apperrors.NewBadRequestError(err.Error()))
 	case errors.Is(err, memory.ErrMemoryDisabled):
-		_ = c.Error(apperrors.NewBadRequestError("memory is disabled"))
+		c.Error(apperrors.NewBadRequestError("memory is disabled"))
 	default:
 		logger.ErrorWithFields(c.Request.Context(), err, nil)
-		_ = c.Error(apperrors.NewInternalServerError(message).WithDetails(err.Error()))
+		c.Error(apperrors.NewInternalServerError(message).WithDetails(err.Error()))
 	}
 }

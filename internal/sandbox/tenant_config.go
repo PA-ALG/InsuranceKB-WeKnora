@@ -1,4 +1,3 @@
-// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: tenant sandbox configuration resolution.
 //
 // ResolveEffectiveConfig turns one stored config into the *Config a manager is

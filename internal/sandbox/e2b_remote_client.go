@@ -1,4 +1,3 @@
-// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: E2B adapter for the provider-neutral RemoteSandboxClient.
 //
 // E2BRemoteClient wraps go-e2b and keeps provider-specific configuration,
@@ -71,7 +70,7 @@ func NewE2BRemoteClientWithTransport(
 // A nil pool falls back to the SDK defaults.
 func NewE2BRemoteClientWithPool(
 	cfg *Config,
-	pool *GatewayTransportPool,
+	pool *SandboxGatewayTransportPool,
 ) (*E2BRemoteClient, error) {
 	if pool == nil {
 		return newE2BRemoteClient(cfg, nil, NewInboundTokenRegistry(), nil)
@@ -172,10 +171,8 @@ func (h *e2bRemoteHandle) TrafficAccessToken() string {
 
 // --- RemoteSandboxClient ------------------------------------------------------
 
-// Provider returns the remote sandbox provider identifier.
 func (c *E2BRemoteClient) Provider() RemoteProvider { return SandboxTypeE2B }
 
-// Capabilities reports supported remote sandbox operations.
 func (c *E2BRemoteClient) Capabilities() RemoteSandboxCapabilities {
 	return RemoteSandboxCapabilities{
 		SupportsReconnect:             true,
@@ -213,7 +210,6 @@ func (c *E2BRemoteClient) Health(ctx context.Context) error {
 	return nil
 }
 
-// ListTemplates returns templates available from the sandbox provider.
 func (c *E2BRemoteClient) ListTemplates(ctx context.Context) ([]RemoteTemplate, error) {
 	items, err := c.client.ListTemplates(ctx)
 	if err != nil {
@@ -476,8 +472,7 @@ func (c *E2BRemoteClient) DeleteSupersededStandardTemplates(ctx context.Context,
 // either way); required when rebuilding from an older image that does not.
 const e2bPtyPromptOverrideCmd = `. /etc/weknora/pty-prompt.sh 2>/dev/null; ` +
 	`for f in /root/.bashrc /home/user/.bashrc /etc/profile.d/zz-weknora-prompt.sh; do ` +
-	"grep -q /etc/weknora/pty-prompt.sh \"$f\" 2>/dev/null || echo '." +
-	" /etc/weknora/pty-prompt.sh' >> \"$f\"; " +
+	`grep -q /etc/weknora/pty-prompt.sh "$f" 2>/dev/null || echo '. /etc/weknora/pty-prompt.sh' >> "$f"; ` +
 	`done`
 
 func (c *E2BRemoteClient) buildStandardTemplate(ctx context.Context) (*RemoteTemplate, error) {
@@ -550,7 +545,6 @@ func (c *E2BRemoteClient) buildDesktopTemplate(ctx context.Context) (*RemoteTemp
 	}, nil
 }
 
-// Create creates a remote sandbox from the requested configuration.
 func (c *E2BRemoteClient) Create(
 	ctx context.Context,
 	request RemoteCreateRequest,
@@ -640,7 +634,6 @@ func (c *E2BRemoteClient) Create(
 	}, nil
 }
 
-// Connect connects to an existing remote sandbox.
 func (c *E2BRemoteClient) Connect(
 	ctx context.Context,
 	request RemoteConnectRequest,
@@ -735,7 +728,6 @@ func (c *E2BRemoteClient) Get(
 	return &summary, nil
 }
 
-// List lists remote sandboxes matching the requested filter.
 func (c *E2BRemoteClient) List(
 	ctx context.Context,
 	filter RemoteListFilter,
@@ -871,7 +863,6 @@ func e2bListStates(states []RemoteSandboxState) []string {
 	return result
 }
 
-// Delete deletes the requested remote sandbox.
 func (c *E2BRemoteClient) Delete(ctx context.Context, sandboxID string) error {
 	if strings.TrimSpace(sandboxID) == "" {
 		return e2bInvalidRequest("Delete", "sandbox ID is required", nil)
@@ -901,7 +892,6 @@ func (c *E2BRemoteClient) Delete(ctx context.Context, sandboxID string) error {
 	return nil
 }
 
-// Exec runs a command in the remote sandbox.
 func (c *E2BRemoteClient) Exec(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1013,7 +1003,7 @@ func (c *E2BRemoteClient) Exec(
 	}, nil
 }
 
-// WriteFile Filesystem operations name DefaultSandboxExecUser explicitly rather than
+// Filesystem operations name DefaultSandboxExecUser explicitly rather than
 // relying on the daemon's default account. Naming the user is required for
 // interoperability: E2B Cloud falls back to "user" when the request omits it,
 // while other E2B-compatible control planes reject the call outright. The
@@ -1039,7 +1029,6 @@ func (c *E2BRemoteClient) WriteFile(
 	return nil
 }
 
-// ReadFile reads content from a remote sandbox file.
 func (c *E2BRemoteClient) ReadFile(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1059,7 +1048,6 @@ func (c *E2BRemoteClient) ReadFile(
 	return content, nil
 }
 
-// ListDir lists entries in a remote sandbox directory.
 func (c *E2BRemoteClient) ListDir(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1089,7 +1077,6 @@ func (c *E2BRemoteClient) ListDir(
 	return result, nil
 }
 
-// MakeDir creates a directory in the remote sandbox.
 func (c *E2BRemoteClient) MakeDir(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1103,14 +1090,10 @@ func (c *E2BRemoteClient) MakeDir(
 		return e2bInvalidRequest("MakeDir", "path is required", nil)
 	}
 	return makeDirTree(dir, func(component string) error {
-		return normalizeE2BError(
-			"MakeDir",
-			sandbox.Filesystem.MakeDir(ctx, component, e2b.WithFileUser(remoteFileUser(ctx))),
-		)
+		return normalizeE2BError("MakeDir", sandbox.Filesystem.MakeDir(ctx, component, e2b.WithFileUser(remoteFileUser(ctx))))
 	})
 }
 
-// Remove removes a path from the remote sandbox.
 func (c *E2BRemoteClient) Remove(
 	ctx context.Context,
 	handle RemoteSandboxHandle,
@@ -1129,7 +1112,6 @@ func (c *E2BRemoteClient) Remove(
 	return nil
 }
 
-// Stat reads metadata for a remote sandbox path.
 func (c *E2BRemoteClient) Stat(
 	ctx context.Context,
 	handle RemoteSandboxHandle,

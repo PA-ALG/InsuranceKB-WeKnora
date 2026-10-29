@@ -237,29 +237,29 @@ func (h *TenantMemberHandler) AddMember(c *gin.Context) {
 
 	// Add the member and write the 201 / mapped-error response through the
 	// shared helper (also used by the invitation auto-accept path).
-	addMemberAndRespond(ctx, c, h.memberService, user, tenantID, req.Role, invitedBy)
+	addMemberAndRespond(c, ctx, h.memberService, user, tenantID, req.Role, invitedBy)
 }
 
 func writeAddMemberError(
-	ctx context.Context,
 	c *gin.Context,
+	ctx context.Context,
 	user *types.User,
 	tenantID uint64,
 	err error,
 ) {
 	switch {
 	case errors.Is(err, service.ErrInvalidTenantRole):
-		_ = c.Error(apperrors.NewValidationError(err.Error()))
+		c.Error(apperrors.NewValidationError(err.Error()))
 	case errors.Is(err, service.ErrAPIKeyCannotAssignOwner):
-		_ = c.Error(apperrors.NewForbiddenError(err.Error()))
+		c.Error(apperrors.NewForbiddenError(err.Error()))
 	case errors.Is(err, service.ErrMembershipAlreadyExists):
 		// 409 reads better than 400 here: the request was syntactically
 		// fine, the conflict is semantic ("already a member").
-		_ = c.Error(apperrors.NewConflictError(err.Error()))
+		c.Error(apperrors.NewConflictError(err.Error()))
 	default:
 		logger.Errorf(ctx, "AddMember failed: user=%s tenant=%d err=%v",
 			user.ID, tenantID, err)
-		_ = c.Error(apperrors.NewInternalServerError("failed to add member").WithDetails(err.Error()))
+		c.Error(apperrors.NewInternalServerError("failed to add member").WithDetails(err.Error()))
 	}
 }
 
@@ -289,8 +289,8 @@ func writeAddMemberSuccess(c *gin.Context, user *types.User, member *types.Tenan
 // Shared by TenantMemberHandler.AddMember and the auto-accept branch of
 // TenantInvitationHandler.CreateInvitation so the mapping never drifts.
 func addMemberAndRespond(
-	ctx context.Context,
 	c *gin.Context,
+	ctx context.Context,
 	memberService interfaces.TenantMemberService,
 	user *types.User,
 	tenantID uint64,
@@ -299,7 +299,7 @@ func addMemberAndRespond(
 ) {
 	member, err := memberService.AddMember(ctx, user.ID, tenantID, role, invitedBy)
 	if err != nil {
-		writeAddMemberError(ctx, c, user, tenantID, err)
+		writeAddMemberError(c, ctx, user, tenantID, err)
 		return
 	}
 	writeAddMemberSuccess(c, user, member)

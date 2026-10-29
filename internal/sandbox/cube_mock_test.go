@@ -80,9 +80,7 @@ func (m *cubeMockServer) URL() string { return m.server.URL }
 
 // SetExecutor installs a callback that is invoked when a command is executed
 // inside any sandbox managed by this mock.
-func (m *cubeMockServer) SetExecutor(
-	f func(sandboxID, cmd string, args []string) (stdout, stderr string, exitCode int),
-) {
+func (m *cubeMockServer) SetExecutor(f func(sandboxID, cmd string, args []string) (stdout, stderr string, exitCode int)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.executor = f
@@ -102,36 +100,12 @@ func (m *cubeMockServer) handle(w http.ResponseWriter, r *http.Request) {
 		m.handleCreate(w, r)
 	case r.URL.Path == "/sandboxes" && r.Method == http.MethodGet:
 		m.handleList(w, r)
-	case strings.HasPrefix(
-		r.URL.Path,
-		"/sandboxes/",
-	) &&
-		strings.HasSuffix(
-			r.URL.Path,
-			"/timeout",
-		) &&
-		r.Method == http.MethodPost:
+	case strings.HasPrefix(r.URL.Path, "/sandboxes/") && strings.HasSuffix(r.URL.Path, "/timeout") && r.Method == http.MethodPost:
 		m.handleSetTimeout(w, r)
-	case strings.HasPrefix(
-		r.URL.Path,
-		"/sandboxes/",
-	) &&
-		strings.HasSuffix(
-			r.URL.Path,
-			"/connect",
-		) &&
-		r.Method == http.MethodPost:
+	case strings.HasPrefix(r.URL.Path, "/sandboxes/") && strings.HasSuffix(r.URL.Path, "/connect") && r.Method == http.MethodPost:
 		m.connectCount.Add(1)
 		m.handleConnect(w, r)
-	case strings.HasPrefix(
-		r.URL.Path,
-		"/sandboxes/",
-	) &&
-		strings.HasSuffix(
-			r.URL.Path,
-			"/snapshots",
-		) &&
-		r.Method == http.MethodPost:
+	case strings.HasPrefix(r.URL.Path, "/sandboxes/") && strings.HasSuffix(r.URL.Path, "/snapshots") && r.Method == http.MethodPost:
 		m.handleCreateSnapshot(w, r)
 	case r.URL.Path == "/snapshots" && r.Method == http.MethodGet:
 		m.handleListSnapshots(w, r)
@@ -226,7 +200,7 @@ func (m *cubeMockServer) handleGetInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, data)
 }
 
-func (m *cubeMockServer) handleList(w http.ResponseWriter, _ *http.Request) {
+func (m *cubeMockServer) handleList(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	items := make([]map[string]any, 0, len(m.sandboxes))
@@ -379,22 +353,7 @@ func (m *cubeMockServer) handleEnvd(w http.ResponseWriter, r *http.Request) {
 		m.ptyConnectCount.Add(1)
 		m.handlePtyStream(w, r)
 		return
-	case strings.Contains(
-		r.URL.Path,
-		"/filesystem",
-	) &&
-		(strings.Contains(
-			r.URL.Path,
-			"Read",
-		) ||
-			strings.Contains(
-				r.URL.Path,
-				"Stat",
-			) ||
-			strings.Contains(
-				r.URL.Path,
-				"ListDir",
-			)):
+	case strings.Contains(r.URL.Path, "/filesystem") && (strings.Contains(r.URL.Path, "Read") || strings.Contains(r.URL.Path, "Stat") || strings.Contains(r.URL.Path, "ListDir")):
 		m.handleFileRead(w, r, sandboxID)
 	case strings.Contains(r.URL.Path, "/filesystem") && strings.Contains(r.URL.Path, "MakeDir"):
 		body, _ := io.ReadAll(r.Body)
@@ -548,6 +507,30 @@ func (m *cubeMockServer) handleFileWrite(w http.ResponseWriter, r *http.Request,
 	m.mu.Unlock()
 
 	writeJSON(w, http.StatusOK, map[string]any{})
+}
+
+// extractFilePathFromBody strips connect framing from the body and parses
+// the JSON content to extract the file path. The Cube SDK uses connect+json
+// for filesystem RPC, so the body is: [1 byte flags][4 bytes big-endian len][JSON].
+// The JSON contains a "path" field.
+func extractFilePathFromBody(body []byte) string {
+	// Strip connect frame envelope: 1 byte flags + 4 bytes big-endian length.
+	if len(body) < 5 {
+		return "/workspace/unknown"
+	}
+	msgLen := binary.BigEndian.Uint32(body[1:5])
+	if int(msgLen)+5 > len(body) {
+		return "/workspace/unknown"
+	}
+	jsonBytes := body[5 : 5+int(msgLen)]
+
+	var req struct {
+		Path string `json:"path"`
+	}
+	if json.Unmarshal(jsonBytes, &req) == nil && strings.HasPrefix(req.Path, "/") {
+		return req.Path
+	}
+	return "/workspace/unknown"
 }
 
 func (m *cubeMockServer) handleFileRead(w http.ResponseWriter, _ *http.Request, sandboxID string) {

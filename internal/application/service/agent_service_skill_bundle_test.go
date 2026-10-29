@@ -25,11 +25,9 @@ func (s skillBundleFileMap) CheckConnectivity(context.Context) error { return ni
 func (s skillBundleFileMap) SaveFile(context.Context, *multipart.FileHeader, uint64, string) (string, error) {
 	return "", errors.New("not implemented")
 }
-
 func (s skillBundleFileMap) SaveBytes(context.Context, []byte, uint64, string, bool) (string, error) {
 	return "", errors.New("not implemented")
 }
-
 func (s skillBundleFileMap) GetFile(_ context.Context, ref string) (io.ReadCloser, error) {
 	data, ok := s.files[ref]
 	if !ok {
@@ -50,7 +48,6 @@ func (r skillBundleResolver) ResolveFileService(
 ) (interfaces.FileService, string, error) {
 	return r.fs, "", nil
 }
-
 func (skillBundleResolver) ResolveBackend(
 	context.Context, *types.Tenant, string, string,
 ) (*types.StorageBackend, error) {

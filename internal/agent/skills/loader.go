@@ -235,8 +235,7 @@ func (l *Loader) LoadSkillFile(skillName, relativePath string) (*SkillFile, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to open skill directory: %w", err)
 	}
-	// Closing this read-only resource cannot change the completed result.
-	defer func() { _ = root.Close() }()
+	defer root.Close()
 	content, err := root.ReadFile(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)

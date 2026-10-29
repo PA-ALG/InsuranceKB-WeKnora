@@ -377,7 +377,7 @@ func (h *AuthHandler) OIDCStart(c *gin.Context) {
 	if err != nil {
 		logger.Errorf(ctx, "Failed to generate OIDC authorization URL: %v", err)
 		appErr := errors.NewForbiddenError("OIDC authorization unavailable").WithDetails(err.Error())
-		_ = c.Error(appErr)
+		c.Error(appErr)
 		return
 	}
 	setOIDCNonceCookie(c, resp.Nonce)
@@ -448,33 +448,14 @@ func (h *AuthHandler) OIDCRedirectCallback(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.userService.LoginWithOIDC(
-		ctx,
-		code,
-		strings.TrimSpace(decodedState.RedirectURI),
-		h.resolveDefaultTenantMode(ctx),
-	)
+	resp, err := h.userService.LoginWithOIDC(ctx, code, strings.TrimSpace(decodedState.RedirectURI), h.resolveDefaultTenantMode(ctx))
 	if err != nil {
 		logger.Errorf(ctx, "Failed to complete OIDC login via redirect callback: %v", err)
-		c.Redirect(
-			http.StatusFound,
-			frontendRedirectURI+"#oidc_error="+urlQueryEscape(
-				"login_failed",
-			)+"&oidc_error_description="+urlQueryEscape(
-				err.Error(),
-			),
-		)
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("login_failed")+"&oidc_error_description="+urlQueryEscape(err.Error()))
 		return
 	}
 	if !resp.Success {
-		c.Redirect(
-			http.StatusFound,
-			frontendRedirectURI+"#oidc_error="+urlQueryEscape(
-				"login_failed",
-			)+"&oidc_error_description="+urlQueryEscape(
-				resp.Message,
-			),
-		)
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("login_failed")+"&oidc_error_description="+urlQueryEscape(resp.Message))
 		return
 	}
 
@@ -667,13 +648,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	if activeTenantID > 0 {
 		tenant, err = h.tenantService.GetTenantByID(ctx, activeTenantID)
 		if err != nil {
-			logger.Warnf(
-				ctx,
-				"Failed to get tenant info for user %s, tenant ID %d: %v",
-				user.Email,
-				activeTenantID,
-				err,
-			)
+			logger.Warnf(ctx, "Failed to get tenant info for user %s, tenant ID %d: %v", user.Email, activeTenantID, err)
 			// Don't fail the request if tenant info is not available
 		}
 	}
@@ -817,17 +792,17 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		case stderrors.Is(err, service.ErrInvalidOldPassword):
 			appErr := errors.NewBadRequestError("Current password is incorrect").
 				WithDetails(service.DetailInvalidOldPassword)
-			_ = c.Error(appErr)
+			c.Error(appErr)
 			return
 		case stderrors.Is(err, service.ErrSamePassword):
 			appErr := errors.NewValidationError("New password must differ from current password").
 				WithDetails(service.DetailSamePassword)
-			_ = c.Error(appErr)
+			c.Error(appErr)
 			return
 		default:
 			logger.Errorf(ctx, "Failed to change password: %v", err)
 			appErr := errors.NewBadRequestError("Password change failed").WithDetails(err.Error())
-			_ = c.Error(appErr)
+			c.Error(appErr)
 			return
 		}
 	}

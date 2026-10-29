@@ -105,21 +105,11 @@ func (h *FAQHandler) ListEntries(c *gin.Context) {
 	sortOrder := secutils.SanitizeForLog(c.Query("sort_order"))
 	isEnabled, err := parseOptionalFAQEnabled(c)
 	if err != nil {
-		_ = c.Error(err)
+		c.Error(err)
 		return
 	}
 
-	result, err := h.knowledgeService.ListFAQEntries(
-		ctx,
-		kbID,
-		&page,
-		tagUUIDs,
-		legacyTagSeqID,
-		keyword,
-		searchField,
-		sortOrder,
-		isEnabled,
-	)
+	result, err := h.knowledgeService.ListFAQEntries(ctx, kbID, &page, tagUUIDs, legacyTagSeqID, keyword, searchField, sortOrder, isEnabled)
 	if err != nil {
 		logger.ErrorWithFields(ctx, err, nil)
 		c.Error(err)

@@ -82,10 +82,7 @@ func TestShellOutputLinksPreferCombinedExecution(t *testing.T) {
 	}
 }
 
-func (f *outputLinkExecutor) ListSessionFiles(
-	_ context.Context,
-	_, _ string,
-) ([]sandbox.RemoteDirEntry, error) {
+func (f *outputLinkExecutor) ListSessionFiles(_ context.Context, sessionID, dir string) ([]sandbox.RemoteDirEntry, error) {
 	f.listed++
 	if f.listError != nil {
 		return nil, f.listError
@@ -98,12 +95,7 @@ func (f *outputLinkExecutor) ListSessionFiles(
 
 func TestShellOutputLinksUseChangedFilesAndDoNotReplay(t *testing.T) {
 	t.Setenv("WEKNORA_SKILL_OUTPUT_DIR", "/workspace/output")
-	old := sandbox.RemoteDirEntry{
-		Path:    "/workspace/output/deck.pptx",
-		Type:    sandbox.RemoteEntryFile,
-		Size:    100,
-		ModTime: time.Unix(1, 0),
-	}
+	old := sandbox.RemoteDirEntry{Path: "/workspace/output/deck.pptx", Type: sandbox.RemoteEntryFile, Size: 100, ModTime: time.Unix(1, 0)}
 	next := old
 	next.ModTime = time.Unix(2, 0)
 	unchanged := sandbox.RemoteDirEntry{Path: "/workspace/output/data.json", Type: sandbox.RemoteEntryFile, Size: 20}
@@ -115,10 +107,7 @@ func TestShellOutputLinksUseChangedFilesAndDoNotReplay(t *testing.T) {
 			{Path: "/workspace/output/subdir", Type: sandbox.RemoteEntryDir},
 		},
 	}
-	result, err := NewShellExecTool(
-		executor,
-		nil,
-	).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 generate.py"}`))
+	result, err := NewShellExecTool(executor, nil).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 generate.py"}`))
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Equal(t, 2, executor.listed)
@@ -126,9 +115,7 @@ func TestShellOutputLinksUseChangedFilesAndDoNotReplay(t *testing.T) {
 	require.Contains(t, result.OutputFiles, "sandbox:new.csv")
 	require.NotContains(t, result.OutputFiles, "sandbox:data.json")
 	require.NotContains(t, result.OutputFiles, "sandbox:subdir")
-	steps := SanitizeAgentStepsForStorage(
-		[]types.AgentStep{{ToolCalls: []types.ToolCall{{Name: ToolShellExec, Result: result}}}},
-	)
+	steps := SanitizeAgentStepsForStorage([]types.AgentStep{{ToolCalls: []types.ToolCall{{Name: ToolShellExec, Result: result}}}})
 	require.NotContains(t, steps[0].ToolCalls[0].Result.Output, "sandbox:")
 	encoded, err := json.Marshal(steps)
 	require.NoError(t, err)
@@ -138,21 +125,13 @@ func TestShellOutputLinksUseChangedFilesAndDoNotReplay(t *testing.T) {
 
 func TestShellOutputLinksOmitUnverifiedOutputs(t *testing.T) {
 	t.Setenv("WEKNORA_SKILL_OUTPUT_DIR", "/workspace/output")
-	created := sandbox.RemoteDirEntry{
-		Path:    "/workspace/output/deck.pptx",
-		Type:    sandbox.RemoteEntryFile,
-		Size:    10,
-		ModTime: time.Unix(2, 0),
-	}
+	created := sandbox.RemoteDirEntry{Path: "/workspace/output/deck.pptx", Type: sandbox.RemoteEntryFile, Size: 10, ModTime: time.Unix(2, 0)}
 	t.Run("inspection failed", func(t *testing.T) {
 		executor := &outputLinkExecutor{
 			listError: errors.New("unavailable"),
 			after:     []sandbox.RemoteDirEntry{created},
 		}
-		result, err := NewShellExecTool(
-			executor,
-			nil,
-		).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 generate.py"}`))
+		result, err := NewShellExecTool(executor, nil).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 generate.py"}`))
 		require.NoError(t, err)
 		require.Empty(t, result.OutputFiles)
 		require.Nil(t, result.OutputFiles, "failed inspection must not claim that no output files were found")
@@ -163,10 +142,7 @@ func TestShellOutputLinksOmitUnverifiedOutputs(t *testing.T) {
 			fakeShellExecutor: fakeShellExecutor{result: &sandbox.ExecuteResult{ExitCode: 1}},
 			after:             []sandbox.RemoteDirEntry{created},
 		}
-		result, err := NewShellExecTool(
-			executor,
-			nil,
-		).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 generate.py"}`))
+		result, err := NewShellExecTool(executor, nil).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 generate.py"}`))
 		require.NoError(t, err)
 		require.True(t, result.Success, "a non-zero exit is still a completed tool call")
 		require.Equal(t, []string{"sandbox:deck.pptx"}, result.OutputFiles)
@@ -177,10 +153,7 @@ func TestShellOutputLinksOmitUnverifiedOutputs(t *testing.T) {
 			fakeShellExecutor: fakeShellExecutor{result: &sandbox.ExecuteResult{Killed: true}},
 			after:             []sandbox.RemoteDirEntry{created},
 		}
-		result, err := NewShellExecTool(
-			executor,
-			nil,
-		).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 generate.py"}`))
+		result, err := NewShellExecTool(executor, nil).Execute(shellExecTestContext(), json.RawMessage(`{"command":"python3 generate.py"}`))
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, []string{"sandbox:deck.pptx"}, result.OutputFiles)
@@ -274,10 +247,7 @@ func TestFileMutationToolsReturnDirectHTMLDeliverables(t *testing.T) {
 	t.Setenv("WEKNORA_SKILL_OUTPUT_DIR", "/workspace/output")
 	sink := &fakeSandboxFileSink{}
 	for _, filePath := range []string{"/workspace/output/report.html", "/workspace/scratch.html"} {
-		result, err := NewWriteSandboxFileTool(
-			sink,
-			0,
-		).Execute(sandboxFileTestContext(), mustWriteSandboxArgs(filePath, "old"))
+		result, err := NewWriteSandboxFileTool(sink, 0).Execute(sandboxFileTestContext(), mustWriteSandboxArgs(filePath, "old"))
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		require.Contains(t, result.Output, filePath)
@@ -288,12 +258,7 @@ func TestFileMutationToolsReturnDirectHTMLDeliverables(t *testing.T) {
 		}
 	}
 	editor := &fakeSandboxFileEditor{files: sink.files}
-	result, err := NewEditSandboxFileTool(
-		editor,
-	).Execute(
-		sandboxFileTestContext(),
-		json.RawMessage(`{"path":"/workspace/output/report.html","edits":[{"old_string":"old","new_string":"new"}]}`),
-	)
+	result, err := NewEditSandboxFileTool(editor).Execute(sandboxFileTestContext(), json.RawMessage(`{"path":"/workspace/output/report.html","edits":[{"old_string":"old","new_string":"new"}]}`))
 	require.NoError(t, err)
 	require.True(t, result.Success, result.Error)
 	require.Contains(t, result.Output, "/workspace/output/report.html")

@@ -1,4 +1,3 @@
-// Package core provides shared Feishu API and document conversion helpers.
 // Package feishu implements the Feishu (飞书/Lark) data source connector for WeKnora.
 //
 // It syncs documents from Feishu Wiki spaces and cloud documents into WeKnora knowledge bases.
@@ -8,8 +7,7 @@
 //   - Wiki nodes:       https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/list
 //   - Export tasks:     https://open.feishu.cn/document/server-docs/docs/drive-v1/export_task/export-user-guide
 //   - File download:    https://open.feishu.cn/document/server-docs/docs/drive-v1/file/download
-//   - Auth:
-//     https://open.feishu.cn/document/server-docs/authentication-management/access-token/tenant_access_token_internal
+//   - Auth:             https://open.feishu.cn/document/server-docs/authentication-management/access-token/tenant_access_token_internal
 package core
 
 import (
@@ -58,6 +56,9 @@ func resolveLocation(name string) *time.Location {
 // defaultBaseURL is the default Feishu Open Platform API base URL.
 const defaultBaseURL = "https://open.feishu.cn"
 
+// larkBaseURL is the Lark (international) API base URL.
+const larkBaseURL = "https://open.larksuite.com"
+
 // GetBaseURL returns the effective base URL, defaulting to Feishu if not set.
 func (c *Config) GetBaseURL() string {
 	if c.BaseURL != "" {
@@ -104,15 +105,15 @@ var ExportFileExtToSuffix = map[string]string{
 
 // --- Feishu API response structures ---
 
-// APIResponse is the common Feishu API response wrapper.
-type APIResponse struct {
+// ApiResponse is the common Feishu API response wrapper.
+type ApiResponse struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 }
 
 // TokenResponse is the response for tenant_access_token API.
 type TokenResponse struct {
-	APIResponse
+	ApiResponse
 	TenantAccessToken string `json:"tenant_access_token"`
 	Expire            int    `json:"expire"` // seconds
 }
@@ -126,7 +127,7 @@ type WikiSpaceListData struct {
 
 // WikiSpaceListResponse is the response for GET /open-apis/wiki/v2/spaces.
 type WikiSpaceListResponse struct {
-	APIResponse
+	ApiResponse
 	Data WikiSpaceListData `json:"data"`
 }
 
@@ -147,30 +148,28 @@ type WikiNodeListData struct {
 
 // WikiNodeListResponse is the response for GET /open-apis/wiki/v2/spaces/:space_id/nodes.
 type WikiNodeListResponse struct {
-	APIResponse
+	ApiResponse
 	Data WikiNodeListData `json:"data"`
 }
 
 // WikiNode represents a node (document or folder) in a Feishu Wiki space.
 type WikiNode struct {
-	SpaceID       string `json:"space_id"`
-	NodeToken     string `json:"node_token"`
-	ObjToken      string `json:"obj_token"` // document token
-	ObjType       string `json:"obj_type"`  // "doc", "sheet", "mindnote", "bitable", "file", "docx", "slides"
-	ParentNodeID  string `json:"parent_node_token"`
-	NodeType      string `json:"node_type"` // "origin" or "shortcut"
-	OriginNodeID  string `json:"origin_node_id"`
-	OriginSpaceID string `json:"origin_space_id"`
-	HasChild      bool   `json:"has_child"`
-	Title         string `json:"title"`
-	Creator       string `json:"creator"`
-	Owner         string `json:"owner"`
-	ObjCreateTime string `json:"obj_create_time"` // document creation time (unix timestamp string)
-	// document last edit time (unix timestamp string) — tracks content changes
-	ObjEditTime    string `json:"obj_edit_time"`
+	SpaceID        string `json:"space_id"`
+	NodeToken      string `json:"node_token"`
+	ObjToken       string `json:"obj_token"` // document token
+	ObjType        string `json:"obj_type"`  // "doc", "sheet", "mindnote", "bitable", "file", "docx", "slides"
+	ParentNodeID   string `json:"parent_node_token"`
+	NodeType       string `json:"node_type"` // "origin" or "shortcut"
+	OriginNodeID   string `json:"origin_node_id"`
+	OriginSpaceID  string `json:"origin_space_id"`
+	HasChild       bool   `json:"has_child"`
+	Title          string `json:"title"`
+	Creator        string `json:"creator"`
+	Owner          string `json:"owner"`
+	ObjCreateTime  string `json:"obj_create_time"`  // document creation time (unix timestamp string)
+	ObjEditTime    string `json:"obj_edit_time"`    // document last edit time (unix timestamp string) — tracks content changes
 	NodeCreateTime string `json:"node_create_time"` // node creation time (unix timestamp string)
-	// node edit time (unix timestamp string) — only tracks node attribute changes
-	NodeEditTime string `json:"node_edit_time"`
+	NodeEditTime   string `json:"node_edit_time"`   // node edit time (unix timestamp string) — only tracks node attribute changes
 }
 
 // WikiNodeInfoData is the data payload of WikiNodeInfoResponse.
@@ -180,11 +179,23 @@ type WikiNodeInfoData struct {
 
 // WikiNodeInfoResponse is the response for GET /open-apis/wiki/v2/spaces/get_node.
 type WikiNodeInfoResponse struct {
-	APIResponse
+	ApiResponse
 	Data WikiNodeInfoData `json:"data"`
 }
 
 // --- Export task API responses ---
+
+// docRawContentData is the data payload of docRawContentResponse.
+type docRawContentData struct {
+	Content string `json:"content"`
+}
+
+// docRawContentResponse is the response for GET /open-apis/docx/v1/documents/:document_id/raw_content.
+// Deprecated: prefer export API for full-fidelity document export.
+type docRawContentResponse struct {
+	ApiResponse
+	Data docRawContentData `json:"data"`
+}
 
 // ExportTaskCreateData is the data payload of ExportTaskCreateResponse.
 type ExportTaskCreateData struct {
@@ -193,7 +204,7 @@ type ExportTaskCreateData struct {
 
 // ExportTaskCreateResponse is the response for POST /drive/v1/export_tasks.
 type ExportTaskCreateResponse struct {
-	APIResponse
+	ApiResponse
 	Data ExportTaskCreateData `json:"data"`
 }
 
@@ -214,11 +225,29 @@ type ExportTaskStatusData struct {
 
 // ExportTaskStatusResponse is the response for GET /drive/v1/export_tasks/{ticket}.
 type ExportTaskStatusResponse struct {
-	APIResponse
+	ApiResponse
 	Data ExportTaskStatusData `json:"data"`
 }
 
 // --- File download response ---
+
+// driveFileMeta is one entry of driveFileMetaData.Metas.
+type driveFileMeta struct {
+	DocToken string `json:"doc_token"`
+	DocType  string `json:"doc_type"`
+	Title    string `json:"title"`
+}
+
+// driveFileMetaData is the data payload of driveFileMetaResponse.
+type driveFileMetaData struct {
+	Metas []driveFileMeta `json:"metas"`
+}
+
+// driveFileMetaResponse is the response for GET /drive/v1/metas for file type nodes.
+type driveFileMetaResponse struct {
+	ApiResponse
+	Data driveFileMetaData `json:"data"`
+}
 
 // FeishuCursor stores incremental sync state for Feishu.
 type FeishuCursor struct {
@@ -268,26 +297,26 @@ type DriveFileListData struct {
 
 // DriveFileListResponse is the response for GET /open-apis/drive/v1/files.
 type DriveFileListResponse struct {
-	APIResponse
+	ApiResponse
 	Data DriveFileListData `json:"data"`
 }
 
-// driveFolderMetaData is the data payload of DriveFolderMetaResponse.
+// driveFolderMetaData is the data payload of driveFolderMetaResponse.
 type driveFolderMetaData struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Token     string `json:"token"`
-	CreateUID string `json:"createUid"`
-	EditUID   string `json:"editUid"`
+	CreateUid string `json:"createUid"`
+	EditUid   string `json:"editUid"`
 	ParentID  string `json:"parentId"`
-	OwnUID    string `json:"ownUid"`
+	OwnUid    string `json:"ownUid"`
 }
 
-// DriveFolderMetaResponse is the response for GET /open-apis/drive/explorer/v2/folder/:folderToken/meta.
+// driveFolderMetaResponse is the response for GET /open-apis/drive/explorer/v2/folder/:folderToken/meta.
 // Used to resolve a root folder's human-readable name (the list API only returns
 // the folder's children, not the folder itself).
-type DriveFolderMetaResponse struct {
-	APIResponse
+type driveFolderMetaResponse struct {
+	ApiResponse
 	Data driveFolderMetaData `json:"data"`
 }
 

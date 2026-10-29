@@ -36,13 +36,9 @@ func (m *artifactFallbackManager) GetType() sandbox.SandboxType {
 	return sandbox.SandboxTypeCube
 }
 
-func (m *artifactFallbackManager) ListSessionFiles(
-	ctx context.Context,
-	sessionID, dir string,
-) ([]sandbox.RemoteDirEntry, error) {
+func (m *artifactFallbackManager) ListSessionFiles(ctx context.Context, sessionID, dir string) ([]sandbox.RemoteDirEntry, error) {
 	return m.source.ListSessionFiles(ctx, sessionID, dir)
 }
-
 func (m *artifactFallbackManager) ReadSessionFile(ctx context.Context, sessionID, path string) ([]byte, error) {
 	return m.source.ReadSessionFile(ctx, sessionID, path)
 }
@@ -75,6 +71,8 @@ func TestArtifactSessionSourceKeepsDefaultBackendForSentinelPin(t *testing.T) {
 	require.NotNil(t, got)
 	// Sentinel pins resolve to the deployment-wide manager, which may be a
 	// distinct object from c.source even though both read the same backend.
+	_, ok := got.(SandboxArtifactSource)
+	require.True(t, ok)
 }
 
 // Attachment staging is reached through a runtime type assertion in

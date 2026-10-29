@@ -1,4 +1,3 @@
-// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: envd protocol compatibility for the E2B data plane.
 //
 // The sandbox-side daemon (envd) authenticates every data-plane call with HTTP

@@ -271,10 +271,7 @@ func TestAdminCreateUserDuplicateLookupTargetsSentinelIdentity(t *testing.T) {
 		t.Fatalf("user=%v, want the username-collision owner %q", user, repo.byUsername.ID)
 	}
 	if repo.emailLookups != 1 {
-		t.Fatalf(
-			"emailLookups=%d, want 1 (Register's check only, the duplicate lookup must not query email)",
-			repo.emailLookups,
-		)
+		t.Fatalf("emailLookups=%d, want 1 (Register's check only, the duplicate lookup must not query email)", repo.emailLookups)
 	}
 }
 
