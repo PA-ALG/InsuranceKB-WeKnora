@@ -33,8 +33,9 @@
 |---|---|
 | Codex | `internal/enterprise/chatsource/knowledge.go`（`KnowledgeNotice` 文案） |
 | Claude（RED，受保护） | `internal/enterprise/chatsource/knowledge_notice_qa4_test.go` |
+| Claude（受保护测试对齐，独立提交） | `internal/enterprise/chatsource/knowledge_notice_edges_test.go`：Q2b 整段比较加入三句规则，其余句子、顺序与空串情形不变 |
 
-验收：RED 测试通过；`go test ./internal/enterprise/chatsource/...` 全部通过（含 Q2b 引用规则、页面说明、产品标注等既有 notice 测试，不改已有断言）；golangci-lint 通过；守卫不新增。
+验收：RED 测试通过；`go test ./internal/enterprise/chatsource/...` 全部通过（含 Q2b 引用规则、页面说明、产品标注等既有 notice 测试；除上表 Q2b 整段比较的对齐外，不改已有断言）；golangci-lint 通过；守卫不新增。
 
 ## 5. 上线后复核
 
