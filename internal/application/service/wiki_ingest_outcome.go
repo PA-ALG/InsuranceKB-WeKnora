@@ -352,6 +352,12 @@ type wikiPageFailures struct {
 func newWikiPageFailures() *wikiPageFailures {
 	return &wikiPageFailures{bySlug: map[string]error{}, byKnowledge: map[string]error{}, additions: map[string]struct{}{}}
 }
+
+// errWikiPageUpdateDeferred marks upstream's guarded rewrite refusal (the new
+// body dropped table rows still on the page): the page keeps its previous body,
+// so its documents are recorded as unapplied like any other unwritten slug.
+var errWikiPageUpdateDeferred = errors.New("wiki page update deferred: rewrite dropped rows still on the page")
+
 func (f *wikiPageFailures) record(slug string, updates []SlugUpdate, cause error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

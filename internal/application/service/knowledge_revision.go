@@ -217,3 +217,27 @@ func revisionPayloadMatchesKnowledge(
 		binding.ParseAttempt == knowledge.CurrentParseAttempt &&
 		binding.FileSHA256 == knowledge.FileSHA256
 }
+
+// revisionSlotRepository routes upstream's slot release through the W1 revision
+// binding, so releaseSubtaskSlot keeps its own retry/backoff while a revision
+// run drains only its own generation.
+type revisionSlotRepository struct {
+	interfaces.KnowledgeRepository
+	revision *types.RevisionCommitBinding
+}
+
+func (r revisionSlotRepository) FinalizeSubtask(ctx context.Context, knowledgeID string) (int, bool, error) {
+	return finalizeRevisionSlot(ctx, r.KnowledgeRepository, knowledgeID, r.revision)
+}
+
+// withRevisionSlot returns repo unchanged for legacy runs and a revision-aware
+// view otherwise.
+func withRevisionSlot(
+	repo interfaces.KnowledgeRepository,
+	revision *types.RevisionCommitBinding,
+) interfaces.KnowledgeRepository {
+	if revision == nil || repo == nil {
+		return repo
+	}
+	return revisionSlotRepository{KnowledgeRepository: repo, revision: revision}
+}

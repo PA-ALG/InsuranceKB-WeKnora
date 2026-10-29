@@ -33,6 +33,7 @@ type parentChildChunkService struct {
 	created  []*types.Chunk
 	existing []*types.Chunk
 	deleted  []string
+	purges   int
 }
 
 func (s *parentChildChunkService) ListAllChunksByKnowledgeID(context.Context, uint64, string) ([]*types.Chunk, error) {
@@ -42,6 +43,11 @@ func (s *parentChildChunkService) ListAllChunksByKnowledgeID(context.Context, ui
 func (s *parentChildChunkService) DeleteChunks(_ context.Context, _ uint64, ids []string) error {
 	s.deleted = append(s.deleted, ids...)
 	return nil
+}
+
+func (s *parentChildChunkService) PurgeSupersededChunksByKnowledgeID(context.Context, uint64, string) (int64, error) {
+	s.purges++
+	return 0, nil
 }
 
 func (s *parentChildChunkService) CreateChunks(_ context.Context, chunks []*types.Chunk) error {
@@ -224,6 +230,8 @@ func TestProcessChunksIndexesEveryTextChild(t *testing.T) {
 		}
 	}
 	require.Len(t, textChunkIDs, 2)
+	require.Equal(t, 1, chunkService.purges,
+		"successful processing must reclaim superseded history only after indexing")
 
 	indexedSourceIDs := make([]string, 0, len(retrieveEngine.indexed))
 	for _, info := range retrieveEngine.indexed {

@@ -21,7 +21,7 @@ export APP_DNS_RESOLVER="$app_dns_resolver"
 # Only emit whitelisted locale tags to avoid config.js injection from env values.
 RUNTIME_DEFAULT_LOCALE=""
 case "${DEFAULT_LOCALE:-}" in
-  zh-CN|en-US|ru-RU|ko-KR|ja-JP) RUNTIME_DEFAULT_LOCALE="${DEFAULT_LOCALE}" ;;
+  zh-CN|zh-TW|en-US|ru-RU|ko-KR|ja-JP) RUNTIME_DEFAULT_LOCALE="${DEFAULT_LOCALE}" ;;
 esac
 
 # Schema Wiki MVP IDs are route selectors. Invalid values become inert before

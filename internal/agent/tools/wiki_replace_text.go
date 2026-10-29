@@ -31,35 +31,32 @@ func NewWikiReplaceTextTool(
 		BaseTool: NewBaseTool(
 
 			ToolWikiReplaceText,
-
-			"Replace all occurrences of specific exact text in a Wiki page. Ideal for"+
-				" consistent minor corrections.",
-
-			json.RawMessage(
-				"{\n\t\t\t\t\"type\": \"object\","+
-					"\n\t\t\t\t\"properties\": {\n\t\t\t\t\t\"slug\": {"+
-					"\n\t\t\t\t\t\t\"type\":"+
-
-					" \"string\",\n\t\t\t\t\t\t\"description\": \"The"+
-					" slug of the Wiki page\"\n\t\t\t\t\t},"+
-					"\n\t\t\t\t\t\"old_text\": {\n\t\t\t\t\t\t\"type\":"+
-					" \"string\",\n\t\t\t\t\t\t\"description\": \"The"+
-
-					" exact text to find and replace\"\n\t\t\t\t\t},"+
-					"\n\t\t\t\t\t\"new_text\": {"+
-					"\n\t\t\t\t\t\t\"type\": \"string\","+
-					"\n\t\t\t\t\t\t\"description\": \"The new text to"+
-					" insert\""+
-					"\n\t\t\t\t\t},\n\t\t\t\t\t\"source_refs\": {"+
-					"\n\t\t\t\t\t\t\"type\": \"array\",\n\t\t\t\t\t\t\"items\":"+
-
-					" {\"type\": \"string\"},\n\t\t\t\t\t\t\"description\""+
-					": \"An optional list of short dN"+
-					" source document IDs that justify this change. If provided, these will"+
-					" COMPLETELY REPLACE the existing"+
-					" source_refs of the page.\"\n\t\t\t\t\t}\n\t\t\t\t},"+
-					"\n\t\t\t\t\"required\": [\"slug\", \"old_text\", \"new_text\"]\n\t\t\t}",
-			),
+			"Replace all occurrences of specific exact text in a Wiki page. Ideal for consistent minor corrections.",
+			json.RawMessage(`{
+				"type": "object",
+				"properties": {
+					"slug": {
+						"type": "string",
+						"description": "The slug of the Wiki page"
+					},
+					"old_text": {
+						"type": "string",
+						"description": "The exact text to find and replace"
+					},
+					"new_text": {
+						"type": "string",
+						"description": "The new text to insert"
+					},
+					"source_refs": {
+						"type": "array",
+						"items": {"type": "string"},
+						"description": "An optional list of `+
+				`doc://N source document handles that justify this change. If provided, `+
+				`these will COMPLETELY REPLACE the existing source_refs of the page."
+					}
+				},
+				"required": ["slug", "old_text", "new_text"]
+			}`),
 		),
 
 		wikiPageService: wikiPageService,
@@ -84,6 +81,11 @@ func (t *wikiReplaceTextTool) Execute(ctx context.Context, args json.RawMessage)
 	// Attribute every page write performed by this tool to the agent so
 	// revision history distinguishes agent edits from pipeline/user ones.
 	ctx = types.WithWikiEditSource(ctx, types.WikiEditSourceAgent)
+	// This tool edits by naming the exact text it removes, so a write that
+	// shortens the page is a deliberate removal — including deleting table
+	// rows, which is a normal request. The whole-page writer is deliberately
+	// NOT marked: there a shorter body is how truncation shows up.
+	ctx = types.WithWikiShrinkAllowed(ctx)
 	var params struct {
 		Slug       string    `json:"slug"`
 		OldText    string    `json:"old_text"`
@@ -163,6 +165,7 @@ func (t *wikiReplaceTextTool) Execute(ctx context.Context, args json.RawMessage)
 		Output:  output,
 		Data: map[string]interface{}{
 			"display_type":      "wiki_replace_text",
+			"data_change":       wikiDataChange("replace_text", kbID),
 			"slug":              params.Slug,
 			"title":             existingPage.Title,
 			"old_text":          oldPreview,
@@ -170,4 +173,9 @@ func (t *wikiReplaceTextTool) Execute(ctx context.Context, args json.RawMessage)
 			"replacement_count": replacementCount,
 		},
 	}, nil
+}
+
+// ApprovalGrant scopes a session-wide approval to the run's knowledge bases.
+func (t *wikiReplaceTextTool) ApprovalGrant(ctx context.Context, _ json.RawMessage) (string, string) {
+	return wikiApprovalGrant(ctx, t.Name(), t.kbIDs)
 }

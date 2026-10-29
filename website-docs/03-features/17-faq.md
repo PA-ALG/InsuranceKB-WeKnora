@@ -17,6 +17,10 @@ FAQ 知识库用于维护退货政策、报销流程和常见故障处理等标�
 
 可按分类管理条目，单独停用暂不使用的问答，或禁止条目出现在推荐中。FAQ 分类为单标签，与文档知识库的多标签机制分别管理。
 
+### 切换列表展开方式
+
+在 FAQ 列表中切换展开或收起方式：集中浏览问题时收起答案，逐项检查时展开内容。此选项只改变列表展示，不改变问答条目、启用状态或检索策略。
+
 ## 导入与导出
 
 使用模板准备标准问、相似问、反例问和答案，多值字段用 `##` 分隔。导入时选择追加或替换：追加会按内容哈希匹配并合并重复项；替换会删除旧条目，仅保留本批导入内容。需要先检查数据时，可通过 API 的 `dry_run` 仅运行验证。
@@ -85,10 +89,10 @@ type FAQSearchRequest struct {
 1. **混合召回**：查询文本归一化后做向量检索 + BM25 关键词检索，融合去重；
 2. **两级标签优先**：`FirstPriorityTagIDs` 命中的条目排最前，其次 `SecondPriorityTagIDs`；
 3. **负例过滤**（`filterByNegativeQuestions`）：查询文本与某条目的任一反例问完全匹配（小写比较）→ 该条目从结果中剔除。典型场景：用户问"不支持 X 吗"，避免返回"支持 X"的条目；
-4. **迭代召回**（`applyFAQPostProcessing`）：当过滤后的唯一条目数不足 `match_count` 且向量结果打满时触发 `iterativeRetrieveWithDeduplication`——最多迭代 5 次、每次 TopK 翻倍（种子 `MatchCount*3` 与每轮增长均封顶 500，触顶即停），带去重与负例过滤缓存，无新结果提前终止；
+4. **迭代召回**（`applyFAQPostProcessing`）：当过滤后的唯一条目数不足 `match_count` 且某个向量结果列表打满时触发 `iterativeRetrieveWithDeduplication`——最多迭代 5 次、每次 TopK 翻倍（从首轮深度的 2 倍起，封顶 500，触顶即停），每轮与首轮同样融合打分，带负例过滤缓存，所有列表都未打满时提前终止；
 5. 结果附带 `score`、`match_type`、`matched_question`（实际命中的是标准问还是哪个相似问），答案按 `answer_strategy`（all / random）返回。
 
-非 FAQ 类型 KB 直接跳过该后处理（`if kb.Type != types.KnowledgeBaseTypeFAQ { return chunks, nil }`），普通混合检索不受影响；agent 检索链在 FAQ 库上同样经过这条后处理路径。
+检索范围内没有 FAQ 库时直接跳过该后处理，普通混合检索不受影响。只要范围内有 FAQ 库（即使主 KB 是文档库，或 FAQ 库来自组织共享），负例过滤都会生效；迭代召回只在主 KB 为 FAQ 库时触发。agent 检索链在 FAQ 库上同样经过这条后处理路径。
 
 ## 条目与接口参考
 

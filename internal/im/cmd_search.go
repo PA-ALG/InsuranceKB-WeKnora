@@ -86,7 +86,7 @@ func (c *SearchCommand) Execute(ctx context.Context, cmdCtx *CommandContext, arg
 		}
 	}
 
-	results, err := c.sessionService.SearchKnowledge(ctx, kbIDs, nil, nil, query)
+	retrieval, err := c.sessionService.SearchKnowledge(ctx, kbIDs, nil, nil, query, nil)
 	if err != nil {
 		var denial *managed.ReadError
 		if errors.As(err, &denial) {
@@ -94,6 +94,7 @@ func (c *SearchCommand) Execute(ctx context.Context, cmdCtx *CommandContext, arg
 		}
 		return nil, fmt.Errorf("search knowledge: %w", err)
 	}
+	results := retrieval.Results
 
 	if len(results) == 0 {
 		return &CommandResult{
