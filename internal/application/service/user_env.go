@@ -68,7 +68,6 @@ type UserEnvService struct {
 	configs repository.TenantSandboxConfigRepository
 }
 
-// NewUserEnvService constructs the service for encrypted user environment variables.
 func NewUserEnvService(
 	skills repository.TenantSkillRepository,
 	configs repository.TenantSandboxConfigRepository,

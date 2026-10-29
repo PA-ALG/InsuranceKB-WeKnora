@@ -128,10 +128,8 @@ const (
 	// password_generated=true only on the create path, idempotent=true
 	// marks a no-op hit on an already-existing identity.
 	// TenantID=0 (system-scope).
-	AuditActionSystemUserCreated AuditAction = "system.user_created"
-	// AuditActionSystemAPIKeyCreated records system API key creation.
+	AuditActionSystemUserCreated   AuditAction = "system.user_created"
 	AuditActionSystemAPIKeyCreated AuditAction = "system.api_key_created"
-	// AuditActionSystemAPIKeyRevoked identifies revocation of a system API key.
 	AuditActionSystemAPIKeyRevoked AuditAction = "system.api_key_revoked"
 
 	// Runtime queue mutations are privileged SystemAdmin actions. Retrying an

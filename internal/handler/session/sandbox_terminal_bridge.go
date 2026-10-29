@@ -1,4 +1,3 @@
-// Package session handles session requests and sandbox terminal connections.
 // Package session: terminal bridge between the WebSocket and the sandbox
 // PTY (see sandbox_terminal_ws.go for the protocol contract).
 package session
