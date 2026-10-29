@@ -167,10 +167,10 @@
 | `scripts/migrate.sh` | +14/-44 | 0 | K 构建部署（保留） | DEPLOY | keep minimal (go.mod/go.sum unavoidable); move project build steps to our own Dockerfile/scripts |
 | `scripts/test-license-bundle.sh` | +2/-0 | 0 | K 构建部署（保留） | DEPLOY | keep minimal (go.mod/go.sum unavoidable); move project build steps to our own Dockerfile/scripts |
 | `scripts/test_embed_nginx.py` | +2/-1 | 0 | K 构建部署（保留） | DEPLOY | keep minimal (go.mod/go.sum unavoidable); move project build steps to our own Dockerfile/scripts |
-| `internal/config/config.go` | +279/-0 | 91 | D 遗留 | CONFIG | delete legacy code path (dead SchemaWiki signing / legacy revision-source backfill), revert file to upstream |
-| `cli/cmd/dryrun_coverage_test.go` | +4/-0 | 0 | D 遗留 | LEGACYTEST | delete legacy code path (dead SchemaWiki signing / legacy revision-source backfill), revert file to upstream |
-| `internal/handler/tenant_secret_disclosure_test.go` | +5/-0 | 11 | D 遗留 | LEGACYTEST | delete legacy code path (dead SchemaWiki signing / legacy revision-source backfill), revert file to upstream |
-| `cli/cmd/doc/doc.go` | +2/-0 | 0 | D 遗留 | PINNING | delete legacy code path (dead SchemaWiki signing / legacy revision-source backfill), revert file to upstream |
+| `internal/config/config.go` | +279/-0 | 91 | K 保留（原 D 遗留） | CONFIG | 阶段 a 保留：KnowledgeRevisionSource 配置仍被 service/knowledge_revision_source.go 读取；修订版本源回填去留另行裁定 |
+| `cli/cmd/dryrun_coverage_test.go` | +4/-0 | 0 | K 保留（原 D 遗留） | LEGACYTEST | 阶段 a 保留：覆盖修订版本源回填命令 |
+| `internal/handler/tenant_secret_disclosure_test.go` | +5/-0 | 11 | X 通用修复（原 D 遗留） | LEGACYTEST | 阶段 a 保留：SSRF 测试隔离，上游版在假 IP 解析下失败；提上游 PR |
+| `cli/cmd/doc/doc.go` | +2/-0 | 0 | K 保留（原 D 遗留） | PINNING | 阶段 a 保留：注册修订版本源回填命令（服务端仍在用） |
 | `internal/application/service/chat_pipeline/memory_affinity.go` | +1/-1 | 0 | L lint/校验 | ANSWER | 回退到上游 |
 | `internal/application/service/chat_pipeline/memory_recall.go` | +5/-2 | 0 | L lint/校验 | ANSWER | 回退到上游 |
 | `internal/application/service/chat_pipeline/memory_recall_test.go` | +5/-5 | 0 | L lint/校验 | ANSWER | 回退到上游 |
@@ -218,7 +218,7 @@
 | `internal/application/repository/memory_lifecycle.go` | +146/-91 | 0 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/repository/memory_vector.go` | +1/-1 | 0 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/repository/model_usage.go` | +1/-1 | 0 | L lint/校验 | OTHER | 回退到上游 |
-| `internal/application/repository/retriever/opensearch/repository_test.go` | +35/-11 | 37 | L lint/校验 | OTHER | 回退到上游 |
+| `internal/application/repository/retriever/opensearch/repository_test.go` | +35/-11 | 37 | X 通用修复（原 L lint/校验） | OTHER | 阶段 a 保留：带 nolint 指令（S7f-1 行为注释例外）；随 opensearch 测试上游化 |
 | `internal/application/repository/retriever/qdrant/repository.go` | +38/-11 | 149 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/repository/wiki_page.go` | +34/-10 | 244 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/agent_service_test.go` | +11/-3 | 254 | L lint/校验 | OTHER | 回退到上游 |
@@ -226,12 +226,12 @@
 | `internal/application/service/artifact_collector.go` | +4/-2 | 0 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/artifact_collector_test.go` | +146/-22 | 23 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/datasource_sweep_wiring_test.go` | +15/-7 | 35 | L lint/校验 | OTHER | 回退到上游 |
-| `internal/application/service/file/oss_test.go` | +85/-25 | 0 | L lint/校验 | OTHER | 回退到上游 |
+| `internal/application/service/file/oss_test.go` | +85/-25 | 0 | X 通用修复（原 L lint/校验） | OTHER | 阶段 a 保留：SSRF 测试隔离，上游版在假 IP 解析下失败；提上游 PR |
 | `internal/application/service/fork_bootstrapper.go` | +4/-2 | 0 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/knowledge_auto_tag.go` | +8/-6 | 38 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/knowledge_content_binding_test.go` | +1/-1 | 26 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/knowledgebase_search.go` | +22/-5 | 171 | L lint/校验 | OTHER | 回退到上游 |
-| `internal/application/service/mcp_service_test.go` | +4/-4 | 223 | L lint/校验 | OTHER | 回退到上游 |
+| `internal/application/service/mcp_service_test.go` | +4/-4 | 223 | X 通用修复（原 L lint/校验） | OTHER | 阶段 a 保留：SSRF 测试隔离，上游版在假 IP 解析下失败；提上游 PR |
 | `internal/application/service/memory/consistency_test.go` | +116/-21 | 0 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/memory/consolidate.go` | +6/-5 | 0 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/memory/consolidate_test.go` | +22/-22 | 0 | L lint/校验 | OTHER | 回退到上游 |
@@ -251,7 +251,7 @@
 | `internal/application/service/session_sandbox_pin.go` | +3/-2 | 98 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/tenant_member_test.go` | +27/-3 | 4 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/tenant_sandbox_config.go` | +3/-2 | 351 | L lint/校验 | OTHER | 回退到上游 |
-| `internal/application/service/tenant_sandbox_config_test.go` | +78/-77 | 673 | L lint/校验 | OTHER | 回退到上游 |
+| `internal/application/service/tenant_sandbox_config_test.go` | +78/-77 | 673 | X 通用修复（原 L lint/校验） | OTHER | 阶段 a 保留：SSRF 测试隔离，上游版在假 IP 解析下失败；提上游 PR |
 | `internal/application/service/tenant_skill_install.go` | +67/-51 | 71 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/tenant_skill_reaper_test.go` | +13/-1 | 12 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/application/service/user_env_resolver.go` | +2/-2 | 0 | L lint/校验 | OTHER | 回退到上游 |
@@ -288,7 +288,7 @@
 | `internal/handler/model.go` | +17/-3 | 267 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/handler/sandbox_check.go` | +9/-9 | 11 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/handler/sandbox_config.go` | +20/-16 | 113 | L lint/校验 | OTHER | 回退到上游 |
-| `internal/handler/sandbox_skill.go` | +6/-2 | 108 | L lint/校验 | OTHER | 回退到上游 |
+| `internal/handler/sandbox_skill.go` | +6/-2 | 108 | K 保留（原 L lint/校验） | OTHER | 阶段 a 保留：swag 注解影响生成的 OpenAPI 文档（S7f-1 行为注释例外） |
 | `internal/handler/session/agent_stream_handler.go` | +18/-16 | 239 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/handler/session/artifact_download.go` | +15/-14 | 0 | L lint/校验 | OTHER | 回退到上游 |
 | `internal/handler/session/helpers.go` | +4/-1 | 57 | L lint/校验 | OTHER | 回退到上游 |
@@ -354,4 +354,11 @@
 | `internal/application/repository/task_queue_test.go` | +50/-11 | 41 | L lint/校验 | PINNING | 回退到上游 |
 | `internal/application/service/knowledge_process_embedding_failure_test.go` | +10/-7 | 25 | L lint/校验 | PINNING | 回退到上游 |
 | `internal/application/service/wiki_ingest_dedup_test.go` | +55/-12 | 0 | L lint/校验 | WIKIINGEST | 回退到上游 |
-| `internal/container/engine_factory.go` | +3/-1 | 0 | L lint/校验 | WIRING | 回退到上游 |
+| `internal/container/engine_factory.go` | +3/-1 | 0 | K 保留（原 L lint/校验） | WIRING | 阶段 a 保留：带 nolint 指令（S7f-1 行为注释例外）；阶段 c 与容器装配一起收口 |
+
+## 阶段 a 结果（2026-10-29，`slice/u1a`）
+
+- 回退 178 个（L 类 181 + D 类 4 中，除下表 10 个），清单 `tests/architecture/u1a_reverted_files.txt`，逐字节等于上游；两个已登记钩子（`agent_service.go`、`session_knowledge_qa.go`）的调用改回上游名称 `NewUserEnvResolver`、`types.MEMORY_RECALL`，与上游更接近。
+- 10 个改判保留（上表已更新类别与理由）：3 个带行为注释（S7f-1 例外）、4 个 SSRF 测试隔离（回退后在假 IP 解析环境下失败，属可上游化的测试修复）、3 个修订版本源回填相关（配置仍被服务读取，不是死代码）。
+- G10：348 → 171（含临时 `.golangci.yml`），收尾 PR 后 170。v0.9.0 试合并冲突：83 → 53（含 `.golangci.yml` 1 处）。
+- 行为：根/cli/client 三个模块全量 `go test -json` 与 main 同环境逐测试对比无变化（本机假 IP DNS 导致的既有失败相同）。
