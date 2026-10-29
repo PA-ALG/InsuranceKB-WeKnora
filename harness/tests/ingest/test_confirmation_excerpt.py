@@ -22,9 +22,8 @@ from tests.ingest.confirmation_scenarios import UPLOADS, asked, only_item, pages
 
 def waiting() -> tuple[ProductRegistry, dict[str, PendingEntry]]:
     current = asked(products(), *UPLOADS)
-    entries = {
-        p.knowledge_id: p for p in current.pending if p.attribution.outcome == "NEEDS_CONFIRM"
-    }
+    # S11a: quarantined materials are asked too, so they are among the pushed questions.
+    entries = {p.knowledge_id: p for p in current.pending}
     assert entries
     return current, entries
 

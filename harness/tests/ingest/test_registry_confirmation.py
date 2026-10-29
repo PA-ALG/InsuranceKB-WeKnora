@@ -213,22 +213,6 @@ def test_a_decision_for_a_material_not_waiting_for_a_person_is_refused() -> None
     )
 
 
-def test_a_quarantined_material_takes_no_person_decision() -> None:
-    source = raw("1818", "brochure", knowledge_id="k-orphan", sha256="f" * 64)
-    head = material("1818", "brochure")["head"]
-    run = attribute_uploads(registry(), [source], Pages(heads={"k-orphan": head}, sources=[source]))
-    [waiting] = run.registry.pending
-    assert waiting.attribution.outcome == "QUARANTINE"
-    ignored = waiting.attribution.model_copy(
-        update={"outcome": "IGNORED", "reason": "confirmed_ignore"}
-    )
-    unchanged_on(
-        "CONFIRMATION_UNEXPECTED",
-        run.registry,
-        lambda: record(run.registry, source, ignored, ref(key="ignore")),
-    )
-
-
 def test_an_answer_is_recorded_once() -> None:
     current, source, head = two_named()
     asked, _, _ = settle(current, source, head, product_key("1814"))

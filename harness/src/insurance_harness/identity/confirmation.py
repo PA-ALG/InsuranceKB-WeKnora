@@ -1,6 +1,8 @@
 """What a person may decide about a material the attribution rules could not settle (S5b-3c-1 Spec).
 
-Each `NEEDS_CONFIRM` reason offers a fixed set of choices. A choice supplies only the fact the rules
+Each `NEEDS_CONFIRM` reason offers a fixed set of choices; so does each `QUARANTINE` reason (S11a):
+a material without a product anchor may be named as one registered product's, and any quarantined
+material may be ignored. A choice supplies only the fact the rules
 were missing — which product, which role, which pack — and the S5b-1 rules then conclude as before;
 replacing, supplementing and ignoring settle a second material of the same role directly. Nothing
 here reads text a person wrote, so a choice can never widen what the rules accept.
@@ -54,19 +56,34 @@ def choices(
 ) -> tuple[Choice, ...]:
     """The choices a question for a person offers, in a fixed order, ending with ignoring it."""
     policy = policy or load_attribution_policy()
-    if pending.outcome != "NEEDS_CONFIRM":
+    if pending.outcome not in {"NEEDS_CONFIRM", "QUARANTINE"}:
         raise ConfirmationError("NOT_CONFIRMABLE")
     ids = [product.product_id for product in registry]
     if len(set(ids)) != len(ids):  # as attribute() refuses it: never pick one definition
         raise AttributionInputError("REGISTRY_DUPLICATE_PRODUCT")
     try:
-        offered = [*_offered(pending, set(ids), policy), Choice(key="ignore", kind="ignore")]
+        found = _quarantined(pending, ids) if pending.outcome == "QUARANTINE" else None
+        offered = [
+            *(found if found is not None else _offered(pending, set(ids), policy)),
+            Choice(key="ignore", kind="ignore"),
+        ]
     except ValidationError:  # a policy pack or role that cannot be an option key
         raise ConfirmationError("NOT_CONFIRMABLE") from None
     keys = [choice.key for choice in offered]
     if len(set(keys)) != len(keys) or len(keys) > MAX_CHOICES:
         raise ConfirmationError("NOT_CONFIRMABLE")
     return tuple(offered)
+
+
+def _quarantined(pending: Attribution, ids: list[str]) -> list[Choice]:
+    """S11a Spec §2.1: without a product anchor a person may name any registered product; with
+    conflicting anchors or no readable opening the rules would quarantine any product chosen, so
+    only ignoring is offered."""
+    if pending.reason == "no_product_anchor":
+        return [Choice(key=_product_key(p), kind="product", value=p) for p in ids]
+    if pending.reason in {"anchor_conflict", "text_unavailable"}:
+        return []
+    raise ConfirmationError("NOT_CONFIRMABLE")
 
 
 def _offered(pending: Attribution, registered: set[str], policy: AttributionPolicy) -> list[Choice]:

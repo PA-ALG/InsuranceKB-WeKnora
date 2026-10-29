@@ -167,7 +167,7 @@ class ProductRegistry(_Strict):
             raise ValueError("an answer is recorded twice")
         settled = [(entry, entry.settlement) for entry in self.pending if entry.settlement]
         for entry, settlement in settled:
-            if entry.attribution.outcome != "NEEDS_CONFIRM":
+            if entry.attribution.outcome not in WAITING:  # NEEDS_CONFIRM, or QUARANTINE (S11a)
                 raise ValueError("only a material waiting for a person has a settlement")
             if (settlement.knowledge_id, settlement.parse_attempt, settlement.sha256) != (
                 entry.knowledge_id,
@@ -288,7 +288,7 @@ def record(
             for p in registry.pending
             if (p.knowledge_id, p.parse_attempt, p.sha256)
             == (source.knowledge_id, source.parse_attempt, source.sha256)
-            and p.attribution.outcome == "NEEDS_CONFIRM"
+            and p.attribution.outcome in WAITING  # a quarantined one too (S11a Spec §2.4)
         ]
         if not waiting:
             raise RegistryError("CONFIRMATION_UNEXPECTED")

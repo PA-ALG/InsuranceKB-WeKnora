@@ -26,6 +26,9 @@ SUBJECT_PREFIX = "material:"
 _SUBJECT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$")  # the platform's (S5b-3a)
 _CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
 _REASONS = {"multiple_products", "pack_unresolved", "role_unresolved", "same_role_differs"}
+# Quarantined materials are asked too (S11a); one without a readable opening has no excerpt.
+_QUARANTINED = {"no_product_anchor", "anchor_conflict", "text_unavailable"}
+_UNREADABLE = "text_unavailable"
 _KINDS = {"product", "pack", "role", "replace", "supplement", "ignore"}
 _LIMITS = {"title": 200, "detail": 2000, "label": 200}
 # Go's unicode.IsSpace, which strings.TrimSpace uses: the platform trims title, detail and labels
@@ -55,7 +58,8 @@ class ConfirmationWording(BaseModel):
     @model_validator(mode="after")
     def _complete(self) -> "ConfirmationWording":
         roles = {role.role for role in load_material_roles().roles}
-        if set(self.details) != _REASONS or set(self.options) != _KINDS or set(self.roles) != roles:
+        reasons = _REASONS | _QUARANTINED
+        if set(self.details) != reasons or set(self.options) != _KINDS or set(self.roles) != roles:
             raise ValueError("the wording must cover every reason, choice and role")
         return self
 
@@ -141,8 +145,9 @@ def question_of(
         "name": attribution.display_name or "",
         "code": attribution.clause_code or "",
     }
+    unreadable = attribution.reason == _UNREADABLE
     excerpt = excerpt_of(head, wording.excerpt_chars)
-    if not excerpt:
+    if not excerpt and not unreadable:
         raise ConfirmationsError("QUESTION_INVALID")  # first pages without any text
     try:
         offered = choices(attribution, registry.registered())
@@ -162,7 +167,7 @@ def question_of(
         revision=revision,
         title=_fill(wording.title, _LIMITS["title"], {"file": entry.file_name}),
         detail=_fill(
-            wording.details[attribution.reason] + "\n" + wording.excerpt,
+            wording.details[attribution.reason] + ("" if unreadable else "\n" + wording.excerpt),
             _LIMITS["detail"],
             facts | {"excerpt": excerpt},
         ),
