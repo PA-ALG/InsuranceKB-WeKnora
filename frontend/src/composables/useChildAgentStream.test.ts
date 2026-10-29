@@ -9,6 +9,7 @@ import * as finalContent from '../utils/finalArtifactContent.ts'
 import * as history from '../utils/rag-pipeline-history.ts'
 import * as timestamps from '../utils/messageTimestamp.ts'
 import * as steering from '../utils/steerStreamFork.ts'
+import * as chatErrors from '../enterprise/chatErrors.ts'
 import * as dataChange from '../utils/assistantDataChange.ts'
 import * as hostApproval from '../views/chat/components/hostApproval.ts'
 import type { useChatStreamHandler as StreamHandler } from './useChatStreamHandler.ts'
@@ -23,6 +24,7 @@ const modules: Record<string, unknown> = {
   '@/utils/rag-pipeline-history': history,
   '@/utils/messageTimestamp': timestamps,
   '@/utils/steerStreamFork': steering,
+  '@/enterprise/chatErrors': chatErrors,
   '@/utils/assistantDataChange': dataChange,
   '@/views/chat/components/hostApproval': hostApproval,
 }

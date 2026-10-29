@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import * as vue from 'vue'
 import ts from 'typescript'
+import { enterpriseFixtureModules } from '../enterprise/__tests__/upstreamFixtureModules.ts'
 
 export function change(operation: string, ids: Record<string, string[]> = {}) {
   return { operation, area: operation.split('.')[0], ids }
@@ -36,6 +37,7 @@ export function fixture(
       exports, console, ...globals,
       require(name: string) {
         if (name in dependencies) return dependencies[name]
+        if (name in enterpriseFixtureModules) return enterpriseFixtureModules[name]
         if (fallback) return fallback(name)
         throw new Error(`Unexpected dependency: ${name}`)
       },
