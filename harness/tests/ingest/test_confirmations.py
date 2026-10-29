@@ -33,14 +33,13 @@ from tests.ingest.upload_helpers import PRODUCTS, SPACE, Pages, raw
 # 1. Pushing ---------------------------------------------------------------------------------------
 
 
-def test_each_question_for_a_person_is_pushed_once_and_quarantine_is_not() -> None:
+def test_each_question_for_a_person_is_pushed_once_quarantine_included() -> None:
+    # S11a (user ruling 2026-10-25): the quarantined k-orphan is asked as well.
     current = asked(products(), *UPLOADS)
     assert waiting(current) == ["k-new", "k-scan", "k-two", "k-unnamed"]
     platform = FakePlatform()
     first, saves = run(current, platform)
-    entries = sorted(
-        (p for p in current.pending if p.knowledge_id != "k-orphan"), key=lambda p: p.knowledge_id
-    )
+    entries = sorted(current.pending, key=lambda p: p.knowledge_id)
     pushed = [
         # S5b-3d-2b: every pushed question also carries its material's source reference.
         {
@@ -58,13 +57,12 @@ def test_each_question_for_a_person_is_pushed_once_and_quarantine_is_not() -> No
         assert [o["key"] for o in item["options"]] == [
             c.key for c in choices(e.attribution, current.registered())
         ]
-    assert platform.find("material:k-orphan") == []
     assert (first.registry, saves) == (current, [])
-    assert first.report.pushed == ["k-new", "k-scan", "k-two", "k-unnamed"]
-    assert first.report.waiting == 4
+    assert first.report.pushed == ["k-new", "k-orphan", "k-scan", "k-two", "k-unnamed"]
+    assert first.report.waiting == 5
 
     again, saves = run(first.registry, platform)
-    assert len(platform.items) == 4
+    assert len(platform.items) == 5
     assert (again.registry, saves, platform.closed) == (current, [], [])
 
 
