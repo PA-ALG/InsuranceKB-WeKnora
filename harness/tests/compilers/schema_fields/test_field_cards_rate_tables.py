@@ -48,8 +48,22 @@ KEPT_EXAMPLES = {
     "premium_payment_term": {"1837"},
     "product_bundle_rules": {"1837", "1803", "1806"},
 }
+# S12c-5 rewrote these rules of seven cards (and, per the #425 R1 ruling, the examples of the
+# customer-profile card); test_field_cards_boundaries.py pins them. The two coverage cards' edits
+# were withdrawn (Owner decision on #425 R2), so they are checked here like every other card.
+S12C5_RULES = {
+    "target_customer_profile": ("includes", "excludes", "bad", "examples"),
+    "premium_payment_frequency": ("excludes", "bad"),
+    "income_loss_benefit_payment_rules": ("excludes", "bad"),
+    "disability_recovery_and_benefit_termination_rules": ("excludes", "bad"),
+    "disability_status_verification_and_reassessment_rules": ("includes", "excludes", "bad"),
+    "sum_assured_growth_rate": ("includes", "bad"),
+    "non_guaranteed_benefit_rules": ("includes", "excludes", "bad"),
+}
 # draft-2026-10-16b with the parts above neutralised; any other edit changes this digest.
-UNTOUCHED_DIGEST = "5da2b4857e0bc38be6c503cc4a4633cd61df1af127c91644fcbc45b68b76a1ab"
+# S12c-5: the S12C5_RULES are neutralised too, which gives the same digest for the cards before
+# and after S12c-5 (was 5da2b4857e0bc38be6c503cc4a4633cd61df1af127c91644fcbc45b68b76a1ab).
+UNTOUCHED_DIGEST = "f8cff3cd899f75410837024e27701a07f13ddbf0b00082a3cf0702da29c668f3"
 
 
 def untouched(cards: dict[str, Any]) -> str:
@@ -63,14 +77,17 @@ def untouched(cards: dict[str, Any]) -> str:
         data[key]["examples"] = [
             e for e in data[key].get("examples", []) if e["product_id"] not in removed
         ]
+    for key, rules in S12C5_RULES.items():
+        for rule in rules:
+            data[key][rule] = [] if rule in ("excludes", "examples") else ""
     text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def test_the_cards_carry_the_s4i_version() -> None:
     assert (
-        cards_version() == "draft-2026-10-18a"
-    )  # S4j: the payment term may cite rate-table headers
+        cards_version() == "draft-2026-10-28a"
+    )  # S4j: the payment term may cite rate-table headers; S12c-5: nine field boundaries
 
 
 def test_the_changed_rules_read_exactly_as_specified() -> None:
