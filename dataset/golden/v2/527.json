@@ -149,10 +149,32 @@
   },
   {
    "field_key": "eligible_occupation_classes",
-   "state": "unknown",
-   "value": null,
-   "reason": "材料未提及可投保职业规则，费率分类不能确定完整承保范围。",
-   "evidence": []
+   "state": "present",
+   "value": "1. 被保险人的职业分类按公司事先公布的职业分类表确定；2. 条款所附年交费率表对 18 周岁及以上被保险人按职业分类的风险等级一至六及以上分别列示（0—17 周岁不分职业）；3. 风险等级六以上的职业分类的费率仅适用于续保或保证续保期间届满 60 日内重新投保。",
+   "reason": "条款 6.4 与条款内年交费率表及其注（2）列明职业风险等级及六级以上的适用限制。",
+   "evidence": [
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "2e023eab46e66da9aa7a20a51bf7e9886529d694bbaffa5451d2ce64c158e559",
+     "page": 6,
+     "quote": "6.4 职业或工种的确\r\n定与变更\r\n我们将按照事先公布的职业分类表确定被保险人的职业分类，您可以通过我们的\r\n网站、服务热线或服务场所工作人员查询到此表。",
+     "segment_id": "D2P6S5"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "2e023eab46e66da9aa7a20a51bf7e9886529d694bbaffa5451d2ce64c158e559",
+     "page": 7,
+     "quote": "平安附加意外伤害医疗保险（A）年交费率表\r\n单位：人民币元\r\n被保险人\r\n基本保险金额\r\n首个 1000 元 以后每 1000 元\r\n0-17 周岁 36 9\r\n18 周岁及以上\r\n职业分类的风险等级一 24 6\r\n职业分类的风险等级二 30 8\r\n职业分类的风险等级三 36 9\r\n职业分类的风险等级四 54 14\r\n职业分类的风险等级五 84 21\r\n职业分类的风险等级六及以上 108 27\r\n注:（1）月交保费＝0.1×年交保费，季交保费＝0.3×年交保费，半年交保费＝0.6×年交保费；",
+     "segment_id": "D2P7S1"
+    },
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "2e023eab46e66da9aa7a20a51bf7e9886529d694bbaffa5451d2ce64c158e559",
+     "page": 7,
+     "quote": "（2）风险等级六以上的职业分类的费率仅适用于续保或保证续保期间届满 60 日内重新投保。",
+     "segment_id": "D2P7S2"
+    }
+   ]
   },
   {
    "field_key": "underwriting_method",
@@ -1726,10 +1748,18 @@
   },
   {
    "field_key": "product_bundle_rules",
-   "state": "unknown",
-   "value": null,
-   "reason": "材料未提及组合销售的必选、可选、互斥、顺序或额度搭配规则。",
-   "evidence": []
+   "state": "present",
+   "value": "除首期保险费外，本合同的保险费须随主险合同保险费一同支付，不能单独支付。",
+   "reason": "条款写明附加险保险费须随主险合同保险费一同支付及可单独支付的情形，属与主险组合销售的先后与支付关系。",
+   "evidence": [
+    {
+     "document": "保险条款.pdf",
+     "document_sha256": "2e023eab46e66da9aa7a20a51bf7e9886529d694bbaffa5451d2ce64c158e559",
+     "page": 4,
+     "quote": "除首期保险费外，本合同的保险费必须随主险合同保险费一同支付，不能单独支\r\n付。",
+     "segment_id": "D2P4S4"
+    }
+   ]
   },
   {
    "field_key": "objection_handling_scripts",
