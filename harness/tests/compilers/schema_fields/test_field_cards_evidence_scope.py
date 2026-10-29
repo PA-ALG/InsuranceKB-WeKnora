@@ -56,3 +56,10 @@ def test_verification_keeps_procedural_consequences_and_leaves_recovery() -> Non
     includes = all_cards()[VERIFICATION]["includes"]
     assert "因无法核验" in includes and "不含因已恢复而停止给付" in includes
     assert any(RECOVERY in target for target in _targets(VERIFICATION))
+
+
+def test_the_age_band_is_a_described_group_not_entry_age_figures() -> None:
+    # Round 3 of #425: "年龄段" alone was read as "0-55周岁", so the card says what an age band is.
+    includes = all_cards()["target_customer_profile"]["includes"]
+    assert "年龄段用概括的人群描述" in includes
+    assert "不写投保年龄的具体周岁数字" in includes

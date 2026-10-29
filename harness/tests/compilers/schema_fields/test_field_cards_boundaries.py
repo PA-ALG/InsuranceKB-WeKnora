@@ -27,7 +27,7 @@ S12C5_RULES = {
 }
 # #425 R1: the customer-profile examples were rewritten to the ruling; they are pinned too.
 EXAMPLES_REWRITTEN = ("target_customer_profile",)
-RULES_DIGEST = "62efd70e07e65836338840777ff4c135eca2ecc5f6e0e58b6a570651b40434b2"
+RULES_DIGEST = "bc7bd0449b6eb8c468213769211de787fa97cdf27db815afa5c36f259e1ba487"
 TARGET_KEY = re.compile(r"[a-z][a-z0-9_]+")
 
 
