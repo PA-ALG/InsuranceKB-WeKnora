@@ -31,7 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from insurance_harness.catalog.trust_policy import load_trust_policy, trusted_pages
 from insurance_harness.eval.product_sources import (
     check_product_id,
-    material_pages,
+    read_materials,
     source_directory,
 )
 from insurance_harness.eval.segment_score import (
@@ -252,10 +252,13 @@ def _product(
     repo: Path, product: str, previous: PreviousSegmentation, reason: str,
     cards_version: str, golden_from: Path | None,
 ) -> _Converted:
-    raw = material_pages(source_directory(repo, product))
-    trusted = trusted_pages(raw)  # an unresolved material stops the remap, as it stops a compile
+    materials = read_materials(source_directory(repo, product))  # S12d: with the folder's record
+    raw, recorded = materials.pages, materials.recorded
+    trusted = trusted_pages(raw, recorded)  # an unresolved material stops the remap, as in compile
     evidence = {role.role: role.evidence for role in load_material_roles().roles}
-    excluded = {doc for doc, role in document_roles(raw).items() if role and not evidence[role]}
+    excluded = {
+        doc for doc, role in document_roles(raw, recorded).items() if role and not evidence[role]
+    }
     golden = load_golden_v2((golden_from or repo / GOLDEN_DIR) / f"{product}.json")
     remapped, report = remap_golden(
         golden, previous, raw, excluded=excluded, emptied_reason=reason,
