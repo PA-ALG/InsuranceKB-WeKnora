@@ -23,11 +23,7 @@ func TestNewMinerUReaderResolvesParseMethod(t *testing.T) {
 		{name: "default is auto", overrides: map[string]string{}, want: "auto"},
 		{name: "legacy enabled becomes auto", overrides: map[string]string{"mineru_enable_ocr": "true"}, want: "auto"},
 		{name: "legacy disabled becomes text", overrides: map[string]string{"mineru_enable_ocr": "false"}, want: "txt"},
-		{
-			name:      "explicit method wins",
-			overrides: map[string]string{"mineru_parse_method": "ocr", "mineru_enable_ocr": "false"},
-			want:      "ocr",
-		},
+		{name: "explicit method wins", overrides: map[string]string{"mineru_parse_method": "ocr", "mineru_enable_ocr": "false"}, want: "ocr"},
 	}
 
 	for _, tt := range tests {
@@ -47,12 +43,7 @@ func TestMinerUUploadFileName(t *testing.T) {
 		fileType string
 		want     string
 	}{
-		{
-			name:     "original basename",
-			fileName: "reports/Illustrator 研报.pdf",
-			fileType: "pdf",
-			want:     "Illustrator 研报.pdf",
-		},
+		{name: "original basename", fileName: "reports/Illustrator 研报.pdf", fileType: "pdf", want: "Illustrator 研报.pdf"},
 		{
 			name:     "strip multipart controls",
 			fileName: "reports/\r\nIllustrator\x00 export.pdf",
@@ -152,12 +143,7 @@ func TestMinerUReaderPreservesMultipartFilename(t *testing.T) {
 		fileType string
 		want     string
 	}{
-		{
-			name:     "original basename",
-			fileName: "reports/Illustrator 研报.pdf",
-			fileType: "pdf",
-			want:     "Illustrator 研报.pdf",
-		},
+		{name: "original basename", fileName: "reports/Illustrator 研报.pdf", fileType: "pdf", want: "Illustrator 研报.pdf"},
 		{
 			name:     "strip multipart controls",
 			fileName: "reports/\r\nIllustrator\x00 export.pdf",

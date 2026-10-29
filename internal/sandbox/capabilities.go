@@ -1,4 +1,4 @@
-// Package sandbox provides session-scoped capability interfaces.
+// Package sandbox: session-scoped capability interfaces.
 //
 // The Sandbox / Manager pair intentionally hides provider identity (Cube,
 // E2B, Docker) from the application layer. Higher layers should never
@@ -147,11 +147,7 @@ type SessionTerminalManager interface {
 	// is set, so a panel open cannot silently resume (and re-bill) a paused
 	// instance. A backend that cannot stream PTYs returns
 	// ErrTerminalUnsupported, not "no sandbox".
-	OpenSessionTerminal(
-		ctx context.Context,
-		sessionID string,
-		opts RemoteTerminalOptions,
-	) (RemoteTerminalSession, error)
+	OpenSessionTerminal(ctx context.Context, sessionID string, opts RemoteTerminalOptions) (RemoteTerminalSession, error)
 }
 
 // SessionTerminalProvider is implemented by managers that MAY offer

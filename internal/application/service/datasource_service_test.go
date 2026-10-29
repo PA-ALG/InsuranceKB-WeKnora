@@ -63,10 +63,7 @@ type processSyncKBService struct {
 	kb     *types.KnowledgeBase
 }
 
-func (s *processSyncKBService) CreateKnowledgeBase(
-	context.Context,
-	*types.KnowledgeBase,
-) (*types.KnowledgeBase, error) {
+func (s *processSyncKBService) CreateKnowledgeBase(context.Context, *types.KnowledgeBase) (*types.KnowledgeBase, error) {
 	return nil, nil
 }
 
@@ -104,11 +101,7 @@ func (s *processSyncKBService) TogglePinKnowledgeBase(context.Context, string) (
 	return nil, nil
 }
 
-func (s *processSyncKBService) HybridSearch(
-	context.Context,
-	string,
-	types.SearchParams,
-) ([]*types.SearchResult, error) {
+func (s *processSyncKBService) HybridSearch(context.Context, string, types.SearchParams) ([]*types.SearchResult, error) {
 	return nil, nil
 }
 
@@ -120,11 +113,7 @@ func (s *processSyncKBService) ResolveEmbeddingModelKeys(context.Context, []*typ
 	return nil
 }
 
-func (s *processSyncKBService) CopyKnowledgeBase(
-	context.Context,
-	string,
-	string,
-) (*types.KnowledgeBase, *types.KnowledgeBase, error) {
+func (s *processSyncKBService) CopyKnowledgeBase(context.Context, string, string) (*types.KnowledgeBase, *types.KnowledgeBase, error) {
 	return nil, nil, nil
 }
 
@@ -452,12 +441,10 @@ func newSyncDeletionHarness(
 		knowledgeRepo: repo,
 		knowledgeSvc:  ks,
 		svc: &DataSourceService{
-			dsRepo:           newKBDeleteDSRepo(ds.KnowledgeBaseID, ds),
-			syncLogRepo:      syncLogRepo,
-			knowledgeService: ks,
-			kbService: &processSyncKBService{
-				kb: &types.KnowledgeBase{ID: ds.KnowledgeBaseID, TenantID: ds.TenantID},
-			},
+			dsRepo:            newKBDeleteDSRepo(ds.KnowledgeBaseID, ds),
+			syncLogRepo:       syncLogRepo,
+			knowledgeService:  ks,
+			kbService:         &processSyncKBService{kb: &types.KnowledgeBase{ID: ds.KnowledgeBaseID, TenantID: ds.TenantID}},
 			connectorRegistry: registry,
 			tenantRepo:        &processSyncTenantRepo{tenant: &types.Tenant{ID: ds.TenantID}},
 			tagService:        &processSyncTagService{},
@@ -724,12 +711,10 @@ func TestProcessSync_SyncDeletionsPartialWhenMixedResults(t *testing.T) {
 	require.NoError(t, registry.Register(mixedSyncConnector{}))
 
 	svc := &DataSourceService{
-		dsRepo:           newKBDeleteDSRepo(ds.KnowledgeBaseID, ds),
-		syncLogRepo:      syncLogRepo,
-		knowledgeService: ks,
-		kbService: &processSyncKBService{
-			kb: &types.KnowledgeBase{ID: ds.KnowledgeBaseID, TenantID: ds.TenantID},
-		},
+		dsRepo:            newKBDeleteDSRepo(ds.KnowledgeBaseID, ds),
+		syncLogRepo:       syncLogRepo,
+		knowledgeService:  ks,
+		kbService:         &processSyncKBService{kb: &types.KnowledgeBase{ID: ds.KnowledgeBaseID, TenantID: ds.TenantID}},
 		connectorRegistry: registry,
 		tenantRepo:        &processSyncTenantRepo{tenant: &types.Tenant{ID: ds.TenantID}},
 		tagService:        &processSyncTagService{},

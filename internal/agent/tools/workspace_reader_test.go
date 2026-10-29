@@ -350,11 +350,7 @@ func TestPaginateSandboxFileLineCounting(t *testing.T) {
 func TestReadFileWorkspaceReturnsSmallTextOnlyInOutput(t *testing.T) {
 	content := []byte("hello sandbox\n")
 	source := &fakeSandboxFileSource{
-		stat: &sandbox.RemoteStatEntry{
-			Path: "/workspace/output/report.txt",
-			Type: sandbox.RemoteEntryFile,
-			Size: int64(len(content)),
-		},
+		stat: &sandbox.RemoteStatEntry{Path: "/workspace/output/report.txt", Type: sandbox.RemoteEntryFile, Size: int64(len(content))},
 		data: content,
 	}
 
@@ -403,11 +399,7 @@ func TestReadFileWorkspaceRefusesNonRegularFile(t *testing.T) {
 func TestReadFileWorkspaceSuppressesBinaryWithoutBase64(t *testing.T) {
 	content := []byte{0xff, 0x00, 0x01}
 	source := &fakeSandboxFileSource{
-		stat: &sandbox.RemoteStatEntry{
-			Path: "/workspace/output/image.bin",
-			Type: sandbox.RemoteEntryFile,
-			Size: int64(len(content)),
-		},
+		stat: &sandbox.RemoteStatEntry{Path: "/workspace/output/image.bin", Type: sandbox.RemoteEntryFile, Size: int64(len(content))},
 		data: content,
 	}
 

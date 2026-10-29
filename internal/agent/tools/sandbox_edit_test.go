@@ -20,10 +20,7 @@ type fakeSandboxFileEditor struct {
 	writes   int
 }
 
-func (f *fakeSandboxFileEditor) StatSessionFile(
-	_ context.Context,
-	_, filePath string,
-) (*sandbox.RemoteStatEntry, error) {
+func (f *fakeSandboxFileEditor) StatSessionFile(_ context.Context, _, filePath string) (*sandbox.RemoteStatEntry, error) {
 	if f.statErr != nil {
 		return nil, f.statErr
 	}

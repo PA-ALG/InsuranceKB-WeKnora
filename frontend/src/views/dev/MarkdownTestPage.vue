@@ -379,11 +379,11 @@ sequenceDiagram
     alt 系统检测到需接管场景
         Sensor->>ADAS: 检测条件满足 (如: 地图数据缺失/限速变化/系统故障/驾驶员分心)
         ADAS->>HMI: 发送接管请求信号 (HOR Signal)
-
+        
         Note right of HMI: 阶段3：分级提醒策略 (符合国标要求)
         HMI-->>Driver: 视觉提示 (仪表盘图标闪烁/颜色变化)
         HMI-->>Driver: 听觉提示 (轻柔蜂鸣声)
-
+        
         ADAS->>HMI: 增强提醒 (若驾驶员无响应)
         HMI-->>Driver: 强视觉警告 (红色边框/文字)
         HMI-->>Driver: 强听觉警告 (连续急促蜂鸣)

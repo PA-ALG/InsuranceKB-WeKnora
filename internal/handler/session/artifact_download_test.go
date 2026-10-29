@@ -47,10 +47,7 @@ func (s *stubMessageServiceForArtifacts) GetMessage(ctx context.Context, session
 	return s.getMessage(ctx, sessionID, id)
 }
 
-func (s *stubMessageServiceForArtifacts) GetSessionArtifacts(
-	ctx context.Context,
-	sessionID string,
-) (types.MessageArtifacts, error) {
+func (s *stubMessageServiceForArtifacts) GetSessionArtifacts(ctx context.Context, sessionID string) (types.MessageArtifacts, error) {
 	if s.getSessionArtifact == nil {
 		return types.MessageArtifacts{}, nil
 	}

@@ -66,10 +66,7 @@ func TestSessionExistenceCheckerBackedByRepository(t *testing.T) {
 	}
 	checker := sessionExistenceCheckerFor(repo)
 
-	ok, err := checker.SessionExists(
-		context.Background(),
-		sandbox.SessionSandboxKey{TenantID: 42, SessionID: "session-a"},
-	)
+	ok, err := checker.SessionExists(context.Background(), sandbox.SessionSandboxKey{TenantID: 42, SessionID: "session-a"})
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -83,10 +80,7 @@ func TestSessionExistenceCheckerPropagatesTransientErrors(t *testing.T) {
 	repo := &fakeSessionLookup{err: fault}
 	checker := sessionExistenceCheckerFor(repo)
 
-	ok, err := checker.SessionExists(
-		context.Background(),
-		sandbox.SessionSandboxKey{TenantID: 42, SessionID: "session-a"},
-	)
+	ok, err := checker.SessionExists(context.Background(), sandbox.SessionSandboxKey{TenantID: 42, SessionID: "session-a"})
 	require.ErrorIs(t, err, fault)
 	require.False(t, ok)
 }
@@ -96,10 +90,7 @@ func TestSessionExistenceCheckerFallsBackToPermissiveWhenLookupNil(t *testing.T)
 	// hands us the permissive checker so the lifecycle coordinator never
 	// blocks resolution on a missing dependency.
 	checker := sessionExistenceCheckerFor(nil)
-	ok, err := checker.SessionExists(
-		context.Background(),
-		sandbox.SessionSandboxKey{TenantID: 42, SessionID: "session-a"},
-	)
+	ok, err := checker.SessionExists(context.Background(), sandbox.SessionSandboxKey{TenantID: 42, SessionID: "session-a"})
 	require.NoError(t, err)
 	require.True(t, ok)
 }

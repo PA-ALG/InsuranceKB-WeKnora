@@ -8,10 +8,7 @@ import (
 	"time"
 )
 
-// ErrMemoryConflict signals that a proposal targets a memory version that has changed.
 var ErrMemoryConflict = errors.New("memory changed; reload before applying this proposal")
-
-// ErrMemoryExtractionLeaseLost signals that the extraction worker no longer owns its lease.
 var ErrMemoryExtractionLeaseLost = errors.New("memory extraction lease lost")
 
 // MemoryMessageCursor breaks timestamp ties using the message primary key.
@@ -20,7 +17,6 @@ type MemoryMessageCursor struct {
 	ID string    `json:"id"`
 }
 
-// After reports whether this cursor follows the other cursor.
 func (c MemoryMessageCursor) After(other MemoryMessageCursor) bool {
 	return c.At.After(other.At) || (c.At.Equal(other.At) && c.ID > other.ID)
 }
@@ -52,10 +48,8 @@ type MemoryExtractionState struct {
 	LeaseUntil time.Time `json:"lease_until,omitempty"`
 }
 
-// Value implements driver.Valuer for JSON persistence.
 func (s MemoryExtractionState) Value() (driver.Value, error) { return json.Marshal(s) }
 
-// Scan implements sql.Scanner for JSON persistence.
 func (s *MemoryExtractionState) Scan(value interface{}) error {
 	*s = MemoryExtractionState{}
 	var raw []byte
@@ -75,7 +69,6 @@ func (s *MemoryExtractionState) Scan(value interface{}) error {
 	return json.Unmarshal(raw, s)
 }
 
-// MemoryExtractionBatch groups the pending sessions claimed for extraction.
 type MemoryExtractionBatch struct {
 	// RetryAt keeps a redelivered task alive while a crashed worker's lease expires.
 	RetryAt  time.Time

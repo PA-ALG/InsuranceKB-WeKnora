@@ -1,4 +1,3 @@
-// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: session-bound Manager.
 //
 // SessionBoundManager keeps one persistent remote sandbox per tenant session.
@@ -345,12 +344,7 @@ func (m *SessionBoundManager) prepareSessionDirs(
 	if result == nil || result.ExitCode != 0 || result.Killed {
 		detail := "provider returned no result"
 		if result != nil {
-			detail = fmt.Sprintf(
-				"exit=%d killed=%t stderr=%s",
-				result.ExitCode,
-				result.Killed,
-				strings.TrimSpace(result.Stderr),
-			)
+			detail = fmt.Sprintf("exit=%d killed=%t stderr=%s", result.ExitCode, result.Killed, strings.TrimSpace(result.Stderr))
 		}
 		return fmt.Errorf("sandbox: workspace preparation failed for user %s at %s: %s. "+
 			"Command was not started; existing files were preserved. "+
