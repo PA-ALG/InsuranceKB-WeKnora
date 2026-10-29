@@ -6,8 +6,8 @@
  "catalog_version": "2026-08-12-v5",
  "dataset_version": "v2",
  "files": {
-  "1814.json": "e6215f77f7fc973da8bbfe30d87df4843448caa1018d30eae5dc89aaec57187f",
-  "1816.json": "31edf99e55017c16920b0f629ab1fbffb997761b4adc137e8db2da302cb19359",
+  "1814.json": "33ff4d5bdd6ed434d87f5da27858871d8dace2d3779d86d7480e2d0961b30705",
+  "1816.json": "b85ff48bb1926f73df349c2961a2d0fb1dac7b77cf34b85c46fb9ac5660e5b27",
   "1824.json": "ac34df7ee56dce1f5524a89187145fb96f3252df49afe5e66a1a223a777d773f",
   "1826.json": "2dfd25c8a784b9d55b278b427278c904a337ad7fb57a242fa14bc447369b451f",
   "1828.json": "4acf07c579235b4b02943af0e117cc56f7102ab020881460d4762dea59fd60fa",
@@ -15,12 +15,12 @@
   "594.json": "a16aca45d16b4e882ce1b77e493a308bc4d5c264ab40596a1fc91fbfe0afa534",
   "596.json": "a21e175df5852669f1679dcc86eb644129d30530c0c655d03594612430e2d0b7",
   "1847H.json": "d0790a5d1c89d3368d78c1a23fab8f06f04cc951a68f7536c90f1b4107f79d9e",
-  "2648.json": "b9d8cf1cd7ddda35a9d9509c996c8392861686b0def07fe90bfbfa9ab9d3322d",
-  "527.json": "2805572e27dbf6dd77764b0840fe7cbf44be7a6f68b854a997c8c5b283db2d42",
-  "1815.json": "1a6b5da8065c301d1077091477e09dfff3fcc55c19156592c223bd6beb4c09c4",
+  "2648.json": "d37dd852e314055bf4a6f213ee78ca4cd0e857aa27c76c8cd1fef56f812c5878",
+  "527.json": "d9774f65626dc870f3464138457e0fa565036476d3d3422514c8cdb9c5ea5d39",
+  "1815.json": "f56a2b5672db8cabbc4a242b3a70d75250ee37362d24313a5b745b34b1bac5d1",
   "L0410.json": "8afdd27e794aea8e4329a9970d26492821d4a1aace0d596f2fc6fcf818e8358c",
   "2647.json": "b4fd1d7953d9f98cbf0283a76b7335c2153d635e5312326c3cfaa22af293d541",
-  "1855.json": "64323120e7f70b59094666622d91621471c9f20bb2740bf3352cddc33d801129",
+  "1855.json": "fb1fd2cf686655d0a895e2fa6efa19763bf54ec2d5e45822279d46939d8c7987",
   "L3223.json": "1636c431b26a2abaa0d695bc6b2dcbae96e7fa32e4a3992266c6ccc250724b08"
  },
  "products": {
@@ -37,13 +37,26 @@
     "保险条款.pdf": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c"
    },
    "states": {
-    "absent_explicitly": 2,
-    "present": 24,
-    "unknown": 16
+    "present": 25,
+    "unknown": 15,
+    "absent_explicitly": 2
    },
    "non_evidence_sha256": {
     "费率表.pdf": "72224c36ed2455365fcbcd361444d3f26b50ee88d62aba7673d41525c27b99c7"
-   }
+   },
+   "owner_edits": [
+    {
+     "field_key": "product_bundle_rules",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 1：附加险保险费随主险一同支付属本字段 includes 的组合关系；生效日、效力终止等合同效力内容按 excludes 不入。",
+     "segments": [
+      "D2P8S10",
+      "D2P8S11",
+      "D2P8S12"
+     ]
+    }
+   ]
   },
   "1816": {
    "fields": 56,
@@ -58,13 +71,26 @@
     "保险条款.pdf": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f"
    },
    "states": {
-    "absent_explicitly": 6,
-    "present": 33,
-    "unknown": 17
+    "present": 34,
+    "unknown": 16,
+    "absent_explicitly": 6
    },
    "non_evidence_sha256": {
     "费率表.pdf": "b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a"
-   }
+   },
+   "owner_edits": [
+    {
+     "field_key": "product_bundle_rules",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 1：附加险保险费随主险一同支付属本字段 includes 的组合关系；生效日、效力终止等合同效力内容按 excludes 不入。",
+     "segments": [
+      "D2P7S14",
+      "D2P7S15",
+      "D2P7S16"
+     ]
+    }
+   ]
   },
   "1824": {
    "fields": 53,
@@ -231,14 +257,81 @@
     "保险条款.pdf": "b2ade27cf1c05ac48b1319ba0480f6c92951db5bbe6e611432b5394a0944d85e"
    },
    "states": {
-    "absent_explicitly": 8,
-    "present": 30,
-    "unknown": 16
+    "present": 32,
+    "unknown": 13,
+    "absent_explicitly": 9
    },
    "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
    "non_evidence_sha256": {
     "费率表.pdf": "3f8b09d45ba85fe38523d0048b8c9adc6882a6539fae7af26a1d5e0d7d4b1f87"
-   }
+   },
+   "owner_edits": [
+    {
+     "field_key": "covered_critical_specified_diseases",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 2：该清单是规范内重大疾病、作为主责任触发名单，按字段卡归重症特定疾病，与 1855 一致。",
+     "segments": [
+      "D2P3S2",
+      "D2P3S16",
+      "D2P4S3",
+      "D2P4S5",
+      "D2P4S6",
+      "D2P4S7",
+      "D2P4S8",
+      "D2P4S9",
+      "D2P4S10",
+      "D2P4S11",
+      "D2P4S12",
+      "D2P4S13",
+      "D2P4S14",
+      "D2P9S18",
+      "D2P10S1",
+      "D2P10S2",
+      "D2P10S3"
+     ]
+    },
+    {
+     "field_key": "covered_specified_diseases",
+     "from_state": "present",
+     "to_state": "absent_explicitly",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 2：同上，引用完整保险责任列举。",
+     "segments": [
+      "D2P2S8",
+      "D2P2S9",
+      "D2P2S10",
+      "D2P2S11",
+      "D2P2S12",
+      "D2P2S13",
+      "D2P3S1",
+      "D2P3S2",
+      "D2P3S3",
+      "D2P3S17"
+     ]
+    },
+    {
+     "field_key": "tax_qualified_status",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 3：说明书第 7 页、条款第 12 页明文；S12e 独立重复标注同判 present。",
+     "segments": [
+      "D1P7S9",
+      "D2P12S12"
+     ]
+    },
+    {
+     "field_key": "tax_benefit_rules",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 3：适用对象与计税口径为材料给出的具体规则，不套用通用政策补写。",
+     "segments": [
+      "D1P7S9",
+      "D2P12S12",
+      "D2P12S18",
+      "D2P12S19"
+     ]
+    }
+   ]
   },
   "527": {
    "fields": 48,
@@ -253,14 +346,36 @@
     "保险条款.pdf": "2e023eab46e66da9aa7a20a51bf7e9886529d694bbaffa5451d2ce64c158e559"
    },
    "states": {
-    "absent_explicitly": 1,
-    "present": 27,
-    "unknown": 20
+    "present": 29,
+    "unknown": 18,
+    "absent_explicitly": 1
    },
    "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
    "non_evidence_sha256": {
     "费率表.pdf": "819dc1f80fa5f688bc89774f5e6c5356a05cbe4f3ebd4f5ffb358bef9e26f430"
-   }
+   },
+   "owner_edits": [
+    {
+     "field_key": "product_bundle_rules",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 1：附加险保险费随主险一同支付属本字段 includes 的组合关系；生效日、效力终止等合同效力内容按 excludes 不入。",
+     "segments": [
+      "D2P4S4"
+     ]
+    },
+    {
+     "field_key": "eligible_occupation_classes",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 4：该表印在条款内，属条款内容，信任策略按材料角色只限制费率表文件；注（2）是条款明文的职业适用限制。",
+     "segments": [
+      "D2P6S5",
+      "D2P7S1",
+      "D2P7S2"
+     ]
+    }
+   ]
   },
   "1815": {
    "fields": 44,
@@ -275,14 +390,27 @@
     "保险条款.pdf": "e85297ed8c3f19a27945e0f15364067164b343f551ae01ae3ac3beba0096b54f"
    },
    "states": {
-    "absent_explicitly": 5,
-    "present": 21,
-    "unknown": 18
+    "present": 22,
+    "unknown": 17,
+    "absent_explicitly": 5
    },
    "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
    "non_evidence_sha256": {
     "费率表.pdf": "1e37b3b2c4f0c41a172a2d5f5e27ed5a1c164e29ee65227dddc086405928cb1b"
-   }
+   },
+   "owner_edits": [
+    {
+     "field_key": "product_bundle_rules",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 1：附加险保险费随主险一同支付属本字段 includes 的组合关系；生效日、效力终止等合同效力内容按 excludes 不入。",
+     "segments": [
+      "D2P3S16",
+      "D2P3S17",
+      "D2P3S18"
+     ]
+    }
+   ]
   },
   "L0410": {
    "fields": 44,
@@ -342,9 +470,9 @@
     "保险条款.pdf": "37c49fb676f0bfda734d5affd935fc9ebda799aa2385ba32303d566083346072"
    },
    "states": {
-    "absent_explicitly": 5,
-    "present": 34,
-    "unknown": 15
+    "present": 35,
+    "unknown": 14,
+    "absent_explicitly": 5
    },
    "basis": "S12 准入评估 §3.4（docs/design/S12-Golden六类险种-20261028.md）: all source-extractable fields of the pack, one independent judge session per product on the current segmentation (S4i/S4j: rate-table header segments only for policy-trusted fields), draft-2026-10-18a card rules without examples, the S4h prompt adapted to the trust policy; audited by Claude",
    "non_evidence_sha256": {
@@ -358,6 +486,20 @@
      "to_state": "present",
      "basis": "S12d Spec §3：记录费率表角色后，表头（交费期间：趸交、3/6/8/10/15/20 年交，男女各一页）成为该字段的表头输入；按 S4j（用户 2026-10-18）交费期间引用费率表表头。确定性修订，模型调用 0。",
      "segments": "all rate-table header segments listing 交费期间"
+    },
+    {
+     "field_key": "product_bundle_rules",
+     "from_state": "unknown",
+     "to_state": "present",
+     "basis": "Golden 修订 2026-10-29（docs/design/S12-Golden修订-20261029.md，#430 §5.7）：Owner 裁定，确定性修订，模型调用 0。 裁定 1：附加险保险费随主险一同支付属本字段 includes 的组合关系；生效日、效力终止等合同效力内容按 excludes 不入。",
+     "segments": [
+      "D1P7S2",
+      "D1P7S3",
+      "D1P7S4",
+      "D2P6S15",
+      "D2P6S16",
+      "D2P6S17"
+     ]
     }
    ]
   },
