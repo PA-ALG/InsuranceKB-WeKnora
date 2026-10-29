@@ -284,14 +284,16 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 	if releaseForRetry && !canRelease {
 		return errors.New("wiki retry release unavailable")
 	}
-	// Upstream's retry budget (v0.9.0): an op that keeps failing before it runs
-	// must not be released forever. Past wikiMaxFailRetries it is archived like
-	// any other failure, which also releases its finalizing slot below.
+	// Upstream's retry budget (v0.9.0): an op whose attempt failed must not be
+	// released forever. Past wikiMaxFailRetries it is archived like any other
+	// failure, which also releases its finalizing slot below. A cancelled batch
+	// keeps its budget: cancellation is not a failed attempt of this op.
+	countsAttempt := releaseForRetry && !errors.Is(op.failure, context.Canceled)
 	failCount := 0
 	for _, row := range op.queueRows {
 		failCount = max(failCount, row.FailCount)
 	}
-	if releaseForRetry && failCount+1 > wikiMaxFailRetries {
+	if countsAttempt && failCount+1 > wikiMaxFailRetries {
 		releaseForRetry = false
 	}
 	allSettled := true
@@ -307,8 +309,10 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 		if op.failure == nil {
 			settled, err = store.CompleteOperation(ctx, row, marker.ExecutionID)
 		} else if releaseForRetry {
-			if _, err = s.pendingRepo.IncrFailCount(ctx, row.ID); err != nil {
-				return err
+			if countsAttempt {
+				if _, err = s.pendingRepo.IncrFailCount(ctx, row.ID); err != nil {
+					return err
+				}
 			}
 			settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
 		} else {
