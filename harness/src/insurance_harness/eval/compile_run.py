@@ -47,6 +47,7 @@ from insurance_harness.compilers.schema_fields.engine import (
 )
 from insurance_harness.eval.convert import predictions_from_candidate
 from insurance_harness.eval.material_identity import (
+    document_role_map,
     effective_roles,
     material_identities,
     validate_materials,
@@ -327,7 +328,7 @@ def compile_products(
             quotes = (located(carried, revisions, pages, headers)
                       if carried is not None and revisions is not None else None)
             output = compiler.compile(product, definitions, pages, table_headers=headers,
-                                      carry=quotes)
+                                      carry=quotes, roles=document_role_map(read))
             output = output.model_copy(update={
                 "materials": materials, "material_roles": material_roles, "carry_digest": digest,
                 "carry_release": carried.release_id if digest is not None and carried else None,
