@@ -358,7 +358,7 @@
 
 ## 阶段 a 结果（2026-10-29，`slice/u1a`）
 
-- 回退 178 个（L 类 181 + D 类 4 中，除下表 10 个），清单 `tests/architecture/u1a_reverted_files.txt`，逐字节等于上游；两个已登记钩子（`agent_service.go`、`session_knowledge_qa.go`）的调用改回上游名称 `NewUserEnvResolver`、`types.MEMORY_RECALL`，与上游更接近。
+- 回退 178 个（L 类 184 + D 类 4 共 188 个，除下表 10 个），清单 `tests/architecture/u1a_reverted_files.txt`，逐字节等于上游；两个已登记钩子（`agent_service.go`、`session_knowledge_qa.go`）的调用改回上游名称 `NewUserEnvResolver`、`types.MEMORY_RECALL`，与上游更接近。
 - 10 个改判保留（上表已更新类别与理由）：3 个带行为注释（S7f-1 例外）、4 个 SSRF 测试隔离（回退后在假 IP 解析环境下失败，属可上游化的测试修复）、3 个修订版本源回填相关（配置仍被服务读取，不是死代码）。
 - G10：348 → 171（含临时 `.golangci.yml`），收尾 PR 后 170。v0.9.0 试合并冲突：83 → 53（含 `.golangci.yml` 1 处）。
 - 行为：根/cli/client 三个模块全量 `go test -json` 与 main 同环境逐测试对比无变化（本机假 IP DNS 导致的既有失败相同）。
