@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from insurance_harness.bundle.client import PlatformClient, PlatformError, Release, ReleaseMember
-from insurance_harness.catalog.spot_check import load_spot_check_policy
+from insurance_harness.catalog.spot_check import PackRule, SpotCheckPolicy
 from insurance_harness.compilers.schema_fields import publish
 from insurance_harness.eval import spot_check_report as command
 from insurance_harness.ingest import source_map as source_map_module
@@ -26,6 +26,9 @@ def test_the_wilson_lower_bound_matches_known_values() -> None:
 
 
 def test_a_publish_sample_is_split_to_the_platform_batch_limit() -> None:
+    # Spot-check policy v2 (2026-10-29) samples 10% by default; this edge test is about batching,
+    # so it pins a full-sample policy instead of depending on the shipped rate.
+    full = PackRule(rate=1.0, minimum=5, target=0.9)
     claims = [
         ReleaseMember(
             kind="claim",
@@ -57,7 +60,7 @@ def test_a_publish_sample_is_split_to_the_platform_batch_limit() -> None:
 
     client = PlatformClient("https://weknora.test", "k", transport=httpx.MockTransport(platform))
     released = Release(id="rel-1", epoch=1, members=claims)
-    policy = load_spot_check_policy()
+    policy = SpotCheckPolicy(version="test-full", default=full)
     assert publish._submit_sample(client, "demo", released, None, policy) == 1203
     assert batches == [500, 500, 203]
 
