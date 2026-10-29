@@ -33,7 +33,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # macOS removed 2026-10-29 (#454): GitHub-hosted macOS runners were never
+        # assigned (runner empty, 0 steps, cancelled after 15 min) on three runs;
+        # restore when runners are available again.
+        os: [ubuntu-latest, windows-latest]
         go: ['1.26']
     steps:
       - uses: actions/checkout@v6

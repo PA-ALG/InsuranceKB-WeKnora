@@ -9,7 +9,7 @@
   "G5_hardcoded": 69,
   "G6_private_access": 6,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 171,
+  "G10_upstream_patches": 170,
   "G11_new_file_location": 144
  },
  "guards": {
@@ -193,7 +193,6 @@
   "G10_upstream_patches": {
    ".dockerignore": 1,
    ".gitignore": 1,
-   ".golangci.yml": 1,
    "Makefile": 1,
    "README.md": 1,
    "THIRD_PARTY_NOTICES.md": 1,
