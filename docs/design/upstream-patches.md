@@ -153,3 +153,4 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/router/index.ts`、`frontend/src/i18n/locales/{zh-CN,en-US,ja-JP,ko-KR,ru-RU}.ts` | RV5b | 注册企业人工审核队列会话页面及五语言 `enterpriseKnowledge.review`；沿用固定路由表与集中式语言包，候选预览、决定与请求隔离留在 enterprise 自有模块 | 部分（页面及语言包注册扩展点） | 上游提供自有页面路由与模块语言包注册后移除接缝 |
 | `internal/router/router.go` | S5b-3d-2 | 待确认项原文件会话入口复用既有 RAW 文件读取器，向 MountSessionConfirmations 注入 Files；沿用管理员、RAW 可读和 Wiki 可编辑守卫 | 部分（企业路由装配） | 上游提供企业模块与按 Space 的读写权限装配扩展点后移除此接缝 |
 | `internal/application/service/session_knowledge_qa.go` | QA2 | 在既有阶段作用域旁包裹 RetrievalScope，使企业快问快答按点名产品检索本轮固定材料并在阶段结束恢复输入；原生入口没有企业检索阶段扩展点，识别与排序留在 enterprise 包 | 部分（问答检索扩展） | 上游提供可注入的检索来源插件与阶段作用域扩展点后移回 |
+| `.golangci.yml` | S7f-1 | **临时**：为逐字节回退到 v0.8.2 的 128 个上游 Go 文件排除 lll、revive 与格式化器（精确路径，`BEGIN/END S7f-1 临时排除` 标记包住），避免 `--new-from-merge-base` 把上游原样写法报成新问题；不放宽项目自有代码 | 否（仅本项目 CI 需要） | S7f-1 收尾 PR 删除两段标记内的排除，文件恢复上游字节 |
