@@ -137,7 +137,7 @@ func TestWikiReduceFailureIsNotALockMiss(t *testing.T) {
 	failed := false
 	acquired, err := svc.withSlugLock(context.Background(), "kb", "concept/loan", func() error {
 		var reduceErr error
-		_, _, failed, reduceErr = svc.reduceSlugUpdates(context.Background(), &interruptedWikiChatModel{}, "kb", "concept/loan", []SlugUpdate{{Slug: "concept/loan", Type: types.WikiPageTypeConcept, KnowledgeID: "source", SourceRef: "source", Item: extractedItem{Name: "Loan", Details: "Rules"}}}, 1, wikiOutcomeBatchContext(), nil)
+		_, _, failed, _, reduceErr = svc.reduceSlugUpdates(context.Background(), &interruptedWikiChatModel{}, "kb", "concept/loan", []SlugUpdate{{Slug: "concept/loan", Type: types.WikiPageTypeConcept, KnowledgeID: "source", SourceRef: "source", Item: extractedItem{Name: "Loan", Details: "Rules"}}}, 1, wikiOutcomeBatchContext(), nil)
 		return reduceErr
 	})
 	if !acquired || !failed || err == nil {

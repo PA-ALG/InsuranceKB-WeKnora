@@ -74,6 +74,6 @@ func TestQA2cQuickAnswerStagesKeepTheOwnCopyAndFinishItsSentence(t *testing.T) {
 	chatpipeline.NewPluginMerge(svc.eventManager, nil, nil)
 	chatpipeline.NewPluginFilterTopK(svc.eventManager)
 	require.NoError(t, svc.KnowledgeQAByEvent(ctx, cm, []types.EventType{types.CHUNK_MERGE, types.FILTER_TOP_K}))
-	require.Equal(t, []string{"own", "own-next"}, ids(cm.MergeResult))
+	require.Equal(t, []string{"own", "own-next"}, resultIDs(cm.MergeResult))
 	require.Equal(t, 1, cm.RerankTopK, "the caller's cap is restored")
 }

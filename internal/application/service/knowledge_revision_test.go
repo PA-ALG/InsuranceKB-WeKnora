@@ -77,8 +77,8 @@ func TestFinalizeSubtaskDetachedUsesRevisionFencedPath(t *testing.T) {
 	}
 
 	finalizeSubtaskDetached(
-		context.Background(), repo, "knowledge-1", "summary",
-		nil, false, true, binding,
+		context.Background(), withRevisionSlot(repo, binding), "knowledge-1", "summary",
+		nil, false, true,
 	)
 
 	require.Equal(t, 1, repo.revisionCalls)

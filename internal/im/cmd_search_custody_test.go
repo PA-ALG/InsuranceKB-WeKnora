@@ -17,8 +17,8 @@ type rejectedSearchService struct {
 }
 
 func (s *rejectedSearchService) SearchKnowledge(
-	context.Context, []string, []string, []types.TagScope, string,
-) ([]*types.SearchResult, error) {
+	context.Context, []string, []string, []types.TagScope, string, *types.KnowledgeSearchOptions,
+) (*types.RetrievalResult, error) {
 	return nil, s.err
 }
 

@@ -65,7 +65,7 @@ func q2aFixture() (context.Context, *sessionService, *q1aKBs) {
 		"raw-chat": {ID: "raw-chat", Type: types.ModelTypeKnowledgeQA},
 	}}
 	svc := NewSessionService(cfg, nil, nil, kbs, &q1aDocs{}, chunks, models, &q1aTenants{}, events,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, HostSandboxManager{}, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, HostSandboxManager{}, nil, nil, nil, nil, nil,
 		chatsource.NewResolver(source, source, source, source)).(*sessionService)
 	// KnowledgeQA runs CHUNK_SEARCH_PARALLEL, as the production container registers it.
 	chatpipeline.NewPluginSearchParallel(events, kbs, svc.knowledgeService, chunks, cfg, nil, svc.tenantService,
@@ -121,18 +121,18 @@ func TestQ2aWikiOnlyQuickAnswerAlsoReadsTheSpacesPinnedMaterials(t *testing.T) {
 	run := askQ2a(ctx, t, svc, "Product field", "q-chat")
 	require.Len(t, kbs.seen, 1, "the Space's raw KB is searched once")
 	require.Equal(t, []string{"q-doc"}, kbs.seen[0].KnowledgeIDs, "only the release-pinned material is searched")
-	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, ids(run.prompted))
+	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, resultIDs(run.prompted))
 	require.Equal(t, "release", run.prompted[0].Metadata["source_tier"])
 	require.Equal(t, "raw_text", run.prompted[1].Metadata["source_tier"])
-	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, ids(run.refs))
+	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, resultIDs(run.refs))
 	require.True(t, run.answer == nil || !run.answer.IsFallback, "an answer from sources is not a fallback")
 }
 
 func TestQ2aRawMaterialsAnswerWhenNoPublishedFieldMatches(t *testing.T) {
 	ctx, svc, _ := q2aFixture()
 	run := askQ2a(ctx, t, svc, "unrelated question", "q-chat")
-	require.Equal(t, []string{"q-current"}, ids(run.prompted))
-	require.Equal(t, []string{"q-current"}, ids(run.refs))
+	require.Equal(t, []string{"q-current"}, resultIDs(run.prompted))
+	require.Equal(t, []string{"q-current"}, resultIDs(run.refs))
 	require.True(t, run.answer == nil || !run.answer.IsFallback)
 }
 
@@ -149,7 +149,7 @@ func TestQ2aNothingFoundGivesTheFixedAnswerInsteadOfGeneralKnowledge(t *testing.
 func TestQ2aTheModelSeesBothSourceTiers(t *testing.T) {
 	ctx, svc, _ := q2aFixture()
 	svc.cfg.Conversation.Summary.ContextTemplate = "context={{contexts}} query={{query}}"
-	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil, nil)
 	run := askQ2a(ctx, t, svc, "Product field", "q-chat")
 	require.Contains(t, run.rendered, "已发布知识（审核过）", "published fields are labelled")
 	require.Contains(t, run.rendered, "原文检索（未经编译审核）", "raw passages are labelled")

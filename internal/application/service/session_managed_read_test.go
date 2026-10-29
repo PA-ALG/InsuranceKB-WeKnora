@@ -97,7 +97,7 @@ func TestSessionReadRejectsManagedSelections(t *testing.T) {
 						err = svc.KnowledgeQA(ctx, req, nil)
 					} else {
 						_, err = svc.SearchKnowledge(
-							ctx, req.KnowledgeBaseIDs, req.KnowledgeIDs, req.TagScopes, "query",
+							ctx, req.KnowledgeBaseIDs, req.KnowledgeIDs, req.TagScopes, "query", nil,
 						)
 					}
 					var denial *managed.ReadError
@@ -132,7 +132,7 @@ func TestSessionReadPreservesUnmanagedPath(t *testing.T) {
 					TurnLeaseHeld: true, KnowledgeBaseIDs: []string{"library"},
 				}, nil)
 			} else {
-				_, err = svc.SearchKnowledge(ctx, []string{"library"}, nil, nil, "query")
+				_, err = svc.SearchKnowledge(ctx, []string{"library"}, nil, nil, "query", nil)
 			}
 			require.ErrorIs(t, err, sentinel)
 			require.Equal(t, 1, models.calls)
