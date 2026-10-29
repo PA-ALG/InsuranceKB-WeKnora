@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "https://github.com/Tencent/WeKnora.git",
-  "commit": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
-  "tree": "9533ab2071e71f4bc2ebb09c85d3ac246841ff9a",
+  "commit": "f17ee8a8da901bd658a4cb25f40b5fd41adbfdd7",
+  "tree": "de9e8951de64824a2f654d8ff5ace37fe5672b23",
   "release_ancestor": {
     "tag": "v0.7.1",
     "commit": "c64a48647cd6f7eb8b0fb020b2e8fec74ee375fb"
@@ -10,5 +10,5 @@
   "required_capability_commits": [
     "80a5003cc99a427098afe184eee6601916d3d156"
   ],
-  "official_migration_head": 110
+  "official_migration_head": 134
 }
