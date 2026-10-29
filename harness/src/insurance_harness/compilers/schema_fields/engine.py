@@ -114,6 +114,35 @@ def _forbidden(
     }
 
 
+def _references(
+    source: SegmentedSource,
+    policy: TrustPolicy,
+    selected: Mapping[str, tuple[str, list[str]]],
+    carry: Mapping[str, Sequence[CarriedQuote]],
+    reviewed: Mapping[str, str],
+) -> dict[str, tuple[str, list[str]]]:
+    """Reviewed values step two may keep, with their segments (S12c-8 Spec §2.2).
+
+    Only a field step one found present, whose carried quotes are each found once in this
+    compile and none of them in a segment the field may not use: then every segment the reviewed
+    value rests on is among the field's step-two segments, and a fact whose segment is gone
+    cannot be kept from the old value.
+    """
+    out: dict[str, tuple[str, list[str]]] = {}
+    for key, text in reviewed.items():
+        quotes = carry.get(key)
+        if selected.get(key, ("", []))[0] != "present" or not quotes or not text.strip():
+            continue
+        spots = [source.locate(q.document, q.page, q.quote) for q in quotes]
+        if not all(spots):
+            continue
+        found = set().union(*spots)
+        if _forbidden(source, policy, list(found), key):
+            continue
+        out[key] = (text, [segment.id for segment in source.ordered(list(found))])
+    return out
+
+
 def _value_batches(
     items: list[tuple[FieldDefinition, list[Segment]]],
     limit: int,
@@ -215,9 +244,12 @@ class SchemaFieldsCompiler:
         table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
         carry: Mapping[str, Sequence[CarriedQuote]] | None = None,
         roles: Mapping[str, str | None] | None = None,
+        reviewed: Mapping[str, str] | None = None,
     ) -> CompileOutput:
         """carry: reviewed quotes per field a recompile hands to step two (S12c-4 Spec §2.2).
-        roles: each document's material role, shown to step two by segment-id prefix (S12c-7)."""
+        roles: each document's material role, shown to step two by segment-id prefix (S12c-7).
+        reviewed: the published value of a carried field, shown to step two as a reference only
+        when every one of its quotes is found in this compile's segments (S12c-8 Spec §2)."""
         fields, source = self._prepare(entity_id, definitions, pages, table_headers=table_headers)
         documents = {
             source.document_ids[document]: role
@@ -269,6 +301,7 @@ class SchemaFieldsCompiler:
             added = located - set(ids) - _forbidden(source, policy, list(located), key)
             if added:
                 carried[key] = [segment.id for segment in source.ordered(list(added))]
+        references = _references(source, policy, selected, carry or {}, reviewed or {})
         recalled: dict[str, list[str]] = {}
         for key, found in later.items():
             state, ids = selected.get(key, ("", []))
@@ -284,7 +317,7 @@ class SchemaFieldsCompiler:
         values: dict[str, str | None] = {}
         used: dict[str, list[str]] = {}
         for items in _value_batches(present, self._value_batch_chars):
-            answer = send(build_value_request(entity_id, items, documents))
+            answer = send(build_value_request(entity_id, items, documents, references))
             rows = parse_value_rows(answer, [definition for definition, _ in items])
             for key, (written, cited) in rows.items():
                 values[key], used[key] = written, cited

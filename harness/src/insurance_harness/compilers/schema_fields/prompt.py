@@ -41,8 +41,9 @@ pitfalls 是该字段实测出现过的错误。
 # so outputs written under another protocol are compiled again. 2026-10-29.1 (S12c-6) marks the
 # production pipeline that also takes two step-one draws per batch; 2026-10-29.2 (S12c-7) adds each
 # document's role to step two and the rule that the terms prevail over the brochure; 2026-10-29.3
-# (S12c-6b) marks the production pipeline back to one step-one draw.
-VALUE_PROTOCOL_VERSION = "2026-10-29.3"
+# (S12c-6b) marks the production pipeline back to one step-one draw; 2026-10-29.4 (S12c-8) shows a
+# recompile's step two the reviewed value of a carried field, which it keeps where still supported.
+VALUE_PROTOCOL_VERSION = "2026-10-29.4"
 
 # S12c-7: step two knows each document's role, and the terms prevail over the brochure.
 _TERMS_PREVAIL = (
@@ -73,6 +74,21 @@ present 时 value 为非空字符串，多项时在同一字符串内编号（1.
 used_segments 列出写 value 实际用到的段落编号，必须取自给定段落；
 unknown 时省略 value 与 used_segments。每个目标字段恰好一行，按给定顺序与 ordinal。
 """
+)
+
+
+# S12c-8: on a recompile, step two sees a carried field's reviewed value. Added to the system text
+# only when a request carries one, so other requests stay byte-identical to protocol 2026-10-29.3.
+_KEEP_REVIEWED = (
+    "部分字段附有 reviewed_value：本产品本字段上一版经审核发布的值；\n"
+    "reviewed_segments 是它的依据段落，都在本字段的给定段落中。\n"
+    "reviewed_value 只是参考，事实以给定段落为准：\n"
+    "reviewed_value 中给定段落仍然支持的事实，value 必须保留，"
+    "不得删减其中的数值、条件、例外、期限与适用对象，可以调整措辞与顺序；\n"
+    "给定段落与 reviewed_value 不一致的，以给定段落为准；给定段落不支持的内容不写入；\n"
+    "按上面其他规则不应写入的内容（如属于其他字段的内容、与条款冲突的说明书说法），"
+    "即使出现在 reviewed_value 中也不写入；\n"
+    "给定段落中有、reviewed_value 中没有的本字段内容，要补充进 value。\n"
 )
 
 
@@ -131,17 +147,25 @@ def build_value_request(
     entity_id: str,
     items: Sequence[tuple[FieldDefinition, Sequence[Segment]]],
     documents: Mapping[str, str] | None = None,
+    reviewed: Mapping[str, tuple[str, Sequence[str]]] | None = None,
 ) -> JudgeLikeRequest:
     """Each field with only the segments step one selected for it; `documents` maps each segment-id
-    prefix ("D1") to its material role, so step two can let the terms prevail (S12c-7)."""
-    fields = [
-        {
+    prefix ("D1") to its material role, so step two can let the terms prevail (S12c-7);
+    `reviewed` gives a field's published value and its segment ids as a reference (S12c-8)."""
+    fields = []
+    kept = False
+    for definition, segments in items:
+        entry = {
             **_field(definition, examples=False),
             "segments": "\n".join(f"{s.id} {s.text}" for s in segments),
         }
-        for definition, segments in items
-    ]
+        reference = (reviewed or {}).get(definition.field_key)
+        if reference is not None:
+            entry["reviewed_value"], entry["reviewed_segments"] = reference[0], list(reference[1])
+            kept = True
+        fields.append(entry)
     payload: dict[str, Any] = {"entity_id": entity_id, "schema_fields": fields}
     if documents:
         payload["documents"] = dict(documents)
-    return JudgeLikeRequest(system=VALUE_PROMPT, user=_encode(payload))
+    system = VALUE_PROMPT + _KEEP_REVIEWED if kept else VALUE_PROMPT
+    return JudgeLikeRequest(system=system, user=_encode(payload))
