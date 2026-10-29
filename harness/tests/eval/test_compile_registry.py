@@ -41,7 +41,7 @@ def output(root: Path, product: str) -> CompileOutput:
 def test_a_product_only_the_registry_knows_compiles_with_its_facts(
     dataset: Path, tmp_path: Path
 ) -> None:
-    build, sent = factory(["example-flash-2026"] * 3)
+    build, sent = factory(["example-flash-2026"] * 2)
     root = tmp_path / "run"
     runs = compile_products(
         dataset,
@@ -56,14 +56,14 @@ def test_a_product_only_the_registry_knows_compiles_with_its_facts(
         (CREATED, "新建的产品", "pack-a", False)
     ]
     assert (output(root, CREATED).entity_id, output(root, CREATED).pack_id) == (CREATED, "pack-a")
-    assert len(sent) == 3
+    assert len(sent) == 2
 
 
 def test_registry_facts_of_a_seeded_product_give_the_same_compile(
     dataset: Path, tmp_path: Path
 ) -> None:
-    plain, _ = factory(["example-flash-2026"] * 3)
-    from_registry, _ = factory(["example-flash-2026"] * 3)
+    plain, _ = factory(["example-flash-2026"] * 2)
+    from_registry, _ = factory(["example-flash-2026"] * 2)
     without = compile_products(
         dataset,
         ["p1"],
@@ -90,7 +90,7 @@ def test_registry_facts_of_a_seeded_product_give_the_same_compile(
 def test_facts_without_a_page_source_are_refused_before_any_call(
     dataset: Path, tmp_path: Path
 ) -> None:
-    build, sent = factory(["example-flash-2026"] * 3)
+    build, sent = factory(["example-flash-2026"] * 2)
     with pytest.raises(ValueError):
         compile_products(
             dataset,
@@ -104,7 +104,7 @@ def test_facts_without_a_page_source_are_refused_before_any_call(
 
 
 def test_a_stored_output_of_another_pack_stops_the_compile(dataset: Path, tmp_path: Path) -> None:
-    build, _ = factory(["example-flash-2026"] * 3)
+    build, _ = factory(["example-flash-2026"] * 2)
     root = tmp_path / "run"
     compile_products(
         dataset,
@@ -115,7 +115,7 @@ def test_a_stored_output_of_another_pack_stops_the_compile(dataset: Path, tmp_pa
         page_source=pages,
         facts={CREATED: ("新建的产品", "pack-a")}.__getitem__,
     )
-    again, sent = factory(["example-flash-2026"] * 3)
+    again, sent = factory(["example-flash-2026"] * 2)
     with pytest.raises(ValueError):
         compile_products(
             dataset,
