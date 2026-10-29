@@ -25,7 +25,9 @@ S12C5_RULES = {
     "sum_assured_growth_rate": ("includes", "bad"),
     "non_guaranteed_benefit_rules": ("includes", "excludes", "bad"),
 }
-RULES_DIGEST = "27c2a23a2e8eb257834cd87c68b54471cc754a303c4b51ce06b81a57482e2765"
+# #425 R1: the customer-profile examples were rewritten to the ruling; they are pinned too.
+EXAMPLES_REWRITTEN = ("target_customer_profile",)
+RULES_DIGEST = "62efd70e07e65836338840777ff4c135eca2ecc5f6e0e58b6a570651b40434b2"
 TARGET_KEY = re.compile(r"[a-z][a-z0-9_]+")
 
 
@@ -40,6 +42,8 @@ def test_the_cards_carry_the_s12c5_version() -> None:
 def test_the_rewritten_rules_read_exactly_as_specified() -> None:
     cards = all_cards()
     data = {key: {rule: cards[key][rule] for rule in rules} for key, rules in S12C5_RULES.items()}
+    for key in EXAMPLES_REWRITTEN:
+        data[key]["examples"] = cards[key]["examples"]
     text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     assert hashlib.sha256(text.encode("utf-8")).hexdigest() == RULES_DIGEST
 
@@ -71,5 +75,5 @@ def test_the_segments_of_the_fields_own_facts_stay_selectable() -> None:
     for key in ("coverage_responsibilities", "coverage_summary"):
         assert "同一段落中的给付内容照常选入" in excludes(key), key
     assert "交费频率仍属本字段" in excludes("premium_payment_frequency")
-    assert "投保年龄条款可以作为归纳年龄段的依据" in cards["target_customer_profile"]["includes"]
+    assert "第一步选入所有说明产品为谁而设的段落" in cards["target_customer_profile"]["includes"]
     assert "适用的增长比例都要写明" in cards["sum_assured_growth_rate"]["includes"]

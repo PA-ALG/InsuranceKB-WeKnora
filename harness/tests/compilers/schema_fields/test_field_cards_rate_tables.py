@@ -48,9 +48,10 @@ KEPT_EXAMPLES = {
     "premium_payment_term": {"1837"},
     "product_bundle_rules": {"1837", "1803", "1806"},
 }
-# S12c-5 rewrote these rules of nine cards; test_field_cards_boundaries.py pins them.
+# S12c-5 rewrote these rules of nine cards (and, per the #425 R1 ruling, the examples of the
+# customer-profile card); test_field_cards_boundaries.py pins them.
 S12C5_RULES = {
-    "target_customer_profile": ("includes", "excludes", "bad"),
+    "target_customer_profile": ("includes", "excludes", "bad", "examples"),
     "premium_payment_frequency": ("excludes", "bad"),
     "income_loss_benefit_payment_rules": ("excludes", "bad"),
     "disability_recovery_and_benefit_termination_rules": ("excludes", "bad"),
@@ -63,7 +64,7 @@ S12C5_RULES = {
 # draft-2026-10-16b with the parts above neutralised; any other edit changes this digest.
 # S12c-5: the S12C5_RULES are neutralised too, which gives the same digest for the cards before
 # and after S12c-5 (was 5da2b4857e0bc38be6c503cc4a4633cd61df1af127c91644fcbc45b68b76a1ab).
-UNTOUCHED_DIGEST = "1327f169116be4b76c68f6a031057cf49f1e5f8fbeaa0abed0cbf700c5327026"
+UNTOUCHED_DIGEST = "8677a34409244654511609d9117e82d205bcb844fbd0679833fb29aa89c2bbac"
 
 
 def untouched(cards: dict[str, Any]) -> str:
@@ -79,7 +80,7 @@ def untouched(cards: dict[str, Any]) -> str:
         ]
     for key, rules in S12C5_RULES.items():
         for rule in rules:
-            data[key][rule] = [] if rule == "excludes" else ""
+            data[key][rule] = [] if rule in ("excludes", "examples") else ""
     text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
