@@ -72,17 +72,7 @@ jobs:
       # crate going unmaintained is not something this repo can act on.
       - name: Audit the vendored dependency tree
         working-directory: third_party/anydoc-go
-        # Temporary ignores (2026-10-29): RUSTSEC-2026-0367/0368/0369 affect zip 8.x
-        # ZipArchive::extract / ZipStreamReader::extract writing to disk (SUID bits,
-        # symlink targets, permissions through symlinks). anydoc 0.1.9 and calamine
-        # 0.36.1 only read entries in memory (by_name/by_index) and never call
-        # extract, so the path is not reachable here. Upstream v0.9.0 already pins
-        # zip 9.0.4; remove these ignores when U-1 (#451) moves the base.
-        run: >-
-          cargo audit
-          --ignore RUSTSEC-2026-0367
-          --ignore RUSTSEC-2026-0368
-          --ignore RUSTSEC-2026-0369
+        run: cargo audit
 
       - name: Vet, test, and build with the engine linked in
         run: |
