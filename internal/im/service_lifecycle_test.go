@@ -12,7 +12,6 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -24,7 +23,6 @@ func (*lifecycleTestAdapter) VerifyCallback(*gin.Context) error { return nil }
 func (*lifecycleTestAdapter) ParseCallback(*gin.Context) (*IncomingMessage, error) {
 	return nil, nil
 }
-
 func (*lifecycleTestAdapter) SendReply(context.Context, *IncomingMessage, *ReplyMessage) error {
 	return nil
 }
@@ -36,9 +34,7 @@ type lifecycleFactoryCounters struct {
 }
 
 func (c *lifecycleFactoryCounters) factory() AdapterFactory {
-	return func(
-		context.Context, *IMChannel, func(context.Context, *IncomingMessage) error,
-	) (Adapter, context.CancelFunc, error) {
+	return func(context.Context, *IMChannel, func(context.Context, *IncomingMessage) error) (Adapter, context.CancelFunc, error) {
 		c.starts.Add(1)
 		var once sync.Once
 		return &lifecycleTestAdapter{}, func() {
@@ -200,8 +196,7 @@ func TestEnsureChannelAdapterRefreshesStaleConfig(t *testing.T) {
 		t.Fatalf("start initial channel: %v", err)
 	}
 	if err := db.Model(&IMChannel{}).Where("id = ?", channel.ID).
-		Updates(map[string]any{"agent_id": "agent-new", "credentials": types.JSON(`{"token":"v2"}`)}).
-		Error; err != nil {
+		Updates(map[string]any{"agent_id": "agent-new", "credentials": types.JSON(`{"token":"v2"}`)}).Error; err != nil {
 		t.Fatalf("update durable channel: %v", err)
 	}
 
@@ -213,11 +208,7 @@ func TestEnsureChannelAdapterRefreshesStaleConfig(t *testing.T) {
 		t.Fatalf("stale runtime config returned: agent=%q credentials=%s", fresh.AgentID, fresh.Credentials)
 	}
 	if counters.starts.Load() != 2 || counters.stops.Load() != 1 {
-		t.Fatalf(
-			"runtime was not rebuilt exactly once: starts=%d stops=%d",
-			counters.starts.Load(),
-			counters.stops.Load(),
-		)
+		t.Fatalf("runtime was not rebuilt exactly once: starts=%d stops=%d", counters.starts.Load(), counters.stops.Load())
 	}
 }
 
@@ -323,11 +314,7 @@ func TestChannelConfigEventReloadsOtherReplica(t *testing.T) {
 		_, runtimeChannel, ok := svcTwo.GetChannelAdapter(channel.ID)
 		if ok && runtimeChannel.AgentID == "agent-new" && string(runtimeChannel.Credentials) == `{"token":"v2"}` {
 			if countersTwo.starts.Load() < 2 || countersTwo.stops.Load() < 1 {
-				t.Fatalf(
-					"replica config changed without rebuilding runtime: starts=%d stops=%d",
-					countersTwo.starts.Load(),
-					countersTwo.stops.Load(),
-				)
+				t.Fatalf("replica config changed without rebuilding runtime: starts=%d stops=%d", countersTwo.starts.Load(), countersTwo.stops.Load())
 			}
 			reloaded = true
 			break
@@ -504,7 +491,7 @@ func TestLeadershipLossStopsAdapterAndSchedulesRecovery(t *testing.T) {
 
 	// Simulate another owner replacing the lease before the next renewal.
 	key := RedisKeyLeader + channel.ID
-	require.NoError(t, redisServer.Set(key, "instance-two"))
+	redisServer.Set(key, "instance-two")
 	svc.handleWSLeadershipLoss(channel.ID)
 
 	if _, _, ok := svc.GetChannelAdapter(channel.ID); ok {

@@ -79,12 +79,7 @@ func (r *knowledgeRepository) AddKnowledgeTagRelations(
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var knowledgeCount int64
 		if err := tx.Model(&types.Knowledge{}).
-			Where(
-				"id = ? AND tenant_id = ? AND knowledge_base_id = ? AND deleted_at IS NULL",
-				knowledgeID,
-				tenantID,
-				kbID,
-			).
+			Where("id = ? AND tenant_id = ? AND knowledge_base_id = ? AND deleted_at IS NULL", knowledgeID, tenantID, kbID).
 			Where("parse_status NOT IN ?", []string{
 				types.ParseStatusCancelled,
 				types.ParseStatusDeleting,
@@ -94,12 +89,7 @@ func (r *knowledgeRepository) AddKnowledgeTagRelations(
 			return err
 		}
 		if knowledgeCount != 1 {
-			return fmt.Errorf(
-				"knowledge %s does not belong to tenant %d and knowledge base %s",
-				knowledgeID,
-				tenantID,
-				kbID,
-			)
+			return fmt.Errorf("knowledge %s does not belong to tenant %d and knowledge base %s", knowledgeID, tenantID, kbID)
 		}
 
 		var tagCount int64
@@ -144,8 +134,7 @@ func (r *knowledgeRepository) GetKnowledgeTags(
 	var rows []relationWithTag
 	if err := r.db.WithContext(ctx).
 		Table("knowledge_tag_relations AS ktr").
-		Select("ktr.knowledge_id, kt.id, kt.seq_id, kt.tenant_id, kt.knowledge_base_id,"+
-			" kt.name, kt.color, kt.sort_order, kt.created_at, kt.updated_at").
+		Select("ktr.knowledge_id, kt.id, kt.seq_id, kt.tenant_id, kt.knowledge_base_id, kt.name, kt.color, kt.sort_order, kt.created_at, kt.updated_at").
 		Joins("JOIN knowledge_tags AS kt ON ktr.tag_id = kt.id").
 		Where("ktr.knowledge_id IN (?)", knowledgeIDs).
 		Find(&rows).Error; err != nil {

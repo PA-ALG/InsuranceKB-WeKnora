@@ -1,4 +1,3 @@
-// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: provider-neutral remote Sandbox implementation.
 //
 // RemoteSandbox is the concrete Sandbox that speaks any RemoteSandboxClient

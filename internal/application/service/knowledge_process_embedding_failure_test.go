@@ -83,9 +83,8 @@ func TestProcessChunksFailsKnowledgeWhenEmbeddingModelUnavailable(t *testing.T) 
 		IndexingStrategy: types.IndexingStrategy{VectorEnabled: true},
 	}
 
-	err := svc.processChunks(context.Background(), kb, knowledge,
+	svc.processChunks(context.Background(), kb, knowledge,
 		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}})
-	require.NoError(t, err)
 
 	require.Len(t, repo.updates, 1, "the failure must be persisted exactly once")
 	require.Equal(t, types.ParseStatusFailed, repo.updates[0].ParseStatus)
@@ -136,9 +135,8 @@ func TestProcessChunksLeavesStatusAloneWhenEmbeddingModelCallIsCancelled(t *test
 				ctx = cancelled
 			}
 
-			err := svc.processChunks(ctx, kb, knowledge,
+			svc.processChunks(ctx, kb, knowledge,
 				[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}})
-			require.Error(t, err)
 
 			require.Empty(t, repo.updates, "an interrupted run must not be written as a failure")
 			require.Equal(t, types.ParseStatusProcessing, knowledge.ParseStatus)
@@ -177,9 +175,8 @@ func TestProcessChunksDoesNotOverwriteCancelledRowOnEmbeddingFailure(t *testing.
 		IndexingStrategy: types.IndexingStrategy{VectorEnabled: true},
 	}
 
-	err := svc.processChunks(context.Background(), kb, knowledge,
+	svc.processChunks(context.Background(), kb, knowledge,
 		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}})
-	require.NoError(t, err)
 
 	require.Greater(t, repo.reads, 1, "the guard must re-read after resolving the model")
 	require.Empty(t, repo.updates, "cancelled must not be overwritten with failed")
@@ -221,8 +218,8 @@ func TestProcessChunksSkipsEmbeddingFailureWriteWhenSourceReplaced(t *testing.T)
 		IndexingStrategy: types.IndexingStrategy{VectorEnabled: true},
 	}
 
-	require.NoError(t, svc.processChunks(context.Background(), kb, knowledge,
-		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}}))
+	svc.processChunks(context.Background(), kb, knowledge,
+		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}})
 
 	require.Greater(t, repo.reads, 2, "the guard must re-read after resolving the model")
 	require.Empty(t, repo.updates,
@@ -252,8 +249,8 @@ func TestProcessChunksSkipsEmbeddingModelWhenIndexingDisabled(t *testing.T) {
 	kb := &types.KnowledgeBase{ID: "kb-1", TenantID: 1}
 	require.False(t, kb.NeedsEmbeddingModel())
 
-	require.NoError(t, svc.processChunks(ctx, kb, knowledge,
-		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}}))
+	svc.processChunks(ctx, kb, knowledge,
+		[]types.ParsedChunk{{Content: "body", Seq: 0, Start: 0, End: 4}})
 
 	require.Len(t, chunkRepo.created, 1, "chunks are persisted even without vector indexing")
 	require.NotEqual(t, types.ParseStatusFailed, knowledge.ParseStatus)

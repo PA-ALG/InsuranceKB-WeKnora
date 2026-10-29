@@ -333,10 +333,7 @@ func (h *Handler) setupStopEventHandler(
 			context.WithoutCancel(ctx),
 			types.TenantIDContextKey, sessionTenantID,
 		)
-		// Empty query: stopped conversations are not indexed.
-		if err := h.completeAssistantMessage(updateCtx, assistantMessage, "", ""); err != nil {
-			logger.Warnf(updateCtx, "Failed to persist stopped assistant message")
-		}
+		h.completeAssistantMessage(updateCtx, assistantMessage, "", "") // empty query: stopped conversations are not indexed
 		return nil
 	})
 }

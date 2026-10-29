@@ -13,7 +13,6 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/im"
 	ws "github.com/gorilla/websocket"
-	"github.com/stretchr/testify/require"
 )
 
 const testBusinessMessage = `{
@@ -244,7 +243,7 @@ func TestLongConnClientReconnectsAfterMaxConnectionAge(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer func() { require.NoError(t, conn.Close()) }()
+		defer conn.Close()
 		connections <- struct{}{}
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {

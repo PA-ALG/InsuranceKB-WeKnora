@@ -28,7 +28,7 @@
 | `internal/mcpserver/tools_ingest.go` | S1a | 按目标 KB 属主分类，在权限授予与文档修改前拒绝受管写入 | 部分（通用策略扩展点） | 同上 |
 | `internal/router/router_wiki_test.go` | S1a | 同步必带分类器入口和属主查询装配，原断言不变 | 否（测试装配） | 上游提供原生 Wiki 写策略后恢复 |
 | `internal/router/router_api_key_capabilities_test.go` | S1a | 同步必带分类器入口，原能力断言不变 | 否（测试装配） | 同上 |
-| 其余约 430 个（含格式改动） | 831 之前 | 见 git 历史 | — | S7 回退格式改动 |
+| 其余约 430 个（含格式改动） | 831 之前 | 见 git 历史 | — | S7 回退格式改动。2026-10-29 盘点（`main@5c9e9ae5f`，G10 共 477 个）：只改格式 88、只改注释 45、只改标识符大小写 6、实质改动 338。S7f-1 回退其中 129 个到上游字节（清单 `tests/architecture/s7f1_format_only_files.txt`，方法见 S7f-1 Spec 附录 A），大小写重命名与实质补丁另立 S7f-1b、S7f-3。U-1 阶段 a（2026-10-29，`main@28b69332c` G10 348）：按 U-1 附录 A 再回退 L 类（0.8.2 期 lint/校验改动）与 D 类 178 个到上游字节（清单 `tests/architecture/u1a_reverted_files.txt`），附录 A 中 10 个 L/D 文件因带行为注释、SSRF 测试隔离或修订版本源回填仍在使用而保留（见该测试 `KEPT`）；此后本行只剩附录 A 中 H/F/X/K/W 类未单独登记的文件，U-1 阶段 b/c 逐族登记或回退后删除本行 |
 
 S1a 实际修改 16 个上游文件，其中 11 个此前未偏离上游：Agent 五个写源文件与两个夹具、MCP 两个文件、
 路由两个夹具。`internal/mcpserver/scope.go` 未改。按 S1a Spec §6 登记，G10 基线由 Claude 审查后更新；
@@ -153,3 +153,6 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `frontend/src/router/index.ts`、`frontend/src/i18n/locales/{zh-CN,en-US,ja-JP,ko-KR,ru-RU}.ts` | RV5b | 注册企业人工审核队列会话页面及五语言 `enterpriseKnowledge.review`；沿用固定路由表与集中式语言包，候选预览、决定与请求隔离留在 enterprise 自有模块 | 部分（页面及语言包注册扩展点） | 上游提供自有页面路由与模块语言包注册后移除接缝 |
 | `internal/router/router.go` | S5b-3d-2 | 待确认项原文件会话入口复用既有 RAW 文件读取器，向 MountSessionConfirmations 注入 Files；沿用管理员、RAW 可读和 Wiki 可编辑守卫 | 部分（企业路由装配） | 上游提供企业模块与按 Space 的读写权限装配扩展点后移除此接缝 |
 | `internal/application/service/session_knowledge_qa.go` | QA2 | 在既有阶段作用域旁包裹 RetrievalScope，使企业快问快答按点名产品检索本轮固定材料并在阶段结束恢复输入；原生入口没有企业检索阶段扩展点，识别与排序留在 enterprise 包 | 部分（问答检索扩展） | 上游提供可注入的检索来源插件与阶段作用域扩展点后移回 |
+| `.golangci.yml` | S7f-1 | **临时**：为逐字节回退到 v0.8.2 的 128 个上游 Go 文件排除 lll、revive 与格式化器（精确路径，`BEGIN/END S7f-1 临时排除` 标记包住），避免 `--new-from-merge-base` 把上游原样写法报成新问题；不放宽项目自有代码 | 否（仅本项目 CI 需要） | S7f-1 收尾 PR 删除两段标记内的排除，文件恢复上游字节 |
+| `.golangci.yml` | S7f-1 收尾 | **已移除**：临时排除连同三个父键整体删除，文件恢复为固定上游字节（G10 349→348）；上一行登记随之失效 | — | 已退出 |
+| `.golangci.yml` | U-1 阶段 a | **临时**：为逐字节回退到固定基线的 178 个上游 Go 文件排除 lll、revive、errcheck、staticcheck、unused、govet 与格式化器（精确路径，`BEGIN/END U-1a 临时排除` 标记包住），避免 `--new-from-merge-base` 把上游原样写法报成新问题；不放宽项目自有代码 | 否（仅本项目 CI 需要） | U-1 阶段 a 收尾 PR 删除整段及新增父键，文件恢复上游字节 |

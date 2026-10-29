@@ -1,4 +1,3 @@
-// Package sandbox manages sandbox execution, remote providers, and session bindings.
 // Package sandbox: interactive terminal capability for the Cube adapter.
 //
 // The Cube SDK wraps envd's PTY service (sandbox.Pty) and hands back a

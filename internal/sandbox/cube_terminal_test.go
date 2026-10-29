@@ -69,9 +69,9 @@ func TestCubeOpenTerminalStreamSurvivesHTTPClientTimeout(t *testing.T) {
 }
 
 func TestCubeOpenTerminalRefreshesSandboxTTL(t *testing.T) {
-	prevMin := terminalTTLRefreshMinimum
-	terminalTTLRefreshMinimum = 40 * time.Millisecond
-	t.Cleanup(func() { terminalTTLRefreshMinimum = prevMin })
+	prevMin := terminalTTLRefreshMin
+	terminalTTLRefreshMin = 40 * time.Millisecond
+	t.Cleanup(func() { terminalTTLRefreshMin = prevMin })
 
 	mock := newCubeMockServer(t)
 	mock.ptyHoldAfterStart = time.Second
@@ -105,9 +105,9 @@ func TestCubeDialDesktopRefreshesSandboxTTL(t *testing.T) {
 	// sees it. SetTimeout must follow the relay lifetime (WithoutCancel),
 	// not DialDesktop's request ctx — that ctx is cancelled on handshake
 	// abort and must not take the refresh loop with it.
-	prevMin := terminalTTLRefreshMinimum
-	terminalTTLRefreshMinimum = 40 * time.Millisecond
-	t.Cleanup(func() { terminalTTLRefreshMinimum = prevMin })
+	prevMin := terminalTTLRefreshMin
+	terminalTTLRefreshMin = 40 * time.Millisecond
+	t.Cleanup(func() { terminalTTLRefreshMin = prevMin })
 
 	mock := newCubeMockServer(t)
 	var seen http.Request
@@ -205,8 +205,6 @@ func TestCubeTerminalCloseIsIdempotentUnderConcurrency(t *testing.T) {
 	go func() {
 		defer close(drained)
 		for range session.Output() {
-			// Drain output until the terminal session closes.
-			continue
 		}
 	}()
 

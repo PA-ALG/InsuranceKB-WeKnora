@@ -72,11 +72,11 @@ func firstBrokenPythonQuote(src string) (int, bool) {
 			i++
 			continue
 		case '#':
-			end := strings.IndexByte(src[i:], '\n')
-			if end < 0 {
+			if end := strings.IndexByte(src[i:], '\n'); end < 0 {
 				return 0, false
+			} else {
+				i += end
 			}
-			i += end
 			continue
 		}
 		start, quote, triple, fstring, ok := pythonStringStart(src, i)

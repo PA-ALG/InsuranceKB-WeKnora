@@ -40,7 +40,6 @@ type BochaProvider struct {
 	summary   bool
 }
 
-// NewBochaProvider creates a Bocha web-search provider.
 func NewBochaProvider(params types.WebSearchProviderParameters) (interfaces.WebSearchProvider, error) {
 	if err := ValidateBochaParameters(params); err != nil {
 		return nil, err
@@ -56,7 +55,6 @@ func NewBochaProvider(params types.WebSearchProviderParameters) (interfaces.WebS
 	}, nil
 }
 
-// ValidateBochaParameters checks supported Bocha search options.
 func ValidateBochaParameters(params types.WebSearchProviderParameters) error {
 	if strings.TrimSpace(params.APIKey) == "" {
 		return fmt.Errorf("API key is required for Bocha provider")
@@ -81,16 +79,9 @@ func bochaSummary(extraConfig map[string]string) bool {
 	return strings.TrimSpace(extraConfig["summary"]) != "false"
 }
 
-// Name returns the web-search provider identifier.
 func (p *BochaProvider) Name() string { return "bocha" }
 
-// Search queries the configured web-search provider.
-func (p *BochaProvider) Search(
-	ctx context.Context,
-	query string,
-	maxResults int,
-	includeDate bool,
-) ([]*types.WebSearchResult, error) {
+func (p *BochaProvider) Search(ctx context.Context, query string, maxResults int, includeDate bool) ([]*types.WebSearchResult, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, fmt.Errorf("query is empty")
@@ -121,8 +112,7 @@ func (p *BochaProvider) Search(
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute Bocha request: %w", err)
 	}
-	// The response is read to completion; closing it cannot alter the returned result.
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 	respBody, err := readBochaResponseBody(resp.Body)
 	if err != nil {
 		return nil, err
@@ -136,7 +126,7 @@ func (p *BochaProvider) Search(
 		return nil, fmt.Errorf("failed to unmarshal Bocha response: %w", err)
 	}
 	if response.Code != 0 && response.Code != bochaCode(http.StatusOK) {
-		return nil, fmt.Errorf("bocha API returned code %d", response.Code)
+		return nil, fmt.Errorf("Bocha API returned code %d", response.Code)
 	}
 	results := make([]*types.WebSearchResult, 0, len(response.Data.WebPages.Value))
 	for _, item := range response.Data.WebPages.Value {
@@ -170,7 +160,7 @@ func readBochaResponseBody(reader io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read Bocha response: %w", err)
 	}
 	if len(body) > maxBochaResponseBytes {
-		return nil, fmt.Errorf("bocha response exceeds %d bytes", maxBochaResponseBytes)
+		return nil, fmt.Errorf("Bocha response exceeds %d bytes", maxBochaResponseBytes)
 	}
 	return body, nil
 }
@@ -186,7 +176,7 @@ func bochaHTTPError(statusCode int, body []byte) error {
 			detail = strings.TrimSpace(apiError.Msg)
 		}
 		if detail != "" {
-			return fmt.Errorf("bocha API returned status %d: %s", statusCode, detail)
+			return fmt.Errorf("Bocha API returned status %d: %s", statusCode, detail)
 		}
 	}
 	detail := strings.TrimSpace(string(body))
@@ -194,9 +184,9 @@ func bochaHTTPError(statusCode int, body []byte) error {
 		detail = detail[:4096]
 	}
 	if detail == "" {
-		return fmt.Errorf("bocha API returned status %d", statusCode)
+		return fmt.Errorf("Bocha API returned status %d", statusCode)
 	}
-	return fmt.Errorf("bocha API returned status %d: %s", statusCode, detail)
+	return fmt.Errorf("Bocha API returned status %d: %s", statusCode, detail)
 }
 
 func parseBochaLastCrawled(value string) (time.Time, bool) {
