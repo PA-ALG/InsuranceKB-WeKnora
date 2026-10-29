@@ -327,8 +327,10 @@ def compile_products(
             )
             quotes = (located(carried, revisions, pages, headers)
                       if carried is not None and revisions is not None else None)
+            reviewed = carried.values if carried is not None and quotes is not None else None
             output = compiler.compile(product, definitions, pages, table_headers=headers,
-                                      carry=quotes, roles=document_role_map(read))
+                                      carry=quotes, roles=document_role_map(read),
+                                      reviewed=reviewed)
             output = output.model_copy(update={
                 "materials": materials, "material_roles": material_roles, "carry_digest": digest,
                 "carry_release": carried.release_id if digest is not None and carried else None,

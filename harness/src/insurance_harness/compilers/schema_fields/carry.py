@@ -3,8 +3,9 @@
 Step one is not deterministic: a recompile can miss a segment that the published, reviewed value
 cites, and step two then writes a value without that content (#404). A recompile therefore carries
 the quotes of this product's published present claims, but only when every quote cites a material
-of this compile with the same knowledge, parse attempt and file fingerprint. Only quotes travel,
-never the old value; the engine locates them in this compile's segments and step two decides.
+of this compile with the same knowledge, parse attempt and file fingerprint. The engine locates the
+quotes in this compile's segments and step two decides. Since S12c-8 the reviewed value of such a
+field travels too, as a reference step two may only keep where its segments still support it.
 Quotes name the material they cite, so publication planning, which knows only registered
 materials, computes the same carry as the compile that later reads the pages.
 """
@@ -50,21 +51,30 @@ class CarriedQuote:
 
 @dataclass(frozen=True)
 class Carry:
-    """What one product's recompile carries, by field key, and the release it came from."""
+    """What one product's recompile carries, by field key, and the release it came from.
+
+    ``values`` are the published, reviewed values of the fields whose quotes are carried (S12c-8):
+    step two sees them as a reference so a recompile does not drop facts its segments still support.
+    """
 
     release_id: str
     quotes: Mapping[str, tuple[ReviewedQuote, ...]] = field(default_factory=dict)
+    values: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def digest(self) -> str | None:
         """Identity of the carried input; None when nothing is carried (S12c-4 Spec §2.4)."""
         if not self.quotes:
             return None
-        canonical = json.dumps(
-            {key: [[q.material, q.page, q.quote] for q in quotes]
-             for key, quotes in sorted(self.quotes.items())},
-            ensure_ascii=False, separators=(",", ":"),
-        )
+        carried: dict[str, object] = {
+            key: [[q.material, q.page, q.quote] for q in quotes]
+            for key, quotes in sorted(self.quotes.items())
+        }
+        if self.values:
+            # S12c-8: the reviewed values are carried input too; without them the digest is
+            # the S12c-4 one, so a quotes-only carry keeps its identity.
+            carried = {"quotes": carried, "values": dict(sorted(self.values.items()))}
+        canonical = json.dumps(carried, ensure_ascii=False, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -92,6 +102,7 @@ def carry_for(release: Release | None, entity_id: str, materials: Collection[str
         return None
     current = set(materials)
     claims: dict[str, list[tuple[str, tuple[ReviewedQuote, ...]]]] = {}
+    texts: dict[str, list[tuple[str, str]]] = {}
     for member in release.members:
         if member.kind != "claim" or not isinstance(member.payload, dict):
             continue
@@ -104,11 +115,24 @@ def carry_for(release: Release | None, entity_id: str, materials: Collection[str
         carried = _carried(claim, current)
         if carried:
             claims.setdefault(claim.predicate, []).append((claim.logical_key, carried))
+            texts.setdefault(claim.predicate, []).append((claim.logical_key, _text(claim.value)))
     quotes = {
         key: tuple(dict.fromkeys(quote for _, carried in sorted(found) for quote in carried))
         for key, found in claims.items()
     }
-    return Carry(release.id, quotes)
+    values = {
+        key: "\n".join(text for _, text in sorted(found))
+        for key, found in texts.items()
+        if all(text for _, text in found)
+    }
+    return Carry(release.id, quotes, values)
+
+
+def _text(value: object) -> str:
+    """A present claim's value as step two reads it: the text itself, or canonical JSON."""
+    if isinstance(value, str):
+        return value.strip()
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def located(
