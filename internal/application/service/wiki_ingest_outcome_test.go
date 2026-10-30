@@ -21,23 +21,6 @@ func (wikiOutcomeKnowledge) GetKnowledgeByIDOnly(context.Context, string) (*type
 
 type wikiOutcomeChunks struct{ interfaces.ChunkRepository }
 
-// v0.9.0 map reads text and scanned-page OCR chunks by type.
-func (c wikiOutcomeChunks) ListChunksByKnowledgeIDAndTypes(
-	ctx context.Context, tenantID uint64, knowledgeID string, chunkTypes []types.ChunkType,
-) ([]*types.Chunk, error) {
-	all, err := c.ListChunksByKnowledgeID(ctx, tenantID, knowledgeID)
-	var out []*types.Chunk
-	for _, chunk := range all {
-		for _, want := range chunkTypes {
-			if chunk.ChunkType == want || (chunk.ChunkType == "" && want == types.ChunkTypeText) {
-				out = append(out, chunk)
-				break
-			}
-		}
-	}
-	return out, err
-}
-
 func (wikiOutcomeChunks) ListChunksByKnowledgeID(context.Context, uint64, string) ([]*types.Chunk, error) {
 	return []*types.Chunk{
 		{

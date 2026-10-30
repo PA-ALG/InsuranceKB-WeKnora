@@ -123,7 +123,7 @@ func TestSessionReadPreservesUnmanagedPath(t *testing.T) {
 				cfg:                  &config.Config{Conversation: &config.ConversationConfig{}},
 				knowledgeBaseService: managed.DecorateKnowledgeBaseService(original, c),
 				knowledgeService:     &selectionDocs{}, modelService: models, tenantService: &selectionTenants{},
-				eventManager:         chatpipeline.NewEventManager(),
+				eventManager: chatpipeline.NewEventManager(),
 			}
 			ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))
 			ctx = types.WithCaller(ctx, types.Caller{TenantID: 1, UserID: "viewer", Role: types.TenantRoleViewer})
