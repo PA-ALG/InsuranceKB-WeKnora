@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/enterprise/capture"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -142,4 +143,74 @@ func TestAnUnreadableOfficeUploadIsSimplyNotCaptured(t *testing.T) {
 	})
 	_, err := c.read(t)
 	require.True(t, errors.Is(err, os.ErrNotExist))
+}
+
+// officeZip packs synthetic parts in the given order.
+func officeZip(t *testing.T, names []string, parts map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	for _, name := range names {
+		f, err := w.Create(name)
+		require.NoError(t, err)
+		_, err = f.Write([]byte(parts[name]))
+		require.NoError(t, err)
+	}
+	require.NoError(t, w.Close())
+	return buf.Bytes()
+}
+
+// convertOffice runs the real parse step for one Office upload to the enterprise RAW KB: the original
+// bytes come from the file service and the docreader fake returns its own Markdown. It returns the
+// knowledge, the parse result and what the capture store holds for this exact revision.
+func convertOffice(
+	t *testing.T, fileType string, data []byte,
+) (*types.Knowledge, *types.ReadResult, *capture.Record, error) {
+	t.Helper()
+	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
+	sum := sha256.Sum256(data)
+	digest := hex.EncodeToString(sum[:])
+	k := &types.Knowledge{
+		ID: "knowledge", TenantID: enterpriseTenant, KnowledgeBaseID: enterpriseRawKB, FileType: fileType,
+		FileSHA256: digest, CurrentParseAttempt: 1, ParseStatus: types.ParseStatusProcessing,
+	}
+	kb := &types.KnowledgeBase{ID: enterpriseRawKB, TenantID: enterpriseTenant, ChunkingConfig: types.ChunkingConfig{
+		ParserEngineRules: []types.ParserEngineRule{{FileTypes: []string{"pptx", "docx"}, Engine: "auto"}},
+	}}
+	reader := &firstParseReader{result: &types.ReadResult{MarkdownContent: "docreader text"}}
+	s := &knowledgeService{
+		config: &config.Config{}, captureScope: rawKBs{enterpriseRawKB: enterpriseTenant},
+		repo: &firstParseKnowledgeRepo{knowledge: k}, tenantService: &firstParseTenantService{},
+		documentReader: reader, fileSvc: &revisionSourceFileServiceStub{data: data},
+		firstParse: NewG3FirstParseStore(captureTestKeys(t)),
+	}
+	eff := ResolveProcessConfig(kb, nil)
+	payload := types.DocumentProcessPayload{
+		FileType: fileType, FileName: "source." + fileType, FilePath: "fixture." + fileType,
+		Revision: newRevisionBinding(1, digest, kb, eff, fileType),
+	}
+	got, err := s.convert(context.Background(), payload, kb, k, eff, true)
+	require.NoError(t, err)
+	require.Len(t, reader.requests, 1, "the upstream parse runs once, as usual")
+	record, readErr := capture.NewStore(capture.DefaultRoot(), captureTestKeys(t)).Read(capture.Identity{
+		TenantID: enterpriseTenant, RawKBID: enterpriseRawKB, KnowledgeID: k.ID, ParseAttempt: 1,
+		SourceSHA256: digest,
+	})
+	return k, got, record, readErr
+}
+
+func TestThroughConvertAnIncompleteOfficeFileIsParsedButNotCaptured(t *testing.T) {
+	k, got, record, err := convertOffice(t, "pptx", officeTestDeck(t))
+	require.NoError(t, err, "positive control: a complete deck is captured")
+	require.Equal(t, "产品亮点", record.Markdown)
+	require.NotEqual(t, types.ParseStatusFailed, k.ParseStatus)
+	require.Equal(t, "docreader text", got.MarkdownContent)
+
+	document := `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>` +
+		`<w:p><w:r><w:t>第一段</w:t></w:r></w:p><w:p><w:r><w:t>第二`
+	truncated := officeZip(t, []string{"word/document.xml"}, map[string]string{"word/document.xml": document})
+	k, got, _, err = convertOffice(t, "docx", truncated)
+	require.True(t, errors.Is(err, os.ErrNotExist), "no capture is saved for a valid prefix: %v", err)
+	require.NotEqual(t, types.ParseStatusFailed, k.ParseStatus, k.ErrorMessage)
+	require.Equal(t, "docreader text", got.MarkdownContent, "the upstream parse is unchanged")
 }

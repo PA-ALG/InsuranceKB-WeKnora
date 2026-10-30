@@ -132,8 +132,14 @@ func verify(s *Structure) error {
 		s.ParserIdentitySHA256 != digest([]byte(s.Extractor)) || !validSHA256(s.SourceSHA256) {
 		return malformed("structure identity is invalid")
 	}
-	if _, ok := formatOf(s.Format); !ok || len(s.Pages) == 0 || (s.Format == "docx" && len(s.Pages) != 1) {
-		return malformed("structure format or page count is invalid")
+	// The stored format is one of the frozen literals; the input aliases of Supports are not accepted here.
+	switch s.Format {
+	case "pptx", "docx", "xlsx":
+	default:
+		return malformed("structure format is invalid")
+	}
+	if len(s.Pages) == 0 || (s.Format == "docx" && len(s.Pages) != 1) {
+		return malformed("structure page count is invalid")
 	}
 	check := &pageCheck{format: s.Format, lastIndex: -1, usedSheets: map[string]bool{}}
 	for i := range s.Pages {
@@ -182,7 +188,7 @@ func (c *pageCheck) locator(l Locator, page int) bool {
 		}
 		c.lastIndex = *l.BlockIndex
 		return true
-	default:
+	case "xlsx":
 		match := rowRange.FindStringSubmatch(l.CellRange)
 		if l.Kind != kindRows || l.Slide != nil || l.BlockIndex != nil || strings.TrimSpace(l.Sheet) == "" ||
 			match == nil || match[1] != match[2] {
@@ -200,6 +206,8 @@ func (c *pageCheck) locator(l Locator, page int) bool {
 		}
 		c.lastRowSeen = row
 		return true
+	default:
+		return false
 	}
 }
 
