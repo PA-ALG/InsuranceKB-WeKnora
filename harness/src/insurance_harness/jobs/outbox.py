@@ -34,11 +34,11 @@ from insurance_harness.jobs.models import (
     OutboxEventDraft,
     OutboxEventView,
 )
-from insurance_harness.jobs.store import (
+from insurance_harness.jobs.store_rules import (
     MAX_JOB_ID_LENGTH,
     MAX_SPACE_ID_LENGTH,
     SessionFactory,
-    _aware,
+    aware_utc,
     database_now,
     require_active_lease,
     validated_limit,
@@ -52,9 +52,9 @@ MAX_EVENT_ID_LENGTH = 36
 
 
 def _view(row: WikiOutboxEvent) -> OutboxEventView:
-    created_at = _aware(row.created_at)
+    created_at = aware_utc(row.created_at)
     assert created_at is not None
-    next_dispatch_at = _aware(row.next_dispatch_at)
+    next_dispatch_at = aware_utc(row.next_dispatch_at)
     assert next_dispatch_at is not None
     return OutboxEventView(
         id=row.id,
@@ -63,7 +63,7 @@ def _view(row: WikiOutboxEvent) -> OutboxEventView:
         event_type=row.event_type,
         payload=dict(row.payload),
         created_at=created_at,
-        dispatched_at=_aware(row.dispatched_at),
+        dispatched_at=aware_utc(row.dispatched_at),
         dispatch_attempts=row.dispatch_attempts,
         next_dispatch_at=next_dispatch_at,
     )
