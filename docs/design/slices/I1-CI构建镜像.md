@@ -1,6 +1,6 @@
 # I1 CI 构建镜像
 
-> 状态：Spec 草稿（2026-10-30，Claude）。实现方 Claude，审核方 Codex。蓝图 §3「交付」、§9「构建与部署」、§11 I1。
+> 状态：Spec（2026-10-30，Claude）；2026-10-30 实现时修订 §3.1/§3.3/§3.4/§5（App 先只发 linux/arm64，amd64 移到 I1b）。实现方 Claude，审核方 Codex。蓝图 §3「交付」、§9「构建与部署」、§11 I1。
 > 真实调用：0。不部署；部署仍按单独 Issue。
 
 ## 1. 目标
@@ -27,11 +27,11 @@ GHCR，附构建回执。环境按 digest 拉取，Mac 不再是唯一的构建�
 
 1. **新流水线 `.github/workflows/images.yml`**（我们自有文件；`.github/` 不计 G10）。
    - 触发：push 到 main（只在运行时路径变化时：`cmd/ internal/ migrations/ frontend/ docreader/ docker/ go.mod go.sum third_party/ harness/src harness/pyproject.toml harness/uv.lock deploy/local-build/`）、tag `v*`、`workflow_dispatch`。
-   - 矩阵：`app`、`frontend`、`docreader`、`harness` × `ubuntu-24.04`（amd64）与 `ubuntu-24.04-arm`（arm64）原生 runner，各自构建后 `docker buildx imagetools create` 合成多架构索引。
+   - 矩阵：`frontend`、`docreader`、`harness` × `ubuntu-24.04`（amd64）与 `ubuntu-24.04-arm`（arm64）原生 runner，各自按 digest 推送后 `docker buildx imagetools create` 合成多架构索引；`app` 只在 `ubuntu-24.04-arm` 上构建（见 3.3）。
    - 沿用现有可信流水线的做法：actions 固定 commit SHA、`provenance: mode=max`、`sbom: true`、`attest-build-provenance`、GHA 缓存。
 2. **App 身份与回执沿用 BA0 合同**：CI 先跑 `app_artifact.py` 的身份计算（纯函数部分），把 artifact identity、依赖锁 sha、manifest sha 写成镜像标签，与本机构建同名同值；回执（JSON）作为 workflow artifact 上传，tag 时附在 Release 上。回执字段在本机回执基础上增加 `index_digest` 与每架构 `digest`。
-3. **BA0 合同扩到 amd64**：`app-build-inputs.v1.json` / `app-external-dependencies.v1.json` 增加 amd64 的平台项（DuckDB、spatial 扩展、anydoc 静态库等下载项与校验和），`app_artifact.py` 按架构取值；arm64 现有值不变。合同版本升级须留版本。
-4. **Harness 镜像**：`docker/Dockerfile.harness`（python:3.12-slim 固定 digest + 本次构建的 wheel），入口为 `insurance-harness` CLI；不含任何数据与密钥。
+3. **BA0 合同扩到 amd64 移到 I1b**（实现时修订）：BA0 合同与其受保护验收（`harness/tests/test_local_app_build_830_ba0.py`，3,791 行）把 linux/arm64 写死在清单 `build_contract`、依赖锁平台、`GOARCH`、镜像架构检查与回执校验（`start_exact_image.py`）各处，并显式断言 amd64 被拒绝；amd64 还需要逐项核实 uv、DuckDB spatial/excel 扩展等下载项与校验和。按 §6「不确定的项先只发 arm64」，I1 的 App 只发 linux/arm64，身份与本机构建同名同值；amd64 App 另立 I1b（新增 amd64 清单与依赖锁、`app_artifact.py` 按架构取值、受保护断言单独披露修改）。线上与 I2a 测试环境都是 arm64；I2 若选 amd64 云主机，须先完成 I1b（或选用 ARM 实例）。
+4. **Harness 镜像**：`docker/Dockerfile.harness`（python:3.12-slim-bookworm 与 uv 0.9.26 均按多架构索引 digest 固定；`uv export --locked` 生成带哈希的依赖清单，`pip install --require-hashes` 安装，再装本次构建的 wheel），非 root 用户运行；不含任何数据、配置与密钥。Harness 没有 `insurance-harness` 控制台命令，镜像用法为 `python -I -m insurance_harness.<模块>`（实现时修订）。
 5. **发布命名**：`ghcr.io/pa-alg/insurancekb-weknora-{app,frontend,docreader,harness}`；tag `sha-<12 位>`、`main`、语义版本（tag 触发时）；**部署只用 digest**。
 6. **不含密钥**：镜像不复制 `config.yaml`、`contracts/`、`.env*`；运行时挂载。流水线加一步镜像密钥扫描（采用成熟工具 trivy 的 secret 扫描，Apache-2.0；命中即失败）。公开仓库的 GHCR 包设为 public 或给部署环境发只读 PAT（由用户决定，见 I2）。
 7. **本机路径保留**：`app_artifact.py select-or-build` 不变；新增“按 digest 拉取 CI 镜像并核对标签身份”的选取方式（`select --pull <ref@digest>`），本机部署优先拉 CI 镜像，避免现场下载。
@@ -43,8 +43,8 @@ GHCR，附构建回执。环境按 digest 拉取，Mac 不再是唯一的构建�
 
 ## 5. 验收
 
-1. RED：`app_artifact.py` 对 amd64 计算身份（新测试）；`select --pull` 在标签身份不符时拒绝（新测试）；守卫通过。
-2. 在 PR 分支 `workflow_dispatch` 一次：四个镜像 × 两架构构建成功，索引 digest 可拉取；secret 扫描通过；回执 artifact 字段完整。
+1. RED：`scripts/app_image_registry.py` 的 `plan` 输出与本机相同的身份标签与构建参数，`select --pull` 只接受本仓库 App 的精确 digest、在标签身份/架构/RepoDigests 不符时拒绝且不写 PASS 回执，PASS 回执能通过 `start_exact_image.py` 的回执校验；工作流合同（触发、动作固定 SHA、权限、不用仓库密钥、四个镜像、原生 runner、provenance/SBOM/attestation、secret 扫描失败即失败）；守卫通过。amd64 App 身份的测试移到 I1b。
+2. 合并后在 main 上运行一次（或在 PR 分支 `workflow_dispatch`——仅当工作流文件已在默认分支，GitHub 才允许手动触发）：App（arm64）与其余三个镜像 × 两架构构建成功，索引 digest 可拉取；secret 扫描通过；回执 artifact 字段完整。
 3. 同一提交重跑一次：App 的 artifact identity 与标签相同（镜像 digest 可因时间戳不同，须写明）。
 4. 本机 colima `docker pull <app@digest>` 后用 `select --pull` 选取并通过一次只读烟测（`/app/WeKnora --help` 退出码、健康检查需在 I3a 的独立环境里做，不碰线上）。
 5. 不改线上；部署仍单独开 Issue。
