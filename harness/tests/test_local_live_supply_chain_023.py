@@ -265,6 +265,13 @@ def _reviewed_preservation_rows() -> list[dict[str, str]]:
     return reviewed_rows()
 
 
+def _policy_head() -> int:
+    # The adoption target's official migration head (110 for v0.8.2, 134 for v0.9.0).
+    from scripts.adoption_migration_policy import HEAD
+
+    return HEAD
+
+
 @pytest.mark.parametrize(
     "mutation",
     ["missing", "duplicate", "extra_key", "wrong_sha", "wrong_head", "pass", "extra_target_key"],
@@ -276,7 +283,11 @@ def test_verifier_rejects_invalid_preservation_even_with_reviewed_digest(
     module = _load_verifier()
     lock = module.load_source_lock(LOCK_PATH)
     rows = _reviewed_preservation_rows()
-    official: dict[str, object] = {"status": "merged", "head": 110, "reviewed_preservations": rows}
+    official: dict[str, object] = {
+        "status": "merged",
+        "head": _policy_head(),
+        "reviewed_preservations": rows,
+    }
     verdict = "manual_review_required"
     if mutation == "missing":
         del official["reviewed_preservations"]
@@ -287,7 +298,7 @@ def test_verifier_rejects_invalid_preservation_even_with_reviewed_digest(
     elif mutation == "wrong_sha":
         rows[0]["project_sha256"] = "0" * 64
     elif mutation == "wrong_head":
-        official["head"] = 109
+        official["head"] = _policy_head() - 1
     elif mutation == "pass":
         verdict = "pass"
     report_value = {
@@ -328,7 +339,7 @@ def test_manual_thin_report_requires_exact_reviewed_digest(tmp_path: Path) -> No
         },
         "official_migrations": {
             "status": "merged",
-            "head": 110,
+            "head": _policy_head(),
             "reviewed_preservations": _reviewed_preservation_rows(),
         },
         "plugin_contract": {"status": "valid"},
