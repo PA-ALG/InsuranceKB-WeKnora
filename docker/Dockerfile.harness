@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1.7
+# Insurance Harness CLI image (I1, docs/design/slices/I1-CI构建镜像.md §3.4).
+#
+# Built from the repository root:
+#   docker build -f docker/Dockerfile.harness -t insurancekb-harness .
+# Run any Harness module, e.g.:
+#   docker run --rm -e HARNESS_WEKNORA_BASE_URL=... -e HARNESS_WEKNORA_API_KEY=... \
+#     insurancekb-harness python -I -m insurance_harness.catalog.publish_navigation --help
+#
+# The image holds the locked wheel only: no data, no configuration, no credentials.
+# Both base images are multi-arch indexes pinned by digest (linux/amd64 + linux/arm64).
+
+FROM ghcr.io/astral-sh/uv:0.9.26@sha256:9a23023be68b2ed09750ae636228e903a54a05ea56ed03a934d00fe9fbeded4b AS uv
+
+FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337 AS builder
+COPY --from=uv /uv /usr/local/bin/uv
+WORKDIR /src
+COPY harness/pyproject.toml harness/uv.lock harness/alembic.ini ./
+COPY harness/migrations ./migrations
+COPY harness/src ./src
+# Hash-pinned runtime requirements from the lock, and the project wheel itself.
+RUN uv export --locked --no-dev --no-emit-project --format requirements.txt \
+        --output-file /out/requirements.txt \
+    && uv build --wheel --out-dir /out
+
+FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337 AS runtime
+RUN useradd --create-home --uid 10001 harness
+COPY --from=builder /out /tmp/harness-build
+RUN python -m venv /opt/harness \
+    && /opt/harness/bin/pip install --no-cache-dir --require-hashes \
+        -r /tmp/harness-build/requirements.txt \
+    && /opt/harness/bin/pip install --no-cache-dir --no-deps /tmp/harness-build/*.whl \
+    && rm -rf /tmp/harness-build
+ENV PATH=/opt/harness/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+USER harness
+WORKDIR /home/harness
+CMD ["python", "-I", "-c", "import insurance_harness; print('insurance-harness ready')"]

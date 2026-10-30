@@ -1,0 +1,400 @@
+name: Images (I1)
+
+# Builds the App, UI (frontend), DocReader and Harness images on native runners
+# (docs/design/slices/I1-CI构建镜像.md). Publication is gated on the secret scan:
+#   1. build and push by digest to the QUARANTINE repository only (provenance + SBOM);
+#   2. trivy secret-scan that exact quarantined digest; any finding fails the job;
+#   3. only then copy the same digest into the deployable repository (App) or compose the
+#      multi-arch index there from the scanned per-arch digests (other images);
+#   4. attest the deployable digest and write the receipt.
+# The App is built from the BA0 plan (scripts/app_image_registry.py) so its labels equal a
+# local build's; its receipt extends the local BA0 receipt with index_digest and per-arch
+# digests. The BA0 App contract is linux/arm64 only until its amd64 lock is verified (I1b).
+# On v* tags the receipts are attached to the GitHub Release. Deploys use digests only.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "migrations/**"
+      - "frontend/**"
+      - "docreader/**"
+      - "docker/**"
+      - "go.mod"
+      - "go.sum"
+      - "third_party/**"
+      - "harness/src/**"
+      - "harness/migrations/**"
+      - "harness/pyproject.toml"
+      - "harness/uv.lock"
+      - "deploy/local-build/**"
+      - "scripts/app_artifact.py"
+      - "scripts/app_image_registry.py"
+      - ".github/workflows/images.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  APP_REPOSITORY: ghcr.io/pa-alg/insurancekb-weknora-app
+  QUARANTINE_REPOSITORY: ghcr.io/pa-alg/insurancekb-weknora-quarantine
+  TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+jobs:
+  app:
+    name: app (linux/arm64, BA0 plan)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go (BA0 input resolution runs go list)
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Compute the BA0 plan and export the frozen build context
+        id: plan
+        run: |
+          python3 -I scripts/app_image_registry.py plan \
+            --repo-root . \
+            --build-source-head "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/app-plan.json" \
+            --context-out "$RUNNER_TEMP/app-context"
+          python3 -I - "$RUNNER_TEMP/app-plan.json" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          plan = json.load(open(sys.argv[1], encoding="utf-8"))
+          print("build_args<<BUILD_ARGS_EOF")
+          for name, value in sorted(plan["build_args"].items()):
+              print(f"{name}={value}")
+          print("BUILD_ARGS_EOF")
+          print("labels<<LABELS_EOF")
+          for name, value in sorted(plan["labels"].items()):
+              print(f"{name}={value}")
+          print("LABELS_EOF")
+          print(f"artifact_identity={plan['artifact_identity']}")
+          PY
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push the App to quarantine by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: ${{ runner.temp }}/app-context
+          file: ${{ runner.temp }}/app-context/docker/Dockerfile.app
+          target: runtime
+          platforms: linux/arm64
+          build-args: ${{ steps.plan.outputs.build_args }}
+          labels: |
+            ${{ steps.plan.outputs.labels }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=${{ env.QUARANTINE_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=images-app-arm64
+          cache-to: type=gha,scope=images-app-arm64,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Secret scan the quarantined digest (fails on any finding)
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ github.token }}
+          IMAGE: ${{ env.QUARANTINE_REPOSITORY }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY_IMAGE" \
+            image --scanners secret --exit-code 1 --no-progress "$IMAGE"
+
+      - name: Promote the scanned digest to the deployable repository
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          tags=(-t "$APP_REPOSITORY:sha-${GITHUB_SHA:0:12}")
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then tags+=(-t "$APP_REPOSITORY:main"); fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then tags+=(-t "$APP_REPOSITORY:$GITHUB_REF_NAME"); fi
+          docker buildx imagetools create "${tags[@]}" "$QUARANTINE_REPOSITORY@$DIGEST"
+          promoted=$(docker buildx imagetools inspect "$APP_REPOSITORY:sha-${GITHUB_SHA:0:12}" \
+            --format '{{json .Manifest}}' | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          if [ "$promoted" != "$DIGEST" ]; then
+            echo "promotion changed the digest: $promoted != $DIGEST" >&2
+            exit 1
+          fi
+
+      - name: Attest the deployable App digest
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ env.APP_REPOSITORY }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Write the App receipt (extends the local BA0 receipt)
+        env:
+          INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          # image_id = the config digest of the verified linux/arm64 manifest inside the
+          # promoted (scanned) index; index_digest stays separate. ci-receipt checks that the
+          # index hashes to INDEX_DIGEST and the manifest to the index's arm64 entry.
+          docker buildx imagetools inspect "$APP_REPOSITORY@$INDEX_DIGEST" --raw \
+            > "$RUNNER_TEMP/app-index.json"
+          manifest=$(python3 -I -c 'import json,sys
+          index = json.load(open(sys.argv[1], encoding="utf-8"))
+          print(next(m["digest"] for m in index["manifests"]
+                     if m.get("platform", {}).get("os") == "linux"
+                     and m["platform"].get("architecture") == "arm64"))' "$RUNNER_TEMP/app-index.json")
+          docker buildx imagetools inspect "$APP_REPOSITORY@$manifest" --raw \
+            > "$RUNNER_TEMP/app-manifest.json"
+          python3 -I scripts/app_image_registry.py ci-receipt \
+            --plan "$RUNNER_TEMP/app-plan.json" \
+            --index "$RUNNER_TEMP/app-index.json" \
+            --manifest "$RUNNER_TEMP/app-manifest.json" \
+            --index-digest "$INDEX_DIGEST" \
+            --repository "$APP_REPOSITORY" \
+            --run "$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT" \
+            --output "$RUNNER_TEMP/receipt-app.json"
+          {
+            echo "### App image (linux/arm64)"
+            echo "- pull: \`$APP_REPOSITORY@$INDEX_DIGEST\`"
+            echo "- artifact identity: \`${{ steps.plan.outputs.artifact_identity }}\`"
+            echo "- local select: \`python3 -I scripts/app_image_registry.py select --build-source-head $GITHUB_SHA --pull $APP_REPOSITORY@$INDEX_DIGEST --evidence-out <receipt>\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the App receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: receipt-app
+          path: ${{ runner.temp }}/receipt-app.json
+          if-no-files-found: error
+
+  images:
+    name: ${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [frontend, docreader, harness]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - image: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+          - image: docreader
+            context: .
+            dockerfile: docker/Dockerfile.docreader
+          - image: harness
+            context: .
+            dockerfile: docker/Dockerfile.harness
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Free runner disk for the DocReader image
+        if: matrix.image == 'docreader'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push to quarantine by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            VITE_FRONTEND_COMMIT=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=${{ env.QUARANTINE_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=images-${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=images-${{ matrix.image }}-${{ matrix.arch }},mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Secret scan the quarantined digest (fails on any finding)
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ github.token }}
+          IMAGE: ${{ env.QUARANTINE_REPOSITORY }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY_IMAGE" \
+            image --scanners secret --exit-code 1 --no-progress "$IMAGE"
+
+      - name: Record the scanned per-arch digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "$DIGEST" > "$RUNNER_TEMP/digests/${{ matrix.image }}-${{ matrix.arch }}"
+
+      - name: Upload the scanned per-arch digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/${{ matrix.image }}-${{ matrix.arch }}
+          if-no-files-found: error
+
+  merge:
+    name: ${{ matrix.image }} (multi-arch index)
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: frontend
+            repository: ghcr.io/pa-alg/insurancekb-weknora-frontend
+          - image: docreader
+            repository: ghcr.io/pa-alg/insurancekb-weknora-docreader
+          - image: harness
+            repository: ghcr.io/pa-alg/insurancekb-weknora-harness
+    steps:
+      - name: Download the scanned per-arch digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: digest-${{ matrix.image }}-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Compose the deployable index from the scanned digests
+        id: index
+        env:
+          REPOSITORY: ${{ matrix.repository }}
+        run: |
+          sources=()
+          for arch in amd64 arm64; do
+            sources+=("$QUARANTINE_REPOSITORY@$(cat "$RUNNER_TEMP/digests/${{ matrix.image }}-$arch")")
+          done
+          tags=(-t "$REPOSITORY:sha-${GITHUB_SHA:0:12}")
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then tags+=(-t "$REPOSITORY:main"); fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then tags+=(-t "$REPOSITORY:$GITHUB_REF_NAME"); fi
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+          docker buildx imagetools inspect "$REPOSITORY:sha-${GITHUB_SHA:0:12}" --raw > "$RUNNER_TEMP/index.json"
+          digest=$(docker buildx imagetools inspect "$REPOSITORY:sha-${GITHUB_SHA:0:12}" \
+            --format '{{json .Manifest}}' | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Attest the deployable index digest
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ matrix.repository }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
+
+      - name: Write the image receipt
+        env:
+          REPOSITORY: ${{ matrix.repository }}
+          INDEX_DIGEST: ${{ steps.index.outputs.digest }}
+        run: |
+          python3 -I - "$RUNNER_TEMP/index.json" "$RUNNER_TEMP/receipt-${{ matrix.image }}.json" <<'PY'
+          import json, os, sys
+          index = json.load(open(sys.argv[1], encoding="utf-8"))
+          digests = {
+              f"{m['platform']['os']}/{m['platform']['architecture']}": m["digest"]
+              for m in index.get("manifests", [])
+              if m.get("platform", {}).get("os") not in (None, "unknown")
+          }
+          if sorted(digests) != ["linux/amd64", "linux/arm64"]:
+              raise SystemExit(f"index platforms {sorted(digests)} != linux/amd64 + linux/arm64")
+          repository = os.environ["REPOSITORY"]
+          receipt = {
+              "contract": "i1-image-ci-receipt.v1",
+              "status": "PASS",
+              "build_source_head": os.environ["GITHUB_SHA"],
+              "repository": repository,
+              "index_digest": os.environ["INDEX_DIGEST"],
+              "digests": digests,
+              "pull_reference": f"{repository}@{os.environ['INDEX_DIGEST']}",
+              "run": f"{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}",
+          }
+          json.dump(receipt, open(sys.argv[2], "w", encoding="utf-8"), indent=1, sort_keys=True)
+          PY
+          {
+            echo "### ${{ matrix.image }} (linux/amd64 + linux/arm64)"
+            echo "- pull: \`$REPOSITORY@$INDEX_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the image receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: receipt-${{ matrix.image }}
+          path: ${{ runner.temp }}/receipt-${{ matrix.image }}.json
+          if-no-files-found: error
+
+  release:
+    name: attach receipts to the Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [app, merge]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the receipts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: receipt-*
+          path: ${{ runner.temp }}/receipts
+          merge-multiple: true
+
+      - name: Attach the receipts to the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "$GITHUB_REF_NAME" --notes "Image receipts (pull by digest) are attached."
+          fi
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$RUNNER_TEMP"/receipts/receipt-*.json
