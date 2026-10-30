@@ -77,29 +77,16 @@ def test_the_deployable_index_is_composed_only_from_scanned_digests() -> None:
     assert index_of(steps, "Compose the deployable index") < attest
 
 
-def test_the_app_receipt_extends_the_local_ba0_receipt() -> None:
-    receipt = job_steps("app")[index_of(job_steps("app"), "Write the App receipt")]["run"]
-    local_fields = (
-        "contract",
-        "docker_context",
-        "status",
-        "selector",
-        "artifact_identity",
-        "image_id",
-        "build_source_head",
-        "integration_head",
-        "manifest_sha256",
-        "dependency_lock_sha256",
-        "platform",
-        "target",
-        "labels",
-        "candidate_image_ids",
-        "build_invocations",
-    )
-    for field in local_fields + ("index_digest", "digests", "pull_reference"):
-        assert f'"{field}":' in receipt, field
-    assert '"contract": "ba0-app-build-receipt.v1"' in receipt
-    assert "steps.build.outputs.imageid" in WORKFLOW.read_text(encoding="utf-8")
+def test_the_app_receipt_is_built_by_the_tested_digest_checked_generator() -> None:
+    # #468 round 2 R3: the receipt comes from app_image_registry.ci_app_receipt, which takes
+    # image_id from the arm64 manifest's config digest (tests in
+    # test_app_image_registry_ci_receipt.py), never from build-push-action's imageid output.
+    steps = job_steps("app")
+    receipt = steps[index_of(steps, "Write the App receipt")]["run"]
+    assert "scripts/app_image_registry.py ci-receipt" in receipt
+    for option in ("--plan", "--index", "--manifest", "--index-digest", "--repository"):
+        assert option in receipt, option
+    assert "outputs.imageid" not in WORKFLOW.read_text(encoding="utf-8")
 
 
 def test_receipts_are_attached_to_the_release_with_least_privilege() -> None:

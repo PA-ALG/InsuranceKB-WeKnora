@@ -237,6 +237,107 @@ def select_pulled_app(
     return receipt
 
 
+_INDEX_TYPES = {
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+}
+_MANIFEST_TYPES = {
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+}
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def _exact(raw: bytes, digest: str, description: str) -> bytes:
+    """The bytes whose sha256 is `digest` (a printer may append one newline)."""
+
+    candidates = [raw] + ([raw[:-1]] if raw.endswith(b"\n") else [])
+    for candidate in candidates:
+        if "sha256:" + hashlib.sha256(candidate).hexdigest() == digest:
+            return candidate
+    raise base.ArtifactContractError(f"{description} bytes do not hash to {digest}")
+
+
+def ci_app_receipt(
+    *,
+    plan: Mapping[str, Any],
+    index_bytes: bytes,
+    manifest_bytes: bytes,
+    index_digest: str,
+    repository: str,
+    run: str,
+) -> dict[str, Any]:
+    """The CI App receipt: the local BA0 receipt plus index and per-arch digests.
+
+    `image_id` is the image config digest of the platform manifest (what Docker reports as
+    the image ID and what `start_exact_image` checks), never the index digest buildx returns
+    for a registry export with attestations. The index must hash to `index_digest` and the
+    manifest to the index's entry for the planned platform.
+    """
+
+    if _DIGEST.fullmatch(index_digest) is None:
+        raise base.ArtifactContractError("index digest must be sha256:<64 hex>")
+    index = json.loads(_exact(index_bytes, index_digest, "image index"))
+    if not isinstance(index, Mapping) or index.get("mediaType") not in _INDEX_TYPES:
+        raise base.ArtifactContractError("the pushed App digest is not an image index")
+    platforms: dict[str, str] = {}
+    for entry in index.get("manifests", []):
+        platform = entry.get("platform") or {}
+        if platform.get("os") in (None, "unknown"):
+            continue  # attestation manifests
+        key = f"{platform.get('os')}/{platform.get('architecture')}"
+        if key in platforms:
+            raise base.ArtifactContractError(f"index lists {key} twice")
+        platforms[key] = str(entry.get("digest"))
+    if list(platforms) != [plan["platform"]]:
+        raise base.ArtifactContractError(
+            f"App index platforms {sorted(platforms)} != {plan['platform']}"
+        )
+    manifest = json.loads(_exact(manifest_bytes, platforms[plan["platform"]], "image manifest"))
+    if not isinstance(manifest, Mapping) or manifest.get("mediaType") not in _MANIFEST_TYPES:
+        raise base.ArtifactContractError("platform entry is not an image manifest")
+    config = manifest.get("config") or {}
+    image_id = config.get("digest") if isinstance(config, Mapping) else None
+    if not isinstance(image_id, str) or _DIGEST.fullmatch(image_id) is None:
+        raise base.ArtifactContractError("image manifest has no config digest")
+    receipt: dict[str, Any] = base._receipt(
+        plan,
+        selector="CI_BUILD",
+        image_id=image_id,
+        labels=plan["labels"],
+        candidates=(),
+        build_invocations=1,
+        docker_context="github-actions",
+    )
+    receipt.update(
+        repository=repository,
+        index_digest=index_digest,
+        digests=platforms,
+        pull_reference=f"{repository}@{index_digest}",
+        run=run,
+    )
+    return receipt
+
+
+def _option(arguments: Sequence[str], name: str) -> str | None:
+    for position, value in enumerate(arguments):
+        if value == name and position + 1 < len(arguments):
+            return arguments[position + 1]
+        if value.startswith(name + "="):
+            return value[len(name) + 1 :]
+    return None
+
+
+def _mark_before_parsing(arguments: Sequence[str]) -> None:
+    """`select` with an absolute --evidence-out: mark it non-success before any check."""
+
+    if not arguments or arguments[0] != "select":
+        return
+    evidence = _option(arguments, "--evidence-out")
+    if evidence and Path(evidence).is_absolute():
+        _write_rejected(Path(evidence), _option(arguments, "--pull") or "")
+
+
 def _main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -251,8 +352,30 @@ def _main(arguments: Sequence[str] | None = None) -> int:
     select.add_argument("--build-source-head", required=True)
     select.add_argument("--pull", required=True, help=f"{CI_REPOSITORY}@sha256:<digest>")
     select.add_argument("--evidence-out", required=True)
-    parsed = parser.parse_args(arguments)
-    root = Path(parsed.repo_root).resolve(strict=True)
+    ci_receipt = commands.add_parser("ci-receipt", help="CI: the App receipt from pushed bytes")
+    for name in ("--plan", "--index", "--manifest", "--index-digest", "--repository", "--run"):
+        ci_receipt.add_argument(name, required=True)
+    ci_receipt.add_argument("--output", required=True)
+    argv = list(sys.argv[1:] if arguments is None else arguments)
+    _mark_before_parsing(argv)
+    parsed = parser.parse_args(argv)
+    if parsed.command == "ci-receipt":
+        document = ci_app_receipt(
+            plan=json.loads(Path(parsed.plan).read_text(encoding="utf-8")),
+            index_bytes=Path(parsed.index).read_bytes(),
+            manifest_bytes=Path(parsed.manifest).read_bytes(),
+            index_digest=parsed.index_digest,
+            repository=parsed.repository,
+            run=parsed.run,
+        )
+        Path(parsed.output).write_text(
+            json.dumps(document, sort_keys=True, indent=1) + "\n", encoding="utf-8"
+        )
+        return 0
+    try:
+        root = Path(parsed.repo_root).resolve(strict=True)
+    except OSError as exc:
+        raise base.ArtifactContractError("repository root does not exist") from exc
     if parsed.command == "plan":
         document = ci_plan(
             repo_root=root,

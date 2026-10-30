@@ -155,50 +155,27 @@ jobs:
       - name: Write the App receipt (extends the local BA0 receipt)
         env:
           INDEX_DIGEST: ${{ steps.build.outputs.digest }}
-          IMAGE_ID: ${{ steps.build.outputs.imageid }}
         run: |
-          docker buildx imagetools inspect "$APP_REPOSITORY@$INDEX_DIGEST" --raw > "$RUNNER_TEMP/app-index.json"
-          python3 -I - "$RUNNER_TEMP/app-plan.json" "$RUNNER_TEMP/app-index.json" \
-            "$RUNNER_TEMP/receipt-app.json" <<'PY'
-          import json, os, sys
-          plan = json.load(open(sys.argv[1], encoding="utf-8"))
-          index = json.load(open(sys.argv[2], encoding="utf-8"))
-          digests = {
-              f"{m['platform']['os']}/{m['platform']['architecture']}": m["digest"]
-              for m in index.get("manifests", [])
-              if m.get("platform", {}).get("os") not in (None, "unknown")
-          }
-          if list(digests) != [plan["platform"]]:
-              raise SystemExit(f"App index platforms {sorted(digests)} != {plan['platform']}")
-          repository = os.environ["APP_REPOSITORY"]
-          receipt = {
-              # Local BA0 receipt fields (scripts/app_artifact.py _receipt); image_id is the
-              # image ID buildx reports for this build (build-push-action's --iidfile output),
-              # the same source as the local build's iidfile.
-              "contract": "ba0-app-build-receipt.v1",
-              "docker_context": "github-actions",
-              "status": "PASS",
-              "selector": "CI_BUILD",
-              "artifact_identity": plan["artifact_identity"],
-              "image_id": os.environ["IMAGE_ID"],
-              "build_source_head": plan["build_source_head"],
-              "integration_head": plan["integration_head"],
-              "manifest_sha256": plan["manifest_sha256"],
-              "dependency_lock_sha256": plan["dependency_lock_sha256"],
-              "platform": plan["platform"],
-              "target": plan["target"],
-              "labels": plan["labels"],
-              "candidate_image_ids": [],
-              "build_invocations": 1,
-              # CI extension (Spec §3.2).
-              "repository": repository,
-              "index_digest": os.environ["INDEX_DIGEST"],
-              "digests": digests,
-              "pull_reference": f"{repository}@{os.environ['INDEX_DIGEST']}",
-              "run": f"{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}",
-          }
-          json.dump(receipt, open(sys.argv[3], "w", encoding="utf-8"), indent=1, sort_keys=True)
-          PY
+          # image_id = the config digest of the verified linux/arm64 manifest inside the
+          # promoted (scanned) index; index_digest stays separate. ci-receipt checks that the
+          # index hashes to INDEX_DIGEST and the manifest to the index's arm64 entry.
+          docker buildx imagetools inspect "$APP_REPOSITORY@$INDEX_DIGEST" --raw \
+            > "$RUNNER_TEMP/app-index.json"
+          manifest=$(python3 -I -c 'import json,sys
+          index = json.load(open(sys.argv[1], encoding="utf-8"))
+          print(next(m["digest"] for m in index["manifests"]
+                     if m.get("platform", {}).get("os") == "linux"
+                     and m["platform"].get("architecture") == "arm64"))' "$RUNNER_TEMP/app-index.json")
+          docker buildx imagetools inspect "$APP_REPOSITORY@$manifest" --raw \
+            > "$RUNNER_TEMP/app-manifest.json"
+          python3 -I scripts/app_image_registry.py ci-receipt \
+            --plan "$RUNNER_TEMP/app-plan.json" \
+            --index "$RUNNER_TEMP/app-index.json" \
+            --manifest "$RUNNER_TEMP/app-manifest.json" \
+            --index-digest "$INDEX_DIGEST" \
+            --repository "$APP_REPOSITORY" \
+            --run "$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT" \
+            --output "$RUNNER_TEMP/receipt-app.json"
           {
             echo "### App image (linux/arm64)"
             echo "- pull: \`$APP_REPOSITORY@$INDEX_DIGEST\`"
