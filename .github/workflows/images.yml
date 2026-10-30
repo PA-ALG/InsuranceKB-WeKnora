@@ -1,0 +1,331 @@
+name: Images (I1)
+
+# Builds the App, UI (frontend), DocReader and Harness images on native runners and
+# publishes them to GHCR by digest with provenance, SBOM, build attestation and a failing
+# secret scan (docs/design/slices/I1-CI构建镜像.md). The App is built from the BA0 plan
+# (scripts/app_image_registry.py) so its labels equal a local build's; the BA0 App
+# contract is linux/arm64 only until its amd64 dependency lock is verified (I1b).
+# Deploys use digests only; tags are conveniences.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "migrations/**"
+      - "frontend/**"
+      - "docreader/**"
+      - "docker/**"
+      - "go.mod"
+      - "go.sum"
+      - "third_party/**"
+      - "harness/src/**"
+      - "harness/migrations/**"
+      - "harness/pyproject.toml"
+      - "harness/uv.lock"
+      - "deploy/local-build/**"
+      - "scripts/app_artifact.py"
+      - "scripts/app_image_registry.py"
+      - ".github/workflows/images.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  APP_REPOSITORY: ghcr.io/pa-alg/insurancekb-weknora-app
+  TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+jobs:
+  app:
+    name: app (linux/arm64, BA0 plan)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go (BA0 input resolution runs go list)
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Compute the BA0 plan and export the frozen build context
+        id: plan
+        run: |
+          python3 -I scripts/app_image_registry.py plan \
+            --repo-root . \
+            --build-source-head "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/app-plan.json" \
+            --context-out "$RUNNER_TEMP/app-context"
+          python3 -I - "$RUNNER_TEMP/app-plan.json" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          plan = json.load(open(sys.argv[1], encoding="utf-8"))
+          print("build_args<<BUILD_ARGS_EOF")
+          for name, value in sorted(plan["build_args"].items()):
+              print(f"{name}={value}")
+          print("BUILD_ARGS_EOF")
+          print("labels<<LABELS_EOF")
+          for name, value in sorted(plan["labels"].items()):
+              print(f"{name}={value}")
+          print("LABELS_EOF")
+          print(f"artifact_identity={plan['artifact_identity']}")
+          PY
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push the App by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: ${{ runner.temp }}/app-context
+          file: ${{ runner.temp }}/app-context/docker/Dockerfile.app
+          target: runtime
+          platforms: linux/arm64
+          build-args: ${{ steps.plan.outputs.build_args }}
+          labels: |
+            ${{ steps.plan.outputs.labels }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=${{ env.APP_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=images-app-arm64
+          cache-to: type=gha,scope=images-app-arm64,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest the App digest
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ env.APP_REPOSITORY }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Secret scan (fails on any finding)
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ github.token }}
+          IMAGE: ${{ env.APP_REPOSITORY }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY_IMAGE" \
+            image --scanners secret --exit-code 1 --no-progress "$IMAGE"
+
+      - name: Tag the digest
+        env:
+          REPOSITORY: ${{ env.APP_REPOSITORY }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          tags=(-t "$REPOSITORY:sha-${GITHUB_SHA:0:12}")
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then tags+=(-t "$REPOSITORY:main"); fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then tags+=(-t "$REPOSITORY:$GITHUB_REF_NAME"); fi
+          docker buildx imagetools create "${tags[@]}" "$REPOSITORY@$DIGEST"
+
+      - name: Write the App build receipt
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REPOSITORY: ${{ env.APP_REPOSITORY }}
+        run: |
+          python3 -I - "$RUNNER_TEMP/app-plan.json" "$RUNNER_TEMP/app-receipt.json" <<'PY'
+          import json, os, sys
+          plan = json.load(open(sys.argv[1], encoding="utf-8"))
+          receipt = {
+              "contract": "i1-app-ci-receipt.v1",
+              "artifact_identity": plan["artifact_identity"],
+              "build_source_head": plan["build_source_head"],
+              "manifest_sha256": plan["manifest_sha256"],
+              "dependency_lock_sha256": plan["dependency_lock_sha256"],
+              "platform": plan["platform"],
+              "target": plan["target"],
+              "labels": plan["labels"],
+              "repository": os.environ["REPOSITORY"],
+              "digest": os.environ["DIGEST"],
+              "pull_reference": f"{os.environ['REPOSITORY']}@{os.environ['DIGEST']}",
+              "run": f"{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}",
+          }
+          json.dump(receipt, open(sys.argv[2], "w", encoding="utf-8"), indent=1, sort_keys=True)
+          PY
+          {
+            echo "### App image (linux/arm64)"
+            echo "- pull: \`$REPOSITORY@$DIGEST\`"
+            echo "- artifact identity: \`${{ steps.plan.outputs.artifact_identity }}\`"
+            echo "- local select: \`python3 -I scripts/app_image_registry.py select --build-source-head $GITHUB_SHA --pull $REPOSITORY@$DIGEST --evidence-out <receipt>\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the App receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: app-receipt
+          path: ${{ runner.temp }}/app-receipt.json
+          if-no-files-found: error
+
+  images:
+    name: ${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [frontend, docreader, harness]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - image: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+            repository: ghcr.io/pa-alg/insurancekb-weknora-frontend
+          - image: docreader
+            context: .
+            dockerfile: docker/Dockerfile.docreader
+            repository: ghcr.io/pa-alg/insurancekb-weknora-docreader
+          - image: harness
+            context: .
+            dockerfile: docker/Dockerfile.harness
+            repository: ghcr.io/pa-alg/insurancekb-weknora-harness
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Free runner disk for the DocReader image
+        if: matrix.image == 'docreader'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            VITE_FRONTEND_COMMIT=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=${{ matrix.repository }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=images-${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=images-${{ matrix.image }}-${{ matrix.arch }},mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Secret scan (fails on any finding)
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ github.token }}
+          IMAGE: ${{ matrix.repository }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY_IMAGE" \
+            image --scanners secret --exit-code 1 --no-progress "$IMAGE"
+
+      - name: Record the per-arch digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "$DIGEST" > "$RUNNER_TEMP/digests/${{ matrix.image }}-${{ matrix.arch }}"
+
+      - name: Upload the per-arch digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/${{ matrix.image }}-${{ matrix.arch }}
+          if-no-files-found: error
+
+  merge:
+    name: ${{ matrix.image }} (multi-arch index)
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: frontend
+            repository: ghcr.io/pa-alg/insurancekb-weknora-frontend
+          - image: docreader
+            repository: ghcr.io/pa-alg/insurancekb-weknora-docreader
+          - image: harness
+            repository: ghcr.io/pa-alg/insurancekb-weknora-harness
+    steps:
+      - name: Download the per-arch digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: digest-${{ matrix.image }}-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Create the multi-arch index and tag it
+        id: index
+        env:
+          REPOSITORY: ${{ matrix.repository }}
+        run: |
+          sources=()
+          for arch in amd64 arm64; do
+            sources+=("$REPOSITORY@$(cat "$RUNNER_TEMP/digests/${{ matrix.image }}-$arch")")
+          done
+          tags=(-t "$REPOSITORY:sha-${GITHUB_SHA:0:12}")
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then tags+=(-t "$REPOSITORY:main"); fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then tags+=(-t "$REPOSITORY:$GITHUB_REF_NAME"); fi
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+          digest=$(docker buildx imagetools inspect "$REPOSITORY:sha-${GITHUB_SHA:0:12}" \
+            --format '{{json .Manifest}}' | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          {
+            echo "### ${{ matrix.image }} (linux/amd64 + linux/arm64)"
+            echo "- pull: \`$REPOSITORY@$digest\`"
+            for arch in amd64 arm64; do
+              echo "- $arch: \`$(cat "$RUNNER_TEMP/digests/${{ matrix.image }}-$arch")\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attest the index digest
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ matrix.repository }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
