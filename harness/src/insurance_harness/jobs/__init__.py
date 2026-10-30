@@ -4,6 +4,9 @@
 一次领域提交。全部任务状态与 outbox 写只经本包的存储层入口。
 """
 
+# `DomainWriteHandle` 已删除（P1.5 领域写通道合同，D-2026-07-27-16）：完成
+# 事务收数据不收代码，调用方不再持有任何数据库句柄。领域写用 `DomainWriteSpec`。
+from insurance_harness.jobs.domain_writes import OWNED_TABLES
 from insurance_harness.jobs.errors import (
     CapacityBlockedJobError,
     DomainWriteViolationError,
@@ -55,10 +58,8 @@ from insurance_harness.jobs.models import (
 # 调用方自有事务内的追加会让"领域写 + 事件已提交而任务未完成"成为可能，
 # 重放时新铸随机 event_id，消费端幂等去重无法折叠。
 from insurance_harness.jobs.outbox import OutboxDispatcher
-
-# `DomainWriteHandle` 已删除（P1.5 领域写通道合同，D-2026-07-27-16）：完成
-# 事务收数据不收代码，调用方不再持有任何数据库句柄。领域写用 `DomainWriteSpec`。
-from insurance_harness.jobs.store import OWNED_TABLES, JobStore, database_now
+from insurance_harness.jobs.store import JobStore
+from insurance_harness.jobs.store_rules import database_now
 
 __all__ = [
     "LEGAL_TRANSITIONS",

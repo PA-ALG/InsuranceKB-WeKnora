@@ -1840,7 +1840,7 @@ def test_identity_drift_scope_ignores_ba0_receipts_but_catches_new_go_source(
         "environment": {},
     }
     before = module.canonical_identity(**arguments)
-    receipt = repo_root / "docs/insurance-kb/evidence/830-ba0/d2/initialization-build.json"
+    receipt = repo_root / "docs/build-receipts/d2/initialization-build.json"
     receipt.parent.mkdir(parents=True)
     receipt.write_text('{"status":"PASS"}\n', encoding="utf-8")
 
