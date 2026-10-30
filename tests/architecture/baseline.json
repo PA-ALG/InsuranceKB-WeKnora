@@ -9,7 +9,7 @@
   "G5_hardcoded": 4,
   "G6_private_access": 5,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 168,
+  "G10_upstream_patches": 169,
   "G11_new_file_location": 140
  },
  "guards": {
@@ -142,6 +142,7 @@
    "internal/application/repository/knowledge_transfer_test.go": 1,
    "internal/application/repository/resource.go": 1,
    "internal/application/repository/retriever/opensearch/repository_test.go": 1,
+   "internal/application/repository/retriever/postgres/repository.go": 1,
    "internal/application/repository/task_queue.go": 1,
    "internal/application/service/agent_browser_source_test.go": 1,
    "internal/application/service/agent_service.go": 1,

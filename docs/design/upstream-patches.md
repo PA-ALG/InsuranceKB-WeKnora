@@ -157,3 +157,4 @@ S1b 仅追加本表，不修改 G10 基线。受保护验收文件与既有断�
 | `.golangci.yml` | S7f-1 收尾 | **已移除**：临时排除连同三个父键整体删除，文件恢复为固定上游字节（G10 349→348）；上一行登记随之失效 | — | 已退出 |
 | `.golangci.yml` | U-1 阶段 a | **临时**：为逐字节回退到固定基线的 178 个上游 Go 文件排除 lll、revive、errcheck、staticcheck、unused、govet 与格式化器（精确路径，`BEGIN/END U-1a 临时排除` 标记包住），避免 `--new-from-merge-base` 把上游原样写法报成新问题；不放宽项目自有代码 | 否（仅本项目 CI 需要） | U-1 阶段 a 收尾 PR 删除整段及新增父键，文件恢复上游字节 |
 | `.golangci.yml` | U-1 阶段 a 收尾 | **已移除**：阶段 a 的临时精确排除连同父键整体删除，文件恢复为固定上游字节（G10 171→170）；阶段 a 对应的临时登记随之失效 | — | 已退出 |
+| `internal/application/repository/retriever/postgres/repository.go` | U-1 修复（关键词检索兼容 pg_search 0.22） | 生成问题行排除条件由 `NOT (knowledge_base_id IN (…) AND <谓词>)` 改为反连接子查询 `id NOT IN (SELECT id FROM embeddings WHERE …)`，语义不变（TopK 前排除）；线上 pg_search 0.22.6 拒绝原形状（Unsupported query shape），导致关键词一路报错、混合检索退化为纯向量 | 是（拟提交上游：兼容旧版 pg_search/PolarDB） | 所有部署升级到 pg_search ≥ 0.25 并验证原形状可执行，或上游采用兼容写法后删除 |
