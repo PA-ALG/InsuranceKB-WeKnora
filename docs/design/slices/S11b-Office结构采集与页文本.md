@@ -4,6 +4,8 @@
 > 真实调用：0。用户提供的业务 PPTX/DOCX/XLSX 样本只在本机私有目录做验证，**不进仓库、Issue、PR 或日志**；测试只用测试内生成的合成文件。
 >
 > **取代** 2026-10-29 冻结的版本（分支 `slice/s11b`，Spec `9322b0595`/`a8fff6ca1`，RED `df2ddf061`，未实现、未合并）。
+>
+> 2026-10-30 修订（PR #469 审核 R1、R2）：§2.3 增加"包完整性"（上游读取器遇坏部件或缺部件会静默返回已读部分）；§4 的 `format` 只接受三个冻结字面值。
 
 ## 0. 为什么改
 
@@ -114,6 +116,13 @@ func Decode(data []byte) (*Structure, error)              // 严格解码（拒�
 - 任一 XML 部件含 DTD 或实体声明（`<!DOCTYPE`、`<!ENTITY`）→ `OFFICE_MALFORMED`。
 - 上游提取报错（必需部件缺失或非法）→ `OFFICE_MALFORMED`；块文本不是合法 UTF-8 或含 NUL → `OFFICE_MALFORMED`。
 - 上游自身另有每条目 64 MiB 的读取上限，保留不动。
+- **包完整性**：上游读取器遇到 XML 错误就停止，找不到声明的幻灯片、备注页或工作表就跳过，两种情况都不报错，只返回已读到的部分。所以信任上游结果之前，先证明包是完整的；任一项不满足 → `OFFICE_MALFORMED`，不保存采集，原解析不受影响：
+  - 条目名唯一（上游按名取第一个条目）；
+  - 每个 XML 部件（`.xml`、`.rels`，不论上游是否读取）用上游同一个解码器读到结尾：合法 UTF-8，不含 XML 字符范围以外的字符（含 NUL），元素配对，恰好一个根元素；工作表中的每个单元格，其类型化字段（样式序号、公式与内联字符串的类型化属性）按工作簿读取方流式读取时的方式能解码，因为读取方会丢弃这个解码错误，单元格文本也随之丢失；
+  - DOCX：`word/document.xml` 存在；
+  - PPTX：`sldIdLst` 中每张幻灯片都有关系，目标部件也存在；一张幻灯片至多一个备注关系，有则目标部件存在；
+  - XLSX：至少一个工作表；表名在读取方的大小写折叠规则下唯一；每个工作表用读取方自己的调用流式读到结尾，读取方不报错（包括部件缺失、单元格引用非法、行号越界）。
+  - 不在此校验的：解码成功后单元格值如何呈现（例如共享字符串序号越界时读取方给出空值）。这属于读取方的语义，随 `ExtractorIdentity` 版本化。
 
 ## 3. 采集接线（附加采集）
 
@@ -128,7 +137,7 @@ func Decode(data []byte) (*Structure, error)              // 严格解码（拒�
 
 - `source.Service` 读到 `contract` 为 `enterprise-ooxml-structure.v1` 的原生结构时走 Office 分支，页与块**直接取自结构**（不从 Markdown 切）；其他（PDF）走现有分支，行为与输出逐字节不变。
 - Office 校验（任一不满足 → `PARSE_ARTIFACT_INTEGRITY`），由 `ooxml.Decode` 统一实现：
-  - `contract`、`extractor`、`parser_identity_sha256 == SHA-256(extractor)` 一致；`format` 为三者之一；`source_sha256` 等于采集文件摘要；
+  - `contract`、`extractor`、`parser_identity_sha256 == SHA-256(extractor)` 一致；`format` 必须是 `pptx`、`docx`、`xlsx` 三个字面值之一（`Supports` 接受的输入别名，如大写、带点号或首尾空白，在存储结构中一律无效），locator 校验按这个字面值分派，其他值不进入任何格式分支；`source_sha256` 等于采集文件摘要；
   - 页码从 1 连续，至少一页；每页 `page_text_sha256` 等于页文本摘要；
   - 块按 `start` 升序、互不重叠、`0 ≤ start < end ≤ 页文本码点数`；块文本去空白后非空；同页块 ID 唯一；
   - locator 与 `format` 匹配：pptx 只允许 `PPTX_SHAPE` 且 `slide == 页码`、无其他字段；docx 只有 1 页、只允许 `DOCX_BLOCK` 且 `block_index` 非负并严格递增；xlsx 只允许 `XLSX_CELL_RANGE`、`sheet` 非空且同页一致、不同页互不相同、`cell_range` 为同一行的 `A<r>:XFD<r>` 且行号严格递增。
@@ -140,7 +149,7 @@ func Decode(data []byte) (*Structure, error)              // 严格解码（拒�
 
 | 方 | 路径 |
 |---|---|
-| Claude（实现） | 新包 `internal/enterprise/capture/ooxml/`；`internal/enterprise/capture/`（`native.go` Office 分支、新 `office.go`）；`internal/enterprise/source/`（Office 分支、`Page.Blocks`、`Span` 拒绝）；`internal/application/service/g3_first_parse.go`（`captureOffice`）；`internal/application/service/knowledge_process.go` 一行调用 |
+| Claude（实现） | 新包 `internal/enterprise/capture/ooxml/`；`internal/enterprise/capture/`（`native.go` Office 分支、新 `office.go`）；`internal/enterprise/source/`（Office 分支、`Page.Blocks`、`Span` 拒绝）；`internal/application/service/g3_first_parse.go`（`captureOffice`）及其测试 `office_capture_test.go`；`internal/application/service/knowledge_process.go` 一行调用 |
 | Claude（RED，受保护） | `internal/enterprise/capture/ooxml/acceptance_test.go`、`internal/enterprise/source/office_pages_test.go`、`internal/enterprise/capture/office_capture_test.go` |
 
 不改：`contracts/`、`internal/sourceloc/`（上游原样）、docreader、前端、Harness、发布回验与引用（S11c–S11e）。手写文件 ≤ 500 行。
