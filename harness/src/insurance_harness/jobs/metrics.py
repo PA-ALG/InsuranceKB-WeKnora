@@ -15,7 +15,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.jobs.models import JobState
-from insurance_harness.jobs.store import MAX_SPACE_ID_LENGTH, database_now, validated_text
+from insurance_harness.jobs.store_rules import MAX_SPACE_ID_LENGTH, database_now, validated_text
 from insurance_harness.jobs.tables import WikiJob
 
 _SCHEDULABLE_STATES = (JobState.QUEUED.value, JobState.RETRY_WAIT.value)
