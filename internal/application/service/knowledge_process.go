@@ -4802,6 +4802,7 @@ func (s *knowledgeService) convert(
 	}
 	if !isURL {
 		attachStructureBlocks(ctx, fileType, req.FileContent, result)
+		s.captureOffice(ctx, knowledge, payload, fileType, req.FileContent)
 	}
 	docOutput := types.JSONMap{
 		"text_length":  len(result.MarkdownContent),

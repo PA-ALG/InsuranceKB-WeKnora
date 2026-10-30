@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/capture/ooxml"
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
@@ -96,6 +97,9 @@ func ValidateNative(result *types.ReadResult, sourceSHA, parserIdentitySHA strin
 		return ErrUnavailable
 	}
 	artifact := result.NativeStructure
+	if artifact.SchemaVersion == ooxml.Contract {
+		return validateOffice(result, sourceSHA, parserIdentitySHA)
+	}
 	if (artifact.SchemaVersion != nativeContract && artifact.SchemaVersion != types.NativePartialLocatorContract) ||
 		artifact.SourceSHA256 != sourceSHA || artifact.RawSHA256 != artifact.SanitizedSHA256 ||
 		sha256Hex(artifact.SanitizedJSON) != artifact.SanitizedSHA256 {

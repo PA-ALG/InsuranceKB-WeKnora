@@ -2,10 +2,15 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 
 	"github.com/Tencent/WeKnora/internal/enterprise/capture"
+	"github.com/Tencent/WeKnora/internal/enterprise/capture/ooxml"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
 	werrors "github.com/Tencent/WeKnora/internal/errors"
+	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -54,4 +59,39 @@ func (s *knowledgeService) failG3FirstParse(ctx context.Context, knowledge *type
 		"G3 first parse artifact unavailable", cause)
 	_, err := s.failKnowledge(ctx, knowledge, true, "G3_FIRST_PARSE_ARTIFACT_UNAVAILABLE: %v", cause)
 	return err
+}
+
+// captureOffice seals the Office structure of one parse of an enterprise RAW upload, next to the
+// upstream parse of the same bytes (S11b). The parse itself is never changed: when the structure
+// cannot be extracted or sealed, the knowledge is processed as usual and its source pages report the
+// revision as not captured. Only the typed code is logged, never document text.
+func (s *knowledgeService) captureOffice(
+	ctx context.Context, k *types.Knowledge, p types.DocumentProcessPayload, fileType string, data []byte,
+) {
+	if k == nil || p.URL != "" || p.FileURL != "" || !ooxml.Supports(fileType) ||
+		s.captureScope == nil || !s.captureScope.RawKB(k.TenantID, k.KnowledgeBaseID) {
+		return
+	}
+	sum := sha256.Sum256(data)
+	if p.Revision == nil || p.Revision.ParseAttempt != k.CurrentParseAttempt ||
+		(p.ParseAttempt > 0 && p.Revision.ParseAttempt != p.ParseAttempt) ||
+		p.Revision.FileSHA256 != hex.EncodeToString(sum[:]) {
+		logger.Warnf(ctx, "[office capture] not saved knowledge=%s reason=REVISION_BINDING", k.ID)
+		return
+	}
+	result, chunks, err := capture.Office(fileType, data)
+	if err == nil {
+		err = s.firstParse.save(capture.Identity{
+			TenantID: k.TenantID, RawKBID: k.KnowledgeBaseID, KnowledgeID: k.ID,
+			ParseAttempt: p.Revision.ParseAttempt, SourceSHA256: p.Revision.FileSHA256,
+		}, result, chunks)
+	}
+	if err != nil {
+		reason := "CAPTURE_UNAVAILABLE"
+		var failure *ooxml.Error
+		if errors.As(err, &failure) {
+			reason = failure.Code
+		}
+		logger.Warnf(ctx, "[office capture] not saved knowledge=%s reason=%s", k.ID, reason)
+	}
 }

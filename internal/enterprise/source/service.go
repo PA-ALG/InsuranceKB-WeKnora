@@ -8,6 +8,8 @@ import (
 	"errors"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Tencent/WeKnora/internal/enterprise/capture/ooxml"
 )
 
 // Service verifies and reads the pages of captured source revisions.
@@ -53,6 +55,7 @@ type codeRange struct {
 type verified struct {
 	set    *PageSet
 	native []nativePage
+	office bool // an Office capture: pages and blocks come from its structure, no PDF geometry
 }
 
 func (s *Service) load(ctx context.Context, scope Scope, knowledgeID string, attempt int64) (*verified, error) {
@@ -89,9 +92,16 @@ func (s *Service) load(ctx context.Context, scope Scope, knowledgeID string, att
 		return nil, integrity()
 	}
 	var native struct {
-		Pages []nativePage `json:"pages"`
+		Contract string       `json:"contract"`
+		Pages    []nativePage `json:"pages"`
 	}
-	if json.Unmarshal(a.NativeJSON, &native) != nil || len(native.Pages) == 0 {
+	if json.Unmarshal(a.NativeJSON, &native) != nil {
+		return nil, integrity()
+	}
+	if native.Contract == ooxml.Contract {
+		return officePages(a)
+	}
+	if len(native.Pages) == 0 {
 		return nil, integrity()
 	}
 	runes := []rune(a.Markdown)
@@ -116,6 +126,31 @@ func (s *Service) load(ctx context.Context, scope Scope, knowledgeID string, att
 			NativeSHA256: digest(a.NativeJSON), Pages: pages,
 		},
 		native: native.Pages,
+	}, nil
+}
+
+// officePages reads an Office capture: the structure is decoded and fully verified, must belong to
+// the captured file and parser identity, and its pages are returned verbatim with their blocks.
+func officePages(a *Artifact) (*verified, error) {
+	structure, err := ooxml.Decode(a.NativeJSON)
+	if err != nil || structure.SourceSHA256 != a.FileSHA256 ||
+		structure.ParserIdentitySHA256 != a.ParserIdentitySHA256 {
+		return nil, integrity()
+	}
+	pages := make([]Page, len(structure.Pages))
+	for i, p := range structure.Pages {
+		pages[i] = Page{Number: p.Number, Text: p.Text, TextSHA256: p.TextSHA256}
+		if len(p.Blocks) > 0 {
+			pages[i].Blocks = p.Blocks
+		}
+	}
+	return &verified{
+		set: &PageSet{
+			KnowledgeID: a.KnowledgeID, ParseAttempt: a.ParseAttempt, Document: a.FileName,
+			DocumentSHA256: a.FileSHA256, ParserIdentitySHA256: a.ParserIdentitySHA256,
+			NativeSHA256: digest(a.NativeJSON), Pages: pages,
+		},
+		office: true,
 	}, nil
 }
 

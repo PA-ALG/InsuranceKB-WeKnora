@@ -38,6 +38,9 @@ func (s *Service) Span(
 	if err != nil {
 		return nil, err
 	}
+	if v.office {
+		return nil, &Error{Code: ErrorInvalidRequest, Detail: "Office captures are located by block, not by PDF span"}
+	}
 	if page < 1 || page > len(v.set.Pages) {
 		return nil, outOfRange()
 	}

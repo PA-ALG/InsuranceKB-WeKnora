@@ -4,6 +4,8 @@ package source
 import (
 	"context"
 	"errors"
+
+	"github.com/Tencent/WeKnora/internal/enterprise/capture/ooxml"
 )
 
 const (
@@ -62,11 +64,13 @@ func (f ArtifactStoreFunc) Load(ctx context.Context, scope Scope, id string, att
 	return f(ctx, scope, id, attempt)
 }
 
-// Page is the verbatim text and recorded digest of one physical page.
+// Page is the verbatim text and recorded digest of one physical page. Office pages also carry their
+// located blocks (S11b); PDF pages never do, so their JSON is unchanged.
 type Page struct {
-	Number     int    `json:"page_number"`
-	Text       string `json:"text"`
-	TextSHA256 string `json:"page_text_sha256"`
+	Number     int           `json:"page_number"`
+	Text       string        `json:"text"`
+	TextSHA256 string        `json:"page_text_sha256"`
+	Blocks     []ooxml.Block `json:"blocks,omitempty"`
 }
 
 // PageSet identifies a source revision and its verified physical pages.
