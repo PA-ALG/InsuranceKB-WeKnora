@@ -800,9 +800,15 @@ func generatedQuestionExclusionClause(kbIDs []string) clause.Expression {
 		placeholders[i] = "?"
 		vars[i] = id
 	}
+	// An anti-join subquery keeps "excluded before TopK": pg_search 0.22 rejects a
+	// NOT (... AND ...) beside the ||| match ("Unsupported query shape"). Exit: drop
+	// once every deployment runs pg_search >= 0.25 (docs/design/upstream-patches.md).
+	// NOT (K AND P) also drops rows where K AND P is UNKNOWN (e.g. chunk_id IS NULL),
+	// so the subquery selects (K AND P) IS NOT FALSE, written as the equivalent
+	// "K IS NOT FALSE AND (P) IS NOT FALSE" (an AND is FALSE iff either side is).
 	return clause.Expr{
 		SQL: fmt.Sprintf(
-			"NOT (knowledge_base_id IN (%s) AND %s)",
+			"id NOT IN (SELECT id FROM embeddings WHERE knowledge_base_id IN (%s) IS NOT FALSE AND (%s) IS NOT FALSE)",
 			strings.Join(placeholders, ", "),
 			types.GeneratedQuestionRowPredicate(""),
 		),
