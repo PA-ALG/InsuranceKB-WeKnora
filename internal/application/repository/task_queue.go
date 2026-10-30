@@ -809,6 +809,26 @@ func (r *taskPendingOpsRepository) ArchiveOperation(
 	return err == nil && settled, err
 }
 
+// deadLetterTableMissing reports whether the dead-letter table is absent. A
+// bool-only check cannot tell absence from a failed metadata query, so the
+// catalog is read directly and its error propagated.
+func (r *taskPendingOpsRepository) deadLetterTableMissing(ctx context.Context) (bool, error) {
+	table := types.TaskDeadLetter{}.TableName()
+	db := r.db.WithContext(ctx)
+	switch r.db.Name() {
+	case "postgres":
+		var present bool
+		err := db.Raw("SELECT to_regclass(?) IS NOT NULL", table).Scan(&present).Error
+		return err == nil && !present, err
+	case "sqlite":
+		var count int64
+		err := db.Raw("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count).Error
+		return err == nil && count == 0, err
+	default:
+		return false, errors.New("task execution: dead-letter catalog unsupported")
+	}
+}
+
 func (r *taskPendingOpsRepository) FailedOperationCount(
 	ctx context.Context,
 	tenantID uint64,
@@ -853,9 +873,14 @@ func (r *taskPendingOpsRepository) HasFailedOperation(ctx context.Context, claim
 		).
 		Rows()
 	if err != nil {
-		// Archive writes this table; a store without it cannot hold an archived
-		// failure, so there is nothing to block. Any other error fails closed.
-		if !r.db.WithContext(ctx).Migrator().HasTable(&types.TaskDeadLetter{}) {
+		// Archive writes this table, so a store without it holds no archived
+		// failure. Absence is decided only by a catalog query whose own error is
+		// returned; every other error fails closed.
+		missing, catalogErr := r.deadLetterTableMissing(ctx)
+		if catalogErr != nil {
+			return false, errors.Join(err, catalogErr)
+		}
+		if missing {
 			return false, nil
 		}
 		return false, err
