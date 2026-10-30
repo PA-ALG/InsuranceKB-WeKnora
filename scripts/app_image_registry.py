@@ -147,6 +147,21 @@ def _pulled_image_id(
     return image_id
 
 
+def _write_rejected(output: Path, reference: str) -> None:
+    """A non-success receipt for this attempt, written before anything is validated."""
+
+    base._write_evidence(
+        output,
+        {
+            "contract": "ba0-app-build-receipt.v1",
+            "status": "INCOMPLETE",
+            "selector": _SELECTOR,
+            "pulled_reference": reference,
+            "build_invocations": 0,
+        },
+    )
+
+
 def select_pulled_app(
     *,
     repo_root: str | os.PathLike[str],
@@ -156,8 +171,14 @@ def select_pulled_app(
     runner: base.Runner = subprocess.run,
     docker_context: str = "colima",
 ) -> dict[str, Any]:
-    """Pull one CI app image by digest; write a BA0 receipt only if it proves the identity."""
+    """Pull one CI app image by digest; write a BA0 receipt only if it proves the identity.
 
+    The receipt path is overwritten with a non-success state before any check, so a
+    rejection in this call can never leave an earlier PASS receipt in place.
+    """
+
+    output = Path(evidence_out)
+    _write_rejected(output, reference)
     if _PULL_REFERENCE.fullmatch(reference) is None:
         raise base.ArtifactContractError(
             f"pull reference must be {CI_REPOSITORY}@sha256:<64 hex digest>"
@@ -167,7 +188,6 @@ def select_pulled_app(
     root = Path(repo_root).resolve(strict=True)
     labels = base._required_labels(identity)
     base._source_metadata(identity)
-    output = Path(evidence_out)
     base._write_evidence(
         output,
         {
@@ -244,10 +264,11 @@ def _main(arguments: Sequence[str] | None = None) -> int:
         output.write_text(json.dumps(document, sort_keys=True, indent=1) + "\n", encoding="utf-8")
         print(json.dumps({"artifact_identity": document["artifact_identity"]}))
         return 0
-    identity = _identity(root, parsed.build_source_head, parsed.context)
     evidence = Path(parsed.evidence_out)
     if not evidence.is_absolute():
         evidence = root / evidence
+    _write_rejected(evidence, parsed.pull)
+    identity = _identity(root, parsed.build_source_head, parsed.context)
     receipt = select_pulled_app(
         repo_root=root,
         identity=identity,
