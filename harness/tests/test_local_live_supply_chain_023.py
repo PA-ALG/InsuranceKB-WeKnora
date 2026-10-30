@@ -424,7 +424,9 @@ def test_trusted_workflow_is_main_only_gated_and_builds_three_attested_images() 
 
 def test_model_debug_redaction_is_in_merged_source_not_a_workflow_patch() -> None:
     source = (REPO_ROOT / "internal/middleware/logger.go").read_text(encoding="utf-8")
-    test_source = (REPO_ROOT / "internal/middleware/logger_test.go").read_text(encoding="utf-8")
+    test_source = (REPO_ROOT / "internal/middleware/logger_model_debug_test.go").read_text(
+        encoding="utf-8"
+    )
     dockerfile = _locked_source_bytes("docker/Dockerfile.app").decode("utf-8")
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
