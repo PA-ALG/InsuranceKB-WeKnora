@@ -3,8 +3,9 @@
 #
 # Copies the live stack (images, database, file volumes, configuration) into a separate colima
 # profile and starts it on its own port. The live side is only read: `docker inspect`, `docker save`,
-# `pg_dump` and `tar` through `docker exec`. Secrets go from `docker inspect` straight into mode-600
-# env files under $STAGING_HOME and are never printed.
+# `pg_dump` and `tar` through `docker exec`. Only an allow-list of non-secret settings is copied from
+# live; staging generates its own secrets into mode-600 env files under $STAGING_HOME (never printed).
+# Model API keys stored in the database stay encrypted with live's key, so re-enter them in staging.
 #
 # Usage: deploy/staging/staging.sh <env|images|restore|dns|up|ledger|status|stop>
 set -euo pipefail
