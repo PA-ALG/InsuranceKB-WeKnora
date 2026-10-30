@@ -1279,7 +1279,7 @@ func (s *wikiIngestService) decodePendingRows(
 		}
 		op.dbID = row.ID
 		op.queueRows = []*types.TaskPendingOp{row}
-		op.recoveryBlocked = op.ExecutionID != "" || row.FailCount > 0
+		op.recoveryBlocked = op.ExecutionID != "" || row.FailCount > wikiBudgetRetries(row)
 		decoded = append(decoded, op)
 	}
 	ops = selectWikiInputCohorts(decoded)

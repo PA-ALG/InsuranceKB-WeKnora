@@ -1394,7 +1394,7 @@ func (s *wikiIngestService) mapOneDocument(
 		failCtx, cancel := wikiIngestCleanupContext(ctx)
 		defer cancel()
 		s.tracker().FailSpan(failCtx, wikiSpan, "KNOWLEDGE_LOOKUP_FAILED", err.Error(), err)
-		return nil, nil, err
+		return nil, nil, wikiLookupFailed(err)
 	}
 	if gone {
 		logger.Infof(ctx, "wiki ingest: knowledge %s has been deleted, skip map", knowledgeID)

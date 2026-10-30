@@ -722,6 +722,31 @@ func (r *taskPendingOpsRepository) ReleaseOperation(
 	return result.Error == nil && result.RowsAffected == 1, result.Error
 }
 
+// ReleaseOperationAfterAttempt implements TaskPendingOpsBudgetStore. SET
+// expressions read the old row, so fail_count and budget_retries agree.
+func (r *taskPendingOpsRepository) ReleaseOperationAfterAttempt(
+	ctx context.Context,
+	claim *types.TaskPendingOp,
+	executionID string,
+) (bool, error) {
+	if claim == nil || claim.ID == 0 || executionID == "" {
+		return false, errors.New("task execution: claim and execution id required")
+	}
+	q := pendingExecutionQuery(pendingClaimQuery(r.db.WithContext(ctx), claim), executionID)
+	value := gorm.Expr(
+		"CAST(json_set(json_remove(payload, '$.execution_id'), '$.budget_retries', fail_count + 1) AS BLOB)")
+	if r.db.Name() == "postgres" {
+		value = gorm.Expr(
+			"(payload - 'execution_id') || jsonb_build_object('budget_retries', fail_count + 1)")
+	}
+	result := q.Updates(map[string]interface{}{
+		"claimed_at": nil,
+		"fail_count": gorm.Expr("fail_count + 1"),
+		"payload":    value,
+	})
+	return result.Error == nil && result.RowsAffected == 1, result.Error
+}
+
 func (r *taskPendingOpsRepository) CompleteOperation(
 	ctx context.Context,
 	claim *types.TaskPendingOp,
@@ -828,6 +853,11 @@ func (r *taskPendingOpsRepository) HasFailedOperation(ctx context.Context, claim
 		).
 		Rows()
 	if err != nil {
+		// Archive writes this table; a store without it cannot hold an archived
+		// failure, so there is nothing to block. Any other error fails closed.
+		if !r.db.WithContext(ctx).Migrator().HasTable(&types.TaskDeadLetter{}) {
+			return false, nil
+		}
 		return false, err
 	}
 	defer rows.Close()

@@ -35,6 +35,34 @@ type wikiStageFailure struct {
 func (e *wikiStageFailure) Error() string { return fmt.Sprintf("%s: %s", e.Stage, e.Outcome) }
 func (e *wikiStageFailure) Unwrap() error { return e.Cause }
 
+// wikiLookupStage marks a failed source-document lookup. No model work was
+// sent, so it is NOT_RUN; unlike a cancelled batch it is an attempt of this op
+// and spends upstream's retry budget (v0.9.0), also when the lookup was
+// interrupted.
+const wikiLookupStage = "wiki_lookup"
+
+func wikiLookupFailed(err error) error {
+	return &wikiStageFailure{Stage: wikiLookupStage, Outcome: wikiOutcomeNotRun, Cause: err}
+}
+
+// wikiBudgetRetries is how many of a queue row's failures were budgeted
+// retries of never-run attempts (TaskPendingOpsBudgetStore). Failures beyond
+// it are legacy and cannot authorize replay.
+func wikiBudgetRetries(row *types.TaskPendingOp) int {
+	var marker struct {
+		BudgetRetries int `json:"budget_retries"`
+	}
+	if len(row.Payload) == 0 || json.Unmarshal(row.Payload, &marker) != nil {
+		return 0
+	}
+	return marker.BudgetRetries
+}
+
+func isWikiLookupFailure(err error) bool {
+	var failure *wikiStageFailure
+	return errors.As(err, &failure) && failure.Stage == wikiLookupStage
+}
+
 func wikiFailureOutcome(err error) string {
 	if err == nil {
 		return wikiOutcomeNotRun
@@ -287,8 +315,9 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 	// Upstream's retry budget (v0.9.0): an op whose attempt failed must not be
 	// released forever. Past wikiMaxFailRetries it is archived like any other
 	// failure, which also releases its finalizing slot below. A cancelled batch
-	// keeps its budget: cancellation is not a failed attempt of this op.
-	countsAttempt := releaseForRetry && !errors.Is(op.failure, context.Canceled)
+	// keeps its budget: cancellation is not a failed attempt of this op. A failed
+	// source lookup always counts, as in upstream.
+	countsAttempt := releaseForRetry && (isWikiLookupFailure(op.failure) || !errors.Is(op.failure, context.Canceled))
 	failCount := 0
 	for _, row := range op.queueRows {
 		failCount = max(failCount, row.FailCount)
@@ -309,12 +338,20 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 		if op.failure == nil {
 			settled, err = store.CompleteOperation(ctx, row, marker.ExecutionID)
 		} else if releaseForRetry {
-			if countsAttempt {
+			budget, recordsBudget := s.pendingRepo.(interfaces.TaskPendingOpsBudgetStore)
+			switch {
+			case countsAttempt && recordsBudget:
+				settled, err = budget.ReleaseOperationAfterAttempt(ctx, row, marker.ExecutionID)
+			case countsAttempt:
+				// Without a budget record the next claim treats the count as a
+				// legacy failure and quarantines it: fail closed.
 				if _, err = s.pendingRepo.IncrFailCount(ctx, row.ID); err != nil {
 					return err
 				}
+				settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
+			default:
+				settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
 			}
-			settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
 		} else {
 			settled, err = store.ArchiveOperation(ctx, row, marker.ExecutionID, &types.TaskDeadLetter{
 				TenantID: payload.TenantID, TaskType: wikiTaskType, Scope: wikiTaskScope, ScopeID: payload.KnowledgeBaseID,
@@ -349,11 +386,21 @@ func wikiUnsentPageCancellation(ctx context.Context) error {
 // A fresh follow-up trigger would reset the bounded asynq retry budget.
 // Shared unsent work can be cancelled even while this batch remains live.
 func wikiBatchRetryError(ctx context.Context, failedOps []WikiPendingOp) error {
+	// Upstream (v0.9.0): failed source lookups stay queued with their retry
+	// budget and the batch's follow-up drains them; the task itself succeeds.
+	onlyLookups := len(failedOps) > 0
+	for _, op := range failedOps {
+		onlyLookups = onlyLookups && isWikiLookupFailure(op.failure)
+	}
+	if onlyLookups {
+		return nil
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	for _, op := range failedOps {
-		if op.failure != nil && wikiFailureOutcome(op.failure) == wikiOutcomeNotRun {
+		if op.failure != nil && !isWikiLookupFailure(op.failure) &&
+			wikiFailureOutcome(op.failure) == wikiOutcomeNotRun {
 			return errors.New("wiki ingest: unsent operation released for task retry")
 		}
 	}

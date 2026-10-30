@@ -193,3 +193,11 @@ type TaskPendingOpsExecutionStore interface {
 type TaskPendingOpsRetryStore interface {
 	ReleaseOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error)
 }
+
+// TaskPendingOpsBudgetStore releases a never-run operation whose attempt spends
+// the retry budget: fail_count is bumped and recorded in the payload as
+// budget_retries in the same statement, so a later claim can tell a budgeted
+// retry from a legacy failure. Same owner rules as ReleaseOperation.
+type TaskPendingOpsBudgetStore interface {
+	ReleaseOperationAfterAttempt(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error)
+}
