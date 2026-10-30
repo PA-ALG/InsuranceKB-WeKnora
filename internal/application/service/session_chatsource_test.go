@@ -191,7 +191,7 @@ func q1aFixture() (context.Context, *sessionService, *q1aSources, *q1aKBs) {
 
 func TestQ1aSearchKnowledgeUsesFixedTargetsAndDeliversOnlyMatchingChunks(t *testing.T) {
 	ctx, svc, source, kbs := q1aFixture()
-	rows, err := searchKnowledgeRows(svc, ctx, []string{"q-raw", "q-wiki"}, nil, nil, "question")
+	rows, err := searchKnowledgeRows(ctx, svc, []string{"q-raw", "q-wiki"}, nil, nil, "question")
 	require.NoError(t, err)
 	require.Equal(t, 1, source.reads)
 	require.Len(t, kbs.seen, 1)
@@ -205,13 +205,13 @@ func TestQ1aSearchKnowledgeUsesFixedTargetsAndDeliversOnlyMatchingChunks(t *test
 
 func TestQ1aQuickWikiOnlyAndDependencyFailuresDoNotRecall(t *testing.T) {
 	ctx, svc, source, kbs := q1aFixture()
-	_, err := searchKnowledgeRows(svc, ctx, []string{"q-wiki"}, nil, nil, "question")
+	_, err := searchKnowledgeRows(ctx, svc, []string{"q-wiki"}, nil, nil, "question")
 	var failure *release.Error
 	require.ErrorAs(t, err, &failure)
 	require.Equal(t, "RELEASE_MANAGED_KB", failure.Code)
 	require.Contains(t, err.Error(), "请先选择原始材料库")
 	source.err = errors.New("read unavailable")
-	_, err = searchKnowledgeRows(svc, ctx, []string{"q-raw"}, nil, nil, "question")
+	_, err = searchKnowledgeRows(ctx, svc, []string{"q-raw"}, nil, nil, "question")
 	require.ErrorIs(t, err, source.err)
 	require.Empty(t, kbs.seen)
 }
@@ -219,7 +219,7 @@ func TestQ1aQuickWikiOnlyAndDependencyFailuresDoNotRecall(t *testing.T) {
 func TestQ1aExplicitEnterpriseMissingFromNativeBatchFailsClosed(t *testing.T) {
 	ctx, svc, _, kbs := q1aFixture()
 	kbs.missing = true
-	_, err := searchKnowledgeRows(svc, ctx, []string{"q-raw"}, nil, nil, "question")
+	_, err := searchKnowledgeRows(ctx, svc, []string{"q-raw"}, nil, nil, "question")
 	require.Error(t, err)
 	require.Empty(t, kbs.seen)
 }
@@ -227,7 +227,7 @@ func TestQ1aExplicitEnterpriseMissingFromNativeBatchFailsClosed(t *testing.T) {
 func TestQ1aUnmanagedSearchKeepsNativeResultUnlabelled(t *testing.T) {
 	ctx, svc, source, kbs := q1aFixture()
 	kbs.rows = []*types.SearchResult{{ID: "plain-chunk", KnowledgeID: "plain-doc", Content: "ordinary"}}
-	rows, err := searchKnowledgeRows(svc, ctx, []string{"plain"}, nil, nil, "question")
+	rows, err := searchKnowledgeRows(ctx, svc, []string{"plain"}, nil, nil, "question")
 	require.NoError(t, err)
 	require.Zero(t, source.reads)
 	require.Len(t, rows, 1)
@@ -395,7 +395,7 @@ func TestQ1aQuickAnalysisExcludesEnterpriseAndPreservesRawContext(t *testing.T) 
 // searchKnowledgeRows adapts upstream v0.9.0's SearchKnowledge (options + result
 // envelope) to the row assertions these Q1a cases make.
 func searchKnowledgeRows(
-	svc *sessionService, ctx context.Context, kbIDs, docIDs []string, tags []types.TagScope, query string,
+	ctx context.Context, svc *sessionService, kbIDs, docIDs []string, tags []types.TagScope, query string,
 ) ([]*types.SearchResult, error) {
 	result, err := svc.SearchKnowledge(ctx, kbIDs, docIDs, tags, query, nil)
 	if err != nil || result == nil {

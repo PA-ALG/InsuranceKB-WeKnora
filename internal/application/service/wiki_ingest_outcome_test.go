@@ -128,10 +128,11 @@ func TestReduceSlugUpdatesReportsGenerationFailure(t *testing.T) {
 	pages := &wikiOutcomePages{}
 	model := &interruptedWikiChatModel{}
 	svc := &wikiIngestService{knowledgeSvc: wikiOutcomeKnowledge{}, wikiService: pages}
-	changed, _, failed, _, err := svc.reduceSlugUpdates(context.Background(), model, "kb", "concept/loan", []SlugUpdate{{
-		Slug: "concept/loan", Type: types.WikiPageTypeConcept, KnowledgeID: "source", SourceRef: "source",
-		Item: extractedItem{Name: "Loan", Slug: "concept/loan", Details: "Loan conditions"},
-	}}, 1, wikiOutcomeBatchContext(), nil)
+	changed, _, failed, _, err := svc.reduceSlugUpdates(context.Background(), model, "kb", "concept/loan",
+		[]SlugUpdate{{
+			Slug: "concept/loan", Type: types.WikiPageTypeConcept, KnowledgeID: "source", SourceRef: "source",
+			Item: extractedItem{Name: "Loan", Slug: "concept/loan", Details: "Loan conditions"},
+		}}, 1, wikiOutcomeBatchContext(), nil)
 	if err == nil || changed || !failed || pages.writes != 0 {
 		t.Fatalf("generation failure must remain a failure without writes: changed=%v"+
 			" failed=%v writes=%d error=%v", changed, failed, pages.writes, err)

@@ -20,14 +20,17 @@ type quotaBatchEmbedder struct {
 	err       error
 }
 
-func (e *quotaBatchEmbedder) BatchEmbedWithPool(_ context.Context, _ embedding.Embedder, texts []string) ([][]float32, error) {
+func (e *quotaBatchEmbedder) BatchEmbedWithPool(
+	_ context.Context, _ embedding.Embedder, texts []string,
+) ([][]float32, error) {
 	e.calls++
 	e.wantTexts = append([]string{}, texts...)
 	return e.result, e.err
 }
 
 func TestBatchEmbedNoAutomaticReplayPolicy(t *testing.T) {
-	quota := errors.New(`EmbedBatch API error: Http Status 429 Too Many Requests, Response: {"error":{"code":"insufficient_quota"}}`)
+	quota := errors.New(`EmbedBatch API error: Http Status 429 Too Many Requests, ` +
+		`Response: {"error":{"code":"insufficient_quota"}}`)
 	for _, tc := range []struct {
 		name              string
 		disabled, success bool

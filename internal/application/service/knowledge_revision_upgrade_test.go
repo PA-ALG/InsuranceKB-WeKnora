@@ -31,7 +31,8 @@ func TestUPGImageEnqueueFailurePreservesRevisionForCompletion(t *testing.T) {
 	queue := &upgradeFailedImageQueue{}
 	svc := &knowledgeService{task: queue}
 	// The binding rides the context since U-1 (upstream signature unchanged).
-	_ = svc.enqueueImageMultimodalTasks(withRevisionBinding(context.Background(), revision), knowledge, kb, images, chunks, nil)
+	_ = svc.enqueueImageMultimodalTasks(
+		withRevisionBinding(context.Background(), revision), knowledge, kb, images, chunks, nil)
 	require.NotNil(t, queue.post)
 	var payload types.KnowledgePostProcessPayload
 	require.NoError(t, json.Unmarshal(queue.post.Payload(), &payload))

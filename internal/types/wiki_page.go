@@ -742,7 +742,7 @@ type WikiStats struct {
 	OrphanCount      int64            `json:"orphan_count" extensions:"x-agent"`   // pages with no inbound links
 	RecentUpdates    []*WikiPage      `json:"recent_updates"`                      // last N updated pages
 	PendingTasks     int64            `json:"pending_tasks" extensions:"x-agent"`  // number of documents waiting to be ingested
-	FailedOperations int64            `json:"failed_operations"`                   // archived native generation failures
+	FailedOperations int64            `json:"failed_operations"`                   // archived Wiki failures
 	PendingIssues    int64            `json:"pending_issues" extensions:"x-agent"` // number of pending wiki issues
 	IsActive         bool             `json:"is_active" extensions:"x-agent"`      // whether wiki ingestion is currently running
 }
