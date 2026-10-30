@@ -21,18 +21,18 @@ func TestQ2bToolSourcesKeepExplicitProvenance(t *testing.T) {
 				output := r.ModelToolResultForTool("knowledge_search_fields", &types.ToolResult{
 					Success: true, Data: map[string]interface{}{
 						"display_type": "search_results", "results": []map[string]interface{}{{
-							"chunk_id": "opaque-chunk", "knowledge_id": "doc", "knowledge_base_id": "kb",
+							"chunk_id": "opaque-chunk", "knowledge_id": "doc-7f3a", "knowledge_base_id": "kb-91c2",
 							"knowledge_title": "产品条款", "content": "事实", "metadata": metadata,
 						}},
 					},
 				})
-				require.Contains(t, output, `id="c1"`)
-				_, ref, ok := r.sources.chunks.resolve("c1")
+				require.Contains(t, output, `id="chunk://1"`)
+				_, ref, ok := r.sources.chunks.resolve("chunk://1")
 				require.True(t, ok)
 				require.Equal(t, tier, ref.Metadata["source_tier"])
 				require.Equal(t, "rel-pinned", ref.Metadata["release_id"])
-				require.Equal(t, "doc", ref.KnowledgeID)
-				require.Equal(t, "kb", ref.KnowledgeBaseID)
+				require.Equal(t, "doc-7f3a", ref.KnowledgeID)
+				require.Equal(t, "kb-91c2", ref.KnowledgeBaseID)
 				require.Equal(t, "产品条款", ref.DocumentTitle)
 			})
 		}
@@ -115,11 +115,11 @@ func TestQ2bSearchSourcesKeepProvenanceWithoutInferringFromID(t *testing.T) {
 		{ID: "opaque", Metadata: map[string]string{"source_tier": "raw_text", "release_id": "historical"}},
 		{ID: "release:current:field"},
 	})
-	_, raw, ok := r.sources.chunks.resolve("c1")
+	_, raw, ok := r.sources.chunks.resolve("chunk://1")
 	require.True(t, ok)
 	require.Equal(t, "raw_text", raw.Metadata["source_tier"])
 	require.Equal(t, "historical", raw.Metadata["release_id"])
-	_, unlabelled, ok := r.sources.chunks.resolve("c2")
+	_, unlabelled, ok := r.sources.chunks.resolve("chunk://2")
 	require.True(t, ok)
 	require.Empty(t, unlabelled.Metadata["source_tier"])
 	require.Empty(t, unlabelled.Metadata["release_id"])
@@ -141,7 +141,7 @@ func TestQ2bSourceProvenanceStaysPairedWhenRegisteredAgain(t *testing.T) {
 	r.RegisterSearchResults([]*types.SearchResult{{
 		ID: "chunk", Metadata: map[string]string{"source_tier": "wiki_page", "release_id": "other"},
 	}})
-	_, ref, ok := r.sources.chunks.resolve("c1")
+	_, ref, ok := r.sources.chunks.resolve("chunk://1")
 	require.True(t, ok)
 	require.Equal(t, "raw_text", ref.Metadata["source_tier"])
 	require.Equal(t, "pinned", ref.Metadata["release_id"])

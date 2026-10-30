@@ -26,7 +26,7 @@ describe('the 830-era Schema Wiki frontend', () => {
 
   it('leaves knowledge bases without a schema tab, opening on documents', () => {
     expect(knowledgeBaseSource).not.toContain('schema-wiki/')
-    expect(knowledgeBaseSource).toContain("const validTabs = ['materials', 'documents', 'graph'] as const")
+    expect(knowledgeBaseSource).toContain("const validTabs = ['documents', 'wiki', 'graph', 'gallery'] as const")
     expect(knowledgeBaseSource).toMatch(/const initTab = [^\n]*: 'documents'\n/)
     expect(knowledgeBaseSource).not.toMatch(/activeKbTab === 'schema'/)
   })

@@ -45,7 +45,7 @@ func TestQ2aNoHitsAvoidModelAndPromptEvenWithModelFallback(t *testing.T) {
 	svc.cfg.Conversation.FallbackPrompt = "model fallback {{query}}"
 	capture := &q1aCaptureChat{}
 	svc.modelService.(*stubModelService).chatModel = capture
-	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil, nil)
 	chatpipeline.NewPluginChatCompletionStream(svc.eventManager, svc.modelService)
 	run := askQ2aEdges(ctx, t, svc, "unrelated question", "q-chat")
 	require.NotNil(t, run.answer)
@@ -62,7 +62,7 @@ func TestQ2aFinalModelContextKeepsTiersAfterSecondFilter(t *testing.T) {
 			capture := &q1aCaptureChat{}
 			svc.modelService.(*stubModelService).chatModel = capture
 			svc.cfg.Conversation.Summary.ContextTemplate = "{{contexts}} {{query}}"
-			chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+			chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil, nil)
 			if dropRaw {
 				svc.eventManager.Register(q1aPipeline{
 					events: []types.EventType{types.INTO_CHAT_MESSAGE},
@@ -158,7 +158,7 @@ func TestQ2aSecondFilterEmptyStopsTheModel(t *testing.T) {
 	capture := &q1aCaptureChat{}
 	svc.modelService.(*stubModelService).chatModel = capture
 	svc.cfg.Conversation.Summary.ContextTemplate = "{{contexts}} {{query}}"
-	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil, nil)
 	svc.eventManager.Register(q1aPipeline{
 		events: []types.EventType{types.INTO_CHAT_MESSAGE},
 		on: func(_ types.EventType, cm *types.ChatManage) {
@@ -188,7 +188,7 @@ func TestQ2aEnterpriseRulesSurviveOverridesAndFAQKeepsPublishedFirst(t *testing.
 			cm.SystemPromptOverride = "custom intent system"
 		},
 	})
-	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil, nil)
 	chatpipeline.NewPluginChatCompletionStream(svc.eventManager, svc.modelService)
 	run := askQ2aEdges(ctx, t, svc, "Product field", "q-chat")
 	require.Less(t, strings.Index(run.rendered, "已发布知识（审核过）"), strings.Index(run.rendered, "原文检索（未经编译审核）"))
@@ -202,7 +202,7 @@ func TestQ2aOrdinaryPipelineHasNoEnterpriseRules(t *testing.T) {
 	ctx, svc, _, _ := q1aFixture()
 	capture := &q1aCaptureChat{}
 	svc.modelService.(*stubModelService).chatModel = capture
-	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil, nil)
 	chatpipeline.NewPluginChatCompletionStream(svc.eventManager, svc.modelService)
 	cm := &types.ChatManage{}
 	cm.Query = "ordinary"
@@ -231,7 +231,7 @@ func TestQ2aMCPQuickAnswerKeepsItsExistingScopeAndFallback(t *testing.T) {
 			svc.cfg.Conversation.FallbackStrategy = string(types.FallbackStrategyModel)
 			svc.cfg.Conversation.FallbackPrompt = "existing MCP fallback {{query}}"
 			svc.cfg.Conversation.Summary.ContextTemplate = "{{contexts}} {{query}}"
-			chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+			chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil, nil)
 			chatpipeline.NewPluginChatCompletionStream(svc.eventManager, svc.modelService)
 			run := askQ2aEdges(ctx, t, svc, query, "q-chat")
 			require.Empty(t, kbs.seen)

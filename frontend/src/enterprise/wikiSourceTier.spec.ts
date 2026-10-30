@@ -3,7 +3,7 @@
 // refused (Spec docs/design/slices/S6e-问答读取延伸阅读页面.md §3).
 import { describe, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 import { isPublishedKnowledgeTool, isReleaseReference, publishedKnowledgeReferences, releaseCitationTarget } from './releaseReferences'
 import { referenceSourceKey, sourceTier, sourceTierLabel } from './sourceTier'
 

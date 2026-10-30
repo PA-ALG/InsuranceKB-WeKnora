@@ -1,4 +1,5 @@
-"""Frozen UPG-07 history-preserving migrations for the v0.8.2 adoption.
+"""Frozen UPG-07 history-preserving migrations, adopted with v0.8.2 and carried
+unchanged to the v0.9.0 target (U-1; upstream 000077 is byte-identical in both).
 
 This release-specific policy is shared by report generation and verification.
 Remove it when a reviewed upstream migration preserves the same history. It is
@@ -11,10 +12,10 @@ import hashlib
 
 TARGET = {
     "repository": "https://github.com/Tencent/WeKnora.git",
-    "commit": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
-    "tree": "9533ab2071e71f4bc2ebb09c85d3ac246841ff9a",
+    "commit": "f17ee8a8da901bd658a4cb25f40b5fd41adbfdd7",
+    "tree": "de9e8951de64824a2f654d8ff5ace37fe5672b23",
 }
-HEAD = 110
+HEAD = 134
 HASHES = {
     "migrations/versioned/000077_remove_wiki_log.up.sql": (
         "ce67743466cf0d1cc43f5562c4c32a63366e09cc9922f7e95b4f0ab65cd4b0bf",

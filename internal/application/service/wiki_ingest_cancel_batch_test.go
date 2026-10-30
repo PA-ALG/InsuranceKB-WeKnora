@@ -309,6 +309,9 @@ type wikiReleaseRecorder struct {
 	reject   bool
 }
 
+// v0.9.0 retry budget: a released not-run op counts one failed attempt first.
+func (p *wikiReleaseRecorder) IncrFailCount(context.Context, int64) (int, error) { return 1, nil }
+
 func (p *wikiReleaseRecorder) ReleaseOperation(context.Context, *types.TaskPendingOp, string) (bool, error) {
 	p.releases++
 	return !p.reject, nil

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { reactive } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { routeLocationKey, routerKey } from 'vue-router'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ hasRole: () => true }) }))
 vi.mock('./enterpriseApi', async importOriginal => ({

@@ -2,7 +2,7 @@
 // not raw codes; other errors are left alone (Spec docs/design/slices/S6d-2-延伸阅读与知识库选择体验.md §2).
 import { describe, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 import { enterpriseChatError } from './chatErrors'
 
 const { t } = createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } }).global

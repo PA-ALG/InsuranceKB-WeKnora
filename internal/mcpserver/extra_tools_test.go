@@ -40,7 +40,10 @@ func TestExtraKnowledgeToolsUseCatalogFilterGuardAndRateLimit(t *testing.T) {
 	}, gin.WrapH(srv.Handler()))
 	require.Equal(t, []string{"knowledge_list_spaces"}, toolNames(t, rpc(t, r, "tools/list", map[string]any{})))
 	hidden := rpc(t, r, "tools/call", map[string]any{"name": "knowledge_get_fields", "arguments": map[string]any{}})
-	require.Contains(t, hidden["result"], "isError")
+	// mcp-go v1 applies the endpoint tool filter to tools/call as well: a hidden
+	// tool is "not found" (a JSON-RPC error) before guardTool runs.
+	require.Nil(t, hidden["result"])
+	require.NotNil(t, hidden["error"])
 	require.Zero(t, calls)
 	first := rpc(t, r, "tools/call", map[string]any{"name": "knowledge_list_spaces", "arguments": map[string]any{}})
 	require.NotContains(t, first["result"], "isError")

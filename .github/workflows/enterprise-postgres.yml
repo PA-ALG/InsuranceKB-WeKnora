@@ -60,6 +60,9 @@ jobs:
     env:
       # Disposable CI service credentials, like the Harness integration job.
       WEKNORA_TEST_POSTGRES_URL: postgres://weknora:weknora@127.0.0.1:5432/weknora?sslmode=disable
+      # Upstream v0.9.0 repository tests (e.g. TestPostgresRetireRacing...) read this
+      # name instead; give them the same disposable service so they run, not skip.
+      WEKNORA_REPOSITORY_TEST_POSTGRES_DSN: postgres://weknora:weknora@127.0.0.1:5432/weknora?sslmode=disable
     steps:
       - uses: actions/checkout@v6
 

@@ -49,7 +49,7 @@ func TestQA2ProductionParallelSearchCopiesTheExpandedScope(t *testing.T) {
 	}
 	require.Len(t, afterSearch, 1, "stage-local targets are restored before merge")
 	require.Equal(t, "q-chat", run.model)
-	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, ids(run.prompted),
+	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, resultIDs(run.prompted),
 		"native deduplication and both pinned-parse filters still run")
 }
 

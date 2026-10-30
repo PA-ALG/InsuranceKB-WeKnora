@@ -86,6 +86,13 @@ type TaskPendingOpsRepository interface {
 	DeleteByDedupKey(ctx context.Context, taskType, scope, scopeID, dedupKey, op string) error
 }
 
+// TaskPendingOpsClaimableCounter counts the distinct keys ClaimBatch can
+// claim, excluding every key with a fresh claim (including late siblings).
+// PendingCount remains the count of all rows for crash-recovery consumers.
+type TaskPendingOpsClaimableCounter interface {
+	ClaimableCount(ctx context.Context, taskType, scope, scopeID string, staleBefore time.Time) (int64, error)
+}
+
 // TaskPendingOpsScopeCleaner is an optional extension for callers that need
 // to discard every durable pending operation owned by a deleted scope. It is
 // intentionally separate from TaskPendingOpsRepository so alternate queue
@@ -185,4 +192,12 @@ type TaskPendingOpsExecutionStore interface {
 // retrying is safe before releasing an operation.
 type TaskPendingOpsRetryStore interface {
 	ReleaseOperation(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error)
+}
+
+// TaskPendingOpsBudgetStore releases a never-run operation whose attempt spends
+// the retry budget: fail_count is bumped and recorded in the payload as
+// budget_retries in the same statement, so a later claim can tell a budgeted
+// retry from a legacy failure. Same owner rules as ReleaseOperation.
+type TaskPendingOpsBudgetStore interface {
+	ReleaseOperationAfterAttempt(ctx context.Context, claim *types.TaskPendingOp, executionID string) (bool, error)
 }

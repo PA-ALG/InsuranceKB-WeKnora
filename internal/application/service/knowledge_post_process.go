@@ -131,6 +131,14 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 	attempt := payload.Attempt
 	if attempt <= 0 {
 		attempt = s.tracker().LatestAttempt(ctx, payload.KnowledgeID)
+	} else if attemptSuperseded(ctx, s.tracker(), payload.KnowledgeID, attempt) {
+		// A reparse started after this run. Entering finalizing here would
+		// seed the counter for subtasks that all drop themselves as
+		// superseded, and the new run's own post-process would then find
+		// the row already finalizing and skip its fan-out.
+		logger.Infof(ctx, "[KnowledgePostProcess] Attempt %d of %s superseded, skipping.",
+			attempt, payload.KnowledgeID)
+		return nil
 	}
 
 	// Close the multimodal stage span (parent enqueued it as "running"
@@ -271,7 +279,7 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 		// enqueue its KB-scoped trigger. Retry only the trigger: appending a
 		// second pending op would duplicate durable work and its finalizer.
 		if err := enqueueWikiIngestTrigger(ctx, s.taskEnqueuer, payload.TenantID, payload.KnowledgeBaseID); err != nil {
-			s.tracker().FailSpan(ctx, postSpan, "WIKI_TRIGGER_ENQUEUE_FAILED", err.Error(), err)
+			s.tracker().FailSpanRetryable(ctx, postSpan, "WIKI_TRIGGER_ENQUEUE_FAILED", err.Error(), err)
 			return fmt.Errorf("retry wiki ingest trigger: %w", err)
 		}
 		logger.Infof(ctx, "[KnowledgePostProcess] Re-enqueued wiki ingest trigger for %s", payload.KnowledgeID)
@@ -307,7 +315,7 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 			completed, err = s.knowledgeRepo.CompleteProcessingWithoutSubtasks(ctx, payload.KnowledgeID)
 		}
 		if err != nil {
-			s.tracker().FailSpan(ctx, postSpan, "COMPLETION_FAILED", err.Error(), err)
+			s.tracker().FailSpanRetryable(ctx, postSpan, "COMPLETION_FAILED", err.Error(), err)
 			return fmt.Errorf("complete knowledge without enrichment: %w", err)
 		}
 		if !completed {
@@ -327,7 +335,8 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 				return errors.New("wiki post-process requires atomic finalizing handoff")
 			}
 			pendingOp, buildErr := newWikiIngestPendingOp(
-				ctx, payload.TenantID, payload.KnowledgeBaseID, payload.KnowledgeID, payload.Revision,
+				withRevisionBinding(withAttempt(ctx, attempt), payload.Revision),
+				payload.TenantID, payload.KnowledgeBaseID, payload.KnowledgeID,
 			)
 			if buildErr != nil {
 				return buildErr
@@ -344,7 +353,7 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 			// strand the row; retry so the handoff (or dead-letter) happens.
 			logger.Warnf(ctx, "[KnowledgePostProcess] SetFinalizing failed for %s: %v",
 				payload.KnowledgeID, err)
-			s.tracker().FailSpan(ctx, postSpan, "FINALIZING_HANDOFF_FAILED", err.Error(), err)
+			s.tracker().FailSpanRetryable(ctx, postSpan, "FINALIZING_HANDOFF_FAILED", err.Error(), err)
 			return fmt.Errorf("enter finalizing: %w", err)
 		}
 		if promoted {
@@ -499,17 +508,14 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 			logger.Warnf(ctx,
 				"[KnowledgePostProcess] Releasing %d un-enqueued subtask slot(s) for %s (planned=%d actual=%d)",
 				shortfall, payload.KnowledgeID, plannedOwned, actualOwned)
+			// Keep going past a failed release: stopping at the first error
+			// left every remaining slot without an owner.
 			for i := 0; i < shortfall; i++ {
-				rctx, cancel := context.WithTimeout(
-					context.WithoutCancel(ctx), finalizeSubtaskDetachedTimeout)
-				_, _, err := finalizeRevisionSlot(
-					rctx, s.knowledgeRepo, payload.KnowledgeID, payload.Revision,
-				)
-				cancel()
-				if err != nil {
-					logger.Warnf(ctx, "[KnowledgePostProcess] Failed to release subtask slot for %s: %v",
+				if err := releaseSubtaskSlot(
+					ctx, withRevisionSlot(s.knowledgeRepo, payload.Revision), payload.KnowledgeID,
+				); err != nil {
+					logger.Errorf(ctx, "[KnowledgePostProcess] Failed to release subtask slot for %s: %v",
 						payload.KnowledgeID, err)
-					break
 				}
 			}
 		}

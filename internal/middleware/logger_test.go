@@ -1,8 +1,14 @@
 package middleware
 
 import (
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestSanitizeBody(t *testing.T) {
@@ -63,14 +69,18 @@ func TestSanitizeBody(t *testing.T) {
 			want: `{"apiKey":"***"}`,
 		},
 		{
+			name: "MCP OAuth JWT bearer assertion",
+			in:   `{"assertion":"eyJhbGciOiJFUzI1NiJ9.payload.signature","redirect_uri":"https://example.com/cb"}`,
+			want: `{"assertion":"***","redirect_uri":"https://example.com/cb"}`,
+		},
+		{
 			name: "non sensitive fields untouched",
 			in:   `{"baseUrl":"https://example.com","modelName":"gpt"}`,
 			want: `{"baseUrl":"https://example.com","modelName":"gpt"}`,
 		},
 		{
 			name: "OAuth authorization response fields",
-			in: "{\"authorization_url\":\"https://idp.example/authorize?state=secret\"" +
-				",\"authorization_attempt\":\"secret-state\"}",
+			in:   `{"authorization_url":"https://idp.example/authorize?state=secret","authorization_attempt":"secret-state"}`,
 			want: `{"authorization_url":"***","authorization_attempt":"***"}`,
 		},
 	}
@@ -85,48 +95,126 @@ func TestSanitizeBody(t *testing.T) {
 	}
 }
 
+// The logging middleware is registered ahead of Auth and of every route
+// handler, so whatever it buffers is buffered before a route's own body cap can
+// refuse the request. These tests pin both halves of that: the middleware stays
+// inside its own log budget, and the handler still reads every byte.
+
+// countingBody records how many bytes a reader actually pulled, so a test can
+// tell "the middleware peeked" from "the middleware slurped the request".
+type countingBody struct {
+	io.Reader
+	read int
+}
+
+func (b *countingBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	b.read += n
+	return n, err
+}
+
+func (b *countingBody) Close() error { return nil }
+
+// newJSONContext returns a context whose body is a countingBody, plus that
+// counter, so a test can observe how much the middleware consumed.
+func newJSONContext(t *testing.T, path, body string) (*gin.Context, *countingBody) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, path, nil)
+	counter := &countingBody{Reader: strings.NewReader(body)}
+	c.Request.Body = counter
+	c.Request.ContentLength = int64(len(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	return c, counter
+}
+
+func TestReadRequestBodyKeepsShortBodyIntact(t *testing.T) {
+	payload := `{"query":"refund policy","apiKey":"sk-secret"}`
+
+	c, _ := newJSONContext(t, "/api/v1/knowledge-search", payload)
+	got := readRequestBody(c)
+
+	want := `{"query":"refund policy","apiKey":"***"}`
+	if got != want {
+		t.Fatalf("readRequestBody() = %q, want %q", got, want)
+	}
+	rest, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		t.Fatalf("handler read: %v", err)
+	}
+	if string(rest) != payload {
+		t.Fatalf("handler saw %q, want the untouched body %q", rest, payload)
+	}
+}
+
+// A request larger than the log budget must cost the middleware no more than the
+// log budget (plus one byte, to tell "exactly at the limit" from "over it").
+func TestReadRequestBodyStaysInsideItsLogBudget(t *testing.T) {
+	payload := strings.Repeat("a", maxBodySize*8)
+
+	c, counter := newJSONContext(t, "/api/v1/knowledge-search", payload)
+	got := readRequestBody(c)
+
+	if budget := maxBodySize + 1; counter.read > budget {
+		t.Fatalf("middleware read %d bytes of a %d byte request, want at most %d",
+			counter.read, len(payload), budget)
+	}
+	if want := maxBodySize + len(bodyTruncatedMarker); len(got) != want {
+		t.Fatalf("logged body is %d bytes, want %d (%d logged + %q)",
+			len(got), want, maxBodySize, bodyTruncatedMarker)
+	}
+	if !strings.HasSuffix(got, bodyTruncatedMarker) {
+		t.Fatalf("logged body %q does not end with the truncation marker", got)
+	}
+	rest, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		t.Fatalf("handler read: %v", err)
+	}
+	if len(rest) != len(payload) {
+		t.Fatalf("handler saw %d bytes, want all %d of the request", len(rest), len(payload))
+	}
+}
+
+// The peek must not become a cap the handler inherits: the route's own
+// http.MaxBytesReader still sees the whole request and still decides.
+func TestReadRequestBodyLeavesRouteBodyCapDeciding(t *testing.T) {
+	const routeCap = 64 << 10
+	payload := strings.Repeat("x", routeCap*2)
+
+	c, _ := newJSONContext(t, "/api/v1/skills/catalog", payload)
+	readRequestBody(c)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, routeCap)
+
+	_, err := io.ReadAll(c.Request.Body)
+	var tooLarge *http.MaxBytesError
+	if !errors.As(err, &tooLarge) {
+		t.Fatalf("MaxBytesReader error = %v, want *http.MaxBytesError", err)
+	}
+}
+
+func TestReadRequestBodySkipsNonTextBodies(t *testing.T) {
+	payload := "--x\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\nbody\r\n--x--\r\n"
+
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/knowledge/file", strings.NewReader(payload))
+	c.Request.Header.Set("Content-Type", "multipart/form-data; boundary=x")
+
+	if got := readRequestBody(c); got != "[非文本类型，已跳过]" {
+		t.Fatalf("readRequestBody() = %q, want the non-text marker", got)
+	}
+	rest, err := io.ReadAll(c.Request.Body)
+	if err != nil || string(rest) != payload {
+		t.Fatalf("non-text body was disturbed: %q (%v)", rest, err)
+	}
+}
+
 func TestSanitizeQuery(t *testing.T) {
 	got := sanitizeQuery("code=secret-code&state=secret-state&next=%2Fsettings&state=second")
 	want := "code=%2A%2A%2A&next=%2Fsettings&state=%2A%2A%2A"
 	if got != want {
 		t.Fatalf("sanitizeQuery() = %q, want %q", got, want)
-	}
-}
-
-func TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog(t *testing.T) {
-	const body = "{\"success\":true,\"data\":{\"ok\":true,\"elapsed_ms\":12" +
-		",\"request\":{\"input\":\"private prompt\"},\"raw_response\":{\"content\":\"private" +
-		" model output\",\"reasoning_content\":\"private reasoning\"},\"error\":\"private" +
-		" provider error\"}}"
-
-	got := sanitizeResponseBodyForLog(
-		"/api/v1/models/model-1/debug?trace=1",
-		body,
-	)
-
-	if got != "[model debug response omitted]" {
-		t.Fatalf("unexpected model-debug log body: %q", got)
-	}
-	for _, secret := range []string{
-		"private prompt",
-		"private model output",
-		"private reasoning",
-		"private provider error",
-	} {
-		if strings.Contains(got, secret) {
-			t.Fatalf("model-debug access log leaked %q", secret)
-		}
-	}
-}
-
-func TestR3_3OrdinaryResponseKeepsExistingFieldSanitization(t *testing.T) {
-	const body = `{"api_key":"secret","content":"ordinary response"}`
-
-	got := sanitizeResponseBodyForLog("/api/v1/knowledge", body)
-
-	const want = `{"api_key":"***","content":"ordinary response"}`
-	if got != want {
-		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 

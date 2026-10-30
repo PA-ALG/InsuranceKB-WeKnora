@@ -2,7 +2,7 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 import { release } from './__tests__/s3eFixtures'
 import EnterpriseConcept from './EnterpriseConcept.vue'
 import { readRelease, type Release } from './enterpriseApi'

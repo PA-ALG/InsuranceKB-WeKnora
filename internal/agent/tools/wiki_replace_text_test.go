@@ -16,8 +16,6 @@ type replaceTextWikiService struct {
 	updateCalls int
 }
 
-func (*replaceTextWikiService) CheckWikiWrite(context.Context, string) error { return nil }
-
 func (s *replaceTextWikiService) GetPageBySlug(_ context.Context, _, _ string) (*types.WikiPage, error) {
 	pageCopy := *s.page
 	return &pageCopy, nil
@@ -106,12 +104,8 @@ func TestWikiReplaceTextExactMatchCases(t *testing.T) {
 			oldText: "旧文本", newText: "新文本", want: "新文本与新文本", wantCount: 2,
 		},
 		{
-			name:      "markdown links remain plain exact text",
-			content:   "See [[concept/old]] and [[concept/old]].",
-			oldText:   "[[concept/old]]",
-			newText:   "[[concept/new]]",
-			want:      "See [[concept/new]] and [[concept/new]].",
-			wantCount: 2,
+			name: "markdown links remain plain exact text", content: "See [[concept/old]] and [[concept/old]].",
+			oldText: "[[concept/old]]", newText: "[[concept/new]]", want: "See [[concept/new]] and [[concept/new]].", wantCount: 2,
 		},
 	}
 

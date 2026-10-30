@@ -6,7 +6,7 @@ import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 import Chat from '@/views/chat/index.vue'
 import { useChatStreamHandler, type ChatMessage } from '@/composables/useChatStreamHandler'
 

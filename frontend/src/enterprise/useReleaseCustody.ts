@@ -28,7 +28,7 @@ export function useReleaseCustody(kbId: Readonly<Ref<string>>, activeTab: Ref<st
     }
   }
   watch([managed, activeTab], ([isManaged, tab]) => {
-    if (isManaged && (tab === 'materials' || tab === 'graph')) activeTab.value = 'documents'
+    if (isManaged && (tab === 'wiki' || tab === 'graph')) activeTab.value = 'documents'
   }, { flush: 'sync' })
   watch(kbId, retry, { immediate: true, flush: 'sync' })
   onScopeDispose(() => { generation++ })

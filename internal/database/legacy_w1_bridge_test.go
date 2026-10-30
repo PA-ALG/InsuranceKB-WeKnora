@@ -80,9 +80,9 @@ func TestRuntimeOfficialMigrationHeadMatchesAdoptionManifest(t *testing.T) {
 	require.Equal(t, manifest.OfficialMigrationHead, target.OfficialMigrationHead)
 	require.Equal(t, manifest.OfficialMigrationHead, upstream.OfficialMigrationHead())
 	require.Positive(t, upstream.OfficialMigrationHead())
-	require.Equal(t, "3e8b0bfc80b845b2d4b2ed683994748741450a97", manifest.Commit)
-	require.Equal(t, "9533ab2071e71f4bc2ebb09c85d3ac246841ff9a", manifest.Tree)
-	require.EqualValues(t, 110, manifest.OfficialMigrationHead)
+	require.Equal(t, "f17ee8a8da901bd658a4cb25f40b5fd41adbfdd7", manifest.Commit)
+	require.Equal(t, "de9e8951de64824a2f654d8ff5ace37fe5672b23", manifest.Tree)
+	require.EqualValues(t, 134, manifest.OfficialMigrationHead)
 }
 
 func TestClassifyLegacyW1Origin(t *testing.T) {

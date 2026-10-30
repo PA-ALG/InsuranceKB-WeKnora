@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
-import enUS from '@/i18n/locales/en-US'
-import jaJP from '@/i18n/locales/ja-JP'
-import koKR from '@/i18n/locales/ko-KR'
-import ruRU from '@/i18n/locales/ru-RU'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
+import enUS from '@/enterprise/i18n/locales/en-US'
+import jaJP from '@/enterprise/i18n/locales/ja-JP'
+import koKR from '@/enterprise/i18n/locales/ko-KR'
+import ruRU from '@/enterprise/i18n/locales/ru-RU'
 import { sourceTier, sourceTierLabel, sourceTierForChunk, referenceSourceKey } from './sourceTier'
 
 describe('source provenance boundaries', () => {

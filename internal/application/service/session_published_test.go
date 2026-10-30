@@ -58,7 +58,7 @@ func runQ1b2(t *testing.T, kbIDs []string, query string, raw []*types.SearchResu
 	return run
 }
 
-func ids(results []*types.SearchResult) []string {
+func resultIDs(results []*types.SearchResult) []string {
 	out := []string{}
 	for _, result := range results {
 		out = append(out, result.ID)
@@ -69,16 +69,16 @@ func ids(results []*types.SearchResult) []string {
 func TestQ1b2WikiOnlyQuickAnswerUsesPublishedFieldsWithoutRawSearch(t *testing.T) {
 	run := runQ1b2(t, []string{"q-wiki"}, "Product field", nil)
 	require.Zero(t, run.searched, "a Wiki-only answer runs no raw retrieval")
-	require.Equal(t, []string{"release:q-release:E/field"}, ids(run.prompted))
+	require.Equal(t, []string{"release:q-release:E/field"}, resultIDs(run.prompted))
 	require.Equal(t, "release", run.prompted[0].Metadata["source_tier"])
-	require.Equal(t, []string{"release:q-release:E/field"}, ids(run.refs))
+	require.Equal(t, []string{"release:q-release:E/field"}, resultIDs(run.refs))
 	require.False(t, run.fallback)
 	require.Equal(t, 1, run.reads, "published fields are read once for prompt and references")
 }
 
 func TestQ1b2EmptyRawSearchDefersToPublishedFields(t *testing.T) {
 	run := runQ1b2(t, []string{"q-raw", "q-wiki"}, "Product field", nil)
-	require.Equal(t, []string{"release:q-release:E/field"}, ids(run.prompted))
+	require.Equal(t, []string{"release:q-release:E/field"}, resultIDs(run.prompted))
 	require.False(t, run.fallback)
 }
 
@@ -87,9 +87,9 @@ func TestQ1b2PublishedFieldsComeBeforeRawResults(t *testing.T) {
 		{ID: "q-current", KnowledgeID: "q-doc", KnowledgeBaseID: "q-raw", Content: "fixed material", ImageInfo: "[]"},
 	}
 	run := runQ1b2(t, []string{"q-raw", "q-wiki"}, "Product field", raw)
-	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, ids(run.prompted))
+	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, resultIDs(run.prompted))
 	require.Equal(t, "raw_text", run.prompted[1].Metadata["source_tier"])
-	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, ids(run.refs))
+	require.Equal(t, []string{"release:q-release:E/field", "q-current"}, resultIDs(run.refs))
 }
 
 func TestQ1b2NoPublishedMatchFallsBack(t *testing.T) {
@@ -124,7 +124,7 @@ func TestQ1b2WikiOnlyKeepsTheSelectedKnowledgeBaseModel(t *testing.T) {
 		Session: &types.Session{ID: "q-session", TenantID: 7}, TurnLeaseHeld: true,
 		KnowledgeBaseIDs: []string{"q-wiki"}, Query: "Product field",
 	}
-	expected, err := svc.resolveChatModelID(ctx, req, []string{"q-wiki"}, nil)
+	expected, _, err := svc.resolveChatModelID(ctx, req, []string{"q-wiki"}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "q-chat", expected)
 	actual := ""
@@ -141,7 +141,7 @@ func TestQ1b2RenderedPublishedPromptSurvivesTheSecondFilter(t *testing.T) {
 	reader := &publishedReader{}
 	svc.chatSources = svc.chatSources.WithPublished(knowledge.NewService(reader))
 	svc.cfg.Conversation.Summary.ContextTemplate = "context={{contexts}} query={{query}}"
-	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil)
+	chatpipeline.NewPluginIntoChatMessage(svc.eventManager, nil, nil)
 	rendered := ""
 	svc.eventManager.Register(q1aPipeline{
 		events: []types.EventType{types.INTO_CHAT_MESSAGE},

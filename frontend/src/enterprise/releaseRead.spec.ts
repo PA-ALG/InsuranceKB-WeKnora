@@ -27,17 +27,17 @@ describe('release custody', () => {
   it('keeps managed knowledge bases on documents if a native tab is selected later', async () => {
     vi.mocked(get).mockResolvedValue({ managed: true, kind: 'wiki', state: 'active' } as any)
     const tab = ref('documents'); scoped(() => useReleaseCustody(ref('wiki'), tab)); await nextTick()
-    tab.value = 'materials'; await nextTick(); expect(tab.value).toBe('documents')
+    tab.value = 'wiki'; await nextTick(); expect(tab.value).toBe('documents')
     tab.value = 'documents'; await nextTick(); expect(tab.value).toBe('documents')
   })
   it('preserves unmanaged native tabs and rejects stale classifications after navigation', async () => {
     const old = deferred<any>(); const current = deferred<any>()
     vi.mocked(get).mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise)
-    const kb = ref('old'); const tab = ref('materials'); const state = scoped(() => useReleaseCustody(kb, tab))
+    const kb = ref('old'); const tab = ref('wiki'); const state = scoped(() => useReleaseCustody(kb, tab))
     kb.value = 'current'; old.resolve({ managed: false }); await nextTick()
     expect(state.nativeWikiAllowed.value).toBe(false)
     current.resolve({ managed: false, kind: '', state: '' }); await nextTick()
-    expect(state.nativeWikiAllowed.value).toBe(true); expect(tab.value).toBe('materials')
+    expect(state.nativeWikiAllowed.value).toBe(true); expect(tab.value).toBe('wiki')
   })
   it('fails closed on errors and malformed classifications and supports retry', async () => {
     vi.mocked(get).mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce({ managed: 'false' } as any)

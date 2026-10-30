@@ -85,7 +85,7 @@ func (c *Client) Chat(ctx context.Context, messages []api.Message, opts *api.Opt
 		}
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(resp.Body)
+	raw, err := api.ReadResponseCapped(resp.Body, 0)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -137,8 +137,9 @@ func (c *Client) ChatStream(
 // --- response decoding ---
 
 type rawContentPart struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type    string `json:"type"`
+	Text    string `json:"text"`
+	Refusal string `json:"refusal"`
 }
 
 // rawOutputItem is the union of the output item shapes this package reads:
@@ -241,8 +242,11 @@ func streamItem(raw json.RawMessage) (rawOutputItem, bool, error) {
 func itemText(item rawOutputItem) string {
 	var b strings.Builder
 	for _, part := range item.Content {
-		if part.Type == "output_text" {
+		switch part.Type {
+		case "output_text":
 			b.WriteString(part.Text)
+		case "refusal":
+			b.WriteString(part.Refusal)
 		}
 	}
 	return b.String()
@@ -372,9 +376,11 @@ func (c *Client) processStream(
 	reader := api.NewSSEReader(body)
 	st := &streamState{toolIndex: map[string]int{}, argsSeen: map[string]bool{}}
 
+	// response.completed / response.incomplete return before either caller,
+	// so reaching finish means the terminal event never arrived.
 	finish := func() {
 		assembler.ReasoningMetadata = reasoningMetadata(st.reasoningItems)
-		assembler.End(ch)
+		assembler.EndAtEOF(ch)
 	}
 
 	for {
@@ -421,7 +427,7 @@ func (c *Client) processStream(
 		}
 
 		switch ev.Type {
-		case "response.output_text.delta":
+		case "response.output_text.delta", "response.refusal.delta":
 			if ev.Delta != "" {
 				assembler.Process(ch, api.Delta{Content: ev.Delta})
 			}

@@ -28,7 +28,7 @@ func TestNewWikiIngestPendingOpPersistsResolvedLanguage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pendingOp, err := newWikiIngestPendingOp(tt.ctx, 7, "kb-1", "knowledge-1", nil)
+			pendingOp, err := newWikiIngestPendingOp(tt.ctx, 7, "kb-1", "knowledge-1")
 			if err != nil {
 				t.Fatalf("newWikiIngestPendingOp() error = %v", err)
 			}

@@ -16,6 +16,9 @@ import (
 )
 
 type nativeCaptureUnaryClient struct {
+	// Embedded so RPCs added upstream (e.g. PreprocessImage) need no stub here;
+	// this fake only serves Read.
+	proto.DocReaderClient
 	response *proto.ReadResponse
 }
 

@@ -6,17 +6,17 @@
   "platform": "linux/arm64",
   "build_source": {
     "repository": "https://github.com/PA-ALG/InsuranceKB-WeKnora.git",
-    "commit": "d5be03b3b2da18d9bdcfb8f32d66e0bc31843a83",
-    "tree": "e2c8f4882ff9afd6c5e73c21f1f7fc1db84f33ea"
+    "commit": "696eac86fa475cd921b1fc349d02342b00ac982f",
+    "tree": "9364c0dff1a0f803e3e2f61855e28b80a58f2b61"
   },
   "adoption_manifest": {
     "path": "deploy/upstream/weknora-adoption-target.json",
-    "sha256": "6c5514a6ed2d8b72c935f10deacb384df50821b103e5dc07baab5a35fba58664",
+    "sha256": "63d6336ee51c59cb9e8f7cdf0e4df753aa296d50afe251bffc914dc2910c57b3",
     "repository": "https://github.com/Tencent/WeKnora.git",
-    "commit": "3e8b0bfc80b845b2d4b2ed683994748741450a97",
-    "tree": "9533ab2071e71f4bc2ebb09c85d3ac246841ff9a"
+    "commit": "f17ee8a8da901bd658a4cb25f40b5fd41adbfdd7",
+    "tree": "de9e8951de64824a2f654d8ff5ace37fe5672b23"
   },
-  "reviewed_thin_report_sha256": "dfaf453e844b9169a5bc82c5c4d3ed6eed742c9af95ebf608812b9a622f6da7c",
+  "reviewed_thin_report_sha256": "d259ca10f7058f579a68830130d85c9891322612d291ca8fcfa210ae7d43a044",
   "images": {
     "app": {
       "repository": "ghcr.io/pa-alg/insurancekb-weknora-app",
@@ -39,7 +39,7 @@
       "context": ".",
       "dockerfile": {
         "path": "docker/Dockerfile.docreader",
-        "sha256": "53c45316e460ce213f111b2f322f0e28ff80e2f96a627c26f70957b3f1ca1fb9"
+        "sha256": "161667b1f7354a5aa85e9106e58acb5af294c7f95df1a25c8d104f58e901ec9e"
       }
     }
   }

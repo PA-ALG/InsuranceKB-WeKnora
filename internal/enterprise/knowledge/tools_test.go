@@ -42,7 +42,7 @@ func TestKnowledgeToolOnlyEvidenceGetsHandlesAndModelKeepsUncitedStates(t *testi
 	}, rows[0]["metadata"])
 	registry := modelcontext.NewRegistry(true)
 	rendered := registry.ModelToolResultForTool(query.Name(), result)
-	require.Contains(t, rendered, "c1")
+	require.Contains(t, rendered, `id="chunk://1"`) // v0.9.0 source handle syntax (was c1)
 	require.Contains(t, registry.DecodeOutputText(`<ref id="c1"/>`), `chunk_id="release:rel-3:1828/cooling_off_period"`)
 	require.Contains(t, rendered, "自签收之日起20日内")
 	require.Contains(t, rendered, "90日；意外无等待期")

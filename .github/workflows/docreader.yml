@@ -37,7 +37,10 @@ env:
 jobs:
   verify:
     name: Python tests and Go client tests
-    runs-on: ubuntu-latest
+    # Pinned (U-1, 2026-10-30): ubuntu-latest moved to 26.04, where
+    # actions/setup-python has no 3.10.18 build. Unpin when the exact
+    # PYTHON_VERSION is available there (or upstream changes it).
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6

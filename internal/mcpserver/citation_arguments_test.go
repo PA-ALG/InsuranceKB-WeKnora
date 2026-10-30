@@ -64,8 +64,13 @@ func rawToolCall(t *testing.T, handler http.Handler, name, arguments string) map
 	}
 	var envelope struct {
 		Result map[string]any `json:"result"`
+		Error  map[string]any `json:"error"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(raw), &envelope))
+	if envelope.Error != nil {
+		// mcp-go v1 rejects hidden tools before the handler: keep the message.
+		return map[string]any{"isError": true, "content": envelope.Error["message"]}
+	}
 	require.NotNil(t, envelope.Result, raw)
 	return envelope.Result
 }
@@ -81,8 +86,11 @@ func TestCitationHTTPValidatesSDKDecodedEvidenceIndex(t *testing.T) {
 	}
 	citations := &recordingCitations{}
 	handler := citationTransport(ep, citations)
+	// mcp-go v1 hands the tool the literal JSON number, so only plain integer
+	// spellings pass (v0.52 decoded 1.0 / 1e2 to float64 and they passed).
 	for _, value := range []string{
 		"1.5", "-1", "-0.0", `"1"`, "true", "null", "1000000", "1e6", "9223372036854775808",
+		"1.0", "1e2", "1.00000000000000000000000001", "1e-1000000000",
 	} {
 		result := rawToolCall(t, handler, ep.Tools[0], citationArguments(value))
 		require.Equal(t, true, result["isError"], value)
@@ -94,12 +102,9 @@ func TestCitationHTTPValidatesSDKDecodedEvidenceIndex(t *testing.T) {
 		index int
 	}{
 		{"0", 0},
+		{"1", 1},
+		{"100", 100},
 		{"999999", 999999},
-		{"1.0", 1},
-		{"1e2", 100},
-		// SDK decoding loses the literal precision before project validation.
-		{"1.00000000000000000000000001", 1},
-		{"1e-1000000000", 0},
 	} {
 		result := rawToolCall(t, handler, ep.Tools[0], citationArguments(tc.value))
 		require.NotContains(t, result, "isError", tc.value)
@@ -112,10 +117,11 @@ func TestCitationArgumentsStillPassEndpointGuardAndRateLimit(t *testing.T) {
 	ep := &types.MCPEndpoint{ID: "guarded", TenantID: 7, Enabled: true, RateLimitPerMinute: 1}
 	handler := citationTransport(ep, citations)
 	hidden := rawToolCall(t, handler, types.MCPEndpointToolKnowledgeReadCitation, citationArguments("0"))
-	require.Contains(t, fmt.Sprint(hidden["content"]), "not enabled")
+	require.Equal(t, true, hidden["isError"])
+	require.Contains(t, fmt.Sprint(hidden["content"]), "not found")
 	require.Empty(t, citations.indexes)
 	ep.Tools = types.StringArray{types.MCPEndpointToolKnowledgeReadCitation}
-	allowed := rawToolCall(t, handler, ep.Tools[0], citationArguments("100e-2"))
+	allowed := rawToolCall(t, handler, ep.Tools[0], citationArguments("1"))
 	require.NotContains(t, allowed, "isError")
 	limited := rawToolCall(t, handler, ep.Tools[0], citationArguments("1.0"))
 	require.Contains(t, fmt.Sprint(limited["content"]), "rate limit")

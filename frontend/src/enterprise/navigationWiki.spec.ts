@@ -5,7 +5,7 @@
 import { flushPromises, mount, RouterLinkStub, type VueWrapper } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 import EnterpriseNavigation from './EnterpriseNavigation.vue'
 import { wikiRelease } from './__tests__/wikiFixtures'
 

@@ -44,9 +44,8 @@ func CheckWrite(ctx context.Context, classifier Classifier, tenantID uint64, kbI
 // GuardWikiWrite rejects native reads and writes before normal route permission checks.
 func GuardWikiWrite(classifier Classifier) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tenant, exists := c.Get(types.TenantIDContextKey.String())
-		tenantID, valid := tenant.(uint64)
-		if !exists || !valid || tenantID == 0 {
+		tenantID := requestTenant(c)
+		if tenantID == 0 {
 			reject(c, http.StatusServiceUnavailable, &WriteError{Code: ErrorCodeClassificationUnavailable})
 			return
 		}
@@ -69,6 +68,18 @@ func GuardWikiWrite(classifier Classifier) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// requestTenant reads the authenticated tenant the auth middleware stores on
+// the gin context, falling back to v0.9.0's request Caller. It only proves the
+// request is authenticated: custody classifies the KB's owning tenant.
+func requestTenant(c *gin.Context) uint64 {
+	if tenant, exists := c.Get(types.TenantIDContextKey.String()); exists {
+		if tenantID, ok := tenant.(uint64); ok && tenantID != 0 {
+			return tenantID
+		}
+	}
+	return types.CallerFromContext(c.Request.Context()).TenantID
 }
 
 func reject(c *gin.Context, status int, err *WriteError) {

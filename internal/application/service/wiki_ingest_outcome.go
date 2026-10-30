@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net"
 	"sync"
-	"syscall"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/taskexec"
 	"github.com/Tencent/WeKnora/internal/logger"
-	"github.com/Tencent/WeKnora/internal/models/api"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/google/uuid"
@@ -34,6 +31,24 @@ type wikiStageFailure struct {
 
 func (e *wikiStageFailure) Error() string { return fmt.Sprintf("%s: %s", e.Stage, e.Outcome) }
 func (e *wikiStageFailure) Unwrap() error { return e.Cause }
+
+// wikiLookupStage marks a failed source-document lookup. No model work was
+// sent, so it is NOT_RUN; unlike a cancelled batch it is an attempt of this op
+// and spends upstream's retry budget (v0.9.0), also when the lookup was
+// interrupted.
+const wikiLookupStage = "wiki_lookup"
+
+func wikiLookupFailed(err error) error {
+	return &wikiStageFailure{Stage: wikiLookupStage, Outcome: wikiOutcomeNotRun, Cause: err}
+}
+
+// wikiBudgetRetries: see taskexec.BudgetRetries.
+func wikiBudgetRetries(row *types.TaskPendingOp) int { return taskexec.BudgetRetries(row.Payload) }
+
+func isWikiLookupFailure(err error) bool {
+	var failure *wikiStageFailure
+	return errors.As(err, &failure) && failure.Stage == wikiLookupStage
+}
 
 func wikiFailureOutcome(err error) string {
 	if err == nil {
@@ -114,42 +129,8 @@ func wikiFailureCauseCategory(err error) string {
 	}
 }
 
-// wikiTransportDetail exposes only a category: provider error bodies and
-// wrapper messages can contain credentials or echoed request material.
-func wikiTransportDetail(err error) string {
-	var httpErr *api.HTTPError
-	if errors.As(err, &httpErr) {
-		return fmt.Sprintf("http %d", httpErr.StatusCode)
-	}
-	if wikiTransportTimeout(err) {
-		return "timeout"
-	}
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
-		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
-		return "connection closed"
-	}
-	return "other"
-}
-
-func wikiTransportTimeout(err error) bool {
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
-		return true
-	}
-	// A non-timeout net.Error can precede a timeout in a joined chain, or
-	// wrap it without forwarding Timeout. Inspect the remaining causes too.
-	switch wrapped := err.(type) {
-	case interface{ Unwrap() []error }:
-		for _, child := range wrapped.Unwrap() {
-			if wikiTransportTimeout(child) {
-				return true
-			}
-		}
-	case interface{ Unwrap() error }:
-		return wikiTransportTimeout(wrapped.Unwrap())
-	}
-	return false
-}
+// Transport classification lives in enterprise/taskexec (keeps this file small).
+var wikiTransportDetail = taskexec.TransportDetail
 
 func (s *wikiIngestService) runWikiRequest(
 	ctx context.Context, key string, shared bool, stage string,
@@ -284,6 +265,19 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 	if releaseForRetry && !canRelease {
 		return errors.New("wiki retry release unavailable")
 	}
+	// Upstream's retry budget (v0.9.0): an op whose attempt failed must not be
+	// released forever. Past wikiMaxFailRetries it is archived like any other
+	// failure, which also releases its finalizing slot below. A cancelled batch
+	// keeps its budget: cancellation is not a failed attempt of this op. A failed
+	// source lookup always counts, as in upstream.
+	countsAttempt := releaseForRetry && (isWikiLookupFailure(op.failure) || !errors.Is(op.failure, context.Canceled))
+	failCount := 0
+	for _, row := range op.queueRows {
+		failCount = max(failCount, row.FailCount)
+	}
+	if countsAttempt && failCount+1 > wikiMaxFailRetries {
+		releaseForRetry = false
+	}
 	allSettled := true
 	for _, row := range op.queueRows {
 		var marker struct {
@@ -297,11 +291,25 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 		if op.failure == nil {
 			settled, err = store.CompleteOperation(ctx, row, marker.ExecutionID)
 		} else if releaseForRetry {
-			settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
+			budget, recordsBudget := s.pendingRepo.(interfaces.TaskPendingOpsBudgetStore)
+			switch {
+			case countsAttempt && recordsBudget:
+				settled, err = budget.ReleaseOperationAfterAttempt(ctx, row, marker.ExecutionID)
+			case countsAttempt:
+				// Without a budget record the next claim treats the count as a
+				// legacy failure and quarantines it: fail closed.
+				if _, err = s.pendingRepo.IncrFailCount(ctx, row.ID); err != nil {
+					return err
+				}
+				settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
+			default:
+				settled, err = retryStore.ReleaseOperation(ctx, row, marker.ExecutionID)
+			}
 		} else {
 			settled, err = store.ArchiveOperation(ctx, row, marker.ExecutionID, &types.TaskDeadLetter{
 				TenantID: payload.TenantID, TaskType: wikiTaskType, Scope: wikiTaskScope, ScopeID: payload.KnowledgeBaseID,
 				RelatedID: op.KnowledgeID, LastError: "Wiki generation needs attention: " + wikiFailureOutcome(op.failure),
+				FailCount: row.FailCount + 1,
 			})
 		}
 		if err != nil {
@@ -313,7 +321,10 @@ func (s *wikiIngestService) settleWikiOperation(ctx context.Context, payload Wik
 		return errors.New("wiki settlement unconfirmed")
 	}
 	if op.Op == WikiOpIngest && !releaseForRetry {
-		s.finalizeWikiSubtask(ctx, op.KnowledgeID, op.Revision)
+		// Upstream's attempt guard plus our revision-bound slot release.
+		superseded := attemptSuperseded(ctx, s.tracker(), op.KnowledgeID, op.Attempt)
+		finalizeSubtaskDetached(ctx, withRevisionSlot(s.knowledgeRepo, op.Revision),
+			op.KnowledgeID, "wiki", nil, superseded, true)
 	}
 	return nil
 }
@@ -328,11 +339,21 @@ func wikiUnsentPageCancellation(ctx context.Context) error {
 // A fresh follow-up trigger would reset the bounded asynq retry budget.
 // Shared unsent work can be cancelled even while this batch remains live.
 func wikiBatchRetryError(ctx context.Context, failedOps []WikiPendingOp) error {
+	// Upstream (v0.9.0): failed source lookups stay queued with their retry
+	// budget and the batch's follow-up drains them; the task itself succeeds.
+	onlyLookups := len(failedOps) > 0
+	for _, op := range failedOps {
+		onlyLookups = onlyLookups && isWikiLookupFailure(op.failure)
+	}
+	if onlyLookups {
+		return nil
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	for _, op := range failedOps {
-		if op.failure != nil && wikiFailureOutcome(op.failure) == wikiOutcomeNotRun {
+		if op.failure != nil && !isWikiLookupFailure(op.failure) &&
+			wikiFailureOutcome(op.failure) == wikiOutcomeNotRun {
 			return errors.New("wiki ingest: unsent operation released for task retry")
 		}
 	}
@@ -352,6 +373,12 @@ type wikiPageFailures struct {
 func newWikiPageFailures() *wikiPageFailures {
 	return &wikiPageFailures{bySlug: map[string]error{}, byKnowledge: map[string]error{}, additions: map[string]struct{}{}}
 }
+
+// errWikiPageUpdateDeferred marks upstream's guarded rewrite refusal (the new
+// body dropped table rows still on the page): the page keeps its previous body,
+// so its documents are recorded as unapplied like any other unwritten slug.
+var errWikiPageUpdateDeferred = errors.New("wiki page update deferred: rewrite dropped rows still on the page")
+
 func (f *wikiPageFailures) record(slug string, updates []SlugUpdate, cause error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

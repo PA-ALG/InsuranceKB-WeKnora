@@ -4,7 +4,7 @@ import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Drawer } from 'tdesign-vue-next'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 vi.mock('./enterpriseApi', async original => ({ ...await original<typeof import('./enterpriseApi')>(),
   listSamples: vi.fn(), readRelease: vi.fn(), submitVerdict: vi.fn() }))
 import { EnterpriseError, listSamples, readRelease, submitVerdict } from './enterpriseApi'

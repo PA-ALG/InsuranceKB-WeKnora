@@ -499,6 +499,25 @@ func (r *taskPendingOpsRepository) PendingCount(
 	return n, nil
 }
 
+// ClaimableCount uses ClaimBatch's eligibility and grouping rules so running
+// documents and multiple queued operations for one document do not inflate
+// the number of batches a scheduler needs to dispatch.
+func (r *taskPendingOpsRepository) ClaimableCount(
+	ctx context.Context, taskType, scope, scopeID string, staleBefore time.Time,
+) (int64, error) {
+	freshKeys := r.db.WithContext(ctx).Model(&types.TaskPendingOp{}).
+		Select("dedup_key").
+		Where("task_type = ? AND scope = ? AND scope_id = ?", taskType, scope, scopeID).
+		Where("claimed_at IS NOT NULL AND claimed_at >= ?", staleBefore)
+	var n int64
+	err := r.db.WithContext(ctx).Model(&types.TaskPendingOp{}).
+		Where("task_type = ? AND scope = ? AND scope_id = ?", taskType, scope, scopeID).
+		Where("claimed_at IS NULL OR claimed_at < ?", staleBefore).
+		Where("dedup_key NOT IN (?)", freshKeys).
+		Distinct("dedup_key").Count(&n).Error
+	return n, err
+}
+
 // DeleteByDedupKey drops rows in the tuple whose dedup_key matches.
 // If `op` is non-empty, only rows with the matching op are dropped;
 // otherwise every matching row is removed. Empty dedup_key is rejected
@@ -703,6 +722,31 @@ func (r *taskPendingOpsRepository) ReleaseOperation(
 	return result.Error == nil && result.RowsAffected == 1, result.Error
 }
 
+// ReleaseOperationAfterAttempt implements TaskPendingOpsBudgetStore. SET
+// expressions read the old row, so fail_count and budget_retries agree.
+func (r *taskPendingOpsRepository) ReleaseOperationAfterAttempt(
+	ctx context.Context,
+	claim *types.TaskPendingOp,
+	executionID string,
+) (bool, error) {
+	if claim == nil || claim.ID == 0 || executionID == "" {
+		return false, errors.New("task execution: claim and execution id required")
+	}
+	q := pendingExecutionQuery(pendingClaimQuery(r.db.WithContext(ctx), claim), executionID)
+	value := gorm.Expr(
+		"CAST(json_set(json_remove(payload, '$.execution_id'), '$.budget_retries', fail_count + 1) AS BLOB)")
+	if r.db.Name() == "postgres" {
+		value = gorm.Expr(
+			"(payload - 'execution_id') || jsonb_build_object('budget_retries', fail_count + 1)")
+	}
+	result := q.Updates(map[string]interface{}{
+		"claimed_at": nil,
+		"fail_count": gorm.Expr("fail_count + 1"),
+		"payload":    value,
+	})
+	return result.Error == nil && result.RowsAffected == 1, result.Error
+}
+
 func (r *taskPendingOpsRepository) CompleteOperation(
 	ctx context.Context,
 	claim *types.TaskPendingOp,
@@ -765,6 +809,26 @@ func (r *taskPendingOpsRepository) ArchiveOperation(
 	return err == nil && settled, err
 }
 
+// deadLetterTableMissing reports whether the dead-letter table is absent. A
+// bool-only check cannot tell absence from a failed metadata query, so the
+// catalog is read directly and its error propagated.
+func (r *taskPendingOpsRepository) deadLetterTableMissing(ctx context.Context) (bool, error) {
+	table := types.TaskDeadLetter{}.TableName()
+	db := r.db.WithContext(ctx)
+	switch r.db.Name() {
+	case "postgres":
+		var present bool
+		err := db.Raw("SELECT to_regclass(?) IS NOT NULL", table).Scan(&present).Error
+		return err == nil && !present, err
+	case "sqlite":
+		var count int64
+		err := db.Raw("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count).Error
+		return err == nil && count == 0, err
+	default:
+		return false, errors.New("task execution: dead-letter catalog unsupported")
+	}
+}
+
 func (r *taskPendingOpsRepository) FailedOperationCount(
 	ctx context.Context,
 	tenantID uint64,
@@ -809,6 +873,16 @@ func (r *taskPendingOpsRepository) HasFailedOperation(ctx context.Context, claim
 		).
 		Rows()
 	if err != nil {
+		// Archive writes this table, so a store without it holds no archived
+		// failure. Absence is decided only by a catalog query whose own error is
+		// returned; every other error fails closed.
+		missing, catalogErr := r.deadLetterTableMissing(ctx)
+		if catalogErr != nil {
+			return false, errors.Join(err, catalogErr)
+		}
+		if missing {
+			return false, nil
+		}
 		return false, err
 	}
 	defer rows.Close()

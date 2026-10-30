@@ -20,11 +20,18 @@ func (scopedOnlyKBLookup) GetKnowledgeBaseByID(context.Context, string) (*types.
 	return nil, nil
 }
 
-func TestNativeWikiRegistrationRequiresOwnerLookup(t *testing.T) {
-	require.Panics(t, func() {
+// U-1: registration no longer panics without the owner lookup (upstream's
+// route-table tests register with partial guards); the routes fail closed instead.
+func TestNativeWikiRegistrationWithoutOwnerLookupFailsClosed(t *testing.T) {
+	require.NotPanics(t, func() {
 		RegisterWikiPageRoutes(gin.New().Group("/api/v1"), &handler.WikiPageHandler{},
 			&rbacGuards{kbService: scopedOnlyKBLookup{}}, &stubClassifier{})
 	})
+	var lookup managed.KnowledgeBaseLookup
+	_, err := managed.ForKnowledgeBaseOwner(&stubClassifier{}, lookup).Classify(context.Background(), 7, "kb")
+	var writeErr *managed.WriteError
+	require.ErrorAs(t, err, &writeErr)
+	require.Equal(t, managed.ErrorCodeClassificationUnavailable, writeErr.Code)
 }
 
 func TestReleaseCustodyRoute(t *testing.T) {
@@ -81,4 +88,10 @@ func (*routeRegistrationKBService) GetKnowledgeBaseByIDOnly(
 	ctx context.Context, id string,
 ) (*types.KnowledgeBase, error) {
 	return tenantKBLookupFixture().GetKnowledgeBaseByIDOnly(ctx, id)
+}
+
+// The release-custody owner lookup reads by ID only; upstream's wiki route
+// fixture answers it from its tenant-scoped lookup.
+func (s *stubWikiKBLookup) GetKnowledgeBaseByIDOnly(ctx context.Context, id string) (*types.KnowledgeBase, error) {
+	return s.GetKnowledgeBaseByID(ctx, id)
 }

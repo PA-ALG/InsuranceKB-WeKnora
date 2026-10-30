@@ -97,10 +97,10 @@
       "sha256": "f71040c59798f79c44c08a7a1c1af7de95a8d334ea924b47b67ad6b9632be270"
     },
     "anydoc": {
-      "version": "0.1.9",
+      "version": "0.2.4",
       "platform": "source",
-      "origin": "https://crates.io/api/v1/crates/anydoc/0.1.9/download",
-      "sha256": "93a8b0dbecf79be9329111093b493d256db2a573ed3f1cc827c96bdbbe32a936"
+      "origin": "https://crates.io/api/v1/crates/anydoc/0.2.4/download",
+      "sha256": "cf0d78e4cfe3654eb3ea04422ec5a94352000ee56e97902125e68e51f7527062"
     },
     "browserskill": {
       "version": "0.3.1",

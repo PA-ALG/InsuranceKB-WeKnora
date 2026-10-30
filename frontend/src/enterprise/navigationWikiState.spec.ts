@@ -2,7 +2,7 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
 import EnterpriseNavigation from './EnterpriseNavigation.vue'
 import { wikiPage, wikiRelease } from './__tests__/wikiFixtures'
 

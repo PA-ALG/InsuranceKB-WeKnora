@@ -31,6 +31,13 @@ func newSensitiveGORMLogger(writer gormlogger.Writer, slowThreshold time.Duratio
 	return &sensitiveGORMLogger{delegate: delegate}
 }
 
+// WrapSensitiveGORMLogger keeps the caller's GORM logger configuration (upstream
+// owns slow-SQL thresholds and levels) and only adds this package's redaction:
+// bound values are never interpolated and database error details are hidden.
+func WrapSensitiveGORMLogger(delegate gormlogger.Interface) gormlogger.Interface {
+	return &sensitiveGORMLogger{delegate: delegate}
+}
+
 type sensitiveGORMLogger struct {
 	delegate gormlogger.Interface
 }

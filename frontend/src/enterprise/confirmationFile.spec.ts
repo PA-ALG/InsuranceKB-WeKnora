@@ -5,11 +5,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import zhCN from '@/i18n/locales/zh-CN'
-import enUS from '@/i18n/locales/en-US'
-import jaJP from '@/i18n/locales/ja-JP'
-import koKR from '@/i18n/locales/ko-KR'
-import ruRU from '@/i18n/locales/ru-RU'
+import zhCN from '@/enterprise/i18n/locales/zh-CN'
+import enUS from '@/enterprise/i18n/locales/en-US'
+import jaJP from '@/enterprise/i18n/locales/ja-JP'
+import koKR from '@/enterprise/i18n/locales/ko-KR'
+import ruRU from '@/enterprise/i18n/locales/ru-RU'
 
 vi.mock('./enterpriseApi', async importOriginal => ({
   ...(await importOriginal<typeof import('./enterpriseApi')>()),
