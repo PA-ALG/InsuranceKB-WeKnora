@@ -54,6 +54,10 @@ func intp(v int) *int { return &v }
 
 func slideAt(n int) officeLocator { return officeLocator{Kind: "PPTX_SHAPE", Slide: intp(n)} }
 
+func rowLocator(sheet, cells string) officeLocator {
+	return officeLocator{Kind: "XLSX_CELL_RANGE", Sheet: sheet, CellRange: cells}
+}
+
 // deckFixture: page 1 has two paragraphs (one with a non-BMP character), page 2 one paragraph.
 func deckFixture() officeStructure {
 	first := "产品亮点\n\n保障𠮷全面"
@@ -92,8 +96,8 @@ func bookFixture() officeStructure {
 	s.SourceSHA256 = sha("xlsx bytes")
 	s.Pages = []officePage{
 		{Number: 1, Text: first, TextSHA256: sha(first), Blocks: []officeBlock{
-			{ID: "x1/r1", Start: 0, End: 5, Locator: officeLocator{Kind: "XLSX_CELL_RANGE", Sheet: "费率", CellRange: "A1:XFD1"}},
-			{ID: "x1/r3", Start: 7, End: 14, Locator: officeLocator{Kind: "XLSX_CELL_RANGE", Sheet: "费率", CellRange: "A3:XFD3"}},
+			{ID: "x1/r1", Start: 0, End: 5, Locator: rowLocator("费率", "A1:XFD1")},
+			{ID: "x1/r3", Start: 7, End: 14, Locator: rowLocator("费率", "A3:XFD3")},
 		}},
 		{Number: 2, Text: "", TextSHA256: sha(""), Blocks: []officeBlock{}},
 	}
@@ -132,7 +136,8 @@ func officePages(t *testing.T, set *source.PageSet) []officePage {
 
 func loadOffice(t *testing.T, structure officeStructure) (*source.PageSet, error) {
 	t.Helper()
-	return source.NewService(&store{artifact: officeArtifact(t, structure)}).Pages(context.Background(), scope, "k-1", 2)
+	return source.NewService(&store{artifact: officeArtifact(t, structure)}).
+		Pages(context.Background(), scope, "k-1", 2)
 }
 
 func TestOfficePagesComeFromTheCapturedStructureWithTheirBlocks(t *testing.T) {
@@ -159,7 +164,8 @@ func TestOfficePagesComeFromTheCapturedStructureWithTheirBlocks(t *testing.T) {
 }
 
 func TestPDFPagesCarryNoBlocks(t *testing.T) {
-	set, err := source.NewService(&store{artifact: artifact(t, "第一页。")}).Pages(context.Background(), scope, "k-1", 2)
+	set, err := source.NewService(&store{artifact: artifact(t, "第一页。")}).
+		Pages(context.Background(), scope, "k-1", 2)
 	require.NoError(t, err)
 	data, err := json.Marshal(set)
 	require.NoError(t, err)
@@ -186,29 +192,49 @@ func TestOfficeStructuresThatDoNotVerifyFailClosed(t *testing.T) {
 			b := s.Pages[0].Blocks
 			b[0], b[1] = b[1], b[0]
 		}},
-		"blank block":              {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].End = 0 }},
-		"duplicate block id":       {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[1].ID = "s1/p1" }},
-		"empty block id":           {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].ID = "" }},
-		"negative block start":     {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].Start = -1 }},
-		"page digest not hex sha":  {deckFixture, func(s *officeStructure) { s.Pages[1].TextSHA256 = "not-a-digest" }},
-		"pptx locator kind":        {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].Locator.Kind = "DOCX_BLOCK" }},
-		"slide is not the page":    {deckFixture, func(s *officeStructure) { s.Pages[1].Blocks[0].Locator.Slide = intp(1) }},
-		"missing slide":            {deckFixture, func(s *officeStructure) { s.Pages[1].Blocks[0].Locator.Slide = nil }},
-		"pptx locator extra field": {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].Locator.Sheet = "x" }},
-		"unknown format":           {deckFixture, func(s *officeStructure) { s.Format = "odp" }},
-		"unknown contract":         {deckFixture, func(s *officeStructure) { s.Contract = "enterprise-ooxml-structure.v2" }},
-		"other extractor":          {deckFixture, func(s *officeStructure) { s.Extractor = "other" }},
-		"parser identity":          {deckFixture, func(s *officeStructure) { s.ParserIdentitySHA256 = sha("other") }},
-		"source digest":            {deckFixture, func(s *officeStructure) { s.SourceSHA256 = sha("another file") }},
+		"blank block":             {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].End = 0 }},
+		"duplicate block id":      {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[1].ID = "s1/p1" }},
+		"empty block id":          {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].ID = "" }},
+		"negative block start":    {deckFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].Start = -1 }},
+		"page digest not hex sha": {deckFixture, func(s *officeStructure) { s.Pages[1].TextSHA256 = "not-a-digest" }},
+		"pptx locator kind": {deckFixture, func(s *officeStructure) {
+			s.Pages[0].Blocks[0].Locator.Kind = "DOCX_BLOCK"
+		}},
+		"slide is not the page": {deckFixture, func(s *officeStructure) {
+			s.Pages[1].Blocks[0].Locator.Slide = intp(1)
+		}},
+		"missing slide": {deckFixture, func(s *officeStructure) {
+			s.Pages[1].Blocks[0].Locator.Slide = nil
+		}},
+		"pptx locator extra field": {deckFixture, func(s *officeStructure) {
+			s.Pages[0].Blocks[0].Locator.Sheet = "x"
+		}},
+		"unknown format": {deckFixture, func(s *officeStructure) { s.Format = "odp" }},
+		"unknown contract": {deckFixture, func(s *officeStructure) {
+			s.Contract = "enterprise-ooxml-structure.v2"
+		}},
+		"other extractor": {deckFixture, func(s *officeStructure) { s.Extractor = "other" }},
+		"parser identity": {deckFixture, func(s *officeStructure) { s.ParserIdentitySHA256 = sha("other") }},
+		"source digest":   {deckFixture, func(s *officeStructure) { s.SourceSHA256 = sha("another file") }},
 		"docx second page": {docFixture, func(s *officeStructure) {
 			s.Pages = append(s.Pages, officePage{Number: 2, Text: "", TextSHA256: sha(""), Blocks: []officeBlock{}})
 		}},
-		"docx missing block index": {docFixture, func(s *officeStructure) { s.Pages[0].Blocks[1].Locator.BlockIndex = nil }},
-		"docx block index repeats": {docFixture, func(s *officeStructure) { s.Pages[0].Blocks[1].Locator.BlockIndex = intp(0) }},
-		"xlsx empty sheet":         {bookFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].Locator.Sheet = "" }},
-		"xlsx sheet changes":       {bookFixture, func(s *officeStructure) { s.Pages[0].Blocks[1].Locator.Sheet = "其他" }},
-		"xlsx not a row range":     {bookFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].Locator.CellRange = "A1:B1" }},
-		"xlsx rows not increasing": {bookFixture, func(s *officeStructure) { s.Pages[0].Blocks[1].Locator.CellRange = "A1:XFD1" }},
+		"docx missing block index": {docFixture, func(s *officeStructure) {
+			s.Pages[0].Blocks[1].Locator.BlockIndex = nil
+		}},
+		"docx block index repeats": {docFixture, func(s *officeStructure) {
+			s.Pages[0].Blocks[1].Locator.BlockIndex = intp(0)
+		}},
+		"xlsx empty sheet": {bookFixture, func(s *officeStructure) { s.Pages[0].Blocks[0].Locator.Sheet = "" }},
+		"xlsx sheet changes": {bookFixture, func(s *officeStructure) {
+			s.Pages[0].Blocks[1].Locator.Sheet = "其他"
+		}},
+		"xlsx not a row range": {bookFixture, func(s *officeStructure) {
+			s.Pages[0].Blocks[0].Locator.CellRange = "A1:B1"
+		}},
+		"xlsx rows not increasing": {bookFixture, func(s *officeStructure) {
+			s.Pages[0].Blocks[1].Locator.CellRange = "A1:XFD1"
+		}},
 		"xlsx sheet on two pages": {bookFixture, func(s *officeStructure) {
 			s.Pages[1].Text = "x"
 			s.Pages[1].TextSHA256 = sha("x")

@@ -63,8 +63,8 @@ func slideXML(paragraphs ...string) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<?xml version="1.0" encoding="UTF-8"?><p:sld %s %s><p:cSld><p:spTree>`, nsP, nsA)
 	for i, text := range paragraphs {
-		fmt.Fprintf(&b, `<p:sp><p:nvSpPr><p:cNvPr id="%d" name="t"/></p:nvSpPr><p:txBody><a:p><a:r><a:t>%s</a:t></a:r></a:p>`+
-			`</p:txBody></p:sp>`, i+2, text)
+		fmt.Fprintf(&b, `<p:sp><p:nvSpPr><p:cNvPr id="%d" name="t"/></p:nvSpPr>`+
+			`<p:txBody><a:p><a:r><a:t>%s</a:t></a:r></a:p></p:txBody></p:sp>`, i+2, text)
 	}
 	b.WriteString(`</p:spTree></p:cSld></p:sld>`)
 	return []byte(b.String())
@@ -83,8 +83,10 @@ func rels(targets map[string]string, types map[string]string) []byte {
 	return []byte(b.String())
 }
 
-const slideRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"
-const notesRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"
+const (
+	slideRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"
+	notesRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"
+)
 
 // deck: presentation order is slide3.xml, slide1.xml, slide2.xml (not file-name order).
 // The second slide in order has no text; the first has two shapes and a speaker note.
@@ -109,11 +111,15 @@ func deck(t *testing.T) []byte {
 
 func slideAt(n int) ooxml.Locator { return ooxml.Locator{Kind: "PPTX_SHAPE", Slide: intp(n)} }
 
-func requireCode(t *testing.T, err error, want string) *ooxml.Error {
+func requireCode(t *testing.T, err error, want string) {
+	t.Helper()
+	require.Equal(t, want, failureOf(t, err).Code)
+}
+
+func failureOf(t *testing.T, err error) *ooxml.Error {
 	t.Helper()
 	var failure *ooxml.Error
 	require.True(t, errors.As(err, &failure), "want *ooxml.Error, got %v", err)
-	require.Equal(t, want, failure.Code)
 	return failure
 }
 
@@ -143,8 +149,10 @@ func TestAPresentationBecomesOnePagePerSlideInPresentationOrder(t *testing.T) {
 
 func TestAWordDocumentIsOnePageWithOneBlockPerParagraphOrTable(t *testing.T) {
 	body := `<w:p><w:r><w:t>第一条</w:t></w:r></w:p>` +
-		`<w:tbl><w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc></w:tr>` +
-		`<w:tr><w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>` +
+		`<w:tbl><w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>` +
+		`<w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc></w:tr>` +
+		`<w:tr><w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc>` +
+		`<w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>` +
 		`<w:p><w:r><w:t>第二条</w:t></w:r></w:p>`
 	doc := `<?xml version="1.0" encoding="UTF-8"?>` +
 		`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>` +
@@ -265,7 +273,8 @@ func TestUnsafeOrBrokenPackagesFailWithTypedCodes(t *testing.T) {
 
 	dtd := []byte(`<?xml version="1.0"?><!DOCTYPE p:sld [<!ENTITY secret "机密样本文字">]>` +
 		string(slideXML("&secret;"))[len(`<?xml version="1.0" encoding="UTF-8"?>`):])
-	failure := requireCode(t, mustFail(t, withSlide(t, dtd)), "OFFICE_MALFORMED")
+	failure := failureOf(t, mustFail(t, withSlide(t, dtd)))
+	require.Equal(t, "OFFICE_MALFORMED", failure.Code)
 	require.NotContains(t, failure.Detail, "机密样本文字", "details never carry document text")
 
 	_, err = ooxml.Extract("pptx", withSlide(t, slideXML()))

@@ -69,8 +69,10 @@ func officeDeck(t *testing.T) []byte {
 }
 
 func officeIdentity(data []byte) capture.Identity {
-	return capture.Identity{TenantID: 7, RawKBID: "raw-1", KnowledgeID: "k-office", ParseAttempt: 3,
-		SourceSHA256: shaHex(data)}
+	return capture.Identity{
+		TenantID: 7, RawKBID: "raw-1", KnowledgeID: "k-office", ParseAttempt: 3,
+		SourceSHA256: shaHex(data),
+	}
 }
 
 func TestAnOfficeCaptureIsSealedAndReadBackAsSourcePages(t *testing.T) {
@@ -100,7 +102,8 @@ func TestAnOfficeCaptureIsSealedAndReadBackAsSourcePages(t *testing.T) {
 	load := source.ArtifactStoreFunc(func(context.Context, source.Scope, string, int64) (*source.Artifact, error) {
 		return artifact, nil
 	})
-	set, err := source.NewService(load).Pages(context.Background(), source.Scope{TenantID: 7, SpaceID: "s"}, id.KnowledgeID, 3)
+	set, err := source.NewService(load).
+		Pages(context.Background(), source.Scope{TenantID: 7, SpaceID: "s"}, id.KnowledgeID, 3)
 	require.NoError(t, err)
 	data2, err := json.Marshal(set.Pages)
 	require.NoError(t, err)
