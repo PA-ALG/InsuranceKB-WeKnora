@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net"
 	"sync"
-	"syscall"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/taskexec"
 	"github.com/Tencent/WeKnora/internal/logger"
-	"github.com/Tencent/WeKnora/internal/models/api"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/google/uuid"
@@ -45,18 +42,8 @@ func wikiLookupFailed(err error) error {
 	return &wikiStageFailure{Stage: wikiLookupStage, Outcome: wikiOutcomeNotRun, Cause: err}
 }
 
-// wikiBudgetRetries is how many of a queue row's failures were budgeted
-// retries of never-run attempts (TaskPendingOpsBudgetStore). Failures beyond
-// it are legacy and cannot authorize replay.
-func wikiBudgetRetries(row *types.TaskPendingOp) int {
-	var marker struct {
-		BudgetRetries int `json:"budget_retries"`
-	}
-	if len(row.Payload) == 0 || json.Unmarshal(row.Payload, &marker) != nil {
-		return 0
-	}
-	return marker.BudgetRetries
-}
+// wikiBudgetRetries: see taskexec.BudgetRetries.
+func wikiBudgetRetries(row *types.TaskPendingOp) int { return taskexec.BudgetRetries(row.Payload) }
 
 func isWikiLookupFailure(err error) bool {
 	var failure *wikiStageFailure
@@ -142,42 +129,8 @@ func wikiFailureCauseCategory(err error) string {
 	}
 }
 
-// wikiTransportDetail exposes only a category: provider error bodies and
-// wrapper messages can contain credentials or echoed request material.
-func wikiTransportDetail(err error) string {
-	var httpErr *api.HTTPError
-	if errors.As(err, &httpErr) {
-		return fmt.Sprintf("http %d", httpErr.StatusCode)
-	}
-	if wikiTransportTimeout(err) {
-		return "timeout"
-	}
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
-		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
-		return "connection closed"
-	}
-	return "other"
-}
-
-func wikiTransportTimeout(err error) bool {
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
-		return true
-	}
-	// A non-timeout net.Error can precede a timeout in a joined chain, or
-	// wrap it without forwarding Timeout. Inspect the remaining causes too.
-	switch wrapped := err.(type) {
-	case interface{ Unwrap() []error }:
-		for _, child := range wrapped.Unwrap() {
-			if wikiTransportTimeout(child) {
-				return true
-			}
-		}
-	case interface{ Unwrap() error }:
-		return wikiTransportTimeout(wrapped.Unwrap())
-	}
-	return false
-}
+// Transport classification lives in enterprise/taskexec (keeps this file small).
+var wikiTransportDetail = taskexec.TransportDetail
 
 func (s *wikiIngestService) runWikiRequest(
 	ctx context.Context, key string, shared bool, stage string,
