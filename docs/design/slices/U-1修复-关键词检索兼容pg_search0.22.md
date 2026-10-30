@@ -23,10 +23,10 @@ v0.9.0 上线（#470）后，快问快答回归 10 题中 q24（1824 合同内�
 把排除条件从“与 BM25 条件同级的 `NOT (… AND …)`”改为**反连接子查询**：
 
 ```
-id NOT IN (SELECT id FROM embeddings WHERE knowledge_base_id IN (…) AND <生成问题行谓词>)
+id NOT IN (SELECT id FROM embeddings WHERE knowledge_base_id IN (…) IS NOT FALSE AND (<生成问题行谓词>) IS NOT FALSE)
 ```
 
-- 语义不变：仍在 TopK 之前排除这些知识库的生成问题行；没有生成问题行时结果与无排除条件完全相同。
+- 语义不变：原条件 `NOT (K AND P)` 会过滤 `K AND P` 为 TRUE **或 UNKNOWN** 的行（如 `chunk_id IS NULL`），子查询因此选取 `(K AND P) IS NOT FALSE`，写成等价的 `K IS NOT FALSE AND (P) IS NOT FALSE`（AND 当且仅当一侧为 FALSE 时为 FALSE；PostgreSQL 中 `IN` 优先级高于 `IS`）。仍在 TopK 之前排除；没有命中行时结果与无排除条件完全相同。（#471 审核 R1 修订，2026-10-30）
 - 线上 pg_search 0.22.6 只读实测该形状可执行并返回 10 行；它是普通 SQL，不依赖 pg_search 版本。
 - 向量检索的同名排除条件走 pgvector，不经 pg_search 自定义扫描，本片不改。
 - SQLite 检索不受影响，不改。
@@ -35,7 +35,7 @@ id NOT IN (SELECT id FROM embeddings WHERE knowledge_base_id IN (…) AND <生�
 
 ## 4. 验收
 
-- RED（受保护）：
+- RED（受保护）与补充验收（#471 R1，新文件 `keyword_exclusion_semantics_test.go`：sqlmock 钉住 `IS NOT FALSE` 形状；内存 SQLite 逐行对照原 `NOT (K AND P)` 的三值语义，覆盖 NULL/空串 chunk_id、NULL KB、正常正文、生成问题行、其他 KB，以及 TopK=1 的 NULL chunk 反例）：
   1. sqlmock：带 `ExcludeGeneratedQuestionKBIDs` 时，关键词检索 SQL 使用 `id NOT IN (SELECT id FROM embeddings WHERE …)`，不再出现与 `|||` 同级的 `NOT (knowledge_base_id IN …)`；不带时 SQL 与原来相同。
   2. 真实 ParadeDB（环境变量 `WEKNORA_RETRIEVER_TEST_PARADEDB_DSN` 开启，本机用与线上同版本 pg_search 0.22.6 的镜像跑）：建表与 BM25 索引，写入普通行与生成问题行，带排除条件的关键词检索不报错、返回普通行、不返回生成问题行。
 - 受影响包 `go test`、golangci-lint（改动行）、架构守卫（G10 只多这一项且已登记）、`git diff --check`。
