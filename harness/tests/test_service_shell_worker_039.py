@@ -27,7 +27,7 @@ from insurance_harness.service_shell.worker import (
     HandlerResult,
     WorkerLoop,
 )
-from tests.test_job_store_postgres_035 import PostgresRuntime, _fresh_runtime
+from tests.jobs.job_store_postgres.helpers import PostgresRuntime, _fresh_runtime
 
 
 def _job(number: int, *, job_type: str = "known") -> JobSnapshot:

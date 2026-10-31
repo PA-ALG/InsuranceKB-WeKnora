@@ -32,36 +32,57 @@ SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES = {
     )
 }
 JOB_STORE_POSTGRES_NODES = {
-    f"tests/test_job_store_postgres_035.py::{node}"
-    for node in (
-        "test_p1_5_concurrent_duplicate_enqueue_creates_exactly_one_row",
-        "test_p1_2_eight_workers_claim_each_job_exactly_once_until_typed_empty",
-        "test_p1_2_claim_skips_externally_locked_row_without_blocking",
-        "test_p1_8_concurrent_claims_never_exceed_per_space_limit",
-        "test_p1_8_saturated_space_does_not_block_sibling_space",
-        "test_p1_3_expired_lease_is_reclaimed_and_retaken_with_greater_generation",
-        "test_p1_13_active_fence_uses_postgres_clock_and_never_mutates_job",
-        "test_p1_6_completion_interrupt_before_commit_leaves_neither_row",
-        "test_p1_3_late_worker_every_write_path_is_fenced_after_takeover",
-        "test_p1_4_retry_loop_reaches_dead_letter_only_via_configured_policy",
-        "test_p1_7_concurrent_duplicate_decisions_requeue_exactly_once",
-        "test_p1_6_late_committed_smaller_id_is_still_dispatched",
-        "test_p1_10_forced_kill_takeover_yields_exactly_one_domain_result",
-        "test_p1_10_poison_task_crash_loop_is_bounded_by_max_attempts",
-        "test_p1_9_metrics_match_seeded_distribution_on_postgres",
-        "test_c1_expired_foreign_lease_does_not_consume_global_limit",
-        "test_i3_lease_duration_survives_advisory_lock_wait",
-        "test_p1_8_cross_space_writes_and_outbox_reads_fail_closed_on_postgres",
-        "test_m19_concurrent_dispatchers_do_not_double_deliver",
-        # D-2026-07-27-16 边界冻结的强制验收节点（tasks 清单 15/16/19/21/27）。
-        "test_q15_expired_lease_holder_has_no_write_authority_on_postgres",
-        "test_q16_stalled_expired_leases_never_exceed_limits_on_postgres",
-        "test_q17_unenumerated_space_converges_via_global_reclaim_on_postgres",
-        "test_q19_declarative_domain_write_channel_on_postgres",
-        "test_q30_owned_table_check_is_normalized_on_postgres",
-        "test_q31_values_may_not_smuggle_sql_on_postgres",
-        "test_q25_delivered_but_unmarked_crash_converges_on_postgres",
+    f"tests/jobs/job_store_postgres/{module}::{node}"
+    for module, nodes in (
+        (
+            "test_job_store_postgres_claims.py",
+            (
+                "test_p1_5_concurrent_duplicate_enqueue_creates_exactly_one_row",
+                "test_p1_2_eight_workers_claim_each_job_exactly_once_until_typed_empty",
+                "test_p1_2_claim_skips_externally_locked_row_without_blocking",
+                "test_p1_8_concurrent_claims_never_exceed_per_space_limit",
+                "test_p1_8_saturated_space_does_not_block_sibling_space",
+                "test_p1_3_expired_lease_is_reclaimed_and_retaken_with_greater_generation",
+                "test_p1_13_active_fence_uses_postgres_clock_and_never_mutates_job",
+            ),
+        ),
+        (
+            "test_job_store_postgres_completion.py",
+            (
+                "test_p1_6_completion_interrupt_before_commit_leaves_neither_row",
+                "test_p1_3_late_worker_every_write_path_is_fenced_after_takeover",
+                "test_p1_4_retry_loop_reaches_dead_letter_only_via_configured_policy",
+                "test_p1_7_concurrent_duplicate_decisions_requeue_exactly_once",
+                "test_p1_6_late_committed_smaller_id_is_still_dispatched",
+            ),
+        ),
+        (
+            "test_job_store_postgres_recovery.py",
+            (
+                "test_p1_10_forced_kill_takeover_yields_exactly_one_domain_result",
+                "test_p1_10_poison_task_crash_loop_is_bounded_by_max_attempts",
+                "test_p1_9_metrics_match_seeded_distribution_on_postgres",
+                "test_c1_expired_foreign_lease_does_not_consume_global_limit",
+                "test_i3_lease_duration_survives_advisory_lock_wait",
+                "test_p1_8_cross_space_writes_and_outbox_reads_fail_closed_on_postgres",
+            ),
+        ),
+        (
+            "test_job_store_postgres_guards.py",
+            (
+                "test_m19_concurrent_dispatchers_do_not_double_deliver",
+                # D-2026-07-27-16 边界冻结的强制验收节点（tasks 清单 15/16/19/21/27）。
+                "test_q15_expired_lease_holder_has_no_write_authority_on_postgres",
+                "test_q16_stalled_expired_leases_never_exceed_limits_on_postgres",
+                "test_q17_unenumerated_space_converges_via_global_reclaim_on_postgres",
+                "test_q19_declarative_domain_write_channel_on_postgres",
+                "test_q30_owned_table_check_is_normalized_on_postgres",
+                "test_q31_values_may_not_smuggle_sql_on_postgres",
+                "test_q25_delivered_but_unmarked_crash_converges_on_postgres",
+            ),
+        ),
     )
+    for node in nodes
 }
 JOB_MIGRATION_POSTGRES_NODES = {
     f"tests/test_job_migration_postgres_035.py::{node}"
