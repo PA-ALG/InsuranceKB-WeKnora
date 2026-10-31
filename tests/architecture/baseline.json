@@ -4,13 +4,13 @@
   "G1_dependency_direction": 3,
   "G2_core_purity": 0,
   "G2_go_legacy_terms": 3,
-  "G3_file_size": 8073,
+  "G3_file_size": 7361,
   "G4_naming": 9,
   "G5_hardcoded": 4,
   "G6_private_access": 5,
   "G9_contract_drift": 0,
   "G10_upstream_patches": 153,
-  "G11_new_file_location": 125
+  "G11_new_file_location": 124
  },
  "guards": {
   "G1_dependency_direction": {
@@ -28,7 +28,6 @@
    "harness/src/insurance_harness/live_env/compose.py": 527,
    "harness/src/insurance_harness/live_env/local_provisioning.py": 823,
    "harness/src/insurance_harness/product/version_resolver.py": 717,
-   "internal/application/service/knowledge_revision_source.go": 712,
    "scripts/app_artifact.py": 1749,
    "scripts/start_exact_image.py": 562
   },
@@ -322,7 +321,6 @@
    "internal/application/service/g3_first_parse.go": 1,
    "internal/application/service/knowledge_attempt_cleanup_upgrade.go": 1,
    "internal/application/service/knowledge_revision.go": 1,
-   "internal/application/service/knowledge_revision_source.go": 1,
    "internal/application/service/wiki_ingest_outcome.go": 1,
    "internal/database/embeddings_upgrade.go": 1,
    "internal/database/enterprise_migration.go": 1,

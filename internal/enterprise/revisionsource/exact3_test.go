@@ -1,4 +1,4 @@
-package service
+package revisionsource
 
 import (
 	"crypto/sha256"
