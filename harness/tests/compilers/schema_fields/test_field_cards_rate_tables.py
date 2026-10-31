@@ -78,12 +78,19 @@ S12C9_WRITING_RULES = (
     "cash_value_rules",
 )
 S12C9_EXAMPLE_PITFALLS = {"product_bundle_rules": ("1806",)}
+# S12c-10 added a step-two-only writing rule to the two universal-account cards
+# (test_field_cards_account_scope.py checks them); only these two are neutralised.
+S12C10_WRITING_RULES = (
+    "universal_account_guaranteed_interest_rate",
+    "universal_account_settlement_rules",
+)
 # draft-2026-10-16b with the parts above neutralised; any other edit changes this digest.
 # S12c-5: the S12C5_RULES are neutralised too, which gives the same digest for the cards before
 # and after S12c-5 (was 5da2b4857e0bc38be6c503cc4a4633cd61df1af127c91644fcbc45b68b76a1ab).
 # S12c-9: the S12C9_RULES, the four writing rules and the 1806 pitfalls are neutralised too; the
 # cards before and after S12c-9 give the same digest
 # (was f8cff3cd899f75410837024e27701a07f13ddbf0b00082a3cf0702da29c668f3).
+# S12c-10: the two universal-account writing rules are neutralised too; the digest is unchanged.
 UNTOUCHED_DIGEST = "94ca4701b06a2c792b5171cb4ddbf87e66907d1bad8076b7d5abf91acef04dda"
 
 
@@ -101,7 +108,7 @@ def untouched(cards: dict[str, Any]) -> str:
     for key, rules in (*S12C5_RULES.items(), *S12C9_RULES.items()):
         for rule in rules:
             data[key][rule] = [] if rule in ("excludes", "examples") else ""
-    for key in S12C9_WRITING_RULES:
+    for key in (*S12C9_WRITING_RULES, *S12C10_WRITING_RULES):
         data[key].pop("writing_rule", None)
     for key, products in S12C9_EXAMPLE_PITFALLS.items():
         for example in data[key].get("examples", []):
@@ -113,8 +120,9 @@ def untouched(cards: dict[str, Any]) -> str:
 
 def test_the_cards_carry_the_s4i_version() -> None:
     # S4j: the payment term may cite rate-table headers; S12c-5: nine field boundaries;
-    # S12c-9: contamination hot spots (writing rules and four selection boundaries)
-    assert cards_version() == "draft-2026-10-29a"
+    # S12c-9: contamination hot spots (writing rules and four selection boundaries);
+    # S12c-10: universal-account writing rules
+    assert cards_version() == "draft-2026-10-31a"
 
 
 def test_the_changed_rules_read_exactly_as_specified() -> None:
