@@ -68,17 +68,41 @@ type knowledgeRepository struct {
 // so checking the pin inside that critical section closes the precheck/write
 // race without adding a second lock protocol.
 func rejectPinnedRevisionSourceLocked(tx *gorm.DB, tenantID uint64, knowledgeID string) error {
-	var count int64
-	if err := tx.Model(&types.KnowledgeRevisionSource{}).Where(
-		"tenant_id = ? AND knowledge_id = ? AND retention_state = ?",
-		tenantID, knowledgeID, types.KnowledgeRevisionSourcePinned,
-	).Count(&count).Error; err != nil {
+	count, err := pinnedRevisionSourceCount(tx, func(db *gorm.DB) *gorm.DB {
+		return db.Model(&types.KnowledgeRevisionSource{}).Where(
+			"tenant_id = ? AND knowledge_id = ? AND retention_state = ?",
+			tenantID, knowledgeID, types.KnowledgeRevisionSourcePinned,
+		)
+	})
+	if err != nil {
 		return err
 	}
 	if count > 0 {
 		return ErrResourcePinned
 	}
 	return nil
+}
+
+// pinnedRevisionSourceCount runs a read-only pin count under the rule
+// resourceRepository.MarkDeleted applies: every failure is returned, so
+// PostgreSQL fails closed when the guard table is missing. Only on SQLite does
+// a catalog-confirmed missing table count as nothing pinned, since a store
+// without the table cannot hold a pin; this keeps upstream SQLite fixtures that
+// never migrate it unmodified (U-2a). Write paths do not use it.
+func pinnedRevisionSourceCount(db *gorm.DB, query func(*gorm.DB) *gorm.DB) (int64, error) {
+	var count int64
+	err := query(db).Count(&count).Error
+	if err == nil || db.Name() != "sqlite" {
+		return count, err
+	}
+	missing, catalogErr := tableMissing(db, types.KnowledgeRevisionSource{}.TableName())
+	if catalogErr != nil {
+		return 0, errors.Join(err, catalogErr)
+	}
+	if missing {
+		return 0, nil
+	}
+	return 0, err
 }
 
 // NewKnowledgeRepository creates a new knowledge repository
@@ -848,11 +872,12 @@ func (r *knowledgeRepository) HasPinnedRevisionSource(
 	if tenantID == 0 || knowledgeID == "" {
 		return false, ErrRevisionCommitFailed
 	}
-	var count int64
-	err := r.db.WithContext(ctx).Model(&types.KnowledgeRevisionSource{}).Where(
-		"tenant_id = ? AND knowledge_id = ? AND retention_state = ?",
-		tenantID, knowledgeID, types.KnowledgeRevisionSourcePinned,
-	).Count(&count).Error
+	count, err := pinnedRevisionSourceCount(r.db.WithContext(ctx), func(db *gorm.DB) *gorm.DB {
+		return db.Model(&types.KnowledgeRevisionSource{}).Where(
+			"tenant_id = ? AND knowledge_id = ? AND retention_state = ?",
+			tenantID, knowledgeID, types.KnowledgeRevisionSourcePinned,
+		)
+	})
 	return count > 0, err
 }
 
@@ -1049,11 +1074,12 @@ func ReleaseRevisionSources(tx *gorm.DB, tenantID uint64, refs []RevisionRef) er
 func (r *knowledgeRepository) HasPinnedRevisionSourceInKnowledgeBase(
 	ctx context.Context, tenantID uint64, knowledgeBaseID string,
 ) (bool, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Table("knowledge_revision_sources AS s").
-		Joins("JOIN knowledges AS k ON k.id = s.knowledge_id AND k.tenant_id = s.tenant_id").
-		Where("s.tenant_id = ? AND k.knowledge_base_id = ? AND s.retention_state = ?",
-			tenantID, knowledgeBaseID, types.KnowledgeRevisionSourcePinned).Count(&count).Error
+	count, err := pinnedRevisionSourceCount(r.db.WithContext(ctx), func(db *gorm.DB) *gorm.DB {
+		return db.Table("knowledge_revision_sources AS s").
+			Joins("JOIN knowledges AS k ON k.id = s.knowledge_id AND k.tenant_id = s.tenant_id").
+			Where("s.tenant_id = ? AND k.knowledge_base_id = ? AND s.retention_state = ?",
+				tenantID, knowledgeBaseID, types.KnowledgeRevisionSourcePinned)
+	})
 	return count > 0, err
 }
 
@@ -1503,11 +1529,13 @@ func (r *knowledgeRepository) deleteKnowledgeRowsUnlessRevisionPinned(
 		if len(lockedIDs) == 0 {
 			return nil
 		}
-		var pinned int64
-		if err := tx.Model(&types.KnowledgeRevisionSource{}).Where(
-			"tenant_id = ? AND knowledge_id IN ? AND retention_state = ?",
-			tenantID, lockedIDs, types.KnowledgeRevisionSourcePinned,
-		).Count(&pinned).Error; err != nil {
+		pinned, err := pinnedRevisionSourceCount(tx, func(db *gorm.DB) *gorm.DB {
+			return db.Model(&types.KnowledgeRevisionSource{}).Where(
+				"tenant_id = ? AND knowledge_id IN ? AND retention_state = ?",
+				tenantID, lockedIDs, types.KnowledgeRevisionSourcePinned,
+			)
+		})
+		if err != nil {
 			return err
 		}
 		if pinned != 0 {

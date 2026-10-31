@@ -72,7 +72,6 @@ func TestListPaged_ExcludesDeletingByDefault(t *testing.T) {
 // the default list may only be hidden while cleanup is still in progress.
 func TestGetKnowledgeBatch_TracksDeletionUntilSoftDelete(t *testing.T) {
 	db := setupKnowledgeTestDB(t)
-	require.NoError(t, db.AutoMigrate(&types.KnowledgeRevisionSource{}))
 	repo := NewKnowledgeRepository(db).(*knowledgeRepository)
 	ctx := context.Background()
 	kbID := uuid.New().String()
