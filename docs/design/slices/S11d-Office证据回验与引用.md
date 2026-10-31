@@ -2,11 +2,13 @@
 
 > 状态：Spec 冻结（2026-10-31，Claude）。实现方 Claude，审核方 Codex。计划 #446。
 > 真实调用：0。测试只用测试内生成的合成 Office 采集；用户的业务样本不进仓库、Issue、PR 或日志。
+>
+> 2026-10-31 修订：S11c（#479）已合并，总控决定 Harness 闸门移除随本 PR 一起提交（§3、§4）。
 
 ## 0. 背景
 
 - S11b（#469，已合并）：企业 RAW KB 的 `.pptx/.docx/.xlsx` 在解析时生成 Office 采集（`enterprise-ooxml-structure.v1`）。来源页按页返回逐字文本与块：页文本是本页各块文本以 `\n\n` 连接，块的 `start/end` 是它在页文本中的码点区间（半开），块带 locator：PPTX 为 `PPTX_SHAPE{slide}`（无 `shape_id`），DOCX 为 `DOCX_BLOCK{block_index}`，XLSX 为 `XLSX_CELL_RANGE{sheet, "A<r>:XFD<r>"}`。
-- S11c（#479，审核中）：Harness 读 Office 页、按块切分，证据不跨块；Office 证据的 locator 为**所在块的 locator 字段加 `page`、`start`、`end`**（页文本码点，半开）。平台支持前，Harness 以 `EVIDENCE_LOCATOR_UNSUPPORTED` 拒绝提交这类证据（S11c Spec §2.3）。
+- S11c（#479，已合并）：Harness 读 Office 页、按块切分，证据不跨块；Office 证据的 locator 为**所在块的 locator 字段加 `page`、`start`、`end`**（页文本码点，半开）。平台支持前，Harness 以 `EVIDENCE_LOCATOR_UNSUPPORTED` 拒绝提交这类证据（S11c Spec §2.3）。
 - 现在平台的发布回验（`releasestore.EvidenceVerifier`）对 `PDF_TEXT_SPAN` 以外的 kind 一律返回 `EVIDENCE_UNSUPPORTED`；引用接口（HTTP、MCP）只打开 PDF 文本区间，其他 kind 返回 422 `EVIDENCE_UNSUPPORTED`。
 
 ## 1. 目标
@@ -83,19 +85,22 @@
 |---|---|
 | Claude（实现） | `internal/enterprise/release/evidence.go`（`Locator` 增加 Office 字段；`EvidenceCheck.LocatorKeys` 记录取值非 null 的键）；新 `internal/enterprise/source/locate.go`（`PageSet.LocatorKind`、`PageSet.Locate`、`BlockView`）；`internal/enterprise/releasestore/verify.go`（Office 分支）；`internal/enterprise/citation.go`（Office 引用与媒体类型）；`internal/enterprise/mcptools/citation.go` |
 | Claude（RED，受保护） | `internal/enterprise/releasestore/office_evidence_verify_test.go`、`internal/enterprise/office_citation_test.go` |
+| Claude（Harness，§4） | `harness/src/insurance_harness/compilers/schema_fields/claims.py`（移除闸门）；受保护测试的期望调整（独立披露提交）：`harness/tests/evidence/test_office_segments.py`、`harness/tests/compilers/schema_fields/test_office_publish_gate_cli.py` |
 
-不改：`contracts/`、上游文件、前端、Harness。手写文件 ≤ 500 行。
+不改：`contracts/`、上游文件、前端。手写文件 ≤ 500 行。
 
 ## 4. 与 Harness、前端的衔接
 
-- S11c 的 `EVIDENCE_LOCATOR_UNSUPPORTED` 闸门按 S11c Spec §2.3 在本片**合并并部署后**移除，单独一个小 PR（Harness 改动与测试），不在本 PR。
-- 现在的前端 `CitationPanel` 默认每个非专家引用都有 `highlight` 并用 PDF 查看器打开原文件。Office 引用要等 S11e 的 Office 视图（或至少一个"无高亮时只显示引文"的保护）才能在界面上打开；因此**移除 Harness 闸门的时间不早于前端能显示 Office 引用**。在此之前平台已能回验 Office 证据，但不会收到它。
+- S11c 的 `EVIDENCE_LOCATOR_UNSUPPORTED` 闸门随本 PR 移除（S11c 已合并，总控 2026-10-31 决定）：`claims.py` 直接用 `source.locator(span)` 构造证据，Office 证据带块 locator 提交。部署顺序不影响安全：新 Harness 遇到未部署 S11d 的平台时，平台仍对 Office 证据返回 `EVIDENCE_UNSUPPORTED`（失败关闭）。PDF 证据的 locator 不变（端到端测试覆盖）。
+- S11c 的两条受保护测试断言的正是这个闸门，期望在独立披露的提交里改为"Office 证据带块 locator 经假平台提交成功"，并新增"PDF 页提交的 locator 与改动前相同"。
+- Office 证据仍不 carry（`carry.py` 只沿用 `PDF_TEXT_SPAN` 证据，其他一律重新审核，失败关闭；S11c §不做）。
+- **前端尚未支持**：现在的 `CitationPanel` 默认每个非专家引用都有 `highlight` 并用 PDF 查看器打开原文件，打开 Office 引用会出错。S11e 的 Office 视图（或至少"无 `highlight` 时只显示文档、页与引文"的保护）上线前，**不在线上发布 Office 材料的知识**（运维约束，延续 S11b/S11c 的上线说明）。
 
 ## 5. 验收
 
-- RED 两个文件全部通过；受保护的 PDF 测试不改断言且通过。
+- RED 两个文件全部通过；受保护的 PDF 测试不改断言且通过；Harness 受影响测试（含两条调整后的 S11c 测试）通过，`ruff check`、`mypy` 通过。
 - `go build ./...`、`go vet`、受影响包 `go test`（与 main 同环境逐测试对比）；golangci-lint 对改动行 0 问题；`tests/architecture` 通过（G10 不升）；`git diff --check` 干净。
 
 ## 6. 不做
 
-PPTX 形状、DOCX/XLSX 单元格级定位；Office 高亮与查看器（S11e）；引文归一化；Office 证据的 carry；Harness 闸门移除（见 §4）；已发布的、指向 Office 采集的 `PDF_TEXT_SPAN` 证据的引用（S11b 起 `Span` 返回 `INVALID_REQUEST`，本片不改；S11b 上线说明已要求 S11c 前不导入 Office 材料）。
+PPTX 形状、DOCX/XLSX 单元格级定位；Office 高亮与查看器（S11e）；引文归一化；Office 证据的 carry；前端 Office 视图（S11e，见 §4）；已发布的、指向 Office 采集的 `PDF_TEXT_SPAN` 证据的引用（S11b 起 `Span` 返回 `INVALID_REQUEST`，本片不改；S11b 上线说明已要求 S11c 前不导入 Office 材料）。
