@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRevisionSourceUsesStoredBackendForBackfillAndFixedRead(t *testing.T) {
+func TestRevisionSourceUsesStoredBackendForBackfill(t *testing.T) {
 	s, repo, defaultFiles := revisionSourceFixture(t)
 	root := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(root, "terms.pdf"), defaultFiles.data, 0o600))
@@ -42,16 +42,10 @@ func TestRevisionSourceUsesStoredBackendForBackfillAndFixedRead(t *testing.T) {
 	}
 	s.storageResolver = backend
 	s.tenants = &revisionSourceTenantStub{tenant: &types.Tenant{ID: 10003}}
-	source, err := s.BackfillCurrentCompleted(revisionSourceContext(), repo.knowledge.ID, 2)
+	_, err = s.BackfillCurrentCompleted(revisionSourceContext(), repo.knowledge.ID, 2)
 	require.NoError(t, err)
 	require.Equal(t, backendID, backend.backendID)
 	require.Equal(t, uint64(10003), backend.tenantID)
-	repo.source, repo.sourceErr = source, nil
-	actual, err := s.ReadFixedRevision(
-		revisionSourceContext(), repo.knowledge.ID, 2, source.FileSHA256, source.BindingDigest, 1,
-	)
-	require.NoError(t, err)
-	require.Equal(t, defaultFiles.data, actual)
 	require.Zero(t, defaultFiles.calls)
 }
 
@@ -266,44 +260,4 @@ func TestBackfillKnowledgeRevisionSourceRejectsZeroStaleAndMissingRevisionBefore
 	require.ErrorIs(t, err, ErrRevisionSourceMismatch)
 	require.Zero(t, files.calls)
 	require.Zero(t, repo.sealCalls)
-}
-
-func TestReadFixedRevisionSourceRejectsBindingAndPageDriftBeforeBytes(t *testing.T) {
-	service, repo, files := revisionSourceFixture(t)
-	sealed, err := service.BackfillCurrentCompleted(revisionSourceContext(), "knowledge-1", 2)
-	require.NoError(t, err)
-	repo.source = sealed
-	repo.sourceErr = nil
-	files.calls = 0
-
-	_, err = service.ReadFixedRevision(
-		revisionSourceContext(), "knowledge-1", 2,
-		sealed.FileSHA256, strings.Repeat("f", 64), 1,
-	)
-	require.ErrorIs(t, err, ErrRevisionSourceMismatch)
-	require.Zero(t, files.calls)
-
-	_, err = service.ReadFixedRevision(
-		revisionSourceContext(), "knowledge-1", 2,
-		sealed.FileSHA256, sealed.BindingDigest, 12,
-	)
-	require.ErrorIs(t, err, ErrRevisionSourcePageUnavailable)
-	require.Zero(t, files.calls)
-}
-
-func TestReadFixedRevisionSourceReturnsOnlyExactPinnedObject(t *testing.T) {
-	service, repo, files := revisionSourceFixture(t)
-	sealed, err := service.BackfillCurrentCompleted(revisionSourceContext(), "knowledge-1", 2)
-	require.NoError(t, err)
-	repo.source = sealed
-	repo.sourceErr = nil
-	files.calls = 0
-
-	opened, err := service.ReadFixedRevision(
-		revisionSourceContext(), "knowledge-1", 2,
-		sealed.FileSHA256, sealed.BindingDigest, 2,
-	)
-	require.NoError(t, err)
-	require.Equal(t, files.data, opened)
-	require.Equal(t, []string{sealed.ImmutableLocator}, files.paths[len(files.paths)-1:])
 }

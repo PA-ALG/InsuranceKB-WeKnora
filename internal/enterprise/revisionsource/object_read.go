@@ -15,54 +15,6 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
-// ReadFixedRevision returns the exact pinned object bytes of one fixed revision source after the
-// binding, file digest and page are checked; it never opens a current or latest file.
-func (s *KnowledgeRevisionSourceService) ReadFixedRevision(
-	ctx context.Context,
-	knowledgeID string,
-	parseAttempt int64,
-	expectedFileSHA256 string,
-	expectedBindingDigest string,
-	pageNumber int,
-) ([]byte, error) {
-	if s == nil || s.repo == nil || s.files == nil || knowledgeID == "" || parseAttempt <= 0 ||
-		pageNumber <= 0 || !revisionSourceSHA256(expectedFileSHA256) ||
-		!revisionSourceSHA256(expectedBindingDigest) {
-		return nil, ErrRevisionSourceMismatch
-	}
-	tenantID, ok := ctx.Value(types.TenantIDContextKey).(uint64)
-	if !ok || tenantID == 0 {
-		return nil, ErrRevisionSourceMismatch
-	}
-	source, resource, err := s.repo.GetRevisionSource(ctx, tenantID, knowledgeID, parseAttempt)
-	if err != nil || source == nil || resource == nil ||
-		types.ValidateKnowledgeRevisionSourceBinding(*source) != nil ||
-		source.FileSHA256 != expectedFileSHA256 || source.BindingDigest != expectedBindingDigest ||
-		source.RetentionState != types.KnowledgeRevisionSourcePinned ||
-		resource.ID != source.ResourceID || resource.Handle != source.ResourceHandle ||
-		resource.TenantID != tenantID || resource.ContentHash != source.ObjectSHA256 ||
-		resource.State != types.ResourceStateActive ||
-		resource.Lifecycle != types.ResourceLifecyclePersistent {
-		return nil, ErrRevisionSourceMismatch
-	}
-	if source.PageCount == nil || pageNumber > *source.PageCount {
-		return nil, ErrRevisionSourcePageUnavailable
-	}
-	data, err := s.readResourceObject(ctx, resource)
-	if err != nil || int64(len(data)) != source.Size {
-		return nil, ErrRevisionSourceMismatch
-	}
-	digest := sha256.Sum256(data)
-	if hex.EncodeToString(digest[:]) != source.ObjectSHA256 {
-		return nil, ErrRevisionSourceMismatch
-	}
-	pageCount, err := countImmutablePDFPages(data)
-	if err != nil || pageCount != *source.PageCount || pageNumber > pageCount {
-		return nil, ErrRevisionSourcePageUnavailable
-	}
-	return data, nil
-}
-
 // Resolve the stored backend before opening a resource. A deployment default
 // cannot interpret storage:// paths or select another backend on failure.
 func (s *KnowledgeRevisionSourceService) readResourceObject(

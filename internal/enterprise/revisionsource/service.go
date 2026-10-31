@@ -1,5 +1,5 @@
 // Package revisionsource owns the operational backfill of fixed knowledge revision sources
-// (single source and exact3 batch) and the exact fixed-revision byte read.
+// (single source and exact3 batch).
 package revisionsource
 
 import (
@@ -43,8 +43,8 @@ type knowledgeRevisionSourceExact3Repository interface {
 	) error
 }
 
-// KnowledgeRevisionSourceService owns the sole operational backfill and exact
-// fixed-revision byte path. It never resolves a current/latest/presigned file.
+// KnowledgeRevisionSourceService owns the sole operational backfill of fixed revision
+// sources. It never resolves a current/latest/presigned file.
 type KnowledgeRevisionSourceService struct {
 	config          *config.Config
 	repo            knowledgeRevisionSourceRepository

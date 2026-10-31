@@ -27,8 +27,7 @@ type knowledgeRevisionSourceExact3Backfiller interface {
 }
 
 // KnowledgeRevisionSourceHandler exposes only the human-admin backfill
-// operation. Fixed bytes remain behind the server-derived Schema citation
-// token route and are never addressable by caller-supplied revision metadata.
+// operations; it never serves file bytes.
 type KnowledgeRevisionSourceHandler struct {
 	service knowledgeRevisionSourceBackfiller
 }

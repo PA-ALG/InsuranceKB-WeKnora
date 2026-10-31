@@ -45,15 +45,13 @@ SERVICE_GUARDS = (
 )
 TESTS = {
     PACKAGE: (
-        "TestRevisionSourceUsesStoredBackendForBackfillAndFixedRead",
+        "TestRevisionSourceUsesStoredBackendForBackfill",
         "TestRevisionSourceStoredBackendFailureNeverReadsDefault",
         "TestBackfillKnowledgeRevisionSourceRequiresHumanAdminBeforeAuthorityReads",
         "TestBackfillKnowledgeRevisionSourceUsesOnlyCurrentCompletedAttemptAndRecomputesObject",
         "TestImmutablePDFPageCounterAcceptsExact5961EncryptedMaterials",
         "TestImmutablePDFPageCounterRejectsCorruptExactObject",
         "TestBackfillKnowledgeRevisionSourceRejectsZeroStaleAndMissingRevisionBeforeObjectRead",
-        "TestReadFixedRevisionSourceRejectsBindingAndPageDriftBeforeBytes",
-        "TestReadFixedRevisionSourceReturnsOnlyExactPinnedObject",
         "TestExact3BackfillPreflightsAllSourcesBeforeStrictSerialSeal",
         "TestExact3DryRunClassifiesExactExistingRowsAndStopsOnConflict",
     ),
@@ -137,3 +135,10 @@ def test_only_the_container_wiring_imports_the_new_package_among_upstream_files(
         if p.endswith(".go") and p in upstream and f'"{IMPORT_PATH}"' in text(p)
     )
     assert importers == list(UPSTREAM_IMPORTERS)
+
+
+def test_unused_fixed_revision_read_is_deleted() -> None:
+    # Owner ruling on #493: ReadFixedRevision had no production caller; delete-before-split (S7f-2 §2.1).
+    go = [p for p in tracked("internal", "cmd") if p.endswith(".go")]
+    assert count(r"func \(s \*KnowledgeRevisionSourceService\) ReadFixedRevision\(", go) == 0
+    assert [p for p in go if ".ReadFixedRevision(" in text(p)] == []
