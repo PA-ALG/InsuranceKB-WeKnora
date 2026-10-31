@@ -52,8 +52,10 @@ func TestCreateKnowledgeFromFileCapacityRejectsBeforeWriting(t *testing.T) {
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
 	repo := &createKnowledgeFileRepoStub{}
 	fileSvc := &createKnowledgeFileServiceStub{}
-	svc := &knowledgeService{repo: repo, fileSvc: fileSvc,
-		kbService: &createKnowledgeFileKBServiceStub{kb: &types.KnowledgeBase{ID: "kb-1"}}}
+	svc := &knowledgeService{
+		repo: repo, fileSvc: fileSvc,
+		kbService: &createKnowledgeFileKBServiceStub{kb: &types.KnowledgeBase{ID: "kb-1"}},
+	}
 	knowledge, err := svc.CreateKnowledgeFromFile(newCreateKnowledgeFileContext(), "kb-1",
 		newMultipartFileHeader(t, "doc.txt", "hello"), nil, nil, "", nil, "", nil)
 	require.Error(t, err)

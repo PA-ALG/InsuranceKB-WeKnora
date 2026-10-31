@@ -33,7 +33,9 @@ func (s *countingPhysicalFiles) DeleteFile(context.Context, string) error {
 
 func TestResourceCatalogFileServiceChecksPinnedGuardBeforePhysicalDelete(t *testing.T) {
 	inner := &countingPhysicalFiles{physicalFileStub: &physicalFileStub{savedPath: "local://7/immutable/a.pdf"}}
-	catalog := &pinRejectingCatalog{catalogStub: &catalogStub{}, markDeleteErr: errors.New("resource is revision-pinned")}
+	catalog := &pinRejectingCatalog{
+		catalogStub: &catalogStub{}, markDeleteErr: errors.New("resource is revision-pinned"),
+	}
 	svc := NewResourceCatalogFileService(inner, catalog)
 	ref, err := svc.SaveBytes(context.Background(), []byte("pdf"), 7, "a.pdf", false)
 	require.NoError(t, err)
