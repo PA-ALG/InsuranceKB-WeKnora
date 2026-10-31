@@ -27,11 +27,16 @@ export interface Citation {
   evidence_index: number
   origin: string
   source: { knowledge_id: string; parse_attempt: number; document: string; file_sha256: string }
-  page: { number: number; width_points: string; height_points: string }
+  // Office pages have no geometry: only `number` (S11d).
+  page: { number: number; width_points?: string; height_points?: string }
   start: number
   end: number
   quote: string
-  highlight: { coordinate_space: string; complete: boolean; rects: [number, number, number, number][] }
+  /** PDF evidence only. */
+  highlight?: { coordinate_space: string; complete: boolean; rects: [number, number, number, number][] }
+  /** Office evidence only: the captured block's locator and its span on the page (S11d). */
+  locator?: Record<string, unknown>
+  block?: { block_id: string; start: number; end: number }
   file: string
 }
 

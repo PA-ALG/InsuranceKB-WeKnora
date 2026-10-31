@@ -2,11 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ExpertCitation from './ExpertCitation.vue'
+import OfficeSourceViewer from './OfficeSourceViewer.vue'
 import SourcePageViewer from './SourcePageViewer.vue'
 import {
   EnterpriseError, isExpertCitation, readCitation, type Citation, type ExpertCitation as ExpertRecord,
 } from './enterpriseApi'
 import { citationFailure, originLabel } from './fieldLabels'
+import { officeTarget, type OfficePosition } from './officeCitation'
 
 const props = defineProps<{ spaceId: string; releaseId: string; member: string; evidence: number }>()
 const { t } = useI18n()
@@ -25,6 +27,37 @@ const viewerLabels = computed(() => ({
   region: t('enterpriseKnowledge.viewer.region', {
     document: citation.value?.source.document ?? '',
     page: citation.value?.page.number ?? '',
+  }),
+}))
+
+// A PDF citation has page geometry; an Office one (S11d) has its block's locator instead and opens
+// in upstream's preview. Anything else shows the document, page and quote only (S11e Spec §3.3).
+const office = computed(() => {
+  const read = citation.value
+  return read && !read.highlight ? officeTarget(read.locator, read.quote) : null
+})
+
+function place(position: OfficePosition): string {
+  switch (position.kind) {
+    case 'slide': return t('enterpriseKnowledge.citation.slide', { slide: position.slide })
+    case 'block': return t('enterpriseKnowledge.citation.block', { block: position.block })
+    case 'row': return t('enterpriseKnowledge.citation.row', { sheet: position.sheet, row: position.row })
+  }
+}
+
+const position = computed(() => office.value
+  ? place(office.value.position)
+  : t('enterpriseKnowledge.citation.page', { page: citation.value?.page.number ?? '' }))
+
+const officeLabels = computed(() => ({
+  loading: t('enterpriseKnowledge.viewer.loading'),
+  failed: t('enterpriseKnowledge.viewer.failed'),
+  retry: t('enterpriseKnowledge.retry'),
+  coarse: t('enterpriseKnowledge.viewer.coarse'),
+  notLocated: t('enterpriseKnowledge.viewer.notLocated'),
+  unsafe: t('enterpriseKnowledge.viewer.unsafe'),
+  region: t('enterpriseKnowledge.viewer.officeRegion', {
+    document: citation.value?.source.document ?? '', position: position.value,
   }),
 }))
 
@@ -66,7 +99,7 @@ watch(() => [props.spaceId, props.releaseId, props.member, props.evidence], load
     <template v-else-if="citation">
       <p class="ek-citation__source">
         <span>{{ citation.source.document }}</span>
-        <span>{{ t('enterpriseKnowledge.citation.page', { page: citation.page.number }) }}</span>
+        <span>{{ position }}</span>
         <span
           v-if="citation.origin"
           data-origin
@@ -75,12 +108,21 @@ watch(() => [props.spaceId, props.releaseId, props.member, props.evidence], load
       </p>
       <blockquote class="ek-citation__quote">{{ citation.quote }}</blockquote>
       <SourcePageViewer
+        v-if="citation.highlight"
         :file="citation.file"
         :page="citation.page.number"
         :rects="citation.highlight.rects"
         :complete="citation.highlight.complete"
         :labels="viewerLabels"
       />
+      <OfficeSourceViewer
+        v-else-if="office"
+        :file="citation.file"
+        :document="citation.source.document"
+        :target="office"
+        :labels="officeLabels"
+      />
+      <p v-else role="note" class="ek-status">{{ t('enterpriseKnowledge.viewer.noViewer') }}</p>
     </template>
   </div>
 </template>
