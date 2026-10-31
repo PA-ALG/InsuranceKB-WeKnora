@@ -1,6 +1,8 @@
 // Reads a ZIP's own directory before any zip library touches it (S11e Spec §3.2a). JSZip resolves
 // names, merges duplicates and builds objects for every entry while loading, so the raw entry
 // count, raw names and the format features we do not support are checked here, on the bytes.
+// JSZip 3.10.1 lists entries from the central directory but takes each name from the entry's local
+// header (lib/zipEntry.js readLocalPart); both must therefore hold the same name, byte for byte.
 
 export type ZipDirectoryProblem = 'package' | 'size' | 'structure'
 
@@ -18,10 +20,12 @@ export interface ZipEntry {
   size: number
 }
 
+const LOCAL_HEADER = 0x04034b50
 const END_OF_DIRECTORY = 0x06054b50
 const ZIP64_LOCATOR = 0x07064b50
 const DIRECTORY_ENTRY = 0x02014b50
 const UNSUPPORTED_FLAGS = 0x0001 | 0x0040 | 0x2000 // encrypted, strong encryption, encrypted directory
+const UTF8_FLAG = 0x0800
 const STORED = 0
 const DEFLATED = 8
 const ZIP64_EXTRA = 0x0001
@@ -79,6 +83,7 @@ export function readZipDirectory(data: ArrayBuffer, maxEntries: number): ZipEntr
 
   const entries: ZipEntry[] = []
   const seen = new Set<string>()
+  const regions: [number, number][] = []
   let at = directoryStart
   while (at < end) {
     // More records than the end record declares: stop before reading them.
@@ -107,9 +112,21 @@ export function readZipDirectory(data: ArrayBuffer, maxEntries: number): ZipEntr
       if (id === UNICODE_PATH_EXTRA) throw rejected('structure')
       extra += 4 + view.getUint16(extra + 2, true)
     }
+    // The local header JSZip reads the name from: inside the file, before the central directory,
+    // with the same name bytes and the same UTF-8 flag; its data must end before the directory too.
+    if (localHeader + 30 > directoryStart || view.getUint32(localHeader, true) !== LOCAL_HEADER) throw rejected('package')
+    const localFlags = view.getUint16(localHeader + 6, true)
+    const localNameLength = view.getUint16(localHeader + 26, true)
+    const localData = localHeader + 30 + localNameLength + view.getUint16(localHeader + 28, true)
+    if (localFlags & UNSUPPORTED_FLAGS || localData + compressed > directoryStart) throw rejected('package')
+    const nameBytes = bytes.subarray(at + 46, at + 46 + nameLength)
+    const localName = bytes.subarray(localHeader + 30, localHeader + 30 + localNameLength)
+    if (localNameLength !== nameLength || localName.some((byte, i) => byte !== nameBytes[i])) throw rejected('structure')
+    if ((localFlags ^ flags) & UTF8_FLAG) throw rejected('structure')
+    regions.push([localHeader, localData + compressed])
     let name: string
     try {
-      name = utf8.decode(bytes.subarray(at + 46, at + 46 + nameLength))
+      name = utf8.decode(localName)
     } catch {
       throw rejected('structure')
     }
@@ -126,5 +143,8 @@ export function readZipDirectory(data: ArrayBuffer, maxEntries: number): ZipEntr
     at = next
   }
   if (entries.length !== total) throw rejected('package')
+  // Entries may not share or overlap their local headers and data.
+  regions.sort((a, b) => a[0] - b[0])
+  for (let i = 1; i < regions.length; i++) if (regions[i - 1][1] > regions[i][0]) throw rejected('package')
   return entries
 }

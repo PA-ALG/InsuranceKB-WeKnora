@@ -1,7 +1,8 @@
 // S11e (Spec §3.2a, review R1): an Office package reaches the renderer only after an allow-list
 // rebuild — no embedded HTML, code, controls or external fetches — and anything unreadable is refused.
 import JSZip from 'jszip'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { rawZip } from './__tests__/rawZip'
 import { OFFICE_PACKAGE_LIMITS, OfficePackageRejected, sanitizeOfficePackage } from './officePackage'
 
 const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
@@ -322,6 +323,36 @@ describe('default deny', () => {
       overrides: { 'ppt/presentation.xml': MAIN.pptx, 'ppt/slides/slide1.xml': `${OOXML}.presentationml.slide+xml` },
     }), 'pptx')
     expect(out.names).toContain('ppt/slides/slide1.xml')
+  })
+})
+
+describe('the zip library sees only the checked directory', () => {
+  it('reads a package that has no folder records', async () => {
+    const input = rawZip([
+      { name: '[Content_Types].xml', data: `<Types><Override PartName="/word/document.xml" ContentType="${MAIN.docx}"/></Types>` },
+      { name: '_rels/.rels', data: relsXml([['rId1', `${REL}/officeDocument`, 'word/document.xml']]) },
+      { name: 'word/document.xml', data: `<w:document xmlns:w="${W}"><w:body><w:p/></w:body></w:document>` },
+    ])
+    const out = await rebuilt(input)
+    expect(out.names).toEqual(['[Content_Types].xml', '_rels/.rels', 'word/document.xml'])
+  })
+
+  it.each([
+    ['an extra entry', (zip: JSZip) => { zip.file('word/extra.xml', '<x/>', { createFolders: false }) }],
+    ['a missing entry', (zip: JSZip) => { zip.remove('word/styles.xml') }],
+    ['a file loaded as a folder', (zip: JSZip) => { zip.remove('word/styles.xml'); zip.folder('word/styles.xml') }],
+  ])('refuses a loaded table with %s', async (_name, change) => {
+    const load = JSZip.loadAsync.bind(JSZip)
+    const spy = vi.spyOn(JSZip, 'loadAsync').mockImplementation(async (...args: Parameters<typeof JSZip.loadAsync>) => {
+      const zip = await load(...args)
+      change(zip)
+      return zip
+    })
+    try {
+      expect(await rejection(await build(docx()))).toBe('structure')
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
 

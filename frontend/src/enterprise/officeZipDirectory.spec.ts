@@ -2,41 +2,8 @@
 // resolves, merges or drops anything. Fixtures are structural only: stored entries with plain text.
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
+import { rawZip, type RawRecord as Raw } from './__tests__/rawZip'
 import { readZipDirectory, ZipDirectoryRejected } from './officeZipDirectory'
-
-interface Raw { name: string | Uint8Array; data?: string; flags?: number; method?: number; extra?: number[]; attributes?: number }
-interface End { disk: number; directoryDisk: number; diskEntries: number; total: number; trailing: number[] }
-
-/** A stored-only ZIP written byte by byte, so names and records can be what JSZip would never write. */
-function rawZip(records: Raw[], end: Partial<End> = {}): ArrayBuffer {
-  const out: number[] = []
-  const u16 = (v: number) => out.push(v & 0xff, (v >>> 8) & 0xff)
-  const u32 = (v: number) => out.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff)
-  const encoded = records.map(r => ({
-    ...r, nameBytes: typeof r.name === 'string' ? [...new TextEncoder().encode(r.name)] : [...r.name],
-    dataBytes: [...new TextEncoder().encode(r.data ?? '')], offset: 0,
-  }))
-  for (const r of encoded) {
-    r.offset = out.length
-    u32(0x04034b50); u16(20); u16(r.flags ?? 0x0800); u16(r.method ?? 0); u16(0); u16(0); u32(0)
-    u32(r.dataBytes.length); u32(r.dataBytes.length); u16(r.nameBytes.length); u16(0)
-    out.push(...r.nameBytes, ...r.dataBytes)
-  }
-  const directoryStart = out.length
-  for (const r of encoded) {
-    const extra = r.extra ?? []
-    u32(0x02014b50); u16(20); u16(20); u16(r.flags ?? 0x0800); u16(r.method ?? 0); u16(0); u16(0); u32(0)
-    u32(r.dataBytes.length); u32(r.dataBytes.length); u16(r.nameBytes.length); u16(extra.length); u16(0)
-    u16(0); u16(0); u32(r.attributes ?? 0); u32(r.offset)
-    out.push(...r.nameBytes, ...extra)
-  }
-  const directorySize = out.length - directoryStart
-  u32(0x06054b50); u16(end.disk ?? 0); u16(end.directoryDisk ?? 0)
-  u16(end.diskEntries ?? end.total ?? records.length); u16(end.total ?? records.length)
-  u32(directorySize); u32(directoryStart); u16(0)
-  out.push(...(end.trailing ?? []))
-  return new Uint8Array(out).buffer
-}
 
 function problem(data: ArrayBuffer, maxEntries = 100): string {
   try {
@@ -124,6 +91,31 @@ describe('the raw ZIP directory', () => {
     ['a ZIP64 field', { extra: [0x01, 0x00, 0, 0] }],
   ])('refuses %s', (_name, record) => {
     expect(problem(rawZip([{ name: 'a.xml', data: 'x', ...record }]))).toBe('package')
+  })
+
+  describe('local headers, where JSZip takes the names from', () => {
+    it.each([
+      ['a local name other than the central one', [{ name: 'a.xml', localName: 'b.xml', data: 'x' }]],
+      ['a local name repeated under two central names', [{ name: 'a.xml', data: 'x' }, { name: 'b.xml', localName: 'a.xml', data: 'y' }]],
+      ['a non-canonical local name', [{ name: 'a.xml', localName: '../a.xml', data: 'x' }]],
+      ['local names that differ only in case', [{ name: 'A.xml', data: 'x' }, { name: 'b.xml', localName: 'a.xml', data: 'y' }]],
+      ['a local name of another length', [{ name: 'a.xml', localName: 'a.xmll', data: 'x' }]],
+      ['a UTF-8 flag only in the central directory', [{ name: 'a.xml', flags: 0x0800, localFlags: 0, data: 'x' }]],
+    ])('refuses %s', (_name, records) => {
+      expect(problem(rawZip(records as Raw[]))).toBe('structure')
+    })
+
+    it('refuses an entry whose data runs into the next local header', () => {
+      expect(problem(rawZip([{ name: 'a.xml', data: 'x', compressedSize: 8 }, { name: 'b.xml', data: 'y' }]))).toBe('package')
+    })
+
+    it('refuses an entry whose data runs into the central directory', () => {
+      expect(problem(rawZip([{ name: 'a.xml', data: 'x', compressedSize: 40 }]))).toBe('package')
+    })
+
+    it('refuses an encrypted local header', () => {
+      expect(problem(rawZip([{ name: 'a.xml', localFlags: 0x0801, data: 'x' }]))).toBe('package')
+    })
   })
 
   it('refuses bytes without an end record', () => {

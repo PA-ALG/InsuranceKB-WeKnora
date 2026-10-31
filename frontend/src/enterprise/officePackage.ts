@@ -1,7 +1,7 @@
 import JSZip from 'jszip'
 import type { OfficeFormat } from './officeCitation'
 import { FOLLOWABLE_PROTOCOLS, HYPERLINK, POLICIES } from './officePackagePolicy'
-import { readZipDirectory, ZipDirectoryRejected } from './officeZipDirectory'
+import { readZipDirectory, ZipDirectoryRejected, type ZipEntry } from './officeZipDirectory'
 
 // An Office file is untrusted active content (S11e Spec §3.2a). The upstream renderers act on what a
 // package holds: docx-preview writes an altChunk's HTML into an unsandboxed iframe, and external
@@ -138,20 +138,25 @@ export async function sanitizeOfficePackage(
   // Matched case-insensitively, written back in the spelling the renderers compare literally.
   const allowed = new Map([...policy.contentTypes].map(type => [type.toLowerCase(), type]))
   if (data.byteLength > limits.bytes) throw rejected('size')
-  let declared: number
+  let directory: ZipEntry[]
   try {
-    declared = readZipDirectory(data, limits.entries).reduce((sum, entry) => sum + entry.size, 0)
+    directory = readZipDirectory(data, limits.entries)
   } catch (error) {
     if (error instanceof ZipDirectoryRejected) throw rejected(error.problem)
     throw error
   }
-  if (declared > limits.inflated) throw rejected('size')
+  if (directory.reduce((sum, entry) => sum + entry.size, 0) > limits.inflated) throw rejected('size')
   let zip: JSZip
   try {
-    zip = await JSZip.loadAsync(data)
+    // Without implied folders, JSZip's table holds exactly one object per directory record.
+    zip = await JSZip.loadAsync(data, { createFolders: false })
   } catch {
     throw rejected('package')
   }
+  // Use only what was checked: the library's table must be the checked directory, entry for entry.
+  const loaded = Object.keys(zip.files)
+  if (loaded.length !== directory.length
+    || directory.some(entry => zip.files[entry.name]?.dir !== entry.directory)) throw rejected('structure')
   const entries = Object.values(zip.files).filter(file => !file.dir)
   let budget = limits.inflated
   for (const file of entries) budget -= await inflatedSize(file, budget)
