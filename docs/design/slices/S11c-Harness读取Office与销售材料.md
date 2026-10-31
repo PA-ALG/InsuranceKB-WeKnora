@@ -19,11 +19,11 @@ S11b 让平台对企业 RAW KB 的 `.pptx/.docx/.xlsx` 生成 Office 采集，�
 
 ### 2.1 读取 Office 来源页（`evidence/weknora_pages.py`）
 
-- 响应中的页可带 `blocks`（PDF 页没有该键，行为与输出逐字节不变）。块字段：`block_id`、`start`、`end`、`locator{kind, slide?, block_index?, sheet?, cell_range?}`，严格解析（未知字段、重复键、非有限数一律拒绝）。
-- 一个文档只要有任一页带块，即为 Office 文档；其各页都返回 `OfficePageText`（`eval/pdf_text.PageText` 的子类，增加 `blocks: tuple[OfficeBlock, ...]`，空页为空元组）。`OfficeBlock` 为 `start`、`end` 与 contracts `Locator`。
+- 响应中的页可带 `blocks`（PDF 页没有该键，行为与输出逐字节不变）。块字段：`block_id`、`start`、`end`、`locator{kind, slide?, block_index?, sheet?, cell_range?}`，严格解析（未知字段、重复键、非有限数一律拒绝）。locator 只能带其 kind 的键（PPTX `slide`，DOCX `block_index`，XLSX `sheet`、`cell_range`），任何键为显式 `null` 或属于别的 kind 都在响应边界拒绝，不先规范化再判断；通用 `Locator` 合同的可选字段不变（审核 R2，#479）。
+- 一个文档只要有任一页带 `blocks` **键**（含空列表），即为 Office 文档；按键是否存在判断，不按列表是否为空，否则带文字的空块页会被当作 PDF 文本、绕过 §2.3 的闸门（审核 R1，#479）。其各页都返回 `OfficePageText`（`eval/pdf_text.PageText` 的子类，增加 `blocks: tuple[OfficeBlock, ...]`，空页为空元组）。`OfficeBlock` 为 `start`、`end` 与 contracts `Locator`。
 - 额外校验（任一不满足 → `PARSE_ARTIFACT_INTEGRITY`，与现有完整性错误同码）：
   - 块按 `start` 升序、互不重叠，`0 ≤ start < end ≤ 页文本码点数`，块文本去空白后非空，同页 `block_id` 唯一；
-  - 页文本等于本页各块文本以 `\n\n` 连接（无块的页文本为空串；平台对无块的 Office 页省略 `blocks`，空列表与省略同义）；
+  - 页文本等于本页各块文本以 `\n\n` 连接（无块的页文本为空串；平台对无块的 Office 页省略 `blocks`，在 Office 文档内空列表与省略同义）；
   - 一个文档内所有块的 `kind` 相同，且为 `PPTX_SHAPE`、`DOCX_BLOCK`、`XLSX_CELL_RANGE` 之一；`PPTX_SHAPE` 只有 `slide` 且等于页码；`DOCX_BLOCK` 只有 `block_index`，文档只有 1 页且 `block_index` 严格递增；`XLSX_CELL_RANGE` 只有 `sheet`、`cell_range`，同页 `sheet` 相同、不同页不同，`cell_range` 为同一行 `A<r>:XFD<r>` 且行号严格递增。
 - `contracts` 的 `Locator`：`PPTX_SHAPE` 的必填字段从 `slide, shape_id` 放宽为 `slide`（`shape_id` 仍可填）。JSON Schema 不编码各 kind 的必填字段，`contracts/` 导出不变，以导出命令 `--check` 为准。
 
