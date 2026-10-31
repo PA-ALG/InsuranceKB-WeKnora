@@ -28,6 +28,30 @@ var (
 	ErrNotCaptured = errors.New("parse artifact not captured")
 )
 
+// Typed reasons a revision was not captured (S11f). Only the code and, for a scanned PDF, the first
+// scanned page number are ever exposed; parser messages stay private.
+const (
+	// NotCapturedScannedPage means a PDF page has no usable text layer, so the whole file was not captured.
+	NotCapturedScannedPage = "SCANNED_PAGE"
+	// NotCapturedOfficeUnreadable means an Office file's structure could not be read or sealed.
+	NotCapturedOfficeUnreadable = "OFFICE_STRUCTURE_UNREADABLE"
+	// NotCapturedUnsupportedFormat means the file type is outside what is captured (PDF and OOXML).
+	NotCapturedUnsupportedFormat = "UNSUPPORTED_FORMAT"
+	// NotCapturedNotRecorded means a capturable type without a capture or a note for this attempt.
+	NotCapturedNotRecorded = "CAPTURE_NOT_RECORDED"
+)
+
+// NotCaptured qualifies ErrNotCaptured with its typed reason; errors.Is(err, ErrNotCaptured) holds.
+type NotCaptured struct {
+	Reason string
+	Page   int // the first scanned page, only with NotCapturedScannedPage
+}
+
+func (e *NotCaptured) Error() string { return ErrNotCaptured.Error() + ": " + e.Reason }
+
+// Is makes a typed reason match ErrNotCaptured.
+func (e *NotCaptured) Is(target error) bool { return target == ErrNotCaptured }
+
 // Scope is supplied by the authenticated platform boundary.
 type Scope struct {
 	TenantID uint64
@@ -84,7 +108,12 @@ type PageSet struct {
 	Pages                []Page `json:"pages"`
 }
 
-// Error is safe to expose at the HTTP boundary; backend diagnostics stay private.
-type Error struct{ Code, Detail string }
+// Error is safe to expose at the HTTP boundary; backend diagnostics stay private. Reason and Page
+// qualify ErrorNotCaptured only (S11f).
+type Error struct {
+	Code, Detail string
+	Reason       string
+	Page         int
+}
 
 func (e *Error) Error() string { return e.Code + ": " + e.Detail }

@@ -297,7 +297,14 @@ func writeSourceError(c *gin.Context, err error) {
 	case source.ErrorIntegrity:
 		status = http.StatusInternalServerError
 	}
-	c.AbortWithStatusJSON(status, gin.H{"success": false, "code": failure.Code, "error": failure.Detail})
+	body := gin.H{"success": false, "code": failure.Code, "error": failure.Detail}
+	if failure.Code == source.ErrorNotCaptured && failure.Reason != "" {
+		body["reason"] = failure.Reason
+		if failure.Reason == source.NotCapturedScannedPage && failure.Page > 0 {
+			body["page_number"] = failure.Page
+		}
+	}
+	c.AbortWithStatusJSON(status, body)
 }
 
 func writeError(c *gin.Context, err error) {

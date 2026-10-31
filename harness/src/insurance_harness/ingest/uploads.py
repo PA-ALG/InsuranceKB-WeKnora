@@ -40,7 +40,12 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.ingest.confirmations import ConfirmationsError, sync
 from insurance_harness.ingest.publication import PublicationError, run_publication
-from insurance_harness.ingest.raw_sources import RawSource, RawSources, RawSourcesError
+from insurance_harness.ingest.raw_sources import (
+    RawSource,
+    RawSources,
+    RawSourcesError,
+    UnfinishedSource,
+)
 from insurance_harness.ingest.registry import (
     FINAL,
     ProductRegistry,
@@ -61,6 +66,17 @@ from insurance_harness.ingest.source_map import (
 )
 
 
+class UnreadableMaterial(BaseModel):
+    """Why a listed material's pages could not be read: the typed code only (S11f Spec §2.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+    knowledge_id: str
+    file_name: str
+    code: str
+    reason: str | None = None
+    page: int | None = None  # the first scanned page of a scanned PDF
+
+
 class UploadReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
     counts: dict[str, int]
@@ -69,6 +85,8 @@ class UploadReport(BaseModel):
     unreadable: list[str]
     revision_changes: list[str]  # recorded materials listed with another attempt or SHA (S8)
     not_listed: list[str]  # registered materials missing from the completed listing (S8)
+    unreadable_reasons: list[UnreadableMaterial] = []  # `unreadable`, each with its reason (S11f)
+    unfinished: list[UnfinishedSource] = []  # listed materials whose parse has not completed (S11f)
 
 
 class UploadRun(BaseModel):
@@ -126,16 +144,23 @@ def attribute_uploads(
     sources: Sequence[RawSource],
     pages: PageReader,
     policy: AttributionPolicy | None = None,
+    unfinished: Sequence[UnfinishedSource] = (),
 ) -> UploadRun:
-    """The next registry and a report; the given registry is not modified."""
+    """The next registry and a report; the given registry is not modified.
+
+    `unfinished` is passed through to the report: the listed materials that cannot be judged yet.
+    """
     current = registry.model_copy(deep=True)
     heads: dict[str, str] = {}
-    unreadable: list[str] = []
+    unreadable: list[UnreadableMaterial] = []
     for source in _candidates(current, sources):
         try:
             heads[source.knowledge_id] = head_of(pages, current.space_id, source)
-        except SourcePagesError:
-            unreadable.append(source.knowledge_id)
+        except SourcePagesError as error:
+            unreadable.append(UnreadableMaterial(
+                knowledge_id=source.knowledge_id, file_name=source.file_name, code=error.code,
+                reason=error.reason, page=error.page,
+            ))
     remaining = [s for s in _candidates(current, sources) if s.knowledge_id in heads]
     counts: Counter[str] = Counter()
     affected: set[str] = set()
@@ -168,9 +193,11 @@ def attribute_uploads(
         counts=dict(sorted(counts.items())),
         affected_products=sorted(affected),
         pending=len(current.pending),
-        unreadable=sorted(unreadable),
+        unreadable=sorted(m.knowledge_id for m in unreadable),
         revision_changes=revision_changes,
         not_listed=not_listed,
+        unreadable_reasons=sorted(unreadable, key=lambda m: m.knowledge_id),
+        unfinished=sorted(unfinished, key=lambda u: u.knowledge_id),
     )
     return UploadRun(registry=current, report=report)
 
@@ -290,7 +317,10 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 )
                 print(confirmed.report.model_dump_json())
                 return 0
-            result = attribute_uploads(registry, listing.completed(registry.raw_kb_id), pages)
+            listed = listing.listing(registry.raw_kb_id)
+            result = attribute_uploads(
+                registry, listed.completed, pages, unfinished=listed.unfinished
+            )
             if not args.dry_run and result.registry != registry:
                 save_registry(result.registry, args.registry)
             print(result.report.model_dump_json())

@@ -42,11 +42,30 @@ _ERROR_CODES = frozenset({
 })
 
 
-class SourcePagesError(ValueError):
-    """A caller-safe code, without response content or transport diagnostics."""
+NOT_CAPTURED = "PARSE_ARTIFACT_NOT_CAPTURED"
+SCANNED_PAGE = "SCANNED_PAGE"
+# Why a revision was not captured, as the platform types it (S11f Spec §2.1).
+_NOT_CAPTURED_REASONS = frozenset({
+    SCANNED_PAGE, "OFFICE_STRUCTURE_UNREADABLE", "UNSUPPORTED_FORMAT", "CAPTURE_NOT_RECORDED",
+})
 
-    def __init__(self, code: str) -> None:
+
+class SourcePagesError(ValueError):
+    """A caller-safe code, without response content or transport diagnostics.
+
+    A not-captured revision may also carry the platform's typed reason and, for a scanned PDF, the
+    first scanned page; anything else the response says is dropped (S11f Spec §2.2).
+    """
+
+    def __init__(self, code: str, reason: object = None, page: object = None) -> None:
         self.code = code if code in _ERROR_CODES else "SOURCE_UNAVAILABLE"
+        self.reason: str | None = None
+        self.page: int | None = None
+        known = isinstance(reason, str) and reason in _NOT_CAPTURED_REASONS
+        if self.code == NOT_CAPTURED and known and isinstance(reason, str):
+            self.reason = reason
+            if reason == SCANNED_PAGE and type(page) is int and 0 < page < 2**31:
+                self.page = page
         super().__init__(self.code)
 
 
@@ -157,14 +176,14 @@ class WeKnoraSourcePages:
         except httpx.HTTPError:
             raise SourcePagesError("SOURCE_UNAVAILABLE") from None
         if response.status_code != 200:
-            code = "SOURCE_UNAVAILABLE"
+            code, reason, page = "SOURCE_UNAVAILABLE", None, None
             try:
                 body = _json(response)
                 if isinstance(body, dict) and isinstance(body.get("code"), str):
-                    code = body["code"]
+                    code, reason, page = body["code"], body.get("reason"), body.get("page_number")
             except (ValueError, UnicodeError, RecursionError):
                 pass
-            raise SourcePagesError(code)
+            raise SourcePagesError(code, reason, page)
         try:
             result = _PageSet.model_validate(_json(response))
             if result.knowledge_id != knowledge_id or result.parse_attempt != attempt:

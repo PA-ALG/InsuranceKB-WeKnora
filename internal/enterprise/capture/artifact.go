@@ -60,12 +60,13 @@ func ReadSourceArtifact(
 	if !ValidSHA256(revision.FileSHA256) {
 		return nil, &source.Error{Code: source.ErrorIntegrity, Detail: "source revision failed integrity verification"}
 	}
-	record, err := store.Read(Identity{
+	id := Identity{
 		TenantID: scope.TenantID, RawKBID: scope.RawKBID, KnowledgeID: knowledgeID,
 		ParseAttempt: attempt, SourceSHA256: revision.FileSHA256,
-	})
+	}
+	record, err := store.Read(id)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, source.ErrNotCaptured
+		return nil, notCaptured(store, id, owned.FileType)
 	}
 	if errors.Is(err, ErrUnavailable) {
 		return nil, &source.Error{Code: source.ErrorIntegrity, Detail: "parse artifact failed integrity verification"}
