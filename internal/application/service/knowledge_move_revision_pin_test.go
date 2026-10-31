@@ -29,6 +29,21 @@ func (r *pinnedMoveWikiKnowledgeRepo) UpdateKnowledge(ctx context.Context, k *ty
 	return r.moveWikiKnowledgeRepo.UpdateKnowledge(ctx, k)
 }
 
+// UpdateKnowledgeForTransfer repeats the upstream stub's body with the wrapper as receiver. The
+// inherited method would call UpdateKnowledge on the inner stub, so a transfer write before the pin
+// check would bypass updateCalls; going through r.UpdateKnowledge keeps it counted, and the
+// commitErr short-circuit stays the same.
+func (r *pinnedMoveWikiKnowledgeRepo) UpdateKnowledgeForTransfer(
+	ctx context.Context,
+	_ *types.Knowledge,
+	after *types.Knowledge,
+) error {
+	if after.KnowledgeBaseID == "kb-dst" && r.commitErr != nil {
+		return r.commitErr
+	}
+	return r.UpdateKnowledge(ctx, after)
+}
+
 func TestMoveReparseRejectsPinnedRevisionSourceBeforeMutation(t *testing.T) {
 	svc, wikiRepo, pendingRepo, chunkRepo := newMoveWikiService(t)
 	repo := &pinnedMoveWikiKnowledgeRepo{moveWikiKnowledgeRepo: svc.repo.(*moveWikiKnowledgeRepo), pinned: true}
