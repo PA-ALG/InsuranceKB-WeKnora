@@ -37,13 +37,14 @@ BROCHURE_HEAD = "某某终身寿险产品说\n明书\n在本说明书中，“�
 RATES_HEAD = "《某某终身寿险》年交费率表\n（每万元基本保险金额）\n单位：人民币元"
 
 
-def test_the_shipped_roles_are_versioned_and_only_rate_tables_are_not_evidence() -> None:
+def test_the_shipped_roles_are_versioned_and_only_terms_and_brochures_are_evidence() -> None:
     roles = load_material_roles()
     assert roles.version
     assert {r.role: r.evidence for r in roles.roles} == {
         "terms": True,
         "brochure": True,
         "rate_table": False,
+        "sales_training": False,  # S11c: serves only the sales-type fields (TrustPolicy)
     }
 
 

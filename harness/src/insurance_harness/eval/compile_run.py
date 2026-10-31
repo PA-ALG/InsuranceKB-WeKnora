@@ -294,7 +294,7 @@ def compile_products(
             if revisions is not None:
                 pages = _revision_order(pages, revisions)
                 if headers is not None:
-                    roles = [rule.role for rule in load_trust_policy().header_rules]
+                    roles = list(load_trust_policy().restricted_roles())
                     headers = {role: _revision_order(headers[role], revisions)
                                for role in sorted(headers, key=roles.index)}
             carried = (carry_for(carry.release, product, materials)
