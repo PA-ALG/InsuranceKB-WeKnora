@@ -24,6 +24,7 @@ func (r *indexRetryKnowledgeRepo) UpdateKnowledge(_ context.Context, k *types.Kn
 type indexRetryChunkRepo struct {
 	parentChildChunkService
 	deletes int
+	deleted []string
 }
 
 func (s *indexRetryChunkRepo) DeleteChunksByKnowledgeID(context.Context, uint64, string) error {
@@ -35,6 +36,7 @@ type failingIndexEngine struct {
 	parentChildRetrieveEngine
 	err          error
 	indexDeletes int
+	deleted      []string
 }
 
 func (e *failingIndexEngine) BatchIndex(
