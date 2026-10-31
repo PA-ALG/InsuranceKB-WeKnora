@@ -131,11 +131,15 @@ func TestANoteOnlyAppliesToItsOwnAttemptAndNeverHidesACapture(t *testing.T) {
 	captured := capture.NewStore(seeded(t, in, sealed), testKeys())
 	require.NoError(t, captured.SaveNote(in.Identity, source.NotCapturedScannedPage, 1))
 	repo := noteRepo{
-		knowledge: types.Knowledge{ID: in.Identity.KnowledgeID, TenantID: in.Identity.TenantID,
-			KnowledgeBaseID: in.Identity.RawKBID, FileName: "条款.pdf", FileType: "pdf"},
+		knowledge: types.Knowledge{
+			ID: in.Identity.KnowledgeID, TenantID: in.Identity.TenantID,
+			KnowledgeBaseID: in.Identity.RawKBID, FileName: "条款.pdf", FileType: "pdf",
+		},
 		attempts: map[int64]bool{in.Identity.ParseAttempt: true},
 	}
-	scope := types.WikiReleaseScope{TenantID: in.Identity.TenantID, SpaceID: "s", RawKBID: in.Identity.RawKBID, WikiKBID: "w"}
+	scope := types.WikiReleaseScope{
+		TenantID: in.Identity.TenantID, SpaceID: "s", RawKBID: in.Identity.RawKBID, WikiKBID: "w",
+	}
 	reader := revisionOf{noteRepo: repo, sha: in.Identity.SourceSHA256}
 	artifact, err := capture.ReadSourceArtifact(context.Background(), captured, reader, scope,
 		in.Identity.KnowledgeID, in.Identity.ParseAttempt)
@@ -162,9 +166,13 @@ func TestAnInvalidNoteIsRefusedWhenWrittenAndWhenRead(t *testing.T) {
 		reason string
 		page   int
 	}{
-		{source.NotCapturedScannedPage, 0}, {source.NotCapturedScannedPage, -1},
-		{source.NotCapturedOfficeUnreadable, 2}, {source.NotCapturedNotRecorded, 0},
-		{source.NotCapturedUnsupportedFormat, 0}, {"SOMETHING_ELSE", 0}, {"", 0},
+		{source.NotCapturedScannedPage, 0},
+		{source.NotCapturedScannedPage, -1},
+		{source.NotCapturedOfficeUnreadable, 2},
+		{source.NotCapturedNotRecorded, 0},
+		{source.NotCapturedUnsupportedFormat, 0},
+		{"SOMETHING_ELSE", 0},
+		{"", 0},
 	} {
 		require.ErrorIs(t, c.store.SaveNote(c.id, bad.reason, bad.page), capture.ErrUnavailable, "%+v", bad)
 	}
