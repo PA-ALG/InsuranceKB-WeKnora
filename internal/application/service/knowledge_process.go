@@ -4759,9 +4759,7 @@ func (s *knowledgeService) convert(
 	}
 	// Classify the original error before sanitization can remove malformed bytes.
 	if s.enterpriseScannedPDF(knowledge, payload, result) {
-		s.endStage(ctx, knowledge.ID, types.StageDocReader, types.JSONMap{
-			"first_parse_saved": false, "not_captured_reason": "scanned_page",
-		})
+		s.noteScannedPDF(ctx, knowledge, payload, result.Error)
 		return &types.ReadResult{Error: result.Error}, nil
 	}
 	sanitizeReadResult(result, firstParse)
