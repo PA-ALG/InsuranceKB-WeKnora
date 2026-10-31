@@ -1,0 +1,100 @@
+# I3a fresh-install rehearsal (docs/design/slices/I3-私有化演练.md §1): the I2 topology installed from
+# images pinned by digest (images.lock) into an empty colima profile. No source build, no data copied
+# from live. Secrets come from env files under $REHEARSAL_HOME, written by rehearsal.py outside any
+# repository; this file holds no secret values. Run it only through rehearsal.py, which verifies the
+# owned VM and passes the recorded UI port.
+name: insurancekb-rehearsal
+
+x-restart: &restart
+  restart: unless-stopped
+  pull_policy: never
+
+services:
+  pg:
+    <<: *restart
+    image: ${REHEARSAL_PG_IMAGE:?run rehearsal.py images first}
+    env_file: ${REHEARSAL_HOME:?}/pg.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+
+  redis:
+    <<: *restart
+    image: ${REHEARSAL_REDIS_IMAGE:?run rehearsal.py images first}
+    env_file: ${REHEARSAL_HOME:?}/redis.env
+    entrypoint: ["/bin/sh"]
+    command: ["-ceu", "exec redis-server --save '' --appendonly no --requirepass \"$$REDIS_PASSWORD\""]
+    networks: [internal]
+
+  docreader:
+    <<: *restart
+    image: ${REHEARSAL_DOCREADER_IMAGE:?run rehearsal.py images first}
+    environment:
+      DOCREADER_GRPC_PORT: "50051"
+      DOCREADER_GRPC_MAX_FILE_SIZE_MB: "128"
+    volumes:
+      - docreader-tmp:/tmp/docreader
+    networks: [internal]
+
+  app:
+    <<: *restart
+    image: ${REHEARSAL_APP_IMAGE:?run rehearsal.py images first}
+    env_file:
+      - ${REHEARSAL_DEFAULTS:?}
+      - ${REHEARSAL_HOME:?}/app.env
+      # ENTERPRISE_SPACES and DISABLE_REGISTRATION, written by `seed` once the KBs exist.
+      - ${REHEARSAL_HOME:?}/spaces.env
+    environment:
+      DB_HOST: pg
+      REDIS_ADDR: redis:6379
+      DOCREADER_ADDR: docreader:50051
+    volumes:
+      - files:/data/files
+      - docreader-tmp:/tmp/docreader:ro
+      # The image's config.yaml plus the artifact signing ring (rehearsal finding F3).
+      - ${REHEARSAL_HOME:?}/config.yaml:/app/config/config.yaml:ro
+      # The App image ships config/ but not contracts/ (releasestore ENTERPRISE_CONTRACTS_DIR), so an
+      # install mounts contracts/ from the same commit as the images — rehearsal finding F1.
+      - ${REHEARSAL_CONTRACTS_DIR:?}:/app/contracts:ro
+    networks: [internal, egress]
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      docreader:
+        condition: service_started
+
+  ui:
+    <<: *restart
+    image: ${REHEARSAL_UI_IMAGE:?run rehearsal.py images first}
+    environment:
+      APP_HOST: app
+      APP_PORT: "8080"
+      APP_SCHEME: http
+      MAX_FILE_SIZE_MB: "128"
+    volumes:
+      # The random instance marker: rehearsal.py writes over HTTP only to an endpoint serving it.
+      - ${REHEARSAL_HOME:?}/instance-marker.txt:/usr/share/nginx/html/rehearsal-instance.txt:ro
+    ports:
+      - "127.0.0.1:${REHEARSAL_UI_PORT:?}:80"
+    networks: [internal, edge]
+    depends_on:
+      app:
+        condition: service_started
+
+networks:
+  internal:
+    internal: true
+  egress: {}
+  edge: {}
+
+volumes:
+  pgdata: {}
+  files: {}
+  docreader-tmp: {}
