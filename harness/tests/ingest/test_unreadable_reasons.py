@@ -1,7 +1,7 @@
 """S11f acceptance (protected, written by Claude): the upload report says why a material is unread.
 
-Spec docs/design/slices/S11f-未采集材料带类型原因.md §2.2, §3.4. RED until S11f: SourcePagesError has no
-reason, RawSources has no listing() and the report has no unreadable_reasons / unfinished.
+Spec docs/design/slices/S11f-未采集材料带类型原因.md §2.2, §3.4. RED until S11f: SourcePagesError
+has no reason, RawSources has no listing() and the report has no unreadable_reasons / unfinished.
 """
 
 import json
@@ -41,8 +41,8 @@ def test_a_not_captured_error_keeps_a_known_reason_and_a_strict_page() -> None:
         assert (error.reason, error.page) == (reason, None), "only a scanned page has a page"
     for page in (True, 0, -1, "3", 3.0, 2**31, None):
         assert SourcePagesError(NOT_CAPTURED, "SCANNED_PAGE", page).page is None, page
-    for reason in ("SOMETHING_ELSE", "", None, 7, "scanned_page"):
-        assert SourcePagesError(NOT_CAPTURED, reason, 3).reason is None, reason
+    for odd in ("SOMETHING_ELSE", "", None, 7, "scanned_page"):
+        assert SourcePagesError(NOT_CAPTURED, odd, 3).reason is None, odd
     other = SourcePagesError("PARSE_ARTIFACT_INTEGRITY", "SCANNED_PAGE", 3)
     assert (other.reason, other.page) == (None, None), "a reason belongs to NOT_CAPTURED only"
     assert str(SourcePagesError(NOT_CAPTURED, "SCANNED_PAGE", 3)) == NOT_CAPTURED
@@ -56,10 +56,12 @@ def test_the_page_reader_carries_the_platform_reason_and_nothing_else() -> None:
             "reason": "SCANNED_PAGE", "page_number": 4,
         })
 
-    reader = WeKnoraSourcePages("http://weknora.test", "key", transport=httpx.MockTransport(handler))
+    transport = httpx.MockTransport(handler)
+    reader = WeKnoraSourcePages("http://weknora.test", "key", transport=transport)
     with pytest.raises(SourcePagesError) as caught:
         reader.pages(SPACE, "k-1", 1)
-    assert (caught.value.code, caught.value.reason, caught.value.page) == (NOT_CAPTURED, "SCANNED_PAGE", 4)
+    error = caught.value
+    assert (error.code, error.reason, error.page) == (NOT_CAPTURED, "SCANNED_PAGE", 4)
     assert SECRET not in repr(caught.value) and SECRET not in str(caught.value)
 
 
@@ -67,8 +69,10 @@ def test_the_page_reader_carries_the_platform_reason_and_nothing_else() -> None:
 
 
 def item(kid: str, status: str, **extra: object) -> dict[str, object]:
-    return {"id": kid, "parse_status": status, "current_parse_attempt": 1, "file_name": kid + ".pdf",
-            "file_sha256": "a" * 64, **extra}
+    return {
+        "id": kid, "parse_status": status, "current_parse_attempt": 1,
+        "file_name": kid + ".pdf", "file_sha256": "a" * 64, **extra,
+    }
 
 
 def listing(items: list[dict[str, object]]) -> httpx.MockTransport:
@@ -84,19 +88,22 @@ def listing(items: list[dict[str, object]]) -> httpx.MockTransport:
 def test_the_listing_maps_parse_states_without_reading_error_messages() -> None:
     items = [
         item("k-done", "completed"), item("k-failed", "failed", error_message=SECRET),
-        item("k-cancelled", "cancelled"), item("k-pending", "pending"), item("k-running", "processing"),
-        item("k-final", "finalizing"), item("k-deleting", "deleting"), item("k-odd", "archived"),
+        item("k-cancelled", "cancelled"), item("k-pending", "pending"),
+        item("k-running", "processing"), item("k-final", "finalizing"),
+        item("k-deleting", "deleting"), item("k-odd", "archived"),
     ]
     sources = RawSources("http://weknora.test", "key", transport=listing(items))
     read = sources.listing(RAW_KB)
     assert [s.knowledge_id for s in read.completed] == ["k-done"]
     assert read.unfinished == [
-        UnfinishedSource(knowledge_id="k-failed", file_name="k-failed.pdf", state="PARSE_FAILED"),
-        UnfinishedSource(knowledge_id="k-cancelled", file_name="k-cancelled.pdf", state="PARSE_CANCELLED"),
-        UnfinishedSource(knowledge_id="k-pending", file_name="k-pending.pdf", state="NOT_CAPTURED_YET"),
-        UnfinishedSource(knowledge_id="k-running", file_name="k-running.pdf", state="NOT_CAPTURED_YET"),
-        UnfinishedSource(knowledge_id="k-final", file_name="k-final.pdf", state="NOT_CAPTURED_YET"),
-        UnfinishedSource(knowledge_id="k-odd", file_name="k-odd.pdf", state="PARSE_STATE_UNKNOWN"),
+        UnfinishedSource.model_validate(
+            {"knowledge_id": kid, "file_name": kid + ".pdf", "state": state}
+        )
+        for kid, state in [
+            ("k-failed", "PARSE_FAILED"), ("k-cancelled", "PARSE_CANCELLED"),
+            ("k-pending", "NOT_CAPTURED_YET"), ("k-running", "NOT_CAPTURED_YET"),
+            ("k-final", "NOT_CAPTURED_YET"), ("k-odd", "PARSE_STATE_UNKNOWN"),
+        ]
     ]
     assert SECRET not in json.dumps([u.model_dump() for u in read.unfinished])
     assert sources.completed(RAW_KB) == read.completed, "completed() is unchanged"
@@ -168,7 +175,8 @@ def test_the_command_prints_reasons_and_unfinished_without_platform_text(
             "reason": "SCANNED_PAGE", "page_number": 3,
         })
 
-    assert main(["run", "--registry", str(path), "--dry-run"], transport=httpx.MockTransport(handler)) == 0
+    transport = httpx.MockTransport(handler)
+    assert main(["run", "--registry", str(path), "--dry-run"], transport=transport) == 0
     out = capsys.readouterr().out
     report = json.loads(out)
     assert report["unreadable"] == [scanned]
