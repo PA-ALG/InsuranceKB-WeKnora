@@ -59,7 +59,7 @@ function docx(body = BODY, more: Partial<Spec> = {}): Spec {
       ...more.parts,
     },
     rels: {
-      '': [['rId1', `${REL}/officeDocument`, 'word/document.xml'], ['rId2', `${REL}/metadata/core-properties`, 'docProps/core.xml']],
+      '': [['rId1', `${REL}/officeDocument`, 'word/document.xml'], ['rId2', 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties', 'docProps/core.xml']],
       'word/document.xml': [['rIdS', `${REL}/styles`, 'styles.xml'], ['rIdI', `${REL}/image`, 'media/image1.png']],
       ...more.rels,
     },
@@ -105,7 +105,7 @@ describe('an ordinary package', () => {
     expect(await out.relIds('word/document.xml')).toEqual(['rIdS', 'rIdI'])
     const types = await out.text('[Content_Types].xml')
     expect(types).toContain(`<Override PartName="/word/document.xml" ContentType="${MAIN.docx}"/>`)
-    expect(types).toContain('<Default Extension="png" ContentType="image/png"/>')
+    expect(types).toContain('<Override PartName="/word/media/image1.png" ContentType="image/png"/>')
   })
 
   it('keeps a deck and a workbook', async () => {
@@ -221,7 +221,8 @@ describe('active and foreign content', () => {
     }), 'pptx')
     expect(deck.names).toEqual(['[Content_Types].xml', '_rels/.rels', 'ppt/_rels/presentation.xml.rels',
       'ppt/presentation.xml', 'ppt/slides/_rels/slide1.xml.rels', 'ppt/slides/slide1.xml'])
-    expect(await deck.relIds('ppt/slides/slide1.xml')).toEqual(['rId7'])
+    // The deck renderer follows no hyperlinks, so even a web link is not kept.
+    expect(await deck.relIds('ppt/slides/slide1.xml')).toEqual([])
     const book = await rebuilt(await build({
       parts: { 'xl/workbook.xml': '<workbook/>', 'xl/externalLinks/externalLink1.xml': '<externalLink/>', 'xl/vbaProject.bin': 'vba' },
       rels: {
@@ -231,6 +232,96 @@ describe('active and foreign content', () => {
       overrides: { 'xl/workbook.xml': MAIN.xlsx },
     }), 'xlsx')
     expect(book.names).toEqual(['[Content_Types].xml', '_rels/.rels', 'xl/_rels/workbook.xml.rels', 'xl/workbook.xml'])
+  })
+})
+
+describe('default deny', () => {
+  it.each([
+    ['custom XML', `${REL}/customXml`, 'item1.xml', 'application/xml'],
+    ['an unknown type to an allowed image', 'urn:example:relationships/thing', 'media/thing.png', 'image/png'],
+    ['a stylesWithEffects part the renderer does not load', 'http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects', 'stylesWithEffects.xml', `${OOXML}.wordprocessingml.styles+xml`],
+  ])('drops a relationship type outside the list: %s', async (_name, type, target, contentType) => {
+    const part = `word/${target}`
+    const spec = docx(BODY, { parts: { [part]: '<x/>' }, overrides: { [part]: contentType } })
+    const out = await rebuilt(await build(withDocRels(spec, [['rIdU', type, target]])))
+    expect(out.names).not.toContain(part)
+    expect(await out.relIds('word/document.xml')).toEqual(['rIdS', 'rIdI'])
+  })
+
+  it.each([
+    ['outside the list', { 'word/styles.xml': 'application/xml' }, {}],
+    ['missing', {}, { xml: '' }],
+  ])('drops a part whose content type is %s, with its relationship', async (_name, overrides, defaults) => {
+    const spec = docx()
+    const base = { ...spec.overrides }
+    delete base['word/styles.xml']
+    const out = await rebuilt(await build({ ...spec, overrides: { ...base, ...overrides }, defaults: { xml: 'application/xml', ...defaults } }))
+    expect(out.names).not.toContain('word/styles.xml')
+    expect(await out.relIds('word/document.xml')).toEqual(['rIdI'])
+  })
+
+  it('drops a part no content type names', async () => {
+    const spec = docx(BODY, { parts: { 'word/media/picture.dat': PNG } })
+    const out = await rebuilt(await build(withDocRels(spec, [['rIdD', `${REL}/image`, 'media/picture.dat']])))
+    expect(out.names).not.toContain('word/media/picture.dat')
+  })
+
+  it('writes content types back in the spelling the renderers compare', async () => {
+    const out = await rebuilt(await build({
+      parts: { 'ppt/presentation.xml': '<p:presentation/>', 'ppt/slideMasters/slideMaster1.xml': '<p:sldMaster/>' },
+      rels: { '': [['rId1', `${REL}/officeDocument`, 'ppt/presentation.xml']], 'ppt/presentation.xml': [['rId2', `${REL}/slideMaster`, 'slideMasters/slideMaster1.xml']] },
+      overrides: { 'ppt/presentation.xml': MAIN.pptx.toUpperCase(), 'ppt/slideMasters/slideMaster1.xml': `${OOXML}.presentationml.slidemaster+xml` },
+    }), 'pptx')
+    const types = await out.text('[Content_Types].xml')
+    expect(types).toContain(`ContentType="${OOXML}.presentationml.slideMaster+xml"`)
+    expect(types).toContain(`ContentType="${MAIN.pptx}"`)
+  })
+
+  const STRICT = 'http://purl.oclc.org/ooxml/officeDocument/relationships'
+
+  it('reads a Strict workbook, which the sheet renderer supports', async () => {
+    const out = await rebuilt(await build({
+      parts: { 'xl/workbook.xml': '<workbook><sheets><sheet name="A" sheetId="1" r:id="rId2"/></sheets></workbook>', 'xl/worksheets/sheet1.xml': '<worksheet/>' },
+      rels: { '': [['rId1', `${STRICT}/officeDocument`, 'xl/workbook.xml']], 'xl/workbook.xml': [['rId2', `${STRICT}/worksheet`, 'worksheets/sheet1.xml']] },
+      overrides: { 'xl/workbook.xml': MAIN.xlsx, 'xl/worksheets/sheet1.xml': `${OOXML}.spreadsheetml.worksheet+xml` },
+    }), 'xlsx')
+    expect(out.names).toContain('xl/worksheets/sheet1.xml')
+  })
+
+  it('refuses a Strict document or deck, which their renderers do not read', async () => {
+    const strict = docx()
+    expect(await rejection(await build({ ...strict, rels: { ...strict.rels, '': [['rId1', `${STRICT}/officeDocument`, 'word/document.xml']] } }))).toBe('structure')
+    expect(await rejection(await build({
+      parts: { 'ppt/presentation.xml': '<p:presentation/>' },
+      rels: { '': [['rId1', `${STRICT}/officeDocument`, 'ppt/presentation.xml']] },
+      overrides: { 'ppt/presentation.xml': MAIN.pptx },
+    }), 'pptx')).toBe('structure')
+  })
+
+  it.each([
+    ['a slide the deck lists', 'pptx', 'ppt/presentation.xml', '<p:presentation><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst></p:presentation>',
+      `${REL}/slide`, 'ppt/slides/slide1.xml', 'application/xml'],
+    ['a slide master the deck lists', 'pptx', 'ppt/presentation.xml', '<p:presentation><p:sldMasterIdLst><p:sldMasterId id="1" r:id="rId2"/></p:sldMasterIdLst></p:presentation>',
+      'urn:example:relationships/slideMaster', 'ppt/slideMasters/slideMaster1.xml', `${OOXML}.presentationml.slideMaster+xml`],
+    ['a macro sheet the workbook lists', 'xlsx', 'xl/workbook.xml', '<workbook><sheets><sheet name="M" sheetId="1" r:id="rId2"/></sheets></workbook>',
+      'http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet', 'xl/macrosheets/sheet1.xml', 'application/vnd.ms-excel.macrosheet+xml'],
+  ])('refuses a package that loses %s', async (_name, format, mainPart, mainXml, type, target, contentType) => {
+    const input = await build({
+      parts: { [mainPart]: mainXml, [target]: '<x/>' },
+      rels: { '': [['rId1', `${REL}/officeDocument`, mainPart]], [mainPart]: [['rId2', type, target.slice(target.indexOf('/') + 1)]] },
+      overrides: { [mainPart]: MAIN[format as 'pptx' | 'xlsx'], [target]: contentType },
+    })
+    expect(await rejection(input, format as 'pptx' | 'xlsx')).toBe('structure')
+  })
+
+  it('keeps a deck whose listed slides all survive; a section list names slides by id only', async () => {
+    const sections = '<p:extLst><p:ext><p14:sectionLst><p14:section name="A"><p14:sldIdLst><p14:sldId id="256"/></p14:sldIdLst></p14:section></p14:sectionLst></p:ext></p:extLst>'
+    const out = await rebuilt(await build({
+      parts: { 'ppt/presentation.xml': `<p:presentation><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>${sections}</p:presentation>`, 'ppt/slides/slide1.xml': '<p:sld/>' },
+      rels: { '': [['rId1', `${REL}/officeDocument`, 'ppt/presentation.xml']], 'ppt/presentation.xml': [['rId2', `${REL}/slide`, 'slides/slide1.xml']] },
+      overrides: { 'ppt/presentation.xml': MAIN.pptx, 'ppt/slides/slide1.xml': `${OOXML}.presentationml.slide+xml` },
+    }), 'pptx')
+    expect(out.names).toContain('ppt/slides/slide1.xml')
   })
 })
 

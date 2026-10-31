@@ -1,12 +1,15 @@
 import JSZip from 'jszip'
 import type { OfficeFormat } from './officeCitation'
+import { FOLLOWABLE_PROTOCOLS, HYPERLINK, POLICIES } from './officePackagePolicy'
+import { readZipDirectory, ZipDirectoryRejected } from './officeZipDirectory'
 
 // An Office file is untrusted active content (S11e Spec §3.2a). The upstream renderers act on what a
 // package holds: docx-preview writes an altChunk's HTML into an unsandboxed iframe, and external
 // targets make the browser fetch them. Before a cited file reaches the preview, its package is
-// rebuilt from an allow-list: only parts reachable from the package root through relationships
-// we keep, canonical relationship and content-type parts, no altChunk elements. Anything we cannot
-// read within the limits is refused, never shown as is.
+// rebuilt default-deny: the ZIP directory is checked on the raw bytes, then only parts reachable
+// from the package root through relationships the format's renderer follows, whose content types it
+// reads (officePackagePolicy.ts), are kept; relationship and content-type parts are regenerated and
+// altChunk elements removed. Anything we cannot read within the limits is refused, never shown as is.
 
 export type OfficePackageProblem = 'package' | 'size' | 'structure'
 
@@ -20,7 +23,7 @@ export class OfficePackageRejected extends Error {
 export interface OfficePackageLimits {
   /** Downloaded bytes. */
   bytes: number
-  /** Zip entries. */
+  /** ZIP directory records, folders included. */
   entries: number
   /** Bytes of all entries once inflated, counted while inflating (declared sizes can lie). */
   inflated: number
@@ -32,32 +35,6 @@ export const OFFICE_PACKAGE_LIMITS: OfficePackageLimits = {
   inflated: 256 * 1024 * 1024,
 }
 
-const MAIN_TYPES: Record<OfficeFormat, string> = {
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml',
-}
-
-// Relationship types (last path segment, lower case) that carry embedded documents, code or
-// controls, or pull in other files. The relationship and the part it targets are dropped.
-const DROPPED_RELATIONSHIPS = new Set([
-  'afchunk', 'oleobject', 'control', 'activexcontrol', 'activexcontrolbinary',
-  'vbaproject', 'vbaprojectsignature', 'vbaprojectsignatureagile', 'vbaprojectsignaturev3', 'wordvbadata',
-  'keymapcustomizations', 'attachedtoolbars', 'extensibility', 'attachedtemplate', 'frame', 'subdocument',
-  'externallink', 'externallinkpath', 'slideupdateinfo',
-])
-
-// Parts that are markup, code or OLE payloads, whatever relationship reaches them.
-const DROPPED_CONTENT_TYPES = new Set([
-  'text/html', 'application/xhtml+xml', 'message/rfc822', 'multipart/related', 'application/rtf', 'text/rtf',
-  'application/vnd.ms-office.vbaproject', 'application/vnd.ms-office.vbaprojectsignature',
-  'application/vnd.ms-word.vbadata+xml', 'application/vnd.ms-office.activex+xml', 'application/vnd.ms-office.activex',
-  'application/vnd.openxmlformats-officedocument.oleobject', 'application/vnd.ms-word.keymapcustomizations+xml',
-  'application/vnd.ms-word.attachedtoolbars',
-])
-const DROPPED_EXTENSIONS = new Set(['html', 'htm', 'xhtml', 'xht', 'mht', 'mhtml', 'rtf', 'bin', 'js', 'vbs', 'hta'])
-
-const FOLLOWABLE = new Set(['http:', 'https:', 'mailto:'])
 const RELATIONSHIPS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships'
 const CONTENT_TYPES_NS = 'http://schemas.openxmlformats.org/package/2006/content-types'
 const CONTENT_TYPES = '[Content_Types].xml'
@@ -122,7 +99,7 @@ function resolve(source: string, target: string): string | null {
 
 function followable(target: string): boolean {
   try {
-    return FOLLOWABLE.has(new URL(target).protocol)
+    return FOLLOWABLE_PROTOCOLS.has(new URL(target).protocol)
   } catch {
     return false
   }
@@ -151,13 +128,24 @@ function inflatedSize(file: JSZip.JSZipObject, budget: number): Promise<number> 
 }
 
 /**
- * Rebuilds an Office package so that only inert parts reach the renderer. Throws
+ * Rebuilds an Office package so that only what the format's renderer reads reaches it. Throws
  * `OfficePackageRejected` when the file is not a readable package of `format` within `limits`.
  */
 export async function sanitizeOfficePackage(
   data: ArrayBuffer, format: OfficeFormat, limits: OfficePackageLimits = OFFICE_PACKAGE_LIMITS,
 ): Promise<ArrayBuffer> {
+  const policy = POLICIES[format]
+  // Matched case-insensitively, written back in the spelling the renderers compare literally.
+  const allowed = new Map([...policy.contentTypes].map(type => [type.toLowerCase(), type]))
   if (data.byteLength > limits.bytes) throw rejected('size')
+  let declared: number
+  try {
+    declared = readZipDirectory(data, limits.entries).reduce((sum, entry) => sum + entry.size, 0)
+  } catch (error) {
+    if (error instanceof ZipDirectoryRejected) throw rejected(error.problem)
+    throw error
+  }
+  if (declared > limits.inflated) throw rejected('size')
   let zip: JSZip
   try {
     zip = await JSZip.loadAsync(data)
@@ -165,17 +153,11 @@ export async function sanitizeOfficePackage(
     throw rejected('package')
   }
   const entries = Object.values(zip.files).filter(file => !file.dir)
-  if (entries.length > limits.entries) throw rejected('size')
-  const byName = new Map<string, JSZip.JSZipObject>()
-  for (const file of entries) {
-    const key = file.name.toLowerCase()
-    // Two names differing only in case would let the renderer read a part we did not inspect.
-    if (byName.has(key)) throw rejected('structure')
-    byName.set(key, file)
-  }
   let budget = limits.inflated
   for (const file of entries) budget -= await inflatedSize(file, budget)
 
+  // The directory check refused names that differ only in case, so this lookup is unambiguous.
+  const byName = new Map(entries.map(file => [file.name.toLowerCase(), file]))
   const part = (name: string) => zip.file(name) ?? byName.get(name.toLowerCase()) ?? null
   const text = async (file: JSZip.JSZipObject) => {
     try {
@@ -192,60 +174,79 @@ export async function sanitizeOfficePackage(
     .filter(d => d.Extension && d.ContentType).map(d => [d.Extension.toLowerCase(), d.ContentType]))
   const overrides = new Map(elements(typesXml, 'Override')
     .filter(o => o.PartName && o.ContentType).map(o => [o.PartName.replace(/^\/+/, '').toLowerCase(), o.ContentType]))
-  const contentType = (name: string) => overrides.get(name.toLowerCase()) ?? defaults.get(extension(name)) ?? ''
-  const inert = (name: string) =>
-    !DROPPED_CONTENT_TYPES.has(contentType(name).toLowerCase()) && !DROPPED_EXTENSIONS.has(extension(name))
+  /** The allowed content type of a part, or null when it has none the renderer reads. */
+  const contentType = (name: string) =>
+    allowed.get((overrides.get(name.toLowerCase()) ?? defaults.get(extension(name)) ?? '').split(';')[0].trim().toLowerCase()) ?? null
 
-  // Walk relationships from the package root; whatever is not reached is not kept.
+  // Walk relationships from the package root, default-deny: a relationship stays only if the
+  // renderer follows its type and reads its target's content type; nothing else is reached.
   const keep = new Set<string>([typesFile.name])
   const rewritten = new Map<string, string>()
   const queue = ['']
-  let main: string | null = null
+  let main: { name: string; kept: Set<string> } | null = null
   while (queue.length) {
     const source = queue.shift()!
     const relsFile = part(source ? relationshipsPart(source) : '_rels/.rels')
     if (!relsFile) continue
     keep.add(relsFile.name)
     const kept: Relationship[] = []
+    let mainName: string | null = null
     for (const rel of elements(await text(relsFile), 'Relationship')) {
       const relationship = {
         id: rel.Id ?? '', type: rel.Type ?? '', target: rel.Target ?? '', external: rel.TargetMode?.toLowerCase() === 'external',
       }
-      const kind = relationship.type.slice(relationship.type.lastIndexOf('/') + 1).toLowerCase()
-      if (!relationship.id || DROPPED_RELATIONSHIPS.has(kind)) continue
+      if (!relationship.id || !policy.relationships.has(relationship.type)) continue
       if (relationship.external) {
         // External targets are fetched by the renderer (a leaked request) or embed another file;
         // only links the reader may follow stay.
-        if (kind === 'hyperlink' && followable(relationship.target)) kept.push(relationship)
+        if (relationship.type === HYPERLINK && followable(relationship.target)) kept.push(relationship)
         continue
       }
       const name = resolve(source, relationship.target)
-      if (!name) continue
-      const file = part(name)
-      if (file && !inert(file.name)) continue
+      const file = name ? part(name) : null
+      if (!file || !contentType(file.name)) continue
       kept.push(relationship)
-      if (!source && kind === 'officedocument') {
-        if (main !== null || !file) throw rejected('structure')
-        main = file.name
+      if (!source && relationship.type.endsWith('/officeDocument')) {
+        if (mainName !== null) throw rejected('structure')
+        mainName = file.name
       }
-      if (file && !keep.has(file.name)) {
+      if (!keep.has(file.name)) {
         keep.add(file.name)
         queue.push(file.name)
       }
+    }
+    if (!source) {
+      if (!mainName || contentType(mainName) !== policy.main) throw rejected('structure')
+      main = { name: mainName, kept: new Set() }
+    } else if (source === main?.name) {
+      main.kept = new Set(kept.map(rel => rel.id))
     }
     rewritten.set(relsFile.name, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${RELATIONSHIPS_NS}">`
       + kept.map(rel => `<Relationship Id="${escapeAttribute(rel.id)}" Type="${escapeAttribute(rel.type)}" `
         + `Target="${escapeAttribute(rel.target)}"${rel.external ? ' TargetMode="External"' : ''}/>`).join('')
       + '</Relationships>')
   }
-  if (!main || contentType(main).toLowerCase() !== MAIN_TYPES[format]) throw rejected('structure')
+  if (!main) throw rejected('structure')
+
+  // Slides, slide masters and sheets the main part lists through a relationship must have survived:
+  // the renderer would otherwise read a document with holes. Elements that name no relationship
+  // (a section's slide list holds slide ids only) refer to nothing here.
+  if (policy.required.length) {
+    const mainXml = await text(part(main.name)!)
+    for (const element of policy.required) {
+      for (const attributes of elements(mainXml, element)) {
+        const id = Object.entries(attributes).find(([key]) => /^[\w.-]+:id$/.test(key))?.[1]
+        if (id !== undefined && !main.kept.has(id)) throw rejected('structure')
+      }
+    }
+  }
 
   // altChunk elements are body content, not blocks: upstream counts only paragraphs and tables,
   // so removing them leaves every cited block number unchanged.
   if (format === 'docx') {
     for (const name of keep) {
-      if (extension(name) !== 'xml' || !contentType(name).includes('wordprocessingml')) continue
-      const xml = rewritten.get(name) ?? await text(part(name)!)
+      if (!contentType(name)?.includes('wordprocessingml')) continue
+      const xml = await text(part(name)!)
       if (!xml.includes('altChunk')) continue
       const clean = xml.replace(ALT_CHUNK, '')
       if (ALT_CHUNK_LEFT.test(clean)) throw rejected('structure')
@@ -253,11 +254,11 @@ export async function sanitizeOfficePackage(
     }
   }
 
+  // Every kept part is declared again with its allowed type; nothing else is declared.
+  const declaredParts = [...keep].filter(name => name !== typesFile.name && !name.toLowerCase().endsWith('.rels'))
   rewritten.set(typesFile.name, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${CONTENT_TYPES_NS}">`
-    + [...defaults].filter(([, type]) => !DROPPED_CONTENT_TYPES.has(type.toLowerCase()))
-      .map(([ext, type]) => `<Default Extension="${escapeAttribute(ext)}" ContentType="${escapeAttribute(type)}"/>`).join('')
-    + [...keep].filter(name => overrides.has(name.toLowerCase()))
-      .map(name => `<Override PartName="/${escapeAttribute(name)}" ContentType="${escapeAttribute(overrides.get(name.toLowerCase())!)}"/>`).join('')
+    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    + declaredParts.map(name => `<Override PartName="/${escapeAttribute(name)}" ContentType="${escapeAttribute(contentType(name)!)}"/>`).join('')
     + '</Types>')
 
   // Only files: removing a folder entry would also remove the kept parts under it.
