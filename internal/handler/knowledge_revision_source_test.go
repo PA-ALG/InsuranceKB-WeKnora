@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Tencent/WeKnora/internal/application/service"
+	"github.com/Tencent/WeKnora/internal/enterprise/revisionsource"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -73,9 +73,14 @@ func TestKnowledgeRevisionSourceBackfillMapsTypedSafeErrors(t *testing.T) {
 		status int
 		code   string
 	}{
-		"disabled":         {service.ErrRevisionSourceBackfillDisabled, http.StatusServiceUnavailable, "REVISION_SOURCE_BACKFILL_DISABLED"},
-		"mismatch":         {service.ErrRevisionSourceMismatch, http.StatusConflict, "REVISION_SOURCE_MISMATCH"},
-		"page unavailable": {service.ErrRevisionSourcePageUnavailable, http.StatusUnprocessableEntity, "PAGE_UNAVAILABLE"},
+		"disabled": {
+			revisionsource.ErrRevisionSourceBackfillDisabled, http.StatusServiceUnavailable,
+			"REVISION_SOURCE_BACKFILL_DISABLED",
+		},
+		"mismatch": {revisionsource.ErrRevisionSourceMismatch, http.StatusConflict, "REVISION_SOURCE_MISMATCH"},
+		"page unavailable": {
+			revisionsource.ErrRevisionSourcePageUnavailable, http.StatusUnprocessableEntity, "PAGE_UNAVAILABLE",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)

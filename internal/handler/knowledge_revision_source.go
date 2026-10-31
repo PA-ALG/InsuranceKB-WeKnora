@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Tencent/WeKnora/internal/application/service"
+	"github.com/Tencent/WeKnora/internal/enterprise/revisionsource"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -22,8 +22,8 @@ type knowledgeRevisionSourceExact3Backfiller interface {
 	BackfillExact3(
 		context.Context,
 		string,
-		service.KnowledgeRevisionSourceExact3RequestV1,
-	) (*service.KnowledgeRevisionSourceExact3ResultV1, error)
+		revisionsource.KnowledgeRevisionSourceExact3RequestV1,
+	) (*revisionsource.KnowledgeRevisionSourceExact3ResultV1, error)
 }
 
 // KnowledgeRevisionSourceHandler exposes only the human-admin backfill
@@ -60,13 +60,13 @@ func (h *KnowledgeRevisionSourceHandler) Backfill(c *gin.Context) {
 	knowledgeID := strings.TrimSpace(c.Param("id"))
 	attempt, err := strconv.ParseInt(c.Param("attempt"), 10, 64)
 	if err != nil || knowledgeID == "" || attempt <= 0 || h == nil || h.service == nil {
-		writeKnowledgeRevisionSourceError(c, service.ErrRevisionSourceMismatch)
+		writeKnowledgeRevisionSourceError(c, revisionsource.ErrRevisionSourceMismatch)
 		return
 	}
 	source, err := h.service.BackfillCurrentCompleted(c.Request.Context(), knowledgeID, attempt)
 	if err != nil || source == nil || source.PageCount == nil {
 		if err == nil {
-			err = service.ErrRevisionSourceMismatch
+			err = revisionsource.ErrRevisionSourceMismatch
 		}
 		writeKnowledgeRevisionSourceError(c, err)
 		return
@@ -85,20 +85,20 @@ func (h *KnowledgeRevisionSourceHandler) Backfill(c *gin.Context) {
 func (h *KnowledgeRevisionSourceHandler) BackfillExact3(c *gin.Context) {
 	backfiller, ok := any(h.service).(knowledgeRevisionSourceExact3Backfiller)
 	if !ok || strings.TrimSpace(c.Param("kb_id")) == "" || c.Request == nil || c.Request.Body == nil {
-		writeKnowledgeRevisionSourceError(c, service.ErrRevisionSourceMismatch)
+		writeKnowledgeRevisionSourceError(c, revisionsource.ErrRevisionSourceMismatch)
 		return
 	}
-	var request service.KnowledgeRevisionSourceExact3RequestV1
+	var request revisionsource.KnowledgeRevisionSourceExact3RequestV1
 	decoder := json.NewDecoder(io.LimitReader(c.Request.Body, 32<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil || !decodedToEOF(decoder) {
-		writeKnowledgeRevisionSourceError(c, service.ErrRevisionSourceMismatch)
+		writeKnowledgeRevisionSourceError(c, revisionsource.ErrRevisionSourceMismatch)
 		return
 	}
 	result, err := backfiller.BackfillExact3(c.Request.Context(), c.Param("kb_id"), request)
 	if err != nil || result == nil {
 		if err == nil {
-			err = service.ErrRevisionSourceMismatch
+			err = revisionsource.ErrRevisionSourceMismatch
 		}
 		writeKnowledgeRevisionSourceError(c, err)
 		return
@@ -110,17 +110,17 @@ func writeKnowledgeRevisionSourceError(c *gin.Context, err error) {
 	status := http.StatusConflict
 	code := "REVISION_SOURCE_MISMATCH"
 	switch {
-	case errors.Is(err, service.ErrRevisionSourceBackfillDisabled):
+	case errors.Is(err, revisionsource.ErrRevisionSourceBackfillDisabled):
 		status = http.StatusServiceUnavailable
 		code = "REVISION_SOURCE_BACKFILL_DISABLED"
-	case errors.Is(err, service.ErrRevisionSourcePageUnavailable):
+	case errors.Is(err, revisionsource.ErrRevisionSourcePageUnavailable):
 		status = http.StatusUnprocessableEntity
 		code = "PAGE_UNAVAILABLE"
-	case errors.Is(err, service.ErrRevisionSourceExact3Conflict):
+	case errors.Is(err, revisionsource.ErrRevisionSourceExact3Conflict):
 		code = "REVISION_SOURCE_EXACT3_CONFLICT_STOP"
 	}
 	errorBody := gin.H{"code": code, "message": "revision source request failed"}
-	var exact3Err *service.KnowledgeRevisionSourceExact3Error
+	var exact3Err *revisionsource.KnowledgeRevisionSourceExact3Error
 	if errors.As(err, &exact3Err) && exact3Err.FailedRole != "" {
 		errorBody["failed_role"] = exact3Err.FailedRole
 		if exact3Err.Receipt != nil {

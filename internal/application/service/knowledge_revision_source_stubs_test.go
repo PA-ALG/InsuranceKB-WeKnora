@@ -142,31 +142,6 @@ func (s *revisionSourceResourceCatalogStub) ResolvePath(
 	return r.PhysicalPath, r, nil
 }
 
-type revisionSourceTenantStub struct {
-	interfaces.TenantRepository
-	tenant *types.Tenant
-}
-
-func (s *revisionSourceTenantStub) GetTenantByID(context.Context, uint64) (*types.Tenant, error) {
-	return s.tenant, nil
-}
-
-type revisionSourceBackendStub struct {
-	interfaces.StorageBackendResolver
-	reader    interfaces.FileService
-	provider  string
-	err       error
-	backendID string
-	tenantID  uint64
-}
-
-func (s *revisionSourceBackendStub) ResolveFileService(
-	_ context.Context, tenant *types.Tenant, backendID, _, _ string,
-) (interfaces.FileService, string, error) {
-	s.backendID, s.tenantID = backendID, tenant.ID
-	return s.reader, s.provider, s.err
-}
-
 type revisionSourceFileServiceStub struct {
 	interfaces.FileService
 	data       []byte
