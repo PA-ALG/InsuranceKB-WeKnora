@@ -13,7 +13,8 @@ python3 tests/enterprise-office-citation/check.py --screenshots <dir>
 
 The script starts the Vite dev server, reads the cases and fixtures from the check page, and
 answers the panel's two requests itself: the citation (an S11d Office response, see
-`internal/enterprise/citation.go` `blockCitation`) and the cited file. Nothing reaches a backend.
+`internal/enterprise/citation.go` `blockCitation`) and the cited file. Nothing reaches a backend;
+any request leaving the page is refused and fails the case.
 
 | Case | Expected |
 |---|---|
@@ -21,7 +22,9 @@ answers the panel's two requests itself: the citation (an S11d Office response, 
 | `docx-block-4` | the quote is highlighted in body block 4 (after an empty paragraph), not in the table |
 | `xlsx-rates-row-3` | row 3 of sheet "Rates" is marked, not row 3 of "Notes"; the coarse note is shown |
 | `docx-quote-missing` | the document is shown, nothing is highlighted, the not-located note is shown |
-| `docx-script-link` | the quote is highlighted; clicking the file's `javascript:` link runs nothing |
+| `docx-script-link` | the quote is highlighted; the file's `javascript:` link reaches the page without its target, and clicking it does nothing |
+| `docx-altchunk` | an altChunk (HTML with a script) and an external image before block 4: no click, the script does not run, no iframe, the quote is still highlighted in block 4 |
+| `docx-not-a-package` | the file is not a package: nothing is rendered, the refusal note is shown |
 | `no-locator` | no viewer; document, page, quote and the no-viewer note only |
 
 `fixtures.ts` builds every file in the browser with JSZip and SheetJS. Never add business

@@ -117,6 +117,26 @@ export async function docxLinkFixture(text: string, label: string, href: string)
   return zip.generateAsync({ type: 'blob' })
 }
 
+/**
+ * `docxFixture(blocks)` with an altChunk before body block `before` (1-based): HTML that runs a script
+ * as soon as a renderer writes it into the page, and an external image the browser would fetch.
+ */
+export async function docxAltChunkFixture(blocks: string[], before: number, flag: string): Promise<Blob> {
+  const zip = await JSZip.loadAsync(await (await docxFixture(blocks)).arrayBuffer())
+  zip.file('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${NS.rel}">`
+    + `<Relationship Id="rIdChunk" Type="${REL}/aFChunk" Target="chunk.html"/>`
+    + `<Relationship Id="rIdPixel" Type="${REL}/image" Target="https://external.invalid/pixel.png" TargetMode="External"/>`
+    + '</Relationships>')
+  zip.file('word/chunk.html', `<html><body><p>embedded</p><script>parent.${flag} = 1</script></body></html>`)
+  const types = await zip.file('[Content_Types].xml')!.async('string')
+  zip.file('[Content_Types].xml', types.replace('</Types>', '<Override PartName="/word/chunk.html" ContentType="text/html"/></Types>'))
+  const xml = await zip.file('word/document.xml')!.async('string')
+  const at = xml.split('<w:p').slice(0, before).join('<w:p').length
+  zip.file('word/document.xml', (xml.slice(0, at) + '<w:altChunk r:id="rIdChunk"/>' + xml.slice(at))
+    .replace('<w:document ', `<w:document xmlns:r="${NS.r}" `))
+  return zip.generateAsync({ type: 'blob' })
+}
+
 /** A workbook with the given sheets, in order. */
 export function xlsxFixture(sheets: [string, string[][]][]): Blob {
   const book = XLSX.utils.book_new()
@@ -130,6 +150,8 @@ export type Expectation =
   | { kind: 'not-located'; note: string }
   | { kind: 'no-viewer'; note: string }
   | { kind: 'blocked-link'; flag: string }
+  | { kind: 'inert'; quote: string; within: string; index: number; flag: string }
+  | { kind: 'rejected'; note: string }
 
 export interface OfficeCase {
   name: string
@@ -141,14 +163,15 @@ export interface OfficeCase {
 const COARSE = '已标出引文所在的位置，未能逐字高亮'
 const NOT_LOCATED = '未能在原文中定位这段引文，请对照上方引文'
 const NO_VIEWER = '这类出处暂不支持打开原文，请对照上方引文'
+const UNSAFE = '原文件含有无法安全显示的内容，未打开，请对照上方引文'
+const BODY = ['总则：本合同由保险条款构成。', '', '等待期为九十日（重大疾病）。', '等待期为三十日（一般疾病）。']
 
 // Each quote also occurs outside its cited place, so only the locator can pick the right one.
 export const FILES = {
   deck: () => pptxFixture([['产品概览', '犹豫期为十五日'], ['适合人群', '犹豫期为十五日'], ['其他说明']]),
-  manual: () => docxFixture([
-    '总则：本合同由保险条款构成。', '', '等待期为九十日（重大疾病）。', '等待期为三十日（一般疾病）。',
-    [['项目', '说明'], ['等待期', '等待期为三十日']],
-  ]),
+  manual: () => docxFixture([...BODY, [['项目', '说明'], ['等待期', '等待期为三十日']]]),
+  chunked: () => docxAltChunkFixture(BODY, 4, '__officeAltChunkRan'),
+  broken: async () => new Blob(['this is not an Office package']),
   linked: () => docxLinkFixture('链接说明：见下方链接。', '了解详情', 'javascript:window.__officeLinkFollowed=1'),
   rates: () => xlsxFixture([
     ['Notes', [['说明', '取值'], ['示例', '100 元'], ['示例', '180 元']]],
@@ -157,6 +180,7 @@ export const FILES = {
 }
 export const DOCUMENTS: Record<keyof typeof FILES, string> = {
   deck: '合成演示.pptx', manual: '合成手册.docx', linked: '合成链接.docx', rates: '合成费率.xlsx',
+  chunked: '合成嵌入.docx', broken: '合成损坏.docx',
 }
 
 function citation(name: string, file: keyof typeof FILES, page: number, quote: string, locator?: Record<string, unknown>) {
@@ -194,6 +218,16 @@ export const CASES: OfficeCase[] = [
     name: 'docx-script-link', file: 'linked',
     citation: citation('docx-script-link', 'linked', 1, '链接说明', { kind: 'DOCX_BLOCK', block_index: 0 }),
     expect: { kind: 'blocked-link', flag: '__officeLinkFollowed' },
+  },
+  {
+    name: 'docx-altchunk', file: 'chunked',
+    citation: citation('docx-altchunk', 'chunked', 1, '等待期为三十日', { kind: 'DOCX_BLOCK', block_index: 3 }),
+    expect: { kind: 'inert', quote: '等待期为三十日', within: 'section > article > p, section > article > table', index: 3, flag: '__officeAltChunkRan' },
+  },
+  {
+    name: 'docx-not-a-package', file: 'broken',
+    citation: citation('docx-not-a-package', 'broken', 1, '等待期为三十日', { kind: 'DOCX_BLOCK', block_index: 3 }),
+    expect: { kind: 'rejected', note: UNSAFE },
   },
   {
     name: 'no-locator', file: 'deck',

@@ -96,13 +96,24 @@ def main() -> int:
                 route.fulfill(status=404, json={"success": False, "code": "SOURCE_NOT_FOUND"})
 
             context.route("**/api/v1/enterprise/**", answer)
+            # Nothing may leave the page: a request elsewhere is recorded, refused and fails the case.
+            outbound: list[str] = []
+
+            def refuse(route: Route) -> None:
+                outbound.append(route.request.url)
+                route.abort()
+
+            context.route(lambda url: not url.startswith(base), refuse)
             for case in cases:
                 page = context.new_page()
                 errors: list[str] = []
+                outbound.clear()
                 page.on("pageerror", lambda error: errors.append((error.stack or str(error)).splitlines()[:4]))
                 page.goto(f"{base}{PAGE}?case={case['name']}")
                 page.wait_for_function("window.officeCitationHarness", timeout=60_000)
                 failure = page.evaluate("officeCitationHarness.verify()")
+                if outbound:
+                    failure = (failure + "; " if failure else "") + "requests leaving the page: " + json.dumps(outbound)
                 if errors:
                     failure = (failure + "; " if failure else "") + "page errors: " + json.dumps(errors, ensure_ascii=False)
                 if args.screenshots:

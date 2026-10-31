@@ -29,7 +29,11 @@ function check(c: OfficeCase): string | null {
   const alert = document.querySelector('[role="alert"]')
   if (alert) return `alert: ${alert.textContent?.trim()}`
   const e = c.expect
-  if (e.kind === 'text') {
+  if (e.kind === 'text' || e.kind === 'inert') {
+    if (e.kind === 'inert') {
+      if ((window as unknown as Record<string, unknown>)[e.flag] !== undefined) return 'the embedded script ran'
+      if (document.querySelector('iframe')) return 'an iframe was rendered'
+    }
     const ranges = highlighted()
     if (ranges.length !== 1) return `wanted 1 highlighted range, got ${ranges.length}`
     if (ranges[0].toString() !== e.quote) return `highlighted "${ranges[0].toString()}"`
@@ -51,10 +55,19 @@ function check(c: OfficeCase): string | null {
   }
   if (e.kind === 'blocked-link') {
     if (highlighted().length !== 1) return 'the quote is not highlighted'
-    const link = document.querySelector<HTMLAnchorElement>('.docx-container a[href^="javascript:"]')
-    if (!link) return 'the renderer wrote no script link'
+    // The package rebuild drops the script target; the click guard is the second line.
+    const link = [...document.querySelectorAll<HTMLAnchorElement>('.docx-container a')].find(a => a.textContent === '了解详情')
+    if (!link) return 'the link text is not rendered'
+    if (/^\s*javascript:/i.test(link.getAttribute('href') ?? '')) return 'the script target reached the page'
+    const before = location.href
     link.click()
+    if (location.href !== before) return 'the link navigated'
     return (window as unknown as Record<string, unknown>)[e.flag] === undefined ? null : 'the script link ran'
+  }
+  if (e.kind === 'rejected') {
+    if (document.querySelector('.document-preview')) return 'the package was rendered'
+    if (!document.querySelector('.ek-citation__quote')?.textContent?.trim()) return 'the quote is not shown'
+    return note() === e.note ? null : `note: "${note()}"`
   }
   if (document.querySelector('.document-preview, .source-page-viewer')) return 'a viewer was rendered'
   if (!document.querySelector('.ek-citation__quote')?.textContent?.trim()) return 'the quote is not shown'
