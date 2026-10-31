@@ -1,8 +1,9 @@
 // S11e (Spec §3.2a, review round 2): the ZIP directory is checked on the raw bytes, before JSZip
 // resolves, merges or drops anything. Fixtures are structural only: stored entries with plain text.
 import JSZip from 'jszip'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { rawZip, type RawRecord as Raw } from './__tests__/rawZip'
+import { sanitizeOfficePackage } from './officePackage'
 import { readZipDirectory, ZipDirectoryRejected } from './officeZipDirectory'
 
 function problem(data: ArrayBuffer, maxEntries = 100): string {
@@ -115,6 +116,50 @@ describe('the raw ZIP directory', () => {
 
     it('refuses an encrypted local header', () => {
       expect(problem(rawZip([{ name: 'a.xml', localFlags: 0x0801, data: 'x' }]))).toBe('package')
+    })
+  })
+
+  // Order when several things are wrong (officeZipDirectory.ts): the end record and the directory's
+  // placement first; then each central record in directory order, the first bad record deciding —
+  // within a record, its own bounds, flags, method and sizes (`package`), its extra fields (ZIP64
+  // `package`, Unicode path `structure`), then its local header's bounds, signature, flags and data
+  // extent (`package`), then the name: local equals central and UTF-8 flags agree, UTF-8, folder
+  // attribute, collisions, canonical form (`structure`); after all records, the record count and
+  // overlapping local regions (`package`).
+  describe('local header bounds, before any name is read or JSZip is reached', () => {
+    const CASES: [string, Raw[], string][] = [
+      ['a local signature that is not one', [{ name: 'a.xml', data: 'x', localSignature: 0x08074b50 }], 'package'],
+      ['a local offset outside the buffer', [{ name: 'a.xml', data: 'x', localOffset: 0x7ffffff0 }], 'package'],
+      ['a local offset at the central directory', [{ name: 'a.xml', data: 'x', localOffset: start => start }], 'package'],
+      // The last 10 bytes before the directory start with a local signature; the 30-byte header cannot fit.
+      ['a local fixed header cut off by the central directory', [{ name: 'a.xml', data: 'PK\u0003\u0004xxxxxx' }, { name: 'b.xml', data: 'y', writeLocal: false, localOffset: start => start - 10 }], 'package'],
+      ['a local name length running past the central directory', [{ name: 'a.xml', data: 'x', localNameLength: 0xffff }], 'package'],
+      ['a local extra length running past the central directory', [{ name: 'a.xml', data: 'x', localExtraLength: 0xffff }], 'package'],
+      ['two central records sharing one local header', [{ name: 'a.xml', data: 'x' }, { name: 'b.xml', writeLocal: false, localOffset: (_, offsets) => offsets[0] }], 'structure'],
+    ]
+
+    it.each(CASES)('refuses %s', (_name, records, expected) => {
+      expect(problem(rawZip(records))).toBe(expected)
+    })
+
+    it.each(CASES)('stops the rebuild before JSZip for %s', async (_name, records, expected) => {
+      const load = vi.spyOn(JSZip, 'loadAsync')
+      try {
+        await expect(sanitizeOfficePackage(rawZip(records), 'docx')).rejects.toMatchObject({ name: 'OfficePackageRejected', problem: expected })
+        expect(load).not.toHaveBeenCalled()
+      } finally {
+        load.mockRestore()
+      }
+    })
+
+    it('reports the first problem in that order', () => {
+      // Local header bounds come before the name: a bad signature wins over a different local name.
+      expect(problem(rawZip([{ name: 'a.xml', localName: 'b.xml', data: 'x', localSignature: 0 }]))).toBe('package')
+      // A record's extra fields come before its local header.
+      expect(problem(rawZip([{ name: 'a.xml', flags: 0, extra: [0x75, 0x70, 0, 0], data: 'x', localSignature: 0 }]))).toBe('structure')
+      // Records are checked in directory order: the first bad record decides.
+      expect(problem(rawZip([{ name: 'a.xml', localName: 'c.xml', data: 'x' }, { name: 'b.xml', data: 'y', localSignature: 0 }]))).toBe('structure')
+      expect(problem(rawZip([{ name: 'a.xml', data: 'x', localSignature: 0 }, { name: 'b.xml', localName: 'c.xml', data: 'y' }]))).toBe('package')
     })
   })
 

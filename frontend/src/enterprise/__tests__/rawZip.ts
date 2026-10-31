@@ -14,6 +14,16 @@ export interface RawRecord {
   localFlags?: number
   /** A declared compressed size (both headers) other than the data length. */
   compressedSize?: number
+  /** The local header's signature when it is not a local header's. */
+  localSignature?: number
+  /** The local name length field when it differs from the name written after it. */
+  localNameLength?: number
+  /** The local extra length field; no extra bytes are written. */
+  localExtraLength?: number
+  /** Whether this record's own local header is written (default true). */
+  writeLocal?: boolean
+  /** The central record's local header offset, from the directory start and the written local offsets. */
+  localOffset?: number | ((directoryStart: number, offsets: number[]) => number)
 }
 
 export interface RawEnd { disk: number; directoryDisk: number; diskEntries: number; total: number; trailing: number[] }
@@ -33,11 +43,17 @@ export function rawZip(records: RawRecord[], end: Partial<RawEnd> = {}): ArrayBu
   })
   for (const r of encoded) {
     r.offset = out.length
-    u32(0x04034b50); u16(20); u16(r.localFlags ?? r.flags ?? 0x0800); u16(r.method ?? 0); u16(0); u16(0); u32(0)
-    u32(r.compressed); u32(r.data.length); u16(r.localNameBytes.length); u16(0)
+    if (r.writeLocal === false) continue
+    u32(r.localSignature ?? 0x04034b50); u16(20); u16(r.localFlags ?? r.flags ?? 0x0800); u16(r.method ?? 0); u16(0); u16(0); u32(0)
+    u32(r.compressed); u32(r.data.length); u16(r.localNameLength ?? r.localNameBytes.length); u16(r.localExtraLength ?? 0)
     out.push(...r.localNameBytes, ...r.data)
   }
   const directoryStart = out.length
+  const offsets = encoded.map(r => r.offset)
+  for (const r of encoded) {
+    if (typeof r.localOffset === 'function') r.offset = r.localOffset(directoryStart, offsets)
+    else if (r.localOffset !== undefined) r.offset = r.localOffset
+  }
   for (const r of encoded) {
     const extra = r.extra ?? []
     u32(0x02014b50); u16(20); u16(20); u16(r.flags ?? 0x0800); u16(r.method ?? 0); u16(0); u16(0); u32(0)
