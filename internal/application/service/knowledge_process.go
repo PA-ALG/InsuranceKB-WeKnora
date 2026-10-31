@@ -4759,7 +4759,7 @@ func (s *knowledgeService) convert(
 	}
 	// Classify the original error before sanitization can remove malformed bytes.
 	if s.enterpriseScannedPDF(knowledge, payload, result) {
-		s.noteScannedPDF(ctx, knowledge, payload, result.Error)
+		s.noteScannedPDF(ctx, knowledge, payload, result.Error, req.FileContent)
 		return &types.ReadResult{Error: result.Error}, nil
 	}
 	sanitizeReadResult(result, firstParse)

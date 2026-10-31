@@ -69,15 +69,16 @@ func (s *G3FirstParseStore) note(id capture.Identity, reason string, page int) e
 var scannedPage = regexp.MustCompile(`^page ([1-9][0-9]*) is scanned$`)
 
 // noteScannedPDF ends the docreader stage of an enterprise scanned PDF exactly as S4c-2c defined and
-// notes the first scanned page, so the page API can say why the revision has no capture. The note is
-// only an explanation: failing to write it changes nothing about the parse.
+// notes the first scanned page, so the page API can say why the revision has no capture. data are
+// the bytes this parse read: the note is signed only for the revision they are. The note is only an
+// explanation: failing to write it changes nothing about the parse.
 func (s *knowledgeService) noteScannedPDF(
-	ctx context.Context, k *types.Knowledge, p types.DocumentProcessPayload, parserError string,
+	ctx context.Context, k *types.Knowledge, p types.DocumentProcessPayload, parserError string, data []byte,
 ) {
 	s.endStage(ctx, k.ID, types.StageDocReader, types.JSONMap{
 		"first_parse_saved": false, "not_captured_reason": "scanned_page",
 	})
-	if !boundRevision(k, p) {
+	if !boundToBytes(k, p, data) {
 		logger.Warnf(ctx, "[capture note] not saved knowledge=%s reason=REVISION_BINDING", k.ID)
 		return
 	}
@@ -91,11 +92,15 @@ func (s *knowledgeService) noteScannedPDF(
 	}
 }
 
-// boundRevision is the binding a capture is saved under: the payload names the knowledge's current
-// parse attempt.
-func boundRevision(k *types.Knowledge, p types.DocumentProcessPayload) bool {
-	return p.Revision != nil && p.Revision.ParseAttempt == k.CurrentParseAttempt &&
-		(p.ParseAttempt <= 0 || p.Revision.ParseAttempt == p.ParseAttempt)
+// boundToBytes is the binding a capture or note is saved under: the payload names the knowledge's
+// current parse attempt, and the bytes this parse read are that revision's file.
+func boundToBytes(k *types.Knowledge, p types.DocumentProcessPayload, data []byte) bool {
+	if p.Revision == nil || p.Revision.ParseAttempt != k.CurrentParseAttempt ||
+		(p.ParseAttempt > 0 && p.Revision.ParseAttempt != p.ParseAttempt) {
+		return false
+	}
+	sum := sha256.Sum256(data)
+	return p.Revision.FileSHA256 == hex.EncodeToString(sum[:])
 }
 
 func revisionIdentity(k *types.Knowledge, p types.DocumentProcessPayload) capture.Identity {
@@ -123,8 +128,7 @@ func (s *knowledgeService) captureOffice(
 		s.captureScope == nil || !s.captureScope.RawKB(k.TenantID, k.KnowledgeBaseID) {
 		return
 	}
-	sum := sha256.Sum256(data)
-	if !boundRevision(k, p) || p.Revision.FileSHA256 != hex.EncodeToString(sum[:]) {
+	if !boundToBytes(k, p, data) {
 		logger.Warnf(ctx, "[office capture] not saved knowledge=%s reason=REVISION_BINDING", k.ID)
 		return
 	}
