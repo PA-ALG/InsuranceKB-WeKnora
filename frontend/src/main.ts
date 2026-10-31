@@ -20,6 +20,7 @@ import { initFont } from "@/composables/useFont";
 import { installTDesignIconOfflineGuard } from "@/utils/tdesign-icon-offline";
 import { installAutofillGuard } from "@/utils/disable-autofill";
 import { useAuthStore } from "@/stores/auth";
+import { installEnterprise } from "@/enterprise/install";
 
 // 必须在 Vue 组件挂载之前执行，避免 tdesign-icons 运行时请求 tdesign.gtimg.com
 installTDesignIconOfflineGuard();
@@ -38,6 +39,7 @@ async function bootstrap() {
   app.use(TDesign);
   const pinia = createPinia();
   app.use(pinia);
+  installEnterprise({ router, i18n, pinia });
 
   // Capabilities (can_create_tenant, auto_accept_invitation) are not cached
   // in localStorage — reconcile once before first paint when a session exists.
