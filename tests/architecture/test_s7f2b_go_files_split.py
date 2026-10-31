@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import REPO_ROOT  # noqa: E402
+from common import REPO_ROOT, project_added_files  # noqa: E402
 
 MAX_LINES = 500
 DATABASE = "internal/database"
@@ -126,8 +126,9 @@ def test_split_files_are_within_the_line_limit() -> None:
     assert over == {}
 
 
-def test_no_go_file_in_the_database_package_exceeds_the_limit() -> None:
-    over = {p: line_count(p) for p in go_files(DATABASE) if line_count(p) > MAX_LINES}
+def test_no_project_go_file_in_the_database_package_exceeds_the_limit() -> None:
+    ours = project_added_files()  # upstream files are outside G3, e.g. migration_sqlite_versioned_schema_test.go
+    over = {p: line_count(p) for p in go_files(DATABASE) if p in ours and line_count(p) > MAX_LINES}
     assert over == {}
 
 
