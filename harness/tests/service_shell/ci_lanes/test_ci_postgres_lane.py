@@ -98,7 +98,7 @@ JOB_MIGRATION_POSTGRES_NODES = {
     )
 }
 SERVICE_SHELL_POSTGRES_NODES = {
-    f"tests/test_service_shell_worker_039.py::{node}"
+    f"tests/service_shell/worker/test_worker_postgres.py::{node}"
     for node in (
         "test_t5_postgres_two_workers_single_result_and_unknown_type_budget",
         "test_t6_postgres_drain_reclaims_with_higher_generation_and_one_result",
