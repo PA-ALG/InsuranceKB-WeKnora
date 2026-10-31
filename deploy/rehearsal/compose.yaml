@@ -1,7 +1,8 @@
 # I3a fresh-install rehearsal (docs/design/slices/I3-私有化演练.md §1): the I2 topology installed from
 # images pinned by digest (images.lock) into an empty colima profile. No source build, no data copied
-# from live. Secrets come from env files under $REHEARSAL_HOME, written by rehearsal.sh outside any
-# repository; this file holds no secret values.
+# from live. Secrets come from env files under $REHEARSAL_HOME, written by rehearsal.py outside any
+# repository; this file holds no secret values. Run it only through rehearsal.py, which verifies the
+# owned VM and passes the recorded UI port.
 name: insurancekb-rehearsal
 
 x-restart: &restart
@@ -11,7 +12,7 @@ x-restart: &restart
 services:
   pg:
     <<: *restart
-    image: ${REHEARSAL_PG_IMAGE:?run rehearsal.sh images first}
+    image: ${REHEARSAL_PG_IMAGE:?run rehearsal.py images first}
     env_file: ${REHEARSAL_HOME:?}/pg.env
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -24,7 +25,7 @@ services:
 
   redis:
     <<: *restart
-    image: ${REHEARSAL_REDIS_IMAGE:?run rehearsal.sh images first}
+    image: ${REHEARSAL_REDIS_IMAGE:?run rehearsal.py images first}
     env_file: ${REHEARSAL_HOME:?}/redis.env
     entrypoint: ["/bin/sh"]
     command: ["-ceu", "exec redis-server --save '' --appendonly no --requirepass \"$$REDIS_PASSWORD\""]
@@ -32,7 +33,7 @@ services:
 
   docreader:
     <<: *restart
-    image: ${REHEARSAL_DOCREADER_IMAGE:?run rehearsal.sh images first}
+    image: ${REHEARSAL_DOCREADER_IMAGE:?run rehearsal.py images first}
     environment:
       DOCREADER_GRPC_PORT: "50051"
       DOCREADER_GRPC_MAX_FILE_SIZE_MB: "128"
@@ -42,7 +43,7 @@ services:
 
   app:
     <<: *restart
-    image: ${REHEARSAL_APP_IMAGE:?run rehearsal.sh images first}
+    image: ${REHEARSAL_APP_IMAGE:?run rehearsal.py images first}
     env_file:
       - ${REHEARSAL_DEFAULTS:?}
       - ${REHEARSAL_HOME:?}/app.env
@@ -71,14 +72,17 @@ services:
 
   ui:
     <<: *restart
-    image: ${REHEARSAL_UI_IMAGE:?run rehearsal.sh images first}
+    image: ${REHEARSAL_UI_IMAGE:?run rehearsal.py images first}
     environment:
       APP_HOST: app
       APP_PORT: "8080"
       APP_SCHEME: http
       MAX_FILE_SIZE_MB: "128"
+    volumes:
+      # The random instance marker: rehearsal.py writes over HTTP only to an endpoint serving it.
+      - ${REHEARSAL_HOME:?}/instance-marker.txt:/usr/share/nginx/html/rehearsal-instance.txt:ro
     ports:
-      - "127.0.0.1:${REHEARSAL_UI_PORT:-18495}:80"
+      - "127.0.0.1:${REHEARSAL_UI_PORT:?}:80"
     networks: [internal, edge]
     depends_on:
       app:
