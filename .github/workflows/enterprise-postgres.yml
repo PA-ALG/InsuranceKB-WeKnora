@@ -168,8 +168,8 @@ jobs:
       #   expected index set predates official 000112 (idx_embeddings_knowledge_id/_chunk_id).
       # - TestPostgresEmbeddingsForwardRepair/conservative_down_preserves_the_repaired_table:
       #   expects enterprise version 2 after one down step, i.e. 000003 as the enterprise head
-      #   (it is 000012). Exit for both: the follow-up that updates these expectations after
-      #   the S7f-2b split (#485) moves this test.
+      #   (it is 000012). Exit for both: the test-only follow-up that updates these expectations
+      #   in internal/database/embeddings_upgrade_postgres_test.go (moved there by #485).
       - name: Tests (ParadeDB)
         run: |
           set -o pipefail
