@@ -49,6 +49,7 @@ S11d 让引用接口回验并返回 Office 证据（`internal/enterprise/citatio
   - `found && !precise`：「已标出引文所在的位置，未能逐字高亮」（例如 XLSX 只标整行、引文在幻灯片里不唯一）；
   - `!found`：「未能在原文中定位这段引文，请对照上方引文」。原文件仍显示，不跳到别处。
 - 下载失败：`role="alert"` 说明 + 重试按钮（与 PDF 查看器同一文案）；渲染失败由上游组件显示其错误与重试。
+- 渲染出的 Office 内容不可信：`docx-preview` 把文件里外部链接的目标原样写进 `<a href>`，包括 `javascript:`。预览区域在捕获阶段拦下点击（含中键），链接协议不是 `http:`、`https:`、`mailto:` 的一律不跟随（实现中发现，2026-10-31 修订；上游知识库预览有同样问题，另行反馈上游）。
 
 ### 3.3 引用面板（`CitationPanel.vue`）
 
@@ -70,7 +71,7 @@ S11d 让引用接口回验并返回 Office 证据（`internal/enterprise/citatio
 | 方 | 路径 |
 |---|---|
 | Claude（RED，受保护） | `frontend/src/enterprise/officeCitation.spec.ts`、`OfficeSourceViewer.spec.ts`、`citationPanelOffice.spec.ts` |
-| Claude（实现） | `frontend/src/enterprise/{officeCitation.ts, OfficeSourceViewer.vue, CitationPanel.vue, enterpriseApi.ts}`、`frontend/src/enterprise/i18n/messages/*.ts` |
+| Claude（实现） | `frontend/src/enterprise/{officeCitation.ts, OfficeSourceViewer.vue, CitationPanel.vue, enterpriseApi.ts}`、`frontend/src/enterprise/i18n/messages/*.ts`；链接拦截的测试 `frontend/src/enterprise/officeSourceLinks.spec.ts` |
 | Claude（浏览器检查，非 CI） | `frontend/tests/enterprise-office-citation/`：合成 PPTX/DOCX/XLSX（测试内用 JSZip/SheetJS 生成）+ 检查页 + 无头浏览器脚本 |
 
 不改：上游文件（`components/document-preview.vue`、`utils/sourceLocator*.ts` 原样使用，G10 不升）、`package.json`（不加依赖）、后端、Harness、受保护的 `CitationPanel.spec.ts`、`SourcePageViewer.spec.ts`。手写文件 ≤ 500 行。
@@ -85,7 +86,8 @@ S11d 让引用接口回验并返回 Office 证据（`internal/enterprise/citatio
   - DOCX 引文在正文第 3 段：只高亮该段中的引文；
   - XLSX 引文在「Rates」工作表第 3 行：该行被标出，说明「未能逐字高亮」；
   - 引文在原文里找不到：原文仍显示，说明「未能在原文中定位」；
-  - 无 locator 的引用：只有文档、页、引文与说明，没有查看器、没有报错。
+  - 无 locator 的引用：只有文档、页、引文与说明，没有查看器、没有报错；
+  - DOCX 里带 `javascript:` 外部链接：引文照常高亮，点击该链接不执行任何脚本。
 - `tests/architecture` 通过（G10 不升，G11 无新增）；`git diff --check` 干净。
 
 ## 6. 上线
