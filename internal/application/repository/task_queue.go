@@ -809,13 +809,13 @@ func (r *taskPendingOpsRepository) ArchiveOperation(
 	return err == nil && settled, err
 }
 
-// deadLetterTableMissing reports whether the dead-letter table is absent. A
-// bool-only check cannot tell absence from a failed metadata query, so the
-// catalog is read directly and its error propagated.
-func (r *taskPendingOpsRepository) deadLetterTableMissing(ctx context.Context) (bool, error) {
-	table := types.TaskDeadLetter{}.TableName()
-	db := r.db.WithContext(ctx)
-	switch r.db.Name() {
+var errCatalogUnsupported = errors.New("catalog unsupported")
+
+// tableMissing reports whether table is absent. A bool-only check cannot tell
+// absence from a failed metadata query, so the catalog is read directly and
+// its error propagated.
+func tableMissing(db *gorm.DB, table string) (bool, error) {
+	switch db.Name() {
 	case "postgres":
 		var present bool
 		err := db.Raw("SELECT to_regclass(?) IS NOT NULL", table).Scan(&present).Error
@@ -825,8 +825,16 @@ func (r *taskPendingOpsRepository) deadLetterTableMissing(ctx context.Context) (
 		err := db.Raw("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count).Error
 		return err == nil && count == 0, err
 	default:
-		return false, errors.New("task execution: dead-letter catalog unsupported")
+		return false, errCatalogUnsupported
 	}
+}
+
+func (r *taskPendingOpsRepository) deadLetterTableMissing(ctx context.Context) (bool, error) {
+	missing, err := tableMissing(r.db.WithContext(ctx), types.TaskDeadLetter{}.TableName())
+	if errors.Is(err, errCatalogUnsupported) {
+		err = fmt.Errorf("task execution: dead-letter %w", err)
+	}
+	return missing, err
 }
 
 func (r *taskPendingOpsRepository) FailedOperationCount(
