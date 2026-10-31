@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/Tencent/WeKnora/deploy/upstream"
@@ -57,6 +60,10 @@ func TestPostgresEmbeddingsForwardRepair(t *testing.T) {
 		affected, err := result.RowsAffected()
 		require.NoError(t, err)
 		require.EqualValues(t, 1, affected)
+		// The table here comes from the official migrations up to their current head (e.g.
+		// 000112's indexes), not from the repair, so "unchanged" is checked against what was
+		// there before; the repair's own index set (requireEmbeddingsSchema) predates 000112.
+		indexesBefore := matrix.embeddingsIndexes(t)
 
 		require.NoError(t, RunMigrationsWithOptions(
 			repairDSN,
@@ -69,7 +76,8 @@ func TestPostgresEmbeddingsForwardRepair(t *testing.T) {
 			"SELECT content FROM embeddings WHERE source_id = 'existing-source'",
 		).Scan(&content))
 		require.Equal(t, "existing-content", content)
-		matrix.requireEmbeddingsSchema(t)
+		matrix.requireEmbeddingsColumns(t)
+		require.ElementsMatch(t, indexesBefore, matrix.embeddingsIndexes(t))
 	})
 
 	t.Run("partial existing table fails before enterprise ledger advances", func(t *testing.T) {
@@ -148,8 +156,12 @@ func TestPostgresEmbeddingsForwardRepair(t *testing.T) {
 		require.NoError(t, err)
 		enterpriseMigrator, err := migrate.New(enterprisePostgresMigrationSource, enterpriseDSN)
 		require.NoError(t, err)
-		require.NoError(t, enterpriseMigrator.Steps(-1))
-		matrix.requireEnterpriseVersion(t, 2)
+		// Roll back through the repair migration itself: its down is the conservative step
+		// under test. One step down from the head stopped reaching it once enterprise 000004
+		// existed.
+		beforeRepair := migrationFileVersion(t, embeddingsForwardRepairMigrationPath) - 1
+		require.NoError(t, enterpriseMigrator.Migrate(beforeRepair))
+		matrix.requireEnterpriseVersion(t, beforeRepair)
 		require.True(t, matrix.embeddingsTableExists(t))
 		var content string
 		require.NoError(t, matrix.db.QueryRowContext(
@@ -245,7 +257,28 @@ func (m *postgresMigrationMatrix) requireEnterpriseVersion(t *testing.T, want ui
 	require.False(t, dirty)
 }
 
+// requireEmbeddingsSchema checks the table the enterprise 000003 forward repair rebuilds.
+// Known, accepted limitation (#486): 000003 rebuilds the index set from before official
+// 000112, so a legacy-state database repaired after 000112 lacks idx_embeddings_knowledge_id
+// and idx_embeddings_chunk_id. The live database has both (ledgers 134/12, read-only check on
+// 2026-10-31), no legacy-state database remains, and applied migrations are never edited.
 func (m *postgresMigrationMatrix) requireEmbeddingsSchema(t *testing.T) {
+	t.Helper()
+	m.requireEmbeddingsColumns(t)
+	require.ElementsMatch(t, []string{
+		"embeddings_pkey",
+		"embeddings_unique_source",
+		"embeddings_search_idx",
+		"embeddings_embedding_idx_3584",
+		"embeddings_embedding_idx_798",
+		"embeddings_embedding_idx_1024",
+		"idx_embeddings_is_enabled",
+		"idx_embeddings_knowledge_base_id",
+		"idx_embeddings_tag_id",
+	}, m.embeddingsIndexes(t))
+}
+
+func (m *postgresMigrationMatrix) requireEmbeddingsColumns(t *testing.T) {
 	t.Helper()
 	type column struct {
 		name     string
@@ -285,7 +318,10 @@ func (m *postgresMigrationMatrix) requireEmbeddingsSchema(t *testing.T) {
 		{name: "is_enabled", dataType: "boolean"},
 		{name: "tag_id", dataType: "character varying(36)"},
 	}, got)
+}
 
+func (m *postgresMigrationMatrix) embeddingsIndexes(t *testing.T) []string {
+	t.Helper()
 	indexRows, err := m.db.QueryContext(
 		context.Background(),
 		`SELECT indexname
@@ -301,17 +337,17 @@ func (m *postgresMigrationMatrix) requireEmbeddingsSchema(t *testing.T) {
 		indexes = append(indexes, name)
 	}
 	require.NoError(t, indexRows.Err())
-	require.ElementsMatch(t, []string{
-		"embeddings_pkey",
-		"embeddings_unique_source",
-		"embeddings_search_idx",
-		"embeddings_embedding_idx_3584",
-		"embeddings_embedding_idx_798",
-		"embeddings_embedding_idx_1024",
-		"idx_embeddings_is_enabled",
-		"idx_embeddings_knowledge_base_id",
-		"idx_embeddings_tag_id",
-	}, indexes)
+	return indexes
+}
+
+// migrationFileVersion reads the version from a golang-migrate file name ("000003_name.up.sql").
+func migrationFileVersion(t *testing.T, path string) uint {
+	t.Helper()
+	prefix, _, found := strings.Cut(filepath.Base(path), "_")
+	require.True(t, found, path)
+	version, err := strconv.ParseUint(prefix, 10, 32)
+	require.NoError(t, err, path)
+	return uint(version)
 }
 
 func (m *postgresMigrationMatrix) requireRepository1024InsertRollsBack(
