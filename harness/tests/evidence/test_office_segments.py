@@ -4,8 +4,8 @@
 Protected file: written by Claude. Each block of an Office page is split on its own with the PDF
 rules; segment ids stay D<n>P<p>S<k>. Evidence slices merge adjacent segments only inside one
 block, and `locator(span)` gives each slice the block's Office locator with page-text offsets.
-PDF pages split, merge and locate exactly as before. Until S11d lets the platform verify Office
-locators, the bundle refuses evidence on an Office page instead of submitting it.
+PDF pages split, merge and locate exactly as before. S11d lets the platform verify Office locators,
+so the bundle carries evidence on an Office page with its block locator (S11d Spec §4).
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import hashlib
 
 import pytest
 
-from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.compilers.schema_fields.claims import claims_from
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, FieldResult
 from insurance_harness.contracts import Locator
@@ -148,7 +147,7 @@ def test_a_pptx_shape_locator_no_longer_needs_a_shape_id() -> None:
         Locator(kind="PPTX_SHAPE")
 
 
-def test_the_bundle_refuses_office_evidence_until_the_platform_verifies_it() -> None:
+def test_the_bundle_carries_office_evidence_with_its_block_locator() -> None:
     brochure = office_page(
         "产品说明书.docx", 1, ("产品说明书", Locator(kind="DOCX_BLOCK", block_index=0)),
         ("本产品保障期间为终身。", Locator(kind="DOCX_BLOCK", block_index=1)),
@@ -164,6 +163,8 @@ def test_the_bundle_refuses_office_evidence_until_the_platform_verifies_it() -> 
     output = CompileOutput(
         pack_id="pack", entity_id="p1", model="m", fields=[field], cards_version="cards-x"
     )
-    with pytest.raises(BundleError) as refused:
-        claims_from(output, source, {"产品说明书.docx": SourceRevision("k-1", 1)})
-    assert (refused.value.reason, refused.value.field_index) == ("EVIDENCE_LOCATOR_UNSUPPORTED", 0)
+    claims = claims_from(output, source, {"产品说明书.docx": SourceRevision("k-1", 1)})
+    (evidence,) = claims[0].evidence
+    assert evidence.locator == Locator(kind="DOCX_BLOCK", block_index=1, page=1, start=7, end=18)
+    assert evidence.quote == "本产品保障期间为终身。"
+    assert (evidence.source_ref, evidence.file_sha256) == (f"source:v1:k-1:1:{SHA}", SHA)

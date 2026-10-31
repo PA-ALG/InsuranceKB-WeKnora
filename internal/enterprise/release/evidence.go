@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -33,19 +34,27 @@ type Evidence struct {
 }
 
 // Locator holds the PDF_TEXT_SPAN coordinates: one-based page, page-local code points [start, end),
-// or for an EXPERT_REVISION citation the revision record it names (S9a).
+// or for an EXPERT_REVISION citation the revision record it names (S9a). Office evidence adds its
+// block's locator fields to the same page and offsets (S11d).
 type Locator struct {
 	Kind             string `json:"kind"`
 	Page             *int   `json:"page,omitempty"`
 	Start            *int   `json:"start,omitempty"`
 	End              *int   `json:"end,omitempty"`
 	RevisionRecordID string `json:"revision_record_id,omitempty"`
+	Slide            *int   `json:"slide,omitempty"`
+	BlockIndex       *int   `json:"block_index,omitempty"`
+	Sheet            string `json:"sheet,omitempty"`
+	CellRange        string `json:"cell_range,omitempty"`
 }
 
 // EvidenceCheck is one evidence object with its JSON pointer inside the bundle.
 type EvidenceCheck struct {
 	Path     string // e.g. /members/0/payload/evidence/1
 	Evidence Evidence
+	// LocatorKeys are the locator's keys with a non-null value, sorted, so a verifier can refuse
+	// positions it does not check; Locator keeps only the fields that are verified (S11d Spec §2.1).
+	LocatorKeys []string
 }
 
 // EvidenceVerifier checks evidence against the captured sources of the request scope
@@ -140,7 +149,7 @@ func (s *Service) checkEvidence(ctx context.Context, b Bundle) error {
 				return invalid("evidence does not match the contract at " + path)
 			}
 			sources[ev.SourceRef] = true
-			checks = append(checks, EvidenceCheck{Path: path, Evidence: ev})
+			checks = append(checks, EvidenceCheck{Path: path, Evidence: ev, LocatorKeys: locatorKeys(item)})
 		}
 		if payload.hasEvidence && !sameRefs(sources, m.EvidenceRefs) {
 			return invalid(fmt.Sprintf("evidence sources differ from /members/%d/evidence_refs", i))
@@ -156,6 +165,20 @@ func (s *Service) checkEvidence(ctx context.Context, b Bundle) error {
 		return &Error{Code: ErrorEvidenceUnverifiable, Detail: "evidence verification is not configured"}
 	}
 	return s.verifier.VerifyEvidence(ctx, checks)
+}
+
+// locatorKeys lists the keys of an evidence item's locator that carry a value; null counts as absent.
+func locatorKeys(item any) []string {
+	object, _ := item.(map[string]any)
+	locator, _ := object["locator"].(map[string]any)
+	keys := make([]string, 0, len(locator))
+	for key, value := range locator {
+		if value != nil {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 func sameRefs(sources map[string]bool, refs []string) bool {
