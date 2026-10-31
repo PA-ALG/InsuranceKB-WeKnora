@@ -10,9 +10,7 @@ import pytest
 import yaml
 
 from scripts import prepare_weknora_adoption as adoption
-from scripts.prepare_weknora_adoption import (
-    AdoptionTargetError,
-)
+from scripts.adoption_validation import AdoptionTargetError
 from tests.service_shell.weknora_adoption.helpers import (
     PLUGIN_CONTRACT,
     _contract_value,
