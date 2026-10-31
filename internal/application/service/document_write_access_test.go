@@ -193,7 +193,6 @@ func newDocumentWriteFixture(t *testing.T) *documentWriteFixture {
 			&types.KnowledgeTag{},
 			&types.KnowledgeTagRelation{},
 			&types.ChunkRevision{},
-			&types.KnowledgeRevisionSource{},
 		),
 	)
 	repo := &documentKnowledgeSpy{KnowledgeRepository: repository.NewKnowledgeRepository(db)}
