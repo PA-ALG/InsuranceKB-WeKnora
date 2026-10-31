@@ -21,11 +21,8 @@ import (
 
 type moveWikiKnowledgeRepo struct {
 	interfaces.KnowledgeRepository
-	knowledge   *types.Knowledge
-	commitErr   error
-	pinned      bool
-	pinnedCalls int
-	updateCalls int
+	knowledge *types.Knowledge
+	commitErr error
 }
 
 func (r *moveWikiKnowledgeRepo) GetKnowledgeByID(
@@ -36,17 +33,9 @@ func (r *moveWikiKnowledgeRepo) GetKnowledgeByID(
 }
 
 func (r *moveWikiKnowledgeRepo) UpdateKnowledge(_ context.Context, k *types.Knowledge) error {
-	r.updateCalls++
 	clone := *k
 	r.knowledge = &clone
 	return nil
-}
-
-func (r *moveWikiKnowledgeRepo) HasPinnedRevisionSource(
-	_ context.Context, _ uint64, _ string,
-) (bool, error) {
-	r.pinnedCalls++
-	return r.pinned, nil
 }
 
 func (r *moveWikiKnowledgeRepo) DeleteKnowledgeTagRelations(_ context.Context, _ string) error {
@@ -212,28 +201,6 @@ func TestMoveOneKnowledgeSkipsWikiWorkForNonWikiKBs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, wikiRepo.listedKBs)
 	assert.Empty(t, pendingRepo.ops)
-}
-
-func TestMoveReparseRejectsPinnedRevisionSourceBeforeMutation(t *testing.T) {
-	svc, wikiRepo, pendingRepo, chunkRepo := newMoveWikiService(t)
-	repo := svc.repo.(*moveWikiKnowledgeRepo)
-	repo.pinned = true
-	repo.knowledge.Type = "file"
-	repo.knowledge.FilePath = "source/document.md"
-	repo.knowledge.FileName = "document.md"
-	repo.knowledge.FileType = "md"
-
-	err := svc.moveOneKnowledge(
-		moveWikiCtx(), "kn-1", wikiEnabledKB("kb-src"), wikiEnabledKB("kb-dst"), "reparse",
-	)
-
-	require.ErrorIs(t, err, ErrKnowledgeRevisionSourcePinned)
-	require.Equal(t, 1, repo.pinnedCalls)
-	require.Zero(t, repo.updateCalls)
-	require.Empty(t, wikiRepo.listedKBs)
-	require.Empty(t, pendingRepo.ops)
-	require.Empty(t, chunkRepo.movedToKB)
-	require.Equal(t, types.ParseStatusCompleted, repo.knowledge.ParseStatus)
 }
 
 func (r *moveWikiKnowledgeRepo) UpdateKnowledgeForTransfer(

@@ -1,0 +1,8 @@
+cli/cmd/dryrun_coverage_test.go
+docreader/client/client_test.go
+docreader/tests/test_pdf_router.py
+internal/application/service/file/resource_catalog_test.go
+internal/application/service/knowledge_batch_reparse_test.go
+internal/application/service/knowledge_create_test.go
+internal/application/service/knowledge_move_wiki_test.go
+internal/application/service/resource_test.go

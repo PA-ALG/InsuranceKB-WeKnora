@@ -21,8 +21,10 @@ LIST = Path(__file__).resolve().parent / "s7f1_format_only_files.txt"
 G10_BEFORE = 477
 # Files that look comment-only but carry behaviour (build tag, lint directives, swag
 # annotations feeding the generated OpenAPI docs). They stay patched (Spec §2.3).
+# docreader/client/client_test.go (build tag) was kept here until U-2b: v0.9.0's upstream test
+# skips without a live DocReader, so the tag's reason is gone and the file is restored
+# (Spec docs/design/slices/U-2b-上游测试夹具外移.md).
 KEPT = (
-    "docreader/client/client_test.go",
     "internal/application/repository/retriever/opensearch/repository_test.go",
     "internal/container/engine_factory.go",
     "internal/handler/sandbox_skill.go",
