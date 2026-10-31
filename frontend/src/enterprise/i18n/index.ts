@@ -1,5 +1,6 @@
 // Enterprise UI strings live outside upstream's locale files: each upgrade takes
-// upstream's bundles unchanged and this module deep-merges our keys on top.
+// upstream's bundles unchanged. installEnterprise merges these into the app's i18n
+// instance at startup; withEnterpriseMessages gives upstream's locale audit the same view.
 import { mergeMessages } from './merge.ts'
 import enUS from './messages/en-US.ts'
 import jaJP from './messages/ja-JP.ts'
@@ -9,7 +10,7 @@ import zhCN from './messages/zh-CN.ts'
 
 // zh-TW has no enterprise translation yet; the Simplified Chinese strings keep
 // its key set equal to the other bundles (upstream's locale audit requires it).
-const ENTERPRISE_MESSAGES: Record<string, object> = {
+export const ENTERPRISE_MESSAGES: Record<string, object> = {
   'en-US': enUS,
   'ja-JP': jaJP,
   'ko-KR': koKR,

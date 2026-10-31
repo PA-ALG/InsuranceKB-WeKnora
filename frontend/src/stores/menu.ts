@@ -31,8 +31,6 @@ export const useMenuStore = defineStore('menuStore', () => {
       children: createMenuChildren()
     },
     { title: '', titleKey: 'menu.knowledgeBase', icon: 'zhishiku', path: 'knowledge-bases' },
-    // Enterprise knowledge (S3d-3a, registered upstream patch): published releases, read-only.
-    { title: '', titleKey: 'menu.enterpriseKnowledge', icon: 'enterprise', path: 'enterprise' },
     // Artifacts only exist where skills run in a sandbox.
     { title: '', titleKey: 'menu.artifacts', icon: 'artifact', path: 'artifacts', requiredCapability: 'settings.sandbox' },
     { title: '', titleKey: 'menu.agents', icon: 'agent', path: 'agents', requiredCapability: 'agents' },

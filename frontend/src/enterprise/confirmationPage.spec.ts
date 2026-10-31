@@ -11,7 +11,7 @@ import enUS from '@/enterprise/i18n/locales/en-US'
 import jaJP from '@/enterprise/i18n/locales/ja-JP'
 import koKR from '@/enterprise/i18n/locales/ko-KR'
 import ruRU from '@/enterprise/i18n/locales/ru-RU'
-import routerSource from '@/router/index.ts?raw'
+import routerSource from '@/enterprise/routes.ts?raw'
 
 vi.mock('./enterpriseApi', async importOriginal => ({
   ...(await importOriginal<typeof import('./enterpriseApi')>()),
@@ -420,7 +420,7 @@ describe('confirmation desk', () => {
     expect(links).toContainEqual({ name: 'enterpriseConfirmations', params: { spaceId: 'demo' } })
     expect(routerSource).toMatch(new RegExp([
       'path: "enterprise/:spaceId/confirmations",', 'name: "enterpriseConfirmations",',
-      'component: \\(\\) => import\\("\\.\\./enterprise/EnterpriseConfirmations\\.vue"\\),',
+      'component: \\(\\) => import\\("\\./EnterpriseConfirmations\\.vue"\\),',
     ].join('\\s*')))
   })
 
