@@ -84,6 +84,59 @@ S12C10_WRITING_RULES = (
     "universal_account_guaranteed_interest_rate",
     "universal_account_settlement_rules",
 )
+# S12c-11 (#473 Owner ruling): a non-payment condition that applies only to one benefit belongs to
+# that benefit's rule field as well as to exclusions; who issues a disability assessment belongs
+# to the disability criteria. Exactly the added or reworded text is reverted here
+# (test_field_cards_benefit_conditions.py checks it), so any other edit to these cards still
+# changes the digest.
+S12C11_BENEFIT_CLAUSE = (
+    "；条文中只针对本项责任的不给付条件与限制（如“……的，我们不承担本项保险金责任”）"
+    "也属于本字段，同时选入责任免除（exclusions）"
+)
+S12C11_BENEFIT_CARDS = (
+    "accidental_death_benefit_rules",
+    "additional_benefit_rules",
+    "disability_benefit_rules",
+    "death_benefit_rules",
+    "maturity_benefit_rules",
+    "survival_benefit_rules",
+    "premium_waiver_rules",
+    "income_loss_benefit_eligibility_conditions",
+    "income_loss_care_benefit_conditions",
+)
+S12C11_SUFFIXES = {
+    "disability_definition_and_assessment_criteria": (
+        "、伤残鉴定由谁出具（如二级以上医院或鉴定机构出具伤残程度资料或鉴定书），"
+        "理赔申请材料条文中写明的出具机构要求也属于本字段"
+    ),
+    "claim_application_deadline_and_documents": (
+        "；伤残鉴定书等材料写明的出具机构要求同时选入伤残定义与认定标准"
+        "（disability_definition_and_assessment_criteria）"
+    ),
+}
+S12C11_ADDED_EXCLUDE = (
+    "disability_definition_and_assessment_criteria",
+    [
+        "理赔时须提交的申请材料清单",
+        "理赔申请时效与申请材料（claim_application_deadline_and_documents）",
+    ],
+)
+S12C11_REWORDED_EXCLUDES = {
+    "death_benefit_rules": (
+        "责任免除条款列出的导致身故不赔的情形及退还现金价值",
+        "导致身故不赔的情形及退还现金价值",
+    ),
+    "income_loss_benefit_eligibility_conditions": (
+        "责任免除条款列出的不予给付情形",
+        "不予给付的免责情形",
+    ),
+}
+S12C11_PITFALL = (
+    "income_loss_benefit_eligibility_conditions",
+    "1806",
+    "抽取错误：混入完整等待期处理和给付金额频率，应只保留给付条件。",
+    "抽取错误：混入完整等待期处理、给付金额频率和既往疾病免责，应只保留给付条件。",
+)
 # draft-2026-10-16b with the parts above neutralised; any other edit changes this digest.
 # S12c-5: the S12C5_RULES are neutralised too, which gives the same digest for the cards before
 # and after S12c-5 (was 5da2b4857e0bc38be6c503cc4a4633cd61df1af127c91644fcbc45b68b76a1ab).
@@ -91,11 +144,32 @@ S12C10_WRITING_RULES = (
 # cards before and after S12c-9 give the same digest
 # (was f8cff3cd899f75410837024e27701a07f13ddbf0b00082a3cf0702da29c668f3).
 # S12c-10: the two universal-account writing rules are neutralised too; the digest is unchanged.
+# S12c-11: the added and reworded benefit-condition and assessment text is reverted first; the
+# digest is unchanged.
 UNTOUCHED_DIGEST = "94ca4701b06a2c792b5171cb4ddbf87e66907d1bad8076b7d5abf91acef04dda"
+
+
+def _revert_s12c11(data: dict[str, Any]) -> None:
+    for key in S12C11_BENEFIT_CARDS:
+        data[key]["includes"] = data[key]["includes"].removesuffix(S12C11_BENEFIT_CLAUSE)
+    for key, suffix in S12C11_SUFFIXES.items():
+        data[key]["includes"] = data[key]["includes"].removesuffix(suffix)
+    key, pair = S12C11_ADDED_EXCLUDE
+    data[key]["excludes"] = [p for p in data[key]["excludes"] if list(p) != pair]
+    for key, (new, old) in S12C11_REWORDED_EXCLUDES.items():
+        data[key]["excludes"] = [
+            [old if content == new else content, target]
+            for content, target in data[key]["excludes"]
+        ]
+    key, product, new, old = S12C11_PITFALL
+    for example in data[key].get("examples", []):
+        if example["product_id"] == product:
+            example["pitfalls"] = [old if p == new else p for p in example.get("pitfalls", [])]
 
 
 def untouched(cards: dict[str, Any]) -> str:
     data = copy.deepcopy(cards)
+    _revert_s12c11(data)
     for key in INCLUDES:
         data[key]["includes"] = ""
     data["premium_payment_term"]["unknown_rule"] = ""
@@ -121,8 +195,8 @@ def untouched(cards: dict[str, Any]) -> str:
 def test_the_cards_carry_the_s4i_version() -> None:
     # S4j: the payment term may cite rate-table headers; S12c-5: nine field boundaries;
     # S12c-9: contamination hot spots (writing rules and four selection boundaries);
-    # S12c-10: universal-account writing rules
-    assert cards_version() == "draft-2026-10-31a"
+    # S12c-10: universal-account writing rules; S12c-11: benefit conditions and assessment issuer
+    assert cards_version() == "draft-2026-10-31b"
 
 
 def test_the_changed_rules_read_exactly_as_specified() -> None:
