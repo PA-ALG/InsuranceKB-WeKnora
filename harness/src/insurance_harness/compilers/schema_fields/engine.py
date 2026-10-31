@@ -106,11 +106,11 @@ def reusable(
 def _forbidden(
     source: SegmentedSource, policy: TrustPolicy, ids: Sequence[str], field_key: str,
 ) -> set[str]:
-    """Header segments the field may not use: a restricted header serves only its fields."""
+    """Restricted segments the field may not use: a header or scoped role serves only its fields."""
     return {
         segment.id for segment in source.ordered(ids)
         if (role := source.header_role(segment.document)) is not None
-        and field_key not in policy.header_fields(role)
+        and field_key not in policy.restricted_fields(role)
     }
 
 

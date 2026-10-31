@@ -1,6 +1,7 @@
 """What a person may decide about a material the attribution rules could not settle (S5b-3c-1 Spec).
 
-Each `NEEDS_CONFIRM` reason offers a fixed set of choices; so does each `QUARANTINE` reason (S11a):
+Each `NEEDS_CONFIRM` reason offers a fixed set of choices (brand candidates, S11c, as the products
+a title names); so does each `QUARANTINE` reason (S11a):
 a material without a product anchor may be named as one registered product's, and any quarantined
 material may be ignored. A choice supplies only the fact the rules
 were missing — which product, which role, which pack — and the S5b-1 rules then conclude as before;
@@ -87,7 +88,7 @@ def _quarantined(pending: Attribution, ids: list[str]) -> list[Choice]:
 
 
 def _offered(pending: Attribution, registered: set[str], policy: AttributionPolicy) -> list[Choice]:
-    if pending.reason == "multiple_products":
+    if pending.reason in {"multiple_products", "brand_candidates"}:
         return [
             Choice(key=_product_key(product_id), kind="product", value=product_id)
             for product_id in pending.candidates

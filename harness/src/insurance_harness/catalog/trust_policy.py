@@ -1,4 +1,10 @@
-"""Versioned field adoption of material headers (blueprint §7.3, S4j Spec §3.2)."""
+"""Versioned field adoption of restricted materials (blueprint §7.3, S4j Spec §3.2).
+
+A header rule lets a non-evidence role's header block serve its fields (a rate table's header for
+the payment term). A scoped rule (S11c Spec §2.4) lets a non-evidence role's whole text serve only
+its fields (sales and training materials for the sales-type fields). Either way the role serves
+no other field, at compile and at publish.
+"""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -49,13 +55,14 @@ class TrustPolicy(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     version: NonBlank
     header_rules: tuple[HeaderRule, ...]
+    scoped_rules: tuple[HeaderRule, ...] = ()
 
     @model_validator(mode="after")
-    def _header_roles(self) -> "TrustPolicy":
+    def _restricted_roles(self) -> "TrustPolicy":
         eligible = {r.role for r in load_material_roles().roles if not r.evidence}
-        roles = [r.role for r in self.header_rules]
+        roles = self.restricted_roles()
         if len(set(roles)) != len(roles) or not set(roles) <= eligible:
-            raise ValueError("header roles must be unique non-evidence roles")
+            raise ValueError("restricted roles must be unique non-evidence roles")
         return self
 
     def header_fields(self, role: str) -> frozenset[str]:
@@ -63,6 +70,18 @@ class TrustPolicy(BaseModel):
 
     def header_roles(self) -> frozenset[str]:
         return frozenset(r.role for r in self.header_rules)
+
+    def scoped_roles(self) -> frozenset[str]:
+        return frozenset(r.role for r in self.scoped_rules)
+
+    def restricted_roles(self) -> tuple[str, ...]:
+        """Every restricted role, header roles first, in policy order."""
+        return tuple(r.role for r in (*self.header_rules, *self.scoped_rules))
+
+    def restricted_fields(self, role: str) -> frozenset[str]:
+        """The fields a restricted role may serve, by its header or its scoped rule."""
+        rules = (*self.header_rules, *self.scoped_rules)
+        return frozenset(f for r in rules if r.role == role for f in r.fields)
 
 
 def parse_trust_policy(text: str) -> TrustPolicy:
@@ -85,6 +104,8 @@ def load_trust_policy() -> TrustPolicy:
 @dataclass(frozen=True)
 class TrustedPages[P]:
     evidence: list[P]
+    # Restricted pages by role: header roles (clipped to their header block when segmented) and
+    # scoped roles (segmented whole); each serves only its role's fields.
     table_headers: dict[str, list[P]]
     # Each read document's effective role (recorded or inferred), for output identity (S5b-6).
     roles: dict[str, str] = field(default_factory=dict)
@@ -93,7 +114,7 @@ class TrustedPages[P]:
 def trusted_pages[P: PageTextLike](
     pages: Sequence[P], recorded: Mapping[str, str] | None = None
 ) -> TrustedPages[P]:
-    """Whole evidence plus separately bounded header inputs, without rewriting pages.
+    """Whole evidence plus separately bounded restricted inputs, without rewriting pages.
 
     `recorded` maps a document to its registry-recorded role, which wins over inference (S5b-6).
     """
@@ -101,9 +122,9 @@ def trusted_pages[P: PageTextLike](
     roles = document_roles(pages, recorded)
     policy = load_trust_policy()
     headers = {
-        rule.role: [p for p in pages if roles[p.document] == rule.role]
-        for rule in policy.header_rules
-        if rule.role in roles.values()
+        role: [p for p in pages if roles[p.document] == role]
+        for role in policy.restricted_roles()
+        if role in roles.values()
     }
     resolved = {document: role for document, role in roles.items() if role is not None}
     return TrustedPages(evidence, headers, resolved)
