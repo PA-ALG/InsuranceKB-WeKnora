@@ -44,7 +44,10 @@
 ## 3. 验收
 
 - RED（受保护）`tests/architecture/test_u2b_upstream_tests_restored.py` + `u2b_restored_upstream_tests.txt`：8 个文件与 `f17ee8a8d` 逐字节一致；G10 ≤ 161 − 8。
-- 受保护测试调整（单独提交、写明原因）：`tests/architecture/test_u1a_upstream_lint_reverted.py` 的 `KEPT` 去掉 `cli/cmd/dryrun_coverage_test.go`（覆盖改由我方测试文件登记，不再需要改上游文件）。
+- 受保护测试调整（各自单独提交、写明原因）：
+  - `tests/architecture/test_u1a_upstream_lint_reverted.py` 的 `KEPT` 去掉 `cli/cmd/dryrun_coverage_test.go`（覆盖改由我方测试文件登记，不再需要改上游文件）；
+  - `tests/architecture/test_s7f1_upstream_format_reverted.py` 的 `KEPT` 去掉 `docreader/client/client_test.go`（S7f-1 把构建标签算作“带行为的注释”保留；v0.9.0 上游测试缺服务即跳过，标签的原因已不存在）。
+- DocReader 客户端测试还原后，CI 的 DocReader 作业（会启动 gRPC 服务）重新运行上游的 `TestReadURL`、`TestReadFile`；`TestReadURL` 经 DocReader 抓取 `https://example.com`，在本机假 IP 解析下会被 SSRF 守卫拒绝，只在本机手动启动 DocReader 服务时才会运行到，普通本地 `go test` 照常跳过。
 - 测试数：各包顶层测试函数数不少于 main（`service` 多 1 个：原追加在上游测试里的 6 条断言独立成测试）；docreader 测试方法数相同（78）。
 - 门禁：受影响 Go 包 `go vet` 与 `go test`（与 main 同环境逐测试对比）、`cli` 模块 `go test ./cmd/`、docreader `unittest`、golangci-lint `--new-from-rev=origin/main`、`pytest -q tests/architecture`、`git diff --check`。
 - 基线只用 `record_baseline.py` 下调（G10 161 → 153，逐键取小）；`docs/design/upstream-patches.md` 追加一行退出记录。
