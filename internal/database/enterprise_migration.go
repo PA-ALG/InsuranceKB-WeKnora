@@ -329,6 +329,27 @@ func validatePostgresMigrationSetVersion(
 	)
 }
 
+type MigrationSafetyError struct {
+	Reason string
+	Cause  error
+}
+
+func (e *MigrationSafetyError) Error() string {
+	message := "migration safety check failed: " + e.Reason
+	if e.Cause != nil {
+		message += ": " + e.Cause.Error()
+	}
+	return message
+}
+
+func (e *MigrationSafetyError) Unwrap() error {
+	return e.Cause
+}
+
+func newMigrationSafetyError(reason string, cause error) error {
+	return &MigrationSafetyError{Reason: reason, Cause: cause}
+}
+
 func ensureMigrationSafetyError(reason string, err error) error {
 	if err == nil {
 		return nil
