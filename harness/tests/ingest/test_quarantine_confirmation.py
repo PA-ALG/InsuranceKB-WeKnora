@@ -269,8 +269,10 @@ def test_the_existing_wording_and_its_version_are_unchanged() -> None:
         k: wording.details[k]
         for k in ("multiple_products", "pack_unresolved", "role_unresolved", "same_role_differs")
     }
+    # S11c adds the sales_training role's name only; the other roles' names are unchanged.
+    roles = {k: v for k, v in wording.roles.items() if k != "sales_training"}
     canonical = json.dumps(
-        [existing, wording.options, wording.roles, wording.title, wording.excerpt],
+        [existing, wording.options, roles, wording.title, wording.excerpt],
         ensure_ascii=False,
         sort_keys=True,
     )

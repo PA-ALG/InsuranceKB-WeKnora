@@ -187,7 +187,7 @@ def score_selection(
 
 def _trusted_document(source: SegmentedSource, field_key: str, document: str) -> bool:
     role = source.header_role(document)
-    return role is None or field_key in load_trust_policy().header_fields(role)
+    return role is None or field_key in load_trust_policy().restricted_fields(role)
 
 
 def _recorded_selection(source: SegmentedSource, result: FieldResult) -> set[str] | None:

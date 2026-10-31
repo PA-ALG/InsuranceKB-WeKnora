@@ -6,8 +6,10 @@ ids, so every quote equals its page slice by construction; it carries the fixed 
 code-point offsets the platform can verify against its captured parse artifact. Evidence on a
 document not read as evidence (S4i), a field whose ids no longer cut its saved evidence, or a
 document the source map does not name, stops the build: the bundle never guesses where a quote
-came from. With the product page (S3d-2), the bundle also carries the product's entity and its
-pack's presentation profile, which must be for the same product and pack as the output.
+came from. Evidence on an Office page stops it too (EVIDENCE_LOCATOR_UNSUPPORTED, S11c Spec §2.3):
+the platform verifies and cites only PDF text spans until S11d, which removes this stop. With
+the product page (S3d-2), the bundle also carries the product's entity and its pack's presentation
+profile, which must be for the same product and pack as the output.
 """
 
 from collections.abc import Mapping, Sequence
@@ -31,7 +33,6 @@ from insurance_harness.contracts.enums import (
 from insurance_harness.contracts.knowledge import (
     Claim,
     Evidence,
-    Locator,
     NavigationProfile,
     Provenance,
 )
@@ -147,7 +148,7 @@ def _evidence(
     policy = load_trust_policy()
     if any(
         (role := source.header_role(saved.document)) is not None
-        and field.field_key not in policy.header_fields(role)
+        and field.field_key not in policy.restricted_fields(role)
         for saved in field.evidence
     ):
         raise BundleError("EVIDENCE_ROLE_NOT_TRUSTED", index)
@@ -172,13 +173,14 @@ def _evidence(
         revision = sources.get(span.document)
         if revision is None:
             raise BundleError("SOURCE_REVISION_MISSING", index)
+        locator = source.locator(span)
+        if locator.kind != LocatorKind.PDF_TEXT_SPAN:
+            raise BundleError("EVIDENCE_LOCATOR_UNSUPPORTED", index)
         evidence.append(
             Evidence(
                 source_ref=revision.ref(span.document_sha256.lower()),
                 file_sha256=span.document_sha256.lower(),
-                locator=Locator(
-                    kind=LocatorKind.PDF_TEXT_SPAN, page=span.page, start=span.start, end=span.end
-                ),
+                locator=locator,
                 quote=span.quote,
                 match=EvidenceMatch.EXACT,
                 access_scope=ACCESS_SCOPE,
