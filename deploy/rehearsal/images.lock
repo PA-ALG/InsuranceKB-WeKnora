@@ -1,0 +1,14 @@
+# I3a image lock: every service is pinned by digest; nothing is built here.
+# Third-party base services come from their public registries by digest (the same digests the
+# live environment runs). Product images are listed twice:
+#   *_CI  — GHCR digests published by the Images workflow (I1); empty until a green run on main.
+#   *_LIVE — the image IDs the live environment runs (used only by `rehearsal.sh images --from-live`
+#            as a fallback, copied from the live VM read-only).
+REHEARSAL_PG_IMAGE=paradedb/paradedb@sha256:ea992f2ee1e44d961d3b0f8b4b184cb2061fc9a8fc1dbfafb88f88180e3a16db
+REHEARSAL_REDIS_IMAGE=redis@sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf
+REHEARSAL_APP_IMAGE_CI=
+REHEARSAL_UI_IMAGE_CI=
+REHEARSAL_DOCREADER_IMAGE_CI=
+REHEARSAL_APP_IMAGE_LIVE=sha256:82b994e516c7aea0e7cdd98f66cb2c87091fe0b174b649e60158a917b354dc84
+REHEARSAL_UI_IMAGE_LIVE=sha256:55dbdff6d84a9d4e7724c69f67f7317ce82cba9380d27b177b326ad10eb98e61
+REHEARSAL_DOCREADER_IMAGE_LIVE=sha256:c34b8cafd3e2532530d566ba5024b67115a58462f1cdf6e671d2f92576829b42
