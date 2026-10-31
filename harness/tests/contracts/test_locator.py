@@ -27,11 +27,19 @@ def test_locator_round_trip(fields: dict[str, Any]) -> None:
     assert Locator.model_validate_json(locator.model_dump_json()) == locator
 
 
+# S11c Spec §2.1: the platform locates a slide's text, not its shapes, so a shape id is optional.
+OPTIONAL = {("PPTX_SHAPE", "shape_id")}
+
+
 @pytest.mark.parametrize("fields", CASES)
 def test_every_kind_specific_field_is_required(fields: dict[str, Any]) -> None:
     for name in fields.keys() - {"kind"}:
+        rest = {key: value for key, value in fields.items() if key != name}
+        if (fields["kind"], name) in OPTIONAL:
+            Locator(**rest)
+            continue
         with pytest.raises(ValidationError):
-            Locator(**{key: value for key, value in fields.items() if key != name})
+            Locator(**rest)
 
 
 @pytest.mark.parametrize("fields", [

@@ -25,7 +25,13 @@ from insurance_harness.ingest.registry import PendingEntry, ProductRegistry
 SUBJECT_PREFIX = "material:"
 _SUBJECT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$")  # the platform's (S5b-3a)
 _CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
-_REASONS = {"multiple_products", "pack_unresolved", "role_unresolved", "same_role_differs"}
+_REASONS = {
+    "multiple_products",
+    "brand_candidates",  # S11c: added without a new version, as no asked question changes
+    "pack_unresolved",
+    "role_unresolved",
+    "same_role_differs",
+}
 # Quarantined materials are asked too (S11a); one without a readable opening has no excerpt.
 _QUARANTINED = {"no_product_anchor", "anchor_conflict", "text_unavailable"}
 _UNREADABLE = "text_unavailable"

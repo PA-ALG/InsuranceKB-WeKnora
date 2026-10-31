@@ -10,6 +10,11 @@ more text ends the segment inside the line (PDF extraction glues the next headin
 the line); and a run that reaches MAX_CHARS is cut after its last terminator, the rest
 carrying into the next segment, so only runs without any terminator (tables) are cut at
 a line end.
+
+S11c Spec §2.2: an Office page is split block by block with the same rules, so no segment or
+evidence slice crosses a block, and `locator` gives a slice its block's Office locator. Which
+restricted documents are clipped to their header block is the TrustPolicy's (catalog/): a scoped
+role such as sales material is split whole.
 """
 
 import re
@@ -18,6 +23,10 @@ from collections.abc import Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from insurance_harness.catalog.trust_policy import load_trust_policy
+from insurance_harness.contracts.enums import LocatorKind
+from insurance_harness.contracts.knowledge import Locator
+from insurance_harness.evidence.office_pages import OfficeBlock, OfficePageText
 from insurance_harness.evidence.quote_verification import (
     Digest,
     NonBlank,
@@ -167,6 +176,33 @@ def _split(page: PageText, document_number: int) -> list[Segment]:
     return out
 
 
+def _split_ranges(
+    page: PageText, document_number: int, ranges: Sequence[tuple[int, int]]
+) -> list[tuple[int, Segment]]:
+    """Each range of the page split on its own, with page offsets and ids running on across
+    ranges; every segment is returned with the index of the range that holds it."""
+    out: list[tuple[int, Segment]] = []
+    for index, (start, end) in enumerate(ranges):
+        clipped = page.model_copy(update={"text": page.text[start:end]})
+        for segment in _split(clipped, document_number):
+            update = {
+                "id": f"D{document_number}P{page.page}S{len(out) + 1}",
+                "start": segment.start + start,
+                "end": segment.end + start,
+            }
+            out.append((index, segment.model_copy(update=update)))
+    return out
+
+
+def _clip(ranges: list[tuple[int, int]], text: str) -> list[tuple[int, int]]:
+    """The parts of the ranges inside the page's header block (S4j), if it has one."""
+    block = header_block(text)
+    if block is None:
+        return []
+    clipped = [(max(a, block[0]), min(b, block[1])) for a, b in ranges]
+    return [(a, b) for a, b in clipped if a < b]
+
+
 def _squeeze(text: str) -> tuple[str, list[int]]:
     """Width-folded text without whitespace, plus each kept character's original offset."""
     kept, offsets = [], []
@@ -193,7 +229,19 @@ class SegmentedSource:
         *,
         table_headers: Mapping[str, Sequence[PageTextLike]] | None = None,
     ) -> None:
-        ordinary = tuple(PageText.model_validate(page) for page in pages)
+        self._blocks: dict[tuple[str, int], tuple[OfficeBlock, ...]] = {}
+        office: dict[str, bool] = {}
+
+        def adapted(raw: PageTextLike) -> PageText:
+            page = PageText.model_validate(raw)
+            is_office = isinstance(raw, OfficePageText)
+            if office.setdefault(page.document, is_office) != is_office:
+                raise ValueError("one document with Office and plain pages")
+            if isinstance(raw, OfficePageText):
+                self._blocks[(page.document, page.page)] = raw.blocks
+            return page
+
+        ordinary = tuple(adapted(page) for page in pages)
         documents = {page.document for page in ordinary}
         headers: list[PageText] = []
         self._header_roles: dict[str, str] = {}
@@ -201,7 +249,7 @@ class SegmentedSource:
             if not isinstance(role, str) or not role.strip():
                 raise ValueError("a header role must be a nonblank string")
             for raw in group:
-                page = PageText.model_validate(raw)
+                page = adapted(raw)
                 if (
                     page.document in documents
                     or self._header_roles.get(page.document, role) != role
@@ -215,6 +263,8 @@ class SegmentedSource:
         digests: dict[str, str] = {}
         seen: set[tuple[str, int]] = set()
         segments: list[Segment] = []
+        scoped = load_trust_policy().scoped_roles()
+        self._block_of: dict[str, int] = {}  # an Office segment's block, by its index on the page
         for page in self.pages:
             if (page.document, page.page) in seen:
                 raise ValueError("duplicate source page identity")
@@ -225,15 +275,15 @@ class SegmentedSource:
                 raise ValueError("one document name with two fingerprints")
             seen.add((page.document, page.page))
             number = numbers.setdefault(page.document, len(numbers) + 1)
-            if self.header_role(page.document) is None:
-                segments.extend(_split(page, number))
-            elif (block := header_block(page.text)) is not None:
-                start, end = block
-                clipped = page.model_copy(update={"text": page.text[start:end]})
-                segments.extend(
-                    s.model_copy(update={"start": s.start + start, "end": s.end + start})
-                    for s in _split(clipped, number)
-                )
+            blocks = self._blocks.get((page.document, page.page))
+            ranges = [(0, len(page.text))] if blocks is None else [(b.start, b.end) for b in blocks]
+            restricted = self.header_role(page.document)
+            if restricted is not None and restricted not in scoped:
+                ranges = _clip(ranges, page.text)  # a header role serves its header block only
+            for index, segment in _split_ranges(page, number, ranges):
+                if blocks is not None:
+                    self._block_of[segment.id] = index
+                segments.append(segment)
         self.segments = tuple(segments)
         # The "D<n>" prefix of each document's segment ids, in reading order.
         self.document_ids = {document: f"D{number}" for document, number in numbers.items()}
@@ -243,7 +293,8 @@ class SegmentedSource:
         self._copies: dict[str, frozenset[str]] = {}
 
     def header_role(self, document: str) -> str | None:
-        """The restricted header role of a document, or None for ordinary/unknown documents."""
+        """The restricted role of a document (a header or a scoped role, read through
+        table_headers), or None for ordinary/unknown documents."""
         return self._header_roles.get(document)
 
     def listing(self) -> str:
@@ -301,6 +352,7 @@ class SegmentedSource:
                 segment is None
                 or (segment.document, segment.page) != (run[-1].document, run[-1].page)
                 or self._position[segment.id] != self._position[run[-1].id] + 1
+                or self._block_of.get(segment.id) != self._block_of.get(run[-1].id)
             ):
                 page = self._pages[(run[0].document, run[0].page)]
                 out.append(
@@ -317,6 +369,27 @@ class SegmentedSource:
             if segment is not None:
                 run.append(segment)
         return out
+
+    def locator(self, span: EvidenceSpan) -> Locator:
+        """Where a slice of this source sits: a PDF text span, or its Office block's locator with
+        the page and the slice's page-text offsets (code points, half-open; S11c Spec §2.2)."""
+        page = self._pages.get((span.document, span.page))
+        if (
+            page is None
+            or page.document_sha256.lower() != span.document_sha256.lower()
+            or page.text[span.start : span.end] != span.quote
+        ):
+            raise ValueError("not a slice of this source")
+        blocks = self._blocks.get((span.document, span.page))
+        if blocks is None:
+            return Locator(
+                kind=LocatorKind.PDF_TEXT_SPAN, page=span.page, start=span.start, end=span.end
+            )
+        block = next((b for b in blocks if b.start <= span.start and span.end <= b.end), None)
+        if block is None:
+            raise ValueError("a slice across blocks")
+        located = block.locator.model_dump(exclude_none=True)
+        return Locator(**located, page=span.page, start=span.start, end=span.end)
 
     def locate(
         self, document: str, page: int, quote: str, segment_id: str | None = None

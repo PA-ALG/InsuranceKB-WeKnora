@@ -1,14 +1,36 @@
-"""Read and verify immutable page text from WeKnora's captured parse artifact."""
+"""Read and verify immutable page text from WeKnora's captured parse artifact.
+
+Office captures (S11b) also return each page's located blocks; such a document's pages become
+OfficePageText, re-checked against their text (S11c Spec §2.1). Whether a document is Office is
+decided by the presence of the `blocks` key on any page, never by whether a list is empty, so
+Office text cannot pass as PDF text (review R1 on #479). PDF pages carry no blocks key and become
+PageText exactly as before.
+"""
 
 import hashlib
 import json
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 
+from insurance_harness.contracts.enums import LocatorKind
+from insurance_harness.contracts.knowledge import Locator
 from insurance_harness.eval.pdf_text import PageText
+from insurance_harness.evidence.office_pages import (
+    OFFICE_LOCATOR_FIELDS,
+    OfficeBlock,
+    OfficePageText,
+    check_office_document,
+)
 
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
@@ -28,11 +50,45 @@ class SourcePagesError(ValueError):
         super().__init__(self.code)
 
 
+class _BlockLocator(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    kind: Literal["PPTX_SHAPE", "DOCX_BLOCK", "XLSX_CELL_RANGE"]
+    slide: int | None = Field(default=None, ge=1)
+    block_index: int | None = Field(default=None, ge=0)
+    sheet: str | None = None
+    cell_range: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _own_fields_only(cls, data: object) -> object:
+        """Exactly the kind's keys, none of them null: an explicit null or another kind's key is
+        refused here, before conversion could drop it as if it were omitted (review R2)."""
+        if isinstance(data, dict):
+            kind = data.get("kind")
+            fields = OFFICE_LOCATOR_FIELDS.get(LocatorKind(kind)) if isinstance(kind, str) else None
+            if (
+                fields is None
+                or set(data) != {"kind", *fields}
+                or any(value is None for value in data.values())
+            ):
+                raise ValueError("a locator with fields outside its kind")
+        return data
+
+
+class _Block(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    block_id: _NonBlank
+    start: int = Field(ge=0)
+    end: int = Field(ge=1)
+    locator: _BlockLocator
+
+
 class _Page(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     page_number: int = Field(ge=1)
     text: str
     page_text_sha256: _Digest
+    blocks: list[_Block] = Field(default_factory=list)  # Office pages only; omitted when empty
 
 
 class _PageSet(BaseModel):
@@ -118,9 +174,34 @@ class WeKnoraSourcePages:
                         or hashlib.sha256(page.text.encode("utf-8")).hexdigest()
                         != page.page_text_sha256):
                     raise ValueError("page integrity mismatch")
+            if not any("blocks" in page.model_fields_set for page in result.pages):
+                return [
+                    PageText(result.document, result.document_sha256, page.page_number, page.text)
+                    for page in result.pages
+                ]
+            return _office_pages(result)
         except (ValueError, UnicodeError, ValidationError, RecursionError):
             raise SourcePagesError("PARSE_ARTIFACT_INTEGRITY") from None
-        return [
-            PageText(result.document, result.document_sha256, page.page_number, page.text)
-            for page in result.pages
-        ]
+
+
+def _office_pages(result: _PageSet) -> list[PageText]:
+    """Every page of a document with blocks, each checked against its text (ValueError)."""
+    office: list[OfficePageText] = []
+    for page in result.pages:
+        if len({block.block_id for block in page.blocks}) != len(page.blocks):
+            raise ValueError("duplicate block id")
+        blocks = tuple(
+            OfficeBlock(
+                start=block.start,
+                end=block.end,
+                locator=Locator(**block.locator.model_dump(exclude_unset=True)),
+            )
+            for block in page.blocks
+        )
+        office.append(
+            OfficePageText(
+                result.document, result.document_sha256, page.page_number, page.text, blocks
+            )
+        )
+    check_office_document(office)
+    return list(office)

@@ -1,4 +1,15 @@
 {
- "version": "2026-10-18.1",
- "header_rules": [{"role": "rate_table", "fields": ["premium_payment_term"]}]
+ "version": "2026-10-31.1",
+ "header_rules": [{"role": "rate_table", "fields": ["premium_payment_term"]}],
+ "scoped_rules": [
+  {
+   "role": "sales_training",
+   "fields": [
+    "sales_pitch_script",
+    "four_step_sales_script",
+    "objection_handling_scripts",
+    "product_faq"
+   ]
+  }
+ ]
 }
