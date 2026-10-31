@@ -56,18 +56,23 @@ S11d 让引用接口回验并返回 Office 证据（`internal/enterprise/citatio
 
 威胁：引用打开的是 Space 成员上传的原文件。上游渲染器会执行文件里的主动内容：`docx-preview@0.3.7` 默认 `renderAltChunks: true`，把 `w:altChunk` 经 `aFChunk` 关系指向的 HTML 写进**无 sandbox 的 iframe `srcdoc`**，打开引用即在应用同源执行脚本，无需点击（审核用真实 Chromium 复现）；外部目标（图片、模板、框架）会让浏览器向文件指定的地址发请求。点击拦截挡不住渲染时执行。
 
-做法：**在字节交给渲染器之前**，由企业模块 `frontend/src/enterprise/officePackage.ts` 用上游已有的 `jszip` 按允许清单重建文件包；上游文件不改（G10 仍为 161），不用上游渲染器的配置开关（上游组件不暴露）。
+做法：**在字节交给渲染器之前**，由企业模块按"默认拒绝"重建文件包（审核第二轮修订，2026-10-31）；上游文件不改（G10 仍为 161），不用上游渲染器的配置开关（上游组件不暴露）。三个模块：`officeZipDirectory.ts`（读原始 ZIP 目录）、`officePackagePolicy.ts`（各格式允许清单，数据）、`officePackage.ts`（用上游已有的 `jszip` 重建）。
 
-1. **只留可达部件**：从包根的 `_rels/.rels` 出发沿关系遍历，只保留被保留关系指向的部件、这些部件的关系部件与 `[Content_Types].xml`；其他部件（包括未被引用的孤立部件、同名不同大小写的重复项）一律不进新包。关系部件与 `[Content_Types].xml` 由我们按解析结果重新生成，不沿用原文。
-2. **丢弃的关系（连同目标部件）**：`aFChunk`；OLE `oleObject`；ActiveX `control`、`activeXControlBinary`；宏 `vbaProject`（及签名）、`wordVbaData`、`keyMapCustomizations`、`attachedToolbars`、界面扩展 `extensibility`；`attachedTemplate`、`frame`、`subDocument`；外部数据 `externalLink`、`externalLinkPath`、`slideUpdateInfo`。三种格式同一份清单。
-3. **外部目标**：`TargetMode="External"` 的关系一律丢弃，只有 `hyperlink` 且目标协议为 `http:`、`https:`、`mailto:` 的保留（按浏览器 URL 解析判断，`java\tscript:` 之类同样丢弃）；§3.2 的点击拦截保留作纵深。
-4. **丢弃的部件类型**：内容类型为 HTML/XHTML/MHT/RTF、VBA、ActiveX、OLE 的部件，以及扩展名为 `html/htm/xhtml/xht/mht/mhtml/rtf/bin/js/vbs/hta` 的部件，无论被哪种关系引用。
-5. **DOCX 的 `w:altChunk` 元素**：所有 WordprocessingML 部件（正文、页眉页脚、脚注尾注、批注、词汇表）里的 `altChunk` 元素删除；删除后仍能找到 `altChunk` 元素即拒绝。块号不变：上游 `internal/sourceloc` 与 `docx-preview` 的定位都只数正文顶层段落与表格，`altChunk` 不占块号（浏览器检查覆盖：被引块前插入 altChunk，高亮仍在原块）。
-6. **失败关闭**（抛 `OfficePackageRejected`，§3.2 的说明）：
-   - `package`：不是 zip、zip 加密或损坏、部件读不出；
-   - `size`：下载超过 128 MiB、条目超过 10 000、全部条目实际解压字节超过 256 MiB（边解压边计数，不信声明的大小，超限立即停止）；
-   - `structure`：缺 `[Content_Types].xml`，包根没有恰好一个 `officeDocument` 关系，主部件内容类型不是该格式的标准主类型（如启用宏的 `docm` 主类型），名字仅大小写不同的条目，或 altChunk 删不干净。
-7. 未改动且已压缩的部件原样复制压缩数据，不再解压一次。
+1. **先读原始 ZIP 目录**（`officeZipDirectory.ts`，不经任何 zip 库，在 JSZip 归一化名字、合并同名条目之前）：
+   - 结束记录必须恰在文件末尾（含注释长度）；中央目录紧接其前；记录数与结束记录声明的一致；
+   - 条目数（**含目录条目**）超过 10 000 → `size`；声明的解压字节合计超过上限 → `size`（只作预检，实际解压仍逐块计数）；
+   - 不支持的格式特性 → `package`：ZIP64（计数/大小/偏移为全 1、ZIP64 定位记录或扩展字段）、分卷、加密标志（含强加密与目录加密）、存储与 deflate 以外的压缩方法；
+   - 名字 → `structure`：非 UTF-8（JSZip 会按另一种方式解码）；带 Unicode 路径扩展字段（JSZip 会改读其中的名字）；原始同名、按 JSZip 的 `utils.resolve` 归一化后同名或仅大小写不同；非规范（以 `/` 开头、含 `.` / `..` / 空段、反斜杠、NUL 或其他控制字符）；带 DOS 目录属性却不以 `/` 结尾，或目录条目有内容。
+2. **允许清单**（`officePackagePolicy.ts`，按格式的数据，来源写在代码注释里：`docx-preview` 0.3.7 的 `RelationshipTypes` 与 `loadRelationshipPart`，`@vue-office/pptx` 1.0.1 按内容类型与每页关系读取的部件，SheetJS 0.20.2 的 `ct2type` 与 `RELS`）：
+   - **关系类型**用完整 URI 比较；**部件内容类型**为渲染器实际读取的那些（不区分大小写匹配，写回时用渲染器逐字比较的拼写）；
+   - Strict 命名空间只在渲染器支持时允许：SheetJS 读 Strict 工作簿（`officeDocument`、`worksheet` 等的 Strict 关系），`docx-preview` 与 `@vue-office/pptx` 只认 Transitional，Strict 的 DOCX/PPTX 因此没有主部件而被拒；
+   - 关系保留的条件：类型在该格式清单内，且目标是包内存在、内容类型在清单内的部件；否则关系与目标部件都不进新包（包括没有内容类型的部件、未知关系、渲染器不读的部件）。
+3. **只留可达部件**：从包根的 `_rels/.rels` 出发，只沿保留的关系遍历；未被到达的部件（孤立部件等）不进新包。关系部件与 `[Content_Types].xml` 按保留结果重新生成（每个保留部件一条 Override），不沿用原文。
+4. **外部目标**：只有 `hyperlink` 关系、且在该格式清单内（只有 DOCX：`@vue-office/pptx` 不跟随链接，SheetJS 只输出单元格）、目标协议为 `http:`、`https:`、`mailto:` 时保留（按浏览器 URL 解析判断，`java\tscript:` 之类同样丢弃）；其他外部目标一律丢弃，不会让浏览器向文件指定的地址发请求。§3.2 的点击拦截保留作纵深。
+5. **主部件**：包根必须恰有一个保留下来的 `officeDocument` 关系，目标内容类型等于该格式的标准主类型（启用宏等变体不在清单内 → 拒绝）。主部件列出的必需关系（PPTX 的 `sldId`、`sldMasterId`，XLSX 的 `sheet`）若被丢弃 → 拒绝，不给渲染器有缺口的文档（例如宏表、类型不对的幻灯片）。
+6. **DOCX 的 `w:altChunk` 元素**：所有保留的 WordprocessingML 部件里的 `altChunk` 元素删除；删除后仍能找到 `altChunk` 元素即拒绝。块号不变：上游 `internal/sourceloc` 与 `docx-preview` 的定位都只数正文顶层段落与表格，`altChunk` 不占块号（浏览器检查覆盖：被引块前插入 altChunk，高亮仍在原块）。
+7. **失败关闭**（抛 `OfficePackageRejected`，§3.2 的说明）：`package`（不是 zip、损坏、不支持的 ZIP 特性、部件读不出），`size`（下载超过 128 MiB、条目含目录超过 10 000、声明或实际解压字节超过 256 MiB，实际字节边解压边计数、超限立即停止），`structure`（第 1 步的名字问题，缺 `[Content_Types].xml`，主部件不符或必需关系丢失，altChunk 删不干净）。
+8. 未改动且已压缩的部件原样复制压缩数据，不再解压一次。重建在主线程进行，切换引用或关闭时其结果被丢弃（视图测试覆盖下载与重建两个等待阶段）。
 
 纵深防御（后续，不在本片）：UI 镜像加不含 `unsafe-inline` 的 CSP（同样覆盖 `srcdoc`、内联事件与外部请求），另开切片；上游知识库预览的同类问题反馈上游。
 
@@ -91,7 +96,7 @@ S11d 让引用接口回验并返回 Office 证据（`internal/enterprise/citatio
 | 方 | 路径 |
 |---|---|
 | Claude（RED，受保护） | `frontend/src/enterprise/officeCitation.spec.ts`、`OfficeSourceViewer.spec.ts`、`citationPanelOffice.spec.ts` |
-| Claude（实现） | `frontend/src/enterprise/{officeCitation.ts, officePackage.ts, OfficeSourceViewer.vue, CitationPanel.vue, enterpriseApi.ts}`、`frontend/src/enterprise/i18n/messages/*.ts`；测试 `frontend/src/enterprise/officeSourceLinks.spec.ts`、`officePackage.spec.ts`、`officeSourceSanitize.spec.ts` |
+| Claude（实现） | `frontend/src/enterprise/{officeCitation.ts, officePackage.ts, officePackagePolicy.ts, officeZipDirectory.ts, OfficeSourceViewer.vue, CitationPanel.vue, enterpriseApi.ts}`、`frontend/src/enterprise/i18n/messages/*.ts`；测试 `frontend/src/enterprise/officeSourceLinks.spec.ts`、`officePackage.spec.ts`、`officeZipDirectory.spec.ts`、`officeSourceSanitize.spec.ts` |
 | Claude（受保护测试调整，单独披露提交） | `OfficeSourceViewer.spec.ts`：视图测试里的重建步骤替换为原样返回，说明标签加 `unsafe`，"不直接引入 Office 库"的断言改为渲染库一律不许、`jszip` 只许 `officePackage.ts` 引入；`citationPanelOffice.spec.ts`：说明标签加 `unsafe` |
 | Claude（浏览器检查，非 CI） | `frontend/tests/enterprise-office-citation/`：合成 PPTX/DOCX/XLSX（测试内用 JSZip/SheetJS 生成）+ 检查页 + 无头浏览器脚本 |
 
@@ -111,7 +116,7 @@ S11d 让引用接口回验并返回 Office 证据（`internal/enterprise/citatio
   - DOCX 里带 `javascript:` 外部链接：引文照常高亮，点击该链接不执行任何脚本；
   - DOCX 在被引块之前带 `altChunk`（HTML 内联脚本）与外部图片：不点击任何内容，脚本不执行、页面里没有 `srcdoc` iframe、没有对外请求，被引块仍正确高亮；
   - 不是 zip 的"DOCX"：不渲染预览，给出 §3.2 的拒绝说明。
-- 重建的单元测试：§3.2a 每一种丢弃（关系、外部目标、部件类型、孤立部件、altChunk 元素）与每一种拒绝；普通 DOCX/PPTX/XLSX 重建后正文部件逐字不变。
+- 重建的单元测试：§3.2a 每一种丢弃（清单外关系、清单外或缺失内容类型的部件、外部目标、孤立部件、altChunk 元素）、Strict 变体（XLSX 保留，DOCX/PPTX 拒绝）、必需关系丢失即拒绝与每一种拒绝；原始 ZIP 目录的每一种拒绝（目录条目计入上限、原始同名、归一化碰撞、非规范名字、结束记录与目录不符、ZIP64/分卷/加密）；普通 DOCX/PPTX/XLSX 重建后正文部件逐字不变；视图在下载与重建两个阶段都丢弃过期结果。
 - `tests/architecture` 通过（G10 不升，G11 无新增）；`git diff --check` 干净。
 
 ## 6. 上线
