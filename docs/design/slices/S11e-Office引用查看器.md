@@ -1,11 +1,11 @@
 # S11e 前端打开 Office 引用：沿用上游原文件预览，按块定位并高亮引文
 
-> 状态：Spec 冻结（2026-10-31，Claude）。实现方 Claude，审核方 Codex。计划见 #446，平台侧引用见 S11d（#483）。
+> 状态：Spec 冻结（2026-10-31，Claude）。实现方 Claude，审核方 Codex。计划见 #446，平台侧引用见 S11d（#483，已合并 `b8013c425`）。
 > 真实调用：0（实现、验收测试与浏览器检查都只用测试内生成的合成文件）。
 
 ## 0. 背景
 
-S11d 让引用接口回验并返回 Office 证据：200 响应**没有 `highlight` 键**，改为 `page{number}`、采集中块的 `locator`（PPTX `PPTX_SHAPE{slide}`、DOCX `DOCX_BLOCK{block_index}`、XLSX `XLSX_CELL_RANGE{sheet, "A<r>:XFD<r>"}`）与 `block{block_id, start, end}`；原文件接口按扩展名给 Office 媒体类型。
+S11d 让引用接口回验并返回 Office 证据（`internal/enterprise/citation.go` 的 `blockCitation`，字段由 `internal/enterprise/office_citation_test.go` 逐键锁定）：200 响应**没有 `highlight` 键**，改为 `page{number}`、采集中块的 `locator`（PPTX `PPTX_SHAPE{slide}`、DOCX `DOCX_BLOCK{block_index}`、XLSX `XLSX_CELL_RANGE{sheet, "A<r>:XFD<r>"}`）与 `block{block_id, start, end}`；原文件接口按扩展名给 Office 媒体类型。
 
 现在的 `CitationPanel` 默认每个非专家引用都有 `highlight`，并用 pdf.js 打开原文件：打开 Office 引用会抛错（读 `undefined.rects`），即使不抛错，pdf.js 也打不开 Office 文件。S11d 因此要求：S11e 上线前不在线上发布 Office 材料的知识。
 
