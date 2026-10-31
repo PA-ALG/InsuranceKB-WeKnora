@@ -352,13 +352,20 @@ export default {
       "mismatch": "원문이 변경되어 열 수 없습니다",
       "notFound": "인용된 원문을 찾을 수 없습니다",
       "unsupported": "이 유형의 출처는 아직 열 수 없습니다",
-      "failed": "출처를 열 수 없습니다"
+      "failed": "출처를 열 수 없습니다",
+      "slide": "슬라이드 {slide}",
+      "block": "본문 {block}번째 단락",
+      "row": "시트 「{sheet}」 {row}행"
     },
     "viewer": {
       "loading": "원문을 여는 중…",
       "failed": "원문 페이지를 표시할 수 없습니다",
       "incomplete": "강조 표시가 불완전할 수 있습니다",
-      "region": "{document} {page}쪽"
+      "region": "{document} {page}쪽",
+      "officeRegion": "{document} {position}",
+      "coarse": "인용 위치는 표시했지만 인용문 자체는 강조하지 못했습니다",
+      "notLocated": "원문에서 인용문을 찾지 못했습니다. 위의 인용문과 대조해 주세요",
+      "noViewer": "이 유형의 출처는 아직 원문을 열 수 없습니다. 위의 인용문을 참고하세요"
     }
   }
 }

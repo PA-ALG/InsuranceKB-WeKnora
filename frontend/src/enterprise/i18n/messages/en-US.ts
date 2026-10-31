@@ -352,13 +352,20 @@ export default {
       "mismatch": "The source has changed and cannot be opened",
       "notFound": "The cited source was not found",
       "unsupported": "This kind of source cannot be opened yet",
-      "failed": "The source could not be opened"
+      "failed": "The source could not be opened",
+      "slide": "Slide {slide}",
+      "block": "Paragraph {block}",
+      "row": "Sheet “{sheet}”, row {row}"
     },
     "viewer": {
       "loading": "Opening the source…",
       "failed": "The source page cannot be shown",
       "incomplete": "The highlight may be incomplete",
-      "region": "{document}, page {page}"
+      "region": "{document}, page {page}",
+      "officeRegion": "{document}, {position}",
+      "coarse": "The place of the quote is marked, but not the quote itself",
+      "notLocated": "The quote could not be found in the source; compare it with the quote above",
+      "noViewer": "This kind of source cannot be opened yet; see the quote above"
     }
   }
 }

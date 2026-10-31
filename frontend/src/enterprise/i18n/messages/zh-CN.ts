@@ -352,13 +352,20 @@ export default {
       "mismatch": "原文已变化，无法回跳",
       "notFound": "找不到被引用的原文",
       "unsupported": "这类出处暂不支持打开",
-      "failed": "出处无法打开"
+      "failed": "出处无法打开",
+      "slide": "第 {slide} 张幻灯片",
+      "block": "正文第 {block} 段",
+      "row": "工作表「{sheet}」第 {row} 行"
     },
     "viewer": {
       "loading": "正在打开原文…",
       "failed": "原文页无法显示",
       "incomplete": "高亮可能不完整",
-      "region": "{document} 第 {page} 页"
+      "region": "{document} 第 {page} 页",
+      "officeRegion": "{document} {position}",
+      "coarse": "已标出引文所在的位置，未能逐字高亮",
+      "notLocated": "未能在原文中定位这段引文，请对照上方引文",
+      "noViewer": "这类出处暂不支持打开原文，请对照上方引文"
     }
   }
 }

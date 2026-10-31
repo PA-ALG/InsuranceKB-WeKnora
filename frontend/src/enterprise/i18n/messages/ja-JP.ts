@@ -352,13 +352,20 @@ export default {
       "mismatch": "原文が変更されたため開けません",
       "notFound": "引用元の原文が見つかりません",
       "unsupported": "この種類の出典はまだ開けません",
-      "failed": "出典を開けません"
+      "failed": "出典を開けません",
+      "slide": "スライド {slide}",
+      "block": "本文 第 {block} 段落",
+      "row": "シート「{sheet}」{row} 行目"
     },
     "viewer": {
       "loading": "原文を開いています…",
       "failed": "原文ページを表示できません",
       "incomplete": "ハイライトが不完全な可能性があります",
-      "region": "{document} {page} ページ"
+      "region": "{document} {page} ページ",
+      "officeRegion": "{document} {position}",
+      "coarse": "引用の位置は示しましたが、引用文そのものはハイライトできません",
+      "notLocated": "原文で引用文を見つけられませんでした。上の引用文と照らし合わせてください",
+      "noViewer": "この種類の出典はまだ原文を開けません。上の引用文をご覧ください"
     }
   }
 }
