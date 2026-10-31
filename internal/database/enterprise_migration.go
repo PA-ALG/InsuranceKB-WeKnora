@@ -329,6 +329,8 @@ func validatePostgresMigrationSetVersion(
 	)
 }
 
+// MigrationSafetyError reports a PostgreSQL migration safety check that failed: Reason names the
+// check and Cause, when present, is the underlying error.
 type MigrationSafetyError struct {
 	Reason string
 	Cause  error

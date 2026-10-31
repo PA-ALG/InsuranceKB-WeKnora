@@ -87,8 +87,8 @@ func (s *revisionSourceRepositoryStub) GetExact3RevisionSourceAuthority(
 		row.Knowledge.KnowledgeBaseID != knowledgeBaseID || parseAttempt != row.Current.ParseAttempt {
 		return nil, repository.ErrKnowledgeNotFound
 	}
-	copy := row
-	return &copy, nil
+	rowCopy := row
+	return &rowCopy, nil
 }
 
 func (s *revisionSourceRepositoryStub) SealRevisionSourceBinding(
@@ -103,8 +103,8 @@ func (s *revisionSourceRepositoryStub) SealRevisionSourceBinding(
 		}
 		return nil, s.sealErr
 	}
-	copy := source
-	return &copy, nil
+	sourceCopy := source
+	return &sourceCopy, nil
 }
 
 func (s *revisionSourceRepositoryStub) HasPinnedRevisionSource(
@@ -132,7 +132,9 @@ func (s *revisionSourceResourceCatalogStub) Resolve(
 	return s.resource, s.err
 }
 
-func (s *revisionSourceResourceCatalogStub) ResolvePath(ctx context.Context, path string) (string, *types.StoredResource, error) {
+func (s *revisionSourceResourceCatalogStub) ResolvePath(
+	ctx context.Context, path string,
+) (string, *types.StoredResource, error) {
 	r, err := s.Resolve(ctx, path)
 	if err != nil || r == nil {
 		return "", r, err
@@ -158,7 +160,9 @@ type revisionSourceBackendStub struct {
 	tenantID  uint64
 }
 
-func (s *revisionSourceBackendStub) ResolveFileService(_ context.Context, tenant *types.Tenant, backendID, provider, base string) (interfaces.FileService, string, error) {
+func (s *revisionSourceBackendStub) ResolveFileService(
+	_ context.Context, tenant *types.Tenant, backendID, _, _ string,
+) (interfaces.FileService, string, error) {
 	s.backendID, s.tenantID = backendID, tenant.ID
 	return s.reader, s.provider, s.err
 }

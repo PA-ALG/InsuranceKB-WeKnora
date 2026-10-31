@@ -262,7 +262,7 @@ func (m *postgresMigrationMatrix) requireEmbeddingsSchema(t *testing.T) {
 		  ORDER BY attnum`,
 	)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var got []column
 	for rows.Next() {
 		var value column
@@ -293,7 +293,7 @@ func (m *postgresMigrationMatrix) requireEmbeddingsSchema(t *testing.T) {
 		  WHERE schemaname = 'public' AND tablename = 'embeddings'`,
 	)
 	require.NoError(t, err)
-	defer indexRows.Close()
+	defer func() { _ = indexRows.Close() }()
 	var indexes []string
 	for indexRows.Next() {
 		var name string
