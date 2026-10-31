@@ -9,10 +9,9 @@ import pytest
 import yaml
 
 from scripts import prepare_weknora_adoption as adoption
-from scripts.prepare_weknora_adoption import (
-    AdoptionTargetError,
-    main,
-)
+from scripts.adoption_target import load_adoption_target
+from scripts.adoption_validation import AdoptionTargetError
+from scripts.prepare_weknora_adoption import main
 from tests.service_shell.weknora_adoption.helpers import (
     MANIFEST,
     PLUGIN_CONTRACT,
@@ -366,7 +365,7 @@ def test_check_inventory_rejects_noncanonical_paths(tmp_path: Path, bad_path: st
 
 @pytest.mark.parametrize(
     "loader",
-    [adoption.load_adoption_target, adoption._load_runtime_source_lock, adoption._load_w1_paths],
+    [load_adoption_target, adoption._load_runtime_source_lock, adoption._load_w1_paths],
 )
 def test_check_loaders_sanitize_invalid_utf8(tmp_path: Path, loader: object) -> None:
     path = tmp_path / "invalid"

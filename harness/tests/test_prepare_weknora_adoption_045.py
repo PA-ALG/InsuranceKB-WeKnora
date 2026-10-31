@@ -15,9 +15,8 @@ import pytest
 import yaml
 
 from scripts import prepare_weknora_adoption as adoption
-from scripts.prepare_weknora_adoption import (
-    AdoptionTargetError,
-)
+from scripts.adoption_validation import AdoptionTargetError
+from scripts.plugin_contract_model import ContractState, TimeoutPolicy
 from tests.service_shell.weknora_adoption.helpers import (
     PLUGIN_CONTRACT,
     _contract_value,
@@ -43,17 +42,17 @@ def test_plugin_contract_freezes_approved_refs_transports_and_independent_states
         "internal_queue",
         "mcp_control_plane",
     )
-    assert contract.states.w1_runtime == adoption.ContractState(
+    assert contract.states.w1_runtime == ContractState(
         available=False, status="available_after_replay"
     )
-    assert contract.states.consumer_adapted == adoption.ContractState(
+    assert contract.states.consumer_adapted == ContractState(
         available=False, status="pre_w1"
     )
-    assert contract.states.source_reader_authority == adoption.ContractState(
+    assert contract.states.source_reader_authority == ContractState(
         available=False,
         status="blocked_on_p3_acl_inspection_authority",
     )
-    assert contract.states.artifact_gate == adoption.ContractState(
+    assert contract.states.artifact_gate == ContractState(
         available=False,
         status="planned_nodes_pending_artifact_pr",
     )
@@ -191,7 +190,7 @@ def test_plugin_contract_typed_dispositions_retries_and_source_head_rules() -> N
     assert contract.retry_policy.allowed_methods == ("GET",)
     assert contract.retry_policy.bounded_attempts == 3
     assert contract.retry_policy.mutation_auto_retry is False
-    assert contract.timeout_policy == adoption.TimeoutPolicy(
+    assert contract.timeout_policy == TimeoutPolicy(
         policy_id="w1_public_contract_timeout_v1",
         connect_seconds=5,
         read_seconds=15,
