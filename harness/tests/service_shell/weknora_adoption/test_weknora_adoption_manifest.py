@@ -8,14 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from scripts.prepare_weknora_adoption import (
-    AdoptionTargetError,
-    DiscoveryRevision,
-    GitHubDiscoveryResolver,
-    load_adoption_target,
-    main,
-    render_discovery_proposal,
-)
+from scripts.adoption_discovery import GitHubDiscoveryResolver, render_discovery_proposal
+from scripts.adoption_target import DiscoveryRevision, load_adoption_target
+from scripts.adoption_validation import AdoptionTargetError
+from scripts.prepare_weknora_adoption import main
 from tests.service_shell.weknora_adoption.helpers import (
     CAPABILITY_COMMIT,
     MANIFEST,
