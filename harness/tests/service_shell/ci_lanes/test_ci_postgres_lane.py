@@ -19,17 +19,28 @@ from tests.service_shell.ci_lanes.helpers import (
 )
 
 SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES = {
-    f"tests/test_source_lifecycle_migration_postgres_021.py::{node}"
-    for node in (
-        "test_l5_0012_to_0006_installs_postgresql_schema_constraints_and_append_only_guards",
-        "test_l5_historical_0012_rows_create_zero_heads_and_one_open_issue_per_source",
-        "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[source_head]",
-        "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[source_event]",
-        "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[backfill_issue]",
-        "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[historical_provenance]",
-        "test_l5_empty_0006_to_0012_to_0006_round_trip_restores_postgresql_schema",
-        "test_l5_alembic_check_passes_and_revision_topology_keeps_single_head",
+    f"tests/ingest/source_lifecycle_postgres/{module}::{node}"
+    for module, nodes in (
+        (
+            "test_source_lifecycle_postgres_upgrade.py",
+            (
+                "test_l5_0012_to_0006_installs_postgresql_schema_constraints_and_append_only_guards",
+                "test_l5_historical_0012_rows_create_zero_heads_and_one_open_issue_per_source",
+            ),
+        ),
+        (
+            "test_source_lifecycle_postgres_downgrade.py",
+            (
+                "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[source_head]",
+                "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[source_event]",
+                "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[backfill_issue]",
+                "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[historical_provenance]",
+                "test_l5_empty_0006_to_0012_to_0006_round_trip_restores_postgresql_schema",
+                "test_l5_alembic_check_passes_and_revision_topology_keeps_single_head",
+            ),
+        ),
     )
+    for node in nodes
 }
 JOB_STORE_POSTGRES_NODES = {
     f"tests/jobs/job_store_postgres/{module}::{node}"
