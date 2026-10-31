@@ -18,6 +18,35 @@ if TYPE_CHECKING:
 
 BASE_URL = "http://weknora.test"
 
+# S7f-2d/2e split oversized test modules into directories. Helper code that moved out of the
+# original test modules keeps pytest's assertion rewriting: some tests match on the
+# introspected assertion messages those helpers produce.
+pytest.register_assert_rewrite(
+    *(
+        f"tests.{package}"
+        for package in (
+            "identity.knowledge_scope",
+            "identity.knowledge_scope_migration",
+            "identity.product_version",
+            "ingest.source_lifecycle_migration",
+            "ingest.source_lifecycle_postgres",
+            "ingest.structured_import",
+            "ingest.weknora_source",
+            "jobs.job_store",
+            "jobs.job_store_postgres",
+            "service_shell.app_build",
+            "service_shell.apps",
+            "service_shell.ci_lanes",
+            "service_shell.local_live_cli",
+            "service_shell.local_live_compose",
+            "service_shell.local_provisioning",
+            "service_shell.model_probe",
+            "service_shell.weknora_adoption",
+            "service_shell.worker",
+        )
+    )
+)
+
 
 @pytest.fixture
 def settings() -> HarnessSettings:
