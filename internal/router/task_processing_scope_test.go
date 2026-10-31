@@ -29,7 +29,7 @@ func TestProcessingFailureCallbackDoesNotFollowMovedDocuments(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
-	require.NoError(t, db.AutoMigrate(&types.Knowledge{}, &types.KnowledgeRevisionSource{}))
+	require.NoError(t, db.AutoMigrate(&types.Knowledge{}))
 	repo := repository.NewKnowledgeRepository(db)
 	callback := newDeadLetterKnowledgeFailer(transferFailureKnowledge{repo: repo}, nil)
 	for _, tc := range []struct {
