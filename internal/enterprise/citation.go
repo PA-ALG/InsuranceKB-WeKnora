@@ -9,12 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/capture/ooxml"
 	"github.com/Tencent/WeKnora/internal/enterprise/expert"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/source"
@@ -30,11 +32,13 @@ const maxSourceFile = 256 << 20
 
 const errorSourceIntegrity = "SOURCE_INTEGRITY"
 
-// CitationView is the same verified evidence used by HTTP and MCP readers.
+// CitationView is the same verified evidence used by HTTP and MCP readers: a PDF text span or,
+// for Office evidence, its captured block (S11d); exactly one of Span and Block is set.
 type CitationView struct {
 	Evidence release.EvidenceAt
 	Source   release.SourceRef
 	Span     *source.SpanView
+	Block    *source.BlockView
 }
 
 type citationSourceFailure struct{ failure *source.Error }
@@ -70,17 +74,21 @@ func ReadCitation(
 	return verifySourceCitation(ctx, pages, p, space, at)
 }
 
-// verifySourceCitation opens the captured page of a PDF text span and checks the quote.
+// verifySourceCitation opens the captured page of a PDF text span or an Office block and checks the quote.
 func verifySourceCitation(
 	ctx context.Context, pages *source.Service, p release.Principal, space string, at release.EvidenceAt,
 ) (*CitationView, error) {
 	ev := at.Evidence
 	ref, isSource := release.ParseSourceRef(ev.SourceRef)
 	loc := ev.Locator
-	if !isSource || loc.Kind != "PDF_TEXT_SPAN" || loc.Page == nil || loc.Start == nil || loc.End == nil {
+	office := source.OfficeKind(loc.Kind)
+	if !isSource || (loc.Kind != "PDF_TEXT_SPAN" && !office) || loc.Page == nil || loc.Start == nil || loc.End == nil {
 		return nil, &release.Error{
-			Code: release.ErrorEvidenceUnsupported, Detail: "only PDF text spans can be opened",
+			Code: release.ErrorEvidenceUnsupported, Detail: "only PDF text spans and Office blocks can be opened",
 		}
+	}
+	if office {
+		return verifyBlockCitation(ctx, pages, source.Scope{TenantID: p.TenantID, SpaceID: space}, at, ref)
 	}
 	if pages == nil {
 		return nil, citationSourceError(nil)
@@ -100,6 +108,35 @@ func verifySourceCitation(
 		}
 	}
 	return &CitationView{Evidence: at, Source: ref, Span: view}, nil
+}
+
+// verifyBlockCitation re-reads the captured pages of Office evidence and locates its block with the
+// same check as submission (S11d Spec §2.3); like a PDF citation it does not repeat the quote digest.
+func verifyBlockCitation(
+	ctx context.Context, pages *source.Service, scope source.Scope, at release.EvidenceAt, ref release.SourceRef,
+) (*CitationView, error) {
+	if pages == nil {
+		return nil, citationSourceError(nil)
+	}
+	set, err := pages.Pages(ctx, scope, ref.KnowledgeID, ref.ParseAttempt)
+	if err != nil {
+		return nil, citationSourceError(err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, citationSourceError(err)
+	}
+	ev := at.Evidence
+	loc := ev.Locator
+	view, err := set.Locate(ooxml.Locator{
+		Kind: loc.Kind, Slide: loc.Slide, BlockIndex: loc.BlockIndex, Sheet: loc.Sheet, CellRange: loc.CellRange,
+	}, *loc.Page, *loc.Start, *loc.End)
+	if err != nil || set.DocumentSHA256 != ref.FileSHA256 || strings.ToLower(ev.FileSHA256) != ref.FileSHA256 ||
+		view.Quote != ev.Quote {
+		return nil, &release.Error{
+			Code: release.ErrorEvidenceMismatch, Detail: "the captured source no longer matches this evidence",
+		}
+	}
+	return &CitationView{Evidence: at, Source: ref, Block: view}, nil
 }
 
 // citation opens one evidence object of an explicit release and re-verifies it against the
@@ -140,13 +177,17 @@ func citation(
 		return
 	}
 	at, ref, view := verified.Evidence, verified.Source, verified.Span
+	file := fmt.Sprintf("%s/releases/%s/sources/%s/attempts/%d/file",
+		strings.Replace(spacesPath, ":space_id", url.PathEscape(space), 1),
+		url.PathEscape(at.ReleaseID), url.PathEscape(ref.KnowledgeID), ref.ParseAttempt)
+	if verified.Block != nil {
+		blockCitation(c, at, verified.Block, file)
+		return
+	}
 	rects := make([][4]int, 0, len(view.Rects))
 	for _, r := range view.Rects {
 		rects = append(rects, [4]int{r.X0, r.Y0, r.X1, r.Y1})
 	}
-	file := fmt.Sprintf("%s/releases/%s/sources/%s/attempts/%d/file",
-		strings.Replace(spacesPath, ":space_id", url.PathEscape(space), 1),
-		url.PathEscape(at.ReleaseID), url.PathEscape(ref.KnowledgeID), ref.ParseAttempt)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"release_id": at.ReleaseID, "member": at.Slug, "evidence_index": at.Index, "origin": at.Origin,
 		"source": gin.H{
@@ -159,6 +200,23 @@ func citation(
 			"coordinate_space": "normalized_0_1e6_top_left", "complete": view.Complete, "rects": rects,
 		},
 		"file": file,
+	}})
+}
+
+// blockCitation answers Office evidence with its captured block and locator. Office captures carry
+// no geometry, so there is no highlight; a viewer opens the page and block (S11d Spec §2.3).
+func blockCitation(c *gin.Context, at release.EvidenceAt, view *source.BlockView, file string) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"release_id": at.ReleaseID, "member": at.Slug, "evidence_index": at.Index, "origin": at.Origin,
+		"source": gin.H{
+			"knowledge_id": view.KnowledgeID, "parse_attempt": view.ParseAttempt,
+			"document": view.Document, "file_sha256": view.DocumentSHA256,
+		},
+		"page":  gin.H{"number": view.Page},
+		"start": view.Start, "end": view.End, "quote": view.Quote,
+		"locator": view.Block.Locator,
+		"block":   gin.H{"block_id": view.Block.ID, "start": view.Block.Start, "end": view.Block.End},
+		"file":    file,
 	}})
 }
 
@@ -197,7 +255,21 @@ func citedFile(c *gin.Context, service *release.Service, files SourceFiles) {
 	}
 	releaseCacheHeaders(c, tag)
 	c.Header("Content-Disposition", "inline; filename*=UTF-8''"+url.PathEscape(name))
-	c.Data(http.StatusOK, "application/pdf", raw)
+	c.Data(http.StatusOK, citedMediaType(name), raw)
+}
+
+// citedMediaType names the media type of a cited original by its extension: the Office formats a
+// capture supports (S11b), otherwise PDF, the only other format that is captured.
+func citedMediaType(name string) string {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".pptx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case ".xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	}
+	return "application/pdf"
 }
 
 // readSourceFile checks the live source before confirming a cached copy or verifying all bytes.

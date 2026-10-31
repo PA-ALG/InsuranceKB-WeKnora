@@ -2,8 +2,9 @@
 
 The real source-pages reader serves the publish command over a fake platform. A page that declares
 `blocks: []` but carries text is refused with PARSE_ARTIFACT_INTEGRITY before any candidate is
-sent; the same text with a legitimate block stops at the Office evidence gate (S11c Spec §2.3).
-Either way the only platform request is the Active read.
+sent; the only platform request is the Active read. The same text with legitimate blocks publishes
+its evidence with the block's Office locator, which the platform verifies since S11d (S11d Spec §4;
+this replaced the S11c gate test), and a PDF page publishes the same PDF_TEXT_SPAN as before.
 """
 
 from __future__ import annotations
@@ -60,17 +61,19 @@ def sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def page_set(blocks: list[dict[str, Any]]) -> dict[str, Any]:
+def page_set(blocks: list[dict[str, Any]] | None, document: str = DOCUMENT) -> dict[str, Any]:
+    """Page 1 of k-1 attempt 2; a PDF page (blocks None) has no `blocks` key."""
+    page: dict[str, Any] = {"page_number": 1, "text": TEXT, "page_text_sha256": sha(TEXT)}
+    if blocks is not None:
+        page["blocks"] = blocks
     return {
         "knowledge_id": "k-1",
         "parse_attempt": 2,
-        "document": DOCUMENT,
+        "document": document,
         "document_sha256": DOC_SHA,
         "parser_identity_sha256": sha("ooxml"),
         "native_sha256": sha("native"),
-        "pages": [
-            {"page_number": 1, "text": TEXT, "page_text_sha256": sha(TEXT), "blocks": blocks}
-        ],
+        "pages": [page],
     }
 
 
@@ -85,6 +88,7 @@ class Platform:
 
     def __init__(self) -> None:
         self.seen: list[tuple[str, str]] = []
+        self.candidate: dict[str, Any] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path.removeprefix("/api/v1/enterprise/spaces/space-1/")
@@ -92,6 +96,7 @@ class Platform:
         if path == "releases/active":
             return httpx.Response(404, json={"success": False, "code": "RELEASE_NOT_FOUND"})
         if path == "candidates":
+            self.candidate = json.loads(request.content)
             return ok({"id": "cand_1", "status": "created"}, 201)
         decision = {"id": "dec_1", "candidate_id": "cand_1", "outcome": "approve"}
         return ok({**decision, "digest": "e" * 64})
@@ -172,7 +177,12 @@ def test_text_with_empty_blocks_stops_before_any_candidate_is_sent(
     assert server.seen == [("GET", "releases/active")]
 
 
-def test_legitimate_office_evidence_stops_at_the_gate(
+def submitted_evidence(server: Platform) -> list[dict[str, Any]]:
+    members = server.candidate["members"]
+    return [item for m in members for item in m["payload"].get("evidence", [])]
+
+
+def test_legitimate_office_evidence_publishes_with_its_block_locator(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     office = OfficePageText(DOCUMENT, DOC_SHA, 1, TEXT, (
@@ -184,8 +194,29 @@ def test_legitimate_office_evidence_stops_at_the_gate(
     code, summary, server = publish_with(
         tmp_path, monkeypatch, capsys, page_set(LEGAL_BLOCKS), output_citing(source, "D1P1S2")
     )
-    assert code == 2
-    assert summary == {
-        "stopped": "BUNDLE_INVALID", "reason": "EVIDENCE_LOCATOR_UNSUPPORTED", "field_index": 0,
+    assert code == 0, summary
+    assert server.seen[:2] == [("GET", "releases/active"), ("POST", "candidates")]
+    (evidence,) = submitted_evidence(server)
+    assert {key: value for key, value in evidence["locator"].items() if value is not None} == {
+        "kind": "DOCX_BLOCK", "block_index": 1, "page": 1, "start": 7, "end": 15,
     }
-    assert server.seen == [("GET", "releases/active")]
+    assert (evidence["quote"], evidence["source_ref"], evidence["file_sha256"]) == (
+        BODY, f"source:v1:k-1:2:{DOC_SHA}", DOC_SHA,
+    )
+
+
+def test_pdf_evidence_publishes_the_same_text_span_as_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    served = page_set(None, "产品说明书.pdf")
+    pdf = SegmentedSource([PageText("产品说明书.pdf", DOC_SHA, 1, TEXT)])
+    (segment,) = pdf.segments
+    code, summary, server = publish_with(
+        tmp_path, monkeypatch, capsys, served, output_citing(pdf, segment.id)
+    )
+    assert code == 0, summary
+    (evidence,) = submitted_evidence(server)
+    assert evidence["locator"] == Locator(
+        kind="PDF_TEXT_SPAN", page=1, start=segment.start, end=segment.end
+    ).model_dump(mode="json")
+    assert evidence["quote"] == TEXT[segment.start : segment.end]

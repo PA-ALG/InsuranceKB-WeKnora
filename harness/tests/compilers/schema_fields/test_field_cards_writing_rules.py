@@ -36,7 +36,8 @@ def definition(key: str) -> FieldDefinition:
 
 
 def test_the_cards_carry_the_s12c9_version() -> None:
-    assert cards_version() == "draft-2026-10-29a"
+    # S12c-10 bumped the version again; the S12c-9 rules stay pinned by the assertions below.
+    assert cards_version() == "draft-2026-10-31a"
 
 
 def test_a_writing_rule_reaches_step_two_only() -> None:
