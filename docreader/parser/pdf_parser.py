@@ -2366,6 +2366,13 @@ class PDFParser(BaseParser):
 
     def parse_stream(self, content: bytes) -> ParsedDocumentStream:
         """Prepare PDF metadata, then render scanned pages only as consumed."""
+        if self._native_capture_mode:
+            # The capture request must survive the streaming read: run the same evidence
+            # producer as parse_into_text (no images, failures surface, no scanned fallback).
+            document = self.parse_into_text(content)
+            return ParsedDocumentStream(
+                document=document, image_count=len(document.images or {})
+            )
         if self._force_scanned:
             stream = PDFScannedParser(
                 file_name=self.file_name, file_type=self.file_type
