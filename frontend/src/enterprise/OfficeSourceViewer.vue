@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, ref, shallowRef, watch } from 'vue'
 import { get } from '@/utils/request'
 import type { SourceLocateRequest } from '@/utils/sourceLocator'
 import { officeLocateRequest, type OfficeFormat, type OfficeTarget } from './officeCitation'
+import { OfficePackageRejected, sanitizeOfficePackage } from './officePackage'
 
 // Upstream's original-file preview renders the Office file and highlights the citation; it is
 // loaded on demand so the Office renderers stay out of the enterprise pages' first bundle.
@@ -14,7 +15,9 @@ const props = defineProps<{
   file: string
   document: string
   target: OfficeTarget
-  labels: { loading: string; failed: string; retry: string; coarse: string; notLocated: string; region: string }
+  labels: {
+    loading: string; failed: string; retry: string; coarse: string; notLocated: string; unsafe: string; region: string
+  }
 }>()
 
 type Located = { found: boolean; precise: boolean }
@@ -25,7 +28,7 @@ const MEDIA_TYPES: Record<OfficeFormat, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 }
 
-const state = ref<'loading' | 'ready' | 'failed'>('loading')
+const state = ref<'loading' | 'ready' | 'failed' | 'rejected'>('loading')
 const retry = ref(0)
 const blob = shallowRef<Blob | null>(null)
 const located = ref<Located | null>(null)
@@ -58,10 +61,13 @@ watch(
           responseType: 'arraybuffer', timeout: 180_000, signal: controller.signal,
         })
         if (!active) return
-        blob.value = new Blob([bytes], { type: MEDIA_TYPES[format] })
+        // The renderer only ever sees the rebuilt package (Spec §3.2a).
+        const clean = await sanitizeOfficePackage(bytes, format)
+        if (!active) return
+        blob.value = new Blob([clean], { type: MEDIA_TYPES[format] })
         state.value = 'ready'
-      } catch {
-        if (active) state.value = 'failed'
+      } catch (error) {
+        if (active) state.value = error instanceof OfficePackageRejected ? 'rejected' : 'failed'
       }
     })()
   },
@@ -75,12 +81,14 @@ watch(() => props.target, target => {
 }, { immediate: true })
 
 // A rendered Office file is untrusted: docx-preview writes a file's external link targets into
-// anchors as they are, `javascript:` included. Only web and mail links may be followed.
+// anchors as they are, `javascript:` included. The package rebuild already drops such targets;
+// here only web and mail links may be followed, and a link whose target was dropped goes nowhere.
 const FOLLOWABLE = /^(?:https?|mailto):$/
 
 function blockUnsafeLinks(event: MouseEvent) {
   const link = event.target instanceof Element ? event.target.closest('a[href]') : null
-  if (link instanceof HTMLAnchorElement && !FOLLOWABLE.test(link.protocol)) event.preventDefault()
+  if (!(link instanceof HTMLAnchorElement)) return
+  if (!link.getAttribute('href')?.trim() || !FOLLOWABLE.test(link.protocol)) event.preventDefault()
 }
 
 function onLocated(result: Located) {
@@ -91,6 +99,7 @@ function onLocated(result: Located) {
 <template>
   <div class="office-source-viewer">
     <p v-if="state === 'loading'" role="status">{{ labels.loading }}</p>
+    <p v-else-if="state === 'rejected'" data-rejected role="note" class="ek-status">{{ labels.unsafe }}</p>
     <div v-else-if="state === 'failed'" class="office-source-error" role="alert">
       <p>{{ labels.failed }}</p>
       <button type="button" @click="retry++">{{ labels.retry }}</button>

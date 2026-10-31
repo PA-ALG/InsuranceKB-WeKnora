@@ -365,7 +365,8 @@ export default {
       "officeRegion": "{document}, {position}",
       "coarse": "The place of the quote is marked, but not the quote itself",
       "notLocated": "The quote could not be found in the source; compare it with the quote above",
-      "noViewer": "This kind of source cannot be opened yet; see the quote above"
+      "noViewer": "This kind of source cannot be opened yet; see the quote above",
+      "unsafe": "The source file contains content that cannot be shown safely, so it was not opened; see the quote above"
     }
   }
 }

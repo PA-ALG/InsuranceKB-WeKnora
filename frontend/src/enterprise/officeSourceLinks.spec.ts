@@ -5,9 +5,13 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/utils/request', () => ({ get: vi.fn() }))
+vi.mock('./officePackage', async importOriginal => ({
+  ...(await importOriginal<typeof import('./officePackage')>()),
+  sanitizeOfficePackage: vi.fn(async (bytes: ArrayBuffer) => bytes),
+}))
 vi.mock('@/components/document-preview.vue', async () => {
   const { defineComponent, h } = await import('vue')
-  const hrefs = ['javascript:void(0)', 'data:text/html,x', 'vbscript:x', 'https://example.com/a', 'mailto:a@example.com', '#anchor']
+  const hrefs = ['javascript:void(0)', 'data:text/html,x', 'vbscript:x', 'https://example.com/a', 'mailto:a@example.com', '#anchor', '']
   return {
     default: defineComponent({
       name: 'DocumentPreview',
@@ -20,7 +24,7 @@ import { get } from '@/utils/request'
 import OfficeSourceViewer from './OfficeSourceViewer.vue'
 import { officeTarget } from './officeCitation'
 
-const labels = { loading: 'l', failed: 'f', retry: 'r', coarse: 'c', notLocated: 'n', region: 'region' }
+const labels = { loading: 'l', failed: 'f', retry: 'r', coarse: 'c', notLocated: 'n', unsafe: 'u', region: 'region' }
 
 afterEach(() => { vi.resetAllMocks() })
 
@@ -38,7 +42,7 @@ async function clicked(index: number, type: 'click' | 'auxclick' = 'click'): Pro
 }
 
 describe('links in a rendered Office file', () => {
-  it.each([[0, 'javascript:'], [1, 'data:'], [2, 'vbscript:']])('blocks link %i (%s)', async index => {
+  it.each([[0, 'javascript:'], [1, 'data:'], [2, 'vbscript:'], [6, 'a dropped target']])('blocks link %i (%s)', async index => {
     expect(await clicked(index)).toBe(true)
     expect(await clicked(index, 'auxclick')).toBe(true)
   })

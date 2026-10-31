@@ -55,6 +55,7 @@ const officeLabels = computed(() => ({
   retry: t('enterpriseKnowledge.retry'),
   coarse: t('enterpriseKnowledge.viewer.coarse'),
   notLocated: t('enterpriseKnowledge.viewer.notLocated'),
+  unsafe: t('enterpriseKnowledge.viewer.unsafe'),
   region: t('enterpriseKnowledge.viewer.officeRegion', {
     document: citation.value?.source.document ?? '', position: position.value,
   }),
