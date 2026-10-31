@@ -23,7 +23,7 @@ services:
     image: ghcr.io/pa-alg/insurancekb-weknora-docreader:src-a8bf55ae1844-lock-55bb545f43a4@sha256:418de99a454fdfee1592cc8346fad6f8e2601ed27107561aa745474d94b8b207
 
   postgres:
-    image: paradedb/paradedb:v0.22.2-pg17@sha256:af585013f97f622715de01e48d00558f7edf17055d7b40deafc9f98ca8d99a56
+    image: paradedb/paradedb:v0.22.6-pg17@sha256:ea992f2ee1e44d961d3b0f8b4b184cb2061fc9a8fc1dbfafb88f88180e3a16db
 
   redis:
     image: redis:7.0-alpine@sha256:c9d92d840fd011c908f040592857c724ae6d877f2aba5c40ad963276507386b2
