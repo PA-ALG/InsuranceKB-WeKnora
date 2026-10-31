@@ -9,7 +9,7 @@
   "G5_hardcoded": 4,
   "G6_private_access": 5,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 153,
+  "G10_upstream_patches": 151,
   "G11_new_file_location": 124
  },
  "guards": {
@@ -130,10 +130,8 @@
    "internal/application/service/knowledge_post_process.go": 1,
    "internal/application/service/knowledge_process.go": 1,
    "internal/application/service/knowledge_process_index_retry_test.go": 1,
-   "internal/application/service/knowledge_process_parent_child_test.go": 1,
    "internal/application/service/knowledge_process_status_test.go": 1,
    "internal/application/service/knowledge_replace.go": 1,
-   "internal/application/service/knowledge_replace_test.go": 1,
    "internal/application/service/knowledge_util.go": 1,
    "internal/application/service/knowledgebase.go": 1,
    "internal/application/service/knowledgebase_delete_datasource_test.go": 1,
