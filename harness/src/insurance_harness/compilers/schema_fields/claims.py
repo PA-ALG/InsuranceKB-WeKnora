@@ -2,14 +2,14 @@
 
 Each field becomes one Claim. Evidence is cut from the page text by the field's selected segment
 ids, so every quote equals its page slice by construction; it carries the fixed source revision
-(``source:v1:<knowledge_id>:<parse_attempt>:<file_sha256>``) and a PDF_TEXT_SPAN locator with
-code-point offsets the platform can verify against its captured parse artifact. Evidence on a
-document not read as evidence (S4i), a field whose ids no longer cut its saved evidence, or a
-document the source map does not name, stops the build: the bundle never guesses where a quote
-came from. Evidence on an Office page stops it too (EVIDENCE_LOCATOR_UNSUPPORTED, S11c Spec §2.3):
-the platform verifies and cites only PDF text spans until S11d, which removes this stop. With
-the product page (S3d-2), the bundle also carries the product's entity and its pack's presentation
-profile, which must be for the same product and pack as the output.
+(``source:v1:<knowledge_id>:<parse_attempt>:<file_sha256>``) and a locator with code-point
+offsets the platform can verify against its captured parse artifact: a PDF_TEXT_SPAN, or on an
+Office page its block's locator with the page and offsets (S11c Spec §2.2, verified since S11d).
+Evidence on a document not read as evidence (S4i), a field whose ids no longer cut its saved
+evidence, or a document the source map does not name, stops the build: the bundle never guesses
+where a quote came from. With the product page (S3d-2), the bundle also carries the product's
+entity and its pack's presentation profile, which must be for the same product and pack as the
+output.
 """
 
 from collections.abc import Mapping, Sequence
@@ -26,7 +26,6 @@ from insurance_harness.contracts.bundle import CandidateBundle, ReviewPlan
 from insurance_harness.contracts.enums import (
     ClaimState,
     EvidenceMatch,
-    LocatorKind,
     SourceClass,
     UnknownReason,
 )
@@ -173,14 +172,11 @@ def _evidence(
         revision = sources.get(span.document)
         if revision is None:
             raise BundleError("SOURCE_REVISION_MISSING", index)
-        locator = source.locator(span)
-        if locator.kind != LocatorKind.PDF_TEXT_SPAN:
-            raise BundleError("EVIDENCE_LOCATOR_UNSUPPORTED", index)
         evidence.append(
             Evidence(
                 source_ref=revision.ref(span.document_sha256.lower()),
                 file_sha256=span.document_sha256.lower(),
-                locator=locator,
+                locator=source.locator(span),
                 quote=span.quote,
                 match=EvidenceMatch.EXACT,
                 access_scope=ACCESS_SCOPE,
