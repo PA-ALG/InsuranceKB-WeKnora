@@ -31,15 +31,15 @@ MOVED_DECLARATIONS = (
     r"type KnowledgeRevisionSourceExact3RequestV1 struct",
     r"type KnowledgeRevisionSourceExact3ResultV1 struct",
     r"type KnowledgeRevisionSourceExact3Error struct",
-    r"ErrRevisionSourceMismatch\s+=",
-    r"ErrRevisionSourcePageUnavailable\s+=",
-    r"ErrRevisionSourceBackfillDisabled\s+=",
-    r"ErrRevisionSourceExact3Conflict\s+=",
-    r"KnowledgeRevisionSourceExact3ContractV1\s+=",
+    r"(?:var |const )?ErrRevisionSourceMismatch\s+=",
+    r"(?:var |const )?ErrRevisionSourcePageUnavailable\s+=",
+    r"(?:var |const )?ErrRevisionSourceBackfillDisabled\s+=",
+    r"(?:var |const )?ErrRevisionSourceExact3Conflict\s+=",
+    r"(?:var |const )?KnowledgeRevisionSourceExact3ContractV1\s+=",
 )
 # Called from upstream service files; they stay in the service package.
 SERVICE_GUARDS = (
-    r"ErrKnowledgeRevisionSourcePinned\s+=",
+    r"(?:var |const )?ErrKnowledgeRevisionSourcePinned\s+=",
     r"func requireKnowledgeRevisionSourceDeleteAllowed\(",
     r"func requireKnowledgeRevisionSourceReparseAllowed\(",
 )
