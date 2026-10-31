@@ -3,7 +3,8 @@
 
 ``internal/application/service/knowledge_revision_source.go`` is deliberately not covered: it cannot reach
 500 lines without a new Go file in an upstream package (G11) or a move into ``internal/enterprise``; the Spec
-leaves it to a follow-up slice.
+leaves it to a follow-up slice. S7f-2b2 did that move: 11 of the service tests below now live in
+``internal/enterprise/revisionsource`` (see ``test_s7f2b2_revision_source_moved.py``).
 
 Standard library only. Run from the repository root:  python -m pytest -q tests/architecture
 """
@@ -23,6 +24,7 @@ MAX_LINES = 500
 DATABASE = "internal/database"
 SERVICE = "internal/application/service"
 REPOSITORY = "internal/application/repository"
+REVISION_SOURCE = "internal/enterprise/revisionsource"  # S7f-2b2 moved the revision-source service here
 SPLIT_FILES = (
     f"{DATABASE}/legacy_w1_bridge.go",
     f"{DATABASE}/legacy_w1_bridge_test.go",
@@ -68,6 +70,10 @@ MOVED_TESTS = {
         "TestPostgresEmbeddingsForwardRepair",
     ),
     SERVICE: (
+        "TestPinnedRevisionSourceBlocksKnowledgeDeleteBeforeMutation",
+        "TestPinnedRevisionSourceBlocksDirectReparseBeforeAnyMutation",
+    ),
+    REVISION_SOURCE: (
         "TestRevisionSourceUsesStoredBackendForBackfillAndFixedRead",
         "TestRevisionSourceStoredBackendFailureNeverReadsDefault",
         "TestBackfillKnowledgeRevisionSourceRequiresHumanAdminBeforeAuthorityReads",
@@ -77,8 +83,6 @@ MOVED_TESTS = {
         "TestBackfillKnowledgeRevisionSourceRejectsZeroStaleAndMissingRevisionBeforeObjectRead",
         "TestReadFixedRevisionSourceRejectsBindingAndPageDriftBeforeBytes",
         "TestReadFixedRevisionSourceReturnsOnlyExactPinnedObject",
-        "TestPinnedRevisionSourceBlocksKnowledgeDeleteBeforeMutation",
-        "TestPinnedRevisionSourceBlocksDirectReparseBeforeAnyMutation",
         "TestExact3BackfillPreflightsAllSourcesBeforeStrictSerialSeal",
         "TestExact3DryRunClassifiesExactExistingRowsAndStopsOnConflict",
     ),
