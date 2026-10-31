@@ -3,6 +3,11 @@ name: Enterprise PostgreSQL
 # Go adapter tests that need a real PostgreSQL read WEKNORA_TEST_POSTGRES_URL and skip
 # without it, so before this job they never ran in CI. Tests named TestPostgres* in the
 # packages below run here, and the job fails if any of them skips.
+#
+# The paradedb job runs the tests that need ParadeDB itself (pg_search BM25, pgvector, the
+# full migration chain) on the same ParadeDB release as the live database (#486). Before it,
+# the internal/database migration matrix and the retriever's BM25 test only ever skipped in
+# CI, which is how the v0.9.0 keyword query shape reached live unseen (#471).
 
 on:
   push:
@@ -12,6 +17,7 @@ on:
       - "internal/application/repository/**"
       - "internal/database/**"
       - "migrations/enterprise/**"
+      - "migrations/versioned/**"
       - "go.mod"
       - "go.sum"
       - ".github/workflows/enterprise-postgres.yml"
@@ -21,6 +27,7 @@ on:
       - "internal/application/repository/**"
       - "internal/database/**"
       - "migrations/enterprise/**"
+      - "migrations/versioned/**"
       - "go.mod"
       - "go.sum"
       - ".github/workflows/enterprise-postgres.yml"
@@ -87,3 +94,88 @@ jobs:
             exit 1
           fi
           grep -q -- '--- PASS: TestPostgres' postgres.log
+
+  paradedb:
+    name: Go ParadeDB tests (live pg_search release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      paradedb:
+        # Same release as the live database. The live pg container runs the linux/arm64 entry
+        # (sha256:ea992f2e...) of this multi-arch index, the same digest as REHEARSAL_PG_IMAGE in
+        # deploy/rehearsal/images.lock; CI resolves the amd64 entry of the same tag. When the live
+        # ParadeDB is upgraded, change the tag, this digest and PG_SEARCH_VERSION below together
+        # (the live extension version is `SELECT extversion FROM pg_extension WHERE
+        # extname = 'pg_search'`, read-only).
+        image: paradedb/paradedb:v0.22.6-pg17@sha256:58bf87d2a6f1e72f56590b0f0ae1467e82c3f99ca203dde646672c8ac13148b2
+        env:
+          POSTGRES_USER: weknora
+          POSTGRES_PASSWORD: weknora
+          POSTGRES_DB: weknora
+        ports:
+          - 5432:5432
+        # TCP inside the container: the image's bootstrap (extensions in template1 and
+        # POSTGRES_DB, as on live) runs on a socket-only temporary server first.
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U weknora -d weknora"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 24
+    env:
+      PG_SEARCH_VERSION: "0.22.6"
+      # Disposable CI service credentials, like the job above. One database per suite: the
+      # migration matrix drops the public schema, the retriever test recreates its own table,
+      # and the score-catalog test needs a database without pg_search (template0).
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: weknora
+      PGPASSWORD: weknora
+      WEKNORA_TEST_POSTGRES_URL: postgres://weknora:weknora@127.0.0.1:5432/weknora_embeddings_repair_test?sslmode=disable
+      WEKNORA_MIGRATION_TEST_POSTGRES_DSN: postgres://weknora:weknora@127.0.0.1:5432/weknora_migration_test?sslmode=disable
+      WEKNORA_RETRIEVER_TEST_PARADEDB_DSN: postgres://weknora:weknora@127.0.0.1:5432/weknora_retriever_paradedb?sslmode=disable
+      WEKNORA_RETRIEVER_TEST_POSTGRES_DSN: postgres://weknora:weknora@127.0.0.1:5432/weknora_retriever_catalog?sslmode=disable
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Require the live pg_search version
+        run: |
+          actual=$(psql -d weknora -At -c "SELECT extversion FROM pg_extension WHERE extname = 'pg_search'")
+          echo "pg_search ${actual}"
+          if [ "${actual}" != "${PG_SEARCH_VERSION}" ]; then
+            echo "pg_search is '${actual}', expected ${PG_SEARCH_VERSION} (the live release)." >&2
+            exit 1
+          fi
+
+      - name: Create disposable databases
+        run: |
+          psql -d weknora -v ON_ERROR_STOP=1 \
+            -c "CREATE DATABASE weknora_embeddings_repair_test" \
+            -c "CREATE DATABASE weknora_migration_test" \
+            -c "CREATE DATABASE weknora_retriever_paradedb" \
+            -c "CREATE DATABASE weknora_retriever_catalog TEMPLATE template0"
+
+      - name: Tests (ParadeDB)
+        run: |
+          set -o pipefail
+          status=0
+          go test -count=1 -v -run '^TestPostgres' ./internal/database/... 2>&1 | tee paradedb.log || status=1
+          go test -count=1 -v ./internal/application/repository/retriever/postgres/... 2>&1 \
+            | tee -a paradedb.log || status=1
+          exit "${status}"
+
+      - name: Require executed zero-skip ParadeDB tests
+        run: |
+          if grep -q -- '--- SKIP' paradedb.log; then
+            echo "A ParadeDB test skipped; its DSN must reach the service." >&2
+            exit 1
+          fi
+          for test in TestPostgresLegacyW1MigrationMatrix TestPostgresEmbeddingsForwardRepair \
+            TestPostgresMigrationsServeAgentHistory TestKeywordExclusionRunsOnParadeDB \
+            TestKeywordScoreCatalogCompatibility; do
+            grep -q -- "--- PASS: ${test} " paradedb.log || { echo "${test} did not pass" >&2; exit 1; }
+          done
