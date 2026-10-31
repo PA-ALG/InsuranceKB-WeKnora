@@ -63,7 +63,8 @@ LOCATOR_FIELDS: dict[LocatorKind, tuple[str, ...]] = {
     LocatorKind.OCR_REGION: ("page", "bbox"),
     LocatorKind.DOCX_BLOCK: ("block_index",),
     LocatorKind.DOCX_TABLE_CELL: ("table_index", "row", "column"),
-    LocatorKind.PPTX_SHAPE: ("slide", "shape_id"),
+    # S11c: the platform locates a slide's text, not its shapes (S11b), so shape_id is optional.
+    LocatorKind.PPTX_SHAPE: ("slide",),
     LocatorKind.XLSX_CELL_RANGE: ("sheet", "cell_range"),
     LocatorKind.CHUNK_SPAN: ("chunk_id", "start", "end"),
     LocatorKind.STRUCTURED_PATH: ("path",),

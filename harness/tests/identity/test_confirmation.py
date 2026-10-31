@@ -160,7 +160,13 @@ def test_each_question_offers_its_choices_in_a_fixed_order() -> None:
     )
 
     pending, _, registry = unrecognised_role("1830")
-    assert keys(pending, registry) == ["role:terms", "role:brochure", "role:rate_table", "ignore"]
+    assert keys(pending, registry) == [
+        "role:terms",
+        "role:brochure",
+        "role:rate_table",
+        "role:sales_training",  # S11c
+        "ignore",
+    ]
     assert choices(pending, registry)[1] == Choice(
         key="role:brochure", kind="role", value="brochure"
     )

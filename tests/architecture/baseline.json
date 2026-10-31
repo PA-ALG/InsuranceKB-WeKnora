@@ -9,7 +9,7 @@
   "G5_hardcoded": 4,
   "G6_private_access": 5,
   "G9_contract_drift": 0,
-  "G10_upstream_patches": 163,
+  "G10_upstream_patches": 161,
   "G11_new_file_location": 140
  },
  "guards": {
@@ -113,10 +113,8 @@
    "frontend/src/composables/useChatStreamHandler.ts": 1,
    "frontend/src/composables/useChildAgentStream.test.ts": 1,
    "frontend/src/composables/useCitationPopover.ts": 1,
-   "frontend/src/i18n/index.ts": 1,
    "frontend/src/i18n/localeKeyAudit.ts": 1,
-   "frontend/src/router/index.ts": 1,
-   "frontend/src/stores/menu.ts": 1,
+   "frontend/src/main.ts": 1,
    "frontend/src/test-utils/vueFixture.ts": 1,
    "frontend/src/utils/citationMarkdown.ts": 1,
    "frontend/src/utils/referenceSources.ts": 1,

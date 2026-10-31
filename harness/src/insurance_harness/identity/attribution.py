@@ -10,6 +10,10 @@ does not depend on the order of the registry.
 Names are compared as whole titles, not searched in the text: a product name can be part of another
 one (…终身寿险 inside …终身寿险(分红型)), and a substring search would file a new product as a new
 version of the shorter one.
+
+Sales and training materials, and Office files of no recognised role, often print only a brand
+(S11c Spec §2.5). When no anchor settles them, the products whose brand they carry are offered to a
+person as candidates; a brand is never an anchor, so even one candidate is only a question.
 """
 
 import hashlib
@@ -18,6 +22,7 @@ import unicodedata
 from collections.abc import Callable, Sequence
 from functools import lru_cache
 from importlib.resources import files
+from pathlib import PurePosixPath
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -81,6 +86,15 @@ class AttributionPolicy(_Frozen):
     created_id_prefix: str = Field(min_length=1)
     created_id_hex: int = Field(ge=8, le=64)
     classifications: tuple[Classification, ...] = Field(min_length=1)
+    # Brand candidates (S11c Spec §2.5): which materials are offered by brand, and how a brand is
+    # read from a registered name and matched; each year pattern has one two-digit group.
+    brand_roles: tuple[str, ...]
+    brand_extensions: tuple[str, ...]
+    brand_prefixes: tuple[str, ...]
+    brand_min_chars: int = Field(gt=0)
+    brand_max_candidates: int = Field(gt=0)
+    upload_year_pattern: str = Field(min_length=1)
+    product_year_patterns: tuple[str, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _consistent(self) -> "AttributionPolicy":
@@ -93,10 +107,17 @@ class AttributionPolicy(_Frozen):
                     self.guide_title_pattern,
                 )
             ]
+            years = [re.compile(t) for t in (self.upload_year_pattern, *self.product_year_patterns)]
         except re.error as error:
             raise ValueError("invalid attribution pattern") from error
         if patterns[2].groups != 1 or not self.title_prefix_pattern.startswith("^"):
             raise ValueError("the guide pattern needs one group and the prefix an anchor")
+        if any(year.groups != 1 for year in years):
+            raise ValueError("a year pattern needs one group")
+        if not all(_fold(text) for text in (*self.brand_prefixes, *self.brand_extensions)):
+            raise ValueError("a blank brand prefix or extension")
+        if not set(self.brand_roles) <= {role.role for role in load_material_roles().roles}:
+            raise ValueError("a brand role that is not a material role")
         suffixes = [_fold(entry.suffix) for entry in self.classifications]
         if len(set(suffixes)) != len(suffixes):
             raise ValueError("duplicate classification suffix")
@@ -233,10 +254,58 @@ def _named_inside(title: str, products: Sequence[RegisteredProduct]) -> list[Reg
     return [found[key] for key in sorted(found)] if len(found) > 1 else []
 
 
+def _unqualified(name: str) -> str:
+    """A name without its parenthesised qualifiers, nested ones included."""
+    while (stripped := _QUALIFIER.sub("", name)) != name:
+        name = stripped
+    return name
+
+
+def _brand(name: str, policy: AttributionPolicy) -> str:
+    """A registered name's brand core: no company or rider prefix, qualifier or type suffix."""
+    core = _fold(name).casefold()
+    prefixes = [_fold(prefix).casefold() for prefix in policy.brand_prefixes]
+    while prefix := next((p for p in prefixes if core.startswith(p)), ""):
+        core = core[len(prefix) :]  # repeatedly, as in 平安附加…
+    core = _unqualified(core)
+    suffixes = [_fold(entry.suffix).casefold() for entry in policy.classifications]
+    found = max((s for s in suffixes if core.endswith(s)), key=len, default="")
+    return core[: len(core) - len(found)]
+
+
+def _years(text: str, patterns: Sequence[str]) -> set[str]:
+    return {match.group(1) for pattern in patterns for match in re.finditer(pattern, text)}
+
+
+def _brand_candidates(
+    upload: Upload, window: str, products: Sequence[RegisteredProduct], policy: AttributionPolicy
+) -> list[str]:
+    """Products whose brand the material's file name or opening carries (Spec §2.5).
+
+    A brand matches by its first brand_min_chars characters: registered names add type words the
+    materials leave out (…养老, …长期). A year the material carries keeps the products of that
+    year, when any; more than brand_max_candidates candidates are no candidates at all.
+    """
+    text = (_fold(PurePosixPath(upload.file_name).stem) + "\n" + window).casefold()
+    found = []
+    for product in products:
+        brands = {_brand(name, policy) for name in product.names}
+        if any(len(b) >= policy.brand_min_chars and b[: policy.brand_min_chars] in text
+               for b in brands):
+            found.append(product)
+    wanted = _years(text, (policy.upload_year_pattern,))
+    dated = [
+        p for p in found
+        if wanted & _years(" ".join(_fold(n) for n in p.names), policy.product_year_patterns)
+    ]
+    chosen = dated or found
+    if len(chosen) > policy.brand_max_candidates:
+        return []
+    return sorted(p.product_id for p in chosen)
+
+
 def _pack(name: str, policy: AttributionPolicy) -> str | None:
-    base = name
-    while (stripped := _QUALIFIER.sub("", base)) != base:
-        base = stripped
+    base = _unqualified(name)
     hits = [entry for entry in policy.classifications if base.endswith(_fold(entry.suffix))]
     return max(hits, key=lambda entry: len(_fold(entry.suffix))).schema_pack_id if hits else None
 
@@ -337,6 +406,11 @@ def attribute(
             candidates=tuple(p.product_id for p in named),
             **anchors,
         )
+    extension = PurePosixPath(upload.file_name).suffix.casefold()
+    office = extension in {e.casefold() for e in policy.brand_extensions}
+    if role in policy.brand_roles or (role is None and office):
+        if brands := _brand_candidates(upload, window, products, policy):
+            return decided("NEEDS_CONFIRM", "brand_candidates", candidates=tuple(brands), **anchors)
     if role != TERMS or own_code is None or not title:
         return decided("QUARANTINE", "no_product_anchor", **anchors)
 

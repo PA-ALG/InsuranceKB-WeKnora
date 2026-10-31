@@ -50,6 +50,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   APP_REPOSITORY: ghcr.io/pa-alg/insurancekb-weknora-app
   QUARANTINE_REPOSITORY: ghcr.io/pa-alg/insurancekb-weknora-quarantine
+  # Build cache lives in its own non-deployable GHCR repository: the repo-wide 10 GB GitHub
+  # Actions cache evicted blobs of `mode=max` entries and arm64 builds then failed with
+  # "blob … not found" on import (runs 41122068543, 41125520379).
+  BUILDCACHE_REPOSITORY: ghcr.io/pa-alg/insurancekb-weknora-buildcache
   TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
 
 jobs:
@@ -116,8 +120,8 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           outputs: type=image,name=${{ env.QUARANTINE_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=images-app-arm64
-          cache-to: type=gha,scope=images-app-arm64,mode=max
+          cache-from: type=registry,ref=${{ env.BUILDCACHE_REPOSITORY }}:app-arm64
+          cache-to: type=registry,ref=${{ env.BUILDCACHE_REPOSITORY }}:app-arm64,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
           provenance: mode=max
           sbom: true
 
@@ -126,9 +130,11 @@ jobs:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ github.token }}
           IMAGE: ${{ env.QUARANTINE_REPOSITORY }}@${{ steps.build.outputs.digest }}
+        # The quarantined digest is an index (image + attestations); trivy resolves an index to
+        # linux/amd64 unless told otherwise, so the arm64 legs name their platform explicitly.
         run: |
           docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY_IMAGE" \
-            image --scanners secret --exit-code 1 --no-progress "$IMAGE"
+            image --scanners secret --exit-code 1 --no-progress --platform linux/arm64 "$IMAGE"
 
       - name: Promote the scanned digest to the deployable repository
         env:
@@ -246,8 +252,8 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           outputs: type=image,name=${{ env.QUARANTINE_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=images-${{ matrix.image }}-${{ matrix.arch }}
-          cache-to: type=gha,scope=images-${{ matrix.image }}-${{ matrix.arch }},mode=max
+          cache-from: type=registry,ref=${{ env.BUILDCACHE_REPOSITORY }}:${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ env.BUILDCACHE_REPOSITORY }}:${{ matrix.image }}-${{ matrix.arch }},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true
           provenance: mode=max
           sbom: true
 
@@ -256,9 +262,10 @@ jobs:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ github.token }}
           IMAGE: ${{ env.QUARANTINE_REPOSITORY }}@${{ steps.build.outputs.digest }}
+          PLATFORM: linux/${{ matrix.arch }}
         run: |
           docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY_IMAGE" \
-            image --scanners secret --exit-code 1 --no-progress "$IMAGE"
+            image --scanners secret --exit-code 1 --no-progress --platform "$PLATFORM" "$IMAGE"
 
       - name: Record the scanned per-arch digest
         env:

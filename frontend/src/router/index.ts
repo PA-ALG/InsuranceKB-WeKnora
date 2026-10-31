@@ -121,16 +121,6 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
-          path: "knowledge-bases/:kbId/materials-wiki",
-          name: "materialsWiki",
-          redirect: (to) => ({
-            name: "knowledgeBaseDetail",
-            params: { kbId: to.params.kbId },
-            query: { ...to.query, tab: "materials" },
-          }),
-          meta: { requiresInit: true, requiresAuth: true },
-        },
-        {
           path: "knowledge-search",
           // 旧路径保留为重定向，打开全局命令面板（⌘K），带上可选的 q 参数
           redirect: (to) => {
@@ -205,99 +195,6 @@ const router = createRouter({
           name: "organizationList",
           component: () => import("../views/organization/OrganizationList.vue"),
           meta: { requiresInit: true, requiresAuth: true, requiredCapability: 'organizations' }
-        },
-        // Enterprise knowledge (S3d-3a): published releases of the caller's Spaces, read-only.
-        {
-          path: "enterprise",
-          name: "enterpriseSpaces",
-          component: () => import("../enterprise/EnterpriseSpaces.vue"),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId",
-          name: "enterpriseSpace",
-          component: () => import("../enterprise/EnterpriseSpace.vue"),
-          props: route => ({
-            spaceId: String(route.params.spaceId),
-            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
-          }),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId/changes",
-          name: "enterpriseChanges",
-          component: () => import("../enterprise/EnterpriseChanges.vue"),
-          props: route => ({
-            spaceId: String(route.params.spaceId),
-            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
-          }),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId/spot-checks",
-          name: "enterpriseSpotChecks",
-          component: () => import("../enterprise/EnterpriseSpotChecks.vue"),
-          props: route => ({ spaceId: String(route.params.spaceId) }),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId/reviews",
-          name: "enterpriseReviews",
-          component: () => import("../enterprise/EnterpriseReviews.vue"),
-          props: route => ({ spaceId: String(route.params.spaceId) }),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId/confirmations",
-          name: "enterpriseConfirmations",
-          component: () => import("../enterprise/EnterpriseConfirmations.vue"),
-          props: route => ({ spaceId: String(route.params.spaceId) }),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId/graph",
-          name: "enterpriseGraph",
-          component: () => import("../enterprise/EnterpriseGraph.vue"),
-          props: route => ({
-            spaceId: String(route.params.spaceId),
-            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
-          }),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId/concepts/:conceptKey",
-          name: "enterpriseConcept",
-          component: () => import("../enterprise/EnterpriseConcept.vue"),
-          props: route => ({
-            spaceId: String(route.params.spaceId),
-            conceptKey: String(route.params.conceptKey),
-            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
-          }),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId/wiki/:entityId/:pageType/:pageSlug",
-          name: "enterpriseWikiPage",
-          component: () => import("../enterprise/EnterpriseWikiPage.vue"),
-          props: route => ({
-            spaceId: String(route.params.spaceId),
-            entityId: String(route.params.entityId),
-            pageType: String(route.params.pageType),
-            pageSlug: String(route.params.pageSlug),
-            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
-          }),
-          meta: { requiresInit: true, requiresAuth: true }
-        },
-        {
-          path: "enterprise/:spaceId/entities/:entityId",
-          name: "enterpriseEntity",
-          component: () => import("../enterprise/EnterpriseEntity.vue"),
-          props: route => ({
-            spaceId: String(route.params.spaceId),
-            entityId: String(route.params.entityId),
-            releaseId: typeof route.query.release === 'string' && route.query.release ? route.query.release : undefined,
-          }),
-          meta: { requiresInit: true, requiresAuth: true }
         },
         // Compatibility redirects for /platform/system/* URLs. System
         // administration surfaces live as dedicated sections inside the
