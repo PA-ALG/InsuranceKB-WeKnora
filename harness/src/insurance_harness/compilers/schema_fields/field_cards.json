@@ -1,5 +1,5 @@
 {
- "version": "draft-2026-10-29a",
+ "version": "draft-2026-10-31a",
  "source": "Claude 起草、用户审定中；示例来自留出产品并经独立评委复核（Issue #157）",
  "state_rules": {
   "present": "原文给出该字段的内容。",
@@ -4431,7 +4431,8 @@
      "reason": null,
      "pitfalls": []
     }
-   ]
+   ],
+   "writing_rule": "本字段只写万能账户。专属商业养老保险的投资组合账户、投资连结账户不是万能账户；给定段落只有这类账户的内容时，返回 unknown。"
   },
   "universal_account_settlement_rules": {
    "title": "万能账户结算规则",
@@ -4489,7 +4490,8 @@
      "reason": null,
      "pitfalls": []
     }
-   ]
+   ],
+   "writing_rule": "本字段只写万能账户。专属商业养老保险的投资组合账户、投资连结账户不是万能账户；给定段落只有这类账户的内容时，返回 unknown。"
   },
   "initial_charge_rules": {
    "title": "初始费用规则",
