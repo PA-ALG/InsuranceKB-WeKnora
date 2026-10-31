@@ -2,9 +2,10 @@
 // U-5a acceptance (protected, written by Claude): the enterprise pages, sidebar entry and UI strings
 // the app sees stay the same when they move out of upstream's route table, menu store and i18n setup
 // (Spec docs/design/slices/U-5a-前端企业入口收口.md §3).
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import router from '@/router'
 import i18n from '@/i18n'
 import { useMenuStore } from '@/stores/menu'
@@ -17,6 +18,9 @@ import zhTW from '@/i18n/locales/zh-TW.ts'
 import { withEnterpriseMessages } from './i18n/index.ts'
 import enterpriseEnUS from './i18n/messages/en-US.ts'
 import enterpriseZhCN from './i18n/messages/zh-CN.ts'
+import { installEnterprise } from './install.ts'
+import routesSource from './routes.ts?raw'
+import mainSource from '@/main.ts?raw'
 
 // Taken before anything is assembled, so the expectation never sees a bundle the app merged into.
 const EXPECTED_MESSAGES = withEnterpriseMessages(structuredClone({
@@ -27,6 +31,7 @@ const EXPECTED_MESSAGES = withEnterpriseMessages(structuredClone({
 function assemble() {
   const pinia = createPinia()
   setActivePinia(pinia)
+  installEnterprise({ router, i18n, pinia })
   return { menu: useMenuStore(pinia) }
 }
 
@@ -168,5 +173,64 @@ describe('the sidebar', () => {
     menu.updataMenuChildren({ id: 'session-1' })
     expect(menu.menuArr.find(item => item.path === 'creatChat')?.children?.map(child => child.id)).toEqual(['session-1'])
     expect(menu.menuArr.find(item => item.path === 'enterprise')?.children).toBeUndefined()
+  })
+})
+
+describe('installing the enterprise module', () => {
+  const page = { render: () => null }
+  const fakeI18n = () => ({
+    global: { availableLocales: ['zh-CN'], mergeLocaleMessage: vi.fn(), t: (key: string) => key },
+  })
+
+  it('changes nothing when it runs again', () => {
+    const pinia = createPinia()
+    installEnterprise({ router, i18n, pinia })
+    const routes = router.getRoutes().length
+    const menu = useMenuStore(pinia).menuArr.map(item => ({ ...item }))
+    installEnterprise({ router, i18n, pinia })
+    expect(router.getRoutes()).toHaveLength(routes)
+    expect(useMenuStore(pinia).menuArr.map(item => ({ ...item }))).toEqual(menu)
+    expect(i18n.global.getLocaleMessage('zh-CN')).toEqual(EXPECTED_MESSAGES['zh-CN'])
+  })
+
+  it('refuses, registering nothing, when the Platform layout route is gone', () => {
+    const pinia = createPinia()
+    const bare = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', name: 'home', component: page }],
+    })
+    const strings = fakeI18n()
+    expect(() => installEnterprise({ router: bare, i18n: strings, pinia })).toThrow(/Platform/)
+    expect(bare.getRoutes().map(record => record.name)).toEqual(['home'])
+    expect(strings.global.mergeLocaleMessage).not.toHaveBeenCalled()
+    expect(useMenuStore(pinia).menuArr.some(item => item.path === 'enterprise')).toBe(false)
+  })
+
+  it('refuses, registering nothing, when the knowledge-base menu entry is gone', () => {
+    const pinia = createPinia()
+    const menu = useMenuStore(pinia)
+    menu.menuArr.splice(menu.menuArr.findIndex(item => item.path === 'knowledge-bases'), 1)
+    const layout = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/platform', name: 'Platform', component: page, children: [] }],
+    })
+    const strings = fakeI18n()
+    expect(() => installEnterprise({ router: layout, i18n: strings, pinia })).toThrow(/knowledge-bases/)
+    expect(layout.getRoutes().map(record => record.name)).toEqual(['Platform'])
+    expect(strings.global.mergeLocaleMessage).not.toHaveBeenCalled()
+    expect(menu.menuArr.some(item => item.path === 'enterprise')).toBe(false)
+  })
+
+  it('runs in main.ts after Pinia and before the router takes its first navigation', () => {
+    expect(mainSource).toContain('import { installEnterprise } from "@/enterprise/install";')
+    const pinia = mainSource.indexOf('app.use(pinia);')
+    const install = mainSource.indexOf('installEnterprise({ router, i18n, pinia });')
+    expect(pinia).toBeGreaterThan(-1)
+    expect(install).toBeGreaterThan(pinia)
+    expect(mainSource.indexOf('app.use(router);')).toBeGreaterThan(install)
+  })
+
+  it('registers no 830-era schema-wiki route (S7b), now that enterprise routes live here', () => {
+    expect(routesSource).not.toContain('schema-wiki')
   })
 })
