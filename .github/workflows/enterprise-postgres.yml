@@ -159,27 +159,17 @@ jobs:
             -c "CREATE DATABASE weknora_retriever_paradedb" \
             -c "CREATE DATABASE weknora_retriever_catalog TEMPLATE template0"
 
-      # Three cases failed the first time they actually ran (#486); each is a stale expectation,
-      # not a ParadeDB difference, and is excluded here by name until its fix lands:
-      # - TestPostgresMigrationsServeAgentHistory (upstream v0.9.0 file, unchanged): steps one
-      #   migration down expecting 000106's index to go, but the head is now 000134. Exit: the
-      #   upstream test pins its own version (to be reported upstream).
-      # - TestPostgresEmbeddingsForwardRepair/existing_table_and_data_remain_unchanged: the
-      #   expected index set predates official 000112 (idx_embeddings_knowledge_id/_chunk_id).
-      # - TestPostgresEmbeddingsForwardRepair/conservative_down_preserves_the_repaired_table:
-      #   expects enterprise version 2 after one down step, i.e. 000003 as the enterprise head
-      #   (it is 000012). Exit for both: the test-only follow-up that updates these expectations
-      #   in internal/database/embeddings_upgrade_postgres_test.go (moved there by #485).
+      # Excluded by name: TestPostgresMigrationsServeAgentHistory (upstream v0.9.0 file,
+      # unchanged; G10) failed the first time it actually ran (#486). It steps one migration
+      # down expecting 000106's index to go, but the official head is now 000134 — a stale
+      # expectation, not a ParadeDB difference. Exit: upstream makes the test step down to
+      # its own version.
       - name: Tests (ParadeDB)
         run: |
           set -o pipefail
           status=0
-          go test -count=1 -v -run '^TestPostgres' \
-            -skip '^TestPostgres(MigrationsServeAgentHistory|EmbeddingsForwardRepair)$' \
+          go test -count=1 -v -run '^TestPostgres' -skip '^TestPostgresMigrationsServeAgentHistory$' \
             ./internal/database/... 2>&1 | tee paradedb.log || status=1
-          go test -count=1 -v -run '^TestPostgresEmbeddingsForwardRepair$' \
-            -skip '^TestPostgresEmbeddingsForwardRepair$/^(existing_table_and_data_remain_unchanged|conservative_down_preserves_the_repaired_table)$' \
-            ./internal/database/ 2>&1 | tee -a paradedb.log || status=1
           go test -count=1 -v ./internal/application/repository/retriever/postgres/... 2>&1 \
             | tee -a paradedb.log || status=1
           exit "${status}"
