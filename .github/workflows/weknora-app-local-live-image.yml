@@ -104,6 +104,7 @@ jobs:
         run: |
           "${{ runner.temp }}/locked-source/harness/.venv/bin/pytest" -q \
             tests/test_prepare_weknora_adoption_045.py \
+            tests/service_shell/weknora_adoption \
             tests/test_local_live_cli_023.py::test_r3_3_retry_vlm_consumes_marker_after_identity_before_single_reparse \
             tests/test_scope_016.py::test_s1_2_only_bound_space_builds_scope \
             tests/test_service_shell_config_health_039.py::test_t3_readiness_starts_not_ready_then_checks_db_and_uses_fresh_cache \
