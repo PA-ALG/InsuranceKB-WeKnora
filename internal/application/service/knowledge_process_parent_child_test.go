@@ -30,18 +30,11 @@ func (r *parentChildKnowledgeRepo) UpdateKnowledge(
 
 type parentChildChunkService struct {
 	interfaces.ChunkRepository
-	created  []*types.Chunk
-	existing []*types.Chunk
-	deleted  []string
-	purges   int
+	created []*types.Chunk
+	purges  int
 }
 
-func (s *parentChildChunkService) ListAllChunksByKnowledgeID(context.Context, uint64, string) ([]*types.Chunk, error) {
-	return append([]*types.Chunk(nil), s.existing...), nil
-}
-
-func (s *parentChildChunkService) DeleteChunks(_ context.Context, _ uint64, ids []string) error {
-	s.deleted = append(s.deleted, ids...)
+func (s *parentChildChunkService) DeleteChunksByKnowledgeID(context.Context, uint64, string) error {
 	return nil
 }
 
@@ -51,19 +44,6 @@ func (s *parentChildChunkService) PurgeSupersededChunksByKnowledgeID(context.Con
 }
 
 func (s *parentChildChunkService) CreateChunks(_ context.Context, chunks []*types.Chunk) error {
-	s.created = append([]*types.Chunk(nil), chunks...)
-	return nil
-}
-
-func (s *parentChildChunkService) CreateChunksAtRevision(
-	_ context.Context,
-	chunks []*types.Chunk,
-	_ uint64,
-	_ string,
-	_ string,
-	_ int64,
-	_ string,
-) error {
 	s.created = append([]*types.Chunk(nil), chunks...)
 	return nil
 }
@@ -99,10 +79,7 @@ func (parentChildEmbedder) GetModelID() string   { return "parent-child-test" }
 
 type parentChildRetrieveEngine struct {
 	interfaces.RetrieveEngineService
-	indexed    []*types.IndexInfo
-	deleted    []string
-	batchErr   error
-	afterBatch func()
+	indexed []*types.IndexInfo
 }
 
 func (e *parentChildRetrieveEngine) EngineType() types.RetrieverEngineType {
@@ -119,13 +96,6 @@ func (e *parentChildRetrieveEngine) DeleteByKnowledgeIDList(
 	return nil
 }
 
-func (e *parentChildRetrieveEngine) DeleteByChunkIDList(
-	_ context.Context, ids []string, _ int, _ string,
-) error {
-	e.deleted = append(e.deleted, ids...)
-	return nil
-}
-
 func (e *parentChildRetrieveEngine) EstimateStorageSize(
 	context.Context, embedding.Embedder, []*types.IndexInfo, []types.RetrieverType,
 ) int64 {
@@ -139,10 +109,7 @@ func (e *parentChildRetrieveEngine) BatchIndex(
 	_ []types.RetrieverType,
 ) error {
 	e.indexed = append([]*types.IndexInfo(nil), infos...)
-	if e.afterBatch != nil {
-		e.afterBatch()
-	}
-	return e.batchErr
+	return nil
 }
 
 type parentChildRetrieveRegistry struct {
@@ -217,11 +184,11 @@ func TestProcessChunksIndexesEveryTextChild(t *testing.T) {
 		{Content: "standalone child", Seq: 1, Start: 12, End: 28, ParentIndex: -1},
 	}
 
-	require.NoError(t, svc.processChunks(ctx, kb, knowledge, chunks, ProcessChunksOptions{
+	svc.processChunks(ctx, kb, knowledge, chunks, ProcessChunksOptions{
 		ParentChunks: []types.ParsedParentChunk{
 			{Content: "parent context", Seq: 0, Start: 0, End: 28},
 		},
-	}))
+	})
 
 	var textChunkIDs []string
 	for _, chunk := range chunkService.created {

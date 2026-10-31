@@ -78,8 +78,8 @@ func (r *attemptFenceKnowledgeRepo) UpdateKnowledge(_ context.Context, incoming 
 func attemptFenceProcessFixture(
 	t *testing.T,
 	repo *attemptFenceKnowledgeRepo,
-	engine *parentChildRetrieveEngine,
-) (*knowledgeService, context.Context, *types.KnowledgeBase, *types.Knowledge, *parentChildChunkService) {
+	engine *recordingRetrieveEngine,
+) (*knowledgeService, context.Context, *types.KnowledgeBase, *types.Knowledge, *recordingChunkService) {
 	t.Helper()
 	worker := &types.Knowledge{
 		ID: "knowledge-1", TenantID: 1, KnowledgeBaseID: "kb-1",
@@ -88,7 +88,7 @@ func attemptFenceProcessFixture(
 	}
 	current := *worker
 	repo.current = &current
-	chunks := &parentChildChunkService{}
+	chunks := newRecordingChunkService()
 	tenant := &types.Tenant{
 		ID: 1,
 		RetrieverEngines: types.RetrieverEngines{Engines: []types.RetrieverEngineParams{{
@@ -113,7 +113,7 @@ func attemptFenceProcessFixture(
 func TestBatchIndexFailureCleansOnlyItsStableBatchIDs(t *testing.T) {
 	t.Run("lost state claim still removes partial late vector writes", func(t *testing.T) {
 		repo := &attemptFenceKnowledgeRepo{updateErr: repository.ErrRevisionSuperseded}
-		engine := &parentChildRetrieveEngine{batchErr: errors.New("index failed")}
+		engine := newRecordingRetrieveEngine(errors.New("index failed"))
 		svc, ctx, kb, worker, chunks := attemptFenceProcessFixture(t, repo, engine)
 
 		err := svc.processChunks(ctx, kb, worker,
@@ -130,7 +130,7 @@ func TestBatchIndexFailureCleansOnlyItsStableBatchIDs(t *testing.T) {
 
 	t.Run("successful claim cleans this batch UUIDs only", func(t *testing.T) {
 		repo := &attemptFenceKnowledgeRepo{}
-		engine := &parentChildRetrieveEngine{batchErr: errors.New("index failed")}
+		engine := newRecordingRetrieveEngine(errors.New("index failed"))
 		svc, ctx, kb, worker, chunks := attemptFenceProcessFixture(t, repo, engine)
 
 		require.NoError(t, svc.processChunks(ctx, kb, worker,
@@ -146,7 +146,7 @@ func TestBatchIndexFailureCleansOnlyItsStableBatchIDs(t *testing.T) {
 
 func TestSuccessfulOldBatchIndexCleansOwnArtifactsAfterNewAttemptWins(t *testing.T) {
 	repo := &attemptFenceKnowledgeRepo{}
-	engine := &parentChildRetrieveEngine{}
+	engine := newRecordingRetrieveEngine(nil)
 	svc, ctx, kb, worker, chunks := attemptFenceProcessFixture(t, repo, engine)
 	engine.afterBatch = func() {
 		newer := *repo.current
