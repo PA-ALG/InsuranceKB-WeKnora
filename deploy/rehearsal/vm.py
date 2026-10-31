@@ -5,10 +5,8 @@ that already exists, then records a creation id, the instance id and the canonic
 directory (with the creation id also written into that directory). Every later step re-checks the
 record against the profile's real disk link, the canonical path under
 <REHEARSAL_DISK_ROOT>/insurancekb-rehearsal/<profile>, the marker and the Docker context socket.
-`destroy` validates everything before its first destructive call, deletes the external disk only
-after colima confirms the profile is gone and Lima reports the disk unused, removes entries by name
-inside directories opened without following links, and stops (keeping everything) on any failure
-or unknown state.
+`create` records the step it is about to attempt, so teardown.py can clean up a failed creation by
+exactly what that step may have made.
 """
 
 import json
@@ -27,6 +25,9 @@ import private
 EXT_ROOT = "insurancekb-rehearsal"
 MARKER = "owner"
 OWNER = "owner.json"
+STAGED_LINK = ".datadisk.rehearsal-link"
+# The steps of `create`, in order; the record names the one last attempted (teardown.py).
+STAGES = ("dir", "starting", "stopping", "copying", "linking", "restarting", "ready")
 # Private files a destroyed rehearsal leaves behind; removed by name once the VM and disks are gone.
 STATE_FILES = ("owner.json", "secrets.env", "app.env", "pg.env", "redis.env", "spaces.env",
                "harness.env", "images.env", "state.json", "config.yaml", "instance-marker.txt")
@@ -180,7 +181,7 @@ def lima_disk(settings: Settings, run: Runner) -> dict | None:
     return None
 
 
-def _open_owned_dir(path: Path) -> int:
+def open_owned_dir(path: Path) -> int:
     private.canonical(path)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -192,19 +193,25 @@ def _open_owned_dir(path: Path) -> int:
     return fd
 
 
-def _marker(ext_dir: Path) -> str:
-    fd = _open_owned_dir(ext_dir)
+def marker_in(fd: int) -> str:
+    """The creation id in an opened external directory; a link or a missing marker is not ours."""
     try:
         handle = os.open(MARKER, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
         with os.fdopen(handle, "rb") as marker:
             return marker.read().decode().strip()
     except OSError:
         raise VmError("NOT_OWNED") from None
+
+
+def _marker(ext_dir: Path) -> str:
+    fd = open_owned_dir(ext_dir)
+    try:
+        return marker_in(fd)
     finally:
         os.close(fd)
 
 
-def _owned_record(settings: Settings) -> dict:
+def owned_record(settings: Settings) -> dict:
     record = private.read_json(private.private_dir(settings.home), OWNER)
     if record is None:
         raise VmError("NOT_OWNED")
@@ -220,7 +227,7 @@ def _owned_record(settings: Settings) -> dict:
     return record
 
 
-def _check_link(settings: Settings, datadisk: Path, *, required: bool) -> None:
+def check_link(settings: Settings, datadisk: Path, *, required: bool) -> None:
     link = settings.lima_disk_dir / "datadisk"
     if not os.path.lexists(link):
         if required:
@@ -232,7 +239,7 @@ def _check_link(settings: Settings, datadisk: Path, *, required: bool) -> None:
 
 def verify(settings: Settings, run: Runner) -> dict:
     """The ready, owned rehearsal: record, marker, disk link, live profile and context socket."""
-    record = _owned_record(settings)
+    record = owned_record(settings)
     if record.get("state") != "ready":
         raise VmError("NOT_READY")
     ext_dir = Path(record["ext_dir"])
@@ -245,7 +252,7 @@ def verify(settings: Settings, run: Runner) -> dict:
         regular = False
     if not regular:
         raise VmError("DISK_INVALID")
-    _check_link(settings, datadisk, required=True)
+    check_link(settings, datadisk, required=True)
     if settings.profile not in profiles(run):
         raise VmError("PROFILE_MISSING")
     endpoint = run(["docker", "context", "inspect", settings.context,
@@ -257,20 +264,20 @@ def verify(settings: Settings, run: Runner) -> dict:
 
 def start(settings: Settings, run: Runner) -> None:
     """Start the owned VM if `down` stopped it (a stopped profile has no Docker context)."""
-    record = _owned_record(settings)
+    record = owned_record(settings)
     if record.get("state") != "ready":
         raise VmError("NOT_READY")
     if _marker(Path(record["ext_dir"])) != record.get("creation_id"):
         raise VmError("NOT_OWNED")
-    _check_link(settings, Path(record["ext_dir"]) / "datadisk", required=True)
+    check_link(settings, Path(record["ext_dir"]) / "datadisk", required=True)
     if profiles(run).get(settings.profile) == "Stopped":
         try:
-            _checked(run, ["colima", "start", "-p", settings.profile], "START_FAILED")
+            checked(run, ["colima", "start", "-p", settings.profile], "START_FAILED")
         finally:
             run(["docker", "context", "use", settings.live_context])
 
 
-def _checked(run: Runner, argv: list[str], code: str) -> None:
+def checked(run: Runner, argv: list[str], code: str) -> None:
     if run(argv, quiet=True).returncode != 0:
         raise VmError(code)
 
@@ -291,7 +298,7 @@ def create(settings: Settings, run: Runner) -> dict:
         os.mkdir(ext_dir.parent, 0o700)
     except FileExistsError:
         pass
-    os.close(_open_owned_dir(ext_dir.parent))
+    os.close(open_owned_dir(ext_dir.parent))
     try:
         os.mkdir(ext_dir, 0o700)
     except FileExistsError:
@@ -301,7 +308,7 @@ def create(settings: Settings, run: Runner) -> dict:
         "profile": settings.profile, "context": settings.context,
         "colima_home": str(settings.colima_home), "ext_dir": str(ext_dir),
         "ui_port": settings.ui_port, "state": "creating"}
-    fd = _open_owned_dir(ext_dir)
+    fd = open_owned_dir(ext_dir)
     try:
         marker = os.open(MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
                          dir_fd=fd)
@@ -309,22 +316,35 @@ def create(settings: Settings, run: Runner) -> dict:
         os.close(marker)
     finally:
         os.close(fd)
-    private.write_json(home, OWNER, record)
+    private.write_json(home, OWNER, {**record, "stage": "dir"})
+
+    def advance(stage: str) -> None:
+        # Written before the step, so a failure leaves the last stage attempted: teardown accepts
+        # exactly the resources that stage can have made, and nothing else.
+        record["stage"] = stage
+        private.write_json(home, OWNER, record)
+
     try:
-        _checked(run, ["colima", "start", "-p", settings.profile, "--cpu", "4", "--memory", "5",
-                       "--disk", "40", "--vm-type", "vz"], "START_FAILED")
-        _checked(run, ["colima", "stop", "-p", settings.profile], "STOP_FAILED")
-        _move_disk(settings, ext_dir, run)
-        _checked(run, ["colima", "start", "-p", settings.profile], "START_FAILED")
+        advance("starting")
+        checked(run, ["colima", "start", "-p", settings.profile, "--cpu", "4", "--memory", "5",
+                      "--disk", "40", "--vm-type", "vz"], "START_FAILED")
+        advance("stopping")
+        checked(run, ["colima", "stop", "-p", settings.profile], "STOP_FAILED")
+        advance("copying")
+        _copy_disk(settings, ext_dir, run)
+        advance("linking")
+        _link_disk(settings, ext_dir)
+        advance("restarting")
+        checked(run, ["colima", "start", "-p", settings.profile], "START_FAILED")
     finally:
         run(["docker", "context", "use", settings.live_context])
-    record["state"] = "ready"
+    record.update(state="ready", stage="ready")
     private.write_json(home, OWNER, record)
     return {"profile": settings.profile, "state": "ready"}
 
 
-def _move_disk(settings: Settings, ext_dir: Path, run: Runner) -> None:
-    """Copy Lima's new data disk into the owned directory, then swap in a link atomically."""
+def _copy_disk(settings: Settings, ext_dir: Path, run: Runner) -> None:
+    """Copy Lima's new data disk into the owned directory."""
     link = settings.lima_disk_dir / "datadisk"
     if not stat.S_ISREG(os.lstat(link).st_mode):
         raise VmError("DISK_INVALID")
@@ -332,94 +352,21 @@ def _move_disk(settings: Settings, ext_dir: Path, run: Runner) -> None:
     if os.path.lexists(partial) or os.path.lexists(datadisk):
         raise VmError("EXT_DIR_EXISTS")
     if run(["cp", "-c", str(link), str(partial)]).returncode != 0:
-        _checked(run, ["cp", str(link), str(partial)], "COPY_FAILED")
+        checked(run, ["cp", str(link), str(partial)], "COPY_FAILED")
     copied = os.lstat(partial)
     if not stat.S_ISREG(copied.st_mode) or copied.st_size != os.lstat(link).st_size:
         raise VmError("COPY_FAILED")
-    fd = _open_owned_dir(ext_dir)
+    fd = open_owned_dir(ext_dir)
     try:
         os.rename("datadisk.partial", "datadisk", src_dir_fd=fd, dst_dir_fd=fd)
     finally:
         os.close(fd)
-    staged = settings.lima_disk_dir / ".datadisk.rehearsal-link"
+
+
+def _link_disk(settings: Settings, ext_dir: Path) -> None:
+    """Replace Lima's disk file with a link to the copy, atomically."""
+    datadisk = ext_dir / "datadisk"
+    staged = settings.lima_disk_dir / STAGED_LINK
     os.symlink(datadisk, staged)
-    os.replace(staged, link)
-    _check_link(settings, datadisk, required=True)
-
-
-def destroy(settings: Settings, run: Runner) -> dict:
-    record = _owned_record(settings)
-    if record.get("state") == "destroyed":
-        return {"profile": settings.profile, "state": "destroyed", "already": True}
-    if settings.disk_root is None:
-        raise VmError("DISK_ROOT_REQUIRED")
-    ext_dir = Path(record["ext_dir"])
-    if _marker(ext_dir) != record.get("creation_id"):
-        raise VmError("NOT_OWNED")
-    _check_link(settings, ext_dir / "datadisk", required=False)
-    listed = profiles(run)
-    if settings.profile in listed:
-        if listed[settings.profile] != "Stopped":
-            _checked(run, ["colima", "stop", "-p", settings.profile], "STOP_FAILED")
-        _checked(run, ["colima", "delete", "-p", settings.profile, "--force"], "DELETE_FAILED")
-        if settings.profile in profiles(run):
-            raise VmError("DELETE_UNCONFIRMED")
-    if os.path.lexists(settings.lima_instance_dir):
-        raise VmError("INSTANCE_REMAINS")
-    entry = lima_disk(settings, run)
-    if (entry and (entry.get("instance") or entry.get("instanceDir"))) or os.path.lexists(
-            settings.lima_disk_dir / "in_use_by"):
-        raise VmError("DISK_IN_USE")
-    _remove_lima_entry(settings, ext_dir / "datadisk", run)
-    _remove_ext_dir(ext_dir)
-    home = private.private_dir(settings.home)
-    fd = os.open(home, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        for name in STATE_FILES:
-            if name != OWNER and os.path.lexists(home / name):
-                os.unlink(name, dir_fd=fd)
-    finally:
-        os.close(fd)
-    record["state"] = "destroyed"
-    private.write_json(home, OWNER, record)
-    run(["docker", "context", "use", settings.live_context])
-    # Run outputs (registry, compile and review responses) hold no secret and are kept as
-    # evidence; move them away before the next `profile`, which needs an empty home.
-    kept = sorted(name for name in os.listdir(home) if name != OWNER)
-    return {"profile": settings.profile, "state": "destroyed", "kept": kept}
-
-
-def _remove_lima_entry(settings: Settings, datadisk: Path, run: Runner) -> None:
-    link = settings.lima_disk_dir / "datadisk"
-    if os.path.islink(link):
-        _check_link(settings, datadisk, required=True)
-        os.unlink(link)
-    elif os.path.lexists(link):  # creation stopped before the swap: Lima's own disk
-        env = {**os.environ, "LIMA_HOME": str(settings.colima_home / "_lima")}
-        if run(["limactl", "disk", "delete", settings.context], env=env).returncode != 0:
-            raise VmError("DISK_DELETE_FAILED")
-    if os.path.lexists(settings.lima_disk_dir):
-        try:
-            os.rmdir(settings.lima_disk_dir)
-        except OSError:
-            raise VmError("LIMA_ENTRY_NOT_EMPTY") from None
-
-
-def _remove_ext_dir(ext_dir: Path) -> None:
-    fd = _open_owned_dir(ext_dir)
-    try:
-        for name in ("datadisk", "datadisk.partial"):
-            try:
-                info = os.stat(name, dir_fd=fd, follow_symlinks=False)
-            except FileNotFoundError:
-                continue
-            if not stat.S_ISREG(info.st_mode):
-                raise VmError("DISK_INVALID")
-            os.unlink(name, dir_fd=fd)
-        os.unlink(MARKER, dir_fd=fd)
-    finally:
-        os.close(fd)
-    try:
-        os.rmdir(ext_dir)
-    except OSError:
-        raise VmError("EXT_DIR_NOT_EMPTY") from None
+    os.replace(staged, settings.lima_disk_dir / "datadisk")
+    check_link(settings, datadisk, required=True)

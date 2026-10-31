@@ -21,6 +21,7 @@ sys.path.insert(0, str(HERE))
 import private  # noqa: E402
 import seed  # noqa: E402
 import stack  # noqa: E402
+import teardown  # noqa: E402
 import vm  # noqa: E402
 
 Emit = Callable[[dict], None]
@@ -46,7 +47,7 @@ COMMANDS: dict[str, Callable[..., dict]] = {
     "smoke": lambda s, run, opener, emit, args: seed.smoke(seed.connect(s, run, opener)),
     "status": lambda s, run, opener, emit, args: stack.status(s, run),
     "down": lambda s, run, opener, emit, args: stack.down(s, run),
-    "destroy": lambda s, run, opener, emit, args: vm.destroy(s, run),
+    "destroy": lambda s, run, opener, emit, args: teardown.destroy(s, run),
 }
 
 

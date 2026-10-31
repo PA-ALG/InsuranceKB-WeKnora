@@ -22,10 +22,11 @@ if str(DEPLOY) not in sys.path:
     sys.path.insert(0, str(DEPLOY))
 private: Any = importlib.import_module("private")
 vm: Any = importlib.import_module("vm")
+teardown: Any = importlib.import_module("teardown")
 
 
 class World:
-    """colima/Lima as far as the rehearsal sees them, with injectable failures."""
+    """colima/Lima as far as the rehearsal sees them, with scripted failures."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -35,8 +36,9 @@ class World:
         self.colima = root / "colima"
         (self.colima / "_lima" / "_disks").mkdir(parents=True)
         self.profiles: dict[str, str] = {"default": "Running"}
-        self.fail: dict[str, int] = {}
-        self.in_use = False
+        self.fail: dict[str, int] = {}  # command -> return code, every call
+        self.script: dict[str, list[int]] = {}  # command -> return codes for the next calls
+        self.in_use = ""  # the instance Lima reports holding the disk
         self.calls: list[list[str]] = []
         self.loud: list[list[str]] = []
 
@@ -51,6 +53,10 @@ class World:
     def lima(self, name: str) -> Path:
         return self.colima / "_lima" / "_disks" / f"colima-{name}"
 
+    def rc(self, command: str) -> int:
+        scripted = self.script.get(command)
+        return scripted.pop(0) if scripted else self.fail.get(command, 0)
+
     def __call__(self, argv: list[str], *, quiet: bool = False, **_: Any) -> Any:
         self.calls.append(list(argv))
         if not quiet:
@@ -58,34 +64,48 @@ class World:
         result = vm.Result
         match argv:
             case ["colima", "list", "--json"]:
-                if self.fail.get("list"):
-                    return result(self.fail["list"])
+                if code := self.rc("list"):
+                    return result(code)
                 lines = [json.dumps({"name": n, "status": s}) for n, s in self.profiles.items()]
                 return result(0, ("\n".join(lines) + "\n").encode())
             case ["colima", "start", "-p", name, *_rest]:
+                if code := self.rc("start"):
+                    return result(code)
                 if name not in self.profiles:
                     self.lima(name).mkdir()
                     (self.lima(name) / "datadisk").write_bytes(b"disk-image" * 4)
                     (self.colima / "_lima" / f"colima-{name}").mkdir()
                 self.profiles[name] = "Running"
+                (self.lima(name) / "in_use_by").unlink(missing_ok=True)
+                (self.lima(name) / "in_use_by").symlink_to(self.colima / "_lima" / f"colima-{name}")
                 return result(0)
             case ["colima", "stop", "-p", name]:
+                if code := self.rc("stop"):
+                    return result(code)
                 self.profiles[name] = "Stopped"
-                return result(self.fail.get("stop", 0))
+                (self.lima(name) / "in_use_by").unlink(missing_ok=True)
+                return result(0)
             case ["colima", "delete", "-p", name, "--force"]:
-                if self.fail.get("delete"):
-                    return result(self.fail["delete"])
+                if code := self.rc("delete"):
+                    return result(code)
                 self.profiles.pop(name, None)
                 shutil.rmtree(self.colima / "_lima" / f"colima-{name}", ignore_errors=True)
-                return result(0)
+                return result(0)  # like colima: the Lima disk entry stays
             case ["limactl", "disk", "list", "--json"]:
-                if self.fail.get("disks"):
-                    return result(self.fail["disks"])
+                if code := self.rc("disks"):
+                    return result(code)
                 disks = sorted((self.colima / "_lima" / "_disks").iterdir())
-                lines = [json.dumps({"name": d.name, "instance": d.name if self.in_use else "",
+                lines = [json.dumps({"name": d.name, "instance": self.in_use,
                                      "instanceDir": ""}) for d in disks]
                 return result(0, "\n".join(lines).encode())
-            case ["cp", "-c", source, target]:
+            case ["limactl", "disk", "delete", name]:
+                if code := self.rc("disk-delete"):
+                    return result(code)
+                shutil.rmtree(self.colima / "_lima" / "_disks" / name)
+                return result(0)
+            case ["cp", *_flags, source, target]:
+                if code := self.rc("cp"):
+                    return result(code)
                 shutil.copyfile(source, target)
                 return result(0)
             case ["docker", "context", "inspect", context, *_rest]:
@@ -121,61 +141,114 @@ def code(error: pytest.ExceptionInfo[Exception]) -> str:
     return str(error.value.code)  # type: ignore[attr-defined]
 
 
-# R1: destroy stops on failure or unknown state and deletes nothing.
+# R1: everything checkable is checked before the first stop, delete or unlink.
+
+def untouched(world: World) -> bool:
+    """No stop or delete was issued and every owned resource is still in place."""
+    return (not world.called("colima", "stop") and not world.called("colima", "delete")
+            and not world.called("limactl", "disk", "delete") and kept(world)
+            and (ext(world) / "owner").is_file())
+
+
+def state(world: World) -> str:
+    return str(private.read_json(world.home, "owner.json")["state"])
+
 
 def test_create_then_destroy_removes_only_owned_resources(world: World) -> None:
     settings = owned(world)
     assert kept(world)
     assert os.readlink(world.lima("rehearsal") / "datadisk") == str(ext(world) / "datadisk")
-    assert private.read_json(world.home, "owner.json")["state"] == "ready"
-    assert vm.destroy(settings, world)["state"] == "destroyed"
+    assert state(world) == "ready"
+    world.calls.clear()
+    assert teardown.destroy(settings, world)["state"] == "destroyed"
     assert not ext(world).exists() and not os.path.lexists(world.lima("rehearsal"))
-    assert private.read_json(world.home, "owner.json")["state"] == "destroyed"
-    order = [call[:2] for call in world.calls]
-    assert order.index(["colima", "delete"]) < order.index(["limactl", "disk"])
-    assert vm.destroy(settings, world)["already"] is True
+    assert state(world) == "destroyed"
+    order = [call[:3] for call in world.calls]
+    assert order.index(["limactl", "disk", "list"]) < order.index(["colima", "stop", "-p"])
+    assert teardown.destroy(settings, world)["already"] is True
     # Lima's port-forward daemons outlive colima start: never hand them a pipe (finding F7).
     assert not [call for call in world.loud if call[:2] in (
         ["colima", "start"], ["colima", "stop"], ["colima", "delete"])]
 
 
-def test_destroy_keeps_disks_when_colima_delete_fails(world: World) -> None:
-    settings = owned(world)
-    world.fail["delete"] = 42
-    with pytest.raises(vm.VmError) as error:
-        vm.destroy(settings, world)
-    assert code(error) == "DELETE_FAILED"
-    assert kept(world)
-    assert private.read_json(world.home, "owner.json")["state"] == "ready"
-
-
 @pytest.mark.parametrize(("failing", "expected"), [("list", "COLIMA_STATE_UNKNOWN"),
-                                                    ("disks", "DISK_STATE_UNKNOWN"),
-                                                    ("stop", "STOP_FAILED")])
-def test_destroy_keeps_everything_on_unknown_state(world: World, failing: str,
-                                                   expected: str) -> None:
+                                                    ("disks", "DISK_STATE_UNKNOWN")])
+def test_an_unreadable_state_stops_destroy_before_anything_happens(
+        world: World, failing: str, expected: str) -> None:
     settings = owned(world)
+    world.calls.clear()
     world.fail[failing] = 1
     with pytest.raises(vm.VmError) as error:
-        vm.destroy(settings, world)
+        teardown.destroy(settings, world)
     assert code(error) == expected
-    assert kept(world)
+    assert untouched(world) and "rehearsal" in world.profiles
+    assert state(world) == "ready"
 
 
-def test_destroy_keeps_a_disk_lima_reports_in_use(world: World) -> None:
+def test_a_disk_used_by_another_instance_stops_destroy_first(world: World) -> None:
     settings = owned(world)
-    world.in_use = True
+    world.calls.clear()
+    world.in_use = "colima-other"
     with pytest.raises(vm.VmError) as error:
-        vm.destroy(settings, world)
+        teardown.destroy(settings, world)
     assert code(error) == "DISK_IN_USE"
-    assert kept(world)
+    assert untouched(world) and state(world) == "ready"
+
+
+def test_unexpected_content_in_the_external_directory_stops_destroy_first(
+        world: World) -> None:
+    settings = owned(world)
+    world.calls.clear()
+    (ext(world) / "notes.txt").write_text("someone else's file")
+    with pytest.raises(vm.VmError) as error:
+        teardown.destroy(settings, world)
+    assert code(error) == "EXT_DIR_UNEXPECTED"
+    assert untouched(world) and state(world) == "ready"
+    assert (ext(world) / "notes.txt").read_text() == "someone else's file"
+    (ext(world) / "notes.txt").unlink()  # the operator moves it away: retrying still owns it
+    assert teardown.destroy(settings, world)["state"] == "destroyed"
+
+
+def test_a_failed_delete_keeps_disks_and_a_retry_finishes(world: World) -> None:
+    settings = owned(world)
+    world.script["delete"] = [42]
+    with pytest.raises(vm.VmError) as error:
+        teardown.destroy(settings, world)
+    assert code(error) == "DELETE_FAILED"
+    assert kept(world) and (ext(world) / "owner").is_file()
+    assert state(world) == "destroying"
+    assert teardown.destroy(settings, world)["state"] == "destroyed"
+    assert not ext(world).exists() and not os.path.lexists(world.lima("rehearsal"))
+
+
+def test_a_failed_recheck_after_delete_keeps_disks_and_a_retry_finishes(world: World) -> None:
+    settings = owned(world)
+    world.script["disks"] = [0, 1]  # readable before the delete, unreadable right after it
+    with pytest.raises(vm.VmError) as error:
+        teardown.destroy(settings, world)
+    assert code(error) == "DISK_STATE_UNKNOWN"
+    assert "rehearsal" not in world.profiles  # the documented residual: the VM is gone
+    assert kept(world) and state(world) == "destroying"
+    assert teardown.destroy(settings, world)["state"] == "destroyed"
+    assert not ext(world).exists() and not os.path.lexists(world.lima("rehearsal"))
+
+
+def test_a_failed_stop_keeps_everything_but_the_record_says_destroying(world: World) -> None:
+    settings = owned(world)
+    world.script["stop"] = [1]
+    with pytest.raises(vm.VmError) as error:
+        teardown.destroy(settings, world)
+    assert code(error) == "STOP_FAILED"
+    assert kept(world) and "rehearsal" in world.profiles and state(world) == "destroying"
+    assert teardown.destroy(settings, world)["state"] == "destroyed"
 
 
 def test_destroy_after_the_profile_is_already_gone(world: World) -> None:
     settings = owned(world)
     world.profiles.pop("rehearsal")
     shutil.rmtree(world.colima / "_lima" / "colima-rehearsal")
-    assert vm.destroy(settings, world)["state"] == "destroyed"
+    (world.lima("rehearsal") / "in_use_by").unlink()
+    assert teardown.destroy(settings, world)["state"] == "destroyed"
     assert not world.called("colima", "delete")
     assert not ext(world).exists()
 
@@ -204,7 +277,7 @@ def test_create_refuses_targets_that_already_exist(world: World, existing: str) 
 def test_destroy_never_deletes_a_profile_without_its_record(world: World) -> None:
     world.profiles["other"] = "Running"
     with pytest.raises(vm.VmError) as error:
-        vm.destroy(world.settings(profile="other"), world)
+        teardown.destroy(world.settings(profile="other"), world)
     assert code(error) == "NOT_OWNED"
     assert not world.called("colima", "delete")
 
@@ -213,7 +286,7 @@ def test_a_record_for_one_profile_does_not_own_another(world: World) -> None:
     owned(world)
     world.profiles["other"] = "Running"
     with pytest.raises(vm.VmError) as error:
-        vm.destroy(world.settings(profile="other"), world)
+        teardown.destroy(world.settings(profile="other"), world)
     assert code(error) == "NOT_OWNED"
     assert not world.called("colima", "delete")
 
@@ -224,7 +297,7 @@ def test_destroy_refuses_an_external_directory_swapped_for_a_symlink(world: Worl
     shutil.move(str(ext(world)), str(elsewhere))
     ext(world).symlink_to(elsewhere)
     with pytest.raises((vm.VmError, private.PrivateError)):
-        vm.destroy(settings, world)
+        teardown.destroy(settings, world)
     assert (elsewhere / "datadisk").is_file()
     assert not world.called("colima", "delete")
 
@@ -248,7 +321,7 @@ def test_a_disk_link_pointing_elsewhere_is_refused_before_any_delete(world: Worl
         vm.verify(settings, world)
     assert code(error) == "DISK_LINK_FOREIGN"
     with pytest.raises(vm.VmError):
-        vm.destroy(settings, world)
+        teardown.destroy(settings, world)
     assert foreign.read_bytes() == b"not ours" and (ext(world) / "datadisk").is_file()
     assert not world.called("colima", "delete")
 
@@ -259,6 +332,57 @@ def test_create_refuses_a_home_with_another_rehearsals_state(world: World) -> No
     with pytest.raises(vm.VmError) as error:
         vm.create(world.settings(), world)
     assert code(error) == "HOME_NOT_EMPTY"
+
+
+@pytest.mark.parametrize(("command", "codes", "expected", "stage"), [
+    ("stop", [1], "STOP_FAILED", "stopping"),
+    ("cp", [1, 1], "COPY_FAILED", "copying"),
+    ("start", [0, 1], "START_FAILED", "restarting")])
+def test_a_failed_create_is_cleaned_up_by_its_recorded_stage(
+        world: World, command: str, codes: list[int], expected: str, stage: str) -> None:
+    settings = world.settings()
+    world.script[command] = codes
+    with pytest.raises(vm.VmError) as error:
+        vm.create(settings, world)
+    assert code(error) == expected
+    record = private.read_json(world.home, "owner.json")
+    assert (record["state"], record["stage"]) == ("creating", stage)
+    assert teardown.destroy(settings, world)["state"] == "destroyed"
+    assert world.called("colima", "delete")
+    assert "rehearsal" not in world.profiles
+    assert not os.path.lexists(world.lima("rehearsal")) and not ext(world).exists()
+    assert vm.create(settings, world)["state"] == "ready"  # and `profile` can run again
+
+
+def test_an_interrupted_link_swap_is_cleaned_up(world: World) -> None:
+    settings = world.settings()
+    world.script["start"] = [0, 1]
+    with pytest.raises(vm.VmError):
+        vm.create(settings, world)
+    # The state a crash between staging and swapping the link leaves: Lima's own file in place,
+    # our staged link beside it, the record at "linking".
+    record = private.read_json(world.home, "owner.json")
+    private.write_json(world.home, "owner.json", {**record, "stage": "linking"})
+    link = world.lima("rehearsal") / "datadisk"
+    link.unlink()
+    link.write_bytes(b"lima's own disk")
+    (world.lima("rehearsal") / vm.STAGED_LINK).symlink_to(ext(world) / "datadisk")
+    assert teardown.destroy(settings, world)["state"] == "destroyed"
+    assert not os.path.lexists(world.lima("rehearsal")) and not ext(world).exists()
+
+
+def test_a_regular_disk_file_is_not_ours_once_the_link_was_made(world: World) -> None:
+    settings = owned(world)
+    world.calls.clear()
+    link = world.lima("rehearsal") / "datadisk"
+    link.unlink()
+    link.write_bytes(b"someone else's disk")
+    with pytest.raises(vm.VmError) as error:
+        teardown.destroy(settings, world)
+    assert code(error) == "DISK_LINK_FOREIGN"
+    assert link.read_bytes() == b"someone else's disk" and (ext(world) / "datadisk").is_file()
+    assert not world.called("colima", "stop") and not world.called("colima", "delete")
+    assert state(world) == "ready"
 
 
 @pytest.mark.parametrize(("variable", "value", "expected"), [

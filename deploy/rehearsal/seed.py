@@ -288,9 +288,16 @@ def materials(ctx: Context, poll_seconds: float = 10, limit_seconds: float = 180
         if digest in local:
             raise Stop("MATERIALS_DUPLICATE")
         local[digest] = pdf
-    recorded: dict[str, str] = dict(state.get("materials") or {})
-    if not local or (recorded and set(recorded) != set(local)):
+    # The full expected set is fixed once; progress (digest -> knowledge id) may be partial after
+    # an interrupted upload and then resumes. Any other difference is a change and is refused.
+    expected_digests = sorted(local)
+    if not local or state.get("expected", expected_digests) != expected_digests:
         raise Stop("MATERIALS_CHANGED")
+    recorded: dict[str, str] = dict(state.get("materials") or {})
+    if not set(recorded) <= set(local):
+        raise Stop("MATERIALS_CHANGED")
+    state.update(product=product, expected=expected_digests, materials=recorded)
+    save_state(ctx, state)
     raw = state["space"]["raw_kb_id"]
     present = listing(api, raw)
     by_id = {item.get("id"): item for item in present}

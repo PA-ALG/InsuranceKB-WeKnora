@@ -44,6 +44,8 @@ class Platform:
         self.knowledge: list[dict[str, Any]] = []
         self.requests: list[tuple[str, str]] = []
         self.overrides: dict[tuple[str, str], tuple[int, bytes]] = {}
+        # Upload answers in call order: (status, whether the server kept the file anyway).
+        self.uploads: list[tuple[int, bool]] = []
 
     @staticmethod
     def ok(document: Any, status: int = 200) -> tuple[int, bytes]:
@@ -92,7 +94,9 @@ class Platform:
             content = data.split(b"Content-Type: application/pdf\r\n\r\n", 1)[1].rsplit(
                 b"\r\n--", 1)[0]
             assert name is not None
-            return self.ok({"data": self.add(name[1].decode(), content)})
+            status, kept = self.uploads.pop(0) if self.uploads else (200, True)
+            item = self.add(name[1].decode(), content) if kept else None
+            return self.ok({"data": item}) if status == 200 else (status, b"")
         if path.endswith("/knowledge"):
             return self.ok({"data": self.knowledge, "total": len(self.knowledge)})
         return 404, b""
@@ -372,3 +376,25 @@ def test_a_listing_digest_that_disagrees_is_refused(root: Path) -> None:
         seed.materials(ctx, poll_seconds=0)
     assert stopped(error) == "MATERIAL_DIGEST_MISMATCH"
     assert not (ctx.home / "run" / "source-map.json").exists()
+
+
+@pytest.mark.parametrize("kept_anyway", [False, True])
+def test_an_interrupted_upload_resumes_to_exactly_the_expected_sources(
+        root: Path, kept_anyway: bool) -> None:
+    platform = Platform()
+    ctx = context(root, platform)
+    seed.platform(ctx)
+    platform.uploads = [(200, True), (503, kept_anyway)]
+    with pytest.raises(seed.Stop) as error:
+        seed.materials(ctx, poll_seconds=0)
+    assert (stopped(error), error.value.status) == ("UPLOAD_FAILED", 503)
+    progress = private.read_json(ctx.home, "state.json")
+    assert len(progress["materials"]) == 1 and len(progress["expected"]) == 3
+    assert seed.materials(ctx, poll_seconds=0)["materials"] == 3  # the service is back
+    mapped = private.read_json(ctx.home / "run", "source-map.json")["products"]["A"]
+    local = {hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in (root / "repo/dataset/shouxian_product/product-A").glob("*.pdf")}
+    assert sorted(entry["sha256"] for entry in mapped) == sorted(local)
+    assert len({entry["knowledge_id"] for entry in mapped}) == 3
+    assert len(platform.knowledge) == 3  # resumed, nothing uploaded twice
+    assert len(platform.writes("/knowledge/file")) == (3 if kept_anyway else 4)
