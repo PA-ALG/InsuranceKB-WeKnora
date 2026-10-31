@@ -49,6 +49,7 @@ S11b 让平台对企业 RAW KB 的 `.pptx/.docx/.xlsx` 生成 Office 采集，�
   - 范围角色必须是非证据角色、唯一，且不与 `header_rules` 的角色重叠；
   - 范围角色的页**完整切分**（不像表头角色那样只取表头块），但只能作为其字段的证据；
   - `TrustPolicy.restricted_fields(role)` 返回该角色可服务的字段（表头规则与范围规则之并）；第一步的禁选（`engine._forbidden`）、发布证据检查（`claims.py`）与段落评分（`segment_score.py`）统一用它。Golden 重映射（`golden_remap.py`）只处理被排除材料的表头，仍用 `header_fields`，不变；
+  - `TrustPolicy.restricted_roles()` 按策略顺序列出全部受限角色（表头角色在前）；`trusted_pages` 与按修订排序受限页的 `eval/compile_run.py` 都用它，不再只枚举 `header_rules`（否则受限页映射里出现范围角色时排序会抛错）；
   - `trusted_pages` 把范围角色的页放进受限页映射（与表头角色同一映射，所有读取全部页面的调用方因此自动带上它们）；`SegmentedSource` 对受限文档按信任策略决定：范围角色完整切分，其他受限角色照旧只切表头块（未知角色也照旧裁剪，失败关闭）。`evidence/segments.py` 因此读取 `catalog` 的信任策略（G1 允许）。
 - 版本：`material_roles` `2026-10-31.1`，`trust_policy` `2026-10-31.1`。角色本已计入编译身份（S5b-6）；对没有 `sales_training` 材料的产品，编译请求与身份不变。
 
@@ -76,12 +77,13 @@ S11b 让平台对企业 RAW KB 的 `.pptx/.docx/.xlsx` 生成 Office 采集，�
 - PDF 来源页、PDF 段落、证据区间与 locator 逐字节不变；没有 `sales_training` 材料的产品，编译请求、编译身份与输出不变。
 - 现有 PDF 材料的角色识别与归属结果不变（数据集全部材料回归 + 现有测试）。
 - 线上：新策略对已隔离的 PDF（例如那份放错的说明书）判定不变；已隔离的 Office 材料若匹配品牌核心，会改为品牌候选问题。
+- 归属策略升版后，隔离材料（每次运行都重新判定）的判定带新的 `policy_ref`，其确认问题按既有机制换新一版（与以往每次升版相同）；等待人工的 `NEEDS_CONFIRM` 材料不重新判定，问题不变。信任策略的内容进入离线重放上下文（`compile_run` 的 `context.json`），升版后旧运行的原始回答不能再离线重放；编译产物的复用只看材料身份与角色，不受影响。
 
 ## 4. 改动范围
 
 | 方 | 路径 |
 |---|---|
-| Claude（实现） | `harness/src/insurance_harness/evidence/{weknora_pages.py, segments.py}`、新 `evidence/office_pages.py`、`eval/pdf_text.py`（不改，`OfficePageText` 为子类）、`contracts/knowledge.py`（`LOCATOR_FIELDS`）、`catalog/{trust_policy.py, trust_policy.json}`、`identity/{material_roles.json, attribution.py, attribution_policy.json, confirmation.py}`、`ingest/{confirmation_questions.py, confirmation_wording.json}`、`compilers/schema_fields/{engine.py, claims.py}`、`eval/segment_score.py`（改用 `restricted_fields`） |
+| Claude（实现） | `harness/src/insurance_harness/evidence/{weknora_pages.py, segments.py}`、新 `evidence/office_pages.py`、`eval/pdf_text.py`（不改，`OfficePageText` 为子类）、`contracts/knowledge.py`（`LOCATOR_FIELDS`）、`catalog/{trust_policy.py, trust_policy.json}`、`identity/{material_roles.json, attribution.py, attribution_policy.json, confirmation.py}`、`ingest/{confirmation_questions.py, confirmation_wording.json}`、`compilers/schema_fields/{engine.py, claims.py}`、`eval/segment_score.py`（改用 `restricted_fields`）、`eval/compile_run.py`（改用 `restricted_roles`） |
 | Claude（RED，受保护） | `harness/tests/evidence/test_office_source_pages.py`、`harness/tests/evidence/test_office_segments.py`、`harness/tests/catalog/test_sales_training_trust.py`、`harness/tests/identity/test_brand_candidates.py` |
 | 受保护测试的预期调整（独立披露提交） | 只在本 Spec 改变的事实处更新期望：`tests/contracts/test_locator.py`（`PPTX_SHAPE.shape_id` 变为可选）、`tests/identity/test_material_roles.py`（角色目录多一个非证据角色），以及其他断言"角色目录恰为三种"的既有测试 |
 
