@@ -17,7 +17,7 @@ from insurance_harness.eval.pdf_text import PageText
 
 BLOCK_SEPARATOR = "\n\n"
 # The fields each Office block locator carries, exactly: no shape or cell is located (S11b).
-_FIELDS = {
+OFFICE_LOCATOR_FIELDS = {
     LocatorKind.PPTX_SHAPE: {"slide"},
     LocatorKind.DOCX_BLOCK: {"block_index"},
     LocatorKind.XLSX_CELL_RANGE: {"sheet", "cell_range"},
@@ -41,7 +41,7 @@ def row_of(locator: Locator) -> int | None:
 
 
 def _check_locator(locator: Locator, page: int) -> None:
-    fields = _FIELDS.get(locator.kind)
+    fields = OFFICE_LOCATOR_FIELDS.get(locator.kind)
     if fields is None or set(locator.model_dump(exclude_none=True)) != {"kind", *fields}:
         raise ValueError("not an Office block locator")
     if locator.kind == LocatorKind.PPTX_SHAPE and locator.slide != page:
