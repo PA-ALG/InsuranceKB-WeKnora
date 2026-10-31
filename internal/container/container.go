@@ -79,6 +79,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/enterprise/mcptools"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
+	"github.com/Tencent/WeKnora/internal/enterprise/revisionsource"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
@@ -321,7 +322,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Decorate(managed.DecorateKnowledgeBaseService))
 	must(container.Provide(service.NewWikiIngestService, dig.Name("wikiIngest")))
 	must(container.Provide(service.NewWikiLintService))
-	must(container.Provide(service.NewKnowledgeRevisionSourceService))
+	must(container.Provide(revisionsource.NewKnowledgeRevisionSourceService))
 	must(container.Provide(func(cfg *config.Config) (*capture.Keys, error) {
 		ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
 		if err != nil {
@@ -708,7 +709,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewGraphSearchHandler))
 	must(container.Provide(handler.NewKnowledgeHandler))
 	must(container.Provide(func(
-		revisionSourceService *service.KnowledgeRevisionSourceService,
+		revisionSourceService *revisionsource.KnowledgeRevisionSourceService,
 	) *handler.KnowledgeRevisionSourceHandler {
 		return handler.NewKnowledgeRevisionSourceHandler(revisionSourceService)
 	}))
