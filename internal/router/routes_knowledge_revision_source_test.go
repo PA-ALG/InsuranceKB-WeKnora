@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
+	"github.com/Tencent/WeKnora/internal/enterprise/revisionsource"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/gin-gonic/gin"
@@ -21,7 +21,7 @@ type revisionSourceRouteBackfiller struct {
 	calls       int
 	exact3Calls int
 	exact3KBID  string
-	exact3      service.KnowledgeRevisionSourceExact3RequestV1
+	exact3      revisionsource.KnowledgeRevisionSourceExact3RequestV1
 }
 
 func (s *revisionSourceRouteBackfiller) BackfillCurrentCompleted(
@@ -35,18 +35,18 @@ func (s *revisionSourceRouteBackfiller) BackfillCurrentCompleted(
 func (s *revisionSourceRouteBackfiller) BackfillExact3(
 	_ context.Context,
 	kbID string,
-	request service.KnowledgeRevisionSourceExact3RequestV1,
-) (*service.KnowledgeRevisionSourceExact3ResultV1, error) {
+	request revisionsource.KnowledgeRevisionSourceExact3RequestV1,
+) (*revisionsource.KnowledgeRevisionSourceExact3ResultV1, error) {
 	s.exact3Calls++
 	s.exact3KBID = kbID
 	s.exact3 = request
-	return &service.KnowledgeRevisionSourceExact3ResultV1{
-		Contract: service.KnowledgeRevisionSourceExact3ContractV1,
+	return &revisionsource.KnowledgeRevisionSourceExact3ResultV1{
+		Contract: revisionsource.KnowledgeRevisionSourceExact3ContractV1,
 		DryRun:   request.DryRun,
 		ValidatedRoles: []string{
-			service.KnowledgeRevisionSourceRoleTerms,
-			service.KnowledgeRevisionSourceRoleBrochure,
-			service.KnowledgeRevisionSourceRoleRateTable,
+			revisionsource.KnowledgeRevisionSourceRoleTerms,
+			revisionsource.KnowledgeRevisionSourceRoleBrochure,
+			revisionsource.KnowledgeRevisionSourceRoleRateTable,
 		},
 	}, nil
 }
@@ -199,13 +199,22 @@ func TestKnowledgeRevisionSourceExact3DryRunReachesServerAfterExactKBAuthority(t
 			kbService: revisionSourceRouteKBLookup{},
 		},
 	)
-	request := service.KnowledgeRevisionSourceExact3RequestV1{
-		Contract: service.KnowledgeRevisionSourceExact3ContractV1,
+	request := revisionsource.KnowledgeRevisionSourceExact3RequestV1{
+		Contract: revisionsource.KnowledgeRevisionSourceExact3ContractV1,
 		DryRun:   true,
-		Sources: []service.KnowledgeRevisionSourceExact3ItemV1{
-			{Role: service.KnowledgeRevisionSourceRoleTerms, KnowledgeID: "terms", ParseAttempt: 2, ExpectedFileSHA256: strings.Repeat("a", 64), ExpectedManifestDigest: strings.Repeat("1", 64)},
-			{Role: service.KnowledgeRevisionSourceRoleBrochure, KnowledgeID: "brochure", ParseAttempt: 2, ExpectedFileSHA256: strings.Repeat("b", 64), ExpectedManifestDigest: strings.Repeat("2", 64)},
-			{Role: service.KnowledgeRevisionSourceRoleRateTable, KnowledgeID: "rate", ParseAttempt: 2, ExpectedFileSHA256: strings.Repeat("c", 64), ExpectedManifestDigest: strings.Repeat("3", 64)},
+		Sources: []revisionsource.KnowledgeRevisionSourceExact3ItemV1{
+			{
+				Role: revisionsource.KnowledgeRevisionSourceRoleTerms, KnowledgeID: "terms", ParseAttempt: 2,
+				ExpectedFileSHA256: strings.Repeat("a", 64), ExpectedManifestDigest: strings.Repeat("1", 64),
+			},
+			{
+				Role: revisionsource.KnowledgeRevisionSourceRoleBrochure, KnowledgeID: "brochure", ParseAttempt: 2,
+				ExpectedFileSHA256: strings.Repeat("b", 64), ExpectedManifestDigest: strings.Repeat("2", 64),
+			},
+			{
+				Role: revisionsource.KnowledgeRevisionSourceRoleRateTable, KnowledgeID: "rate", ParseAttempt: 2,
+				ExpectedFileSHA256: strings.Repeat("c", 64), ExpectedManifestDigest: strings.Repeat("3", 64),
+			},
 		},
 	}
 	body, err := json.Marshal(request)
