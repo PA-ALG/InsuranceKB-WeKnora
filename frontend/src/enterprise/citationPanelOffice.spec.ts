@@ -62,6 +62,7 @@ function viewerLabels(region: string) {
     retry: '重试',
     coarse: '已标出引文所在的位置，未能逐字高亮',
     notLocated: '未能在原文中定位这段引文，请对照上方引文',
+    unsafe: '原文件含有无法安全显示的内容，未打开，请对照上方引文',
     region,
   }
 }

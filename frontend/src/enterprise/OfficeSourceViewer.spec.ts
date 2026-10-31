@@ -6,6 +6,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/utils/request', () => ({ get: vi.fn() }))
+// The package rebuild (Spec §3.2a, review R1) has its own tests; here it hands the bytes through.
+vi.mock('./officePackage', async importOriginal => ({
+  ...(await importOriginal<typeof import('./officePackage')>()),
+  sanitizeOfficePackage: vi.fn(async (bytes: ArrayBuffer) => bytes),
+}))
 vi.mock('@/components/document-preview.vue', async () => {
   const { defineComponent, h } = await import('vue')
   return {
@@ -34,6 +39,7 @@ const labels = {
   retry: '重试',
   coarse: '已标出引文所在的位置，未能逐字高亮',
   notLocated: '未能在原文中定位这段引文，请对照上方引文',
+  unsafe: '原文件含有无法安全显示的内容，未打开，请对照上方引文',
   region: '演示.pptx 第 2 张幻灯片',
 }
 const MEDIA = {
@@ -191,14 +197,19 @@ describe('office source viewer', () => {
 })
 
 describe('office rendering is adopted, not rebuilt', () => {
-  // Enterprise code reaches the Office renderers only through upstream's DocumentPreview (Spec §2).
+  // Enterprise code reaches the Office renderers only through upstream's DocumentPreview (Spec §2);
+  // the zip library is used only to rebuild packages before rendering (Spec §3.2a).
   const sources = import.meta.glob(['./*.ts', './*.vue', '!./*.spec.ts'], { query: '?raw', import: 'default', eager: true })
+  const importing = (library: string) => Object.entries(sources)
+    .filter(([, text]) => new RegExp(`from\\s+['"]${library}['"]|import\\(\\s*['"]${library}['"]`).test(String(text)))
+    .map(([path]) => path)
 
   it('imports no Office rendering library directly', () => {
-    const offenders = Object.entries(sources)
-      .filter(([, text]) => /from\s+['"](?:docx-preview|xlsx|@vue-office\/pptx|jszip)['"]|import\(\s*['"](?:docx-preview|xlsx|@vue-office\/pptx|jszip)['"]/.test(String(text)))
-      .map(([path]) => path)
-    expect(offenders).toEqual([])
+    expect(['docx-preview', 'xlsx', '@vue-office/pptx'].flatMap(importing)).toEqual([])
+  })
+
+  it('uses the zip library only to rebuild packages', () => {
+    expect(importing('jszip')).toEqual(['./officePackage.ts'])
   })
 
   it('renders through the upstream preview component', () => {
