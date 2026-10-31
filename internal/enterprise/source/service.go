@@ -73,7 +73,12 @@ func (s *Service) load(ctx context.Context, scope Scope, knowledgeID string, att
 		case errors.Is(err, ErrNotFound):
 			return nil, &Error{Code: ErrorSourceNotFound, Detail: "source revision was not found"}
 		case errors.Is(err, ErrNotCaptured):
-			return nil, &Error{Code: ErrorNotCaptured, Detail: "parse artifact was not captured"}
+			failure := &Error{Code: ErrorNotCaptured, Detail: "parse artifact was not captured"}
+			var reason *NotCaptured
+			if errors.As(err, &reason) {
+				failure.Reason, failure.Page = reason.Reason, reason.Page
+			}
+			return nil, failure
 		case errors.As(err, &failure) && failure.Code == ErrorInvalidRequest:
 			return nil, &Error{Code: ErrorInvalidRequest, Detail: "source request authorization is invalid"}
 		case errors.As(err, &failure) && failure.Code == ErrorIntegrity:

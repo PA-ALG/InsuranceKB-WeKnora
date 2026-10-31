@@ -35,7 +35,9 @@ KEPT = {
     # Revision-source backfill is still wired server-side (service reads this config).
     "internal/config/config.go": "KnowledgeRevisionSource config still read by the service",
     "cli/cmd/doc/doc.go": "registers the revision-source backfill commands",
-    "cli/cmd/dryrun_coverage_test.go": "covers the revision-source backfill commands",
+    # cli/cmd/dryrun_coverage_test.go was kept here until U-2b: its coverage of the backfill
+    # commands now registers from our own cli/cmd/revision_source_dryrun_test.go, so the
+    # upstream file is restored (Spec docs/design/slices/U-2b-上游测试夹具外移.md).
 }
 # A temporary, registered lint exclusion for exactly these files lives in .golangci.yml (itself an
 # upstream file) until the phase (a) follow-up PR deletes it; it is the only file this bound

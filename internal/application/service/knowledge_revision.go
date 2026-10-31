@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"strings"
@@ -256,4 +257,47 @@ func withRevisionBinding(ctx context.Context, revision *types.RevisionCommitBind
 func revisionBindingFromContext(ctx context.Context) *types.RevisionCommitBinding {
 	revision, _ := ctx.Value(revisionBindingKey{}).(*types.RevisionCommitBinding)
 	return revision
+}
+
+// ErrKnowledgeRevisionSourcePinned rejects deleting or reparsing knowledge while one of its
+// fixed revision sources is still pinned.
+var ErrKnowledgeRevisionSourcePinned = errors.New("KNOWLEDGE_REVISION_SOURCE_PINNED")
+
+type knowledgeRevisionSourceDeleteGuard interface {
+	HasPinnedRevisionSource(context.Context, uint64, string) (bool, error)
+}
+
+func requireKnowledgeRevisionSourceDeleteAllowed(
+	ctx context.Context,
+	repo interfaces.KnowledgeRepository,
+	tenantID uint64,
+	knowledgeID string,
+) error {
+	guard, ok := repo.(knowledgeRevisionSourceDeleteGuard)
+	if tenantID == 0 || knowledgeID == "" {
+		return ErrKnowledgeRevisionSourcePinned
+	}
+	// Non-production test doubles and older adapters may not expose the early
+	// preflight. The concrete repository still enforces the same condition
+	// atomically at DeleteKnowledge/DeleteKnowledgeList.
+	if !ok {
+		return nil
+	}
+	pinned, err := guard.HasPinnedRevisionSource(ctx, tenantID, knowledgeID)
+	if err != nil {
+		return ErrKnowledgeRevisionSourcePinned
+	}
+	if pinned {
+		return ErrKnowledgeRevisionSourcePinned
+	}
+	return nil
+}
+
+func requireKnowledgeRevisionSourceReparseAllowed(
+	ctx context.Context,
+	repo interfaces.KnowledgeRepository,
+	tenantID uint64,
+	knowledgeID string,
+) error {
+	return requireKnowledgeRevisionSourceDeleteAllowed(ctx, repo, tenantID, knowledgeID)
 }

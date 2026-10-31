@@ -495,7 +495,7 @@ WeKnora 编辑界面（复用上游编辑器、diff、history 组件）
 |---|---|---|
 | G1 依赖方向 | Harness §4.2 目标目录不 import 旧目录；核心目录（`contracts`、`jobs`、`models`、`compile`、`evidence`、`review`、`changes`、`bundle`、`governance`）不 import `compilers`。Go 侧的隔离由 G2 与 G11 保证 | S0（基线 10 处：`jobs`、`service_shell` 对 `db`、`product_ingestion` 的引用） |
 | G2 核心纯净 | Harness 核心目录、Go `internal/enterprise`、前端 `src/enterprise` 不出现险种名、field_key 字面量、Schema67、Golden（词表 `tests/architecture/domain_terms.txt`，由 Catalog v5 冻结生成）；`internal/` 其他非测试 Go 文件中的 Schema67/Golden 次数记基线 | S0（核心 0；Go 旧代码 294 处） |
-| G3 文件规模 | 手写 `.py/.go/.ts/.vue`（含测试）不超过 500 行；生成代码、锁文件、迁移除外。新文件、原本不超过 500 行的文件越线一律失败；S0 时已超限的文件允许在基线行数上最多再多 50 行（固定容差，不随基线上移），超出即须拆分。这些文件在 S7 清理旧代码后一次性拆分 | S0 |
+| G3 文件规模 | 手写 `.py/.go/.ts/.vue`（含测试）不超过 500 行；生成代码、锁文件、迁移除外。新文件、原本不超过 500 行的文件越线一律失败；S0 时已超限的文件允许在基线行数上最多再多 50 行（固定容差，不随基线上移），超出即须拆分。这些文件在 S7 清理旧代码后一次性拆分；拆分后仍保留的超长文件（理由与退出条件）登记在 `docs/design/slices/S7f-2-拆分超长文件.md`「登记的例外」表，它们仍在基线内、受同一规则约束 | S0 |
 | G4 命名 | 新文件名不含 Goal、mission 或版本后缀（`_596`、`_815`、`_830`、`g3_`、`g35`、`m1NN`、`_vN` 等） | S0 |
 | G5 无实例硬编码 | 非测试代码不出现本机绝对路径、`/private/tmp`、IP 字面量、release/run UUID 字面量、固定 tenant 或人名 | S0 |
 | G6 私有访问 | Python 不跨模块 import 或访问 `_private` 名；生产代码不含 `_for_test` 钩子 | S0 |
@@ -680,6 +680,7 @@ KEEP = 原样保留；REWIRE = 保留行为，搬到目标位置或改接新合�
 | 2026-10-18 | 审核准入先试点一个 pack：RV2c 校准样本太薄（每 pack 1 款产品，Wilson 下界 0.79–0.90），只准入打分器确实压低了错误的重疾险，门槛 0.9（审核策略 v2）；RV4 抽检落地前每次 MACHINE 发布逐条人工复核；扩大或调门槛须有第 2 款产品的 Golden 或 RV4 抽检数据（用户 2026-10-18，RV3） | §6.3 |
 | 2026-10-18 | 企业知识导航按"领域 → Schema 险种分组"组织，领域可扩展到服务权益与服务条线（导航是版本化数据）；跨产品概念页 = 字段定义 + 模型说明（模型补充）+ 跨产品汇总（每句引用 Claim、数字可回验，标"模型汇总（依据各产品原文）"）+ 可点击对照表与实时摘要；"关键字段"子字段下一轮（用户 2026-10-18，S3e） | §7.2 |
 | 2026-10-19 | 问答接入发布版本（Q1，方案 B）：WeKnora 的对话、Agent、IM、嵌入复用不变，数据层补一个按 Release 读取的查询服务，作为 Agent 工具与 MCP 的来源；原文 chunk 问答保留为可选来源——在问答中选 Space 的原始材料库即原文检索、选 Wiki 库即已发布知识、两者都选为混合；原文只检索当前发布版本固定的材料，每个来源标注"已发布知识（审核过）"或"原文检索（未经编译审核）"；修订硬边界 5"原始材料不直接回答业务问题"；多轮之间是否沿用同一版本暂不处理（用户 2026-10-19） | §7.5、§7.8 |
+| 2026-10-31 | S7f-2 收尾：G3 拆分后只剩登记的例外——本地 live 链路与结构化导入的 6 个旧目录文件（Owner 2026-10-30 裁定 (a)，不为拆分改位置/可达性守卫）、自包含的 App 构建工具 `scripts/app_artifact.py` 与 `scripts/start_exact_image.py`（拆分会改 Dockerfile、运行时复用合同或 App 镜像内容），各写退出条件；`knowledge_revision_source.go` 由 S7f-2b2 迁入 `internal/enterprise/revisionsource`（同时删除无生产调用的 `ReadFixedRevision`），G3 只剩上述 8 个登记例外 | §8 G3、§11 S7 |
 
 ## 附录 A · 术语
 
