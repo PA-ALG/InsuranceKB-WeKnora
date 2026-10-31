@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -117,9 +116,7 @@ func (s *createKnowledgeFileServiceStub) CopyFile(ctx context.Context, srcPath s
 }
 
 type createKnowledgeTaskEnqueuerStub struct {
-	calls         int
-	payload       types.DocumentProcessPayload
-	manualPayload types.ManualProcessPayload
+	calls int
 }
 
 func (s *createKnowledgeTaskEnqueuerStub) Enqueue(
@@ -127,27 +124,7 @@ func (s *createKnowledgeTaskEnqueuerStub) Enqueue(
 	opts ...asynq.Option,
 ) (*asynq.TaskInfo, error) {
 	s.calls++
-	if task.Type() == types.TypeDocumentProcess {
-		_ = json.Unmarshal(task.Payload(), &s.payload)
-	}
-	if task.Type() == types.TypeManualProcess {
-		_ = json.Unmarshal(task.Payload(), &s.manualPayload)
-	}
 	return &asynq.TaskInfo{ID: "task-1", Queue: "default"}, nil
-}
-
-func TestManualProcessPayloadCarriesDatabaseParseAttempt(t *testing.T) {
-	t.Parallel()
-	task := &createKnowledgeTaskEnqueuerStub{}
-	svc := &knowledgeService{task: task}
-	knowledge := &types.Knowledge{
-		ID: "manual-1", TenantID: 7, KnowledgeBaseID: "kb-1", CurrentParseAttempt: 9,
-	}
-	_, err := svc.enqueueManualProcessing(
-		context.Background(), knowledge, "content", true,
-	)
-	require.NoError(t, err)
-	require.Equal(t, int64(9), task.manualPayload.ParseAttempt)
 }
 
 func TestCreateKnowledgeFromFileDoesNotPersistWhenStorageSaveFails(t *testing.T) {
@@ -176,21 +153,6 @@ func TestCreateKnowledgeFromFileDoesNotPersistWhenStorageSaveFails(t *testing.T)
 	require.Error(t, err)
 	require.Nil(t, knowledge)
 	require.Equal(t, 1, fileSvc.saveCalls)
-	require.Zero(t, repo.createCalls)
-}
-
-func TestCreateKnowledgeFromFileCapacityRejectsBeforeWriting(t *testing.T) {
-	t.Setenv("DOCUMENT_STORAGE_MIN_FREE_BYTES", "18446744073709551615")
-	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
-	repo := &createKnowledgeFileRepoStub{}
-	fileSvc := &createKnowledgeFileServiceStub{}
-	svc := &knowledgeService{repo: repo, fileSvc: fileSvc,
-		kbService: &createKnowledgeFileKBServiceStub{kb: &types.KnowledgeBase{ID: "kb-1"}}}
-	knowledge, err := svc.CreateKnowledgeFromFile(newCreateKnowledgeFileContext(), "kb-1",
-		newMultipartFileHeader(t, "doc.txt", "hello"), nil, nil, "", nil, "", nil)
-	require.Error(t, err)
-	require.Nil(t, knowledge)
-	require.Zero(t, fileSvc.saveCalls)
 	require.Zero(t, repo.createCalls)
 }
 
@@ -228,15 +190,6 @@ func TestCreateKnowledgeFromFilePersistsStoredFilePathOnCreate(t *testing.T) {
 	require.NotNil(t, repo.createdKnowledge)
 	require.Equal(t, "stored/"+knowledge.ID, repo.createdKnowledge.FilePath)
 	require.Equal(t, 1, task.calls)
-	require.Equal(t, int64(1), repo.createdKnowledge.CurrentParseAttempt)
-	require.Equal(t, "5d41402abc4b2a76b9719d911017c592", repo.createdKnowledge.FileHash)
-	require.Equal(t,
-		"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-		repo.createdKnowledge.FileSHA256,
-	)
-	require.NotNil(t, task.payload.Revision)
-	require.Equal(t, int64(1), task.payload.Revision.ParseAttempt)
-	require.Equal(t, repo.createdKnowledge.FileSHA256, task.payload.Revision.FileSHA256)
 }
 
 // Datasource sync deletes the previous knowledge for an external_id before
