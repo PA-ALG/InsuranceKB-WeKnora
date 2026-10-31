@@ -8,6 +8,7 @@ file so the upstream test files stay byte-identical (U-2b).
 """
 
 import unittest
+from unittest import mock
 
 from docreader.models.document import Document
 from docreader.parser.parser import Parser
@@ -83,13 +84,14 @@ class NativeCaptureStreamTest(unittest.TestCase):
 
     def test_the_override_reaches_the_parser_through_parse_file_stream(self):
         parser = Parser()
-        parser.registry.get_parser_class = lambda engine, file_type: _Probe
-        stream = parser.parse_file_stream(
-            "source.pdf",
-            "pdf",
-            b"%PDF-probe",
-            engine_overrides={"pdf_native_structure_capture": MODE},
-        )
+        # The registry is shared by every Parser; patch it only for this call.
+        with mock.patch.object(parser.registry, "get_parser_class", return_value=_Probe):
+            stream = parser.parse_file_stream(
+                "source.pdf",
+                "pdf",
+                b"%PDF-probe",
+                engine_overrides={"pdf_native_structure_capture": MODE},
+            )
         try:
             self.assertEqual(stream.document.metadata[KEY], "{}")
         finally:
