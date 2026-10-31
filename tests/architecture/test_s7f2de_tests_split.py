@@ -2,14 +2,17 @@
 (Spec docs/design/slices/S7f-2-拆分超长文件.md, section "S7f-2d / S7f-2e 实施"; blueprint §8 G3, §11 S7).
 
 Each source module becomes a directory under a blueprint §4.2 target directory holding scenario-group
-test modules, an optional conftest.py (the source's fixtures) and an optional helpers.py (shared code).
-Tests move verbatim; the AST/collection proof lives in the PR.
+test modules, an optional conftest.py (the source's fixtures) and *helpers.py modules (shared code).
+Three sources keep their path with only the scenario group the digest-pinned plugin contract
+(deploy/upstream/weknora-plugin-contract.yaml) names by "path::function". Tests move verbatim; the
+AST/collection proof lives in the PR.
 
 Standard library only. Run from the repository root:  python -m pytest -q tests/architecture
 """
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -40,7 +43,15 @@ MOVES = {
     "test_structured_import_010.py": "ingest/structured_import",
     "test_weknora_source_contract_017.py": "ingest/weknora_source",
 }
-ALLOWED_SUPPORT = {"conftest.py", "helpers.py"}
+# Kept at their path (≤ 500 lines): the plugin contract and the trusted local-live image workflow
+# reference tests in them by path; changing the contract means changing its pinned digest.
+KEPT = {"test_prepare_weknora_adoption_045.py", "test_local_live_cli_023.py", "test_scope_016.py"}
+PLUGIN_CONTRACT = "deploy/upstream/weknora-plugin-contract.yaml"
+TEST_REF = re.compile(r"^\s*test_ref:\s*(harness/tests/\S+)::(\w+)\s*$", re.MULTILINE)
+
+
+def is_support(name: str) -> bool:
+    return name == "conftest.py" or name.endswith("helpers.py")
 
 
 def tracked(*paths: str) -> list[str]:
@@ -52,9 +63,25 @@ def tracked(*paths: str) -> list[str]:
 
 
 def test_the_source_modules_are_gone() -> None:
-    sources = [f"{HARNESS_TESTS}/{name}" for name in MOVES]
+    sources = [f"{HARNESS_TESTS}/{name}" for name in MOVES if name not in KEPT]
     assert tracked(*sources) == []
     assert [s for s in sources if (REPO_ROOT / s).exists()] == []
+
+
+def test_kept_modules_are_small_and_still_hold_every_contract_reference() -> None:
+    text = (REPO_ROOT / PLUGIN_CONTRACT).read_text(encoding="utf-8")
+    refs = TEST_REF.findall(text)
+    assert {Path(path).name for path, _ in refs} & set(MOVES) == KEPT
+    problems = []
+    for path, function in refs:
+        source = (REPO_ROOT / path).read_text(encoding="utf-8")
+        if re.search(rf"^(?:async\s+)?def\s+{function}\s*\(", source, re.MULTILINE) is None:
+            problems.append(f"{path}::{function} is missing")
+    for name in KEPT:
+        lines = (REPO_ROOT / HARNESS_TESTS / name).read_text(encoding="utf-8").count("\n") + 1
+        if lines > MAX_LINES:
+            problems.append(f"{name}: {lines} lines")
+    assert problems == []
 
 
 def test_g3_lists_no_harness_test_module() -> None:
@@ -73,8 +100,8 @@ def test_each_directory_holds_only_split_modules_within_limits() -> None:
             name = Path(path).name
             if Path(path).parent.as_posix() != rel_dir:
                 problems.append(f"{path}: nested below the split directory")
-            elif not (name in ALLOWED_SUPPORT or (name.startswith("test_") and name.endswith(".py"))):
-                problems.append(f"{path}: only test modules, conftest.py and helpers.py belong here")
+            elif not (is_support(name) or (name.startswith("test_") and name.endswith(".py"))):
+                problems.append(f"{path}: only test modules, conftest.py and *helpers.py belong here")
             lines = (REPO_ROOT / path).read_text(encoding="utf-8").count("\n") + 1
             if lines > MAX_LINES:
                 problems.append(f"{path}: {lines} lines")
