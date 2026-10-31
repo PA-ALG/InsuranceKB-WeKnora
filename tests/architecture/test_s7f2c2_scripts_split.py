@@ -3,7 +3,8 @@
 
 ``harness/scripts/prepare_weknora_adoption.py`` is split by responsibility inside the ``scripts`` package; the
 names tests monkeypatch on it stay defined there. Eight files stay over 500 lines as registered exceptions with a
-reason and an exit condition; ``internal/application/service/knowledge_revision_source.go`` is left to S7f-2b2.
+reason and an exit condition; ``internal/application/service/knowledge_revision_source.go`` was left to S7f-2b2,
+which moved it into ``internal/enterprise/revisionsource``, so G3 now holds only the registered exceptions.
 
 Standard library only. Run from the repository root:  python -m pytest -q tests/architecture
 """
@@ -57,7 +58,7 @@ REGISTERED_EXCEPTIONS = {
     "scripts/app_artifact.py",
     "scripts/start_exact_image.py",
 }
-LEFT_TO_S7F2B2 = "internal/application/service/knowledge_revision_source.go"
+MOVED_BY_S7F2B2 = "internal/application/service/knowledge_revision_source.go"
 SPEC = "docs/design/slices/S7f-2-拆分超长文件.md"
 EXCEPTION_HEADING = "### 登记的例外"
 
@@ -116,8 +117,9 @@ def test_split_modules_share_no_private_names() -> None:
     assert not private, private
 
 
-def test_g3_holds_only_registered_exceptions_and_the_s7f2b2_file() -> None:
-    assert set(checks_files.g3_file_size()) == REGISTERED_EXCEPTIONS | {LEFT_TO_S7F2B2}
+def test_g3_holds_only_registered_exceptions() -> None:
+    assert not (REPO_ROOT / MOVED_BY_S7F2B2).exists()
+    assert set(checks_files.g3_file_size()) == REGISTERED_EXCEPTIONS
 
 
 def test_every_exception_has_a_reason_and_an_exit_condition() -> None:
