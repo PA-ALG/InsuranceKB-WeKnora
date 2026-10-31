@@ -41,5 +41,8 @@ func (r *citationReader) Citation(
 	if view.Evidence.ReleaseID != releaseID {
 		return Citation{}, &release.Error{Code: release.ErrorReleaseConflict}
 	}
+	if block := view.Block; block != nil {
+		return Citation{Document: block.Document, Page: block.Page, Quote: block.Quote}, nil
+	}
 	return Citation{Document: view.Span.Document, Page: view.Span.Page, Quote: view.Span.Quote}, nil
 }
