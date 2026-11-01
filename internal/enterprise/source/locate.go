@@ -1,6 +1,10 @@
 package source
 
-import "github.com/Tencent/WeKnora/internal/enterprise/capture/ooxml"
+import (
+	"time"
+
+	"github.com/Tencent/WeKnora/internal/enterprise/capture/ooxml"
+)
 
 // ErrorLocatorMismatch identifies Office evidence that is not the exact place of one captured block;
 // the Detail is a reason category, never source text. Callers report it as an evidence mismatch.
@@ -28,6 +32,7 @@ type BlockView struct {
 	Start, End                            int // page-local code points, half-open
 	Quote                                 string
 	Block                                 ooxml.Block
+	RevisedAt                             time.Time // the cited revision's time, zero when unknown
 }
 
 // LocatorKind is the locator kind of evidence on these pages: an Office capture's block kind (one
@@ -66,7 +71,7 @@ func (s *PageSet) Locate(locator ooxml.Locator, page, start, end int) (*BlockVie
 		return &BlockView{
 			KnowledgeID: s.KnowledgeID, Document: s.Document, DocumentSHA256: s.DocumentSHA256,
 			ParseAttempt: s.ParseAttempt, Page: page, Start: start, End: end,
-			Quote: string(text[start:end]), Block: b,
+			Quote: string(text[start:end]), Block: b, RevisedAt: s.RevisedAt,
 		}, nil
 	}
 	return nil, locatorMismatch("block")

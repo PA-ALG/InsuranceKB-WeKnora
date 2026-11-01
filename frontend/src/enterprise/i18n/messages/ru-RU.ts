@@ -28,6 +28,7 @@ export default {
     "sourceTierRawText": "Поиск по исходному тексту (без компиляции и проверки)",
     "sourceTierRelease": "Опубликованные знания (проверено)",
     "sourceTierWikiPage": "Составлено моделью (не проверено поштучно)",
+    "sourceTierMethod": "Метод продаж (учебный материал, не факт о продукте)",
     "releaseCitationUnavailable": "Точный источник этой ссылки недоступен.",
     "releaseCitationDenied": "Откройте источник в веб-сеансе после входа.",
     "knowledgeFindEntity": "Найти опубликованные продукты",
@@ -257,6 +258,23 @@ export default {
       "collapseEntry": "Свернуть поля: {name}",
       "noFields": "Нет полей",
       "noConcepts": "В этой версии нет общих понятий"
+    },
+    "method": {
+      "banner": "Метод продаж (учебный материал, не факт о продукте)",
+      "notices": {
+        "product_info": "Содержит сведения о продукте: приоритет у условий договора и опубликованных знаний"
+      },
+      "labels": "Применимость",
+      "family": "Серия: {name}",
+      "familyProducts": "Продукты серии:",
+      "source": "Источник",
+      "sourceOf": "Открыть источник пункта {n}",
+      "materials": "Исходные материалы:",
+      "material": "{document} (добавлен {date})",
+      "materialsLoading": "Чтение исходных материалов…",
+      "materialsFailed": "Исходные материалы сейчас недоступны",
+      "updated": "Обновлено {date}",
+      "related": "Связанные методы продаж"
     },
     "version": {
       "title": "Версия",

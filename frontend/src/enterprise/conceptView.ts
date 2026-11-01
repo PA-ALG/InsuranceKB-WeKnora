@@ -1,5 +1,6 @@
 import type { Release, ReleaseMember } from './enterpriseApi'
 import { navigationTree } from './navigationView'
+import { methodEntityIds } from './methodView'
 import { entitySummaries } from './releaseView'
 import { valueOutline } from './valueOutline'
 
@@ -45,12 +46,14 @@ function fieldLabels(release: Release) {
 
 export function conceptKeys(release: Release): string[] {
   const subjects = new Map<string, Set<string>>()
+  // SK-3: method knowledge forms no concept; method predicates stay on method pages.
+  const methods = methodEntityIds(release)
   for (const member of release.members) {
     const payload = member.payload
     if (member.kind !== 'claim' || !['present', 'absent_explicitly'].includes(text(payload?.state))) continue
     const key = text(payload?.predicate)
     const subject = text(payload?.subject_ref)
-    if (!key || !subject) continue
+    if (!key || !subject || methods.has(subject)) continue
     if (!subjects.has(key)) subjects.set(key, new Set())
     subjects.get(key)!.add(subject)
   }

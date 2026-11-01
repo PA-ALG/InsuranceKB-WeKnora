@@ -349,7 +349,9 @@ func checkBase(b Bundle, head Head) error {
 }
 
 // materialize applies a delta bundle to the base members: removals, then
-// replacements and additions; the result is sorted by logical slug.
+// replacements and additions; the result is sorted by logical slug. Every publishing path takes
+// it (whole activation and its precheck, point details and point batches), so the method rule is
+// checked here, against the target it builds (SK-3 §4.1, #523 R1).
 func materialize(base []Member, b Bundle) ([]Member, error) {
 	bySlug := make(map[string]Member, len(base)+len(b.Members))
 	for _, m := range base {
@@ -369,6 +371,9 @@ func materialize(base []Member, b Bundle) ([]Member, error) {
 		out = append(out, m)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].LogicalSlug < out[j].LogicalSlug })
+	if err := checkMethodClaims(base, out, b); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

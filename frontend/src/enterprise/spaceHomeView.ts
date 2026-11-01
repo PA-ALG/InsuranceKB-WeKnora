@@ -1,6 +1,7 @@
 import type { Release, ReleaseMember } from './enterpriseApi'
 import { conceptKeys } from './conceptView'
 import { navigationTree } from './navigationView'
+import { methodEntityIds } from './methodView'
 
 type RecordValue = Record<string, unknown>
 const text = (value: unknown): string => typeof value === 'string' ? value : ''
@@ -64,7 +65,11 @@ export function spaceHomeView(release: Release) {
       stated.get(key)!.add(subject)
     }
   }
-  const groups = navigationTree(release).flatMap(domain => domain.groups.filter(group => group.entries.length).map(group => ({
+  // SK-3: the directory is the product overview; methods are reached from the navigation.
+  const methods = methodEntityIds(release)
+  const groups = navigationTree(release).flatMap(domain => domain.groups
+    .map(group => ({ ...group, entries: group.entries.filter(entry => !methods.has(entry.entityId)) }))
+    .filter(group => group.entries.length).map(group => ({
     key: group.key, id: JSON.stringify([domain.key, group.key]), title: group.title || domain.title,
     rows: group.entries.map(entry => ({ ...entry,
       cells: columns.map(column => overviewCell(column.key, claims.get(entry.entityId)?.get(column.key) ?? [])),

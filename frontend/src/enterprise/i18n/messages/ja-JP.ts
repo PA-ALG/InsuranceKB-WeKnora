@@ -14,6 +14,7 @@ export default {
     "sourceTierRawText": "原文検索（未コンパイル・未審査）",
     "sourceTierRelease": "公開済みナレッジ（審査済み）",
     "sourceTierWikiPage": "モデル整理（個別未審査）",
+    "sourceTierMethod": "販売手法（研修資料、商品事実ではありません）",
     "releaseCitationUnavailable": "この引用の正確な出典を開けません。",
     "releaseCitationDenied": "ログイン済みのウェブ画面から出典を開いてください。",
     "knowledgeFindEntity": "公開済み製品を検索",
@@ -257,6 +258,23 @@ export default {
       "collapseEntry": "{name}のフィールドを折りたたむ",
       "noFields": "フィールドはありません",
       "noConcepts": "このリリースに共通の概念はありません"
+    },
+    "method": {
+      "banner": "販売手法（研修資料、商品事実ではありません）",
+      "notices": {
+        "product_info": "商品情報を含みます：約款と公開済みナレッジが優先します"
+      },
+      "labels": "適用範囲",
+      "family": "シリーズ：{name}",
+      "familyProducts": "シリーズの商品：",
+      "source": "原文",
+      "sourceOf": "{n} 項目の原文を開く",
+      "materials": "出典資料：",
+      "material": "{document}（{date} 登録）",
+      "materialsLoading": "出典資料を読み込み中…",
+      "materialsFailed": "出典資料を読み込めません",
+      "updated": "{date} 更新",
+      "related": "関連する販売手法"
     },
     "version": {
       "title": "バージョン情報",

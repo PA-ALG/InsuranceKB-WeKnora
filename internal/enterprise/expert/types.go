@@ -17,6 +17,9 @@ import (
 const (
 	ErrorStale   = "EXPERT_EDIT_STALE"
 	ErrorInvalid = "EXPERT_EDIT_INVALID"
+	// ErrorMethodKnowledge refuses an edit of method knowledge, which rests on its training material
+	// only: it is corrected by withdrawal, a corrected material and a new compile (SK-0 §3.4).
+	ErrorMethodKnowledge = "EXPERT_EDIT_METHOD_KNOWLEDGE"
 )
 
 // MaxReasonRunes bounds the free-text reason an expert gives for an edit.

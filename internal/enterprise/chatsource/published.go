@@ -165,10 +165,7 @@ func publishedHits(
 				ID: "release:" + id + ":" + field.Slug, Content: content,
 				KnowledgeTitle: knowledge.FieldTitle(field),
 				Score:          1, ChunkType: types.ChunkTypeText, MatchType: types.MatchTypeKeywords,
-				Metadata: map[string]string{
-					"source_tier": "release", "space_id": space, "release_id": id,
-					"logical_slug": field.Slug, "evidence_index": "0",
-				},
+				Metadata: knowledge.FieldMetadata(space, id, field),
 			})
 			if len(hits) == maxPublishedHits {
 				return hits, nil

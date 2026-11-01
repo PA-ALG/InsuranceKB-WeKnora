@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -190,12 +191,9 @@ func citation(
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"release_id": at.ReleaseID, "member": at.Slug, "evidence_index": at.Index, "origin": at.Origin,
-		"source": gin.H{
-			"knowledge_id": view.KnowledgeID, "parse_attempt": view.ParseAttempt,
-			"document": view.Document, "file_sha256": view.DocumentSHA256,
-		},
-		"page":  gin.H{"number": view.Page, "width_points": view.WidthPoints, "height_points": view.HeightPoints},
-		"start": view.Start, "end": view.End, "quote": view.Quote,
+		"source": citedSource(view.KnowledgeID, view.ParseAttempt, view.Document, view.DocumentSHA256, view.RevisedAt),
+		"page":   gin.H{"number": view.Page, "width_points": view.WidthPoints, "height_points": view.HeightPoints},
+		"start":  view.Start, "end": view.End, "quote": view.Quote,
 		"highlight": gin.H{
 			"coordinate_space": "normalized_0_1e6_top_left", "complete": view.Complete, "rects": rects,
 		},
@@ -203,17 +201,23 @@ func citation(
 	}})
 }
 
+// citedSource names the cited revision; revised_at (RFC 3339, UTC) is its time when known (SK-3 §4.3).
+func citedSource(knowledgeID string, attempt int64, document, sha string, revisedAt time.Time) gin.H {
+	out := gin.H{"knowledge_id": knowledgeID, "parse_attempt": attempt, "document": document, "file_sha256": sha}
+	if !revisedAt.IsZero() {
+		out["revised_at"] = revisedAt.UTC().Format(time.RFC3339)
+	}
+	return out
+}
+
 // blockCitation answers Office evidence with its captured block and locator. Office captures carry
 // no geometry, so there is no highlight; a viewer opens the page and block (S11d Spec §2.3).
 func blockCitation(c *gin.Context, at release.EvidenceAt, view *source.BlockView, file string) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"release_id": at.ReleaseID, "member": at.Slug, "evidence_index": at.Index, "origin": at.Origin,
-		"source": gin.H{
-			"knowledge_id": view.KnowledgeID, "parse_attempt": view.ParseAttempt,
-			"document": view.Document, "file_sha256": view.DocumentSHA256,
-		},
-		"page":  gin.H{"number": view.Page},
-		"start": view.Start, "end": view.End, "quote": view.Quote,
+		"source": citedSource(view.KnowledgeID, view.ParseAttempt, view.Document, view.DocumentSHA256, view.RevisedAt),
+		"page":   gin.H{"number": view.Page},
+		"start":  view.Start, "end": view.End, "quote": view.Quote,
 		"locator": view.Block.Locator,
 		"block":   gin.H{"block_id": view.Block.ID, "start": view.Block.Start, "end": view.Block.End},
 		"file":    file,

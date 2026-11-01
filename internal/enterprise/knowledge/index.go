@@ -19,6 +19,8 @@ type entityPayload struct {
 	Labels    []string   `json:"classification_labels"`
 	Lifecycle *Lifecycle `json:"lifecycle"`
 	Family    *Family    `json:"product_family"`
+	// Identifiers are read only for SK-2's notice flag; other identifiers stay with the member.
+	Identifiers map[string]any `json:"identifiers"`
 }
 
 type claimPayload struct {
@@ -40,8 +42,14 @@ type claimPayload struct {
 }
 
 type profilePayload struct {
-	Labels   []string `json:"classification_labels"`
-	Sections []struct {
+	Labels []string `json:"classification_labels"`
+	// SK-3: a profile may serve entity types whatever their labels and declare their knowledge
+	// class; a method profile carries the copy readers give methods.
+	Types       []string          `json:"entity_types"`
+	Class       string            `json:"knowledge_class"`
+	ReadingNote string            `json:"reading_note"`
+	Notices     map[string]string `json:"notices"`
+	Sections    []struct {
 		Fields []struct {
 			Key   string `json:"field_key"`
 			Title string `json:"short_title"`
@@ -57,6 +65,7 @@ type navigationPayload struct {
 		Types  []string `json:"entity_types"`
 		Groups []struct {
 			Key    string   `json:"group_key"`
+			Title  string   `json:"display_name"`
 			Labels []string `json:"classification_labels"`
 		} `json:"groups"`
 	} `json:"domains"`
@@ -125,9 +134,10 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 				payload.Family = nil
 			}
 			index.entityByID[payload.ID] = len(index.entities)
+			notice, _ := payload.Identifiers["notice"].(string)
 			index.entities = append(index.entities, indexedEntity{Entity: Entity{
-				EntityID: payload.ID, Name: name, Names: payload.Names, Labels: payload.Labels,
-				Lifecycle: payload.Lifecycle, Family: payload.Family,
+				EntityID: payload.ID, Kind: payload.Type, Name: name, Names: payload.Names, Labels: payload.Labels,
+				Lifecycle: payload.Lifecycle, Family: payload.Family, Notice: notice,
 			}, kind: payload.Type})
 		case "relation":
 			// A relation only adds version links: one that does not decode loses its link, not the read.
@@ -211,6 +221,7 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 		})
 	}
 	index.linkVersions(relations)
+	index.markMethods()
 	return index, ctx.Err()
 }
 

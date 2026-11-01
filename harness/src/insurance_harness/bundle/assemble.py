@@ -20,10 +20,10 @@ from insurance_harness.contracts.knowledge import (
     Claim,
     ConceptSummary,
     Entity,
-    NavigationProfile,
     PresentationProfile,
     WikiPage,
 )
+from insurance_harness.contracts.navigation import NavigationProfile
 
 ACCESS_SCOPE = "space"
 

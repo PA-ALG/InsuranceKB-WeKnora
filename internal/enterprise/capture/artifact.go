@@ -81,5 +81,6 @@ func ReadSourceArtifact(
 		KnowledgeID: knowledgeID, ParseAttempt: attempt, FileName: owned.FileName,
 		FileSHA256: revision.FileSHA256, ParserIdentitySHA256: record.ParserIdentitySHA256,
 		Markdown: record.Markdown, NativeJSON: append([]byte(nil), record.Native.SanitizedJSON...),
+		RevisedAt: revision.CompletedAt,
 	}, nil
 }

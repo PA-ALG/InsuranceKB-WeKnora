@@ -107,9 +107,29 @@ function fieldView(member: ReleaseMember, title: string): FieldView {
 
 interface ProfileSection { key: string; title: string; fields: { key: string; title: string }[] }
 
-function profileFor(release: Release, labels: string[]): { name: string; sections: ProfileSection[] } {
-  const profile = membersOf(release, 'presentation_profile')
-    .find(candidate => strings(candidate.classification_labels).some(label => labels.includes(label)))
+/** Each entity's type, by entity ID (first entity member wins, as in the summaries). */
+export function entityTypes(release: Release): Map<string, string> {
+  const types = new Map<string, string>()
+  for (const entity of membersOf(release, 'entity')) {
+    const id = text(entity.entity_id)
+    if (id && !types.has(id)) types.set(id, text(entity.entity_type))
+  }
+  return types
+}
+
+/**
+ * The profile an entity is shown with (SK-3 Spec §1): the first whose entity_types name its type,
+ * otherwise the first without entity_types whose classification labels meet the entity's.
+ */
+export function profileMemberFor(release: Release, type: string, labels: string[]): Payload | undefined {
+  const profiles = membersOf(release, 'presentation_profile')
+  return (type ? profiles.find(candidate => strings(candidate.entity_types).includes(type)) : undefined)
+    ?? profiles.find(candidate => !strings(candidate.entity_types).length
+      && strings(candidate.classification_labels).some(label => labels.includes(label)))
+}
+
+function profileFor(release: Release, type: string, labels: string[]): { name: string; sections: ProfileSection[] } {
+  const profile = profileMemberFor(release, type, labels)
   const sections = Array.isArray(profile?.sections) ? (profile!.sections as Payload[]) : []
   return {
     name: text(profile?.display_name),
@@ -138,7 +158,7 @@ export function entityView(release: Release, entityId: string): EntityView | nul
   if (!entity && claims.length === 0) return null
   const { name, labels } = entity ? identity(entity) : { name: entityId, labels: [] as string[] }
 
-  const profile = profileFor(release, labels)
+  const profile = profileFor(release, entity ? text(entity.entity_type) : '', labels)
   const titles = new Map(profile.sections.flatMap(section => section.fields.map(field => [field.key, field.title] as const)))
   const sourced = new Map<string, [string, ReleaseMember][]>()
   const generated: [string, ReleaseMember][] = []

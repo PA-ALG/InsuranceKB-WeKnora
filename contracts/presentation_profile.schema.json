@@ -83,7 +83,7 @@
   "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/presentation_profile.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "A pack's display groups and field order, published with the release it renders.\n\nReaders show an entity with the profile whose classification_labels meet the entity's,\nso each field and section appears once and the labels say which entities it serves.",
+  "description": "A pack's display groups and field order, published with the release it renders.\n\nReaders show an entity with the first profile whose entity_types name its type; otherwise with\na profile without entity_types whose classification_labels meet the entity's (SK-3 §1), so each\nfield and section appears once and the labels or types say which entities it serves.",
   "properties": {
     "classification_labels": {
       "items": {
@@ -91,7 +91,6 @@
         "pattern": "\\S",
         "type": "string"
       },
-      "minItems": 1,
       "title": "Classification Labels",
       "type": "array"
     },
@@ -106,6 +105,51 @@
       ],
       "default": null,
       "title": "Display Name"
+    },
+    "entity_types": {
+      "anyOf": [
+        {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Entity Types"
+    },
+    "knowledge_class": {
+      "anyOf": [
+        {
+          "const": "method",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Class"
+    },
+    "notices": {
+      "patternProperties": {
+        "\\S": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        }
+      },
+      "propertyNames": {
+        "minLength": 1
+      },
+      "title": "Notices",
+      "type": "object"
     },
     "profile_id": {
       "minLength": 1,
@@ -123,6 +167,20 @@
       "pattern": "\\S",
       "title": "Profile Version",
       "type": "string"
+    },
+    "reading_note": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reading Note"
     },
     "schema_pack_id": {
       "minLength": 1,
@@ -144,7 +202,6 @@
     "profile_version",
     "profile_sha256",
     "schema_pack_id",
-    "classification_labels",
     "sections"
   ],
   "title": "PresentationProfile",
