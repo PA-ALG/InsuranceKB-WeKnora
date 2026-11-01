@@ -93,7 +93,7 @@ def expect(result: Attribution, outcome: str, reason: str, product_id: str | Non
 
 def test_the_policy_loads_with_its_version_and_points_at_real_packs() -> None:
     policy = load_attribution_policy()
-    assert policy.version == "2026-11-01.5"  # PV-3: training materials by version and date
+    assert policy.version == "2026-11-01.6"  # PV-3: training materials by version and date
     catalog = json.loads(
         files("insurance_harness.catalog").joinpath("schema_packs.json").read_text(encoding="utf-8")
     )
@@ -105,7 +105,7 @@ def test_the_policy_loads_with_its_version_and_points_at_real_packs() -> None:
     for entry in policy.classifications:
         assert entry.classification in classes.get(entry.schema_pack_id, []), entry
     assert attribute(upload("1828", "brochure"), [registered("1828", "terms")]).policy_ref == (
-        "attribution-policy@2026-11-01.5"
+        "attribution-policy@2026-11-01.6"
     )
 
 
