@@ -28,7 +28,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from insurance_harness.identity.material_roles import load_material_roles, role_of
-from insurance_harness.identity.title_lines import line_titles
+from insurance_harness.identity.title_lines import line_titles, title_pattern
 
 TERMS = "terms"  # the material role that prints the clause filing code and may create a product
 _SHA256 = r"^[0-9a-f]{64}$"
@@ -85,7 +85,11 @@ class AttributionPolicy(_Frozen):
     title_prefix_pattern: str = Field(min_length=1)  # page numbers and labels before a title
     issuer_names: tuple[str, ...]  # the insurer's name, printed above a title (S5b-7)
     guide_title_pattern: str = Field(min_length=1)  # the name in the reader guide, one group
-    title_line_pattern: str = Field(min_length=1)  # a whole title line anywhere, one group (S5b-7)
+    # A whole title line anywhere on the first pages (S5b-7): 《name》, then at most one listed
+    # qualifier and one listed document word, nothing else; a line with an exclusion is no title.
+    title_line_qualifiers: tuple[str, ...]
+    title_line_documents: tuple[str, ...] = Field(min_length=1)
+    title_line_exclusions: tuple[str, ...]
     created_id_prefix: str = Field(min_length=1)
     created_id_hex: int = Field(ge=8, le=64)
     classifications: tuple[Classification, ...] = Field(min_length=1)
@@ -108,7 +112,6 @@ class AttributionPolicy(_Frozen):
                     self.clause_code_pattern,
                     self.title_prefix_pattern,
                     self.guide_title_pattern,
-                    self.title_line_pattern,
                 )
             ]
             years = [re.compile(t) for t in (self.upload_year_pattern, *self.product_year_patterns)]
@@ -116,8 +119,9 @@ class AttributionPolicy(_Frozen):
             raise ValueError("invalid attribution pattern") from error
         if patterns[2].groups != 1 or not self.title_prefix_pattern.startswith("^"):
             raise ValueError("the guide pattern needs one group and the prefix an anchor")
-        if patterns[3].groups != 1 or not all(_fold(name) for name in self.issuer_names):
-            raise ValueError("the title line pattern needs one group, an issuer name some text")
+        words = (*self.issuer_names, *self.title_line_qualifiers, *self.title_line_documents)
+        if not all(_fold(word) for word in (*words, *self.title_line_exclusions)):
+            raise ValueError("a blank issuer name or title line word")
         if any(year.groups != 1 for year in years):
             raise ValueError("a year pattern needs one group")
         if not all(_fold(text) for text in (*self.brand_prefixes, *self.brand_extensions)):
@@ -128,6 +132,13 @@ class AttributionPolicy(_Frozen):
         if len(set(suffixes)) != len(suffixes):
             raise ValueError("duplicate classification suffix")
         return self
+
+    @property
+    def title_line_pattern(self) -> str:
+        """The whole-line title, the name its one group (S5b-7 Spec §2.3)."""
+        qualifiers = [_fold(word) for word in self.title_line_qualifiers]
+        documents = [_fold(word) for word in self.title_line_documents]
+        return title_pattern(qualifiers, documents, self.max_title_chars)
 
     @property
     def policy_ref(self) -> str:
@@ -194,6 +205,9 @@ def _title(text: str, policy: AttributionPolicy) -> str:
     if text.startswith(left):
         end = text.find(right, len(left))
         name = text[len(left) : end] if end > 0 else ""
+        after = text[end + len(right) : end + len(right) + 4] if end > 0 else ""
+        if any(_fold(word) in after for word in policy.title_line_exclusions):
+            return ""  # 《name》不适用…, 《name》并非…: an explanation, not a title (S5b-7)
     else:
         # A marker at the very start counts: then there is no title, and the body is never one.
         ends = [i for i in (text.find(_fold(mark)) for mark in policy.title_end_markers) if i >= 0]
@@ -372,12 +386,13 @@ def attribute(
         if chosen is not None and owners:  # no text, so no code to contradict the file
             return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return decided("QUARANTINE", "text_unavailable")
-    lines = line_titles(upload.head, policy.title_line_pattern, _fold)
-    # A title line counts as the opening for the role when the opening shows none (S5b-7).
-    role = role or role_of(upload.file_name, upload.head) or next(
-        (r for line in lines.values() if (r := role_of(upload.file_name, line + upload.head))),
-        None,
+    lines = line_titles(
+        upload.head, policy.title_line_pattern, policy.title_line_exclusions, _fold
     )
+    # Title lines only add role evidence to the opening, so a conflict stays a conflict; terms are
+    # never read through them (S5b-7 Spec §2.3).
+    if role is None and (role := role_of(upload.file_name, upload.head)) != TERMS:
+        role = role_of(upload.file_name, upload.head, "".join(lines.values()))
     # A terms' own code is the one printed with the verification line (S5b-5), wherever it sits
     # in the first pages; older terms that open with their code keep the S5b-1 rule. Any other
     # code only cites one (after a label, or in a brochure's body): it may confirm a registered
