@@ -110,6 +110,9 @@ func (s *Service) validate(ctx context.Context, raw []byte) (Bundle, string, err
 	if err := validateMembers(b); err != nil {
 		return Bundle{}, "", err
 	}
+	if err := s.checkRefreshShape(b); err != nil {
+		return Bundle{}, "", err
+	}
 	for _, m := range b.Members {
 		for _, ref := range m.EvidenceRefs {
 			if err := ctx.Err(); err != nil {

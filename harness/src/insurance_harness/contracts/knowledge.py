@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import hashlib
 import unicodedata
+from datetime import date
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Self
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SerializerFunctionWrapHandler,
     StrictBool,
     StrictFloat,
     StrictInt,
     StrictStr,
     StringConstraints,
+    model_serializer,
     model_validator,
 )
 
@@ -165,6 +168,40 @@ class Review(ContractModel):
     reviewed_at: str | None = None
 
 
+DateText = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+SUPERSEDES = "supersedes"
+
+
+class ProductLifecycle(ContractModel):
+    """A filed version's sale period from the pinned product repository (PV-0 appendix A §1.2).
+
+    Not a claim's business effective period: the end of sale never ends a policy's terms. The
+    sale status is derived when read (appendix A §3.2), never stored.
+    """
+
+    sale_start: DateText | None = None
+    sale_end: DateText | None = None
+    source_status: Literal["on_sale", "discontinued"] | None = None
+    basis_commit: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40}$")] | None = None
+    basis_date: DateText | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> Self:
+        for text in (self.sale_start, self.sale_end, self.basis_date):
+            if text is not None:
+                date.fromisoformat(text)  # an impossible calendar day raises ValueError
+        if self.sale_start and self.sale_end and self.sale_start >= self.sale_end:
+            raise ValueError("a sale period must end after it starts")
+        return self
+
+
+class ProductFamily(ContractModel):
+    """The brand family a version belongs to: grouping only, never an attribution anchor."""
+
+    key: NonBlank
+    display_name: NonBlank
+
+
 class Entity(ContractModel):
     entity_id: NonBlank
     entity_type: NonBlank
@@ -173,6 +210,25 @@ class Entity(ContractModel):
     identifiers: dict[str, str] = Field(default_factory=dict)
     classification_labels: list[str] = Field(default_factory=list)
     owner_module: NonBlank
+    lifecycle: ProductLifecycle | None = None
+    product_family: ProductFamily | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_absent_version_data(self, handler: SerializerFunctionWrapHandler) -> Any:
+        # Absent version data is not serialized, so every existing entity keeps its digest.
+        data = handler(self)
+        if isinstance(data, dict):
+            for key in ("lifecycle", "product_family"):
+                if data.get(key) is None:
+                    data.pop(key, None)
+        return data
+
+
+def supersedes_relation_id(newer: str, older: str) -> str:
+    """The deterministic id of the relation saying `newer` replaces `older` (PV-4 Spec §1.3)."""
+    if not newer.strip() or not older.strip() or newer == older or "/" in newer + older:
+        raise ValueError("supersedes needs two different entity ids without '/'")
+    return f"{SUPERSEDES}/{newer}/{older}"
 
 
 class Claim(ContractModel):

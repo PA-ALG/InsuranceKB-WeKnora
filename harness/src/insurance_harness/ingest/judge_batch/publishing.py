@@ -48,6 +48,7 @@ from insurance_harness.ingest.judge_batch.verdicts import (
     load_verdicts,
 )
 from insurance_harness.ingest.source_map import PageReader
+from insurance_harness.ingest.version_metadata import registry_metadata
 from insurance_harness.review.routing import Route, Scores
 
 
@@ -124,7 +125,11 @@ def build(
         by_key={claim.logical_key: 1.0 for claim in chosen},
     )
     page = product_page(
-        repo / SCHEMA_PACK_CATALOG, rebuilt.pack, entity_id=product, name=rebuilt.name
+        repo / SCHEMA_PACK_CATALOG,
+        rebuilt.pack,
+        entity_id=product,
+        name=rebuilt.name,
+        metadata=registry_metadata(registry, product),
     )
     version = require_cards_version(rebuilt.output)
     bundle = delta_bundle(

@@ -118,6 +118,8 @@ def _claim(
             claim_id=key,
             logical_key=key,
             subject_ref=output.entity_id,
+            # The subject is the product version entity itself (PV-0 appendix A §1.2).
+            product_version_ref=output.entity_id,
             predicate=field.field_key,
             state=ClaimState(field.state),
             value=field.value if field.state == "present" else None,

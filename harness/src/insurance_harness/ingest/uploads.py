@@ -48,6 +48,7 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.ingest.confirmations import ConfirmationsError, sync
 from insurance_harness.ingest.detach import REASONS, DetachError, detach
+from insurance_harness.ingest.identity_refresh import RefreshError, run_refresh
 from insurance_harness.ingest.publication import PublicationError, run_publication
 from insurance_harness.ingest.raw_sources import (
     RawSource,
@@ -318,6 +319,10 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     migration.add_argument("--manifest-commit", required=True)
     migration.add_argument("--refresh", action="store_true")
     migration.add_argument("--dry-run", action="store_true")
+    refreshing = commands.add_parser("refresh-identity")
+    refreshing.add_argument("--registry", type=Path, required=True)
+    refreshing.add_argument("--live", action="store_true")
+    refreshing.add_argument("--max-bundles", type=int)
     detaching = commands.add_parser("detach")
     detaching.add_argument("--registry", type=Path, required=True)
     detaching.add_argument("--knowledge-id", required=True)
@@ -345,6 +350,13 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 print(report.model_dump_json())
                 return 1 if any((report.stopped, report.review_stopped, report.failed,
                                  report.samples_failed)) else 0
+            if args.command == "refresh-identity":  # the metadata publish path (PV-4 Spec §3.3)
+                refreshed = run_refresh(
+                    PlatformClient(base_url, api_key, transport=transport),
+                    load_registry(args.registry), live=args.live, max_bundles=args.max_bundles,
+                )
+                print(json.dumps(refreshed))
+                return 1 if "stopped" in refreshed else 0
             listing = RawSources(base_url, api_key, transport=transport)
             pages = WeKnoraSourcePages(base_url, api_key, transport=transport)
             if args.command == "seed":
@@ -411,6 +423,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         ConfirmationsError,
         PublicationError,
         CatalogError,
+        RefreshError,
     ) as error:
         print(error.code, file=sys.stderr)
         return 1

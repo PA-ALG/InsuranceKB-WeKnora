@@ -47,6 +47,7 @@ from insurance_harness.ingest.source_map import (
     load_trusted_pages,
     reader_from_env,
 )
+from insurance_harness.ingest.version_metadata import registry_metadata
 from insurance_harness.review.routing import Route, Scores, labelled
 from insurance_harness.review.spot_check import sample
 
@@ -111,11 +112,12 @@ def main(argv: list[str] | None = None) -> int:
         return _emit({"stopped": "OUTPUT_UNREADABLE"}, 2)
     if output.entity_id != args.product:
         return _emit({"stopped": "OUTPUT_MISMATCH"}, 2)
-    registry_map, registered = None, None
+    registry_map, registered, metadata = None, None, None
     if args.registry:
         try:
             registry_map, facts = registry_inputs(args.registry, [args.product])
             registered = facts[args.product]
+            metadata = registry_metadata(args.registry, args.product)
         except RegistryError as error:
             return _emit({"stopped": error.code}, 2)
         if output.pack_id != registered[1]:
@@ -132,7 +134,11 @@ def main(argv: list[str] | None = None) -> int:
         name = (registered[0] if registered else
                 display_name(source_directory(args.repo, args.product)))
         page = product_page(
-            args.repo / SCHEMA_PACK_CATALOG, output.pack_id, entity_id=args.product, name=name
+            args.repo / SCHEMA_PACK_CATALOG,
+            output.pack_id,
+            entity_id=args.product,
+            name=name,
+            metadata=metadata,
         )
         navigation = load_navigation()
         source_map = registry_map if registry_map is not None else load_source_map(args.source_map)

@@ -22,6 +22,8 @@ type Service struct {
 	// evidenceSchema is optional: without it, payload evidence fails closed as unverifiable.
 	evidenceSchema *jsonschema.Schema
 	schemaErr      error
+	// versioned names the entity types whose identity an identity_refresh may change (PV-4a).
+	versioned map[string]bool
 }
 
 // NewService compiles the supplied schema once. Invalid or absent schema
