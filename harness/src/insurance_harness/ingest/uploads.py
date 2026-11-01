@@ -77,6 +77,7 @@ from insurance_harness.ingest.registry import (
     save_registry,
     seed_registry,
 )
+from insurance_harness.ingest.registry_lock import RegistryBusy, RegistryLock
 from insurance_harness.ingest.registry_migration import MigrationError, migrate_registry
 from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
@@ -269,14 +270,7 @@ def attribute_uploads(
                 methods.record(source, attribution)
             break
         remaining = [*(source for source, _ in deferred), *held]
-
-    def pages_of(source: RawSource) -> list[PageText] | None:
-        try:
-            return read.get(source.knowledge_id) or material_pages(pages, current.space_id, source)
-        except SourcePagesError:
-            return None  # a registered material's pages, unreadable now: tried again next run
-
-    methods.backfill(sources, pages_of)  # registered sales materials (SK-1 §3.1)
+    methods.backfill(sources, pages)  # registered sales materials (SK-1 §3.1)
     revision_changes, not_listed = _changes(current, sources)
     report = UploadReport(
         counts=dict(sorted(counts.items())),
@@ -291,27 +285,6 @@ def attribute_uploads(
         question_state_unknown=sorted(kept),
     )
     return UploadRun(registry=current, report=report)
-
-
-class _Busy(Exception):
-    pass
-
-
-class _Lock:
-    """One run per registry file: a lock file beside it, taken or refused at once."""
-
-    def __init__(self, registry_path: Path) -> None:
-        self.path = registry_path.with_name(registry_path.name + ".lock")
-
-    def __enter__(self) -> "_Lock":
-        try:
-            os.close(os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
-        except FileExistsError:
-            raise _Busy from None
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        self.path.unlink(missing_ok=True)
 
 
 def _seed_products(repo: Path, product_ids: Sequence[str]) -> dict[str, SeedProduct]:
@@ -378,7 +351,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         print("CONFIGURATION_MISSING", file=sys.stderr)
         return 2
     try:
-        with _Lock(args.registry):
+        with RegistryLock(args.registry):
             if args.command == "publish":
                 report = run_publication(
                     args.registry, args.run_root,
@@ -452,7 +425,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 save_registry(result.registry, args.registry)
             print(result.report.model_dump_json())
             return 0
-    except _Busy:
+    except RegistryBusy:
         print("REGISTRY_BUSY", file=sys.stderr)
         return 3
     except (
@@ -477,12 +450,12 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
 def _migrate(args: argparse.Namespace) -> int:
     """`migrate-registry`: the registry lock, the pinned catalog, then the journaled migration."""
     try:
-        with _Lock(args.registry):
+        with RegistryLock(args.registry):
             catalog = catalog_from_checkout(args.manifest_dir, args.manifest_commit)
             report = migrate_registry(
                 args.registry, catalog, refresh=args.refresh, dry_run=args.dry_run
             )
-    except _Busy:
+    except RegistryBusy:
         print("REGISTRY_BUSY", file=sys.stderr)
         return 3
     except (CatalogError, MigrationError, RegistryError) as error:
@@ -498,13 +471,13 @@ def _migrate(args: argparse.Namespace) -> int:
 def _change(args: argparse.Namespace) -> int:
     """`detach` (PV-3 Spec §4) or `relabel` (SK-1 §4.5): the registry lock, then the change."""
     try:
-        with _Lock(args.registry):
+        with RegistryLock(args.registry):
             registry = load_registry(args.registry)
             changed = (request_relabel(registry, args.knowledge_id) if args.command == "relabel"
                        else detach(registry, args.knowledge_id, args.reason))
             if not args.dry_run:
                 save_registry(changed, args.registry)
-    except _Busy:
+    except RegistryBusy:
         print("REGISTRY_BUSY", file=sys.stderr)
         return 3
     except (DetachError, ConfirmationsError, RegistryError) as error:

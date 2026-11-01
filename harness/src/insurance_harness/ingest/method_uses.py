@@ -7,16 +7,18 @@ also expires records whose source revision is no longer the listed one. The prod
 entries, their materials and roles, the source map — is never touched here.
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
 
 from insurance_harness.catalog.sales_taxonomy import SalesTaxonomy, load_sales_taxonomy
 from insurance_harness.eval.pdf_text import PageText
+from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.identity.attribution import Attribution, AttributionPolicy
 from insurance_harness.identity.method_signals import BLOCK_SCHEME, MethodHits, detect
 from insurance_harness.ingest.method_use_model import LIVE, MethodUse, check_method_uses
-from insurance_harness.ingest.raw_sources import RawSource, UnfinishedSource
+from insurance_harness.ingest.raw_sources import RawSource, UnfinishedSource, material_pages
 from insurance_harness.ingest.registry import V2, ProductRegistry
+from insurance_harness.ingest.source_map import PageReader
 
 _JUDGED = frozenset({"QUARANTINE", "METHOD_MATERIAL", "SUPPLEMENT", "NEEDS_CONFIRM"})
 _ENDED = frozenset({"IGNORED", "DETACHED"})  # a material that no longer takes part (Spec §3.1)
@@ -87,13 +89,10 @@ class MethodStep:
             return None
         return self._detect(source, self.pages.get(source.knowledge_id, ()))
 
-    def backfill(
-        self,
-        sources: Sequence[RawSource],
-        read: Callable[[RawSource], Sequence[PageText] | None],
-    ) -> None:
+    def backfill(self, sources: Sequence[RawSource], reader: PageReader) -> None:
         """Registered sales materials without a method use for their listed revision — attached
-        before SK-1, or by a person — are detected too, once per run (Spec §3.1)."""
+        before SK-1, or by a person — are detected too, once per run (Spec §3.1); pages this run
+        already read are not read again, and unreadable ones are tried again next run."""
         if self.registry.contract != V2:
             return
         held = {
@@ -110,8 +109,13 @@ class MethodStep:
                 or self._settled(source)
             ):
                 continue
-            pages = read(source)
-            hits = self._detect(source, pages) if pages is not None else None
+            try:
+                pages = self.pages.get(source.knowledge_id) or material_pages(
+                    reader, self.registry.space_id, source
+                )
+            except SourcePagesError:
+                continue
+            hits = self._detect(source, pages)
             if hits is not None:
                 self._add(source, hits)
 
