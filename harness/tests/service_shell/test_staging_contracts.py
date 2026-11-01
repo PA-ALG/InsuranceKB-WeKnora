@@ -21,19 +21,23 @@ SCRIPT = Path(__file__).resolve().parents[3] / "deploy/staging/staging.sh"
 IMAGE = "sha256:" + "a" * 64
 
 FAKE_DOCKER = r"""
-import json, sys
+import json, re, sys
 from pathlib import Path
 state = json.loads((Path(__file__).resolve().parent / "state.json").read_text())
 argv = sys.argv[1:]
 if argv[:1] == ["--context"]:
     argv = argv[2:]
+def render(fmt, source):
+    # Like `docker inspect -f`: the mount range becomes the source, the rest of the template stays.
+    rendered = re.sub(r"\{\{range \.Mounts\}\}.*\{\{end\}\}\{\{end\}\}", lambda _: source, fmt)
+    sys.stdout.write(rendered + "\n")
 match argv:
     case ["inspect", "-f", "{{.Image}}", _]:
         print(state["image"])
     case ["inspect", "-f", fmt, _] if "/app/config/config.yaml" in fmt:
-        print(state["config"])
+        render(fmt, state["config"])
     case ["inspect", "-f", fmt, _] if '"/app/contracts"' in fmt:
-        print(state["contracts"])
+        render(fmt, state["contracts"])
     case ["image", "inspect", _] | ["tag", _, _]:
         pass
     case _:
@@ -92,3 +96,21 @@ def test_path_that_cannot_keep_its_meaning_is_refused(staging: Staging, piece: s
     result = staging.images(f"/live/a{piece}b/contracts")
     assert result.returncode != 0 and "staging:" in result.stderr
     assert not staging.override.exists()
+
+
+@pytest.mark.parametrize("tail", ["\n", "\n\n", "\r\n"])
+def test_trailing_newline_does_not_create_an_override(staging: Staging, tail: str) -> None:
+    # #525 re-review R2: command substitution drops trailing LFs, so the check needs the full value.
+    result = staging.images(f"/fixture/contracts{tail}")
+    assert result.returncode != 0 and "staging:" in result.stderr
+    assert not staging.override.exists()
+
+
+@pytest.mark.parametrize("tail", ["\n", "\n\n", "\r\n"])
+def test_trailing_newline_keeps_an_existing_override(staging: Staging, tail: str) -> None:
+    staging.home.mkdir()
+    before = b'services:\n  app:\n    volumes:\n      - "/old/contracts:/app/contracts:ro"\n'
+    staging.override.write_bytes(before)
+    result = staging.images(f"/fixture/contracts{tail}")
+    assert result.returncode != 0 and "staging:" in result.stderr
+    assert staging.override.read_bytes() == before
