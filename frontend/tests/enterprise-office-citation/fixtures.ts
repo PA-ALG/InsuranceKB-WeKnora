@@ -29,6 +29,23 @@ function textBox(id: number, paragraphs: string[]): string {
     + `<p:txBody><a:bodyPr wrap="square"/><a:lstStyle/>${body}</p:txBody></p:sp>`
 }
 
+/**
+ * A group holding a table: @vue-office/pptx 1.0.1 renders no graphic frame inside a group and
+ * stops the whole deck on one (S11h Spec §1).
+ */
+function groupedTable(id: number, rows: string[][]): string {
+  const cell = (text: string) => `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="zh-CN"/><a:t>${text}</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc>`
+  return `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="${id}" name="Group ${id}"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>`
+    + '<p:grpSpPr><a:xfrm><a:off x="457200" y="3657600"/><a:ext cx="8229600" cy="1828800"/>'
+    + '<a:chOff x="457200" y="3657600"/><a:chExt cx="8229600" cy="1828800"/></a:xfrm></p:grpSpPr>'
+    + `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${id + 1}" name="Table ${id + 1}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>`
+    + '<p:xfrm><a:off x="457200" y="3657600"/><a:ext cx="8229600" cy="1828800"/></p:xfrm>'
+    + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1"/>'
+    + `<a:tblGrid>${rows[0].map(() => '<a:gridCol w="4114800"/>').join('')}</a:tblGrid>`
+    + rows.map(cells => `<a:tr h="457200">${cells.map(cell).join('')}</a:tr>`).join('')
+    + '</a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:grpSp>'
+}
+
 const THEME = `<?xml version="1.0" encoding="UTF-8"?><a:theme xmlns:a="${NS.a}" name="Synthetic"><a:themeElements>`
   + '<a:clrScheme name="Synthetic"><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>'
   + '<a:dk2><a:srgbClr val="1F497D"/></a:dk2><a:lt2><a:srgbClr val="EEECE1"/></a:lt2>'
@@ -43,8 +60,8 @@ const THEME = `<?xml version="1.0" encoding="UTF-8"?><a:theme xmlns:a="${NS.a}" 
   + `<a:bgFillStyleLst>${'<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>'.repeat(3)}</a:bgFillStyleLst>`
   + '</a:fmtScheme></a:themeElements></a:theme>'
 
-/** A deck whose slides hold the given paragraphs, in presentation order. */
-export async function pptxFixture(slides: string[][]): Promise<Blob> {
+/** A deck whose slides hold the given paragraphs, in presentation order, and the `extra` shapes of slide i. */
+export async function pptxFixture(slides: string[][], extra: Record<number, string> = {}): Promise<Blob> {
   const zip = new JSZip()
   const overrides = [
     ['/ppt/presentation.xml', `${PML}.presentation.main+xml`],
@@ -84,7 +101,7 @@ export async function pptxFixture(slides: string[][]): Promise<Blob> {
   zip.file('ppt/slideLayouts/_rels/slideLayout1.xml.rels', rels([['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml']]))
   slides.forEach((paragraphs, i) => {
     zip.file(`ppt/slides/slide${i + 1}.xml`, `<?xml version="1.0" encoding="UTF-8"?><p:sld ${XMLNS}>`
-      + `<p:cSld><p:spTree>${GROUP}${textBox(2, paragraphs)}</p:spTree></p:cSld>`
+      + `<p:cSld><p:spTree>${GROUP}${textBox(2, paragraphs)}${extra[i] ?? ''}</p:spTree></p:cSld>`
       + '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>')
     zip.file(`ppt/slides/_rels/slide${i + 1}.xml.rels`, rels([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml']]))
   })
@@ -152,6 +169,8 @@ export type Expectation =
   | { kind: 'blocked-link'; flag: string }
   | { kind: 'inert'; quote: string; within: string; index: number; flag: string }
   | { kind: 'rejected'; note: string }
+  /** The preview shows `shown` but not the quote; the text view below marks it. */
+  | { kind: 'text-view'; quote: string; shown: string; note: string }
 
 export interface OfficeCase {
   name: string
@@ -169,6 +188,10 @@ const BODY = ['总则：本合同由保险条款构成。', '', '等待期为九
 // Each quote also occurs outside its cited place, so only the locator can pick the right one.
 export const FILES = {
   deck: () => pptxFixture([['产品概览', '犹豫期为十五日'], ['适合人群', '犹豫期为十五日'], ['其他说明']]),
+  grouped: () => pptxFixture(
+    [['产品概览', '犹豫期为十五日', '保单贷款比例为八成'], ['适合人群', '犹豫期为十五日'], ['其他说明']],
+    { 1: groupedTable(10, [['项目', '说明'], ['保单贷款', '保单贷款比例为八成']]) },
+  ),
   manual: () => docxFixture([...BODY, [['项目', '说明'], ['等待期', '等待期为三十日']]]),
   chunked: () => docxAltChunkFixture(BODY, 4, '__officeAltChunkRan'),
   broken: async () => new Blob(['this is not an Office package']),
@@ -179,7 +202,7 @@ export const FILES = {
   ]),
 }
 export const DOCUMENTS: Record<keyof typeof FILES, string> = {
-  deck: '合成演示.pptx', manual: '合成手册.docx', linked: '合成链接.docx', rates: '合成费率.xlsx',
+  deck: '合成演示.pptx', grouped: '合成组合.pptx', manual: '合成手册.docx', linked: '合成链接.docx', rates: '合成费率.xlsx',
   chunked: '合成嵌入.docx', broken: '合成损坏.docx',
 }
 
@@ -228,6 +251,16 @@ export const CASES: OfficeCase[] = [
     name: 'docx-not-a-package', file: 'broken',
     citation: citation('docx-not-a-package', 'broken', 1, '等待期为三十日', { kind: 'DOCX_BLOCK', block_index: 3 }),
     expect: { kind: 'rejected', note: UNSAFE },
+  },
+  {
+    name: 'pptx-grouped-table', file: 'grouped',
+    citation: citation('pptx-grouped-table', 'grouped', 2, '犹豫期为十五日', { kind: 'PPTX_SHAPE', slide: 2 }),
+    expect: { kind: 'text', quote: '犹豫期为十五日', within: '.pptx-preview-slide-wrapper', index: 1 },
+  },
+  {
+    name: 'pptx-quote-in-grouped-table', file: 'grouped',
+    citation: citation('pptx-quote-in-grouped-table', 'grouped', 2, '保单贷款比例为八成', { kind: 'PPTX_SHAPE', slide: 2 }),
+    expect: { kind: 'text-view', quote: '保单贷款比例为八成', shown: '.pptx-preview-slide-wrapper', note: NOT_LOCATED },
   },
   {
     name: 'no-locator', file: 'deck',
