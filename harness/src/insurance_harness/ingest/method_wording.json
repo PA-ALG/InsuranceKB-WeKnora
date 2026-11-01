@@ -1,0 +1,27 @@
+{
+ "version": "2026-11-01.1",
+ "title": "「{file}」需要选择销售方法的适用范围",
+ "detail": "文件：{file}\n系统在这份材料里找到销售方法内容（命中：{signals}）。销售方法不挂在某个产品版本上，按险种归类；系统在材料里识别到的险种：{categories}，无法自动确定适用范围。请选择这份材料里的销售方法适用的险种；如果它不是销售方法材料，选择忽略，{ignore_note}。",
+ "no_categories": "没有识别到险种",
+ "ignore_method_only": "忽略后这份文件不再参与归属与抽取",
+ "ignore_dual": "忽略只撤下它的销售方法用途，不影响它已有的产品归属",
+ "options": {
+  "suggested": "按系统识别：{categories}",
+  "general": "通用（不限险种）",
+  "category": "{category}",
+  "ignore": "忽略（不作为销售方法材料）"
+ },
+ "categories": {
+  "critical_illness_insurance": "重疾险",
+  "medical_insurance": "医疗险",
+  "accident_medical_insurance": "意外医疗险",
+  "accident_insurance": "意外险",
+  "annuity_insurance": "年金险",
+  "supplementary_pension_insurance": "专属商业养老保险",
+  "whole_life_insurance": "终身寿险",
+  "term_life_insurance": "定期寿险",
+  "endowment_insurance": "两全保险",
+  "nursing_care_insurance": "护理险",
+  "disability_income_insurance": "失能收入损失保险"
+ }
+}

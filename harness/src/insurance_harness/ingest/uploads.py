@@ -18,7 +18,8 @@ person are not judged again; quarantined ones are, every run.
         --reason {wrong_version,wrong_product,not_product_material} [--dry-run]
 
 `confirm` pushes the materials waiting for a person to the platform and applies their answers
-(S5b-3c-2); it shares the registry lock with the other commands. `migrate-registry` turns a v1
+(S5b-3c-2), and on a v2 registry the method-scope questions too (SK-1 §4); it shares the registry
+lock with the other commands. `migrate-registry` turns a v1
 registry into v2 (or refreshes the version fields) from a pinned product repository checkout
 (PV-1 Spec §4); it reads no platform. A `run` on a v2 registry reads the catalog it names.
 `detach` takes a wrongly attributed material off its entry in a v2 registry (PV-3 Spec §4).
@@ -36,6 +37,8 @@ import httpx
 from pydantic import BaseModel, ConfigDict
 
 from insurance_harness.bundle.client import PlatformClient, PlatformError
+from insurance_harness.catalog.sales_taxonomy import SalesTaxonomyError
+from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.eval.product_sources import declared_pack, display_name, source_directory
 from insurance_harness.evidence.weknora_pages import SourcePagesError, WeKnoraSourcePages
 from insurance_harness.identity.attribution import (
@@ -48,12 +51,15 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.ingest.confirmations import ConfirmationsError, sync
 from insurance_harness.ingest.detach import REASONS, DetachError, detach
+from insurance_harness.ingest.method_confirmations import sync_methods
+from insurance_harness.ingest.method_uses import MethodStep, expire_method_uses
 from insurance_harness.ingest.publication import PublicationError, run_publication
 from insurance_harness.ingest.raw_sources import (
     RawSource,
     RawSources,
     RawSourcesError,
     UnfinishedSource,
+    material_pages,
 )
 from insurance_harness.ingest.registry import (
     FINAL,
@@ -63,7 +69,7 @@ from insurance_harness.ingest.registry import (
     ProductRegistry,
     RegistryError,
     SeedProduct,
-    head_of,
+    head_text,
     load_registry,
     record,
     save_registry,
@@ -136,6 +142,8 @@ def _candidates(
         or (p.attribution.outcome == "NEEDS_CONFIRM" and p.attribution.policy_ref == policy_ref)
     }
     settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome in FINAL}
+    # A material detached without a product entry (a method material, SK-1 §3.4) ends here too.
+    settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome == "DETACHED"}
     return sorted(
         (s for s in sources if s.knowledge_id not in settled), key=lambda s: s.knowledge_id
     )
@@ -192,10 +200,15 @@ def attribute_uploads(
     asked = {p.knowledge_id for p in current.pending if p.attribution.outcome == "NEEDS_CONFIRM"}
     previous = {p.knowledge_id: p for p in current.pending}
     heads: dict[str, str] = {}
+    read: dict[str, list[PageText]] = {}  # every page, read once: the head and method blocks
     unreadable: list[UnreadableMaterial] = []
+    if current.contract == V2:
+        expire_method_uses(current, sources, unfinished)  # before a new revision is recorded
+    methods = MethodStep(current, read, policy)
     for source in _candidates(current, sources, policy.policy_ref):
         try:
-            heads[source.knowledge_id] = head_of(pages, current.space_id, source)
+            read[source.knowledge_id] = material_pages(pages, current.space_id, source)
+            heads[source.knowledge_id] = head_text(read[source.knowledge_id])
         except SourcePagesError as error:
             unreadable.append(UnreadableMaterial(
                 knowledge_id=source.knowledge_id, file_name=source.file_name, code=error.code,
@@ -219,6 +232,7 @@ def attribute_uploads(
             )
             attribution = attribute(upload, current.registered(), policy, catalog=catalog)
             if source.knowledge_id in asked and attribution.outcome in WAITING:
+                methods.record(source, attribution)  # beside the question as it was asked
                 held.append(source)  # the person's question stays as it was asked
                 continue
             if attribution.outcome == "QUARANTINE":
@@ -228,11 +242,14 @@ def attribute_uploads(
             if record(current, source, attribution, catalog=catalog):
                 changed = True
                 affected.add(attribution.product_id or "")
+            methods.record(source, attribution)  # a second use beside the product one (SK-1)
         if not changed:
             for source, attribution in deferred:
+                attribution = methods.conclude(source, attribution)  # METHOD_MATERIAL (SK-1)
                 counts[attribution.outcome] += 1
                 if not _same_question(previous.get(source.knowledge_id), source, attribution):
                     record(current, source, attribution, catalog=catalog)
+                methods.record(source, attribution)
             break
         remaining = [*(source for source, _ in deferred), *held]
     revision_changes, not_listed = _changes(current, sources)
@@ -370,14 +387,17 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 return 0
             registry = load_registry(args.registry)
             if args.command == "confirm":
-                confirmed = sync(
-                    registry,
-                    PlatformClient(base_url, api_key, transport=transport),
-                    pages,
-                    write=not args.dry_run,
-                    save=lambda current: save_registry(current, args.registry),
+                client = PlatformClient(base_url, api_key, transport=transport)
+                save = lambda current: save_registry(current, args.registry)  # noqa: E731
+                confirmed = sync(registry, client, pages, write=not args.dry_run, save=save)
+                if registry.contract != V2:
+                    print(confirmed.report.model_dump_json())
+                    return 0
+                methods = sync_methods(  # the method-scope questions (SK-1 §4)
+                    confirmed.registry, client, write=not args.dry_run, save=save
                 )
-                print(confirmed.report.model_dump_json())
+                merged = confirmed.report.model_dump(mode="json")
+                print(json.dumps(merged | {"methods": methods.report.model_dump(mode="json")}))
                 return 0
             listed = listing.listing(registry.raw_kb_id)
             basis = registry.metadata_basis
@@ -411,6 +431,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         ConfirmationsError,
         PublicationError,
         CatalogError,
+        SalesTaxonomyError,
     ) as error:
         print(error.code, file=sys.stderr)
         return 1

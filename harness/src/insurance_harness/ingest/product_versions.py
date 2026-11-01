@@ -123,6 +123,7 @@ def v1_excluded() -> IncEx:
     decision: dict[str, IncEx | bool] = {"attribution": key}
     excluded: dict[str, IncEx | bool] = {
         "metadata_basis": True,
+        "method_uses": True,  # SK-1
         "products": {"__all__": {"version": True}},
         "pending": {"__all__": pending},
         "decisions": {"__all__": decision},

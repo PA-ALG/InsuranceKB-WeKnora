@@ -177,8 +177,10 @@ class _Sync:
     # The registry ---------------------------------------------------------------------------
 
     def waiting(self) -> list[PendingEntry]:
-        """Materials waiting for a person: NEEDS_CONFIRM, and quarantined ones (S11a Spec §2.1)."""
-        return sorted(self.current.pending, key=lambda p: p.knowledge_id)
+        """Materials waiting for a person: NEEDS_CONFIRM, and quarantined ones (S11a Spec §2.1);
+        a method material is asked for its scope only, by the method questions (SK-1 §3.3)."""
+        kept = (p for p in self.current.pending if p.attribution.outcome != "METHOD_MATERIAL")
+        return sorted(kept, key=lambda p: p.knowledge_id)
 
     def mark(self, entry: PendingEntry, settlement: Settlement | None) -> PendingEntry:
         """Save the entry with this settlement (or without one) in place of the current one."""

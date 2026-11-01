@@ -24,7 +24,7 @@ from insurance_harness.identity.attribution import (
     attribute,
     load_attribution_policy,
 )
-from insurance_harness.identity.material_roles import load_material_roles
+from insurance_harness.identity.material_roles import recognized_roles
 from insurance_harness.identity.training_versions import versioned
 from insurance_harness.identity.version_basis import VersionBasis
 
@@ -119,8 +119,8 @@ def _offered(pending: Attribution, registered: set[str], policy: AttributionPoli
         pending.reason == "role_unresolved" and pending.version_basis is not None
     ):  # a training material decided by version takes only the roles one may take
         return [Choice(key=f"role:{r}", kind="role", value=r) for r in policy.brand_roles]
-    if pending.reason == "role_unresolved":
-        roles = load_material_roles().roles
+    if pending.reason == "role_unresolved":  # only roles a material can be recognised as (SK-1)
+        roles = recognized_roles()
         return [Choice(key=f"role:{r.role}", kind="role", value=r.role) for r in roles]
     return [Choice(key="replace", kind="replace"), Choice(key="supplement", kind="supplement")]
 

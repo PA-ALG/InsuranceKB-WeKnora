@@ -1,0 +1,57 @@
+{
+ "version": "2026-11-01.1",
+ "basis": "SK-0 §2.2, SK-1 §2.1: material-level method signals and the insurance category of a sales-method material; the other dimensions are judged per method in SK-2",
+ "method_signals": [
+  "销售方法",
+  "销售技巧",
+  "讲解步骤",
+  "讲解逻辑",
+  "讲解关键句",
+  "关键句",
+  "需求分析",
+  "异议",
+  "促成",
+  "转保",
+  "实操",
+  "学习笔记",
+  "话术",
+  "客户经营"
+ ],
+ "min_signals": 2,
+ "insurance_categories": [
+  {"label": "critical_illness_insurance", "words": ["重疾", "重大疾病"]},
+  {"label": "medical_insurance", "words": ["医疗险", "医疗保险", "百万医疗", "住院医疗"]},
+  {"label": "accident_medical_insurance", "words": ["意外医疗"]},
+  {"label": "accident_insurance", "words": ["意外险", "意外伤害保险"]},
+  {"label": "annuity_insurance", "words": ["年金险", "年金保险"]},
+  {"label": "supplementary_pension_insurance", "words": ["专属商业养老", "补充养老"]},
+  {"label": "whole_life_insurance", "words": ["终身寿险", "终身寿"]},
+  {"label": "term_life_insurance", "words": ["定期寿险"]},
+  {"label": "endowment_insurance", "words": ["两全保险", "两全险"]},
+  {"label": "nursing_care_insurance", "words": ["护理险", "护理保险"]},
+  {"label": "disability_income_insurance", "words": ["失能收入", "收入损失保险"]}
+ ],
+ "general": {"label": "scope:general", "words": ["通用", "不限险种", "各类保险"]},
+ "plan_types": [
+  {"label": "plan_type:participating", "words": ["分红"]},
+  {"label": "plan_type:universal", "words": ["万能"]},
+  {"label": "plan_type:unit_linked", "words": ["投资连结", "投连"]},
+  {"label": "plan_type:ordinary", "words": ["普通型"]}
+ ],
+ "life_stages": [
+  {"label": "life_stage:single", "words": ["单身"]},
+  {"label": "life_stage:family_formation", "words": ["家庭形成期"]},
+  {"label": "life_stage:family_growth", "words": ["家庭成长期"]},
+  {"label": "life_stage:mature", "words": ["家庭成熟期"]},
+  {"label": "life_stage:retirement", "words": ["退休"]}
+ ],
+ "sales_stages": [
+  {"label": "sales_stage:approach", "words": ["接触", "约访"]},
+  {"label": "sales_stage:needs_analysis", "words": ["需求分析"]},
+  {"label": "sales_stage:presentation", "words": ["产品说明", "讲解"]},
+  {"label": "sales_stage:objection", "words": ["异议"]},
+  {"label": "sales_stage:closing", "words": ["促成"]},
+  {"label": "sales_stage:transfer", "words": ["转保"]},
+  {"label": "sales_stage:after_sale", "words": ["售后", "客户经营"]}
+ ]
+}

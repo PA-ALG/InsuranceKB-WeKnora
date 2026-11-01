@@ -7,8 +7,9 @@ waiting for a person or for their terms (`pending`) and an append-only record of
 each with the attribution policy version it was made under and, when a person made it, the answer it
 came from (S5b-3c-1).
 
-A v2 registry also records the filed version each entry stands for (PV-1 Spec §2.3); a v1
-registry is read and written back as v1, so only the migration command turns one into the other.
+A v2 registry also records the filed version each entry stands for (PV-1 Spec §2.3), and the
+material-level method uses (SK-1 Spec §2.3); a v1 registry is read and written back as v1, so only
+the migration command turns one into the other.
 """
 
 import json
@@ -27,13 +28,14 @@ from pydantic import (
     model_validator,
 )
 
-from insurance_harness.evidence.weknora_pages import SourcePagesError
+from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.identity.attribution import (
     Attribution,
     RegisteredMaterial,
     RegisteredProduct,
 )
 from insurance_harness.identity.material_roles import load_material_roles, role_of
+from insurance_harness.ingest.method_use_model import MethodUse, check_method_uses
 from insurance_harness.ingest.product_versions import (
     MetadataBasis,
     ProductVersion,
@@ -43,7 +45,7 @@ from insurance_harness.ingest.product_versions import (
     relinked,
     v1_excluded,
 )
-from insurance_harness.ingest.raw_sources import RawSource
+from insurance_harness.ingest.raw_sources import RawSource, material_pages
 from insurance_harness.ingest.source_map import PageReader, SourceEntry, SourceMap
 from insurance_harness.ingest.version_catalog import VersionCatalog
 
@@ -56,7 +58,7 @@ _OptionKey = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9:._-]{0,
 _Principal = Annotated[str, StringConstraints(pattern=r"^[^\x00-\x1f\x7f-\x9f]{1,256}$")]
 # Applied outcomes change the products; waiting ones stay in pending; final ones end judging.
 APPLIED = frozenset({"SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE"})
-WAITING = frozenset({"NEEDS_CONFIRM", "QUARANTINE"})
+WAITING = frozenset({"NEEDS_CONFIRM", "QUARANTINE", "METHOD_MATERIAL"})  # judged again (SK-1)
 FINAL = frozenset({"DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE", "IGNORED"})
 _PERSON_ONLY = frozenset({"REPLACE", "IGNORED"})
 
@@ -162,6 +164,7 @@ class ProductRegistry(_Strict):
     pending: list[PendingEntry]
     decisions: list[DecisionEntry]
     metadata_basis: MetadataBasis | None = None  # v2 only (PV-1)
+    method_uses: list[MethodUse] = Field(default_factory=list)  # v2 only (SK-1)
 
     @model_validator(mode="after")
     def _consistent(self) -> "ProductRegistry":
@@ -170,10 +173,12 @@ class ProductRegistry(_Strict):
         decided = [p.attribution for p in self.pending] + [d.attribution for d in self.decisions]
         keys = [a.version_key for a in (*decided, *concluded) if a is not None]
         found = [a for a in (*decided, *concluded) if a is not None]
-        evidence = any(
-            a.version_basis or a.shared_versions or a.outcome == "DETACHED" for a in found
-        )  # PV-3 fields and outcome: v2 only (review R7)
+        evidence = bool(self.method_uses) or any(
+            a.version_basis or a.shared_versions or a.outcome in {"DETACHED", "METHOD_MATERIAL"}
+            for a in found
+        )  # PV-3 and SK-1 fields and outcomes: v2 only (review R7)
         check_versions(self.contract, self.metadata_basis, versions, keys, evidence)
+        check_method_uses(self.method_uses)
         recorded = [m for p in self.products.values() for m in (*p.materials, *p.retired)]
         ids = [m.knowledge_id for m in recorded] + [p.knowledge_id for p in self.pending]
         if len(set(ids)) != len(ids):
@@ -424,16 +429,11 @@ def _link(registry: ProductRegistry) -> None:
 
 
 def head_of(pages: PageReader, space_id: str, source: RawSource) -> str:
-    """The text attribution reads: the first two pages, in page order.
+    """The text attribution reads: the first two of the listed file's pages, in page order."""
+    return head_text(material_pages(pages, space_id, source))
 
-    Every page must belong to the file the listing names: the page reader checks the revision and
-    its own page hashes, not that the captured document is the listed one.
-    """
-    read = sorted(
-        pages.pages(space_id, source.knowledge_id, source.parse_attempt), key=lambda p: p.page
-    )
-    if not read or any(page.document_sha256 != source.sha256 for page in read):
-        raise SourcePagesError("PARSE_ARTIFACT_INTEGRITY")
+
+def head_text(read: Sequence[PageText]) -> str:
     return "\n".join(page.text for page in read[:2])
 
 

@@ -20,7 +20,7 @@ from insurance_harness.bundle.client import ConfirmationInput, ConfirmationOptio
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.identity.attribution import load_attribution_policy
 from insurance_harness.identity.confirmation import Choice, ConfirmationError, choices
-from insurance_harness.identity.material_roles import load_material_roles
+from insurance_harness.identity.material_roles import recognized_roles
 from insurance_harness.identity.version_basis import SignalSource, Verdict, VersionBasis
 from insurance_harness.ingest.registry import PendingEntry, ProductRegistry
 
@@ -86,7 +86,7 @@ class ConfirmationWording(BaseModel):
 
     @model_validator(mode="after")
     def _complete(self) -> "ConfirmationWording":
-        roles = {role.role for role in load_material_roles().roles}
+        roles = {role.role for role in recognized_roles()}  # a product question's roles (SK-1)
         reasons = _REASONS | _QUARANTINED
         if set(self.details) != reasons or set(self.options) != _KINDS or set(self.roles) != roles:
             raise ValueError("the wording must cover every reason, choice and role")
