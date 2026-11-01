@@ -160,7 +160,7 @@ def test_an_open_unanswered_question_is_kept_as_asked() -> None:
 def test_an_open_answered_question_is_kept_and_then_applied() -> None:
     platform = FakePlatform(uploads={DECK.knowledge_id: (BRANDED, DECK.sha256)})
     asked, item_id = asked_on(platform, BRANDED)
-    choice = next(o["key"] for o in platform.view(item_id)["options"] if "sc-esb" in o["key"])
+    choice = next(o["key"] for o in platform.view(item_id)["options"] if o["key"] != "ignore")
     platform.answer(item_id, choice)
     after, rejudged, _ = judged(asked, platform, BRANDED)
     assert after.pending == asked.pending and rejudged == []
