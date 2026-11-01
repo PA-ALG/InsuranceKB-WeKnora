@@ -90,7 +90,8 @@ def test_a_brochure_waits_until_its_terms_arrive() -> None:
 # 5. New version -------------------------------------------------------------------------------
 
 
-def test_new_terms_replace_the_old_ones() -> None:
+def test_new_terms_are_a_new_entry_beside_the_old_one() -> None:
+    # PV-1 (revises S5b-1 §3.7): the old entry keeps its terms; nothing is retired.
     head = material("1828", "terms")["head"].replace("174号", "999号", 1)
     new = raw("1828", "terms", knowledge_id="k-1828-terms2", sha256="e" * 64)
     run = attribute_uploads(
@@ -100,10 +101,13 @@ def test_new_terms_replace_the_old_ones() -> None:
     )
     product = run.registry.products["1828"]
     terms = [m.knowledge_id for m in product.materials if m.role == "terms"]
-    assert terms == ["k-1828-terms2"]
-    assert len(product.clause_codes) == 2
-    assert run.registry.decisions[-1].attribution.replaces == (knowledge_id("1828", "terms"),)
-    assert run.report.affected_products == ["1828"]
+    assert terms == [knowledge_id("1828", "terms")]
+    assert len(product.clause_codes) == 1 and product.retired == []
+    decided = run.registry.decisions[-1].attribution
+    assert (decided.outcome, decided.replaces, decided.candidates) == ("NEW_VERSION", (), ("1828",))
+    [created] = [pid for pid in run.registry.products if pid != "1828"]
+    assert [m.knowledge_id for m in run.registry.products[created].materials] == ["k-1828-terms2"]
+    assert run.report.affected_products == [created]
 
 
 # 6. Waiting for a person ----------------------------------------------------------------------

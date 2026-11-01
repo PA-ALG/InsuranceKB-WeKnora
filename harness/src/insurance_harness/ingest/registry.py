@@ -6,6 +6,9 @@ registry exports one on demand instead of a second copy being kept. It also keep
 waiting for a person or for their terms (`pending`) and an append-only record of every decision,
 each with the attribution policy version it was made under and, when a person made it, the answer it
 came from (S5b-3c-1).
+
+A v2 registry also records the filed version each entry stands for (PV-1 Spec §2.3); a v1
+registry is read and written back as v1, so only the migration command turns one into the other.
 """
 
 import json
@@ -31,10 +34,20 @@ from insurance_harness.identity.attribution import (
     RegisteredProduct,
 )
 from insurance_harness.identity.material_roles import load_material_roles, role_of
+from insurance_harness.ingest.product_versions import (
+    MetadataBasis,
+    ProductVersion,
+    check_versions,
+    entry_version,
+    relinked,
+    v1_excluded,
+)
 from insurance_harness.ingest.raw_sources import RawSource
 from insurance_harness.ingest.source_map import PageReader, SourceEntry, SourceMap
+from insurance_harness.ingest.version_catalog import VersionCatalog
 
 CONTRACT: Literal["product-registry.v1"] = "product-registry.v1"
+V2: Literal["product-registry.v2"] = "product-registry.v2"
 _Identifier = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")]
 _Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 _Name = Annotated[str, StringConstraints(pattern=r"\S")]
@@ -73,7 +86,8 @@ class ProductEntry(_Strict):
     schema_pack_id: _Name
     origin: Literal["seeded", "created"]
     materials: list[MaterialEntry]
-    retired: list[MaterialEntry] = Field(default_factory=list)  # replaced by a new version
+    retired: list[MaterialEntry] = Field(default_factory=list)  # replaced by a person (REPLACE)
+    version: ProductVersion | None = None  # v2 only (PV-1)
 
 
 class ConfirmationRef(_Strict):
@@ -140,15 +154,21 @@ class SeedProduct(_Strict):
 
 
 class ProductRegistry(_Strict):
-    contract: Literal["product-registry.v1"]
+    contract: Literal["product-registry.v1", "product-registry.v2"]
     space_id: _Identifier
     raw_kb_id: _Identifier
     products: dict[_Identifier, ProductEntry]
     pending: list[PendingEntry]
     decisions: list[DecisionEntry]
+    metadata_basis: MetadataBasis | None = None  # v2 only (PV-1)
 
     @model_validator(mode="after")
     def _consistent(self) -> "ProductRegistry":
+        versions = {product_id: p.version for product_id, p in self.products.items()}
+        concluded = [p.settlement.conclusion for p in self.pending if p.settlement]
+        decided = [p.attribution for p in self.pending] + [d.attribution for d in self.decisions]
+        keys = [a.version_key for a in (*decided, *concluded) if a is not None]
+        check_versions(self.contract, self.metadata_basis, versions, keys)
         recorded = [m for p in self.products.values() for m in (*p.materials, *p.retired)]
         ids = [m.knowledge_id for m in recorded] + [p.knowledge_id for p in self.pending]
         if len(set(ids)) != len(ids):
@@ -197,6 +217,7 @@ class ProductRegistry(_Strict):
                     RegisteredMaterial(knowledge_id=m.knowledge_id, sha256=m.sha256, role=m.role)
                     for m in product.materials
                 ),
+                version_key=product.version.version_key if product.version else None,
             )
             for product_id, product in sorted(self.products.items())
         ]
@@ -251,9 +272,16 @@ def load_registry(path: Path) -> ProductRegistry:
         raise RegistryError("REGISTRY_INVALID") from None
 
 
+def registry_document(registry: ProductRegistry) -> bytes:
+    """The file bytes; a v1 registry keeps the v1 format, without the v2 fields."""
+    if registry.contract == CONTRACT:
+        return registry.model_dump_json(indent=1, exclude=v1_excluded()).encode("utf-8") + b"\n"
+    return registry.model_dump_json(indent=1).encode("utf-8") + b"\n"
+
+
 def save_registry(registry: ProductRegistry, path: Path) -> None:
     """Replace the file in one step: a failed write leaves the previous registry in place."""
-    data = registry.model_dump_json(indent=1).encode("utf-8") + b"\n"
+    data = registry_document(registry)
     handle = tempfile.NamedTemporaryFile(
         dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
     )
@@ -273,12 +301,14 @@ def record(
     source: RawSource,
     attribution: Attribution,
     confirmation: ConfirmationRef | None = None,
+    catalog: VersionCatalog | None = None,
 ) -> bool:
     """Record one decision in place; True when the products changed.
 
     A person's decision names the answer it came from and must settle a material waiting for a
     person at this exact revision. All or nothing: the changes are made on a copy and kept only when
-    every step succeeds, so a refusal leaves the registry as it was.
+    every step succeeds, so a refusal leaves the registry as it was. In a v2 registry an entry
+    added by CREATE or NEW_VERSION gets its version fields from the catalog (PV-1 Spec §3).
     """
     if attribution.outcome in _PERSON_ONLY and confirmation is None:
         raise RegistryError("CONFIRMATION_REQUIRED")
@@ -297,7 +327,8 @@ def record(
             raise RegistryError("CONFIRMATION_RECORDED")
     staged = registry.model_copy(deep=True)
     try:
-        changed = _apply(staged, source, attribution, confirmation)
+        changed = _apply(staged, source, attribution, confirmation, catalog)
+        ProductRegistry.model_validate(staged.model_dump())  # the registry-wide rules still hold
     except ValidationError:  # an entry the registry format refuses, such as a blank file name
         raise RegistryError("RECORD_INVALID") from None
     registry.products, registry.pending = staged.products, staged.pending
@@ -310,6 +341,7 @@ def _apply(
     source: RawSource,
     attribution: Attribution,
     confirmation: ConfirmationRef | None,
+    catalog: VersionCatalog | None,
 ) -> bool:
     previous = next((p for p in registry.pending if p.knowledge_id == source.knowledge_id), None)
     registry.pending = [p for p in registry.pending if p.knowledge_id != source.knowledge_id]
@@ -346,18 +378,27 @@ def _apply(
         role=attribution.role,
         file_name=source.file_name,
     )
-    if attribution.outcome == "CREATE":
+    if attribution.outcome in {"CREATE", "NEW_VERSION"}:  # a new version is a new entry (PV-1)
         if not (
             attribution.display_name and attribution.clause_code and attribution.schema_pack_id
-        ):
+        ) or attribution.replaces:
             raise RegistryError("ATTRIBUTION_INCOMPLETE")
+        if attribution.product_id in registry.products:
+            raise RegistryError("PRODUCT_EXISTS")
         registry.products[attribution.product_id] = ProductEntry(
             names=[attribution.display_name],
             clause_codes=[attribution.clause_code],
             schema_pack_id=attribution.schema_pack_id,
             origin="created",
             materials=[material],
+            version=entry_version(
+                registry.contract != CONTRACT,
+                attribution.version_key,
+                attribution.display_name,
+                catalog,
+            ),
         )
+        _link(registry)
         return True
     product = registry.products.get(attribution.product_id)
     if product is None:
@@ -366,11 +407,14 @@ def _apply(
     replaced = [m for m in product.materials if m.knowledge_id in attribution.replaces]
     product.materials = sorted([*kept, material], key=lambda m: m.knowledge_id)
     product.retired = sorted([*product.retired, *replaced], key=lambda m: m.knowledge_id)
-    # Only a new terms version adds its own code; a replaced material may merely cite one.
-    code = attribution.clause_code
-    if attribution.outcome == "NEW_VERSION" and code and code not in product.clause_codes:
-        product.clause_codes.append(code)
     return True
+
+
+def _link(registry: ProductRegistry) -> None:
+    """Recompute every entry's unique predecessor (PV-0 appendix A §1.4)."""
+    linked = relinked({k: p.version for k, p in registry.products.items()})
+    for product_id, version in linked.items():
+        registry.products[product_id].version = version
 
 
 def head_of(pages: PageReader, space_id: str, source: RawSource) -> str:

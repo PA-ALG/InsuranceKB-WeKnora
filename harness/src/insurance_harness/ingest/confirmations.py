@@ -121,7 +121,7 @@ def _settlement(
 def _applies(registry: ProductRegistry, conclusion: Attribution) -> bool:
     """The saved conclusion can still be recorded as it stands (Spec §2.2, review R2)."""
     product = registry.products.get(conclusion.product_id or "")
-    if conclusion.outcome == "CREATE":
+    if conclusion.outcome in {"CREATE", "NEW_VERSION"}:  # a new version adds a new entry (PV-1)
         return product is None
     if conclusion.outcome == "IGNORED" or (
         conclusion.outcome == "NEEDS_CONFIRM" and not conclusion.product_id

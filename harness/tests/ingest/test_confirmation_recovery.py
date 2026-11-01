@@ -9,8 +9,9 @@ import httpx
 import pytest
 
 from insurance_harness.bundle.client import PlatformClient, PlatformError
+from insurance_harness.identity.attribution import Attribution
 from insurance_harness.ingest.confirmations import sync
-from insurance_harness.ingest.registry import ProductRegistry, Settlement
+from insurance_harness.ingest.registry import ConfirmationRef, ProductRegistry, Settlement, record
 from insurance_harness.ingest.uploads import attribute_uploads
 from tests.ingest.confirmation_platform import PREFIX, FakePlatform
 from tests.ingest.confirmation_scenarios import (
@@ -25,13 +26,36 @@ from tests.ingest.confirmation_scenarios import (
     run,
     waiting,
 )
-from tests.ingest.upload_helpers import PRODUCTS, Pages, material, raw
-
-NEW_CODE = "平安人寿〔2026〕两全保险999号"
+from tests.ingest.upload_helpers import Pages, material, raw
 
 
 def settled_reasons(current: ProductRegistry) -> list[str]:
     return [p.settlement.reason for p in current.pending if p.settlement is not None]
+
+
+def overtaken(current: ProductRegistry, head: str) -> tuple[ProductRegistry, Pages]:
+    """Meanwhile another document replaces the same old terms, by a person's recorded decision.
+
+    PV-1 (Spec §3): terms with a new code are a new entry and no longer retire the old terms, so a
+    second replacement of the same terms is what now overtakes the settled one."""
+    reissued = raw("1818", "terms", knowledge_id="k-reissued", sha256="e" * 64)
+    other = raw("1818", "terms", knowledge_id="k-other", sha256="9" * 64)
+    both = Pages(heads={"k-reissued": head, "k-other": head}, sources=[reissued, other])
+    moved = attribute_uploads(current, [other], both).registry
+    replaced = Attribution(
+        outcome="REPLACE",
+        reason="confirmed_replace",
+        product_id="1818",
+        role="terms",
+        replaces=("k-1818-terms",),
+        policy_ref=moved.pending[-1].attribution.policy_ref,
+    )
+    answer = ConfirmationRef(
+        item_id="item-other", answer_id="answer-other", option_key="replace", answerer="person"
+    )
+    assert record(moved, other, replaced, answer) is True
+    assert [m.knowledge_id for m in moved.products["1818"].retired] == ["k-1818-terms"]
+    return moved, both
 
 
 def test_an_interrupted_applied_close_is_completed_from_its_settlement() -> None:
@@ -138,16 +162,12 @@ def test_a_settled_replacement_overtaken_by_a_new_version_is_a_conflict() -> Non
         run(first.registry, platform, reader=reader, save=crash)
     [persisted] = crash.saved
 
-    # Meanwhile terms with a new code replace the same old terms.
-    newer = raw("1818", "terms", knowledge_id="k-newer", sha256="9" * 64)
-    newer_head = head.replace(PRODUCTS["1818"]["clause_code"], NEW_CODE, 1)
-    both = Pages(heads={"k-reissued": head, "k-newer": newer_head}, sources=[reissued, newer])
-    moved = attribute_uploads(persisted, [newer], both)
-    assert moved.report.counts == {"NEW_VERSION": 1}
+    # Meanwhile another document replaces the same old terms.
+    moved, both = overtaken(persisted, head)
 
-    result, saves = run(moved.registry, platform, reader=both)
+    result, saves = run(moved, platform, reader=both)
     assert result.report.skipped == {"CONFIRMATION_CONFLICT": 1}
-    assert (result.registry, saves) == (moved.registry, [])
+    assert (result.registry, saves) == (moved, [])
     assert len(platform.closed) == 1
     assert waiting(result.registry) == ["k-reissued"]
 
@@ -214,17 +234,13 @@ def test_an_open_settlement_whose_conclusion_no_longer_applies_is_not_closed() -
     with pytest.raises(PlatformError):
         run(first.registry, platform, reader=reader, save=saves)
     assert settled_reasons(saves[-1]) == ["applied"]
-    newer = raw("1818", "terms", knowledge_id="k-newer", sha256="9" * 64)
-    newer_head = head.replace(PRODUCTS["1818"]["clause_code"], NEW_CODE, 1)
-    both = Pages(heads={"k-reissued": head, "k-newer": newer_head}, sources=[reissued, newer])
-    moved = attribute_uploads(saves[-1], [newer], both)
-    assert moved.report.counts == {"NEW_VERSION": 1}
+    moved, both = overtaken(saves[-1], head)
     platform.fail_closures_after = None
 
-    result, later = run(moved.registry, platform, reader=both)
+    result, later = run(moved, platform, reader=both)
     assert platform.closed == []  # the item stays open: a person can still answer again
     assert result.report.skipped == {"CONFIRMATION_CONFLICT": 1}
-    assert (result.registry, later) == (moved.registry, [])
+    assert (result.registry, later) == (moved, [])
 
 
 def test_a_closed_item_whose_answer_differs_from_the_settlement_is_not_executed() -> None:

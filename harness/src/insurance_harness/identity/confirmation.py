@@ -132,7 +132,7 @@ def conclude(
     try:
         if choice.kind == "product":
             result = attribute(upload, registry, policy, product=choice.value)
-            fits = result.product_id == choice.value and (
+            fits = _about(result) == choice.value and (
                 result.outcome in {"DUPLICATE", "SUPPLEMENT", "NEW_VERSION"}
                 or (
                     result.outcome == "NEEDS_CONFIRM"
@@ -143,7 +143,7 @@ def conclude(
             result = attribute(
                 upload, registry, policy, product=pending.product_id, role=choice.value
             )
-            fits = (result.product_id, result.role) == (pending.product_id, choice.value) and (
+            fits = (_about(result), result.role) == (pending.product_id, choice.value) and (
                 result.outcome in {"SUPPLEMENT", "NEW_VERSION"}
                 or (result.outcome, result.reason) == ("NEEDS_CONFIRM", "same_role_differs")
             )
@@ -157,6 +157,14 @@ def conclude(
     if not fits:
         raise ConfirmationError("CHOICE_STALE")
     return result
+
+
+def _about(result: Attribution) -> str | None:
+    """The registered product a conclusion is about: a new version names its entry of the same
+    name as the one candidate, beside the new entry it adds (PV-1 Spec §3)."""
+    if result.outcome == "NEW_VERSION" and len(result.candidates) == 1:
+        return result.candidates[0]
+    return result.product_id
 
 
 def _same_role(

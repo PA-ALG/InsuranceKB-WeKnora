@@ -11,6 +11,7 @@ import re
 import unicodedata
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -92,7 +93,7 @@ def expect(result: Attribution, outcome: str, reason: str, product_id: str | Non
 
 def test_the_policy_loads_with_its_version_and_points_at_real_packs() -> None:
     policy = load_attribution_policy()
-    assert policy.version == "2026-11-01.1"  # S5b-7: title lines anywhere on the first pages
+    assert policy.version == "2026-11-01.2"  # PV-1: new versions beside old ones, catalog
     catalog = json.loads(
         files("insurance_harness.catalog").joinpath("schema_packs.json").read_text(encoding="utf-8")
     )
@@ -104,7 +105,7 @@ def test_the_policy_loads_with_its_version_and_points_at_real_packs() -> None:
     for entry in policy.classifications:
         assert entry.classification in classes.get(entry.schema_pack_id, []), entry
     assert attribute(upload("1828", "brochure"), [registered("1828", "terms")]).policy_ref == (
-        "attribution-policy@2026-11-01.1"
+        "attribution-policy@2026-11-01.2"
     )
 
 
@@ -193,8 +194,10 @@ def test_terms_with_a_new_clause_code_are_a_new_version() -> None:
         upload("1828", "terms", sha256="e" * 64, head=head),
         [registered("1828", "terms", "brochure"), registered("1826")],
     )
-    expect(result, "NEW_VERSION", "new_clause_code", "1828")
-    assert result.replaces == ("k-1828-terms",)
+    # PV-1 (revises S5b-1 §3.7): a new entry beside 1828, which is named and keeps its terms.
+    expect(result, "NEW_VERSION", "new_clause_code")
+    assert result.product_id not in {"1828", "1826"} and result.candidates == ("1828",)
+    assert result.replaces == ()
     assert result.clause_code == fold(PRODUCTS["1828"]["clause_code"]).replace("174号", "999号")
 
 
@@ -375,7 +378,7 @@ OWN = "平安人寿〔2025〕终身寿险301号"
 PLAIN = "远山恒泰终身寿险"
 
 
-def fictitious(**fields: object) -> RegisteredProduct:
+def fictitious(**fields: Any) -> RegisteredProduct:
     return RegisteredProduct(
         product_id="P",
         names=(PLAIN,),
@@ -412,5 +415,5 @@ def test_the_leading_code_still_creates_and_versions() -> None:
     versioned = attribute(
         terms("平安人寿〔2026〕终身寿险302号" + PLAIN + "阅读指引"), [fictitious()]
     )
-    expect(versioned, "NEW_VERSION", "new_clause_code", "P")
-    assert versioned.replaces == ("old-terms",)
+    expect(versioned, "NEW_VERSION", "new_clause_code")  # PV-1: a new entry beside P
+    assert (versioned.candidates, versioned.replaces) == (("P",), ())

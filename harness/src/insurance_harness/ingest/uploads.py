@@ -12,9 +12,13 @@ person are not judged again; quarantined ones are, every run.
     python -m insurance_harness.ingest.uploads confirm --registry PATH [--dry-run]
     python -m insurance_harness.ingest.uploads publish --registry PATH --run-root DIR \\
         --stage-config PATH [--dry-run]
+    python -m insurance_harness.ingest.uploads migrate-registry --registry PATH \\
+        --manifest-dir DIR --manifest-commit SHA [--refresh] [--dry-run]
 
 `confirm` pushes the materials waiting for a person to the platform and applies their answers
-(S5b-3c-2); it shares the registry lock with the other commands.
+(S5b-3c-2); it shares the registry lock with the other commands. `migrate-registry` turns a v1
+registry into v2 (or refreshes the version fields) from a pinned product repository checkout
+(PV-1 Spec §4); it reads no platform. A `run` on a v2 registry reads the catalog it names.
 """
 
 import argparse
@@ -49,6 +53,7 @@ from insurance_harness.ingest.raw_sources import (
 )
 from insurance_harness.ingest.registry import (
     FINAL,
+    V2,
     WAITING,
     PendingEntry,
     ProductRegistry,
@@ -60,12 +65,19 @@ from insurance_harness.ingest.registry import (
     save_registry,
     seed_registry,
 )
+from insurance_harness.ingest.registry_migration import MigrationError, migrate_registry
 from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
     BASE_URL_ENV,
     PageReader,
     SourceMapError,
     load_source_map,
+)
+from insurance_harness.ingest.version_catalog import (
+    CatalogError,
+    VersionCatalog,
+    catalog_from_checkout,
+    load_catalog,
 )
 
 
@@ -164,10 +176,12 @@ def attribute_uploads(
     pages: PageReader,
     policy: AttributionPolicy | None = None,
     unfinished: Sequence[UnfinishedSource] = (),
+    catalog: VersionCatalog | None = None,
 ) -> UploadRun:
     """The next registry and a report; the given registry is not modified.
 
     `unfinished` is passed through to the report: the listed materials that cannot be judged yet.
+    `catalog` is the pinned version catalog a v2 registry names (PV-1 Spec §3).
     """
     current = registry.model_copy(deep=True)
     policy = policy or load_attribution_policy()
@@ -199,7 +213,7 @@ def attribute_uploads(
                 sha256=source.sha256,
                 head=heads[source.knowledge_id],
             )
-            attribution = attribute(upload, current.registered(), policy)
+            attribution = attribute(upload, current.registered(), policy, catalog=catalog)
             if source.knowledge_id in asked and attribution.outcome in WAITING:
                 held.append(source)  # the person's question stays as it was asked
                 continue
@@ -207,14 +221,14 @@ def attribute_uploads(
                 deferred.append((source, attribution))  # its terms may arrive in this run
                 continue
             counts[attribution.outcome] += 1
-            if record(current, source, attribution):
+            if record(current, source, attribution, catalog=catalog):
                 changed = True
                 affected.add(attribution.product_id or "")
         if not changed:
             for source, attribution in deferred:
                 counts[attribution.outcome] += 1
                 if not _same_question(previous.get(source.knowledge_id), source, attribution):
-                    record(current, source, attribution)
+                    record(current, source, attribution, catalog=catalog)
             break
         remaining = [*(source for source, _ in deferred), *held]
     revision_changes, not_listed = _changes(current, sources)
@@ -294,7 +308,15 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     publication.add_argument("--products", nargs="+")
     publication.add_argument("--seed-from", type=Path, action="append", default=[])
     publication.add_argument("--dry-run", action="store_true")
+    migration = commands.add_parser("migrate-registry")
+    migration.add_argument("--registry", type=Path, required=True)
+    migration.add_argument("--manifest-dir", type=Path, required=True)
+    migration.add_argument("--manifest-commit", required=True)
+    migration.add_argument("--refresh", action="store_true")
+    migration.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+    if args.command == "migrate-registry":
+        return _migrate(args)
     base_url, api_key = os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, "")
     if not base_url or not api_key:
         print("CONFIGURATION_MISSING", file=sys.stderr)
@@ -347,8 +369,19 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 print(confirmed.report.model_dump_json())
                 return 0
             listed = listing.listing(registry.raw_kb_id)
+            basis = registry.metadata_basis
+            catalog = (
+                load_catalog(
+                    args.registry,
+                    basis.catalog_sha256,
+                    repository=basis.repository,
+                    commit=basis.commit,
+                )
+                if registry.contract == V2 and basis is not None
+                else None
+            )
             result = attribute_uploads(
-                registry, listed.completed, pages, unfinished=listed.unfinished
+                registry, listed.completed, pages, unfinished=listed.unfinished, catalog=catalog
             )
             if not args.dry_run and result.registry != registry:
                 save_registry(result.registry, args.registry)
@@ -366,12 +399,34 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         PlatformError,
         ConfirmationsError,
         PublicationError,
+        CatalogError,
     ) as error:
         print(error.code, file=sys.stderr)
         return 1
     except OSError:  # lock or registry file; the message would carry the path
         print("REGISTRY_IO_ERROR", file=sys.stderr)
         return 1
+
+
+def _migrate(args: argparse.Namespace) -> int:
+    """`migrate-registry`: the registry lock, the pinned catalog, then the journaled migration."""
+    try:
+        with _Lock(args.registry):
+            catalog = catalog_from_checkout(args.manifest_dir, args.manifest_commit)
+            report = migrate_registry(
+                args.registry, catalog, refresh=args.refresh, dry_run=args.dry_run
+            )
+    except _Busy:
+        print("REGISTRY_BUSY", file=sys.stderr)
+        return 3
+    except (CatalogError, MigrationError, RegistryError) as error:
+        print(error.code, file=sys.stderr)
+        return 1
+    except OSError:
+        print("REGISTRY_IO_ERROR", file=sys.stderr)
+        return 1
+    print(report.model_dump_json())
+    return 0
 
 
 if __name__ == "__main__":
