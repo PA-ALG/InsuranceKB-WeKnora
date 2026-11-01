@@ -85,15 +85,25 @@ def write_new(path: Path, data: bytes) -> None:
         raise
 
 
+def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    found: dict[str, object] = {}
+    for key, value in pairs:
+        if key in found:
+            raise ValueError("a repeated journal key")
+        found[key] = value
+    return found
+
+
 def journal_path(path: Path) -> Path:
     return path.with_name(path.name + ".migration-journal.json")
 
 
 def read_journal(path: Path) -> Journal:
     """The open journal of this registry; anything malformed or naming another file is refused."""
-    try:
-        journal = Journal.model_validate_json(journal_path(path).read_bytes())
-    except (OSError, ValidationError, ValueError):
+    try:  # a repeated key is refused, never resolved to its last value (review R3)
+        data = json.loads(journal_path(path).read_bytes(), object_pairs_hook=_unique)
+        journal = Journal.model_validate(data)
+    except (OSError, ValidationError, ValueError, RecursionError):
         raise MigrationError("MIGRATION_JOURNAL_INVALID") from None
     backup, temp = journal.backup_file, journal.temp_file
     if not (backup.startswith(f"{path.name}.backup-") and backup.endswith(".json")) or not (
