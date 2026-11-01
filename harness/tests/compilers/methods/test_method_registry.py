@@ -76,7 +76,8 @@ def _foreign_block(world: World) -> list[MethodEntry]:
 
 
 def _triple_twice(world: World) -> list[MethodEntry]:
-    return [entry(METHOD_A, link_a(world, "讲解步骤一"), link_a(world, "讲解步骤二"))]
+    twice = (link_a(world, "讲解步骤一"), link_a(world, "讲解步骤二"))
+    return [entry(METHOD_A).model_copy(update={"links": twice})]  # built unchecked, read back
 
 
 def _unsorted(world: World) -> list[MethodEntry]:
