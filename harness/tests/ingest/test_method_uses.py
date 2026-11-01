@@ -20,6 +20,7 @@ from insurance_harness.ingest.raw_sources import UnfinishedSource
 from insurance_harness.ingest.registry import (
     ConfirmationRef,
     DecisionEntry,
+    MaterialEntry,
     ProductRegistry,
     RegistryError,
     record,
@@ -240,3 +241,31 @@ def test_one_record_per_revision_and_one_live_record_per_material() -> None:
     document["method_uses"] = [document["method_uses"][0], second]
     with pytest.raises(ValidationError):  # two live records for one knowledge id
         ProductRegistry.model_validate(document)
+
+
+# 3.1 Registered sales materials are detected too (Spec §3.1, added after the RED) ---------------
+
+
+def test_a_sales_material_attached_before_sk1_gets_its_method_use() -> None:
+    deck = MaterialEntry(
+        knowledge_id="k-deck",
+        parse_attempt=1,
+        sha256="d" * 64,
+        role="sales_training",
+        file_name=BRAND_DECK,
+    )
+    current = v2(**{"2635": nursing_entry(materials=[held(), deck])})
+    after = judged(current, {"k-deck": (BRAND_DECK, BRAND_SLIDES, "d" * 64)})
+    use = only_use(after)
+    assert (use.knowledge_id, use.sha256, use.state) == ("k-deck", "d" * 64, "active")
+    assert after.products == current.products  # the product side is unchanged
+    again = judged(after, {"k-deck": (BRAND_DECK, BRAND_SLIDES, "d" * 64)})
+    assert again.method_uses == after.method_uses  # recorded once
+
+
+def test_a_registered_terms_material_is_never_backfilled() -> None:
+    slides = (("平安某某保险条款", "阅读指引"), ("销售方法", "讲解步骤 异议 促成"))
+    terms = held().model_copy(update={"knowledge_id": "k-terms", "file_name": "条款.pdf"})
+    current = v2(**{"2635": nursing_entry(materials=[terms])})
+    after = judged(current, {"k-terms": ("条款.pdf", slides, "e" * 64)})
+    assert after.method_uses == []
