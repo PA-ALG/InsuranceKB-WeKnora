@@ -62,8 +62,8 @@
 卡片顺序：`field_key = predicate`、`short_title = title`、`description = definition`；`profile_sha256` = 配置其余内容的
 规范 JSON 的 SHA-256。
 
-`compile` 组包时：候选包有任何成员或移出，且 Active 里 `presentation/<profile_id>` 的摘要与本配置不同（含没有）时，
-带上该配置成员。撤下（`withdraw`）只移出成员，不带配置。
+`compile` 组包时：本次有方法 Claim 或方法实体要发布，且 Active 里 `presentation/<profile_id>` 的摘要与本配置不同（含
+没有）时，带上该配置成员；只有移出的候选包（方法退出、`withdraw`）不带配置。
 
 ### 2.3 导航（`catalog/navigation.json`，版本 `2026-11-01.2`）
 
@@ -135,7 +135,7 @@ YYYY-MM-DD”（业务日，UTC+8 固定偏移，同 PV-4b），**不称作材�
   显示为“系列：<系列名>”，链接到同一 Release 中该系列的产品条目（PV-4b 的 `product_family`），系列不在本 Release 时只显示键。
 - 五项按方法配置的字段顺序：文本项一段文字，后跟“来源 1…n”；列表项逐项编号，每项后跟“原文”，打开该项自己的证据
   （`evidence[i]`）。打开原文用现有 `CitationPanel`（PDF 查看器、Office 查看器与 S11h 文本视图），固定本页 Release。
-  未收录的项显示“已发布知识未收录”。列表与证据不等长（只可能出现在检查之前发布的数据里）时按普通字段显示来源。
+  未收录的项显示现有的未知状态文案（“材料未提及”）。列表与证据不等长（只可能出现在检查之前发布的数据里）时按普通字段显示来源。
 - 来源材料与日期：方法各 Claim 证据里出现的每份材料（按 `source_ref` 去重、按首次出现排序）读一次出处，显示
   “来源材料：<文件名>（入库 YYYY-MM-DD）”；读取中/读不到各有提示，读不到不影响正文。“更新于 YYYY-MM-DD”取方法 Claim 的
   `maintenance.changed_at` 中最新的一个（没有则不显示）。
