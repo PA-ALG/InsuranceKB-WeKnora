@@ -379,7 +379,7 @@ func recordRevisionSourceLocked(
 	knowledge *types.Knowledge,
 	revision *types.KnowledgeRevision,
 ) error {
-	source, err := prepareRevisionSourceLocked(tx, knowledge, revision, true, revision.CompletedAt)
+	source, err := prepareRevisionSourceLocked(tx, knowledge, revision, true, revision.CompletedAt, nil)
 	if err != nil || source == nil {
 		return err
 	}
@@ -391,13 +391,15 @@ func recordRevisionSourceLocked(
 
 // prepareRevisionSourceLocked builds the released, unsealed source row of a committed attempt.
 // It returns nil for formats that record no source (S11g: PDF and the three OOXML formats do);
-// write=false never backfills the resource digest (dry run).
+// write=false never backfills the resource digest (dry run). A non-nil verified object must
+// still be the locked resource before anything else happens (#513 review R1).
 func prepareRevisionSourceLocked(
 	tx *gorm.DB,
 	knowledge *types.Knowledge,
 	revision *types.KnowledgeRevision,
 	write bool,
 	now time.Time,
+	verified *types.RevisionSourceObject,
 ) (*types.KnowledgeRevisionSource, error) {
 	handle, ok := types.ParseResourcePath(knowledge.FilePath)
 	if !ok {
@@ -409,6 +411,9 @@ func prepareRevisionSourceLocked(
 		handle, knowledge.TenantID, types.ResourceStateActive,
 	).First(&resource).Error; err != nil {
 		return nil, fmt.Errorf("%w: source resource unavailable", ErrRevisionCommitFailed)
+	}
+	if verified != nil && (!verified.Matches(resource) || verified.ObjectSHA256 != revision.FileSHA256) {
+		return nil, ErrRevisionSourceUnavailable
 	}
 	mimeType, recorded := types.RevisionSourceMIME(resource.MimeType, resource.OriginalName)
 	if !recorded {
@@ -457,13 +462,15 @@ func prepareRevisionSourceLocked(
 }
 
 // RecordMissingRevisionSource records the commit-time source row of an attempt committed before
-// its format recorded one (S11g). An existing row is returned untouched; dryRun writes nothing.
-// Any binding or format failure is ErrRevisionSourceUnavailable and writes nothing.
+// its format recorded one (S11g), bound to the object the caller hashed. An existing row is
+// returned untouched; dryRun writes nothing. Any binding, format or object drift is
+// ErrRevisionSourceUnavailable and writes nothing (no row, no digest backfill).
 func (r *knowledgeRepository) RecordMissingRevisionSource(
 	ctx context.Context,
 	tenantID uint64,
 	knowledgeID string,
 	parseAttempt int64,
+	verified types.RevisionSourceObject,
 	dryRun bool,
 ) (*types.KnowledgeRevisionSource, types.RevisionSourceRecordOutcome, error) {
 	if tenantID == 0 || knowledgeID == "" || parseAttempt <= 0 {
@@ -505,7 +512,9 @@ func (r *knowledgeRepository) RecordMissingRevisionSource(
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		source, err := prepareRevisionSourceLocked(tx, &knowledge, &revision, !dryRun, time.Now().UTC())
+		source, err := prepareRevisionSourceLocked(
+			tx, &knowledge, &revision, !dryRun, time.Now().UTC(), &verified,
+		)
 		if err != nil || source == nil {
 			return ErrRevisionSourceUnavailable
 		}

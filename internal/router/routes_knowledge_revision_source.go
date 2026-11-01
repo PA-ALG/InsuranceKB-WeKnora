@@ -6,9 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterKnowledgeRevisionSourceRoutes mounts the operational source mutations
-// (sealed backfill, exact3 backfill, and S11g's record of a missing commit-time row). It is declared to the global API-key gate only so the explicit
-// DenyAPIKeyPrincipal guard remains load-bearing before the human Admin gate.
+// RegisterKnowledgeRevisionSourceRoutes mounts the operational source mutations (sealed backfill,
+// exact3 backfill, and S11g's record of a missing commit-time row). It is declared to the global
+// API-key gate only so the explicit DenyAPIKeyPrincipal guard remains load-bearing before the
+// human Admin gate.
 func RegisterKnowledgeRevisionSourceRoutes(
 	r *gin.RouterGroup,
 	h *handler.KnowledgeRevisionSourceHandler,

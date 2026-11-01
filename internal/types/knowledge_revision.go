@@ -190,6 +190,28 @@ const (
 	RevisionSourceRecordRecorded    RevisionSourceRecordOutcome = "recorded"
 )
 
+// RevisionSourceObject is the identity of the stored object whose bytes the caller hashed. The
+// repository records a missing source row only while the locked resource is still exactly this
+// object (S11g, #513 review R1), so a swap between hashing and writing records nothing.
+type RevisionSourceObject struct {
+	ResourceID       string
+	ResourceHandle   string
+	Provider         string
+	StorageBackendID string
+	PhysicalPath     string
+	Size             int64
+	ObjectSHA256     string
+}
+
+// Matches reports whether a resource is still the verified object.
+func (o RevisionSourceObject) Matches(resource StoredResource) bool {
+	return o.ResourceID != "" && o.ResourceID == resource.ID &&
+		o.ResourceHandle == resource.Handle && o.Provider == resource.Provider &&
+		o.StorageBackendID == resource.StorageBackendID && o.PhysicalPath == resource.PhysicalPath &&
+		o.Size > 0 && o.Size == resource.Size && validRevisionSHA256(o.ObjectSHA256) &&
+		(resource.ContentHash == "" || resource.ContentHash == o.ObjectSHA256)
+}
+
 const pdfMIME = "application/pdf"
 
 // officeSourceMIME is a fixed table, not the host MIME database: the stored resource MIME comes

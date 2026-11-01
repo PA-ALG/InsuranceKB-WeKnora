@@ -12,7 +12,7 @@ import (
 // commit-time source row of an already committed attempt (S11g).
 type knowledgeRevisionSourceRecorder interface {
 	RecordMissingRevisionSource(
-		context.Context, uint64, string, int64, bool,
+		context.Context, uint64, string, int64, types.RevisionSourceObject, bool,
 	) (*types.KnowledgeRevisionSource, types.RevisionSourceRecordOutcome, error)
 }
 
@@ -65,8 +65,13 @@ func (s *KnowledgeRevisionSourceService) RecordMissingSource(
 		(resource.ContentHash != "" && resource.ContentHash != objectSHA256) {
 		return nil, "", ErrRevisionSourceMismatch
 	}
+	verified := types.RevisionSourceObject{
+		ResourceID: resource.ID, ResourceHandle: resource.Handle, Provider: resource.Provider,
+		StorageBackendID: resource.StorageBackendID, PhysicalPath: resource.PhysicalPath,
+		Size: resource.Size, ObjectSHA256: objectSHA256,
+	}
 	source, outcome, err := s.recorder.RecordMissingRevisionSource(
-		ctx, tenantID, knowledgeID, parseAttempt, dryRun,
+		ctx, tenantID, knowledgeID, parseAttempt, verified, dryRun,
 	)
 	if err != nil || source == nil {
 		return nil, "", ErrRevisionSourceMismatch

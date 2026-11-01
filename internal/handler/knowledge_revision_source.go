@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -108,7 +109,7 @@ func (h *KnowledgeRevisionSourceHandler) Record(c *gin.Context) {
 	recorder, ok := any(h.service).(knowledgeRevisionSourceRecorder)
 	knowledgeID := strings.TrimSpace(c.Param("id"))
 	attempt, err := strconv.ParseInt(c.Param("attempt"), 10, 64)
-	dryRun, validMode := map[string]bool{"": true, "true": true, "false": false}[c.Query("dry_run")]
+	dryRun, validMode := recordDryRun(c.Request.URL.RawQuery)
 	if !ok || err != nil || knowledgeID == "" || attempt <= 0 || !validMode {
 		writeKnowledgeRevisionSourceError(c, revisionsource.ErrRevisionSourceMismatch)
 		return
@@ -129,6 +130,28 @@ func (h *KnowledgeRevisionSourceHandler) Record(c *gin.Context) {
 		ManifestAlgorithm: source.ManifestAlgorithm, ManifestDigest: source.ManifestDigest,
 		ChunkCount: source.ChunkCount, RetentionState: source.RetentionState,
 	}})
+}
+
+// recordDryRun reads dry_run from the raw query: absent means a dry run; exactly one "true" or
+// "false" is honoured; a malformed query, a repeated or empty value is rejected (#513 review R2).
+func recordDryRun(rawQuery string) (bool, bool) {
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return false, false
+	}
+	modes, present := values["dry_run"]
+	switch {
+	case !present:
+		return true, true
+	case len(modes) != 1:
+		return false, false
+	case modes[0] == "true":
+		return true, true
+	case modes[0] == "false":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func (h *KnowledgeRevisionSourceHandler) BackfillExact3(c *gin.Context) {
