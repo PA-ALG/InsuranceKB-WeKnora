@@ -15,7 +15,8 @@ const defaultQuestionLimit = 12
 // Fields alone compare every product. Named products supply overview fields when no field is
 // asked, or when a field matches only through a named product's name. Published question intents
 // narrow a sales comparison of every product to versions that may be on sale, and a service
-// question's named versions to those sold on its purchase date (PV-4b Spec §4.2).
+// question's named versions to those sold on its purchase date (PV-4b Spec §4.2). Method knowledge
+// answers no product question; a method question takes it first (SK-3 Spec §6.2).
 func (s *Service) QuestionFields(
 	ctx context.Context, tenantID uint64, spaceID, releaseID, question string, limit int,
 ) ([]Field, error) {
@@ -30,7 +31,7 @@ func (s *Service) QuestionFields(
 	if limit <= 0 {
 		limit = defaultQuestionLimit
 	}
-	entities := index.orderedEntities()
+	entities := index.productEntities()
 	products := index.questionProducts(question)
 	termQuestion := normalizeQuestionTerm(question)
 	intent := index.questionIntent(termQuestion)
@@ -55,6 +56,10 @@ func (s *Service) QuestionFields(
 			out = append(out, field)
 		}
 		return len(out) < limit
+	}
+	// SK-3 §6.2: how-to-sell questions take method knowledge first, in at most half the limit.
+	for _, field := range index.methodFields(question, termQuestion, products, limit/2) {
+		add(field)
 	}
 	if fieldsAsked {
 		scope := products

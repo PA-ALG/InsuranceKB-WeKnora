@@ -44,6 +44,9 @@ func (s *Service) activationMembers(
 		}
 	}
 	target, err := materialize(active.Members, b)
+	if err == nil {
+		err = checkMethodClaims(active.Members, target, b)
+	}
 	if err != nil || !refresh {
 		return target, err
 	}

@@ -32,12 +32,19 @@ type Evidence struct {
 type Field struct {
 	ReleaseID, Slug, EntityID, EntityName, EntityVersion, FieldKey, FieldTitle, State, Value, Origin, Review string
 	Evidence                                                                                                 []Evidence
+	// Method marks method knowledge (SK-3): Note is its profile's reading note with the entity's
+	// notice sentence, and Items[i] is the list item Evidence[i] supports, when they line up.
+	Method bool
+	Note   string
+	Items  []string
 }
 
 // Entity is the published identity, aliases and classification of an entry, with its version
 // data: Status is evaluated for the read; Predecessors and Successors are visible entity IDs.
 type Entity struct {
 	EntityID, Name           string
+	Kind, Notice             string // the entity type and SK-2's identifiers.notice flag
+	Method                   bool   // a method-knowledge profile serves the type (SK-3 §1)
 	Names, Labels            []string
 	Lifecycle                *Lifecycle
 	Family                   *Family

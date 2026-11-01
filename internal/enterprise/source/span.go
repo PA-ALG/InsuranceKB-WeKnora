@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"sort"
+	"time"
 	"unicode"
 )
 
@@ -25,6 +26,7 @@ type SpanView struct {
 	Quote                                 string
 	Rects                                 []Rect
 	Complete                              bool
+	RevisedAt                             time.Time // the cited revision's time, zero when unknown
 }
 
 // Span verifies the artifact like Pages, then returns the exact text of [start, end) on
@@ -67,6 +69,7 @@ func (s *Service) Span(
 		KnowledgeID: v.set.KnowledgeID, Document: v.set.Document, DocumentSHA256: v.set.DocumentSHA256,
 		ParseAttempt: v.set.ParseAttempt, Page: page, WidthPoints: native.Width, HeightPoints: native.Height,
 		Start: start, End: end, Quote: string(text[start:end]), Rects: rects, Complete: complete,
+		RevisedAt: v.set.RevisedAt,
 	}, nil
 }
 

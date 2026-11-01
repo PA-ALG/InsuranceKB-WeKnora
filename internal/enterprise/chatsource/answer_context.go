@@ -65,6 +65,11 @@ func AnswerPassage(ctx context.Context, result *types.SearchResult, content stri
 	var tier string
 	switch result.Metadata["source_tier"] {
 	case "release":
+		// Method knowledge is not a reviewed product fact; its text opens with its profile's
+		// reading note instead (SK-3 §6.3).
+		if result.Metadata["knowledge_class"] == "method" {
+			return content
+		}
 		tier = "已发布知识（审核过）"
 	case "raw_text":
 		tier = rawTier(ctx, result)
